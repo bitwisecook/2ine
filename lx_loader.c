@@ -697,7 +697,7 @@ static __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
     _exit((int) (exitcode & 0xFF));
 } // lxTerminate
 
-static __attribute__((noreturn)) void endLxProcess(const uint32 exitcode)
+static __attribute__((noreturn, used)) void endLxProcess(const uint32 exitcode)
 {
     if (GLoaderState.dosExit)
         GLoaderState.dosExit(1, exitcode);  // let exit lists run. Should call lxTerminate!
@@ -1240,6 +1240,9 @@ static void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ord
             void *retval = lxexp->addr;
             if (native && lxexp->object && lxexp->object->alias != 0xFFFF)  // 16-bit bridge? this is actually a void**, due to some macro salsa.  :/
                 retval = *((void**) retval);
+            if (getenv("TWOINE_TRACE_FIXUPS"))
+                fprintf(stderr, "2INE FIXUP: %s@%u want16=%d native=%d -> %p\n",
+                        module->name, (uint) ordinal, want16bit, native, retval);
             return retval;
         } // if
     } // for
@@ -1258,6 +1261,8 @@ static void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ord
 
 static void *getModuleProcAddrByName(const LxModule *module, const char *name, const LxExport **_lxexp, const int want16bit)
 {
+    if (getenv("TWOINE_TRACE_FIXUPS"))
+        fprintf(stderr, "2INE FIXNAME: %s@'%s' want16=%d\n", module->name, name, want16bit);
     //printf("lookup module == '%s', name == '%s'\n", module->name, name);
 
     const LxExport *lxexp = module->exports;
@@ -1428,6 +1433,9 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                 } // else
 
                 const LxExport *lxexp = NULL;
+                if (getenv("TWOINE_TRACE_FIXUPS"))
+                    fprintf(stderr, "2INE FIXORD: mod=%u ord=%u srcoff=%X\n",
+                            (uint) moduleid, (uint) importid, (uint) (uint16) srcoffset);
                 if (moduleid == 0) {
                     fprintf(stderr, "uhoh, looking for module ordinal 0, which is illegal.\n");
                 } else if (moduleid > lx->num_import_mod_entries) {
@@ -1506,6 +1514,11 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                 break;
             } // case
         } // switch
+
+        if (getenv("TWOINE_TRACE_FIXUPS") && (srcoffset >= 0x700) && (srcoffset < 0x800))
+            fprintf(stderr, "2INE FIXREC: page=%p srctype=%X flags=%X srcoffset=%X final=%X size=%u\n",
+                    page, (uint) srctype, (uint) fixupflags, (uint) (uint16) srcoffset,
+                    (uint) finalval, (uint) finalsize);
 
         if (fixupflags & 0x4) {  // Has additive.
             uint32 additive = 0;
@@ -1617,6 +1630,41 @@ static void fixupLinearCodeSegmentReferences(uint8 *addr, size_t size)
 
 /* LX ("Linear Executable") modules are 32-bit binaries that can contain 16-bit segments. */
 // !!! FIXME: break up this function.
+// Optional post-load memory dump, for correlating a live loader address with
+//  an offline disassembler/REA image. Set TWOINE_DUMP_MODULES to a writable
+//  directory; one file per object is written as <MODULE>.obj<N>.bin. This is
+//  diagnostic tooling only and does not change load semantics.
+static void dumpLoadedModule(const LxModule *lxmod)
+{
+    const char *dumpdir = getenv("TWOINE_DUMP_MODULES");
+
+    if (getenv("TWOINE_DUMP_MAPS") && lxmod) {
+        fprintf(stderr, "2INE MAPS: %s", lxmod->name);
+        for (uint32 i = 0; i < lxmod->num_mmaps; i++)
+            fprintf(stderr, " obj%u=%p+%X", (uint) i + 1,
+                    lxmod->mmaps[i].addr, (uint) lxmod->mmaps[i].size);
+        fprintf(stderr, "\n");
+    } // if
+
+    if ((!dumpdir) || (!*dumpdir) || (!lxmod))
+        return;
+
+    for (uint32 i = 0; i < lxmod->num_mmaps; i++) {
+        const LxMmaps *mmap = &lxmod->mmaps[i];
+        char fname[1024];
+        snprintf(fname, sizeof (fname), "%s/%s.obj%u.bin",
+                 dumpdir, lxmod->name, (uint) i + 1);
+        FILE *io = fopen(fname, "wb");
+        if (!io) {
+            fprintf(stderr, "Couldn't open '%s' for module dump: %s\n",
+                    fname, strerror(errno));
+            continue;
+        } // if
+        fwrite(mmap->addr, mmap->size, 1, io);
+        fclose(io);
+    } // for
+} // dumpLoadedModule
+
 static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint32 exelen, int dependency_tree_depth)
 {
     const LxHeader *lx = (const LxHeader *) exe;
@@ -1973,10 +2021,18 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
             object_flags |= 0x4;
         } // if
 
-        // Now set all the pages of this object to the proper final permissions...
-        const int prot = ((object_flags & 0x1) ? PROT_READ : 0) |
-                         ((object_flags & 0x2) ? PROT_WRITE : 0) |
-                         ((object_flags & 0x4) ? PROT_EXEC : 0);
+        // Now set all the pages of this object to the proper final permissions.
+        // OS/2 ran on 386-era CPUs where any readable page is executable, so
+        //  shipping binaries (IBM's VAC++ runtimes among them) put callable
+        //  code in objects flagged READ but not EXEC. On a host with NX that
+        //  turns a valid far call into SIGSEGV, so preserve the 386 rule:
+        //  readable implies executable. Objects that are not readable stay
+        //  non-executable.
+        int prot = ((object_flags & 0x1) ? PROT_READ : 0) |
+                   ((object_flags & 0x2) ? PROT_WRITE : 0) |
+                   ((object_flags & 0x4) ? PROT_EXEC : 0);
+        if (prot & PROT_READ)
+            prot |= PROT_EXEC;
 
         retval->mmaps[i].prot = prot;
 
@@ -1990,6 +2046,8 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
             goto loadlx_failed;
         } // if
     } // for
+
+    dumpLoadedModule(retval);
 
     retval->os2path = makeOS2Path(fname);
     if (!retval->os2path)
@@ -2561,7 +2619,11 @@ static LxModule *loadModuleByModuleNameInternal(const char *modname, const int d
     } // for
 
     // !!! FIXME: decide the right path to the file, or if it's a native replacement library.
-    char fname[256];
+    // Look in the current directory first (as upstream 2ine does), then in
+    //  each colon-separated directory of TWOINE_LIBPATH. The latter lets a
+    //  toolchain driver keep one copy of the shim libraries and still run
+    //  compilers from their own directories.
+    char fname[1024];
     snprintf(fname, sizeof (fname), "%s.dll", modname);
     locatePathCaseInsensitive(fname);
 
@@ -2570,11 +2632,47 @@ static LxModule *loadModuleByModuleNameInternal(const char *modname, const int d
         retval = loadModuleByPathInternal(fname, dependency_tree_depth);
 
     if (!retval) {
+        const char *libdirs = getenv("TWOINE_LIBPATH");
+        if (libdirs) {
+            const char *ptr = libdirs;
+            while ((!retval) && *ptr) {
+                const char *end = strchr(ptr, ':');
+                const size_t len = end ? (size_t) (end - ptr) : strlen(ptr);
+                char dllpath[1024];
+                snprintf(dllpath, sizeof (dllpath), "%.*s%s%s.dll",
+                         (int) len, ptr, (len == 0) ? "./" : "/", modname);
+                locatePathCaseInsensitive(dllpath);
+                if (access(dllpath, F_OK) == 0)
+                    retval = loadModuleByPathInternal(dllpath, dependency_tree_depth);
+                ptr = end ? end + 1 : ptr + len;
+            } // while
+        } // if
+    } // if
+
+    if (!retval) {
         snprintf(fname, sizeof (fname), "./lib%s.so", modname);
         for (char *ptr = fname; *ptr; ptr++) {
             *ptr = (((*ptr >= 'A') && (*ptr <= 'Z')) ? (*ptr - ('A' - 'a')) : *ptr);
         } // for
         retval = loadNativeModule(fname, modname);
+
+        if ((!retval) && getenv("TWOINE_LIBPATH")) {
+            const char *libdirs = getenv("TWOINE_LIBPATH");
+            const char *ptr = libdirs;
+            while ((!retval) && *ptr) {
+                const char *end = strchr(ptr, ':');
+                const size_t len = end ? (size_t) (end - ptr) : strlen(ptr);
+                char soname[1200];
+                snprintf(soname, sizeof (soname), "%.*s%s%s.so",
+                         (int) len, ptr, (len == 0) ? "./lib" : "/lib", modname);
+                const char *libbase = strrchr(soname, '/') + 1;
+                for (char *p = (char *) libbase; *p; p++) {
+                    *p = (((*p >= 'A') && (*p <= 'Z')) ? (*p - ('A' - 'a')) : *p);
+                } // for
+                retval = loadNativeModule(soname, modname);
+                ptr = end ? end + 1 : ptr + len;
+            } // while
+        } // if
 
         if (retval != NULL) {
             // module is ready to use, put it in the loaded list.
@@ -2685,11 +2783,66 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
     abort();
 } // handleThreadLocalStorageAccess
 
+// Report which loaded OS/2 module (and object) contains an address, so a
+//  crash inside application or DLL code is attributable instead of a bare
+//  pointer. Returns 1 and fills buf if the address is in a mapped module
+//  object, 0 otherwise.
+static int describeModuleAddress(const void *ptr, char *buf, const size_t buflen)
+{
+    const uint32 addr = (uint32) (size_t) ptr;
+
+    for (LxModule *lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next) {
+        for (uint32 i = 0; i < lxmod->num_mmaps; i++) {
+            const LxMmaps *mmap = &lxmod->mmaps[i];
+            const uint32 base = (uint32) (size_t) mmap->addr;
+            const uint32 end = base + (uint32) mmap->size;
+            if ((addr >= base) && (addr < end)) {
+                snprintf(buf, buflen, "%s object #%u +0x%X [base=%08X size=%X]",
+                         lxmod->name, (uint) i + 1, (uint) (addr - base),
+                         base, (uint) mmap->size);
+                return 1;
+            } // if
+        } // for
+    } // for
+
+    *buf = '\0';
+    return 0;
+} // describeModuleAddress
+
+// Print the /proc/self/maps line covering ptr, for host mappings the module
+//  walk cannot explain (libc, malloc'd regions, deleted files).
+static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
+{
+    char path[64];
+    snprintf(path, sizeof (path), "/proc/%d/maps", (int) getpid());
+    FILE *io = fopen(path, "r");
+    *buf = '\0';
+    if (!io)
+        return;
+
+    const unsigned long want = (unsigned long) (size_t) ptr;
+    char line[512];
+    while (fgets(line, sizeof (line), io)) {
+        unsigned long start = 0, end = 0;
+        if (sscanf(line, "%lx-%lx", &start, &end) == 2) {
+            if ((want >= start) && (want < end)) {
+                strncpy(buf, line, buflen - 1);
+                buf[buflen - 1] = '\0';
+                char *nl = strchr(buf, '\n');
+                if (nl) *nl = '\0';
+                break;
+            } // if
+        } // if
+    } // while
+    fclose(io);
+} // describeHostMapping
+
 static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
 {
     ucontext_t *uctx = (ucontext_t *) ctx;
     const uint32 *addr = (const uint32 *) info->si_addr;
     const uint32 *tlspage = GLoaderState.tlspage;
+    greg_t *gregs = uctx->uc_mcontext.gregs;
 
     if (tlspage && (addr >= tlspage))
     {
@@ -2702,8 +2855,65 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
     static int faults = 0;
     faults++;
     switch (faults) {
-        // !!! FIXME: case #1 should be a much more detailed crash dump.
-        case 1: fprintf(stderr, "SIGSEGV at addr=%p (eip=%p)\n", addr, (void *) ((ucontext_t *) ctx)->uc_mcontext.gregs[REG_EIP]); break;
+        case 1: {
+            char eipmod[512], addrmod[512];
+            const void *eip = (const void *) (size_t) gregs[REG_EIP];
+            describeModuleAddress(eip, eipmod, sizeof (eipmod));
+            describeModuleAddress(addr, addrmod, sizeof (addrmod));
+            if (!*eipmod) {
+                char line[512];
+                describeHostMapping(eip, line, sizeof (line));
+                snprintf(eipmod, sizeof (eipmod), "%s",
+                         *line ? line : "unmapped");
+            } // if
+            if (!*addrmod) {
+                char line[512];
+                describeHostMapping(addr, line, sizeof (line));
+                snprintf(addrmod, sizeof (addrmod), "%s",
+                         *line ? line : "unmapped");
+            } // if
+            fprintf(stderr,
+                    "SIGSEGV at %p (%s) eip=%p (%s) eax=%08X ebx=%08X "
+                    "ecx=%08X edx=%08X esi=%08X edi=%08X ebp=%08X esp=%08X\n",
+                    addr, (*addrmod) ? addrmod : "unmapped",
+                    eip, (*eipmod) ? eipmod : "unmapped",
+                    (uint) gregs[REG_EAX], (uint) gregs[REG_EBX],
+                    (uint) gregs[REG_ECX], (uint) gregs[REG_EDX],
+                    (uint) gregs[REG_ESI], (uint) gregs[REG_EDI],
+                    (uint) gregs[REG_EBP], (uint) gregs[REG_ESP]);
+            {
+                char line[512];
+                describeHostMapping(eip, line, sizeof (line));
+                if (*line) {
+                    const uint8 *bytes = (const uint8 *) (size_t) eip;
+                    fprintf(stderr, "  eip bytes:");
+                    for (int i = 0; i < 16; i++)
+                        fprintf(stderr, " %02X", bytes[i]);
+                    fprintf(stderr, "\n");
+                } // if
+            }
+            {
+                const uint32 *stack = (const uint32 *) (size_t) gregs[REG_ESP];
+                fprintf(stderr, "  near-stack:");
+                for (int i = -8; i < 8; i++)
+                    fprintf(stderr, " [%08X]=%08X", (uint) (stack + i),
+                            (uint) stack[i]);
+                fprintf(stderr, "\n");
+            }
+            {
+                const uint32 *stack = (const uint32 *) (size_t) gregs[REG_ESP];
+                fprintf(stderr, "  stack:");
+                for (int i = 0; i < 12; i++) {
+                    char mod[320];
+                    describeModuleAddress((const void *) (size_t) stack[i],
+                                          mod, sizeof (mod));
+                    fprintf(stderr, " [%08X%s%s]", (uint) stack[i],
+                            (*mod) ? "=" : "", mod);
+                } // for
+                fprintf(stderr, "\n");
+            }
+            break;
+        } // case
         case 2: write(2, "SIGSEGV, aborting.\n", 19); break;
         default: break;
     } // switch
@@ -2769,8 +2979,16 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.convert1616to32 = lxConvert1616to32;
     GLoaderState.convert32to1616 = lxConvert32to1616;
     GLoaderState.loadModule = loadModuleByPathOrModuleName;
+    GLoaderState.freeModule = freeLxModule;
     GLoaderState.makeUnixPath = lxMakeUnixPath;
     GLoaderState.terminate = lxTerminate;
+
+    if (getenv("TWOINE_TRACE_ARGS")) {
+        fprintf(stderr, "2INE ARGS:");
+        for (int i = 0; i < argc; i++)
+            fprintf(stderr, " [%d]='%s'", i, argv[i]);
+        fprintf(stderr, "\n2INE CMD='%s'\n", GLoaderState.pib.pib_pchcmd ? GLoaderState.pib.pib_pchcmd : "(null)");
+    } // if
 
     const char *modulename = GLoaderState.subprocess ? getenv("IS_2INE") : argv[1];
     LxModule *lxmod = loadModuleByPath(modulename);

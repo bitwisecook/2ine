@@ -324,6 +324,7 @@ typedef struct LxLoaderState
     void *(*convert1616to32)(const uint32 addr1616);
     uint32 (*convert32to1616)(void *addr32);
     LxModule *(*loadModule)(const char *modname);
+    void (*freeModule)(LxModule *lxmod);
     char *(*makeUnixPath)(const char *os2path, uint32 *err);
     void __attribute__((noreturn)) (*terminate)(const uint32 exitcode);
     int (*registerAudioGenerator)(LxAudioGeneratorFn fn, void *data, const int singleton);

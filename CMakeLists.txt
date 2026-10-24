@@ -73,6 +73,9 @@ endif()
 
 # !!! FIXME
 include_directories("/usr/local/include/SDL2")
+if(NOT EXISTS "/usr/local/include/SDL2/SDL.h")
+    include_directories("/usr/include/SDL2")
+endif()
 
 add_library(2ine SHARED "lib2ine.c")
 if(LX_LEGACY)
@@ -89,6 +92,11 @@ foreach(_I doscalls;msg;nls;quecalls;viocalls;kbdcalls;sesmgr;som;pmwin;pmshapi;
     endif()
     target_link_libraries(${_I} 2ine)
 endforeach()
+
+# msg.c reads the extra arguments of the MSGSEG32 stdcall entry point from the
+#  frame, so it must keep an explicit frame pointer even in optimized builds.
+set_source_files_properties("native/msg.c" PROPERTIES
+    COMPILE_FLAGS "-fno-omit-frame-pointer")
 
 target_link_libraries(doscalls "pthread")
 # FIXME target_link_libraries(viocalls ${CURSES_LIBRARIES})

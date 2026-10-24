@@ -21,11 +21,16 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 
 #include "doscalls-lx.h"
 
 static pthread_mutex_t GMutexDosCalls;
 static pthread_mutex_t GMutexDosBeep;
+
+static char *makeUnixPath(const char *os2path, APIRET *err);
+static int grabLock(pthread_mutex_t *lock);
+static void ungrabLock(pthread_mutex_t *lock);
 
 typedef struct ExitListItem
 {
@@ -93,6 +98,86 @@ typedef struct
     volatile int posted;
     volatile int waiting;
 } EventSem;
+
+// Named semaphores are shared by the OS/2 processes 2ine starts. The registry
+//  keeps the OS/2 name alongside the handle so DosOpenEventSem()/
+//  DosOpenMutexSem() can find an existing object by name.
+typedef struct NamedSem
+{
+    char *name;
+    int is_mutex;
+    void *handle;
+    struct NamedSem *next;
+} NamedSem;
+
+// Named shared memory is backed by POSIX shared memory so that the OS/2
+//  processes 2ine starts (a compiler driver and its preprocessor, for
+//  example) really see the same pages. The registry also tracks anonymous
+//  page-rounded DosAllocMem blocks so DosFreeMem can retire them without
+//  breaking the OS/2 guarantee that a freed page stays addressable.
+typedef struct SharedMemBlock
+{
+    void *addr;
+    size_t size;
+    int freed;
+    struct SharedMemBlock *next;
+} SharedMemBlock;
+
+static SharedMemBlock *GSharedMem = NULL;
+
+static NamedSem *GNamedSems = NULL;
+
+static void registerNamedSem(const char *name, const int is_mutex, void *handle)
+{
+    if ((!name) || (!*name))
+        return;
+    NamedSem *sem = (NamedSem *) malloc(sizeof (*sem));
+    if (!sem)
+        return;
+    sem->name = strdup(name);
+    if (!sem->name) {
+        free(sem);
+        return;
+    } // if
+    sem->is_mutex = is_mutex;
+    sem->handle = handle;
+    grabLock(&GMutexDosCalls);
+    sem->next = GNamedSems;
+    GNamedSems = sem;
+    ungrabLock(&GMutexDosCalls);
+} // registerNamedSem
+
+static void *findNamedSem(const char *name, const int is_mutex)
+{
+    void *retval = NULL;
+    if (!name)
+        return NULL;
+    grabLock(&GMutexDosCalls);
+    for (NamedSem *sem = GNamedSems; sem; sem = sem->next) {
+        if ((sem->is_mutex == is_mutex) && (strcasecmp(sem->name, name) == 0)) {
+            retval = sem->handle;
+            break;
+        } // if
+    } // for
+    ungrabLock(&GMutexDosCalls);
+    return retval;
+} // findNamedSem
+
+static void unregisterNamedSem(void *handle)
+{
+    grabLock(&GMutexDosCalls);
+    for (NamedSem **next = &GNamedSems; *next; ) {
+        NamedSem *sem = *next;
+        if (sem->handle == handle) {
+            *next = sem->next;
+            free(sem->name);
+            free(sem);
+            break;
+        } // if
+        next = &sem->next;
+    } // for
+    ungrabLock(&GMutexDosCalls);
+} // unregisterNamedSem
 
 
 typedef struct
@@ -291,6 +376,105 @@ APIRET DosScanEnv(PSZ name, PSZ *outval)
 } // DosScanEnv
 
 
+// DosSearchPath() flags, from the OS/2 Toolkit's bsedos.h.
+#define SEARCH_PATH           0x0000  // pszPathOrName is a path list.
+#define SEARCH_CUR_DIRECTORY  0x0001  // search the current directory too.
+#define SEARCH_ENVIRONMENT    0x0002  // pszPathOrName names an environment variable.
+#define SEARCH_IGNORENETERRS  0x0004  // ignore an unset environment variable.
+
+// Split an OS/2 path list (';'-separated), probe each directory for the given
+//  file name, and return the first hit as an OS/2-style path. A file name
+//  that is already a path (drive or separator) is probed directly.
+APIRET DosSearchPath(ULONG flag, PSZ pszPathOrName, PSZ pszFilename, PBYTE pBuf, ULONG cbBuf)
+{
+    TRACE_NATIVE("DosSearchPath(%u, '%s', '%s', %p, %u)", (uint) flag,
+                 pszPathOrName ? pszPathOrName : "",
+                 pszFilename ? pszFilename : "", pBuf, (uint) cbBuf);
+
+    if ((!pszFilename) || (!*pszFilename) || (!pBuf) || (!cbBuf))
+        return ERROR_INVALID_PARAMETER;
+
+    const char *file = pszFilename;
+    char fullpath[PATH_MAX];
+    APIRET err = NO_ERROR;
+
+    // A file name that carries its own drive/absolute path bypasses the list.
+    if (strchr(file, ':') || (strchr(file, '\\') && (*file == '\\')) ||
+        (strchr(file, '/') && (*file == '/'))) {
+        char *unixpath = makeUnixPath(file, &err);
+        if (!unixpath)
+            return err;
+        const int found = (access(unixpath, F_OK) == 0);
+        free(unixpath);
+        if (!found)
+            return ERROR_FILE_NOT_FOUND;
+        if (strlen(file) + 1 > cbBuf)
+            return ERROR_BUFFER_OVERFLOW;
+        strcpy((char *) pBuf, file);
+        return NO_ERROR;
+    } // if
+
+    // pszPathOrName is either a path list or the name of an environment
+    //  variable holding one.
+    char pathlist[PATH_MAX] = { 0 };
+    const char *path = pszPathOrName;
+    if (flag & SEARCH_ENVIRONMENT) {
+        char *value = NULL;
+        const APIRET envrc = (path && *path) ? DosScanEnv((PSZ) path, &value)
+                                             : ERROR_ENVVAR_NOT_FOUND;
+        if (envrc != NO_ERROR) {
+            if (!(flag & SEARCH_IGNORENETERRS))
+                return envrc;
+            path = NULL;
+        } else {
+            strncpy(pathlist, value, sizeof (pathlist) - 1);
+            path = pathlist;
+        } // else
+    } // if
+
+    int found = 0;
+
+    if (flag & SEARCH_CUR_DIRECTORY) {
+        snprintf(fullpath, sizeof (fullpath), "%s", file);
+        char *unixpath = makeUnixPath(fullpath, &err);
+        if (unixpath) {
+            found = (access(unixpath, F_OK) == 0);
+            free(unixpath);
+        } // if
+    } // if
+
+    const char *dir = path;
+    while ((!found) && dir && *dir) {
+        const char *end = strchr(dir, ';');
+        const size_t dirlen = end ? (size_t) (end - dir) : strlen(dir);
+        if (dirlen == 0) {
+            snprintf(fullpath, sizeof (fullpath), "%s", file);
+        } else if ((dirlen + 1 + strlen(file)) < sizeof (fullpath)) {
+            snprintf(fullpath, sizeof (fullpath), "%.*s\\%s",
+                     (int) dirlen, dir, file);
+        } else {
+            return ERROR_FILENAME_EXCED_RANGE;
+        } // else
+
+        char *unixpath = makeUnixPath(fullpath, &err);
+        if (unixpath) {
+            found = (access(unixpath, F_OK) == 0);
+            free(unixpath);
+        } // if
+
+        dir = end ? end + 1 : NULL;
+    } // while
+
+    if (!found)
+        return ERROR_FILE_NOT_FOUND;
+    if (strlen(fullpath) + 1 > cbBuf)
+        return ERROR_BUFFER_OVERFLOW;
+
+    strcpy((char *) pBuf, fullpath);
+    return NO_ERROR;
+} // DosSearchPath
+
+
 static int getHFileUnixDescriptor(HFILE h)
 {
     grabLock(&GMutexDosCalls);
@@ -425,8 +609,9 @@ APIRET DosCreateEventSem(PSZ name, PHEV phev, ULONG attr, BOOL32 state)
     TRACE_NATIVE("DosCreateEventSem('%s', %p, %u, %u)", name, phev, (uint) attr, (uint) state);
 
     if (name != NULL) {
-        FIXME("implement named semaphores");
-        return ERROR_NOT_ENOUGH_MEMORY;
+        // A create of an already-registered name is an error on OS/2.
+        if (findNamedSem(name, 0))
+            return ERROR_DUPLICATE_NAME;
     } // if
 
     if (attr & DC_SEM_SHARED) {
@@ -451,18 +636,36 @@ APIRET DosCreateEventSem(PSZ name, PHEV phev, ULONG attr, BOOL32 state)
 
     sem->posted = state ? 1 : 0;
 
+    if (name != NULL)
+        registerNamedSem(name, 0, sem);
+
     *phev = (HEV) sem;
 
     return NO_ERROR;
 } // DosCreateEventSem
+
+APIRET DosOpenEventSem(PSZ pszName, PHEV phev)
+{
+    TRACE_NATIVE("DosOpenEventSem('%s', %p)", pszName ? pszName : "", phev);
+
+    if ((!pszName) || (!phev))
+        return ERROR_INVALID_PARAMETER;
+
+    void *handle = findNamedSem(pszName, 0);
+    if (!handle)
+        return ERROR_SEM_NOT_FOUND;
+
+    *phev = (HEV) handle;
+    return NO_ERROR;
+} // DosOpenEventSem
 
 APIRET DosCreateMutexSem(PSZ name, PHMTX phmtx, ULONG attr, BOOL32 state)
 {
     TRACE_NATIVE("DosCreateMutexSem('%s', %p, %u, %u)", name, phmtx, (uint) attr, (uint) state);
 
     if (name != NULL) {
-        FIXME("implement named mutexes");
-        return ERROR_NOT_ENOUGH_MEMORY;
+        if (findNamedSem(name, 1))
+            return ERROR_DUPLICATE_NAME;
     } // if
 
     if (attr & DC_SEM_SHARED) {
@@ -491,10 +694,28 @@ APIRET DosCreateMutexSem(PSZ name, PHMTX phmtx, ULONG attr, BOOL32 state)
     if (state)
         pthread_mutex_lock(mtx);
 
+    if (name != NULL)
+        registerNamedSem(name, 1, mtx);
+
     *phmtx = (HMTX) mtx;
 
     return NO_ERROR;
 } // DosCreateMutexSem
+
+APIRET DosOpenMutexSem(PSZ pszName, PHMTX phmtx)
+{
+    TRACE_NATIVE("DosOpenMutexSem('%s', %p)", pszName ? pszName : "", phmtx);
+
+    if ((!pszName) || (!phmtx))
+        return ERROR_INVALID_PARAMETER;
+
+    void *handle = findNamedSem(pszName, 1);
+    if (!handle)
+        return ERROR_SEM_NOT_FOUND;
+
+    *phmtx = (HMTX) handle;
+    return NO_ERROR;
+} // DosOpenMutexSem
 
 // !!! FIXME: this is obviously not correct.
 APIRET DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
@@ -621,14 +842,42 @@ APIRET DosSetRelMaxFH(PLONG pincr, PULONG pcurrent)
 } // DosSetRelMaxFH
 
 
+// OS/2 commits whole pages, and callers (IBM's C++ runtime among them) do
+//  write into the page-rounded tail of an allocation. Return a page-rounded,
+//  zero-filled mapping rather than an exact-size malloc block.
 APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
 {
     TRACE_NATIVE("DosAllocMem(%p, %u, %u)", ppb, (uint) cb, (uint) flag);
 
-    // !!! FIXME: this API is actually much more complicated than this.
-    *ppb = calloc(1, cb);
-    if (!*ppb)
+    if ((!ppb) || (cb == 0))
+        return ERROR_INVALID_PARAMETER;
+
+    const size_t pagesize = (size_t) getpagesize();
+    size_t size = (size_t) cb;
+    if ((size % pagesize) != 0)
+        size += pagesize - (size % pagesize);
+
+    void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (addr == MAP_FAILED)
         return ERROR_NOT_ENOUGH_MEMORY;
+
+    SharedMemBlock *block = (SharedMemBlock *) malloc(sizeof (*block));
+    if (!block) {
+        munmap(addr, size);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    } // if
+
+    block->addr = addr;
+    block->size = size;
+    block->freed = 0;
+
+    grabLock(&GMutexDosCalls);
+    block->next = GSharedMem;
+    GSharedMem = block;
+    ungrabLock(&GMutexDosCalls);
+
+    *ppb = addr;
     return NO_ERROR;
 } // DosAllocMem
 
@@ -1360,6 +1609,35 @@ static char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
     size_t len = 0;
     size_t idx = 0;
 
+    // A NULL pEnv means "inherit the caller's environment" (the usual case
+    //  for compiler drivers launching their preprocessor/pass executables).
+    if (!os2env) {
+        extern char **environ;
+        size_t count = 0;
+        while (environ[count])
+            count++;
+
+        retval = (char **) malloc(sizeof (char *) * (count + 2));
+        if (!retval) {
+            *err = ERROR_NOT_ENOUGH_MEMORY;
+            return NULL;
+        } // if
+        for (size_t i = 0; i < count; i++)
+            retval[i] = environ[i];
+
+        const size_t buflen = strlen(exe) + 16;
+        char *is2ine = (char *) malloc(buflen);
+        if (!is2ine) {
+            free(retval);
+            *err = ERROR_NOT_ENOUGH_MEMORY;
+            return NULL;
+        } // if
+        snprintf(is2ine, buflen, "IS_2INE=%s", exe);
+        retval[count++] = is2ine;
+        retval[count] = NULL;
+        return retval;
+    } // if
+
     const char *src = os2env;
     if (*src == '\0') {
         retval = (char **) malloc(sizeof (char *));
@@ -1422,79 +1700,58 @@ static char **calcArgv(const char *os2args, APIRET *err)
         return NULL;  // bad.
     } // if
 
-    size_t len = 0;
-    size_t idx = 1;
+    // OS/2 passes one double-NUL-terminated argument string; quotes group a
+    //  token that contains spaces and are removed from the token itself. The
+    //  IBM compilers rely on this for options such as /Yw"C:\tmp\file".
+    const char *args = os2args + argv0len + 1;
+    size_t maxargs = 2;
+    for (const char *ptr = args; *ptr; ptr++) {
+        if ((*ptr == ' ') || (*ptr == '\t'))
+            maxargs++;
+    } // for
 
-    const char *src = os2args + argv0len + 1;
-
-    // this can overallocate a little, but that's alright.
-    while (*src) {
-        const char ch = *(src++);
-        if ((ch == ' ') || (ch == '\t'))
-            idx++;
-        len++;
-    } // while
-
-    idx++;  // one more for NULL terminator element.
-
-    len += argv0len + 1 + sizeof (char *);
-    len += idx * (sizeof (char *) + 1);
-
-    void *allocated = malloc(len);
-    if (!allocated) {
+    const size_t bufsize = argv0len + 1 + strlen(args) + 1;
+    char **retval = (char **) malloc((maxargs + 1) * sizeof (char *) + bufsize);
+    if (!retval) {
         *err = ERROR_NOT_ENOUGH_MEMORY;
         return NULL;
     } // if
-    char **retval = (char **) allocated;
-    char *dst = (char *) (retval + idx + 1);
 
-    idx = 0;
+    char *dst = (char *) (retval + maxargs + 1);
+    size_t idx = 0;
 
     retval[idx++] = dst;
-    strcpy(dst, os2args);
+    memcpy(dst, os2args, argv0len + 1);
     dst += argv0len + 1;
 
-    src = os2args + argv0len + 1;
-    while ((*src == ' ') || (*src == '\t'))
-        src++;  // skip whitespace.
+    char *start = dst;
+    int in_quotes = 0;
+    int have_token = 0;
 
-    const char *srcstart = src;
-
-    while (*src) {
-        const char ch = *(src++);
-        if ((ch == ' ') || (ch == '\t')) {
-            retval[idx++] = dst;
-            const size_t cpylen = ((size_t) (src - srcstart)) - 1;
-            memcpy(dst, srcstart, cpylen);
-            dst += cpylen;
-            *(dst++) = '\0';
-            while ((*src == ' ') || (*src == '\t'))
-                src++;
-            srcstart = src;
-        } else if (ch == '"') {
-            srcstart++;
-            while ((*src != '"') && (*src != '\0'))
-                src++;
-            retval[idx++] = dst;
-            const size_t cpylen = (size_t) (src - srcstart);
-            memcpy(dst, srcstart, cpylen);
-            dst += cpylen;
-            *(dst++) = '\0';
-            if (*src == '"')
-                src++;
-            while ((*src == ' ') || (*src == '\t'))
-                src++;
-            srcstart = src;
+    for (const char *ptr = args; ; ptr++) {
+        const char ch = *ptr;
+        if (ch == '"') {
+            in_quotes = !in_quotes;
+            have_token = 1;
+            continue;
+        } else if ((ch == '\0') || ((!in_quotes) && ((ch == ' ') || (ch == '\t')))) {
+            if (have_token) {
+                *(dst++) = '\0';
+                retval[idx++] = start;
+                start = dst;
+                have_token = 0;
+            } // if
+            if (ch == '\0')
+                break;
+            continue;
         } // else if
-    } // for
 
-    const size_t cpylen = (size_t) (src - srcstart);
-    if (cpylen) {
-        retval[idx++] = dst;
-        memcpy(dst, srcstart, cpylen);
-        dst += cpylen;
-        *(dst++) = '\0';
-    } // if
+        if (!have_token) {
+            start = dst;
+            have_token = 1;
+        } // if
+        *(dst++) = ch;
+    } // for
 
     retval[idx] = NULL;
     return retval;
@@ -1639,6 +1896,14 @@ static APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG ex
 APIRET DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ pEnv, PRESULTCODES pRes, PSZ pName)
 {
     TRACE_NATIVE("DosExecPgm('%s', %u, %u, '%s', '%s', %p, '%s')", pObjname, (uint) cbObjname, (uint) execFlag, pArg, pEnv, pRes, pName);
+    if (GLoaderState.trace_native && pArg) {
+        fprintf(stderr, "2INE TRACE: DosExecPgm arg block:");
+        for (const char *p = pArg; p < (pArg + 1024); p++) {
+            if (*p) fprintf(stderr, " %c", (*p >= 32 && *p < 127) ? *p : '.');
+            else { fprintf(stderr, " |"); if (p[1] == '\0') break; }
+        }
+        fprintf(stderr, "\n");
+    }
     return DosExecPgm_implementation(pObjname, cbObjname, execFlag, pArg, pEnv, pRes, pName);
 } // DosExecPgm
 
@@ -1688,6 +1953,20 @@ APIRET DosPostEventSem(HEV hev)
 
     return retval;
 } // DosPostEventSem
+
+APIRET DosWaitNPipe(PSZ pszName, ULONG ulTimeOut)
+{
+    TRACE_NATIVE("DosWaitNPipe('%s', %u)", pszName ? pszName : "",
+                 (uint) ulTimeOut);
+
+    if ((!pszName) || (!*pszName))
+        return ERROR_INVALID_PARAMETER;
+
+    // 2ine has no named-pipe provider yet, so no instance can become
+    //  available. Report the OS/2 "nothing connected" result immediately
+    //  instead of blocking for a pipe that will never appear.
+    return ERROR_PIPE_NOT_CONNECTED;
+} // DosWaitNPipe
 
 APIRET DosWaitEventSem(HEV hev, ULONG ulTimeout)
 {
@@ -1786,6 +2065,7 @@ APIRET DosCloseEventSem(HEV hev)
     if (waiting > 0)
         return ERROR_SEM_BUSY;
 
+    unregisterNamedSem(sem);
     pthread_mutex_destroy(&sem->mutex);
     pthread_cond_destroy(&sem->condition);
     free(sem);
@@ -1793,11 +2073,153 @@ APIRET DosCloseEventSem(HEV hev)
     return NO_ERROR;
 } // DosCloseEventSem
 
+static void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
+{
+    // OS/2 names are case-insensitive and use backslashes; fold to one
+    //  collision-resistant POSIX name.
+    uint64_t hash = 1469598103934665603ULL;  // FNV-1a 64-bit offset basis.
+    for (const char *ptr = os2name; *ptr; ptr++) {
+        unsigned char ch = (unsigned char) *ptr;
+        if ((ch >= 'A') && (ch <= 'Z'))
+            ch += 'a' - 'A';
+        hash ^= ch;
+        hash *= 1099511628211ULL;  // FNV-1a 64-bit prime.
+    } // for
+    snprintf(buf, buflen, "/2ine-shm-%016llx", (unsigned long long) hash);
+} // makeSharedMemName
+
+APIRET DosGetNamedSharedMem(PPVOID ppb, PSZ pszName, ULONG flag)
+{
+    TRACE_NATIVE("DosGetNamedSharedMem(%p, '%s', %u)", ppb,
+                 pszName ? pszName : "", (uint) flag);
+
+    if ((!ppb) || (!pszName) || (!*pszName))
+        return ERROR_INVALID_PARAMETER;
+
+    char shmname[128];
+    makeSharedMemName(pszName, shmname, sizeof (shmname));
+
+    const int fd = shm_open(shmname, O_RDWR, 0600);
+    if (fd == -1) {
+        return (errno == ENOENT) ? ERROR_FILE_NOT_FOUND : ERROR_ACCESS_DENIED;
+    } // if
+
+    struct stat st;
+    if (fstat(fd, &st) == -1) {
+        close(fd);
+        return ERROR_ACCESS_DENIED;
+    } // if
+
+    const size_t size = (size_t) st.st_size;
+    void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if (addr == MAP_FAILED)
+        return ERROR_NOT_ENOUGH_MEMORY;
+
+    SharedMemBlock *block = (SharedMemBlock *) malloc(sizeof (*block));
+    if (!block) {
+        munmap(addr, size);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    } // if
+
+    block->addr = addr;
+    block->size = size;
+    block->freed = 0;
+
+    grabLock(&GMutexDosCalls);
+    block->next = GSharedMem;
+    GSharedMem = block;
+    ungrabLock(&GMutexDosCalls);
+
+    *ppb = addr;
+    return NO_ERROR;
+} // DosGetNamedSharedMem
+
+APIRET DosAllocSharedMem(PPVOID ppb, PSZ pszName, ULONG cb, ULONG flag)
+{
+    TRACE_NATIVE("DosAllocSharedMem(%p, '%s', %u, %u)", ppb,
+                 pszName ? pszName : "", (uint) cb, (uint) flag);
+
+    if ((!ppb) || (cb == 0))
+        return ERROR_INVALID_PARAMETER;
+
+    const size_t pagesize = (size_t) getpagesize();
+    size_t size = (size_t) cb;
+    if ((size % pagesize) != 0)
+        size += pagesize - (size % pagesize);
+
+    void *addr = MAP_FAILED;
+    if (pszName && *pszName) {
+        char shmname[128];
+        makeSharedMemName(pszName, shmname, sizeof (shmname));
+        const int fd = shm_open(shmname, O_CREAT | O_EXCL | O_RDWR, 0600);
+        if (fd == -1) {
+            if (errno == EEXIST)
+                return ERROR_DUPLICATE_NAME;
+            return ERROR_NOT_ENOUGH_MEMORY;
+        } // if
+        if (ftruncate(fd, (off_t) size) == -1) {
+            close(fd);
+            shm_unlink(shmname);
+            return ERROR_NOT_ENOUGH_MEMORY;
+        } // if
+        addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        close(fd);
+    } else {
+        addr = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    } // else
+
+    if (addr == MAP_FAILED)
+        return ERROR_NOT_ENOUGH_MEMORY;
+
+    SharedMemBlock *block = (SharedMemBlock *) malloc(sizeof (*block));
+    if (!block) {
+        munmap(addr, size);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    } // if
+
+    block->addr = addr;
+    block->size = size;
+    block->freed = 0;
+
+    grabLock(&GMutexDosCalls);
+    block->next = GSharedMem;
+    GSharedMem = block;
+    ungrabLock(&GMutexDosCalls);
+
+    *ppb = addr;
+    return NO_ERROR;
+} // DosAllocSharedMem
+
+APIRET DosGiveSharedMem(PVOID pb, PID pid, ULONG flag)
+{
+    TRACE_NATIVE("DosGiveSharedMem(%p, %u, %u)", pb, (uint) pid, (uint) flag);
+    // Shared mappings are already visible to every process that can name
+    //  them; there is no per-process grant to perform here.
+    return NO_ERROR;
+} // DosGiveSharedMem
+
 APIRET DosFreeMem(PVOID pb)
 {
     TRACE_NATIVE("DosFreeMem(%p)", pb);
 
     // !!! FIXME: this API is actually much more complicated than this.
+
+    // OS/2 releases pages lazily: a program that frees a block and then
+    //  touches it (the IBM C runtime's exit path does this with its errno
+    //  storage) still sees valid memory. Keep the mapping and mark it free
+    //  rather than calling munmap() immediately.
+    grabLock(&GMutexDosCalls);
+    for (SharedMemBlock *block = GSharedMem; block; block = block->next) {
+        if (block->addr == pb) {
+            block->freed = 1;
+            ungrabLock(&GMutexDosCalls);
+            return NO_ERROR;
+        } // if
+    } // for
+    ungrabLock(&GMutexDosCalls);
+
     free(pb);
     return NO_ERROR;
 } // DosFreeMem
@@ -1974,6 +2396,50 @@ APIRET DosDelete(PSZ pszFile)
     TRACE_NATIVE("DosDelete('%s')", pszFile);
     return DosDelete_implementation(pszFile);
 } // DosDelete
+
+APIRET DosForceDelete(PSZ pszFile)
+{
+    TRACE_NATIVE("DosForceDelete('%s')", pszFile);
+
+    if (!pszFile)
+        return ERROR_INVALID_PARAMETER;
+
+    APIRET err;
+    char *unixpath = makeUnixPath(pszFile, &err);
+    if (!unixpath)
+        return err;
+
+    int rc = unlink(unixpath);
+    if ((rc == -1) && (errno == EACCES)) {
+        // DosForceDelete ignores the read-only attribute; on Unix that
+        //  attribute does not inhibit unlink(), so this mainly covers a
+        //  file mode that blocks the operation.
+        struct stat st;
+        if ((lstat(unixpath, &st) == 0) && (!S_ISDIR(st.st_mode))) {
+            if (chmod(unixpath, st.st_mode | S_IWUSR) == 0)
+                rc = unlink(unixpath);
+        } // if
+    } // if
+
+    const int saved_errno = errno;
+    free(unixpath);
+    if (rc == -1) {
+        switch (saved_errno) {
+            case EACCES: return ERROR_ACCESS_DENIED;
+            case EBUSY: return ERROR_ACCESS_DENIED;
+            case EISDIR: return ERROR_ACCESS_DENIED;
+            case ENAMETOOLONG: return ERROR_FILENAME_EXCED_RANGE;
+            case ENOENT: return ERROR_FILE_NOT_FOUND;
+            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
+            case EPERM: return ERROR_ACCESS_DENIED;
+            case EROFS: return ERROR_ACCESS_DENIED;
+            case ETXTBSY: return ERROR_ACCESS_DENIED;
+            default: return ERROR_ACCESS_DENIED;
+        } // switch
+    } // if
+
+    return NO_ERROR;
+} // DosForceDelete
 
 APIRET DosSetPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULONG cbInfoBuf, ULONG flOptions)
 {
@@ -2426,6 +2892,31 @@ APIRET DosLoadModule(PSZ pszName, ULONG cbName, PSZ pszModname, PHMODULE phmod)
     *phmod = (HMODULE) lxmod;
     return NO_ERROR;
 } // DosLoadModule
+
+APIRET DosFreeModule(HMODULE hmod)
+{
+    TRACE_NATIVE("DosFreeModule(%u)", (uint) hmod);
+
+    if ((!hmod) || (!GLoaderState.freeModule))
+        return ERROR_INVALID_HANDLE;
+
+    LxModule *lxmod = (LxModule *) hmod;
+    LxModule *loaded;
+
+    /* Validate the opaque handle before passing it back to the loader. */
+    grabLock(&GMutexDosCalls);
+    for (loaded = GLoaderState.loaded_modules; loaded; loaded = loaded->next) {
+        if (loaded == lxmod)
+            break;
+    } // for
+    ungrabLock(&GMutexDosCalls);
+
+    if (!loaded)
+        return ERROR_INVALID_HANDLE;
+
+    GLoaderState.freeModule(lxmod);
+    return NO_ERROR;
+} // DosFreeModule
 
 
 static APIRET resetOneBuffer(const int fd)
@@ -3104,6 +3595,7 @@ APIRET DosCloseMutexSem(HMTX hmtx)
 
     if (hmtx) {
         pthread_mutex_t *mutex = (pthread_mutex_t *) hmtx;
+        unregisterNamedSem(mutex);
         const int rc = pthread_mutex_destroy(mutex);
         if (rc == EBUSY) {
             return ERROR_SEM_BUSY;
@@ -3771,6 +4263,271 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     linfo->pidCurrent = GLoaderState.pib.pib_ulpid;
     linfo->pidParent = GLoaderState.pib.pib_ulppid;
 }
+
+APIRET DosQueryDBCSEnv(ULONG buflen, PCOUNTRYCODE pcc, PCHAR buf)
+{
+    TRACE_NATIVE("DosQueryDBCSEnv(%u, %p, %p)", (uint) buflen, pcc, buf);
+    if ((!pcc) || (!buf))
+        return ERROR_INVALID_PARAMETER;
+    if ((pcc->country != 0) || (pcc->codepage != 0))
+        return ERROR_CODE_PAGE_NOT_FOUND;
+    memset(buf, '\0', buflen);
+    return NO_ERROR;
+} // DosQueryDBCSEnv
+
+APIRET DosSetDefaultDisk(ULONG disknum)
+{
+    TRACE_NATIVE("DosSetDefaultDisk(%u)", (uint) disknum);
+
+    if ((disknum < 1) || (disknum > 26) || (!GLoaderState.disks[disknum - 1]))
+        return ERROR_INVALID_DRIVE;
+
+    GLoaderState.current_disk = disknum;
+    return NO_ERROR;
+} // DosSetDefaultDisk
+
+APIRET DosDeleteDir(PSZ pszDir)
+{
+    TRACE_NATIVE("DosDeleteDir('%s')", pszDir ? pszDir : "");
+
+    if (!pszDir)
+        return ERROR_INVALID_PARAMETER;
+
+    APIRET err = NO_ERROR;
+    char *unixpath = makeUnixPath(pszDir, &err);
+    if (!unixpath)
+        return err;
+
+    const int rc = rmdir(unixpath);
+    const int saved_errno = errno;
+    free(unixpath);
+    if (rc == -1) {
+        switch (saved_errno) {
+            case EACCES: return ERROR_ACCESS_DENIED;
+            case EBUSY: return ERROR_ACCESS_DENIED;
+            case ENOENT: return ERROR_PATH_NOT_FOUND;
+            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
+            case ENOTEMPTY: return ERROR_DIR_NOT_EMPTY;
+            case EROFS: return ERROR_ACCESS_DENIED;
+            default: return ERROR_ACCESS_DENIED;
+        } // switch
+    } // if
+
+    return NO_ERROR;
+} // DosDeleteDir
+
+// DosCopy control bit: replace an existing target.
+#define DCPY_EXISTING 0x0001U
+
+APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
+{
+    TRACE_NATIVE("DosCopy('%s', '%s', %u)", pszOld ? pszOld : "",
+                 pszNew ? pszNew : "", (uint) option);
+
+    if ((!pszOld) || (!pszNew))
+        return ERROR_INVALID_PARAMETER;
+
+    APIRET err = NO_ERROR;
+    char *oldpath = makeUnixPath(pszOld, &err);
+    if (!oldpath)
+        return err;
+    char *newpath = makeUnixPath(pszNew, &err);
+    if (!newpath) {
+        free(oldpath);
+        return err;
+    } // if
+
+    if ((!(option & DCPY_EXISTING)) && (access(newpath, F_OK) == 0)) {
+        free(newpath);
+        free(oldpath);
+        return ERROR_FILE_EXISTS;
+    } // if
+
+    APIRET retval = NO_ERROR;
+    int in = open(oldpath, O_RDONLY);
+    if (in == -1) {
+        retval = ERROR_FILE_NOT_FOUND;
+    } else {
+        int out = open(newpath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        if (out == -1) {
+            retval = ERROR_ACCESS_DENIED;
+        } else {
+            char buf[16384];
+            for (;;) {
+                const ssize_t br = read(in, buf, sizeof (buf));
+                if (br < 0) {
+                    retval = ERROR_READ_FAULT;
+                    break;
+                } else if (br == 0) {
+                    break;
+                } // else if
+                ssize_t written = 0;
+                while (written < br) {
+                    const ssize_t bw = write(out, buf + written, br - written);
+                    if (bw <= 0) {
+                        retval = ERROR_DISK_FULL;
+                        break;
+                    } // if
+                    written += bw;
+                } // while
+                if (retval != NO_ERROR)
+                    break;
+            } // for
+            close(out);
+        } // else
+        close(in);
+    } // else
+
+    free(newpath);
+    free(oldpath);
+    return retval;
+} // DosCopy
+
+APIRET DosMove(PSZ pszOld, PSZ pszNew)
+{
+    TRACE_NATIVE("DosMove('%s', '%s')", pszOld ? pszOld : "",
+                 pszNew ? pszNew : "");
+
+    if ((!pszOld) || (!pszNew))
+        return ERROR_INVALID_PARAMETER;
+
+    APIRET err = NO_ERROR;
+    char *oldpath = makeUnixPath(pszOld, &err);
+    if (!oldpath)
+        return err;
+    char *newpath = makeUnixPath(pszNew, &err);
+    if (!newpath) {
+        free(oldpath);
+        return err;
+    } // if
+
+    APIRET retval = NO_ERROR;
+    if (rename(oldpath, newpath) == -1) {
+        switch (errno) {
+            case EACCES: retval = ERROR_ACCESS_DENIED; break;
+            case EEXIST: retval = ERROR_FILE_EXISTS; break;
+            case ENOENT: retval = ERROR_FILE_NOT_FOUND; break;
+            case EXDEV: retval = ERROR_NOT_SAME_DEVICE; break;
+            default: retval = ERROR_ACCESS_DENIED; break;
+        } // switch
+    } // if
+
+    free(newpath);
+    free(oldpath);
+    return retval;
+} // DosMove
+
+// DosQueryMem page flags, from the OS/2 Toolkit's bsememf.h.
+#define PAG_READ    0x00000001U
+#define PAG_WRITE   0x00000002U
+#define PAG_EXECUTE 0x00000004U
+#define PAG_COMMIT  0x00000010U
+
+APIRET DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag)
+{
+    TRACE_NATIVE("DosQueryMem(%p, %p, %p)", pb, pcb, pflag);
+
+    if ((!pcb) || (!pflag))
+        return ERROR_INVALID_PARAMETER;
+
+    // 2ine commits all process memory read/write; report that without
+    //  pretending to know allocator boundaries.
+    *pflag = PAG_READ | PAG_WRITE | PAG_COMMIT;
+    return NO_ERROR;
+} // DosQueryMem
+
+APIRET DosSetFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBuf)
+{
+    TRACE_NATIVE("DosSetFileInfo(%u, %u, %p, %u)", (uint) hf,
+                 (uint) ulInfoLevel, pInfo, (uint) cbInfoBuf);
+
+    const int fd = getHFileUnixDescriptor(hf);
+    if (fd == -1)
+        return ERROR_INVALID_HANDLE;
+
+    if (ulInfoLevel != FIL_STANDARD)
+        return ERROR_INVALID_LEVEL;
+    if ((!pInfo) || (cbInfoBuf < sizeof (FILESTATUS3)))
+        return ERROR_BUFFER_OVERFLOW;
+
+    // Only the write-permission attribute has a Unix analogue; timestamps
+    //  and EA data are accepted but not applied by this shim.
+    const FILESTATUS3 *st = (const FILESTATUS3 *) pInfo;
+    struct stat sb;
+    if (fstat(fd, &sb) == -1)
+        return ERROR_INVALID_HANDLE;
+    mode_t mode = sb.st_mode & 07777;
+    if (st->attrFile & FILE_READONLY)
+        mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
+    else
+        mode |= S_IWUSR;
+    if (fchmod(fd, mode) == -1)
+        return ERROR_ACCESS_DENIED;
+
+    return NO_ERROR;
+} // DosSetFileInfo
+
+APIRET DosError(ULONG error)
+{
+    TRACE_NATIVE("DosError(%u)", (uint) error);
+    // OS/2 returns the classification for the supplied error number. All of
+    //  the shim's errors are "unrecoverable" or ordinary errors; callers use
+    //  this mostly for display, so report the ordinary class.
+    return ERROR_GEN_FAILURE;
+} // DosError
+
+APIRET DosQueryModFromEIP(PHMODULE phmod, PCHAR pszModName, ULONG cbModName,
+                          PULONG pulOffset, PULONG pulObject, ULONG ulEIP)
+{
+    TRACE_NATIVE("DosQueryModFromEIP(%p, %p, %u, %p, %p, %08X)",
+                 phmod, pszModName, (uint) cbModName, pulOffset, pulObject,
+                 (uint) ulEIP);
+
+    for (LxModule *lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next) {
+        for (uint32 i = 0; i < lxmod->num_mmaps; i++) {
+            const uint32 base = (uint32) (size_t) lxmod->mmaps[i].addr;
+            const uint32 end = base + (uint32) lxmod->mmaps[i].size;
+            if ((ulEIP >= base) && (ulEIP < end)) {
+                if (phmod)
+                    *phmod = (HMODULE) lxmod;
+                if (pulOffset)
+                    *pulOffset = ulEIP - base;
+                if (pulObject)
+                    *pulObject = i + 1;
+                if (pszModName) {
+                    const size_t len = strlen(lxmod->name);
+                    if (len + 1 > cbModName)
+                        return ERROR_BUFFER_OVERFLOW;
+                    strcpy(pszModName, lxmod->name);
+                } // if
+                return NO_ERROR;
+            } // if
+        } // for
+    } // for
+
+    return ERROR_FILE_NOT_FOUND;
+} // DosQueryModFromEIP
+
+APIRET DosAcknowledgeSignalException(ULONG ulSignalNum)
+{
+    TRACE_NATIVE("DosAcknowledgeSignalException(%u)", (uint) ulSignalNum);
+    return NO_ERROR;
+} // DosAcknowledgeSignalException
+
+APIRET DosRaiseException(PEXCEPTIONREPORTRECORD pexcept)
+{
+    TRACE_NATIVE("DosRaiseException(%p)", pexcept);
+    FIXME("OS/2 exception dispatch is not implemented");
+    return ERROR_NOT_SUPPORTED;
+} // DosRaiseException
+
+APIRET DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler,
+                          PVOID pTargetIP, PEXCEPTIONREPORTRECORD pERepRec)
+{
+    TRACE_NATIVE("DosUnwindException(%p, %p, %p)", phandler, pTargetIP, pERepRec);
+    FIXME("OS/2 exception unwinding is not implemented");
+    return ERROR_NOT_SUPPORTED;
+} // DosUnwindException
 
 LX_NATIVE_DESTRUCTOR(doscalls)
 {
