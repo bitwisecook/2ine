@@ -1677,112 +1677,76 @@ static char *findExePath(const char *exe, APIRET *err)
 
 static char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
 {
-    char **retval = NULL;
-    size_t len = 0;
-    size_t idx = 0;
-
-    // A NULL pEnv means "inherit the caller's environment" (the usual case
-    //  for compiler drivers launching their preprocessor/pass executables).
-    if (!os2env) {
+    // Build a NULL-terminated environment for the child lx_loader. Besides
+    //  the caller-supplied OS/2 environment, keep the host settings the
+    //  loader itself needs to find lib2ine/libdoscalls and the OS/2 DLLs.
+    size_t count = 0;
+    const char *src = os2env;
+    if (!src) {
         extern char **environ;
-        size_t count = 0;
         while (environ[count])
             count++;
+    } else {
+        while (*src) {
+            count++;
+            src += strlen(src) + 1;
+        } // while
+    } // else
 
-        retval = (char **) malloc(sizeof (char *) * (count + 2));
-        if (!retval) {
-            *err = ERROR_NOT_ENOUGH_MEMORY;
-            return NULL;
-        } // if
-        for (size_t i = 0; i < count; i++)
-            retval[i] = environ[i];
-
-        const size_t buflen = strlen(exe) + 16;
-        char *is2ine = (char *) malloc(buflen);
-        if (!is2ine) {
-            free(retval);
-            *err = ERROR_NOT_ENOUGH_MEMORY;
-            return NULL;
-        } // if
-        snprintf(is2ine, buflen, "IS_2INE=%s", exe);
-        retval[count++] = is2ine;
-        retval[count] = NULL;
-        return retval;
-    } // if
-
-    const char *src = os2env;
-    if (*src == '\0') {
-        retval = (char **) malloc(sizeof (char *));
-        if (retval)
-            retval[0] = NULL;
-        return retval;
-    } // if
-
-    while (1) {
-        if (*(src++))
-            len++;
-        else {
-            idx++;
-            len += sizeof (char *) + 1;
-            if (*src == '\0')
-                break;
-        } // else
-    } // while
-
-    len += sizeof (char *);  // NULL at the end.
-    len += strlen(exe) + 16 + sizeof (char *);  // IS_2INE environment var.
-    idx++;  // IS_2INE
-
-    retval = (char **) malloc(len);
+    const char *tlib = getenv("TWOINE_LIBPATH");
+    const char *ldlib = getenv("LD_LIBRARY_PATH");
+    char **retval = (char **) calloc(count + 6, sizeof (char *));
     if (!retval) {
         *err = ERROR_NOT_ENOUGH_MEMORY;
         return NULL;
     } // if
 
-    char *dst = (char *) (retval + (idx + 1));
-    char *start = dst;
-    src = os2env;
-    idx = 0;
-    while (1) {
-        const char ch = *(src++);
-        *(dst++) = ch;
-        if (!ch) {
-            retval[idx++] = start;
-            start = dst;
-            if (*src == '\0')
-                break;
-        } // if
-    } // while
-    strcpy(dst, "IS_2INE=");
-    dst += strlen(dst);
-    strcpy(dst, exe);
-    dst += strlen(dst) + 1;
-    *(dst++) = '\0';
-    retval[idx++] = start;
+    size_t idx = 0;
+    if (!os2env) {
+        extern char **environ;
+        for (size_t i = 0; i < count; i++)
+            retval[idx++] = environ[i];
+    } else {
+        src = os2env;
+        while (*src) {
+            retval[idx++] = strdup(src);
+            src += strlen(src) + 1;
+        } // while
+    } // else
 
+    char buf[4096];
+    snprintf(buf, sizeof (buf), "IS_2INE=%s", exe);
+    retval[idx++] = strdup(buf);
+    if (tlib) {
+        snprintf(buf, sizeof (buf), "TWOINE_LIBPATH=%s", tlib);
+        retval[idx++] = strdup(buf);
+    } // if
+    if (ldlib) {
+        snprintf(buf, sizeof (buf), "LD_LIBRARY_PATH=%s", ldlib);
+        retval[idx++] = strdup(buf);
+    } // if
     retval[idx] = NULL;
     return retval;
 } // calcEnvp
 
-static char **calcArgv(const char *os2args, APIRET *err)
+static char **calcArgv(const char *os2args, const char *progpath, APIRET *err)
 {
-    const size_t argv0len = strlen(os2args);
-    if (argv0len == 0) {
-        *err = ERROR_BAD_ENVIRONMENT;
-        return NULL;  // bad.
-    } // if
+    if ((!os2args) || (!*os2args))
+        os2args = "";
 
-    // OS/2 passes one double-NUL-terminated argument string; quotes group a
-    //  token that contains spaces and are removed from the token itself. The
-    //  IBM compilers rely on this for options such as /Yw"C:\tmp\file".
-    const char *args = os2args + argv0len + 1;
-    size_t maxargs = 2;
+    // OS/2 passes one string for argv[0], a NUL, then the argument string.
+    //  The child here is another invocation of lx_loader, so its argv[0] is
+    //  the loader name and argv[1] is the OS/2 program to load. Everything
+    //  after the first NUL becomes the child's arguments.
+    const char *args = os2args + strlen(os2args) + 1;
+
+    size_t maxargs = 3;
     for (const char *ptr = args; *ptr; ptr++) {
         if ((*ptr == ' ') || (*ptr == '\t'))
             maxargs++;
     } // for
 
-    const size_t bufsize = argv0len + 1 + strlen(args) + 1;
+    const size_t bufsize = 16 + strlen(progpath) + 1 + strlen(args) + 1;
     char **retval = (char **) malloc((maxargs + 1) * sizeof (char *) + bufsize);
     if (!retval) {
         *err = ERROR_NOT_ENOUGH_MEMORY;
@@ -1792,9 +1756,13 @@ static char **calcArgv(const char *os2args, APIRET *err)
     char *dst = (char *) (retval + maxargs + 1);
     size_t idx = 0;
 
+    strcpy(dst, "lx_loader");
     retval[idx++] = dst;
-    memcpy(dst, os2args, argv0len + 1);
-    dst += argv0len + 1;
+    dst += strlen(dst) + 1;
+
+    strcpy(dst, progpath);
+    retval[idx++] = dst;
+    dst += strlen(dst) + 1;
 
     char *start = dst;
     int in_quotes = 0;
@@ -1888,7 +1856,7 @@ static APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG ex
         return retval;
     } // if
 
-    char **argv = calcArgv(pArg, &retval);
+    char **argv = calcArgv(pArg, pName, &retval);
     if (!argv) {
         free(exe);
         free(pNameUnix);
