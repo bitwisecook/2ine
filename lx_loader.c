@@ -542,6 +542,10 @@ static void *lxConvert1616to32(const uint32 addr1616)
 
     const uint16 selector = (uint16) (addr1616 >> 19);  // slide segment down, and shift out control bits.
     const uint16 offset = (uint16) (addr1616 % 0x10000);  // all our LDT segments start at 64k boundaries (at the moment!).
+    // 0xFFFF is the Microsoft 16-bit runtime's "use my DS" sentinel for
+    //  far pointers that the import thunks normally replace with DS.
+    if ((selector == 0x1FFF) && GLoaderState.near16_base)
+        return (void *) (size_t) (GLoaderState.near16_base + offset);
     //printf("lxConvert1616to32: 0x%X -> %p\n", (uint) addr1616, (void *) (size_t) (GLoaderState.ldt[selector] + offset));
     assert(GLoaderState.ldt[selector] != 0);
     return (void *) (size_t) (GLoaderState.ldt[selector] + offset);
@@ -2342,6 +2346,12 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
 
     // All the pages we need from the EXE are loaded into the appropriate spots in memory.
     //printf("mmap()'d everything we need!\n");
+
+    if (!isDLL && ne->auto_data_segment &&
+        (ne->auto_data_segment <= ne->num_segment_table_entries)) {
+        GLoaderState.near16_base = (uint32) (uintptr_t)
+            retval->mmaps[ne->auto_data_segment - 1].addr;
+    } // if
 
     retval->eip = (lxSelectorToSegment(retval->mmaps[ne->reg_cs-1].alias) << 16) | ne->reg_ip;
 
