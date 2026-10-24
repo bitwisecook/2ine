@@ -481,6 +481,10 @@ static int allocateSelector(const uint16 selector, const int pages, const uint32
 } // allocateSelector
 
 // !!! FIXME: mutex this
+// Selector 0x1FFF (segment 0xFFFF) is reserved as the Microsoft 16-bit
+// runtime's "use DS" sentinel.  Do not allocate a real mapping there.
+#define LX_NEAR16_SENTINEL_SELECTOR 0x1FFF
+
 static int lxFindSelector(const uint32 _addr, uint16 *outselector, uint16 *outoffset, int iscode)
 {
     uint32 addr = _addr;
@@ -497,9 +501,10 @@ static int lxFindSelector(const uint32 _addr, uint16 *outselector, uint16 *outof
     if (addr < (1024 * 1024 * 512)) {
         const uint16 idx = (uint16) (addr >> 16);
         const uint32 tile = ldt[idx];
-        if (tile == 0) {
+        if ((tile == 0) && (idx != LX_NEAR16_SENTINEL_SELECTOR)) {
             preferred = available = idx;  // we can use this piece.
-        } else if ((tile <= addr) && ((tile + 0x10000) > addr)) {
+        } else if ((tile != 0) && (idx != LX_NEAR16_SENTINEL_SELECTOR) &&
+                   (tile <= addr) && ((tile + 0x10000) > addr)) {
             *outselector = idx;
             *outoffset = (uint16) (addr - tile);
             //printf("SELECTOR: found tiled selector 0x%X for address %p\n", (uint) idx, (void *) addr);
@@ -508,6 +513,8 @@ static int lxFindSelector(const uint32 _addr, uint16 *outselector, uint16 *outof
     } // if
 
     for (int i = 0; i < LX_MAX_LDT_SLOTS; i++) {
+        if (i == LX_NEAR16_SENTINEL_SELECTOR)
+            continue;  // reserved for the Microsoft 16-bit DS sentinel.
         const uint32 tile = ldt[i];
         if (tile == 0)
             available = i;
