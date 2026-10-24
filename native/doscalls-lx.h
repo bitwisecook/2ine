@@ -18,16 +18,32 @@ static APIRET16 bridge16to32_Dos16CWait(uint8 *args) {
     return Dos16CWait(action, option, pres, ppid, pid);
 }
 
+static APIRET16 bridge16to32_Dos16EnterCritSec(uint8 *args) {
+    return Dos16EnterCritSec();
+}
+
 static VOID bridge16to32_Dos16Exit(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, result);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, action);
     Dos16Exit(action, result);
 }
 
+static APIRET16 bridge16to32_Dos16ExitCritSec(uint8 *args) {
+    return Dos16ExitCritSec();
+}
+
 static APIRET16 bridge16to32_Dos16GetInfoSeg(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSEL, localseg);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSEL, globalseg);
     return Dos16GetInfoSeg(globalseg, localseg);
+}
+
+static APIRET16 bridge16to32_Dos16SetPrty(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, pid);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(SHORT, delta);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, prtyclass);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, scope);
+    return Dos16SetPrty(scope, prtyclass, delta, pid);
 }
 
 static APIRET16 bridge16to32_Dos16HoldSignal(uint8 *args) {
@@ -42,6 +58,11 @@ static APIRET16 bridge16to32_Dos16SetSigHandler(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, prevaddress);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PFN, routine);
     return Dos16SetSigHandler(routine, prevaddress, prevaction, action, signumber);
+}
+
+static APIRET16 bridge16to32_Dos16GetDateTime(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PDATETIME, pdt);
+    return Dos16GetDateTime(pdt);
 }
 
 static APIRET16 bridge16to32_Dos16AllocSeg(uint8 *args) {
@@ -140,15 +161,15 @@ static APIRET16 bridge16to32_Dos16MkDir(uint8 *args) {
 }
 
 static APIRET16 bridge16to32_Dos16Open(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PEAOP2, peaop2);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, ulReserved);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, fsOpenMode);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, fsOpenFlags);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, ulAttribute);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, cbFile);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PULONG, pulAction);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pusAction);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pHf);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, pszFileName);
-    return Dos16Open(pszFileName, pHf, pulAction, cbFile, ulAttribute, fsOpenFlags, fsOpenMode, peaop2);
+    return Dos16Open(pszFileName, pHf, pusAction, cbFile, ulAttribute, fsOpenFlags, fsOpenMode, ulReserved);
 }
 
 static APIRET16 bridge16to32_Dos16QCurDir(uint8 *args) {
@@ -209,11 +230,42 @@ static APIRET16 bridge16to32_Dos16GetPID(uint8 *args) {
     return Dos16GetPID(ppidinfo);
 }
 
+static APIRET16 bridge16to32_Dos16Error(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, error);
+    return Dos16Error(error);
+}
+
+static APIRET16 bridge16to32_Dos16GetSeg(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, sel);
+    return Dos16GetSeg(sel);
+}
+
+static APIRET16 bridge16to32_Dos16LockSeg(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, sel);
+    return Dos16LockSeg(sel);
+}
+
+static APIRET16 bridge16to32_Dos16UnlockSeg(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, sel);
+    return Dos16UnlockSeg(sel);
+}
+
 static APIRET16 bridge16to32_Dos16GetCp(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pcCP);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, arCP);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cb);
     return Dos16GetCp(cb, arCP, pcCP);
+}
+
+static APIRET16 bridge16to32_Dos16HugeShift(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pshift);
+    return Dos16HugeShift(pshift);
+}
+
+static APIRET16 bridge16to32_Dos16HugeIncr(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PULONG, psize);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, sel);
+    return Dos16HugeIncr(sel, psize);
 }
 
 static APIRET16 bridge16to32_Dos16Read(uint8 *args) {
@@ -265,6 +317,13 @@ static APIRET16 bridge16to32_Dos16ExecPgm(uint8 *args) {
     return Dos16ExecPgm(pObjname, cbObjname, execFlag, pArg, pEnv, pRes, pName);
 }
 
+static APIRET16 bridge16to32_Dos16CreateThread(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, pbStack);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, pTid);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, pfnFun);
+    return Dos16CreateThread(pfnFun, pTid, pbStack);
+}
+
 static APIRET16 bridge16to32_Dos16MkDir2(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PEAOP2, peaop2);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, pszDirName);
@@ -273,10 +332,14 @@ static APIRET16 bridge16to32_Dos16MkDir2(uint8 *args) {
 
 LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(Dos16CWait)
+    LX_NATIVE_MODULE_16BIT_API(Dos16EnterCritSec)
     LX_NATIVE_MODULE_16BIT_API(Dos16Exit)
+    LX_NATIVE_MODULE_16BIT_API(Dos16ExitCritSec)
     LX_NATIVE_MODULE_16BIT_API(Dos16GetInfoSeg)
+    LX_NATIVE_MODULE_16BIT_API(Dos16SetPrty)
     LX_NATIVE_MODULE_16BIT_API(Dos16HoldSignal)
     LX_NATIVE_MODULE_16BIT_API(Dos16SetSigHandler)
+    LX_NATIVE_MODULE_16BIT_API(Dos16GetDateTime)
     LX_NATIVE_MODULE_16BIT_API(Dos16AllocSeg)
     LX_NATIVE_MODULE_16BIT_API(Dos16ReallocSeg)
     LX_NATIVE_MODULE_16BIT_API(Dos16FreeSeg)
@@ -302,7 +365,13 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(Dos16GetEnv)
     LX_NATIVE_MODULE_16BIT_API(Dos16GetVersion)
     LX_NATIVE_MODULE_16BIT_API(Dos16GetPID)
+    LX_NATIVE_MODULE_16BIT_API(Dos16Error)
+    LX_NATIVE_MODULE_16BIT_API(Dos16GetSeg)
+    LX_NATIVE_MODULE_16BIT_API(Dos16LockSeg)
+    LX_NATIVE_MODULE_16BIT_API(Dos16UnlockSeg)
     LX_NATIVE_MODULE_16BIT_API(Dos16GetCp)
+    LX_NATIVE_MODULE_16BIT_API(Dos16HugeShift)
+    LX_NATIVE_MODULE_16BIT_API(Dos16HugeIncr)
     LX_NATIVE_MODULE_16BIT_API(Dos16Read)
     LX_NATIVE_MODULE_16BIT_API(Dos16Write)
     LX_NATIVE_MODULE_16BIT_API(DosSemRequest)
@@ -310,6 +379,7 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(DosSemWait)
     LX_NATIVE_MODULE_16BIT_API(DosSemSet)
     LX_NATIVE_MODULE_16BIT_API(Dos16ExecPgm)
+    LX_NATIVE_MODULE_16BIT_API(Dos16CreateThread)
     LX_NATIVE_MODULE_16BIT_API(Dos16MkDir2)
 LX_NATIVE_MODULE_16BIT_SUPPORT_END()
 
@@ -320,10 +390,14 @@ LX_NATIVE_MODULE_DEINIT({
 static int init16_doscalls(void) {
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CWait, 14)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16EnterCritSec, 0)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16Exit, 4)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16ExitCritSec, 0)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetInfoSeg, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetPrty, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16HoldSignal, 2)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetSigHandler, 16)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetDateTime, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16AllocSeg, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16ReallocSeg, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16FreeSeg, 2)
@@ -349,7 +423,13 @@ static int init16_doscalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetEnv, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetVersion, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetPID, 4)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16Error, 2)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetSeg, 2)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16LockSeg, 2)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16UnlockSeg, 2)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetCp, 10)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16HugeShift, 4)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16HugeIncr, 6)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16Read, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16Write, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(DosSemRequest, 8)
@@ -357,6 +437,7 @@ static int init16_doscalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(DosSemWait, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(DosSemSet, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16ExecPgm, 24)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CreateThread, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16MkDir2, 8)
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
     return 1;
@@ -364,10 +445,14 @@ static int init16_doscalls(void) {
 
 LX_NATIVE_MODULE_INIT({ if (!init16_doscalls()) return 0; })
     LX_NATIVE_EXPORT16(Dos16CWait, 2),
+    LX_NATIVE_EXPORT16(Dos16EnterCritSec, 3),
     LX_NATIVE_EXPORT16(Dos16Exit, 5),
+    LX_NATIVE_EXPORT16(Dos16ExitCritSec, 6),
     LX_NATIVE_EXPORT16(Dos16GetInfoSeg, 8),
+    LX_NATIVE_EXPORT16(Dos16SetPrty, 11),
     LX_NATIVE_EXPORT16(Dos16HoldSignal, 13),
     LX_NATIVE_EXPORT16(Dos16SetSigHandler, 14),
+    LX_NATIVE_EXPORT16(Dos16GetDateTime, 33),
     LX_NATIVE_EXPORT16(Dos16AllocSeg, 34),
     LX_NATIVE_EXPORT16(Dos16ReallocSeg, 38),
     LX_NATIVE_EXPORT16(Dos16FreeSeg, 39),
@@ -394,7 +479,13 @@ LX_NATIVE_MODULE_INIT({ if (!init16_doscalls()) return 0; })
     LX_NATIVE_EXPORT16(Dos16GetVersion, 92),
     LX_NATIVE_EXPORT16(Dos16GetPID, 94),
     LX_NATIVE_EXPORT(DosForceDelete, 110),
+    LX_NATIVE_EXPORT16(Dos16Error, 120),
+    LX_NATIVE_EXPORT16(Dos16GetSeg, 121),
+    LX_NATIVE_EXPORT16(Dos16LockSeg, 122),
+    LX_NATIVE_EXPORT16(Dos16UnlockSeg, 123),
     LX_NATIVE_EXPORT16(Dos16GetCp, 130),
+    LX_NATIVE_EXPORT16(Dos16HugeShift, 135),
+    LX_NATIVE_EXPORT16(Dos16HugeIncr, 136),
     LX_NATIVE_EXPORT16(Dos16Read, 137),
     LX_NATIVE_EXPORT16(Dos16Write, 138),
     LX_NATIVE_EXPORT16(DosSemRequest, 140),
@@ -402,6 +493,7 @@ LX_NATIVE_MODULE_INIT({ if (!init16_doscalls()) return 0; })
     LX_NATIVE_EXPORT16(DosSemWait, 142),
     LX_NATIVE_EXPORT16(DosSemSet, 143),
     LX_NATIVE_EXPORT16(Dos16ExecPgm, 144),
+    LX_NATIVE_EXPORT16(Dos16CreateThread, 145),
     LX_NATIVE_EXPORT16(Dos16MkDir2, 185),
     LX_NATIVE_EXPORT(DosSetMaxFH, 209),
     LX_NATIVE_EXPORT(DosError, 212),

@@ -820,6 +820,9 @@ static void *generateMissingTrampoline16(const char *_module, const char *_entry
     char *ptr = (char *) trampoline;
     char *module = strdup(_module);
     char *entry = strdup(_entry);
+    if (getenv("TWOINE_TRACE_FIXUPS"))
+        fprintf(stderr, "2INE MISSING16: %s@%s -> %p (sel %04X)\n",
+                _module, _entry, trampoline, (uint) selector);
 
     // USE16
     *(ptr++) = 0x89;  /* mov cx,sp... */
@@ -1273,6 +1276,8 @@ static void *getModuleProcAddrByName(const LxModule *module, const char *name, c
             void *retval = lxexp->addr;
             if (lxexp->object && lxexp->object->alias != 0xFFFF)  // 16-bit bridge? this is actually a void**, due to some macro salsa.  :/
                 retval = *((void**) retval);
+            if (getenv("TWOINE_TRACE_FIXUPS"))
+                fprintf(stderr, "2INE FIXNAME: %s@'%s' -> %p\n", module->name, name, retval);
             return retval;
         } // if
     } // for
@@ -2294,6 +2299,9 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
             goto loadne_failed;
         }
 
+        if (getenv("TWOINE_TRACE_SEGMENTS"))
+            fprintf(stderr, "2INE NESEG %s #%u addr=%p selector=%04X iscode=%d\n",
+                    retval->name, (uint) i + 1, mmapaddr, (uint) selector, iscode);
         retval->mmaps[i].mapped = mmapaddr;
         retval->mmaps[i].size = vsize;
         retval->mmaps[i].addr = mmapaddr;
@@ -2314,7 +2322,7 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
             size_t leftover = vsize;
             if (segfiledataoffset) {
                 memcpy(dst, src, segfiledatalen);
-                char fname[16]; snprintf(fname, sizeof (fname), "seg%d.bin", (int) i+1); FILE *io = fopen(fname, "wb"); if (io) { fwrite(dst, segfiledatalen, 1, io); fclose(io); }
+
                 leftover -= segfiledatalen;
                 dst += segfiledatalen;
             }
@@ -2338,7 +2346,16 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
             if (!autodataseg) {
                 goto loadne_failed;
             }
-            sp = autodataseg->size + ne->stack_size;
+            // The declared minimum stack can be smaller than what a large
+            //  16-bit runtime (e.g. MASM's) actually uses. Leave a generous
+            //  region below the automatic data segment for the stack; the
+            //  heap and stack still share the remaining 64k.
+            uint32 stacktop = (uint32) autodataseg->size + ne->stack_size;
+            if (stacktop < ((uint32) autodataseg->size + 0x8000))
+                stacktop = (uint32) autodataseg->size + 0x8000;
+            if (stacktop >= 0xFFF0)
+                stacktop = 0xFFF0;
+            sp = (uint16) stacktop;
         }
 
         retval->esp = (lxSelectorToSegment(retval->mmaps[ne->reg_ss-1].alias) << 16) | (sp ? sp : 0xFFFF);

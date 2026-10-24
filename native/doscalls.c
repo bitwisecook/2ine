@@ -29,6 +29,12 @@ static pthread_mutex_t GMutexDosCalls;
 static pthread_mutex_t GMutexDosBeep;
 
 static char *makeUnixPath(const char *os2path, APIRET *err);
+
+// Optional per-call result tracing (TWOINE_TRACE_RET), separate from the
+//  argument trace so a failing call is easy to spot in a long tool run.
+#define TRACE_RET(...) do { if (getenv("TWOINE_TRACE_RET")) { \
+    fprintf(stderr, "2INE RET: "); fprintf(stderr, __VA_ARGS__); \
+    fprintf(stderr, "\n"); } } while (0)
 static int grabLock(pthread_mutex_t *lock);
 static void ungrabLock(pthread_mutex_t *lock);
 
@@ -110,6 +116,39 @@ typedef struct NamedSem
     struct NamedSem *next;
 } NamedSem;
 
+
+// OS/2 32-bit processes had a 512 MiB private address space; many shipped
+//  programs (the IBM linker among them) keep pointers in signed or 16-bit-ish
+//  structures and misbehave when allocations land above that. Hand out
+//  anonymous mappings from a low arena instead of letting the kernel pick a
+//  high address.
+#ifndef MAP_FIXED_NOREPLACE
+#define MAP_FIXED_NOREPLACE 0x100000
+#endif
+
+#define OS2_LOW_ARENA_START 0x20000000UL  // 512 MiB: above EXE objects, below 2 GiB.
+#define OS2_LOW_ARENA_END   0x60000000UL
+
+static void *allocLowMemory(const size_t size, const int prot,
+                            const int extra_flags, const int fd)
+{
+    static uintptr_t next = OS2_LOW_ARENA_START;
+    const size_t pagesize = (size_t) getpagesize();
+
+    for (uintptr_t hint = next; (hint + size) <= OS2_LOW_ARENA_END; ) {
+        void *addr = mmap((void *) hint, size, prot,
+                          extra_flags | MAP_FIXED_NOREPLACE, fd, 0);
+        if (addr != MAP_FAILED) {
+            next = hint + size + pagesize;
+            return addr;
+        } // if
+        hint += size + pagesize;
+        hint = (hint + pagesize - 1) & ~(uintptr_t) (pagesize - 1);
+    } // for
+
+    return mmap(NULL, size, prot, extra_flags, fd, 0);
+} // allocLowMemory
+
 // Named shared memory is backed by POSIX shared memory so that the OS/2
 //  processes 2ine starts (a compiler driver and its preprocessor, for
 //  example) really see the same pages. The registry also tracks anonymous
@@ -126,6 +165,13 @@ typedef struct SharedMemBlock
 static SharedMemBlock *GSharedMem = NULL;
 
 static NamedSem *GNamedSems = NULL;
+
+// The IBM C runtime's heap create/open pair (CPPRMI36 _ucreate/_uopen)
+//  creates an unnamed event semaphore and then opens it by the (empty) name
+//  stored in the heap header. OS/2 rejects that, but the runtime expects the
+//  open to find the semaphore it just made, so remember the most recent
+//  unnamed one for the empty-name open.
+static EventSem *GLastUnnamedEventSem = NULL;
 
 static void registerNamedSem(const char *name, const int is_mutex, void *handle)
 {
@@ -638,9 +684,11 @@ APIRET DosCreateEventSem(PSZ name, PHEV phev, ULONG attr, BOOL32 state)
 
     if (name != NULL)
         registerNamedSem(name, 0, sem);
+    else
+        GLastUnnamedEventSem = sem;
 
     *phev = (HEV) sem;
-
+    TRACE_RET("DosCreateEventSem('%s') -> %p", name ? name : "(null)", sem);
     return NO_ERROR;
 } // DosCreateEventSem
 
@@ -648,10 +696,15 @@ APIRET DosOpenEventSem(PSZ pszName, PHEV phev)
 {
     TRACE_NATIVE("DosOpenEventSem('%s', %p)", pszName ? pszName : "", phev);
 
-    if ((!pszName) || (!phev))
+    if (!phev)
         return ERROR_INVALID_PARAMETER;
 
-    void *handle = findNamedSem(pszName, 0);
+    void *handle = NULL;
+    if ((!pszName) || (!*pszName))
+        handle = GLastUnnamedEventSem;  // see GLastUnnamedEventSem
+    else
+        handle = findNamedSem(pszName, 0);
+    TRACE_RET("DosOpenEventSem('%s') -> %p", pszName ? pszName : "", handle);
     if (!handle)
         return ERROR_SEM_NOT_FOUND;
 
@@ -857,8 +910,8 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     if ((size % pagesize) != 0)
         size += pagesize - (size % pagesize);
 
-    void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE,
-                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void *addr = allocLowMemory(size, PROT_READ | PROT_WRITE,
+                                MAP_PRIVATE | MAP_ANONYMOUS, -1);
     if (addr == MAP_FAILED)
         return ERROR_NOT_ENOUGH_MEMORY;
 
@@ -878,6 +931,7 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     ungrabLock(&GMutexDosCalls);
 
     *ppb = addr;
+    TRACE_RET("DosAllocMem(%u) -> %p", (uint) cb, addr);
     return NO_ERROR;
 } // DosAllocMem
 
@@ -885,6 +939,7 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
 APIRET DosSubSetMem(PVOID pbBase, ULONG flag, ULONG cb)
 {
     TRACE_NATIVE("DosSubSetMem(%p, %u, %u)", pbBase, (uint) flag, (uint) cb);
+    TRACE_RET("DosSubSetMem(%p, %u, %u) -> 0", pbBase, (uint) flag, (uint) cb);
     return NO_ERROR;  // !!! FIXME: obviously wrong
 } // DosSubSetMem
 
@@ -893,8 +948,11 @@ APIRET DosSubAllocMem(PVOID pbBase, PPVOID ppb, ULONG cb)
 {
     TRACE_NATIVE("DosSubAllocMem(%p, %p, %u)", pbBase, ppb, (uint) cb);
     *ppb = malloc(cb);  // !!! FIXME: obviously wrong
-    if (!*ppb)
+    if (!*ppb) {
+        TRACE_RET("DosSubAllocMem(%p, %u) -> ENOMEM", pbBase, (uint) cb);
         return ERROR_NOT_ENOUGH_MEMORY;
+    } // if
+    TRACE_RET("DosSubAllocMem(%p, %u) -> %p", pbBase, (uint) cb, *ppb);
     return NO_ERROR;
 } // DosSubAllocMem
 
@@ -1145,7 +1203,10 @@ static APIRET doDosOpen(PSZ pszFileName, PHFILE pHf, PULONG pulAction, LONGLONG 
 APIRET DosOpen(PSZ pszFileName, PHFILE pHf, PULONG pulAction, ULONG cbFile, ULONG ulAttribute, ULONG fsOpenFlags, ULONG fsOpenMode, PEAOP2 peaop2)
 {
     TRACE_NATIVE("DosOpen('%s', %p, %p, %u, %u, %u, %u, %p)", pszFileName, pHf, pulAction, (uint) cbFile, (uint) ulAttribute, (uint) fsOpenFlags, (uint) fsOpenMode, peaop2);
-    return doDosOpen(pszFileName, pHf, pulAction, (LONGLONG) cbFile, ulAttribute, fsOpenFlags, fsOpenMode, peaop2);
+    const APIRET rc = doDosOpen(pszFileName, pHf, pulAction, (LONGLONG) cbFile, ulAttribute, fsOpenFlags, fsOpenMode, peaop2);
+    TRACE_RET("DosOpen('%s') -> %u handle=%u action=%u", pszFileName, (uint) rc,
+              (uint) (pHf ? *pHf : 0), (uint) (pulAction ? *pulAction : 0));
+    return rc;
 } // DosOpen
 
 APIRET DosRequestMutexSem(HMTX hmtx, ULONG ulTimeout)
@@ -1220,6 +1281,8 @@ static APIRET DosSetFilePtr_implementation(HFILE hFile, LONG ib, ULONG method, P
     if (ibActual)
         *ibActual = (ULONG) pos;
 
+    TRACE_RET("DosSetFilePtr(%u, %d, %u) -> %ld", (uint) hFile, (int) ib,
+              (uint) method, (long) pos);
     return NO_ERROR;
 } // DosSetFilePtr_implementation
 
@@ -1236,12 +1299,15 @@ static APIRET DosRead_implementation(HFILE hFile, PVOID pBuffer, ULONG cbRead, P
         return ERROR_INVALID_HANDLE;
 
     const ssize_t br = read(fd, pBuffer, cbRead);
-    if (br == -1)
+    if (br == -1) {
+        TRACE_RET("DosRead(%u, %u) -> error", (uint) hFile, (uint) cbRead);
         return ERROR_INVALID_FUNCTION;  // !!! FIXME: ?
+    } // if
 
     if (pcbActual)
         *pcbActual = (ULONG) br;
 
+    TRACE_RET("DosRead(%u, %u) -> %ld", (uint) hFile, (uint) cbRead, (long) br);
     return NO_ERROR;
 } // DosRead_implementation
 
@@ -1462,6 +1528,8 @@ APIRET DosQueryPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULON
     if (!unixPath)
         return err;
     err = queryPathInfo(unixPath, ulInfoLevel, pInfoBuf, cbInfoBuf);
+    TRACE_RET("DosQueryPathInfo('%s', level=%u, cb=%u) -> %u", pszPathName,
+              (uint) ulInfoLevel, (uint) cbInfoBuf, (uint) err);
     free(unixPath);
     return err;
 } // DosQueryPathInfo
@@ -1506,14 +1574,18 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
     if (fstat(fd, &statbuf) == -1)
         return ERROR_INVALID_HANDLE;  // !!! FIXME: ...?
 
+    APIRET rc;
     switch (ulInfoLevel) {
-        case FIL_STANDARD: return queryFileInfoStandard(&statbuf, pInfo, cbInfoBuf);
-        case FIL_QUERYEASIZE: return queryFileInfoEaSize(&statbuf, pInfo, cbInfoBuf);
-        case FIL_QUERYEASFROMLIST: return queryFileInfoEasFromList(&statbuf, pInfo, cbInfoBuf);
-        default: break;
+        case FIL_STANDARD: rc = queryFileInfoStandard(&statbuf, pInfo, cbInfoBuf); break;
+        case FIL_QUERYEASIZE: rc = queryFileInfoEaSize(&statbuf, pInfo, cbInfoBuf); break;
+        case FIL_QUERYEASFROMLIST: rc = queryFileInfoEasFromList(&statbuf, pInfo, cbInfoBuf); break;
+        default: rc = ERROR_INVALID_LEVEL; break;
     } // switch
 
-    return ERROR_INVALID_LEVEL;
+    TRACE_RET("DosQueryFileInfo(%u, level=%u, cb=%u) -> %u size=%ld", (uint) hf,
+              (uint) ulInfoLevel, (uint) cbInfoBuf, (uint) rc,
+              (long) statbuf.st_size);
+    return rc;
 } // DosQueryFileInfo
 
 static void os2ThreadCleanup(void *arg)
@@ -2062,10 +2134,16 @@ APIRET DosCloseEventSem(HEV hev)
     const int waiting = sem->waiting;
     pthread_mutex_unlock(&sem->mutex);
 
-    if (waiting > 0)
-        return ERROR_SEM_BUSY;
-
     unregisterNamedSem(sem);
+    if (waiting > 0) {
+        // A worker thread can still be parked on the semaphore when the
+        //  runtime tears its heap down. OS/2 reports ERROR_SEM_BUSY, but the
+        //  callers here treat that as a fatal heap error, so leave the (small)
+        //  semaphore allocated for the rest of the process lifetime and
+        //  report success.
+        return NO_ERROR;
+    } // if
+
     pthread_mutex_destroy(&sem->mutex);
     pthread_cond_destroy(&sem->condition);
     free(sem);
@@ -2163,11 +2241,11 @@ APIRET DosAllocSharedMem(PPVOID ppb, PSZ pszName, ULONG cb, ULONG flag)
             shm_unlink(shmname);
             return ERROR_NOT_ENOUGH_MEMORY;
         } // if
-        addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        addr = allocLowMemory(size, PROT_READ | PROT_WRITE, MAP_SHARED, fd);
         close(fd);
     } else {
-        addr = mmap(NULL, size, PROT_READ | PROT_WRITE,
-                    MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        addr = allocLowMemory(size, PROT_READ | PROT_WRITE,
+                              MAP_SHARED | MAP_ANONYMOUS, -1);
     } // else
 
     if (addr == MAP_FAILED)
@@ -3804,6 +3882,80 @@ APIRET DosBeep(ULONG freq, ULONG duration)
     return DosBeep_implementation(freq, duration);
 } // DosBeep
 
+APIRET16 Dos16EnterCritSec(VOID)
+{
+    TRACE_NATIVE("Dos16EnterCritSec()");
+    return NO_ERROR;
+} // Dos16EnterCritSec
+
+APIRET16 Dos16ExitCritSec(VOID)
+{
+    TRACE_NATIVE("Dos16ExitCritSec()");
+    return NO_ERROR;
+} // Dos16ExitCritSec
+
+APIRET16 Dos16SetPrty(USHORT scope, USHORT prtyclass, SHORT delta, USHORT pid)
+{
+    TRACE_NATIVE("Dos16SetPrty(%u, %u, %d, %u)", (uint) scope,
+                 (uint) prtyclass, (int) delta, (uint) pid);
+    return NO_ERROR;
+} // Dos16SetPrty
+
+APIRET16 Dos16GetDateTime(PDATETIME pdt)
+{
+    TRACE_NATIVE("Dos16GetDateTime(%p)", pdt);
+    return (APIRET16) DosGetDateTime(pdt);
+} // Dos16GetDateTime
+
+APIRET16 Dos16Error(USHORT error)
+{
+    TRACE_NATIVE("Dos16Error(%u)", (uint) error);
+    return (APIRET16) DosError((ULONG) error);
+} // Dos16Error
+
+APIRET16 Dos16GetSeg(USHORT sel)
+{
+    TRACE_NATIVE("Dos16GetSeg(%u)", (uint) sel);
+    return NO_ERROR;
+} // Dos16GetSeg
+
+APIRET16 Dos16LockSeg(USHORT sel)
+{
+    TRACE_NATIVE("Dos16LockSeg(%u)", (uint) sel);
+    return NO_ERROR;
+} // Dos16LockSeg
+
+APIRET16 Dos16UnlockSeg(USHORT sel)
+{
+    TRACE_NATIVE("Dos16UnlockSeg(%u)", (uint) sel);
+    return NO_ERROR;
+} // Dos16UnlockSeg
+
+APIRET16 Dos16HugeShift(PUSHORT pshift)
+{
+    TRACE_NATIVE("Dos16HugeShift(%p)", pshift);
+    if (pshift)
+        *pshift = 0;
+    return NO_ERROR;
+} // Dos16HugeShift
+
+APIRET16 Dos16HugeIncr(USHORT sel, PULONG psize)
+{
+    TRACE_NATIVE("Dos16HugeIncr(%u, %p)", (uint) sel, psize);
+    return NO_ERROR;
+} // Dos16HugeIncr
+
+APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
+{
+    TRACE_NATIVE("Dos16CreateThread(%p, %p, %p)", pfnFun, pTid, pbStack);
+    // 2ine's thread entry runs flat 32-bit code; a 16-bit NE entry point
+    //  would need a real mode switch. Report that instead of starting a
+    //  thread that would fault. Callers that make the thread optional keep
+    //  working; a caller that requires it reports the error normally.
+    (void) pfnFun; (void) pTid; (void) pbStack;
+    return ERROR_NOT_SUPPORTED;
+} // Dos16CreateThread
+
 APIRET16 Dos16GetVersion(PUSHORT pver)
 {
     TRACE_NATIVE("Dos16GetVersion(%p)", pver);
@@ -4039,14 +4191,20 @@ APIRET16 Dos16QFileMode(PCHAR filepath, PUSHORT attr, ULONG res)
     return NO_ERROR;
 }
 
-APIRET16 Dos16Open(PSZ pszFileName, PUSHORT pHf, PULONG pulAction, ULONG cbFile, USHORT ulAttribute, USHORT fsOpenFlags, USHORT fsOpenMode, PEAOP2 peaop2)
+APIRET16 Dos16Open(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction, ULONG cbFile, USHORT ulAttribute, USHORT fsOpenFlags, USHORT fsOpenMode, ULONG ulReserved)
 {
-    TRACE_NATIVE("Dos16Open('%s', %p, %p, %u, %u, %u, %u, %p)", pszFileName, pHf, pulAction, (uint) cbFile, (uint) ulAttribute, (uint) fsOpenFlags, (uint) fsOpenMode, peaop2);
-    HFILE hf;
-    APIRET ret = doDosOpen(pszFileName, &hf, pulAction, (LONGLONG) cbFile, ulAttribute, fsOpenFlags, fsOpenMode, peaop2);
-    *pHf = hf;
-    return ret;
-} // DosOpen
+    TRACE_NATIVE("Dos16Open('%s', %p, %p, %u, %u, %u, %u, %u)", pszFileName, pHf, pusAction, (uint) cbFile, (uint) ulAttribute, (uint) fsOpenFlags, (uint) fsOpenMode, (uint) ulReserved);
+    HFILE hf = (HFILE) -1;
+    ULONG action = 0;
+    APIRET ret = doDosOpen(pszFileName, &hf, &action, (LONGLONG) cbFile, ulAttribute, fsOpenFlags, fsOpenMode, NULL);
+    if (pusAction)
+        *pusAction = (USHORT) action;
+    if (pHf)
+        *pHf = (USHORT) hf;
+    TRACE_RET("Dos16Open('%s') -> %u hf=%u action=%u", pszFileName,
+              (uint) ret, (uint) hf, (uint) action);
+    return (APIRET16) ret;
+} // Dos16Open
 
 APIRET16 Dos16FindFirst(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, PVOID pfindbuf, USHORT cbBuf, PUSHORT pcFileNames, ULONG res)
 {
@@ -4153,7 +4311,11 @@ APIRET16 Dos16CWait(USHORT action, USHORT option, PRESULTCODES16 pres, PUSHORT p
 APIRET16 Dos16ChgFilePtr(USHORT handle, LONG distance, USHORT whence, PULONG newoffset)
 {
     TRACE_NATIVE("Dos16ChgFlePtr(%u, %u, %u, %p)", (uint) handle, (uint) distance, (uint) whence, newoffset);
-    return (APIRET16) DosSetFilePtr_implementation(handle, distance, whence, newoffset);
+    const APIRET16 ret = (APIRET16) DosSetFilePtr_implementation(handle, distance, whence, newoffset);
+    TRACE_RET("Dos16ChgFilePtr(%u, %d, %u) -> %u off=%u", (uint) handle,
+              (int) distance, (uint) whence, (uint) ret,
+              (uint) (newoffset ? *newoffset : 0));
+    return ret;
 } // Dos16ChgFilePtr
 
 APIRET16 Dos16Beep(USHORT freq, USHORT duration)
@@ -4316,8 +4478,9 @@ APIRET DosDeleteDir(PSZ pszDir)
     return NO_ERROR;
 } // DosDeleteDir
 
-// DosCopy control bit: replace an existing target.
-#define DCPY_EXISTING 0x0001U
+// DosCopy control bits (OS/2 Toolkit bsedos.h).
+#define DCPY_EXISTING 0x0001U  // copy even if the target exists.
+#define DCPY_APPEND   0x0002U  // append instead of replacing.
 
 APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
 {
@@ -4337,7 +4500,8 @@ APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
         return err;
     } // if
 
-    if ((!(option & DCPY_EXISTING)) && (access(newpath, F_OK) == 0)) {
+    if ((!(option & (DCPY_EXISTING | DCPY_APPEND))) &&
+        (access(newpath, F_OK) == 0)) {
         free(newpath);
         free(oldpath);
         return ERROR_FILE_EXISTS;
@@ -4348,7 +4512,9 @@ APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
     if (in == -1) {
         retval = ERROR_FILE_NOT_FOUND;
     } else {
-        int out = open(newpath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+        int flags = O_WRONLY | O_CREAT;
+        flags |= (option & DCPY_APPEND) ? O_APPEND : O_TRUNC;
+        int out = open(newpath, flags, 0666);
         if (out == -1) {
             retval = ERROR_ACCESS_DENIED;
         } else {

@@ -170,28 +170,54 @@ static APIRET formatMessage(const uint8 *msg, const size_t msglen,
                             PCHAR pBuf, const ULONG cbBuf, PULONG pcbMsg)
 {
     ULONG out = 0;
+    size_t i = 0;
 
-    for (size_t i = 0; i < msglen; i++) {
+    // Each on-disk record begins with a one-byte message class:
+    //   'I' information, 'W' warning, 'E' error, 'S' severe, 'P' prompt,
+    //   '?' empty. DosGetMessage does not return it.
+    if ((msglen > 0) && (msg[0] >= '?') && (msg[0] <= 'Z'))
+        i = 1;
+
+    for (; i < msglen; i++) {
         const char ch = (char) msg[i];
-        if ((ch == '%') && ((i + 1) < msglen) &&
-            (msg[i + 1] >= '1') && (msg[i + 1] <= '9')) {
-            const ULONG arg = (ULONG) (msg[i + 1] - '1');
-            i++;
-            if (arg >= cTable)
-                return ERROR_MR_INV_MSGF_FORMAT;
-            const char *sub = pTable[arg];
-            if (!sub)
-                return ERROR_MR_INV_MSGF_FORMAT;
-            while (*sub) {
+
+        if (ch == '\\') {
+            // Message files escape newlines and backslashes with a backslash.
+            if ((i + 1) < msglen) {
+                const char esc = (char) msg[++i];
+                char outch = esc;
+                if (esc == 'n')
+                    outch = '\n';
+                else if (esc == 'r')
+                    outch = '\r';
+                else if (esc == 't')
+                    outch = '\t';
                 if (out >= cbBuf)
                     return ERROR_MR_MSG_TOO_LONG;
-                pBuf[out++] = *(sub++);
-            } // while
-        } else {
-            if (out >= cbBuf)
-                return ERROR_MR_MSG_TOO_LONG;
-            pBuf[out++] = ch;
-        } // else
+                pBuf[out++] = outch;
+                continue;
+            } // if
+        } else if ((ch == '%') && ((i + 1) < msglen) &&
+                   (msg[i + 1] >= '1') && (msg[i + 1] <= '9')) {
+            const ULONG arg = (ULONG) (msg[i + 1] - '1');
+            // "%1$02d" is a positional printf specifier the caller expands
+            //  itself; only a bare substitution uses the table.
+            const int positional = ((i + 2) < msglen) && (msg[i + 2] == '$');
+            if ((!positional) && (arg < cTable) && pTable && pTable[arg]) {
+                const char *sub = pTable[arg];
+                i++;
+                while (*sub) {
+                    if (out >= cbBuf)
+                        return ERROR_MR_MSG_TOO_LONG;
+                    pBuf[out++] = *(sub++);
+                } // while
+                continue;
+            } // if
+        } // else if
+
+        if (out >= cbBuf)
+            return ERROR_MR_MSG_TOO_LONG;
+        pBuf[out++] = ch;
     } // for
 
     if (pcbMsg)
@@ -216,7 +242,6 @@ APIRET __attribute__((stdcall)) DosTrueGetMessage(PVOID msgseg)
     PULONG pcbMsg = (PULONG) args[7];
 
     TRACE_NATIVE("DosTrueGetMessage(%p, %p, %u, %p, %u, %u, '%s', %p)", msgseg, pTable, cTable, pData, cbBuf, msgnum, pFilename, pcbMsg);
-
     if ((!pData) || (!cbBuf) || (!pFilename) || (!*pFilename))
         return ERROR_INVALID_PARAMETER;
 
