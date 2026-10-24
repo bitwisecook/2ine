@@ -202,6 +202,9 @@ static char *lxMakeUnixPath(const char *os2path, uint32 *err)
 {
     const char *mountpoint = NULL;
     const char *cwd = NULL;
+    const char *fallback_cwd = NULL;
+    const char *rootrel = NULL;
+    int driveidx = 0;
 
     FIXME("map devices in 2ine.cfg");
     if ((strcasecmp(os2path, "NUL") == 0) || (strcasecmp(os2path, "\\DEV\\NUL") == 0))
@@ -220,15 +223,18 @@ static char *lxMakeUnixPath(const char *os2path, uint32 *err)
             drive = (GLoaderState.current_disk-1) + 'A';
         }
 
-        const int driveidx = drive - 'A';
+        driveidx = drive - 'A';
         mountpoint = GLoaderState.disks[driveidx];
         if (!mountpoint) {
             *err = 26; //ERROR_NOT_DOS_DISK;
             return NULL;
         }
 
+        fallback_cwd = GLoaderState.current_dir[driveidx];
         if ((*os2path != '\\') && (*os2path != '/')) {
-            cwd = GLoaderState.current_dir[driveidx];
+            cwd = fallback_cwd;
+        } else {
+            rootrel = os2path + 1;
         }
     }
 
@@ -251,6 +257,44 @@ static char *lxMakeUnixPath(const char *os2path, uint32 *err)
     }
 
     locatePathCaseInsensitive(retval);
+
+    // The Microsoft 16-bit driver creates its linker response file in the
+    //  current directory but passes it as a root-relative name (\035434lk).
+    //  On OS/2 that resolves against the current drive root; here the driver
+    //  created it in the cwd. Prefer the absolute name if it exists, then
+    //  fall back to the same name under the current directory.
+    if (rootrel && (access(retval, F_OK) != 0)) {
+        char *roots = strdup(rootrel);
+        size_t rootslen = roots ? strlen(roots) : 0;
+        while (rootslen && ((roots[rootslen - 1] == '\\') ||
+                            (roots[rootslen - 1] == '/'))) {
+            roots[--rootslen] = '\0';
+        } // while
+        const char *dir = fallback_cwd;
+        const size_t altlen = (mountpoint ? strlen(mountpoint) : 0) +
+                              (dir ? strlen(dir) : 0) +
+                              (roots ? strlen(roots) : 0) + 4;
+        char *alt = (char *) malloc(altlen);
+        if (alt && roots) {
+            snprintf(alt, altlen, "%s%s%s%s%s",
+                     mountpoint ? mountpoint : "",
+                     dir ? "/" : "", dir ? dir : "",
+                     *roots ? "/" : "", roots);
+            for (char *p = strchr(alt, '\\'); p; p = strchr(p + 1, '\\'))
+                *p = '/';
+            char *pp = alt;
+            while ((pp = strstr(pp, "//")) != NULL)
+                memmove(pp, pp + 1, strlen(pp));
+            locatePathCaseInsensitive(alt);
+            if (access(alt, F_OK) == 0) {
+                free(retval);
+                retval = alt;
+                alt = NULL;
+            } // if
+            free(alt);
+        } // if
+        free(roots);
+    } // if
 
     return retval;
 } // lxMakeUnixPath
@@ -707,6 +751,35 @@ static __attribute__((noreturn, used)) void endLxProcess(const uint32 exitcode)
         GLoaderState.dosExit(1, exitcode);  // let exit lists run. Should call lxTerminate!
     lxTerminate(exitcode);  // just in case.
 } // endLxProcess
+
+static int lxCreateCodeAlias(const uint16 selDS, uint16 *outselector)
+{
+    const uint32 base = GLoaderState.ldt[selDS >> 3];
+    if (!base)
+        return 0;
+
+    uint16 slot = 0;
+    for (uint16 i = 1; i < LX_MAX_LDT_SLOTS; i++) {
+        if (!GLoaderState.ldt[i]) {
+            slot = i;
+            break;
+        } // if
+    } // for
+    if (!slot)
+        return 0;
+
+    if (!allocateSelector(slot, 16, base, MODIFY_LDT_CONTENTS_CODE, 0))
+        return 0;
+
+    // The app writes instruction bytes through its data selector and executes
+    //  them through this alias. The NE data mapping is normally read/write
+    //  only, so make the backing pages executable too.
+    mprotect((void *) (uintptr_t) base, 0x10000,
+             PROT_READ | PROT_WRITE | PROT_EXEC);
+
+    *outselector = (uint16) ((slot << 3) | 7);
+    return 1;
+} // lxCreateCodeAlias
 
 static void *lxAllocSegment(uint16 *selector, const int iscode)
 {
@@ -2183,18 +2256,25 @@ static int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8
                 default: fprintf(stderr, "unknown fixup type %u\n", (uint) (srctype & 0xF)); break;
             } // switch
         } else {
-            while ((srcchain_offset != 0) && (srcchain_offset != 0xFFFF) &&
-                   (srcchain_offset < seg_fixup_limit)) {
-                uint16 *source = (uint16 *) (dst + srcchain_offset);
-                srcchain_offset = *source;
-                switch (srctype & 0xF) {
-                    case 0: *((uint8 *) source) = target & 0xFF; break; // LOBYTE
-                    case 2: *source = target >> 16; break; // SEGMENT
-                    case 3: source[0] = target & 0xFFFF; source[1] = target >> 16; break; // FAR_ADDR
-                    case 5: *source = target & 0xFFFF; break; // OFFSET
-                    default: fprintf(stderr, "unknown fixup type %u\n", (uint) (srctype & 0xF)); break;
-                } // switch
-            } // while
+            // The first source offset can legitimately be zero (the first
+            //  word of the segment). Patch it before following the chain; the
+            //  previous `offset != 0` loop guard silently skipped those
+            //  fixups, leaving the 0xFFFF placeholder in the loaded image.
+            if (srcchain_offset < seg_fixup_limit) {
+                do {
+                    uint16 *source = (uint16 *) (dst + srcchain_offset);
+                    const uint32 next_offset = (uint32) *source;
+                    switch (srctype & 0xF) {
+                        case 0: *((uint8 *) source) = target & 0xFF; break; // LOBYTE
+                        case 2: *source = target >> 16; break; // SEGMENT
+                        case 3: source[0] = target & 0xFFFF; source[1] = target >> 16; break; // FAR_ADDR
+                        case 5: *source = target & 0xFFFF; break; // OFFSET
+                        default: fprintf(stderr, "unknown fixup type %u\n", (uint) (srctype & 0xF)); break;
+                    } // switch
+                    srcchain_offset = next_offset;
+                } while ((srcchain_offset != 0) && (srcchain_offset != 0xFFFF) &&
+                         (srcchain_offset < seg_fixup_limit));
+            } // if
         } // else
     } // for
 
@@ -3009,6 +3089,7 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.deinitOs2Tib = lxDeinitOs2Tib;
     GLoaderState.allocSegment = lxAllocSegment;
     GLoaderState.freeSegment = lxFreeSegment;
+    GLoaderState.createCodeAlias = lxCreateCodeAlias;
     GLoaderState.findSelector = lxFindSelector;
     GLoaderState.freeSelector = lxFreeSelector;
     GLoaderState.convert1616to32 = lxConvert1616to32;

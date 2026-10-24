@@ -320,6 +320,7 @@ typedef struct LxLoaderState
     void (*deinitOs2Tib)(const uint16 selector);
     void *(*allocSegment)(uint16 *selector, const int iscode);
     void (*freeSegment)(const uint16 selector);
+    int (*createCodeAlias)(const uint16 selDS, uint16 *outselector);
     int (*findSelector)(const uint32 addr, uint16 *outselector, uint16 *outoffset, int iscode);
     void (*freeSelector)(const uint16 selector);
     void *(*convert1616to32)(const uint32 addr1616);

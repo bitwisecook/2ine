@@ -1695,7 +1695,11 @@ static char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
 
     const char *tlib = getenv("TWOINE_LIBPATH");
     const char *ldlib = getenv("LD_LIBRARY_PATH");
-    char **retval = (char **) calloc(count + 6, sizeof (char *));
+    static const char *passthru[] = {
+        "TRACE_NATIVE", "TWOINE_TRACE_RET", "TWOINE_TRACE_SEGMENTS",
+        "TWOINE_KEEP_TEMPS", "TWOINE_TRACE_DOSINT", NULL
+    };
+    char **retval = (char **) calloc(count + 16, sizeof (char *));
     if (!retval) {
         *err = ERROR_NOT_ENOUGH_MEMORY;
         return NULL;
@@ -1725,6 +1729,13 @@ static char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
         snprintf(buf, sizeof (buf), "LD_LIBRARY_PATH=%s", ldlib);
         retval[idx++] = strdup(buf);
     } // if
+    for (int i = 0; passthru[i]; i++) {
+        const char *val = getenv(passthru[i]);
+        if (val) {
+            snprintf(buf, sizeof (buf), "%s=%s", passthru[i], val);
+            retval[idx++] = strdup(buf);
+        } // if
+    } // for
     retval[idx] = NULL;
     return retval;
 } // calcEnvp
@@ -3968,14 +3979,11 @@ APIRET16 Dos16NewSize(USHORT hf, ULONG size)
 APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
 {
     TRACE_NATIVE("Dos16CreateCSAlias(%u, %p)", (uint) selDS, pselCS);
-    // A true CS alias would need a second LDT descriptor with the code bit
-    //  and a base matching the caller's data. The 16-bit compiler passes use
-    //  the returned selector for far pointers and (in the optimized pass) for
-    //  generated instruction templates. Until the alias execution path is
-    //  verified, return the original selector; the app's own data segment is
-    //  already mapped writable/executable in this shim.
+    uint16 alias = selDS;
+    if (GLoaderState.createCodeAlias)
+        GLoaderState.createCodeAlias(selDS, &alias);
     if (pselCS)
-        *pselCS = selDS;
+        *pselCS = alias;
     return NO_ERROR;
 } // Dos16CreateCSAlias
 
