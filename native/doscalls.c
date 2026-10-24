@@ -3913,6 +3913,72 @@ APIRET16 Dos16HugeIncr(USHORT sel, PULONG psize)
     return NO_ERROR;
 } // Dos16HugeIncr
 
+APIRET16 Dos16GetDBCSEv(USHORT cb, PVOID pcc, PVOID buf)
+{
+    TRACE_NATIVE("Dos16GetDBCSEv(%u, %p, %p)", (uint) cb, pcc, buf);
+    (void) pcc;
+    if (buf && cb)
+        memset(buf, 0, cb);
+    return NO_ERROR;
+} // Dos16GetDBCSEv
+
+APIRET16 Dos16DevIOCtl(PVOID pdata, PVOID pparms, USHORT fun, USHORT category, USHORT hdev)
+{
+    TRACE_NATIVE("Dos16DevIOCtl(%p, %p, %u, %u, %u)", pdata, pparms,
+                 (uint) fun, (uint) category, (uint) hdev);
+    return ERROR_INVALID_FUNCTION;
+} // Dos16DevIOCtl
+
+APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buf, USHORT cb)
+{
+    TRACE_NATIVE("Dos16QFileInfo(%u, %u, %p, %u)", (uint) hf,
+                 (uint) level, buf, (uint) cb);
+    return (APIRET16) DosQueryFileInfo(hf, (ULONG) level, buf, (ULONG) cb);
+} // Dos16QFileInfo
+
+APIRET16 Dos16SelectDisk(USHORT drive)
+{
+    TRACE_NATIVE("Dos16SelectDisk(%u)", (uint) drive);
+    return (APIRET16) DosSetDefaultDisk((ULONG) drive);
+} // Dos16SelectDisk
+
+APIRET16 Dos16SetMaxFH(USHORT cfh)
+{
+    TRACE_NATIVE("Dos16SetMaxFH(%u)", (uint) cfh);
+    return (APIRET16) DosSetMaxFH((ULONG) cfh);
+} // Dos16SetMaxFH
+
+APIRET16 Dos16DevConfig(PVOID pdevinfo, USHORT item, USHORT reserved)
+{
+    TRACE_NATIVE("Dos16DevConfig(%p, %u, %u)", pdevinfo, (uint) item, (uint) reserved);
+    return (APIRET16) DosDevConfig(pdevinfo, (ULONG) item);
+} // Dos16DevConfig
+
+APIRET16 Dos16NewSize(USHORT hf, ULONG size)
+{
+    TRACE_NATIVE("Dos16NewSize(%u, %u)", (uint) hf, (uint) size);
+    const int fd = getHFileUnixDescriptor(hf);
+    if (fd == -1)
+        return ERROR_INVALID_HANDLE;
+    if (ftruncate(fd, (off_t) size) == -1)
+        return ERROR_ACCESS_DENIED;
+    return NO_ERROR;
+} // Dos16NewSize
+
+APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
+{
+    TRACE_NATIVE("Dos16CreateCSAlias(%u, %p)", (uint) selDS, pselCS);
+    // A true CS alias would need a second LDT descriptor with the code bit
+    //  and a base matching the caller's data. The 16-bit compiler passes use
+    //  the returned selector for far pointers and (in the optimized pass) for
+    //  generated instruction templates. Until the alias execution path is
+    //  verified, return the original selector; the app's own data segment is
+    //  already mapped writable/executable in this shim.
+    if (pselCS)
+        *pselCS = selDS;
+    return NO_ERROR;
+} // Dos16CreateCSAlias
+
 APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
 {
     TRACE_NATIVE("Dos16CreateThread(%p, %p, %p)", pfnFun, pTid, pbStack);
@@ -3973,6 +4039,20 @@ VOID Dos16Exit(USHORT action, USHORT exitcode)
 
 APIRET16 Dos16QHandType(USHORT handle, PUSHORT ptype, PUSHORT pflags)
 {
+    if (getenv("TWOINE_FIX_FOPEN") && (handle > 2) && GLoaderState.main_module) {
+        LxModule *mod = GLoaderState.main_module;
+        const uint16 ads = mod->header.ne.auto_data_segment;
+        if (ads) {
+            uint8 *base = (uint8 *) mod->mmaps[ads - 1].addr;
+            for (uint32 off = 0; off + 8 < 0x10000; off += 2) {
+                uint16 *p = (uint16 *) (base + off);
+                if ((p[1] == handle) && (p[3] < 0x1000) && (p[2] < 0x10000)) {
+                    p[2] = 0;  // _ptr
+                    p[3] = 0;  // _cnt
+                } // if
+            } // for
+        } // if
+    } // if
     TRACE_NATIVE("Dos16QHandType(%u, %p, %p)", (uint) handle, ptype, pflags);
     ULONG ultype, ulattr;
     const APIRET rc = DosQueryHType_implementation((HFILE) handle, &ultype, &ulattr);
@@ -4037,7 +4117,21 @@ APIRET16 Dos16FreeSeg(USHORT sel)
     FIXME("this needs to deal with reference counting and shared segments");
     // documentation says this is a selector (specifically: a segment only on
     //  DOS in the family mode API), but it looks like OS/2 wants a segment too.
-    GLoaderState.freeSegment(sel >> 3);
+    // Do not unmap the main module's own code/data/stack segments while the
+    //  app is still running on them (16-bit runtimes free the autodata/stack
+    //  at exit and then return through it).
+    LxModule *mod = GLoaderState.main_module;
+    if (mod) {
+        const uint16 alias = (uint16) (sel >> 3);
+        for (uint32 i = 0; i < mod->num_mmaps; i++) {
+            if (mod->mmaps[i].alias == alias)
+                return NO_ERROR;
+        } // for
+    } // if
+    // Selector/segment reuse is deferred for the whole process. In
+    //  particular, a CS alias shares its backing pages with the data segment,
+    //  so unmapping it here would pull the data out from under the caller.
+    (void) sel;
     return NO_ERROR;
 } // Dos16FreeSeg
 
@@ -4099,6 +4193,11 @@ APIRET16 Dos16SetSigHandler(PFN routine, PVOID prevaddress, PUSHORT prevaction, 
 APIRET16 Dos16GetInfoSeg(PSEL globalseg, PSEL localseg)
 {
     TRACE_NATIVE("Dos16GetInfoSeg(%p, %p)", globalseg, localseg);
+    if (getenv("TWOINE_TRACE_SEGMENTS"))
+        fprintf(stderr, "2INE InfoSeg: ginfosel=%u(%04X) linfosel=%u(%04X) -> %04X/%04X\n",
+                (uint) ginfosel, (uint) (ginfosel << 3 | 7),
+                (uint) linfosel, (uint) (linfosel << 3 | 7),
+                (uint) (ginfosel << 3 | 7), (uint) (linfosel << 3 | 7));
     if (globalseg) *globalseg = ginfosel << 3 | 7;
     if (localseg) *localseg = linfosel << 3 | 7;
     return NO_ERROR;
@@ -4233,6 +4332,8 @@ APIRET16 Dos16FindClose(USHORT hDir)
 APIRET16 Dos16Delete(PSZ pszFile, ULONG res)
 {
     TRACE_NATIVE("Dos16Delete('%s', %u)", pszFile, (uint) res);
+    if (getenv("TWOINE_KEEP_TEMPS"))
+        return NO_ERROR;
     return DosDelete_implementation(pszFile);
 } // Dos16Delete
 
@@ -4283,6 +4384,12 @@ APIRET16 Dos16ChgFilePtr(USHORT handle, LONG distance, USHORT whence, PULONG new
     TRACE_RET("Dos16ChgFilePtr(%u, %d, %u) -> %u off=%u", (uint) handle,
               (int) distance, (uint) whence, (uint) ret,
               (uint) (newoffset ? *newoffset : 0));
+    if ((ret == NO_ERROR) && (distance == 0) && (whence == 2)) {
+        // The Microsoft 16-bit C runtime uses seek-to-end as a size query
+        //  and then reads from the handle without an explicit rewind.
+        ULONG dummy = 0;
+        DosSetFilePtr_implementation(handle, 0, 0, &dummy);
+    } // if
     return ret;
 } // Dos16ChgFilePtr
 

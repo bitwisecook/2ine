@@ -227,7 +227,7 @@ static char *lxMakeUnixPath(const char *os2path, uint32 *err)
             return NULL;
         }
 
-        if (*os2path != '\\') {
+        if ((*os2path != '\\') && (*os2path != '/')) {
             cwd = GLoaderState.current_dir[driveidx];
         }
     }
@@ -2096,6 +2096,13 @@ static int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8
     const uint8 *segptr = origexe + (seg->offset << sector_shift);
     const uint8 *fixupptr = segptr + (seg->size ? seg->size : 0xFFFF);
     const uint32 num_fixups = (uint32) *((const uint16 *) fixupptr); fixupptr += 2;
+    // The source-chain offsets are relative to the segment's *virtual* size
+    //  (minimum allocation), not the amount of data present in the file.
+    //  NE data segments commonly have fixups past the file image, in the
+    //  zero-filled tail; using seg->size here leaves their selectors as the
+    //  0xFFFF placeholder and the app calls through a bad far pointer.
+    const uint32 seg_fixup_limit = seg->minimum_allocation ?
+        (uint32) seg->minimum_allocation : 0x10000;
 
     for (uint32 i = 0; i < num_fixups; i++) {
         const uint8 srctype = *(fixupptr++);
@@ -2172,7 +2179,8 @@ static int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8
                 default: fprintf(stderr, "unknown fixup type %u\n", (uint) (srctype & 0xF)); break;
             } // switch
         } else {
-            while (srcchain_offset < seg->size) {  // strictly, this should end with 0xFFFF, but we drop out for any out-of-bounds index.
+            while ((srcchain_offset != 0) && (srcchain_offset != 0xFFFF) &&
+                   (srcchain_offset < seg_fixup_limit)) {
                 uint16 *source = (uint16 *) (dst + srcchain_offset);
                 srcchain_offset = *source;
                 switch (srctype & 0xF) {
