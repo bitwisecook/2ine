@@ -269,6 +269,13 @@ static void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t 
 
     LxTIB *tib = (LxTIB *) tibspace;
     LxTIB2 *tib2 = (LxTIB2 *) (tib + 1);
+    LxPostTIB *posttib = (LxPostTIB *) (tib2 + 1);
+    void *host_stack = malloc(65536);
+    if (!host_stack) {
+        fprintf(stderr, "Could not allocate 16-bit bridge stack\n");
+        abort();
+    }
+    posttib->host_stack = (uint8 *) host_stack + 65536;
 
     FIXME("This is probably 50% wrong");
     tib->tib_pexchain = NULL;
@@ -298,6 +305,11 @@ static LxTIB *getOs2Tib_lib2ine(void)
 
 static void deinitOs2Tib_lib2ine(const uint16 selector)
 {
+    LxTIB *tib = (LxTIB *) pthread_getspecific(tlskey);
+    if (tib) {
+        LxPostTIB *posttib = (LxPostTIB *) (tib->tib_ptib2 + 1);
+        free((uint8 *) posttib->host_stack - 65536);
+    }
     pthread_setspecific(tlskey, NULL);
 }
 

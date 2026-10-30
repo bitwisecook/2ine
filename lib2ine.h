@@ -271,6 +271,7 @@ typedef struct LxPostTIB
 {
     uint32 tls[32];
     void *anchor_block;
+    void *host_stack;
 } LxPostTIB;
 
 // There are a few things that need access to the sound hardware:

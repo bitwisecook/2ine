@@ -707,6 +707,9 @@ static LxTIB *lxGetOs2Tib(void)
 
 static void lxDeinitOs2Tib(const uint16 selector)
 {
+    LxTIB *tib = lxGetOs2Tib();
+    LxPostTIB *posttib = (LxPostTIB *) (tib->tib_ptib2 + 1);
+    free((uint8 *) posttib->host_stack - 65536);
     // !!! FIXME: I barely know what I'm doing here, this could all be wrong.
     struct user_desc entry;
     memset(&entry, '\0', sizeof (entry));

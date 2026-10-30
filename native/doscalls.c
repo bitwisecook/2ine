@@ -3642,7 +3642,7 @@ APIRET16 DosSemWait(PHSEM16 sem, LONG ms)
 APIRET16 DosSemSet(PHSEM16 sem)
 {
     TRACE_NATIVE("DosSemSet(%p)", sem);
-    __sync_bool_compare_and_swap(sem, 1, 0);
+    __sync_lock_test_and_set(sem, 1);
     return NO_ERROR;
 } // DosSemSet
 
@@ -3987,15 +3987,89 @@ APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
     return NO_ERROR;
 } // Dos16CreateCSAlias
 
+typedef struct NeThreadStart
+{
+    uint32 entry, stack;
+    uint8 *code;
+    uint16 selector;
+    uint16 tid;
+} NeThreadStart;
+
+static void *neThreadEntry(void *arg)
+{
+    NeThreadStart *start = (NeThreadStart *) arg;
+    uint8 tibspace[LXTIBSIZE] = { 0 };
+    uint8 *p = start->code;
+    const uint16 guest_ss = start->stack >> 16, guest_sp = start->stack & 0xffff;
+    const uint16 guest_cs = start->entry >> 16, guest_ip = start->entry & 0xffff;
+    const uint16 code_selector = (start->selector << 3) | 7;
+    const uint32 saved_sp = (uint32) (start->code + 0x100);
+    GLoaderState.initOs2Tib(tibspace, &arg, 65536, start->tid);
+    const uint16 tib_selector = GLoaderState.setOs2Tib(tibspace);
+
+    /* Save the host frame, switch to the guest stack and call its far entry. */
+    *p++ = 0x60;  /* pushad */
+    *p++ = 0x89; *p++ = 0x25; memcpy(p, &saved_sp, 4); p += 4;
+    *p++ = 0x66; *p++ = 0xea;
+    uint16 off = (uint16) ((p - start->code) + 4);
+    memcpy(p, &off, 2); p += 2; memcpy(p, &code_selector, 2); p += 2;
+    *p++ = 0xb8; memcpy(p, &guest_ss, 2); p += 2;
+    *p++ = 0x8e; *p++ = 0xd0;
+    *p++ = 0xbc; memcpy(p, &guest_sp, 2); p += 2;
+    *p++ = 0x8e; *p++ = 0xd8;
+    *p++ = 0x8e; *p++ = 0xc0;
+    *p++ = 0x9a; memcpy(p, &guest_ip, 2); p += 2; memcpy(p, &guest_cs, 2); p += 2;
+    *p++ = 0x66; *p++ = 0xea;
+    const uint32 flat = (uint32) (p + 6);
+    memcpy(p, &flat, 4); p += 4; memcpy(p, &GLoaderState.original_cs, 2); p += 2;
+    *p++ = 0x66; *p++ = 0xb8; memcpy(p, &GLoaderState.original_ss, 2); p += 2;
+    *p++ = 0x8e; *p++ = 0xd0;
+    *p++ = 0x66; *p++ = 0xb8; memcpy(p, &GLoaderState.original_ds, 2); p += 2;
+    *p++ = 0x8e; *p++ = 0xd8;
+    *p++ = 0x66; *p++ = 0xb8; memcpy(p, &GLoaderState.original_es, 2); p += 2;
+    *p++ = 0x8e; *p++ = 0xc0;
+    *p++ = 0x8b; *p++ = 0x25; memcpy(p, &saved_sp, 4); p += 4;
+    *p++ = 0x61; *p++ = 0xc3;  /* popad; ret */
+    ((void (*)(void)) start->code)();
+    GLoaderState.deinitOs2Tib(tib_selector);
+    GLoaderState.freeSegment(start->selector);
+    free(start);
+    return NULL;
+}
+
 APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
 {
     TRACE_NATIVE("Dos16CreateThread(%p, %p, %p)", pfnFun, pTid, pbStack);
-    // 2ine's thread entry runs flat 32-bit code; a 16-bit NE entry point
-    //  would need a real mode switch. Report that instead of starting a
-    //  thread that would fault. Callers that make the thread optional keep
-    //  working; a caller that requires it reports the error normally.
-    (void) pfnFun; (void) pTid; (void) pbStack;
-    return ERROR_NOT_SUPPORTED;
+    if (!pfnFun || !pTid || !pbStack)
+        return ERROR_INVALID_PARAMETER;
+    NeThreadStart *start = calloc(1, sizeof (*start));
+    if (!start)
+        return ERROR_NOT_ENOUGH_MEMORY;
+    static uint32 next_tid = 1;
+    const uint32 tid = __sync_add_and_fetch(&next_tid, 1);
+    if (tid > 0xffff) {
+        free(start);
+        return ERROR_MAX_THRDS_REACHED;
+    }
+    start->tid = (uint16) tid;
+    start->entry = GLoaderState.convert32to1616(pfnFun);
+    start->stack = GLoaderState.convert32to1616(pbStack);
+    start->code = GLoaderState.allocSegment(&start->selector, 1);
+    if (!start->entry || !start->stack || !start->code) {
+        if (start->code)
+            GLoaderState.freeSegment(start->selector);
+        free(start);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, neThreadEntry, start) != 0) {
+        GLoaderState.freeSegment(start->selector);
+        free(start);
+        return ERROR_MAX_THRDS_REACHED;
+    }
+    pthread_detach(thread);
+    *(uint16 *) pTid = (uint16) tid;
+    return NO_ERROR;
 } // Dos16CreateThread
 
 APIRET16 Dos16GetVersion(PUSHORT pver)

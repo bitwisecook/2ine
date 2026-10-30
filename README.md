@@ -32,6 +32,8 @@ other contributors; this disclosure applies to this fork's changes.
 This fork extends the loader and DOSCALLS and MSG shims for historical OS/2
 toolchains. Earlier Linux x86 tests exercised IBM VisualAge C++ 3.6.5, Microsoft
 C 6.0, MASM 5.10A and LINK 5.13. These are compatibility experiments, not a
-claim that all programs or toolchain configurations work. In this revision,
-MASM 6.0's reader thread is not implemented and its source assembly fails.
+claim that all programs or toolchain configurations work. MASM 6.0 can
+assemble a small source file with `/c`; broader compatibility and thread
+lifecycle behavior remain unverified. An optional regression test is available
+as `tests/test-ml6.sh`, using a separately supplied OS/2 `ML.EXE`.
 

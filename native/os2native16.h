@@ -96,7 +96,8 @@ MOV AX, CX  ; move the stack offset into the low word. Now %eax has the linear s
 
 MOV CX, 0xABCD  ; original linear stack segment from lx_loader's main().
 MOV SS, CX
-MOV ESP, EAX  ; and the same stack pointer, but linear.
+MOV EDX, FS:[host_stack]  ; dedicated 32-bit bridge stack.
+MOV ESP, EDX
 ADD EAX, 16  ; %eax now points to original function arguments on the stack.
 
 PUSH EBX  ; save original ss:sp to stack.
@@ -185,8 +186,13 @@ RETF 0x22   ; ...and back to the (far) caller, clearing the args (Pascal calling
     memcpy(ptr, &GLoaderState.original_ss, 2); ptr += 2; \
     *(ptr++) = 0x8E;  /* mov ss,ecx... */ \
     *(ptr++) = 0xD1;  /*  ...mov ss,ecx */ \
-    *(ptr++) = 0x89;  /* mov esp,eax... */ \
-    *(ptr++) = 0xC4;  /*  ...mov esp,eax */ \
+    /* Use the per-thread host stack, preserving EAX as the guest argument pointer. */ \
+    *(ptr++) = 0x64;  /* mov edx,fs:[host_stack offset] */ \
+    *(ptr++) = 0x8B; \
+    *(ptr++) = 0x15; \
+    const uint32 hoststack_offset = sizeof (LxTIB) + sizeof (LxTIB2) + __builtin_offsetof(LxPostTIB, host_stack); \
+    memcpy(ptr, &hoststack_offset, 4); ptr += 4; \
+    *(ptr++) = 0x89; *(ptr++) = 0xD4;  /* mov esp,edx */ \
     *(ptr++) = 0x83;  /* add eax,byte +0x10... */ \
     *(ptr++) = 0xC0;  /*  ...add eax,byte +0x10 */ \
     *(ptr++) = 0x10;  /*  ...add eax,byte +0x10 */ \
