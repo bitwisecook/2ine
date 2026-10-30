@@ -3861,15 +3861,31 @@ APIRET DosBeep(ULONG freq, ULONG duration)
     return DosBeep_implementation(freq, duration);
 } // DosBeep
 
+static pthread_once_t GCritSecOnce = PTHREAD_ONCE_INIT;
+static pthread_mutex_t GCritSec;
+
+static void initCritSec(void)
+{
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&GCritSec, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
+
 APIRET16 Dos16EnterCritSec(VOID)
 {
     TRACE_NATIVE("Dos16EnterCritSec()");
+    pthread_once(&GCritSecOnce, initCritSec);
+    pthread_mutex_lock(&GCritSec);
     return NO_ERROR;
 } // Dos16EnterCritSec
 
 APIRET16 Dos16ExitCritSec(VOID)
 {
     TRACE_NATIVE("Dos16ExitCritSec()");
+    pthread_once(&GCritSecOnce, initCritSec);
+    pthread_mutex_unlock(&GCritSec);
     return NO_ERROR;
 } // Dos16ExitCritSec
 
@@ -4062,6 +4078,7 @@ APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
         return ERROR_NOT_ENOUGH_MEMORY;
     }
     pthread_t thread;
+    __atomic_store_n(&GLoaderState.ne_threads_started, 1, __ATOMIC_RELEASE);
     if (pthread_create(&thread, NULL, neThreadEntry, start) != 0) {
         GLoaderState.freeSegment(start->selector);
         free(start);

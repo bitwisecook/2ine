@@ -287,6 +287,7 @@ typedef int (*LxAudioGeneratorFn)(void *data, float *stream, int len, int freq);
 
 typedef struct LxLoaderState
 {
+    uint32 ne_threads_started;
     LxModule *loaded_modules;
     LxModule *main_module;
     uint8 main_tibspace[LXTIBSIZE];

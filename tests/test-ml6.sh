@@ -46,3 +46,19 @@ assert types[0] == 0x80 and types[-1] in (0x8a, 0x8b), types
 assert any(t in (0xa0, 0xa1) for t in types), types
 PY
 echo 'MASM 6 assembly and OMF record checks passed'
+
+# Exercise repeated reader-buffer allocations on a source larger than 300 KiB.
+python3 - <<'PY'
+from pathlib import Path
+with Path('large.asm').open('w') as out:
+    out.write('include extra.inc\n')
+    for _ in range(4200):
+        out.write('; ' + 'large source reader regression ' * 3 + '\n')
+    out.write('example segment\n mov ax,value\n ret\nexample ends\nend\n')
+PY
+for iteration in 1 2 3 4 5; do
+    rm -f large.obj
+    timeout 30 "${runner[@]}" ML.EXE /c large.asm >large.log 2>&1
+    test -s large.obj
+done
+echo 'MASM 6 large-source reader checks passed'

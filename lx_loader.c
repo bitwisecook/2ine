@@ -725,6 +725,11 @@ static void freeLxModule(LxModule *lxmod);
 
 static __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
 {
+    /* Do not unmap modules while an NE thread may still be executing them.
+       The kernel releases the process mappings and descriptors on _exit. */
+    if (__atomic_load_n(&GLoaderState.ne_threads_started, __ATOMIC_ACQUIRE))
+        _exit((int) (exitcode & 0xff));
+
     GLoaderState.lib2ine_shutdown();
 
     // free the actual .exe
@@ -796,23 +801,31 @@ static void *lxAllocSegment(uint16 *selector, const int iscode)
     // These are meant to be 64k segments mapped for use by 16-bit code, which means we
     //  need them under 512 megabytes so their segments can convert directly to a linear
     //  address with some bit twiddling.
-    static size_t baseaddr = 136 * 1024 * 1024;  // just start at a random low address that (hopefully) doesn't overlap anything.
+    static size_t baseaddr = 136 * 1024 * 1024;
+    static pthread_mutex_t segment_mutex = PTHREAD_MUTEX_INITIALIZER;
     const uint32 segmentsize = 0x10000;
-    void *segment = mmap((void *) baseaddr, segmentsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (segment == ((void *) MAP_FAILED)) {
-        FIXME("This could be more robust.");
-        fprintf(stderr, "Failed to mmap a 16-bit friendly memory segment.\n");
-        return NULL;
-    }
-
-    baseaddr += segmentsize;
-    uint16 offset = 0xFFFF;
     *selector = 0xFFFF;
-    lxFindSelector((uint32) segment, selector, &offset, iscode);
-    assert(*selector != 0xFFFF);
-    assert(offset == 0);
-    //printf("lxAllocSegment: addr=%p, selector=%x\n", segment, (uint) *selector);
-    return segment;
+    pthread_mutex_lock(&segment_mutex);
+    while (baseaddr < 512 * 1024 * 1024) {
+        const size_t candidate = baseaddr;
+        baseaddr += segmentsize;
+        void *segment = mmap((void *) candidate, segmentsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (segment == MAP_FAILED)
+            continue;
+        if ((size_t) segment != candidate) {
+            munmap(segment, segmentsize);
+            continue;
+        }
+        uint16 offset = 0xFFFF;
+        if (lxFindSelector((uint32) segment, selector, &offset, iscode) && offset == 0) {
+            pthread_mutex_unlock(&segment_mutex);
+            return segment;
+        }
+        munmap(segment, segmentsize);
+    }
+    pthread_mutex_unlock(&segment_mutex);
+    fprintf(stderr, "Failed to allocate a low 16-bit segment.\n");
+    return NULL;
 } // lxAllocSegment
 
 static void lxFreeSegment(const uint16 selector)
