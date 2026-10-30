@@ -36,6 +36,9 @@ claim that all programs or toolchain configurations work. MASM 6.0 can
 assemble a small source file with `/c`; broader compatibility and thread
 lifecycle behavior remain unverified. An optional regression test is available
 as `tests/test-ml6.sh`, using a separately supplied OS/2 `ML.EXE`.
+If `ML.ERR` is alongside `ML.EXE`, the test checks the diagnostic path too.
+Passing `LINK.EXE` and `OS2.LIB` as the third and fourth arguments additionally
+checks assembling, linking and running an OS/2 program using DOSCALLS.
 When a process has created 16-bit threads, process exit currently skips DLL
 termination callbacks to avoid unmapping code still in use by those threads.
 The 16-bit critical-section implementation synchronizes callers of the API;

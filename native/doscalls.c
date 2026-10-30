@@ -4117,13 +4117,7 @@ APIRET16 Dos16GetPID(PPIDINFO16 ppidinfo)
     TRACE_NATIVE("Dos16GetPID(%p)", ppidinfo);
     PTIB2 tib2 = (PTIB2) LX_GETTIB2();
 
-    // note that these happen to fit Linux default PID ranges in 2018, which
-    //  tend to be 32768, but can be much higher by writing to
-    //  /proc/sys/kernel/pid_max
-    assert(GLoaderState.pib.pib_ulpid <= 0xFFFF);
-    assert(GLoaderState.pib.pib_ulppid <= 0xFFFF);
-    assert(tib2->tib2_ultid <= 0xFFFF);
-
+    // This interface has 16-bit fields even when host IDs are wider.
     ppidinfo->pid = (USHORT) GLoaderState.pib.pib_ulpid;
     ppidinfo->tid = (USHORT) tib2->tib2_ultid;
     ppidinfo->pidParent = (USHORT) GLoaderState.pib.pib_ulppid;
