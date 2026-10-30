@@ -3614,9 +3614,9 @@ APIRET16 DosSemWait(PHSEM16 sem, LONG ms)
 {
     TRACE_NATIVE("DosSemWait(%p, %u)", sem, (uint) ms);
     if (ms == 0) {
-        return __sync_bool_compare_and_swap(sem, 0, 1) ? NO_ERROR : ERROR_TIMEOUT;
+        return (__atomic_load_n(sem, __ATOMIC_ACQUIRE) == 0) ? NO_ERROR : ERROR_TIMEOUT;
     } else if (ms < 0) {
-        while (!__sync_bool_compare_and_swap(sem, 0, 1))
+        while (!(__atomic_load_n(sem, __ATOMIC_ACQUIRE) == 0))
             usleep(1000);
         return NO_ERROR;
     }
@@ -3627,7 +3627,7 @@ APIRET16 DosSemWait(PHSEM16 sem, LONG ms)
     const uint64 end = (((uint64) ts.tv_sec) * 1000) + (((uint64) ts.tv_nsec) / 1000000) + ms;
 
     while (1) {
-        if (__sync_bool_compare_and_swap(sem, 0, 1))
+        if ((__atomic_load_n(sem, __ATOMIC_ACQUIRE) == 0))
             return NO_ERROR;
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
         const uint64 now = (((uint64) ts.tv_sec) * 1000) + (((uint64) ts.tv_nsec) / 1000000);

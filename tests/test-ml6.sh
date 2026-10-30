@@ -12,12 +12,14 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cp "$ml" "$tmp/ML.EXE"
 cat > "$tmp/sample.asm" <<'EOF'
+include extra.inc
 example segment
-    mov ax, 1234h
+    mov ax, value
     ret
 example ends
 end
 EOF
+printf 'value equ 1234h\n' > "$tmp/extra.inc"
 cd "$tmp"
 export LD_LIBRARY_PATH="$build${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export TWOINE_LIBPATH="$build${TWOINE_LIBPATH:+:$TWOINE_LIBPATH}"
