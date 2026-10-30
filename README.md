@@ -22,3 +22,10 @@ I have answers: icculus@icculus.org
 
 --ryan.
 
+## About this fork
+
+This fork contains changes made for the OS/2 reconstruction project. AI tools
+were used to research and write those changes, including the GCC build fix.
+The original 2ine project and the README above are by Ryan C. Gordon and its
+other contributors; this disclosure applies to this fork's changes.
+
