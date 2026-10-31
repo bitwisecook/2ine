@@ -54,12 +54,17 @@ int main(void)
     CHECK(r == 64 && g == 128 && b == 192);
     CHECK(lx_host_window_present(window));
     lx_host_window_show(window);
+    uint64_t before_event = lx_host_video_ticks_ms();
     LxHostEvent event = {LX_HOST_EVENT_QUIT, 0, NULL};
     CHECK(lx_host_video_push(&event));
     int quit = 0;
     while (lx_host_video_poll(&event))
         if (event.type == LX_HOST_EVENT_QUIT)
+        {
+            CHECK(event.timestamp + 1 >= before_event);
+            CHECK(event.timestamp <= lx_host_video_ticks_ms() + 1);
             quit = 1;
+        }
     CHECK(quit);
     lx_host_window_destroy(window);
     lx_host_video_quit();

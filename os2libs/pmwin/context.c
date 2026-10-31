@@ -28,8 +28,8 @@ AnchorBlock *getAnchorBlock(const HAB hab)
 
 ULONG currentSystemTicks(void)
 {
-    FIXME("this isn't correct"); // see notes in processSDLEvent() for details.
-    return (uint32)(lx_host_monotonic_us() / 1000);
+    /* PM messages and host events share the multimedia clock. */
+    return (uint32)lx_host_video_ticks_ms();
 }
 
 HAB WinInitialize(ULONG flOptions)

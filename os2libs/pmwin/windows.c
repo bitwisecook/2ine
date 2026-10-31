@@ -114,11 +114,6 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
     memset(win, '\0', sizeof(*win));
 }
 
-Window *getWindowFromSDLWindow(LxHostWindow *sdlwin)
-{
-    return (Window *)sdlwin ? lx_host_window_data(sdlwin) : NULL;
-}
-
 BOOL WinRegisterClass(HAB hab, PSZ pszClassName, PFNWP pfnWndProc, ULONG flStyle,
                       ULONG cbWindowData)
 {

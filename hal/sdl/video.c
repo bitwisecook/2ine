@@ -29,6 +29,10 @@ const char *lx_host_video_error(void)
 {
     return SDL_GetError();
 }
+uint64_t lx_host_video_ticks_ms(void)
+{
+    return SDL_GetTicks();
+}
 LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, int height,
                                     void *data)
 {

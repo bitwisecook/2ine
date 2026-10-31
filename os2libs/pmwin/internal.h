@@ -104,7 +104,6 @@ LX_PRIVATE BOOL destroyMessageQueue(AnchorBlock *anchor);
 LX_PRIVATE void destroyWindow(AnchorBlock *anchor, Window *win);
 LX_PRIVATE void destroyPresentationSpace(AnchorBlock *anchor, PresentationSpace *ps);
 LX_PRIVATE ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg);
-LX_PRIVATE Window *getWindowFromSDLWindow(LxHostWindow *sdlwin);
 LX_PRIVATE BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1,
                                    MPARAM mp2, ULONG ticks);
 LX_PRIVATE BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks);

@@ -23,6 +23,8 @@ typedef struct LxHostEvent
 int lx_host_video_initialize(int *width, int *height);
 void lx_host_video_quit(void);
 const char *lx_host_video_error(void);
+/* Milliseconds in the same time domain as LxHostEvent.timestamp. */
+uint64_t lx_host_video_ticks_ms(void);
 LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, int height,
                                     void *data);
 void lx_host_window_destroy(LxHostWindow *window);
