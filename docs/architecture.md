@@ -2,7 +2,7 @@
 
 # How 2ine works
 
-**One OS/2 loader and API layer. Two ways to execute x86. Separate host services.**
+**One OS/2 loader and API layer. A shared runtime over a hardware abstraction layer.**
 
 ## Structure
 
@@ -13,17 +13,22 @@ flowchart TD
     Guest --> APIs["native/ · OS/2 DLL implementations"]
     Loader --> Execution["runtime/execution.h"]
     APIs --> Execution
-    Execution --> Native["native/execution_linux_i386.c"]
-    Execution --> Emulator["emulator/execution_unicorn.c"]
-    Emulator --> CPU["emulator/cpu.h + cpu_unicorn.c"] --> Unicorn["Unicorn"]
+    Execution --> Native["hal/native/execution_linux_i386.c"]
+    Execution --> Emulator["hal/emulator/execution_unicorn.c"]
+    Emulator --> CPU["hal/emulator/cpu.h + cpu_unicorn.c"] --> Unicorn["Unicorn"]
     APIs --> Host["runtime/host*.h · opaque host services"]
-    Host --> Linux["Linux"]
-    Host --> Mac["macOS"]
-    Host -. incomplete port .-> Windows["Windows"]
+    Host --> HAL["hal/host/ · host implementations"]
+    HAL --> Linux["Linux"]
+    HAL --> Mac["macOS"]
+    HAL -. incomplete port .-> Windows["Windows"]
 ```
 
-`native/` retains the original OS/2 API implementations as well as Linux native
-execution. Those APIs serve both backends. Execution adapters know no
+`native/` contains the OS/2 API implementations shared by both execution paths.
+`runtime/` owns execution dispatch, checked guest mappings and platform-neutral
+host-service contracts. `hal/` implements those contracts: `hal/native/` owns
+Linux i386 execution and ABI bridges, `hal/emulator/` owns CPU emulation, and
+`hal/host/` owns host services. Its CMake target selects the implementation and
+dependencies for each worker. Execution adapters know no
 `LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or implement DOSCALLS.
 `tests/check-boundaries.py` checks that source separation.
 
@@ -32,8 +37,9 @@ execution. Those APIs serve both backends. Execution adapters know no
 | Common loader | Formats, relocations, imports, modules and OS/2 identity |
 | `guest/` | Fixed-width layouts, checked arguments and private resource IDs |
 | `runtime/execution.h` | Entries, callbacks, threads, selectors and guest mappings |
-| `emulator/cpu.h` | CPU registers, contexts/x87, segments, bounded runs and faults |
+| `hal/emulator/cpu.h` | CPU registers, contexts/x87, segments, bounded runs and faults |
 | `runtime/host*.h` | VM, files, paths, libraries, clocks, threads, synchronization and child processes |
+| `hal/` | Execution backends, native ABI bridges and host-service implementations |
 
 ## Loading
 
@@ -85,7 +91,7 @@ backend each. Neither Rosetta nor a Linux VM is part of macOS execution.
 ```mermaid
 sequenceDiagram
     participant Loader as Common loader (ARM64 host)
-    participant Exec as emulator/execution_unicorn.c
+    participant Exec as hal/emulator/execution_unicorn.c
     participant CPU as Unicorn x86 CPU
     participant API as Common OS/2 API
     participant Host as macOS host adapter
@@ -110,7 +116,7 @@ callbacks preserve complete CPU contexts, including x87 state.
 ```mermaid
 sequenceDiagram
     participant Loader as Common loader (i386 worker)
-    participant Exec as native/execution_linux_i386.c
+    participant Exec as hal/native/execution_linux_i386.c
     participant CPU as x86 hardware
     participant Bridge as Native ABI bridge
     participant API as Common OS/2 API

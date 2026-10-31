@@ -1,7 +1,7 @@
-/* Native Linux i386 execution adapter. See ../LICENSE.txt for licensing. */
+/* Native Linux i386 execution adapter. See ../../LICENSE.txt for licensing. */
 #define _GNU_SOURCE 1
-#include "../runtime/execution_internal.h"
-#include "../runtime/host.h"
+#include "../../runtime/execution_internal.h"
+#include "../../runtime/host.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

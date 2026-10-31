@@ -29,10 +29,3 @@ else()
 endif()
 
 endif()
-
-target_sources(twoine_runtime_objects PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/cpu.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/cpu_unicorn.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/execution_unicorn.c")
-target_include_directories(twoine_runtime_objects PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
-set(TWOINE_UNICORN_TARGET "${TWOINE_UNICORN_TARGET}" PARENT_SCOPE)

@@ -1,4 +1,4 @@
-/* Derived from original 2ine; zlib-style license. See ../LICENSE.txt. */
+/* Derived from original 2ine; zlib-style license. See ../../LICENSE.txt. */
 /* Register argument entries for the Linux i386 worker. */
 /* CSet/2 passes EAX and requires ECX preservation across the host call. */
 __asm__ (

@@ -2,7 +2,7 @@
 /* Portable process entry and API dispatch over the CPU execution interface. */
 #include "execution_internal.h"
 #include "cpu.h"
-#include "../guest/abi.h"
+#include "../../guest/abi.h"
 #include "host_sync.h"
 #include <setjmp.h>
 #include <stdio.h>
