@@ -14,7 +14,7 @@ flowchart LR
 ```
 
 `hal/native/` also supplies the i386 ABI bridges compiled into the API modules.
-`native/` contains OS/2 DLL implementations shared by native and emulated
+`os2libs/` contains OS/2 DLL implementations shared by native and emulated
 execution. Host services are implemented in `hal/host/`. `*-lx.h` files are generated;
 edit their headers/binding policies, then run `python3 lxapigen.py`.
 

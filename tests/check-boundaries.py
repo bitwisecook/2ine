@@ -26,17 +26,17 @@ for path in [root / 'hal/emulator/cpu.h', *sorted((root / 'runtime').glob('*.h')
     check(path, platform)
 for path in sorted((root / 'hal').rglob('*.c')):
     check(path, [r'\b(?:GLoaderState|LxModule|LxMmaps)\b',
-                 r'#\s*include\s*<[^>]*(?:lib2ine\.h|native/)'])
+                 r'#\s*include\s*<[^>]*(?:lib2ine\.h|os2libs/)'])
 hardware = platform + [r'\b(?:__asm__|syscall|mmap|munmap|mprotect|dlopen|dlsym|dlclose|fork|waitpid)\s*\(']
-for name in ['lx_loader.c', 'lib2ine.c', 'native/doscalls.c', 'native/msg.c', 'native/nls.c']:
+for name in ['lx_loader.c', 'lib2ine.c', 'os2libs/doscalls.c', 'os2libs/msg.c', 'os2libs/nls.c']:
     check(root / name, hardware)
 for directory in ['runtime', 'guest']:
     for path in sorted((root / directory).rglob('*.[ch]')):
         check(path, hardware + [r'#\s*include\s*<[^>]*hal/'])
 # Implementation locations are part of the HAL boundary, including build input.
 for path in [*sorted((root / 'runtime').glob('host*.c')),
-             *sorted((root / 'native').glob('execution_*.c')),
-             *sorted((root / 'native').glob('abi_linux_*.c'))]:
+             *sorted((root / 'os2libs').glob('execution_*.c')),
+             *sorted((root / 'os2libs').glob('abi_linux_*.c'))]:
     failures.append(f'{path.relative_to(root)}: hardware implementation belongs in hal/')
 if (root / 'emulator').exists():
     failures.append('emulator/: execution implementations belong in hal/emulator/')

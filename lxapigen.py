@@ -309,7 +309,7 @@ def generate(root: Path, *, check: bool = False) -> bool:
     policies16 = read_policies16(root / "guest/bindings/api16.json")
     policies32 = read_policies32(root / "guest/bindings/api32.json")
     outputs: dict[Path, str] = {}
-    for header in sorted((root / "native").glob("*.h")):
+    for header in sorted((root / "os2libs").glob("*.h")):
         if header.name.startswith("os2") or header.name.endswith("-lx.h"):
             continue
         functions = parse_functions(header.read_text())

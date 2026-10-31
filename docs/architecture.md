@@ -10,7 +10,7 @@
 flowchart TD
     Image["NE / LX executable + DLLs"] --> Loader["lx_loader.c · load, relocate, resolve"]
     Loader --> Guest["guest/ · wire ABI, arguments, handles"]
-    Guest --> APIs["native/ · OS/2 DLL implementations"]
+    Guest --> APIs["os2libs/ · OS/2 DLL implementations"]
     Loader --> Execution["runtime/execution.h"]
     APIs --> Execution
     Execution --> Native["hal/native/execution_linux_i386.c"]
@@ -23,7 +23,7 @@ flowchart TD
     HAL -. incomplete port .-> Windows["Windows"]
 ```
 
-`native/` contains the OS/2 API implementations shared by both execution paths.
+`os2libs/` contains the OS/2 API implementations shared by both execution paths.
 `runtime/` owns execution dispatch, checked guest mappings and platform-neutral
 host-service contracts. `hal/` implements those contracts: `hal/native/` owns
 Linux i386 execution and ABI bridges, `hal/emulator/` owns CPU emulation, and

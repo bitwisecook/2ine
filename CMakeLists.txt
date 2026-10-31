@@ -113,7 +113,7 @@ if(TWOINE_PORTABLE_LOADER)
 endif()
 
 foreach(_I doscalls;msg;nls;quecalls;viocalls;kbdcalls;sesmgr;som;pmwin;pmshapi;pmgpi;tcpip32)
-    add_library(${_I} SHARED "native/${_I}.c")
+    add_library(${_I} SHARED "os2libs/${_I}.c")
     if(TWOINE_NATIVE_LOADER)
         set_target_properties(${_I} PROPERTIES COMPILE_FLAGS "-m32")
         set_target_properties(${_I} PROPERTIES LINK_FLAGS "-m32 -ggdb3")

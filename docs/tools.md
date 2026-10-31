@@ -6,7 +6,7 @@ Python 3.11+. No runtime dependencies outside the standard library.
 
 | Tool | Input → output |
 |---|---|
-| `lxapigen.py` | API headers + binding policies → `native/*-lx.h` |
+| `lxapigen.py` | API headers + binding policies → `os2libs/*-lx.h` |
 | `cvtasm.py` | ndisasm text → C byte emissions |
 | `os2imports.py` | lx_dump text → named NE/LX imports |
 | `unimplemented.py` | Named imports → services absent from export tables |

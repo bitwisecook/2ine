@@ -32,7 +32,7 @@ def missing(lines: Iterable[str], exports: set[str]) -> Iterator[str]:
 
 def main() -> int:
     try:
-        exports = implemented(Path(__file__).resolve().parent / "native")
+        exports = implemented(Path(__file__).resolve().parent / "os2libs")
         sys.stdout.writelines(missing(sys.stdin, exports))
     except OSError as error:
         print(f"unimplemented: {error}", file=sys.stderr)
