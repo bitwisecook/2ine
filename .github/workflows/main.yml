@@ -10,7 +10,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install --yes cmake ninja-build gcc-multilib libc6-dev-i386 libncurses-dev:i386 libsdl2-dev:i386
+          sudo apt-get install --yes cmake ninja-build gcc-multilib libc6-dev-i386 libncurses-dev libncursesw6:i386 libsdl2-dev libsdl2-2.0-0:i386
       - name: Configure native worker
         run: cmake -S . -B build-native -GNinja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=OFF
       - name: Build
