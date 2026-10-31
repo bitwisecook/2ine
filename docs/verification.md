@@ -65,6 +65,7 @@ not compiler-instrumented. Application leak detection is disabled because the
 worker intentionally retains some guest allocations until process exit.
 
 `verification.json` contains compact, source-bound results and fixture/output
-hashes. Full local `results.json` files additionally retain commands, environment
+hashes. Recorded publication-only workflow changes do not change compiled
+application inputs; their tested/published hashes are listed separately. Full local `results.json` files additionally retain commands, environment
 and log locations. The gate qualifies these configured pipelines and their
 assertions, not every archived binary or an OS/2 reconstruction milestone.

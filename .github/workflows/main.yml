@@ -1,26 +1,19 @@
-name: Build
-
-on: [push, pull_request]
-
+name: Native Linux application
+on: [push, pull_request, workflow_dispatch]
 jobs:
-  Build:
-    name: ${{ matrix.platform.name }}
-    runs-on: ${{ matrix.platform.os }}
-    strategy:
-      matrix:
-        platform:
-        - { name: Linux,   os: ubuntu-20.04, flags: -GNinja }
-        #- { name: Windows, os: windows-latest }
-        #- { name: MacOS,   os: macos-latest }
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-    - name: Setup Linux dependencies
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install cmake ninja-build libncursesw5-dev libncursesw5:i386 libsdl2-dev
-    - name: Get 2ine sources
-      uses: actions/checkout@v2
-    - name: Configure CMake
-      run: cmake -B build ${{ matrix.platform.flags }}
-    - name: Build
-      run: cmake --build build/
+      - uses: actions/checkout@v4
+      - name: Install i386 development dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build gcc-multilib libc6-dev-i386 libncurses-dev:i386 libsdl2-dev:i386
+      - name: Configure native worker
+        run: cmake -S . -B build-native -GNinja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=OFF
+      - name: Build
+        run: cmake --build build-native --parallel 2
+      - name: Test native execution boundary
+        run: ctest --test-dir build-native --output-on-failure

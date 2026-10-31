@@ -125,7 +125,7 @@
     "tests/runtime/test_execution.c": "a24bc10052e42d8fb36c52b81296495b4b6d5e8569e53f845c21868b9274a3ce",
     ".github/FUNDING.yml": "cd312c348618fb91c4d068d07f099e1b9b1e4562ba6b7c9e579d66216ef5c4d5",
     ".github/workflows/runtime.yml": "3304eee57fb5fbe1c4a93ad05ac9a357abc9d8fa61ef37e9019c09d5c53aa233",
-    ".github/workflows/main.yml": "0b3e60e79bdaefe62feb5f64ba8ee6fbad37b0059b23dd8355f8d239b27a0907"
+    ".github/workflows/main.yml": "bb79886760959828a84c0308d161bc2ae68a08f872c89c91a42b0a472a0f649a"
   },
   "runs": [
     {
@@ -3333,5 +3333,13 @@
     "worker": "Mach-O ARM64",
     "unicorn": "2.1.4",
     "source_revision": "8028ec436f2d9376525352dd38ed9ed6b9f6be10"
-  }
+  },
+  "publication_only_changes": [
+    {
+      "path": ".github/workflows/main.yml",
+      "tested_sha256": "0b3e60e79bdaefe62feb5f64ba8ee6fbad37b0059b23dd8355f8d239b27a0907",
+      "published_sha256": "bb79886760959828a84c0308d161bc2ae68a08f872c89c91a42b0a472a0f649a",
+      "reason": "Replace the inherited retired Ubuntu 20.04 CI runner with Ubuntu 24.04, provision i386 dependencies, and run the native execution contract. No application source or fixture recipe changes."
+    }
+  ]
 }
