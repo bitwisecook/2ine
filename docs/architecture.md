@@ -13,11 +13,11 @@ flowchart TD
     Guest --> APIs["os2libs/ · OS/2 DLL implementations"]
     Loader --> Execution["runtime/execution.h"]
     APIs --> Execution
-    Execution --> Native["hal/native/execution_linux_i386.c"]
+    Execution --> Native["hal/linux/i386/execution.c"]
     Execution --> Emulator["hal/emulator/execution_unicorn.c"]
     Emulator --> CPU["hal/emulator/cpu.h + cpu_unicorn.c"] --> Unicorn["Unicorn"]
     APIs --> Host["runtime/host*.h · opaque host services"]
-    Host --> HAL["hal/host/ · host implementations"]
+    Host --> HAL["hal/posix/ + platform adapters"]
     HAL --> Linux["Linux"]
     HAL --> Mac["macOS"]
     HAL -. incomplete port .-> Windows["Windows"]
@@ -25,11 +25,13 @@ flowchart TD
 
 `os2libs/` contains the OS/2 API implementations shared by both execution paths.
 `runtime/` owns execution dispatch, checked guest mappings and platform-neutral
-host-service contracts. `hal/` implements those contracts: `hal/native/` owns
+host-service contracts. `hal/` implements those contracts: `hal/linux/i386/` owns
 Linux i386 execution and ABI bridges, `hal/emulator/` owns CPU emulation, and
-`hal/host/` owns host services. Its CMake target selects the implementation and
-dependencies for each worker. Execution adapters know no
-`LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or implement DOSCALLS.
+`hal/posix/` shares host services between `hal/linux/` and `hal/macos/`.
+`hal/win/` contains partial Windows adapters. [HAL source selection](hal.md)
+chooses the implementation and dependencies for each worker. Execution adapters
+know no `LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or implement
+DOSCALLS.
 `tests/check-boundaries.py` checks that source separation.
 
 | Boundary | Owns |
@@ -116,7 +118,7 @@ callbacks preserve complete CPU contexts, including x87 state.
 ```mermaid
 sequenceDiagram
     participant Loader as Common loader (i386 worker)
-    participant Exec as hal/native/execution_linux_i386.c
+    participant Exec as hal/linux/i386/execution.c
     participant CPU as x86 hardware
     participant Bridge as Native ABI bridge
     participant API as Common OS/2 API

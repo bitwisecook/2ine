@@ -85,7 +85,7 @@ class Suite:
                         LD_LIBRARY_PATH=str(self.build))
         source = Path(__file__).resolve().parents[1]
         inventory = [p for p in source.iterdir() if p.is_file() and p.name != '.git']
-        for directory in ['runtime', 'hal', 'os2libs', 'guest', 'tests', '.github']:
+        for directory in ['runtime', 'hal', 'os2libs', 'guest', 'tools', 'tests', '.github']:
             inventory.extend(p for p in (source / directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts)
         source_hashes = {str(p.relative_to(source)): digest(p) for p in inventory}
         try:

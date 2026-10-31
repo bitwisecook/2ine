@@ -27,6 +27,10 @@ for path in [root / 'hal/emulator/cpu.h', *sorted((root / 'runtime').glob('*.h')
 for path in sorted((root / 'hal').rglob('*.c')):
     check(path, [r'\b(?:GLoaderState|LxModule|LxMmaps)\b',
                  r'#\s*include\s*<[^>]*(?:lib2ine\.h|os2libs/)'])
+for directory in ['hal/common', 'hal/posix', 'hal/emulator']:
+    for path in sorted((root / directory).rglob('*.[ch]')):
+        check(path, [r'#\s*(?:if|ifdef|ifndef|elif)\b[^\n]*(?:_WIN32|__APPLE__|__linux__)',
+                     r'#\s*include\s*<(?:windows\.h|mach/|mach-o/|sys/sysinfo\.h)'])
 hardware = platform + [r'\b(?:__asm__|syscall|mmap|munmap|mprotect|dlopen|dlsym|dlclose|fork|waitpid)\s*\(']
 for name in ['lx_loader.c', 'lib2ine.c', 'os2libs/doscalls.c', 'os2libs/msg.c', 'os2libs/nls.c']:
     check(root / name, hardware)
@@ -41,7 +45,8 @@ for path in [*sorted((root / 'runtime').glob('host*.c')),
 if (root / 'emulator').exists():
     failures.append('emulator/: execution implementations belong in hal/emulator/')
 for path in [root / 'CMakeLists.txt', root / 'runtime/CMakeLists.txt']:
-    check(path, [r'\bhal/(?:host|native|emulator)/', r'\bTWOINE_HOST_SOURCES\b'], cmake=True)
+    check(path, [r'(?<!tests/)\bhal/(?:common|posix|linux|macos|win|emulator)/[^\s"\)]*\.[ch]\b',
+                 r'\bTWOINE_HOST_SOURCES\b'], cmake=True)
 if failures:
     raise SystemExit('\n'.join(failures))
 print('Guest semantics, shared runtime and HAL source boundaries passed')

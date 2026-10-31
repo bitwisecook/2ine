@@ -2,7 +2,7 @@
 
 # Native execution and OS/2 APIs
 
-**Linux i386 runs guest instructions directly.** `hal/native/execution_linux_i386.c` owns
+**Linux i386 runs guest instructions directly.** `hal/linux/i386/execution.c` owns
 LDT selectors, FS/TIB setup, native entry and mixed-mode bridges.
 
 ```mermaid
@@ -13,10 +13,11 @@ flowchart LR
     Bridge --> Callback["Nested guest callback"] --> CPU
 ```
 
-`hal/native/` also supplies the i386 ABI bridges compiled into the API modules.
+`hal/linux/i386/` also supplies the i386 ABI bridges compiled into the API modules.
 `os2libs/` contains OS/2 DLL implementations shared by native and emulated
-execution. Host services are implemented in `hal/host/`. `*-lx.h` files are generated;
-edit their headers/binding policies, then run `python3 lxapigen.py`.
+execution. Host services use shared POSIX and [platform adapters](hal.md).
+`*-lx.h` files are generated; edit their headers/binding policies, then run
+`python3 lxapigen.py`.
 
 Native entry needs Linux, a 32-bit x86 worker and `CONFIG_X86_16BIT=y` with LDT
 access. Intel macOS uses emulation. [Build](build.md).

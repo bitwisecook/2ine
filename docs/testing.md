@@ -6,6 +6,11 @@ Run runtime and execution contracts with `ctest --test-dir build --output-on-fai
 They cover mixed-mode entry, callbacks, threads/TLS, memory bounds, resource
 lifetimes, x87 state and host synchronization.
 
+The `host_platform` test checks argument packing (including empty arguments),
+executable/process discovery, memory protection, clocks and UTC calendar
+conversion. Linux additionally runs `host_mutex_owner` for robust mutex
+owner-death recovery. These complement shared monitor timeout/cancellation tests.
+
 ## Developer tools
 
 Supply the historical tools yourself. Copy `tests/devtools-fixtures.example.json`

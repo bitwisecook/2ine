@@ -2,6 +2,10 @@
 
 # Python tools
 
+For maintained C/H sources, use `python3 tools/format-c.py --write` or
+`--check`. The pinned formatter, exclusions and CI check are described in
+[C/H formatting](formatting.md).
+
 Python 3.11+. No runtime dependencies outside the standard library.
 
 | Tool | Input → output |

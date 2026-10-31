@@ -35,6 +35,7 @@ This profile uses the existing repository i386 SDL shared library and a
 Debian-style i386 ncurses path. Other distributions may need path adjustments.
 On Ubuntu CI, host SDL headers are combined with the i386 configuration header
 extracted from its development package; see `.github/workflows/main.yml`.
+The native dependency paths are defined in `hal/linux/i386/dependencies.cmake`.
 
 ## Runtime contracts only
 
