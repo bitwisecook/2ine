@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
-#include "host.h"
+#include "hal/host.h"
 #include <sys/sysinfo.h>
 int lx_host_system_memory(uint64_t *total, uint64_t *available)
 {

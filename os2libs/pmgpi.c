@@ -9,7 +9,7 @@
 #include "os2native.h"
 #include "pmgpi.h"
 
-#include "pmgpi-lx.h"
+#include "os2libs/generated/pmgpi-lx.h"
 
 BOOL GpiQueryTextBox(HPS hps, LONG lCount1, PCH pchString, LONG lCount2, PPOINTL aptlPoints)
 {

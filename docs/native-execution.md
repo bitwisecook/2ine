@@ -8,8 +8,8 @@ LDT selectors, FS/TIB setup, native entry and mixed-mode bridges.
 ```mermaid
 flowchart LR
     Shared["runtime/execution.h"] --> Entry["Native entry"] --> CPU["x86 CPU"]
-    CPU --> Bridge["16/32-bit API bridge"] --> APIs["doscalls.c · msg.c · nls.c"]
-    APIs --> Host["runtime/host_*.h"]
+    CPU --> Bridge["16/32-bit API bridge"] --> APIs["os2libs/doscalls/ · msg.c · nls.c"]
+    APIs --> Host["hal/include/hal/host_*.h"]
     Bridge --> Callback["Nested guest callback"] --> CPU
 ```
 
@@ -17,7 +17,7 @@ flowchart LR
 `os2libs/` contains OS/2 DLL implementations shared by native and emulated
 execution. Host services use shared POSIX and [platform adapters](hal.md).
 `*-lx.h` files are generated; edit their headers/binding policies, then run
-`python3 lxapigen.py`.
+`python3 tools/lxapigen.py`.
 
 Native entry needs Linux, a 32-bit x86 worker and `CONFIG_X86_16BIT=y` with LDT
 access. Intel macOS uses emulation. [Build](build.md).

@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _DARWIN_C_SOURCE 1
-#include "host.h"
+#include "hal/host.h"
 #include "../common/process.h"
 #include <errno.h>
 #include <crt_externs.h>
@@ -35,4 +35,9 @@ char *lx_host_executable_path(void)
     char *resolved = realpath(buffer, NULL);
     free(buffer);
     return resolved;
+}
+
+char *const *lx_host_environment(void)
+{
+    return *_NSGetEnviron();
 }

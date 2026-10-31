@@ -2,7 +2,7 @@
 /* Process bootstrap queries. Returned strings/buffers belong to the caller. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
-#include "host.h"
+#include "hal/host.h"
 #include "../common/process.h"
 #include <stdlib.h>
 #include <string.h>
@@ -111,4 +111,10 @@ size_t lx_host_stack_limit(void)
 void lx_host_process_exit(uint32_t status)
 {
     ExitProcess(status);
+}
+
+char *const *lx_host_environment(void)
+{
+    extern char **_environ;
+    return _environ;
 }

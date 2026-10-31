@@ -2,10 +2,16 @@
 
 # Build and run
 
+Use CMake 3.24+, a C99 compiler and Python 3.11+. Application builds also need
+ncurses development files. SDL 3.4.18 is downloaded with a SHA-256 check and
+built from source by default; no SDL binary is stored in this repository.
+
 ## macOS / emulated Linux
 
-Install a C compiler, CMake, Python 3, Unicorn 2.1.4+, SDL2 and ncurses development
-packages. macOS: `brew install cmake unicorn sdl2 ncurses`.
+Install Unicorn 2.1.4+ and ncurses, for example `brew install cmake unicorn ncurses`
+on macOS. SDL detects the optional audio and desktop development packages
+available on your host. Install the packages for your intended display/audio
+backend before configuring; missing optional backends are listed by SDL.
 
 ```sh
 cmake -S . -B build-portable -DTWOINE_PORTABLE_LOADER=ON -DCMAKE_BUILD_TYPE=Release
@@ -14,15 +20,17 @@ ctest --test-dir build-portable --output-on-failure
 TWOINE_BACKEND=unicorn TWOINE_LIBPATH="$PWD/build-portable" build-portable/lx_loader program.exe
 ```
 
-The portable profile defaults on outside Linux x86. Intel macOS uses it too;
-Rosetta is not required. `TWOINE_PORTABLE_NE` is an older alias for the option.
-An explicitly requested backend must be linked or startup fails.
+This profile defaults on outside Linux x86. Intel macOS uses it too.
+`TWOINE_PORTABLE_NE` is an older alias. An explicitly requested backend must
+be linked or startup fails. Windows has no complete application adapter.
 
 ## Native Linux x86
 
-The worker is i386, even on x86-64 Linux. Install 32-bit C development/runtime
-libraries, SDL2 headers/runtime and ncurses. The kernel must support `modify_ldt`
-and 16-bit descriptors (`CONFIG_X86_16BIT=y`).
+The worker is i386, including on x86-64 Linux. Install GCC multilib, 32-bit libc
+and ncurses development/runtime libraries. The kernel must support `modify_ldt`
+and 16-bit descriptors (`CONFIG_X86_16BIT=y`). SDL builds in a separate i386
+project. Install 32-bit development packages for any optional SDL backend you
+need; the software/dummy backends support headless testing.
 
 ```sh
 cmake -S . -B build-native -DTWOINE_PORTABLE_LOADER=OFF -DCMAKE_BUILD_TYPE=Release
@@ -31,25 +39,32 @@ ctest --test-dir build-native --output-on-failure
 TWOINE_BACKEND=native TWOINE_LIBPATH="$PWD/build-native" build-native/lx_loader program.exe
 ```
 
-This profile uses the existing repository i386 SDL shared library and a
-Debian-style i386 ncurses path. Other distributions may need path adjustments.
-On Ubuntu CI, host SDL headers are combined with the i386 configuration header
-extracted from its development package; see `.github/workflows/main.yml`.
-The native dependency paths are defined in `hal/linux/i386/dependencies.cmake`.
+`hal/linux/i386/dependencies.cmake` discovers matching ncurses libraries.
+`-DTWOINE_BUILD_RUNTIME=ON` additionally builds the portable runtime and its
+contracts with the host ABI; this does not change the i386 application worker.
+
+## Dependency providers and offline builds
+
+Pass `-DTWOINE_SDL3_SOURCE_DIR=/absolute/path/to/SDL3-3.4.18` to use an unpacked
+source tree without a download. Its version is checked. Alternatively, install
+SDL 3.4.18 and pass `-DTWOINE_SDL3_PROVIDER=system -DSDL3_DIR=/path/to/SDL3/cmake`.
+The installed library must match the application worker architecture. Source
+builds pin both the release and archive hash; local source/system providers
+trust the supplied files. See [dependencies](dependencies.md).
+
+`-DTWOINE_UNICORN_SOURCE_DIR=/absolute/path/to/unicorn` builds a local Unicorn
+source tree. CI pins the revision recorded in [dependencies](dependencies.md).
 
 ## Runtime contracts only
 
-No SDL or curses needed:
+SDL and curses are not required:
 
 ```sh
-cmake -S . -B build-runtime -DTWOINE_RUNTIME_ONLY=ON -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build-runtime -DTWOINE_RUNTIME_ONLY=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build build-runtime --parallel
 ctest --test-dir build-runtime --output-on-failure
 ```
 
-`-DTWOINE_UNICORN_SOURCE_DIR=/absolute/path/to/unicorn` builds a local Unicorn
-source tree. CI pins the revision in [dependencies](dependencies.md).
-
-Regenerate API glue: `python3 lxapigen.py`.
-Run historical tool pipelines: [tests](testing.md).
-Windows has partial primitives but no complete filesystem/application adapter.
+Regenerate exports with `python3 tools/lxapigen.py`. Executables (`lx_loader`,
+`lx_dump`) and OS/2 shared libraries remain at the build-directory root.
+Historical compiler pipelines are described in [tests](testing.md).

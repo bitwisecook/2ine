@@ -2,7 +2,7 @@
 /* Scoped USE16 ABI arguments: checked spans, aligned snapshots and copy-back. */
 #ifndef TWOINE_GUEST_ARGUMENTS_H
 #define TWOINE_GUEST_ARGUMENTS_H
-#include "../runtime/execution.h"
+#include "runtime/execution.h"
 typedef struct LxGuestArgument
 {
     LxGuestBorrow borrow;

@@ -1,6 +1,6 @@
 # Public domain. No rights reserved.
 # Wholly AI-authored.
-name: Portable CPU runtime
+name: Portable runtime and application
 on: [push, pull_request, workflow_dispatch]
 jobs:
   runtime:
@@ -8,9 +8,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        profile: [runtime, application]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install Linux application dependencies
+        if: runner.os == 'Linux' && matrix.profile == 'application'
+        run: sudo apt-get update && sudo apt-get install --yes libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev
       - name: Fetch pinned Unicorn source
         shell: bash
         run: |
@@ -21,7 +25,9 @@ jobs:
       - name: Configure
         shell: bash
         run: |
-          cmake -S . -B build-runtime -DTWOINE_RUNTIME_ONLY=ON -DCMAKE_BUILD_TYPE=Release -DTWOINE_UNICORN_SOURCE_DIR="$PWD/_deps/unicorn"
+          runtime_only=OFF
+          if [ "${{ matrix.profile }}" = runtime ]; then runtime_only=ON; fi
+          cmake -S . -B build-runtime -DTWOINE_RUNTIME_ONLY="$runtime_only" -DTWOINE_PORTABLE_LOADER=ON -DCMAKE_BUILD_TYPE=Release -DTWOINE_UNICORN_SOURCE_DIR="$PWD/_deps/unicorn"
       - name: Build
         run: cmake --build build-runtime --config Release --parallel 2
       - name: Test

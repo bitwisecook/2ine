@@ -21,12 +21,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "../runtime/host_thread.h"
+#include "hal/host_thread.h"
 #include <errno.h>
 
 #include "os2types.h"
 #include "os2errors.h"
-#include "../lib2ine.h"
+#include "runtime/runtime.h"
 
 #if 1
 #define TRACE_NATIVE(...)                                                                          \

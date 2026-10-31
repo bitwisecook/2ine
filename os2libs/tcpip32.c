@@ -9,18 +9,10 @@
 #include "os2native.h"
 #include "tcpip32.h"
 
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/select.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <unistd.h>
-#include <errno.h>
-#include <poll.h>
+#include "hal/socket.h"
+#include "hal/host_thread.h"
 
-#include "tcpip32-lx.h"
+#include "os2libs/generated/tcpip32-lx.h"
 
 int OS2_sock_init(void)
 {
@@ -28,22 +20,20 @@ int OS2_sock_init(void)
     return 1; // always succeeds.
 }
 
-static void mapOS2SockAddrIn(const OS2_sockaddr *os2addr, struct sockaddr_in *bsdaddr)
+static void mapOS2SockAddrIn(const OS2_sockaddr *source, LxHostSocketAddress *target)
 {
-    const OS2_sockaddr_in *os2addrin = (const OS2_sockaddr_in *)os2addr;
-    memset(bsdaddr, '\0', sizeof(*bsdaddr));
-    bsdaddr->sin_family = AF_INET;
-    bsdaddr->sin_port = os2addrin->sin_port;
-    bsdaddr->sin_addr.s_addr = os2addrin->sin_addr.s_addr;
+    const OS2_sockaddr_in *address = (const OS2_sockaddr_in *)source;
+    target->address = address->sin_addr.s_addr;
+    target->port = address->sin_port;
 }
 
-static void mapBSDSockAddrIn(const struct sockaddr_in *bsdaddr, OS2_sockaddr *os2addr)
+static void mapBSDSockAddrIn(const LxHostSocketAddress *source, OS2_sockaddr *target)
 {
-    OS2_sockaddr_in *os2addrin = (OS2_sockaddr_in *)os2addr;
-    memset(os2addrin, '\0', sizeof(*os2addrin));
-    os2addrin->sin_family = OS2_AF_INET;
-    os2addrin->sin_port = bsdaddr->sin_port;
-    os2addrin->sin_addr.s_addr = bsdaddr->sin_addr.s_addr;
+    OS2_sockaddr_in *address = (OS2_sockaddr_in *)target;
+    memset(address, 0, sizeof *address);
+    address->sin_family = OS2_AF_INET;
+    address->sin_port = source->port;
+    address->sin_addr.s_addr = source->address;
 }
 
 static int mapOS2MsgFlags(const int os2flags)
@@ -53,7 +43,7 @@ static int mapOS2MsgFlags(const int os2flags)
 #define MAPSOCKFLAGS(f)                                                                            \
     if (os2flags & OS2_##f)                                                                        \
     {                                                                                              \
-        bsdflags |= f;                                                                             \
+        bsdflags |= LX_##f;                                                                        \
     }
     MAPSOCKFLAGS(MSG_OOB);
     MAPSOCKFLAGS(MSG_PEEK);
@@ -72,7 +62,7 @@ int OS2_recv(int sock, void *buf, size_t len, int os2flags)
 {
     TRACE_NATIVE("recv(%d, %p, %d, %d)", sock, buf, (int)len, os2flags);
     FIXME("this should fail if not a socket");
-    return recv(sock, buf, len, mapOS2MsgFlags(os2flags));
+    return (int)lx_host_socket_recv(sock, buf, len, mapOS2MsgFlags(os2flags));
 }
 
 int OS2_connect(int sock, const struct OS2_sockaddr *os2addr, int addrlen)
@@ -87,16 +77,16 @@ int OS2_connect(int sock, const struct OS2_sockaddr *os2addr, int addrlen)
         return -1;
     }
 
-    struct sockaddr_in bsdaddr;
+    LxHostSocketAddress bsdaddr;
     mapOS2SockAddrIn(os2addr, &bsdaddr);
-    return connect(sock, &bsdaddr, (socklen_t)sizeof(bsdaddr));
+    return lx_host_socket_connect(sock, &bsdaddr);
 }
 
 int OS2_shutdown(int sock, int kind)
 {
     TRACE_NATIVE("shutdown(%d, %d)", sock, kind);
     FIXME("this should fail if not a socket");
-    return shutdown(sock, kind);
+    return lx_host_socket_shutdown(sock, kind);
 }
 
 int OS2_socket(int os2family, int os2socktype, int protocol)
@@ -117,11 +107,11 @@ int OS2_socket(int os2family, int os2socktype, int protocol)
     int bsdsocktype;
     if (os2socktype == OS2_SOCK_STREAM)
     {
-        bsdsocktype = SOCK_STREAM;
+        bsdsocktype = LX_SOCKET_STREAM;
     }
     else if (os2socktype == OS2_SOCK_DGRAM)
     {
-        bsdsocktype = SOCK_DGRAM;
+        bsdsocktype = LX_SOCKET_DGRAM;
     }
     else
     {
@@ -129,150 +119,109 @@ int OS2_socket(int os2family, int os2socktype, int protocol)
         return -1;
     }
 
-    return socket(AF_INET, bsdsocktype, 0);
+    return lx_host_socket_open(bsdsocktype);
 }
 
 ssize_t OS2_send(int sock, const void *buf, size_t len, int os2flags)
 {
     TRACE_NATIVE("send(%d, %p, %d, %d)", sock, buf, (int)len, os2flags);
     FIXME("this should fail if not a socket");
-    return send(sock, buf, len, mapOS2MsgFlags(os2flags));
+    return (ssize_t)lx_host_socket_send(sock, buf, len, mapOS2MsgFlags(os2flags));
 }
 
 int OS2_soclose(int sock)
 {
     TRACE_NATIVE("soclose(%d)", sock);
     FIXME("this should fail if not a socket");
-    return close(sock);
+    return lx_host_socket_close(sock);
 }
 
 int OS2_sock_errno(void)
 {
     TRACE_NATIVE("sock_errno()");
     FIXME("this should cache errno when an OS/2 socket function fails");
-    return errno;
+    return lx_host_socket_error();
 }
 
 unsigned long OS2_inet_addr(const char *name)
 {
     TRACE_NATIVE("inet_addr('%s')", name);
-    return inet_addr(name);
+    return lx_host_socket_parse_address(name);
 }
 
 struct OS2_hostent *OS2_gethostbyname(const char *name)
 {
-    TRACE_NATIVE("gethostbyname('%s')", name);
-    struct hostent *hent = gethostbyname(name);
-    return (OS2_hostent *)hent;
+    static LX_HOST_THREAD_LOCAL OS2_hostent output;
+    LxHostSocketHost host;
+    if (!lx_host_socket_host(name, &host))
+        return NULL;
+    output.h_name = host.name;
+    output.h_aliases = host.aliases;
+    output.h_addrtype = host.family;
+    output.h_length = host.length;
+    output.h_addr_list = host.addresses;
+    return &output;
 }
 
 unsigned short OS2_htons(unsigned short val)
 {
     TRACE_NATIVE("htons(%u)", (unsigned int)val);
-    return htons(val);
+    return lx_host_socket_network16(val);
 }
 
-char *OS2_inet_ntoa(struct OS2_in_addr os2inaddr)
+char *OS2_inet_ntoa(struct OS2_in_addr address)
 {
-    TRACE_NATIVE("inet_ntoa(%u)", (unsigned int)os2inaddr.s_addr);
-    struct in_addr bsdaddr;
-    bsdaddr.s_addr = os2inaddr.s_addr;
-    return inet_ntoa(bsdaddr);
+    return lx_host_socket_format_address(address.s_addr);
 }
 
-struct OS2_servent *OS2_getservbyname(const char *name, const char *proto)
+struct OS2_servent *OS2_getservbyname(const char *name, const char *protocol)
 {
-    TRACE_NATIVE("getservbyname('%s', '%s')", name, proto);
-    struct servent *sent = getservbyname(name, proto);
-    return (OS2_servent *)sent;
+    static LX_HOST_THREAD_LOCAL OS2_servent output;
+    LxHostSocketService service;
+    if (!lx_host_socket_service(name, protocol, &service))
+        return NULL;
+    output.s_name = service.name;
+    output.s_aliases = service.aliases;
+    output.s_port = service.port;
+    output.s_proto = service.protocol;
+    return &output;
 }
 
-static void mapOS2FdSet(const OS2_fd_set *os2set, fd_set *bsdset)
+static LxHostSocketSet mapOS2FdSet(const OS2_fd_set *source)
 {
-    FD_ZERO(bsdset);
-    const int total = os2set->fd_count;
-    for (int i = 0; i < total; i++)
-    {
-        FD_SET(os2set->fd_array[i], bsdset);
-    }
+    LxHostSocketSet result = {source->fd_count, source->fd_array};
+    return result;
 }
 
-int OS2_select(int ndfs, OS2_fd_set *os2readfds, OS2_fd_set *os2writefds, OS2_fd_set *os2errorfds,
-               OS2_timeval *os2timeout)
+int OS2_select(int limit, OS2_fd_set *read, OS2_fd_set *write, OS2_fd_set *error,
+               OS2_timeval *timeout)
 {
-    TRACE_NATIVE("select(%d, %p, %p, %p, %p)", ndfs, os2readfds, os2writefds, os2errorfds,
-                 os2timeout);
-#define MAPFDS(t)                                                                                  \
-    fd_set bsd##t##fds;                                                                            \
-    fd_set *t##fds = NULL;                                                                         \
-    if (os2##t##fds)                                                                               \
-    {                                                                                              \
-        t##fds = &bsd##t##fds;                                                                     \
-        mapOS2FdSet(os2##t##fds, t##fds);                                                          \
-    }
-    MAPFDS(read);
-    MAPFDS(write);
-    MAPFDS(error);
-#undef MAPFDS
-
-    struct timeval bsdtv;
-    struct timeval *pbsdtv = NULL;
-    if (os2timeout)
-    {
-        pbsdtv = &bsdtv;
-        bsdtv.tv_sec = os2timeout->tv_sec;
-        bsdtv.tv_usec = os2timeout->tv_usec;
-    }
-    const int rc = select(ndfs, readfds, writefds, errorfds, pbsdtv);
-    FIXME("fill in OS/2 fds");
-    return rc;
+    LxHostSocketSet r, w, e;
+    if (read)
+        r = mapOS2FdSet(read);
+    if (write)
+        w = mapOS2FdSet(write);
+    if (error)
+        e = mapOS2FdSet(error);
+    /* The API returns the readiness count and retains the supplied descriptor lists. */
+    return lx_host_socket_select(limit, read ? &r : NULL, write ? &w : NULL, error ? &e : NULL,
+                                 timeout ? timeout->tv_sec : 0, timeout ? timeout->tv_usec : 0,
+                                 timeout != NULL);
 }
 
-int OS2_os2_select(int *socks, int noreads, int nowrites, int noexcept, long timeout)
+int OS2_os2_select(int *sockets, int reads, int writes, int errors, long timeout)
 {
-    TRACE_NATIVE("os2_select(%p, %d, %d, %d, %d)", socks, noreads, nowrites, noexcept,
-                 (int)timeout);
-    const int nfds = noreads + nowrites + noexcept;
-    struct pollfd *fds = (struct pollfd *)alloca(sizeof(struct pollfd) * nfds);
-    struct pollfd *origfds = fds;
-    for (int i = 0; i < noreads; i++)
-    {
-        fds->fd = *(socks++);
-        fds->events = POLLIN;
-        fds++;
-    }
-
-    for (int i = 0; i < nowrites; i++)
-    {
-        fds->fd = *(socks++);
-        fds->events = POLLOUT;
-        fds++;
-    }
-
-    for (int i = 0; i < noexcept; i++)
-    {
-        fds->fd = *(socks++);
-        fds->events = POLLERR;
-        fds++;
-    }
-
-    return poll(origfds, nfds, timeout * 1000);
+    return lx_host_socket_poll(sockets, reads, writes, errors, (int)(timeout * 1000));
 }
 
 int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
     TRACE_NATIVE("getsockname(%d, %p, %p)", sock, os2name, os2namelen);
 
-    struct sockaddr_in bsdaddr;
-    socklen_t namelen = sizeof(bsdaddr);
-    const int rc = getsockname(sock, &bsdaddr, &namelen);
+    LxHostSocketAddress bsdaddr;
+    const int rc = lx_host_socket_name(sock, &bsdaddr);
     if (rc == -1)
     {
-        return -1;
-    }
-    else if (bsdaddr.sin_family != AF_INET)
-    {
-        FIXME("this only deals with IPv4 at the moment");
         return -1;
     }
     else if (*os2namelen < sizeof(OS2_sockaddr_in))
@@ -288,23 +237,22 @@ int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
 int OS2_bind(int sock, const OS2_sockaddr *os2name, int os2namelen)
 {
     TRACE_NATIVE("bind(%d, %p, %d)", sock, os2name, os2namelen);
-    struct sockaddr_in bsdaddr;
+    LxHostSocketAddress bsdaddr;
     mapOS2SockAddrIn(os2name, &bsdaddr);
-    return bind(sock, (struct sockaddr *)&bsdaddr, sizeof(bsdaddr));
+    return lx_host_socket_bind(sock, &bsdaddr);
 }
 
 int OS2_listen(int sock, int backlog)
 {
     TRACE_NATIVE("listen(%d, %d)", sock, backlog);
-    return listen(sock, backlog);
+    return lx_host_socket_listen(sock, backlog);
 }
 
 int OS2_accept(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
     TRACE_NATIVE("bind(%d, %p, %p)", sock, os2name, os2namelen);
-    struct sockaddr_in bsdaddr;
-    socklen_t bsdaddrlen = sizeof(bsdaddr);
-    const int retval = accept(sock, (struct sockaddr *)&bsdaddr, &bsdaddrlen);
+    LxHostSocketAddress bsdaddr;
+    const int retval = lx_host_socket_accept(sock, &bsdaddr);
 
     if (os2name != NULL)
     {
@@ -325,7 +273,7 @@ static int mapOS2SocketOption(const int os2name)
     {
 #define MAPSOOPT(f)                                                                                \
     case OS2_##f:                                                                                  \
-        return f
+        return LX_##f
         MAPSOOPT(SO_DEBUG);
         MAPSOOPT(SO_ACCEPTCONN);
         MAPSOOPT(SO_REUSEADDR);
@@ -359,7 +307,6 @@ static int mapOS2SocketOption(const int os2name)
 int OS2_setsockopt(int sock, int os2level, int os2name, const void *value, int len)
 {
     const int bsdname = mapOS2SocketOption(os2name);
-    const int bsdlevel = SOL_SOCKET;
     if (!bsdname)
     {
         return -1;
@@ -368,28 +315,25 @@ int OS2_setsockopt(int sock, int os2level, int os2name, const void *value, int l
     {
         return -1;
     }
-    return setsockopt(sock, bsdlevel, bsdname, value, len);
+    return lx_host_socket_option(sock, (LxHostSocketOption)bsdname, value, len);
 }
 
-int OS2_gettimeofday(OS2_timeval *os2tv, OS2_timezone *os2tz)
+int OS2_gettimeofday(OS2_timeval *time, OS2_timezone *zone)
 {
-    struct timeval bsdtv;
-    struct timezone bsdtz;
-    const int retval = gettimeofday(&bsdtv, &bsdtz);
-
-    if (os2tv)
+    int64_t seconds;
+    int32_t micros, west, dst;
+    int result = lx_host_wall_time(&seconds, &micros, &west, &dst);
+    if (time)
     {
-        os2tv->tv_sec = bsdtv.tv_sec;
-        os2tv->tv_usec = bsdtv.tv_usec;
+        time->tv_sec = (int32_t)seconds;
+        time->tv_usec = micros;
     }
-
-    if (os2tz)
+    if (zone)
     {
-        os2tz->tz_minuteswest = bsdtz.tz_minuteswest;
-        os2tz->tz_dsttime = bsdtz.tz_dsttime;
+        zone->tz_minuteswest = west;
+        zone->tz_dsttime = dst;
     }
-
-    return retval;
+    return result;
 }
 
 // SOCKS support...

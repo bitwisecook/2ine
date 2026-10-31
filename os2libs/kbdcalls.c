@@ -9,7 +9,7 @@
 #include "os2native16.h"
 #include "kbdcalls.h"
 
-#include "kbdcalls-lx.h"
+#include "os2libs/generated/kbdcalls-lx.h"
 
 APIRET16 KbdCharIn(PKBDKEYINFO pkbci, USHORT fWait, HKBD hkbd)
 {

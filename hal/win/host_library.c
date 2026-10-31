@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host library lifetime and symbol lookup behind an opaque handle. */
-#include "host_library.h"
+#include "hal/host_library.h"
 #include <stdlib.h>
 #include <stdio.h>
 #define WIN32_LEAN_AND_MEAN

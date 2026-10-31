@@ -1,0 +1,78 @@
+{
+  "_notice": "Public domain. No rights reserved. Wholly AI-authored.",
+  "description": "Guest program/runtime fixtures. Original notices and licenses remain applicable; no host dependency binaries.",
+  "files": [
+    {
+      "path": "emx.dll",
+      "sha256": "4a25957466d6c4f6bb5ae6406b4fd52779926effe352bfe07e96297497c13d31",
+      "size": 91198,
+      "format": "LX",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/emx.dll",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "hello.exe",
+      "sha256": "ec2c8f00ab5911c62519f96a557a87f26d9f52bea2a8730d51892bb00c6204e4",
+      "size": 481,
+      "format": "LX",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/hello.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "hello16.exe",
+      "sha256": "bd9c4a335584ee2d81704aa5c27798abe9325bdde6b74b2580f9de1e2febb59a",
+      "size": 1392,
+      "format": "NE",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/hello16.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "helloc.exe",
+      "sha256": "aa28c35de232a8e432dfe0df1d771d63cb58838dab10295c6e1163a6df72b7b8",
+      "size": 60171,
+      "format": "LX",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/helloc.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "testargv.exe",
+      "sha256": "8e9671ba5beb589642c407e2b79b7adbc742a22d5ddedc1b395b85769d126bfa",
+      "size": 58766,
+      "format": "LX",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/testargv.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "testargv16.exe",
+      "sha256": "acf4755031d21cd6dbf6d850ee21d2418205129cb9d86d035b1015b99fad00cd",
+      "size": 14330,
+      "format": "NE",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/testargv16.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "testbeep.exe",
+      "sha256": "e05b9fce24b20c5018ba5f2d66ecdd7734643f9b80f4fb0c14b9cc19afde27f9",
+      "size": 2273,
+      "format": "LX",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/testbeep.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "testpm.exe",
+      "sha256": "41abdef94ffcb27174f62265c8042e0a4d3798d1c9101ba4fde99b55960ded9c",
+      "size": 4792,
+      "format": "LX",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/testpm.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    },
+    {
+      "path": "testtls.exe",
+      "sha256": "52e1d872877ee405e9691eadec634f1eba0db6dc404d1b5c5e5797d751cdc781",
+      "size": 85893,
+      "format": "LX",
+      "provenance": "Retained unchanged from fork main 3628e3cbde5c44263437a827bb134303a13e2d4e, tests/testtls.exe",
+      "build_recipe": "Original toolchain, flags and exact source mapping are not established."
+    }
+  ]
+}

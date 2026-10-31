@@ -9,7 +9,7 @@
 #include "os2native.h"
 #include "quecalls.h"
 
-#include "quecalls-lx.h"
+#include "os2libs/generated/quecalls-lx.h"
 
 APIRET DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ pszName)
 {

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest-address ownership and execution-backend dispatch. */
 #include "cpu_internal.h"
-#include "host.h"
+#include "hal/host.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

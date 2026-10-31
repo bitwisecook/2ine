@@ -10,8 +10,8 @@
 #define _INCL_OS2NATIVE16_H_
 
 #include "os2native.h"
-#include "../guest/abi.h"
-#include "../guest/arguments.h"
+#include "guest/abi.h"
+#include "guest/arguments.h"
 
 #define LX_NATIVE_MODULE_16BIT_SUPPORT() static LxMmaps obj16;
 

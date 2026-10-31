@@ -3,8 +3,8 @@
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
-#include "host_sync.h"
-#include "host.h"
+#include "hal/host_sync.h"
+#include "hal/host.h"
 #include <stdlib.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

@@ -9,53 +9,8 @@
 #include "os2native16.h"
 #include "viocalls.h"
 
-#undef TRUE
-#undef FALSE
-
-#include <unistd.h>
-#include <ctype.h>
-
-#if defined(HAVE_NCURSESW_NCURSES_H)
-#include <ncursesw/ncurses.h>
-#elif defined(HAVE_NCURSESW_CURSES_H)
-#include <ncursesw/curses.h>
-#elif defined(HAVE_NCURSESW_H)
-#include <ncursesw.h>
-#elif defined(HAVE_CURSES_H)
-#include <curses.h>
-#else
-#error ncurses gui enabled, but no known header file found
-#endif
-
-#include <locale.h>
-
-#include "viocalls-lx.h"
-
-enum
-{
-    VIOATTR_BACK_BLACK = 0x00,
-    VIOATTR_BACK_BLUE = 0x10,
-    VIOATTR_BACK_GREEN = 0x20,
-    VIOATTR_BACK_CYAN = 0x30,
-    VIOATTR_BACK_RED = 0x40,
-    VIOATTR_BACK_MAGENTA = 0x50,
-    VIOATTR_BACK_YELLOW = 0x60,
-    VIOATTR_BACK_BROWN = 0x60,
-    VIOATTR_BACK_WHITE = 0x70,
-
-    VIOATTR_FORE_BLACK = 0x00,
-    VIOATTR_FORE_BLUE = 0x01,
-    VIOATTR_FORE_GREEN = 0x02,
-    VIOATTR_FORE_CYAN = 0x03,
-    VIOATTR_FORE_RED = 0x04,
-    VIOATTR_FORE_MAGENTA = 0x05,
-    VIOATTR_FORE_YELLOW = 0x06,
-    VIOATTR_FORE_BROWN = 0x06,
-    VIOATTR_FORE_WHITE = 0x07,
-
-    VIOATTR_INTENSITY = 0x08,
-    VIOATTR_BLINK = 0x80
-};
+#include "hal/terminal.h"
+#include "os2libs/generated/viocalls-lx.h"
 
 static uint16 *vio_buffer = NULL;
 static uint16 vio_scrw, vio_scrh;
@@ -67,51 +22,15 @@ static int initNcurses(void)
     if (vio_buffer != NULL)
         return 1;
 
-    setlocale(LC_CTYPE, "");
-    if (initscr() == NULL)
-    {
-        fprintf(stderr, "ncurses: initscr() failed\n");
-        return 0;
-    }
-
-    cbreak();
-    keypad(stdscr, TRUE);
-    noecho();
-    start_color();
-    use_default_colors();
-
-    static const short curses_colormap[] = {COLOR_BLACK, COLOR_BLUE,    COLOR_GREEN,  COLOR_CYAN,
-                                            COLOR_RED,   COLOR_MAGENTA, COLOR_YELLOW, COLOR_WHITE};
-
-    if (COLORS >= 64)
-    { // foreground and background
-        for (uint32 i = 0; i < 8; i++)
-        {
-            for (uint32 j = 0; j < 8; j++)
-            {
-                const int pair = (int)(i | (j << 3));
-                init_pair(pair, curses_colormap[i], (j == 0) ? -1 : curses_colormap[j]);
-            }
-        }
-    }
-    else if (COLORS >= 8)
-    { // just foregrounds
-        for (int i = 0; i < 8; i++)
-            init_pair(i, curses_colormap[i], COLOR_BLACK);
-    }
-
-    // (otherwise, we won't set colors at all.)
-
     int scrh, scrw;
-    getmaxyx(stdscr, scrh, scrw);
+    if (!lx_host_terminal_open(&scrw, &scrh))
+        return 0;
 
     const size_t buflen = scrw * scrh * sizeof(uint16);
     vio_buffer = malloc(buflen);
     if (!vio_buffer)
     {
-        endwin();
-        delwin(stdscr);
-        stdscr = NULL;
+        lx_host_terminal_close();
         return 0;
     }
 
@@ -134,13 +53,7 @@ static void deinitNcurses(void)
     if (!vio_buffer)
         return;
 
-    reset_shell_mode();
-
-    printf("\n");
-    fflush(stdout);
-
-    delwin(stdscr);
-    stdscr = NULL;
+    lx_host_terminal_close();
     free(vio_buffer);
     vio_buffer = NULL;
     vio_curx = vio_cury = vio_scrw = vio_scrh = 0;
@@ -148,7 +61,7 @@ static void deinitNcurses(void)
 
 static inline void commitToNcurses(void)
 {
-    refresh();
+    lx_host_terminal_refresh();
 }
 
 static void pushToNcurses(const int y, const int x, int numcells, const int commit)
@@ -158,64 +71,7 @@ static void pushToNcurses(const int y, const int x, int numcells, const int comm
     if (numcells > avail)
         numcells = avail;
 
-    move(y, x);
-
-    for (int i = 0; i < numcells; i++)
-    {
-        const uint8 viochar = *(src++);
-        const uint8 vioattr = *(src++);
-
-        chtype ch;
-        switch (viochar)
-        {
-            case 0xC4:
-                ch = ACS_HLINE;
-                break;
-            case 0xB3:
-                ch = ACS_VLINE;
-                break;
-            case 0xDA:
-                ch = ACS_ULCORNER;
-                break;
-            case 0xBF:
-                ch = ACS_URCORNER;
-                break;
-            case 0xC0:
-                ch = ACS_LLCORNER;
-                break;
-            case 0xD9:
-                ch = ACS_LRCORNER;
-                break;
-            default:
-                ch = (chtype)viochar;
-                break;
-        }
-
-        chtype attr = 0;
-
-        if (COLORS >= 64)
-        { // foreground and background
-            const int color = ((vioattr & 0x70) >> 1) | (vioattr & 0x7);
-            attr |= COLOR_PAIR(color);
-        }
-        else if (COLORS >= 8)
-        { // just foregrounds
-            const int color = (vioattr & 0x7);
-            attr |= COLOR_PAIR(color);
-        }
-
-        if (vioattr & VIOATTR_INTENSITY)
-            attr |= A_BOLD;
-        if (vioattr & VIOATTR_BLINK)
-            attr |= A_BLINK;
-
-        addch(ch | attr);
-    }
-
-    move(vio_cury, vio_curx);
-
-    if (commit)
-        commitToNcurses();
+    lx_host_terminal_cells(x, y, (const uint16_t *)src, numcells, vio_curx, vio_cury, commit);
 }
 
 APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
@@ -383,8 +239,7 @@ APIRET16 VioSetCurPos(USHORT usRow, USHORT usColumn, HVIO hvio)
     vio_cury = usRow;
     vio_curx = usColumn;
 
-    move(vio_cury, vio_curx);
-    refresh();
+    lx_host_terminal_cursor(vio_curx, vio_cury);
 
     return NO_ERROR;
 }

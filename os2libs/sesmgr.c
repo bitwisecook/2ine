@@ -9,7 +9,7 @@
 #include "os2native16.h"
 #include "sesmgr.h"
 
-#include "sesmgr-lx.h"
+#include "os2libs/generated/sesmgr-lx.h"
 
 APIRET DosStartSession(PSTARTDATA psd, PULONG pidSession, PPID ppid)
 {

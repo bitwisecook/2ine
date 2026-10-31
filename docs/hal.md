@@ -3,12 +3,13 @@
 # Hardware abstraction layer
 
 The shared runtime and OS/2 libraries call platform-neutral execution and host
-contracts in `runtime/`. Implementation sources are selected by
+contracts in `hal/include/hal/` and `runtime/execution.h`. Implementation sources are selected by
 `hal/platform.cmake`; shared source files do not select an OS with preprocessor
 branches.
 
 ```text
 hal/
+  include/hal/  Public host-service contracts without platform types
   common/       CPU identification and argv serialization
   posix/        Shared Linux/macOS VM, files, libraries, threads and processes
   linux/        procfs queries, memory statistics and robust mutex/deadline hooks
@@ -16,6 +17,7 @@ hal/
   macos/        Darwin bootstrap queries, Mach memory queries and relative waits
   win/          Existing partial Win32 adapters
   emulator/     Host-independent Unicorn execution
+  sdl/          SDL3 audio streams, windows, rendering and normalized events
 ```
 
 Linux and macOS combine the shared POSIX sources with their own process, system
@@ -36,7 +38,7 @@ application support.
 
 Platform dependency discovery is colocated with its implementation:
 `macos/dependencies.cmake` locates SDK curses, and
-`linux/i386/dependencies.cmake` selects the existing i386 SDL/ncurses dependencies.
+`linux/i386/dependencies.cmake` selects i386 ncurses; `cmake/SDL3.cmake` selects the SDL provider.
 
 Add an OS-specific operation to its platform directory. Reuse POSIX code when
 the semantics match on Linux and macOS; use a private platform hook when they
@@ -45,3 +47,11 @@ code. The source-boundary check rejects OS-selection branches and platform-only
 headers in shared HAL code.
 
 [Architecture](architecture.md) · [Build](build.md) · [Tests](testing.md)
+
+Audio generator policy lives in `runtime/audio.c`; SDL owns the stream and device
+conversion. A stream stays open until runtime shutdown. Closing PM video does
+not close audio. PM windows/messages/painting use opaque HAL windows and
+normalized rectangles/events. VIO retains its OS/2 screen buffer and delegates
+terminal rendering to `posix/terminal_curses.c`. TCP/IP translates OS/2 socket
+structures and flags before calling `posix/host_socket.c`. No SDL or curses types
+cross the public HAL boundary.

@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _GNU_SOURCE 1
-#include "host.h"
+#include "hal/host.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -64,4 +64,10 @@ char *lx_host_executable_path(void)
             return NULL;
     }
     return NULL;
+}
+
+char *const *lx_host_environment(void)
+{
+    extern char **environ;
+    return environ;
 }

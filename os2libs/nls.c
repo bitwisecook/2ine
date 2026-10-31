@@ -9,7 +9,7 @@
 #include "os2native16.h"
 #include "nls.h"
 
-#include "nls-lx.h"
+#include "os2libs/generated/nls-lx.h"
 
 APIRET16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf)
 {

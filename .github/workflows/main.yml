@@ -11,15 +11,9 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install --yes cmake ninja-build gcc-multilib libc6-dev-i386 libncurses-dev libncursesw6:i386 libsdl2-dev libsdl2-2.0-0:i386
-      - name: Stage i386 SDL configuration header
-        run: |
-          mkdir -p "$RUNNER_TEMP/twoine-i386"
-          cd "$RUNNER_TEMP/twoine-i386"
-          apt-get download libsdl2-dev:i386
-          dpkg-deb --extract libsdl2-dev_*_i386.deb "$RUNNER_TEMP/twoine-i386"
-      - name: Configure native worker
-        run: cmake -S . -B build-native -GNinja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=OFF -DCMAKE_C_FLAGS="-I$RUNNER_TEMP/twoine-i386/usr/include/i386-linux-gnu"
+          sudo apt-get install --yes cmake ninja-build gcc-multilib libc6-dev-i386 libncurses-dev libncurses-dev:i386 libasound2-dev:i386 libx11-dev:i386 libxext-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxrandr-dev:i386
+      - name: Configure native worker and pinned SDL3 source
+        run: cmake -S . -B build-native -GNinja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=OFF
       - name: Build
         run: cmake --build build-native --parallel 2
       - name: Test native execution boundary

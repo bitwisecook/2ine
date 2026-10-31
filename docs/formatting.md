@@ -18,7 +18,7 @@ the wrapper searches for `clang-format-21`, then `clang-format`.
 The default file list includes tracked and untracked C/H sources recognized by
 Git. `.clang-format-ignore` excludes generated export headers, reference
 experiments, third-party sources and build directories. Generated export glue
-retains its generator's layout; validate it with `python3 lxapigen.py --check`.
+retains its generator's layout; validate it with `python3 tools/lxapigen.py --check`.
 
 `.clang-format` specifies four spaces, Allman braces, a 100-column target and
 pointer stars beside variable names. Include order, comment text and string

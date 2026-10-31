@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart TD
-    Image["NE / LX executable + DLLs"] --> Loader["lx_loader.c · load, relocate, resolve"]
+    Image["NE / LX executable + DLLs"] --> Loader["loader/ · load, relocate, resolve"]
     Loader --> Guest["guest/ · wire ABI, arguments, handles"]
     Guest --> APIs["os2libs/ · OS/2 DLL implementations"]
     Loader --> Execution["runtime/execution.h"]
@@ -16,7 +16,7 @@ flowchart TD
     Execution --> Native["hal/linux/i386/execution.c"]
     Execution --> Emulator["hal/emulator/execution_unicorn.c"]
     Emulator --> CPU["hal/emulator/cpu.h + cpu_unicorn.c"] --> Unicorn["Unicorn"]
-    APIs --> Host["runtime/host*.h · opaque host services"]
+    APIs --> Host["hal/include/hal/ · opaque host services"]
     Host --> HAL["hal/posix/ + platform adapters"]
     HAL --> Linux["Linux"]
     HAL --> Mac["macOS"]
@@ -25,14 +25,15 @@ flowchart TD
 
 `os2libs/` contains the OS/2 API implementations shared by both execution paths.
 `runtime/` owns execution dispatch, checked guest mappings and platform-neutral
-host-service contracts. `hal/` implements those contracts: `hal/linux/i386/` owns
+process and audio policy. `hal/include/hal/` declares host-service contracts,
+and `hal/` implements them: `hal/linux/i386/` owns
 Linux i386 execution and ABI bridges, `hal/emulator/` owns CPU emulation, and
 `hal/posix/` shares host services between `hal/linux/` and `hal/macos/`.
 `hal/win/` contains partial Windows adapters. [HAL source selection](hal.md)
 chooses the implementation and dependencies for each worker. Execution adapters
 know no `LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or implement
 DOSCALLS.
-`tests/check-boundaries.py` checks that source separation.
+`tests/architecture/check_boundaries.py` checks that source separation.
 
 | Boundary | Owns |
 |---|---|
@@ -40,8 +41,29 @@ DOSCALLS.
 | `guest/` | Fixed-width layouts, checked arguments and private resource IDs |
 | `runtime/execution.h` | Entries, callbacks, threads, selectors and guest mappings |
 | `hal/emulator/cpu.h` | CPU registers, contexts/x87, segments, bounded runs and faults |
-| `runtime/host*.h` | VM, files, paths, libraries, clocks, threads, synchronization and child processes |
+| `hal/include/hal/host*.h` | VM, files, paths, libraries, clocks, threads, synchronization and child processes |
 | `hal/` | Execution backends, native ABI bridges and host-service implementations |
+
+## Source ownership
+
+| Directory | Contents |
+|---|---|
+| `formats/` | Packed NE/LX definitions and decompression, without process state |
+| `loader/` | Entry, imports/relocations, NE/LX loading, module lifetime and paths |
+| `runtime/core/` | Bootstrap, process environment, threads, configuration and drives |
+| `runtime/` | Execution dispatch/mappings and audio generator policy |
+| `guest/` | Wire layouts, argument marshalling, handles and explicit binding policies |
+| `os2libs/doscalls/` | File I/O, file metadata, directories, paths, memory, threads, processes, semaphores, modules, exceptions, system and audio APIs |
+| `os2libs/pmwin/` | Anchor context, windows, messages and painting |
+| `os2libs/generated/` | Generated export tables; public API declarations remain in `os2libs/*.h` |
+| `tools/` | Generators, import analysis, assembly conversion and `lx_dump` |
+| `tools/data/` | Ordinal catalogue |
+| `tests/` | HAL, runtime, guest, tools, architecture and integration tests; guest programs/fixtures |
+| `research/` | Format specifications and isolated experiments |
+
+Component CMake files own their targets. Generated tables are included only by
+their module's entry unit; private split-unit headers do not extend the public
+OS/2 API. `mdm` and `pmmerge` are existing unbuilt placeholders, not provided DLLs.
 
 ## Loading
 

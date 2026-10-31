@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _GNU_SOURCE 1
-#include "host.h"
+#include "hal/host.h"
 #include <unistd.h>
 #include <sys/resource.h>
 void lx_host_process_ids(uint32_t *process, uint32_t *parent)

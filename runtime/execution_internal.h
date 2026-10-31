@@ -2,7 +2,7 @@
 #ifndef TWOINE_EXECUTION_INTERNAL_H
 #define TWOINE_EXECUTION_INTERNAL_H
 #include "execution.h"
-#include "host_sync.h"
+#include "hal/host_sync.h"
 
 typedef struct LxExecutionOperations
 {

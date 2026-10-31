@@ -9,12 +9,12 @@
 #include "os2native16.h"
 #include "msg.h"
 
-#include "../runtime/host_fs.h"
+#include "hal/host_fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "msg-lx.h"
+#include "os2libs/generated/msg-lx.h"
 
 APIRET DosPutMessage(HFILE handle, ULONG size, PCHAR message)
 {

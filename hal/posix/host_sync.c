@@ -3,9 +3,9 @@
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
-#include "host_sync.h"
+#include "hal/host_sync.h"
 #include "sync_platform.h"
-#include "host.h"
+#include "hal/host.h"
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>

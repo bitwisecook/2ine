@@ -8,3 +8,5 @@ __pycache__/
 
 .ruff_cache/
 .ty_cache/
+
+_deps/

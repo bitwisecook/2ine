@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "host.h"
+#include "hal/host.h"
 const char *lx_host_arch(void)
 {
 #if defined(__aarch64__) || defined(_M_ARM64)
@@ -11,4 +11,9 @@ const char *lx_host_arch(void)
 #else
     return "other";
 #endif
+}
+
+uint32_t lx_host_atomic_increment(uint32_t *value)
+{
+    return __atomic_add_fetch(value, 1, __ATOMIC_SEQ_CST);
 }

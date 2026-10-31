@@ -1,0 +1,11 @@
+# Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
+if(LX_LEGACY)
+    add_executable(lx_loader main.c modules.c entry.c imports.c load_ne.c load_lx.c paths.c)
+    twoine_application_target(lx_loader)
+    target_link_libraries(lx_loader PRIVATE 2ine twoine_formats ${CMAKE_DL_LIBS})
+    set_target_properties(lx_loader PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+    if(TWOINE_NATIVE_LOADER)
+        target_compile_options(lx_loader PRIVATE -no-pie)
+        target_link_options(lx_loader PRIVATE -no-pie)
+    endif()
+endif()

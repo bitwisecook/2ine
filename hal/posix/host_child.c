@@ -2,7 +2,7 @@
 /* Child lifecycle and status normalization; no OS/2 data layouts cross here. */
 #define _GNU_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
-#include "host_process.h"
+#include "hal/host_process.h"
 #include <stdlib.h>
 #include <string.h>
 #include <spawn.h>

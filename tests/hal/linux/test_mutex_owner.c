@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Linux robust mutex recovery restores ownership after a thread exits. */
-#include "host_sync.h"
-#include "host_thread.h"
+#include "hal/host_sync.h"
+#include "hal/host_thread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #define CHECK(expression)                                                                          \

@@ -3,7 +3,7 @@
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #define _FILE_OFFSET_BITS 64
-#include "host_fs.h"
+#include "hal/host_fs.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

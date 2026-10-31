@@ -2,7 +2,7 @@
 /* Host physical-memory queries; guest policy and size limits are applied above. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
-#include "host.h"
+#include "hal/host.h"
 #include <string.h>
 #include <time.h>
 #define WIN32_LEAN_AND_MEAN
