@@ -104,8 +104,8 @@ enum
     EXLST_EXIT
 };
 
-typedef void *PEXCEPTIONREGISTRATIONRECORD;  // !!! FIXME
-typedef void *PEXCEPTIONREPORTRECORD;  // !!! FIXME
+typedef void *PEXCEPTIONREGISTRATIONRECORD;
+typedef void *PEXCEPTIONREPORTRECORD;
 typedef struct { USHORT country; USHORT codepage; } COUNTRYCODE, *PCOUNTRYCODE;
 
 typedef struct
@@ -129,7 +129,7 @@ enum {
     OBJ_GETTABLE = 0x100, OBJ_GIVEABLE = 0x200, PAG_DEFAULT = 0x400
 };
 
-typedef void *PEAOP2; //  !!! FIXME
+typedef void *PEAOP2;
 
 enum
 {
@@ -479,12 +479,10 @@ enum
     END_LIBPATH = 2
 };
 
-typedef void *PCONTEXTRECORD;  // !!! FIXME
+typedef void *PCONTEXTRECORD;
 
 
-// DosQueryHeaderInfo() is an undocumented OS/2 API that is exported from DOSCALLS. Java uses it.
-//  This isn't mentioned in the docs or the SDK (beyond the ordinal being listed). I got the basic details
-//  from Odin32, which lists it in their os2newapi.h header.
+/* Undocumented DOSCALLS header query used by Java runtimes. */
 enum
 {
     QHINF_EXEINFO = 1,
@@ -499,21 +497,21 @@ enum
 
 OS2EXPORT APIRET OS2API DosQueryHeaderInfo(HMODULE hmod, ULONG ulIndex, PVOID pvBuffer, ULONG cbBuffer, ULONG ulSubFunction) OS2APIINFO(582);
 
-// This is also undocumented (thanks, EDM/2!). Of course, Java uses it.
+/* Undocumented DOSCALLS entry used by Java runtimes. */
 OS2EXPORT APIRET OS2API DosQuerySysState(ULONG func, ULONG arg1, ULONG pid, ULONG _res_, PVOID buf, ULONG bufsz) OS2APIINFO(368);
 
-// This is also undocumented (no idea about this at all, including function params). Of course, Java uses it.
+/* Undocumented DOSCALLS entry used by Java runtimes. */
 OS2EXPORT APIRET OS2API DosR3ExitAddr(void) OS2APIINFO(553);
 
-// These are 16-bit APIs that aren't in the 4.5 toolkit headers. Yeah, Java uses them! Winging it.
-typedef int HSEM16, *PHSEM16;  // !!! FIXME: int? Not short?
+/* Legacy USE16 DOSCALLS entries absent from the 4.5 Toolkit headers. */
+typedef int HSEM16, *PHSEM16;
 OS2EXPORT APIRET16 OS2API16 DosSemRequest(PHSEM16 sem, LONG ms) OS2APIINFO(140);
 OS2EXPORT APIRET16 OS2API16 DosSemClear(PHSEM16 sem) OS2APIINFO(141);
 OS2EXPORT APIRET16 OS2API16 DosSemWait(PHSEM16 sem, LONG ms) OS2APIINFO(142);
 OS2EXPORT APIRET16 OS2API16 DosSemSet(PHSEM16 sem) OS2APIINFO(143);
 
 
-// These are only meant to be available to 16-bit binaries, some were removed in OS/2 2.0's SDK.
+/* USE16-only exports. */
 OS2EXPORT APIRET16 OS2API16 Dos16EnterCritSec(VOID) OS2APIINFO(3);
 OS2EXPORT APIRET16 OS2API16 Dos16ExitCritSec(VOID) OS2APIINFO(6);
 OS2EXPORT APIRET16 OS2API16 Dos16SetPrty(USHORT scope, USHORT prtyclass, SHORT delta, USHORT pid) OS2APIINFO(11);
@@ -574,12 +572,9 @@ OS2EXPORT APIRET16 OS2API16 Dos16ExecPgm(PCHAR pObjname, SHORT cbObjname, USHORT
 OS2EXPORT APIRET16 OS2API16 Dos16CWait(USHORT action, USHORT option, PRESULTCODES16 pres, PUSHORT ppid, USHORT pid) OS2APIINFO(2);
 OS2EXPORT APIRET16 OS2API16 Dos16ChgFilePtr(USHORT handle, LONG distance, USHORT whence, PULONG newoffset) OS2APIINFO(58);
 OS2EXPORT APIRET16 OS2API16 Dos16Beep(USHORT freq, USHORT dur) OS2APIINFO(50);
-OS2EXPORT APIRET16 OS2API16 Dos16MkDir(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(66);   // !!! FIXME: check this one
-OS2EXPORT APIRET16 OS2API16 Dos16MkDir2(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(185);  // !!! FIXME: check this one
+OS2EXPORT APIRET16 OS2API16 Dos16MkDir(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(66);
+OS2EXPORT APIRET16 OS2API16 Dos16MkDir2(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(185);
 
-// !!! FIXME: these should probably get sorted alphabetically and/or grouped
-// !!! FIXME:  into areas of functionality, but for now, I'm just listing them
-// !!! FIXME:  in the order I implemented them to get things running.
 
 OS2EXPORT APIRET OS2API DosDupHandle(HFILE hFile, PHFILE pHfile) OS2APIINFO(260);
 OS2EXPORT APIRET OS2API DosGetInfoBlocks(PTIB *pptib, PPIB *pppib) OS2APIINFO(312);
@@ -680,6 +675,3 @@ OS2EXPORT APIRET OS2API DosCreateDir(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(2
 #endif
 
 #endif
-
-// end of doscalls.h ...
-

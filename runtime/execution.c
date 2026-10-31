@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Selection and dispatch for the process execution boundary. */
 #include "execution_internal.h"
 #include <stdlib.h>

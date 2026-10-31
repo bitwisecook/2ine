@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Native thread creation and cancellation cleanup are confined to the host. */
 #include "host_thread.h"
 #include <stdlib.h>

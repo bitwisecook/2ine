@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest-address ownership and execution-backend dispatch. */
 #include "cpu_internal.h"
 #include "host.h"

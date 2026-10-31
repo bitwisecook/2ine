@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Process bootstrap queries. Returned strings/buffers belong to the caller. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1

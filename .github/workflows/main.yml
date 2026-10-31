@@ -1,3 +1,4 @@
+# Derived from original 2ine; zlib-style license. See LICENSE.txt in the repository root.
 name: Native Linux application
 on: [push, pull_request, workflow_dispatch]
 jobs:

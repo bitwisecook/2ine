@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host shared-memory objects. Names are caller-provided ASCII identifiers. */
 #ifndef TWOINE_HOST_SHARED_H
 #define TWOINE_HOST_SHARED_H

@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host synchronization objects. OS/2 ownership and handles live above this API. */
 #ifndef TWOINE_HOST_SYNC_H
 #define TWOINE_HOST_SYNC_H

@@ -12,30 +12,13 @@
 
 #include "pmwin-lx.h"
 
-// NOTE: PM reference manual says OS/2 generally ignores the HAB you pass
-//  to functions, instead getting that info from the current thread, but
-//  other IBM platforms might not do that, so programs should always pass
-//  a valid HAB to everything. Things like WinCreateWindow() probably rely
-//  on the current thread's HAB without requiring the API call to specify
-//  it in any case.
-// So current approach: keep a pointer to the anchor block in the TIB, and
-//  the anchor block keeps a copy of it's HAB. When the anchor block is
-//  needed, we pull it from the TIB directly, and if it's in a function
-//  where a HAB is specified, we fail if the handles don't match.
-// If I later find out that OS/2 doesn't even care even if you give it a
-//  bogus HAB, we can relax this check.
-
-
-// !!! FIXME: You can send messages to HWNDs on a different thread, which
-// !!! FIXME:  means HWND values must be unique across threads. Technically,
-// !!! FIXME:  they have to be unique across processes, too.  :/
+/* Each host thread owns one anchor block. APIs with a HAB require it to match that block. */
 
 
 #define FIRST_HWND_VALUE 10
 #define FIRST_HPS_VALUE 10
 
-// This is the keyname we use on an heavyweight SDL window to find our
-//  associated Window*.
+/* SDL window userdata identifies its OS/2 Window object. */
 #define WINDATA_WINDOWPTR_NAME "2ine_windowptr"
 
 static SDL_atomic_t GHABCounter;
@@ -50,7 +33,7 @@ typedef struct WindowClass
     struct WindowClass *next;
 } WindowClass;
 
-// these get shared with all children, but they're owned by the topmost parent.
+
 typedef struct
 {
     SDL_Window *window;
@@ -66,7 +49,7 @@ typedef struct Window
     struct Window *children;
     struct Window *sibling;
     struct Window *owner;
-    const char *window_class_name;  // Class at creation time. styles and window procs might change later, though! This is just to make debugging easier.
+    const char *window_class_name;  /* Retain the creation-time class for diagnostics; styles and procedures can vary. */
     char *text;
     void *data;
     size_t data_len;
@@ -99,12 +82,12 @@ typedef struct
 {
     HPS hps;
     Window *window;
-    // !!! FIXME: this is gonna be WAY more complicated.
+
 } PresentationSpace;
 
 typedef struct
 {
-    HAB hab;  // actual HAB value for this block, for comparison.
+    HAB hab;
     ERRORID last_error;
     WindowClass *registered_classes;
     MessageQueue message_queue;
@@ -116,12 +99,12 @@ typedef struct
 
 #define SET_WIN_ERROR_AND_RETURN(anchor, err, rc) { anchor->last_error = (err); return (rc); }
 
-static Window desktop_window;  // !!! FIXME: initialize and upkeep on this.
+static Window desktop_window;
 
 static inline AnchorBlock *getAnchorBlockNoHAB(void)
 {
     return (AnchorBlock *) lxHostThreadState()->anchor_block;
-} // getAnchorBlockNoHAB
+}
 
 static AnchorBlock *getAnchorBlock(const HAB hab)
 {
@@ -132,7 +115,7 @@ static AnchorBlock *getAnchorBlock(const HAB hab)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HAB, NULL);
     }
     return anchor;
-} // getAnchorBlock
+}
 
 static Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
 {
@@ -147,7 +130,7 @@ static Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
         return &desktop_window;
     }
     return NULL;
-} // getWindowFromHWND
+}
 
 static PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor, const HPS hps)
 {
@@ -160,7 +143,7 @@ static PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor,
         return (ps->hps == hps) ? ps : NULL;
     }
     return NULL;
-} // getPresentationSpaceFromHPS
+}
 
 static const char *messageName(const ULONG msg)
 {
@@ -309,15 +292,15 @@ static const char *messageName(const ULONG msg)
     }
 
     return "???";
-} // messageName
+}
 
 static WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
 {
     const ULONG intclass = (ULONG) (size_t) classname;
     if ((intclass >= 0xffff0001) && (intclass <= 0xffff0070)) {
-        // built-in class, like WC_BUTTON or whatever.
+
         switch (intclass) {
-            // !!! FIXME: write me.
+
             case WC_FRAME:
             case WC_COMBOBOX:
             case WC_BUTTON:
@@ -349,13 +332,13 @@ static WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classna
         }
     }
     return NULL;
-} // findRegisteredClass
+}
 
 static ULONG currentSystemTicks(void)
 {
     FIXME("this isn't correct");  // see notes in processSDLEvent() for details.
     return SDL_GetTicks();
-} // currentSystemTicks
+}
 
 HAB WinInitialize(ULONG flOptions)
 {
@@ -367,7 +350,7 @@ HAB WinInitialize(ULONG flOptions)
 
     LxHostThreadState *posttib = lxHostThreadState();
     if (posttib->anchor_block != NULL) {
-        return NULLHANDLE;  // fail if thread already has a HAB
+        return NULLHANDLE;
     }
 
     if (!SDL_WasInit(SDL_INIT_VIDEO)) {
@@ -377,7 +360,7 @@ HAB WinInitialize(ULONG flOptions)
         }
     }
 
-    FIXME("OS/2 doesn't support multi-monitor");  // this might not be true, actually.
+    FIXME("OS/2 doesn't support multi-monitor");
     SDL_Rect desktoprect;
     SDL_GetDisplayBounds(0, &desktoprect);
     desktop_window.hwnd = HWND_DESKTOP;
@@ -407,7 +390,7 @@ HAB WinInitialize(ULONG flOptions)
     memset(anchor->pres_spaces, '\0', sizeof (PresentationSpace) * anchor->pres_spaces_array_len);
 
     const int ihab = SDL_AtomicAdd(&GHABCounter, 1) + 1;
-    if (ihab <= 0) {  // this is clearly a pathological program.
+    if (ihab <= 0) {
         free(anchor->pres_spaces);
         free(anchor->windows);
         free(anchor);
@@ -419,7 +402,7 @@ HAB WinInitialize(ULONG flOptions)
     posttib->anchor_block = anchor;
 
     return hab;
-} // WinInitialize
+}
 
 static MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
@@ -429,7 +412,7 @@ static MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
     TRACE_EVENT("EVENT SEND { hwnd=%u, msg=%u (%s), mp1=%p, mp2=%p, proc=%p }", (uint) win->hwnd, (uint) msg, messageName(msg), mp1, mp2, winproc);
     return winproc(win->hwnd, msg, mp1, mp2);
-} // sendMessage
+}
 
 static BOOL destroyMessageQueue(AnchorBlock *anchor)
 {
@@ -445,7 +428,7 @@ static BOOL destroyMessageQueue(AnchorBlock *anchor)
     TRACE_EVENT("HMQ %u destroyed", (uint) anchor->message_queue.hmq);
     memset(&anchor->message_queue, '\0', sizeof (MessageQueue));
     return TRUE;
-} // destroyMessageQueue
+}
 
 static void destroyWindow(AnchorBlock *anchor, Window *win)
 {
@@ -453,22 +436,18 @@ static void destroyWindow(AnchorBlock *anchor, Window *win)
         return;
     }
 
-    // !!! FIXME: hide window first, and optionally send WM_ACTIVATE message if losing focus.
-    // !!! FIXME: send WM_RENDERALLFMTS if we are clipboard owner and unrendered formats are in the clipboard.
 
     // send WM_DESTROY. This is a simple notification, and cannot prevent destruction.
     sendMessage(win, WM_DESTROY, 0, 0);
 
-    // Next, destroy all child windows.
+
     Window *next = NULL;
     for (Window *i = win->children; i != NULL; i = next) {
         next = i->sibling;
         destroyWindow(anchor, i);
     }
 
-    // !!! FIXME: see notes in SDK reference about disassociating/destroying HPS objects.
 
-    // if this is a heavyweight window, destroy those parts.
     if (win->parent == &desktop_window) {
         SDL_DestroyTexture(win->heavy.texture);
         SDL_DestroyRenderer(win->heavy.renderer);
@@ -489,7 +468,7 @@ static void destroyWindow(AnchorBlock *anchor, Window *win)
     free(win->text);
     free(win->data);
     memset(win, '\0', sizeof (*win));
-} // destroyWindow
+}
 
 static void destroyPresentationSpace(AnchorBlock *anchor, PresentationSpace *ps)
 {
@@ -498,7 +477,7 @@ static void destroyPresentationSpace(AnchorBlock *anchor, PresentationSpace *ps)
     }
     FIXME("this will be more complicated later");
     memset(ps, '\0', sizeof (*ps));
-} // destroyPresentationSpace
+}
 
 BOOL WinTerminate(HAB hab)
 {
@@ -532,10 +511,10 @@ BOOL WinTerminate(HAB hab)
     free(anchor);
     lxHostThreadState()->anchor_block = NULL;
 
-    SDL_Quit();  // !!! FIXME: does this reference count?
+    SDL_Quit();
 
     return TRUE;
-} // WinTerminate
+}
 
 ERRORID WinGetLastError(HAB hab)
 {
@@ -546,7 +525,7 @@ ERRORID WinGetLastError(HAB hab)
     }
     const ERRORID retval = anchor->last_error;
     SET_WIN_ERROR_AND_RETURN(anchor, NO_ERROR, retval);
-} // WinGetLastError
+}
 
 HMQ WinCreateMsgQueue(HAB hab, LONG cmsg)
 {
@@ -558,14 +537,14 @@ HMQ WinCreateMsgQueue(HAB hab, LONG cmsg)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_MSG_QUEUE_ALREADY_EXISTS, NULLHANDLE);
     }
 
-    // as of OS/2 Warp 4.0, cmsg is ignored (the queue is always dynamically allocated), so we ignore it too.
+    /* Message queues grow dynamically; cmsg does not limit capacity. */
 
     assert(anchor->message_queue.head == NULL);
     assert(anchor->message_queue.tail == NULL);
     assert(anchor->message_queue.free_pool == NULL);
 
     const int ihmq = SDL_AtomicAdd(&GHMQCounter, 1) + 1;
-    if (ihmq <= 0) {  // this is clearly a pathological program.
+    if (ihmq <= 0) {
         return NULLHANDLE;
     }
 
@@ -573,7 +552,7 @@ HMQ WinCreateMsgQueue(HAB hab, LONG cmsg)
     anchor->message_queue.hmq = hmq;
     TRACE_EVENT("HMQ %u created", (uint) hmq);
     return hmq;
-} // WinCreateMsgQueue
+}
 
 static ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg)
 {
@@ -601,12 +580,12 @@ static ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg)
     anchor->message_queue.tail = item;
 
     return TRUE;
-} // postMessage
+}
 
 static inline Window *getWindowFromSDLWindow(SDL_Window *sdlwin)
 {
     return (Window *) sdlwin ? SDL_GetWindowData(sdlwin, WINDATA_WINDOWPTR_NAME) : NULL;
-} // getWindowFromSDLWindow
+}
 
 
 #if 0
@@ -621,39 +600,37 @@ static Window *hittestWindow(SDL_Window *sdlwin, int x, int y)
         return NULL;
     }
 
-    // (win) is currently the oldest parent, which is associated with the
-    //  SDL_Window. We need to see which lightweight child window, if any,
-    //  this event was meant for.
+    // Resolve lightweight children beneath the SDL-backed top-level window.
 
     // y coordinates are flipped on OS/2. zero is the bottom of the window.
     y = sdlwin->h - y;
-// !!! FIXME WRITE ME
+
     for (Window *i =
     if (win->class_style & CS_HITTEST) {
         sendMessage(win, WM_HITTEST,
     }
 
-} // findWindowFromSDL
+}
 #endif
 
 static BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2, ULONG ticks)
 {
     const QMSG qmsg = { hwnd, msg, mp1, mp2, currentSystemTicks(), { 0, 0 }, 0 };
     return postMessage(anchor, &qmsg);
-} // postTimestampedMsg
+}
 
 #if 0
 static BOOL postSimpleMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
     return postTimestampedMsg(anchor, hwnd, msg, mp1, mp2, currentSystemTicks());
-} // postSimpleMsg
+}
 
 #endif
 
 static BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
 {
     FIXME("this should WinInvalidateRect() the windows, not send paint messages");
-    FIXME("this is a recursive hell");  // we need to start at the end of the sibling list, which is the bottom of the stack.
+    FIXME("this is a recursive hell");  // Sibling traversal starts at the bottom of the window stack.
     BOOL retval = FALSE;
     if (win) {
         retval |= postExposedMessages(anchor, win->sibling, ticks);
@@ -664,7 +641,7 @@ static BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ti
         }
     }
     return retval;
-} // postExposedMessages
+}
 
 
 static const char *sdlEventName(const SDL_EventType ev)
@@ -722,7 +699,7 @@ static const char *sdlEventName(const SDL_EventType ev)
         default: break;
     }
     return "???";
-} // sdlEventName
+}
 
 static const char *sdlWindowEventName(const SDL_WindowEventID ev)
 {
@@ -748,21 +725,11 @@ static const char *sdlWindowEventName(const SDL_WindowEventID ev)
         default: break;
     }
     return "???";
-} // sdlWindowEventName
+}
 
 static BOOL processSDLEvent(AnchorBlock *anchor, const SDL_Event *sdlevent)
 {
-    // !!! FIXME: we just drop events if we run out of memory, etc.
 
-    // !!! FIXME: QMSG::time appears to be milliseconds since the system
-    // !!! FIXME:  booted (presumably rolling over every 38 days). SDL's
-    // !!! FIXME:  event timestamps (and SDL_GetTicks()) are milliseconds
-    // !!! FIXME:  since SDL_Init(), which is more or less since app startup.
-    // !!! FIXME:  We might need a way to map these, so they're consistent
-    // !!! FIXME:  across processes.
-    // !!! FIXME: Also, it's well known that SDL event timestamps are when
-    // !!! FIXME:  SDL gets the event from the OS, not the timestamp of when
-    // !!! FIXME:  the OS generated it, which might be a problem.
 
 /*
 sdfsdf
@@ -776,7 +743,6 @@ sdfsdf
 sdfsdf
 */
 
-//SDL_GetWindowFromID(window) sdfsdf
 
     const ULONG ticks = (ULONG) sdlevent->common.timestamp;
 
@@ -791,8 +757,7 @@ sdfsdf
             switch (sdlevent->window.event) {
                 case SDL_WINDOWEVENT_SHOWN:
                 case SDL_WINDOWEVENT_EXPOSED: {
-                    // maybe this doesn't matter in a world of compositing window managers, but it would be nice to completely avoid sending WM_PAINT to child windows that otherwise don't apply.
-                    //  This only applies for heavyweight windows the OS is marking as exposed, not OS/2 apps marking OS/2 HWNDs as invalid for various reasons.
+
                     FIXME("SDL doesn't report invalid subregions, just that a window needs repainting");
                     Window *win = getWindowFromSDLWindow(SDL_GetWindowFromID(sdlevent->window.windowID));
                     if (!win) {
@@ -801,84 +766,62 @@ sdfsdf
                     return postExposedMessages(anchor, win, ticks);
                 }
 
-                default: break;  // not (currently) supported.
+                default: break;
             }
             return FALSE;
-
 
 
 #if 0
                 case SDL_WINDOWEVENT_SHOWN:
                 case SDL_WINDOWEVENT_HIDDEN:
-                case SDL_WINDOWEVENT_MOVED,          /**< Window has been moved to data1, data2
-                                     */
-                case SDL_WINDOWEVENT_RESIZED,        /**< Window has been resized to data1xdata2 */
-                case SDL_WINDOWEVENT_SIZE_CHANGED,   /**< The window size has changed, either as
-                                         a result of an API call or through the
-                                         system or user changing the window size. */
-                case SDL_WINDOWEVENT_MINIMIZED,      /**< Window has been minimized */
-                case SDL_WINDOWEVENT_MAXIMIZED,      /**< Window has been maximized */
-                case SDL_WINDOWEVENT_RESTORED,       /**< Window has been restored to normal size
-                                         and position */
-                case SDL_WINDOWEVENT_ENTER,          /**< Window has gained mouse focus */
-                case SDL_WINDOWEVENT_LEAVE,          /**< Window has lost mouse focus */
-                case SDL_WINDOWEVENT_FOCUS_GAINED,   /**< Window has gained keyboard focus */
-                case SDL_WINDOWEVENT_FOCUS_LOST,     /**< Window has lost keyboard focus */
-                case SDL_WINDOWEVENT_CLOSE,          /**< The window manager requests that the window be closed */
-                case SDL_WINDOWEVENT_TAKE_FOCUS,     /**< Window is being offered a focus (should SetWindowInputFocus() on itself or a subwindow, or ignore) */
-                //case SDL_WINDOWEVENT_HIT_TEST        /**< Window had a hit test that wasn't SDL_HITTEST_NORMAL. */
-
-
-//    SDL_MOUSEMOTION    = 0x400, /**< Mouse moved */
-//    SDL_MOUSEBUTTONDOWN,        /**< Mouse button pressed */
-//    SDL_MOUSEBUTTONUP,          /**< Mouse button released */
-//    SDL_MOUSEWHEEL,             /**< Mouse wheel motion */
-//    SDL_KEYDOWN        = 0x300, /**< Key pressed */
-//    SDL_KEYUP,                  /**< Key released */
-//    SDL_TEXTINPUT,              /**< Keyboard text input */
-//    SDL_CLIPBOARDUPDATE = 0x900, /**< The clipboard changed */
-//    SDL_DROPFILE        = 0x1000, /**< The system requests a file open */
-//    SDL_DROPTEXT,                 /**< text/plain drag-and-drop event */
-//    SDL_DROPBEGIN,                /**< A new set of drops is beginning (NULL filename) */
-//    SDL_DROPCOMPLETE,             /**< Current set of drops is now complete (NULL filename) */
+                case SDL_WINDOWEVENT_MOVED,
+                case SDL_WINDOWEVENT_RESIZED,
+                case SDL_WINDOWEVENT_SIZE_CHANGED,
+                case SDL_WINDOWEVENT_MINIMIZED,
+                case SDL_WINDOWEVENT_MAXIMIZED,
+                case SDL_WINDOWEVENT_RESTORED,
+                case SDL_WINDOWEVENT_ENTER,
+                case SDL_WINDOWEVENT_LEAVE,
+                case SDL_WINDOWEVENT_FOCUS_GAINED,
+                case SDL_WINDOWEVENT_FOCUS_LOST,
+                case SDL_WINDOWEVENT_CLOSE,
+                case SDL_WINDOWEVENT_TAKE_FOCUS,
 
 
         case SDL_MOUSEBUTTONDOWN:
-            
+
         case SDL_MOUSEBUTTONUP:
             if (sdlevent->button.clicks == 1) {}
 #endif
 
 
-        default: return FALSE;  // not (currently) supported.
+        default: return FALSE;
     }
 
     assert(!"shouldn't hit this");
     return TRUE;
-} // processSDLEvent
+}
 
 static void pumpEvents(AnchorBlock *anchor)
 {
     SDL_Event sdlevent;
     BOOL queued = FALSE;
 
-    // run through anything pending. If we don't post anything to the OS/2
-    //  event queue, we need to block until we do, though, so then we'll use
-    //  SDL_WaitEvent() in hopes that someday it's fully waitable.
+
     while (SDL_PollEvent(&sdlevent)) {
         queued |= processSDLEvent(anchor, &sdlevent);
     }
 
-    while (!queued) {  // block until stuff shows up.
+    while (!queued) {
         while (!SDL_WaitEvent(&sdlevent)) {
-            SDL_Delay(10);  // dunno what else to do here...
+            SDL_Delay(10);
         }
         queued |= processSDLEvent(anchor, &sdlevent);
-        while (SDL_PollEvent(&sdlevent)) {  // catch anything else pending.
+        while (SDL_PollEvent(&sdlevent)) {
             queued |= processSDLEvent(anchor, &sdlevent);
         }
     }
-} // waitForMessage
+}
 
 static BOOL skipMessage(const PQMSG qmsg, HWND hwndFilter, ULONG msgFilterFirst, ULONG msgFilterLast)
 {
@@ -893,7 +836,7 @@ static BOOL skipMessage(const PQMSG qmsg, HWND hwndFilter, ULONG msgFilterFirst,
         }
     }
     return FALSE;
-} // skipMessage
+}
 
 BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULONG msgFilterLast)
 {
@@ -917,7 +860,7 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
             }
         }
 
-        // Found an event? Remove from queue, return that info.
+
         if (i != NULL) {
             memcpy(pqmsg, &i->qmsg, sizeof (QMSG));
 
@@ -944,8 +887,8 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
     }
 
     assert(!"shouldn't hit this.");
-    return TRUE;  // shouldn't hit this.
-} // WinGetMsg
+    return TRUE;
+}
 
 MRESULT WinDispatchMsg(HAB hab, PQMSG pqmsg)
 {
@@ -958,7 +901,7 @@ MRESULT WinDispatchMsg(HAB hab, PQMSG pqmsg)
         }
     }
     return 0;
-} // WinDispatchMsg
+}
 
 BOOL WinDestroyMsgQueue(HMQ hmq)
 {
@@ -971,7 +914,7 @@ BOOL WinDestroyMsgQueue(HMQ hmq)
     }
 
     return destroyMessageQueue(anchor);
-} // WinDestroyMsgQueue
+}
 
 BOOL WinRegisterClass(HAB hab, PSZ pszClassName, PFNWP pfnWndProc, ULONG flStyle, ULONG cbWindowData)
 {
@@ -1000,13 +943,11 @@ BOOL WinRegisterClass(HAB hab, PSZ pszClassName, PFNWP pfnWndProc, ULONG flStyle
     winclass->data_len = cbWindowData;
 
     return TRUE;
-} // WinRegisterClass
+}
 
 MRESULT WinSendMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
-    // !!! FIXME: This needs to be able to send to windows in different
-    // !!! FIXME:  threads (and processes!), so this will need some effort to
-    // !!! FIXME:  support.
+
 
     TRACE_NATIVE("WinSendMsg(%u, %u, %p, %p)", (uint) hwnd, (uint) msg, mp1, mp2);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -1017,19 +958,11 @@ MRESULT WinSendMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         }
     }
     return (MRESULT) 0;
-} // WinSendMsg
+}
 
 BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
-    // !!! FIXME: SDL docs say you can call this, but not WinSendMsg() if
-    // !!! FIXME:  the thread doesn't have a message queue, but that has to
-    // !!! FIXME:  be a typo, right? How do you post a message to a queue that
-    // !!! FIXME:  doesn't exist? But one could call a window procedure
-    // !!! FIXME:  directly...
 
-    // !!! FIXME: This needs to be able to post to windows in different
-    // !!! FIXME:  threads (and processes!), so this will need some effort to
-    // !!! FIXME:  support.
 
     TRACE_NATIVE("WinPostMsg(%u, %u, %p, %p)", (uint) hwnd, (uint) msg, mp1, mp2);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -1054,21 +987,17 @@ BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
 
     return TRUE;
-} // WinPostMsg
+}
 
 BOOL WinPostQueueMsg(HMQ hmq, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
     TRACE_NATIVE("WinPostMsgQueue(%u, %u, %p, %p)", (uint) hmq, (uint) msg, mp1, mp2);
-    // I assume this works like win32's PostThreadMessage(), in that there
-    //  isn't a target HWND, so the target thread would have to deal with this
-    //  message after a call to WinGetMsg() and not in a window procedure
-    //  during a call to WinDispatchMsg().
+    /* Thread messages enter the queue without a target window procedure. */
 
-    // (!!! FIXME: right now these are stored on the anchor block and not
-    //             anywhere global I can reach it.)
+
     FIXME("need to be able to access other threads' message queues");
     return FALSE;
-} // WinPostQueueMsg
+}
 
 HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, LONG x, LONG y, LONG cx, LONG cy, HWND hwndOwner, HWND hwndInsertBehind, ULONG id, PVOID pCtlData, PVOID pPresParams)
 {
@@ -1101,7 +1030,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         }
     }
 
-    // make space for the new window struct in the anchor block
+
     Window *win = NULL;
     FIXME("optimize this");
     for (size_t i = 0; i < anchor->windows_array_len; i++) {
@@ -1125,7 +1054,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
 
     char *text = NULL;
     if (pszName) {
-        // !!! FIXME: text isn't necessarily a string. It's window-class-specific data.
+
         text = strdup(pszName);
         if (!text) {
             SET_WIN_ERROR_AND_RETURN(anchor, PMERR_HEAP_OUT_OF_MEMORY, NULLHANDLE);
@@ -1141,11 +1070,9 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         }
     }
 
-    if (hwndParent == HWND_DESKTOP) {  // toplevel? build a heavy weight window.
+    if (hwndParent == HWND_DESKTOP) {
         Uint32 sdlflags = SDL_WINDOW_HIDDEN | SDL_WINDOW_BORDERLESS;
-        // !!! FIXME   SDL_WINDOW_SKIP_TASKBAR  = 0x00010000,      /**< window should not be added to the taskbar */
-        // !!! FIXME: text isn't necessarily a string. It's window-class-specific data.
-        // The Y coordinate is the bottom of the window, counted from the bottom of the parent window (desktop, in this case) :/
+
         SDL_Window *window = SDL_CreateWindow(text ? text : "", x, (desktop_window.h - y) - cy, cx, cy, sdlflags);
         if (!window) {
             free(text);
@@ -1183,7 +1110,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         win->heavy.window = window;
         win->heavy.renderer = renderer;
         win->heavy.texture = texture;
-    } else {  // use same heavy as parent.
+    } else {
         win->heavy.window = parent->heavy.window;
         win->heavy.renderer = parent->heavy.renderer;
         win->heavy.texture = parent->heavy.texture;
@@ -1201,16 +1128,12 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     win->style = flStyle;
     win->id = id;
     win->owner = owner;
-    win->sibling = NULL;  // we'll insert this later.
-    win->x = win->y = win->w = win->h = 0;  // we'll set these later.
+    win->sibling = NULL;
+    win->x = win->y = win->w = win->h = 0;
 
-    // we're ready, send WM_CREATE. Note that pCtlData has to be a pointer (not
-    //  an integer cast to a pointer), because OS/2 would dereference it, and the
-    //  16 bits at the start of the data it points to tell you how many bytes are
-    //  pointed at, so it could deal with 16-bit code. We don't (currently) care,
-    //  so just pass it on.
+    /* WM_CREATE receives the caller's control-data pointer unchanged. */
     if (sendMessage(win, WM_CREATE, pCtlData, pPresParams) != FALSE) {
-        // response to WM_CREATE was to cancel window creation!!
+
         destroyWindow(anchor, win);
         return NULLHANDLE;
     }
@@ -1237,7 +1160,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         }
     }
 
-    if (parent->children == NULL) {  // nothing to insert behind, just make it the only child.
+    if (parent->children == NULL) {
         parent->children = win;
     } else if (hwndInsertBehind == HWND_TOP) {
         win->sibling = parent->children;
@@ -1248,7 +1171,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
             prev = i;
         }
         prev->sibling = win;
-    } else {  // insert behind a specific window.
+    } else {
         win->sibling = insertBehind->sibling;
         insertBehind->sibling = win;
     }
@@ -1257,13 +1180,13 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         SDL_SetWindowPosition(win->heavy.window, win->x, (parent->h - win->y) - win->h);
         SDL_SetWindowSize(win->heavy.window, win->w, win->h);
         if (win->style & WS_VISIBLE) {
-            // !!! FIXME: mark window region invalid
+
             SDL_ShowWindow(win->heavy.window);
         }
     }
 
     return win->hwnd;
-} // WinCreateWindow
+}
 
 HWND WinCreateStdWindow(HWND hwndParent, ULONG flStyle, PULONG pflCreateFlags, PSZ pszClientClass, PSZ pszTitle, ULONG styleClient, HMODULE hmod, ULONG idResources, PHWND phwndClient)
 {
@@ -1291,7 +1214,7 @@ HWND WinCreateStdWindow(HWND hwndParent, ULONG flStyle, PULONG pflCreateFlags, P
     }
 
     return retval;
-} // WinCreateStdWindow
+}
 
 BOOL WinDestroyWindow(HWND hwnd)
 {
@@ -1309,7 +1232,7 @@ BOOL WinDestroyWindow(HWND hwnd)
     destroyWindow(anchor, win);
 
     return TRUE;
-} // WinDestroyWindow
+}
 
 MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
@@ -1325,7 +1248,7 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
 
     switch (msg) {
-        // this whole block just returns zero without further processing.
+
         case WM_ACTIVATE:
         case WM_APPTERMINATENOTIFY:
         case WM_ADJUSTWINDOWPOS:
@@ -1378,23 +1301,23 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_TIMER:
         case WM_TRACKFRAME:
         case WM_TRANSLATEACCEL:
-        //case WM_TRANSLATEMNEMONIC:  // !!! FIXME: this is in the SDK reference but not the SDK headers.
+
         case WM_UPDATEFRAME:
         case WM_VRNDISABLED:
         case WM_VRNENABLED:
         case WM_VSCROLL:
 
-        // the SDK reference manual doesn't list default actions for these messages, but it's probably just "return zero".
+
         case WM_MSGBOXINIT:
         case WM_MSGBOXDISMISS:
 
             return (MRESULT) 0;
 
-        // this whole block just returns one without further processing.
+
         case WM_MENUSELECT:
             return (MRESULT) 1;
 
-        // this block sends the message to the window owner (if one exists), or otherwise returns 0.
+
         case WM_BEGINDRAG:
         case WM_BEGINSELECT:
         case WM_BUTTON1CLICK:
@@ -1426,7 +1349,7 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_TEXTEDIT:
             return win->owner ? sendMessage(win->owner, msg, mp1, mp2) : (MRESULT) 0;
 
-        // These messages actually do something specific in default processing...
+
         case WM_HITTEST:
             return HT_NORMAL;
 
@@ -1454,7 +1377,7 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
 
     return (MRESULT) 0;
-} // WinDefWindowProc
+}
 
 HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint)
 {
@@ -1476,7 +1399,7 @@ HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint)
         }
         FIXME("check if this is already assigned to this drawable");
     } else {
-        // make space for the new presentation struct in the anchor block
+
         FIXME("optimize this");
         FIXME("cut-and-paste from WinCreateWindow");
         for (size_t i = 0; i < anchor->pres_spaces_array_len; i++) {
@@ -1512,7 +1435,7 @@ HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint)
     }
 
     return hps;
-} // WinBeginPaint
+}
 
 BOOL WinEndPaint(HPS hps)
 {
@@ -1537,7 +1460,7 @@ BOOL WinEndPaint(HPS hps)
 
     destroyPresentationSpace(anchor, ps);
     return TRUE;
-} // WinEndPaint
+}
 
 static void os2ColorIndexToRGB(const LONG os2color, Uint8 *r, Uint8 *g, Uint8 *b)
 {
@@ -1571,7 +1494,7 @@ static void os2ColorIndexToRGB(const LONG os2color, Uint8 *r, Uint8 *g, Uint8 *b
     FIXME("unknown color index");
     RETURNRGB(0x00, 0x00, 0x00);
     #undef RETURNRGB
-} // os2ColorIndexToRGB
+}
 
 static void calcHeavyweightRect(const Window *win, SDL_Rect* rect)
 {
@@ -1588,7 +1511,7 @@ static void calcHeavyweightRect(const Window *win, SDL_Rect* rect)
 
     rect->x = x;
     rect->y = (win->h - y) - rect->h;
-} // calcHeavyweightRect
+}
 
 BOOL WinFillRect(HPS hps, PRECTL prcl, LONG lColor)
 {
@@ -1617,13 +1540,13 @@ BOOL WinFillRect(HPS hps, PRECTL prcl, LONG lColor)
     Uint8 r, g, b;
     os2ColorIndexToRGB(lColor, &r, &g, &b);
 
-    //printf("fill { x=%d, y=%d, w=%d, h=%d, r=0x%X, g=0x%X, b=0x%X }\n", (int) rect.x, (int) rect.y, (int) rect.w, (int) rect.h, (uint) r, (uint) g, (uint) b);
+
     SDL_RenderSetClipRect(renderer, &cliprect);
     SDL_SetRenderDrawColor(renderer, r, g, b, 0xFF);
     SDL_RenderFillRect(renderer, &rect);
     SDL_RenderSetClipRect(renderer, NULL);
     return TRUE;
-} // WinFillRect
+}
 
 BOOL WinIsWindow(HAB hab, HWND hwnd)
 {
@@ -1640,7 +1563,7 @@ BOOL WinIsWindow(HAB hab, HWND hwnd)
     }
 
     return TRUE;
-} // WinIsWindow
+}
 
 BOOL WinIsWindowEnabled(HWND hwnd)
 {
@@ -1656,7 +1579,7 @@ BOOL WinIsWindowEnabled(HWND hwnd)
     }
 
     return win->enabled;
-} // WinIsWindowEnabled
+}
 
 BOOL WinIsWindowVisible(HWND hwnd)
 {
@@ -1672,8 +1595,4 @@ BOOL WinIsWindowVisible(HWND hwnd)
     }
 
     return ((win->style & WS_VISIBLE) == WS_VISIBLE) ? TRUE : FALSE;
-} // WinIsWindowVisible
-
-
-// end of pmwin.c ...
-
+}

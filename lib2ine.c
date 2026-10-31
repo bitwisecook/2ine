@@ -67,7 +67,6 @@ static void initPib(void)
     argv[argc] = NULL;
 
 
-    // !!! FIXME: HUGE HACK
     int is_lx_loader = 0;
     {
         const char *ptr = strrchr(argv[0], '/');
@@ -81,12 +80,6 @@ static void initPib(void)
     }
 
 
-    // !!! FIXME: this is incomplete.
-
-    // Eventually, the environment table looks like this (double-null to terminate list):  var1=a\0var2=b\0var3=c\0\0
-    // The command line looks like this: \0argv0\0argv1 argv2 argvN\0\0
-    // Between env and cmd is the exe name: argv0\0
-
     size_t len = 1;
     for (int i = 0; i < argc; i++) {
         int needs_escape = 0;
@@ -98,16 +91,16 @@ static void initPib(void)
             else if ((ch == '\\') || (ch == '\"'))
                 num_backslashes++;
             len++;
-        } // for
+        }
 
         if (needs_escape) {
             len += 2 + num_backslashes;
-        } // if
+        }
 
-        len++;  // terminator
-    } // for
+        len++;
+    }
 
-    len += strlen(argv[0]) + 1;  // for the exe name.
+    len += strlen(argv[0]) + 1;
 
     char **envp = environ;
 
@@ -120,25 +113,18 @@ static void initPib(void)
                 str = path;
         } else if (strncmp(str, "IS_2INE=", 8) == 0) {
             continue;
-        } // if
+        }
         len += strlen(str) + 1;
-    } // for
+    }
 
-    len += 4;  // null terminators.
+    len += 4;
 
-    // align this to 64k, because it has to be at the start of a segment
-    //  for 16-bit code.
-    // cmd.exe uses realloc on the enviroment seg so make it 64k
-    //  (!!! FIXME: this works even though it doesn't use allocSegment because
-    //  we currently just allocate the full 64k and never actually realloc
-    //  later. allocSegment isn't up and running at this point. But we might
-    //  want lx_loader to copy this to an alloc'd segment later so we
-    //  definitely have an tileable address below 512mb.)
+
     char *env = NULL;
     if (posix_memalign((void **) &env, 0x10000, 0x10000) != 0) {
         fprintf(stderr, "Out of memory\n");
         abort();
-    } // if
+    }
 
     memset(env, 0, 0x10000);
     if (len > 0x10000) { fprintf(stderr, "OS/2 environment and command exceed one segment\n"); abort(); }
@@ -153,23 +139,21 @@ static void initPib(void)
             libpath = str + 8;
         } else if (strncmp(str, "IS_2INE=", 8) == 0) {
             continue;
-        } // if
+        }
 
         strcpy(ptr, str);
         ptr += strlen(str) + 1;
     }
     *(ptr++) = '\0';
 
-    // we keep a copy of LIBPATH for undocumented API
-    //  DosQueryHandleInfo(..., QHINF_LIBPATH, ...). I guess in case the app
-    //  has changed the environment var after start? Java uses this.
+
     if (libpath == NULL)
         libpath = "";
 
     GLoaderState.libpath = strdup(libpath);
     GLoaderState.libpathlen = strlen(libpath) + 1;
 
-    // put the exe name between the environment and the command line.
+
     strcpy(ptr, argv[0]);
     ptr += strlen(argv[0]) + 1;
 
@@ -183,7 +167,7 @@ static void initPib(void)
             const char ch = *arg;
             if ((ch == ' ') || (ch == '\t'))
                 needs_escape = 1;
-        } // for
+        }
 
         if (needs_escape) {
             *(ptr++) = '"';
@@ -192,25 +176,23 @@ static void initPib(void)
                 if ((ch == '\\') || (ch == '\n'))
                     *(ptr++) = '\\';
                 *(ptr++) = ch;
-            } // for
+            }
             *(ptr++) = '"';
         } else {
             for (const char *arg = argv[i]; *arg; arg++)
                 *(ptr++) = *arg;
-        } // if
+        }
 
         if (i < (argc-1))
             *(ptr++) = ' ';
-    } // for
+    }
 
     *(ptr++) = '\0';
 
     lx_host_process_ids(&pib->pib_ulpid, &pib->pib_ulppid);
     pib->pib_pchcmd = cmd;
     pib->pib_pchenv = env;
-    //pib->pib_hmte is filled in later during loadModule()
-    // !!! FIXME: uint32 pib_flstatus;
-    // !!! FIXME: uint32 pib_ultype;
+
 
     if (is_lx_loader) {
         argv--;
@@ -218,7 +200,7 @@ static void initPib(void)
 
     free(cmdlinebuf);
     free(argv);
-} // initPib
+}
 
 static void dosExit_lib2ine(uint32 action, uint32 result) {}
 
@@ -240,8 +222,8 @@ static void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t 
     tib->tib_pstack = top - stacklen;
     tib->tib_pstacklimit = top;
     tib->tib_ptib2 = tib_address ? tib_address + sizeof (LxTIB) : 0;
-    tib->tib_version = 20;  // !!! FIXME
-    tib->tib_ordinal = 79;  // !!! FIXME
+    tib->tib_version = 20;
+    tib->tib_ordinal = 79;
 
     tib2->tib2_ultid = tid;
     tib2->tib2_ulpri = 512;
@@ -288,8 +270,7 @@ static uint32 convert32to1616_lib2ine(void *addr32)
 
 static LxModule *loadModule_lib2ine(const char *modname)
 {
-    return NULL;  // lx_loader will do OS/2 modules, we don't.
-    // !!! FIXME: maybe this should dlopen() native modules instead?
+    return NULL;
 }
 
 static char *makeUnixPath_lib2ine(const char *os2path, uint32 *err)
@@ -297,7 +278,7 @@ static char *makeUnixPath_lib2ine(const char *os2path, uint32 *err)
     // this doesn't convert any OS/2 paths. For native apps, use native paths.
     char *retval = strdup(os2path);
     if (!retval) {
-        *err = 8;  //ERROR_NOT_ENOUGH_MEMORY;
+        *err = 8;
     }
     return retval;
 }
@@ -312,7 +293,7 @@ static void freeSegment_lib2ine(const uint16 selector) {}
 
 static void __attribute__((noreturn)) terminate_lib2ine(const uint32 exitcode)
 {
-    exit((int) exitcode);  // let static constructors and atexit() run.
+    exit((int) exitcode);
 }
 
 
@@ -373,7 +354,7 @@ static void cfgProcessMountPoint(const char *fname, const int lineno, const char
     }
 
     const int idx = (int) (letter - 'A');
-    free(GLoaderState.disks[idx]);  // in case we're overriding.
+    free(GLoaderState.disks[idx]);
     GLoaderState.disks[idx] = NULL;
 
     if (*val != '\0') {  // val=="" means don't mount
@@ -411,14 +392,12 @@ static void cfgProcessSystem(const char *fname, const int lineno, const char *va
 
 static void cfgProcessLine(const char *fname, const int lineno, const char *category, const char *var, const char *val)
 {
-    //printf("CFG: process line cat=%s var=%s, val=%s\n", category, var, val);
+
     if ((*category == '\0') || (*var == '\0')) {
         cfgWarn(fname, lineno, "Invalid configuration line");
     } else if (strcmp(category, "mountpoint") == 0) {
         cfgProcessMountPoint(fname, lineno, var, val);
-    // eventually will map COM1, LPT1, NUL, etc.
-    //} else if (strcmp(category, "device") == 0) {
-    //    cfgProcessDevice(fname, lineno, var, val);
+
     } else if (strcmp(category, "system") == 0) {
         cfgProcessSystem(fname, lineno, var, val);
     } else {
@@ -441,20 +420,19 @@ static void cfgLoad(const char *fname)
     while ((len = getline(&buffer, &buflen, io)) >= 0) {
         lineno++;
 
-        // strip whitespace and endlines off end of string.
+
         while ((len > 0) && (cfgIsSpace(buffer[len-1]))) {
             buffer[--len] = '\0';
         }
 
-        //printf("CFG: fname=%s line=%d text=%s\n", fname, lineno, buffer);
 
         #define SKIPSPACE() while (cfgIsSpace(*ptr)) { ptr++; }
 
         char *ptr = buffer;
         SKIPSPACE();
         if ((*ptr == '\0') || (*ptr == ';') || (*ptr == '#') || ((ptr[0] == '/') && (ptr[1] == '/'))) {
-            //printf("CFG: comment or blank line\n");
-            continue;  // it's a comment or blank line, skip it.
+
+            continue;
         }
         const char *category = ptr;
         while (cfgIsSymChar(*ptr)) { ptr++; }
@@ -495,7 +473,7 @@ static void cfgLoadFiles(void)
 {
     cfgLoad("/etc/2ine.cfg");
 
-    // optionally override or add config from user's config dir.
+
     char *fname = NULL;
     const char *env = getenv("XDG_CONFIG_HOME");
     if (env) {
@@ -533,7 +511,7 @@ static void prepOs2Drives(void)
     FIXME("need to pass current dirs and disks to OS/2 subprocesses");
 
     char *cwd = lx_host_path_current();
-    char *rp = cwd ? lx_host_path_canonical(cwd) : NULL;  // in case there's a symlink in there.
+    char *rp = cwd ? lx_host_path_canonical(cwd) : NULL;
     if ((cwd == NULL) || (rp == NULL)) {
         fprintf(stderr, "Can't get cwd (%s), defaulting to \"/\".\n", strerror(errno));
         rp = strdup("/");
@@ -565,11 +543,11 @@ static void prepOs2Drives(void)
         const size_t rplen = strlen(rp);
         assert(rplen > 0);
         if ((strncmp(rp, cwd, rplen) == 0) && ((rp[rplen-1] == '/') || (cwd[rplen] == '/') || (cwd[rplen] == '\0'))) {
-            // our cwd is under this mount point!
+
             const char *d = cwd + rplen;
             GLoaderState.current_dir[i] = strdup((*d == '/') ? d + 1 : d);
             char *ptr = GLoaderState.current_dir[i];
-            while (*ptr) {  // make current dir an OS/2-style relative path.
+            while (*ptr) {
                 if (*ptr == '/') {
                     *ptr = '\\';
                 }
@@ -580,18 +558,18 @@ static void prepOs2Drives(void)
                 lowestcwd = i + 1;
             }
         } else {
-            // current directory isn't under this mount point, just make it the root.
+
             GLoaderState.current_dir[i] = strdup("");
         }
         free(rp);
     }
 
     if (!lowestmounted) {
-        // if no disks are mapped at all, just map the Unix root filesystem to C:
+
         GLoaderState.disks[drive_c] = strdup("/");
-        char *ptr = strdup(cwd + 1);  // skip the initial '/'
+        char *ptr = strdup(cwd + 1);
         GLoaderState.current_dir[drive_c] = ptr;
-        while (*ptr) {  // make current dir an OS/2-style relative path.
+        while (*ptr) {
             if (*ptr == '/') {
                 *ptr = '\\';
             }
@@ -599,8 +577,7 @@ static void prepOs2Drives(void)
         }
         GLoaderState.current_disk = drive_c + 1;
     } else if (!lowestcwd) {
-        // your actual cwd isn't under any mountpoint, so pick the first mounted drive we
-        //  saw, starting with C:\, unless we only have A:\ or B:\, then use one of those.
+        /* Use the first mapped drive when cwd is outside all mounts; prefer C: over A:/B:. */
         GLoaderState.current_disk = lowestmounted;
     } else {
         GLoaderState.current_disk = lowestcwd;
@@ -635,7 +612,7 @@ static Uint32 no_audio_generators_timeout = 0;
 static int SDLCALL closeAudioDeviceThread(void *arg)
 {
     const SDL_AudioDeviceID dev = (SDL_AudioDeviceID) (size_t) arg;
-    //printf("2ine: Closing idle audio device %u.\n", (uint) dev);
+
     SDL_CloseAudioDevice(dev);
     return 0;
 }
@@ -653,7 +630,7 @@ static void closeAudioDeviceFromAnotherThread(void)
     if (thread) {
         SDL_DetachThread(thread);
     } else {
-        sdl_audio_device = dev;  // oh well.
+        sdl_audio_device = dev;
     }
 }
 
@@ -680,7 +657,7 @@ static void SDLCALL audioCallback(void *userdata, Uint8 *stream, int len)
         if (generator->fn(generator->data, (float *) stream, samples, sdl_audio_spec.freq)) {
             prev = generator;
         } else {
-            // remove this generator, it's done.
+
             if (prev) {
                 prev->next = next;
             } else {
@@ -728,7 +705,7 @@ static int registerAudioGenerator_lib2ine(LxAudioGeneratorFn fn, void *data, con
             if (i->fn == fn) {
                 SDL_UnlockAudioDevice(sdl_audio_device);
                 free(info);
-                return 2;   // already added.
+                return 2;
             }
         }
     }
@@ -738,13 +715,13 @@ static int registerAudioGenerator_lib2ine(LxAudioGeneratorFn fn, void *data, con
     audio_generators = info;
     SDL_UnlockAudioDevice(sdl_audio_device);
     return 1;
-} // registerAudioGenerator_lib2ine
+}
 
 
 static void lib2ine_shutdown(void)
 {
     if (sdl_audio_device) {
-        // let the audio callback run about two more times, to let any last queued things fully render.
+        /* Allow two audio callbacks to drain the final queued samples. */
         SDL_Delay(((sdl_audio_spec.samples * 1000) / sdl_audio_spec.freq) * 2);
         SDL_CloseAudioDevice(sdl_audio_device);
         SDL_QuitSubSystem(SDL_INIT_AUDIO);
@@ -790,7 +767,7 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     GLoaderState.registerAudioGenerator = registerAudioGenerator_lib2ine;
     GLoaderState.lib2ine_shutdown = lib2ine_shutdown;
 
-    // VMware emulates the PC Speaker on a sound card _really_ quietly.
+    /* Use a low amplitude to match the PC speaker mix. */
     GLoaderState.beep_volume = 0.05f;
 
     cfgLoadFiles();
@@ -800,7 +777,7 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     GLoaderState.initOs2Tib(GLoaderState.main_tibspace, (void *) &stack_limit, stack_limit, 0);
     GLoaderState.main_tib_selector = GLoaderState.setOs2Tib(GLoaderState.main_tibspace);
 
-    // these override config files (for now).
+
     if (getenv("TRACE_NATIVE")) {
         GLoaderState.trace_native = 1;
     }
@@ -818,6 +795,3 @@ LX_NATIVE_DESTRUCTOR(lib2ine)
 {
     lib2ine_shutdown();
 }
-
-// end of lib2ine.c ...
-

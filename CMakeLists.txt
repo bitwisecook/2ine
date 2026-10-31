@@ -1,3 +1,4 @@
+# Derived from original 2ine; zlib-style license. See LICENSE.txt.
 cmake_minimum_required(VERSION 3.16)
 project(2ine C)
 include(CTest)
@@ -26,7 +27,6 @@ if(TWOINE_RUNTIME_ONLY)
     return()
 endif()
 
-# The native application loader uses the Linux i386 ABI and descriptor services.
 
 if(NOT CMAKE_BUILD_TYPE)
     set(DEBUG_BUILD ON)
@@ -99,7 +99,7 @@ add_compile_definitions(TWOINE_PORTABLE_LOADER=$<BOOL:${TWOINE_PORTABLE_LOADER}>
 
 add_library(2ine SHARED "lib2ine.c" "guest/handles.c")
 if(TWOINE_NATIVE_LOADER)
-    target_sources(2ine PRIVATE guest/arguments.c runtime/execution.c runtime/execution_memory.c runtime/execution_native_linux_i386.c ${TWOINE_HOST_SOURCES})
+    target_sources(2ine PRIVATE guest/arguments.c runtime/execution.c runtime/execution_memory.c native/execution_linux_i386.c ${TWOINE_HOST_SOURCES})
     target_compile_definitions(2ine PRIVATE TWOINE_NATIVE_LINUX_I386=1)
 endif()
 if(TWOINE_NATIVE_LOADER)
@@ -124,19 +124,17 @@ foreach(_I doscalls;msg;nls;quecalls;viocalls;kbdcalls;sesmgr;som;pmwin;pmshapi;
 endforeach()
 
 if(TWOINE_NATIVE_LOADER)
-    target_sources(doscalls PRIVATE runtime/abi_native_linux_i386_doscalls.c)
-    target_sources(msg PRIVATE runtime/abi_native_linux_i386_msg.c)
+    target_sources(doscalls PRIVATE native/abi_linux_i386_doscalls.c)
+    target_sources(msg PRIVATE native/abi_linux_i386_msg.c)
 endif()
 
 target_link_libraries(doscalls "pthread")
-# FIXME target_link_libraries(viocalls ${CURSES_LIBRARIES})
 if(TWOINE_NATIVE_LOADER)
     target_link_libraries(viocalls /usr/lib/i386-linux-gnu/libncursesw.so.6)
 else()
     target_link_libraries(viocalls ${CURSES_LIBRARIES})
 endif()
 
-# !!! FIXME: clean this up/
 if(TWOINE_NATIVE_LOADER)
     target_link_libraries(2ine "${CMAKE_CURRENT_SOURCE_DIR}/libSDL2-2.0.so.0")
     target_link_libraries(pmwin "${CMAKE_CURRENT_SOURCE_DIR}/libSDL2-2.0.so.0")
@@ -157,7 +155,6 @@ if(LX_LEGACY)
     endif()
 endif()
 
-# end of CMakeLists.txt ...
 
 
 if(BUILD_TESTING AND TWOINE_NATIVE_LOADER)

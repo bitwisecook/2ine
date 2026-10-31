@@ -1,0 +1,22 @@
+# Public domain. No rights reserved.
+# Wholly AI-authored.
+name: Python tools
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  tools:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ruff and ty
+        run: |
+          python3 -m venv "$RUNNER_TEMP/python-tools"
+          "$RUNNER_TEMP/python-tools/bin/pip" install ruff==0.15.20 ty==0.0.57
+      - name: Lint, format and typecheck
+        run: |
+          "$RUNNER_TEMP/python-tools/bin/ruff" check .
+          "$RUNNER_TEMP/python-tools/bin/ruff" format --check .
+          "$RUNNER_TEMP/python-tools/bin/ty" check
+      - name: Test tools and generated bindings
+        run: |
+          python3 -m unittest discover -s tests -p test_tools.py -v
+          python3 lxapigen.py --check

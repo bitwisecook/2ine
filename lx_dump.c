@@ -13,7 +13,6 @@
 
 #include "lib2ine.h"
 
-// !!! FIXME: some cut-and-paste with lx_loader.c ...
 
 static int sanityCheckLxExe(const uint8 *exe, const uint32 exelen)
 {
@@ -49,7 +48,7 @@ static int sanityCheckLxExe(const uint8 *exe, const uint32 exelen)
     }
 
     return 1;
-} // sanityCheckLxExe
+}
 
 static int sanityCheckNeExe(const uint8 *exe, const uint32 exelen)
 {
@@ -65,7 +64,7 @@ static int sanityCheckNeExe(const uint8 *exe, const uint32 exelen)
     }
 
     return 1;
-} // sanityCheckNeExe
+}
 
 static int sanityCheckExe(uint8 **_exe, uint32 *_exelen, int *_is_lx)
 {
@@ -74,9 +73,9 @@ static int sanityCheckExe(uint8 **_exe, uint32 *_exelen, int *_is_lx)
         return 0;
     }
     const uint32 header_offset = *((uint32 *) (*_exe + 0x3C));
-    //printf("header offset is %u\n", (uint) header_offset);
 
-    *_exe += header_offset;  // skip the DOS stub, etc.
+
+    *_exe += header_offset;
     *_exelen -= header_offset;
 
     const uint8 *magic = *_exe;
@@ -91,7 +90,7 @@ static int sanityCheckExe(uint8 **_exe, uint32 *_exelen, int *_is_lx)
 
     fprintf(stderr, "not an OS/2 EXE\n");
     return 0;
-} // sanityCheckExe
+}
 
 static int parseLxExe(const uint8 *origexe, const uint8 *exe)
 {
@@ -153,12 +152,12 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
     printf("Number of instance pages in demand section: %u\n", (uint) lx->num_instance_demand);
     printf("Heap size: %u\n", (uint) lx->heapsize);
 
-    /* This is apparently a requirement as of OS/2 2.0, according to lxexe.txt. */
+    /* OS/2 LX objects with 16:16 aliases are limited to 64 KiB. */
     if ((lx->object_iter_pages_offset != 0) && (lx->object_iter_pages_offset != lx->data_pages_offset)) {
         fprintf(stderr, "Object iterator pages offset must be 0 or equal to Data pages offset\n");
     }
 
-    // when an LX file says "object" it's probably more like "section" or "segment" ...?
+
     printf("\n");
     printf("Object table (%u entries):\n", (uint) lx->module_num_objects);
     for (uint32 i = 0; i < lx->module_num_objects; i++) {
@@ -227,7 +226,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                     case 0x07: printf("32-bit offset fixup"); break;
                     case 0x08: printf("32-bit self-relative offset fixup"); break;
                     default: printf("(undefined fixup)"); break;
-                } // switch
+                }
                 printf("\n");
 
                 const uint8 fixupflags = *(fixup++);
@@ -237,7 +236,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                     case 0x1: printf(" IMPORTBYORDINAL"); break;
                     case 0x2: printf(" IMPORTBYNAME"); break;
                     case 0x3: printf(" INTERNALVIAENTRY"); break;
-                } // switch
+                }
 
                 if (fixupflags & 0x4) printf(" ADDITIVE");
                 if (fixupflags & 0x8) printf(" INTERNALCHAINING");
@@ -254,19 +253,19 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                 } else {
                     const sint16 srcoffset = *((sint16 *) fixup); fixup += 2;
                     printf("Source offset: %d\n", (int) srcoffset);
-                } // else
+                }
                 printf("\n");
 
                 switch (fixupflags & 0x3) {
                     case 0x0:
                         printf("Internal fixup record:\n");
-                        if (fixupflags & 0x40) { // 16 bit value
+                        if (fixupflags & 0x40) {
                             const uint16 val = *((uint16 *) fixup); fixup += 2;
                             printf("Object: %u\n", (uint) val);
                         } else {
                             const uint8 val = *(fixup++);
                             printf("Object: %u\n", (uint) val);
-                        } // else
+                        }
 
                         printf("Target offset: ");
                         if ((srctype & 0xF) == 0x2) { // 16-bit selector fixup
@@ -277,59 +276,59 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
                         } else {  // 16-bit target offset
                             const uint16 val = *((uint16 *) fixup); fixup += 2;
                             printf("%u\n", (uint) val);
-                        } // else
+                        }
                         break;
 
                     case 0x1:
                         printf("Import by ordinal fixup record:\n");
-                        if (fixupflags & 0x40) { // 16 bit value
+                        if (fixupflags & 0x40) {
                             const uint16 val = *((uint16 *) fixup); fixup += 2;
                             printf("Module ordinal: %u\n", (uint) val);
                         } else {
                             const uint8 val = *(fixup++);
                             printf("Module ordinal: %u\n", (uint) val);
-                        } // else
+                        }
 
-                        if (fixupflags & 0x80) { // 8 bit value
+                        if (fixupflags & 0x80) {
                             const uint8 val = *(fixup++);
                             printf("Import ordinal: %u\n", (uint) val);
-                        } else if (fixupflags & 0x10) {  // 32-bit value
+                        } else if (fixupflags & 0x10) {
                             const uint32 val = *((uint32 *) fixup); fixup += 4;
                             printf("Import ordinal: %u\n", (uint) val);
-                        } else {  // 16-bit value
+                        } else {
                             const uint16 val = *((uint16 *) fixup); fixup += 2;
                             printf("Import ordinal: %u\n", (uint) val);
-                        } // else
+                        }
 
                         uint32 additive = 0;
                         if (fixupflags & 0x4) {  // Has additive.
-                            if (fixupflags & 0x20) { // 32-bit value
+                            if (fixupflags & 0x20) {
                                 additive = *((uint32 *) fixup);
                                 fixup += 4;
-                            } else {  // 16-bit value
+                            } else {
                                 additive = *((uint16 *) fixup);
                                 fixup += 2;
-                            } // else
-                        } // if
+                            }
+                        }
                         printf("Additive: %u\n", (uint) additive);
                         break;
 
                     case 0x2: {
                         printf("Import by name fixup record:\n");
-                        if (fixupflags & 0x40) { // 16 bit value
+                        if (fixupflags & 0x40) {
                             const uint16 val = *((uint16 *) fixup); fixup += 2;
                             printf("Module ordinal: %u\n", (uint) val);
                         } else {
                             const uint8 val = *(fixup++);
                             printf("Module ordinal: %u\n", (uint) val);
-                        } // else
+                        }
 
                         uint32 name_offset = 0;
-                        if (fixupflags & 0x10) {  // 32-bit value
+                        if (fixupflags & 0x10) {
                             name_offset = *((uint32 *) fixup); fixup += 4;
-                        } else {  // 16-bit value
+                        } else {
                             name_offset = *((uint16 *) fixup); fixup += 2;
-                        } // else
+                        }
 
                         const uint8 *import_name = (exe + lx->import_proc_table_offset) + name_offset;
                         char name[128];
@@ -340,39 +339,39 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
 
                         uint32 additive = 0;
                         if (fixupflags & 0x4) {  // Has additive.
-                            if (fixupflags & 0x20) { // 32-bit value
+                            if (fixupflags & 0x20) {
                                 additive = *((uint32 *) fixup);
                                 fixup += 4;
-                            } else {  // 16-bit value
+                            } else {
                                 additive = *((uint16 *) fixup);
                                 fixup += 2;
-                            } // else
-                        } // if
+                            }
+                        }
                         printf("Additive: %u\n", (uint) additive);
 
                         break;
-                    } // case
+                    }
 
                     case 0x3:
                         printf("Internal entry table fixup record:\n");
                         printf("WRITE ME\n"); exit(1);
                         break;
-                } // switch
+                }
 
                 if (srctype & 0x20) { // source list
                     printf("Source offset list:");
                     for (uint8 i = 0; i < srclist_count; i++) {
                         const sint16 val = *((sint16 *) fixup); fixup += 2;
                         printf(" %d", (int) val);
-                    } // for
-                } // if
+                    }
+                }
 
                 printf("\n\n");
-            } // while
+            }
 
             printf("\n");
-        } // for
-    } // for
+        }
+    }
 
     printf("\n");
     printf("Resource table (%u entries):\n", (uint) lx->num_resource_table_entries);
@@ -385,7 +384,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
         printf("Object: %u\n", (uint) rsrc->object);
         printf("Offset: 0x%X\n", (uint) rsrc->offset);
         printf("\n");
-    } // for
+    }
 
     printf("\n");
 
@@ -393,7 +392,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
     int bundleid = 1;
     int ordinal = 1;
     const uint8 *entryptr = exe + lx->entry_table_offset;
-    while (*entryptr) {  /* end field has a value of zero. */
+    while (*entryptr) {
         const uint8 numentries = *(entryptr++);  /* number of entries in this bundle */
         const uint8 bundletype = (*entryptr) & ~0x80;
         const uint8 paramtypes = (*(entryptr++) & 0x80) ? 1 : 0;
@@ -474,9 +473,9 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
 
             default:
                 printf("UNKNOWN (%u)\n\n", (uint) bundletype);
-                break;  // !!! FIXME: what to do?
-        } // switch
-    } // while
+                break;
+        }
+    }
     printf("\n");
 
     printf("Module directives (%u entries):\n", (uint) lx->num_module_directives);
@@ -487,7 +486,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
         printf("Data size: %u\n", (uint) *((const uint16 *) dirptr)); dirptr += 2;
         printf("Data offset: %u\n", (uint) *((const uint32 *) dirptr)); dirptr += 4;
         printf("\n");
-        // !!! FIXME: verify record directive table, etc, based on Directive ID
+
     }
     printf("\n");
 
@@ -504,7 +503,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
     for (uint32 i = 0; i < lx->num_import_mod_entries; i++) {
         char name[128];
         const uint8 namelen = *(import_modules_table++);
-        // !!! FIXME: name can't be more than 127 chars, according to docs. Check this.
+
         memcpy(name, import_modules_table, namelen);
         import_modules_table += namelen;
         name[namelen] = '\0';
@@ -523,7 +522,7 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
         name_table += namelen;
         const uint16 ordinal = *((const uint16 *) name_table); name_table += 2;
         printf("%u: '%s' (ordinal %u)\n", (uint) i, name, (uint) ordinal);
-    } // for
+    }
 
     printf("Non-resident name table:\n");
     name_table = origexe + lx->non_resident_name_table_offset;
@@ -536,10 +535,10 @@ static int parseLxExe(const uint8 *origexe, const uint8 *exe)
         name_table += namelen;
         const uint16 ordinal = *((const uint16 *) name_table); name_table += 2;
         printf("%u: '%s' (ordinal %u)\n", (uint) i, name, (uint) ordinal);
-    } // for
+    }
 
     return 1;
-} // parseLxExe
+}
 
 static int parseNeExe(const uint8 *origexe, const uint8 *exe)
 {
@@ -565,7 +564,7 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
         case 0x1: printf("FULLSCREEN"); break;
         case 0x2: printf("WINPMCOMPAT"); break;
         case 0x3: printf("WINPMUSES"); break;
-    } // switch
+    }
     printf("\n");
     printf("Automatic data segment: %u\n", (uint) ne->auto_data_segment);
     printf("Dynamic heap size: %u\n", (uint) ne->dynamic_heap_size);
@@ -659,7 +658,7 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                     switch (flags & 0x3) {
                         case 0: {
                             const uint8 segment = targetptr[0];
-                            //const uint8 reserved = targetptr[1];
+
                             const uint16 offset = *((const uint16 *) &targetptr[2]);
                             printf(" INTERNALREF (");
                             if (segment == 0xFF)
@@ -715,7 +714,7 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
         while (*((const uint16 *) ptr)) {
             const uint16 typeid = *((const uint16 *) ptr); ptr += 2;
             const uint32 num_resources = (uint32) *((const uint16 *) ptr); ptr += 2;
-            ptr += 4;  // reserved.
+            ptr += 4;
             for (uint32 j = 0; j < num_resources; j++) {
                 idx++;
                 printf(" %d:", idx);
@@ -736,7 +735,7 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
                 const uint16 size = *((const uint16 *) ptr); ptr += 2;
                 const uint16 flags = *((const uint16 *) ptr); ptr += 2;
                 const uint16 resourceid = *((const uint16 *) ptr); ptr += 2;
-                ptr += 4;  // reserved.
+                ptr += 4;
                 printf("  Offset: %u\n", (uint) offset);
                 printf("  Size: %u\n", (uint) size);
                 printf("  Flags:");
@@ -867,7 +866,7 @@ static int parseNeExe(const uint8 *origexe, const uint8 *exe)
     }
 
     return 1;
-} // parseNeExe
+}
 
 static void parseExe(const char *exefname, uint8 *exe, uint32 exelen)
 {
@@ -884,7 +883,7 @@ static void parseExe(const char *exefname, uint8 *exe, uint32 exelen)
     } else {
         parseNeExe(origexe, exe);
     }
-} // parseExe
+}
 
 int main(int argc, char **argv)
 {
@@ -925,6 +924,4 @@ int main(int argc, char **argv)
     free(exe);
 
     return 0;
-} // main
-
-// end of lx_dump.c ...
+}

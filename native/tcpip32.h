@@ -10,19 +10,14 @@
 #define _INCL_TCPIP32_H_
 
 #include "os2types.h"
-#include <stdio.h>  // !!! FIXME: don't use size_t in here.
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// These are (mostly) the same symbols as BSD sockets, so to prevent conflicts
-//  with the _actual_ C runtime on the host, we name them OS2_*. The LX
-//  loader exports them with the correct names. If you're recompiling an
-//  OS/2 app and using this for API support, just use real BSD sockets
-//  instead.
+/* OS2_ prefixes avoid collisions with host BSD socket symbols; guest exports use OS/2 names. */
 
-// !!! FIXME: lots of "int" and such in here that should probably be int32, etc.
 
 #define OS2_MSG_OOB         0x1
 #define OS2_MSG_PEEK        0x2
@@ -158,5 +153,3 @@ OS2EXPORT int OS2API OS2_gettimeofday(OS2_timeval *os2tv, OS2_timezone *os2tz) O
 #endif
 
 #endif
-
-// end of tcpip32.h ...

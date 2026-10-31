@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_CPU_INTERNAL_H
 #define TWOINE_CPU_INTERNAL_H
 #include "cpu.h"
@@ -42,7 +43,10 @@ struct LxCpu {
     char error[256];
 };
 
-/* The top 128 KiB are backend-owned descriptor tables, outside application RAM. */
+/* Guest linear space:
+   00000000..FFFDFFFF  application mappings
+   FFFE0000..FFFEFFFF  GDT and ring-transition scratch
+   FFFF0000..FFFFFFFF  LDT */
 #define LX_DESCRIPTOR_BASE UINT32_C(0xfffe0000)
 #define LX_DESCRIPTOR_SIZE UINT32_C(0x00020000)
 int lx_cpu_fail(LxCpu *cpu, const char *message);

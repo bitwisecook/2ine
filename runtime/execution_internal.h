@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_EXECUTION_INTERNAL_H
 #define TWOINE_EXECUTION_INTERNAL_H
 #include "execution.h"

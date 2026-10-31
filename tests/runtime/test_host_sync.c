@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host synchronization semantics used by OS/2 mutex and event resources. */
 #define _POSIX_C_SOURCE 200809L
 #include "host_sync.h"

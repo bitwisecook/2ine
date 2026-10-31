@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Fixed OS/2 process/thread wire layouts. Address fields contain guest values. */
 #ifndef TWOINE_GUEST_ABI_H
 #define TWOINE_GUEST_ABI_H

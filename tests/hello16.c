@@ -9,6 +9,3 @@ int main(void)
     DosPutMessage(1, 32, "Hello from a 16-bit OS/2 .exe!\r\n");
     return 0;
 }
-
-// end of hello16.c ...
-

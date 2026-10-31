@@ -13,7 +13,6 @@
 #include "../guest/abi.h"
 #include "../guest/arguments.h"
 
-// !!! FIXME: _lots_ of macro salsa in here.
 
 #define LX_NATIVE_MODULE_16BIT_SUPPORT() \
     static LxMmaps obj16;
@@ -82,6 +81,3 @@
 #define LX_NATIVE_EXPORT16_DIFFERENT_NAME(fn, fnname, ord) { ord, fnname, &fn##16, &obj16, 1 }
 
 #endif
-
-// end of os2native16.h ...
-

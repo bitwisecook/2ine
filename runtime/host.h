@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host services used by the guest execution backends. */
 #ifndef TWOINE_HOST_H
 #define TWOINE_HOST_H

@@ -13,10 +13,4 @@ int main(void)
     DosBeep(497, 100);
     DosBeep(500, 100);
     return 0;
-} // main
-
-// end of testbeep.c ...
-
-
-
-
+}

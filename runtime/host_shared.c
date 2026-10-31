@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared backing for guest address spaces, without guest ABI or OS/2 policy. */
 #define _GNU_SOURCE 1
 #include "host_shared.h"

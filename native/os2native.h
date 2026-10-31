@@ -9,7 +9,7 @@
 #ifndef _INCL_OS2NATIVE_H_
 #define _INCL_OS2NATIVE_H_
 
-/* Unless forced off, build in support for OS/2 binaries (the LX export tables, 16-bit bridge code, etc) */
+
 #ifndef LX_LEGACY
 #define LX_LEGACY 1
 #endif
@@ -63,13 +63,9 @@ OS2EXPORT void lxNativeModuleDeinit(void);
     return lx_native_exports; \
 }
 
-// we store the TIB2 struct right after the TIB struct on the stack,
-//  so get the TIB, then step forward to the TIB2.
+/* TIB2 follows TIB contiguously in guest memory. */
 #define LX_GETTIB() ((LxTIB *) GLoaderState.getOs2Tib())
 #define LX_GETTIB2() ((LxTIB2 *) (LX_GETTIB() + 1))
 #define LX_GETPOSTTIB() ((LxPostTIB *) (LX_GETTIB2() + 1))
 
 #endif
-
-// end of os2native.h ...
-

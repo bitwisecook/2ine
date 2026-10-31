@@ -19,7 +19,7 @@ static MRESULT APIENTRY winproc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
 
     return WinDefWindowProc(hwnd, msg, mp1, mp2);
-} // winproc
+}
 
 int main(int argc, char **argv)
 {
@@ -40,7 +40,4 @@ int main(int argc, char **argv)
     WinTerminate(hab);
 
     return 0;
-} // main
-
-// end of testpm.c ...
-
+}

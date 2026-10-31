@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Portable process entry and API dispatch over the CPU execution interface. */
 #include "execution_internal.h"
 #include "cpu.h"

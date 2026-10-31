@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* MSG flat 32-bit stack ABI. Guest buffers remain pinned during host output. */
 static uint32 bridge32_DosPutMessage(uint8 *arguments)
 {

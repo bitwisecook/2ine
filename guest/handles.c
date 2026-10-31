@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Typed resource ownership and generation-checked OS/2 handles. */
 #include "handles.h"
 #include "../runtime/host_sync.h"

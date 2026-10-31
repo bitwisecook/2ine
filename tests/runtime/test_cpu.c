@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Execution contracts shared by portable CPU backend implementations. */
 #include "cpu.h"
 #include "host.h"

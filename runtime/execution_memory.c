@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest mapping ownership, independent of the host address chosen for backing. */
 #include "execution_internal.h"
 #include "host.h"
@@ -5,6 +6,8 @@
 #include <stdint.h>
 #include <string.h>
 
+/* Guest [address, address+size) -> host backing[0..size).
+   Active borrows pin this translation against protect/unmap. */
 struct LxGuestMapping {
     uint32_t address;
     size_t size;

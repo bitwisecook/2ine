@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Backend-independent x86 guest execution and guest-address access. */
 #ifndef TWOINE_CPU_H
 #define TWOINE_CPU_H

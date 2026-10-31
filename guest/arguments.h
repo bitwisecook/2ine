@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Scoped USE16 ABI arguments: checked spans, aligned snapshots and copy-back. */
 #ifndef TWOINE_GUEST_ARGUMENTS_H
 #define TWOINE_GUEST_ARGUMENTS_H

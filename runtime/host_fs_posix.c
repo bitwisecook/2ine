@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* POSIX filesystem adapter for Linux and macOS. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1

@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest pointer ownership is kept out of host API implementations. */
 #include "arguments.h"
 #include <stdlib.h>
@@ -7,7 +8,7 @@ int lx_guest_argument_far(LxExecution *e, uint32_t pointer, size_t size,
 {
     memset(a, 0, sizeof *a);
     if (!pointer && (nullable || !size)) return 1;
-    /* Snapshots preserve original output bytes when an API leaves them alone. */
+    /* Snapshot output buffers so unwritten bytes retain their caller-supplied values. */
     unsigned access = permissions | (live ? 0 : LX_GUEST_READ);
     if (!lx_execution_borrow_far(e, pointer, size, access, &a->borrow)) return 0;
     a->size = size; a->permissions = permissions; a->host = a->borrow.host;

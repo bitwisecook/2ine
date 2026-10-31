@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Public domain. No rights reserved.
+# Wholly AI-authored.
 # Exercise the 16-bit MASM reader thread with a separately supplied ML.EXE.
 set -euo pipefail
 

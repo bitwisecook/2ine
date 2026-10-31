@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* NLS wire structures have 32-bit fields and explicit byte order. */
 static uint32 bridge32_DosQueryDBCSEnv(uint8 *arguments)
 {

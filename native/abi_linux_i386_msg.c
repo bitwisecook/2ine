@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* MSGSEG32 supplies one hidden word before seven caller-owned arguments.
    Copy all eight into a C frame, then remove only the hidden word on return. */
 __asm__(

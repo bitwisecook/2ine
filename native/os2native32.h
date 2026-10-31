@@ -1,3 +1,4 @@
+/* Derived from original 2ine; zlib-style license. See ../LICENSE.txt. */
 /* Flat guest API entries backed by explicit wire marshalling functions. */
 #ifndef TWOINE_OS2NATIVE32_H
 #define TWOINE_OS2NATIVE32_H

@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host memory and clock services; no guest CPU state lives in this file. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1

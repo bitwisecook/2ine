@@ -43,6 +43,3 @@ OS2EXPORT APIRET16 OS2API16 KbdSetStatus(PKBDKEYINFO pkbci, HKBD hkbd) OS2APIINF
 #endif
 
 #endif
-
-// end of kbdcalls.h ...
-

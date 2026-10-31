@@ -1,7 +1,7 @@
 /* Native Linux i386 execution adapter. See ../LICENSE.txt for licensing. */
 #define _GNU_SOURCE 1
-#include "execution_internal.h"
-#include "host.h"
+#include "../runtime/execution_internal.h"
+#include "../runtime/host.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,8 +58,7 @@ typedef struct NativeState {
 static NativeState *Native;
 static pthread_mutex_t DescriptorMutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static pthread_mutex_t SegmentMutex = PTHREAD_MUTEX_INITIALIZER;
-/* The worker DSO is linked at process start, so initial-exec TLS has a fixed
-   GS-relative displacement. Guest FS contains only the OS/2 TIB and TLS slots. */
+/* Initial-exec TLS gives each host bridge stack a fixed GS-relative slot; guest FS remains private. */
 static __thread uint8 *NativeTib;
 static __thread void *NativeHostStack __attribute__((tls_model("initial-exec")));
 static __thread uint8_t *NativeHostAllocation;
@@ -82,17 +81,16 @@ static __attribute__((noreturn, used)) void endLxProcess(uint32 result)
 static inline uint16 lxSelectorToSegment(const uint16 selector)
 {
     return (selector << 3) | 7;
-} // lxSelectorToSegment
+}
 
-// !!! FIXME: mutex this
+
 static int allocateSelector(const uint16 selector, const int pages, const uint32 addr, const unsigned int contents, const int is32bit)
 {
     assert(selector < LX_MAX_LDT_SLOTS);
 
     if (Native->ldt[selector])
-        return 0;  // already in use.
+        return 0;
 
-    //const int expand_down = (contents == MODIFY_LDT_CONTENTS_STACK);
 
     if (nativeLdt(selector, addr, (uint32) pages - 1,
                            contents == MODIFY_LDT_CONTENTS_CODE,
@@ -101,39 +99,36 @@ static int allocateSelector(const uint16 selector, const int pages, const uint32
 
     Native->ldt[selector] = addr;
     return 1;
-} // allocateSelector
+}
 
-// !!! FIXME: mutex this
-// Selector 0x1FFF (segment 0xFFFF) is reserved as the Microsoft 16-bit
-// runtime's "use DS" sentinel.  Do not allocate a real mapping there.
+
 #define LX_NEAR16_SENTINEL_SELECTOR 0x1FFF
 
 static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint16 *outoffset, int iscode)
 {
     uint32 addr = _addr;
     if (addr < 4096)
-        return 0;   // we won't map the NULL page.
+        return 0;
 
     const uint32 *ldt = Native->ldt;
 
     int available = -1;
     int preferred = -1;
 
-    // optimize for the case where we need a selector that happens to be in tiled memory,
-    //  since it's fast to look up.
+    /* Tiled selectors encode a 64-KiB-aligned base directly. */
     if (addr < (1024 * 1024 * 512)) {
         const uint16 idx = (uint16) (addr >> 16);
         const uint32 tile = ldt[idx];
         if ((tile == 0) && (idx != LX_NEAR16_SENTINEL_SELECTOR)) {
-            preferred = available = idx;  // we can use this piece.
+            preferred = available = idx;
         } else if ((tile != 0) && (idx != LX_NEAR16_SENTINEL_SELECTOR) &&
                    (tile <= addr) && ((tile + 0x10000) > addr)) {
             *outselector = idx;
             *outoffset = (uint16) (addr - tile);
-            //printf("SELECTOR: found tiled selector 0x%X for address %p\n", (uint) idx, (void *) addr);
-            return 1;  // already allocated to this address.
-        } // if
-    } // if
+
+            return 1;
+        }
+    }
 
     for (int i = 0; i < LX_MAX_LDT_SLOTS; i++) {
         if (i == LX_NEAR16_SENTINEL_SELECTOR)
@@ -144,19 +139,18 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
         else if ((tile <= addr) && ((tile + 0x10000) > addr)) {
             *outselector = (uint16) i;
             *outoffset = (uint16) (addr - tile);
-            //printf("SELECTOR: found existing selector 0x%X for address %p\n", (uint) i, (void *) addr);
-            return 1;  // already allocated to this address.
-        } // else if
-    } // for
 
-    // nothing allocated to this address so far. Try to allocate something.
+            return 1;
+        }
+    }
+
+
     if (available == -1) {
         fprintf(stderr, "Uhoh, we've run out of LDT selectors! Probably about to crash...\n"); fflush(stderr);
-        return 0;  // uh oh, out of selectors!
-    } // if
+        return 0;
+    }
 
-    // decide if there is code or data mapped here. If there's an OS/2 API to
-    //  change page permissions, we'll need to update the mapping and our state.
+    /* Descriptor type follows the mapped object permissions. */
     if (iscode == -1 && Native->services.query_executable)
         iscode = Native->services.query_executable(Native->services.userdata, addr);
 
@@ -165,21 +159,21 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
     }
 
     const uint32 diff = addr % 0x10000;
-    addr -= diff;   // make sure we start on a 64k border.
+    addr -= diff;
 
     const uint16 selector = (uint16) (preferred != -1) ? preferred : available;
-    //printf("setting up LDT mapping for %s at selector %u\n", iscode ? "code" : "data", (unsigned int) selector);
+
 
     if (!allocateSelector(selector, 16, addr, iscode ? MODIFY_LDT_CONTENTS_CODE : MODIFY_LDT_CONTENTS_DATA, 0)) {
         fprintf(stderr, "Uhoh, we've failed to allocate LDT selector %u! Probably about to crash...\n", (uint) selector); fflush(stderr);
         return 0;
-    } // if
+    }
 
-    //printf("SELECTOR: allocated selector 0x%X for address %p\n", (uint) selector, (void *) addr);
+
     *outselector = selector;
     *outoffset = (uint16) diff;
     return 1;
-} // lxFindSelector
+}
 static int lxFindSelector(const uint32 address, uint16 *selector, uint16 *offset, int code)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -189,19 +183,18 @@ static int lxFindSelector(const uint32 address, uint16 *selector, uint16 *offset
 }
 
 
-// !!! FIXME: mutex this
 static void lxFreeSelectorUnlocked(const uint16 selector)
 {
     assert(selector < LX_MAX_LDT_SLOTS);
 
     if (!Native->ldt[selector])
-        return;  // already free.
+        return;
 
     if (nativeLdt(selector, 0, 0, 0, 16, 0) != 0)
         return;
 
     Native->ldt[selector] = 0;
-} // lxFreeSelector
+}
 static void lxFreeSelector(const uint16 selector)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -216,15 +209,13 @@ static void *lxConvert1616to32(const uint32 addr1616)
         return NULL;
 
     const uint16 selector = (uint16) (addr1616 >> 19);  // slide segment down, and shift out control bits.
-    const uint16 offset = (uint16) (addr1616 % 0x10000);  // all our LDT segments start at 64k boundaries (at the moment!).
-    // 0xFFFF is the Microsoft 16-bit runtime's "use my DS" sentinel for
-    //  far pointers that the import thunks normally replace with DS.
+    const uint16 offset = (uint16) (addr1616 % 0x10000);  /* LDT bases are 64-KiB aligned; selector 0xFFFF means the Microsoft runtime DS base. */
     if ((selector == 0x1FFF) && Native->near16_base)
         return (void *) (size_t) (Native->near16_base + offset);
-    //printf("lxConvert1616to32: 0x%X -> %p\n", (uint) addr1616, (void *) (size_t) (Native->ldt[selector] + offset));
+
     if (!Native->ldt[selector]) return NULL;
     return lx_execution_memory(Native->execution, Native->ldt[selector] + offset, 1, 0);
-} // lxConvert1616to32
+}
 
 static uint32 lxConvert32to1616(void *addr32)
 {
@@ -235,50 +226,44 @@ static uint32 lxConvert32to1616(void *addr32)
     uint16 offset = 0;
     if (!lxFindSelector((uint32) addr32, &selector, &offset, -1)) {
         fprintf(stderr, "Uhoh, ran out of LDT entries?!\n");
-        return 0;  // oh well, crash, probably.
-    } // if
+        return 0;
+    }
 
-    //printf("selector=0x%X, segment=0x%X\n", (uint) selector, (uint) lxSelectorToSegment(selector));
+
     return (((uint32)lxSelectorToSegment(selector)) << 16) | ((uint32) offset);
-} // lxConvert32to1616
+}
 
 static inline void *lxConvertSegmentOffsetto32(const uint16 seg, const uint16 off)
 {
     return lxConvert1616to32((((uint32) seg) << 16) | ((uint32) off));
-} // lxConvertSegmentOffsetto32
+}
 
-// EMX (and probably many other things) occasionally has to call a 16-bit
-//  system API, and assumes its stack is tiled in the LDT; it'll just shift
-//  the stack pointer and use it as a stack segment for the 16-bit call
-//  without calling DosFlatToSel(). So we tile the main thread's stack and
-//  pray that covers it. If we have to tile _every_ thread's stack, we can do
-//  that later.
-// !!! FIXME: if we do this for secondary thread stacks, we'll need to mutex this.
+
 static void initOs2StackSegmentsUnlocked(uint32 addr, uint32 stacklen, const int deinit)
 {
-    //printf("base == %p, stacklen == %u\n", (void*)addr, (uint) stacklen);
-    const uint32 diff = addr % 0x10000;
-    addr -= diff;   // make sure we start on a 64k border.
-    stacklen += diff;   // make sure we start on a 64k border.
 
-    // We fill in LDT tiles for the entire stack (EMX, etc, assume this will work).
-    if (stacklen % 0x10000)  // pad this out to 64k
+    const uint32 diff = addr % 0x10000;
+    addr -= diff;
+    stacklen += diff;
+
+    /* EMX expects every stack tile to have an LDT descriptor. */
+    if (stacklen % 0x10000)
         stacklen += 0x10000 - (stacklen % 0x10000);
 
-    // !!! FIXME: do we have to allocate these backwards? (stack grows down).
+
     while (stacklen) {
-        //printf("Allocating selector 0x%X for stack %p ... \n", (uint) (addr >> 16), (void *) addr);
+
         if (deinit) {
             lxFreeSelector((uint16) (addr >> 16));
         } else {
             if (!allocateSelector((uint16) (addr >> 16), 16, addr, MODIFY_LDT_CONTENTS_DATA, 0)) {
                 FIXME("uhoh, couldn't set up an LDT entry for a stack segment! Might crash later!");
-            } // if
-        } // else
+            }
+        }
         stacklen -= 0x10000;
         addr += 0x10000;
-    } // while
-} // initOs2StackSegments
+    }
+}
 static void initOs2StackSegments(uint32 address, uint32 size, const int release)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -287,14 +272,7 @@ static void initOs2StackSegments(uint32 address, uint32 size, const int release)
 }
 
 
-// OS/2 threads keep their Thread Information Block at FS:0x0000, so we have
-//  to ask the Linux kernel to screw around with 16-bit selectors on our
-//  behalf so we don't crash out when apps try to access it directly.
-// OS/2 provides a C-callable API to obtain the (32-bit linear!) TIB address
-//  without going directly to the FS register, but lots of programs (including
-//  the EMX runtime) touch the register directly, so we have to deal with it.
-// You must call this once for each thread that will go into LX land, from
-//  that thread, as soon as possible after starting.
+/* FS:0 addresses this thread's guest TIB; attach from the entering host thread. */
 static uint16 lxSetOs2Tib(uint8 *tibspace)
 {
     void *stack = malloc(65536);
@@ -314,13 +292,11 @@ static uint16 lxSetOs2Tib(uint8 *tibspace)
     const long rc = syscall(SYS_set_thread_area, &entry);
     if (rc != 0) { perror("set_thread_area"); abort(); }
 
-    // The "<< 3 | 3" makes this a GDT selector at ring 3 permissions.
-    //  If this did "| 7" instead of "| 3", it'd be an LDT selector.
-    //  Use lxFindSelector() or allocateSelector() for LDT entries, though!
+    /* TI=0 and RPL=3 select a ring-3 GDT entry; LDT entries use TI=1. */
     const unsigned int segment = (entry.entry_number << 3) | 3;
     __asm__ __volatile__ ( "movw %%ax, %%fs  \n\t" : : "a" (segment) );
     return (uint16) entry.entry_number;
-} // lxSetOs2Tib
+}
 
 static void *lxGetOs2Tib2(void)
 {
@@ -344,7 +320,7 @@ static void lxDeinitOs2Tib(const uint16 selector)
     free(NativeHostAllocation); NativeHostAllocation = NULL;
     NativeHostStack = NULL;
     NativeTib = NULL;
-} // lsDeinitOs2Tib
+}
 
 static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
 {
@@ -357,17 +333,15 @@ static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
         if (!Native->ldt[i]) {
             slot = i;
             break;
-        } // if
-    } // for
+        }
+    }
     if (!slot)
         return 0;
 
     if (!allocateSelector(slot, 16, base, MODIFY_LDT_CONTENTS_CODE, 0))
         return 0;
 
-    // The app writes instruction bytes through its data selector and executes
-    //  them through this alias. The NE data mapping is normally read/write
-    //  only, so make the backing pages executable too.
+    /* A CS alias executes bytes written through the shared data mapping. */
     LxGuestMapping *mapping = lx_execution_mapping_at(Native->execution, base);
     if (!mapping || !lx_execution_protect(Native->execution, mapping, 7)) {
         lxFreeSelector(slot); return 0;
@@ -375,7 +349,7 @@ static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
 
     *outselector = (uint16) ((slot << 3) | 7);
     return 1;
-} // lxCreateCodeAlias
+}
 static int lxCreateCodeAlias(const uint16 selector, uint16 *output)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -387,9 +361,7 @@ static int lxCreateCodeAlias(const uint16 selector, uint16 *output)
 
 static void *lxAllocSegment(uint16 *selector, const int iscode)
 {
-    // These are meant to be 64k segments mapped for use by 16-bit code, which means we
-    //  need them under 512 megabytes so their segments can convert directly to a linear
-    //  address with some bit twiddling.
+    /* Keep USE16 allocations below 512 MiB so tiled selectors convert directly to linear addresses. */
     static size_t baseaddr = 136 * 1024 * 1024;
     const uint32 segmentsize = 0x10000;
     *selector = 0xFFFF;
@@ -412,7 +384,7 @@ static void *lxAllocSegment(uint16 *selector, const int iscode)
     pthread_mutex_unlock(&SegmentMutex);
     fprintf(stderr, "Failed to allocate a low 16-bit segment.\n");
     return NULL;
-} // lxAllocSegment
+}
 
 static void lxFreeSegment(const uint16 selector)
 {
@@ -423,17 +395,17 @@ static void lxFreeSegment(const uint16 selector)
         Native->segments[selector] = NULL; lxFreeSelector(selector);
     }
     pthread_mutex_unlock(&SegmentMutex);
-} // lxFreeSegment
+}
 
 static void missingEntryPointCalled(const char *module, const char *entry)
 {
     fflush(stdout);
     fflush(stderr);
     fprintf(stderr, "\n\nMissing entry point '%s' in module '%s'! Aborting.\n\n\n", entry, module);
-    //STUBBED("output backtrace");
+
     fflush(stderr);
     endLxProcess(1);
-} // missingEntryPointCalled
+}
 
 static void *generateMissingTrampoline(const char *_module, const char *_entry)
 {
@@ -450,7 +422,7 @@ static void *generateMissingTrampoline(const char *_module, const char *_entry)
             nativeProtect(page, pagesize, LX_HOST_READ | LX_HOST_EXECUTE);
         page = lx_host_vm_map(NULL, pagesize, LX_HOST_READ | LX_HOST_WRITE | LX_HOST_EXECUTE, 0);
         pageused = 0;
-    } // if
+    }
 
     void *trampoline = page + pageused;
     char *ptr = (char *) trampoline;
@@ -459,7 +431,7 @@ static void *generateMissingTrampoline(const char *_module, const char *_entry)
 
     *(ptr++) = 0x55;  // pushl %ebp
     *(ptr++) = 0x89;  // movl %esp,%ebp
-    *(ptr++) = 0xE5;  //   ...movl %esp,%ebp
+    *(ptr++) = 0xE5;
     *(ptr++) = 0x68;  // pushl immediate
     memcpy(ptr, &entry, sizeof (char *));
     ptr += sizeof (uint32);
@@ -471,7 +443,7 @@ static void *generateMissingTrampoline(const char *_module, const char *_entry)
     memcpy(ptr, &fn, sizeof (void *));
     ptr += sizeof (void *);
     *(ptr++) = 0xFF;  // call absolute in %eax.
-    *(ptr++) = 0xD0;  //   ...call absolute in %eax.
+    *(ptr++) = 0xD0;
 
     const uint32 trampoline_len = (uint32) (ptr - ((char *) trampoline));
     assert(trampoline_len <= 32);
@@ -480,10 +452,9 @@ static void *generateMissingTrampoline(const char *_module, const char *_entry)
     if (pageused % 4)  // keep these aligned to 32 bits.
         pageused += (4 - (pageused % 4));
 
-    //printf("Generated trampoline %p for module '%s' export '%s'\n", trampoline, module, entry);
 
     return trampoline;
-} // generateMissingTrampoline
+}
 
 static void *generateMissingTrampoline16(const char *_module, const char *_entry, LxExecutionBridge *binding)
 {
@@ -500,7 +471,7 @@ static void *generateMissingTrampoline16(const char *_module, const char *_entry
         assert(segment != NULL);
         assert(selector != 0xFFFF);
         segmentused = 0;
-    } // if
+    }
 
     void *trampoline = segment + segmentused;
     char *ptr = (char *) trampoline;
@@ -510,52 +481,52 @@ static void *generateMissingTrampoline16(const char *_module, const char *_entry
         fprintf(stderr, "2INE MISSING16: %s@%s -> %p (sel %04X)\n",
                 _module, _entry, trampoline, (uint) selector);
 
-    // USE16
+
     *(ptr++) = 0x89;  /* mov cx,sp... */
-    *(ptr++) = 0xE1;  /*  ...mov cx,sp */
+    *(ptr++) = 0xE1;
     *(ptr++) = 0x66;  /* jmp dword 0x7788:0x33332222... */
-    *(ptr++) = 0xEA;  /*  ...jmp dword 0x7788:0x33332222 */
+    *(ptr++) = 0xEA;
     const uint32 jmp32addr = (uint32) (ptr + 6);
     memcpy(ptr, &jmp32addr, 4); ptr += 4;
     memcpy(ptr, &Native->original_cs, 2); ptr += 2;
 
-    // USE32
+
     *(ptr++) = 0x66;  /* mov ax,ss... */
-    *(ptr++) = 0x8C;  /*  ...mov ax,ss */
-    *(ptr++) = 0xD0;  /*  ...mov ax,ss */
+    *(ptr++) = 0x8C;
+    *(ptr++) = 0xD0;
     *(ptr++) = 0x66;  /* shr ax,byte 0x3... */
-    *(ptr++) = 0xC1;  /*  ...shr ax,byte 0x3 */
-    *(ptr++) = 0xE8;  /*  ...shr ax,byte 0x3 */
-    *(ptr++) = 0x03;  /*  ...shr ax,byte 0x3 */
+    *(ptr++) = 0xC1;
+    *(ptr++) = 0xE8;
+    *(ptr++) = 0x03;
     *(ptr++) = 0xC1;  /* shl eax,byte 0x10... */
-    *(ptr++) = 0xE0;  /*  ...shl eax,byte 0x10 */
-    *(ptr++) = 0x10;  /*  ...shl eax,byte 0x10 */
+    *(ptr++) = 0xE0;
+    *(ptr++) = 0x10;
     *(ptr++) = 0x66;  /* mov ax,cx... */
-    *(ptr++) = 0x89;  /*  ...mov ax,cx */
-    *(ptr++) = 0xC8;  /*  ...mov ax,cx */
+    *(ptr++) = 0x89;
+    *(ptr++) = 0xC8;
     *(ptr++) = 0x66;  /* mov cx,0xabcd... */
-    *(ptr++) = 0xB9;  /*  ...mov cx,0xabcd */
+    *(ptr++) = 0xB9;
     memcpy(ptr, &Native->original_ss, 2); ptr += 2;
     *(ptr++) = 0x8E;  /* mov ss,ecx... */
-    *(ptr++) = 0xD1;  /*  ...mov ss,ecx */
+    *(ptr++) = 0xD1;
     *(ptr++) = 0x89;  /* mov esp,eax... */
-    *(ptr++) = 0xC4;  /*  ...mov esp,eax */
+    *(ptr++) = 0xC4;
 
     if (Native->original_ss != Native->original_ds) {
         *(ptr++) = 0x66;  /* mov cx,0x8888... */
-        *(ptr++) = 0xB9;  /*  ...mov cx,0x8888 */
+        *(ptr++) = 0xB9;
         memcpy(ptr, &Native->original_ds, 2); ptr += 2;
     }
     *(ptr++) = 0x8E;  /* mov ds,ecx... */
-    *(ptr++) = 0xD9;  /*  ...mov ds,ecx */
+    *(ptr++) = 0xD9;
 
     if (Native->original_es != Native->original_ds) {
         *(ptr++) = 0x66;  /* mov cx,0x8888... */
-        *(ptr++) = 0xB9;  /*  ...mov cx,0x8888 */
+        *(ptr++) = 0xB9;
         memcpy(ptr, &Native->original_es, 2); ptr += 2;
     }
     *(ptr++) = 0x8E;  /* mov es,ecx... */
-    *(ptr++) = 0xC1;  /*  ...mov es,ecx */
+    *(ptr++) = 0xC1;
 
     // okay, CPU is in a sane state again, call the trampoline. Don't bother cleaning up.
     *(ptr++) = 0x68;  // pushl immediate
@@ -570,8 +541,7 @@ static void *generateMissingTrampoline16(const char *_module, const char *_entry
     memcpy(ptr, &fn, sizeof (void *));
     ptr += sizeof (void *);
     *(ptr++) = 0xFF;  // call absolute in %eax.
-    *(ptr++) = 0xD0;  //   ...call absolute in %eax.
-    // (and never return.)
+    *(ptr++) = 0xD0;
 
     const uint32 trampoline_len = (uint32) (ptr - ((char *) trampoline));
     assert(trampoline_len <= 64);
@@ -580,9 +550,7 @@ static void *generateMissingTrampoline16(const char *_module, const char *_entry
     if (segmentused % 4)  // keep these aligned to 32 bits.
         segmentused += (4 - (segmentused % 4));
 
-    //printf("Generated trampoline %p for module '%s' 16-bit export '%s'\n", trampoline, module, entry);
 
-    // this hack is not thread safe and only works at all because we don't store this long-term.
     binding->host = trampoline;
     binding->address = (uint32) (uintptr_t) trampoline;
     binding->segment_base = (uint32) (uintptr_t) segment;
@@ -590,23 +558,20 @@ static void *generateMissingTrampoline16(const char *_module, const char *_entry
     binding->selector_index = selector;
 
     return trampoline;
-} // generateMissingTrampoline16
+}
 
 static __attribute__((noreturn)) void runLxModule(const LxExecutionEntry *entry)
 {
     uint8 *stack = (uint8 *) ((size_t) entry->stack);
 
-    // ...and you pass it the pointer to argv0. This is (at least as far as the docs suggest) appended to the environment table.
-
-
 
     __asm__ __volatile__ (
-        "movl %%esi,%%esp  \n\t"  // use the OS/2 process's stack.
-        "pushl %%eax       \n\t"  // cmd
-        "pushl %%ecx       \n\t"  // env
-        "pushl $0          \n\t"  // reserved
+        "movl %%esi,%%esp  \n\t"
+        "pushl %%eax       \n\t"
+        "pushl %%ecx       \n\t"
+        "pushl $0          \n\t"
         "pushl %%edx       \n\t"  // module handle
-        "leal 1f,%%eax     \n\t"  // address that entry point should return to.
+        "leal 1f,%%eax     \n\t"
         "pushl %%eax       \n\t"
         "pushl %%edi       \n\t"  // the OS/2 process entry point (we'll "ret" to it instead of jmp, so stack and registers are all correct).
         "xorl %%eax,%%eax  \n\t"
@@ -616,32 +581,27 @@ static __attribute__((noreturn)) void runLxModule(const LxExecutionEntry *entry)
         "xorl %%esi,%%esi  \n\t"
         "xorl %%edi,%%edi  \n\t"
         "xorl %%ebp,%%ebp  \n\t"
-        "ret               \n\t"  // go to OS/2 land!
-        "1:                \n\t"  //  ...and return here.
+        "ret               \n\t"
+        "1:                \n\t"
         "pushl %%eax       \n\t"  // push exit code from OS/2 app.
-        "call endLxProcess \n\t"  // never returns.
-        // If we returned here, %eax has the exit code from the app.
-            : // no outputs.
+        "call endLxProcess \n\t"
+            :
             : "a" ((void *) (uintptr_t) entry->command),
               "c" ((void *) (uintptr_t) entry->environment),
               "d" (entry->module), "S" (stack), "D" (entry->entry)
             : "memory"
     );
 
-    (void) endLxProcess;  // make compiler happy.
+    (void) endLxProcess;
 
     __builtin_unreachable();
-} // runLxModule
+}
 
 static __attribute__((noreturn)) void runNeModule(const LxExecutionEntry *entry)
 {
 
 
-
-    // According to https://github.com/open-watcom/open-watcom-v2/blob/master/bld/clib/startup/c/maino16.c ,
-    //  The stack at startup should have, pushed in this order: cmdline offset, env segment, far* to top of stack, far* to bottom of stack.
-    // Microsoft C 5.1 wants things in registers (maybe Watcom does too, elsewhere, and I'm reading it wrong?),
-    //  so we do both.
+    /* NE startup supplies both the stack ABI and AX/BX/CX runtime arguments. */
     const uint16 stacksize = (uint16) entry->stack_bytes;
     const uint16 ss = (entry->stack >> 16) & 0xFFFF;  // stack segment
     const uint32 cmd1616 = lxConvert32to1616((void *) (uintptr_t) entry->command);
@@ -649,7 +609,7 @@ static __attribute__((noreturn)) void runNeModule(const LxExecutionEntry *entry)
     const uint16 envseg = (cmd1616 >> 16) & 0xFFFF;
 
     uint8 *stack = (uint8 *) lxConvert1616to32(entry->stack);
-    //printf("stack is at 32=%p 16=%x:%x\n", stack, (uint) ss, (uint) (entry->stack & 0xFFFF));
+
     stack -= 2; *((uint16 *) stack) = cmdlineoffset;  // cmdline offset
     stack -= 2; *((uint16 *) stack) = envseg;  // env segment
     stack -= 2; *((uint16 *) stack) = entry->stack & 0xFFFF;  // top of stack
@@ -663,43 +623,25 @@ static __attribute__((noreturn)) void runNeModule(const LxExecutionEntry *entry)
     assert(selector != 0xFFFF);
     char *ptr = (char *) segment;
 
-/*
-; instructions are in Intel syntax here, not AT&T.
-USE32
-JMP WORD 0xAAAA:0xBBBB  ; jump into 16-bit land (the next instruction!).
+/* NE startup stack (low addresses first):
+     SS:SP -> stack-bottom segment, offset
+              stack-top segment, offset
+              environment segment, command offset
+     AX=environment, BX=command offset, CX=autodata size. */
 
-USE16
-MOV AX,0x1111     ; set stack segment
-MOV SS,AX
-MOV SP,0x2222     ; set stack pointer
-MOV AX,0x3333     ; set data segment
-MOV DS,AX
-XOR AX,AX         ; set extra segment to zero.
-MOV ES,AX
-MOV AX,0x4444     ; AX=env segment
-MOV BX,0x5555     ; BX=cmdline offset
-MOV CX,0x6666     ; CX=size of auto data segment
-XOR DX,DX         ; clear remaining general registers.
-XOR SI,SI
-XOR DI,DI
-XOR BP,BP
-JMP 0x6666:0x7777 ; jump into actual 16-bit entry point.
-INT 0x3           ; if it returns here, crash and burn.
-*/
 
-    // USE32
     *(ptr++) = 0x66;  /* jmp word 0xaaaa:0xbbbb... */
-    *(ptr++) = 0xEA;  /*  ...jmp word 0xaaaa:0xbbbb */
+    *(ptr++) = 0xEA;
     const uint16 jmp16offset = 6;
     memcpy(ptr, &jmp16offset, 2); ptr += 2;
     const uint16 jmp16segment = lxSelectorToSegment(selector);
     memcpy(ptr, &jmp16segment, 2); ptr += 2;
 
-    // USE16
+
     *(ptr++) = 0xB8;  /* mov ax,0x1111... */
     memcpy(ptr, &ss, 2); ptr += 2;
     *(ptr++) = 0x8E;  /* mov ss,ax... */
-    *(ptr++) = 0xD0;  /*  ...mov ss,ax */
+    *(ptr++) = 0xD0;
     *(ptr++) = 0xBC;  /* mov sp,0x2222... */
     const uint16 sp = (uint16) (((size_t) stack) & 0xFFFF);  // top of stack offset
     memcpy(ptr, &sp, 2); ptr += 2;
@@ -707,11 +649,11 @@ INT 0x3           ; if it returns here, crash and burn.
     const uint16 ds = entry->data_selector ? entry->data_selector : ss;  // data segment
     memcpy(ptr, &ds, 2); ptr += 2;
     *(ptr++) = 0x8E;  /* mov ds,ax... */
-    *(ptr++) = 0xD8;  /*  ...mov ds,ax */
+    *(ptr++) = 0xD8;
     *(ptr++) = 0x31;  /* xor ax,ax... */
-    *(ptr++) = 0xC0;  /*  ...xor ax,ax */
+    *(ptr++) = 0xC0;
     *(ptr++) = 0x8E;  /* mov es,ax... */
-    *(ptr++) = 0xC0;  /*  ...mov es,ax */
+    *(ptr++) = 0xC0;
     *(ptr++) = 0xB8;  /* mov ax,0x4444... */
     memcpy(ptr, &envseg, 2); ptr += 2;
     *(ptr++) = 0xBB;  /* mov bx,0x5555... */
@@ -720,25 +662,25 @@ INT 0x3           ; if it returns here, crash and burn.
     const uint16 autodatasize = entry->data_bytes;
     memcpy(ptr, &autodatasize, 2); ptr += 2;
     *(ptr++) = 0x31;  /* xor dx,dx... */
-    *(ptr++) = 0xD2;  /*  ...xor dx,dx */
+    *(ptr++) = 0xD2;
     *(ptr++) = 0x31;  /* xor si,si... */
-    *(ptr++) = 0xF6;  /*  ...xor si,si */
+    *(ptr++) = 0xF6;
     *(ptr++) = 0x31;  /* xor di,di... */
-    *(ptr++) = 0xFF;  /*  ...xor di,di */
+    *(ptr++) = 0xFF;
     *(ptr++) = 0x31;  /* xor bp,bp... */
-    *(ptr++) = 0xED;  /*  ...xor bp,bp */
+    *(ptr++) = 0xED;
     *(ptr++) = 0xEA;  /* jmp 0x6666:0x7777... */
     const uint16 ip = (uint16) (entry->entry & 0xFFFF);
     memcpy(ptr, &ip, 2); ptr += 2;
     const uint16 cs = (uint16) ((entry->entry >> 16) & 0xFFFF);
     memcpy(ptr, &cs, 2); ptr += 2;
     *(ptr++) = 0xCD;  /* int 0x3... */
-    *(ptr++) = 0x03;  /*  ...int 0x3 */
+    *(ptr++) = 0x03;
 
-    __asm__ __volatile__("jmp *%%eax\n\t" : /* no outputs */ : "a" (segment) : "memory");
+    __asm__ __volatile__("jmp *%%eax\n\t" :  : "a" (segment) : "memory");
 
     __builtin_unreachable();
-} // runNeModule
+}
 
 static void runLxLibraryInitOrTerm(const LxExecutionEntry *entry, const int isTermination)
 {
@@ -748,17 +690,17 @@ static void runLxLibraryInitOrTerm(const LxExecutionEntry *entry, const int isTe
 
 
     __asm__ __volatile__ (
-        "pushal            \n\t"  // save all the current registers.
-        "pushfl            \n\t"  // save all the current flags.
-        "movl %%esp,%%ecx  \n\t"  // save our stack to a temporary register.
-        "testl %%esi,%%esi \n\t"  // force the OS/2 process's stack?
-        "je 1f             \n\t"  // if 0, nope, we're already good.
-        "movl %%esi,%%esp  \n\t"  // use the OS/2 process's stack.
+        "pushal            \n\t"
+        "pushfl            \n\t"
+        "movl %%esp,%%ecx  \n\t"
+        "testl %%esi,%%esi \n\t"
+        "je 1f             \n\t"
+        "movl %%esi,%%esp  \n\t"
         "1:                \n\t"  //
-        "pushl %%ecx       \n\t"  // save original stack pointer for real.
-        "pushl %%eax       \n\t"  // isTermination
+        "pushl %%ecx       \n\t"
+        "pushl %%eax       \n\t"
         "pushl %%edx       \n\t"  // library module handle
-        "leal 2f,%%eax     \n\t"  // address that entry point should return to.
+        "leal 2f,%%eax     \n\t"
         "pushl %%eax       \n\t"
         "pushl %%edi       \n\t"  // the OS/2 library entry point (we'll "ret" to it instead of jmp, so stack and registers are all correct).
         "xorl %%eax,%%eax  \n\t"
@@ -768,46 +710,41 @@ static void runLxLibraryInitOrTerm(const LxExecutionEntry *entry, const int isTe
         "xorl %%esi,%%esi  \n\t"
         "xorl %%edi,%%edi  \n\t"
         "xorl %%ebp,%%ebp  \n\t"
-        "ret               \n\t"  // go to OS/2 land!
-        "2:                \n\t"  //  ...and return here.
-        "addl $8,%%esp     \n\t"  // drop arguments to entry point.
-        "popl %%esp        \n\t"  // restore native process stack now.
-        "popfl             \n\t"  // restore our original flags.
-        "popal             \n\t"  // restore our original registers.
-            : // no outputs
+        "ret               \n\t"
+        "2:                \n\t"
+        "addl $8,%%esp     \n\t"
+        "popl %%esp        \n\t"
+        "popfl             \n\t"
+        "popal             \n\t"
+            :
             : "a" (isTermination), "d" (entry->module), "S" (stack), "D" (entry->entry)
             : "memory"
     );
 
-    //fprintf(stderr, "...survived time in LX land!\n"); fflush(stderr);
 
-    // !!! FIXME: this entry point returns a result...do we abort if it reports error?
-} // runLxLibraryInitOrTerm
+}
 
 static void fixupLinearCodeSegmentReferences(uint8 *addr, size_t size)
 {
-    // in lieu of writing a full x86 instruction decoder, we just look for
-    //  0xEA (JMP LARGE FAR PTR ADDR), skip 4 bytes (the 32-bit offset), and
-    //  see if the next two bytes are 0x5B 0x00 (the 16-bit segment). This is
-    //  wrong but "good enough" for now.
+
     while (size >= 7) {
         size--;
         if (*(addr++) == 0xEA) {
             if ((addr[4] == 0x5B) && (addr[5] == 0x00)) {
-                //printf("Patching out code segment 0x5B at %p\n", addr+4);
+
                 memcpy(&addr[4], &Native->original_cs, 2);
                 size -= 6;
                 addr += 6;
-            } // if
-        } // if
-    } // while
-} // fixupLinearCodeSegmentReferences
+            }
+        }
+    }
+}
 
 static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
 {
     greg_t *gregs = uctx->uc_mcontext.gregs;
 
-    // use the segfaulting thread's FS register, so we can get its TIB2 pointer.
+    // Read FS from the faulting thread to locate its guest TIB2.
     void *ptib2 = NULL;
     __asm__ __volatile__ (
         "pushw %%fs            \n\t"
@@ -818,34 +755,30 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
             : "eax" (gregs[REG_FS])
     );
 
-    // The thread's TLS data is stored in LxPostTIB, right after its TIB2 struct.
+    /* The 32 TLS words follow TIB/TIB2 in guest memory. */
     uint32 *tls = (uint32 *) ((uint8 *) ptib2 + Native->services.tls_offset - Native->services.tib2_offset);
     tls += slot;
 
-    //printf("We wanted to access thread %p TLS slot %d (currently holds %u)\n", tls - slot, slot, (uint) *tls);
 
     static const int x86RegisterToUContextEnum[] = {
         REG_EAX, REG_ECX, REG_EDX, REG_EBX, REG_ESP, REG_EBP, REG_ESI, REG_EDI
     };
 
-    // this is a hack; we'll want a much more serious x86 instruction decoder before long.
+
     int handled = 1;
-    uint8 *eip = (void *) (size_t) gregs[REG_EIP];  // program counter at point of segfault.
+    uint8 *eip = (void *) (size_t) gregs[REG_EIP];
     switch (eip[0]) {
-        case 0xC7:  // mov imm16/32 -> r/m
-            //printf("setting TLS slot %d to imm %u.\n", slot, (uint) *((uint32 *) (eip + 2)));
-            *tls = *((uint32 *) (eip + 2));  // !!! FIXME: verify it's a imm32, not 16
+        case 0xC7:  /* MOV immediate to TLS memory. */
+            *tls = *((uint32 *) (eip + 2));
             gregs[REG_EIP] += 6;
             break;
 
-        case 0x89:  // mov r -> r/m
-            //printf("setting TLS slot %d to reg %d (%u).\n", slot, x86RegisterToUContextEnum[eip[1] >> 3], (uint) gregs[x86RegisterToUContextEnum[eip[1] >> 3]]);
+        case 0x89:  /* MOV register to TLS memory. */
             *tls = (uint32) gregs[x86RegisterToUContextEnum[eip[1] >> 3]];
             gregs[REG_EIP] += 2;
             break;
 
-        case 0x8B:  // mov r/m -> r
-            //printf("setting reg %d to TLS slot %d (%u).\n", (uint) x86RegisterToUContextEnum[eip[1] >> 3], slot, *tls);
+        case 0x8B:  /* MOV TLS memory to register. */
             gregs[x86RegisterToUContextEnum[eip[1] >> 3]] = (greg_t) *tls;
             gregs[REG_EIP] += 2;
             break;
@@ -853,26 +786,21 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
         default:
             handled = 0;
             break;
-    } // switch
+    }
 
     if (!handled) {
         fprintf(stderr, "Oh no, unhandled opcode 0x%X at %p accessing TLS register! File a bug!\n", (uint) eip[0], eip);
     } else {
-        // drop out of signal handler to (hopefully) next instruction in the app,
-        //  as if it accessed the TLS slot normally and none of this ever happened.
-        //printf("TLS access handler jumping back into app at %p...\n", (void *) gregs[REG_EIP]); fflush(stdout);
+        /* Advance EIP past the emulated TLS instruction before returning from the signal. */
         setcontext(uctx);
         fprintf(stderr, "panic: setcontext() failed in the TLS access handler! Aborting! (%s)\n", strerror(errno));
-    } // else
+    }
 
     fflush(stderr);
     abort();
-} // handleThreadLocalStorageAccess
+}
 
-// Report which loaded OS/2 module (and object) contains an address, so a
-//  crash inside application or DLL code is attributable instead of a bare
-//  pointer. Returns 1 and fills buf if the address is in a mapped module
-//  object, 0 otherwise.
+/* Resolve a fault address to its guest module/object for diagnostics. */
 static int describeModuleAddress(const void *ptr, char *buffer, size_t size)
 {
     if (!Native->services.describe_address) { *buffer = '\0'; return 0; }
@@ -880,8 +808,7 @@ static int describeModuleAddress(const void *ptr, char *buffer, size_t size)
              (uint32) (uintptr_t) ptr, buffer, size);
 }
 
-// Print the /proc/self/maps line covering ptr, for host mappings the module
-//  walk cannot explain (libc, malloc'd regions, deleted files).
+/* Resolve host-only fault addresses through /proc/self/maps. */
 static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
 {
     char path[64];
@@ -902,11 +829,11 @@ static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
                 char *nl = strchr(buf, '\n');
                 if (nl) *nl = '\0';
                 break;
-            } // if
-        } // if
-    } // while
+            }
+        }
+    }
     fclose(io);
-} // describeHostMapping
+}
 
 static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
 {
@@ -921,7 +848,7 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
         const int slot = (int) (addr - tlspage);
         if (slot < 32)
             handleThreadLocalStorageAccess(slot, uctx);
-    } // if
+    }
 
     static int faults = 0;
     faults++;
@@ -936,13 +863,13 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
                 describeHostMapping(eip, line, sizeof (line));
                 snprintf(eipmod, sizeof (eipmod), "%s",
                          *line ? line : "unmapped");
-            } // if
+            }
             if (!*addrmod) {
                 char line[512];
                 describeHostMapping(addr, line, sizeof (line));
                 snprintf(addrmod, sizeof (addrmod), "%s",
                          *line ? line : "unmapped");
-            } // if
+            }
             fprintf(stderr,
                     "SIGSEGV at %p (%s) eip=%p (%s) eax=%08X ebx=%08X "
                     "ecx=%08X edx=%08X esi=%08X edi=%08X ebp=%08X esp=%08X\n",
@@ -961,7 +888,7 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
                     for (int i = 0; i < 16; i++)
                         fprintf(stderr, " %02X", bytes[i]);
                     fprintf(stderr, "\n");
-                } // if
+                }
             }
             {
                 const uint32 *stack = (const uint32 *) (size_t) gregs[REG_ESP];
@@ -980,17 +907,17 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
                                           mod, sizeof (mod));
                     fprintf(stderr, " [%08X%s%s]", (uint) stack[i],
                             (*mod) ? "=" : "", mod);
-                } // for
+                }
                 fprintf(stderr, "\n");
             }
             break;
-        } // case
+        }
         case 2: write(2, "SIGSEGV, aborting.\n", 19); break;
         default: break;
-    } // switch
+    }
 
-    abort();  // cash out.
-} // segfault_catcher
+    abort();
+}
 
 static int installSignalHandlers(void)
 {
@@ -1003,10 +930,10 @@ static int installSignalHandlers(void)
     if (sigaction(SIGSEGV, &action, &Native->previous_segv) == -1) {
         fprintf(stderr, "Couldn't install SIGSEGV handler! (%s)\n", strerror(errno));
         return 0;
-    } // if
+    }
 
     return 1;
-} // installSignalHandlers
+}
 
 static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_base,
                              uint16_t selector_index, LxExecutionApi16 callback, uint16_t argument_bytes)
@@ -1016,7 +943,7 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_ba
 
 
     /* instructions are in Intel syntax here, not AT&T. */
-    /* USE16 */
+
     *(ptr++) = 0x53;  /* push bx */
     *(ptr++) = 0x51;  /* push cx */
     *(ptr++) = 0x52;  /* push dx */
@@ -1024,41 +951,41 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_ba
     *(ptr++) = 0x57;  /* push di */
     *(ptr++) = 0x55;  /* push bp */
     *(ptr++) = 0x89;  /* mov cx,sp... */
-    *(ptr++) = 0xE1;  /*  ...mov cx,sp */
+    *(ptr++) = 0xE1;
     *(ptr++) = 0x66;  /* jmp dword 0x7788:0x33332222... */
-    *(ptr++) = 0xEA;  /*  ...jmp dword 0x7788:0x33332222 */
+    *(ptr++) = 0xEA;
     const uint32 jmp32addr = (uint32) (ptr + 6);
     memcpy(ptr, &jmp32addr, 4); ptr += 4;
     memcpy(ptr, &Native->original_cs, 2); ptr += 2;
 
-    /* USE32 */
+
     *(ptr++) = 0x66;  /* mov bx,ss... */
-    *(ptr++) = 0x8C;  /*  ...mov bx,ss */
-    *(ptr++) = 0xD3;  /*  ...mov bx,ss */
+    *(ptr++) = 0x8C;
+    *(ptr++) = 0xD3;
     *(ptr++) = 0xC1;  /* shl ebx,byte 0x10... */
-    *(ptr++) = 0xE3;  /*  ...shl ebx,byte 0x10 */
-    *(ptr++) = 0x10;  /*  ...shl ebx,byte 0x10 */
+    *(ptr++) = 0xE3;
+    *(ptr++) = 0x10;
     *(ptr++) = 0x66;  /* mov bx,cx... */
-    *(ptr++) = 0x89;  /*  ...mov bx,cx */
-    *(ptr++) = 0xCB;  /*  ...mov bx,cx */
+    *(ptr++) = 0x89;
+    *(ptr++) = 0xCB;
     *(ptr++) = 0x66;  /* mov ax,ss... */
-    *(ptr++) = 0x8C;  /*  ...mov ax,ss */
-    *(ptr++) = 0xD0;  /*  ...mov ax,ss */
+    *(ptr++) = 0x8C;
+    *(ptr++) = 0xD0;
     *(ptr++) = 0x66;  /* shr ax,byte 0x3... */
-    *(ptr++) = 0xC1;  /*  ...shr ax,byte 0x3 */
-    *(ptr++) = 0xE8;  /*  ...shr ax,byte 0x3 */
-    *(ptr++) = 0x03;  /*  ...shr ax,byte 0x3 */
+    *(ptr++) = 0xC1;
+    *(ptr++) = 0xE8;
+    *(ptr++) = 0x03;
     *(ptr++) = 0xC1;  /* shl eax,byte 0x10... */
-    *(ptr++) = 0xE0;  /*  ...shl eax,byte 0x10 */
-    *(ptr++) = 0x10;  /*  ...shl eax,byte 0x10 */
+    *(ptr++) = 0xE0;
+    *(ptr++) = 0x10;
     *(ptr++) = 0x66;  /* mov ax,cx... */
-    *(ptr++) = 0x89;  /*  ...mov ax,cx */
-    *(ptr++) = 0xC8;  /*  ...mov ax,cx */
+    *(ptr++) = 0x89;
+    *(ptr++) = 0xC8;
     *(ptr++) = 0x66;  /* mov cx,0xabcd... */
-    *(ptr++) = 0xB9;  /*  ...mov cx,0xabcd */
+    *(ptr++) = 0xB9;
     memcpy(ptr, &Native->original_ss, 2); ptr += 2;
     *(ptr++) = 0x8E;  /* mov ss,ecx... */
-    *(ptr++) = 0xD1;  /*  ...mov ss,ecx */
+    *(ptr++) = 0xD1;
     /* Use the per-thread host stack, preserving EAX as the guest argument pointer. */
     *(ptr++) = 0x65;  /* mov edx,gs:[private bridge-stack TLS displacement] */
     *(ptr++) = 0x8B;
@@ -1067,27 +994,26 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_ba
     memcpy(ptr, &hoststack_offset, 4); ptr += 4;
     *(ptr++) = 0x89; *(ptr++) = 0xD4;  /* mov esp,edx */
     *(ptr++) = 0x83;  /* add eax,byte +0x10... */
-    *(ptr++) = 0xC0;  /*  ...add eax,byte +0x10 */
-    *(ptr++) = 0x10;  /*  ...add eax,byte +0x10 */
+    *(ptr++) = 0xC0;
+    *(ptr++) = 0x10;
     *(ptr++) = 0x53;  /* push ebx */
     *(ptr++) = 0x1E;  /* push ds */
     *(ptr++) = 0x06;  /* push es */
     if (Native->original_ss != Native->original_ds) {
         *(ptr++) = 0x66;  /* mov cx,0x8888... */
-        *(ptr++) = 0xB9;  /*  ...mov cx,0x8888 */
+        *(ptr++) = 0xB9;
         memcpy(ptr, &Native->original_ds, 2); ptr += 2;
     }
     *(ptr++) = 0x8E;  /* mov ds,ecx... */
-    *(ptr++) = 0xD9;  /*  ...mov ds,ecx */
+    *(ptr++) = 0xD9;
     if (Native->original_ds != Native->original_es) {
         *(ptr++) = 0x66;  /* mov cx,0x9999... */
-        *(ptr++) = 0xB9;  /*  ...mov cx,0x9999 */
+        *(ptr++) = 0xB9;
         memcpy(ptr, &Native->original_es, 2); ptr += 2;
     }
     *(ptr++) = 0x8E;  /* mov es,ecx... */
-    *(ptr++) = 0xC1;  /*  ...mov es,ecx */
-    /* Preserve the guest continuation independently of the private host stack.
-       Three C arguments plus padding retain the i386 host call alignment. */
+    *(ptr++) = 0xC1;
+    /* Keep guest continuation outside the host stack; padding aligns three C arguments. */
     *ptr++ = 0x83; *ptr++ = 0xec; *ptr++ = 8;
     *ptr++ = 0x8d; *ptr++ = 0x50; *ptr++ = 0xf0; /* lea edx,[eax-16] */
     *ptr++ = 0x52; /* guest stack below the saved USE16 registers */
@@ -1103,21 +1029,21 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_ba
     *(ptr++) = 0x07;  /* pop es */
     *(ptr++) = 0x1F;  /* pop ds */
     *(ptr++) = 0x66;  /* pop bx... */
-    *(ptr++) = 0x5B;  /*  ...pop bx */
+    *(ptr++) = 0x5B;
     *(ptr++) = 0x66;  /* pop cx... */
-    *(ptr++) = 0x59;  /*  ...pop cx */
+    *(ptr++) = 0x59;
     *(ptr++) = 0x66;  /* jmp word 0xaaaa:0xbbbb... */
-    *(ptr++) = 0xEA;  /*  ...jmp word 0xaaaa:0xbbbb */
+    *(ptr++) = 0xEA;
     const uint16 jmp16offset = (uint16) ((((uint32)ptr) - ((uint32)segment_base))+4);
     memcpy(ptr, &jmp16offset, 2); ptr += 2;
     const uint16 jmp16segment = (selector_index << 3) | 7;
     memcpy(ptr, &jmp16segment, 2); ptr += 2;
 
-    /* USE16 */
+
     *(ptr++) = 0x8E;  /* mov ss,cx... */
-    *(ptr++) = 0xD1;  /*  ...mov ss,cx */
+    *(ptr++) = 0xD1;
     *(ptr++) = 0x89;  /* mov sp,bx... */
-    *(ptr++) = 0xDC;  /*  ...mov sp,bx */
+    *(ptr++) = 0xDC;
     *(ptr++) = 0x5D;  /* pop bp */
     *(ptr++) = 0x5F;  /* pop di */
     *(ptr++) = 0x5E;  /* pop si */
@@ -1148,7 +1074,7 @@ static void *prepareThread16(uint32_t entry, uint32_t stack)
     const uint16 code_selector = (selector << 3) | 7;
     const uint32 saved_sp = (uint32) (code + 0x100);
     /* Save the host frame, switch to the guest stack and call its far entry. */
-    *p++ = 0x60;  /* pushad */
+    *p++ = 0x60;
     *p++ = 0x89; *p++ = 0x25; memcpy(p, &saved_sp, 4); p += 4;
     *p++ = 0x66; *p++ = 0xea;
     uint16 off = (uint16) ((p - code) + 4);
@@ -1202,8 +1128,7 @@ static void callback32(uint32_t entry, uint32_t argument)
         ((void (*)(uint32_t)) (uintptr_t) entry)(argument); return;
     }
     void *previous = NativeHostStack;
-    /* Nested USE16 imports get unused private stack below this host frame.
-       The callback itself runs below the suspended guest continuation. */
+    /* Nested imports use host stack space below this frame; callbacks use the suspended guest stack. */
     NativeHostStack = (void *) ((sp - 128) & ~(uintptr_t) 15);
     const uint32_t stack = NativeBridge->guest_stack;
     __asm__ __volatile__(
@@ -1280,8 +1205,7 @@ static int initialize(LxExecution *execution)
         free(Native); Native = NULL; execution->backend = NULL;
         return lx_execution_fail(execution, "Native descriptor allocation failed");
     }
-    /* Kernels built without X86_16BIT reject legacy descriptors even when
-       their i386 compatibility process support is enabled. Probe before use. */
+    /* Probe USE16 descriptors because i386 compatibility alone does not enable them. */
     if (nativeLdt(LX_MAX_LDT_SLOTS - 2, 0x10000, 15, 1, 16, 1) != 0) {
         char message[256];
         snprintf(message, sizeof message, "Native 16-bit descriptor support unavailable: %s", strerror(errno));
@@ -1343,8 +1267,8 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
     memcpy(p, &callback, 4); p += 4;
     *p++ = 0xff; *p++ = 0xd0; /* call host ABI bridge */
     if (eax_argument) { *p++ = 0x89; *p++ = 0x45; *p++ = 32; } /* saved EAX result */
-    *p++ = 0xc9; /* leave */
-    if (eax_argument) *p++ = 0x61; /* popad */
+    *p++ = 0xc9;
+    if (eax_argument) *p++ = 0x61;
     if (binding->callee_pop) {
         *p++ = 0xc2; memcpy(p, &binding->callee_pop, 2); p += 2;
     } else *p++ = 0xc3;

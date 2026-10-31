@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Child lifecycle and status normalization; no OS/2 data layouts cross here. */
 #define _GNU_SOURCE 1
 #define _POSIX_C_SOURCE 200809L

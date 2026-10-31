@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host filesystem objects and normalized results. No guest ABI appears here. */
 #ifndef TWOINE_HOST_FS_H
 #define TWOINE_HOST_FS_H

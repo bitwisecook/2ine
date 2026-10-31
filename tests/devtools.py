@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Public domain. No rights reserved.
+# Wholly AI-authored.
 """Run configured OS/2 build pipelines with separately supplied historical tools.
 
 Every fixture is required. Work directories must be new, so stale outputs cannot
@@ -83,14 +85,14 @@ class Suite:
                         LD_LIBRARY_PATH=str(self.build))
         source = Path(__file__).resolve().parents[1]
         inventory = [p for p in source.iterdir() if p.is_file() and p.name != '.git']
-        for directory in ['runtime', 'native', 'guest', 'tests', '.github']:
+        for directory in ['runtime', 'emulator', 'native', 'guest', 'tests', '.github']:
             inventory.extend(p for p in (source / directory).rglob('*') if p.is_file() and '__pycache__' not in p.parts)
         source_hashes = {str(p.relative_to(source)): digest(p) for p in inventory}
         try:
             base = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=source, text=True, stderr=subprocess.DEVNULL).strip()
         except (subprocess.CalledProcessError, OSError):
             base = None
-        self.record = dict(source_base=base, source_sha256=source_hashes,
+        self.record = dict(_notice='Public domain. No rights reserved. Wholly AI-authored.', source_base=base, source_sha256=source_hashes,
             observed_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             platform=platform.platform(), machine=platform.machine(), backend=args.backend,
             runner=str(self.build / 'lx_loader'), runner_sha256=digest(self.build / 'lx_loader'),
@@ -148,8 +150,7 @@ class Suite:
             self.run(work, ['cl.exe', *flags, name + '.c'], env)
             self.artifact(work / (name + '.obj')); self.artifact(work / (name + '.exe'), target)
             if target == 'NE': self.run(work, [name + '.exe'], contains='hello from portable msc')
-        # Exercise the legacy directory-ID table, including reuse and exhaustion
-        # of the old ten-entry implementation, through real generated API glue.
+        # Exercise more than ten live search IDs and reuse through USE16 glue.
         (work / 'dirs.c').write_text('extern unsigned far pascal DosFindFirst(char far *, short far *, unsigned, void far *, unsigned, unsigned far *, unsigned long);\nextern unsigned far pascal DosFindClose(unsigned);\nint main(void) {\n    short handles[12]; unsigned count; int i; char buffer[300];\n    for (i = 0; i < 12; i++) {\n        handles[i] = -1; count = 1;\n        if (DosFindFirst("*.c", &handles[i], 0, buffer, sizeof buffer, &count, 0L)) return 10+i;\n    }\n    count = 1;\n    if (DosFindFirst("*.c", &handles[0], 0, buffer, sizeof buffer, &count, 0L)) return 30;\n    for (i = 0; i < 12; i++) if (DosFindClose(handles[i])) return 40+i;\n    if (!DosFindClose(handles[0])) return 60;\n    return 0;\n}\n')
         self.run(work, ['cl.exe', '/Lp', 'dirs.c'], env)
         self.artifact(work / 'dirs.obj'); self.artifact(work / 'dirs.exe', 'NE')

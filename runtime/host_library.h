@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host dynamic libraries. These are host API modules, never guest DLL images. */
 #ifndef TWOINE_HOST_LIBRARY_H
 #define TWOINE_HOST_LIBRARY_H

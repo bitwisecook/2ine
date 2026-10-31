@@ -48,6 +48,3 @@ OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PCHAR title) OS2APIINFO(ord=5,name=D
 #endif
 
 #endif
-
-// end of sesmgr.h ...
-

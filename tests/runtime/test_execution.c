@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 #define _POSIX_C_SOURCE 200809L
 /* Process-level invocation contracts for native and emulated execution. */
 #include "execution.h"

@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Unicorn adapter. Public runtime interfaces contain no Unicorn types. */
 #include "cpu_internal.h"
 #include <unicorn/unicorn.h>

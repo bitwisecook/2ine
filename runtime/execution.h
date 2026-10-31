@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Process-level guest execution. No loader objects or host OS types cross this interface. */
 #ifndef TWOINE_EXECUTION_H
 #define TWOINE_EXECUTION_H
@@ -7,6 +8,8 @@
 
 typedef struct LxExecution LxExecution;
 typedef struct LxGuestMapping LxGuestMapping;
+/* Packed far pointer: [31..16 selector | 15..0 offset].
+   The selector resolves through the backend; it is never a host pointer. */
 typedef uint32_t (*LxExecutionApi16)(uint8_t *arguments);
 typedef enum LxExecutionAbi32 { LX_ABI_STACK32 = 1, LX_ABI_EAX32 = 2 } LxExecutionAbi32;
 typedef struct LxExecutionApi32 {
@@ -108,7 +111,7 @@ void lx_execution_destroy_thread16(LxExecution *execution, void *invocation);
 void *lx_execution_prepare_thread32(LxExecution *execution, uint32_t entry, uint32_t stack, uint32_t argument);
 void lx_execution_thread32(LxExecution *execution, void *invocation);
 void lx_execution_destroy_thread32(LxExecution *execution, void *invocation);
-/* Ends the current managed guest thread. Returns zero outside such an entry. */
+
 int lx_execution_end_thread(LxExecution *execution);
 void lx_execution_callback32(LxExecution *execution, uint32_t entry, uint32_t argument);
 uint16_t lx_execution_attach_tib(LxExecution *execution, uint8_t *tib);

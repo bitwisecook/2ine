@@ -6,8 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 
-/* lib2ine is support code and data that is common between various native
-   reimplementations of the OS/2 API, and the OS/2 binary loader. */
+/* Shared loader state and host implementations of OS/2 APIs. */
 
 #ifndef _INCL_LIB2INE_H_
 #define _INCL_LIB2INE_H_ 1
@@ -219,7 +218,7 @@ struct LxModule
         NeHeader ne;
     } header;
 
-    char name[256];  // !!! FIXME: allocate this.
+    char name[256];
 
     LxModule **dependencies;
     uint32 num_dependencies;
@@ -234,11 +233,10 @@ struct LxModule
     uint32 esp;
     uint16 autodatasize;  // only used for NE binaries.
     int initialized;
-    char *os2path;  // absolute path to module, in OS/2 format
-    // !!! FIXME: put this elsewhere?
+    char *os2path;
     uint32 signal_exception_focus_count;
-    LxModule *prev;  // all loaded modules are in a doubly-linked list.
-    LxModule *next;  // all loaded modules are in a doubly-linked list.
+    LxModule *prev;
+    LxModule *next;
 };
 
 #pragma pack(push, 1)
@@ -274,7 +272,7 @@ typedef struct LxPIB
 
 #pragma pack(pop)
 
-// We put the 128 bytes of TLS slots (etc) after the TIB structs.
+/* Each TIB/TIB2 pair is followed by 32 guest TLS words. */
 typedef struct LxPostTIB
 {
     uint32 tls[32];
@@ -288,11 +286,7 @@ typedef struct LxHostThreadState {
 } LxHostThreadState;
 LxHostThreadState *lxHostThreadState(void);
 
-// There are a few things that need access to the sound hardware:
-//  DosBeep(), MMOS/2, DART, basic system sounds, etc. We unify all this
-//  into a single SDL audio device open where possible, so that we don't
-//  have to deal with multiple devices, but that means it has to move into
-//  lib2ine so multiple libraries can access it.
+/* OS/2 audio services share one SDL device across API modules. */
 typedef int (*LxAudioGeneratorFn)(void *data, float *stream, int len, int freq);
 
 #define LXTIBSIZE (sizeof (LxTIB) + sizeof (LxTIB2) + sizeof (LxPostTIB))
@@ -349,13 +343,10 @@ typedef struct LxLoaderState
 typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);
 typedef void (*LxNativeModuleDeinitEntryPoint)(void);
 
-// !!! FIXME: need to change this symbol name.
+
 extern __attribute__((visibility("default"))) LxLoaderState GLoaderState;
 
 #define LX_NATIVE_CONSTRUCTOR(modname) void __attribute__((constructor)) lxNativeConstructor_##modname(void)
 #define LX_NATIVE_DESTRUCTOR(modname) void __attribute__((destructor)) lxNativeDestructor_##modname(void)
 
 #endif
-
-// end of lib2ine.h ...
-

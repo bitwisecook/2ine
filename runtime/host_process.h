@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host child processes. Guest command syntax and result codes belong above. */
 #ifndef TWOINE_HOST_PROCESS_H
 #define TWOINE_HOST_PROCESS_H

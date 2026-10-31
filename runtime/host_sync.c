@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Synchronization adapters for host mutexes and monotonic wait deadlines. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1

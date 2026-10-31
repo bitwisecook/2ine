@@ -65,16 +65,15 @@ APIRET16 Dos16PutMessage(USHORT handle, USHORT size, PCHAR message)
 static uint16 readLE16(const uint8 *ptr)
 {
     return (uint16) (ptr[0] | (ptr[1] << 8));
-} // readLE16
+}
 
 static uint32 readLE32(const uint8 *ptr)
 {
     return (uint32) ptr[0] | ((uint32) ptr[1] << 8) |
            ((uint32) ptr[2] << 16) | ((uint32) ptr[3] << 24);
-} // readLE32
+}
 
-// Open an OS/2 message file through the same drive mapping the rest of the
-//  shim uses. Returns NULL if it can't be opened or isn't a message file.
+/* Use guest drive mappings for message files. */
 static uint8 *loadMessageFile(const char *filename, size_t *outlen)
 {
     uint32 err = 0;
@@ -92,14 +91,13 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
                strlen(MSGFILE_SIGNATURE)) != 0) {
         free(data);
         return NULL;
-    } // if
+    }
 
     *outlen = (size_t) len;
     return data;
-} // loadMessageFile
+}
 
-// Locate message `msgnum` in a loaded message file. Returns a pointer and
-//  length inside `data`, or NULL if the number is not present.
+/* Return a span into the file buffer; records are not NUL-terminated. */
 static const uint8 *findMessage(const uint8 *data, const size_t datalen,
                                 const uint32 msgnum, size_t *outlen)
 {
@@ -131,18 +129,16 @@ static const uint8 *findMessage(const uint8 *data, const size_t datalen,
         end = (uint32) datalen;  // last message runs to the end of the file.
         while ((end > start) && (data[end - 1] == '\0'))
             end--;
-    } // else
+    }
 
     if ((start > datalen) || (end > datalen) || (end < start))
         return NULL;
 
     *outlen = (size_t) (end - start);
     return data + start;
-} // findMessage
+}
 
-// Expand "%1".."%9" using the caller's substitution table. pTable entries
-//  are flat 32-bit pointers for the Dos32 entry points; the 16-bit entry
-//  point converts them before calling here.
+/* Expand bare %1..%9 substitutions using the caller's pointer table. */
 static APIRET formatMessage(const uint8 *msg, const size_t msglen,
                             PCHAR *pTable, const ULONG cTable,
                             PCHAR pBuf, const ULONG cbBuf, PULONG pcbMsg)
@@ -174,7 +170,7 @@ static APIRET formatMessage(const uint8 *msg, const size_t msglen,
                     return ERROR_MR_MSG_TOO_LONG;
                 pBuf[out++] = outch;
                 continue;
-            } // if
+            }
         } else if ((ch == '%') && ((i + 1) < msglen) &&
                    (msg[i + 1] >= '1') && (msg[i + 1] <= '9')) {
             const ULONG arg = (ULONG) (msg[i + 1] - '1');
@@ -188,20 +184,20 @@ static APIRET formatMessage(const uint8 *msg, const size_t msglen,
                     if (out >= cbBuf)
                         return ERROR_MR_MSG_TOO_LONG;
                     pBuf[out++] = *(sub++);
-                } // while
+                }
                 continue;
-            } // if
-        } // else if
+            }
+        }
 
         if (out >= cbBuf)
             return ERROR_MR_MSG_TOO_LONG;
         pBuf[out++] = ch;
-    } // for
+    }
 
     if (pcbMsg)
         *pcbMsg = out;
     return NO_ERROR;
-} // formatMessage
+}
 
 APIRET lx_message_get(PVOID msgseg, PVOID pTable, ULONG cTable, PCHAR pData,
                          ULONG cbBuf, ULONG msgnum, PCHAR pFilename, PULONG pcbMsg)
@@ -221,13 +217,13 @@ APIRET lx_message_get(PVOID msgseg, PVOID pTable, ULONG cTable, PCHAR pData,
     if (!msg) {
         free(data);
         return ERROR_MR_MID_NOT_FOUND;
-    } // if
+    }
 
     const APIRET rc = formatMessage(msg, msglen, (PCHAR *) pTable, cTable,
                                     pData, cbBuf, pcbMsg);
     free(data);
     return rc;
-} // DosTrueGetMessage
+}
 
 APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cbBuf, USHORT msgnum, PCHAR pFilename, PUSHORT pcbMsg, PVOID msgseg)
 {
@@ -246,7 +242,7 @@ APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cb
     if (!msg) {
         free(data);
         return ERROR_MR_MID_NOT_FOUND;
-    } // if
+    }
 
     // The 16-bit caller's substitution table entries are 16:16 pointers.
     PCHAR flatTable[9] = {0};
@@ -269,6 +265,4 @@ APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cb
     for (uint16 i = 0; i < ntable; i++) lx_guest_argument_finish(&substitutions[i], 0);
     free(data);
     return rc;
-} // Dos16TrueGetMessage
-
-// end of msg.c ...
+}

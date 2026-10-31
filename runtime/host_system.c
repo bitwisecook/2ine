@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host physical-memory queries; guest policy and size limits are applied above. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1

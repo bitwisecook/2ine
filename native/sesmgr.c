@@ -16,13 +16,10 @@ APIRET DosStartSession(PSTARTDATA psd, PULONG pidSession, PPID ppid)
     TRACE_NATIVE("DosStartSession(%p, %p, %p)", psd, pidSession, ppid);
 printf("'%s', '%s', '%s'\n", psd->PgmTitle, psd->PgmName, psd->IconFile);
     return ERROR_NOT_ENOUGH_MEMORY;
-} // DosStartSession
+}
 
 APIRET16 Dos16SMSetTitle(PCHAR title)
 {
     TRACE_NATIVE("Dos16SMSetTitle(%p)", title);
     return NO_ERROR;
-}	
-
-// end of sesmgr.c ...
-
+}

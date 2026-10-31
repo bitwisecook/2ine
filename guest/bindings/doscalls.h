@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* DOSCALLS flat 32-bit ABI. Host pointer outputs use private temporary storage. */
 static uint32 bridge32_DosAllocMem(uint8 *arguments)
 {

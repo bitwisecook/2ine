@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# Public domain. No rights reserved.
+# Wholly AI-authored.
 """Check the source separation between guest semantics, execution and host APIs."""
 from pathlib import Path
 import re
@@ -17,9 +19,9 @@ def check(path, patterns):
 
 platform = [r'#\s*include\s*[<"](?:sys/|asm/|pthread\.h|windows\.h|unicorn/)',
             r'\b(?:ucontext_t|HANDLE|uc_engine|pthread_\w+)\b']
-for name in ['runtime/cpu.h', 'runtime/execution.h']:
+for name in ['emulator/cpu.h', 'runtime/execution.h']:
     check(root / name, platform)
-for name in ['runtime/execution_native_linux_i386.c', 'runtime/execution_unicorn.c', 'runtime/cpu.c', 'runtime/cpu_unicorn.c']:
+for name in ['native/execution_linux_i386.c', 'emulator/execution_unicorn.c', 'emulator/cpu.c', 'emulator/cpu_unicorn.c']:
     check(root / name, [r'\b(?:GLoaderState|LxModule|LxMmaps)\b'])
 for name in ['lx_loader.c', 'lib2ine.c', 'native/doscalls.c', 'native/msg.c', 'native/nls.c', 'guest/handles.c', 'guest/arguments.c']:
     check(root / name, platform + [r'\b(?:__asm__|syscall|mmap|munmap|mprotect|dlopen|dlsym|dlclose|fork|waitpid)\s*\('])

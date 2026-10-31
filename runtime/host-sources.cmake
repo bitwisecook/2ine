@@ -1,3 +1,5 @@
+# Public domain. No rights reserved.
+# Wholly AI-authored.
 # Host services shared by the native worker and the portable execution library.
 if(NOT UNIX)
     message(FATAL_ERROR "The complete host service set currently builds on Linux/macOS; Windows has no filesystem adapter.")

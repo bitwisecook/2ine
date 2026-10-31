@@ -18,7 +18,7 @@ APIRET16 KbdCharIn(PKBDKEYINFO pkbci, USHORT fWait, HKBD hkbd)
     memset(pkbci, '\0', sizeof (*pkbci));
     pkbci->chChar = getchar();
     return NO_ERROR;
-} // kbdCharIn
+}
 
 APIRET16 KbdGetStatus(PKBDKEYINFO pkbci, HKBD hkbd)
 {
@@ -53,6 +53,3 @@ APIRET16 KbdStringIn(PCHAR pch, PSTRINGINBUF pchin, USHORT flag, HKBD hkbd)
     if (pchin) pchin->cchIn = count;
     return NO_ERROR;
 }
-
-// end of kbdcalls.c ...
-

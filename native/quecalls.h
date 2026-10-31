@@ -44,6 +44,3 @@ OS2EXPORT APIRET OS2API DosWriteQueue(HQUEUE hq, ULONG request, ULONG cbData, PV
 #endif
 
 #endif
-
-// end of quecalls.h ...
-

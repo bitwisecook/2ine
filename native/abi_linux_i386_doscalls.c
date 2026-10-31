@@ -1,33 +1,31 @@
+/* Derived from original 2ine; zlib-style license. See ../LICENSE.txt. */
 /* Register argument entries for the Linux i386 worker. */
-// DosFlatToSel() passes its argument in %eax, so a little asm to bridge that...
-// Note that this isn't syscall calling conventions at all; CSet/2 generates
-//  thunking code that expects this function to preserve %ecx, so we'll just
-//  go ahead and save a bunch of stuff, just in case.
+/* CSet/2 passes EAX and requires ECX preservation across the host call. */
 __asm__ (
     ".hidden _DosFlatToSel\n.hidden _DosSelToFlat\n"
     ".globl DosFlatToSel  \n\t"
     ".type	DosFlatToSel, @function \n\t"
     "DosFlatToSel:  \n\t"
-    "    pushl %ebx  \n\t"  // save off a bunch of stuff. Better safe than sorry.
+    "    pushl %ebx  \n\t"
     "    pushl %ecx  \n\t"
     "    pushl %edx  \n\t"
     "    pushl %edi  \n\t"
     "    pushl %esi  \n\t"
-    "    pushl %eax  \n\t"  // the actual argument to DosFlatToSel.
+    "    pushl %eax  \n\t"
     "    call _DosFlatToSel  \n\t"
-    "    addl $4, %esp  \n\t"  // clear argument to DosFlatToSel.
+    "    addl $4, %esp  \n\t"
     "    popl %esi  \n\t"
     "    popl %edi  \n\t"
-    "    popl %edx  \n\t"  // save off a bunch of stuff.
+    "    popl %edx  \n\t"
     "    popl %ecx  \n\t"
     "    popl %ebx  \n\t"
     "    ret  \n\t"
 	".size	DosFlatToSel, .-DosFlatToSel  \n\t"
 );
 
-// DosSelToFlat() passes its argument in %eax, so a little asm to bridge that...
+/* The selector argument arrives in EAX. */
 __asm__ (
-    // !!! FIXME: this needs to protect more registers.
+
     ".hidden _DosFlatToSel\n.hidden _DosSelToFlat\n"
     ".globl DosSelToFlat  \n\t"
     ".type	DosSelToFlat, @function \n\t"

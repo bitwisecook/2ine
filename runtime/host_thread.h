@@ -1,3 +1,4 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host thread lifetime. Guest thread IDs and guest stacks are separate objects. */
 #ifndef TWOINE_HOST_THREAD_H
 #define TWOINE_HOST_THREAD_H

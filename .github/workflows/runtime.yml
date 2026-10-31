@@ -1,3 +1,5 @@
+# Public domain. No rights reserved.
+# Wholly AI-authored.
 name: Portable CPU runtime
 on: [push, pull_request, workflow_dispatch]
 jobs:

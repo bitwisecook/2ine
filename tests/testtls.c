@@ -12,12 +12,10 @@ static void APIENTRY threadFunc(ULONG arg)
     const unsigned int t = (unsigned int) arg;
     DosSleep(t == 1 ? 500 : 1000);
     *GAddr = t * 100;
-    //printf("thread %u set TLS value to %u\n", t, t * 100);
-    //fflush(stdout);
+
     DosSleep(t == 1 ? 1000 : 50);
     x = *GAddr;
-    //printf("thread %u sees TLS value of %u\n", t, (unsigned int) *GAddr);
-    //fflush(stdout);
+
 }
 
 int main(void)
@@ -51,4 +49,3 @@ int main(void)
 
     return 0;
 }
-
