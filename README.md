@@ -33,3 +33,5 @@ Raise an issue on GH or find a way to contact me.
 
 [Build](docs/build.md) · [Architecture](docs/architecture.md) ·
 [Tools](docs/tools.md) · [Tests](docs/testing.md) · [Licensing](docs/licensing.md)
+
+[C/H formatting](docs/formatting.md)

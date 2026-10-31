@@ -4,12 +4,20 @@
 #define TWOINE_HOST_SYNC_H
 #include <stdint.h>
 typedef struct LxHostMutex LxHostMutex;
-typedef struct LxHostOnce { uint32_t state; } LxHostOnce;
+typedef struct LxHostOnce
+{
+    uint32_t state;
+} LxHostOnce;
 #define LX_HOST_ONCE_INIT {0}
 void lx_host_once(LxHostOnce *once, void (*initialize)(void));
-typedef enum LxHostLockResult {
-    LX_HOST_LOCK_OK, LX_HOST_LOCK_BUSY, LX_HOST_LOCK_TIMEOUT,
-    LX_HOST_LOCK_OWNER_DIED, LX_HOST_LOCK_NOT_OWNER, LX_HOST_LOCK_FAILED
+typedef enum LxHostLockResult
+{
+    LX_HOST_LOCK_OK,
+    LX_HOST_LOCK_BUSY,
+    LX_HOST_LOCK_TIMEOUT,
+    LX_HOST_LOCK_OWNER_DIED,
+    LX_HOST_LOCK_NOT_OWNER,
+    LX_HOST_LOCK_FAILED
 } LxHostLockResult;
 LxHostMutex *lx_host_mutex_create(int recursive, int owned);
 /* UINT32_MAX waits indefinitely; zero never waits. */

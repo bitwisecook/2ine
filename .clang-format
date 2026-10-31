@@ -1,0 +1,28 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+BasedOnStyle: LLVM
+Language: Cpp
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+BreakBeforeBraces: Allman
+PointerAlignment: Right
+DerivePointerAlignment: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+IndentCaseLabels: true
+SortIncludes: Never
+IncludeBlocks: Preserve
+ReflowComments: Never
+BreakStringLiterals: false
+InsertBraces: false
+RemoveBracesLLVM: false
+QualifierAlignment: Leave
+WhitespaceSensitiveMacros:
+  - LX_NATIVE_MODULE_INIT
+  - LX_NATIVE_MODULE_DEINIT
+StatementMacros:
+  - X

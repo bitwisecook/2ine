@@ -135,22 +135,29 @@ def read_policies32(path: Path) -> Policies32:
 
 def parse_functions(text: str) -> list[Function]:
     functions: dict[int, Function] = {}
-    for line in text.splitlines():
+    # Export prototypes may wrap across lines and contain parameter comments.
+    text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", text, flags=re.S)
+    for declaration in re.split(r"(?<=;)", text):
+        line = " ".join(declaration.split())
         if "OS2APIINFO" not in line:
             continue
-        match = re.match(
-            r"OS2EXPORT\s+(.*?)\s+(OS2API|OS2API16)\s+(.*?)\s*\((.*?)\)\s+OS2APIINFO\((.*?)\);",
+        start = line.find("OS2EXPORT")
+        if start >= 0:
+            line = line[start:]
+        match = re.fullmatch(
+            r"OS2EXPORT\s+(.+?)\s*(OS2API|OS2API16)\s+(.*?)\s*\((.*?)\)\s+OS2APIINFO\((.*?)\);",
             line,
         )
         if match is None:
             raise ValueError(f"could not parse export: {line}")
-        result, api, name, parameters, info = match.groups()
+        result, api, name, parameters, info = (value.strip() for value in match.groups())
         options: dict[str, str] = {}
         if info.isdecimal():
             options["ord"] = info
         else:
             for option in info.split(","):
                 key, value = option.split("=", 1)
+                key, value = key.strip(), value.strip()
                 if key not in {"ord", "name"}:
                     raise ValueError(f"{name}: unknown OS2APIINFO key {key!r}")
                 options[key] = value

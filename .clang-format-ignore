@@ -1,0 +1,11 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+# Export glue is formatted by its generator; keep regeneration independent.
+os2libs/*-lx.h
+**/generated/**
+# Reference experiments and dependency sources retain their own formatting.
+research/**
+third_party/**
+_deps/**
+build/**
+build-*/**
+cmake-*/**

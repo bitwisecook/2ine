@@ -37,12 +37,16 @@ typedef int64_t sint64;
 typedef unsigned int uint;
 
 #ifndef _STUBBED
-    #define _STUBBED(x, what) do { \
-        static int seen_this = 0; \
-        if (!seen_this) { \
-            seen_this = 1; \
-            fprintf(stderr, "2INE " what ": %s at %s (%s:%d)\n", x, __FUNCTION__, __FILE__, __LINE__); \
-        } \
+#define _STUBBED(x, what)                                                                          \
+    do                                                                                             \
+    {                                                                                              \
+        static int seen_this = 0;                                                                  \
+        if (!seen_this)                                                                            \
+        {                                                                                          \
+            seen_this = 1;                                                                         \
+            fprintf(stderr, "2INE " what ": %s at %s (%s:%d)\n", x, __FUNCTION__, __FILE__,        \
+                    __LINE__);                                                                     \
+        }                                                                                          \
     } while (0)
 #endif
 
@@ -56,10 +60,16 @@ typedef unsigned int uint;
 #endif
 
 #ifndef STUBBED
-    #define STUBBED(x) do {} while (0)
+#define STUBBED(x)                                                                                 \
+    do                                                                                             \
+    {                                                                                              \
+    } while (0)
 #endif
 #ifndef FIXME
-    #define FIXME(x) do {} while (0)
+#define FIXME(x)                                                                                   \
+    do                                                                                             \
+    {                                                                                              \
+    } while (0)
 #endif
 
 #pragma pack(push, 1)
@@ -184,7 +194,6 @@ typedef struct NeSegmentTableEntry
 
 #pragma pack(pop)
 
-
 typedef struct LxMmaps
 {
     LxGuestMapping *mapping;
@@ -193,13 +202,13 @@ typedef struct LxMmaps
     void *addr;
     size_t size;
     int prot;
-    uint16 alias;  // 16:16 alias, if one.
+    uint16 alias; // 16:16 alias, if one.
 } LxMmaps;
 
 typedef struct LxExport
 {
     uint32 ordinal;
-    const char *name;  // can be NULL
+    const char *name; // can be NULL
     void *addr;
     const LxMmaps *object;
     int indirect;
@@ -211,7 +220,7 @@ struct LxModule
 {
     uint32 refcount;
     uint32 handle;
-    int is_lx;  // 1 if an LX module, 0 if NE.
+    int is_lx; // 1 if an LX module, 0 if NE.
     union
     {
         LxHeader lx;
@@ -231,7 +240,7 @@ struct LxModule
     LxHostLibrary *nativelib;
     uint32 eip;
     uint32 esp;
-    uint16 autodatasize;  // only used for NE binaries.
+    uint16 autodatasize; // only used for NE binaries.
     int initialized;
     char *os2path;
     uint32 signal_exception_focus_count;
@@ -280,7 +289,8 @@ typedef struct LxPostTIB
 } LxPostTIB;
 
 /* Host-only thread metadata. Never serialized into an OS/2 TIB or TLS area. */
-typedef struct LxHostThreadState {
+typedef struct LxHostThreadState
+{
     void *anchor_block;
     LxGuestMapping *tib_mapping;
 } LxHostThreadState;
@@ -289,7 +299,7 @@ LxHostThreadState *lxHostThreadState(void);
 /* OS/2 audio services share one SDL device across API modules. */
 typedef int (*LxAudioGeneratorFn)(void *data, float *stream, int len, int freq);
 
-#define LXTIBSIZE (sizeof (LxTIB) + sizeof (LxTIB2) + sizeof (LxPostTIB))
+#define LXTIBSIZE (sizeof(LxTIB) + sizeof(LxTIB2) + sizeof(LxPostTIB))
 
 #define LX_MAX_LDT_SLOTS 8192
 
@@ -307,18 +317,19 @@ typedef struct LxLoaderState
     int running;
     int trace_native;
     int trace_events;
-    char *disks[26];  // mount points, A: through Z: ... NULL if unmounted.
-    char *current_dir[26];  // current directory, per-disk, A: through Z: ... NULL if unmounted.
-    int current_disk;  // 1==A:\\, 2==B:\\, etc.
-    uint32 diskmap;  // 1<<0==drive A mounted, 1<<1==drive B mounted, etc.
+    char *disks[26];       // mount points, A: through Z: ... NULL if unmounted.
+    char *current_dir[26]; // current directory, per-disk, A: through Z: ... NULL if unmounted.
+    int current_disk;      // 1==A:\\, 2==B:\\, etc.
+    uint32 diskmap;        // 1<<0==drive A mounted, 1<<1==drive B mounted, etc.
     float beep_volume;
     uint16 main_tib_selector;
     uint32 mainstacksize;
     char *libpath;
     uint32 libpathlen;
     uint32 *tlspage;
-    uint32 tlsmask;  // one bit for each TLS slot in use.
-    uint8 tlsallocs[32];  // number of TLS slots allocated in one block, indexed by starting block (zero if not the starting block).
+    uint32 tlsmask; // one bit for each TLS slot in use.
+    uint8 tlsallocs
+        [32]; // number of TLS slots allocated in one block, indexed by starting block (zero if not the starting block).
     void (*dosExit)(uint32 action, uint32 result);
     uint32 (*writeFile)(uint32 handle, void *buffer, uint32 size, uint32 *actual);
     void (*initOs2Tib)(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid);
@@ -343,10 +354,11 @@ typedef struct LxLoaderState
 typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);
 typedef void (*LxNativeModuleDeinitEntryPoint)(void);
 
-
 extern __attribute__((visibility("default"))) LxLoaderState GLoaderState;
 
-#define LX_NATIVE_CONSTRUCTOR(modname) void __attribute__((constructor)) lxNativeConstructor_##modname(void)
-#define LX_NATIVE_DESTRUCTOR(modname) void __attribute__((destructor)) lxNativeDestructor_##modname(void)
+#define LX_NATIVE_CONSTRUCTOR(modname)                                                             \
+    void __attribute__((constructor)) lxNativeConstructor_##modname(void)
+#define LX_NATIVE_DESTRUCTOR(modname)                                                              \
+    void __attribute__((destructor)) lxNativeDestructor_##modname(void)
 
 #endif

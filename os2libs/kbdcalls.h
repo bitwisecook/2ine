@@ -12,31 +12,36 @@
 #include "os2types.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #pragma pack(push, 2)
-typedef struct
-{
-    UCHAR chChar;
-    UCHAR chScan;
-    UCHAR fbStatus;
-    UCHAR bNlsShift;
-    USHORT fsState;
-    ULONG time;
-} KBDKEYINFO, *PKBDKEYINFO;
+    typedef struct
+    {
+        UCHAR chChar;
+        UCHAR chScan;
+        UCHAR fbStatus;
+        UCHAR bNlsShift;
+        USHORT fsState;
+        ULONG time;
+    } KBDKEYINFO, *PKBDKEYINFO;
 
-typedef struct
-{
-    USHORT cb;
-    USHORT cchIn;
-} STRINGINBUF, *PSTRINGINBUF;
+    typedef struct
+    {
+        USHORT cb;
+        USHORT cchIn;
+    } STRINGINBUF, *PSTRINGINBUF;
 #pragma pack(pop)
 
-OS2EXPORT APIRET16 OS2API16 KbdCharIn(PKBDKEYINFO pkbci, USHORT fWait, HKBD hkbd) OS2APIINFO(ord=4,name=KBDCHARIN);
-OS2EXPORT APIRET16 OS2API16 KbdStringIn(PCHAR pch, PSTRINGINBUF pchin, USHORT flag, HKBD hkbd) OS2APIINFO(ord=9,name=KBDSTRINGIN);
-OS2EXPORT APIRET16 OS2API16 KbdGetStatus(PKBDKEYINFO pkbci, HKBD hkbd) OS2APIINFO(ord=10,name=KBDGETSTATUS);
-OS2EXPORT APIRET16 OS2API16 KbdSetStatus(PKBDKEYINFO pkbci, HKBD hkbd) OS2APIINFO(ord=11,name=KBDSETSTATUS);
+    OS2EXPORT APIRET16 OS2API16 KbdCharIn(PKBDKEYINFO pkbci, USHORT fWait, HKBD hkbd)
+        OS2APIINFO(ord = 4, name = KBDCHARIN);
+    OS2EXPORT APIRET16 OS2API16 KbdStringIn(PCHAR pch, PSTRINGINBUF pchin, USHORT flag, HKBD hkbd)
+        OS2APIINFO(ord = 9, name = KBDSTRINGIN);
+    OS2EXPORT APIRET16 OS2API16 KbdGetStatus(PKBDKEYINFO pkbci, HKBD hkbd)
+        OS2APIINFO(ord = 10, name = KBDGETSTATUS);
+    OS2EXPORT APIRET16 OS2API16 KbdSetStatus(PKBDKEYINFO pkbci, HKBD hkbd)
+        OS2APIINFO(ord = 11, name = KBDSETSTATUS);
 
 #ifdef __cplusplus
 }

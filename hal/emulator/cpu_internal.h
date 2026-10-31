@@ -3,7 +3,8 @@
 #define TWOINE_CPU_INTERNAL_H
 #include "cpu.h"
 
-typedef struct LxCpuOperations {
+typedef struct LxCpuOperations
+{
     const char *name;
     int (*open)(LxCpu *cpu);
     void (*close)(LxCpu *cpu);
@@ -20,7 +21,8 @@ typedef struct LxCpuOperations {
     void (*free_context)(void *context);
 } LxCpuOperations;
 
-typedef struct LxMemoryRegion {
+typedef struct LxMemoryRegion
+{
     uint32_t address;
     size_t size;
     unsigned permissions;
@@ -29,12 +31,14 @@ typedef struct LxMemoryRegion {
     struct LxMemoryRegion *next;
 } LxMemoryRegion;
 
-typedef struct LxCpuSegment {
+typedef struct LxCpuSegment
+{
     LxSegment definition;
     struct LxCpuSegment *next;
 } LxCpuSegment;
 
-struct LxCpu {
+struct LxCpu
+{
     const LxCpuOperations *ops;
     void *backend;
     LxMemoryRegion *memory;

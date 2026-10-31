@@ -12,14 +12,19 @@
 #include "os2types.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-OS2EXPORT APIRET16 OS2API16 Dos16PutMessage(USHORT hfile, USHORT cbMsg, PCHAR pBuf) OS2APIINFO(ord=1,name=DOSPUTMESSAGE);
-OS2EXPORT APIRET16 OS2API16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cbBuf, USHORT msgnum, PCHAR pFilename, PUSHORT pcbMsg, PVOID msgseg) OS2APIINFO(ord=2,name=DOSTRUEGETMESSAGE);
-OS2EXPORT APIRET OS2API DosPutMessage(HFILE hfile, ULONG cbMsg, PCHAR pBuf) OS2APIINFO(5);
-/* MSGSEG32 passes a hidden word before seven arguments; the bridge removes only that word with ret 4. */
-OS2EXPORT __attribute__((stdcall)) APIRET OS2API DosTrueGetMessage(PVOID msgseg) OS2APIINFO(6);
+    OS2EXPORT APIRET16 OS2API16 Dos16PutMessage(USHORT hfile, USHORT cbMsg, PCHAR pBuf)
+        OS2APIINFO(ord = 1, name = DOSPUTMESSAGE);
+    OS2EXPORT APIRET16 OS2API16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData,
+                                                    USHORT cbBuf, USHORT msgnum, PCHAR pFilename,
+                                                    PUSHORT pcbMsg, PVOID msgseg)
+        OS2APIINFO(ord = 2, name = DOSTRUEGETMESSAGE);
+    OS2EXPORT APIRET OS2API DosPutMessage(HFILE hfile, ULONG cbMsg, PCHAR pBuf) OS2APIINFO(5);
+    /* MSGSEG32 passes a hidden word before seven arguments; the bridge removes only that word with ret 4. */
+    OS2EXPORT __attribute__((stdcall)) APIRET OS2API DosTrueGetMessage(PVOID msgseg) OS2APIINFO(6);
 
 #ifdef __cplusplus
 }

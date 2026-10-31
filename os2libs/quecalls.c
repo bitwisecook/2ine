@@ -11,7 +11,6 @@
 
 #include "quecalls-lx.h"
 
-
 APIRET DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ pszName)
 {
     TRACE_NATIVE("DosCreateQueue(%p, %u, '%s')", phq, priority, pszName);
@@ -21,7 +20,7 @@ APIRET DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ pszName)
 
 APIRET DosCloseQueue(HQUEUE hq)
 {
-    TRACE_NATIVE("DosCloseQueue(%u)", (uint) hq);
+    TRACE_NATIVE("DosCloseQueue(%u)", (uint)hq);
     FIXME("write me");
     return ERROR_QUE_INVALID_HANDLE;
 }
@@ -33,37 +32,41 @@ APIRET DosOpenQueue(PPID ppid, PHQUEUE phq, PSZ pszName)
     return ERROR_QUE_NO_MEMORY;
 }
 
-APIRET DosPeekQueue(HQUEUE hq, PREQUESTDATA pRequest, PULONG pcbData, PPVOID ppbuf, PULONG element, BOOL32 nowait, PBYTE ppriority, HEV hsem)
+APIRET DosPeekQueue(HQUEUE hq, PREQUESTDATA pRequest, PULONG pcbData, PPVOID ppbuf, PULONG element,
+                    BOOL32 nowait, PBYTE ppriority, HEV hsem)
 {
-    TRACE_NATIVE("DosPeekQueue(%u, %p, %p, %p, %p, %u, %p, %u)", (uint) hq, pRequest, pcbData, ppbuf, element, (uint) nowait, ppriority, (uint) hsem);
+    TRACE_NATIVE("DosPeekQueue(%u, %p, %p, %p, %p, %u, %p, %u)", (uint)hq, pRequest, pcbData, ppbuf,
+                 element, (uint)nowait, ppriority, (uint)hsem);
     FIXME("write me");
     return ERROR_QUE_INVALID_HANDLE;
 }
 
 APIRET DosPurgeQueue(HQUEUE hq)
 {
-    TRACE_NATIVE("DosPurgeQueue(%u)", (uint) hq);
+    TRACE_NATIVE("DosPurgeQueue(%u)", (uint)hq);
     FIXME("write me");
     return ERROR_QUE_INVALID_HANDLE;
 }
 
 APIRET DosQueryQueue(HQUEUE hq, PULONG pcbEntries)
 {
-    TRACE_NATIVE("DosQueryQueue(%u, %p)", (uint) hq, pcbEntries);
+    TRACE_NATIVE("DosQueryQueue(%u, %p)", (uint)hq, pcbEntries);
     FIXME("write me");
     return ERROR_QUE_INVALID_HANDLE;
 }
 
-APIRET DosReadQueue(HQUEUE hq, PREQUESTDATA pRequest, PULONG pcbData, PPVOID ppbuf, ULONG element, BOOL32 wait, PBYTE ppriority, HEV hsem)
+APIRET DosReadQueue(HQUEUE hq, PREQUESTDATA pRequest, PULONG pcbData, PPVOID ppbuf, ULONG element,
+                    BOOL32 wait, PBYTE ppriority, HEV hsem)
 {
-    TRACE_NATIVE("DosReadQueue(%u, %p, %p, %p, %u, %u, %p, %u)", (uint) hq, pRequest, pcbData, ppbuf, (uint) element, (uint) wait, ppriority, (uint) hsem);
+    TRACE_NATIVE("DosReadQueue(%u, %p, %p, %p, %u, %u, %p, %u)", (uint)hq, pRequest, pcbData, ppbuf,
+                 (uint)element, (uint)wait, ppriority, (uint)hsem);
     FIXME("write me");
     return ERROR_QUE_INVALID_HANDLE;
 }
 
 APIRET DosWriteQueue(HQUEUE hq, ULONG request, ULONG cbData, PVOID pbData, ULONG priority)
 {
-    TRACE_NATIVE("DosWriteQueue(%u)", (uint) hq);
+    TRACE_NATIVE("DosWriteQueue(%u)", (uint)hq);
     FIXME("write me");
     return ERROR_QUE_INVALID_HANDLE;
 }

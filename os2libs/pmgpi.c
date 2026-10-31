@@ -13,7 +13,8 @@
 
 BOOL GpiQueryTextBox(HPS hps, LONG lCount1, PCH pchString, LONG lCount2, PPOINTL aptlPoints)
 {
-    TRACE_NATIVE("GpiQueryTextBox(%u, %d, '%s', %d, %p)", (unsigned int) hps, (int) lCount1, pchString, (int) lCount2, aptlPoints);
+    TRACE_NATIVE("GpiQueryTextBox(%u, %d, '%s', %d, %p)", (unsigned int)hps, (int)lCount1,
+                 pchString, (int)lCount2, aptlPoints);
     FIXME("write me");
     return 0;
 }

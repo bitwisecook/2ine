@@ -9,20 +9,20 @@ static ULONG x = 0;
 
 static void APIENTRY threadFunc(ULONG arg)
 {
-    const unsigned int t = (unsigned int) arg;
+    const unsigned int t = (unsigned int)arg;
     DosSleep(t == 1 ? 500 : 1000);
     *GAddr = t * 100;
 
     DosSleep(t == 1 ? 1000 : 50);
     x = *GAddr;
-
 }
 
 int main(void)
 {
     TID tid = 0;
 
-    if (DosAllocThreadLocalMemory(1, &GAddr) != NO_ERROR) {
+    if (DosAllocThreadLocalMemory(1, &GAddr) != NO_ERROR)
+    {
         fprintf(stderr, "DosAllocLocalThreadMemory failed\n");
         return 1;
     }
@@ -31,18 +31,20 @@ int main(void)
     printf("Main thread set TLS value to 10\n");
     fflush(stdout);
 
-    if (DosCreateThread(&tid, threadFunc, 1, 0, 0xFFFF) != NO_ERROR) {
+    if (DosCreateThread(&tid, threadFunc, 1, 0, 0xFFFF) != NO_ERROR)
+    {
         fprintf(stderr, "DosCreateThread 1 failed\n");
         return 1;
     }
-    if (DosCreateThread(&tid, threadFunc, 2, 0, 0xFFFF) != NO_ERROR) {
+    if (DosCreateThread(&tid, threadFunc, 2, 0, 0xFFFF) != NO_ERROR)
+    {
         fprintf(stderr, "DosCreateThread 2 failed\n");
         return 1;
     }
 
     DosSleep(4000);
 
-    printf("Main thread sees TLS value of %u\n", (unsigned int) *GAddr);
+    printf("Main thread sees TLS value of %u\n", (unsigned int)*GAddr);
     fflush(stdout);
 
     DosFreeThreadLocalMemory(GAddr);

@@ -4,9 +4,13 @@
 #define TWOINE_HOST_SHARED_H
 #include <stddef.h>
 typedef struct LxHostShared LxHostShared;
-typedef enum LxHostSharedResult {
-    LX_HOST_SHARED_OK, LX_HOST_SHARED_MISSING, LX_HOST_SHARED_EXISTS,
-    LX_HOST_SHARED_DENIED, LX_HOST_SHARED_NOMEM
+typedef enum LxHostSharedResult
+{
+    LX_HOST_SHARED_OK,
+    LX_HOST_SHARED_MISSING,
+    LX_HOST_SHARED_EXISTS,
+    LX_HOST_SHARED_DENIED,
+    LX_HOST_SHARED_NOMEM
 } LxHostSharedResult;
 LxHostSharedResult lx_host_shared_open(const char *name, size_t create_size, LxHostShared **output);
 size_t lx_host_shared_size(const LxHostShared *object);

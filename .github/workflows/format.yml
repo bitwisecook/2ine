@@ -1,0 +1,15 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+name: C and header formatting
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  formatting:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install pinned clang-format
+        run: python -m pip install "clang-format==$(cat tools/clang-format-version)"
+      - name: Check C and headers
+        run: python tools/format-c.py --check

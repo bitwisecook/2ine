@@ -9,7 +9,6 @@
 #ifndef _INCL_OS2_H_
 #define _INCL_OS2_H_
 
-
 #include "os2types.h"
 #include "os2errors.h"
 #include "doscalls.h"

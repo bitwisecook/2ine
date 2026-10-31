@@ -15,7 +15,8 @@ const char *lx_host_arch(void);
 /* Bootstrap argv is returned as consecutive NUL-terminated strings. */
 char *lx_host_command_line(size_t *size);
 char *lx_host_executable_path(void);
-typedef struct LxHostCalendar {
+typedef struct LxHostCalendar
+{
     int year, month, day, weekday, hour, minute, second, utc_offset_minutes;
 } LxHostCalendar;
 uint64_t lx_host_realtime_us(void);
@@ -30,7 +31,12 @@ __attribute__((noreturn))
 void lx_host_process_exit(uint32_t status);
 int lx_host_system_memory(uint64_t *total, uint64_t *available);
 
-enum { LX_HOST_READ = 1, LX_HOST_WRITE = 2, LX_HOST_EXECUTE = 4 };
+enum
+{
+    LX_HOST_READ = 1,
+    LX_HOST_WRITE = 2,
+    LX_HOST_EXECUTE = 4
+};
 /* Exact mappings fail on occupied addresses; existing mappings are never replaced.
    Host addresses and host protection are independent of guest virtual addresses. */
 void *lx_host_vm_map(void *hint, size_t size, unsigned permissions, int exact);

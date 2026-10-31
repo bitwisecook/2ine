@@ -12,7 +12,8 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* lxapigen.py reads OS2APIINFO; the C compiler ignores it. */
@@ -35,51 +36,50 @@ extern "C" {
 #define OS2API16 OS2API
 #endif
 
-typedef uint32_t APIRET;
-typedef uint16_t APIRET16;
-typedef uint32_t APIRET32;
+    typedef uint32_t APIRET;
+    typedef uint16_t APIRET16;
+    typedef uint32_t APIRET32;
 
-typedef uint32_t BOOL;
+    typedef uint32_t BOOL;
 
-typedef void VOID;
-typedef VOID *PVOID;
-typedef PVOID *PPVOID;
-typedef char CHAR, *PCHAR;
-typedef uint8_t UCHAR, *PUCHAR;
-typedef int16_t SHORT, *PSHORT;
-typedef uint16_t USHORT, *PUSHORT;
-typedef int32_t LONG, *PLONG;
-typedef uint32_t ULONG, *PULONG;
-typedef uint32_t BOOL32, *PBOOL32;
-typedef int64_t LONGLONG, *PLONGLONG;
-typedef uint64_t ULONGLONG, *PULONGLONG;
-typedef uint8_t BYTE, *PBYTE;
+    typedef void VOID;
+    typedef VOID *PVOID;
+    typedef PVOID *PPVOID;
+    typedef char CHAR, *PCHAR;
+    typedef uint8_t UCHAR, *PUCHAR;
+    typedef int16_t SHORT, *PSHORT;
+    typedef uint16_t USHORT, *PUSHORT;
+    typedef int32_t LONG, *PLONG;
+    typedef uint32_t ULONG, *PULONG;
+    typedef uint32_t BOOL32, *PBOOL32;
+    typedef int64_t LONGLONG, *PLONGLONG;
+    typedef uint64_t ULONGLONG, *PULONGLONG;
+    typedef uint8_t BYTE, *PBYTE;
 
+    typedef uint16_t SHANDLE, *PSHANDLE;
+    typedef uint32_t LHANDLE, *PLHANDLE;
+    typedef LHANDLE HANDLE, *PHANDLE;
+    typedef HANDLE HMODULE, *PHMODULE;
+    typedef HANDLE HFILE, *PHFILE;
+    typedef HANDLE HDIR, *PHDIR;
+    typedef HANDLE HEV, *PHEV;
+    typedef HANDLE HMTX, *PHMTX;
+    typedef HANDLE HQUEUE, *PHQUEUE;
+    typedef HANDLE HPS, *PHPS;
+    typedef HANDLE PID, *PPID;
+    typedef HANDLE TID, *PTID;
+    typedef SHANDLE HVIO, *PHVIO;
+    typedef SHANDLE HKBD, *PHKBD;
 
-typedef uint16_t SHANDLE, *PSHANDLE;
-typedef uint32_t LHANDLE, *PLHANDLE;
-typedef LHANDLE HANDLE, *PHANDLE;
-typedef HANDLE HMODULE, *PHMODULE;
-typedef HANDLE HFILE, *PHFILE;
-typedef HANDLE HDIR, *PHDIR;
-typedef HANDLE HEV, *PHEV;
-typedef HANDLE HMTX, *PHMTX;
-typedef HANDLE HQUEUE, *PHQUEUE;
-typedef HANDLE HPS, *PHPS;
-typedef HANDLE PID, *PPID;
-typedef HANDLE TID, *PTID;
-typedef SHANDLE HVIO, *PHVIO;
-typedef SHANDLE HKBD, *PHKBD;
+    typedef PCHAR PSZ;
+    typedef PCHAR PCH;
 
-typedef PCHAR PSZ;
-typedef PCHAR PCH;
+    typedef USHORT SEL;
+    typedef PUSHORT PSEL;
 
-typedef USHORT SEL;
-typedef PUSHORT PSEL;
+    typedef int(APIENTRY *PFN)(void);
 
-typedef int (APIENTRY *PFN)(void);
-
-typedef ULONG ERRORID;
+    typedef ULONG ERRORID;
 
 #define NULLHANDLE 0
 #define TRUE 1

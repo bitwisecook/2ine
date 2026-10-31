@@ -4,7 +4,8 @@
 #include "execution.h"
 #include "host_sync.h"
 
-typedef struct LxExecutionOperations {
+typedef struct LxExecutionOperations
+{
     const char *name;
     int (*initialize)(LxExecution *execution);
     void (*destroy)(LxExecution *execution);
@@ -28,9 +29,11 @@ typedef struct LxExecutionOperations {
     void (*near_base)(uint32_t address);
     uint16_t (*flat_code_selector)(void);
     void (*prepare_code)(uint8_t *code, size_t size);
-    void *(*missing_entry)(const char *module, const char *entry, unsigned bits, LxExecutionBridge *bridge);
+    void *(*missing_entry)(const char *module, const char *entry, unsigned bits,
+                           LxExecutionBridge *bridge);
     size_t (*emit_bridge16)(uint8_t *output, size_t capacity, uint8_t *segment_base,
-                            uint16_t selector_index, LxExecutionApi16 callback, uint16_t argument_bytes);
+                            uint16_t selector_index, LxExecutionApi16 callback,
+                            uint16_t argument_bytes);
     int (*atomic_u32)(LxExecution *, uint32_t, void *, int, uint32_t, uint32_t *);
     int (*native_entry)(LxExecution *, void *, uint32_t *);
     int identity_memory;
@@ -45,7 +48,8 @@ typedef struct LxExecutionOperations {
     int (*end_thread)(void);
     int (*copy_in)(LxExecution *, uint32_t, void *, const void *, size_t);
 } LxExecutionOperations;
-struct LxExecution {
+struct LxExecution
+{
     const LxExecutionOperations *ops;
     LxExecutionServices services;
     void *backend;

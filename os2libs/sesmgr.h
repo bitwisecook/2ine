@@ -12,36 +12,39 @@
 #include "os2types.h"
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-typedef struct
-{
-    USHORT Length;
-    USHORT Related;
-    USHORT FgBg;
-    USHORT TraceOpt;
-    PSZ PgmTitle;
-    PSZ PgmName;
-    PBYTE PgmInputs;
-    PBYTE TermQ;
-    PBYTE Environment;
-    USHORT InheritOpt;
-    USHORT SessionType;
-    PSZ IconFile;
-    ULONG PgmHandle;
-    USHORT PgmControl;
-    USHORT InitXPos;
-    USHORT InitYPos;
-    USHORT InitXSize;
-    USHORT InitYSize;
-    USHORT Reserved;
-    PSZ ObjectBuffer;
-    ULONG ObjectBuffLen;
-} STARTDATA, *PSTARTDATA;
+    typedef struct
+    {
+        USHORT Length;
+        USHORT Related;
+        USHORT FgBg;
+        USHORT TraceOpt;
+        PSZ PgmTitle;
+        PSZ PgmName;
+        PBYTE PgmInputs;
+        PBYTE TermQ;
+        PBYTE Environment;
+        USHORT InheritOpt;
+        USHORT SessionType;
+        PSZ IconFile;
+        ULONG PgmHandle;
+        USHORT PgmControl;
+        USHORT InitXPos;
+        USHORT InitYPos;
+        USHORT InitXSize;
+        USHORT InitYSize;
+        USHORT Reserved;
+        PSZ ObjectBuffer;
+        ULONG ObjectBuffLen;
+    } STARTDATA, *PSTARTDATA;
 
-OS2EXPORT APIRET OS2API DosStartSession(PSTARTDATA psd, PULONG pidSession, PPID ppid) OS2APIINFO(ord=37);
-OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PCHAR title) OS2APIINFO(ord=5,name=DOSSMSETTITLE);
+    OS2EXPORT APIRET OS2API DosStartSession(PSTARTDATA psd, PULONG pidSession, PPID ppid)
+        OS2APIINFO(ord = 37);
+    OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PCHAR title)
+        OS2APIINFO(ord = 5, name = DOSSMSETTITLE);
 
 #ifdef __cplusplus
 }

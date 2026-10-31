@@ -5,11 +5,20 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef enum LxHandleKind {
-    LX_HANDLE_MODULE = 1, LX_HANDLE_THREAD, LX_HANDLE_EVENT,
-    LX_HANDLE_MUTEX, LX_HANDLE_DIRECTORY, LX_HANDLE_FILE
+typedef enum LxHandleKind
+{
+    LX_HANDLE_MODULE = 1,
+    LX_HANDLE_THREAD,
+    LX_HANDLE_EVENT,
+    LX_HANDLE_MUTEX,
+    LX_HANDLE_DIRECTORY,
+    LX_HANDLE_FILE
 } LxHandleKind;
-typedef struct LxHandleBorrow { void *resource; void *lease; } LxHandleBorrow;
+typedef struct LxHandleBorrow
+{
+    void *resource;
+    void *lease;
+} LxHandleBorrow;
 /* Repeated inserts of one resource share ownership. The kind and destructor must match.
    A closed handle is rejected immediately; active borrows keep its resource
    alive until release. Slot generations are retired before they can wrap. */
@@ -21,5 +30,5 @@ size_t lx_handle_count(LxHandleKind kind, const void *resource);
 /* Guard runs under the registry lock and must not call registry functions.
    Returns 1 on close, 0 for an invalid handle, -1 when busy. */
 int lx_handle_close_guarded(uint32_t handle, LxHandleKind kind, size_t allowed_borrows,
-                             int (*guard)(void *));
+                            int (*guard)(void *));
 #endif

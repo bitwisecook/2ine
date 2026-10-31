@@ -9,13 +9,11 @@
 #include "os2native16.h"
 #include "viocalls.h"
 
-
 #undef TRUE
 #undef FALSE
 
 #include <unistd.h>
 #include <ctype.h>
-
 
 #if defined(HAVE_NCURSESW_NCURSES_H)
 #include <ncursesw/ncurses.h>
@@ -59,7 +57,6 @@ enum
     VIOATTR_BLINK = 0x80
 };
 
-
 static uint16 *vio_buffer = NULL;
 static uint16 vio_scrw, vio_scrh;
 static uint16 vio_curx, vio_cury;
@@ -71,31 +68,34 @@ static int initNcurses(void)
         return 1;
 
     setlocale(LC_CTYPE, "");
-    if (initscr() == NULL) {
+    if (initscr() == NULL)
+    {
         fprintf(stderr, "ncurses: initscr() failed\n");
         return 0;
     }
 
-	cbreak();
-	keypad(stdscr, TRUE);
-	noecho();
+    cbreak();
+    keypad(stdscr, TRUE);
+    noecho();
     start_color();
     use_default_colors();
 
+    static const short curses_colormap[] = {COLOR_BLACK, COLOR_BLUE,    COLOR_GREEN,  COLOR_CYAN,
+                                            COLOR_RED,   COLOR_MAGENTA, COLOR_YELLOW, COLOR_WHITE};
 
-    static const short curses_colormap[] = {
-        COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_CYAN,
-        COLOR_RED, COLOR_MAGENTA, COLOR_YELLOW, COLOR_WHITE
-    };
-
-    if (COLORS >= 64) {   // foreground and background
-        for (uint32 i = 0; i < 8; i++) {
-            for (uint32 j = 0; j < 8; j++) {
-                const int pair = (int) (i | (j << 3));
+    if (COLORS >= 64)
+    { // foreground and background
+        for (uint32 i = 0; i < 8; i++)
+        {
+            for (uint32 j = 0; j < 8; j++)
+            {
+                const int pair = (int)(i | (j << 3));
                 init_pair(pair, curses_colormap[i], (j == 0) ? -1 : curses_colormap[j]);
             }
         }
-    } else if (COLORS >= 8) {  // just foregrounds
+    }
+    else if (COLORS >= 8)
+    { // just foregrounds
         for (int i = 0; i < 8; i++)
             init_pair(i, curses_colormap[i], COLOR_BLACK);
     }
@@ -105,9 +105,10 @@ static int initNcurses(void)
     int scrh, scrw;
     getmaxyx(stdscr, scrh, scrw);
 
-    const size_t buflen = scrw * scrh * sizeof (uint16);
+    const size_t buflen = scrw * scrh * sizeof(uint16);
     vio_buffer = malloc(buflen);
-    if (!vio_buffer) {
+    if (!vio_buffer)
+    {
         endwin();
         delwin(stdscr);
         stdscr = NULL;
@@ -115,8 +116,8 @@ static int initNcurses(void)
     }
 
     memset(vio_buffer, '\0', buflen);
-    vio_scrw = (uint16) scrw;
-    vio_scrh = (uint16) scrh;
+    vio_scrw = (uint16)scrw;
+    vio_scrh = (uint16)scrh;
     vio_curx = vio_cury = 0;
 
     FIXME("these are just the default values OS/2 4.52 returns");
@@ -133,10 +134,10 @@ static void deinitNcurses(void)
     if (!vio_buffer)
         return;
 
-
     reset_shell_mode();
 
-    printf("\n"); fflush(stdout);
+    printf("\n");
+    fflush(stdout);
 
     delwin(stdscr);
     stdscr = NULL;
@@ -152,34 +153,53 @@ static inline void commitToNcurses(void)
 
 static void pushToNcurses(const int y, const int x, int numcells, const int commit)
 {
-    const uint8 *src = (const uint8 *) (vio_buffer + ((y * vio_scrw) + x));
+    const uint8 *src = (const uint8 *)(vio_buffer + ((y * vio_scrw) + x));
     const uint32 avail = (((vio_scrh - y) * vio_scrw) - x);
     if (numcells > avail)
         numcells = avail;
 
     move(y, x);
 
-    for (int i = 0; i < numcells; i++) {
+    for (int i = 0; i < numcells; i++)
+    {
         const uint8 viochar = *(src++);
         const uint8 vioattr = *(src++);
 
         chtype ch;
-        switch (viochar) {
-            case 0xC4: ch = ACS_HLINE; break;
-            case 0xB3: ch = ACS_VLINE; break;
-            case 0xDA: ch = ACS_ULCORNER; break;
-            case 0xBF: ch = ACS_URCORNER; break;
-            case 0xC0: ch = ACS_LLCORNER; break;
-            case 0xD9: ch = ACS_LRCORNER; break;
-            default: ch = (chtype) viochar; break;
+        switch (viochar)
+        {
+            case 0xC4:
+                ch = ACS_HLINE;
+                break;
+            case 0xB3:
+                ch = ACS_VLINE;
+                break;
+            case 0xDA:
+                ch = ACS_ULCORNER;
+                break;
+            case 0xBF:
+                ch = ACS_URCORNER;
+                break;
+            case 0xC0:
+                ch = ACS_LLCORNER;
+                break;
+            case 0xD9:
+                ch = ACS_LRCORNER;
+                break;
+            default:
+                ch = (chtype)viochar;
+                break;
         }
 
         chtype attr = 0;
 
-        if (COLORS >= 64) {   // foreground and background
+        if (COLORS >= 64)
+        { // foreground and background
             const int color = ((vioattr & 0x70) >> 1) | (vioattr & 0x7);
             attr |= COLOR_PAIR(color);
-        } else if (COLORS >= 8) {  // just foregrounds
+        }
+        else if (COLORS >= 8)
+        { // just foregrounds
             const int color = (vioattr & 0x7);
             attr |= COLOR_PAIR(color);
         }
@@ -200,21 +220,20 @@ static void pushToNcurses(const int y, const int x, int numcells, const int comm
 
 APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
 {
-    TRACE_NATIVE("VioGetMode(%p, %u)", pvioModeInfo, (uint) hvio);
+    TRACE_NATIVE("VioGetMode(%p, %u)", pvioModeInfo, (uint)hvio);
 
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
     else if (pvioModeInfo == NULL)
         return ERROR_VIO_INVALID_PARMS;
-    else if (pvioModeInfo->cb != sizeof (*pvioModeInfo))
+    else if (pvioModeInfo->cb != sizeof(*pvioModeInfo))
         return ERROR_VIO_INVALID_LENGTH;
-
 
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
 
-    memset(pvioModeInfo, '\0', sizeof (*pvioModeInfo));
-    pvioModeInfo->cb = sizeof (*pvioModeInfo);
+    memset(pvioModeInfo, '\0', sizeof(*pvioModeInfo));
+    pvioModeInfo->cb = sizeof(*pvioModeInfo);
     pvioModeInfo->fbType = VGMT_OTHER;
     pvioModeInfo->color = 4;
     pvioModeInfo->col = vio_scrw;
@@ -225,13 +244,12 @@ APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
     pvioModeInfo->attrib = 1;
     FIXME("fill in the rest of these");
 
-
     return NO_ERROR;
 }
 
 APIRET16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio)
 {
-    TRACE_NATIVE("VioGetCurPos(%p, %p, %u)", pusRow, pusColumn, (uint) hvio);
+    TRACE_NATIVE("VioGetCurPos(%p, %p, %u)", pusRow, pusColumn, (uint)hvio);
 
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
@@ -249,22 +267,22 @@ APIRET16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio)
 
 APIRET16 VioGetBuf(PULONG pLVB, PUSHORT pcbLVB, HVIO hvio)
 {
-    TRACE_NATIVE("VioGetBuf(%p, %p, %u)", pLVB, pcbLVB, (uint) hvio);
+    TRACE_NATIVE("VioGetBuf(%p, %p, %u)", pLVB, pcbLVB, (uint)hvio);
 
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
     if (pLVB)
-        *pLVB = (ULONG) vio_buffer;
+        *pLVB = (ULONG)vio_buffer;
     if (pcbLVB)
-        *pcbLVB = vio_scrw * vio_scrh * sizeof (ULONG);
+        *pcbLVB = vio_scrw * vio_scrh * sizeof(ULONG);
     return NO_ERROR;
 }
 
 APIRET16 VioGetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
 {
-    TRACE_NATIVE("VioGetCurType(%p, %u)", pvioCursorInfo, (uint) hvio);
+    TRACE_NATIVE("VioGetCurType(%p, %u)", pvioCursorInfo, (uint)hvio);
     return NO_ERROR;
 
     if (hvio != 0)
@@ -274,15 +292,17 @@ APIRET16 VioGetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
 
-    memcpy(pvioCursorInfo, &vio_cursorinfo, sizeof (*pvioCursorInfo));
+    memcpy(pvioCursorInfo, &vio_cursorinfo, sizeof(*pvioCursorInfo));
     return NO_ERROR;
 }
 
-APIRET16 VioScrollUp(USHORT usTopRow, USHORT usLeftCol, USHORT usBotRow, USHORT usRightCol, USHORT cbLines, PBYTE pCell, HVIO hvio)
+APIRET16 VioScrollUp(USHORT usTopRow, USHORT usLeftCol, USHORT usBotRow, USHORT usRightCol,
+                     USHORT cbLines, PBYTE pCell, HVIO hvio)
 {
-    TRACE_NATIVE("VioScrollUp(%u, %u, %u, %u, %u, %p, %u)", (uint) usTopRow, (uint) usLeftCol, (uint) usBotRow, (uint) usRightCol, (uint) cbLines, pCell, (uint) hvio);
-FIXME("buggy");
-return NO_ERROR;
+    TRACE_NATIVE("VioScrollUp(%u, %u, %u, %u, %u, %p, %u)", (uint)usTopRow, (uint)usLeftCol,
+                 (uint)usBotRow, (uint)usRightCol, (uint)cbLines, pCell, (uint)hvio);
+    FIXME("buggy");
+    return NO_ERROR;
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
     else if (pCell == NULL)
@@ -313,19 +333,22 @@ return NO_ERROR;
 
     uint16 *src = vio_buffer + ((usTopRow * vio_scrw) + usLeftCol) + adjust;
     uint16 *dst = (src - (cbLines * vio_scrw)) + adjust;
-    const size_t rowcpylen = rowlen * sizeof (uint16);
-    for (uint32 i = 0; i < collen; i++) {
+    const size_t rowcpylen = rowlen * sizeof(uint16);
+    for (uint32 i = 0; i < collen; i++)
+    {
         memcpy(dst, src, rowcpylen);
         src += vio_scrw;
         dst += vio_scrw;
     }
 
-    const uint16 clear_cell = *((uint16 *) pCell);
-    for (uint32 i = 0; i < cbLines; i++) {
+    const uint16 clear_cell = *((uint16 *)pCell);
+    for (uint32 i = 0; i < cbLines; i++)
+    {
         if (dst >= (vio_buffer + (vio_scrw * vio_scrh)))
             break;
         uint16 *origdst = dst;
-        for (uint32 j = 0; j < rowlen; j++) {
+        for (uint32 j = 0; j < rowlen; j++)
+        {
             *(dst++) = clear_cell;
         }
         dst = origdst + vio_scrw;
@@ -347,7 +370,7 @@ return NO_ERROR;
 
 APIRET16 VioSetCurPos(USHORT usRow, USHORT usColumn, HVIO hvio)
 {
-    TRACE_NATIVE("VioSetCurPos(%u, %u, %u)", (uint) usRow, (uint) usColumn, (uint) hvio);
+    TRACE_NATIVE("VioSetCurPos(%u, %u, %u)", (uint)usRow, (uint)usColumn, (uint)hvio);
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
@@ -368,14 +391,15 @@ APIRET16 VioSetCurPos(USHORT usRow, USHORT usColumn, HVIO hvio)
 
 APIRET16 VioSetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
 {
-    TRACE_NATIVE("VioSetCurType(%p, %u)", pvioCursorInfo, (uint) hvio);
+    TRACE_NATIVE("VioSetCurType(%p, %u)", pvioCursorInfo, (uint)hvio);
     FIXME("write me");
     return NO_ERROR;
 }
 
 APIRET16 VioReadCellStr(PCH pchCellStr, PUSHORT pcb, USHORT usRow, USHORT usColumn, HVIO hvio)
 {
-    TRACE_NATIVE("VioReadCellStr(%p, %p, %u, %u, %u)", pchCellStr, pcb, (uint) usRow, (uint) usColumn, (uint) hvio);
+    TRACE_NATIVE("VioReadCellStr(%p, %p, %u, %u, %u)", pchCellStr, pcb, (uint)usRow, (uint)usColumn,
+                 (uint)hvio);
 
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
@@ -388,16 +412,17 @@ APIRET16 VioReadCellStr(PCH pchCellStr, PUSHORT pcb, USHORT usRow, USHORT usColu
 
     const uint32 maxidx = ((uint32)vio_scrh) * ((uint32)vio_scrw);
     const uint32 idx = (((uint32)usRow) * ((uint32)vio_scrw)) + ((uint32)usColumn);
-    const uint32 avail = (maxidx - idx) * sizeof (uint16);
-    if (((uint32) *pcb) > avail)
-        *pcb = (USHORT) avail;
-    memcpy(pchCellStr, vio_buffer + idx, (size_t) *pcb);
+    const uint32 avail = (maxidx - idx) * sizeof(uint16);
+    if (((uint32)*pcb) > avail)
+        *pcb = (USHORT)avail;
+    memcpy(pchCellStr, vio_buffer + idx, (size_t)*pcb);
     return NO_ERROR;
 }
 
 APIRET16 VioWrtCellStr(PCH pchCellStr, USHORT cb, USHORT usRow, USHORT usColumn, HVIO hvio)
 {
-    TRACE_NATIVE("VioWrtCellStr(%p, %u, %u, %u, %u)", pchCellStr, (uint) cb, (uint) usRow, (uint) usColumn, (uint) hvio);
+    TRACE_NATIVE("VioWrtCellStr(%p, %u, %u, %u, %u)", pchCellStr, (uint)cb, (uint)usRow,
+                 (uint)usColumn, (uint)hvio);
 
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
@@ -408,22 +433,23 @@ APIRET16 VioWrtCellStr(PCH pchCellStr, USHORT cb, USHORT usRow, USHORT usColumn,
     else if (usColumn >= vio_scrw)
         return ERROR_VIO_COL;
 
-    const uint16 *src = (uint16 *) pchCellStr;
+    const uint16 *src = (uint16 *)pchCellStr;
     uint16 *dst = vio_buffer + ((usRow * vio_scrw) + usColumn);
-    const uint32 avail = (((vio_scrh - usRow) * vio_scrw) - usColumn) * sizeof (uint16);
-    if (((uint32) cb) > avail)
-        cb = (USHORT) avail;
+    const uint32 avail = (((vio_scrh - usRow) * vio_scrw) - usColumn) * sizeof(uint16);
+    if (((uint32)cb) > avail)
+        cb = (USHORT)avail;
 
     memcpy(dst, src, cb);
 
-    pushToNcurses(usRow, usColumn, cb / sizeof (uint16), 1);
+    pushToNcurses(usRow, usColumn, cb / sizeof(uint16), 1);
 
     return NO_ERROR;
 }
 
 APIRET16 VioWrtCharStrAtt(PCH pch, USHORT cb, USHORT usRow, USHORT usColumn, PBYTE pAttr, HVIO hvio)
 {
-    TRACE_NATIVE("VioWrtCharStrAtt(%p, %u, %u, %u, %p, %u)", pch, (uint) cb, (uint) usRow, (uint) usColumn, pAttr, (uint) hvio);
+    TRACE_NATIVE("VioWrtCharStrAtt(%p, %u, %u, %u, %p, %u)", pch, (uint)cb, (uint)usRow,
+                 (uint)usColumn, pAttr, (uint)hvio);
 
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
@@ -435,13 +461,14 @@ APIRET16 VioWrtCharStrAtt(PCH pch, USHORT cb, USHORT usRow, USHORT usColumn, PBY
         return ERROR_VIO_COL;
 
     const uint8 attr = *pAttr;
-    const uint8 *src = (uint8 *) pch;
-    uint8 *dst = (uint8 *) (vio_buffer + ((usRow * vio_scrw) + usColumn));
+    const uint8 *src = (uint8 *)pch;
+    uint8 *dst = (uint8 *)(vio_buffer + ((usRow * vio_scrw) + usColumn));
     const uint32 avail = (((vio_scrh - usRow) * vio_scrw) - usColumn);
-    if (((uint32) cb) > avail)
-        cb = (USHORT) avail;
+    if (((uint32)cb) > avail)
+        cb = (USHORT)avail;
 
-    for (uint32 i = 0; i < cb; i++, src++) {
+    for (uint32 i = 0; i < cb; i++, src++)
+    {
         *(dst++) = *src;
         *(dst++) = attr;
     }
@@ -453,7 +480,8 @@ APIRET16 VioWrtCharStrAtt(PCH pch, USHORT cb, USHORT usRow, USHORT usColumn, PBY
 
 APIRET16 VioWrtNCell(PBYTE pCell, USHORT cb, USHORT usRow, USHORT usColumn, HVIO hvio)
 {
-    TRACE_NATIVE("VioWrtNCell(%p, %u, %u, %u, %u)", pCell, (uint) cb, (uint) usRow, (uint) usColumn, (uint) hvio);
+    TRACE_NATIVE("VioWrtNCell(%p, %u, %u, %u, %u)", pCell, (uint)cb, (uint)usRow, (uint)usColumn,
+                 (uint)hvio);
 
     if (hvio != 0)
         return ERROR_VIO_INVALID_HANDLE;
@@ -464,11 +492,11 @@ APIRET16 VioWrtNCell(PBYTE pCell, USHORT cb, USHORT usRow, USHORT usColumn, HVIO
     else if (usColumn >= vio_scrw)
         return ERROR_VIO_COL;
 
-    const uint16 cell = *((uint16 *) pCell);
+    const uint16 cell = *((uint16 *)pCell);
     uint16 *dst = vio_buffer + ((usRow * vio_scrw) + usColumn);
     const uint32 avail = (((vio_scrh - usRow) * vio_scrw) - usColumn);
-    if (((uint32) cb) > avail)
-        cb = (USHORT) avail;
+    if (((uint32)cb) > avail)
+        cb = (USHORT)avail;
 
     for (uint32 i = 0; i < cb; i++)
         *(dst++) = cell;

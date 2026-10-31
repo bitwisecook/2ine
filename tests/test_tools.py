@@ -88,6 +88,33 @@ Import ordinal: 5
 
 
 class GeneratorTests(unittest.TestCase):
+    def test_wrapped_exports_preserve_argument_and_ordinal_metadata(self) -> None:
+        text = """#ifndef SAMPLE_H
+OS2EXPORT APIRET OS2API
+Read(USHORT count, /* requested bytes */
+     PVOID buffer)
+    OS2APIINFO(ord = 17, name = READ);
+OS2EXPORT VOID OS2API16 Exit(
+    VOID) OS2APIINFO(18);
+OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
+#endif
+"""
+        functions = lxapigen.parse_functions(text)
+        self.assertEqual([f.ordinal for f in functions], [17, 18, 19])
+        self.assertEqual(functions[0].name, "Read")
+        self.assertEqual(functions[0].exported_name, "READ")
+        self.assertEqual(
+            functions[0].arguments,
+            (lxapigen.Argument("USHORT", "count"), lxapigen.Argument("PVOID", "buffer")),
+        )
+        self.assertTrue(functions[1].use16)
+        self.assertEqual(functions[1].arguments, ())
+        self.assertEqual(functions[2].result, "PVOID *")
+
+    def test_rejects_unterminated_export(self) -> None:
+        with self.assertRaisesRegex(ValueError, "could not parse export"):
+            lxapigen.parse_functions("OS2EXPORT VOID OS2API16 Exit(VOID) OS2APIINFO(5)")
+
     def test_rejects_duplicate_ordinals(self) -> None:
         with self.assertRaisesRegex(ValueError, "duplicate ordinal"):
             lxapigen.parse_functions(

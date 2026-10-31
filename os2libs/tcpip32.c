@@ -25,24 +25,22 @@
 int OS2_sock_init(void)
 {
     TRACE_NATIVE("sock_init()");
-    return 1;  // always succeeds.
+    return 1; // always succeeds.
 }
-
 
 static void mapOS2SockAddrIn(const OS2_sockaddr *os2addr, struct sockaddr_in *bsdaddr)
 {
-    const OS2_sockaddr_in *os2addrin = (const OS2_sockaddr_in *) os2addr;
-    memset(bsdaddr, '\0', sizeof (*bsdaddr));
+    const OS2_sockaddr_in *os2addrin = (const OS2_sockaddr_in *)os2addr;
+    memset(bsdaddr, '\0', sizeof(*bsdaddr));
     bsdaddr->sin_family = AF_INET;
     bsdaddr->sin_port = os2addrin->sin_port;
     bsdaddr->sin_addr.s_addr = os2addrin->sin_addr.s_addr;
 }
 
-
 static void mapBSDSockAddrIn(const struct sockaddr_in *bsdaddr, OS2_sockaddr *os2addr)
 {
-    OS2_sockaddr_in *os2addrin = (OS2_sockaddr_in *) os2addr;
-    memset(os2addrin, '\0', sizeof (*os2addrin));
+    OS2_sockaddr_in *os2addrin = (OS2_sockaddr_in *)os2addr;
+    memset(os2addrin, '\0', sizeof(*os2addrin));
     os2addrin->sin_family = OS2_AF_INET;
     os2addrin->sin_port = bsdaddr->sin_port;
     os2addrin->sin_addr.s_addr = bsdaddr->sin_addr.s_addr;
@@ -52,7 +50,11 @@ static int mapOS2MsgFlags(const int os2flags)
 {
     int bsdflags = 0;
 
-    #define MAPSOCKFLAGS(f) if (os2flags & OS2_##f) { bsdflags |= f; }
+#define MAPSOCKFLAGS(f)                                                                            \
+    if (os2flags & OS2_##f)                                                                        \
+    {                                                                                              \
+        bsdflags |= f;                                                                             \
+    }
     MAPSOCKFLAGS(MSG_OOB);
     MAPSOCKFLAGS(MSG_PEEK);
     MAPSOCKFLAGS(MSG_DONTROUTE);
@@ -61,15 +63,14 @@ static int mapOS2MsgFlags(const int os2flags)
     MAPSOCKFLAGS(MSG_CTRUNC);
     MAPSOCKFLAGS(MSG_WAITALL);
     MAPSOCKFLAGS(MSG_DONTWAIT);
-    #undef MAPSOCKFLAGS
-
+#undef MAPSOCKFLAGS
 
     return bsdflags;
 }
 
 int OS2_recv(int sock, void *buf, size_t len, int os2flags)
 {
-    TRACE_NATIVE("recv(%d, %p, %d, %d)", sock, buf, (int) len, os2flags);
+    TRACE_NATIVE("recv(%d, %p, %d, %d)", sock, buf, (int)len, os2flags);
     FIXME("this should fail if not a socket");
     return recv(sock, buf, len, mapOS2MsgFlags(os2flags));
 }
@@ -80,14 +81,15 @@ int OS2_connect(int sock, const struct OS2_sockaddr *os2addr, int addrlen)
 
     FIXME("this should fail if not a socket");
 
-    if (os2addr->sa_family != OS2_AF_INET) {
+    if (os2addr->sa_family != OS2_AF_INET)
+    {
         FIXME("currently demands IPv4 socket");
         return -1;
     }
 
     struct sockaddr_in bsdaddr;
     mapOS2SockAddrIn(os2addr, &bsdaddr);
-    return connect(sock, &bsdaddr, (socklen_t) sizeof (bsdaddr));
+    return connect(sock, &bsdaddr, (socklen_t)sizeof(bsdaddr));
 }
 
 int OS2_shutdown(int sock, int kind)
@@ -100,22 +102,29 @@ int OS2_shutdown(int sock, int kind)
 int OS2_socket(int os2family, int os2socktype, int protocol)
 {
     TRACE_NATIVE("socket(%d, %d, %d)", os2family, os2socktype, protocol);
-    if (os2family != OS2_AF_INET) {
+    if (os2family != OS2_AF_INET)
+    {
         FIXME("currently demands IPv4 socket");
         return -1;
     }
 
-    if (protocol != 0) {
+    if (protocol != 0)
+    {
         FIXME("Only protocol 0 supported at the moment");
         return -1;
     }
 
     int bsdsocktype;
-    if (os2socktype == OS2_SOCK_STREAM) {
+    if (os2socktype == OS2_SOCK_STREAM)
+    {
         bsdsocktype = SOCK_STREAM;
-    } else if (os2socktype == OS2_SOCK_DGRAM) {
+    }
+    else if (os2socktype == OS2_SOCK_DGRAM)
+    {
         bsdsocktype = SOCK_DGRAM;
-    } else {
+    }
+    else
+    {
         FIXME("Only SOCK_STREAM and SOCK_DGRAM supported at the moment");
         return -1;
     }
@@ -125,7 +134,7 @@ int OS2_socket(int os2family, int os2socktype, int protocol)
 
 ssize_t OS2_send(int sock, const void *buf, size_t len, int os2flags)
 {
-    TRACE_NATIVE("send(%d, %p, %d, %d)", sock, buf, (int) len, os2flags);
+    TRACE_NATIVE("send(%d, %p, %d, %d)", sock, buf, (int)len, os2flags);
     FIXME("this should fail if not a socket");
     return send(sock, buf, len, mapOS2MsgFlags(os2flags));
 }
@@ -154,18 +163,18 @@ struct OS2_hostent *OS2_gethostbyname(const char *name)
 {
     TRACE_NATIVE("gethostbyname('%s')", name);
     struct hostent *hent = gethostbyname(name);
-    return (OS2_hostent *) hent;
+    return (OS2_hostent *)hent;
 }
 
 unsigned short OS2_htons(unsigned short val)
 {
-    TRACE_NATIVE("htons(%u)", (unsigned int) val);
+    TRACE_NATIVE("htons(%u)", (unsigned int)val);
     return htons(val);
 }
 
 char *OS2_inet_ntoa(struct OS2_in_addr os2inaddr)
 {
-    TRACE_NATIVE("inet_ntoa(%u)", (unsigned int) os2inaddr.s_addr);
+    TRACE_NATIVE("inet_ntoa(%u)", (unsigned int)os2inaddr.s_addr);
     struct in_addr bsdaddr;
     bsdaddr.s_addr = os2inaddr.s_addr;
     return inet_ntoa(bsdaddr);
@@ -175,36 +184,41 @@ struct OS2_servent *OS2_getservbyname(const char *name, const char *proto)
 {
     TRACE_NATIVE("getservbyname('%s', '%s')", name, proto);
     struct servent *sent = getservbyname(name, proto);
-    return (OS2_servent *) sent;
+    return (OS2_servent *)sent;
 }
 
 static void mapOS2FdSet(const OS2_fd_set *os2set, fd_set *bsdset)
 {
     FD_ZERO(bsdset);
     const int total = os2set->fd_count;
-    for (int i = 0; i < total; i++) {
+    for (int i = 0; i < total; i++)
+    {
         FD_SET(os2set->fd_array[i], bsdset);
     }
 }
 
-int OS2_select(int ndfs, OS2_fd_set *os2readfds, OS2_fd_set *os2writefds, OS2_fd_set *os2errorfds, OS2_timeval *os2timeout)
+int OS2_select(int ndfs, OS2_fd_set *os2readfds, OS2_fd_set *os2writefds, OS2_fd_set *os2errorfds,
+               OS2_timeval *os2timeout)
 {
-    TRACE_NATIVE("select(%d, %p, %p, %p, %p)", ndfs, os2readfds, os2writefds, os2errorfds, os2timeout);
-    #define MAPFDS(t) \
-    fd_set bsd##t##fds; \
-    fd_set *t##fds = NULL; \
-    if (os2##t##fds) { \
-        t##fds = &bsd##t##fds; \
-        mapOS2FdSet(os2##t##fds, t##fds); \
+    TRACE_NATIVE("select(%d, %p, %p, %p, %p)", ndfs, os2readfds, os2writefds, os2errorfds,
+                 os2timeout);
+#define MAPFDS(t)                                                                                  \
+    fd_set bsd##t##fds;                                                                            \
+    fd_set *t##fds = NULL;                                                                         \
+    if (os2##t##fds)                                                                               \
+    {                                                                                              \
+        t##fds = &bsd##t##fds;                                                                     \
+        mapOS2FdSet(os2##t##fds, t##fds);                                                          \
     }
     MAPFDS(read);
     MAPFDS(write);
     MAPFDS(error);
-    #undef MAPFDS
+#undef MAPFDS
 
     struct timeval bsdtv;
     struct timeval *pbsdtv = NULL;
-    if (os2timeout) {
+    if (os2timeout)
+    {
         pbsdtv = &bsdtv;
         bsdtv.tv_sec = os2timeout->tv_sec;
         bsdtv.tv_usec = os2timeout->tv_usec;
@@ -216,23 +230,27 @@ int OS2_select(int ndfs, OS2_fd_set *os2readfds, OS2_fd_set *os2writefds, OS2_fd
 
 int OS2_os2_select(int *socks, int noreads, int nowrites, int noexcept, long timeout)
 {
-    TRACE_NATIVE("os2_select(%p, %d, %d, %d, %d)", socks, noreads, nowrites, noexcept, (int) timeout);
+    TRACE_NATIVE("os2_select(%p, %d, %d, %d, %d)", socks, noreads, nowrites, noexcept,
+                 (int)timeout);
     const int nfds = noreads + nowrites + noexcept;
-    struct pollfd *fds = (struct pollfd *) alloca(sizeof (struct pollfd) * nfds);
+    struct pollfd *fds = (struct pollfd *)alloca(sizeof(struct pollfd) * nfds);
     struct pollfd *origfds = fds;
-    for (int i = 0; i < noreads; i++) {
+    for (int i = 0; i < noreads; i++)
+    {
         fds->fd = *(socks++);
         fds->events = POLLIN;
         fds++;
     }
 
-    for (int i = 0; i < nowrites; i++) {
+    for (int i = 0; i < nowrites; i++)
+    {
         fds->fd = *(socks++);
         fds->events = POLLOUT;
         fds++;
     }
 
-    for (int i = 0; i < noexcept; i++) {
+    for (int i = 0; i < noexcept; i++)
+    {
         fds->fd = *(socks++);
         fds->events = POLLERR;
         fds++;
@@ -246,19 +264,24 @@ int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
     TRACE_NATIVE("getsockname(%d, %p, %p)", sock, os2name, os2namelen);
 
     struct sockaddr_in bsdaddr;
-    socklen_t namelen = sizeof (bsdaddr);
+    socklen_t namelen = sizeof(bsdaddr);
     const int rc = getsockname(sock, &bsdaddr, &namelen);
-    if (rc == -1) {
+    if (rc == -1)
+    {
         return -1;
-    } else if (bsdaddr.sin_family != AF_INET) {
+    }
+    else if (bsdaddr.sin_family != AF_INET)
+    {
         FIXME("this only deals with IPv4 at the moment");
         return -1;
-    } else if (*os2namelen < sizeof (OS2_sockaddr_in)) {
+    }
+    else if (*os2namelen < sizeof(OS2_sockaddr_in))
+    {
         return -1;
     }
 
     mapBSDSockAddrIn(&bsdaddr, os2name);
-    *os2namelen = sizeof (OS2_sockaddr_in);
+    *os2namelen = sizeof(OS2_sockaddr_in);
     return rc;
 }
 
@@ -267,7 +290,7 @@ int OS2_bind(int sock, const OS2_sockaddr *os2name, int os2namelen)
     TRACE_NATIVE("bind(%d, %p, %d)", sock, os2name, os2namelen);
     struct sockaddr_in bsdaddr;
     mapOS2SockAddrIn(os2name, &bsdaddr);
-    return bind(sock, (struct sockaddr *) &bsdaddr, sizeof (bsdaddr));
+    return bind(sock, (struct sockaddr *)&bsdaddr, sizeof(bsdaddr));
 }
 
 int OS2_listen(int sock, int backlog)
@@ -280,15 +303,17 @@ int OS2_accept(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
     TRACE_NATIVE("bind(%d, %p, %p)", sock, os2name, os2namelen);
     struct sockaddr_in bsdaddr;
-    socklen_t bsdaddrlen = sizeof (bsdaddr);
-    const int retval = accept(sock, (struct sockaddr *) &bsdaddr, &bsdaddrlen);
+    socklen_t bsdaddrlen = sizeof(bsdaddr);
+    const int retval = accept(sock, (struct sockaddr *)&bsdaddr, &bsdaddrlen);
 
-    if (os2name != NULL) {
+    if (os2name != NULL)
+    {
         mapBSDSockAddrIn(&bsdaddr, os2name);
     }
 
-    if (os2namelen != NULL) {
-        *os2namelen = sizeof (OS2_sockaddr_in);
+    if (os2namelen != NULL)
+    {
+        *os2namelen = sizeof(OS2_sockaddr_in);
     }
 
     return retval;
@@ -296,8 +321,11 @@ int OS2_accept(int sock, OS2_sockaddr *os2name, int *os2namelen)
 
 static int mapOS2SocketOption(const int os2name)
 {
-    switch (os2name) {
-        #define MAPSOOPT(f) case OS2_##f: return f
+    switch (os2name)
+    {
+#define MAPSOOPT(f)                                                                                \
+    case OS2_##f:                                                                                  \
+        return f
         MAPSOOPT(SO_DEBUG);
         MAPSOOPT(SO_ACCEPTCONN);
         MAPSOOPT(SO_REUSEADDR);
@@ -319,8 +347,9 @@ static int mapOS2SocketOption(const int os2name)
         MAPSOOPT(SO_ERROR);
         MAPSOOPT(SO_TYPE);
 
-        #undef MAPSOOPT
-        default: break;
+#undef MAPSOOPT
+        default:
+            break;
     }
 
     FIXME("unsupported OS/2 socket option");
@@ -331,9 +360,12 @@ int OS2_setsockopt(int sock, int os2level, int os2name, const void *value, int l
 {
     const int bsdname = mapOS2SocketOption(os2name);
     const int bsdlevel = SOL_SOCKET;
-    if (!bsdname) {
+    if (!bsdname)
+    {
         return -1;
-    } else if (os2level != OS2_SOL_SOCKET) {
+    }
+    else if (os2level != OS2_SOL_SOCKET)
+    {
         return -1;
     }
     return setsockopt(sock, bsdlevel, bsdname, value, len);
@@ -345,12 +377,14 @@ int OS2_gettimeofday(OS2_timeval *os2tv, OS2_timezone *os2tz)
     struct timezone bsdtz;
     const int retval = gettimeofday(&bsdtv, &bsdtz);
 
-    if (os2tv) {
+    if (os2tv)
+    {
         os2tv->tv_sec = bsdtv.tv_sec;
         os2tv->tv_usec = bsdtv.tv_usec;
     }
 
-    if (os2tz) {
+    if (os2tz)
+    {
         os2tz->tz_minuteswest = bsdtz.tz_minuteswest;
         os2tz->tz_dsttime = bsdtz.tz_dsttime;
     }

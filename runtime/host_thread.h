@@ -9,7 +9,8 @@
 #define LX_HOST_THREAD_LOCAL __thread
 #endif
 typedef struct LxHostThread LxHostThread;
-LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument, void (*cleanup)(void *));
+LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument,
+                                    void (*cleanup)(void *));
 int lx_host_thread_join(LxHostThread *thread, void **result);
 void lx_host_thread_detach(LxHostThread *thread);
 void lx_host_thread_exit(void *result);
