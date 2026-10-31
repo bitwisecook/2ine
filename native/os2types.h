@@ -15,8 +15,7 @@
 extern "C" {
 #endif
 
-// this doesn't do anything when compiling, but a script parses these in
-//  the headers to generate some code.
+/* lxapigen.py reads OS2APIINFO; the C compiler ignores it. */
 #define OS2APIINFO(...)
 
 #ifndef APIENTRY
@@ -31,16 +30,7 @@ extern "C" {
 #define OS2API APIENTRY
 #endif
 
-// Note that we never export actual 16-bit APIs from these headers, even if
-//  we have them marked as OS2API16. This is just for documentation's sake at
-//  the moment. If you compile against these headers and link against an
-//  OS2API16 function, they will be exist and operate in a linear address
-//  space. If you call them from an LX executable, though, the system assumes
-//  you're calling in from 16-bit code and exports something that cleans up
-//  the details behind the scenes.
-// For developing against this API directly on Linux, you should assume this
-//  works like OS/2's PowerPC port, and the same 16-bit APIs you used on x86
-//  were made 32-bit clean by default for the new platform.
+/* OS2API16 declarations use the host C ABI; guest entry uses generated USE16 bridges. */
 #ifndef OS2API16
 #define OS2API16 OS2API
 #endif
@@ -65,11 +55,7 @@ typedef int64_t LONGLONG, *PLONGLONG;
 typedef uint64_t ULONGLONG, *PULONGLONG;
 typedef uint8_t BYTE, *PBYTE;
 
-// !!! FIXME: HANDLE should either be 64-bits on x86_64, or we need to
-// !!! FIXME:  refactor and mutex a bunch of stuff...if it has to be a 32-bit
-// !!! FIXME:  int, it needs to be an index into a resizable array, but at the
-// !!! FIXME:  native word size, these handles can just be pointers cast to ints.
-// !!! FIXME:  alternately: guarantee all handles are in the bottom 4 gigabytes?
+
 typedef uint16_t SHANDLE, *PSHANDLE;
 typedef uint32_t LHANDLE, *PLHANDLE;
 typedef LHANDLE HANDLE, *PHANDLE;
@@ -104,6 +90,3 @@ typedef ULONG ERRORID;
 #endif
 
 #endif
-
-// end of os2types.h ...
-

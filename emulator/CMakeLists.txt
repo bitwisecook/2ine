@@ -1,0 +1,38 @@
+# Public domain. No rights reserved.
+# Wholly AI-authored.
+set(TWOINE_UNICORN_SOURCE_DIR "" CACHE PATH "Local Unicorn source tree for an embedded build")
+if(TWOINE_UNICORN_SOURCE_DIR)
+    set(UNICORN_ARCH "x86" CACHE STRING "Unicorn guest architecture" FORCE)
+    set(UNICORN_BUILD_TESTS OFF CACHE BOOL "Unicorn tests" FORCE)
+    set(UNICORN_INSTALL OFF CACHE BOOL "Unicorn install" FORCE)
+    set(UNICORN_LEGACY_STATIC_ARCHIVE OFF CACHE BOOL "Unicorn archive bundling" FORCE)
+    set(BUILD_SHARED_LIBS OFF)
+    add_subdirectory("${TWOINE_UNICORN_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/unicorn" EXCLUDE_FROM_ALL)
+    set(TWOINE_UNICORN_TARGET unicorn)
+else()
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(UNICORN QUIET IMPORTED_TARGET GLOBAL unicorn>=2.1.4)
+endif()
+if(TARGET PkgConfig::UNICORN)
+    set(TWOINE_UNICORN_TARGET PkgConfig::UNICORN)
+else()
+    find_path(UNICORN_INCLUDE_DIR unicorn/unicorn.h)
+    find_library(UNICORN_LIBRARY NAMES unicorn unicorn_static)
+    if(NOT UNICORN_INCLUDE_DIR OR NOT UNICORN_LIBRARY)
+        message(FATAL_ERROR "Unicorn >=2.1.4 is required for the portable CPU runtime")
+    endif()
+    add_library(twoine_unicorn UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(twoine_unicorn PROPERTIES IMPORTED_LOCATION "${UNICORN_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${UNICORN_INCLUDE_DIR}")
+    set(TWOINE_UNICORN_TARGET twoine_unicorn)
+endif()
+
+endif()
+
+target_sources(twoine_runtime_objects PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpu.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cpu_unicorn.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/execution_unicorn.c")
+target_include_directories(twoine_runtime_objects PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+set(TWOINE_UNICORN_TARGET "${TWOINE_UNICORN_TARGET}" PARENT_SCOPE)

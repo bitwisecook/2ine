@@ -23,6 +23,3 @@ OS2EXPORT BOOL OS2API GpiQueryTextBox(HPS hps, LONG lCount1, PCH pchString, LONG
 #endif
 
 #endif
-
-// end of pmgpi.h ...
-

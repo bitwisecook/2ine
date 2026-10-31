@@ -26,9 +26,9 @@ int OS2_sock_init(void)
 {
     TRACE_NATIVE("sock_init()");
     return 1;  // always succeeds.
-} // OS2_sock_init
+}
 
-// !!! FIXME: currently expects you're doing IPv4
+
 static void mapOS2SockAddrIn(const OS2_sockaddr *os2addr, struct sockaddr_in *bsdaddr)
 {
     const OS2_sockaddr_in *os2addrin = (const OS2_sockaddr_in *) os2addr;
@@ -36,9 +36,9 @@ static void mapOS2SockAddrIn(const OS2_sockaddr *os2addr, struct sockaddr_in *bs
     bsdaddr->sin_family = AF_INET;
     bsdaddr->sin_port = os2addrin->sin_port;
     bsdaddr->sin_addr.s_addr = os2addrin->sin_addr.s_addr;
-} // mapOS2SockAddrIn
+}
 
-// !!! FIXME: currently expects you're doing IPv4
+
 static void mapBSDSockAddrIn(const struct sockaddr_in *bsdaddr, OS2_sockaddr *os2addr)
 {
     OS2_sockaddr_in *os2addrin = (OS2_sockaddr_in *) os2addr;
@@ -46,7 +46,7 @@ static void mapBSDSockAddrIn(const struct sockaddr_in *bsdaddr, OS2_sockaddr *os
     os2addrin->sin_family = OS2_AF_INET;
     os2addrin->sin_port = bsdaddr->sin_port;
     os2addrin->sin_addr.s_addr = bsdaddr->sin_addr.s_addr;
-} // mapBSDSockAddrIn
+}
 
 static int mapOS2MsgFlags(const int os2flags)
 {
@@ -63,24 +63,22 @@ static int mapOS2MsgFlags(const int os2flags)
     MAPSOCKFLAGS(MSG_DONTWAIT);
     #undef MAPSOCKFLAGS
 
-    // !!! FIXME: no such flag on Linux
-    //MAPSOCKFLAGS(MSG_FULLREAD);
 
     return bsdflags;
-} // mapOS2MsgFlags
+}
 
 int OS2_recv(int sock, void *buf, size_t len, int os2flags)
 {
     TRACE_NATIVE("recv(%d, %p, %d, %d)", sock, buf, (int) len, os2flags);
-    FIXME("this should fail if not a socket"); // otherwise you might be a file descriptor...
+    FIXME("this should fail if not a socket");
     return recv(sock, buf, len, mapOS2MsgFlags(os2flags));
-} // OS2_recv
+}
 
 int OS2_connect(int sock, const struct OS2_sockaddr *os2addr, int addrlen)
 {
     TRACE_NATIVE("connect(%d, %p, %d)", sock, os2addr, addrlen);
 
-    FIXME("this should fail if not a socket"); // otherwise you might be a file descriptor...
+    FIXME("this should fail if not a socket");
 
     if (os2addr->sa_family != OS2_AF_INET) {
         FIXME("currently demands IPv4 socket");
@@ -90,14 +88,14 @@ int OS2_connect(int sock, const struct OS2_sockaddr *os2addr, int addrlen)
     struct sockaddr_in bsdaddr;
     mapOS2SockAddrIn(os2addr, &bsdaddr);
     return connect(sock, &bsdaddr, (socklen_t) sizeof (bsdaddr));
-} // OS2_connect
+}
 
 int OS2_shutdown(int sock, int kind)
 {
     TRACE_NATIVE("shutdown(%d, %d)", sock, kind);
-    FIXME("this should fail if not a socket"); // otherwise you might be a file descriptor...
+    FIXME("this should fail if not a socket");
     return shutdown(sock, kind);
-} // OS2_shutdown
+}
 
 int OS2_socket(int os2family, int os2socktype, int protocol)
 {
@@ -123,47 +121,47 @@ int OS2_socket(int os2family, int os2socktype, int protocol)
     }
 
     return socket(AF_INET, bsdsocktype, 0);
-} // OS2_socket
+}
 
 ssize_t OS2_send(int sock, const void *buf, size_t len, int os2flags)
 {
     TRACE_NATIVE("send(%d, %p, %d, %d)", sock, buf, (int) len, os2flags);
-    FIXME("this should fail if not a socket"); // otherwise you might be a file descriptor...
+    FIXME("this should fail if not a socket");
     return send(sock, buf, len, mapOS2MsgFlags(os2flags));
-} // OS2_send
+}
 
 int OS2_soclose(int sock)
 {
     TRACE_NATIVE("soclose(%d)", sock);
-    FIXME("this should fail if not a socket"); // otherwise you might close a file descriptor...
+    FIXME("this should fail if not a socket");
     return close(sock);
-} // OS2_soclose
+}
 
 int OS2_sock_errno(void)
 {
     TRACE_NATIVE("sock_errno()");
     FIXME("this should cache errno when an OS/2 socket function fails");
     return errno;
-} // OS2_sock_errno
+}
 
 unsigned long OS2_inet_addr(const char *name)
 {
     TRACE_NATIVE("inet_addr('%s')", name);
     return inet_addr(name);
-} // OS2_inet_addr
+}
 
 struct OS2_hostent *OS2_gethostbyname(const char *name)
 {
     TRACE_NATIVE("gethostbyname('%s')", name);
     struct hostent *hent = gethostbyname(name);
-    return (OS2_hostent *) hent;  // these happen to match up between Linux and OS/2.
-} // OS2_gethostbyname
+    return (OS2_hostent *) hent;
+}
 
 unsigned short OS2_htons(unsigned short val)
 {
     TRACE_NATIVE("htons(%u)", (unsigned int) val);
     return htons(val);
-} // OS2_htons
+}
 
 char *OS2_inet_ntoa(struct OS2_in_addr os2inaddr)
 {
@@ -171,14 +169,14 @@ char *OS2_inet_ntoa(struct OS2_in_addr os2inaddr)
     struct in_addr bsdaddr;
     bsdaddr.s_addr = os2inaddr.s_addr;
     return inet_ntoa(bsdaddr);
-} // OS2_inet_ntoa
+}
 
 struct OS2_servent *OS2_getservbyname(const char *name, const char *proto)
 {
     TRACE_NATIVE("getservbyname('%s', '%s')", name, proto);
     struct servent *sent = getservbyname(name, proto);
-    return (OS2_servent *) sent;  // these happen to match up between Linux and OS/2.
-} // OS2_getservbyname
+    return (OS2_servent *) sent;
+}
 
 static void mapOS2FdSet(const OS2_fd_set *os2set, fd_set *bsdset)
 {
@@ -187,7 +185,7 @@ static void mapOS2FdSet(const OS2_fd_set *os2set, fd_set *bsdset)
     for (int i = 0; i < total; i++) {
         FD_SET(os2set->fd_array[i], bsdset);
     }
-} // mapOS2FdSet
+}
 
 int OS2_select(int ndfs, OS2_fd_set *os2readfds, OS2_fd_set *os2writefds, OS2_fd_set *os2errorfds, OS2_timeval *os2timeout)
 {
@@ -214,7 +212,7 @@ int OS2_select(int ndfs, OS2_fd_set *os2readfds, OS2_fd_set *os2writefds, OS2_fd
     const int rc = select(ndfs, readfds, writefds, errorfds, pbsdtv);
     FIXME("fill in OS/2 fds");
     return rc;
-} // OS2_select
+}
 
 int OS2_os2_select(int *socks, int noreads, int nowrites, int noexcept, long timeout)
 {
@@ -241,7 +239,7 @@ int OS2_os2_select(int *socks, int noreads, int nowrites, int noexcept, long tim
     }
 
     return poll(origfds, nfds, timeout * 1000);
-} // OS2_os2_select
+}
 
 int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
@@ -262,7 +260,7 @@ int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
     mapBSDSockAddrIn(&bsdaddr, os2name);
     *os2namelen = sizeof (OS2_sockaddr_in);
     return rc;
-} // OS2_getsockname
+}
 
 int OS2_bind(int sock, const OS2_sockaddr *os2name, int os2namelen)
 {
@@ -270,13 +268,13 @@ int OS2_bind(int sock, const OS2_sockaddr *os2name, int os2namelen)
     struct sockaddr_in bsdaddr;
     mapOS2SockAddrIn(os2name, &bsdaddr);
     return bind(sock, (struct sockaddr *) &bsdaddr, sizeof (bsdaddr));
-} // OS2_bind
+}
 
 int OS2_listen(int sock, int backlog)
 {
     TRACE_NATIVE("listen(%d, %d)", sock, backlog);
     return listen(sock, backlog);
-} // OS2_listen
+}
 
 int OS2_accept(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
@@ -294,7 +292,7 @@ int OS2_accept(int sock, OS2_sockaddr *os2name, int *os2namelen)
     }
 
     return retval;
-} // OS2_accept
+}
 
 static int mapOS2SocketOption(const int os2name)
 {
@@ -306,14 +304,12 @@ static int mapOS2SocketOption(const int os2name)
         MAPSOOPT(SO_KEEPALIVE);
         MAPSOOPT(SO_DONTROUTE);
         MAPSOOPT(SO_BROADCAST);
-        //MAPSOOPT(SO_USELOOPBACK);
+
         MAPSOOPT(SO_LINGER);
         MAPSOOPT(SO_OOBINLINE);
-        //MAPSOOPT(SO_L_BROADCAST);
-        //MAPSOOPT(SO_RCV_SHUTDOWN);
-        //MAPSOOPT(SO_SND_SHUTDOWN);
+
         MAPSOOPT(SO_REUSEPORT);
-        //MAPSOOPT(SO_TTCP);
+
         MAPSOOPT(SO_SNDBUF);
         MAPSOOPT(SO_RCVBUF);
         MAPSOOPT(SO_SNDLOWAT);
@@ -322,14 +318,14 @@ static int mapOS2SocketOption(const int os2name)
         MAPSOOPT(SO_RCVTIMEO);
         MAPSOOPT(SO_ERROR);
         MAPSOOPT(SO_TYPE);
-        //MAPSOOPT(SO_OPTIONS);
+
         #undef MAPSOOPT
         default: break;
     }
 
     FIXME("unsupported OS/2 socket option");
     return 0;
-} // mapOS2SocketOption
+}
 
 int OS2_setsockopt(int sock, int os2level, int os2name, const void *value, int len)
 {
@@ -341,7 +337,7 @@ int OS2_setsockopt(int sock, int os2level, int os2name, const void *value, int l
         return -1;
     }
     return setsockopt(sock, bsdlevel, bsdname, value, len);
-} // OS2_setsockopt
+}
 
 int OS2_gettimeofday(OS2_timeval *os2tv, OS2_timezone *os2tz)
 {
@@ -360,51 +356,48 @@ int OS2_gettimeofday(OS2_timeval *os2tv, OS2_timezone *os2tz)
     }
 
     return retval;
-} // OS2_gettimeofday
+}
 
 // SOCKS support...
 
 int OS2_Rgetsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
-    // !!! FIXME: this doesn't talk to a SOCKS proxy at all.
+
     TRACE_NATIVE("Rgetsockname(%d, %p, %p)", sock, os2name, os2namelen);
     return OS2_getsockname(sock, os2name, os2namelen);
-} // OS2_Rgetsockname
+}
 
 int OS2_Rbind(int sock, OS2_sockaddr *os2name, int os2namelen, OS2_sockaddr *os2remote)
 {
-    // !!! FIXME: this doesn't talk to a SOCKS proxy at all.
+
     TRACE_NATIVE("Rbind(%d, %p, %d, %p)", sock, os2name, os2namelen, os2remote);
     return OS2_bind(sock, os2name, os2namelen);
-} // OS2_Rbind
+}
 
 int OS2_Raccept(int sock, OS2_sockaddr *os2name, int *os2namelen)
 {
-    // !!! FIXME: this doesn't talk to a SOCKS proxy at all.
+
     TRACE_NATIVE("Raccept(%d, %p, %p)", sock, os2name, os2namelen);
     return OS2_accept(sock, os2name, os2namelen);
-} // OS2_Raccept
+}
 
 int OS2_Rconnect(int sock, const OS2_sockaddr *os2name, int os2namelen)
 {
-    // !!! FIXME: this doesn't talk to a SOCKS proxy at all.
+
     TRACE_NATIVE("Rconnect(%d, %p, %d)", sock, os2name, os2namelen);
     return OS2_connect(sock, os2name, os2namelen);
-} // OS2_Rconnect
+}
 
 int OS2_Rlisten(int sock, int backlog)
 {
-    // !!! FIXME: this doesn't talk to a SOCKS proxy at all.
+
     TRACE_NATIVE("Rlisten(%d, %d)", sock, backlog);
     return OS2_listen(sock, backlog);
-} // OS2_Rlisten
+}
 
 OS2_hostent *OS2_Rgethostbyname(const char *name)
 {
-    // !!! FIXME: this doesn't talk to a SOCKS proxy at all.
+
     TRACE_NATIVE("Rgethostbyname('%s')", name);
     return OS2_gethostbyname(name);
-} // OS2_Rgethostbyname
-
-// end of tcpip32.c ...
-
+}

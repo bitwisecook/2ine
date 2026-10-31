@@ -1,0 +1,43 @@
+<!-- Public domain. No rights reserved. Wholly AI-authored. -->
+
+# Tests
+
+Run runtime and execution contracts with `ctest --test-dir build --output-on-failure`.
+They cover mixed-mode entry, callbacks, threads/TLS, memory bounds, resource
+lifetimes, x87 state and host synchronization.
+
+## Developer tools
+
+Supply the historical tools yourself. Copy `tests/devtools-fixtures.example.json`
+and set these paths:
+
+| Key | Contents |
+|---|---|
+| `msc` | Microsoft C 6.0 `bin`, `include`, `lib` |
+| `msasm` | MASM 5.10A `bin`, `lib`, protected-mode LINK/runtime |
+| `ml6` | OS/2 `ML.EXE`, with adjacent `ML.ERR` |
+| `msc386` | DDK CL386, compiler helpers and LINK386 |
+| `ibm_bin`, `ibm_lib` | ICC/ILINK 3.6.5 EXEs/DLLs and matching LIB directory |
+| `watcom` | Watcom 11.0c `binp`, `binp/dll`, `binw/wlsystem.lnk`, `lib386/os2` |
+| `os2386` | OS/2 import library; recipes use Open Watcom 1.9 |
+
+```sh
+python3 tests/devtools.py --build build --backend unicorn \
+  --fixtures /path/fixtures.json --work /path/new-results
+```
+
+Use `--backend native` with the native Linux build. Each run needs a fresh work
+directory. It retains command logs, objects, executables and `results.json`.
+
+| Toolchain | Exercises |
+|---|---|
+| Microsoft C 6.0 | Compile/link/run NE, produce DOS MZ, directory handle reuse |
+| MASM 5.10A + LINK | Assemble/link/run NE |
+| MASM 6 | Small/large sources, diagnostics, assemble/link/run NE |
+| DDK CL386 + ML6 + LINK386 | Compile/assemble/link/run LX, returning 42 |
+| IBM ICC/ILINK 3.6.5 | Compiler helpers, linker thread, compile/link/run LX |
+| Watcom 11.0c | Compile/assemble/archive/link/run LX and invalid-source diagnostics |
+
+OMF checks accept omitted zero checksums and validate nonzero checksums. LX
+checks validate object/page extents and entry/stack objects. The DOS MZ output
+is inspected, not executed. No proprietary compiler fixtures are distributed.

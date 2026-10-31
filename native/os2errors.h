@@ -695,6 +695,3 @@ enum
 };
 
 #endif
-
-// end of os2errors.h ...
-

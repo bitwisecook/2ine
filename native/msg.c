@@ -9,28 +9,29 @@
 #include "os2native16.h"
 #include "msg.h"
 
-#include <unistd.h>
+#include "../runtime/host_fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "msg-lx.h"
 
-APIRET DosPutMessage(HFILE handle, ULONG msglen, PCHAR msg)
+APIRET DosPutMessage(HFILE handle, ULONG size, PCHAR message)
 {
-    TRACE_NATIVE("DosPutMessage(%u, %u, %p)", (uint) handle, (uint) msglen, msg);
-    FIXME("really implement this");
-    write(handle, msg, msglen);
-    return NO_ERROR;
-} // DosPutMessage
-
-APIRET16 Dos16PutMessage(USHORT handle, USHORT msglen, PCHAR msg)
+    TRACE_NATIVE("DosPutMessage(%u, %u, %p)", (uint) handle, (uint) size, message);
+    uint32 actual;
+    if (GLoaderState.writeFile) return GLoaderState.writeFile(handle, message, size, &actual);
+    /* Programs importing MSG alone have only the initial standard handles. */
+    LxHostFile *file = lx_host_file_standard(handle);
+    if (!file) return ERROR_INVALID_HANDLE;
+    size_t written;
+    const LxHostFsError error = lx_host_file_write(file, message, size, &written);
+    lx_host_file_close(file); return error ? ERROR_WRITE_FAULT : NO_ERROR;
+}
+APIRET16 Dos16PutMessage(USHORT handle, USHORT size, PCHAR message)
 {
-    TRACE_NATIVE("Dos16PutMessage(%u, %u, %p)", (uint) handle, (uint) msglen, msg);
-    FIXME("really implement this");
-    write(handle, msg, msglen);
-    return NO_ERROR;
-} // Dos16PutMessage
+    return (APIRET16) DosPutMessage(handle, size, message);
+}
 
 //
 // OS/2 message files (the output of MKMSGF) start with:
@@ -64,16 +65,15 @@ APIRET16 Dos16PutMessage(USHORT handle, USHORT msglen, PCHAR msg)
 static uint16 readLE16(const uint8 *ptr)
 {
     return (uint16) (ptr[0] | (ptr[1] << 8));
-} // readLE16
+}
 
 static uint32 readLE32(const uint8 *ptr)
 {
     return (uint32) ptr[0] | ((uint32) ptr[1] << 8) |
            ((uint32) ptr[2] << 16) | ((uint32) ptr[3] << 24);
-} // readLE32
+}
 
-// Open an OS/2 message file through the same drive mapping the rest of the
-//  shim uses. Returns NULL if it can't be opened or isn't a message file.
+/* Use guest drive mappings for message files. */
 static uint8 *loadMessageFile(const char *filename, size_t *outlen)
 {
     uint32 err = 0;
@@ -81,47 +81,23 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
     if (!unixpath)
         return NULL;
 
-    FILE *io = fopen(unixpath, "rb");
+    size_t len;
+    uint8 *data = lx_host_file_snapshot(unixpath, UINT32_MAX, &len, NULL);
     free(unixpath);
-    if (!io)
-        return NULL;
-
-    if (fseek(io, 0, SEEK_END) != 0) {
-        fclose(io);
-        return NULL;
-    } // if
-    const long len = ftell(io);
-    if (len < 0x15) {
-        fclose(io);
-        return NULL;
-    } // if
-    rewind(io);
-
-    uint8 *data = (uint8 *) malloc((size_t) len);
-    if (!data) {
-        fclose(io);
-        return NULL;
-    } // if
-
-    if (fread(data, (size_t) len, 1, io) != 1) {
-        free(data);
-        fclose(io);
-        return NULL;
-    } // if
-    fclose(io);
+    if (!data) return NULL;
+    if (len < 0x15) { free(data); return NULL; }
 
     if (memcmp(data + MSGFILE_SIGNATURE_OFFSET, MSGFILE_SIGNATURE,
                strlen(MSGFILE_SIGNATURE)) != 0) {
         free(data);
         return NULL;
-    } // if
+    }
 
     *outlen = (size_t) len;
     return data;
-} // loadMessageFile
+}
 
-// Locate message `msgnum` in a loaded message file. Returns a pointer and
-//  length inside `data`, or NULL if the number is not present.
+/* Return a span into the file buffer; records are not NUL-terminated. */
 static const uint8 *findMessage(const uint8 *data, const size_t datalen,
                                 const uint32 msgnum, size_t *outlen)
 {
@@ -153,18 +129,16 @@ static const uint8 *findMessage(const uint8 *data, const size_t datalen,
         end = (uint32) datalen;  // last message runs to the end of the file.
         while ((end > start) && (data[end - 1] == '\0'))
             end--;
-    } // else
+    }
 
     if ((start > datalen) || (end > datalen) || (end < start))
         return NULL;
 
     *outlen = (size_t) (end - start);
     return data + start;
-} // findMessage
+}
 
-// Expand "%1".."%9" using the caller's substitution table. pTable entries
-//  are flat 32-bit pointers for the Dos32 entry points; the 16-bit entry
-//  point converts them before calling here.
+/* Expand bare %1..%9 substitutions using the caller's pointer table. */
 static APIRET formatMessage(const uint8 *msg, const size_t msglen,
                             PCHAR *pTable, const ULONG cTable,
                             PCHAR pBuf, const ULONG cbBuf, PULONG pcbMsg)
@@ -196,7 +170,7 @@ static APIRET formatMessage(const uint8 *msg, const size_t msglen,
                     return ERROR_MR_MSG_TOO_LONG;
                 pBuf[out++] = outch;
                 continue;
-            } // if
+            }
         } else if ((ch == '%') && ((i + 1) < msglen) &&
                    (msg[i + 1] >= '1') && (msg[i + 1] <= '9')) {
             const ULONG arg = (ULONG) (msg[i + 1] - '1');
@@ -210,37 +184,24 @@ static APIRET formatMessage(const uint8 *msg, const size_t msglen,
                     if (out >= cbBuf)
                         return ERROR_MR_MSG_TOO_LONG;
                     pBuf[out++] = *(sub++);
-                } // while
+                }
                 continue;
-            } // if
-        } // else if
+            }
+        }
 
         if (out >= cbBuf)
             return ERROR_MR_MSG_TOO_LONG;
         pBuf[out++] = ch;
-    } // for
+    }
 
     if (pcbMsg)
         *pcbMsg = out;
     return NO_ERROR;
-} // formatMessage
+}
 
-APIRET __attribute__((stdcall)) DosTrueGetMessage(PVOID msgseg)
+APIRET lx_message_get(PVOID msgseg, PVOID pTable, ULONG cTable, PCHAR pData,
+                         ULONG cbBuf, ULONG msgnum, PCHAR pFilename, PULONG pcbMsg)
 {
-    // `msgseg` is the hidden frame word that the MSGSEG32 call thunk pushes
-    //  before the seven documented arguments. The stdcall qualifier makes this
-    //  entry point pop it with `ret 4`, matching retail DOSCALL1 ordinal 388.
-    // The seven following arguments live directly above the frame pointer;
-    //  msg.c is built with -fno-omit-frame-pointer so this stays reliable.
-    PVOID *args = (PVOID *) ((uint8 *) __builtin_frame_address(0) + 8);
-    PVOID pTable = args[1];
-    const ULONG cTable = (ULONG) (size_t) args[2];
-    PCHAR pData = (PCHAR) args[3];
-    const ULONG cbBuf = (ULONG) (size_t) args[4];
-    const ULONG msgnum = (ULONG) (size_t) args[5];
-    PCHAR pFilename = (PCHAR) args[6];
-    PULONG pcbMsg = (PULONG) args[7];
-
     TRACE_NATIVE("DosTrueGetMessage(%p, %p, %u, %p, %u, %u, '%s', %p)", msgseg, pTable, cTable, pData, cbBuf, msgnum, pFilename, pcbMsg);
     if ((!pData) || (!cbBuf) || (!pFilename) || (!*pFilename))
         return ERROR_INVALID_PARAMETER;
@@ -256,13 +217,13 @@ APIRET __attribute__((stdcall)) DosTrueGetMessage(PVOID msgseg)
     if (!msg) {
         free(data);
         return ERROR_MR_MID_NOT_FOUND;
-    } // if
+    }
 
     const APIRET rc = formatMessage(msg, msglen, (PCHAR *) pTable, cTable,
                                     pData, cbBuf, pcbMsg);
     free(data);
     return rc;
-} // DosTrueGetMessage
+}
 
 APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cbBuf, USHORT msgnum, PCHAR pFilename, PUSHORT pcbMsg, PVOID msgseg)
 {
@@ -281,21 +242,27 @@ APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cb
     if (!msg) {
         free(data);
         return ERROR_MR_MID_NOT_FOUND;
-    } // if
+    }
 
     // The 16-bit caller's substitution table entries are 16:16 pointers.
-    PCHAR flatTable[9];
+    PCHAR flatTable[9] = {0};
+    LxGuestArgument substitutions[9] = {0};
     const uint16 ntable = (cTable < 9) ? cTable : 9;
-    for (uint16 i = 0; i < ntable; i++)
-        flatTable[i] = (PCHAR) GLoaderState.convert1616to32(((uint32 *) pTable)[i]);
+    for (uint16 i = 0; i < ntable; i++) {
+        uint32 pointer = lx_guest_load_u32((uint8 *) pTable + i * 4);
+        if (!lx_guest_argument_strings(GLoaderState.execution, pointer, 1, 65536, 1, &substitutions[i])) {
+            for (uint16 j = 0; j < i; j++) lx_guest_argument_finish(&substitutions[j], 0);
+            free(data); return ERROR_INVALID_PARAMETER;
+        }
+        flatTable[i] = substitutions[i].host;
+    }
 
     ULONG realLen = 0;
     const APIRET rc = formatMessage(msg, msglen, flatTable, ntable,
                                     pData, cbBuf, &realLen);
     if (pcbMsg)
         *pcbMsg = (USHORT) realLen;
+    for (uint16 i = 0; i < ntable; i++) lx_guest_argument_finish(&substitutions[i], 0);
     free(data);
     return rc;
-} // Dos16TrueGetMessage
-
-// end of msg.c ...
+}

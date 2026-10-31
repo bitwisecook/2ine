@@ -1,0 +1,11 @@
+{
+  "_notice": "Public domain. No rights reserved. Wholly AI-authored.",
+  "msc": "/fixtures/msc60",
+  "msasm": "/fixtures/msasm",
+  "ml6": "/fixtures/masm60/ML.EXE",
+  "msc386": "/fixtures/ddk386",
+  "ibm_bin": "/fixtures/ibm365/bin-and-runtime",
+  "ibm_lib": "/fixtures/ibm365/LIB",
+  "watcom": "/fixtures/watcom11",
+  "os2386": "/fixtures/os2-toolkit/os2386.lib"
+}

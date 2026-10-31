@@ -1,0 +1,28 @@
+# Public domain. No rights reserved.
+# Wholly AI-authored.
+name: Portable CPU runtime
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned Unicorn source
+        shell: bash
+        run: |
+          git init _deps/unicorn
+          git -C _deps/unicorn remote add origin https://github.com/unicorn-engine/unicorn.git
+          git -C _deps/unicorn fetch --depth=1 origin 8028ec436f2d9376525352dd38ed9ed6b9f6be10
+          git -C _deps/unicorn checkout --detach FETCH_HEAD
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S . -B build-runtime -DTWOINE_RUNTIME_ONLY=ON -DCMAKE_BUILD_TYPE=Release -DTWOINE_UNICORN_SOURCE_DIR="$PWD/_deps/unicorn"
+      - name: Build
+        run: cmake --build build-runtime --config Release --parallel 2
+      - name: Test
+        run: ctest --test-dir build-runtime -C Release --output-on-failure

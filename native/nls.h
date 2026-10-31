@@ -77,6 +77,3 @@ OS2EXPORT APIRET16 OS2API16 Dos16GetCtryInfo(USHORT len, PCOUNTRYCODE16 pcc, PCO
 #endif
 
 #endif
-
-// end of nls.h ...
-

@@ -20,6 +20,3 @@ extern "C" {
 #endif
 
 #endif
-
-// end of som.h ...
-

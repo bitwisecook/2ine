@@ -9,14 +9,14 @@
 #include "os2native16.h"
 #include "viocalls.h"
 
-// os2types.h defines these, but so does curses.
+
 #undef TRUE
 #undef FALSE
 
 #include <unistd.h>
 #include <ctype.h>
 
-// CMake searches for a whole bunch of different possible curses includes
+
 #if defined(HAVE_NCURSESW_NCURSES_H)
 #include <ncursesw/ncurses.h>
 #elif defined(HAVE_NCURSESW_CURSES_H)
@@ -70,11 +70,11 @@ static int initNcurses(void)
     if (vio_buffer != NULL)
         return 1;
 
-    setlocale(LC_CTYPE, ""); // !!! FIXME: we assume you have a UTF-8 terminal.
+    setlocale(LC_CTYPE, "");
     if (initscr() == NULL) {
         fprintf(stderr, "ncurses: initscr() failed\n");
         return 0;
-    } // if
+    }
 
 	cbreak();
 	keypad(stdscr, TRUE);
@@ -82,7 +82,7 @@ static int initNcurses(void)
     start_color();
     use_default_colors();
 
-    // map to VIO attributes...
+
     static const short curses_colormap[] = {
         COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_CYAN,
         COLOR_RED, COLOR_MAGENTA, COLOR_YELLOW, COLOR_WHITE
@@ -93,12 +93,12 @@ static int initNcurses(void)
             for (uint32 j = 0; j < 8; j++) {
                 const int pair = (int) (i | (j << 3));
                 init_pair(pair, curses_colormap[i], (j == 0) ? -1 : curses_colormap[j]);
-            } // for
-        } // for
+            }
+        }
     } else if (COLORS >= 8) {  // just foregrounds
         for (int i = 0; i < 8; i++)
             init_pair(i, curses_colormap[i], COLOR_BLACK);
-    } // else if
+    }
 
     // (otherwise, we won't set colors at all.)
 
@@ -109,10 +109,10 @@ static int initNcurses(void)
     vio_buffer = malloc(buflen);
     if (!vio_buffer) {
         endwin();
-        delwin(stdscr);  // not sure if this is safe, but valgrind said it leaks.
+        delwin(stdscr);
         stdscr = NULL;
         return 0;
-    } // if
+    }
 
     memset(vio_buffer, '\0', buflen);
     vio_scrw = (uint16) scrw;
@@ -126,30 +126,29 @@ static int initNcurses(void)
     vio_cursorinfo.attr = 0;
 
     return 1;
-} // initNcurses
+}
 
 static void deinitNcurses(void)
 {
     if (!vio_buffer)
         return;
 
-    // !!! FIXME: this is wrong
-    //endwin();
+
     reset_shell_mode();
 
     printf("\n"); fflush(stdout);
 
-    delwin(stdscr);  // not sure if this is safe, but valgrind said it leaks.
+    delwin(stdscr);
     stdscr = NULL;
     free(vio_buffer);
     vio_buffer = NULL;
     vio_curx = vio_cury = vio_scrw = vio_scrh = 0;
-} // deinitNcurses
+}
 
 static inline void commitToNcurses(void)
 {
     refresh();
-} // commitToNcurses
+}
 
 static void pushToNcurses(const int y, const int x, int numcells, const int commit)
 {
@@ -173,7 +172,7 @@ static void pushToNcurses(const int y, const int x, int numcells, const int comm
             case 0xC0: ch = ACS_LLCORNER; break;
             case 0xD9: ch = ACS_LRCORNER; break;
             default: ch = (chtype) viochar; break;
-        } // switch
+        }
 
         chtype attr = 0;
 
@@ -183,7 +182,7 @@ static void pushToNcurses(const int y, const int x, int numcells, const int comm
         } else if (COLORS >= 8) {  // just foregrounds
             const int color = (vioattr & 0x7);
             attr |= COLOR_PAIR(color);
-        } // else if
+        }
 
         if (vioattr & VIOATTR_INTENSITY)
             attr |= A_BOLD;
@@ -191,26 +190,26 @@ static void pushToNcurses(const int y, const int x, int numcells, const int comm
             attr |= A_BLINK;
 
         addch(ch | attr);
-    } // for
+    }
 
     move(vio_cury, vio_curx);
 
     if (commit)
         commitToNcurses();
-} // pushToNcurses
+}
 
 APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
 {
     TRACE_NATIVE("VioGetMode(%p, %u)", pvioModeInfo, (uint) hvio);
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (pvioModeInfo == NULL)
         return ERROR_VIO_INVALID_PARMS;
     else if (pvioModeInfo->cb != sizeof (*pvioModeInfo))
         return ERROR_VIO_INVALID_LENGTH;
 
-    //FIXME("might need to init ncurses at some point, but not yet.");
+
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
 
@@ -225,21 +224,17 @@ APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
     pvioModeInfo->fmt_ID = 0;
     pvioModeInfo->attrib = 1;
     FIXME("fill in the rest of these");
-    //ULONG buf_addr;
-    //ULONG buf_length;
-    //ULONG full_length;
-    //ULONG partial_length;
-    //PCHAR ext_data_addr;
+
 
     return NO_ERROR;
-} // VioGetMode
+}
 
 APIRET16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio)
 {
     TRACE_NATIVE("VioGetCurPos(%p, %p, %u)", pusRow, pusColumn, (uint) hvio);
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
 
@@ -250,14 +245,14 @@ APIRET16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio)
         *pusColumn = vio_curx;
 
     return NO_ERROR;
-} // VioGetCurPos
+}
 
 APIRET16 VioGetBuf(PULONG pLVB, PUSHORT pcbLVB, HVIO hvio)
 {
     TRACE_NATIVE("VioGetBuf(%p, %p, %u)", pLVB, pcbLVB, (uint) hvio);
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
     if (pLVB)
@@ -265,7 +260,7 @@ APIRET16 VioGetBuf(PULONG pLVB, PUSHORT pcbLVB, HVIO hvio)
     if (pcbLVB)
         *pcbLVB = vio_scrw * vio_scrh * sizeof (ULONG);
     return NO_ERROR;
-} // VioGetBuf
+}
 
 APIRET16 VioGetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
 {
@@ -273,7 +268,7 @@ APIRET16 VioGetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
     return NO_ERROR;
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (pvioCursorInfo == NULL)
         return ERROR_VIO_INVALID_PARMS;
     else if (!initNcurses())
@@ -281,15 +276,15 @@ APIRET16 VioGetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
 
     memcpy(pvioCursorInfo, &vio_cursorinfo, sizeof (*pvioCursorInfo));
     return NO_ERROR;
-} // VioGetCurType
+}
 
 APIRET16 VioScrollUp(USHORT usTopRow, USHORT usLeftCol, USHORT usBotRow, USHORT usRightCol, USHORT cbLines, PBYTE pCell, HVIO hvio)
 {
     TRACE_NATIVE("VioScrollUp(%u, %u, %u, %u, %u, %p, %u)", (uint) usTopRow, (uint) usLeftCol, (uint) usBotRow, (uint) usRightCol, (uint) cbLines, pCell, (uint) hvio);
 FIXME("buggy");
-return NO_ERROR;  // !!! FIXME: buggy
+return NO_ERROR;
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (pCell == NULL)
         return ERROR_VIO_INVALID_PARMS;
     else if (!initNcurses())
@@ -305,11 +300,11 @@ return NO_ERROR;  // !!! FIXME: buggy
         usBotRow = vio_scrh - 1;
 
     if (usLeftCol >= usRightCol)
-        return NO_ERROR;  // already done.
+        return NO_ERROR;
     else if (usTopRow >= usBotRow)
-        return NO_ERROR;  // already done.
+        return NO_ERROR;
     else if (cbLines == 0)
-        return NO_ERROR;  // already done.
+        return NO_ERROR;
 
     const uint32 rowlen = (usRightCol - usLeftCol) + 1;
     const uint32 overlines = (cbLines > usTopRow) ? (cbLines - usTopRow) : 0;
@@ -323,18 +318,18 @@ return NO_ERROR;  // !!! FIXME: buggy
         memcpy(dst, src, rowcpylen);
         src += vio_scrw;
         dst += vio_scrw;
-    } // for
+    }
 
     const uint16 clear_cell = *((uint16 *) pCell);
     for (uint32 i = 0; i < cbLines; i++) {
         if (dst >= (vio_buffer + (vio_scrw * vio_scrh)))
-            break;  // !!! FIXME: just calculate this outside the loop and adjust cbLines.
+            break;
         uint16 *origdst = dst;
         for (uint32 j = 0; j < rowlen; j++) {
             *(dst++) = clear_cell;
         }
         dst = origdst + vio_scrw;
-    } // for
+    }
 
     int starty = usTopRow - cbLines;
     if (starty < 0)
@@ -348,13 +343,13 @@ return NO_ERROR;  // !!! FIXME: buggy
     commitToNcurses();
 
     return NO_ERROR;
-} // VioScrollUp
+}
 
 APIRET16 VioSetCurPos(USHORT usRow, USHORT usColumn, HVIO hvio)
 {
     TRACE_NATIVE("VioSetCurPos(%u, %u, %u)", (uint) usRow, (uint) usColumn, (uint) hvio);
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
     else if (usRow >= vio_scrh)
@@ -369,21 +364,21 @@ APIRET16 VioSetCurPos(USHORT usRow, USHORT usColumn, HVIO hvio)
     refresh();
 
     return NO_ERROR;
-} // VioSetCurPos
+}
 
 APIRET16 VioSetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
 {
     TRACE_NATIVE("VioSetCurType(%p, %u)", pvioCursorInfo, (uint) hvio);
     FIXME("write me");
     return NO_ERROR;
-} // VioSetCurType
+}
 
 APIRET16 VioReadCellStr(PCH pchCellStr, PUSHORT pcb, USHORT usRow, USHORT usColumn, HVIO hvio)
 {
     TRACE_NATIVE("VioReadCellStr(%p, %p, %u, %u, %u)", pchCellStr, pcb, (uint) usRow, (uint) usColumn, (uint) hvio);
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
     else if (usRow >= vio_scrh)
@@ -398,14 +393,14 @@ APIRET16 VioReadCellStr(PCH pchCellStr, PUSHORT pcb, USHORT usRow, USHORT usColu
         *pcb = (USHORT) avail;
     memcpy(pchCellStr, vio_buffer + idx, (size_t) *pcb);
     return NO_ERROR;
-} // VioReadCellStr
+}
 
 APIRET16 VioWrtCellStr(PCH pchCellStr, USHORT cb, USHORT usRow, USHORT usColumn, HVIO hvio)
 {
     TRACE_NATIVE("VioWrtCellStr(%p, %u, %u, %u, %u)", pchCellStr, (uint) cb, (uint) usRow, (uint) usColumn, (uint) hvio);
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
     else if (usRow >= vio_scrh)
@@ -419,19 +414,19 @@ APIRET16 VioWrtCellStr(PCH pchCellStr, USHORT cb, USHORT usRow, USHORT usColumn,
     if (((uint32) cb) > avail)
         cb = (USHORT) avail;
 
-    memcpy(dst, src, cb);  // !!! FIXME: what happens if cb extends into half a cell?
+    memcpy(dst, src, cb);
 
     pushToNcurses(usRow, usColumn, cb / sizeof (uint16), 1);
 
     return NO_ERROR;
-} // VioWrtCellStr
+}
 
 APIRET16 VioWrtCharStrAtt(PCH pch, USHORT cb, USHORT usRow, USHORT usColumn, PBYTE pAttr, HVIO hvio)
 {
     TRACE_NATIVE("VioWrtCharStrAtt(%p, %u, %u, %u, %p, %u)", pch, (uint) cb, (uint) usRow, (uint) usColumn, pAttr, (uint) hvio);
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
     else if (usRow >= vio_scrh)
@@ -449,19 +444,19 @@ APIRET16 VioWrtCharStrAtt(PCH pch, USHORT cb, USHORT usRow, USHORT usColumn, PBY
     for (uint32 i = 0; i < cb; i++, src++) {
         *(dst++) = *src;
         *(dst++) = attr;
-    } // for
+    }
 
     pushToNcurses(usRow, usColumn, cb, 1);
 
     return NO_ERROR;
-} // VioWrtCharStrAtt
+}
 
 APIRET16 VioWrtNCell(PBYTE pCell, USHORT cb, USHORT usRow, USHORT usColumn, HVIO hvio)
 {
     TRACE_NATIVE("VioWrtNCell(%p, %u, %u, %u, %u)", pCell, (uint) cb, (uint) usRow, (uint) usColumn, (uint) hvio);
 
     if (hvio != 0)
-        return ERROR_VIO_INVALID_HANDLE;  // !!! FIXME: can be non-zero when VioCreatePS() is implemented.
+        return ERROR_VIO_INVALID_HANDLE;
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
     else if (usRow >= vio_scrh)
@@ -481,12 +476,9 @@ APIRET16 VioWrtNCell(PBYTE pCell, USHORT cb, USHORT usRow, USHORT usColumn, HVIO
     pushToNcurses(usRow, usColumn, cb, 1);
 
     return NO_ERROR;
-} // VioWrtNCell
+}
 
 LX_NATIVE_DESTRUCTOR(viocalls)
 {
     deinitNcurses();
 }
-
-// end of viocalls.c ...
-

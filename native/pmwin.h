@@ -310,7 +310,7 @@ enum {
     FID_DBE_KKPOPUP = 0x8013
 };
 
-// OS/2's SDK packs these to 2 because 16-bit and 32-bit code share the same structs.  :/
+/* Two-byte packing preserves the shared USE16/USE32 PM layout. */
 #pragma pack(push, 2)
 typedef struct
 {
@@ -846,7 +846,7 @@ enum {
     PMERR_HFONT_IS_SELECTED = 0x2119,
     PMERR_DRVR_NOT_SUPPORTED = 0x2120,
     PMERR_INV_INKPS_FUNCTION = 0x2121
-    // !!! FIXME: there are more of these.
+
 };
 
 enum {
@@ -903,6 +903,3 @@ OS2EXPORT BOOL OS2API WinIsWindowVisible(HWND hwnd) OS2APIINFO(775);
 #endif
 
 #endif
-
-// end of pmwin.h ...
-

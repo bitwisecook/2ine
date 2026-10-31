@@ -67,6 +67,3 @@ OS2EXPORT APIRET16 OS2API16 VioWrtNCell(PBYTE pCell, USHORT cb, USHORT usRow, US
 #endif
 
 #endif
-
-// end of viocalls.h ...
-

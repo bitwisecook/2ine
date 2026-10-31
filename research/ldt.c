@@ -14,8 +14,6 @@ int main(void)
     struct user_desc ldt[8 * 1024];
     long rc;
 
-    //rc = syscall(123, (int) 0, (void *) ldt, (unsigned long) sizeof (ldt));
-    //printf("read syscall == %ld\n", rc);
 
     char *str = malloc(64);
     strcpy(str, "hello world!");
@@ -43,30 +41,16 @@ int main(void)
 
     printf("entry=%u, base=%p, limit=%u\n", entry->entry_number, (void *) entry->base_addr, entry->limit);
 
-// modify_ldt
-//    rc = syscall(SYS_modify_ldt, (int) 1, (void *) entry, (unsigned long) sizeof (*entry));
-//    printf("write syscall == %ld\n", rc);
 
-// set_thread_area
     rc = syscall(SYS_set_thread_area, entry);
     printf("write syscall == %ld\n", rc);
 
     printf("entry==%d\n", (int) (entry->entry_number));
 
-// this doesn't give you a user_desc struct back, I think it gives you the real LDT entry...?
-//    rc = syscall(SYS_modify_ldt, (int) 0, (void *) entry, (unsigned long) sizeof (*entry) * 128);
-//    printf("read syscall == %ld\n", rc);
 
-//    long i;
-//    for (i = 0; i < 128; i++, entry++)
-//        printf("entry=%u, base=%p, limit=%u\n", entry->entry_number, (void *) entry->base_addr, entry->limit);
-
-    // I have no idea why this needs the "<< 3 | 3", but it's probably
-    //  specified in the Intel manuals. I got this from looking at how
-    //  Wine does it.
+    /* TI=0 and RPL=3 select a ring-3 GDT entry. */
     __asm__ __volatile__ (
-        //"pushw %%ax\n\t"
-        //"popw %%fs \n\t"
+
         "movw %%ax,%%fs \n\t"
             :
             : "a" ((entry->entry_number << 3) | 3)
@@ -99,6 +83,3 @@ int main(void)
 
     return 0;
 }
-
-// end of ldt.c ...
-
