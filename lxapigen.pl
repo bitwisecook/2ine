@@ -3,6 +3,7 @@
 use warnings;
 use strict;
 use File::Basename;
+use JSON::PP qw(decode_json);
 
 my %typesizes = (
     'LONG' => 4,
@@ -21,6 +22,10 @@ sub typesize {
 }
 
 chdir(dirname(__FILE__)) or die("failed to chdir to script location: $!\n");
+open(my $wire_file, '<', 'guest/bindings/api32.json') or die("Cannot open API32 bindings: $!");
+my $wire_bindings = decode_json(do { local $/; <$wire_file> }); close($wire_file);
+open(my $wire16_file, '<', 'guest/bindings/api16.json') or die("Cannot open API16 bindings: $!");
+my $wire16_bindings = decode_json(do { local $/; <$wire16_file> }); close($wire16_file);
 my $dirname = 'native';
 opendir(DIRH, $dirname) or die("Failed to opendir '$dirname': $!\n");
 
@@ -36,6 +41,8 @@ while (readdir(DIRH)) {
 
     print("$module ...\n");
 
+    my $api32 = $wire_bindings->{$module} // {};
+    my $api16 = $wire16_bindings->{$module} // {};
     my %ordinalmap = ();
     my $has16bitfns = 0;
 
@@ -125,6 +132,14 @@ while (readdir(DIRH)) {
 EOF
 ;
 
+    if (%$api32) {
+        print OUT "#include \"os2native32.h\"\n#if TWOINE_PORTABLE_LOADER\n";
+        print OUT "#include \"../guest/bindings/$module.h\"\n";
+        print OUT "LX_NATIVE_MODULE_32BIT_SUPPORT()\n";
+        for my $fn (sort keys %$api32) { print OUT "LX_NATIVE_MODULE_32BIT_API($fn)\n"; }
+        print OUT "#endif\n\n";
+    }
+
     foreach (sort { $a <=> $b } keys(%ordinalmap) ) {
         my $tableref = $ordinalmap{$_};
         my $fn = $tableref->{'fn'};
@@ -140,33 +155,62 @@ EOF
         # Build a little wrapper that'll pull arguments off the stack and
         #  convert to whatever the native calling conventions are.
         if ($is16bit) {
-            print OUT "static $rettype bridge16to32_$fn(uint8 *args) {\n";
-            #foreach (@args) {
-            # arguments are listed backwards here.
+            my $policy = $api16->{$fn};
+            print OUT "#if !TWOINE_PORTABLE_LOADER\n" unless defined $policy;
+            print OUT "static uint32 bridge16to32_$fn(uint8 *args) {\n";
+            my %pointer_types;
             for my $i (reverse 0..$#args) {
-                my $arg = $args[$i];
-                my ($t, $n) = $arg =~ /\A\s*(.*?)\s+(.*?)\s*\Z/;
-                #print("arg='$_' t='$t' n='$n'\n");
-                my $a = ($t =~ /\AP/) ? 'PTRARG' : 'ARG';  # it's a pointer?
+                my ($t, $n) = $args[$i] =~ /\A\s*(.*?)\s+(.*?)\s*\Z/;
+                my $a = ($t =~ /\AP/) ? 'PTRARG' : 'ARG';
+                $pointer_types{$n} = $t if $a eq 'PTRARG';
                 print OUT "    LX_NATIVE_MODULE_16BIT_BRIDGE_$a($t, $n);\n";
             }
-
-            print OUT "    ";
-            if (($rettype ne 'void') && ($rettype ne 'VOID')) {
-                # Currently it's reasonable to assume the retval will land in EAX.
-                print OUT "return ";
+            my $guarded = defined($policy) && @$policy;
+            if (defined $policy) {
+                my %listed = map { $_->{name} => 1 } @$policy;
+                die("Incomplete USE16 pointer policy for $fn") if
+                    join(',', sort keys %listed) ne join(',', sort keys %pointer_types);
             }
-
+            if ($guarded) {
+                my $count = scalar @$policy;
+                print OUT "    LxGuestArgument __abi_args[$count] = {0};\n";
+                print OUT "    uint32 __abi_result = ERROR_INVALID_PARAMETER;\n    int __abi_copy = 0;\n";
+                for my $i (0..$#$policy) {
+                    my $entry = $policy->[$i];
+                    my ($name,$size,$permissions,$kind) = @{$entry}{qw(name size permissions kind)};
+                    my $nullable = $entry->{nullable} ? 1 : 0;
+                    my $call;
+                    if ($kind eq 'string' || $kind eq 'command' || $kind eq 'environment') {
+                        my $count = $kind eq 'string' ? 1 : $kind eq 'command' ? 2 : 0;
+                        $call = "lx_guest_argument_strings(GLoaderState.execution, ${name}_guest, $count, $size, $nullable, &__abi_args[$i])";
+                    } else {
+                        die("Invalid USE16 pointer kind for $fn.$name") unless $kind eq 'live' || $kind eq 'copy';
+                        my $live = $kind eq 'live' ? 1 : 0;
+                        $call = "lx_guest_argument_far(GLoaderState.execution, ${name}_guest, $size, $permissions, $live, $nullable, &__abi_args[$i])";
+                    }
+                    print OUT "    if (!$call) goto __abi_done;\n";
+                    print OUT "    $name = ($pointer_types{$name}) __abi_args[$i].host;\n";
+                }
+            }
+            print OUT '    ';
+            my $returns = $rettype ne 'void' && $rettype ne 'VOID';
+            print OUT $guarded ? '__abi_result = ' : 'return ' if $returns;
             print OUT "$fn(";
             my $comma = '';
             foreach (@args) {
                 my ($t, $n) = /\A\s*(.*?)\s+(.*?)\s*\Z/;
-                print OUT "$comma$n";
-                $comma = ', ';
+                print OUT "$comma$n"; $comma = ', ';
             }
             print OUT ");\n";
-
-            print OUT "}\n\n";
+            if ($guarded) {
+                print OUT "    __abi_result = 0;\n" unless $returns;
+                print OUT "    __abi_copy = 1;\n__abi_done:\n";
+                for my $i (0..$#$policy) { print OUT "    lx_guest_argument_finish(&__abi_args[$i], __abi_copy);\n"; }
+                print OUT "    return __abi_result;\n";
+            } else { print OUT "    return 0;\n" unless $returns; }
+            print OUT "}\n";
+            print OUT "#endif\n" unless defined $policy;
+            print OUT "\n";
         }
     }
 
@@ -176,13 +220,16 @@ EOF
             my $tableref = $ordinalmap{$_};
             next if not $tableref->{'is16bit'};
             my $fn = $tableref->{'fn'};
+            print OUT "#if !TWOINE_PORTABLE_LOADER\n" unless exists($api16->{$fn});
             print OUT "    LX_NATIVE_MODULE_16BIT_API($fn)\n";
+            print OUT "#endif\n" unless exists($api16->{$fn});
         }
 
         print OUT "LX_NATIVE_MODULE_16BIT_SUPPORT_END()\n";
         print OUT "\n";
         print OUT "LX_NATIVE_MODULE_DEINIT({\n";
         print OUT "    LX_NATIVE_MODULE_DEINIT_16BIT_SUPPORT();\n";
+        print OUT "    LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT();\n" if %$api32;
         print OUT "})\n";
         print OUT "\n";
         print OUT "static int init16_$module(void) {\n";
@@ -204,7 +251,9 @@ EOF
                 my ($t, $n) = /\A\s*(.*?)\s+(.*?)\s*\Z/;
                 $argbytes += typesize($t);
             }
+            print OUT "#if !TWOINE_PORTABLE_LOADER\n" unless exists($api16->{$fn});
             print OUT "        LX_NATIVE_INIT_16BIT_BRIDGE($fn, $argbytes)\n";
+            print OUT "#endif\n" unless exists($api16->{$fn});
         }
 
         print OUT "    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()\n";
@@ -212,11 +261,25 @@ EOF
         print OUT "}\n\n";
     }
 
-    print OUT "LX_NATIVE_MODULE_INIT(";
-    if ($has16bitfns) {
-        print OUT "{ if (!init16_$module()) return 0; }";
+    if (%$api32) {
+        if (!$has16bitfns) {
+            print OUT "LX_NATIVE_MODULE_DEINIT({ LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT(); })\n";
+        }
+        print OUT "#if TWOINE_PORTABLE_LOADER\nstatic int init32_$module(void) {\n";
+        print OUT "    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()\n";
+        for my $fn (sort keys %$api32) {
+            my $entry = $api32->{$fn};
+            my ($bytes, $pop, $abi) = @{$entry}{qw(argument_bytes callee_pop convention)};
+            die("Invalid wire ABI for $fn") unless $bytes =~ /^\d+$/ && $pop =~ /^\d+$/ &&
+                $bytes <= 65535 && $pop <= $bytes && $abi =~ /^LX_ABI_(STACK|EAX)32$/;
+            print OUT "    LX_NATIVE_INIT_32BIT_BRIDGE($fn, $bytes, $pop, $abi)\n";
+        }
+        print OUT "    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()\n    return 1;\n}\n#endif\n";
     }
-    print OUT ")\n";
+    print OUT "LX_NATIVE_MODULE_INIT({\n";
+    print OUT "    if (!init16_$module()) return 0;\n" if $has16bitfns;
+    print OUT "    LX_NATIVE_INIT_32BIT_MODULE($module)\n" if %$api32;
+    print OUT "})\n";
 
     my $comma = '';
     foreach (sort { $a <=> $b } keys(%ordinalmap) ) {
@@ -224,15 +287,16 @@ EOF
         my $fn = $tableref->{'fn'};
         my $expname = $tableref->{'expname'};
         my $ordinal = $tableref->{'ordinal'};
-        my $suffix = $tableref->{'is16bit'} ? '16' : '';
+        my $suffix = $tableref->{'is16bit'} ? '16' : exists($api32->{$fn}) ? '32' : '';
 
-        print OUT $comma;
+        print OUT "#if !TWOINE_PORTABLE_LOADER\n" if (!$tableref->{'is16bit'} && !exists($api32->{$fn})) || ($tableref->{'is16bit'} && !exists($api16->{$fn}));
         if (defined $expname) {
             print OUT "    LX_NATIVE_EXPORT${suffix}_DIFFERENT_NAME($fn, \"$expname\", $ordinal)";
         } else {
             print OUT "    LX_NATIVE_EXPORT${suffix}($fn, $ordinal)";
         }
-        $comma = ",\n";
+        print OUT ",\n";
+        print OUT "#endif\n" if (!$tableref->{'is16bit'} && !exists($api32->{$fn})) || ($tableref->{'is16bit'} && !exists($api16->{$fn}));
     }
     print OUT "\n";
 

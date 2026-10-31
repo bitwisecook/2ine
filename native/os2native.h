@@ -22,22 +22,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <pthread.h>
+#include "../runtime/host_thread.h"
 #include <errno.h>
-#include <sys/mman.h>
 
 #include "os2types.h"
 #include "os2errors.h"
 #include "../lib2ine.h"
 
 #if 1
-#define TRACE_NATIVE(...) do { if (GLoaderState.trace_native) { fprintf(stderr, "2INE TRACE [%lu]: ", (unsigned long) pthread_self()); fprintf(stderr, __VA_ARGS__); fprintf(stderr, ";\n"); } } while (0)
+#define TRACE_NATIVE(...) do { if (GLoaderState.trace_native) { fprintf(stderr, "2INE TRACE [%lu]: ", (unsigned long) lx_host_thread_id()); fprintf(stderr, __VA_ARGS__); fprintf(stderr, ";\n"); } } while (0)
 #else
 #define TRACE_NATIVE(...) do {} while (0)
 #endif
 
 #if 1
-#define TRACE_EVENT(...) do { if (GLoaderState.trace_events) { fprintf(stderr, "2INE TRACE [%lu]: ", (unsigned long) pthread_self()); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } } while (0)
+#define TRACE_EVENT(...) do { if (GLoaderState.trace_events) { fprintf(stderr, "2INE TRACE [%lu]: ", (unsigned long) lx_host_thread_id()); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } } while (0)
 #else
 #define TRACE_EVENT(...) do {} while (0)
 #endif

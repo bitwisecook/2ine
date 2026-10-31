@@ -1,32 +1,32 @@
-cmake_minimum_required(VERSION 3.4)
-project(2ine)
+cmake_minimum_required(VERSION 3.16)
+project(2ine C)
+include(CTest)
+include(runtime/host-sources.cmake)
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_test(NAME source_boundaries COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/check-boundaries.py")
+endif()
+set(TWOINE_PORTABLE_DEFAULT ON)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$")
+    set(TWOINE_PORTABLE_DEFAULT OFF)
+endif()
 
-# Note that this project doesn't work on Mac OS X because I can't mmap()
-#  address 0x10000, which is the usual base address for OS/2 binaries.
-# It appears the address is already accessible when main() begins, but no
-#  objects seem to be loaded there. I don't know what it is...maybe some
-#  thing allocated by the C runtime at startup? Have to solve that somehow or
-#  give up on Mac support.
-#
-# Eventually, even on Linux, it might make sense to override malloc and friends
-#  at the dynamic loader level, so we control all allocations even if they
-#  happen in glibc. Once we have that, make sure they all sit in the upper
-#  2 gigabytes (reserved for system use on OS/2, so this works out), probably
-#  with them mmap()'d there via a local copy of dlmalloc or something.
-#
-# Note that 32-bit OS/2 programs only got 512 megabytes of the address space
-#  (enormous in the days of machines with a couple megabytes of physical RAM!)
-#  to accomodate thunking to and from 16 bit code. We don't bother with this
-#  at the moment, though, but maybe we must at some point. I hope not.
-#
-# Also, it might be nice if we can run as a 64-bit process and thunk around in
-#  32-bits as necessary, but I don't know the technical barriers to this yet.
-#  If we can pull that off, it would allow an OS/2 app to have the full 4
-#  gigabytes of memory, and we'll just put 2ine's data outside of that range,
-#  and run the native bits with more registers, etc. Maybe even keep the
-#  native functions out of low memory and only eat a few bytes of it with
-#  trampolines. I'm probably getting ahead of myself, though, as it's not like
-#  any OS/2 apps were _that_ memory hungry, and honestly? Port your software.
+option(TWOINE_PORTABLE_LOADER "Build the OS/2 application loader with portable execution" ${TWOINE_PORTABLE_DEFAULT})
+option(TWOINE_PORTABLE_NE "Alias for TWOINE_PORTABLE_LOADER" OFF)
+if(TWOINE_PORTABLE_NE)
+    set(TWOINE_PORTABLE_LOADER ON)
+endif()
+option(TWOINE_RUNTIME_ONLY "Build the portable CPU runtime without the native Linux loader" OFF)
+option(TWOINE_BUILD_RUNTIME "Build the portable CPU runtime" ${TWOINE_RUNTIME_ONLY})
+if(TWOINE_RUNTIME_ONLY OR TWOINE_BUILD_RUNTIME OR TWOINE_PORTABLE_LOADER)
+    include(CTest)
+    add_subdirectory(runtime)
+endif()
+if(TWOINE_RUNTIME_ONLY)
+    return()
+endif()
+
+# The native application loader uses the Linux i386 ABI and descriptor services.
 
 if(NOT CMAKE_BUILD_TYPE)
     set(DEBUG_BUILD ON)
@@ -48,11 +48,22 @@ if(NOT LX_LEGACY)
     add_definitions(-DLX_LEGACY=0)
 endif()
 
+if(LX_LEGACY AND NOT TWOINE_PORTABLE_LOADER AND (NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
+   NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$"))
+    message(FATAL_ERROR "The native application loader requires Linux x86. Use TWOINE_PORTABLE_LOADER=ON for emulated application execution.")
+endif()
+
 add_definitions(-std=c99 -Wall -ggdb3)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 
 set(CURSES_NEED_WIDE TRUE)
 set(CURSES_NEED_NCURSES TRUE)
+if(APPLE AND NOT CURSES_INCLUDE_PATH)
+    execute_process(COMMAND xcrun --show-sdk-path OUTPUT_VARIABLE TWOINE_APPLE_SDK
+                    OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    find_path(CURSES_INCLUDE_PATH curses.h HINTS "${TWOINE_APPLE_SDK}/usr/include")
+    find_library(CURSES_NCURSES_LIBRARY NAMES ncursesw ncurses HINTS "${TWOINE_APPLE_SDK}/usr/lib")
+endif()
 find_package(Curses)
 if(NOT CURSES_FOUND)
     message(FATAL_ERROR "ncurses not found")
@@ -69,46 +80,69 @@ elseif(CURSES_HAVE_CURSES_H)
     add_definitions(-DHAVE_CURSES_H)
 elseif(CURSES_HAVE_NCURSES_CURSES_H)
     add_definitions(-DHAVE_NCURSESW_NCURSES_H)
+elseif(EXISTS "${CURSES_INCLUDE_PATH}/curses.h")
+    # The macOS SDK exposes wide curses through its flat curses.h header.
+    add_definitions(-DHAVE_CURSES_H)
 endif()
 
-# !!! FIXME
-include_directories("/usr/local/include/SDL2")
-if(NOT EXISTS "/usr/local/include/SDL2/SDL.h")
-    include_directories("/usr/include/SDL2")
+if(TWOINE_PORTABLE_LOADER OR NOT LX_LEGACY)
+    find_package(SDL2 CONFIG REQUIRED)
+    include_directories(${SDL2_INCLUDE_DIRS})
+else()
+    include_directories("/usr/local/include/SDL2" "/usr/include/SDL2")
 endif()
+set(TWOINE_NATIVE_LOADER OFF)
+if(LX_LEGACY AND NOT TWOINE_PORTABLE_LOADER)
+    set(TWOINE_NATIVE_LOADER ON)
+endif()
+add_compile_definitions(TWOINE_PORTABLE_LOADER=$<BOOL:${TWOINE_PORTABLE_LOADER}>)
 
-add_library(2ine SHARED "lib2ine.c")
-if(LX_LEGACY)
+add_library(2ine SHARED "lib2ine.c" "guest/handles.c")
+if(TWOINE_NATIVE_LOADER)
+    target_sources(2ine PRIVATE guest/arguments.c runtime/execution.c runtime/execution_memory.c runtime/execution_native_linux_i386.c ${TWOINE_HOST_SOURCES})
+    target_compile_definitions(2ine PRIVATE TWOINE_NATIVE_LINUX_I386=1)
+endif()
+if(TWOINE_NATIVE_LOADER)
     set_target_properties(2ine PROPERTIES COMPILE_FLAGS "-m32")
     set_target_properties(2ine PROPERTIES LINK_FLAGS "-m32 -ggdb3")
 endif()
-target_link_libraries(2ine "pthread")
+target_link_libraries(2ine "pthread" ${CMAKE_DL_LIBS})
+if(TWOINE_PORTABLE_LOADER)
+    target_link_libraries(2ine twoine_runtime_objects)
+endif()
 
 foreach(_I doscalls;msg;nls;quecalls;viocalls;kbdcalls;sesmgr;som;pmwin;pmshapi;pmgpi;tcpip32)
     add_library(${_I} SHARED "native/${_I}.c")
-    if(LX_LEGACY)
+    if(TWOINE_NATIVE_LOADER)
         set_target_properties(${_I} PROPERTIES COMPILE_FLAGS "-m32")
         set_target_properties(${_I} PROPERTIES LINK_FLAGS "-m32 -ggdb3")
     endif()
     target_link_libraries(${_I} 2ine)
+    if(APPLE)
+        set_target_properties(${_I} PROPERTIES SUFFIX ".so")
+    endif()
 endforeach()
 
-# msg.c reads the extra arguments of the MSGSEG32 stdcall entry point from the
-#  frame, so it must keep an explicit frame pointer even in optimized builds.
-set_source_files_properties("native/msg.c" PROPERTIES
-    COMPILE_FLAGS "-fno-omit-frame-pointer")
+if(TWOINE_NATIVE_LOADER)
+    target_sources(doscalls PRIVATE runtime/abi_native_linux_i386_doscalls.c)
+    target_sources(msg PRIVATE runtime/abi_native_linux_i386_msg.c)
+endif()
 
 target_link_libraries(doscalls "pthread")
 # FIXME target_link_libraries(viocalls ${CURSES_LIBRARIES})
-target_link_libraries(viocalls /usr/lib/i386-linux-gnu/libncursesw.so.6)
+if(TWOINE_NATIVE_LOADER)
+    target_link_libraries(viocalls /usr/lib/i386-linux-gnu/libncursesw.so.6)
+else()
+    target_link_libraries(viocalls ${CURSES_LIBRARIES})
+endif()
 
 # !!! FIXME: clean this up/
-if(LX_LEGACY)
+if(TWOINE_NATIVE_LOADER)
     target_link_libraries(2ine "${CMAKE_CURRENT_SOURCE_DIR}/libSDL2-2.0.so.0")
     target_link_libraries(pmwin "${CMAKE_CURRENT_SOURCE_DIR}/libSDL2-2.0.so.0")
 else()
-    target_link_libraries(2ine "SDL2")
-    target_link_libraries(pmwin "SDL2")
+    target_link_libraries(2ine SDL2::SDL2)
+    target_link_libraries(pmwin SDL2::SDL2)
 endif()
 
 add_executable(lx_dump lx_dump.c)
@@ -116,10 +150,22 @@ add_executable(lx_dump lx_dump.c)
 if(LX_LEGACY)
     add_executable(lx_loader lx_loader.c)
     target_link_libraries(lx_loader 2ine)
-    target_link_libraries(lx_loader "dl")
-    set_target_properties(lx_loader PROPERTIES COMPILE_FLAGS "-m32 -no-pie")
-    set_target_properties(lx_loader PROPERTIES LINK_FLAGS "-m32 -no-pie -ggdb3")
+    target_link_libraries(lx_loader ${CMAKE_DL_LIBS})
+    if(TWOINE_NATIVE_LOADER)
+        set_target_properties(lx_loader PROPERTIES COMPILE_FLAGS "-m32 -no-pie")
+        set_target_properties(lx_loader PROPERTIES LINK_FLAGS "-m32 -no-pie -ggdb3")
+    endif()
 endif()
 
 # end of CMakeLists.txt ...
 
+
+if(BUILD_TESTING AND TWOINE_NATIVE_LOADER)
+    add_executable(twoine_native_execution_tests tests/runtime/test_execution.c)
+    target_compile_options(twoine_native_execution_tests PRIVATE -m32)
+    target_link_options(twoine_native_execution_tests PRIVATE -m32)
+    target_include_directories(twoine_native_execution_tests PRIVATE runtime)
+    target_link_libraries(twoine_native_execution_tests PRIVATE 2ine)
+    add_test(NAME native_execution COMMAND twoine_native_execution_tests native)
+    set_tests_properties(native_execution PROPERTIES TIMEOUT 20)
+endif()

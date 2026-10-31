@@ -19,6 +19,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include "runtime/execution.h"
+#include "runtime/host_library.h"
+#include "guest/abi.h"
+#include "guest/handles.h"
 #include <string.h>
 
 typedef uint8_t uint8;
@@ -184,6 +188,8 @@ typedef struct NeSegmentTableEntry
 
 typedef struct LxMmaps
 {
+    LxGuestMapping *mapping;
+    uint32 guest_base;
     void *mapped;
     void *addr;
     size_t size;
@@ -197,6 +203,7 @@ typedef struct LxExport
     const char *name;  // can be NULL
     void *addr;
     const LxMmaps *object;
+    int indirect;
 } LxExport;
 
 struct LxModule;
@@ -204,6 +211,7 @@ typedef struct LxModule LxModule;
 struct LxModule
 {
     uint32 refcount;
+    uint32 handle;
     int is_lx;  // 1 if an LX module, 0 if NE.
     union
     {
@@ -221,7 +229,7 @@ struct LxModule
 
     const LxExport *exports;
     uint32 num_exports;
-    void *nativelib;
+    LxHostLibrary *nativelib;
     uint32 eip;
     uint32 esp;
     uint16 autodatasize;  // only used for NE binaries.
@@ -245,10 +253,10 @@ typedef struct LxTIB2
 
 typedef struct LxTIB
 {
-    void *tib_pexchain;
-    void *tib_pstack;
-    void *tib_pstacklimit;
-    LxTIB2 *tib_ptib2;
+    uint32 tib_pexchain;
+    uint32 tib_pstack;
+    uint32 tib_pstacklimit;
+    uint32 tib_ptib2;
     uint32 tib_version;
     uint32 tib_ordinal;
 } LxTIB;
@@ -257,7 +265,7 @@ typedef struct LxPIB
 {
     uint32 pib_ulpid;
     uint32 pib_ulppid;
-    void *pib_hmte;
+    uint32 pib_hmte;
     char *pib_pchcmd;
     char *pib_pchenv;
     uint32 pib_flstatus;
@@ -270,9 +278,15 @@ typedef struct LxPIB
 typedef struct LxPostTIB
 {
     uint32 tls[32];
-    void *anchor_block;
-    void *host_stack;
+
 } LxPostTIB;
+
+/* Host-only thread metadata. Never serialized into an OS/2 TIB or TLS area. */
+typedef struct LxHostThreadState {
+    void *anchor_block;
+    LxGuestMapping *tib_mapping;
+} LxHostThreadState;
+LxHostThreadState *lxHostThreadState(void);
 
 // There are a few things that need access to the sound hardware:
 //  DosBeep(), MMOS/2, DART, basic system sounds, etc. We unify all this
@@ -287,11 +301,13 @@ typedef int (*LxAudioGeneratorFn)(void *data, float *stream, int len, int freq);
 
 typedef struct LxLoaderState
 {
+    LxExecution *execution;
     uint32 ne_threads_started;
     LxModule *loaded_modules;
     LxModule *main_module;
     uint8 main_tibspace[LXTIBSIZE];
     LxPIB pib;
+    LxGuestMapping *guest_pib;
     int using_lx_loader;
     int subprocess;
     int running;
@@ -302,20 +318,15 @@ typedef struct LxLoaderState
     int current_disk;  // 1==A:\\, 2==B:\\, etc.
     uint32 diskmap;  // 1<<0==drive A mounted, 1<<1==drive B mounted, etc.
     float beep_volume;
-    uint8 main_tib_selector;
+    uint16 main_tib_selector;
     uint32 mainstacksize;
-    uint16 original_cs;
-    uint16 original_ds;
-    uint16 original_es;
-    uint16 original_ss;
-    uint32 near16_base;  // base of the main 16-bit module's auto-data/stack segment.
-    uint32 *ldt; //[LX_MAX_LDT_SLOTS];
     char *libpath;
     uint32 libpathlen;
     uint32 *tlspage;
     uint32 tlsmask;  // one bit for each TLS slot in use.
     uint8 tlsallocs[32];  // number of TLS slots allocated in one block, indexed by starting block (zero if not the starting block).
     void (*dosExit)(uint32 action, uint32 result);
+    uint32 (*writeFile)(uint32 handle, void *buffer, uint32 size, uint32 *actual);
     void (*initOs2Tib)(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid);
     uint16 (*setOs2Tib)(uint8 *tibspace);
     LxTIB *(*getOs2Tib)(void);

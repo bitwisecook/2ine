@@ -120,7 +120,7 @@ static Window desktop_window;  // !!! FIXME: initialize and upkeep on this.
 
 static inline AnchorBlock *getAnchorBlockNoHAB(void)
 {
-    return (AnchorBlock *) LX_GETPOSTTIB()->anchor_block;
+    return (AnchorBlock *) lxHostThreadState()->anchor_block;
 } // getAnchorBlockNoHAB
 
 static AnchorBlock *getAnchorBlock(const HAB hab)
@@ -365,7 +365,7 @@ HAB WinInitialize(ULONG flOptions)
         return NULLHANDLE;  // reserved; must be zero.
     }
 
-    LxPostTIB *posttib = LX_GETPOSTTIB();
+    LxHostThreadState *posttib = lxHostThreadState();
     if (posttib->anchor_block != NULL) {
         return NULLHANDLE;  // fail if thread already has a HAB
     }
@@ -530,7 +530,7 @@ BOOL WinTerminate(HAB hab)
     }
 
     free(anchor);
-    LX_GETPOSTTIB()->anchor_block = NULL;
+    lxHostThreadState()->anchor_block = NULL;
 
     SDL_Quit();  // !!! FIXME: does this reference count?
 

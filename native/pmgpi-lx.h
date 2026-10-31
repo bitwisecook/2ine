@@ -9,8 +9,12 @@
 /* This is glue code for OS/2 binaries. Native binaries don't need this. */
 #if LX_LEGACY
 
-LX_NATIVE_MODULE_INIT()
-    LX_NATIVE_EXPORT(GpiQueryTextBox, 489)
+LX_NATIVE_MODULE_INIT({
+})
+#if !TWOINE_PORTABLE_LOADER
+    LX_NATIVE_EXPORT(GpiQueryTextBox, 489),
+#endif
+
 LX_NATIVE_MODULE_INIT_END()
 
 #endif /* LX_LEGACY */

@@ -8,25 +8,18 @@
 
 #include "os2native16.h"
 #include "doscalls.h"
+#include "../runtime/host.h"
+#include "../runtime/host_fs.h"
+#include "../runtime/host_process.h"
+#include "../runtime/host_sync.h"
 
-#include <unistd.h>
 #include <limits.h>
-#include <time.h>
-#include <dirent.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
-#include <sys/sysinfo.h>
-#include <sys/time.h>
-#include <sys/resource.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 
 #include "doscalls-lx.h"
 
-static pthread_mutex_t GMutexDosCalls;
-static pthread_mutex_t GMutexDosBeep;
+static LxHostMutex *GMutexDosCalls;
+static LxHostMutex *GMutexDosBeep;
+static LxHostMutex *GMutexDir16;
 
 static char *makeUnixPath(const char *os2path, APIRET *err);
 
@@ -35,12 +28,13 @@ static char *makeUnixPath(const char *os2path, APIRET *err);
 #define TRACE_RET(...) do { if (getenv("TWOINE_TRACE_RET")) { \
     fprintf(stderr, "2INE RET: "); fprintf(stderr, __VA_ARGS__); \
     fprintf(stderr, "\n"); } } while (0)
-static int grabLock(pthread_mutex_t *lock);
-static void ungrabLock(pthread_mutex_t *lock);
+static int grabLock(LxHostMutex **lock);
+static void ungrabLock(LxHostMutex **lock);
 
 typedef struct ExitListItem
 {
-    PFNEXITLIST fn;
+    PFNEXITLIST host_entry;
+    uint32 guest_entry;
     uint32 priority;
     struct ExitListItem *next;
 } ExitListItem;
@@ -74,7 +68,7 @@ enum {
 
 typedef struct HFileInfo
 {
-    int fd;       // unix file descriptor.
+    uint32 handle; /* Private typed file handle; zero=free, one=reserved. */
     ULONG type;   // file, pipe, device, etc.
     ULONG attr;   // for character devices, DAW_*
     ULONG flags;  // OPEN_FLAGS_*
@@ -85,24 +79,24 @@ static uint32 MaxHFiles = 0;
 
 typedef struct Thread
 {
-    pthread_t thread;
-    size_t stacklen;
-    PFNTHREAD fn;
-    ULONG fnarg;
+    LxHostThread *thread;
+    LxGuestMapping *stack;
+    void *invocation;
+    uint32 id, handle;
     uint16 selector;
-    struct Thread *prev;
+    int finished, joining;
     struct Thread *next;
 } Thread;
+static Thread *GThreads;
+static uint32 GNextThreadId = 2;
+static uint32 GNextThreadStack = 0x18000000;
 
-static Thread *GDeadThreads = NULL;
 
 
 typedef struct
 {
-    pthread_mutex_t mutex;
-    pthread_cond_t condition;
-    volatile int posted;
-    volatile int waiting;
+    LxHostMonitor *monitor;
+    int posted;
 } EventSem;
 
 // Named semaphores are shared by the OS/2 processes 2ine starts. The registry
@@ -112,42 +106,11 @@ typedef struct NamedSem
 {
     char *name;
     int is_mutex;
+    uint32 internal_handle;
     void *handle;
     struct NamedSem *next;
 } NamedSem;
 
-
-// OS/2 32-bit processes had a 512 MiB private address space; many shipped
-//  programs (the IBM linker among them) keep pointers in signed or 16-bit-ish
-//  structures and misbehave when allocations land above that. Hand out
-//  anonymous mappings from a low arena instead of letting the kernel pick a
-//  high address.
-#ifndef MAP_FIXED_NOREPLACE
-#define MAP_FIXED_NOREPLACE 0x100000
-#endif
-
-#define OS2_LOW_ARENA_START 0x20000000UL  // 512 MiB: above EXE objects, below 2 GiB.
-#define OS2_LOW_ARENA_END   0x60000000UL
-
-static void *allocLowMemory(const size_t size, const int prot,
-                            const int extra_flags, const int fd)
-{
-    static uintptr_t next = OS2_LOW_ARENA_START;
-    const size_t pagesize = (size_t) getpagesize();
-
-    for (uintptr_t hint = next; (hint + size) <= OS2_LOW_ARENA_END; ) {
-        void *addr = mmap((void *) hint, size, prot,
-                          extra_flags | MAP_FIXED_NOREPLACE, fd, 0);
-        if (addr != MAP_FAILED) {
-            next = hint + size + pagesize;
-            return addr;
-        } // if
-        hint += size + pagesize;
-        hint = (hint + pagesize - 1) & ~(uintptr_t) (pagesize - 1);
-    } // for
-
-    return mmap(NULL, size, prot, extra_flags, fd, 0);
-} // allocLowMemory
 
 // Named shared memory is backed by POSIX shared memory so that the OS/2
 //  processes 2ine starts (a compiler driver and its preprocessor, for
@@ -158,6 +121,7 @@ typedef struct SharedMemBlock
 {
     void *addr;
     size_t size;
+    LxGuestMapping *mapping;
     int freed;
     struct SharedMemBlock *next;
 } SharedMemBlock;
@@ -172,130 +136,166 @@ static NamedSem *GNamedSems = NULL;
 //  open to find the semaphore it just made, so remember the most recent
 //  unnamed one for the empty-name open.
 static EventSem *GLastUnnamedEventSem = NULL;
+static uint32 GLastUnnamedEventHandle;
 
-static void registerNamedSem(const char *name, const int is_mutex, void *handle)
+static void destroyEventResource(void *value)
 {
-    if ((!name) || (!*name))
-        return;
-    NamedSem *sem = (NamedSem *) malloc(sizeof (*sem));
-    if (!sem)
-        return;
-    sem->name = strdup(name);
-    if (!sem->name) {
-        free(sem);
-        return;
-    } // if
-    sem->is_mutex = is_mutex;
-    sem->handle = handle;
-    grabLock(&GMutexDosCalls);
-    sem->next = GNamedSems;
-    GNamedSems = sem;
-    ungrabLock(&GMutexDosCalls);
-} // registerNamedSem
-
-static void *findNamedSem(const char *name, const int is_mutex)
+    EventSem *sem = value;
+    lx_host_monitor_destroy(sem->monitor); free(sem);
+}
+static void destroyMutexResource(void *value)
 {
-    void *retval = NULL;
-    if (!name)
-        return NULL;
-    grabLock(&GMutexDosCalls);
-    for (NamedSem *sem = GNamedSems; sem; sem = sem->next) {
-        if ((sem->is_mutex == is_mutex) && (strcasecmp(sem->name, name) == 0)) {
-            retval = sem->handle;
-            break;
-        } // if
-    } // for
-    ungrabLock(&GMutexDosCalls);
-    return retval;
-} // findNamedSem
-
-static void unregisterNamedSem(void *handle)
+    LxHostMutex *mutex = value;
+    /* An unpublished, initially-owned mutex can arrive here on allocation failure. */
+    if (lx_host_mutex_busy(mutex))
+        while (lx_host_mutex_unlock(mutex) == LX_HOST_LOCK_OK) {}
+    lx_host_mutex_destroy(mutex);
+}
+static NamedSem *findNamedSemLocked(const char *name, int is_mutex)
 {
+    for (NamedSem *sem = GNamedSems; sem; sem = sem->next)
+        if (sem->is_mutex == is_mutex && !strcasecmp(sem->name, name)) return sem;
+    return NULL;
+}
+static APIRET publishSemaphore(void *value, LxHandleKind kind, const char *name, uint32 *output)
+{
+    void (*destroy)(void *) = kind == LX_HANDLE_MUTEX ? destroyMutexResource : destroyEventResource;
+    uint32 public_handle = lx_handle_create(kind, value, destroy);
+    if (!public_handle) { destroy(value); return ERROR_NOT_ENOUGH_MEMORY; }
+    APIRET result = NO_ERROR;
     grabLock(&GMutexDosCalls);
-    for (NamedSem **next = &GNamedSems; *next; ) {
-        NamedSem *sem = *next;
-        if (sem->handle == handle) {
-            *next = sem->next;
-            free(sem->name);
-            free(sem);
-            break;
-        } // if
-        next = &sem->next;
-    } // for
+    if (name && *name) {
+        if (findNamedSemLocked(name, kind == LX_HANDLE_MUTEX)) result = ERROR_DUPLICATE_NAME;
+        else {
+            NamedSem *entry = calloc(1, sizeof *entry);
+            if (entry) entry->name = strdup(name);
+            uint32 internal = entry && entry->name ? lx_handle_create(kind, value, destroy) : 0;
+            if (!internal) {
+                if (entry) { free(entry->name); free(entry); }
+                result = ERROR_NOT_ENOUGH_MEMORY;
+            } else {
+                entry->is_mutex = kind == LX_HANDLE_MUTEX; entry->handle = value;
+                entry->internal_handle = internal; entry->next = GNamedSems; GNamedSems = entry;
+            }
+        }
+    } else if (!name && kind == LX_HANDLE_EVENT) {
+        uint32 internal = lx_handle_create(kind, value, destroy);
+        if (!internal) result = ERROR_NOT_ENOUGH_MEMORY;
+        else {
+            uint32 old = GLastUnnamedEventHandle;
+            GLastUnnamedEventSem = value; GLastUnnamedEventHandle = internal;
+            if (old) lx_handle_close(old, LX_HANDLE_EVENT);
+        }
+    }
     ungrabLock(&GMutexDosCalls);
-} // unregisterNamedSem
+    if (result) lx_handle_close(public_handle, kind);
+    else *output = public_handle;
+    return result;
+}
+static APIRET openSemaphore(const char *name, LxHandleKind kind, uint32 *output)
+{
+    if (!output || (kind == LX_HANDLE_MUTEX && !name)) return ERROR_INVALID_PARAMETER;
+    grabLock(&GMutexDosCalls);
+    void *value = NULL;
+    if ((!name || !*name) && kind == LX_HANDLE_EVENT) value = GLastUnnamedEventSem;
+    else if (name) {
+        NamedSem *entry = findNamedSemLocked(name, kind == LX_HANDLE_MUTEX);
+        if (entry) value = entry->handle;
+    }
+    uint32 handle = value ? lx_handle_create(kind, value,
+        kind == LX_HANDLE_MUTEX ? destroyMutexResource : destroyEventResource) : 0;
+    ungrabLock(&GMutexDosCalls);
+    if (!value) return ERROR_SEM_NOT_FOUND;
+    if (!handle) return ERROR_NOT_ENOUGH_MEMORY;
+    *output = handle; return NO_ERROR;
+}
+/* Registry names own one private handle; retire it after the last public close. */
+static void retireSemaphoreName(void *value, LxHandleKind kind)
+{
+    if (lx_handle_count(kind, value) != 1) return;
+    for (NamedSem **link = &GNamedSems; *link; link = &(*link)->next) {
+        NamedSem *entry = *link;
+        if (entry->handle == value && entry->is_mutex == (kind == LX_HANDLE_MUTEX)) {
+            *link = entry->next; uint32 internal = entry->internal_handle;
+            free(entry->name); free(entry); lx_handle_close(internal, kind); return;
+        }
+    }
+    if (kind == LX_HANDLE_EVENT && GLastUnnamedEventSem == value) {
+        uint32 internal = GLastUnnamedEventHandle;
+        GLastUnnamedEventHandle = 0; GLastUnnamedEventSem = NULL;
+        lx_handle_close(internal, kind);
+    }
+}
+static void releaseResourceBorrow(void *p) { lx_handle_release(p); }
 
 
 typedef struct
 {
-    DIR *dirp;
+    LxHostDirectory *dirp;
     ULONG attr;
     ULONG level;
     char pattern[CCHMAXPATHCOMP];
 } DirFinder;
 
 static DirFinder GHDir1;
+static void destroyDirectoryResource(void *value)
+{
+    DirFinder *directory = value;
+    if (directory->dirp) lx_host_directory_close(directory->dirp);
+    free(directory);
+}
 
 static GINFOSEG *ginfo;
 static SEL ginfosel;
 static LINFOSEG *linfo;
 static SEL linfosel;
 
-static HDIR *hdir16 = 0;
+/* Legacy directory IDs index private typed handles; 1 is the system search. */
+static HDIR hdir16[0x10000];
 
-static int grabLock(pthread_mutex_t *lock)
+static int grabLock(LxHostMutex **lock)
 {
-    return (pthread_mutex_lock(lock) == 0);
+    return (lx_host_mutex_lock(*lock, UINT32_MAX) == LX_HOST_LOCK_OK);
 } // grabLock
 
-static void ungrabLock(pthread_mutex_t *lock)
+static void ungrabLock(LxHostMutex **lock)
 {
-    pthread_mutex_unlock(lock);
+    lx_host_mutex_unlock(*lock);
 } // ungrabLock
 
-static void timespecNowPlusMilliseconds(struct timespec *waittime, const ULONG ulTimeout)
+static APIRET fileError(LxHostFsError error)
 {
-    clock_gettime(CLOCK_REALTIME, waittime);
-    waittime->tv_sec += ulTimeout / 1000;
-    waittime->tv_nsec += (ulTimeout % 1000) * 1000000;
-    if (waittime->tv_nsec >= 1000000000) {
-        waittime->tv_sec++;
-        waittime->tv_nsec -= 1000000000;
-        assert(waittime->tv_nsec < 1000000000);
-    } // if
-} // timespecNowPlusMilliseconds
-
-static void initHFileInfoFromUnixFd(const int fd, HFileInfo *info)
+    switch (error) {
+        case LX_HOST_FS_OK: return NO_ERROR;
+        case LX_HOST_FS_MISSING: return ERROR_FILE_NOT_FOUND;
+        case LX_HOST_FS_NOT_DIRECTORY: return ERROR_PATH_NOT_FOUND;
+        case LX_HOST_FS_NOT_EMPTY: return ERROR_DIR_NOT_EMPTY;
+        case LX_HOST_FS_EXISTS: return ERROR_FILE_EXISTS;
+        case LX_HOST_FS_NO_MEMORY: return ERROR_NOT_ENOUGH_MEMORY;
+        case LX_HOST_FS_TOO_MANY_FILES: return ERROR_TOO_MANY_OPEN_FILES;
+        case LX_HOST_FS_FULL: return ERROR_DISK_FULL;
+        case LX_HOST_FS_NAME_LONG: return ERROR_FILENAME_EXCED_RANGE;
+        case LX_HOST_FS_CROSS_DEVICE: return ERROR_NOT_SAME_DEVICE;
+        case LX_HOST_FS_INVALID: return ERROR_INVALID_PARAMETER;
+        case LX_HOST_FS_IO: return ERROR_INVALID_FUNCTION;
+        default: return ERROR_ACCESS_DENIED;
+    }
+}
+static void destroyFileResource(void *value) { lx_host_file_close(value); }
+static int initFileInfo(LxHostFile *file, HFileInfo *info, ULONG flags)
 {
-    struct stat statbuf;
-    if ((fd != -1) && (fstat(fd, &statbuf) == 0)) {
-        ULONG type = 0;
-        switch (statbuf.st_mode & S_IFMT) {
-            case S_IFREG:
-                type = 0;
-                break;
-            case S_IFBLK:
-            case S_IFCHR:
-                type = 1;
-                break;
-            case S_IFIFO:
-            case S_IFSOCK:
-            default:
-                type = 2;
-                break;
-        } // switch
-        info->fd = fd;
-        info->type = type;
-        FIXME("What should this be?");
-        info->attr = DAW_STDIN | DAW_STDOUT | DAW_LEVEL1 | DAW_CHARACTER;
-        info->flags = 0;
-    } else {
-        info->fd = -1;
-        info->type = 0;
-        info->attr = 0;
-        info->flags = 0;
-    } // else
-} // initHFileInfoFromUnixFd
+    memset(info, 0, sizeof *info);
+    LxHostFileInfo description;
+    if (!file || lx_host_file_info(file, &description) != LX_HOST_FS_OK) {
+        lx_host_file_close(file); return 0;
+    }
+    info->handle = lx_handle_create(LX_HANDLE_FILE, file, destroyFileResource);
+    if (!info->handle) { lx_host_file_close(file); return 0; }
+    info->type = description.kind == LX_HOST_FILE_REGULAR ? 0 : description.kind == LX_HOST_FILE_DEVICE ? 1 : 2;
+    info->attr = DAW_STDIN | DAW_STDOUT | DAW_LEVEL1 | DAW_CHARACTER;
+    info->flags = flags; return 1;
+}
+ // initHFileInfoFromUnixFd
 
 
 APIRET DosGetInfoBlocks(PTIB *pptib, PPIB *pppib)
@@ -306,7 +306,7 @@ APIRET DosGetInfoBlocks(PTIB *pptib, PPIB *pppib)
         *pptib = (PTIB) LX_GETTIB();
 
     if (pppib != NULL)
-        *pppib = (PPIB) &GLoaderState.pib;
+        *pppib = GLoaderState.guest_pib ? lx_execution_mapping_host(GLoaderState.guest_pib) : (PPIB) &GLoaderState.pib;
 
     return 0;
 } // DosGetInfoBlocks
@@ -335,45 +335,21 @@ APIRET DosQuerySysInfo(ULONG first, ULONG last, PVOID _buf, ULONG buflen)
             case QSV_VERSION_MINOR: *(buf++) = 45; break;   // OS/2 Warp 4.5
             case QSV_VERSION_REVISION: *(buf++) = 0; break; // OS/2 Warp 4.5
 
-            case QSV_MS_COUNT: {
-                static long startoffset = 0;
-                if (startoffset == 0) {
-                    struct timespec ts;
-                    struct sysinfo info;
-                    sysinfo(&info);
-                    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-                    startoffset = info.uptime - ((long) ts.tv_sec);
-                } // if
+            case QSV_MS_COUNT: *(buf++) = (uint32) (lx_host_monotonic_us() / 1000); break;
 
-                struct timespec ts;
-                clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-                *(buf++) = (uint32) (((long) ts.tv_sec) - startoffset);
-                break;
-            } // case
-
-            case QSV_TIME_LOW: *(buf++) = (uint32) time(NULL); break;
+            case QSV_TIME_LOW: *(buf++) = (uint32) (lx_host_realtime_us() / 1000000); break;
             case QSV_TIME_HIGH: *(buf++) = 0; break;  // !!! FIXME: 32-bit Linux time_t is 32-bits!
 
-            case QSV_TOTPHYSMEM: {
-                struct sysinfo info;
-                sysinfo(&info);
-                *(buf++) = (uint32) info.totalram;
-                break;
-            } // case
-
-            case QSV_TOTRESMEM: {
-                struct sysinfo info;
-                sysinfo(&info);
-                *(buf++) = (uint32) info.totalram - info.freeram;  // !!! FIXME: probably not right?
-                break;
-            } // case
-
+            case QSV_TOTPHYSMEM:
+            case QSV_TOTRESMEM:
             case QSV_TOTAVAILMEM: {
-                struct sysinfo info;
-                sysinfo(&info);
-                *(buf++) = (uint32) info.freeram;
+                uint64 total = 0, available = 0;
+                lx_host_system_memory(&total, &available);
+                uint64 value = (varid == QSV_TOTPHYSMEM) ? total :
+                               (varid == QSV_TOTAVAILMEM) ? available : total - available;
+                *(buf++) = value > UINT32_MAX ? UINT32_MAX : (uint32) value;
                 break;
-            } // case
+            }
 
             case QSV_MAXPRMEM: *(buf++) = 0x7FFFFFFF; break;  // !!! FIXME: should I list all 4 gigs? Also: what about machines with < 2 gigs?
             case QSV_MAXSHMEM: *(buf++) = 0x7FFFFFFF; break;  // !!! FIXME: should I list all 4 gigs? Also: what about machines with < 2 gigs?
@@ -391,17 +367,26 @@ APIRET DosQuerySysInfo(ULONG first, ULONG last, PVOID _buf, ULONG buflen)
 } // DosQuerySysInfo
 
 
-APIRET DosQueryModuleName(HMODULE hmod, ULONG buflen, PCHAR buf)
+static APIRET DosQueryModuleNameObject(HMODULE hmod, ULONG buflen, PCHAR buf, const LxModule *lxmod)
 {
     TRACE_NATIVE("DosQueryModuleName(%u, %u, %p)", (uint) hmod, (uint) buflen, buf);
 
-    const LxModule *lxmod = (LxModule *) hmod;
+
     // !!! FIXME: error 6 ERROR_INVALID_HANDLE
     if (strlen(lxmod->os2path) >= buflen)
         return ERROR_BAD_LENGTH;
     strcpy(buf, lxmod->os2path);
     return NO_ERROR;
 } // DosQueryModuleName
+APIRET DosQueryModuleName(HMODULE hmod, ULONG buflen, PCHAR buf)
+{
+    LxHandleBorrow module;
+    if (!lx_handle_borrow(hmod, LX_HANDLE_MODULE, &module)) return ERROR_INVALID_HANDLE;
+    const APIRET result = DosQueryModuleNameObject(hmod, buflen, buf, module.resource);
+    lx_handle_release(&module);
+    return result;
+}
+
 
 
 APIRET DosScanEnv(PSZ name, PSZ *outval)
@@ -450,7 +435,7 @@ APIRET DosSearchPath(ULONG flag, PSZ pszPathOrName, PSZ pszFilename, PBYTE pBuf,
         char *unixpath = makeUnixPath(file, &err);
         if (!unixpath)
             return err;
-        const int found = (access(unixpath, F_OK) == 0);
+        const int found = lx_host_path_exists(unixpath);
         free(unixpath);
         if (!found)
             return ERROR_FILE_NOT_FOUND;
@@ -484,7 +469,7 @@ APIRET DosSearchPath(ULONG flag, PSZ pszPathOrName, PSZ pszFilename, PBYTE pBuf,
         snprintf(fullpath, sizeof (fullpath), "%s", file);
         char *unixpath = makeUnixPath(fullpath, &err);
         if (unixpath) {
-            found = (access(unixpath, F_OK) == 0);
+            found = lx_host_path_exists(unixpath);
             free(unixpath);
         } // if
     } // if
@@ -504,7 +489,7 @@ APIRET DosSearchPath(ULONG flag, PSZ pszPathOrName, PSZ pszFilename, PBYTE pBuf,
 
         char *unixpath = makeUnixPath(fullpath, &err);
         if (unixpath) {
-            found = (access(unixpath, F_OK) == 0);
+            found = lx_host_path_exists(unixpath);
             free(unixpath);
         } // if
 
@@ -521,30 +506,56 @@ APIRET DosSearchPath(ULONG flag, PSZ pszPathOrName, PSZ pszFilename, PBYTE pBuf,
 } // DosSearchPath
 
 
-static int getHFileUnixDescriptor(HFILE h)
+enum ResourceOperation { RESOURCE_READ, RESOURCE_WRITE, RESOURCE_REQUEST_MUTEX,
+    RESOURCE_RELEASE_MUTEX, RESOURCE_RESET_EVENT, RESOURCE_POST_EVENT, RESOURCE_WAIT_EVENT, RESOURCE_QUERY_EVENT };
+typedef struct ResourceCall {
+    enum ResourceOperation operation;
+    uint32 handle, value;
+    void *resource, *buffer, *output;
+} ResourceCall;
+static APIRET DosRequestMutexSemResource(HMTX, ULONG, LxHostMutex *);
+static APIRET DosReleaseMutexSemResource(HMTX, LxHostMutex *);
+static APIRET DosResetEventSemResource(HEV, PULONG, EventSem *);
+static APIRET DosPostEventSemResource(HEV, EventSem *);
+static APIRET DosWaitEventSemResource(HEV, ULONG, EventSem *);
+static APIRET DosQueryEventSemResource(HEV, PULONG, EventSem *);
+static uint32 resourceOperation(void *argument)
+{
+    ResourceCall *call = argument;
+    switch (call->operation) {
+        case RESOURCE_READ: return lx_host_file_read(call->resource, call->buffer, call->value, call->output);
+        case RESOURCE_WRITE: return lx_host_file_write(call->resource, call->buffer, call->value, call->output);
+        case RESOURCE_REQUEST_MUTEX: return DosRequestMutexSemResource(call->handle, call->value, call->resource);
+        case RESOURCE_RELEASE_MUTEX: return DosReleaseMutexSemResource(call->handle, call->resource);
+        case RESOURCE_RESET_EVENT: return DosResetEventSemResource(call->handle, call->output, call->resource);
+        case RESOURCE_POST_EVENT: return DosPostEventSemResource(call->handle, call->resource);
+        case RESOURCE_WAIT_EVENT: return DosWaitEventSemResource(call->handle, call->value, call->resource);
+        case RESOURCE_QUERY_EVENT: return DosQueryEventSemResource(call->handle, call->output, call->resource);
+    }
+    return ERROR_INVALID_FUNCTION;
+}
+static uint32 guardedResource(enum ResourceOperation operation, uint32 handle, uint32 value,
+                               LxHandleBorrow *object, void *buffer, void *output)
+{
+    ResourceCall call = {operation, handle, value, object->resource, buffer, output};
+    return lx_host_guarded_call(resourceOperation, &call, releaseResourceBorrow, object);
+}
+static int borrowFile(HFILE id, LxHandleBorrow *object)
 {
     grabLock(&GMutexDosCalls);
-    const int fd = (h < MaxHFiles) ? HFiles[h].fd : -1;
-    ungrabLock(&GMutexDosCalls);
-    return fd;
-} // getHFileUnixDescriptor
-
-static APIRET DosWrite_implementation(HFILE h, PVOID buf, ULONG buflen, PULONG actual)
+    const int ok = id < MaxHFiles && HFiles[id].handle > 1 &&
+        lx_handle_borrow(HFiles[id].handle, LX_HANDLE_FILE, object);
+    ungrabLock(&GMutexDosCalls); return ok;
+}
+static APIRET DosWrite_implementation(HFILE id, PVOID data, ULONG size, PULONG actual)
 {
-    const int fd = getHFileUnixDescriptor(h);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-
-    // !!! FIXME: writing to a terminal should probably convert CR/LF to LF.
-    const int rc = write(fd, buf, buflen);
-    if (rc < 0) {
-        *actual = 0;
-        return ERROR_DISK_FULL;  // !!! FIXME: map these errors.
-    } // if
-
-    *actual = (uint32) rc;
-    return NO_ERROR;
-} // DosWrite_implementation
+    LxHandleBorrow file;
+    if (!borrowFile(id, &file)) return ERROR_INVALID_HANDLE;
+    size_t count = 0; LxHostFsError error;
+    error = (LxHostFsError) guardedResource(RESOURCE_WRITE, id, size, &file, data, &count);
+    if (actual) *actual = (ULONG) count;
+    return fileError(error);
+}
 
 APIRET DosWrite(HFILE h, PVOID buf, ULONG buflen, PULONG actual)
 {
@@ -558,12 +569,14 @@ static void runDosExitList(const uint32 why)
     for (ExitListItem *item = GExitList; item; item = next) {
         // don't run any of these more than once:
         //  http://www.verycomputer.com/3_c1f6e02c06ed108e_1.htm
-        PFNEXITLIST fn = item->fn;
+        PFNEXITLIST host_entry = item->host_entry;
+        uint32 guest_entry = item->guest_entry;
         next = item->next;
         GExitList = next;
         free(item);
         //printf("calling dosexitlist item %p\n", fn); fflush(stdout);
-        fn(why);
+        if (GLoaderState.execution) lx_execution_callback32(GLoaderState.execution, guest_entry, why);
+        else host_entry(why);
         //printf("dosexitlist item %p returned!\n", fn); fflush(stdout);
     } // for
 } // runDosExitList
@@ -574,7 +587,8 @@ static VOID DosExit_implementation(ULONG action, ULONG exitcode)
     if (action == EXIT_THREAD) {
         // !!! FIXME: If last thread: terminate process.
         FIXME("if last thread, treat as DosExit(1)");  // right now it will terminate process like exit(0), without running the exit list or reporting exitcode.
-        pthread_exit(NULL);  // DosWaitThread doesn't report exit codes.
+        lx_execution_end_thread(GLoaderState.execution);
+        lx_host_thread_exit(NULL);  // Legacy 16-bit thread entry.
     } // if
 
     // terminate the process.
@@ -610,7 +624,9 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
             ExitListItem *newitem = (ExitListItem *) malloc(sizeof (ExitListItem));
             if (!newitem)
                 return ERROR_NOT_ENOUGH_MEMORY;
-            newitem->fn = fn;
+            newitem->host_entry = GLoaderState.execution ? NULL : fn;
+            newitem->guest_entry = GLoaderState.execution ? (uint32) (uintptr_t) fn : 0;
+            newitem->priority = arg;
             for (item = GExitList; item; item = item->next) {
                 if (item->priority >= ((uint32) arg))
                     break;
@@ -628,7 +644,7 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
 
         case EXLST_REMOVE: {
             for (item = GExitList; item; item = item->next) {
-                if (item->fn == fn) {
+                if (GLoaderState.execution ? item->guest_entry == (uint32) (uintptr_t) fn : item->host_entry == fn) {
                     if (prev)
                         prev->next = item->next;
                     else
@@ -650,125 +666,35 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
     return NO_ERROR;
 } // DosExitList
 
-APIRET DosCreateEventSem(PSZ name, PHEV phev, ULONG attr, BOOL32 state)
+APIRET DosCreateEventSem(PSZ name, PHEV output, ULONG attr, BOOL32 state)
 {
-    TRACE_NATIVE("DosCreateEventSem('%s', %p, %u, %u)", name, phev, (uint) attr, (uint) state);
-
-    if (name != NULL) {
-        // A create of an already-registered name is an error on OS/2.
-        if (findNamedSem(name, 0))
-            return ERROR_DUPLICATE_NAME;
-    } // if
-
-    if (attr & DC_SEM_SHARED) {
-        FIXME("implement shared semaphores");
-    } // if
-
-    assert(sizeof (HEV) == sizeof (EventSem *));
-    EventSem *sem = (EventSem *) malloc(sizeof (EventSem));
-    if (sem == NULL)
-        return ERROR_NOT_ENOUGH_MEMORY;
-
-    if (pthread_mutex_init(&sem->mutex, NULL) == -1) {
-        free(sem);
-        return ERROR_NOT_ENOUGH_MEMORY;
-    } // if
-
-    if (pthread_cond_init(&sem->condition, NULL) == -1) {
-        pthread_mutex_destroy(&sem->mutex);
-        free(sem);
-        return ERROR_NOT_ENOUGH_MEMORY;
-    } // if
-
-    sem->posted = state ? 1 : 0;
-
-    if (name != NULL)
-        registerNamedSem(name, 0, sem);
-    else
-        GLastUnnamedEventSem = sem;
-
-    *phev = (HEV) sem;
-    TRACE_RET("DosCreateEventSem('%s') -> %p", name ? name : "(null)", sem);
-    return NO_ERROR;
-} // DosCreateEventSem
-
-APIRET DosOpenEventSem(PSZ pszName, PHEV phev)
+    TRACE_NATIVE("DosCreateEventSem('%s', %p, %u, %u)", name, output, (uint) attr, (uint) state);
+    if (!output) return ERROR_INVALID_PARAMETER;
+    EventSem *sem = calloc(1, sizeof *sem);
+    if (!sem) return ERROR_NOT_ENOUGH_MEMORY;
+    sem->monitor = lx_host_monitor_create();
+    if (!sem->monitor) { free(sem); return ERROR_NOT_ENOUGH_MEMORY; }
+    sem->posted = state != 0;
+    return publishSemaphore(sem, LX_HANDLE_EVENT, name, output);
+}
+APIRET DosOpenEventSem(PSZ name, PHEV output)
 {
-    TRACE_NATIVE("DosOpenEventSem('%s', %p)", pszName ? pszName : "", phev);
-
-    if (!phev)
-        return ERROR_INVALID_PARAMETER;
-
-    void *handle = NULL;
-    if ((!pszName) || (!*pszName))
-        handle = GLastUnnamedEventSem;  // see GLastUnnamedEventSem
-    else
-        handle = findNamedSem(pszName, 0);
-    TRACE_RET("DosOpenEventSem('%s') -> %p", pszName ? pszName : "", handle);
-    if (!handle)
-        return ERROR_SEM_NOT_FOUND;
-
-    *phev = (HEV) handle;
-    return NO_ERROR;
-} // DosOpenEventSem
-
-APIRET DosCreateMutexSem(PSZ name, PHMTX phmtx, ULONG attr, BOOL32 state)
+    TRACE_NATIVE("DosOpenEventSem('%s', %p)", name, output);
+    return openSemaphore(name, LX_HANDLE_EVENT, output);
+}
+APIRET DosCreateMutexSem(PSZ name, PHMTX output, ULONG attr, BOOL32 state)
 {
-    TRACE_NATIVE("DosCreateMutexSem('%s', %p, %u, %u)", name, phmtx, (uint) attr, (uint) state);
-
-    if (name != NULL) {
-        if (findNamedSem(name, 1))
-            return ERROR_DUPLICATE_NAME;
-    } // if
-
-    if (attr & DC_SEM_SHARED) {
-        FIXME("implement shared mutexes");
-    } // if
-
-    assert(sizeof (HMTX) == sizeof (pthread_mutex_t *));
-    pthread_mutex_t *mtx = (pthread_mutex_t *) malloc(sizeof (pthread_mutex_t));
-    if (mtx == NULL)
-        return ERROR_NOT_ENOUGH_MEMORY;
-
-    // OS/2 mutexes are recursive.
-    pthread_mutexattr_t muxattr;
-    pthread_mutexattr_init(&muxattr);
-    pthread_mutexattr_settype(&muxattr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutexattr_setrobust(&muxattr, PTHREAD_MUTEX_ROBUST);
-
-    const int rc = pthread_mutex_init(mtx, &muxattr);
-    pthread_mutexattr_destroy(&muxattr);
-
-    if (rc == -1) {
-        free(mtx);
-        return ERROR_NOT_ENOUGH_MEMORY;
-    } // if
-
-    if (state)
-        pthread_mutex_lock(mtx);
-
-    if (name != NULL)
-        registerNamedSem(name, 1, mtx);
-
-    *phmtx = (HMTX) mtx;
-
-    return NO_ERROR;
-} // DosCreateMutexSem
-
-APIRET DosOpenMutexSem(PSZ pszName, PHMTX phmtx)
+    TRACE_NATIVE("DosCreateMutexSem('%s', %p, %u, %u)", name, output, (uint) attr, (uint) state);
+    if (!output) return ERROR_INVALID_PARAMETER;
+    LxHostMutex *mutex = lx_host_mutex_create(1, state);
+    if (!mutex) return ERROR_NOT_ENOUGH_MEMORY;
+    return publishSemaphore(mutex, LX_HANDLE_MUTEX, name, output);
+}
+APIRET DosOpenMutexSem(PSZ name, PHMTX output)
 {
-    TRACE_NATIVE("DosOpenMutexSem('%s', %p)", pszName ? pszName : "", phmtx);
-
-    if ((!pszName) || (!phmtx))
-        return ERROR_INVALID_PARAMETER;
-
-    void *handle = findNamedSem(pszName, 1);
-    if (!handle)
-        return ERROR_SEM_NOT_FOUND;
-
-    *phmtx = (HMTX) handle;
-    return NO_ERROR;
-} // DosOpenMutexSem
+    TRACE_NATIVE("DosOpenMutexSem('%s', %p)", name, output);
+    return openSemaphore(name, LX_HANDLE_MUTEX, output);
+}
 
 // !!! FIXME: this is obviously not correct.
 APIRET DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
@@ -793,30 +719,7 @@ ULONG _DosFlatToSel(PVOID ptr)
     return GLoaderState.convert32to1616(ptr);
 } // _DosFlatToSel
 
-// DosFlatToSel() passes its argument in %eax, so a little asm to bridge that...
-// Note that this isn't syscall calling conventions at all; CSet/2 generates
-//  thunking code that expects this function to preserve %ecx, so we'll just
-//  go ahead and save a bunch of stuff, just in case.
-__asm__ (
-    ".globl DosFlatToSel  \n\t"
-    ".type	DosFlatToSel, @function \n\t"
-    "DosFlatToSel:  \n\t"
-    "    pushl %ebx  \n\t"  // save off a bunch of stuff. Better safe than sorry.
-    "    pushl %ecx  \n\t"
-    "    pushl %edx  \n\t"
-    "    pushl %edi  \n\t"
-    "    pushl %esi  \n\t"
-    "    pushl %eax  \n\t"  // the actual argument to DosFlatToSel.
-    "    call _DosFlatToSel  \n\t"
-    "    addl $4, %esp  \n\t"  // clear argument to DosFlatToSel.
-    "    popl %esi  \n\t"
-    "    popl %edi  \n\t"
-    "    popl %edx  \n\t"  // save off a bunch of stuff.
-    "    popl %ecx  \n\t"
-    "    popl %ebx  \n\t"
-    "    ret  \n\t"
-	".size	_DosFlatToSel, .-_DosFlatToSel  \n\t"
-);
+
 #endif
 
 APIRET DosSetSignalExceptionFocus(BOOL32 flag, PULONG pulTimes)
@@ -843,61 +746,23 @@ APIRET DosSetSignalExceptionFocus(BOOL32 flag, PULONG pulTimes)
     return NO_ERROR;
 } // DosSetSignalExceptionFocus
 
-APIRET DosSetRelMaxFH(PLONG pincr, PULONG pcurrent)
+APIRET DosSetRelMaxFH(PLONG request, PULONG current)
 {
-    TRACE_NATIVE("DosSetRelMaxFH(%p, %p)", pincr, pcurrent);
+    grabLock(&GMutexDosCalls);
+    if (request && *request > 0) {
+        uint32 increase = (uint32) *request;
+        if (increase > 0x10000u - MaxHFiles) increase = 0x10000u - MaxHFiles;
+        HFileInfo *files = increase ? realloc(HFiles, sizeof *files * (MaxHFiles + increase)) : NULL;
+        if (files) {
+            memset(files + MaxHFiles, 0, sizeof *files * increase);
+            HFiles = files; MaxHFiles += increase;
+        } else increase = 0;
+        *request = (LONG) increase;
+    }
+    if (current) *current = MaxHFiles;
+    ungrabLock(&GMutexDosCalls); return NO_ERROR;
+}
 
-    #if 0
-    struct rlimit rlim;
-    int rc = getrlimit(RLIMIT_NOFILE, &rlim);
-    assert(rc == 0);  // this shouldn't fail...right?
-    if (pcurrent)
-        *pcurrent = (ULONG) rlim.rlim_cur;
-
-    if (pincr) {
-        rlim.rlim_cur = (rlim_t) (((LONG) rlim.rlim_cur) + *pincr);
-        if (setrlimit(RLIMIT_NOFILE, &rlim) == 0) {
-            if (pcurrent)
-                *pcurrent = (ULONG) rlim.rlim_cur;
-        } // if
-    } // if
-    #endif
-
-    if (pincr != NULL) {
-        const LONG incr = *pincr;
-        // OS/2 API docs say reductions in file handles are advisory, so we
-        //  ignore them outright. Fight me.
-        if (incr > 0) {
-            grabLock(&GMutexDosCalls);
-            HFileInfo *info = (HFileInfo *) realloc(HFiles, sizeof (HFileInfo) * (MaxHFiles + incr));
-            if (info != NULL) {
-                HFiles = info;
-                FIXME("this needs to initialize the end of the array, not the front");
-                for (LONG i = 0; i < incr; i++, info++) {
-                    info->fd = -1;
-                    info->type = 0;
-                    info->attr = 0;
-                    info->flags = 0;
-                } // for
-                MaxHFiles += incr;
-            } // if
-            ungrabLock(&GMutexDosCalls);
-        } // if
-    } // if
-
-    if (pcurrent != NULL) {
-        grabLock(&GMutexDosCalls);
-        *pcurrent = MaxHFiles;
-        ungrabLock(&GMutexDosCalls);
-    } // if
-
-    return NO_ERROR;  // always returns NO_ERROR even if it fails.
-} // DosSetRelMaxFH
-
-
-// OS/2 commits whole pages, and callers (IBM's C++ runtime among them) do
-//  write into the page-rounded tail of an allocation. Return a page-rounded,
-//  zero-filled mapping rather than an exact-size malloc block.
 APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
 {
     TRACE_NATIVE("DosAllocMem(%p, %u, %u)", ppb, (uint) cb, (uint) flag);
@@ -905,24 +770,32 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     if ((!ppb) || (cb == 0))
         return ERROR_INVALID_PARAMETER;
 
-    const size_t pagesize = (size_t) getpagesize();
+    const size_t pagesize = 4096;
     size_t size = (size_t) cb;
     if ((size % pagesize) != 0)
         size += pagesize - (size % pagesize);
 
-    void *addr = allocLowMemory(size, PROT_READ | PROT_WRITE,
-                                MAP_PRIVATE | MAP_ANONYMOUS, -1);
-    if (addr == MAP_FAILED)
-        return ERROR_NOT_ENOUGH_MEMORY;
+    LxGuestMapping *mapping = NULL;
+    void *addr;
+    if (GLoaderState.execution) {
+        mapping = lx_execution_map(GLoaderState.execution, 0, size, 3 | ((flag & 4) ? 4 : 0), 0);
+        if (!mapping) return ERROR_NOT_ENOUGH_MEMORY;
+        addr = lx_execution_mapping_host(mapping);
+    } else {
+        addr = lx_host_memory_alloc(size);
+        if (!addr) return ERROR_NOT_ENOUGH_MEMORY;
+    }
 
     SharedMemBlock *block = (SharedMemBlock *) malloc(sizeof (*block));
     if (!block) {
-        munmap(addr, size);
+        if (mapping) lx_execution_unmap(GLoaderState.execution, mapping);
+        else lx_host_memory_free(addr, size);
         return ERROR_NOT_ENOUGH_MEMORY;
     } // if
 
     block->addr = addr;
     block->size = size;
+    block->mapping = mapping;
     block->freed = 0;
 
     grabLock(&GMutexDosCalls);
@@ -961,7 +834,7 @@ static APIRET DosQueryHType_implementation(HFILE hFile, PULONG pType, PULONG pAt
     APIRET retval = NO_ERROR;
 
     grabLock(&GMutexDosCalls);
-    if ((hFile >= MaxHFiles) || (HFiles[hFile].fd == -1))
+    if ((hFile >= MaxHFiles) || (HFiles[hFile].handle <= 1))
         retval = ERROR_INVALID_HANDLE;
     else {
         // OS/2 will dereference a NULL pointer here, but I can't do it...!!!
@@ -989,23 +862,15 @@ APIRET DosGetDateTime(PDATETIME pdt)
 {
     TRACE_NATIVE("DosGetDateTime(%p)", pdt);
 
-    // we can't use time() for this, since we need sub-second resolution.
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
+    const uint64 now = lx_host_realtime_us();
+    LxHostCalendar value;
+    if (!pdt || !lx_host_calendar((int64_t) (now / 1000000), 0, &value)) return ERROR_INVALID_PARAMETER;
+    pdt->hours = value.hour; pdt->minutes = value.minute;
+    pdt->seconds = value.second > 59 ? 59 : value.second;
+    pdt->hundredths = (now % 1000000) / 10000;
+    pdt->day = value.day; pdt->month = value.month; pdt->year = value.year;
+    pdt->timezone = -value.utc_offset_minutes; pdt->weekday = value.weekday;
 
-    struct tm ltm;
-    localtime_r(&tv.tv_sec, &ltm);
-
-    pdt->hours = ltm.tm_hour;
-    pdt->minutes = ltm.tm_min;
-    pdt->seconds = (ltm.tm_sec == 60) ? 59 : ltm.tm_sec;  // !!! FIXME: I assume OS/2 doesn't support leap seconds...
-    pdt->hundredths = tv.tv_usec / 10000000;  // microseconds to hundreths.
-    pdt->day = ltm.tm_mday;
-    pdt->month = ltm.tm_mon + 1;
-    pdt->year = ltm.tm_year + 1900;
-    pdt->timezone = -(ltm.tm_gmtoff / 60);  // OS/2 is minutes west of GMT, Unix is seconds east. Convert and flip!
-    pdt->weekday = ltm.tm_wday;
-    
     return NO_ERROR;  // never returns failure.
 } // DosGetDateTime
 
@@ -1014,191 +879,57 @@ static char *makeUnixPath(const char *os2path, APIRET *err)
     return GLoaderState.makeUnixPath(os2path, (uint32 *) err);
 } // makeUnixPath
 
-static APIRET doDosOpen(PSZ pszFileName, PHFILE pHf, PULONG pulAction, LONGLONG cbFile, ULONG ulAttribute, ULONG fsOpenFlags, ULONG fsOpenMode, PEAOP2 peaop2)
+static APIRET doDosOpen(PSZ name, PHFILE output, PULONG action, LONGLONG size, ULONG attributes,
+                         ULONG open_flags, ULONG open_mode, PEAOP2 extended)
 {
-    int isReadOnly = 0;
-    int flags = 0;
-    const ULONG access_mask = OPEN_ACCESS_READONLY | OPEN_ACCESS_WRITEONLY | OPEN_ACCESS_READWRITE;
-    switch (fsOpenMode & access_mask) {
-        case OPEN_ACCESS_READONLY: isReadOnly = 1; flags |= O_RDONLY; break;
-        case OPEN_ACCESS_WRITEONLY: flags |= O_WRONLY; break;
-        case OPEN_ACCESS_READWRITE: flags |= O_RDWR; break;
+    if (!name || !output || size < 0 || extended || (attributes & FILE_DIRECTORY) ||
+        (open_flags & 0xfffffe00u) || (open_mode & 0xffff0000u)) return ERROR_INVALID_PARAMETER;
+    if (open_flags & OPEN_FLAGS_DASD) return ERROR_OPEN_FAILED;
+    unsigned flags;
+    switch (open_mode & 3) {
+        case OPEN_ACCESS_READONLY: flags = LX_HOST_FILE_READ; break;
+        case OPEN_ACCESS_WRITEONLY: flags = LX_HOST_FILE_WRITE; break;
+        case OPEN_ACCESS_READWRITE: flags = LX_HOST_FILE_READ | LX_HOST_FILE_WRITE; break;
         default: return ERROR_INVALID_PARAMETER;
-    } // switch
-
-    if (isReadOnly && (cbFile != 0))
-        return ERROR_INVALID_PARAMETER;
-    else if (ulAttribute & FILE_DIRECTORY)
-        return ERROR_INVALID_PARAMETER;  // !!! FIXME: I assume you can't create a directory with DosOpen...right?
-    else if (isReadOnly && ((fsOpenFlags & 0xF0) == OPEN_ACTION_CREATE_IF_NEW))
-        return ERROR_INVALID_PARAMETER;  // !!! FIXME: is this invalid on OS/2?
-    else if (isReadOnly && ((fsOpenFlags & 0x0F) == OPEN_ACTION_REPLACE_IF_EXISTS))
-        return ERROR_INVALID_PARAMETER;  // !!! FIXME: is this invalid on OS/2?
-    else if (fsOpenFlags & 0xfffffe00)  // bits (1<<8) through (1<<31) are reserved, must be zero.
-        return ERROR_INVALID_PARAMETER;
-    else if (fsOpenFlags & OPEN_FLAGS_DASD)  // no good is going to come of this.
-        return ERROR_OPEN_FAILED;
-    else if (fsOpenMode & 0xffff0000)  // bits (1<<16) through (1<<31) are reserved, must be zero.
-        return ERROR_INVALID_PARAMETER;
-
-    if (peaop2 != NULL) {
-        FIXME("EAs not yet implemented");
-        return ERROR_OPEN_FAILED;
     }
-
-    switch (fsOpenFlags & 0xF0) {
-        case OPEN_ACTION_FAIL_IF_NEW:
-            break;  // just don't O_CREAT and you're fine.
-
-        case OPEN_ACTION_CREATE_IF_NEW:
-            flags |= O_CREAT | O_EXCL;  // the O_EXCL is intentional! see below.
-            break;
-    } // switch
-
-    int mustNotExist = 0;
-    int isExclusive = 0;
-    int isReplacing = 0;
-
-    switch (fsOpenFlags & 0x0F) {
-        case OPEN_ACTION_FAIL_IF_EXISTS:
-            if (isReadOnly)
-                mustNotExist = 1;
-            else {
-                isExclusive = 1;
-                flags |= O_CREAT | O_EXCL;
-            } // else
-            break;
-
-        case OPEN_ACTION_OPEN_IF_EXISTS:
-            break;  // nothing to do here.
-
-        case OPEN_ACTION_REPLACE_IF_EXISTS:  // right now, we already failed above if readonly.
-            isReplacing = 1;
-            flags |= O_TRUNC;  // have the open call nuke it, and then we'll ftruncate to grow it if necessary.
-            break;
-    } // switch
-
-    if (fsOpenMode & OPEN_FLAGS_WRITE_THROUGH)
-        flags |= O_SYNC;  // !!! FIXME: this flag is supposed to drop when inherited by children, but fcntl() can't do that on Linux.
-
-    if (fsOpenMode & OPEN_FLAGS_NOINHERIT)
-        flags |= O_CLOEXEC;
-
-    if (fsOpenMode & OPEN_FLAGS_FAIL_ON_ERROR)
-        FIXME("need other file i/o APIs to do a system dialog box if this handle has i/o failures!");
-
-    // O_DIRECT isn't supported on ZFS-on-Linux, so I'm already not on board,
-    //  but also: do we care if programs intended to run on a system with a
-    //  few megabytes of RAM--on an OS that didn't have a resizeable file
-    //  cache!--writes into a multi-gigabyte machine's flexible cache? I don't!
-    //if (fsOpenMode & OPEN_FLAGS_NO_CACHE)
-    //    flags |= O_DIRECT;
-
-    FIXME("There are fsOpenMode flags we currently ignore (like sharing support)");
-
-    const mode_t mode = S_IRUSR | ((ulAttribute & FILE_READONLY) ? 0 : S_IWUSR);
-    FIXME("Most of the file attributes don't make sense on Unix, but we could stuff them in EAs");
-
-    HFileInfo *info = HFiles;
-    uint32 i;
-
-    if (!grabLock(&GMutexDosCalls))
-        return ERROR_SYS_INTERNAL;
-
-    for (i = 0; i < MaxHFiles; i++, info++) {
-        if (info->fd == -1) {  // available?
-            info->fd = -2;
-            break;
-        } // if
-    } // for
-
+    const ULONG existing = open_flags & 15, missing = open_flags & 0xf0;
+    if (existing > OPEN_ACTION_REPLACE_IF_EXISTS || (missing != OPEN_ACTION_FAIL_IF_NEW && missing != OPEN_ACTION_CREATE_IF_NEW))
+        return ERROR_INVALID_PARAMETER;
+    if (!(flags & LX_HOST_FILE_WRITE) && (size || missing == OPEN_ACTION_CREATE_IF_NEW || existing == OPEN_ACTION_REPLACE_IF_EXISTS))
+        return ERROR_INVALID_PARAMETER;
+    if (missing == OPEN_ACTION_CREATE_IF_NEW || existing == OPEN_ACTION_FAIL_IF_EXISTS)
+        flags |= LX_HOST_FILE_CREATE | LX_HOST_FILE_EXCLUSIVE;
+    if (existing == OPEN_ACTION_REPLACE_IF_EXISTS) flags |= LX_HOST_FILE_TRUNCATE;
+    if (open_mode & OPEN_FLAGS_WRITE_THROUGH) flags |= LX_HOST_FILE_SYNC;
+    if (open_mode & OPEN_FLAGS_NOINHERIT) flags |= LX_HOST_FILE_NOINHERIT;
+    APIRET result;
+    char *path = makeUnixPath(name, &result); if (!path) return result;
+    grabLock(&GMutexDosCalls);
+    HFILE id;
+    for (id = 0; id < MaxHFiles && HFiles[id].handle; id++) {}
+    if (id == MaxHFiles) { ungrabLock(&GMutexDosCalls); free(path); return ERROR_TOO_MANY_OPEN_FILES; }
+    HFiles[id].handle = 1; ungrabLock(&GMutexDosCalls);
+    LxHostFsError error;
+    LxHostFile *file = lx_host_file_open(path, flags, (attributes & FILE_READONLY) != 0, &error);
+    int created = file && (flags & LX_HOST_FILE_EXCLUSIVE);
+    if (!file && error == LX_HOST_FS_EXISTS && missing == OPEN_ACTION_CREATE_IF_NEW && existing != OPEN_ACTION_FAIL_IF_EXISTS)
+        file = lx_host_file_open(path, flags & ~LX_HOST_FILE_EXCLUSIVE, (attributes & FILE_READONLY) != 0, &error);
+    free(path);
+    if (file && size && (created || existing == OPEN_ACTION_REPLACE_IF_EXISTS)) {
+        error = lx_host_file_resize(file, (uint64) size);
+        if (error) { lx_host_file_close(file); file = NULL; }
+    }
+    HFileInfo info;
+    result = file ? (initFileInfo(file, &info, open_mode) ? NO_ERROR : ERROR_NOT_ENOUGH_MEMORY) : fileError(error);
+    grabLock(&GMutexDosCalls);
+    if (result) memset(&HFiles[id], 0, sizeof HFiles[id]); else HFiles[id] = info;
     ungrabLock(&GMutexDosCalls);
-
-    if (i == MaxHFiles) {
-        return ERROR_TOO_MANY_OPEN_FILES;
+    if (!result) {
+        *output = id;
+        if (action) *action = created ? FILE_CREATED : existing == OPEN_ACTION_REPLACE_IF_EXISTS ? FILE_TRUNCATED : FILE_EXISTED;
     }
-
-    const HFILE hf = i;
-
-    APIRET err = NO_ERROR;
-    char *unixpath = makeUnixPath(pszFileName, &err);
-    if (!unixpath) {
-        info->fd = -1;
-        return err;
-    } // if
-
-    //if (strcmp(pszFileName, unixpath) != 0) { fprintf(stderr, "DosOpen: converted '%s' to '%s'\n", pszFileName, unixpath); }
-
-    int fd = open(unixpath, flags, mode);
-
-    // if failed trying exclusive-create because file already exists, but we
-    //  didn't explicitly _need_ exclusivity, retry without O_EXCL. We always
-    //  try O_EXCL at first when using O_CREAT, so we can tell atomically if
-    //  we were the one that created the file, to satisfy pulAction.
-    int existed = 0;
-    if ((fd == -1) && (flags & (O_CREAT|O_EXCL)) && (errno == EEXIST) && !isExclusive) {
-        existed = 1;
-        fd = open(unixpath, flags & ~O_EXCL, mode);
-    } else if (fd != -1) {
-        existed = 1;
-    } // else if
-    free(unixpath);
-
-    if (fd != -1) {
-        if (mustNotExist) {
-            close(fd);
-            info->fd = -1;
-            return ERROR_OPEN_FAILED;  // !!! FIXME: what error does OS/2 return for this?
-        } else if ( (!existed || isReplacing) && (cbFile > 0) ) {
-            if (ftruncate(info->fd, cbFile) == -1) {
-                const int e = errno;
-                close(fd);
-                info->fd = -1;
-                errno = e;  // let the switch below sort out the OS/2 error code.
-            } // if
-        } // else if
-    } // if
-
-    if (fd != -1) {
-        if (isReplacing)
-            FIXME("Replacing a file should delete all its EAs, too");
-    } // if
-
-    initHFileInfoFromUnixFd(fd, info);
-
-    if (fd == -1) {
-        switch (errno) {
-            case EACCES: return ERROR_ACCESS_DENIED;
-            case EDQUOT: return ERROR_CANNOT_MAKE;
-            case EEXIST: return ERROR_CANNOT_MAKE;
-            case EISDIR: return ERROR_ACCESS_DENIED;
-            case EMFILE: return ERROR_TOO_MANY_OPEN_FILES;
-            case ENFILE: return ERROR_TOO_MANY_OPEN_FILES;
-            case ENAMETOOLONG: return ERROR_FILENAME_EXCED_RANGE;
-            case ENOSPC: return ERROR_DISK_FULL;
-            case ENOMEM: return ERROR_NOT_ENOUGH_MEMORY;
-            case ENOENT: return ERROR_FILE_NOT_FOUND;  // !!! FIXME: could be PATH_NOT_FOUND too, depending on circumstances.
-            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
-            case EPERM: return ERROR_ACCESS_DENIED;
-            case EROFS: return ERROR_ACCESS_DENIED;
-            case ETXTBSY: return ERROR_ACCESS_DENIED;
-            default: return ERROR_OPEN_FAILED;  // !!! FIXME: debug logging about missin errno case.
-        } // switch
-        __builtin_unreachable();
-    } // if
-
-    info->flags = fsOpenFlags;
-
-    if (isReplacing)
-        *pulAction = FILE_TRUNCATED;
-    else if (existed)
-        *pulAction = FILE_EXISTED;
-    else
-        *pulAction = FILE_CREATED;
-
-    *pHf = hf;
-    return NO_ERROR;
-} // doDosOpen
+    return result;
+}
 
 APIRET DosOpen(PSZ pszFileName, PHFILE pHf, PULONG pulAction, ULONG cbFile, ULONG ulAttribute, ULONG fsOpenFlags, ULONG fsOpenMode, PEAOP2 peaop2)
 {
@@ -1209,82 +940,66 @@ APIRET DosOpen(PSZ pszFileName, PHFILE pHf, PULONG pulAction, ULONG cbFile, ULON
     return rc;
 } // DosOpen
 
-APIRET DosRequestMutexSem(HMTX hmtx, ULONG ulTimeout)
+static APIRET DosRequestMutexSemResource(HMTX hmtx, ULONG ulTimeout, LxHostMutex *mutex)
 {
     TRACE_NATIVE("DosRequestMutexSem(%u, %u)", (uint) hmtx, (uint) ulTimeout);
 
     if (!hmtx)
         return ERROR_INVALID_HANDLE;
 
-    pthread_mutex_t *mutex = (pthread_mutex_t *) hmtx;
-    int rc;
+    switch (lx_host_mutex_lock(mutex, ulTimeout)) {
+        case LX_HOST_LOCK_OK: return NO_ERROR;
+        case LX_HOST_LOCK_BUSY:
+        case LX_HOST_LOCK_TIMEOUT: return ERROR_TIMEOUT;
+        case LX_HOST_LOCK_OWNER_DIED: return ERROR_SEM_OWNER_DIED;
+        default: return ERROR_INVALID_HANDLE;
+    }
 
-    if (ulTimeout == SEM_IMMEDIATE_RETURN) {
-        rc = pthread_mutex_trylock(mutex);
-    } else if (ulTimeout == SEM_INDEFINITE_WAIT) {
-        rc = pthread_mutex_lock(mutex);
-    } else {
-        struct timespec waittime;
-        timespecNowPlusMilliseconds(&waittime, ulTimeout);
-        rc = pthread_mutex_timedlock(mutex, &waittime);
-    } // else
+}
+APIRET DosRequestMutexSem(HMTX hmtx, ULONG ulTimeout)
+{
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(hmtx, LX_HANDLE_MUTEX, &object)) return ERROR_INVALID_HANDLE;
+    APIRET result;
+    result = guardedResource(RESOURCE_REQUEST_MUTEX, hmtx, ulTimeout, &object, NULL, NULL);
+    return result;
+}
+ // DosRequestMutexSem
 
-    switch (rc) {
-        case 0: return NO_ERROR;
-        case EAGAIN: return ERROR_TOO_MANY_SEM_REQUESTS;
-        case EOWNERDEAD: return ERROR_SEM_OWNER_DIED;
-        case ETIMEDOUT: return ERROR_TIMEOUT;
-        default: break;
-    } // switch
-
-    return ERROR_INVALID_HANDLE;  // oh well.
-} // DosRequestMutexSem
-
-APIRET DosReleaseMutexSem(HMTX hmtx)
+static APIRET DosReleaseMutexSemResource(HMTX hmtx, LxHostMutex *mutex)
 {
     TRACE_NATIVE("DosReleaseMutexSem(%u)", (uint) hmtx);
 
     if (!hmtx)
         return ERROR_INVALID_HANDLE;
 
-    pthread_mutex_t *mutex = (pthread_mutex_t *) hmtx;
-    const int rc = pthread_mutex_unlock(mutex);
-    if (rc == 0)
-        return NO_ERROR;
-    else if (rc == EPERM)
-        return ERROR_NOT_OWNER;
-
+    const LxHostLockResult rc = lx_host_mutex_unlock(mutex);
+    if (rc == LX_HOST_LOCK_OK) return NO_ERROR;
+    if (rc == LX_HOST_LOCK_NOT_OWNER) return ERROR_NOT_OWNER;
     return ERROR_INVALID_HANDLE;
-} // DosReleaseMutexSem
 
-static APIRET DosSetFilePtr_implementation(HFILE hFile, LONG ib, ULONG method, PULONG ibActual)
+}
+APIRET DosReleaseMutexSem(HMTX hmtx)
 {
-    int whence;
-    switch (method) {
-        case FILE_BEGIN: whence = SEEK_SET; break;
-        case FILE_CURRENT: whence = SEEK_CUR; break;
-        case FILE_END: whence = SEEK_END; break;
-        default: return ERROR_INVALID_FUNCTION;
-    } // switch
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(hmtx, LX_HANDLE_MUTEX, &object)) return ERROR_INVALID_HANDLE;
+    APIRET result;
+    result = guardedResource(RESOURCE_RELEASE_MUTEX, hmtx, 0, &object, NULL, NULL);
+    return result;
+}
+ // DosReleaseMutexSem
 
-    const int fd = getHFileUnixDescriptor(hFile);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-
-    const off_t pos = lseek(fd, (off_t) ib, whence);
-    if (pos == -1) {
-        if (errno == EINVAL)
-            return ERROR_NEGATIVE_SEEK;
-        return ERROR_INVALID_FUNCTION;  // !!! FIXME: ?
-    } // if
-
-    if (ibActual)
-        *ibActual = (ULONG) pos;
-
-    TRACE_RET("DosSetFilePtr(%u, %d, %u) -> %ld", (uint) hFile, (int) ib,
-              (uint) method, (long) pos);
-    return NO_ERROR;
-} // DosSetFilePtr_implementation
+static APIRET DosSetFilePtr_implementation(HFILE id, LONG distance, ULONG origin, PULONG output)
+{
+    if (origin > FILE_END) return ERROR_INVALID_FUNCTION;
+    LxHandleBorrow file;
+    if (!borrowFile(id, &file)) return ERROR_INVALID_HANDLE;
+    uint64 position;
+    const LxHostFsError error = lx_host_file_seek(file.resource, distance, origin, &position);
+    lx_handle_release(&file);
+    if (!error && output) *output = (ULONG) position;
+    return error == LX_HOST_FS_INVALID ? ERROR_NEGATIVE_SEEK : fileError(error);
+}
 
 APIRET DosSetFilePtr(HFILE hFile, LONG ib, ULONG method, PULONG ibActual)
 {
@@ -1292,24 +1007,15 @@ APIRET DosSetFilePtr(HFILE hFile, LONG ib, ULONG method, PULONG ibActual)
     return DosSetFilePtr_implementation(hFile, ib, method, ibActual);
 } // DosSetFilePtr
 
-static APIRET DosRead_implementation(HFILE hFile, PVOID pBuffer, ULONG cbRead, PULONG pcbActual)
+static APIRET DosRead_implementation(HFILE id, PVOID data, ULONG size, PULONG actual)
 {
-    const int fd = getHFileUnixDescriptor(hFile);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-
-    const ssize_t br = read(fd, pBuffer, cbRead);
-    if (br == -1) {
-        TRACE_RET("DosRead(%u, %u) -> error", (uint) hFile, (uint) cbRead);
-        return ERROR_INVALID_FUNCTION;  // !!! FIXME: ?
-    } // if
-
-    if (pcbActual)
-        *pcbActual = (ULONG) br;
-
-    TRACE_RET("DosRead(%u, %u) -> %ld", (uint) hFile, (uint) cbRead, (long) br);
-    return NO_ERROR;
-} // DosRead_implementation
+    LxHandleBorrow file;
+    if (!borrowFile(id, &file)) return ERROR_INVALID_HANDLE;
+    size_t count = 0; LxHostFsError error;
+    error = (LxHostFsError) guardedResource(RESOURCE_READ, id, size, &file, data, &count);
+    if (actual) *actual = (ULONG) count;
+    return fileError(error);
+}
 
 APIRET DosRead(HFILE hFile, PVOID pBuffer, ULONG cbRead, PULONG pcbActual)
 {
@@ -1317,26 +1023,16 @@ APIRET DosRead(HFILE hFile, PVOID pBuffer, ULONG cbRead, PULONG pcbActual)
     return DosRead_implementation(hFile, pBuffer, cbRead, pcbActual);
 } // DosRead
 
-static APIRET DosClose_implementation(HFILE hFile)
+static APIRET DosClose_implementation(HFILE id)
 {
-    const int fd = getHFileUnixDescriptor(hFile);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-
-    if (fd <= 2) { FIXME("remove me"); return NO_ERROR; } // for debugging purposes, remove me later.
-
-    const int rc = close(fd);
-    if (rc == -1)
-        return ERROR_ACCESS_DENIED;  // !!! FIXME: ?
-
     grabLock(&GMutexDosCalls);
-    HFiles[hFile].fd = -1;
-    HFiles[hFile].type = 0;
-    HFiles[hFile].attr = 0;
-    ungrabLock(&GMutexDosCalls);
-
-    return NO_ERROR;
-} // DosClose_implementation
+    APIRET result = ERROR_INVALID_HANDLE;
+    if (id < MaxHFiles && HFiles[id].handle > 1) {
+        uint32 handle = HFiles[id].handle; memset(&HFiles[id], 0, sizeof HFiles[id]);
+        result = lx_handle_close(handle, LX_HANDLE_FILE) ? NO_ERROR : ERROR_INVALID_HANDLE;
+    }
+    ungrabLock(&GMutexDosCalls); return result;
+}
 
 APIRET DosClose(HFILE hFile)
 {
@@ -1383,16 +1079,13 @@ APIRET DosExitMustComplete(PULONG pulNesting)
     return NO_ERROR;
 } // DosExitMustComplete
 
-static void unixTimeToOs2(const time_t unixtime, FDATE *os2date, FTIME *os2time)
+static void unixTimeToOs2(const int64_t seconds, FDATE *date, FTIME *time)
 {
-    struct tm lt;
-    localtime_r(&unixtime, &lt);
-    os2date->day = (USHORT) lt.tm_mday;
-    os2date->month = (USHORT) (lt.tm_mon + 1);
-    os2date->year = (USHORT) (lt.tm_year - 80);  // wants years since 1980, apparently.
-    os2time->twosecs = (USHORT) (lt.tm_sec / 2);
-    os2time->minutes = (USHORT) lt.tm_min;
-    os2time->hours = (USHORT) lt.tm_hour;
+    LxHostCalendar value;
+    if (!lx_host_calendar(seconds, 0, &value)) { memset(date, 0, sizeof *date); memset(time, 0, sizeof *time); return; }
+    date->day = value.day; date->month = value.month;
+    date->year = value.year < 1980 ? 0 : value.year > 2107 ? 127 : value.year - 1980;
+    time->twosecs = value.second / 2; time->minutes = value.minute; time->hours = value.hour;
 } // unixTimeToOs2
 
 static inline void initFileCreationDateTime(FDATE *fdate, FTIME *ftime)
@@ -1414,21 +1107,21 @@ static inline void initFileCreationDateTime(FDATE *fdate, FTIME *ftime)
     } // if
 } // initFileCreationDateTime
 
-static APIRET queryFileInfoStandardFromStat(const struct stat *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
+static APIRET queryFileInfoStandardFromStat(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
     FILESTATUS3 *st = (FILESTATUS3 *) pInfoBuf;
     memset(st, '\0', sizeof (*st));
 
     initFileCreationDateTime(&st->fdateCreation, &st->ftimeCreation);
-    unixTimeToOs2(statbuf->st_atime, &st->fdateLastAccess, &st->ftimeLastAccess);
-    unixTimeToOs2(statbuf->st_mtime, &st->fdateLastWrite, &st->ftimeLastWrite);
+    unixTimeToOs2(statbuf->accessed, &st->fdateLastAccess, &st->ftimeLastAccess);
+    unixTimeToOs2(statbuf->modified, &st->fdateLastWrite, &st->ftimeLastWrite);
 
-    st->cbFile = (ULONG) statbuf->st_size;
-    st->cbFileAlloc = (ULONG) (statbuf->st_blocks * 512);
+    st->cbFile = (ULONG) statbuf->size;
+    st->cbFileAlloc = (ULONG) statbuf->allocated;
 
-    if (S_ISDIR(statbuf->st_mode))
+    if (statbuf->kind == LX_HOST_FILE_DIRECTORY)
         st->attrFile |= FILE_DIRECTORY;
-    if ((statbuf->st_mode & S_IWUSR) == 0)  // !!! FIXME: not accurate...?
+    if (statbuf->readonly)  // !!! FIXME: not accurate...?
         st->attrFile |= FILE_READONLY;
 
     return NO_ERROR;
@@ -1439,8 +1132,8 @@ static APIRET queryPathInfoStandard(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBu
     if (cbInfoBuf < sizeof (FILESTATUS3))
         return ERROR_BUFFER_OVERFLOW;
 
-    struct stat statbuf;
-    if (stat(unixPath, &statbuf) == -1) {
+    LxHostFileInfo statbuf;
+    if (lx_host_path_info(unixPath, &statbuf) != LX_HOST_FS_OK) {
         return ERROR_PATH_NOT_FOUND;  // !!! FIXME
     }
 
@@ -1463,7 +1156,7 @@ static APIRET queryPathInfoEaSize(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
 
 static APIRET queryPathInfoFullName(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
-    char *real = realpath(unixPath, NULL);
+    char *real = lx_host_path_canonical(unixPath);
     if (real == NULL) {
         // !!! FIXME: what _should_ this do if file doesn't exist? If parent directory doesn't?
         real = strdup(unixPath);  // could be file doesn't exist, but this still needs to return something...
@@ -1534,14 +1227,14 @@ APIRET DosQueryPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULON
     return err;
 } // DosQueryPathInfo
 
-static APIRET queryFileInfoStandard(const struct stat *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
+static APIRET queryFileInfoStandard(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
     if (cbInfoBuf < sizeof (FILESTATUS3))
         return ERROR_BUFFER_OVERFLOW;
     return queryFileInfoStandardFromStat(statbuf, pInfoBuf, cbInfoBuf);
 } // queryFileInfoStandard
 
-static APIRET queryFileInfoEaSize(const struct stat *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
+static APIRET queryFileInfoEaSize(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
     if (cbInfoBuf < sizeof (FILESTATUS4))
         return ERROR_BUFFER_OVERFLOW;
@@ -1555,7 +1248,7 @@ static APIRET queryFileInfoEaSize(const struct stat *statbuf, PVOID pInfoBuf, UL
     return NO_ERROR;
 } // queryFileInfoEaSize
 
-static APIRET queryFileInfoEasFromList(const struct stat *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
+static APIRET queryFileInfoEasFromList(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
     FIXME("write me");
     return ERROR_INVALID_LEVEL;
@@ -1566,13 +1259,12 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
 {
     TRACE_NATIVE("DosQueryFileInfo(%u, %u, %p, %u)", (uint) hf, (uint) ulInfoLevel, pInfo, (uint) cbInfoBuf);
 
-    const int fd = getHFileUnixDescriptor(hf);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-
-    struct stat statbuf;
-    if (fstat(fd, &statbuf) == -1)
-        return ERROR_INVALID_HANDLE;  // !!! FIXME: ...?
+    LxHandleBorrow file;
+    if (!borrowFile(hf, &file)) return ERROR_INVALID_HANDLE;
+    LxHostFileInfo statbuf;
+    LxHostFsError error = lx_host_file_info(file.resource, &statbuf);
+    lx_handle_release(&file);
+    if (error) return fileError(error);
 
     APIRET rc;
     switch (ulInfoLevel) {
@@ -1584,92 +1276,74 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
 
     TRACE_RET("DosQueryFileInfo(%u, level=%u, cb=%u) -> %u size=%ld", (uint) hf,
               (uint) ulInfoLevel, (uint) cbInfoBuf, (uint) rc,
-              (long) statbuf.st_size);
+              (long) statbuf.size);
     return rc;
 } // DosQueryFileInfo
 
+static void destroyThreadResource(void *value)
+{
+    Thread *thread = value;
+    lx_execution_destroy_thread32(GLoaderState.execution, thread->invocation);
+    if (thread->stack) {
+        lx_execution_stack_segments(GLoaderState.execution, lx_execution_mapping_address(thread->stack),
+                                     lx_execution_mapping_size(thread->stack), 1);
+        lx_execution_unmap(GLoaderState.execution, thread->stack);
+    }
+    free(thread);
+}
 static void os2ThreadCleanup(void *arg)
 {
-    Thread *thread = (Thread *) arg;
+    Thread *thread = arg;
     GLoaderState.deinitOs2Tib(thread->selector);
-    grabLock(&GMutexDosCalls);
-    thread->prev = NULL;
-    thread->next = GDeadThreads;
-    GDeadThreads = thread;
-    ungrabLock(&GMutexDosCalls);
-} // os2ThreadCleanup
-
-static void os2ThreadEntry2(uint8 *tibspace, Thread *thread)
-{
-    void *esp = NULL;  // close enough.
-    GLoaderState.initOs2Tib(tibspace, &esp, thread->stacklen, (TID) thread);
-    thread->selector = GLoaderState.setOs2Tib(tibspace);
-    pthread_cleanup_push(os2ThreadCleanup, thread);
-    thread->fn(thread->fnarg);
-    pthread_cleanup_pop(1);
-} // os2ThreadEntry2
-
+    grabLock(&GMutexDosCalls); thread->finished = 1; ungrabLock(&GMutexDosCalls);
+}
 static void *os2ThreadEntry(void *arg)
 {
-    // put our thread's TIB structs on the stack and call that the top of the stack.
-    uint8 tibspace[LXTIBSIZE];
-    memset(tibspace, '\0', LXTIBSIZE);  // make sure TLS slots are clear, etc.
-    os2ThreadEntry2(tibspace, (Thread *) arg);
-    return NULL;  // OS/2 threads don't return a value here.
-} // os2ThreadEntry
-
-APIRET DosCreateThread(PTID ptid, PFNTHREAD pfn, ULONG param, ULONG flag, ULONG cbStack)
+    Thread *thread = arg;
+    uint8 tibspace[LXTIBSIZE] = {0};
+    const size_t size = lx_execution_mapping_size(thread->stack);
+    GLoaderState.initOs2Tib(tibspace, (uint8 *) lx_execution_mapping_host(thread->stack) + size, size, thread->id);
+    thread->selector = GLoaderState.setOs2Tib(tibspace);
+    lx_execution_thread32(GLoaderState.execution, thread->invocation);
+    return NULL;
+}
+APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, ULONG bytes)
 {
-    TRACE_NATIVE("DosCreateThread(%p, %p, %u, %u, %u)", ptid, pfn, (uint) param, (uint) flag, (uint) cbStack);
-
-    if (flag & CREATE_SUSPENDED)
-        FIXME("Can't start threads in suspended state");
-
-    Thread *thread = (Thread *) malloc(sizeof (Thread));
-    if (!thread)
-        return ERROR_NOT_ENOUGH_MEMORY;
-    memset(thread, '\0', sizeof (*thread));
-
-    size_t stacksize = cbStack;
-    if ((stacksize % 4096) != 0)
-        stacksize += 4096 - (cbStack % 4096);
-
-    stacksize += 4096;  // leave a page for the TIB and host system libs that use more stack.
-
-    thread->stacklen = stacksize;
-    thread->fn = pfn;
-    thread->fnarg = param;
-
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, stacksize);
-    const int rc = pthread_create(&thread->thread, &attr, os2ThreadEntry, thread);
-    pthread_attr_destroy(&attr);
-
-    if (rc != 0) {
-        free(thread);
-        return ERROR_MAX_THRDS_REACHED;  // I guess...?
-    } // if
-
-    if (ptid)
-        *ptid = (TID) thread;
-
-    return NO_ERROR;
-} // DosCreateThread
-
-
-static void __attribute__((noreturn)) execOs2Child(const char *exe, char * const *argv, char * const *envp)
-{
-    // !!! FIXME: wire up any other things we need here.
-    execve(exe, argv, envp);
-    fprintf(stderr, "Failed to exec child process: %s\n", strerror(errno));
-    _exit(1);  // uh oh.
-} // execOs2Child
+    TRACE_NATIVE("DosCreateThread(%p, %p, %u, %u, %u)", ptid, entry, (uint) argument, (uint) flags, (uint) bytes);
+    if (!ptid || !entry || (flags & CREATE_SUSPENDED) || bytes > 0x1000000) return ERROR_INVALID_PARAMETER;
+    const uint32 size = bytes ? (bytes + 0xffff) & ~0xffffu : 0x10000;
+    Thread *thread = calloc(1, sizeof *thread);
+    if (!thread) return ERROR_NOT_ENOUGH_MEMORY;
+    grabLock(&GMutexDosCalls);
+    if (GNextThreadId > UINT16_MAX) { ungrabLock(&GMutexDosCalls); free(thread); return ERROR_MAX_THRDS_REACHED; }
+    while (GNextThreadStack <= 0x1fff0000u - size) {
+        uint32 base = GNextThreadStack; GNextThreadStack += size + 0x10000;
+        thread->stack = lx_execution_map(GLoaderState.execution, base, size, 3, 1);
+        if (thread->stack) break;
+    }
+    if (!thread->stack) { ungrabLock(&GMutexDosCalls); free(thread); return ERROR_NOT_ENOUGH_MEMORY; }
+    lx_execution_stack_segments(GLoaderState.execution, lx_execution_mapping_address(thread->stack), size, 0);
+    thread->invocation = lx_execution_prepare_thread32(GLoaderState.execution, (uint32) (uintptr_t) entry,
+        lx_execution_mapping_address(thread->stack) + size - 16, argument);
+    thread->id = GNextThreadId++;
+    if (thread->invocation) thread->handle = lx_handle_create(LX_HANDLE_THREAD, thread, destroyThreadResource);
+    if (!thread->handle) {
+        ungrabLock(&GMutexDosCalls); destroyThreadResource(thread); return ERROR_NOT_ENOUGH_MEMORY;
+    }
+    thread->thread = lx_host_thread_create(os2ThreadEntry, thread, os2ThreadCleanup);
+    if (!thread->thread) {
+        ungrabLock(&GMutexDosCalls); lx_handle_close(thread->handle, LX_HANDLE_THREAD); return ERROR_MAX_THRDS_REACHED;
+    }
+    thread->next = GThreads; GThreads = thread; *ptid = thread->id;
+    /* Process exit must not unload code beneath any guest thread. */
+    __atomic_store_n(&GLoaderState.ne_threads_started, 1, __ATOMIC_RELEASE);
+    ungrabLock(&GMutexDosCalls); return NO_ERROR;
+}
 
 static char *findExePath(const char *exe, APIRET *err)
 {
     FIXME("eventually this needs to search the path and maybe launch native (non-OS/2) processes too");
-    char *retval = strdup("/proc/self/exe");
+    char *retval = lx_host_executable_path();
     if (!retval)
         *err = ERROR_NOT_ENOUGH_MEMORY;
     return retval;
@@ -1697,7 +1371,7 @@ static char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
     const char *ldlib = getenv("LD_LIBRARY_PATH");
     static const char *passthru[] = {
         "TRACE_NATIVE", "TWOINE_TRACE_RET", "TWOINE_TRACE_SEGMENTS",
-        "TWOINE_KEEP_TEMPS", "TWOINE_TRACE_DOSINT", NULL
+        "TWOINE_KEEP_TEMPS", "TWOINE_TRACE_DOSINT", "TWOINE_BACKEND", NULL
     };
     char **retval = (char **) calloc(count + 16, sizeof (char *));
     if (!retval) {
@@ -1709,7 +1383,7 @@ static char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
     if (!os2env) {
         extern char **environ;
         for (size_t i = 0; i < count; i++)
-            retval[idx++] = environ[i];
+            retval[idx++] = strdup(environ[i]);
     } else {
         src = os2env;
         while (*src) {
@@ -1743,7 +1417,7 @@ static char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
 static char **calcArgv(const char *os2args, const char *progpath, APIRET *err)
 {
     if ((!os2args) || (!*os2args))
-        os2args = "";
+        os2args = "\0";
 
     // OS/2 passes one string for argv[0], a NUL, then the argument string.
     //  The child here is another invocation of lx_loader, so its argv[0] is
@@ -1808,41 +1482,25 @@ static char **calcArgv(const char *os2args, const char *progpath, APIRET *err)
     return retval;
 } // calcArgv
 
-static void setProcessResultCode(PRESULTCODES pRes, const int status)
+typedef struct ChildProcess {
+    LxHostChild *host;
+    int waiting;
+    struct ChildProcess *next;
+} ChildProcess;
+static ChildProcess *GChildren;
+static void setProcessResultCode(PRESULTCODES output, const LxHostChildStatus *status)
 {
-    if (!pRes)
-        return;
-
-    if (WIFEXITED(status)) {
-        // !!! FIXME: OS/2 processes exit with a ULONG, and returns bottom 16-bits of it for codeResult. Unix only gives you 8, though!
-        pRes->codeTerminate = TC_EXIT;
-        pRes->codeResult = WEXITSTATUS(status);
-    } else if (WIFSIGNALED(status)) {
-        FIXME("These might not be exactly right");
-        pRes->codeResult = 0;
-        switch (WTERMSIG(status)) {
-            case SIGTERM:
-            case SIGKILL:
-            case SIGINT:
-            case SIGQUIT:
-                pRes->codeTerminate = TC_KILLPROCESS;
-                break;
-            case SIGPIPE:
-            case SIGABRT:
-            pRes->codeTerminate = TC_HARDERROR;
-                break;
-            default:
-                pRes->codeTerminate = TC_EXCEPTION;
-                break;
-        } // switch
-    } // else if
-} // setProcessResultCode
+    if (!output) return;
+    const ULONG reasons[] = {TC_EXIT, TC_KILLPROCESS, TC_HARDERROR, TC_EXCEPTION};
+    output->codeTerminate = reasons[status->reason]; output->codeResult = status->result;
+}
 
 static APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ pEnv, PRESULTCODES pRes, PSZ pName)
 {
     APIRET retval = NO_ERROR;
 
-    if (pObjname)  // !!! FIXME: what does it want to put in here for failures?
+    if (cbObjname < 0) return ERROR_INVALID_PARAMETER;
+    if (pObjname && cbObjname > 0)
         *pObjname = '\0';
 
     if ((execFlag == EXEC_TRACE) || (execFlag == EXEC_ASYNCRESULTDB)) { // sorry debuggers!
@@ -1875,68 +1533,37 @@ static APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG ex
     } // if
 
     char **envp = calcEnvp(pEnv, pNameUnix, &retval);
-    if (!argv) {
+    if (!envp) {
         free(argv);
         free(exe);
         free(pNameUnix);
         return retval;
     } // if
 
-    //printf("EXEC'ING! exe='%s'\n", exe);
-    //for (char * const *ptr = argv; *ptr; ptr++) { printf(" ARGV[%d] = '%s'\n", (int) (ptr - argv), *ptr); }
-    //for (char * const *ptr = envp; *ptr; ptr++) { printf(" ENVP[%d] = '%s'\n", (int) (ptr - envp), *ptr); }
-
-    const int doubleFork = (execFlag == EXEC_ASYNC) || (execFlag == EXEC_BACKGROUND);
-    int status = 0;
-    pid_t pid = fork();
-    if (pid == -1)  // failed?
-        retval = ERROR_NO_PROC_SLOTS;
-
-    else if (pid == 0) {  // we're the child.
-        if (doubleFork) {  // fork again so we aren't a direct child of the original parent.
-            pid = fork();
-            if (pid == -1) {  // uhoh.
-                fprintf(stderr, "Failed to double-fork child process for EXEC_ASYNC: %s\n", strerror(errno));
-                _exit(1);
-            } else if (pid != 0) {  // we're the parent
-                _exit(0);  // just die now.
-            }
-            // we're the double-forked child.
-            if (setsid() < 0) {
-                fprintf(stderr, "Failed to setsid(): %s\n", strerror(errno));
-                _exit(1);
-            } // if
-            // !!! FIXME: need to report pid to original parent now via a temporary pipe.
-        } // if
-
-        // run the new program!
-        execOs2Child(exe, argv, envp);
-
-    } else {  // we're the parent.
-        switch (execFlag) {
-            case EXEC_SYNC: {
-                const pid_t rc = waitpid(pid, &status, 0);
-                assert(rc == pid);  // !!! FIXME
-                setProcessResultCode(pRes, status);
-                break;
-            } // case
-
-            case EXEC_ASYNC:
-            case EXEC_ASYNCRESULT:
-            case EXEC_BACKGROUND:
-                if (pRes) {
-                    pRes->codeResult = 0;
-                    pRes->codeTerminate = (ULONG) pid;
-                } // if
-                break;
-
-            default:
-                assert(!"shouldn't hit this code");
-                retval = ERROR_INVALID_FUNCTION;
-                break;
-        } // switch
-    } // else
-
+    ChildProcess *tracked = execFlag == EXEC_ASYNCRESULT ? calloc(1, sizeof *tracked) : NULL;
+    if (execFlag != EXEC_SYNC && execFlag != EXEC_ASYNC && execFlag != EXEC_ASYNCRESULT && execFlag != EXEC_BACKGROUND)
+        retval = ERROR_INVALID_FUNCTION;
+    else if (execFlag == EXEC_ASYNCRESULT && !tracked) retval = ERROR_NOT_ENOUGH_MEMORY;
+    else {
+        LxHostChild *child = lx_host_child_spawn(exe, argv, envp);
+        if (!child) retval = ERROR_NO_PROC_SLOTS;
+        else if (execFlag == EXEC_SYNC) {
+            LxHostChildStatus status;
+            if (lx_host_child_wait(child, 0, &status) != 1) retval = ERROR_GEN_FAILURE;
+            else setProcessResultCode(pRes, &status);
+            lx_host_child_release(child);
+        } else {
+            if (pRes) { pRes->codeTerminate = lx_host_child_id(child); pRes->codeResult = 0; }
+            if (tracked) {
+                tracked->host = child;
+                grabLock(&GMutexDosCalls); tracked->next = GChildren; GChildren = tracked; ungrabLock(&GMutexDosCalls);
+                tracked = NULL;
+            } else lx_host_child_release(child);
+        }
+    }
+    free(tracked);
+    for (char **item = envp; *item; item++) free(*item);
+    free(pNameUnix);
     free(envp);
     free(argv);
     free(exe);
@@ -1958,7 +1585,7 @@ APIRET DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ 
     return DosExecPgm_implementation(pObjname, cbObjname, execFlag, pArg, pEnv, pRes, pName);
 } // DosExecPgm
 
-APIRET DosResetEventSem(HEV hev, PULONG pulPostCt)
+static APIRET DosResetEventSemResource(HEV hev, PULONG pulPostCt, EventSem *sem)
 {
     TRACE_NATIVE("DosResetEventSem(%u, %p)", (uint) hev, pulPostCt);
 
@@ -1967,23 +1594,31 @@ APIRET DosResetEventSem(HEV hev, PULONG pulPostCt)
 
     APIRET retval = NO_ERROR;
     ULONG count = 0;
-    EventSem *sem = (EventSem *) hev;
 
-    pthread_mutex_lock(&sem->mutex);
+    lx_host_monitor_lock(sem->monitor);
     count = sem->posted;
     if (!sem->posted)
         retval = ERROR_ALREADY_RESET;
     else
         sem->posted = 0;
-    pthread_mutex_unlock(&sem->mutex);
+    lx_host_monitor_unlock(sem->monitor);
 
     if (pulPostCt)
         *pulPostCt = count;
 
     return retval;
-} // DosResetEventSem
+}
+APIRET DosResetEventSem(HEV hev, PULONG pulPostCt)
+{
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(hev, LX_HANDLE_EVENT, &object)) return ERROR_INVALID_HANDLE;
+    APIRET result;
+    result = guardedResource(RESOURCE_RESET_EVENT, hev, 0, &object, NULL, pulPostCt);
+    return result;
+}
+ // DosResetEventSem
 
-APIRET DosPostEventSem(HEV hev)
+static APIRET DosPostEventSemResource(HEV hev, EventSem *sem)
 {
     TRACE_NATIVE("DosPostEventSem(%u)", (uint) hev);
 
@@ -1991,19 +1626,27 @@ APIRET DosPostEventSem(HEV hev)
         return ERROR_INVALID_HANDLE;
 
     APIRET retval = NO_ERROR;
-    EventSem *sem = (EventSem *) hev;
 
-    pthread_mutex_lock(&sem->mutex);
+    lx_host_monitor_lock(sem->monitor);
     if (sem->posted)
         retval = ERROR_ALREADY_POSTED;
     else {
         sem->posted = 1;
-        pthread_cond_broadcast(&sem->condition);
+        lx_host_monitor_wake_all(sem->monitor);
     } // else
-    pthread_mutex_unlock(&sem->mutex);
+    lx_host_monitor_unlock(sem->monitor);
 
     return retval;
-} // DosPostEventSem
+}
+APIRET DosPostEventSem(HEV hev)
+{
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(hev, LX_HANDLE_EVENT, &object)) return ERROR_INVALID_HANDLE;
+    APIRET result;
+    result = guardedResource(RESOURCE_POST_EVENT, hev, 0, &object, NULL, NULL);
+    return result;
+}
+ // DosPostEventSem
 
 APIRET DosWaitNPipe(PSZ pszName, ULONG ulTimeOut)
 {
@@ -2019,116 +1662,69 @@ APIRET DosWaitNPipe(PSZ pszName, ULONG ulTimeOut)
     return ERROR_PIPE_NOT_CONNECTED;
 } // DosWaitNPipe
 
-APIRET DosWaitEventSem(HEV hev, ULONG ulTimeout)
+static APIRET DosWaitEventSemResource(HEV hev, ULONG timeout, EventSem *sem)
 {
-    TRACE_NATIVE("DosWaitEventSem(%u, %u)", (uint) hev, (uint) ulTimeout);
+    TRACE_NATIVE("DosWaitEventSem(%u, %u)", (uint) hev, (uint) timeout);
+    const uint64 deadline = timeout == UINT32_MAX ? UINT64_MAX : lx_host_monotonic_us() + (uint64) timeout * 1000;
+    APIRET result = NO_ERROR;
+    lx_host_monitor_lock(sem->monitor);
+    while (!sem->posted) {
+        const uint64 now = lx_host_monotonic_us();
+        if (!timeout || now >= deadline) { result = ERROR_TIMEOUT; break; }
+        uint32 wait = UINT32_MAX;
+        if (deadline != UINT64_MAX) wait = (uint32) ((deadline - now + 999) / 1000);
+        LxHostLockResult rc = lx_host_monitor_wait(sem->monitor, wait);
+        if (rc == LX_HOST_LOCK_FAILED) { result = ERROR_INVALID_HANDLE; break; }
+    }
+    lx_host_monitor_unlock(sem->monitor); return result;
+}
+APIRET DosWaitEventSem(HEV hev, ULONG timeout)
+{
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(hev, LX_HANDLE_EVENT, &object)) return ERROR_INVALID_HANDLE;
+    APIRET result;
+    result = guardedResource(RESOURCE_WAIT_EVENT, hev, timeout, &object, NULL, NULL);
+    return result;
+}
 
-    if (!hev)
-        return ERROR_INVALID_HANDLE;
 
-    EventSem *sem = (EventSem *) hev;
-    int posted = 0;
-
-    if (ulTimeout == SEM_IMMEDIATE_RETURN) {
-        pthread_mutex_lock(&sem->mutex);
-        posted = sem->posted;
-        pthread_mutex_unlock(&sem->mutex);
-        return posted ? NO_ERROR : ERROR_TIMEOUT;
-    } else if (ulTimeout == SEM_INDEFINITE_WAIT) {
-        pthread_mutex_lock(&sem->mutex);
-        sem->waiting++;
-        while (1) {
-            posted = sem->posted;
-            if (!posted) {
-                pthread_cond_wait(&sem->condition, &sem->mutex);
-                posted = sem->posted;
-            } // if
-
-            if (posted) {
-                sem->waiting--;
-                pthread_mutex_unlock(&sem->mutex);
-                return NO_ERROR;
-            } // if
-
-            // spurious wakeup? Block again.
-        } // while
-    } else {  // wait for X milliseconds.
-        struct timespec waittime;
-        timespecNowPlusMilliseconds(&waittime, ulTimeout);
-
-        pthread_mutex_lock(&sem->mutex);
-        sem->waiting++;
-        while (1) {
-            int rc = 0;
-            posted = sem->posted;
-            if (!posted) {
-                rc = pthread_cond_timedwait(&sem->condition, &sem->mutex, &waittime);
-                posted = sem->posted;
-            } // if
-
-            if ((posted) || (rc == ETIMEDOUT)) {
-                sem->waiting--;
-                pthread_mutex_unlock(&sem->mutex);
-                if (posted)
-                    return NO_ERROR;  // we're good.
-                else
-                    return ERROR_TIMEOUT;
-            } // if
-
-            // otherwise, try again...spurious wakeup?
-        } // while
-    } // else
-
-    return NO_ERROR;
-} // DosWaitEventSem
-
-APIRET DosQueryEventSem(HEV hev, PULONG pulPostCt)
+static APIRET DosQueryEventSemResource(HEV hev, PULONG pulPostCt, EventSem *sem)
 {
     TRACE_NATIVE("DosQueryEventSem(%u, %p)", (uint) hev, pulPostCt);
 
     if (!hev)
         return ERROR_INVALID_HANDLE;
 
-    EventSem *sem = (EventSem *) hev;
-    pthread_mutex_lock(&sem->mutex);
+    lx_host_monitor_lock(sem->monitor);
     const ULONG count = (ULONG) sem->posted;
-    pthread_mutex_unlock(&sem->mutex);
+    lx_host_monitor_unlock(sem->monitor);
 
     if (pulPostCt)
         *pulPostCt = count;
 
     return NO_ERROR;
-} // DosQueryEventSem
-
-APIRET DosCloseEventSem(HEV hev)
+}
+APIRET DosQueryEventSem(HEV hev, PULONG pulPostCt)
 {
-    TRACE_NATIVE("DosCloseEventSem(%u)", (uint) hev);
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(hev, LX_HANDLE_EVENT, &object)) return ERROR_INVALID_HANDLE;
+    APIRET result;
+    result = guardedResource(RESOURCE_QUERY_EVENT, hev, 0, &object, NULL, pulPostCt);
+    return result;
+}
+ // DosQueryEventSem
 
-    if (!hev)
-        return ERROR_INVALID_HANDLE;
-
-    EventSem *sem = (EventSem *) hev;
-
-    pthread_mutex_lock(&sem->mutex);
-    const int waiting = sem->waiting;
-    pthread_mutex_unlock(&sem->mutex);
-
-    unregisterNamedSem(sem);
-    if (waiting > 0) {
-        // A worker thread can still be parked on the semaphore when the
-        //  runtime tears its heap down. OS/2 reports ERROR_SEM_BUSY, but the
-        //  callers here treat that as a fatal heap error, so leave the (small)
-        //  semaphore allocated for the rest of the process lifetime and
-        //  report success.
-        return NO_ERROR;
-    } // if
-
-    pthread_mutex_destroy(&sem->mutex);
-    pthread_cond_destroy(&sem->condition);
-    free(sem);
-
-    return NO_ERROR;
-} // DosCloseEventSem
+APIRET DosCloseEventSem(HEV handle)
+{
+    TRACE_NATIVE("DosCloseEventSem(%u)", (uint) handle);
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(handle, LX_HANDLE_EVENT, &object)) return ERROR_INVALID_HANDLE;
+    grabLock(&GMutexDosCalls);
+    int closed = lx_handle_close(handle, LX_HANDLE_EVENT);
+    if (closed) retireSemaphoreName(object.resource, LX_HANDLE_EVENT);
+    ungrabLock(&GMutexDosCalls);
+    lx_handle_release(&object); return closed ? NO_ERROR : ERROR_INVALID_HANDLE;
+}
 
 static void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
 {
@@ -2145,109 +1741,37 @@ static void makeSharedMemName(const char *os2name, char *buf, const size_t bufle
     snprintf(buf, buflen, "/2ine-shm-%016llx", (unsigned long long) hash);
 } // makeSharedMemName
 
-APIRET DosGetNamedSharedMem(PPVOID ppb, PSZ pszName, ULONG flag)
+static APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG flags)
 {
-    TRACE_NATIVE("DosGetNamedSharedMem(%p, '%s', %u)", ppb,
-                 pszName ? pszName : "", (uint) flag);
-
-    if ((!ppb) || (!pszName) || (!*pszName))
+    if (!output || !name || !*name || (flags & ~(PAG_READ | PAG_WRITE | PAG_COMMIT | OBJ_TILE | OBJ_GETTABLE | OBJ_GIVEABLE)))
         return ERROR_INVALID_PARAMETER;
-
-    char shmname[128];
-    makeSharedMemName(pszName, shmname, sizeof (shmname));
-
-    const int fd = shm_open(shmname, O_RDWR, 0600);
-    if (fd == -1) {
-        return (errno == ENOENT) ? ERROR_FILE_NOT_FOUND : ERROR_ACCESS_DENIED;
-    } // if
-
-    struct stat st;
-    if (fstat(fd, &st) == -1) {
-        close(fd);
-        return ERROR_ACCESS_DENIED;
-    } // if
-
-    const size_t size = (size_t) st.st_size;
-    void *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    close(fd);
-    if (addr == MAP_FAILED)
-        return ERROR_NOT_ENOUGH_MEMORY;
-
-    SharedMemBlock *block = (SharedMemBlock *) malloc(sizeof (*block));
-    if (!block) {
-        munmap(addr, size);
-        return ERROR_NOT_ENOUGH_MEMORY;
-    } // if
-
-    block->addr = addr;
-    block->size = size;
-    block->freed = 0;
-
-    grabLock(&GMutexDosCalls);
-    block->next = GSharedMem;
-    GSharedMem = block;
-    ungrabLock(&GMutexDosCalls);
-
-    *ppb = addr;
-    return NO_ERROR;
-} // DosGetNamedSharedMem
-
-APIRET DosAllocSharedMem(PPVOID ppb, PSZ pszName, ULONG cb, ULONG flag)
+    char identifier[128]; makeSharedMemName(name, identifier, sizeof identifier);
+    LxHostShared *object = NULL;
+    const LxHostSharedResult opened = lx_host_shared_open(identifier, size, &object);
+    if (opened != LX_HOST_SHARED_OK) return opened == LX_HOST_SHARED_MISSING ? ERROR_FILE_NOT_FOUND :
+        opened == LX_HOST_SHARED_EXISTS ? ERROR_DUPLICATE_NAME : ERROR_NOT_ENOUGH_MEMORY;
+    LxGuestMapping *mapping = lx_execution_map_shared(GLoaderState.execution, object);
+    lx_host_shared_close(object);
+    if (!mapping) return ERROR_NOT_ENOUGH_MEMORY;
+    SharedMemBlock *block = calloc(1, sizeof *block);
+    if (!block) { lx_execution_unmap(GLoaderState.execution, mapping); return ERROR_NOT_ENOUGH_MEMORY; }
+    block->mapping = mapping; block->addr = lx_execution_mapping_host(mapping);
+    block->size = lx_execution_mapping_size(mapping);
+    grabLock(&GMutexDosCalls); block->next = GSharedMem; GSharedMem = block; ungrabLock(&GMutexDosCalls);
+    *output = block->addr; return NO_ERROR;
+}
+APIRET DosGetNamedSharedMem(PPVOID output, PSZ name, ULONG flags)
 {
-    TRACE_NATIVE("DosAllocSharedMem(%p, '%s', %u, %u)", ppb,
-                 pszName ? pszName : "", (uint) cb, (uint) flag);
-
-    if ((!ppb) || (cb == 0))
-        return ERROR_INVALID_PARAMETER;
-
-    const size_t pagesize = (size_t) getpagesize();
-    size_t size = (size_t) cb;
-    if ((size % pagesize) != 0)
-        size += pagesize - (size % pagesize);
-
-    void *addr = MAP_FAILED;
-    if (pszName && *pszName) {
-        char shmname[128];
-        makeSharedMemName(pszName, shmname, sizeof (shmname));
-        const int fd = shm_open(shmname, O_CREAT | O_EXCL | O_RDWR, 0600);
-        if (fd == -1) {
-            if (errno == EEXIST)
-                return ERROR_DUPLICATE_NAME;
-            return ERROR_NOT_ENOUGH_MEMORY;
-        } // if
-        if (ftruncate(fd, (off_t) size) == -1) {
-            close(fd);
-            shm_unlink(shmname);
-            return ERROR_NOT_ENOUGH_MEMORY;
-        } // if
-        addr = allocLowMemory(size, PROT_READ | PROT_WRITE, MAP_SHARED, fd);
-        close(fd);
-    } else {
-        addr = allocLowMemory(size, PROT_READ | PROT_WRITE,
-                              MAP_SHARED | MAP_ANONYMOUS, -1);
-    } // else
-
-    if (addr == MAP_FAILED)
-        return ERROR_NOT_ENOUGH_MEMORY;
-
-    SharedMemBlock *block = (SharedMemBlock *) malloc(sizeof (*block));
-    if (!block) {
-        munmap(addr, size);
-        return ERROR_NOT_ENOUGH_MEMORY;
-    } // if
-
-    block->addr = addr;
-    block->size = size;
-    block->freed = 0;
-
-    grabLock(&GMutexDosCalls);
-    block->next = GSharedMem;
-    GSharedMem = block;
-    ungrabLock(&GMutexDosCalls);
-
-    *ppb = addr;
-    return NO_ERROR;
-} // DosAllocSharedMem
+    TRACE_NATIVE("DosGetNamedSharedMem(%p, '%s', %u)", output, name ? name : "", (uint) flags);
+    return mapNamedSharedMemory(output, name, 0, flags);
+}
+APIRET DosAllocSharedMem(PPVOID output, PSZ name, ULONG size, ULONG flags)
+{
+    TRACE_NATIVE("DosAllocSharedMem(%p, '%s', %u, %u)", output, name ? name : "", (uint) size, (uint) flags);
+    if (!size || size > UINT32_MAX - 4095) return ERROR_INVALID_PARAMETER;
+    if (!name || !*name) return DosAllocMem(output, size, flags);
+    return mapNamedSharedMemory(output, name, (size + 4095) & ~4095u, flags);
+}
 
 APIRET DosGiveSharedMem(PVOID pb, PID pid, ULONG flag)
 {
@@ -2263,10 +1787,8 @@ APIRET DosFreeMem(PVOID pb)
 
     // !!! FIXME: this API is actually much more complicated than this.
 
-    // OS/2 releases pages lazily: a program that frees a block and then
-    //  touches it (the IBM C runtime's exit path does this with its errno
-    //  storage) still sees valid memory. Keep the mapping and mark it free
-    //  rather than calling munmap() immediately.
+    // Retain retired mappings until worker teardown. The IBM C runtime's
+    // exit path still accesses its errno storage after freeing the block.
     grabLock(&GMutexDosCalls);
     for (SharedMemBlock *block = GSharedMem; block; block = block->next) {
         if (block->addr == pb) {
@@ -2277,137 +1799,82 @@ APIRET DosFreeMem(PVOID pb)
     } // for
     ungrabLock(&GMutexDosCalls);
 
-    free(pb);
-    return NO_ERROR;
+    return ERROR_INVALID_ADDRESS;
 } // DosFreeMem
 
-APIRET DosWaitChild(ULONG action, ULONG option, PRESULTCODES pres, PPID ppid, PID pid)
+APIRET DosWaitChild(ULONG action, ULONG option, PRESULTCODES result, PPID output_pid, PID pid)
 {
-    TRACE_NATIVE("DosWaitChild(%u, %u, %p, %p, %u)", (uint) action, (uint) option, pres, ppid, (uint) pid);
+    TRACE_NATIVE("DosWaitChild(%u, %u, %p, %p, %u)", (uint) action, (uint) option, result, output_pid, (uint) pid);
+    if (action != DCWA_PROCESS || (option != DCWW_WAIT && option != DCWW_NOWAIT)) return ERROR_INVALID_PARAMETER;
+    for (;;) {
+        grabLock(&GMutexDosCalls);
+        ChildProcess *child = NULL;
+        LxHostChildStatus status; int ready = 0;
+        for (ChildProcess *item = GChildren; item; item = item->next) {
+            if (item->waiting || (pid && lx_host_child_id(item->host) != pid)) continue;
+            if (pid) { child = item; break; }
+            ready = lx_host_child_wait(item->host, 1, &status);
+            if (ready) { child = item; break; }
+        }
+        if (!child) {
+            int any = GChildren != NULL; ungrabLock(&GMutexDosCalls);
+            if (pid || !any) return pid ? ERROR_INVALID_PROCID : ERROR_WAIT_NO_CHILDREN;
+            if (option == DCWW_NOWAIT) return ERROR_CHILD_NOT_COMPLETE;
+            lx_host_sleep_ms(1); continue;
+        }
+        child->waiting = 1; ungrabLock(&GMutexDosCalls);
+        if (!ready) ready = lx_host_child_wait(child->host, option == DCWW_NOWAIT, &status);
+        grabLock(&GMutexDosCalls);
+        if (ready == 1) {
+            for (ChildProcess **link = &GChildren; *link; link = &(*link)->next)
+                if (*link == child) { *link = child->next; break; }
+        } else child->waiting = 0;
+        ungrabLock(&GMutexDosCalls);
+        if (ready != 1) return ready ? ERROR_INVALID_PROCID : ERROR_CHILD_NOT_COMPLETE;
+        if (output_pid) *output_pid = lx_host_child_id(child->host);
+        setProcessResultCode(result, &status); lx_host_child_release(child->host); free(child); return NO_ERROR;
+    }
+}
 
-    if (action == DCWA_PROCESSTREE) {
-        // we need a wait to wait on the whole tree (including trees of a
-        // terminated child we already waited on, which the API reference
-        // lists as an example.
-        FIXME("implement me");
-        return ERROR_INVALID_PARAMETER;
-    } // if
-
-    pid_t unixpid;
-    if (action == DCWA_PROCESS)
-        unixpid = (pid == 0) ? (pid_t) -1 : (pid_t) pid;
-
-    int waitoptions;
-    if (option == DCWW_WAIT) {
-        waitoptions = 0;
-    } else if (option == DCWW_NOWAIT) {
-        waitoptions = WNOHANG;
-    } else {
-        return ERROR_INVALID_PARAMETER;
-    } // else
-
-    int status = 0;
-    pid_t rc;
-    while (1) {
-        rc = waitpid(unixpid, &status, waitoptions);
-        if (rc == 0) {  // WNOHANG and no children were done.
-            assert(option == DCWW_NOWAIT);
-            return ERROR_CHILD_NOT_COMPLETE;
-        } else if (rc == -1) {
-            if (errno == EINTR)
-                continue;  // try again, I guess.
-            else if (errno == ECHILD)
-                return (pid == 0) ? ERROR_WAIT_NO_CHILDREN : ERROR_INVALID_PROCID;
-        } else {
-            break;  // we're good.
-        } // else
-
-        assert(!"Shouldn't hit this code");
-        return ERROR_CHILD_NOT_COMPLETE;
-    } // while
-
-    if (ppid)
-        *ppid = (PID) rc;
-
-    setProcessResultCode(pres, status);
-
-    return NO_ERROR;
-} // DosWaitChild
-
-APIRET DosWaitThread(PTID ptid, ULONG option)
+APIRET DosWaitThread(PTID id, ULONG option)
 {
-    TRACE_NATIVE("DosWaitThread(%p, %u)", ptid, (uint) option);
-
-    Thread *thread = (Thread *) *ptid;
-    void *exitcode = NULL;
-
-    if ((option != DCWW_WAIT) && (option != DCWW_NOWAIT))
-        return ERROR_INVALID_PARAMETER;
-
-    if (thread == NULL) {   // check our dead thread list for anything.
-        while (1) {
-            grabLock(&GMutexDosCalls);
-            if (GDeadThreads) {
-                thread = GDeadThreads;
-                GDeadThreads = thread->next;
-                if (GDeadThreads)
-                    GDeadThreads->prev = NULL;
-                assert(!thread->prev);
-            } // if
+    TRACE_NATIVE("DosWaitThread(%p, %u)", id, (uint) option);
+    if (!id || (option != DCWW_WAIT && option != DCWW_NOWAIT)) return ERROR_INVALID_PARAMETER;
+    for (;;) {
+        grabLock(&GMutexDosCalls);
+        Thread *thread;
+        for (thread = GThreads; thread; thread = thread->next)
+            if (*id ? thread->id == *id : thread->finished && !thread->joining) break;
+        if (!thread && (*id || !GThreads)) { ungrabLock(&GMutexDosCalls); return ERROR_INVALID_THREADID; }
+        if (!thread || (option == DCWW_NOWAIT && !thread->finished)) {
             ungrabLock(&GMutexDosCalls);
-
-            if (thread) {
-                pthread_join(thread->thread, &exitcode);  // reap it.
-                *ptid = (TID) thread;
-                free(thread);
-                return NO_ERROR;
-            } // if
-
-            if (option == DCWW_NOWAIT)
-                return ERROR_THREAD_NOT_TERMINATED;
-
-            usleep(10000);  // sleep then try again, for DCWW_WAIT.
-        } // while
-
-        assert(!"shouldn't hit this code");
-        return ERROR_THREAD_NOT_TERMINATED; // !!! FIXME
-    } // if
-
-    // codepath if we were waiting for a specific thread.
-    int rc;
-    if (option == DCWW_NOWAIT) {
-        rc = pthread_tryjoin_np(thread->thread, &exitcode);
-    } else {  //if (option == DCWW_WAIT)
-        rc = pthread_join(thread->thread, &exitcode);
-    } // else
-
-    if (rc == EBUSY)
-        return ERROR_THREAD_NOT_TERMINATED;
-    else if (rc != 0)
-        return ERROR_INVALID_THREADID; // oh well.
-
-    grabLock(&GMutexDosCalls);
-    if (thread->prev)
-        thread->prev->next = thread->next;
-    else
-        GDeadThreads = thread->next;
-
-    if (thread->next)
-        thread->next->prev = thread->prev;
-    ungrabLock(&GMutexDosCalls);
-
-    free(thread);
-    return NO_ERROR;
-} // DosWaitThread
+            if (option == DCWW_NOWAIT) return ERROR_THREAD_NOT_TERMINATED;
+            lx_host_sleep_ms(1); continue;
+        }
+        if (thread->joining) { ungrabLock(&GMutexDosCalls); return ERROR_INVALID_THREADID; }
+        LxHandleBorrow object;
+        if (!lx_handle_borrow(thread->handle, LX_HANDLE_THREAD, &object)) {
+            ungrabLock(&GMutexDosCalls); return ERROR_INVALID_THREADID;
+        }
+        thread->joining = 1;
+        ungrabLock(&GMutexDosCalls);
+        int joined = lx_host_thread_join(thread->thread, NULL);
+        grabLock(&GMutexDosCalls);
+        if (!joined) {
+            for (Thread **link = &GThreads; *link; link = &(*link)->next)
+                if (*link == thread) { *link = thread->next; break; }
+            *id = thread->id; lx_handle_close(thread->handle, LX_HANDLE_THREAD);
+        } else thread->joining = 0;
+        ungrabLock(&GMutexDosCalls); lx_handle_release(&object);
+        return joined ? ERROR_INVALID_THREADID : NO_ERROR;
+    }
+}
 
 APIRET DosSleep(ULONG msec)
 {
     TRACE_NATIVE("DosSleep(%u)", (uint) msec);
 
-    if (msec == 0)
-        sched_yield();
-    else
-        usleep(msec * 1000);
+    lx_host_sleep_ms(msec);
     return NO_ERROR;
 } // DosSleep
 
@@ -2418,85 +1885,25 @@ APIRET DosSubFreeMem(PVOID pbBase, PVOID pb, ULONG cb)
     return NO_ERROR;
 } // DosSubAllocMem
 
-static APIRET DosDelete_implementation(PSZ pszFile)
+static APIRET DosDelete_implementation(PSZ name)
 {
-    APIRET err;
-    if (!pszFile)
-        return ERROR_INVALID_PARAMETER;
-    char *unixpath = makeUnixPath(pszFile, &err);
-    if (!unixpath)
-        return err;
-
-    const int rc = unlink(unixpath);
-    free(unixpath);
-    if (rc == -1) {
-        switch (errno) {
-            case EACCES: return ERROR_ACCESS_DENIED;
-            case EBUSY: return ERROR_ACCESS_DENIED;
-            case EISDIR: return ERROR_ACCESS_DENIED;
-            case ENAMETOOLONG: return ERROR_FILENAME_EXCED_RANGE;
-            case ENOENT: return ERROR_FILE_NOT_FOUND;  // !!! FIXME: could be PATH_NOT_FOUND too, depending on circumstances.
-            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
-            case EPERM: return ERROR_ACCESS_DENIED;
-            case EROFS: return ERROR_ACCESS_DENIED;
-            case ETXTBSY: return ERROR_ACCESS_DENIED;
-            default: return ERROR_INVALID_PARAMETER;  // !!! FIXME: debug logging about missin errno case.
-        } // switch
-        __builtin_unreachable();
-    } // if
-
-    return NO_ERROR;
-} // DosDelete_implementation
-
-APIRET DosDelete(PSZ pszFile)
+    if (!name) return ERROR_INVALID_PARAMETER;
+    APIRET result;
+    char *path = makeUnixPath(name, &result); if (!path) return result;
+    result = fileError(lx_host_path_remove(path, 0)); free(path); return result;
+}
+APIRET DosDelete(PSZ name) { return DosDelete_implementation(name); }
+APIRET DosForceDelete(PSZ name)
 {
-    TRACE_NATIVE("DosDelete('%s')", pszFile);
-    return DosDelete_implementation(pszFile);
-} // DosDelete
-
-APIRET DosForceDelete(PSZ pszFile)
-{
-    TRACE_NATIVE("DosForceDelete('%s')", pszFile);
-
-    if (!pszFile)
-        return ERROR_INVALID_PARAMETER;
-
-    APIRET err;
-    char *unixpath = makeUnixPath(pszFile, &err);
-    if (!unixpath)
-        return err;
-
-    int rc = unlink(unixpath);
-    if ((rc == -1) && (errno == EACCES)) {
-        // DosForceDelete ignores the read-only attribute; on Unix that
-        //  attribute does not inhibit unlink(), so this mainly covers a
-        //  file mode that blocks the operation.
-        struct stat st;
-        if ((lstat(unixpath, &st) == 0) && (!S_ISDIR(st.st_mode))) {
-            if (chmod(unixpath, st.st_mode | S_IWUSR) == 0)
-                rc = unlink(unixpath);
-        } // if
-    } // if
-
-    const int saved_errno = errno;
-    free(unixpath);
-    if (rc == -1) {
-        switch (saved_errno) {
-            case EACCES: return ERROR_ACCESS_DENIED;
-            case EBUSY: return ERROR_ACCESS_DENIED;
-            case EISDIR: return ERROR_ACCESS_DENIED;
-            case ENAMETOOLONG: return ERROR_FILENAME_EXCED_RANGE;
-            case ENOENT: return ERROR_FILE_NOT_FOUND;
-            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
-            case EPERM: return ERROR_ACCESS_DENIED;
-            case EROFS: return ERROR_ACCESS_DENIED;
-            case ETXTBSY: return ERROR_ACCESS_DENIED;
-            default: return ERROR_ACCESS_DENIED;
-        } // switch
-    } // if
-
-    return NO_ERROR;
-} // DosForceDelete
+    if (!name) return ERROR_INVALID_PARAMETER;
+    APIRET result;
+    char *path = makeUnixPath(name, &result); if (!path) return result;
+    LxHostFsError error = lx_host_path_remove(path, 0);
+    if (error == LX_HOST_FS_DENIED || error == LX_HOST_FS_READ_ONLY) {
+        if (!lx_host_path_readonly(path, 0)) error = lx_host_path_remove(path, 0);
+    }
+    result = fileError(error); free(path); return result;
+}
 
 APIRET DosSetPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULONG cbInfoBuf, ULONG flOptions)
 {
@@ -2517,16 +1924,16 @@ APIRET DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod)
     ungrabLock(&GMutexDosCalls);
 
     if (phmod)
-        *phmod = (HMODULE) lxmod;
+        *phmod = lxmod ? lxmod->handle : 0;
 
     return lxmod ? NO_ERROR : ERROR_INVALID_NAME;
 } // DosQueryModuleHandle
 
-APIRET DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN* ppfn)
+static APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN* ppfn, const LxModule *lxmod)
 {
     TRACE_NATIVE("DosQueryProcAddr(%u, %u, '%s', %p)", (uint) hmod, (uint) ordinal, pszName, ppfn);
 
-    const LxModule *lxmod = (LxModule *) hmod;
+
     const LxExport *exports = lxmod->exports;
     const uint32 num_exports = lxmod->num_exports;
 
@@ -2536,7 +1943,7 @@ APIRET DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN* ppfn)
         for (uint32 i = 0; i < num_exports; i++, exports++) {
             if (exports->ordinal == ordinal) {
                 if (ppfn)
-                    *ppfn = (PFN) exports->addr;
+                    *ppfn = (PFN) (exports->indirect ? *(void **) exports->addr : exports->addr);
                 return NO_ERROR;
             } // if
         } // for
@@ -2547,7 +1954,7 @@ APIRET DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN* ppfn)
         for (uint32 i = 0; i < num_exports; i++, exports++) {
             if (exports->name && (strcmp(exports->name, pszName) == 0)) {
                 if (ppfn)
-                    *ppfn = (PFN) exports->addr;
+                    *ppfn = (PFN) (exports->indirect ? *(void **) exports->addr : exports->addr);
                 return NO_ERROR;
             } // if
         } // for
@@ -2556,6 +1963,15 @@ APIRET DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN* ppfn)
 
     __builtin_unreachable();
 } // DosQueryProcAddr
+APIRET DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN* ppfn)
+{
+    LxHandleBorrow module;
+    if (!lx_handle_borrow(hmod, LX_HANDLE_MODULE, &module)) return ERROR_INVALID_HANDLE;
+    const APIRET result = DosQueryProcAddrObject(hmod, ordinal, pszName, ppfn, module.resource);
+    lx_handle_release(&module);
+    return result;
+}
+
 
 APIRET DosQueryCp(ULONG cb, PULONG arCP, PULONG pcCP)
 {
@@ -2582,17 +1998,12 @@ APIRET DosOpenL(PSZ pszFileName, PHFILE pHf, PULONG pulAction, LONGLONG cbFile, 
     return doDosOpen(pszFileName, pHf, pulAction, cbFile, ulAttribute, fsOpenFlags, fsOpenMode, peaop2);
 } // DosOpenL
 
-static inline ULONG findNextSizeNeeded(const ULONG ulInfoLevel, const ULONG pcFileNames)
+static inline ULONG findNextSizeNeeded(const ULONG level, const ULONG count)
 {
-    switch (ulInfoLevel) {
-        case -1: return (sizeof (FILEFINDBUF) - CCHMAXPATHCOMP) * pcFileNames;
-        case FIL_STANDARD: return (sizeof (FILEFINDBUF3) - CCHMAXPATHCOMP) * pcFileNames;
-        case FIL_QUERYEASIZE: return (sizeof (FILEFINDBUF4) - CCHMAXPATHCOMP) * pcFileNames;
-        case FIL_QUERYEASFROMLIST: FIXME("write me"); return 0xFFFFFFFF;
-        default: assert(!"Shouldn't hit this."); return 0xFFFFFFFF;
-    } // switch
-    __builtin_unreachable();
-} // findNextSizeNeeded;
+    const ULONG minimum = level == (ULONG) -1 ? 24 : level == FIL_STANDARD ? 32 :
+                          level == FIL_QUERYEASIZE ? 36 : 0;
+    return !minimum || count > UINT32_MAX / minimum ? UINT32_MAX : count * minimum;
+}
 
 static int wildcardMatch(const char *str, const char *pattern)
 {
@@ -2639,31 +2050,19 @@ static int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *er
     if (musthave & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED))
         return 0;
 
-    struct dirent *dent;
-    const int fd = dirfd(dirf->dirp);
-    const char *pattern = dirf->pattern;
-
-    while ((dent = readdir(dirf->dirp)) != NULL) {
-        const char *name = dent->d_name;
+    const char *pattern = dirf->pattern, *name;
+    LxHostFileInfo statbuf; LxHostFsError error = LX_HOST_FS_OK;
+    while (lx_host_directory_read(dirf->dirp, &name, &statbuf, &error) == 1) {
         // !!! FIXME: OS/2 doesn't enumerate ".." for the drive root!
         //if (strcmp(name, "..") == 0) { if drive_root continue; }
 
         const size_t namelen = strlen(name);
         if (namelen >= CCHMAXPATHCOMP) continue;
-        if (namelen + findNextSizeNeeded(dirf->level, 1) >= *pcbBuf) continue; // FIXME??
 
         if (!wildcardMatch(name, pattern)) continue;
 
-        // we stat(), not lstat(), because OS/2 doesn't understand symlinks,
-        //  so we pretend the real file/dir is there. This could cause
-        //  problems with broken links and infinite loops, though.
-        //  For lstat-like behaviour, if we change our minds, the last arg
-        //  of fstatat() needs the AT_SYMLINK_NOFOLLOW flag.
-        struct stat statbuf;
-        if (fstatat(fd, name, &statbuf, 0) == -1) continue;
-
-        const int isfile = S_ISREG(statbuf.st_mode);
-        const int isdir = S_ISDIR(statbuf.st_mode);
+        const int isfile = statbuf.kind == LX_HOST_FILE_REGULAR;
+        const int isdir = statbuf.kind == LX_HOST_FILE_DIRECTORY;
         if (!isfile && !isdir) continue;  // OS/2 didn't have fifos, devs, sockets, etc.
         assert(isfile != isdir);
 
@@ -2673,7 +2072,7 @@ static int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *er
             if (musthave & FILE_DIRECTORY) continue;
         } // else
 
-        const int readonly = ((statbuf.st_mode & S_IWUSR) == 0);  // !!! FIXME: not accurate...?
+        const int readonly = statbuf.readonly;  // !!! FIXME: not accurate...?
         if (readonly) {
             if ((mayhave & FILE_READONLY) == 0) continue;
         } else {
@@ -2681,66 +2080,37 @@ static int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *er
         } // else
 
 
-        // okay! Definitely take this one!
-        switch (dirf->level) {
-            case -1: {
-                PFILEFINDBUF st = (PFILEFINDBUF) *ppfindbuf;
-                initFileCreationDateTime(&st->fdateCreation, &st->ftimeCreation);
-                unixTimeToOs2(statbuf.st_atime, &st->fdateLastAccess, &st->ftimeLastAccess);
-                unixTimeToOs2(statbuf.st_mtime, &st->fdateLastWrite, &st->ftimeLastWrite);
-                st->cbFile = (ULONG) statbuf.st_size;  // !!! FIXME: > 2gig files?
-                st->cbFileAlloc = (ULONG) (statbuf.st_blocks * 512);
-                if (isdir) st->attrFile |= FILE_DIRECTORY;
-                if (readonly) st->attrFile |= FILE_READONLY;
-                st->cchName = (UCHAR) namelen;
-                strcpy(st->achName, name);
-                return 1;
-            } // case
-
-            case FIL_STANDARD: {
-                PFILEFINDBUF3 st = (PFILEFINDBUF3) *ppfindbuf;
-                memset(st, '\0', sizeof (*st));
-                *ppfindbuf = st + 1;
-                *pcbBuf -= sizeof (*st);
-                st->oNextEntryOffset = sizeof (*st);
-                initFileCreationDateTime(&st->fdateCreation, &st->ftimeCreation);
-                unixTimeToOs2(statbuf.st_atime, &st->fdateLastAccess, &st->ftimeLastAccess);
-                unixTimeToOs2(statbuf.st_mtime, &st->fdateLastWrite, &st->ftimeLastWrite);
-                st->cbFile = (ULONG) statbuf.st_size;  // !!! FIXME: > 2gig files?
-                st->cbFileAlloc = (ULONG) (statbuf.st_blocks * 512);
-                if (isdir) st->attrFile |= FILE_DIRECTORY;
-                if (readonly) st->attrFile |= FILE_READONLY;
-                st->cchName = (UCHAR) namelen;
-                strcpy(st->achName, name);
-                return 1;
-            } // case
-
-            case FIL_QUERYEASIZE: {
-                PFILEFINDBUF4 st = (PFILEFINDBUF4) *ppfindbuf;
-                memset(st, '\0', sizeof (*st));
-                *ppfindbuf = st + 1;
-                *pcbBuf -= sizeof (*st);
-                st->oNextEntryOffset = sizeof (*st);
-                initFileCreationDateTime(&st->fdateCreation, &st->ftimeCreation);
-                unixTimeToOs2(statbuf.st_atime, &st->fdateLastAccess, &st->ftimeLastAccess);
-                unixTimeToOs2(statbuf.st_mtime, &st->fdateLastWrite, &st->ftimeLastWrite);
-                st->cbFile = (ULONG) statbuf.st_size;  // !!! FIXME: > 2gig files?
-                st->cbFileAlloc = (ULONG) (statbuf.st_blocks * 512);
-                if (isdir) st->attrFile |= FILE_DIRECTORY;
-                if (readonly) st->attrFile |= FILE_READONLY;
-                st->cbList = 0;  FIXME("write me: EA support");
-                st->cchName = (UCHAR) namelen;
-                strcpy(st->achName, name);
-                return 1;
-            } // case
-
-            case FIL_QUERYEASFROMLIST:
-                FIXME("write me");
-                break;
-        } // switch
+        const int legacy = dirf->level == (ULONG) -1;
+        const ULONG name_offset = legacy ? 23 : dirf->level == FIL_QUERYEASIZE ? 33 : 29;
+        ULONG extent = name_offset + (ULONG) namelen + 1;
+        if (!legacy) extent = (extent + 3) & ~3u;
+        if (extent > *pcbBuf) { *err = ERROR_BUFFER_OVERFLOW; return 0; }
+        uint8 *out = *ppfindbuf;
+        memset(out, 0, extent);
+        uint8 *fields = out + (legacy ? 0 : 4);
+        FDATE date; FTIME time;
+        initFileCreationDateTime(&date, &time);
+        lx_guest_store_u16(fields, date.day | date.month << 5 | date.year << 9);
+        lx_guest_store_u16(fields + 2, time.twosecs | time.minutes << 5 | time.hours << 11);
+        unixTimeToOs2(statbuf.accessed, &date, &time);
+        lx_guest_store_u16(fields + 4, date.day | date.month << 5 | date.year << 9);
+        lx_guest_store_u16(fields + 6, time.twosecs | time.minutes << 5 | time.hours << 11);
+        unixTimeToOs2(statbuf.modified, &date, &time);
+        lx_guest_store_u16(fields + 8, date.day | date.month << 5 | date.year << 9);
+        lx_guest_store_u16(fields + 10, time.twosecs | time.minutes << 5 | time.hours << 11);
+        lx_guest_store_u32(fields + 12, (uint32) statbuf.size);
+        lx_guest_store_u32(fields + 16, (uint32) statbuf.allocated);
+        const uint32 attributes = (isdir ? FILE_DIRECTORY : 0) | (readonly ? FILE_READONLY : 0);
+        if (legacy) lx_guest_store_u16(fields + 20, attributes);
+        else { lx_guest_store_u32(fields + 20, attributes); lx_guest_store_u32(out, extent); }
+        out[name_offset - 1] = (uint8) namelen;
+        memcpy(out + name_offset, name, namelen + 1);
+        *ppfindbuf = out + extent; *pcbBuf -= extent;
+        return 1;
     } // while
 
-    return 0;  // found nothing else that matches our needs.
+    if (error) *err = fileError(error);
+    return 0;  // No matching entries remain.
 } // findNextOne
     
 
@@ -2755,15 +2125,23 @@ static APIRET findNext(DirFinder *dirf, PVOID pfindbuf, ULONG cbBuf, PULONG pcFi
     ULONG i;
     int err = NO_ERROR;
     memset(pfindbuf, 0, cbBuf);
+    uint8 *last = NULL;
     for (i = 0; i < maxents; i++) {
-        if (!findNextOne(dirf, &pfindbuf, &cbBuf, &err))
+        uint8 *current = pfindbuf;
+        const uint64 position = lx_host_directory_position(dirf->dirp);
+        if (!findNextOne(dirf, &pfindbuf, &cbBuf, &err)) {
+            if (err == ERROR_BUFFER_OVERFLOW) lx_host_directory_seek(dirf->dirp, position);
             break;
-    } // for
+        }
+        last = current;
+    }
+    if (last && dirf->level != (ULONG) -1) lx_guest_store_u32(last, 0);
+    if (i && err == ERROR_BUFFER_OVERFLOW) err = NO_ERROR;
 
     *pcFileNames = i;
 
-    if ((i == 0) && (maxents > 0)) {
-        closedir(dirf->dirp);
+    if ((i == 0) && (maxents > 0) && !err) {
+        lx_host_directory_close(dirf->dirp);
         dirf->dirp = NULL;
         err = ERROR_NO_MORE_FILES;
     } // if
@@ -2771,7 +2149,7 @@ static APIRET findNext(DirFinder *dirf, PVOID pfindbuf, ULONG cbBuf, PULONG pcFi
     return err;
 } // findNext
 
-APIRET DosFindFirst(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute, PVOID pfindbuf, ULONG cbBuf, PULONG pcFileNames, ULONG ulInfoLevel)
+static APIRET DosFindFirstLocked(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute, PVOID pfindbuf, ULONG cbBuf, PULONG pcFileNames, ULONG ulInfoLevel)
 {
     TRACE_NATIVE("DosFindFirst('%s', %p, %u, %p, %u, %p, %u)", pszFileSpec, phdir, (uint) flAttribute, pfindbuf, (uint) cbBuf, pcFileNames, (uint) ulInfoLevel);
 
@@ -2816,6 +2194,8 @@ APIRET DosFindFirst(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute, PVOID pfind
         return ERROR_FILENAME_EXCED_RANGE;
     } // if
 
+    LxHandleBorrow directory = {0};
+    uint32 handle = *phdir;
     DirFinder *dirf = NULL;
     if (*phdir == HDIR_SYSTEM) {
         dirf = &GHDir1;
@@ -2827,29 +2207,22 @@ APIRET DosFindFirst(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute, PVOID pfind
         } // if
         memset(dirf, '\0', sizeof (*dirf));
     } else {
-        dirf = (DirFinder *) *phdir;
+        if (!lx_handle_borrow(handle, LX_HANDLE_DIRECTORY, &directory)) {
+            free(path); return ERROR_INVALID_HANDLE;
+        }
+        dirf = directory.resource;
     } // else
 
-    DIR *dirp = opendir((path == pattern) ? "." : path);
+    LxHostFsError error;
+    LxHostDirectory *dirp = lx_host_directory_open((path == pattern) ? "." : path, &error);
     if (!dirp) {
-        const int rc = errno;
-        if (*phdir == HDIR_CREATE)
-            free(dirf);
-        free(path);
-        switch (rc) {
-            case EACCES: return ERROR_ACCESS_DENIED;
-            case EMFILE: return ERROR_NO_MORE_SEARCH_HANDLES;
-            case ENFILE: return ERROR_NO_MORE_SEARCH_HANDLES;
-            case ENOMEM: return ERROR_NOT_ENOUGH_MEMORY;
-            case ENOENT: return ERROR_PATH_NOT_FOUND;  // !!! FIXME: should this be FILE_NOT_FOUND if the parent dir exists...?
-            case ENAMETOOLONG: return ERROR_FILENAME_EXCED_RANGE;
-            default: break;
-        } // switch
-        return ERROR_PATH_NOT_FOUND;  // oh well.
-    } // if
+        if (*phdir == HDIR_CREATE) free(dirf);
+        free(path); lx_handle_release(&directory);
+        return fileError(error);
+    }
 
     if (dirf->dirp)
-        closedir(dirf->dirp);
+        lx_host_directory_close(dirf->dirp);
 
     dirf->dirp = dirp;
     dirf->attr = flAttribute;
@@ -2863,54 +2236,54 @@ APIRET DosFindFirst(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute, PVOID pfind
     //  "Any nonzero return code, except ERROR_EAS_DIDNT_FIT, indicates that no handle has been allocated. This includes such nonerror
     //  indicators as ERROR_NO_MORE_FILES."
     if ((err != NO_ERROR) && (err != ERROR_EAS_DIDNT_FIT)) {
-        closedir(dirf->dirp);
+        if (dirf->dirp) lx_host_directory_close(dirf->dirp);
         dirf->dirp = NULL;
-        if (*phdir == HDIR_CREATE)
-            free(dirf);
+        if (*phdir == HDIR_CREATE) free(dirf);
+        lx_handle_release(&directory);
         return err;
     } // if
 
     if (err == ERROR_NO_MORE_FILES)
         return ERROR_FILE_NOT_FOUND;
-    *phdir = (HDIR) dirf;
+    if (*phdir == HDIR_CREATE) {
+        handle = lx_handle_create(LX_HANDLE_DIRECTORY, dirf, destroyDirectoryResource);
+        if (!handle) { destroyDirectoryResource(dirf); return ERROR_NOT_ENOUGH_MEMORY; }
+    }
+    *phdir = handle;
+    lx_handle_release(&directory);
     return NO_ERROR;
 } // DosFindFirst
 
-APIRET DosFindNext(HDIR hDir, PVOID pfindbuf, ULONG cbfindbuf, PULONG pcFilenames)
+APIRET DosFindFirst(PSZ spec, PHDIR handle, ULONG attrs, PVOID data, ULONG size, PULONG count, ULONG level)
 {
-    TRACE_NATIVE("DosFindNext(%u, %p, %u, %p)", (uint) hDir, pfindbuf, (uint) cbfindbuf, pcFilenames);
-
-    if ((hDir == 0) || (hDir == HDIR_SYSTEM) || (hDir == HDIR_CREATE))
-        return ERROR_INVALID_HANDLE;
-    else if (cbfindbuf > 0xFFFF)   // !!! FIXME: Control Program API Reference says this fails if > 64k, although that was obviously a 16-bit limitation.
-        return ERROR_INVALID_PARAMETER;
-    else if (!pcFilenames)
-        return ERROR_INVALID_PARAMETER;
-    else if (!pfindbuf && (*pcFilenames != 0))
-        return ERROR_INVALID_PARAMETER;
-    else if (cbfindbuf < findNextSizeNeeded(((DirFinder *) hDir)->level, *pcFilenames))
-        return ERROR_BUFFER_OVERFLOW;
-    return findNext((DirFinder *) hDir, pfindbuf, cbfindbuf, pcFilenames);
-} // DosFindNext
-
-APIRET DosFindClose(HDIR hDir)
+    grabLock(&GMutexDosCalls);
+    const APIRET result = DosFindFirstLocked(spec, handle, attrs, data, size, count, level);
+    ungrabLock(&GMutexDosCalls); return result;
+}
+APIRET DosFindNext(HDIR handle, PVOID data, ULONG size, PULONG count)
 {
-    TRACE_NATIVE("DosFindClose(%u)", (uint) hDir);
-
-    if ((hDir == 0) || (hDir == HDIR_SYSTEM) || (hDir == HDIR_CREATE))
-        return ERROR_INVALID_HANDLE;
-
-    DirFinder *dirf = (DirFinder *) hDir;
-    if (dirf->dirp)
-        closedir(dirf->dirp);
-
-    if (dirf == &GHDir1)
-        memset(dirf, '\0', sizeof (*dirf));
-    else
-        free(dirf);
-
-    return NO_ERROR;
-} // DosFindClose
+    grabLock(&GMutexDosCalls);
+    LxHandleBorrow object = {0};
+    DirFinder *directory = handle == HDIR_SYSTEM ? &GHDir1 :
+        lx_handle_borrow(handle, LX_HANDLE_DIRECTORY, &object) ? object.resource : NULL;
+    APIRET result;
+    if (!directory) result = ERROR_INVALID_HANDLE;
+    else if (size > 0xFFFF || !count || (!data && *count)) result = ERROR_INVALID_PARAMETER;
+    else if (size < findNextSizeNeeded(directory->level, *count)) result = ERROR_BUFFER_OVERFLOW;
+    else result = findNext(directory, data, size, count);
+    lx_handle_release(&object);
+    ungrabLock(&GMutexDosCalls); return result;
+}
+APIRET DosFindClose(HDIR handle)
+{
+    grabLock(&GMutexDosCalls);
+    APIRET result = NO_ERROR;
+    if (handle == HDIR_SYSTEM) {
+        if (GHDir1.dirp) lx_host_directory_close(GHDir1.dirp);
+        memset(&GHDir1, 0, sizeof GHDir1);
+    } else if (!lx_handle_close(handle, LX_HANDLE_DIRECTORY)) result = ERROR_INVALID_HANDLE;
+    ungrabLock(&GMutexDosCalls); return result;
+}
 
 APIRET DosDevConfig(PVOID pdevinfo, ULONG item)
 {
@@ -2946,18 +2319,18 @@ APIRET DosLoadModule(PSZ pszName, ULONG cbName, PSZ pszModname, PHMODULE phmod)
     if (!lxmod)
         return ERROR_BAD_FORMAT;
 
-    *phmod = (HMODULE) lxmod;
+    *phmod = lxmod ? lxmod->handle : 0;
     return NO_ERROR;
 } // DosLoadModule
 
-APIRET DosFreeModule(HMODULE hmod)
+static APIRET DosFreeModuleObject(HMODULE hmod, LxModule *lxmod)
 {
     TRACE_NATIVE("DosFreeModule(%u)", (uint) hmod);
 
     if ((!hmod) || (!GLoaderState.freeModule))
         return ERROR_INVALID_HANDLE;
 
-    LxModule *lxmod = (LxModule *) hmod;
+
     LxModule *loaded;
 
     /* Validate the opaque handle before passing it back to the loader. */
@@ -2974,51 +2347,35 @@ APIRET DosFreeModule(HMODULE hmod)
     GLoaderState.freeModule(lxmod);
     return NO_ERROR;
 } // DosFreeModule
-
-
-static APIRET resetOneBuffer(const int fd)
+APIRET DosFreeModule(HMODULE hmod)
 {
-    if (fsync(fd) == -1) {
-        switch (errno) {
-            case EBADF: return ERROR_INVALID_HANDLE;
-            case EIO: return ERROR_ACCESS_DENIED;
-            case EROFS: return ERROR_ACCESS_DENIED;
-            case EINVAL: return ERROR_INVALID_HANDLE;
-            default: break;
-        } // switch
-        return ERROR_INVALID_HANDLE;
-    } // if
-
-    return NO_ERROR;
-} // resetOneBuffer
+    LxHandleBorrow module;
+    if (!lx_handle_borrow(hmod, LX_HANDLE_MODULE, &module)) return ERROR_INVALID_HANDLE;
+    const APIRET result = DosFreeModuleObject(hmod, module.resource);
+    lx_handle_release(&module);
+    return result;
+}
 
 
-APIRET DosResetBuffer(HFILE hFile)
+
+APIRET DosResetBuffer(HFILE id)
 {
-    TRACE_NATIVE("DosResetBuffer(%u)", (uint) hFile);
-
-    if (hFile == 0xFFFFFFFF) {  // flush all files.
-        // !!! FIXME: this is holding the lock the whole time...
-        APIRET err = NO_ERROR;
-        grabLock(&GMutexDosCalls);
-        for (uint32 i = 0; i < MaxHFiles; i++) {
-            const int fd = HFiles[hFile].fd;
-            if (fd != -1) {
-                const APIRET thiserr = resetOneBuffer(fd);
-                if (err == NO_ERROR)
-                    err = thiserr;
-            } // if
-        } // for
-        ungrabLock(&GMutexDosCalls);
-        return err;
-    } // if
-
-    // flush just one file.
-    const int fd = getHFileUnixDescriptor(hFile);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-    return resetOneBuffer(fd);
-} // DosResetBuffer
+    grabLock(&GMutexDosCalls);
+    APIRET result = NO_ERROR;
+    const uint32 first = id == UINT32_MAX ? 0 : id, last = id == UINT32_MAX ? MaxHFiles : id + 1;
+    if (id != UINT32_MAX && (id >= MaxHFiles || HFiles[id].handle <= 1)) result = ERROR_INVALID_HANDLE;
+    else for (uint32 i = first; i < last; i++) {
+        LxHandleBorrow file;
+        if (HFiles[i].handle > 1 && lx_handle_borrow(HFiles[i].handle, LX_HANDLE_FILE, &file)) {
+            LxHostFileInfo info;
+            /* Pipes/devices have no filesystem buffers to commit. */
+            LxHostFsError error = lx_host_file_info(file.resource, &info);
+            if (!error && info.kind == LX_HOST_FILE_REGULAR) error = lx_host_file_flush(file.resource);
+            lx_handle_release(&file); if (!result) result = fileError(error);
+        }
+    }
+    ungrabLock(&GMutexDosCalls); return result;
+}
 
 APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
 {
@@ -3032,104 +2389,40 @@ APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
     if (!path)
         return err;
 
-    const int fd = open(path, O_RDONLY, 0);
+    LxHostFsError error;
+    LxHostFile *file = lx_host_file_open(path, LX_HOST_FILE_READ, 0, &error);
     free(path);
-    if (fd == -1) {
-        switch (errno) {  // !!! FIXME: copy/paste, put this in a function.
-            case EACCES: return ERROR_ACCESS_DENIED;
-            case EISDIR: return ERROR_ACCESS_DENIED;
-            case EMFILE: return ERROR_TOO_MANY_OPEN_FILES;
-            case ENFILE: return ERROR_TOO_MANY_OPEN_FILES;
-            case ENAMETOOLONG: return ERROR_FILENAME_EXCED_RANGE;
-            case ENOSPC: return ERROR_DISK_FULL;
-            case ENOMEM: return ERROR_NOT_ENOUGH_MEMORY;
-            case ENOENT: return ERROR_FILE_NOT_FOUND;  // !!! FIXME: could be PATH_NOT_FOUND too, depending on circumstances.
-            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
-            case EPERM: return ERROR_ACCESS_DENIED;
-            case EROFS: return ERROR_ACCESS_DENIED;
-            case ETXTBSY: return ERROR_ACCESS_DENIED;
-            default: break;
-        } // switch
-        return ERROR_OPEN_FAILED;  // !!! FIXME: debug logging about missing errno case.
-    } // if
-
-    // !!! FIXME: I guess we should parse NE/LE files here too?
-
-    uint32 lxoffset = 0;
-    LxHeader lx;
-    uint8 mz[2];
-    if (read(fd, mz, 2) != 2) goto queryapptype_iofailed;
-    if ((mz[0] != 'M') || (mz[1] != 'Z')) goto queryapptype_iofailed;
-    if (lseek(fd, 0x3C, SEEK_SET) == -1) goto queryapptype_iofailed;
-    if (read(fd, &lxoffset, sizeof (lxoffset)) != sizeof (lxoffset)) goto queryapptype_iofailed;
-    if (lseek(fd, lxoffset, SEEK_SET) == -1) goto queryapptype_iofailed;
-    if (read(fd, &lx, sizeof (lx)) != sizeof (lx)) goto queryapptype_iofailed;
-    close(fd);
-
-    if ((lx.magic_l != 'L') || (lx.magic_x != 'X')) return ERROR_INVALID_EXE_SIGNATURE;
-    if (lx.module_flags & 0x2000) return ERROR_EXE_MARKED_INVALID;  // "not loadable" ... I guess this is it?
-
-    const uint32 module_type = lx.module_flags & 0x00038000;
-
-    ULONG flags = 0;
-
-    // !!! FIXME: can you be both compat and incompat?
-    if (lx.module_flags & 0x100) flags |= FAPPTYP_NOTWINDOWCOMPAT;
-    if (lx.module_flags & 0x200) flags |= FAPPTYP_WINDOWCOMPAT;
-    if (lx.module_flags & 0x300) flags |= FAPPTYP_WINDOWAPI;
-    // !!! FIXME: FAPPTYP_BOUND = 0x0008
-    if (module_type & 0x8000) flags |= FAPPTYP_DLL;
-    if (module_type & 0x20000) flags |= FAPPTYP_PHYSDRV;
-    if (module_type & 0x28000) flags |= FAPPTYP_VIRTDRV;
-    if (module_type & 0x18000) flags |= FAPPTYP_PROTDLL;
-
-    // !!! FIXME: FAPPTYP_DOS = 0x0020
-    // !!! FIXME: FAPPTYP_WINDOWSREAL = 0x0200
-    // !!! FIXME: FAPPTYP_WINDOWSPROT = 0x0400
-    // !!! FIXME: FAPPTYP_WINDOWSPROT31 =0x1000
-
-    flags |= FAPPTYP_32BIT;  // !!! FIXME: currently always true.
-
-    return NO_ERROR;
-
-queryapptype_iofailed:
-    close(fd);
-    return ERROR_INVALID_EXE_SIGNATURE;
-} // DosQueryAppType
-
-static uint32 *initTLSPage(void)
-{
-    const int pagesize = getpagesize();
-
-    void *addr = mmap(NULL, pagesize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (addr == ((void *) MAP_FAILED))
-        return NULL;
-
-    // Fill in the page with a debug info string.
-    char *dst = (char *) addr;
-    const char *str = "This is the fake OS/2 TLS page. ";
-    assert(strlen(str) == 32);
-    for (int i = 0; i < 127; i++, dst += 32)
-        strcpy(dst, str);
-    memcpy(dst, str, 31);
-    dst[31] = '\0';
-
-    if (mprotect(addr, pagesize, PROT_NONE) == -1) {
-        munmap(addr, pagesize);
-        return NULL;
-    } // if
-
-    printf("allocated magic OS/2 TLS page at %p\n", addr); fflush(stdout);
-
-    return (uint32 *) addr;
-} // initTLSPage
-
+    if (!file) return fileError(error);
+    uint8 mz[64], lx[24]; size_t actual;
+    APIRET result = ERROR_INVALID_EXE_SIGNATURE;
+    if (lx_host_file_read(file, mz, sizeof mz, &actual) || actual != sizeof mz || mz[0] != 'M' || mz[1] != 'Z') goto done;
+    if (lx_host_file_seek(file, lx_guest_load_u32(mz + 60), 0, NULL) ||
+        lx_host_file_read(file, lx, sizeof lx, &actual) || actual != sizeof lx || lx[0] != 'L' || lx[1] != 'X') goto done;
+    const uint32 module_flags = lx_guest_load_u32(lx + 16);
+    if (module_flags & 0x2000) { result = ERROR_EXE_MARKED_INVALID; goto done; }
+    const uint32 type = module_flags & 0x38000;
+    ULONG flags = FAPPTYP_32BIT;
+    switch (module_flags & 0x300) {
+        case 0x100: flags |= FAPPTYP_NOTWINDOWCOMPAT; break;
+        case 0x200: flags |= FAPPTYP_WINDOWCOMPAT; break;
+        case 0x300: flags |= FAPPTYP_WINDOWAPI; break;
+    }
+    switch (type) {
+        case 0x8000: flags |= FAPPTYP_DLL; break;
+        case 0x20000: flags |= FAPPTYP_PHYSDRV; break;
+        case 0x28000: flags |= FAPPTYP_VIRTDRV; break;
+        case 0x18000: flags |= FAPPTYP_PROTDLL; break;
+    }
+    *pFlags = flags; result = NO_ERROR;
+done:
+    lx_host_file_close(file); return result;
+}
 
 APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
 {
     TRACE_NATIVE("DosAllocThreadLocalMemory(%u, %p)", (uint) cb, p);
 
-    if (cb > 8)  // this is a limitation in OS/2. This whole API is weird.
+    if (!cb || cb > 8)  // OS/2 allocates one to eight contiguous words.
         return ERROR_INVALID_PARAMETER;
     else if (!p)
         return ERROR_INVALID_PARAMETER;
@@ -3143,26 +2436,25 @@ APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
     //  is there a lot of thread contention at the point where your app is
     //  allocating TLS?
     if (GLoaderState.tlspage == NULL) {
-        if ((GLoaderState.tlspage = initTLSPage()) == NULL) {
+        if ((GLoaderState.tlspage = (uint32 *) (uintptr_t) lx_execution_tls_window(GLoaderState.execution)) == NULL) {
             ungrabLock(&GMutexDosCalls);
             return ERROR_NOT_ENOUGH_MEMORY;
         } // if
     } // if
 
     int i;
-    for (i = 0; i < 32; i++, mask <<= 1) {
+    for (i = 0; i <= 32 - (int) cb; i++, mask <<= 1) {
         if (((GLoaderState.tlsmask ^ mask) & mask) == mask)
             break;
     } // for
 
-    if (i == 32)
+    if (i > 32 - (int) cb)
         retval = ERROR_NOT_ENOUGH_MEMORY; // there are only 32 slots, couldn't find anything contiguous.
     else {
         assert(GLoaderState.tlsallocs[i] == 0);
         GLoaderState.tlsallocs[i] = (uint8) cb;
         GLoaderState.tlsmask |= mask;
         *p = GLoaderState.tlspage + i;
-        printf("allocated %u OS/2 TLS slot%s at %p\n", (uint) cb, (cb == 1) ? "" : "s", *p); fflush(stdout);
     } // else
         
     ungrabLock(&GMutexDosCalls);
@@ -3179,14 +2471,14 @@ APIRET DosFreeThreadLocalMemory(ULONG *p)
     grabLock(&GMutexDosCalls);
 
     if (GLoaderState.tlspage) {
-        const uint32 slot = (uint32) (p - GLoaderState.tlspage);
+        const uintptr_t distance = (uintptr_t) p - (uintptr_t) GLoaderState.tlspage;
+        const uint32 slot = distance < 128 && !(distance & 3) ? (uint32) distance / 4 : 32;
         if (slot < 32) {
             const uint8 slots = GLoaderState.tlsallocs[slot];
             if (slots > 0) {
                 const uint32 mask = ((uint32) (0xFF >> (8 - slots))) << slot;
                 assert((GLoaderState.tlsmask & mask) == mask);
                 GLoaderState.tlsmask &= ~mask;
-                printf("freed %u OS/2 TLS slot%s at %p\n", (uint) slots, (slots == 1) ? "" : "s", p); fflush(stdout);
                 GLoaderState.tlsallocs[slot] = 0;
                 retval = NO_ERROR;
             } // if
@@ -3208,7 +2500,7 @@ APIRET DosQueryFHState(HFILE hFile, PULONG pMode)
         pMode = &tmp;
 
     grabLock(&GMutexDosCalls);
-    if ((hFile < MaxHFiles) && (HFiles[hFile].fd != -1))
+    if ((hFile < MaxHFiles) && (HFiles[hFile].handle > 1))
         *pMode = HFiles[hFile].flags;
     else
         retval = ERROR_INVALID_HANDLE;
@@ -3268,7 +2560,7 @@ APIRET DosSetMaxFH(ULONG cFH)
     TRACE_NATIVE("DosSetMaxFH(%u)", (uint) cFH);
     grabLock(&GMutexDosCalls);
 
-    if (cFH < MaxHFiles) {
+    if (cFH < MaxHFiles || cFH > 0x10000u) {
         ungrabLock(&GMutexDosCalls);
         return ERROR_INVALID_PARAMETER;  // strictly speaking, we could shrink, but I'm not doing it.
     } // if
@@ -3283,7 +2575,7 @@ APIRET DosSetMaxFH(ULONG cFH)
         HFiles = info;
         info += MaxHFiles;
         for (ULONG i = MaxHFiles; i < cFH; i++, info++) {
-            info->fd = -1;
+            info->handle = 0;
             info->type = 0;
             info->attr = 0;
             info->flags = 0;
@@ -3383,19 +2675,8 @@ static APIRET DosSetCurrentDir_implementation(PSZ pszName)
     // generally we don't use the Unix process's cwd, but this might be
     //  helpful for subprocesses or native builds, but mostly, it checks
     //  all the stuff we care about (missing dir, not a dir, etc).
-    APIRET retval = NO_ERROR;
-    if (chdir(path) == -1) {
-        switch (errno) {
-            // OS/2 treats a chdir to a regular file as "Path not found", even though it _is_ found.  :/
-            case ENOTDIR: retval = ERROR_PATH_NOT_FOUND; break;
-            case ENOENT: retval = ERROR_PATH_NOT_FOUND; break;
-            case EACCES: retval = ERROR_ACCESS_DENIED; break;
-            case EIO: retval = ERROR_DRIVE_LOCKED; break;
-            case ENAMETOOLONG: retval = ERROR_FILENAME_EXCED_RANGE; break;
-            case ENOMEM: retval = ERROR_NOT_ENOUGH_MEMORY; break;
-            default: retval = ERROR_PATH_NOT_FOUND; break;
-        }
-    }
+    LxHostFsError changed = lx_host_path_chdir(path);
+    APIRET retval = changed == LX_HOST_FS_NOT_DIRECTORY || changed == LX_HOST_FS_MISSING ? ERROR_PATH_NOT_FOUND : fileError(changed);
 
     free(path);
 
@@ -3516,25 +2797,8 @@ static APIRET DosCreateDir_implementation(PSZ pszDirName, PEAOP2 peaop2)
     char *path = makeUnixPath(pszDirName, &err);
     if (!path) return (APIRET) err;
 
-    const int rc = mkdir(path, 0755);
-    free(path);
-    if (rc == -1) {
-        switch (errno) {
-            case EACCES: return ERROR_ACCESS_DENIED;
-            case EBUSY: return ERROR_ACCESS_DENIED;
-            case EISDIR: return ERROR_ACCESS_DENIED;
-            case ENAMETOOLONG: return ERROR_FILENAME_EXCED_RANGE;
-            case ENOENT: return ERROR_FILE_NOT_FOUND;  // !!! FIXME: could be PATH_NOT_FOUND too, depending on circumstances.
-            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
-            case EPERM: return ERROR_ACCESS_DENIED;
-            case EROFS: return ERROR_ACCESS_DENIED;
-            case ETXTBSY: return ERROR_ACCESS_DENIED;
-            default: return ERROR_INVALID_PARAMETER;  // !!! FIXME: debug logging about missin errno case.
-        }
-        __builtin_unreachable();
-    }
-
-    return NO_ERROR;
+    const APIRET result = fileError(lx_host_path_mkdir(path));
+    free(path); return result;
 } // DosCreateDir_implementation
 
 
@@ -3555,115 +2819,71 @@ ULONG _DosSelToFlat(void *ptr)
     return (ULONG) GLoaderState.convert1616to32((uint32) ptr);
 } // _DosSelToFlat
 
-// DosSelToFlat() passes its argument in %eax, so a little asm to bridge that...
-__asm__ (
-    // !!! FIXME: this needs to protect more registers.
-    ".globl DosSelToFlat  \n\t"
-    ".type	DosSelToFlat, @function \n\t"
-    "DosSelToFlat:  \n\t"
-    "    pushl %eax  \n\t"
-    "    call _DosSelToFlat  \n\t"
-    "    addl $4, %esp  \n\t"
-    "    ret  \n\t"
-	".size	_DosSelToFlat, .-_DosSelToFlat  \n\t"
-);
+
 #endif
 
-static inline int trySpinLock(int *lock)
+static int semaphoreWord(PHSEM16 sem, int exchange, uint32 value, uint32 *previous)
 {
-    return (__sync_lock_test_and_set(lock, 1) == 0);
-} // trySpinLock
-
+    if (!sem) return 0;
+    if (GLoaderState.execution) {
+        uint32 address;
+        return lx_execution_address(GLoaderState.execution, sem, 4, 3, &address) &&
+               lx_execution_atomic_u32(GLoaderState.execution, address, exchange, value, previous);
+    }
+    grabLock(&GMutexDosCalls);
+    *previous = lx_guest_load_u32(sem);
+    if (exchange) lx_guest_store_u32(sem, value);
+    ungrabLock(&GMutexDosCalls);
+    return 1;
+}
+static APIRET16 waitSemaphoreWord(PHSEM16 sem, LONG milliseconds, int request)
+{
+    const uint64 deadline = milliseconds < 0 ? UINT64_MAX :
+        lx_host_monotonic_us() + (uint64) milliseconds * 1000;
+    for (;;) {
+        uint32 previous;
+        if (!semaphoreWord(sem, request, 1, &previous)) return ERROR_INVALID_PARAMETER;
+        if (!previous) return NO_ERROR;
+        if (milliseconds == 0 || lx_host_monotonic_us() >= deadline) return ERROR_TIMEOUT;
+        lx_host_sleep_ms(1);
+    }
+}
 APIRET16 DosSemRequest(PHSEM16 sem, LONG ms)
 {
-    TRACE_NATIVE("DosSemRequest(%p, %u)", sem, (uint) ms);
-    if (ms == 0) {
-        return !trySpinLock(sem) ? ERROR_TIMEOUT : NO_ERROR;
-    } else if (ms < 0) {
-        while (!trySpinLock(sem))
-            usleep(1000);
-        return NO_ERROR;
-    }
-
-    struct timespec ts;
-
-    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-    const uint64 end = (((uint64) ts.tv_sec) * 1000) + (((uint64) ts.tv_nsec) / 1000000) + ms;
-
-    while (1) {
-        if (trySpinLock(sem))
-            return NO_ERROR;
-        clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-        const uint64 now = (((uint64) ts.tv_sec) * 1000) + (((uint64) ts.tv_nsec) / 1000000);
-        if (now >= end)
-            return ERROR_TIMEOUT;
-        usleep(1000);
-    } // while
-
-    return NO_ERROR;
-} // DosSemRequest
-
+    TRACE_NATIVE("DosSemRequest(%p, %d)", sem, (int) ms);
+    return waitSemaphoreWord(sem, ms, 1);
+}
 APIRET16 DosSemClear(PHSEM16 sem)
 {
     TRACE_NATIVE("DosSemClear(%p)", sem);
-    __sync_lock_release(sem);
-    return NO_ERROR;
-} // DosSemClear
-
+    uint32 previous;
+    return semaphoreWord(sem, 1, 0, &previous) ? NO_ERROR : ERROR_INVALID_PARAMETER;
+}
 APIRET16 DosSemWait(PHSEM16 sem, LONG ms)
 {
-    TRACE_NATIVE("DosSemWait(%p, %u)", sem, (uint) ms);
-    if (ms == 0) {
-        return (__atomic_load_n(sem, __ATOMIC_ACQUIRE) == 0) ? NO_ERROR : ERROR_TIMEOUT;
-    } else if (ms < 0) {
-        while (!(__atomic_load_n(sem, __ATOMIC_ACQUIRE) == 0))
-            usleep(1000);
-        return NO_ERROR;
-    }
-
-    struct timespec ts;
-
-    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-    const uint64 end = (((uint64) ts.tv_sec) * 1000) + (((uint64) ts.tv_nsec) / 1000000) + ms;
-
-    while (1) {
-        if ((__atomic_load_n(sem, __ATOMIC_ACQUIRE) == 0))
-            return NO_ERROR;
-        clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-        const uint64 now = (((uint64) ts.tv_sec) * 1000) + (((uint64) ts.tv_nsec) / 1000000);
-        if (now >= end)
-            return ERROR_TIMEOUT;
-        usleep(1000);
-    } // while
-
-    return NO_ERROR;
-} // DosSemWait
-
+    TRACE_NATIVE("DosSemWait(%p, %d)", sem, (int) ms);
+    return waitSemaphoreWord(sem, ms, 0);
+}
 APIRET16 DosSemSet(PHSEM16 sem)
 {
     TRACE_NATIVE("DosSemSet(%p)", sem);
-    __sync_lock_test_and_set(sem, 1);
-    return NO_ERROR;
-} // DosSemSet
+    uint32 previous;
+    return semaphoreWord(sem, 1, 1, &previous) ? NO_ERROR : ERROR_INVALID_PARAMETER;
+}
 
-APIRET DosCloseMutexSem(HMTX hmtx)
+static int mutexCanClose(void *value) { return !lx_host_mutex_busy(value); }
+APIRET DosCloseMutexSem(HMTX handle)
 {
-    TRACE_NATIVE("DosCloseMutexSem(%u)", (uint) hmtx);
-
-    if (hmtx) {
-        pthread_mutex_t *mutex = (pthread_mutex_t *) hmtx;
-        unregisterNamedSem(mutex);
-        const int rc = pthread_mutex_destroy(mutex);
-        if (rc == EBUSY) {
-            return ERROR_SEM_BUSY;
-        } else if (rc == 0) {
-            free(mutex);
-            return NO_ERROR;
-        } // else if
-    } // if
-
-    return ERROR_INVALID_HANDLE;
-} // DosCloseMutexSem
+    TRACE_NATIVE("DosCloseMutexSem(%u)", (uint) handle);
+    LxHandleBorrow object;
+    if (!lx_handle_borrow(handle, LX_HANDLE_MUTEX, &object)) return ERROR_INVALID_HANDLE;
+    grabLock(&GMutexDosCalls);
+    int closed = lx_handle_close_guarded(handle, LX_HANDLE_MUTEX, 1, mutexCanClose);
+    if (closed == 1) retireSemaphoreName(object.resource, LX_HANDLE_MUTEX);
+    ungrabLock(&GMutexDosCalls);
+    lx_handle_release(&object);
+    return closed == 1 ? NO_ERROR : closed == -1 ? ERROR_SEM_BUSY : ERROR_INVALID_HANDLE;
+}
 
 APIRET DosSetProcessCp(ULONG cp)
 {
@@ -3681,52 +2901,39 @@ APIRET DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal, ULONG ulFSAInfoLevel
     return ERROR_INVALID_FUNCTION;
 } // DosQueryFSAttach
 
-APIRET DosSetFileSize(HFILE h, ULONG len)
+APIRET DosSetFileSize(HFILE id, ULONG size)
 {
-    TRACE_NATIVE("DosSetFileSize(%u, %u)", (unsigned int) h, (unsigned int) len);
-    const int fd = getHFileUnixDescriptor(h);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-
-    if (ftruncate(fd, len) == -1) {
-        FIXME("Set a better error based on errno");
-        return ERROR_DISK_FULL;
-    }
-    return NO_ERROR;
-} // DosSetFileSize
-
-static APIRET DosDupHandle_implementation(HFILE hFile, PHFILE pHfile)
+    LxHandleBorrow file;
+    if (!borrowFile(id, &file)) return ERROR_INVALID_HANDLE;
+    const LxHostFsError error = lx_host_file_resize(file.resource, size);
+    lx_handle_release(&file); return fileError(error);
+}
+static APIRET DosDupHandle_implementation(HFILE source, PHFILE output)
 {
-    if (*pHfile == -1) {
-        HFileInfo *info = HFiles;
-        uint32 i;
-
-        if (!grabLock(&GMutexDosCalls))
-            return ERROR_SYS_INTERNAL;
-
-        for (i = 0; i < MaxHFiles; i++, info++) {
-            if (info->fd == -1) {  // available?
-                    info->fd = -2;
-                    break;
-            } // if
-        } // for
-
-        ungrabLock(&GMutexDosCalls);
-
-        if (i == MaxHFiles) {
-            return ERROR_TOO_MANY_OPEN_FILES;
+    if (!output) return ERROR_INVALID_PARAMETER;
+    grabLock(&GMutexDosCalls);
+    APIRET result = NO_ERROR; HFILE target = *output;
+    LxHandleBorrow original = {0};
+    if (source >= MaxHFiles || HFiles[source].handle <= 1 ||
+        !lx_handle_borrow(HFiles[source].handle, LX_HANDLE_FILE, &original)) result = ERROR_INVALID_HANDLE;
+    else {
+        if (target == (HFILE) -1) {
+            for (target = 0; target < MaxHFiles && HFiles[target].handle; target++) {}
+            if (target == MaxHFiles) result = ERROR_TOO_MANY_OPEN_FILES;
+        } else if (target >= MaxHFiles || HFiles[target].handle) result = ERROR_INVALID_TARGET_HANDLE;
+        if (!result) {
+            LxHostFsError error;
+            LxHostFile *copy = lx_host_file_duplicate(original.resource, &error);
+            if (!copy) result = fileError(error);
+            else {
+                HFileInfo info;
+                if (!initFileInfo(copy, &info, HFiles[source].flags)) result = ERROR_NOT_ENOUGH_MEMORY;
+                else { HFiles[target] = info; *output = target; }
+            }
         }
-        memcpy(&HFiles[i], &HFiles[hFile], sizeof(HFileInfo));
-        HFiles[i].fd = dup(HFiles[hFile].fd);
-        *pHfile = i;
-    } else {
-        if (HFiles[*pHfile].fd != -1)
-            return ERROR_INVALID_TARGET_HANDLE;
-        memcpy(&HFiles[*pHfile], &HFiles[hFile], sizeof(HFileInfo));
-        HFiles[*pHfile].fd = dup(HFiles[hFile].fd);
     }
-    return NO_ERROR;
-} // DosDupHandle_implementation
+    lx_handle_release(&original); ungrabLock(&GMutexDosCalls); return result;
+}
 
 APIRET DosDupHandle(HFILE hFile, PHFILE pHfile)
 {
@@ -3829,7 +3036,7 @@ static APIRET DosBeep_implementation(ULONG freq, ULONG duration)
 
     FIXME("should be atomic");
     while (*((volatile ULONG *) &dos_beep_info.next_freq) != 0) {
-        usleep(1000);
+        lx_host_sleep_ms(1);
     }
 
     dos_beep_info.next_duration = mix_duration;
@@ -3842,7 +3049,7 @@ static APIRET DosBeep_implementation(ULONG freq, ULONG duration)
     // If less than 50 milliseconds, don't sleep at all; if they call DosBeep
     //  again, it'll block until it can queue the command anyhow.
     if (duration > 55) {
-        usleep((duration-55) * 1000);
+        lx_host_sleep_ms(duration - 55);
     }
 
     const int rc = GLoaderState.registerAudioGenerator(DosBeepGenerator, &dos_beep_info, 1);
@@ -3861,31 +3068,28 @@ APIRET DosBeep(ULONG freq, ULONG duration)
     return DosBeep_implementation(freq, duration);
 } // DosBeep
 
-static pthread_once_t GCritSecOnce = PTHREAD_ONCE_INIT;
-static pthread_mutex_t GCritSec;
+static LxHostOnce GCritSecOnce = LX_HOST_ONCE_INIT;
+static LxHostMutex *GCritSec;
 
 static void initCritSec(void)
 {
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-    pthread_mutex_init(&GCritSec, &attr);
-    pthread_mutexattr_destroy(&attr);
+    GCritSec = lx_host_mutex_create(1, 0);
+    if (!GCritSec) abort();
 }
 
 APIRET16 Dos16EnterCritSec(VOID)
 {
     TRACE_NATIVE("Dos16EnterCritSec()");
-    pthread_once(&GCritSecOnce, initCritSec);
-    pthread_mutex_lock(&GCritSec);
+    lx_host_once(&GCritSecOnce, initCritSec);
+    lx_host_mutex_lock(GCritSec, UINT32_MAX);
     return NO_ERROR;
 } // Dos16EnterCritSec
 
 APIRET16 Dos16ExitCritSec(VOID)
 {
     TRACE_NATIVE("Dos16ExitCritSec()");
-    pthread_once(&GCritSecOnce, initCritSec);
-    pthread_mutex_unlock(&GCritSec);
+    lx_host_once(&GCritSecOnce, initCritSec);
+    lx_host_mutex_unlock(GCritSec);
     return NO_ERROR;
 } // Dos16ExitCritSec
 
@@ -3956,12 +3160,44 @@ APIRET16 Dos16DevIOCtl(PVOID pdata, PVOID pparms, USHORT fun, USHORT category, U
     return ERROR_INVALID_FUNCTION;
 } // Dos16DevIOCtl
 
-APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buf, USHORT cb)
+static void storeDateTime16(uint8 *data, FDATE date, FTIME time)
 {
-    TRACE_NATIVE("Dos16QFileInfo(%u, %u, %p, %u)", (uint) hf,
-                 (uint) level, buf, (uint) cb);
-    return (APIRET16) DosQueryFileInfo(hf, (ULONG) level, buf, (ULONG) cb);
-} // Dos16QFileInfo
+    lx_guest_store_u16(data, date.day | date.month << 5 | date.year << 9);
+    lx_guest_store_u16(data + 2, time.twosecs | time.minutes << 5 | time.hours << 11);
+}
+APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
+{
+    const uint32 size = level == FIL_STANDARD ? 22 : level == FIL_QUERYEASIZE ? 26 : 0;
+    if (!size) return ERROR_INVALID_LEVEL;
+    if (capacity < size) return ERROR_BUFFER_OVERFLOW;
+    uint32 address;
+    if (!lx_execution_address(GLoaderState.execution, buffer, size, LX_GUEST_WRITE, &address))
+        return ERROR_INVALID_PARAMETER;
+    FILESTATUS4 value = {0};
+    const APIRET result = DosQueryFileInfo(hf, level, &value, sizeof value);
+    if (!result) {
+        uint8 *p = buffer;
+        storeDateTime16(p, value.fdateCreation, value.ftimeCreation);
+        storeDateTime16(p + 4, value.fdateLastAccess, value.ftimeLastAccess);
+        storeDateTime16(p + 8, value.fdateLastWrite, value.ftimeLastWrite);
+        lx_guest_store_u32(p + 12, value.cbFile); lx_guest_store_u32(p + 16, value.cbFileAlloc);
+        lx_guest_store_u16(p + 20, value.attrFile);
+        if (level == FIL_QUERYEASIZE) lx_guest_store_u32(p + 22, value.cbList);
+    }
+    return result;
+}
+APIRET16 Dos16SetFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
+{
+    if (level != FIL_STANDARD) return ERROR_INVALID_LEVEL;
+    if (capacity < 22) return ERROR_BUFFER_OVERFLOW;
+    uint32 address;
+    if (!lx_execution_address(GLoaderState.execution, buffer, 22, LX_GUEST_READ, &address))
+        return ERROR_INVALID_PARAMETER;
+    FILESTATUS3 value = {0};
+    /* The current file-info setter applies the permission attribute. */
+    value.attrFile = lx_guest_load_u16((uint8 *) buffer + 20);
+    return DosSetFileInfo(hf, level, &value, sizeof value);
+}
 
 APIRET16 Dos16SelectDisk(USHORT drive)
 {
@@ -3981,15 +3217,9 @@ APIRET16 Dos16DevConfig(PVOID pdevinfo, USHORT item, USHORT reserved)
     return (APIRET16) DosDevConfig(pdevinfo, (ULONG) item);
 } // Dos16DevConfig
 
-APIRET16 Dos16NewSize(USHORT hf, ULONG size)
+APIRET16 Dos16NewSize(USHORT handle, ULONG size)
 {
-    TRACE_NATIVE("Dos16NewSize(%u, %u)", (uint) hf, (uint) size);
-    const int fd = getHFileUnixDescriptor(hf);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-    if (ftruncate(fd, (off_t) size) == -1)
-        return ERROR_ACCESS_DENIED;
-    return NO_ERROR;
+    return DosSetFileSize(handle, size);
 } // Dos16NewSize
 
 APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
@@ -4006,51 +3236,23 @@ APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
 typedef struct NeThreadStart
 {
     uint32 entry, stack;
-    uint8 *code;
-    uint16 selector;
-    uint16 tid;
+    void *invocation;
+    uint16 tid, tib_selector;
 } NeThreadStart;
 
-static void *neThreadEntry(void *arg)
+static void neThreadCleanup(void *argument)
 {
-    NeThreadStart *start = (NeThreadStart *) arg;
-    uint8 tibspace[LXTIBSIZE] = { 0 };
-    uint8 *p = start->code;
-    const uint16 guest_ss = start->stack >> 16, guest_sp = start->stack & 0xffff;
-    const uint16 guest_cs = start->entry >> 16, guest_ip = start->entry & 0xffff;
-    const uint16 code_selector = (start->selector << 3) | 7;
-    const uint32 saved_sp = (uint32) (start->code + 0x100);
-    GLoaderState.initOs2Tib(tibspace, &arg, 65536, start->tid);
-    const uint16 tib_selector = GLoaderState.setOs2Tib(tibspace);
-
-    /* Save the host frame, switch to the guest stack and call its far entry. */
-    *p++ = 0x60;  /* pushad */
-    *p++ = 0x89; *p++ = 0x25; memcpy(p, &saved_sp, 4); p += 4;
-    *p++ = 0x66; *p++ = 0xea;
-    uint16 off = (uint16) ((p - start->code) + 4);
-    memcpy(p, &off, 2); p += 2; memcpy(p, &code_selector, 2); p += 2;
-    *p++ = 0xb8; memcpy(p, &guest_ss, 2); p += 2;
-    *p++ = 0x8e; *p++ = 0xd0;
-    *p++ = 0xbc; memcpy(p, &guest_sp, 2); p += 2;
-    *p++ = 0x8e; *p++ = 0xd8;
-    *p++ = 0x8e; *p++ = 0xc0;
-    *p++ = 0x9a; memcpy(p, &guest_ip, 2); p += 2; memcpy(p, &guest_cs, 2); p += 2;
-    *p++ = 0x66; *p++ = 0xea;
-    const uint32 flat = (uint32) (p + 6);
-    memcpy(p, &flat, 4); p += 4; memcpy(p, &GLoaderState.original_cs, 2); p += 2;
-    *p++ = 0x66; *p++ = 0xb8; memcpy(p, &GLoaderState.original_ss, 2); p += 2;
-    *p++ = 0x8e; *p++ = 0xd0;
-    *p++ = 0x66; *p++ = 0xb8; memcpy(p, &GLoaderState.original_ds, 2); p += 2;
-    *p++ = 0x8e; *p++ = 0xd8;
-    *p++ = 0x66; *p++ = 0xb8; memcpy(p, &GLoaderState.original_es, 2); p += 2;
-    *p++ = 0x8e; *p++ = 0xc0;
-    *p++ = 0x8b; *p++ = 0x25; memcpy(p, &saved_sp, 4); p += 4;
-    *p++ = 0x61; *p++ = 0xc3;  /* popad; ret */
-    ((void (*)(void)) start->code)();
-    GLoaderState.deinitOs2Tib(tib_selector);
-    GLoaderState.freeSegment(start->selector);
-    free(start);
-    return NULL;
+    NeThreadStart *start = argument;
+    GLoaderState.deinitOs2Tib(start->tib_selector);
+    lx_execution_destroy_thread16(GLoaderState.execution, start->invocation); free(start);
+}
+static void *neThreadEntry(void *argument)
+{
+    NeThreadStart *start = argument;
+    uint8 tibspace[LXTIBSIZE] = {0};
+    GLoaderState.initOs2Tib(tibspace, GLoaderState.convert1616to32(start->stack), 65536, start->tid);
+    start->tib_selector = GLoaderState.setOs2Tib(tibspace);
+    lx_execution_thread16(GLoaderState.execution, start->invocation); return NULL;
 }
 
 APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
@@ -4061,8 +3263,8 @@ APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
     NeThreadStart *start = calloc(1, sizeof (*start));
     if (!start)
         return ERROR_NOT_ENOUGH_MEMORY;
-    static uint32 next_tid = 1;
-    const uint32 tid = __sync_add_and_fetch(&next_tid, 1);
+    grabLock(&GMutexDosCalls);
+    const uint32 tid = GNextThreadId++; ungrabLock(&GMutexDosCalls);
     if (tid > 0xffff) {
         free(start);
         return ERROR_MAX_THRDS_REACHED;
@@ -4070,21 +3272,21 @@ APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
     start->tid = (uint16) tid;
     start->entry = GLoaderState.convert32to1616(pfnFun);
     start->stack = GLoaderState.convert32to1616(pbStack);
-    start->code = GLoaderState.allocSegment(&start->selector, 1);
-    if (!start->entry || !start->stack || !start->code) {
-        if (start->code)
-            GLoaderState.freeSegment(start->selector);
+    if (start->entry && start->stack)
+        start->invocation = lx_execution_prepare_thread16(GLoaderState.execution, start->entry, start->stack);
+    if (!start->invocation) {
         free(start);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
-    pthread_t thread;
+    LxHostThread *thread;
     __atomic_store_n(&GLoaderState.ne_threads_started, 1, __ATOMIC_RELEASE);
-    if (pthread_create(&thread, NULL, neThreadEntry, start) != 0) {
-        GLoaderState.freeSegment(start->selector);
+    thread = lx_host_thread_create(neThreadEntry, start, neThreadCleanup);
+    if (!thread) {
+        lx_execution_destroy_thread16(GLoaderState.execution, start->invocation);
         free(start);
         return ERROR_MAX_THRDS_REACHED;
     }
-    pthread_detach(thread);
+    lx_host_thread_detach(thread);
     *(uint16 *) pTid = (uint16) tid;
     return NO_ERROR;
 } // Dos16CreateThread
@@ -4132,20 +3334,6 @@ VOID Dos16Exit(USHORT action, USHORT exitcode)
 
 APIRET16 Dos16QHandType(USHORT handle, PUSHORT ptype, PUSHORT pflags)
 {
-    if (getenv("TWOINE_FIX_FOPEN") && (handle > 2) && GLoaderState.main_module) {
-        LxModule *mod = GLoaderState.main_module;
-        const uint16 ads = mod->header.ne.auto_data_segment;
-        if (ads) {
-            uint8 *base = (uint8 *) mod->mmaps[ads - 1].addr;
-            for (uint32 off = 0; off + 8 < 0x10000; off += 2) {
-                uint16 *p = (uint16 *) (base + off);
-                if ((p[1] == handle) && (p[3] < 0x1000) && (p[2] < 0x10000)) {
-                    p[2] = 0;  // _ptr
-                    p[3] = 0;  // _cnt
-                } // if
-            } // for
-        } // if
-    } // if
     TRACE_NATIVE("Dos16QHandType(%u, %p, %p)", (uint) handle, ptype, pflags);
     ULONG ultype, ulattr;
     const APIRET rc = DosQueryHType_implementation((HFILE) handle, &ultype, &ulattr);
@@ -4270,7 +3458,7 @@ APIRET16 Dos16SetVec(USHORT vecnum, PFN routine, PVOID prevaddress)
 {
    TRACE_NATIVE("Dos16SetVec(%u, %p, %p)", (uint) vecnum, routine, prevaddress);
    FIXME("do something");
-   if (prevaddress) *(PFN *)prevaddress = 0;
+   if (prevaddress) lx_guest_store_u32(prevaddress, 0);
    return NO_ERROR;
 } 
 
@@ -4278,7 +3466,7 @@ APIRET16 Dos16SetSigHandler(PFN routine, PVOID prevaddress, PUSHORT prevaction, 
 {
    TRACE_NATIVE("Dos16SetSigHandler(%p, %p, %p, %u, %u)", routine, prevaddress, prevaction, action, signumber);
    FIXME("do something");
-   if (prevaddress) *(PFN *)prevaddress = 0;
+   if (prevaddress) lx_guest_store_u32(prevaddress, 0);
    if (prevaction) *prevaction = 0;
    return NO_ERROR;
 } 
@@ -4324,14 +3512,11 @@ APIRET16 Dos16HoldSignal(USHORT action)
 APIRET16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf, USHORT infobufsize)
 {
     TRACE_NATIVE("Dos16QFsInfo(%d, %d, %p, %d)", drivenum, fslevel, infobuf, infobufsize);
-    const char label[] = "linux";
-    if (fslevel == 1)
-        FIXME("fslevel 1");
-    else if (fslevel == 2)
-    {
-        infobuf[4] = sizeof(label);
-        strcpy((char *)&infobuf[5], label);
-    }
+    const char label[] = "host";
+    if (fslevel != 2) return ERROR_INVALID_LEVEL;
+    if (infobufsize < 5 + sizeof label) return ERROR_BUFFER_OVERFLOW;
+    memset(infobuf, 0, 4); infobuf[4] = sizeof label - 1;
+    memcpy(infobuf + 5, label, sizeof label);
     return NO_ERROR;
 }
 
@@ -4341,13 +3526,10 @@ APIRET16 Dos16QFileMode(PCHAR filepath, PUSHORT attr, ULONG res)
     APIRET err;
     char *path = makeUnixPath(filepath, &err);
     if (!path) return err;
-    struct stat sbuf;
-    int ret = stat(path, &sbuf);
-    free(path);
-    if (ret) return ERROR_FILE_NOT_FOUND;
-    *attr = 0;
-    if (S_ISDIR(sbuf.st_mode))
-        *attr |= (1 << 4);
+    LxHostFileInfo info;
+    const LxHostFsError error = lx_host_path_info(path, &info); free(path);
+    if (error) return fileError(error);
+    if (attr) *attr = (info.kind == LX_HOST_FILE_DIRECTORY ? FILE_DIRECTORY : 0) | (info.readonly ? FILE_READONLY : 0);
     return NO_ERROR;
 }
 
@@ -4368,25 +3550,25 @@ APIRET16 Dos16Open(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction, ULONG cbFile
 
 APIRET16 Dos16FindFirst(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, PVOID pfindbuf, USHORT cbBuf, PUSHORT pcFileNames, ULONG res)
 {
-    if (!hdir16)
-        hdir16 = calloc(10, sizeof(HDIR)); // 10 dir handles
-    ULONG hdir32 = *phdir;
-    ULONG cfn = *pcFileNames;
-    APIRET ret = DosFindFirst(pszFileSpec, &hdir32, flAttribute, pfindbuf, cbBuf, &cfn, -1);
-    if (ret && (ret != ERROR_EAS_DIDNT_FIT))
-        return ret;
-    int i;
-    for (i = 0; i < 10; i++)
-    {
-        if(!hdir16[i])
-            break;
+    if (!phdir || !pcFileNames) return ERROR_INVALID_PARAMETER;
+    grabLock(&GMutexDir16);
+    USHORT id = (USHORT) *phdir;
+    ULONG handle;
+    if (id == 0xffff) {
+        for (id = 2; id < 0xffff && hdir16[id]; id++) {}
+        if (id == 0xffff) { ungrabLock(&GMutexDir16); return ERROR_NO_MORE_FILES; }
+        handle = HDIR_CREATE;
+    } else if (id == HDIR_SYSTEM) handle = HDIR_SYSTEM;
+    else if (!hdir16[id]) { ungrabLock(&GMutexDir16); return ERROR_INVALID_HANDLE; }
+    else handle = hdir16[id];
+    ULONG count = *pcFileNames;
+    APIRET result = DosFindFirst(pszFileSpec, &handle, flAttribute, pfindbuf, cbBuf, &count, -1);
+    if (!result || result == ERROR_EAS_DIDNT_FIT) {
+        if (id != HDIR_SYSTEM) hdir16[id] = handle;
+        *phdir = (SHORT) id;
     }
-    if (i == 10)
-        return ERROR_NO_MORE_FILES;
-    hdir16[i] = hdir32;
-    *phdir = i;
-    *pcFileNames = cfn;
-    return ret;
+    *pcFileNames = (USHORT) count;
+    ungrabLock(&GMutexDir16); return (APIRET16) result;
 }
 
 APIRET16 Dos16ChDir(PSZ pszDir, ULONG res)
@@ -4406,20 +3588,22 @@ APIRET16 Dos16Close(USHORT hFile)
 
 APIRET16 Dos16FindNext(USHORT hDir, PVOID pfindbuf, USHORT cbfindbuf, PUSHORT pcFilenames)
 {
-    APIRET ret;
-    ULONG pcfn = *pcFilenames;
-    ret = DosFindNext(hdir16[hDir], pfindbuf, cbfindbuf, &pcfn);
-    *pcFilenames = pcfn;
-    return ret;
+    if (!pcFilenames) return ERROR_INVALID_PARAMETER;
+    grabLock(&GMutexDir16);
+    ULONG handle = hDir == HDIR_SYSTEM ? HDIR_SYSTEM : hdir16[hDir];
+    ULONG count = *pcFilenames;
+    APIRET result = handle ? DosFindNext(handle, pfindbuf, cbfindbuf, &count) : ERROR_INVALID_HANDLE;
+    *pcFilenames = (USHORT) count;
+    ungrabLock(&GMutexDir16); return (APIRET16) result;
 }
 
 APIRET16 Dos16FindClose(USHORT hDir)
 {
-    if (hDir > 10)
-        return ERROR_INVALID_HANDLE;
-    HDIR hdir32 = hdir16[hDir];
-    hdir16[hDir] = 0;
-    return DosFindClose(hdir32);
+    grabLock(&GMutexDir16);
+    ULONG handle = hDir == HDIR_SYSTEM ? HDIR_SYSTEM : hdir16[hDir];
+    APIRET result = handle ? DosFindClose(handle) : ERROR_INVALID_HANDLE;
+    if (!result && hDir != HDIR_SYSTEM) hdir16[hDir] = 0;
+    ungrabLock(&GMutexDir16); return (APIRET16) result;
 }
  
 APIRET16 Dos16Delete(PSZ pszFile, ULONG res)
@@ -4477,12 +3661,6 @@ APIRET16 Dos16ChgFilePtr(USHORT handle, LONG distance, USHORT whence, PULONG new
     TRACE_RET("Dos16ChgFilePtr(%u, %d, %u) -> %u off=%u", (uint) handle,
               (int) distance, (uint) whence, (uint) ret,
               (uint) (newoffset ? *newoffset : 0));
-    if ((ret == NO_ERROR) && (distance == 0) && (whence == 2)) {
-        // The Microsoft 16-bit C runtime uses seek-to-end as a size query
-        //  and then reads from the handle without an explicit rewind.
-        ULONG dummy = 0;
-        DosSetFilePtr_implementation(handle, 0, 0, &dummy);
-    } // if
     return ret;
 } // Dos16ChgFilePtr
 
@@ -4509,30 +3687,33 @@ APIRET16 Dos16MkDir2(PSZ pszDirName, PEAOP2 peaop2)  // !!! FIXME: check this.
 LX_NATIVE_CONSTRUCTOR(doscalls)
 {
     GLoaderState.dosExit = DosExit;
+    GLoaderState.writeFile = DosWrite;
 
-    if (pthread_mutex_init(&GMutexDosCalls, NULL) == -1) {
-        fprintf(stderr, "pthread_mutex_init failed!\n");
+    if (!(GMutexDosCalls = lx_host_mutex_create(0, 0))) {
+        fprintf(stderr, "Host mutex allocation failed!\n");
         abort();
     } // if
 
-    if (pthread_mutex_init(&GMutexDosBeep, NULL) == -1) {
-        pthread_mutex_destroy(&GMutexDosCalls);
-        fprintf(stderr, "pthread_mutex_init failed!\n");
+    if (!(GMutexDosBeep = lx_host_mutex_create(0, 0))) {
+        lx_host_mutex_destroy(GMutexDosCalls);
+        fprintf(stderr, "Host mutex allocation failed!\n");
         abort();
     } // if
+
+    if (!(GMutexDir16 = lx_host_mutex_create(0, 0))) abort();
 
     MaxHFiles = 20;  // seems to be OS/2's default.
     HFiles = (HFileInfo *) malloc(sizeof (HFileInfo) * MaxHFiles);
     if (!HFiles) {
-        pthread_mutex_destroy(&GMutexDosCalls);
-        pthread_mutex_destroy(&GMutexDosBeep);
+        lx_host_mutex_destroy(GMutexDosCalls);
+        lx_host_mutex_destroy(GMutexDosBeep);
         fprintf(stderr, "Out of memory!\n");
         abort();
     } // if
 
     HFileInfo *info = HFiles;
     for (uint32 i = 0; i < MaxHFiles; i++, info++) {
-        info->fd = -1;
+        info->handle = 0;
         info->type = 0;
         info->attr = 0;
         info->flags = 0;
@@ -4550,7 +3731,7 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
 
     FIXME("We can iterate /proc/self/fd to get all currently-open files");
     for (int i = 0; i <= 2; i++) {
-        initHFileInfoFromUnixFd(i, &HFiles[i]);
+        initFileInfo(lx_host_file_standard(i), &HFiles[i], 0);
     } // for
 
     FIXME("Maybe set this up in lx_loader and make it NULL in lib2ine");
@@ -4558,25 +3739,21 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     ginfo = (GINFOSEG *) GLoaderState.allocSegment(&ginfosel, 0);
     linfo = (LINFOSEG *) GLoaderState.allocSegment(&linfosel, 0);
     if ((!ginfo) || (!linfo)) {
-        pthread_mutex_destroy(&GMutexDosCalls);
-        pthread_mutex_destroy(&GMutexDosBeep);
+        lx_host_mutex_destroy(GMutexDosCalls);
+        lx_host_mutex_destroy(GMutexDosBeep);
         fprintf(stderr, "Failed to allocate info segments!\n");
         abort();
     }
 
     memset(ginfo, '\0', sizeof (GINFOSEG));
     memset(linfo, '\0', sizeof (LINFOSEG));
-    ginfo->time = time(NULL);
-    struct tm *gtime = gmtime((time_t *)&ginfo->time);
-    ginfo->hour = gtime->tm_hour;
-    ginfo->minutes = gtime->tm_min;
-    ginfo->seconds = gtime->tm_sec;
-    ginfo->timezone = 0;
-    ginfo->cusecTimerInterval = 100;
-    ginfo->day = gtime->tm_mday;
-    ginfo->month = gtime->tm_mon;
-    ginfo->year = gtime->tm_year;
-    ginfo->weekday = gtime->tm_wday;
+    const uint64 now = lx_host_realtime_us() / 1000000;
+    LxHostCalendar value = {0}; lx_host_calendar((int64_t) now, 1, &value);
+    ginfo->time = (uint32) now;
+    ginfo->hour = value.hour; ginfo->minutes = value.minute; ginfo->seconds = value.second;
+    ginfo->timezone = 0; ginfo->cusecTimerInterval = 100;
+    ginfo->day = value.day; ginfo->month = value.month;
+    ginfo->year = value.year; ginfo->weekday = value.weekday;
     ginfo->uchMajorVersion = 20; FIXME("are these backwards?");
     ginfo->uchMinorVersion = 40; FIXME("are these backwards?");
     ginfo->sgCurrent = 1;
@@ -4628,22 +3805,9 @@ APIRET DosDeleteDir(PSZ pszDir)
     if (!unixpath)
         return err;
 
-    const int rc = rmdir(unixpath);
-    const int saved_errno = errno;
+    const LxHostFsError error = lx_host_path_remove(unixpath, 1);
     free(unixpath);
-    if (rc == -1) {
-        switch (saved_errno) {
-            case EACCES: return ERROR_ACCESS_DENIED;
-            case EBUSY: return ERROR_ACCESS_DENIED;
-            case ENOENT: return ERROR_PATH_NOT_FOUND;
-            case ENOTDIR: return ERROR_PATH_NOT_FOUND;
-            case ENOTEMPTY: return ERROR_DIR_NOT_EMPTY;
-            case EROFS: return ERROR_ACCESS_DENIED;
-            default: return ERROR_ACCESS_DENIED;
-        } // switch
-    } // if
-
-    return NO_ERROR;
+    return error == LX_HOST_FS_MISSING ? ERROR_PATH_NOT_FOUND : fileError(error);
 } // DosDeleteDir
 
 // DosCopy control bits (OS/2 Toolkit bsedos.h).
@@ -4668,49 +3832,35 @@ APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
         return err;
     } // if
 
-    if ((!(option & (DCPY_EXISTING | DCPY_APPEND))) &&
-        (access(newpath, F_OK) == 0)) {
-        free(newpath);
-        free(oldpath);
-        return ERROR_FILE_EXISTS;
-    } // if
-
-    APIRET retval = NO_ERROR;
-    int in = open(oldpath, O_RDONLY);
-    if (in == -1) {
-        retval = ERROR_FILE_NOT_FOUND;
-    } else {
-        int flags = O_WRONLY | O_CREAT;
-        flags |= (option & DCPY_APPEND) ? O_APPEND : O_TRUNC;
-        int out = open(newpath, flags, 0666);
-        if (out == -1) {
-            retval = ERROR_ACCESS_DENIED;
-        } else {
-            char buf[16384];
-            for (;;) {
-                const ssize_t br = read(in, buf, sizeof (buf));
-                if (br < 0) {
-                    retval = ERROR_READ_FAULT;
-                    break;
-                } else if (br == 0) {
-                    break;
-                } // else if
-                ssize_t written = 0;
-                while (written < br) {
-                    const ssize_t bw = write(out, buf + written, br - written);
-                    if (bw <= 0) {
-                        retval = ERROR_DISK_FULL;
-                        break;
-                    } // if
-                    written += bw;
-                } // while
-                if (retval != NO_ERROR)
-                    break;
-            } // for
-            close(out);
-        } // else
-        close(in);
-    } // else
+    unsigned flags = LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE;
+    if (!(option & (DCPY_EXISTING | DCPY_APPEND))) flags |= LX_HOST_FILE_EXCLUSIVE;
+    if (!(option & DCPY_APPEND)) flags |= LX_HOST_FILE_TRUNCATE;
+    LxHostFsError error;
+    LxHostFile *input = lx_host_file_open(oldpath, LX_HOST_FILE_READ, 0, &error);
+    APIRET retval = input ? NO_ERROR : fileError(error);
+    if (input) {
+        LxHostFile *output = lx_host_file_open(newpath, flags, 0, &error);
+        if (!output) retval = fileError(error);
+        else {
+            if (option & DCPY_APPEND) retval = fileError(lx_host_file_seek(output, 0, 2, NULL));
+            char data[16384];
+            while (!retval) {
+                size_t count;
+                error = lx_host_file_read(input, data, sizeof data, &count);
+                if (error) { retval = fileError(error); break; }
+                if (!count) break;
+                size_t written = 0;
+                while (written < count) {
+                    size_t actual;
+                    error = lx_host_file_write(output, data + written, count - written, &actual);
+                    if (error || !actual) { retval = error ? fileError(error) : ERROR_DISK_FULL; break; }
+                    written += actual;
+                }
+            }
+            lx_host_file_close(output);
+        }
+        lx_host_file_close(input);
+    }
 
     free(newpath);
     free(oldpath);
@@ -4735,27 +3885,12 @@ APIRET DosMove(PSZ pszOld, PSZ pszNew)
         return err;
     } // if
 
-    APIRET retval = NO_ERROR;
-    if (rename(oldpath, newpath) == -1) {
-        switch (errno) {
-            case EACCES: retval = ERROR_ACCESS_DENIED; break;
-            case EEXIST: retval = ERROR_FILE_EXISTS; break;
-            case ENOENT: retval = ERROR_FILE_NOT_FOUND; break;
-            case EXDEV: retval = ERROR_NOT_SAME_DEVICE; break;
-            default: retval = ERROR_ACCESS_DENIED; break;
-        } // switch
-    } // if
+    APIRET retval = fileError(lx_host_path_move(oldpath, newpath));
 
     free(newpath);
     free(oldpath);
     return retval;
 } // DosMove
-
-// DosQueryMem page flags, from the OS/2 Toolkit's bsememf.h.
-#define PAG_READ    0x00000001U
-#define PAG_WRITE   0x00000002U
-#define PAG_EXECUTE 0x00000004U
-#define PAG_COMMIT  0x00000010U
 
 APIRET DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag)
 {
@@ -4775,30 +3910,13 @@ APIRET DosSetFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBuf)
     TRACE_NATIVE("DosSetFileInfo(%u, %u, %p, %u)", (uint) hf,
                  (uint) ulInfoLevel, pInfo, (uint) cbInfoBuf);
 
-    const int fd = getHFileUnixDescriptor(hf);
-    if (fd == -1)
-        return ERROR_INVALID_HANDLE;
-
-    if (ulInfoLevel != FIL_STANDARD)
-        return ERROR_INVALID_LEVEL;
-    if ((!pInfo) || (cbInfoBuf < sizeof (FILESTATUS3)))
-        return ERROR_BUFFER_OVERFLOW;
-
-    // Only the write-permission attribute has a Unix analogue; timestamps
-    //  and EA data are accepted but not applied by this shim.
-    const FILESTATUS3 *st = (const FILESTATUS3 *) pInfo;
-    struct stat sb;
-    if (fstat(fd, &sb) == -1)
-        return ERROR_INVALID_HANDLE;
-    mode_t mode = sb.st_mode & 07777;
-    if (st->attrFile & FILE_READONLY)
-        mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
-    else
-        mode |= S_IWUSR;
-    if (fchmod(fd, mode) == -1)
-        return ERROR_ACCESS_DENIED;
-
-    return NO_ERROR;
+    if (ulInfoLevel != FIL_STANDARD) return ERROR_INVALID_LEVEL;
+    if (!pInfo || cbInfoBuf < sizeof(FILESTATUS3)) return ERROR_BUFFER_OVERFLOW;
+    LxHandleBorrow file;
+    if (!borrowFile(hf, &file)) return ERROR_INVALID_HANDLE;
+    const FILESTATUS3 *info = pInfo;
+    const LxHostFsError error = lx_host_file_readonly(file.resource, (info->attrFile & FILE_READONLY) != 0);
+    lx_handle_release(&file); return fileError(error);
 } // DosSetFileInfo
 
 APIRET DosError(ULONG error)
@@ -4823,7 +3941,7 @@ APIRET DosQueryModFromEIP(PHMODULE phmod, PCHAR pszModName, ULONG cbModName,
             const uint32 end = base + (uint32) lxmod->mmaps[i].size;
             if ((ulEIP >= base) && (ulEIP < end)) {
                 if (phmod)
-                    *phmod = (HMODULE) lxmod;
+                    *phmod = lxmod ? lxmod->handle : 0;
                 if (pulOffset)
                     *pulOffset = ulEIP - base;
                 if (pulObject)
@@ -4866,6 +3984,7 @@ APIRET DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler,
 LX_NATIVE_DESTRUCTOR(doscalls)
 {
     GLoaderState.dosExit = NULL;
+    GLoaderState.writeFile = NULL;
 
     ExitListItem *next = GExitList;
     GExitList = NULL;
@@ -4876,8 +3995,7 @@ LX_NATIVE_DESTRUCTOR(doscalls)
     } // for
 
     for (uint32 i = 0; i < MaxHFiles; i++) {
-        if (HFiles[i].fd > 2)  // don't close -1, or any stdio handles.
-            close(HFiles[i].fd);
+        if (HFiles[i].handle > 1) lx_handle_close(HFiles[i].handle, LX_HANDLE_FILE);
     } // for
     free(HFiles);
     HFiles = NULL;
@@ -4885,8 +4003,9 @@ LX_NATIVE_DESTRUCTOR(doscalls)
 
     GLoaderState.freeSelector(ginfosel);
     GLoaderState.freeSelector(linfosel);
-    pthread_mutex_destroy(&GMutexDosCalls);
-    pthread_mutex_destroy(&GMutexDosBeep);
+    lx_host_mutex_destroy(GMutexDosCalls);
+    lx_host_mutex_destroy(GMutexDosBeep);
+    lx_host_mutex_destroy(GMutexDir16);
 }
 
 // end of doscalls.c ...

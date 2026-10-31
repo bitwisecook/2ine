@@ -15,9 +15,10 @@ APIRET16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf)
 {
     // !!! FIXME: implement this for real.
     TRACE_NATIVE("Dos16GetDBCSEv(%u, %p, %p)", (uint) buflen, pcc, buf);
+    if (!pcc) return ERROR_INVALID_PARAMETER;
     if ((pcc->country != 0) || (pcc->codepage != 0))
         return ERROR_CODE_PAGE_NOT_FOUND;
-    memset(buf, '\0', buflen);
+    if (buflen) memset(buf, '\0', buflen);
     return NO_ERROR;
 } // Dos16GetDBCSEv
 
@@ -40,11 +41,12 @@ APIRET16 Dos16GetCtryInfo(USHORT len, PCOUNTRYCODE16 pcc, PCOUNTRYINFO16 pch, PU
     COUNTRYCODE cc = {pcc->country, pcc->codepage};
     APIRET16 ret = DosQueryCtryInfo(sizeof(ci), &cc, &ci, NULL);
     if (ret) return ret;
-    pch->country = ci.country;
-    pch->codepage = ci.codepage;
-    pch->fsDateFmt = ci.fsDateFmt;
-    memcpy(&pch->szCurrency, &ci.szCurrency, len - 6);
-    if (dlen) *dlen = sizeof(PCOUNTRYCODE16);
+    uint8 wire[38] = {0};
+    lx_guest_store_u16(wire, ci.country); lx_guest_store_u16(wire + 2, ci.codepage);
+    lx_guest_store_u16(wire + 4, ci.fsDateFmt);
+    memcpy(wire + 6, ci.szCurrency, 32);
+    memcpy(pch, wire, len < sizeof wire ? len : sizeof wire);
+    if (dlen) *dlen = sizeof wire;
     return NO_ERROR;
 }
 
@@ -52,9 +54,10 @@ APIRET DosQueryDBCSEnv(ULONG buflen, PCOUNTRYCODE pcc, PCHAR buf)
 {
     // !!! FIXME: implement this for real.
     TRACE_NATIVE("DosQueryDBCSEnv(%u, %p, %p)", (uint) buflen, pcc, buf);
+    if (!pcc) return ERROR_INVALID_PARAMETER;
     if ((pcc->country != 0) || (pcc->codepage != 0))
         return ERROR_CODE_PAGE_NOT_FOUND;
-    memset(buf, '\0', buflen);
+    if (buflen) memset(buf, '\0', buflen);
     return NO_ERROR;
 } // DosQueryDBCSEnv
 
@@ -62,6 +65,7 @@ APIRET DosMapCase(ULONG cb, PCOUNTRYCODE pcc, PCHAR pch)
 {
     // !!! FIXME: implement this for real.
     TRACE_NATIVE("DosMapCase(%u, %p, %p)", (uint) cb, pcc, pch);
+    if (!pcc) return ERROR_INVALID_PARAMETER;
     if ((pcc->country != 0) || (pcc->codepage != 0))
         return ERROR_CODE_PAGE_NOT_FOUND;
 
@@ -88,6 +92,7 @@ APIRET DosQueryCtryInfo(ULONG cb, PCOUNTRYCODE pcc, PCOUNTRYINFO pci, PULONG pcb
     //  it all out now.
     memset(pci, '\0', cb);
 
+    if (!pcc) return ERROR_INVALID_PARAMETER;
     if ((pcc->country != 0) || (pcc->codepage != 0))
         return ERROR_CODE_PAGE_NOT_FOUND;
 

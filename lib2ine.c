@@ -15,64 +15,22 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <unistd.h>
 #include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <pthread.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 #include <assert.h>
 
 #include "lib2ine.h"
+#include "runtime/host.h"
+#include "runtime/host_thread.h"
+#include "runtime/host_fs.h"
 #include "SDL.h"
 
 extern char **environ;
 
 LxLoaderState GLoaderState;
 
-static pthread_key_t tlskey;
-
-static void *readfile(const char *fname, size_t *_len)
-{
-    const size_t chunklen = 128;
-    const int fd = open(fname, O_RDONLY);
-    if (fd == -1) {
-        fprintf(stderr, "Can't open '%s': %s\n", fname, strerror(errno));
-        return NULL;
-    }
-
-    char *buf = NULL;
-    size_t bw = 0;
-
-    while (1) {
-        buf = (char *) realloc(buf, bw + chunklen);
-        if (!buf) {
-            fprintf(stderr, "Out of memory\n");
-            free(buf);
-            close(fd);
-            return NULL;
-        }
-
-        const ssize_t br = read(fd, buf + bw, chunklen);
-        if (br < 0) {
-            fprintf(stderr, "Read fail on '%s': %s\n", fname, strerror(errno));
-            free(buf);
-            close(fd);
-            return NULL;
-        }
-
-        bw += br;
-        if (br < chunklen) {
-            break;
-        }
-    }
-
-    close(fd);
-    *_len = bw;
-    return buf;
-}
+static LX_HOST_THREAD_LOCAL LxTIB *DefaultTib;
+static LX_HOST_THREAD_LOCAL LxHostThreadState host_thread_state;
+LxHostThreadState *lxHostThreadState(void) { return &host_thread_state; }
 
 static void initPib(void)
 {
@@ -80,7 +38,7 @@ static void initPib(void)
     memset(pib, '\0', sizeof (*pib));
 
     size_t cmdlinebuflen = 0;
-    char *cmdlinebuf = readfile("/proc/self/cmdline", &cmdlinebuflen);
+    char *cmdlinebuf = lx_host_command_line(&cmdlinebuflen);
     if (!cmdlinebuf) {
         abort();
     }
@@ -182,6 +140,8 @@ static void initPib(void)
         abort();
     } // if
 
+    memset(env, 0, 0x10000);
+    if (len > 0x10000) { fprintf(stderr, "OS/2 environment and command exceed one segment\n"); abort(); }
     const char *libpath = NULL;
     char *ptr = env;
     for (int i = 0; envp[i]; i++) {
@@ -245,8 +205,7 @@ static void initPib(void)
 
     *(ptr++) = '\0';
 
-    pib->pib_ulpid = (uint32) getpid();
-    pib->pib_ulppid = (uint32) getppid();
+    lx_host_process_ids(&pib->pib_ulpid, &pib->pib_ulppid);
     pib->pib_pchcmd = cmd;
     pib->pib_pchenv = env;
     //pib->pib_hmte is filled in later during loadModule()
@@ -269,19 +228,18 @@ static void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t 
 
     LxTIB *tib = (LxTIB *) tibspace;
     LxTIB2 *tib2 = (LxTIB2 *) (tib + 1);
-    LxPostTIB *posttib = (LxPostTIB *) (tib2 + 1);
-    void *host_stack = malloc(65536);
-    if (!host_stack) {
-        fprintf(stderr, "Could not allocate 16-bit bridge stack\n");
-        abort();
-    }
-    posttib->host_stack = (uint8 *) host_stack + 65536;
-
     FIXME("This is probably 50% wrong");
-    tib->tib_pexchain = NULL;
-    tib->tib_pstack = topOfStack - stacklen;
-    tib->tib_pstacklimit = (void *) topOfStack;
-    tib->tib_ptib2 = tib2;
+    uint32 top = (uint32) (uintptr_t) topOfStack;
+    uint32 tib_address = 0;
+    if (GLoaderState.execution) {
+        lx_execution_address(GLoaderState.execution, tibspace, LXTIBSIZE, 0, &tib_address);
+        uint32 guest_top;
+        if (lx_execution_address(GLoaderState.execution, topOfStack, 0, 0, &guest_top)) top = guest_top;
+    }
+    tib->tib_pexchain = 0;
+    tib->tib_pstack = top - stacklen;
+    tib->tib_pstacklimit = top;
+    tib->tib_ptib2 = tib_address ? tib_address + sizeof (LxTIB) : 0;
     tib->tib_version = 20;  // !!! FIXME
     tib->tib_ordinal = 79;  // !!! FIXME
 
@@ -294,23 +252,18 @@ static void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t 
 
 static uint16 setOs2Tib_lib2ine(uint8 *tibspace)
 {
-    pthread_setspecific(tlskey, (LxTIB *) tibspace);
+    DefaultTib = (LxTIB *) tibspace;
     return 1;
 }
 
 static LxTIB *getOs2Tib_lib2ine(void)
 {
-    return (LxTIB *) pthread_getspecific(tlskey);
+    return DefaultTib;
 }
 
 static void deinitOs2Tib_lib2ine(const uint16 selector)
 {
-    LxTIB *tib = (LxTIB *) pthread_getspecific(tlskey);
-    if (tib) {
-        LxPostTIB *posttib = (LxPostTIB *) (tib->tib_ptib2 + 1);
-        free((uint8 *) posttib->host_stack - 65536);
-    }
-    pthread_setspecific(tlskey, NULL);
+    DefaultTib = NULL;
 }
 
 static int findSelector_lib2ine(const uint32 addr, uint16 *outselector, uint16 *outoffset, int iscode)
@@ -425,10 +378,10 @@ static void cfgProcessMountPoint(const char *fname, const int lineno, const char
 
     if (*val != '\0') {  // val=="" means don't mount
         const size_t vallen = strlen(val);
-        struct stat statbuf;
-        if (stat(val, &statbuf) == -1) {
+        LxHostFileInfo statbuf;
+        if (lx_host_path_info(val, &statbuf) != LX_HOST_FS_OK) {
             cfgWarn(fname, lineno, "Path \"%s\" for drive %c:\\ isn't accessible: %s", val, letter, strerror(errno));
-        } else if (!S_ISDIR(statbuf.st_mode)) {
+        } else if (statbuf.kind != LX_HOST_FILE_DIRECTORY) {
             cfgWarn(fname, lineno, "Path \"%s\" for drive %c:\\ isn't a directory", val, letter);
         } else if ((GLoaderState.disks[idx] = (char *) malloc(vallen + 2)) == NULL) {
             cfgWarn(fname, lineno, "Out of memory!");
@@ -579,12 +532,12 @@ static void prepOs2Drives(void)
 
     FIXME("need to pass current dirs and disks to OS/2 subprocesses");
 
-    char *cwd = getcwd(NULL, 0);
-    char *rp = cwd ? realpath(cwd, NULL) : NULL;  // in case there's a symlink in there.
+    char *cwd = lx_host_path_current();
+    char *rp = cwd ? lx_host_path_canonical(cwd) : NULL;  // in case there's a symlink in there.
     if ((cwd == NULL) || (rp == NULL)) {
         fprintf(stderr, "Can't get cwd (%s), defaulting to \"/\".\n", strerror(errno));
         rp = strdup("/");
-        chdir(rp);
+        lx_host_path_chdir(rp);
     }
 
     free(cwd);
@@ -595,7 +548,7 @@ static void prepOs2Drives(void)
             continue;
         }
 
-        rp = realpath(GLoaderState.disks[i], NULL);
+        rp = lx_host_path_canonical(GLoaderState.disks[i]);
         if (rp == NULL) {
             fprintf(stderr, "Can't realpath \"%s\" (%s), not mounting %c:\\\n", GLoaderState.disks[i], strerror(errno), i + 'A');
             free(GLoaderState.disks[i]);
@@ -811,19 +764,14 @@ static void lib2ine_shutdown(void)
         GLoaderState.disks[i] = NULL;
     }
 
-    free(GLoaderState.pib.pib_pchenv);
+    if (!GLoaderState.execution) free(GLoaderState.pib.pib_pchenv);
     GLoaderState.pib.pib_pchenv = NULL;
 
-    pthread_key_delete(tlskey);
+    DefaultTib = NULL;
 }
 
 LX_NATIVE_CONSTRUCTOR(lib2ine)
 {
-    if (pthread_key_create(&tlskey, NULL) != 0) {
-        fprintf(stderr, "Couldn't create TLS key\n");
-        abort();
-    }
-
     memset(&GLoaderState, '\0', sizeof (GLoaderState));
     GLoaderState.dosExit = dosExit_lib2ine;
     GLoaderState.initOs2Tib = initOs2Tib_lib2ine;
@@ -848,11 +796,8 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     cfgLoadFiles();
     prepOs2Drives();
 
-    struct rlimit rlim;
-    if (getrlimit(RLIMIT_STACK, &rlim) == -1) {
-        rlim.rlim_cur = 8 * 1024 * 1024;  // oh well.
-    }
-    GLoaderState.initOs2Tib(GLoaderState.main_tibspace, &rlim, rlim.rlim_cur, 0);  // hopefully that's close enough on the stack address.
+    const size_t stack_limit = lx_host_stack_limit();
+    GLoaderState.initOs2Tib(GLoaderState.main_tibspace, (void *) &stack_limit, stack_limit, 0);
     GLoaderState.main_tib_selector = GLoaderState.setOs2Tib(GLoaderState.main_tibspace);
 
     // these override config files (for now).

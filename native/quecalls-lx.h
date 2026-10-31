@@ -9,15 +9,33 @@
 /* This is glue code for OS/2 binaries. Native binaries don't need this. */
 #if LX_LEGACY
 
-LX_NATIVE_MODULE_INIT()
+LX_NATIVE_MODULE_INIT({
+})
+#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT(DosReadQueue, 9),
+#endif
+#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT(DosPurgeQueue, 10),
+#endif
+#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT(DosCloseQueue, 11),
+#endif
+#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT(DosQueryQueue, 12),
+#endif
+#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT(DosPeekQueue, 13),
+#endif
+#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT(DosWriteQueue, 14),
+#endif
+#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT(DosOpenQueue, 15),
-    LX_NATIVE_EXPORT(DosCreateQueue, 16)
+#endif
+#if !TWOINE_PORTABLE_LOADER
+    LX_NATIVE_EXPORT(DosCreateQueue, 16),
+#endif
+
 LX_NATIVE_MODULE_INIT_END()
 
 #endif /* LX_LEGACY */

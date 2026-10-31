@@ -11,23 +11,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <errno.h>
-#include <sys/mman.h>
 #include <assert.h>
-#include <dlfcn.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <signal.h>
-#include <ucontext.h>
+#include "runtime/host_fs.h"
 
-// 16-bit selector kernel nonsense...
-#include <sys/syscall.h>
-#include <sys/types.h>
-#include <asm/ldt.h>
 
 #include "lib2ine.h"
+#include "runtime/execution.h"
+#include "runtime/host.h"
 
 // !!! FIXME: move this into an lx_common.c file.
 static int sanityCheckLxModule(const uint8 *exe, const uint32 exelen)
@@ -118,7 +111,7 @@ static int sanityCheckModule(uint8 **_exe, uint32 *_exelen, int *_is_lx)
 
 static char *makeOS2Path(const char *fname)
 {
-    char *full = realpath(fname, NULL);
+    char *full = lx_host_path_canonical(fname);
     if (!full)
         return NULL;
 
@@ -145,33 +138,24 @@ static char *makeOS2Path(const char *fname)
 // !!! FIXNE:  length can change!
 static int locateOneElement(char *buf)
 {
-    if (access(buf, F_OK) == 0)
+    if (lx_host_path_exists(buf))
         return 1;  // quick rejection: exists in current case.
 
-    DIR *dirp;
-    char *ptr = strrchr(buf, '/');  // find entry at end of path.
-    if (ptr == NULL) {
-        dirp = opendir(".");
-        ptr = buf;
-    } else if (ptr == buf) {
-        dirp = opendir("/");
-    } else {
-        *ptr = '\0';
-        dirp = opendir(buf);
-        *ptr = '/';
-        ptr++;  // point past dirsep to entry itself.
-    } // else
-
-    for (struct dirent *dent = readdir(dirp); dent; dent = readdir(dirp)) {
-        if (strcasecmp(dent->d_name, ptr) == 0) {
-            strcpy(ptr, dent->d_name); // found a match. Overwrite with this case.
-            closedir(dirp);
-            return 1;
-        } // if
-    } // for
-
-    // no match at all...
-    closedir(dirp);
+    LxHostDirectory *directory;
+    char *ptr = strrchr(buf, '/');
+    if (!ptr) { directory = lx_host_directory_open(".", NULL); ptr = buf; }
+    else if (ptr == buf) { directory = lx_host_directory_open("/", NULL); ptr++; }
+    else {
+        *ptr = 0; directory = lx_host_directory_open(buf, NULL); *ptr++ = '/';
+    }
+    if (!directory) return 0;
+    const char *name;
+    while (lx_host_directory_read(directory, &name, NULL, NULL) == 1) {
+        if (!strcasecmp(name, ptr)) {
+            strcpy(ptr, name); lx_host_directory_close(directory); return 1;
+        }
+    }
+    lx_host_directory_close(directory);
     return 0;
 } // locateOneElement
 
@@ -183,7 +167,7 @@ static int locatePathCaseInsensitive(char *buf)
     if (*ptr == '\0')
         return 0;  // Uh...I guess that's success?
 
-    if (access(buf, F_OK) == 0)
+    if (lx_host_path_exists(buf))
         return 0;  // quick rejection: exists in current case.
 
     while ( (ptr = strchr(ptr + 1, '/')) != NULL ) {
@@ -263,7 +247,7 @@ static char *lxMakeUnixPath(const char *os2path, uint32 *err)
     //  On OS/2 that resolves against the current drive root; here the driver
     //  created it in the cwd. Prefer the absolute name if it exists, then
     //  fall back to the same name under the current directory.
-    if (rootrel && (access(retval, F_OK) != 0)) {
+    if (rootrel && (!lx_host_path_exists(retval))) {
         char *roots = strdup(rootrel);
         size_t rootslen = roots ? strlen(roots) : 0;
         while (rootslen && ((roots[rootslen - 1] == '\\') ||
@@ -286,7 +270,7 @@ static char *lxMakeUnixPath(const char *os2path, uint32 *err)
             while ((pp = strstr(pp, "//")) != NULL)
                 memmove(pp, pp + 1, strlen(pp));
             locatePathCaseInsensitive(alt);
-            if (access(alt, F_OK) == 0) {
+            if (lx_host_path_exists(alt)) {
                 free(retval);
                 retval = alt;
                 alt = NULL;
@@ -448,289 +432,95 @@ static int decompressIterated(uint8 *dst, uint32 dstlen, const uint8 *src, uint3
     return 1;
 } // decompressIterated
 
-static inline uint16 lxSelectorToSegment(const uint16 selector)
+static inline uint16 lxSelectorToSegment(uint16 index) { return (index << 3) | 7; }
+static uint16 lxSetOs2Tib(uint8 *source)
 {
-    return (selector << 3) | 7;
-} // lxSelectorToSegment
-
-// !!! FIXME: mutex this
-static int allocateSelector(const uint16 selector, const int pages, const uint32 addr, const unsigned int contents, const int is32bit)
+    LxHostThreadState *state = lxHostThreadState();
+    if (state->tib_mapping) { fprintf(stderr, "TIB is already attached\n"); abort(); }
+    state->tib_mapping = lx_execution_map(GLoaderState.execution, 0, 0x20000, 3, 0);
+    if (!state->tib_mapping) { fprintf(stderr, "Cannot allocate guest TIB\n"); abort(); }
+    uint32 base = lx_execution_mapping_address(state->tib_mapping);
+    uint32 address = (base + 0xffff) & ~0xffffu;
+    uint8 *tib = (uint8 *) lx_execution_mapping_host(state->tib_mapping) + (address - base);
+    memcpy(tib, source, LXTIBSIZE);
+    lx_guest_store_u32(tib + offsetof(LxTIB, tib_ptib2), address + sizeof(LxTIB));
+    return lx_execution_attach_tib(GLoaderState.execution, tib);
+}
+static LxTIB *lxGetOs2Tib(void) { return lx_execution_current_tib(GLoaderState.execution); }
+static void lxDeinitOs2Tib(uint16 token)
 {
-    assert(selector < LX_MAX_LDT_SLOTS);
-
-    if (GLoaderState.ldt[selector])
-        return 0;  // already in use.
-
-    //const int expand_down = (contents == MODIFY_LDT_CONTENTS_STACK);
-
-    struct user_desc entry;
-    entry.entry_number = (unsigned int) selector;
-    entry.base_addr = (unsigned int) addr; //(expand_down ? (addr + 0x10000) : addr);
-    entry.limit = pages; //expand_down ? 0 : 16;
-    entry.seg_32bit = is32bit;
-    entry.contents = contents;
-    entry.read_exec_only = 0;
-    entry.limit_in_pages = 1;
-    entry.seg_not_present = 0;
-    entry.useable = 1;
-    if (syscall(SYS_modify_ldt, 1, &entry, sizeof (entry)) != 0)
-        return 0;
-
-    GLoaderState.ldt[selector] = addr;
-    return 1;
-} // allocateSelector
-
-// !!! FIXME: mutex this
-// Selector 0x1FFF (segment 0xFFFF) is reserved as the Microsoft 16-bit
-// runtime's "use DS" sentinel.  Do not allocate a real mapping there.
-#define LX_NEAR16_SENTINEL_SELECTOR 0x1FFF
-
-static int lxFindSelector(const uint32 _addr, uint16 *outselector, uint16 *outoffset, int iscode)
+    lx_execution_detach_tib(GLoaderState.execution, token);
+    LxHostThreadState *state = lxHostThreadState();
+    if (state->tib_mapping) lx_execution_unmap(GLoaderState.execution, state->tib_mapping);
+    state->tib_mapping = NULL;
+}
+static void *lxAllocSegment(uint16 *s, int x) { return lx_execution_alloc_segment(GLoaderState.execution, s, x); }
+static void lxFreeSegment(uint16 s) { lx_execution_free_segment(GLoaderState.execution, s); }
+static int lxCreateCodeAlias(uint16 s, uint16 *out) { return lx_execution_code_alias(GLoaderState.execution, s, out); }
+static int lxFindSelector(uint32 a, uint16 *s, uint16 *o, int x) { return lx_execution_find_selector(GLoaderState.execution, a, s, o, x); }
+static void lxFreeSelector(uint16 s) { lx_execution_free_selector(GLoaderState.execution, s); }
+static void *lxConvert1616to32(uint32 p) { return lx_execution_far_to_host(GLoaderState.execution, p); }
+static uint32 lxConvert32to1616(void *p) { return lx_execution_host_to_far(GLoaderState.execution, p); }
+static void initOs2StackSegments(uint32 a, uint32 n, int release) { lx_execution_stack_segments(GLoaderState.execution, a, n, release); }
+static void fixupLinearCodeSegmentReferences(uint8 *p, size_t n) { lx_execution_prepare_code(GLoaderState.execution, p, n); }
+static void *generateMissingTrampoline(const char *m, const char *n) { return lx_execution_missing_entry(GLoaderState.execution, m, n, 32, NULL); }
+static void *generateMissingTrampoline16(const char *m, const char *n, const LxExport **out)
 {
-    uint32 addr = _addr;
-    if (addr < 4096)
-        return 0;   // we won't map the NULL page.
-
-    const uint32 *ldt = GLoaderState.ldt;
-
-    int available = -1;
-    int preferred = -1;
-
-    // optimize for the case where we need a selector that happens to be in tiled memory,
-    //  since it's fast to look up.
-    if (addr < (1024 * 1024 * 512)) {
-        const uint16 idx = (uint16) (addr >> 16);
-        const uint32 tile = ldt[idx];
-        if ((tile == 0) && (idx != LX_NEAR16_SENTINEL_SELECTOR)) {
-            preferred = available = idx;  // we can use this piece.
-        } else if ((tile != 0) && (idx != LX_NEAR16_SENTINEL_SELECTOR) &&
-                   (tile <= addr) && ((tile + 0x10000) > addr)) {
-            *outselector = idx;
-            *outoffset = (uint16) (addr - tile);
-            //printf("SELECTOR: found tiled selector 0x%X for address %p\n", (uint) idx, (void *) addr);
-            return 1;  // already allocated to this address.
-        } // if
-    } // if
-
-    for (int i = 0; i < LX_MAX_LDT_SLOTS; i++) {
-        if (i == LX_NEAR16_SENTINEL_SELECTOR)
-            continue;  // reserved for the Microsoft 16-bit DS sentinel.
-        const uint32 tile = ldt[i];
-        if (tile == 0)
-            available = i;
-        else if ((tile <= addr) && ((tile + 0x10000) > addr)) {
-            *outselector = (uint16) i;
-            *outoffset = (uint16) (addr - tile);
-            //printf("SELECTOR: found existing selector 0x%X for address %p\n", (uint) i, (void *) addr);
-            return 1;  // already allocated to this address.
-        } // else if
-    } // for
-
-    // nothing allocated to this address so far. Try to allocate something.
-    if (available == -1) {
-        fprintf(stderr, "Uhoh, we've run out of LDT selectors! Probably about to crash...\n"); fflush(stderr);
-        return 0;  // uh oh, out of selectors!
-    } // if
-
-    // decide if there is code or data mapped here. If there's an OS/2 API to
-    //  change page permissions, we'll need to update the mapping and our state.
-    for (LxModule *lxmod = GLoaderState.loaded_modules; (iscode == -1) && lxmod; lxmod = lxmod->next) {
-        LxMmaps *mmaps = lxmod->mmaps;
-        for (uint32 i = 0; i < lxmod->num_mmaps; i++, mmaps++) {
-            const size_t lo = (size_t) mmaps->addr;
-            const size_t hi = lo + mmaps->size;
-            if ((addr >= lo) && (addr <= hi)) {
-                iscode = ((mmaps->prot & PROT_EXEC) != 0);
-                break;
-            } // if
-        } // for
-    } // for
-
-    if (iscode == -1) {
-        iscode = 0;
+    LxExecutionBridge bridge;
+    void *address = lx_execution_missing_entry(GLoaderState.execution, m, n, 16, &bridge);
+    static LxMmaps object;
+    static LxExport exported;
+    object.mapped = object.addr = bridge.host;
+    object.size = bridge.size; object.alias = bridge.selector_index; object.guest_base = bridge.segment_base;
+    exported.addr = address; exported.object = &object;
+    *out = &exported;
+    return address;
+}
+static uint32 guestEntryAddress(void *host)
+{
+    uint32 address;
+    if (!lx_execution_entry_address(GLoaderState.execution, host, &address)) {
+        fprintf(stderr, "%s\n", lx_execution_error(GLoaderState.execution)); abort();
     }
-
-    const uint32 diff = addr % 0x10000;
-    addr -= diff;   // make sure we start on a 64k border.
-
-    const uint16 selector = (uint16) (preferred != -1) ? preferred : available;
-    //printf("setting up LDT mapping for %s at selector %u\n", iscode ? "code" : "data", (unsigned int) selector);
-
-    if (!allocateSelector(selector, 16, addr, iscode ? MODIFY_LDT_CONTENTS_CODE : MODIFY_LDT_CONTENTS_DATA, 0)) {
-        fprintf(stderr, "Uhoh, we've failed to allocate LDT selector %u! Probably about to crash...\n", (uint) selector); fflush(stderr);
-        return 0;
-    } // if
-
-    //printf("SELECTOR: allocated selector 0x%X for address %p\n", (uint) selector, (void *) addr);
-    *outselector = selector;
-    *outoffset = (uint16) diff;
-    return 1;
-} // lxFindSelector
-
-// !!! FIXME: mutex this
-static void lxFreeSelector(const uint16 selector)
+    return address;
+}
+static LxExecutionEntry executionEntry(const LxModule *module)
 {
-    assert(selector < LX_MAX_LDT_SLOTS);
-
-    if (!GLoaderState.ldt[selector])
-        return;  // already free.
-
-    struct user_desc entry;
-    memset(&entry, '\0', sizeof (entry));
-    entry.entry_number = (unsigned int) selector;
-    entry.read_exec_only = 1;
-    entry.seg_not_present = 1;
-    if (syscall(SYS_modify_ldt, 1, &entry, sizeof (entry)) != 0)
-        return;  // oh well.
-
-    GLoaderState.ldt[selector] = 0;
-} // lxFreeSelector
-
-static void *lxConvert1616to32(const uint32 addr1616)
+    LxExecutionEntry e = {0};
+    e.entry = module->eip; e.stack = module->esp;
+    e.module = module->handle;
+    if (!lx_execution_address(GLoaderState.execution, GLoaderState.pib.pib_pchcmd, 1, LX_GUEST_READ, &e.command) ||
+        !lx_execution_address(GLoaderState.execution, GLoaderState.pib.pib_pchenv, 1, LX_GUEST_READ, &e.environment)) {
+        fprintf(stderr, "Process parameters are outside guest memory\n"); abort();
+    }
+    e.stack_bytes = GLoaderState.mainstacksize;
+    e.data_bytes = module->autodatasize;
+    if (!module->is_lx && module->header.ne.auto_data_segment)
+        e.data_selector = lxSelectorToSegment(module->mmaps[module->header.ne.auto_data_segment - 1].alias);
+    return e;
+}
+static void runModule(LxModule *module)
 {
-    if (addr1616 == 0)
-        return NULL;
-
-    const uint16 selector = (uint16) (addr1616 >> 19);  // slide segment down, and shift out control bits.
-    const uint16 offset = (uint16) (addr1616 % 0x10000);  // all our LDT segments start at 64k boundaries (at the moment!).
-    // 0xFFFF is the Microsoft 16-bit runtime's "use my DS" sentinel for
-    //  far pointers that the import thunks normally replace with DS.
-    if ((selector == 0x1FFF) && GLoaderState.near16_base)
-        return (void *) (size_t) (GLoaderState.near16_base + offset);
-    //printf("lxConvert1616to32: 0x%X -> %p\n", (uint) addr1616, (void *) (size_t) (GLoaderState.ldt[selector] + offset));
-    assert(GLoaderState.ldt[selector] != 0);
-    return (void *) (size_t) (GLoaderState.ldt[selector] + offset);
-} // lxConvert1616to32
-
-static uint32 lxConvert32to1616(void *addr32)
+    LxExecutionEntry e = executionEntry(module);
+    GLoaderState.running = 1;
+    lx_execution_program(GLoaderState.execution, &e, module->is_lx ? 32 : 16);
+}
+static void runLxLibraryInitOrTerm(LxModule *module, int termination)
 {
-    if (addr32 == NULL)
-        return 0;
-
-    uint16 selector = 0;
-    uint16 offset = 0;
-    if (!lxFindSelector((uint32) addr32, &selector, &offset, -1)) {
-        fprintf(stderr, "Uhoh, ran out of LDT entries?!\n");
-        return 0;  // oh well, crash, probably.
-    } // if
-
-    //printf("selector=0x%X, segment=0x%X\n", (uint) selector, (uint) lxSelectorToSegment(selector));
-    return (((uint32)lxSelectorToSegment(selector)) << 16) | ((uint32) offset);
-} // lxConvert32to1616
-
-static inline void *lxConvertSegmentOffsetto32(const uint16 seg, const uint16 off)
-{
-    return lxConvert1616to32((((uint32) seg) << 16) | ((uint32) off));
-} // lxConvertSegmentOffsetto32
-
-// EMX (and probably many other things) occasionally has to call a 16-bit
-//  system API, and assumes its stack is tiled in the LDT; it'll just shift
-//  the stack pointer and use it as a stack segment for the 16-bit call
-//  without calling DosFlatToSel(). So we tile the main thread's stack and
-//  pray that covers it. If we have to tile _every_ thread's stack, we can do
-//  that later.
-// !!! FIXME: if we do this for secondary thread stacks, we'll need to mutex this.
-static void initOs2StackSegments(uint32 addr, uint32 stacklen, const int deinit)
-{
-    //printf("base == %p, stacklen == %u\n", (void*)addr, (uint) stacklen);
-    const uint32 diff = addr % 0x10000;
-    addr -= diff;   // make sure we start on a 64k border.
-    stacklen += diff;   // make sure we start on a 64k border.
-
-    // We fill in LDT tiles for the entire stack (EMX, etc, assume this will work).
-    if (stacklen % 0x10000)  // pad this out to 64k
-        stacklen += 0x10000 - (stacklen % 0x10000);
-
-    // !!! FIXME: do we have to allocate these backwards? (stack grows down).
-    while (stacklen) {
-        //printf("Allocating selector 0x%X for stack %p ... \n", (uint) (addr >> 16), (void *) addr);
-        if (deinit) {
-            lxFreeSelector((uint16) (addr >> 16));
-        } else {
-            if (!allocateSelector((uint16) (addr >> 16), 16, addr, MODIFY_LDT_CONTENTS_DATA, 0)) {
-                FIXME("uhoh, couldn't set up an LDT entry for a stack segment! Might crash later!");
-            } // if
-        } // else
-        stacklen -= 0x10000;
-        addr += 0x10000;
-    } // while
-} // initOs2StackSegments
-
-// OS/2 threads keep their Thread Information Block at FS:0x0000, so we have
-//  to ask the Linux kernel to screw around with 16-bit selectors on our
-//  behalf so we don't crash out when apps try to access it directly.
-// OS/2 provides a C-callable API to obtain the (32-bit linear!) TIB address
-//  without going directly to the FS register, but lots of programs (including
-//  the EMX runtime) touch the register directly, so we have to deal with it.
-// You must call this once for each thread that will go into LX land, from
-//  that thread, as soon as possible after starting.
-static uint16 lxSetOs2Tib(uint8 *tibspace)
-{
-    // !!! FIXME: I barely know what I'm doing here, this could all be wrong.
-    struct user_desc entry;
-    entry.entry_number = -1;
-    entry.base_addr = (unsigned int) ((size_t)tibspace);
-    entry.limit = LXTIBSIZE;
-    entry.seg_32bit = 1;
-    entry.contents = MODIFY_LDT_CONTENTS_DATA;
-    entry.read_exec_only = 0;
-    entry.limit_in_pages = 0;
-    entry.seg_not_present = 0;
-    entry.useable = 1;
-    const long rc = syscall(SYS_set_thread_area, &entry);
-    assert(rc == 0);  FIXME("this can legit fail, though!");
-
-    // The "<< 3 | 3" makes this a GDT selector at ring 3 permissions.
-    //  If this did "| 7" instead of "| 3", it'd be an LDT selector.
-    //  Use lxFindSelector() or allocateSelector() for LDT entries, though!
-    const unsigned int segment = (entry.entry_number << 3) | 3;
-    __asm__ __volatile__ ( "movw %%ax, %%fs  \n\t" : : "a" (segment) );
-    return (uint16) entry.entry_number;
-} // lxSetOs2Tib
-
-static LxTIB2 *lxGetOs2Tib2(void)
-{
-    // just read the FS register, since we have to stick it there anyhow...
-    LxTIB2 *ptib2;
-    __asm__ __volatile__ ( "movl %%fs:0xC, %0  \n\t" : "=r" (ptib2) );
-    return ptib2;
-} // lxGetTib2
-
-static LxTIB *lxGetOs2Tib(void)
-{
-    // we store the TIB2 struct right after the TIB struct on the stack,
-    //  so get the TIB2's linear address from %fs:0xC, then step back
-    //  to the TIB's linear address.
-    uint8 *ptib2 = (uint8 *) lxGetOs2Tib2();
-    return (LxTIB *) (ptib2 - sizeof (LxTIB));
-} // lxGetOs2Tib
-
-static void lxDeinitOs2Tib(const uint16 selector)
-{
-    LxTIB *tib = lxGetOs2Tib();
-    LxPostTIB *posttib = (LxPostTIB *) (tib->tib_ptib2 + 1);
-    free((uint8 *) posttib->host_stack - 65536);
-    // !!! FIXME: I barely know what I'm doing here, this could all be wrong.
-    struct user_desc entry;
-    memset(&entry, '\0', sizeof (entry));
-    entry.entry_number = selector;
-    entry.read_exec_only = 1;
-    entry.seg_not_present = 1;
-
-    const long rc = syscall(SYS_set_thread_area, &entry);
-    assert(rc == 0);  FIXME("this can legit fail, though!");
-} // lsDeinitOs2Tib
+    LxExecutionEntry e = executionEntry(module);
+    e.stack = GLoaderState.running ? 0 : GLoaderState.main_module->esp;
+    lx_execution_library(GLoaderState.execution, &e, termination);
+}
 
 static void freeLxModule(LxModule *lxmod);
+static void destroyLxModule(void *resource);
 
 static __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
 {
     /* Do not unmap modules while an NE thread may still be executing them.
        The kernel releases the process mappings and descriptors on _exit. */
     if (__atomic_load_n(&GLoaderState.ne_threads_started, __ATOMIC_ACQUIRE))
-        _exit((int) (exitcode & 0xff));
-
-    GLoaderState.lib2ine_shutdown();
+        lx_host_process_exit((int) (exitcode & 0xff));
 
     // free the actual .exe
     freeLxModule(GLoaderState.main_module);
@@ -748,8 +538,11 @@ static __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
         freeLxModule(lxmod);
     } // while
 
-    free(GLoaderState.ldt);
-    GLoaderState.ldt = NULL;
+    GLoaderState.lib2ine_shutdown();
+
+    if (!GLoaderState.running)
+        lx_execution_destroy(GLoaderState.execution);
+    GLoaderState.execution = NULL;
 
     // OS/2's docs say this only keeps the lower 16 bits of exitcode.
     // !!! FIXME: ...but Unix only keeps the lowest 8 bits. Will have to
@@ -757,465 +550,10 @@ static __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
     if (exitcode > 255)
         FIXME("deal with process exit codes > 255. We clamped this one!");
 
-    _exit((int) (exitcode & 0xFF));
+    lx_host_process_exit((int) (exitcode & 0xFF));
 } // lxTerminate
 
-static __attribute__((noreturn, used)) void endLxProcess(const uint32 exitcode)
-{
-    if (GLoaderState.dosExit)
-        GLoaderState.dosExit(1, exitcode);  // let exit lists run. Should call lxTerminate!
-    lxTerminate(exitcode);  // just in case.
-} // endLxProcess
-
-static int lxCreateCodeAlias(const uint16 selDS, uint16 *outselector)
-{
-    const uint32 base = GLoaderState.ldt[selDS >> 3];
-    if (!base)
-        return 0;
-
-    uint16 slot = 0;
-    for (uint16 i = 1; i < LX_MAX_LDT_SLOTS; i++) {
-        if (!GLoaderState.ldt[i]) {
-            slot = i;
-            break;
-        } // if
-    } // for
-    if (!slot)
-        return 0;
-
-    if (!allocateSelector(slot, 16, base, MODIFY_LDT_CONTENTS_CODE, 0))
-        return 0;
-
-    // The app writes instruction bytes through its data selector and executes
-    //  them through this alias. The NE data mapping is normally read/write
-    //  only, so make the backing pages executable too.
-    mprotect((void *) (uintptr_t) base, 0x10000,
-             PROT_READ | PROT_WRITE | PROT_EXEC);
-
-    *outselector = (uint16) ((slot << 3) | 7);
-    return 1;
-} // lxCreateCodeAlias
-
-static void *lxAllocSegment(uint16 *selector, const int iscode)
-{
-    // These are meant to be 64k segments mapped for use by 16-bit code, which means we
-    //  need them under 512 megabytes so their segments can convert directly to a linear
-    //  address with some bit twiddling.
-    static size_t baseaddr = 136 * 1024 * 1024;
-    static pthread_mutex_t segment_mutex = PTHREAD_MUTEX_INITIALIZER;
-    const uint32 segmentsize = 0x10000;
-    *selector = 0xFFFF;
-    pthread_mutex_lock(&segment_mutex);
-    while (baseaddr < 512 * 1024 * 1024) {
-        const size_t candidate = baseaddr;
-        baseaddr += segmentsize;
-        void *segment = mmap((void *) candidate, segmentsize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (segment == MAP_FAILED)
-            continue;
-        if ((size_t) segment != candidate) {
-            munmap(segment, segmentsize);
-            continue;
-        }
-        uint16 offset = 0xFFFF;
-        if (lxFindSelector((uint32) segment, selector, &offset, iscode) && offset == 0) {
-            pthread_mutex_unlock(&segment_mutex);
-            return segment;
-        }
-        munmap(segment, segmentsize);
-    }
-    pthread_mutex_unlock(&segment_mutex);
-    fprintf(stderr, "Failed to allocate a low 16-bit segment.\n");
-    return NULL;
-} // lxAllocSegment
-
-static void lxFreeSegment(const uint16 selector)
-{
-    const uint32 addr32 = GLoaderState.ldt[selector];
-    if (addr32) {
-        void *addr = (void *) ((size_t) addr32);
-        //printf("lxFreeSegment: addr=%p, selector=%x\n", addr, (uint) selector);
-        munmap(addr, 0x10000);
-        lxFreeSelector(selector);
-    } // if
-} // lxFreeSegment
-
-static void missingEntryPointCalled(const char *module, const char *entry)
-{
-    fflush(stdout);
-    fflush(stderr);
-    fprintf(stderr, "\n\nMissing entry point '%s' in module '%s'! Aborting.\n\n\n", entry, module);
-    //STUBBED("output backtrace");
-    fflush(stderr);
-    lxTerminate(1);
-} // missingEntryPointCalled
-
-static void *generateMissingTrampoline(const char *_module, const char *_entry)
-{
-    static void *page = NULL;
-    static uint32 pageused = 0;
-    static uint32 pagesize = 0;
-
-    if (pagesize == 0)
-        pagesize = getpagesize();
-
-    if ((!page) || ((pagesize - pageused) < 32))
-    {
-        if (page)
-            mprotect(page, pagesize, PROT_READ | PROT_EXEC);
-        page = mmap(NULL, pagesize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        pageused = 0;
-    } // if
-
-    void *trampoline = page + pageused;
-    char *ptr = (char *) trampoline;
-    char *module = strdup(_module);
-    char *entry = strdup(_entry);
-
-    *(ptr++) = 0x55;  // pushl %ebp
-    *(ptr++) = 0x89;  // movl %esp,%ebp
-    *(ptr++) = 0xE5;  //   ...movl %esp,%ebp
-    *(ptr++) = 0x68;  // pushl immediate
-    memcpy(ptr, &entry, sizeof (char *));
-    ptr += sizeof (uint32);
-    *(ptr++) = 0x68;  // pushl immediate
-    memcpy(ptr, &module, sizeof (char *));
-    ptr += sizeof (uint32);
-    *(ptr++) = 0xB8;  // movl immediate to %eax
-    const void *fn = missingEntryPointCalled;
-    memcpy(ptr, &fn, sizeof (void *));
-    ptr += sizeof (void *);
-    *(ptr++) = 0xFF;  // call absolute in %eax.
-    *(ptr++) = 0xD0;  //   ...call absolute in %eax.
-
-    const uint32 trampoline_len = (uint32) (ptr - ((char *) trampoline));
-    assert(trampoline_len <= 32);
-    pageused += trampoline_len;
-
-    if (pageused % 4)  // keep these aligned to 32 bits.
-        pageused += (4 - (pageused % 4));
-
-    //printf("Generated trampoline %p for module '%s' export '%s'\n", trampoline, module, entry);
-
-    return trampoline;
-} // generateMissingTrampoline
-
-static void *generateMissingTrampoline16(const char *_module, const char *_entry, const LxExport **_lxexp)
-{
-    static void *segment = NULL;
-    static uint32 segmentused = 0;
-    const uint32 segmentsize = 0x10000;
-    static uint16 selector = 0xFFFF;
-
-    if ((!segment) || ((segmentsize - segmentused) < 64))
-    {
-        if (segment)
-            mprotect(segment, segmentsize, PROT_READ | PROT_EXEC);
-        segment = lxAllocSegment(&selector, 1);
-        assert(segment != NULL);
-        assert(selector != 0xFFFF);
-        segmentused = 0;
-    } // if
-
-    void *trampoline = segment + segmentused;
-    char *ptr = (char *) trampoline;
-    char *module = strdup(_module);
-    char *entry = strdup(_entry);
-    if (getenv("TWOINE_TRACE_FIXUPS"))
-        fprintf(stderr, "2INE MISSING16: %s@%s -> %p (sel %04X)\n",
-                _module, _entry, trampoline, (uint) selector);
-
-    // USE16
-    *(ptr++) = 0x89;  /* mov cx,sp... */
-    *(ptr++) = 0xE1;  /*  ...mov cx,sp */
-    *(ptr++) = 0x66;  /* jmp dword 0x7788:0x33332222... */
-    *(ptr++) = 0xEA;  /*  ...jmp dword 0x7788:0x33332222 */
-    const uint32 jmp32addr = (uint32) (ptr + 6);
-    memcpy(ptr, &jmp32addr, 4); ptr += 4;
-    memcpy(ptr, &GLoaderState.original_cs, 2); ptr += 2;
-
-    // USE32
-    *(ptr++) = 0x66;  /* mov ax,ss... */
-    *(ptr++) = 0x8C;  /*  ...mov ax,ss */
-    *(ptr++) = 0xD0;  /*  ...mov ax,ss */
-    *(ptr++) = 0x66;  /* shr ax,byte 0x3... */
-    *(ptr++) = 0xC1;  /*  ...shr ax,byte 0x3 */
-    *(ptr++) = 0xE8;  /*  ...shr ax,byte 0x3 */
-    *(ptr++) = 0x03;  /*  ...shr ax,byte 0x3 */
-    *(ptr++) = 0xC1;  /* shl eax,byte 0x10... */
-    *(ptr++) = 0xE0;  /*  ...shl eax,byte 0x10 */
-    *(ptr++) = 0x10;  /*  ...shl eax,byte 0x10 */
-    *(ptr++) = 0x66;  /* mov ax,cx... */
-    *(ptr++) = 0x89;  /*  ...mov ax,cx */
-    *(ptr++) = 0xC8;  /*  ...mov ax,cx */
-    *(ptr++) = 0x66;  /* mov cx,0xabcd... */
-    *(ptr++) = 0xB9;  /*  ...mov cx,0xabcd */
-    memcpy(ptr, &GLoaderState.original_ss, 2); ptr += 2;
-    *(ptr++) = 0x8E;  /* mov ss,ecx... */
-    *(ptr++) = 0xD1;  /*  ...mov ss,ecx */
-    *(ptr++) = 0x89;  /* mov esp,eax... */
-    *(ptr++) = 0xC4;  /*  ...mov esp,eax */
-
-    if (GLoaderState.original_ss != GLoaderState.original_ds) {
-        *(ptr++) = 0x66;  /* mov cx,0x8888... */
-        *(ptr++) = 0xB9;  /*  ...mov cx,0x8888 */
-        memcpy(ptr, &GLoaderState.original_ds, 2); ptr += 2;
-    }
-    *(ptr++) = 0x8E;  /* mov ds,ecx... */
-    *(ptr++) = 0xD9;  /*  ...mov ds,ecx */
-
-    if (GLoaderState.original_es != GLoaderState.original_ds) {
-        *(ptr++) = 0x66;  /* mov cx,0x8888... */
-        *(ptr++) = 0xB9;  /*  ...mov cx,0x8888 */
-        memcpy(ptr, &GLoaderState.original_es, 2); ptr += 2;
-    }
-    *(ptr++) = 0x8E;  /* mov es,ecx... */
-    *(ptr++) = 0xC1;  /*  ...mov es,ecx */
-
-    // okay, CPU is in a sane state again, call the trampoline. Don't bother cleaning up.
-    *(ptr++) = 0x68;  // pushl immediate
-    memcpy(ptr, &entry, sizeof (char *));
-    ptr += sizeof (uint32);
-    *(ptr++) = 0x68;  // pushl immediate
-    memcpy(ptr, &module, sizeof (char *));
-    ptr += sizeof (uint32);
-    *(ptr++) = 0xB8;  // movl immediate to %eax
-
-    const void *fn = missingEntryPointCalled;
-    memcpy(ptr, &fn, sizeof (void *));
-    ptr += sizeof (void *);
-    *(ptr++) = 0xFF;  // call absolute in %eax.
-    *(ptr++) = 0xD0;  //   ...call absolute in %eax.
-    // (and never return.)
-
-    const uint32 trampoline_len = (uint32) (ptr - ((char *) trampoline));
-    assert(trampoline_len <= 64);
-    segmentused += trampoline_len;
-
-    if (segmentused % 4)  // keep these aligned to 32 bits.
-        segmentused += (4 - (segmentused % 4));
-
-    //printf("Generated trampoline %p for module '%s' 16-bit export '%s'\n", trampoline, module, entry);
-
-    // this hack is not thread safe and only works at all because we don't store this long-term.
-    static LxExport lxexp;
-    static LxMmaps lxmmap;
-    lxexp.addr = trampoline;
-    lxexp.object = &lxmmap;
-    lxmmap.mapped = lxmmap.addr = segment;
-    lxmmap.size = 0x10000;
-    lxmmap.alias = selector;
-    *_lxexp = &lxexp;
-
-    return trampoline;
-} // generateMissingTrampoline16
-
-static __attribute__((noreturn)) void runLxModule(LxModule *lxmod)
-{
-    uint8 *stack = (uint8 *) ((size_t) lxmod->esp);
-
-    // ...and you pass it the pointer to argv0. This is (at least as far as the docs suggest) appended to the environment table.
-    //fprintf(stderr, "jumping into LX land for exe '%s'...! eip=%p esp=%p\n", lxmod->name, (void *) lxmod->eip, stack); fflush(stderr);
-
-    GLoaderState.running = 1;
-
-    __asm__ __volatile__ (
-        "movl %%esi,%%esp  \n\t"  // use the OS/2 process's stack.
-        "pushl %%eax       \n\t"  // cmd
-        "pushl %%ecx       \n\t"  // env
-        "pushl $0          \n\t"  // reserved
-        "pushl %%edx       \n\t"  // module handle
-        "leal 1f,%%eax     \n\t"  // address that entry point should return to.
-        "pushl %%eax       \n\t"
-        "pushl %%edi       \n\t"  // the OS/2 process entry point (we'll "ret" to it instead of jmp, so stack and registers are all correct).
-        "xorl %%eax,%%eax  \n\t"
-        "xorl %%ebx,%%ebx  \n\t"
-        "xorl %%ecx,%%ecx  \n\t"
-        "xorl %%edx,%%edx  \n\t"
-        "xorl %%esi,%%esi  \n\t"
-        "xorl %%edi,%%edi  \n\t"
-        "xorl %%ebp,%%ebp  \n\t"
-        "ret               \n\t"  // go to OS/2 land!
-        "1:                \n\t"  //  ...and return here.
-        "pushl %%eax       \n\t"  // push exit code from OS/2 app.
-        "call endLxProcess \n\t"  // never returns.
-        // If we returned here, %eax has the exit code from the app.
-            : // no outputs.
-            : "a" (GLoaderState.pib.pib_pchcmd),
-              "c" (GLoaderState.pib.pib_pchenv),
-              "d" (lxmod), "S" (stack), "D" (lxmod->eip)
-            : "memory"
-    );
-
-    (void) endLxProcess;  // make compiler happy.
-
-    __builtin_unreachable();
-} // runLxModule
-
-static __attribute__((noreturn)) void runNeModule(LxModule *lxmod)
-{
-    //fprintf(stderr, "jumping into NE land for exe '%s'...! cs:ip=%X:%X (%p) ss:sp=%X:%X (%p)\n", lxmod->name, (uint) (lxmod->eip >> 16), (uint) (lxmod->eip & 0xFFFF), lxConvert1616to32(lxmod->eip), (uint) (lxmod->esp >> 16), (uint) (lxmod->esp & 0xFFFF), lxConvert1616to32(lxmod->esp)); fflush(stderr);
-
-    GLoaderState.running = 1;
-
-    // According to https://github.com/open-watcom/open-watcom-v2/blob/master/bld/clib/startup/c/maino16.c ,
-    //  The stack at startup should have, pushed in this order: cmdline offset, env segment, far* to top of stack, far* to bottom of stack.
-    // Microsoft C 5.1 wants things in registers (maybe Watcom does too, elsewhere, and I'm reading it wrong?),
-    //  so we do both.
-    const uint16 stacksize = (uint16) GLoaderState.mainstacksize;
-    const uint16 ss = (lxmod->esp >> 16) & 0xFFFF;  // stack segment
-    const uint32 cmd1616 = lxConvert32to1616(GLoaderState.pib.pib_pchcmd);
-    const uint16 cmdlineoffset = cmd1616 & 0xFFFF;
-    const uint16 envseg = (cmd1616 >> 16) & 0xFFFF;
-
-    uint8 *stack = (uint8 *) lxConvert1616to32(lxmod->esp);
-    //printf("stack is at 32=%p 16=%x:%x\n", stack, (uint) ss, (uint) (lxmod->esp & 0xFFFF));
-    stack -= 2; *((uint16 *) stack) = cmdlineoffset;  // cmdline offset
-    stack -= 2; *((uint16 *) stack) = envseg;  // env segment
-    stack -= 2; *((uint16 *) stack) = lxmod->esp & 0xFFFF;  // top of stack
-    stack -= 2; *((uint16 *) stack) = ss;
-    stack -= 2; *((uint16 *) stack) = (lxmod->esp & 0xFFFF) - stacksize;  // bottom of stack
-    stack -= 2; *((uint16 *) stack) = ss;  // bottom of stack
-
-    uint16 selector = 0xFFFF;
-    void *segment = lxAllocSegment(&selector, 1);
-    assert(segment != NULL);
-    assert(selector != 0xFFFF);
-    char *ptr = (char *) segment;
-
-/*
-; instructions are in Intel syntax here, not AT&T.
-USE32
-JMP WORD 0xAAAA:0xBBBB  ; jump into 16-bit land (the next instruction!).
-
-USE16
-MOV AX,0x1111     ; set stack segment
-MOV SS,AX
-MOV SP,0x2222     ; set stack pointer
-MOV AX,0x3333     ; set data segment
-MOV DS,AX
-XOR AX,AX         ; set extra segment to zero.
-MOV ES,AX
-MOV AX,0x4444     ; AX=env segment
-MOV BX,0x5555     ; BX=cmdline offset
-MOV CX,0x6666     ; CX=size of auto data segment
-XOR DX,DX         ; clear remaining general registers.
-XOR SI,SI
-XOR DI,DI
-XOR BP,BP
-JMP 0x6666:0x7777 ; jump into actual 16-bit entry point.
-INT 0x3           ; if it returns here, crash and burn.
-*/
-
-    // USE32
-    *(ptr++) = 0x66;  /* jmp word 0xaaaa:0xbbbb... */
-    *(ptr++) = 0xEA;  /*  ...jmp word 0xaaaa:0xbbbb */
-    const uint16 jmp16offset = 6;
-    memcpy(ptr, &jmp16offset, 2); ptr += 2;
-    const uint16 jmp16segment = lxSelectorToSegment(selector);
-    memcpy(ptr, &jmp16segment, 2); ptr += 2;
-
-    // USE16
-    *(ptr++) = 0xB8;  /* mov ax,0x1111... */
-    memcpy(ptr, &ss, 2); ptr += 2;
-    *(ptr++) = 0x8E;  /* mov ss,ax... */
-    *(ptr++) = 0xD0;  /*  ...mov ss,ax */
-    *(ptr++) = 0xBC;  /* mov sp,0x2222... */
-    const uint16 sp = (uint16) (((size_t) stack) & 0xFFFF);  // top of stack offset
-    memcpy(ptr, &sp, 2); ptr += 2;
-    *(ptr++) = 0xB8;  /* mov ax,0x3333... */
-    const uint16 ds = lxmod->header.ne.auto_data_segment ? lxSelectorToSegment(lxmod->mmaps[lxmod->header.ne.auto_data_segment-1].alias) : ss;  // data segment
-    memcpy(ptr, &ds, 2); ptr += 2;
-    *(ptr++) = 0x8E;  /* mov ds,ax... */
-    *(ptr++) = 0xD8;  /*  ...mov ds,ax */
-    *(ptr++) = 0x31;  /* xor ax,ax... */
-    *(ptr++) = 0xC0;  /*  ...xor ax,ax */
-    *(ptr++) = 0x8E;  /* mov es,ax... */
-    *(ptr++) = 0xC0;  /*  ...mov es,ax */
-    *(ptr++) = 0xB8;  /* mov ax,0x4444... */
-    memcpy(ptr, &envseg, 2); ptr += 2;
-    *(ptr++) = 0xBB;  /* mov bx,0x5555... */
-    memcpy(ptr, &cmdlineoffset, 2); ptr += 2;
-    *(ptr++) = 0xB9;  /* mov cx,0x6666... */
-    const uint16 autodatasize = lxmod->autodatasize;
-    memcpy(ptr, &autodatasize, 2); ptr += 2;
-    *(ptr++) = 0x31;  /* xor dx,dx... */
-    *(ptr++) = 0xD2;  /*  ...xor dx,dx */
-    *(ptr++) = 0x31;  /* xor si,si... */
-    *(ptr++) = 0xF6;  /*  ...xor si,si */
-    *(ptr++) = 0x31;  /* xor di,di... */
-    *(ptr++) = 0xFF;  /*  ...xor di,di */
-    *(ptr++) = 0x31;  /* xor bp,bp... */
-    *(ptr++) = 0xED;  /*  ...xor bp,bp */
-    *(ptr++) = 0xEA;  /* jmp 0x6666:0x7777... */
-    const uint16 ip = (uint16) (lxmod->eip & 0xFFFF);
-    memcpy(ptr, &ip, 2); ptr += 2;
-    const uint16 cs = (uint16) ((lxmod->eip >> 16) & 0xFFFF);
-    memcpy(ptr, &cs, 2); ptr += 2;
-    *(ptr++) = 0xCD;  /* int 0x3... */
-    *(ptr++) = 0x03;  /*  ...int 0x3 */
-
-    __asm__ __volatile__("jmp *%%eax\n\t" : /* no outputs */ : "a" (segment) : "memory");
-
-    __builtin_unreachable();
-} // runNeModule
-
-static __attribute__((noreturn)) void runModule(LxModule *lxmod)
-{
-    if (lxmod->is_lx) {
-        runLxModule(lxmod);
-    } else {
-        runNeModule(lxmod);
-    }
-    __builtin_unreachable();
-} // runModule
-
-static void runLxLibraryInitOrTerm(LxModule *lxmod, const int isTermination)
-{
-    uint8 *stack = NULL;
-
-    // force us over to OS/2 main module's stack if we aren't already on it.
-    if (!GLoaderState.running)
-        stack = (uint8 *) ((size_t) GLoaderState.main_module->esp);
-
-    //fprintf(stderr, "jumping into LX land to %s library '%s'...! eip=%p esp=%p\n", isTermination ? "terminate" : "initialize", lxmod->name, (void *) lxmod->eip, stack); fflush(stderr);
-
-    __asm__ __volatile__ (
-        "pushal            \n\t"  // save all the current registers.
-        "pushfl            \n\t"  // save all the current flags.
-        "movl %%esp,%%ecx  \n\t"  // save our stack to a temporary register.
-        "testl %%esi,%%esi \n\t"  // force the OS/2 process's stack?
-        "je 1f             \n\t"  // if 0, nope, we're already good.
-        "movl %%esi,%%esp  \n\t"  // use the OS/2 process's stack.
-        "1:                \n\t"  //
-        "pushl %%ecx       \n\t"  // save original stack pointer for real.
-        "pushl %%eax       \n\t"  // isTermination
-        "pushl %%edx       \n\t"  // library module handle
-        "leal 2f,%%eax     \n\t"  // address that entry point should return to.
-        "pushl %%eax       \n\t"
-        "pushl %%edi       \n\t"  // the OS/2 library entry point (we'll "ret" to it instead of jmp, so stack and registers are all correct).
-        "xorl %%eax,%%eax  \n\t"
-        "xorl %%ebx,%%ebx  \n\t"
-        "xorl %%ecx,%%ecx  \n\t"
-        "xorl %%edx,%%edx  \n\t"
-        "xorl %%esi,%%esi  \n\t"
-        "xorl %%edi,%%edi  \n\t"
-        "xorl %%ebp,%%ebp  \n\t"
-        "ret               \n\t"  // go to OS/2 land!
-        "2:                \n\t"  //  ...and return here.
-        "addl $8,%%esp     \n\t"  // drop arguments to entry point.
-        "popl %%esp        \n\t"  // restore native process stack now.
-        "popfl             \n\t"  // restore our original flags.
-        "popal             \n\t"  // restore our original registers.
-            : // no outputs
-            : "a" (isTermination), "d" (lxmod), "S" (stack), "D" (lxmod->eip)
-            : "memory"
-    );
-
-    //fprintf(stderr, "...survived time in LX land!\n"); fflush(stderr);
-
-    // !!! FIXME: this entry point returns a result...do we abort if it reports error?
-    // !!! FIXME: (actually, DosLoadModule() can report that failure. Abort if (GLoaderState.running == 0), though!)
-} // runLxLibraryInitOrTerm
+ // endLxProcess
 
 static void runLxLibraryInit(LxModule *lxmod)
 {
@@ -1263,27 +601,24 @@ static void runLibraryTerm(LxModule *lxmod)
 
 static void freeLxModule(LxModule *lxmod)
 {
-    if (!lxmod)
-        return;
-
-    //printf("freeing %s module '%s' (starting refcount=%d) ...\n", lxmod->nativelib ? "native" : lxmod->is_lx ? "LX" : "NE", lxmod->name, (int) lxmod->refcount); fflush(stdout);
-
-    // !!! FIXME: mutex from here
-    lxmod->refcount--;
-    //fprintf(stderr, "unref'd module '%s' to %u\n", lxmod->name, (uint) lxmod->refcount);
-    if (lxmod->refcount > 0)
-        return;  // something is still using it.
-
+    if (!lxmod || __atomic_sub_fetch(&lxmod->refcount, 1, __ATOMIC_ACQ_REL)) return;
     if ((lxmod->initialized) && (lxmod != GLoaderState.main_module)) {
         if (!lxmod->nativelib) {
             runLibraryTerm(lxmod);
         } else {
-            LxNativeModuleDeinitEntryPoint fn = (LxNativeModuleDeinitEntryPoint) dlsym(lxmod->nativelib, "lxNativeModuleDeinit");
+            LxNativeModuleDeinitEntryPoint fn = (LxNativeModuleDeinitEntryPoint) lx_host_library_symbol(lxmod->nativelib, "lxNativeModuleDeinit");
             if (fn)
                 fn();
         } // else
     } // if
 
+    lxmod->initialized = 0;
+    if (lxmod->handle) lx_handle_close(lxmod->handle, LX_HANDLE_MODULE);
+    else destroyLxModule(lxmod);
+}
+static void destroyLxModule(void *resource)
+{
+    LxModule *lxmod = resource;
     if (lxmod->next)
         lxmod->next->prev = lxmod->prev;
 
@@ -1298,7 +633,7 @@ static void freeLxModule(LxModule *lxmod)
         LxMmaps *lxmmap = lxmod->is_lx ?
             &lxmod->mmaps[lxmod->header.lx.esp_object - 1] :
             &lxmod->mmaps[lxmod->header.ne.reg_ss - 1];
-        const uint32 stackbase = (uint32) ((size_t)lxmmap->addr);
+        const uint32 stackbase = lxmmap->guest_base;
         initOs2StackSegments(stackbase, lxmmap->size, 1);
         lxmmap->mapped = NULL;  // don't unmap the stack we're probably using!
     } // if
@@ -1312,13 +647,17 @@ static void freeLxModule(LxModule *lxmod)
     for (uint32 i = 0; i < lxmod->num_mmaps; i++) {
         if (lxmod->mmaps[i].alias != 0xFFFF)
             lxFreeSelector(lxmod->mmaps[i].alias);
-        if (lxmod->mmaps[i].mapped)
-            munmap(lxmod->mmaps[i].mapped, lxmod->mmaps[i].size);
+        if (lxmod->mmaps[i].mapped) {
+            if (lxmod->mmaps[i].mapping)
+                lx_execution_unmap(GLoaderState.execution, lxmod->mmaps[i].mapping);
+            else
+                lx_host_memory_free(lxmod->mmaps[i].mapped, lxmod->mmaps[i].size);
+        }
     } // for
     free(lxmod->mmaps);    
 
     if (lxmod->nativelib)
-        dlclose(lxmod->nativelib);
+        lx_host_library_close(lxmod->nativelib);
     else {
         for (uint32 i = 0; i < lxmod->num_exports; i++)
             free((void *) lxmod->exports[i].name);
@@ -1327,7 +666,7 @@ static void freeLxModule(LxModule *lxmod)
 
     //printf("Freed module '%s'\n", lxmod->name); fflush(stdout);
     free(lxmod);
-} // freeLxModule
+} // destroyLxModule
 
 static LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependency_tree_depth);
 
@@ -1341,7 +680,7 @@ static void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ord
             if (_lxexp)
                 *_lxexp = lxexp;
             void *retval = lxexp->addr;
-            if (native && lxexp->object && lxexp->object->alias != 0xFFFF)  // 16-bit bridge? this is actually a void**, due to some macro salsa.  :/
+            if (lxexp->indirect)  // 16-bit bridge? this is actually a void**, due to some macro salsa.  :/
                 retval = *((void**) retval);
             if (getenv("TWOINE_TRACE_FIXUPS"))
                 fprintf(stderr, "2INE FIXUP: %s@%u want16=%d native=%d -> %p\n",
@@ -1374,7 +713,7 @@ static void *getModuleProcAddrByName(const LxModule *module, const char *name, c
             if (_lxexp)
                 *_lxexp = lxexp;
             void *retval = lxexp->addr;
-            if (lxexp->object && lxexp->object->alias != 0xFFFF)  // 16-bit bridge? this is actually a void**, due to some macro salsa.  :/
+            if (lxexp->indirect)  // Indirect host export entry. this is actually a void**, due to some macro salsa.  :/
                 retval = *((void**) retval);
             if (getenv("TWOINE_TRACE_FIXUPS"))
                 fprintf(stderr, "2INE FIXNAME: %s@'%s' -> %p\n", module->name, name, retval);
@@ -1422,6 +761,9 @@ static void doFixup(uint8 *page, const sint16 offset, const uint32 finalval, con
 
 static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj, const uint32 pagenum, uint8 *page)
 {
+    uint32 guest_page;
+    if (!lx_execution_address(GLoaderState.execution, page, 0, 0, &guest_page)) abort();
+
     assert(lxmod->is_lx);  // this should only be called from the LX loader.
     const LxHeader *lx = &lxmod->header.lx;
 //const LxObjectTableEntry *origobj = ((const LxObjectTableEntry *) (exe + lx->object_table_offset));
@@ -1463,7 +805,7 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                 finalsize = 4;
                 break;
             case 0x6:  // 16:32 pointer fixup
-                finalval2 = GLoaderState.original_cs;
+                finalval2 = lx_execution_flat_code_selector(GLoaderState.execution);
                 finalsize = 6;
                 allow_fixup_to_alias = 1;
                 break;
@@ -1502,7 +844,7 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                 } // if
 
                 if (!fixup_to_alias) {
-                    const uint32 base = (uint32) (size_t) lxmod->mmaps[objectid - 1].addr;
+                    const uint32 base = lxmod->mmaps[objectid - 1].guest_base;
                     finalval = base + targetoffset;
                 } else {
                     if (lxmod->mmaps[objectid - 1].alias == 0xFFFF) {
@@ -1547,7 +889,7 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                     fprintf(stderr, "uhoh, looking for module ordinal %u, but only %u available.\n", (uint) moduleid, (uint) lx->num_import_mod_entries);
                 } else {
                     //printf("import-by-ordinal fixup: module=%u import=%u\n", (uint) moduleid, (uint) importid);
-                    finalval = (uint32) (size_t) getModuleProcAddrByOrdinal(lxmod->dependencies[moduleid-1], importid, &lxexp, fixup_to_alias, 1);
+                    finalval = guestEntryAddress(getModuleProcAddrByOrdinal(lxmod->dependencies[moduleid-1], importid, &lxexp, fixup_to_alias, 1));
                 } // else
 
                 if (fixup_to_alias) {
@@ -1557,8 +899,8 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                         const uint16 segment = lxSelectorToSegment(lxexp->object->alias);
                         switch (srctype & 0xF) {
                             case 0x2: finalval = segment; break; // 16-bit selector fixup?  !!! FIXME:
-                            case 0x3: finalval = (((uint32) segment) << 16) | (finalval - ((uint32)lxexp->object->addr)); break; // 16:16 pointer fixup
-                            case 0x6: finalval -= ((uint32)lxexp->object->addr); finalval2 = segment; break; // 16:32 pointer fixup
+                            case 0x3: finalval = (((uint32) segment) << 16) | (finalval - lxexp->object->guest_base); break; // 16:16 pointer fixup
+                            case 0x6: finalval -= lxexp->object->guest_base; finalval2 = segment; break; // 16:32 pointer fixup
                             default: assert(!"shouldn't hit this code"); break;
                         } // switch
                     } // else
@@ -1593,7 +935,7 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                     memcpy(name, import_name, namelen);
                     name[namelen] = '\0';
                     //printf("import-by-name fixup: module=%u import='%s'\n", (uint) moduleid, name);
-                    finalval = (uint32) (size_t) getModuleProcAddrByName(lxmod->dependencies[moduleid-1], name, &lxexp, fixup_to_alias);
+                    finalval = guestEntryAddress(getModuleProcAddrByName(lxmod->dependencies[moduleid-1], name, &lxexp, fixup_to_alias));
                 } // else
 
                 if (fixup_to_alias) {
@@ -1603,8 +945,8 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                         const uint16 segment = lxSelectorToSegment(lxexp->object->alias);
                         switch (srctype & 0xF) {
                             case 0x2: finalval = segment; break; // 16-bit selector fixup?  !!! FIXME:
-                            case 0x3: finalval = (((uint32) segment) << 16) | (finalval - ((uint32)lxexp->object->addr)); break; // 16:16 pointer fixup
-                            case 0x6: finalval -= ((uint32)lxexp->object->addr); finalval2 = segment; break; // 16:32 pointer fixup
+                            case 0x3: finalval = (((uint32) segment) << 16) | (finalval - lxexp->object->guest_base); break; // 16:16 pointer fixup
+                            case 0x6: finalval -= lxexp->object->guest_base; finalval2 = segment; break; // 16:32 pointer fixup
                             default: assert(!"shouldn't hit this code"); break;
                         } // switch
                     } // else
@@ -1615,7 +957,7 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
             case 0x3: { // Internal entry table fixup record
                 FIXME("FIXUP 0x3 WRITE ME");
                 assert(!"write me");
-                _exit(1);
+                lx_host_process_exit(1);
                 break;
             } // case
         } // switch
@@ -1641,7 +983,7 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
                 const sint16 offset = *((sint16 *) fixup); fixup += 2;
                 if ((srctype & 0xF) == 0x08) {  // self-relative fixup?
                     assert(finalval2 == 0);
-                    doFixup(page, offset, finalval - (((uint32)page)+offset+4), 0, finalsize);
+                    doFixup(page, offset, finalval - (guest_page+offset+4), 0, finalsize);
                 } else {
                     doFixup(page, offset, finalval, finalval2, finalsize);
                 } // else
@@ -1649,7 +991,7 @@ static void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntr
         } else {
             if ((srctype & 0xF) == 0x08) {  // self-relative fixup?
                 assert(finalval2 == 0);
-                doFixup(page, srcoffset, finalval - (((uint32)page)+srcoffset+4), 0, finalsize);
+                doFixup(page, srcoffset, finalval - (guest_page+srcoffset+4), 0, finalsize);
             } else {
                 doFixup(page, srcoffset, finalval, finalval2, finalsize);
             } // else
@@ -1714,25 +1056,6 @@ static int loadLxNameTable(LxModule *lxmod, const uint8 *name_table)
 //  for things that look like absolute jmps to code segment 0x5B, and patch
 //  them up to the host's actual linear address code segment. This is nasty,
 //  but oh well.
-static void fixupLinearCodeSegmentReferences(uint8 *addr, size_t size)
-{
-    // in lieu of writing a full x86 instruction decoder, we just look for
-    //  0xEA (JMP LARGE FAR PTR ADDR), skip 4 bytes (the 32-bit offset), and
-    //  see if the next two bytes are 0x5B 0x00 (the 16-bit segment). This is
-    //  wrong but "good enough" for now.
-    while (size >= 7) {
-        size--;
-        if (*(addr++) == 0xEA) {
-            if ((addr[4] == 0x5B) && (addr[5] == 0x00)) {
-                //printf("Patching out code segment 0x5B at %p\n", addr+4);
-                memcpy(&addr[4], &GLoaderState.original_cs, 2);
-                size -= 6;
-                addr += 6;
-            } // if
-        } // if
-    } // while
-} // fixupLinearCodeSegmentReferences
-
 /* LX ("Linear Executable") modules are 32-bit binaries that can contain 16-bit segments. */
 // !!! FIXME: break up this function.
 // Optional post-load memory dump, for correlating a live loader address with
@@ -1772,6 +1095,7 @@ static void dumpLoadedModule(const LxModule *lxmod)
 
 static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint32 exelen, int dependency_tree_depth)
 {
+    LxModule *retval = NULL;
     const LxHeader *lx = (const LxHeader *) exe;
     const uint32 module_type = lx->module_flags & 0x00038000;
 
@@ -1793,7 +1117,7 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
         goto loadlx_failed;
     } // if else if
 
-    LxModule *retval = (LxModule *) malloc(sizeof (LxModule));
+    retval = (LxModule *) malloc(sizeof (LxModule));
     if (!retval) {
         fprintf(stderr, "Out of memory!\n");
         goto loadlx_failed;
@@ -1801,6 +1125,8 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
     memset(retval, '\0', sizeof (*retval));
     retval->is_lx = 1;
     retval->refcount = 1;
+    retval->handle = lx_handle_create(LX_HANDLE_MODULE, retval, destroyLxModule);
+    if (!retval->handle) { fprintf(stderr, "Cannot allocate module handle\n"); goto loadlx_failed; }
     retval->dependencies = (LxModule **) malloc(sizeof (LxModule *) * lx->num_import_mod_entries);
     retval->mmaps = (LxMmaps *) malloc(sizeof (LxMmaps) * lx->module_num_objects);
     if (!retval->dependencies || !retval->mmaps) {
@@ -1829,7 +1155,11 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
 
     if (!isDLL) {
         GLoaderState.main_module = retval;
-        GLoaderState.pib.pib_hmte = retval;
+        GLoaderState.pib.pib_hmte = retval->handle;
+        if (GLoaderState.guest_pib) {
+            LxGuestPib *pib = lx_execution_mapping_host(GLoaderState.guest_pib);
+            lx_guest_store_u32(&pib->module, retval->handle);
+        }
     } // else if
 
     const char *modname = retval->name;
@@ -1866,34 +1196,37 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
                 vsize += 0x10000;  // make sure we can align to a 64k boundary.
         } // if
 
-        const int mmapflags = MAP_ANONYMOUS | MAP_PRIVATE | (isDLL ? 0 : MAP_FIXED);
         void *base = isDLL ? NULL : (void *) ((size_t) obj->reloc_base_addr);
-        void *mmapaddr = mmap(base, vsize, PROT_READ|PROT_WRITE, mmapflags, -1, 0);
+        LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution,
+            (uint32) (uintptr_t) base, vsize, LX_GUEST_READ | LX_GUEST_WRITE, !isDLL);
+        void *mmapaddr = mapping ? lx_execution_mapping_host(mapping) : NULL;
         // we'll mprotect() these pages to the proper permissions later.
 
         //fprintf(stderr, "%s lxobj #%u mmap(%p, %u, %c%c%c, ANON|PRIVATE%s, -1, 0) == %p\n", retval->name, (uint) i, base, (uint) vsize, (obj->object_flags & 0x1) ? 'R' : '-', (obj->object_flags & 0x2) ? 'W' : '-', (obj->object_flags & 0x4) ? 'X' : '-', isDLL ? "" : "|FIXED", mmapaddr);
 
-        if (mmapaddr == ((void *) MAP_FAILED)) {
+        if (!mmapaddr) {
             fprintf(stderr, "mmap(%p, %u, RW-, ANON|PRIVATE%s, -1, 0) failed (%d): %s\n",
                     base, (uint) vsize, isDLL ? "" : "|FIXED", errno, strerror(errno));
             goto loadlx_failed;
         } // if
 
+        retval->mmaps[i].mapping = mapping;
         retval->mmaps[i].mapped = mmapaddr;
         retval->mmaps[i].size = vsize;
 
         // force objects with a 16:16 alias to a 64k boundary.
-        size_t adjust = (size_t) mmapaddr;
-        if (needs_1616_alias && ((adjust % 0x10000) != 0)) {
-            assert(isDLL);  // this must be fixed to a specific address, hopefully handled this...?
-            const size_t diff = 0x10000 - (adjust % 0x10000);
+        const uint32 guest_mapping_base = lx_execution_mapping_address(mapping);
+        if (needs_1616_alias && (guest_mapping_base % 0x10000) != 0) {
+            assert(isDLL);
+            const uint32 diff = 0x10000 - (guest_mapping_base % 0x10000);
             vsize -= diff;
-            adjust += diff;
-            mmapaddr = (void *) adjust;
-        } // if
+            mmapaddr = (uint8 *) mmapaddr + diff;
+        }
 
         FIXME("Can we just unmap the adjusted pieces?");  // instead of keeping an extra pointer and wasted space...
         retval->mmaps[i].addr = mmapaddr;
+        retval->mmaps[i].guest_base = lx_execution_mapping_address(mapping) +
+            (uint32) ((uint8 *) mmapaddr - (uint8 *) lx_execution_mapping_host(mapping));
 
         const LxObjectPageTableEntry *objpage = ((const LxObjectPageTableEntry *) (exe + lx->object_page_table_offset));
         objpage += obj->page_table_index - 1;
@@ -1954,7 +1287,7 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
 
     retval->eip = lx->eip;
     if (lx->eip_object != 0) {
-        const uint32 base = (uint32) ((size_t)retval->mmaps[lx->eip_object - 1].addr);
+        const uint32 base = retval->mmaps[lx->eip_object - 1].guest_base;
         retval->eip += base;
     } // if
 
@@ -1963,14 +1296,14 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
     if (!isDLL) {
         assert(lx->esp_object != 0);
         const LxMmaps *lxmmap = &retval->mmaps[lx->esp_object - 1];
-        const uint32 stackbase = (uint32) ((size_t)lxmmap->addr);
+        const uint32 stackbase = lxmmap->guest_base;
         const uint32 stacksize = (uint32) lxmmap->size;
         retval->esp = lx->esp + stackbase;
         GLoaderState.mainstacksize = stacksize;
 
         // This needs to be set up now, so it's available to any library
         //  init code that runs in LX land.
-        GLoaderState.initOs2Tib(GLoaderState.main_tibspace, (void *) ((size_t) retval->esp), stacksize, 0);
+        GLoaderState.initOs2Tib(GLoaderState.main_tibspace, (uint8 *) lxmmap->addr + lx->esp, stacksize, 1);
         GLoaderState.main_tib_selector = GLoaderState.setOs2Tib(GLoaderState.main_tibspace);
         initOs2StackSegments(stackbase, stacksize, 0);
     } // if
@@ -1984,7 +1317,7 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
                 continue;  // Object doesn't need a 16:16 alias, skip it.
             uint16 offset = 0;
             const int iscode = (obj->object_flags & 0x4) ? 1 : 0;
-            if (!lxFindSelector((uint32) (size_t) retval->mmaps[i].addr, &retval->mmaps[i].alias, &offset, iscode)) {
+            if (!lxFindSelector(retval->mmaps[i].guest_base, &retval->mmaps[i].alias, &offset, iscode)) {
                 fprintf(stderr, "Ran out of LDT entries getting a 16:16 alias for '%s' object #%u!\n", modname, (uint) (i + 1));
                 goto loadlx_failed;
             } // if
@@ -2008,7 +1341,7 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
         } // if
     } // while
 
-    LxExport *lxexp = (LxExport *) malloc(sizeof (LxExport) * total_ordinals);
+    LxExport *lxexp = (LxExport *) calloc(1, sizeof (LxExport) * total_ordinals);
     if (!lxexp) {
         fprintf(stderr, "Out of memory!\n");
         goto loadlx_failed;
@@ -2133,20 +1466,22 @@ static LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *ex
         //  turns a valid far call into SIGSEGV, so preserve the 386 rule:
         //  readable implies executable. Objects that are not readable stay
         //  non-executable.
-        int prot = ((object_flags & 0x1) ? PROT_READ : 0) |
-                   ((object_flags & 0x2) ? PROT_WRITE : 0) |
-                   ((object_flags & 0x4) ? PROT_EXEC : 0);
-        if (prot & PROT_READ)
-            prot |= PROT_EXEC;
+        int prot = ((object_flags & 0x1) ? LX_GUEST_READ : 0) |
+                   ((object_flags & 0x2) ? LX_GUEST_WRITE : 0) |
+                   ((object_flags & 0x4) ? LX_GUEST_EXECUTE : 0);
+        if (prot & LX_GUEST_READ)
+            prot |= LX_GUEST_EXECUTE;
 
         retval->mmaps[i].prot = prot;
 
-        if (mprotect(retval->mmaps[i].mapped, retval->mmaps[i].size, prot) == -1) {
+        if (!(retval->mmaps[i].mapping ?
+              lx_execution_protect(GLoaderState.execution, retval->mmaps[i].mapping, (unsigned) prot) :
+              lx_host_vm_protect(retval->mmaps[i].mapped, retval->mmaps[i].size, (unsigned) prot))) {
             fprintf(stderr, "mprotect(%p, %u, %s%s%s, ANON|PRIVATE|FIXED, -1, 0) failed (%d): %s\n",
                     retval->mmaps[i].addr, (uint) retval->mmaps[i].size,
-                    (prot&PROT_READ) ? "R" : "-",
-                    (prot&PROT_WRITE) ? "W" : "-",
-                    (prot&PROT_EXEC) ? "X" : "-",
+                    (prot&LX_GUEST_READ) ? "R" : "-",
+                    (prot&LX_GUEST_WRITE) ? "W" : "-",
+                    (prot&LX_GUEST_EXECUTE) ? "X" : "-",
                     errno, strerror(errno));
             goto loadlx_failed;
         } // if
@@ -2308,6 +1643,7 @@ static int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8
 // NE ("New Executable") modules are 16-bit binaries.
 static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint32 exelen, int dependency_tree_depth)
 {
+    LxModule *retval = NULL;
     FIXME("All of this needs bounds checking and corruption testing");
     const NeHeader *ne = (const NeHeader *) exe;
     const uint16 module_type = ne->module_flags & 0x8000;
@@ -2328,7 +1664,7 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
     }
 
     // we load an "LxModule" even for NE binaries. Sorry!!
-    LxModule *retval = (LxModule *) malloc(sizeof (LxModule));
+    retval = (LxModule *) malloc(sizeof (LxModule));
     if (!retval) {
         fprintf(stderr, "Out of memory!\n");
         goto loadne_failed;
@@ -2336,6 +1672,8 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
     memset(retval, '\0', sizeof (*retval));
     retval->is_lx = 0;
     retval->refcount = 1;
+    retval->handle = lx_handle_create(LX_HANDLE_MODULE, retval, destroyLxModule);
+    if (!retval->handle) { fprintf(stderr, "Cannot allocate module handle\n"); free(retval); return NULL; }
     retval->dependencies = (LxModule **) malloc(sizeof (LxModule *) * ne->num_module_ref_table_entries);
     retval->mmaps = (LxMmaps *) malloc(sizeof (LxMmaps) * ne->num_segment_table_entries);
     if (!retval->dependencies || !retval->mmaps) {
@@ -2364,7 +1702,11 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
 
     if (!isDLL) {
         GLoaderState.main_module = retval;
-        GLoaderState.pib.pib_hmte = retval;
+        GLoaderState.pib.pib_hmte = retval->handle;
+        if (GLoaderState.guest_pib) {
+            LxGuestPib *pib = lx_execution_mapping_host(GLoaderState.guest_pib);
+            lx_guest_store_u32(&pib->module, retval->handle);
+        }
     } // else if
 
     const char *modname = retval->name;
@@ -2408,7 +1750,7 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
             fprintf(stderr, "lxAllocSegment(%d) failed\n", iscode);
             goto loadne_failed;
         } else if (selector == 0xFFFF) {
-            munmap(mmapaddr, vsize);
+            /* The execution instance retains ownership of this failed allocation. */
             mmapaddr = NULL;
             fprintf(stderr, "Failed to get a selector for a segment\n");
             goto loadne_failed;
@@ -2417,6 +1759,12 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
         if (getenv("TWOINE_TRACE_SEGMENTS"))
             fprintf(stderr, "2INE NESEG %s #%u addr=%p selector=%04X iscode=%d\n",
                     retval->name, (uint) i + 1, mmapaddr, (uint) selector, iscode);
+        uint32 guest_address;
+        if (!lx_execution_address(GLoaderState.execution, mmapaddr, vsize, 0, &guest_address)) {
+            fprintf(stderr, "NE segment is outside guest memory\n"); goto loadne_failed;
+        }
+        retval->mmaps[i].mapping = lx_execution_mapping_at(GLoaderState.execution, guest_address);
+        retval->mmaps[i].guest_base = guest_address;
         retval->mmaps[i].mapped = mmapaddr;
         retval->mmaps[i].size = vsize;
         retval->mmaps[i].addr = mmapaddr;
@@ -2452,8 +1800,10 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
 
     if (!isDLL && ne->auto_data_segment &&
         (ne->auto_data_segment <= ne->num_segment_table_entries)) {
-        GLoaderState.near16_base = (uint32) (uintptr_t)
-            retval->mmaps[ne->auto_data_segment - 1].addr;
+        uint32 data_address;
+        if (!lx_execution_address(GLoaderState.execution,
+                retval->mmaps[ne->auto_data_segment - 1].addr, 1, 0, &data_address)) abort();
+        lx_execution_near_base(GLoaderState.execution, data_address);
     } // if
 
     retval->eip = (lxSelectorToSegment(retval->mmaps[ne->reg_cs-1].alias) << 16) | ne->reg_ip;
@@ -2493,7 +1843,7 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
         // This needs to be set up now, so it's available to any library
         //  init code that runs in LX land.
         void *topofstack = (void *) (((size_t) retval->mmaps[ne->reg_ss-1].addr) + sp);
-        GLoaderState.initOs2Tib(GLoaderState.main_tibspace, topofstack, stacksize, 0);
+        GLoaderState.initOs2Tib(GLoaderState.main_tibspace, topofstack, stacksize, 1);
         GLoaderState.main_tib_selector = GLoaderState.setOs2Tib(GLoaderState.main_tibspace);
     } // if
 
@@ -2511,7 +1861,7 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
         } // while
 
         if (total_ordinals > 0) {
-            LxExport *lxexp = (LxExport *) malloc(sizeof (LxExport) * total_ordinals);
+            LxExport *lxexp = (LxExport *) calloc(1, sizeof (LxExport) * total_ordinals);
             if (!lxexp) {
                 fprintf(stderr, "Out of memory!\n");
                 goto loadne_failed;
@@ -2597,17 +1947,19 @@ static LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *ex
         // Now set all the pages of this object to the proper final permissions...
         const int iscode = ((seg->segment_flags & 0x7) == 0) ? 1 : 0;
         const int preload = (seg->segment_flags & 0x40) ? 1 : 0;  // PRELOAD implies read-only, according to spec.
-        const int prot = ((preload && !iscode) ? 0 : PROT_WRITE) | (iscode ? PROT_EXEC : 0) | PROT_READ;
+        const int prot = ((preload && !iscode) ? 0 : LX_GUEST_WRITE) | (iscode ? LX_GUEST_EXECUTE : 0) | LX_GUEST_READ;
         retval->mmaps[i].prot = prot;
 
-        //printf("mprotect(%p, %u, %s%s%s);\n", retval->mmaps[i].mapped, (uint) retval->mmaps[i].size, (prot&PROT_READ) ? "R" : "-", (prot&PROT_WRITE) ? "W" : "-", (prot&PROT_EXEC) ? "X" : "-");
+        //printf("mprotect(%p, %u, %s%s%s);\n", retval->mmaps[i].mapped, (uint) retval->mmaps[i].size, (prot&LX_GUEST_READ) ? "R" : "-", (prot&LX_GUEST_WRITE) ? "W" : "-", (prot&LX_GUEST_EXECUTE) ? "X" : "-");
 
-        if (mprotect(retval->mmaps[i].mapped, retval->mmaps[i].size, prot) == -1) {
+        if (!(retval->mmaps[i].mapping ?
+              lx_execution_protect(GLoaderState.execution, retval->mmaps[i].mapping, (unsigned) prot) :
+              lx_host_vm_protect(retval->mmaps[i].mapped, retval->mmaps[i].size, (unsigned) prot))) {
             fprintf(stderr, "mprotect(%p, %u, %s%s%s) failed (%d): %s\n",
                     retval->mmaps[i].mapped, (uint) retval->mmaps[i].size,
-                    (prot&PROT_READ) ? "R" : "-",
-                    (prot&PROT_WRITE) ? "W" : "-",
-                    (prot&PROT_EXEC) ? "X" : "-",
+                    (prot&LX_GUEST_READ) ? "R" : "-",
+                    (prot&LX_GUEST_WRITE) ? "W" : "-",
+                    (prot&LX_GUEST_EXECUTE) ? "X" : "-",
                     errno, strerror(errno));
             goto loadne_failed;
         } // if
@@ -2662,35 +2014,12 @@ static LxModule *loadModule(const char *fname, uint8 *exe, uint32 exelen, int de
 
 static LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_depth)
 {
-    const char *what = NULL; (void) what;
-    uint8 *module = NULL;
-    uint32 modulelen = 0;
-    FILE *io = NULL;
-
-    // !!! FIXME: locate correct file (case-insensitive checking, convert '\\' to '/' etc)...
-
-    #define LOADFAIL(x) { what = x; goto loadmod_failed; }
-
-    if ((io = fopen(fname, "rb")) == NULL) LOADFAIL("open");
-    if (fseek(io, 0, SEEK_END) < 0) LOADFAIL("seek");
-    modulelen = ftell(io);
-    if ((module = (uint8 *) malloc(modulelen)) == NULL) LOADFAIL("malloc");
-    rewind(io);
-    if (fread(module, modulelen, 1, io) != 1) LOADFAIL("read");
-    fclose(io);
-
-    #undef LOADFAIL
-
-    LxModule *retval = loadModule(fname, module, modulelen, dependency_tree_depth);
-    free(module);
-    return retval;
-
-loadmod_failed:
-    fprintf(stderr, "%s failure on '%s: %s'\n", what, fname, strerror(errno));
-    if (io)
-        fclose(io);
-    free(module);
-    return NULL;
+    size_t size;
+    LxHostFsError error;
+    uint8 *module = lx_host_file_snapshot(fname, UINT32_MAX, &size, &error);
+    if (!module) { fprintf(stderr, "Cannot read module '%s' (host filesystem result %u)\n", fname, (unsigned) error); return NULL; }
+    LxModule *result = loadModule(fname, module, (uint32) size, dependency_tree_depth);
+    free(module); return result;
 } // loadModuleByPathInternal
 
 static inline LxModule *loadModuleByPath(const char *fname)
@@ -2701,7 +2030,7 @@ static inline LxModule *loadModuleByPath(const char *fname)
 static LxModule *loadNativeModule(const char *fname, const char *modname)
 {
     LxModule *retval = (LxModule *) malloc(sizeof (LxModule));
-    void *lib = NULL;
+    LxHostLibrary *lib = NULL;
     LxNativeModuleInitEntryPoint fn = NULL;
     const LxExport *exports = NULL;
     uint32 num_exports = 0;
@@ -2713,13 +2042,14 @@ static LxModule *loadNativeModule(const char *fname, const char *modname)
     memset(retval, '\0', sizeof(*retval));
 
     // !!! FIXME: mutex this.
-    lib = dlopen(fname, RTLD_LOCAL | RTLD_NOW);
+    char error[512];
+    lib = lx_host_library_open(fname, error, sizeof error);
     if (lib == NULL) {
-        fprintf(stderr, "dlopen('%s') failed: %s\n", fname, dlerror());
+        fprintf(stderr, "Host library '%s' failed: %s\n", fname, error);
         goto loadnative_failed;
     } // if
 
-    fn = (LxNativeModuleInitEntryPoint) dlsym(lib, "lxNativeModuleInit");
+    fn = (LxNativeModuleInitEntryPoint) lx_host_library_symbol(lib, "lxNativeModuleInit");
     if (!fn)
         goto loadnative_failed;
 
@@ -2727,6 +2057,8 @@ static LxModule *loadNativeModule(const char *fname, const char *modname)
     if (!exports)
         goto loadnative_failed;
     retval->refcount = 1;
+    retval->handle = lx_handle_create(LX_HANDLE_MODULE, retval, destroyLxModule);
+    if (!retval->handle) { fprintf(stderr, "Cannot allocate module handle\n"); goto loadnative_failed; }
     strcpy(retval->name, modname);
     retval->nativelib = lib;
     retval->os2path = os2path;
@@ -2739,7 +2071,12 @@ static LxModule *loadNativeModule(const char *fname, const char *modname)
     return retval;
 
 loadnative_failed:
-    if (lib) dlclose(lib);
+    if (exports) {
+        LxNativeModuleDeinitEntryPoint cleanup = (LxNativeModuleDeinitEntryPoint)
+            lx_host_library_symbol(lib, "lxNativeModuleDeinit");
+        if (cleanup) cleanup();
+    }
+    if (lib) lx_host_library_close(lib);
     free(os2path);
     free(retval);
     return NULL;
@@ -2766,7 +2103,7 @@ static LxModule *loadModuleByModuleNameInternal(const char *modname, const int d
     locatePathCaseInsensitive(fname);
 
     LxModule *retval = NULL;
-    if (access(fname, F_OK) == 0)
+    if (lx_host_path_exists(fname))
         retval = loadModuleByPathInternal(fname, dependency_tree_depth);
 
     if (!retval) {
@@ -2780,7 +2117,7 @@ static LxModule *loadModuleByModuleNameInternal(const char *modname, const int d
                 snprintf(dllpath, sizeof (dllpath), "%.*s%s%s.dll",
                          (int) len, ptr, (len == 0) ? "./" : "/", modname);
                 locatePathCaseInsensitive(dllpath);
-                if (access(dllpath, F_OK) == 0)
+                if (lx_host_path_exists(dllpath))
                     retval = loadModuleByPathInternal(dllpath, dependency_tree_depth);
                 ptr = end ? end + 1 : ptr + len;
             } // while
@@ -2854,77 +2191,6 @@ static LxModule *loadModuleByPathOrModuleName(const char *modname)
     return retval;
 } // loadModuleByPathOrModuleName
 
-static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
-{
-    greg_t *gregs = uctx->uc_mcontext.gregs;
-
-    // use the segfaulting thread's FS register, so we can get its TIB2 pointer.
-    LxTIB2 *ptib2 = NULL;
-    __asm__ __volatile__ (
-        "pushw %%fs            \n\t"
-        "movw %%ax, %%fs       \n\t"
-        "movl %%fs:0xC, %%eax  \n\t"
-        "popw %%fs             \n\t"
-            : "=a" (ptib2)
-            : "eax" (gregs[REG_FS])
-    );
-
-    // The thread's TLS data is stored in LxPostTIB, right after its TIB2 struct.
-    LxPostTIB *posttib = (LxPostTIB *) (ptib2 + 1);
-    uint32 *tls = posttib->tls;
-    tls += slot;
-
-    //printf("We wanted to access thread %p TLS slot %d (currently holds %u)\n", tls - slot, slot, (uint) *tls);
-
-    static const int x86RegisterToUContextEnum[] = {
-        REG_EAX, REG_ECX, REG_EDX, REG_EBX, REG_ESP, REG_EBP, REG_ESI, REG_EDI
-    };
-
-    // this is a hack; we'll want a much more serious x86 instruction decoder before long.
-    int handled = 1;
-    uint8 *eip = (void *) (size_t) gregs[REG_EIP];  // program counter at point of segfault.
-    switch (eip[0]) {
-        case 0xC7:  // mov imm16/32 -> r/m
-            //printf("setting TLS slot %d to imm %u.\n", slot, (uint) *((uint32 *) (eip + 2)));
-            *tls = *((uint32 *) (eip + 2));  // !!! FIXME: verify it's a imm32, not 16
-            gregs[REG_EIP] += 6;
-            break;
-
-        case 0x89:  // mov r -> r/m
-            //printf("setting TLS slot %d to reg %d (%u).\n", slot, x86RegisterToUContextEnum[eip[1] >> 3], (uint) gregs[x86RegisterToUContextEnum[eip[1] >> 3]]);
-            *tls = (uint32) gregs[x86RegisterToUContextEnum[eip[1] >> 3]];
-            gregs[REG_EIP] += 2;
-            break;
-
-        case 0x8B:  // mov r/m -> r
-            //printf("setting reg %d to TLS slot %d (%u).\n", (uint) x86RegisterToUContextEnum[eip[1] >> 3], slot, *tls);
-            gregs[x86RegisterToUContextEnum[eip[1] >> 3]] = (greg_t) *tls;
-            gregs[REG_EIP] += 2;
-            break;
-
-        default:
-            handled = 0;
-            break;
-    } // switch
-
-    if (!handled) {
-        fprintf(stderr, "Oh no, unhandled opcode 0x%X at %p accessing TLS register! File a bug!\n", (uint) eip[0], eip);
-    } else {
-        // drop out of signal handler to (hopefully) next instruction in the app,
-        //  as if it accessed the TLS slot normally and none of this ever happened.
-        //printf("TLS access handler jumping back into app at %p...\n", (void *) gregs[REG_EIP]); fflush(stdout);
-        setcontext(uctx);
-        fprintf(stderr, "panic: setcontext() failed in the TLS access handler! Aborting! (%s)\n", strerror(errno));
-    } // else
-
-    fflush(stderr);
-    abort();
-} // handleThreadLocalStorageAccess
-
-// Report which loaded OS/2 module (and object) contains an address, so a
-//  crash inside application or DLL code is attributable instead of a bare
-//  pointer. Returns 1 and fills buf if the address is in a mapped module
-//  object, 0 otherwise.
 static int describeModuleAddress(const void *ptr, char *buf, const size_t buflen)
 {
     const uint32 addr = (uint32) (size_t) ptr;
@@ -2932,7 +2198,7 @@ static int describeModuleAddress(const void *ptr, char *buf, const size_t buflen
     for (LxModule *lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next) {
         for (uint32 i = 0; i < lxmod->num_mmaps; i++) {
             const LxMmaps *mmap = &lxmod->mmaps[i];
-            const uint32 base = (uint32) (size_t) mmap->addr;
+            const uint32 base = mmap->guest_base;
             const uint32 end = base + (uint32) mmap->size;
             if ((addr >= base) && (addr < end)) {
                 snprintf(buf, buflen, "%s object #%u +0x%X [base=%08X size=%X]",
@@ -2947,144 +2213,34 @@ static int describeModuleAddress(const void *ptr, char *buf, const size_t buflen
     return 0;
 } // describeModuleAddress
 
-// Print the /proc/self/maps line covering ptr, for host mappings the module
-//  walk cannot explain (libc, malloc'd regions, deleted files).
-static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
+static int executableAt(void *unused, uint32 address)
 {
-    char path[64];
-    snprintf(path, sizeof (path), "/proc/%d/maps", (int) getpid());
-    FILE *io = fopen(path, "r");
-    *buf = '\0';
-    if (!io)
-        return;
-
-    const unsigned long want = (unsigned long) (size_t) ptr;
-    char line[512];
-    while (fgets(line, sizeof (line), io)) {
-        unsigned long start = 0, end = 0;
-        if (sscanf(line, "%lx-%lx", &start, &end) == 2) {
-            if ((want >= start) && (want < end)) {
-                strncpy(buf, line, buflen - 1);
-                buf[buflen - 1] = '\0';
-                char *nl = strchr(buf, '\n');
-                if (nl) *nl = '\0';
-                break;
-            } // if
-        } // if
-    } // while
-    fclose(io);
-} // describeHostMapping
-
-static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
+    (void) unused;
+    for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        for (uint32 i = 0; i < m->num_mmaps; i++) {
+            const LxMmaps *p = &m->mmaps[i];
+            uintptr_t base = (uintptr_t) p->addr;
+            if (address >= base && address - base < p->size)
+                return !!(p->prot & LX_GUEST_EXECUTE);
+        }
+    return -1;
+}
+static int describeExecutionAddress(void *unused, uint32 address, char *buffer, size_t size)
 {
-    ucontext_t *uctx = (ucontext_t *) ctx;
-    const uint32 *addr = (const uint32 *) info->si_addr;
-    const uint32 *tlspage = GLoaderState.tlspage;
-    greg_t *gregs = uctx->uc_mcontext.gregs;
-
-    if (tlspage && (addr >= tlspage))
-    {
-        // was the app accessing one of the OS/2 TLS slots?
-        const int slot = (int) (addr - tlspage);
-        if (slot < 32)
-            handleThreadLocalStorageAccess(slot, uctx);
-    } // if
-
-    static int faults = 0;
-    faults++;
-    switch (faults) {
-        case 1: {
-            char eipmod[512], addrmod[512];
-            const void *eip = (const void *) (size_t) gregs[REG_EIP];
-            describeModuleAddress(eip, eipmod, sizeof (eipmod));
-            describeModuleAddress(addr, addrmod, sizeof (addrmod));
-            if (!*eipmod) {
-                char line[512];
-                describeHostMapping(eip, line, sizeof (line));
-                snprintf(eipmod, sizeof (eipmod), "%s",
-                         *line ? line : "unmapped");
-            } // if
-            if (!*addrmod) {
-                char line[512];
-                describeHostMapping(addr, line, sizeof (line));
-                snprintf(addrmod, sizeof (addrmod), "%s",
-                         *line ? line : "unmapped");
-            } // if
-            fprintf(stderr,
-                    "SIGSEGV at %p (%s) eip=%p (%s) eax=%08X ebx=%08X "
-                    "ecx=%08X edx=%08X esi=%08X edi=%08X ebp=%08X esp=%08X\n",
-                    addr, (*addrmod) ? addrmod : "unmapped",
-                    eip, (*eipmod) ? eipmod : "unmapped",
-                    (uint) gregs[REG_EAX], (uint) gregs[REG_EBX],
-                    (uint) gregs[REG_ECX], (uint) gregs[REG_EDX],
-                    (uint) gregs[REG_ESI], (uint) gregs[REG_EDI],
-                    (uint) gregs[REG_EBP], (uint) gregs[REG_ESP]);
-            {
-                char line[512];
-                describeHostMapping(eip, line, sizeof (line));
-                if (*line) {
-                    const uint8 *bytes = (const uint8 *) (size_t) eip;
-                    fprintf(stderr, "  eip bytes:");
-                    for (int i = 0; i < 16; i++)
-                        fprintf(stderr, " %02X", bytes[i]);
-                    fprintf(stderr, "\n");
-                } // if
-            }
-            {
-                const uint32 *stack = (const uint32 *) (size_t) gregs[REG_ESP];
-                fprintf(stderr, "  near-stack:");
-                for (int i = -8; i < 8; i++)
-                    fprintf(stderr, " [%08X]=%08X", (uint) (stack + i),
-                            (uint) stack[i]);
-                fprintf(stderr, "\n");
-            }
-            {
-                const uint32 *stack = (const uint32 *) (size_t) gregs[REG_ESP];
-                fprintf(stderr, "  stack:");
-                for (int i = 0; i < 12; i++) {
-                    char mod[320];
-                    describeModuleAddress((const void *) (size_t) stack[i],
-                                          mod, sizeof (mod));
-                    fprintf(stderr, " [%08X%s%s]", (uint) stack[i],
-                            (*mod) ? "=" : "", mod);
-                } // for
-                fprintf(stderr, "\n");
-            }
-            break;
-        } // case
-        case 2: write(2, "SIGSEGV, aborting.\n", 19); break;
-        default: break;
-    } // switch
-
-    abort();  // cash out.
-} // segfault_catcher
-
-static int installSignalHandlers(void)
+    (void) unused;
+    return describeModuleAddress((void *) (uintptr_t) address, buffer, size);
+}
+static void executionReturned(void *unused, uint32 result)
 {
-    struct sigaction action;
-
-    memset(&action, '\0', sizeof (action));
-    action.sa_sigaction = segfault_catcher;
-    action.sa_flags = SA_NODEFER | SA_SIGINFO;
-
-    if (sigaction(SIGSEGV, &action, NULL) == -1) {
-        fprintf(stderr, "Couldn't install SIGSEGV handler! (%s)\n", strerror(errno));
-        return 0;
-    } // if
-
-    return 1;
-} // installSignalHandlers
+    (void) unused;
+    if (GLoaderState.dosExit) GLoaderState.dosExit(1, result);
+    lxTerminate(result);
+}
 
 int main(int argc, char **argv, char **envp)
 {
     if (argc < 2) {
         fprintf(stderr, "USAGE: %s <program.exe> [...programargs...]\n", argv[0]);
-        return 1;
-    }
-
-    GLoaderState.ldt = (uint32 *) calloc(LX_MAX_LDT_SLOTS, sizeof (*GLoaderState.ldt));
-    if (!GLoaderState.ldt) {
-        fprintf(stderr, "Out of memory\n");
         return 1;
     }
 
@@ -3094,18 +2250,36 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.deinitOs2Tib(GLoaderState.main_tib_selector);
     GLoaderState.main_tib_selector = 0;
 
-    if (!installSignalHandlers())
+    const LxExecutionServices services = {
+        NULL, executableAt, describeExecutionAddress, executionReturned,
+        LXTIBSIZE, sizeof (LxTIB), sizeof (LxTIB) + sizeof (LxTIB2)
+    };
+    char error[256];
+    GLoaderState.execution = lx_execution_create(getenv("TWOINE_BACKEND"), &services, error, sizeof error);
+    if (!GLoaderState.execution) {
+        fprintf(stderr, "2ine: %s\n", error);
         return 1;
+    }
 
-    unsigned int segment = 0;
-    __asm__ __volatile__ ( "movw %%cs, %%ax  \n\t" : "=a" (segment) );
-    GLoaderState.original_cs = segment;
-    __asm__ __volatile__ ( "movw %%ds, %%ax  \n\t" : "=a" (segment) );
-    GLoaderState.original_ds = segment;
-    __asm__ __volatile__ ( "movw %%es, %%ax  \n\t" : "=a" (segment) );
-    GLoaderState.original_es = segment;
-    __asm__ __volatile__ ( "movw %%ss, %%ax  \n\t" : "=a" (segment) );
-    GLoaderState.original_ss = segment;
+    /* Keep the command and environment in one 64-KiB guest segment. */
+    const size_t command_offset = (size_t) (GLoaderState.pib.pib_pchcmd - GLoaderState.pib.pib_pchenv);
+    LxGuestMapping *parameters = lx_execution_map(GLoaderState.execution, 0x07000000, 0x10000, 3, 1);
+    if (!parameters) { fprintf(stderr, "Cannot allocate guest process parameters\n"); return 1; }
+    char *environment = lx_execution_mapping_host(parameters);
+    memcpy(environment, GLoaderState.pib.pib_pchenv, 0x10000);
+    free(GLoaderState.pib.pib_pchenv);
+    GLoaderState.pib.pib_pchenv = environment;
+    GLoaderState.pib.pib_pchcmd = environment + command_offset;
+    GLoaderState.guest_pib = lx_execution_map(GLoaderState.execution, 0x07010000, 0x1000, 3, 1);
+    if (!GLoaderState.guest_pib) { fprintf(stderr, "Cannot allocate guest PIB\n"); return 1; }
+    LxGuestPib *pib = lx_execution_mapping_host(GLoaderState.guest_pib);
+    lx_guest_store_u32(&pib->process_id, GLoaderState.pib.pib_ulpid);
+    lx_guest_store_u32(&pib->parent_id, GLoaderState.pib.pib_ulppid);
+    lx_guest_store_u32(&pib->command, lx_execution_mapping_address(parameters) + (uint32) command_offset);
+    lx_guest_store_u32(&pib->environment, lx_execution_mapping_address(parameters));
+    lx_guest_store_u32(&pib->status, GLoaderState.pib.pib_flstatus);
+    lx_guest_store_u32(&pib->type, GLoaderState.pib.pib_ultype);
+
 
     GLoaderState.setOs2Tib = lxSetOs2Tib;
     GLoaderState.getOs2Tib = lxGetOs2Tib;

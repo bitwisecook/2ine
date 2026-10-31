@@ -1,0 +1,859 @@
+{
+  "doscalls": {
+    "DosSemRequest": [
+      {
+        "name": "sem",
+        "size": "4",
+        "permissions": 3,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "DosSemClear": [
+      {
+        "name": "sem",
+        "size": "4",
+        "permissions": 3,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "DosSemWait": [
+      {
+        "name": "sem",
+        "size": "4",
+        "permissions": 1,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "DosSemSet": [
+      {
+        "name": "sem",
+        "size": "4",
+        "permissions": 3,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "Dos16EnterCritSec": [],
+    "Dos16ExitCritSec": [],
+    "Dos16SetPrty": [],
+    "Dos16GetDateTime": [
+      {
+        "name": "pdt",
+        "size": "11",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16Error": [],
+    "Dos16GetSeg": [],
+    "Dos16LockSeg": [],
+    "Dos16UnlockSeg": [],
+    "Dos16HugeShift": [
+      {
+        "name": "pshift",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16HugeIncr": [
+      {
+        "name": "psize",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16GetDBCSEv": [
+      {
+        "name": "pcc",
+        "size": "4",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "buf",
+        "size": "cb",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16DevConfig": [
+      {
+        "name": "pdevinfo",
+        "size": "1",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16DevIOCtl": [
+      {
+        "name": "pdata",
+        "size": "0",
+        "permissions": 0,
+        "kind": "live",
+        "nullable": true
+      },
+      {
+        "name": "pparms",
+        "size": "0",
+        "permissions": 0,
+        "kind": "live",
+        "nullable": true
+      }
+    ],
+    "Dos16QFileInfo": [
+      {
+        "name": "buf",
+        "size": "cb",
+        "permissions": 2,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "Dos16SelectDisk": [],
+    "Dos16SetFileInfo": [
+      {
+        "name": "buf",
+        "size": "cb",
+        "permissions": 1,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "Dos16SetMaxFH": [],
+    "Dos16NewSize": [],
+    "Dos16CreateCSAlias": [
+      {
+        "name": "pselCS",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16CreateThread": [
+      {
+        "name": "pfnFun",
+        "size": "1",
+        "permissions": 4,
+        "kind": "live",
+        "nullable": false
+      },
+      {
+        "name": "pTid",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pbStack",
+        "size": "1",
+        "permissions": 3,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "Dos16GetVersion": [
+      {
+        "name": "pver",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16GetMachineMode": [
+      {
+        "name": "pmode",
+        "size": "1",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16GetHugeShift": [
+      {
+        "name": "pcount",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16Exit": [],
+    "Dos16QHandType": [
+      {
+        "name": "ptype",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      },
+      {
+        "name": "pflags",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16AllocSeg": [
+      {
+        "name": "psel",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16ReallocSeg": [],
+    "Dos16FreeSeg": [],
+    "Dos16GetPID": [
+      {
+        "name": "ppidinfo",
+        "size": "6",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16GetCp": [
+      {
+        "name": "arCP",
+        "size": "cb",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pcCP",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16GetEnv": [
+      {
+        "name": "psel",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      },
+      {
+        "name": "pcmdoffset",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16Write": [
+      {
+        "name": "buf",
+        "size": "buflen",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "actual",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16SetVec": [
+      {
+        "name": "routine",
+        "size": "1",
+        "permissions": 4,
+        "kind": "live",
+        "nullable": true
+      },
+      {
+        "name": "prevaddress",
+        "size": "4",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16SetSigHandler": [
+      {
+        "name": "routine",
+        "size": "1",
+        "permissions": 4,
+        "kind": "live",
+        "nullable": true
+      },
+      {
+        "name": "prevaddress",
+        "size": "4",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": true
+      },
+      {
+        "name": "prevaction",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16GetInfoSeg": [
+      {
+        "name": "globalseg",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      },
+      {
+        "name": "localseg",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16QCurDisk": [
+      {
+        "name": "drivenum",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "drivemap",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16QCurDir": [
+      {
+        "name": "dirpathlen",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "dirpath",
+        "size": "dirpathlen ? lx_guest_load_u16(dirpathlen) : 0",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16HoldSignal": [],
+    "Dos16QFsInfo": [
+      {
+        "name": "infobuf",
+        "size": "infobufsize",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16QFileMode": [
+      {
+        "name": "filepath",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "attr",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16Open": [
+      {
+        "name": "pszFileName",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "pHf",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pusAction",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16FindFirst": [
+      {
+        "name": "pszFileSpec",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "phdir",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pfindbuf",
+        "size": "cbBuf",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pcFileNames",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16ChDir": [
+      {
+        "name": "pszDir",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
+    ],
+    "Dos16Close": [],
+    "Dos16FindNext": [
+      {
+        "name": "pfindbuf",
+        "size": "cbfindbuf",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pcFilenames",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16FindClose": [],
+    "Dos16Delete": [
+      {
+        "name": "pszFile",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
+    ],
+    "Dos16DupHandle": [
+      {
+        "name": "pHfile",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16Read": [
+      {
+        "name": "pBuffer",
+        "size": "cbRead",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pcbActual",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16ExecPgm": [
+      {
+        "name": "pObjname",
+        "size": "cbObjname > 0 ? (uint32) cbObjname : 0",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pArg",
+        "size": "65536",
+        "permissions": 1,
+        "kind": "command",
+        "nullable": true
+      },
+      {
+        "name": "pEnv",
+        "size": "65536",
+        "permissions": 1,
+        "kind": "environment",
+        "nullable": true
+      },
+      {
+        "name": "pRes",
+        "size": "4",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pName",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
+    ],
+    "Dos16CWait": [
+      {
+        "name": "pres",
+        "size": "4",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "ppid",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16ChgFilePtr": [
+      {
+        "name": "newoffset",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16Beep": [],
+    "Dos16MkDir": [
+      {
+        "name": "pszDirName",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "peaop2",
+        "size": "1",
+        "permissions": 1,
+        "kind": "live",
+        "nullable": true
+      }
+    ],
+    "Dos16MkDir2": [
+      {
+        "name": "pszDirName",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "peaop2",
+        "size": "1",
+        "permissions": 1,
+        "kind": "live",
+        "nullable": true
+      }
+    ]
+  },
+  "msg": {
+    "Dos16PutMessage": [
+      {
+        "name": "pBuf",
+        "size": "cbMsg",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16TrueGetMessage": [
+      {
+        "name": "pTable",
+        "size": "(cTable < 9 ? cTable : 9) * 4u",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pData",
+        "size": "cbBuf",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pFilename",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "pcbMsg",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": true
+      },
+      {
+        "name": "msgseg",
+        "size": "1",
+        "permissions": 1,
+        "kind": "live",
+        "nullable": true
+      }
+    ]
+  },
+  "kbdcalls": {
+    "KbdCharIn": [
+      {
+        "name": "pkbci",
+        "size": "10",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdStringIn": [
+      {
+        "name": "pchin",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pch",
+        "size": "lx_guest_load_u16(pchin)",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdGetStatus": [
+      {
+        "name": "pkbci",
+        "size": "10",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdSetStatus": [
+      {
+        "name": "pkbci",
+        "size": "10",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ]
+  },
+  "viocalls": {
+    "VioGetCurPos": [
+      {
+        "name": "pusRow",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pusColumn",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioGetCurType": [
+      {
+        "name": "pvioCursorInfo",
+        "size": "8",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioScrollUp": [
+      {
+        "name": "pCell",
+        "size": "2",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioSetCurPos": [],
+    "VioSetCurType": [
+      {
+        "name": "pvioCursorInfo",
+        "size": "8",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioReadCellStr": [
+      {
+        "name": "pcb",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pchCellStr",
+        "size": "pcb ? lx_guest_load_u16(pcb) : 0",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioWrtCellStr": [
+      {
+        "name": "pchCellStr",
+        "size": "cb",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioWrtCharStrAtt": [
+      {
+        "name": "pch",
+        "size": "cb",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pAttr",
+        "size": "1",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioWrtNCell": [
+      {
+        "name": "pCell",
+        "size": "2",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ]
+  },
+  "nls": {
+    "Dos16GetDBCSEv": [
+      {
+        "name": "pcc",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "buf",
+        "size": "buflen",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16CaseMap": [
+      {
+        "name": "pcc",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pch",
+        "size": "len",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16GetCtryInfo": [
+      {
+        "name": "pcc",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pch",
+        "size": "len",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "dlen",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ]
+  },
+  "sesmgr": {
+    "Dos16SMSetTitle": [
+      {
+        "name": "title",
+        "size": "65536",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
+    ]
+  }
+}
