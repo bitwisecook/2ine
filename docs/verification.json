@@ -125,7 +125,7 @@
     "tests/runtime/test_execution.c": "a24bc10052e42d8fb36c52b81296495b4b6d5e8569e53f845c21868b9274a3ce",
     ".github/FUNDING.yml": "cd312c348618fb91c4d068d07f099e1b9b1e4562ba6b7c9e579d66216ef5c4d5",
     ".github/workflows/runtime.yml": "3304eee57fb5fbe1c4a93ad05ac9a357abc9d8fa61ef37e9019c09d5c53aa233",
-    ".github/workflows/main.yml": "7eff12e38e1dbc85a9b17ed6758e9262616eeb878577f2db8dc2570ddecd932f"
+    ".github/workflows/main.yml": "f64f5968ce5a619ac3bcd3b78a116a1fd75b20c3acf94670c172a71bdf9f0e67"
   },
   "runs": [
     {
@@ -3338,7 +3338,7 @@
     {
       "path": ".github/workflows/main.yml",
       "tested_sha256": "0b3e60e79bdaefe62feb5f64ba8ee6fbad37b0059b23dd8355f8d239b27a0907",
-      "published_sha256": "7eff12e38e1dbc85a9b17ed6758e9262616eeb878577f2db8dc2570ddecd932f",
+      "published_sha256": "f64f5968ce5a619ac3bcd3b78a116a1fd75b20c3acf94670c172a71bdf9f0e67",
       "reason": "Replace the inherited retired Ubuntu 20.04 CI runner with Ubuntu 24.04, provision i386 dependencies, and run the native execution contract. No application source or fixture recipe changes."
     }
   ]
