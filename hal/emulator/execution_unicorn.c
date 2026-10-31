@@ -591,6 +591,29 @@ static void callback(uint32_t entry, uint32_t argument)
     push32(&r, Emulated->return_address);
     invoke(r, 0);
 }
+static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+{
+    if (!Active)
+        failure("Guest callback requires an active guest invocation");
+    if (!lx_execution_memory(Emulated->execution, entry, 1, LX_GUEST_EXECUTE))
+        failure("Invalid guest callback entry");
+    LxCpuRegisters r;
+    lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
+    lx_cpu_restore(Emulated->cpu, Active->context);
+    lx_cpu_get_registers(Emulated->cpu, &r);
+    lx_host_mutex_unlock(Emulated->mutex);
+    if (r.ss & 4)
+        r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+    r.ss = r.ds = r.es = FLAT_DATA;
+    r.cs = FLAT_CODE;
+    r.eip = entry;
+    push32(&r, d);
+    push32(&r, c);
+    push32(&r, b);
+    push32(&r, a);
+    push32(&r, Emulated->return_address);
+    return invoke(r, 0);
+}
 typedef struct Thread32Entry
 {
     uint32_t entry, stack, argument;
@@ -785,4 +808,4 @@ const LxExecutionOperations lx_execution_unicorn = {
     emitBridge16, atomicU32,       NULL,        0,
     map,          unmap,           protect,     emitBridge32,
     copyOut,      prepareThread32, thread32,    free,
-    endThread,    copyIn};
+    endThread,    copyIn,          callback4};

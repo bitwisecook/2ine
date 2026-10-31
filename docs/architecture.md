@@ -273,5 +273,6 @@ leaves module teardown to OS process destruction. Retired DosFreeMem mappings
 stay until worker teardown for IBM runtime compatibility. The 16-bit critical
 section synchronizes participants without suspending unrelated guest threads.
 
-See [testing](testing.md) for supported toolchain recipes. There is no complete
-GUI or DOS execution environment.
+See [testing](testing.md) for supported toolchain recipes. The [GUI subset](gui.md) runs selected small PM/GPI applications; menus,
+dialogs, fonts and a complete desktop remain unsupported. There is no DOS
+execution environment.

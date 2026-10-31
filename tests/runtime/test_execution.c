@@ -63,6 +63,7 @@ static uint32_t bridge(uint8_t *args)
     uint32_t prior = lx_guest_load_u32(tls);
     lx_execution_callback32(Execution, CallbackEntry, 0xabcdef01);
     CHECK(lx_guest_load_u32(tls) == prior + 1);
+    CHECK(lx_execution_callback32_4(Execution, CallbackEntry + 0x300, 7, 11, 13, 17) == 34);
     lx_execution_release(&pinned);
     return 0x4321;
 }
@@ -269,6 +270,9 @@ static void invoke16(void)
     put32(callback_code + 20, CallbackEntry + 0x200);
     put32(callback_code + 5, CallbackEntry + 0x100);
     memcpy(lx_execution_mapping_host(nested), callback_code, sizeof callback_code);
+    const uint8_t four_words[] = {0x8b, 0x44, 0x24, 4,    0x6b, 0xc0, 3,    0x03, 0x44, 0x24, 8,
+                                  0xd1, 0xe0, 0x2b, 0x44, 0x24, 12,   0x33, 0x44, 0x24, 16,   0xc3};
+    memcpy((uint8_t *)lx_execution_mapping_host(nested) + 0x300, four_words, sizeof four_words);
     uint16_t code_selector, stack_selector, bridge_selector;
     uint8_t *code = lx_execution_alloc_segment(Execution, &code_selector, 1);
     uint8_t *stack = lx_execution_alloc_segment(Execution, &stack_selector, 0);

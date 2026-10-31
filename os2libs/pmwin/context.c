@@ -61,13 +61,12 @@ HAB WinInitialize(ULONG flOptions)
     }
 
     anchor->windows_array_len = 16;
-    anchor->windows = (Window *)malloc(sizeof(Window) * anchor->windows_array_len);
+    anchor->windows = calloc(anchor->windows_array_len, sizeof *anchor->windows);
     if (!anchor->windows)
     {
         free(anchor);
         return NULLHANDLE;
     }
-    memset(anchor->windows, '\0', sizeof(Window) * anchor->windows_array_len);
 
     anchor->pres_spaces_array_len = 16;
     anchor->pres_spaces =
@@ -113,7 +112,8 @@ BOOL WinTerminate(HAB hab)
 
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
-        destroyWindow(anchor, &anchor->windows[i]);
+        destroyWindow(anchor, anchor->windows[i]);
+        free(anchor->windows[i]);
     }
     free(anchor->windows);
 
@@ -130,6 +130,12 @@ BOOL WinTerminate(HAB hab)
         destroyMessageQueue(anchor);
     }
 
+    while (anchor->timers)
+    {
+        PmTimer *next = anchor->timers->next;
+        free(anchor->timers);
+        anchor->timers = next;
+    }
     free(anchor);
     lxHostThreadState()->anchor_block = NULL;
 

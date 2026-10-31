@@ -75,16 +75,27 @@ typedef struct
 {
     HPS hps;
     Window *window;
-
+    POINTL position;
+    LONG color;
+    int persistent;
 } PresentationSpace;
+
+typedef struct PmTimer
+{
+    HWND hwnd;
+    ULONG id, interval;
+    uint64_t due;
+    struct PmTimer *next;
+} PmTimer;
 
 typedef struct
 {
+    PmTimer *timers;
     HAB hab;
     ERRORID last_error;
     WindowClass *registered_classes;
     MessageQueue message_queue;
-    Window *windows;
+    Window **windows;
     size_t windows_array_len;
     PresentationSpace *pres_spaces;
     size_t pres_spaces_array_len;
@@ -113,4 +124,6 @@ LX_PRIVATE BOOL skipMessage(const PQMSG qmsg, HWND hwndFilter, ULONG msgFilterFi
                             ULONG msgFilterLast);
 LX_PRIVATE void os2ColorIndexToRGB(const LONG os2color, uint8 *r, uint8 *g, uint8 *b);
 LX_PRIVATE void calcHeavyweightRect(const Window *win, LxHostRect *rect);
+LX_PRIVATE int pumpTimers(AnchorBlock *anchor);
+LX_PRIVATE MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position);
 #endif

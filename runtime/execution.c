@@ -223,3 +223,9 @@ int lx_execution_end_thread(LxExecution *e)
 {
     return e->ops->end_thread();
 }
+
+uint32_t lx_execution_callback32_4(LxExecution *e, uint32_t entry, uint32_t a, uint32_t b,
+                                   uint32_t c, uint32_t d)
+{
+    return e->ops->callback32_4(entry, a, b, c, d);
+}

@@ -87,6 +87,7 @@ HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint)
 
     ps->hps = hps;
     ps->window = win;
+    ps->color = CLR_BLACK;
 
     if (prclPaint)
     {
@@ -117,7 +118,8 @@ BOOL WinEndPaint(HPS hps)
     Window *win = ps->window;
     lx_host_window_present(win->heavy.window);
 
-    destroyPresentationSpace(anchor, ps);
+    if (!ps->persistent)
+        destroyPresentationSpace(anchor, ps);
     return TRUE;
 }
 
@@ -222,6 +224,8 @@ BOOL WinFillRect(HPS hps, PRECTL prcl, LONG lColor)
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INV_HPS, NULLHANDLE);
     }
+    if (!prcl)
+        return FALSE;
     Window *win = ps->window;
     LxHostRect cliprect;
     calcHeavyweightRect(win, &cliprect);

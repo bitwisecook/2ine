@@ -1,0 +1,10 @@
+{
+  "_notice": "Public domain. No rights reserved. Wholly AI-authored.",
+  "pmstars": {
+    "url": "https://ftpmirror.infania.net/sites/os2bbs.com/tools/pmstars.zip",
+    "archive_sha256": "3d70496f39f49a42b1910c24ace91c264551b5a6adb719130e1b375009ef21d8",
+    "member": "PMStars.exe",
+    "program_sha256": "53dbf6259a0079858f52a643e10f5385cb7f8b7e5395ec43140f27ab29269e93",
+    "provenance": "Don Moore's original 1999 package, with readme and C/header sources; readme identifies Watcom 10.6. External fixture, not redistributed in Git."
+  }
+}

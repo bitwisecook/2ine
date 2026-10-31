@@ -63,3 +63,9 @@ with unmapped-memory faults under Unicorn. Those failures also occur on the
 pre-cleanup build. Passing execution contracts do not imply complete compiler
 or Presentation Manager compatibility. SDL's dummy/software tests do not
 qualify a physical display or sound device.
+
+The `presentation_manager` contract covers frame/client layout, window-registry
+growth, retained presentation spaces, filtered queue insertion and timers. Native
+contracts also test all four OS/2 stack-alignment offsets at a host API entry.
+Optional archived GUI fixtures verify real pixels and X11 input; see
+[GUI applications](gui.md) for exact targets, inputs and limits.

@@ -168,6 +168,12 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
     TRACE_EVENT("EVENT SEND { hwnd=%u, msg=%u (%s), mp1=%p, mp2=%p, proc=%p }", (uint)win->hwnd,
                 (uint)msg, messageName(msg), mp1, mp2, winproc);
+    if (GLoaderState.execution && (uintptr_t)winproc <= UINT32_MAX &&
+        lx_execution_memory(GLoaderState.execution, (uint32_t)(uintptr_t)winproc, 1,
+                            LX_GUEST_EXECUTE))
+        return (MRESULT)(uintptr_t)lx_execution_callback32_4(
+            GLoaderState.execution, (uint32_t)(uintptr_t)winproc, win->hwnd, msg,
+            (uint32_t)(uintptr_t)mp1, (uint32_t)(uintptr_t)mp2);
     return winproc(win->hwnd, msg, mp1, mp2);
 }
 
@@ -237,7 +243,7 @@ ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg)
         item = (MessageQueueItem *)malloc(sizeof(*item));
         if (item == NULL)
         {
-            return FALSE;
+            return PMERR_HEAP_OUT_OF_MEMORY;
         }
     }
 
@@ -255,14 +261,14 @@ ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg)
     }
     anchor->message_queue.tail = item;
 
-    return TRUE;
+    return NO_ERROR;
 }
 
 BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2,
                         ULONG ticks)
 {
-    const QMSG qmsg = {hwnd, msg, mp1, mp2, currentSystemTicks(), {0, 0}, 0};
-    return postMessage(anchor, &qmsg);
+    const QMSG qmsg = {hwnd, msg, mp1, mp2, ticks, {0, 0}, 0};
+    return postMessage(anchor, &qmsg) == NO_ERROR;
 }
 
 BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
@@ -288,40 +294,76 @@ BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
 BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
 {
     ULONG ticks = (ULONG)event->timestamp;
-    switch (event->type)
+    Window *win = event->window_data;
+    if (event->type == LX_HOST_EVENT_QUIT)
+        return postTimestampedMsg(anchor, 0, WM_QUIT, 0, 0, ticks);
+    if (!win || !win->hwnd)
+        return FALSE;
+    if (event->type == LX_HOST_EVENT_CLOSE)
+        return postTimestampedMsg(anchor, win->hwnd, WM_CLOSE, 0, 0, ticks);
+    if (event->type == LX_HOST_EVENT_SHOWN || event->type == LX_HOST_EVENT_EXPOSED)
+        return postExposedMessages(anchor, win, ticks);
+    if (event->type == LX_HOST_EVENT_RESIZED)
     {
-        case LX_HOST_EVENT_QUIT:
-            return postTimestampedMsg(anchor, NULLHANDLE, WM_QUIT, 0, 0, ticks);
-        case LX_HOST_EVENT_SHOWN:
-        case LX_HOST_EVENT_EXPOSED:
-            return event->window_data ? postExposedMessages(anchor, event->window_data, ticks)
-                                      : FALSE;
-        default:
+        if (event->width == win->w && event->height == win->h)
             return FALSE;
+        return WinSetWindowPos(win->hwnd, HWND_TOP, win->x, win->y, event->width, event->height,
+                               SWP_SIZE | SWP_NOADJUST);
     }
+    if (event->type != LX_HOST_EVENT_MOTION && event->type != LX_HOST_EVENT_BUTTON_DOWN &&
+        event->type != LX_HOST_EVENT_BUTTON_UP)
+        return FALSE;
+    int x = event->x, y = win->h - 1 - event->y;
+    for (;;)
+    {
+        Window *child;
+        for (child = win->children; child; child = child->sibling)
+            if ((child->style & WS_VISIBLE) && x >= child->x && y >= child->y &&
+                x < child->x + child->w && y < child->y + child->h)
+                break;
+        if (!child)
+            break;
+        x -= child->x;
+        y -= child->y;
+        win = child;
+    }
+    ULONG message = WM_MOUSEMOVE;
+    if (event->type != LX_HOST_EVENT_MOTION)
+    {
+        if (!event->button)
+            return FALSE;
+        message =
+            WM_BUTTON1DOWN + (event->button - 1) * 3 + (event->type == LX_HOST_EVENT_BUTTON_UP);
+    }
+    MPARAM point = (MPARAM)(uintptr_t)(((uint32)(uint16)y << 16) | (uint16)x);
+    BOOL result = postTimestampedMsg(anchor, win->hwnd, message, point, 0, ticks);
+    if (event->type == LX_HOST_EVENT_BUTTON_UP)
+        result |= postTimestampedMsg(anchor, win->hwnd, WM_BUTTON1CLICK + (event->button - 1) * 3,
+                                     point, 0, ticks);
+    return result;
 }
 
+static void presentWindows(AnchorBlock *anchor)
+{
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+    {
+        Window *win = anchor->windows[i];
+        if (win && win->hwnd && win->parent == &desktop_window && (win->style & WS_VISIBLE))
+            lx_host_window_present(win->heavy.window);
+    }
+}
 void pumpEvents(AnchorBlock *anchor)
 {
     LxHostEvent event;
-    BOOL queued = FALSE;
-
-    while (lx_host_video_poll(&event))
+    while (!anchor->message_queue.head)
     {
-        queued |= processHostEvent(anchor, &event);
-    }
-
-    while (!queued)
-    {
-        while (!lx_host_video_wait(&event))
-        {
-            lx_host_sleep_ms(10);
-        }
-        queued |= processHostEvent(anchor, &event);
         while (lx_host_video_poll(&event))
-        {
-            queued |= processHostEvent(anchor, &event);
-        }
+            processHostEvent(anchor, &event);
+        int wait = pumpTimers(anchor);
+        if (anchor->message_queue.head)
+            break;
+        if (lx_host_video_wait_timeout(&event, wait))
+            processHostEvent(anchor, &event);
     }
 }
 
@@ -365,6 +407,9 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
 
     while (1)
     {
+        /* Present retained drawing even while queued timers keep the queue busy. */
+        presentWindows(anchor);
+        pumpTimers(anchor);
         MessageQueueItem *prev = NULL;
         MessageQueueItem *i = anchor->message_queue.head;
         if (bIsFiltering)
@@ -397,11 +442,8 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
                 anchor->message_queue.head = i->next;
             }
 
-            if (!anchor->message_queue.head)
-            {
-                assert(anchor->message_queue.tail == i);
-                anchor->message_queue.tail = NULL;
-            }
+            if (anchor->message_queue.tail == i)
+                anchor->message_queue.tail = prev;
 
             i->next = anchor->message_queue.free_pool;
             anchor->message_queue.free_pool = i;
@@ -503,4 +545,19 @@ BOOL WinPostQueueMsg(HMQ hmq, ULONG msg, MPARAM mp1, MPARAM mp2)
 
     FIXME("need to be able to access other threads' message queues");
     return FALSE;
+}
+
+MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position)
+{
+    if (!TWOINE_PORTABLE_LOADER || !GLoaderState.execution)
+        return sendMessage(win, msg, position, 0);
+    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    if (!mapping)
+        return 0;
+    memcpy(lx_execution_mapping_host(mapping), position, sizeof *position);
+    MRESULT result =
+        sendMessage(win, msg, (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping), 0);
+    memcpy(position, lx_execution_mapping_host(mapping), sizeof *position);
+    lx_execution_unmap(GLoaderState.execution, mapping);
+    return result;
 }

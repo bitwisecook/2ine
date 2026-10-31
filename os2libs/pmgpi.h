@@ -17,6 +17,22 @@ extern "C"
 {
 #endif
 
+    enum
+    {
+        PU_PELS = 8,
+        GPIF_DEFAULT = 0,
+        GPIT_NORMAL = 0,
+        GPIA_ASSOC = 0x4000,
+        DM_DRAW = 1
+    };
+    OS2EXPORT BOOL OS2API GpiErase(HPS hps) OS2APIINFO(389);
+    OS2EXPORT HPS OS2API GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags) OS2APIINFO(369);
+    OS2EXPORT BOOL OS2API GpiDestroyPS(HPS hps) OS2APIINFO(379);
+    OS2EXPORT LONG OS2API GpiLine(HPS hps, PPOINTL point) OS2APIINFO(398);
+    OS2EXPORT BOOL OS2API GpiMove(HPS hps, PPOINTL point) OS2APIINFO(404);
+    OS2EXPORT BOOL OS2API GpiSetColor(HPS hps, LONG color) OS2APIINFO(517);
+    OS2EXPORT BOOL OS2API GpiSetDrawingMode(HPS hps, LONG mode) OS2APIINFO(522);
+    OS2EXPORT LONG OS2API GpiSetPel(HPS hps, PPOINTL point) OS2APIINFO(544);
     OS2EXPORT BOOL OS2API GpiQueryTextBox(HPS hps, LONG lCount1, PCH pchString, LONG lCount2,
                                           PPOINTL aptlPoints) OS2APIINFO(489);
 

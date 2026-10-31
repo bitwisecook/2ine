@@ -31,6 +31,11 @@ extern "C"
 
     typedef struct
     {
+        LONG cx, cy;
+    } SIZEL, *PSIZEL;
+
+    typedef struct
+    {
         LONG xLeft;
         LONG yBottom;
         LONG xRight;
@@ -881,6 +886,16 @@ extern "C"
 
     // API entry points...
 
+    OS2EXPORT BOOL OS2API WinQueryPointerPos(HWND hwnd, PPOINTL point) OS2APIINFO(823);
+    OS2EXPORT BOOL OS2API WinQueryWindowPos(HWND hwnd, PSWP position) OS2APIINFO(837);
+    OS2EXPORT BOOL OS2API WinQueryWindowRect(HWND hwnd, PRECTL rect) OS2APIINFO(840);
+    OS2EXPORT HPOINTER OS2API WinQuerySysPointer(HWND hwnd, LONG id, BOOL copy) OS2APIINFO(828);
+    OS2EXPORT HDC OS2API WinOpenWindowDC(HWND hwnd) OS2APIINFO(794);
+    OS2EXPORT BOOL OS2API WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy,
+                                          ULONG flags) OS2APIINFO(875);
+    OS2EXPORT ULONG OS2API WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
+        OS2APIINFO(884);
+    OS2EXPORT BOOL OS2API WinStopTimer(HAB hab, HWND hwnd, ULONG id) OS2APIINFO(885);
     OS2EXPORT HAB OS2API WinInitialize(ULONG flOptions) OS2APIINFO(763);
     OS2EXPORT BOOL OS2API WinTerminate(HAB hab) OS2APIINFO(888);
     OS2EXPORT ERRORID OS2API WinGetLastError(HAB hab) OS2APIINFO(753);

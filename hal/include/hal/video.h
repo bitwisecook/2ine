@@ -12,13 +12,19 @@ typedef enum LxHostEventType
     LX_HOST_EVENT_OTHER,
     LX_HOST_EVENT_QUIT,
     LX_HOST_EVENT_EXPOSED,
-    LX_HOST_EVENT_SHOWN
+    LX_HOST_EVENT_SHOWN,
+    LX_HOST_EVENT_CLOSE,
+    LX_HOST_EVENT_RESIZED,
+    LX_HOST_EVENT_MOTION,
+    LX_HOST_EVENT_BUTTON_DOWN,
+    LX_HOST_EVENT_BUTTON_UP
 } LxHostEventType;
 typedef struct LxHostEvent
 {
     LxHostEventType type;
     uint64_t timestamp;
     void *window_data;
+    int x, y, width, height, button;
 } LxHostEvent;
 int lx_host_video_initialize(int *width, int *height);
 void lx_host_video_quit(void);
@@ -29,7 +35,7 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
                                     void *data);
 void lx_host_window_destroy(LxHostWindow *window);
 void *lx_host_window_data(LxHostWindow *window);
-void lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height);
+int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height);
 void lx_host_window_show(LxHostWindow *window);
 int lx_host_window_present(LxHostWindow *window);
 int lx_host_window_fill(LxHostWindow *window, const LxHostRect *clip, const LxHostRect *rect,
@@ -38,6 +44,9 @@ int lx_host_window_pixel(LxHostWindow *window, int x, int y, uint8_t *red, uint8
                          uint8_t *blue);
 int lx_host_video_poll(LxHostEvent *event);
 int lx_host_video_wait(LxHostEvent *event);
+int lx_host_video_wait_timeout(LxHostEvent *event, int milliseconds);
+int lx_host_window_line(LxHostWindow *window, const LxHostRect *clip, int x1, int y1, int x2,
+                        int y2, uint8_t r, uint8_t g, uint8_t b);
 int lx_host_video_push(const LxHostEvent *event);
 void lx_host_mouse_position(int *x, int *y);
 #endif

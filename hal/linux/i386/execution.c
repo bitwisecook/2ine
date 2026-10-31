@@ -1261,6 +1261,28 @@ static void program(const LxExecutionEntry *entry, unsigned bits)
         runNeModule(entry);
     runLxModule(entry);
 }
+static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+{
+    uintptr_t sp;
+    __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
+    uintptr_t base = (uintptr_t)NativeHostAllocation;
+    if (!NativeBridge || sp < base || sp >= base + 65536)
+        return ((uint32_t (*)(uint32_t, uint32_t, uint32_t, uint32_t))(uintptr_t)entry)(a, b, c, d);
+    uint32_t words[4] = {a, b, c, d}, value;
+    void *previous = NativeHostStack;
+    NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
+    uint32_t stack = NativeBridge->guest_stack;
+    /* ESI retains the saved host frame across the guest procedure and nested imports. */
+    __asm__ __volatile__("pushfl\n\tpushal\n\tmovl %%esp,%%esi\n\t"
+                         "movl %%eax,%%esp\n\tandl $-16,%%esp\n\t"
+                         "pushl 12(%%ebx)\n\tpushl 8(%%ebx)\n\tpushl 4(%%ebx)\n\tpushl (%%ebx)\n\t"
+                         "call *%%edi\n\tmovl %%eax,28(%%esi)\n\tmovl %%esi,%%esp\n\tpopal\n\tpopfl"
+                         : "=a"(value)
+                         : "a"(stack), "b"(words), "D"(entry)
+                         : "memory");
+    NativeHostStack = previous;
+    return value;
+}
 static void callback32(uint32_t entry, uint32_t argument)
 {
     uintptr_t sp;
@@ -1555,4 +1577,5 @@ const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          thread32,
                                                          destroyThread32,
                                                          endThread,
-                                                         copyIn};
+                                                         copyIn,
+                                                         callback4};

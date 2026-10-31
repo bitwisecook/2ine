@@ -8,7 +8,8 @@ It's a program that loads and runs OS/2 .exe files on Linux and macOS.
 
 *Does it work?*
 
-It runs command line OS/2 apps, including Microsoft, IBM and Watcom developer tools.
+It runs command line OS/2 apps, including Microsoft, IBM and Watcom developer tools,
+and small Presentation Manager GUI programs such as PMStars.
 
 *Why?*
 
@@ -32,5 +33,5 @@ Raise an issue on GH or find a way to contact me.
 --[bitwisecook]
 
 [Build](docs/build.md) · [Architecture](docs/architecture.md) · [HAL](docs/hal.md) ·
-[Tools](docs/tools.md) · [Tests](docs/testing.md) ·
+[Tools](docs/tools.md) · [Tests](docs/testing.md) · [GUI applications](docs/gui.md) ·
 [C/H formatting](docs/formatting.md) · [Licensing](docs/licensing.md)

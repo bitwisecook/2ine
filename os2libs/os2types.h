@@ -10,6 +10,7 @@
 #define _INCL_OS2TYPES_H_
 
 #include <stdint.h>
+#include "hal/abi.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -20,7 +21,7 @@ extern "C"
 #define OS2APIINFO(...)
 
 #ifndef APIENTRY
-#define APIENTRY
+#define APIENTRY LX_HOST_API_ENTRY
 #endif
 
 #ifndef OS2EXPORT
@@ -66,6 +67,8 @@ extern "C"
     typedef HANDLE HMTX, *PHMTX;
     typedef HANDLE HQUEUE, *PHQUEUE;
     typedef HANDLE HPS, *PHPS;
+    typedef HANDLE HDC, *PHDC;
+    typedef HANDLE HPOINTER, *PHPOINTER;
     typedef HANDLE PID, *PPID;
     typedef HANDLE TID, *PTID;
     typedef SHANDLE HVIO, *PHVIO;
