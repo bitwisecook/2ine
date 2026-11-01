@@ -118,7 +118,8 @@ static uint32 bridge32_WinRegisterClass(uint8 *a)
 {
     char *name = pm_string(pm_word(a, 1));
     uint32 entry = pm_word(a, 2);
-    if (!name || !lx_execution_memory(GLoaderState.execution, entry, 1, LX_GUEST_EXECUTE))
+    if (!name ||
+        (entry && !lx_execution_memory(GLoaderState.execution, entry, 1, LX_GUEST_EXECUTE)))
     {
         free(name);
         return 0;
@@ -975,4 +976,14 @@ static uint32 bridge32_WinSetClipbrdData(uint8 *a)
 static uint32 bridge32_WinDeleteAtom(uint8 *a)
 {
     return WinDeleteAtom(pm_word(a, 0), pm_word(a, 1));
+}
+
+static uint32 bridge32_WinSetOwner(uint8 *a)
+{
+    return WinSetOwner(pm_word(a, 0), pm_word(a, 1));
+}
+
+static uint32 bridge32_WinSetErrorInfo(uint8 *a)
+{
+    return WinSetErrorInfo(pm_word(a, 0), pm_word(a, 1));
 }

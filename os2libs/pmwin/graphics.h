@@ -5,6 +5,8 @@
 #include "os2libs/pmwin.h"
 #include "hal/font.h"
 #include "guest/handles.h"
+BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);
+BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle);
 typedef struct PmRegion
 {
     void *anchor;

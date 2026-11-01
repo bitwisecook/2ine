@@ -118,3 +118,21 @@ ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
         lx_guest_store_u32(process, GetCurrentProcessId());
     return GetCurrentThreadId();
 }
+
+ULONG GetCurrentProcess(void)
+{
+    return UINT32_MAX;
+}
+
+BOOL SetForegroundWindow(ULONG handle)
+{
+    if (!open32Presentation() || !WinIsWindow(open32Presentation(), handle))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    ULONG parent;
+    while ((parent = WinQueryWindow(handle, 5)) && parent != HWND_DESKTOP)
+        handle = parent;
+    return BringWindowToTop(handle);
+}

@@ -23,6 +23,10 @@ Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
     {
         return &desktop_window;
     }
+    else if (hwnd == HWND_OBJECT)
+    {
+        return (Window *)&anchor->object_window;
+    }
     return NULL;
 }
 
@@ -513,7 +517,7 @@ BOOL WinDestroyWindow(HWND hwnd)
     }
 
     Window *win = getWindowFromHWND(anchor, hwnd);
-    if (!win || win == &desktop_window)
+    if (!win || win == &desktop_window || win == &anchor->object_window)
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
     }

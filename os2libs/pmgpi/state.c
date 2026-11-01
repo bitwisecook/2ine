@@ -84,6 +84,11 @@ LONG GpiSavePS(HPS handle)
     memcpy(s->primitive_back, ps->primitive_back, sizeof s->primitive_back);
     memcpy(s->primitive_mix, ps->primitive_mix, sizeof s->primitive_mix);
     memcpy(s->primitive_back_mix, ps->primitive_back_mix, sizeof s->primitive_back_mix);
+    s->char_angle = ps->char_angle;
+    s->char_shear = ps->char_shear;
+    s->char_direction = ps->char_direction;
+    s->text_horizontal = ps->text_horizontal;
+    s->text_vertical = ps->text_vertical;
     s->charset = ps->charset;
     s->char_mode = ps->char_mode;
     s->char_width = ps->char_width;
@@ -121,6 +126,11 @@ BOOL GpiRestorePS(HPS handle, LONG id)
     memcpy(ps->primitive_back, s->primitive_back, sizeof s->primitive_back);
     memcpy(ps->primitive_mix, s->primitive_mix, sizeof s->primitive_mix);
     memcpy(ps->primitive_back_mix, s->primitive_back_mix, sizeof s->primitive_back_mix);
+    ps->char_angle = s->char_angle;
+    ps->char_shear = s->char_shear;
+    ps->char_direction = s->char_direction;
+    ps->text_horizontal = s->text_horizontal;
+    ps->text_vertical = s->text_vertical;
     ps->charset = s->charset;
     ps->char_mode = s->char_mode;
     ps->char_width = s->char_width;

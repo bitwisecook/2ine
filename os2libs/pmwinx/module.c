@@ -5,6 +5,7 @@
 #include "os2libs/pmwinx/input.h"
 #include "hal/host.h"
 #include "os2libs/pmshapi.h"
+#include "os2libs/pmwin/open32_post.h"
 static void open32Shutdown(void);
 #define LX_NATIVE_MODULE_SHUTDOWN() open32Shutdown()
 #include "os2libs/generated/pmwinx-lx.h"
@@ -39,7 +40,11 @@ BOOL WinXProcessMsg(PVOID message)
                    lx_guest_load_u32(wire + 16),
                    {(LONG)lx_guest_load_u32(wire + 20), (LONG)lx_guest_load_u32(wire + 24)},
                    lx_guest_load_u32(wire + 28)};
-    WinDispatchMsg(open32Presentation(), &native);
+    if (native.msg == LX_PM_OPEN32_POST)
+        SendMessage(native.hwnd, native.reserved, (ULONG)(uintptr_t)native.mp1,
+                    (ULONG)(uintptr_t)native.mp2);
+    else
+        WinDispatchMsg(open32Presentation(), &native);
     return TRUE;
 }
 
@@ -111,6 +116,7 @@ ULONG GetTickCount(void)
 static _Thread_local ULONG last_error;
 void open32SetError(ULONG error)
 {
+    TRACE_NATIVE("Open32 error %u", error);
     last_error = error;
 }
 ULONG GetLastError(void)

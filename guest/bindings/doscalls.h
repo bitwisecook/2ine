@@ -1175,3 +1175,45 @@ static uint32 bridge32_DosCreateDir(uint8 *a)
     free(name);
     return result;
 }
+
+static uint32 bridge32_DosQueryModFromEIP(uint8 *arguments)
+{
+    const uint32 module_pointer = lx_guest_load_u32(arguments);
+    const uint32 object_pointer = lx_guest_load_u32(arguments + 4);
+    const uint32 capacity = lx_guest_load_u32(arguments + 8);
+    const uint32 name_pointer = lx_guest_load_u32(arguments + 12);
+    const uint32 offset_pointer = lx_guest_load_u32(arguments + 16);
+    LxGuestBorrow module = {0}, object = {0}, name = {0}, offset = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if ((module_pointer && !lx_execution_borrow(GLoaderState.execution, module_pointer, 4,
+                                                LX_GUEST_WRITE, &module)) ||
+        (object_pointer && !lx_execution_borrow(GLoaderState.execution, object_pointer, 4,
+                                                LX_GUEST_WRITE, &object)) ||
+        (name_pointer && capacity &&
+         !lx_execution_borrow(GLoaderState.execution, name_pointer, capacity, LX_GUEST_WRITE,
+                              &name)) ||
+        (offset_pointer &&
+         !lx_execution_borrow(GLoaderState.execution, offset_pointer, 4, LX_GUEST_WRITE, &offset)))
+        goto done;
+    HMODULE handle = 0;
+    ULONG number = 0, displacement = 0;
+    char empty;
+    result = DosQueryModFromEIP(&handle, &number, capacity,
+                                name_pointer ? (capacity ? name.host : &empty) : NULL,
+                                &displacement, lx_guest_load_u32(arguments + 20));
+    if (result == NO_ERROR || result == ERROR_BUFFER_OVERFLOW)
+    {
+        if (module.host)
+            lx_guest_store_u32(module.host, handle);
+        if (object.host)
+            lx_guest_store_u32(object.host, number);
+        if (offset.host)
+            lx_guest_store_u32(offset.host, displacement);
+    }
+done:
+    lx_execution_release(&offset);
+    lx_execution_release(&name);
+    lx_execution_release(&object);
+    lx_execution_release(&module);
+    return result;
+}

@@ -685,8 +685,8 @@ extern "C"
     OS2EXPORT APIRET OS2API DosMove(PSZ pszOld, PSZ pszNew) OS2APIINFO(271);
     OS2EXPORT APIRET OS2API DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag) OS2APIINFO(306);
     OS2EXPORT APIRET OS2API DosError(ULONG error) OS2APIINFO(212);
-    OS2EXPORT APIRET OS2API DosQueryModFromEIP(PHMODULE phmod, PCHAR pszModName, ULONG cbModName,
-                                               PULONG pulOffset, PULONG pulObject, ULONG ulEIP)
+    OS2EXPORT APIRET OS2API DosQueryModFromEIP(PHMODULE phmod, PULONG pulObject, ULONG cbModName,
+                                               PCHAR pszModName, PULONG pulOffset, ULONG ulEIP)
         OS2APIINFO(360);
     OS2EXPORT APIRET OS2API DosAcknowledgeSignalException(ULONG ulSignalNum) OS2APIINFO(418);
     OS2EXPORT APIRET OS2API DosRaiseException(PEXCEPTIONREPORTRECORD pexcept) OS2APIINFO(356);

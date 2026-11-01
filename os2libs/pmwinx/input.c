@@ -116,3 +116,16 @@ SHORT GetAsyncKeyState(LONG key)
             return (SHORT)WinGetPhysKeyState(HWND_DESKTOP, (LONG)scan);
     return 0;
 }
+
+BOOL GetKeyboardState(PVOID output)
+{
+    if (!output)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint8 *bytes = output;
+    for (unsigned key = 0; key < 256; key++)
+        bytes[key] = (down[key] ? 0x80 : 0) | toggled[key];
+    return TRUE;
+}

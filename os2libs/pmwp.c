@@ -12,3 +12,13 @@ BOOL WinSetObjectData(ULONG object, PSZ settings)
         anchor->last_error = 0x1709; /* WPERR_INVALID_OBJECT */
     return FALSE;
 }
+
+BOOL WinIsSomDDReady(void)
+{
+    return FALSE;
+}
+
+APIRET WinRestartSomDD(BOOL state)
+{
+    return state ? 50 : 0; /* ERROR_NOT_SUPPORTED: no DSOM daemon provider. */
+}

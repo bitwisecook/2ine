@@ -141,6 +141,14 @@ def program(checked):
     g.result(0, 74)
     g.call(2, 753, 1)
     g.result(0x100A, 75)
+    g.call(2, 977, 0x11234, 0x6000)
+    g.result(0, 114)
+    g.call(2, 977, 0x25678, 0x6000)
+    g.result(0x11234, 115)
+    g.call(2, 753, 1)
+    g.result(0x25678, 116)
+    g.call(2, 753, 1)
+    g.result(0, 117)
     g.call(2, 716, 1, 0)
     g.call(2, 926, 1, class_name, 0x10002, 0, 8)
     g.result(1, 71)
@@ -170,11 +178,16 @@ def program(checked):
         g.result(0, 62)
         g.call(4, 550, 0xFFFFFFEF, 0xDEADBEEF, 0, 1, first)
         g.result(87, 63)
+    spool = g.field(bytes([0xFF]) * 12)
+    g.call(5, 399, 0, 3, 0, 0, spool, spool + 4, spool + 8, 0)
+    g.result(0, 150)
+    for offset in (0, 4, 8):
+        g.word(spool + offset, 0, 151)
     g.exit(0)
     return linear_image(
         g.code,
         g.fixups,
-        ["DOSCALLS", "PMWIN", "PMSHAPI", "PMWINX"],
+        ["DOSCALLS", "PMWIN", "PMSHAPI", "PMWINX", "PMSPL"],
         "DESKTOP",
         data=g.data,
         resources=[(5, 1, bundle), (5, 2, b"\xb5\x01\xffoops")],
@@ -235,6 +248,74 @@ def desktop_services():
     )
 
 
+def module_address(checked):
+    """Module lookup writes object, module name and displacement to distinct SDK slots."""
+    g = FlatGuest()
+    sentinel = 0xA1B2C3D4
+    slots = g.field(struct.pack("<7I", *([sentinel] * 7)))
+    module, obj, offset = slots + 4, slots + 12, slots + 20
+    guard = g.field(struct.pack("<I", sentinel) + bytes(64) + struct.pack("<I", sentinel))
+    name = guard + 4
+    g.call(1, 360, module, obj, 64, name, offset, 0x10020)
+    g.result(0, 1)
+    g.word(obj, 1, 2)
+    g.word(offset, 0x20, 3)
+    g.load(module)
+    g.require(b"\x85\xc0\x0f\x95\xc0\x0f\xb6\xc0\x3d\x01\0\0\0", 4)
+    g.word(name, int.from_bytes(b"MODA", "little"), 5)
+    for address in (slots, slots + 8, slots + 16, slots + 24, guard, name + 64):
+        g.word(address, sentinel, 6)
+    g.call(1, 360, module, obj, 1, name, offset, 0x10020)
+    g.result(111, 7)
+    g.word(name, int.from_bytes(b"MODA", "little"), 8)
+    g.call(1, 360, module, obj, 64, name, offset, 0xDEADBEEF)
+    g.result(2, 9)
+    g.word(obj, 1, 10)
+    g.word(offset, 0x20, 11)
+    if checked:
+        g.call(1, 360, module, obj, 64, name, 0xDEADBEEF, 0x10020)
+        g.result(87, 12)
+        g.word(name, int.from_bytes(b"MODA", "little"), 13)
+    g.call(2, 480)
+    g.result(0, 14)
+    g.call(2, 464, 1)
+    g.result(50, 15)
+    g.call(2, 464, 0)
+    g.result(0, 16)
+    g.call(3, 763, 0)
+    g.result(1, 17)
+    g.call(3, 716, 1, 0)
+    name = g.field(b"ObjectFixture\0")
+    title = g.field(b"message-only\0")
+    packet = g.field(bytes(32))
+    g.call(3, 926, 1, name, 0, 0, 4)
+    g.result(1, 18)
+    g.call(3, 909, 2, name, title, 0, 1, 1, 1, 1, 0, 3, 17, 0, 0)
+    g.code.extend(b"\xa3" + struct.pack("<I", module))
+    g.require(b"\x85\xc0\x0f\x95\xc0\x0f\xb6\xc0\x3d\x01\0\0\0", 19)
+    g.call_handle(3, 839, module, 0)
+    g.result(0, 20)
+    g.call_handle(3, 876, module, 0, 0x55667788)
+    g.result(1, 21)
+    g.call_handle(3, 839, module, 0)
+    g.result(0x55667788, 22)
+    g.call_handle(3, 919, module, 0x1000, 123, 456)
+    g.result(1, 23)
+    g.call(3, 915, 1, packet, (module,), 0x1000, 0x1000, 1)
+    g.result(1, 24)
+    g.word(packet + 8, 123, 25)
+    g.word(packet + 12, 456, 26)
+    g.call_handle(3, 728, module)
+    g.result(1, 27)
+    g.call(3, 728, 2)
+    g.result(0, 28)
+    g.call(3, 888, 1)
+    g.result(1, 29)
+
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWP", "PMWIN"], "MODADDR", data=g.data)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -265,7 +346,11 @@ def main():
             SDL_VIDEO_DRIVER="dummy",
             SDL_RENDER_DRIVER="software",
         )
-        for payload in (program(args.backend == "unicorn"), desktop_services()):
+        for payload in (
+            program(args.backend == "unicorn"),
+            desktop_services(),
+            module_address(args.backend == "unicorn"),
+        ):
             executable.write_bytes(payload)
             result = subprocess.run(
                 [str(build / "lx_loader"), str(executable)],

@@ -2,11 +2,13 @@
 /* Foreign posts are staged under a lock and consumed by the owning PM thread. */
 #include "os2libs/pmwin/internal.h"
 #include "hal/host_sync.h"
+#include "os2libs/pmwin/open32_post.h"
 typedef struct Target
 {
     struct Target *next;
     HWND window;
     AnchorBlock *anchor;
+    BOOL open32;
 } Target;
 typedef struct Pending
 {
@@ -73,7 +75,8 @@ void unregisterWindowMessages(HWND window)
     }
     lx_host_mutex_unlock(lock);
 }
-BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
+static BOOL post_packet(HWND window, ULONG message, MPARAM first, MPARAM second, ULONG reserved,
+                        BOOL open32)
 {
     if (!lock || !window)
         return FALSE;
@@ -82,7 +85,7 @@ BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
         return FALSE;
     lx_host_mutex_lock(lock, UINT32_MAX);
     for (Target *target = targets; target; target = target->next)
-        if (target->window == window)
+        if (target->window == window && (!open32 || target->open32))
         {
             item->anchor = target->anchor;
             break;
@@ -93,7 +96,7 @@ BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
         free(item);
         return FALSE;
     }
-    item->message = (QMSG){window, message, first, second, currentSystemTicks(), {0, 0}, 0};
+    item->message = (QMSG){window, message, first, second, currentSystemTicks(), {0, 0}, reserved};
     if (tail)
         tail->next = item;
     else
@@ -103,6 +106,10 @@ BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
     LxHostEvent wake = {0};
     lx_host_video_push(&wake);
     return TRUE;
+}
+BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
+{
+    return post_packet(window, message, first, second, 0, FALSE);
 }
 void drainForeignMessages(AnchorBlock *anchor)
 {
@@ -127,4 +134,27 @@ void drainForeignMessages(AnchorBlock *anchor)
         }
     }
     lx_host_mutex_unlock(lock);
+}
+
+BOOL lx_pm_mark_open32_window(HWND window)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor || !lock)
+        return FALSE;
+    BOOL found = FALSE;
+    lx_host_mutex_lock(lock, UINT32_MAX);
+    for (Target *target = targets; target; target = target->next)
+        if (target->window == window && target->anchor == anchor)
+        {
+            target->open32 = TRUE;
+            found = TRUE;
+            break;
+        }
+    lx_host_mutex_unlock(lock);
+    return found;
+}
+BOOL lx_pm_post_open32_message(HWND window, ULONG message, ULONG first, ULONG second)
+{
+    return post_packet(window, LX_PM_OPEN32_POST, (MPARAM)(uintptr_t)first,
+                       (MPARAM)(uintptr_t)second, message, TRUE);
 }
