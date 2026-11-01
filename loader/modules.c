@@ -172,6 +172,13 @@ void destroyLxModule(void *resource)
     if (lxmod == GLoaderState.loaded_modules)
         GLoaderState.loaded_modules = lxmod->next;
 
+    /* DLL termination still needs the process stack and main-module entry state. */
+    for (uint32 i = lxmod->num_dependencies; i > 0; i--)
+    {
+        freeLxModule(lxmod->dependencies[i - 1]);
+    }
+    free(lxmod->dependencies);
+
     if (GLoaderState.main_module == lxmod)
     {
         GLoaderState.main_module = NULL;
@@ -181,12 +188,6 @@ void destroyLxModule(void *resource)
         initOs2StackSegments(stackbase, lxmmap->size, 1);
         lxmmap->mapped = NULL; /* The current thread may still be using this stack. */
     }
-
-    for (uint32 i = lxmod->num_dependencies; i > 0; i--)
-    {
-        freeLxModule(lxmod->dependencies[i - 1]);
-    }
-    free(lxmod->dependencies);
 
     for (uint32 i = 0; i < lxmod->num_mmaps; i++)
     {

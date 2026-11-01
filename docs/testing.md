@@ -6,6 +6,14 @@ Run runtime and execution contracts with `ctest --test-dir build --output-on-fai
 They cover mixed-mode entry, callbacks, threads/TLS, memory bounds, resource
 lifetimes, x87 state and host synchronization.
 
+`legacy_file_apis` builds synthetic NE/LX guests without an external compiler.
+It verifies writable preloaded NE stacks, NLS case mapping and export ordinals,
+packed `DosFindFirst2` directory records, `DosOpen2` with empty extended
+attributes, file read/close, nested critical/must-complete calls, portable
+output-pointer validation, and DLL termination during failed process loading.
+Nonempty extended attributes and higher `DosFindFirst2` information levels
+remain unsupported and return errors.
+
 The `host_platform` test checks argument packing (including empty arguments),
 executable/process discovery, memory protection, clocks and UTC calendar
 conversion. Linux additionally runs `host_mutex_owner` for robust mutex

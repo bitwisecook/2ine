@@ -362,6 +362,26 @@
       "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DosEnterMustComplete": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosExitMustComplete": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosEnterCritSec": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosExitCritSec": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "nls": {

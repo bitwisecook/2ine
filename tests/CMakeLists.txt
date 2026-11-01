@@ -75,6 +75,17 @@ endif()
 
 set(TWOINE_PMSTARS_EXE "" CACHE FILEPATH "Optional unchanged archived PMStars.exe fixture")
 set(TWOINE_RUNBOX_EXE "" CACHE FILEPATH "Optional RunBox executable built from archived source")
+if(TARGET lx_loader)
+    if(TWOINE_PORTABLE_LOADER)
+        set(_twoine_legacy_backend unicorn)
+    else()
+        set(_twoine_legacy_backend native)
+    endif()
+    add_test(NAME legacy_file_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/legacy.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(legacy_file_apis PROPERTIES TIMEOUT 40)
+endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
     if(TWOINE_PORTABLE_LOADER)
         set(_twoine_gui_backend unicorn)

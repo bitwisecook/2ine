@@ -598,6 +598,66 @@
         "kind": "live",
         "nullable": true
       }
+    ],
+    "Dos16FindFirst2": [
+      {
+        "name": "pszFileSpec",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "phdir",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pfindbuf",
+        "size": "cbBuf",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pcFileNames",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16Open2": [
+      {
+        "name": "pszFileName",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "pHf",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pusAction",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "ea",
+        "size": "12",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
     ]
   },
   "msg": {

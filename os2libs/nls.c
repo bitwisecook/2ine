@@ -82,7 +82,7 @@ APIRET DosMapCase(ULONG cb, PCOUNTRYCODE pcc, PCHAR pch)
     for (ULONG i = 0; i < cb; i++)
     {
         const CHAR ch = *pch;
-        *(pch++) = ((ch >= 'A') && (ch <= 'Z')) ? ch - ('A' - 'a') : ch;
+        *(pch++) = ((ch >= 'a') && (ch <= 'z')) ? ch - ('a' - 'A') : ch;
     }
 
     return NO_ERROR;

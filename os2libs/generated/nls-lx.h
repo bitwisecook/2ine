@@ -12,25 +12,6 @@ LX_NATIVE_MODULE_32BIT_API(DosQueryCtryInfo)
 LX_NATIVE_MODULE_32BIT_API(DosQueryDBCSEnv)
 #endif
 
-static uint32 bridge16to32_Dos16GetDBCSEv(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, buf);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYCODE16, pcc);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, buflen);
-    LxGuestArgument __abi_args[2] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pcc_guest, 4, 3, 0, 0, &__abi_args[0])) goto __abi_done;
-    pcc = (PCOUNTRYCODE16) __abi_args[0].host;
-    if (!lx_guest_argument_far(GLoaderState.execution, buf_guest, buflen, 2, 0, 0, &__abi_args[1])) goto __abi_done;
-    buf = (PCHAR) __abi_args[1].host;
-    __abi_result = Dos16GetDBCSEv(buflen, pcc, buf);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
-    return __abi_result;
-}
-
 static uint32 bridge16to32_Dos16CaseMap(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, pch);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYCODE16, pcc);
@@ -73,10 +54,29 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_Dos16GetDBCSEv(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, buf);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYCODE16, pcc);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, buflen);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GLoaderState.execution, pcc_guest, 4, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pcc = (PCOUNTRYCODE16) __abi_args[0].host;
+    if (!lx_guest_argument_far(GLoaderState.execution, buf_guest, buflen, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    buf = (PCHAR) __abi_args[1].host;
+    __abi_result = Dos16GetDBCSEv(buflen, pcc, buf);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
 LX_NATIVE_MODULE_16BIT_SUPPORT()
-    LX_NATIVE_MODULE_16BIT_API(Dos16GetDBCSEv)
     LX_NATIVE_MODULE_16BIT_API(Dos16CaseMap)
     LX_NATIVE_MODULE_16BIT_API(Dos16GetCtryInfo)
+    LX_NATIVE_MODULE_16BIT_API(Dos16GetDBCSEv)
 LX_NATIVE_MODULE_16BIT_SUPPORT_END()
 
 LX_NATIVE_MODULE_DEINIT({
@@ -86,9 +86,9 @@ LX_NATIVE_MODULE_DEINIT({
 
 static int init16_nls(void) {
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetDBCSEv, 10)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CaseMap, 10)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetCtryInfo, 14)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetDBCSEv, 10)
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
     return 1;
 }
@@ -107,12 +107,12 @@ LX_NATIVE_MODULE_INIT({
     if (!init16_nls()) return 0;
     LX_NATIVE_INIT_32BIT_MODULE(nls)
 })
+    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16CaseMap, "DOSCASEMAP", 1),
+    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16GetCtryInfo, "DOSGETCTRYINFO", 3),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16GetDBCSEv, "DOSGETDBCSEV", 4),
     LX_NATIVE_EXPORT32(DosQueryCtryInfo, 5),
     LX_NATIVE_EXPORT32(DosQueryDBCSEnv, 6),
     LX_NATIVE_EXPORT32(DosMapCase, 7),
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16CaseMap, "DOSCASEMAP", 391),
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16GetCtryInfo, "DOSGETCTRYINFO", 393),
 
 LX_NATIVE_MODULE_INIT_END()
 

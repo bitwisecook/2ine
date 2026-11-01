@@ -531,10 +531,10 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
         // Now set all the pages of this object to the proper final permissions...
         const int iscode = ((seg->segment_flags & 0x7) == 0) ? 1 : 0;
-        const int preload =
-            (seg->segment_flags & 0x40) ? 1 : 0; // PRELOAD implies read-only, according to spec.
-        const int prot = ((preload && !iscode) ? 0 : LX_GUEST_WRITE) |
-                         (iscode ? LX_GUEST_EXECUTE : 0) | LX_GUEST_READ;
+        /* PRELOAD (0x40) controls loading time; 0x80 marks read-only data. */
+        const int readonly = !iscode && (seg->segment_flags & 0x80);
+        const int prot =
+            (readonly ? 0 : LX_GUEST_WRITE) | (iscode ? LX_GUEST_EXECUTE : 0) | LX_GUEST_READ;
         retval->mmaps[i].prot = prot;
 
         if (!(retval->mmaps[i].mapping

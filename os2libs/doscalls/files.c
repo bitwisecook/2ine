@@ -703,6 +703,45 @@ APIRET16 Dos16Open(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction, ULONG cbFile
     return (APIRET16)ret;
 }
 
+APIRET16 Dos16Open2(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction, ULONG cbFile,
+                    USHORT ulAttribute, USHORT fsOpenFlags, ULONG fsOpenMode, PVOID ea,
+                    ULONG reserved)
+{
+    TRACE_NATIVE("Dos16Open2('%s', %p, %p, %u, %u, %u, %u, %p, %u)", pszFileName, pHf, pusAction,
+                 (uint)cbFile, (uint)ulAttribute, (uint)fsOpenFlags, (uint)fsOpenMode, ea,
+                 (uint)reserved);
+    if (reserved || !pHf || !pusAction)
+        return ERROR_INVALID_PARAMETER;
+    /* EAOP contains two far pointers and a 32-bit error offset. */
+    if (ea)
+    {
+        const uint32 list = lx_guest_load_u32((uint8 *)ea + 4);
+        lx_guest_store_u32((uint8 *)ea + 8, 0);
+        if (list)
+        {
+            LxGuestBorrow header = {0};
+            if (!lx_execution_borrow_far(GLoaderState.execution, list, 4, LX_GUEST_READ, &header))
+                return ERROR_INVALID_PARAMETER;
+            const uint32 size = lx_guest_load_u32(header.host);
+            lx_execution_release(&header);
+            if (size < 4)
+                return ERROR_EA_LIST_INCONSISTENT;
+            if (size > 4)
+                return ERROR_EAS_NOT_SUPPORTED;
+        }
+    }
+    HFILE handle = (HFILE)-1;
+    ULONG action = 0;
+    const APIRET result = doDosOpen(pszFileName, &handle, &action, cbFile, ulAttribute, fsOpenFlags,
+                                    fsOpenMode, NULL);
+    if (!result)
+    {
+        *pHf = (USHORT)handle;
+        *pusAction = (USHORT)action;
+    }
+    return (APIRET16)result;
+}
+
 APIRET16 Dos16Close(USHORT hFile)
 {
     TRACE_NATIVE("Dos16Close(%u)", (uint)hFile);

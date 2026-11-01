@@ -1015,6 +1015,44 @@ static uint32 bridge32_DosDupHandle(uint8 *a)
     return result;
 }
 
+static uint32 bridge32MustComplete(uint8 *arguments, int enter)
+{
+    const uint32 pointer = lx_guest_load_u32(arguments);
+    LxGuestBorrow output = {0};
+    if (pointer &&
+        !lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_WRITE, &output))
+        return ERROR_INVALID_PARAMETER;
+    ULONG count = 0;
+    const uint32 result = enter ? DosEnterMustComplete(pointer ? &count : NULL)
+                                : DosExitMustComplete(pointer ? &count : NULL);
+    if (!result && pointer)
+        lx_guest_store_u32(output.host, count);
+    lx_execution_release(&output);
+    return result;
+}
+
+static uint32 bridge32_DosEnterMustComplete(uint8 *arguments)
+{
+    return bridge32MustComplete(arguments, 1);
+}
+
+static uint32 bridge32_DosExitMustComplete(uint8 *arguments)
+{
+    return bridge32MustComplete(arguments, 0);
+}
+
+static uint32 bridge32_DosEnterCritSec(uint8 *arguments)
+{
+    (void)arguments;
+    return DosEnterCritSec();
+}
+
+static uint32 bridge32_DosExitCritSec(uint8 *arguments)
+{
+    (void)arguments;
+    return DosExitCritSec();
+}
+
 static uint32 bridge32_DosMove(uint8 *a)
 {
     char *from = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);

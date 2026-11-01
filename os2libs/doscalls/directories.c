@@ -426,6 +426,18 @@ APIRET16 Dos16FindFirst(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, PVOID
     return (APIRET16)result;
 }
 
+APIRET16 Dos16FindFirst2(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute, PVOID pfindbuf,
+                         USHORT cbBuf, PUSHORT pcFileNames, USHORT level, ULONG res)
+{
+    TRACE_NATIVE("Dos16FindFirst2('%s', %p, %u, %p, %u, %p, %u, %u)", pszFileSpec, phdir,
+                 (uint)flAttribute, pfindbuf, (uint)cbBuf, pcFileNames, (uint)level, (uint)res);
+    if (res)
+        return ERROR_INVALID_PARAMETER;
+    if (level != FIL_STANDARD)
+        return ERROR_INVALID_LEVEL;
+    return Dos16FindFirst(pszFileSpec, phdir, flAttribute, pfindbuf, cbBuf, pcFileNames, 0);
+}
+
 APIRET16 Dos16FindNext(USHORT hDir, PVOID pfindbuf, USHORT cbfindbuf, PUSHORT pcFilenames)
 {
     if (!pcFilenames)

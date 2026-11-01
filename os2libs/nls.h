@@ -72,10 +72,10 @@ extern "C"
     OS2EXPORT APIRET16 OS2API16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf)
         OS2APIINFO(ord = 4, name = DOSGETDBCSEV);
     OS2EXPORT APIRET16 OS2API16 Dos16CaseMap(USHORT len, PCOUNTRYCODE16 pcc, PCHAR pch)
-        OS2APIINFO(ord = 391, name = DOSCASEMAP);
+        OS2APIINFO(ord = 1, name = DOSCASEMAP);
     OS2EXPORT APIRET16 OS2API16 Dos16GetCtryInfo(USHORT len, PCOUNTRYCODE16 pcc, PCOUNTRYINFO16 pch,
                                                  PUSHORT dlen)
-        OS2APIINFO(ord = 393, name = DOSGETCTRYINFO);
+        OS2APIINFO(ord = 3, name = DOSGETCTRYINFO);
 
 #ifdef __cplusplus
 }

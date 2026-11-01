@@ -25,6 +25,11 @@ ndisasm -b32 code.bin | python3 tools/cvtasm.py
 The import catalogue is `tools/data/os2imports.json`. `cvtasm.py` and `os2imports.py` accept
 files as arguments or read stdin. `unimplemented.py` reads stdin.
 
+The `PMWINX` catalogue records 795 named Open32 exports from the Warp 4.52
+`os2image/FI/DAX/DLL/PMWINX.DLL`, SHA-256
+`07a7368235f8b5b0b42b955dc5d8130eb0fdf178c3f20bc62ab334b1da339655`.
+These names identify required APIs in import reports; Open32 is not implemented.
+
 ```sh
 uvx ruff check .
 uvx ruff format --check .

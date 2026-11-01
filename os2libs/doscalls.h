@@ -525,6 +525,8 @@ extern "C"
     /* USE16-only exports. */
     OS2EXPORT APIRET16 OS2API16 Dos16EnterCritSec(VOID) OS2APIINFO(3);
     OS2EXPORT APIRET16 OS2API16 Dos16ExitCritSec(VOID) OS2APIINFO(6);
+    OS2EXPORT APIRET OS2API DosEnterCritSec(VOID) OS2APIINFO(232);
+    OS2EXPORT APIRET OS2API DosExitCritSec(VOID) OS2APIINFO(233);
     OS2EXPORT APIRET16 OS2API16 Dos16SetPrty(USHORT scope, USHORT prtyclass, SHORT delta,
                                              USHORT pid) OS2APIINFO(11);
     OS2EXPORT APIRET16 OS2API16 Dos16GetDateTime(PDATETIME pdt) OS2APIINFO(33);
@@ -590,9 +592,16 @@ extern "C"
     OS2EXPORT APIRET16 OS2API16 Dos16Open(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction,
                                           ULONG cbFile, USHORT ulAttribute, USHORT fsOpenFlags,
                                           USHORT fsOpenMode, ULONG ulReserved) OS2APIINFO(70);
+    OS2EXPORT APIRET16 OS2API16 Dos16Open2(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction,
+                                           ULONG cbFile, USHORT ulAttribute, USHORT fsOpenFlags,
+                                           ULONG fsOpenMode, PVOID ea, ULONG reserved)
+        OS2APIINFO(95);
     OS2EXPORT APIRET16 OS2API16 Dos16FindFirst(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute,
                                                PVOID pfindbuf, USHORT cbBuf, PUSHORT pcFileNames,
                                                ULONG res) OS2APIINFO(64);
+    OS2EXPORT APIRET16 OS2API16 Dos16FindFirst2(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute,
+                                                PVOID pfindbuf, USHORT cbBuf, PUSHORT pcFileNames,
+                                                USHORT level, ULONG res) OS2APIINFO(184);
     OS2EXPORT APIRET16 OS2API16 Dos16ChDir(PSZ pszDir, ULONG res) OS2APIINFO(57);
     OS2EXPORT APIRET16 OS2API16 Dos16Close(USHORT hFile) OS2APIINFO(59);
     OS2EXPORT APIRET16 OS2API16 Dos16FindNext(USHORT hDir, PVOID pfindbuf, USHORT cbfindbuf,

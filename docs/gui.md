@@ -84,3 +84,11 @@ imply 16-bit PM APIs. Qt/klibc applications require additional runtime integrati
 Archive screening also considered PMxEyes, PMEyes, Eyecon, Eyes 0.9.5, PMLife,
 PMGuts and several clocks. Their menu/dialog/profile, NE16 PM or external-runtime
 requirements exceed this subset; they are not listed as working applications.
+
+Lotus SmartSuite 1.7 with Fixpack 3 does not yet reach a usable application
+window. Word Pro, 1-2-3, Freelance and Organizer require the Open32 `PMWINX`
+module; Approach first encounters the missing `PMSPL` printing module. The
+Open32 ordinal catalogue supports import diagnostics; it supplies no Open32
+implementation. Additional help, controls, desktop and graphics services are
+also required. Native and Unicorn startup probes currently return a dependency
+failure for all five products.

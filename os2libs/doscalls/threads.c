@@ -300,6 +300,12 @@ void initCritSec(void)
 APIRET16 Dos16EnterCritSec(VOID)
 {
     TRACE_NATIVE("Dos16EnterCritSec()");
+    return (APIRET16)DosEnterCritSec();
+}
+
+APIRET DosEnterCritSec(VOID)
+{
+    TRACE_NATIVE("DosEnterCritSec()");
     lx_host_once(&GCritSecOnce, initCritSec);
     lx_host_mutex_lock(GCritSec, UINT32_MAX);
     return NO_ERROR;
@@ -308,6 +314,12 @@ APIRET16 Dos16EnterCritSec(VOID)
 APIRET16 Dos16ExitCritSec(VOID)
 {
     TRACE_NATIVE("Dos16ExitCritSec()");
+    return (APIRET16)DosExitCritSec();
+}
+
+APIRET DosExitCritSec(VOID)
+{
+    TRACE_NATIVE("DosExitCritSec()");
     lx_host_once(&GCritSecOnce, initCritSec);
     lx_host_mutex_unlock(GCritSec);
     return NO_ERROR;
