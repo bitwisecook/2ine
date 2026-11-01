@@ -20,6 +20,8 @@ typedef struct Open32Window
     LxGuestMapping *creation;
     struct Open32Property *properties;
     Open32Scroll scroll[3];
+    BOOL scroll_dragging;
+    LONG scroll_drag_offset, scroll_track_position;
     BOOL erase_pending;
     int destroyed;
     struct Open32Window *next, *creating_previous;

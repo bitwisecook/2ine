@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/windows.h"
+#include "os2libs/pmwinx/drawing.h"
 BOOL GetClientRect(ULONG window, PVOID output)
 {
     RECTL rect;
@@ -102,6 +103,44 @@ ULONG GetParent(ULONG window)
         return (w->style & (0x40000000u | 0x80000000u)) ? w->parent : 0;
     ULONG parent = WinQueryWindow(window, 5);
     return parent == HWND_DESKTOP ? WinQueryWindow(window, 4) : parent;
+}
+
+BOOL WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count, LONG direction)
+{
+    TRACE_NATIVE("WinTranslateDevicePoints(%u, %u, %p, %d, %d)", dc, window, points, count,
+                 direction);
+    /* WINX2PM and PM2WINX use the same involution in the original adapter. */
+    (void)direction;
+    LONG height;
+    RECTL rectangle;
+    if (dc && open32FindDC(dc))
+        height = open32DCHeight(dc);
+    else if (!dc && window && open32Presentation() && WinQueryWindowRect(window, &rectangle))
+        height = rectangle.yTop - rectangle.yBottom;
+    else
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    if (count < 0 || count > 65536 || (count && !points))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint8 *wire = points;
+    for (LONG i = 0; i < count; i++)
+    {
+        int64_t y = (int64_t)height - 1 - (LONG)lx_guest_load_u32(wire + i * 8 + 4);
+        if (y < INT32_MIN || y > INT32_MAX)
+        {
+            open32SetError(87);
+            return FALSE;
+        }
+    }
+    for (LONG i = 0; i < count; i++)
+        lx_guest_store_u32(wire + i * 8 + 4, (ULONG)((int64_t)height - 1 -
+                                                     (LONG)lx_guest_load_u32(wire + i * 8 + 4)));
+    return TRUE;
 }
 
 ULONG SetParent(ULONG window, ULONG parent)

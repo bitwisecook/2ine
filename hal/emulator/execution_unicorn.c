@@ -36,25 +36,6 @@ typedef struct Invocation
     uint32_t api_arguments;
     const LxCpuRegisters *api_registers;
 } Invocation;
-typedef struct Thread32Entry
-{
-    uint32_t entry, stack, argument;
-    int cancelled;
-} Thread32Entry;
-static __thread Thread32Entry *CurrentThread32;
-static int endThread(void);
-static int threadCancelled(void)
-{
-    return CurrentThread32 && __atomic_load_n(&CurrentThread32->cancelled, __ATOMIC_ACQUIRE);
-}
-static int cancelThread32(void *invocation)
-{
-    Thread32Entry *entry = invocation;
-    if (!entry)
-        return 0;
-    __atomic_store_n(&entry->cancelled, 1, __ATOMIC_RELEASE);
-    return 1;
-}
 typedef struct EmulatedState
 {
     LxExecution *execution;
@@ -100,8 +81,6 @@ static void replaceContext(Invocation *frame);
 static void pollTermination(LxExecution *e)
 {
     EmulatedState *s = e->backend;
-    if (threadCancelled())
-        endThread();
     if (!__atomic_load_n(&s->termination, __ATOMIC_ACQUIRE))
         return;
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
@@ -437,20 +416,22 @@ static void bindThreadWindow(EmulatedState *s)
 static uint32_t invoke(LxCpuRegisters registers, int preserve)
 {
     EmulatedState *s = Emulated;
-    Invocation frame = {0};
-    frame.outer = Active;
-    Active = &frame;
+    Invocation *frame = calloc(1, sizeof *frame);
+    if (!frame)
+        failure("Out of memory");
+    frame->outer = Active;
+    Active = frame;
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
-    if (!lx_cpu_restore(s->cpu, frame.outer ? frame.outer->context : s->initial) ||
+    if (!lx_cpu_restore(s->cpu, frame->outer ? frame->outer->context : s->initial) ||
         !lx_cpu_set_registers(s->cpu, &registers))
         failure(lx_cpu_error(s->cpu));
-    replaceContext(&frame);
+    replaceContext(frame);
     lx_host_mutex_unlock(s->mutex);
     for (;;)
     {
         pollTermination(s->execution);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
-        if (!lx_cpu_restore(s->cpu, frame.context))
+        if (!lx_cpu_restore(s->cpu, frame->context))
             failure(lx_cpu_error(s->cpu));
         bindThreadWindow(s);
         /* Bound cooperative slices at translated-block boundaries. Counting
@@ -458,8 +439,9 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         LxCpuEvent event = lx_cpu_run_blocks(s->cpu, 4096);
         if (!lx_cpu_get_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
-        replaceContext(&frame);
+        replaceContext(frame);
         lx_host_mutex_unlock(s->mutex);
+        lx_host_thread_test_cancel();
         if (event.reason == LX_CPU_BUDGET)
             continue;
         if (event.reason == LX_CPU_TRAP && event.vector == RETURN_VECTOR)
@@ -540,7 +522,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             failure("API frame address overflows");
         uint8_t eax_frame[4];
         lx_guest_store_u32(eax_frame, registers.eax);
-        LxGuestBorrow *arguments = &frame.arguments;
+        LxGuestBorrow *arguments = &frame->arguments;
         uint8_t *args = eax_frame;
         if (b->convention != LX_ABI_EAX32)
         {
@@ -549,32 +531,34 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
                 failure(lx_execution_error(s->execution));
             args = arguments->host;
         }
-        frame.api_arguments = b->convention == LX_ABI_EAX32 ? 0 : (uint32_t)frame_address;
-        frame.api_registers = &registers;
+        frame->api_arguments = b->convention == LX_ABI_EAX32 ? 0 : (uint32_t)frame_address;
+        frame->api_registers = &registers;
+        lx_host_thread_test_cancel();
         registers.eax = b->callback(args);
-        frame.api_registers = NULL;
-        frame.api_arguments = 0;
+        frame->api_registers = NULL;
+        frame->api_arguments = 0;
         lx_execution_release(arguments);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
-        if (!lx_cpu_restore(s->cpu, frame.context) || !lx_cpu_set_registers(s->cpu, &registers))
+        if (!lx_cpu_restore(s->cpu, frame->context) || !lx_cpu_set_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
-        replaceContext(&frame);
+        replaceContext(frame);
         lx_host_mutex_unlock(s->mutex);
     }
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
     if (preserve)
     {
         lx_cpu_context_free(s->completed_main.context);
-        s->completed_main.context = frame.context;
+        s->completed_main.context = frame->context;
         s->completed_main.outer = NULL;
         Active = &s->completed_main;
     }
     else
     {
-        lx_cpu_context_free(frame.context);
-        Active = frame.outer;
+        lx_cpu_context_free(frame->context);
+        Active = frame->outer;
     }
     lx_host_mutex_unlock(s->mutex);
+    free(frame);
     return registers.eax;
 }
 static LxCpuRegisters initialRegisters(void)
@@ -765,6 +749,10 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     return result;
 }
 
+typedef struct Thread32Entry
+{
+    uint32_t entry, stack, argument;
+} Thread32Entry;
 static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
 {
     Thread32Entry *p = malloc(sizeof *p);
@@ -773,14 +761,12 @@ static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
         p->entry = entry;
         p->stack = stack;
         p->argument = argument;
-        p->cancelled = 0;
     }
     return p;
 }
 static void thread32(void *invocation)
 {
     Thread32Entry *entry = invocation;
-    CurrentThread32 = entry;
     jmp_buf target;
     jmp_buf *outer_return = ThreadReturn;
     Invocation *outer_frame = ThreadOuter;
@@ -797,12 +783,9 @@ static void thread32(void *invocation)
     }
     ThreadReturn = outer_return;
     ThreadOuter = outer_frame;
-    CurrentThread32 = NULL;
 }
-static int endThread(void)
+static void cleanupThread32(void)
 {
-    if (!ThreadReturn)
-        return 0;
     while (Active != ThreadOuter)
     {
         Invocation *frame = Active;
@@ -811,9 +794,17 @@ static int endThread(void)
         lx_cpu_context_free(frame->context);
         Active = frame->outer;
         lx_host_mutex_unlock(Emulated->mutex);
+        free(frame);
     }
+}
+static int endThread(void)
+{
+    if (!ThreadReturn)
+        return 0;
+    cleanupThread32();
     longjmp(*ThreadReturn, 1);
 }
+
 static void *missing(const char *module, const char *entry, unsigned bits, LxExecutionBridge *b)
 {
     uint16_t selector;
@@ -1025,7 +1016,6 @@ const LxExecutionOperations lx_execution_unicorn = {"unicorn",
                                                     callback4,
                                                     apiArguments,
                                                     apiRegisters32,
+                                                    cleanupThread32,
                                                     terminateProcess,
-                                                    pollTermination,
-                                                    cancelThread32,
-                                                    threadCancelled};
+                                                    pollTermination};

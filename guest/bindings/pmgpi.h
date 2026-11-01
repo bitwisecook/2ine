@@ -841,3 +841,62 @@ static uint32 bridge32_GpiQueryRegionRects(uint8 *a)
     lx_execution_release(&control_output);
     return result;
 }
+
+static uint32 bridge32_GpiQueryCharAngle(uint8 *a)
+{
+    POINTL angle;
+    return GpiQueryCharAngle(gpi_word(a, 0), &angle) &&
+           lx_execution_write(GLoaderState.execution, gpi_word(a, 1), &angle, sizeof angle);
+}
+
+static uint32 bridge32_GpiQueryCharShear(uint8 *a)
+{
+    POINTL shear;
+    return GpiQueryCharShear(gpi_word(a, 0), &shear) &&
+           lx_execution_write(GLoaderState.execution, gpi_word(a, 1), &shear, sizeof shear);
+}
+
+static uint32 bridge32_GpiQueryTextAlignment(uint8 *a)
+{
+    LONG horizontal, vertical;
+    LxGuestBorrow h = {0}, v = {0};
+    uint32 result =
+        lx_execution_borrow(GLoaderState.execution, gpi_word(a, 1), 4, LX_GUEST_WRITE, &h) &&
+        lx_execution_borrow(GLoaderState.execution, gpi_word(a, 2), 4, LX_GUEST_WRITE, &v) &&
+        GpiQueryTextAlignment(gpi_word(a, 0), &horizontal, &vertical);
+    if (result)
+    {
+        lx_guest_store_u32(h.host, horizontal);
+        lx_guest_store_u32(v.host, vertical);
+    }
+    lx_execution_release(&v);
+    lx_execution_release(&h);
+    return result;
+}
+
+static uint32 bridge32_GpiSetCharAngle(uint8 *a)
+{
+    POINTL value;
+    return lx_execution_read(GLoaderState.execution, gpi_word(a, 1), &value, sizeof value) &&
+           GpiSetCharAngle(gpi_word(a, 0), &value);
+}
+
+static uint32 bridge32_GpiSetCharShear(uint8 *a)
+{
+    POINTL value;
+    return lx_execution_read(GLoaderState.execution, gpi_word(a, 1), &value, sizeof value) &&
+           GpiSetCharShear(gpi_word(a, 0), &value);
+}
+
+static uint32 bridge32_GpiSetCharDirection(uint8 *a)
+{
+    return GpiSetCharDirection(gpi_word(a, 0), (LONG)gpi_word(a, 1));
+}
+static uint32 bridge32_GpiQueryCharDirection(uint8 *a)
+{
+    return (uint32)GpiQueryCharDirection(gpi_word(a, 0));
+}
+static uint32 bridge32_GpiSetTextAlignment(uint8 *a)
+{
+    return GpiSetTextAlignment(gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2));
+}

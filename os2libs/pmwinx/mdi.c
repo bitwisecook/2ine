@@ -55,6 +55,8 @@ static ULONG mdi_create(Open32Window *client, ULONG definition)
 ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
     Open32Window *window = open32FindWindow(handle);
+    if (window && window->class->builtin == 2)
+        return open32ScrollWindowProc(handle, message, first, second);
     if (!window || window->class->builtin != 1)
         return 0;
     if (message == 0x81)

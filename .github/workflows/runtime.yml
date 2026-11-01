@@ -42,3 +42,9 @@ jobs:
       - name: Test native GNOME ball manager
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/integration/gnome_balls.py --build build-runtime
+      - name: Retain GUI failure evidence
+        if: failure() && runner.os == 'Linux' && matrix.profile == 'application'
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-gui-failure
+          path: build-runtime/gui-results/

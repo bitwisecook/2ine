@@ -664,6 +664,21 @@ extern "C"
         OS2APIINFO(282);
     OS2EXPORT VOID OS2API DosExit(ULONG action, ULONG result) OS2APIINFO(234);
     OS2EXPORT APIRET OS2API DosExitList(ULONG ordercode, PFNEXITLIST pfn) OS2APIINFO(296);
+    typedef struct
+    {
+        ULONG hsemCur;
+        ULONG ulUser;
+    } SEMRECORD, *PSEMRECORD;
+    OS2EXPORT APIRET OS2API DosCreateMuxWaitSem(PSZ name, PHMUX output, ULONG count,
+                                                PSEMRECORD records, ULONG flags) OS2APIINFO(337);
+    OS2EXPORT APIRET OS2API DosOpenMuxWaitSem(PSZ name, PHMUX output) OS2APIINFO(338);
+    OS2EXPORT APIRET OS2API DosCloseMuxWaitSem(HMUX handle) OS2APIINFO(339);
+    OS2EXPORT APIRET OS2API DosWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
+        OS2APIINFO(340);
+    OS2EXPORT APIRET OS2API DosAddMuxWaitSem(HMUX handle, PSEMRECORD record) OS2APIINFO(341);
+    OS2EXPORT APIRET OS2API DosDeleteMuxWaitSem(HMUX handle, ULONG semaphore) OS2APIINFO(342);
+    OS2EXPORT APIRET OS2API DosQueryMuxWaitSem(HMUX handle, PULONG count, PSEMRECORD records,
+                                               PULONG flags) OS2APIINFO(343);
     OS2EXPORT APIRET OS2API DosCreateEventSem(PSZ pszName, PHEV phev, ULONG flAttr, BOOL32 fState)
         OS2APIINFO(324);
     OS2EXPORT APIRET OS2API DosCreateMutexSem(PSZ pszName, PHMTX phmtx, ULONG flAttr, BOOL32 fState)
@@ -713,8 +728,8 @@ extern "C"
     OS2EXPORT APIRET16 OS2API16 Dos16Move(PSZ pszOld, PSZ pszNew, ULONG reserved) OS2APIINFO(67);
     OS2EXPORT APIRET OS2API DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag) OS2APIINFO(306);
     OS2EXPORT APIRET OS2API DosError(ULONG error) OS2APIINFO(212);
-    OS2EXPORT APIRET OS2API DosQueryModFromEIP(PHMODULE phmod, PCHAR pszModName, ULONG cbModName,
-                                               PULONG pulOffset, PULONG pulObject, ULONG ulEIP)
+    OS2EXPORT APIRET OS2API DosQueryModFromEIP(PHMODULE phmod, PULONG pulObject, ULONG cbModName,
+                                               PCHAR pszModName, PULONG pulOffset, ULONG ulEIP)
         OS2APIINFO(360);
     OS2EXPORT APIRET OS2API DosAcknowledgeSignalException(ULONG ulSignalNum) OS2APIINFO(418);
     OS2EXPORT APIRET OS2API DosRaiseException(PEXCEPTIONREPORTRECORD pexcept) OS2APIINFO(356);
@@ -738,8 +753,8 @@ extern "C"
     OS2EXPORT APIRET OS2API DosFreeMem(PVOID pb) OS2APIINFO(304);
     OS2EXPORT APIRET OS2API DosWaitChild(ULONG action, ULONG option, PRESULTCODES pres, PPID ppid,
                                          PID pid) OS2APIINFO(280);
-    OS2EXPORT APIRET OS2API DosWaitThread(PTID ptid, ULONG option) OS2APIINFO(349);
     OS2EXPORT APIRET OS2API DosKillThread(TID id) OS2APIINFO(111);
+    OS2EXPORT APIRET OS2API DosWaitThread(PTID ptid, ULONG option) OS2APIINFO(349);
     OS2EXPORT APIRET OS2API DosSleep(ULONG msec) OS2APIINFO(229);
     OS2EXPORT APIRET OS2API DosSubFreeMem(PVOID pbBase, PVOID pb, ULONG cb) OS2APIINFO(346);
     OS2EXPORT APIRET OS2API DosDelete(PSZ pszFile) OS2APIINFO(259);

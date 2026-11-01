@@ -1035,6 +1035,7 @@ extern "C"
     OS2EXPORT HWND OS2API WinGetNextWindow(HENUM enumeration) OS2APIINFO(756);
     OS2EXPORT BOOL OS2API WinEndEnumWindows(HENUM enumeration) OS2APIINFO(737);
     OS2EXPORT HAB OS2API WinQueryAnchorBlock(HWND window) OS2APIINFO(800);
+    OS2EXPORT BOOL OS2API WinSetOwner(HWND window, HWND owner) OS2APIINFO(864);
     OS2EXPORT HWND OS2API WinQueryWindow(HWND window, LONG code) OS2APIINFO(834);
     OS2EXPORT BOOL OS2API WinSetParent(HWND window, HWND parent, BOOL redraw) OS2APIINFO(865);
     OS2EXPORT ULONG OS2API WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text)
@@ -1083,7 +1084,12 @@ extern "C"
     OS2EXPORT BOOL OS2API WinAlarm(HWND desktop, ULONG type) OS2APIINFO(701);
     OS2EXPORT ULONG OS2API WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id,
                                          ULONG style) OS2APIINFO(789);
+    OS2EXPORT APIRET OS2API WinWaitEventSem(HEV handle, ULONG timeout) OS2APIINFO(978);
+    OS2EXPORT APIRET OS2API WinRequestMutexSem(HMTX handle, ULONG timeout) OS2APIINFO(979);
+    OS2EXPORT APIRET OS2API WinWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
+        OS2APIINFO(980);
     OS2EXPORT ERRORID OS2API WinGetLastError(HAB hab) OS2APIINFO(753);
+    OS2EXPORT ERRORID OS2API WinSetErrorInfo(ERRORID error, ULONG flags, ...) OS2APIINFO(977);
     OS2EXPORT UCHAR OS2API WinCpTranslateChar(HAB hab, ULONG source, UCHAR character,
                                               ULONG destination) OS2APIINFO(711);
     OS2EXPORT ULONG OS2API WinQueryCp(HMQ queue) OS2APIINFO(810);

@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 custom windows translate their lifecycle callbacks through PM. */
 #include "os2libs/pmwinx/windows.h"
+#include "os2libs/pmwin/open32_post.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/internal.h"
@@ -24,7 +25,10 @@ ULONG open32WindowCallback(Open32Window *w, ULONG message, ULONG first, ULONG se
 static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     if (creating && !creating->handle)
+    {
         creating->handle = handle;
+        lx_pm_mark_open32_window(handle);
+    }
     Open32Window *w = open32FindWindow(handle);
     if (!w)
         return WinDefWindowProc(handle, message, first, second);
@@ -473,15 +477,19 @@ LONG SetWindowLong(ULONG handle, LONG index, LONG value)
 BOOL SetWindowPos(ULONG handle, ULONG after, LONG x, LONG y, LONG width, LONG height, ULONG flags)
 {
     Open32Window *w = open32FindWindow(handle);
-    if (!w || ((flags & 1) == 0 && (width < 0 || height < 0)))
+    SWP old = {0};
+    RECTL parent_bounds = {0};
+    BOOL native = !w && open32NativeDialogWindow(handle) && WinQueryWindowPos(handle, &old) &&
+                  WinQueryWindowRect(WinQueryWindow(handle, 5), &parent_bounds);
+    if ((!w && !native) || ((flags & 1) == 0 && (width < 0 || height < 0)))
     {
-        open32SetError(w ? 87 : 1400);
+        open32SetError(w || native ? 87 : 1400);
         return FALSE;
     }
-    LONG new_width = flags & 1 ? w->width : width;
-    LONG new_height = flags & 1 ? w->height : height;
-    LONG new_x = flags & 2 ? w->x : x;
-    LONG new_y = flags & 2 ? w->y : y;
+    LONG new_width = flags & 1 ? (w ? w->width : old.cx) : width;
+    LONG new_height = flags & 1 ? (w ? w->height : old.cy) : height;
+    LONG new_x = flags & 2 ? (w ? w->x : old.x) : x;
+    LONG new_y = flags & 2 ? (w ? w->y : parent_bounds.yTop - old.y - old.cy) : y;
     RECTL bounds;
     if (!WinQueryWindowRect(WinQueryWindow(handle, 5), &bounds))
         return FALSE;
@@ -519,6 +527,13 @@ BOOL ShowWindow(ULONG handle, LONG command)
     Open32Window *w = open32FindWindow(handle);
     if (!w)
     {
+        if (open32NativeDialogWindow(handle) &&
+            (command == 0 || command == 1 || command == 5 || command == 8))
+        {
+            BOOL previous = WinIsWindowVisible(handle);
+            WinShowWindow(handle, command != 0);
+            return previous;
+        }
         open32SetError(1400);
         return FALSE;
     }

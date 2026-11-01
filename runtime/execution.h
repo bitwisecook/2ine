@@ -142,9 +142,8 @@ void *lx_execution_prepare_thread32(LxExecution *execution, uint32_t entry, uint
 void lx_execution_thread32(LxExecution *execution, void *invocation);
 void lx_execution_destroy_thread32(LxExecution *execution, void *invocation);
 
+void lx_execution_cleanup_thread32(LxExecution *execution);
 int lx_execution_end_thread(LxExecution *execution);
-int lx_execution_cancel_thread32(LxExecution *execution, void *invocation);
-int lx_execution_thread_cancelled(LxExecution *execution);
 /* Portable process termination runs cleanup on the primary guest thread. Blocking
    service loops poll so a worker's request can interrupt an idle primary thread. */
 void lx_execution_terminate(LxExecution *execution, void (*cleanup)(uint32_t), uint32_t code);

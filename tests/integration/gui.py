@@ -13,6 +13,7 @@ import json
 import os
 import select
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -36,10 +37,9 @@ def wait_for(condition, process, seconds=8):
 
 
 def colored_pixels(rgb):
+    """Count colored stars independently of grayscale frame controls."""
     return sum(
-        1
-        for r, g, b in zip(rgb[::3], rgb[1::3], rgb[2::3], strict=True)
-        if r != g or g != b or r > 0
+        1 for r, g, b in zip(rgb[::3], rgb[1::3], rgb[2::3], strict=True) if r != g or g != b
     )
 
 
@@ -214,6 +214,17 @@ def main():
             )
             receipt.write_text(json.dumps(result, indent=2) + "\n")
             print(f"PASS {args.profile} {args.backend}: rendered, interacted and closed")
+        except BaseException:
+            worker_log.flush()
+            dots = args.work / "dots.png"
+            print(
+                f"GUI evidence: {args.work}; dot capture present: {dots.exists()}", file=sys.stderr
+            )
+            print(
+                "\n".join((args.work / "worker.log").read_text().splitlines()[-160:]),
+                file=sys.stderr,
+            )
+            raise
         finally:
             os.close(read_fd)
             if process and process.poll() is None:

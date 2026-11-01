@@ -3,6 +3,7 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/input.h"
+#include "os2libs/pmwin/open32_post.h"
 typedef struct QueuedMessage
 {
     uint8 wire[28];
@@ -44,6 +45,9 @@ BOOL open32PmMessage(const QMSG *native, ULONG *message, ULONG *first, ULONG *se
     *second = (ULONG)(uintptr_t)native->mp2;
     switch (native->msg)
     {
+        case LX_PM_OPEN32_POST:
+            *message = native->reserved;
+            return TRUE;
         case WM_PAINT:
             *message = 15;
             *first = *second = 0;
@@ -152,7 +156,7 @@ static BOOL accept_native(const QMSG *native)
     if (!node)
         return FALSE;
     node->native = *native;
-    node->native_valid = TRUE;
+    node->native_valid = native->msg != LX_PM_OPEN32_POST;
     node->key = key;
     node->keyboard = native->msg == WM_CHAR;
     lx_guest_store_u32(node->wire + 16, native->time);
@@ -255,6 +259,25 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
         if (!accept_native(&native))
             return -1;
     }
+}
+BOOL WaitMessage(void)
+{
+    HAB hab = open32Presentation();
+    if (!hab)
+        return FALSE;
+    while (!pending)
+    {
+        QMSG native = {0};
+        BOOL received = WinGetMsg(hab, &native, 0, 0, 0);
+        if (!received && native.msg != WM_QUIT)
+        {
+            open32SetError(87);
+            return FALSE;
+        }
+        if (!accept_native(&native))
+            return FALSE;
+    }
+    return TRUE;
 }
 BOOL PeekMessage(PVOID output, ULONG filter, ULONG first, ULONG last, ULONG flags)
 {
@@ -361,6 +384,8 @@ BOOL PostMessage(ULONG handle, ULONG message, ULONG first, ULONG second)
         return FALSE;
     if (handle && !open32FindWindow(handle))
     {
+        if (lx_pm_post_open32_message(handle, message, first, second))
+            return TRUE;
         open32SetError(1400);
         return FALSE;
     }

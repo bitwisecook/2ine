@@ -10,4 +10,6 @@ OS2EXPORT BOOL OS2API WinDestroyObject(ULONG object) OS2APIINFO(251);
 OS2EXPORT ULONG OS2API WinQueryObject(PSZ id) OS2APIINFO(252);
 OS2EXPORT ULONG OS2API WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location,
                                        ULONG flags) OS2APIINFO(281);
+OS2EXPORT BOOL OS2API WinIsSomDDReady(void) OS2APIINFO(480);
+OS2EXPORT APIRET OS2API WinRestartSomDD(BOOL state) OS2APIINFO(464);
 #endif

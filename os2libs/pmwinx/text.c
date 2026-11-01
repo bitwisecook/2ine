@@ -114,38 +114,12 @@ LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
 }
 BOOL TextOut(ULONG handle, LONG x, LONG y, PSZ text, LONG count)
 {
-    Open32DC *dc = open32FindDC(handle);
-    LONG length;
-    char *copy = dc && open32CanDraw(handle) && count >= 0
-                     ? text_copy(text, count, FALSE, 0, &length)
-                     : NULL;
-    LxHostFontMetrics metrics;
-    if (!copy || !lx_host_font_metrics(lx_pm_font(handle), &metrics))
+    if (count < 0)
     {
-        free(copy);
         open32SetError(87);
         return FALSE;
     }
-    int64_t baseline = (int64_t)open32DCHeight(handle) - y - metrics.ascent, width = 0;
-    for (LONG i = 0; i < length; i++)
-        width += lx_host_font_advance(lx_pm_font(handle), lx_pm_codepoint((uint8)copy[i]));
-    if (baseline - metrics.descent < INT32_MIN || baseline + metrics.ascent > INT32_MAX ||
-        (int64_t)x + width < INT32_MIN || (int64_t)x + width > INT32_MAX)
-    {
-        free(copy);
-        open32SetError(87);
-        return FALSE;
-    }
-    if (dc->background_mode == 2)
-    {
-        RECTL rect = {x, (LONG)baseline - metrics.descent, (LONG)(x + width),
-                      (LONG)baseline + metrics.ascent};
-        WinFillRect(handle, &rect, rgb_color(dc->background_color));
-    }
-    POINTL point = {x, (LONG)baseline};
-    BOOL result = lx_pm_text(handle, &point, length, copy, rgb_color(dc->text_color), NULL);
-    free(copy);
-    return result;
+    return ExtTextOut(handle, x, y, 0, NULL, text, (ULONG)count, NULL);
 }
 
 BOOL GetTextExtentPoint32(ULONG handle, PCHAR text, LONG count, PVOID output)
@@ -187,4 +161,145 @@ BOOL GetTextExtentPoint32(ULONG handle, PCHAR text, LONG count, PVOID output)
 BOOL GetTextExtentPoint(ULONG dc, PCHAR text, LONG count, PVOID size)
 {
     return GetTextExtentPoint32(dc, text, count, size);
+}
+
+BOOL ExtTextOut(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle, PCHAR text, ULONG count,
+                PLONG advances)
+{
+    TRACE_NATIVE("ExtTextOut(%u, %d, %d, %X, %p, %p, %u, %p)", handle, x, y, flags, rectangle, text,
+                 count, advances);
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc || !open32CanDraw(handle) || count > 65536 || (count && !text) ||
+        ((flags & 6) && !rectangle))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    if (flags & ~6u)
+    {
+        open32SetError(50);
+        return FALSE;
+    }
+    RECTL area = {0};
+    LONG height = open32DCHeight(handle);
+    if (flags & 6)
+    {
+        const uint8 *wire = rectangle;
+        LONG left = (LONG)lx_guest_load_u32(wire), top = (LONG)lx_guest_load_u32(wire + 4);
+        LONG right = (LONG)lx_guest_load_u32(wire + 8), bottom = (LONG)lx_guest_load_u32(wire + 12);
+        int64_t lower = (int64_t)height - bottom, upper = (int64_t)height - top;
+        if (right < left || bottom < top || lower < INT32_MIN || upper > INT32_MAX)
+        {
+            open32SetError(87);
+            return FALSE;
+        }
+        area = (RECTL){left, (LONG)lower, right, (LONG)upper};
+    }
+    LxHostFont *font = lx_pm_font(handle);
+    LxHostFontMetrics metrics;
+    LONG length = 0;
+    char *copy = count ? text_copy(text, (LONG)count, FALSE, 0, &length) : NULL;
+    if ((count && !copy) || !lx_host_font_metrics(font, &metrics))
+    {
+        free(copy);
+        open32SetError(87);
+        return FALSE;
+    }
+    int64_t advance = 0;
+    for (LONG i = 0; i < length; i++)
+        advance += advances ? (LONG)lx_guest_load_u32((const uint8 *)advances + i * 4)
+                            : lx_host_font_advance(font, lx_pm_codepoint((uint8)copy[i]));
+    LONG reference_x = dc->text_alignment & 1 ? dc->position_x : x;
+    LONG reference_y = dc->text_alignment & 1 ? dc->position_y : y;
+    ULONG horizontal = dc->text_alignment & 6, vertical = dc->text_alignment & 24;
+    int64_t start = (int64_t)reference_x - (horizontal == 2   ? advance
+                                            : horizontal == 6 ? advance / 2
+                                                              : 0);
+    int64_t baseline = (int64_t)height - reference_y +
+                       (vertical == 24  ? 0
+                        : vertical == 8 ? metrics.descent
+                                        : -metrics.ascent);
+    if (advance < INT32_MIN || advance > INT32_MAX || start < INT32_MIN || start > INT32_MAX ||
+        ((dc->text_alignment & 1) && ((int64_t)reference_x + advance < INT32_MIN ||
+                                      (int64_t)reference_x + advance > INT32_MAX)))
+    {
+        free(copy);
+        open32SetError(87);
+        return FALSE;
+    }
+    x = (LONG)start;
+    int64_t position = start, leftmost = start, rightmost = start;
+    BOOL valid = baseline - metrics.descent >= INT32_MIN && baseline + metrics.ascent <= INT32_MAX;
+    for (LONG i = 0; valid && i < length; i++)
+    {
+        int glyph = lx_host_font_advance(font, lx_pm_codepoint((uint8)copy[i]));
+        int64_t step = advances ? (LONG)lx_guest_load_u32((const uint8 *)advances + i * 4) : glyph;
+        valid = glyph >= 0 && position + glyph <= INT32_MAX;
+        if (position < leftmost)
+            leftmost = position;
+        if (position + glyph > rightmost)
+            rightmost = position + glyph;
+        position += step;
+        valid = valid && position >= INT32_MIN && position <= INT32_MAX;
+    }
+    if (!valid)
+    {
+        free(copy);
+        open32SetError(87);
+        return FALSE;
+    }
+    BOOL result = TRUE;
+    if (flags & 2)
+        result = WinFillRect(handle, &area, rgb_color(dc->background_color));
+    else if (count && dc->background_mode == 2)
+    {
+        RECTL background = {(LONG)leftmost, (LONG)baseline - metrics.descent, (LONG)rightmost,
+                            (LONG)baseline + metrics.ascent};
+        if (!(flags & 4) || WinIntersectRect(0, &background, &background, &area))
+            result = WinFillRect(handle, &background, rgb_color(dc->background_color));
+    }
+    POINTL point = {x, (LONG)baseline};
+    for (LONG i = 0; result && i < length; i++)
+    {
+        result = lx_pm_text(handle, &point, 1, copy + i, rgb_color(dc->text_color),
+                            (flags & 4) ? &area : NULL);
+        LONG step = advances ? (LONG)lx_guest_load_u32((const uint8 *)advances + i * 4)
+                             : lx_host_font_advance(font, lx_pm_codepoint((uint8)copy[i]));
+        point.x = (LONG)((int64_t)point.x + step);
+    }
+    if (result && (dc->text_alignment & 1))
+    {
+        dc->position_x = (LONG)((int64_t)reference_x + advance);
+        dc->position_y = reference_y;
+    }
+    free(copy);
+    return result;
+}
+
+ULONG SetTextAlign(ULONG handle, ULONG alignment)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc || (alignment & ~0x1fu) || (alignment & 6) == 4 || (alignment & 24) == 16)
+    {
+        open32SetError(dc ? 87 : 6);
+        return UINT32_MAX;
+    }
+    if ((alignment & 1) && (alignment & 6))
+    {
+        open32SetError(50);
+        return UINT32_MAX;
+    }
+    ULONG previous = dc->text_alignment;
+    dc->text_alignment = alignment;
+    return previous;
+}
+ULONG GetTextAlign(ULONG handle)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc)
+    {
+        open32SetError(6);
+        return UINT32_MAX;
+    }
+    return dc->text_alignment;
 }

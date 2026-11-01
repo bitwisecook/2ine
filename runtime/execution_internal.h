@@ -50,10 +50,9 @@ typedef struct LxExecutionOperations
     uint32_t (*callback32_4)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
     uint32_t (*api_arguments)(void);
     int (*api_registers32)(LxExecutionRegisters32 *);
+    void (*cleanup_thread32)(void);
     void (*terminate)(LxExecution *, void (*)(uint32_t), uint32_t);
     void (*poll_termination)(LxExecution *);
-    int (*cancel_thread32)(void *);
-    int (*thread_cancelled)(void);
 } LxExecutionOperations;
 struct LxExecution
 {

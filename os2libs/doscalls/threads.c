@@ -68,6 +68,7 @@ void destroyThreadResource(void *value)
 void os2ThreadCleanup(void *arg)
 {
     Thread *thread = arg;
+    lx_execution_cleanup_thread32(GLoaderState.execution);
     GLoaderState.deinitOs2Tib(thread->selector);
     grabLock(&GMutexDosCalls);
     thread->finished = 1;
@@ -198,6 +199,48 @@ APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, 
     return NO_ERROR;
 }
 
+static uint32 waitKilledThread(void *argument)
+{
+    LxHandleBorrow *borrow = argument;
+    Thread *thread = borrow->resource;
+    lx_host_thread_test_cancel();
+    for (;;)
+    {
+        grabLock(&GMutexDosCalls);
+        BOOL finished = thread->finished;
+        ungrabLock(&GMutexDosCalls);
+        if (finished)
+            return NO_ERROR;
+        lx_host_sleep_ms(1);
+    }
+}
+
+APIRET DosKillThread(TID id)
+{
+    TRACE_NATIVE("DosKillThread(%u)", id);
+    grabLock(&GMutexDosCalls);
+    Thread *thread;
+    for (thread = GThreads; thread && thread->id != id; thread = thread->next)
+    {
+    }
+    LxHandleBorrow borrow = {0};
+    if (!thread || thread->finished || thread->joining ||
+        !lx_handle_borrow(thread->handle, LX_HANDLE_THREAD, &borrow))
+    {
+        ungrabLock(&GMutexDosCalls);
+        return ERROR_INVALID_THREADID;
+    }
+    LxHostCancelResult cancelled = lx_host_thread_cancel(thread->thread);
+    ungrabLock(&GMutexDosCalls);
+    APIRET result = cancelled == LX_HOST_CANCEL_UNSUPPORTED ? ERROR_NOT_SUPPORTED
+                    : cancelled == LX_HOST_CANCEL_OK        ? NO_ERROR
+                                                            : ERROR_INVALID_THREADID;
+    if (!result)
+        return lx_host_guarded_call(waitKilledThread, &borrow, releaseResourceBorrow, &borrow);
+    lx_handle_release(&borrow);
+    return result;
+}
+
 APIRET DosWaitThread(PTID id, ULONG option)
 {
     TRACE_NATIVE("DosWaitThread(%p, %u)", id, (uint)option);
@@ -255,23 +298,6 @@ APIRET DosWaitThread(PTID id, ULONG option)
         lx_handle_release(&object);
         return joined ? ERROR_INVALID_THREADID : NO_ERROR;
     }
-}
-
-APIRET DosKillThread(TID id)
-{
-    TRACE_NATIVE("DosKillThread(%u)", (uint)id);
-    if (id == 1)
-        return ERROR_INVALID_THREADID;
-    grabLock(&GMutexDosCalls);
-    Thread *thread = GThreads;
-    while (thread && thread->id != id)
-        thread = thread->next;
-    APIRET result = !thread || thread->finished ? ERROR_INVALID_THREADID
-                    : lx_execution_cancel_thread32(GLoaderState.execution, thread->invocation)
-                        ? NO_ERROR
-                        : ERROR_NOT_SUPPORTED;
-    ungrabLock(&GMutexDosCalls);
-    return result;
 }
 
 APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)

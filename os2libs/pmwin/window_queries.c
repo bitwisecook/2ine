@@ -157,6 +157,29 @@ HWND WinQueryWindow(HWND window, LONG code)
     return result ? result->hwnd : 0;
 }
 
+BOOL WinSetOwner(HWND handle, HWND owner_handle)
+{
+    TRACE_NATIVE("WinSetOwner(%u, %u)", handle, owner_handle);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    Window *owner = anchor && owner_handle ? getWindowFromHWND(anchor, owner_handle) : NULL;
+    if (!window || window == &desktop_window || window->destroying ||
+        (owner_handle && (!owner || owner->destroying)))
+    {
+        if (anchor)
+            lxHostThreadState()->pm_error = PMERR_INVALID_HWND;
+        return FALSE;
+    }
+    for (Window *cursor = owner; cursor; cursor = cursor->owner)
+        if (cursor == window)
+        {
+            lxHostThreadState()->pm_error = PMERR_INVALID_HWND;
+            return FALSE;
+        }
+    window->owner = owner;
+    return TRUE;
+}
+
 HWND WinWindowFromPoint(HWND parent, PPOINTL point, BOOL children)
 {
     TRACE_NATIVE("WinWindowFromPoint(%u, %p, %u)", (uint)parent, point, (uint)children);

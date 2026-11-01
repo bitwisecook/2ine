@@ -1,8 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* System cursor handles retain the host cursor and distinguish shared resources from copies. */
 #include "os2libs/pmwin/internal.h"
-#include "os2libs/pmwin/graphics.h"
-#include "guest/abi.h"
+#include "os2libs/pmwin/pointer_image.h"
 typedef struct PmPointer
 {
     struct PmPointer *next;
@@ -11,7 +10,8 @@ typedef struct PmPointer
     LONG id;
     BOOL copy;
     LxHostPointer *host;
-    uint32_t *pixels;
+    PmPointerImage *image;
+    uint32 *pixels;
     unsigned width, height, hot_x, hot_y;
 } PmPointer;
 static void release_pointer(void *resource)
@@ -24,110 +24,75 @@ static void release_pointer(void *resource)
         *link = pointer->next;
     lx_host_pointer_destroy(pointer->host);
     free(pointer->pixels);
+    pmPointerImageFree(pointer->image);
     free(pointer);
-}
-HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
-{
-    TRACE_NATIVE("WinLoadPointer(%u, %u, %u)", (uint)desktop, (uint)module, (uint)id);
-    AnchorBlock *anchor = getAnchorBlockNoHAB();
-    uint32 size = 0;
-    void *resource = NULL;
-    if (!anchor)
-        return 0;
-    if (desktop != HWND_DESKTOP)
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
-    if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
-        !GLoaderState.freeResource || GLoaderState.queryResourceSize(module, 1, id, &size) ||
-        GLoaderState.getResource(module, 1, id, &resource))
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
-    const uint8 *p = resource;
-    HPOINTER result = 0;
-    PmPointer *pointer = NULL;
-    /* A color icon/pointer has a monochrome mask followed by its color header.
-       Bitmap-array resources select their first image. Offsets remain resource-relative. */
-    size_t offset = size >= 14 && lx_guest_load_u16(p) == 0x4142 ? 14 : 0;
-    if (size - offset < 32 ||
-        (lx_guest_load_u16(p + offset) != 0x4943 && lx_guest_load_u16(p + offset) != 0x5043) ||
-        lx_guest_load_u32(p + offset + 14) != 12)
-        goto done;
-    const uint8 *mask = p + offset;
-    unsigned width = lx_guest_load_u16(mask + 18), twice_height = lx_guest_load_u16(mask + 20);
-    if (!width || width > 256 || !twice_height || (twice_height & 1) || twice_height > 512 ||
-        lx_guest_load_u16(mask + 22) != 1 || lx_guest_load_u16(mask + 24) != 1)
-        goto done;
-    unsigned height = twice_height / 2;
-    size_t color_at = offset + 32;
-    if (size - color_at < 26)
-        goto done;
-    const uint8 *color = p + color_at;
-    if (lx_guest_load_u32(color + 14) != 12 || lx_guest_load_u16(color + 18) != width ||
-        lx_guest_load_u16(color + 20) != height || lx_guest_load_u16(color + 22) != 1)
-        goto done;
-    unsigned depth = lx_guest_load_u16(color + 24);
-    if (depth != 1 && depth != 4 && depth != 8 && depth != 24)
-        goto done;
-    unsigned colors = depth <= 8 ? 1u << depth : 0;
-    size_t stride = ((size_t)width * depth + 31) / 32 * 4,
-           mask_stride = ((size_t)width + 31) / 32 * 4;
-    uint32 bits_at = lx_guest_load_u32(color + 10), mask_at = lx_guest_load_u32(mask + 10);
-    if (colors * 3u > size - color_at - 26 || bits_at > size || stride * height > size - bits_at ||
-        mask_at > size || mask_stride * twice_height > size - mask_at)
-        goto done;
-    pointer = calloc(1, sizeof *pointer);
-    if (!pointer)
-        goto done;
-    pointer->pixels = malloc((size_t)width * height * 4);
-    if (!pointer->pixels)
-        goto done;
-    const uint8 *palette = color + 26;
-    for (unsigned y = 0; y < height; y++)
-        for (unsigned x = 0; x < width; x++)
-        {
-            const uint8 *row = p + bits_at + y * stride;
-            const uint8 *rgb;
-            if (colors)
-            {
-                unsigned bit = x * depth;
-                unsigned index = (row[bit / 8] >> (8 - depth - bit % 8)) & (colors - 1);
-                rgb = palette + index * 3;
-            }
-            else
-                rgb = row + x * 3;
-            unsigned transparent =
-                p[mask_at + (y + height) * mask_stride + x / 8] & (0x80 >> (x % 8));
-            pointer->pixels[(size_t)(height - 1 - y) * width + x] =
-                (transparent ? 0 : 0xff000000u) | (uint32)rgb[2] << 16 | (uint32)rgb[1] << 8 |
-                rgb[0];
-        }
-    unsigned hot_x = lx_guest_load_u16(mask + 6), hot_y = lx_guest_load_u16(mask + 8);
-    if (hot_x >= width || hot_y >= height)
-        goto done;
-    pointer->anchor = anchor;
-    pointer->copy = TRUE;
-    pointer->width = width;
-    pointer->height = height;
-    pointer->hot_x = hot_x;
-    pointer->hot_y = height - 1 - hot_y;
-    pointer->handle = lx_handle_create(LX_HANDLE_PM_POINTER, pointer, release_pointer);
-    if (!pointer->handle)
-        goto done;
-    result = pointer->handle;
-    pointer->next = anchor->pointers;
-    anchor->pointers = pointer;
-done:
-    if (!result && pointer)
-    {
-        lx_host_pointer_destroy(pointer->host);
-        free(pointer->pixels);
-        free(pointer);
-    }
-    GLoaderState.freeResource(resource);
-    return result;
 }
 void destroyPointers(AnchorBlock *anchor)
 {
     while (anchor->pointers)
         lx_handle_close(anchor->pointers->handle, LX_HANDLE_PM_POINTER);
+}
+HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
+{
+    TRACE_NATIVE("WinLoadPointer(%u, %u, %u)", (uint)desktop, (uint)module, (uint)id);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor)
+        return 0;
+    if (desktop != HWND_DESKTOP || !GLoaderState.queryResourceSize || !GLoaderState.getResource)
+        return 0;
+    void *bytes = NULL;
+    ULONG size;
+    if (GLoaderState.queryResourceSize(module, 1, id, &size) || size > 16 * 1024 * 1024 ||
+        GLoaderState.getResource(module, 1, id, &bytes))
+        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
+    PmPointerImage *image = pmPointerImage(bytes, size);
+    size_t offset = size >= 14 && lx_guest_load_u16(bytes) == 0x4142 ? 14 : 0;
+    unsigned hot_x = size >= offset + 10 ? lx_guest_load_u16((uint8 *)bytes + offset + 6) : 0;
+    unsigned hot_y = size >= offset + 10 ? lx_guest_load_u16((uint8 *)bytes + offset + 8) : 0;
+    if (GLoaderState.freeResource)
+        GLoaderState.freeResource(bytes);
+    if (!image)
+        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_RESOURCE_FORMAT, 0);
+    PmPointer *pointer = calloc(1, sizeof *pointer);
+    if (!pointer)
+    {
+        pmPointerImageFree(image);
+        return 0;
+    }
+    pointer->pixels = malloc((size_t)image->width * image->height * sizeof *pointer->pixels);
+    if (!pointer->pixels || hot_x >= image->width || hot_y >= image->height)
+    {
+        free(pointer->pixels);
+        pmPointerImageFree(image);
+        free(pointer);
+        return 0;
+    }
+    pointer->width = image->width;
+    pointer->height = image->height;
+    pointer->hot_x = hot_x;
+    pointer->hot_y = image->height - 1 - hot_y;
+    for (unsigned y = 0; y < image->height; y++)
+        for (unsigned x = 0; x < image->width; x++)
+        {
+            size_t source = (size_t)y * image->width + x;
+            size_t target = (size_t)(image->height - 1 - y) * image->width + x;
+            pointer->pixels[target] =
+                image->pixels[source] | (image->mask[source] ? 0 : 0xff000000u);
+        }
+    pointer->anchor = anchor;
+    pointer->image = image;
+    pointer->copy = TRUE;
+    pointer->handle = lx_handle_create(LX_HANDLE_PM_POINTER, pointer, release_pointer);
+    if (!pointer->handle)
+    {
+        free(pointer->pixels);
+        pmPointerImageFree(image);
+        free(pointer);
+        return 0;
+    }
+    pointer->next = anchor->pointers;
+    anchor->pointers = pointer;
+    return pointer->handle;
 }
 HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
 {
@@ -213,8 +178,9 @@ BOOL WinDestroyPointer(HPOINTER handle)
     if (!lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &borrow))
         return FALSE;
     BOOL copy = ((PmPointer *)borrow.resource)->copy;
+    BOOL result = copy && lx_handle_close_guarded(handle, LX_HANDLE_PM_POINTER, 1, NULL) == 1;
     lx_handle_release(&borrow);
-    return copy && lx_handle_close(handle, LX_HANDLE_PM_POINTER);
+    return result;
 }
 
 BOOL WinSetPointerPos(HWND desktop, LONG x, LONG y)
@@ -232,4 +198,46 @@ BOOL WinShowCursor(HWND handle, BOOL show)
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     /* Text carets are painted by their control; absent carets cannot be shown. */
     return window && !show;
+}
+
+BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &borrow))
+        return FALSE;
+    PmPointerImage *image = ((PmPointer *)borrow.resource)->image;
+    BOOL result = image != NULL;
+    if (result)
+    {
+        *width = (LONG)image->width;
+        *height = (LONG)image->height;
+    }
+    lx_handle_release(&borrow);
+    return result;
+}
+BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_pm_valid_ps(space) || !lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &borrow))
+        return FALSE;
+    PmPointerImage *image = ((PmPointer *)borrow.resource)->image;
+    BOOL result = image != NULL;
+    for (unsigned row = 0; result && row < image->height; row++)
+        for (unsigned column = 0; result && column < image->width; column++)
+        {
+            int64_t px = (int64_t)x + column, py = (int64_t)y + row;
+            if (px < INT32_MIN || px > INT32_MAX || py < INT32_MIN || py > INT32_MAX)
+            {
+                result = FALSE;
+                break;
+            }
+            uint32 destination;
+            if (!lx_pm_raster_read(space, (LONG)px, (LONG)py, 1, 1, &destination))
+                continue;
+            size_t at = (size_t)row * image->width + column;
+            uint32 pixel = (destination & (image->mask[at] ? 0xffffff : 0)) ^ image->pixels[at];
+            result = lx_pm_raster_write(space, (LONG)px, (LONG)py, 1, 1, &pixel);
+        }
+    lx_handle_release(&borrow);
+    return result;
 }

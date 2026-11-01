@@ -31,6 +31,9 @@ extern "C"
         QUE_CONVERT_ADDRESS = 4
     };
 
+    /* A host session notifier owns a writer reference independently of guest handles. */
+    APIRET lx_queue_open_writer(PPID owner, PHQUEUE output, PSZ name);
+
     OS2EXPORT APIRET OS2API DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ pszName) OS2APIINFO(16);
     OS2EXPORT APIRET OS2API DosCloseQueue(HQUEUE hq) OS2APIINFO(11);
     OS2EXPORT APIRET OS2API DosOpenQueue(PPID ppid, PHQUEUE phq, PSZ pszName) OS2APIINFO(15);

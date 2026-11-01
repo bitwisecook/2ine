@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include "os2libs/pmwinx.h"
 void open32SetError(ULONG error);
+ULONG open32ScrollWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);
+BOOL open32NativeDialogWindow(ULONG handle);
 BOOL open32ValidProcedure(ULONG address);
 ULONG open32BuiltinWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);
 BOOL open32EraseBackground(ULONG window, ULONG dc);

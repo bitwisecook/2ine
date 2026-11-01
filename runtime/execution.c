@@ -224,6 +224,11 @@ void lx_execution_destroy_thread32(LxExecution *e, void *invocation)
     if (invocation)
         e->ops->destroy_thread32(invocation);
 }
+void lx_execution_cleanup_thread32(LxExecution *e)
+{
+    if (e->ops->cleanup_thread32)
+        e->ops->cleanup_thread32();
+}
 int lx_execution_end_thread(LxExecution *e)
 {
     return e->ops->end_thread();
@@ -251,13 +256,4 @@ void lx_execution_poll_termination(LxExecution *e)
 {
     if (e && e->ops->poll_termination)
         e->ops->poll_termination(e);
-}
-
-int lx_execution_cancel_thread32(LxExecution *e, void *invocation)
-{
-    return e && e->ops->cancel_thread32 && e->ops->cancel_thread32(invocation);
-}
-int lx_execution_thread_cancelled(LxExecution *e)
-{
-    return e && e->ops->thread_cancelled && e->ops->thread_cancelled();
 }

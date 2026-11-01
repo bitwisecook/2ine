@@ -447,6 +447,75 @@ extern "C"
         OS2APIINFO(ord = 608, name = SETDIBITS);
     OS2EXPORT BOOL OS2API GetTextExtentPoint(ULONG dc, PCHAR text, LONG count, PVOID size)
         OS2APIINFO(ord = 368, name = GETTEXTEXTENTPOINT);
+    OS2EXPORT BOOL OS2API ExtTextOut(ULONG dc, LONG x, LONG y, ULONG flags, PVOID rectangle,
+                                     PCHAR text, ULONG count, PLONG advances)
+        OS2APIINFO(ord = 200, name = EXTTEXTOUT);
+    OS2EXPORT BOOL OS2API WaitMessage(void) OS2APIINFO(ord = 712, name = WAITMESSAGE);
+    OS2EXPORT ULONG OS2API GetCurrentProcess(void) OS2APIINFO(ord = 256, name = GETCURRENTPROCESS);
+    OS2EXPORT LONG OS2API GetTextFace(ULONG dc, LONG capacity, PCHAR output)
+        OS2APIINFO(ord = 370, name = GETTEXTFACE);
+    OS2EXPORT BOOL OS2API EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
+        OS2APIINFO(ord = 176, name = ENUMCHILDWINDOWS);
+    OS2EXPORT BOOL OS2API WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count,
+                                                   LONG direction)
+        OS2APIINFO(ord = 6003, name = WINTRANSLATEDEVICEPOINTS);
+    OS2EXPORT LONG OS2API DialogBox(ULONG module, PSZ resource, ULONG owner, ULONG procedure)
+        OS2APIINFO(ord = 147, name = DIALOGBOX);
+    OS2EXPORT LONG OS2API DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure,
+                                         ULONG parameter)
+        OS2APIINFO(ord = 148, name = DIALOGBOXPARAM);
+    OS2EXPORT BOOL OS2API EndDialog(ULONG dialog, LONG result)
+        OS2APIINFO(ord = 170, name = ENDDIALOG);
+    OS2EXPORT ULONG OS2API GetDlgItem(ULONG dialog, LONG identity)
+        OS2APIINFO(ord = 273, name = GETDLGITEM);
+    OS2EXPORT BOOL OS2API SetDlgItemText(ULONG dialog, LONG identity, PSZ text)
+        OS2APIINFO(ord = 611, name = SETDLGITEMTEXT);
+    OS2EXPORT ULONG OS2API GetDlgItemText(ULONG dialog, LONG identity, PCHAR output, LONG capacity)
+        OS2APIINFO(ord = 275, name = GETDLGITEMTEXT);
+    OS2EXPORT LONG OS2API SendDlgItemMessage(ULONG dialog, LONG identity, ULONG message,
+                                             ULONG first, ULONG second)
+        OS2APIINFO(ord = 587, name = SENDDLGITEMMESSAGE);
+    OS2EXPORT BOOL OS2API PatBlt(ULONG dc, LONG x, LONG y, LONG width, LONG height, ULONG operation)
+        OS2APIINFO(ord = 511, name = PATBLT);
+    OS2EXPORT ULONG OS2API CreatePatternBrush(ULONG bitmap)
+        OS2APIINFO(ord = 86, name = CREATEPATTERNBRUSH);
+    OS2EXPORT BOOL OS2API DPtoLP(ULONG dc, PVOID points, LONG count)
+        OS2APIINFO(ord = 100, name = DPTOLP);
+    OS2EXPORT BOOL OS2API LPtoDP(ULONG dc, PVOID points, LONG count)
+        OS2APIINFO(ord = 453, name = LPTODP);
+    OS2EXPORT BOOL OS2API GetKeyboardState(PVOID output)
+        OS2APIINFO(ord = 1013, name = GETKEYBOARDSTATE);
+    OS2EXPORT BOOL OS2API Polygon(ULONG dc, PVOID points, LONG count)
+        OS2APIINFO(ord = 524, name = POLYGON);
+    OS2EXPORT BOOL OS2API Polyline(ULONG dc, PVOID points, LONG count)
+        OS2APIINFO(ord = 525, name = POLYLINE);
+    OS2EXPORT ULONG OS2API SetTextAlign(ULONG dc, ULONG alignment)
+        OS2APIINFO(ord = 647, name = SETTEXTALIGN);
+    OS2EXPORT ULONG OS2API GetTextAlign(ULONG dc) OS2APIINFO(ord = 365, name = GETTEXTALIGN);
+    OS2EXPORT BOOL OS2API SetBrushOrgEx(ULONG dc, LONG x, LONG y, PVOID previous)
+        OS2APIINFO(ord = 596, name = SETBRUSHORGEX);
+    OS2EXPORT BOOL OS2API GetBrushOrgEx(ULONG dc, PVOID output)
+        OS2APIINFO(ord = 234, name = GETBRUSHORGEX);
+    OS2EXPORT BOOL OS2API SetForegroundWindow(ULONG window)
+        OS2APIINFO(ord = 621, name = SETFOREGROUNDWINDOW);
+    OS2EXPORT BOOL OS2API IsBadReadPtr(PVOID pointer, ULONG bytes)
+        OS2APIINFO(ord = 433, name = ISBADREADPTR);
+    OS2EXPORT BOOL OS2API IsBadWritePtr(PVOID pointer, ULONG bytes)
+        OS2APIINFO(ord = 435, name = ISBADWRITEPTR);
+    OS2EXPORT BOOL OS2API IsBadCodePtr(ULONG procedure) OS2APIINFO(ord = 430, name = ISBADCODEPTR);
+    OS2EXPORT ULONG OS2API CharUpper(ULONG pointer) OS2APIINFO(ord = 30, name = CHARUPPER);
+    OS2EXPORT ULONG OS2API CharLower(ULONG pointer) OS2APIINFO(ord = 24, name = CHARLOWER);
+    OS2EXPORT ULONG OS2API CharUpperBuff(ULONG pointer, ULONG count)
+        OS2APIINFO(ord = 31, name = CHARUPPERBUFF);
+    OS2EXPORT ULONG OS2API CharLowerBuff(ULONG pointer, ULONG count)
+        OS2APIINFO(ord = 25, name = CHARLOWERBUFF);
+    OS2EXPORT ULONG OS2API CharNext(ULONG pointer) OS2APIINFO(ord = 26, name = CHARNEXT);
+    OS2EXPORT ULONG OS2API CharPrev(ULONG start, ULONG current)
+        OS2APIINFO(ord = 27, name = CHARPREV);
+    OS2EXPORT LONG OS2API lstrcmpi(ULONG first, ULONG second)
+        OS2APIINFO(ord = 480, name = LSTRCMPI);
+    OS2EXPORT ULONG OS2API GetFileAttributes(PSZ name)
+        OS2APIINFO(ord = 284, name = GETFILEATTRIBUTES);
     OS2EXPORT ULONG OS2API GetTickCount(void) OS2APIINFO(ord = 373, name = GETTICKCOUNT);
     OS2EXPORT LONG OS2API MulDiv(LONG number, LONG numerator, LONG denominator)
         OS2APIINFO(ord = 494, name = MULDIV);
