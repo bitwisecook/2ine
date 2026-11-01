@@ -467,6 +467,8 @@ def fixed_selectors():
     # with the fixed flat code selector still active.
     g.code.extend(b"\x66\xb8\x53\x00\x8e\xd8\xc7\x05" + struct.pack("<II", marker, 0xC0FFEE))
     g.word(marker, 0xC0FFEE, 90)
+    g.code.extend(b"\x6a\x53\x07\x26\xc7\x05" + struct.pack("<II", marker, 0x12345678))
+    g.word(marker, 0x12345678, 91)
     g.exit(0)
     return linear_image(g.code, g.fixups, ["DOSCALLS"], "FLATSEL", data=g.data)
 
@@ -525,6 +527,9 @@ def segmented_lx():
     for output in (tib, pib):
         g.code.extend(b"\x66\xa1" + struct.pack("<H", output))
         g.require(b"\x66\x85\xc0\x0f\x95\xc0\x3c\x01", 93)
+    # USE16 data-selector faults must use a flat host signal stack.
+    g.code.extend(b"\x06\x1e\x68\x53\x00\x1f\x66\xb8\x53\x00\x00\x00\x8e\xc0\x1f\x07")
+    g.word(marker, 0xBEEF, 100)
     for value in (0x1234, 0x5678, 0xFFFE, 0xFF80):
         g.push(value)
     g.pointer(marker)
@@ -585,9 +590,8 @@ def main():
             (directory / filename).write_bytes(data)
         (directory / "grand.exe").write_bytes(grandchild_program())
         executables = ["segmented.exe", "segmented-lx.exe", "queues.exe", "kill.exe"]
-        if args.backend == "unicorn":
-            (directory / "selectors.exe").write_bytes(fixed_selectors())
-            executables.append("selectors.exe")
+        (directory / "selectors.exe").write_bytes(fixed_selectors())
+        executables.append("selectors.exe")
         for executable in executables:
             result = subprocess.run(
                 [*base, "run", "C:\\OS2\\" + executable],
