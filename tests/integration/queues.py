@@ -200,11 +200,14 @@ def main():
             payloads.append(cancelled_program())
             if args.backend == "unicorn":
                 payloads.append(cancelled_program(spin=True))
-        for payload in payloads:
+        for index, payload in enumerate(payloads):
             path.write_bytes(payload)
-            result = subprocess.run(
-                [str(build / "lx_loader"), str(path)], env=env, capture_output=True, timeout=15
-            )
+            try:
+                result = subprocess.run(
+                    [str(build / "lx_loader"), str(path)], env=env, capture_output=True, timeout=15
+                )
+            except subprocess.TimeoutExpired as error:
+                raise RuntimeError(f"queue contract {index} timed out") from error
             if result.returncode:
                 raise RuntimeError(
                     f"queue exit={result.returncode}\n" + result.stderr.decode(errors="replace")

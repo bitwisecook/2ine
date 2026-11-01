@@ -37,10 +37,9 @@ def wait_for(condition, process, seconds=8):
 
 
 def colored_pixels(rgb):
+    """Count colored stars independently of grayscale frame controls."""
     return sum(
-        1
-        for r, g, b in zip(rgb[::3], rgb[1::3], rgb[2::3], strict=True)
-        if r != g or g != b or r > 0
+        1 for r, g, b in zip(rgb[::3], rgb[1::3], rgb[2::3], strict=True) if r != g or g != b
     )
 
 
