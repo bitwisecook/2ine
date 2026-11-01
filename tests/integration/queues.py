@@ -136,6 +136,48 @@ def blocking_program():
     return linear_image(g.code, g.fixups, ["DOSCALLS", "QUECALLS"], "QUEUEWORK", data=g.data)
 
 
+def cancelled_program(spin=False):
+    g = FlatGuest()
+    queue, thread, started, count = (g.field(bytes(4)) for _ in range(4))
+    request = g.field(bytes(8))
+    size, data, priority = (g.field(bytes(4)) for _ in range(3))
+    name = g.field(b"\\QUEUES\\CancelFixture\0")
+    g.call(2, 16, queue, 0, name)
+    g.result(0, 1)
+    g.call(1, 324, 0, started, 0, 0)
+    g.call(1, 311, thread, 0x88776655, 0, 0, 65536)
+    g.result(0, 2)
+    g.call(1, 329, (started,), 3000)
+    g.result(0, 3)
+    g.call(1, 229, 30)
+    g.call(1, 111, (thread,))
+    g.result(0, 4)
+    g.call(1, 349, thread, 0)
+    g.result(0, 5)
+    g.call_handle(2, 12, queue, count)
+    g.result(0, 6)
+    g.word(count, 0, 7)
+    g.call_handle(2, 14, queue, 88, 4, 0x55667788, 0)
+    g.result(0, 8)
+    g.call_handle(2, 9, queue, request, size, data, 0, 0, priority, 0)
+    g.result(0, 9)
+    g.word(request + 4, 88, 10)
+    g.word(data, 0x55667788, 11)
+    g.call_handle(2, 11, queue)
+    g.result(0, 12)
+    g.call(1, 326, (started,))
+    g.exit(0)
+    worker = 0x10000 + len(g.code)
+    g.call(1, 328, (started,))
+    if spin:
+        g.code.extend(b"\xeb\xfe")
+    else:
+        g.call_handle(2, 9, queue, request, size, data, 0, 0, priority, 0)
+        g.exit(99)
+    g.code = g.code.replace(struct.pack("<I", 0x88776655), struct.pack("<I", worker))
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "QUECALLS"], "QUEUEKILL", data=g.data)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -150,10 +192,15 @@ def main():
     )
     with tempfile.TemporaryDirectory(prefix="twoine-queues-") as temporary:
         path = Path(temporary) / "queues.exe"
-        for payload in [
+        payloads = [
             *(queue_program(order, args.backend == "unicorn") for order in range(3)),
             blocking_program(),
-        ]:
+        ]
+        if os.name == "posix":
+            payloads.append(cancelled_program())
+            if args.backend == "unicorn":
+                payloads.append(cancelled_program(spin=True))
+        for payload in payloads:
             path.write_bytes(payload)
             result = subprocess.run(
                 [str(build / "lx_loader"), str(path)], env=env, capture_output=True, timeout=15

@@ -68,9 +68,24 @@ static uint32 bridge32_DosWriteQueue(uint8 *a)
     return DosWriteQueue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                          (PVOID)(uintptr_t)lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
 }
-static uint32 queue_receive32(uint8 *a, BOOL peek)
+typedef struct QueueReceive32
 {
-    LxGuestBorrow outputs[5] = {{0}};
+    uint8 *arguments;
+    BOOL peek;
+    LxGuestBorrow outputs[5];
+} QueueReceive32;
+static void queue_receive32_cleanup(void *argument)
+{
+    QueueReceive32 *call = argument;
+    for (unsigned i = 0; i < 5; i++)
+        lx_execution_release(&call->outputs[i]);
+}
+static uint32 queue_receive32_operation(void *argument)
+{
+    QueueReceive32 *call = argument;
+    uint8 *a = call->arguments;
+    BOOL peek = call->peek;
+    LxGuestBorrow *outputs = call->outputs;
     const unsigned positions[] = {4, 8, 12, 24, 16};
     const unsigned sizes[] = {8, 4, 4, 1, 4};
     uint32 result = ERROR_INVALID_PARAMETER;
@@ -100,9 +115,14 @@ static uint32 queue_receive32(uint8 *a, BOOL peek)
             lx_guest_store_u32(outputs[4].host, cursor);
     }
 done:
-    for (unsigned i = 0; i < 5; i++)
-        lx_execution_release(&outputs[i]);
     return result;
+}
+static uint32 queue_receive32(uint8 *a, BOOL peek)
+{
+    QueueReceive32 call = {0};
+    call.arguments = a;
+    call.peek = peek;
+    return lx_host_guarded_call(queue_receive32_operation, &call, queue_receive32_cleanup, &call);
 }
 static uint32 bridge32_DosPeekQueue(uint8 *a)
 {

@@ -4,6 +4,7 @@
 #include "quecalls.h"
 #include "guest/handles.h"
 #include "hal/host_sync.h"
+#include "hal/host_thread.h"
 #include "hal/host_library.h"
 
 typedef struct QueueEntry
@@ -233,24 +234,33 @@ APIRET DosWriteQueue(HQUEUE handle, ULONG request, ULONG size, PVOID data, ULONG
     lx_handle_release(&borrow);
     return result;
 }
-static APIRET receive(HQUEUE handle, PREQUESTDATA request, PULONG size, PPVOID data, PULONG cursor,
-                      BOOL32 nowait, PBYTE priority, HEV event, BOOL peek)
+typedef struct ReceiveCall
 {
-    if (!request || !size || !data || !cursor || !priority)
-        return ERROR_INVALID_PARAMETER;
-    if (nowait > 1)
-        return ERROR_QUE_INVALID_WAIT;
-    if (nowait)
-    {
-        LxHandleBorrow semaphore;
-        if (!event || !lx_handle_borrow(event, LX_HANDLE_EVENT, &semaphore))
-            return ERROR_INVALID_PARAMETER;
-        lx_handle_release(&semaphore);
-    }
     LxHandleBorrow borrow;
-    if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
-        return ERROR_QUE_INVALID_HANDLE;
-    Queue *queue = borrow.resource;
+    PREQUESTDATA request;
+    PULONG size, cursor;
+    PPVOID data;
+    PBYTE priority;
+    HEV event;
+    BOOL32 nowait;
+    BOOL peek;
+} ReceiveCall;
+static void receive_cleanup(void *argument)
+{
+    ReceiveCall *call = argument;
+    lx_handle_release(&call->borrow);
+}
+static uint32 receive_operation(void *argument)
+{
+    ReceiveCall *call = argument;
+    Queue *queue = call->borrow.resource;
+    PREQUESTDATA request = call->request;
+    PULONG size = call->size, cursor = call->cursor;
+    PPVOID data = call->data;
+    PBYTE priority = call->priority;
+    HEV event = call->event;
+    BOOL32 nowait = call->nowait;
+    BOOL peek = call->peek;
     lock_queues();
     APIRET result = NO_ERROR;
     if (nowait)
@@ -318,8 +328,27 @@ static APIRET receive(HQUEUE handle, PREQUESTDATA request, PULONG size, PPVOID d
         break;
     }
     lx_host_monitor_unlock(monitor);
-    lx_handle_release(&borrow);
     return result;
+}
+static APIRET receive(HQUEUE handle, PREQUESTDATA request, PULONG size, PPVOID data, PULONG cursor,
+                      BOOL32 nowait, PBYTE priority, HEV event, BOOL peek)
+{
+    if (!request || !size || !data || !cursor || !priority)
+        return ERROR_INVALID_PARAMETER;
+    if (nowait > 1)
+        return ERROR_QUE_INVALID_WAIT;
+    if (nowait)
+    {
+        LxHandleBorrow semaphore;
+        if (!event || !lx_handle_borrow(event, LX_HANDLE_EVENT, &semaphore))
+            return ERROR_INVALID_PARAMETER;
+        lx_handle_release(&semaphore);
+    }
+    LxHandleBorrow borrow;
+    if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
+        return ERROR_QUE_INVALID_HANDLE;
+    ReceiveCall call = {borrow, request, size, cursor, data, priority, event, nowait, peek};
+    return lx_host_guarded_call(receive_operation, &call, receive_cleanup, &call);
 }
 APIRET DosPeekQueue(HQUEUE handle, PREQUESTDATA request, PULONG size, PPVOID data, PULONG element,
                     BOOL32 nowait, PBYTE priority, HEV event)

@@ -12,3 +12,7 @@ The original Lotus OLE runtime also requires private Warp SOM runtime DLLs, `SOM
 The current PM provider has no distributed SOM daemon: its readiness query returns false and starting it returns `ERROR_NOT_SUPPORTED`. PM error-state exchange stores and returns the previous error ID; optional extended error records are not retained.
 
 Named OS/2 queue contracts are recorded in `queue-contracts.json`. The current queue namespace and sender addresses are local to one 2ine process; queue data is not copied.
+
+Mux-wait contracts are recorded in `mux-contracts.json`. Event posts and mutex releases notify blocked ANY/ALL waits. PM wait exports currently delegate to the DOS semaphore waits; synchronous cross-thread PM message pumping is not implemented.
+
+POSIX thread cancellation runs cleanup at host cancellation points; Unicorn also checks between guest execution slices and before API dispatch. Native guest loops that never enter a host cancellation point cannot yet be interrupted. The Windows host adapter reports cancellation as unsupported.

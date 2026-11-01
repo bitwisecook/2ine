@@ -65,6 +65,7 @@ extern "C"
     typedef HANDLE HDIR, *PHDIR;
     typedef HANDLE HEV, *PHEV;
     typedef HANDLE HMTX, *PHMTX;
+    typedef HANDLE HMUX, *PHMUX;
     typedef HANDLE HQUEUE, *PHQUEUE;
     typedef HANDLE HPS, *PHPS;
     typedef HANDLE HDC, *PHDC;

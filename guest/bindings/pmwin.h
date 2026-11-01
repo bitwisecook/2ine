@@ -987,3 +987,42 @@ static uint32 bridge32_WinSetErrorInfo(uint8 *a)
 {
     return WinSetErrorInfo(pm_word(a, 0), pm_word(a, 1));
 }
+
+static uint32 bridge32_WinWaitEventSem(uint8 *a)
+{
+    return WinWaitEventSem(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinRequestMutexSem(uint8 *a)
+{
+    return WinRequestMutexSem(pm_word(a, 0), pm_word(a, 1));
+}
+typedef struct WirePmMuxWait
+{
+    HMUX handle;
+    ULONG timeout;
+    LxGuestBorrow output;
+} WirePmMuxWait;
+static void pm_mux_cleanup(void *argument)
+{
+    WirePmMuxWait *call = argument;
+    lx_execution_release(&call->output);
+}
+static uint32 pm_mux_operation(void *argument)
+{
+    WirePmMuxWait *call = argument;
+    ULONG user = 0;
+    uint32 result = WinWaitMuxWaitSem(call->handle, call->timeout, &user);
+    if (!result || result == 105)
+        lx_guest_store_u32(call->output.host, user);
+    return result;
+}
+static uint32 bridge32_WinWaitMuxWaitSem(uint8 *a)
+{
+    WirePmMuxWait call = {0};
+    call.handle = pm_word(a, 0);
+    call.timeout = pm_word(a, 1);
+    if (!lx_execution_borrow(GLoaderState.execution, pm_word(a, 2), 4, LX_GUEST_WRITE,
+                             &call.output))
+        return 87;
+    return lx_host_guarded_call(pm_mux_operation, &call, pm_mux_cleanup, &call);
+}

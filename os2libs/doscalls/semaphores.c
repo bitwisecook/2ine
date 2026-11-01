@@ -6,9 +6,67 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
+typedef struct SemaphoreSharing
+{
+    struct SemaphoreSharing *next;
+    void *resource;
+} SemaphoreSharing;
+static LxHostOnce sharing_once = LX_HOST_ONCE_INIT;
+static LxHostMonitor *sharing_lock;
+static SemaphoreSharing *sharing;
+static void initialize_sharing(void)
+{
+    sharing_lock = lx_host_monitor_create();
+    if (!sharing_lock)
+        abort();
+}
+static BOOL set_sharing(void *resource, BOOL shared)
+{
+    if (!shared)
+        return TRUE;
+    SemaphoreSharing *entry = malloc(sizeof *entry);
+    if (!entry)
+        return FALSE;
+    entry->resource = resource;
+    lx_host_once(&sharing_once, initialize_sharing);
+    lx_host_monitor_lock(sharing_lock);
+    entry->next = sharing;
+    sharing = entry;
+    lx_host_monitor_unlock(sharing_lock);
+    return TRUE;
+}
+static void remove_sharing(void *resource)
+{
+    lx_host_once(&sharing_once, initialize_sharing);
+    lx_host_monitor_lock(sharing_lock);
+    for (SemaphoreSharing **link = &sharing; *link; link = &(*link)->next)
+        if ((*link)->resource == resource)
+        {
+            SemaphoreSharing *entry = *link;
+            *link = entry->next;
+            free(entry);
+            break;
+        }
+    lx_host_monitor_unlock(sharing_lock);
+}
+BOOL semaphoreResourceShared(void *resource)
+{
+    lx_host_once(&sharing_once, initialize_sharing);
+    lx_host_monitor_lock(sharing_lock);
+    BOOL shared = FALSE;
+    for (SemaphoreSharing *entry = sharing; entry; entry = entry->next)
+        if (entry->resource == resource)
+        {
+            shared = TRUE;
+            break;
+        }
+    lx_host_monitor_unlock(sharing_lock);
+    return shared;
+}
 void destroyEventResource(void *value)
 {
     EventSem *sem = value;
+    remove_sharing(value);
     lx_host_monitor_destroy(sem->monitor);
     free(sem);
 }
@@ -16,6 +74,7 @@ void destroyEventResource(void *value)
 void destroyMutexResource(void *value)
 {
     LxHostMutex *mutex = value;
+    remove_sharing(value);
     /* An unpublished, initially-owned mutex can arrive here on allocation failure. */
     if (lx_host_mutex_busy(mutex))
         while (lx_host_mutex_unlock(mutex) == LX_HOST_LOCK_OK)
@@ -162,6 +221,11 @@ APIRET DosCreateEventSem(PSZ name, PHEV output, ULONG attr, BOOL32 state)
         return ERROR_NOT_ENOUGH_MEMORY;
     }
     sem->posted = state != 0;
+    if (!set_sharing(sem, (attr & 1) || name))
+    {
+        destroyEventResource(sem);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
     return publishSemaphore(sem, LX_HANDLE_EVENT, name, output);
 }
 
@@ -179,6 +243,11 @@ APIRET DosCreateMutexSem(PSZ name, PHMTX output, ULONG attr, BOOL32 state)
     LxHostMutex *mutex = lx_host_mutex_create(1, state);
     if (!mutex)
         return ERROR_NOT_ENOUGH_MEMORY;
+    if (!set_sharing(mutex, (attr & 1) || name))
+    {
+        destroyMutexResource(mutex);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
     return publishSemaphore(mutex, LX_HANDLE_MUTEX, name, output);
 }
 
@@ -228,7 +297,10 @@ APIRET DosReleaseMutexSemResource(HMTX hmtx, LxHostMutex *mutex)
 
     const LxHostLockResult rc = lx_host_mutex_unlock(mutex);
     if (rc == LX_HOST_LOCK_OK)
+    {
+        notifyMuxWaiters();
         return NO_ERROR;
+    }
     if (rc == LX_HOST_LOCK_NOT_OWNER)
         return ERROR_NOT_OWNER;
     return ERROR_INVALID_HANDLE;
@@ -296,6 +368,8 @@ APIRET DosPostEventSemResource(HEV hev, EventSem *sem)
         lx_host_monitor_wake_all(sem->monitor);
     }
     lx_host_monitor_unlock(sem->monitor);
+    if (!retval)
+        notifyMuxWaiters();
 
     return retval;
 }
