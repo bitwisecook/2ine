@@ -19,8 +19,12 @@ static unsigned notifications(HAB hab, HWND window, ULONG message)
     unsigned count = 0;
     QMSG event;
     while (WinPeekMsg(hab, &event, 0, 0, 0, 1))
+    {
+        if (event.msg == WM_PAINT)
+            WinDispatchMsg(hab, &event);
         if (event.hwnd == window && event.msg == message)
             count++;
+    }
     return count;
 }
 static void enumeration(HPS ps)

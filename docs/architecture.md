@@ -68,8 +68,14 @@ OS/2 API. `mdm` and `pmmerge` are existing unbuilt placeholders, not provided DL
 PM child windows share their top-level host render target. Clipping honors both
 class and window styles; frame statics preserve their interiors and pass pointer
 hit tests through to the controls underneath. Exposure invalidates one window
-tree, and presentation coalesces queued paints with a bounded delay. Both message
-retrieval paths pump host events even when guest timers keep the queue busy.
+tree. Message retrieval synthesizes low-priority paint requests from persistent
+update regions, after posted messages and before timers, with parents painted
+before children. Retrieving a paint request does not validate the update region;
+BeginPaint or default paint processing does. Disabling window updates suspends
+paint delivery while retaining damage; reenabling alone does not force redraw.
+Presentation coalesces damaged
+windows with a bounded delay. Both message retrieval paths pump host events
+even when guest timers keep the queue busy.
 
 PM clipboard metadata and system atoms are shared within the worker process.
 This does not synchronize with the host clipboard. Clipboard data currently

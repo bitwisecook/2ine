@@ -438,14 +438,14 @@ void presentWindow(AnchorBlock *anchor, Window *window)
     while (root->parent && root->parent != &desktop_window)
         root = root->parent;
     uint64_t now = lx_host_video_ticks_ms();
-    for (MessageQueueItem *item = anchor->message_queue.head; item; item = item->next)
-        if (item->qmsg.msg == WM_PAINT)
-        {
-            Window *pending = getWindowFromHWND(anchor, item->qmsg.hwnd);
-            if (pending && pending->heavy.window == window->heavy.window &&
-                WinIsWindowVisible(pending->hwnd) && now - root->last_present < 16)
-                return;
-        }
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+    {
+        Window *pending = anchor->windows[i];
+        if (pending && pending->hwnd && pending->heavy.window == window->heavy.window &&
+            pending->paint_pending && !WinIsRectEmpty(0, &pending->invalid) &&
+            WinIsWindowVisible(pending->hwnd) && now - root->last_present < 16)
+            return;
+    }
     lx_host_window_present(window->heavy.window);
     root->last_present = now;
 }
@@ -457,6 +457,55 @@ static void presentWindows(AnchorBlock *anchor)
         if (win && win->hwnd && win->parent == &desktop_window && (win->style & WS_VISIBLE))
             presentWindow(anchor, win);
     }
+}
+/* Paint parents before children and lower siblings before overlapping upper siblings.
+   Retrieving WM_PAINT never validates damage: an application may defer its drawing. */
+static Window *nextPaintSibling(AnchorBlock *anchor, Window *window, HWND filter, ULONG first,
+                                ULONG last)
+{
+    if (!window)
+        return NULL;
+    Window *found = nextPaintSibling(anchor, window->sibling, filter, first, last);
+    if (found)
+        return found;
+    if (getWindowFromHWND(anchor, window->hwnd) != window || !(window->style & WS_VISIBLE) ||
+        window->w <= 0 || window->h <= 0)
+        return NULL;
+    QMSG message = {.hwnd = window->hwnd, .msg = WM_PAINT};
+    if (window->paint_pending && !WinIsRectEmpty(0, &window->invalid) &&
+        !skipMessage(&message, filter, first, last))
+        return window;
+    return nextPaintSibling(anchor, window->children, filter, first, last);
+}
+static BOOL paintMessage(AnchorBlock *anchor, PQMSG output, HWND filter, ULONG first, ULONG last)
+{
+    Window *window = nextPaintSibling(anchor, desktop_window.children, filter, first, last);
+    if (!window || getWindowFromHWND(anchor, window->hwnd) != window)
+        return FALSE;
+    *output = (QMSG){.hwnd = window->hwnd, .msg = WM_PAINT, .time = currentSystemTicks()};
+    return TRUE;
+}
+static MessageQueueItem *queuedMessage(AnchorBlock *anchor, MessageQueueItem **previous,
+                                       HWND filter, ULONG first, ULONG last)
+{
+    MessageQueueItem *timer = NULL, *timer_previous = NULL, *prev = NULL;
+    for (MessageQueueItem *item = anchor->message_queue.head; item; prev = item, item = item->next)
+    {
+        if (skipMessage(&item->qmsg, filter, first, last))
+            continue;
+        if (item->qmsg.msg != WM_TIMER)
+        {
+            *previous = prev;
+            return item;
+        }
+        if (!timer)
+        {
+            timer = item;
+            timer_previous = prev;
+        }
+    }
+    *previous = timer_previous;
+    return timer;
 }
 void pumpEvents(AnchorBlock *anchor)
 {
@@ -471,7 +520,8 @@ void pumpEvents(AnchorBlock *anchor)
         int wait = pumpTimers(anchor);
         if (wait < 0 || wait > 10)
             wait = 10; /* Cross-process posts arrive through the bottle's mailbox. */
-        if (anchor->message_queue.head)
+        QMSG paint;
+        if (anchor->message_queue.head || paintMessage(anchor, &paint, 0, 0, 0))
             break;
         if (lx_host_video_wait_timeout(&event, wait))
             lx_pm_host_event(&event);
@@ -505,7 +555,6 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
 {
     TRACE_NATIVE("WinGetMsg(%u, %p, %u, %u, %u)", (uint)hab, pqmsg, (uint)hwndFilter,
                  (uint)msgFilterFirst, (uint)msgFilterLast);
-    const BOOL bIsFiltering = (hwndFilter || msgFilterFirst || msgFilterLast);
     AnchorBlock *anchor = getAnchorBlock(hab);
     if (!anchor)
     {
@@ -527,17 +576,11 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
         presentWindows(anchor);
         pumpTimers(anchor);
         MessageQueueItem *prev = NULL;
-        MessageQueueItem *i = anchor->message_queue.head;
-        if (bIsFiltering)
-        {
-            for (; i != NULL; prev = i, i = i->next)
-            {
-                if (!skipMessage(&i->qmsg, hwndFilter, msgFilterFirst, msgFilterLast))
-                {
-                    break;
-                }
-            }
-        }
+        MessageQueueItem *i =
+            queuedMessage(anchor, &prev, hwndFilter, msgFilterFirst, msgFilterLast);
+        if ((!i || i->qmsg.msg == WM_TIMER) &&
+            paintMessage(anchor, pqmsg, hwndFilter, msgFilterFirst, msgFilterLast))
+            return TRUE;
 
         if (i != NULL)
         {
@@ -696,12 +739,10 @@ BOOL WinPeekMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULO
     pumpTimers(anchor);
     presentWindows(anchor);
 retry:;
-    MessageQueueItem *previous = NULL, *item = anchor->message_queue.head;
-    while (item && skipMessage(&item->qmsg, filter, first, last))
-    {
-        previous = item;
-        item = item->next;
-    }
+    MessageQueueItem *previous = NULL;
+    MessageQueueItem *item = queuedMessage(anchor, &previous, filter, first, last);
+    if ((!item || item->qmsg.msg == WM_TIMER) && paintMessage(anchor, output, filter, first, last))
+        return TRUE;
     if (!item)
         return FALSE;
     *output = item->qmsg;
