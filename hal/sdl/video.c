@@ -46,6 +46,29 @@ void lx_host_pointer_destroy(LxHostPointer *pointer)
         free(pointer);
     }
 }
+LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
+                                            unsigned hot_x, unsigned hot_y)
+{
+    if (!pixels || !width || !height || width > 256 || height > 256 || hot_x >= width ||
+        hot_y >= height)
+        return NULL;
+    LxHostPointer *pointer = calloc(1, sizeof *pointer);
+    if (!pointer)
+        return NULL;
+    SDL_Surface *surface = SDL_CreateSurfaceFrom((int)width, (int)height, SDL_PIXELFORMAT_ARGB8888,
+                                                 (void *)pixels, (int)width * 4);
+    if (surface)
+    {
+        pointer->cursor = SDL_CreateColorCursor(surface, (int)hot_x, (int)hot_y);
+        SDL_DestroySurface(surface);
+    }
+    if (!pointer->cursor)
+    {
+        free(pointer);
+        return NULL;
+    }
+    return pointer;
+}
 int lx_host_pointer_set(LxHostPointer *pointer)
 {
     return pointer ? SDL_SetCursor(pointer->cursor) && SDL_ShowCursor() : SDL_HideCursor();

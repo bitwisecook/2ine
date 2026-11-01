@@ -105,9 +105,14 @@ static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, 
             lx_host_mutex_unlock(s->mutex);
             return 1;
         }
-        if (!slot && !s->selectors[i].selector)
+        if (!s->selectors[i].selector)
             slot = i;
     }
+    /* Fixed USE16 LX objects can contain prebound tiled selectors. Keep the
+       same base-to-selector relation as OS/2 and the native worker. */
+    unsigned tile = base >> 16;
+    if (tile && tile < SELECTOR_COUNT - 1 && !s->selectors[tile].selector)
+        slot = tile;
     if (!slot)
     {
         lx_host_mutex_unlock(s->mutex);
@@ -340,7 +345,8 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         if (!lx_cpu_restore(s->cpu, frame.context))
             failure(lx_cpu_error(s->cpu));
         bindThreadWindow(s);
-        LxCpuEvent event = lx_cpu_run(s->cpu, 0, 10000);
+        /* Save contexts at instruction boundaries, including interrupted USE16 REP copies. */
+        LxCpuEvent event = lx_cpu_run(s->cpu, 10000, 0);
         if (!lx_cpu_get_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
         replaceContext(&frame);
@@ -354,12 +360,13 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             char error[512];
             snprintf(error, sizeof error,
                      "CPU stop %d vector %u at %04x:%08x "
-                     "eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x "
+                     "eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x ebp=%08x "
+                     "memory=%08x access=%d "
                      "ss:esp=%04x:%08x ds=%04x es=%04x fs=%04x gs=%04x: %s",
                      event.reason, event.vector, registers.cs, registers.eip, registers.eax,
                      registers.ebx, registers.ecx, registers.edx, registers.esi, registers.edi,
-                     registers.ss, registers.esp, registers.ds, registers.es, registers.fs,
-                     registers.gs, lx_cpu_error(s->cpu));
+                     registers.ebp, event.address, event.memory_access, registers.ss, registers.esp,
+                     registers.ds, registers.es, registers.fs, registers.gs, lx_cpu_error(s->cpu));
             lx_host_mutex_lock(s->mutex, UINT32_MAX);
             uint8_t *bytes =
                 lx_cpu_translate_far(s->cpu, registers.cs, registers.eip, 16, LX_MEM_READ);
@@ -370,12 +377,24 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
                     fprintf(stderr, " %02x", bytes[i]);
                 fprintf(stderr, "\n");
             }
-            bytes =
-                lx_cpu_translate_far(s->cpu, registers.ss, registers.esp & 0xffff, 16, LX_MEM_READ);
+            uint32_t stack_offset = registers.esp;
+            if ((registers.ss & 4) && s->selectors[registers.ss >> 3].bits == 16)
+                stack_offset &= 0xffff;
+            bytes = lx_cpu_translate_far(s->cpu, registers.ss, stack_offset, 64, LX_MEM_READ);
             if (bytes)
             {
                 fprintf(stderr, "guest stack:");
-                for (unsigned i = 0; i < 16; i++)
+                for (unsigned i = 0; i < 64; i++)
+                    fprintf(stderr, " %02x", bytes[i]);
+                fprintf(stderr, "\n");
+            }
+            bytes = registers.eax >= 16
+                        ? lx_cpu_translate(s->cpu, registers.eax - 16, 48, LX_MEM_READ)
+                        : NULL;
+            if (bytes)
+            {
+                fprintf(stderr, "guest eax-16:");
+                for (unsigned i = 0; i < 48; i++)
                     fprintf(stderr, " %02x", bytes[i]);
                 fprintf(stderr, "\n");
             }
@@ -741,6 +760,11 @@ static int initialize(LxExecution *e)
     Emulated = s;
     LxSegment code = {FLAT_CODE, 0, UINT32_MAX, 32, 1};
     LxSegment data = {FLAT_DATA, 0, UINT32_MAX, 32, 0};
+    if (!lx_cpu_set_segment(s->cpu, &code) || !lx_cpu_set_segment(s->cpu, &data))
+        failure(lx_cpu_error(s->cpu));
+    /* OS/2 mixed-mode thunks also use the system's fixed flat selectors. */
+    code.selector = 0x5b;
+    data.selector = 0x53;
     if (!lx_cpu_set_segment(s->cpu, &code) || !lx_cpu_set_segment(s->cpu, &data))
         failure(lx_cpu_error(s->cpu));
     s->return_page = lx_execution_map(e, 0, 0x10000, 7, 0);

@@ -28,8 +28,12 @@ __asm__(
     ".globl DosSelToFlat  \n\t"
     ".type	DosSelToFlat, @function \n\t"
     "DosSelToFlat:  \n\t"
+    "    pushl %ecx  \n\t"
+    "    pushl %edx  \n\t"
     "    pushl %eax  \n\t"
     "    call _DosSelToFlat  \n\t"
     "    addl $4, %esp  \n\t"
+    "    popl %edx  \n\t"
+    "    popl %ecx  \n\t"
     "    ret  \n\t"
     ".size	DosSelToFlat, .-DosSelToFlat  \n\t");

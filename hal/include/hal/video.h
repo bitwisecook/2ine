@@ -18,6 +18,9 @@ typedef enum
     LX_HOST_POINTER_ILLEGAL
 } LxHostPointerShape;
 LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape);
+/* Pixels are top-down 0xAARRGGBB values. The factory copies their contents. */
+LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
+                                            unsigned hot_x, unsigned hot_y);
 void lx_host_pointer_destroy(LxHostPointer *pointer);
 int lx_host_pointer_set(LxHostPointer *pointer);
 typedef struct LxHostRect

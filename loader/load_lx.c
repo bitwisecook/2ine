@@ -523,6 +523,14 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
     const int isDLL = (module_type == 0x8000);
 
+    if (lx->eip_object > lx->module_num_objects || lx->esp_object > lx->module_num_objects ||
+        lx->auto_ds_object_num > lx->module_num_objects ||
+        (!isDLL && (!lx->eip_object || !lx->esp_object)))
+    {
+        fprintf(stderr, "Invalid LX entry, stack or data object index\n");
+        goto loadlx_failed;
+    }
+
     if (isDLL && !GLoaderState.main_module)
     {
         fprintf(stderr, "uhoh, need to load an .exe before a .dll!\n");
@@ -618,6 +626,10 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                 goto loadlx_failed;
             }
             uses_aliases = 1;
+
+            /* USE16 writable objects retain a full tile for DosReallocSeg growth. */
+            if (!(obj->object_flags & 0x2000) && (obj->object_flags & 2))
+                vsize = 0x10000;
 
             if (relocatable)
                 vsize += 0x10000;
@@ -724,12 +736,24 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     {
         const uint32 base = retval->mmaps[lx->eip_object - 1].guest_base;
         retval->eip += base;
+        const LxObjectTableEntry *entry =
+            (const LxObjectTableEntry *)(exe + lx->object_table_offset) + lx->eip_object - 1;
+        retval->entry16 = !(entry->object_flags & 0x2000);
+        if (lx->eip >= retval->mmaps[lx->eip_object - 1].size || (retval->entry16 && isDLL))
+        {
+            fprintf(stderr, "Invalid LX entry offset or unsupported USE16 library entry\n");
+            goto loadlx_failed;
+        }
     }
 
     if (!isDLL)
     {
-        assert(lx->esp_object != 0);
         const LxMmaps *lxmmap = &retval->mmaps[lx->esp_object - 1];
+        if (lx->esp > lxmmap->size)
+        {
+            fprintf(stderr, "Invalid LX initial stack offset\n");
+            goto loadlx_failed;
+        }
         const uint32 stackbase = lxmmap->guest_base;
         const uint32 stacksize = (uint32)lxmmap->size;
         retval->esp = lx->esp + stackbase;

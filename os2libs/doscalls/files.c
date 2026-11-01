@@ -63,7 +63,7 @@ int initFileInfo(LxHostFile *file, HFileInfo *info, ULONG flags)
     info->type = description.kind == LX_HOST_FILE_REGULAR  ? 0
                  : description.kind == LX_HOST_FILE_DEVICE ? 1
                                                            : 2;
-    info->attr = DAW_STDIN | DAW_STDOUT | DAW_LEVEL1 | DAW_CHARACTER;
+    info->attr = info->type == 1 ? DAW_STDIN | DAW_STDOUT | DAW_LEVEL1 | DAW_CHARACTER : 0;
     info->flags = flags;
     return 1;
 }
@@ -260,6 +260,25 @@ APIRET DosSetFilePtr(HFILE hFile, LONG ib, ULONG method, PULONG ibActual)
     return DosSetFilePtr_implementation(hFile, ib, method, ibActual);
 }
 
+APIRET16 Dos16SetFilePtrL(USHORT id, ULONG high, ULONG low, ULONG method, PVOID position)
+{
+    if (method > 2 || !position)
+        return ERROR_INVALID_PARAMETER;
+    LxHandleBorrow file;
+    if (!borrowFile(id, &file))
+        return ERROR_INVALID_HANDLE;
+    uint64_t result;
+    int64_t offset = (int64_t)((uint64_t)high << 32 | low);
+    LxHostFsError error = lx_host_file_seek(file.resource, offset, method, &result);
+    lx_handle_release(&file);
+    if (!error)
+    {
+        lx_guest_store_u32(position, (uint32_t)result);
+        lx_guest_store_u32((uint8 *)position + 4, (uint32_t)((uint64_t)result >> 32));
+    }
+    return (APIRET16)fileError(error);
+}
+
 APIRET DosRead_implementation(HFILE id, PVOID data, ULONG size, PULONG actual)
 {
     LxHandleBorrow file;
@@ -438,6 +457,44 @@ APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
         return err;
     }
 
+    LxHostFileInfo target_info;
+    if (lx_host_path_info(newpath, &target_info) == LX_HOST_FS_OK &&
+        target_info.kind == LX_HOST_FILE_DIRECTORY)
+    {
+        const char *base = pszOld;
+        for (const char *p = pszOld; *p; p++)
+            if (*p == '/' || *p == '\\' || *p == ':')
+                base = p + 1;
+        size_t size = strlen(pszNew) + strlen(base) + 2;
+        char *destination = malloc(size);
+        if (!destination)
+        {
+            free(oldpath);
+            free(newpath);
+            return ERROR_NOT_ENOUGH_MEMORY;
+        }
+        snprintf(destination, size, "%s\\%s", pszNew, base);
+        free(newpath);
+        newpath = makeUnixPath(destination, &err);
+        free(destination);
+        if (!newpath)
+        {
+            free(oldpath);
+            return err;
+        }
+    }
+    char *source_identity = lx_host_path_canonical(oldpath);
+    char *target_identity = lx_host_path_canonical(newpath);
+    BOOL same = source_identity && target_identity && !strcmp(source_identity, target_identity);
+    free(source_identity);
+    free(target_identity);
+    if (same)
+    {
+        free(oldpath);
+        free(newpath);
+        return ERROR_ACCESS_DENIED;
+    }
+
     unsigned flags = LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE;
     if (!(option & (DCPY_EXISTING | DCPY_APPEND)))
         flags |= LX_HOST_FILE_EXCLUSIVE;
@@ -598,6 +655,43 @@ APIRET DosResetBuffer(HFILE id)
     return result;
 }
 
+APIRET16 Dos16BufReset(USHORT file)
+{
+    return (APIRET16)DosResetBuffer(file == 0xffff ? UINT32_MAX : file);
+}
+
+APIRET16 Dos16QFHandState(USHORT file, PUSHORT state)
+{
+    ULONG value;
+    APIRET result = DosQueryFHState(file, &value);
+    if (!result)
+        *state = (USHORT)value;
+    return (APIRET16)result;
+}
+
+APIRET16 Dos16SetFHandState(USHORT file, USHORT state)
+{
+    if (state & ~0xffu)
+        return ERROR_NOT_SUPPORTED;
+    grabLock(&GMutexDosCalls);
+    APIRET result = ERROR_INVALID_HANDLE;
+    if (file < MaxHFiles && HFiles[file].handle > 1)
+    {
+        LxHandleBorrow object;
+        if (lx_handle_borrow(HFiles[file].handle, LX_HANDLE_FILE, &object))
+        {
+            result =
+                fileError(lx_host_file_inherit(object.resource, !(state & OPEN_FLAGS_NOINHERIT)));
+            if (!result)
+                HFiles[file].flags =
+                    (HFiles[file].flags & ~OPEN_FLAGS_NOINHERIT) | (state & OPEN_FLAGS_NOINHERIT);
+            lx_handle_release(&object);
+        }
+    }
+    ungrabLock(&GMutexDosCalls);
+    return (APIRET16)result;
+}
+
 APIRET DosQueryFHState(HFILE hFile, PULONG pMode)
 {
     TRACE_NATIVE("DosQueryFHState(%u, %p)", (uint)hFile, pMode);
@@ -725,32 +819,50 @@ APIRET16 Dos16Open2(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction, ULONG cbFil
                  (uint)reserved);
     if (reserved || !pHf || !pusAction)
         return ERROR_INVALID_PARAMETER;
-    /* EAOP contains two far pointers and a 32-bit error offset. */
     if (ea)
-    {
-        const uint32 list = lx_guest_load_u32((uint8 *)ea + 4);
         lx_guest_store_u32((uint8 *)ea + 8, 0);
-        if (list)
-        {
-            LxGuestBorrow header = {0};
-            if (!lx_execution_borrow_far(GLoaderState.execution, list, 4, LX_GUEST_READ, &header))
-                return ERROR_INVALID_PARAMETER;
-            const uint32 size = lx_guest_load_u32(header.host);
-            lx_execution_release(&header);
-            if (size < 4)
-                return ERROR_EA_LIST_INCONSISTENT;
-            if (size > 4)
-                return ERROR_EAS_NOT_SUPPORTED;
-        }
-    }
     HFILE handle = (HFILE)-1;
     ULONG action = 0;
-    const APIRET result = doDosOpen(pszFileName, &handle, &action, cbFile, ulAttribute, fsOpenFlags,
-                                    fsOpenMode, NULL);
+    APIRET result = doDosOpen(pszFileName, &handle, &action, cbFile, ulAttribute, fsOpenFlags,
+                              fsOpenMode, NULL);
+    if (!result && ea && action != FILE_EXISTED)
+    {
+        result = applyEas16(handle, ea);
+        if (result)
+            DosClose_implementation(handle);
+    }
     if (!result)
     {
         *pHf = (USHORT)handle;
         *pusAction = (USHORT)action;
+    }
+    return (APIRET16)result;
+}
+
+APIRET16 Dos16OpenL(PSZ name, PUSHORT file, PUSHORT action, ULONG high, ULONG low,
+                    USHORT attributes, USHORT flags, ULONG mode, PVOID ea, ULONG reserved)
+{
+    TRACE_NATIVE("Dos16OpenL('%s', %p, %p, %u:%u, %u, %u, %u, %p, %u)", name, file, action,
+                 (uint)high, (uint)low, (uint)attributes, (uint)flags, (uint)mode, ea,
+                 (uint)reserved);
+    if (!file || !action)
+        return ERROR_INVALID_PARAMETER;
+    if (ea)
+        lx_guest_store_u32((uint8 *)ea + 8, 0);
+    HFILE handle;
+    ULONG taken;
+    LONGLONG size = (LONGLONG)((uint64_t)high << 32 | low);
+    APIRET result = doDosOpen(name, &handle, &taken, size, attributes, flags, mode, NULL);
+    if (!result && ea && taken != FILE_EXISTED)
+    {
+        result = applyEas16(handle, ea);
+        if (result)
+            DosClose_implementation(handle);
+    }
+    if (!result)
+    {
+        *file = (USHORT)handle;
+        *action = (USHORT)taken;
     }
     return (APIRET16)result;
 }
@@ -784,5 +896,71 @@ APIRET16 Dos16Read(USHORT hFile, PVOID pBuffer, USHORT cbRead, PUSHORT pcbActual
     ULONG actual;
     APIRET ret = DosRead_implementation(hFile, pBuffer, cbRead, &actual);
     *pcbActual = (USHORT)actual;
+    TRACE_RET("Dos16Read(%u, %u) -> %u, actual=%u", hFile, cbRead, (uint)ret, (uint)actual);
     return ret;
+}
+
+APIRET16 Dos16SetFileMode(PCHAR filepath, USHORT attr, ULONG reserved)
+{
+    TRACE_NATIVE("Dos16SetFileMode('%s', %u, %u)", filepath, attr, (uint)reserved);
+    if (reserved ||
+        (attr & ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_DIRECTORY | FILE_ARCHIVED)))
+        return ERROR_INVALID_PARAMETER;
+    APIRET error = NO_ERROR;
+    char *path = makeUnixPath(filepath, &error);
+    if (!path)
+        return error;
+    error = fileError(lx_host_path_readonly(path, (attr & FILE_READONLY) != 0));
+    free(path);
+    return error;
+}
+
+APIRET DosDevIOCtl(HFILE device, ULONG category, ULONG function, PVOID parameters,
+                   ULONG parameter_max, PULONG parameter_size, PVOID data, ULONG data_max,
+                   PULONG data_size)
+{
+    TRACE_NATIVE("DosDevIOCtl(%u, %u, %u, %p, %u, %p, %p, %u, %p)", (uint)device, (uint)category,
+                 (uint)function, parameters, (uint)parameter_max, parameter_size, data,
+                 (uint)data_max, data_size);
+    if (device == (HFILE)-1 && category == 8 && function == 0x63)
+    {
+        if (!parameters || parameter_max < 2 || !data || !data_size)
+            return ERROR_INVALID_PARAMETER;
+        const uint8 *input = parameters;
+        TRACE_NATIVE("DSK_GETDEVICEPARAMS command=%u drive=%u", input[0], input[1]);
+        if (input[0] > 1 || input[1] >= 26 || !GLoaderState.disks[input[1]])
+            return ERROR_INVALID_DRIVE;
+        if (data_max < 36)
+        {
+            *data_size = 36;
+            return ERROR_BUFFER_OVERFLOW;
+        }
+        uint64_t total, available;
+        LxHostFsError error = lx_host_path_space(GLoaderState.disks[input[1]], &total, &available);
+        if (error)
+            return fileError(error);
+        /* A mapped directory is a local virtual fixed disk, with 512-byte sectors. */
+        uint64_t sectors = total / 512;
+        uint64_t cylinders = sectors / (255 * 63);
+        uint8 *output = data;
+        memset(output, 0, 36);
+        lx_guest_store_u16(output, 512);
+        output[2] = 8;     /* 4-KiB allocation unit. */
+        output[10] = 0xf8; /* Fixed-media descriptor. */
+        lx_guest_store_u16(output + 13, 63);
+        lx_guest_store_u16(output + 15, 255);
+        lx_guest_store_u32(output + 21, sectors > UINT32_MAX ? UINT32_MAX : sectors);
+        lx_guest_store_u16(output + 31, cylinders > 65535 ? 65535 : cylinders);
+        output[33] = 5;                     /* DEVTYPE_FIXED, Toolkit bsedev.h. */
+        lx_guest_store_u16(output + 34, 1); /* Non-removable medium. */
+        *data_size = 36;
+        if (parameter_size)
+            *parameter_size = 2;
+        return NO_ERROR;
+    }
+    LxHandleBorrow file;
+    if (!borrowFile(device, &file))
+        return ERROR_INVALID_HANDLE;
+    lx_handle_release(&file);
+    return ERROR_INVALID_FUNCTION;
 }

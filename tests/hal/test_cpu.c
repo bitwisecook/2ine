@@ -209,6 +209,71 @@ static void bounded_execution(void)
     puts("instruction/time budgets and explicit unavailable-backend error passed");
 }
 
+static void interrupted_segmented_copies(void)
+{
+    LxCpu *cpu = make_cpu();
+    LxSegment source = {0x37, 0x40000, 0xffff, 16, 0};
+    CHECK(lx_cpu_set_segment(cpu, &source));
+    /* Each context keeps a sentinel on its stack while REP MOVSB is preempted. */
+    const unsigned char code[] = {0x68, 0x34, 0x12, 0xf3, 0xa4, 0x58, 0xcc};
+    unsigned char input[65536], output[65536];
+    for (unsigned i = 0; i < sizeof input; i++)
+        input[i] = (unsigned char)((i * 37) ^ (i >> 8));
+    memset(output, 0xcc, sizeof output);
+    CHECK(lx_cpu_write(cpu, 0x20000, code, sizeof code));
+    CHECK(lx_cpu_write(cpu, 0x40000, input, sizeof input));
+    CHECK(lx_cpu_write(cpu, 0x50000, output, sizeof output));
+    LxCpuContext *contexts[2];
+    for (unsigned i = 0; i < 2; i++)
+    {
+        LxCpuRegisters r = {0};
+        r.cs = 0x2b;
+        r.ds = 0x37;
+        r.es = 0x2f;
+        r.ss = 0x23;
+        r.esp = 0x4fff0 - i * 32;
+        r.ecx = 16384;
+        r.esi = r.edi = i ? 0xc0ff : 0x100;
+        r.eflags = 2 | (i ? 0x400 : 0);
+        CHECK(lx_cpu_set_registers(cpu, &r));
+        CHECK((contexts[i] = lx_cpu_save(cpu)));
+    }
+    unsigned done[2] = {0}, slices = 0;
+    while ((!done[0] || !done[1]) && slices++ < 1000)
+        for (unsigned i = 0; i < 2; i++)
+        {
+            if (done[i])
+                continue;
+            CHECK(lx_cpu_restore(cpu, contexts[i]));
+            LxCpuEvent event = lx_cpu_run(cpu, 97, 0);
+            LxCpuRegisters r;
+            CHECK(lx_cpu_get_registers(cpu, &r));
+            CHECK(r.cs == 0x2b && r.ds == 0x37 && r.es == 0x2f && r.ss == 0x23);
+            CHECK((r.eflags & 0x400) == (i ? 0x400 : 0));
+            CHECK(r.ecx <= 16384);
+            if (event.reason == LX_CPU_TRAP)
+            {
+                CHECK(event.vector == 3 && r.ecx == 0 && r.eax == 0x1234);
+                CHECK(r.esp == 0x4fff0 - i * 32);
+                CHECK(r.esi == (i ? 0x80ff : 0x4100) && r.edi == r.esi);
+                done[i] = 1;
+            }
+            else
+                CHECK(event.reason == LX_CPU_BUDGET);
+            lx_cpu_context_free(contexts[i]);
+            CHECK((contexts[i] = lx_cpu_save(cpu)));
+        }
+    CHECK(done[0] && done[1] && slices > 2);
+    CHECK(lx_cpu_read(cpu, 0x50000, output, sizeof output));
+    for (unsigned i = 0; i < sizeof input; i++)
+        CHECK(output[i] ==
+              ((i >= 0x100 && i < 0x4100) || (i >= 0x8100 && i < 0xc100) ? input[i] : 0xcc));
+    lx_cpu_context_free(contexts[0]);
+    lx_cpu_context_free(contexts[1]);
+    lx_cpu_destroy(cpu);
+    puts("interleaved USE16 forward/backward copies preserve REP, stack and segment state passed");
+}
+
 int main(void)
 {
     printf("host=%s/%s backend=unicorn\n", lx_host_os(), lx_host_arch());
@@ -218,6 +283,7 @@ int main(void)
     floating_point_context();
     memory_and_faults();
     bounded_execution();
+    interrupted_segmented_copies();
     puts("CPU execution contracts passed");
     return 0;
 }

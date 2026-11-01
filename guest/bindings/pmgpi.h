@@ -58,6 +58,22 @@ static uint32 bridge32_GpiQueryRGBColor(uint8 *a)
 {
     return (uint32)GpiQueryRGBColor(gpi_word(a, 0), gpi_word(a, 1), (LONG)gpi_word(a, 2));
 }
+static uint32 bridge32_GpiQueryColorData(uint8 *a)
+{
+    LONG count = (LONG)gpi_word(a, 1), output[4];
+    if (count < 0 || count > 4)
+        return 0;
+    uint32 result = GpiQueryColorData(gpi_word(a, 0), count, output);
+    if (result && count)
+    {
+        uint8 wire[16];
+        for (LONG i = 0; i < count; i++)
+            lx_guest_store_u32(wire + 4 * i, output[i]);
+        result =
+            lx_execution_write(GLoaderState.execution, gpi_word(a, 2), wire, (size_t)count * 4);
+    }
+    return result;
+}
 
 static uint32 bridge32_GpiQueryFonts(uint8 *a)
 {

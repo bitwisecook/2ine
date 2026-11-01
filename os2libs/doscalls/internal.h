@@ -32,7 +32,11 @@
 #include "hal/host_fs.h"
 #include "hal/host_process.h"
 #include "hal/host_sync.h"
+#include "hal/host_shared.h"
 #include <limits.h>
+
+APIRET applyEas16(HFILE handle, const void *operation);
+APIRET queryAllEas16(HFILE handle, void *operation);
 
 typedef struct ExitListItem
 {
@@ -90,6 +94,8 @@ typedef struct
 {
     LxHostMonitor *monitor;
     int posted;
+    LxHostShared *shared;
+    uint32 *shared_state;
 } EventSem;
 
 /* The registry maps case-folded OS/2 names to private semaphore handles. */
@@ -110,12 +116,14 @@ typedef struct SharedMemBlock
     size_t size;
     LxGuestMapping *mapping;
     int freed;
+    char shared_name[128];
     struct SharedMemBlock *next;
 } SharedMemBlock;
 
 typedef struct
 {
     LxHostDirectory *dirp;
+    char *path;
     ULONG attr;
     ULONG level;
     char pattern[CCHMAXPATHCOMP];
@@ -241,7 +249,7 @@ LX_PRIVATE void destroyThreadResource(void *value);
 LX_PRIVATE void os2ThreadCleanup(void *arg);
 LX_PRIVATE void *os2ThreadEntry(void *arg);
 LX_PRIVATE char *findExePath(const char *exe, APIRET *err);
-LX_PRIVATE char **calcEnvp(const char *os2env, const char *exe, APIRET *err);
+LX_PRIVATE char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIRET *err);
 LX_PRIVATE char **calcArgv(const char *os2args, const char *progpath, APIRET *err);
 LX_PRIVATE void setProcessResultCode(PRESULTCODES output, const LxHostChildStatus *status);
 LX_PRIVATE APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,

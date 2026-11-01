@@ -3,6 +3,8 @@
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmwinx.h"
 #include "os2libs/helpmgr.h"
+#include "os2libs/pmwp.h"
+#include "os2libs/pmwin.h"
 #include "runtime/runtime.h"
 #include <limits.h>
 #define CHECK(x)                                                                                   \
@@ -31,10 +33,47 @@ static void require_string(HINI profile, char *app, char *key, const char *expec
 int main(int argc, char **argv)
 {
     CHECK(argc == 3);
+    HAB anchor = WinInitialize(0);
+    CHECK(anchor);
     GLoaderState.makeUnixPath = host_path;
     int writing = !strcmp(argv[1], "write");
+    ULONG desktop = WinQueryObject("<WP_DESKTOP>");
+    CHECK(desktop && !WinDestroyObject(desktop));
+    if (writing)
+    {
+        ULONG folder =
+            WinCreateObject("WPFolder", "Suite", "OBJECTID=<TEST_SUITE>;", "<WP_DESKTOP>", 0);
+        CHECK(folder && folder == WinQueryObject("<test_suite>"));
+        CHECK(!WinCreateObject("WPFolder", "Suite", "", "<WP_DESKTOP>", 0));
+        CHECK(!WinCreateObject("Unknown", "Title", "", "<WP_DESKTOP>", 0));
+        CHECK(!WinCreateObject("WPProgram", "App", "", "<MISSING>", 0));
+        ULONG app =
+            WinCreateObject("WPProgram", "Editor", "OBJECTID=<TEST_APP>;EXENAME=C:\\EDITOR.EXE;",
+                            "<TEST_SUITE>", 0);
+        CHECK(app && !WinDestroyObject(folder));
+        CHECK(app ==
+              WinCreateObject("WPProgram", "Editor", "PARAMETERS=one^;two;", "<TEST_SUITE>", 2));
+        CHECK(app == WinQueryObject("<TEST_APP>"));
+        CHECK(WinSetObjectData(app, "OBJECTID=<TEST_RENAMED>;"));
+        CHECK(!WinQueryObject("<TEST_APP>") && WinQueryObject("<TEST_RENAMED>") == app);
+    }
+    else
+    {
+        ULONG app = WinQueryObject("<TEST_RENAMED>");
+        ULONG folder = WinQueryObject("<TEST_SUITE>");
+        CHECK(app && folder);
+        CHECK(WinDestroyObject(app) && !WinQueryObject("<TEST_RENAMED>"));
+        CHECK(!WinSetObjectData(app, "TITLE=stale;"));
+        CHECK(WinDestroyObject(folder) && !WinQueryObject("<TEST_SUITE>"));
+    }
     HINI profile = PrfOpenProfile(0, "private.ini");
     CHECK(profile && profile != HINI_USERPROFILE && profile != HINI_SYSTEMPROFILE);
+    WinGetLastError(anchor);
+    char untouched[4] = "xyz";
+    CHECK(!PrfQueryProfileString(profile, "Absent", "Missing", NULL, untouched, sizeof untouched));
+    CHECK(!strcmp(untouched, "xyz"));
+    CHECK((WinGetLastError(anchor) & 0xffff) == 0x1304);
+    CHECK(!WinGetLastError(anchor));
     if (writing)
     {
         CHECK(PrfWriteProfileString(profile, "App", "String", "hello"));
@@ -107,17 +146,36 @@ int main(int argc, char **argv)
     CHECK(!PrfOpenProfile(0, "cycle.ini"));
     CHECK(!PrfOpenProfile(0, "truncated.ini"));
 
+    SWCNTRL switch_value = {0};
+    switch_value.hwnd = 123;
+    switch_value.uchVisibility = 4;
+    switch_value.fbJump = 2;
+    strcpy(switch_value.szSwtitle, "Suite installer");
+    CHECK(sizeof switch_value == 96);
+    ULONG switch_handle = WinAddSwitchEntry(&switch_value);
+    CHECK(switch_handle && WinQuerySwitchHandle(123, 0) == switch_handle);
+    SWCNTRL switch_copy;
+    CHECK(!WinQuerySwitchEntry(switch_handle, &switch_copy) && switch_copy.idProcess &&
+          !strcmp(switch_copy.szSwtitle, "Suite installer"));
+    strcpy(switch_value.szSwtitle, "Suite progress");
+    CHECK(!WinChangeSwitchEntry(switch_handle, &switch_value));
+    CHECK(!WinQuerySwitchEntry(switch_handle, &switch_copy) &&
+          !strcmp(switch_copy.szSwtitle, "Suite progress"));
+    CHECK(!WinRemoveSwitchEntry(switch_handle) && WinRemoveSwitchEntry(switch_handle) == 6);
+    CHECK(!WinQuerySwitchHandle(123, 0));
+
     ULONG key = 0, disposition = 0;
     if (writing)
     {
         CHECK(RegOpenKeyEx(0xffffffef, "Software\\Test", 0, 3, &key) == 2);
-        CHECK(!RegCreateKeyEx(0xffffffef, "Software\\Test", 0, NULL, 0, 7, NULL, &key,
+        CHECK(!RegCreateKeyEx(0xffffffef, "Software\\Test", 0, NULL, 0, 0x001f003f, NULL, &key,
                               &disposition) &&
               disposition == 1);
         CHECK(!RegSetValueEx(key, NULL, 0, 1, "default", 8));
         CHECK(!RegSetValueEx(key, "Raw", 0, 3, binary, 4));
         CHECK(!RegCloseKey(key));
     }
+    CHECK(RegOpenKeyEx(0x80000002, "SOFTWARE\\TEST", 0, 0x00200000, &key) == 87);
     CHECK(!RegOpenKeyEx(0x80000002, "SOFTWARE\\TEST\\", 0, 1, &key));
     CHECK(key && !PrfCloseProfile(key));
     ULONG type = 99;

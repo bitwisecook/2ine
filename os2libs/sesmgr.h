@@ -40,9 +40,15 @@ extern "C"
         PSZ ObjectBuffer;
         ULONG ObjectBuffLen;
     } STARTDATA, *PSTARTDATA;
+    typedef struct
+    {
+        USHORT Length, SelectInd, BondInd;
+    } STATUSDATA, *PSTATUSDATA;
 
     OS2EXPORT APIRET OS2API DosStartSession(PSTARTDATA psd, PULONG pidSession, PPID ppid)
         OS2APIINFO(ord = 37);
+    OS2EXPORT APIRET OS2API DosSelectSession(ULONG session) OS2APIINFO(38);
+    OS2EXPORT APIRET OS2API DosSetSession(ULONG session, PSTATUSDATA status) OS2APIINFO(39);
     OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PCHAR title)
         OS2APIINFO(ord = 5, name = DOSSMSETTITLE);
 

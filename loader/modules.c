@@ -81,6 +81,7 @@ LxTIB *lxGetOs2Tib(void)
 
 void lxDeinitOs2Tib(uint16 token)
 {
+    lxHostThreadCleanup();
     lx_execution_detach_tib(GLoaderState.execution, token);
     LxHostThreadState *state = lxHostThreadState();
     if (state->tib_mapping)
@@ -292,6 +293,9 @@ LxModule *loadNativeModule(const char *fname, const char *modname)
     const LxExport *exports = NULL;
     uint32 num_exports = 0;
     char *os2path = makeOS2Path(fname);
+    /* Native API modules can live outside every guest drive. */
+    if (!os2path && modname)
+        os2path = strdup(modname);
 
     if (!retval || !modname || !os2path)
         goto loadnative_failed;

@@ -22,6 +22,8 @@ typedef struct Slot
 } Slot;
 /* Index zero and the 16-bit special-handle range are never returned. */
 #define SLOT_COUNT 65535u
+/* The high bit is reserved for process-independent shared semaphore handles. */
+#define LAST_GENERATION 0x7fffu
 static Slot Slots[SLOT_COUNT];
 static uint32_t NextSlot = 1;
 static Resource *Resources;
@@ -49,13 +51,13 @@ uint32_t lx_handle_create(LxHandleKind kind, void *value, void (*destroy)(void *
     uint32_t index = NextSlot;
     for (unsigned i = 0; i < SLOT_COUNT - 1; i++)
     {
-        if (!Slots[index].resource && Slots[index].generation != UINT16_MAX)
+        if (!Slots[index].resource && Slots[index].generation != LAST_GENERATION)
             break;
         if (++index == SLOT_COUNT)
             index = 1;
     }
     Slot *slot = &Slots[index];
-    if (slot->resource || slot->generation == UINT16_MAX)
+    if (slot->resource || slot->generation == LAST_GENERATION)
     {
         lx_host_mutex_unlock(Mutex);
         return 0;

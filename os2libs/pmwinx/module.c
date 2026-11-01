@@ -1,9 +1,131 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx.h"
+#include "os2libs/pmwin.h"
+#include "os2libs/pmgpi.h"
+#include "os2libs/doscalls.h"
+#include "guest/handles.h"
 #include "os2libs/generated/pmwinx-lx.h"
 
 static uint32 references;
+ULONG LoadLibraryOpen32(PSZ name)
+{
+    TRACE_NATIVE("LoadLibraryOpen32('%s')", name);
+    HMODULE module = 0;
+    return DosLoadModule(NULL, 0, name, &module) ? 0 : module;
+}
+BOOL FreeLibraryOpen32(ULONG module)
+{
+    TRACE_NATIVE("FreeLibraryOpen32(%u)", module);
+    return DosFreeModule(module) == NO_ERROR;
+}
+typedef struct Open32DC
+{
+    HPS space;
+    HWND window;
+    HAB anchor;
+} Open32DC;
+static void destroyOpen32DC(void *value)
+{
+    Open32DC *dc = value;
+    if (dc->anchor == WinQueryAnchorBlock(HWND_DESKTOP))
+        WinReleasePS(dc->space);
+    free(dc);
+}
+static Open32DC *borrowOpen32DC(ULONG handle, LxHandleBorrow *borrow)
+{
+    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_DC, borrow))
+        return NULL;
+    Open32DC *dc = borrow->resource;
+    if (dc->anchor == WinQueryAnchorBlock(HWND_DESKTOP))
+        return dc;
+    lx_handle_release(borrow);
+    return NULL;
+}
+ULONG GetDCOpen32(HWND window)
+{
+    TRACE_NATIVE("GetDCOpen32(%u)", window);
+    window = window ? window : HWND_DESKTOP;
+    if (!WinIsWindow(0, window))
+        return 0;
+    Open32DC *dc = calloc(1, sizeof *dc);
+    if (!dc)
+        return 0;
+    dc->window = window;
+    dc->anchor = WinQueryAnchorBlock(HWND_DESKTOP);
+    /* Foreign display windows share these screen capabilities; drawing stays local. */
+    dc->space = WinGetPS(WinQueryWindowDC(window) ? window : HWND_DESKTOP);
+    ULONG result = dc->space ? lx_handle_create(LX_HANDLE_OPEN32_DC, dc, destroyOpen32DC) : 0;
+    if (!result)
+        destroyOpen32DC(dc);
+    return result;
+}
+LONG ReleaseDCOpen32(HWND window, ULONG handle)
+{
+    TRACE_NATIVE("ReleaseDCOpen32(%u, %u)", window, handle);
+    LxHandleBorrow borrow = {0};
+    Open32DC *dc = borrowOpen32DC(handle, &borrow);
+    if (!dc)
+        return 0;
+    LONG result = dc->window == (window ? window : HWND_DESKTOP) &&
+                  lx_handle_close(handle, LX_HANDLE_OPEN32_DC);
+    lx_handle_release(&borrow);
+    return result;
+}
+LONG GetDeviceCapsOpen32(ULONG handle, LONG index)
+{
+    TRACE_NATIVE("GetDeviceCapsOpen32(%u, %d)", handle, index);
+    LxHandleBorrow borrow = {0};
+    Open32DC *dc = borrowOpen32DC(handle, &borrow);
+    if (!dc)
+        return 0;
+    HDC device = GpiQueryDevice(dc->space);
+    LONG caps[42];
+    BOOL valid = device != (HDC)-1 && DevQueryCaps(device, 0, 42, caps);
+    lx_handle_release(&borrow);
+    if (!valid)
+        return 0;
+    switch (index)
+    {
+        case 2:
+            return caps[2] == 2 ? 1 : 0; /* DT_RASDISPLAY */
+        case 4:
+            return caps[8] ? (LONG)((int64_t)caps[4] * 1000 / caps[8]) : 0;
+        case 6:
+            return caps[9] ? (LONG)((int64_t)caps[5] * 1000 / caps[9]) : 0;
+        case 8:
+            return caps[4];
+        case 10:
+            return caps[5];
+        case 12:
+            return caps[16];
+        case 14:
+            return caps[15];
+        case 22:
+            return caps[27];
+        case 24:
+            return caps[16] > 8 ? -1 : caps[14];
+        case 88:
+            return caps[37];
+        case 90:
+            return caps[38];
+        case 108:
+            return caps[16];
+        default:
+            return 0;
+    }
+}
+LONG LoadStringOpen32(ULONG module, ULONG id, PCHAR output, LONG capacity)
+{
+    TRACE_NATIVE("LoadStringOpen32(%u, %u, %p, %d)", module, id, output, capacity);
+    if (!module)
+        return 0;
+    if (module == UINT32_MAX)
+        module = 0;
+    if (id & 0xff000000u)
+        id &= 0xffffu;
+    return WinLoadString(0, module, id, capacity, output);
+}
 BOOL WinXProcessMsg(PVOID message)
 {
     (void)message;

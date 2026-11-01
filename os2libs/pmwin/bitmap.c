@@ -63,6 +63,36 @@ static int unused_bitmap(void *resource)
 {
     return ((PmBitmap *)resource)->selected == 0;
 }
+ULONG WinGetSysBitmap(HWND desktop, ULONG id)
+{
+    TRACE_NATIVE("WinGetSysBitmap(%u, %u)", (uint)desktop, (uint)id);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor)
+        return 0;
+    if (desktop != 1 || (id != 6 && id != 18 && id != 19))
+    {
+        lxHostThreadState()->pm_error = desktop != 1 ? PMERR_INVALID_HWND : PMERR_INVALID_PARM;
+        return 0;
+    }
+    ULONG handle = lx_pm_bitmap_create(9, 9, 1, 1);
+    LxHandleBorrow borrow = {0};
+    PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
+    if (!bitmap)
+        return 0;
+    for (unsigned y = 0; y < 9; y++)
+        for (unsigned x = 0; x < 9; x++)
+        {
+            int marked;
+            if (id == 6)
+                marked = (x >= 1 && x <= 3 && y == 5 - x) || (x >= 3 && x <= 7 && y == x - 1);
+            else
+                marked = x == 0 || y == 0 || x == 8 || y == 8 || (y == 4 && x >= 2 && x <= 6) ||
+                         (id == 18 && x == 4 && y >= 2 && y <= 6);
+            bitmap->pixels[y * 9 + x] = marked ? 0 : 0xffffff;
+        }
+    lx_handle_release(&borrow);
+    return handle;
+}
 BOOL lx_pm_bitmap_delete(ULONG handle)
 {
     LxHandleBorrow borrow = {0};

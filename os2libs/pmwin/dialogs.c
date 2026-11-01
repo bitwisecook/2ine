@@ -16,6 +16,18 @@ typedef struct PmDialog
     HWND disabled_owner;
     HWND window, previous_focus;
 } PmDialog;
+BOOL windowAcceptsInput(Window *window)
+{
+    PmDialog *modal = NULL;
+    for (Window *p = window; p && p != &desktop_window; p = p->parent)
+    {
+        if (p->destroying || (!p->enabled && (!modal || modal->disabled_owner != p->hwnd)))
+            return FALSE;
+        if (p->dialog && p->dialog->processing && !p->dialog->dismissed)
+            modal = p->dialog;
+    }
+    return window != NULL;
+}
 void dialogWordChanged(Window *window, LONG index, USHORT value)
 {
     if (!window->dialog)
@@ -115,11 +127,11 @@ static BOOL dialog_key(AnchorBlock *anchor, HWND dialog, const QMSG *message)
         for (size_t i = 0; i < anchor->windows_array_len; i++)
         {
             Window *w = anchor->windows[i];
-            if (!w || !w->hwnd || !(w->style & 0x10000) || !WinIsChild(w->hwnd, dialog))
+            if (!w || !w->hwnd || !(w->style & 0x20000) || !WinIsChild(w->hwnd, dialog))
                 continue;
-            BOOL visible = TRUE;
+            BOOL visible = windowAcceptsInput(w);
             for (Window *p = w; p && p != &desktop_window; p = p->parent)
-                if (!p->enabled || !(p->style & WS_VISIBLE))
+                if (!(p->style & WS_VISIBLE))
                     visible = FALSE;
             if (!visible)
                 continue;
@@ -176,8 +188,11 @@ ULONG WinProcessDlg(HWND handle)
     if (!dialog->dismissed && window->owner && window->owner != &desktop_window &&
         window->owner->enabled)
     {
+        HWND focus = anchor->focus;
         dialog->disabled_owner = window->owner->hwnd;
         WinEnableWindow(dialog->disabled_owner, FALSE);
+        if (focus && WinIsChild(focus, handle))
+            WinSetFocus(HWND_DESKTOP, focus);
     }
     while (!dialog->dismissed)
     {

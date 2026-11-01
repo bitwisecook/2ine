@@ -43,6 +43,11 @@ BOOL WinSetDlgItemText(HWND dialog, ULONG id, PSZ text)
 {
     return WinSetWindowText(WinWindowFromID(dialog, id), text);
 }
+LONG WinQueryDlgItemTextLength(HWND dialog, ULONG id)
+{
+    HWND child = WinWindowFromID(dialog, id);
+    return child ? WinQueryWindowTextLength(child) : 0;
+}
 ULONG WinQueryDlgItemText(HWND dialog, ULONG id, LONG capacity, PCHAR output)
 {
     return (ULONG)WinQueryWindowText(WinWindowFromID(dialog, id), capacity, output);

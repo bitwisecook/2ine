@@ -53,6 +53,7 @@ LxHostFile *lx_host_file_open(const char *path, unsigned flags, int readonly, Lx
 /* A bounded regular-file snapshot is caller-owned and has an extra NUL byte. */
 void *lx_host_file_snapshot(const char *path, size_t maximum, size_t *size, LxHostFsError *error);
 LxHostFile *lx_host_file_standard(unsigned stream);
+LxHostFsError lx_host_file_inherit(LxHostFile *file, int inherit);
 LxHostFile *lx_host_file_duplicate(LxHostFile *file, LxHostFsError *error);
 void lx_host_file_close(LxHostFile *file);
 LxHostFsError lx_host_file_read(LxHostFile *file, void *data, size_t size, size_t *actual);
@@ -63,9 +64,16 @@ LxHostFsError lx_host_file_seek(LxHostFile *file, int64_t distance, unsigned ori
 LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info);
 LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size);
 LxHostFsError lx_host_file_flush(LxHostFile *file);
+/* Blocking advisory whole-file lock, released on descriptor close or process exit. */
+LxHostFsError lx_host_file_lock(LxHostFile *file, int acquire);
 LxHostFsError lx_host_file_readonly(LxHostFile *file, int readonly);
+/* Opaque application metadata follows a file through renames. A missing value is empty. */
+LxHostFsError lx_host_file_metadata_set(LxHostFile *file, const void *data, size_t size);
+LxHostFsError lx_host_file_metadata_get(LxHostFile *file, void *data, size_t capacity,
+                                        size_t *size);
 int lx_host_path_exists(const char *path);
 LxHostFsError lx_host_path_readonly(const char *path, int readonly);
+LxHostFsError lx_host_path_space(const char *path, uint64_t *total, uint64_t *available);
 LxHostFsError lx_host_path_info(const char *path, LxHostFileInfo *info);
 LxHostFsError lx_host_path_remove(const char *path, int directory);
 LxHostFsError lx_host_path_move(const char *source, const char *target);

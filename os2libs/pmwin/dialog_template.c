@@ -27,6 +27,12 @@ static BOOL string_valid(const DialogTemplate *t, unsigned length, unsigned offs
     return !length || (offset < t->size && length < t->size - offset &&
                        t->bytes[offset + length] == 0 && !memchr(t->bytes + offset, 0, length));
 }
+static BOOL text_valid(const DialogTemplate *t, unsigned length, unsigned offset)
+{
+    if (length == 3 && offset <= t->size && t->size - offset >= 3 && t->bytes[offset] == 0xff)
+        return TRUE;
+    return string_valid(t, length, offset);
+}
 static BOOL parameters_valid(const DialogTemplate *t, unsigned offset)
 {
     if (offset == 0xffff)
@@ -56,7 +62,7 @@ static BOOL validate_tree(DialogTemplate *t, unsigned depth)
     const uint8 *item = t->bytes + word(t->bytes, 6) + t->next++ * TEMPLATE_ITEM;
     unsigned class_length = word(item, 4), class_offset = word(item, 6);
     if (!string_valid(t, class_length, class_offset) ||
-        !string_valid(t, word(item, 8), word(item, 10)) ||
+        !text_valid(t, word(item, 8), word(item, 10)) ||
         (!class_length && (class_offset < 1 || class_offset > 0x70)) || (SHORT)word(item, 20) < 0 ||
         (SHORT)word(item, 22) < 0 || !parameters_valid(t, word(item, 26)))
         return FALSE;
@@ -90,6 +96,12 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
     PSZ class_name = word(item, 4) ? (PSZ)(t->bytes + class_offset)
                                    : (PSZ)(uintptr_t)(0xffff0000u | class_offset);
     PSZ text = word(item, 8) ? (PSZ)(t->bytes + text_offset) : "";
+    char resource_name[16];
+    if (word(item, 8) == 3 && t->bytes[text_offset] == 0xff)
+    {
+        snprintf(resource_name, sizeof resource_name, "#%u", word(t->bytes, text_offset + 1));
+        text = resource_name;
+    }
     POINTL position[2] = {{(SHORT)word(item, 16), (SHORT)word(item, 18)},
                           {(SHORT)word(item, 20), (SHORT)word(item, 22)}};
     unsigned control = word(item, 28);
@@ -147,7 +159,8 @@ HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data, s
         .bytes = data, .size = word(data, 0), .procedure = procedure, .parameters = parameters};
     unsigned items = word(data, 6);
     if (t.size > size || t.size < TEMPLATE_HEADER || items < TEMPLATE_HEADER || items > t.size ||
-        word(data, 2) || (word(data, 4) != 437 && word(data, 4) != 0) || word(data, 12))
+        word(data, 2) || (word(data, 4) != 437 && word(data, 4) != 850 && word(data, 4) != 0) ||
+        word(data, 12))
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_RESOURCE_FORMAT, 0);
     t.count = (t.size - items) / TEMPLATE_ITEM;
     if (!validate_tree(&t, 0) || !t.next || word(data + items, 4) || word(data + items, 6) != 1)
@@ -175,7 +188,7 @@ HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data, s
     }
     Window *actual_owner = getWindowFromHWND(anchor, owner);
     Window *parent_window = getWindowFromHWND(anchor, parent);
-    while (actual_owner && actual_owner->parent != parent_window)
+    while (actual_owner && actual_owner != parent_window && actual_owner->parent != parent_window)
         actual_owner = actual_owner->parent;
     HWND result = create_item(&t, parent, actual_owner ? actual_owner->hwnd : 0, 0);
     if (result)
@@ -186,13 +199,19 @@ HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data, s
             focus = t.windows[desired];
         else
             for (size_t i = 1; i < t.count; i++)
-                if (WinQueryWindowULong(t.windows[i], -2) & 0x10000) /* WS_TABSTOP */
+                if (WinQueryWindowULong(t.windows[i], -2) & 0x20000) /* WS_TABSTOP */
                 {
                     focus = t.windows[i];
                     break;
                 }
         if (!initializeDialogProcedure(result, focus, parameters))
             result = 0;
+        if (result)
+        {
+            Window *window = getWindowFromHWND(anchor, result);
+            if (window && (window->style & WS_VISIBLE))
+                postExposedMessages(anchor, window, currentSystemTicks());
+        }
     }
     if (mapping)
         lx_execution_unmap(GLoaderState.execution, mapping);

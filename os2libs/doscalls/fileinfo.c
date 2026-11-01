@@ -114,43 +114,32 @@ APIRET queryPathInfoEaSize(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
         return rc;
 
     FILESTATUS4 *st = (FILESTATUS4 *)pInfoBuf;
-    FIXME("write me");
-    st->cbList = 0;
+    LxHostFsError error;
+    LxHostFile *file = lx_host_file_open(unixPath, LX_HOST_FILE_READ, 0, &error);
+    if (!file)
+        return fileError(error);
+    size_t size = 0;
+    error = lx_host_file_metadata_get(file, NULL, 0, &size);
+    lx_host_file_close(file);
+    if (error && error != LX_HOST_FS_INVALID)
+        return fileError(error);
+    st->cbList = size ? size : 4;
     return NO_ERROR;
 }
 
 APIRET queryPathInfoFullName(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
-    char *real = lx_host_path_canonical(unixPath);
-    if (real == NULL)
+    char *guest = lxHostPathToGuest(unixPath);
+    if (!guest)
+        return ERROR_PATH_NOT_FOUND;
+    const size_t required = strlen(guest) + 1;
+    if (required > cbInfoBuf)
     {
-
-        real = strdup(unixPath);
-        if (real == NULL)
-        {
-            return ERROR_NOT_ENOUGH_MEMORY;
-        }
-    }
-
-    if ((strlen(real) + 3) >= cbInfoBuf)
-    {
-        free(real);
+        free(guest);
         return ERROR_BUFFER_OVERFLOW;
     }
-
-    char *dst = (char *)pInfoBuf;
-    *(dst++) = 'C';
-    *(dst++) = ':';
-    strcpy(dst, real);
-    free(real);
-
-    while (*dst)
-    {
-        if (*dst == '/')
-            *dst = '\\';
-        dst++;
-    }
-
+    memcpy(pInfoBuf, guest, required);
+    free(guest);
     return NO_ERROR;
 }
 
@@ -214,8 +203,7 @@ APIRET queryFileInfoEaSize(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG 
         return rc;
 
     FILESTATUS4 *st = (FILESTATUS4 *)pInfoBuf;
-    FIXME("write me");
-    st->cbList = 0;
+    st->cbList = 4;
     return NO_ERROR;
 }
 
@@ -235,6 +223,13 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
         return ERROR_INVALID_HANDLE;
     LxHostFileInfo statbuf;
     LxHostFsError error = lx_host_file_info(file.resource, &statbuf);
+    size_t ea_size = 0;
+    if (!error && ulInfoLevel == FIL_QUERYEASIZE)
+    {
+        error = lx_host_file_metadata_get(file.resource, NULL, 0, &ea_size);
+        if (error == LX_HOST_FS_INVALID)
+            error = LX_HOST_FS_OK;
+    }
     lx_handle_release(&file);
     if (error)
         return fileError(error);
@@ -247,6 +242,8 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
             break;
         case FIL_QUERYEASIZE:
             rc = queryFileInfoEaSize(&statbuf, pInfo, cbInfoBuf);
+            if (!rc)
+                ((FILESTATUS4 *)pInfo)->cbList = ea_size ? ea_size : 4;
             break;
         case FIL_QUERYEASFROMLIST:
             rc = queryFileInfoEasFromList(&statbuf, pInfo, cbInfoBuf);
@@ -266,12 +263,56 @@ APIRET DosSetPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULONG 
 {
     TRACE_NATIVE("DosSetPathInfo('%s', %u, %p, %u, %u)", pszPathName, (uint)ulInfoLevel, pInfoBuf,
                  (uint)cbInfoBuf, (uint)flOptions);
-    FIXME("write me");
-    return NO_ERROR;
+    if (ulInfoLevel != FIL_STANDARD)
+        return ERROR_INVALID_LEVEL;
+    if (!pInfoBuf || cbInfoBuf < sizeof(FILESTATUS3))
+        return ERROR_BUFFER_OVERFLOW;
+    APIRET error = NO_ERROR;
+    char *path = makeUnixPath(pszPathName, &error);
+    if (!path)
+        return error;
+    error = fileError(
+        lx_host_path_readonly(path, (((FILESTATUS3 *)pInfoBuf)->attrFile & FILE_READONLY) != 0));
+    free(path);
+    return error;
+}
+
+static void storeStatus16(PVOID buffer, USHORT level, const FILESTATUS4 *value)
+{
+    uint8 *p = buffer;
+    storeDateTime16(p, value->fdateCreation, value->ftimeCreation);
+    storeDateTime16(p + 4, value->fdateLastAccess, value->ftimeLastAccess);
+    storeDateTime16(p + 8, value->fdateLastWrite, value->ftimeLastWrite);
+    lx_guest_store_u32(p + 12, value->cbFile);
+    lx_guest_store_u32(p + 16, value->cbFileAlloc);
+    lx_guest_store_u16(p + 20, value->attrFile);
+    if (level == FIL_QUERYEASIZE)
+        lx_guest_store_u32(p + 22, value->cbList);
+}
+
+APIRET16 Dos16QPathInfo(PSZ path, USHORT level, PVOID buffer, USHORT capacity, ULONG reserved)
+{
+    if (reserved)
+        return ERROR_INVALID_PARAMETER;
+    if (level == FIL_QUERYFULLNAME)
+        return (APIRET16)DosQueryPathInfo(path, level, buffer, capacity);
+    unsigned size = level == FIL_STANDARD ? 22 : level == FIL_QUERYEASIZE ? 26 : 0;
+    if (!size)
+        return ERROR_INVALID_LEVEL;
+    if (capacity < size)
+        return ERROR_BUFFER_OVERFLOW;
+    FILESTATUS4 value = {0};
+    APIRET result = DosQueryPathInfo(path, level, &value, sizeof value);
+    if (!result)
+        storeStatus16(buffer, level, &value);
+    return (APIRET16)result;
 }
 
 APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
 {
+    TRACE_NATIVE("Dos16QFileInfo(%u, %u, %p, %u)", hf, level, buffer, capacity);
+    if (level == 4)
+        return capacity < 12 ? ERROR_BUFFER_OVERFLOW : queryAllEas16(hf, buffer);
     const uint32 size = level == FIL_STANDARD ? 22 : level == FIL_QUERYEASIZE ? 26 : 0;
     if (!size)
         return ERROR_INVALID_LEVEL;
@@ -283,22 +324,14 @@ APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
     FILESTATUS4 value = {0};
     const APIRET result = DosQueryFileInfo(hf, level, &value, sizeof value);
     if (!result)
-    {
-        uint8 *p = buffer;
-        storeDateTime16(p, value.fdateCreation, value.ftimeCreation);
-        storeDateTime16(p + 4, value.fdateLastAccess, value.ftimeLastAccess);
-        storeDateTime16(p + 8, value.fdateLastWrite, value.ftimeLastWrite);
-        lx_guest_store_u32(p + 12, value.cbFile);
-        lx_guest_store_u32(p + 16, value.cbFileAlloc);
-        lx_guest_store_u16(p + 20, value.attrFile);
-        if (level == FIL_QUERYEASIZE)
-            lx_guest_store_u32(p + 22, value.cbList);
-    }
+        storeStatus16(buffer, level, &value);
     return result;
 }
 
 APIRET16 Dos16SetFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
 {
+    if (level == 2)
+        return capacity < 12 ? ERROR_BUFFER_OVERFLOW : applyEas16(hf, buffer);
     if (level != FIL_STANDARD)
         return ERROR_INVALID_LEVEL;
     if (capacity < 22)

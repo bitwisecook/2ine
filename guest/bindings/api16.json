@@ -1,6 +1,29 @@
 {
   "_notice": "Public domain. No rights reserved. Wholly AI-authored.",
   "doscalls": {
+    "Dos16EditName": [
+      {
+        "name": "source",
+        "size": "256",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "edit",
+        "size": "256",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "target",
+        "size": "capacity",
+        "permissions": 2,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
     "DosSemRequest": [
       {
         "name": "sem",
@@ -658,6 +681,136 @@
         "kind": "copy",
         "nullable": true
       }
+    ],
+    "Dos16SubSet": [],
+    "Dos16SubAlloc": [
+      {
+        "name": "offset",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16SubFree": [],
+    "Dos16SetFileMode": [
+      {
+        "name": "filepath",
+        "size": "CCHMAXPATH",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
+    ],
+    "Dos16QProcStatus": [
+      {
+        "name": "buffer",
+        "size": "size",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16SMPMPresent": [
+      {
+        "name": "present",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16ScanEnv": [
+      {
+        "name": "name",
+        "size": "65536",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "value",
+        "size": "4",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16SMSetTitle": [
+      {
+        "name": "title",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
+    ],
+    "Dos16QPathInfo": [
+      {
+        "name": "path",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "buf",
+        "size": "cb",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16SetProcCp": [],
+    "Dos16BufReset": [],
+    "Dos16SetFilePtrL": [
+      {
+        "name": "position",
+        "size": "8",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16QFHandState": [
+      {
+        "name": "state",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16SetFHandState": [],
+    "Dos16OpenL": [
+      {
+        "name": "name",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "file",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "action",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "ea",
+        "size": "12",
+        "permissions": 3,
+        "kind": "live",
+        "nullable": true
+      }
     ]
   },
   "msg": {
@@ -844,6 +997,24 @@
         "name": "pCell",
         "size": "2",
         "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioGetMode": [
+      {
+        "name": "pvioModeInfo",
+        "size": "34",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "VioGetCp": [
+      {
+        "name": "codepage",
+        "size": "2",
+        "permissions": 2,
         "kind": "copy",
         "nullable": false
       }

@@ -62,6 +62,7 @@ LX_PRIVATE LxHostMutex *GCritSec;
 
 LX_NATIVE_CONSTRUCTOR(doscalls)
 {
+    GLoaderState.beep = DosBeep;
     GLoaderState.dosExit = DosExit;
     GLoaderState.writeFile = DosWrite;
     GLoaderState.getResource = DosGetResource;

@@ -65,6 +65,8 @@ void initPib(void)
         argv++;
         argc--;
     }
+    const char *original_arguments =
+        GLoaderState.subprocess ? getenv("TWOINE_CHILD_ARGUMENTS") : NULL;
 
     size_t len = 1;
     for (int i = 0; i < argc; i++)
@@ -90,6 +92,8 @@ void initPib(void)
     }
 
     len += strlen(argv[0]) + 1;
+    if (original_arguments)
+        len += strlen(original_arguments) + 1;
 
     char *const *envp = lx_host_environment();
 
@@ -103,7 +107,7 @@ void initPib(void)
             if (!GLoaderState.subprocess)
                 str = path;
         }
-        else if (strncmp(str, "IS_2INE=", 8) == 0)
+        else if (strncmp(str, "IS_2INE=", 8) == 0 || !strncmp(str, "TWOINE_CHILD_ARGUMENTS=", 23))
         {
             continue;
         }
@@ -139,7 +143,7 @@ void initPib(void)
         {
             libpath = str + 8;
         }
-        else if (strncmp(str, "IS_2INE=", 8) == 0)
+        else if (strncmp(str, "IS_2INE=", 8) == 0 || !strncmp(str, "TWOINE_CHILD_ARGUMENTS=", 23))
         {
             continue;
         }
@@ -162,7 +166,13 @@ void initPib(void)
     strcpy(ptr, argv[0]);
     ptr += strlen(argv[0]);
     *(ptr++) = '\0';
-    for (int i = 1; i < argc; i++)
+    if (original_arguments)
+    {
+        /* DosExecPgm supplies an OS/2 command tail, not a host argv serialization. */
+        strcpy(ptr, original_arguments);
+        ptr += strlen(original_arguments);
+    }
+    for (int i = 1; !original_arguments && i < argc; i++)
     {
         int needs_escape = 0;
         for (const char *arg = argv[i]; *arg; arg++)

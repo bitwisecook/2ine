@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx.h"
 #include "os2libs/pmshapi.h"
+#include "os2libs/pmshapi/profiles.h"
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "hal/host_sync.h"
@@ -21,7 +22,8 @@ enum
 {
     KEY_QUERY_VALUE = 1,
     KEY_SET_VALUE = 2,
-    KEY_CREATE_SUB_KEY = 4
+    KEY_CREATE_SUB_KEY = 4,
+    KEY_ALL_ACCESS = 0x001f003f
 };
 
 static void initialize(void)
@@ -30,7 +32,7 @@ static void initialize(void)
     if (!mutex)
         abort();
     const char *path = getenv("TWOINE_REGISTRY");
-    database = PrfOpenProfile(0, (PSZ)(path && *path ? path : ".2ine-registry.profile"));
+    database = lx_profile_open_host(path && *path ? path : ".2ine-registry.profile");
 }
 static const char *root_name(ULONG key)
 {
@@ -150,7 +152,7 @@ LONG RegOpenKeyEx(ULONG key, PSZ name, ULONG options, ULONG access, PULONG outpu
 {
     TRACE_NATIVE("RegOpenKeyEx(%08X, '%s', %u, %X, %p)", (uint)key, name, (uint)options,
                  (uint)access, output);
-    if (!output || options || (access & ~0x000f003fu))
+    if (!output || options || (access & ~KEY_ALL_ACCESS))
         return ERROR_INVALID_PARAMETER;
     lx_host_once(&once, initialize);
     if (!database)
@@ -199,8 +201,11 @@ LONG RegCreateKey(ULONG key, PSZ name, PULONG output)
 LONG RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name, ULONG options,
                     ULONG access, PVOID security, PULONG output, PULONG disposition)
 {
+    TRACE_NATIVE("RegCreateKeyEx(%08X, '%s', %u, '%s', %u, %X, %p, %p, %p)", (uint)key, name,
+                 (uint)reserved, class_name, (uint)options, (uint)access, security, output,
+                 disposition);
     (void)class_name;
-    if (!output || reserved || (access & ~0x000f003fu))
+    if (!output || reserved || (access & ~KEY_ALL_ACCESS))
         return ERROR_INVALID_PARAMETER;
     if (options || security)
         return ERROR_NOT_SUPPORTED;

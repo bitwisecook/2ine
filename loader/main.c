@@ -86,7 +86,21 @@ int main(int argc, char **argv, char **envp)
     }
 
     const char *modulename = GLoaderState.subprocess ? getenv("IS_2INE") : argv[1];
+    uint32 path_error = 0;
+    char *mapped = NULL;
+    if (!GLoaderState.subprocess && strlen(modulename) >= 2 && modulename[1] == ':')
+    {
+        mapped = lxMakeUnixPath(modulename, &path_error);
+        if (!mapped)
+        {
+            fprintf(stderr, "Cannot resolve guest program '%s' (OS/2 error %u)\n", modulename,
+                    path_error);
+            return 1;
+        }
+        modulename = mapped;
+    }
     LxModule *lxmod = loadModuleByPath(modulename);
+    free(mapped);
     if (lxmod != NULL)
         runModule(lxmod);
 

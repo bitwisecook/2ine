@@ -1,4 +1,30 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+static uint32 bridge32_GetDCOpen32(uint8 *a)
+{
+    return GetDCOpen32(lx_guest_load_u32(a));
+}
+static uint32 bridge32_GetDeviceCapsOpen32(uint8 *a)
+{
+    return GetDeviceCapsOpen32(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_ReleaseDCOpen32(uint8 *a)
+{
+    return ReleaseDCOpen32(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_LoadStringOpen32(uint8 *a)
+{
+    ULONG module = lx_guest_load_u32(a);
+    LONG capacity = (LONG)lx_guest_load_u32(a + 12);
+    if (!module || capacity <= 0)
+        return 0;
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), capacity,
+                             LX_GUEST_WRITE, &output))
+        return 0;
+    LONG result = LoadStringOpen32(module, lx_guest_load_u32(a + 4), output.host, capacity);
+    lx_execution_release(&output);
+    return result;
+}
 static uint32 bridge32_WinInitializeOpen32(uint8 *arguments)
 {
     WinInitializeOpen32(lx_guest_load_u32(arguments));
@@ -19,6 +45,17 @@ static uint32 bridge32_MulDiv(uint8 *arguments)
 static char *o32_string(uint32 pointer)
 {
     return pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 32768) : NULL;
+}
+static uint32 bridge32_LoadLibraryOpen32(uint8 *a)
+{
+    char *name = o32_string(lx_guest_load_u32(a));
+    uint32 result = name ? LoadLibraryOpen32(name) : 0;
+    free(name);
+    return result;
+}
+static uint32 bridge32_FreeLibraryOpen32(uint8 *a)
+{
+    return FreeLibraryOpen32(lx_guest_load_u32(a));
 }
 static uint32 bridge32_RegCloseKey(uint8 *a)
 {

@@ -74,10 +74,10 @@ HWND WinGetNextWindow(HENUM handle)
                 e->position = 0; /* The call after end-of-list starts over. */
         }
         else
-            anchor->last_error = PMERR_INVALID_HENUM;
+            lxHostThreadState()->pm_error = PMERR_INVALID_HENUM;
     }
     else if (anchor)
-        anchor->last_error = PMERR_INVALID_HENUM;
+        lxHostThreadState()->pm_error = PMERR_INVALID_HENUM;
     lx_handle_release(&borrow);
     return result;
 }
@@ -94,7 +94,7 @@ BOOL WinEndEnumWindows(HENUM handle)
     }
     lx_handle_release(&borrow);
     if (!result && anchor)
-        anchor->last_error = PMERR_INVALID_HENUM;
+        lxHostThreadState()->pm_error = PMERR_INVALID_HENUM;
     return result;
 }
 void destroyWindowEnumerations(AnchorBlock *anchor)
@@ -151,7 +151,7 @@ HWND WinQueryWindow(HWND window, LONG code)
             result = w->parent;
             break;
         default:
-            anchor->last_error = PMERR_PARAMETER_OUT_OF_RANGE;
+            lxHostThreadState()->pm_error = PMERR_PARAMETER_OUT_OF_RANGE;
             break;
     }
     return result ? result->hwnd : 0;

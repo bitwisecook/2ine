@@ -25,6 +25,21 @@ APIRET DosScanEnv(PSZ name, PSZ *outval)
     return ERROR_ENVVAR_NOT_FOUND;
 }
 
+APIRET16 Dos16ScanEnv(PSZ name, PULONG value)
+{
+    if (!name || !value)
+        return ERROR_INVALID_PARAMETER;
+    PSZ text;
+    APIRET rc = DosScanEnv(name, &text);
+    if (rc)
+        return (APIRET16)rc;
+    ULONG pointer = GLoaderState.convert32to1616(text);
+    if (!pointer)
+        return ERROR_INVALID_ADDRESS;
+    lx_guest_store_u32(value, pointer);
+    return NO_ERROR;
+}
+
 void runDosExitList(const uint32 why)
 {
     while (GExitList)
@@ -214,7 +229,8 @@ APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,
         return retval;
     }
 
-    char **envp = calcEnvp(pEnv, pNameUnix, &retval);
+    const char *arguments = pArg && *pArg ? pArg + strlen(pArg) + 1 : "";
+    char **envp = calcEnvp(pEnv, pNameUnix, arguments, &retval);
     if (!envp)
     {
         free(argv);
@@ -296,6 +312,27 @@ APIRET DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ 
         fprintf(stderr, "\n");
     }
     return DosExecPgm_implementation(pObjname, cbObjname, execFlag, pArg, pEnv, pRes, pName);
+}
+
+APIRET DosKillProcess(ULONG action, PID pid)
+{
+    TRACE_NATIVE("DosKillProcess(%u, %u)", (unsigned)action, (unsigned)pid);
+    if (action > 1)
+        return ERROR_INVALID_PARAMETER;
+    /* Process-tree termination and unrelated host processes are outside this worker's scope. */
+    if (action == 1)
+        return ERROR_ACCESS_DENIED;
+    APIRET result = ERROR_INVALID_PROCID;
+    grabLock(&GMutexDosCalls);
+    for (ChildProcess *child = GChildren; child; child = child->next)
+        if (lx_host_child_id(child->host) == pid)
+        {
+            int stopped = lx_host_child_terminate(child->host);
+            result = !stopped ? NO_ERROR : stopped > 0 ? ERROR_INVALID_PROCID : ERROR_ACCESS_DENIED;
+            break;
+        }
+    ungrabLock(&GMutexDosCalls);
+    return result;
 }
 
 APIRET DosWaitChild(ULONG action, ULONG option, PRESULTCODES result, PPID output_pid, PID pid)
@@ -383,6 +420,11 @@ APIRET DosSetProcessCp(ULONG cp)
     return NO_ERROR;
 }
 
+APIRET16 Dos16SetProcCp(USHORT codepage, USHORT reserved)
+{
+    return reserved ? ERROR_INVALID_PARAMETER : (APIRET16)DosSetProcessCp(codepage);
+}
+
 APIRET16 Dos16GetPID(PPIDINFO16 ppidinfo)
 {
     TRACE_NATIVE("Dos16GetPID(%p)", ppidinfo);
@@ -414,83 +456,66 @@ APIRET16 Dos16ExecPgm(PCHAR pObjname, SHORT cbObjname, USHORT execFlag, PSZ pArg
     return ret;
 }
 
-char **calcEnvp(const char *os2env, const char *exe, APIRET *err)
+static int hostControlVariable(const char *entry)
 {
-    /* Preserve worker library settings alongside the guest environment for child workers. */
-    size_t count = 0;
-    const char *src = os2env;
-    if (!src)
+    return !strncmp(entry, "TWOINE_", 7) || !strncmp(entry, "SDL_", 4) ||
+           !strncmp(entry, "LD_LIBRARY_PATH=", 16) || !strncmp(entry, "DYLD_LIBRARY_PATH=", 18) ||
+           !strncmp(entry, "TRACE_NATIVE=", 13) || !strncmp(entry, "TRACE_EVENTS=", 13) ||
+           !strncmp(entry, "DISPLAY=", 8) || !strncmp(entry, "WAYLAND_DISPLAY=", 16) ||
+           !strncmp(entry, "XDG_RUNTIME_DIR=", 16) || !strncmp(entry, "LIBGL_", 6) ||
+           !strncmp(entry, "GALLIUM_", 8);
+}
+char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIRET *err)
+{
+    const char *guest = os2env ? os2env : GLoaderState.pib.pib_pchenv;
+    if (!guest)
     {
-        extern char **environ;
-        while (environ[count])
-            count++;
+        *err = ERROR_INVALID_PARAMETER;
+        return NULL;
     }
-    else
-    {
-        while (*src)
-        {
+    size_t count = 3;
+    for (const char *p = guest; *p; p += strlen(p) + 1)
+        count++;
+    char *const *host = lx_host_environment();
+    for (size_t i = 0; host[i]; i++)
+        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23))
             count++;
-            src += strlen(src) + 1;
-        }
-    }
-
-    const char *tlib = getenv("TWOINE_LIBPATH");
-    const char *ldlib = getenv("LD_LIBRARY_PATH");
-    static const char *passthru[] = {"TRACE_NATIVE",
-                                     "TWOINE_TRACE_RET",
-                                     "TWOINE_TRACE_SEGMENTS",
-                                     "TWOINE_KEEP_TEMPS",
-                                     "TWOINE_TRACE_DOSINT",
-                                     "TWOINE_BACKEND",
-                                     NULL};
-    char **retval = (char **)calloc(count + 16, sizeof(char *));
-    if (!retval)
+    char **result = calloc(count, sizeof *result);
+    if (!result)
     {
         *err = ERROR_NOT_ENOUGH_MEMORY;
         return NULL;
     }
-
-    size_t idx = 0;
-    if (!os2env)
-    {
-        extern char **environ;
-        for (size_t i = 0; i < count; i++)
-            retval[idx++] = strdup(environ[i]);
-    }
-    else
-    {
-        src = os2env;
-        while (*src)
+    size_t at = 0;
+    for (size_t i = 0; host[i]; i++)
+        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23))
         {
-            retval[idx++] = strdup(src);
-            src += strlen(src) + 1;
+            result[at] = strdup(host[i]);
+            if (!result[at++])
+                goto failed;
         }
-    }
-
-    char buf[4096];
-    snprintf(buf, sizeof(buf), "IS_2INE=%s", exe);
-    retval[idx++] = strdup(buf);
-    if (tlib)
-    {
-        snprintf(buf, sizeof(buf), "TWOINE_LIBPATH=%s", tlib);
-        retval[idx++] = strdup(buf);
-    }
-    if (ldlib)
-    {
-        snprintf(buf, sizeof(buf), "LD_LIBRARY_PATH=%s", ldlib);
-        retval[idx++] = strdup(buf);
-    }
-    for (int i = 0; passthru[i]; i++)
-    {
-        const char *val = getenv(passthru[i]);
-        if (val)
+    for (const char *p = guest; *p; p += strlen(p) + 1)
+        if (!hostControlVariable(p) && strncmp(p, "IS_2INE=", 8))
         {
-            snprintf(buf, sizeof(buf), "%s=%s", passthru[i], val);
-            retval[idx++] = strdup(buf);
+            result[at] = strdup(p);
+            if (!result[at++])
+                goto failed;
         }
-    }
-    retval[idx] = NULL;
-    return retval;
+    result[at] = malloc(strlen(exe) + 9);
+    if (!result[at])
+        goto failed;
+    sprintf(result[at++], "IS_2INE=%s", exe);
+    result[at] = malloc(strlen(arguments) + 24);
+    if (!result[at])
+        goto failed;
+    sprintf(result[at], "TWOINE_CHILD_ARGUMENTS=%s", arguments);
+    return result;
+failed:
+    for (size_t i = 0; i < at; i++)
+        free(result[i]);
+    free(result);
+    *err = ERROR_NOT_ENOUGH_MEMORY;
+    return NULL;
 }
 
 char **calcArgv(const char *os2args, const char *progpath, APIRET *err)

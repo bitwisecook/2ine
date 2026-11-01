@@ -8,25 +8,7 @@
 #include "loader/internal.h"
 char *makeOS2Path(const char *fname)
 {
-    char *full = lx_host_path_canonical(fname);
-    if (!full)
-        return NULL;
-
-    char *retval = (char *)malloc(strlen(full) + 3);
-    if (!retval)
-        return NULL;
-
-    retval[0] = 'C';
-    retval[1] = ':';
-    strcpy(retval + 2, full);
-    free(full);
-    for (char *ptr = retval + 2; *ptr; ptr++)
-    {
-        if (*ptr == '/')
-            *ptr = '\\';
-    }
-
-    return retval;
+    return lxHostPathToGuest(fname);
 }
 
 int locateOneElement(char *buf)

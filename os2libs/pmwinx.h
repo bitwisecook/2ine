@@ -15,6 +15,15 @@ extern "C"
         OS2APIINFO(ord = 6007, name = WINXPROCESSMSG);
     OS2EXPORT LONG OS2API MulDiv(LONG number, LONG numerator, LONG denominator)
         OS2APIINFO(ord = 494, name = MULDIV);
+    OS2EXPORT LONG OS2API LoadStringOpen32(ULONG module, ULONG id, PCHAR output, LONG capacity)
+        OS2APIINFO(ord = 464, name = LOADSTRING);
+    OS2EXPORT ULONG OS2API GetDCOpen32(ULONG window) OS2APIINFO(ord = 263, name = GETDC);
+    OS2EXPORT LONG OS2API GetDeviceCapsOpen32(ULONG dc, LONG index)
+        OS2APIINFO(ord = 269, name = GETDEVICECAPS);
+    OS2EXPORT LONG OS2API ReleaseDCOpen32(ULONG window, ULONG dc)
+        OS2APIINFO(ord = 560, name = RELEASEDC);
+    OS2EXPORT ULONG OS2API LoadLibraryOpen32(PSZ name) OS2APIINFO(ord = 461, name = LOADLIBRARY);
+    OS2EXPORT BOOL OS2API FreeLibraryOpen32(ULONG module) OS2APIINFO(ord = 223, name = FREELIBRARY);
     OS2EXPORT LONG OS2API RegCloseKey(ULONG key) OS2APIINFO(ord = 541, name = REGCLOSEKEY);
     OS2EXPORT LONG OS2API RegOpenKey(ULONG key, PSZ name, PULONG output)
         OS2APIINFO(ord = 549, name = REGOPENKEY);

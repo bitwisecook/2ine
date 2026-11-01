@@ -85,6 +85,11 @@ static void file_status(char *path, HFILE handle)
                            : DosQueryPathInfo(path, FIL_STANDARD, buffer + 1, 30);
         CHECK(!result);
         canaries(buffer, sizeof normal);
+        FILESTATUS4 extended;
+        memset(&extended, 0xcc, sizeof extended);
+        result = by_handle ? DosQueryFileInfo(handle, FIL_QUERYEASIZE, &extended, sizeof extended)
+                           : DosQueryPathInfo(path, FIL_QUERYEASIZE, &extended, sizeof extended);
+        CHECK(!result && extended.cbFile == 5 && extended.cbList == 4);
     }
 }
 static void priority(void)
