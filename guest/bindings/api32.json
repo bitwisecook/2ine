@@ -346,7 +346,8 @@
     "DosUnwindException": {
       "argument_bytes": 12,
       "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
+      "convention": "LX_ABI_STACK32",
+      "native_bridge": true
     },
     "DosSetFileInfo": {
       "argument_bytes": 16,

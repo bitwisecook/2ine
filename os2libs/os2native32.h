@@ -6,7 +6,6 @@
 #ifndef LX_NATIVE_MODULE_SHUTDOWN
 #define LX_NATIVE_MODULE_SHUTDOWN()
 #endif
-#if TWOINE_PORTABLE_LOADER
 #define LX_NATIVE_MODULE_32BIT_SUPPORT() static LxMmaps obj32;
 #define LX_NATIVE_MODULE_32BIT_API(fn) static void *fn##32;
 #define LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()                                                      \
@@ -32,10 +31,14 @@
 #define LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()                                                  \
     if (!lx_execution_protect(GLoaderState.execution, obj32.mapping, 5))                           \
         return 0;
-#define LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT()                                                    \
+#define LX_NATIVE_MODULE_DEINIT_BRIDGED_SUPPORT()                                                  \
     LX_NATIVE_MODULE_SHUTDOWN();                                                                   \
     if (obj32.mapping)                                                                             \
         lx_execution_unmap(GLoaderState.execution, obj32.mapping);
+#define LX_NATIVE_EXPORT32_BRIDGED(fn, ord) {ord, #fn, &fn##32, &obj32, 1}
+#define LX_NATIVE_EXPORT32_BRIDGED_DIFFERENT_NAME(fn, name, ord) {ord, name, &fn##32, &obj32, 1}
+#if TWOINE_PORTABLE_LOADER
+#define LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT() LX_NATIVE_MODULE_DEINIT_BRIDGED_SUPPORT()
 #define LX_NATIVE_INIT_32BIT_MODULE(module)                                                        \
     if (!init32_##module())                                                                        \
         return 0;

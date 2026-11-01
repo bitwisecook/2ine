@@ -27,7 +27,7 @@ void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t stackle
         if (lx_execution_address(GLoaderState.execution, topOfStack, 0, 0, &guest_top))
             top = guest_top;
     }
-    tib->tib_pexchain = 0;
+    tib->tib_pexchain = UINT32_MAX;
     tib->tib_pstack = top - stacklen;
     tib->tib_pstacklimit = top;
     tib->tib_ptib2 = tib_address ? tib_address + sizeof(LxTIB) : 0;

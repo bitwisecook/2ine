@@ -193,6 +193,26 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
         self.assertTrue(output.startswith("#if !TWOINE_PORTABLE_LOADER"))
         self.assertIn("Exit();\n    return 0;", output)
 
+    def test_native_bridge_keeps_the_wire_entry_on_both_workers(self) -> None:
+        functions = lxapigen.parse_functions(
+            "OS2EXPORT APIRET OS2API Jump(ULONG target) OS2APIINFO(7);\n"
+            "OS2EXPORT APIRET OS2API Read(VOID) OS2APIINFO(8);"
+        )
+        output = lxapigen.render(
+            "sample",
+            functions,
+            {},
+            {
+                "Jump": lxapigen.Abi32(4, 0, "LX_ABI_STACK32", True),
+                "Read": lxapigen.Abi32(0, 0, "LX_ABI_STACK32"),
+            },
+        )
+        self.assertIn("LX_NATIVE_EXPORT32_BRIDGED(Jump, 7)", output)
+        self.assertIn("LX_NATIVE_EXPORT32(Read, 8)", output)
+        self.assertIn("LX_NATIVE_MODULE_DEINIT_BRIDGED_SUPPORT()", output)
+        self.assertIn("if (!init32_sample()) return 0;", output)
+        self.assertIn("#if TWOINE_PORTABLE_LOADER\nLX_NATIVE_MODULE_32BIT_API(Read)", output)
+
     def test_rejects_bad_wire_abi(self) -> None:
         for values in [(3, 0, "LX_ABI_STACK32"), (8, 0, "LX_ABI_EAX32"), (4, 8, "LX_ABI_STACK32")]:
             with self.subTest(values=values), tempfile.TemporaryDirectory() as directory:

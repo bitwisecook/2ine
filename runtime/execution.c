@@ -234,3 +234,8 @@ uint32_t lx_execution_callback32_4(LxExecution *e, uint32_t entry, uint32_t a, u
 {
     return e->ops->callback32_4(entry, a, b, c, d);
 }
+
+int lx_execution_api_registers32(LxExecution *e, LxExecutionRegisters32 *registers)
+{
+    return e && registers && e->ops->api_registers32 ? e->ops->api_registers32(registers) : 0;
+}

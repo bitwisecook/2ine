@@ -49,6 +49,7 @@ typedef struct LxExecutionOperations
     int (*copy_in)(LxExecution *, uint32_t, void *, const void *, size_t);
     uint32_t (*callback32_4)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
     uint32_t (*api_arguments)(void);
+    int (*api_registers32)(LxExecutionRegisters32 *);
 } LxExecutionOperations;
 struct LxExecution
 {

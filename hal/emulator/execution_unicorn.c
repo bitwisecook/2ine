@@ -30,6 +30,7 @@ typedef struct Invocation
     struct Invocation *outer;
     LxGuestBorrow arguments;
     uint32_t api_arguments;
+    const LxCpuRegisters *api_registers;
 } Invocation;
 typedef struct EmulatedState
 {
@@ -422,7 +423,9 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             args = arguments->host;
         }
         frame.api_arguments = b->convention == LX_ABI_EAX32 ? 0 : (uint32_t)frame_address;
+        frame.api_registers = &registers;
         registers.eax = b->callback(args);
+        frame.api_registers = NULL;
         frame.api_arguments = 0;
         lx_execution_release(arguments);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
@@ -805,14 +808,41 @@ static uint32_t apiArguments(void)
 {
     return Active ? Active->api_arguments : 0;
 }
+static int apiRegisters32(LxExecutionRegisters32 *out)
+{
+    if (!Active || !Active->api_registers)
+        return 0;
+    const LxCpuRegisters *r = Active->api_registers;
+    out->eax = r->eax;
+    out->ebx = r->ebx;
+    out->ecx = r->ecx;
+    out->edx = r->edx;
+    out->esi = r->esi;
+    out->edi = r->edi;
+    out->ebp = r->ebp;
+    out->esp = r->esp + 4;
+    uint8_t return_address[4];
+    if (!lx_execution_read(Emulated->execution, r->esp, return_address, 4))
+        return 0;
+    out->eip = lx_guest_load_u32(return_address);
+    out->eflags = r->eflags;
+    out->cs = r->cs;
+    out->ds = r->ds;
+    out->es = r->es;
+    out->fs = r->fs;
+    out->gs = r->gs;
+    out->ss = r->ss;
+    return 1;
+}
 const LxExecutionOperations lx_execution_unicorn = {
-    "unicorn",    initialize,      destroy,     program,
-    library,      prepareThread,   thread16,    free,
-    callback,     attachTib,       currentTib,  detachTib,
-    allocSegment, freeSegment,     codeAlias,   findSelector,
-    freeSelector, farToHost,       hostToFar,   stackSegments,
-    nearBase,     flatCode,        prepareCode, missing,
-    emitBridge16, atomicU32,       NULL,        0,
-    map,          unmap,           protect,     emitBridge32,
-    copyOut,      prepareThread32, thread32,    free,
-    endThread,    copyIn,          callback4,   apiArguments};
+    "unicorn",     initialize,      destroy,     program,
+    library,       prepareThread,   thread16,    free,
+    callback,      attachTib,       currentTib,  detachTib,
+    allocSegment,  freeSegment,     codeAlias,   findSelector,
+    freeSelector,  farToHost,       hostToFar,   stackSegments,
+    nearBase,      flatCode,        prepareCode, missing,
+    emitBridge16,  atomicU32,       NULL,        0,
+    map,           unmap,           protect,     emitBridge32,
+    copyOut,       prepareThread32, thread32,    free,
+    endThread,     copyIn,          callback4,   apiArguments,
+    apiRegisters32};

@@ -1516,14 +1516,56 @@ static int nativeEntry(LxExecution *e, void *host, uint32_t *address)
     *address = (uint32_t)(uintptr_t)host;
     return 1;
 }
+typedef struct NativeApiCall
+{
+    uint32_t *registers;
+    uint32_t arguments;
+    struct NativeApiCall *previous;
+} NativeApiCall;
+static _Thread_local NativeApiCall *NativeApi;
+static uint32_t dispatchApi32(LxExecutionApi16 callback, uint8_t *arguments, uint32_t *registers)
+{
+    NativeApiCall call = {
+        registers, arguments == (uint8_t *)(registers + 7) ? 0 : (uint32_t)(uintptr_t)arguments,
+        NativeApi};
+    NativeApi = &call;
+    uint32_t result = callback(arguments);
+    NativeApi = call.previous;
+    return result;
+}
+static uint32_t apiArguments(void)
+{
+    return NativeApi ? NativeApi->arguments : 0;
+}
+static int apiRegisters32(LxExecutionRegisters32 *out)
+{
+    if (!NativeApi)
+        return 0;
+    const uint32_t *r = NativeApi->registers;
+    memset(out, 0, sizeof *out);
+    out->edi = r[0];
+    out->esi = r[1];
+    out->ebp = r[2];
+    out->ebx = r[4];
+    out->edx = r[5];
+    out->ecx = r[6];
+    out->eax = r[7];
+    out->eflags = r[8];
+    out->eip = r[9];
+    out->esp = (uint32_t)(uintptr_t)(r + 10);
+    __asm__ __volatile__(
+        "mov %%cs,%0; mov %%ds,%1; mov %%es,%2; mov %%fs,%3; mov %%gs,%4; mov %%ss,%5"
+        : "=m"(out->cs), "=m"(out->ds), "=m"(out->es), "=m"(out->fs), "=m"(out->gs), "=m"(out->ss));
+    return 1;
+}
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *binding)
 {
     if (capacity < 64)
         return 0;
     uint8_t *p = output;
     const int eax_argument = binding->convention == LX_ABI_EAX32;
-    if (eax_argument)
-        *p++ = 0x60; /* pushad: preserve the register-argument ABI */
+    *p++ = 0x9c;
+    *p++ = 0x60; /* pushfd; pushad: retain the suspended guest registers */
     *p++ = 0x55;
     *p++ = 0x89;
     *p++ = 0xe5; /* push ebp; mov ebp,esp */
@@ -1532,26 +1574,31 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
     *p++ = 0xf0; /* align host call stack */
     *p++ = 0x83;
     *p++ = 0xec;
-    *p++ = 12;
+    *p++ = 4;
     *p++ = 0x8d;
     *p++ = 0x45;
-    *p++ = eax_argument ? 32 : 8; /* argument frame */
+    *p++ = 4;
+    *p++ = 0x50; /* saved registers */
+    *p++ = 0x8d;
+    *p++ = 0x45;
+    *p++ = eax_argument ? 32 : 44;
     *p++ = 0x50;
-    *p++ = 0xb8;
+    *p++ = 0x68;
     uint32_t callback = (uint32_t)(uintptr_t)binding->callback;
     memcpy(p, &callback, 4);
     p += 4;
+    *p++ = 0xb8;
+    uint32_t dispatch = (uint32_t)(uintptr_t)dispatchApi32;
+    memcpy(p, &dispatch, 4);
+    p += 4;
     *p++ = 0xff;
-    *p++ = 0xd0; /* call host ABI bridge */
-    if (eax_argument)
-    {
-        *p++ = 0x89;
-        *p++ = 0x45;
-        *p++ = 32;
-    } /* saved EAX result */
+    *p++ = 0xd0;
+    *p++ = 0x89;
+    *p++ = 0x45;
+    *p++ = 32; /* callback result replaces saved EAX */
     *p++ = 0xc9;
-    if (eax_argument)
-        *p++ = 0x61;
+    *p++ = 0x61;
+    *p++ = 0x9d; /* leave; popad; popfd */
     if (binding->callee_pop)
     {
         *p++ = 0xc2;
@@ -1612,4 +1659,6 @@ const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          destroyThread32,
                                                          endThread,
                                                          copyIn,
-                                                         callback4};
+                                                         callback4,
+                                                         apiArguments,
+                                                         apiRegisters32};
