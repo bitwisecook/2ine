@@ -80,6 +80,11 @@ typedef struct LxHostEvent
     char text[64];
 } LxHostEvent;
 int lx_host_video_initialize(int *width, int *height);
+/* Release a renderer's GL binding before a separate graphics context is bound. */
+int lx_host_video_release_graphics(void);
+/* Install/remove only while graphics users are quiescent. The callback releases
+   an external graphics API's current binding before renderer operations. */
+void lx_host_video_set_graphics_release(void (*release)(void));
 void lx_host_video_quit(void);
 const char *lx_host_video_error(void);
 /* Milliseconds in the same time domain as LxHostEvent.timestamp. */

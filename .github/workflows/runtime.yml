@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Linux application dependencies
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: sudo apt-get update && sudo apt-get install --yes libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev xvfb libxtst6
+        run: sudo apt-get update && sudo apt-get install --yes libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6
       - name: Fetch hash-verified archived PMStars fixture
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: python3 tests/integration/fetch_gui_fixture.py --destination "$RUNNER_TEMP/hobbes"
@@ -30,7 +30,7 @@ jobs:
         run: |
           gui_args=()
           if [ "$RUNNER_OS" = Linux ] && [ "${{ matrix.profile }}" = application ]; then
-            gui_args=(-DTWOINE_PMSTARS_EXE="$RUNNER_TEMP/hobbes/PMStars.exe")
+            gui_args=(-DTWOINE_PMSTARS_EXE="$RUNNER_TEMP/hobbes/PMStars.exe" -DTWOINE_OPENGL=ON)
           fi
           runtime_only=OFF
           if [ "${{ matrix.profile }}" = runtime ]; then runtime_only=ON; fi

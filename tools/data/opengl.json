@@ -1,0 +1,6469 @@
+{
+  "functions": [
+    {
+      "name": "glAccum",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "op"
+        ],
+        [
+          "float",
+          "value"
+        ]
+      ]
+    },
+    {
+      "name": "glAlphaFunc",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "func"
+        ],
+        [
+          "float",
+          "ref"
+        ]
+      ]
+    },
+    {
+      "name": "glAreTexturesResident",
+      "result": "uint8_t",
+      "arguments": [
+        [
+          "int32_t",
+          "n"
+        ],
+        [
+          "const uint32_t *",
+          "textures"
+        ],
+        [
+          "uint8_t *",
+          "residences"
+        ]
+      ]
+    },
+    {
+      "name": "glArrayElement",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "i"
+        ]
+      ]
+    },
+    {
+      "name": "glBegin",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glBindTexture",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "texture"
+        ]
+      ]
+    },
+    {
+      "name": "glBitmap",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ],
+        [
+          "float",
+          "xorig"
+        ],
+        [
+          "float",
+          "yorig"
+        ],
+        [
+          "float",
+          "xmove"
+        ],
+        [
+          "float",
+          "ymove"
+        ],
+        [
+          "const uint8_t *",
+          "bitmap"
+        ]
+      ]
+    },
+    {
+      "name": "glBlendFunc",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "sfactor"
+        ],
+        [
+          "uint32_t",
+          "dfactor"
+        ]
+      ]
+    },
+    {
+      "name": "glCallList",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "list"
+        ]
+      ]
+    },
+    {
+      "name": "glCallLists",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "n"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "const void *",
+          "lists"
+        ]
+      ]
+    },
+    {
+      "name": "glClear",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glClearAccum",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "red"
+        ],
+        [
+          "float",
+          "green"
+        ],
+        [
+          "float",
+          "blue"
+        ],
+        [
+          "float",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glClearColor",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "red"
+        ],
+        [
+          "float",
+          "green"
+        ],
+        [
+          "float",
+          "blue"
+        ],
+        [
+          "float",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glClearDepth",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "depth"
+        ]
+      ]
+    },
+    {
+      "name": "glClearIndex",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glClearStencil",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "s"
+        ]
+      ]
+    },
+    {
+      "name": "glClipPlane",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "plane"
+        ],
+        [
+          "const double *",
+          "equation"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3b",
+      "result": "void",
+      "arguments": [
+        [
+          "int8_t",
+          "red"
+        ],
+        [
+          "int8_t",
+          "green"
+        ],
+        [
+          "int8_t",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3bv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int8_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "red"
+        ],
+        [
+          "double",
+          "green"
+        ],
+        [
+          "double",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "red"
+        ],
+        [
+          "float",
+          "green"
+        ],
+        [
+          "float",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "red"
+        ],
+        [
+          "int32_t",
+          "green"
+        ],
+        [
+          "int32_t",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "red"
+        ],
+        [
+          "int16_t",
+          "green"
+        ],
+        [
+          "int16_t",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3ub",
+      "result": "void",
+      "arguments": [
+        [
+          "uint8_t",
+          "red"
+        ],
+        [
+          "uint8_t",
+          "green"
+        ],
+        [
+          "uint8_t",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3ubv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint8_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3ui",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "red"
+        ],
+        [
+          "uint32_t",
+          "green"
+        ],
+        [
+          "uint32_t",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3uiv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3us",
+      "result": "void",
+      "arguments": [
+        [
+          "uint16_t",
+          "red"
+        ],
+        [
+          "uint16_t",
+          "green"
+        ],
+        [
+          "uint16_t",
+          "blue"
+        ]
+      ]
+    },
+    {
+      "name": "glColor3usv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4b",
+      "result": "void",
+      "arguments": [
+        [
+          "int8_t",
+          "red"
+        ],
+        [
+          "int8_t",
+          "green"
+        ],
+        [
+          "int8_t",
+          "blue"
+        ],
+        [
+          "int8_t",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4bv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int8_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "red"
+        ],
+        [
+          "double",
+          "green"
+        ],
+        [
+          "double",
+          "blue"
+        ],
+        [
+          "double",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "red"
+        ],
+        [
+          "float",
+          "green"
+        ],
+        [
+          "float",
+          "blue"
+        ],
+        [
+          "float",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "red"
+        ],
+        [
+          "int32_t",
+          "green"
+        ],
+        [
+          "int32_t",
+          "blue"
+        ],
+        [
+          "int32_t",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "red"
+        ],
+        [
+          "int16_t",
+          "green"
+        ],
+        [
+          "int16_t",
+          "blue"
+        ],
+        [
+          "int16_t",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4ub",
+      "result": "void",
+      "arguments": [
+        [
+          "uint8_t",
+          "red"
+        ],
+        [
+          "uint8_t",
+          "green"
+        ],
+        [
+          "uint8_t",
+          "blue"
+        ],
+        [
+          "uint8_t",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4ubv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint8_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4ui",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "red"
+        ],
+        [
+          "uint32_t",
+          "green"
+        ],
+        [
+          "uint32_t",
+          "blue"
+        ],
+        [
+          "uint32_t",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4uiv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4us",
+      "result": "void",
+      "arguments": [
+        [
+          "uint16_t",
+          "red"
+        ],
+        [
+          "uint16_t",
+          "green"
+        ],
+        [
+          "uint16_t",
+          "blue"
+        ],
+        [
+          "uint16_t",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColor4usv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glColorMask",
+      "result": "void",
+      "arguments": [
+        [
+          "uint8_t",
+          "red"
+        ],
+        [
+          "uint8_t",
+          "green"
+        ],
+        [
+          "uint8_t",
+          "blue"
+        ],
+        [
+          "uint8_t",
+          "alpha"
+        ]
+      ]
+    },
+    {
+      "name": "glColorMaterial",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glColorPointer",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "size"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "const void *",
+          "ptr"
+        ]
+      ]
+    },
+    {
+      "name": "glCopyPixels",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ]
+      ]
+    },
+    {
+      "name": "glCopyTexImage1D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "uint32_t",
+          "internalformat"
+        ],
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "border"
+        ]
+      ]
+    },
+    {
+      "name": "glCopyTexImage2D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "uint32_t",
+          "internalformat"
+        ],
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ],
+        [
+          "int32_t",
+          "border"
+        ]
+      ]
+    },
+    {
+      "name": "glCopyTexSubImage1D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "int32_t",
+          "xoffset"
+        ],
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ]
+      ]
+    },
+    {
+      "name": "glCopyTexSubImage2D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "int32_t",
+          "xoffset"
+        ],
+        [
+          "int32_t",
+          "yoffset"
+        ],
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ]
+      ]
+    },
+    {
+      "name": "glCullFace",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glDeleteLists",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "list"
+        ],
+        [
+          "int32_t",
+          "range"
+        ]
+      ]
+    },
+    {
+      "name": "glDeleteTextures",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "n"
+        ],
+        [
+          "const uint32_t *",
+          "textures"
+        ]
+      ]
+    },
+    {
+      "name": "glDepthFunc",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "func"
+        ]
+      ]
+    },
+    {
+      "name": "glDepthMask",
+      "result": "void",
+      "arguments": [
+        [
+          "uint8_t",
+          "flag"
+        ]
+      ]
+    },
+    {
+      "name": "glDepthRange",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "near_val"
+        ],
+        [
+          "double",
+          "far_val"
+        ]
+      ]
+    },
+    {
+      "name": "glDisable",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "cap"
+        ]
+      ]
+    },
+    {
+      "name": "glDisableClientState",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "cap"
+        ]
+      ]
+    },
+    {
+      "name": "glDrawArrays",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ],
+        [
+          "int32_t",
+          "first"
+        ],
+        [
+          "int32_t",
+          "count"
+        ]
+      ]
+    },
+    {
+      "name": "glDrawBuffer",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glDrawElements",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ],
+        [
+          "int32_t",
+          "count"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "const void *",
+          "indices"
+        ]
+      ]
+    },
+    {
+      "name": "glDrawPixels",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ],
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "const void *",
+          "pixels"
+        ]
+      ]
+    },
+    {
+      "name": "glEdgeFlag",
+      "result": "void",
+      "arguments": [
+        [
+          "uint8_t",
+          "flag"
+        ]
+      ]
+    },
+    {
+      "name": "glEdgeFlagPointer",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "const void *",
+          "ptr"
+        ]
+      ]
+    },
+    {
+      "name": "glEdgeFlagv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint8_t *",
+          "flag"
+        ]
+      ]
+    },
+    {
+      "name": "glEnable",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "cap"
+        ]
+      ]
+    },
+    {
+      "name": "glEnableClientState",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "cap"
+        ]
+      ]
+    },
+    {
+      "name": "glEnd",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glEndList",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glEvalCoord1d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "u"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalCoord1dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "u"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalCoord1f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "u"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalCoord1fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "u"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalCoord2d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "u"
+        ],
+        [
+          "double",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalCoord2dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "u"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalCoord2f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "u"
+        ],
+        [
+          "float",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalCoord2fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "u"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalMesh1",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ],
+        [
+          "int32_t",
+          "i1"
+        ],
+        [
+          "int32_t",
+          "i2"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalMesh2",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ],
+        [
+          "int32_t",
+          "i1"
+        ],
+        [
+          "int32_t",
+          "i2"
+        ],
+        [
+          "int32_t",
+          "j1"
+        ],
+        [
+          "int32_t",
+          "j2"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalPoint1",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "i"
+        ]
+      ]
+    },
+    {
+      "name": "glEvalPoint2",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "i"
+        ],
+        [
+          "int32_t",
+          "j"
+        ]
+      ]
+    },
+    {
+      "name": "glFeedbackBuffer",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "size"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "float *",
+          "buffer"
+        ]
+      ]
+    },
+    {
+      "name": "glFinish",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glFlush",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glFogf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glFogfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glFogi",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glFogiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glFrontFace",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glFrustum",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "left"
+        ],
+        [
+          "double",
+          "right"
+        ],
+        [
+          "double",
+          "bottom"
+        ],
+        [
+          "double",
+          "top"
+        ],
+        [
+          "double",
+          "near_val"
+        ],
+        [
+          "double",
+          "far_val"
+        ]
+      ]
+    },
+    {
+      "name": "glGenLists",
+      "result": "uint32_t",
+      "arguments": [
+        [
+          "int32_t",
+          "range"
+        ]
+      ]
+    },
+    {
+      "name": "glGenTextures",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "n"
+        ],
+        [
+          "uint32_t *",
+          "textures"
+        ]
+      ]
+    },
+    {
+      "name": "glGetBooleanv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "uint8_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetClipPlane",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "plane"
+        ],
+        [
+          "double *",
+          "equation"
+        ]
+      ]
+    },
+    {
+      "name": "glGetDoublev",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "double *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetError",
+      "result": "uint32_t",
+      "arguments": []
+    },
+    {
+      "name": "glGetFloatv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetIntegerv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetLightfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "light"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetLightiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "light"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetMapdv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "query"
+        ],
+        [
+          "double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glGetMapfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "query"
+        ],
+        [
+          "float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glGetMapiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "query"
+        ],
+        [
+          "int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glGetMaterialfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetMaterialiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetPixelMapfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "map"
+        ],
+        [
+          "float *",
+          "values"
+        ]
+      ]
+    },
+    {
+      "name": "glGetPixelMapuiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "map"
+        ],
+        [
+          "uint32_t *",
+          "values"
+        ]
+      ]
+    },
+    {
+      "name": "glGetPixelMapusv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "map"
+        ],
+        [
+          "uint16_t *",
+          "values"
+        ]
+      ]
+    },
+    {
+      "name": "glGetPointerv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "void * *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetPolygonStipple",
+      "result": "void",
+      "arguments": [
+        [
+          "uint8_t *",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glGetString",
+      "result": "const uint8_t *",
+      "arguments": [
+        [
+          "uint32_t",
+          "name"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexEnvfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexEnviv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexGendv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "double *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexGenfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexGeniv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexImage",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "void *",
+          "pixels"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexLevelParameterfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexLevelParameteriv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexParameterfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glGetTexParameteriv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glHint",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexMask",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexPointer",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "const void *",
+          "ptr"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexd",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexdv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexf",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexfv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexi",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexiv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexs",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexsv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexub",
+      "result": "void",
+      "arguments": [
+        [
+          "uint8_t",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glIndexubv",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint8_t *",
+          "c"
+        ]
+      ]
+    },
+    {
+      "name": "glInitNames",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glInterleavedArrays",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "const void *",
+          "pointer"
+        ]
+      ]
+    },
+    {
+      "name": "glIsEnabled",
+      "result": "uint8_t",
+      "arguments": [
+        [
+          "uint32_t",
+          "cap"
+        ]
+      ]
+    },
+    {
+      "name": "glIsList",
+      "result": "uint8_t",
+      "arguments": [
+        [
+          "uint32_t",
+          "list"
+        ]
+      ]
+    },
+    {
+      "name": "glIsTexture",
+      "result": "uint8_t",
+      "arguments": [
+        [
+          "uint32_t",
+          "texture"
+        ]
+      ]
+    },
+    {
+      "name": "glLightModelf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glLightModelfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glLightModeli",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glLightModeliv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glLightf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "light"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glLightfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "light"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glLighti",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "light"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glLightiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "light"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glLineStipple",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "factor"
+        ],
+        [
+          "uint16_t",
+          "pattern"
+        ]
+      ]
+    },
+    {
+      "name": "glLineWidth",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "width"
+        ]
+      ]
+    },
+    {
+      "name": "glListBase",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "base"
+        ]
+      ]
+    },
+    {
+      "name": "glLoadIdentity",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glLoadMatrixd",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "m"
+        ]
+      ]
+    },
+    {
+      "name": "glLoadMatrixf",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "m"
+        ]
+      ]
+    },
+    {
+      "name": "glLoadName",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "name"
+        ]
+      ]
+    },
+    {
+      "name": "glLogicOp",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "opcode"
+        ]
+      ]
+    },
+    {
+      "name": "glMap1d",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "double",
+          "u1"
+        ],
+        [
+          "double",
+          "u2"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "int32_t",
+          "order"
+        ],
+        [
+          "const double *",
+          "points"
+        ]
+      ]
+    },
+    {
+      "name": "glMap1f",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "float",
+          "u1"
+        ],
+        [
+          "float",
+          "u2"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "int32_t",
+          "order"
+        ],
+        [
+          "const float *",
+          "points"
+        ]
+      ]
+    },
+    {
+      "name": "glMap2d",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "double",
+          "u1"
+        ],
+        [
+          "double",
+          "u2"
+        ],
+        [
+          "int32_t",
+          "ustride"
+        ],
+        [
+          "int32_t",
+          "uorder"
+        ],
+        [
+          "double",
+          "v1"
+        ],
+        [
+          "double",
+          "v2"
+        ],
+        [
+          "int32_t",
+          "vstride"
+        ],
+        [
+          "int32_t",
+          "vorder"
+        ],
+        [
+          "const double *",
+          "points"
+        ]
+      ]
+    },
+    {
+      "name": "glMap2f",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "float",
+          "u1"
+        ],
+        [
+          "float",
+          "u2"
+        ],
+        [
+          "int32_t",
+          "ustride"
+        ],
+        [
+          "int32_t",
+          "uorder"
+        ],
+        [
+          "float",
+          "v1"
+        ],
+        [
+          "float",
+          "v2"
+        ],
+        [
+          "int32_t",
+          "vstride"
+        ],
+        [
+          "int32_t",
+          "vorder"
+        ],
+        [
+          "const float *",
+          "points"
+        ]
+      ]
+    },
+    {
+      "name": "glMapGrid1d",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "un"
+        ],
+        [
+          "double",
+          "u1"
+        ],
+        [
+          "double",
+          "u2"
+        ]
+      ]
+    },
+    {
+      "name": "glMapGrid1f",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "un"
+        ],
+        [
+          "float",
+          "u1"
+        ],
+        [
+          "float",
+          "u2"
+        ]
+      ]
+    },
+    {
+      "name": "glMapGrid2d",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "un"
+        ],
+        [
+          "double",
+          "u1"
+        ],
+        [
+          "double",
+          "u2"
+        ],
+        [
+          "int32_t",
+          "vn"
+        ],
+        [
+          "double",
+          "v1"
+        ],
+        [
+          "double",
+          "v2"
+        ]
+      ]
+    },
+    {
+      "name": "glMapGrid2f",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "un"
+        ],
+        [
+          "float",
+          "u1"
+        ],
+        [
+          "float",
+          "u2"
+        ],
+        [
+          "int32_t",
+          "vn"
+        ],
+        [
+          "float",
+          "v1"
+        ],
+        [
+          "float",
+          "v2"
+        ]
+      ]
+    },
+    {
+      "name": "glMaterialf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glMaterialfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glMateriali",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glMaterialiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glMatrixMode",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glMultMatrixd",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "m"
+        ]
+      ]
+    },
+    {
+      "name": "glMultMatrixf",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "m"
+        ]
+      ]
+    },
+    {
+      "name": "glNewList",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "list"
+        ],
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3b",
+      "result": "void",
+      "arguments": [
+        [
+          "int8_t",
+          "nx"
+        ],
+        [
+          "int8_t",
+          "ny"
+        ],
+        [
+          "int8_t",
+          "nz"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3bv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int8_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "nx"
+        ],
+        [
+          "double",
+          "ny"
+        ],
+        [
+          "double",
+          "nz"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "nx"
+        ],
+        [
+          "float",
+          "ny"
+        ],
+        [
+          "float",
+          "nz"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "nx"
+        ],
+        [
+          "int32_t",
+          "ny"
+        ],
+        [
+          "int32_t",
+          "nz"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "nx"
+        ],
+        [
+          "int16_t",
+          "ny"
+        ],
+        [
+          "int16_t",
+          "nz"
+        ]
+      ]
+    },
+    {
+      "name": "glNormal3sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glNormalPointer",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "const void *",
+          "ptr"
+        ]
+      ]
+    },
+    {
+      "name": "glOrtho",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "left"
+        ],
+        [
+          "double",
+          "right"
+        ],
+        [
+          "double",
+          "bottom"
+        ],
+        [
+          "double",
+          "top"
+        ],
+        [
+          "double",
+          "near_val"
+        ],
+        [
+          "double",
+          "far_val"
+        ]
+      ]
+    },
+    {
+      "name": "glPassThrough",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "token"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelMapfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "map"
+        ],
+        [
+          "int32_t",
+          "mapsize"
+        ],
+        [
+          "const float *",
+          "values"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelMapuiv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "map"
+        ],
+        [
+          "int32_t",
+          "mapsize"
+        ],
+        [
+          "const uint32_t *",
+          "values"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelMapusv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "map"
+        ],
+        [
+          "int32_t",
+          "mapsize"
+        ],
+        [
+          "const uint16_t *",
+          "values"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelStoref",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelStorei",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelTransferf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelTransferi",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glPixelZoom",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "xfactor"
+        ],
+        [
+          "float",
+          "yfactor"
+        ]
+      ]
+    },
+    {
+      "name": "glPointSize",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "size"
+        ]
+      ]
+    },
+    {
+      "name": "glPolygonMode",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "face"
+        ],
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glPolygonOffset",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "factor"
+        ],
+        [
+          "float",
+          "units"
+        ]
+      ]
+    },
+    {
+      "name": "glPolygonStipple",
+      "result": "void",
+      "arguments": [
+        [
+          "const uint8_t *",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glPopAttrib",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glPopClientAttrib",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glPopMatrix",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glPopName",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glPrioritizeTextures",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "n"
+        ],
+        [
+          "const uint32_t *",
+          "textures"
+        ],
+        [
+          "const float *",
+          "priorities"
+        ]
+      ]
+    },
+    {
+      "name": "glPushAttrib",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glPushClientAttrib",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glPushMatrix",
+      "result": "void",
+      "arguments": []
+    },
+    {
+      "name": "glPushName",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "name"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "x"
+        ],
+        [
+          "int16_t",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos2sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ],
+        [
+          "double",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ],
+        [
+          "float",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "x"
+        ],
+        [
+          "int16_t",
+          "y"
+        ],
+        [
+          "int16_t",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos3sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ],
+        [
+          "double",
+          "z"
+        ],
+        [
+          "double",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ],
+        [
+          "float",
+          "z"
+        ],
+        [
+          "float",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "z"
+        ],
+        [
+          "int32_t",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "x"
+        ],
+        [
+          "int16_t",
+          "y"
+        ],
+        [
+          "int16_t",
+          "z"
+        ],
+        [
+          "int16_t",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glRasterPos4sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glReadBuffer",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glReadPixels",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ],
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "void *",
+          "pixels"
+        ]
+      ]
+    },
+    {
+      "name": "glRectd",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x1"
+        ],
+        [
+          "double",
+          "y1"
+        ],
+        [
+          "double",
+          "x2"
+        ],
+        [
+          "double",
+          "y2"
+        ]
+      ]
+    },
+    {
+      "name": "glRectdv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v1"
+        ],
+        [
+          "const double *",
+          "v2"
+        ]
+      ]
+    },
+    {
+      "name": "glRectf",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x1"
+        ],
+        [
+          "float",
+          "y1"
+        ],
+        [
+          "float",
+          "x2"
+        ],
+        [
+          "float",
+          "y2"
+        ]
+      ]
+    },
+    {
+      "name": "glRectfv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v1"
+        ],
+        [
+          "const float *",
+          "v2"
+        ]
+      ]
+    },
+    {
+      "name": "glRecti",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x1"
+        ],
+        [
+          "int32_t",
+          "y1"
+        ],
+        [
+          "int32_t",
+          "x2"
+        ],
+        [
+          "int32_t",
+          "y2"
+        ]
+      ]
+    },
+    {
+      "name": "glRectiv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v1"
+        ],
+        [
+          "const int32_t *",
+          "v2"
+        ]
+      ]
+    },
+    {
+      "name": "glRects",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "x1"
+        ],
+        [
+          "int16_t",
+          "y1"
+        ],
+        [
+          "int16_t",
+          "x2"
+        ],
+        [
+          "int16_t",
+          "y2"
+        ]
+      ]
+    },
+    {
+      "name": "glRectsv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v1"
+        ],
+        [
+          "const int16_t *",
+          "v2"
+        ]
+      ]
+    },
+    {
+      "name": "glRenderMode",
+      "result": "int32_t",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glRotated",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "angle"
+        ],
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ],
+        [
+          "double",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glRotatef",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "angle"
+        ],
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ],
+        [
+          "float",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glScaled",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ],
+        [
+          "double",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glScalef",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ],
+        [
+          "float",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glScissor",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ]
+      ]
+    },
+    {
+      "name": "glSelectBuffer",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "size"
+        ],
+        [
+          "uint32_t *",
+          "buffer"
+        ]
+      ]
+    },
+    {
+      "name": "glShadeModel",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mode"
+        ]
+      ]
+    },
+    {
+      "name": "glStencilFunc",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "func"
+        ],
+        [
+          "int32_t",
+          "ref"
+        ],
+        [
+          "uint32_t",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glStencilMask",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "mask"
+        ]
+      ]
+    },
+    {
+      "name": "glStencilOp",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "fail"
+        ],
+        [
+          "uint32_t",
+          "zfail"
+        ],
+        [
+          "uint32_t",
+          "zpass"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "s"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "s"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "s"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "s"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord1sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "s"
+        ],
+        [
+          "double",
+          "t"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "s"
+        ],
+        [
+          "float",
+          "t"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "s"
+        ],
+        [
+          "int32_t",
+          "t"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "s"
+        ],
+        [
+          "int16_t",
+          "t"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord2sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "s"
+        ],
+        [
+          "double",
+          "t"
+        ],
+        [
+          "double",
+          "r"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "s"
+        ],
+        [
+          "float",
+          "t"
+        ],
+        [
+          "float",
+          "r"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "s"
+        ],
+        [
+          "int32_t",
+          "t"
+        ],
+        [
+          "int32_t",
+          "r"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "s"
+        ],
+        [
+          "int16_t",
+          "t"
+        ],
+        [
+          "int16_t",
+          "r"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord3sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "s"
+        ],
+        [
+          "double",
+          "t"
+        ],
+        [
+          "double",
+          "r"
+        ],
+        [
+          "double",
+          "q"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "s"
+        ],
+        [
+          "float",
+          "t"
+        ],
+        [
+          "float",
+          "r"
+        ],
+        [
+          "float",
+          "q"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "s"
+        ],
+        [
+          "int32_t",
+          "t"
+        ],
+        [
+          "int32_t",
+          "r"
+        ],
+        [
+          "int32_t",
+          "q"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "s"
+        ],
+        [
+          "int16_t",
+          "t"
+        ],
+        [
+          "int16_t",
+          "r"
+        ],
+        [
+          "int16_t",
+          "q"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoord4sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glTexCoordPointer",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "size"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "const void *",
+          "ptr"
+        ]
+      ]
+    },
+    {
+      "name": "glTexEnvf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glTexEnvfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glTexEnvi",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glTexEnviv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glTexGend",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "double",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glTexGendv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const double *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glTexGenf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glTexGenfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glTexGeni",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glTexGeniv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "coord"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glTexImage1D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "int32_t",
+          "internalFormat"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "border"
+        ],
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "const void *",
+          "pixels"
+        ]
+      ]
+    },
+    {
+      "name": "glTexImage2D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "int32_t",
+          "internalFormat"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ],
+        [
+          "int32_t",
+          "border"
+        ],
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "const void *",
+          "pixels"
+        ]
+      ]
+    },
+    {
+      "name": "glTexParameterf",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "float",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glTexParameterfv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const float *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glTexParameteri",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "int32_t",
+          "param"
+        ]
+      ]
+    },
+    {
+      "name": "glTexParameteriv",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "uint32_t",
+          "pname"
+        ],
+        [
+          "const int32_t *",
+          "params"
+        ]
+      ]
+    },
+    {
+      "name": "glTexSubImage1D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "int32_t",
+          "xoffset"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "const void *",
+          "pixels"
+        ]
+      ]
+    },
+    {
+      "name": "glTexSubImage2D",
+      "result": "void",
+      "arguments": [
+        [
+          "uint32_t",
+          "target"
+        ],
+        [
+          "int32_t",
+          "level"
+        ],
+        [
+          "int32_t",
+          "xoffset"
+        ],
+        [
+          "int32_t",
+          "yoffset"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ],
+        [
+          "uint32_t",
+          "format"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "const void *",
+          "pixels"
+        ]
+      ]
+    },
+    {
+      "name": "glTranslated",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ],
+        [
+          "double",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glTranslatef",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ],
+        [
+          "float",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "x"
+        ],
+        [
+          "int16_t",
+          "y"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex2sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ],
+        [
+          "double",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ],
+        [
+          "float",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "x"
+        ],
+        [
+          "int16_t",
+          "y"
+        ],
+        [
+          "int16_t",
+          "z"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex3sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4d",
+      "result": "void",
+      "arguments": [
+        [
+          "double",
+          "x"
+        ],
+        [
+          "double",
+          "y"
+        ],
+        [
+          "double",
+          "z"
+        ],
+        [
+          "double",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4dv",
+      "result": "void",
+      "arguments": [
+        [
+          "const double *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4f",
+      "result": "void",
+      "arguments": [
+        [
+          "float",
+          "x"
+        ],
+        [
+          "float",
+          "y"
+        ],
+        [
+          "float",
+          "z"
+        ],
+        [
+          "float",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4fv",
+      "result": "void",
+      "arguments": [
+        [
+          "const float *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4i",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "z"
+        ],
+        [
+          "int32_t",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4iv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int32_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4s",
+      "result": "void",
+      "arguments": [
+        [
+          "int16_t",
+          "x"
+        ],
+        [
+          "int16_t",
+          "y"
+        ],
+        [
+          "int16_t",
+          "z"
+        ],
+        [
+          "int16_t",
+          "w"
+        ]
+      ]
+    },
+    {
+      "name": "glVertex4sv",
+      "result": "void",
+      "arguments": [
+        [
+          "const int16_t *",
+          "v"
+        ]
+      ]
+    },
+    {
+      "name": "glVertexPointer",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "size"
+        ],
+        [
+          "uint32_t",
+          "type"
+        ],
+        [
+          "int32_t",
+          "stride"
+        ],
+        [
+          "const void *",
+          "ptr"
+        ]
+      ]
+    },
+    {
+      "name": "glViewport",
+      "result": "void",
+      "arguments": [
+        [
+          "int32_t",
+          "x"
+        ],
+        [
+          "int32_t",
+          "y"
+        ],
+        [
+          "int32_t",
+          "width"
+        ],
+        [
+          "int32_t",
+          "height"
+        ]
+      ]
+    }
+  ],
+  "ordinals": {
+    "warp": {
+      "pglCreateContext": 1,
+      "pglMakeCurrent": 2,
+      "pglChooseConfig": 3,
+      "pglQueryConfigs": 4,
+      "pglDestroyContext": 5,
+      "pglCopyContext": 6,
+      "pglIsIndirect": 7,
+      "pglSelectColorIndexPalette": 8,
+      "pglUseFont": 9,
+      "pglGetCurrentContext": 10,
+      "pglGetCurrentWindow": 11,
+      "pglWaitGL": 12,
+      "pglWaitPM": 13,
+      "pglSwapBuffers": 14,
+      "pglQueryCapability": 15,
+      "pglQueryVersion": 16,
+      "pglUsePMBitmapFont": 17,
+      "pglGrabFrontBitmap": 18,
+      "pglReleaseFrontBitmap": 19,
+      "glAccum": 20,
+      "glAlphaFunc": 21,
+      "glBegin": 22,
+      "glBitmap": 23,
+      "glBlendFunc": 24,
+      "glCallList": 25,
+      "glCallLists": 26,
+      "glClear": 27,
+      "glClearAccum": 28,
+      "glClearColor": 29,
+      "glClearDepth": 30,
+      "glClearIndex": 31,
+      "glClearStencil": 32,
+      "glClipPlane": 33,
+      "glColor3b": 34,
+      "glColor3bv": 35,
+      "glColor3d": 36,
+      "glColor3dv": 37,
+      "glColor3f": 38,
+      "glColor3fv": 39,
+      "glColor3i": 40,
+      "glColor3iv": 41,
+      "glColor3s": 42,
+      "glColor3sv": 43,
+      "glColor3ub": 44,
+      "glColor3ubv": 45,
+      "glColor3ui": 46,
+      "glColor3uiv": 47,
+      "glColor3us": 48,
+      "glColor3usv": 49,
+      "glColor4b": 50,
+      "glColor4bv": 51,
+      "glColor4d": 52,
+      "glColor4dv": 53,
+      "glColor4f": 54,
+      "glColor4fv": 55,
+      "glColor4i": 56,
+      "glColor4iv": 57,
+      "glColor4s": 58,
+      "glColor4sv": 59,
+      "glColor4ub": 60,
+      "glColor4ubv": 61,
+      "glColor4ui": 62,
+      "glColor4uiv": 63,
+      "glColor4us": 64,
+      "glColor4usv": 65,
+      "glColorMask": 66,
+      "glColorMaterial": 67,
+      "glCopyPixels": 68,
+      "glCullFace": 69,
+      "glDeleteLists": 70,
+      "glDepthFunc": 71,
+      "glDepthMask": 72,
+      "glDepthRange": 73,
+      "glDisable": 74,
+      "glDrawBuffer": 75,
+      "glDrawPixels": 76,
+      "glEdgeFlag": 77,
+      "glEdgeFlagv": 78,
+      "glEnable": 79,
+      "glEnd": 80,
+      "glEndList": 81,
+      "glEvalCoord1d": 82,
+      "glEvalCoord1dv": 83,
+      "glEvalCoord1f": 84,
+      "glEvalCoord1fv": 85,
+      "glEvalCoord2d": 86,
+      "glEvalCoord2dv": 87,
+      "glEvalCoord2f": 88,
+      "glEvalCoord2fv": 89,
+      "glEvalMesh1": 90,
+      "glEvalMesh2": 91,
+      "glEvalPoint1": 92,
+      "glEvalPoint2": 93,
+      "glFeedbackBuffer": 94,
+      "glFinish": 95,
+      "glFlush": 96,
+      "glFogf": 97,
+      "glFogfv": 98,
+      "glFogi": 99,
+      "glFogiv": 100,
+      "glFrontFace": 101,
+      "glFrustum": 102,
+      "glGenLists": 103,
+      "glGetBooleanv": 104,
+      "glGetClipPlane": 105,
+      "glGetDoublev": 106,
+      "glGetError": 107,
+      "glGetFloatv": 108,
+      "glGetIntegerv": 109,
+      "glGetLightfv": 110,
+      "glGetLightiv": 111,
+      "glGetMapdv": 112,
+      "glGetMapfv": 113,
+      "glGetMapiv": 114,
+      "glGetMaterialfv": 115,
+      "glGetMaterialiv": 116,
+      "glGetPixelMapfv": 117,
+      "glGetPixelMapuiv": 118,
+      "glGetPixelMapusv": 119,
+      "glGetPolygonStipple": 120,
+      "glGetString": 121,
+      "glGetTexEnvfv": 122,
+      "glGetTexEnviv": 123,
+      "glGetTexGendv": 124,
+      "glGetTexGenfv": 125,
+      "glGetTexGeniv": 126,
+      "glGetTexImage": 127,
+      "glGetTexLevelParameterfv": 128,
+      "glGetTexLevelParameteriv": 129,
+      "glGetTexParameterfv": 130,
+      "glGetTexParameteriv": 131,
+      "glHint": 132,
+      "glIndexMask": 133,
+      "glIndexd": 134,
+      "glIndexdv": 135,
+      "glIndexf": 136,
+      "glIndexfv": 137,
+      "glIndexi": 138,
+      "glIndexiv": 139,
+      "glIndexs": 140,
+      "glIndexsv": 141,
+      "glInitNames": 142,
+      "glIsEnabled": 143,
+      "glIsList": 144,
+      "glLightModelf": 145,
+      "glLightModelfv": 146,
+      "glLightModeli": 147,
+      "glLightModeliv": 148,
+      "glLightf": 149,
+      "glLightfv": 150,
+      "glLighti": 151,
+      "glLightiv": 152,
+      "glLineStipple": 153,
+      "glLineWidth": 154,
+      "glListBase": 155,
+      "glLoadIdentity": 156,
+      "glLoadMatrixd": 157,
+      "glLoadMatrixf": 158,
+      "glLoadName": 159,
+      "glLogicOp": 160,
+      "glMap1d": 161,
+      "glMap1f": 162,
+      "glMap2d": 163,
+      "glMap2f": 164,
+      "glMapGrid1d": 165,
+      "glMapGrid1f": 166,
+      "glMapGrid2d": 167,
+      "glMapGrid2f": 168,
+      "glMaterialf": 169,
+      "glMaterialfv": 170,
+      "glMateriali": 171,
+      "glMaterialiv": 172,
+      "glMatrixMode": 173,
+      "glMultMatrixd": 174,
+      "glMultMatrixf": 175,
+      "glNewList": 176,
+      "glNormal3b": 177,
+      "glNormal3bv": 178,
+      "glNormal3d": 179,
+      "glNormal3dv": 180,
+      "glNormal3f": 181,
+      "glNormal3fv": 182,
+      "glNormal3i": 183,
+      "glNormal3iv": 184,
+      "glNormal3s": 185,
+      "glNormal3sv": 186,
+      "glOrtho": 187,
+      "glPassThrough": 188,
+      "glPixelMapfv": 189,
+      "glPixelMapuiv": 190,
+      "glPixelMapusv": 191,
+      "glPixelStoref": 192,
+      "glPixelStorei": 193,
+      "glPixelTransferf": 194,
+      "glPixelTransferi": 195,
+      "glPixelZoom": 196,
+      "glPointSize": 197,
+      "glPolygonMode": 198,
+      "glPolygonStipple": 199,
+      "glPopAttrib": 200,
+      "glPopMatrix": 201,
+      "glPopName": 202,
+      "glPushAttrib": 203,
+      "glPushMatrix": 204,
+      "glPushName": 205,
+      "glRasterPos2d": 206,
+      "glRasterPos2dv": 207,
+      "glRasterPos2f": 208,
+      "glRasterPos2fv": 209,
+      "glRasterPos2i": 210,
+      "glRasterPos2iv": 211,
+      "glRasterPos2s": 212,
+      "glRasterPos2sv": 213,
+      "glRasterPos3d": 214,
+      "glRasterPos3dv": 215,
+      "glRasterPos3f": 216,
+      "glRasterPos3fv": 217,
+      "glRasterPos3i": 218,
+      "glRasterPos3iv": 219,
+      "glRasterPos3s": 220,
+      "glRasterPos3sv": 221,
+      "glRasterPos4d": 222,
+      "glRasterPos4dv": 223,
+      "glRasterPos4f": 224,
+      "glRasterPos4fv": 225,
+      "glRasterPos4i": 226,
+      "glRasterPos4iv": 227,
+      "glRasterPos4s": 228,
+      "glRasterPos4sv": 229,
+      "glReadBuffer": 230,
+      "glReadPixels": 231,
+      "glRectd": 232,
+      "glRectdv": 233,
+      "glRectf": 234,
+      "glRectfv": 235,
+      "glRecti": 236,
+      "glRectiv": 237,
+      "glRects": 238,
+      "glRectsv": 239,
+      "glRenderMode": 240,
+      "glRotated": 241,
+      "glRotatef": 242,
+      "glScaled": 243,
+      "glScalef": 244,
+      "glScissor": 245,
+      "glSelectBuffer": 246,
+      "glShadeModel": 247,
+      "glStencilFunc": 248,
+      "glStencilMask": 249,
+      "glStencilOp": 250,
+      "glTexCoord1d": 251,
+      "glTexCoord1dv": 252,
+      "glTexCoord1f": 253,
+      "glTexCoord1fv": 254,
+      "glTexCoord1i": 255,
+      "glTexCoord1iv": 256,
+      "glTexCoord1s": 257,
+      "glTexCoord1sv": 258,
+      "glTexCoord2d": 259,
+      "glTexCoord2dv": 260,
+      "glTexCoord2f": 261,
+      "glTexCoord2fv": 262,
+      "glTexCoord2i": 263,
+      "glTexCoord2iv": 264,
+      "glTexCoord2s": 265,
+      "glTexCoord2sv": 266,
+      "glTexCoord3d": 267,
+      "glTexCoord3dv": 268,
+      "glTexCoord3f": 269,
+      "glTexCoord3fv": 270,
+      "glTexCoord3i": 271,
+      "glTexCoord3iv": 272,
+      "glTexCoord3s": 273,
+      "glTexCoord3sv": 274,
+      "glTexCoord4d": 275,
+      "glTexCoord4dv": 276,
+      "glTexCoord4f": 277,
+      "glTexCoord4fv": 278,
+      "glTexCoord4i": 279,
+      "glTexCoord4iv": 280,
+      "glTexCoord4s": 281,
+      "glTexCoord4sv": 282,
+      "glTexEnvf": 283,
+      "glTexEnvfv": 284,
+      "glTexEnvi": 285,
+      "glTexEnviv": 286,
+      "glTexGend": 287,
+      "glTexGendv": 288,
+      "glTexGenf": 289,
+      "glTexGenfv": 290,
+      "glTexGeni": 291,
+      "glTexGeniv": 292,
+      "glTexImage1D": 293,
+      "glTexImage2D": 294,
+      "glTexParameterf": 295,
+      "glTexParameterfv": 296,
+      "glTexParameteri": 297,
+      "glTexParameteriv": 298,
+      "glTranslated": 299,
+      "glTranslatef": 300,
+      "glVertex2d": 301,
+      "glVertex2dv": 302,
+      "glVertex2f": 303,
+      "glVertex2fv": 304,
+      "glVertex2i": 305,
+      "glVertex2iv": 306,
+      "glVertex2s": 307,
+      "glVertex2sv": 308,
+      "glVertex3d": 309,
+      "glVertex3dv": 310,
+      "glVertex3f": 311,
+      "glVertex3fv": 312,
+      "glVertex3i": 313,
+      "glVertex3iv": 314,
+      "glVertex3s": 315,
+      "glVertex3sv": 316,
+      "glVertex4d": 317,
+      "glVertex4dv": 318,
+      "glVertex4f": 319,
+      "glVertex4fv": 320,
+      "glVertex4i": 321,
+      "glVertex4iv": 322,
+      "glVertex4s": 323,
+      "glVertex4sv": 324,
+      "glViewport": 325,
+      "gluErrorString": 326,
+      "gluOrtho2D": 327,
+      "gluPerspective": 328,
+      "gluPickMatrix": 329,
+      "gluLookAt": 330,
+      "gluProject": 331,
+      "gluUnProject": 332,
+      "gluScaleImage": 333,
+      "gluBuild1DMipmaps": 334,
+      "gluBuild2DMipmaps": 335,
+      "gluNewQuadric": 336,
+      "gluDeleteQuadric": 337,
+      "gluQuadricNormals": 338,
+      "gluQuadricTexture": 339,
+      "gluQuadricOrientation": 340,
+      "gluQuadricDrawStyle": 341,
+      "gluCylinder": 342,
+      "gluDisk": 343,
+      "gluPartialDisk": 344,
+      "gluSphere": 345,
+      "gluQuadricCallback": 346,
+      "gluNewTess": 347,
+      "gluTessCallback": 348,
+      "gluDeleteTess": 349,
+      "gluBeginPolygon": 350,
+      "gluEndPolygon": 351,
+      "gluNextContour": 352,
+      "gluTessVertex": 353,
+      "gluNewNurbsRenderer": 354,
+      "gluDeleteNurbsRenderer": 355,
+      "gluBeginSurface": 356,
+      "gluBeginCurve": 357,
+      "gluEndCurve": 358,
+      "gluEndSurface": 359,
+      "gluBeginTrim": 360,
+      "gluEndTrim": 361,
+      "gluPwlCurve": 362,
+      "gluNurbsCurve": 363,
+      "gluNurbsSurface": 364,
+      "gluLoadSamplingMatrices": 365,
+      "gluNurbsProperty": 366,
+      "gluGetNurbsProperty": 367,
+      "gluNurbsCallback": 368,
+      "gluGetString": 369
+    },
+    "gold11": {
+      "gluTessBeginContour": 1,
+      "glAreTexturesResident": 2,
+      "gluQuadricOrientation": 3,
+      "pglReleaseFrontBitmap": 4,
+      "glEvalMesh1": 5,
+      "glEvalMesh2": 6,
+      "gluGetNurbsProperty": 7,
+      "glPrioritizeTextures": 8,
+      "glTexImage1D": 9,
+      "glTexImage2D": 10,
+      "glTexCoord1d": 11,
+      "glTexCoord1f": 12,
+      "glTexCoord1i": 13,
+      "glTexCoord2d": 14,
+      "glTexCoord2f": 15,
+      "glTexCoord2i": 16,
+      "glTexCoord1s": 17,
+      "glTexCoord3d": 18,
+      "glTexCoord3f": 19,
+      "glTexCoord3i": 20,
+      "glTexCoord2s": 21,
+      "glTexCoord4d": 22,
+      "glTexCoord4f": 23,
+      "glTexCoord4i": 24,
+      "glTexCoord3s": 25,
+      "glMapGrid1d": 26,
+      "glMapGrid2d": 27,
+      "glTexCoord4s": 28,
+      "glMapGrid1f": 29,
+      "glMapGrid2f": 30,
+      "glAlphaFunc": 31,
+      "glIsEnabled": 32,
+      "glBlendFunc": 33,
+      "glNormal3bv": 34,
+      "glNormal3dv": 35,
+      "glDepthFunc": 36,
+      "glEdgeFlagv": 37,
+      "glNormal3fv": 38,
+      "glClipPlane": 39,
+      "glNormal3iv": 40,
+      "glDrawBuffer": 41,
+      "glFrontFace": 42,
+      "glTexCoord1dv": 43,
+      "glTexCoord1fv": 44,
+      "glTexCoord1iv": 45,
+      "glTexCoord2dv": 46,
+      "glTexCoord2fv": 47,
+      "glTexCoord2iv": 48,
+      "glTexCoord1sv": 49,
+      "glTexCoord3dv": 50,
+      "glDepthMask": 51,
+      "glTexCoord3fv": 52,
+      "glTexCoord3iv": 53,
+      "glReadBuffer": 54,
+      "glTexCoord2sv": 55,
+      "glNormal3sv": 56,
+      "glTexCoord4dv": 57,
+      "glTexCoord4fv": 58,
+      "glTexCoord4iv": 59,
+      "glTexCoord3sv": 60,
+      "glClearIndex": 61,
+      "glTexCoord4sv": 62,
+      "glMaterialf": 63,
+      "gluDeleteNurbsRenderer": 64,
+      "gluEndCurve": 65,
+      "glShadeModel": 66,
+      "glMateriali": 67,
+      "glColorMask": 68,
+      "glPopAttrib": 69,
+      "glDepthRange": 70,
+      "glColor3ubv": 71,
+      "glColor4ubv": 72,
+      "glVertex2dv": 73,
+      "glVertex3dv": 74,
+      "glVertex4dv": 75,
+      "glGetDoublev": 76,
+      "glVertex2fv": 77,
+      "glVertex3fv": 78,
+      "glRenderMode": 79,
+      "glCallLists": 80,
+      "glVertex4fv": 81,
+      "glColor3uiv": 82,
+      "glColor4uiv": 83,
+      "glVertex2iv": 84,
+      "glVertex3iv": 85,
+      "glStencilOp": 86,
+      "glVertex4iv": 87,
+      "glIndexMask": 88,
+      "glGetString": 89,
+      "gluPwlCurve": 90,
+      "glClearAccum": 91,
+      "glGetLightfv": 92,
+      "glGetFloatv": 93,
+      "glInitNames": 94,
+      "glLineWidth": 95,
+      "glClearColor": 96,
+      "glGetLightiv": 97,
+      "glColor3usv": 98,
+      "glIsTexture": 99,
+      "glColor4usv": 100,
+      "glPopMatrix": 101,
+      "glPixelZoom": 102,
+      "glVertex2sv": 103,
+      "glVertex3sv": 104,
+      "glVertex4sv": 105,
+      "glDrawArrays": 106,
+      "gluCylinder": 107,
+      "glPushAttrib": 108,
+      "glMatrixMode": 109,
+      "glMaterialfv": 110,
+      "glEvalCoord1d": 111,
+      "glEvalCoord2d": 112,
+      "glClearDepth": 113,
+      "glEvalPoint1": 114,
+      "glEvalCoord1f": 115,
+      "glEvalPoint2": 116,
+      "glEvalCoord2f": 117,
+      "glPixelMapfv": 118,
+      "glPointSize": 119,
+      "glMaterialiv": 120,
+      "glDrawPixels": 121,
+      "glReadPixels": 122,
+      "gluBeginTrim": 123,
+      "glCopyPixels": 124,
+      "gluUnProject": 125,
+      "glTranslated": 126,
+      "glTranslatef": 127,
+      "glPushMatrix": 128,
+      "glGetTexImage": 129,
+      "glGetBooleanv": 130,
+      "gluScaleImage": 131,
+      "glStencilMask": 132,
+      "glGetIntegerv": 133,
+      "gluDeleteMesh": 134,
+      "pglConfigList": 135,
+      "glLightModelf": 136,
+      "gluGetString": 137,
+      "glGetTexGendv": 138,
+      "glLightModeli": 139,
+      "glGetTexGenfv": 140,
+      "glGetTexGeniv": 141,
+      "glLoadMatrixd": 142,
+      "glLoadMatrixf": 143,
+      "pglIsIndirect": 144,
+      "gluEndSurface": 145,
+      "gluDeleteTess": 146,
+      "glGetPointerv": 147,
+      "glStencilFunc": 148,
+      "glDeleteLists": 149,
+      "glRasterPos2d": 150,
+      "glRasterPos3d": 151,
+      "glRasterPos4d": 152,
+      "glRasterPos2f": 153,
+      "glRasterPos3f": 154,
+      "glRasterPos4f": 155,
+      "glGetTexEnvfv": 156,
+      "glRasterPos2i": 157,
+      "glRasterPos3i": 158,
+      "glRasterPos4i": 159,
+      "glGetTexEnviv": 160,
+      "glGenTextures": 161,
+      "glMultMatrixd": 162,
+      "glPolygonMode": 163,
+      "glMultMatrixf": 164,
+      "glLineStipple": 165,
+      "glRasterPos2s": 166,
+      "glBindTexture": 167,
+      "glRasterPos3s": 168,
+      "glRasterPos4s": 169,
+      "gluBeginCurve": 170,
+      "glPixelStoref": 171,
+      "gluEndPolygon": 172,
+      "glPixelStorei": 173,
+      "gluNurbsCurve": 174,
+      "gluPickMatrix": 175,
+      "glPixelMapuiv": 176,
+      "glPixelMapusv": 177,
+      "gluNewQuadric": 178,
+      "gluTessNormal": 179,
+      "glPassThrough": 180,
+      "glEvalCoord1dv": 181,
+      "glEvalCoord2dv": 182,
+      "glEvalCoord1fv": 183,
+      "glEvalCoord2fv": 184,
+      "gluTessVertex": 185,
+      "pglInternalGetCharBitmap": 186,
+      "glDrawElements": 187,
+      "glClearStencil": 188,
+      "glGetClipPlane": 189,
+      "glSelectBuffer": 190,
+      "glGetTexLevelParameterfv": 191,
+      "glLightModelfv": 192,
+      "pglSwapBuffers": 193,
+      "glLightModeliv": 194,
+      "glArrayElement": 195,
+      "glGetTexLevelParameteriv": 196,
+      "glColorPointer": 197,
+      "pglMakeCurrent": 198,
+      "gluLoadSamplingMatrices": 199,
+      "glLoadIdentity": 200,
+      "gluPartialDisk": 201,
+      "glIndexPointer": 202,
+      "glRasterPos2dv": 203,
+      "glRasterPos3dv": 204,
+      "glRasterPos4dv": 205,
+      "glRasterPos2fv": 206,
+      "glRasterPos3fv": 207,
+      "glRasterPos4fv": 208,
+      "glRasterPos2iv": 209,
+      "glRasterPos3iv": 210,
+      "glRasterPos4iv": 211,
+      "glRasterPos2sv": 212,
+      "glRasterPos3sv": 213,
+      "glRasterPos4sv": 214,
+      "gluPerspective": 215,
+      "gluErrorString": 216,
+      "pglCopyContext": 217,
+      "gluNextContour": 218,
+      "glEnd": 219,
+      "glCopyTexImage1D": 220,
+      "glCopyTexImage2D": 221,
+      "glFeedbackBuffer": 222,
+      "glTexSubImage1D": 223,
+      "glTexSubImage2D": 224,
+      "pglSelectColorIndexPalette": 225,
+      "glColorMaterial": 226,
+      "glFogf": 227,
+      "glTexParameterf": 228,
+      "glFogi": 229,
+      "glGetMaterialfv": 230,
+      "glTexParameteri": 231,
+      "pglChooseConfig": 232,
+      "glGetMaterialiv": 233,
+      "gluNurbsCallback": 234,
+      "glNormalPointer": 235,
+      "gluBeginSurface": 236,
+      "glHint": 237,
+      "glGetPixelMapfv": 238,
+      "gluNurbsSurface": 239,
+      "glTexParameterfv": 240,
+      "gluTessCallback": 241,
+      "glTexParameteriv": 242,
+      "gluBeginPolygon": 243,
+      "glPolygonOffset": 244,
+      "pglCreateContext": 245,
+      "pglQueryConfigs": 246,
+      "glGetPixelMapuiv": 247,
+      "glVertexPointer": 248,
+      "pglQueryVersion": 249,
+      "glPixelTransferf": 250,
+      "glPixelTransferi": 251,
+      "glDeleteTextures": 252,
+      "gluDeleteQuadric": 253,
+      "glGetPixelMapusv": 254,
+      "gluBuild1DMipmaps": 255,
+      "gluBuild2DMipmaps": 256,
+      "gluQuadricNormals": 257,
+      "glEdgeFlagPointer": 258,
+      "glPolygonStipple": 259,
+      "gluNurbsProperty": 260,
+      "gluTessProperty": 261,
+      "pglDestroyContext": 262,
+      "glPopClientAttrib": 263,
+      "gluTessEndContour": 264,
+      "gluQuadricTexture": 265,
+      "glTexCoordPointer": 266,
+      "gluTessEndPolygon": 267,
+      "gluQuadricCallback": 268,
+      "glMap1d": 269,
+      "glMap2d": 270,
+      "glMap1f": 271,
+      "glMap2f": 272,
+      "pglGrabFrontBitmap": 273,
+      "glPushClientAttrib": 274,
+      "glBegin": 275,
+      "glClear": 276,
+      "glAccum": 277,
+      "pglUsePMBitmapFont": 278,
+      "pglQueryCapability": 279,
+      "glBitmap": 280,
+      "glFlush": 281,
+      "glEnable": 282,
+      "glRectd": 283,
+      "glFogfv": 284,
+      "glRectf": 285,
+      "glFogiv": 286,
+      "glRecti": 287,
+      "pglNoop": 288,
+      "glOrtho": 289,
+      "glScaled": 290,
+      "glScalef": 291,
+      "gluDisk": 292,
+      "glFinish": 293,
+      "glRectdv": 294,
+      "glRects": 295,
+      "glRectfv": 296,
+      "glIndexd": 297,
+      "glIndexf": 298,
+      "glDisable": 299,
+      "glIndexi": 300,
+      "glLightf": 301,
+      "glLighti": 302,
+      "glIsList": 303,
+      "glIndexs": 304,
+      "glRectiv": 305,
+      "gluGetTessProperty": 306,
+      "glRectsv": 307,
+      "glColor3b": 308,
+      "glColor4b": 309,
+      "glColor3d": 310,
+      "glColor4d": 311,
+      "glLogicOp": 312,
+      "glColor3f": 313,
+      "glColor4f": 314,
+      "glColor3i": 315,
+      "glEndList": 316,
+      "glColor4i": 317,
+      "glColor3s": 318,
+      "glColor4s": 319,
+      "glPopName": 320,
+      "glTexGend": 321,
+      "glTexGenf": 322,
+      "glTexGeni": 323,
+      "gluSphere": 324,
+      "glIndexub": 325,
+      "glNewList": 326,
+      "pglWaitGL": 327,
+      "glIndexdv": 328,
+      "glIndexfv": 329,
+      "pglWaitPM": 330,
+      "glIndexiv": 331,
+      "glLightfv": 332,
+      "glLightiv": 333,
+      "glIndexsv": 334,
+      "glRotated": 335,
+      "glTexEnvf": 336,
+      "glRotatef": 337,
+      "glTexEnvi": 338,
+      "glFrustum": 339,
+      "gluLookAt": 340,
+      "glScissor": 341,
+      "glCopyTexSubImage1D": 342,
+      "glCopyTexSubImage2D": 343,
+      "glNormal3b": 344,
+      "glNormal3d": 345,
+      "glEdgeFlag": 346,
+      "glNormal3f": 347,
+      "glNormal3i": 348,
+      "glCullFace": 349,
+      "glNormal3s": 350,
+      "glEnableClientState": 351,
+      "glColor3ub": 352,
+      "glColor4ub": 353,
+      "glGetMapdv": 354,
+      "glGetMapfv": 355,
+      "glGetMapiv": 356,
+      "glVertex2d": 357,
+      "glVertex3d": 358,
+      "glLoadName": 359,
+      "glVertex4d": 360,
+      "glVertex2f": 361,
+      "glVertex3f": 362,
+      "glVertex4f": 363,
+      "glListBase": 364,
+      "glColor3ui": 365,
+      "glColor4ui": 366,
+      "gluOrtho2D": 367,
+      "glVertex2i": 368,
+      "glVertex3i": 369,
+      "glVertex4i": 370,
+      "glColor3bv": 371,
+      "glColor4bv": 372,
+      "glColor3dv": 373,
+      "glColor4dv": 374,
+      "glCallList": 375,
+      "glColor3fv": 376,
+      "glColor4fv": 377,
+      "gluQuadricDrawStyle": 378,
+      "glColor3iv": 379,
+      "glColor4iv": 380,
+      "glColor3us": 381,
+      "glColor4us": 382,
+      "pglUseFont": 383,
+      "glGenLists": 384,
+      "glVertex2s": 385,
+      "glVertex3s": 386,
+      "glColor3sv": 387,
+      "glColor4sv": 388,
+      "glVertex4s": 389,
+      "glDisableClientState": 390,
+      "glPushName": 391,
+      "glGetError": 392,
+      "glTexGendv": 393,
+      "glTexGenfv": 394,
+      "glGetPolygonStipple": 395,
+      "glTexGeniv": 396,
+      "glIndexubv": 397,
+      "pglGetCurrentWindow": 398,
+      "glGetTexParameterfv": 399,
+      "glGetTexParameteriv": 400,
+      "gluProject": 401,
+      "gluEndTrim": 402,
+      "glTexEnvfv": 403,
+      "glTexEnviv": 404,
+      "glInterleavedArrays": 405,
+      "gluNewNurbsRenderer": 406,
+      "gluTessBeginPolygon": 407,
+      "pglGetCurrentContext": 408,
+      "glViewport": 409,
+      "gluNewTess": 410
+    }
+  },
+  "constants": {
+    "GL_VERSION_1_1": 1,
+    "GL_FALSE": 0,
+    "GL_TRUE": 1,
+    "GL_BYTE": 5120,
+    "GL_UNSIGNED_BYTE": 5121,
+    "GL_SHORT": 5122,
+    "GL_UNSIGNED_SHORT": 5123,
+    "GL_INT": 5124,
+    "GL_UNSIGNED_INT": 5125,
+    "GL_FLOAT": 5126,
+    "GL_DOUBLE": 5130,
+    "GL_2_BYTES": 5127,
+    "GL_3_BYTES": 5128,
+    "GL_4_BYTES": 5129,
+    "GL_POINTS": 0,
+    "GL_LINES": 1,
+    "GL_LINE_LOOP": 2,
+    "GL_LINE_STRIP": 3,
+    "GL_TRIANGLES": 4,
+    "GL_TRIANGLE_STRIP": 5,
+    "GL_TRIANGLE_FAN": 6,
+    "GL_QUADS": 7,
+    "GL_QUAD_STRIP": 8,
+    "GL_POLYGON": 9,
+    "GL_VERTEX_ARRAY": 32884,
+    "GL_NORMAL_ARRAY": 32885,
+    "GL_COLOR_ARRAY": 32886,
+    "GL_INDEX_ARRAY": 32887,
+    "GL_TEXTURE_COORD_ARRAY": 32888,
+    "GL_EDGE_FLAG_ARRAY": 32889,
+    "GL_VERTEX_ARRAY_SIZE": 32890,
+    "GL_VERTEX_ARRAY_TYPE": 32891,
+    "GL_VERTEX_ARRAY_STRIDE": 32892,
+    "GL_NORMAL_ARRAY_TYPE": 32894,
+    "GL_NORMAL_ARRAY_STRIDE": 32895,
+    "GL_COLOR_ARRAY_SIZE": 32897,
+    "GL_COLOR_ARRAY_TYPE": 32898,
+    "GL_COLOR_ARRAY_STRIDE": 32899,
+    "GL_INDEX_ARRAY_TYPE": 32901,
+    "GL_INDEX_ARRAY_STRIDE": 32902,
+    "GL_TEXTURE_COORD_ARRAY_SIZE": 32904,
+    "GL_TEXTURE_COORD_ARRAY_TYPE": 32905,
+    "GL_TEXTURE_COORD_ARRAY_STRIDE": 32906,
+    "GL_EDGE_FLAG_ARRAY_STRIDE": 32908,
+    "GL_VERTEX_ARRAY_POINTER": 32910,
+    "GL_NORMAL_ARRAY_POINTER": 32911,
+    "GL_COLOR_ARRAY_POINTER": 32912,
+    "GL_INDEX_ARRAY_POINTER": 32913,
+    "GL_TEXTURE_COORD_ARRAY_POINTER": 32914,
+    "GL_EDGE_FLAG_ARRAY_POINTER": 32915,
+    "GL_V2F": 10784,
+    "GL_V3F": 10785,
+    "GL_C4UB_V2F": 10786,
+    "GL_C4UB_V3F": 10787,
+    "GL_C3F_V3F": 10788,
+    "GL_N3F_V3F": 10789,
+    "GL_C4F_N3F_V3F": 10790,
+    "GL_T2F_V3F": 10791,
+    "GL_T4F_V4F": 10792,
+    "GL_T2F_C4UB_V3F": 10793,
+    "GL_T2F_C3F_V3F": 10794,
+    "GL_T2F_N3F_V3F": 10795,
+    "GL_T2F_C4F_N3F_V3F": 10796,
+    "GL_T4F_C4F_N3F_V4F": 10797,
+    "GL_MATRIX_MODE": 2976,
+    "GL_MODELVIEW": 5888,
+    "GL_PROJECTION": 5889,
+    "GL_TEXTURE": 5890,
+    "GL_POINT_SMOOTH": 2832,
+    "GL_POINT_SIZE": 2833,
+    "GL_POINT_SIZE_GRANULARITY": 2835,
+    "GL_POINT_SIZE_RANGE": 2834,
+    "GL_LINE_SMOOTH": 2848,
+    "GL_LINE_STIPPLE": 2852,
+    "GL_LINE_STIPPLE_PATTERN": 2853,
+    "GL_LINE_STIPPLE_REPEAT": 2854,
+    "GL_LINE_WIDTH": 2849,
+    "GL_LINE_WIDTH_GRANULARITY": 2851,
+    "GL_LINE_WIDTH_RANGE": 2850,
+    "GL_POINT": 6912,
+    "GL_LINE": 6913,
+    "GL_FILL": 6914,
+    "GL_CW": 2304,
+    "GL_CCW": 2305,
+    "GL_FRONT": 1028,
+    "GL_BACK": 1029,
+    "GL_POLYGON_MODE": 2880,
+    "GL_POLYGON_SMOOTH": 2881,
+    "GL_POLYGON_STIPPLE": 2882,
+    "GL_EDGE_FLAG": 2883,
+    "GL_CULL_FACE": 2884,
+    "GL_CULL_FACE_MODE": 2885,
+    "GL_FRONT_FACE": 2886,
+    "GL_POLYGON_OFFSET_FACTOR": 32824,
+    "GL_POLYGON_OFFSET_UNITS": 10752,
+    "GL_POLYGON_OFFSET_POINT": 10753,
+    "GL_POLYGON_OFFSET_LINE": 10754,
+    "GL_POLYGON_OFFSET_FILL": 32823,
+    "GL_COMPILE": 4864,
+    "GL_COMPILE_AND_EXECUTE": 4865,
+    "GL_LIST_BASE": 2866,
+    "GL_LIST_INDEX": 2867,
+    "GL_LIST_MODE": 2864,
+    "GL_NEVER": 512,
+    "GL_LESS": 513,
+    "GL_EQUAL": 514,
+    "GL_LEQUAL": 515,
+    "GL_GREATER": 516,
+    "GL_NOTEQUAL": 517,
+    "GL_GEQUAL": 518,
+    "GL_ALWAYS": 519,
+    "GL_DEPTH_TEST": 2929,
+    "GL_DEPTH_BITS": 3414,
+    "GL_DEPTH_CLEAR_VALUE": 2931,
+    "GL_DEPTH_FUNC": 2932,
+    "GL_DEPTH_RANGE": 2928,
+    "GL_DEPTH_WRITEMASK": 2930,
+    "GL_DEPTH_COMPONENT": 6402,
+    "GL_LIGHTING": 2896,
+    "GL_LIGHT0": 16384,
+    "GL_LIGHT1": 16385,
+    "GL_LIGHT2": 16386,
+    "GL_LIGHT3": 16387,
+    "GL_LIGHT4": 16388,
+    "GL_LIGHT5": 16389,
+    "GL_LIGHT6": 16390,
+    "GL_LIGHT7": 16391,
+    "GL_SPOT_EXPONENT": 4613,
+    "GL_SPOT_CUTOFF": 4614,
+    "GL_CONSTANT_ATTENUATION": 4615,
+    "GL_LINEAR_ATTENUATION": 4616,
+    "GL_QUADRATIC_ATTENUATION": 4617,
+    "GL_AMBIENT": 4608,
+    "GL_DIFFUSE": 4609,
+    "GL_SPECULAR": 4610,
+    "GL_SHININESS": 5633,
+    "GL_EMISSION": 5632,
+    "GL_POSITION": 4611,
+    "GL_SPOT_DIRECTION": 4612,
+    "GL_AMBIENT_AND_DIFFUSE": 5634,
+    "GL_COLOR_INDEXES": 5635,
+    "GL_LIGHT_MODEL_TWO_SIDE": 2898,
+    "GL_LIGHT_MODEL_LOCAL_VIEWER": 2897,
+    "GL_LIGHT_MODEL_AMBIENT": 2899,
+    "GL_FRONT_AND_BACK": 1032,
+    "GL_SHADE_MODEL": 2900,
+    "GL_FLAT": 7424,
+    "GL_SMOOTH": 7425,
+    "GL_COLOR_MATERIAL": 2903,
+    "GL_COLOR_MATERIAL_FACE": 2901,
+    "GL_COLOR_MATERIAL_PARAMETER": 2902,
+    "GL_NORMALIZE": 2977,
+    "GL_CLIP_PLANE0": 12288,
+    "GL_CLIP_PLANE1": 12289,
+    "GL_CLIP_PLANE2": 12290,
+    "GL_CLIP_PLANE3": 12291,
+    "GL_CLIP_PLANE4": 12292,
+    "GL_CLIP_PLANE5": 12293,
+    "GL_ACCUM_RED_BITS": 3416,
+    "GL_ACCUM_GREEN_BITS": 3417,
+    "GL_ACCUM_BLUE_BITS": 3418,
+    "GL_ACCUM_ALPHA_BITS": 3419,
+    "GL_ACCUM_CLEAR_VALUE": 2944,
+    "GL_ACCUM": 256,
+    "GL_ADD": 260,
+    "GL_LOAD": 257,
+    "GL_MULT": 259,
+    "GL_RETURN": 258,
+    "GL_ALPHA_TEST": 3008,
+    "GL_ALPHA_TEST_REF": 3010,
+    "GL_ALPHA_TEST_FUNC": 3009,
+    "GL_BLEND": 3042,
+    "GL_BLEND_SRC": 3041,
+    "GL_BLEND_DST": 3040,
+    "GL_ZERO": 0,
+    "GL_ONE": 1,
+    "GL_SRC_COLOR": 768,
+    "GL_ONE_MINUS_SRC_COLOR": 769,
+    "GL_SRC_ALPHA": 770,
+    "GL_ONE_MINUS_SRC_ALPHA": 771,
+    "GL_DST_ALPHA": 772,
+    "GL_ONE_MINUS_DST_ALPHA": 773,
+    "GL_DST_COLOR": 774,
+    "GL_ONE_MINUS_DST_COLOR": 775,
+    "GL_SRC_ALPHA_SATURATE": 776,
+    "GL_CONSTANT_COLOR": 32769,
+    "GL_ONE_MINUS_CONSTANT_COLOR": 32770,
+    "GL_CONSTANT_ALPHA": 32771,
+    "GL_ONE_MINUS_CONSTANT_ALPHA": 32772,
+    "GL_FEEDBACK": 7169,
+    "GL_RENDER": 7168,
+    "GL_SELECT": 7170,
+    "GL_2D": 1536,
+    "GL_3D": 1537,
+    "GL_3D_COLOR": 1538,
+    "GL_3D_COLOR_TEXTURE": 1539,
+    "GL_4D_COLOR_TEXTURE": 1540,
+    "GL_POINT_TOKEN": 1793,
+    "GL_LINE_TOKEN": 1794,
+    "GL_LINE_RESET_TOKEN": 1799,
+    "GL_POLYGON_TOKEN": 1795,
+    "GL_BITMAP_TOKEN": 1796,
+    "GL_DRAW_PIXEL_TOKEN": 1797,
+    "GL_COPY_PIXEL_TOKEN": 1798,
+    "GL_PASS_THROUGH_TOKEN": 1792,
+    "GL_FEEDBACK_BUFFER_POINTER": 3568,
+    "GL_FEEDBACK_BUFFER_SIZE": 3569,
+    "GL_FEEDBACK_BUFFER_TYPE": 3570,
+    "GL_SELECTION_BUFFER_POINTER": 3571,
+    "GL_SELECTION_BUFFER_SIZE": 3572,
+    "GL_FOG": 2912,
+    "GL_FOG_MODE": 2917,
+    "GL_FOG_DENSITY": 2914,
+    "GL_FOG_COLOR": 2918,
+    "GL_FOG_INDEX": 2913,
+    "GL_FOG_START": 2915,
+    "GL_FOG_END": 2916,
+    "GL_LINEAR": 9729,
+    "GL_EXP": 2048,
+    "GL_EXP2": 2049,
+    "GL_LOGIC_OP": 3057,
+    "GL_INDEX_LOGIC_OP": 3057,
+    "GL_COLOR_LOGIC_OP": 3058,
+    "GL_LOGIC_OP_MODE": 3056,
+    "GL_CLEAR": 5376,
+    "GL_SET": 5391,
+    "GL_COPY": 5379,
+    "GL_COPY_INVERTED": 5388,
+    "GL_NOOP": 5381,
+    "GL_INVERT": 5386,
+    "GL_AND": 5377,
+    "GL_NAND": 5390,
+    "GL_OR": 5383,
+    "GL_NOR": 5384,
+    "GL_XOR": 5382,
+    "GL_EQUIV": 5385,
+    "GL_AND_REVERSE": 5378,
+    "GL_AND_INVERTED": 5380,
+    "GL_OR_REVERSE": 5387,
+    "GL_OR_INVERTED": 5389,
+    "GL_STENCIL_TEST": 2960,
+    "GL_STENCIL_WRITEMASK": 2968,
+    "GL_STENCIL_BITS": 3415,
+    "GL_STENCIL_FUNC": 2962,
+    "GL_STENCIL_VALUE_MASK": 2963,
+    "GL_STENCIL_REF": 2967,
+    "GL_STENCIL_FAIL": 2964,
+    "GL_STENCIL_PASS_DEPTH_PASS": 2966,
+    "GL_STENCIL_PASS_DEPTH_FAIL": 2965,
+    "GL_STENCIL_CLEAR_VALUE": 2961,
+    "GL_STENCIL_INDEX": 6401,
+    "GL_KEEP": 7680,
+    "GL_REPLACE": 7681,
+    "GL_INCR": 7682,
+    "GL_DECR": 7683,
+    "GL_NONE": 0,
+    "GL_LEFT": 1030,
+    "GL_RIGHT": 1031,
+    "GL_FRONT_LEFT": 1024,
+    "GL_FRONT_RIGHT": 1025,
+    "GL_BACK_LEFT": 1026,
+    "GL_BACK_RIGHT": 1027,
+    "GL_AUX0": 1033,
+    "GL_AUX1": 1034,
+    "GL_AUX2": 1035,
+    "GL_AUX3": 1036,
+    "GL_COLOR_INDEX": 6400,
+    "GL_RED": 6403,
+    "GL_GREEN": 6404,
+    "GL_BLUE": 6405,
+    "GL_ALPHA": 6406,
+    "GL_LUMINANCE": 6409,
+    "GL_LUMINANCE_ALPHA": 6410,
+    "GL_ALPHA_BITS": 3413,
+    "GL_RED_BITS": 3410,
+    "GL_GREEN_BITS": 3411,
+    "GL_BLUE_BITS": 3412,
+    "GL_INDEX_BITS": 3409,
+    "GL_SUBPIXEL_BITS": 3408,
+    "GL_AUX_BUFFERS": 3072,
+    "GL_READ_BUFFER": 3074,
+    "GL_DRAW_BUFFER": 3073,
+    "GL_DOUBLEBUFFER": 3122,
+    "GL_STEREO": 3123,
+    "GL_BITMAP": 6656,
+    "GL_COLOR": 6144,
+    "GL_DEPTH": 6145,
+    "GL_STENCIL": 6146,
+    "GL_DITHER": 3024,
+    "GL_RGB": 6407,
+    "GL_RGBA": 6408,
+    "GL_MAX_LIST_NESTING": 2865,
+    "GL_MAX_ATTRIB_STACK_DEPTH": 3381,
+    "GL_MAX_MODELVIEW_STACK_DEPTH": 3382,
+    "GL_MAX_NAME_STACK_DEPTH": 3383,
+    "GL_MAX_PROJECTION_STACK_DEPTH": 3384,
+    "GL_MAX_TEXTURE_STACK_DEPTH": 3385,
+    "GL_MAX_EVAL_ORDER": 3376,
+    "GL_MAX_LIGHTS": 3377,
+    "GL_MAX_CLIP_PLANES": 3378,
+    "GL_MAX_TEXTURE_SIZE": 3379,
+    "GL_MAX_PIXEL_MAP_TABLE": 3380,
+    "GL_MAX_VIEWPORT_DIMS": 3386,
+    "GL_MAX_CLIENT_ATTRIB_STACK_DEPTH": 3387,
+    "GL_ATTRIB_STACK_DEPTH": 2992,
+    "GL_CLIENT_ATTRIB_STACK_DEPTH": 2993,
+    "GL_COLOR_CLEAR_VALUE": 3106,
+    "GL_COLOR_WRITEMASK": 3107,
+    "GL_CURRENT_INDEX": 2817,
+    "GL_CURRENT_COLOR": 2816,
+    "GL_CURRENT_NORMAL": 2818,
+    "GL_CURRENT_RASTER_COLOR": 2820,
+    "GL_CURRENT_RASTER_DISTANCE": 2825,
+    "GL_CURRENT_RASTER_INDEX": 2821,
+    "GL_CURRENT_RASTER_POSITION": 2823,
+    "GL_CURRENT_RASTER_TEXTURE_COORDS": 2822,
+    "GL_CURRENT_RASTER_POSITION_VALID": 2824,
+    "GL_CURRENT_TEXTURE_COORDS": 2819,
+    "GL_INDEX_CLEAR_VALUE": 3104,
+    "GL_INDEX_MODE": 3120,
+    "GL_INDEX_WRITEMASK": 3105,
+    "GL_MODELVIEW_MATRIX": 2982,
+    "GL_MODELVIEW_STACK_DEPTH": 2979,
+    "GL_NAME_STACK_DEPTH": 3440,
+    "GL_PROJECTION_MATRIX": 2983,
+    "GL_PROJECTION_STACK_DEPTH": 2980,
+    "GL_RENDER_MODE": 3136,
+    "GL_RGBA_MODE": 3121,
+    "GL_TEXTURE_MATRIX": 2984,
+    "GL_TEXTURE_STACK_DEPTH": 2981,
+    "GL_VIEWPORT": 2978,
+    "GL_AUTO_NORMAL": 3456,
+    "GL_MAP1_COLOR_4": 3472,
+    "GL_MAP1_GRID_DOMAIN": 3536,
+    "GL_MAP1_GRID_SEGMENTS": 3537,
+    "GL_MAP1_INDEX": 3473,
+    "GL_MAP1_NORMAL": 3474,
+    "GL_MAP1_TEXTURE_COORD_1": 3475,
+    "GL_MAP1_TEXTURE_COORD_2": 3476,
+    "GL_MAP1_TEXTURE_COORD_3": 3477,
+    "GL_MAP1_TEXTURE_COORD_4": 3478,
+    "GL_MAP1_VERTEX_3": 3479,
+    "GL_MAP1_VERTEX_4": 3480,
+    "GL_MAP2_COLOR_4": 3504,
+    "GL_MAP2_GRID_DOMAIN": 3538,
+    "GL_MAP2_GRID_SEGMENTS": 3539,
+    "GL_MAP2_INDEX": 3505,
+    "GL_MAP2_NORMAL": 3506,
+    "GL_MAP2_TEXTURE_COORD_1": 3507,
+    "GL_MAP2_TEXTURE_COORD_2": 3508,
+    "GL_MAP2_TEXTURE_COORD_3": 3509,
+    "GL_MAP2_TEXTURE_COORD_4": 3510,
+    "GL_MAP2_VERTEX_3": 3511,
+    "GL_MAP2_VERTEX_4": 3512,
+    "GL_COEFF": 2560,
+    "GL_DOMAIN": 2562,
+    "GL_ORDER": 2561,
+    "GL_FOG_HINT": 3156,
+    "GL_LINE_SMOOTH_HINT": 3154,
+    "GL_PERSPECTIVE_CORRECTION_HINT": 3152,
+    "GL_POINT_SMOOTH_HINT": 3153,
+    "GL_POLYGON_SMOOTH_HINT": 3155,
+    "GL_DONT_CARE": 4352,
+    "GL_FASTEST": 4353,
+    "GL_NICEST": 4354,
+    "GL_SCISSOR_TEST": 3089,
+    "GL_SCISSOR_BOX": 3088,
+    "GL_MAP_COLOR": 3344,
+    "GL_MAP_STENCIL": 3345,
+    "GL_INDEX_SHIFT": 3346,
+    "GL_INDEX_OFFSET": 3347,
+    "GL_RED_SCALE": 3348,
+    "GL_RED_BIAS": 3349,
+    "GL_GREEN_SCALE": 3352,
+    "GL_GREEN_BIAS": 3353,
+    "GL_BLUE_SCALE": 3354,
+    "GL_BLUE_BIAS": 3355,
+    "GL_ALPHA_SCALE": 3356,
+    "GL_ALPHA_BIAS": 3357,
+    "GL_DEPTH_SCALE": 3358,
+    "GL_DEPTH_BIAS": 3359,
+    "GL_PIXEL_MAP_S_TO_S_SIZE": 3249,
+    "GL_PIXEL_MAP_I_TO_I_SIZE": 3248,
+    "GL_PIXEL_MAP_I_TO_R_SIZE": 3250,
+    "GL_PIXEL_MAP_I_TO_G_SIZE": 3251,
+    "GL_PIXEL_MAP_I_TO_B_SIZE": 3252,
+    "GL_PIXEL_MAP_I_TO_A_SIZE": 3253,
+    "GL_PIXEL_MAP_R_TO_R_SIZE": 3254,
+    "GL_PIXEL_MAP_G_TO_G_SIZE": 3255,
+    "GL_PIXEL_MAP_B_TO_B_SIZE": 3256,
+    "GL_PIXEL_MAP_A_TO_A_SIZE": 3257,
+    "GL_PIXEL_MAP_S_TO_S": 3185,
+    "GL_PIXEL_MAP_I_TO_I": 3184,
+    "GL_PIXEL_MAP_I_TO_R": 3186,
+    "GL_PIXEL_MAP_I_TO_G": 3187,
+    "GL_PIXEL_MAP_I_TO_B": 3188,
+    "GL_PIXEL_MAP_I_TO_A": 3189,
+    "GL_PIXEL_MAP_R_TO_R": 3190,
+    "GL_PIXEL_MAP_G_TO_G": 3191,
+    "GL_PIXEL_MAP_B_TO_B": 3192,
+    "GL_PIXEL_MAP_A_TO_A": 3193,
+    "GL_PACK_ALIGNMENT": 3333,
+    "GL_PACK_LSB_FIRST": 3329,
+    "GL_PACK_ROW_LENGTH": 3330,
+    "GL_PACK_SKIP_PIXELS": 3332,
+    "GL_PACK_SKIP_ROWS": 3331,
+    "GL_PACK_SWAP_BYTES": 3328,
+    "GL_UNPACK_ALIGNMENT": 3317,
+    "GL_UNPACK_LSB_FIRST": 3313,
+    "GL_UNPACK_ROW_LENGTH": 3314,
+    "GL_UNPACK_SKIP_PIXELS": 3316,
+    "GL_UNPACK_SKIP_ROWS": 3315,
+    "GL_UNPACK_SWAP_BYTES": 3312,
+    "GL_ZOOM_X": 3350,
+    "GL_ZOOM_Y": 3351,
+    "GL_TEXTURE_ENV": 8960,
+    "GL_TEXTURE_ENV_MODE": 8704,
+    "GL_TEXTURE_1D": 3552,
+    "GL_TEXTURE_2D": 3553,
+    "GL_TEXTURE_WRAP_S": 10242,
+    "GL_TEXTURE_WRAP_T": 10243,
+    "GL_TEXTURE_MAG_FILTER": 10240,
+    "GL_TEXTURE_MIN_FILTER": 10241,
+    "GL_TEXTURE_ENV_COLOR": 8705,
+    "GL_TEXTURE_GEN_S": 3168,
+    "GL_TEXTURE_GEN_T": 3169,
+    "GL_TEXTURE_GEN_MODE": 9472,
+    "GL_TEXTURE_BORDER_COLOR": 4100,
+    "GL_TEXTURE_WIDTH": 4096,
+    "GL_TEXTURE_HEIGHT": 4097,
+    "GL_TEXTURE_BORDER": 4101,
+    "GL_TEXTURE_COMPONENTS": 4099,
+    "GL_TEXTURE_RED_SIZE": 32860,
+    "GL_TEXTURE_GREEN_SIZE": 32861,
+    "GL_TEXTURE_BLUE_SIZE": 32862,
+    "GL_TEXTURE_ALPHA_SIZE": 32863,
+    "GL_TEXTURE_LUMINANCE_SIZE": 32864,
+    "GL_TEXTURE_INTENSITY_SIZE": 32865,
+    "GL_NEAREST_MIPMAP_NEAREST": 9984,
+    "GL_NEAREST_MIPMAP_LINEAR": 9986,
+    "GL_LINEAR_MIPMAP_NEAREST": 9985,
+    "GL_LINEAR_MIPMAP_LINEAR": 9987,
+    "GL_OBJECT_LINEAR": 9217,
+    "GL_OBJECT_PLANE": 9473,
+    "GL_EYE_LINEAR": 9216,
+    "GL_EYE_PLANE": 9474,
+    "GL_SPHERE_MAP": 9218,
+    "GL_DECAL": 8449,
+    "GL_MODULATE": 8448,
+    "GL_NEAREST": 9728,
+    "GL_REPEAT": 10497,
+    "GL_CLAMP": 10496,
+    "GL_S": 8192,
+    "GL_T": 8193,
+    "GL_R": 8194,
+    "GL_Q": 8195,
+    "GL_TEXTURE_GEN_R": 3170,
+    "GL_TEXTURE_GEN_Q": 3171,
+    "GL_VENDOR": 7936,
+    "GL_RENDERER": 7937,
+    "GL_VERSION": 7938,
+    "GL_EXTENSIONS": 7939,
+    "GL_NO_ERROR": 0,
+    "GL_INVALID_VALUE": 1281,
+    "GL_INVALID_ENUM": 1280,
+    "GL_INVALID_OPERATION": 1282,
+    "GL_STACK_OVERFLOW": 1283,
+    "GL_STACK_UNDERFLOW": 1284,
+    "GL_OUT_OF_MEMORY": 1285,
+    "GL_CURRENT_BIT": 1,
+    "GL_POINT_BIT": 2,
+    "GL_LINE_BIT": 4,
+    "GL_POLYGON_BIT": 8,
+    "GL_POLYGON_STIPPLE_BIT": 16,
+    "GL_PIXEL_MODE_BIT": 32,
+    "GL_LIGHTING_BIT": 64,
+    "GL_FOG_BIT": 128,
+    "GL_DEPTH_BUFFER_BIT": 256,
+    "GL_ACCUM_BUFFER_BIT": 512,
+    "GL_STENCIL_BUFFER_BIT": 1024,
+    "GL_VIEWPORT_BIT": 2048,
+    "GL_TRANSFORM_BIT": 4096,
+    "GL_ENABLE_BIT": 8192,
+    "GL_COLOR_BUFFER_BIT": 16384,
+    "GL_HINT_BIT": 32768,
+    "GL_EVAL_BIT": 65536,
+    "GL_LIST_BIT": 131072,
+    "GL_TEXTURE_BIT": 262144,
+    "GL_SCISSOR_BIT": 524288,
+    "GL_ALL_ATTRIB_BITS": 1048575,
+    "GL_PROXY_TEXTURE_1D": 32867,
+    "GL_PROXY_TEXTURE_2D": 32868,
+    "GL_TEXTURE_PRIORITY": 32870,
+    "GL_TEXTURE_RESIDENT": 32871,
+    "GL_TEXTURE_BINDING_1D": 32872,
+    "GL_TEXTURE_BINDING_2D": 32873,
+    "GL_TEXTURE_INTERNAL_FORMAT": 4099,
+    "GL_ALPHA4": 32827,
+    "GL_ALPHA8": 32828,
+    "GL_ALPHA12": 32829,
+    "GL_ALPHA16": 32830,
+    "GL_LUMINANCE4": 32831,
+    "GL_LUMINANCE8": 32832,
+    "GL_LUMINANCE12": 32833,
+    "GL_LUMINANCE16": 32834,
+    "GL_LUMINANCE4_ALPHA4": 32835,
+    "GL_LUMINANCE6_ALPHA2": 32836,
+    "GL_LUMINANCE8_ALPHA8": 32837,
+    "GL_LUMINANCE12_ALPHA4": 32838,
+    "GL_LUMINANCE12_ALPHA12": 32839,
+    "GL_LUMINANCE16_ALPHA16": 32840,
+    "GL_INTENSITY": 32841,
+    "GL_INTENSITY4": 32842,
+    "GL_INTENSITY8": 32843,
+    "GL_INTENSITY12": 32844,
+    "GL_INTENSITY16": 32845,
+    "GL_R3_G3_B2": 10768,
+    "GL_RGB4": 32847,
+    "GL_RGB5": 32848,
+    "GL_RGB8": 32849,
+    "GL_RGB10": 32850,
+    "GL_RGB12": 32851,
+    "GL_RGB16": 32852,
+    "GL_RGBA2": 32853,
+    "GL_RGBA4": 32854,
+    "GL_RGB5_A1": 32855,
+    "GL_RGBA8": 32856,
+    "GL_RGB10_A2": 32857,
+    "GL_RGBA12": 32858,
+    "GL_RGBA16": 32859,
+    "GL_CLIENT_PIXEL_STORE_BIT": 1,
+    "GL_CLIENT_VERTEX_ARRAY_BIT": 2,
+    "GL_ALL_CLIENT_ATTRIB_BITS": 4294967295,
+    "GL_CLIENT_ALL_ATTRIB_BITS": 4294967295
+  }
+}

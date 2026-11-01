@@ -21,6 +21,7 @@ typedef enum LxHandleKind
     LX_HANDLE_PM_ACCEL,
     LX_HANDLE_PM_REGION,
     LX_HANDLE_PM_POINTER,
+    LX_HANDLE_GL_CONTEXT,
     LX_HANDLE_KIND_LIMIT
 } LxHandleKind;
 typedef struct LxHandleBorrow

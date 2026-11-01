@@ -11,11 +11,11 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo apt-get install --yes cmake ninja-build gcc-multilib libc6-dev-i386 libncurses-dev libncurses-dev:i386 libasound2-dev:i386 libx11-dev:i386 libxext-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxrandr-dev:i386 libxss-dev:i386 xvfb libxtst6
+          sudo apt-get install --yes cmake ninja-build gcc-multilib libc6-dev-i386 libncurses-dev libncurses-dev:i386 libasound2-dev:i386 libx11-dev:i386 libxext-dev:i386 libxcursor-dev:i386 libxi-dev:i386 libxrandr-dev:i386 libxss-dev:i386 libegl1-mesa-dev:i386 libgl1-mesa-dri:i386 xvfb libxtst6
       - name: Fetch hash-verified archived PMStars fixture
         run: python3 tests/integration/fetch_gui_fixture.py --destination "$RUNNER_TEMP/hobbes"
       - name: Configure native worker and pinned SDL3 source
-        run: cmake -S . -B build-native -GNinja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=OFF -DTWOINE_PMSTARS_EXE="$RUNNER_TEMP/hobbes/PMStars.exe"
+        run: cmake -S . -B build-native -GNinja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=OFF -DTWOINE_OPENGL=ON -DTWOINE_PMSTARS_EXE="$RUNNER_TEMP/hobbes/PMStars.exe"
       - name: Build
         run: cmake --build build-native --parallel 2
       - name: Test native execution boundary

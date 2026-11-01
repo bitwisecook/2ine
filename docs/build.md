@@ -80,3 +80,5 @@ cmake -S . -B build \
 The font directory must contain all twelve release TTF files and `LICENSE`.
 The build copies these assets to `build/fonts/`; retain it when moving a worker.
 The runtime-only profile requires neither FreeType nor these font assets.
+
+[Optional Mesa OpenGL and macOS KosmicKrisp](opengl.md).

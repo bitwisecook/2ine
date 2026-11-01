@@ -3,6 +3,16 @@
 #include "hal/video.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
+static void (*GraphicsRelease)(void);
+void lx_host_video_set_graphics_release(void (*release)(void))
+{
+    GraphicsRelease = release;
+}
+static void prepareRenderer(void)
+{
+    if (GraphicsRelease)
+        GraphicsRelease();
+}
 struct LxHostPointer
 {
     SDL_Cursor *cursor;
@@ -62,7 +72,12 @@ int lx_host_video_initialize(int *width, int *height)
 }
 void lx_host_video_quit(void)
 {
+    prepareRenderer();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+}
+int lx_host_video_release_graphics(void)
+{
+    return !SDL_GL_GetCurrentContext() || SDL_GL_MakeCurrent(NULL, NULL);
 }
 const char *lx_host_video_error(void)
 {
@@ -75,6 +90,7 @@ uint64_t lx_host_video_ticks_ms(void)
 LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, int height,
                                     void *data)
 {
+    prepareRenderer();
     LxHostWindow *window = calloc(1, sizeof *window);
     if (!window)
         return NULL;
@@ -104,6 +120,7 @@ failed:
 }
 void lx_host_window_destroy(LxHostWindow *window)
 {
+    prepareRenderer();
     if (!window)
         return;
     SDL_DestroyTexture(window->texture);
@@ -117,6 +134,7 @@ void *lx_host_window_data(LxHostWindow *window)
 }
 int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height)
 {
+    prepareRenderer();
     if (width <= 0 || height <= 0)
         return 0;
     if (width != window->width || height != window->height)
@@ -143,28 +161,34 @@ int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int h
 }
 void lx_host_window_show(LxHostWindow *window)
 {
+    prepareRenderer();
     SDL_ShowWindow(window->window);
 }
 void lx_host_window_hide(LxHostWindow *window)
 {
+    prepareRenderer();
     SDL_HideWindow(window->window);
 }
 int lx_host_window_title(LxHostWindow *window, const char *title)
 {
+    prepareRenderer();
     return window && SDL_SetWindowTitle(window->window, title);
 }
 int lx_host_window_border(LxHostWindow *window, int bordered)
 {
+    prepareRenderer();
     return window && SDL_SetWindowBordered(window->window, bordered != 0);
 }
 int lx_host_window_focus(LxHostWindow *window)
 {
+    prepareRenderer();
     return window && SDL_RaiseWindow(window->window);
 }
 int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int y, int width,
                         int height, const uint8_t *coverage, uint8_t red, uint8_t green,
                         uint8_t blue)
 {
+    prepareRenderer();
     if (!window || !clip || width < 0 || height < 0 || width > 4096 || height > 4096 ||
         (width && height && !coverage))
         return 0;
@@ -200,6 +224,7 @@ int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int
 }
 int lx_host_window_present(LxHostWindow *window)
 {
+    prepareRenderer();
     if (!window->dirty)
         return 1;
     if (!SDL_SetRenderTarget(window->renderer, NULL))
@@ -214,6 +239,7 @@ int lx_host_window_present(LxHostWindow *window)
 int lx_host_window_fill(LxHostWindow *window, const LxHostRect *clip, const LxHostRect *rect,
                         uint8_t red, uint8_t green, uint8_t blue)
 {
+    prepareRenderer();
     SDL_Rect clipping = {clip->x, clip->y, clip->w, clip->h};
     SDL_FRect area = {(float)rect->x, (float)rect->y, (float)rect->w, (float)rect->h};
     int ok = SDL_SetRenderClipRect(window->renderer, &clipping) &&
@@ -226,6 +252,7 @@ int lx_host_window_fill(LxHostWindow *window, const LxHostRect *clip, const LxHo
 int lx_host_window_pixel(LxHostWindow *window, int x, int y, uint8_t *red, uint8_t *green,
                          uint8_t *blue)
 {
+    prepareRenderer();
     SDL_Surface *surface = SDL_RenderReadPixels(window->renderer, NULL);
     if (!surface)
         return 0;
@@ -472,6 +499,7 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
 int lx_host_window_line(LxHostWindow *window, const LxHostRect *clip, int x1, int y1, int x2,
                         int y2, uint8_t r, uint8_t g, uint8_t b)
 {
+    prepareRenderer();
     SDL_Rect bounds = {clip->x, clip->y, clip->w, clip->h};
     int ok = SDL_SetRenderClipRect(window->renderer, &bounds) &&
              SDL_SetRenderDrawColor(window->renderer, r, g, b, 255) &&
@@ -522,6 +550,7 @@ void lx_host_mouse_position(int *x, int *y)
 
 int lx_host_window_read(LxHostWindow *window, const LxHostRect *rect, uint32_t *rgb)
 {
+    prepareRenderer();
     if (!window || !rect || !rgb || rect->w < 0 || rect->h < 0 || rect->x < 0 || rect->y < 0 ||
         rect->w > window->width - rect->x || rect->h > window->height - rect->y)
         return 0;
@@ -547,6 +576,7 @@ int lx_host_window_read(LxHostWindow *window, const LxHostRect *rect, uint32_t *
 int lx_host_window_image(LxHostWindow *window, const LxHostRect *clip, const LxHostRect *rect,
                          const uint32_t *rgb)
 {
+    prepareRenderer();
     if (!window || !clip || !rect || !rgb || rect->w <= 0 || rect->h <= 0)
         return 0;
     SDL_Surface *surface = SDL_CreateSurface(rect->w, rect->h, SDL_PIXELFORMAT_RGBA32);

@@ -30,7 +30,7 @@ def check(path, patterns, cmake=False):
 
 
 platform = [
-    r"#\s*include\s*<(?:sys/|asm/|pthread\.h|windows\.h|unicorn/|SDL3/|curses\.h|arpa/|netinet/|netdb\.h)",
+    r"#\s*include\s*<(?:sys/|asm/|pthread\.h|windows\.h|unicorn/|SDL3/|EGL/|GL/|OpenGL/|vulkan/|Metal/|d3d\w*\.h|curses\.h|arpa/|netinet/|netdb\.h)",
     r"\b(?:ucontext_t|uc_engine|pthread_\w+|SDL_\w+)\b",
 ]
 hardware = platform + [
@@ -42,7 +42,7 @@ for directory in ["runtime", "guest", "loader", "formats", "os2libs"]:
             path,
             hardware
             + [
-                r"#\s*include\s*<[^>]*hal/(?!abi\.h|audio\.h|video\.h|font\.h|socket\.h|terminal\.h|host(?:_\w+)?\.h)[^>]+>"
+                r"#\s*include\s*<[^>]*hal/(?!abi\.h|audio\.h|video\.h|font\.h|opengl\.h|gl_(?:dispatch|constants)\.h|socket\.h|terminal\.h|host(?:_\w+)?\.h)[^>]+>"
             ],
         )
 for path in sorted((root / "hal/include").rglob("*.h")):

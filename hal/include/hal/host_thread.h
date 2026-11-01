@@ -15,6 +15,13 @@ int lx_host_thread_join(LxHostThread *thread, void **result);
 void lx_host_thread_detach(LxHostThread *thread);
 void lx_host_thread_exit(void *result);
 uint64_t lx_host_thread_id(void);
+/* Values have a destructor on host thread exit. Delete only after all threads
+   using the key have joined; deletion does not destroy their values. */
+typedef struct LxHostTlsKey LxHostTlsKey;
+LxHostTlsKey *lx_host_tls_create(void (*destroy)(void *));
+void lx_host_tls_destroy(LxHostTlsKey *key);
+void *lx_host_tls_get(LxHostTlsKey *key);
+int lx_host_tls_set(LxHostTlsKey *key, void *value);
 /* The cleanup argument remains live in the caller's frame. The host adapter
    runs cleanup on both ordinary return and supported thread cancellation. */
 uint32_t lx_host_guarded_call(uint32_t (*operation)(void *), void *argument,

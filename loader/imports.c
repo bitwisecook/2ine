@@ -34,7 +34,7 @@ void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
     const LxExport *lxexp = module->exports;
     for (uint32 i = 0; i < module->num_exports; i++, lxexp++)
     {
-        if (lxexp->ordinal == ordinal)
+        if (ordinal && lxexp->ordinal == ordinal)
         {
             if (_lxexp)
                 *_lxexp = lxexp;

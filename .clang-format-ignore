@@ -1,6 +1,10 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 # Export glue is formatted by its generator; keep regeneration independent.
 **/generated/**
+hal/include/hal/gl_dispatch.h
+hal/mesa/gl_load.h
+guest/bindings/opengl.h
+hal/include/hal/gl_constants.h
 # Reference experiments and dependency sources retain their own formatting.
 research/**
 third_party/**

@@ -1,5 +1,27 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 add_test(NAME source_boundaries COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/architecture/check_boundaries.py")
+if(TARGET opengl)
+    add_executable(twoine_opengl_tests hal/test_opengl.c)
+    twoine_application_target(twoine_opengl_tests)
+    target_link_libraries(twoine_opengl_tests PRIVATE opengl)
+    add_test(NAME opengl_mesa COMMAND twoine_opengl_tests)
+    set_tests_properties(opengl_mesa PROPERTIES TIMEOUT 60)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set_tests_properties(opengl_mesa PROPERTIES ENVIRONMENT "LIBGL_ALWAYS_SOFTWARE=1")
+        add_executable(twoine_gl_policy_tests hal/test_gl_policy.c ../hal/macos/gl_policy.c)
+        twoine_application_target(twoine_gl_policy_tests)
+        target_compile_definitions(twoine_gl_policy_tests PRIVATE TWOINE_KOSMICKRISP_ICD="/twoine-test/kosmickrisp.json")
+        add_test(NAME opengl_macos_policy COMMAND twoine_gl_policy_tests)
+    endif()
+    add_executable(twoine_opengl_pm_tests os2libs/test_opengl.c)
+    twoine_application_target(twoine_opengl_pm_tests)
+    target_link_libraries(twoine_opengl_pm_tests PRIVATE opengl pmwin 2ine)
+    add_test(NAME opengl_pm COMMAND twoine_opengl_pm_tests)
+    set_tests_properties(opengl_pm PROPERTIES TIMEOUT 60 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set_property(TEST opengl_pm APPEND PROPERTY ENVIRONMENT "LIBGL_ALWAYS_SOFTWARE=1")
+    endif()
+endif()
 if(TARGET twoine_runtime)
     add_executable(twoine_host_platform_tests hal/test_host_platform.c)
     target_link_libraries(twoine_host_platform_tests PRIVATE twoine_runtime)
@@ -85,6 +107,39 @@ if(TARGET lx_loader)
         set(_twoine_legacy_backend unicorn)
     else()
         set(_twoine_legacy_backend native)
+    endif()
+    if(TARGET opengl)
+        add_test(NAME opengl_guest COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/opengl.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            --work "${PROJECT_BINARY_DIR}/opengl-results/guest")
+        set_tests_properties(opengl_guest PROPERTIES TIMEOUT 180)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            find_program(TWOINE_XVFB_RUN xvfb-run)
+            if(TWOINE_XVFB_RUN)
+                add_test(NAME opengl_desktop_guest COMMAND "${TWOINE_XVFB_RUN}" -a
+                    "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/opengl.py"
+                    --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+                    --video-driver x11 --render-driver opengl
+                    --work "${PROJECT_BINARY_DIR}/opengl-results/desktop")
+                add_test(NAME opengl_desktop_pm COMMAND "${TWOINE_XVFB_RUN}" -a $<TARGET_FILE:twoine_opengl_pm_tests>)
+                set_tests_properties(opengl_desktop_guest opengl_desktop_pm PROPERTIES TIMEOUT 180)
+                set_tests_properties(opengl_desktop_pm PROPERTIES ENVIRONMENT "SDL_VIDEO_DRIVER=x11;SDL_RENDER_DRIVER=opengl;LIBGL_ALWAYS_SOFTWARE=1")
+            endif()
+        endif()
+        set(TWOINE_OPENGL_SDK "" CACHE PATH "Optional OS/2 SDK fixture for SIMPLE.C")
+        set(TWOINE_OPENGL_WATCOM "" CACHE PATH "Optional Linux-hosted Watcom fixture")
+        if(TWOINE_OPENGL_SDK OR TWOINE_OPENGL_WATCOM)
+            if(NOT TWOINE_OPENGL_SDK OR NOT TWOINE_OPENGL_WATCOM OR NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+                message(FATAL_ERROR "The SDK OpenGL fixture needs both TWOINE_OPENGL_SDK and TWOINE_OPENGL_WATCOM on Linux.")
+            endif()
+            add_test(NAME opengl_sdk COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/integration/opengl_sdk.py"
+                --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+                --sdk "${TWOINE_OPENGL_SDK}" --watcom "${TWOINE_OPENGL_WATCOM}"
+                --work "${PROJECT_BINARY_DIR}/opengl-results/sdk")
+            set_tests_properties(opengl_sdk PROPERTIES TIMEOUT 90)
+        endif()
     endif()
     add_test(NAME pm_dialog_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/dialogs.py"

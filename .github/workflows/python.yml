@@ -18,5 +18,6 @@ jobs:
           "$RUNNER_TEMP/python-tools/bin/ty" check
       - name: Test tools and generated bindings
         run: |
-          python3 -m unittest discover -s tests/tools -p test_tools.py -v
+          python3 -m unittest discover -s tests/tools -p 'test_*.py' -v
           python3 tools/lxapigen.py --check
+          python3 tools/gen_opengl.py --check
