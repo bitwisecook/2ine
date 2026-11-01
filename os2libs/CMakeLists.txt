@@ -5,7 +5,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
     elseif(module STREQUAL "mdm")
         set(sources mdm.c midi_synth.c midi_config.c midi_mt32.c)
     elseif(module STREQUAL "pmwin")
-        set(sources pmwin/module.c pmwin/context.c pmwin/windows.c pmwin/frame_state.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/raster.c pmwin/coordinates.c pmwin/device_context.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/hooks.c pmwin/visible.c pmwin/dive.c pmwin/thread_messages.c pmwin/input.c pmwin/window_text.c)
+        set(sources pmwin/module.c pmwin/context.c pmwin/windows.c pmwin/frame_state.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/raster.c pmwin/coordinates.c pmwin/device_context.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/hooks.c pmwin/visible.c pmwin/dive.c pmwin/thread_messages.c pmwin/input.c pmwin/window_text.c pmwin/clipboard.c)
     elseif(module STREQUAL "pmgpi")
         set(sources pmgpi.c pmgpi/fonts.c pmgpi/device.c pmgpi/state.c pmgpi/bitmap.c pmgpi/regions.c pmgpi/text.c pmgpi/shapes.c)
     elseif(module STREQUAL "pmctls")
@@ -32,7 +32,7 @@ endif()
 twoine_add_terminal(viocalls)
 
 target_link_libraries(pmgpi PRIVATE pmwin)
-target_link_libraries(pmwinx PRIVATE pmshapi)
+target_link_libraries(pmwinx PRIVATE pmshapi pmwin)
 
 target_link_libraries(pmctls PRIVATE pmwin)
 

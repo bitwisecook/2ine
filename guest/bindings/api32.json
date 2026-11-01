@@ -557,6 +557,11 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "WinLoadPointer": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "WinLoadString": {
       "argument_bytes": 20,
       "callee_pop": 0,
@@ -1023,6 +1028,71 @@
       "convention": "LX_ABI_STACK32"
     },
     "WinSetVisibleRegionNotify": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinOpenClipbrd": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCloseClipbrd": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEmptyClipbrd": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClipbrdOwner": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetClipbrdOwner": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEnumClipbrdFmts": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClipbrdFmtInfo": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClipbrdData": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetClipbrdData": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQuerySystemAtomTable": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinAddAtom": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFindAtom": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDeleteAtom": {
       "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
@@ -1533,6 +1603,21 @@
     },
     "RegEnumValue": {
       "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "LoadCursor": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetCursor": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DestroyCursor": {
+      "argument_bytes": 4,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

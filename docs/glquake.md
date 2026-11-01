@@ -4,7 +4,7 @@ This port builds id Software's GPL GLQuake as a native OS/2 LX Presentation
 Manager application. The same executable uses IBM OpenGL on Warp 4.52 and
 2ine's Mesa/PGL implementation. The platform layer calls OS/2 APIs only.
 
-The current port provides a fixed-size window, single-player maps, save/load,
+The current port provides a resizable window, single-player maps, save/load,
 keyboard controls, relative mouse movement, mouse buttons and Quake's TGA
 screenshot command. Game sound uses MMPM/2 DART with 16-bit stereo PCM. LAN
 multiplayer uses Quake's UDP datagram protocol, including server discovery,
@@ -39,7 +39,7 @@ ordinal profile. Run from the game directory so that `id1` is found:
 
 Linux uses Mesa. macOS uses the KosmicKrisp/Metal configuration described in
 [OpenGL](opengl.md); this port adds no platform-specific host graphics calls.
-The macOS host runtime still needs separate macOS testing.
+Resizing updates the render viewport, console dimensions and mouse center.
 
 Use the original Quake keyboard bindings or change them in the Options menu.
 Arrow keys move and turn; holding Alt strafes. Mouse motion turns/moves;
@@ -64,6 +64,8 @@ Additional switches:
 
 `glquake.log` records startup, renderer selection, engine messages and shutdown.
 Quake writes bindings/settings to `id1/config.cfg` on normal shutdown.
+
+For repeatable `demo1` performance measurements, see [game timedemos](game-benchmarks.md).
 
 ## LAN play
 

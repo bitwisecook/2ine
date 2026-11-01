@@ -27,6 +27,9 @@ The patch replaces the source's minute-relative wall clock with monotonic
 `DosQuerySysInfo(QSV_MS_COUNT)` time. A short process critical section serializes
 UI and game callers; unsigned differences extend the 32-bit millisecond wrap.
 The existing source configuration defaults to windowed DIVE output.
+The desktop patch fits the game into a centered 4:3 viewport when resized,
+clears the letterbox bars, and recenters relative mouse input in client
+coordinates. `TWOINE_KEEP_ASPECT=0` selects the original stretched presentation.
 
 Saves allocate their declared archive capacity independently of the screen
 buffers, preserving the save-file layout on levels with larger state. Audio

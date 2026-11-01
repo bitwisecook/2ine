@@ -26,6 +26,16 @@ void destroyPointers(AnchorBlock *anchor)
     while (anchor->pointers)
         lx_handle_close(anchor->pointers->handle, LX_HANDLE_PM_POINTER);
 }
+HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
+{
+    TRACE_NATIVE("WinLoadPointer(%u, %u, %u)", (uint)desktop, (uint)module, (uint)id);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor)
+        return 0;
+    /* Resource cursors are unavailable; callers may retain a system pointer. */
+    SET_WIN_ERROR_AND_RETURN(
+        anchor, desktop == HWND_DESKTOP ? PMERR_RESOURCE_NOT_FOUND : PMERR_INVALID_HWND, 0);
+}
 HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

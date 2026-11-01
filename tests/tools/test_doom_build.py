@@ -9,6 +9,58 @@ from pathlib import Path
 
 
 class DoomClockTests(unittest.TestCase):
+    def test_desktop_view_fits_four_by_three_and_centers_bars(self):
+        root = Path(__file__).resolve().parents[2]
+        patch = (root / "research/patches/doom110-desktop.patch").read_text()
+        additions = "\n".join(line[1:] for line in patch.splitlines() if line.startswith("+"))
+        body = "static void FitGameView" + additions.split("static void FitGameView", 1)[1]
+        body = body.split("\n}\n", 1)[0] + "\n}\n"
+        source = (
+            r"""
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+typedef uint32_t ULONG;
+typedef struct { ULONG ulDstWidth, ulDstHeight, lDstPosX, lDstPosY; } SETUP_BLITTER;
+"""
+            + body
+            + r"""
+int main(void) {
+    const unsigned sizes[][2] = {{640,480}, {1000,480}, {480,900}, {1600,900}, {1,1}};
+    for (unsigned i = 0; i < sizeof sizes / sizeof *sizes; i++) {
+        unsigned w = sizes[i][0], h = sizes[i][1];
+        SETUP_BLITTER b;
+        FitGameView(w, h, &b);
+        if (!b.ulDstWidth || !b.ulDstHeight || b.ulDstWidth > w || b.ulDstHeight > h ||
+            b.lDstPosX != (w-b.ulDstWidth)/2 || b.lDstPosY != (h-b.ulDstHeight)/2 ||
+            (b.ulDstWidth != w && b.ulDstHeight != h)) return 1;
+        if (getenv("TWOINE_KEEP_ASPECT") && !atoi(getenv("TWOINE_KEEP_ASPECT"))) {
+            if (b.ulDstWidth != w || b.ulDstHeight != h || b.lDstPosX || b.lDstPosY) return 1;
+        } else if (abs((int)(3*b.ulDstWidth) - (int)(4*b.ulDstHeight)) > 4) return 1;
+    }
+    return 0;
+}
+"""
+        )
+        compiler = shutil.which("cc")
+        self.assertIsNotNone(compiler)
+        with tempfile.TemporaryDirectory(prefix="twoine-doom-view-") as temporary:
+            directory = Path(temporary)
+            (directory / "view.c").write_text(source)
+            subprocess.run(
+                [
+                    str(compiler),
+                    "-Wall",
+                    "-Werror",
+                    str(directory / "view.c"),
+                    "-o",
+                    str(directory / "view"),
+                ],
+                check=True,
+            )
+            subprocess.run([str(directory / "view")], check=True)
+            subprocess.run([str(directory / "view")], env={"TWOINE_KEEP_ASPECT": "0"}, check=True)
+
     def test_patched_clock_rollover_and_concurrent_callers(self):
         root = Path(__file__).resolve().parents[2]
         patch = (root / "research/patches/doom110-clock.patch").read_text()

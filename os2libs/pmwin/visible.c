@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Window drawing excludes visible siblings above it and clip-children areas. */
+/* Window styles control sibling and child clipping. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 static BOOL exclude_window(PmRegion *visible, Window *window, const LxHostRect *origin)
@@ -40,10 +40,11 @@ BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
     if (!regionBoolean(visible, &initial, ps->clip_lease.resource, ps->clip_lease.resource ? 6 : 2))
         return FALSE;
     for (Window *w = window; w->parent && w->parent != &desktop_window; w = w->parent)
-        for (Window *above = w->parent->children; above && above != w; above = above->sibling)
-            if (!exclude_window(visible, above, &origin))
-                goto fail;
-    if (window->style & 0x20000000) /* WS_CLIPCHILDREN */
+        if ((w->style | w->class_style) & WS_CLIPSIBLINGS)
+            for (Window *above = w->parent->children; above && above != w; above = above->sibling)
+                if (!exclude_window(visible, above, &origin))
+                    goto fail;
+    if ((window->style | window->class_style) & WS_CLIPCHILDREN)
         for (Window *child = window->children; child; child = child->sibling)
             if (!exclude_window(visible, child, &origin))
                 goto fail;

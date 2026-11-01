@@ -1,0 +1,92 @@
+--- a/i_main.c
++++ b/i_main.c
+@@ -450,6 +450,25 @@
+    exit(0);
+ }
+ 
++static void FitGameView(ULONG width, ULONG height, SETUP_BLITTER *blitter)
++{
++   const char *keep_aspect = getenv("TWOINE_KEEP_ASPECT");
++   blitter->ulDstWidth = width;
++   blitter->ulDstHeight = height;
++   blitter->lDstPosX = blitter->lDstPosY = 0;
++   if (keep_aspect && keep_aspect[0] == '0' && !keep_aspect[1]) return;
++   blitter->ulDstHeight = width * 3 / 4;
++   if (blitter->ulDstHeight > height)
++   {
++      blitter->ulDstHeight = height;
++      blitter->ulDstWidth = height * 4 / 3;
++   }
++   if (!blitter->ulDstWidth) blitter->ulDstWidth = 1;
++   if (!blitter->ulDstHeight) blitter->ulDstHeight = 1;
++   blitter->lDstPosX = (width - blitter->ulDstWidth) / 2;
++   blitter->lDstPosY = (height - blitter->ulDstHeight) / 2;
++}
++
+ MRESULT EXPENTRY WndProc (HWND hwnd, ULONG iMsg, MPARAM mp1, MPARAM mp2)
+ {
+    event_t		event;
+@@ -522,6 +541,8 @@
+ 
+    case WM_VRNENABLED:
+       hps = WinGetPS (hwnd);
++      WinQueryWindowRect(hwnd, &rcl);
++      WinFillRect(hps, &rcl, CLR_BLACK);
+       hrgn = GpiCreateRegion (hps, 0L, NULL);
+ 
+       WinQueryVisibleRegion (hwnd, hrgn);
+@@ -565,8 +586,7 @@
+       SetupBlitter.lDstPosY          = 0;
+       if (!use_fullscreen)
+       {
+-         SetupBlitter.ulDstWidth        = swp.cx;
+-         SetupBlitter.ulDstHeight       = swp.cy;
++         FitGameView(swp.cx, swp.cy, &SetupBlitter);
+ 
+          SetupBlitter.lScreenPosX       = pointl.x;
+          SetupBlitter.lScreenPosY       = pointl.y;
+@@ -658,8 +678,7 @@
+          POINTL ptl;
+          WinQueryPointerPos (HWND_DESKTOP, &ptl);
+          WinQueryWindowPos( hFrame, &swp );
+-         ptl.x -= swp.x;
+-         ptl.y -= swp.y;
++         WinMapWindowPoints(HWND_DESKTOP, hwnd, &ptl, 1);
+          WinPostMsg( hwnd, WM_MOUSEMOVE, MPFROM2SHORT(ptl.x, ptl.y), NULL );
+ //         WinSetPointer (HWND_DESKTOP, NULL);
+       }
+@@ -675,9 +694,9 @@
+       }
+       event.type = ev_mouse;
+       event.data1 = mb;
+-      WinQueryWindowPos( hFrame, &swp );
+-      event.data2 = SHORT1FROMMP(mp1) - SCREENWIDTH/2;
+-      event.data3 = SHORT2FROMMP(mp1) - SCREENHEIGHT/2;
++      WinQueryWindowPos( hwnd, &swp );
++      event.data2 = SHORT1FROMMP(mp1) - swp.cx/2;
++      event.data3 = SHORT2FROMMP(mp1) - swp.cy/2;
+       if((!event.data2) && (!event.data3)) break;
+       WinPostMsg( hwnd, (WM_USER+100), NULL, NULL );
+       D_PostEvent(&event);
+@@ -685,8 +704,11 @@
+ 
+    case (WM_USER+100):
+       mmove = TRUE;
+-      WinQueryWindowPos( hFrame, &swp );
+-      WinSetPointerPos(HWND_DESKTOP, SCREENWIDTH/2+swp.x, SCREENHEIGHT/2+swp.y);
++      WinQueryWindowPos( hwnd, &swp );
++      pointl.x = swp.cx/2;
++      pointl.y = swp.cy/2;
++      WinMapWindowPoints(hwnd, HWND_DESKTOP, &pointl, 1);
++      WinSetPointerPos(HWND_DESKTOP, pointl.x, pointl.y);
+       //WinSetPointer (HWND_DESKTOP, NULL);
+       break;
+ 
+@@ -711,6 +733,7 @@
+ 
+    case WM_PAINT:
+       hps = WinBeginPaint(hwnd,0,&rcl);
++      WinFillRect(hps, &rcl, CLR_BLACK);
+       RenderScene();
+       WinEndPaint(hps);
+       return 0;

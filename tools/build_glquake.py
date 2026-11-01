@@ -100,7 +100,9 @@ def main():
             flags=re.M,
         )
         target.write_bytes(data)
-    shutil.copytree(headers / "gl", headers / "GL", dirs_exist_ok=True)
+    # On a case-insensitive host these names already identify the same directory.
+    if not (headers / "GL").exists() or not (headers / "gl").samefile(headers / "GL"):
+        shutil.copytree(headers / "gl", headers / "GL", dirs_exist_ok=True)
     tools = output / "host-tools"
     tools.mkdir(exist_ok=True)
     for name in () if runner else ("wcc386", "wlink"):

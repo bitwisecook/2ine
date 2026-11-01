@@ -159,6 +159,18 @@ int lx_host_socket_nonblocking(int fd, int enabled)
 }
 int lx_host_socket_available(int fd, int *bytes)
 {
+#ifdef SO_NREAD
+    int type;
+    socklen_t size = sizeof type;
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &size) < 0)
+        return -1;
+    /* Darwin FIONREAD includes the queued datagram's address record. */
+    if (type == SOCK_DGRAM)
+    {
+        size = sizeof *bytes;
+        return getsockopt(fd, SOL_SOCKET, SO_NREAD, bytes, &size);
+    }
+#endif
     return ioctl(fd, FIONREAD, bytes);
 }
 int lx_host_socket_hostname(char *name, size_t size)

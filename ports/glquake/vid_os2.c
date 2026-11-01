@@ -114,6 +114,21 @@ static MRESULT EXPENTRY WindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     int key, button;
     switch (msg)
     {
+        case WM_SIZE:
+            if (SHORT1FROMMP(mp2) && SHORT2FROMMP(mp2))
+            {
+                width = SHORT1FROMMP(mp2);
+                height = SHORT2FROMMP(mp2);
+                vid.conwidth = width & ~7;
+                if (vid.conwidth < 8)
+                    vid.conwidth = 8;
+                vid.conheight = height;
+                vid.width = vid.conwidth;
+                vid.height = vid.conheight;
+                vid.aspect = (float)height / width * (320.0 / 240.0);
+                vid.recalc_refdef = 1;
+            }
+            return 0;
         case WM_CLOSE:
             Cbuf_AddText("quit\n");
             return 0;

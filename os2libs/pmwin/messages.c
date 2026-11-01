@@ -7,6 +7,7 @@
  */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmwin/menus.h"
 const char *messageName(const ULONG msg)
 {
     switch (msg)
@@ -169,13 +170,21 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
     TRACE_EVENT("EVENT SEND { hwnd=%u, msg=%u (%s), mp1=%p, mp2=%p, proc=%p }", (uint)win->hwnd,
                 (uint)msg, messageName(msg), mp1, mp2, winproc);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (msg == WM_PAINT)
+        anchor->paint_depth++;
+    MRESULT result;
     if (GLoaderState.execution && (uintptr_t)winproc <= UINT32_MAX &&
         lx_execution_memory(GLoaderState.execution, (uint32_t)(uintptr_t)winproc, 1,
                             LX_GUEST_EXECUTE))
-        return (MRESULT)(uintptr_t)lx_execution_callback32_4(
+        result = (MRESULT)(uintptr_t)lx_execution_callback32_4(
             GLoaderState.execution, (uint32_t)(uintptr_t)winproc, win->hwnd, msg,
             (uint32_t)(uintptr_t)mp1, (uint32_t)(uintptr_t)mp2);
-    return winproc(win->hwnd, msg, mp1, mp2);
+    else
+        result = winproc(win->hwnd, msg, mp1, mp2);
+    if (msg == WM_PAINT)
+        anchor->paint_depth--;
+    return result;
 }
 
 BOOL destroyMessageQueue(AnchorBlock *anchor)
@@ -295,15 +304,18 @@ BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1, M
     return postMessage(anchor, &qmsg) == NO_ERROR;
 }
 
+static BOOL postExposedSiblings(AnchorBlock *anchor, Window *win, ULONG ticks)
+{
+    if (!win)
+        return FALSE;
+    BOOL result = postExposedSiblings(anchor, win->sibling, ticks);
+    return postExposedMessages(anchor, win, ticks) | result;
+}
 BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
 {
-    FIXME("this should WinInvalidateRect() the windows, not send paint messages");
-    FIXME(
-        "this is a recursive hell"); // Sibling traversal starts at the bottom of the window stack.
     BOOL retval = FALSE;
     if (win)
     {
-        retval |= postExposedMessages(anchor, win->sibling, ticks);
         if (win->style & WS_VISIBLE)
         {
             FIXME(
@@ -314,7 +326,7 @@ BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
                 visible = (parent->style & WS_VISIBLE) != 0;
             if (visible)
                 retval |= WinInvalidateRect(win->hwnd, NULL, FALSE);
-            retval |= postExposedMessages(anchor, win->children, ticks);
+            retval |= postExposedSiblings(anchor, win->children, ticks);
         }
     }
     return retval;
@@ -328,12 +340,16 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return postTimestampedMsg(anchor, 0, WM_QUIT, 0, 0, ticks);
     if (!win || !win->hwnd)
         return FALSE;
+    if (event->type == LX_HOST_EVENT_INPUT_RESET)
+        return releaseInputState(anchor, ticks);
     if (event->type == LX_HOST_EVENT_KEY_DOWN || event->type == LX_HOST_EVENT_KEY_UP ||
         event->type == LX_HOST_EVENT_TEXT)
         return processKeyboardEvent(anchor, event);
     if (event->type == LX_HOST_EVENT_FOCUS_GAINED)
     {
         WinSetActiveWindow(HWND_DESKTOP, win->hwnd);
+        if (!WinQueryFocus(HWND_DESKTOP))
+            WinSetFocus(HWND_DESKTOP, win->last_focus ? win->last_focus : win->hwnd);
         return FALSE;
     }
     if (event->type == LX_HOST_EVENT_FOCUS_LOST)
@@ -342,6 +358,10 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
             WinSetActiveWindow(HWND_DESKTOP, 0);
         else if (topLevelWindow(anchor, anchor->focus) == win->hwnd)
             WinSetFocus(HWND_DESKTOP, 0);
+        memset(anchor->key_down, 0, sizeof anchor->key_down);
+        memset(anchor->physical_keys, 0, sizeof anchor->physical_keys);
+        anchor->modifiers = anchor->text_modifiers = anchor->text_scancode = anchor->text_repeat =
+            0;
         return FALSE;
     }
     if (event->type == LX_HOST_EVENT_CLOSE)
@@ -368,7 +388,14 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         for (child = win->children; child; child = child->sibling)
             if ((child->style & WS_VISIBLE) && x >= child->x && y >= child->y &&
                 x < child->x + child->w && y < child->y + child->h)
+            {
+                MPARAM local = (MPARAM)(uintptr_t)((uint16)(x - child->x) |
+                                                   (uint32)(uint16)(y - child->y) << 16);
+                if ((child->class_style & CS_HITTEST) &&
+                    (LONG)(uintptr_t)sendMessage(child, WM_HITTEST, local, 0) == HT_TRANSPARENT)
+                    continue;
                 break;
+            }
         if (!child)
             break;
         x -= child->x;
@@ -377,6 +404,8 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     }
     if (!win->enabled)
         return FALSE;
+    if (event->type == LX_HOST_EVENT_BUTTON_DOWN)
+        dismissMenusForClick(anchor, win);
     ULONG message = WM_MOUSEMOVE;
     if (event->type != LX_HOST_EVENT_MOTION)
     {
@@ -393,13 +422,32 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     return result;
 }
 
+void presentWindow(AnchorBlock *anchor, Window *window)
+{
+    if (!window || !window->heavy.window || anchor->paint_depth)
+        return;
+    Window *root = window;
+    while (root->parent && root->parent != &desktop_window)
+        root = root->parent;
+    uint64_t now = lx_host_video_ticks_ms();
+    for (MessageQueueItem *item = anchor->message_queue.head; item; item = item->next)
+        if (item->qmsg.msg == WM_PAINT)
+        {
+            Window *pending = getWindowFromHWND(anchor, item->qmsg.hwnd);
+            if (pending && pending->heavy.window == window->heavy.window &&
+                WinIsWindowVisible(pending->hwnd) && now - root->last_present < 16)
+                return;
+        }
+    lx_host_window_present(window->heavy.window);
+    root->last_present = now;
+}
 static void presentWindows(AnchorBlock *anchor)
 {
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
         Window *win = anchor->windows[i];
         if (win && win->hwnd && win->parent == &desktop_window && (win->style & WS_VISIBLE))
-            lx_host_window_present(win->heavy.window);
+            presentWindow(anchor, win);
     }
 }
 void pumpEvents(AnchorBlock *anchor)
@@ -463,6 +511,9 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
         /* Present retained drawing even while queued timers keep the queue busy. */
         drainForeignMessages(anchor);
         lx_pm_dive_pump(anchor);
+        LxHostEvent event;
+        while (lx_host_video_poll(&event))
+            processHostEvent(anchor, &event);
         presentWindows(anchor);
         pumpTimers(anchor);
         MessageQueueItem *prev = NULL;

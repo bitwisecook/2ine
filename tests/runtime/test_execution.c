@@ -187,6 +187,14 @@ static void invoke32(void)
     put32(post_return + 5, lx_execution_mapping_address(data) + 4);
     memcpy(p + 0x400, post_return, sizeof post_return);
     ReturnCallback = lx_execution_mapping_address(code) + 0x400;
+    /* More imports than dispatch buckets exercise collisions and older entries. */
+    LxGuestMapping *imports = lx_execution_map(Execution, 0x07000000, 0x40000, 7, 1);
+    CHECK(imports);
+    uint8_t *stubs = lx_execution_mapping_host(imports);
+    api = (LxExecutionApi32){bridge32, 16, 16, LX_ABI_STACK32};
+    for (unsigned i = 0; i < 4096; i++)
+        CHECK(lx_execution_emit_bridge32(Execution, stubs + i * 64, 64, &api));
+    CHECK(lx_execution_protect(Execution, imports, 5));
     CHECK(lx_execution_protect(Execution, code, 5));
     LxExecutionEntry entry = {0};
     entry.entry = lx_execution_mapping_address(code);
@@ -216,6 +224,10 @@ static void invoke32(void)
         }
         CHECK(ProgramResult == 0x1235);
     }
+    for (unsigned i = 0; i < 4096; i++)
+        CHECK(lx_execution_callback32_4(Execution, lx_execution_mapping_address(imports) + i * 64,
+                                        i, 0, 0, 0) == i + 1);
+    CHECK(lx_execution_unmap(Execution, imports));
     ReturnCallback = 0;
     CHECK(lx_execution_unmap(Execution, code));
     CHECK(lx_execution_unmap(Execution, stack));

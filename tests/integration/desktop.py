@@ -137,6 +137,10 @@ def program(checked):
     flags = g.field(bytes(4))
     g.call(2, 763, 0)
     g.result(1, 70)
+    g.call(2, 780, 1, 0, 1)  # Unavailable pointer resources fail through the real export.
+    g.result(0, 74)
+    g.call(2, 753, 1)
+    g.result(0x100A, 75)
     g.call(2, 716, 1, 0)
     g.call(2, 926, 1, class_name, 0x10002, 0, 8)
     g.result(1, 71)
@@ -177,6 +181,60 @@ def program(checked):
     )
 
 
+def desktop_services():
+    g = FlatGuest()
+    text, count = g.field(b"hello\0"), g.field(bytes(4))
+    g.call(2, 763, 0)
+    g.result(1, 119)
+    cursor = g.field(bytes(4))
+    g.call(2, 828, 1, 2, 0)  # The dummy driver may have no host cursors.
+    g.code.extend(b"\xa3" + struct.pack("<I", cursor))
+    g.call(4, 459, 0, 32513)  # Open32 IDC_IBEAM maps to SPTR_TEXT.
+    g.require(b"\x3b\x05" + struct.pack("<I", cursor), 114)
+    g.call_handle(4, 605, cursor)
+    g.result(0, 115)
+    g.call(4, 605, 0)
+    g.require(b"\x3b\x05" + struct.pack("<I", cursor), 116)
+    g.call_handle(4, 143, cursor)  # Shared system cursors cannot be destroyed.
+    g.result(0, 117)
+    g.call(4, 459, 0, 0)
+    g.result(0, 118)
+    # Edit-menu Paste availability resolves these clipboard and atom APIs lazily.
+    g.call(2, 830)
+    g.result(1, 100)
+    g.call(2, 700, 1, text)
+    g.result(0xC000, 101)
+    g.call(2, 744, 1, text)
+    g.result(0xC000, 102)
+    g.call(2, 793, 1)
+    g.result(1, 103)
+    g.call(2, 739, 1, 0)
+    g.result(0, 104)
+    g.call(2, 808, 1)
+    g.result(0, 105)
+    g.call(2, 807, 1, 0xC000, count)
+    g.result(0, 106)
+    g.call(2, 854, 1, 456, 0xC000, 0x201)
+    g.result(1, 107)
+    g.call(2, 807, 1, 0xC000, count)
+    g.result(1, 108)
+    g.word(count, 0x201, 109)
+    g.call(2, 806, 1, 0xC000)
+    g.result(456, 110)
+    g.call(2, 733, 1)
+    g.result(1, 111)
+    g.call(2, 707, 1)
+    g.result(1, 112)
+    g.call(2, 721, 1, 0xC000)
+    g.result(0, 113)
+    g.call(2, 888, 1)
+    g.result(1, 120)
+    g.exit(0)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "PMWIN", "PMSHAPI", "PMWINX"], "DESKSERV", data=g.data
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -196,7 +254,6 @@ def main():
             )
         )
         executable = work / "desktop.exe"
-        executable.write_bytes(program(args.backend == "unicorn"))
         env = dict(
             os.environ,
             TWOINE_BACKEND=args.backend,
@@ -208,17 +265,19 @@ def main():
             SDL_VIDEO_DRIVER="dummy",
             SDL_RENDER_DRIVER="software",
         )
-        result = subprocess.run(
-            [str(build / "lx_loader"), str(executable)],
-            cwd=work,
-            env=env,
-            capture_output=True,
-            timeout=15,
-        )
-        if result.returncode:
-            raise RuntimeError(
-                f"desktop exit={result.returncode}\n" + result.stderr.decode(errors="replace")
+        for payload in (program(args.backend == "unicorn"), desktop_services()):
+            executable.write_bytes(payload)
+            result = subprocess.run(
+                [str(build / "lx_loader"), str(executable)],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                timeout=15,
             )
+            if result.returncode:
+                raise RuntimeError(
+                    f"desktop exit={result.returncode}\n" + result.stderr.decode(errors="replace")
+                )
         for corrupt_table in (False, True):
             bad = bytearray(linear_image(b"\xc3", [], [], "BADRES", resources=[(5, 1, b"data")]))
             if corrupt_table:

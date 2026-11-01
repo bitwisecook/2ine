@@ -14,6 +14,7 @@
 #define FLAT_DATA 0x23
 #define API_VECTOR 0xf1
 #define RETURN_VECTOR 0xf0
+#define BINDING_BUCKETS 2048
 
 typedef struct Binding
 {
@@ -23,6 +24,7 @@ typedef struct Binding
     LxExecutionAbi32 convention;
     char *missing_module, *missing_entry;
     struct Binding *next;
+    struct Binding *hash_next;
 } Binding;
 typedef struct Invocation
 {
@@ -40,6 +42,7 @@ typedef struct EmulatedState
     LxSegment selectors[SELECTOR_COUNT];
     LxGuestMapping *segments[SELECTOR_COUNT];
     Binding *bindings;
+    Binding *binding_buckets[BINDING_BUCKETS];
     LxGuestMapping *return_page;
     uint32_t return_address, near_base;
     uint16_t return_selector;
@@ -51,6 +54,11 @@ static EmulatedState *Emulated;
 static __thread Invocation *Active;
 static __thread uint8_t *ThreadTib;
 static __thread uint16_t ThreadFs;
+
+static unsigned bindingBucket(uint32_t address)
+{
+    return (address ^ (address >> 4) ^ (address >> 16)) & (BINDING_BUCKETS - 1);
+}
 
 static __attribute__((noreturn)) void failure(const char *message)
 {
@@ -277,6 +285,9 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *base, uint
     b->argument_bytes = bytes;
     b->next = Emulated->bindings;
     Emulated->bindings = b;
+    unsigned bucket = bindingBucket(b->address);
+    b->hash_next = Emulated->binding_buckets[bucket];
+    Emulated->binding_buckets[bucket] = b;
     output[0] = 0xcd;
     output[1] = API_VECTOR;
     output[2] = 0xca;
@@ -302,6 +313,12 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
 }
 static void replaceContext(Invocation *frame)
 {
+    if (frame->context)
+    {
+        if (!lx_cpu_update(Emulated->cpu, frame->context))
+            failure(lx_cpu_error(Emulated->cpu));
+        return;
+    }
     LxCpuContext *next = lx_cpu_save(Emulated->cpu);
     if (!next)
         failure(lx_cpu_error(Emulated->cpu));
@@ -340,7 +357,9 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         if (!lx_cpu_restore(s->cpu, frame.context))
             failure(lx_cpu_error(s->cpu));
         bindThreadWindow(s);
-        LxCpuEvent event = lx_cpu_run(s->cpu, 0, 10000);
+        /* Bound cooperative slices at translated-block boundaries. Counting
+           every instruction adds a callback even inside hot rendering loops. */
+        LxCpuEvent event = lx_cpu_run_blocks(s->cpu, 4096);
         if (!lx_cpu_get_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
         replaceContext(&frame);
@@ -386,7 +405,8 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         if (registers.cs & 4)
             linear += s->selectors[registers.cs >> 3].base;
         Binding *b;
-        for (b = s->bindings; b && b->address != linear; b = b->next)
+        for (b = s->binding_buckets[bindingBucket(linear)]; b && b->address != linear;
+             b = b->hash_next)
         {
         }
         if (!b)

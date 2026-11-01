@@ -18,7 +18,8 @@
 typedef struct UnicornCpu
 {
     uc_engine *engine;
-    uc_hook interrupt_hook, memory_hook;
+    uc_hook interrupt_hook, memory_hook, block_hook;
+    uint64_t block_budget, blocks_remaining;
     LxCpuEvent event;
     int stopped;
 } UnicornCpu;
@@ -26,6 +27,15 @@ typedef struct UnicornCpu
 static int checked(LxCpu *cpu, uc_err error)
 {
     return error == UC_ERR_OK ? 1 : lx_cpu_fail(cpu, uc_strerror(error));
+}
+
+static void block_boundary(uc_engine *engine, uint64_t address, uint32_t size, void *opaque)
+{
+    UnicornCpu *u = opaque;
+    (void)address;
+    (void)size;
+    if (u->block_budget && !u->blocks_remaining--)
+        uc_emu_stop(engine);
 }
 
 static void interrupt(uc_engine *engine, uint32_t vector, void *opaque)
@@ -126,6 +136,8 @@ static int open_cpu(LxCpu *cpu)
         !checked(cpu, uc_reg_write(u->engine, UC_X86_REG_CR0, &cr0)) ||
         !checked(cpu, uc_hook_add(u->engine, &u->interrupt_hook, UC_HOOK_INTR, (void *)interrupt, u,
                                   1, 0)) ||
+        !checked(cpu, uc_hook_add(u->engine, &u->block_hook, UC_HOOK_BLOCK, (void *)block_boundary,
+                                  u, 1, 0)) ||
         !checked(cpu, uc_hook_add(u->engine, &u->memory_hook, UC_HOOK_MEM_INVALID,
                                   (void *)memory_fault, u, 1, 0)))
         goto fail;
@@ -211,58 +223,64 @@ static int get_registers(LxCpu *cpu, LxCpuRegisters *r)
 {
     UnicornCpu *u = cpu->backend;
     memset(r, 0, sizeof *r);
-#define READ_REG(field, name)                                                                      \
-    if (!checked(cpu, uc_reg_read(u->engine, UC_X86_REG_##name, &r->field)))                       \
-        return 0;
-    GENERAL_REGISTERS(READ_REG)
-    SEGMENT_REGISTERS(READ_REG)
-#undef READ_REG
-    return 1;
+#define REG_ID(field, name) UC_X86_REG_##name,
+    static const int ids[] = {GENERAL_REGISTERS(REG_ID) SEGMENT_REGISTERS(REG_ID)};
+#undef REG_ID
+#define REG_VALUE(field, name) &r->field,
+    void *values[] = {GENERAL_REGISTERS(REG_VALUE) SEGMENT_REGISTERS(REG_VALUE)};
+#undef REG_VALUE
+    return checked(cpu, uc_reg_read_batch(u->engine, ids, values, sizeof ids / sizeof ids[0]));
 }
 static int set_registers(LxCpu *cpu, const LxCpuRegisters *r)
 {
     UnicornCpu *u = cpu->backend;
-#define WRITE_REG(field, name)                                                                     \
-    if (!checked(cpu, uc_reg_write(u->engine, UC_X86_REG_##name, &r->field)))                      \
-        return 0;
-    SEGMENT_REGISTERS(WRITE_REG)
-    GENERAL_REGISTERS(WRITE_REG)
-#undef WRITE_REG
-    return 1;
+#define REG_ID(field, name) UC_X86_REG_##name,
+    static const int ids[] = {SEGMENT_REGISTERS(REG_ID) GENERAL_REGISTERS(REG_ID)};
+#undef REG_ID
+#define REG_VALUE(field, name) (void *)&r->field,
+    void *values[] = {SEGMENT_REGISTERS(REG_VALUE) GENERAL_REGISTERS(REG_VALUE)};
+#undef REG_VALUE
+    return checked(cpu, uc_reg_write_batch(u->engine, ids, values, sizeof ids / sizeof ids[0]));
 }
 
-static LxCpuEvent run_cpu(LxCpu *cpu, uint64_t instructions, uint64_t timeout_us)
+static LxCpuEvent run_bounded(LxCpu *cpu, uint64_t instructions, uint64_t timeout_us,
+                              uint64_t blocks)
 {
     UnicornCpu *u = cpu->backend;
-    LxCpuRegisters r;
+    uint32_t eip = 0;
+    uint16_t cs = 0;
+    const int ids[] = {UC_X86_REG_EIP, UC_X86_REG_CS};
+    void *values[] = {&eip, &cs};
     memset(&u->event, 0, sizeof u->event);
     u->event.reason = LX_CPU_BUDGET;
     u->stopped = 0;
-    if (!instructions && !timeout_us)
+    if (!instructions && !timeout_us && !blocks)
     {
-        lx_cpu_fail(cpu, "Guest execution requires an instruction or time bound");
+        lx_cpu_fail(cpu, "Guest execution requires an instruction, block or time bound");
         u->event.reason = LX_CPU_FAULT;
         return u->event;
     }
-    if (instructions > SIZE_MAX || !get_registers(cpu, &r))
+    u->block_budget = u->blocks_remaining = blocks;
+    if (instructions > SIZE_MAX || !checked(cpu, uc_reg_read_batch(u->engine, ids, values, 2)))
     {
         lx_cpu_fail(cpu, "Invalid guest execution bound or CPU state");
         u->event.reason = LX_CPU_FAULT;
         return u->event;
     }
     /* UC_MODE_32 starts from EIP; its x86 core applies the cached CS base. */
-    uint64_t start = r.eip;
+    uint64_t start = eip;
     uc_err error = uc_emu_start(u->engine, start, UINT64_MAX, timeout_us, (size_t)instructions);
+    u->block_budget = 0;
     if (error != UC_ERR_OK)
     {
         checked(cpu, error);
         if (!u->stopped)
         {
             u->event.reason = LX_CPU_FAULT;
-            u->event.address = r.eip;
+            u->event.address = eip;
             for (LxCpuSegment *s = cpu->segments; s; s = s->next)
             {
-                if ((s->definition.selector & ~3u) == (r.cs & ~3u))
+                if ((s->definition.selector & ~3u) == (cs & ~3u))
                 {
                     u->event.address += s->definition.base;
                     break;
@@ -271,6 +289,15 @@ static LxCpuEvent run_cpu(LxCpu *cpu, uint64_t instructions, uint64_t timeout_us
         }
     }
     return u->event;
+}
+
+static LxCpuEvent run_cpu(LxCpu *cpu, uint64_t instructions, uint64_t timeout_us)
+{
+    return run_bounded(cpu, instructions, timeout_us, 0);
+}
+static LxCpuEvent run_blocks(LxCpu *cpu, uint64_t blocks)
+{
+    return run_bounded(cpu, 0, 0, blocks);
 }
 
 static void *save_context(LxCpu *cpu)
@@ -291,12 +318,17 @@ static int restore_context(LxCpu *cpu, const void *context)
     UnicornCpu *u = cpu->backend;
     return checked(cpu, uc_context_restore(u->engine, (uc_context *)context));
 }
+static int update_context(LxCpu *cpu, void *context)
+{
+    UnicornCpu *u = cpu->backend;
+    return checked(cpu, uc_context_save(u->engine, context));
+}
 static void free_context(void *context)
 {
     uc_context_free(context);
 }
 
 const LxCpuOperations lx_cpu_unicorn_operations = {
-    "unicorn",      open_cpu,     close_cpu,       map_memory,    unmap_memory,
-    protect_memory, invalidate,   set_segment,     get_registers, set_registers,
-    run_cpu,        save_context, restore_context, free_context};
+    "unicorn",       open_cpu,     close_cpu,     map_memory,    unmap_memory, protect_memory,
+    invalidate,      set_segment,  get_registers, set_registers, run_cpu,      save_context,
+    restore_context, free_context, run_blocks,    update_context};

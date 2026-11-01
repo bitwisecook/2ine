@@ -81,6 +81,21 @@ desktop fullscreen; `TWOINE_FULLSCREEN=1` starts there. Keep the guest
 opens with the backtick key. Keep the `soundfonts/` directory when relocating
 a worker; `TWOINE_SOUNDFONT` selects another compatible complete SF2 bank.
 
+The source build keeps a 4:3 game image when resized, centering it with black
+bars instead of stretching. Set `TWOINE_KEEP_ASPECT=0` to use stretching instead.
+Mouse turning uses the resized client area's center.
+For explicit host mouse capture, set `TWOINE_MOUSE_CAPTURE=1` before launching.
+The mouse starts released. On macOS, the title bar has **Capture Mouse** /
+**Release Mouse** controls showing the **Control–Option** shortcut, matching
+[UTM's capture/release shortcut](https://docs.getutm.app/basics/controls/).
+Click the game or use the title-bar button to capture; Control–Option toggles
+capture. Changing focus releases it and returning to the window leaves it
+released. Guest pointer warps and cursor hiding are suppressed while released.
+Set `TWOINE_MOUSE_CAPTURE=0` to disable capture and guest pointer warps entirely.
+Leaving it unset retains the application's original pointer behaviour.
+These environment options are independent launch settings that a bottle manager
+can store per bottle; they do not change a global preference or Doom's config.
+
 In the OS/2 reconstruction workspace, `scripts/2ine-doom` runs the prepared
 persistent game directory. `TWOINE_BACKEND=unicorn scripts/2ine-doom` selects
 the portable worker. `TWOINE_DOOM_HOME` and `TWOINE_BUILD` override the game and

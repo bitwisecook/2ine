@@ -226,3 +226,16 @@ done:
     lx_execution_release(&name);
     return result;
 }
+
+static uint32 bridge32_LoadCursor(uint8 *a)
+{
+    return LoadCursor(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_SetCursor(uint8 *a)
+{
+    return SetCursor(lx_guest_load_u32(a));
+}
+static uint32 bridge32_DestroyCursor(uint8 *a)
+{
+    return DestroyCursor(lx_guest_load_u32(a));
+}

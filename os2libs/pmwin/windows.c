@@ -65,7 +65,8 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
             }
             case WC_STATIC:
             {
-                static WindowClass text = {"#5", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                static WindowClass text = {"#5", controlProcedure, CS_SIZEREDRAW | CS_HITTEST, 4,
+                                           NULL};
                 return &text;
             }
             case WC_ENTRYFIELD:
@@ -441,6 +442,8 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         }
     }
 
+    if (win->style & WS_VISIBLE)
+        postExposedMessages(anchor, win, currentSystemTicks());
     return win->hwnd;
 }
 

@@ -96,6 +96,7 @@ BOOL WinTerminate(HAB hab)
     {
         return FALSE;
     }
+    WinCloseClipbrd(hab);
 
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
