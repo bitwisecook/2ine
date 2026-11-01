@@ -603,8 +603,14 @@ def main():
                 raise AssertionError(
                     f"{executable}: {result.returncode}\n{result.stderr.decode(errors='replace')}"
                 )
-        attribute = "com.twoine.metadata" if sys.platform == "darwin" else "user.2ine.metadata"
-        assert os.getxattr(directory / "attributes.dat", attribute) == FEA
+        if sys.platform == "darwin":
+            raw = subprocess.check_output(
+                ["/usr/bin/xattr", "-px", "com.twoine.metadata", str(directory / "attributes.dat")]
+            )
+            attributes = bytes.fromhex(raw.decode())
+        else:
+            attributes = os.getxattr(directory / "attributes.dat", "user.2ine.metadata")
+        assert attributes == FEA
         print(
             "Segmented suballocation, persistent packed EAs and cross-process queue/session handoff passed"
         )
