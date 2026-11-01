@@ -12,6 +12,8 @@
 #include "quecalls.h"
 #include "hal/host_thread.h"
 #include "hal/host_sync.h"
+#include "hal/host_mailbox.h"
+#include "hal/host.h"
 #include "os2libs/pmwin.h"
 
 #include "os2libs/generated/sesmgr-lx.h"
@@ -20,6 +22,8 @@ typedef struct SessionWait
 {
     struct SessionWait *next;
     PID pid;
+    ULONG id;
+    LxHostMailbox *identity;
     HQUEUE queue;
     BOOL related;
     BOOL selectable, bonded;
@@ -27,6 +31,35 @@ typedef struct SessionWait
 static SessionWait *sessions;
 static LxHostMutex *session_mutex;
 static LxHostOnce session_once = LX_HOST_ONCE_INIT;
+static void destroy_session(SessionWait *session)
+{
+    if (session->queue)
+        DosCloseQueue(session->queue);
+    if (session->identity)
+        lx_host_mailbox_close(session->identity);
+    free(session);
+}
+static BOOL reserve_session(SessionWait *session)
+{
+    uint32 process, parent;
+    lx_host_process_ids(&process, &parent);
+    for (ULONG offset = 0; offset < 0xfffe; offset++)
+    {
+        ULONG id = (process + offset) % 0xfffe + 1;
+        char name[32];
+        snprintf(name, sizeof name, "session-%04x", (unsigned)id);
+        uint32 owner;
+        int result =
+            lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), name, 1, 0, &session->identity, &owner);
+        if (result == 2)
+            continue;
+        if (result)
+            return FALSE;
+        session->id = id;
+        return TRUE;
+    }
+    return FALSE;
+}
 static void initialize_sessions(void)
 {
     session_mutex = lx_host_mutex_create(0, 0);
@@ -56,7 +89,7 @@ APIRET DosSelectSession(ULONG session)
     APIRET result = 369; /* ERROR_SMG_INVALID_SESSION_ID */
     lx_host_mutex_lock(session_mutex, UINT32_MAX);
     for (SessionWait *item = sessions; item; item = item->next)
-        if (item->pid == session)
+        if (item->id == session)
         {
             /* Child foreground selection requires a target host window. */
             result = item->related ? 224 : 460; /* NO_TARGET_WINDOW / PROCESS_NOT_PARENT */
@@ -80,7 +113,7 @@ APIRET DosSetSession(ULONG session, PSTATUSDATA status)
     lx_host_mutex_lock(session_mutex, UINT32_MAX);
     APIRET result = 369;
     for (SessionWait *item = sessions; item; item = item->next)
-        if (item->pid == session)
+        if (item->id == session)
         {
             result = item->related ? NO_ERROR : 460;
             if (!result)
@@ -105,13 +138,11 @@ static void *session_wait(void *value)
     PID ended = 0;
     if (!DosWaitChild(0, 0, &result, &ended, session->pid) && session->queue)
     {
-        USHORT message[2] = {(USHORT)session->pid, (USHORT)result.codeResult};
+        USHORT message[2] = {(USHORT)session->id, (USHORT)result.codeResult};
         DosWriteQueue(session->queue, 0, sizeof message, message, 0);
     }
-    if (session->queue)
-        DosCloseQueue(session->queue);
     remove_session(session);
-    free(session);
+    destroy_session(session);
     return NULL;
 }
 APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
@@ -122,13 +153,18 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     SessionWait *session = calloc(1, sizeof *session);
     if (!session)
         return ERROR_NOT_ENOUGH_MEMORY;
+    if (!reserve_session(session))
+    {
+        destroy_session(session);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
     if (data->TermQ && *data->TermQ)
     {
         PID owner;
         APIRET result = DosOpenQueue(&owner, &session->queue, (PSZ)data->TermQ);
         if (result)
         {
-            free(session);
+            destroy_session(session);
             return result;
         }
     }
@@ -137,9 +173,7 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     char *command = malloc(name_size + strlen(inputs) + 2);
     if (!command)
     {
-        if (session->queue)
-            DosCloseQueue(session->queue);
-        free(session);
+        destroy_session(session);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
     memcpy(command, data->PgmName, name_size);
@@ -151,15 +185,13 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     free(command);
     if (error)
     {
-        if (session->queue)
-            DosCloseQueue(session->queue);
-        free(session);
+        destroy_session(session);
         return error;
     }
     session->pid = result.codeTerminate;
     session->related = data->Related == 1;
     session->selectable = TRUE;
-    *session_id = session->pid;
+    *session_id = session->id;
     *pid = session->pid;
     lx_host_once(&session_once, initialize_sessions);
     lx_host_mutex_lock(session_mutex, UINT32_MAX);
@@ -172,9 +204,7 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     else
     {
         remove_session(session);
-        if (session->queue)
-            DosCloseQueue(session->queue);
-        free(session);
+        destroy_session(session);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
     return NO_ERROR;

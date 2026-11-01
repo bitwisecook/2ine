@@ -327,6 +327,8 @@ def queue_program(writer):
         g.result(0, 146)
         g.call(3, 37, session, sid, pid)
         g.result(0, 23)
+        g.load(sid)
+        g.require(b"\xa9\x00\x00\xff\xff", 153)
         for length, select, bond, expected in (
             (5, 1, 1, 461),
             (6, 3, 1, 456),
@@ -349,7 +351,9 @@ def queue_program(writer):
         g.result(0, 27)
         g.word(size, 4, 28)
         g.load(pointer)
-        g.require(b"\x83\x78\x02\x00", 29)
+        g.require(b"\x66\x83\x78\x02\x00", 29)
+        g.code.extend(b"\x0f\xb7\x00")
+        g.require(b"\x3b\x05" + struct.pack("<I", sid), 154)
         g.call(1, 304, (pointer,))
         g.result(0, 30)
         g.call_handle(2, 12, queue, count)
