@@ -520,7 +520,7 @@ void pumpEvents(AnchorBlock *anchor)
             lx_pm_host_event(&event);
         int wait = pumpTimers(anchor);
         if (wait < 0 || wait > 10)
-            wait = 10; /* Cross-process posts arrive through the bottle's mailbox. */
+            wait = 10; /* Cross-process posts arrive through the ball's mailbox. */
         QMSG paint;
         if (anchor->message_queue.head || paintMessage(anchor, &paint, 0, 0, 0))
             break;

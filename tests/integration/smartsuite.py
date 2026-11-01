@@ -23,9 +23,9 @@ def digest(path):
 
 def run(args, display, env):
     work = args.work.resolve()
-    document = args.document_path if args.bottle else work / "document.lwp"
+    document = args.document_path if args.ball else work / "document.lwp"
     document.unlink(missing_ok=True)
-    guest_name = args.document_guest if args.bottle else "C:" + str(document).replace("/", "\\")
+    guest_name = args.document_guest if args.ball else "C:" + str(document).replace("/", "\\")
     if len(guest_name.encode()) >= 260:
         raise ValueError("document path exceeds the OS/2 file-dialog limit")
     snapshots = []
@@ -223,7 +223,7 @@ def run(args, display, env):
         },
         "harness_sha256": digest(Path(__file__)),
         "initial_preferences_sha256": args.preferences_sha256,
-        "bottle": str(args.bottle.resolve()) if args.bottle else None,
+        "ball": str(args.ball.resolve()) if args.ball else None,
         "initial_profiles_sha256": args.initial_profiles_sha256,
         "fonts": "warp" if env.get("TWOINE_WARP_FONT_DIRECTORY") else "liberation",
         "normal_exit": result,
@@ -272,7 +272,7 @@ def main():
     parser.add_argument("--installation", type=Path)
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--settings", type=Path)
-    source.add_argument("--bottle", type=Path, help="use the original installer-created settings")
+    source.add_argument("--ball", type=Path, help="use the original installer-created settings")
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=45)
     args = parser.parse_args()
@@ -280,20 +280,20 @@ def main():
     (args.work / "receipt.json").unlink(missing_ok=True)
     build, work = args.build.resolve(), args.work.resolve()
     args.initial_profiles_sha256 = {}
-    if args.bottle:
+    if args.ball:
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-        from tools import bottles
+        from tools import balls
 
-        args.bottle = args.bottle.resolve()
-        data = bottles.load(args.bottle)
-        args.installation = bottles.host_path(r"C:\LOTUSW4", args.bottle, data)
-        bottles.write_config(args.bottle, data)
-        env = bottles.environment(args.bottle, data, build, args.backend)
+        args.ball = args.ball.resolve()
+        data = balls.load(args.ball)
+        args.installation = balls.host_path(r"C:\LOTUSW4", args.ball, data)
+        balls.write_config(args.ball, data)
+        env = balls.environment(args.ball, data, build, args.backend)
         runtime = Path(env["TWOINE_LIBPATH"].split(os.pathsep)[0])
-        bottles.sync_runtime(build, runtime)
+        balls.sync_runtime(build, runtime)
         args.launch_command = [str(runtime / "lx_loader"), r"C:\LOTUSW4\WORDPRO\WORDPRO.EXE"]
         args.document_guest = rf"C:\TEMP\wordpro-{work.name}\document.lwp"
-        args.document_path = bottles.host_path(args.document_guest, args.bottle, data)
+        args.document_path = balls.host_path(args.document_guest, args.ball, data)
         args.document_path.parent.mkdir(parents=True, exist_ok=True)
         args.preferences_sha256 = None
         for key in ("TWOINE_USER_PROFILE", "TWOINE_SYSTEM_PROFILE", "TWOINE_REGISTRY"):

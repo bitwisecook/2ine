@@ -97,10 +97,10 @@ void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
 {
     /* Case-fold OS/2 names into stable, collision-resistant host object names. */
     uint64_t hash = 1469598103934665603ULL; // FNV-1a 64-bit offset basis.
-    const char *bottle = getenv("TWOINE_BOTTLE");
-    if (bottle)
+    const char *ball = getenv("TWOINE_BALL");
+    if (ball)
     {
-        for (const char *p = bottle; *p; p++)
+        for (const char *p = ball; *p; p++)
             hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
         hash = (hash ^ 0xff) * 1099511628211ULL;
     }

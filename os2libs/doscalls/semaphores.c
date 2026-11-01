@@ -23,7 +23,7 @@ enum
 static uint64 eventScope(void)
 {
     uint64 hash = 1469598103934665603ULL;
-    const char *scope = getenv("TWOINE_BOTTLE");
+    const char *scope = getenv("TWOINE_BALL");
     if (!scope)
         scope = getenv("TWOINE_IPC_DIR");
     for (const char *p = scope; p && *p; p++)
@@ -86,7 +86,7 @@ void destroyEventResource(void *value)
     free(sem);
 }
 
-/* Named events use a bottle-scoped shared state and live-handle references.
+/* Named events use a ball-scoped shared state and live-handle references.
    Waits poll at one millisecond; private events retain condition-variable waits. */
 static APIRET namedEvent(const char *name, PHEV output, int create, BOOL32 state)
 {

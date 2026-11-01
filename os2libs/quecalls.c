@@ -101,8 +101,8 @@ static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int creat
     if ((flags & ~7u) || (flags & 3) == 3)
         return ERROR_QUE_INVALID_PRIORITY;
     uint64_t hash = 1469598103934665603ULL;
-    const char *bottle = getenv("TWOINE_BOTTLE");
-    for (const char *p = bottle ? bottle : ""; *p; p++)
+    const char *ball = getenv("TWOINE_BALL");
+    for (const char *p = ball ? ball : ""; *p; p++)
         hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
     hash = (hash ^ 0xff) * 1099511628211ULL;
     for (const char *p = name; *p; p++)

@@ -303,9 +303,9 @@ if(TARGET mdm AND UNIX)
 endif()
 
 if(TARGET pmwinx)
-    add_test(NAME bottles COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/bottles.py"
+    add_test(NAME balls COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/balls.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
-    set_tests_properties(bottles PROPERTIES TIMEOUT 60)
+    set_tests_properties(balls PROPERTIES TIMEOUT 60)
 endif()
 if(TARGET quecalls)
     add_test(NAME installer_apis COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/install_apis.py"

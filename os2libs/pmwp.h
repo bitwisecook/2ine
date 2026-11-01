@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Persistent bottle-local Workplace Shell folder and program objects. */
+/* Persistent ball-local Workplace Shell folder and program objects. */
 #ifndef TWOINE_PMWP_H
 #define TWOINE_PMWP_H
 #include "os2types.h"

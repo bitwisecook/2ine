@@ -18,6 +18,8 @@ jobs:
           "$RUNNER_TEMP/python-tools/bin/ty" check
       - name: Test tools and generated bindings
         run: |
+          cmake -S ball -B build-ball-engine -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-ball-engine --parallel 2
           python3 -m unittest discover -s tests/tools -p 'test_*.py' -v
           python3 tools/lxapigen.py --check
           python3 tools/gen_opengl.py --check

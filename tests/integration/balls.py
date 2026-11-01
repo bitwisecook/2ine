@@ -20,7 +20,7 @@ def program(previous):
     g = FlatGuest()
     drive, bitmap, module = (g.field(bytes(4)) for _ in range(3))
     output = g.field(bytes(128))
-    name = g.field(b"BOTTLEPROBE\0")
+    name = g.field(b"BALLPROBE\0")
     path = g.field(b"C:\\OS2\\probe.exe\0")
     g.call(1, 275, drive, bitmap)
     g.result(0, 10)
@@ -67,7 +67,7 @@ def program(previous):
     g.result(0, 98)
     g.call(1, 258, source, existing, 1)
     g.result(5, 99)
-    app, key = g.field(b"Bottle\0"), g.field(b"Value\0")
+    app, key = g.field(b"Ball\0"), g.field(b"Value\0")
     fallback, text = g.field(b"none\0"), g.field(b"saved\0")
     g.call(6, 763, 0)
     g.result(1, 90)
@@ -82,7 +82,7 @@ def program(previous):
     g.word(output, int.from_bytes(b"save" if previous else b"none", "little"), 51)
     g.call(2, 116, 0xFFFFFFFF, app, key, text)
     g.result(1, 52)
-    registry = g.field(b"Software\\BottleProbe\0")
+    registry = g.field(b"Software\\BallProbe\0")
     handle, disposition, size, kind = (g.field(bytes(4)) for _ in range(4))
     g.call(3, 543, 0xFFFFFFEF, registry, 0, 0, 0, 3, 0, handle, disposition)
     g.result(0, 60)
@@ -96,15 +96,15 @@ def program(previous):
     g.result(0, 64)
     g.call_handle(3, 541, handle)
     g.result(0, 65)
-    identifier = g.field(b"<BOTTLE_APP>\0")
+    identifier = g.field(b"<BALL_APP>\0")
     g.call(5, 252, identifier)
     if previous:
         g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 66)
     else:
         g.result(0, 66)
     class_name = g.field(b"WPProgram\0")
-    title = g.field(b"Bottle application\0")
-    setup = g.field(b"OBJECTID=<BOTTLE_APP>;EXENAME=C:\\OS2\\probe.exe;\0")
+    title = g.field(b"Ball application\0")
+    setup = g.field(b"OBJECTID=<BALL_APP>;EXENAME=C:\\OS2\\probe.exe;\0")
     desktop = g.field(b"<WP_DESKTOP>\0")
     g.call(5, 281, class_name, title, setup, desktop, 2)
     g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 67)
@@ -124,7 +124,7 @@ def program(previous):
         g.code,
         g.fixups,
         ["DOSCALLS", "PMSHAPI", "PMWINX", "MSG", "PMWP", "PMWIN"],
-        "BOTTLEPROBE",
+        "BALLPROBE",
         data=g.data,
     )
 
@@ -134,17 +134,17 @@ def main():
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--backend", choices=("native", "unicorn"), required=True)
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="twoine-bottles-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="twoine-balls-") as temporary:
         root = Path(temporary)
         media = root / "media"
         media.mkdir()
-        launcher = [sys.executable, str(ROOT / "tools/bottles.py")]
+        launcher = [sys.executable, str(ROOT / "tools/balls.py")]
         for name in ("first", "second"):
-            bottle = root / name
+            ball = root / name
             base = [
                 *launcher,
-                "--bottle",
-                str(bottle),
+                "--ball",
+                str(ball),
                 "--build",
                 str(args.build.resolve()),
                 "--backend",
@@ -164,10 +164,10 @@ def main():
                 offsets = struct.pack(
                     "<HH" if width == 2 else "<II", first, first + len(records[0])
                 )
-                (bottle / f"drive_c/OS2/message-{version}.msg").write_bytes(
+                (ball / f"drive_c/OS2/message-{version}.msg").write_bytes(
                     header + offsets + b"".join(records)
                 )
-            executable = bottle / "drive_c/OS2/probe.exe"
+            executable = ball / "drive_c/OS2/probe.exe"
             for previous in (False, True):
                 executable.write_bytes(program(previous))
                 result = subprocess.run(
@@ -181,15 +181,15 @@ def main():
                         f"{name}/{previous}: {result.returncode}\n{result.stderr.decode(errors='replace')}"
                     )
             for path in ("OS2.INI", "REGISTRY.INI", "OBJECTS.INI"):
-                assert (bottle / "drive_c/OS2" / path).stat().st_size > 12
-            source = bottle / "drive_c/OS2/message-1.msg"
+                assert (ball / "drive_c/OS2" / path).stat().st_size > 12
+            source = ball / "drive_c/OS2/message-1.msg"
             assert (
-                bottle / "drive_c/OS2/InstallerDirectory/MESSAGE-1.MSG"
+                ball / "drive_c/OS2/InstallerDirectory/MESSAGE-1.MSG"
             ).read_bytes() == source.read_bytes()
-            data = json.loads((bottle / "bottle.json").read_text())
+            data = json.loads((ball / "ball.json").read_text())
             assert data["drives"]["C"] == "drive_c"
         print(
-            "Two bottles retained independent profiles, registry and mapped guest module/full paths"
+            "Two balls retained independent profiles, registry and mapped guest module/full paths"
         )
 
 

@@ -1,0 +1,20 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+name: Shared C ball engine
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  engine:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Build portable C library and helper
+        run: |
+          cmake -S ball -B build-ball-engine -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-ball-engine --config Release --parallel 2
+      - name: Test native persistence, launch plans and API ownership
+        run: python -m unittest tests.tools.test_balls tests.tools.test_balls_desktop tests.tools.test_ball_engine -v

@@ -8,6 +8,7 @@ hal/include/hal/gl_constants.h
 # Reference experiments and dependency sources retain their own formatting.
 research/**
 third_party/**
+ball/vendor/**
 _deps/**
 build/**
 build-*/**

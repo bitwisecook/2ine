@@ -39,6 +39,6 @@ jobs:
         run: cmake --build build-runtime --config Release --parallel 2
       - name: Test
         run: ctest --test-dir build-runtime -C Release --output-on-failure
-      - name: Test native GNOME bottle manager
+      - name: Test native GNOME ball manager
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/integration/gnome_bottles.py --build build-runtime
+        run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/integration/gnome_balls.py --build build-runtime
