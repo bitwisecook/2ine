@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+#include "os2libs/doscalls.h"
 static uint32 bridge32_GetProfileString(uint8 *a)
 {
     uint32 key_pointer = lx_guest_load_u32(a + 4), fallback_pointer = lx_guest_load_u32(a + 8);
@@ -2811,4 +2812,127 @@ static uint32 bridge32_GetFileAttributes(uint8 *a)
     uint32 result = GetFileAttributes(name);
     free(name);
     return result;
+}
+
+static uint32 bridge32_DdeInitialize(uint8 *a)
+{
+    LxGuestBorrow output;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
+        return 0x4006;
+    ULONG id = lx_guest_load_u32(output.host);
+    uint32 result = DdeInitialize(&id, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                                  lx_guest_load_u32(a + 12));
+    if (!result)
+        lx_guest_store_u32(output.host, id);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_DdeGetLastError(uint8 *a)
+{
+    return DdeGetLastError(lx_guest_load_u32(a));
+}
+static uint32 bridge32_DdeUninitialize(uint8 *a)
+{
+    return DdeUninitialize(lx_guest_load_u32(a));
+}
+
+static uint32 bridge32_DdeCreateStringHandle(uint8 *a)
+{
+    char *text = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 256);
+    uint32 result =
+        DdeCreateStringHandle(lx_guest_load_u32(a), text, (LONG)lx_guest_load_u32(a + 8));
+    free(text);
+    return result;
+}
+static uint32 bridge32_DdeFreeStringHandle(uint8 *a)
+{
+    return DdeFreeStringHandle(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_DdeKeepStringHandle(uint8 *a)
+{
+    return DdeKeepStringHandle(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_DdeCmpStringHandles(uint8 *a)
+{
+    return (uint32)DdeCmpStringHandles(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_DdeQueryString(uint8 *a)
+{
+    uint32 pointer = lx_guest_load_u32(a + 8), capacity = lx_guest_load_u32(a + 12);
+    LxGuestBorrow output = {0};
+    if (pointer && capacity &&
+        !lx_execution_borrow(GLoaderState.execution, pointer, capacity < 256 ? capacity : 256,
+                             LX_GUEST_WRITE, &output))
+    {
+        open32DdeSetError(lx_guest_load_u32(a), 0x4006);
+        return 0;
+    }
+    uint32 result = DdeQueryString(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), output.host,
+                                   capacity, (LONG)lx_guest_load_u32(a + 16));
+    lx_execution_release(&output);
+    return result;
+}
+
+static uint32 bridge32_DdeNameService(uint8 *a)
+{
+    return DdeNameService(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                          lx_guest_load_u32(a + 12));
+}
+
+static uint32 bridge32_GetFullPathName(uint8 *a)
+{
+    char *name = o32_string(lx_guest_load_u32(a));
+    char path[CCHMAXPATH], *filepart = NULL;
+    ULONG capacity = lx_guest_load_u32(a + 4);
+    ULONG length = GetFullPathName(name, sizeof path, path, &filepart);
+    free(name);
+    if (!length || length >= sizeof path)
+        return 0;
+    if (capacity <= length)
+        return length + 1;
+    LxGuestBorrow output = {0}, part = {0};
+    uint32 result = 0, part_pointer = lx_guest_load_u32(a + 12);
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), length + 1,
+                             LX_GUEST_WRITE, &output) ||
+        (part_pointer &&
+         !lx_execution_borrow(GLoaderState.execution, part_pointer, 4, LX_GUEST_WRITE, &part)))
+        open32SetError(87);
+    else
+    {
+        memcpy(output.host, path, length + 1);
+        if (part.host)
+            lx_guest_store_u32(part.host,
+                               filepart ? lx_guest_load_u32(a + 8) + (uint32)(filepart - path) : 0);
+        result = length;
+    }
+    lx_execution_release(&output);
+    lx_execution_release(&part);
+    return result;
+}
+
+static uint32 bridge32_IsClipboardFormatAvailable(uint8 *a)
+{
+    return IsClipboardFormatAvailable(lx_guest_load_u32(a));
+}
+
+static uint32 bridge32_OpenClipboard(uint8 *a)
+{
+    return OpenClipboard(lx_guest_load_u32(a));
+}
+static uint32 bridge32_CloseClipboard(uint8 *a)
+{
+    (void)a;
+    return CloseClipboard();
+}
+static uint32 bridge32_EmptyClipboard(uint8 *a)
+{
+    (void)a;
+    return EmptyClipboard();
+}
+
+static uint32 bridge32_CountClipboardFormats(uint8 *a)
+{
+    (void)a;
+    return CountClipboardFormats();
 }

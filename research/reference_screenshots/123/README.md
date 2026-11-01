@@ -11,8 +11,14 @@ The original Lotus OLE runtime also requires private Warp SOM runtime DLLs, `SOM
 
 The current PM provider has no distributed SOM daemon: its readiness query returns false and starting it returns `ERROR_NOT_SUPPORTED`. PM error-state exchange stores and returns the previous error ID; optional extended error records are not retained.
 
-Named OS/2 queue contracts are recorded in `queue-contracts.json`. Named queues use bottle-local host mailboxes between 2ine processes. Same-process writes preserve opaque guest addresses; cross-process records carry copied payloads. Session termination uses a private queue reference so closing the session does not invalidate the application's queue handle.
+Named OS/2 queue contracts are recorded in `queue-contracts.json`. Named queues use bottle-local host mailboxes between 2ine processes. Same-process writes preserve opaque guest addresses; cross-process named shared-memory records preserve their original pointer and pool ownership. Private cross-process payloads are copied. Session termination uses a private queue reference so closing the session does not invalidate the application's queue handle.
 
 Mux-wait contracts are recorded in `mux-contracts.json`. Event posts and mutex releases notify blocked ANY/ALL waits. PM wait exports currently delegate to the DOS semaphore waits; synchronous cross-thread PM message pumping is not implemented.
 
 POSIX thread cancellation runs cleanup at host cancellation points; Unicorn also checks between guest execution slices and before API dispatch. Native guest loops that never enter a host cancellation point cannot yet be interrupted. The Windows host adapter reports cancellation as unsupported.
+
+`memory-control-contracts.json` records stock shared-memory, suballocation and list-selection measurements. Suballocations remain within their supplied arena, use eight-byte units and retain pool-relative free-list state across process attachments. The current memory provider commits backing eagerly; sparse commitment and page decommit are not modeled.
+
+Open32 DDE supports thread-owned initialization, ANSI string references and local service-name registration/filter state. Peer registration notifications and DDE conversations are not implemented; registering a service when a local peer requires notification fails with `DMLERR_DLL_USAGE`. This does not provide DDE exchange between applications or host processes.
+
+The original SOMDD executable can be run separately with the same private runtime, repositories and `TWOINE_IPC_DIR` as Lotus. PMWP does not start it automatically. Initialization now reaches the workbook input path; committed cell contents and workbook persistence remain unverified.

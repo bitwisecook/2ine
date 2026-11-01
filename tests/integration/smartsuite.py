@@ -102,17 +102,36 @@ def run(args, display, env):
         def font(main, index):
             height = display.geometry(main)[1]
             display.click(main, 50, height - 9, 1)
-            pause(0.5)
+            pause(2)
             dictionary_warning()
             capture(main, f"font-selector-{index}")
             display.click(main, 30, height - 56 + index * 14, 1)
             pause(0.5)
+            display.focus(main)
 
         def reopen(main, name):
             menu(main, "c")
             capture(main, f"closed-{name}")
             menu(main, "o")
             filename(window("Open"))
+            warning = next(
+                (handle for handle, title in display.windows() if title == "Lotus Word Pro"), None
+            )
+            if warning:
+                messages = [
+                    line
+                    for line in Path(log.name).read_text(errors="replace").splitlines()
+                    if "WinMessageBox(" in line
+                ]
+                if (
+                    not messages
+                    or "Your system does not have a default printer driver." not in messages[-1]
+                ):
+                    raise RuntimeError(f"unexpected Word Pro reopen message; see {log.name}")
+                capture(warning, f"{name}-formatting-warning")
+                display.focus(warning)
+                display.key(0xFF0D)
+                pause(0.5)
             # Xvfb has no window manager to restore native focus after a modal closes.
             display.focus(main)
             pause(0.2)
@@ -309,6 +328,7 @@ def main():
         env = dict(
             os.environ,
             TWOINE_BACKEND=args.backend,
+            TWOINE_IPC_DIR=str(work / "ipc"),
             LD_LIBRARY_PATH=str(build),
             TWOINE_LIBPATH=":".join(
                 map(str, (build, installation / "WORDPRO", installation / "COMPNENT"))
@@ -332,6 +352,7 @@ def main():
             else:
                 raise FileNotFoundError(source)
             env[key] = str(destination)
+        (work / "ipc").mkdir(exist_ok=True)
         args.preferences_sha256 = prepare_preferences(args, env, build, work)
         args.launch_command = [str(build / "lx_loader"), "WORDPRO.EXE"]
     read, write = os.pipe()

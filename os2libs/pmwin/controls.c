@@ -211,7 +211,7 @@ static MRESULT list_message(Window *window, ULONG message, MPARAM first, MPARAM 
         }
         c->selected = -1;
         controlRepaint(window);
-        if (changed)
+        if (changed && !(window->style & 0x11) && !(USHORT)(uintptr_t)second)
             controlNotify(window, 1); /* LN_SELECT */
         return controlReply(TRUE);
     }

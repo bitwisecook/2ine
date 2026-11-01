@@ -1502,3 +1502,45 @@ static uint32 bridge32_DosSelToFlat(uint8 *a)
     return memory && lx_execution_address(GLoaderState.execution, memory, 1, 0, &address) ? address
                                                                                           : 0;
 }
+
+static uint32 bridge32_DosSubSetMem(uint8 *a)
+{
+    void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
+                                     LX_GUEST_READ | LX_GUEST_WRITE);
+    return base ? DosSubSetMem(base, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8))
+                : ERROR_INVALID_PARAMETER;
+}
+static uint32 bridge32_DosSubAllocMem(uint8 *a)
+{
+    void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
+                                     LX_GUEST_READ | LX_GUEST_WRITE);
+    LxGuestBorrow output;
+    if (!base || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4,
+                                      LX_GUEST_WRITE, &output))
+        return ERROR_INVALID_PARAMETER;
+    void *memory = NULL;
+    uint32 result = DosSubAllocMem(base, &memory, lx_guest_load_u32(a + 8)), address;
+    if (!result)
+    {
+        if (lx_execution_address(GLoaderState.execution, memory, 0, 0, &address))
+            lx_guest_store_u32(output.host, address);
+        else
+            result = ERROR_INVALID_ADDRESS;
+    }
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_DosSubFreeMem(uint8 *a)
+{
+    void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
+                                     LX_GUEST_READ | LX_GUEST_WRITE);
+    void *memory = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a + 4), 1, 0);
+    return base && memory ? DosSubFreeMem(base, memory, lx_guest_load_u32(a + 8))
+                          : ERROR_INVALID_PARAMETER;
+}
+static uint32 bridge32_DosSubUnsetMem(uint8 *a)
+{
+    void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
+                                     LX_GUEST_READ | LX_GUEST_WRITE);
+    return base ? DosSubUnsetMem(base) : ERROR_INVALID_PARAMETER;
+}

@@ -67,26 +67,6 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     return NO_ERROR;
 }
 
-APIRET DosSubSetMem(PVOID pbBase, ULONG flag, ULONG cb)
-{
-    TRACE_NATIVE("DosSubSetMem(%p, %u, %u)", pbBase, (uint)flag, (uint)cb);
-    TRACE_RET("DosSubSetMem(%p, %u, %u) -> 0", pbBase, (uint)flag, (uint)cb);
-    return NO_ERROR;
-}
-
-APIRET DosSubAllocMem(PVOID pbBase, PPVOID ppb, ULONG cb)
-{
-    TRACE_NATIVE("DosSubAllocMem(%p, %p, %u)", pbBase, ppb, (uint)cb);
-    *ppb = malloc(cb);
-    if (!*ppb)
-    {
-        TRACE_RET("DosSubAllocMem(%p, %u) -> ENOMEM", pbBase, (uint)cb);
-        return ERROR_NOT_ENOUGH_MEMORY;
-    }
-    TRACE_RET("DosSubAllocMem(%p, %u) -> %p", pbBase, (uint)cb, *ppb);
-    return NO_ERROR;
-}
-
 APIRET DosSetMem(PVOID pb, ULONG cb, ULONG flag)
 {
     TRACE_NATIVE("DosSetMem(%p, %u, %u)", pb, (uint)cb, (uint)flag);
@@ -140,7 +120,7 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
     const LxHostSharedResult opened = lx_host_shared_open(identifier, size, &object);
     if (opened != LX_HOST_SHARED_OK)
         return opened == LX_HOST_SHARED_MISSING  ? ERROR_FILE_NOT_FOUND
-               : opened == LX_HOST_SHARED_EXISTS ? ERROR_DUPLICATE_NAME
+               : opened == LX_HOST_SHARED_EXISTS ? ERROR_ALREADY_EXISTS
                                                  : ERROR_NOT_ENOUGH_MEMORY;
     /* OS/2 shared pointers retain one linear address in every attached process. */
     uint64_t address = 0;
@@ -173,6 +153,26 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
     ungrabLock(&GMutexDosCalls);
     *output = block->addr;
     return NO_ERROR;
+}
+
+BOOL lx_dos_shared_address(ULONG address, ULONG size)
+{
+    BOOL shared = FALSE;
+    grabLock(&GMutexDosCalls);
+    for (SharedMemBlock *block = GSharedMem; block; block = block->next)
+    {
+        if (!block->mapping || !block->shared_name[0] || block->freed)
+            continue;
+        uint32 first = lx_execution_mapping_address(block->mapping);
+        if (address >= first && (uint64)address - first <= block->size &&
+            size <= block->size - ((uint64)address - first))
+        {
+            shared = TRUE;
+            break;
+        }
+    }
+    ungrabLock(&GMutexDosCalls);
+    return shared;
 }
 
 APIRET DosGetNamedSharedMem(PPVOID output, PSZ name, ULONG flags)
@@ -217,13 +217,6 @@ APIRET DosFreeMem(PVOID pb)
     ungrabLock(&GMutexDosCalls);
 
     return ERROR_INVALID_ADDRESS;
-}
-
-APIRET DosSubFreeMem(PVOID pbBase, PVOID pb, ULONG cb)
-{
-    TRACE_NATIVE("DosSubFreeMem(%p, %p, %u)", pbBase, pb, (uint)cb);
-    free(pb);
-    return NO_ERROR;
 }
 
 ULONG _DosSelToFlat(void *ptr)

@@ -17,6 +17,23 @@ extern "C"
         OS2APIINFO(ord = 6010, name = WINTERMINATEOPEN32);
     OS2EXPORT BOOL OS2API WinXProcessMsg(PVOID message)
         OS2APIINFO(ord = 6007, name = WINXPROCESSMSG);
+    OS2EXPORT ULONG OS2API DdeCreateStringHandle(ULONG id, PSZ text, LONG codepage)
+        OS2APIINFO(ord = 109, name = DDECREATESTRINGHANDLE);
+    OS2EXPORT BOOL OS2API DdeFreeStringHandle(ULONG id, ULONG string)
+        OS2APIINFO(ord = 114, name = DDEFREESTRINGHANDLE);
+    OS2EXPORT BOOL OS2API DdeKeepStringHandle(ULONG id, ULONG string)
+        OS2APIINFO(ord = 118, name = DDEKEEPSTRINGHANDLE);
+    OS2EXPORT ULONG OS2API DdeQueryString(ULONG id, ULONG string, PSZ output, ULONG capacity,
+                                          LONG codepage)
+        OS2APIINFO(ord = 123, name = DDEQUERYSTRING);
+    OS2EXPORT LONG OS2API DdeCmpStringHandles(ULONG first, ULONG second)
+        OS2APIINFO(ord = 105, name = DDECMPSTRINGHANDLES);
+    OS2EXPORT ULONG OS2API DdeNameService(ULONG id, ULONG string, ULONG reserved, ULONG command)
+        OS2APIINFO(ord = 119, name = DDENAMESERVICE);
+    OS2EXPORT ULONG OS2API DdeInitialize(PULONG id, ULONG callback, ULONG flags, ULONG reserved)
+        OS2APIINFO(ord = 117, name = DDEINITIALIZE);
+    OS2EXPORT ULONG OS2API DdeGetLastError(ULONG id) OS2APIINFO(ord = 116, name = DDEGETLASTERROR);
+    OS2EXPORT BOOL OS2API DdeUninitialize(ULONG id) OS2APIINFO(ord = 127, name = DDEUNINITIALIZE);
     OS2EXPORT ULONG OS2API GetLastError(void) OS2APIINFO(ord = 300, name = GETLASTERROR);
     OS2EXPORT VOID OS2API SetLastError(ULONG error) OS2APIINFO(ord = 624, name = SETLASTERROR);
     OS2EXPORT VOID OS2API Sleep(ULONG milliseconds) OS2APIINFO(ord = 673, name = SLEEP);
@@ -178,6 +195,8 @@ extern "C"
         OS2APIINFO(ord = 2055, name = GETLOCALEINFO);
     OS2EXPORT BOOL OS2API IsDBCSLeadByte(ULONG character)
         OS2APIINFO(ord = 442, name = ISDBCSLEADBYTE);
+    OS2EXPORT ULONG OS2API GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
+        OS2APIINFO(ord = 292, name = GETFULLPATHNAME);
     OS2EXPORT ULONG OS2API GetCurrentDirectory(ULONG capacity, PSZ output)
         OS2APIINFO(ord = 253, name = GETCURRENTDIRECTORY);
     OS2EXPORT BOOL OS2API SetCurrentDirectory(PSZ name)
@@ -257,6 +276,13 @@ extern "C"
         OS2APIINFO(ord = 349, name = GETRGNBOX);
     OS2EXPORT ULONG OS2API CreateRectRgnIndirect(PVOID input)
         OS2APIINFO(ord = 94, name = CREATERECTRGNINDIRECT);
+    OS2EXPORT ULONG OS2API CountClipboardFormats(void)
+        OS2APIINFO(ord = 56, name = COUNTCLIPBOARDFORMATS);
+    OS2EXPORT BOOL OS2API OpenClipboard(ULONG window) OS2APIINFO(ord = 502, name = OPENCLIPBOARD);
+    OS2EXPORT BOOL OS2API CloseClipboard(void) OS2APIINFO(ord = 41, name = CLOSECLIPBOARD);
+    OS2EXPORT BOOL OS2API EmptyClipboard(void) OS2APIINFO(ord = 165, name = EMPTYCLIPBOARD);
+    OS2EXPORT BOOL OS2API IsClipboardFormatAvailable(ULONG format)
+        OS2APIINFO(ord = 441, name = ISCLIPBOARDFORMATAVAILABLE);
     OS2EXPORT ULONG OS2API SetClipboardViewer(ULONG window)
         OS2APIINFO(ord = 603, name = SETCLIPBOARDVIEWER);
     OS2EXPORT ULONG OS2API GetClipboardViewer(void)

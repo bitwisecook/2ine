@@ -518,6 +518,26 @@
       "argument_bytes": 20,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DosSubSetMem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosSubAllocMem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosSubFreeMem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosSubUnsetMem": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "nls": {
@@ -3269,6 +3289,81 @@
     },
     "GetFileAttributes": {
       "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeInitialize": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeGetLastError": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeUninitialize": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeCreateStringHandle": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeFreeStringHandle": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeKeepStringHandle": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeQueryString": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeCmpStringHandles": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeNameService": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetFullPathName": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsClipboardFormatAvailable": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "OpenClipboard": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CloseClipboard": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EmptyClipboard": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CountClipboardFormats": {
+      "argument_bytes": 0,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

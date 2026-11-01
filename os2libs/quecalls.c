@@ -404,7 +404,7 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
         priority = 0;
     if (__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
         result = ERROR_QUE_INVALID_HANDLE;
-    else if (copied && (length > QUEUE_PAYLOAD_LIMIT || (length && !data)))
+    else if (copied && length && !data)
         result = ERROR_INVALID_PARAMETER;
     if (!result && GLoaderState.execution)
     {
@@ -425,6 +425,11 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
                                        &address))
             result = ERROR_INVALID_PARAMETER;
     }
+    /* Named shared mappings retain the sender's pointer and pool ownership. */
+    if (!copy && !result && lx_dos_shared_address(address, length))
+        copied = FALSE;
+    if (!result && copied && length > QUEUE_PAYLOAD_LIMIT)
+        result = ERROR_INVALID_PARAMETER;
     size_t bytes = sizeof(Packet) + (copied ? length : 0);
     uint8 *packet = !result ? malloc(bytes) : NULL;
     if (!result && !packet)

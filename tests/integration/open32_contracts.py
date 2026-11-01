@@ -191,6 +191,7 @@ API = {
     "RealizePalette": 536,
     "GetPaletteEntries": 332,
     "GetNearestPaletteIndex": 321,
+    "GetFullPathName": 292,
     "GetCurrentDirectory": 253,
     "SetCurrentDirectory": 604,
     "RegisterClipboardFormat": 557,
@@ -695,6 +696,19 @@ def directory_program():
     absent = g.field(b"no-such-directory\0")
     name = g.field(b"TestFormat\0")
     lower = g.field(b"testformat\0")
+    path_output = g.field(bytes(1024))
+    full_name = g.field(b"C:\\future.lwp\0")
+    filepart = g.field(bytes(4))
+    call(g, "GetFullPathName", full_name, 0, 0, 0)
+    g.result(14, 189)
+    call(g, "GetFullPathName", full_name, 1, path_output, filepart)
+    g.result(14, 190)
+    g.word(path_output, 0, 191)
+    g.word(filepart, 0, 192)
+    call(g, "GetFullPathName", full_name, 1024, path_output, filepart)
+    g.result(13, 193)
+    g.word(path_output, int.from_bytes(b"C:\\f", "little"), 194)
+    g.word(filepart, path_output + 3, 195)
     call(g, "RegisterClipboardFormat", name)
     store(g, length)
     call(g, "GlobalAddAtom", name)

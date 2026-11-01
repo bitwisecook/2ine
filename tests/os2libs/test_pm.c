@@ -272,14 +272,30 @@ static void selection_contracts(HWND parent)
     CHECK((intptr_t)WinSendMsg(list, 0x161, (MPARAM)(intptr_t)-1, "second") == 1);
     expected_selection = 0;
     CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 1);
-    CHECK((intptr_t)WinSendMsg(list, 0x165, 0, 0) == 0);
-    CHECK((intptr_t)WinSendMsg(list, 0x165, (MPARAM)(uintptr_t)100, 0) == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, 0, 0) == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, (MPARAM)(uintptr_t)100, 0) == 0);
     CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 1);
     expected_selection = 1;
     CHECK(WinSendMsg(list, 0x164, (MPARAM)(uintptr_t)1, (MPARAM)(uintptr_t)TRUE) &&
           selections == 2);
     expected_selection = -1;
     CHECK(WinSendMsg(list, 0x164, (MPARAM)(intptr_t)-1, 0) && selections == 3);
+    expected_selection = 0;
+    CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 4);
+    expected_selection = -1;
+    CHECK(WinSendMsg(list, 0x164, (MPARAM)(intptr_t)-1, (MPARAM)(uintptr_t)TRUE) &&
+          selections == 4);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, (MPARAM)(intptr_t)-1, 0) == -1);
+    CHECK(WinDestroyWindow(list));
+    list = WinCreateWindow(parent, (PSZ)WC_LISTBOX, "", 1, 0, 0, 120, 80, parent, HWND_TOP, 902,
+                           NULL, NULL);
+    CHECK(list && (intptr_t)WinSendMsg(list, 0x161, (MPARAM)(intptr_t)-1, "first") == 0);
+    expected_selection = 0;
+    CHECK(WinSendMsg(list, 0x164, 0, (MPARAM)(uintptr_t)TRUE) && selections == 5);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, 0, 0) == -1);
+    expected_selection = -1;
+    CHECK(WinSendMsg(list, 0x164, (MPARAM)(intptr_t)-1, 0) && selections == 5);
+    CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, (MPARAM)(intptr_t)-1, 0) == -1);
     CHECK(WinDestroyWindow(list));
 }
 static void scrollbar_contracts(HAB hab, HWND parent)

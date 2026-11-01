@@ -1,0 +1,44 @@
+{
+  "scope": "Original Warp 4.52 DOSCALLS and PMWIN, measured in the isolated reference overlay",
+  "shared_memory": {
+    "probe": "sharedq.c",
+    "allocation_bytes": 8196096,
+    "allocation_flags": 3,
+    "first_allocation": 0,
+    "duplicate_allocation": 183,
+    "duplicate_output_unchanged": true,
+    "get_existing": 0,
+    "same_process_get_returns_same_address": true
+  },
+  "suballocation": {
+    "probe": "subq.c",
+    "committed_pool_bytes": 8192,
+    "initial_size": 4096,
+    "initial_flags": 9,
+    "initialize": 0,
+    "attach_flags_8": 0,
+    "allocate_zero": 87,
+    "first_allocation_offset": 64,
+    "allocation_alignment_bytes": 8,
+    "allocate_1_through_9_and_free": 0,
+    "consecutive_16_byte_offsets": [
+      64,
+      80
+    ],
+    "duplicate_free": 312,
+    "unset": 0,
+    "invalid_flags_16": 87,
+    "initialize_zero_bytes": 311,
+    "initialize_8_bytes": 87
+  },
+  "list_selection": {
+    "probe": "listq.c",
+    "single_selection_query_start_0": 0,
+    "single_selection_query_start_minus_1": 0,
+    "select_item_notification": "one synchronous LN_SELECT",
+    "clear_all_true": "selection becomes -1 without LN_SELECT",
+    "clear_all_false": "single-selection list: one synchronous LN_SELECT; multiselection list: no LN_SELECT",
+    "individual_deselect": "one synchronous LN_SELECT",
+    "multiple_selection_query_start_0_after_select_0": -1
+  }
+}

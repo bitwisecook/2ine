@@ -1,7 +1,7 @@
 # Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
 foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmshapi pmwp pmgpi tcpip32 pmwinx pmctls helpmgr mdm mmio pmspl pmdrag dive pmgre so32dll tcp32dll)
     if(module STREQUAL "doscalls")
-        set(sources doscalls/module.c doscalls/files.c doscalls/fileinfo.c doscalls/eas.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/modules.c doscalls/system.c doscalls/audio.c doscalls/mux_wait.c)
+        set(sources doscalls/module.c doscalls/files.c doscalls/fileinfo.c doscalls/eas.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/suballocation.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/modules.c doscalls/system.c doscalls/audio.c doscalls/mux_wait.c)
     elseif(module STREQUAL "mdm")
         set(sources mdm.c midi_synth.c midi_config.c midi_mt32.c)
     elseif(module STREQUAL "pmwin")
@@ -17,6 +17,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
             pmwinx/time.c
             pmwinx/locale.c
             pmwinx/context.c
+            pmwinx/dde.c
             pmwinx/registry.c
             pmwinx/modules.c
             pmwinx/resources.c

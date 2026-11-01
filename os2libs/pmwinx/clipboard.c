@@ -2,6 +2,7 @@
 /* Clipboard viewers form a checked notification chain within this worker. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwin.h"
 #include "hal/host_sync.h"
 typedef struct Viewer
 {
@@ -100,4 +101,53 @@ void open32ClipboardCleanup(void)
         viewers = viewer->next;
         free(viewer);
     }
+}
+
+BOOL IsClipboardFormatAvailable(ULONG format)
+{
+    ULONG flags;
+    return format && format <= 0xffff &&
+           WinQueryClipbrdFmtInfo(open32Presentation(), format, &flags);
+}
+
+static _Thread_local ULONG opened_for;
+BOOL OpenClipboard(ULONG window)
+{
+    if (window && !open32FindWindow(window))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    if (!WinOpenClipbrd(open32Presentation()))
+    {
+        open32SetError(5);
+        return FALSE;
+    }
+    opened_for = window;
+    return TRUE;
+}
+BOOL CloseClipboard(void)
+{
+    if (!WinCloseClipbrd(open32Presentation()))
+    {
+        open32SetError(1418);
+        return FALSE;
+    }
+    opened_for = 0;
+    return TRUE;
+}
+BOOL EmptyClipboard(void)
+{
+    ULONG hab = open32Presentation();
+    if (!WinEmptyClipbrd(hab) || !WinSetClipbrdOwner(hab, opened_for))
+    {
+        open32SetError(1418);
+        return FALSE;
+    }
+    return TRUE;
+}
+
+ULONG CountClipboardFormats(void)
+{
+    return lx_pm_clipboard_count();
 }

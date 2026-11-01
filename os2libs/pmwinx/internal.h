@@ -15,6 +15,8 @@ void open32CriticalCleanup(void);
 void open32IconsCleanup(void);
 ULONG open32Presentation(void);
 void open32ContextCleanup(void);
+void open32DdeCleanup(void);
+void open32DdeSetError(ULONG id, ULONG error);
 LONG open32FormatGuest(PSZ format, ULONG arguments, PSZ output);
 void open32MenusCleanup(void);
 void open32ClipboardWindowDestroyed(ULONG window);

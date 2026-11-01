@@ -43,6 +43,7 @@ from open32_contracts import (
     thread_program,
     time_program,
 )
+from open32_dde import clipboard_program, dde_program
 from open32_icons import icon_program
 from open32_patterns import pattern_program
 from open32_posts import posted_program
@@ -252,6 +253,8 @@ def main():
             return result
 
         run(program(), ["alpha", "beta"])
+        run(dde_program())
+        run(clipboard_program())
         run(window_program())
         run(api_window_program())
         run(keyboard_program())

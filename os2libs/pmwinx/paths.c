@@ -86,3 +86,38 @@ ULONG GetFileAttributes(PSZ name)
     ULONG attributes = information.attrFile & 0x37;
     return attributes ? attributes : 0x80;
 }
+
+ULONG GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
+{
+    TRACE_NATIVE("GetFullPathName('%s', %u, %p, %p)", name ? name : "", (uint)capacity, output,
+                 filepart);
+    if (!name || !*name)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    typedef APIRET(OS2API * QueryFn)(PSZ, ULONG, PVOID, ULONG);
+    QueryFn query = (QueryFn)open32DosService("DosQueryPathInfo");
+    char path[CCHMAXPATH];
+    ULONG error = query ? query(name, FIL_QUERYFULLNAME, path, sizeof path) : 120;
+    if (error)
+    {
+        open32SetError(error);
+        return 0;
+    }
+    ULONG length = (ULONG)strlen(path);
+    if (capacity <= length)
+        return length + 1;
+    if (!output)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    memcpy(output, path, length + 1);
+    if (filepart)
+    {
+        char *last = strrchr(output, '\\');
+        *filepart = last && last[1] ? last + 1 : NULL;
+    }
+    return length;
+}
