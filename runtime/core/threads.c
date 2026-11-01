@@ -11,6 +11,16 @@ LxHostThreadState *lxHostThreadState(void)
     return &host_thread_state;
 }
 
+void lxHostThreadCleanup(void)
+{
+    if (host_thread_state.pm_cleanup)
+    {
+        void (*cleanup)(void) = host_thread_state.pm_cleanup;
+        host_thread_state.pm_cleanup = NULL;
+        cleanup();
+    }
+}
+
 void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid)
 {
     uint8 *topOfStack = (uint8 *)_topOfStack;
@@ -27,7 +37,7 @@ void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t stackle
         if (lx_execution_address(GLoaderState.execution, topOfStack, 0, 0, &guest_top))
             top = guest_top;
     }
-    tib->tib_pexchain = 0;
+    tib->tib_pexchain = UINT32_MAX;
     tib->tib_pstack = top - stacklen;
     tib->tib_pstacklimit = top;
     tib->tib_ptib2 = tib_address ? tib_address + sizeof(LxTIB) : 0;
@@ -54,5 +64,6 @@ LxTIB *getOs2Tib_lib2ine(void)
 
 void deinitOs2Tib_lib2ine(const uint16 selector)
 {
+    lxHostThreadCleanup();
     DefaultTib = NULL;
 }

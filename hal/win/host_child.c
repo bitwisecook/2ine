@@ -12,6 +12,12 @@ struct LxHostChild
     HANDLE handle;
     DWORD id;
 };
+int lx_host_child_terminate(LxHostChild *child)
+{
+    if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
+        return 1;
+    return TerminateProcess(child->handle, 1) ? 0 : -1;
+}
 static wchar_t *wide(const char *s)
 {
     int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, NULL, 0);

@@ -3,6 +3,7 @@
 #ifndef TWOINE_HOST_SHARED_H
 #define TWOINE_HOST_SHARED_H
 #include <stddef.h>
+#include <stdint.h>
 typedef struct LxHostShared LxHostShared;
 typedef enum LxHostSharedResult
 {
@@ -13,6 +14,9 @@ typedef enum LxHostSharedResult
     LX_HOST_SHARED_NOMEM
 } LxHostSharedResult;
 LxHostSharedResult lx_host_shared_open(const char *name, size_t create_size, LxHostShared **output);
+/* Reserve a process-independent numeric slot while an object has live references. */
+int lx_host_shared_slot(LxHostShared *object, uint64_t first, uint64_t limit, uint64_t alignment,
+                        uint64_t *slot);
 size_t lx_host_shared_size(const LxHostShared *object);
 /* Exact views never replace an existing mapping. The caller owns the view;
    release it with lx_host_shared_unmap independently of the object's lifetime. */

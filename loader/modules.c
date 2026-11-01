@@ -16,6 +16,23 @@ void destroyLxModule(void *resource);
 
 LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependency_tree_depth);
 
+static void initializeModuleGraph(LxModule *module)
+{
+    if (!module || module->initialized || module->init_started)
+        return;
+    module->init_started = 1;
+    for (uint32 i = 0; i < module->num_dependencies; i++)
+        initializeModuleGraph(module->dependencies[i]);
+    if (module != GLoaderState.main_module)
+    {
+        if (module->is_lx)
+            runLxLibraryInit(module);
+        else
+            runNeLibraryInit(module);
+    }
+    module->initialized = 1;
+}
+
 /* LX ("Linear Executable") modules are 32-bit binaries that can contain 16-bit segments. */
 
 int sanityCheckModule(uint8 **_exe, uint32 *_exelen, int *_is_lx)
@@ -81,6 +98,7 @@ LxTIB *lxGetOs2Tib(void)
 
 void lxDeinitOs2Tib(uint16 token)
 {
+    lxHostThreadCleanup();
     lx_execution_detach_tib(GLoaderState.execution, token);
     LxHostThreadState *state = lxHostThreadState();
     if (state->tib_mapping)
@@ -133,10 +151,8 @@ void fixupLinearCodeSegmentReferences(uint8 *p, size_t n)
     lx_execution_prepare_code(GLoaderState.execution, p, n);
 }
 
-void freeLxModule(LxModule *lxmod)
+static void terminateModule(LxModule *lxmod)
 {
-    if (!lxmod || __atomic_sub_fetch(&lxmod->refcount, 1, __ATOMIC_ACQ_REL))
-        return;
     if ((lxmod->initialized) && (lxmod != GLoaderState.main_module))
     {
         if (!lxmod->nativelib)
@@ -154,6 +170,130 @@ void freeLxModule(LxModule *lxmod)
     }
 
     lxmod->initialized = 0;
+}
+
+void registerLxModule(LxModule *module)
+{
+    module->next = GLoaderState.loaded_modules;
+    if (module->next)
+        module->next->prev = module;
+    GLoaderState.loaded_modules = module;
+    module->listed = 1;
+}
+
+static void unregisterModule(LxModule *module)
+{
+    if (!module->listed)
+        return;
+    if (module->next)
+        module->next->prev = module->prev;
+    if (module->prev)
+        module->prev->next = module->next;
+    if (GLoaderState.loaded_modules == module)
+        GLoaderState.loaded_modules = module->next;
+    module->next = module->prev = NULL;
+    module->listed = 0;
+}
+
+static void collectModules(void)
+{
+    static int collecting;
+    if (collecting)
+        return;
+    collecting = 1;
+    int removed;
+    do
+    {
+        removed = 0;
+        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        {
+            m->incoming_references = 0;
+            m->reachable = m->loading;
+        }
+        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+            for (uint32 i = 0; i < m->num_dependencies; i++)
+                if (m->dependencies[i])
+                    m->dependencies[i]->incoming_references++;
+        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+            if (m->refcount > m->incoming_references)
+                m->reachable = 1;
+        int changed;
+        do
+        {
+            changed = 0;
+            for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+                if (m->reachable)
+                    for (uint32 i = 0; i < m->num_dependencies; i++)
+                    {
+                        LxModule *dependency = m->dependencies[i];
+                        if (dependency && !dependency->reachable)
+                        {
+                            dependency->reachable = 1;
+                            changed = 1;
+                        }
+                    }
+        } while (changed);
+
+        /* Termination callbacks run while the whole unreachable graph is mapped. */
+        LxModule *tail = GLoaderState.loaded_modules;
+        while (tail && tail->next)
+            tail = tail->next;
+        for (LxModule *m = tail; m; m = m->prev)
+            if (!m->reachable)
+                terminateModule(m);
+        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+            if (!m->reachable)
+            {
+                for (uint32 i = 0; i < m->num_dependencies; i++)
+                    if (m->dependencies[i])
+                        __atomic_sub_fetch(&m->dependencies[i]->refcount, 1, __ATOMIC_ACQ_REL);
+                m->num_dependencies = 0;
+            }
+        LxModule *next;
+        for (LxModule *m = GLoaderState.loaded_modules; m; m = next)
+        {
+            next = m->next;
+            if (!m->reachable)
+            {
+                removed = 1;
+                unregisterModule(m);
+                lx_handle_close(m->handle, LX_HANDLE_MODULE);
+            }
+        }
+    } while (removed);
+    collecting = 0;
+}
+
+void unloadAllModules(void)
+{
+    while (GLoaderState.loaded_modules)
+    {
+        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        {
+            m->loading = 0;
+            m->refcount = 0;
+        }
+        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+            for (uint32 i = 0; i < m->num_dependencies; i++)
+                if (m->dependencies[i])
+                    m->dependencies[i]->refcount++;
+        collectModules();
+    }
+}
+
+void freeLxModule(LxModule *lxmod)
+{
+    if (!lxmod)
+        return;
+    uint32 remaining = __atomic_sub_fetch(&lxmod->refcount, 1, __ATOMIC_ACQ_REL);
+    if (lxmod->listed)
+    {
+        collectModules();
+        return;
+    }
+    if (remaining)
+        return;
+    terminateModule(lxmod);
     if (lxmod->handle)
         lx_handle_close(lxmod->handle, LX_HANDLE_MODULE);
     else
@@ -163,14 +303,7 @@ void freeLxModule(LxModule *lxmod)
 void destroyLxModule(void *resource)
 {
     LxModule *lxmod = resource;
-    if (lxmod->next)
-        lxmod->next->prev = lxmod->prev;
-
-    if (lxmod->prev)
-        lxmod->prev->next = lxmod->next;
-
-    if (lxmod == GLoaderState.loaded_modules)
-        GLoaderState.loaded_modules = lxmod->next;
+    unregisterModule(lxmod);
 
     /* DLL termination still needs the process stack and main-module entry state. */
     for (uint32 i = lxmod->num_dependencies; i > 0; i--)
@@ -203,6 +336,7 @@ void destroyLxModule(void *resource)
     }
     free(lxmod->mmaps);
     free(lxmod->resources);
+    free(lxmod->os2path);
 
     if (lxmod->nativelib)
         lx_host_library_close(lxmod->nativelib);
@@ -265,6 +399,18 @@ LxModule *loadModule(const char *fname, uint8 *exe, uint32 exelen, int dependenc
 
 LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_depth)
 {
+    char *os2path = makeOS2Path(fname);
+    if (os2path)
+    {
+        for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+            if (!module->load_failed && !strcasecmp(module->os2path, os2path))
+            {
+                __atomic_add_fetch(&module->refcount, 1, __ATOMIC_ACQ_REL);
+                free(os2path);
+                return module;
+            }
+        free(os2path);
+    }
     size_t size;
     LxHostFsError error;
     uint8 *module = lx_host_file_snapshot(fname, UINT32_MAX, &size, &error);
@@ -281,7 +427,9 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
 
 LxModule *loadModuleByPath(const char *fname)
 {
-    return loadModuleByPathInternal(fname, 0);
+    LxModule *module = loadModuleByPathInternal(fname, 0);
+    initializeModuleGraph(module);
+    return module;
 }
 
 LxModule *loadNativeModule(const char *fname, const char *modname)
@@ -292,6 +440,9 @@ LxModule *loadNativeModule(const char *fname, const char *modname)
     const LxExport *exports = NULL;
     uint32 num_exports = 0;
     char *os2path = makeOS2Path(fname);
+    /* Native API modules can live outside every guest drive. */
+    if (!os2path && modname)
+        os2path = strdup(modname);
 
     if (!retval || !modname || !os2path)
         goto loadnative_failed;
@@ -359,7 +510,7 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
 
     for (LxModule *i = GLoaderState.loaded_modules; i != NULL; i = i->next)
     {
-        if (strcasecmp(i->name, modname) == 0)
+        if (!i->load_failed && strcasecmp(i->name, modname) == 0)
         {
             i->refcount++;
 
@@ -432,13 +583,7 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
 
         if (retval != NULL)
         {
-
-            if (GLoaderState.loaded_modules)
-            {
-                retval->next = GLoaderState.loaded_modules;
-                GLoaderState.loaded_modules->prev = retval;
-            }
-            GLoaderState.loaded_modules = retval;
+            registerLxModule(retval);
         }
     }
     return retval;
@@ -446,7 +591,9 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
 
 LxModule *loadModuleByModuleName(const char *modname)
 {
-    return loadModuleByModuleNameInternal(modname, 0);
+    LxModule *module = loadModuleByModuleNameInternal(modname, 0);
+    initializeModuleGraph(module);
+    return module;
 }
 
 LxModule *loadModuleByPathOrModuleName(const char *modname)

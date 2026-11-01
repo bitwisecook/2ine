@@ -7,6 +7,8 @@
  */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmwin/controls.h"
+#include "os2libs/pmwin/menus.h"
 Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
 {
     if (hwnd >= FIRST_HWND_VALUE)
@@ -23,6 +25,8 @@ Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
     {
         return &desktop_window;
     }
+    else if (hwnd == HWND_OBJECT)
+        return (Window *)&anchor->object_window;
     return NULL;
 }
 
@@ -80,6 +84,10 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
                 return &list;
             }
             case WC_SCROLLBAR:
+            {
+                static WindowClass scrollbar = {"#8", controlProcedure, CS_SIZEREDRAW, 0, NULL};
+                return &scrollbar;
+            }
             case WC_TITLEBAR:
             case WC_APPSTAT:
             case WC_KBDSTAT:
@@ -513,7 +521,7 @@ BOOL WinDestroyWindow(HWND hwnd)
     }
 
     Window *win = getWindowFromHWND(anchor, hwnd);
-    if (!win || win == &desktop_window)
+    if (!win || win == &desktop_window || win == &anchor->object_window)
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
     }
@@ -548,6 +556,16 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
     switch (msg)
     {
+        case WM_CREATE:
+            if (mp1 && win->window_class_name && !strcmp(win->window_class_name, "#1"))
+            {
+                FRAMECDATA data;
+                if (!controlRead(mp1, &data, sizeof data) || data.cb != sizeof data)
+                    return (MRESULT)(uintptr_t)TRUE;
+                if ((data.flCreateFlags & 2) && !createSystemMenu(win, data.flCreateFlags))
+                    return (MRESULT)(uintptr_t)TRUE;
+            }
+            return 0;
         case WM_SETICON:
             /* Null removes the application icon; non-null icon resources are unsupported. */
             return (MRESULT)(uintptr_t)(mp1 == NULL);
@@ -574,7 +592,6 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_CALCFRAMERECT:
         case WM_COMMAND:
         case WM_CONTROL:
-        case WM_CREATE:
         case WM_CTLCOLORCHANGE:
         case WM_DESTROY:
         case WM_DRAWITEM:
@@ -668,6 +685,10 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_HITTEST:
             return HT_NORMAL;
 
+        case WM_PAINT:
+            validateWindowPaint(anchor, win);
+            return 0;
+
         case WM_BUTTON1DOWN:
             WinSetActiveWindow(HWND_DESKTOP, topLevelWindow(anchor, hwnd));
             return 0;
@@ -678,7 +699,6 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_FOCUSCHANGE:
         case WM_HELP:
         case WM_MOUSEMOVE:
-        case WM_PAINT:
         case WM_PPAINT:
         case WM_QUERYCONVERTPOS:
         case WM_QUERYWINDOWPARAMS:
@@ -707,7 +727,7 @@ BOOL WinIsWindow(HAB hab, HWND hwnd)
         return FALSE;
 
     Window *win = getWindowFromHWND(anchor, hwnd);
-    if (!win)
+    if (!win && !windowMessageTargetExists(hwnd))
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
     }
@@ -747,6 +767,38 @@ BOOL WinIsWindowVisible(HWND hwnd)
     return ((win->style & WS_VISIBLE) == WS_VISIBLE) ? TRUE : FALSE;
 }
 
+static BOOL set_window_order(AnchorBlock *anchor, Window *window, HWND behind)
+{
+    if (!window->parent)
+        return FALSE;
+    if (behind == window->hwnd)
+        return TRUE;
+    Window *previous = NULL;
+    if (behind != HWND_TOP && behind != HWND_BOTTOM)
+    {
+        previous = getWindowFromHWND(anchor, behind);
+        if (!previous || previous->parent != window->parent || previous->destroying)
+            return FALSE;
+    }
+    Window **slot = &window->parent->children;
+    while (*slot && *slot != window)
+        slot = &(*slot)->sibling;
+    if (!*slot)
+        return FALSE;
+    *slot = window->sibling;
+    if (behind == HWND_BOTTOM)
+    {
+        slot = &window->parent->children;
+        while (*slot)
+            slot = &(*slot)->sibling;
+    }
+    else
+        slot = previous ? &previous->sibling : &window->parent->children;
+    window->sibling = *slot;
+    *slot = window;
+    return TRUE;
+}
+
 BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, ULONG flags)
 {
     TRACE_NATIVE("WinSetWindowPos(%u, %u, %d, %d, %d, %d, %u)", (uint)hwnd, (uint)behind, (int)x,
@@ -769,6 +821,12 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     flags = swp.fl;
     if (!(flags & SWP_NOADJUST))
         sendWindowPos(win, WM_ADJUSTWINDOWPOS, &swp);
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
+    flags = swp.fl;
+    if ((flags & SWP_ZORDER) && !set_window_order(anchor, win, swp.hwndInsertBehind))
+        return FALSE;
     LONG oldw = win->w, oldh = win->h;
     win->x = swp.x;
     win->y = swp.y;
@@ -791,29 +849,49 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     }
     if (was_visible != ((win->style & WS_VISIBLE) != 0))
         sendMessage(win, WM_SHOW, (MPARAM)(uintptr_t)((win->style & WS_VISIBLE) != 0), 0);
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
     if (oldw != win->w || oldh != win->h)
     {
         sendMessage(win, WM_SIZE, (MPARAM)(uintptr_t)(((uint32)(uint16)oldh << 16) | (uint16)oldw),
                     (MPARAM)(uintptr_t)(((uint32)(uint16)win->h << 16) | (uint16)win->w));
+        win = getWindowFromHWND(anchor, hwnd);
+        if (!win || win->destroying)
+            return FALSE;
         HWND menu = WinWindowFromID(win->hwnd, FID_MENU);
         LONG menu_height = menu ? 24 : 0;
         if (menu && win->h > menu_height)
             WinSetWindowPos(menu, HWND_TOP, 0, win->h - menu_height, win->w, menu_height,
                             SWP_MOVE | SWP_SIZE | SWP_SHOW);
+        win = getWindowFromHWND(anchor, hwnd);
+        if (!win || win->destroying)
+            return FALSE;
         for (Window *child = win->children; child; child = child->sibling)
             if (child->id == FID_CLIENT && win->h > menu_height)
                 WinSetWindowPos(child->hwnd, HWND_BOTTOM, 0, 0, win->w, win->h - menu_height,
                                 SWP_MOVE | SWP_SIZE | SWP_SHOW);
     }
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
     if (oldw != win->w || oldh != win->h)
         for (Window *child = win->children; child; child = child->sibling)
             if (child->style & WS_MAXIMIZED)
                 WinSetWindowPos(child->hwnd, HWND_TOP, 0, 0, win->w, win->h,
                                 SWP_MOVE | SWP_SIZE | SWP_NOADJUST);
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
     if (flags & (SWP_SIZE | SWP_MOVE | SWP_SHOW | SWP_HIDE))
         notifyVisibleRegions(anchor, win);
     if (!(flags & SWP_NOREDRAW) && (flags & (SWP_SIZE | SWP_SHOW)))
         postExposedMessages(anchor, win, currentSystemTicks());
+    if ((flags & SWP_ZORDER) && !(flags & SWP_NOREDRAW))
+        WinInvalidateRect(win->parent->hwnd, NULL, TRUE);
+    if ((flags & (SWP_ZORDER | SWP_ACTIVATE)) == (SWP_ZORDER | SWP_ACTIVATE) &&
+        swp.hwndInsertBehind == HWND_TOP && win->parent == &desktop_window)
+        lx_host_window_focus(win->heavy.window);
     if (flags & SWP_ACTIVATE)
         WinSetActiveWindow(HWND_DESKTOP, topLevelWindow(anchor, hwnd));
     return TRUE;
@@ -868,6 +946,63 @@ BOOL WinQueryPointerPos(HWND hwnd, PPOINTL point)
 BOOL WinShowWindow(HWND window, BOOL show)
 {
     return WinSetWindowPos(window, HWND_TOP, 0, 0, 0, 0, show ? SWP_SHOW : SWP_HIDE);
+}
+static void setDrawable(Window *window, LxHostWindow *drawable)
+{
+    window->heavy.window = drawable;
+    for (Window *child = window->children; child; child = child->sibling)
+        setDrawable(child, drawable);
+}
+BOOL WinSetParent(HWND handle, HWND parent_handle, BOOL redraw)
+{
+    TRACE_NATIVE("WinSetParent(%u, %u, %u)", (uint)handle, (uint)parent_handle, (uint)redraw);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    Window *parent = anchor ? getWindowFromHWND(anchor, parent_handle) : NULL;
+    if (!window || !parent || !window->parent || window->destroying || parent->destroying)
+        return FALSE;
+    for (Window *ancestor = parent; ancestor; ancestor = ancestor->parent)
+        if (ancestor == window)
+            return FALSE;
+    Window *old_parent = window->parent;
+    if (old_parent == parent)
+        return TRUE;
+    LxHostWindow *drawable = parent->heavy.window;
+    if (parent == &desktop_window)
+    {
+        drawable = lx_host_window_create(
+            window->text, window->x, desktop_window.h - window->y - window->h,
+            window->w > 0 ? window->w : 1, window->h > 0 ? window->h : 1, window);
+        if (!drawable)
+            return FALSE;
+    }
+    Window **link = &old_parent->children;
+    while (*link && *link != window)
+        link = &(*link)->sibling;
+    if (!*link)
+    {
+        if (parent == &desktop_window)
+            lx_host_window_destroy(drawable);
+        return FALSE;
+    }
+    *link = window->sibling;
+    window->sibling = parent->children;
+    parent->children = window;
+    LxHostWindow *old_drawable = old_parent == &desktop_window ? window->heavy.window : NULL;
+    window->parent = parent;
+    setDrawable(window, drawable);
+    if (old_drawable)
+        lx_host_window_destroy(old_drawable);
+    if (parent == &desktop_window && (window->style & WS_VISIBLE))
+        lx_host_window_show(drawable);
+    notifyVisibleRegions(anchor, window);
+    if (redraw && (window->style & WS_VISIBLE))
+    {
+        if (old_parent != &desktop_window && old_parent != &anchor->object_window)
+            WinInvalidateRect(old_parent->hwnd, NULL, TRUE);
+        WinInvalidateRect(handle, NULL, TRUE);
+    }
+    return TRUE;
 }
 
 BOOL WinEnableWindow(HWND window, BOOL enable)

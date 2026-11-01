@@ -65,6 +65,8 @@ static pthread_mutex_t SegmentMutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread uint8 *NativeTib;
 static __thread void *NativeHostStack __attribute__((tls_model("initial-exec")));
 static __thread uint8_t *NativeHostAllocation;
+static __thread void *NativeSignalAllocation;
+static __thread stack_t NativePreviousSignalStack;
 typedef struct NativeBridgeFrame
 {
     uint32_t guest_stack;
@@ -298,6 +300,16 @@ static void initOs2StackSegments(uint32 address, uint32 size, const int release)
 /* FS:0 addresses this thread's guest TIB; attach from the entering host thread. */
 static uint16 lxSetOs2Tib(uint8 *tibspace)
 {
+    if (sigaltstack(NULL, &NativePreviousSignalStack))
+        abort();
+    if (NativePreviousSignalStack.ss_flags & SS_DISABLE)
+    {
+        size_t size = SIGSTKSZ > 65536 ? SIGSTKSZ : 65536;
+        NativeSignalAllocation = malloc(size);
+        stack_t signals = {.ss_sp = NativeSignalAllocation, .ss_size = size};
+        if (!NativeSignalAllocation || sigaltstack(&signals, NULL))
+            abort();
+    }
     void *stack = malloc(65536);
     if (!stack)
     {
@@ -364,6 +376,13 @@ static void lxDeinitOs2Tib(const uint16 selector)
     NativeHostAllocation = NULL;
     NativeHostStack = NULL;
     NativeTib = NULL;
+    if (NativeSignalAllocation)
+    {
+        if (sigaltstack(&NativePreviousSignalStack, NULL))
+            abort();
+        free(NativeSignalAllocation);
+        NativeSignalAllocation = NULL;
+    }
 }
 
 static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
@@ -806,8 +825,7 @@ static void fixupLinearCodeSegmentReferences(uint8 *addr, size_t size)
     }
 }
 
-static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int slot,
-                                                                     ucontext_t *uctx)
+static void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
 {
     greg_t *gregs = uctx->uc_mcontext.gregs;
 
@@ -830,22 +848,56 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
 
     int handled = 1;
     uint8 *eip = (void *)(size_t)gregs[REG_EIP];
+    const uint8 operand = eip[1];
+    if ((operand & 0xC0) || ((operand & 7) == 4) || ((operand & 7) == 5))
+    {
+        fprintf(stderr, "Unsupported TLS memory addressing at %p\n", eip);
+        abort();
+    }
     switch (eip[0])
     {
         case 0xC7: /* MOV immediate to TLS memory. */
+            if (operand & 0x38)
+            {
+                handled = 0;
+                break;
+            }
             *tls = *((uint32 *)(eip + 2));
             gregs[REG_EIP] += 6;
             break;
 
         case 0x89: /* MOV register to TLS memory. */
-            *tls = (uint32)gregs[x86RegisterToUContextEnum[eip[1] >> 3]];
+            *tls = (uint32)gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]];
             gregs[REG_EIP] += 2;
             break;
 
         case 0x8B: /* MOV TLS memory to register. */
-            gregs[x86RegisterToUContextEnum[eip[1] >> 3]] = (greg_t)*tls;
+            gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]] = (greg_t)*tls;
             gregs[REG_EIP] += 2;
             break;
+
+        case 0x81:
+        case 0x83: /* CMP TLS memory with a full or sign-extended immediate. */
+        {
+            if ((operand & 0x38) != 0x38)
+            {
+                handled = 0;
+                break;
+            }
+            uint32 immediate, flags;
+            if (*eip == 0x83)
+                immediate = (uint32)(int32_t)(int8_t)eip[2];
+            else
+                memcpy(&immediate, eip + 2, 4);
+            __asm__ __volatile__("cmpl %2, %1; pushfl; popl %0"
+                                 : "=r"(flags)
+                                 : "r"(*tls), "r"(immediate)
+                                 : "cc");
+            /* CMP changes OF, SF, ZF, AF, PF and CF; preserve all control flags. */
+            gregs[REG_EFL] = (gregs[REG_EFL] & ~0x8D5) | (flags & 0x8D5);
+            gregs[REG_EIP] += *eip == 0x83 ? 3 : 6;
+            break;
+        }
 
         default:
             handled = 0;
@@ -859,10 +911,8 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
     }
     else
     {
-        /* Advance EIP past the emulated TLS instruction before returning from the signal. */
-        setcontext(uctx);
-        fprintf(stderr, "panic: setcontext() failed in the TLS access handler! Aborting! (%s)\n",
-                strerror(errno));
+        /* The signal return restores both guest registers and arithmetic flags. */
+        return;
     }
 
     fflush(stderr);
@@ -912,9 +962,63 @@ static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
     fclose(io);
 }
 
+/* OS/2's flat GDT selectors cannot be installed by an unprivileged Linux task.
+   Translate a faulting data-selector load to the equivalent host flat segment. */
+static int handleFlatDataSelector(ucontext_t *context)
+{
+    greg_t *registers = context->uc_mcontext.gregs;
+    if (registers[REG_TRAPNO] != 13)
+        return 0;
+    uint16_t cs = registers[REG_CS], ss = registers[REG_SS];
+    int code16 = (cs & 4) != 0, stack16 = (ss & 4) != 0;
+    uint32_t code_base = code16 ? Native->ldt[cs >> 3] : 0;
+    uint32_t stack_base = stack16 ? Native->ldt[ss >> 3] : 0;
+    if ((code16 && !code_base) || (stack16 && !stack_base) ||
+        (!code16 && cs != Native->original_cs))
+        return 0;
+    uint32_t ip = code16 ? (uint16_t)registers[REG_EIP] : registers[REG_EIP];
+    const uint8_t *instruction = (const uint8_t *)(uintptr_t)(code_base + ip);
+    uint32_t bytes = 1, selector;
+    int destination;
+    if (*instruction == 0x1f || *instruction == 0x07) /* POP DS / ES */
+    {
+        uint32_t sp = stack16 ? (uint16_t)registers[REG_ESP] : registers[REG_ESP];
+        if (stack16 && sp > 0xfffe)
+            return 0;
+        uint16_t word;
+        memcpy(&word, (const void *)(uintptr_t)(stack_base + sp), sizeof word);
+        selector = word;
+        destination = *instruction == 0x1f ? REG_DS : REG_ES;
+        if (selector != 0x53)
+            return 0;
+        uint32_t step = code16 ? 2 : 4;
+        registers[REG_ESP] =
+            stack16 ? (registers[REG_ESP] & ~0xffffu) | (uint16_t)(sp + step) : sp + step;
+    }
+    else if (*instruction == 0x8e && (instruction[1] & 0xc0) == 0xc0)
+    {
+        unsigned segment = (instruction[1] >> 3) & 7;
+        if (segment != 0 && segment != 3)
+            return 0;
+        static const int source[] = {REG_EAX, REG_ECX, REG_EDX, REG_EBX,
+                                     REG_ESP, REG_EBP, REG_ESI, REG_EDI};
+        selector = (uint16_t)registers[source[instruction[1] & 7]];
+        if (selector != 0x53)
+            return 0;
+        destination = segment == 3 ? REG_DS : REG_ES;
+        bytes = 2;
+    }
+    else
+        return 0;
+    registers[destination] = Native->original_ds;
+    registers[REG_EIP] = code16 ? (uint16_t)(ip + bytes) : ip + bytes;
+    return 1;
+}
 static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
 {
     ucontext_t *uctx = (ucontext_t *)ctx;
+    if (handleFlatDataSelector(uctx))
+        return;
     const uint32 *addr = (const uint32 *)info->si_addr;
     const uint32 *tlspage = (const uint32 *)(uintptr_t)Native->execution->tls_address;
     greg_t *gregs = uctx->uc_mcontext.gregs;
@@ -924,7 +1028,10 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
         // was the app accessing one of the OS/2 TLS slots?
         const int slot = (int)(addr - tlspage);
         if (slot < 32)
+        {
             handleThreadLocalStorageAccess(slot, uctx);
+            return;
+        }
     }
 
     static int faults = 0;
@@ -1004,7 +1111,7 @@ static int installSignalHandlers(void)
 
     memset(&action, '\0', sizeof(action));
     action.sa_sigaction = segfault_catcher;
-    action.sa_flags = SA_NODEFER | SA_SIGINFO;
+    action.sa_flags = SA_NODEFER | SA_SIGINFO | SA_ONSTACK;
 
     if (sigaction(SIGSEGV, &action, &Native->previous_segv) == -1)
     {
@@ -1274,12 +1381,12 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     uintptr_t sp;
     __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
     uintptr_t base = (uintptr_t)NativeHostAllocation;
-    if (!NativeBridge || sp < base || sp >= base + 65536)
-        return ((uint32_t (*)(uint32_t, uint32_t, uint32_t, uint32_t))(uintptr_t)entry)(a, b, c, d);
+    int suspended = NativeBridge && sp >= base && sp < base + 65536;
     uint32_t words[4] = {a, b, c, d}, value;
     void *previous = NativeHostStack;
-    NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
-    uint32_t stack = NativeBridge->guest_stack;
+    if (suspended)
+        NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
+    uint32_t stack = suspended ? NativeBridge->guest_stack : (uint32_t)(sp - 128);
     /* ESI retains the saved host frame across the guest procedure and nested imports. */
     __asm__ __volatile__("pushfl\n\tpushal\n\tmovl %%esp,%%esi\n\t"
                          "movl %%eax,%%esp\n\tandl $-16,%%esp\n\t"
@@ -1491,14 +1598,56 @@ static int nativeEntry(LxExecution *e, void *host, uint32_t *address)
     *address = (uint32_t)(uintptr_t)host;
     return 1;
 }
+typedef struct NativeApiCall
+{
+    uint32_t *registers;
+    uint32_t arguments;
+    struct NativeApiCall *previous;
+} NativeApiCall;
+static _Thread_local NativeApiCall *NativeApi;
+static uint32_t dispatchApi32(LxExecutionApi16 callback, uint8_t *arguments, uint32_t *registers)
+{
+    NativeApiCall call = {
+        registers, arguments == (uint8_t *)(registers + 7) ? 0 : (uint32_t)(uintptr_t)arguments,
+        NativeApi};
+    NativeApi = &call;
+    uint32_t result = callback(arguments);
+    NativeApi = call.previous;
+    return result;
+}
+static uint32_t apiArguments(void)
+{
+    return NativeApi ? NativeApi->arguments : 0;
+}
+static int apiRegisters32(LxExecutionRegisters32 *out)
+{
+    if (!NativeApi)
+        return 0;
+    const uint32_t *r = NativeApi->registers;
+    memset(out, 0, sizeof *out);
+    out->edi = r[0];
+    out->esi = r[1];
+    out->ebp = r[2];
+    out->ebx = r[4];
+    out->edx = r[5];
+    out->ecx = r[6];
+    out->eax = r[7];
+    out->eflags = r[8];
+    out->eip = r[9];
+    out->esp = (uint32_t)(uintptr_t)(r + 10);
+    __asm__ __volatile__(
+        "mov %%cs,%0; mov %%ds,%1; mov %%es,%2; mov %%fs,%3; mov %%gs,%4; mov %%ss,%5"
+        : "=m"(out->cs), "=m"(out->ds), "=m"(out->es), "=m"(out->fs), "=m"(out->gs), "=m"(out->ss));
+    return 1;
+}
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *binding)
 {
     if (capacity < 64)
         return 0;
     uint8_t *p = output;
     const int eax_argument = binding->convention == LX_ABI_EAX32;
-    if (eax_argument)
-        *p++ = 0x60; /* pushad: preserve the register-argument ABI */
+    *p++ = 0x9c;
+    *p++ = 0x60; /* pushfd; pushad: retain the suspended guest registers */
     *p++ = 0x55;
     *p++ = 0x89;
     *p++ = 0xe5; /* push ebp; mov ebp,esp */
@@ -1507,26 +1656,31 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
     *p++ = 0xf0; /* align host call stack */
     *p++ = 0x83;
     *p++ = 0xec;
-    *p++ = 12;
+    *p++ = 4;
     *p++ = 0x8d;
     *p++ = 0x45;
-    *p++ = eax_argument ? 32 : 8; /* argument frame */
+    *p++ = 4;
+    *p++ = 0x50; /* saved registers */
+    *p++ = 0x8d;
+    *p++ = 0x45;
+    *p++ = eax_argument ? 32 : 44;
     *p++ = 0x50;
-    *p++ = 0xb8;
+    *p++ = 0x68;
     uint32_t callback = (uint32_t)(uintptr_t)binding->callback;
     memcpy(p, &callback, 4);
     p += 4;
+    *p++ = 0xb8;
+    uint32_t dispatch = (uint32_t)(uintptr_t)dispatchApi32;
+    memcpy(p, &dispatch, 4);
+    p += 4;
     *p++ = 0xff;
-    *p++ = 0xd0; /* call host ABI bridge */
-    if (eax_argument)
-    {
-        *p++ = 0x89;
-        *p++ = 0x45;
-        *p++ = 32;
-    } /* saved EAX result */
+    *p++ = 0xd0;
+    *p++ = 0x89;
+    *p++ = 0x45;
+    *p++ = 32; /* callback result replaces saved EAX */
     *p++ = 0xc9;
-    if (eax_argument)
-        *p++ = 0x61;
+    *p++ = 0x61;
+    *p++ = 0x9d; /* leave; popad; popfd */
     if (binding->callee_pop)
     {
         *p++ = 0xc2;
@@ -1587,4 +1741,6 @@ const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          destroyThread32,
                                                          endThread,
                                                          copyIn,
-                                                         callback4};
+                                                         callback4,
+                                                         apiArguments,
+                                                         apiRegisters32};

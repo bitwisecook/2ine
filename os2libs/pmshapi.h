@@ -20,6 +20,18 @@ extern "C"
 #define HINI_USERPROFILE ((HINI)0xffffffffu)
 #define HINI_SYSTEMPROFILE ((HINI)0xfffffffeu)
 
+    typedef struct
+    {
+        ULONG hwnd, hwndIcon, hprog, idProcess, idSession, uchVisibility, fbJump;
+        CHAR szSwtitle[64];
+        ULONG bProgType;
+    } SWCNTRL, *PSWCNTRL;
+    OS2EXPORT ULONG OS2API WinAddSwitchEntry(PSWCNTRL entry) OS2APIINFO(120);
+    OS2EXPORT ULONG OS2API WinRemoveSwitchEntry(ULONG handle) OS2APIINFO(129);
+    OS2EXPORT ULONG OS2API WinChangeSwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(123);
+    OS2EXPORT ULONG OS2API WinQuerySwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(124);
+    OS2EXPORT ULONG OS2API WinQuerySwitchHandle(ULONG window, ULONG process) OS2APIINFO(125);
+
     OS2EXPORT HINI OS2API PrfOpenProfile(HANDLE hab, PSZ name) OS2APIINFO(102);
     OS2EXPORT BOOL OS2API PrfCloseProfile(HINI profile) OS2APIINFO(103);
     OS2EXPORT LONG OS2API PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback)

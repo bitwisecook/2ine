@@ -12,6 +12,7 @@ visible differences before qualifying another application.
 | [Word Pro](wordpro/review.md) | New/edit/font/save/reopen/edit cycle | Native and Unicorn cycles |
 | [PMStars](pmstars/README.md) | Original release animation | Animation, pointer input, dot mode and resizing |
 | [RunBox](runbox/README.md) | Archived source rebuilt with Watcom, moving window | Movement and pointer avoidance |
+| [Lotus 1-2-3](123/README.md) | New workbook, values/formula, Courier/Helv, save/reopen and recalculation | Application cycle unverified |
 
 Allow differences in font shapes, antialiasing and small text metrics. Missing
 controls, incorrect colors/state, clipped content and layout errors remain

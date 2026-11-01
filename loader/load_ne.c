@@ -504,6 +504,12 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             goto loadne_failed;
     }
 
+    retval->os2path = makeOS2Path(fname);
+    if (!retval->os2path)
+        goto loadne_failed;
+    retval->loading = 1;
+    registerLxModule(retval);
+
     const uint16 *import_modules_table = (const uint16 *)(exe + ne->module_reference_table_offset);
     for (uint32 i = 0; i < ne->num_module_ref_table_entries; i++)
     {
@@ -551,34 +557,16 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         }
     }
 
-    retval->os2path = makeOS2Path(fname);
-    if (!retval->os2path)
-        goto loadne_failed;
-
-    if (!isDLL)
-    {
-        retval->initialized = 1;
-    }
-    else
-    {
-
-        assert(GLoaderState.main_module != NULL);
-        assert(GLoaderState.main_module != retval);
-        runNeLibraryInit(retval);
-
-        retval->initialized = 1;
-
-        if (GLoaderState.loaded_modules)
-        {
-            retval->next = GLoaderState.loaded_modules;
-            GLoaderState.loaded_modules->prev = retval;
-        }
-        GLoaderState.loaded_modules = retval;
-    }
+    retval->loading = 0;
 
     return retval;
 
 loadne_failed:
+    if (retval)
+    {
+        retval->loading = 0;
+        retval->load_failed = 1;
+    }
     freeLxModule(retval);
     return NULL;
 }

@@ -411,6 +411,16 @@ uint32_t lx_execution_tls_window(LxExecution *e)
     return address;
 }
 
+LxGuestMapping *lx_execution_map_shared_at(LxExecution *e, LxHostShared *object, uint32_t address)
+{
+    if (!object || lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
+        return NULL;
+    LxGuestMapping *m =
+        map_unlocked(e, address, lx_host_shared_size(object), 3, address != 0, object);
+    lx_host_mutex_unlock(e->memory_mutex);
+    return m;
+}
+
 LxGuestMapping *lx_execution_map_shared(LxExecution *e, LxHostShared *object)
 {
     if (!object || lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)

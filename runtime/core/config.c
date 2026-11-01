@@ -245,6 +245,21 @@ void cfgLoad(const char *fname)
 
 void cfgLoadFiles(void)
 {
+    /* An explicit configuration is self-contained, including drive mappings. */
+    const char *explicit_config = getenv("TWOINE_CONFIG");
+    if (explicit_config && *explicit_config)
+    {
+        FILE *check = fopen(explicit_config, "r");
+        if (!check)
+        {
+            fprintf(stderr, "2ine: cannot open configuration '%s': %s\n", explicit_config,
+                    strerror(errno));
+            exit(1);
+        }
+        fclose(check);
+        cfgLoad(explicit_config);
+        return;
+    }
     cfgLoad("/etc/2ine.cfg");
 
     char *fname = NULL;

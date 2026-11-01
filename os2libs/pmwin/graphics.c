@@ -218,6 +218,7 @@ BOOL lx_pm_color_table(HPS handle, ULONG options, LONG format, LONG start, LONG 
             return FALSE;
         LONG current = lx_pm_resolve_color(handle, ps->color);
         ps->rgb_colors = TRUE;
+        ps->color_format = format;
         ps->color = current < 0 ? 0 : current;
         return TRUE;
     }
@@ -225,6 +226,7 @@ BOOL lx_pm_color_table(HPS handle, ULONG options, LONG format, LONG start, LONG 
         if (colors[i] < 0 || colors[i] > 0xffffff)
             return FALSE;
     ps->rgb_colors = FALSE;
+    ps->color_format = format;
     if (options & 1 || format == 0)
         memset(ps->color_valid, 0, sizeof ps->color_valid);
     for (LONG i = 0; i < count; i++)

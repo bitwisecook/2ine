@@ -189,6 +189,11 @@ int lx_execution_entry_address(LxExecution *e, void *host, uint32_t *address)
     return lx_execution_fail(e, "Host API requires a generated guest binding");
 }
 
+uint32_t lx_execution_api_arguments(LxExecution *e)
+{
+    return e && e->ops->api_arguments ? e->ops->api_arguments() : 0;
+}
+
 size_t lx_execution_emit_bridge32(LxExecution *e, uint8_t *output, size_t capacity,
                                   const LxExecutionApi32 *binding)
 {
@@ -228,4 +233,9 @@ uint32_t lx_execution_callback32_4(LxExecution *e, uint32_t entry, uint32_t a, u
                                    uint32_t c, uint32_t d)
 {
     return e->ops->callback32_4(entry, a, b, c, d);
+}
+
+int lx_execution_api_registers32(LxExecution *e, LxExecutionRegisters32 *registers)
+{
+    return e && registers && e->ops->api_registers32 ? e->ops->api_registers32(registers) : 0;
 }

@@ -18,6 +18,9 @@ typedef enum
     LX_HOST_POINTER_ILLEGAL
 } LxHostPointerShape;
 LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape);
+/* Pixels are top-down 0xAARRGGBB values. The factory copies their contents. */
+LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
+                                            unsigned hot_x, unsigned hot_y);
 void lx_host_pointer_destroy(LxHostPointer *pointer);
 int lx_host_pointer_set(LxHostPointer *pointer);
 typedef struct LxHostRect
@@ -80,6 +83,7 @@ typedef struct LxHostEvent
     uint32_t scancode; /* IBM PC set 1 physical key position, without release bit. */
     char text[64];
 } LxHostEvent;
+/* Each successful initialization owns one reference, released by video_quit. */
 int lx_host_video_initialize(int *width, int *height);
 /* Release a renderer's GL binding before a separate graphics context is bound. */
 int lx_host_video_release_graphics(void);

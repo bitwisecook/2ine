@@ -1,69 +1,46 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/os2native.h"
-#include "os2libs/pmwinx.h"
-#include "os2libs/pmwin.h"
+#include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/windows.h"
+#include "os2libs/pmwinx/input.h"
+#include "hal/host.h"
+#include "os2libs/pmshapi.h"
+static void open32Shutdown(void);
+#define LX_NATIVE_MODULE_SHUTDOWN() open32Shutdown()
 #include "os2libs/generated/pmwinx-lx.h"
 
 static uint32 references;
-static LX_HOST_THREAD_LOCAL ULONG current_cursor;
-ULONG LoadCursor(ULONG instance, ULONG name)
+static void open32Shutdown(void)
 {
-    TRACE_NATIVE("LoadCursor(%u, %u)", instance, name);
-    if (instance)
-        return name <= 0xffff ? WinLoadPointer(HWND_DESKTOP, instance, name) : 0;
-    LONG id;
-    switch (name)
-    {
-        case 32512:
-            id = 1;
-            break; /* IDC_ARROW */
-        case 32513:
-            id = 2;
-            break; /* IDC_IBEAM */
-        case 32514:
-        case 32650:
-            id = 3;
-            break; /* IDC_WAIT / IDC_APPSTARTING */
-        case 32642:
-            id = 6;
-            break;
-        case 32643:
-            id = 7;
-            break;
-        case 32644:
-            id = 8;
-            break;
-        case 32645:
-            id = 9;
-            break;
-        case 32646:
-            id = 5;
-            break; /* IDC_SIZEALL */
-        case 32648:
-            id = 18;
-            break; /* IDC_NO */
-        default:
-            return 0;
-    }
-    return WinQuerySysPointer(HWND_DESKTOP, id, FALSE);
-}
-ULONG SetCursor(ULONG cursor)
-{
-    ULONG previous = current_cursor;
-    if (!WinSetPointer(HWND_DESKTOP, cursor))
-        return 0;
-    current_cursor = cursor;
-    return previous;
-}
-BOOL DestroyCursor(ULONG cursor)
-{
-    return WinDestroyPointer(cursor);
+    open32QueueCleanup();
+    open32CaretCleanup();
+    open32HooksCleanup();
+    open32WindowsCleanup();
+    open32MenusCleanup();
+    open32ClipboardCleanup();
+    open32DrawingCleanup();
+    open32ClassesCleanup();
+    open32IconsCleanup();
+    open32CriticalCleanup();
+    open32ContextCleanup();
+    open32MemoryCleanup();
+    references = 0;
 }
 BOOL WinXProcessMsg(PVOID message)
 {
-    (void)message;
-    /* This worker creates OS/2 PM windows; no Open32 window owns their messages. */
-    return FALSE;
+    const uint8 *wire = message;
+    ULONG handle = wire ? lx_guest_load_u32(wire) : 0;
+    if (!open32FindWindow(handle))
+        return FALSE;
+    QMSG native = {handle,
+                   lx_guest_load_u32(wire + 4),
+                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 8),
+                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 12),
+                   lx_guest_load_u32(wire + 16),
+                   {(LONG)lx_guest_load_u32(wire + 20), (LONG)lx_guest_load_u32(wire + 24)},
+                   lx_guest_load_u32(wire + 28)};
+    WinDispatchMsg(open32Presentation(), &native);
+    return TRUE;
 }
 
 VOID WinInitializeOpen32(ULONG reserved)
@@ -97,4 +74,66 @@ LONG MulDiv(LONG number, LONG numerator, LONG denominator)
     if (negative)
         result = -result;
     return result < INT32_MIN || result > INT32_MAX ? -1 : (LONG)result;
+}
+
+LONG WinCallWinMain(LONG argc, PSZ *argv, PFNWINMAIN entry, LONG show)
+{
+    TRACE_NATIVE("WinCallWinMain(%d, %p, %p, %d)", (int)argc, argv, entry, (int)show);
+    (void)argc;
+    (void)argv;
+    if (!entry)
+        return -1;
+    char *command = GLoaderState.pib.pib_pchcmd;
+    if (command)
+        command += strlen(command) + 1;
+    else
+        command = "";
+    if (GLoaderState.execution)
+    {
+        uint32 address;
+        if ((uintptr_t)entry > UINT32_MAX ||
+            !lx_execution_memory(GLoaderState.execution, (uint32)(uintptr_t)entry, 1,
+                                 LX_GUEST_EXECUTE) ||
+            !lx_execution_address(GLoaderState.execution, command, strlen(command) + 1,
+                                  LX_GUEST_READ, &address))
+            return -1;
+        return (LONG)lx_execution_callback32_4(GLoaderState.execution, (uint32)(uintptr_t)entry,
+                                               UINT32_MAX, 0, address, (uint32)show);
+    }
+    return entry(UINT32_MAX, 0, command, show);
+}
+
+ULONG GetTickCount(void)
+{
+    return (ULONG)(lx_host_monotonic_us() / 1000);
+}
+
+static _Thread_local ULONG last_error;
+void open32SetError(ULONG error)
+{
+    last_error = error;
+}
+ULONG GetLastError(void)
+{
+    return last_error;
+}
+VOID SetLastError(ULONG error)
+{
+    last_error = error;
+}
+VOID Sleep(ULONG milliseconds)
+{
+    lx_host_sleep_ms(milliseconds);
+}
+
+ULONG GetUserDefaultLCID(void)
+{
+    /* The current NLS provider exposes United States country and English locale. */
+    return 0x0409;
+}
+
+ULONG GetOEMCP(void)
+{
+    /* The NLS provider currently exposes CP437 as the process OEM code page. */
+    return 437;
 }

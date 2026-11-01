@@ -56,3 +56,43 @@ done:
     free(name);
     return result;
 }
+
+static uint32 bridge32_DosInsertMessage(uint8 *a)
+{
+    uint32 count = lx_guest_load_u32(a + 4), message_size = lx_guest_load_u32(a + 12),
+           capacity = lx_guest_load_u32(a + 20);
+    if (count > 9 || message_size > 1048576 || capacity > 1048576)
+        return ERROR_INVALID_PARAMETER;
+    LxGuestBorrow table = {0}, message = {0}, output = {0}, actual = {0};
+    char *values[9] = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if ((count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), count * 4,
+                                       LX_GUEST_READ, &table)) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), message_size,
+                             LX_GUEST_READ, &message) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16), capacity,
+                             LX_GUEST_WRITE, &output) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 24), 4, LX_GUEST_WRITE,
+                             &actual))
+        goto done;
+    for (unsigned i = 0; i < count; i++)
+    {
+        values[i] = lx_execution_copy_string(GLoaderState.execution,
+                                             lx_guest_load_u32((uint8 *)table.host + i * 4), 65536);
+        if (!values[i])
+            goto done;
+    }
+    ULONG written = 0;
+    result = DosInsertMessage(values, count, message.host, message_size, output.host, capacity,
+                              &written);
+    if (!result)
+        lx_guest_store_u32(actual.host, written);
+done:
+    for (unsigned i = 0; i < 9; i++)
+        free(values[i]);
+    lx_execution_release(&table);
+    lx_execution_release(&message);
+    lx_execution_release(&output);
+    lx_execution_release(&actual);
+    return result;
+}

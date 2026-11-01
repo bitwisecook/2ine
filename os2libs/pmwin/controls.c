@@ -192,17 +192,24 @@ static MRESULT list_message(Window *window, ULONG message, MPARAM first, MPARAM 
     }
     if (message == LM_QUERYSELECTION) /* LM_QUERYSELECTION */
     {
-        for (size_t i = index < 0 ? 0 : (size_t)index + 1; i < c->count; i++)
+        size_t start = !(window->style & 0x11) || index < 0 ? 0 : (size_t)index + 1;
+        for (size_t i = start; i < c->count; i++)
             if (c->items[i].selected)
                 return controlReply((LONG)i);
         return controlReply(-1);
     }
     if (message == LM_SELECTITEM && index == -1)
     {
+        BOOL changed = FALSE;
         for (size_t i = 0; i < c->count; i++)
+        {
+            changed |= c->items[i].selected;
             c->items[i].selected = FALSE;
+        }
         c->selected = -1;
         controlRepaint(window);
+        if (changed)
+            controlNotify(window, 1); /* LN_SELECT */
         return controlReply(TRUE);
     }
     if (message == LM_QUERYTOPINDEX) /* LM_QUERYTOPINDEX */
@@ -232,14 +239,21 @@ static MRESULT list_message(Window *window, ULONG message, MPARAM first, MPARAM 
             controlRepaint(window);
             return controlReply((LONG)c->count);
         case LM_SELECTITEM:
+        {
             if (!(USHORT)(uintptr_t)second && !c->items[index].selected)
                 return controlReply(FALSE);
+            BOOL selected = (USHORT)(uintptr_t)second != 0;
+            BOOL changed = c->items[index].selected != selected;
             if (!(window->style & 0x11) && (uintptr_t)second)
                 for (size_t i = 0; i < c->count; i++)
                     c->items[i].selected = FALSE;
-            c->items[index].selected = (uintptr_t)second != 0;
-            c->selected = (uintptr_t)second ? index : -1;
-            break;
+            c->items[index].selected = selected;
+            c->selected = selected ? index : -1;
+            controlRepaint(window);
+            if (changed)
+                controlNotify(window, 1); /* LN_SELECT */
+            return controlReply(TRUE);
+        }
         case LM_SETITEMTEXT:
         {
             char *text = controlCopyText(second);
@@ -274,7 +288,7 @@ static void draw_text(Window *window, HPS space, const char *text, int baseline,
                       BOOL mnemonics, BOOL selected, int inset)
 {
     LxHostFont *font = lx_pm_font(space);
-    if (!font || !text)
+    if (!font || !text || !windowAcceptsUpdates(window))
         return;
     LxHostRect rect;
     calcHeavyweightRect(window, &rect);
@@ -470,7 +484,7 @@ static void paint(Window *window)
                       c->items[i].selected, 3);
         }
     }
-    else
+    else if (!(c->kind == 5 && ((window->style & 0x7f) == 3 || (window->style & 0x7f) == 4)))
         draw_text(window, space, window->text,
                   c->kind == 3 ? (window->h + metrics.ascent - metrics.descent) / 2
                                : metrics.ascent,
@@ -490,6 +504,7 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         /* These static and button styles require a different control representation. */
         if ((kind == 3 && (window->style & 15) > 6) ||
             (kind == 5 && (window->style & 0x7f) != 1 && (window->style & 0x7f) != 2 &&
+             (window->style & 0x7f) != 3 && (window->style & 0x7f) != 4 &&
              (window->style & 0x7f) != 8))
             return controlReply(TRUE);
         window->control = calloc(1, sizeof *window->control);
@@ -511,6 +526,8 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         }
         if (kind == 2 && !initializeCombo(window))
             return controlReply(TRUE);
+        if (kind == 8 && !initializeScrollbar(window, first))
+            return controlReply(TRUE);
         return 0;
     }
     PmControl *c = window->control;
@@ -521,6 +538,8 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
                                 : HT_NORMAL);
     if (!c)
         return 0;
+    if (c->kind == 8)
+        return scrollbarMessage(window, message, first, second);
     if (message == WM_BUTTON1DOWN &&
         (c->kind == 3 || c->kind == 6 || c->kind == 7 || c->kind == 10 || c->kind == 32))
         WinSetFocus(HWND_DESKTOP, handle);

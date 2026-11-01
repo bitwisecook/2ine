@@ -54,8 +54,11 @@ typedef struct LxPostTIB
 typedef struct LxHostThreadState
 {
     void *anchor_block;
+    void (*pm_cleanup)(void);
+    uint32 pm_error;
     LxGuestMapping *tib_mapping;
 } LxHostThreadState;
 LxHostThreadState *lxHostThreadState(void);
+void lxHostThreadCleanup(void);
 
 #endif

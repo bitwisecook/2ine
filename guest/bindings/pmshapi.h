@@ -1,4 +1,39 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+static uint32 bridge32_WinAddSwitchEntry(uint8 *a)
+{
+    SWCNTRL value;
+    return lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a), &value, sizeof value)
+               ? WinAddSwitchEntry(&value)
+               : 0;
+}
+static uint32 bridge32_WinRemoveSwitchEntry(uint8 *a)
+{
+    return WinRemoveSwitchEntry(lx_guest_load_u32(a));
+}
+static uint32 bridge32_WinChangeSwitchEntry(uint8 *a)
+{
+    SWCNTRL value;
+    return lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 4), &value, sizeof value)
+               ? WinChangeSwitchEntry(lx_guest_load_u32(a), &value)
+               : ERROR_INVALID_PARAMETER;
+}
+static uint32 bridge32_WinQuerySwitchEntry(uint8 *a)
+{
+    SWCNTRL value;
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), sizeof value,
+                             LX_GUEST_WRITE, &output))
+        return ERROR_INVALID_PARAMETER;
+    uint32 result = WinQuerySwitchEntry(lx_guest_load_u32(a), &value);
+    if (!result)
+        memcpy(output.host, &value, sizeof value);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_WinQuerySwitchHandle(uint8 *a)
+{
+    return WinQuerySwitchHandle(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
 static int profile_strings(uint8 *arguments, char **strings, unsigned count)
 {
     for (unsigned i = 0; i < count; i++)

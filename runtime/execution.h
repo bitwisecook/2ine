@@ -25,6 +25,15 @@ typedef struct LxExecutionApi32
 } LxExecutionApi32;
 size_t lx_execution_emit_bridge32(LxExecution *execution, uint8_t *output, size_t capacity,
                                   const LxExecutionApi32 *binding);
+typedef struct LxExecutionRegisters32
+{
+    uint32_t eax, ebx, ecx, edx, esi, edi, ebp, esp, eip, eflags;
+    uint16_t cs, ds, es, fs, gs, ss;
+} LxExecutionRegisters32;
+/* Snapshot the suspended caller of a generated 32-bit API bridge. */
+int lx_execution_api_registers32(LxExecution *execution, LxExecutionRegisters32 *registers);
+/* Current generated API argument frame, or zero outside a stack-based API call. */
+uint32_t lx_execution_api_arguments(LxExecution *execution);
 typedef struct LxGuestBorrow
 {
     void *host;
@@ -57,6 +66,8 @@ enum
 LxGuestMapping *lx_execution_map(LxExecution *execution, uint32_t address, size_t size,
                                  unsigned permissions, int exact);
 /* The execution instance owns each view, independently of the shared object. */
+LxGuestMapping *lx_execution_map_shared_at(LxExecution *execution, LxHostShared *object,
+                                           uint32_t address);
 LxGuestMapping *lx_execution_map_shared(LxExecution *execution, LxHostShared *object);
 LxGuestMapping *lx_execution_mapping_at(LxExecution *execution, uint32_t address);
 uint32_t lx_execution_mapping_address(const LxGuestMapping *mapping);
@@ -94,6 +105,8 @@ typedef struct LxExecutionBridge
     uint32_t size;
     uint16_t selector_index;
 } LxExecutionBridge;
+int lx_execution_universal_thunk(LxExecution *execution, uint32_t ordinal,
+                                 LxExecutionBridge *bridge);
 
 typedef struct LxExecutionServices
 {

@@ -73,6 +73,8 @@ LX_PRIVATE LxModule *loadModule(const char *fname, uint8 *exe, uint32 exelen,
                                 int dependency_tree_depth);
 LX_PRIVATE LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_depth);
 LX_PRIVATE LxModule *loadModuleByPath(const char *fname);
+LX_PRIVATE void registerLxModule(LxModule *module);
+LX_PRIVATE void unloadAllModules(void);
 LX_PRIVATE LxModule *loadNativeModule(const char *fname, const char *modname);
 LX_PRIVATE LxModule *loadModuleByModuleNameInternal(const char *modname,
                                                     const int dependency_tree_depth);

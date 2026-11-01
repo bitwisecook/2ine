@@ -6,11 +6,45 @@
 #include "os2libs/pm_text.h"
 #include "guest/abi.h"
 #include <ctype.h>
-static Window *menu_window(HWND handle)
+Window *lx_pm_menu_window(HWND handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     return window && window->menu ? window : NULL;
+}
+BOOL createSystemMenu(Window *frame, ULONG flags)
+{
+    HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, WS_VISIBLE | 1, 0,
+                               frame->h > 24 ? frame->h - 24 : 0, 24, 24, frame->hwnd, HWND_TOP,
+                               FID_SYSMENU, NULL, NULL);
+    if (!bar)
+        return FALSE;
+    HWND popup = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_MENU, NULL, 0, 0, 0, 1, 1, bar, HWND_TOP, 0,
+                                 NULL, NULL);
+    if (!popup)
+        goto fail;
+    MENUITEM root = {-1, 0x11, 0, 0x8007, popup, 0}; /* MIS_TEXT | MIS_SUBMENU, SC_SYSMENU */
+    if ((intptr_t)WinSendMsg(bar, 0x180, &root, "~System") == -1)
+        goto fail;
+    static const struct
+    {
+        USHORT id;
+        ULONG flag;
+        const char *text;
+    } entries[] = {{0x8008, 0x30, "~Restore"},  {0x8001, 0, "~Move"},        {0x8000, 8, "~Size"},
+                   {0x8002, 0x10, "Mi~nimize"}, {0x8003, 0x20, "Ma~ximize"}, {0x8004, 0, "~Close"}};
+    for (size_t i = 0; i < sizeof entries / sizeof entries[0]; i++)
+    {
+        if (entries[i].flag && !(flags & entries[i].flag))
+            continue;
+        MENUITEM item = {-1, 0x41, 0, entries[i].id, 0, 0}; /* MIS_TEXT | MIS_SYSCOMMAND */
+        if ((intptr_t)WinSendMsg(popup, 0x180, &item, (MPARAM)entries[i].text) == -1)
+            goto fail;
+    }
+    return TRUE;
+fail:
+    WinDestroyWindow(bar);
+    return FALSE;
 }
 void destroyMenu(Window *window)
 {
@@ -45,7 +79,7 @@ static PmMenuItem *menu_find(Window *window, unsigned id, BOOL recursive, Window
         }
         if (recursive && item->item.hwndSubMenu)
         {
-            PmMenuItem *sub = menu_find(menu_window(item->item.hwndSubMenu), id, TRUE, found);
+            PmMenuItem *sub = menu_find(lx_pm_menu_window(item->item.hwndSubMenu), id, TRUE, found);
             if (sub)
                 return sub;
         }
@@ -100,7 +134,7 @@ static void menu_close(Window *window)
     PmMenu *menu = window->menu;
     for (size_t i = 0; menu && i < menu->count; i++)
     {
-        Window *sub = menu_window(menu->items[i].item.hwndSubMenu);
+        Window *sub = lx_pm_menu_window(menu->items[i].item.hwndSubMenu);
         if (sub)
             menu_close(sub);
     }
@@ -143,7 +177,7 @@ static void menu_select(Window *window, int index)
         return;
     if (menu->selected >= 0 && (size_t)menu->selected < menu->count)
     {
-        Window *previous = menu_window(menu->items[menu->selected].item.hwndSubMenu);
+        Window *previous = lx_pm_menu_window(menu->items[menu->selected].item.hwndSubMenu);
         if (previous)
             menu_close(previous);
     }
@@ -152,7 +186,7 @@ static void menu_select(Window *window, int index)
 }
 static void menu_open(Window *window, PmMenuItem *item)
 {
-    Window *root = menu_root(window), *submenu = menu_window(item->item.hwndSubMenu);
+    Window *root = menu_root(window), *submenu = lx_pm_menu_window(item->item.hwndSubMenu);
     if (!submenu)
         return;
     HWND handle = window->hwnd;
@@ -163,9 +197,9 @@ static void menu_open(Window *window, PmMenuItem *item)
         WinSendMsg(root->owner->hwnd, WM_INITMENU, (MPARAM)(uintptr_t)item->item.id,
                    (MPARAM)(uintptr_t)submenu->hwnd);
     /* WM_INITMENU may replace items or destroy the menu while the owner runs. */
-    window = menu_window(handle);
+    window = lx_pm_menu_window(handle);
     item = menu_find(window, id, FALSE, NULL);
-    submenu = item ? menu_window(item->item.hwndSubMenu) : NULL;
+    submenu = item ? lx_pm_menu_window(item->item.hwndSubMenu) : NULL;
     if (!submenu)
         return;
     window->menu->selected = item->item.iPosition;
@@ -266,7 +300,7 @@ static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size,
         return 0;
     HWND handle = WinCreateWindow(parent, (PSZ)WC_MENU, NULL, depth ? 0 : WS_VISIBLE | 1, 0, 0, 1,
                                   24, owner, HWND_TOP, depth ? 0 : FID_MENU, NULL, NULL);
-    Window *window = menu_window(handle);
+    Window *window = lx_pm_menu_window(handle);
     if (!window)
         return 0;
     PmMenu *menu = window->menu;
@@ -319,6 +353,22 @@ fail:
     WinDestroyWindow(handle);
     return 0;
 }
+BOOL lx_pm_menu_remove(HWND handle, size_t index, BOOL destroy_submenu)
+{
+    Window *window = lx_pm_menu_window(handle);
+    if (!window || index >= window->menu->count)
+        return FALSE;
+    PmMenuItem *item = &window->menu->items[index];
+    if (destroy_submenu && item->item.hwndSubMenu)
+        WinDestroyWindow(item->item.hwndSubMenu);
+    free(item->text);
+    memmove(item, item + 1, (window->menu->count - index - 1) * sizeof *item);
+    window->menu->count--;
+    menu_layout(window);
+    WinInvalidateRect(handle, NULL, FALSE);
+    return TRUE;
+}
+
 HWND WinCreateMenu(HWND parent, PVOID data)
 {
     if (!data)
@@ -348,7 +398,7 @@ HWND WinLoadMenu(HWND frame, HMODULE module, ULONG id)
 BOOL WinPopupMenu(HWND parent, HWND owner, HWND handle, LONG x, LONG y, LONG id, ULONG flags)
 {
     (void)flags;
-    Window *window = menu_window(handle);
+    Window *window = lx_pm_menu_window(handle);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *target = anchor ? getWindowFromHWND(anchor, owner) : NULL;
     if (!window || !target)
@@ -581,13 +631,7 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
         if (!item)
             return 0;
         size_t index = (size_t)(item - found->menu->items);
-        if (message == 0x181 && item->item.hwndSubMenu)
-            WinDestroyWindow(item->item.hwndSubMenu);
-        free(item->text);
-        memmove(item, item + 1, (found->menu->count - index - 1) * sizeof *item);
-        found->menu->count--;
-        menu_layout(found);
-        return (MRESULT)(uintptr_t)TRUE;
+        return (MRESULT)(uintptr_t)lx_pm_menu_remove(found->hwnd, index, message == 0x181);
     }
     if (message == 0x186)
     {
@@ -595,4 +639,51 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
         return (MRESULT)(uintptr_t)TRUE;
     }
     return WinDefWindowProc(handle, message, first, second);
+}
+
+BOOL lx_pm_menu_attach(HWND handle, HWND parent_handle)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = lx_pm_menu_window(handle);
+    Window *parent = anchor ? getWindowFromHWND(anchor, parent_handle) : NULL;
+    if (!window || !parent || parent == &desktop_window || window == parent ||
+        (window->parent != &desktop_window && window->parent != parent))
+        return FALSE;
+    for (Window *ancestor = parent; ancestor; ancestor = ancestor->parent)
+        if (ancestor == window)
+            return FALSE;
+    if (window->parent != parent)
+    {
+        Window **link = &window->parent->children;
+        while (*link && *link != window)
+            link = &(*link)->sibling;
+        if (*link)
+            *link = window->sibling;
+        lx_host_window_destroy(window->heavy.window);
+        window->heavy.window = parent->heavy.window;
+        window->parent = parent;
+        window->sibling = parent->children;
+        parent->children = window;
+    }
+    window->owner = parent;
+    window->style |= 1;  /* MS_ACTIONBAR */
+    window->id = 0x8005; /* FID_MENU */
+    if (!WinSetWindowPos(handle, HWND_TOP, 0, parent->h - 24, parent->w, 24,
+                         SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ZORDER))
+        return FALSE;
+    return WinInvalidateRect(handle, NULL, FALSE) && WinUpdateWindow(handle);
+}
+
+BOOL lx_pm_menu_owner(HWND handle, HWND owner_handle)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *menu = lx_pm_menu_window(handle);
+    Window *owner = anchor ? getWindowFromHWND(anchor, owner_handle) : NULL;
+    if (!menu || !owner || menu == owner)
+        return FALSE;
+    for (Window *ancestor = owner; ancestor; ancestor = ancestor->owner)
+        if (ancestor == menu)
+            return FALSE;
+    menu->owner = owner;
+    return TRUE;
 }

@@ -256,10 +256,6 @@ static uint32 bridge32_WinQuerySysPointer(uint8 *a)
 {
     return WinQuerySysPointer(pm_word(a, 0), (LONG)pm_word(a, 1), pm_word(a, 2));
 }
-static uint32 bridge32_WinLoadPointer(uint8 *a)
-{
-    return WinLoadPointer(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2));
-}
 static uint32 bridge32_WinSetPointer(uint8 *a)
 {
     return WinSetPointer(pm_word(a, 0), pm_word(a, 1));
@@ -289,6 +285,11 @@ static uint32 bridge32_WinQuerySysColor(uint8 *a)
 {
     return (uint32)WinQuerySysColor(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2));
 }
+static uint32 bridge32_WinQueryCp(uint8 *a)
+{
+    return WinQueryCp(pm_word(a, 0));
+}
+
 static uint32 bridge32_WinQuerySysValue(uint8 *a)
 {
     return (uint32)WinQuerySysValue(pm_word(a, 0), (LONG)pm_word(a, 1));
@@ -443,6 +444,10 @@ static uint32 bridge32_WinCreateDlg(uint8 *a)
     lx_execution_release(&data);
     return result;
 }
+static uint32 bridge32_WinEnumDlgItem(uint8 *a)
+{
+    return WinEnumDlgItem(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2));
+}
 static uint32 bridge32_WinLoadDlg(uint8 *a)
 {
     if (!pm_procedure(pm_word(a, 2)))
@@ -509,6 +514,10 @@ static uint32 bridge32_WinSetDlgItemText(uint8 *a)
 static uint32 bridge32_WinQueryWindowTextLength(uint8 *a)
 {
     return (uint32)WinQueryWindowTextLength(pm_word(a, 0));
+}
+static uint32 bridge32_WinQueryDlgItemTextLength(uint8 *a)
+{
+    return (uint32)WinQueryDlgItemTextLength(pm_word(a, 0), pm_word(a, 1));
 }
 static uint32 pm_query_text(uint8 *a, int item)
 {
@@ -710,6 +719,57 @@ static uint32 bridge32_WinDrawText(uint8 *a)
     return result;
 }
 
+static uint32 bridge32_WinGetSysBitmap(uint8 *a)
+{
+    return WinGetSysBitmap(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinUpper(uint8 *a)
+{
+    uint32 pointer = pm_word(a, 3);
+    char *text = lx_execution_copy_string(GLoaderState.execution, pointer, 65536);
+    if (!text)
+        return 0;
+    size_t length = strlen(text) + 1;
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, pointer, length, LX_GUEST_WRITE, &output))
+    {
+        free(text);
+        return 0;
+    }
+    uint32 result = WinUpper(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2), text);
+    memcpy(output.host, text, length);
+    lx_execution_release(&output);
+    free(text);
+    return result;
+}
+static uint32 bridge32_WinUpperChar(uint8 *a)
+{
+    return WinUpperChar(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2), pm_word(a, 3));
+}
+static uint32 bridge32_WinSetParent(uint8 *a)
+{
+    return WinSetParent(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2));
+}
+static uint32 bridge32_WinDrawBorder(uint8 *a)
+{
+    RECTL rect;
+    return lx_execution_read(GLoaderState.execution, pm_word(a, 1), &rect, sizeof rect) &&
+           WinDrawBorder(pm_word(a, 0), &rect, (LONG)pm_word(a, 2), (LONG)pm_word(a, 3),
+                         (LONG)pm_word(a, 4), (LONG)pm_word(a, 5), pm_word(a, 6));
+}
+static uint32 bridge32_WinLoadPointer(uint8 *a)
+{
+    return WinLoadPointer(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2));
+}
+static uint32 bridge32_WinDrawPointer(uint8 *a)
+{
+    return WinDrawPointer(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2), pm_word(a, 3),
+                          pm_word(a, 4));
+}
+static uint32 bridge32_WinEnableWindowUpdate(uint8 *a)
+{
+    return WinEnableWindowUpdate(pm_word(a, 0), pm_word(a, 1));
+}
 static uint32 bridge32_WinDrawBitmap(uint8 *a)
 {
     RECTL source;
@@ -876,6 +936,11 @@ static uint32 bridge32_WinCalcFrameRect(uint8 *a)
            lx_execution_write(GLoaderState.execution, pm_word(a, 1), &rect, sizeof rect);
 }
 
+static uint32 bridge32_WinCpTranslateChar(uint8 *a)
+{
+    return WinCpTranslateChar(pm_word(a, 0), pm_word(a, 1), (UCHAR)pm_word(a, 2), pm_word(a, 3));
+}
+
 static uint32 bridge32_WinSetPointerPos(uint8 *a)
 {
     return WinSetPointerPos(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2));
@@ -895,6 +960,29 @@ static uint32 bridge32_WinQueryVisibleRegion(uint8 *a)
 static uint32 bridge32_WinSetVisibleRegionNotify(uint8 *a)
 {
     return WinSetVisibleRegionNotify(pm_word(a, 0), pm_word(a, 1));
+}
+
+static uint32 bridge32_WinMessageBox(uint8 *a)
+{
+    char *text = lx_guest_load_u32(a + 8) ? lx_execution_copy_string(GLoaderState.execution,
+                                                                     lx_guest_load_u32(a + 8), 8193)
+                                          : strdup("");
+    char *caption =
+        lx_guest_load_u32(a + 12)
+            ? lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 12), 1025)
+            : strdup("");
+    uint32 result = text && caption ? WinMessageBox(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                                                    text, caption, lx_guest_load_u32(a + 16),
+                                                    lx_guest_load_u32(a + 20))
+                                    : 0xffff;
+    free(text);
+    free(caption);
+    return result;
+}
+
+static uint32 bridge32_WinAlarm(uint8 *a)
+{
+    return WinAlarm(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
 
 static uint32 bridge32_WinQuerySystemAtomTable(uint8 *a)

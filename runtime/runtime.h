@@ -73,6 +73,7 @@ typedef struct LxLoaderState
     void __attribute__((noreturn)) (*terminate)(const uint32 exitcode);
     int (*registerAudioGenerator)(LxAudioGeneratorFn fn, void *data, const int singleton);
     void (*lib2ine_shutdown)(void);
+    uint32 (*beep)(uint32 frequency, uint32 duration);
     int (*registerStereoAudioGenerator)(LxAudioGeneratorFn fn, void *data, const int singleton);
 } LxLoaderState;
 
@@ -80,6 +81,7 @@ typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);
 typedef void (*LxNativeModuleDeinitEntryPoint)(void);
 
 extern __attribute__((visibility("default"))) LxLoaderState GLoaderState;
+char *lxHostPathToGuest(const char *name);
 
 #define LX_NATIVE_CONSTRUCTOR(modname)                                                             \
     void __attribute__((constructor)) lxNativeConstructor_##modname(void)

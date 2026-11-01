@@ -24,7 +24,7 @@ static Window *group_start(Window *window)
     Window *start = first;
     for (Window *item = first; item; item = item->sibling)
     {
-        if (item->style & 0x20000) /* WS_GROUP */
+        if (item->style & 0x10000) /* WS_GROUP */
             start = item;
         if (item == window)
             break;
@@ -68,7 +68,7 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
             int index = 0;
             for (Window *item = group_start(window); item; item = item->sibling)
             {
-                if (index && (item->style & 0x20000))
+                if (index && (item->style & 0x10000))
                     break;
                 if (item->control && item->control->kind == 3)
                 {
@@ -118,7 +118,7 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
         Window *start = group_start(window);
         for (Window *item = start; item; item = item->sibling)
         {
-            if (item != start && (item->style & 0x20000))
+            if (item != start && (item->style & 0x10000))
                 break;
             if (item->control && item->control->kind == 3 &&
                 ((item->style & 15) == BS_RADIO || (item->style & 15) == BS_AUTORADIO))

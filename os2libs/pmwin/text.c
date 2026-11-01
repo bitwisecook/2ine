@@ -3,6 +3,43 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pm_text.h"
+static BOOL case_parameters(HAB hab, ULONG codepage, ULONG country)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (codepage != 0 && codepage != 437 && codepage != 850)
+    {
+        if (anchor)
+            lxHostThreadState()->pm_error = PMERR_INVALID_SRC_CODEPAGE;
+        return FALSE;
+    }
+    if (country != 0 && country != 1)
+    {
+        if (anchor)
+            lxHostThreadState()->pm_error = PMERR_PARAMETER_OUT_OF_RANGE;
+        return FALSE;
+    }
+    return TRUE;
+}
+ULONG WinUpperChar(HAB hab, ULONG codepage, ULONG country, ULONG character)
+{
+    if (!case_parameters(hab, codepage, country) || character > 255)
+        return 0;
+    /* Preserve non-ASCII bytes, as does the current NLS DosMapCase provider. */
+    return character >= 'a' && character <= 'z' ? character - ('a' - 'A') : character;
+}
+ULONG WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text)
+{
+    TRACE_NATIVE("WinUpper(%u, %u, %u, '%s')", (uint)hab, (uint)codepage, (uint)country, text);
+    if (!text || !case_parameters(hab, codepage, country))
+        return 0;
+    size_t length = strlen(text);
+    if (length > UINT32_MAX)
+        return 0;
+    for (size_t i = 0; i < length; i++)
+        if (text[i] >= 'a' && text[i] <= 'z')
+            text[i] -= 'a' - 'A';
+    return (ULONG)length;
+}
 LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *bounds)
 {
@@ -48,8 +85,8 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
     ps->position = end;
     return 1;
 }
-LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
-                 ULONG flags)
+LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
+                     LONG background, ULONG flags, BOOL clip, BOOL opaque_runs)
 {
     TRACE_NATIVE("WinDrawText(%u, %d, %p, %p, %d, %d, %u)", (uint)handle, (int)count, text, rect,
                  (int)foreground, (int)background, (uint)flags);
@@ -149,9 +186,17 @@ LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
                 x += (available - widths[line]) / 2;
             else if (flags & 0x200)
                 x += available - widths[line];
+            if (opaque_runs && widths[line])
+            {
+                RECTL run = {x, top - (line + 1) * height, x + widths[line], top - line * height};
+                if ((!clip || WinIntersectRect(0, &run, &run, rect)) &&
+                    !WinFillRect(handle, &run, background))
+                    result = 0;
+            }
             POINTL point = {x, top - line * height - metrics.ascent};
             if (!lx_pm_text(handle, &point, lengths[line], copy + starts[line],
-                            (flags & 0x40) ? ps->primitive_color[1] : foreground, rect))
+                            (flags & 0x40) ? ps->primitive_color[1] : foreground,
+                            clip ? rect : NULL))
                 result = 0;
         }
     }
@@ -160,6 +205,12 @@ LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
     free(starts);
     free(copy);
     return result;
+}
+
+LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
+                 ULONG flags)
+{
+    return lx_pm_draw_text(handle, count, text, rect, foreground, background, flags, TRUE, FALSE);
 }
 
 BOOL lx_pm_mask(HPS handle, LONG x, LONG y, int width, int height, const uint8_t *coverage,

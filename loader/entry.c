@@ -36,6 +36,26 @@ LxExecutionEntry executionEntry(const LxModule *module)
     if (!module->is_lx && module->header.ne.auto_data_segment)
         e.data_selector =
             lxSelectorToSegment(module->mmaps[module->header.ne.auto_data_segment - 1].alias);
+    if (module->is_lx && module->entry16)
+    {
+        const LxHeader *header = &module->header.lx;
+        const LxMmaps *code = &module->mmaps[header->eip_object - 1];
+        const LxMmaps *stack = &module->mmaps[header->esp_object - 1];
+        if (code->alias == 0xffff || stack->alias == 0xffff || header->eip > 0xffff ||
+            header->esp > 0xffff)
+        {
+            fprintf(stderr, "Invalid USE16 LX entry or stack\n");
+            abort();
+        }
+        e.entry = (uint32)lxSelectorToSegment(code->alias) << 16 | header->eip;
+        e.stack = (uint32)lxSelectorToSegment(stack->alias) << 16 | header->esp;
+        if (header->auto_ds_object_num)
+        {
+            const LxMmaps *data = &module->mmaps[header->auto_ds_object_num - 1];
+            e.data_selector = lxSelectorToSegment(data->alias);
+            e.data_bytes = (uint16)data->size;
+        }
+    }
     return e;
 }
 
@@ -43,7 +63,7 @@ void runModule(LxModule *module)
 {
     LxExecutionEntry e = executionEntry(module);
     GLoaderState.running = 1;
-    lx_execution_program(GLoaderState.execution, &e, module->is_lx ? 32 : 16);
+    lx_execution_program(GLoaderState.execution, &e, module->is_lx && !module->entry16 ? 32 : 16);
 }
 
 void runLxLibraryInitOrTerm(LxModule *module, int termination)
@@ -61,13 +81,7 @@ __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
 
     freeLxModule(GLoaderState.main_module);
 
-    /* Dependencies precede their dependents in the load list; teardown starts at its head. */
-    while (GLoaderState.loaded_modules)
-    {
-        LxModule *lxmod = GLoaderState.loaded_modules;
-        lxmod->refcount = 1;
-        freeLxModule(lxmod);
-    }
+    unloadAllModules();
 
     GLoaderState.lib2ine_shutdown();
 

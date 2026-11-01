@@ -154,17 +154,16 @@ APIRET DosQueryCp(ULONG cb, PULONG arCP, PULONG pcCP)
 
     FIXME("This is mostly a stub");
 
-    if (cb < sizeof(*arCP) * 2)
-        return ERROR_CPLIST_TOO_SMALL;
-
     // 437 == United States codepage.
-    arCP[0] = 437; // current process codepage
-    arCP[1] = 437; // prepared system codepage
+    if (cb >= 2)
+        arCP[0] = 437; // current process codepage
+    if (cb >= 4)
+        arCP[1] = 437; // prepared system codepage
 
     if (pcCP)
-        *pcCP = sizeof(*arCP) * 2;
+        *pcCP = cb >= 4 ? 4 : cb >= 2 ? 2 : 0;
 
-    return NO_ERROR;
+    return cb < 4 ? ERROR_CPLIST_TOO_SMALL : NO_ERROR;
 }
 
 APIRET DosDevConfig(PVOID pdevinfo, ULONG item)
@@ -211,6 +210,30 @@ APIRET DosQuerySysState(ULONG func, ULONG arg1, ULONG pid, ULONG _res_, PVOID bu
                  (uint)_res_, buf, (uint)bufsz);
     FIXME("implement me");
     return ERROR_INVALID_PARAMETER;
+}
+
+APIRET16 Dos16QProcStatus(PVOID buffer, USHORT size)
+{
+    TRACE_NATIVE("Dos16QProcStatus(%p, %u)", buffer, (uint)size);
+    /* No complete cross-process resource snapshot is available. Leave the
+       caller's buffer untouched instead of returning an empty process list. */
+    return ERROR_NOT_SUPPORTED;
+}
+
+APIRET16 Dos16SMPMPresent(PUSHORT present)
+{
+    TRACE_NATIVE("Dos16SMPMPresent(%p)", present);
+    if (!present)
+        return ERROR_INVALID_PARAMETER;
+    *present = 0; /* No 16-bit PM desktop session is running in this worker. */
+    return NO_ERROR;
+}
+
+APIRET16 Dos16SMSetTitle(PSZ title)
+{
+    TRACE_NATIVE("Dos16SMSetTitle('%s')", title);
+    /* A console worker does not own a session-manager switch-list entry. */
+    return ERROR_NOT_SUPPORTED;
 }
 
 APIRET16 Dos16GetDateTime(PDATETIME pdt)

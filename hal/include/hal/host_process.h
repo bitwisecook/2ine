@@ -21,6 +21,8 @@ LxHostChild *lx_host_child_spawn(const char *path, char *const *arguments,
 uint32_t lx_host_child_id(const LxHostChild *child);
 /* 1 observed completion, 0 still running, -1 failure. */
 int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status);
+/* Terminate this retained child only: 0 signalled, 1 already finished, -1 failure. */
+int lx_host_child_terminate(LxHostChild *child);
 /* A released running child is detached and reaped by the host adapter. */
 void lx_host_child_release(LxHostChild *child);
 #endif

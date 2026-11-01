@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host windows and render targets contain no OS/2 window/message state. */
 #include "hal/video.h"
+#include "hal/host_sync.h"
 #include "window_chrome.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
@@ -8,6 +9,14 @@ static void (*GraphicsRelease)(void);
 static Uint32 CaptureResetEvent;
 static Uint32 WakeEvent;
 static unsigned ControlledWindows;
+static LxHostOnce VideoOnce = LX_HOST_ONCE_INIT;
+static LxHostMutex *VideoLock;
+static void initializeVideoLock(void)
+{
+    VideoLock = lx_host_mutex_create(0, 0);
+    if (!VideoLock)
+        abort();
+}
 static int cursor_visible(int requested);
 void lx_host_video_set_graphics_release(void (*release)(void))
 {
@@ -50,6 +59,29 @@ void lx_host_pointer_destroy(LxHostPointer *pointer)
         SDL_DestroyCursor(pointer->cursor);
         free(pointer);
     }
+}
+LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
+                                            unsigned hot_x, unsigned hot_y)
+{
+    if (!pixels || !width || !height || width > 256 || height > 256 || hot_x >= width ||
+        hot_y >= height)
+        return NULL;
+    LxHostPointer *pointer = calloc(1, sizeof *pointer);
+    if (!pointer)
+        return NULL;
+    SDL_Surface *surface = SDL_CreateSurfaceFrom((int)width, (int)height, SDL_PIXELFORMAT_ARGB8888,
+                                                 (void *)pixels, (int)width * 4);
+    if (surface)
+    {
+        pointer->cursor = SDL_CreateColorCursor(surface, (int)hot_x, (int)hot_y);
+        SDL_DestroySurface(surface);
+    }
+    if (!pointer->cursor)
+    {
+        free(pointer);
+        return NULL;
+    }
+    return pointer;
 }
 int lx_host_pointer_set(LxHostPointer *pointer)
 {
@@ -125,30 +157,51 @@ static void toggle_capture(void *opaque)
 }
 int lx_host_video_initialize(int *width, int *height)
 {
+    lx_host_once(&VideoOnce, initializeVideoLock);
+    lx_host_mutex_lock(VideoLock, UINT32_MAX);
+    int result = 0;
     /* Popup-to-document focus changes must retain the dismissing click. */
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
-    if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) && !SDL_InitSubSystem(SDL_INIT_VIDEO))
-        return 0;
+    /* Every client owns one SDL subsystem reference, including PM worker threads. */
+    if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
+        goto done;
     if (!WakeEvent)
     {
         WakeEvent = SDL_RegisterEvents(2);
         if (!WakeEvent)
-            return 0;
+            goto failed;
         CaptureResetEvent = WakeEvent + 1;
     }
     SDL_Rect bounds;
     if (!SDL_GetDisplayBounds(SDL_GetPrimaryDisplay(), &bounds))
-        return 0;
+        goto failed;
     *width = bounds.w;
     *height = bounds.h;
-    return 1;
+    result = 1;
+    goto done;
+failed:
+    SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO))
+    {
+        CaptureResetEvent = 0;
+        WakeEvent = 0;
+    }
+done:
+    lx_host_mutex_unlock(VideoLock);
+    return result;
 }
 void lx_host_video_quit(void)
 {
+    lx_host_once(&VideoOnce, initializeVideoLock);
+    lx_host_mutex_lock(VideoLock, UINT32_MAX);
     prepareRenderer();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
-    CaptureResetEvent = 0;
-    WakeEvent = 0;
+    if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO))
+    {
+        CaptureResetEvent = 0;
+        WakeEvent = 0;
+    }
+    lx_host_mutex_unlock(VideoLock);
 }
 int lx_host_video_release_graphics(void)
 {
@@ -503,6 +556,18 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
         case SDL_EVENT_WINDOW_SHOWN:
             event->type = LX_HOST_EVENT_SHOWN;
             id = input->window.windowID;
+            break;
+        case SDL_EVENT_WINDOW_MOVED:
+            id = input->window.windowID;
+            {
+                SDL_Window *moved = SDL_GetWindowFromID(id);
+                LxHostWindow *window = moved
+                                           ? SDL_GetPointerProperty(SDL_GetWindowProperties(moved),
+                                                                    "2ine.window", NULL)
+                                           : NULL;
+                if (window)
+                    window->dirty = 1;
+            }
             break;
         case SDL_EVENT_WINDOW_EXPOSED:
             event->type = LX_HOST_EVENT_EXPOSED;

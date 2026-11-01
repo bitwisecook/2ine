@@ -1,0 +1,165 @@
+{
+  "application": "Lotus 1-2-3",
+  "release": "SmartSuite for OS/2 Warp 4 release 1.7 + Fixpack 3",
+  "operating_system": "Stock OS/2 Warp 4.52, internal revision 14.086_W4",
+  "profile": {
+    "cpu": "QEMU TCG Pentium II, one CPU",
+    "ram_mib": 128,
+    "display": "Cirrus VGA, 1024x768, stock fonts",
+    "printer": "No default printer; acknowledged screen-formatting warning for each new/opened document",
+    "network": "none",
+    "installation": "Original INSTALL.CMD, original Fixpack self-extractor /d, original SSFIXPAK.CMD; both installers reported success"
+  },
+  "inputs": {
+    "warp_install_iso": {
+      "file": "OS2 Warp 452 - Client - Disk 1 - Install Disk - ISO.iso",
+      "sha256": "6fc32f65dce15fc39a4d4c1dddf5289f9482422ced9168bcc7c39f8abcae69d9"
+    },
+    "lotus_iso": {
+      "file": "Lotus SmartSuite 1.7 for OS2.iso",
+      "sha256": "f26722ec26956a74deab1ddcda1fe3a97f5eebad4991c0f7bce6e4ed57fc41d1"
+    },
+    "fixpack": {
+      "file": "LC59A0IE.EXE",
+      "sha256": "62483cc2d6454e08c78967b10f55c1d15e195d39a25a871b28a32b415e34c61b"
+    },
+    "comparison_executable": {
+      "file": "123W.EXE",
+      "sha256": "be8d2129f73ac08abe90c839cdb1458d333361403575ea95a618c226095a2c9e",
+      "scope": "Separately staged Fixpack 3 executable used by 2ine"
+    }
+  },
+  "steps": [
+    "Launch 123W.EXE; select blank workbook in welcome dialog",
+    "Use F5 Go To for each cell; type quantity in A1, double in B1, 21 in A2, +A2*2 in B2; Enter commits in place",
+    "F5 A1..B1; open bottom font selector; choose Courier",
+    "Ctrl+S; save C:\\123-REFERENCE.123 in default Lotus 1-2-3 9 Workbook format",
+    "Ctrl+F4; Ctrl+O; reopen saved workbook",
+    "F5 A2; type 24; Enter; observe B2 recalculated to 48",
+    "F5 A2..B2; use bottom font selector to choose Helv; Ctrl+S",
+    "Close workbook and reopen again; verify quantity/double, 24/48, Courier headers and Helv numbers",
+    "Alt+F4; observe normal return to command prompt; export saved workbook via FAT floppy"
+  ],
+  "document": {
+    "file": "123-reference.123 (private fixture)",
+    "bytes": 3944,
+    "sha256": "48dae5bf7cae27875e036028ea93cfa1e4e40193cce6dfeb2105e8c80ab9c46f",
+    "observed_cells": {
+      "A1": "quantity",
+      "B1": "double",
+      "A2": 24,
+      "B2": 48
+    },
+    "formula": "B2 = +A2*2",
+    "fonts": {
+      "A1..B1": "Courier",
+      "A2..B2": "Helv"
+    }
+  },
+  "screenshots": [
+    {
+      "file": "welcome.png",
+      "sha256": "f4f1aff2b29d4f2bbd22da4aaed3f4d3e68278f62fae7e784d569643294f4463",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "blank-workbook.png",
+      "sha256": "efafb0f64bf923a3c35e16017de8433dd16a490d0a46135436c14cbaaefb1f2c",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "populated.png",
+      "sha256": "277e96d7f1a3f0de9673c57835c7ac1226cf0295043262a9fc649a200768ea2d",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "font-selector-0.png",
+      "sha256": "5bd46521b8bfb54714dd511defc725d673aa2e67e2bb78c83377b68188ea8287",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "courier-headers.png",
+      "sha256": "8a4d14f8d97826f30a80dd7f485da6dc5114dca301c2c909171e4ada8b3f8373",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "save-as.png",
+      "sha256": "e2dfbd111fe9e8eddc453e2efdb62fce03aab2ca7cba6c2c8a6824d4ff3651c6",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "saved.png",
+      "sha256": "2c8b6b3ccc2c8008e9776ec46ad493dca676887e0b0440e80d1a7764f6b6f0c1",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "closed.png",
+      "sha256": "315c21c68dd2ef0a42e01d7a5959dbea61107e8014b58ddfd7622d98ff9b6a0c",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "reopened.png",
+      "sha256": "118f6745d12b06f0b39069718b2fe3e04e6bce44b5670ecb7813d3edf492c35b",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "recalculated.png",
+      "sha256": "dd7d1dec9b6aa6063bce30c3638ffdd62f299a8be35d59012488a8f91bbe82b9",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "font-selector-1.png",
+      "sha256": "742749297447e51bef1174e1ff838c8c313849e5270d652ac04bc4e75a8e83fb",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "final-reopened.png",
+      "sha256": "9f63d331bebc102a74c7c11a193aeebb2d5a224cf99fc125c250542375c53c68",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "normal-exit.png",
+      "sha256": "551ded74fc64d5b708f5fe64c5bf4132c03b5889d15e897543a1f09d71fd0ca3",
+      "size": [
+        1024,
+        768
+      ]
+    }
+  ]
+}

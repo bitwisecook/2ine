@@ -4,7 +4,7 @@
 import struct
 
 
-def linear_image(code, fixups, modules, name, library=False, data=b"", resources=()):
+def linear_image(code, fixups, modules, name, library=False, data=b"", resources=(), exports=()):
     header = bytearray(196)
     header[:2] = b"LX"
     struct.pack_into("<HH", header, 8, 2, 1)
@@ -49,6 +49,10 @@ def linear_image(code, fixups, modules, name, library=False, data=b"", resources
     struct.pack_into("<I", header, 88, len(header) + len(tables))
     tables.extend(bytes([len(name)]) + name.encode() + b"\x00\x00\x00")
     struct.pack_into("<I", header, 92, len(header) + len(tables))
+    if exports:
+        tables.extend(bytes([len(exports), 3]) + struct.pack("<H", 1))
+        for offset in exports:
+            tables.extend(b"\x01" + struct.pack("<I", offset))
     tables.extend(b"\x00\x00")
     struct.pack_into("<I", header, 104, len(header) + len(tables))
     records = b"".join(fixups)

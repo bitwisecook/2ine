@@ -1,6 +1,30 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Multiline edit storage uses byte offsets and CR/LF line endings. */
 #include "os2libs/pmwin/controls.h"
+
+static BOOL replace(Window *window, size_t position, size_t removed, const char *data, size_t size)
+{
+    PmControl *c = window->control;
+    const char *old = window->text ? window->text : "";
+    size_t length = strlen(old);
+    if (position > length || removed > length - position || size > c->limit ||
+        length - removed > c->limit - size)
+        return FALSE;
+    char *copy = malloc(length - removed + size + 1);
+    if (!copy)
+        return FALSE;
+    memcpy(copy, old, position);
+    if (size)
+        memcpy(copy + position, data, size);
+    memcpy(copy + position + size, old + position + removed, length - position - removed + 1);
+    free(window->text);
+    window->text = copy;
+    c->first = c->last = (unsigned)(position + size);
+    c->changed = TRUE;
+    controlRepaint(window);
+    controlNotify(window, 7); /* MLN_CHANGE */
+    return TRUE;
+}
 MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;
@@ -89,6 +113,76 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         case 0x1c0:
         case 0x1c8:
             return controlReply((LONG)length);
+        case 0x1c1: /* MLM_FORMAT */
+        {
+            unsigned old = c->transfer_format;
+            if ((unsigned)a <= 2)
+                c->transfer_format = (unsigned)a;
+            return controlReply((LONG)old);
+        }
+        case 0x1c2: /* MLM_SETIMPORTEXPORT: caller retains the transfer buffer. */
+            c->transfer = first;
+            c->transfer_size = (USHORT)b;
+            return controlReply(first != NULL && c->transfer_size != 0);
+        case 0x1c3: /* MLM_IMPORT */
+        case 0x1c4: /* MLM_EXPORT */
+        {
+            uint8 offset[4];
+            if (!controlRead(first, offset, sizeof offset) || !c->transfer)
+                return 0;
+            LONG position = (LONG)lx_guest_load_u32(offset);
+            if (position == -1)
+                position = (LONG)c->last;
+            uint8 requested[4];
+            ULONG wanted = (ULONG)b;
+            if (message == 0x1c4)
+            {
+                if (!controlRead(second, requested, sizeof requested))
+                    return 0;
+                wanted = lx_guest_load_u32(requested);
+            }
+            if (position < 0 || (size_t)position > length)
+                return 0;
+            size_t count = wanted < c->transfer_size ? wanted : c->transfer_size;
+            if (message == 0x1c3)
+            {
+                char *data = malloc(count ? count : 1);
+                if (!data)
+                    return 0;
+                BOOL ok = controlRead(c->transfer, data, count);
+                if (ok)
+                {
+                    count = strnlen(data, count);
+                    TRACE_NATIVE("MLE import: position=%d, bytes=%u", (int)position, (uint)count);
+                    ok = replace(window, position, 0, data, count);
+                }
+                free(data);
+                if (!ok)
+                    return 0;
+            }
+            else
+            {
+                if (count > length - (size_t)position)
+                    count = length - (size_t)position;
+                if (!controlWrite(c->transfer, text + position, count))
+                    return 0;
+                lx_guest_store_u32(requested, wanted - (ULONG)count);
+                if (!controlWrite(second, requested, sizeof requested))
+                    return 0;
+            }
+            lx_guest_store_u32(offset, (uint32)position + (uint32)count);
+            if (!controlWrite(first, offset, sizeof offset))
+                return 0;
+            return controlReply((LONG)count);
+        }
+        case 0x1c6: /* MLM_DELETE: programmatic edits also apply to read-only controls. */
+        {
+            size_t position = a < 0 ? c->last : (size_t)a;
+            if (position > length || b < 0)
+                return 0;
+            size_t count = (size_t)b < length - position ? (size_t)b : length - position;
+            return controlReply(replace(window, position, count, NULL, 0) ? (LONG)count : 0);
+        }
         case 0x1ca:
             c->first = a < 0 ? c->first : (ULONG)a > length ? (unsigned)length : (unsigned)a;
             c->last = b < 0 ? c->last : (ULONG)b > length ? (unsigned)length : (unsigned)b;

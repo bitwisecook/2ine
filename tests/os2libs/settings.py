@@ -34,6 +34,9 @@ def main():
             TWOINE_USER_PROFILE=str(work / "user.profile"),
             TWOINE_SYSTEM_PROFILE=str(work / "system.profile"),
             TWOINE_REGISTRY=str(work / "registry.profile"),
+            TWOINE_OBJECTS=str(work / "objects.profile"),
+            SDL_VIDEO_DRIVER="dummy",
+            SDL_AUDIO_DRIVER="dummy",
         )
         for mode in ("write", "read"):
             subprocess.run(

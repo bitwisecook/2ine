@@ -103,6 +103,10 @@ int main(void)
     CHECK(lx_host_window_pixel(window, 4, 3, &r, &g, &b) && r == 255 && g == 0 && b == 0);
     CHECK(lx_host_window_title(window, "2ine mask test"));
     CHECK(lx_host_window_present(window));
+    CHECK(lx_host_video_initialize(&width, &height));
+    lx_host_video_quit();
+    CHECK(lx_host_window_present(window));
+    CHECK(lx_host_window_pixel(window, 4, 3, &r, &g, &b) && r == 255 && g == 0 && b == 0);
     lx_host_window_show(window);
     uint64_t before_event = lx_host_video_ticks_ms();
     LxHostEvent event = {LX_HOST_EVENT_QUIT, 0, NULL};

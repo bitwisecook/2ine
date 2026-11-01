@@ -31,6 +31,8 @@ typedef struct Invocation
     LxCpuContext *context;
     struct Invocation *outer;
     LxGuestBorrow arguments;
+    uint32_t api_arguments;
+    const LxCpuRegisters *api_registers;
 } Invocation;
 typedef struct EmulatedState
 {
@@ -113,9 +115,14 @@ static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, 
             lx_host_mutex_unlock(s->mutex);
             return 1;
         }
-        if (!slot && !s->selectors[i].selector)
+        if (!s->selectors[i].selector)
             slot = i;
     }
+    /* Fixed USE16 LX objects can contain prebound tiled selectors. Keep the
+       same base-to-selector relation as OS/2 and the native worker. */
+    unsigned tile = base >> 16;
+    if (tile && tile < SELECTOR_COUNT - 1 && !s->selectors[tile].selector)
+        slot = tile;
     if (!slot)
     {
         lx_host_mutex_unlock(s->mutex);
@@ -373,12 +380,13 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             char error[512];
             snprintf(error, sizeof error,
                      "CPU stop %d vector %u at %04x:%08x "
-                     "eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x "
+                     "eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x ebp=%08x "
+                     "memory=%08x access=%d "
                      "ss:esp=%04x:%08x ds=%04x es=%04x fs=%04x gs=%04x: %s",
                      event.reason, event.vector, registers.cs, registers.eip, registers.eax,
                      registers.ebx, registers.ecx, registers.edx, registers.esi, registers.edi,
-                     registers.ss, registers.esp, registers.ds, registers.es, registers.fs,
-                     registers.gs, lx_cpu_error(s->cpu));
+                     registers.ebp, event.address, event.memory_access, registers.ss, registers.esp,
+                     registers.ds, registers.es, registers.fs, registers.gs, lx_cpu_error(s->cpu));
             lx_host_mutex_lock(s->mutex, UINT32_MAX);
             uint8_t *bytes =
                 lx_cpu_translate_far(s->cpu, registers.cs, registers.eip, 16, LX_MEM_READ);
@@ -389,12 +397,24 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
                     fprintf(stderr, " %02x", bytes[i]);
                 fprintf(stderr, "\n");
             }
-            bytes =
-                lx_cpu_translate_far(s->cpu, registers.ss, registers.esp & 0xffff, 16, LX_MEM_READ);
+            uint32_t stack_offset = registers.esp;
+            if ((registers.ss & 4) && s->selectors[registers.ss >> 3].bits == 16)
+                stack_offset &= 0xffff;
+            bytes = lx_cpu_translate_far(s->cpu, registers.ss, stack_offset, 64, LX_MEM_READ);
             if (bytes)
             {
                 fprintf(stderr, "guest stack:");
-                for (unsigned i = 0; i < 16; i++)
+                for (unsigned i = 0; i < 64; i++)
+                    fprintf(stderr, " %02x", bytes[i]);
+                fprintf(stderr, "\n");
+            }
+            bytes = registers.eax >= 16
+                        ? lx_cpu_translate(s->cpu, registers.eax - 16, 48, LX_MEM_READ)
+                        : NULL;
+            if (bytes)
+            {
+                fprintf(stderr, "guest eax-16:");
+                for (unsigned i = 0; i < 48; i++)
                     fprintf(stderr, " %02x", bytes[i]);
                 fprintf(stderr, "\n");
             }
@@ -440,7 +460,11 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
                 failure(lx_execution_error(s->execution));
             args = arguments->host;
         }
+        frame.api_arguments = b->convention == LX_ABI_EAX32 ? 0 : (uint32_t)frame_address;
+        frame.api_registers = &registers;
         registers.eax = b->callback(args);
+        frame.api_registers = NULL;
+        frame.api_arguments = 0;
         lx_execution_release(arguments);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
         if (!lx_cpu_restore(s->cpu, frame.context) || !lx_cpu_set_registers(s->cpu, &registers))
@@ -763,6 +787,11 @@ static int initialize(LxExecution *e)
     LxSegment data = {FLAT_DATA, 0, UINT32_MAX, 32, 0};
     if (!lx_cpu_set_segment(s->cpu, &code) || !lx_cpu_set_segment(s->cpu, &data))
         failure(lx_cpu_error(s->cpu));
+    /* OS/2 mixed-mode thunks also use the system's fixed flat selectors. */
+    code.selector = 0x5b;
+    data.selector = 0x53;
+    if (!lx_cpu_set_segment(s->cpu, &code) || !lx_cpu_set_segment(s->cpu, &data))
+        failure(lx_cpu_error(s->cpu));
     s->return_page = lx_execution_map(e, 0, 0x10000, 7, 0);
     if (!s->return_page)
         failure(lx_execution_error(e));
@@ -834,14 +863,45 @@ static int copyIn(LxExecution *e, uint32_t address, void *host, const void *inpu
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+static uint32_t apiArguments(void)
+{
+    return Active ? Active->api_arguments : 0;
+}
+static int apiRegisters32(LxExecutionRegisters32 *out)
+{
+    if (!Active || !Active->api_registers)
+        return 0;
+    const LxCpuRegisters *r = Active->api_registers;
+    out->eax = r->eax;
+    out->ebx = r->ebx;
+    out->ecx = r->ecx;
+    out->edx = r->edx;
+    out->esi = r->esi;
+    out->edi = r->edi;
+    out->ebp = r->ebp;
+    out->esp = r->esp + 4;
+    uint8_t return_address[4];
+    if (!lx_execution_read(Emulated->execution, r->esp, return_address, 4))
+        return 0;
+    out->eip = lx_guest_load_u32(return_address);
+    out->eflags = r->eflags;
+    out->cs = r->cs;
+    out->ds = r->ds;
+    out->es = r->es;
+    out->fs = r->fs;
+    out->gs = r->gs;
+    out->ss = r->ss;
+    return 1;
+}
 const LxExecutionOperations lx_execution_unicorn = {
-    "unicorn",    initialize,      destroy,     program,
-    library,      prepareThread,   thread16,    free,
-    callback,     attachTib,       currentTib,  detachTib,
-    allocSegment, freeSegment,     codeAlias,   findSelector,
-    freeSelector, farToHost,       hostToFar,   stackSegments,
-    nearBase,     flatCode,        prepareCode, missing,
-    emitBridge16, atomicU32,       NULL,        0,
-    map,          unmap,           protect,     emitBridge32,
-    copyOut,      prepareThread32, thread32,    free,
-    endThread,    copyIn,          callback4};
+    "unicorn",     initialize,      destroy,     program,
+    library,       prepareThread,   thread16,    free,
+    callback,      attachTib,       currentTib,  detachTib,
+    allocSegment,  freeSegment,     codeAlias,   findSelector,
+    freeSelector,  farToHost,       hostToFar,   stackSegments,
+    nearBase,      flatCode,        prepareCode, missing,
+    emitBridge16,  atomicU32,       NULL,        0,
+    map,           unmap,           protect,     emitBridge32,
+    copyOut,       prepareThread32, thread32,    free,
+    endThread,     copyIn,          callback4,   apiArguments,
+    apiRegisters32};

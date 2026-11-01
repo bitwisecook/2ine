@@ -60,6 +60,9 @@ def program(checked):
     g.result(0, 80)
     g.call_handle(1, 352, profile, 10, 20, first)
     g.result(0, 81)
+    g.call(4, 464, (profile,), 0, output, 64)
+    g.result(5, 85)
+    g.word(output, int.from_bytes(b"hell", "little"), 86)
     g.call_handle(1, 322, profile)
     g.result(0, 82)
     g.load(first)
@@ -77,6 +80,14 @@ def program(checked):
     # A malformed bundle is contained by its declared resource extent.
     g.call(2, 781, 0, 0, 16, 64, output)
     g.result(0, 35)
+    g.call(4, 464, 0xFFFFFFFF, 0xFF000000, output, 3)
+    g.result(2, 87)
+    g.require(b"\x66\x81\x3d" + struct.pack("<IH", output, 0x6568), 88)
+    g.require(b"\x80\x3d" + struct.pack("<I", output + 2) + b"\0", 88)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", output, 0x12345678))
+    g.call(4, 464, 0, 0, output, 64)
+    g.result(0, 89)
+    g.word(output, 0x12345678, 90)
     g.call(3, 102, 0, private)
     g.code.extend(b"\xa3" + struct.pack("<I", profile))
     g.require(b"\x83\xf8\x00\x0f\x95\xc0\x0f\xb6\xc0\x3d\x01\x00\x00\x00", 40)
@@ -181,11 +192,47 @@ def program(checked):
     )
 
 
+def libraries_program():
+    g = FlatGuest()
+    module = g.field(bytes(4))
+    name, missing = g.field(b"RESOURCE\0"), g.field(b"ABSENT\0")
+    g.call(2, 461, name)
+    g.code.extend(b"\xa3" + struct.pack("<I", module))
+    g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 10)
+    g.call(2, 461, name)
+    g.require(b"\x3b\x05" + struct.pack("<I", module), 11)
+    for expected in (1, 1, 0):
+        g.call(2, 223, (module,))
+        g.result(expected, 12)
+    g.call(2, 461, missing)
+    g.result(0, 13)
+    g.call(2, 223, 0)
+    g.result(0, 14)
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX"], "LIBRARIES", data=g.data)
+
+
 def desktop_services():
     g = FlatGuest()
     text, count = g.field(b"hello\0"), g.field(bytes(4))
     g.call(2, 763, 0)
     g.result(1, 119)
+    dc = g.field(bytes(4))
+    g.call(4, 263, 0)
+    g.code.extend(b"\xa3" + struct.pack("<I", dc))
+    g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 91)
+    for index, expected in ((2, 1), (12, 24), (14, 1), (88, 96), (90, 96)):
+        g.call(4, 269, (dc,), index)
+        g.result(expected, 92)
+    g.call(4, 560, 2, (dc,))
+    g.result(0, 93)
+    g.call(4, 560, 0, (dc,))
+    g.result(1, 94)
+    g.call(4, 269, (dc,), 88)
+    g.result(0, 95)
+    g.call(4, 560, 0, (dc,))
+    g.result(0, 96)
+
     cursor = g.field(bytes(4))
     g.call(2, 828, 1, 2, 0)  # The dummy driver may have no host cursors.
     g.code.extend(b"\xa3" + struct.pack("<I", cursor))
@@ -250,7 +297,10 @@ def main():
                 [],
                 "RESOURCE",
                 library=True,
-                resources=[(10, 20, b"data")],
+                resources=[
+                    (10, 20, b"data"),
+                    (5, 1, struct.pack("<H", 437) + b"\x06hello\0" + b"\x01\0" * 15),
+                ],
             )
         )
         executable = work / "desktop.exe"
@@ -265,7 +315,11 @@ def main():
             SDL_VIDEO_DRIVER="dummy",
             SDL_RENDER_DRIVER="software",
         )
-        for payload in (program(args.backend == "unicorn"), desktop_services()):
+        for payload in (
+            program(args.backend == "unicorn"),
+            desktop_services(),
+            libraries_program(),
+        ):
             executable.write_bytes(payload)
             result = subprocess.run(
                 [str(build / "lx_loader"), str(executable)],
