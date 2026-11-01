@@ -51,6 +51,7 @@ HAB WinInitialize(ULONG flOptions)
     AnchorBlock *anchor = calloc(1, sizeof(AnchorBlock));
     if (anchor == NULL)
     {
+        lx_host_video_quit();
         return NULLHANDLE;
     }
 
@@ -59,6 +60,7 @@ HAB WinInitialize(ULONG flOptions)
     if (!anchor->windows)
     {
         free(anchor);
+        lx_host_video_quit();
         return NULLHANDLE;
     }
 
@@ -69,6 +71,7 @@ HAB WinInitialize(ULONG flOptions)
     {
         free(anchor->windows);
         free(anchor);
+        lx_host_video_quit();
         return NULLHANDLE;
     }
     memset(anchor->pres_spaces, '\0', sizeof(PresentationSpace) * anchor->pres_spaces_array_len);
@@ -79,6 +82,7 @@ HAB WinInitialize(ULONG flOptions)
         free(anchor->pres_spaces);
         free(anchor->windows);
         free(anchor);
+        lx_host_video_quit();
         return NULLHANDLE;
     }
 

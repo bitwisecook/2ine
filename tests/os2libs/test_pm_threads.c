@@ -117,6 +117,11 @@ int main(void)
     lx_host_monitor_unlock(delivery.monitor);
     CHECK(!lx_host_thread_join(thread, NULL));
     lx_host_monitor_destroy(delivery.monitor);
+    HPS space = WinGetPS(client);
+    RECTL rectangle = {0, 0, 10, 10};
+    CHECK(space && WinFillRect(space, &rectangle, CLR_RED));
+    WinPeekMsg(hab, &message, 0, 0, 0, 0);
+    CHECK(WinReleasePS(space));
     CHECK(WinDestroyWindow(frame));
     CHECK(WinTerminate(hab));
     puts("PM client activation and cross-thread message lifetime passed");

@@ -83,6 +83,7 @@ typedef struct LxHostEvent
     uint32_t scancode; /* IBM PC set 1 physical key position, without release bit. */
     char text[64];
 } LxHostEvent;
+/* Each successful initialization owns one reference, released by video_quit. */
 int lx_host_video_initialize(int *width, int *height);
 /* Release a renderer's GL binding before a separate graphics context is bound. */
 int lx_host_video_release_graphics(void);
