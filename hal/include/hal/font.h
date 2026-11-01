@@ -12,6 +12,7 @@ typedef struct LxHostFontMetrics
     int em, ascent, descent, leading, average_width, maximum_width, x_height;
     int lowercase_ascent, lowercase_descent;
     int underline_size, underline_position, strikeout_size, strikeout_position;
+    unsigned sfnt;
 } LxHostFontMetrics;
 typedef struct LxHostGlyph
 {

@@ -82,7 +82,7 @@ typedef struct Thread
     void *invocation;
     uint32 id, handle;
     uint16 selector;
-    int finished, joining;
+    int finished, joining, detached;
     struct Thread *next;
 } Thread;
 

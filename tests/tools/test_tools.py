@@ -132,6 +132,22 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
         with self.assertRaisesRegex(ValueError, "could not parse export"):
             lxapigen.parse_functions("OS2EXPORT VOID OS2API16 Exit(VOID) OS2APIINFO(5)")
 
+    def test_variadic_export_retains_its_fixed_prefix(self) -> None:
+        function = lxapigen.parse_functions(
+            "OS2EXPORT LONG OS2API Format(PSZ output, PSZ format, ...) OS2APIINFO(7);"
+        )[0]
+        self.assertTrue(function.variadic)
+        self.assertEqual([argument.name for argument in function.arguments], ["output", "format"])
+        for parameters, api in (
+            ("...", "OS2API"),
+            ("PSZ format, ..., ULONG value", "OS2API"),
+            ("PSZ format, ...", "OS2API16"),
+        ):
+            with self.assertRaisesRegex(ValueError, "invalid variadic"):
+                lxapigen.parse_functions(
+                    f"OS2EXPORT LONG {api} Format({parameters}) OS2APIINFO(7);"
+                )
+
     def test_generator_uses_owned_output_directory_and_read_only_check(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -63,6 +63,8 @@ BOOL lx_pm_fill_span(HPS ps, LONG x, LONG y, LONG count, unsigned primitive);
 LONG lx_pm_rgb(LONG index);
 LONG lx_pm_text(HPS ps, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *clip);
+LONG lx_pm_draw_text(HPS ps, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
+                     ULONG flags, BOOL clip, BOOL opaque_runs);
 BOOL lx_pm_valid_ps(HPS hps);
 HDC lx_pm_open_dc(HAB anchor, LONG type, HDC compatible);
 LONG lx_pm_close_dc(HDC dc);

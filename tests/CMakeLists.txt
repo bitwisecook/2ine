@@ -153,6 +153,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/desktop.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(desktop_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME open32_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(open32_apis PROPERTIES TIMEOUT 40)
     add_test(NAME pm_window_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/windows.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")

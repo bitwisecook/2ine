@@ -37,6 +37,7 @@ class Function:
     ordinal: int
     exported_name: str | None
     use16: bool
+    variadic: bool = False
 
 
 @dataclass(frozen=True)
@@ -163,8 +164,15 @@ def parse_functions(text: str) -> list[Function]:
                 options[key] = value
         ordinal = int(options["ord"])
         arguments: list[Argument] = []
+        variadic = False
         if parameters not in {"void", "VOID"}:
-            for parameter in parameters.split(","):
+            parts = parameters.split(",")
+            for index, parameter in enumerate(parts):
+                if parameter.strip() == "...":
+                    if index != len(parts) - 1 or not index or api == "OS2API16":
+                        raise ValueError(f"{name}: invalid variadic parameter list")
+                    variadic = True
+                    continue
                 type_name, argument_name = parameter.strip().rsplit(None, 1)
                 arguments.append(Argument(type_name, argument_name))
         if ordinal in functions:
@@ -176,6 +184,7 @@ def parse_functions(text: str) -> list[Function]:
             ordinal,
             options.get("name"),
             api == "OS2API16",
+            variadic,
         )
     return [functions[key] for key in sorted(functions)]
 

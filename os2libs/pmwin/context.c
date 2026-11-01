@@ -157,3 +157,14 @@ ERRORID WinGetLastError(HAB hab)
     const ERRORID retval = anchor->last_error;
     SET_WIN_ERROR_AND_RETURN(anchor, NO_ERROR, retval);
 }
+
+ULONG WinQueryCp(HMQ queue)
+{
+    TRACE_NATIVE("WinQueryCp(%u)", queue);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor)
+        return 0;
+    if (!queue || anchor->message_queue.hmq != queue)
+        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HMQ, 0);
+    return 437;
+}

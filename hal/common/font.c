@@ -126,6 +126,7 @@ int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
     metrics->bold = (face->style_flags & FT_STYLE_FLAG_BOLD) != 0;
     metrics->italic = (face->style_flags & FT_STYLE_FLAG_ITALIC) != 0;
     metrics->fixed = FT_IS_FIXED_WIDTH(face) != 0;
+    metrics->sfnt = FT_IS_SFNT(face) != 0;
     metrics->em = (int)font->pixels;
     metrics->ascent = (int)(m->ascender + 63) / 64;
     metrics->descent = (int)(-m->descender + 63) / 64;

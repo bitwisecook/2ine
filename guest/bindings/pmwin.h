@@ -285,6 +285,11 @@ static uint32 bridge32_WinQuerySysColor(uint8 *a)
 {
     return (uint32)WinQuerySysColor(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2));
 }
+static uint32 bridge32_WinQueryCp(uint8 *a)
+{
+    return WinQueryCp(pm_word(a, 0));
+}
+
 static uint32 bridge32_WinQuerySysValue(uint8 *a)
 {
     return (uint32)WinQuerySysValue(pm_word(a, 0), (LONG)pm_word(a, 1));
@@ -870,4 +875,9 @@ static uint32 bridge32_WinCalcFrameRect(uint8 *a)
     return lx_execution_read(GLoaderState.execution, pm_word(a, 1), &rect, sizeof rect) &&
            WinCalcFrameRect(pm_word(a, 0), &rect, pm_word(a, 2)) &&
            lx_execution_write(GLoaderState.execution, pm_word(a, 1), &rect, sizeof rect);
+}
+
+static uint32 bridge32_WinCpTranslateChar(uint8 *a)
+{
+    return WinCpTranslateChar(pm_word(a, 0), pm_word(a, 1), (UCHAR)pm_word(a, 2), pm_word(a, 3));
 }

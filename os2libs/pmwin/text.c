@@ -48,8 +48,8 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
     ps->position = end;
     return 1;
 }
-LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
-                 ULONG flags)
+LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
+                     LONG background, ULONG flags, BOOL clip, BOOL opaque_runs)
 {
     TRACE_NATIVE("WinDrawText(%u, %d, %p, %p, %d, %d, %u)", (uint)handle, (int)count, text, rect,
                  (int)foreground, (int)background, (uint)flags);
@@ -149,9 +149,17 @@ LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
                 x += (available - widths[line]) / 2;
             else if (flags & 0x200)
                 x += available - widths[line];
+            if (opaque_runs && widths[line])
+            {
+                RECTL run = {x, top - (line + 1) * height, x + widths[line], top - line * height};
+                if ((!clip || WinIntersectRect(0, &run, &run, rect)) &&
+                    !WinFillRect(handle, &run, background))
+                    result = 0;
+            }
             POINTL point = {x, top - line * height - metrics.ascent};
             if (!lx_pm_text(handle, &point, lengths[line], copy + starts[line],
-                            (flags & 0x40) ? ps->primitive_color[1] : foreground, rect))
+                            (flags & 0x40) ? ps->primitive_color[1] : foreground,
+                            clip ? rect : NULL))
                 result = 0;
         }
     }
@@ -160,6 +168,12 @@ LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
     free(starts);
     free(copy);
     return result;
+}
+
+LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
+                 ULONG flags)
+{
+    return lx_pm_draw_text(handle, count, text, rect, foreground, background, flags, TRUE, FALSE);
 }
 
 BOOL lx_pm_mask(HPS handle, LONG x, LONG y, int width, int height, const uint8_t *coverage,

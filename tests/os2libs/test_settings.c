@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx.h"
 #include "os2libs/helpmgr.h"
 #include "runtime/runtime.h"
+#include "hal/host_thread.h"
 #include <limits.h>
 #define CHECK(x)                                                                                   \
     do                                                                                             \
@@ -27,6 +28,20 @@ static void require_string(HINI profile, char *app, char *key, const char *expec
     CHECK(PrfQueryProfileString(profile, app, key, "fallback", text, sizeof text) ==
           strlen(expected));
     CHECK(!strcmp(text, expected));
+}
+static void *error_thread(void *unused)
+{
+    (void)unused;
+    CHECK(GetLastError() == 0);
+    SetLastError(123);
+    CHECK(GetLastError() == 123);
+    return NULL;
+}
+static LONG OS2API winmain(ULONG instance, ULONG previous, PSZ command, LONG show)
+{
+    CHECK(instance == UINT32_MAX && previous == 0);
+    CHECK(!strcmp(command, "alpha beta") && show == 7);
+    return 123;
 }
 int main(int argc, char **argv)
 {
@@ -111,13 +126,16 @@ int main(int argc, char **argv)
     if (writing)
     {
         CHECK(RegOpenKeyEx(0xffffffef, "Software\\Test", 0, 3, &key) == 2);
-        CHECK(!RegCreateKeyEx(0xffffffef, "Software\\Test", 0, NULL, 0, 7, NULL, &key,
+        CHECK(!RegCreateKeyEx(0xffffffef, "Software\\Test", 0, NULL, 0, 0x001f003f, NULL, &key,
                               &disposition) &&
               disposition == 1);
         CHECK(!RegSetValueEx(key, NULL, 0, 1, "default", 8));
         CHECK(!RegSetValueEx(key, "Raw", 0, 3, binary, 4));
         CHECK(!RegCloseKey(key));
     }
+    CHECK(RegOpenKeyEx(0x80000002, "Software\\Test", 0, 0x00200000, &key) == 87);
+    CHECK(!RegOpenKeyEx(0x80000002, "Software\\Test", 0, 0x001f003f, &key));
+    CHECK(!RegCloseKey(key));
     CHECK(!RegOpenKeyEx(0x80000002, "SOFTWARE\\TEST\\", 0, 1, &key));
     CHECK(key && !PrfCloseProfile(key));
     ULONG type = 99;
@@ -179,6 +197,23 @@ int main(int argc, char **argv)
     CHECK(MulDiv(INT32_MAX, INT32_MAX, 1) == -1);
     CHECK(MulDiv(INT32_MIN, 1, 1) == INT32_MIN);
     CHECK(MulDiv(INT32_MIN, INT32_MIN, INT32_MIN) == INT32_MIN);
+    SetLastError(99);
+    LxHostThread *thread = lx_host_thread_create(error_thread, NULL, NULL);
+    CHECK(thread && lx_host_thread_join(thread, NULL) == 0);
+    CHECK(GetLastError() == 99);
+    char *command = GLoaderState.pib.pib_pchcmd;
+    GLoaderState.pib.pib_pchcmd = "program.exe\0alpha beta\0";
+    CHECK(WinCallWinMain(9, NULL, winmain, 7) == 123);
+    GLoaderState.pib.pib_pchcmd = command;
+    CHECK(GetProfileInt("test", "missing", 42) == 42);
+    CHECK(PrfWriteProfileString(HINI_USERPROFILE, "WINI_test", "number", "-12"));
+    CHECK(GetProfileInt("test", "number", 42) == (ULONG)-12);
+    CHECK(PrfWriteProfileString(HINI_USERPROFILE, "WINI_test", "string", "hello"));
+    char profile_text[8];
+    CHECK(GetProfileString("test", "string", "fallback", profile_text, sizeof profile_text) == 5);
+    CHECK(!strcmp(profile_text, "hello"));
+    CHECK(GetProfileString("test", "string", NULL, profile_text, 3) == 2);
+    CHECK(!strcmp(profile_text, "he"));
     WinInitializeOpen32(0);
     WinInitializeOpen32(0);
     WinTerminateOpen32(0);
