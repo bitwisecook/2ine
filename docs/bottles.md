@@ -28,7 +28,7 @@ The bottle contains:
 | `drive_c/OS2/OS2.INI` | User profile |
 | `drive_c/OS2/OS2SYS.INI` | System profile |
 | `drive_c/OS2/REGISTRY.INI` | Open32 registry database |
-| `drive_c/OS2/OBJECTS.INI` | Workplace Shell program and folder metadata |
+| `drive_c/OS2/OBJECTS.INI` | Workplace Shell object and class metadata |
 | `drive_c/OS2/DLL/2INE/` | Versioned loader and native API modules used by this bottle |
 | `drive_c/TEMP/` | Guest temporary files |
 | `ipc/` | Bottle-scoped queues and shared-memory address assignments |
@@ -65,10 +65,12 @@ The default DPATH searches C:\OS2 and C:\OS2\SYSTEM for message files.
 Only SET and LIBPATH lines are interpreted. Kernel drivers and boot commands
 in CONFIG.SYS are not executed by 2ine.
 
-Workplace Shell metadata supports `WPFolder` and `WPProgram` records under the
-virtual `<WP_DESKTOP>` root, stable object IDs, setup updates and deletion.
-Records persist between workers and stay inside the bottle. SOM class registration,
-a Workplace Shell desktop and host desktop shortcuts are not provided.
+Workplace Shell metadata supports `WPFolder`, `WPProgram` and `WPShadow` records
+under the virtual `<WP_DESKTOP>` root, stable object IDs, setup updates and deletion.
+Shadows reference existing object IDs or mapped files. Class registration stores
+case-sensitive class/module associations and supports deregistration. Records persist
+between workers and stay inside the bottle. Executing custom SOM classes, a Workplace
+Shell desktop and host desktop shortcuts are not provided.
 
 `run` and `install` accept a guest path or a host executable path inside a mapped
 directory. Path lookup is case insensitive. The default working directory is
