@@ -484,7 +484,14 @@ APIRET DosSleep(ULONG msec)
 {
     TRACE_NATIVE("DosSleep(%u)", (uint)msec);
 
-    lx_host_sleep_ms(msec);
+    do
+    {
+        lx_execution_poll_termination(GLoaderState.execution);
+        ULONG slice = msec > 10 ? 10 : msec;
+        lx_host_sleep_ms(slice);
+        msec -= slice;
+    } while (msec);
+    lx_execution_poll_termination(GLoaderState.execution);
     return NO_ERROR;
 }
 

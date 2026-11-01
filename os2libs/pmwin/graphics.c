@@ -209,19 +209,19 @@ BOOL lx_pm_color_table(HPS handle, ULONG options, LONG format, LONG start, LONG 
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, handle) : NULL;
-    if (!ps || (options & ~1u) || start < 0 || count < 0 || start > 256 || count > 256 - start ||
-        (count && !colors) || (format != 0 && format != 2 && format != 3))
+    if (!ps || (options & ~1u) || (format != 0 && format != 2 && format != 3))
         return FALSE;
     if (format == 3)
     {
-        if (count)
-            return FALSE;
+        /* RGB mode ignores the palette range and table arguments. */
         LONG current = lx_pm_resolve_color(handle, ps->color);
         ps->rgb_colors = TRUE;
         ps->color_format = format;
         ps->color = current < 0 ? 0 : current;
         return TRUE;
     }
+    if (start < 0 || count < 0 || start > 256 || count > 256 - start || (count && !colors))
+        return FALSE;
     for (LONG i = 0; i < count; i++)
         if (colors[i] < 0 || colors[i] > 0xffffff)
             return FALSE;

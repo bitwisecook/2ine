@@ -56,6 +56,22 @@ def program(checked):
     g.result(99, 11)
     g.call_handle(2, 899, window, 1)
     g.code.extend(b"\xa3" + struct.pack("<I", child))
+    point = g.field(struct.pack("<ii", 3, 3))
+    g.call_handle(2, 883, window, 1)  # WinShowWindow
+    g.result(1, 32)
+    g.call_handle(2, 787, window, point, 1, 1)  # Dialog units to pixels
+    g.result(1, 40)
+    g.call_handle(2, 900, window, point, 1)  # WinWindowFromPoint, checked POINTL bridge
+    g.require(b"\x3b\x05" + struct.pack("<I", child), 33)
+    g.call_handle(2, 900, window, 0xFFFFFFFF, 1)
+    g.result(0, 34)
+    space = g.field(bytes(4))
+    g.call_handle(2, 757, child)  # WinGetPS
+    g.code.extend(b"\xa3" + struct.pack("<I", space))
+    g.call_handle(3, 592, space, 0, 3, 0, 16, 0xFFFFFFFF)
+    g.result(1, 41)  # RGB mode must not dereference the ignored palette.
+    g.call_handle(2, 848, space)
+    g.result(1, 42)
     g.call_handle(2, 844, child, 0xFFFFFFFF)
     g.result(1, 12)
     g.call_handle(2, 929, child, callback)
@@ -117,7 +133,7 @@ def program(checked):
     return linear_image(
         g.code,
         g.fixups,
-        ["DOSCALLS", "PMWIN"],
+        ["DOSCALLS", "PMWIN", "PMGPI"],
         "DIALOGS",
         data=g.data,
         resources=[(4, 777, template())],

@@ -512,6 +512,7 @@ void pumpEvents(AnchorBlock *anchor)
     LxHostEvent event;
     while (!anchor->message_queue.head)
     {
+        lx_execution_poll_termination(GLoaderState.execution);
         drainForeignMessages(anchor);
         lx_pm_dive_pump(anchor);
         presentWindows(anchor);

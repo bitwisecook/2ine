@@ -60,6 +60,16 @@ void runDosExitList(const uint32 why)
     }
 }
 
+static uint32 processExitCode;
+static int processingExitList;
+static void finishProcessExit(uint32 exitcode)
+{
+    processExitCode = exitcode;
+    processingExitList = 1;
+    runDosExitList(TC_EXIT);
+    GLoaderState.terminate(exitcode);
+}
+
 VOID DosExit_implementation(ULONG action, ULONG exitcode)
 {
 
@@ -71,9 +81,7 @@ VOID DosExit_implementation(ULONG action, ULONG exitcode)
         lx_host_thread_exit(NULL);
     }
 
-    runDosExitList(TC_EXIT);
-
-    GLoaderState.terminate(exitcode);
+    lx_execution_terminate(GLoaderState.execution, finishProcessExit, exitcode);
 }
 
 VOID DosExit(ULONG action, ULONG exitcode)
@@ -86,10 +94,9 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
 {
     TRACE_NATIVE("DosExitList(%u, %p)", (uint)ordercode, fn);
 
-    if (fn == NULL)
-        return ERROR_INVALID_FUNCTION;
-
     const uint8 cmd = ordercode & 0xFF;
+    if (fn == NULL && cmd != EXLST_EXIT)
+        return ERROR_INVALID_FUNCTION;
     const uint8 arg = (ordercode >> 8) & 0xFF;
     ExitListItem *prev = NULL;
     ExitListItem *item = NULL;
@@ -169,6 +176,11 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
         }
 
         case EXLST_EXIT:
+            /* This is a transfer, not a return to the terminating handler. The
+               current entry was removed before invocation, so continue the list. */
+            if (!processingExitList)
+                return ERROR_INVALID_FUNCTION;
+            finishProcessExit(processExitCode);
             return NO_ERROR;
 
         default:

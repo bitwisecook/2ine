@@ -663,6 +663,11 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "WinWindowFromPoint": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "WinWindowFromID": {
       "argument_bytes": 8,
       "callee_pop": 0,
@@ -2604,6 +2609,11 @@
     },
     "GetParent": {
       "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetParent": {
+      "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },

@@ -133,6 +133,7 @@ API = {
     "FindFirstFile": 211,
     "CreateFont": 75,
     "GetParent": 333,
+    "SetParent": 633,
     "EndPaint": 173,
     "BeginPaint": 16,
     "RedrawWindow": 540,
@@ -913,6 +914,16 @@ def api_window_program():
     g.require(b"\x3b\x05" + struct.pack("<I", children[0]), 163)
     call(g, "GetWindow", (children[0],), 2)
     g.require(b"\x3b\x05" + struct.pack("<I", children[1]), 164)
+    call(g, "SetParent", (children[0],), (children[1],))
+    g.require(b"\x3b\x05" + struct.pack("<I", window), 164)
+    call(g, "GetParent", (children[0],))
+    g.require(b"\x3b\x05" + struct.pack("<I", children[1]), 164)
+    call(g, "SetParent", (children[1],), (children[0],))  # Reject parent cycles.
+    g.result(0, 164)
+    call(g, "SetParent", (children[0],), (window,))
+    g.require(b"\x3b\x05" + struct.pack("<I", children[1]), 164)
+    call(g, "SetParent", 0xDEADBEEF, (window,))
+    g.result(0, 164)
     for child_handle in children:
         call(g, "DestroyWindow", (child_handle,))
         g.result(1, 165)

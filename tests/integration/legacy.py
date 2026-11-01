@@ -252,6 +252,92 @@ def memory_program(checked):
     return linear_image(g.code, g.fixups, ["DOSCALLS"], "MEMQUERY", data=g.data)
 
 
+def kill_thread_program(wait):
+    g = FlatGuest()
+    thread, ready, resumed, queue = [g.field(bytes(4)) for _ in range(4)]
+    request, length, output, priority = [g.field(bytes(8)) for _ in range(4)]
+    queue_name = g.field(b"\\QUEUES\\TWOINE_KILL_TEST\0")
+    g.code = bytearray(b"\xe9" + bytes(4))
+    worker = 0x10000 + len(g.code)
+    if wait == "queue":
+        g.call(3, 16, queue, 0, queue_name)
+        g.result(0, 100)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", ready, 1))
+    if wait == "sleep":
+        g.call(1, 229, 10000)
+    elif wait == "queue":
+        g.call_handle(3, 9, queue, request, length, output, 0, 0, priority, 0)
+    else:
+        g.code.extend(b"\xeb\xfe")
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", resumed, 1))
+    g.call(1, 234, 0, 0)
+    struct.pack_into("<i", g.code, 1, len(g.code) - 5)
+    g.call(1, 311, thread, worker, 0, 0, 65536)
+    g.result(0, 101)
+    loop = len(g.code)
+    g.call(1, 229, 1)
+    g.code.extend(b"\x83\x3d" + struct.pack("<I", ready) + b"\x01\x0f\x85")
+    g.code.extend(struct.pack("<i", loop - len(g.code) - 4))
+    g.call_handle(1, 111, thread)
+    g.result(0, 102)
+    g.call(1, 349, thread, 0)
+    g.result(0, 103)
+    g.word(resumed, 0, 104)
+    g.call(1, 111, 1)
+    g.result(309, 105)
+    if wait == "queue":
+        g.call_handle(3, 11, queue)
+        g.result(0, 106)
+    g.exit(0)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "PMWIN", "QUECALLS"], "KILLTHRD", data=g.data
+    )
+
+
+def worker_exit_program(wait):
+    g = FlatGuest()
+    tib, pib, thread = [g.field(bytes(4)) for _ in range(3)]
+    text, written = g.field(b"primary exit\n"), g.field(bytes(4))
+    g.code = bytearray(b"\xe9" + bytes(4))
+    callback = 0x10000 + len(g.code)
+    g.code.extend(b"\x89\xe0")
+    g.result(0x2FFE8, 97)  # Exit callbacks start on the initial process stack.
+    g.call(1, 312, tib, pib)
+    g.result(0, 90)
+    g.load(tib)
+    g.require(b"\x83\x38\xff", 98)  # No interrupted exception frames survive.
+    g.code.extend(b"\x8b\x40\x0c\x8b\x00")  # TIB -> TIB2 -> thread ID.
+    g.result(1, 91)
+    g.call(1, 282, 1, text, 13, written)
+    g.result(0, 92)
+    g.call(1, 296, 3, 0)
+    g.exit(96)
+    worker = 0x10000 + len(g.code)
+    g.call(1, 229, 50)
+    g.exit(0)
+    struct.pack_into("<i", g.code, 1, len(g.code) - 5)
+    g.call(1, 296, 1, callback)
+    g.result(0, 93)
+    if wait == "messages":
+        g.call(2, 763, 0)
+        g.call(2, 716, 1, 0)
+    g.data.extend(bytes(-len(g.data) % 4))
+    registration = g.field(struct.pack("<II", 0xFFFFFFFF, callback))
+    g.call(1, 354, registration)
+    g.result(0, 99)
+    g.call(1, 311, thread, worker, 0, 0, 65536)
+    g.result(0, 94)
+    g.code.extend(b"\x81\xec\x00\x10\x00\x00")  # Interrupted nested stack.
+    if wait == "sleep":
+        g.call(1, 229, 10000)
+    elif wait == "messages":
+        g.call(2, 915, 1, g.field(bytes(32)), 0, 0, 0)
+    else:
+        g.code.extend(b"\xeb\xfe")
+    g.exit(95)  # No guest code resumes on the primary thread after termination.
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWIN"], "WORKEXIT", data=g.data)
+
+
 def exit_library():
     g = FlatGuest()
     g.code.extend(b"\x83\x7c\x24\x08\x00\x75\x00")  # Register only at DLL initialization.
@@ -265,7 +351,8 @@ def exit_library():
     g.code[branch] = len(g.code) - branch - 1
     g.code.extend(b"\xb8\x01\x00\x00\x00\xc3")
     struct.pack_into("<I", g.code, patch, len(g.code) - origin)
-    g.code.extend(b"\xc3")
+    g.call(1, 296, 3, 0)  # EXLST_EXIT transfers control; NULL is valid here.
+    g.exit(96)  # A handler must never resume after handing off to the next one.
     return linear_image(g.code, g.fixups, ["DOSCALLS"], "EXITDLL", library=True)
 
 
@@ -510,6 +597,38 @@ def main():
             raise RuntimeError(
                 f"memory query exit={result.returncode}\n" + result.stderr.decode(errors="replace")
             )
+        if args.backend == "unicorn":
+            for wait in ("busy", "sleep", "queue"):
+                killed = work / "killthrd.exe"
+                killed.write_bytes(kill_thread_program(wait))
+                result = subprocess.run(
+                    [str(build / "lx_loader"), str(killed)],
+                    cwd=work,
+                    env=env,
+                    capture_output=True,
+                    timeout=15,
+                )
+                if result.returncode:
+                    raise RuntimeError(
+                        f"kill thread ({wait})={result.returncode}\n"
+                        + result.stderr.decode(errors="replace")
+                    )
+            for wait in ("busy", "sleep", "messages"):
+                worker_exit = work / "workexit.exe"
+                worker_exit.write_bytes(worker_exit_program(wait))
+                result = subprocess.run(
+                    [str(build / "lx_loader"), str(worker_exit)],
+                    cwd=work,
+                    env=env,
+                    capture_output=True,
+                    timeout=15,
+                )
+                if result.returncode or result.stdout != b"primary exit\n":
+                    raise RuntimeError(
+                        f"worker exit ({wait})={result.returncode}\n"
+                        + repr(result.stdout)
+                        + result.stderr.decode(errors="replace")
+                    )
         (work / "exitdll.dll").write_bytes(exit_library())
         lifetime = work / "exitlife.exe"
         lifetime.write_bytes(exit_program())
