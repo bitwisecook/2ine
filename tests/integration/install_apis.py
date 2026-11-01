@@ -459,12 +459,12 @@ def grandchild_program():
     return linear_image(g.code, g.fixups, ["DOSCALLS", "QUECALLS"], "GRAND", data=g.data)
 
 
-def fixed_selectors():
+def fixed_selectors(flat_code):
     g = FlatGuest()
     marker = g.field(bytes(4))
-    g.code.extend(b"\xea" + struct.pack("<IH", 0x10000 + len(g.code) + 7, 0x5B))
-    # Use OS/2's flat data selector, write through it and execute an imported API
-    # with the fixed flat code selector still active.
+    if flat_code:
+        g.code.extend(b"\xea" + struct.pack("<IH", 0x10000 + len(g.code) + 7, 0x5B))
+    # Load the flat data selector through both MOV and POP and write through DS/ES.
     g.code.extend(b"\x66\xb8\x53\x00\x8e\xd8\xc7\x05" + struct.pack("<II", marker, 0xC0FFEE))
     g.word(marker, 0xC0FFEE, 90)
     g.code.extend(b"\x6a\x53\x07\x26\xc7\x05" + struct.pack("<II", marker, 0x12345678))
@@ -590,7 +590,7 @@ def main():
             (directory / filename).write_bytes(data)
         (directory / "grand.exe").write_bytes(grandchild_program())
         executables = ["segmented.exe", "segmented-lx.exe", "queues.exe", "kill.exe"]
-        (directory / "selectors.exe").write_bytes(fixed_selectors())
+        (directory / "selectors.exe").write_bytes(fixed_selectors(args.backend == "unicorn"))
         executables.append("selectors.exe")
         for executable in executables:
             result = subprocess.run(
