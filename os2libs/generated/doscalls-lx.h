@@ -640,6 +640,25 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_Dos16Move(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, reserved);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, pszNew);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, pszOld);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_strings(GLoaderState.execution, pszOld_guest, 1, 260, 0, &__abi_args[0])) goto __abi_done;
+    pszOld = (PSZ) __abi_args[0].host;
+    if (!lx_guest_argument_strings(GLoaderState.execution, pszNew_guest, 1, 260, 0, &__abi_args[1])) goto __abi_done;
+    pszNew = (PSZ) __abi_args[1].host;
+    __abi_result = Dos16Move(pszOld, pszNew, reserved);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
 static uint32 bridge16to32_Dos16NewSize(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, size);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, hf);
@@ -1450,6 +1469,7 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(Dos16FindFirst)
     LX_NATIVE_MODULE_16BIT_API(Dos16FindNext)
     LX_NATIVE_MODULE_16BIT_API(Dos16MkDir)
+    LX_NATIVE_MODULE_16BIT_API(Dos16Move)
     LX_NATIVE_MODULE_16BIT_API(Dos16NewSize)
     LX_NATIVE_MODULE_16BIT_API(Dos16Open)
     LX_NATIVE_MODULE_16BIT_API(Dos16QCurDir)
@@ -1536,6 +1556,7 @@ static int init16_doscalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16FindFirst, 24)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16FindNext, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16MkDir, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16Move, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16NewSize, 6)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16Open, 26)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16QCurDir, 10)
@@ -1897,6 +1918,7 @@ LX_NATIVE_MODULE_INIT({
     LX_NATIVE_EXPORT16(Dos16FindFirst, 64),
     LX_NATIVE_EXPORT16(Dos16FindNext, 65),
     LX_NATIVE_EXPORT16(Dos16MkDir, 66),
+    LX_NATIVE_EXPORT16(Dos16Move, 67),
     LX_NATIVE_EXPORT16(Dos16NewSize, 68),
     LX_NATIVE_EXPORT16(Dos16Open, 70),
     LX_NATIVE_EXPORT16(Dos16QCurDir, 71),

@@ -811,6 +811,22 @@
         "kind": "live",
         "nullable": true
       }
+    ],
+    "Dos16Move": [
+      {
+        "name": "pszOld",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "pszNew",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
     ]
   },
   "msg": {

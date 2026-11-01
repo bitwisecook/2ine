@@ -572,6 +572,11 @@ APIRET DosMove(PSZ pszOld, PSZ pszNew)
     return retval;
 }
 
+APIRET16 Dos16Move(PSZ pszOld, PSZ pszNew, ULONG reserved)
+{
+    TRACE_NATIVE("Dos16Move('%s', '%s', %u)", pszOld, pszNew, reserved);
+    return reserved ? ERROR_INVALID_PARAMETER : DosMove(pszOld, pszNew);
+}
 APIRET DosSetRelMaxFH(PLONG request, PULONG current)
 {
     grabLock(&GMutexDosCalls);
