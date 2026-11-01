@@ -210,7 +210,7 @@ def main():
     args = parser.parse_args()
     build = args.build.resolve()
     with tempfile.TemporaryDirectory(prefix="twoine-open32-") as temporary:
-        work = Path(temporary)
+        work = Path(temporary).resolve()
         env = dict(
             os.environ,
             TWOINE_BACKEND=args.backend,

@@ -33,7 +33,8 @@ static uint64 eventScope(void)
 static void initializeEventPool(void)
 {
     char name[64];
-    snprintf(name, sizeof name, "/2ine-event-pool4-%016llx", (unsigned long long)eventScope());
+    /* Host shared-memory names also fit Darwin's 31-character limit. */
+    snprintf(name, sizeof name, "/2ine-epool4-%016llx", (unsigned long long)eventScope());
     LxHostSharedResult result = lx_host_shared_open(name, 8, &event_pool);
     int created = result == LX_HOST_SHARED_OK;
     if (result == LX_HOST_SHARED_EXISTS)
