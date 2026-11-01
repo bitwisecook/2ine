@@ -20,3 +20,9 @@ jobs:
         run: cmake --build build-native --parallel 2
       - name: Test native execution boundary
         run: ctest --test-dir build-native --output-on-failure
+      - name: Retain GUI failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-gui-failure
+          path: build-native/gui-results/

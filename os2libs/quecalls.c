@@ -65,22 +65,28 @@ static void destroy_queue(void *value)
     free(queue->name);
     free(queue);
 }
+static int notify_revision(Queue *queue)
+{
+    lx_host_mutex_lock(queue->mutex, UINT32_MAX);
+    uint32 revision;
+    int failed = lx_host_mailbox_revision(queue->mailbox, &revision);
+    if (!failed && queue->event && revision != queue->revision)
+    {
+        APIRET result = DosPostEventSem(queue->event);
+        failed = result && result != ERROR_ALREADY_POSTED && result != ERROR_TOO_MANY_POSTS;
+        if (!failed)
+            queue->revision = revision;
+    }
+    lx_host_mutex_unlock(queue->mutex);
+    return failed;
+}
 static void *notify_queue(void *value)
 {
     Queue *queue = value;
-    uint32 previous = queue->revision;
     while (!__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
     {
-        uint32 revision;
-        if (lx_host_mailbox_revision(queue->mailbox, &revision))
+        if (notify_revision(queue))
             break;
-        if (revision != previous)
-        {
-            APIRET result = DosPostEventSem(queue->event);
-            if (result && result != ERROR_ALREADY_POSTED && result != ERROR_TOO_MANY_POSTS)
-                break;
-            previous = revision;
-        }
         lx_host_sleep_ms(1);
     }
     return NULL;
@@ -443,8 +449,8 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
         result = lx_host_mailbox_send(queue->mailbox, packet, bytes, priority)
                      ? ERROR_QUE_UNABLE_TO_ADD
                      : NO_ERROR;
-        if (!result && queue->event)
-            DosPostEventSem(queue->event);
+        if (!result)
+            notify_revision(queue);
     }
     free(packet);
     lx_handle_release(&borrow);

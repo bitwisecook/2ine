@@ -33,6 +33,13 @@ struct LxHostMailbox
     pthread_mutex_t mutex;
     int cancel_state;
 };
+static void lock_mailbox(LxHostMailbox *mailbox)
+{
+    int previous;
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &previous);
+    pthread_mutex_lock(&mailbox->mutex);
+    mailbox->cancel_state = previous;
+}
 static void unlock(LxHostMailbox *mailbox)
 {
     int previous = mailbox->cancel_state;
@@ -42,8 +49,7 @@ static void unlock(LxHostMailbox *mailbox)
 }
 static unsigned char *snapshot(LxHostMailbox *mailbox, size_t *size)
 {
-    pthread_mutex_lock(&mailbox->mutex);
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &mailbox->cancel_state);
+    lock_mailbox(mailbox);
     if (flock(mailbox->fd, LOCK_EX) < 0)
     {
         int previous = mailbox->cancel_state;
@@ -282,8 +288,7 @@ int lx_host_mailbox_count(LxHostMailbox *mailbox, uint32_t *count, int purge)
 
 int lx_host_mailbox_revision(LxHostMailbox *mailbox, uint32_t *revision)
 {
-    pthread_mutex_lock(&mailbox->mutex);
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &mailbox->cancel_state);
+    lock_mailbox(mailbox);
     if (flock(mailbox->fd, LOCK_SH))
     {
         int previous = mailbox->cancel_state;
