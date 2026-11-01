@@ -10,3 +10,5 @@ The `lotus-123` compatibility branch can open a blank workbook. Cell entry, work
 The original Lotus OLE runtime also requires private Warp SOM runtime DLLs, `SOM.IR`, the installation's `LOTUSW4/ETC/*.IR` interface repositories and the `OS2/ETC/DSOM/SOMD*.DAT`/`SOMD*.TOC` implementation repository. Point `SOMIR` to the semicolon-separated guest paths and `SOMDDIR` to a writable private copy of the DSOM directory; the reference installation sets `SOMDTHREADPEER=1`. These original files are not bundled. Each test session must use separate writable profiles and DSOM registration files.
 
 The current PM provider has no distributed SOM daemon: its readiness query returns false and starting it returns `ERROR_NOT_SUPPORTED`. PM error-state exchange stores and returns the previous error ID; optional extended error records are not retained.
+
+Named OS/2 queue contracts are recorded in `queue-contracts.json`. The current queue namespace and sender addresses are local to one 2ine process; queue data is not copied.

@@ -165,6 +165,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/desktop.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(desktop_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME queue_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/queues.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(queue_apis PROPERTIES TIMEOUT 40)
     add_test(NAME exception_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/exceptions.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")

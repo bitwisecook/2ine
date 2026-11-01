@@ -3421,5 +3421,47 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }
+  },
+  "quecalls": {
+    "DosCreateQueue": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosOpenQueue": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosCloseQueue": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosPurgeQueue": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosQueryQueue": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosWriteQueue": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosReadQueue": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosPeekQueue": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
   }
 }
