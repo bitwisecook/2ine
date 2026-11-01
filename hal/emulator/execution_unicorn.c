@@ -29,6 +29,7 @@ typedef struct Invocation
     LxCpuContext *context;
     struct Invocation *outer;
     LxGuestBorrow arguments;
+    uint32_t api_arguments;
 } Invocation;
 typedef struct EmulatedState
 {
@@ -420,7 +421,9 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
                 failure(lx_execution_error(s->execution));
             args = arguments->host;
         }
+        frame.api_arguments = b->convention == LX_ABI_EAX32 ? 0 : (uint32_t)frame_address;
         registers.eax = b->callback(args);
+        frame.api_arguments = 0;
         lx_execution_release(arguments);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
         if (!lx_cpu_restore(s->cpu, frame.context) || !lx_cpu_set_registers(s->cpu, &registers))
@@ -798,6 +801,10 @@ static int copyIn(LxExecution *e, uint32_t address, void *host, const void *inpu
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+static uint32_t apiArguments(void)
+{
+    return Active ? Active->api_arguments : 0;
+}
 const LxExecutionOperations lx_execution_unicorn = {
     "unicorn",    initialize,      destroy,     program,
     library,      prepareThread,   thread16,    free,
@@ -808,4 +815,4 @@ const LxExecutionOperations lx_execution_unicorn = {
     emitBridge16, atomicU32,       NULL,        0,
     map,          unmap,           protect,     emitBridge32,
     copyOut,      prepareThread32, thread32,    free,
-    endThread,    copyIn,          callback4};
+    endThread,    copyIn,          callback4,   apiArguments};

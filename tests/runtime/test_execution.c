@@ -38,6 +38,7 @@ static void returned(void *unused, uint32_t result)
 }
 static uint32_t bridge(uint8_t *args)
 {
+    uint32_t api_arguments = lx_execution_api_arguments(Execution);
     uint16_t a;
     uint32_t b;
     memcpy(&a, args, 2);
@@ -62,8 +63,10 @@ static uint32_t bridge(uint8_t *args)
     CHECK(pinned.host == tls);
     uint32_t prior = lx_guest_load_u32(tls);
     lx_execution_callback32(Execution, CallbackEntry, 0xabcdef01);
+    CHECK(lx_execution_api_arguments(Execution) == api_arguments);
     CHECK(lx_guest_load_u32(tls) == prior + 1);
     CHECK(lx_execution_callback32_4(Execution, CallbackEntry + 0x300, 7, 11, 13, 17) == 34);
+    CHECK(lx_execution_api_arguments(Execution) == api_arguments);
     lx_execution_release(&pinned);
     return 0x4321;
 }
@@ -437,6 +440,7 @@ int main(int argc, char **argv)
     free(tls_string);
     CHECK(!lx_execution_copy_string(Execution, TlsWindow + 128, 4096));
     mapping_contract();
+    CHECK(lx_execution_api_arguments(Execution) == 0);
     argument_contract();
     invoke32();
     invoke16();

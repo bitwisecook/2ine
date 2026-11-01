@@ -798,8 +798,7 @@ static void fixupLinearCodeSegmentReferences(uint8 *addr, size_t size)
     }
 }
 
-static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int slot,
-                                                                     ucontext_t *uctx)
+static void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
 {
     greg_t *gregs = uctx->uc_mcontext.gregs;
 
@@ -822,22 +821,56 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
 
     int handled = 1;
     uint8 *eip = (void *)(size_t)gregs[REG_EIP];
+    const uint8 operand = eip[1];
+    if ((operand & 0xC0) || ((operand & 7) == 4) || ((operand & 7) == 5))
+    {
+        fprintf(stderr, "Unsupported TLS memory addressing at %p\n", eip);
+        abort();
+    }
     switch (eip[0])
     {
         case 0xC7: /* MOV immediate to TLS memory. */
+            if (operand & 0x38)
+            {
+                handled = 0;
+                break;
+            }
             *tls = *((uint32 *)(eip + 2));
             gregs[REG_EIP] += 6;
             break;
 
         case 0x89: /* MOV register to TLS memory. */
-            *tls = (uint32)gregs[x86RegisterToUContextEnum[eip[1] >> 3]];
+            *tls = (uint32)gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]];
             gregs[REG_EIP] += 2;
             break;
 
         case 0x8B: /* MOV TLS memory to register. */
-            gregs[x86RegisterToUContextEnum[eip[1] >> 3]] = (greg_t)*tls;
+            gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]] = (greg_t)*tls;
             gregs[REG_EIP] += 2;
             break;
+
+        case 0x81:
+        case 0x83: /* CMP TLS memory with a full or sign-extended immediate. */
+        {
+            if ((operand & 0x38) != 0x38)
+            {
+                handled = 0;
+                break;
+            }
+            uint32 immediate, flags;
+            if (*eip == 0x83)
+                immediate = (uint32)(int32_t)(int8_t)eip[2];
+            else
+                memcpy(&immediate, eip + 2, 4);
+            __asm__ __volatile__("cmpl %2, %1; pushfl; popl %0"
+                                 : "=r"(flags)
+                                 : "r"(*tls), "r"(immediate)
+                                 : "cc");
+            /* CMP changes OF, SF, ZF, AF, PF and CF; preserve all control flags. */
+            gregs[REG_EFL] = (gregs[REG_EFL] & ~0x8D5) | (flags & 0x8D5);
+            gregs[REG_EIP] += *eip == 0x83 ? 3 : 6;
+            break;
+        }
 
         default:
             handled = 0;
@@ -851,10 +884,8 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
     }
     else
     {
-        /* Advance EIP past the emulated TLS instruction before returning from the signal. */
-        setcontext(uctx);
-        fprintf(stderr, "panic: setcontext() failed in the TLS access handler! Aborting! (%s)\n",
-                strerror(errno));
+        /* The signal return restores both guest registers and arithmetic flags. */
+        return;
     }
 
     fflush(stderr);
@@ -916,7 +947,10 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
         // was the app accessing one of the OS/2 TLS slots?
         const int slot = (int)(addr - tlspage);
         if (slot < 32)
+        {
             handleThreadLocalStorageAccess(slot, uctx);
+            return;
+        }
     }
 
     static int faults = 0;

@@ -25,6 +25,8 @@ typedef struct LxExecutionApi32
 } LxExecutionApi32;
 size_t lx_execution_emit_bridge32(LxExecution *execution, uint8_t *output, size_t capacity,
                                   const LxExecutionApi32 *binding);
+/* Current emulated API argument frame, or zero outside a stack-based API call. */
+uint32_t lx_execution_api_arguments(LxExecution *execution);
 typedef struct LxGuestBorrow
 {
     void *host;
