@@ -22,3 +22,12 @@ PFNWP defaultGuestWindowProc(void)
 #endif
     return WinDefWindowProc;
 }
+PFNWP defaultGuestDialogProc(void)
+{
+#if TWOINE_PORTABLE_LOADER && LX_LEGACY
+    if (GLoaderState.execution && obj32.mapping && WinDefDlgProc32)
+        return (PFNWP)(uintptr_t)(obj32.guest_base +
+                                  (uint32)((uint8 *)WinDefDlgProc32 - (uint8 *)obj32.addr));
+#endif
+    return WinDefDlgProc;
+}

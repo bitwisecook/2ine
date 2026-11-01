@@ -111,6 +111,47 @@ void lx_host_window_hide(LxHostWindow *window)
 {
     SDL_HideWindow(window->window);
 }
+int lx_host_window_title(LxHostWindow *window, const char *title)
+{
+    return window && SDL_SetWindowTitle(window->window, title);
+}
+int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int y, int width,
+                        int height, const uint8_t *coverage, uint8_t red, uint8_t green,
+                        uint8_t blue)
+{
+    if (!window || !clip || width < 0 || height < 0 || width > 4096 || height > 4096 ||
+        (width && height && !coverage))
+        return 0;
+    if (!width || !height)
+        return 1;
+    SDL_Surface *surface = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_RGBA32);
+    if (!surface)
+        return 0;
+    for (int row = 0; row < height; row++)
+    {
+        uint8_t *pixels = (uint8_t *)surface->pixels + row * surface->pitch;
+        for (int column = 0; column < width; column++)
+        {
+            pixels[column * 4] = red;
+            pixels[column * 4 + 1] = green;
+            pixels[column * 4 + 2] = blue;
+            pixels[column * 4 + 3] = coverage[(size_t)row * width + column];
+        }
+    }
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(window->renderer, surface);
+    SDL_DestroySurface(surface);
+    if (!texture)
+        return 0;
+    SDL_Rect clipping = {clip->x, clip->y, clip->w, clip->h};
+    SDL_FRect destination = {(float)x, (float)y, (float)width, (float)height};
+    int ok = SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND) &&
+             SDL_SetRenderClipRect(window->renderer, &clipping) &&
+             SDL_RenderTexture(window->renderer, texture, NULL, &destination);
+    SDL_DestroyTexture(texture);
+    if (ok)
+        window->dirty = 1;
+    return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
+}
 int lx_host_window_present(LxHostWindow *window)
 {
     if (!window->dirty)

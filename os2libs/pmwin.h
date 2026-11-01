@@ -897,6 +897,42 @@ extern "C"
 
     // API entry points...
 
+#pragma pack(push, 2)
+    typedef struct
+    {
+        USHORT fsItemStatus, cChildren, cchClassName, offClassName, cchText, offText;
+        ULONG flStyle;
+        SHORT x, y, cx, cy;
+        USHORT id, offPresParams, offCtlData;
+    } DLGTITEM;
+    typedef struct
+    {
+        USHORT cbTemplate, type, codepage, offadlgti, fsTemplateStatus, iItemFocus, coffPresParams;
+        DLGTITEM adlgti[1];
+    } DLGTEMPLATE, *PDLGTEMPLATE;
+#pragma pack(pop)
+    OS2EXPORT HWND OS2API WinCreateDlg(HWND parent, HWND owner, PFNWP procedure, PDLGTEMPLATE data,
+                                       PVOID parameters) OS2APIINFO(922);
+    OS2EXPORT HWND OS2API WinLoadDlg(HWND parent, HWND owner, PFNWP procedure, HMODULE module,
+                                     ULONG id, PVOID parameters) OS2APIINFO(924);
+    OS2EXPORT ULONG OS2API WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module,
+                                     ULONG id, PVOID parameters) OS2APIINFO(923);
+    OS2EXPORT ULONG OS2API WinProcessDlg(HWND dialog) OS2APIINFO(796);
+    OS2EXPORT BOOL OS2API WinDismissDlg(HWND dialog, ULONG result) OS2APIINFO(729);
+    OS2EXPORT MRESULT OS2API WinDefDlgProc(HWND dialog, ULONG message, MPARAM first, MPARAM second)
+        OS2APIINFO(910);
+    OS2EXPORT MRESULT OS2API WinSendDlgItemMsg(HWND dialog, ULONG id, ULONG message, MPARAM first,
+                                               MPARAM second) OS2APIINFO(903);
+    OS2EXPORT BOOL OS2API WinMapDlgPoints(HWND dialog, PPOINTL points, ULONG count, BOOL to_pixels)
+        OS2APIINFO(787);
+    OS2EXPORT BOOL OS2API WinSetWindowText(HWND window, PSZ text) OS2APIINFO(877);
+    OS2EXPORT LONG OS2API WinQueryWindowText(HWND window, LONG capacity, PCHAR output)
+        OS2APIINFO(841);
+    OS2EXPORT LONG OS2API WinQueryWindowTextLength(HWND window) OS2APIINFO(842);
+    OS2EXPORT BOOL OS2API WinSetDlgItemText(HWND window, ULONG id, PSZ text) OS2APIINFO(859);
+    OS2EXPORT ULONG OS2API WinQueryDlgItemText(HWND window, ULONG id, LONG capacity, PCHAR output)
+        OS2APIINFO(815);
+
     OS2EXPORT BOOL OS2API WinQueryPointerPos(HWND hwnd, PPOINTL point) OS2APIINFO(823);
     OS2EXPORT BOOL OS2API WinQueryWindowPos(HWND hwnd, PSWP position) OS2APIINFO(837);
     OS2EXPORT BOOL OS2API WinQueryWindowRect(HWND hwnd, PRECTL rect) OS2APIINFO(840);
@@ -919,6 +955,8 @@ extern "C"
                                         PCHAR output) OS2APIINFO(781);
     OS2EXPORT HWND OS2API WinWindowFromID(HWND window, ULONG id) OS2APIINFO(899);
     OS2EXPORT ULONG OS2API WinQueryWindowULong(HWND window, LONG index) OS2APIINFO(843);
+    OS2EXPORT USHORT OS2API WinQueryWindowUShort(HWND window, LONG index) OS2APIINFO(844);
+    OS2EXPORT BOOL OS2API WinSetWindowUShort(HWND window, LONG index, USHORT value) OS2APIINFO(879);
     OS2EXPORT BOOL OS2API WinSetWindowULong(HWND window, LONG index, ULONG value) OS2APIINFO(878);
     OS2EXPORT PVOID OS2API WinQueryWindowPtr(HWND window, LONG index) OS2APIINFO(839);
     OS2EXPORT BOOL OS2API WinSetWindowPtr(HWND window, LONG index, PVOID value) OS2APIINFO(876);

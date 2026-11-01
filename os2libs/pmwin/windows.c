@@ -41,11 +41,26 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
                 return &frame;
             }
             case WC_COMBOBOX:
+                return NULL;
             case WC_BUTTON:
+            {
+                static WindowClass button = {"#3", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &button;
+            }
             case WC_MENU:
+                return NULL;
             case WC_STATIC:
+            {
+                static WindowClass text = {"#5", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &text;
+            }
             case WC_ENTRYFIELD:
+                return NULL;
             case WC_LISTBOX:
+            {
+                static WindowClass list = {"#7", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &list;
+            }
             case WC_SCROLLBAR:
             case WC_TITLEBAR:
             case WC_MLE:
@@ -78,11 +93,15 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
 
 void destroyWindow(AnchorBlock *anchor, Window *win)
 {
-    if (!win || (win->hwnd == NULLHANDLE))
+    if (!win || (win->hwnd == NULLHANDLE) || win->destroying)
     {
         return;
     }
 
+    win->destroying = TRUE;
+    win->style &= ~WS_VISIBLE;
+    if (win->parent == &desktop_window)
+        lx_host_window_hide(win->heavy.window);
     for (size_t i = 0; i < anchor->pres_spaces_array_len; i++)
         if (anchor->pres_spaces[i].window == win)
             destroyPresentationSpace(anchor, &anchor->pres_spaces[i]);
@@ -97,15 +116,19 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
         else
             link = &timer->next;
     }
-    // WM_DESTROY is a notification and cannot prevent destruction.
-    sendMessage(win, WM_DESTROY, 0, 0);
-
     Window *next = NULL;
     for (Window *i = win->children; i != NULL; i = next)
     {
         next = i->sibling;
         destroyWindow(anchor, i);
     }
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        if (anchor->windows[i] && anchor->windows[i]->owner == win)
+            destroyWindow(anchor, anchor->windows[i]);
+    /* Children receive WM_DESTROY before their parent. */
+    sendMessage(win, WM_DESTROY, 0, 0);
+    destroyDialog(win);
+    destroyControl(win);
 
     if (win->parent == &desktop_window)
     {
@@ -197,7 +220,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     }
 
     Window *parent = getWindowFromHWND(anchor, hwndParent);
-    if (!parent)
+    if (!parent || parent->destroying)
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, NULLHANDLE);
     }
@@ -206,7 +229,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     if (hwndOwner != NULLHANDLE)
     {
         owner = getWindowFromHWND(anchor, hwndOwner);
-        if (!owner)
+        if (!owner || owner->destroying)
         {
             SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, NULLHANDLE);
         }
@@ -287,7 +310,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     win->parent = parent;
     win->children = NULL;
     win->hwnd = (HWND)(window_index + FIRST_HWND_VALUE);
-    win->enabled = TRUE;
+    win->enabled = (flStyle & WS_DISABLED) == 0;
     win->window_class_name = winclass->name; // this pointer lives until Anchor Block terminates.
     win->data = data;
     win->text = text;
@@ -423,7 +446,7 @@ BOOL WinDestroyWindow(HWND hwnd)
     }
 
     Window *win = getWindowFromHWND(anchor, hwnd);
-    if (!win)
+    if (!win || win == &desktop_window)
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
     }

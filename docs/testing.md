@@ -97,3 +97,10 @@ extents through native/portable exports. HAL tests rasterize glyphs from all
 12 pinned faces, inspect coverage, distinguish proportional/monospace advances
 and verify style metadata. Host PM tests cover owner inheritance, callback-time
 hierarchy queries, frame data, enumeration wrapping and queued-message retirement.
+
+`pm_dialogs` verifies packed-template rejection, initialization and immediate
+dismissal, owner restoration, nested modal processing, owner destruction,
+dialog reuse, list state and WM_QUIT reposting. `pm_dialog_apis` builds an x86
+LX fixture with a real dialog resource and guest WM_INITDLG callback; it checks
+modal results, stock subclass procedure calls and invalid portable spans.
+The media test verifies transparent, half-coverage and opaque glyph blending.

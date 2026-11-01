@@ -341,6 +341,9 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     if (event->type != LX_HOST_EVENT_MOTION && event->type != LX_HOST_EVENT_BUTTON_DOWN &&
         event->type != LX_HOST_EVENT_BUTTON_UP)
         return FALSE;
+    for (Window *parent = win; parent && parent != &desktop_window; parent = parent->parent)
+        if (!parent->enabled)
+            return FALSE;
     int x = event->x, y = win->h - 1 - event->y;
     for (;;)
     {
@@ -355,6 +358,8 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         y -= child->y;
         win = child;
     }
+    if (!win->enabled)
+        return FALSE;
     ULONG message = WM_MOUSEMOVE;
     if (event->type != LX_HOST_EVENT_MOTION)
     {
@@ -548,7 +553,7 @@ BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
 
     Window *win = getWindowFromHWND(anchor, hwnd);
-    if (!win)
+    if (hwnd && !win)
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
     }
@@ -569,10 +574,11 @@ BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 BOOL WinPostQueueMsg(HMQ hmq, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
     TRACE_NATIVE("WinPostMsgQueue(%u, %u, %p, %p)", (uint)hmq, (uint)msg, mp1, mp2);
-    /* Thread messages enter the queue without a target window procedure. */
-
-    FIXME("need to be able to access other threads' message queues");
-    return FALSE;
+    /* Only the calling PM thread's queue is addressable by this registry. */
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor || !hmq || anchor->message_queue.hmq != hmq)
+        return FALSE;
+    return WinPostMsg(0, msg, mp1, mp2);
 }
 
 MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position)

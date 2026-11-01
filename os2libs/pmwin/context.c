@@ -100,15 +100,17 @@ BOOL WinTerminate(HAB hab)
     {
         destroyPresentationSpace(anchor, &anchor->pres_spaces[i]);
     }
-    free(anchor->pres_spaces);
-
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
         destroyWindow(anchor, anchor->windows[i]);
-        free(anchor->windows[i]);
     }
     destroyWindowEnumerations(anchor);
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        free(anchor->windows[i]);
+    free(anchor->pres_spaces);
     free(anchor->windows);
+    if (anchor->control_bridge)
+        lx_execution_unmap(GLoaderState.execution, anchor->control_bridge);
 
     WindowClass *winclassnext = NULL;
     for (WindowClass *i = anchor->registered_classes; i; i = winclassnext)

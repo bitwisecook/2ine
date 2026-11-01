@@ -71,6 +71,11 @@ if(TARGET pmwin)
     target_link_libraries(twoine_pm_tests PRIVATE pmgpi pmwin 2ine)
     add_test(NAME presentation_manager COMMAND twoine_pm_tests)
     set_tests_properties(presentation_manager PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+    add_executable(twoine_dialog_tests os2libs/test_dialogs.c)
+    twoine_application_target(twoine_dialog_tests)
+    target_link_libraries(twoine_dialog_tests PRIVATE pmwin 2ine)
+    add_test(NAME pm_dialogs COMMAND twoine_dialog_tests)
+    set_tests_properties(pm_dialogs PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
 endif()
 
 set(TWOINE_PMSTARS_EXE "" CACHE FILEPATH "Optional unchanged archived PMStars.exe fixture")
@@ -81,6 +86,10 @@ if(TARGET lx_loader)
     else()
         set(_twoine_legacy_backend native)
     endif()
+    add_test(NAME pm_dialog_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/dialogs.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(pm_dialog_apis PROPERTIES TIMEOUT 20)
     add_test(NAME legacy_file_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/legacy.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")

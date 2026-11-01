@@ -43,6 +43,14 @@ static uint32 bridge32_WinQueryWindowULong(uint8 *a)
 {
     return WinQueryWindowULong(pm_word(a, 0), (LONG)pm_word(a, 1));
 }
+static uint32 bridge32_WinQueryWindowUShort(uint8 *a)
+{
+    return WinQueryWindowUShort(pm_word(a, 0), (LONG)pm_word(a, 1));
+}
+static uint32 bridge32_WinSetWindowUShort(uint8 *a)
+{
+    return WinSetWindowUShort(pm_word(a, 0), (LONG)pm_word(a, 1), (USHORT)pm_word(a, 2));
+}
 static uint32 bridge32_WinSetWindowULong(uint8 *a)
 {
     return WinSetWindowULong(pm_word(a, 0), (LONG)pm_word(a, 1), pm_word(a, 2));
@@ -385,4 +393,112 @@ static uint32 bridge32_WinCreateWindow(uint8 *a)
     free(title);
     free(class_name);
     return result;
+}
+
+static int pm_procedure(uint32 address)
+{
+    return !address || lx_execution_memory(GLoaderState.execution, address, 1, LX_GUEST_EXECUTE);
+}
+static uint32 bridge32_WinCreateDlg(uint8 *a)
+{
+    uint8 prefix[2];
+    LxGuestBorrow data = {0};
+    if (!pm_procedure(pm_word(a, 2)) ||
+        !lx_execution_read(GLoaderState.execution, pm_word(a, 3), prefix, 2))
+        return 0;
+    uint32 size = lx_guest_load_u16(prefix);
+    if (size < 14 ||
+        !lx_execution_borrow(GLoaderState.execution, pm_word(a, 3), size, LX_GUEST_READ, &data))
+        return 0;
+    uint32 result = WinCreateDlg(pm_word(a, 0), pm_word(a, 1), (PFNWP)(uintptr_t)pm_word(a, 2),
+                                 data.host, pm_param(a, 4));
+    lx_execution_release(&data);
+    return result;
+}
+static uint32 bridge32_WinLoadDlg(uint8 *a)
+{
+    if (!pm_procedure(pm_word(a, 2)))
+        return 0;
+    return WinLoadDlg(pm_word(a, 0), pm_word(a, 1), (PFNWP)(uintptr_t)pm_word(a, 2), pm_word(a, 3),
+                      pm_word(a, 4), pm_param(a, 5));
+}
+static uint32 bridge32_WinDlgBox(uint8 *a)
+{
+    if (!pm_procedure(pm_word(a, 2)))
+        return 0xffff;
+    return WinDlgBox(pm_word(a, 0), pm_word(a, 1), (PFNWP)(uintptr_t)pm_word(a, 2), pm_word(a, 3),
+                     pm_word(a, 4), pm_param(a, 5));
+}
+static uint32 bridge32_WinProcessDlg(uint8 *a)
+{
+    return WinProcessDlg(pm_word(a, 0));
+}
+static uint32 bridge32_WinPostQueueMsg(uint8 *a)
+{
+    return WinPostQueueMsg(pm_word(a, 0), pm_word(a, 1), pm_param(a, 2), pm_param(a, 3));
+}
+static uint32 bridge32_WinDismissDlg(uint8 *a)
+{
+    return WinDismissDlg(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinDefDlgProc(uint8 *a)
+{
+    return (uint32)(uintptr_t)WinDefDlgProc(pm_word(a, 0), pm_word(a, 1), pm_param(a, 2),
+                                            pm_param(a, 3));
+}
+static uint32 bridge32_WinSendDlgItemMsg(uint8 *a)
+{
+    return (uint32)(uintptr_t)WinSendDlgItemMsg(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2),
+                                                pm_param(a, 3), pm_param(a, 4));
+}
+static uint32 bridge32_WinMapDlgPoints(uint8 *a)
+{
+    uint32 count = pm_word(a, 2);
+    if (count > 65536)
+        return 0;
+    LxGuestBorrow points = {0};
+    if (count && !lx_execution_borrow(GLoaderState.execution, pm_word(a, 1), (size_t)count * 8,
+                                      LX_GUEST_READ | LX_GUEST_WRITE, &points))
+        return 0;
+    uint32 result = WinMapDlgPoints(pm_word(a, 0), points.host, count, pm_word(a, 3));
+    lx_execution_release(&points);
+    return result;
+}
+static uint32 bridge32_WinSetWindowText(uint8 *a)
+{
+    char *text = pm_string(pm_word(a, 1));
+    uint32 result = text ? WinSetWindowText(pm_word(a, 0), text) : 0;
+    free(text);
+    return result;
+}
+static uint32 bridge32_WinSetDlgItemText(uint8 *a)
+{
+    char *text = pm_string(pm_word(a, 2));
+    uint32 result = text ? WinSetDlgItemText(pm_word(a, 0), pm_word(a, 1), text) : 0;
+    free(text);
+    return result;
+}
+static uint32 bridge32_WinQueryWindowTextLength(uint8 *a)
+{
+    return (uint32)WinQueryWindowTextLength(pm_word(a, 0));
+}
+static uint32 pm_query_text(uint8 *a, int item)
+{
+    LONG capacity = (LONG)pm_word(a, item ? 2 : 1);
+    LxGuestBorrow output = {0};
+    if (capacity <= 0 || !lx_execution_borrow(GLoaderState.execution, pm_word(a, item ? 3 : 2),
+                                              (uint32)capacity, LX_GUEST_WRITE, &output))
+        return 0;
+    uint32 result = item ? WinQueryDlgItemText(pm_word(a, 0), pm_word(a, 1), capacity, output.host)
+                         : (uint32)WinQueryWindowText(pm_word(a, 0), capacity, output.host);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_WinQueryWindowText(uint8 *a)
+{
+    return pm_query_text(a, 0);
+}
+static uint32 bridge32_WinQueryDlgItemText(uint8 *a)
+{
+    return pm_query_text(a, 1);
 }

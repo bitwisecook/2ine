@@ -86,14 +86,13 @@ PMGuts and several clocks. Their menu/dialog/profile, NE16 PM or external-runtim
 requirements exceed this subset; they are not listed as working applications.
 
 Lotus SmartSuite 1.7 with Fixpack 3 does not yet reach an editable document.
-With its installer settings supplied separately, Word Pro loads the language and
-shared button DLLs, creates its frame/client, subclasses the frame and registers
-its custom controls on native and Unicorn. Measured FreeType font enumeration, window enumeration and status-window
-creation now work. Word Pro reaches its message loop and starts a background
-thread, then faults in its own dispatch path at 0x436c9d on both backends.
-The failing context belongs to a modal dialog whose required WinDlgBox service
-is unavailable. This startup result does not qualify the other suite components
-or the document save/reopen workflow.
+With its installer settings supplied separately, Word Pro creates its actual
+welcome dialog on native and Unicorn. Its push buttons render through the font
+HAL and respond to real pointer input. Cancel dismisses the dialog through its
+normal window procedure. Create a Plain Document advances into Word Pro
+Preferences, whose additional control requirements exceed the current subset.
+This startup result does not qualify other suite components or document
+creation, saving and reopening.
 
 ## Profiles and Open32 settings
 
@@ -148,3 +147,29 @@ an application's text editing or document rendering.
 
 Window registries and message queues currently belong to the calling PM thread;
 cross-thread window lookup, synchronous sends and queue posts are unavailable.
+
+## Dialog and basic control subset
+
+PM loads packed, codepage-437 dialog resources or checked in-memory templates,
+creates their frame/child hierarchy and sends WM_INITDLG. Modal processing
+disables an enabled owner, dispatches queued messages, retains state across
+nested or reentrant destruction, restores the owner and reposts WM_QUIT.
+Dismissal hides the window; WinDlgBox destroys it after its modal loop returns.
+The SDK's QWS_FLAGS/FF_DLGDISMISSED and QWS_RESULT words track this state.
+Clearing FF_DLGDISMISSED permits another modal run. Child and owned windows
+receive destruction notifications before their parent or owner.
+
+The stock control subset includes text push buttons, single-line text/frame
+statics, and text lists with insertion, removal, queries, item handles and
+selection state. Lists support single-click selection; modifier-key selection,
+scrollbars, owner drawing and full keyboard navigation are unavailable.
+Push buttons post normal WM_COMMAND messages to their owner. Window text is
+stored as owned strings and queried with bounded, NUL-terminated copies.
+Portable subclassing returns a callable guest procedure for stock controls.
+Checkboxes, entry fields, combo boxes and complete frame/menu controls remain
+unavailable. Unsupported controls do not receive fabricated successful handles.
+
+Glyph masks are composited by the host HAL with clipping and coverage alpha.
+This control rendering does not supply GPI text output or complete dialog text
+layout. The current-thread WinPostQueueMsg and NULL-window WinPostMsg paths
+support modal queue messages; cross-thread posting remains unavailable.

@@ -52,6 +52,9 @@ typedef struct Window
         window_class_name; /* Retain the creation-time class for diagnostics; styles and procedures can vary. */
     char *text;
     PmPresentationParameter *parameters;
+    struct PmDialog *dialog;
+    struct PmControl *control;
+    BOOL destroying;
     void *data;
     size_t data_len;
     ULONG id;
@@ -101,6 +104,7 @@ typedef struct PmTimer
 typedef struct
 {
     struct PmWindowEnumeration *enumerations;
+    LxGuestMapping *control_bridge;
     PmTimer *timers;
     HAB hab;
     ERRORID last_error;
@@ -124,6 +128,7 @@ LX_PRIVATE const char *messageName(const ULONG msg);
 LX_PRIVATE WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname);
 LX_PRIVATE ULONG currentSystemTicks(void);
 LX_PRIVATE PFNWP defaultGuestWindowProc(void);
+LX_PRIVATE PFNWP defaultGuestDialogProc(void);
 LX_PRIVATE MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2);
 LX_PRIVATE BOOL destroyMessageQueue(AnchorBlock *anchor);
 LX_PRIVATE void destroyWindow(AnchorBlock *anchor, Window *win);
@@ -142,4 +147,12 @@ LX_PRIVATE void calcHeavyweightRect(const Window *win, LxHostRect *rect);
 LX_PRIVATE int pumpTimers(AnchorBlock *anchor);
 LX_PRIVATE MRESULT sendCreateMessage(Window *window, const CREATESTRUCT *creation);
 LX_PRIVATE MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position);
+LX_PRIVATE void destroyDialog(Window *window);
+LX_PRIVATE BOOL initializeDialog(Window *window);
+LX_PRIVATE BOOL initializeDialogProcedure(HWND window, HWND focus, PVOID parameters);
+LX_PRIVATE void dialogWordChanged(Window *window, LONG index, USHORT value);
+LX_PRIVATE void destroyControl(Window *window);
+LX_PRIVATE MRESULT controlProcedure(HWND window, ULONG message, MPARAM first, MPARAM second);
+LX_PRIVATE HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data,
+                             size_t size, PVOID parameters);
 #endif

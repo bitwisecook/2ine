@@ -78,6 +78,13 @@ int main(void)
     uint8_t r, g, b;
     CHECK(lx_host_window_pixel(window, 2, 3, &r, &g, &b));
     CHECK(r == 64 && g == 128 && b == 192);
+    uint8_t mask[3] = {0, 128, 255};
+    CHECK(lx_host_window_mask(window, &clip, 2, 3, 3, 1, mask, 255, 0, 0));
+    CHECK(lx_host_window_pixel(window, 2, 3, &r, &g, &b) && r == 64 && g == 128 && b == 192);
+    CHECK(lx_host_window_pixel(window, 3, 3, &r, &g, &b) && r >= 158 && r <= 160 && g >= 63 &&
+          g <= 64 && b >= 95 && b <= 96);
+    CHECK(lx_host_window_pixel(window, 4, 3, &r, &g, &b) && r == 255 && g == 0 && b == 0);
+    CHECK(lx_host_window_title(window, "2ine mask test"));
     CHECK(lx_host_window_present(window));
     lx_host_window_show(window);
     uint64_t before_event = lx_host_video_ticks_ms();
