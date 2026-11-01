@@ -4,6 +4,46 @@ A bottle holds an application's OS/2 drives, configuration, installed files,
 profiles, registry and saved launch commands. It uses the same loader and API
 modules as an ordinary 2ine run. Python 3.11 or newer is required for the manager.
 
+## GNOME application
+
+The native GTK 4/libadwaita manager runs on Ubuntu 26.04 or newer. Install its
+system dependencies and launch it from this checkout:
+
+```sh
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
+/usr/bin/python3 tools/gnome_bottles.py --build "$PWD/build-portable"
+```
+
+Use **+** to create a bottle, or the folder button to open an existing bottle.
+**Runtime…** chooses the build folder containing `lx_loader`; this choice and
+opened bottles are remembered. **Drives** maps installation-media folders.
+**Applications** runs an installer or executable and saves application launchers.
+Executable paths must be inside a mapped drive. The arguments field accepts
+quoted values such as `"a value with spaces"`; no shell is invoked.
+Backslashes in OS/2 paths are retained literally.
+
+**Settings** selects the execution backend, tracing, beep volume and environment
+overrides, and provides a CONFIG.SYS editor. Resetting a variable restores its
+inherited value. Profiles and the registry persist in the same bottle as CLI
+launches; this manager does not provide a registry or binary-profile editor.
+**Activity** shows the running operation, its final exit code and the last 64 KiB
+of output. Full output is saved under `logs/desktop-*.log`; installer receipts
+retain the CLI format. One operation runs at a time in the manager. Close the
+guest application's windows before closing the manager.
+
+Install the launcher and icon in the current user's application menu:
+
+```sh
+python3 tools/install_gnome.py
+```
+
+The launcher refers to this checkout, which must remain in place. The GTK GUI
+uses asynchronous subprocesses to invoke `tools/bottles.py`, so installations
+and application execution leave the interface's event loop responsive. Its
+preferences live in `$XDG_CONFIG_HOME/2ine/bottles-gnome.json`.
+
+## Command line
+
 Create a bottle and map extracted installation media:
 
 ```sh
@@ -48,9 +88,11 @@ Configure settings and register an installed application:
 python3 tools/bottles.py --bottle bottles/office config system.beep_volume 0.03
 python3 tools/bottles.py --bottle bottles/office config runtime.backend unicorn
 python3 tools/bottles.py --bottle bottles/office config env.LANG en_US
+python3 tools/bottles.py --bottle bottles/office unset env.LANG
 python3 tools/bottles.py --bottle bottles/office add-app WordPro 'C:\LOTUSW4\WORDPRO\WORDPRO.EXE'
 python3 tools/bottles.py --bottle bottles/office --build build launch WordPro
 python3 tools/bottles.py --bottle bottles/office apps
+python3 tools/bottles.py --bottle bottles/office remove-app WordPro
 python3 tools/bottles.py --bottle bottles/office show
 python3 tools/bottles.py --bottle bottles/office unmap D
 ```

@@ -332,6 +332,8 @@ def main(argv=None):
     app.add_argument("name")
     app.add_argument("program")
     app.add_argument("arguments", nargs=argparse.REMAINDER)
+    remove = sub.add_parser("remove-app", help="remove a saved launcher without deleting files")
+    remove.add_argument("name")
     launch = sub.add_parser("launch", help="run a saved application")
     launch.add_argument("name")
     launch.add_argument("arguments", nargs=argparse.REMAINDER)
@@ -345,6 +347,8 @@ def main(argv=None):
     )
     setting.add_argument("key")
     setting.add_argument("value")
+    unset = sub.add_parser("unset", help="restore an inherited setting or environment variable")
+    unset.add_argument("key")
     for name in ("run", "install"):
         launch = sub.add_parser(name, help="run an original guest executable inside the bottle")
         launch.add_argument("--cwd", help="guest or mapped host working directory")
@@ -381,6 +385,9 @@ def main(argv=None):
             args.arguments = [*app["arguments"], *args.arguments]
             args.cwd = None
             return run(args, bottle, data)
+        elif args.action == "remove-app":
+            data.get("applications", {}).pop(args.name, None)
+            save(bottle / "bottle.json", data)
         elif args.action in ("map", "unmap"):
             letter = args.drive.upper().rstrip(":")
             if letter not in string.ascii_uppercase or len(letter) != 1 or letter == "C":
@@ -391,13 +398,17 @@ def main(argv=None):
                 data["drives"].pop(letter, None)
             write_config(bottle, data)
             save(bottle / "bottle.json", data)
-        elif args.action == "config":
+        elif args.action in ("config", "unset"):
             group, _, key = args.key.partition(".")
             if group not in ("env", "system", "runtime") or not key:
                 raise ValueError("use env.NAME, system.NAME or runtime.backend")
             if group == "runtime" and key != "backend":
                 raise ValueError("unknown runtime setting")
-            data.setdefault("environment" if group == "env" else group, {})[key] = args.value
+            settings = data.setdefault("environment" if group == "env" else group, {})
+            if args.action == "unset":
+                settings.pop(key, None)
+            else:
+                settings[key] = args.value
             environment(bottle, data, args.build.resolve(), args.backend)
             write_config(bottle, data)
             save(bottle / "bottle.json", data)

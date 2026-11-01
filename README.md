@@ -40,3 +40,5 @@ Raise an issue on GH or find a way to contact me.
 
 Use [bottles](docs/bottles.md) to keep application installations, drive mappings,
 profiles, registry and launch settings in separate persistent environments.
+The [native GNOME manager](docs/bottles.md#gnome-application) provides bottle creation,
+configuration, installer execution and saved application launchers on Ubuntu 26.04+.

@@ -22,6 +22,23 @@ class BottleTests(unittest.TestCase):
         bottles.init(self.bottle)
         self.data = bottles.load(self.bottle)
 
+    def test_reset_settings_and_remove_launcher_preserve_installation(self):
+        self.data["environment"]["LANG"] = "de_DE"
+        self.data["runtime"]["backend"] = "unicorn"
+        self.data["applications"]["Editor"] = {"program": r"C:\OS2\EDITOR.EXE", "arguments": []}
+        program = self.bottle / "drive_c/OS2/EDITOR.EXE"
+        program.write_bytes(b"installed")
+        bottles.save(self.bottle / "bottle.json", self.data)
+        base = ["--bottle", str(self.bottle)]
+        self.assertEqual(bottles.main([*base, "unset", "env.LANG"]), 0)
+        self.assertEqual(bottles.main([*base, "unset", "runtime.backend"]), 0)
+        self.assertEqual(bottles.main([*base, "remove-app", "Editor"]), 0)
+        data = bottles.load(self.bottle)
+        self.assertEqual(data["environment"], {})
+        self.assertEqual(data["runtime"], {})
+        self.assertEqual(data["applications"], {})
+        self.assertEqual(program.read_bytes(), b"installed")
+
     def test_persistence_and_distinct_profiles(self):
         second = self.root / "two"
         bottles.init(second)
