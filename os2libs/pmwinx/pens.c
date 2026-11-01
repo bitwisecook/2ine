@@ -3,6 +3,7 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include <math.h>
 typedef struct Open32Pen
 {
     LONG style, width;
@@ -400,4 +401,192 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     if (!result)
         open32SetError(87);
     return result;
+}
+
+static int compare_crossings(const void *a, const void *b)
+{
+    double left = *(const double *)a, right = *(const double *)b;
+    return left < right ? -1 : left > right;
+}
+static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL filled)
+{
+    TRACE_NATIVE("GDI path(%u, %p, %d, %u, %u)", handle, input, count, closed, filled);
+    Open32DC *dc = open32FindDC(handle);
+    Open32Pen *pen = dc ? dc->pen.resource : NULL;
+    if (!dc || !pen || !open32CanDraw(handle) || !input || count < 2 || count > 65536)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    POINTL *points = malloc((size_t)count * sizeof *points);
+    double *crossings = malloc((size_t)count * sizeof *crossings);
+    if (!points || !crossings)
+    {
+        free(points);
+        free(crossings);
+        open32SetError(8);
+        return FALSE;
+    }
+    int64_t left = INT32_MAX, top = INT32_MAX, right = INT32_MIN, bottom = INT32_MIN;
+    for (LONG i = 0; i < count; i++)
+    {
+        const uint8 *wire = (const uint8 *)input + i * 8;
+        points[i] = (POINTL){(LONG)lx_guest_load_u32(wire), (LONG)lx_guest_load_u32(wire + 4)};
+        if (points[i].x < left)
+            left = points[i].x;
+        if (points[i].x > right)
+            right = points[i].x;
+        if (points[i].y < top)
+            top = points[i].y;
+        if (points[i].y > bottom)
+            bottom = points[i].y;
+    }
+    LONG diameter = pen->width ? pen->width : 1, before = (diameter - 1) / 2, after = diameter / 2;
+    BOOL valid = right - left <= 65536 && bottom - top <= 65536;
+    uint64 work = 0;
+    LONG segments = closed ? count : count - 1;
+    for (LONG i = 0; valid && i < segments && pen->style != 5; i++)
+    {
+        POINTL a = points[i], b = points[(i + 1) % count];
+        uint64 dx = (uint64)llabs((int64_t)a.x - b.x), dy = (uint64)llabs((int64_t)a.y - b.y);
+        work += (dx > dy ? dx : dy) * diameter * diameter;
+        valid = work <= 67108864;
+    }
+    left -= before;
+    top -= before;
+    right += after + 1;
+    bottom += after + 1;
+    LONG canvas_width = open32DCWidth(handle), canvas_height = open32DCHeight(handle);
+    if (left < 0)
+        left = 0;
+    if (top < 0)
+        top = 0;
+    if (right > canvas_width)
+        right = canvas_width;
+    if (bottom > canvas_height)
+        bottom = canvas_height;
+    if (!valid || (bottom > top && (uint64)(bottom - top) * (ULONG)count > 67108864))
+    {
+        free(points);
+        free(crossings);
+        open32SetError(8);
+        return FALSE;
+    }
+    if (left >= right || top >= bottom)
+    {
+        free(points);
+        free(crossings);
+        return TRUE;
+    }
+    size_t width = (size_t)(right - left), height = (size_t)(bottom - top), area = width * height;
+    uint8 *coverage = area <= 16777216 ? calloc(area, 1) : NULL;
+    uint32 *pixels = coverage ? malloc(area * sizeof *pixels) : NULL;
+    if (!coverage || !pixels)
+    {
+        free(points);
+        free(crossings);
+        free(coverage);
+        free(pixels);
+        open32SetError(8);
+        return FALSE;
+    }
+    for (LONG y = (LONG)top; filled && y < bottom; y++)
+    {
+        unsigned n = 0;
+        double scan = y + 0.5;
+        for (LONG i = 0; i < count; i++)
+        {
+            POINTL a = points[i], b = points[(i + 1) % count];
+            if ((a.y <= scan && b.y > scan) || (b.y <= scan && a.y > scan))
+                crossings[n++] = a.x + (scan - a.y) * ((double)b.x - a.x) / ((double)b.y - a.y);
+        }
+        qsort(crossings, n, sizeof *crossings, compare_crossings);
+        for (unsigned i = 0; i + 1 < n; i += 2)
+        {
+            int64_t begin = (int64_t)ceil(crossings[i] - 0.5),
+                    end = (int64_t)ceil(crossings[i + 1] - 0.5);
+            if (begin < left)
+                begin = left;
+            if (end > right)
+                end = right;
+            for (int64_t x = begin; x < end; x++)
+                coverage[(size_t)(bottom - 1 - y) * width + (size_t)(x - left)] = 1;
+        }
+    }
+    uint64 step = 0;
+    for (LONG i = 0; i < segments && pen->style != 5; i++)
+    {
+        POINTL a = points[i], b = points[(i + 1) % count];
+        int64_t x = a.x, y = a.y, dx = llabs((int64_t)b.x - a.x), dy = llabs((int64_t)b.y - a.y),
+                error = dx - dy;
+        LONG sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1;
+        while (x != b.x || y != b.y)
+        {
+            uint8 value = dash_pixel(pen->style, step++) ? 2 : dc->background_mode == 2 ? 3 : 0;
+            if (value)
+                for (LONG oy = -before; oy <= after; oy++)
+                    for (LONG ox = -before; ox <= after; ox++)
+                    {
+                        LONG cx = 2 * (ox + before) - diameter + 1,
+                             cy = 2 * (oy + before) - diameter + 1;
+                        if (diameter > 1 && cx * cx + cy * cy > diameter * diameter)
+                            continue;
+                        int64_t px = x + ox, py = y + oy;
+                        if (px >= left && px < right && py >= top && py < bottom)
+                            coverage[(size_t)(bottom - 1 - py) * width + (size_t)(px - left)] =
+                                value;
+                    }
+            int64_t twice = error * 2;
+            if (twice > -dy)
+            {
+                error -= dy;
+                x += sx;
+            }
+            if (twice < dx)
+            {
+                error += dx;
+                y += sy;
+            }
+        }
+    }
+    BOOL result = lx_pm_raster_read(handle, (LONG)left, canvas_height - (LONG)bottom,
+                                    (unsigned)width, (unsigned)height, pixels);
+    static const LONG mixes[] = {0, 9, 10, 7, 14, 8, 12, 4, 16, 6, 11, 5, 15, 2, 13, 1, 17};
+    if (result)
+    {
+        for (size_t i = 0; i < area; i++)
+        {
+            uint32 rgb;
+            if (!coverage[i])
+                continue;
+            if (coverage[i] == 1)
+            {
+                if (!open32BrushPixel(dc, (LONG)(left + i % width), (LONG)(bottom - 1 - i / width),
+                                      &rgb))
+                    continue;
+            }
+            else
+            {
+                ULONG color = coverage[i] == 2 ? pen->color : dc->background_color;
+                rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+            }
+            pixels[i] = lx_pm_mix_pixel(rgb, pixels[i], mixes[dc->rop2]);
+        }
+        result = lx_pm_raster_write(handle, (LONG)left, canvas_height - (LONG)bottom,
+                                    (unsigned)width, (unsigned)height, pixels);
+    }
+    free(points);
+    free(crossings);
+    free(coverage);
+    free(pixels);
+    return result;
+}
+
+BOOL Polygon(ULONG handle, PVOID input, LONG count)
+{
+    return draw_path(handle, input, count, TRUE, TRUE);
+}
+BOOL Polyline(ULONG handle, PVOID input, LONG count)
+{
+    return draw_path(handle, input, count, FALSE, FALSE);
 }

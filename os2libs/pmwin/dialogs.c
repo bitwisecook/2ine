@@ -297,7 +297,7 @@ HWND WinLoadDlg(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG 
         !GLoaderState.freeResource || GLoaderState.queryResourceSize(module, 4, id, &size) ||
         GLoaderState.getResource(module, 4, id, &data))
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
-    HWND result = createDialog(parent, owner, procedure, data, size, parameters);
+    HWND result = createDialog(parent, owner, procedure, data, size, parameters, module);
     GLoaderState.freeResource(data);
     return result;
 }
@@ -323,7 +323,7 @@ ULONG WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG 
 HWND WinCreateDlg(HWND parent, HWND owner, PFNWP procedure, PDLGTEMPLATE data, PVOID parameters)
 {
     return data ? createDialog(parent, owner, procedure, (const uint8 *)data, data->cbTemplate,
-                               parameters)
+                               parameters, 0)
                 : 0;
 }
 MRESULT WinDefDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)

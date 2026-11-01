@@ -177,18 +177,20 @@ APIRET DosFreeModule(HMODULE hmod)
     return result;
 }
 
-APIRET DosQueryModFromEIP(PHMODULE phmod, PCHAR pszModName, ULONG cbModName, PULONG pulOffset,
-                          PULONG pulObject, ULONG ulEIP)
+APIRET DosQueryModFromEIP(PHMODULE phmod, PULONG pulObject, ULONG cbModName, PCHAR pszModName,
+                          PULONG pulOffset, ULONG ulEIP)
 {
-    TRACE_NATIVE("DosQueryModFromEIP(%p, %p, %u, %p, %p, %08X)", phmod, pszModName, (uint)cbModName,
-                 pulOffset, pulObject, (uint)ulEIP);
+    TRACE_NATIVE("DosQueryModFromEIP(%p, %p, %u, %p, %p, %08X)", phmod, pulObject, (uint)cbModName,
+                 pszModName, pulOffset, (uint)ulEIP);
 
     for (LxModule *lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next)
     {
         for (uint32 i = 0; i < lxmod->num_mmaps; i++)
         {
-            const uint32 base = (uint32)(size_t)lxmod->mmaps[i].addr;
-            const uint32 end = base + (uint32)lxmod->mmaps[i].size;
+            const uint32 base = lxmod->mmaps[i].mapping
+                                    ? lx_execution_mapping_address(lxmod->mmaps[i].mapping)
+                                    : (uint32)(size_t)lxmod->mmaps[i].addr;
+            const uint64 end = (uint64)base + lxmod->mmaps[i].size;
             if ((ulEIP >= base) && (ulEIP < end))
             {
                 if (phmod)

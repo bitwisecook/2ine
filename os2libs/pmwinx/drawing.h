@@ -10,14 +10,17 @@ typedef struct Open32DC
     BOOL foreign_window;
     ULONG kind, default_bitmap, text_color, background_color;
     LONG background_mode;
+    ULONG text_alignment;
     ULONG font_handle;
     LxHandleBorrow font, brush, palette, pen;
     ULONG pen_handle;
     LONG position_x, position_y, rop2;
     ULONG palette_handle, clip_region;
     ULONG brush_handle;
+    LONG brush_origin_x, brush_origin_y;
     struct Open32DC *next;
 } Open32DC;
+BOOL open32BrushPixel(Open32DC *dc, LONG x, LONG y, uint32 *rgb);
 Open32DC *open32FindDC(ULONG handle);
 BOOL open32CanDraw(ULONG handle);
 LONG open32DCHeight(ULONG handle);

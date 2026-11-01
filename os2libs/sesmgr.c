@@ -161,7 +161,7 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     if (data->TermQ && *data->TermQ)
     {
         PID owner;
-        APIRET result = DosOpenQueue(&owner, &session->queue, (PSZ)data->TermQ);
+        APIRET result = lx_queue_open_writer(&owner, &session->queue, (PSZ)data->TermQ);
         if (result)
         {
             destroy_session(session);

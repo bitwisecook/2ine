@@ -1,0 +1,22 @@
+{
+  "scope": "Stock Warp 4.52 DOSCALLS/QUECALLS, default process",
+  "probes": [
+    "queueq.c FIFO",
+    "queueq.c PRIORITY"
+  ],
+  "observations": {
+    "invalid_order_3": 87,
+    "invalid_name": 335,
+    "case_insensitive_duplicate": 332,
+    "same_process_open": "returns existing queue handle and owner PID",
+    "fifo_priority": "ignored, read priority is zero",
+    "priority_16": "accepted and clamped to 15",
+    "nonblocking_without_event": 87,
+    "peek_cursor": "zero selects head; returned cursor selects successor on next peek",
+    "empty_nonblocking_with_event": 342,
+    "close_open_handle": "invalidates creator handle and removes name",
+    "closed_handle": 337,
+    "open_missing_name": 343
+  },
+  "primary_reference": "https://www.bitsavers.org/pdf/ibm/pc/os2/OS2_2.x/IBM_OS2_2.0_Technical_Library_1992/S10G-6263-00_OS2_2.0_Control_Program_Programming_Reference_199203.pdf"
+}

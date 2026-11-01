@@ -142,6 +142,7 @@ void *lx_execution_prepare_thread32(LxExecution *execution, uint32_t entry, uint
 void lx_execution_thread32(LxExecution *execution, void *invocation);
 void lx_execution_destroy_thread32(LxExecution *execution, void *invocation);
 
+void lx_execution_cleanup_thread32(LxExecution *execution);
 int lx_execution_end_thread(LxExecution *execution);
 /* Four stack words and a 32-bit result; nested calls preserve the suspended CPU state. */
 uint32_t lx_execution_callback32_4(LxExecution *execution, uint32_t entry, uint32_t a, uint32_t b,

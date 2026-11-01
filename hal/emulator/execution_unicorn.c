@@ -4,6 +4,7 @@
 #include "cpu.h"
 #include "guest/abi.h"
 #include "hal/host_sync.h"
+#include "hal/host_thread.h"
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -349,19 +350,21 @@ static void bindThreadWindow(EmulatedState *s)
 static uint32_t invoke(LxCpuRegisters registers, int preserve)
 {
     EmulatedState *s = Emulated;
-    Invocation frame = {0};
-    frame.outer = Active;
-    Active = &frame;
+    Invocation *frame = calloc(1, sizeof *frame);
+    if (!frame)
+        failure("Out of memory");
+    frame->outer = Active;
+    Active = frame;
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
-    if (!lx_cpu_restore(s->cpu, frame.outer ? frame.outer->context : s->initial) ||
+    if (!lx_cpu_restore(s->cpu, frame->outer ? frame->outer->context : s->initial) ||
         !lx_cpu_set_registers(s->cpu, &registers))
         failure(lx_cpu_error(s->cpu));
-    replaceContext(&frame);
+    replaceContext(frame);
     lx_host_mutex_unlock(s->mutex);
     for (;;)
     {
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
-        if (!lx_cpu_restore(s->cpu, frame.context))
+        if (!lx_cpu_restore(s->cpu, frame->context))
             failure(lx_cpu_error(s->cpu));
         bindThreadWindow(s);
         /* Bound cooperative slices at translated-block boundaries. Counting
@@ -369,8 +372,9 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         LxCpuEvent event = lx_cpu_run_blocks(s->cpu, 4096);
         if (!lx_cpu_get_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
-        replaceContext(&frame);
+        replaceContext(frame);
         lx_host_mutex_unlock(s->mutex);
+        lx_host_thread_test_cancel();
         if (event.reason == LX_CPU_BUDGET)
             continue;
         if (event.reason == LX_CPU_TRAP && event.vector == RETURN_VECTOR)
@@ -451,7 +455,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             failure("API frame address overflows");
         uint8_t eax_frame[4];
         lx_guest_store_u32(eax_frame, registers.eax);
-        LxGuestBorrow *arguments = &frame.arguments;
+        LxGuestBorrow *arguments = &frame->arguments;
         uint8_t *args = eax_frame;
         if (b->convention != LX_ABI_EAX32)
         {
@@ -460,32 +464,34 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
                 failure(lx_execution_error(s->execution));
             args = arguments->host;
         }
-        frame.api_arguments = b->convention == LX_ABI_EAX32 ? 0 : (uint32_t)frame_address;
-        frame.api_registers = &registers;
+        frame->api_arguments = b->convention == LX_ABI_EAX32 ? 0 : (uint32_t)frame_address;
+        frame->api_registers = &registers;
+        lx_host_thread_test_cancel();
         registers.eax = b->callback(args);
-        frame.api_registers = NULL;
-        frame.api_arguments = 0;
+        frame->api_registers = NULL;
+        frame->api_arguments = 0;
         lx_execution_release(arguments);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
-        if (!lx_cpu_restore(s->cpu, frame.context) || !lx_cpu_set_registers(s->cpu, &registers))
+        if (!lx_cpu_restore(s->cpu, frame->context) || !lx_cpu_set_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
-        replaceContext(&frame);
+        replaceContext(frame);
         lx_host_mutex_unlock(s->mutex);
     }
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
     if (preserve)
     {
         lx_cpu_context_free(s->completed_main.context);
-        s->completed_main.context = frame.context;
+        s->completed_main.context = frame->context;
         s->completed_main.outer = NULL;
         Active = &s->completed_main;
     }
     else
     {
-        lx_cpu_context_free(frame.context);
-        Active = frame.outer;
+        lx_cpu_context_free(frame->context);
+        Active = frame->outer;
     }
     lx_host_mutex_unlock(s->mutex);
+    free(frame);
     return registers.eax;
 }
 static LxCpuRegisters initialRegisters(void)
@@ -709,10 +715,8 @@ static void thread32(void *invocation)
     ThreadReturn = outer_return;
     ThreadOuter = outer_frame;
 }
-static int endThread(void)
+static void cleanupThread32(void)
 {
-    if (!ThreadReturn)
-        return 0;
     while (Active != ThreadOuter)
     {
         Invocation *frame = Active;
@@ -721,9 +725,17 @@ static int endThread(void)
         lx_cpu_context_free(frame->context);
         Active = frame->outer;
         lx_host_mutex_unlock(Emulated->mutex);
+        free(frame);
     }
+}
+static int endThread(void)
+{
+    if (!ThreadReturn)
+        return 0;
+    cleanupThread32();
     longjmp(*ThreadReturn, 1);
 }
+
 static void *missing(const char *module, const char *entry, unsigned bits, LxExecutionBridge *b)
 {
     uint16_t selector;
@@ -893,15 +905,45 @@ static int apiRegisters32(LxExecutionRegisters32 *out)
     out->ss = r->ss;
     return 1;
 }
-const LxExecutionOperations lx_execution_unicorn = {
-    "unicorn",     initialize,      destroy,     program,
-    library,       prepareThread,   thread16,    free,
-    callback,      attachTib,       currentTib,  detachTib,
-    allocSegment,  freeSegment,     codeAlias,   findSelector,
-    freeSelector,  farToHost,       hostToFar,   stackSegments,
-    nearBase,      flatCode,        prepareCode, missing,
-    emitBridge16,  atomicU32,       NULL,        0,
-    map,           unmap,           protect,     emitBridge32,
-    copyOut,       prepareThread32, thread32,    free,
-    endThread,     copyIn,          callback4,   apiArguments,
-    apiRegisters32};
+const LxExecutionOperations lx_execution_unicorn = {"unicorn",
+                                                    initialize,
+                                                    destroy,
+                                                    program,
+                                                    library,
+                                                    prepareThread,
+                                                    thread16,
+                                                    free,
+                                                    callback,
+                                                    attachTib,
+                                                    currentTib,
+                                                    detachTib,
+                                                    allocSegment,
+                                                    freeSegment,
+                                                    codeAlias,
+                                                    findSelector,
+                                                    freeSelector,
+                                                    farToHost,
+                                                    hostToFar,
+                                                    stackSegments,
+                                                    nearBase,
+                                                    flatCode,
+                                                    prepareCode,
+                                                    missing,
+                                                    emitBridge16,
+                                                    atomicU32,
+                                                    NULL,
+                                                    0,
+                                                    map,
+                                                    unmap,
+                                                    protect,
+                                                    emitBridge32,
+                                                    copyOut,
+                                                    prepareThread32,
+                                                    thread32,
+                                                    free,
+                                                    endThread,
+                                                    copyIn,
+                                                    callback4,
+                                                    apiArguments,
+                                                    apiRegisters32,
+                                                    cleanupThread32};

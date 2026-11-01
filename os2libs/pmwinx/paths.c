@@ -65,3 +65,24 @@ BOOL SetCurrentDirectory(PSZ name)
         open32SetError(error);
     return error == 0;
 }
+
+ULONG GetFileAttributes(PSZ name)
+{
+    TRACE_NATIVE("GetFileAttributes('%s')", name);
+    if (!name || !*name)
+    {
+        open32SetError(name ? 3 : 87);
+        return UINT32_MAX;
+    }
+    typedef APIRET(OS2API * QueryFn)(PSZ, ULONG, PVOID, ULONG);
+    QueryFn query = (QueryFn)open32DosService("DosQueryPathInfo");
+    FILESTATUS3 information = {0};
+    ULONG error = query ? query(name, FIL_STANDARD, &information, sizeof information) : 120;
+    if (error)
+    {
+        open32SetError(error);
+        return UINT32_MAX;
+    }
+    ULONG attributes = information.attrFile & 0x37;
+    return attributes ? attributes : 0x80;
+}

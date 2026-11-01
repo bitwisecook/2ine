@@ -80,6 +80,14 @@ LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument, void
     }
     return thread;
 }
+LxHostCancelResult lx_host_thread_cancel(LxHostThread *thread)
+{
+    return pthread_cancel(thread->object) ? LX_HOST_CANCEL_FAILED : LX_HOST_CANCEL_OK;
+}
+void lx_host_thread_test_cancel(void)
+{
+    pthread_testcancel();
+}
 int lx_host_thread_join(LxHostThread *thread, void **result)
 {
     int error = pthread_join(thread->object, result);

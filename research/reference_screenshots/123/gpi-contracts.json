@@ -1,0 +1,77 @@
+{
+  "source": "Stock Warp 4.52 WinGetScreenPS, independently compiled gpiquery.exe, private overlay",
+  "default_character_angle": [
+    0,
+    0
+  ],
+  "default_character_shear": [
+    0,
+    0
+  ],
+  "default_text_alignment": [
+    0,
+    0
+  ],
+  "default_character_direction": 0,
+  "direction_values": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "alignment_horizontal_values": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "alignment_vertical_sample_values": [
+    0,
+    256,
+    512,
+    768,
+    1024,
+    1280
+  ],
+  "spooler": {
+    "probe": "splquery.exe",
+    "enum_levels": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "enum_status": 0,
+    "returned": 0,
+    "total": 0,
+    "needed": 0,
+    "missing_named_queue_status": 2150
+  },
+  "scrollbar": {
+    "probe": "scrollq.exe, original PMWINX dynamically loaded via caller-cleaned exports",
+    "default_control_range": [
+      0,
+      0
+    ],
+    "raw_sbm_setrange_status": 1,
+    "raw_sbm_setrange_did_not_clamp_position": true
+  },
+  "character_case": {
+    "probe": "charcase.exe calls original CharUpper/CharLower for byte values0..255",
+    "scope": "Default United States process code page; CP437-style mappings observed",
+    "upper_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f604142434445464748494a4b4c4d4e4f505152535455565758595a7b7c7d7e7f809a45418e418f804545454949498e8f9092924f994f555559999a9b9c9d9e9f41494f55a5a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+    "lower_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f406162636465666768696a6b6c6d6e6f707172737475767778797a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f878182838485868788898a8b8c8d848690919193949596979894819b9c9d9e9fa0a1a2a3a4a4a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedfe0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff"
+  },
+  "lstrcmpi": {
+    "scope": "Stock Warp 4.52 PMWINX ordinal 480, default process locale, 65536 single-byte pairs",
+    "normalization": "ASCII lowercase a-z to uppercase; other bytes unchanged",
+    "return": "normalized first differing unsigned byte minus normalized second byte",
+    "measurement_sha256": "880a843108203b3e5af565391c6b0db57fe719bf4dab4d7281e5229da30f39f6"
+  }
+}
