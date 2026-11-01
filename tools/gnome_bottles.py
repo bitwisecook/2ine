@@ -112,7 +112,7 @@ class BottleWindow(Adw.ApplicationWindow):
         self.split.set_content(self.detail)
         if initial:
             self.remember(initial.resolve())
-        self.refresh(initial)
+        self.refresh(initial.resolve() if initial else None)
 
     def close_requested(self, *_):
         if self.process:

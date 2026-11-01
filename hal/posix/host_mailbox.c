@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* File locks serialize mailbox records across independent worker processes. */
 #define _POSIX_C_SOURCE 200809L
+#define _DARWIN_C_SOURCE 1
 #include "hal/host_mailbox.h"
 #include <sys/file.h>
 #include <sys/stat.h>
