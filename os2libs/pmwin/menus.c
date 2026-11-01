@@ -384,7 +384,7 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
             WinInvalidateRect(handle, NULL, FALSE);
             return 0;
         }
-        if ((p & 2) && key == 0x1e)
+        if ((p & 2) && (key == 0x1e || key == 8))
         {
             menu_activate(window, menu->selected);
             return 0;

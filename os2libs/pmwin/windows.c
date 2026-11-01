@@ -746,6 +746,9 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
                hwnd,
                0,
                0};
+    if (!prepareFrameState(win, &swp))
+        return FALSE;
+    flags = swp.fl;
     if (!(flags & SWP_NOADJUST))
         sendWindowPos(win, WM_ADJUSTWINDOWPOS, &swp);
     LONG oldw = win->w, oldh = win->h;
@@ -784,6 +787,11 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
                 WinSetWindowPos(child->hwnd, HWND_BOTTOM, 0, 0, win->w, win->h - menu_height,
                                 SWP_MOVE | SWP_SIZE | SWP_SHOW);
     }
+    if (oldw != win->w || oldh != win->h)
+        for (Window *child = win->children; child; child = child->sibling)
+            if (child->style & WS_MAXIMIZED)
+                WinSetWindowPos(child->hwnd, HWND_TOP, 0, 0, win->w, win->h,
+                                SWP_MOVE | SWP_SIZE | SWP_NOADJUST);
     if (!(flags & SWP_NOREDRAW) && (flags & (SWP_SIZE | SWP_SHOW)))
         postExposedMessages(anchor, win, currentSystemTicks());
     if (flags & SWP_ACTIVATE)
@@ -797,7 +805,9 @@ BOOL WinQueryWindowPos(HWND hwnd, PSWP position)
     Window *win = anchor ? getWindowFromHWND(anchor, hwnd) : NULL;
     if (!win || !position)
         return FALSE;
-    *position = (SWP){(win->style & WS_VISIBLE) ? SWP_SHOW : SWP_HIDE,
+    *position = (SWP){((win->style & WS_VISIBLE) ? SWP_SHOW : SWP_HIDE) |
+                          ((win->style & WS_MAXIMIZED) ? SWP_MAXIMIZE : 0) |
+                          ((win->style & WS_MINIMIZED) ? SWP_MINIMIZE : 0),
                       win->h,
                       win->w,
                       win->y,

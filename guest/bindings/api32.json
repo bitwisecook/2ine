@@ -1019,6 +1019,11 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "GpiPolyLine": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "GpiLine": {
       "argument_bytes": 8,
       "callee_pop": 0,
@@ -1279,6 +1284,16 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "GpiSetPatternRefPoint": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryPatternRefPoint": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "GpiQueryPatternSet": {
       "argument_bytes": 4,
       "callee_pop": 0,
@@ -1388,6 +1403,31 @@
       "argument_bytes": 16,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryColor": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryLogColorTable": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetCharMode": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryCharMode": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiConvert": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmwinx": {
@@ -1433,6 +1473,26 @@
     },
     "WinXProcessMsg": {
       "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegOpenKey": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegCreateKey": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegDeleteValue": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegEnumValue": {
+      "argument_bytes": 32,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

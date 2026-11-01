@@ -79,14 +79,18 @@ LONG GpiSavePS(HPS handle)
     s->line_type = ps->line_type;
     s->pattern_set = ps->pattern_set;
     s->pattern = ps->pattern;
+    s->pattern_reference = ps->pattern_reference;
     memcpy(s->primitive_color, ps->primitive_color, sizeof s->primitive_color);
     memcpy(s->primitive_back, ps->primitive_back, sizeof s->primitive_back);
     memcpy(s->primitive_mix, ps->primitive_mix, sizeof s->primitive_mix);
     memcpy(s->primitive_back_mix, ps->primitive_back_mix, sizeof s->primitive_back_mix);
     s->charset = ps->charset;
+    s->char_mode = ps->char_mode;
     s->char_width = ps->char_width;
     s->char_height = ps->char_height;
     s->viewport = ps->viewport;
+    s->viewport_set = ps->viewport_set;
+    s->page_size = ps->page_size;
     s->rgb_colors = ps->rgb_colors;
     memcpy(s->colors, ps->colors, sizeof s->colors);
     memcpy(s->color_valid, ps->color_valid, sizeof s->color_valid);
@@ -112,14 +116,18 @@ BOOL GpiRestorePS(HPS handle, LONG id)
     ps->line_type = s->line_type;
     ps->pattern_set = s->pattern_set;
     ps->pattern = s->pattern;
+    ps->pattern_reference = s->pattern_reference;
     memcpy(ps->primitive_color, s->primitive_color, sizeof s->primitive_color);
     memcpy(ps->primitive_back, s->primitive_back, sizeof s->primitive_back);
     memcpy(ps->primitive_mix, s->primitive_mix, sizeof s->primitive_mix);
     memcpy(ps->primitive_back_mix, s->primitive_back_mix, sizeof s->primitive_back_mix);
     ps->charset = s->charset;
+    ps->char_mode = s->char_mode;
     ps->char_width = s->char_width;
     ps->char_height = s->char_height;
     ps->viewport = s->viewport;
+    ps->viewport_set = s->viewport_set;
+    ps->page_size = s->page_size;
     ps->rgb_colors = s->rgb_colors;
     memcpy(ps->colors, s->colors, sizeof s->colors);
     memcpy(ps->color_valid, s->color_valid, sizeof s->color_valid);
@@ -135,9 +143,12 @@ BOOL GpiRestorePS(HPS handle, LONG id)
 BOOL GpiSetPageViewport(HPS handle, PRECTL rect)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || !rect)
+    if (!ps || !rect || rect->xRight <= rect->xLeft || rect->yTop <= rect->yBottom ||
+        (int64_t)rect->xRight - rect->xLeft > INT32_MAX ||
+        (int64_t)rect->yTop - rect->yBottom > INT32_MAX)
         return FALSE;
     ps->viewport = *rect;
+    ps->viewport_set = TRUE;
     return TRUE;
 }
 BOOL GpiQueryPageViewport(HPS handle, PRECTL rect)
@@ -145,8 +156,13 @@ BOOL GpiQueryPageViewport(HPS handle, PRECTL rect)
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || !rect)
         return FALSE;
-    *rect = ps->viewport;
+    SIZEL page = lx_pm_page_dimensions(ps);
+    *rect = ps->viewport_set ? ps->viewport : (RECTL){0, 0, page.cx, page.cy};
     return TRUE;
+}
+BOOL GpiConvert(HPS handle, LONG source, LONG target, LONG count, PPOINTL points)
+{
+    return lx_pm_convert_points(handle, source, target, count, points);
 }
 BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID attrs)
 {
@@ -212,9 +228,10 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
         if ((mask & 0x20) &&
             !GpiSetPattern(handle, (defaults & 0x20) ? 0 : lx_guest_load_u16(p + 14)))
             return FALSE;
-        if ((mask & 0x40) && !(defaults & 0x40) &&
-            (lx_guest_load_u32(p + 16) || lx_guest_load_u32(p + 20)))
-            return FALSE;
+        if (mask & 0x40)
+            ps->pattern_reference = (defaults & 0x40) ? (POINTL){0, 0}
+                                                      : (POINTL){(LONG)lx_guest_load_u32(p + 16),
+                                                                 (LONG)lx_guest_load_u32(p + 20)};
     }
     unsigned index = (unsigned)primitive - 1;
     LONG color = (defaults & 1) ? CLR_BLACK : (LONG)lx_guest_load_u32(p);
@@ -277,4 +294,68 @@ BOOL GpiQueryCurrentPosition(HPS handle, PPOINTL point)
 BOOL GpiSetCurrentPosition(HPS handle, PPOINTL point)
 {
     return GpiMove(handle, point);
+}
+
+LONG GpiQueryColor(HPS handle)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    return ps ? ps->color : -255;
+}
+LONG GpiQueryLogColorTable(HPS handle, ULONG options, LONG start, LONG count, PLONG output)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || (options & ~2u) || start < 0 || count < 0 || (count && !output))
+        return -1;
+    if (ps->rgb_colors)
+        return -2;
+    LONG last = 15;
+    for (LONG i = 16; i < 256; i++)
+        if (ps->color_valid[i])
+            last = i;
+    LONG returned = 0;
+    for (LONG i = start; i <= last && returned < count; i++)
+    {
+        BOOL loaded = i < 16 || ps->color_valid[i];
+        if (options & 2)
+        {
+            if (!loaded)
+                continue;
+            if (count - returned < 2)
+                break;
+            output[returned++] = i;
+        }
+        output[returned++] = loaded ? lx_pm_resolve_color(handle, i) : -1;
+    }
+    return returned;
+}
+
+BOOL GpiSetCharMode(HPS handle, LONG mode)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || mode < 0 || mode > 3)
+        return FALSE;
+    ps->char_mode = mode ? mode : 1;
+    return TRUE;
+}
+LONG GpiQueryCharMode(HPS handle)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    return ps ? (ps->char_mode ? ps->char_mode : 1) : -1;
+}
+
+BOOL GpiSetPatternRefPoint(HPS handle, PPOINTL point)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || !point)
+        return FALSE;
+    ps->pattern_reference = *point;
+    return TRUE;
+}
+BOOL GpiQueryPatternRefPoint(HPS handle, PPOINTL point)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || !point)
+        return FALSE;
+    *point = ps->pattern_reference;
+    return TRUE;
 }

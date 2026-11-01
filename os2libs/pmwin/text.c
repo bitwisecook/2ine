@@ -13,21 +13,39 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
     LONG rgb = lx_pm_resolve_color(handle, color);
     if (!font || rgb < 0)
         return 0;
-    int64_t x = point->x;
+    POINTL origin = *point;
+    if (!lx_pm_transform_point(ps, &origin, TRUE))
+        return 0;
+    RECTL device_bounds;
+    if (bounds)
+    {
+        POINTL corners[2] = {{bounds->xLeft, bounds->yBottom}, {bounds->xRight, bounds->yTop}};
+        if (!lx_pm_transform_point(ps, &corners[0], TRUE) ||
+            !lx_pm_transform_point(ps, &corners[1], TRUE))
+            return 0;
+        device_bounds = (RECTL){corners[0].x, corners[0].y, corners[1].x, corners[1].y};
+        bounds = &device_bounds;
+    }
+    int64_t x = origin.x;
     for (LONG i = 0; i < count; i++)
     {
         LxHostGlyph glyph;
         if (!lx_host_font_glyph(font, lx_pm_codepoint((uint8)text[i]), &glyph))
             return 0;
         BOOL ok = x >= INT32_MIN && x <= INT32_MAX &&
-                  lx_pm_mask(handle, (LONG)x + glyph.left, point->y + glyph.top - glyph.height,
+                  lx_pm_mask(handle, (LONG)x + glyph.left, origin.y + glyph.top - glyph.height,
                              glyph.width, glyph.height, glyph.coverage, rgb, bounds);
         x += glyph.advance;
         lx_host_glyph_free(&glyph);
         if (!ok)
             return 0;
     }
-    ps->position = (POINTL){(LONG)x, point->y};
+    if (x < INT32_MIN || x > INT32_MAX)
+        return 0;
+    POINTL end = {(LONG)x, origin.y};
+    if (!lx_pm_transform_point(ps, &end, FALSE))
+        return 0;
+    ps->position = end;
     return 1;
 }
 LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,

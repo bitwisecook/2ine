@@ -9,6 +9,7 @@
 #include "os2native.h"
 #include "pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmwin/internal.h"
 
 #include "os2libs/generated/pmgpi-lx.h"
 
@@ -18,7 +19,11 @@ HPS GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags)
     if (!size || (flags & ~(PU_PELS | GPIA_ASSOC | 0x1000 | 0x300)) || (flags & 0x300) == 0x300 ||
         size->cx < 0 || size->cy < 0)
         return 0;
-    return lx_pm_create_ps(hab, dc);
+    HPS handle = lx_pm_create_ps(hab, dc);
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (ps)
+        ps->page_size = *size;
+    return handle;
 }
 BOOL GpiDestroyPS(HPS hps)
 {
@@ -27,6 +32,16 @@ BOOL GpiDestroyPS(HPS hps)
 LONG GpiLine(HPS hps, PPOINTL point)
 {
     return lx_pm_line(hps, point, 0);
+}
+LONG GpiPolyLine(HPS hps, LONG count, PPOINTL points)
+{
+    TRACE_NATIVE("GpiPolyLine(%u, %d, %p)", (unsigned)hps, (int)count, points);
+    if (!lx_pm_valid_ps(hps) || count < 0 || count > 65536 || (count && !points))
+        return 0;
+    for (LONG i = 0; i < count; i++)
+        if (!lx_pm_line(hps, &points[i], 0))
+            return 0;
+    return 1;
 }
 BOOL GpiMove(HPS hps, PPOINTL point)
 {

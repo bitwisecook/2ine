@@ -85,14 +85,16 @@ local to one PM thread; cross-thread sends and posts are unsupported.
 ### Word Pro document workflow
 
 With separately supplied SmartSuite 1.7/Fixpack 3 binaries and installation
-settings, Word Pro's native Linux i386 profile supports a basic document cycle:
+settings, Word Pro's native Linux i386 and Linux Unicorn profiles support a basic document cycle:
 create a plain document, type text, choose Courier, save an LWP, close and reopen,
 choose Helv, add text, save and reopen again, then exit normally. The test uses
 real X11 keyboard and pointer events and checks the resulting document's bytes.
 This qualifies that bounded workflow, not complete Word Pro compatibility.
-Toolbar rendering and other controls still require comparison with stock Warp.
+The toolbar renders when the original SmartIcons preferences and icon resources
+are supplied. Frame sizing, scrollbar controls and document-menu merging still
+differ from stock Warp; see the [visual review](../research/reference_screenshots/wordpro/review.md).
 Reference captures live in `research/reference_screenshots/wordpro/`.
-The portable Word Pro workflow is not qualified. 1-2-3 is the next application;
+The workflow has not been exercised on macOS. 1-2-3 is the next application;
 other suite applications are deferred.
 
 ```sh
@@ -102,7 +104,9 @@ python3 tests/integration/smartsuite.py --build build --backend native \
 ```
 
 Settings must contain `user.profile` and `registry.profile`; `system.profile` is
-optional. The harness copies these before use, retains screenshots and logs,
+optional. Supply `l97user.ini` in the settings directory, or `L97USER.INI` in the
+Word Pro installation directory. The harness copies application preferences
+and profiles into its work directory, redirects INIPath through PMSHAPI, retains screenshots and logs,
 and writes `receipt.json` only after both saves/reopens and a successful exit.
 The work directory's previous harness document and receipt are replaced.
 Proprietary application binaries and fonts are supplied separately.
@@ -123,13 +127,13 @@ the built-in profiles. Their defaults are `.2ine-user.profile` and
 a guest path through the normal drive mapping.
 
 PMWINX implements Open32 initialization/termination, checked `MulDiv`, and
-`RegOpenKeyEx`, `RegCreateKeyEx`, `RegCloseKey`, `RegQueryValueEx` and
-`RegSetValueEx`. Registry keys and value names fold ASCII case, values retain
+`RegOpenKey`/`RegOpenKeyEx`, `RegCreateKey`/`RegCreateKeyEx`, `RegCloseKey`,
+`RegEnumValue`, `RegDeleteValue`, `RegQueryValueEx` and `RegSetValueEx`. Registry keys and value names fold ASCII case, values retain
 their type and exact bytes, handles enforce query/write/create access, and
 undersized value queries return the required length. IBM Open32 and Win32
 predefined root constants address the same roots. The separate registry profile
 uses `TWOINE_REGISTRY` (a guest path), default `.2ine-registry.profile`.
-Enumeration, deletion, security descriptors, Unicode name folding and other
+Subkey enumeration/deletion, security descriptors, Unicode name folding and other
 Open32 services are not implemented.
 
 LX resources are validated and mapped independently of fixed EXE addresses.
@@ -174,6 +178,15 @@ or bundled by 2ine. Without the explicit environment variable, Liberation remain
 the default. `TWOINE_FONT_DIRECTORY` selects an alternate Liberation directory.
 This option supplies outline faces; it does not reproduce Warp's bitmap system
 fonts or guarantee identical text layout.
+
+Frame positioning supports explicit maximization within the parent, follows parent
+resizing, and restores geometry through the public `QWS_*RESTORE` words. Native
+minimized-window behavior remains unsupported. GPI lines and boxes share page
+viewport conversion with coordinate queries; bitmap pattern fills honor their
+reference point, and box outlines use line attributes separately from area fills.
+Bitmap copying supports source/destination background transparency. Full model
+and viewing transforms, arbitrary pattern fonts and complete text scaling remain
+outside the supported subset.
 
 ## Dialog and basic control subset
 

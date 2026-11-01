@@ -67,27 +67,6 @@ BOOL lx_pm_move(HPS hps, const POINTL *point)
     ps->position = *point;
     return TRUE;
 }
-LONG lx_pm_line(HPS hps, const POINTL *point, int pel)
-{
-    AnchorBlock *anchor = getAnchorBlockNoHAB();
-    PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
-    if (!ps || !point || !ps->window || !ps->window->heavy.window)
-        return 0;
-    LxHostRect clip;
-    calcHeavyweightRect(ps->window, &clip);
-    uint8 r, g, b;
-    LONG rgb = lx_pm_resolve_color(hps, ps->primitive_color[0]);
-    r = (rgb >> 16) & 255;
-    g = (rgb >> 8) & 255;
-    b = rgb & 255;
-    POINTL from = pel ? *point : ps->position;
-    int ok = lx_host_window_line(ps->window->heavy.window, &clip, clip.x + from.x,
-                                 clip.y + clip.h - 1 - from.y, clip.x + point->x,
-                                 clip.y + clip.h - 1 - point->y, r, g, b);
-    if (!pel)
-        ps->position = *point;
-    return ok ? 1 : 0;
-}
 
 BOOL lx_pm_erase(HPS hps)
 {

@@ -10,7 +10,10 @@ LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG verti
     if (!ps || !point || horizontal < 0 || vertical < 0 || (control & ~0x10000003) ||
         !(control & 3))
         return 0;
-    POINTL from = ps->position;
+    POINTL from = ps->position, end = *point;
+    if (!lx_pm_transform_point(ps, &from, TRUE) || !lx_pm_transform_point(ps, &end, TRUE))
+        return 0;
+    point = &end;
     RECTL rect = {from.x < point->x ? from.x : point->x, from.y < point->y ? from.y : point->y,
                   from.x > point->x ? from.x : point->x, from.y > point->y ? from.y : point->y};
     if (!(control & 0x10000000))
@@ -30,7 +33,7 @@ LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG verti
     if (vertical > height)
         vertical = (LONG)height;
     LONG rx = horizontal / 2, ry = vertical / 2;
-    BOOL fill = (control & 1) && ps->pattern != 15 && ps->pattern != 64;
+    BOOL fill = (control & 1) != 0;
     for (LONG row = 0; row < height; row++)
     {
         LONG inset = 0;
@@ -46,19 +49,17 @@ LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG verti
             }
         }
         LONG left = rect.xLeft + inset, right = rect.xRight - inset, y = rect.yBottom + row;
-        if (fill || ((control & 2) && (row == 0 || row == height - 1)))
+        if (fill && !lx_pm_fill_span(handle, left, y, right - left, 3))
+            return 0;
+        if ((control & 2) && ps->line_type != 8)
         {
-            RECTL span = {left, y, right, y + 1};
-            if (!WinFillRect(handle, &span, ps->primitive_color[3]))
-                return 0;
-        }
-        else if (control & 2)
-        {
-            RECTL span = {left, y, left + 1, y + 1};
-            if (!WinFillRect(handle, &span, ps->primitive_color[3]))
-                return 0;
-            span = (RECTL){right - 1, y, right, y + 1};
-            if (!WinFillRect(handle, &span, ps->primitive_color[3]))
+            if (row == 0 || row == height - 1)
+            {
+                if (!lx_pm_fill_span(handle, left, y, right - left, 0))
+                    return 0;
+            }
+            else if (!lx_pm_fill_span(handle, left, y, 1, 0) ||
+                     !lx_pm_fill_span(handle, right - 1, y, 1, 0))
                 return 0;
         }
     }

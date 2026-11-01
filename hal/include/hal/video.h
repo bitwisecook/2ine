@@ -60,6 +60,7 @@ typedef enum
     LX_HOST_KEY_SHIFT,
     LX_HOST_KEY_CTRL,
     LX_HOST_KEY_ALT,
+    LX_HOST_KEY_KP_ENTER,
     LX_HOST_KEY_F1 = 0x120
 } LxHostKey;
 enum

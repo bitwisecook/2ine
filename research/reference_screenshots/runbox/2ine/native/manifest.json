@@ -1,0 +1,48 @@
+{
+  "program": "runbox.exe",
+  "program_sha256": "49ab149a855a53f465f570b1df4f7d062d28ed409a3fffb9cd3275394846c8d8",
+  "backend": "native",
+  "command": [
+    "lx_loader",
+    "runbox.exe"
+  ],
+  "worker_sha256": "e987ee966feaca1303dd3f28b50ddce66b50f49042fcc356bc27a64b0eda6f31",
+  "libraries": {
+    "libpmgpi.so": "daa7ead562ce120b4328cf826cea2115c89c3d273d58ac5d804c5e16fe61f95e",
+    "libpmctls.so": "2f05344639308bbaad07a996ee7c6c479ee99c6ff985f8c8443cb1cb1e3e0595",
+    "libpmwin.so": "a190fe7a61f01dc318904a3eac1bebe82e01f4e5647acd23c92c7aa6aebae8dc",
+    "libpmwinx.so": "ade4df5f02f2429fc3c709ce0d3ce87a6b049d574f361182242d20c57dc0f02b",
+    "libhelpmgr.so": "2178d034d1a3732321b319aef71d5444a0677f3c86d3139fe85df263145ad230",
+    "libpmshapi.so": "14c1bdf5a3f5d2cd1f188227318eefb843c3fffdcefc1eacf8a31c4da4a6db7e",
+    "libtcpip32.so": "37a4adc7905470fcc06030e467792db42e6f90be1241e801a9f104cd930185c6",
+    "libdoscalls.so": "1b3223cd822dc2c0b3608789279c9d74f4edd1bb34a4a8a4f67f818053a30dec",
+    "libmsg.so": "630d7ddefb5b20f2facdd0cecaf89001dc97560fdd8a60be7f421866d7f46490",
+    "libnls.so": "8908590644bfdc4ab689b9ee7c97150edca7639273a2552b84dd07737f891ba5",
+    "libviocalls.so": "6b66d8d8fc28a55ac06c9e6bb2f3fbdd9a60b2f79bb5262d2502c1da0ff0d89f",
+    "libkbdcalls.so": "58617c2c24d9c3151e22749978f5d64447e10f06b919e9201590c11d1a2d51f7",
+    "libsom.so": "0a5eb7df26c1b1cc0dbfa4605cf5af9d73d8eeed89cde9356758b63bf8a690de",
+    "libquecalls.so": "05864be02af8dde8dbee63f6243b09402b5aaf8b7d9a9f5ac41df41f049d6319",
+    "libsesmgr.so": "1fd16c084b7740706df0be9a1f0f6eeaefa73ff37bbb893ccf4f43e5e2c92a1b",
+    "lib2ine.so": "05e7bb9868f8b15dd9597867f496dc1e1c771d7b39c977cbf14dbb2a799a521f"
+  },
+  "profile": "runbox",
+  "window_size": [
+    50,
+    50
+  ],
+  "pointer_avoidance": true,
+  "position_before": [
+    129,
+    589
+  ],
+  "position_after": [
+    121,
+    598
+  ],
+  "passed": true,
+  "exit": 0,
+  "clean_close": true,
+  "screenshots": {
+    "moving.png": "771711fb00e85ebcfe302eb837e443266f170572210232c65759c8552395eee3"
+  }
+}

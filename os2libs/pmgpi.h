@@ -40,6 +40,8 @@ extern "C"
     OS2EXPORT LONG OS2API GpiQueryLineType(HPS ps) OS2APIINFO(459);
     OS2EXPORT LONG OS2API GpiSavePS(HPS ps) OS2APIINFO(501);
     OS2EXPORT BOOL OS2API GpiRestorePS(HPS ps, LONG id) OS2APIINFO(499);
+    OS2EXPORT BOOL OS2API GpiConvert(HPS ps, LONG source, LONG target, LONG count, PPOINTL points)
+        OS2APIINFO(364);
     OS2EXPORT BOOL OS2API GpiSetPageViewport(HPS ps, PRECTL rect) OS2APIINFO(540);
     OS2EXPORT BOOL OS2API GpiQueryPageViewport(HPS ps, PRECTL rect) OS2APIINFO(472);
     OS2EXPORT BOOL OS2API GpiSetAttrs(HPS ps, LONG primitive, ULONG mask, ULONG defaults,
@@ -69,6 +71,8 @@ extern "C"
     OS2EXPORT LONG OS2API GpiCharStringAt(HPS ps, PPOINTL point, LONG count, PCH text)
         OS2APIINFO(359);
     OS2EXPORT LONG OS2API GpiQueryPatternSet(HPS ps) OS2APIINFO(475);
+    OS2EXPORT BOOL OS2API GpiSetPatternRefPoint(HPS ps, PPOINTL point) OS2APIINFO(542);
+    OS2EXPORT BOOL OS2API GpiQueryPatternRefPoint(HPS ps, PPOINTL point) OS2APIINFO(474);
     OS2EXPORT BOOL OS2API GpiSetPatternSet(HPS ps, LONG id) OS2APIINFO(543);
     OS2EXPORT LONG OS2API GpiQueryPattern(HPS ps) OS2APIINFO(473);
     OS2EXPORT BOOL OS2API GpiSetPattern(HPS ps, LONG symbol) OS2APIINFO(541);
@@ -127,6 +131,7 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiErase(HPS hps) OS2APIINFO(389);
     OS2EXPORT HPS OS2API GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags) OS2APIINFO(369);
     OS2EXPORT BOOL OS2API GpiDestroyPS(HPS hps) OS2APIINFO(379);
+    OS2EXPORT LONG OS2API GpiPolyLine(HPS ps, LONG count, PPOINTL points) OS2APIINFO(415);
     OS2EXPORT LONG OS2API GpiLine(HPS hps, PPOINTL point) OS2APIINFO(398);
     OS2EXPORT BOOL OS2API GpiMove(HPS hps, PPOINTL point) OS2APIINFO(404);
     OS2EXPORT BOOL OS2API GpiSetColor(HPS hps, LONG color) OS2APIINFO(517);
@@ -135,6 +140,11 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiQueryTextBox(HPS hps, LONG lCount1, PCH pchString, LONG lCount2,
                                           PPOINTL aptlPoints) OS2APIINFO(489);
 
+    OS2EXPORT LONG OS2API GpiQueryColor(HPS ps) OS2APIINFO(437);
+    OS2EXPORT LONG OS2API GpiQueryLogColorTable(HPS ps, ULONG options, LONG start, LONG count,
+                                                PLONG output) OS2APIINFO(593);
+    OS2EXPORT BOOL OS2API GpiSetCharMode(HPS ps, LONG mode) OS2APIINFO(512);
+    OS2EXPORT LONG OS2API GpiQueryCharMode(HPS ps) OS2APIINFO(432);
 #ifdef __cplusplus
 }
 #endif

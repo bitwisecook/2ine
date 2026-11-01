@@ -12,6 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from images import FlatGuest, linear_image
 from linux.x11 import Display, x
 
 
@@ -38,7 +39,7 @@ def run(args, display, env):
         )
 
         def pause(seconds):
-            time.sleep(seconds)
+            time.sleep(seconds * (4 if args.backend == "unicorn" else 1))
             if process.poll() is not None:
                 raise RuntimeError(f"Word Pro exited early: {process.returncode}; see {log.name}")
 
@@ -96,10 +97,17 @@ def run(args, display, env):
             capture(main, name)
 
         try:
-            welcome = window("Welcome to Lotus Word Pro")
-            pause(0.5)
-            width, height = display.geometry(welcome)
-            capture(welcome, "welcome")
+            deadline = time.monotonic() + args.timeout
+            while True:
+                welcome = window("Welcome to Lotus Word Pro")
+                pause(0.5)
+                try:
+                    width, height = display.geometry(welcome)
+                    capture(welcome, "welcome")
+                    break
+                except (OSError, AssertionError):
+                    if time.monotonic() >= deadline:
+                        raise
             display.click(welcome, width * 110 // 335, height - height * 8 // 164, 1)
             main = window("Word Pro")
             pause(2)
@@ -136,6 +144,9 @@ def run(args, display, env):
             final = document.read_bytes()
             assert final != first
             assert all(value in final for value in (b"edited after reopen", b"Courier", b"Helv"))
+            assert final.index(b"edited after reopen") > final.index(b"courier text"), (
+                "reopened edit was inserted before the existing text"
+            )
             stages.append({"stage": "edited", "bytes": len(final), "sha256": digest(document)})
             reopen(main, "final-reopened")
             assert document.read_bytes() == final
@@ -159,11 +170,49 @@ def run(args, display, env):
         "screenshot_sha256": {name: digest(work / name) for name in snapshots},
         "worker_sha256": digest(args.build / "lx_loader"),
         "runtime_sha256": digest(args.build / "lib2ine.so"),
+        "module_sha256": {
+            path.name: digest(path) for path in sorted(args.build.glob("lib*.so")) if path.is_file()
+        },
+        "harness_sha256": digest(Path(__file__)),
+        "initial_preferences_sha256": args.preferences_sha256,
         "fonts": "warp" if env.get("TWOINE_WARP_FONT_DIRECTORY") else "liberation",
         "normal_exit": result,
     }
     (work / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
     print(json.dumps(receipt, indent=2))
+
+
+def prepare_preferences(args, env, build, work):
+    source = args.settings / "l97user.ini"
+    if not source.is_file():
+        source = args.installation / "WORDPRO" / "L97USER.INI"
+    if not source.is_file():
+        raise FileNotFoundError("supply settings/l97user.ini or installation/WORDPRO/L97USER.INI")
+    shutil.copyfile(source, work / "l97user.ini")
+    (work / "lwp.ini").unlink(missing_ok=True)
+    guest_path = "C:" + str(work).replace("/", "\\")
+    guest = FlatGuest()
+    app, key, value = (
+        guest.field(text.encode() + b"\0") for text in ("WordPro", "INIPath", guest_path)
+    )
+    guest.call(2, 116, 0xFFFFFFFF, app, key, value)
+    guest.result(1, 1)
+    guest.exit(0)
+    executable = work / "preferences.exe"
+    executable.write_bytes(
+        linear_image(guest.code, guest.fixups, ["DOSCALLS", "PMSHAPI"], "PREFS", data=guest.data)
+    )
+    with (work / "preferences.log").open("wb") as log:
+        subprocess.run(
+            [str(build / "lx_loader"), str(executable)],
+            cwd=work,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            check=True,
+            timeout=args.timeout,
+        )
+    return digest(source)
 
 
 def main():
@@ -208,6 +257,7 @@ def main():
         else:
             raise FileNotFoundError(source)
         env[key] = str(destination)
+    args.preferences_sha256 = prepare_preferences(args, env, build, work)
     read, write = os.pipe()
     server = subprocess.Popen(
         ["Xvfb", "-displayfd", str(write), "-screen", "0", "1024x768x24", "-nolisten", "tcp"],

@@ -170,6 +170,32 @@ LONG RegOpenKeyEx(ULONG key, PSZ name, ULONG options, ULONG access, PULONG outpu
     free(path);
     return result;
 }
+LONG RegOpenKey(ULONG key, PSZ name, PULONG output)
+{
+    if (!output)
+        return ERROR_INVALID_PARAMETER;
+    if (!name || !*name)
+    {
+        LxHandleBorrow borrow = {0};
+        BOOL valid = root_name(key) || lx_handle_borrow(key, LX_HANDLE_REGISTRY_KEY, &borrow);
+        lx_handle_release(&borrow);
+        if (!valid)
+            return ERROR_INVALID_HANDLE;
+        *output = key;
+        return NO_ERROR;
+    }
+    /* The registry provider has no ACLs; its default grants the supported key rights. */
+    const ULONG default_access = 0x000f003fu;
+    return RegOpenKeyEx(key, name, 0, default_access, output);
+}
+LONG RegCreateKey(ULONG key, PSZ name, PULONG output)
+{
+    if ((!name || !*name) && root_name(key))
+        return RegOpenKey(key, name, output);
+    if (!name)
+        return ERROR_INVALID_PARAMETER;
+    return RegCreateKeyEx(key, name, 0, NULL, 0, 0x000f003fu, NULL, output, NULL);
+}
 LONG RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name, ULONG options,
                     ULONG access, PVOID security, PULONG output, PULONG disposition)
 {
@@ -247,6 +273,28 @@ LONG RegSetValueEx(ULONG key, PSZ name, ULONG reserved, ULONG type, PVOID data, 
     free(value);
     return result;
 }
+LONG RegDeleteValue(ULONG key, PSZ name)
+{
+    lx_host_once(&once, initialize);
+    ULONG access;
+    char *path = key_path(key, NULL, &access), *value = lower_name(name, "v:");
+    LONG result = ERROR_INVALID_HANDLE;
+    if (path && value && database)
+    {
+        result = ERROR_ACCESS_DENIED;
+        if (access & KEY_SET_VALUE)
+        {
+            ULONG size = 0;
+            result = ERROR_FILE_NOT_FOUND;
+            if (PrfQueryProfileSize(database, path, value, &size))
+                result = PrfWriteProfileData(database, path, value, NULL, 0) ? NO_ERROR
+                                                                             : ERROR_WRITE_FAULT;
+        }
+    }
+    free(path);
+    free(value);
+    return result;
+}
 LONG RegQueryValueEx(ULONG key, PSZ name, PULONG reserved, PULONG type, PVOID output, PULONG size)
 {
     TRACE_NATIVE("RegQueryValueEx(%08X, '%s', %p, %p, %p, %p)", (uint)key, name, reserved, type,
@@ -291,6 +339,63 @@ LONG RegQueryValueEx(ULONG key, PSZ name, PULONG reserved, PULONG type, PVOID ou
     }
     free(path);
     free(value);
+    return result;
+}
+LONG RegEnumValue(ULONG key, ULONG index, PSZ name, PULONG name_size, PULONG reserved, PULONG type,
+                  PVOID data, PULONG data_size)
+{
+    if (!name || !name_size || reserved || (data && !data_size))
+        return ERROR_INVALID_PARAMETER;
+    lx_host_once(&once, initialize);
+    ULONG access;
+    char *path = key_path(key, NULL, &access);
+    if (!path)
+        return ERROR_INVALID_HANDLE;
+    LONG result = ERROR_OPEN_FAILED;
+    if (database)
+    {
+        result = ERROR_ACCESS_DENIED;
+        if (access & KEY_QUERY_VALUE)
+        {
+            ULONG bytes = 0;
+            result = ERROR_NO_MORE_ITEMS;
+            if (PrfQueryProfileSize(database, path, NULL, &bytes))
+            {
+                char *names = calloc((size_t)bytes + 1, 1);
+                result = ERROR_NOT_ENOUGH_MEMORY;
+                if (names)
+                {
+                    result = ERROR_NO_MORE_ITEMS;
+                    if (PrfQueryProfileData(database, path, NULL, names, &bytes))
+                        for (char *entry = names; *entry; entry += strlen(entry) + 1)
+                            if (!strncmp(entry, "v:", 2) && !index--)
+                            {
+                                size_t length = strlen(entry + 2);
+                                if (*name_size <= length)
+                                {
+                                    result = RegQueryValueEx(key, entry + 2, NULL, type, NULL,
+                                                             data_size);
+                                    if (!result)
+                                        result = ERROR_MORE_DATA;
+                                }
+                                else
+                                {
+                                    result = RegQueryValueEx(key, entry + 2, NULL, type, data,
+                                                             data_size);
+                                    if (!result || result == ERROR_MORE_DATA)
+                                    {
+                                        memcpy(name, entry + 2, length + 1);
+                                        *name_size = (ULONG)length;
+                                    }
+                                }
+                                break;
+                            }
+                    free(names);
+                }
+            }
+        }
+    }
+    free(path);
     return result;
 }
 LX_NATIVE_DESTRUCTOR(pmwinx_registry)

@@ -1,0 +1,25 @@
+{
+  "application": "RunBox 1.01",
+  "operating_system": "Stock OS/2 Warp 4.52, internal revision 14.086_W4",
+  "profile": {
+    "cpu": "QEMU TCG Pentium II, one CPU",
+    "ram_mib": 128,
+    "display": "Cirrus VGA, 1024x768, stock fonts",
+    "network": "none"
+  },
+  "warp_install_iso": {
+    "file": "OS2 Warp 452 - Client - Disk 1 - Install Disk - ISO.iso",
+    "sha256": "6fc32f65dce15fc39a4d4c1dddf5289f9482422ced9168bcc7c39f8abcae69d9"
+  },
+  "program": {
+    "file": "runbox.exe",
+    "sha256": "49ab149a855a53f465f570b1df4f7d062d28ed409a3fffb9cd3275394846c8d8",
+    "source_archive": "https://hobbes.infania.net/download/pub/os2/games/toys/RunBox_1-01.zip",
+    "scope": "Same executable transferred through private FAT floppy and copied to the stock guest hard disk; no application executable redistributed"
+  },
+  "capture": "Unchanged archived RUN.C rebuilt with Watcom11.0c; source SHA256 79cfadcdd72c2ccab5bf51365bb2e8e52f8bfd2599d614ad7451f3c6291a357f. Captures show the moving 50x50 window at different positions. This does not qualify the shipped GCC executable or stock close behavior.",
+  "screenshots": {
+    "moving.png": "9988155e1eb6094c09b7ef625ed53fd70d1b09354a4239fcde97902c540ef5fd",
+    "moved.png": "eef0ec6c89b6a29655781b6f2239f9f0ab6fcbc2bfb7f49da199721aa1075728"
+  }
+}

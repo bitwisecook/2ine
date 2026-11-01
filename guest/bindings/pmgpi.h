@@ -707,3 +707,87 @@ static uint32 bridge32_DevQueryHardcopyCaps(uint8 *a)
     return (uint32)DevQueryHardcopyCaps(gpi_word(a, 0), (LONG)gpi_word(a, 1), count,
                                         (PVOID)(uintptr_t)gpi_word(a, 3));
 }
+
+static uint32 bridge32_GpiQueryColor(uint8 *a)
+{
+    return (uint32)GpiQueryColor(gpi_word(a, 0));
+}
+static uint32 bridge32_GpiQueryLogColorTable(uint8 *a)
+{
+    LONG count = (LONG)gpi_word(a, 3);
+    if (count < 0)
+        return UINT32_MAX;
+    size_t copied = count > 512 ? 512 : (size_t)count;
+    LxGuestBorrow output = {0};
+    if (copied && !lx_execution_borrow(GLoaderState.execution, gpi_word(a, 4), copied * 4,
+                                       LX_GUEST_WRITE, &output))
+        return UINT32_MAX;
+    LONG values[512];
+    LONG result = GpiQueryLogColorTable(gpi_word(a, 0), gpi_word(a, 1), (LONG)gpi_word(a, 2),
+                                        (LONG)copied, values);
+    for (LONG i = 0; i < result; i++)
+        lx_guest_store_u32((uint8 *)output.host + i * 4, (uint32)values[i]);
+    lx_execution_release(&output);
+    return (uint32)result;
+}
+
+static uint32 bridge32_GpiSetCharMode(uint8 *a)
+{
+    return GpiSetCharMode(gpi_word(a, 0), (LONG)gpi_word(a, 1));
+}
+static uint32 bridge32_GpiQueryCharMode(uint8 *a)
+{
+    return (uint32)GpiQueryCharMode(gpi_word(a, 0));
+}
+
+static uint32 bridge32_GpiConvert(uint8 *a)
+{
+    LONG count = (LONG)gpi_word(a, 3);
+    if (count < 0 || count > 65536)
+        return 0;
+    size_t bytes = (size_t)count * sizeof(POINTL);
+    POINTL *points = count ? malloc(bytes) : NULL;
+    if (count &&
+        (!points || !lx_execution_read(GLoaderState.execution, gpi_word(a, 4), points, bytes)))
+    {
+        free(points);
+        return 0;
+    }
+    BOOL result =
+        GpiConvert(gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2), count, points);
+    if (result && count)
+        result = lx_execution_write(GLoaderState.execution, gpi_word(a, 4), points, bytes);
+    free(points);
+    return result;
+}
+
+static uint32 bridge32_GpiSetPatternRefPoint(uint8 *a)
+{
+    POINTL p;
+    return lx_execution_read(GLoaderState.execution, gpi_word(a, 1), &p, sizeof p)
+               ? GpiSetPatternRefPoint(gpi_word(a, 0), &p)
+               : 0;
+}
+static uint32 bridge32_GpiQueryPatternRefPoint(uint8 *a)
+{
+    POINTL p;
+    return GpiQueryPatternRefPoint(gpi_word(a, 0), &p) &&
+           lx_execution_write(GLoaderState.execution, gpi_word(a, 1), &p, sizeof p);
+}
+
+static uint32 bridge32_GpiPolyLine(uint8 *a)
+{
+    LONG count = (LONG)gpi_word(a, 1);
+    if (count < 0 || count > 65536)
+        return 0;
+    POINTL *points = count ? malloc((size_t)count * sizeof *points) : NULL;
+    if (count && (!points || !lx_execution_read(GLoaderState.execution, gpi_word(a, 2), points,
+                                                (size_t)count * sizeof *points)))
+    {
+        free(points);
+        return 0;
+    }
+    uint32 result = GpiPolyLine(gpi_word(a, 0), count, points);
+    free(points);
+    return result;
+}

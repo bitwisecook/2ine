@@ -23,8 +23,8 @@ static int font_metrics(unsigned index, LxHostFont *font, FONTMETRICS *output)
     output->lXHeight = m.x_height;
     output->lMaxAscender = m.ascent;
     output->lMaxDescender = m.descent;
-    output->lLowerCaseAscent = m.ascent;
-    output->lLowerCaseDescent = m.descent;
+    output->lLowerCaseAscent = m.lowercase_ascent;
+    output->lLowerCaseDescent = m.lowercase_descent;
     output->lInternalLeading = m.ascent + m.descent > m.em ? m.ascent + m.descent - m.em : 0;
     output->lExternalLeading = m.leading;
     output->lAveCharWidth = m.average_width;

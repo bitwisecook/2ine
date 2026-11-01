@@ -374,9 +374,6 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     }
     if (!win->enabled)
         return FALSE;
-    if (event->type == LX_HOST_EVENT_BUTTON_DOWN || event->type == LX_HOST_EVENT_BUTTON_UP)
-        if (event->button >= 1 && event->button <= 3)
-            anchor->key_down[event->button] = event->type == LX_HOST_EVENT_BUTTON_DOWN;
     ULONG message = WM_MOUSEMOVE;
     if (event->type != LX_HOST_EVENT_MOTION)
     {
@@ -498,6 +495,7 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
             i->next = anchor->message_queue.free_pool;
             anchor->message_queue.free_pool = i;
 
+            synchronizeInputState(anchor, pqmsg);
             if (filterInputMessage(anchor, pqmsg, 1))
                 continue;
             return (pqmsg->msg != WM_QUIT) ? TRUE : FALSE;
@@ -647,6 +645,7 @@ retry:
         item->next = anchor->message_queue.free_pool;
         anchor->message_queue.free_pool = item;
     }
+    synchronizeInputState(anchor, output);
     if (filterInputMessage(anchor, output, flags))
     {
         if (!(flags & 1))

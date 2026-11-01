@@ -24,6 +24,42 @@ static uint32 bridge32_RegCloseKey(uint8 *a)
 {
     return (uint32)RegCloseKey(lx_guest_load_u32(a));
 }
+static uint32 bridge32_RegOpenKey(uint8 *a)
+{
+    const uint32 pointer = lx_guest_load_u32(a + 4);
+    char *name = o32_string(pointer);
+    LxGuestBorrow output = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if ((!pointer || name) && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+                                                  4, LX_GUEST_WRITE, &output))
+    {
+        ULONG handle = 0;
+        result = (uint32)RegOpenKey(lx_guest_load_u32(a), name, &handle);
+        if (!result)
+            lx_guest_store_u32(output.host, handle);
+    }
+    lx_execution_release(&output);
+    free(name);
+    return result;
+}
+static uint32 bridge32_RegCreateKey(uint8 *a)
+{
+    const uint32 pointer = lx_guest_load_u32(a + 4);
+    char *name = o32_string(pointer);
+    LxGuestBorrow output = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if ((!pointer || name) && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+                                                  4, LX_GUEST_WRITE, &output))
+    {
+        ULONG handle = 0;
+        result = (uint32)RegCreateKey(lx_guest_load_u32(a), name, &handle);
+        if (!result)
+            lx_guest_store_u32(output.host, handle);
+    }
+    lx_execution_release(&output);
+    free(name);
+    return result;
+}
 static uint32 bridge32_RegOpenKeyEx(uint8 *a)
 {
     const uint32 pointer = lx_guest_load_u32(a + 4);
@@ -70,6 +106,15 @@ static uint32 bridge32_RegCreateKeyEx(uint8 *a)
     lx_execution_release(&disposition);
     lx_execution_release(&output);
     free(class_name);
+    free(name);
+    return result;
+}
+static uint32 bridge32_RegDeleteValue(uint8 *a)
+{
+    const uint32 pointer = lx_guest_load_u32(a + 4);
+    char *name = o32_string(pointer);
+    uint32 result = pointer && !name ? ERROR_INVALID_PARAMETER
+                                     : (uint32)RegDeleteValue(lx_guest_load_u32(a), name);
     free(name);
     return result;
 }
@@ -133,5 +178,51 @@ static uint32 bridge32_WinXProcessMsg(uint8 *a)
         return 0;
     uint32 result = WinXProcessMsg(message.host);
     lx_execution_release(&message);
+    return result;
+}
+
+static uint32 bridge32_RegEnumValue(uint8 *a)
+{
+    uint32 np = lx_guest_load_u32(a + 8), sp = lx_guest_load_u32(a + 12),
+           tp = lx_guest_load_u32(a + 20), dp = lx_guest_load_u32(a + 24),
+           cp = lx_guest_load_u32(a + 28);
+    LxGuestBorrow name = {0}, length = {0}, type = {0}, data = {0}, size = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if (!np || lx_guest_load_u32(a + 16) ||
+        !lx_execution_borrow(GLoaderState.execution, sp, 4, 3, &length) ||
+        (tp && !lx_execution_borrow(GLoaderState.execution, tp, 4, LX_GUEST_WRITE, &type)) ||
+        (cp && !lx_execution_borrow(GLoaderState.execution, cp, 4, 3, &size)))
+        goto done;
+    ULONG characters = lx_guest_load_u32(length.host),
+          count = cp ? lx_guest_load_u32(size.host) : 0, kind = 0;
+    if (characters > 32767)
+    {
+        result = ERROR_MORE_DATA;
+        goto done;
+    }
+    if ((characters &&
+         !lx_execution_borrow(GLoaderState.execution, np, characters, LX_GUEST_WRITE, &name)) ||
+        (dp && (!cp || (count && !lx_execution_borrow(GLoaderState.execution, dp, count,
+                                                      LX_GUEST_WRITE, &data)))))
+        goto done;
+    char empty = 0;
+    result =
+        (uint32)RegEnumValue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                             characters ? name.host : &empty, &characters, NULL, tp ? &kind : NULL,
+                             dp ? (count ? data.host : &empty) : NULL, cp ? &count : NULL);
+    if (!result || result == ERROR_MORE_DATA)
+    {
+        lx_guest_store_u32(length.host, characters);
+        if (cp)
+            lx_guest_store_u32(size.host, count);
+        if (tp)
+            lx_guest_store_u32(type.host, kind);
+    }
+done:
+    lx_execution_release(&size);
+    lx_execution_release(&data);
+    lx_execution_release(&type);
+    lx_execution_release(&length);
+    lx_execution_release(&name);
     return result;
 }

@@ -1,0 +1,70 @@
+{
+  "backend": "unicorn",
+  "executable_sha256": "69ca50c2bfa1434a4f01d033a2bc9ee45d5678e9461f1d40a24fe8e97a3266bc",
+  "document": "document.lwp (private fixture)",
+  "stages": [
+    {
+      "stage": "created",
+      "bytes": 12488,
+      "sha256": "82a27c184b696e833919cfb7456242a90df7d8e098a5c5df7a48a65688c2137c"
+    },
+    {
+      "stage": "edited",
+      "bytes": 12616,
+      "sha256": "f077e61793c6e52a97aa8ae81bf62e9e896d49749e324a34ce048cc91c658066"
+    }
+  ],
+  "snapshots": [
+    "welcome.png",
+    "blank-document.png",
+    "new-document.png",
+    "font-selector-0.png",
+    "save-as.png",
+    "saved.png",
+    "closed-reopened.png",
+    "reopened.png",
+    "font-selector-1.png",
+    "edited-after-reopen.png",
+    "closed-final-reopened.png",
+    "final-reopened.png"
+  ],
+  "screenshot_sha256": {
+    "welcome.png": "5675017a672984a6cb643679bfd114f9c3b698bd37a1db94b641f593dad3e39c",
+    "blank-document.png": "d32187f6055acf6b174073b8c80f97f9ded3e1383c4bdb47ec1c99fa8df4bfdd",
+    "new-document.png": "0dc263760a349179120cec766a66d2f95d1159e2b1609d6426d65f2e1ef06c33",
+    "font-selector-0.png": "fd8fdc710efe180e6bf0fc8aac8fa0c859cdd6e46e7995109b18ad6053945f43",
+    "save-as.png": "c5035c3bef4c3d27ccda51a4a059971c8c69c8b6e4f1c1695714e4c10cb98b27",
+    "saved.png": "3f23f1cfbe8af9b9992f1292f1cfceecb49ff238ac517e4fb7e27cf8c1458955",
+    "closed-reopened.png": "699f8d855f848b40c6ade6c610f44c5129d4b728ac4893de2244fc58c5208781",
+    "reopened.png": "79e7136f58b87ba4525cf2e74f9f91fb5d105944f4e295fb8eae70a91810a0b0",
+    "font-selector-1.png": "6a1ecb4ec96831ae9f216fea109b13de03d89471b017e884071596f83b724a22",
+    "edited-after-reopen.png": "0f583988392117c7a103d76311e71d7d010aff133ae2a1907fba1a171a197da4",
+    "closed-final-reopened.png": "699f8d855f848b40c6ade6c610f44c5129d4b728ac4893de2244fc58c5208781",
+    "final-reopened.png": "d4bef2db06dab612eaf8688b5f3ab67dcfb38e3d353dbbf10b5d6dbedf934559"
+  },
+  "worker_sha256": "b944be73529b79f8ca0720f933d6c9d012dbec0770a550e4ce03bb1dec0e163e",
+  "runtime_sha256": "a092e6e72831ff04c7792176f3ea775b9ecdc5937344e0390d8d10448cf964c7",
+  "module_sha256": {
+    "lib2ine.so": "a092e6e72831ff04c7792176f3ea775b9ecdc5937344e0390d8d10448cf964c7",
+    "libdoscalls.so": "2e7aee2a35db61a6c91b02b3738364d8f7135f892e78365ad1c74dc1f1e0365b",
+    "libhelpmgr.so": "e05899da78c51e6a7ff76d66c9d372605b15e18ddeb709f3464863beaf12757d",
+    "libkbdcalls.so": "35325a96477789be91fdba630e610aa28bfd1a98817a07b6be054b235402eee2",
+    "libmsg.so": "aa9164a411d911c92fec3dc6e0cee4931edc33b0f564b58df7c0e4d66b85a5e8",
+    "libnls.so": "10e7e88b5acc3ca4e863b51ba5d05f794b8f7d28415a7df98382019415f6ba97",
+    "libpmctls.so": "d2d1407ea704f64a2fa6c76daff2e4b8ab5a823ca27cd9a360293308187cc3f5",
+    "libpmgpi.so": "a1505069d344ebf97ed6cc1f45b09c1ca57a1263dc4a7b1cc824d4d4901761a5",
+    "libpmshapi.so": "8b22c9438c262d96b955b2197c6365df272a128f4552f854242edf3862e2fbce",
+    "libpmwin.so": "b11494294687f7e83ea07f78adebb00b6f110ac77fa552f8995ec6f09ab21ae8",
+    "libpmwinx.so": "a37108b0925eea74afb2e04a629d8cb3927335a175836b1fdc407d6c82c7f589",
+    "libquecalls.so": "7162f682fe69cc8d3f9e72aa821672e38cb63907023f12e6e50a4cd47534e6e3",
+    "libsesmgr.so": "9eb22b0369492e300fd5e2fb42f2919c9f22ff35965f9b1e791e2f0a19bf1013",
+    "libsom.so": "7151655ba383f860bb258b2077c6c83bdd34651a2233b76e365658f1154821a3",
+    "libtcpip32.so": "c1b8a5d376f1ea8672a5f040719a01245317a21ae380adec041682601699a9d3",
+    "libviocalls.so": "54b3dc80c6109670adb3a99549e411f0f3704f59efeab4a615964ebe8a12cc23"
+  },
+  "harness_sha256": "f67725573e4e9d2a55a193ec589b2fb01e363a93cac1874e33537c5d1a554083",
+  "initial_preferences_sha256": "f45d1e70560a50d422e1560f3035e47edae98f37a83d248e29b9f5005e9d4fe5",
+  "fonts": "liberation",
+  "normal_exit": 0,
+  "capture_profile": "Linux unicorn, Xvfb 1024x768, stock SmartIcons preferences, liberation outline faces"
+}

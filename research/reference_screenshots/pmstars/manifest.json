@@ -1,0 +1,24 @@
+{
+  "application": "PMStars",
+  "operating_system": "Stock OS/2 Warp 4.52, internal revision 14.086_W4",
+  "profile": {
+    "cpu": "QEMU TCG Pentium II, one CPU",
+    "ram_mib": 128,
+    "display": "Cirrus VGA, 1024x768, stock fonts",
+    "network": "none"
+  },
+  "warp_install_iso": {
+    "file": "OS2 Warp 452 - Client - Disk 1 - Install Disk - ISO.iso",
+    "sha256": "6fc32f65dce15fc39a4d4c1dddf5289f9482422ced9168bcc7c39f8abcae69d9"
+  },
+  "program": {
+    "file": "PMStars.exe",
+    "sha256": "53dbf6259a0079858f52a643e10f5385cb7f8b7e5395ec43140f27ab29269e93",
+    "source_archive": "https://ftpmirror.infania.net/sites/os2bbs.com/tools/pmstars.zip",
+    "scope": "Same executable transferred through private FAT floppy and copied to the stock guest hard disk; no application executable redistributed"
+  },
+  "capture": "Unchanged original Watcom release executable; running animation captured after launch from an OS/2 Window.",
+  "screenshots": {
+    "animated.png": "2870df0441400cf9ce75667cd2d7e57f8022f01996e89b4444f2228c0636a5cd"
+  }
+}

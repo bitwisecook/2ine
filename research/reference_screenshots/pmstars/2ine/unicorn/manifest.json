@@ -1,0 +1,47 @@
+{
+  "program": "PMStars.exe",
+  "program_sha256": "53dbf6259a0079858f52a643e10f5385cb7f8b7e5395ec43140f27ab29269e93",
+  "backend": "unicorn",
+  "command": [
+    "lx_loader",
+    "PMStars.exe"
+  ],
+  "worker_sha256": "b944be73529b79f8ca0720f933d6c9d012dbec0770a550e4ce03bb1dec0e163e",
+  "libraries": {
+    "libpmgpi.so": "a1505069d344ebf97ed6cc1f45b09c1ca57a1263dc4a7b1cc824d4d4901761a5",
+    "libpmctls.so": "d2d1407ea704f64a2fa6c76daff2e4b8ab5a823ca27cd9a360293308187cc3f5",
+    "libpmwin.so": "b11494294687f7e83ea07f78adebb00b6f110ac77fa552f8995ec6f09ab21ae8",
+    "libpmwinx.so": "a37108b0925eea74afb2e04a629d8cb3927335a175836b1fdc407d6c82c7f589",
+    "libtcpip32.so": "c1b8a5d376f1ea8672a5f040719a01245317a21ae380adec041682601699a9d3",
+    "libhelpmgr.so": "e05899da78c51e6a7ff76d66c9d372605b15e18ddeb709f3464863beaf12757d",
+    "libpmshapi.so": "8b22c9438c262d96b955b2197c6365df272a128f4552f854242edf3862e2fbce",
+    "libdoscalls.so": "2e7aee2a35db61a6c91b02b3738364d8f7135f892e78365ad1c74dc1f1e0365b",
+    "libviocalls.so": "54b3dc80c6109670adb3a99549e411f0f3704f59efeab4a615964ebe8a12cc23",
+    "libkbdcalls.so": "35325a96477789be91fdba630e610aa28bfd1a98817a07b6be054b235402eee2",
+    "libquecalls.so": "7162f682fe69cc8d3f9e72aa821672e38cb63907023f12e6e50a4cd47534e6e3",
+    "libmsg.so": "aa9164a411d911c92fec3dc6e0cee4931edc33b0f564b58df7c0e4d66b85a5e8",
+    "libsom.so": "7151655ba383f860bb258b2077c6c83bdd34651a2233b76e365658f1154821a3",
+    "libnls.so": "10e7e88b5acc3ca4e863b51ba5d05f794b8f7d28415a7df98382019415f6ba97",
+    "libsesmgr.so": "9eb22b0369492e300fd5e2fb42f2919c9f22ff35965f9b1e791e2f0a19bf1013",
+    "lib2ine.so": "a092e6e72831ff04c7792176f3ea775b9ecdc5937344e0390d8d10448cf964c7"
+  },
+  "profile": "pmstars",
+  "window_size": [
+    500,
+    400
+  ],
+  "animation": true,
+  "left_click_origin": true,
+  "right_click_dot_mode": true,
+  "resize": true,
+  "passed": true,
+  "exit": 1,
+  "clean_close": true,
+  "screenshots": {
+    "resized.png": "25812c7e49159ac9793a4c1262ed408017d7b03f1932f072775af6d5e3a71c98",
+    "dots.png": "96b40790338600ae5185339495a106363baa2670fb57069e1b0af281a9d846fa",
+    "clicked.png": "f07779c4645fc3bfad5ba3a0b436f758c85ecd1553003265dff6b8c190b7dccc",
+    "animated.png": "fdd12467876bdbd228a59f88b3f6ddbc1c671558a54069c6188c9a633fcda5a8",
+    "initial.png": "2adc508c02abf1bf3be6d36544adcea40798e7237aa0e04cc5ae95fbe574abfd"
+  }
+}

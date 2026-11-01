@@ -73,6 +73,7 @@ typedef struct Window
     RECTL invalid;
     BOOL enabled;
 } Window;
+LX_PRIVATE BOOL prepareFrameState(Window *window, SWP *position);
 
 typedef struct MessageQueueItem
 {
@@ -96,9 +97,12 @@ typedef struct PresentationSpace
     LONG color;
     LONG back_color, mix, back_mix, line_type;
     LONG pattern_set, pattern;
+    POINTL pattern_reference;
     LONG primitive_color[5], primitive_back[5];
     LONG primitive_mix[5], primitive_back_mix[5];
     RECTL viewport;
+    BOOL viewport_set;
+    SIZEL page_size;
     struct PmSavedSpace *saved;
     LONG save_id;
     LxHandleBorrow bitmap_lease, clip_lease;
@@ -112,7 +116,7 @@ typedef struct PresentationSpace
     } logical_fonts[255];
     LxHandleBorrow bitmap_ids[255];
     char font_names[255][8];
-    LONG charset;
+    LONG charset, char_mode;
     LONG char_width, char_height;
     HDC dc;
     LxHandleBorrow dc_lease;
@@ -128,10 +132,13 @@ typedef struct PmSavedSpace
     POINTL position;
     LONG color, back_color, mix, back_mix, line_type;
     LONG pattern_set, pattern;
+    POINTL pattern_reference;
     LONG primitive_color[5], primitive_back[5];
     LONG primitive_mix[5], primitive_back_mix[5];
-    LONG charset, char_width, char_height;
+    LONG charset, char_mode, char_width, char_height;
     RECTL viewport;
+    BOOL viewport_set;
+    SIZEL page_size;
     BOOL rgb_colors;
     LONG colors[256];
     uint8 color_valid[256];
@@ -166,7 +173,7 @@ typedef struct
     LxGuestMapping *control_bridge, *menu_bridge;
     HWND focus, active, capture;
     ULONG modifiers, text_modifiers, text_scancode, text_repeat;
-    uint8 key_down[256];
+    uint8 key_down[256], key_toggled[256], physical_keys[256];
     PmTimer *timers;
     HAB hab;
     ERRORID last_error;
@@ -217,7 +224,8 @@ LX_PRIVATE void destroyControl(Window *window);
 LX_PRIVATE MRESULT controlProcedure(HWND window, ULONG message, MPARAM first, MPARAM second);
 LX_PRIVATE HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data,
                              size_t size, PVOID parameters);
-LX_PRIVATE BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event);
+LX_PRIVATE void synchronizeInputState(AnchorBlock *anchor, const QMSG *message);
+BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event);
 LX_PRIVATE HWND topLevelWindow(AnchorBlock *anchor, HWND handle);
 LX_PRIVATE void releaseWindowAccelerator(Window *window);
 LX_PRIVATE void destroyAccelerators(AnchorBlock *anchor);

@@ -228,6 +228,9 @@ BOOL WinInvertRect(HPS handle, PRECTL input)
 BOOL WinDrawBitmap(HPS destination, ULONG handle, PRECTL source, PPOINTL point, LONG foreground,
                    LONG background, ULONG flags)
 {
+    TRACE_NATIVE("WinDrawBitmap(%u, %u, %p, %p, %d, %d, %u)", (unsigned)destination,
+                 (unsigned)handle, source, point, (int)foreground, (int)background,
+                 (unsigned)flags);
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
     BOOL result = FALSE;

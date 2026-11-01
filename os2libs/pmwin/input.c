@@ -126,17 +126,44 @@ LONG WinGetKeyState(HWND desktop, LONG key)
                 : key == 10 ? (anchor->modifiers & 16) != 0
                 : key == 11 ? (anchor->modifiers & 32) != 0
                             : anchor->key_down[key] != 0;
-    return down ? (SHORT)0x8000 : 0;
+    return (SHORT)((down ? 0x8000 : 0) | anchor->key_toggled[key]);
 }
 LONG WinGetPhysKeyState(HWND desktop, LONG scan)
 {
-    if (scan == 0x2a || scan == 0x36)
-        return WinGetKeyState(desktop, 9);
-    if (scan == 0x1d)
-        return WinGetKeyState(desktop, 10);
-    if (scan == 0x38)
-        return WinGetKeyState(desktop, 11);
-    return 0;
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor || desktop != HWND_DESKTOP || scan < 0 || scan > 255)
+        return 0;
+    unsigned state = anchor->physical_keys[scan];
+    anchor->physical_keys[scan] &= ~1u;
+    return (SHORT)((state & 2 ? 0x8000 : 0) | (state & 1));
+}
+void synchronizeInputState(AnchorBlock *anchor, const QMSG *message)
+{
+    if (message->msg == WM_CHAR)
+    {
+        ULONG flags = (ULONG)(uintptr_t)message->mp1;
+        unsigned key = (unsigned)((uintptr_t)message->mp2 >> 16) & 255;
+        if ((flags & 2) && key)
+        {
+            BOOL down = !(flags & 0x40);
+            if (down && !anchor->key_down[key] && !(flags & 0x80))
+                anchor->key_toggled[key] ^= 1;
+            anchor->key_down[key] = down;
+        }
+        anchor->modifiers = flags & (8 | 16 | 32);
+    }
+    else if (message->msg >= WM_BUTTON1DOWN && message->msg <= WM_BUTTON3UP)
+    {
+        ULONG index = message->msg - WM_BUTTON1DOWN;
+        if (index % 3 < 2)
+        {
+            unsigned key = index / 3 + 1;
+            BOOL down = index % 3 == 0;
+            if (down && !anchor->key_down[key])
+                anchor->key_toggled[key] ^= 1;
+            anchor->key_down[key] = down;
+        }
+    }
 }
 static unsigned virtual_key(uint32 key)
 {
@@ -147,6 +174,8 @@ static unsigned virtual_key(uint32 key)
         case LX_HOST_KEY_TAB:
             return 6;
         case LX_HOST_KEY_RETURN:
+            return 8;
+        case LX_HOST_KEY_KP_ENTER:
             return 0x1e;
         case LX_HOST_KEY_ESCAPE:
             return 0xf;
@@ -181,6 +210,18 @@ static unsigned virtual_key(uint32 key)
     }
     return key >= LX_HOST_KEY_F1 && key < LX_HOST_KEY_F1 + 24 ? 0x20 + key - LX_HOST_KEY_F1 : 0;
 }
+typedef struct NavigationKey
+{
+    unsigned key, scan, character, control_character;
+} NavigationKey;
+/* Enhanced keys use OS/2 physical positions and BIOS extended translations. */
+static const NavigationKey navigation_keys[] = {
+    {LX_HOST_KEY_HOME, 0x60, 0x47, 0x77},   {LX_HOST_KEY_UP, 0x61, 0x48, 0x8d},
+    {LX_HOST_KEY_PAGEUP, 0x62, 0x49, 0x84}, {LX_HOST_KEY_LEFT, 0x63, 0x4b, 0x73},
+    {LX_HOST_KEY_RIGHT, 0x64, 0x4d, 0x74},  {LX_HOST_KEY_END, 0x65, 0x4f, 0x75},
+    {LX_HOST_KEY_DOWN, 0x66, 0x50, 0x91},   {LX_HOST_KEY_PAGEDOWN, 0x67, 0x51, 0x76},
+    {LX_HOST_KEY_INSERT, 0x68, 0x52, 0x92}, {LX_HOST_KEY_DELETE, 0x69, 0x53, 0x93},
+};
 static unsigned cp437(uint32 point)
 {
     if (point < 128)
@@ -192,6 +233,19 @@ static unsigned cp437(uint32 point)
 }
 BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
 {
+    const NavigationKey *navigation = NULL;
+    for (unsigned i = 0; i < sizeof navigation_keys / sizeof navigation_keys[0]; i++)
+        if (navigation_keys[i].key == event->key)
+            navigation = &navigation_keys[i];
+    unsigned scan = navigation                           ? navigation->scan
+                    : event->key == LX_HOST_KEY_KP_ENTER ? 0x5a
+                                                         : event->scancode;
+    if ((event->type == LX_HOST_EVENT_KEY_DOWN || event->type == LX_HOST_EVENT_KEY_UP) && scan &&
+        scan < 256)
+    {
+        uint8 *state = &anchor->physical_keys[scan];
+        *state = event->type == LX_HOST_EVENT_KEY_DOWN ? 3 : (*state & 1);
+    }
     Window *window = getWindowFromHWND(anchor, anchor->focus);
     if (!window || window->destroying)
         return FALSE;
@@ -203,8 +257,7 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
                   (event->modifiers & LX_HOST_MOD_ALT ? 32 : 0);
     if (event->type == LX_HOST_EVENT_TEXT)
         flags = anchor->text_modifiers;
-    else
-        anchor->modifiers = flags;
+
     if (event->type == LX_HOST_EVENT_TEXT)
     {
         const uint8 *p = (const uint8 *)event->text;
@@ -232,8 +285,6 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return posted;
     }
     unsigned key = virtual_key(event->key);
-    if (key)
-        anchor->key_down[key] = event->type == LX_HOST_EVENT_KEY_DOWN;
     if (!key && event->type == LX_HOST_EVENT_KEY_DOWN && !(flags & (16 | 32)))
     {
         anchor->text_scancode = event->scancode;
@@ -249,11 +300,26 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
     if ((flags & 8) && character >= 'a' && character <= 'z')
         character -= 'a' - 'A';
     ULONG parameter = key ? key << 16 : character;
-    return postTimestampedMsg(anchor, window->hwnd, WM_CHAR,
-                              (MPARAM)(uintptr_t)(flags | (key ? 2 : 1) |
-                                                  (event->scancode ? 4 : 0) | 1u << 16 |
-                                                  event->scancode << 24),
-                              (MPARAM)(uintptr_t)parameter, (ULONG)event->timestamp);
+    unsigned control = event->key == LX_HOST_KEY_RETURN || event->key == LX_HOST_KEY_KP_ENTER ? 13
+                       : event->key == LX_HOST_KEY_TAB                                        ? 9
+                       : event->key == LX_HOST_KEY_BACKSPACE                                  ? 8
+                       : event->key == LX_HOST_KEY_ESCAPE                                     ? 27
+                                                                                              : 0;
+    if (control)
+    {
+        if (event->type == LX_HOST_EVENT_KEY_DOWN)
+            flags |= 1; /* KC_CHAR validates control characters only on keydown. */
+        parameter |= control;
+        if (event->key == LX_HOST_KEY_ESCAPE || event->type == LX_HOST_EVENT_KEY_UP)
+            parameter |= (event->key == LX_HOST_KEY_KP_ENTER ? 0xe0 : scan) << 8;
+    }
+    if (navigation)
+        parameter |=
+            ((flags & 16 ? navigation->control_character : navigation->character) << 8) | 0xe0;
+    return postTimestampedMsg(
+        anchor, window->hwnd, WM_CHAR,
+        (MPARAM)(uintptr_t)(flags | (key ? 2 : 1) | (scan ? 4 : 0) | 1u << 16 | scan << 24),
+        (MPARAM)(uintptr_t)parameter, (ULONG)event->timestamp);
 }
 
 ULONG WinGetCurrentTime(HAB hab)

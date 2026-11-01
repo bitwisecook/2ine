@@ -1,5 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Frame/client lifetime, queue filtering, retained drawing and timer contracts. */
+#include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin.h"
 #include "os2libs/pmgpi.h"
 #include "guest/handles.h"
@@ -85,6 +86,82 @@ static void accelerator_contracts(HAB hab, HWND frame, HWND client)
     CHECK(WinSetAccelTable(hab, 0, frame) && WinDestroyAccelTable(handle));
     CHECK(!WinQueryAccelTable(hab, frame) && !WinDestroyAccelTable(handle));
 }
+static void keyboard_contracts(HAB hab, HWND window)
+{
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    CHECK(anchor && WinSetFocus(HWND_DESKTOP, window));
+    LxHostEvent event = {0};
+    event.type = LX_HOST_EVENT_KEY_DOWN;
+    event.key = LX_HOST_KEY_CTRL;
+    event.scancode = 0x1d;
+    event.modifiers = LX_HOST_MOD_CTRL;
+    CHECK(processKeyboardEvent(anchor, &event));
+    event.key = LX_HOST_KEY_END;
+    event.scancode = 0x4f;
+    CHECK(processKeyboardEvent(anchor, &event));
+    event.type = LX_HOST_EVENT_KEY_UP;
+    CHECK(processKeyboardEvent(anchor, &event));
+    event.key = LX_HOST_KEY_CTRL;
+    event.scancode = 0x1d;
+    event.modifiers = 0;
+    CHECK(processKeyboardEvent(anchor, &event));
+    CHECK(WinGetPhysKeyState(HWND_DESKTOP, 0x1d) == 1);
+    CHECK(WinGetPhysKeyState(HWND_DESKTOP, 0x1d) == 0);
+    QMSG message;
+    CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
+    CHECK((WinGetKeyState(HWND_DESKTOP, 10) & 0x8000) != 0);
+    CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
+    CHECK((uintptr_t)message.mp2 == 0x001375e0 && ((uintptr_t)message.mp1 >> 24) == 0x65 &&
+          (WinGetKeyState(HWND_DESKTOP, 10) & 0x8000) != 0);
+    CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
+    CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
+    CHECK((WinGetKeyState(HWND_DESKTOP, 10) & 0x8000) == 0);
+    for (unsigned keypad = 0; keypad < 2; keypad++)
+    {
+        event.type = LX_HOST_EVENT_KEY_DOWN;
+        event.key = keypad ? LX_HOST_KEY_KP_ENTER : LX_HOST_KEY_RETURN;
+        event.scancode = 0x1c;
+        CHECK(processKeyboardEvent(anchor, &event));
+        CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
+        CHECK(((uintptr_t)message.mp1 & 7) == 7);
+        CHECK((uintptr_t)message.mp2 == ((keypad ? 0x1eu : 8u) << 16 | 13));
+        CHECK(((uintptr_t)message.mp1 >> 24) == (keypad ? 0x5au : 0x1cu));
+        event.type = LX_HOST_EVENT_KEY_UP;
+        CHECK(processKeyboardEvent(anchor, &event));
+        CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
+        CHECK(((uintptr_t)message.mp1 & 0x47) == 0x46);
+        CHECK((uintptr_t)message.mp2 == (keypad ? 0x001ee00du : 0x00081c0du));
+    }
+    const struct
+    {
+        unsigned key, scan, plain, control;
+    } navigation[] = {
+        {LX_HOST_KEY_HOME, 0x60, 0x001447e0, 0x001477e0},
+        {LX_HOST_KEY_END, 0x65, 0x00134fe0, 0x001375e0},
+        {LX_HOST_KEY_LEFT, 0x63, 0x00154be0, 0x001573e0},
+        {LX_HOST_KEY_RIGHT, 0x64, 0x00174de0, 0x001774e0},
+        {LX_HOST_KEY_UP, 0x61, 0x001648e0, 0x00168de0},
+        {LX_HOST_KEY_DOWN, 0x66, 0x001850e0, 0x001891e0},
+        {LX_HOST_KEY_PAGEUP, 0x62, 0x001149e0, 0x001184e0},
+        {LX_HOST_KEY_PAGEDOWN, 0x67, 0x001251e0, 0x001276e0},
+        {LX_HOST_KEY_INSERT, 0x68, 0x001a52e0, 0x001a92e0},
+        {LX_HOST_KEY_DELETE, 0x69, 0x001b53e0, 0x001b93e0},
+    };
+    for (unsigned i = 0; i < sizeof navigation / sizeof navigation[0]; i++)
+        for (unsigned control = 0; control < 2; control++)
+            for (unsigned up = 0; up < 2; up++)
+            {
+                event.type = up ? LX_HOST_EVENT_KEY_UP : LX_HOST_EVENT_KEY_DOWN;
+                event.key = navigation[i].key;
+                event.modifiers = control ? LX_HOST_MOD_CTRL : 0;
+                CHECK(processKeyboardEvent(anchor, &event));
+                CHECK(WinGetMsg(hab, &message, window, WM_CHAR, WM_CHAR));
+                CHECK(((uintptr_t)message.mp1 >> 24) == navigation[i].scan);
+                CHECK(((uintptr_t)message.mp1 & 0x57) == (6u | control << 4 | up << 6));
+                CHECK((uintptr_t)message.mp2 ==
+                      (control ? navigation[i].control : navigation[i].plain));
+            }
+}
 static void menu_contracts(HWND parent)
 {
     const uint8_t empty[] = {10, 0, 0, 0, 181, 1, 0, 0, 0, 0};
@@ -134,6 +211,17 @@ static void graphics_contracts(HAB hab, HWND window)
     SIZEL size = {32, 24};
     HPS ps = GpiCreatePS(hab, memory, &size, 0x5008);
     CHECK(ps && GpiQueryDevice(ps) == memory && DevCloseDC(memory) == (ULONG)-1);
+    LONG colors[40];
+    CHECK(GpiQueryLogColorTable(ps, 0, 0, 40, colors) == 16);
+    CHECK(colors[0] == 0xffffff && colors[1] == 0xff && colors[2] == 0xff0000);
+    LONG custom = 0x123456;
+    CHECK(GpiCreateLogColorTable(ps, 0, 2, 20, 1, &custom));
+    CHECK(GpiQueryLogColorTable(ps, 0, 16, 5, colors) == 5 && colors[0] == -1 &&
+          colors[4] == custom);
+    CHECK(GpiQueryLogColorTable(ps, 2, 16, 3, colors) == 2 && colors[0] == 20 &&
+          colors[1] == custom);
+    CHECK(GpiCreateLogColorTable(ps, 0, 0, 0, 0, NULL));
+    CHECK(GpiSetColor(ps, CLR_RED) && GpiQueryColor(ps) == CLR_RED);
     CHECK(GpiSetCp(ps, 437) && GpiQueryCp(ps) == 437 && !GpiSetCp(ps, 932));
     FATTRS attrs = {0};
     attrs.usRecordLength = sizeof attrs;
@@ -145,15 +233,28 @@ static void graphics_contracts(HAB hab, HWND window)
     SIZEF box = {24 * 65536, 24 * 65536};
     CHECK(GpiSetCharBox(ps, &box) && GpiQueryFontMetrics(ps, sizeof metrics, &metrics) &&
           metrics.lEmHeight == 24);
+    CHECK(metrics.lLowerCaseAscent >= metrics.lXHeight &&
+          metrics.lLowerCaseAscent < metrics.lMaxAscender &&
+          metrics.lLowerCaseDescent <= metrics.lMaxDescender);
     LONG widths[2];
     CHECK(GpiQueryWidthTable(ps, 'W', 1, widths) && GpiQueryWidthTable(ps, 'i', 1, widths + 1) &&
           widths[0] == widths[1]);
     CHECK(GpiQueryNumberSetIds(ps) == 1 && !GpiSetCharSet(ps, 6));
+    CHECK(GpiQueryCharMode(ps) == 1 && GpiSetCharMode(ps, 3));
+    CHECK(!GpiSetCharMode(ps, 4));
     LONG saved = GpiSavePS(ps);
-    CHECK(saved > 0 && GpiSetBackMix(ps, 2) && GpiQueryBackMix(ps) == 2);
+    CHECK(saved > 0 && GpiSetCharMode(ps, 0) && GpiQueryCharMode(ps) == 1 && GpiSetBackMix(ps, 2) &&
+          GpiQueryBackMix(ps) == 2);
     CHECK(GpiSetCharSet(ps, 0) && GpiRestorePS(ps, saved) && GpiQueryCharSet(ps) == 5 &&
           GpiQueryBackMix(ps) == 5);
-    CHECK(!GpiRestorePS(ps, saved));
+    CHECK(!GpiRestorePS(ps, saved) && GpiQueryCharMode(ps) == 3);
+    POINTL converted = {16, 12};
+    RECTL viewport = {10, 20, 74, 68};
+    CHECK(GpiSetPageViewport(ps, &viewport) && GpiConvert(ps, 1, 5, 1, &converted));
+    CHECK(converted.x == 42 && converted.y == 44);
+    CHECK(GpiConvert(ps, 5, 2, 1, &converted) && converted.x == 16 && converted.y == 12);
+    viewport = (RECTL){0, 0, 32, 24};
+    CHECK(GpiSetPageViewport(ps, &viewport));
     uint8_t header[64] = {64};
     header[4] = 32;
     header[8] = 24;
@@ -202,6 +303,119 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(GpiSetBitmap(ps, 0) == bitmap && GpiDeleteSetId(ps, 9) && GpiDeleteBitmap(bitmap));
     CHECK(!GpiDeleteBitmap(bitmap) && GpiDestroyPS(ps) && DevCloseDC(memory) == 0);
     CHECK(!DevQueryCaps(memory, 0, 1, widths));
+}
+static void frame_state_contracts(void)
+{
+    HWND parent = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "", 0, 0, 0, 64, 48, 0, HWND_TOP, 0,
+                                  NULL, NULL);
+    HWND child = WinCreateWindow(parent, (PSZ)WC_FRAME, "", 0, 10, 7, 20, 12, parent, HWND_TOP, 0,
+                                 NULL, NULL);
+    CHECK(parent && child);
+    CHECK(!WinSetWindowPos(child, HWND_TOP, 0, 0, 0, 0, SWP_MAXIMIZE | SWP_RESTORE));
+    CHECK(WinSetWindowPos(child, HWND_TOP, 0, 0, 0, 0, SWP_MAXIMIZE));
+    SWP position;
+    CHECK(WinQueryWindowPos(child, &position) && (position.fl & SWP_MAXIMIZE));
+    CHECK(position.x == 0 && position.y == 0 && position.cx == 64 && position.cy == 48);
+    CHECK(WinQueryWindowUShort(child, 0x0c) == 10 && WinQueryWindowUShort(child, 0x10) == 20);
+    CHECK(WinSetWindowPos(parent, HWND_TOP, 0, 0, 80, 60, SWP_SIZE));
+    CHECK(WinQueryWindowPos(child, &position) && position.cx == 80 && position.cy == 60);
+    CHECK(WinSetWindowUShort(child, 0x0c, 13));
+    CHECK(WinSetWindowPos(child, HWND_TOP, 0, 0, 0, 0, SWP_RESTORE));
+    CHECK(WinQueryWindowPos(child, &position) && !(position.fl & SWP_MAXIMIZE));
+    CHECK(position.x == 13 && position.y == 7 && position.cx == 20 && position.cy == 12);
+    CHECK(WinDestroyWindow(parent));
+}
+static void raster_contracts(HAB hab, HWND window)
+{
+    HDC dc = DevOpenDC(hab, 8, "*", 0, NULL, 0);
+    SIZEL size = {8, 8};
+    HPS ps = GpiCreatePS(hab, dc, &size, 0x5008);
+    uint8_t header[12] = {12, 0, 0, 0, 8, 0, 8, 0, 1, 0, 24, 0};
+    ULONG bitmap = GpiCreateBitmap(ps, header, 0, NULL, NULL);
+    CHECK(dc && ps && bitmap && GpiSetBitmap(ps, bitmap) == 0);
+    RECTL all = {0, 0, 8, 8};
+    CHECK(WinFillRect(ps, &all, CLR_WHITE));
+    CHECK(GpiSetColor(ps, CLR_RED));
+    POINTL from = {2, 1}, to = {2, 6};
+    CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
+    uint32_t pixel;
+    CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(GpiSetColor(ps, CLR_WHITE) && GpiSetMix(ps, 4));
+    CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
+    CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0x00ffff);
+    CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
+    CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(GpiSetMix(ps, 2) && GpiSetLineType(ps, 8));
+    CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
+    CHECK(lx_pm_raster_read(ps, 2, 3, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(GpiSetLineType(ps, 7));
+    POINTL segments[2] = {{4, 2}, {6, 2}}, current;
+    from = (POINTL){4, 0};
+    CHECK(GpiSetColor(ps, CLR_RED) && GpiMove(ps, &from));
+    CHECK(GpiPolyLine(ps, 2, segments) && GpiQueryCurrentPosition(ps, &current));
+    CHECK(current.x == 6 && current.y == 2);
+    CHECK(lx_pm_raster_read(ps, 4, 1, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(lx_pm_raster_read(ps, 5, 2, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(GpiPolyLine(ps, 0, NULL) && !GpiPolyLine(ps, -1, segments));
+    RECTL shifted_view = {1, 1, 9, 9}, shifted_clip = {2, 2, 5, 3};
+    CHECK(WinFillRect(ps, &all, CLR_WHITE) && GpiSetPageViewport(ps, &shifted_view));
+    ULONG region = GpiCreateRegion(ps, 1, &shifted_clip);
+    CHECK(region && GpiSetClipRegion(ps, region, NULL) == 2);
+    from = (POINTL){1, 1};
+    to = (POINTL){3, 1};
+    CHECK(GpiMove(ps, &from) && GpiLine(ps, &to));
+    CHECK(lx_pm_raster_read(ps, 2, 2, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(lx_pm_raster_read(ps, 4, 2, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0xffffff);
+    CHECK(GpiSetClipRegion(ps, 0, NULL) == 2 && GpiDestroyRegion(ps, region));
+    shifted_view = (RECTL){0, 0, 16, 16};
+    CHECK(GpiSetPageViewport(ps, &shifted_view) && GpiMove(ps, &from) && GpiLine(ps, &to));
+    CHECK(lx_pm_raster_read(ps, 6, 2, 1, 1, &pixel) && pixel == 0xff0000);
+    shifted_view = (RECTL){0, 0, 8, 8};
+    CHECK(GpiSetPageViewport(ps, &shifted_view));
+    uint8_t info[18] = {12, 0, 0, 0, 2, 0, 2, 0, 1, 0, 1, 0, 0, 0, 0, 255, 255, 255};
+    uint8_t bits[8] = {0x80, 0, 0, 0, 0x40, 0, 0, 0};
+    ULONG tile = GpiCreateBitmap(ps, info, 4, bits, info);
+    CHECK(tile && GpiSetBitmapId(ps, tile, 7) && GpiSetPatternSet(ps, 7));
+    CHECK(GpiSetColor(ps, CLR_BLUE) && GpiSetBackColor(ps, CLR_WHITE) && GpiSetBackMix(ps, 2));
+    uint8_t line[28] = {CLR_RED};
+    CHECK(GpiSetAttrs(ps, 1, 1, 0, line));
+    from = (POINTL){0, 0};
+    to = (POINTL){5, 5};
+    CHECK(GpiMove(ps, &from) && GpiBox(ps, 3, &to, 0, 0));
+    CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0x0000ff);
+    CHECK(lx_pm_raster_read(ps, 2, 1, 1, 1, &pixel) && pixel == 0xffffff);
+    CHECK(lx_pm_raster_read(ps, 0, 1, 1, 1, &pixel) && pixel == 0xff0000);
+    uint8_t area[24] = {CLR_BLUE, 0, 0, 0, 0xfe, 0xff, 0xff, 0xff, 2, 0,
+                        2,        0, 7, 0, 0,    0,    1,    0,    0, 0};
+    CHECK(GpiSetBackMix(ps, 5) && GpiSetAttrs(ps, 4, 0x5f, 0, area));
+    POINTL reference;
+    CHECK(GpiQueryPatternRefPoint(ps, &reference) && reference.x == 1 && reference.y == 0);
+    CHECK(GpiMove(ps, &from) && GpiBox(ps, 1, &to, 0, 0));
+    CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0xffffff);
+    CHECK(lx_pm_raster_read(ps, 2, 1, 1, 1, &pixel) && pixel == 0x0000ff);
+    LONG saved = GpiSavePS(ps);
+    reference = (POINTL){INT32_MIN, INT32_MAX};
+    CHECK(saved > 0 && GpiSetPatternRefPoint(ps, &reference));
+    CHECK(GpiRestorePS(ps, saved) && GpiQueryPatternRefPoint(ps, &reference));
+    CHECK(reference.x == 1 && reference.y == 0);
+    CHECK(GpiSetPatternSet(ps, 0) && GpiDeleteSetId(ps, 7) && GpiDeleteBitmap(tile));
+    CHECK(WinFillRect(ps, &all, CLR_GREEN));
+    uint32_t blue = 0x0000ff;
+    CHECK(lx_pm_raster_write(ps, 1, 1, 1, 1, &blue));
+    HPS target = WinGetPS(window);
+    POINTL points[3] = {{0, 0}, {8, 8}, {0, 0}};
+    CHECK(WinFillRect(target, &all, CLR_RED) && GpiSetBackColor(target, CLR_GREEN));
+    CHECK(GpiSetBackMix(target, 18) && GpiBitBlt(target, ps, 3, points, 0xcc, 2));
+    CHECK(lx_pm_raster_read(target, 0, 0, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(lx_pm_raster_read(target, 1, 1, 1, 1, &pixel) && pixel == blue);
+    CHECK(GpiSetBackColor(target, CLR_RED) && GpiSetBackMix(target, 19));
+    CHECK(GpiBitBlt(target, ps, 3, points, 0xcc, 2));
+    CHECK(lx_pm_raster_read(target, 0, 0, 1, 1, &pixel) && pixel == 0x00ff00);
+    CHECK(lx_pm_raster_read(target, 1, 1, 1, 1, &pixel) && pixel == blue);
+    CHECK(WinReleasePS(target));
+    CHECK(GpiSetBitmap(ps, 0) == bitmap && GpiDeleteBitmap(bitmap));
+    CHECK(GpiDestroyPS(ps) && DevCloseDC(dc) == 0);
 }
 int main(void)
 {
@@ -266,6 +480,9 @@ int main(void)
     menu_contracts(frame);
     list_contracts(frame);
     hook_contracts(hab, client);
+    keyboard_contracts(hab, client);
+    raster_contracts(hab, client);
+    frame_state_contracts();
     SWP position;
     RECTL rectangle;
     CHECK(WinQueryWindowPos(client, &position) && position.cx == 64 && position.cy == 48);

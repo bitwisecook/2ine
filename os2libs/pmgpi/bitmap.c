@@ -271,20 +271,36 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
     }
     else
         ok = lx_pm_raster_read(source, points[2].x, points[2].y, (unsigned)sw, (unsigned)sh, src);
-    if (ok && rop != 0xcc && rop != 0 && rop != 0xff &&
+    PresentationSpace *ps = lx_pm_font_space(destination);
+    BOOL transparent = ps && (ps->back_mix == 18 || ps->back_mix == 19);
+    if (ok && (transparent || (rop != 0xcc && rop != 0 && rop != 0xff)) &&
         !lx_pm_raster_read(destination, points[0].x, points[0].y, (unsigned)w, (unsigned)h, dst))
         ok = FALSE;
-    PresentationSpace *ps = lx_pm_font_space(destination);
-    uint32 pattern = ps ? (uint32)lx_pm_resolve_color(destination, ps->color) : 0;
+    LONG background = lx_pm_resolve_color(destination, ps->back_color);
     if (ok)
     {
-        for (LONG y = 0; y < h; y++)
-            for (LONG x = 0; x < w; x++)
-                dst[(size_t)y * w + x] =
-                    rop_pixel(pattern, src[(size_t)(y * sh / h) * sw + x * sw / w],
-                              dst[(size_t)y * w + x], (unsigned)rop);
-        ok = lx_pm_raster_write(destination, points[0].x, points[0].y, (unsigned)w, (unsigned)h,
-                                dst);
+        for (LONG y = 0; y < h && ok; y++)
+            for (LONG x = 0; x < w && ok; x++)
+            {
+                size_t index = (size_t)y * w + x;
+                uint32 source_pixel = src[(size_t)(y * sh / h) * sw + x * sw / w];
+                if ((ps->back_mix == 18 && source_pixel == (uint32)background) ||
+                    (ps->back_mix == 19 && dst[index] != (uint32)background))
+                    continue;
+                uint32 pattern = 0;
+                BOOL foreground;
+                if (((rop ^ (rop >> 4)) & 15) &&
+                    !lx_pm_pattern_pixel(destination, points[0].x + x, points[0].y + y, &pattern,
+                                         &foreground))
+                {
+                    ok = FALSE;
+                    break;
+                }
+                dst[index] = rop_pixel(pattern, source_pixel, dst[index], (unsigned)rop);
+            }
+        if (ok)
+            ok = lx_pm_raster_write(destination, points[0].x, points[0].y, (unsigned)w, (unsigned)h,
+                                    dst);
     }
     free(dst);
     free(src);

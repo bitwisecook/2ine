@@ -132,6 +132,18 @@ int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
     metrics->leading = (int)(m->height / 64) - metrics->ascent - metrics->descent;
     if (metrics->leading < 0)
         metrics->leading = 0;
+    for (unsigned point = 'a'; point <= 'z'; point++)
+    {
+        if (FT_Load_Char(face, point, FT_LOAD_DEFAULT))
+            return 0;
+        FT_Glyph_Metrics *glyph = &face->glyph->metrics;
+        int ascent = (int)(glyph->horiBearingY + 63) / 64;
+        int descent = (int)(glyph->height - glyph->horiBearingY + 63) / 64;
+        if (ascent > metrics->lowercase_ascent)
+            metrics->lowercase_ascent = ascent;
+        if (descent > metrics->lowercase_descent)
+            metrics->lowercase_descent = descent;
+    }
     metrics->maximum_width = (int)(m->max_advance + 63) / 64;
     metrics->underline_size = scaled(font, face->underline_thickness);
     if (metrics->underline_size < 1)

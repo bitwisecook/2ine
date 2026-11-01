@@ -16,8 +16,12 @@ extern "C"
     OS2EXPORT LONG OS2API MulDiv(LONG number, LONG numerator, LONG denominator)
         OS2APIINFO(ord = 494, name = MULDIV);
     OS2EXPORT LONG OS2API RegCloseKey(ULONG key) OS2APIINFO(ord = 541, name = REGCLOSEKEY);
+    OS2EXPORT LONG OS2API RegOpenKey(ULONG key, PSZ name, PULONG output)
+        OS2APIINFO(ord = 549, name = REGOPENKEY);
     OS2EXPORT LONG OS2API RegOpenKeyEx(ULONG key, PSZ name, ULONG options, ULONG access,
                                        PULONG output) OS2APIINFO(ord = 550, name = REGOPENKEYEX);
+    OS2EXPORT LONG OS2API RegCreateKey(ULONG key, PSZ name, PULONG output)
+        OS2APIINFO(ord = 542, name = REGCREATEKEY);
     OS2EXPORT LONG OS2API RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name,
                                          ULONG options, ULONG access, PVOID security, PULONG output,
                                          PULONG disposition)
@@ -25,6 +29,11 @@ extern "C"
     OS2EXPORT LONG OS2API RegQueryValueEx(ULONG key, PSZ name, PULONG reserved, PULONG type,
                                           PVOID data, PULONG size)
         OS2APIINFO(ord = 553, name = REGQUERYVALUEEX);
+    OS2EXPORT LONG OS2API RegEnumValue(ULONG key, ULONG index, PSZ name, PULONG name_size,
+                                       PULONG reserved, PULONG type, PVOID data, PULONG data_size)
+        OS2APIINFO(ord = 548, name = REGENUMVALUE);
+    OS2EXPORT LONG OS2API RegDeleteValue(ULONG key, PSZ name)
+        OS2APIINFO(ord = 545, name = REGDELETEVALUE);
     OS2EXPORT LONG OS2API RegSetValueEx(ULONG key, PSZ name, ULONG reserved, ULONG type, PVOID data,
                                         ULONG size) OS2APIINFO(ord = 555, name = REGSETVALUEEX);
 #ifdef __cplusplus

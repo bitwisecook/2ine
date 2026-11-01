@@ -109,7 +109,9 @@ The optional `tests/integration/smartsuite.py` harness exercises Word Pro's real
 new/edit/font/save/reopen/edit/save/reopen/exit cycle using separately supplied
 installation files and settings. It records screenshots and document hashes;
 see [GUI applications](gui.md) for invocation and limits. The native Linux
-workflow is qualified independently of the portable contract suite.
+and Linux Unicorn document workflows are checked independently of the contract
+suites. The harness allows longer interaction settling time for emulated
+execution; it copies and redirects application preferences before startup.
 
 PM contracts also cover logical-font text output, memory bitmaps and raster
 copies, region clipping, presentation-space state, accelerators, list searching

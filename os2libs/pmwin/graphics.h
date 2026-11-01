@@ -45,6 +45,9 @@ BOOL lx_pm_raster_read(HPS ps, LONG x, LONG y, unsigned width, unsigned height, 
 BOOL lx_pm_raster_write(HPS ps, LONG x, LONG y, unsigned width, unsigned height,
                         const uint32_t *pixels);
 struct PresentationSpace;
+SIZEL lx_pm_page_dimensions(struct PresentationSpace *ps);
+BOOL lx_pm_transform_point(struct PresentationSpace *ps, POINTL *point, BOOL to_device);
+BOOL lx_pm_convert_points(HPS ps, LONG source, LONG target, LONG count, POINTL *points);
 struct PresentationSpace *lx_pm_font_space(HPS hps);
 LxHostFont *lx_pm_font(HPS hps);
 unsigned lx_pm_font_index(HPS hps);
@@ -54,6 +57,9 @@ BOOL lx_pm_destroy_ps(HPS hps);
 LONG lx_pm_color(HPS hps, LONG color);
 BOOL lx_pm_move(HPS hps, const POINTL *point);
 LONG lx_pm_line(HPS hps, const POINTL *point, int pel);
+uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix);
+BOOL lx_pm_pattern_pixel(HPS ps, LONG x, LONG y, uint32_t *rgb, BOOL *foreground);
+BOOL lx_pm_fill_span(HPS ps, LONG x, LONG y, LONG count, unsigned primitive);
 LONG lx_pm_rgb(LONG index);
 LONG lx_pm_text(HPS ps, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *clip);

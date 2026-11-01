@@ -371,8 +371,10 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
                     event->key = LX_HOST_KEY_TAB;
                     break;
                 case SDLK_RETURN:
-                case SDLK_KP_ENTER:
                     event->key = LX_HOST_KEY_RETURN;
+                    break;
+                case SDLK_KP_ENTER:
+                    event->key = LX_HOST_KEY_KP_ENTER;
                     break;
                 case SDLK_ESCAPE:
                     event->key = LX_HOST_KEY_ESCAPE;

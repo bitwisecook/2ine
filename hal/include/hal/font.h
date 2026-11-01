@@ -10,6 +10,7 @@ typedef struct LxHostFontMetrics
     char family[32], face[32];
     unsigned bold, italic, fixed;
     int em, ascent, descent, leading, average_width, maximum_width, x_height;
+    int lowercase_ascent, lowercase_descent;
     int underline_size, underline_position, strikeout_size, strikeout_position;
 } LxHostFontMetrics;
 typedef struct LxHostGlyph

@@ -45,6 +45,8 @@ int main(void)
         LxHostFontMetrics metrics;
         CHECK(font && lx_host_font_metrics(font, &metrics));
         CHECK(metrics.family[0] && metrics.ascent > 0 && metrics.descent >= 0 && metrics.em == 16);
+        CHECK(metrics.lowercase_ascent > 0 && metrics.lowercase_ascent <= metrics.ascent);
+        CHECK(metrics.lowercase_descent >= 0 && metrics.lowercase_descent <= metrics.descent);
         CHECK(metrics.bold == ((i % 4) & 1) && metrics.italic == (((i % 4) >> 1) & 1));
         int wide = lx_host_font_advance(font, 'W'), narrow = lx_host_font_advance(font, 'i');
         CHECK(wide > 0 && narrow > 0 && (i < 8 ? wide > narrow : wide == narrow));
