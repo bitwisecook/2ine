@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/graphics.h"
 PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor, const HPS hps)
 {
     if (hps >= FIRST_HPS_VALUE)
@@ -27,11 +28,28 @@ void destroyPresentationSpace(AnchorBlock *anchor, PresentationSpace *ps)
     {
         return;
     }
+    while (ps->saved)
+    {
+        PmSavedSpace *saved = ps->saved;
+        ps->saved = saved->next;
+        free(saved);
+    }
+    if (ps->clip_lease.resource)
+        ((PmRegion *)ps->clip_lease.resource)->selected--;
+    lx_handle_release(&ps->clip_lease);
+    if (ps->bitmap_lease.resource)
+        ((PmBitmap *)ps->bitmap_lease.resource)->selected--;
+    lx_handle_release(&ps->bitmap_lease);
+    for (unsigned i = 0; i < 255; i++)
+        lx_handle_release(&ps->bitmap_ids[i]);
     lx_host_font_close(ps->font);
+    if (ps->dc_lease.resource)
+        ((PmDeviceContext *)ps->dc_lease.resource)->spaces--;
+    lx_handle_release(&ps->dc_lease);
     memset(ps, '\0', sizeof(*ps));
 }
 
-HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint)
+HPS acquirePresentationSpace(HWND hwnd, HPS hps, PRECTL prclPaint, BOOL paint)
 {
     TRACE_NATIVE("WinBeginPaint(%u, %u, %p)", (uint)hwnd, (uint)hps, prclPaint);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -45,6 +63,7 @@ HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, NULLHANDLE);
     }
 
+    BOOL fresh = !hps;
     PresentationSpace *ps = NULL;
     if (hps != NULLHANDLE)
     {
@@ -87,17 +106,35 @@ HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint)
 
     ps->hps = hps;
     ps->window = win;
-    ps->color = CLR_BLACK;
+    ps->dc = hwnd;
+    if (fresh)
+    {
+        ps->codepage = 437;
+        ps->color = CLR_BLACK;
+        ps->back_color = CLR_WHITE;
+        ps->mix = 2;
+        ps->back_mix = 5;
+        for (unsigned i = 0; i < 5; i++)
+        {
+            ps->primitive_color[i] = CLR_BLACK;
+            ps->primitive_back[i] = CLR_WHITE;
+            ps->primitive_mix[i] = 2;
+            ps->primitive_back_mix[i] = 5;
+        }
+        ps->line_type = 7;
+        ps->pattern = 16;
+        ps->viewport = (RECTL){0, 0, win->w, win->h};
+    }
 
     if (prclPaint)
     {
         FIXME("report the update region, not the whole window");
-        prclPaint->xLeft = 0;
-        prclPaint->yBottom = 0;
-        prclPaint->xRight = win->w;
-        prclPaint->yTop = win->h;
+        *prclPaint =
+            WinIsRectEmpty(0, &win->invalid) ? (RECTL){0, 0, win->w, win->h} : win->invalid;
     }
 
+    if (paint)
+        validateWindowPaint(anchor, win);
     return hps;
 }
 
@@ -116,7 +153,7 @@ BOOL WinEndPaint(HPS hps)
     }
 
     Window *win = ps->window;
-    if (win->heavy.window)
+    if (win && win->heavy.window)
         lx_host_window_present(win->heavy.window);
 
     if (!ps->persistent)
@@ -228,6 +265,24 @@ BOOL WinFillRect(HPS hps, PRECTL prcl, LONG lColor)
     if (!prcl)
         return FALSE;
     Window *win = ps->window;
+    if (!win && ps->bitmap_lease.resource)
+    {
+        PmBitmap *bitmap = ps->bitmap_lease.resource;
+        LONG rgb = lx_pm_resolve_color(hps, lColor);
+        if (rgb < 0)
+            return FALSE;
+        LONG left = prcl->xLeft > 0 ? prcl->xLeft : 0;
+        LONG bottom = prcl->yBottom > 0 ? prcl->yBottom : 0;
+        LONG right = prcl->xRight < (LONG)bitmap->width ? prcl->xRight : (LONG)bitmap->width;
+        LONG top = prcl->yTop < (LONG)bitmap->height ? prcl->yTop : (LONG)bitmap->height;
+        for (LONG y = bottom; y < top; y++)
+            for (LONG x = left; x < right; x++)
+                if (lx_pm_clip_point(hps, x, y))
+                    bitmap->pixels[(size_t)y * bitmap->width + x] = (ULONG)rgb;
+        return TRUE;
+    }
+    if (!win)
+        return FALSE;
     LxHostRect cliprect;
     calcHeavyweightRect(win, &cliprect);
 
@@ -238,9 +293,34 @@ BOOL WinFillRect(HPS hps, PRECTL prcl, LONG lColor)
     rect.h = prcl->yTop - prcl->yBottom;
 
     uint8 r, g, b;
-    os2ColorIndexToRGB(lColor, &r, &g, &b);
+    LONG rgb = lx_pm_resolve_color(hps, lColor);
+    if (rgb < 0)
+        return FALSE;
+    r = (rgb >> 16) & 255;
+    g = (rgb >> 8) & 255;
+    b = rgb & 255;
 
-    return win->heavy.window && lx_host_window_fill(win->heavy.window, &cliprect, &rect, r, g, b)
-               ? TRUE
-               : FALSE;
+    if (!win->heavy.window)
+        return FALSE;
+    PmRegion visible = {0};
+    if (!lx_pm_window_clip(hps, prcl, &visible))
+        return FALSE;
+    BOOL result = TRUE;
+    for (size_t i = 0; result && i < visible.count; i++)
+    {
+        RECTL intersection;
+        if (!WinIntersectRect(0, &intersection, prcl, &visible.rects[i]))
+            continue;
+        LxHostRect part = {
+            cliprect.x + intersection.xLeft, cliprect.y + cliprect.h - intersection.yTop,
+            intersection.xRight - intersection.xLeft, intersection.yTop - intersection.yBottom};
+        result = lx_host_window_fill(win->heavy.window, &cliprect, &part, r, g, b);
+    }
+    free(visible.rects);
+    return result;
+}
+
+HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL rect)
+{
+    return acquirePresentationSpace(hwnd, hps, rect, TRUE);
 }

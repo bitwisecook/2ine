@@ -10,3 +10,7 @@ __pycache__/
 .ty_cache/
 
 _deps/
+
+# Original Warp fonts are private, user-supplied runtime inputs.
+*.[pP][fF][bB]
+*.[fF][oO][nN]

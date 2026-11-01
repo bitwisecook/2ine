@@ -124,3 +124,14 @@ static uint32 bridge32_RegQueryValueEx(uint8 *a)
     free(name);
     return result;
 }
+
+static uint32 bridge32_WinXProcessMsg(uint8 *a)
+{
+    uint32 address = lx_guest_load_u32(a);
+    LxGuestBorrow message = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, address, 32, LX_GUEST_READ, &message))
+        return 0;
+    uint32 result = WinXProcessMsg(message.host);
+    lx_execution_release(&message);
+    return result;
+}

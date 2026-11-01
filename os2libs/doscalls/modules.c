@@ -54,6 +54,7 @@ APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppf
 
     if (ordinal > 65533)
     {
+        TRACE_NATIVE("unavailable export %s#%u", lxmod->name, (uint)ordinal);
         return ERROR_INVALID_ORDINAL;
     }
     else if (ordinal != 0)
@@ -67,6 +68,7 @@ APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppf
                 return NO_ERROR;
             }
         }
+        TRACE_NATIVE("unavailable export %s#%u", lxmod->name, (uint)ordinal);
         return ERROR_INVALID_ORDINAL;
     }
     else

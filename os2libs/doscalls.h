@@ -722,6 +722,8 @@ extern "C"
     OS2EXPORT APIRET OS2API DosFreeResource(PVOID resource) OS2APIINFO(353);
     OS2EXPORT APIRET OS2API DosQueryResourceSize(HMODULE module, ULONG type, ULONG name,
                                                  PULONG size) OS2APIINFO(573);
+    OS2EXPORT APIRET OS2API Dos32QueryResourceSize(HMODULE module, ULONG type, ULONG name,
+                                                   PULONG size) OS2APIINFO(572);
     OS2EXPORT APIRET OS2API DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppfn)
         OS2APIINFO(321);
     OS2EXPORT APIRET OS2API DosQueryCp(ULONG cb, PULONG arCP, PULONG pcCP) OS2APIINFO(291);

@@ -4,6 +4,12 @@
 #include "os2libs/generated/pmwinx-lx.h"
 
 static uint32 references;
+BOOL WinXProcessMsg(PVOID message)
+{
+    (void)message;
+    /* This worker creates OS/2 PM windows; no Open32 window owns their messages. */
+    return FALSE;
+}
 
 VOID WinInitializeOpen32(ULONG reserved)
 {

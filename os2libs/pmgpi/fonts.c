@@ -4,6 +4,7 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
 #include "hal/font.h"
+#include "os2libs/pmwin/internal.h"
 #include "os2libs/pm_text.h"
 
 static const char *families[] = {"Helv", "Tms Rmn", "Courier"};
@@ -127,4 +128,154 @@ BOOL GpiQueryTextBox(HPS hps, LONG count, PCH text, LONG points, PPOINTL output)
     if (copied)
         memcpy(output, box, (size_t)copied * sizeof *box);
     return TRUE;
+}
+
+LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
+{
+    TRACE_NATIVE("GpiCreateLogFont(%u, %p, %d, %p)", (uint)handle, name, (int)id, attrs);
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || !attrs || attrs->usRecordLength != sizeof *attrs || id < 0 || id > 254 ||
+        !memchr(attrs->szFacename, 0, FACESIZE))
+        return 0;
+    if (ps->bitmap_ids[id].resource)
+        return 0;
+    if (name)
+        memcpy(ps->font_names[id], name, 8);
+    else
+        memset(ps->font_names[id], 0, 8);
+    unsigned index = 0;
+    BOOL matched = FALSE;
+    for (unsigned i = 0; i < 12; i++)
+    {
+        char face[64];
+        snprintf(face, sizeof face, "%s%s", families[i / 4], styles[i % 4]);
+        if (!strcasecmp(attrs->szFacename, face))
+        {
+            index = i;
+            matched = TRUE;
+            break;
+        }
+    }
+    if (attrs->lMatch > 0 && attrs->lMatch <= 12)
+    {
+        unsigned candidate = (unsigned)attrs->lMatch - 1;
+        char face[64];
+        snprintf(face, sizeof face, "%s%s", families[candidate / 4], styles[candidate % 4]);
+        if (!strcasecmp(attrs->szFacename, face))
+            index = candidate;
+    }
+    index = (index & ~3u) | (index % 4) | ((attrs->fsSelection & 0x20) ? 1 : 0) |
+            ((attrs->fsSelection & 1) ? 2 : 0);
+    unsigned pixels = attrs->lMaxBaselineExt > 0 && attrs->lMaxBaselineExt <= 512
+                          ? (unsigned)attrs->lMaxBaselineExt
+                          : 16;
+    ps->logical_fonts[id].index = index;
+    ps->logical_fonts[id].pixels = pixels;
+    ps->logical_fonts[id].defined = TRUE;
+    return matched ? 2 : 1;
+}
+BOOL GpiSetCharSet(HPS handle, LONG id)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || id < 0 || id > 254 || (id && !ps->logical_fonts[id].defined))
+        return FALSE;
+    ps->charset = id;
+    return TRUE;
+}
+LONG GpiQueryCharSet(HPS handle)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    return ps ? ps->charset : -1;
+}
+BOOL GpiDeleteSetId(HPS handle, LONG id)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || id < -1 || id > 254 || (id > 0 && ps->charset == id))
+        return FALSE;
+    if (id == -1)
+    {
+        for (unsigned i = 0; i < 255; i++)
+            lx_handle_release(&ps->bitmap_ids[i]);
+        memset(ps->logical_fonts, 0, sizeof ps->logical_fonts);
+        ps->charset = 0;
+    }
+    else
+    {
+        lx_handle_release(&ps->bitmap_ids[id]);
+        ps->logical_fonts[id].defined = FALSE;
+    }
+    return TRUE;
+}
+BOOL GpiSetCharBox(HPS handle, PSIZEF box)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || !box)
+        return FALSE;
+    ps->char_width = box->cx;
+    ps->char_height = box->cy;
+    return TRUE;
+}
+BOOL GpiQueryCharBox(HPS handle, PSIZEF box)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || !box)
+        return FALSE;
+    box->cx = ps->char_width ? ps->char_width : 16 * 65536;
+    box->cy = ps->char_height ? ps->char_height : 16 * 65536;
+    return TRUE;
+}
+
+LONG GpiQueryNumberSetIds(HPS handle)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps)
+        return -1;
+    LONG count = 0;
+    for (unsigned i = 0; i < 255; i++)
+        if (ps->logical_fonts[i].defined || ps->bitmap_ids[i].resource)
+            count++;
+    return count;
+}
+BOOL GpiQuerySetIds(HPS handle, LONG count, PLONG types, PVOID names, PLONG ids)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || count < 0 || (count && (!types || !names || !ids)))
+        return FALSE;
+    LONG copied = 0;
+    for (unsigned i = 0; i < 255 && copied < count; i++)
+    {
+        BOOL font = ps->logical_fonts[i].defined;
+        if (!font && !ps->bitmap_ids[i].resource)
+            continue;
+        types[copied] = font ? 6 : 7;
+        ids[copied] = (LONG)i;
+        if (font)
+            memcpy((uint8 *)names + copied * 8, ps->font_names[i], 8);
+        else
+            memset((uint8 *)names + copied * 8, 0, 8);
+        copied++;
+    }
+    return TRUE;
+}
+BOOL GpiQueryWidthTable(HPS handle, LONG first, LONG count, PLONG output)
+{
+    if (first < 0 || first > 255 || count < 0 || count > 256 - first || (count && !output))
+        return FALSE;
+    LxHostFont *font = lx_pm_font(handle);
+    if (!font)
+        return FALSE;
+    for (LONG i = 0; i < count; i++)
+        output[i] = lx_host_font_advance(font, lx_pm_codepoint((uint8)(first + i)));
+    return TRUE;
+}
+LONG GpiCharStringAt(HPS handle, PPOINTL point, LONG count, PCH text)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    return ps ? lx_pm_text(handle, point, count, text, ps->primitive_color[1], NULL) : 0;
+}
+LONG GpiCharString(HPS handle, LONG count, PCH text)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    POINTL point = ps ? ps->position : (POINTL){0, 0};
+    return ps ? GpiCharStringAt(handle, &point, count, text) : 0;
 }

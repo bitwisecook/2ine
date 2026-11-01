@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools import cvtasm, lxapigen, os2imports, unimplemented
+from tools import cvtasm, extract_warp_fonts, lxapigen, os2imports, unimplemented
 
 
 class AssemblerTests(unittest.TestCase):
@@ -82,6 +82,26 @@ Import ordinal: 5
                 ),
                 ["DosClose (DOSCALLS@257)\n"],
             )
+
+
+class WarpFontTests(unittest.TestCase):
+    def test_selects_only_native_fonts_and_rejects_incomplete_or_ambiguous_media(self):
+        listing = "\n".join(f"Path = OS2IMAGE/DISK_17/{name}" for name in extract_warp_fonts.FONTS)
+        listing += "\nPath = OS2IMAGE/DISK_W1/HELV.FON\nPath = ../HELV.PFB"
+        members = extract_warp_fonts.select_members(listing)
+        self.assertEqual(set(members), set(extract_warp_fonts.FONTS))
+        with self.assertRaisesRegex(ValueError, "missing native"):
+            extract_warp_fonts.select_members("Path = ../os2image/disk_17/HELV.PFB")
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            extract_warp_fonts.select_members(listing + "\nPath = os2image/disk_18/HELV.PFB")
+
+    def test_rejects_checkout_and_existing_destinations_before_extraction(self):
+        checkout = Path(extract_warp_fonts.__file__).resolve().parents[1]
+        with self.assertRaisesRegex(ValueError, "outside"):
+            extract_warp_fonts.extract(Path("absent.iso"), checkout / "fonts", "absent", "absent")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "must not exist"):
+                extract_warp_fonts.extract(Path("absent.iso"), Path(directory), "absent", "absent")
 
 
 class GeneratorTests(unittest.TestCase):

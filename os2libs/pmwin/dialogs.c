@@ -14,6 +14,7 @@ typedef struct PmDialog
     BOOL dismissed, processing;
     ULONG result;
     HWND disabled_owner;
+    HWND window, previous_focus;
 } PmDialog;
 void dialogWordChanged(Window *window, LONG index, USHORT value)
 {
@@ -32,6 +33,8 @@ BOOL initializeDialog(Window *window)
         return FALSE;
     window->dialog->references = 1;
     window->dialog->result = DIALOG_ERROR;
+    window->dialog->window = window->hwnd;
+    window->dialog->previous_focus = WinQueryFocus(HWND_DESKTOP);
     return TRUE;
 }
 static void release(PmDialog *dialog)
@@ -51,6 +54,8 @@ BOOL initializeDialogProcedure(HWND handle, HWND focus, PVOID parameters)
     anchor = getAnchorBlockNoHAB();
     window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     BOOL alive = window && window->dialog == dialog;
+    if (alive && !dialog->dismissed && !WinIsChild(WinQueryFocus(HWND_DESKTOP), handle))
+        WinSetFocus(HWND_DESKTOP, focus ? focus : handle);
     release(dialog);
     return alive;
 }
@@ -62,6 +67,12 @@ static void restore_owner(PmDialog *dialog)
     Window *owner = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     if (owner && !owner->destroying)
         WinEnableWindow(handle, TRUE);
+    if (anchor && (!anchor->focus || WinIsChild(anchor->focus, dialog->window)))
+    {
+        Window *focus = getWindowFromHWND(anchor, dialog->previous_focus);
+        if (focus && !focus->destroying)
+            WinSetFocus(HWND_DESKTOP, focus->hwnd);
+    }
 }
 void destroyDialog(Window *window)
 {
@@ -90,6 +101,67 @@ BOOL WinDismissDlg(HWND handle, ULONG result)
     restore_owner(dialog);
     release(dialog);
     return TRUE;
+}
+static BOOL dialog_key(AnchorBlock *anchor, HWND dialog, const QMSG *message)
+{
+    ULONG flags = (USHORT)(uintptr_t)message->mp1;
+    unsigned key = (USHORT)((uintptr_t)message->mp2 >> 16);
+    if (message->msg != WM_CHAR || !(flags & 2) || (flags & 0x40))
+        return FALSE;
+    if (key == 6) /* VK_TAB */
+    {
+        HWND first = 0, previous = 0, next = 0;
+        BOOL found = FALSE;
+        for (size_t i = 0; i < anchor->windows_array_len; i++)
+        {
+            Window *w = anchor->windows[i];
+            if (!w || !w->hwnd || !(w->style & 0x10000) || !WinIsChild(w->hwnd, dialog))
+                continue;
+            BOOL visible = TRUE;
+            for (Window *p = w; p && p != &desktop_window; p = p->parent)
+                if (!p->enabled || !(p->style & WS_VISIBLE))
+                    visible = FALSE;
+            if (!visible)
+                continue;
+            if (!first)
+                first = w->hwnd;
+            if (found && !next)
+                next = w->hwnd;
+            if (w->hwnd == anchor->focus)
+            {
+                found = TRUE;
+                if (flags & 8)
+                    next = previous;
+            }
+            if (!found)
+                previous = w->hwnd;
+        }
+        if (first)
+            WinSetFocus(HWND_DESKTOP, next ? next : first);
+        return TRUE;
+    }
+    Window *focused = getWindowFromHWND(anchor, anchor->focus);
+    if ((key == 0x1e || key == 8) && focused && focused->window_class_name &&
+        !strcmp(focused->window_class_name, "#10"))
+        return FALSE;
+    if (key == 0xf || key == 0x1e || key == 8) /* Escape / Enter / Newline */
+    {
+        ULONG id = key == 0xf ? 2 : 1;
+        if (id == 1)
+            for (size_t i = 0; i < anchor->windows_array_len; i++)
+            {
+                Window *w = anchor->windows[i];
+                if (w && w->hwnd && w->enabled && (w->style & WS_VISIBLE) && (w->style & 0x400) &&
+                    WinIsChild(w->hwnd, dialog))
+                {
+                    id = w->id;
+                    break;
+                }
+            }
+        WinPostMsg(dialog, WM_COMMAND, (MPARAM)(uintptr_t)id, (MPARAM)(uintptr_t)1);
+        return TRUE;
+    }
+    return FALSE;
 }
 ULONG WinProcessDlg(HWND handle)
 {
@@ -121,7 +193,8 @@ ULONG WinProcessDlg(HWND handle)
                 WinPostQueueMsg(anchor->message_queue.hmq, WM_QUIT, message.mp1, message.mp2);
             break;
         }
-        WinDispatchMsg(anchor->hab, &message);
+        if (!dialog_key(anchor, handle, &message))
+            WinDispatchMsg(anchor->hab, &message);
     }
     ULONG result = dialog->result;
     dialog->processing = FALSE;

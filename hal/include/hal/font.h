@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Font indices identify the pinned host catalogue. Each font owns its face and size. */
+/* Font indices identify family/style slots in the selected host catalogue. Each font owns its face and size. */
 #ifndef TWOINE_HAL_FONT_H
 #define TWOINE_HAL_FONT_H
 #include <stddef.h>

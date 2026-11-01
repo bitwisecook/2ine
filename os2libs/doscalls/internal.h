@@ -39,6 +39,7 @@ typedef struct ExitListItem
     PFNEXITLIST host_entry;
     uint32 guest_entry;
     uint32 priority;
+    LxModule *module;
     struct ExitListItem *next;
 } ExitListItem;
 

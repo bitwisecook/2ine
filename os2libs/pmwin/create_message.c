@@ -48,3 +48,21 @@ MRESULT sendCreateMessage(Window *window, const CREATESTRUCT *creation)
     lx_execution_unmap(execution, mapping);
     return result;
 }
+
+MRESULT sendOwnerItem(Window *owner, ULONG id, OWNERITEM *item)
+{
+    LxExecution *execution = GLoaderState.execution;
+    if (!execution || (uintptr_t)owner->window_proc > UINT32_MAX ||
+        !lx_execution_memory(execution, (uint32)(uintptr_t)owner->window_proc, 1, LX_GUEST_EXECUTE))
+        return sendMessage(owner, WM_DRAWITEM, (MPARAM)(uintptr_t)id, item);
+    LxGuestMapping *mapping =
+        lx_execution_map(execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    if (!mapping)
+        return 0;
+    memcpy(lx_execution_mapping_host(mapping), item, sizeof *item);
+    MRESULT result = sendMessage(owner, WM_DRAWITEM, (MPARAM)(uintptr_t)id,
+                                 (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping));
+    memcpy(item, lx_execution_mapping_host(mapping), sizeof *item);
+    lx_execution_unmap(execution, mapping);
+    return result;
+}

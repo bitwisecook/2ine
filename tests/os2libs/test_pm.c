@@ -3,6 +3,7 @@
 #include "os2libs/pmwin.h"
 #include "os2libs/pmgpi.h"
 #include "guest/handles.h"
+#include "os2libs/pmwin/graphics.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -17,6 +18,37 @@
         }                                                                                          \
     } while (0)
 static unsigned creates, sizes, changes;
+static unsigned hook_calls;
+static BOOL OS2API input_hook(HAB hab, PQMSG message, ULONG flags)
+{
+    CHECK(flags == 1);
+    if (message->msg == WM_USER + 100)
+    {
+        hook_calls++;
+        return TRUE;
+    }
+    if (message->msg == WM_USER + 101)
+    {
+        hook_calls++;
+        message->msg++;
+        message->mp1 = (MPARAM)(uintptr_t)1234;
+        CHECK(WinReleaseHook(hab, 1, 1, (PFN)input_hook, 0));
+    }
+    return FALSE;
+}
+static void hook_contracts(HAB hab, HWND window)
+{
+    QMSG message;
+    while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+    {
+    }
+    CHECK(WinSetHook(hab, 1, 1, (PFN)input_hook, 0));
+    CHECK(WinPostMsg(window, WM_USER + 100, 0, 0));
+    CHECK(WinPostMsg(window, WM_USER + 101, 0, 0));
+    CHECK(WinGetMsg(hab, &message, 0, 0, 0));
+    CHECK(hook_calls == 2 && message.msg == WM_USER + 102 && (uintptr_t)message.mp1 == 1234);
+    CHECK(!WinReleaseHook(hab, 1, 1, (PFN)input_hook, 0));
+}
 static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
 {
     if (message == WM_CREATE)
@@ -32,6 +64,144 @@ static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
     if (message == WM_SIZE)
         sizes++;
     return WinDefWindowProc(hwnd, message, a, b);
+}
+static void accelerator_contracts(HAB hab, HWND frame, HWND client)
+{
+    const uint8_t table[] = {1, 0, 181, 1, 17, 0, 'S', 0, 42, 0};
+    ULONG handle = WinCreateAccelTable(hab, (PVOID)table);
+    CHECK(handle && WinSetAccelTable(hab, handle, frame));
+    CHECK(WinQueryAccelTable(hab, frame) == handle && !WinDestroyAccelTable(handle));
+    uint8_t copy[10];
+    CHECK(WinCopyAccelTable(handle, copy, sizeof copy) == sizeof copy &&
+          !memcmp(copy, table, sizeof table));
+    QMSG message = {client, WM_CHAR, (MPARAM)(uintptr_t)0x10001, (MPARAM)(uintptr_t)'s', 0,
+                    {0, 0}, 0};
+    CHECK(!WinTranslateAccel(hab, frame, 0, &message) && message.hwnd == client &&
+          message.msg == WM_CHAR);
+    message.mp1 = (MPARAM)(uintptr_t)0x10011;
+    CHECK(WinTranslateAccel(hab, frame, 0, &message));
+    CHECK(message.hwnd == frame && message.msg == WM_COMMAND && (uintptr_t)message.mp1 == 42 &&
+          (uintptr_t)message.mp2 == 3);
+    CHECK(WinSetAccelTable(hab, 0, frame) && WinDestroyAccelTable(handle));
+    CHECK(!WinQueryAccelTable(hab, frame) && !WinDestroyAccelTable(handle));
+}
+static void menu_contracts(HWND parent)
+{
+    const uint8_t empty[] = {10, 0, 0, 0, 181, 1, 0, 0, 0, 0};
+    HWND menu = WinCreateMenu(parent, (PVOID)empty);
+    CHECK(menu);
+    MENUITEM item = {-1, 1, 0, 42, 0, 123};
+    CHECK((intptr_t)WinSendMsg(menu, 0x180, &item, "~Item") == 0);
+    item.iPosition = 99;
+    item.afAttribute = 0x4000;
+    item.hItem = 456;
+    CHECK(WinSendMsg(menu, 0x183, 0, &item));
+    MENUITEM actual;
+    CHECK(WinSendMsg(menu, 0x182, (MPARAM)(uintptr_t)42, &actual));
+    CHECK(actual.iPosition == 0 && actual.afAttribute == 0x4000 && actual.hItem == 456);
+    item.id = 43;
+    CHECK(!WinSendMsg(menu, 0x183, 0, &item));
+    CHECK(WinDestroyWindow(menu));
+}
+static void list_contracts(HWND parent)
+{
+    HWND combo = WinCreateWindow(parent, (PSZ)WC_COMBOBOX, "", 4, 0, 0, 180, 120, parent, HWND_TOP,
+                                 901, NULL, NULL);
+    CHECK(combo);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0004,
+                                     "Lotus Word Pro") == -1);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x161, (MPARAM)(intptr_t)-1, "Lotus Word Pro") == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x161, (MPARAM)(intptr_t)-1, "Plain text") == 1);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0004,
+                                     "Lotus Word Pro") == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0x00010006, "Lotus") == 0);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0005, "text") == 1);
+    CHECK((LONG)(intptr_t)WinSendMsg(combo, 0x16b, (MPARAM)(uintptr_t)0xffff0004,
+                                     "lotus word pro") == -1);
+    CHECK(WinSendMsg(combo, 0x164, 0, (MPARAM)(uintptr_t)TRUE));
+    char text[32];
+    CHECK(WinQueryWindowText(combo, sizeof text, text) == 14 && !strcmp(text, "Lotus Word Pro"));
+    CHECK(WinDestroyWindow(combo));
+}
+static void graphics_contracts(HAB hab, HWND window)
+{
+    CHECK(sizeof(FATTRS) == 56);
+    HDC window_dc = WinQueryWindowDC(window);
+    CHECK(window_dc == WinOpenWindowDC(window));
+    CHECK(!WinQueryWindowDC(0));
+    HDC memory = DevOpenDC(hab, 8, "*", 0, NULL, window_dc);
+    CHECK(memory && !DevOpenDC(hab, 8, "*", 0, NULL, 0xdeadbeef));
+    SIZEL size = {32, 24};
+    HPS ps = GpiCreatePS(hab, memory, &size, 0x5008);
+    CHECK(ps && GpiQueryDevice(ps) == memory && DevCloseDC(memory) == (ULONG)-1);
+    CHECK(GpiSetCp(ps, 437) && GpiQueryCp(ps) == 437 && !GpiSetCp(ps, 932));
+    FATTRS attrs = {0};
+    attrs.usRecordLength = sizeof attrs;
+    strcpy(attrs.szFacename, "Courier");
+    CHECK(GpiCreateLogFont(ps, NULL, 5, &attrs) == 2 && GpiSetCharSet(ps, 5));
+    FONTMETRICS metrics;
+    CHECK(GpiQueryFontMetrics(ps, sizeof metrics, &metrics) &&
+          !strcmp(metrics.szFamilyname, "Courier"));
+    SIZEF box = {24 * 65536, 24 * 65536};
+    CHECK(GpiSetCharBox(ps, &box) && GpiQueryFontMetrics(ps, sizeof metrics, &metrics) &&
+          metrics.lEmHeight == 24);
+    LONG widths[2];
+    CHECK(GpiQueryWidthTable(ps, 'W', 1, widths) && GpiQueryWidthTable(ps, 'i', 1, widths + 1) &&
+          widths[0] == widths[1]);
+    CHECK(GpiQueryNumberSetIds(ps) == 1 && !GpiSetCharSet(ps, 6));
+    LONG saved = GpiSavePS(ps);
+    CHECK(saved > 0 && GpiSetBackMix(ps, 2) && GpiQueryBackMix(ps) == 2);
+    CHECK(GpiSetCharSet(ps, 0) && GpiRestorePS(ps, saved) && GpiQueryCharSet(ps) == 5 &&
+          GpiQueryBackMix(ps) == 5);
+    CHECK(!GpiRestorePS(ps, saved));
+    uint8_t header[64] = {64};
+    header[4] = 32;
+    header[8] = 24;
+    header[12] = 1;
+    header[14] = 24;
+    ULONG bitmap = GpiCreateBitmap(ps, header, 0, NULL, NULL);
+    CHECK(bitmap && GpiSetBitmap(ps, bitmap) == 0 && !GpiDeleteBitmap(bitmap));
+    RECTL fill = {0, 0, 32, 24};
+    CHECK(WinFillRect(ps, &fill, CLR_RED));
+    uint32_t pixel;
+    CHECK(lx_pm_raster_read(ps, 3, 4, 1, 1, &pixel) && pixel == 0xff0000);
+    RECTL outer = {0, 0, 16, 16}, hole = {4, 4, 12, 12};
+    ULONG a = GpiCreateRegion(ps, 1, &outer), b = GpiCreateRegion(ps, 1, &hole),
+          clipped = GpiCreateRegion(ps, 0, NULL);
+    CHECK(a && b && clipped && GpiCombineRegion(ps, clipped, a, b, 7) == 3);
+    RECTL bound;
+    CHECK(GpiQueryRegionBox(ps, clipped, &bound) == 3 && WinEqualRect(hab, &bound, &outer));
+    ULONG previous = 99;
+    CHECK(GpiSetClipRegion(ps, clipped, &previous) == 3 && previous == 0 &&
+          !GpiDestroyRegion(ps, clipped));
+    CHECK(GpiRectVisible(ps, &hole) == 1 && GpiRectVisible(ps, &outer) == 2);
+    CHECK(WinFillRect(ps, &outer, CLR_BLUE));
+    CHECK(lx_pm_raster_read(ps, 1, 1, 1, 1, &pixel) && pixel == 0x0000ff);
+    CHECK(lx_pm_raster_read(ps, 8, 8, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(GpiSetClipRegion(ps, 0, &previous) == 2 && previous == clipped);
+    CHECK(GpiDestroyRegion(ps, clipped) && GpiDestroyRegion(ps, a) && GpiDestroyRegion(ps, b));
+    CHECK(WinFillRect(ps, &outer, CLR_RED));
+
+    CHECK(GpiSetBitmapId(ps, bitmap, 9) && !GpiSetBitmapId(ps, bitmap, 9));
+    CHECK(GpiQueryBitmapHandle(ps, 9) == bitmap && GpiQueryNumberSetIds(ps) == 2);
+    LONG types[2], ids[2];
+    char names[16];
+    CHECK(GpiQuerySetIds(ps, 2, types, names, ids) && ids[0] == 5 && types[0] == 6 && ids[1] == 9 &&
+          types[1] == 7);
+    uint8_t queried[64] = {64};
+    CHECK(GpiQueryBitmapInfoHeader(bitmap, queried) && queried[4] == 32 && queried[8] == 24 &&
+          queried[14] == 24);
+    memset(queried, 0xa5, sizeof queried);
+    CHECK(GpiQueryBitmapParameters(bitmap, queried) && queried[0] == 12 && queried[4] == 32 &&
+          queried[12] == 0xa5);
+    HPS target = WinGetPS(window);
+    POINTL points[3] = {{0, 0}, {32, 24}, {0, 0}};
+    CHECK(GpiBitBlt(target, ps, 3, points, 0xcc, 2));
+    CHECK(lx_pm_raster_read(target, 3, 4, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(WinReleasePS(target));
+    CHECK(GpiSetBitmap(ps, 0) == bitmap && GpiDeleteSetId(ps, 9) && GpiDeleteBitmap(bitmap));
+    CHECK(!GpiDeleteBitmap(bitmap) && GpiDestroyPS(ps) && DevCloseDC(memory) == 0);
+    CHECK(!DevQueryCaps(memory, 0, 1, widths));
 }
 int main(void)
 {
@@ -57,6 +227,10 @@ int main(void)
     CHECK(WinQueryWindowULong(client, -4) == hmq);
     CHECK(WinSubclassWindow(client, WinDefWindowProc) == procedure);
     CHECK(WinSubclassWindow(client, procedure) == WinDefWindowProc);
+    CHECK(WinQueryWindowULong(client, -3) == (ULONG)(uintptr_t)procedure);
+    CHECK(WinSetWindowPtr(client, -3, (PVOID)(uintptr_t)0x12345678));
+    CHECK((uintptr_t)WinQueryWindowPtr(client, -3) == 0x12345678);
+    CHECK(WinSubclassWindow(client, procedure) == (PFNWP)(uintptr_t)0x12345678);
     CHECK(WinQuerySysColor(HWND_DESKTOP, -20, 0) == 0xffffff);
     CHECK(!WinQuerySysColor(HWND_DESKTOP, -51, 0));
     CHECK((WinGetLastError(hab) & 0xffff) == PMERR_PARAMETER_OUT_OF_RANGE);
@@ -87,6 +261,11 @@ int main(void)
     CHECK(GpiQueryRGBColor(screen, 1, CLR_RED) == -255);
     CHECK(WinReleasePS(screen) && !WinReleasePS(screen));
     CHECK(WinSetWindowPos(frame, HWND_TOP, 10, 10, 64, 48, SWP_MOVE | SWP_SIZE | SWP_SHOW));
+    graphics_contracts(hab, client);
+    accelerator_contracts(hab, frame, client);
+    menu_contracts(frame);
+    list_contracts(frame);
+    hook_contracts(hab, client);
     SWP position;
     RECTL rectangle;
     CHECK(WinQueryWindowPos(client, &position) && position.cx == 64 && position.cy == 48);
@@ -161,7 +340,7 @@ int main(void)
     CHECK(WinGetMsg(hab, &q, client, WM_TIMER, WM_TIMER) && (uintptr_t)q.mp1 == timer);
     CHECK(WinStopTimer(hab, client, timer) && !WinStopTimer(hab, client, timer));
     CHECK(WinDestroyWindow(frame));
-    CHECK(!GpiMove(ps, &point));
+    CHECK(GpiQueryDevice(ps) == 0 && GpiMove(ps, &point) && GpiDestroyPS(ps));
     HENUM abandoned = WinBeginEnumWindows(HWND_DESKTOP);
     CHECK(abandoned);
     CHECK(WinDestroyMsgQueue(hmq) && WinTerminate(hab));

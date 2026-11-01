@@ -27,20 +27,21 @@ APIRET DosScanEnv(PSZ name, PSZ *outval)
 
 void runDosExitList(const uint32 why)
 {
-    ExitListItem *next = NULL;
-    for (ExitListItem *item = GExitList; item; item = next)
+    while (GExitList)
     {
-
+        ExitListItem *item = GExitList;
         PFNEXITLIST host_entry = item->host_entry;
         uint32 guest_entry = item->guest_entry;
-        next = item->next;
-        GExitList = next;
+        LxModule *module = item->module;
+        GExitList = item->next;
         free(item);
 
         if (GLoaderState.execution)
             lx_execution_callback32(GLoaderState.execution, guest_entry, why);
         else
             host_entry(why);
+        if (module)
+            GLoaderState.freeModule(module);
     }
 }
 
@@ -91,6 +92,26 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
             newitem->host_entry = GLoaderState.execution ? NULL : fn;
             newitem->guest_entry = GLoaderState.execution ? (uint32)(uintptr_t)fn : 0;
             newitem->priority = arg;
+            newitem->module = NULL;
+            if (GLoaderState.execution)
+                for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+                {
+                    if (module == GLoaderState.main_module || module->nativelib)
+                        continue;
+                    for (uint32 i = 0; i < module->num_mmaps; i++)
+                    {
+                        const LxMmaps *object = &module->mmaps[i];
+                        if (newitem->guest_entry >= object->guest_base &&
+                            (uint64)newitem->guest_entry - object->guest_base < object->size)
+                        {
+                            __atomic_add_fetch(&module->refcount, 1, __ATOMIC_ACQ_REL);
+                            newitem->module = module;
+                            break;
+                        }
+                    }
+                    if (newitem->module)
+                        break;
+                }
             for (item = GExitList; item; item = item->next)
             {
                 if (item->priority >= ((uint32)arg))
@@ -121,7 +142,10 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
                         prev->next = item->next;
                     else
                         GExitList = item->next;
+                    LxModule *module = item->module;
                     free(item);
+                    if (module)
+                        GLoaderState.freeModule(module);
                     return NO_ERROR;
                 }
                 prev = item;

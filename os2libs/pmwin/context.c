@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/graphics.h"
 /* OS/2 deduces the anchor from the calling thread; HAB arguments are advisory. */
 AnchorBlock *getAnchorBlockNoHAB(void)
 {
@@ -96,19 +97,25 @@ BOOL WinTerminate(HAB hab)
         return FALSE;
     }
 
-    for (size_t i = 0; i < anchor->pres_spaces_array_len; i++)
-    {
-        destroyPresentationSpace(anchor, &anchor->pres_spaces[i]);
-    }
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
         destroyWindow(anchor, anchor->windows[i]);
     }
+    for (size_t i = 0; i < anchor->pres_spaces_array_len; i++)
+        destroyPresentationSpace(anchor, &anchor->pres_spaces[i]);
+    destroyAccelerators(anchor);
+    destroyPointers(anchor);
+    destroyHooks(anchor);
+    lx_pm_region_cleanup(anchor);
+    lx_pm_bitmap_cleanup(anchor);
+    destroyDeviceContexts(anchor);
     destroyWindowEnumerations(anchor);
     for (size_t i = 0; i < anchor->windows_array_len; i++)
         free(anchor->windows[i]);
     free(anchor->pres_spaces);
     free(anchor->windows);
+    if (anchor->menu_bridge)
+        lx_execution_unmap(GLoaderState.execution, anchor->menu_bridge);
     if (anchor->control_bridge)
         lx_execution_unmap(GLoaderState.execution, anchor->control_bridge);
 

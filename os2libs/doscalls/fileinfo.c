@@ -74,11 +74,31 @@ APIRET queryPathInfoStandard(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
         return ERROR_BUFFER_OVERFLOW;
 
     LxHostFileInfo statbuf;
-    if (lx_host_path_info(unixPath, &statbuf) != LX_HOST_FS_OK)
+    LxHostFsError error = lx_host_path_info(unixPath, &statbuf);
+    if (error == LX_HOST_FS_MISSING)
     {
-        return ERROR_PATH_NOT_FOUND;
+        char *parent = strdup(*unixPath ? unixPath : ".");
+        if (!parent)
+            return ERROR_NOT_ENOUGH_MEMORY;
+        char *slash = strrchr(parent, '/'), *backslash = strrchr(parent, '\\');
+        if (backslash && (!slash || backslash > slash))
+            slash = backslash;
+        if (!slash)
+            strcpy(parent, ".");
+        else if (slash == parent || (slash == parent + 2 && parent[1] == ':'))
+            slash[1] = 0;
+        else
+            *slash = 0;
+        LxHostFileInfo directory;
+        LxHostFsError parent_error = lx_host_path_info(parent, &directory);
+        free(parent);
+        if (parent_error == LX_HOST_FS_MISSING || parent_error == LX_HOST_FS_NOT_DIRECTORY ||
+            (parent_error == LX_HOST_FS_OK && directory.kind != LX_HOST_FILE_DIRECTORY))
+            return ERROR_PATH_NOT_FOUND;
+        return parent_error ? fileError(parent_error) : ERROR_FILE_NOT_FOUND;
     }
-
+    if (error)
+        return fileError(error);
     return queryFileInfoStandardFromStat(&statbuf, pInfoBuf, cbInfoBuf);
 }
 

@@ -11,6 +11,8 @@ extern "C"
         OS2APIINFO(ord = 6009, name = WININITIALIZEOPEN32);
     OS2EXPORT VOID OS2API WinTerminateOpen32(ULONG reserved)
         OS2APIINFO(ord = 6010, name = WINTERMINATEOPEN32);
+    OS2EXPORT BOOL OS2API WinXProcessMsg(PVOID message)
+        OS2APIINFO(ord = 6007, name = WINXPROCESSMSG);
     OS2EXPORT LONG OS2API MulDiv(LONG number, LONG numerator, LONG denominator)
         OS2APIINFO(ord = 494, name = MULDIV);
     OS2EXPORT LONG OS2API RegCloseKey(ULONG key) OS2APIINFO(ord = 541, name = REGCLOSEKEY);

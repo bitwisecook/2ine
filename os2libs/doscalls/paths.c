@@ -52,7 +52,7 @@ APIRET DosQueryCurrentDir_implementation(ULONG disknum, PBYTE pBuf, PULONG pcbBu
     }
 
     const char *cdir =
-        GLoaderState.current_dir[disknum ? (disknum - 1) : GLoaderState.current_disk];
+        GLoaderState.current_dir[disknum ? (disknum - 1) : (GLoaderState.current_disk - 1)];
     if (cdir == NULL)
     {
         FIXME("should this return ERROR_INVALID_DRIVE?");

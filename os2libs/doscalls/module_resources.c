@@ -44,6 +44,10 @@ APIRET DosQueryResourceSize(HMODULE module, ULONG type, ULONG name, PULONG size)
     lx_handle_release(&borrow);
     return result;
 }
+APIRET Dos32QueryResourceSize(HMODULE module, ULONG type, ULONG name, PULONG size)
+{
+    return DosQueryResourceSize(module, type, name, size);
+}
 APIRET DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output)
 {
     TRACE_NATIVE("DosGetResource(%u, %u, %u, %p)", (uint)module, (uint)type, (uint)name, output);

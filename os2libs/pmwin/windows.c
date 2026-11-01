@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/graphics.h"
 Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
 {
     if (hwnd >= FIRST_HWND_VALUE)
@@ -27,7 +28,14 @@ Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
 
 WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
 {
-    const uintptr_t intclass = (uintptr_t)classname;
+    uintptr_t intclass = (uintptr_t)classname;
+    if (classname && !(intclass >= 0xffff0001 && intclass <= 0xffff0070) && classname[0] == '#')
+    {
+        char *end;
+        unsigned long number = strtoul(classname + 1, &end, 10);
+        if (*end == 0 && number >= 1 && number <= 0x70)
+            intclass = 0xffff0000u + number;
+    }
     if ((intclass >= 0xffff0001) && (intclass <= 0xffff0070))
     {
 
@@ -41,21 +49,30 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
                 return &frame;
             }
             case WC_COMBOBOX:
-                return NULL;
+            {
+                static WindowClass combo = {"#2", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &combo;
+            }
             case WC_BUTTON:
             {
                 static WindowClass button = {"#3", controlProcedure, CS_SIZEREDRAW, 4, NULL};
                 return &button;
             }
             case WC_MENU:
-                return NULL;
+            {
+                static WindowClass menu = {"#4", menuProcedure, CS_SIZEREDRAW, 0, NULL};
+                return &menu;
+            }
             case WC_STATIC:
             {
                 static WindowClass text = {"#5", controlProcedure, CS_SIZEREDRAW, 4, NULL};
                 return &text;
             }
             case WC_ENTRYFIELD:
-                return NULL;
+            {
+                static WindowClass entry = {"#6", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &entry;
+            }
             case WC_LISTBOX:
             {
                 static WindowClass list = {"#7", controlProcedure, CS_SIZEREDRAW, 4, NULL};
@@ -63,12 +80,21 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
             }
             case WC_SCROLLBAR:
             case WC_TITLEBAR:
-            case WC_MLE:
             case WC_APPSTAT:
             case WC_KBDSTAT:
             case WC_PECIC:
             case WC_DBE_KKPOPUP:
+                return NULL;
+            case WC_MLE:
+            {
+                static WindowClass mle = {"#10", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &mle;
+            }
             case WC_SPINBUTTON:
+            {
+                static WindowClass spin = {"#32", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &spin;
+            }
             case WC_CONTAINER:
             case WC_SLIDER:
             case WC_VALUESET:
@@ -99,12 +125,15 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
     }
 
     win->destroying = TRUE;
+    if (anchor->focus == win->hwnd)
+        WinSetFocus(HWND_DESKTOP, 0);
+    if (anchor->active == win->hwnd)
+        anchor->active = 0;
+    if (anchor->capture == win->hwnd)
+        anchor->capture = 0;
     win->style &= ~WS_VISIBLE;
     if (win->parent == &desktop_window)
         lx_host_window_hide(win->heavy.window);
-    for (size_t i = 0; i < anchor->pres_spaces_array_len; i++)
-        if (anchor->pres_spaces[i].window == win)
-            destroyPresentationSpace(anchor, &anchor->pres_spaces[i]);
     for (PmTimer **link = &anchor->timers; *link;)
     {
         PmTimer *timer = *link;
@@ -116,19 +145,29 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
         else
             link = &timer->next;
     }
-    Window *next = NULL;
-    for (Window *i = win->children; i != NULL; i = next)
-    {
-        next = i->sibling;
-        destroyWindow(anchor, i);
-    }
+    /* WM_DESTROY precedes destruction of children; their handles remain queryable. */
+    sendMessage(win, WM_DESTROY, 0, 0);
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        if (anchor->windows[i] && anchor->windows[i]->hwnd && anchor->windows[i]->parent == win)
+            destroyWindow(anchor, anchor->windows[i]);
     for (size_t i = 0; i < anchor->windows_array_len; i++)
         if (anchor->windows[i] && anchor->windows[i]->owner == win)
             destroyWindow(anchor, anchor->windows[i]);
-    /* Children receive WM_DESTROY before their parent. */
-    sendMessage(win, WM_DESTROY, 0, 0);
+    for (size_t i = 0; i < anchor->pres_spaces_array_len; i++)
+    {
+        PresentationSpace *ps = &anchor->pres_spaces[i];
+        if (ps->window != win)
+            continue;
+        if (ps->persistent)
+            lx_pm_associate_dc(ps->hps, 0);
+        else
+            destroyPresentationSpace(anchor, ps);
+    }
+    releaseWindowAccelerator(win);
     destroyDialog(win);
     destroyControl(win);
+    destroyMenu(win);
+    destroyStandardFile(win);
 
     if (win->parent == &desktop_window)
     {
@@ -418,6 +457,20 @@ HWND WinCreateStdWindow(HWND hwndParent, ULONG flStyle, PULONG pflCreateFlags, P
         return NULLHANDLE;
     }
 
+    if (*pflCreateFlags & 4)
+    {
+        if (!WinLoadMenu(retval, hmod, idResources))
+        {
+            WinDestroyWindow(retval);
+            return 0;
+        }
+    }
+    if (*pflCreateFlags & 0x8000)
+    {
+        ULONG table = WinLoadAccelTable(WinQueryAnchorBlock(retval), hmod, idResources);
+        if (table)
+            WinSetAccelTable(WinQueryAnchorBlock(retval), table, retval);
+    }
     if (pszClientClass)
     {
         HWND clientwin = WinCreateWindow(retval, pszClientClass, NULL, styleClient | WS_VISIBLE, 0,
@@ -471,6 +524,14 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         return (MRESULT)0;
     }
 
+    if (win->window_class_name && !strcmp(win->window_class_name, "#1") &&
+        (msg == WM_COMMAND || msg == WM_HELP || msg == WM_INITMENU || msg == WM_MENUSELECT ||
+         msg == WM_MENUEND || msg >= WM_USER))
+    {
+        HWND client = WinWindowFromID(hwnd, FID_CLIENT);
+        if (client)
+            return WinSendMsg(client, msg, mp1, mp2);
+    }
     switch (msg)
     {
         case WM_SETICON:
@@ -590,6 +651,8 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
             return HT_NORMAL;
 
         case WM_BUTTON1DOWN:
+            WinSetActiveWindow(HWND_DESKTOP, topLevelWindow(anchor, hwnd));
+            return 0;
         case WM_BUTTON2DOWN:
         case WM_BUTTON3DOWN:
         case WM_CALCVALIDRECTS:
@@ -668,6 +731,8 @@ BOOL WinIsWindowVisible(HWND hwnd)
 
 BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, ULONG flags)
 {
+    TRACE_NATIVE("WinSetWindowPos(%u, %u, %d, %d, %d, %d, %u)", (uint)hwnd, (uint)behind, (int)x,
+                 (int)y, (int)cx, (int)cy, (uint)flags);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *win = anchor ? getWindowFromHWND(anchor, hwnd) : NULL;
     if (!win || ((flags & SWP_SIZE) && (cx <= 0 || cy <= 0)))
@@ -709,13 +774,20 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     {
         sendMessage(win, WM_SIZE, (MPARAM)(uintptr_t)(((uint32)(uint16)oldh << 16) | (uint16)oldw),
                     (MPARAM)(uintptr_t)(((uint32)(uint16)win->h << 16) | (uint16)win->w));
+        HWND menu = WinWindowFromID(win->hwnd, FID_MENU);
+        LONG menu_height = menu ? 24 : 0;
+        if (menu && win->h > menu_height)
+            WinSetWindowPos(menu, HWND_TOP, 0, win->h - menu_height, win->w, menu_height,
+                            SWP_MOVE | SWP_SIZE | SWP_SHOW);
         for (Window *child = win->children; child; child = child->sibling)
-            if (child->id == FID_CLIENT)
-                WinSetWindowPos(child->hwnd, HWND_TOP, 0, 0, win->w, win->h,
+            if (child->id == FID_CLIENT && win->h > menu_height)
+                WinSetWindowPos(child->hwnd, HWND_BOTTOM, 0, 0, win->w, win->h - menu_height,
                                 SWP_MOVE | SWP_SIZE | SWP_SHOW);
     }
     if (!(flags & SWP_NOREDRAW) && (flags & (SWP_SIZE | SWP_SHOW)))
         postExposedMessages(anchor, win, currentSystemTicks());
+    if (flags & SWP_ACTIVATE)
+        WinSetActiveWindow(HWND_DESKTOP, topLevelWindow(anchor, hwnd));
     return TRUE;
 }
 
@@ -762,14 +834,6 @@ BOOL WinQueryPointerPos(HWND hwnd, PPOINTL point)
     point->y = y;
     return TRUE;
 }
-HPOINTER WinQuerySysPointer(HWND hwnd, LONG id, BOOL copy)
-{
-    (void)hwnd;
-    (void)id;
-    (void)copy;
-    /* System pointer/icon resources are not provided by this worker. */
-    return NULLHANDLE;
-}
 
 BOOL WinShowWindow(HWND window, BOOL show)
 {
@@ -790,5 +854,23 @@ BOOL WinEnableWindow(HWND window, BOOL enable)
         w->style |= WS_DISABLED;
     if (was_enabled != w->enabled)
         sendMessage(w, WM_ENABLE, (MPARAM)(uintptr_t)w->enabled, 0);
+    return TRUE;
+}
+
+BOOL WinCalcFrameRect(HWND handle, PRECTL rect, BOOL client)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    if (!window || !rect)
+        return FALSE;
+    LONG height = WinWindowFromID(handle, FID_MENU) ? 24 : 0;
+    RECTL calculated = *rect;
+    if (client)
+        calculated.yTop -= height;
+    else
+        calculated.yTop += height;
+    if (WinIsRectEmpty(0, &calculated))
+        return FALSE;
+    *rect = calculated;
     return TRUE;
 }

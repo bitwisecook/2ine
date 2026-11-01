@@ -23,6 +23,10 @@ static const char *files[] = {"LiberationSans-Regular.ttf",  "LiberationSans-Bol
                               "LiberationMono-Regular.ttf",  "LiberationMono-Bold.ttf",
                               "LiberationMono-Italic.ttf",   "LiberationMono-BoldItalic.ttf"};
 
+static const char *warp_files[] = {"HELV.PFB", "HELVB.PFB", "HELVI.PFB", "HELVBI.PFB",
+                                   "TNR.PFB",  "TNRB.PFB",  "TNRI.PFB",  "TNRBI.PFB",
+                                   "COUR.PFB", "COURB.PFB", "COURI.PFB", "COURBI.PFB"};
+
 unsigned lx_host_font_count(void)
 {
     return sizeof files / sizeof files[0];
@@ -63,10 +67,13 @@ LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
 {
     if (index >= lx_host_font_count() || !pixels || pixels > 512)
         return NULL;
-    char *directory = font_directory();
+    const char *warp_directory = getenv("TWOINE_WARP_FONT_DIRECTORY");
+    const int warp = warp_directory && *warp_directory;
+    const char *file = warp ? warp_files[index] : files[index];
+    char *directory = warp ? strdup(warp_directory) : font_directory();
     if (!directory)
         return NULL;
-    size_t length = strlen(directory) + strlen(files[index]) + 2;
+    size_t length = strlen(directory) + strlen(file) + 2;
     char *path = malloc(length);
     LxHostFont *font = calloc(1, sizeof *font);
     if (!path || !font)
@@ -76,7 +83,7 @@ LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
         free(directory);
         return NULL;
     }
-    snprintf(path, length, "%s/%s", directory, files[index]);
+    snprintf(path, length, "%s/%s", directory, file);
     free(directory);
     int failed = FT_Init_FreeType(&font->library) ||
                  FT_New_Face(font->library, path, 0, &font->face) ||

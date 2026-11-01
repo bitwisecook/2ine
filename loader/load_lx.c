@@ -974,16 +974,14 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
         assert(GLoaderState.main_module != NULL);
         assert(GLoaderState.main_module != retval);
-        runLxLibraryInit(retval);
-
-        retval->initialized = 1;
-
         if (GLoaderState.loaded_modules)
         {
             retval->next = GLoaderState.loaded_modules;
             GLoaderState.loaded_modules->prev = retval;
         }
         GLoaderState.loaded_modules = retval;
+        runLxLibraryInit(retval);
+        retval->initialized = 1;
     }
 
     return retval;

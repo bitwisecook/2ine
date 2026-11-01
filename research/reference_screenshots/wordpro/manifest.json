@@ -1,0 +1,137 @@
+{
+  "application": "Lotus Word Pro",
+  "release": "SmartSuite for OS/2 Warp 4 release 1.7 + Fixpack 3",
+  "operating_system": "Stock OS/2 Warp 4.52, internal revision 14.086_W4",
+  "profile": {
+    "cpu": "QEMU TCG Pentium II, one CPU",
+    "ram_mib": 128,
+    "display": "Cirrus VGA, 1024x768, stock fonts",
+    "printer": "No default printer; acknowledged screen-formatting warning for each new/opened document",
+    "network": "none",
+    "installation": "Original INSTALL.CMD, original Fixpack self-extractor /d, original SSFIXPAK.CMD; both installers reported success"
+  },
+  "inputs": {
+    "warp_install_iso": {
+      "file": "OS2 Warp 452 - Client - Disk 1 - Install Disk - ISO.iso",
+      "sha256": "6fc32f65dce15fc39a4d4c1dddf5289f9482422ced9168bcc7c39f8abcae69d9"
+    },
+    "lotus_iso": {
+      "file": "Lotus SmartSuite 1.7 for OS2.iso",
+      "sha256": "f26722ec26956a74deab1ddcda1fe3a97f5eebad4991c0f7bce6e4ed57fc41d1"
+    },
+    "fixpack": {
+      "file": "LC59A0IE.EXE",
+      "sha256": "62483cc2d6454e08c78967b10f55c1d15e195d39a25a871b28a32b415e34c61b"
+    },
+    "comparison_executable": {
+      "file": "WORDPRO.EXE",
+      "sha256": "69ca50c2bfa1434a4f01d033a2bc9ee45d5678e9461f1d40a24fe8e97a3266bc",
+      "scope": "Hash of separately staged Fixpack3 executable used by 2ine; not a hash read back from the VM"
+    }
+  },
+  "steps": [
+    "Create a Plain Document; accept user preferences; acknowledge printer warning",
+    "Type word pro editing test",
+    "Choose Courier in genuine font popup; type  courier text",
+    "Ctrl+S; enter C:\\wordpro-reference.lwp; save",
+    "File > Close; Ctrl+O; open saved file; acknowledge printer warning",
+    "Ctrl+End; Enter; choose Helv; type edited after reopen",
+    "Ctrl+S; close and reopen again; acknowledge printer warning",
+    "Exit normally; copy saved file to FAT floppy and export for byte inspection"
+  ],
+  "document": {
+    "file": "wordpro-reference.lwp (private fixture)",
+    "bytes": 12752,
+    "sha256": "a0937a0e826263a0624ddae5f7a4af737e6bebd19ba6a9491e477397fc7b91d4",
+    "verified_markers": [
+      "WordPro",
+      "word pro editing test",
+      "courier text",
+      "edited after reopen",
+      "Courier",
+      "Helv"
+    ]
+  },
+  "screenshots": [
+    {
+      "file": "blank-document.png",
+      "sha256": "78e41faec76ee77fc1a84ed576cecd32fbb35feabffa5f70b0ea03e99878e040",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "edited-after-reopen.png",
+      "sha256": "7e5fe39500d2ded2dacee359bcc1feeaf5b5b025cca29b7b8ee30eb1f640a380",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "final-reopened.png",
+      "sha256": "40b722ff3a2d514be654bffc7043137e7c06dba0a04a021233203a39b91c7e69",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "font-selector-0.png",
+      "sha256": "96c2a55296faa3a27851ea52fcb68daa14b92af67a73c772cfc76a28b65fa246",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "font-selector-1.png",
+      "sha256": "a8d0c7f4da65761d0c38e471405a2c964d9c12fbec46b21d66354c533b425176",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "new-document.png",
+      "sha256": "9cd82484e3a6af477ff4336b8f586fdf3310ccf7e9380cf62152c076dbd72038",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "reopened.png",
+      "sha256": "821874ec71c9cefafc9009b936c26c83d6a7f9336b3f322df0e6f3ac25e3e28b",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "save-as.png",
+      "sha256": "7271b804f443804be31e1434ce4473706f9645352dc1011d046bb7b56cf9f1bb",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "saved.png",
+      "sha256": "560b56d0732c55a0fe570f986c12f78ea3b3ed798a145bc9b4ade6ce515d4f10",
+      "size": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "welcome.png",
+      "sha256": "92a3982c409a0a9f5d1fb8468585765712a7cb6a748ce32a9a10df912178a49f",
+      "size": [
+        1024,
+        768
+      ]
+    }
+  ]
+}

@@ -58,6 +58,10 @@ fn(x, "XGetImage", P, [P, U, Int, Int, C.c_uint, C.c_uint, U, Int])
 fn(x, "XDestroyImage", Int, [P])
 fn(t, "XTestFakeMotionEvent", Int, [P, Int, Int, Int, U])
 fn(t, "XTestFakeButtonEvent", Int, [P, C.c_uint, Int, U])
+fn(t, "XTestFakeKeyEvent", Int, [P, C.c_uint, Int, U])
+fn(x, "XKeysymToKeycode", C.c_ubyte, [P, U])
+fn(x, "XKeycodeToKeysym", U, [P, C.c_ubyte, Int])
+fn(x, "XSetInputFocus", Int, [P, U, Int, U])
 
 
 # SDL probes may destroy an auxiliary window between XQueryTree and XFetchName.
@@ -177,6 +181,29 @@ class Display:
             + chunk(b"IEND", b"")
         )
         return bytes(rgb)
+
+    def focus(self, w):
+        x.XSetInputFocus(self.d, w, 1, 0)
+        x.XFlush(self.d)
+
+    def key(self, keysym, modifiers=()):
+        codes = [x.XKeysymToKeycode(self.d, key) for key in (*modifiers, keysym)]
+        assert all(codes), f"unmapped X11 keysym {keysym:#x}"
+        for code in codes:
+            t.XTestFakeKeyEvent(self.d, code, 1, 0)
+        for code in reversed(codes):
+            t.XTestFakeKeyEvent(self.d, code, 0, 0)
+        x.XFlush(self.d)
+
+    def text(self, value):
+        for char in value:
+            symbol = ord(char)
+            code = x.XKeysymToKeycode(self.d, symbol)
+            assert code, f"unmapped X11 character {char!r}"
+            plain = x.XKeycodeToKeysym(self.d, code, 0)
+            shifted = x.XKeycodeToKeysym(self.d, code, 1)
+            assert symbol in (plain, shifted), f"unsupported X11 character {char!r}"
+            self.key(symbol, (0xFFE1,) if symbol != plain else ())
 
     def click(self, w, px, py, button):
         rx, ry = Int(), Int()

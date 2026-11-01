@@ -1,11 +1,13 @@
 # Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
-foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmshapi pmgpi tcpip32 pmwinx helpmgr)
+foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmshapi pmgpi tcpip32 pmwinx pmctls helpmgr)
     if(module STREQUAL "doscalls")
         set(sources doscalls/module.c doscalls/files.c doscalls/fileinfo.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/modules.c doscalls/system.c doscalls/audio.c)
     elseif(module STREQUAL "pmwin")
-        set(sources pmwin/module.c pmwin/context.c pmwin/windows.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/controls.c pmwin/window_text.c)
+        set(sources pmwin/module.c pmwin/context.c pmwin/windows.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/device_context.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/hooks.c pmwin/visible.c pmwin/input.c pmwin/window_text.c)
     elseif(module STREQUAL "pmgpi")
-        set(sources pmgpi.c pmgpi/fonts.c pmgpi/device.c)
+        set(sources pmgpi.c pmgpi/fonts.c pmgpi/device.c pmgpi/state.c pmgpi/bitmap.c pmgpi/regions.c pmgpi/text.c pmgpi/shapes.c)
+    elseif(module STREQUAL "pmctls")
+        set(sources pmctls/module.c)
     elseif(module STREQUAL "pmwinx")
         set(sources pmwinx/module.c pmwinx/registry.c)
     elseif(module STREQUAL "pmshapi")
@@ -29,3 +31,5 @@ twoine_add_terminal(viocalls)
 
 target_link_libraries(pmgpi PRIVATE pmwin)
 target_link_libraries(pmwinx PRIVATE pmshapi)
+
+target_link_libraries(pmctls PRIVATE pmwin)

@@ -3,6 +3,43 @@
 #include "hal/video.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
+struct LxHostPointer
+{
+    SDL_Cursor *cursor;
+};
+LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape)
+{
+    static const SDL_SystemCursor shapes[] = {
+        SDL_SYSTEM_CURSOR_DEFAULT,     SDL_SYSTEM_CURSOR_TEXT,      SDL_SYSTEM_CURSOR_WAIT,
+        SDL_SYSTEM_CURSOR_NWSE_RESIZE, SDL_SYSTEM_CURSOR_MOVE,      SDL_SYSTEM_CURSOR_NWSE_RESIZE,
+        SDL_SYSTEM_CURSOR_NESW_RESIZE, SDL_SYSTEM_CURSOR_EW_RESIZE, SDL_SYSTEM_CURSOR_NS_RESIZE,
+        SDL_SYSTEM_CURSOR_NOT_ALLOWED};
+    if ((unsigned)shape >= sizeof shapes / sizeof *shapes)
+        return NULL;
+    LxHostPointer *pointer = calloc(1, sizeof *pointer);
+    if (pointer)
+    {
+        pointer->cursor = SDL_CreateSystemCursor(shapes[shape]);
+        if (!pointer->cursor)
+        {
+            free(pointer);
+            return NULL;
+        }
+    }
+    return pointer;
+}
+void lx_host_pointer_destroy(LxHostPointer *pointer)
+{
+    if (pointer)
+    {
+        SDL_DestroyCursor(pointer->cursor);
+        free(pointer);
+    }
+}
+int lx_host_pointer_set(LxHostPointer *pointer)
+{
+    return pointer ? SDL_SetCursor(pointer->cursor) && SDL_ShowCursor() : SDL_HideCursor();
+}
 struct LxHostWindow
 {
     SDL_Window *window;
@@ -59,6 +96,7 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
                                         SDL_TEXTUREACCESS_TARGET, width, height);
     if (!window->texture || !SDL_SetRenderTarget(window->renderer, window->texture))
         goto failed;
+    SDL_StartTextInput(window->window);
     return window;
 failed:
     lx_host_window_destroy(window);
@@ -114,6 +152,14 @@ void lx_host_window_hide(LxHostWindow *window)
 int lx_host_window_title(LxHostWindow *window, const char *title)
 {
     return window && SDL_SetWindowTitle(window->window, title);
+}
+int lx_host_window_border(LxHostWindow *window, int bordered)
+{
+    return window && SDL_SetWindowBordered(window->window, bordered != 0);
+}
+int lx_host_window_focus(LxHostWindow *window)
+{
+    return window && SDL_RaiseWindow(window->window);
 }
 int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int y, int width,
                         int height, const uint8_t *coverage, uint8_t red, uint8_t green,
@@ -188,6 +234,92 @@ int lx_host_window_pixel(LxHostWindow *window, int x, int y, uint8_t *red, uint8
     SDL_DestroySurface(surface);
     return ok;
 }
+static unsigned physical_key(SDL_Scancode key)
+{
+    static const uint8_t letters[26] = {0x1e, 0x30, 0x2e, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17,
+                                        0x24, 0x25, 0x26, 0x32, 0x31, 0x18, 0x19, 0x10, 0x13,
+                                        0x1f, 0x14, 0x16, 0x2f, 0x11, 0x2d, 0x15, 0x2c};
+    if (key >= SDL_SCANCODE_A && key <= SDL_SCANCODE_Z)
+        return letters[key - SDL_SCANCODE_A];
+    if (key >= SDL_SCANCODE_1 && key <= SDL_SCANCODE_0)
+        return 2 + key - SDL_SCANCODE_1;
+    if (key >= SDL_SCANCODE_F1 && key <= SDL_SCANCODE_F10)
+        return 0x3b + key - SDL_SCANCODE_F1;
+    switch (key)
+    {
+        case SDL_SCANCODE_ESCAPE:
+            return 1;
+        case SDL_SCANCODE_BACKSPACE:
+            return 0x0e;
+        case SDL_SCANCODE_TAB:
+            return 0x0f;
+        case SDL_SCANCODE_RETURN:
+        case SDL_SCANCODE_KP_ENTER:
+            return 0x1c;
+        case SDL_SCANCODE_SPACE:
+            return 0x39;
+        case SDL_SCANCODE_MINUS:
+            return 0x0c;
+        case SDL_SCANCODE_EQUALS:
+            return 0x0d;
+        case SDL_SCANCODE_LEFTBRACKET:
+            return 0x1a;
+        case SDL_SCANCODE_RIGHTBRACKET:
+            return 0x1b;
+        case SDL_SCANCODE_BACKSLASH:
+            return 0x2b;
+        case SDL_SCANCODE_SEMICOLON:
+            return 0x27;
+        case SDL_SCANCODE_APOSTROPHE:
+            return 0x28;
+        case SDL_SCANCODE_GRAVE:
+            return 0x29;
+        case SDL_SCANCODE_COMMA:
+            return 0x33;
+        case SDL_SCANCODE_PERIOD:
+            return 0x34;
+        case SDL_SCANCODE_SLASH:
+            return 0x35;
+        case SDL_SCANCODE_LSHIFT:
+            return 0x2a;
+        case SDL_SCANCODE_RSHIFT:
+            return 0x36;
+        case SDL_SCANCODE_LCTRL:
+        case SDL_SCANCODE_RCTRL:
+            return 0x1d;
+        case SDL_SCANCODE_LALT:
+        case SDL_SCANCODE_RALT:
+            return 0x38;
+        case SDL_SCANCODE_CAPSLOCK:
+            return 0x3a;
+        case SDL_SCANCODE_F11:
+            return 0x57;
+        case SDL_SCANCODE_F12:
+            return 0x58;
+        case SDL_SCANCODE_HOME:
+            return 0x47;
+        case SDL_SCANCODE_UP:
+            return 0x48;
+        case SDL_SCANCODE_PAGEUP:
+            return 0x49;
+        case SDL_SCANCODE_LEFT:
+            return 0x4b;
+        case SDL_SCANCODE_RIGHT:
+            return 0x4d;
+        case SDL_SCANCODE_END:
+            return 0x4f;
+        case SDL_SCANCODE_DOWN:
+            return 0x50;
+        case SDL_SCANCODE_PAGEDOWN:
+            return 0x51;
+        case SDL_SCANCODE_INSERT:
+            return 0x52;
+        case SDL_SCANCODE_DELETE:
+            return 0x53;
+        default:
+            return 0;
+    }
+}
 static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
 {
     SDL_memset(event, 0, sizeof *event);
@@ -209,6 +341,97 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             event->type = LX_HOST_EVENT_CLOSE;
             id = input->window.windowID;
+            break;
+        case SDL_EVENT_WINDOW_FOCUS_GAINED:
+        case SDL_EVENT_WINDOW_FOCUS_LOST:
+            event->type = input->type == SDL_EVENT_WINDOW_FOCUS_GAINED ? LX_HOST_EVENT_FOCUS_GAINED
+                                                                       : LX_HOST_EVENT_FOCUS_LOST;
+            id = input->window.windowID;
+            break;
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+        {
+            event->type =
+                input->type == SDL_EVENT_KEY_DOWN ? LX_HOST_EVENT_KEY_DOWN : LX_HOST_EVENT_KEY_UP;
+            id = input->key.windowID;
+            event->modifiers = (input->key.mod & SDL_KMOD_SHIFT ? LX_HOST_MOD_SHIFT : 0) |
+                               (input->key.mod & SDL_KMOD_CTRL ? LX_HOST_MOD_CTRL : 0) |
+                               (input->key.mod & SDL_KMOD_ALT ? LX_HOST_MOD_ALT : 0);
+            event->repeat = input->key.repeat;
+            event->scancode = physical_key(input->key.scancode);
+            event->key = input->key.key < 128 ? input->key.key : 0;
+            if (input->key.key >= SDLK_F1 && input->key.key <= SDLK_F12)
+                event->key = LX_HOST_KEY_F1 + (input->key.key - SDLK_F1);
+            switch (input->key.key)
+            {
+                case SDLK_BACKSPACE:
+                    event->key = LX_HOST_KEY_BACKSPACE;
+                    break;
+                case SDLK_TAB:
+                    event->key = LX_HOST_KEY_TAB;
+                    break;
+                case SDLK_RETURN:
+                case SDLK_KP_ENTER:
+                    event->key = LX_HOST_KEY_RETURN;
+                    break;
+                case SDLK_ESCAPE:
+                    event->key = LX_HOST_KEY_ESCAPE;
+                    break;
+                case SDLK_HOME:
+                    event->key = LX_HOST_KEY_HOME;
+                    break;
+                case SDLK_END:
+                    event->key = LX_HOST_KEY_END;
+                    break;
+                case SDLK_LEFT:
+                    event->key = LX_HOST_KEY_LEFT;
+                    break;
+                case SDLK_RIGHT:
+                    event->key = LX_HOST_KEY_RIGHT;
+                    break;
+                case SDLK_UP:
+                    event->key = LX_HOST_KEY_UP;
+                    break;
+                case SDLK_DOWN:
+                    event->key = LX_HOST_KEY_DOWN;
+                    break;
+                case SDLK_DELETE:
+                    event->key = LX_HOST_KEY_DELETE;
+                    break;
+                case SDLK_INSERT:
+                    event->key = LX_HOST_KEY_INSERT;
+                    break;
+                case SDLK_PAGEUP:
+                    event->key = LX_HOST_KEY_PAGEUP;
+                    break;
+                case SDLK_PAGEDOWN:
+                    event->key = LX_HOST_KEY_PAGEDOWN;
+                    break;
+                case SDLK_LSHIFT:
+                case SDLK_RSHIFT:
+                    event->key = LX_HOST_KEY_SHIFT;
+                    break;
+                case SDLK_LCTRL:
+                case SDLK_RCTRL:
+                    event->key = LX_HOST_KEY_CTRL;
+                    break;
+                case SDLK_LALT:
+                case SDLK_RALT:
+                    event->key = LX_HOST_KEY_ALT;
+                    break;
+                default:
+                    break;
+            }
+            break;
+        }
+        case SDL_EVENT_TEXT_INPUT:
+            event->type = LX_HOST_EVENT_TEXT;
+            id = input->text.windowID;
+            SDL_strlcpy(event->text, input->text.text, sizeof event->text);
+            SDL_Keymod modifiers = SDL_GetModState();
+            event->modifiers = (modifiers & SDL_KMOD_SHIFT ? LX_HOST_MOD_SHIFT : 0) |
+                               (modifiers & SDL_KMOD_CTRL ? LX_HOST_MOD_CTRL : 0) |
+                               (modifiers & SDL_KMOD_ALT ? LX_HOST_MOD_ALT : 0);
             break;
         case SDL_EVENT_WINDOW_RESIZED:
             event->type = LX_HOST_EVENT_RESIZED;
@@ -293,4 +516,63 @@ void lx_host_mouse_position(int *x, int *y)
     SDL_GetGlobalMouseState(&a, &b);
     *x = (int)a;
     *y = (int)b;
+}
+
+int lx_host_window_read(LxHostWindow *window, const LxHostRect *rect, uint32_t *rgb)
+{
+    if (!window || !rect || !rgb || rect->w < 0 || rect->h < 0 || rect->x < 0 || rect->y < 0 ||
+        rect->w > window->width - rect->x || rect->h > window->height - rect->y)
+        return 0;
+    SDL_Rect area = {rect->x, rect->y, rect->w, rect->h};
+    SDL_Surface *surface = SDL_RenderReadPixels(window->renderer, &area);
+    if (!surface)
+        return 0;
+    int ok = 1;
+    for (int y = 0; ok && y < rect->h; y++)
+        for (int x = 0; x < rect->w; x++)
+        {
+            Uint8 r, g, b, a;
+            if (!SDL_ReadSurfacePixel(surface, x, y, &r, &g, &b, &a))
+            {
+                ok = 0;
+                break;
+            }
+            rgb[(size_t)y * rect->w + x] = (uint32_t)r << 16 | (uint32_t)g << 8 | b;
+        }
+    SDL_DestroySurface(surface);
+    return ok;
+}
+int lx_host_window_image(LxHostWindow *window, const LxHostRect *clip, const LxHostRect *rect,
+                         const uint32_t *rgb)
+{
+    if (!window || !clip || !rect || !rgb || rect->w <= 0 || rect->h <= 0)
+        return 0;
+    SDL_Surface *surface = SDL_CreateSurface(rect->w, rect->h, SDL_PIXELFORMAT_RGBA32);
+    if (!surface)
+        return 0;
+    for (int y = 0; y < rect->h; y++)
+    {
+        uint8_t *row = (uint8_t *)surface->pixels + y * surface->pitch;
+        for (int x = 0; x < rect->w; x++)
+        {
+            uint32_t p = rgb[(size_t)y * rect->w + x];
+            row[4 * x] = p >> 16;
+            row[4 * x + 1] = p >> 8;
+            row[4 * x + 2] = p;
+            row[4 * x + 3] = 255;
+        }
+    }
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(window->renderer, surface);
+    SDL_DestroySurface(surface);
+    if (!texture)
+        return 0;
+    SDL_Rect clipping = {clip->x, clip->y, clip->w, clip->h};
+    SDL_FRect dest = {(float)rect->x, (float)rect->y, (float)rect->w, (float)rect->h};
+    int ok = SDL_SetRenderClipRect(window->renderer, &clipping) &&
+             SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_NONE) &&
+             SDL_RenderTexture(window->renderer, texture, NULL, &dest);
+    SDL_DestroyTexture(texture);
+    if (ok)
+        window->dirty = 1;
+    return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
 }

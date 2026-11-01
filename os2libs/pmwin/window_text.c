@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Window text is owned by its window; queries exclude the terminating NUL. */
-#include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/controls.h"
 
 BOOL WinSetWindowText(HWND handle, PSZ text)
 {
@@ -16,6 +16,7 @@ BOOL WinSetWindowText(HWND handle, PSZ text)
     if (window->parent == &desktop_window)
         lx_host_window_title(window->heavy.window, copy);
     postTimestampedMsg(anchor, handle, WM_PAINT, 0, 0, currentSystemTicks());
+    controlTextChanged(window);
     return TRUE;
 }
 LONG WinQueryWindowTextLength(HWND handle)

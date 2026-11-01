@@ -96,7 +96,7 @@ static MRESULT OS2API procedure(HWND window, ULONG message, MPARAM first, MPARAM
     }
     if (message == WM_DESTROY)
     {
-        CHECK(!WinWindowFromID(window, 1));
+        CHECK(WinWindowFromID(window, 1));
         destroyed++;
     }
     return WinDefDlgProc(window, message, first, second);

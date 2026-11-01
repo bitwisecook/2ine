@@ -31,6 +31,33 @@ static PFNWP previous_control_procedure(AnchorBlock *anchor)
     }
     return (PFNWP)(uintptr_t)lx_execution_mapping_address(anchor->control_bridge);
 }
+static uint32 menu_callback(uint8 *args)
+{
+    return (uint32)(uintptr_t)menuProcedure(lx_guest_load_u32(args), lx_guest_load_u32(args + 4),
+                                            (MPARAM)(uintptr_t)lx_guest_load_u32(args + 8),
+                                            (MPARAM)(uintptr_t)lx_guest_load_u32(args + 12));
+}
+static PFNWP previous_menu_procedure(AnchorBlock *anchor)
+{
+    if (!anchor->menu_bridge)
+    {
+        LxGuestMapping *mapping =
+            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        const LxExecutionApi32 api = {menu_callback, 16, 0, LX_ABI_STACK32};
+        if (!mapping)
+            return NULL;
+        if (!lx_execution_emit_bridge32(GLoaderState.execution, lx_execution_mapping_host(mapping),
+                                        4096, &api) ||
+            !lx_execution_protect(GLoaderState.execution, mapping,
+                                  LX_GUEST_READ | LX_GUEST_EXECUTE))
+        {
+            lx_execution_unmap(GLoaderState.execution, mapping);
+            return NULL;
+        }
+        anchor->menu_bridge = mapping;
+    }
+    return (PFNWP)(uintptr_t)lx_execution_mapping_address(anchor->menu_bridge);
+}
 #endif
 
 HWND WinWindowFromID(HWND window, ULONG id)
@@ -73,12 +100,15 @@ BOOL WinSetWindowUShort(HWND window, LONG index, USHORT value)
 }
 ULONG WinQueryWindowULong(HWND window, LONG index)
 {
+    TRACE_NATIVE("WinQueryWindowULong(%u, %d)", (uint)window, (int)index);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
     if (!anchor)
         return 0;
     if (!w)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
+    if (index == -3) /* QWP_PFNWP */
+        return (ULONG)(uintptr_t)callableWindowProcedure(anchor, w->window_proc);
     if (index == -2) /* QWL_STYLE */
         return w->style;
     if (index == -4) /* QWL_HMQ */
@@ -89,12 +119,15 @@ ULONG WinQueryWindowULong(HWND window, LONG index)
 }
 BOOL WinSetWindowULong(HWND window, LONG index, ULONG value)
 {
+    TRACE_NATIVE("WinSetWindowULong(%u, %d, %u)", (uint)window, (int)index, (uint)value);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
     if (!anchor)
         return FALSE;
     if (!w)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
+    if (index == -3)
+        return WinSubclassWindow(window, (PFNWP)(uintptr_t)value) != NULL;
     if (index == -2)
     {
         w->style = value;
@@ -118,6 +151,7 @@ BOOL WinSetWindowPtr(HWND window, LONG index, PVOID value)
 
 PFNWP WinSubclassWindow(HWND window, PFNWP procedure)
 {
+    TRACE_NATIVE("WinSubclassWindow(%u, %p)", (uint)window, procedure);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
     if (!anchor)
@@ -127,17 +161,42 @@ PFNWP WinSubclassWindow(HWND window, PFNWP procedure)
     if (!procedure)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_PARAMETER, NULL);
     PFNWP previous = w->window_proc;
+    PFNWP callable = callableWindowProcedure(anchor, previous);
+    if (!callable)
+        return NULL;
+    w->window_proc = procedure;
+    return callable;
+}
+
+PFNWP callableWindowProcedure(AnchorBlock *anchor, PFNWP previous)
+{
     PFNWP callable = previous;
     if (!previous || previous == WinDefWindowProc)
         callable = defaultGuestWindowProc();
     else if (previous == WinDefDlgProc)
         callable = defaultGuestDialogProc();
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
+    else if (previous == menuProcedure && GLoaderState.execution)
+        callable = previous_menu_procedure(anchor);
     else if (previous == controlProcedure && GLoaderState.execution)
         callable = previous_control_procedure(anchor);
 #endif
-    if (!callable)
-        return NULL;
-    w->window_proc = procedure;
     return callable;
+}
+
+BOOL WinQueryClassInfo(HAB hab, PSZ name, PCLASSINFO info)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor || !name || !info)
+        return FALSE;
+    WindowClass *window_class = findRegisteredClass(anchor, name);
+    if (!window_class)
+        return FALSE;
+    PFNWP procedure = callableWindowProcedure(anchor, window_class->window_proc);
+    if (!procedure)
+        return FALSE;
+    info->flClassStyle = window_class->style;
+    info->pfnWindowProc = procedure;
+    info->cbWindowData = window_class->data_len;
+    return TRUE;
 }

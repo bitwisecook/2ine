@@ -74,25 +74,38 @@ and finite event waits. Native guest API entries realign OS/2 stacks for host
 libraries. Portable entry/callback bridges use checked fixed-width guest layouts,
 including 32-byte QMSGs and copied SWPs for host-generated position messages.
 
-Top-level windows use host decorations. OS/2 frame controls, menus, dialogs,
-system icon resources, keyboard translation, bitmap APIs and font rendering are
-not implemented as a complete PM environment. `WinQuerySysPointer` reports no
-resource; it does not return a fabricated icon. Only pixel-unit window DCs and
-direct drawing mode are supported. Existing VIO/NE execution support does not
-imply 16-bit PM APIs. Qt/klibc applications require additional runtime integration.
+Top-level windows use host decorations. The supported subset includes menus,
+accelerators, resource dialogs, file dialogs, entry/list/combo/spin controls,
+checkboxes, radio buttons, multiline entries, logical fonts, text output,
+memory DCs, bitmaps and clipping regions. System pointer shapes use host
+cursors. System icon resources, 16-bit PM, printing, full transformations and
+a complete OS/2 desktop remain unavailable. Window registries and queues are
+local to one PM thread; cross-thread sends and posts are unsupported.
 
-Archive screening also considered PMxEyes, PMEyes, Eyecon, Eyes 0.9.5, PMLife,
-PMGuts and several clocks. Their menu/dialog/profile, NE16 PM or external-runtime
-requirements exceed this subset; they are not listed as working applications.
+### Word Pro document workflow
 
-Lotus SmartSuite 1.7 with Fixpack 3 does not yet reach an editable document.
-With its installer settings supplied separately, Word Pro creates its actual
-welcome dialog on native and Unicorn. Its push buttons render through the font
-HAL and respond to real pointer input. Cancel dismisses the dialog through its
-normal window procedure. Create a Plain Document advances into Word Pro
-Preferences, whose additional control requirements exceed the current subset.
-This startup result does not qualify other suite components or document
-creation, saving and reopening.
+With separately supplied SmartSuite 1.7/Fixpack 3 binaries and installation
+settings, Word Pro's native Linux i386 profile supports a basic document cycle:
+create a plain document, type text, choose Courier, save an LWP, close and reopen,
+choose Helv, add text, save and reopen again, then exit normally. The test uses
+real X11 keyboard and pointer events and checks the resulting document's bytes.
+This qualifies that bounded workflow, not complete Word Pro compatibility.
+Toolbar rendering and other controls still require comparison with stock Warp.
+Reference captures live in `research/reference_screenshots/wordpro/`.
+The portable Word Pro workflow is not qualified. 1-2-3 is the next application;
+other suite applications are deferred.
+
+```sh
+python3 tests/integration/smartsuite.py --build build --backend native \
+  --installation /private/LOTUSW4 --settings /private/wordpro-settings \
+  --work /private/wordpro-results
+```
+
+Settings must contain `user.profile` and `registry.profile`; `system.profile` is
+optional. The harness copies these before use, retains screenshots and logs,
+and writes `receipt.json` only after both saves/reopens and a successful exit.
+The work directory's previous harness document and receipt are replaced.
+Proprietary application binaries and fonts are supplied separately.
 
 ## Profiles and Open32 settings
 
@@ -136,17 +149,31 @@ codepage conversion of string resources are unavailable. HELPMGR explicitly
 reports unavailable help rendering through `HELPINIT`; it creates no help
 instance.
 
-The font HAL measures and rasterizes the pinned Liberation faces through
-FreeType. GPI exposes public font enumeration, current font metrics and bounded
-CP437 text extents; window font presentation parameters select family, style
-and point size. Text extents use character advances without kerning, consistent
-with the device's advertised capabilities. Glyph rasterization is covered by HAL tests. GPI text output,
-logical-font selection, transformations, complex-script shaping and a complete
-font/graphics API remain unavailable. Font query support alone does not qualify
-an application's text editing or document rendering.
+The font HAL measures and rasterizes twelve pinned Liberation faces through
+FreeType. GPI supports logical font sets, selection, character boxes, CP437
+text output and extents. Extents use character advances without kerning.
+Complex-script shaping and a complete font/graphics API remain unavailable.
 
-Window registries and message queues currently belong to the calling PM thread;
-cross-thread window lookup, synchronous sends and queue posts are unavailable.
+### Optional original Warp outline fonts
+
+Users with Warp 4.52 installation media can extract its twelve native Type 1
+faces using external [7-Zip](https://www.7-zip.org/) and
+[Deark](https://entropymine.com/deark/):
+
+```sh
+python3 tools/extract_warp_fonts.py --iso /private/warp452-install.iso \
+  --destination /private/warp-fonts --deark /path/to/deark
+TWOINE_WARP_FONT_DIRECTORY=/private/warp-fonts build/lx_loader WORDPRO.EXE
+```
+
+The extractor requires a new destination outside this checkout and records ISO,
+member and decoded-font hashes in a manifest. It decodes the compressed native
+`OS2IMAGE/DISK_*/` PFB members. The fonts retain their original rights and must
+remain private. They are never downloaded, installed, copied into build outputs,
+or bundled by 2ine. Without the explicit environment variable, Liberation remains
+the default. `TWOINE_FONT_DIRECTORY` selects an alternate Liberation directory.
+This option supplies outline faces; it does not reproduce Warp's bitmap system
+fonts or guarantee identical text layout.
 
 ## Dialog and basic control subset
 
@@ -156,20 +183,18 @@ disables an enabled owner, dispatches queued messages, retains state across
 nested or reentrant destruction, restores the owner and reposts WM_QUIT.
 Dismissal hides the window; WinDlgBox destroys it after its modal loop returns.
 The SDK's QWS_FLAGS/FF_DLGDISMISSED and QWS_RESULT words track this state.
-Clearing FF_DLGDISMISSED permits another modal run. Child and owned windows
-receive destruction notifications before their parent or owner.
+Clearing FF_DLGDISMISSED permits another modal run. Parents receive WM_DESTROY while their children remain queryable; child
+destruction follows before the parent storage is released.
 
-The stock control subset includes text push buttons, single-line text/frame
-statics, and text lists with insertion, removal, queries, item handles and
-selection state. Lists support single-click selection; modifier-key selection,
-scrollbars, owner drawing and full keyboard navigation are unavailable.
-Push buttons post normal WM_COMMAND messages to their owner. Window text is
-stored as owned strings and queried with bounded, NUL-terminated copies.
-Portable subclassing returns a callable guest procedure for stock controls.
-Checkboxes, entry fields, combo boxes and complete frame/menu controls remain
-unavailable. Unsupported controls do not receive fabricated successful handles.
+The stock controls support bounded text editing, single selection, list search,
+owner drawing, checkbox/radio state, combo selection and control notifications.
+Window text uses owned strings with bounded NUL-terminated queries. Guest
+subclass procedures can call the returned default procedure on both workers.
+Full list keyboard navigation, modifier-key multiselection and scrollbars are
+incomplete. File dialogs accept a typed single filename; allocated multiselection
+lists and complete modeless behavior are unsupported.
 
-Glyph masks are composited by the host HAL with clipping and coverage alpha.
-This control rendering does not supply GPI text output or complete dialog text
-layout. The current-thread WinPostQueueMsg and NULL-window WinPostMsg paths
-support modal queue messages; cross-thread posting remains unavailable.
+Glyph masks use coverage alpha and visible-window clipping. Current-thread
+input hooks can modify or consume queued input. Other hook types and cross-thread
+hook operation remain unsupported. Unsupported API paths return failure rather
+than fabricating resources.

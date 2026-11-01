@@ -5,6 +5,16 @@
 #include "os2types.h"
 #define FACESIZE 32
 #pragma pack(push, 2)
+typedef struct _FATTRS
+{
+    USHORT usRecordLength, fsSelection;
+    LONG lMatch;
+    CHAR szFacename[FACESIZE];
+    USHORT idRegistry, usCodePage;
+    LONG lMaxBaselineExt, lAveCharWidth;
+    USHORT fsType, fsFontUse;
+} FATTRS;
+typedef FATTRS *PFATTRS;
 typedef struct _PANOSE
 {
     BYTE bFamilyType, bSerifStyle, bWeight, bProportion, bContrast, bStrokeVariation;

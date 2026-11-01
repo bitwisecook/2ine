@@ -9,7 +9,9 @@ It's a program that loads and runs OS/2 .exe files on Linux and macOS.
 *Does it work?*
 
 It runs command line OS/2 apps, including Microsoft, IBM and Watcom developer tools,
-and small Presentation Manager GUI programs such as PMStars.
+and small Presentation Manager GUI programs such as PMStars. The native Linux
+i386 profile also supports a [basic Word Pro document editing cycle](docs/gui.md#word-pro-document-workflow)
+with separately supplied SmartSuite media and settings.
 
 *Why?*
 

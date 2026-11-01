@@ -14,7 +14,9 @@
 
 HPS GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags)
 {
-    if (!size || (flags & ~(PU_PELS | GPIA_ASSOC)))
+    TRACE_NATIVE("GpiCreatePS(%u, %u, %p, %u)", (uint)hab, (uint)dc, size, (uint)flags);
+    if (!size || (flags & ~(PU_PELS | GPIA_ASSOC | 0x1000 | 0x300)) || (flags & 0x300) == 0x300 ||
+        size->cx < 0 || size->cy < 0)
         return 0;
     return lx_pm_create_ps(hab, dc);
 }
@@ -33,6 +35,27 @@ BOOL GpiMove(HPS hps, PPOINTL point)
 BOOL GpiSetColor(HPS hps, LONG color)
 {
     return lx_pm_color(hps, color) != -255;
+}
+HDC GpiQueryDevice(HPS ps)
+{
+    return lx_pm_query_dc(ps);
+}
+BOOL GpiAssociate(HPS ps, HDC dc)
+{
+    return lx_pm_associate_dc(ps, dc);
+}
+BOOL GpiSetCp(HPS ps, ULONG cp)
+{
+    return lx_pm_set_cp(ps, cp);
+}
+ULONG GpiQueryCp(HPS ps)
+{
+    return lx_pm_query_cp(ps);
+}
+BOOL GpiCreateLogColorTable(HPS ps, ULONG options, LONG format, LONG start, LONG count,
+                            PLONG colors)
+{
+    return lx_pm_color_table(ps, options, format, start, count, colors);
 }
 BOOL GpiSetDrawingMode(HPS hps, LONG mode)
 {

@@ -726,6 +726,39 @@ static uint32 bridge32_DosFreeThreadLocalMemory(uint8 *a)
     return DosFreeThreadLocalMemory((ULONG *)(uintptr_t)lx_guest_load_u32(a));
 }
 
+static uint32 bridge32_DosQueryMem(uint8 *a)
+{
+    const uint32 address = lx_guest_load_u32(a);
+    LxGuestBorrow memory = {0}, size = {0}, flags = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, address, 1, 0, &memory))
+        return ERROR_INVALID_ADDRESS;
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4,
+                            LX_GUEST_READ | LX_GUEST_WRITE, &size) &&
+        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
+                            &flags))
+    {
+        ULONG count = lx_guest_load_u32(size.host), attributes = 0;
+        if (count)
+        {
+            const size_t remaining = lx_execution_mapping_size(memory.mapping) -
+                                     (address - lx_execution_mapping_address(memory.mapping));
+            if (count > remaining)
+                count = (ULONG)remaining;
+            result = DosQueryMem(memory.host, &count, &attributes);
+            if (!result)
+            {
+                lx_guest_store_u32(size.host, count);
+                lx_guest_store_u32(flags.host, attributes);
+            }
+        }
+    }
+    lx_execution_release(&flags);
+    lx_execution_release(&size);
+    lx_execution_release(&memory);
+    return result;
+}
+
 static uint32 bridge32_DosSetMem(uint8 *a)
 {
     const uint32 size = lx_guest_load_u32(a + 4);
@@ -1112,4 +1145,9 @@ static uint32 bridge32_DosMove(uint8 *a)
     free(from);
     free(to);
     return result;
+}
+
+static uint32 bridge32_Dos32QueryResourceSize(uint8 *a)
+{
+    return bridge32_DosQueryResourceSize(a);
 }

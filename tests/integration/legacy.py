@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from images import linear_image
+from images import FlatGuest, linear_image
 
 
 class Guest:
@@ -195,6 +195,84 @@ def critical_program(checked):
     return linear_image(code, fixups, ["DOSCALLS"], "CRITICAL")
 
 
+def path_program():
+    g = FlatGuest()
+    info = g.field(bytes(24))
+    for name, expected in (
+        (b"input.txt", 0),
+        (b"absent.txt", 2),
+        (b"absent\\child.txt", 3),
+        (b"input.txt\\child.txt", 3),
+    ):
+        path = g.field(name + b"\0")
+        g.call(1, 223, path, 1, info, 24)  # DosQueryPathInfo
+        g.result(expected, 50 + expected)
+    disk, drives = g.field(bytes(4)), g.field(bytes(4))
+    current, explicit = g.field(bytes(260)), g.field(bytes(260))
+    size1, size2 = g.field(struct.pack("<I", 260)), g.field(struct.pack("<I", 260))
+    g.call(1, 275, disk, drives)  # DosQueryCurrentDisk
+    g.result(0, 54)
+    g.call(1, 274, 0, current, size1)
+    g.result(0, 55)
+    g.call(1, 274, (disk,), explicit, size2)
+    g.result(0, 56)
+    g.load(size1)
+    g.require(b"\x3b\x05" + struct.pack("<I", size2), 57)
+    g.code.extend(b"\x89\xc1\xbe" + struct.pack("<I", current))
+    g.code.extend(b"\xbf" + struct.pack("<I", explicit) + b"\xfc\xf3\xa6")
+    g.require(b"", 58)  # Both forms must return the same bytes, including NUL.
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "PATHS", data=g.data)
+
+
+def memory_program(checked):
+    g = FlatGuest()
+    size = g.field(struct.pack("<I", 0x100000))
+    flags = g.field(bytes(4))
+    g.call(1, 306, 0x20000, size, flags)
+    g.result(0, 70)
+    g.load(flags)
+    g.require(b"\x25\x13\x00\x00\x00\x3d\x13\x00\x00\x00", 71)
+    if checked:
+        g.load(size)
+        g.require(b"\x3d\x00\x00\x01\x00", 72)
+        g.call(1, 306, 0xDEADBEEF, size, flags)
+        g.result(487, 73)
+        g.call(1, 306, 0x20000, 0xDEADBEEF, flags)
+        g.result(87, 74)
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "MEMQUERY", data=g.data)
+
+
+def exit_library():
+    g = FlatGuest()
+    g.code.extend(b"\x83\x7c\x24\x08\x00\x75\x00")  # Register only at DLL initialization.
+    branch = len(g.code) - 1
+    g.code.extend(b"\xe8\x00\x00\x00\x00\x58\x05")  # Position-independent callback address.
+    origin = len(g.code) - 2
+    patch = len(g.code)
+    g.code.extend(bytes(4) + b"\x50\x68\x01\xff\x00\x00")
+    g.call(1, 296)  # DosExitList(EXLST_ADD | 0xff00, callback)
+    g.code.extend(b"\x83\xc4\x08")
+    g.code[branch] = len(g.code) - branch - 1
+    g.code.extend(b"\xb8\x01\x00\x00\x00\xc3")
+    struct.pack_into("<I", g.code, patch, len(g.code) - origin)
+    g.code.extend(b"\xc3")
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "EXITDLL", library=True)
+
+
+def exit_program():
+    g = FlatGuest()
+    module = g.field(bytes(4))
+    name = g.field(b"EXITDLL\0")
+    g.call(1, 318, 0, 0, name, module)
+    g.result(0, 60)
+    g.call(1, 322, (module,))  # The registered exit callback must remain executable.
+    g.result(0, 61)
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "EXITLIFE", data=g.data)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -206,6 +284,47 @@ def main():
     with tempfile.TemporaryDirectory(prefix="twoine-legacy-") as scratch:
         work = Path(scratch)
         (work / "input.txt").write_bytes(b"NE16 fixture\n")
+        paths = work / "paths.exe"
+        paths.write_bytes(path_program())
+        result = subprocess.run(
+            [str(build / "lx_loader"), str(paths)],
+            cwd=work,
+            env=env,
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode:
+            raise RuntimeError(
+                f"paths exit={result.returncode}\n" + result.stderr.decode(errors="replace")
+            )
+        memory = work / "memquery.exe"
+        memory.write_bytes(memory_program(args.backend == "unicorn"))
+        result = subprocess.run(
+            [str(build / "lx_loader"), str(memory)],
+            cwd=work,
+            env=env,
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode:
+            raise RuntimeError(
+                f"memory query exit={result.returncode}\n" + result.stderr.decode(errors="replace")
+            )
+        (work / "exitdll.dll").write_bytes(exit_library())
+        lifetime = work / "exitlife.exe"
+        lifetime.write_bytes(exit_program())
+        result = subprocess.run(
+            [str(build / "lx_loader"), str(lifetime)],
+            cwd=work,
+            env=env,
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode:
+            raise RuntimeError(
+                f"exit callback lifetime exit={result.returncode}\n"
+                + result.stderr.decode(errors="replace")
+            )
         guest = program()
         for preload in (False, True):
             exe = work / "legacy.exe"

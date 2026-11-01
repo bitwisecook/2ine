@@ -15,6 +15,7 @@ from images import FlatGuest, linear_image
 def program(checked):
     g = FlatGuest()
     status = g.field(bytes(4))
+    bitmap = g.field(bytes(4))
     window = g.field(bytes(4))
     space = g.field(bytes(4))
     count = g.field(bytes(4))
@@ -117,6 +118,17 @@ def program(checked):
     g.result(1, 42)
     g.word(output, 96, 43)
     g.word(output + 4, 96, 44)
+    for identity in (701, 702, 703):
+        g.call(3, 399, (space,), 0, identity, 0, 0)
+        g.code.extend(b"\x85\xc0\x75\x12")
+        g.exit(45)
+        g.code.extend(b"\xa3" + struct.pack("<I", bitmap))
+        g.call(3, 573, (bitmap,), output)
+        g.result(1, 46)
+        g.word(output + 4, 0x00010002, 47)
+        g.word(output + 8, 0x00180001, 48)
+        g.call(3, 371, (bitmap,))
+        g.result(1, 49)
     if checked:
         g.call(3, 586, (space,), 1, helv, 0xDEADBEEF, 228, 0)
         g.result(0xFFFFFF01, 50)
@@ -133,7 +145,25 @@ def program(checked):
     g.call(2, 888, 1)
     g.result(1, 62)
     g.exit(0)
-    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWIN", "PMGPI"], "WINDOWS", data=g.data)
+    resources = []
+    for identity, fixed in ((701, 12), (702, 40), (703, 64)):
+        header = bytearray(fixed)
+        struct.pack_into("<I", header, 0, fixed)
+        if fixed == 12:
+            struct.pack_into("<HHHH", header, 4, 2, 1, 1, 24)
+        else:
+            struct.pack_into("<IIHH", header, 4, 2, 1, 1, 24)
+        bits = bytes((0, 0, 255, 0, 255, 0, 0, 0))
+        resource = struct.pack("<2sIHHI", b"BM", 14 + fixed + len(bits), 0, 0, 14 + fixed)
+        resources.append((2, identity, resource + header + bits))
+    return linear_image(
+        g.code,
+        g.fixups,
+        ["DOSCALLS", "PMWIN", "PMGPI"],
+        "WINDOWS",
+        data=g.data,
+        resources=resources,
+    )
 
 
 def main():

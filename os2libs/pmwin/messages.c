@@ -312,7 +312,7 @@ BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
                  parent = parent->parent)
                 visible = (parent->style & WS_VISIBLE) != 0;
             if (visible)
-                retval |= postTimestampedMsg(anchor, win->hwnd, WM_PAINT, 0, 0, ticks);
+                retval |= WinInvalidateRect(win->hwnd, NULL, FALSE);
             retval |= postExposedMessages(anchor, win->children, ticks);
         }
     }
@@ -327,6 +327,20 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return postTimestampedMsg(anchor, 0, WM_QUIT, 0, 0, ticks);
     if (!win || !win->hwnd)
         return FALSE;
+    if (event->type == LX_HOST_EVENT_KEY_DOWN || event->type == LX_HOST_EVENT_KEY_UP ||
+        event->type == LX_HOST_EVENT_TEXT)
+        return processKeyboardEvent(anchor, event);
+    if (event->type == LX_HOST_EVENT_FOCUS_GAINED)
+    {
+        WinSetActiveWindow(HWND_DESKTOP, win->hwnd);
+        return FALSE;
+    }
+    if (event->type == LX_HOST_EVENT_FOCUS_LOST)
+    {
+        if (topLevelWindow(anchor, anchor->focus) == win->hwnd)
+            WinSetFocus(HWND_DESKTOP, 0);
+        return FALSE;
+    }
     if (event->type == LX_HOST_EVENT_CLOSE)
         return postTimestampedMsg(anchor, win->hwnd, WM_CLOSE, 0, 0, ticks);
     if (event->type == LX_HOST_EVENT_SHOWN || event->type == LX_HOST_EVENT_EXPOSED)
@@ -360,6 +374,9 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     }
     if (!win->enabled)
         return FALSE;
+    if (event->type == LX_HOST_EVENT_BUTTON_DOWN || event->type == LX_HOST_EVENT_BUTTON_UP)
+        if (event->button >= 1 && event->button <= 3)
+            anchor->key_down[event->button] = event->type == LX_HOST_EVENT_BUTTON_DOWN;
     ULONG message = WM_MOUSEMOVE;
     if (event->type != LX_HOST_EVENT_MOTION)
     {
@@ -481,6 +498,8 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
             i->next = anchor->message_queue.free_pool;
             anchor->message_queue.free_pool = i;
 
+            if (filterInputMessage(anchor, pqmsg, 1))
+                continue;
             return (pqmsg->msg != WM_QUIT) ? TRUE : FALSE;
         }
 
@@ -594,4 +613,61 @@ MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position)
     memcpy(position, lx_execution_mapping_host(mapping), sizeof *position);
     lx_execution_unmap(GLoaderState.execution, mapping);
     return result;
+}
+
+BOOL WinPeekMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULONG flags)
+{
+    AnchorBlock *anchor = getAnchorBlock(hab);
+    if (!anchor || !output || flags > 1 || (filter && !getWindowFromHWND(anchor, filter)))
+        return FALSE;
+    LxHostEvent event;
+    while (lx_host_video_poll(&event))
+        processHostEvent(anchor, &event);
+    pumpTimers(anchor);
+    presentWindows(anchor);
+retry:
+    MessageQueueItem *previous = NULL, *item = anchor->message_queue.head;
+    while (item && skipMessage(&item->qmsg, filter, first, last))
+    {
+        previous = item;
+        item = item->next;
+    }
+    if (!item)
+        return FALSE;
+    *output = item->qmsg;
+    QMSG original = item->qmsg;
+    if (flags & 1)
+    {
+        if (previous)
+            previous->next = item->next;
+        else
+            anchor->message_queue.head = item->next;
+        if (anchor->message_queue.tail == item)
+            anchor->message_queue.tail = previous;
+        item->next = anchor->message_queue.free_pool;
+        anchor->message_queue.free_pool = item;
+    }
+    if (filterInputMessage(anchor, output, flags))
+    {
+        if (!(flags & 1))
+        {
+            MessageQueueItem **link = &anchor->message_queue.head;
+            previous = NULL;
+            while (*link && *link != item)
+            {
+                previous = *link;
+                link = &(*link)->next;
+            }
+            if (*link && !memcmp(&item->qmsg, &original, sizeof original))
+            {
+                *link = item->next;
+                if (anchor->message_queue.tail == item)
+                    anchor->message_queue.tail = previous;
+                item->next = anchor->message_queue.free_pool;
+                anchor->message_queue.free_pool = item;
+            }
+        }
+        goto retry;
+    }
+    return TRUE;
 }

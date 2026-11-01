@@ -104,3 +104,15 @@ dialog reuse, list state and WM_QUIT reposting. `pm_dialog_apis` builds an x86
 LX fixture with a real dialog resource and guest WM_INITDLG callback; it checks
 modal results, stock subclass procedure calls and invalid portable spans.
 The media test verifies transparent, half-coverage and opaque glyph blending.
+
+The optional `tests/integration/smartsuite.py` harness exercises Word Pro's real
+new/edit/font/save/reopen/edit/save/reopen/exit cycle using separately supplied
+installation files and settings. It records screenshots and document hashes;
+see [GUI applications](gui.md) for invocation and limits. The native Linux
+workflow is qualified independently of the portable contract suite.
+
+PM contracts also cover logical-font text output, memory bitmaps and raster
+copies, region clipping, presentation-space state, accelerators, list searching
+and input-hook modification/removal. The generated legacy guest tests current
+directory/path errors and an exit callback registered by a DLL that is later
+released by its caller.
