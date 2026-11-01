@@ -99,6 +99,7 @@ API = {
     "FindFirstFile": 211,
     "CreateFont": 75,
     "GetParent": 333,
+    "SetParent": 633,
     "EndPaint": 173,
     "BeginPaint": 16,
     "RedrawWindow": 540,
@@ -873,6 +874,16 @@ def api_window_program():
     g.require(b"\x3b\x05" + struct.pack("<I", children[0]), 163)
     call(g, "GetWindow", (children[0],), 2)
     g.require(b"\x3b\x05" + struct.pack("<I", children[1]), 164)
+    call(g, "SetParent", (children[0],), (children[1],))
+    g.require(b"\x3b\x05" + struct.pack("<I", window), 164)
+    call(g, "GetParent", (children[0],))
+    g.require(b"\x3b\x05" + struct.pack("<I", children[1]), 164)
+    call(g, "SetParent", (children[1],), (children[0],))  # Reject parent cycles.
+    g.result(0, 164)
+    call(g, "SetParent", (children[0],), (window,))
+    g.require(b"\x3b\x05" + struct.pack("<I", children[1]), 164)
+    call(g, "SetParent", 0xDEADBEEF, (window,))
+    g.result(0, 164)
     for child_handle in children:
         call(g, "DestroyWindow", (child_handle,))
         g.result(1, 165)
@@ -1847,7 +1858,9 @@ def bitmap_program():
     g = FlatGuest()
     dc, memory, bitmap, previous = (g.field(bytes(4)) for _ in range(4))
     mono = g.field(bytes.fromhex("a0004000"))
-    info = g.field(struct.pack("<IiiHH6I", 40, 3, 2, 1, 1, 0, 0, 0, 0, 2, 0) + struct.pack("<2I", 0, 0xffffff))
+    info = g.field(
+        struct.pack("<IiiHH6I", 40, 3, 2, 1, 1, 0, 0, 0, 0, 2, 0) + struct.pack("<2I", 0, 0xFFFFFF)
+    )
     replacement = g.field(bytes.fromhex("40000000a0000000"))
     output = g.field(bytes(24))
     call(g, "GetDC", 0)
@@ -1861,7 +1874,7 @@ def bitmap_program():
     g.word(output + 12, 2, 2)
     call(g, "SelectObject", (memory,), (bitmap,))
     store(g, previous)
-    for y, values in enumerate(((0, 0xffffff, 0), (0xffffff, 0, 0xffffff))):
+    for y, values in enumerate(((0, 0xFFFFFF, 0), (0xFFFFFF, 0, 0xFFFFFF))):
         for x, value in enumerate(values):
             call(g, "GetPixel", (memory,), x, y)
             g.result(value, 3)
@@ -1871,7 +1884,7 @@ def bitmap_program():
     call(g, "SetDIBits", (dc,), (bitmap,), 0, 2, replacement, info, 0)
     g.result(2, 5)
     call(g, "SelectObject", (memory,), (bitmap,))
-    for y, values in enumerate(((0xffffff, 0, 0xffffff), (0, 0xffffff, 0))):
+    for y, values in enumerate(((0xFFFFFF, 0, 0xFFFFFF), (0, 0xFFFFFF, 0))):
         for x, value in enumerate(values):
             call(g, "GetPixel", (memory,), x, y)
             g.result(value, 6)

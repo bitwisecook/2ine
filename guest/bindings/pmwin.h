@@ -35,6 +35,14 @@ static uint32 bridge32_WinInitialize(uint8 *a)
 {
     return WinInitialize(pm_word(a, 0));
 }
+static uint32 bridge32_WinWindowFromPoint(uint8 *a)
+{
+    uint8 bytes[8];
+    if (!lx_execution_read(GLoaderState.execution, pm_word(a, 1), bytes, sizeof bytes))
+        return 0;
+    POINTL point = {(LONG)lx_guest_load_u32(bytes), (LONG)lx_guest_load_u32(bytes + 4)};
+    return WinWindowFromPoint(pm_word(a, 0), &point, pm_word(a, 2));
+}
 static uint32 bridge32_WinWindowFromID(uint8 *a)
 {
     return WinWindowFromID(pm_word(a, 0), pm_word(a, 1));

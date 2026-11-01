@@ -1002,6 +1002,10 @@ static uint32 bridge32_DosCreateThread(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+static uint32 bridge32_DosKillThread(uint8 *a)
+{
+    return DosKillThread(lx_guest_load_u32(a));
+}
 static uint32 bridge32_DosWaitThread(uint8 *a)
 {
     LxGuestBorrow output;

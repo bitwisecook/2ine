@@ -239,3 +239,25 @@ int lx_execution_api_registers32(LxExecution *e, LxExecutionRegisters32 *registe
 {
     return e && registers && e->ops->api_registers32 ? e->ops->api_registers32(registers) : 0;
 }
+
+void lx_execution_terminate(LxExecution *e, void (*cleanup)(uint32_t), uint32_t code)
+{
+    if (e && e->ops->terminate)
+        e->ops->terminate(e, cleanup, code);
+    else
+        cleanup(code);
+}
+void lx_execution_poll_termination(LxExecution *e)
+{
+    if (e && e->ops->poll_termination)
+        e->ops->poll_termination(e);
+}
+
+int lx_execution_cancel_thread32(LxExecution *e, void *invocation)
+{
+    return e && e->ops->cancel_thread32 && e->ops->cancel_thread32(invocation);
+}
+int lx_execution_thread_cancelled(LxExecution *e)
+{
+    return e && e->ops->thread_cancelled && e->ops->thread_cancelled();
+}

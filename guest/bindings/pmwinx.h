@@ -1593,6 +1593,11 @@ static uint32 bridge32_GetParent(uint8 *a)
     return GetParent(lx_guest_load_u32(a));
 }
 
+static uint32 bridge32_SetParent(uint8 *a)
+{
+    return SetParent(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+
 static uint32 bridge32_RedrawWindow(uint8 *a)
 {
     LxGuestBorrow rect = {0};

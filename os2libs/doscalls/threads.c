@@ -257,6 +257,23 @@ APIRET DosWaitThread(PTID id, ULONG option)
     }
 }
 
+APIRET DosKillThread(TID id)
+{
+    TRACE_NATIVE("DosKillThread(%u)", (uint)id);
+    if (id == 1)
+        return ERROR_INVALID_THREADID;
+    grabLock(&GMutexDosCalls);
+    Thread *thread = GThreads;
+    while (thread && thread->id != id)
+        thread = thread->next;
+    APIRET result = !thread || thread->finished ? ERROR_INVALID_THREADID
+                    : lx_execution_cancel_thread32(GLoaderState.execution, thread->invocation)
+                        ? NO_ERROR
+                        : ERROR_NOT_SUPPORTED;
+    ungrabLock(&GMutexDosCalls);
+    return result;
+}
+
 APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
 {
     TRACE_NATIVE("DosAllocThreadLocalMemory(%u, %p)", (uint)cb, p);
@@ -441,7 +458,14 @@ APIRET DosSleep(ULONG msec)
 {
     TRACE_NATIVE("DosSleep(%u)", (uint)msec);
 
-    lx_host_sleep_ms(msec);
+    do
+    {
+        lx_execution_poll_termination(GLoaderState.execution);
+        ULONG slice = msec > 10 ? 10 : msec;
+        lx_host_sleep_ms(slice);
+        msec -= slice;
+    } while (msec);
+    lx_execution_poll_termination(GLoaderState.execution);
     return NO_ERROR;
 }
 

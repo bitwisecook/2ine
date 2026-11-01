@@ -206,7 +206,8 @@ static APIRET receive_queue(HQUEUE handle, PREQUESTDATA request, PULONG length, 
     while ((received =
                 lx_host_mailbox_receive(queue->mailbox, bytes, sizeof(Packet) + QUEUE_PAYLOAD_LIMIT,
                                         &size, &importance, &token, peek)) == 1 &&
-           !nowait && !__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
+           !nowait && !__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE) &&
+           !lx_execution_thread_cancelled(GLoaderState.execution))
         lx_host_sleep_ms(10);
     APIRET result = received == 1 ? ERROR_QUE_EMPTY : received ? ERROR_QUE_MEMORY_ERROR : NO_ERROR;
     if (__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))

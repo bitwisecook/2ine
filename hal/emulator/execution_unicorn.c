@@ -4,6 +4,8 @@
 #include "cpu.h"
 #include "guest/abi.h"
 #include "hal/host_sync.h"
+#include "hal/host_thread.h"
+#include "hal/host.h"
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +36,25 @@ typedef struct Invocation
     uint32_t api_arguments;
     const LxCpuRegisters *api_registers;
 } Invocation;
+typedef struct Thread32Entry
+{
+    uint32_t entry, stack, argument;
+    int cancelled;
+} Thread32Entry;
+static __thread Thread32Entry *CurrentThread32;
+static int endThread(void);
+static int threadCancelled(void)
+{
+    return CurrentThread32 && __atomic_load_n(&CurrentThread32->cancelled, __ATOMIC_ACQUIRE);
+}
+static int cancelThread32(void *invocation)
+{
+    Thread32Entry *entry = invocation;
+    if (!entry)
+        return 0;
+    __atomic_store_n(&entry->cancelled, 1, __ATOMIC_RELEASE);
+    return 1;
+}
 typedef struct EmulatedState
 {
     LxExecution *execution;
@@ -49,6 +70,11 @@ typedef struct EmulatedState
     uint32_t return_address, near_base;
     uint16_t return_selector;
     LxHostMutex *mutex, *segment_mutex;
+    uint64_t primary_thread;
+    uint32_t exit_stack;
+    unsigned termination; /* 0 running, 1 requested, 2 primary cleanup. Protected by mutex. */
+    void (*exit_cleanup)(uint32_t);
+    uint32_t exit_code;
 } EmulatedState;
 /* One guest address space per worker. Each host thread has its own CPU context;
    the shared engine is held only during CPU operations, never across an API. */
@@ -66,6 +92,68 @@ static __attribute__((noreturn)) void failure(const char *message)
 {
     fprintf(stderr, "2ine execution: %s\n", message);
     abort();
+}
+/* Other guest threads remain parked until host process exit. In particular, do
+   not run their PM destructors while the primary thread is executing exit handlers. */
+static LxCpuRegisters initialRegisters(void);
+static void replaceContext(Invocation *frame);
+static void pollTermination(LxExecution *e)
+{
+    EmulatedState *s = e->backend;
+    if (threadCancelled())
+        endThread();
+    if (!__atomic_load_n(&s->termination, __ATOMIC_ACQUIRE))
+        return;
+    lx_host_mutex_lock(s->mutex, UINT32_MAX);
+    int primary = lx_host_thread_id() == s->primary_thread;
+    unsigned state = s->termination;
+    void (*cleanup)(uint32_t) = s->exit_cleanup;
+    uint32_t code = s->exit_code;
+    if (primary && state == 1)
+        __atomic_store_n(&s->termination, 2, __ATOMIC_RELEASE);
+    lx_host_mutex_unlock(s->mutex);
+    if (primary)
+    {
+        if (state == 1)
+        {
+            /* OS/2 discards the interrupted program stack and exception chain
+               before dispatching its process exit list on thread one. */
+            if (Active && s->exit_stack)
+            {
+                LxCpuRegisters r = initialRegisters();
+                r.esp = s->exit_stack;
+                lx_host_mutex_lock(s->mutex, UINT32_MAX);
+                if (!lx_cpu_restore(s->cpu, Active->context) || !lx_cpu_set_registers(s->cpu, &r))
+                    failure(lx_cpu_error(s->cpu));
+                replaceContext(Active);
+                lx_host_mutex_unlock(s->mutex);
+                if (ThreadTib)
+                    lx_guest_store_u32(ThreadTib, UINT32_MAX);
+            }
+            cleanup(code);
+            failure("Process termination cleanup returned");
+        }
+        return;
+    }
+    for (;;)
+        lx_host_sleep_ms(10);
+}
+static void terminateProcess(LxExecution *e, void (*cleanup)(uint32_t), uint32_t code)
+{
+    EmulatedState *s = e->backend;
+    lx_host_mutex_lock(s->mutex, UINT32_MAX);
+    int recursive = s->termination == 2 && lx_host_thread_id() == s->primary_thread;
+    if (!s->termination)
+    {
+        s->exit_cleanup = cleanup;
+        s->exit_code = code;
+        __atomic_store_n(&s->termination, 1, __ATOMIC_RELEASE);
+    }
+    lx_host_mutex_unlock(s->mutex);
+    if (recursive)
+        cleanup(code);
+    pollTermination(e);
+    failure("Process termination returned");
 }
 static int map(LxExecution *e, uint32_t a, size_t n, unsigned p, void *host)
 {
@@ -360,6 +448,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
     lx_host_mutex_unlock(s->mutex);
     for (;;)
     {
+        pollTermination(s->execution);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
         if (!lx_cpu_restore(s->cpu, frame.context))
             failure(lx_cpu_error(s->cpu));
@@ -510,6 +599,8 @@ static void program(const LxExecutionEntry *e, unsigned bits)
     if (Active == &Emulated->completed_main)
         Active = NULL;
     LxCpuRegisters r = initialRegisters();
+    if (bits == 32)
+        Emulated->exit_stack = e->stack;
     if (bits == 32)
     {
         r.eip = e->entry;
@@ -674,10 +765,6 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     return result;
 }
 
-typedef struct Thread32Entry
-{
-    uint32_t entry, stack, argument;
-} Thread32Entry;
 static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
 {
     Thread32Entry *p = malloc(sizeof *p);
@@ -686,12 +773,14 @@ static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
         p->entry = entry;
         p->stack = stack;
         p->argument = argument;
+        p->cancelled = 0;
     }
     return p;
 }
 static void thread32(void *invocation)
 {
     Thread32Entry *entry = invocation;
+    CurrentThread32 = entry;
     jmp_buf target;
     jmp_buf *outer_return = ThreadReturn;
     Invocation *outer_frame = ThreadOuter;
@@ -708,6 +797,7 @@ static void thread32(void *invocation)
     }
     ThreadReturn = outer_return;
     ThreadOuter = outer_frame;
+    CurrentThread32 = NULL;
 }
 static int endThread(void)
 {
@@ -757,6 +847,7 @@ static int initialize(LxExecution *e)
     if (!s)
         return lx_execution_fail(e, "Out of memory");
     s->execution = e;
+    s->primary_thread = lx_host_thread_id();
     e->backend = s;
     s->mutex = lx_host_mutex_create(0, 0);
     if (!s->mutex)
@@ -893,15 +984,48 @@ static int apiRegisters32(LxExecutionRegisters32 *out)
     out->ss = r->ss;
     return 1;
 }
-const LxExecutionOperations lx_execution_unicorn = {
-    "unicorn",     initialize,      destroy,     program,
-    library,       prepareThread,   thread16,    free,
-    callback,      attachTib,       currentTib,  detachTib,
-    allocSegment,  freeSegment,     codeAlias,   findSelector,
-    freeSelector,  farToHost,       hostToFar,   stackSegments,
-    nearBase,      flatCode,        prepareCode, missing,
-    emitBridge16,  atomicU32,       NULL,        0,
-    map,           unmap,           protect,     emitBridge32,
-    copyOut,       prepareThread32, thread32,    free,
-    endThread,     copyIn,          callback4,   apiArguments,
-    apiRegisters32};
+const LxExecutionOperations lx_execution_unicorn = {"unicorn",
+                                                    initialize,
+                                                    destroy,
+                                                    program,
+                                                    library,
+                                                    prepareThread,
+                                                    thread16,
+                                                    free,
+                                                    callback,
+                                                    attachTib,
+                                                    currentTib,
+                                                    detachTib,
+                                                    allocSegment,
+                                                    freeSegment,
+                                                    codeAlias,
+                                                    findSelector,
+                                                    freeSelector,
+                                                    farToHost,
+                                                    hostToFar,
+                                                    stackSegments,
+                                                    nearBase,
+                                                    flatCode,
+                                                    prepareCode,
+                                                    missing,
+                                                    emitBridge16,
+                                                    atomicU32,
+                                                    NULL,
+                                                    0,
+                                                    map,
+                                                    unmap,
+                                                    protect,
+                                                    emitBridge32,
+                                                    copyOut,
+                                                    prepareThread32,
+                                                    thread32,
+                                                    free,
+                                                    endThread,
+                                                    copyIn,
+                                                    callback4,
+                                                    apiArguments,
+                                                    apiRegisters32,
+                                                    terminateProcess,
+                                                    pollTermination,
+                                                    cancelThread32,
+                                                    threadCancelled};

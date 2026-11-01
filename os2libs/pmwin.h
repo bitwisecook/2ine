@@ -1021,6 +1021,8 @@ extern "C"
     OS2EXPORT LONG OS2API WinDrawText(HPS ps, LONG count, PCH text, PRECTL rect, LONG foreground,
                                       LONG background, ULONG flags) OS2APIINFO(913);
     OS2EXPORT BOOL OS2API WinQueryWindowRect(HWND hwnd, PRECTL rect) OS2APIINFO(840);
+    OS2EXPORT HWND OS2API WinWindowFromPoint(HWND parent, PPOINTL point, BOOL children)
+        OS2APIINFO(900);
     OS2EXPORT BOOL OS2API WinEnableWindow(HWND window, BOOL enable) OS2APIINFO(735);
     OS2EXPORT BOOL OS2API WinShowWindow(HWND window, BOOL show) OS2APIINFO(883);
     OS2EXPORT BOOL OS2API WinSetPresParam(HWND window, ULONG id, ULONG size, PVOID data)

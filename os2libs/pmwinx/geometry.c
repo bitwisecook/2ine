@@ -103,3 +103,28 @@ ULONG GetParent(ULONG window)
     ULONG parent = WinQueryWindow(window, 5);
     return parent == HWND_DESKTOP ? WinQueryWindow(window, 4) : parent;
 }
+
+ULONG SetParent(ULONG window, ULONG parent)
+{
+    HAB hab = open32Presentation();
+    HWND target = parent ? parent : HWND_DESKTOP;
+    if (!hab || !WinIsWindow(hab, window) || !WinIsWindow(hab, target))
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    ULONG previous = WinQueryWindow(window, 5);
+    if (!WinSetParent(window, target, TRUE))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    Open32Window *w = open32FindWindow(window);
+    if (w)
+    {
+        w->parent = parent;
+        /* Reapply the top-left position using the new PM parent's height. */
+        SetWindowPos(window, 0, w->x, w->y, 0, 0, 1 | 4 | 16);
+    }
+    return previous == HWND_DESKTOP ? 0 : previous;
+}
