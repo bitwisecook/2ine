@@ -6,8 +6,10 @@ Manager application. The same executable uses IBM OpenGL on Warp 4.52 and
 
 The current port provides a fixed-size window, single-player maps, save/load,
 keyboard controls, relative mouse movement, mouse buttons and Quake's TGA
-screenshot command. Sound, CD audio and LAN networking are disabled. Local
-client/server communication uses Quake's loopback driver.
+screenshot command. Game sound uses MMPM/2 DART with 16-bit stereo PCM. LAN
+multiplayer uses Quake's UDP datagram protocol, including server discovery,
+listen servers and dedicated servers. Local single-player communication uses
+Quake's loopback driver. CD music is disabled.
 
 ## Run
 
@@ -19,7 +21,10 @@ contains a usable `id1/pak0.pak`.
 On Warp, install the optional IBM OpenGL runtime from your OS/2 media.
 `OPENGL.DLL` and its matching `RASTER.DLL` must be on LIBPATH or in the
 application directory. Use a color desktop; the verified VM uses Cirrus VGA
-at 1024x768. Start with a small window for IBM's software renderer:
+at 1024x768. Sound requires MMPM/2 and a working DART audio device; networking
+requires the OS/2 TCP/IP runtime and a configured TCP/IP interface. If no
+audio device or UDP stack is available, the engine continues without that
+feature. Start with a small window for IBM's software renderer:
 
 ```bat
 glquake -width 320 -height 240 +map e1m1
@@ -44,6 +49,13 @@ when quitting an active game.
 
 Additional switches:
 
+- `-nosound`: disable game sound, including DART device initialization.
+- `-sndspeed N`: PCM sample rate from 8000 to 48000 Hz (default 22050).
+- `-noudp`: disable UDP networking.
+- `-port N`: server/discovery port (default 26000).
+- `-ip A.B.C.D`: bind sockets to an explicit local IPv4 interface.
+- `-broadcast A.B.C.D`: discovery broadcast address (default 255.255.255.255);
+  use a subnet broadcast when the host needs an explicit interface route.
 - `-nomouse`: leave the desktop pointer unconfined and disable relative motion.
 - `-gl10`: force the stock OpenGL 1.0 texture compatibility path.
 - `-inputlog`: record translated PM key/button/motion events in `glquake.log`.
@@ -52,6 +64,28 @@ Additional switches:
 
 `glquake.log` records startup, renderer selection, engine messages and shutdown.
 Quake writes bindings/settings to `id1/config.cfg` on normal shutdown.
+
+## LAN play
+
+Start a listen server from the game directory:
+
+```bat
+glquake -listen 4 +map e1m1
+```
+
+On another machine, use Multiplayer / Join a Game to discover the server, or
+connect to its IPv4 address directly:
+
+```bat
+glquake +connect 192.168.1.10:26000
+```
+
+The console `slist` command lists discovered servers. `status` lists connected
+players, `name` changes your name, and `say` sends chat. A dedicated server uses
+`-dedicated 4 +map e1m1`. Each client/server needs matching game data and
+network access for UDP on the chosen port. Discovery uses subnet broadcasts;
+use direct connections across routed networks. If hostname resolution selects
+the wrong local interface, start the server with `-ip` and its LAN IPv4 address.
 
 ## Build on Linux
 
@@ -92,7 +126,8 @@ host i386 execution support.
 
 The build uses C versions of Quake's low-level routines, 32-bit enums for the
 on-disk model records, and a 2 MB OS/2 stack for the player-skin scratch buffer.
-It links the Toolkit's original Warp import library. Watcom's newer
+It links the Toolkit's original Warp OpenGL, MMPM/2 and TCP/IP import libraries.
+Watcom's newer
 `lib386/os2/opengl.lib` uses a different ordinal ABI and must not replace it.
 
 ## Build inside Warp 4.52
@@ -100,7 +135,8 @@ It links the Toolkit's original Warp import library. Watcom's newer
 Use the prepared `source/` directory or the complete source archive accompanying
 the executable. Install OS/2-hosted Open Watcom 2 and the OS/2 Toolkit.
 Copy `%SDK%\lib\opengl.lib` to the source directory as `warpgl.lib` if it is
-not already present. Run from a writable source directory:
+not already present. Also copy `%SDK%\lib\mmpm2.lib`, `so32dll.lib` and
+`tcp32dll.lib` into the source directory. Run from a writable source directory:
 
 ```bat
 set WATCOM=C:\WATCOM
@@ -145,3 +181,25 @@ and `--mouse` to exercise relative motion and firing.
 Supply a new work directory for each run. Stock Warp verification uses a
 private VM disk, IBM's original OpenGL runtime, the same executable, actual
 PM input, an engine screenshot and the startup/shutdown log.
+
+The audio harness plays the shareware demo, captures actual DART output and
+checks finite nonzero PCM, differing stereo channels and clean shutdown. The
+network harness runs two peers on an isolated loopback broadcast, discovers a
+server, exchanges chat and checks server-reported player movement in recorded
+Quake demos:
+
+```sh
+python3 tests/integration/glquake_audio.py \
+  --build /path/to/2ine-build --backend native \
+  --program /path/to/glquake.exe --data /path/to/id1/pak0.pak \
+  --work /path/to/audio-test
+xvfb-run -a -s '-screen 0 1024x768x24' \
+  python3 tests/integration/glquake_network.py \
+  --build /path/to/2ine-build --backend native \
+  --program /path/to/glquake.exe --data /path/to/id1/pak0.pak \
+  --work /path/to/network-test
+```
+
+Both harnesses also accept `--backend unicorn` and require fresh work directories.
+The audio harness accepts `--unavailable` to check startup without an audio
+device. The binary must remain unchanged throughout each run.

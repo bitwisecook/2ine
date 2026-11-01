@@ -117,3 +117,60 @@ int Os2LegacySocketInit(void)
 {
     return 0;
 }
+
+int Os2LegacyGetSocketName(int socket, Os2LegacyAddress *address, int *length)
+{
+    if (!address || !length || *length < (int)sizeof *address)
+        return failure(14);
+    LxHostSocketAddress host;
+    int result = socket_result(lx_host_socket_name(socket, &host));
+    if (!result)
+    {
+        memset(address, 0, sizeof *address);
+        address->family = OS2_AF_INET_LEGACY;
+        address->port = host.port;
+        address->address = host.address;
+        *length = sizeof *address;
+    }
+    return result;
+}
+int Os2LegacySocketOption(int socket, int level, int option, const void *value, int length)
+{
+    if (level != 0xffff)
+        return failure(42);
+    LxHostSocketOption host;
+    switch (option)
+    {
+        case 0x0001:
+            host = LX_SO_DEBUG;
+            break;
+        case 0x0004:
+            host = LX_SO_REUSEADDR;
+            break;
+        case 0x0008:
+            host = LX_SO_KEEPALIVE;
+            break;
+        case 0x0010:
+            host = LX_SO_DONTROUTE;
+            break;
+        case 0x0020:
+            host = LX_SO_BROADCAST;
+            break;
+        case 0x0100:
+            host = LX_SO_OOBINLINE;
+            break;
+        case 0x1001:
+            host = LX_SO_SNDBUF;
+            break;
+        case 0x1002:
+            host = LX_SO_RCVBUF;
+            break;
+        default:
+            return failure(42);
+    }
+    if (!value || length < 4)
+        return failure(14);
+    int number;
+    memcpy(&number, value, sizeof number);
+    return socket_result(lx_host_socket_option(socket, host, &number, sizeof number));
+}

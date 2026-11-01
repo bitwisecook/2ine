@@ -84,3 +84,18 @@ static uint32 bridge32_Os2LegacyGetHostByName(uint8 *a)
     }
     return base;
 }
+
+static uint32 bridge32_Os2LegacyInetText(uint8 *a)
+{
+    static LX_HOST_THREAD_LOCAL LxGuestMapping *storage;
+    const char *text = Os2LegacyInetText(lx_guest_load_u32(a));
+    if (!text)
+        return 0;
+    if (!storage)
+        storage =
+            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    if (!storage)
+        return 0;
+    memcpy(lx_execution_mapping_host(storage), text, strlen(text) + 1);
+    return lx_execution_mapping_address(storage);
+}

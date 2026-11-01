@@ -11,6 +11,10 @@ typedef struct Os2LegacyAddress
 } Os2LegacyAddress;
 OS2EXPORT int OS2API Os2LegacyBind(int socket, const Os2LegacyAddress *address, int length)
     OS2APIINFO(ord = 2, name = bind);
+OS2EXPORT int OS2API Os2LegacyGetSocketName(int socket, Os2LegacyAddress *address, int *length)
+    OS2APIINFO(ord = 6, name = getsockname);
+OS2EXPORT int OS2API Os2LegacySocketOption(int socket, int level, int option, const void *value,
+                                           int length) OS2APIINFO(ord = 15, name = setsockopt);
 OS2EXPORT int OS2API Os2LegacyIoctl(int socket, int command, void *argument, int length)
     OS2APIINFO(ord = 8, name = ioctl);
 OS2EXPORT int OS2API Os2LegacyRecvFrom(int socket, void *buffer, int length, int flags,

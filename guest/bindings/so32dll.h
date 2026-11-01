@@ -89,3 +89,41 @@ done:
     lx_execution_release(&count);
     return result;
 }
+
+static uint32 bridge32_Os2LegacyGetSocketName(uint8 *a)
+{
+    LxGuestBorrow output = {0}, count = {0};
+    uint32 result = (uint32)-1;
+    if (lx_execution_borrow(GLoaderState.execution, socket_word(a, 2), 4,
+                            LX_GUEST_READ | LX_GUEST_WRITE, &count))
+    {
+        int length = lx_guest_load_u32(count.host);
+        Os2LegacyAddress address;
+        if (length >= (int)sizeof address &&
+            lx_execution_borrow(GLoaderState.execution, socket_word(a, 1), sizeof address,
+                                LX_GUEST_WRITE, &output))
+        {
+            result = Os2LegacyGetSocketName(socket_word(a, 0), &address, &length);
+            if (!result)
+            {
+                memcpy(output.host, &address, sizeof address);
+                lx_guest_store_u32(count.host, length);
+            }
+        }
+    }
+    lx_execution_release(&output);
+    lx_execution_release(&count);
+    return result;
+}
+static uint32 bridge32_Os2LegacySocketOption(uint8 *a)
+{
+    LxGuestBorrow value = {0};
+    uint32 result = (uint32)-1;
+    uint32 length = socket_word(a, 4);
+    if (length <= INT32_MAX && lx_execution_borrow(GLoaderState.execution, socket_word(a, 3),
+                                                   length, LX_GUEST_READ, &value))
+        result = Os2LegacySocketOption(socket_word(a, 0), socket_word(a, 1), socket_word(a, 2),
+                                       value.host, length);
+    lx_execution_release(&value);
+    return result;
+}

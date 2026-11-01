@@ -13,9 +13,9 @@ from pathlib import Path
 
 UNITS = """cl_demo cl_input cl_main cl_parse cl_tent chase cmd common console crc cvar
  gl_draw gl_mesh gl_model gl_refrag gl_rlight gl_rmain gl_rmisc gl_rsurf gl_screen gl_test gl_warp
- host host_cmd keys menu mathlib net_loop net_main net_vcr net_none
+ host host_cmd keys menu mathlib net_loop net_main net_vcr net_bsd net_dgrm net_os2
  pr_cmds pr_edict pr_exec r_part sbar sv_main sv_phys sv_move sv_user
- zone view wad world cd_null snd_null sys_os2 vid_os2 gl_os2""".split()
+ zone view wad world cd_null snd_dma snd_mem snd_mix snd_os2 sys_os2 vid_os2 gl_os2""".split()
 FLAGS = "-zq -w1 -e25 -bt=os2 -mf -5r -fp3 -fpi87 -otexan -dGLQUAKE -dOS2 -bm -j -ei".split()
 NATIVE_FLAGS = ["-od" if flag == "-otexan" else flag for flag in FLAGS]
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,8 +47,11 @@ def main():
     for original in (upstream / "WinQuake").iterdir():
         if original.suffix.lower() in (".c", ".h", ".q1"):
             shutil.copyfile(original, source / original.name)
-    host = source / "host.c"
-    host.write_text(host.read_text().replace("__TIME__", '"source"').replace("__DATE__", '"build"'))
+    for name in ("host.c", "host_cmd.c"):
+        host = source / name
+        host.write_text(
+            host.read_text().replace("__TIME__", '"source"').replace("__DATE__", '"build"')
+        )
     header = source / "glquake.h"
     header.write_text(
         header.read_text()
@@ -64,11 +67,20 @@ def main():
     ):
         file = source / filename
         file.write_text(file.read_text().replace(declaration, "extern " + declaration))
-    sound = source / "snd_null.c"
+    datagram = source / "net_dgrm.c"
+    datagram.write_text(
+        datagram.read_text().replace(
+            "#if defined(_WIN32)",
+            "#if defined(__OS2__)\n#define TCPV40HDRS\n#include <types.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#elif defined(_WIN32)",
+            1,
+        )
+    )
+    sound = source / "snd_dma.c"
     sound.write_text(
         sound.read_text().replace(
-            "void S_Init (void)\n{",
-            "void S_Init (void)\n{\n    Cvar_RegisterVariable(&volume);\n    Cvar_RegisterVariable(&bgmvolume);",
+            "\tS_Startup ();",
+            "\tS_Startup ();\n\tif (!sound_started && !fakedma)\n\t\treturn;",
+            1,
         )
     )
     shutil.copyfile(upstream / "gnu.txt", source / "COPYING")
@@ -139,6 +151,9 @@ def main():
         "library os2386",
         "library warpgl",
     ]
+    for name in ("mmpm2", "so32dll", "tcp32dll"):
+        shutil.copyfile(sdk / ("lib/" + name + ".lib"), source / (name + ".lib"))
+        lines.append("library " + name)
     lines += ["file " + u + ".obj" for u in UNITS]
     (source / "build.lnk").write_text("\n".join(lines) + "\n")
     command = [*tool("wlink"), "@build.lnk"]
@@ -191,6 +206,7 @@ def main():
                     str(p): digest(p)
                     for p in [
                         sdk / "lib/opengl.lib",
+                        *(sdk / ("lib/" + n + ".lib") for n in ("mmpm2", "so32dll", "tcp32dll")),
                         *(
                             [watcom / "binp/dll/wccd386.dll", watcom / "binp/dll/wlinkd.dll"]
                             if runner

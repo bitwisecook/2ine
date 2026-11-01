@@ -338,7 +338,9 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     }
     if (event->type == LX_HOST_EVENT_FOCUS_LOST)
     {
-        if (topLevelWindow(anchor, anchor->focus) == win->hwnd)
+        if (anchor->active == win->hwnd)
+            WinSetActiveWindow(HWND_DESKTOP, 0);
+        else if (topLevelWindow(anchor, anchor->focus) == win->hwnd)
             WinSetFocus(HWND_DESKTOP, 0);
         return FALSE;
     }

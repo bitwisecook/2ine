@@ -284,8 +284,7 @@ void VID_Init(unsigned char *palette)
     sprintf(path, "%s/glquake", com_gamedir);
     Sys_mkdir(path);
     vid.recalc_refdef = 1;
-    Con_SafePrintf("OS/2 PGL video %dx%d initialized (sound disabled, loopback network)\n", width,
-                   height);
+    Con_SafePrintf("OS/2 PGL video %dx%d initialized\n", width, height);
 }
 
 void VID_Shutdown(void)

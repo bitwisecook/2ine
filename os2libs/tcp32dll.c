@@ -34,3 +34,13 @@ int Os2LegacyGetHostName(char *name, int length)
 {
     return name && length > 0 ? lx_host_socket_hostname(name, (size_t)length) : -1;
 }
+
+char *Os2LegacyInetText(uint32_t address)
+{
+    static LX_HOST_THREAD_LOCAL char text[16];
+    const char *formatted = lx_host_socket_format_address(address);
+    if (!formatted)
+        return NULL;
+    snprintf(text, sizeof text, "%s", formatted);
+    return text;
+}

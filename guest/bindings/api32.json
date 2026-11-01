@@ -1694,6 +1694,16 @@
       "argument_bytes": 0,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyGetSocketName": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacySocketOption": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "tcp32dll": {
@@ -1719,6 +1729,11 @@
     },
     "Os2LegacyGetHostName": {
       "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyInetText": {
+      "argument_bytes": 4,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }
