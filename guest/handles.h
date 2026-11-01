@@ -12,7 +12,10 @@ typedef enum LxHandleKind
     LX_HANDLE_EVENT,
     LX_HANDLE_MUTEX,
     LX_HANDLE_DIRECTORY,
-    LX_HANDLE_FILE
+    LX_HANDLE_FILE,
+    LX_HANDLE_PROFILE,
+    LX_HANDLE_REGISTRY_KEY,
+    LX_HANDLE_KIND_LIMIT
 } LxHandleKind;
 typedef struct LxHandleBorrow
 {

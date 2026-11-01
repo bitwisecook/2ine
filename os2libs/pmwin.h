@@ -10,7 +10,6 @@
 #define _INCL_PMWIN_H_
 
 #include "os2types.h"
-
 #ifdef __cplusplus
 extern "C"
 {
@@ -889,6 +888,20 @@ extern "C"
     OS2EXPORT BOOL OS2API WinQueryPointerPos(HWND hwnd, PPOINTL point) OS2APIINFO(823);
     OS2EXPORT BOOL OS2API WinQueryWindowPos(HWND hwnd, PSWP position) OS2APIINFO(837);
     OS2EXPORT BOOL OS2API WinQueryWindowRect(HWND hwnd, PRECTL rect) OS2APIINFO(840);
+    OS2EXPORT LONG OS2API WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity,
+                                        PCHAR output) OS2APIINFO(781);
+    OS2EXPORT HWND OS2API WinWindowFromID(HWND window, ULONG id) OS2APIINFO(899);
+    OS2EXPORT ULONG OS2API WinQueryWindowULong(HWND window, LONG index) OS2APIINFO(843);
+    OS2EXPORT BOOL OS2API WinSetWindowULong(HWND window, LONG index, ULONG value) OS2APIINFO(878);
+    OS2EXPORT PVOID OS2API WinQueryWindowPtr(HWND window, LONG index) OS2APIINFO(839);
+    OS2EXPORT BOOL OS2API WinSetWindowPtr(HWND window, LONG index, PVOID value) OS2APIINFO(876);
+
+    OS2EXPORT LONG OS2API WinQuerySysColor(HWND desktop, LONG index, LONG reserved) OS2APIINFO(826);
+    OS2EXPORT LONG OS2API WinQuerySysValue(HWND desktop, LONG index) OS2APIINFO(829);
+    OS2EXPORT HPS OS2API WinGetPS(HWND window) OS2APIINFO(757);
+    OS2EXPORT HPS OS2API WinGetScreenPS(HWND desktop) OS2APIINFO(759);
+    OS2EXPORT BOOL OS2API WinReleasePS(HPS space) OS2APIINFO(848);
+    OS2EXPORT PFNWP OS2API WinSubclassWindow(HWND window, PFNWP procedure) OS2APIINFO(929);
     OS2EXPORT HPOINTER OS2API WinQuerySysPointer(HWND hwnd, LONG id, BOOL copy) OS2APIINFO(828);
     OS2EXPORT HDC OS2API WinOpenWindowDC(HWND hwnd) OS2APIINFO(794);
     OS2EXPORT BOOL OS2API WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy,

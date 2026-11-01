@@ -9,5 +9,6 @@ BOOL lx_pm_destroy_ps(HPS hps);
 LONG lx_pm_color(HPS hps, LONG color);
 BOOL lx_pm_move(HPS hps, const POINTL *point);
 LONG lx_pm_line(HPS hps, const POINTL *point, int pel);
+LONG lx_pm_rgb(LONG index);
 BOOL lx_pm_valid_ps(HPS hps);
 #endif

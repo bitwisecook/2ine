@@ -64,6 +64,9 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
 {
     GLoaderState.dosExit = DosExit;
     GLoaderState.writeFile = DosWrite;
+    GLoaderState.getResource = DosGetResource;
+    GLoaderState.queryResourceSize = DosQueryResourceSize;
+    GLoaderState.freeResource = DosFreeResource;
 
     if (!(GMutexDosCalls = lx_host_mutex_create(0, 0)))
     {
@@ -156,6 +159,10 @@ LX_NATIVE_DESTRUCTOR(doscalls)
 {
     GLoaderState.dosExit = NULL;
     GLoaderState.writeFile = NULL;
+    GLoaderState.getResource = NULL;
+    GLoaderState.queryResourceSize = NULL;
+    GLoaderState.freeResource = NULL;
+    destroyModuleResources();
 
     ExitListItem *next = GExitList;
     GExitList = NULL;

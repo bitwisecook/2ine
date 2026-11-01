@@ -277,4 +277,5 @@ LX_PRIVATE void initCritSec(void);
 LX_PRIVATE void storeDateTime16(uint8 *data, FDATE date, FTIME time);
 LX_PRIVATE void neThreadCleanup(void *argument);
 LX_PRIVATE void *neThreadEntry(void *argument);
+LX_PRIVATE void destroyModuleResources(void);
 #endif

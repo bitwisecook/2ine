@@ -6,7 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
-/* Each host thread owns one anchor block. HAB arguments must match that block. */
+/* OS/2 deduces the anchor from the calling thread; HAB arguments are advisory. */
 AnchorBlock *getAnchorBlockNoHAB(void)
 {
     return (AnchorBlock *)lxHostThreadState()->anchor_block;
@@ -14,16 +14,8 @@ AnchorBlock *getAnchorBlockNoHAB(void)
 
 AnchorBlock *getAnchorBlock(const HAB hab)
 {
-    AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor)
-    {
-        return NULL;
-    }
-    else if (anchor->hab != hab)
-    {
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HAB, NULL);
-    }
-    return anchor;
+    (void)hab;
+    return getAnchorBlockNoHAB();
 }
 
 ULONG currentSystemTicks(void)

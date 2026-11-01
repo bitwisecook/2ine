@@ -116,7 +116,8 @@ BOOL WinEndPaint(HPS hps)
     }
 
     Window *win = ps->window;
-    lx_host_window_present(win->heavy.window);
+    if (win->heavy.window)
+        lx_host_window_present(win->heavy.window);
 
     if (!ps->persistent)
         destroyPresentationSpace(anchor, ps);
@@ -200,7 +201,7 @@ void calcHeavyweightRect(const Window *win, LxHostRect *rect)
     rect->w = win->w;
     rect->h = win->h;
 
-    while (win->parent != &desktop_window)
+    while (win->parent && win->parent != &desktop_window)
     {
         x += win->x;
         y += win->y;
@@ -239,6 +240,7 @@ BOOL WinFillRect(HPS hps, PRECTL prcl, LONG lColor)
     uint8 r, g, b;
     os2ColorIndexToRGB(lColor, &r, &g, &b);
 
-    lx_host_window_fill(win->heavy.window, &cliprect, &rect, r, g, b);
-    return TRUE;
+    return win->heavy.window && lx_host_window_fill(win->heavy.window, &cliprect, &rect, r, g, b)
+               ? TRUE
+               : FALSE;
 }

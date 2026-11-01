@@ -77,3 +77,15 @@ growth, retained presentation spaces, filtered queue insertion and timers. Nativ
 contracts also test all four OS/2 stack-alignment offsets at a host API entry.
 Optional archived GUI fixtures verify real pixels and X11 input; see
 [GUI applications](gui.md) for exact targets, inputs and limits.
+
+## Desktop service contracts
+
+Application profiles register `application_settings` and `desktop_apis` with
+CTest. The settings test runs separate writer/reader processes against temporary
+profiles and registry files, validates merged and case-sensitive queries, binary
+truncation, typed handle lifetime, write rollback and malformed native INI
+records. The generated LX guest tests relocatable resource objects in EXEs,
+resource references, counted strings, DOSCALL1 aliasing, settings bridges,
+opaque window pointers and guest calls to the procedure returned by subclassing.
+Portable guests additionally exercise invalid input/output spans. No Lotus
+binaries are required for these tests.

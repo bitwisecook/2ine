@@ -104,7 +104,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                const uint32 pagenum, uint8 *page)
 {
     uint32 guest_page;
-    if (!lx_execution_address(GLoaderState.execution, page, 0, 0, &guest_page))
+    if (!lx_execution_address(GLoaderState.execution, page, 1, LX_GUEST_READ, &guest_page))
         abort();
 
     assert(lxmod->is_lx);
@@ -601,8 +601,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     const LxObjectTableEntry *obj = ((const LxObjectTableEntry *)(exe + lx->object_table_offset));
     for (uint32 i = 0; i < lx->module_num_objects; i++, obj++)
     {
-        if (obj->object_flags & 0x8)
-            continue;
+        const int relocatable = isDLL || (obj->object_flags & 0x8);
 
         uint32 vsize = obj->virtual_size;
         if ((vsize % lx->page_size) != 0)
@@ -620,13 +619,14 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             }
             uses_aliases = 1;
 
-            if (isDLL) // (specifically: if !MAP_FIXED)
+            if (relocatable)
                 vsize += 0x10000;
         }
 
-        void *base = isDLL ? NULL : (void *)((size_t)obj->reloc_base_addr);
-        LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, (uint32)(uintptr_t)base,
-                                                   vsize, LX_GUEST_READ | LX_GUEST_WRITE, !isDLL);
+        void *base = relocatable ? NULL : (void *)((size_t)obj->reloc_base_addr);
+        LxGuestMapping *mapping =
+            lx_execution_map(GLoaderState.execution, (uint32)(uintptr_t)base, vsize,
+                             LX_GUEST_READ | LX_GUEST_WRITE, !relocatable);
         void *mmapaddr = mapping ? lx_execution_mapping_host(mapping) : NULL;
 
         if (!mmapaddr)
@@ -643,7 +643,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         const uint32 guest_mapping_base = lx_execution_mapping_address(mapping);
         if (needs_1616_alias && (guest_mapping_base % 0x10000) != 0)
         {
-            assert(isDLL);
+            assert(relocatable);
             const uint32 diff = 0x10000 - (guest_mapping_base % 0x10000);
             vsize -= diff;
             mmapaddr = (uint8 *)mmapaddr + diff;
@@ -861,6 +861,33 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             goto loadlx_failed;
     }
 
+    if (lx->num_resource_table_entries)
+    {
+        const uint32 offset = lx->resource_table_offset;
+        const uint32 count = lx->num_resource_table_entries;
+        if (offset > exelen || count > (exelen - offset) / sizeof(LxResourceTableEntry))
+        {
+            fprintf(stderr, "Resource table exceeds module bounds\n");
+            goto loadlx_failed;
+        }
+        retval->resources = malloc(count * sizeof *retval->resources);
+        if (!retval->resources)
+            goto loadlx_failed;
+        memcpy(retval->resources, exe + offset, count * sizeof *retval->resources);
+        retval->num_resources = count;
+        for (uint32 i = 0; i < count; i++)
+        {
+            const LxResourceTableEntry *r = &retval->resources[i];
+            if (!r->object || r->object > retval->num_mmaps ||
+                r->offset > retval->mmaps[r->object - 1].size ||
+                r->resource_size > retval->mmaps[r->object - 1].size - r->offset)
+            {
+                fprintf(stderr, "Resource extent exceeds module object\n");
+                goto loadlx_failed;
+            }
+        }
+    }
+
     const uint8 *import_modules_table = exe + lx->import_module_table_offset;
     for (uint32 i = 0; i < lx->num_import_mod_entries; i++)
     {
@@ -886,9 +913,6 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     obj = ((const LxObjectTableEntry *)(exe + lx->object_table_offset));
     for (uint32 i = 0; i < lx->module_num_objects; i++, obj++)
     {
-        if (obj->object_flags & 0x8)
-            continue;
-
         uint8 *dst = (uint8 *)retval->mmaps[i].addr;
         const uint32 numPageTableEntries = obj->num_page_table_entries;
         for (uint32 pagenum = 0; pagenum < numPageTableEntries; pagenum++)

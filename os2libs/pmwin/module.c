@@ -12,3 +12,13 @@ LX_PRIVATE uint32 GHABCounter;
 LX_PRIVATE uint32 GHMQCounter;
 
 LX_PRIVATE Window desktop_window;
+
+PFNWP defaultGuestWindowProc(void)
+{
+#if TWOINE_PORTABLE_LOADER && LX_LEGACY
+    if (GLoaderState.execution && obj32.mapping && WinDefWindowProc32)
+        return (PFNWP)(uintptr_t)(obj32.guest_base +
+                                  (uint32)((uint8 *)WinDefWindowProc32 - (uint8 *)obj32.addr));
+#endif
+    return WinDefWindowProc;
+}

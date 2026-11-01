@@ -35,6 +35,40 @@ static uint32 bridge32_WinInitialize(uint8 *a)
 {
     return WinInitialize(pm_word(a, 0));
 }
+static uint32 bridge32_WinWindowFromID(uint8 *a)
+{
+    return WinWindowFromID(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinQueryWindowULong(uint8 *a)
+{
+    return WinQueryWindowULong(pm_word(a, 0), (LONG)pm_word(a, 1));
+}
+static uint32 bridge32_WinSetWindowULong(uint8 *a)
+{
+    return WinSetWindowULong(pm_word(a, 0), (LONG)pm_word(a, 1), pm_word(a, 2));
+}
+static uint32 bridge32_WinQueryWindowPtr(uint8 *a)
+{
+    return (uint32)(uintptr_t)WinQueryWindowPtr(pm_word(a, 0), (LONG)pm_word(a, 1));
+}
+static uint32 bridge32_WinSetWindowPtr(uint8 *a)
+{
+    return WinSetWindowPtr(pm_word(a, 0), (LONG)pm_word(a, 1), (void *)(uintptr_t)pm_word(a, 2));
+}
+static uint32 bridge32_WinLoadString(uint8 *a)
+{
+    const LONG capacity = (LONG)pm_word(a, 3);
+    if (capacity <= 0)
+        return 0;
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, pm_word(a, 4), (uint32)capacity,
+                             LX_GUEST_WRITE, &output))
+        return 0;
+    uint32 result =
+        (uint32)WinLoadString(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2), capacity, output.host);
+    lx_execution_release(&output);
+    return result;
+}
 static uint32 bridge32_WinTerminate(uint8 *a)
 {
     return WinTerminate(pm_word(a, 0));
@@ -213,4 +247,31 @@ static uint32 bridge32_WinQueryWindowRect(uint8 *a)
 static uint32 bridge32_WinQuerySysPointer(uint8 *a)
 {
     return WinQuerySysPointer(pm_word(a, 0), (LONG)pm_word(a, 1), pm_word(a, 2));
+}
+
+static uint32 bridge32_WinQuerySysColor(uint8 *a)
+{
+    return (uint32)WinQuerySysColor(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2));
+}
+static uint32 bridge32_WinQuerySysValue(uint8 *a)
+{
+    return (uint32)WinQuerySysValue(pm_word(a, 0), (LONG)pm_word(a, 1));
+}
+
+static uint32 bridge32_WinSubclassWindow(uint8 *a)
+{
+    return (uint32)(uintptr_t)WinSubclassWindow(pm_word(a, 0), (PFNWP)(uintptr_t)pm_word(a, 1));
+}
+
+static uint32 bridge32_WinGetPS(uint8 *a)
+{
+    return WinGetPS(pm_word(a, 0));
+}
+static uint32 bridge32_WinGetScreenPS(uint8 *a)
+{
+    return WinGetScreenPS(pm_word(a, 0));
+}
+static uint32 bridge32_WinReleasePS(uint8 *a)
+{
+    return WinReleasePS(pm_word(a, 0));
 }

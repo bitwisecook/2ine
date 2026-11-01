@@ -55,7 +55,7 @@ LONG lx_pm_line(HPS hps, const POINTL *point, int pel)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
-    if (!ps || !point)
+    if (!ps || !point || !ps->window->heavy.window)
         return 0;
     LxHostRect clip;
     calcHeavyweightRect(ps->window, &clip);
@@ -78,4 +78,35 @@ BOOL lx_pm_erase(HPS hps)
         return FALSE;
     RECTL rect = {0, 0, ps->window->w, ps->window->h};
     return WinFillRect(hps, &rect, CLR_BACKGROUND);
+}
+
+HPS WinGetPS(HWND window)
+{
+    return WinBeginPaint(window, 0, NULL);
+}
+HPS WinGetScreenPS(HWND desktop)
+{
+    if (desktop != HWND_DESKTOP)
+        return 0;
+    return WinGetPS(desktop);
+}
+BOOL WinReleasePS(HPS space)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, space) : NULL;
+    if (!ps || ps->persistent)
+        return FALSE;
+    if (ps->window->heavy.window)
+        lx_host_window_present(ps->window->heavy.window);
+    destroyPresentationSpace(anchor, ps);
+    return TRUE;
+}
+
+LONG lx_pm_rgb(LONG index)
+{
+    if (index < CLR_FALSE || index > CLR_PALEGRAY)
+        return -255;
+    uint8 r, g, b;
+    os2ColorIndexToRGB(index, &r, &g, &b);
+    return (LONG)((ULONG)r << 16 | (ULONG)g << 8 | b);
 }

@@ -8,6 +8,4 @@
 
 #include "os2native.h"
 #include "pmshapi.h"
-
-LX_NATIVE_MODULE_INIT()
-LX_NATIVE_MODULE_INIT_END()
+#include "os2libs/generated/pmshapi-lx.h"

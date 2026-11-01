@@ -85,10 +85,46 @@ Archive screening also considered PMxEyes, PMEyes, Eyecon, Eyes 0.9.5, PMLife,
 PMGuts and several clocks. Their menu/dialog/profile, NE16 PM or external-runtime
 requirements exceed this subset; they are not listed as working applications.
 
-Lotus SmartSuite 1.7 with Fixpack 3 does not yet reach a usable application
-window. Word Pro, 1-2-3, Freelance and Organizer require the Open32 `PMWINX`
-module; Approach first encounters the missing `PMSPL` printing module. The
-Open32 ordinal catalogue supports import diagnostics; it supplies no Open32
-implementation. Additional help, controls, desktop and graphics services are
-also required. Native and Unicorn startup probes currently return a dependency
-failure for all five products.
+Lotus SmartSuite 1.7 with Fixpack 3 does not yet reach an editable document.
+With its installer settings supplied separately, Word Pro loads the language and
+shared button DLLs, creates its frame/client, subclasses the frame and registers
+its custom controls on native and Unicorn. Font enumeration (`GpiQueryFonts`)
+is the next missing service. This startup result does not qualify the other
+suite components or the document save/reopen workflow.
+
+## Profiles and Open32 settings
+
+PMSHAPI provides case-sensitive application/key profiles, binary values,
+application/key enumeration, user-over-system queries and private profile
+handles. Existing OS/2 binary INI files can be read. Writes use an atomic
+replacement in 2ine's own profile format; they do not produce native OS/2 INI
+files. A private profile's first write converts that file to the 2ine format.
+The supported file limit is 32 MiB. Open handles share updates within one
+worker; concurrent writers in separate workers are not synchronized.
+
+The optional host paths `TWOINE_USER_PROFILE` and `TWOINE_SYSTEM_PROFILE` select
+the built-in profiles. Their defaults are `.2ine-user.profile` and
+`.2ine-system.profile` in the worker's working directory. `PrfOpenProfile` takes
+a guest path through the normal drive mapping.
+
+PMWINX implements Open32 initialization/termination, checked `MulDiv`, and
+`RegOpenKeyEx`, `RegCreateKeyEx`, `RegCloseKey`, `RegQueryValueEx` and
+`RegSetValueEx`. Registry keys and value names fold ASCII case, values retain
+their type and exact bytes, handles enforce query/write/create access, and
+undersized value queries return the required length. IBM Open32 and Win32
+predefined root constants address the same roots. The separate registry profile
+uses `TWOINE_REGISTRY` (a guest path), default `.2ine-registry.profile`.
+Enumeration, deletion, security descriptors, Unicode name folding and other
+Open32 services are not implemented.
+
+LX resources are validated and mapped independently of fixed EXE addresses.
+DOSCALLS resource-size/get/free operations retain read-only copies until their
+matching releases; PM loads counted string bundles through those operations.
+Window IDs, class extra words/pointers and subclassing preserve guest addresses,
+including a callable default procedure returned to portable guests. PM exposes
+its default system palette, basic control/screen metrics and transient screen
+presentation spaces for queries; drawing into the desktop is unavailable.
+GPI color queries use the same indexed palette as drawing. Custom palettes and
+codepage conversion of string resources are unavailable. HELPMGR explicitly
+reports unavailable help rendering through `HELPINIT`; it creates no help
+instance.

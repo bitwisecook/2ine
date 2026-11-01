@@ -202,6 +202,7 @@ void destroyLxModule(void *resource)
         }
     }
     free(lxmod->mmaps);
+    free(lxmod->resources);
 
     if (lxmod->nativelib)
         lx_host_library_close(lxmod->nativelib);
@@ -384,6 +385,10 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
             }
         }
     }
+
+    /* DOSCALL1 is the implementation behind the system DOSCALLS forwarder. */
+    if (!retval && strcasecmp(modname, "DOSCALL1") == 0)
+        return loadModuleByModuleNameInternal("DOSCALLS", dependency_tree_depth);
 
     if (!retval)
     {

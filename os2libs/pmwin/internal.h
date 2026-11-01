@@ -110,6 +110,7 @@ LX_PRIVATE PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anc
 LX_PRIVATE const char *messageName(const ULONG msg);
 LX_PRIVATE WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname);
 LX_PRIVATE ULONG currentSystemTicks(void);
+LX_PRIVATE PFNWP defaultGuestWindowProc(void);
 LX_PRIVATE MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2);
 LX_PRIVATE BOOL destroyMessageQueue(AnchorBlock *anchor);
 LX_PRIVATE void destroyWindow(AnchorBlock *anchor, Window *win);

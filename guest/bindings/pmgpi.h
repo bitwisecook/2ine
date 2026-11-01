@@ -49,3 +49,12 @@ static uint32 bridge32_GpiErase(uint8 *a)
 {
     return GpiErase(gpi_word(a, 0));
 }
+
+static uint32 bridge32_GpiQueryColorIndex(uint8 *a)
+{
+    return (uint32)GpiQueryColorIndex(gpi_word(a, 0), gpi_word(a, 1), (LONG)gpi_word(a, 2));
+}
+static uint32 bridge32_GpiQueryRGBColor(uint8 *a)
+{
+    return (uint32)GpiQueryRGBColor(gpi_word(a, 0), gpi_word(a, 1), (LONG)gpi_word(a, 2));
+}

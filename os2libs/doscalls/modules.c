@@ -101,8 +101,10 @@ APIRET DosLoadModule(PSZ pszName, ULONG cbName, PSZ pszModname, PHMODULE phmod)
 {
     TRACE_NATIVE("DosLoadModule(%p, %u, '%s', %p)", pszName, (uint)cbName, pszModname, phmod);
 
-    FIXME("improve this");
-    *pszName = 0;
+    if (!pszModname || !*pszModname || !phmod || (cbName && !pszName))
+        return ERROR_INVALID_PARAMETER;
+    if (cbName)
+        *pszName = 0;
 
     FIXME("there's no mutex on this global state at the moment!");
     LxModule *lxmod = GLoaderState.loadModule(pszModname);

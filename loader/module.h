@@ -53,6 +53,8 @@ struct LxModule
 
     LxMmaps *mmaps;
     uint32 num_mmaps;
+    LxResourceTableEntry *resources;
+    uint32 num_resources;
 
     const LxExport *exports;
     uint32 num_exports;

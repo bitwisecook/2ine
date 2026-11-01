@@ -43,7 +43,7 @@ static void lock(void)
 
 uint32_t lx_handle_create(LxHandleKind kind, void *value, void (*destroy)(void *))
 {
-    if (!value || kind < LX_HANDLE_MODULE || kind > LX_HANDLE_FILE)
+    if (!value || kind < LX_HANDLE_MODULE || kind >= LX_HANDLE_KIND_LIMIT)
         return 0;
     lock();
     uint32_t index = NextSlot;

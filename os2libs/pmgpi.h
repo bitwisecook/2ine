@@ -25,6 +25,8 @@ extern "C"
         GPIA_ASSOC = 0x4000,
         DM_DRAW = 1
     };
+    OS2EXPORT LONG OS2API GpiQueryColorIndex(HPS hps, ULONG options, LONG rgb) OS2APIINFO(439);
+    OS2EXPORT LONG OS2API GpiQueryRGBColor(HPS hps, ULONG options, LONG index) OS2APIINFO(479);
     OS2EXPORT BOOL OS2API GpiErase(HPS hps) OS2APIINFO(389);
     OS2EXPORT HPS OS2API GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags) OS2APIINFO(369);
     OS2EXPORT BOOL OS2API GpiDestroyPS(HPS hps) OS2APIINFO(379);

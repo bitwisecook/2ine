@@ -30,12 +30,35 @@ int main(void)
     CHECK(hab);
     HMQ hmq = WinCreateMsgQueue(hab, 0);
     CHECK(hmq);
-    CHECK(WinRegisterClass(hab, "test", procedure, CS_SIZEREDRAW, 0));
+    CHECK(WinRegisterClass(0, "test", procedure, CS_SIZEREDRAW, 8));
     ULONG flags = 0;
     HWND client;
     HWND frame = WinCreateStdWindow(HWND_DESKTOP, WS_VISIBLE, &flags, "test", "PM contracts", 0, 0,
                                     0, &client);
     CHECK(frame && client && creates == 1);
+    CHECK(WinWindowFromID(frame, FID_CLIENT) == client);
+    CHECK(!WinWindowFromID(frame, FID_MENU));
+    CHECK(WinSetWindowULong(client, 0, 0x12345678) && WinQueryWindowULong(client, 0) == 0x12345678);
+    CHECK(WinSetWindowPtr(client, 4, (void *)(uintptr_t)0xfedcba98) &&
+          (uintptr_t)WinQueryWindowPtr(client, 4) == 0xfedcba98);
+    CHECK(!WinSetWindowULong(client, 5, 42) && !WinSetWindowULong(client, -1, 42));
+    CHECK(WinQueryWindowULong(client, -4) == hmq);
+    CHECK(WinSubclassWindow(client, WinDefWindowProc) == procedure);
+    CHECK(WinSubclassWindow(client, procedure) == WinDefWindowProc);
+    CHECK(WinQuerySysColor(HWND_DESKTOP, -20, 0) == 0xffffff);
+    CHECK(!WinQuerySysColor(HWND_DESKTOP, -51, 0));
+    CHECK((WinGetLastError(hab) & 0xffff) == PMERR_PARAMETER_OUT_OF_RANGE);
+    RECTL desktop;
+    CHECK(WinQueryWindowRect(HWND_DESKTOP, &desktop));
+    CHECK(WinQuerySysValue(HWND_DESKTOP, 20) == desktop.xRight);
+    CHECK(WinQuerySysValue(HWND_DESKTOP, 21) == desktop.yTop);
+    HPS screen = WinGetScreenPS(HWND_DESKTOP);
+    CHECK(screen);
+    CHECK(GpiQueryColorIndex(screen, 0, 0xff0000) == CLR_RED);
+    CHECK(GpiQueryColorIndex(screen, 0, 0x0100fe) == CLR_BLUE);
+    CHECK(GpiQueryRGBColor(screen, 0, CLR_RED) == 0xff0000);
+    CHECK(GpiQueryRGBColor(screen, 1, CLR_RED) == -255);
+    CHECK(WinReleasePS(screen) && !WinReleasePS(screen));
     CHECK(WinSetWindowPos(frame, HWND_TOP, 10, 10, 64, 48, SWP_MOVE | SWP_SIZE | SWP_SHOW));
     SWP position;
     RECTL rectangle;

@@ -85,6 +85,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/legacy.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(legacy_file_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME desktop_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/desktop.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(desktop_apis PROPERTIES TIMEOUT 40)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
     if(TWOINE_PORTABLE_LOADER)
@@ -111,4 +115,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
             set_tests_properties(gui_${profile} PROPERTIES TIMEOUT 30)
         endif()
     endforeach()
+endif()
+
+if(TARGET pmwinx)
+    add_executable(twoine_settings_tests os2libs/test_settings.c)
+    twoine_application_target(twoine_settings_tests)
+    target_link_libraries(twoine_settings_tests PRIVATE pmwinx pmshapi helpmgr 2ine)
+    add_test(NAME application_settings COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/os2libs/settings.py" $<TARGET_FILE:twoine_settings_tests>)
+    set_tests_properties(application_settings PROPERTIES TIMEOUT 40)
 endif()

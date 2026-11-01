@@ -53,6 +53,9 @@ typedef struct LxLoaderState
         [32]; // number of TLS slots allocated in one block, indexed by starting block (zero if not the starting block).
     void (*dosExit)(uint32 action, uint32 result);
     uint32 (*writeFile)(uint32 handle, void *buffer, uint32 size, uint32 *actual);
+    uint32 (*getResource)(uint32 module, uint32 type, uint32 name, void **output);
+    uint32 (*queryResourceSize)(uint32 module, uint32 type, uint32 name, uint32 *size);
+    uint32 (*freeResource)(void *resource);
     void (*initOs2Tib)(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid);
     uint16 (*setOs2Tib)(uint8 *tibspace);
     LxTIB *(*getOs2Tib)(void);
