@@ -2,6 +2,7 @@
 /* Frame/client lifetime, queue filtering, retained drawing and timer contracts. */
 #include "os2libs/pmwin.h"
 #include "os2libs/pmgpi.h"
+#include "guest/handles.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -161,7 +162,11 @@ int main(void)
     CHECK(WinStopTimer(hab, client, timer) && !WinStopTimer(hab, client, timer));
     CHECK(WinDestroyWindow(frame));
     CHECK(!GpiMove(ps, &point));
+    HENUM abandoned = WinBeginEnumWindows(HWND_DESKTOP);
+    CHECK(abandoned);
     CHECK(WinDestroyMsgQueue(hmq) && WinTerminate(hab));
+    LxHandleBorrow borrow = {0};
+    CHECK(!lx_handle_borrow(abandoned, LX_HANDLE_PM_ENUM, &borrow));
     puts("PM frame, stable handles, retained drawing, queue and timer contracts passed");
     return 0;
 }

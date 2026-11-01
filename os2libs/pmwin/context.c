@@ -75,7 +75,6 @@ HAB WinInitialize(ULONG flOptions)
     if (ihab <= 0)
     {
         free(anchor->pres_spaces);
-        destroyWindowEnumerations(anchor);
         free(anchor->windows);
         free(anchor);
         return NULLHANDLE;
@@ -108,6 +107,7 @@ BOOL WinTerminate(HAB hab)
         destroyWindow(anchor, anchor->windows[i]);
         free(anchor->windows[i]);
     }
+    destroyWindowEnumerations(anchor);
     free(anchor->windows);
 
     WindowClass *winclassnext = NULL;
