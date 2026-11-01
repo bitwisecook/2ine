@@ -8,6 +8,8 @@
 #include "guest/handles.h"
 /* Deliver a host event on its window's PM thread, staging it when called elsewhere. */
 BOOL lx_pm_host_event(const LxHostEvent *event);
+BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);
+BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle);
 typedef struct PmRegion
 {
     void *anchor;

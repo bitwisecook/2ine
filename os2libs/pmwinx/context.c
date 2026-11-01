@@ -53,3 +53,18 @@ LONG SetMapMode(ULONG dc, LONG mode)
     }
     return 1;
 }
+
+BOOL DPtoLP(ULONG handle, PVOID points, LONG count)
+{
+    /* MM_TEXT uses coincident device/logical origins and one pixel per unit. */
+    if (!open32FindDC(handle) || count < 0 || count > 65536 || (count && !points))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    return TRUE;
+}
+BOOL LPtoDP(ULONG handle, PVOID points, LONG count)
+{
+    return DPtoLP(handle, points, count);
+}

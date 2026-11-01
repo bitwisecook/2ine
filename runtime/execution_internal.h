@@ -50,6 +50,7 @@ typedef struct LxExecutionOperations
     uint32_t (*callback32_4)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
     uint32_t (*api_arguments)(void);
     int (*api_registers32)(LxExecutionRegisters32 *);
+    void (*cleanup_thread32)(void);
 } LxExecutionOperations;
 struct LxExecution
 {

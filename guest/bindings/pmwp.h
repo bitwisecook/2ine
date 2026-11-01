@@ -52,3 +52,14 @@ static uint32 bridge32_WinDeregisterObjectClass(uint8 *a)
     free(name);
     return result;
 }
+
+static uint32 bridge32_WinIsSomDDReady(uint8 *a)
+{
+    (void)a;
+    return WinIsSomDDReady();
+}
+
+static uint32 bridge32_WinRestartSomDD(uint8 *a)
+{
+    return WinRestartSomDD(lx_guest_load_u32(a));
+}

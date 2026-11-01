@@ -1,0 +1,27 @@
+{
+  "scope": "Stock Warp 4.52 DOSCALLS, measured with muxq.c",
+  "observations": {
+    "invalid_flags_0": 87,
+    "wait_any": "returns first ready record user value",
+    "query_short_array": {
+      "result": 289,
+      "count": "required member count",
+      "flags": "unchanged"
+    },
+    "duplicate_member": 284,
+    "delete_invalid_handle": 6,
+    "close_event_member": 0,
+    "wait_all_timeout": {
+      "result": 640,
+      "user": "unchanged"
+    },
+    "wait_all_success": "returns last record user value",
+    "empty_mux_create": 0,
+    "empty_mux_wait": 286,
+    "named_mux_with_private_member": 292,
+    "private_mux_with_shared_member": 0,
+    "private_mux_flags": 2,
+    "named_mux_flags": 3,
+    "same_process_named_open": "returns same handle with an additional open reference; closing it preserves creator handle"
+  }
+}

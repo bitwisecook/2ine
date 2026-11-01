@@ -30,15 +30,16 @@ static uint32 builtin_procedure(uint8 *arguments)
 }
 static Open32Class *builtin_class(const char *name)
 {
-    if (strcasecmp(name, "MDICLIENT"))
+    BOOL scroll = !strcasecmp(name, "SCROLLBAR");
+    if (!scroll && strcasecmp(name, "MDICLIENT"))
         return NULL;
     Open32Class *c = calloc(1, sizeof *c);
     if (!c)
         return NULL;
-    c->name = strdup("MDICLIENT");
+    c->name = strdup(scroll ? "SCROLLBAR" : "MDICLIENT");
     c->style = 0x4008;
-    c->builtin = 1;
-    c->brush = 13;
+    c->builtin = scroll ? 2 : 1;
+    c->brush = scroll ? 1 : 13;
     c->names = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
     c->procedure_mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
     const LxExecutionApi32 bridge = {builtin_procedure, 16, 0, LX_ABI_STACK32};

@@ -181,9 +181,34 @@ int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity,
     if (!bytes)
         return -1;
     Header *header = (void *)bytes;
-    int result = header->count ? -1 : 1;
+    int result = header->count ? (*token ? (peek ? 3 : 2) : -1) : 1;
     size_t selected = 0, at = sizeof *header;
-    Record chosen = {0};
+    Record chosen = {0}, cursor = {0};
+    if (peek && *token)
+    {
+        size_t scan = sizeof *header;
+        while (scan < used)
+        {
+            Record record;
+            if (used - scan < sizeof record)
+                break;
+            memcpy(&record, bytes + scan, sizeof record);
+            if (record.size > used - scan - sizeof record)
+                break;
+            if (record.token == *token)
+            {
+                cursor = record;
+                break;
+            }
+            scan += sizeof record + record.size;
+        }
+        if (!cursor.token)
+        {
+            free(bytes);
+            unlock(mailbox);
+            return 2;
+        }
+    }
     while (at < used)
     {
         Record record;
@@ -192,9 +217,15 @@ int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity,
         memcpy(&record, bytes + at, sizeof record);
         if (record.size > used - at - sizeof record)
             break;
-        if ((!*token || *token == record.token) &&
-            (!selected || header->order == 1 ||
-             (header->order == 2 && record.priority > chosen.priority)))
+        int eligible = !*token || (!peek && *token == record.token);
+        if (peek && *token)
+            eligible = header->order == 1 ? record.token < cursor.token
+                       : header->order == 2
+                           ? record.priority < cursor.priority ||
+                                 (record.priority == cursor.priority && record.token > cursor.token)
+                           : record.token > cursor.token;
+        if (eligible && (!selected || header->order == 1 ||
+                         (header->order == 2 && record.priority > chosen.priority)))
         {
             selected = at;
             chosen = record;

@@ -410,4 +410,12 @@ BOOL WinDeregisterObjectClass(PSZ name)
     end(profile, lock);
     return result;
 }
+BOOL WinIsSomDDReady(void)
+{
+    return FALSE;
+}
+APIRET WinRestartSomDD(BOOL state)
+{
+    return state ? 50 : 0;
+}
 #include "os2libs/generated/pmwp-lx.h"

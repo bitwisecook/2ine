@@ -1328,3 +1328,177 @@ static uint32 bridge32_DosSelToFlat(uint8 *a)
     return memory && lx_execution_address(GLoaderState.execution, memory, 1, 0, &address) ? address
                                                                                           : 0;
 }
+
+static uint32 bridge32_DosQueryModFromEIP(uint8 *arguments)
+{
+    const uint32 module_pointer = lx_guest_load_u32(arguments);
+    const uint32 object_pointer = lx_guest_load_u32(arguments + 4);
+    const uint32 capacity = lx_guest_load_u32(arguments + 8);
+    const uint32 name_pointer = lx_guest_load_u32(arguments + 12);
+    const uint32 offset_pointer = lx_guest_load_u32(arguments + 16);
+    LxGuestBorrow module = {0}, object = {0}, name = {0}, offset = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if ((module_pointer && !lx_execution_borrow(GLoaderState.execution, module_pointer, 4,
+                                                LX_GUEST_WRITE, &module)) ||
+        (object_pointer && !lx_execution_borrow(GLoaderState.execution, object_pointer, 4,
+                                                LX_GUEST_WRITE, &object)) ||
+        (name_pointer && capacity &&
+         !lx_execution_borrow(GLoaderState.execution, name_pointer, capacity, LX_GUEST_WRITE,
+                              &name)) ||
+        (offset_pointer &&
+         !lx_execution_borrow(GLoaderState.execution, offset_pointer, 4, LX_GUEST_WRITE, &offset)))
+        goto done;
+    HMODULE handle = 0;
+    ULONG number = 0, displacement = 0;
+    char empty;
+    result = DosQueryModFromEIP(&handle, &number, capacity,
+                                name_pointer ? (capacity ? name.host : &empty) : NULL,
+                                &displacement, lx_guest_load_u32(arguments + 20));
+    if (result == NO_ERROR || result == ERROR_BUFFER_OVERFLOW)
+    {
+        if (module.host)
+            lx_guest_store_u32(module.host, handle);
+        if (object.host)
+            lx_guest_store_u32(object.host, number);
+        if (offset.host)
+            lx_guest_store_u32(offset.host, displacement);
+    }
+done:
+    lx_execution_release(&offset);
+    lx_execution_release(&name);
+    lx_execution_release(&object);
+    lx_execution_release(&module);
+    return result;
+}
+
+static uint32 bridge32_DosCreateMuxWaitSem(uint8 *a)
+{
+    uint32 pointer = lx_guest_load_u32(a), count = lx_guest_load_u32(a + 8);
+    char *name = pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 256) : NULL;
+    LxGuestBorrow output = {0}, records = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if ((pointer && !name) || count > 64 ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
+                             &output) ||
+        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), count * 8,
+                                       LX_GUEST_READ, &records)))
+        goto done;
+    SEMRECORD input[64];
+    for (uint32 i = 0; i < count; i++)
+    {
+        input[i].hsemCur = lx_guest_load_u32((uint8 *)records.host + i * 8);
+        input[i].ulUser = lx_guest_load_u32((uint8 *)records.host + i * 8 + 4);
+    }
+    HMUX handle = 0;
+    result = DosCreateMuxWaitSem(name, &handle, count, input, lx_guest_load_u32(a + 16));
+    if (!result)
+        lx_guest_store_u32(output.host, handle);
+done:
+    lx_execution_release(&records);
+    lx_execution_release(&output);
+    free(name);
+    return result;
+}
+static uint32 bridge32_DosOpenMuxWaitSem(uint8 *a)
+{
+    uint32 pointer = lx_guest_load_u32(a);
+    char *name = pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 256) : NULL;
+    LxGuestBorrow output = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if ((!pointer || name) && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+                                                  4, LX_GUEST_READ | LX_GUEST_WRITE, &output))
+    {
+        HMUX handle = lx_guest_load_u32(output.host);
+        result = DosOpenMuxWaitSem(name, &handle);
+        if (!result)
+            lx_guest_store_u32(output.host, handle);
+    }
+    lx_execution_release(&output);
+    free(name);
+    return result;
+}
+static uint32 bridge32_DosCloseMuxWaitSem(uint8 *a)
+{
+    return DosCloseMuxWaitSem(lx_guest_load_u32(a));
+}
+typedef struct WireMuxWait
+{
+    HMUX handle;
+    ULONG timeout;
+    LxGuestBorrow output;
+} WireMuxWait;
+static void wire_mux_cleanup(void *argument)
+{
+    WireMuxWait *call = argument;
+    lx_execution_release(&call->output);
+}
+static uint32 wire_mux_operation(void *argument)
+{
+    WireMuxWait *call = argument;
+    ULONG user = 0;
+    uint32 result = DosWaitMuxWaitSem(call->handle, call->timeout, &user);
+    if (!result || result == ERROR_SEM_OWNER_DIED)
+        lx_guest_store_u32(call->output.host, user);
+    return result;
+}
+static uint32 bridge32_DosWaitMuxWaitSem(uint8 *a)
+{
+    WireMuxWait call = {0};
+    call.handle = lx_guest_load_u32(a);
+    call.timeout = lx_guest_load_u32(a + 4);
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
+                             &call.output))
+        return ERROR_INVALID_PARAMETER;
+    return lx_host_guarded_call(wire_mux_operation, &call, wire_mux_cleanup, &call);
+}
+static uint32 bridge32_DosAddMuxWaitSem(uint8 *a)
+{
+    uint8 bytes[8];
+    if (!lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 4), bytes, sizeof bytes))
+        return ERROR_INVALID_PARAMETER;
+    SEMRECORD record = {lx_guest_load_u32(bytes), lx_guest_load_u32(bytes + 4)};
+    return DosAddMuxWaitSem(lx_guest_load_u32(a), &record);
+}
+static uint32 bridge32_DosDeleteMuxWaitSem(uint8 *a)
+{
+    return DosDeleteMuxWaitSem(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_DosQueryMuxWaitSem(uint8 *a)
+{
+    LxGuestBorrow count = {0}, records = {0}, flags = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &count) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
+                             &flags))
+        goto done;
+    ULONG capacity = lx_guest_load_u32(count.host), attr = 0;
+    if (capacity > 64)
+        capacity = 64;
+    if (capacity && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+                                         capacity * 8, LX_GUEST_WRITE, &records))
+        goto done;
+    SEMRECORD output[64];
+    result = DosQueryMuxWaitSem(lx_guest_load_u32(a), &capacity, output, &attr);
+    if (!result || result == ERROR_PARAM_TOO_SMALL)
+        lx_guest_store_u32(count.host, capacity);
+    if (!result)
+    {
+        lx_guest_store_u32(flags.host, attr);
+        for (ULONG i = 0; i < capacity; i++)
+        {
+            lx_guest_store_u32((uint8 *)records.host + i * 8, output[i].hsemCur);
+            lx_guest_store_u32((uint8 *)records.host + i * 8 + 4, output[i].ulUser);
+        }
+    }
+done:
+    lx_execution_release(&flags);
+    lx_execution_release(&records);
+    lx_execution_release(&count);
+    return result;
+}
+
+static uint32 bridge32_DosKillThread(uint8 *a)
+{
+    return DosKillThread(lx_guest_load_u32(a));
+}

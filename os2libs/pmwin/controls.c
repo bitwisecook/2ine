@@ -27,6 +27,9 @@ void destroyControl(Window *window)
     PmControl *control = window->control;
     if (!control)
         return;
+    lx_handle_release(&control->image_lease);
+    if (control->owns_image)
+        WinDestroyPointer(control->image);
     for (size_t i = 0; i < control->count; i++)
         free(control->items[i].text);
     free(control->items);
@@ -356,6 +359,14 @@ static void paint(Window *window)
     if (!frame)
         WinFillRect(space, &rect,
                     (c->kind == 7 || c->kind == 6 || c->kind == 32) ? CLR_WHITE : CLR_PALEGRAY);
+    if (c->kind == 5 && (window->style & 0x7f) == 3)
+    {
+        LONG width, height;
+        if (c->image && lx_pm_pointer_dimensions(c->image, &width, &height))
+            lx_pm_pointer_draw(space, (window->w - width) / 2, (window->h - height) / 2, c->image);
+        WinEndPaint(space);
+        return;
+    }
     if ((c->kind == 3 && !(window->style & 15)) || c->kind == 2 || c->kind == 6 || c->kind == 32 ||
         (c->kind == 5 && (window->style & 0x7f) != 1))
     {
@@ -531,6 +542,27 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         return 0;
     }
     PmControl *c = window->control;
+    if (c && c->kind == 5 && (window->style & 0x7f) == 3)
+    {
+        if (message == 0x101)
+            return controlReply(c->image); /* SM_QUERYHANDLE */
+        if (message == 0x100)              /* SM_SETHANDLE */
+        {
+            ULONG next = (ULONG)(uintptr_t)first;
+            LxHandleBorrow image = {0};
+            LONG width, height;
+            if (next && (!lx_pm_pointer_dimensions(next, &width, &height) ||
+                         !lx_handle_borrow(next, LX_HANDLE_PM_POINTER, &image)))
+                return 0;
+            ULONG previous = c->image;
+            lx_handle_release(&c->image_lease);
+            c->image_lease = image;
+            c->image = next;
+            c->owns_image = FALSE;
+            controlRepaint(window);
+            return controlReply(previous);
+        }
+    }
     if (message == WM_HITTEST && c)
         return controlReply(c->kind == 5 &&
                                     ((window->style & 0x7f) == 2 || (window->style & 0x7f) == 8)
@@ -591,4 +623,23 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         return 0;
     }
     return WinDefWindowProc(handle, message, first, second);
+}
+
+BOOL controlResourcePointer(HWND handle, HMODULE module, ULONG identity)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    if (!window || !window->control || window->control->kind != 5 || (window->style & 0x7f) != 3)
+        return FALSE;
+    HPOINTER image = WinLoadPointer(HWND_DESKTOP, module, identity);
+    if (!image)
+        return FALSE;
+    WinSendMsg(handle, 0x100, (MPARAM)(uintptr_t)image, 0);
+    if (window->control->image != image)
+    {
+        WinDestroyPointer(image);
+        return FALSE;
+    }
+    window->control->owns_image = TRUE;
+    return TRUE;
 }

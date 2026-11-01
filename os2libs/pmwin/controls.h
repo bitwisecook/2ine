@@ -11,6 +11,9 @@ typedef struct
 typedef struct PmControl
 {
     unsigned kind;
+    HPOINTER image;
+    BOOL owns_image;
+    LxHandleBorrow image_lease;
     BOOL pressed, changed, insert;
     unsigned check, limit, first, last, view;
     LONG lower, upper, value;
@@ -26,6 +29,7 @@ typedef struct PmControl
     int selected, top;
 } PmControl;
 
+BOOL controlResourcePointer(HWND window, HMODULE module, ULONG identity);
 void controlRepaint(Window *window);
 void controlNotify(Window *window, USHORT code);
 BOOL controlRead(MPARAM address, void *output, size_t size);

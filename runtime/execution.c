@@ -224,6 +224,11 @@ void lx_execution_destroy_thread32(LxExecution *e, void *invocation)
     if (invocation)
         e->ops->destroy_thread32(invocation);
 }
+void lx_execution_cleanup_thread32(LxExecution *e)
+{
+    if (e->ops->cleanup_thread32)
+        e->ops->cleanup_thread32();
+}
 int lx_execution_end_thread(LxExecution *e)
 {
     return e->ops->end_thread();

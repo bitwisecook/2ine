@@ -45,6 +45,12 @@ LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument, void
     }
     return thread;
 }
+LxHostCancelResult lx_host_thread_cancel(LxHostThread *thread)
+{
+    (void)thread;
+    return LX_HOST_CANCEL_UNSUPPORTED;
+}
+void lx_host_thread_test_cancel(void) {}
 int lx_host_thread_join(LxHostThread *thread, void **result)
 {
     DWORD value;

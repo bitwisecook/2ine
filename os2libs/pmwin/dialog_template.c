@@ -2,6 +2,7 @@
 /* Packed templates are validated completely before any window is published. */
 #include "os2libs/pmwin/internal.h"
 #include "guest/abi.h"
+#include "os2libs/pmwin/controls.h"
 
 enum
 {
@@ -16,6 +17,7 @@ typedef struct
     HWND *windows;
     uint32 guest;
     PFNWP procedure;
+    HMODULE module;
     PVOID parameters;
 } DialogTemplate;
 static USHORT word(const uint8 *p, size_t offset)
@@ -54,6 +56,13 @@ static BOOL parameters_valid(const DialogTemplate *t, unsigned offset)
         at += bytes;
     }
     return TRUE;
+}
+static BOOL icon_ordinal(const DialogTemplate *t, const uint8 *item)
+{
+    unsigned offset = word(item, 10);
+    return !word(item, 4) && word(item, 6) == 5 && (lx_guest_load_u32(item + 12) & 0x7f) == 3 &&
+           word(item, 8) == 3 && offset <= t->size && t->size - offset >= 3 &&
+           t->bytes[offset] == 0xff;
 }
 static BOOL validate_tree(DialogTemplate *t, unsigned depth)
 {
@@ -126,6 +135,9 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
     if (!handle)
         return 0;
     t->windows[index] = handle;
+    if (icon_ordinal(t, item) &&
+        !controlResourcePointer(handle, t->module, word(t->bytes + text_offset, 1)))
+        goto failed;
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *window = getWindowFromHWND(anchor, handle);
     if (!index && !initializeDialog(window))
@@ -150,13 +162,16 @@ failed:
     return 0;
 }
 HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data, size_t size,
-                  PVOID parameters)
+                  PVOID parameters, HMODULE module)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor || !data || size < TEMPLATE_HEADER)
         return 0;
-    DialogTemplate t = {
-        .bytes = data, .size = word(data, 0), .procedure = procedure, .parameters = parameters};
+    DialogTemplate t = {.bytes = data,
+                        .size = word(data, 0),
+                        .procedure = procedure,
+                        .parameters = parameters,
+                        .module = module};
     unsigned items = word(data, 6);
     if (t.size > size || t.size < TEMPLATE_HEADER || items < TEMPLATE_HEADER || items > t.size ||
         word(data, 2) || (word(data, 4) != 437 && word(data, 4) != 850 && word(data, 4) != 0) ||

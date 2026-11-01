@@ -18,9 +18,12 @@ from open32_contracts import (
     bitmap_program,
     caret_program,
     critical_program,
+    dialog_program,
     dib_program,
     directory_program,
     drawing_program,
+    enumeration_program,
+    extended_text_program,
     file_program,
     filetime_program,
     find_program,
@@ -40,6 +43,11 @@ from open32_contracts import (
     thread_program,
     time_program,
 )
+from open32_icons import icon_program
+from open32_patterns import pattern_program
+from open32_posts import posted_program
+from open32_scroll import scroll_program
+from open32_text import alignment_program
 
 
 def program():
@@ -101,8 +109,9 @@ def program():
     g.result(0, 30)
     g.call(3, 37, (handle,))
     g.result(0, 31)
-    g.call(4, 397, 0, 0, 3, output, 300, needed)
-    g.result(0x4009, 32)
+    queue_name = g.field(b"absent\0")
+    g.call(4, 397, 0, queue_name, 3, output, 300, needed)
+    g.result(2150, 32)
     g.word(needed, 0, 33)
     g.call(5, 250, 0xDEADBEEF, text)
     g.result(0, 34)
@@ -251,6 +260,14 @@ def main():
         run(message_program())
         run(drawing_program())
         run(dib_program())
+        run(dialog_program())
+        run(icon_program())
+        run(pattern_program())
+        run(posted_program())
+        run(scroll_program())
+        run(alignment_program())
+        run(enumeration_program())
+        run(extended_text_program())
         run(bitmap_program())
         run(stroke_program())
         run(palette_program())

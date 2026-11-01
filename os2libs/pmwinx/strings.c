@@ -2,6 +2,7 @@
 /* ANSI string copies retain guest pointers and validate each destination extent. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/case_tables.h"
 #define STRING_LIMIT (1024u * 1024u)
 static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
 {
@@ -60,4 +61,102 @@ LONG lstrlen(ULONG source)
     LONG length = (LONG)strlen(text);
     free(text);
     return length;
+}
+
+static ULONG case_buffer(ULONG pointer, ULONG count, const uint8 table[256])
+{
+    if (!count)
+        return 0;
+    LxGuestBorrow text = {0};
+    if (count > STRING_LIMIT || !lx_execution_borrow(GLoaderState.execution, pointer, count,
+                                                     LX_GUEST_READ | LX_GUEST_WRITE, &text))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    uint8 *bytes = text.host;
+    for (ULONG i = 0; i < count; i++)
+        bytes[i] = table[bytes[i]];
+    lx_execution_release(&text);
+    return count;
+}
+static ULONG case_string(ULONG value, const uint8 table[256])
+{
+    if (value <= UINT16_MAX)
+        return (value & 0xff00) | table[value & 255];
+    char *copy = lx_execution_copy_string(GLoaderState.execution, value, STRING_LIMIT);
+    if (!copy)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG count = (ULONG)strlen(copy) + 1;
+    free(copy);
+    return case_buffer(value, count, table) ? value : 0;
+}
+ULONG CharUpper(ULONG value)
+{
+    return case_string(value, upper_case);
+}
+ULONG CharLower(ULONG value)
+{
+    return case_string(value, lower_case);
+}
+ULONG CharUpperBuff(ULONG pointer, ULONG count)
+{
+    return case_buffer(pointer, count, upper_case);
+}
+ULONG CharLowerBuff(ULONG pointer, ULONG count)
+{
+    return case_buffer(pointer, count, lower_case);
+}
+
+ULONG CharNext(ULONG pointer)
+{
+    uint8 value;
+    if (!lx_execution_read(GLoaderState.execution, pointer, &value, 1))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    return value ? pointer + 1 : pointer;
+}
+ULONG CharPrev(ULONG start, ULONG current)
+{
+    if (current <= start)
+        return current;
+    if (!lx_execution_memory(GLoaderState.execution, current - 1, 1, LX_GUEST_READ))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    /* The process NLS provider exposes no double-byte lead ranges. */
+    return current - 1;
+}
+
+LONG lstrcmpi(ULONG first, ULONG second)
+{
+    char *a = lx_execution_copy_string(GLoaderState.execution, first, STRING_LIMIT);
+    char *b = lx_execution_copy_string(GLoaderState.execution, second, STRING_LIMIT);
+    LONG result = 0;
+    if (!a || !b)
+        open32SetError(87);
+    else
+    {
+        const unsigned char *p = (const unsigned char *)a, *q = (const unsigned char *)b;
+        for (;; p++, q++)
+        {
+            unsigned int x = *p, y = *q;
+            if (x >= 'a' && x <= 'z')
+                x -= 'a' - 'A';
+            if (y >= 'a' && y <= 'z')
+                y -= 'a' - 'A';
+            result = (LONG)x - (LONG)y;
+            if (result || !*p)
+                break;
+        }
+    }
+    free(a);
+    free(b);
+    return result;
 }

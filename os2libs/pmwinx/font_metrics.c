@@ -109,3 +109,24 @@ LONG EnumFontFamilies(ULONG handle, PSZ family, ULONG procedure, ULONG parameter
     lx_execution_unmap(GLoaderState.execution, mapping);
     return result;
 }
+
+LONG GetTextFace(ULONG handle, LONG capacity, PCHAR output)
+{
+    FONTMETRICS metrics;
+    if (!open32FindDC(handle) || capacity < 0 ||
+        !GpiQueryFontMetrics(handle, sizeof metrics, &metrics))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    size_t length = strnlen(metrics.szFacename, sizeof metrics.szFacename);
+    if (!output)
+        return (LONG)length + 1;
+    if (!capacity)
+        return 0;
+    if (length >= (size_t)capacity)
+        length = (size_t)capacity - 1;
+    memcpy(output, metrics.szFacename, length);
+    output[length] = 0;
+    return (LONG)length;
+}

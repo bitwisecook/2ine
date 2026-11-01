@@ -1,0 +1,63 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+"""Measured GPI default text attributes and presentation-space save/restore."""
+
+import struct
+
+from images import FlatGuest, linear_image
+
+
+def text_state_program():
+    g = FlatGuest()
+    space, count, output = (g.field(bytes(n)) for n in (4, 4, 16))
+    g.call(2, 763, 0)
+    g.call(2, 716, 1, 0)
+    g.call(2, 759, 1)
+    g.code.extend(b"\xa3" + struct.pack("<I", space))
+    g.call(3, 434, (space,), output)
+    g.result(1, 128)
+    g.word(output, 0, 129)
+    g.word(output + 4, 0, 130)
+    g.call(3, 648, (space,), output, output + 4)
+    g.result(1, 131)
+    g.word(output, 0, 132)
+    g.word(output + 4, 0, 133)
+    g.call(3, 429, (space,), output)
+    g.result(1, 125)
+    g.word(output, 0, 126)
+    g.word(output + 4, 0, 127)
+    angle = g.field(struct.pack("<ii", 7, 0))
+    shear = g.field(struct.pack("<ii", 0, 3))
+    g.call(3, 501, (space,))
+    g.code.extend(b"\xa3" + struct.pack("<I", count))
+    g.call(3, 509, (space,), angle)
+    g.result(1, 134)
+    g.call(3, 514, (space,), shear)
+    g.result(1, 135)
+    g.call(3, 511, (space,), 1)
+    g.result(1, 136)
+    g.call(3, 649, (space,), 2, 0x400)
+    g.result(1, 137)
+    g.call(3, 429, (space,), output)
+    g.word(output, 7, 138)
+    g.call(3, 434, (space,), output)
+    g.word(output + 4, 3, 139)
+    g.call(3, 648, (space,), output, output + 4)
+    g.word(output, 2, 140)
+    g.word(output + 4, 0x400, 141)
+    g.call(3, 499, (space,), (count,))
+    g.result(1, 142)
+    g.call(3, 429, (space,), output)
+    g.word(output, 0, 143)
+    g.call(3, 434, (space,), output)
+    g.word(output + 4, 0, 144)
+    g.call(3, 431, (space,))
+    g.result(0, 145)
+    g.call(3, 648, (space,), output, output + 4)
+    g.word(output, 0, 146)
+    g.word(output + 4, 0, 147)
+    g.call(2, 848, (space,))
+    g.call(2, 888, 1)
+    g.exit(0)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "PMWIN", "PMGPI"], "TEXTSTATE32", data=g.data
+    )

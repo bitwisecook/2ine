@@ -119,6 +119,8 @@ typedef struct PresentationSpace
     } logical_fonts[255];
     LxHandleBorrow bitmap_ids[255];
     char font_names[255][8];
+    POINTL char_angle, char_shear;
+    LONG char_direction, text_horizontal, text_vertical;
     LONG charset, char_mode;
     LONG char_width, char_height;
     HDC dc;
@@ -139,6 +141,8 @@ typedef struct PmSavedSpace
     POINTL pattern_reference;
     LONG primitive_color[5], primitive_back[5];
     LONG primitive_mix[5], primitive_back_mix[5];
+    POINTL char_angle, char_shear;
+    LONG char_direction, text_horizontal, text_vertical;
     LONG charset, char_mode, char_width, char_height;
     RECTL viewport;
     BOOL viewport_set;
@@ -240,7 +244,7 @@ LX_PRIVATE BOOL windowAcceptsUpdates(const Window *window);
 LX_PRIVATE void destroyControl(Window *window);
 LX_PRIVATE MRESULT controlProcedure(HWND window, ULONG message, MPARAM first, MPARAM second);
 LX_PRIVATE HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data,
-                             size_t size, PVOID parameters);
+                             size_t size, PVOID parameters, HMODULE module);
 LX_PRIVATE void synchronizeInputState(AnchorBlock *anchor, const QMSG *message);
 BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event);
 BOOL releaseInputState(AnchorBlock *anchor, ULONG timestamp);

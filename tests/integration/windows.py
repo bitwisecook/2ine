@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from gpi_text_state import text_state_program
 from images import FlatGuest, linear_image
 
 
@@ -93,6 +94,16 @@ def program(checked):
     g.require(b"\x3b\x05" + struct.pack("<I", window), 19)
     g.call_handle(2, 737, enumeration)
     g.result(1, 20)
+    g.call(2, 864, (window,), 0)
+    g.result(1, 120)
+    g.call(2, 834, (window,), 4)
+    g.result(0, 121)
+    g.call(2, 864, (window,), (window,))
+    g.result(0, 122)
+    g.call(2, 864, (window,), 1)
+    g.result(1, 123)
+    g.call(2, 834, (window,), 4)
+    g.result(1, 124)
     g.call_handle(2, 757, window)
     save(space)
     g.call(3, 586, (space,), 1, helv, count, 228, 0)
@@ -214,7 +225,6 @@ def main():
     with tempfile.TemporaryDirectory(prefix="twoine-windows-") as temporary:
         work = Path(temporary)
         executable = work / "windows.exe"
-        executable.write_bytes(program(args.backend == "unicorn"))
         env = dict(
             os.environ,
             TWOINE_BACKEND=args.backend,
@@ -223,17 +233,19 @@ def main():
             SDL_VIDEO_DRIVER="dummy",
             SDL_RENDER_DRIVER="software",
         )
-        result = subprocess.run(
-            [str(build / "lx_loader"), str(executable)],
-            cwd=work,
-            env=env,
-            capture_output=True,
-            timeout=15,
-        )
-        if result.returncode:
-            raise RuntimeError(
-                f"window exit={result.returncode}\n" + result.stderr.decode(errors="replace")
+        for image in (program(args.backend == "unicorn"), text_state_program()):
+            executable.write_bytes(image)
+            result = subprocess.run(
+                [str(build / "lx_loader"), str(executable)],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                timeout=15,
             )
+            if result.returncode:
+                raise RuntimeError(
+                    f"window exit={result.returncode}\n" + result.stderr.decode(errors="replace")
+                )
         print(
             "guest CREATESTRUCT callbacks, window enumeration, presentation attributes and measured fonts passed"
         )

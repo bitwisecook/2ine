@@ -1,39 +1,46 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Flat queue bindings translate pointer outputs independently of host pointer width. */
-static uint32 queue32_open(uint8 *a, int create)
-{
-    uint32 first = lx_guest_load_u32(a), second = lx_guest_load_u32(a + 4);
-    uint32 name_pointer = lx_guest_load_u32(a + 8);
-    char *name = lx_execution_copy_string(GLoaderState.execution, name_pointer, 256);
-    LxGuestBorrow output = {0}, owner = {0};
-    uint32 result = ERROR_INVALID_PARAMETER;
-    if (name &&
-        lx_execution_borrow(GLoaderState.execution, create ? first : second, 4, LX_GUEST_WRITE,
-                            &output) &&
-        (create || lx_execution_borrow(GLoaderState.execution, first, 4, LX_GUEST_WRITE, &owner)))
-    {
-        HQUEUE handle = 0;
-        PID pid = 0;
-        result = create ? DosCreateQueue(&handle, second, name) : DosOpenQueue(&pid, &handle, name);
-        if (!result)
-        {
-            lx_guest_store_u32(output.host, handle);
-            if (!create)
-                lx_guest_store_u32(owner.host, pid);
-        }
-    }
-    free(name);
-    lx_execution_release(&output);
-    lx_execution_release(&owner);
-    return result;
-}
+/* Queue data addresses are opaque guest values, not host pointers to dereference. */
 static uint32 bridge32_DosCreateQueue(uint8 *a)
 {
-    return queue32_open(a, 1);
+    LxGuestBorrow output = {0};
+    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 8), 256);
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if (name && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 4, LX_GUEST_WRITE,
+                                    &output))
+    {
+        HQUEUE handle = 0;
+        result = DosCreateQueue(&handle, lx_guest_load_u32(a + 4), name);
+        if (!result)
+            lx_guest_store_u32(output.host, handle);
+    }
+    lx_execution_release(&output);
+    free(name);
+    return result;
 }
 static uint32 bridge32_DosOpenQueue(uint8 *a)
 {
-    return queue32_open(a, 0);
+    LxGuestBorrow pid = {0}, output = {0};
+    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 8), 256);
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if (name &&
+        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 4, LX_GUEST_WRITE,
+                            &pid) &&
+        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
+                            &output))
+    {
+        HQUEUE handle = 0;
+        PID owner = 0;
+        result = DosOpenQueue(&owner, &handle, name);
+        if (!result)
+        {
+            lx_guest_store_u32(pid.host, owner);
+            lx_guest_store_u32(output.host, handle);
+        }
+    }
+    lx_execution_release(&output);
+    lx_execution_release(&pid);
+    free(name);
+    return result;
 }
 static uint32 bridge32_DosCloseQueue(uint8 *a)
 {
@@ -45,7 +52,7 @@ static uint32 bridge32_DosPurgeQueue(uint8 *a)
 }
 static uint32 bridge32_DosQueryQueue(uint8 *a)
 {
-    LxGuestBorrow output;
+    LxGuestBorrow output = {0};
     if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
                              &output))
         return ERROR_INVALID_PARAMETER;
@@ -59,62 +66,80 @@ static uint32 bridge32_DosQueryQueue(uint8 *a)
 static uint32 bridge32_DosWriteQueue(uint8 *a)
 {
     uint32 size = lx_guest_load_u32(a + 8), pointer = lx_guest_load_u32(a + 12);
-    if (size > QUEUE_PAYLOAD_LIMIT)
-        return ERROR_INVALID_PARAMETER;
-    LxGuestBorrow data = {0};
-    if (size && !lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_READ, &data))
-        return ERROR_INVALID_PARAMETER;
-    uint32 result =
-        DosWriteQueue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), size,
-                      size ? data.host : (void *)(uintptr_t)pointer, lx_guest_load_u32(a + 16));
-    lx_execution_release(&data);
+    LxGuestBorrow input = {0};
+    PVOID data = (PVOID)(uintptr_t)pointer;
+    if (size && size <= QUEUE_PAYLOAD_LIMIT &&
+        lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_READ, &input))
+        data = input.host;
+    uint32 result = DosWriteQueue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), size, data,
+                                  lx_guest_load_u32(a + 16));
+    lx_execution_release(&input);
     return result;
 }
-static uint32 queue32_receive(uint8 *a, int peek)
+typedef struct QueueReceive32
 {
-    LxGuestBorrow slots[5] = {{0}};
-    static const unsigned offsets[] = {4, 8, 12, 24, 16};
-    static const unsigned sizes[] = {8, 4, 4, 1, 4};
+    uint8 *arguments;
+    BOOL peek;
+    LxGuestBorrow outputs[5];
+} QueueReceive32;
+static void queue_receive32_cleanup(void *argument)
+{
+    QueueReceive32 *call = argument;
+    for (unsigned i = 0; i < 5; i++)
+        lx_execution_release(&call->outputs[i]);
+}
+static uint32 queue_receive32_operation(void *argument)
+{
+    QueueReceive32 *call = argument;
+    uint8 *a = call->arguments;
+    BOOL peek = call->peek;
+    LxGuestBorrow *outputs = call->outputs;
+    const unsigned positions[] = {4, 8, 12, 24, 16};
+    const unsigned sizes[] = {8, 4, 4, 1, 4};
     uint32 result = ERROR_INVALID_PARAMETER;
     for (unsigned i = 0; i < (peek ? 5u : 4u); i++)
-        if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + offsets[i]),
-                                 sizes[i], i == 4 ? 3 : LX_GUEST_WRITE, &slots[i]))
+        if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + positions[i]),
+                                 sizes[i], LX_GUEST_WRITE | (i == 4 ? LX_GUEST_READ : 0),
+                                 &outputs[i]))
             goto done;
-    REQUESTDATA request;
-    ULONG length, element = peek ? lx_guest_load_u32(slots[4].host) : lx_guest_load_u32(a + 16);
-    BYTE priority;
-    void *memory = NULL;
-    result = peek ? DosPeekQueue(lx_guest_load_u32(a), &request, &length, &memory, &element,
-                                 lx_guest_load_u32(a + 20), &priority, lx_guest_load_u32(a + 28))
-                  : DosReadQueue(lx_guest_load_u32(a), &request, &length, &memory, element,
-                                 lx_guest_load_u32(a + 20), &priority, lx_guest_load_u32(a + 28));
+    REQUESTDATA request = {0};
+    ULONG size = 0, cursor = peek ? lx_guest_load_u32(outputs[4].host) : lx_guest_load_u32(a + 16);
+    PVOID data = NULL;
+    BYTE priority = 0;
+    if (peek)
+        result = DosPeekQueue(lx_guest_load_u32(a), &request, &size, &data, &cursor,
+                              lx_guest_load_u32(a + 20), &priority, lx_guest_load_u32(a + 28));
+    else
+        result = DosReadQueue(lx_guest_load_u32(a), &request, &size, &data, cursor,
+                              lx_guest_load_u32(a + 20), &priority, lx_guest_load_u32(a + 28));
     if (!result)
     {
-        uint32 address = (uint32)(uintptr_t)memory;
-        if (length && memory &&
-            !lx_execution_address(GLoaderState.execution, memory, length, LX_GUEST_READ, &address))
-        {
-            result = ERROR_QUE_MEMORY_ERROR;
-            goto done;
-        }
-        lx_guest_store_u32(slots[0].host, request.pid);
-        lx_guest_store_u32((uint8 *)slots[0].host + 4, request.ulData);
-        lx_guest_store_u32(slots[1].host, length);
-        lx_guest_store_u32(slots[2].host, address);
-        *(uint8 *)slots[3].host = priority;
+        lx_guest_store_u32(outputs[0].host, request.pid);
+        lx_guest_store_u32((uint8 *)outputs[0].host + 4, request.ulData);
+        lx_guest_store_u32(outputs[1].host, size);
+        uint32 address = (uint32)(uintptr_t)data;
+        if (data && size)
+            lx_execution_address(GLoaderState.execution, data, size, LX_GUEST_READ, &address);
+        lx_guest_store_u32(outputs[2].host, address);
+        *(uint8 *)outputs[3].host = priority;
         if (peek)
-            lx_guest_store_u32(slots[4].host, element);
+            lx_guest_store_u32(outputs[4].host, cursor);
     }
 done:
-    for (unsigned i = 0; i < 5; i++)
-        lx_execution_release(&slots[i]);
     return result;
 }
-static uint32 bridge32_DosReadQueue(uint8 *a)
+static uint32 queue_receive32(uint8 *a, BOOL peek)
 {
-    return queue32_receive(a, 0);
+    QueueReceive32 call = {0};
+    call.arguments = a;
+    call.peek = peek;
+    return lx_host_guarded_call(queue_receive32_operation, &call, queue_receive32_cleanup, &call);
 }
 static uint32 bridge32_DosPeekQueue(uint8 *a)
 {
-    return queue32_receive(a, 1);
+    return queue_receive32(a, TRUE);
+}
+static uint32 bridge32_DosReadQueue(uint8 *a)
+{
+    return queue_receive32(a, FALSE);
 }

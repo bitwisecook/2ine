@@ -6,6 +6,40 @@ import struct
 from images import FlatGuest, linear_image
 
 API = {
+    "GetFileAttributes": 284,
+    "lstrcmpi": 480,
+    "GetBrushOrgEx": 234,
+    "SetBrushOrgEx": 596,
+    "Polygon": 524,
+    "SetBkColor": 593,
+    "PatBlt": 511,
+    "CreatePatternBrush": 86,
+    "CharPrev": 27,
+    "CharNext": 26,
+    "CharLowerBuff": 25,
+    "CharUpperBuff": 31,
+    "CharLower": 24,
+    "CharUpper": 30,
+    "IsBadCodePtr": 430,
+    "IsBadWritePtr": 435,
+    "IsBadReadPtr": 433,
+    "GetTextAlign": 365,
+    "SetTextAlign": 647,
+    "GetKeyboardState": 1013,
+    "DPtoLP": 100,
+    "LPtoDP": 453,
+    "DialogBoxParam": 148,
+    "DialogBox": 147,
+    "EndDialog": 170,
+    "GetDlgItem": 273,
+    "GetDlgItemText": 275,
+    "SetDlgItemText": 611,
+    "WinTranslateDevicePoints": 6003,
+    "EnumChildWindows": 176,
+    "GetTextFace": 370,
+    "GetCurrentProcess": 256,
+    "ExtTextOut": 200,
+    "WaitMessage": 712,
     "CreateBitmap": 58,
     "SetDIBits": 608,
     "GetTextExtentPoint": 368,
@@ -672,6 +706,12 @@ def directory_program():
     call(g, "GetCurrentDirectory", 1, output)
     g.require(b"\x3b\x05" + struct.pack("<I", required), 181)
     g.word(output, 0, 182)
+    call(g, "GetFileAttributes", sub)
+    g.result(0x10, 186)
+    call(g, "GetFileAttributes", absent)
+    g.result(0xFFFFFFFF, 187)
+    call(g, "GetLastError")
+    g.result(2, 188)
     call(g, "SetCurrentDirectory", sub)
     g.result(1, 183)
     call(g, "SetCurrentDirectory", absent)
@@ -1067,6 +1107,10 @@ def keyboard_program():
     call(g, "GetKeyState", 0x74)
     g.code.extend(b"\x25\xff\xff\0\0")
     g.result(0x8000, 6)
+    keyboard = g.field(bytes(256))
+    call(g, "GetKeyboardState", keyboard)
+    g.result(1, 20)
+    g.word(keyboard + 0x74, 0x80, 21)
     call(g, "UnhookWindowsHookEx", (hook_b,))
     g.result(1, 7)
     g.code.extend(b"\xc7\x05" + struct.pack("<II", sequence, 0))
@@ -1741,6 +1785,8 @@ def message_program():
     call(g, "DispatchMessage", message)
     g.call(3, 884, 1, (window,), 202, 2)
     g.result(202, 42)
+    call(g, "WaitMessage")
+    g.result(1, 61)
     call(g, "GetMessage", message, 0, 0x113, 0x113)
     g.result(1, 43)
     g.word(message + 4, 0x113, 44)
@@ -1847,7 +1893,9 @@ def bitmap_program():
     g = FlatGuest()
     dc, memory, bitmap, previous = (g.field(bytes(4)) for _ in range(4))
     mono = g.field(bytes.fromhex("a0004000"))
-    info = g.field(struct.pack("<IiiHH6I", 40, 3, 2, 1, 1, 0, 0, 0, 0, 2, 0) + struct.pack("<2I", 0, 0xffffff))
+    info = g.field(
+        struct.pack("<IiiHH6I", 40, 3, 2, 1, 1, 0, 0, 0, 0, 2, 0) + struct.pack("<2I", 0, 0xFFFFFF)
+    )
     replacement = g.field(bytes.fromhex("40000000a0000000"))
     output = g.field(bytes(24))
     call(g, "GetDC", 0)
@@ -1861,7 +1909,7 @@ def bitmap_program():
     g.word(output + 12, 2, 2)
     call(g, "SelectObject", (memory,), (bitmap,))
     store(g, previous)
-    for y, values in enumerate(((0, 0xffffff, 0), (0xffffff, 0, 0xffffff))):
+    for y, values in enumerate(((0, 0xFFFFFF, 0), (0xFFFFFF, 0, 0xFFFFFF))):
         for x, value in enumerate(values):
             call(g, "GetPixel", (memory,), x, y)
             g.result(value, 3)
@@ -1871,7 +1919,7 @@ def bitmap_program():
     call(g, "SetDIBits", (dc,), (bitmap,), 0, 2, replacement, info, 0)
     g.result(2, 5)
     call(g, "SelectObject", (memory,), (bitmap,))
-    for y, values in enumerate(((0xffffff, 0, 0xffffff), (0, 0xffffff, 0))):
+    for y, values in enumerate(((0xFFFFFF, 0, 0xFFFFFF), (0, 0xFFFFFF, 0))):
         for x, value in enumerate(values):
             call(g, "GetPixel", (memory,), x, y)
             g.result(value, 6)
@@ -1888,3 +1936,169 @@ def bitmap_program():
     call(g, "ReleaseDC", 0, (dc,))
     g.exit(0)
     return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX"], "BITMAPS32", data=g.data)
+
+
+def extended_text_program():
+    g = FlatGuest()
+    screen, dc, bitmap = (g.field(bytes(4)) for _ in range(3))
+    rectangle = g.field(struct.pack("<4i", 4, 4, 12, 12))
+    clipping = g.field(struct.pack("<4i", 30, 0, 40, 24))
+    text = g.field(b"HH")
+    steps = g.field(struct.pack("<2i", 30, 0))
+    size = g.field(bytes(8))
+    call(g, "GetDC", 0)
+    store(g, screen)
+    call(g, "CreateCompatibleDC", (screen,))
+    store(g, dc)
+    call(g, "CreateCompatibleBitmap", (screen,), 48, 32)
+    store(g, bitmap)
+    call(g, "SelectObject", (dc,), (bitmap,))
+    call(g, "ExtTextOut", (dc,), 0, 0, 2, rectangle, 0, 0, 0)
+    g.result(1, 1)
+    for x, y, value in ((3, 4, 0), (4, 4, 0xFFFFFF), (11, 11, 0xFFFFFF), (12, 11, 0), (4, 12, 0)):
+        call(g, "GetPixel", (dc,), x, y)
+        g.result(value, 2)
+    call(g, "SetBkMode", (dc,), 1)
+    call(g, "SetTextColor", (dc,), 0xFF)
+    call(g, "ExtTextOut", (dc,), 0, 0, 4, clipping, text, 2, steps)
+    g.result(1, 3)
+    # Clipping excludes the first glyph; explicit advances put the second at x=30.
+    x, y, colored = (g.field(bytes(4)) for _ in range(3))
+    loop = len(g.code)
+    call(g, "GetPixel", (dc,), (x,), (y,))
+    g.code.extend(b"\x3d\xff\x00\x00\x00\x75")
+    skip = len(g.code)
+    g.code.extend(b"\0")
+    g.code.extend(b"\x83\x3d" + struct.pack("<I", x) + b"\x1e")
+    g.require(b"\x0f\x93\xc0\x0f\xb6\xc0\x3d\x01\0\0\0", 4)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", colored, 1))
+    g.code[skip] = len(g.code) - skip - 1
+    g.code.extend(b"\xff\x05" + struct.pack("<I", x))
+    g.code.extend(b"\x81\x3d" + struct.pack("<II", x, 48) + b"\x0f\x85")
+    g.code.extend(struct.pack("<i", loop - len(g.code) - 4))
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", x, 0))
+    g.code.extend(b"\xff\x05" + struct.pack("<I", y))
+    g.code.extend(b"\x81\x3d" + struct.pack("<II", y, 24) + b"\x0f\x85")
+    g.code.extend(struct.pack("<i", loop - len(g.code) - 4))
+    g.word(colored, 1, 5)
+    call(g, "GetTextExtentPoint", (dc,), text, 2, size)
+    g.result(1, 6)
+    call(g, "DeleteDC", (dc,))
+    call(g, "DeleteObject", (bitmap,))
+    call(g, "ReleaseDC", 0, (screen,))
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX"], "EXTTEXT32", data=g.data)
+
+
+def enumeration_program():
+    g = FlatGuest()
+    name = g.field(b"EnumContract\0")
+    parent, first, grandchild, last, count = (g.field(bytes(4)) for _ in range(5))
+    record = g.field(struct.pack("<10I", 0, 0x88776655, 0, 0, 0xFFFFFFFF, 0, 0, 0, 0, name))
+    call(g, "RegisterClass", record)
+    call(g, "CreateWindowEx", 0, name, 0, 0, 0, 0, 100, 100, 0, 0, 0xFFFFFFFF, 0)
+    store(g, parent)
+    for destination, owner in ((first, parent), (grandchild, first), (last, parent)):
+        call(g, "CreateWindowEx", 0, name, 0, 0x40000000, 0, 0, 10, 10, (owner,), 0, 0xFFFFFFFF, 0)
+        store(g, destination)
+    call(g, "EnumChildWindows", (parent,), 0x77665544, 42)
+    g.result(1, 1)
+    g.word(count, 3, 2)
+    # A stopping callback can destroy its own window without invalidating the snapshot.
+    call(g, "EnumChildWindows", (parent,), 0x66554433, 0)
+    g.result(0, 3)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", count, 0))
+    call(g, "EnumChildWindows", (parent,), 0x77665544, 42)
+    g.result(1, 4)
+    g.word(count, 2, 5)
+    points = g.field(struct.pack("<4i", 4, 0, -2, 99))
+    call(g, "WinTranslateDevicePoints", 0, (parent,), points, 2, 0)
+    g.result(1, 8)
+    g.word(points + 4, 99, 9)
+    g.word(points + 12, 0, 10)
+    call(g, "WinTranslateDevicePoints", 0, (parent,), points, 2, 1)
+    g.result(1, 11)
+    g.word(points + 4, 0, 12)
+    g.word(points + 12, 99, 13)
+    call(g, "GetDC", (parent,))
+    store(g, count)
+    call(g, "DPtoLP", (count,), points, 2)
+    g.result(1, 14)
+    call(g, "LPtoDP", (count,), points, 2)
+    g.result(1, 15)
+    g.word(points, 4, 16)
+    g.word(points + 4, 0, 17)
+    g.word(points + 8, 0xFFFFFFFE, 18)
+    g.word(points + 12, 99, 19)
+    call(g, "ReleaseDC", (parent,), (count,))
+    call(g, "GetCurrentProcess")
+    g.result(0xFFFFFFFF, 6)
+    call(g, "DestroyWindow", (parent,))
+    call(g, "UnregisterClass", name, 0xFFFFFFFF)
+    g.exit(0)
+    procedure = 0x10000 + len(g.code)
+    g.code.extend(b"\xb8\x01\0\0\0\xc3")
+    enumeration = 0x10000 + len(g.code)
+    g.require(b"\x83\x7c\x24\x08\x2a", 7)
+    g.code.extend(b"\xff\x05" + struct.pack("<I", count) + b"\xb8\x01\0\0\0\xc3")
+    stopping = 0x10000 + len(g.code)
+    g.code.extend(b"\x8b\x44\x24\x04")
+    store(g, last)
+    call(g, "DestroyWindow", (last,))
+    g.code.extend(b"\x31\xc0\xc3")
+    g.data = g.data.replace(struct.pack("<I", 0x88776655), struct.pack("<I", procedure))
+    for sentinel, address in ((0x77665544, enumeration), (0x66554433, stopping)):
+        g.code = g.code.replace(struct.pack("<I", sentinel), struct.pack("<I", address))
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX"], "ENUM32", data=g.data)
+
+
+def dialog_program():
+    from dialogs import template
+
+    g = FlatGuest()
+    window, child, initialized = (g.field(bytes(4)) for _ in range(3))
+    text = g.field(b"Acknowledged\0")
+    output = g.field(bytes(32))
+    call(g, "DialogBoxParam", 0, 777, 0, 0x77665544, 42)
+    g.result(0x12345678, 1)
+    g.word(initialized, 1, 2)
+    call(g, "IsWindow", (window,))
+    g.result(0, 3)
+    g.exit(0)
+    callback = 0x10000 + len(g.code)
+    g.code.extend(b"\x8b\x44\x24\x04")
+    store(g, window)
+    g.code.extend(b"\x81\x7c\x24\x08\x10\x01\0\0\x0f\x85")
+    command_branch = len(g.code)
+    g.code.extend(bytes(4))
+    g.require(b"\x83\x7c\x24\x10\x2a", 4)
+    call(g, "GetDlgItem", (window,), 1)
+    store(g, child)
+    call(g, "SetDlgItemText", (window,), 1, text)
+    g.result(1, 5)
+    call(g, "GetDlgItemText", (window,), 1, output, 32)
+    g.result(12, 6)
+    g.word(output, int.from_bytes(b"Ackn", "little"), 7)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", initialized, 1))
+    g.call(3, 919, (window,), 0x20, 1, 0)
+    g.result(1, 8)
+    g.code.extend(b"\xb8\x01\0\0\0\xc3")
+    struct.pack_into("<i", g.code, command_branch, len(g.code) - command_branch - 4)
+    g.code.extend(b"\x81\x7c\x24\x08\x11\x01\0\0\x0f\x85")
+    default_branch = len(g.code)
+    g.code.extend(bytes(4))
+    g.require(b"\x83\x7c\x24\x0c\x01", 9)
+    call(g, "EndDialog", (window,), 0x12345678)
+    g.result(1, 10)
+    g.code.extend(b"\xb8\x01\0\0\0\xc3")
+    struct.pack_into("<i", g.code, default_branch, len(g.code) - default_branch - 4)
+    g.code.extend(b"\x31\xc0\xc3")
+    g.code = g.code.replace(struct.pack("<I", 0x77665544), struct.pack("<I", callback))
+    return linear_image(
+        g.code,
+        g.fixups,
+        ["DOSCALLS", "PMWINX", "PMWIN"],
+        "DIALOG32",
+        data=g.data,
+        resources=[(4, 777, template())],
+    )
