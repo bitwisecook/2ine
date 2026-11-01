@@ -348,3 +348,87 @@ BOOL lx_pm_clip_point(HPS handle, LONG x, LONG y)
             return TRUE;
     return FALSE;
 }
+
+#include "os2libs/pmgpi.h"
+
+static int region_rect_order(const RECTL *a, const RECTL *b, BOOL bottom_up, BOOL right_first)
+{
+    LONG ay = bottom_up ? a->yBottom : a->yTop;
+    LONG by = bottom_up ? b->yBottom : b->yTop;
+    if (ay != by)
+        return bottom_up ? (ay > by) - (ay < by) : (ay < by) - (ay > by);
+    return right_first ? (a->xLeft < b->xLeft) - (a->xLeft > b->xLeft)
+                       : (a->xLeft > b->xLeft) - (a->xLeft < b->xLeft);
+}
+static int region_top_left(const void *a, const void *b)
+{
+    return region_rect_order(a, b, FALSE, FALSE);
+}
+static int region_top_right(const void *a, const void *b)
+{
+    return region_rect_order(a, b, FALSE, TRUE);
+}
+static int region_bottom_left(const void *a, const void *b)
+{
+    return region_rect_order(a, b, TRUE, FALSE);
+}
+static int region_bottom_right(const void *a, const void *b)
+{
+    return region_rect_order(a, b, TRUE, TRUE);
+}
+BOOL lx_pm_region_query_rects(HPS ps, ULONG handle, PRECTL bounds, RGNRECT *control, PRECTL rects)
+{
+    if (!control || (rects && (!control->ircStart || !control->crc)) || control->ulDirection < 1 ||
+        control->ulDirection > 4 || !lx_pm_valid_ps(ps))
+        return FALSE;
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_PM_REGION, &borrow))
+        return FALSE;
+    PmRegion *region = borrow.resource;
+    BOOL result = FALSE;
+    if (region->anchor != getAnchorBlockNoHAB() || region->selected)
+        goto end;
+    PmRegion filtered = {0}, clip = {0};
+    if (bounds)
+    {
+        clip.rects = bounds;
+        clip.count = 1;
+    }
+    if (!regionBoolean(&filtered, region, bounds ? &clip : NULL, bounds ? 6 : 2))
+        goto end;
+    if (!rects)
+    {
+        control->ircStart = 1;
+        control->crcReturned = (ULONG)filtered.count;
+        if (bounds)
+        {
+            uint64_t area = 0;
+            for (size_t i = 0; i < filtered.count; i++)
+                area += (uint64_t)((int64_t)filtered.rects[i].xRight - filtered.rects[i].xLeft) *
+                        ((int64_t)filtered.rects[i].yTop - filtered.rects[i].yBottom);
+            uint64_t full = bounds->xRight > bounds->xLeft && bounds->yTop > bounds->yBottom
+                                ? (uint64_t)((int64_t)bounds->xRight - bounds->xLeft) *
+                                      ((int64_t)bounds->yTop - bounds->yBottom)
+                                : 0;
+            control->crc = !area ? 1 : area == full ? 3 : 2;
+        }
+        free(filtered.rects);
+        result = TRUE;
+        goto end;
+    }
+    static int (*const order[])(const void *, const void *) = {
+        region_top_left, region_top_right, region_bottom_left, region_bottom_right};
+    qsort(filtered.rects, filtered.count, sizeof *filtered.rects, order[control->ulDirection - 1]);
+    size_t start = control->ircStart - 1;
+    size_t count = start < filtered.count ? filtered.count - start : 0;
+    if (count > control->crc)
+        count = control->crc;
+    if (count)
+        memcpy(rects, filtered.rects + start, count * sizeof *rects);
+    control->crcReturned = (ULONG)count;
+    free(filtered.rects);
+    result = TRUE;
+end:
+    lx_handle_release(&borrow);
+    return result;
+}

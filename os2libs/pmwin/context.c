@@ -96,6 +96,7 @@ BOOL WinTerminate(HAB hab)
     {
         return FALSE;
     }
+    WinCloseClipbrd(hab);
 
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
@@ -138,6 +139,7 @@ BOOL WinTerminate(HAB hab)
         free(anchor->timers);
         anchor->timers = next;
     }
+    lx_pm_dive_cleanup(anchor);
     free(anchor);
     lxHostThreadState()->anchor_block = NULL;
 

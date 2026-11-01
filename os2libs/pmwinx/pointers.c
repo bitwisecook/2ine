@@ -12,6 +12,10 @@ ULONG LoadCursor(HMODULE module, PSZ name)
         open32SetError(8);
         return 0;
     }
+    if (module)
+        return (uintptr_t)name <= 0xffff
+                   ? WinLoadPointer(HWND_DESKTOP, module, (ULONG)(uintptr_t)name)
+                   : 0;
     LONG id = 0;
     if (!module)
         switch ((uintptr_t)name)
@@ -23,6 +27,7 @@ ULONG LoadCursor(HMODULE module, PSZ name)
                 id = 2;
                 break; /* IDC_IBEAM */
             case 32514:
+            case 32650:
                 id = 3;
                 break; /* IDC_WAIT */
             case 32642:
@@ -59,4 +64,9 @@ ULONG SetCursor(ULONG cursor)
     ULONG previous = current_cursor;
     current_cursor = cursor;
     return previous;
+}
+
+BOOL DestroyCursor(ULONG cursor)
+{
+    return WinDestroyPointer(cursor);
 }

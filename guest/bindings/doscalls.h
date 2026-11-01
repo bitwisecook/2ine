@@ -535,8 +535,10 @@ static uint32 wireQueryFileInfo(uint8 *a, int path)
         free(name);
         return ERROR_INVALID_LEVEL;
     }
-    const uint32 wire_size = level == FIL_STANDARD ? 24 : level == FIL_QUERYEASIZE ? 28 : size;
-    if (size < wire_size || !wire_size)
+    const uint32 wire_size = level == FIL_STANDARD      ? (size < 24 ? size : 24)
+                             : level == FIL_QUERYEASIZE ? 28
+                                                        : size;
+    if (size < wire_size || !wire_size || (level == FIL_STANDARD && size < 22))
     {
         free(name);
         return ERROR_BUFFER_OVERFLOW;
@@ -554,7 +556,8 @@ static uint32 wireQueryFileInfo(uint8 *a, int path)
                                : DosQueryFileInfo(lx_guest_load_u32(a), level, data, capacity);
     if (!result && data != output.host)
     {
-        uint8 *p = output.host;
+        uint8 wire[28] = {0};
+        uint8 *p = wire;
         wireDateTime(p, value.fdateCreation, value.ftimeCreation);
         wireDateTime(p + 4, value.fdateLastAccess, value.ftimeLastAccess);
         wireDateTime(p + 8, value.fdateLastWrite, value.ftimeLastWrite);
@@ -563,6 +566,7 @@ static uint32 wireQueryFileInfo(uint8 *a, int path)
         lx_guest_store_u32(p + 20, value.attrFile);
         if (level == FIL_QUERYEASIZE)
             lx_guest_store_u32(p + 24, value.cbList);
+        memcpy(output.host, wire, wire_size);
     }
     lx_execution_release(&output);
     free(name);
@@ -1152,4 +1156,22 @@ static uint32 bridge32_DosMove(uint8 *a)
 static uint32 bridge32_Dos32QueryResourceSize(uint8 *a)
 {
     return bridge32_DosQueryResourceSize(a);
+}
+
+static uint32 bridge32_DosSetPriority(uint8 *a)
+{
+    return DosSetPriority(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                          (LONG)lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
+}
+
+static uint32 bridge32_DosCreateDir(uint8 *a)
+{
+    if (lx_guest_load_u32(a + 4))
+        return ERROR_EA_LIST_INCONSISTENT;
+    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
+    if (!name)
+        return ERROR_INVALID_PARAMETER;
+    uint32 result = DosCreateDir(name, NULL);
+    free(name);
+    return result;
 }

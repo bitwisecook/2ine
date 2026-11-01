@@ -14,6 +14,7 @@
 #define FLAT_DATA 0x23
 #define API_VECTOR 0xf1
 #define RETURN_VECTOR 0xf0
+#define BINDING_BUCKETS 2048
 
 typedef struct Binding
 {
@@ -23,6 +24,7 @@ typedef struct Binding
     LxExecutionAbi32 convention;
     char *missing_module, *missing_entry;
     struct Binding *next;
+    struct Binding *hash_next;
 } Binding;
 typedef struct Invocation
 {
@@ -42,6 +44,7 @@ typedef struct EmulatedState
     LxSegment selectors[SELECTOR_COUNT];
     LxGuestMapping *segments[SELECTOR_COUNT];
     Binding *bindings;
+    Binding *binding_buckets[BINDING_BUCKETS];
     LxGuestMapping *return_page;
     uint32_t return_address, near_base;
     uint16_t return_selector;
@@ -53,6 +56,11 @@ static EmulatedState *Emulated;
 static __thread Invocation *Active;
 static __thread uint8_t *ThreadTib;
 static __thread uint16_t ThreadFs;
+
+static unsigned bindingBucket(uint32_t address)
+{
+    return (address ^ (address >> 4) ^ (address >> 16)) & (BINDING_BUCKETS - 1);
+}
 
 static __attribute__((noreturn)) void failure(const char *message)
 {
@@ -279,6 +287,9 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *base, uint
     b->argument_bytes = bytes;
     b->next = Emulated->bindings;
     Emulated->bindings = b;
+    unsigned bucket = bindingBucket(b->address);
+    b->hash_next = Emulated->binding_buckets[bucket];
+    Emulated->binding_buckets[bucket] = b;
     output[0] = 0xcd;
     output[1] = API_VECTOR;
     output[2] = 0xca;
@@ -304,6 +315,12 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
 }
 static void replaceContext(Invocation *frame)
 {
+    if (frame->context)
+    {
+        if (!lx_cpu_update(Emulated->cpu, frame->context))
+            failure(lx_cpu_error(Emulated->cpu));
+        return;
+    }
     LxCpuContext *next = lx_cpu_save(Emulated->cpu);
     if (!next)
         failure(lx_cpu_error(Emulated->cpu));
@@ -342,7 +359,9 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         if (!lx_cpu_restore(s->cpu, frame.context))
             failure(lx_cpu_error(s->cpu));
         bindThreadWindow(s);
-        LxCpuEvent event = lx_cpu_run(s->cpu, 0, 10000);
+        /* Bound cooperative slices at translated-block boundaries. Counting
+           every instruction adds a callback even inside hot rendering loops. */
+        LxCpuEvent event = lx_cpu_run_blocks(s->cpu, 4096);
         if (!lx_cpu_get_registers(s->cpu, &registers))
             failure(lx_cpu_error(s->cpu));
         replaceContext(&frame);
@@ -388,7 +407,8 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         if (registers.cs & 4)
             linear += s->selectors[registers.cs >> 3].base;
         Binding *b;
-        for (b = s->bindings; b && b->address != linear; b = b->next)
+        for (b = s->binding_buckets[bindingBucket(linear)]; b && b->address != linear;
+             b = b->hash_next)
         {
         }
         if (!b)
@@ -599,17 +619,29 @@ static void callback(uint32_t entry, uint32_t argument)
 }
 static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
-    if (!Active)
-        failure("Guest callback requires an active guest invocation");
     if (!lx_execution_memory(Emulated->execution, entry, 1, LX_GUEST_EXECUTE))
         failure("Invalid guest callback entry");
     LxCpuRegisters r;
-    lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
-    lx_cpu_restore(Emulated->cpu, Active->context);
-    lx_cpu_get_registers(Emulated->cpu, &r);
-    lx_host_mutex_unlock(Emulated->mutex);
-    if (r.ss & 4)
-        r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+    LxGuestMapping *stack = NULL;
+    if (Active)
+    {
+        lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
+        lx_cpu_restore(Emulated->cpu, Active->context);
+        lx_cpu_get_registers(Emulated->cpu, &r);
+        lx_host_mutex_unlock(Emulated->mutex);
+        if (r.ss & 4)
+            r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+    }
+    else
+    {
+        /* Asynchronous OS/2 services attach a TIB before delivering a callback.
+           Their stack belongs to this invocation, independent of any other CPU. */
+        stack = lx_execution_map(Emulated->execution, 0, 0x10000, 3, 0);
+        if (!stack)
+            failure("Cannot allocate guest callback stack");
+        r = initialRegisters();
+        r.esp = lx_execution_mapping_address(stack) + 0x10000 - 16;
+    }
     r.ss = r.ds = r.es = FLAT_DATA;
     r.cs = FLAT_CODE;
     r.eip = entry;
@@ -618,8 +650,12 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     push32(&r, b);
     push32(&r, a);
     push32(&r, Emulated->return_address);
-    return invoke(r, 0);
+    uint32_t result = invoke(r, 0);
+    if (stack)
+        lx_execution_unmap(Emulated->execution, stack);
+    return result;
 }
+
 typedef struct Thread32Entry
 {
     uint32_t entry, stack, argument;

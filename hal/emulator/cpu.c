@@ -284,6 +284,10 @@ LxCpuEvent lx_cpu_run(LxCpu *cpu, uint64_t count, uint64_t us)
 {
     return cpu->ops->run(cpu, count, us);
 }
+LxCpuEvent lx_cpu_run_blocks(LxCpu *cpu, uint64_t blocks)
+{
+    return cpu->ops->run_blocks(cpu, blocks);
+}
 
 LxCpuContext *lx_cpu_save(LxCpu *cpu)
 {
@@ -311,6 +315,12 @@ int lx_cpu_restore(LxCpu *cpu, const LxCpuContext *context)
     if (!context || context->owner != cpu)
         return lx_cpu_fail(cpu, "CPU context belongs to a different CPU");
     return cpu->ops->restore(cpu, context->data);
+}
+int lx_cpu_update(LxCpu *cpu, LxCpuContext *context)
+{
+    if (!context || context->owner != cpu)
+        return lx_cpu_fail(cpu, "CPU context belongs to a different CPU");
+    return cpu->ops->update_context(cpu, context->data);
 }
 
 void lx_cpu_context_free(LxCpuContext *context)

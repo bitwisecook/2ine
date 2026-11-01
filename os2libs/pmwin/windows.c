@@ -11,13 +11,13 @@ Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
 {
     if (hwnd >= FIRST_HWND_VALUE)
     {
-        const size_t idx = (size_t)(hwnd - FIRST_HWND_VALUE);
-        if (idx >= anchor->windows_array_len)
+        for (size_t i = 0; i < anchor->windows_array_len; i++)
         {
-            return NULL;
+            Window *window = anchor->windows[i];
+            if (window && window->hwnd == hwnd)
+                return window;
         }
-        Window *win = anchor->windows[idx];
-        return (win && win->hwnd == hwnd) ? win : NULL;
+        return NULL;
     }
     else if (hwnd == HWND_DESKTOP)
     {
@@ -65,7 +65,8 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
             }
             case WC_STATIC:
             {
-                static WindowClass text = {"#5", controlProcedure, CS_SIZEREDRAW, 4, NULL};
+                static WindowClass text = {"#5", controlProcedure, CS_SIZEREDRAW | CS_HITTEST, 4,
+                                           NULL};
                 return &text;
             }
             case WC_ENTRYFIELD:
@@ -124,6 +125,8 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
         return;
     }
 
+    unregisterWindowMessages(win->hwnd);
+    lx_pm_dive_forget(win);
     win->destroying = TRUE;
     if (anchor->focus == win->hwnd)
         WinSetFocus(HWND_DESKTOP, 0);
@@ -305,9 +308,6 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_HEAP_OUT_OF_MEMORY, NULLHANDLE);
     }
-    size_t window_index = 0;
-    while (anchor->windows[window_index] != win)
-        window_index++;
     char *text = NULL;
     if (pszName)
     {
@@ -348,7 +348,16 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
 
     win->parent = parent;
     win->children = NULL;
-    win->hwnd = (HWND)(window_index + FIRST_HWND_VALUE);
+    win->hwnd = registerWindowMessages(anchor);
+    if (!win->hwnd)
+    {
+        if (parent == &desktop_window)
+            lx_host_window_destroy(win->heavy.window);
+        free(text);
+        free(data);
+        return 0;
+    }
+    win->visible_region_notify = FALSE;
     win->enabled = (flStyle & WS_DISABLED) == 0;
     win->window_class_name = winclass->name; // this pointer lives until Anchor Block terminates.
     win->data = data;
@@ -433,6 +442,8 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         }
     }
 
+    if (win->style & WS_VISIBLE)
+        postExposedMessages(anchor, win, currentSystemTicks());
     return win->hwnd;
 }
 
@@ -480,6 +491,9 @@ HWND WinCreateStdWindow(HWND hwndParent, ULONG flStyle, PULONG pflCreateFlags, P
             WinDestroyWindow(retval);
             return NULLHANDLE;
         }
+        AnchorBlock *anchor = getAnchorBlockNoHAB();
+        Window *frame = getWindowFromHWND(anchor, retval);
+        frame->last_focus = clientwin;
         if (phwndClient)
         {
             *phwndClient = clientwin;
@@ -551,6 +565,10 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         }
 
         case WM_ACTIVATE:
+            for (Window *child = win->children; child; child = child->sibling)
+                if (child->id == FID_CLIENT)
+                    return sendMessage(child, msg, mp1, mp2);
+            return 0;
         case WM_APPTERMINATENOTIFY:
         case WM_ADJUSTWINDOWPOS:
         case WM_CALCFRAMERECT:
@@ -845,6 +863,8 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     win = getWindowFromHWND(anchor, hwnd);
     if (!win || win->destroying)
         return FALSE;
+    if (flags & (SWP_SIZE | SWP_MOVE | SWP_SHOW | SWP_HIDE))
+        notifyVisibleRegions(anchor, win);
     if (!(flags & SWP_NOREDRAW) && (flags & (SWP_SIZE | SWP_SHOW)))
         postExposedMessages(anchor, win, currentSystemTicks());
     if ((flags & SWP_ZORDER) && !(flags & SWP_NOREDRAW))

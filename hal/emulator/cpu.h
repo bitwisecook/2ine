@@ -38,7 +38,7 @@ typedef struct LxSegment
 typedef enum LxCpuStop
 {
     LX_CPU_TRAP,   /* Software interrupt, or a CPU exception vector. */
-    LX_CPU_BUDGET, /* Instruction or wall-clock execution bound. */
+    LX_CPU_BUDGET, /* Instruction, translated-block or wall-clock execution bound. */
     LX_CPU_FAULT
 } LxCpuStop;
 
@@ -77,10 +77,15 @@ int lx_cpu_get_registers(LxCpu *cpu, LxCpuRegisters *registers);
 int lx_cpu_set_registers(LxCpu *cpu, const LxCpuRegisters *registers);
 /* Execution returns to the caller for API dispatch; host calls run outside the JIT. */
 LxCpuEvent lx_cpu_run(LxCpu *cpu, uint64_t instruction_limit, uint64_t timeout_us);
+/* Cooperative scheduling without a callback on every guest instruction.
+   This bounds translated blocks, rather than promising an exact instruction count. */
+LxCpuEvent lx_cpu_run_blocks(LxCpu *cpu, uint64_t block_limit);
 
 /* Contexts include backend CPU state, including x87; they do not snapshot RAM.
    A context can only be restored to the CPU which created it. */
 LxCpuContext *lx_cpu_save(LxCpu *cpu);
+/* Refresh an existing CPU snapshot without allocating another context. */
+int lx_cpu_update(LxCpu *cpu, LxCpuContext *context);
 int lx_cpu_restore(LxCpu *cpu, const LxCpuContext *context);
 void lx_cpu_context_free(LxCpuContext *context);
 #endif

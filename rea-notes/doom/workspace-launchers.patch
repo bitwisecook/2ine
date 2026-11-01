@@ -1,0 +1,104 @@
+diff --git a/scripts/2ine-run b/scripts/2ine-run
+new file mode 100755
+--- /dev/null
++++ b/scripts/2ine-run
+@@ -0,0 +1,50 @@
++#!/usr/bin/env bash
++# Run an OS/2 executable under the workspace 2ine build.
++#
++# Usage: scripts/2ine-run TOOL.EXE [args...]
++#
++# Environment:
++#   TWOINE_ROOT      override the 2ine checkout (default: <repo>/tools/2ine)
++#   TWOINE_BUILD     override the build directory (default: $TWOINE_ROOT/build)
++#   TWOINE_LIBPATH   additional OS/2 DLL / native shim search directories
++#
++# The current directory is significant: 2ine resolves imported OS/2 DLLs and
++# native lib*.so shims from the current directory, TWOINE_LIBPATH, and the
++# build directory, in that order. The IBM and Watcom compilers also resolve
++# their runtime message/catalog files relative to the current directory.
++set -euo pipefail
++
++here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++root="${TWOINE_ROOT:-$here/../tools/2ine}"
++build="${TWOINE_BUILD:-$root/build}"
++loader="$build/lx_loader"
++
++if [[ ! -x "$loader" ]]; then
++    echo "2ine-run: no loader at $loader" >&2
++    echo "  build it with: cmake -S '$root' -B '$build' -DCMAKE_POLICY_VERSION_MINIMUM=3.5 && cmake --build '$build'" >&2
++    exit 127
++fi
++
++if [[ $# -lt 1 ]]; then
++    echo "usage: 2ine-run TOOL.EXE [args...]" >&2
++    exit 2
++fi
++
++export LD_LIBRARY_PATH="$build${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
++if [[ -n "${TWOINE_LIBPATH:-}" ]]; then
++    export TWOINE_LIBPATH="$build:$TWOINE_LIBPATH"
++else
++    export TWOINE_LIBPATH="$build"
++fi
++
++# The Microsoft C 6.0 and MASM runtimes place segment selectors and code
++#  templates in the low 32-bit arena. Host ASLR can move the loader's own
++#  mappings and make those layouts vary enough to crash intermittently.
++#  Running the loader with address randomization disabled makes the 16-bit
++#  tool path deterministic. The personality is inherited by DosExecPgm
++#  children, so C1/C2/C3/LINK all see the same layout.
++if command -v setarch >/dev/null 2>&1 && setarch "$(uname -m)" -R true 2>/dev/null; then
++    exec setarch "$(uname -m)" -R "$loader" "$@"
++fi
++
++exec "$loader" "$@"
+diff --git a/scripts/2ine-doom b/scripts/2ine-doom
+new file mode 100755
+--- /dev/null
++++ b/scripts/2ine-doom
+@@ -0,0 +1,22 @@
++#!/usr/bin/env bash
++# Run the workspace's source-built OS/2 Doom in its persistent game directory.
++set -euo pipefail
++here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++workspace="$(cd "$here/.." && pwd)"
++game="${TWOINE_DOOM_HOME:-$workspace/.state/2ine/doom/playable}"
++export TWOINE_AUDIO_CONFIG="${TWOINE_AUDIO_CONFIG:-$workspace/.state/2ine/doom/audio.conf}"
++export TWOINE_ROOT="${TWOINE_ROOT:-$workspace/tools/src/2ine-hal}"
++if [[ -z "${TWOINE_BUILD:-}" ]]; then
++    if [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 && "${TWOINE_BACKEND:-native}" == native ]]; then
++        export TWOINE_BUILD="$workspace/.state/2ine/doom/runtime-full-native"
++    else
++        export TWOINE_BUILD="$workspace/.state/2ine/doom/runtime-full-portable"
++    fi
++fi
++if [[ ! -f "$game/os2doom.exe" || ! -f "$game/doom1.wad" ]]; then
++    echo "2ine-doom: missing executable or shareware WAD in $game" >&2
++    echo "See $TWOINE_ROOT/docs/doom.md for the source build and setup commands." >&2
++    exit 2
++fi
++cd "$game"
++exec "$here/2ine-run" ./os2doom.exe "$@"
+diff --git a/scripts/2ine-soundfonts b/scripts/2ine-soundfonts
+new file mode 100755
+--- /dev/null
++++ b/scripts/2ine-soundfonts
+@@ -0,0 +1,17 @@
++#!/usr/bin/env bash
++# Fetch/select banks or inspect an external VOGONS SoundFont topic.
++set -euo pipefail
++here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++workspace="$(cd "$here/.." && pwd)"
++state="$workspace/.state/2ine/doom"
++export TWOINE_AUDIO_CONFIG="${TWOINE_AUDIO_CONFIG:-$state/audio.conf}"
++if [[ "${1:-}" == recommended ]]; then
++    shift
++    exec python3 "$workspace/tools/src/2ine-hal/tools/recommended_soundfonts.py" "$@"
++fi
++if [[ "${1:-}" == forum ]]; then
++    shift
++    exec python3 "$workspace/tools/src/2ine-hal/tools/vogons_soundfonts.py" "$@"
++fi
++exec python3 "$workspace/tools/src/2ine-hal/tools/fetch_soundfonts.py" \
++    --cache "$state/soundfonts-cache" --config "$TWOINE_AUDIO_CONFIG" "$@"

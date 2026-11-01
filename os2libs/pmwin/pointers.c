@@ -26,6 +26,16 @@ void destroyPointers(AnchorBlock *anchor)
     while (anchor->pointers)
         lx_handle_close(anchor->pointers->handle, LX_HANDLE_PM_POINTER);
 }
+HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
+{
+    TRACE_NATIVE("WinLoadPointer(%u, %u, %u)", (uint)desktop, (uint)module, (uint)id);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor)
+        return 0;
+    /* Resource cursors are unavailable; callers may retain a system pointer. */
+    SET_WIN_ERROR_AND_RETURN(
+        anchor, desktop == HWND_DESKTOP ? PMERR_RESOURCE_NOT_FOUND : PMERR_INVALID_HWND, 0);
+}
 HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -78,4 +88,21 @@ BOOL WinDestroyPointer(HPOINTER handle)
     BOOL copy = ((PmPointer *)borrow.resource)->copy;
     lx_handle_release(&borrow);
     return copy && lx_handle_close(handle, LX_HANDLE_PM_POINTER);
+}
+
+BOOL WinSetPointerPos(HWND desktop, LONG x, LONG y)
+{
+    return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() &&
+           lx_host_mouse_warp(x, desktop_window.h - 1 - y);
+}
+BOOL WinShowPointer(HWND desktop, BOOL show)
+{
+    return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() && lx_host_pointer_show(show != 0);
+}
+BOOL WinShowCursor(HWND handle, BOOL show)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    /* Text carets are painted by their control; absent carets cannot be shown. */
+    return window && !show;
 }

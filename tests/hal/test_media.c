@@ -18,6 +18,7 @@
     } while (0)
 static unsigned samples_played;
 static unsigned generator_calls, generator_live = 1;
+static unsigned stereo_calls, stereo_live = 1;
 static int policy_generator(void *unused, float *output, int count, int frequency)
 {
     (void)unused;
@@ -26,6 +27,18 @@ static int policy_generator(void *unused, float *output, int count, int frequenc
         output[i] += 0.125f;
     __atomic_add_fetch(&generator_calls, 1, __ATOMIC_SEQ_CST);
     return __atomic_load_n(&generator_live, __ATOMIC_SEQ_CST);
+}
+static int stereo_generator(void *unused, float *output, int count, int frequency)
+{
+    (void)unused;
+    CHECK(frequency == 48000 && count > 0 && count <= 1024);
+    for (int i = 0; i < count; i++)
+    {
+        output[i * 2] += 0.25f;
+        output[i * 2 + 1] -= 0.0625f;
+    }
+    __atomic_add_fetch(&stereo_calls, 1, __ATOMIC_SEQ_CST);
+    return __atomic_load_n(&stereo_live, __ATOMIC_SEQ_CST);
 }
 static void generate(void *unused, float *output, int count, int frequency)
 {
@@ -64,6 +77,8 @@ int main(void)
         CHECK(!glyph.coverage);
         lx_host_font_close(font);
     }
+    CHECK(!lx_host_audio_open_channels(generate, NULL, 0));
+    CHECK(!lx_host_audio_open_channels(generate, NULL, 3));
     LxHostAudio *audio = lx_host_audio_open(generate, NULL);
     CHECK(audio);
     for (unsigned i = 0; !__atomic_load_n(&samples_played, __ATOMIC_SEQ_CST) && i < 200; i++)
@@ -107,17 +122,32 @@ int main(void)
     lx_host_sleep_ms(60);
     CHECK(__atomic_load_n(&samples_played, __ATOMIC_SEQ_CST) > before);
     lx_host_audio_close(audio);
+    CHECK(!lxRegisterStereoAudioGenerator(NULL, NULL, 1));
+    CHECK(lxRegisterStereoAudioGenerator(stereo_generator, NULL, 1) == 1);
+    CHECK(lxRegisterStereoAudioGenerator(stereo_generator, NULL, 1) == 2);
     CHECK(lxRegisterAudioGenerator(policy_generator, NULL, 1) == 1);
     CHECK(lxRegisterAudioGenerator(policy_generator, NULL, 1) == 2);
-    for (int i = 0; !__atomic_load_n(&generator_calls, __ATOMIC_SEQ_CST) && i < 200; i++)
+    for (int i = 0; (!__atomic_load_n(&generator_calls, __ATOMIC_SEQ_CST) ||
+                     !__atomic_load_n(&stereo_calls, __ATOMIC_SEQ_CST)) &&
+                    i < 200;
+         i++)
         lx_host_sleep_ms(5);
     CHECK(__atomic_load_n(&generator_calls, __ATOMIC_SEQ_CST));
+    CHECK(__atomic_load_n(&stereo_calls, __ATOMIC_SEQ_CST));
+    __atomic_store_n(&stereo_live, 0, __ATOMIC_SEQ_CST);
     __atomic_store_n(&generator_live, 0, __ATOMIC_SEQ_CST);
     int registered = 2;
     for (int i = 0; registered == 2 && i < 200; i++)
     {
         lx_host_sleep_ms(5);
         registered = lxRegisterAudioGenerator(policy_generator, NULL, 1);
+    }
+    CHECK(registered == 1);
+    registered = 2;
+    for (int i = 0; registered == 2 && i < 200; i++)
+    {
+        lx_host_sleep_ms(5);
+        registered = lxRegisterStereoAudioGenerator(stereo_generator, NULL, 1);
     }
     CHECK(registered == 1);
     lxAudioShutdown();

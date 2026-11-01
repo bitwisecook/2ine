@@ -1,23 +1,11 @@
-/**
- * 2ine; an OS/2 emulator for Linux.
- *
- * Please see the file LICENSE.txt in the source's root directory.
- *
- *  This file written by Ryan C. Gordon.
- */
-
-#ifndef _INCL_MDM_H_
-#define _INCL_MDM_H_
-
+/* Public domain. No rights reserved. Wholly AI-authored. */
+#ifndef TWOINE_MDM_H
+#define TWOINE_MDM_H
 #include "os2types.h"
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
-#ifdef __cplusplus
-}
-#endif
-
+OS2EXPORT ULONG OS2API mciSendCommand(USHORT device, USHORT message, ULONG flags, PVOID parameters,
+                                      USHORT user) OS2APIINFO(ord = 1);
+OS2EXPORT ULONG OS2API mciSendString(PSZ command, PSZ output, USHORT length, ULONG window,
+                                     USHORT user) OS2APIINFO(ord = 2);
+OS2EXPORT ULONG OS2API mciGetErrorString(ULONG error, PSZ output, USHORT length)
+    OS2APIINFO(ord = 3);
 #endif

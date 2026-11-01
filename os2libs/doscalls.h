@@ -505,6 +505,8 @@ extern "C"
         QHINF_MAPSEL
     };
 
+    OS2EXPORT APIRET OS2API DosSetPriority(ULONG scope, ULONG priority_class, LONG delta,
+                                           ULONG target) OS2APIINFO(236);
     OS2EXPORT APIRET OS2API DosQueryHeaderInfo(HMODULE hmod, ULONG ulIndex, PVOID pvBuffer,
                                                ULONG cbBuffer, ULONG ulSubFunction) OS2APIINFO(582);
 

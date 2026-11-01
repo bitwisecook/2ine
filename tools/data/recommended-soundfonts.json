@@ -1,0 +1,165 @@
+{
+  "_notice": "Public domain. No rights reserved. Wholly AI-authored index descriptions; external files retain their own terms.",
+  "schema": 1,
+  "source": "https://github.com/dwhinham/mt32-pi/wiki/Recommended-SoundFonts",
+  "source_raw": "https://raw.githubusercontent.com/wiki/dwhinham/mt32-pi/Recommended-SoundFonts.md",
+  "source_snapshot_sha256": "48b64cc259a232845c4779d526da22313566e38a1c823108a03256e3a8668117",
+  "observed_date": "2026-11-01",
+  "choices": [
+    {
+      "id": "8mbgm-enhanced",
+      "name": "8mbgm_enhanced18",
+      "category": "high-quality",
+      "source_url": "https://archive.org/download/soundfonts_201910/8mbgm_enhanced18.sf2",
+      "provider": "direct",
+      "download_url": "https://archive.org/download/soundfonts_201910/8mbgm_enhanced18.sf2",
+      "notes": "Direct SF2 linked by mt32-pi; external bank license is not established by the listing."
+    },
+    {
+      "id": "ntonyx-32mb",
+      "name": "32MbGMStereo by NTONYX",
+      "category": "high-quality",
+      "source_url": "http://ntonyx.com/sf_f.htm",
+      "provider": "source",
+      "notes": "Publisher landing page; no direct file pinned."
+    },
+    {
+      "id": "arachno",
+      "name": "Arachno SoundFont by Arachnosoft",
+      "category": "high-quality",
+      "source_url": "http://www.arachnosoft.com/main/soundfont.php",
+      "provider": "source",
+      "notes": "Publisher download page; use its current download terms/files."
+    },
+    {
+      "id": "chorium",
+      "name": "Chorium by openwrld",
+      "category": "high-quality",
+      "source_url": "https://www.pistonsoft.com/soundfonts.html",
+      "provider": "source",
+      "notes": "Publisher landing page; no direct file pinned."
+    },
+    {
+      "id": "crisis",
+      "name": "Crisis General MIDI by Christophe Maricourt",
+      "category": "high-quality",
+      "source_url": "http://www.bismutnetwork.com/04CrisisGeneralMidi/Soundfont3.0.php",
+      "provider": "source",
+      "notes": "Original linked page; availability and format require checking at source."
+    },
+    {
+      "id": "generaluser-gs",
+      "name": "GeneralUser GS by S. Christian Collins",
+      "category": "high-quality",
+      "source_url": "https://www.schristiancollins.com/generaluser.php",
+      "provider": "catalog",
+      "bank_id": "generaluser-gs",
+      "notes": "Uses the existing hash-verified GeneralUser GS catalog; GM/Roland GS compatible, not hardware emulation."
+    },
+    {
+      "id": "sgm",
+      "name": "SGM by Shan",
+      "category": "high-quality",
+      "source_url": "https://archive.org/details/SGM-V2.01",
+      "provider": "source",
+      "notes": "External archive collection; choose its exact file at the source."
+    },
+    {
+      "id": "timbres-of-heaven",
+      "name": "Timbres of Heaven by Don Allen",
+      "category": "high-quality",
+      "source_url": "http://midkar.com/soundfonts",
+      "provider": "source",
+      "notes": "Publisher collection; no direct current file pinned."
+    },
+    {
+      "id": "sc55-trevor",
+      "name": "SC-55 by trevor0402",
+      "category": "sc55",
+      "source_url": "https://github.com/trevor0402/SC55Soundfont/releases",
+      "provider": "source",
+      "notes": "Wiki-listed repository returned HTTP404 when checked 2026-11-01; retained as source-only."
+    },
+    {
+      "id": "sc55-emperor",
+      "name": "SC-55 by EmperorGrieferus",
+      "category": "sc55",
+      "source_url": "https://www.youtube.com/watch?v=_J8-CgvC-As",
+      "provider": "source",
+      "notes": "Creator video/source page; no direct bank URL inferred from video content."
+    },
+    {
+      "id": "sc55-patch93",
+      "name": "SC-55 by Patch93",
+      "category": "sc55",
+      "source_url": "https://musical-artifacts.com/artifacts/1228",
+      "provider": "source",
+      "notes": "Source returned HTTP403 to ordinary public requests when checked 2026-11-01; open the original page manually."
+    },
+    {
+      "id": "windows-midi",
+      "name": "Default Windows MIDI SoundFont",
+      "category": "sc55",
+      "source_url": "https://musical-artifacts.com/artifacts/10165",
+      "provider": "source",
+      "notes": "Wiki describes a conversion of the Windows Microsoft/Roland synthesizer. No redistribution license inferred."
+    },
+    {
+      "id": "creative-1mgm",
+      "name": "Creative 1MGM.SF2",
+      "category": "creative-ensoniq",
+      "source_url": "https://web.archive.org/web/20120501160846/http://connect.creativelabs.com/developer/SoundFont/SoundFont%20Librarian.zip",
+      "provider": "source",
+      "notes": "Historical driver/tool archive; obtain the named bank at source. No package execution or bulk extraction."
+    },
+    {
+      "id": "creative-driver-banks",
+      "name": "Creative CT2MGM / CT4MGM / CT8MGM",
+      "category": "creative-ensoniq",
+      "source_url": "https://archive.org/details/cd-sb-audigy",
+      "provider": "source",
+      "notes": "Driver CD archive; banks are listed under Audio/Common/SFBank. Source-only; no full CD download."
+    },
+    {
+      "id": "ensoniq-eapci8m",
+      "name": "Ensoniq EAPCI8M SF2 conversion",
+      "category": "creative-ensoniq",
+      "source_url": "https://archive.org/details/EAPCI8M-SF2",
+      "provider": "source",
+      "notes": "External archive collection. Conversion differs from original ECW playback; select exact file at source."
+    },
+    {
+      "id": "voice-crystal",
+      "name": "Voice Crystal / Gravis Ultrasound",
+      "category": "gus",
+      "source_url": "http://www.voicecrystal.com/sf4mgm.htm",
+      "provider": "source",
+      "notes": "Commercial purchase source in the wiki; no automatic purchase or download."
+    },
+    {
+      "id": "omega-gmgs2",
+      "name": "OmegaGMGS2 by Ricsim78",
+      "category": "yamaha-xg",
+      "source_url": "https://musescore.org/en/node/109371",
+      "provider": "source",
+      "notes": "Source page; no direct current SF2 URL pinned."
+    },
+    {
+      "id": "phoenix",
+      "name": "Phoenix GS/XG/GM2/MT-32 by Jexu",
+      "category": "yamaha-xg",
+      "source_url": "https://musical-artifacts.com/artifacts/1356",
+      "provider": "source",
+      "notes": "Source returned HTTP403 when checked 2026-11-01. The bank name does not establish actual MT-32 LA emulation."
+    },
+    {
+      "id": "yamaha-xg-logue",
+      "name": "Yamaha XG Sound Set Ver.2.0 by Logue",
+      "category": "yamaha-xg",
+      "source_url": "https://github.com/logue/sf2synth.js/raw/develop/public/Yamaha%20XG%20Sound%20Set%20Ver.2.0.sf2",
+      "provider": "direct",
+      "download_url": "https://raw.githubusercontent.com/logue/sf2synth.js/develop/public/Yamaha%20XG%20Sound%20Set%20Ver.2.0.sf2",
+      "notes": "Direct public SF2 in the linked repository; observed download identity is retained privately. Listing/project code license is not treated as a bank license."
+    }
+  ]
+}

@@ -87,3 +87,8 @@ LONG GpiIntersectClipRectangle(HPS handle, PRECTL rectangle)
         GpiDestroyRegion(handle, second);
     return result;
 }
+
+BOOL GpiQueryRegionRects(HPS ps, ULONG handle, PRECTL bounds, RGNRECT *control, PRECTL rects)
+{
+    return lx_pm_region_query_rects(ps, handle, bounds, control, rects);
+}

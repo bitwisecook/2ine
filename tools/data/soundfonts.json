@@ -1,0 +1,74 @@
+{
+  "_notice": "Public domain. No rights reserved. Wholly AI-authored.",
+  "schema": 1,
+  "default": "generaluser-gs",
+  "banks": [
+    {
+      "id": "generaluser-gs",
+      "name": "GeneralUser GS",
+      "version": "2.0.3",
+      "author": "S. Christian Collins",
+      "description": "Complete General MIDI and Roland GS compatible sampled bank; the default. It is not a Roland ROM bank or an SC-55/MT-32 emulator.",
+      "homepage": "https://www.schristiancollins.com/generaluser.php",
+      "source": "https://github.com/mrbumpy409/GeneralUser-GS/tree/684543d5e5efaef08d02be50dcda8d552478fa60",
+      "license": "GeneralUser GS License v2.0",
+      "bank": "GeneralUser-GS.sf2",
+      "files": [
+        {
+          "name": "GeneralUser-GS.sf2",
+          "url": "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/684543d5e5efaef08d02be50dcda8d552478fa60/GeneralUser-GS.sf2",
+          "size": 32319396,
+          "sha256": "9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe"
+        },
+        {
+          "name": "LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/684543d5e5efaef08d02be50dcda8d552478fa60/documentation/LICENSE.txt",
+          "size": 2317,
+          "sha256": "7b32efefdf95ce38a043799f0659853ddc00fbaa14d8c50f0aca16b9b8b405be"
+        }
+      ]
+    },
+    {
+      "id": "timgm6mb",
+      "name": "TimGM6mb",
+      "version": "musescore-6bf0564e",
+      "author": "Tim Brechbill; MuseScore distribution",
+      "description": "Small complete General MIDI bank retained by the official historical MuseScore source. A neutral low-memory alternative.",
+      "homepage": "https://www.timbrechbill.com/saxguru/Timidity.php",
+      "source": "https://github.com/musescore/MuseScore/tree/6bf0564e3fa76d5e1d7dd7d96f49124fef1074a8/share/sound",
+      "license": "GPL-2.0-only",
+      "bank": "TimGM6mb.sf2",
+      "files": [
+        {
+          "name": "TimGM6mb.sf2",
+          "url": "https://raw.githubusercontent.com/musescore/MuseScore/6bf0564e3fa76d5e1d7dd7d96f49124fef1074a8/share/sound/TimGM6mb.sf2",
+          "size": 5969788,
+          "sha256": "c5378b62028c920cb11e4803327983fee2f2cdff5dc89c708e39da417e51c854"
+        },
+        {
+          "name": "LICENSE.GPL",
+          "url": "https://raw.githubusercontent.com/musescore/MuseScore/6bf0564e3fa76d5e1d7dd7d96f49124fef1074a8/LICENSE.GPL",
+          "size": 18770,
+          "sha256": "5911e49c99b4ee7e211daaae06b742821650dc501bff7c9a82fbba7811de01e8"
+        }
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "name": "Munt / MT-32",
+      "url": "https://github.com/munt/munt",
+      "description": "Real MT-32/CM-32L device emulation, using user-supplied control and PCM ROM images. This fetcher downloads no Roland ROMs. An SF2 bank does not emulate MT-32 LA synthesis or SysEx patches."
+    },
+    {
+      "name": "MuseScore SoundFont guide",
+      "url": "https://musescore.org/en/handbook/3/soundfonts-and-sfz-files",
+      "description": "Official guide to other banks and formats, including FluidR3. The 2ine SoundFont backend accepts complete SF2 banks; SF3 and SFZ are different formats."
+    },
+    {
+      "name": "FreePats",
+      "url": "https://freepats.zenvoid.org/",
+      "description": "Author/community source for openly licensed instrument samples and banks. Check coverage and per-bank license; a single instrument is not a complete GM set."
+    }
+  ]
+}

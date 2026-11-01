@@ -2487,3 +2487,8 @@ static uint32 bridge32_GetTextExtentPoint(uint8 *a)
 {
     return bridge32_GetTextExtentPoint32(a);
 }
+
+static uint32 bridge32_DestroyCursor(uint8 *a)
+{
+    return DestroyCursor(lx_guest_load_u32(a));
+}

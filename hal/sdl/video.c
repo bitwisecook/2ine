@@ -1,9 +1,14 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host windows and render targets contain no OS/2 window/message state. */
 #include "hal/video.h"
+#include "window_chrome.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 static void (*GraphicsRelease)(void);
+static Uint32 CaptureResetEvent;
+static Uint32 WakeEvent;
+static unsigned ControlledWindows;
+static int cursor_visible(int requested);
 void lx_host_video_set_graphics_release(void (*release)(void))
 {
     GraphicsRelease = release;
@@ -48,7 +53,7 @@ void lx_host_pointer_destroy(LxHostPointer *pointer)
 }
 int lx_host_pointer_set(LxHostPointer *pointer)
 {
-    return pointer ? SDL_SetCursor(pointer->cursor) && SDL_ShowCursor() : SDL_HideCursor();
+    return pointer ? SDL_SetCursor(pointer->cursor) && cursor_visible(1) : cursor_visible(0);
 }
 struct LxHostWindow
 {
@@ -56,13 +61,81 @@ struct LxHostWindow
     SDL_Renderer *renderer;
     SDL_Texture *texture;
     void *data;
+    int x, y;
     int width, height;
     int dirty;
+    int fullscreen;
+    int startup_checked;
+    int suppress_enter;
+    int restoring;
+    int windowed_x, windowed_y;
+    int capture_control, captured, capture_chord,
+        suppress_click; /* 0 legacy, 1 managed, 2 disabled. */
+    LxWindowChrome *chrome;
 };
+static LxHostWindow *focused_window(void)
+{
+    SDL_Window *sdl = SDL_GetKeyboardFocus();
+    return sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
+}
+static int cursor_visible(int requested)
+{
+    LxHostWindow *window = focused_window();
+    if (window && window->capture_control)
+        requested = !window->captured;
+    else if (!window && ControlledWindows)
+        requested = 1;
+    return requested ? SDL_ShowCursor() : SDL_HideCursor();
+}
+int lx_host_window_is_captured(LxHostWindow *window)
+{
+    return window && window->capture_control && window->captured;
+}
+int lx_host_window_set_capture(LxHostWindow *window, int captured)
+{
+    if (!window || window->capture_control != 1)
+        return 0;
+    captured = captured != 0;
+    if (window->captured == captured)
+        return 1;
+    if (!SDL_SetWindowMouseGrab(window->window, captured) && captured)
+        return 0;
+    window->captured = captured;
+    lx_window_chrome_capture(window->chrome, captured);
+    if (captured)
+    {
+        SDL_RaiseWindow(window->window);
+        SDL_HideCursor();
+    }
+    else
+    {
+        SDL_SetCursor(SDL_GetDefaultCursor());
+        SDL_ShowCursor();
+    }
+    SDL_Event reset = {0};
+    reset.type = CaptureResetEvent;
+    reset.user.windowID = SDL_GetWindowID(window->window);
+    SDL_PushEvent(&reset);
+    return 1;
+}
+static void toggle_capture(void *opaque)
+{
+    LxHostWindow *window = opaque;
+    lx_host_window_set_capture(window, !window->captured);
+}
 int lx_host_video_initialize(int *width, int *height)
 {
+    /* Popup-to-document focus changes must retain the dismissing click. */
+    SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
     if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO) && !SDL_InitSubSystem(SDL_INIT_VIDEO))
         return 0;
+    if (!WakeEvent)
+    {
+        WakeEvent = SDL_RegisterEvents(2);
+        if (!WakeEvent)
+            return 0;
+        CaptureResetEvent = WakeEvent + 1;
+    }
     SDL_Rect bounds;
     if (!SDL_GetDisplayBounds(SDL_GetPrimaryDisplay(), &bounds))
         return 0;
@@ -74,6 +147,8 @@ void lx_host_video_quit(void)
 {
     prepareRenderer();
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    CaptureResetEvent = 0;
+    WakeEvent = 0;
 }
 int lx_host_video_release_graphics(void)
 {
@@ -96,15 +171,24 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
         return NULL;
     window->data = data;
     window->dirty = 1;
+    window->x = x;
+    window->y = y;
     window->width = width;
     window->height = height;
     window->window = SDL_CreateWindow(title ? title : "", width, height,
                                       SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE);
     if (!window->window)
         goto failed;
-    SDL_SetWindowPosition(window->window, x, y);
     if (!SDL_SetPointerProperty(SDL_GetWindowProperties(window->window), "2ine.window", window))
         goto failed;
+    const char *capture = getenv("TWOINE_MOUSE_CAPTURE");
+    window->capture_control = !capture || !*capture ? 0 : SDL_strcmp(capture, "0") ? 1 : 2;
+    if (window->capture_control)
+    {
+        ControlledWindows++;
+        if (window->capture_control == 1)
+            window->chrome = lx_window_chrome_create(window->window, toggle_capture, window);
+    }
     window->renderer = SDL_CreateRenderer(window->window, NULL);
     if (!window->renderer)
         goto failed;
@@ -113,6 +197,7 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
     if (!window->texture || !SDL_SetRenderTarget(window->renderer, window->texture))
         goto failed;
     SDL_StartTextInput(window->window);
+    SDL_SetWindowPosition(window->window, x, y);
     return window;
 failed:
     lx_host_window_destroy(window);
@@ -123,6 +208,12 @@ void lx_host_window_destroy(LxHostWindow *window)
     prepareRenderer();
     if (!window)
         return;
+    if (window->capture_control)
+    {
+        lx_host_window_set_capture(window, 0);
+        lx_window_chrome_destroy(window->chrome);
+        ControlledWindows--;
+    }
     SDL_DestroyTexture(window->texture);
     SDL_DestroyRenderer(window->renderer);
     SDL_DestroyWindow(window->window);
@@ -156,13 +247,60 @@ int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int h
         window->width = width;
         window->height = height;
     }
+    window->x = x;
+    window->y = y;
+    if (window->fullscreen)
+    {
+        window->windowed_x = x;
+        window->windowed_y = y;
+        return 1;
+    }
     return SDL_SetWindowPosition(window->window, x, y) &&
            SDL_SetWindowSize(window->window, width, height);
+}
+int lx_host_window_fullscreen(LxHostWindow *window, int enabled)
+{
+    prepareRenderer();
+    if (!window)
+        return 0;
+    enabled = enabled != 0;
+    if (window->fullscreen == enabled)
+        return 1;
+    /* A surface change must not redirect queued canvas drawing to the window. */
+    if (!SDL_FlushRenderer(window->renderer) || !SDL_SyncWindow(window->window))
+        return 0;
+    if (enabled)
+        SDL_GetWindowPosition(window->window, &window->windowed_x, &window->windowed_y);
+    if (!SDL_SetWindowFullscreen(window->window, enabled))
+        return 0;
+    window->fullscreen = enabled;
+    window->restoring = !enabled;
+    window->dirty = 1;
+    if (!SDL_SyncWindow(window->window))
+        return 0;
+    if (!enabled)
+        return SDL_SetWindowPosition(window->window, window->windowed_x, window->windowed_y) &&
+               SDL_SetWindowSize(window->window, window->width, window->height) &&
+               SDL_SyncWindow(window->window);
+    return 1;
+}
+int lx_host_window_is_fullscreen(LxHostWindow *window)
+{
+    return window && window->fullscreen;
 }
 void lx_host_window_show(LxHostWindow *window)
 {
     prepareRenderer();
+    if (!SDL_FlushRenderer(window->renderer))
+        return;
     SDL_ShowWindow(window->window);
+    if (!window->startup_checked)
+    {
+        const char *fullscreen = getenv("TWOINE_FULLSCREEN");
+        window->startup_checked = 1;
+        if (fullscreen && SDL_strcmp(fullscreen, "0") && *fullscreen)
+            lx_host_window_fullscreen(window, 1);
+    }
 }
 void lx_host_window_hide(LxHostWindow *window)
 {
@@ -352,6 +490,11 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
     SDL_memset(event, 0, sizeof *event);
     event->timestamp = input->common.timestamp / SDL_NS_PER_MS;
     SDL_WindowID id = 0;
+    if (input->type == CaptureResetEvent)
+    {
+        event->type = LX_HOST_EVENT_INPUT_RESET;
+        id = input->user.windowID;
+    }
     switch (input->type)
     {
         case SDL_EVENT_QUIT:
@@ -360,6 +503,18 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
         case SDL_EVENT_WINDOW_SHOWN:
             event->type = LX_HOST_EVENT_SHOWN;
             id = input->window.windowID;
+            break;
+        case SDL_EVENT_WINDOW_MOVED:
+            id = input->window.windowID;
+            {
+                SDL_Window *moved = SDL_GetWindowFromID(id);
+                LxHostWindow *window = moved
+                                           ? SDL_GetPointerProperty(SDL_GetWindowProperties(moved),
+                                                                    "2ine.window", NULL)
+                                           : NULL;
+                if (window)
+                    window->dirty = 1;
+            }
             break;
         case SDL_EVENT_WINDOW_EXPOSED:
             event->type = LX_HOST_EVENT_EXPOSED;
@@ -492,6 +647,87 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
     SDL_Window *sdl = id ? SDL_GetWindowFromID(id) : NULL;
     LxHostWindow *window =
         sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
+    if (window)
+    {
+        if (window->capture_control == 1)
+        {
+            unsigned chord = LX_HOST_MOD_CTRL | LX_HOST_MOD_ALT;
+            int modifier = event->key == LX_HOST_KEY_CTRL || event->key == LX_HOST_KEY_ALT;
+            if (modifier && event->type == LX_HOST_EVENT_KEY_DOWN &&
+                (event->modifiers & chord) == chord && !window->capture_chord)
+            {
+                window->capture_chord = 1;
+                toggle_capture(window);
+                event->type = LX_HOST_EVENT_OTHER;
+            }
+            else if (modifier && window->capture_chord)
+            {
+                if (!(event->modifiers & chord))
+                    window->capture_chord = 0;
+                event->type = LX_HOST_EVENT_OTHER;
+            }
+            if (event->type == LX_HOST_EVENT_FOCUS_LOST)
+            {
+                lx_host_window_set_capture(window, 0);
+                window->capture_chord = window->suppress_click = 0;
+            }
+            if (event->type == LX_HOST_EVENT_BUTTON_UP && window->suppress_click &&
+                event->button == 1)
+            {
+                window->suppress_click = 0;
+                event->type = LX_HOST_EVENT_OTHER;
+            }
+            if (!window->captured)
+            {
+                if (event->type == LX_HOST_EVENT_BUTTON_DOWN && event->button == 1)
+                {
+                    lx_host_window_set_capture(window, 1);
+                    window->suppress_click = 1;
+                    event->type = LX_HOST_EVENT_OTHER;
+                }
+                if (event->type == LX_HOST_EVENT_MOTION ||
+                    event->type == LX_HOST_EVENT_BUTTON_DOWN ||
+                    event->type == LX_HOST_EVENT_BUTTON_UP)
+                    event->type = LX_HOST_EVENT_OTHER;
+            }
+        }
+        if ((event->type == LX_HOST_EVENT_KEY_DOWN || event->type == LX_HOST_EVENT_KEY_UP) &&
+            event->key == LX_HOST_KEY_RETURN)
+        {
+            if (event->type == LX_HOST_EVENT_KEY_DOWN && (event->modifiers & LX_HOST_MOD_ALT))
+            {
+                if (!event->repeat)
+                    lx_host_window_fullscreen(window, !window->fullscreen);
+                window->suppress_enter = 1;
+                event->type = LX_HOST_EVENT_OTHER;
+            }
+            else if (window->suppress_enter)
+            {
+                if (event->type == LX_HOST_EVENT_KEY_UP)
+                    window->suppress_enter = 0;
+                event->type = LX_HOST_EVENT_OTHER;
+            }
+        }
+        if (event->type == LX_HOST_EVENT_RESIZED && (window->fullscreen || window->restoring))
+        {
+            if (!window->fullscreen && event->width == window->width &&
+                event->height == window->height)
+                window->restoring = 0;
+            window->dirty = 1;
+            event->type = LX_HOST_EVENT_OTHER;
+        }
+        if (window->fullscreen &&
+            (event->type == LX_HOST_EVENT_MOTION || event->type == LX_HOST_EVENT_BUTTON_DOWN ||
+             event->type == LX_HOST_EVENT_BUTTON_UP))
+        {
+            int width, height;
+            if (SDL_GetWindowSize(sdl, &width, &height) && width > 0 && height > 0)
+            {
+                event->x = (int)((int64_t)event->x * window->width / width);
+                event->y = (int)((int64_t)event->y * window->height / height);
+            }
+        }
+    }
     if (window && (event->type == LX_HOST_EVENT_SHOWN || event->type == LX_HOST_EVENT_EXPOSED))
         window->dirty = 1;
     event->window_data = window ? window->data : NULL;
@@ -534,10 +770,10 @@ int lx_host_video_wait(LxHostEvent *event)
 }
 int lx_host_video_push(const LxHostEvent *event)
 {
-    if (event->type != LX_HOST_EVENT_QUIT)
+    if (event->type != LX_HOST_EVENT_QUIT && event->type != LX_HOST_EVENT_OTHER)
         return 0;
     SDL_Event output = {0};
-    output.type = SDL_EVENT_QUIT;
+    output.type = event->type == LX_HOST_EVENT_QUIT ? SDL_EVENT_QUIT : WakeEvent;
     return SDL_PushEvent(&output);
 }
 void lx_host_mouse_position(int *x, int *y)
@@ -546,6 +782,19 @@ void lx_host_mouse_position(int *x, int *y)
     SDL_GetGlobalMouseState(&a, &b);
     *x = (int)a;
     *y = (int)b;
+    SDL_Window *sdl = SDL_GetKeyboardFocus();
+    LxHostWindow *window =
+        sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
+    if (window && window->fullscreen)
+    {
+        int origin_x, origin_y, width, height;
+        if (SDL_GetWindowPosition(sdl, &origin_x, &origin_y) &&
+            SDL_GetWindowSize(sdl, &width, &height) && width > 0 && height > 0)
+        {
+            *x = window->x + (int)((a - origin_x) * window->width / width);
+            *y = window->y + (int)((b - origin_y) * window->height / height);
+        }
+    }
 }
 
 int lx_host_window_read(LxHostWindow *window, const LxHostRect *rect, uint32_t *rgb)
@@ -607,4 +856,28 @@ int lx_host_window_image(LxHostWindow *window, const LxHostRect *clip, const LxH
     if (ok)
         window->dirty = 1;
     return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
+}
+
+int lx_host_mouse_warp(int x, int y)
+{
+    SDL_Window *sdl = SDL_GetKeyboardFocus();
+    LxHostWindow *window =
+        sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
+    if ((window && window->capture_control && !window->captured) || (!window && ControlledWindows))
+        return 1; /* A released guest cannot pull the desktop pointer back. */
+    if (window && window->fullscreen)
+    {
+        int origin_x, origin_y, width, height;
+        if (SDL_GetWindowPosition(sdl, &origin_x, &origin_y) &&
+            SDL_GetWindowSize(sdl, &width, &height))
+        {
+            x = origin_x + (int)((int64_t)(x - window->x) * width / window->width);
+            y = origin_y + (int)((int64_t)(y - window->y) * height / window->height);
+        }
+    }
+    return SDL_WarpMouseGlobal((float)x, (float)y);
+}
+int lx_host_pointer_show(int show)
+{
+    return cursor_visible(show);
 }

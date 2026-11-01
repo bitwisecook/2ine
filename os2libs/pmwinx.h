@@ -10,6 +10,7 @@ extern "C"
 #endif
     OS2EXPORT LONG OS2API WinCallWinMain(LONG argc, PSZ *argv, PFNWINMAIN entry, LONG show)
         OS2APIINFO(ord = 6000, name = WINCALLWINMAIN);
+    OS2EXPORT BOOL OS2API DestroyCursor(ULONG cursor) OS2APIINFO(ord = 143, name = DESTROYCURSOR);
     OS2EXPORT VOID OS2API WinInitializeOpen32(ULONG reserved)
         OS2APIINFO(ord = 6009, name = WININITIALIZEOPEN32);
     OS2EXPORT VOID OS2API WinTerminateOpen32(ULONG reserved)

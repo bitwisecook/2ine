@@ -74,6 +74,15 @@ int lx_host_socket_name(int socket, LxHostSocketAddress *address);
 int lx_host_socket_shutdown(int socket, int how);
 int64_t lx_host_socket_send(int socket, const void *buffer, size_t size, unsigned flags);
 int64_t lx_host_socket_recv(int socket, void *buffer, size_t size, unsigned flags);
+int64_t lx_host_socket_sendto(int socket, const void *buffer, size_t size, unsigned flags,
+                              const LxHostSocketAddress *address);
+int64_t lx_host_socket_recvfrom(int socket, void *buffer, size_t size, unsigned flags,
+                                LxHostSocketAddress *address);
+int lx_host_socket_nonblocking(int socket, int enabled);
+int lx_host_socket_available(int socket, int *bytes);
+int lx_host_socket_hostname(char *name, size_t size);
+/* Stable BSD socket error number, independent of host errno numbering. */
+int lx_host_socket_bsd_error(void);
 int lx_host_socket_error(void);
 uint32_t lx_host_socket_parse_address(const char *name);
 char *lx_host_socket_format_address(uint32_t address);

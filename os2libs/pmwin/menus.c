@@ -121,16 +121,54 @@ static void menu_finish(Window *window)
         WinPostMsg(root->owner->hwnd, WM_MENUEND, (MPARAM)(uintptr_t)root->id,
                    (MPARAM)(uintptr_t)root->hwnd);
 }
+void dismissMenusForClick(AnchorBlock *anchor, Window *target)
+{
+    Window *target_menu = target;
+    while (target_menu && !target_menu->menu)
+        target_menu = target_menu->parent;
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+    {
+        Window *window = anchor->windows[i];
+        if (!window || !window->hwnd || !window->menu || !window->menu->focus ||
+            menu_root(window) != window)
+            continue;
+        if (!target_menu || menu_root(target_menu) != window)
+            menu_finish(window);
+    }
+}
+static void menu_select(Window *window, int index)
+{
+    PmMenu *menu = window->menu;
+    if (menu->selected == index)
+        return;
+    if (menu->selected >= 0 && (size_t)menu->selected < menu->count)
+    {
+        Window *previous = lx_pm_menu_window(menu->items[menu->selected].item.hwndSubMenu);
+        if (previous)
+            menu_close(previous);
+    }
+    menu->selected = index;
+    WinInvalidateRect(window->hwnd, NULL, FALSE);
+}
 static void menu_open(Window *window, PmMenuItem *item)
 {
     Window *root = menu_root(window), *submenu = lx_pm_menu_window(item->item.hwndSubMenu);
     if (!submenu)
         return;
+    HWND handle = window->hwnd;
+    unsigned id = item->item.id;
     if (!root->menu->focus)
         root->menu->focus = WinQueryFocus(HWND_DESKTOP);
     if (root->owner)
         WinSendMsg(root->owner->hwnd, WM_INITMENU, (MPARAM)(uintptr_t)item->item.id,
                    (MPARAM)(uintptr_t)submenu->hwnd);
+    /* WM_INITMENU may replace items or destroy the menu while the owner runs. */
+    window = lx_pm_menu_window(handle);
+    item = menu_find(window, id, FALSE, NULL);
+    submenu = item ? lx_pm_menu_window(item->item.hwndSubMenu) : NULL;
+    if (!submenu)
+        return;
+    window->menu->selected = item->item.iPosition;
     menu_layout(submenu);
     POINTL point = {(window->style & 1) ? item->rect.xLeft : window->w,
                     (window->style & 1) ? 0 : item->rect.yTop};
@@ -152,8 +190,10 @@ static void menu_activate(Window *window, int index)
     PmMenuItem *item = &menu->items[index];
     if ((item->item.afAttribute & 0x4000) || (item->item.afStyle & (4 | 0x100 | 0x200)))
         return;
-    menu->selected = index;
-    WinInvalidateRect(window->hwnd, NULL, FALSE);
+    if (menu->selected == index && item->item.hwndSubMenu &&
+        WinIsWindowVisible(item->item.hwndSubMenu))
+        return;
+    menu_select(window, index);
     if (item->item.hwndSubMenu)
     {
         menu_open(window, item);
@@ -384,6 +424,29 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
             }
         return 0;
     }
+    if (message == WM_MOUSEMOVE)
+    {
+        POINTL point = {(SHORT)p, (SHORT)(p >> 16)};
+        for (size_t i = 0; i < menu->count; i++)
+            if (WinPtInRect(0, &menu->items[i].rect, &point))
+            {
+                if (menu->selected == (int)i)
+                    return 0;
+                if ((menu->items[i].item.afAttribute & 0x4000) ||
+                    (menu->items[i].item.afStyle & (4 | 0x100 | 0x200)))
+                {
+                    if (!(window->style & 1))
+                        menu_select(window, -1);
+                    return 0;
+                }
+                if (menu->items[i].item.hwndSubMenu && menu_root(window)->menu->focus)
+                    menu_activate(window, (int)i);
+                else if (!(window->style & 1))
+                    menu_select(window, (int)i);
+                break;
+            }
+        return 0;
+    }
     if (message == WM_CHAR && !(p & 0x40))
     {
         unsigned key = q >> 16, character = q & 0xffff;
@@ -392,12 +455,12 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
             menu_finish(window);
             return 0;
         }
-        if ((p & 2) && (key == 0x10 || key == 0x12))
+        if ((p & 2) && (key == 0x16 || key == 0x18))
         {
-            int direction = key == 0x12 ? 1 : -1;
+            int direction = key == 0x18 ? 1 : -1;
             if (menu->count)
-                menu->selected = (menu->selected + direction + (int)menu->count) % (int)menu->count;
-            WinInvalidateRect(handle, NULL, FALSE);
+                menu_select(window,
+                            (menu->selected + direction + (int)menu->count) % (int)menu->count);
             return 0;
         }
         if ((p & 2) && (key == 0x1e || key == 8))
@@ -473,15 +536,24 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
     {
         if (!item)
             return 0;
+        TRACE_EVENT("MENU QUERY hwnd=%u id=%u pos=%d style=%x attr=%x submenu=%u data=%x text=%s",
+                    handle, item->item.id, item->item.iPosition, item->item.afStyle,
+                    item->item.afAttribute, item->item.hwndSubMenu, item->item.hItem,
+                    item->text ? item->text : "");
         return (MRESULT)(uintptr_t)controlWrite(second, &item->item, sizeof item->item);
     }
     if (message == 0x18c)
         return (MRESULT)(uintptr_t)(item && item->text ? strlen(item->text) : 0);
     if (message == 0x18b)
     {
-        if (!item)
+        SHORT capacity = (SHORT)(p >> 16);
+        if (!item || !item->text || !(item->item.afStyle & 1) || capacity <= 0)
             return 0;
-        return (MRESULT)(uintptr_t)controlTextOutput(second, item->text ? item->text : "", p >> 16);
+        size_t count = strlen(item->text);
+        if (count >= (size_t)capacity)
+            count = (size_t)capacity - 1;
+        return (MRESULT)(uintptr_t)(controlTextOutput(second, item->text, (size_t)capacity) ? count
+                                                                                            : 0);
     }
     if (message == 0x18e)
     {

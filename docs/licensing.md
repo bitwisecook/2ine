@@ -29,3 +29,14 @@ notices and meet their source/distribution requirements.
 
 Historical compiler/SDK fixtures are supplied separately and are not licensed
 or redistributed by this project. `LICENSE.txt` is preserved unchanged.
+
+Sampled MIDI retains TinySoundFont's MIT notice and GeneralUser GS's own bank
+license, staged together in `build/soundfonts/`. [Doom source builds](doom.md)
+use separately supplied third-party source under its existing notices; neither
+that source nor game WADs are relicensed or distributed here.
+
+Optional Munt/libmt32emu retains its LGPL-2.1-or-later license. Preserve its
+notices and applicable source/relinking requirements when distributing linked
+builds. SoundFont forum discovery records author and license claims separately
+from the forum's own post license. Fetched/user-imported banks stay in the
+user's cache with receipts; the downloader does not change their licenses.

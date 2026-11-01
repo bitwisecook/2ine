@@ -15,6 +15,9 @@ typedef struct PmRegion
     size_t count;
 } PmRegion;
 BOOL regionBoolean(PmRegion *out, const PmRegion *a, const PmRegion *b, LONG mode);
+struct RGNRECT;
+BOOL lx_pm_region_query_rects(HPS ps, ULONG region, PRECTL bounds, struct RGNRECT *control,
+                              PRECTL rects);
 BOOL lx_pm_window_clip(HPS ps, const RECTL *bounds, PmRegion *visible);
 LONG lx_pm_visible_box(HPS ps, RECTL *rectangle);
 ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles);
@@ -44,6 +47,13 @@ ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsi
 BOOL lx_pm_bitmap_delete(ULONG handle);
 ULONG lx_pm_bitmap_select(HPS ps, ULONG bitmap);
 void lx_pm_bitmap_cleanup(void *anchor);
+void *lx_pm_dive_target(LONG x, LONG y, unsigned width, unsigned height);
+void lx_pm_dive_release(void *context);
+BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned height,
+                     const uint32_t *pixels, ULONG count, const RECTL *rectangles);
+void lx_pm_dive_pump(void *anchor);
+void lx_pm_dive_forget(void *window);
+void lx_pm_dive_cleanup(void *anchor);
 BOOL lx_pm_raster_read(HPS ps, LONG x, LONG y, unsigned width, unsigned height, uint32_t *pixels);
 BOOL lx_pm_raster_write(HPS ps, LONG x, LONG y, unsigned width, unsigned height,
                         const uint32_t *pixels);

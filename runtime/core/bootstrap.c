@@ -30,6 +30,7 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     GLoaderState.makeUnixPath = makeUnixPath_lib2ine;
     GLoaderState.terminate = terminate_lib2ine;
     GLoaderState.registerAudioGenerator = lxRegisterAudioGenerator;
+    GLoaderState.registerStereoAudioGenerator = lxRegisterStereoAudioGenerator;
     GLoaderState.lib2ine_shutdown = lib2ine_shutdown;
 
     /* Use a low amplitude to match the PC speaker mix. */

@@ -94,8 +94,15 @@ The toolbar renders when the original SmartIcons preferences and icon resources
 are supplied. Frame sizing, scrollbar controls and document-menu merging still
 differ from stock Warp; see the [visual review](../research/reference_screenshots/wordpro/review.md).
 Reference captures live in `research/reference_screenshots/wordpro/`.
-The workflow has not been exercised on macOS. 1-2-3 is the next application;
-other suite applications are deferred.
+Manual macOS ARM64 testing reaches the welcome dialog and document editor.
+The Edit-menu initialization failure caused by missing clipboard/atom exports
+has been addressed, together with transparent dialog frames, menu tracking,
+class clipping and Open32 system cursors. This does not qualify the full workflow
+on macOS: initial page and toolbar drawing has intermittently required input or
+a focus change, a blank menu-bar entry has been observed, and launch/foreground
+behavior remains under investigation. The newest host-event pumping change has
+regression coverage but still needs successful application-level confirmation.
+1-2-3 is the next application; other suite applications are deferred.
 
 ```sh
 python3 tests/integration/smartsuite.py --build build --backend native \

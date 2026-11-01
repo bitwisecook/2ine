@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -26,6 +27,32 @@ static void address_out(const struct sockaddr_in *source, LxHostSocketAddress *t
 {
     target->address = source->sin_addr.s_addr;
     target->port = source->sin_port;
+}
+/* Restrict wildcard sockets to a per-process host IPv4 identity when selected. */
+static int local_address(struct in_addr *address)
+{
+    const char *value = getenv("TWOINE_SOCKET_BIND_ADDRESS");
+    if (!value || !*value)
+        return 0;
+    if (inet_pton(AF_INET, value, address) == 1)
+        return 1;
+    errno = EINVAL;
+    return -1;
+}
+static int bind_sender(int fd)
+{
+    struct in_addr selected;
+    int policy = local_address(&selected);
+    if (policy <= 0)
+        return policy;
+    struct sockaddr_in current = {0};
+    socklen_t length = sizeof current;
+    if (getsockname(fd, (struct sockaddr *)&current, &length) < 0)
+        return -1;
+    if (current.sin_family != AF_INET || current.sin_port || current.sin_addr.s_addr)
+        return 0;
+    current.sin_addr = selected;
+    return bind(fd, (struct sockaddr *)&current, sizeof current);
 }
 static int message_flags(unsigned flags)
 {
@@ -60,6 +87,12 @@ int lx_host_socket_connect(int fd, const LxHostSocketAddress *address)
 int lx_host_socket_bind(int fd, const LxHostSocketAddress *address)
 {
     struct sockaddr_in a = address_in(address);
+    struct in_addr selected;
+    int policy = local_address(&selected);
+    if (policy < 0)
+        return -1;
+    if (policy && a.sin_addr.s_addr == INADDR_ANY)
+        a.sin_addr = selected;
     return bind(fd, (struct sockaddr *)&a, sizeof a);
 }
 int lx_host_socket_listen(int fd, int backlog)
@@ -100,6 +133,94 @@ int64_t lx_host_socket_recv(int fd, void *buffer, size_t size, unsigned flags)
 int lx_host_socket_error(void)
 {
     return errno;
+}
+int64_t lx_host_socket_sendto(int fd, const void *buffer, size_t size, unsigned flags,
+                              const LxHostSocketAddress *address)
+{
+    struct sockaddr_in a = address_in(address);
+    if (bind_sender(fd) < 0)
+        return -1;
+    return sendto(fd, buffer, size, message_flags(flags), (struct sockaddr *)&a, sizeof a);
+}
+int64_t lx_host_socket_recvfrom(int fd, void *buffer, size_t size, unsigned flags,
+                                LxHostSocketAddress *address)
+{
+    struct sockaddr_in a = {0};
+    socklen_t length = sizeof a;
+    int64_t result =
+        recvfrom(fd, buffer, size, message_flags(flags), (struct sockaddr *)&a, &length);
+    if (result >= 0 && address)
+        address_out(&a, address);
+    return result;
+}
+int lx_host_socket_nonblocking(int fd, int enabled)
+{
+    return ioctl(fd, FIONBIO, &enabled);
+}
+int lx_host_socket_available(int fd, int *bytes)
+{
+#ifdef SO_NREAD
+    int type;
+    socklen_t size = sizeof type;
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &size) < 0)
+        return -1;
+    /* Darwin FIONREAD includes the queued datagram's address record. */
+    if (type == SOCK_DGRAM)
+    {
+        size = sizeof *bytes;
+        return getsockopt(fd, SOL_SOCKET, SO_NREAD, bytes, &size);
+    }
+#endif
+    return ioctl(fd, FIONREAD, bytes);
+}
+int lx_host_socket_hostname(char *name, size_t size)
+{
+    return gethostname(name, size);
+}
+int lx_host_socket_bsd_error(void)
+{
+    switch (errno)
+    {
+#define ERROR(host, bsd)                                                                           \
+    case host:                                                                                     \
+        return bsd
+        ERROR(EPERM, 1);
+        ERROR(EINTR, 4);
+        ERROR(EBADF, 9);
+        ERROR(EACCES, 13);
+        ERROR(EFAULT, 14);
+        ERROR(EINVAL, 22);
+        ERROR(EMFILE, 24);
+        ERROR(EPIPE, 32);
+        ERROR(EAGAIN, 35);
+        ERROR(EINPROGRESS, 36);
+        ERROR(EALREADY, 37);
+        ERROR(ENOTSOCK, 38);
+        ERROR(EDESTADDRREQ, 39);
+        ERROR(EMSGSIZE, 40);
+        ERROR(EPROTOTYPE, 41);
+        ERROR(ENOPROTOOPT, 42);
+        ERROR(EPROTONOSUPPORT, 43);
+        ERROR(ESOCKTNOSUPPORT, 44);
+        ERROR(EOPNOTSUPP, 45);
+        ERROR(EAFNOSUPPORT, 47);
+        ERROR(EADDRINUSE, 48);
+        ERROR(EADDRNOTAVAIL, 49);
+        ERROR(ENETDOWN, 50);
+        ERROR(ENETUNREACH, 51);
+        ERROR(ENETRESET, 52);
+        ERROR(ECONNABORTED, 53);
+        ERROR(ECONNRESET, 54);
+        ERROR(ENOBUFS, 55);
+        ERROR(EISCONN, 56);
+        ERROR(ENOTCONN, 57);
+        ERROR(ETIMEDOUT, 60);
+        ERROR(ECONNREFUSED, 61);
+        ERROR(EHOSTUNREACH, 65);
+#undef ERROR
+        default:
+            return 100;
+    }
 }
 uint32_t lx_host_socket_parse_address(const char *name)
 {

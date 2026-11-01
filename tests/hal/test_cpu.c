@@ -151,8 +151,14 @@ static void floating_point_context(void)
     CHECK(lx_cpu_restore(cpu, context));
     run_trap(cpu, 3);
     CHECK(lx_cpu_read(cpu, 0x40000, &value, sizeof value) && value == 2);
+    CHECK(lx_cpu_update(cpu, context));
+    start_at(cpu, 0x1b, 0x10000);
+    CHECK(lx_cpu_restore(cpu, context));
+    LxCpuRegisters saved;
+    CHECK(lx_cpu_get_registers(cpu, &saved) && saved.eip == 0x10010);
     LxCpu *other = make_cpu();
     CHECK(!lx_cpu_restore(other, context));
+    CHECK(!lx_cpu_update(other, context));
     LxCpuContext *orphan = lx_cpu_save(other);
     CHECK(orphan);
     lx_cpu_destroy(other);
@@ -202,6 +208,21 @@ static void bounded_execution(void)
     CHECK(e.reason == LX_CPU_BUDGET);
     e = lx_cpu_run(cpu, 0, 0);
     CHECK(e.reason == LX_CPU_FAULT);
+    e = lx_cpu_run_blocks(cpu, 100);
+    CHECK(e.reason == LX_CPU_BUDGET);
+    e = lx_cpu_run_blocks(cpu, 0);
+    CHECK(e.reason == LX_CPU_FAULT);
+    /* A block slice must resume after a budget stop and preserve API traps. */
+    const unsigned char trap[] = {0x40, 0xcd, 0xf1, 0x40, 0xcc};
+    CHECK(lx_cpu_write(cpu, 0x10000, trap, sizeof trap));
+    start_at(cpu, 0x1b, 0x10000);
+    e = lx_cpu_run_blocks(cpu, 100);
+    CHECK(e.reason == LX_CPU_TRAP && e.vector == 0xf1);
+    LxCpuRegisters before, after;
+    CHECK(lx_cpu_get_registers(cpu, &before));
+    e = lx_cpu_run_blocks(cpu, 100);
+    CHECK(e.reason == LX_CPU_TRAP && e.vector == 3);
+    CHECK(lx_cpu_get_registers(cpu, &after) && after.eax == before.eax + 1);
     lx_cpu_destroy(cpu);
     char error[256];
     CHECK(!lx_cpu_create("unavailable", error, sizeof error));

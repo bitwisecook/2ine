@@ -65,6 +65,18 @@ Component CMake files own their targets. Generated tables are included only by
 their module's entry unit; private split-unit headers do not extend the public
 OS/2 API. `mdm` and `pmmerge` are existing unbuilt placeholders, not provided DLLs.
 
+PM child windows share their top-level host render target. Clipping honors both
+class and window styles; frame statics preserve their interiors and pass pointer
+hit tests through to the controls underneath. Exposure invalidates one window
+tree, and presentation coalesces queued paints with a bounded delay. Both message
+retrieval paths pump host events even when guest timers keep the queue busy.
+
+PM clipboard metadata and system atoms are shared within the worker process.
+This does not synchronize with the host clipboard. Clipboard data currently
+supports handles and caller-owned pointers; transferring ownership of guest
+pointer allocations and delayed rendering remain unsupported. Open32 standard
+cursors use the PM system-pointer service.
+
 ## Loading
 
 ```mermaid
@@ -131,9 +143,13 @@ sequenceDiagram
     CPU-->>Exec: Return, next API, budget or fault
 ```
 
-The engine runs bounded slices of up to 10 ms, without an ordinary
-per-instruction hook. APIs run with the engine stopped and unlocked. Nested
-callbacks preserve complete CPU contexts, including x87 state.
+The engine schedules slices of up to 4,096 translated blocks. Checking block
+boundaries avoids a callback on every guest instruction and a watchdog thread
+on every guest API call. Exact instruction and time budgets remain available
+through the CPU interface. Register transfers use Unicorn's batch interface;
+API traps use an address hash index and reuse CPU snapshots. APIs run with the
+engine stopped and unlocked. Nested callbacks preserve complete CPU contexts,
+including x87 state.
 
 ## Linux x86: enter, bridge, return
 

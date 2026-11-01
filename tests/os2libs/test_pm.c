@@ -5,6 +5,7 @@
 #include "os2libs/pmgpi.h"
 #include "guest/handles.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmwin/menus.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -20,6 +21,8 @@
     } while (0)
 static unsigned creates, sizes, changes;
 static unsigned hook_calls;
+static HWND changing_menu;
+static unsigned menu_initializations;
 static BOOL OS2API input_hook(HAB hab, PQMSG message, ULONG flags)
 {
     CHECK(flags == 1);
@@ -50,8 +53,34 @@ static void hook_contracts(HAB hab, HWND window)
     CHECK(hook_calls == 2 && message.msg == WM_USER + 102 && (uintptr_t)message.mp1 == 1234);
     CHECK(!WinReleaseHook(hab, 1, 1, (PFN)input_hook, 0));
 }
+static void busy_queue_host_events(HAB hab, HWND window)
+{
+    QMSG message;
+    while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+    {
+    }
+    CHECK(WinPostMsg(window, WM_USER + 150, 0, 0));
+    LxHostEvent quit = {.type = LX_HOST_EVENT_QUIT};
+    CHECK(lx_host_video_push(&quit));
+    CHECK(WinGetMsg(hab, &message, 0, 0, 0) && message.msg == WM_USER + 150);
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    MessageQueueItem *queued = anchor->message_queue.head;
+    while (queued && queued->qmsg.msg != WM_QUIT)
+        queued = queued->next;
+    CHECK(queued); /* Host pumping cannot wait for the guest queue to become empty. */
+    CHECK(!WinGetMsg(hab, &message, 0, 0, 0) && message.msg == WM_QUIT);
+}
 static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
 {
+    if (message == WM_INITMENU && changing_menu)
+    {
+        if (!menu_initializations++)
+        {
+            MENUITEM extra = {0, 1, 0, 99, 0, 0};
+            CHECK((intptr_t)WinSendMsg(changing_menu, 0x180, &extra, "~Extra") == 0);
+        }
+        return 0;
+    }
     if (message == WM_CREATE)
     {
         CREATESTRUCT *creation = b;
@@ -162,6 +191,95 @@ static void keyboard_contracts(HAB hab, HWND window)
                       (control ? navigation[i].control : navigation[i].plain));
             }
 }
+static void host_focus_contracts(HAB hab, HWND frame, HWND client)
+{
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    CHECK(WinSetActiveWindow(HWND_DESKTOP, frame));
+    CHECK(WinSetFocus(HWND_DESKTOP, client));
+    LxHostEvent event = {0};
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        if (anchor->windows[i] && anchor->windows[i]->hwnd == frame)
+            event.window_data = anchor->windows[i];
+    CHECK(event.window_data);
+    event.type = LX_HOST_EVENT_KEY_DOWN;
+    event.key = LX_HOST_KEY_CTRL;
+    event.scancode = 0x1d;
+    event.modifiers = LX_HOST_MOD_CTRL;
+    CHECK(processHostEvent(anchor, &event));
+    QMSG message;
+    CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
+    CHECK(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000);
+    event.type = LX_HOST_EVENT_FOCUS_LOST;
+    processHostEvent(anchor, &event);
+    CHECK(!WinQueryActiveWindow(HWND_DESKTOP) && !WinQueryFocus(HWND_DESKTOP));
+    CHECK(!(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000));
+    CHECK(!WinGetPhysKeyState(HWND_DESKTOP, 0x1d));
+    event.type = LX_HOST_EVENT_FOCUS_GAINED;
+    processHostEvent(anchor, &event);
+    CHECK(WinQueryActiveWindow(HWND_DESKTOP) == frame && WinQueryFocus(HWND_DESKTOP) == client);
+    event.type = LX_HOST_EVENT_KEY_DOWN;
+    event.key = LX_HOST_KEY_ESCAPE;
+    event.scancode = 1;
+    event.modifiers = 0;
+    CHECK(processHostEvent(anchor, &event));
+    CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
+    CHECK(message.hwnd == client && ((uintptr_t)message.mp2 & 0xff) == 27);
+    event.type = LX_HOST_EVENT_KEY_UP;
+    CHECK(processHostEvent(anchor, &event));
+    CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
+}
+static void capture_release_contracts(HAB hab, HWND client)
+{
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    CHECK(WinSetFocus(HWND_DESKTOP, client));
+    LxHostEvent event = {0};
+    event.type = LX_HOST_EVENT_KEY_DOWN;
+    event.key = LX_HOST_KEY_CTRL;
+    event.scancode = 0x1d;
+    event.modifiers = LX_HOST_MOD_CTRL;
+    CHECK(processKeyboardEvent(anchor, &event));
+    event.key = LX_HOST_KEY_UP;
+    CHECK(processKeyboardEvent(anchor, &event));
+    CHECK(WinPostMsg(client, WM_BUTTON1DOWN, 0, 0));
+    QMSG message;
+    for (unsigned i = 0; i < 3; i++)
+        CHECK(WinGetMsg(hab, &message, client, 0, 0));
+    CHECK(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000);
+    CHECK(WinGetKeyState(HWND_DESKTOP, 1) & 0x8000);
+    CHECK(releaseInputState(anchor, 0));
+    CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
+    CHECK(((uintptr_t)message.mp1 >> 24) == 0x1d && ((uintptr_t)message.mp1 & 0x46) == 0x46);
+    CHECK(!(WinGetKeyState(HWND_DESKTOP, 10) & 0x8000));
+    CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
+    CHECK(((uintptr_t)message.mp1 >> 24) == 0x61 && ((uintptr_t)message.mp1 & 0x46) == 0x46);
+    CHECK(WinGetMsg(hab, &message, client, WM_BUTTON1UP, WM_BUTTON1UP));
+    CHECK(!(WinGetKeyState(HWND_DESKTOP, 1) & 0x8000));
+    CHECK(!WinGetPhysKeyState(HWND_DESKTOP, 0x61));
+    CHECK(WinQueryFocus(HWND_DESKTOP) == client);
+}
+static void clipboard_contracts(HAB hab, HWND parent)
+{
+    ULONG table = WinQuerySystemAtomTable();
+    ULONG atom = WinAddAtom(table, "WordPro clipboard format");
+    CHECK(atom >= 0xc000 && WinAddAtom(table, "WORDPRO CLIPBOARD FORMAT") == atom);
+    CHECK(WinFindAtom(table, "WordPro clipboard format") == atom);
+    CHECK(!WinDeleteAtom(table, atom) && WinFindAtom(table, "WordPro clipboard format") == atom);
+    CHECK(WinOpenClipbrd(hab) && !WinOpenClipbrd(hab));
+    CHECK(WinEmptyClipbrd(hab) && !WinEnumClipbrdFmts(hab, 0));
+    ULONG flags = 123;
+    CHECK(!WinQueryClipbrdFmtInfo(hab, atom, &flags) && flags == 123);
+    CHECK(WinSetClipbrdOwner(hab, parent) && WinQueryClipbrdOwner(hab) == parent);
+    CHECK(WinSetClipbrdData(hab, 456, atom, 0x201));
+    CHECK(WinEnumClipbrdFmts(hab, 0) == atom && !WinEnumClipbrdFmts(hab, atom));
+    CHECK(WinQueryClipbrdFmtInfo(hab, atom, &flags) && flags == 0x201);
+    CHECK(WinQueryClipbrdData(hab, atom) == 456);
+    CHECK(WinCloseClipbrd(hab) && !WinCloseClipbrd(hab));
+    CHECK(!WinSetClipbrdData(hab, 789, atom, 0x201));
+    CHECK(WinOpenClipbrd(hab) && WinEmptyClipbrd(hab));
+    CHECK(!WinQueryClipbrdOwner(hab) && !WinQueryClipbrdData(hab, atom));
+    CHECK(WinCloseClipbrd(hab));
+    CHECK(!WinDeleteAtom(table, atom) && !WinFindAtom(table, "WordPro clipboard format"));
+}
 static void menu_contracts(HWND parent)
 {
     const uint8_t empty[] = {10, 0, 0, 0, 181, 1, 0, 0, 0, 0};
@@ -176,9 +294,93 @@ static void menu_contracts(HWND parent)
     MENUITEM actual;
     CHECK(WinSendMsg(menu, 0x182, (MPARAM)(uintptr_t)42, &actual));
     CHECK(actual.iPosition == 0 && actual.afAttribute == 0x4000 && actual.hItem == 456);
+    char text[16];
+    CHECK((uintptr_t)WinSendMsg(menu, 0x18b, (MPARAM)(uintptr_t)(42 | sizeof text << 16), text) ==
+          5);
+    CHECK(!strcmp(text, "~Item"));
+    CHECK((uintptr_t)WinSendMsg(menu, 0x18b, (MPARAM)(uintptr_t)(42 | 3u << 16), text) == 2);
+    CHECK(!strcmp(text, "~I"));
     item.id = 43;
     CHECK(!WinSendMsg(menu, 0x183, 0, &item));
     CHECK(WinDestroyWindow(menu));
+}
+static Window *test_window(HWND handle)
+{
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        if (anchor->windows[i] && anchor->windows[i]->hwnd == handle)
+            return anchor->windows[i];
+    return NULL;
+}
+static MPARAM menu_point(Window *window, unsigned id)
+{
+    for (size_t i = 0; i < window->menu->count; i++)
+        if (window->menu->items[i].item.id == id)
+        {
+            RECTL rect = window->menu->items[i].rect;
+            return (MPARAM)(uintptr_t)((uint16)((rect.xLeft + rect.xRight) / 2) |
+                                       (uint32)(uint16)((rect.yBottom + rect.yTop) / 2) << 16);
+        }
+    CHECK(0);
+    return 0;
+}
+static void menu_tracking_contracts(HWND parent)
+{
+    const uint8_t empty[] = {10, 0, 0, 0, 181, 1, 0, 0, 0, 0};
+    HWND bar = WinCreateMenu(parent, (PVOID)empty);
+    HWND file = WinCreateMenu(HWND_DESKTOP, (PVOID)empty);
+    HWND edit = WinCreateMenu(HWND_DESKTOP, (PVOID)empty);
+    HWND nested = WinCreateMenu(HWND_DESKTOP, (PVOID)empty);
+    CHECK(bar && file && edit && nested);
+    Window *bar_window = test_window(bar), *file_window = test_window(file);
+    test_window(file)->owner = bar_window;
+    test_window(edit)->owner = bar_window;
+    test_window(nested)->owner = file_window;
+    MENUITEM item = {-1, 0x11, 0, 42, file, 0};
+    CHECK((intptr_t)WinSendMsg(bar, 0x180, &item, "~File") == 0);
+    item.id = 43;
+    item.hwndSubMenu = edit;
+    CHECK((intptr_t)WinSendMsg(bar, 0x180, &item, "~Edit") == 1);
+    item = (MENUITEM){-1, 0x11, 0, 101, nested, 0};
+    CHECK((intptr_t)WinSendMsg(file, 0x180, &item, "~First") == 0);
+    item.id = 102;
+    item.afStyle = 1;
+    item.hwndSubMenu = 0;
+    CHECK((intptr_t)WinSendMsg(file, 0x180, &item, "~Second") == 1);
+    CHECK(WinSetWindowPos(bar, HWND_TOP, 0, 0, 300, 24, SWP_SIZE | SWP_SHOW));
+    CHECK(WinSetFocus(HWND_DESKTOP, parent));
+    changing_menu = bar;
+    menu_initializations = 0;
+    HPS paint = WinBeginPaint(parent, 0, NULL);
+    CHECK(paint && WinEndPaint(paint));
+    WinSendMsg(bar, WM_BUTTON1DOWN, menu_point(bar_window, 42), 0);
+    CHECK(menu_initializations == 1 && WinIsWindowVisible(file));
+    RECTL damage;
+    CHECK(!WinQueryUpdateRect(parent, &damage));
+    CHECK(bar_window->menu->items[bar_window->menu->selected].item.id == 42);
+    WinSendMsg(bar, WM_BUTTON1DOWN, menu_point(bar_window, 42), 0);
+    CHECK(menu_initializations == 1);
+    WinSendMsg(file, WM_MOUSEMOVE, menu_point(file_window, 101), 0);
+    CHECK(WinIsWindowVisible(nested));
+    WinSendMsg(file, WM_MOUSEMOVE, menu_point(file_window, 102), 0);
+    CHECK(file_window->menu->selected == 1 && !WinIsWindowVisible(nested));
+    WinSendMsg(file, WM_CHAR, (MPARAM)(uintptr_t)2, (MPARAM)(uintptr_t)(0x16u << 16));
+    CHECK(file_window->menu->selected == 0);
+    WinSendMsg(file, WM_CHAR, (MPARAM)(uintptr_t)2, (MPARAM)(uintptr_t)(0x18u << 16));
+    CHECK(file_window->menu->selected == 1);
+    WinSendMsg(bar, WM_MOUSEMOVE, menu_point(bar_window, 43), 0);
+    CHECK(menu_initializations == 3 && !WinIsWindowVisible(file) && WinIsWindowVisible(edit));
+    changing_menu = 0;
+    LxHostEvent click = {.type = LX_HOST_EVENT_BUTTON_DOWN,
+                         .window_data = test_window(parent),
+                         .x = test_window(parent)->w - 2,
+                         .y = 0,
+                         .button = 1};
+    CHECK(processHostEvent(lxHostThreadState()->anchor_block, &click));
+    CHECK(bar_window->menu->selected == -1 && !bar_window->menu->focus);
+    CHECK(!WinIsWindowVisible(file) && !WinIsWindowVisible(edit) && !WinIsWindowVisible(nested));
+    CHECK(WinDestroyWindow(nested) && WinDestroyWindow(file) && WinDestroyWindow(edit) &&
+          WinDestroyWindow(bar));
 }
 static void list_contracts(HWND parent)
 {
@@ -324,6 +526,55 @@ static void frame_state_contracts(void)
     CHECK(WinQueryWindowPos(child, &position) && !(position.fl & SWP_MAXIMIZE));
     CHECK(position.x == 13 && position.y == 7 && position.cx == 20 && position.cy == 12);
     CHECK(WinDestroyWindow(parent));
+}
+static void dialog_frame_contracts(HWND parent)
+{
+    HWND group = WinCreateWindow(parent, (PSZ)WC_STATIC, "", WS_VISIBLE | 2, 0, 0, 80, 60, parent,
+                                 HWND_TOP, 800, NULL, NULL);
+    HWND content = WinCreateWindow(parent, "test", "", WS_VISIBLE, 10, 10, 20, 20, parent,
+                                   HWND_BOTTOM, 801, NULL, NULL);
+    CHECK(group && content);
+    RECTL damaged;
+    CHECK(WinQueryUpdateRect(content, &damaged));
+    CHECK(damaged.xLeft == 0 && damaged.yBottom == 0 && damaged.xRight == 20 && damaged.yTop == 20);
+    HPS ps = WinGetPS(content);
+    RECTL rect = {0, 0, 20, 20};
+    CHECK(WinFillRect(ps, &rect, CLR_RED));
+    WinSendMsg(group, WM_PAINT, 0, 0);
+    uint32_t pixel;
+    CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK((LONG)(uintptr_t)WinSendMsg(group, WM_HITTEST, 0, 0) == HT_TRANSPARENT);
+    LxHostEvent click = {.type = LX_HOST_EVENT_BUTTON_DOWN,
+                         .window_data = test_window(parent),
+                         .x = 15,
+                         .y = test_window(parent)->h - 16,
+                         .button = 1};
+    CHECK(processHostEvent(lxHostThreadState()->anchor_block, &click));
+    QMSG event;
+    CHECK(WinPeekMsg(0, &event, content, WM_BUTTON1DOWN, WM_BUTTON1DOWN, 1));
+    CHECK(WinSetWindowULong(content, -2, WS_VISIBLE | WS_CLIPSIBLINGS));
+    CHECK(WinFillRect(ps, &rect, CLR_BLUE));
+    CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(WinReleasePS(ps));
+    CHECK(WinDestroyWindow(content) && WinDestroyWindow(group));
+}
+static void class_clip_contracts(HAB hab, HWND parent)
+{
+    CHECK(WinRegisterClass(hab, "ClassClipParent", WinDefWindowProc, CS_CLIPCHILDREN, 0));
+    HWND panel = WinCreateWindow(parent, "ClassClipParent", "", WS_VISIBLE, 0, 0, 40, 40, parent,
+                                 HWND_TOP, 810, NULL, NULL);
+    HWND child = WinCreateWindow(panel, (PSZ)WC_STATIC, "", WS_VISIBLE | 1, 10, 10, 10, 10, panel,
+                                 HWND_TOP, 811, NULL, NULL);
+    CHECK(panel && child);
+    HPS ps = WinGetPS(panel), content = WinGetPS(child);
+    RECTL area = {0, 0, 40, 40};
+    CHECK(WinFillRect(content, &area, CLR_RED));
+    CHECK(WinFillRect(ps, &area, CLR_BLUE));
+    uint32_t pixel;
+    CHECK(lx_pm_raster_read(content, 5, 5, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0x0000ff);
+    CHECK(WinReleasePS(content) && WinReleasePS(ps));
+    CHECK(WinDestroyWindow(panel));
 }
 static void raster_contracts(HAB hab, HWND window)
 {
@@ -478,10 +729,17 @@ int main(void)
     graphics_contracts(hab, client);
     accelerator_contracts(hab, frame, client);
     menu_contracts(frame);
+    clipboard_contracts(hab, frame);
+    menu_tracking_contracts(frame);
     list_contracts(frame);
     hook_contracts(hab, client);
+    busy_queue_host_events(hab, client);
     keyboard_contracts(hab, client);
+    host_focus_contracts(hab, frame, client);
+    capture_release_contracts(hab, client);
     raster_contracts(hab, client);
+    dialog_frame_contracts(client);
+    class_clip_contracts(hab, client);
     frame_state_contracts();
     SWP position;
     RECTL rectangle;

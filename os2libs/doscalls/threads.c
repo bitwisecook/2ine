@@ -451,3 +451,26 @@ APIRET16 Dos16SetPrty(USHORT scope, USHORT prtyclass, SHORT delta, USHORT pid)
                  (uint)pid);
     return NO_ERROR;
 }
+
+APIRET DosSetPriority(ULONG scope, ULONG priority_class, LONG delta, ULONG target)
+{
+    TRACE_NATIVE("DosSetPriority(%u, %u, %d, %u)", scope, priority_class, (int)delta, target);
+    if (scope > 2)
+        return ERROR_INVALID_SCOPE;
+    if (priority_class > 4)
+        return ERROR_INVALID_PCLASS;
+    if (delta < -31 || delta > 31)
+        return ERROR_INVALID_PDELTA;
+    PTIB2 tib = (PTIB2)LX_GETTIB2();
+    if (scope != 2 || (target && target != tib->tib2_ultid))
+        return ERROR_INVALID_PROCID;
+    ULONG previous = tib->tib2_ulpri;
+    LONG level = priority_class ? delta : (LONG)(previous & 0xff) + delta;
+    if (level < 0)
+        level = 0;
+    if (level > 31)
+        level = 31;
+    /* Guest scheduling priority is distinct from host process privileges. */
+    tib->tib2_ulpri = ((priority_class ? priority_class : previous >> 8) << 8) | (ULONG)level;
+    return NO_ERROR;
+}

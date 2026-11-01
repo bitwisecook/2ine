@@ -250,6 +250,8 @@ APIRET DosSetCurrentDir(PSZ pszName)
 
 APIRET DosCreateDir_implementation(PSZ pszDirName, PEAOP2 peaop2)
 {
+    if (!pszDirName)
+        return ERROR_INVALID_PARAMETER;
     if (peaop2 != NULL)
     {
         FIXME("EAs not yet implemented");

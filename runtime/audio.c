@@ -8,6 +8,7 @@ typedef struct Generator
 {
     LxAudioGeneratorFn function;
     void *data;
+    int stereo;
     struct Generator *next;
 } Generator;
 static Generator *generators;
@@ -25,7 +26,20 @@ static void mix(void *unused, float *stream, int samples, int frequency)
     while (*link)
     {
         Generator *generator = *link;
-        if (generator->function(generator->data, stream, samples, frequency))
+        int live = 1;
+        if (generator->stereo)
+            live = generator->function(generator->data, stream, samples, frequency);
+        else
+        {
+            float mono[LX_HOST_AUDIO_BLOCK_FRAMES] = {0};
+            live = generator->function(generator->data, mono, samples, frequency);
+            for (int i = 0; i < samples; i++)
+            {
+                stream[2 * i] += mono[i];
+                stream[2 * i + 1] += mono[i];
+            }
+        }
+        if (live)
             link = &generator->next;
         else
         {
@@ -34,7 +48,7 @@ static void mix(void *unused, float *stream, int samples, int frequency)
         }
     }
 }
-int lxRegisterAudioGenerator(LxAudioGeneratorFn function, void *data, int singleton)
+static int register_generator(LxAudioGeneratorFn function, void *data, int singleton, int stereo)
 {
     if (!function)
         return 0;
@@ -43,7 +57,7 @@ int lxRegisterAudioGenerator(LxAudioGeneratorFn function, void *data, int single
         return 0;
     if (!device)
     {
-        device = lx_host_audio_open(mix, NULL);
+        device = lx_host_audio_open_channels(mix, NULL, 2);
         if (!device)
         {
             lx_host_mutex_unlock(control);
@@ -58,11 +72,12 @@ int lxRegisterAudioGenerator(LxAudioGeneratorFn function, void *data, int single
     }
     generator->function = function;
     generator->data = data;
+    generator->stereo = stereo;
     lx_host_audio_lock(device);
     if (singleton)
     {
         for (Generator *item = generators; item; item = item->next)
-            if (item->function == function)
+            if (item->function == function && item->stereo == stereo)
             {
                 lx_host_audio_unlock(device);
                 free(generator);
@@ -75,6 +90,14 @@ int lxRegisterAudioGenerator(LxAudioGeneratorFn function, void *data, int single
     lx_host_audio_unlock(device);
     lx_host_mutex_unlock(control);
     return 1;
+}
+int lxRegisterAudioGenerator(LxAudioGeneratorFn function, void *data, int singleton)
+{
+    return register_generator(function, data, singleton, 0);
+}
+int lxRegisterStereoAudioGenerator(LxAudioGeneratorFn function, void *data, int singleton)
+{
+    return register_generator(function, data, singleton, 1);
 }
 void lxAudioShutdown(void)
 {

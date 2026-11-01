@@ -25,6 +25,11 @@ audio running. `host_socket` transfers data through an IPv4 loopback connection
 and checks readiness. Socket tests require local network access. Native execution
 tests require the kernel's LDT service; restrictive sandboxes may deny it.
 
+On Linux, `host_fullscreen` requires Xvfb and the X11/XTest shared libraries.
+It checks Alt+Enter, startup fullscreen, scaled pixels, mouse coordinates and
+restored placement using an isolated EWMH manager. `multimedia_stereo_disk`
+captures SDL PCM and verifies independent channels and device volume.
+
 Guest test source is in `tests/programs/`. Retained upstream guest binaries are
 in `tests/programs/fixtures/`, with hashes and known provenance in the manifest.
 They are guest fixtures, not host runtime dependencies.
@@ -118,3 +123,9 @@ copies, region clipping, presentation-space state, accelerators, list searching
 and input-hook modification/removal. The generated legacy guest tests current
 directory/path errors and an exit callback registered by a DLL that is later
 released by its caller.
+
+## Doom and multimedia
+
+See [OS/2 Doom](doom.md) for the optional real-game input/save/load/audio/quit
+check and separately supplied source/WAD fixtures. [Audio](audio.md) describes
+DART and sampled MIDI synthesis. The service contracts require no game media.
