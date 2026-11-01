@@ -32,7 +32,7 @@ extern "C"
         ULONG buf_length;
         ULONG full_length;
         ULONG partial_length;
-        PCHAR ext_data_addr;
+        ULONG ext_data_addr;
     } VIOMODEINFO, *PVIOMODEINFO;
 #pragma pack(pop)
 
@@ -53,6 +53,8 @@ extern "C"
 
     OS2EXPORT APIRET16 OS2API16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
         OS2APIINFO(ord = 21, name = VIOGETMODE);
+    OS2EXPORT APIRET16 OS2API16 VioGetCp(USHORT reserved, PUSHORT codepage, HVIO hvio)
+        OS2APIINFO(ord = 40, name = VIOGETCP);
     OS2EXPORT APIRET16 OS2API16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio)
         OS2APIINFO(ord = 9, name = VIOGETCURPOS);
     OS2EXPORT APIRET16 OS2API16 VioGetBuf(PULONG pLVB, PUSHORT pcbLVB, HVIO hvio)

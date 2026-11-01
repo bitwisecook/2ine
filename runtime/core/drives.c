@@ -86,6 +86,12 @@ void prepOs2Drives(void)
 
     if (!lowestmounted)
     {
+        if (getenv("TWOINE_CONFIG"))
+        {
+            fprintf(stderr, "2ine: explicit configuration has no accessible drives\n");
+            exit(1);
+        }
+        diskmap |= 1u << drive_c;
 
         GLoaderState.disks[drive_c] = strdup("/");
         char *ptr = strdup(cwd + 1);
@@ -122,4 +128,52 @@ void prepOs2Drives(void)
     }
     fprintf(stderr, "\n");
 #endif
+}
+
+/* Translate a host file name through the most specific configured drive. */
+char *lxHostPathToGuest(const char *name)
+{
+    char *full = lx_host_path_canonical(name);
+    if (!full)
+        full = strdup(name);
+    if (!full)
+        return NULL;
+    int drive = -1;
+    size_t prefix = 0;
+    for (int i = 0; i < 26; i++)
+    {
+        const char *mount = GLoaderState.disks[i];
+        if (!mount)
+            continue;
+        size_t n = strlen(mount);
+        while (n > 1 && mount[n - 1] == '/')
+            n--;
+        if (n >= prefix && !strncmp(full, mount, n) &&
+            (n == 1 || full[n] == '/' || full[n] == '\0'))
+        {
+            prefix = n;
+            drive = i;
+        }
+    }
+    if (drive < 0)
+    {
+        free(full);
+        return NULL;
+    }
+    const char *relative = full + prefix;
+    if (*relative == '/')
+        relative++;
+    char *result = malloc(strlen(relative) + 4);
+    if (result)
+    {
+        result[0] = 'A' + drive;
+        result[1] = ':';
+        result[2] = '\\';
+        strcpy(result + 3, relative);
+        for (char *p = result + 3; *p; p++)
+            if (*p == '/')
+                *p = '\\';
+    }
+    free(full);
+    return result;
 }

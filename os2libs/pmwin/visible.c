@@ -21,6 +21,8 @@ BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
     Window *window = ps ? ps->window : NULL;
     if (!window)
         return FALSE;
+    if (!windowAcceptsUpdates(window))
+        return TRUE;
     RECTL rect = {0, 0, window->w, window->h};
     if (bounds)
         WinIntersectRect(0, &rect, &rect, (PRECTL)bounds);

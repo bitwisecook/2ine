@@ -31,6 +31,9 @@ extern "C"
         QUE_CONVERT_ADDRESS = 4
     };
 
+    OS2EXPORT APIRET OS2API lx_queue_open_private(PPID owner, PHQUEUE output, const char *name);
+    OS2EXPORT APIRET OS2API lx_queue_write_copy(HQUEUE handle, ULONG request, ULONG length,
+                                                PVOID data, ULONG priority);
     OS2EXPORT APIRET OS2API DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ pszName) OS2APIINFO(16);
     OS2EXPORT APIRET OS2API DosCloseQueue(HQUEUE hq) OS2APIINFO(11);
     OS2EXPORT APIRET OS2API DosOpenQueue(PPID ppid, PHQUEUE phq, PSZ pszName) OS2APIINFO(15);

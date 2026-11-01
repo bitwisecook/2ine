@@ -107,6 +107,7 @@ extern "C"
     OS2EXPORT LONG OS2API GpiOffsetClipRegion(HPS ps, PPOINTL point) OS2APIINFO(405);
     OS2EXPORT LONG OS2API GpiRectVisible(HPS ps, PRECTL rect) OS2APIINFO(495);
     OS2EXPORT LONG OS2API GpiQueryClipBox(HPS ps, PRECTL rect) OS2APIINFO(435);
+    OS2EXPORT BOOL OS2API GpiQueryColorData(HPS ps, LONG count, PLONG output) OS2APIINFO(438);
     OS2EXPORT LONG OS2API GpiIntersectClipRectangle(HPS ps, PRECTL rect) OS2APIINFO(396);
     OS2EXPORT LONG OS2API GpiCharStringPosAt(HPS ps, PPOINTL start, PRECTL rect, ULONG flags,
                                              LONG count, PCH text, PLONG advances) OS2APIINFO(581);

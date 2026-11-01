@@ -11,6 +11,7 @@ typedef struct PmPointer
     BOOL copy;
     LxHostPointer *host;
     PmPointerImage *image;
+    unsigned hot_x, hot_y;
 } PmPointer;
 static void release_pointer(void *resource)
 {
@@ -43,6 +44,9 @@ HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
         GLoaderState.getResource(module, 1, id, &bytes))
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
     PmPointerImage *image = pmPointerImage(bytes, size);
+    size_t header = size >= 14 && lx_guest_load_u16(bytes) == 0x4142 ? 14 : 0;
+    unsigned hot_x = image ? lx_guest_load_u16((uint8 *)bytes + header + 6) : 0;
+    unsigned hot_y = image ? lx_guest_load_u16((uint8 *)bytes + header + 8) : 0;
     if (GLoaderState.freeResource)
         GLoaderState.freeResource(bytes);
     if (!image)
@@ -55,6 +59,8 @@ HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
     }
     pointer->anchor = anchor;
     pointer->image = image;
+    pointer->hot_x = hot_x < image->width ? hot_x : 0;
+    pointer->hot_y = hot_y < image->height ? image->height - 1 - hot_y : 0;
     pointer->copy = TRUE;
     pointer->handle = lx_handle_create(LX_HANDLE_PM_POINTER, pointer, release_pointer);
     if (!pointer->handle)
@@ -107,8 +113,27 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
     LxHandleBorrow borrow;
     if (!lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &borrow))
         return FALSE;
-    LxHostPointer *host = ((PmPointer *)borrow.resource)->host;
-    BOOL result = host && lx_host_pointer_set(host);
+    PmPointer *pointer = borrow.resource;
+    if (!pointer->host && pointer->image)
+    {
+        PmPointerImage *image = pointer->image;
+        size_t count = (size_t)image->width * image->height;
+        uint32 *pixels = malloc(count * sizeof *pixels);
+        if (pixels)
+        {
+            for (unsigned y = 0; y < image->height; y++)
+                for (unsigned x = 0; x < image->width; x++)
+                {
+                    size_t at = (size_t)(image->height - 1 - y) * image->width + x;
+                    pixels[(size_t)y * image->width + x] =
+                        image->mask[at] && !image->pixels[at] ? 0 : 0xff000000 | image->pixels[at];
+                }
+            pointer->host = lx_host_pointer_create_color(pixels, image->width, image->height,
+                                                         pointer->hot_x, pointer->hot_y);
+            free(pixels);
+        }
+    }
+    BOOL result = pointer->host && lx_host_pointer_set(pointer->host);
     lx_handle_release(&borrow);
     return result;
 }
@@ -155,7 +180,7 @@ BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height)
     lx_handle_release(&borrow);
     return result;
 }
-BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
+static BOOL draw_pointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags)
 {
     LxHandleBorrow borrow = {0};
     if (!lx_pm_valid_ps(space) || !lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &borrow))
@@ -165,6 +190,8 @@ BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
     for (unsigned row = 0; result && row < image->height; row++)
         for (unsigned column = 0; result && column < image->width; column++)
         {
+            if ((flags & 1) && !((row + column) & 1))
+                continue;
             int64_t px = (int64_t)x + column, py = (int64_t)y + row;
             if (px < INT32_MIN || px > INT32_MAX || py < INT32_MIN || py > INT32_MAX)
             {
@@ -175,9 +202,19 @@ BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
             if (!lx_pm_raster_read(space, (LONG)px, (LONG)py, 1, 1, &destination))
                 continue;
             size_t at = (size_t)row * image->width + column;
-            uint32 pixel = (destination & (image->mask[at] ? 0xffffff : 0)) ^ image->pixels[at];
+            uint32 pixel = (destination & (image->mask[at] ? 0xffffff : 0)) ^ image->pixels[at] ^
+                           (flags & 2 ? 0xffffff : 0);
             result = lx_pm_raster_write(space, (LONG)px, (LONG)py, 1, 1, &pixel);
         }
     lx_handle_release(&borrow);
     return result;
+}
+
+BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
+{
+    return draw_pointer(space, x, y, handle, 0);
+}
+BOOL WinDrawPointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags)
+{
+    return !(flags & ~3u) && draw_pointer(space, x, y, handle, flags);
 }

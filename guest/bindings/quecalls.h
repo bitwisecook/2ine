@@ -109,7 +109,14 @@ static uint32 queue_receive32_operation(void *argument)
         lx_guest_store_u32(outputs[0].host, request.pid);
         lx_guest_store_u32((uint8 *)outputs[0].host + 4, request.ulData);
         lx_guest_store_u32(outputs[1].host, size);
-        lx_guest_store_u32(outputs[2].host, (uint32)(uintptr_t)data);
+        uint32 address = (uint32)(uintptr_t)data;
+        if (data && !lx_execution_address(GLoaderState.execution, data, 0, 0, &address) &&
+            (uintptr_t)data > UINT32_MAX)
+        {
+            result = ERROR_QUE_MEMORY_ERROR;
+            goto done;
+        }
+        lx_guest_store_u32(outputs[2].host, address);
         *(uint8 *)outputs[3].host = priority;
         if (peek)
             lx_guest_store_u32(outputs[4].host, cursor);

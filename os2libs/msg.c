@@ -86,6 +86,34 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
     size_t len;
     uint8 *data = lx_host_file_snapshot(unixpath, UINT32_MAX, &len, NULL);
     free(unixpath);
+    if (!data && !strpbrk(filename, ":/\\"))
+    {
+        const char *directories = NULL;
+        for (const char *env = GLoaderState.pib.pib_pchenv; env && *env; env += strlen(env) + 1)
+            if (!strncmp(env, "DPATH=", 6))
+            {
+                directories = env + 6;
+                break;
+            }
+        for (const char *at = directories; at && *at && !data;)
+        {
+            const char *end = strchr(at, ';');
+            size_t count = end ? (size_t)(end - at) : strlen(at);
+            size_t size = count + strlen(filename) + 2;
+            char *guest = malloc(size);
+            if (!guest)
+                return NULL;
+            snprintf(guest, size, "%.*s%s%s", (int)count, at, count ? "\\" : "", filename);
+            unixpath = GLoaderState.makeUnixPath(guest, &err);
+            free(guest);
+            if (unixpath)
+            {
+                data = lx_host_file_snapshot(unixpath, UINT32_MAX, &len, NULL);
+                free(unixpath);
+            }
+            at = end ? end + 1 : NULL;
+        }
+    }
     if (!data)
         return NULL;
     if (len < 0x15)
@@ -111,9 +139,11 @@ static const uint8 *findMessage(const uint8 *data, const size_t datalen, const u
     const uint16 count = readLE16(data + MSGFILE_COUNT_OFFSET);
     const uint16 first = readLE16(data + MSGFILE_FIRST_OFFSET);
     const uint16 format = readLE16(data + MSGFILE_FORMAT_OFFSET);
-    const uint16 tableoff = readLE16(data + MSGFILE_TABLE_OFFSET);
-    const uint16 tableend = readLE16(data + MSGFILE_TABLE_END_OFFSET);
-    const int off32 = (format != MSGFILE_FORMAT_OFF16);
+    const int legacy = format == 0 || format == 1;
+    if (!legacy && format != MSGFILE_FORMAT_OFF16 && format != MSGFILE_FORMAT_OFF32)
+        return NULL;
+    const uint16 tableoff = legacy ? 31 : readLE16(data + MSGFILE_TABLE_OFFSET);
+    const int off32 = !(format & 1);
     const size_t entsize = off32 ? 4 : 2;
 
     if (msgnum < first)
@@ -121,7 +151,7 @@ static const uint8 *findMessage(const uint8 *data, const size_t datalen, const u
     const uint32 index = msgnum - first;
     if (index >= count)
         return NULL;
-    if (tableoff >= datalen)
+    if (tableoff >= datalen || count > (datalen - tableoff) / entsize)
         return NULL;
     if (((size_t)tableoff + ((size_t)index + 1) * entsize) > datalen)
         return NULL;
@@ -291,4 +321,35 @@ APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cb
         lx_guest_argument_finish(&substitutions[i], 0);
     free(data);
     return rc;
+}
+
+APIRET DosInsertMessage(PVOID table, ULONG count, PCHAR message, ULONG message_size, PCHAR output,
+                        ULONG capacity, PULONG actual)
+{
+    TRACE_NATIVE("DosInsertMessage(%p, %u, '%.*s', %u, %p, %u, %p)", table, (uint)count,
+                 (int)message_size, message, (uint)message_size, output, (uint)capacity, actual);
+    if (count > 9 || (count && !table) || !message || !output || !actual)
+        return ERROR_INVALID_PARAMETER;
+    PCHAR *values = table;
+    ULONG written = 0;
+    for (ULONG i = 0; i < message_size; i++)
+    {
+        const char *value = message + i;
+        size_t size = 1;
+        if (message[i] == '%' && i + 1 < message_size && message[i + 1] >= '1' &&
+            message[i + 1] <= '9')
+        {
+            unsigned index = message[++i] - '1';
+            if (index >= count || !values[index])
+                return ERROR_MR_INV_IVCOUNT;
+            value = values[index];
+            size = strlen(value);
+        }
+        if (size > capacity - written)
+            return ERROR_MR_MSG_TOO_LONG;
+        memcpy(output + written, value, size);
+        written += size;
+    }
+    *actual = written;
+    return NO_ERROR;
 }

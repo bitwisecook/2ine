@@ -82,24 +82,35 @@ APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
         return ERROR_VIO_INVALID_HANDLE;
     else if (pvioModeInfo == NULL)
         return ERROR_VIO_INVALID_PARMS;
-    else if (pvioModeInfo->cb != sizeof(*pvioModeInfo))
+    else if (pvioModeInfo->cb < 12)
         return ERROR_VIO_INVALID_LENGTH;
 
     else if (!initNcurses())
         return ERROR_VIO_INVALID_HANDLE;
 
-    memset(pvioModeInfo, '\0', sizeof(*pvioModeInfo));
-    pvioModeInfo->cb = sizeof(*pvioModeInfo);
-    pvioModeInfo->fbType = VGMT_OTHER;
-    pvioModeInfo->color = 4;
-    pvioModeInfo->col = vio_scrw;
-    pvioModeInfo->row = vio_scrh;
-    pvioModeInfo->hres = 640;
-    pvioModeInfo->vres = 400;
-    pvioModeInfo->fmt_ID = 0;
-    pvioModeInfo->attrib = 1;
-    FIXME("fill in the rest of these");
+    USHORT count =
+        pvioModeInfo->cb < sizeof(*pvioModeInfo) ? pvioModeInfo->cb : sizeof(*pvioModeInfo);
+    VIOMODEINFO info = {0};
+    info.cb = count;
+    info.fbType = VGMT_OTHER;
+    info.color = 4;
+    info.col = vio_scrw;
+    info.row = vio_scrh;
+    info.hres = 640;
+    info.vres = 400;
+    info.attrib = 1;
+    memcpy(pvioModeInfo, &info, count);
 
+    return NO_ERROR;
+}
+
+APIRET16 VioGetCp(USHORT reserved, PUSHORT codepage, HVIO hvio)
+{
+    if (reserved || !codepage)
+        return ERROR_VIO_INVALID_PARMS;
+    if (hvio)
+        return ERROR_VIO_INVALID_HANDLE;
+    *codepage = 437;
     return NO_ERROR;
 }
 

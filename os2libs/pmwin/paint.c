@@ -62,6 +62,11 @@ HPS acquirePresentationSpace(HWND hwnd, HPS hps, PRECTL prclPaint, BOOL paint)
     {
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, NULLHANDLE);
     }
+    for (Window *parent = win; parent; parent = parent->parent)
+        if (parent == &anchor->object_window)
+        {
+            SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INV_HPS, NULLHANDLE);
+        }
     if (paint)
         TRACE_EVENT(
             "PAINT hwnd=%u parent=%u class=%s style=%x classStyle=%x size=%d,%d invalid=%d,%d,%d,%d",
@@ -324,6 +329,73 @@ BOOL WinFillRect(HPS hps, PRECTL prcl, LONG lColor)
     }
     free(visible.rects);
     return result;
+}
+
+BOOL WinDrawBorder(HPS handle, PRECTL rect, LONG cx, LONG cy, LONG foreground, LONG background,
+                   ULONG flags)
+{
+    TRACE_NATIVE("WinDrawBorder(%u, %p, %d, %d, %d, %d, %u)", (uint)handle, rect, (int)cx, (int)cy,
+                 (int)foreground, (int)background, (uint)flags);
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || !rect || cx < 0 || cy < 0 || (flags & ~0x11bu) || (flags & 7) > 3)
+        return FALSE;
+    int64_t dx = cx, dy = cy;
+    if (flags & 0x100)
+    {
+        dx *= WinQuerySysValue(HWND_DESKTOP, 26);
+        dy *= WinQuerySysValue(HWND_DESKTOP, 27);
+    }
+    PmBitmap *bitmap = ps->bitmap_lease.resource;
+    LONG width = bitmap       ? (LONG)bitmap->width
+                 : ps->window ? ps->window->w
+                              : 0,
+         height = bitmap       ? (LONG)bitmap->height
+                  : ps->window ? ps->window->h
+                               : 0;
+    RECTL bounds = {0, 0, width, height}, drawing;
+    if (!WinIntersectRect(0, &drawing, rect, &bounds))
+        return TRUE;
+    uint32_t *pixels = malloc((size_t)(drawing.xRight - drawing.xLeft) * 4);
+    if (!pixels)
+        return FALSE;
+    LONG fore = lx_pm_resolve_color(handle, foreground),
+         back = lx_pm_resolve_color(handle, background);
+    BOOL ok = (flags & 0x10) || (fore >= 0 && back >= 0);
+    LONG operation = flags & 7;
+    LONG mix = operation == 1 ? 4 : operation == 2 ? 12 : operation == 3 ? ps->primitive_mix[3] : 2;
+    for (LONG y = drawing.yBottom; ok && y < drawing.yTop; y++)
+    {
+        ok = lx_pm_raster_read(handle, drawing.xLeft, y, drawing.xRight - drawing.xLeft, 1, pixels);
+        for (LONG x = drawing.xLeft; ok && x < drawing.xRight; x++)
+        {
+            BOOL interior = (int64_t)x >= (int64_t)rect->xLeft + dx &&
+                            (int64_t)x < (int64_t)rect->xRight - dx &&
+                            (int64_t)y >= (int64_t)rect->yBottom + dy &&
+                            (int64_t)y < (int64_t)rect->yTop - dy;
+            if (interior && !(flags & 8))
+                continue;
+            uint32_t source;
+            BOOL ink = TRUE;
+            ok = lx_pm_pattern_pixel(handle, x, y, &source, &ink);
+            if (!(flags & 0x10))
+                source = (uint32_t)(ink != interior ? fore : back);
+            else if (interior)
+            {
+                LONG swapped = lx_pm_resolve_color(handle, ink ? ps->primitive_back[3]
+                                                               : ps->primitive_color[3]);
+                if (swapped < 0)
+                    ok = FALSE;
+                source = (uint32_t)swapped;
+            }
+            if (ok)
+                pixels[x - drawing.xLeft] = lx_pm_mix_pixel(source, pixels[x - drawing.xLeft], mix);
+        }
+        if (ok)
+            ok = lx_pm_raster_write(handle, drawing.xLeft, y, drawing.xRight - drawing.xLeft, 1,
+                                    pixels);
+    }
+    free(pixels);
+    return ok;
 }
 
 HPS WinBeginPaint(HWND hwnd, HPS hps, PRECTL rect)

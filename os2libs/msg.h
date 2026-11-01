@@ -22,6 +22,9 @@ extern "C"
                                                     USHORT cbBuf, USHORT msgnum, PCHAR pFilename,
                                                     PUSHORT pcbMsg, PVOID msgseg)
         OS2APIINFO(ord = 2, name = DOSTRUEGETMESSAGE);
+    OS2EXPORT APIRET OS2API DosInsertMessage(PVOID table, ULONG count, PCHAR message,
+                                             ULONG message_size, PCHAR output, ULONG capacity,
+                                             PULONG actual) OS2APIINFO(4);
     OS2EXPORT APIRET OS2API DosPutMessage(HFILE hfile, ULONG cbMsg, PCHAR pBuf) OS2APIINFO(5);
     /* MSGSEG32 passes a hidden word before seven arguments; the bridge removes only that word with ret 4. */
     OS2EXPORT __attribute__((stdcall)) APIRET OS2API DosTrueGetMessage(PVOID msgseg) OS2APIINFO(6);

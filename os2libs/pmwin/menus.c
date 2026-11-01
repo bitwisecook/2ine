@@ -12,6 +12,40 @@ Window *lx_pm_menu_window(HWND handle)
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     return window && window->menu ? window : NULL;
 }
+BOOL createSystemMenu(Window *frame, ULONG flags)
+{
+    HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, 1 | (flags & 1 ? WS_VISIBLE : 0), 0,
+                               frame->h > 24 ? frame->h - 24 : 0, 24, 24, frame->hwnd, HWND_TOP,
+                               FID_SYSMENU, NULL, NULL);
+    if (!bar)
+        return FALSE;
+    HWND popup = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_MENU, NULL, 0, 0, 0, 1, 1, bar, HWND_TOP, 0,
+                                 NULL, NULL);
+    if (!popup)
+        goto fail;
+    MENUITEM root = {-1, 0x11, 0, 0x8007, popup, 0}; /* MIS_TEXT | MIS_SUBMENU, SC_SYSMENU */
+    if ((intptr_t)WinSendMsg(bar, 0x180, &root, "~System") == -1)
+        goto fail;
+    static const struct
+    {
+        USHORT id;
+        ULONG flag;
+        const char *text;
+    } entries[] = {{0x8008, 0x30, "~Restore"},  {0x8001, 0, "~Move"},        {0x8000, 8, "~Size"},
+                   {0x8002, 0x10, "Mi~nimize"}, {0x8003, 0x20, "Ma~ximize"}, {0x8004, 0, "~Close"}};
+    for (size_t i = 0; i < sizeof entries / sizeof entries[0]; i++)
+    {
+        if (entries[i].flag && !(flags & entries[i].flag))
+            continue;
+        MENUITEM item = {-1, 0x41, 0, entries[i].id, 0, 0}; /* MIS_TEXT | MIS_SYSCOMMAND */
+        if ((intptr_t)WinSendMsg(popup, 0x180, &item, (MPARAM)entries[i].text) == -1)
+            goto fail;
+    }
+    return TRUE;
+fail:
+    WinDestroyWindow(bar);
+    return FALSE;
+}
 void destroyMenu(Window *window)
 {
     PmMenu *menu = window->menu;

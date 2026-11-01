@@ -928,6 +928,7 @@ extern "C"
     OS2EXPORT ULONG OS2API WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module,
                                      ULONG id, PVOID parameters) OS2APIINFO(923);
     OS2EXPORT ULONG OS2API WinProcessDlg(HWND dialog) OS2APIINFO(796);
+    OS2EXPORT HWND OS2API WinEnumDlgItem(HWND dialog, HWND item, ULONG code) OS2APIINFO(740);
     OS2EXPORT BOOL OS2API WinDismissDlg(HWND dialog, ULONG result) OS2APIINFO(729);
     OS2EXPORT MRESULT OS2API WinDefDlgProc(HWND dialog, ULONG message, MPARAM first, MPARAM second)
         OS2APIINFO(910);
@@ -939,6 +940,7 @@ extern "C"
     OS2EXPORT LONG OS2API WinQueryWindowText(HWND window, LONG capacity, PCHAR output)
         OS2APIINFO(841);
     OS2EXPORT LONG OS2API WinQueryWindowTextLength(HWND window) OS2APIINFO(842);
+    OS2EXPORT LONG OS2API WinQueryDlgItemTextLength(HWND window, ULONG id) OS2APIINFO(816);
     OS2EXPORT BOOL OS2API WinSetDlgItemText(HWND window, ULONG id, PSZ text) OS2APIINFO(859);
     OS2EXPORT ULONG OS2API WinQueryDlgItemText(HWND window, ULONG id, LONG capacity, PCHAR output)
         OS2APIINFO(815);
@@ -966,6 +968,10 @@ extern "C"
     OS2EXPORT BOOL OS2API WinDrawBitmap(HPS destination, ULONG bitmap, PRECTL source, PPOINTL point,
                                         LONG foreground, LONG background, ULONG flags)
         OS2APIINFO(730);
+    OS2EXPORT ULONG OS2API WinGetSysBitmap(HWND desktop, ULONG id) OS2APIINFO(760);
+    OS2EXPORT BOOL OS2API WinDrawBorder(HPS ps, PRECTL rect, LONG cx, LONG cy, LONG foreground,
+                                        LONG background, ULONG flags) OS2APIINFO(731);
+    OS2EXPORT BOOL OS2API WinEnableWindowUpdate(HWND window, BOOL enable) OS2APIINFO(736);
     OS2EXPORT ULONG OS2API WinCreateAccelTable(HAB hab, PVOID data) OS2APIINFO(713);
     OS2EXPORT ULONG OS2API WinLoadAccelTable(HAB hab, HMODULE module, ULONG id) OS2APIINFO(776);
     OS2EXPORT ULONG OS2API WinCopyAccelTable(ULONG table, PVOID data, ULONG size) OS2APIINFO(709);
@@ -1029,6 +1035,11 @@ extern "C"
     OS2EXPORT HAB OS2API WinQueryAnchorBlock(HWND window) OS2APIINFO(800);
     OS2EXPORT BOOL OS2API WinSetOwner(HWND window, HWND owner) OS2APIINFO(864);
     OS2EXPORT HWND OS2API WinQueryWindow(HWND window, LONG code) OS2APIINFO(834);
+    OS2EXPORT BOOL OS2API WinSetParent(HWND window, HWND parent, BOOL redraw) OS2APIINFO(865);
+    OS2EXPORT ULONG OS2API WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text)
+        OS2APIINFO(893);
+    OS2EXPORT ULONG OS2API WinUpperChar(HAB hab, ULONG codepage, ULONG country, ULONG character)
+        OS2APIINFO(894);
     OS2EXPORT LONG OS2API WinQueryClassName(HWND window, LONG capacity, PCHAR output)
         OS2APIINFO(805);
     OS2EXPORT LONG OS2API WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity,
@@ -1050,6 +1061,8 @@ extern "C"
     OS2EXPORT HPOINTER OS2API WinQuerySysPointer(HWND hwnd, LONG id, BOOL copy) OS2APIINFO(828);
     OS2EXPORT HPOINTER OS2API WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
         OS2APIINFO(780);
+    OS2EXPORT BOOL OS2API WinDrawPointer(HPS ps, LONG x, LONG y, HPOINTER pointer, ULONG flags)
+        OS2APIINFO(732);
     OS2EXPORT BOOL OS2API WinSetPointer(HWND desktop, HPOINTER pointer) OS2APIINFO(866);
     OS2EXPORT BOOL OS2API WinInvertRect(HPS ps, PRECTL rect) OS2APIINFO(767);
     OS2EXPORT BOOL OS2API WinDestroyPointer(HPOINTER pointer) OS2APIINFO(727);
@@ -1070,6 +1083,9 @@ extern "C"
     OS2EXPORT APIRET OS2API WinRequestMutexSem(HMTX handle, ULONG timeout) OS2APIINFO(979);
     OS2EXPORT APIRET OS2API WinWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
         OS2APIINFO(980);
+    OS2EXPORT BOOL OS2API WinAlarm(HWND desktop, ULONG type) OS2APIINFO(701);
+    OS2EXPORT ULONG OS2API WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id,
+                                         ULONG style) OS2APIINFO(789);
     OS2EXPORT ERRORID OS2API WinGetLastError(HAB hab) OS2APIINFO(753);
     OS2EXPORT ERRORID OS2API WinSetErrorInfo(ERRORID error, ULONG flags, ...) OS2APIINFO(977);
     OS2EXPORT UCHAR OS2API WinCpTranslateChar(HAB hab, ULONG source, UCHAR character,

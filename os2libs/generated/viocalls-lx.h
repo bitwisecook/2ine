@@ -67,13 +67,20 @@ static uint32 bridge16to32_VioSetCurPos(uint8 *args) {
     return VioSetCurPos(usRow, usColumn, hvio);
 }
 
-#if !TWOINE_PORTABLE_LOADER
 static uint32 bridge16to32_VioGetMode(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVIOMODEINFO, pvioModeInfo);
-    return VioGetMode(pvioModeInfo, hvio);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GLoaderState.execution, pvioModeInfo_guest, 34, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pvioModeInfo = (PVIOMODEINFO) __abi_args[0].host;
+    __abi_result = VioGetMode(pvioModeInfo, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
 }
-#endif
 
 static uint32 bridge16to32_VioReadCellStr(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
@@ -135,6 +142,22 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_VioGetCp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, codepage);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, reserved);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GLoaderState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    codepage = (PUSHORT) __abi_args[0].host;
+    __abi_result = VioGetCp(reserved, codepage, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
 static uint32 bridge16to32_VioWrtCharStrAtt(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, pAttr);
@@ -180,15 +203,14 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(VioGetCurPos)
     LX_NATIVE_MODULE_16BIT_API(VioWrtCellStr)
     LX_NATIVE_MODULE_16BIT_API(VioSetCurPos)
-#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_MODULE_16BIT_API(VioGetMode)
-#endif
     LX_NATIVE_MODULE_16BIT_API(VioReadCellStr)
     LX_NATIVE_MODULE_16BIT_API(VioGetCurType)
 #if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_MODULE_16BIT_API(VioGetBuf)
 #endif
     LX_NATIVE_MODULE_16BIT_API(VioSetCurType)
+    LX_NATIVE_MODULE_16BIT_API(VioGetCp)
     LX_NATIVE_MODULE_16BIT_API(VioWrtCharStrAtt)
     LX_NATIVE_MODULE_16BIT_API(VioWrtNCell)
 LX_NATIVE_MODULE_16BIT_SUPPORT_END()
@@ -203,15 +225,14 @@ static int init16_viocalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(VioGetCurPos, 10)
         LX_NATIVE_INIT_16BIT_BRIDGE(VioWrtCellStr, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(VioSetCurPos, 6)
-#if !TWOINE_PORTABLE_LOADER
         LX_NATIVE_INIT_16BIT_BRIDGE(VioGetMode, 6)
-#endif
         LX_NATIVE_INIT_16BIT_BRIDGE(VioReadCellStr, 14)
         LX_NATIVE_INIT_16BIT_BRIDGE(VioGetCurType, 6)
 #if !TWOINE_PORTABLE_LOADER
         LX_NATIVE_INIT_16BIT_BRIDGE(VioGetBuf, 10)
 #endif
         LX_NATIVE_INIT_16BIT_BRIDGE(VioSetCurType, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetCp, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(VioWrtCharStrAtt, 16)
         LX_NATIVE_INIT_16BIT_BRIDGE(VioWrtNCell, 12)
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
@@ -225,15 +246,14 @@ LX_NATIVE_MODULE_INIT({
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioGetCurPos, "VIOGETCURPOS", 9),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioWrtCellStr, "VIOWRTCELLSTR", 10),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioSetCurPos, "VIOSETCURPOS", 15),
-#if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioGetMode, "VIOGETMODE", 21),
-#endif
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioReadCellStr, "VIOREADCELLSTR", 24),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioGetCurType, "VIOGETCURTYPE", 27),
 #if !TWOINE_PORTABLE_LOADER
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioGetBuf, "VIOGETBUF", 31),
 #endif
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioSetCurType, "VIOSETCURTYPE", 32),
+    LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioGetCp, "VIOGETCP", 40),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioWrtCharStrAtt, "VIOWRTCHARSTRATT", 48),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(VioWrtNCell, "VIOWRTNCELL", 52),
 

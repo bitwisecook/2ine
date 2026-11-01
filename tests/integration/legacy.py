@@ -275,6 +275,15 @@ def exit_program():
     name = g.field(b"EXITDLL\0")
     g.call(1, 318, 0, 0, name, module)
     g.result(0, 60)
+    found = g.field(bytes(4))
+    path = g.field(bytes(260))
+    g.call(1, 320, (module,), 260, path)
+    g.result(0, 64)
+    for query in (g.field(b"exitdll\0"), g.field(b"EXITDLL.DLL\0"), path):
+        g.call(1, 319, query, found)
+        g.result(0, 62)
+        g.load(found)
+        g.require(b"\x3b\x05" + struct.pack("<I", module), 63)
     g.call(1, 322, (module,))  # The registered exit callback must remain executable.
     g.result(0, 61)
     g.exit(0)

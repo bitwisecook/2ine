@@ -9,6 +9,7 @@ import os
 import select
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -22,16 +23,16 @@ def digest(path):
 
 def run(args, display, env):
     work = args.work.resolve()
-    document = work / "document.lwp"
+    document = args.document_path if args.bottle else work / "document.lwp"
     document.unlink(missing_ok=True)
-    guest_name = "C:" + str(document).replace("/", "\\")
+    guest_name = args.document_guest if args.bottle else "C:" + str(document).replace("/", "\\")
     if len(guest_name.encode()) >= 260:
         raise ValueError("document path exceeds the OS/2 file-dialog limit")
     snapshots = []
     stages = []
     with (work / "wordpro.log").open("wb") as log:
         process = subprocess.Popen(
-            [str(args.build.resolve() / "lx_loader"), "WORDPRO.EXE"],
+            args.launch_command,
             cwd=args.installation.resolve() / "WORDPRO",
             env=env,
             stdout=log,
@@ -61,8 +62,28 @@ def run(args, display, env):
             display.capture(handle, path)
             snapshots.append(path.name)
 
+        def dictionary_warning():
+            messages = [
+                line
+                for line in Path(log.name).read_text(errors="replace").splitlines()
+                if "WinMessageBox(" in line
+            ]
+            if not messages or "Cannot find the spelling dictionary" not in messages[-1]:
+                return
+            caption = messages[-1].rsplit("', '", 1)[-1].split("',", 1)[0]
+            warning = next(
+                (handle for handle, title in display.windows() if title == caption), None
+            )
+            if warning:
+                capture(warning, "missing-dictionary-warning")
+                display.focus(warning)
+                display.key(0xFF0D)
+                pause(0.5)
+                return True
+            return False
+
         def menu(main, mnemonic):
-            display.click(main, 25, 12, 1)
+            display.click(main, 37, 12, 1)
             pause(0.2)
             display.key(ord(mnemonic))
             if mnemonic != "x":
@@ -82,6 +103,7 @@ def run(args, display, env):
             height = display.geometry(main)[1]
             display.click(main, 50, height - 9, 1)
             pause(0.5)
+            dictionary_warning()
             capture(main, f"font-selector-{index}")
             display.click(main, 30, height - 56 + index * 14, 1)
             pause(0.5)
@@ -109,16 +131,41 @@ def run(args, display, env):
                     if time.monotonic() >= deadline:
                         raise
             display.click(welcome, width * 110 // 335, height - height * 8 // 164, 1)
+            for _ in range(3):
+                pause(2)
+                windows = list(display.windows())
+                preferences = next(
+                    (handle for handle, title in windows if title == "Word Pro Preferences"), None
+                )
+                warning = next(
+                    (handle for handle, title in windows if title == "Lotus Word Pro"), None
+                )
+                if preferences:
+                    capture(preferences, "first-run-preferences")
+                    display.focus(preferences)
+                    display.key(0xFF0D)
+                elif warning:
+                    capture(warning, "screen-formatting-warning")
+                    if "Your system does not have a default printer driver." not in Path(
+                        log.name
+                    ).read_text(errors="replace"):
+                        raise RuntimeError(f"unexpected Word Pro startup message; see {log.name}")
+                    display.focus(warning)
+                    display.key(0xFF0D)
+                else:
+                    break
             main = window("Word Pro")
             pause(2)
             display.focus(main)
             capture(main, "blank-document")
             display.text("word pro editing test")
-            pause(0.5)
+            pause(1.5)
+            dictionary_warning()
             capture(main, "new-document")
             font(main, 0)  # Courier, selected in the genuine three-family popup.
             display.text(" courier text")
-            pause(0.5)
+            pause(1.5)
+            dictionary_warning()
             menu(main, "s")
             save_as = window("Save As")
             capture(save_as, "save-as")
@@ -137,7 +184,8 @@ def run(args, display, env):
             pause(0.2)
             font(main, 1)  # Helv for the new paragraph after reopening.
             display.text("edited after reopen")
-            pause(0.5)
+            pause(1.5)
+            dictionary_warning()
             capture(main, "edited-after-reopen")
             menu(main, "s")
             pause(1)
@@ -175,6 +223,8 @@ def run(args, display, env):
         },
         "harness_sha256": digest(Path(__file__)),
         "initial_preferences_sha256": args.preferences_sha256,
+        "bottle": str(args.bottle.resolve()) if args.bottle else None,
+        "initial_profiles_sha256": args.initial_profiles_sha256,
         "fonts": "warp" if env.get("TWOINE_WARP_FONT_DIRECTORY") else "liberation",
         "normal_exit": result,
     }
@@ -219,45 +269,71 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--backend", choices=("native", "unicorn"), required=True)
-    parser.add_argument("--installation", type=Path, required=True)
-    parser.add_argument("--settings", type=Path, required=True)
+    parser.add_argument("--installation", type=Path)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--settings", type=Path)
+    source.add_argument("--bottle", type=Path, help="use the original installer-created settings")
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=45)
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=True)
     (args.work / "receipt.json").unlink(missing_ok=True)
-    build, work, installation = (
-        args.build.resolve(),
-        args.work.resolve(),
-        args.installation.resolve(),
-    )
-    env = dict(
-        os.environ,
-        TWOINE_BACKEND=args.backend,
-        LD_LIBRARY_PATH=str(build),
-        TWOINE_LIBPATH=":".join(
-            map(str, (build, installation / "WORDPRO", installation / "COMPNENT"))
-        ),
-        SDL_VIDEO_DRIVER="x11",
-        SDL_RENDER_DRIVER="software",
-        TRACE_NATIVE="1",
-        TRACE_EVENTS="1",
-    )
-    for key, name in (
-        ("TWOINE_USER_PROFILE", "user.profile"),
-        ("TWOINE_SYSTEM_PROFILE", "system.profile"),
-        ("TWOINE_REGISTRY", "registry.profile"),
-    ):
-        destination = work / name
-        source = args.settings / name
-        if source.is_file():
-            shutil.copyfile(source, destination)
-        elif name == "system.profile":
-            destination.unlink(missing_ok=True)
-        else:
-            raise FileNotFoundError(source)
-        env[key] = str(destination)
-    args.preferences_sha256 = prepare_preferences(args, env, build, work)
+    build, work = args.build.resolve(), args.work.resolve()
+    args.initial_profiles_sha256 = {}
+    if args.bottle:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+        from tools import bottles
+
+        args.bottle = args.bottle.resolve()
+        data = bottles.load(args.bottle)
+        args.installation = bottles.host_path(r"C:\LOTUSW4", args.bottle, data)
+        bottles.write_config(args.bottle, data)
+        env = bottles.environment(args.bottle, data, build, args.backend)
+        runtime = Path(env["TWOINE_LIBPATH"].split(os.pathsep)[0])
+        bottles.sync_runtime(build, runtime)
+        args.launch_command = [str(runtime / "lx_loader"), r"C:\LOTUSW4\WORDPRO\WORDPRO.EXE"]
+        args.document_guest = rf"C:\TEMP\wordpro-{work.name}\document.lwp"
+        args.document_path = bottles.host_path(args.document_guest, args.bottle, data)
+        args.document_path.parent.mkdir(parents=True, exist_ok=True)
+        args.preferences_sha256 = None
+        for key in ("TWOINE_USER_PROFILE", "TWOINE_SYSTEM_PROFILE", "TWOINE_REGISTRY"):
+            path = Path(env[key])
+            args.initial_profiles_sha256[key] = digest(path) if path.is_file() else None
+        env.update(
+            SDL_VIDEO_DRIVER="x11", SDL_RENDER_DRIVER="software", TRACE_NATIVE="1", TRACE_EVENTS="1"
+        )
+    else:
+        if not args.installation:
+            parser.error("--installation is required with --settings")
+        installation = args.installation.resolve()
+        env = dict(
+            os.environ,
+            TWOINE_BACKEND=args.backend,
+            LD_LIBRARY_PATH=str(build),
+            TWOINE_LIBPATH=":".join(
+                map(str, (build, installation / "WORDPRO", installation / "COMPNENT"))
+            ),
+            SDL_VIDEO_DRIVER="x11",
+            SDL_RENDER_DRIVER="software",
+            TRACE_NATIVE="1",
+            TRACE_EVENTS="1",
+        )
+        for key, name in (
+            ("TWOINE_USER_PROFILE", "user.profile"),
+            ("TWOINE_SYSTEM_PROFILE", "system.profile"),
+            ("TWOINE_REGISTRY", "registry.profile"),
+        ):
+            destination = work / name
+            source = args.settings / name
+            if source.is_file():
+                shutil.copyfile(source, destination)
+            elif name == "system.profile":
+                destination.unlink(missing_ok=True)
+            else:
+                raise FileNotFoundError(source)
+            env[key] = str(destination)
+        args.preferences_sha256 = prepare_preferences(args, env, build, work)
+        args.launch_command = [str(build / "lx_loader"), "WORDPRO.EXE"]
     read, write = os.pipe()
     server = subprocess.Popen(
         ["Xvfb", "-displayfd", str(write), "-screen", "0", "1024x768x24", "-nolisten", "tcp"],

@@ -2,8 +2,10 @@
 /* Case-sensitive profile entries, merged system queries and atomic persistence. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmshapi.h"
+#include "os2libs/pmshapi/profiles.h"
 #include "guest/handles.h"
 #include "guest/abi.h"
+#include "runtime/process.h"
 #include "hal/host_fs.h"
 #include "hal/host_sync.h"
 #include <limits.h>
@@ -314,14 +316,16 @@ HINI PrfOpenProfile(HANDLE hab, PSZ name)
     TRACE_NATIVE("PrfOpenProfile(%u, '%s')", (uint)hab, name);
     if (!name || !*name || !GLoaderState.makeUnixPath)
         return 0;
-    lx_host_once(&once, initialize);
     uint32 error = 0;
     char *path = GLoaderState.makeUnixPath(name, &error);
-    if (!path)
-        return 0;
-    char *resolved = profile_path(path);
+    HINI result = path ? lx_profile_open_host(path) : 0;
     free(path);
-    path = resolved;
+    return result;
+}
+HINI lx_profile_open_host(const char *name)
+{
+    lx_host_once(&once, initialize);
+    char *path = profile_path(name);
     if (!path)
         return 0;
     lx_host_monitor_lock(mutex);
@@ -435,6 +439,10 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     }
     lx_host_monitor_unlock(mutex);
     lx_handle_release(&borrow);
+    if (!data)
+        lxHostThreadState()->pm_error = !p      ? 0x1115  /* PMERR_INVALID_INI_FILE_HANDLE */
+                                        : entry ? 0x1309  /* PMERR_MEMORY_ALLOC */
+                                                : 0x1304; /* PMERR_NOT_IN_IDX */
     return data;
 }
 BOOL PrfQueryProfileSize(HINI profile, PSZ app, PSZ key, PULONG size)
@@ -494,8 +502,6 @@ ULONG PrfQueryProfileString(HINI profile, PSZ app, PSZ key, PSZ fallback, PVOID 
                 count--;
         }
     }
-    else
-        ((uint8 *)output)[0] = 0;
     free(data);
     return count;
 }

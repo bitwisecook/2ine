@@ -97,6 +97,7 @@ LONG GpiSavePS(HPS handle)
     s->viewport_set = ps->viewport_set;
     s->page_size = ps->page_size;
     s->rgb_colors = ps->rgb_colors;
+    s->color_format = ps->color_format;
     memcpy(s->colors, ps->colors, sizeof s->colors);
     memcpy(s->color_valid, ps->color_valid, sizeof s->color_valid);
     s->next = ps->saved;
@@ -139,6 +140,7 @@ BOOL GpiRestorePS(HPS handle, LONG id)
     ps->viewport_set = s->viewport_set;
     ps->page_size = s->page_size;
     ps->rgb_colors = s->rgb_colors;
+    ps->color_format = s->color_format;
     memcpy(ps->colors, s->colors, sizeof s->colors);
     memcpy(ps->color_valid, s->color_valid, sizeof s->color_valid);
     PmSavedSpace *end = s->next;
@@ -337,6 +339,22 @@ LONG GpiQueryLogColorTable(HPS handle, ULONG options, LONG start, LONG count, PL
         output[returned++] = loaded ? lx_pm_resolve_color(handle, i) : -1;
     }
     return returned;
+}
+BOOL GpiQueryColorData(HPS handle, LONG count, PLONG output)
+{
+    TRACE_NATIVE("GpiQueryColorData(%u, %d, %p)", (uint)handle, (int)count, output);
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || count < 0 || count > 4 || (count && !output))
+        return FALSE;
+    LONG last = ps->rgb_colors ? 0xffffff : 15;
+    if (!ps->rgb_colors)
+        for (LONG i = 16; i < 256; i++)
+            if (ps->color_valid[i])
+                last = i;
+    const LONG data[4] = {ps->color_format, 0, last, 0};
+    if (count)
+        memcpy(output, data, (size_t)count * sizeof *output);
+    return TRUE;
 }
 
 BOOL GpiSetCharMode(HPS handle, LONG mode)

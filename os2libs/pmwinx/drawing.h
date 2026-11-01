@@ -7,6 +7,7 @@ typedef struct Open32DC
 {
     HPS ps;
     HWND window;
+    BOOL foreign_window;
     ULONG kind, default_bitmap, text_color, background_color;
     LONG background_mode;
     ULONG text_alignment;

@@ -42,7 +42,7 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
             return ERROR_NOT_ENOUGH_MEMORY;
     }
 
-    SharedMemBlock *block = (SharedMemBlock *)malloc(sizeof(*block));
+    SharedMemBlock *block = (SharedMemBlock *)calloc(1, sizeof(*block));
     if (!block)
     {
         if (mapping)
@@ -97,6 +97,13 @@ void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
 {
     /* Case-fold OS/2 names into stable, collision-resistant host object names. */
     uint64_t hash = 1469598103934665603ULL; // FNV-1a 64-bit offset basis.
+    const char *bottle = getenv("TWOINE_BOTTLE");
+    if (bottle)
+    {
+        for (const char *p = bottle; *p; p++)
+            hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
+        hash = (hash ^ 0xff) * 1099511628211ULL;
+    }
     for (const char *ptr = os2name; *ptr; ptr++)
     {
         unsigned char ch = (unsigned char)*ptr;
@@ -105,7 +112,7 @@ void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
         hash ^= ch;
         hash *= 1099511628211ULL; // FNV-1a 64-bit prime.
     }
-    snprintf(buf, buflen, "/2ine-shm-%016llx", (unsigned long long)hash);
+    snprintf(buf, buflen, "/2ine-shm2-%016llx", (unsigned long long)hash);
 }
 
 APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG flags)
@@ -116,13 +123,31 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
         return ERROR_INVALID_PARAMETER;
     char identifier[128];
     makeSharedMemName(name, identifier, sizeof identifier);
+    if (!size)
+    {
+        grabLock(&GMutexDosCalls);
+        for (SharedMemBlock *block = GSharedMem; block; block = block->next)
+            if (!strcmp(block->shared_name, identifier))
+            {
+                block->freed = 0;
+                *output = block->addr;
+                ungrabLock(&GMutexDosCalls);
+                return NO_ERROR;
+            }
+        ungrabLock(&GMutexDosCalls);
+    }
     LxHostShared *object = NULL;
     const LxHostSharedResult opened = lx_host_shared_open(identifier, size, &object);
     if (opened != LX_HOST_SHARED_OK)
         return opened == LX_HOST_SHARED_MISSING  ? ERROR_FILE_NOT_FOUND
                : opened == LX_HOST_SHARED_EXISTS ? ERROR_DUPLICATE_NAME
                                                  : ERROR_NOT_ENOUGH_MEMORY;
-    LxGuestMapping *mapping = lx_execution_map_shared(GLoaderState.execution, object);
+    /* OS/2 shared pointers retain one linear address in every attached process. */
+    uint64_t address = 0;
+    LxGuestMapping *mapping =
+        lx_host_shared_slot(object, 0x30000000, 0x70000000, 65536, &address)
+            ? lx_execution_map_shared_at(GLoaderState.execution, object, (uint32)address)
+            : NULL;
     lx_host_shared_close(object);
     if (!mapping)
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -138,6 +163,7 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
         lx_execution_unmap(GLoaderState.execution, mapping);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
+    strcpy(block->shared_name, identifier);
     block->mapping = mapping;
     block->addr = lx_execution_mapping_host(mapping);
     block->size = lx_execution_mapping_size(mapping);
@@ -269,10 +295,27 @@ APIRET DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag)
 {
     TRACE_NATIVE("DosQueryMem(%p, %p, %p)", pb, pcb, pflag);
 
-    if ((!pcb) || (!pflag))
+    if (!pcb || !pflag || !*pcb)
         return ERROR_INVALID_PARAMETER;
-
-    /* Report read/write commitment; allocator extents are not tracked here. */
+    grabLock(&GMutexDosCalls);
+    const uintptr_t address = (uintptr_t)pb;
+    for (SharedMemBlock *block = GSharedMem; block; block = block->next)
+    {
+        const uintptr_t base = (uintptr_t)block->addr;
+        if (address >= base && address - base < block->size)
+        {
+            size_t remaining = block->size - (address - base);
+            if (*pcb > remaining)
+                *pcb = remaining;
+            *pflag = PAG_READ | PAG_WRITE | PAG_COMMIT |
+                     (block->shared_name[0] ? 0x2000u : 0) | /* PAG_SHARED */
+                     (address == base ? 0x10000u : 0);       /* PAG_BASE */
+            ungrabLock(&GMutexDosCalls);
+            TRACE_RET("DosQueryMem(%p) -> size=%u flags=%x", pb, (uint)*pcb, (uint)*pflag);
+            return NO_ERROR;
+        }
+    }
+    ungrabLock(&GMutexDosCalls);
     *pflag = PAG_READ | PAG_WRITE | PAG_COMMIT;
     return NO_ERROR;
 }
@@ -334,4 +377,119 @@ APIRET16 Dos16FreeSeg(USHORT sel)
     } /* CS aliases share data backing; retaining mappings keeps both aliases valid. */
     (void)sel;
     return NO_ERROR;
+}
+
+/* Family API suballocation reserves eight bytes and rounds blocks to four bytes. */
+typedef struct SubHeap16
+{
+    USHORT selector;
+    ULONG size;
+    unsigned char used[65536 / 4];
+    struct SubHeap16 *next;
+} SubHeap16;
+static SubHeap16 *subheaps16;
+static SubHeap16 *subheap16(USHORT selector)
+{
+    for (SubHeap16 *heap = subheaps16; heap; heap = heap->next)
+        if (heap->selector == selector)
+            return heap;
+    return NULL;
+}
+APIRET16 Dos16SubSet(USHORT selector, USHORT flags, USHORT size)
+{
+    TRACE_NATIVE("Dos16SubSet(%u, %u, %u)", selector, flags, size);
+    if (flags > 1)
+        return ERROR_DOSSUB_BADFLAG;
+    const ULONG extent = size ? size & ~3u : 65536;
+    if (extent <= 8)
+        return ERROR_DOSSUB_BADSIZE;
+    void *base = GLoaderState.convert1616to32((ULONG)selector << 16);
+    uint32 address;
+    if (!base || (GLoaderState.execution &&
+                  !lx_execution_address(GLoaderState.execution, base, extent, 3, &address)))
+        return ERROR_DOSSUB_BADSELECTOR;
+    grabLock(&GMutexDosCalls);
+    SubHeap16 *heap = subheap16(selector);
+    APIRET16 result = NO_ERROR;
+    if (!heap)
+    {
+        if (!flags)
+            result = ERROR_DOSSUB_BADSELECTOR;
+        else if (!(heap = calloc(1, sizeof *heap)))
+            result = ERROR_NOT_ENOUGH_MEMORY;
+        else
+        {
+            heap->selector = selector;
+            heap->next = subheaps16;
+            subheaps16 = heap;
+        }
+    }
+    if (!result)
+    {
+        if (flags)
+        {
+            memset(heap->used, 0, sizeof heap->used);
+            heap->size = extent;
+        }
+        else if (extent < heap->size)
+            result = ERROR_DOSSUB_SHRINK;
+        else
+            heap->size = extent;
+    }
+    ungrabLock(&GMutexDosCalls);
+    return result;
+}
+APIRET16 Dos16SubAlloc(USHORT selector, PUSHORT offset, USHORT size)
+{
+    TRACE_NATIVE("Dos16SubAlloc(%u, %p, %u)", selector, offset, size);
+    if (!offset)
+        return ERROR_INVALID_PARAMETER;
+    const ULONG count = ((ULONG)size + 3) / 4;
+    if (!count || count > (65536 - 8) / 4)
+        return ERROR_DOSSUB_BADSIZE;
+    grabLock(&GMutexDosCalls);
+    SubHeap16 *heap = subheap16(selector);
+    APIRET16 result = heap ? ERROR_DOSSUB_NOMEM : ERROR_DOSSUB_BADSELECTOR;
+    if (heap)
+    {
+        ULONG available = 0;
+        for (ULONG i = 2; i < heap->size / 4; i++)
+        {
+            available = heap->used[i] ? 0 : available + 1;
+            if (available == count)
+            {
+                const ULONG start = i + 1 - count;
+                memset(heap->used + start, 1, count);
+                *offset = start * 4;
+                result = NO_ERROR;
+                break;
+            }
+        }
+    }
+    ungrabLock(&GMutexDosCalls);
+    return result;
+}
+APIRET16 Dos16SubFree(USHORT selector, USHORT offset, USHORT size)
+{
+    TRACE_NATIVE("Dos16SubFree(%u, %u, %u)", selector, offset, size);
+    const ULONG extent = ((ULONG)size + 3) & ~3u;
+    if (!size || offset < 8 || (offset & 3) || (ULONG)offset + extent > 65536)
+        return ERROR_DOSSUB_BADSIZE;
+    grabLock(&GMutexDosCalls);
+    SubHeap16 *heap = subheap16(selector);
+    APIRET16 result = NO_ERROR;
+    if (!heap)
+        result = ERROR_DOSSUB_BADSELECTOR;
+    else if ((ULONG)offset + extent > heap->size)
+        result = ERROR_DOSSUB_BADSIZE;
+    else
+    {
+        for (ULONG i = offset / 4; i < (offset + extent) / 4; i++)
+            if (!heap->used[i])
+                result = ERROR_DOSSUB_OVERLAP;
+        if (!result)
+            memset(heap->used + offset / 4, 0, extent / 4);
+    }
+    ungrabLock(&GMutexDosCalls);
+    return result;
 }

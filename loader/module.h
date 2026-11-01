@@ -40,6 +40,7 @@ struct LxModule
     uint32 refcount;
     uint32 handle;
     int is_lx; // 1 if an LX module, 0 if NE.
+    int entry16;
     union
     {
         LxHeader lx;

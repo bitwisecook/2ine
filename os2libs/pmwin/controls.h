@@ -18,8 +18,11 @@ typedef struct PmControl
     unsigned check, limit, first, last, view;
     LONG lower, upper, value;
     LONG item_height;
+    LONG drag_offset;
     HWND edit, list;
     BOOL dropped, updating;
+    MPARAM transfer;
+    unsigned transfer_size, transfer_format;
     LONG popup_height;
     ListItem *items;
     size_t count;
@@ -41,5 +44,7 @@ MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second);
 MRESULT comboMessage(Window *window, ULONG message, MPARAM first, MPARAM second);
 BOOL initializeCombo(Window *window);
+BOOL initializeScrollbar(Window *window, MPARAM data);
+MRESULT scrollbarMessage(Window *window, ULONG message, MPARAM first, MPARAM second);
 void controlTextChanged(Window *window);
 #endif

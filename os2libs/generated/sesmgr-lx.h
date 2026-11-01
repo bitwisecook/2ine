@@ -3,6 +3,15 @@
 
 #if LX_LEGACY
 
+#include "os2libs/os2native32.h"
+#if TWOINE_PORTABLE_LOADER
+#include "guest/bindings/sesmgr.h"
+LX_NATIVE_MODULE_32BIT_SUPPORT()
+LX_NATIVE_MODULE_32BIT_API(DosSelectSession)
+LX_NATIVE_MODULE_32BIT_API(DosSetSession)
+LX_NATIVE_MODULE_32BIT_API(DosStartSession)
+#endif
+
 static uint32 bridge16to32_Dos16SMSetTitle(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, title);
     LxGuestArgument __abi_args[1] = {0};
@@ -23,6 +32,7 @@ LX_NATIVE_MODULE_16BIT_SUPPORT_END()
 
 LX_NATIVE_MODULE_DEINIT({
     LX_NATIVE_MODULE_DEINIT_16BIT_SUPPORT();
+    LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT();
 })
 
 static int init16_sesmgr(void) {
@@ -32,13 +42,24 @@ static int init16_sesmgr(void) {
     return 1;
 }
 
+#if TWOINE_PORTABLE_LOADER
+static int init32_sesmgr(void) {
+    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosSelectSession, 4, 0, LX_ABI_STACK32)
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosSetSession, 8, 0, LX_ABI_STACK32)
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosStartSession, 12, 0, LX_ABI_STACK32)
+    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
+    return 1;
+}
+#endif
 LX_NATIVE_MODULE_INIT({
     if (!init16_sesmgr()) return 0;
+    LX_NATIVE_INIT_32BIT_MODULE(sesmgr)
 })
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16SMSetTitle, "DOSSMSETTITLE", 5),
-#if !TWOINE_PORTABLE_LOADER
-    LX_NATIVE_EXPORT(DosStartSession, 37),
-#endif
+    LX_NATIVE_EXPORT32(DosStartSession, 37),
+    LX_NATIVE_EXPORT32(DosSelectSession, 38),
+    LX_NATIVE_EXPORT32(DosSetSession, 39),
 
 LX_NATIVE_MODULE_INIT_END()
 

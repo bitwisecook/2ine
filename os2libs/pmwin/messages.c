@@ -389,9 +389,6 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     if (event->type != LX_HOST_EVENT_MOTION && event->type != LX_HOST_EVENT_BUTTON_DOWN &&
         event->type != LX_HOST_EVENT_BUTTON_UP)
         return FALSE;
-    for (Window *parent = win; parent && parent != &desktop_window; parent = parent->parent)
-        if (!parent->enabled)
-            return FALSE;
     int x = event->x, y = win->h - 1 - event->y;
     for (;;)
     {
@@ -413,7 +410,7 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         y -= child->y;
         win = child;
     }
-    if (!win->enabled)
+    if (!windowAcceptsInput(win))
         return FALSE;
     if (event->type == LX_HOST_EVENT_BUTTON_DOWN)
         dismissMenusForClick(anchor, win);
@@ -470,12 +467,14 @@ void pumpEvents(AnchorBlock *anchor)
         lx_pm_dive_pump(anchor);
         presentWindows(anchor);
         while (lx_host_video_poll(&event))
-            processHostEvent(anchor, &event);
+            lx_pm_host_event(&event);
         int wait = pumpTimers(anchor);
+        if (wait < 0 || wait > 10)
+            wait = 10; /* Cross-process posts arrive through the bottle's mailbox. */
         if (anchor->message_queue.head)
             break;
         if (lx_host_video_wait_timeout(&event, wait))
-            processHostEvent(anchor, &event);
+            lx_pm_host_event(&event);
     }
 }
 
@@ -524,7 +523,7 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
         lx_pm_dive_pump(anchor);
         LxHostEvent event;
         while (lx_host_video_poll(&event))
-            processHostEvent(anchor, &event);
+            lx_pm_host_event(&event);
         presentWindows(anchor);
         pumpTimers(anchor);
         MessageQueueItem *prev = NULL;
@@ -634,17 +633,16 @@ BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     {
         return postForeignMessage(hwnd, msg, mp1, mp2);
     }
-    if (anchor->message_queue.hmq == NULLHANDLE)
-    {
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_NO_MSG_QUEUE, FALSE);
-    }
-
     Window *win = getWindowFromHWND(anchor, hwnd);
     if (hwnd && !win)
     {
         if (postForeignMessage(hwnd, msg, mp1, mp2))
             return TRUE;
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
+    }
+    if (anchor->message_queue.hmq == NULLHANDLE)
+    {
+        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_NO_MSG_QUEUE, FALSE);
     }
 
     int mousex, mousey;
@@ -694,7 +692,7 @@ BOOL WinPeekMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULO
     lx_pm_dive_pump(anchor);
     LxHostEvent event;
     while (lx_host_video_poll(&event))
-        processHostEvent(anchor, &event);
+        lx_pm_host_event(&event);
     pumpTimers(anchor);
     presentWindows(anchor);
 retry:;

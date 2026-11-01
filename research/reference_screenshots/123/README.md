@@ -11,7 +11,7 @@ The original Lotus OLE runtime also requires private Warp SOM runtime DLLs, `SOM
 
 The current PM provider has no distributed SOM daemon: its readiness query returns false and starting it returns `ERROR_NOT_SUPPORTED`. PM error-state exchange stores and returns the previous error ID; optional extended error records are not retained.
 
-Named OS/2 queue contracts are recorded in `queue-contracts.json`. The current queue namespace and sender addresses are local to one 2ine process; queue data is not copied.
+Named OS/2 queue contracts are recorded in `queue-contracts.json`. Named queues use bottle-local host mailboxes between 2ine processes. Same-process writes preserve opaque guest addresses; cross-process records carry copied payloads. Session termination uses a private queue reference so closing the session does not invalidate the application's queue handle.
 
 Mux-wait contracts are recorded in `mux-contracts.json`. Event posts and mutex releases notify blocked ANY/ALL waits. PM wait exports currently delegate to the DOS semaphore waits; synchronous cross-thread PM message pumping is not implemented.
 

@@ -114,6 +114,8 @@ def main():
                 for handle, title in display.windows():
                     try:
                         size = display.geometry(handle)
+                        if not display.viewable(handle):
+                            continue
                     except OSError:
                         continue
                     if args.profile == "pmstars" and title == "PMStars" and size == (500, 400):
@@ -191,8 +193,12 @@ def main():
                     )
 
                 after = wait_for(moved_away, process, 3)
-                rgb = display.capture(handle, args.work / "moving.png")
-                assert all(v == 255 for v in rgb), "default GPI background was not rendered"
+
+                def background_painted():
+                    rgb = display.capture(handle, args.work / "moving.png")
+                    return all(v == 255 for v in rgb)
+
+                wait_for(background_painted, process, 2)
                 result.update(pointer_avoidance=True, position_before=before, position_after=after)
             display.close(handle)
             status = process.wait(timeout=8)

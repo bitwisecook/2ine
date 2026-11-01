@@ -7,6 +7,7 @@
  */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+static void cleanupThreadPM(void);
 /* OS/2 deduces the anchor from the calling thread; HAB arguments are advisory. */
 AnchorBlock *getAnchorBlockNoHAB(void)
 {
@@ -37,7 +38,7 @@ HAB WinInitialize(ULONG flOptions)
     LxHostThreadState *posttib = lxHostThreadState();
     if (posttib->anchor_block != NULL)
     {
-        return NULLHANDLE;
+        return ((AnchorBlock *)posttib->anchor_block)->hab;
     }
 
     if (!lx_host_video_initialize(&desktop_window.w, &desktop_window.h))
@@ -50,16 +51,16 @@ HAB WinInitialize(ULONG flOptions)
     AnchorBlock *anchor = calloc(1, sizeof(AnchorBlock));
     if (anchor == NULL)
     {
+        lx_host_video_quit();
         return NULLHANDLE;
     }
 
-    anchor->object_window.hwnd = HWND_OBJECT;
-    anchor->object_window.enabled = TRUE;
     anchor->windows_array_len = 16;
     anchor->windows = calloc(anchor->windows_array_len, sizeof *anchor->windows);
     if (!anchor->windows)
     {
         free(anchor);
+        lx_host_video_quit();
         return NULLHANDLE;
     }
 
@@ -70,6 +71,7 @@ HAB WinInitialize(ULONG flOptions)
     {
         free(anchor->windows);
         free(anchor);
+        lx_host_video_quit();
         return NULLHANDLE;
     }
     memset(anchor->pres_spaces, '\0', sizeof(PresentationSpace) * anchor->pres_spaces_array_len);
@@ -80,12 +82,17 @@ HAB WinInitialize(ULONG flOptions)
         free(anchor->pres_spaces);
         free(anchor->windows);
         free(anchor);
+        lx_host_video_quit();
         return NULLHANDLE;
     }
 
     const HAB hab = (HAB)ihab;
     anchor->hab = hab;
+    anchor->object_window.hwnd = HWND_OBJECT;
+    anchor->object_window.enabled = TRUE;
     posttib->anchor_block = anchor;
+    posttib->pm_cleanup = cleanupThreadPM;
+    posttib->pm_error = 0;
 
     return hab;
 }
@@ -93,12 +100,18 @@ HAB WinInitialize(ULONG flOptions)
 BOOL WinTerminate(HAB hab)
 {
     TRACE_NATIVE("WinTerminate(%u)", (uint)hab);
-    AnchorBlock *anchor = getAnchorBlock(hab);
+    /* Warp retains the thread's PM state until thread/process teardown. */
+    return TRUE;
+}
+
+static void cleanupThreadPM(void)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor)
     {
-        return FALSE;
+        return;
     }
-    WinCloseClipbrd(hab);
+    WinCloseClipbrd(anchor->hab);
 
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
@@ -146,8 +159,6 @@ BOOL WinTerminate(HAB hab)
     lxHostThreadState()->anchor_block = NULL;
 
     lx_host_video_quit();
-
-    return TRUE;
 }
 
 ERRORID WinGetLastError(HAB hab)
@@ -158,7 +169,7 @@ ERRORID WinGetLastError(HAB hab)
     {
         return PMERR_INVALID_HAB;
     }
-    const ERRORID retval = anchor->last_error;
+    const ERRORID retval = lxHostThreadState()->pm_error;
     SET_WIN_ERROR_AND_RETURN(anchor, NO_ERROR, retval);
 }
 
@@ -168,8 +179,8 @@ ERRORID WinSetErrorInfo(ERRORID error, ULONG flags, ...)
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor)
         return PMERR_INVALID_HAB;
-    ERRORID previous = anchor->last_error;
-    anchor->last_error = error;
+    ERRORID previous = lxHostThreadState()->pm_error;
+    lxHostThreadState()->pm_error = error;
     return previous;
 }
 

@@ -11,7 +11,7 @@
 #define FIRST_HPS_VALUE 10
 #define SET_WIN_ERROR_AND_RETURN(anchor, err, rc)                                                  \
     {                                                                                              \
-        anchor->last_error = (err);                                                                \
+        lxHostThreadState()->pm_error = (err);                                                     \
         return (rc);                                                                               \
     }
 #include "os2libs/os2native.h"
@@ -126,6 +126,7 @@ typedef struct PresentationSpace
     LxHandleBorrow dc_lease;
     ULONG codepage;
     BOOL rgb_colors;
+    LONG color_format;
     LONG colors[256];
     uint8 color_valid[256];
 } PresentationSpace;
@@ -146,6 +147,7 @@ typedef struct PmSavedSpace
     BOOL viewport_set;
     SIZEL page_size;
     BOOL rgb_colors;
+    LONG color_format;
     LONG colors[256];
     uint8 color_valid[256];
 } PmSavedSpace;
@@ -184,11 +186,10 @@ typedef struct
     uint8 physical_buttons[3];
     PmTimer *timers;
     HAB hab;
-    ERRORID last_error;
+    Window object_window;
     WindowClass *registered_classes;
     MessageQueue message_queue;
     unsigned paint_depth;
-    Window object_window;
     Window **windows;
     size_t windows_array_len;
     PresentationSpace *pres_spaces;
@@ -221,6 +222,7 @@ LX_PRIVATE void presentWindow(AnchorBlock *anchor, Window *window);
 LX_PRIVATE HWND registerWindowMessages(AnchorBlock *anchor);
 LX_PRIVATE void unregisterWindowMessages(HWND window);
 LX_PRIVATE BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second);
+LX_PRIVATE BOOL windowMessageTargetExists(HWND window);
 LX_PRIVATE void drainForeignMessages(AnchorBlock *anchor);
 LX_PRIVATE void notifyVisibleRegions(AnchorBlock *anchor, Window *window);
 BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event);
@@ -236,6 +238,8 @@ LX_PRIVATE void destroyDialog(Window *window);
 LX_PRIVATE BOOL initializeDialog(Window *window);
 LX_PRIVATE BOOL initializeDialogProcedure(HWND window, HWND focus, PVOID parameters);
 LX_PRIVATE void dialogWordChanged(Window *window, LONG index, USHORT value);
+LX_PRIVATE BOOL windowAcceptsInput(Window *window);
+LX_PRIVATE BOOL windowAcceptsUpdates(const Window *window);
 LX_PRIVATE void destroyControl(Window *window);
 LX_PRIVATE MRESULT controlProcedure(HWND window, ULONG message, MPARAM first, MPARAM second);
 LX_PRIVATE HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data,

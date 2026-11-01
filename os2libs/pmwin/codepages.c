@@ -138,7 +138,7 @@ UCHAR WinCpTranslateChar(HAB hab, ULONG source, UCHAR character, ULONG destinati
     if (from < 0 || to < 0)
     {
         if (anchor)
-            anchor->last_error = from < 0 ? 0x101D : 0x101E;
+            lxHostThreadState()->pm_error = from < 0 ? 0x101D : 0x101E;
         return 0;
     }
     if (from == to)

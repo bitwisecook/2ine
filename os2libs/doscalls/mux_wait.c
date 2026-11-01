@@ -49,13 +49,20 @@ static void destroy_mux(void *value)
 static APIRET member_borrow(ULONG handle, MuxMember *member)
 {
     memset(member, 0, sizeof *member);
-    if (lx_handle_borrow(handle, LX_HANDLE_EVENT, &member->borrow))
+    if (borrowEventResource(handle, &member->borrow))
         member->kind = LX_HANDLE_EVENT;
     else if (lx_handle_borrow(handle, LX_HANDLE_MUTEX, &member->borrow))
         member->kind = LX_HANDLE_MUTEX;
     else
         return ERROR_INVALID_HANDLE;
     return NO_ERROR;
+}
+static BOOL member_shared(const MuxMember *member)
+{
+    return member->kind == LX_HANDLE_EVENT
+               ? ((EventSem *)member->borrow.resource)->shared != NULL ||
+                     semaphoreResourceShared(member->borrow.resource)
+               : semaphoreResourceShared(member->borrow.resource);
 }
 static APIRET add_member(MuxWait *mux, const SEMRECORD *record)
 {
@@ -65,10 +72,9 @@ static APIRET add_member(MuxWait *mux, const SEMRECORD *record)
     APIRET result = member_borrow(record->hsemCur, &member);
     if (result)
         return result;
-    if ((mux->flags & 1) && !semaphoreResourceShared(member.borrow.resource))
+    if ((mux->flags & 1) && !member_shared(&member))
         result = ERROR_WRONG_TYPE;
-    if (mux->count && semaphoreResourceShared(mux->members[0].borrow.resource) !=
-                          semaphoreResourceShared(member.borrow.resource))
+    if (mux->count && member_shared(&mux->members[0]) != member_shared(&member))
         result = ERROR_WRONG_TYPE;
     if (mux->count && mux->members[0].kind != member.kind)
         result = ERROR_WRONG_TYPE;
@@ -263,11 +269,10 @@ static APIRET try_member(MuxMember *member)
 {
     if (member->kind == LX_HANDLE_MUTEX)
         return DosRequestMutexSemResource(member->record.hsemCur, 0, member->borrow.resource);
-    EventSem *event = member->borrow.resource;
-    lx_host_monitor_lock(event->monitor);
-    BOOL posted = event->posted != 0;
-    lx_host_monitor_unlock(event->monitor);
-    return posted ? NO_ERROR : ERROR_TIMEOUT;
+    ULONG posts = 0;
+    APIRET result =
+        DosQueryEventSemResource(member->record.hsemCur, &posts, member->borrow.resource);
+    return result ? result : posts ? NO_ERROR : ERROR_TIMEOUT;
 }
 static APIRET try_mux(MuxWait *mux, PULONG user)
 {
@@ -356,9 +361,15 @@ static uint32 wait_operation(void *argument)
             break;
         ULONG remaining =
             deadline == UINT64_MAX ? UINT32_MAX : (ULONG)((deadline - now + 999) / 1000);
+        if (mux->count && member_shared(&mux->members[0]) && remaining > 10)
+            remaining = 10;
         LxHostLockResult waited = lx_host_monitor_wait(monitor, remaining);
         if (waited == LX_HOST_LOCK_TIMEOUT)
-            break;
+        {
+            if (lx_host_monotonic_us() >= deadline)
+                break;
+            continue;
+        }
         if (waited != LX_HOST_LOCK_OK)
         {
             result = ERROR_INTERRUPT;

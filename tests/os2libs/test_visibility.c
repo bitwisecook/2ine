@@ -86,6 +86,21 @@ int main(void)
     HWND child = WinCreateWindow(parent, "VisibleContract", "Child", WS_VISIBLE, 20, 10, 30, 25,
                                  parent, HWND_TOP, 2, NULL, NULL);
     CHECK(child);
+    notifications(hab, child, WM_PAINT);
+    CHECK(WinEnableWindowUpdate(parent, FALSE));
+    CHECK(!WinIsWindowVisible(parent));
+    CHECK(WinInvalidateRect(child, NULL, FALSE));
+    CHECK(notifications(hab, child, WM_PAINT) == 0);
+    RECTL damage;
+    CHECK(WinQueryUpdateRect(child, &damage));
+    CHECK(WinUpdateWindow(child) && WinQueryUpdateRect(child, &damage));
+    CHECK(WinEnableWindowUpdate(parent, TRUE));
+    CHECK(WinIsWindowVisible(parent));
+    CHECK(notifications(hab, child, WM_PAINT) == 0);
+    CHECK(WinShowWindow(parent, TRUE));
+    CHECK(notifications(hab, child, WM_PAINT) == 1);
+    CHECK(WinUpdateWindow(child) && !WinQueryUpdateRect(child, &damage));
+    CHECK(!WinEnableWindowUpdate(0, TRUE));
     HPS ps = WinGetPS(child);
     CHECK(ps);
     enumeration(ps);

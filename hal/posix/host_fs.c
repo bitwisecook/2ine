@@ -3,9 +3,10 @@
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #define _FILE_OFFSET_BITS 64
-#include "hal/host_fs.h"
+#include "hal/posix/fs_internal.h"
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -13,14 +14,21 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
-struct LxHostFile
-{
-    int fd;
-};
 struct LxHostDirectory
 {
     DIR *object;
 };
+LxHostFsError lx_host_file_lock(LxHostFile *file, int acquire)
+{
+    struct flock lock = {0};
+    lock.l_type = acquire ? F_WRLCK : F_UNLCK;
+    lock.l_whence = SEEK_SET;
+    int result;
+    do
+        result = fcntl(file->fd, F_SETLKW, &lock);
+    while (result < 0 && errno == EINTR);
+    return result == 0 ? LX_HOST_FS_OK : LX_HOST_FS_IO;
+}
 static LxHostFsError fs_error(int error)
 {
     switch (error)
@@ -117,6 +125,14 @@ LxHostFile *lx_host_file_open(const char *path, unsigned flags, int readonly, Lx
 LxHostFile *lx_host_file_standard(unsigned stream)
 {
     return stream <= 2 ? adopt(dup((int)stream), NULL) : NULL;
+}
+LxHostFsError lx_host_file_inherit(LxHostFile *file, int inherit)
+{
+    int flags = fcntl(file->fd, F_GETFD);
+    if (flags < 0 ||
+        fcntl(file->fd, F_SETFD, inherit ? flags & ~FD_CLOEXEC : flags | FD_CLOEXEC) < 0)
+        return fs_error(errno);
+    return LX_HOST_FS_OK;
 }
 LxHostFile *lx_host_file_duplicate(LxHostFile *file, LxHostFsError *error)
 {
@@ -366,4 +382,18 @@ void *lx_host_file_snapshot(const char *path, size_t maximum, size_t *size, LxHo
     if (error)
         *error = result;
     return data;
+}
+
+LxHostFsError lx_host_path_space(const char *path, uint64_t *total, uint64_t *available)
+{
+    struct statvfs info;
+    if (statvfs(path, &info))
+        return fs_error(errno);
+    uint64_t block = info.f_frsize ? info.f_frsize : info.f_bsize;
+    if (!block || (uint64_t)info.f_blocks > UINT64_MAX / block ||
+        (uint64_t)info.f_bavail > UINT64_MAX / block)
+        return LX_HOST_FS_INVALID;
+    *total = (uint64_t)info.f_blocks * block;
+    *available = (uint64_t)info.f_bavail * block;
+    return LX_HOST_FS_OK;
 }

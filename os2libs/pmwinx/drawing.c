@@ -118,14 +118,23 @@ ULONG GetDC(ULONG window)
         return 0;
     }
     HWND target = window ? window : HWND_DESKTOP;
-    HPS ps = WinGetPS(target);
-    if (!ps || !register_context(ps, window, 3))
+    if (!WinIsWindow(0, target))
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    /* Foreign windows expose display capabilities through a local screen PS. */
+    BOOL foreign = !WinQueryWindowDC(target);
+    HPS ps = WinGetPS(foreign ? HWND_DESKTOP : target);
+    Open32DC *dc = ps ? register_context(ps, window, 3) : NULL;
+    if (!dc)
     {
         if (ps)
             WinReleasePS(ps);
         open32SetError(1400);
         return 0;
     }
+    dc->foreign_window = foreign;
     return ps;
 }
 LONG ReleaseDC(ULONG window, ULONG handle)
@@ -396,5 +405,5 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
 BOOL open32CanDraw(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    return dc && dc->kind != 4;
+    return dc && dc->kind != 4 && !dc->foreign_window;
 }

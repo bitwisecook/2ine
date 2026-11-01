@@ -4,9 +4,12 @@
 #define TWOINE_PM_GRAPHICS_H
 #include "os2libs/pmwin.h"
 #include "hal/font.h"
+#include "hal/video.h"
 #include "guest/handles.h"
 BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);
 BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle);
+/* Deliver a host event on its window's PM thread, staging it when called elsewhere. */
+BOOL lx_pm_host_event(const LxHostEvent *event);
 typedef struct PmRegion
 {
     void *anchor;

@@ -48,6 +48,66 @@ void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
         }
     }
 
+    /* DOSCALLS publishes the system keyboard, video, NLS and message entries
+       at additional ordinals. Their callable implementation lives in the
+       owning native module. */
+    if (want16bit && module->nativelib && !strcasecmp(module->name, "DOSCALLS"))
+    {
+        if (ordinal == 576 || ordinal == 424)
+        {
+            static LxMmaps objects[2];
+            static LxExport exports[2];
+            unsigned index = ordinal == 424;
+            LxMmaps *object = &objects[index];
+            LxExport *exported = &exports[index];
+            if (!object->addr)
+            {
+                LxExecutionBridge bridge;
+                if (!lx_execution_universal_thunk(GLoaderState.execution, ordinal, &bridge))
+                    return generateMissingTrampoline16(module->name, "THK16_UNITHUNK", _lxexp);
+                object->mapped = object->addr = lx_execution_memory(
+                    GLoaderState.execution, bridge.segment_base, bridge.size, LX_GUEST_READ);
+                object->size = bridge.size;
+                object->alias = bridge.selector_index;
+                object->guest_base = bridge.segment_base;
+                *exported =
+                    (LxExport){ordinal, ordinal == 424 ? "Dos16SelToFlat" : "THK16_UNITHUNK",
+                               bridge.host, object, 0};
+            }
+            if (_lxexp)
+                *_lxexp = exported;
+            return exported->addr;
+        }
+        const char *target = NULL;
+        uint32 number = 0;
+        if (ordinal >= 745 && ordinal <= 769)
+        {
+            target = "KBDCALLS";
+            number = ordinal - 744;
+        }
+        else if (ordinal >= 770 && ordinal <= 838)
+        {
+            target = "VIOCALLS";
+            number = ordinal - (ordinal < 808 ? 769 : 768);
+        }
+        else if (ordinal >= 391 && ordinal <= 394)
+        {
+            target = "NLS";
+            number = ordinal - 390;
+        }
+        else if (ordinal == 383 || ordinal == 384)
+        {
+            target = "MSG";
+            number = ordinal - 382;
+        }
+        if (target)
+        {
+            LxModule *forward = GLoaderState.loadModule(target);
+            if (forward)
+                return getModuleProcAddrByOrdinal(forward, number, _lxexp, want16bit, native);
+        }
+    }
+
     if (_lxexp)
         *_lxexp = NULL;
 

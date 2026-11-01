@@ -26,18 +26,43 @@ APIRET DosQueryModuleName(HMODULE hmod, ULONG buflen, PCHAR buf)
     return result;
 }
 
+static int moduleNameMatches(const LxModule *module, const char *name)
+{
+    if (!strcasecmp(module->name, name) || (module->os2path && !strcasecmp(module->os2path, name)))
+        return 1;
+    if (strpbrk(name, "\\/:"))
+        return 0;
+    const char *base = module->os2path;
+    if (base)
+    {
+        for (const char *p = base; *p; p++)
+            if (*p == '\\' || *p == '/')
+                base = p + 1;
+        if (!strcasecmp(base, name))
+            return 1;
+    }
+    size_t length = strlen(module->name);
+    return strlen(name) == length + 4 && !strncasecmp(module->name, name, length) &&
+           !strcasecmp(name + length, ".DLL");
+}
+
 APIRET DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod)
 {
     TRACE_NATIVE("DosQueryModuleHandle('%s', %p)", pszModname, phmod);
+    if (!pszModname || !*pszModname || !phmod)
+        return ERROR_INVALID_PARAMETER;
     grabLock(&GMutexDosCalls);
     LxModule *lxmod;
     for (lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next)
     {
-        if (strcasecmp(lxmod->name, pszModname) == 0)
+        if (moduleNameMatches(lxmod, pszModname))
             break;
     }
     ungrabLock(&GMutexDosCalls);
 
+    if (!lxmod && GLoaderState.main_module &&
+        moduleNameMatches(GLoaderState.main_module, pszModname))
+        lxmod = GLoaderState.main_module;
     if (phmod)
         *phmod = lxmod ? lxmod->handle : 0;
 

@@ -1,11 +1,11 @@
 # Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
-foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmshapi pmgpi tcpip32 pmwinx pmctls helpmgr mdm mmio pmspl pmdrag pmwp dive pmgre so32dll tcp32dll)
+foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmshapi pmwp pmgpi tcpip32 pmwinx pmctls helpmgr mdm mmio pmspl pmdrag dive pmgre so32dll tcp32dll)
     if(module STREQUAL "doscalls")
-        set(sources doscalls/module.c doscalls/files.c doscalls/fileinfo.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/mux_wait.c doscalls/modules.c doscalls/system.c doscalls/audio.c)
+        set(sources doscalls/module.c doscalls/files.c doscalls/fileinfo.c doscalls/eas.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/modules.c doscalls/system.c doscalls/audio.c doscalls/mux_wait.c)
     elseif(module STREQUAL "mdm")
         set(sources mdm.c midi_synth.c midi_config.c midi_mt32.c)
     elseif(module STREQUAL "pmwin")
-        set(sources pmwin/module.c pmwin/context.c pmwin/semaphore_waits.c pmwin/codepages.c pmwin/windows.c pmwin/frame_state.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/raster.c pmwin/coordinates.c pmwin/device_context.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/pointer_image.c pmwin/hooks.c pmwin/visible.c pmwin/dive.c pmwin/thread_messages.c pmwin/input.c pmwin/window_text.c pmwin/clipboard.c)
+        set(sources pmwin/module.c pmwin/context.c pmwin/codepages.c pmwin/windows.c pmwin/frame_state.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/raster.c pmwin/coordinates.c pmwin/device_context.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/message_box.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/scrollbar.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/hooks.c pmwin/visible.c pmwin/dive.c pmwin/thread_messages.c pmwin/input.c pmwin/window_text.c pmwin/clipboard.c pmwin/semaphore_waits.c pmwin/pointer_image.c)
     elseif(module STREQUAL "pmgpi")
         set(sources pmgpi.c pmgpi/fonts.c pmgpi/device.c pmgpi/state.c pmgpi/bitmap.c pmgpi/regions.c pmgpi/text.c pmgpi/shapes.c)
     elseif(module STREQUAL "pmctls")
@@ -64,7 +64,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
             pmwinx/threads.c
         )
     elseif(module STREQUAL "pmshapi")
-        set(sources pmshapi.c pmshapi/profiles.c)
+        set(sources pmshapi.c pmshapi/profiles.c pmshapi/switches.c)
     else()
         set(sources "${module}.c")
     endif()
@@ -82,8 +82,11 @@ if(TWOINE_NATIVE_LOADER)
 endif()
 twoine_add_terminal(viocalls)
 
+target_link_libraries(quecalls PRIVATE doscalls)
+target_link_libraries(sesmgr PRIVATE doscalls quecalls pmwin)
 target_link_libraries(pmgpi PRIVATE pmwin)
 target_link_libraries(pmwinx PRIVATE pmshapi pmwin pmgpi)
+target_link_libraries(pmwp PRIVATE pmshapi)
 
 target_link_libraries(pmctls PRIVATE pmwin)
 

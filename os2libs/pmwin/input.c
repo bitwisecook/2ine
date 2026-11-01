@@ -45,9 +45,8 @@ BOOL WinSetFocus(HWND desktop, HWND handle)
     Window *window = getWindowFromHWND(anchor, handle);
     if (handle && !window)
         return FALSE;
-    for (Window *w = window; w && w != &desktop_window; w = w->parent)
-        if (!w->enabled || w->destroying)
-            return FALSE;
+    if (handle && !windowAcceptsInput(window))
+        return FALSE;
     HWND previous = anchor->focus;
     if (previous == handle)
         return TRUE;
@@ -284,9 +283,8 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
     Window *window = getWindowFromHWND(anchor, anchor->focus);
     if (!window || window->destroying)
         return FALSE;
-    for (Window *p = window; p && p != &desktop_window; p = p->parent)
-        if (!p->enabled)
-            return FALSE;
+    if (!windowAcceptsInput(window))
+        return FALSE;
     ULONG flags = (event->modifiers & LX_HOST_MOD_SHIFT ? 8 : 0) |
                   (event->modifiers & LX_HOST_MOD_CTRL ? 16 : 0) |
                   (event->modifiers & LX_HOST_MOD_ALT ? 32 : 0);

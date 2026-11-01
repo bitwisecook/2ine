@@ -65,6 +65,8 @@ static pthread_mutex_t SegmentMutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread uint8 *NativeTib;
 static __thread void *NativeHostStack __attribute__((tls_model("initial-exec")));
 static __thread uint8_t *NativeHostAllocation;
+static __thread void *NativeSignalAllocation;
+static __thread stack_t NativePreviousSignalStack;
 typedef struct NativeBridgeFrame
 {
     uint32_t guest_stack;
@@ -298,6 +300,16 @@ static void initOs2StackSegments(uint32 address, uint32 size, const int release)
 /* FS:0 addresses this thread's guest TIB; attach from the entering host thread. */
 static uint16 lxSetOs2Tib(uint8 *tibspace)
 {
+    if (sigaltstack(NULL, &NativePreviousSignalStack))
+        abort();
+    if (NativePreviousSignalStack.ss_flags & SS_DISABLE)
+    {
+        size_t size = SIGSTKSZ > 65536 ? SIGSTKSZ : 65536;
+        NativeSignalAllocation = malloc(size);
+        stack_t signals = {.ss_sp = NativeSignalAllocation, .ss_size = size};
+        if (!NativeSignalAllocation || sigaltstack(&signals, NULL))
+            abort();
+    }
     void *stack = malloc(65536);
     if (!stack)
     {
@@ -364,6 +376,13 @@ static void lxDeinitOs2Tib(const uint16 selector)
     NativeHostAllocation = NULL;
     NativeHostStack = NULL;
     NativeTib = NULL;
+    if (NativeSignalAllocation)
+    {
+        if (sigaltstack(&NativePreviousSignalStack, NULL))
+            abort();
+        free(NativeSignalAllocation);
+        NativeSignalAllocation = NULL;
+    }
 }
 
 static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
@@ -943,9 +962,63 @@ static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
     fclose(io);
 }
 
+/* OS/2's flat GDT selectors cannot be installed by an unprivileged Linux task.
+   Translate a faulting data-selector load to the equivalent host flat segment. */
+static int handleFlatDataSelector(ucontext_t *context)
+{
+    greg_t *registers = context->uc_mcontext.gregs;
+    if (registers[REG_TRAPNO] != 13)
+        return 0;
+    uint16_t cs = registers[REG_CS], ss = registers[REG_SS];
+    int code16 = (cs & 4) != 0, stack16 = (ss & 4) != 0;
+    uint32_t code_base = code16 ? Native->ldt[cs >> 3] : 0;
+    uint32_t stack_base = stack16 ? Native->ldt[ss >> 3] : 0;
+    if ((code16 && !code_base) || (stack16 && !stack_base) ||
+        (!code16 && cs != Native->original_cs))
+        return 0;
+    uint32_t ip = code16 ? (uint16_t)registers[REG_EIP] : registers[REG_EIP];
+    const uint8_t *instruction = (const uint8_t *)(uintptr_t)(code_base + ip);
+    uint32_t bytes = 1, selector;
+    int destination;
+    if (*instruction == 0x1f || *instruction == 0x07) /* POP DS / ES */
+    {
+        uint32_t sp = stack16 ? (uint16_t)registers[REG_ESP] : registers[REG_ESP];
+        if (stack16 && sp > 0xfffe)
+            return 0;
+        uint16_t word;
+        memcpy(&word, (const void *)(uintptr_t)(stack_base + sp), sizeof word);
+        selector = word;
+        destination = *instruction == 0x1f ? REG_DS : REG_ES;
+        if (selector != 0x53)
+            return 0;
+        uint32_t step = code16 ? 2 : 4;
+        registers[REG_ESP] =
+            stack16 ? (registers[REG_ESP] & ~0xffffu) | (uint16_t)(sp + step) : sp + step;
+    }
+    else if (*instruction == 0x8e && (instruction[1] & 0xc0) == 0xc0)
+    {
+        unsigned segment = (instruction[1] >> 3) & 7;
+        if (segment != 0 && segment != 3)
+            return 0;
+        static const int source[] = {REG_EAX, REG_ECX, REG_EDX, REG_EBX,
+                                     REG_ESP, REG_EBP, REG_ESI, REG_EDI};
+        selector = (uint16_t)registers[source[instruction[1] & 7]];
+        if (selector != 0x53)
+            return 0;
+        destination = segment == 3 ? REG_DS : REG_ES;
+        bytes = 2;
+    }
+    else
+        return 0;
+    registers[destination] = Native->original_ds;
+    registers[REG_EIP] = code16 ? (uint16_t)(ip + bytes) : ip + bytes;
+    return 1;
+}
 static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
 {
     ucontext_t *uctx = (ucontext_t *)ctx;
+    if (handleFlatDataSelector(uctx))
+        return;
     const uint32 *addr = (const uint32 *)info->si_addr;
     const uint32 *tlspage = (const uint32 *)(uintptr_t)Native->execution->tls_address;
     greg_t *gregs = uctx->uc_mcontext.gregs;
@@ -1038,7 +1111,7 @@ static int installSignalHandlers(void)
 
     memset(&action, '\0', sizeof(action));
     action.sa_sigaction = segfault_catcher;
-    action.sa_flags = SA_NODEFER | SA_SIGINFO;
+    action.sa_flags = SA_NODEFER | SA_SIGINFO | SA_ONSTACK;
 
     if (sigaction(SIGSEGV, &action, &Native->previous_segv) == -1)
     {

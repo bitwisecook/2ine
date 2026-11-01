@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Packed resources, callback dismissal, nested ownership and modal queue unwinding. */
 #include "os2libs/pmwin.h"
+#include "os2libs/pmwin/internal.h"
 #include "runtime/runtime.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,9 +42,11 @@ static void make_template(void)
     items[0].cchText = 6;
     items[0].offText = 200;
     memcpy(bytes + 200, "Dialog", 7);
+    items[0].offCtlData = 240;
+    *(uint32_t *)(void *)(bytes + 240) = 3; /* FCF_TITLEBAR | FCF_SYSMENU */
     items[1].offClassName = 3;
     items[1].id = 1;
-    items[1].flStyle = WS_VISIBLE | 0x10000;
+    items[1].flStyle = WS_VISIBLE | 0x20000;
     items[1].cchText = 2;
     items[1].offText = 208;
     memcpy(bytes + 208, "OK", 3);
@@ -61,6 +64,14 @@ static MRESULT OS2API procedure(HWND window, ULONG message, MPARAM first, MPARAM
     if (message == WM_INITDLG)
     {
         initialized++;
+        HWND system = WinWindowFromID(window, FID_SYSMENU);
+        CHECK(system);
+        ULONG id = (ULONG)(uintptr_t)WinSendMsg(system, 0x190, 0, 0);
+        MENUITEM menu;
+        CHECK(id == 0x8007 && WinSendMsg(system, 0x182, (MPARAM)(uintptr_t)id, &menu));
+        CHECK(menu.hwndSubMenu);
+        CHECK((intptr_t)WinSendMsg(menu.hwndSubMenu, 0x18f, (MPARAM)(uintptr_t)0x8004, 0) >= 0);
+        CHECK((intptr_t)WinSendMsg(menu.hwndSubMenu, 0x190, (MPARAM)(uintptr_t)99, 0) == -1);
         CHECK(second == (PVOID)(uintptr_t)0x1234);
         CHECK((HWND)(uintptr_t)first == WinWindowFromID(window, 1));
         CHECK(WinQueryWindowUShort(WinWindowFromID(window, 20), -1) == 20);
@@ -90,6 +101,18 @@ static MRESULT OS2API procedure(HWND window, ULONG message, MPARAM first, MPARAM
             owner = previous;
             mode = 4;
             WinDismissDlg(window, 77);
+        }
+        else if (mode == 5)
+        {
+            AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+            HWND button = WinWindowFromID(window, 1);
+            CHECK(WinSetFocus(HWND_DESKTOP, button));
+            CHECK(!WinSetFocus(HWND_DESKTOP, owner));
+            LxHostEvent event = {0};
+            event.type = LX_HOST_EVENT_KEY_DOWN;
+            event.key = LX_HOST_KEY_RETURN;
+            event.scancode = 0x1c;
+            CHECK(processKeyboardEvent(anchor, &event));
         }
         else
             WinSendDlgItemMsg(window, 1, 0x120, 0, 0); /* BM_CLICK posts WM_COMMAND. */
@@ -134,12 +157,14 @@ int main(void)
     GLoaderState.queryResourceSize = query;
     GLoaderState.freeResource = release_resource;
     make_template();
-    for (mode = 0; mode <= 4; mode++)
+    for (mode = 0; mode <= 5; mode++)
     {
         ULONG flags = 0;
         owner = WinCreateStdWindow(1, 0, &flags, NULL, "Owner", 0, 0, 0, NULL);
         CHECK(owner);
-        ULONG result = WinDlgBox(1, owner, procedure, 0, 777, (PVOID)(uintptr_t)0x1234);
+        CHECK(WinSetWindowPos(owner, 3, 0, 0, 400, 400, SWP_SIZE | SWP_SHOW));
+        ULONG result =
+            WinDlgBox(mode == 5 ? owner : 1, owner, procedure, 0, 777, (PVOID)(uintptr_t)0x1234);
         CHECK(result == (mode == 1   ? 99u
                          : mode == 2 ? 2u
                          : mode == 3 ? 0xffffu
@@ -157,7 +182,7 @@ int main(void)
             CHECK(WinDestroyWindow(owner));
         }
     }
-    CHECK(initialized == 6 && destroyed == 6 && released == 6);
+    CHECK(initialized == 7 && destroyed == 7 && released == 7);
     CHECK(WinDlgBox(1, 0, procedure, 0, 999, NULL) == 0xffff);
     DLGTITEM *items = (void *)(bytes + 14);
     items[1].offText = 255;
