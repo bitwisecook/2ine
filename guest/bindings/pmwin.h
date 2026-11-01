@@ -444,6 +444,10 @@ static uint32 bridge32_WinCreateDlg(uint8 *a)
     lx_execution_release(&data);
     return result;
 }
+static uint32 bridge32_WinEnumDlgItem(uint8 *a)
+{
+    return WinEnumDlgItem(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2));
+}
 static uint32 bridge32_WinLoadDlg(uint8 *a)
 {
     if (!pm_procedure(pm_word(a, 2)))

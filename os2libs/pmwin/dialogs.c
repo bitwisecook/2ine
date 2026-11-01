@@ -54,6 +54,72 @@ static void release(PmDialog *dialog)
     if (!--dialog->references)
         free(dialog);
 }
+HWND WinEnumDlgItem(HWND dialog, HWND item, ULONG code)
+{
+    TRACE_NATIVE("WinEnumDlgItem(%u, %u, %u)", dialog, item, code);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *parent = anchor ? getWindowFromHWND(anchor, dialog) : NULL;
+    if (!parent)
+        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
+    if (code > 7 || !parent->children)
+        return 0;
+    Window *current = getWindowFromHWND(anchor, item);
+    while (current && current != parent && current->parent != parent)
+        current = current->parent;
+    if (code >= 2 && (!current || current == parent))
+        return parent->children->hwnd;
+    Window *start = parent->children, *end = NULL;
+    if (code >= 4)
+    {
+        for (Window *w = start; w; w = w->sibling)
+        {
+            if (w->style & 0x10000) /* WS_GROUP */
+                start = w;
+            if (w == current)
+                break;
+        }
+        end = start->sibling;
+        while (end && !(end->style & 0x10000))
+            end = end->sibling;
+    }
+    Window *first = NULL, *last = NULL, *previous = NULL, *next = NULL;
+    BOOL passed = FALSE;
+    for (Window *w = start; w != end; w = w->sibling)
+    {
+        BOOL eligible = code >= 4 || (w->style & 0x20000); /* WS_TABSTOP */
+        if (w == current)
+            passed = TRUE;
+        if (!eligible)
+            continue;
+        if (!first)
+            first = w;
+        last = w;
+        if (!passed)
+            previous = w;
+        else if (w != current && !next)
+            next = w;
+    }
+    Window *result;
+    switch (code)
+    {
+        case 0:
+        case 4:
+            result = first;
+            break;
+        case 1:
+        case 5:
+            result = last;
+            break;
+        case 2:
+        case 6:
+            result = next ? next : first;
+            break;
+        default:
+            result = previous ? previous : last;
+            break;
+    }
+    return result ? result->hwnd : 0;
+}
 BOOL initializeDialogProcedure(HWND handle, HWND focus, PVOID parameters)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

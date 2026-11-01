@@ -684,6 +684,28 @@ static void frame_state_contracts(void)
 }
 static void dialog_frame_contracts(HWND parent)
 {
+    HWND dialog = WinCreateWindow(parent, "test", "", WS_VISIBLE, 0, 0, 80, 60, parent, HWND_BOTTOM,
+                                  810, NULL, NULL);
+    HWND items[4];
+    for (unsigned i = 0; i < 4; i++)
+        items[i] = WinCreateWindow(dialog, "test", "",
+                                   WS_VISIBLE | (i == 0 || i == 3 ? 0x10000 : 0) |
+                                       (i == 0 || i == 2 ? 0x20000 : 0),
+                                   0, 0, 10, 10, dialog, HWND_BOTTOM, 811 + i, NULL, NULL);
+    HWND nested = WinCreateWindow(items[1], "test", "", WS_VISIBLE, 0, 0, 1, 1, items[1],
+                                  HWND_BOTTOM, 815, NULL, NULL);
+    CHECK(dialog && items[0] && items[1] && items[2] && items[3] && nested);
+    CHECK(WinEnumDlgItem(dialog, 0, 0) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, 0, 1) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, items[2], 2) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, items[0], 3) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, nested, 4) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, nested, 5) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, items[2], 6) == items[0]);
+    CHECK(WinEnumDlgItem(dialog, items[0], 7) == items[2]);
+    CHECK(WinEnumDlgItem(dialog, items[3], 6) == items[3]);
+    CHECK(WinEnumDlgItem(dialog, 0xffffffff, 2) == items[0]);
+    CHECK(WinDestroyWindow(dialog));
     HWND group = WinCreateWindow(parent, (PSZ)WC_STATIC, "", WS_VISIBLE | 2, 0, 0, 80, 60, parent,
                                  HWND_TOP, 800, NULL, NULL);
     HWND content = WinCreateWindow(parent, "test", "", WS_VISIBLE, 10, 10, 20, 20, parent,

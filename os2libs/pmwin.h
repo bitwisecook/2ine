@@ -928,6 +928,7 @@ extern "C"
     OS2EXPORT ULONG OS2API WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module,
                                      ULONG id, PVOID parameters) OS2APIINFO(923);
     OS2EXPORT ULONG OS2API WinProcessDlg(HWND dialog) OS2APIINFO(796);
+    OS2EXPORT HWND OS2API WinEnumDlgItem(HWND dialog, HWND item, ULONG code) OS2APIINFO(740);
     OS2EXPORT BOOL OS2API WinDismissDlg(HWND dialog, ULONG result) OS2APIINFO(729);
     OS2EXPORT MRESULT OS2API WinDefDlgProc(HWND dialog, ULONG message, MPARAM first, MPARAM second)
         OS2APIINFO(910);

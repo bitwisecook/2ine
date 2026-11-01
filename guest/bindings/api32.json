@@ -1212,6 +1212,11 @@
       "argument_bytes": 16,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "WinEnumDlgItem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmgpi": {
