@@ -15,6 +15,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
             pmwinx/module.c
             pmwinx/alerts.c
             pmwinx/time.c
+            pmwinx/timers.c
             pmwinx/locale.c
             pmwinx/context.c
             pmwinx/dde.c

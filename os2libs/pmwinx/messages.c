@@ -126,6 +126,19 @@ static QueuedMessage *new_message(ULONG window, ULONG message, ULONG first, ULON
     node->sequence = ++next_sequence;
     return node;
 }
+BOOL open32PostTimer(ULONG window, ULONG id, ULONG callback)
+{
+    for (QueuedMessage *node = pending; node; node = node->next)
+        if (lx_guest_load_u32(node->wire) == window && lx_guest_load_u32(node->wire + 4) == 0x113 &&
+            lx_guest_load_u32(node->wire + 8) == id)
+            return TRUE;
+    QueuedMessage *node = new_message(window, 0x113, id, callback);
+    if (!node)
+        return FALSE;
+    insert_message(node);
+    WinPostMsg(HWND_DESKTOP, 0, 0, 0);
+    return TRUE;
+}
 static BOOL accept_native(const QMSG *native)
 {
     ULONG message, first, second;
@@ -344,17 +357,29 @@ LONG DispatchMessage(PVOID input)
     const uint8 *wire = input;
     ULONG handle = lx_guest_load_u32(wire), message = lx_guest_load_u32(wire + 4);
     ULONG first = lx_guest_load_u32(wire + 8), second = lx_guest_load_u32(wire + 12);
-    if (!handle || message == 18)
+    BOOL timer_callback = message == 0x113 && second;
+    if ((!handle && !timer_callback) || message == 18)
         return 0;
     Open32Window *window = open32FindWindow(handle);
-    if (!window)
+    if (handle && !window)
     {
         open32SetError(1400);
         return 0;
     }
     QueuedMessage *node = find_message(input);
     LONG result;
-    if ((node && node->native_valid) || message == 15)
+    if (timer_callback)
+    {
+        if (!open32ValidProcedure(second))
+        {
+            open32SetError(87);
+            return 0;
+        }
+        lx_execution_callback32_4(GLoaderState.execution, second, handle, message, first,
+                                  lx_guest_load_u32(wire + 16));
+        result = 0;
+    }
+    else if ((node && node->native_valid) || message == 15)
     {
         QMSG native =
             node && node->native_valid ? node->native : (QMSG){.hwnd = handle, .msg = WM_PAINT};

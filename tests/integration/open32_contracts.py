@@ -191,6 +191,9 @@ API = {
     "RealizePalette": 536,
     "GetPaletteEntries": 332,
     "GetNearestPaletteIndex": 321,
+    "GetDriveType": 277,
+    "GetLogicalDrives": 303,
+    "GetLogicalDriveStrings": 302,
     "GetFullPathName": 292,
     "GetCurrentDirectory": 253,
     "SetCurrentDirectory": 604,
@@ -709,6 +712,26 @@ def directory_program():
     g.result(13, 193)
     g.word(path_output, int.from_bytes(b"C:\\f", "little"), 194)
     g.word(filepart, path_output + 3, 195)
+    root = g.field(b"c:\\\0")
+    missing_drive = g.field(b"z:\\\0")
+    call(g, "GetDriveType", root)
+    g.result(3, 196)
+    call(g, "GetDriveType", 0)
+    g.result(3, 197)
+    call(g, "GetDriveType", missing_drive)
+    g.result(1, 198)
+    call(g, "GetLogicalDrives")
+    g.result(4, 199)
+    call(g, "GetLogicalDriveStrings", 0, 0)
+    g.result(5, 200)
+    call(g, "GetLogicalDriveStrings", 2, output)
+    g.result(5, 201)
+    g.word(output, 0, 202)
+    call(g, "GetLogicalDriveStrings", 1024, output)
+    g.result(4, 203)
+    g.word(output, int.from_bytes(b"C:\\\0", "little"), 204)
+    g.word(output + 4, 0, 205)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", output, 0))
     call(g, "RegisterClipboardFormat", name)
     store(g, length)
     call(g, "GlobalAddAtom", name)

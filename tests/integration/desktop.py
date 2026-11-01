@@ -363,6 +363,64 @@ def module_address(checked):
     return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWP", "PMWIN"], "MODADDR", data=g.data)
 
 
+def registry_enumeration(checked):
+    g = FlatGuest()
+    parent_name = g.field(b"Software\\TwoineEnum\0")
+    child_name, grand_name = g.field(b"Child\0"), g.field(b"Grandchild\0")
+    class_name = g.field(b"Workbook\0")
+    parent, child, grand, restricted = (g.field(bytes(4)) for _ in range(4))
+    name, class_output, timestamp = (g.field(bytes(n)) for n in (64, 64, 8))
+    length, class_length = g.field(struct.pack("<I", 1)), g.field(struct.pack("<I", 64))
+    g.call(2, 543, 0x80000001, parent_name, 0, 0, 0, 0x1F003F, 0, parent, 0)
+    g.result(0, 1)
+    g.call(2, 543, (parent,), child_name, 0, class_name, 0, 0x1F003F, 0, child, 0)
+    g.result(0, 2)
+    g.call(2, 542, (child,), grand_name, grand)
+    g.result(0, 3)
+    g.call(2, 547, (parent,), 0, name, length, 0, class_output, class_length, timestamp)
+    g.result(234, 4)
+    g.word(name, 0, 5)
+    g.word(length, 1, 6)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", length, 64))
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", class_length, 1))
+    g.call(2, 547, (parent,), 0, name, length, 0, class_output, class_length, timestamp)
+    g.result(234, 7)
+    g.word(name, 0, 8)
+    g.word(length, 64, 9)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", class_length, 64))
+    g.call(2, 547, (parent,), 0, name, length, 0, class_output, class_length, timestamp)
+    g.result(0, 10)
+    g.word(name, int.from_bytes(b"chil", "little"), 11)
+    g.word(length, 5, 12)
+    g.word(class_output, int.from_bytes(b"Work", "little"), 13)
+    g.word(class_length, 8, 14)
+    g.require(b"\x83\x3d" + struct.pack("<I", timestamp + 4) + b"\0\x0f\x95\xc0\x3c\x01", 15)
+    g.call(2, 547, (parent,), 1, name, length, 0, 0, 0, 0)
+    g.result(259, 16)
+    g.word(length, 5, 17)
+    g.call(2, 546, (child,), 0, name, 64)
+    g.result(0, 18)
+    g.word(name, int.from_bytes(b"gran", "little"), 19)
+    g.call(2, 550, 0x80000001, parent_name, 0, 1, restricted)
+    g.result(0, 20)
+    g.call(2, 547, (restricted,), 0, name, length, 0, 0, 0, 0)
+    g.result(5, 21)
+    g.call(2, 547, 0xDEADBEEF, 0, name, length, 0, 0, 0, 0)
+    g.result(6, 22)
+    g.call(2, 547, (parent,), 0, name, length, 1, 0, 0, 0)
+    g.result(87, 23)
+    if checked:
+        g.call(2, 547, (parent,), 0, name, 0xDEADBEEF, 0, 0, 0, 0)
+        g.result(87, 24)
+        g.call(2, 547, (parent,), 0, name, length, 0, 0, 0, 0xDEADBEEF)
+        g.result(87, 25)
+    for handle in (restricted, grand, child, parent):
+        g.call(2, 541, (handle,))
+        g.result(0, 26)
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX"], "REGENUM", data=g.data)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -398,6 +456,7 @@ def main():
         )
         for payload in (
             program(args.backend == "unicorn"),
+            registry_enumeration(args.backend == "unicorn"),
             desktop_services(),
             module_address(args.backend == "unicorn"),
             libraries_program(),

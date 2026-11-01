@@ -13,6 +13,7 @@ static void open32Shutdown(void);
 static uint32 references;
 static void open32Shutdown(void)
 {
+    open32TimersCleanup();
     open32DdeCleanup();
     open32QueueCleanup();
     open32CaretCleanup();

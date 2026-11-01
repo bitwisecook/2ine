@@ -49,6 +49,7 @@ from open32_patterns import pattern_program
 from open32_posts import posted_program
 from open32_scroll import scroll_program
 from open32_text import alignment_program
+from open32_timers import timer_program
 
 
 def program():
@@ -255,6 +256,7 @@ def main():
         run(program(), ["alpha", "beta"])
         run(dde_program())
         run(clipboard_program())
+        run(timer_program())
         run(window_program())
         run(api_window_program())
         run(keyboard_program())

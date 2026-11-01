@@ -121,3 +121,50 @@ ULONG GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
     }
     return length;
 }
+
+ULONG GetDriveType(PSZ root)
+{
+    TRACE_NATIVE("GetDriveType('%s')", root ? root : "");
+    ULONG drive = GLoaderState.current_disk;
+    if (root)
+    {
+        unsigned char letter = (unsigned char)root[0];
+        if (letter >= 'a' && letter <= 'z')
+            letter -= 'a' - 'A';
+        if (letter < 'A' || letter > 'Z' || root[1] != ':' ||
+            (root[2] && (root[2] != '\\' && root[2] != '/')) || (root[2] && root[3]))
+            return 1; /* DRIVE_NO_ROOT_DIR */
+        drive = letter - 'A' + 1;
+    }
+    if (!drive || drive > 26 || !(GLoaderState.diskmap & (1u << (drive - 1))))
+        return 1;
+    /* Configured drives are fixed, directory-backed virtual volumes. */
+    return 3;
+}
+ULONG GetLogicalDrives(void)
+{
+    return GLoaderState.diskmap & 0x03ffffffu;
+}
+ULONG GetLogicalDriveStrings(ULONG capacity, PSZ output)
+{
+    char roots[26 * 4 + 1];
+    ULONG size = 0, drives = GetLogicalDrives();
+    for (unsigned i = 0; i < 26; i++)
+        if (drives & (1u << i))
+        {
+            roots[size++] = (char)('A' + i);
+            roots[size++] = ':';
+            roots[size++] = '\\';
+            roots[size++] = 0;
+        }
+    roots[size] = 0;
+    if (capacity <= size)
+        return size + 1;
+    if (!output)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    memcpy(output, roots, size + 1);
+    return size;
+}

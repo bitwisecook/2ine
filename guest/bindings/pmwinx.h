@@ -2936,3 +2936,111 @@ static uint32 bridge32_CountClipboardFormats(uint8 *a)
     (void)a;
     return CountClipboardFormats();
 }
+
+static uint32 bridge32_RegEnumKeyEx(uint8 *a)
+{
+    uint32 np = lx_guest_load_u32(a + 8), sp = lx_guest_load_u32(a + 12);
+    uint32 cp = lx_guest_load_u32(a + 20), cs = lx_guest_load_u32(a + 24);
+    uint32 tp = lx_guest_load_u32(a + 28), result = ERROR_INVALID_PARAMETER;
+    LxGuestBorrow name = {0}, size = {0}, class_name = {0}, class_size = {0}, timestamp = {0};
+    if (!np || lx_guest_load_u32(a + 16) ||
+        !lx_execution_borrow(GLoaderState.execution, sp, 4, 3, &size) || (cp && !cs) ||
+        (cs && !lx_execution_borrow(GLoaderState.execution, cs, 4, 3, &class_size)) ||
+        (tp && !lx_execution_borrow(GLoaderState.execution, tp, 8, LX_GUEST_WRITE, &timestamp)))
+        goto done;
+    ULONG length = lx_guest_load_u32(size.host);
+    ULONG class_length = cs ? lx_guest_load_u32(class_size.host) : 0;
+    if (length > 32768 || class_length > 32768)
+    {
+        result = ERROR_MORE_DATA;
+        goto done;
+    }
+    if ((length &&
+         !lx_execution_borrow(GLoaderState.execution, np, length, LX_GUEST_WRITE, &name)) ||
+        (cp && class_length &&
+         !lx_execution_borrow(GLoaderState.execution, cp, class_length, LX_GUEST_WRITE,
+                              &class_name)))
+        goto done;
+    char empty = 0;
+    result = (uint32)RegEnumKeyEx(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                                  length ? name.host : &empty, &length, NULL,
+                                  cp ? (class_length ? class_name.host : &empty) : NULL,
+                                  cs ? &class_length : NULL, timestamp.host);
+    if (!result)
+    {
+        lx_guest_store_u32(size.host, length);
+        if (cs)
+            lx_guest_store_u32(class_size.host, class_length);
+    }
+done:
+    lx_execution_release(&timestamp);
+    lx_execution_release(&class_size);
+    lx_execution_release(&class_name);
+    lx_execution_release(&size);
+    lx_execution_release(&name);
+    return result;
+}
+static uint32 bridge32_RegEnumKey(uint8 *a)
+{
+    uint32 capacity = lx_guest_load_u32(a + 12);
+    LxGuestBorrow output = {0};
+    if (!lx_guest_load_u32(a + 8))
+        return ERROR_INVALID_PARAMETER;
+    if (capacity > 32768)
+        return ERROR_MORE_DATA;
+    if (capacity && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), capacity,
+                                         LX_GUEST_WRITE, &output))
+        return ERROR_INVALID_PARAMETER;
+    char empty = 0;
+    uint32 result = (uint32)RegEnumKey(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                                       capacity ? output.host : &empty, capacity);
+    lx_execution_release(&output);
+    return result;
+}
+
+static uint32 bridge32_SetTimer(uint8 *a)
+{
+    return SetTimer(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                    lx_guest_load_u32(a + 12));
+}
+static uint32 bridge32_KillTimer(uint8 *a)
+{
+    return KillTimer(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+
+static uint32 bridge32_GetDriveType(uint8 *a)
+{
+    uint32 pointer = lx_guest_load_u32(a);
+    char *root = pointer ? o32_string(pointer) : NULL;
+    if (pointer && !root)
+    {
+        open32SetError(87);
+        return 1;
+    }
+    uint32 result = GetDriveType(root);
+    free(root);
+    return result;
+}
+static uint32 bridge32_GetLogicalDrives(uint8 *a)
+{
+    (void)a;
+    return GetLogicalDrives();
+}
+static uint32 bridge32_GetLogicalDriveStrings(uint8 *a)
+{
+    uint32 capacity = lx_guest_load_u32(a);
+    char roots[26 * 4 + 1];
+    uint32 length = GetLogicalDriveStrings(sizeof roots, roots);
+    if (capacity <= length)
+        return length + 1;
+    LxGuestBorrow output;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), length + 1,
+                             LX_GUEST_WRITE, &output))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    memcpy(output.host, roots, length + 1);
+    lx_execution_release(&output);
+    return length;
+}

@@ -36,6 +36,9 @@ extern "C"
     OS2EXPORT BOOL OS2API DdeUninitialize(ULONG id) OS2APIINFO(ord = 127, name = DDEUNINITIALIZE);
     OS2EXPORT ULONG OS2API GetLastError(void) OS2APIINFO(ord = 300, name = GETLASTERROR);
     OS2EXPORT VOID OS2API SetLastError(ULONG error) OS2APIINFO(ord = 624, name = SETLASTERROR);
+    OS2EXPORT ULONG OS2API SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
+        OS2APIINFO(ord = 653, name = SETTIMER);
+    OS2EXPORT BOOL OS2API KillTimer(ULONG window, ULONG id) OS2APIINFO(ord = 452, name = KILLTIMER);
     OS2EXPORT VOID OS2API Sleep(ULONG milliseconds) OS2APIINFO(ord = 673, name = SLEEP);
     OS2EXPORT ULONG OS2API GetModuleFileName(HMODULE module, PSZ output, ULONG capacity)
         OS2APIINFO(ord = 318, name = GETMODULEFILENAME);
@@ -195,6 +198,10 @@ extern "C"
         OS2APIINFO(ord = 2055, name = GETLOCALEINFO);
     OS2EXPORT BOOL OS2API IsDBCSLeadByte(ULONG character)
         OS2APIINFO(ord = 442, name = ISDBCSLEADBYTE);
+    OS2EXPORT ULONG OS2API GetDriveType(PSZ root) OS2APIINFO(ord = 277, name = GETDRIVETYPE);
+    OS2EXPORT ULONG OS2API GetLogicalDrives(void) OS2APIINFO(ord = 303, name = GETLOGICALDRIVES);
+    OS2EXPORT ULONG OS2API GetLogicalDriveStrings(ULONG capacity, PSZ output)
+        OS2APIINFO(ord = 302, name = GETLOGICALDRIVESTRINGS);
     OS2EXPORT ULONG OS2API GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
         OS2APIINFO(ord = 292, name = GETFULLPATHNAME);
     OS2EXPORT ULONG OS2API GetCurrentDirectory(ULONG capacity, PSZ output)
@@ -557,6 +564,11 @@ extern "C"
     OS2EXPORT LONG OS2API RegQueryValueEx(ULONG key, PSZ name, PULONG reserved, PULONG type,
                                           PVOID data, PULONG size)
         OS2APIINFO(ord = 553, name = REGQUERYVALUEEX);
+    OS2EXPORT LONG OS2API RegEnumKey(ULONG key, ULONG index, PSZ name, ULONG capacity)
+        OS2APIINFO(ord = 546, name = REGENUMKEY);
+    OS2EXPORT LONG OS2API RegEnumKeyEx(ULONG key, ULONG index, PSZ name, PULONG name_size,
+                                       PULONG reserved, PSZ class_name, PULONG class_size,
+                                       PVOID last_write) OS2APIINFO(ord = 547, name = REGENUMKEYEX);
     OS2EXPORT LONG OS2API RegEnumValue(ULONG key, ULONG index, PSZ name, PULONG name_size,
                                        PULONG reserved, PULONG type, PVOID data, PULONG data_size)
         OS2APIINFO(ord = 548, name = REGENUMVALUE);

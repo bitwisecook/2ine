@@ -142,6 +142,7 @@ static PFNWP pm_window_procedure(void)
 static void discard_window(Open32Window *w)
 {
     open32PropertiesCleanup(w);
+    open32TimersWindowDestroyed(w->handle);
     open32ClipboardWindowDestroyed(w->handle);
     if (w->creation)
         lx_execution_unmap(GLoaderState.execution, w->creation);

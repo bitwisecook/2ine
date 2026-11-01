@@ -3366,6 +3366,41 @@
       "argument_bytes": 0,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "RegEnumKey": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegEnumKeyEx": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetTimer": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "KillTimer": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetDriveType": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetLogicalDrives": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetLogicalDriveStrings": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmdrag": {

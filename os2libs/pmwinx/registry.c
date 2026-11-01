@@ -7,6 +7,7 @@
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "hal/host_sync.h"
+#include "hal/host.h"
 
 typedef struct RegistryKey
 {
@@ -23,6 +24,7 @@ enum
     KEY_QUERY_VALUE = 1,
     KEY_SET_VALUE = 2,
     KEY_CREATE_SUB_KEY = 4,
+    KEY_ENUMERATE_SUB_KEYS = 8,
     /* Open32 KEY_ALL_ACCESS includes SYNCHRONIZE in STANDARD_RIGHTS_ALL. */
     KEY_ALL_ACCESS = 0x001f003f
 };
@@ -143,6 +145,28 @@ static int key_exists(const char *path)
     ULONG size;
     return !strchr(path, '\\') || PrfQueryProfileSize(database, (PSZ)path, "k:", &size);
 }
+static BOOL touch_key(const char *path)
+{
+    uint64 time = lx_host_realtime_us() * 10 + 116444736000000000ULL;
+    uint8 wire[8];
+    lx_guest_store_u32(wire, (uint32)time);
+    lx_guest_store_u32(wire + 4, (uint32)(time >> 32));
+    return PrfWriteProfileData(database, (PSZ)path, "t:", wire, sizeof wire);
+}
+static BOOL create_key_record(char *path, const char *class_name)
+{
+    if (!PrfWriteProfileString(database, path, "k:", "") ||
+        !PrfWriteProfileString(database, path, "c:", (PSZ)(class_name ? class_name : "")) ||
+        !touch_key(path))
+        return FALSE;
+    char *parent = strrchr(path, '\\');
+    if (!parent)
+        return TRUE;
+    *parent = 0;
+    BOOL result = touch_key(path);
+    *parent = '\\';
+    return result;
+}
 LONG RegCloseKey(ULONG key)
 {
     if (root_name(key))
@@ -205,8 +229,8 @@ LONG RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name, ULONG o
     TRACE_NATIVE("RegCreateKeyEx(%08X, '%s', %u, '%s', %u, %X, %p, %p, %p)", (uint)key, name,
                  (uint)reserved, class_name, (uint)options, (uint)access, security, output,
                  disposition);
-    (void)class_name;
-    if (!output || reserved || (access & ~KEY_ALL_ACCESS))
+    if (!output || reserved || (access & ~KEY_ALL_ACCESS) ||
+        (class_name && strlen(class_name) > 32767))
         return ERROR_INVALID_PARAMETER;
     if (options || security)
         return ERROR_NOT_SUPPORTED;
@@ -226,11 +250,11 @@ LONG RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name, ULONG o
             if (*p == '\\')
             {
                 *p = 0;
-                if (!key_exists(path) && !PrfWriteProfileString(database, path, "k:", ""))
+                if (!key_exists(path) && !create_key_record(path, NULL))
                     result = ERROR_WRITE_FAULT;
                 *p = '\\';
             }
-        if (!result && !exists && !PrfWriteProfileString(database, path, "k:", ""))
+        if (!result && !exists && !create_key_record(path, class_name))
             result = ERROR_WRITE_FAULT;
         if (!result)
         {
@@ -268,9 +292,10 @@ LONG RegSetValueEx(ULONG key, PSZ name, ULONG reserved, ULONG type, PVOID data, 
                 lx_guest_store_u32(wire, type);
                 if (size)
                     memcpy(wire + 4, data, size);
-                result = PrfWriteProfileData(database, path, value, wire, size + 4)
-                             ? NO_ERROR
-                             : ERROR_WRITE_FAULT;
+                result =
+                    PrfWriteProfileData(database, path, value, wire, size + 4) && touch_key(path)
+                        ? NO_ERROR
+                        : ERROR_WRITE_FAULT;
                 free(wire);
             }
         }
@@ -293,8 +318,9 @@ LONG RegDeleteValue(ULONG key, PSZ name)
             ULONG size = 0;
             result = ERROR_FILE_NOT_FOUND;
             if (PrfQueryProfileSize(database, path, value, &size))
-                result = PrfWriteProfileData(database, path, value, NULL, 0) ? NO_ERROR
-                                                                             : ERROR_WRITE_FAULT;
+                result = PrfWriteProfileData(database, path, value, NULL, 0) && touch_key(path)
+                             ? NO_ERROR
+                             : ERROR_WRITE_FAULT;
         }
     }
     free(path);
@@ -346,6 +372,88 @@ LONG RegQueryValueEx(ULONG key, PSZ name, PULONG reserved, PULONG type, PVOID ou
     free(path);
     free(value);
     return result;
+}
+LONG RegEnumKeyEx(ULONG key, ULONG index, PSZ name, PULONG name_size, PULONG reserved,
+                  PSZ class_name, PULONG class_size, PVOID last_write)
+{
+    TRACE_NATIVE("RegEnumKeyEx(%x, %u, %p, %p, %p, %p, %p, %p)", (uint)key, (uint)index, name,
+                 name_size, reserved, class_name, class_size, last_write);
+    if (!name || !name_size || reserved || (class_name && !class_size))
+        return ERROR_INVALID_PARAMETER;
+    lx_host_once(&once, initialize);
+    if (!database)
+        return ERROR_OPEN_FAILED;
+    ULONG access;
+    char *path = key_path(key, NULL, &access);
+    if (!path)
+        return ERROR_INVALID_HANDLE;
+    LONG result = ERROR_ACCESS_DENIED;
+    char *names = NULL;
+    if (!(access & KEY_ENUMERATE_SUB_KEYS))
+        goto done;
+    ULONG bytes = 0;
+    result = ERROR_NO_MORE_ITEMS;
+    if (!PrfQueryProfileSize(database, NULL, NULL, &bytes))
+        goto done;
+    result = ERROR_NOT_ENOUGH_MEMORY;
+    if (bytes == UINT32_MAX || !(names = calloc((size_t)bytes + 1, 1)))
+        goto done;
+    result = ERROR_MORE_DATA;
+    if (!PrfQueryProfileData(database, NULL, NULL, names, &bytes))
+        goto done;
+    result = ERROR_NO_MORE_ITEMS;
+    size_t prefix = strlen(path);
+    for (char *entry = names; *entry; entry += strlen(entry) + 1)
+    {
+        if (strncmp(entry, path, prefix) || entry[prefix] != '\\' || !entry[prefix + 1] ||
+            strchr(entry + prefix + 1, '\\'))
+            continue;
+        if (index--)
+            continue;
+        ULONG length = (ULONG)strlen(entry + prefix + 1), class_bytes = 0;
+        PrfQueryProfileSize(database, entry, "c:", &class_bytes);
+        char *class_value = calloc((size_t)class_bytes + 1, 1);
+        if (!class_value)
+        {
+            result = ERROR_NOT_ENOUGH_MEMORY;
+            break;
+        }
+        if (class_bytes && !PrfQueryProfileData(database, entry, "c:", class_value, &class_bytes))
+        {
+            free(class_value);
+            result = ERROR_MORE_DATA;
+            break;
+        }
+        ULONG class_length = (ULONG)strlen(class_value);
+        result = ERROR_MORE_DATA;
+        if (*name_size > length && (!class_name || *class_size > class_length))
+        {
+            memcpy(name, entry + prefix + 1, length + 1);
+            *name_size = length;
+            if (class_name)
+                memcpy(class_name, class_value, class_length + 1);
+            if (class_size)
+                *class_size = class_length;
+            if (last_write)
+            {
+                uint8 timestamp[8] = {0};
+                ULONG count = sizeof timestamp;
+                PrfQueryProfileData(database, entry, "t:", timestamp, &count);
+                memcpy(last_write, timestamp, sizeof timestamp);
+            }
+            result = NO_ERROR;
+        }
+        free(class_value);
+        break;
+    }
+done:
+    free(names);
+    free(path);
+    return result;
+}
+LONG RegEnumKey(ULONG key, ULONG index, PSZ name, ULONG capacity)
+{
+    return RegEnumKeyEx(key, index, name, &capacity, NULL, NULL, NULL, NULL);
 }
 LONG RegEnumValue(ULONG key, ULONG index, PSZ name, PULONG name_size, PULONG reserved, PULONG type,
                   PVOID data, PULONG data_size)
