@@ -62,6 +62,8 @@ can be saved as `env.NAME`. The host's executable PATH stays intact; use OS2PATH
 or the guest CONFIG.SYS PATH for guest programs. Installer changes to CONFIG.SYS
 are read at each launch; explicit bottle environment settings take precedence.
 The default DPATH searches C:\OS2 and C:\OS2\SYSTEM for message files.
+The default LANG is en_US, matching the current United States NLS provider;
+CONFIG.SYS and explicit bottle environment settings can override it.
 Only SET and LIBPATH lines are interpreted. Kernel drivers and boot commands
 in CONFIG.SYS are not executed by 2ine.
 
@@ -91,3 +93,39 @@ identified by their content hash and execution backend. Guest module-name querie
 can inspect those actual files. Existing versions remain available to running
 processes. External provider assets still come from `--build`;
 a bottle alone is not a standalone runtime distribution.
+
+## Lotus SmartSuite installation
+
+The English SmartSuite base 1.7 installer uses OS/2's command processor and
+system-version files. Supply `CMD.EXE` and `SYSLEVEL.OS2` from your OS/2 system
+in `drive_c/OS2`, and `OSO001.MSG` in `drive_c/OS2/SYSTEM`. Map the extracted
+SmartSuite CD as D: and copy its `ENGLISH/SUITE.RSP` into the bottle's C: drive.
+
+Edit that response file with your registration and license choices. To install
+all suite components, select these seven `COMP` entries and retain the default
+product installation options:
+
+```text
+COMP = Shared Components for OS/2
+COMP = Freelance Graphics for OS/2
+COMP = Word Pro for OS/2
+COMP = 1-2-3 for OS/2
+COMP = Approach for OS/2
+COMP = Organizer for OS/2
+COMP = DocOnline for OS/2
+```
+
+Run the original installer from a graphical session:
+
+```sh
+python3 tools/bottles.py --bottle bottles/office --build build-portable --backend unicorn \
+  install 'D:\ENGLISH\INSTALL.EXE' /a:I '/l1:C:\suite.log' \
+  '/p:Lotus SmartSuite W4 English Standard Version' '/s:D:\ENGLISH' /x '/r:C:\suite.rsp'
+```
+
+If the optional installer-help message appears, acknowledge its dialog.
+The installer writes its progress to `drive_c/suite.log` and the manager records
+the process result in `logs/last-install.json`. A fresh bottle launch reloads
+CONFIG.SYS after the installer's reboot message. The installer configures the
+five main applications, shared components and online-documentation payloads;
+optional features follow the response-file selections.

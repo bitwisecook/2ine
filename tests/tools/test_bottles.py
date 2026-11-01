@@ -42,6 +42,14 @@ class BottleTests(unittest.TestCase):
             Path(first["TWOINE_USER_PROFILE"]).read_bytes(), b"persistent application settings"
         )
         self.assertFalse(Path(other["TWOINE_USER_PROFILE"]).exists())
+        with patch.dict(os.environ, {"LANG": "C.UTF-8"}):
+            self.assertEqual(
+                bottles.environment(self.bottle, self.data, self.root, "unicorn")["LANG"], "en_US"
+            )
+        self.data["environment"]["LANG"] = "de_DE"
+        self.assertEqual(
+            bottles.environment(self.bottle, self.data, self.root, "unicorn")["LANG"], "de_DE"
+        )
 
     def test_media_mapping_and_case_resolution(self):
         media = self.root / "media"

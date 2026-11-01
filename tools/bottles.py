@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ENV = {
+    "LANG": "en_US",
     "OS2PATH": r"C:\OS2;C:\OS2\SYSTEM",
     "LIBPATH": r"C:\OS2\DLL",
     "DPATH": r"C:\OS2;C:\OS2\SYSTEM",
