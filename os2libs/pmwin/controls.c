@@ -38,7 +38,7 @@ void destroyControl(Window *window)
 }
 void controlRepaint(Window *window)
 {
-    postTimestampedMsg(getAnchorBlockNoHAB(), window->hwnd, WM_PAINT, 0, 0, currentSystemTicks());
+    WinInvalidateRect(window->hwnd, NULL, FALSE);
 }
 void controlNotify(Window *window, USHORT code)
 {

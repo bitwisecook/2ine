@@ -15,7 +15,7 @@ BOOL WinSetWindowText(HWND handle, PSZ text)
     window->text = copy;
     if (window->parent == &desktop_window)
         lx_host_window_title(window->heavy.window, copy);
-    postTimestampedMsg(anchor, handle, WM_PAINT, 0, 0, currentSystemTicks());
+    WinInvalidateRect(handle, NULL, FALSE);
     controlTextChanged(window);
     return TRUE;
 }

@@ -97,11 +97,14 @@ Reference captures live in `research/reference_screenshots/wordpro/`.
 Manual macOS ARM64 testing reaches the welcome dialog and document editor.
 The Edit-menu initialization failure caused by missing clipboard/atom exports
 has been addressed, together with transparent dialog frames, menu tracking,
-class clipping and Open32 system cursors. This does not qualify the full workflow
-on macOS: initial page and toolbar drawing has intermittently required input or
-a focus change, a blank menu-bar entry has been observed, and launch/foreground
-behavior remains under investigation. The newest host-event pumping change has
-regression coverage but still needs successful application-level confirmation.
+class clipping and Open32 system cursors. Manual testing on macOS ARM64 now
+confirms that the document and toolbar draw immediately after creation, without
+a keypress or focus change. Paint requests persist until validation, and parents
+paint before their children. Regression tests cover deferred painting, update
+validation, hidden ancestors and parent/child drawing order. This does not qualify
+the full workflow on macOS: a blank menu-bar entry has been observed, the small
+vertical toolbar decoration draws its white icon without the blue background,
+and launch/foreground behavior remains under investigation.
 1-2-3 is the next application; other suite applications are deferred.
 
 ```sh

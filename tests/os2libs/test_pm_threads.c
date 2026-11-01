@@ -88,11 +88,15 @@ int main(void)
     QMSG message;
     unsigned count = 0;
     while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+    {
+        if (message.msg == WM_PAINT)
+            WinDispatchMsg(hab, &message);
         if (message.msg == WM_USER + 1)
         {
             CHECK(message.hwnd == client && (uintptr_t)message.mp1 == count);
             count++;
         }
+    }
     CHECK(count == 1000);
     HWND old_client = client;
     CHECK(WinDestroyWindow(frame));

@@ -112,8 +112,7 @@ static void hook_contracts(HAB hab, HWND window)
 {
     QMSG message;
     while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
-    {
-    }
+        WinDispatchMsg(hab, &message);
     CHECK(WinSetHook(hab, 1, 1, (PFN)input_hook, 0));
     CHECK(WinPostMsg(window, WM_USER + 100, 0, 0));
     CHECK(WinPostMsg(window, WM_USER + 101, 0, 0));
@@ -125,8 +124,7 @@ static void busy_queue_host_events(HAB hab, HWND window)
 {
     QMSG message;
     while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
-    {
-    }
+        WinDispatchMsg(hab, &message);
     CHECK(WinPostMsg(window, WM_USER + 150, 0, 0));
     LxHostEvent quit = {.type = LX_HOST_EVENT_QUIT};
     CHECK(lx_host_video_push(&quit));
@@ -447,6 +445,46 @@ static MPARAM menu_point(Window *window, unsigned id)
         }
     CHECK(0);
     return 0;
+}
+static void paint_scheduling_contracts(HAB hab)
+{
+    QMSG message;
+    while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
+        WinDispatchMsg(hab, &message);
+    HWND parent = WinCreateWindow(HWND_DESKTOP, "test", "paint order", WS_VISIBLE, 0, 0, 32, 32, 0,
+                                  HWND_TOP, 990, NULL, NULL);
+    HWND child = WinCreateWindow(parent, "test", "child", WS_VISIBLE, 0, 0, 16, 16, parent,
+                                 HWND_TOP, 991, NULL, NULL);
+    CHECK(parent && child);
+    /* An older child invalidation must not put child painting ahead of its parent. */
+    HPS initial = WinBeginPaint(parent, 0, NULL);
+    CHECK(initial && WinEndPaint(initial));
+    CHECK(WinInvalidateRect(child, NULL, FALSE) && WinInvalidateRect(parent, NULL, FALSE));
+    CHECK(WinPostMsg(parent, WM_USER + 151, 0, 0));
+    CHECK(WinPeekMsg(hab, &message, parent, 0, 0, 1) && message.msg == WM_USER + 151);
+    CHECK(WinPeekMsg(hab, &message, 0, WM_PAINT, WM_PAINT, 1));
+    CHECK(message.hwnd == parent);
+    /* PM_REMOVE removes no update region: deferred paint is returned again. */
+    CHECK(WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, 1));
+    HPS paint = WinBeginPaint(parent, 0, NULL);
+    RECTL bounds = {0, 0, 32, 32};
+    CHECK(paint && WinFillRect(paint, &bounds, CLR_BLUE) && WinEndPaint(paint));
+    CHECK(WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, 1));
+    paint = WinBeginPaint(child, 0, NULL);
+    CHECK(paint && WinFillRect(paint, &bounds, CLR_RED) && WinEndPaint(paint));
+    HPS ps = WinGetPS(child);
+    uint32_t pixel;
+    CHECK(ps && lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(WinReleasePS(ps));
+    CHECK(!WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, 1));
+    CHECK(!WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, 1));
+    CHECK(WinShowWindow(parent, FALSE) && WinInvalidateRect(child, NULL, FALSE));
+    CHECK(!WinPeekMsg(hab, &message, child, WM_PAINT, WM_PAINT, 1));
+    CHECK(WinShowWindow(parent, TRUE));
+    CHECK(WinGetMsg(hab, &message, parent, WM_PAINT, WM_PAINT) && message.hwnd == parent);
+    WinDispatchMsg(hab, &message); /* Default painting must validate too. */
+    CHECK(!WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, 1));
+    CHECK(WinDestroyWindow(parent));
 }
 static void menu_tracking_contracts(HWND parent)
 {
@@ -934,6 +972,7 @@ int main(void)
     list_contracts(frame);
     hook_contracts(hab, client);
     busy_queue_host_events(hab, client);
+    paint_scheduling_contracts(hab);
     keyboard_contracts(hab, client);
     host_focus_contracts(hab, frame, client);
     capture_release_contracts(hab, client);

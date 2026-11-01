@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Invalidations accumulate before painting; one queued paint represents their union. */
+/* Damage persists until validated; the message loop synthesizes paint requests. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/paint.h"
 static void remove_paint(AnchorBlock *anchor, HWND handle)
@@ -27,6 +27,7 @@ static void remove_paint(AnchorBlock *anchor, HWND handle)
 void validateWindowPaint(AnchorBlock *anchor, Window *window)
 {
     window->invalid = (RECTL){0, 0, 0, 0};
+    window->paint_pending = FALSE;
     remove_paint(anchor, window->hwnd);
 }
 BOOL windowAcceptsUpdates(const Window *window)
@@ -38,6 +39,7 @@ BOOL windowAcceptsUpdates(const Window *window)
 }
 static void suspend_paint(AnchorBlock *anchor, Window *window)
 {
+    window->paint_pending = FALSE;
     remove_paint(anchor, window->hwnd);
     for (Window *child = window->children; child; child = child->sibling)
         suspend_paint(anchor, child);
@@ -77,14 +79,8 @@ BOOL WinInvalidateRect(HWND handle, PRECTL rectangle, BOOL children)
     if (!WinIntersectRect(0, &damaged, &bounds, rectangle ? rectangle : &bounds))
         return TRUE;
     WinUnionRect(0, &window->invalid, &window->invalid, &damaged);
-    if (WinIsWindowVisible(handle) && windowAcceptsUpdates(window))
-    {
-        MessageQueueItem *item = anchor->message_queue.head;
-        while (item && (item->qmsg.hwnd != handle || item->qmsg.msg != WM_PAINT))
-            item = item->next;
-        if (!item && !postTimestampedMsg(anchor, handle, WM_PAINT, 0, 0, currentSystemTicks()))
-            return FALSE;
-    }
+    if (windowAcceptsUpdates(window))
+        window->paint_pending = TRUE;
     if (children)
         for (Window *child = window->children; child; child = child->sibling)
         {
