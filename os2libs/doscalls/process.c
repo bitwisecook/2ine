@@ -210,7 +210,19 @@ APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,
     }
 
     APIRET err;
-    char *pNameUnix = makeUnixPath(pName, &err);
+    if (!pName || !*pName)
+        return ERROR_INVALID_PARAMETER;
+    char searched[PATH_MAX];
+    const char *program = pName;
+    if (!strpbrk(pName, "\\/:"))
+    {
+        err = DosSearchPath(SEARCH_CUR_DIRECTORY | SEARCH_ENVIRONMENT | SEARCH_IGNORENETERRS,
+                            "PATH", pName, (PBYTE)searched, sizeof searched);
+        if (err)
+            return err;
+        program = searched;
+    }
+    char *pNameUnix = makeUnixPath(program, &err);
     if (!pNameUnix)
         return err;
 

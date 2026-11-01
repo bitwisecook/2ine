@@ -291,7 +291,10 @@ def queue_program(writer):
         g.result(342, 22)
         g.call_handle(2, 9, queue, request, size, pointer, 0, 1, priority, (event,))
         g.result(87, 135)
-        filename = g.field(b"C:\\OS2\\writer.exe\0")
+        directory = g.field(b"C:\\TEMP\0")
+        g.call(1, 255, directory)
+        g.result(0, 155)
+        filename = g.field(b"writer.exe\0")
         session = g.field(
             struct.pack(
                 "<4H5I2HII6HII",
