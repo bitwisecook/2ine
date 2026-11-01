@@ -58,3 +58,77 @@ static uint32 bridge32_GpiQueryRGBColor(uint8 *a)
 {
     return (uint32)GpiQueryRGBColor(gpi_word(a, 0), gpi_word(a, 1), (LONG)gpi_word(a, 2));
 }
+
+static uint32 bridge32_GpiQueryFonts(uint8 *a)
+{
+    const uint32 name_pointer = gpi_word(a, 2);
+    char *face =
+        name_pointer ? lx_execution_copy_string(GLoaderState.execution, name_pointer, 256) : NULL;
+    LxGuestBorrow count = {0}, output = {0};
+    uint32 result = (uint32)-255;
+    if ((!name_pointer || face) && lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3), 4,
+                                                       LX_GUEST_READ | LX_GUEST_WRITE, &count))
+    {
+        LONG requested = (LONG)lx_guest_load_u32(count.host), size = (LONG)gpi_word(a, 4);
+        uint64 bytes = requested > 0 && size > 0 ? (uint64)(uint32)requested * (uint32)size : 0;
+        if (requested >= 0 && size >= 0 && bytes <= UINT32_MAX &&
+            (!requested || (size && lx_execution_borrow(GLoaderState.execution, gpi_word(a, 5),
+                                                        (size_t)bytes, LX_GUEST_WRITE, &output))))
+        {
+            result = (uint32)GpiQueryFonts(gpi_word(a, 0), gpi_word(a, 1), face, &requested, size,
+                                           output.host);
+            if ((LONG)result != -255)
+                lx_guest_store_u32(count.host, (uint32)requested);
+        }
+    }
+    lx_execution_release(&output);
+    lx_execution_release(&count);
+    free(face);
+    return result;
+}
+static uint32 bridge32_GpiQueryFontMetrics(uint8 *a)
+{
+    const LONG size = (LONG)gpi_word(a, 1);
+    if (size < 0)
+        return 0;
+    LxGuestBorrow output = {0};
+    const uint32 bytes = (uint32)size < sizeof(FONTMETRICS) ? (uint32)size : sizeof(FONTMETRICS);
+    if (bytes && !lx_execution_borrow(GLoaderState.execution, gpi_word(a, 2), bytes, LX_GUEST_WRITE,
+                                      &output))
+        return 0;
+    uint32 result = GpiQueryFontMetrics(gpi_word(a, 0), size, output.host);
+    lx_execution_release(&output);
+    return result;
+}
+
+static uint32 bridge32_DevQueryCaps(uint8 *a)
+{
+    LONG start = (LONG)gpi_word(a, 1), count = (LONG)gpi_word(a, 2);
+    if (start < 0 || count < 0 || start > 42 || count > 42 - start)
+        return 0;
+    LxGuestBorrow output = {0};
+    if (count && !lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3), (size_t)count * 4,
+                                      LX_GUEST_WRITE, &output))
+        return 0;
+    uint32 result = DevQueryCaps(gpi_word(a, 0), start, count, output.host);
+    lx_execution_release(&output);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryTextBox(uint8 *a)
+{
+    LONG count = (LONG)gpi_word(a, 1), points = (LONG)gpi_word(a, 3);
+    if (count < 0 || count > 512 || points < 0)
+        return 0;
+    LxGuestBorrow text = {0}, output = {0};
+    uint32 result = 0;
+    size_t bytes = (size_t)(points < 5 ? points : 5) * sizeof(POINTL);
+    if ((!count || lx_execution_borrow(GLoaderState.execution, gpi_word(a, 2), (size_t)count,
+                                       LX_GUEST_READ, &text)) &&
+        (!bytes || lx_execution_borrow(GLoaderState.execution, gpi_word(a, 4), bytes,
+                                       LX_GUEST_WRITE, &output)))
+        result = GpiQueryTextBox(gpi_word(a, 0), count, text.host, points, output.host);
+    lx_execution_release(&output);
+    lx_execution_release(&text);
+    return result;
+}

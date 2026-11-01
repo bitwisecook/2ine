@@ -2,6 +2,7 @@
 /* Real SDL3 dummy audio consumption, software rendering and event translation. */
 #include "hal/audio.h"
 #include "hal/video.h"
+#include "hal/font.h"
 #include "hal/host.h"
 #include "runtime/audio.h"
 #include <stdio.h>
@@ -36,6 +37,31 @@ static void generate(void *unused, float *output, int count, int frequency)
 }
 int main(void)
 {
+    CHECK(lx_host_font_count() == 12);
+    CHECK(!lx_host_font_open(12, 16) && !lx_host_font_open(0, 0) && !lx_host_font_open(0, 513));
+    for (unsigned i = 0; i < lx_host_font_count(); i++)
+    {
+        LxHostFont *font = lx_host_font_open(i, 16);
+        LxHostFontMetrics metrics;
+        CHECK(font && lx_host_font_metrics(font, &metrics));
+        CHECK(metrics.family[0] && metrics.ascent > 0 && metrics.descent >= 0 && metrics.em == 16);
+        CHECK(metrics.bold == ((i % 4) & 1) && metrics.italic == (((i % 4) >> 1) & 1));
+        int wide = lx_host_font_advance(font, 'W'), narrow = lx_host_font_advance(font, 'i');
+        CHECK(wide > 0 && narrow > 0 && (i < 8 ? wide > narrow : wide == narrow));
+        LxHostGlyph glyph;
+        CHECK(lx_host_font_glyph(font, 'A', &glyph));
+        CHECK(glyph.width > 0 && glyph.height > 0 && glyph.coverage && glyph.advance > 0);
+        unsigned coverage = 0, antialiased = 0;
+        for (int pixel = 0; pixel < glyph.width * glyph.height; pixel++)
+        {
+            coverage += glyph.coverage[pixel];
+            antialiased += glyph.coverage[pixel] > 0 && glyph.coverage[pixel] < 255;
+        }
+        CHECK(coverage && antialiased);
+        lx_host_glyph_free(&glyph);
+        CHECK(!glyph.coverage);
+        lx_host_font_close(font);
+    }
     LxHostAudio *audio = lx_host_audio_open(generate, NULL);
     CHECK(audio);
     for (unsigned i = 0; !__atomic_load_n(&samples_played, __ATOMIC_SEQ_CST) && i < 200; i++)
@@ -87,6 +113,6 @@ int main(void)
     CHECK(registered == 1);
     lxAudioShutdown();
     lxAudioShutdown();
-    puts("SDL3 audio, pixels, presentation and event translation passed");
+    puts("FreeType faces/glyphs, SDL3 audio, pixels, presentation and events passed");
     return 0;
 }

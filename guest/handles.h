@@ -15,6 +15,7 @@ typedef enum LxHandleKind
     LX_HANDLE_FILE,
     LX_HANDLE_PROFILE,
     LX_HANDLE_REGISTRY_KEY,
+    LX_HANDLE_PM_ENUM,
     LX_HANDLE_KIND_LIMIT
 } LxHandleKind;
 typedef struct LxHandleBorrow

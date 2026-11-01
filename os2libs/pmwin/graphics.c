@@ -110,3 +110,58 @@ LONG lx_pm_rgb(LONG index)
     os2ColorIndexToRGB(index, &r, &g, &b);
     return (LONG)((ULONG)r << 16 | (ULONG)g << 8 | b);
 }
+
+LxHostFont *lx_pm_font(HPS hps)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
+    if (!ps)
+        return NULL;
+    unsigned index = 0, pixels = 16;
+    char attribute[128] = {0};
+    ULONG bytes =
+        WinQueryPresParam(ps->window->hwnd, 15, 0, NULL, sizeof attribute - 1, attribute, 0);
+    if (bytes && memchr(attribute, 0, bytes))
+    {
+        char *end;
+        unsigned long points = strtoul(attribute, &end, 10);
+        if (points && points <= 384 && *end == '.')
+        {
+            const char *family = end + 1;
+            pixels = (unsigned)(points * 96 + 36) / 72;
+            if (!strncasecmp(family, "Courier", 7) || !strncasecmp(family, "System Monospaced", 17))
+                index = 8;
+            else if (!strncasecmp(family, "Tms Rmn", 7) ||
+                     !strncasecmp(family, "Times New Roman", 15))
+                index = 4;
+            unsigned style = 0;
+            for (const char *p = family; *p; p++)
+            {
+                if (!strncasecmp(p, "Bold", 4))
+                    style |= 1;
+                if (!strncasecmp(p, "Italic", 6))
+                    style |= 2;
+            }
+            index += style;
+        }
+    }
+    if (!ps->font || ps->font_index != index || ps->font_pixels != pixels)
+    {
+        LxHostFont *font = lx_host_font_open(index, pixels);
+        if (!font)
+            return NULL;
+        lx_host_font_close(ps->font);
+        ps->font = font;
+        ps->font_index = index;
+        ps->font_pixels = pixels;
+    }
+
+    return ps->font;
+}
+
+unsigned lx_pm_font_index(HPS hps)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
+    return ps ? ps->font_index : 0;
+}

@@ -89,6 +89,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/desktop.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(desktop_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME pm_window_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/windows.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(pm_window_apis PROPERTIES TIMEOUT 40)
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
     if(TWOINE_PORTABLE_LOADER)

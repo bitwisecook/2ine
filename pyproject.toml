@@ -3,7 +3,7 @@
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-include = ["tools/lxapigen.py", "tools/cvtasm.py", "tools/os2imports.py", "tools/unimplemented.py", "tests/tools/test_tools.py", "tools/format-c.py", "tests/architecture/check_boundaries.py", "tests/hal/terminal_pty.py", "tests/integration/gui.py", "tests/integration/linux/x11.py", "tests/integration/fetch_gui_fixture.py", "tests/integration/legacy.py", "tests/os2libs/settings.py", "tests/integration/desktop.py"]
+include = ["tools/lxapigen.py", "tools/cvtasm.py", "tools/os2imports.py", "tools/unimplemented.py", "tests/tools/test_tools.py", "tools/format-c.py", "tests/architecture/check_boundaries.py", "tests/hal/terminal_pty.py", "tests/integration/gui.py", "tests/integration/linux/x11.py", "tests/integration/fetch_gui_fixture.py", "tests/integration/legacy.py", "tests/os2libs/settings.py", "tests/integration/desktop.py", "tests/integration/images.py", "tests/integration/windows.py"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "UP", "B"]

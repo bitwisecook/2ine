@@ -107,6 +107,10 @@ void lx_host_window_show(LxHostWindow *window)
 {
     SDL_ShowWindow(window->window);
 }
+void lx_host_window_hide(LxHostWindow *window)
+{
+    SDL_HideWindow(window->window);
+}
 int lx_host_window_present(LxHostWindow *window)
 {
     if (!window->dirty)

@@ -275,3 +275,114 @@ static uint32 bridge32_WinReleasePS(uint8 *a)
 {
     return WinReleasePS(pm_word(a, 0));
 }
+
+static uint32 bridge32_WinBeginEnumWindows(uint8 *a)
+{
+    return WinBeginEnumWindows(pm_word(a, 0));
+}
+static uint32 bridge32_WinEndEnumWindows(uint8 *a)
+{
+    return WinEndEnumWindows(pm_word(a, 0));
+}
+static uint32 bridge32_WinGetNextWindow(uint8 *a)
+{
+    return WinGetNextWindow(pm_word(a, 0));
+}
+static uint32 bridge32_WinQueryAnchorBlock(uint8 *a)
+{
+    return WinQueryAnchorBlock(pm_word(a, 0));
+}
+static uint32 bridge32_WinQueryWindow(uint8 *a)
+{
+    return WinQueryWindow(pm_word(a, 0), (LONG)pm_word(a, 1));
+}
+static uint32 bridge32_WinIsWindow(uint8 *a)
+{
+    return WinIsWindow(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinIsWindowEnabled(uint8 *a)
+{
+    return WinIsWindowEnabled(pm_word(a, 0));
+}
+static uint32 bridge32_WinIsWindowVisible(uint8 *a)
+{
+    return WinIsWindowVisible(pm_word(a, 0));
+}
+static uint32 bridge32_WinQueryClassName(uint8 *a)
+{
+    const LONG capacity = (LONG)pm_word(a, 1);
+    if (capacity <= 0)
+        return 0;
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, pm_word(a, 2), (uint32)capacity,
+                             LX_GUEST_WRITE, &output))
+        return 0;
+    uint32 result = (uint32)WinQueryClassName(pm_word(a, 0), capacity, output.host);
+    lx_execution_release(&output);
+    return result;
+}
+
+static uint32 bridge32_WinSetPresParam(uint8 *a)
+{
+    uint32 size = pm_word(a, 2);
+    if (!size || size > 65536)
+        return 0;
+    LxGuestBorrow data = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, pm_word(a, 3), size, LX_GUEST_READ, &data))
+        return 0;
+    uint32 result = WinSetPresParam(pm_word(a, 0), pm_word(a, 1), size, data.host);
+    lx_execution_release(&data);
+    return result;
+}
+static uint32 bridge32_WinQueryPresParam(uint8 *a)
+{
+    const uint32 pointer = pm_word(a, 3), capacity = pm_word(a, 4);
+    LxGuestBorrow found = {0}, output = {0};
+    uint32 result = 0;
+    if ((!pointer ||
+         lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_WRITE, &found)) &&
+        (!capacity || lx_execution_borrow(GLoaderState.execution, pm_word(a, 5), capacity,
+                                          LX_GUEST_WRITE, &output)))
+    {
+        ULONG id = 0;
+        result = WinQueryPresParam(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2),
+                                   pointer ? &id : NULL, capacity, output.host, pm_word(a, 6));
+        if (pointer && result)
+            lx_guest_store_u32(found.host, id);
+    }
+    lx_execution_release(&output);
+    lx_execution_release(&found);
+    return result;
+}
+static uint32 bridge32_WinRemovePresParam(uint8 *a)
+{
+    return WinRemovePresParam(pm_word(a, 0), pm_word(a, 1));
+}
+
+static uint32 bridge32_WinShowWindow(uint8 *a)
+{
+    return WinShowWindow(pm_word(a, 0), pm_word(a, 1));
+}
+
+static uint32 bridge32_WinEnableWindow(uint8 *a)
+{
+    return WinEnableWindow(pm_word(a, 0), pm_word(a, 1));
+}
+
+static uint32 bridge32_WinCreateWindow(uint8 *a)
+{
+    uint32 class_pointer = pm_word(a, 1), title_pointer = pm_word(a, 2);
+    BOOL predefined = class_pointer >= 0xffff0001 && class_pointer <= 0xffff0070;
+    char *class_name = predefined ? NULL : pm_string(class_pointer);
+    char *title = pm_string(title_pointer);
+    uint32 result = 0;
+    if ((predefined || class_name) && (!title_pointer || title))
+        result =
+            WinCreateWindow(pm_word(a, 0), predefined ? (PSZ)(uintptr_t)class_pointer : class_name,
+                            title, pm_word(a, 3), (LONG)pm_word(a, 4), (LONG)pm_word(a, 5),
+                            (LONG)pm_word(a, 6), (LONG)pm_word(a, 7), pm_word(a, 8), pm_word(a, 9),
+                            pm_word(a, 10), pm_param(a, 11), pm_param(a, 12));
+    free(title);
+    free(class_name);
+    return result;
+}

@@ -37,6 +37,7 @@ void lx_host_window_destroy(LxHostWindow *window);
 void *lx_host_window_data(LxHostWindow *window);
 int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height);
 void lx_host_window_show(LxHostWindow *window);
+void lx_host_window_hide(LxHostWindow *window);
 int lx_host_window_present(LxHostWindow *window);
 int lx_host_window_fill(LxHostWindow *window, const LxHostRect *clip, const LxHostRect *rect,
                         uint8_t red, uint8_t green, uint8_t blue);

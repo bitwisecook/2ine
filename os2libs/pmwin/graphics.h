@@ -3,6 +3,9 @@
 #ifndef TWOINE_PM_GRAPHICS_H
 #define TWOINE_PM_GRAPHICS_H
 #include "os2libs/pmwin.h"
+#include "hal/font.h"
+LxHostFont *lx_pm_font(HPS hps);
+unsigned lx_pm_font_index(HPS hps);
 HPS lx_pm_create_ps(HAB hab, HDC dc);
 BOOL lx_pm_erase(HPS hps);
 BOOL lx_pm_destroy_ps(HPS hps);

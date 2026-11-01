@@ -26,3 +26,29 @@ SDL keeps its zlib license and ncurses keeps its own notices. No dependency
 shared library is checked in. Existing guest-program fixtures are inventoried in
 `tests/programs/fixtures/manifest.json`; historical compiler and SDK installations
 are supplied separately.
+
+Application profiles also build **FreeType 2.14.3** from the source release,
+SHA-256 `36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f`.
+The native worker builds its own i386 library. Optional compression, bitmap-image
+and HarfBuzz dependencies are disabled; this provides outline metrics and
+rasterization, without complex-script shaping. Runtime-only profiles omit it.
+[FreeType release](https://freetype.org/) · [API reference](https://freetype.org/freetype2/docs/reference/).
+
+The public font catalogue uses **Liberation 2.1.5**, downloaded separately from
+its official release with SHA-256
+`7191c669bf38899f73a2094ed00f7b800553364f90e2637010a69c0e268f25d0`.
+Unchanged Sans, Serif and Mono faces supply explicit Helv, Tms Rmn and Courier
+substitutions, including bold/italic variants. They are not original IBM fonts.
+CMake copies the twelve faces and their SIL Open Font License to `build/fonts/`.
+Keep that directory beside a relocated worker. `TWOINE_FONT_DIRECTORY` selects
+an alternate directory with the same filenames.
+[Official font release](https://github.com/liberationfonts/liberation-fonts/releases/tag/2.1.5).
+
+FreeType has two alternative licenses. Native-only distributions use the
+[FreeType License](licenses/freetype-FTL.txt): portions of this software are
+copyright © 2026 The FreeType Project (www.freetype.org). All rights reserved.
+Portable distributions linked with GPLv2 Unicorn use FreeType's
+[GPLv2 option](licenses/freetype-GPLv2.txt), preserving the compatible license
+choice for that linked distribution. Keep the applicable notices and source
+requirements. Liberation retains its [SIL OFL 1.1](licenses/liberation-OFL.txt)
+notice; no font data is relicensed by this project.

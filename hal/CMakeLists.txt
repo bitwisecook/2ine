@@ -49,7 +49,9 @@ endfunction()
 
 function(twoine_add_media target)
     target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/sdl/audio.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/video.c")
-    target_link_libraries(${target} PRIVATE SDL3::SDL3)
+    target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/common/font.c")
+    target_compile_definitions(${target} PRIVATE TWOINE_FONT_DIRECTORY="${TWOINE_RUNTIME_FONT_DIR}")
+    target_link_libraries(${target} PRIVATE SDL3::SDL3 twoine_freetype)
 endfunction()
 
 function(twoine_add_terminal target)

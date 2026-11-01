@@ -88,9 +88,12 @@ requirements exceed this subset; they are not listed as working applications.
 Lotus SmartSuite 1.7 with Fixpack 3 does not yet reach an editable document.
 With its installer settings supplied separately, Word Pro loads the language and
 shared button DLLs, creates its frame/client, subclasses the frame and registers
-its custom controls on native and Unicorn. Font enumeration (`GpiQueryFonts`)
-is the next missing service. This startup result does not qualify the other
-suite components or the document save/reopen workflow.
+its custom controls on native and Unicorn. Measured FreeType font enumeration, window enumeration and status-window
+creation now work. Word Pro reaches its message loop and starts a background
+thread, then faults in its own dispatch path at 0x436c9d on both backends.
+The failing context belongs to a modal dialog whose required WinDlgBox service
+is unavailable. This startup result does not qualify the other suite components
+or the document save/reopen workflow.
 
 ## Profiles and Open32 settings
 
@@ -121,10 +124,27 @@ LX resources are validated and mapped independently of fixed EXE addresses.
 DOSCALLS resource-size/get/free operations retain read-only copies until their
 matching releases; PM loads counted string bundles through those operations.
 Window IDs, class extra words/pointers and subclassing preserve guest addresses,
-including a callable default procedure returned to portable guests. PM exposes
+including a callable default procedure returned to portable guests. Window
+creation publishes its hierarchy before WM_CREATE and provides a complete
+52-byte guest CREATESTRUCT. Enumeration retains a z-order snapshot and wraps
+after returning an end marker. Presentation parameters inherit through owners,
+notify affected windows, and support indexed-to-RGB conversion. Show/hide and
+enabled state are maintained; destroyed windows retire their queued messages. PM exposes
 its default system palette, basic control/screen metrics and transient screen
 presentation spaces for queries; drawing into the desktop is unavailable.
 GPI color queries use the same indexed palette as drawing. Custom palettes and
 codepage conversion of string resources are unavailable. HELPMGR explicitly
 reports unavailable help rendering through `HELPINIT`; it creates no help
 instance.
+
+The font HAL measures and rasterizes the pinned Liberation faces through
+FreeType. GPI exposes public font enumeration, current font metrics and bounded
+CP437 text extents; window font presentation parameters select family, style
+and point size. Text extents use character advances without kerning, consistent
+with the device's advertised capabilities. Glyph rasterization is covered by HAL tests. GPI text output,
+logical-font selection, transformations, complex-script shaping and a complete
+font/graphics API remain unavailable. Font query support alone does not qualify
+an application's text editing or document rendering.
+
+Window registries and message queues currently belong to the calling PM thread;
+cross-thread window lookup, synchronous sends and queue posts are unavailable.

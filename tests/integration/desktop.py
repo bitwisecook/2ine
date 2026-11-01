@@ -9,50 +9,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from legacy import linear_image
-
-
-class FlatGuest:
-    def __init__(self):
-        self.code = bytearray(b"\xeb\x03\x31\xc0\xc3")
-        self.data = bytearray()
-        self.fixups = []
-
-    def field(self, data):
-        address = 0x20000 + len(self.data)
-        self.data.extend(data)
-        return address
-
-    def call(self, module, ordinal, *arguments):
-        for value in reversed(arguments):
-            if isinstance(value, tuple):
-                self.code.extend(b"\xff\x35" + struct.pack("<I", value[0]))
-            else:
-                self.code.extend(b"\x68" + struct.pack("<I", value))
-        self.code.extend(b"\xe8\x00\x00\x00\x00")
-        self.fixups.append(struct.pack("<BBhBH", 8, 1, len(self.code) - 4, module, ordinal))
-        if arguments:
-            self.code.extend(b"\x83\xc4" + bytes([4 * len(arguments)]))
-
-    def exit(self, status):
-        self.call(1, 234, 1, status)
-
-    def require(self, comparison, status):
-        # Every failure has a distinct guest exit code.
-        self.code.extend(comparison + b"\x74\x12")
-        self.exit(status)
-
-    def result(self, expected, status):
-        self.require(b"\x3d" + struct.pack("<I", expected), status)
-
-    def word(self, address, expected, status):
-        self.require(b"\x81\x3d" + struct.pack("<II", address, expected), status)
-
-    def load(self, address):
-        self.code.extend(b"\xa1" + struct.pack("<I", address))
-
-    def call_handle(self, module, ordinal, address, *tail):
-        self.call(module, ordinal, (address,), *tail)
+from images import FlatGuest, linear_image
 
 
 def program(checked):

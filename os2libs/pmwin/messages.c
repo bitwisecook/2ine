@@ -264,6 +264,29 @@ ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg)
     return NO_ERROR;
 }
 
+void discardWindowMessages(AnchorBlock *anchor, HWND window)
+{
+    MessageQueueItem *previous = NULL, *item = anchor->message_queue.head;
+    while (item)
+    {
+        MessageQueueItem *next = item->next;
+        if (item->qmsg.hwnd == window)
+        {
+            if (previous)
+                previous->next = next;
+            else
+                anchor->message_queue.head = next;
+            if (anchor->message_queue.tail == item)
+                anchor->message_queue.tail = previous;
+            item->next = anchor->message_queue.free_pool;
+            anchor->message_queue.free_pool = item;
+        }
+        else
+            previous = item;
+        item = next;
+    }
+}
+
 BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2,
                         ULONG ticks)
 {
@@ -284,7 +307,12 @@ BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
         {
             FIXME(
                 "for CS_SYNCPAINT classes, this should send the WM_PAINT message right now instead of posting");
-            retval |= postTimestampedMsg(anchor, win->hwnd, WM_PAINT, 0, 0, ticks);
+            BOOL visible = win->w > 0 && win->h > 0;
+            for (Window *parent = win->parent; visible && parent && parent != &desktop_window;
+                 parent = parent->parent)
+                visible = (parent->style & WS_VISIBLE) != 0;
+            if (visible)
+                retval |= postTimestampedMsg(anchor, win->hwnd, WM_PAINT, 0, 0, ticks);
             retval |= postExposedMessages(anchor, win->children, ticks);
         }
     }

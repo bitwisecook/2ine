@@ -68,3 +68,15 @@ ctest --test-dir build-runtime --output-on-failure
 Regenerate exports with `python3 tools/lxapigen.py`. Executables (`lx_loader`,
 `lx_dump`) and OS/2 shared libraries remain at the build-directory root.
 Historical compiler pipelines are described in [tests](testing.md).
+
+Application font dependencies can also be supplied offline:
+
+```sh
+cmake -S . -B build \
+  -DTWOINE_FREETYPE_SOURCE_DIR=/path/to/freetype-2.14.3 \
+  -DTWOINE_FONT_DATA_DIR=/path/to/liberation-fonts-ttf-2.1.5
+```
+
+The font directory must contain all twelve release TTF files and `LICENSE`.
+The build copies these assets to `build/fonts/`; retain it when moving a worker.
+The runtime-only profile requires neither FreeType nor these font assets.

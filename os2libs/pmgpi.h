@@ -11,6 +11,7 @@
 
 #include "os2types.h"
 #include "pmwin.h"
+#include "pmgpi_fonts.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -25,6 +26,12 @@ extern "C"
         GPIA_ASSOC = 0x4000,
         DM_DRAW = 1
     };
+    OS2EXPORT BOOL OS2API DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
+        OS2APIINFO(606);
+    OS2EXPORT LONG OS2API GpiQueryFonts(HPS hps, ULONG options, PSZ face, PLONG requested,
+                                        LONG record_size, PFONTMETRICS output) OS2APIINFO(586);
+    OS2EXPORT BOOL OS2API GpiQueryFontMetrics(HPS hps, LONG record_size, PFONTMETRICS output)
+        OS2APIINFO(453);
     OS2EXPORT LONG OS2API GpiQueryColorIndex(HPS hps, ULONG options, LONG rgb) OS2APIINFO(439);
     OS2EXPORT LONG OS2API GpiQueryRGBColor(HPS hps, ULONG options, LONG index) OS2APIINFO(479);
     OS2EXPORT BOOL OS2API GpiErase(HPS hps) OS2APIINFO(389);

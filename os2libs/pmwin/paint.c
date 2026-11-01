@@ -27,7 +27,7 @@ void destroyPresentationSpace(AnchorBlock *anchor, PresentationSpace *ps)
     {
         return;
     }
-    FIXME("this will be more complicated later");
+    lx_host_font_close(ps->font);
     memset(ps, '\0', sizeof(*ps));
 }
 

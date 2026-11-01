@@ -89,3 +89,11 @@ resource references, counted strings, DOSCALL1 aliasing, settings bridges,
 opaque window pointers and guest calls to the procedure returned by subclassing.
 Portable guests additionally exercise invalid input/output spans. No Lotus
 binaries are required for these tests.
+
+`pm_window_apis` generates a separate LX guest that checks the actual WM_CREATE
+callback's control pointer, CREATESTRUCT fields and guest strings, then exercises
+window enumeration, presentation parameters, measured font records and text
+extents through native/portable exports. HAL tests rasterize glyphs from all
+12 pinned faces, inspect coverage, distinguish proportional/monospace advances
+and verify style metadata. Host PM tests cover owner inheritance, callback-time
+hierarchy queries, frame data, enumeration wrapping and queued-message retirement.

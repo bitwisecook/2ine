@@ -75,6 +75,7 @@ HAB WinInitialize(ULONG flOptions)
     if (ihab <= 0)
     {
         free(anchor->pres_spaces);
+        destroyWindowEnumerations(anchor);
         free(anchor->windows);
         free(anchor);
         return NULLHANDLE;

@@ -12,14 +12,6 @@
 
 #include "os2libs/generated/pmgpi-lx.h"
 
-BOOL GpiQueryTextBox(HPS hps, LONG lCount1, PCH pchString, LONG lCount2, PPOINTL aptlPoints)
-{
-    TRACE_NATIVE("GpiQueryTextBox(%u, %d, '%s', %d, %p)", (unsigned int)hps, (int)lCount1,
-                 pchString, (int)lCount2, aptlPoints);
-    FIXME("write me");
-    return 0;
-}
-
 HPS GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags)
 {
     if (!size || (flags & ~(PU_PELS | GPIA_ASSOC)))

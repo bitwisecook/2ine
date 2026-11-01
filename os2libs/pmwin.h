@@ -17,6 +17,7 @@ extern "C"
 
     typedef HANDLE HAB, *PHAB;
     typedef HANDLE HMQ, *PHMQ;
+    typedef HANDLE HENUM;
     typedef HANDLE HWND, *PHWND;
 
     typedef PVOID MPARAM, *PMPARAM;
@@ -329,6 +330,17 @@ extern "C"
         USHORT idResources;
     } FRAMECDATA, *PFRAMECDATA;
 #pragma pack(pop)
+
+    typedef struct
+    {
+        PVOID pPresParams, pCtlData;
+        ULONG id;
+        HWND hwndInsertBehind, hwndOwner;
+        LONG cy, cx, y, x;
+        ULONG flStyle;
+        PSZ pszText, pszClass;
+        HWND hwndParent;
+    } CREATESTRUCT, *PCREATESTRUCT;
 
     // Error codes...
     enum
@@ -888,6 +900,21 @@ extern "C"
     OS2EXPORT BOOL OS2API WinQueryPointerPos(HWND hwnd, PPOINTL point) OS2APIINFO(823);
     OS2EXPORT BOOL OS2API WinQueryWindowPos(HWND hwnd, PSWP position) OS2APIINFO(837);
     OS2EXPORT BOOL OS2API WinQueryWindowRect(HWND hwnd, PRECTL rect) OS2APIINFO(840);
+    OS2EXPORT BOOL OS2API WinEnableWindow(HWND window, BOOL enable) OS2APIINFO(735);
+    OS2EXPORT BOOL OS2API WinShowWindow(HWND window, BOOL show) OS2APIINFO(883);
+    OS2EXPORT BOOL OS2API WinSetPresParam(HWND window, ULONG id, ULONG size, PVOID data)
+        OS2APIINFO(938);
+    OS2EXPORT ULONG OS2API WinQueryPresParam(HWND window, ULONG first, ULONG second, PULONG found,
+                                             ULONG capacity, PVOID output, ULONG flags)
+        OS2APIINFO(939);
+    OS2EXPORT BOOL OS2API WinRemovePresParam(HWND window, ULONG id) OS2APIINFO(940);
+    OS2EXPORT HENUM OS2API WinBeginEnumWindows(HWND parent) OS2APIINFO(702);
+    OS2EXPORT HWND OS2API WinGetNextWindow(HENUM enumeration) OS2APIINFO(756);
+    OS2EXPORT BOOL OS2API WinEndEnumWindows(HENUM enumeration) OS2APIINFO(737);
+    OS2EXPORT HAB OS2API WinQueryAnchorBlock(HWND window) OS2APIINFO(800);
+    OS2EXPORT HWND OS2API WinQueryWindow(HWND window, LONG code) OS2APIINFO(834);
+    OS2EXPORT LONG OS2API WinQueryClassName(HWND window, LONG capacity, PCHAR output)
+        OS2APIINFO(805);
     OS2EXPORT LONG OS2API WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity,
                                         PCHAR output) OS2APIINFO(781);
     OS2EXPORT HWND OS2API WinWindowFromID(HWND window, ULONG id) OS2APIINFO(899);

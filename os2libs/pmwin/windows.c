@@ -36,7 +36,8 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
 
             case WC_FRAME:
             {
-                static WindowClass frame = {"#1", WinDefWindowProc, CS_SIZEREDRAW, 0, NULL};
+                /* Public WC_FRAME words extend through QWL_PSTATBLK (0x50). */
+                static WindowClass frame = {"#1", WinDefWindowProc, CS_SIZEREDRAW, 0x54, NULL};
                 return &frame;
             }
             case WC_COMBOBOX:
@@ -127,6 +128,8 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
             }
         }
     }
+    discardWindowMessages(anchor, win->hwnd);
+    destroyPresentationParameters(win);
     free(win->text);
     free(win->data);
     memset(win, '\0', sizeof(*win));
@@ -295,28 +298,10 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     win->id = id;
     win->owner = owner;
     win->sibling = NULL;
-    win->x = win->y = win->w = win->h = 0;
-
-    /* WM_CREATE receives the caller's control-data pointer unchanged. */
-    if (sendMessage(win, WM_CREATE, pCtlData, pPresParams) != FALSE)
-    {
-
-        destroyWindow(anchor, win);
-        return NULLHANDLE;
-    }
-
-    FIXME("should I set swp.fl here?");
-    SWP swp = {0, cy, cx, y, x, hwndInsertBehind, win->hwnd, 0, 0};
-    MRESULT adjust = sendWindowPos(win, WM_ADJUSTWINDOWPOS, &swp);
-
-    (void)adjust;
-    FIXME("adjust based on WM_ADJUSTWINDOWPOS message result");
-
-    win->x = swp.x;
-    win->y = swp.y;
-    win->w = swp.cx;
-    win->h = swp.cy;
-    hwndInsertBehind = swp.hwndInsertBehind;
+    win->x = x;
+    win->y = y;
+    win->w = cx;
+    win->h = cy;
 
     Window *insertBehind = NULL;
     if ((hwndInsertBehind != HWND_TOP) && (hwndInsertBehind != HWND_BOTTOM))
@@ -353,6 +338,27 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
         win->sibling = insertBehind->sibling;
         insertBehind->sibling = win;
     }
+
+    CREATESTRUCT creation = {pPresParams, pCtlData, id,      hwndInsertBehind, hwndOwner, cy, cx, y,
+                             x,           flStyle,  pszName, pszClass,         hwndParent};
+    if (sendCreateMessage(win, &creation) != FALSE)
+    {
+        destroyWindow(anchor, win);
+        return NULLHANDLE;
+    }
+
+    FIXME("should I set swp.fl here?");
+    SWP swp = {0, cy, cx, y, x, hwndInsertBehind, win->hwnd, 0, 0};
+    MRESULT adjust = sendWindowPos(win, WM_ADJUSTWINDOWPOS, &swp);
+
+    (void)adjust;
+    FIXME("adjust based on WM_ADJUSTWINDOWPOS message result");
+
+    win->x = swp.x;
+    win->y = swp.y;
+    win->w = swp.cx;
+    win->h = swp.cy;
+    hwndInsertBehind = swp.hwndInsertBehind;
 
     if (hwndParent == HWND_DESKTOP && win->w > 0 && win->h > 0)
     {
@@ -594,9 +600,7 @@ BOOL WinIsWindow(HAB hab, HWND hwnd)
     FIXME("this 'get the anchor, get the window, set errors' code is repeated a lot");
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor)
-    {
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
-    }
+        return FALSE;
 
     Window *win = getWindowFromHWND(anchor, hwnd);
     if (!win)
@@ -612,9 +616,7 @@ BOOL WinIsWindowEnabled(HWND hwnd)
     TRACE_NATIVE("WinIsWindowEnabled(%u)", (uint)hwnd);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor)
-    {
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
-    }
+        return FALSE;
 
     Window *win = getWindowFromHWND(anchor, hwnd);
     if (!win)
@@ -630,9 +632,7 @@ BOOL WinIsWindowVisible(HWND hwnd)
     TRACE_NATIVE("WinIsWindowVisible(%u)", (uint)hwnd);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor)
-    {
-        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
-    }
+        return FALSE;
 
     Window *win = getWindowFromHWND(anchor, hwnd);
     if (!win)
@@ -665,6 +665,7 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     win->y = swp.y;
     win->w = swp.cx;
     win->h = swp.cy;
+    BOOL was_visible = (win->style & WS_VISIBLE) != 0;
     if (flags & SWP_SHOW)
         win->style |= WS_VISIBLE;
     if (flags & SWP_HIDE)
@@ -676,7 +677,11 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
             return FALSE;
         if (win->style & WS_VISIBLE)
             lx_host_window_show(win->heavy.window);
+        else
+            lx_host_window_hide(win->heavy.window);
     }
+    if (was_visible != ((win->style & WS_VISIBLE) != 0))
+        sendMessage(win, WM_SHOW, (MPARAM)(uintptr_t)((win->style & WS_VISIBLE) != 0), 0);
     if (oldw != win->w || oldh != win->h)
     {
         sendMessage(win, WM_SIZE, (MPARAM)(uintptr_t)(((uint32)(uint16)oldh << 16) | (uint16)oldw),
@@ -741,4 +746,26 @@ HPOINTER WinQuerySysPointer(HWND hwnd, LONG id, BOOL copy)
     (void)copy;
     /* System pointer/icon resources are not provided by this worker. */
     return NULLHANDLE;
+}
+
+BOOL WinShowWindow(HWND window, BOOL show)
+{
+    return WinSetWindowPos(window, HWND_TOP, 0, 0, 0, 0, show ? SWP_SHOW : SWP_HIDE);
+}
+
+BOOL WinEnableWindow(HWND window, BOOL enable)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
+    if (!w)
+        return FALSE;
+    BOOL was_enabled = w->enabled;
+    w->enabled = enable != 0;
+    if (enable)
+        w->style &= ~WS_DISABLED;
+    else
+        w->style |= WS_DISABLED;
+    if (was_enabled != w->enabled)
+        sendMessage(w, WM_ENABLE, (MPARAM)(uintptr_t)w->enabled, 0);
+    return TRUE;
 }
