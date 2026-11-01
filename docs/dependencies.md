@@ -52,3 +52,16 @@ Portable distributions linked with GPLv2 Unicorn use FreeType's
 choice for that linked distribution. Keep the applicable notices and source
 requirements. Liberation retains its [SIL OFL 1.1](licenses/liberation-OFL.txt)
 notice; no font data is relicensed by this project.
+
+MIDI uses pinned [TinySoundFont](https://github.com/schellingb/TinySoundFont)
+(MIT) and [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS)
+(its own permissive license). Revisions and four SHA-256 checks are declared in
+`cmake/Midi.cmake`. Source/header, bank and license files are fetched separately;
+none is stored as a repository binary. CMake stages the bank and both notices
+in `build/soundfonts/`. See [audio](audio.md) for offline and runtime options.
+
+The optional [Munt backend](midi-mt32.md) pins libmt32emu 2.8.3 in
+`cmake/Munt.cmake`, SHA-256
+`81f8c462f46bc8901618762ae34cf9de93894ff81f41db73c79472fa3baef875`.
+It retains Munt's LGPL-2.1-or-later notices and requires separately supplied
+ROM images. Default builds do not fetch or link this optional component.

@@ -72,6 +72,7 @@ typedef struct Window
     LONG h;
     RECTL invalid;
     BOOL enabled;
+    BOOL visible_region_notify;
 } Window;
 LX_PRIVATE BOOL prepareFrameState(Window *window, SWP *position);
 
@@ -207,6 +208,11 @@ LX_PRIVATE ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg);
 LX_PRIVATE BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1,
                                    MPARAM mp2, ULONG ticks);
 LX_PRIVATE BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks);
+LX_PRIVATE HWND registerWindowMessages(AnchorBlock *anchor);
+LX_PRIVATE void unregisterWindowMessages(HWND window);
+LX_PRIVATE BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second);
+LX_PRIVATE void drainForeignMessages(AnchorBlock *anchor);
+LX_PRIVATE void notifyVisibleRegions(AnchorBlock *anchor, Window *window);
 LX_PRIVATE BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event);
 LX_PRIVATE void pumpEvents(AnchorBlock *anchor);
 LX_PRIVATE BOOL skipMessage(const PQMSG qmsg, HWND hwndFilter, ULONG msgFilterFirst,

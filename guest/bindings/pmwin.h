@@ -871,3 +871,24 @@ static uint32 bridge32_WinCalcFrameRect(uint8 *a)
            WinCalcFrameRect(pm_word(a, 0), &rect, pm_word(a, 2)) &&
            lx_execution_write(GLoaderState.execution, pm_word(a, 1), &rect, sizeof rect);
 }
+
+static uint32 bridge32_WinSetPointerPos(uint8 *a)
+{
+    return WinSetPointerPos(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2));
+}
+static uint32 bridge32_WinShowPointer(uint8 *a)
+{
+    return WinShowPointer(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinShowCursor(uint8 *a)
+{
+    return WinShowCursor(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinQueryVisibleRegion(uint8 *a)
+{
+    return WinQueryVisibleRegion(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinSetVisibleRegionNotify(uint8 *a)
+{
+    return WinSetVisibleRegionNotify(pm_word(a, 0), pm_word(a, 1));
+}

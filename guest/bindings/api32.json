@@ -407,6 +407,11 @@
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DosSetPriority": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "nls": {
@@ -991,6 +996,31 @@
       "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "WinSetPointerPos": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinShowPointer": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinShowCursor": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryVisibleRegion": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetVisibleRegionNotify": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmgpi": {
@@ -1428,6 +1458,11 @@
       "argument_bytes": 20,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryRegionRects": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmwinx": {
@@ -1569,6 +1604,183 @@
     },
     "WinFreeFileDlgList": {
       "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "pmgre": {
+    "Gre32Entry3": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Gre32Entry5": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "mdm": {
+    "mciSendCommand": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mciSendString": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mciGetErrorString": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "mmio": {
+    "mmioOpen": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mmioClose": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "so32dll": {
+    "Os2LegacyBind": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyIoctl": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyRecvFrom": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacySendTo": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacySocket": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacySocketClose": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacySocketError": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacySocketInit": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "tcp32dll": {
+    "Os2LegacyLongSwap": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyShortSwap": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyInetAddr": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyGetHostByName": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyGetHostName": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "dive": {
+    "DiveQueryCaps": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveOpen": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveClose": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveSetupBlitter": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveBlitImage": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveSetDestinationPalette": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveSetSourcePalette": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveAllocImageBuffer": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveFreeImageBuffer": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveBeginImageBufferAccess": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveEndImageBufferAccess": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveFullScreenInit": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveFullScreenTerm": {
+      "argument_bytes": 0,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

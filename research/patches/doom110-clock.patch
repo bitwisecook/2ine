@@ -1,0 +1,341 @@
+--- a/i_system.c
++++ b/i_system.c
+@@ -24,6 +24,8 @@
+ rcsid[] = "$Id: m_bbox.c,v 1.1 1997/02/03 22:45:10 b1 Exp $";
+ 
+ #define INCL_DOSDATETIME
++#define INCL_DOSMISC
++#define INCL_DOSPROCESS
+ #include <os2.h>
+ 
+ #include "windows.h"
+@@ -92,15 +94,27 @@
+ //
+ int  I_GetTime (void)
+ {
+-    DATETIME	        tp;
+-    static int	basetime=0;
+-    int newtics;
+-  
+-    DosGetDateTime(&tp);
+-    if (!basetime)
+-	basetime = tp.seconds;
+-    newtics = (tp.seconds-basetime)*TICRATE + (tp.hundredths*TICRATE)/100;
+-    return newtics;
++    ULONG milliseconds;
++    static ULONG previous;
++    static unsigned __int64 elapsed;
++    static int initialized;
++    int tics;
++
++    DosEnterCritSec();
++    if (DosQuerySysInfo(QSV_MS_COUNT, QSV_MS_COUNT, &milliseconds,
++                        sizeof milliseconds) == NO_ERROR)
++    {
++        if (!initialized)
++        {
++            previous = milliseconds;
++            initialized = 1;
++        }
++        elapsed += (ULONG)(milliseconds - previous);
++        previous = milliseconds;
++    }
++    tics = (int)((elapsed * TICRATE) / 1000);
++    DosExitCritSec();
++    return tics;
+ }
+ 
+ 
+--- a/qmus2mid.c
++++ b/qmus2mid.c
+@@ -178,7 +178,7 @@
+ 
+ 
+ int qmus2mid( char *mus, char *mid, int nodisplay,
+-	      int division, int BufferSize, int nocomp,int lenght)
++	      int2 division, int BufferSize, int nocomp,int lenght)
+ {
+   struct Track track[16] ;
+   int TrackCnt = 0 ;
+--- a/tmap.asm
++++ b/tmap.asm
+@@ -3,28 +3,28 @@
+ ;
+ 
+ .586
+-.MODEL flat,c
++.MODEL flat
+ 
+ ; Segment/section definition macros. 
+ 
+ .DATA?
+ 
+ ; External variables:
+-EXTERN	_ds_xstep:NEAR;
+-EXTERN	_ds_ystep:NEAR;
+-EXTERN	_ds_colormap:NEAR;
+-EXTERN  _ds_source:NEAR;
+-
+-EXTERN  _dc_source:NEAR;
+-EXTERN	_dc_colormap:NEAR;
+-
+-EXTERN	_SCREENWIDTH:NEAR;
++EXTERN	_ds_xstep:DWORD;
++EXTERN	_ds_ystep:DWORD;
++EXTERN	_ds_colormap:DWORD;
++EXTERN  _ds_source:DWORD;
++
++EXTERN  _dc_source:DWORD;
++EXTERN	_dc_colormap:DWORD;
++
++EXTERN	_SCREENWIDTH:DWORD;
+ 
+ .DATA 
+ align 4
+ 
+ lastAddress DD 0
+-;EXTERN	_SCREENWIDTH:NEAR;
++;EXTERN	_SCREENWIDTH:DWORD;
+ 
+ .CODE
+ 
+--- a/i_net.c
++++ b/i_net.c
+@@ -27,7 +27,9 @@
+ #include <string.h>
+ #include <stdio.h>
+ 
++#define TCPV40HDRS
+ #include <types.h>
++#include <utils.h>
+ 
+ #include <netdb.h>		// NOTE: use headers from OS/2 Warp 4.0 MPTN
+ #include <netinet/in.h>
+--- a/d_main.c
++++ b/d_main.c
+@@ -1389,7 +1389,7 @@
+     if ( gameaction != ga_loadgame )
+     {
+ 	if (autostart || netgame)
+-	    G_DeferedInitNew (startskill, startepisode, startmap);
++	    G_InitNew (startskill, startepisode, startmap);
+ 	else
+ 	    D_StartTitle ();                // start up intro loop
+ 
+--- a/i_net.c
++++ b/i_net.c
+@@ -163,6 +163,8 @@
+     int		c;
+     doomdata_t	sw;
+ 				
++    // Preserve the complete native record, including ticcmd padding.
++    sw = *netbuffer;
+     // byte swap
+     sw.checksum = htonl(netbuffer->checksum);
+     sw.player = netbuffer->player;
+@@ -173,8 +175,8 @@
+     {
+ 	sw.cmds[c].forwardmove = netbuffer->cmds[c].forwardmove;
+ 	sw.cmds[c].sidemove = netbuffer->cmds[c].sidemove;
+-	sw.cmds[c].angleturn = htons(netbuffer->cmds[c].angleturn);
+-	sw.cmds[c].consistancy = htons(netbuffer->cmds[c].consistancy);
++	sw.cmds[c].angleturn = htonl(netbuffer->cmds[c].angleturn);
++	sw.cmds[c].consistancy = htonl(netbuffer->cmds[c].consistancy);
+ 	sw.cmds[c].chatchar = netbuffer->cmds[c].chatchar;
+ 	sw.cmds[c].buttons = netbuffer->cmds[c].buttons;
+     }
+@@ -236,6 +238,7 @@
+     doomcom->remotenode = i;			// good packet from a game player
+     doomcom->datalength = c;
+ 	
++    *netbuffer = sw;
+     // byte swap
+     netbuffer->checksum = ntohl(sw.checksum);
+     netbuffer->player = sw.player;
+@@ -247,8 +250,8 @@
+     {
+ 	netbuffer->cmds[c].forwardmove = sw.cmds[c].forwardmove;
+ 	netbuffer->cmds[c].sidemove = sw.cmds[c].sidemove;
+-	netbuffer->cmds[c].angleturn = ntohs(sw.cmds[c].angleturn);
+-	netbuffer->cmds[c].consistancy = ntohs(sw.cmds[c].consistancy);
++	netbuffer->cmds[c].angleturn = ntohl(sw.cmds[c].angleturn);
++	netbuffer->cmds[c].consistancy = ntohl(sw.cmds[c].consistancy);
+ 	netbuffer->cmds[c].chatchar = sw.cmds[c].chatchar;
+ 	netbuffer->cmds[c].buttons = sw.cmds[c].buttons;
+     }
+--- a/audio.c
++++ b/audio.c
+@@ -519,34 +519,53 @@
+ void audio_close()
+ {
+ MCI_GENERIC_PARMS    GenericParms;
+ ULONG                rc;
+-
+-free( prebuffer );
++static int           closing;
++
++/* Only one caller owns shutdown; callbacks still need the global buffer. */
++DosEnterCritSec();
++if ( closing || prebuffer == NULL )
++{
++DosExitCritSec();
++return;
++}
++closing = 1;
++DosExitCritSec();
++
++/* Wait for the completion mixer before releasing its work buffer. */
++rc = mciSendCommand( usDeviceID,
++                     MCI_STOP,
++                     MCI_WAIT,
++                     ( PVOID )&GenericParms,
++                     0 );
++if ( rc != MCIERR_SUCCESS )
++goto retry;
+ 
+ rc = mciSendCommand( usDeviceID,
+                      MCI_BUFFER,
+                      MCI_WAIT | MCI_DEALLOCATE_MEMORY,
+                      ( PVOID )&buffer_parms,
+                      0 );
+-
+ if ( rc != MCIERR_SUCCESS )
+-{
+-return;
+-}
++goto retry;
+ 
+ rc = mciSendCommand( usDeviceID,
+-                     MCI_STOP,
++                     MCI_CLOSE,
+                      MCI_WAIT,
+                      ( PVOID )&GenericParms,
+                      0 );
+-
+-rc = mciSendCommand( usDeviceID,
+-                     MCI_CLOSE,
+-                     MCI_WAIT ,
+-                     ( PVOID )&GenericParms,
+-                     0 );
+-free(prebuffer);
++free( prebuffer );
++DosEnterCritSec();
++prebuffer = NULL;
++closing = 0;
++DosExitCritSec();
++return;
++
++retry:
++DosEnterCritSec();
++closing = 0;
++DosExitCritSec();
+ }
+ 
+ void audio_channel_parms(int i, unsigned vol, unsigned pan)
+ {
+--- a/g_game.c
++++ b/g_game.c
+@@ -1346,99 +1346,101 @@
+ 
+ //    WriteDebug("Calling R_DrawViewBorder...\n");
+     R_DrawViewBorder();
+ } 
+  
+ 
+ //
+ // G_SaveGame
+ // Called by the menu task.
+ // Description is a 24 byte text string 
+ //
+ void
+ G_SaveGame
+ ( int	slot,
+   char*	description ) 
+ { 
+     savegameslot = slot; 
+     strcpy (savedescription, description); 
+     sendsave = true; 
+ } 
+  
+ void G_DoSaveGame (void) 
+ { 
+     char	name[100]; 
+     char	name2[VERSIONSIZE]; 
+     char*	description; 
+     int		length; 
+     int		i; 
+ 	
+     if (M_CheckParm("-cdrom"))
+ 	sprintf(name,"c:\\doomdata\\"SAVEGAMENAME"%d.dsg",savegameslot);
+     else
+ 	sprintf (name,SAVEGAMENAME"%d.dsg",savegameslot); 
+     description = savedescription; 
+ 	 
+-    save_p = savebuffer = screens[1]+0x4000; 
++    save_p = savebuffer = Z_Malloc (SAVEGAMESIZE, PU_STATIC, NULL);
+ 	 
+     memcpy (save_p, description, SAVESTRINGSIZE); 
+     save_p += SAVESTRINGSIZE; 
+     memset (name2,0,sizeof(name2)); 
+     sprintf (name2,"version %i",DOOM_VERSION); 
+     memcpy (save_p, name2, VERSIONSIZE); 
+     save_p += VERSIONSIZE; 
+ 	 
+     *save_p++ = gameskill; 
+     *save_p++ = gameepisode; 
+     *save_p++ = gamemap; 
+     for (i=0 ; i<MAXPLAYERS ; i++) 
+ 	*save_p++ = playeringame[i]; 
+     *save_p++ = leveltime>>16; 
+     *save_p++ = leveltime>>8; 
+     *save_p++ = leveltime; 
+  
+     P_ArchivePlayers (); 
+     P_ArchiveWorld (); 
+     P_ArchiveThinkers (); 
+     P_ArchiveSpecials (); 
+ 	 
+     *save_p++ = 0x1d;		// consistancy marker 
+ 	 
+     length = save_p - savebuffer; 
+     if (length > SAVEGAMESIZE) 
+ 	I_Error ("Savegame buffer overrun"); 
+-    M_WriteFile (name, savebuffer, length); 
++    M_WriteFile (name, savebuffer, length);
++    Z_Free (savebuffer);
++    savebuffer = save_p = NULL;
+     gameaction = ga_nothing; 
+     savedescription[0] = 0;		 
+ 	 
+     players[consoleplayer].message = GGSAVED; 
+ 
+     // draw the pattern into the back screen
+     R_FillBackScreen ();	
+ } 
+  
+ 
+ //
+ // G_InitNew
+ // Can be called by the startup code or the menu task,
+ // consoleplayer, displayplayer, playeringame[] should be set. 
+ //
+ skill_t	d_skill; 
+ int     d_episode; 
+ int     d_map; 
+  
+ void
+ G_DeferedInitNew
+ ( skill_t	skill,
+   int		episode,
+   int		map) 
+ { 
+     d_skill = skill; 
+     d_episode = episode; 
+     d_map = map; 
+     gameaction = ga_newgame; 
+ } 
+ 
+ 
+ void G_DoNewGame (void) 
+ {
+     demoplayback = false; 

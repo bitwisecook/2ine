@@ -128,6 +128,8 @@ APIRET doDosOpen(PSZ name, PHFILE output, PULONG action, LONGLONG size, ULONG at
     if (!name || !output || size < 0 || extended || (attributes & FILE_DIRECTORY) ||
         (open_flags & 0xfffffe00u) || (open_mode & 0xffff0000u))
         return ERROR_INVALID_PARAMETER;
+    if (!*name)
+        return ERROR_INVALID_NAME;
     if (open_flags & OPEN_FLAGS_DASD)
         return ERROR_OPEN_FAILED;
     unsigned flags;
@@ -185,6 +187,17 @@ APIRET doDosOpen(PSZ name, PHFILE output, PULONG action, LONGLONG size, ULONG at
         file = lx_host_file_open(path, flags & ~LX_HOST_FILE_EXCLUSIVE,
                                  (attributes & FILE_READONLY) != 0, &error);
     free(path);
+    if (file)
+    {
+        LxHostFileInfo description;
+        if (lx_host_file_info(file, &description) == LX_HOST_FS_OK &&
+            description.kind == LX_HOST_FILE_DIRECTORY)
+        {
+            lx_host_file_close(file);
+            file = NULL;
+            error = LX_HOST_FS_IS_DIRECTORY;
+        }
+    }
     if (file && size && (created || existing == OPEN_ACTION_REPLACE_IF_EXISTS))
     {
         error = lx_host_file_resize(file, (uint64)size);

@@ -56,8 +56,14 @@ struct LxHostWindow
     SDL_Renderer *renderer;
     SDL_Texture *texture;
     void *data;
+    int x, y;
     int width, height;
     int dirty;
+    int fullscreen;
+    int startup_checked;
+    int suppress_enter;
+    int restoring;
+    int windowed_x, windowed_y;
 };
 int lx_host_video_initialize(int *width, int *height)
 {
@@ -96,13 +102,14 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
         return NULL;
     window->data = data;
     window->dirty = 1;
+    window->x = x;
+    window->y = y;
     window->width = width;
     window->height = height;
     window->window = SDL_CreateWindow(title ? title : "", width, height,
                                       SDL_WINDOW_HIDDEN | SDL_WINDOW_RESIZABLE);
     if (!window->window)
         goto failed;
-    SDL_SetWindowPosition(window->window, x, y);
     if (!SDL_SetPointerProperty(SDL_GetWindowProperties(window->window), "2ine.window", window))
         goto failed;
     window->renderer = SDL_CreateRenderer(window->window, NULL);
@@ -113,6 +120,7 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
     if (!window->texture || !SDL_SetRenderTarget(window->renderer, window->texture))
         goto failed;
     SDL_StartTextInput(window->window);
+    SDL_SetWindowPosition(window->window, x, y);
     return window;
 failed:
     lx_host_window_destroy(window);
@@ -156,13 +164,60 @@ int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int h
         window->width = width;
         window->height = height;
     }
+    window->x = x;
+    window->y = y;
+    if (window->fullscreen)
+    {
+        window->windowed_x = x;
+        window->windowed_y = y;
+        return 1;
+    }
     return SDL_SetWindowPosition(window->window, x, y) &&
            SDL_SetWindowSize(window->window, width, height);
+}
+int lx_host_window_fullscreen(LxHostWindow *window, int enabled)
+{
+    prepareRenderer();
+    if (!window)
+        return 0;
+    enabled = enabled != 0;
+    if (window->fullscreen == enabled)
+        return 1;
+    /* A surface change must not redirect queued canvas drawing to the window. */
+    if (!SDL_FlushRenderer(window->renderer) || !SDL_SyncWindow(window->window))
+        return 0;
+    if (enabled)
+        SDL_GetWindowPosition(window->window, &window->windowed_x, &window->windowed_y);
+    if (!SDL_SetWindowFullscreen(window->window, enabled))
+        return 0;
+    window->fullscreen = enabled;
+    window->restoring = !enabled;
+    window->dirty = 1;
+    if (!SDL_SyncWindow(window->window))
+        return 0;
+    if (!enabled)
+        return SDL_SetWindowPosition(window->window, window->windowed_x, window->windowed_y) &&
+               SDL_SetWindowSize(window->window, window->width, window->height) &&
+               SDL_SyncWindow(window->window);
+    return 1;
+}
+int lx_host_window_is_fullscreen(LxHostWindow *window)
+{
+    return window && window->fullscreen;
 }
 void lx_host_window_show(LxHostWindow *window)
 {
     prepareRenderer();
+    if (!SDL_FlushRenderer(window->renderer))
+        return;
     SDL_ShowWindow(window->window);
+    if (!window->startup_checked)
+    {
+        const char *fullscreen = getenv("TWOINE_FULLSCREEN");
+        window->startup_checked = 1;
+        if (fullscreen && SDL_strcmp(fullscreen, "0") && *fullscreen)
+            lx_host_window_fullscreen(window, 1);
+    }
 }
 void lx_host_window_hide(LxHostWindow *window)
 {
@@ -492,6 +547,45 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
     SDL_Window *sdl = id ? SDL_GetWindowFromID(id) : NULL;
     LxHostWindow *window =
         sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
+    if (window)
+    {
+        if ((event->type == LX_HOST_EVENT_KEY_DOWN || event->type == LX_HOST_EVENT_KEY_UP) &&
+            event->key == LX_HOST_KEY_RETURN)
+        {
+            if (event->type == LX_HOST_EVENT_KEY_DOWN && (event->modifiers & LX_HOST_MOD_ALT))
+            {
+                if (!event->repeat)
+                    lx_host_window_fullscreen(window, !window->fullscreen);
+                window->suppress_enter = 1;
+                event->type = LX_HOST_EVENT_OTHER;
+            }
+            else if (window->suppress_enter)
+            {
+                if (event->type == LX_HOST_EVENT_KEY_UP)
+                    window->suppress_enter = 0;
+                event->type = LX_HOST_EVENT_OTHER;
+            }
+        }
+        if (event->type == LX_HOST_EVENT_RESIZED && (window->fullscreen || window->restoring))
+        {
+            if (!window->fullscreen && event->width == window->width &&
+                event->height == window->height)
+                window->restoring = 0;
+            window->dirty = 1;
+            event->type = LX_HOST_EVENT_OTHER;
+        }
+        if (window->fullscreen &&
+            (event->type == LX_HOST_EVENT_MOTION || event->type == LX_HOST_EVENT_BUTTON_DOWN ||
+             event->type == LX_HOST_EVENT_BUTTON_UP))
+        {
+            int width, height;
+            if (SDL_GetWindowSize(sdl, &width, &height) && width > 0 && height > 0)
+            {
+                event->x = (int)((int64_t)event->x * window->width / width);
+                event->y = (int)((int64_t)event->y * window->height / height);
+            }
+        }
+    }
     if (window && (event->type == LX_HOST_EVENT_SHOWN || event->type == LX_HOST_EVENT_EXPOSED))
         window->dirty = 1;
     event->window_data = window ? window->data : NULL;
@@ -534,10 +628,10 @@ int lx_host_video_wait(LxHostEvent *event)
 }
 int lx_host_video_push(const LxHostEvent *event)
 {
-    if (event->type != LX_HOST_EVENT_QUIT)
+    if (event->type != LX_HOST_EVENT_QUIT && event->type != LX_HOST_EVENT_OTHER)
         return 0;
     SDL_Event output = {0};
-    output.type = SDL_EVENT_QUIT;
+    output.type = event->type == LX_HOST_EVENT_QUIT ? SDL_EVENT_QUIT : SDL_EVENT_USER;
     return SDL_PushEvent(&output);
 }
 void lx_host_mouse_position(int *x, int *y)
@@ -546,6 +640,19 @@ void lx_host_mouse_position(int *x, int *y)
     SDL_GetGlobalMouseState(&a, &b);
     *x = (int)a;
     *y = (int)b;
+    SDL_Window *sdl = SDL_GetKeyboardFocus();
+    LxHostWindow *window =
+        sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
+    if (window && window->fullscreen)
+    {
+        int origin_x, origin_y, width, height;
+        if (SDL_GetWindowPosition(sdl, &origin_x, &origin_y) &&
+            SDL_GetWindowSize(sdl, &width, &height) && width > 0 && height > 0)
+        {
+            *x = window->x + (int)((a - origin_x) * window->width / width);
+            *y = window->y + (int)((b - origin_y) * window->height / height);
+        }
+    }
 }
 
 int lx_host_window_read(LxHostWindow *window, const LxHostRect *rect, uint32_t *rgb)
@@ -607,4 +714,26 @@ int lx_host_window_image(LxHostWindow *window, const LxHostRect *clip, const LxH
     if (ok)
         window->dirty = 1;
     return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
+}
+
+int lx_host_mouse_warp(int x, int y)
+{
+    SDL_Window *sdl = SDL_GetKeyboardFocus();
+    LxHostWindow *window =
+        sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
+    if (window && window->fullscreen)
+    {
+        int origin_x, origin_y, width, height;
+        if (SDL_GetWindowPosition(sdl, &origin_x, &origin_y) &&
+            SDL_GetWindowSize(sdl, &width, &height))
+        {
+            x = origin_x + (int)((int64_t)(x - window->x) * width / window->width);
+            y = origin_y + (int)((int64_t)(y - window->y) * height / window->height);
+        }
+    }
+    return SDL_WarpMouseGlobal((float)x, (float)y);
+}
+int lx_host_pointer_show(int show)
+{
+    return show ? SDL_ShowCursor() : SDL_HideCursor();
 }

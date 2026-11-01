@@ -23,6 +23,12 @@ extern "C"
         LONG cx, cy;
     } SIZEF;
     typedef SIZEF *PSIZEF;
+    typedef struct RGNRECT
+    {
+        ULONG ircStart, crc, crcReturned, ulDirection;
+    } RGNRECT;
+    OS2EXPORT BOOL OS2API GpiQueryRegionRects(HPS ps, ULONG region, PRECTL bounds, RGNRECT *control,
+                                              PRECTL rects) OS2APIINFO(587);
     OS2EXPORT LONG OS2API GpiCreateLogFont(HPS ps, PVOID name, LONG id, PFATTRS attrs)
         OS2APIINFO(368);
     OS2EXPORT BOOL OS2API GpiDeleteSetId(HPS ps, LONG id) OS2APIINFO(378);

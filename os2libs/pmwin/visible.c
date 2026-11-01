@@ -53,3 +53,48 @@ fail:
     memset(visible, 0, sizeof *visible);
     return FALSE;
 }
+
+void notifyVisibleRegions(AnchorBlock *anchor, Window *window)
+{
+    if (window->visible_region_notify)
+    {
+        BOOL visible = TRUE;
+        for (Window *w = window; w && w != &desktop_window; w = w->parent)
+            visible = visible && (w->style & WS_VISIBLE) != 0;
+        postTimestampedMsg(anchor, window->hwnd, visible ? WM_VRNENABLED : WM_VRNDISABLED, 0, 0,
+                           currentSystemTicks());
+    }
+    for (Window *child = window->children; child; child = child->sibling)
+        notifyVisibleRegions(anchor, child);
+}
+BOOL WinSetVisibleRegionNotify(HWND handle, BOOL enable)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    if (!window || window == &desktop_window)
+        return FALSE;
+    window->visible_region_notify = enable != 0;
+    if (enable)
+        notifyVisibleRegions(anchor, window);
+    return TRUE;
+}
+ULONG WinQueryVisibleRegion(HWND handle, ULONG region)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    if (!window)
+        return FALSE;
+    HPS ps = WinGetPS(handle);
+    if (!ps)
+        return FALSE;
+    PmRegion visible = {0};
+    BOOL shown = TRUE;
+    for (Window *w = window; w && w != &desktop_window; w = w->parent)
+        shown = shown && (w->style & WS_VISIBLE) != 0;
+    ULONG result = 0;
+    if (!shown || lx_pm_window_clip(ps, NULL, &visible))
+        result = (ULONG)lx_pm_region_set(ps, region, (LONG)visible.count, visible.rects);
+    free(visible.rects);
+    WinReleasePS(ps);
+    return result;
+}

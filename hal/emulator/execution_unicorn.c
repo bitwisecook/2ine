@@ -593,17 +593,29 @@ static void callback(uint32_t entry, uint32_t argument)
 }
 static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
-    if (!Active)
-        failure("Guest callback requires an active guest invocation");
     if (!lx_execution_memory(Emulated->execution, entry, 1, LX_GUEST_EXECUTE))
         failure("Invalid guest callback entry");
     LxCpuRegisters r;
-    lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
-    lx_cpu_restore(Emulated->cpu, Active->context);
-    lx_cpu_get_registers(Emulated->cpu, &r);
-    lx_host_mutex_unlock(Emulated->mutex);
-    if (r.ss & 4)
-        r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+    LxGuestMapping *stack = NULL;
+    if (Active)
+    {
+        lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
+        lx_cpu_restore(Emulated->cpu, Active->context);
+        lx_cpu_get_registers(Emulated->cpu, &r);
+        lx_host_mutex_unlock(Emulated->mutex);
+        if (r.ss & 4)
+            r.esp = Emulated->selectors[r.ss >> 3].base + (r.esp & 0xffff);
+    }
+    else
+    {
+        /* Asynchronous OS/2 services attach a TIB before delivering a callback.
+           Their stack belongs to this invocation, independent of any other CPU. */
+        stack = lx_execution_map(Emulated->execution, 0, 0x10000, 3, 0);
+        if (!stack)
+            failure("Cannot allocate guest callback stack");
+        r = initialRegisters();
+        r.esp = lx_execution_mapping_address(stack) + 0x10000 - 16;
+    }
     r.ss = r.ds = r.es = FLAT_DATA;
     r.cs = FLAT_CODE;
     r.eip = entry;
@@ -612,8 +624,12 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     push32(&r, b);
     push32(&r, a);
     push32(&r, Emulated->return_address);
-    return invoke(r, 0);
+    uint32_t result = invoke(r, 0);
+    if (stack)
+        lx_execution_unmap(Emulated->execution, stack);
+    return result;
 }
+
 typedef struct Thread32Entry
 {
     uint32_t entry, stack, argument;

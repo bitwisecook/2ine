@@ -791,3 +791,34 @@ static uint32 bridge32_GpiPolyLine(uint8 *a)
     free(points);
     return result;
 }
+
+static uint32 bridge32_GpiQueryRegionRects(uint8 *a)
+{
+    RGNRECT control;
+    RECTL bounds;
+    if (!lx_execution_read(GLoaderState.execution, gpi_word(a, 3), &control, sizeof control) ||
+        (gpi_word(a, 4) && control.crc > 65536))
+        return 0;
+    if (gpi_word(a, 2) &&
+        !lx_execution_read(GLoaderState.execution, gpi_word(a, 2), &bounds, sizeof bounds))
+        return 0;
+    LxGuestBorrow control_output = {0}, rectangles = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3), sizeof control, LX_GUEST_WRITE,
+                             &control_output))
+        return 0;
+    if (gpi_word(a, 4) &&
+        (!control.crc ||
+         !lx_execution_borrow(GLoaderState.execution, gpi_word(a, 4),
+                              (size_t)control.crc * sizeof(RECTL), LX_GUEST_WRITE, &rectangles)))
+    {
+        lx_execution_release(&control_output);
+        return 0;
+    }
+    BOOL result = GpiQueryRegionRects(gpi_word(a, 0), gpi_word(a, 1),
+                                      gpi_word(a, 2) ? &bounds : NULL, &control, rectangles.host);
+    if (result)
+        memcpy(control_output.host, &control, sizeof control);
+    lx_execution_release(&rectangles);
+    lx_execution_release(&control_output);
+    return result;
+}

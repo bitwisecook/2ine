@@ -943,6 +943,11 @@ extern "C"
     OS2EXPORT ULONG OS2API WinQueryDlgItemText(HWND window, ULONG id, LONG capacity, PCHAR output)
         OS2APIINFO(815);
 
+    OS2EXPORT BOOL OS2API WinSetPointerPos(HWND desktop, LONG x, LONG y) OS2APIINFO(867);
+    OS2EXPORT BOOL OS2API WinShowPointer(HWND desktop, BOOL show) OS2APIINFO(881);
+    OS2EXPORT BOOL OS2API WinShowCursor(HWND window, BOOL show) OS2APIINFO(880);
+    OS2EXPORT ULONG OS2API WinQueryVisibleRegion(HWND window, ULONG region) OS2APIINFO(1000);
+    OS2EXPORT BOOL OS2API WinSetVisibleRegionNotify(HWND window, BOOL enable) OS2APIINFO(1001);
     OS2EXPORT BOOL OS2API WinQueryPointerPos(HWND hwnd, PPOINTL point) OS2APIINFO(823);
     OS2EXPORT BOOL OS2API WinQueryWindowPos(HWND hwnd, PSWP position) OS2APIINFO(837);
     OS2EXPORT BOOL OS2API WinIntersectRect(HAB hab, PRECTL dst, PRECTL a, PRECTL b) OS2APIINFO(764);

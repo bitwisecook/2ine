@@ -255,6 +255,13 @@ static uint32_t nested16(uint8_t *arguments)
     lx_execution_free_segment(Execution, selector);
     return 0;
 }
+static void *asynchronous_callback(void *tib)
+{
+    uint16_t token = lx_execution_attach_tib(Execution, tib);
+    CHECK(lx_execution_callback32_4(Execution, CallbackEntry + 0x300, 7, 11, 13, 17) == 34);
+    lx_execution_detach_tib(Execution, token);
+    return NULL;
+}
 static void invoke16(void)
 {
     LxGuestMapping *nested = lx_execution_map(Execution, 0x06400000, 0x10000, 7, 1);
@@ -273,6 +280,10 @@ static void invoke16(void)
     const uint8_t four_words[] = {0x8b, 0x44, 0x24, 4,    0x6b, 0xc0, 3,    0x03, 0x44, 0x24, 8,
                                   0xd1, 0xe0, 0x2b, 0x44, 0x24, 12,   0x33, 0x44, 0x24, 16,   0xc3};
     memcpy((uint8_t *)lx_execution_mapping_host(nested) + 0x300, four_words, sizeof four_words);
+    pthread_t callback_thread;
+    CHECK(!pthread_create(&callback_thread, NULL, asynchronous_callback,
+                          lx_execution_current_tib(Execution)));
+    CHECK(!pthread_join(callback_thread, NULL));
     uint16_t code_selector, stack_selector, bridge_selector;
     uint8_t *code = lx_execution_alloc_segment(Execution, &code_selector, 1);
     uint8_t *stack = lx_execution_alloc_segment(Execution, &stack_selector, 0);
@@ -403,6 +414,46 @@ static void invoke_thread32(void)
     CHECK(lx_execution_unmap(Execution, code));
     puts("USE32 thread argument, per-thread TLS alias and non-returning exit passed");
 }
+typedef struct GenerationTest
+{
+    uint8_t *tib;
+    struct GenerationTest *next;
+} GenerationTest;
+static void *generation_thread(void *argument)
+{
+    GenerationTest *test = argument;
+    uint16_t token = lx_execution_attach_tib(Execution, test->tib);
+    CHECK(lx_execution_current_tib(Execution) == test->tib);
+    if (test->next)
+    {
+        pthread_t child;
+        CHECK(!pthread_create(&child, NULL, generation_thread, test->next));
+        CHECK(!pthread_join(child, NULL));
+        CHECK(lx_execution_current_tib(Execution) == test->tib);
+    }
+    lx_execution_detach_tib(Execution, token);
+    return NULL;
+}
+static void generations_contract(void)
+{
+    LxGuestMapping *mappings[6];
+    GenerationTest tests[6];
+    for (unsigned i = 0; i < 6; i++)
+    {
+        mappings[i] = lx_execution_map(Execution, 0x07400000 + i * 0x10000, 0x10000, 3, 1);
+        CHECK(mappings[i]);
+        tests[i].tib = lx_execution_mapping_host(mappings[i]);
+        tests[i].next = i < 5 ? &tests[i + 1] : NULL;
+        lx_guest_store_u32(tests[i].tib + offsetof(LxGuestTib, tib2),
+                           lx_execution_mapping_address(mappings[i]) + sizeof(LxGuestTib));
+    }
+    pthread_t first;
+    CHECK(!pthread_create(&first, NULL, generation_thread, tests));
+    CHECK(!pthread_join(first, NULL));
+    for (unsigned i = 0; i < 6; i++)
+        CHECK(lx_execution_unmap(Execution, mappings[i]));
+    puts("Six generations of host-thread TIB attachment preserve parent TLS");
+}
 int main(int argc, char **argv)
 {
     const char *backend = argc > 1 ? argv[1] : "unicorn";
@@ -436,6 +487,7 @@ int main(int argc, char **argv)
     CHECK(tls_string && !strcmp(tls_string, "x"));
     free(tls_string);
     CHECK(!lx_execution_copy_string(Execution, TlsWindow + 128, 4096));
+    generations_contract();
     mapping_contract();
     argument_contract();
     invoke32();

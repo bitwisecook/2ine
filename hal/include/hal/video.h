@@ -94,6 +94,9 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
 void lx_host_window_destroy(LxHostWindow *window);
 void *lx_host_window_data(LxHostWindow *window);
 int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height);
+/* Host fullscreen preserves guest coordinates and the render target dimensions. */
+int lx_host_window_fullscreen(LxHostWindow *window, int enabled);
+int lx_host_window_is_fullscreen(LxHostWindow *window);
 void lx_host_window_show(LxHostWindow *window);
 void lx_host_window_hide(LxHostWindow *window);
 int lx_host_window_title(LxHostWindow *window, const char *title);
@@ -117,4 +120,6 @@ int lx_host_window_line(LxHostWindow *window, const LxHostRect *clip, int x1, in
                         int y2, uint8_t r, uint8_t g, uint8_t b);
 int lx_host_video_push(const LxHostEvent *event);
 void lx_host_mouse_position(int *x, int *y);
+int lx_host_mouse_warp(int x, int y);
+int lx_host_pointer_show(int show);
 #endif

@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/graphics.h"
 const char *messageName(const ULONG msg)
 {
     switch (msg)
@@ -404,6 +405,9 @@ void pumpEvents(AnchorBlock *anchor)
     LxHostEvent event;
     while (!anchor->message_queue.head)
     {
+        drainForeignMessages(anchor);
+        lx_pm_dive_pump(anchor);
+        presentWindows(anchor);
         while (lx_host_video_poll(&event))
             processHostEvent(anchor, &event);
         int wait = pumpTimers(anchor);
@@ -455,6 +459,8 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
     while (1)
     {
         /* Present retained drawing even while queued timers keep the queue busy. */
+        drainForeignMessages(anchor);
+        lx_pm_dive_pump(anchor);
         presentWindows(anchor);
         pumpTimers(anchor);
         MessageQueueItem *prev = NULL;
@@ -562,7 +568,7 @@ BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor)
     {
-        return FALSE;
+        return postForeignMessage(hwnd, msg, mp1, mp2);
     }
     if (anchor->message_queue.hmq == NULLHANDLE)
     {
@@ -572,6 +578,8 @@ BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     Window *win = getWindowFromHWND(anchor, hwnd);
     if (hwnd && !win)
     {
+        if (postForeignMessage(hwnd, msg, mp1, mp2))
+            return TRUE;
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
     }
 
@@ -618,12 +626,14 @@ BOOL WinPeekMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULO
     AnchorBlock *anchor = getAnchorBlock(hab);
     if (!anchor || !output || flags > 1 || (filter && !getWindowFromHWND(anchor, filter)))
         return FALSE;
+    drainForeignMessages(anchor);
+    lx_pm_dive_pump(anchor);
     LxHostEvent event;
     while (lx_host_video_poll(&event))
         processHostEvent(anchor, &event);
     pumpTimers(anchor);
     presentWindows(anchor);
-retry:
+retry:;
     MessageQueueItem *previous = NULL, *item = anchor->message_queue.head;
     while (item && skipMessage(&item->qmsg, filter, first, last))
     {

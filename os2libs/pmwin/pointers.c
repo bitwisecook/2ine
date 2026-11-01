@@ -79,3 +79,20 @@ BOOL WinDestroyPointer(HPOINTER handle)
     lx_handle_release(&borrow);
     return copy && lx_handle_close(handle, LX_HANDLE_PM_POINTER);
 }
+
+BOOL WinSetPointerPos(HWND desktop, LONG x, LONG y)
+{
+    return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() &&
+           lx_host_mouse_warp(x, desktop_window.h - 1 - y);
+}
+BOOL WinShowPointer(HWND desktop, BOOL show)
+{
+    return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() && lx_host_pointer_show(show != 0);
+}
+BOOL WinShowCursor(HWND handle, BOOL show)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    /* Text carets are painted by their control; absent carets cannot be shown. */
+    return window && !show;
+}

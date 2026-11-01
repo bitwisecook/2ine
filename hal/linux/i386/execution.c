@@ -54,6 +54,7 @@ typedef struct NativeState
     LxGuestMapping *segments[LX_MAX_LDT_SLOTS];
     uint32 near16_base;
     uint16 original_cs, original_ds, original_es, original_ss;
+    unsigned int tib_gdt_entry;
     LxExecutionServices services;
     struct sigaction previous_segv;
 } NativeState;
@@ -307,7 +308,11 @@ static uint16 lxSetOs2Tib(uint8 *tibspace)
     NativeHostStack = (uint8 *)stack + 65536;
     NativeTib = tibspace;
     struct user_desc entry = {0};
-    entry.entry_number = -1;
+    /* Linux copies the parent's three GDT TLS descriptors into each child.
+       Reuse our reserved index in every task instead of allocating another
+       inherited slot; glibc's GS descriptor remains separate. */
+    pthread_mutex_lock(&DescriptorMutex);
+    entry.entry_number = Native->tib_gdt_entry;
     entry.base_addr = (unsigned int)((size_t)tibspace);
     entry.limit = Native->services.tib_size;
     entry.seg_32bit = 1;
@@ -322,6 +327,9 @@ static uint16 lxSetOs2Tib(uint8 *tibspace)
         perror("set_thread_area");
         abort();
     }
+
+    Native->tib_gdt_entry = entry.entry_number;
+    pthread_mutex_unlock(&DescriptorMutex);
 
     /* TI=0 and RPL=3 select a ring-3 GDT entry; LDT entries use TI=1. */
     const unsigned int segment = (entry.entry_number << 3) | 3;
@@ -1407,6 +1415,7 @@ static int initialize(LxExecution *execution)
     execution->backend = Native;
     Native->services = execution->services;
     Native->execution = execution;
+    Native->tib_gdt_entry = (unsigned int)-1;
     Native->ldt = calloc(LX_MAX_LDT_SLOTS, sizeof *Native->ldt);
     if (!Native->ldt)
     {

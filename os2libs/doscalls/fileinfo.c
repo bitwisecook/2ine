@@ -50,7 +50,8 @@ void initFileCreationDateTime(FDATE *fdate, FTIME *ftime)
 
 APIRET queryFileInfoStandardFromStat(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
-    FILESTATUS3 *st = (FILESTATUS3 *)pInfoBuf;
+    FILESTATUS3 value;
+    FILESTATUS3 *st = &value;
     memset(st, '\0', sizeof(*st));
 
     initFileCreationDateTime(&st->fdateCreation, &st->ftimeCreation);
@@ -65,12 +66,14 @@ APIRET queryFileInfoStandardFromStat(const LxHostFileInfo *statbuf, PVOID pInfoB
     if (statbuf->readonly)
         st->attrFile |= FILE_READONLY;
 
+    /* Older 32-bit C runtimes request the 22-byte FILESTATUS prefix. */
+    memcpy(pInfoBuf, st, cbInfoBuf < sizeof *st ? cbInfoBuf : sizeof *st);
     return NO_ERROR;
 }
 
 APIRET queryPathInfoStandard(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
-    if (cbInfoBuf < sizeof(FILESTATUS3))
+    if (cbInfoBuf < 22)
         return ERROR_BUFFER_OVERFLOW;
 
     LxHostFileInfo statbuf;
@@ -197,7 +200,7 @@ APIRET DosQueryPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULON
 
 APIRET queryFileInfoStandard(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
-    if (cbInfoBuf < sizeof(FILESTATUS3))
+    if (cbInfoBuf < 22)
         return ERROR_BUFFER_OVERFLOW;
     return queryFileInfoStandardFromStat(statbuf, pInfoBuf, cbInfoBuf);
 }

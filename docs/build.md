@@ -82,3 +82,17 @@ The build copies these assets to `build/fonts/`; retain it when moving a worker.
 The runtime-only profile requires neither FreeType nor these font assets.
 
 [Optional Mesa OpenGL and macOS KosmicKrisp](opengl.md).
+
+Application builds include [sampled General MIDI synthesis](audio.md), with
+hash-checked TinySoundFont source and the GeneralUser GS bank. Use
+`TWOINE_MIDI_DATA_DIR` for offline inputs. Keep the staged `soundfonts/` directory
+when relocating a worker. `TWOINE_MIDI_SYNTH=OFF` explicitly selects the basic
+oscillator fallback. Runtime-only builds omit these dependencies.
+
+[OS/2 Doom setup and verification](doom.md).
+
+Optional [Munt MT-32 synthesis](midi-mt32.md) is selected with
+`TWOINE_MT32_SYNTH=ON` and requires C++ development files matching the worker
+architecture. Actual MT-32 playback needs separately supplied control/PCM ROMs.
+[SoundFont tools](soundfonts.md) and [VOGONS discovery](vogons-soundfonts.md)
+fetch external banks and retain their sources and hashes.
