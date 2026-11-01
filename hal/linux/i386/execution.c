@@ -1275,7 +1275,18 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
     uintptr_t base = (uintptr_t)NativeHostAllocation;
     if (!NativeBridge || sp < base || sp >= base + 65536)
-        return ((uint32_t (*)(uint32_t, uint32_t, uint32_t, uint32_t))(uintptr_t)entry)(a, b, c, d);
+    {
+        uint32_t words[4] = {a, b, c, d}, value;
+        /* Restore the host frame for caller- and callee-cleaned guest entries. */
+        __asm__ __volatile__(
+            "pushfl\n\tpushal\n\tmovl %%esp,%%esi\n\tandl $-16,%%esp\n\t"
+            "pushl 12(%%ebx)\n\tpushl 8(%%ebx)\n\tpushl 4(%%ebx)\n\tpushl (%%ebx)\n\t"
+            "call *%%edi\n\tmovl %%eax,28(%%esi)\n\tmovl %%esi,%%esp\n\tpopal\n\tpopfl"
+            : "=a"(value)
+            : "b"(words), "D"(entry)
+            : "memory");
+        return value;
+    }
     uint32_t words[4] = {a, b, c, d}, value;
     void *previous = NativeHostStack;
     NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);

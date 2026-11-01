@@ -245,6 +245,8 @@ def queue_program(writer):
         g.result(1, 133)
         g.call_handle(4, 919, pmwindow, 0x5151, 0x1234ABCD, (shared,))
         g.result(1, 115)
+        g.call_handle(4, 919, pmwindow, 0x5152, 0xABCDEF12, 0)
+        g.result(1, 150)
     else:
         g.code.extend(b"\x89\x00\xc7\x40\x04" + struct.pack("<I", 0x1234ABCD))
         g.code.extend(b"\x8b\x15" + struct.pack("<I", pmwindow) + b"\x89\x50\x08")
@@ -377,6 +379,9 @@ def queue_program(writer):
         g.word(message + 8, 0x1234ABCD, 118)
         g.load(shared)
         g.require(b"\x3b\x05" + struct.pack("<I", message + 12), 119)
+        g.call_handle(4, 915, hab, message, (pmwindow,), 0x5152, 0x5152)
+        g.result(1, 151)
+        g.word(message + 8, 0xABCDEF12, 152)
         g.call_handle(4, 728, pmwindow)
         g.result(1, 120)
         g.call_handle(4, 919, pmwindow, 0x5151, 0, 0)

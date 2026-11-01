@@ -285,9 +285,11 @@ void drainForeignMessages(AnchorBlock *anchor)
         uint8 wire[MESSAGE_SIZE];
         size_t size;
         unsigned priority;
-        uint32 token;
-        while (!lx_host_mailbox_receive(inbox, wire, sizeof wire, &size, &priority, &token, 0))
+        for (;;)
         {
+            uint32 token = 0;
+            if (lx_host_mailbox_receive(inbox, wire, sizeof wire, &size, &priority, &token, 0))
+                break;
             if (size != sizeof wire)
                 continue;
             HWND window = lx_guest_load_u32(wire);

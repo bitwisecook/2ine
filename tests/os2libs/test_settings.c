@@ -41,6 +41,9 @@ int main(int argc, char **argv)
     CHECK(desktop && !WinDestroyObject(desktop));
     if (writing)
     {
+        CHECK(!WinRegisterObjectClass(NULL, "missing.dll"));
+        CHECK(!WinRegisterObjectClass("TestDocument", ""));
+        CHECK(WinRegisterObjectClass("TestDocument", "C:\\OS2\\DLL\\missing.dll"));
         ULONG folder =
             WinCreateObject("WPFolder", "Suite", "OBJECTID=<TEST_SUITE>;", "<WP_DESKTOP>", 0);
         CHECK(folder && folder == WinQueryObject("<test_suite>"));
@@ -59,6 +62,9 @@ int main(int argc, char **argv)
     }
     else
     {
+        CHECK(!WinDeregisterObjectClass("testdocument"));
+        CHECK(WinDeregisterObjectClass("TestDocument"));
+        CHECK(!WinDeregisterObjectClass("TestDocument"));
         ULONG app = WinQueryObject("<TEST_RENAMED>");
         ULONG folder = WinQueryObject("<TEST_SUITE>");
         CHECK(app && folder);

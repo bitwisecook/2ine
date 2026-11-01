@@ -512,7 +512,7 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
         lx_pm_dive_pump(anchor);
         LxHostEvent event;
         while (lx_host_video_poll(&event))
-            processHostEvent(anchor, &event);
+            lx_pm_host_event(&event);
         presentWindows(anchor);
         pumpTimers(anchor);
         MessageQueueItem *prev = NULL;

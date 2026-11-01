@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Folder/program records are atomic profile values protected across workers.
+/* Folder/program and class records are atomic profile values protected across workers.
    The desktop is a virtual root. SOM class loading is not supported. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwp.h"
@@ -339,11 +339,28 @@ BOOL WinDestroyObject(ULONG handle)
 BOOL WinRegisterObjectClass(PSZ name, PSZ module)
 {
     TRACE_NATIVE("WinRegisterObjectClass('%s', '%s')", name, module);
-    return FALSE;
+    if (!name || !*name || !module || !*module || strnlen(name, OBJECT_LIMIT) == OBJECT_LIMIT ||
+        strnlen(module, OBJECT_LIMIT) == OBJECT_LIMIT)
+        return FALSE;
+    /* Registration records a case-sensitive class-to-module association. The
+       module need not be present until the class is instantiated. */
+    LxHostFile *lock;
+    HINI profile = begin(&lock);
+    BOOL result = profile && PrfWriteProfileString(profile, "classes", name, module);
+    end(profile, lock);
+    return result;
 }
 BOOL WinDeregisterObjectClass(PSZ name)
 {
     TRACE_NATIVE("WinDeregisterObjectClass('%s')", name);
-    return FALSE;
+    if (!name || !*name || strnlen(name, OBJECT_LIMIT) == OBJECT_LIMIT)
+        return FALSE;
+    LxHostFile *lock;
+    HINI profile = begin(&lock);
+    ULONG size;
+    BOOL result = profile && PrfQueryProfileSize(profile, "classes", name, &size) &&
+                  PrfWriteProfileData(profile, "classes", name, NULL, 0);
+    end(profile, lock);
+    return result;
 }
 #include "os2libs/generated/pmwp-lx.h"
