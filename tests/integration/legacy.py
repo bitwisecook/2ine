@@ -197,6 +197,14 @@ def critical_program(checked):
 
 def path_program():
     g = FlatGuest()
+    directory = g.field(b"created-by-lx\0")
+    g.call(1, 270, directory, 0)  # DosCreateDir must create a queryable directory.
+    g.result(0, 60)
+    directory_info = g.field(bytes(24))
+    g.call(1, 223, directory, 1, directory_info, 24)
+    g.result(0, 61)
+    g.call(1, 270, 0, 0)
+    g.result(87, 62)
     info = g.field(bytes(24))
     for name, expected in (
         (b"input.txt", 0),
@@ -270,7 +278,7 @@ def exit_program():
     g.call(1, 322, (module,))  # The registered exit callback must remain executable.
     g.result(0, 61)
     g.exit(0)
-    return linear_image(g.code, g.fixups, ["DOSCALLS"], "EXITLIFE", data=g.data)
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "EXITDLL.DLL"], "EXITLIFE", data=g.data)
 
 
 def main():

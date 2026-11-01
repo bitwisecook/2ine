@@ -1161,3 +1161,15 @@ static uint32 bridge32_DosSetPriority(uint8 *a)
     return DosSetPriority(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
                           (LONG)lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
 }
+
+static uint32 bridge32_DosCreateDir(uint8 *a)
+{
+    if (lx_guest_load_u32(a + 4))
+        return ERROR_EA_LIST_INCONSISTENT;
+    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
+    if (!name)
+        return ERROR_INVALID_PARAMETER;
+    uint32 result = DosCreateDir(name, NULL);
+    free(name);
+    return result;
+}

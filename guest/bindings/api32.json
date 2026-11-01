@@ -412,6 +412,11 @@
       "argument_bytes": 16,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DosCreateDir": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "nls": {
