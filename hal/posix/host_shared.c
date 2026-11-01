@@ -64,7 +64,6 @@ LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShar
     }
     snprintf(path, capacity, "%s/%s.live", directory, name + 1);
     int lifetime = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
-    free(path);
     LxHostSharedResult result = LX_HOST_SHARED_DENIED;
     int fd = -1;
     if (lifetime < 0)
@@ -76,9 +75,12 @@ LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShar
         result = size ? LX_HOST_SHARED_EXISTS : LX_HOST_SHARED_MISSING;
         goto done;
     }
+    /* Ordinary files preserve logical byte sizes on hosts whose POSIX shm
+       objects report VM-page-rounded sizes. Live views retain retired inodes. */
+    snprintf(path, capacity, "%s/%s.data", directory, name + 1);
     if (size)
-        shm_unlink(name);
-    fd = shm_open(name, O_RDWR | (size ? O_CREAT | O_EXCL : 0), 0600);
+        unlink(path);
+    fd = open(path, O_RDWR | O_CLOEXEC | (size ? O_CREAT | O_EXCL : 0), 0600);
     if (fd < 0)
     {
         result = errno == ENOENT ? LX_HOST_SHARED_MISSING : LX_HOST_SHARED_DENIED;
@@ -98,6 +100,7 @@ LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShar
     *output = s;
     result = LX_HOST_SHARED_OK;
 done:
+    free(path);
     close(operation);
     if (result != LX_HOST_SHARED_OK)
     {

@@ -71,7 +71,7 @@ The bottle contains:
 | `drive_c/OS2/OBJECTS.INI` | Workplace Shell object and class metadata |
 | `drive_c/OS2/DLL/2INE/` | Versioned loader and native API modules used by this bottle |
 | `drive_c/TEMP/` | Guest temporary files |
-| `ipc/` | Bottle-scoped queues and shared-memory address assignments |
+| `ipc/` | Bottle-scoped queues, shared-memory backing and address assignments |
 | `logs/` | Installation receipts |
 
 Mapped directories retain their existing files. `init` preserves an existing
