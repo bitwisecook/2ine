@@ -351,8 +351,11 @@ static void paint(Window *window)
         WinEndPaint(space);
         return;
     }
-    WinFillRect(space, &rect,
-                (c->kind == 7 || c->kind == 6 || c->kind == 32) ? CLR_WHITE : CLR_PALEGRAY);
+    /* Group boxes and frames leave the controls inside them visible. */
+    BOOL frame = c->kind == 5 && ((window->style & 0x7f) == 2 || (window->style & 0x7f) == 8);
+    if (!frame)
+        WinFillRect(space, &rect,
+                    (c->kind == 7 || c->kind == 6 || c->kind == 32) ? CLR_WHITE : CLR_PALEGRAY);
     if ((c->kind == 3 && !(window->style & 15)) || c->kind == 2 || c->kind == 6 || c->kind == 32 ||
         (c->kind == 5 && (window->style & 0x7f) != 1))
     {
@@ -528,6 +531,11 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         return 0;
     }
     PmControl *c = window->control;
+    if (message == WM_HITTEST && c)
+        return controlReply(c->kind == 5 &&
+                                    ((window->style & 0x7f) == 2 || (window->style & 0x7f) == 8)
+                                ? HT_TRANSPARENT
+                                : HT_NORMAL);
     if (!c)
         return 0;
     if (c->kind == 8)

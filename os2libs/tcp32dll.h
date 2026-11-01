@@ -12,6 +12,7 @@ typedef struct Os2LegacyHost
 OS2EXPORT uint32_t OS2API Os2LegacyLongSwap(uint32_t value) OS2APIINFO(ord = 3, name = lswap);
 OS2EXPORT uint16_t OS2API Os2LegacyShortSwap(uint16_t value) OS2APIINFO(ord = 4, name = bswap);
 OS2EXPORT uint32_t OS2API Os2LegacyInetAddr(const char *name) OS2APIINFO(ord = 5, name = inet_addr);
+OS2EXPORT char *OS2API Os2LegacyInetText(uint32_t address) OS2APIINFO(ord = 10, name = inet_ntoa);
 OS2EXPORT Os2LegacyHost *OS2API Os2LegacyGetHostByName(const char *name)
     OS2APIINFO(ord = 11, name = gethostbyname);
 OS2EXPORT int OS2API Os2LegacyGetHostName(char *name, int length)

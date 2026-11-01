@@ -7,6 +7,10 @@
 extern "C"
 {
 #endif
+    OS2EXPORT ULONG OS2API LoadCursor(ULONG instance, ULONG name)
+        OS2APIINFO(ord = 459, name = LOADCURSOR);
+    OS2EXPORT ULONG OS2API SetCursor(ULONG cursor) OS2APIINFO(ord = 605, name = SETCURSOR);
+    OS2EXPORT BOOL OS2API DestroyCursor(ULONG cursor) OS2APIINFO(ord = 143, name = DESTROYCURSOR);
     OS2EXPORT VOID OS2API WinInitializeOpen32(ULONG reserved)
         OS2APIINFO(ord = 6009, name = WININITIALIZEOPEN32);
     OS2EXPORT VOID OS2API WinTerminateOpen32(ULONG reserved)

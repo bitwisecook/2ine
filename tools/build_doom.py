@@ -75,6 +75,13 @@ def build(archive: Path, sdk: Path, watcom: Path, output: Path, build_epoch: int
     execute(
         ["patch", "--batch", "-p1", "-i", str(patch)], source, environment, output / "patch.log"
     )
+    desktop_patch = patch.with_name("doom110-desktop.patch")
+    execute(
+        ["patch", "--batch", "-p1", "-i", str(desktop_patch)],
+        source,
+        environment,
+        output / "desktop-patch.log",
+    )
 
     # The Linux compiler interprets include path separators literally. Copy the
     # authentic SDK, changing only backslashes in preprocessor include operands.
@@ -137,7 +144,13 @@ def build(archive: Path, sdk: Path, watcom: Path, output: Path, build_epoch: int
     (source / "build.lnk").write_text("\n".join(lines) + "\n")
     execute([str(tools / "wlink"), "@build.lnk"], source, environment, output / "link.log")
     executable = output / "os2doom.exe"
-    inputs = [archive, patch, *(tools / name for name in ("wcc386", "wasm", "wlink")), *libraries]
+    inputs = [
+        archive,
+        patch,
+        desktop_patch,
+        *(tools / name for name in ("wcc386", "wasm", "wlink")),
+        *libraries,
+    ]
     # Compiler-emitted default-library directives select these matching runtimes.
     inputs += [
         watcom / "lib386/os2" / name

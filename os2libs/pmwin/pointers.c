@@ -32,11 +32,14 @@ HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     uint32 size = 0;
     void *resource = NULL;
-    if (!anchor || desktop != HWND_DESKTOP || !GLoaderState.queryResourceSize ||
-        !GLoaderState.getResource || !GLoaderState.freeResource ||
-        GLoaderState.queryResourceSize(module, 1, id, &size) ||
-        GLoaderState.getResource(module, 1, id, &resource))
+    if (!anchor)
         return 0;
+    if (desktop != HWND_DESKTOP)
+        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
+    if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
+        !GLoaderState.freeResource || GLoaderState.queryResourceSize(module, 1, id, &size) ||
+        GLoaderState.getResource(module, 1, id, &resource))
+        SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
     const uint8 *p = resource;
     HPOINTER result = 0;
     PmPointer *pointer = NULL;

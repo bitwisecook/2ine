@@ -350,6 +350,16 @@ loadnative_failed:
 
 LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependency_tree_depth)
 {
+    /* LX import module names may include the DLL filename suffix. */
+    char canonical[256];
+    size_t name_length = strlen(modname);
+    if (name_length > 4 && name_length < sizeof canonical &&
+        strcasecmp(modname + name_length - 4, ".dll") == 0)
+    {
+        memcpy(canonical, modname, name_length - 4);
+        canonical[name_length - 4] = '\0';
+        modname = canonical;
+    }
 
     for (LxModule *i = GLoaderState.loaded_modules; i != NULL; i = i->next)
     {

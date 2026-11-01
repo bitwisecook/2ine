@@ -970,3 +970,73 @@ static uint32 bridge32_WinAlarm(uint8 *a)
 {
     return WinAlarm(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
+static uint32 bridge32_WinQuerySystemAtomTable(uint8 *a)
+{
+    (void)a;
+    return WinQuerySystemAtomTable();
+}
+static uint32 bridge32_WinAddAtom(uint8 *a)
+{
+    uint32 address = pm_word(a, 1);
+    char *name = address < 0x10000 || address >= 0xffff0000 ? NULL : pm_string(address);
+    if (address >= 0x10000 && address < 0xffff0000 && !name)
+        return 0;
+    uint32 result = WinAddAtom(pm_word(a, 0), name ? name : (PSZ)(uintptr_t)address);
+    free(name);
+    return result;
+}
+static uint32 bridge32_WinFindAtom(uint8 *a)
+{
+    uint32 address = pm_word(a, 1);
+    char *name = address < 0x10000 || address >= 0xffff0000 ? NULL : pm_string(address);
+    if (address >= 0x10000 && address < 0xffff0000 && !name)
+        return 0;
+    uint32 result = WinFindAtom(pm_word(a, 0), name ? name : (PSZ)(uintptr_t)address);
+    free(name);
+    return result;
+}
+static uint32 bridge32_WinQueryClipbrdFmtInfo(uint8 *a)
+{
+    ULONG flags = 0;
+    uint32 result = WinQueryClipbrdFmtInfo(pm_word(a, 0), pm_word(a, 1), &flags);
+    if (result && !lx_execution_write(GLoaderState.execution, pm_word(a, 2), &flags, sizeof flags))
+        return 0;
+    return result;
+}
+static uint32 bridge32_WinOpenClipbrd(uint8 *a)
+{
+    return WinOpenClipbrd(pm_word(a, 0));
+}
+static uint32 bridge32_WinCloseClipbrd(uint8 *a)
+{
+    return WinCloseClipbrd(pm_word(a, 0));
+}
+static uint32 bridge32_WinEmptyClipbrd(uint8 *a)
+{
+    return WinEmptyClipbrd(pm_word(a, 0));
+}
+static uint32 bridge32_WinQueryClipbrdOwner(uint8 *a)
+{
+    return WinQueryClipbrdOwner(pm_word(a, 0));
+}
+static uint32 bridge32_WinSetClipbrdOwner(uint8 *a)
+{
+    return WinSetClipbrdOwner(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinEnumClipbrdFmts(uint8 *a)
+{
+    return WinEnumClipbrdFmts(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinQueryClipbrdData(uint8 *a)
+{
+    return WinQueryClipbrdData(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinSetClipbrdData(uint8 *a)
+{
+    return WinSetClipbrdData(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2), pm_word(a, 3));
+}
+static uint32 bridge32_WinDeleteAtom(uint8 *a)
+{
+    return WinDeleteAtom(pm_word(a, 0), pm_word(a, 1));
+}

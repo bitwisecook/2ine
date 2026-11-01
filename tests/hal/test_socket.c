@@ -53,7 +53,7 @@ int main(void)
     CHECK(source.address == address.address && source.port);
     CHECK(!memcmp(message, output, sizeof message));
     CHECK(!lx_host_socket_close(sender) && !lx_host_socket_close(receiver));
-    CHECK(!setenv("TWOINE_SOCKET_BIND_ADDRESS", "127.0.0.2", 1));
+    CHECK(!setenv("TWOINE_SOCKET_BIND_ADDRESS", "127.0.0.1", 1));
     receiver = lx_host_socket_open(LX_SOCKET_DGRAM);
     sender = lx_host_socket_open(LX_SOCKET_DGRAM);
     CHECK(receiver >= 0 && sender >= 0);
@@ -61,7 +61,7 @@ int main(void)
     address.port = 0;
     CHECK(!lx_host_socket_bind(receiver, &address));
     CHECK(!lx_host_socket_name(receiver, &address));
-    CHECK(address.address == lx_host_socket_parse_address("127.0.0.2"));
+    CHECK(address.address == lx_host_socket_parse_address("127.0.0.1"));
     CHECK(lx_host_socket_sendto(sender, message, sizeof message, 0, &address) == sizeof message);
     CHECK(lx_host_socket_poll(&receiver, 1, 0, 0, 1000) == 1);
     CHECK(lx_host_socket_recvfrom(receiver, output, sizeof output, 0, &source) == sizeof output);

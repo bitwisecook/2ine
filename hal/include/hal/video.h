@@ -42,7 +42,8 @@ typedef enum LxHostEventType
     LX_HOST_EVENT_KEY_UP,
     LX_HOST_EVENT_TEXT,
     LX_HOST_EVENT_FOCUS_GAINED,
-    LX_HOST_EVENT_FOCUS_LOST
+    LX_HOST_EVENT_FOCUS_LOST,
+    LX_HOST_EVENT_INPUT_RESET
 } LxHostEventType;
 typedef enum
 {
@@ -105,6 +106,9 @@ void lx_host_window_hide(LxHostWindow *window);
 int lx_host_window_title(LxHostWindow *window, const char *title);
 int lx_host_window_border(LxHostWindow *window, int bordered);
 int lx_host_window_focus(LxHostWindow *window);
+/* Opt-in mouse capture starts released and is never restored by focus alone. */
+int lx_host_window_set_capture(LxHostWindow *window, int captured);
+int lx_host_window_is_captured(LxHostWindow *window);
 int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int y, int width,
                         int height, const uint8_t *coverage, uint8_t red, uint8_t green,
                         uint8_t blue);

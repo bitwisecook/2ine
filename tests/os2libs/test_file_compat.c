@@ -1,6 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* File-open failures release slots; FIL_STANDARD prefixes respect caller bounds. */
 #define _POSIX_C_SOURCE 200809L
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE
+#endif
 #include "os2libs/doscalls.h"
 #include "os2libs/os2errors.h"
 #include "runtime/runtime.h"

@@ -3,6 +3,7 @@
 #ifndef TWOINE_PM_MENUS_H
 #define TWOINE_PM_MENUS_H
 #include "os2libs/pmwin/internal.h"
+void dismissMenusForClick(AnchorBlock *anchor, Window *target);
 typedef struct PmMenuItem
 {
     MENUITEM item;

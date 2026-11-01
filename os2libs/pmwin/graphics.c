@@ -95,7 +95,7 @@ BOOL WinReleasePS(HPS space)
     if (!ps || ps->persistent)
         return FALSE;
     if (ps->window && ps->window->heavy.window)
-        lx_host_window_present(ps->window->heavy.window);
+        presentWindow(anchor, ps->window);
     destroyPresentationSpace(anchor, ps);
     return TRUE;
 }

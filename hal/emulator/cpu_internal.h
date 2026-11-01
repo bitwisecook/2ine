@@ -19,6 +19,8 @@ typedef struct LxCpuOperations
     void *(*save)(LxCpu *cpu);
     int (*restore)(LxCpu *cpu, const void *context);
     void (*free_context)(void *context);
+    LxCpuEvent (*run_blocks)(LxCpu *cpu, uint64_t blocks);
+    int (*update_context)(LxCpu *cpu, void *context);
 } LxCpuOperations;
 
 typedef struct LxMemoryRegion

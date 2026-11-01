@@ -230,6 +230,41 @@ static unsigned cp437(uint32 point)
             return i;
     return '?';
 }
+BOOL releaseInputState(AnchorBlock *anchor, ULONG timestamp)
+{
+    Window *window = getWindowFromHWND(anchor, anchor->focus);
+    BOOL posted = FALSE;
+    if (window)
+    {
+        for (unsigned scan = 1; scan < 256; scan++)
+            if (anchor->physical_keys[scan] & 2)
+            {
+                unsigned key = scan == 0x1d                   ? 10
+                               : scan == 0x38                 ? 11
+                               : scan == 0x2a || scan == 0x36 ? 9
+                               : scan == 0x1c                 ? 8
+                               : scan == 0x5a                 ? 0x1e
+                               : scan >= 0x3b && scan <= 0x44 ? 0x20 + scan - 0x3b
+                               : scan == 0x57 || scan == 0x58 ? 0x2a + scan - 0x57
+                                                              : 0;
+                for (unsigned i = 0; i < sizeof navigation_keys / sizeof *navigation_keys; i++)
+                    if (navigation_keys[i].scan == scan)
+                        key = virtual_key(navigation_keys[i].key);
+                posted |= postTimestampedMsg(
+                    anchor, window->hwnd, WM_CHAR,
+                    (MPARAM)(uintptr_t)(0x44 | (key ? 2 : 0) | 1u << 16 | scan << 24),
+                    (MPARAM)(uintptr_t)(key << 16), timestamp);
+            }
+        for (unsigned button = 1; button <= 3; button++)
+            if (anchor->key_down[button])
+                posted |= postTimestampedMsg(anchor, window->hwnd, WM_BUTTON1UP + (button - 1) * 3,
+                                             0, 0, timestamp);
+    }
+    memset(anchor->physical_keys, 0, sizeof anchor->physical_keys);
+    memset(anchor->key_down, 0, sizeof anchor->key_down);
+    anchor->modifiers = anchor->text_modifiers = anchor->text_scancode = anchor->text_repeat = 0;
+    return posted;
+}
 BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
 {
     const NavigationKey *navigation = NULL;

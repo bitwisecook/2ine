@@ -18,6 +18,9 @@ typedef struct Host
 } Host;
 int _System socket(int, int, int);
 int _System bind(int, Address *, int);
+int _System getsockname(int, Address *, int *);
+int _System setsockopt(int, int, int, const void *, int);
+char *_System inet_ntoa(unsigned long);
 int _System ioctl(int, int, void *, int);
 int _System sendto(int, void *, int, int, Address *, int);
 int _System recvfrom(int, void *, int, int, Address *, int *);
@@ -53,6 +56,12 @@ int main(void)
     destination.port = bswap(47684);
     destination.address = inet_addr("127.0.0.1");
     CHECK(bind(receiver, &destination, sizeof destination) == 0);
+    len = sizeof source;
+    CHECK(getsockname(receiver, &source, &len) == 0 && len == sizeof source);
+    CHECK(source.family == 2 && source.port == destination.port &&
+          source.address == destination.address);
+    CHECK(!strcmp(inet_ntoa(source.address), "127.0.0.1"));
+    CHECK(setsockopt(sender, 0xffff, 0x20, &on, 4) == 0);
     CHECK(ioctl(receiver, 0x667e, &on, 4) == 0);
     len = sizeof source;
     CHECK(recvfrom(receiver, output, sizeof output, 0, &source, &len) == -1 &&

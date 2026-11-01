@@ -71,6 +71,7 @@ typedef struct Window
     LONG w;
     LONG h;
     RECTL invalid;
+    uint64_t last_present;
     BOOL enabled;
     BOOL visible_region_notify;
 } Window;
@@ -182,6 +183,7 @@ typedef struct
     Window object_window;
     WindowClass *registered_classes;
     MessageQueue message_queue;
+    unsigned paint_depth;
     Window **windows;
     size_t windows_array_len;
     PresentationSpace *pres_spaces;
@@ -210,13 +212,14 @@ LX_PRIVATE ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg);
 LX_PRIVATE BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1,
                                    MPARAM mp2, ULONG ticks);
 LX_PRIVATE BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks);
+LX_PRIVATE void presentWindow(AnchorBlock *anchor, Window *window);
 LX_PRIVATE HWND registerWindowMessages(AnchorBlock *anchor);
 LX_PRIVATE void unregisterWindowMessages(HWND window);
 LX_PRIVATE BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second);
 LX_PRIVATE BOOL windowMessageTargetExists(HWND window);
 LX_PRIVATE void drainForeignMessages(AnchorBlock *anchor);
 LX_PRIVATE void notifyVisibleRegions(AnchorBlock *anchor, Window *window);
-LX_PRIVATE BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event);
+BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event);
 LX_PRIVATE void pumpEvents(AnchorBlock *anchor);
 LX_PRIVATE BOOL skipMessage(const PQMSG qmsg, HWND hwndFilter, ULONG msgFilterFirst,
                             ULONG msgFilterLast);
@@ -237,6 +240,7 @@ LX_PRIVATE HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uin
                              size_t size, PVOID parameters);
 LX_PRIVATE void synchronizeInputState(AnchorBlock *anchor, const QMSG *message);
 BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event);
+BOOL releaseInputState(AnchorBlock *anchor, ULONG timestamp);
 LX_PRIVATE HWND topLevelWindow(AnchorBlock *anchor, HWND handle);
 LX_PRIVATE void releaseWindowAccelerator(Window *window);
 LX_PRIVATE void destroyAccelerators(AnchorBlock *anchor);

@@ -67,6 +67,12 @@ HPS acquirePresentationSpace(HWND hwnd, HPS hps, PRECTL prclPaint, BOOL paint)
         {
             SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INV_HPS, NULLHANDLE);
         }
+    if (paint)
+        TRACE_EVENT(
+            "PAINT hwnd=%u parent=%u class=%s style=%x classStyle=%x size=%d,%d invalid=%d,%d,%d,%d",
+            win->hwnd, win->parent ? win->parent->hwnd : 0, win->window_class_name, win->style,
+            win->class_style, win->w, win->h, win->invalid.xLeft, win->invalid.yBottom,
+            win->invalid.xRight, win->invalid.yTop);
 
     BOOL fresh = !hps;
     PresentationSpace *ps = NULL;
@@ -159,7 +165,7 @@ BOOL WinEndPaint(HPS hps)
 
     Window *win = ps->window;
     if (win && win->heavy.window)
-        lx_host_window_present(win->heavy.window);
+        presentWindow(anchor, win);
 
     if (!ps->persistent)
         destroyPresentationSpace(anchor, ps);
