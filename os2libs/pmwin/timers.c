@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM timers are dispatched on the owning message-queue thread. */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/timers.h"
 ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -41,7 +42,7 @@ ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
 BOOL WinStopTimer(HAB hab, HWND hwnd, ULONG id)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor)
+    if (!anchor || id > 0xFFFF)
         return FALSE;
     for (PmTimer **link = &anchor->timers; *link; link = &(*link)->next)
     {
@@ -61,7 +62,12 @@ int pumpTimers(AnchorBlock *anchor)
     int wait = -1;
     for (PmTimer *timer = anchor->timers; timer; timer = timer->next)
     {
-        if (timer->due <= now)
+        if (timer->due <= now && timer->callback)
+        {
+            timer->due = now + timer->interval;
+            timer->callback();
+        }
+        else if (timer->due <= now)
         {
             int pending = 0;
             for (MessageQueueItem *m = anchor->message_queue.head; m; m = m->next)
@@ -79,4 +85,38 @@ int pumpTimers(AnchorBlock *anchor)
             wait = interval;
     }
     return wait;
+}
+
+ULONG lx_pm_timer_create(HWND owner, ULONG interval, void (*callback)(void))
+{
+    static _Thread_local ULONG next = 0x10000;
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor || !getWindowFromHWND(anchor, owner) || !interval || !callback || !next)
+        return 0;
+    PmTimer *timer = calloc(1, sizeof *timer);
+    if (!timer)
+        return 0;
+    timer->id = next++;
+    timer->hwnd = owner;
+    timer->interval = interval;
+    timer->callback = callback;
+    timer->due = lx_host_video_ticks_ms() + interval;
+    timer->next = anchor->timers;
+    anchor->timers = timer;
+    return timer->id;
+}
+BOOL lx_pm_timer_stop(ULONG id)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor || id < 0x10000)
+        return FALSE;
+    for (PmTimer **slot = &anchor->timers; *slot; slot = &(*slot)->next)
+        if ((*slot)->id == id && (*slot)->callback)
+        {
+            PmTimer *timer = *slot;
+            *slot = timer->next;
+            free(timer);
+            return TRUE;
+        }
+    return FALSE;
 }

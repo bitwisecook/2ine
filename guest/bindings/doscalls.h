@@ -1042,8 +1042,10 @@ static uint32 bridge32_DosSetProcessCp(uint8 *a)
 }
 static uint32 bridge32_DosUnwindException(uint8 *a)
 {
-    (void)a;
-    return ERROR_NOT_SUPPORTED;
+    /* Registration and report addresses remain guest addresses during dispatch. */
+    return DosUnwindException((PVOID)(uintptr_t)lx_guest_load_u32(a),
+                              (PVOID)(uintptr_t)lx_guest_load_u32(a + 4),
+                              (PVOID)(uintptr_t)lx_guest_load_u32(a + 8));
 }
 
 static void wireLoadDateTime(const uint8 *p, FDATE *date, FTIME *time)

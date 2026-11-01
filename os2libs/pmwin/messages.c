@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/input.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/menus.h"
 const char *messageName(const ULONG msg)
@@ -340,8 +341,17 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return postTimestampedMsg(anchor, 0, WM_QUIT, 0, 0, ticks);
     if (!win || !win->hwnd)
         return FALSE;
+    if ((event->type == LX_HOST_EVENT_BUTTON_DOWN || event->type == LX_HOST_EVENT_BUTTON_UP) &&
+        event->button >= 1 && event->button <= 3)
+    {
+        uint8 *state = &anchor->physical_buttons[event->button - 1];
+        *state = event->type == LX_HOST_EVENT_BUTTON_DOWN ? 3 : (*state & 1);
+    }
     if (event->type == LX_HOST_EVENT_INPUT_RESET)
+    {
+        memset(anchor->physical_buttons, 0, sizeof anchor->physical_buttons);
         return releaseInputState(anchor, ticks);
+    }
     if (event->type == LX_HOST_EVENT_KEY_DOWN || event->type == LX_HOST_EVENT_KEY_UP ||
         event->type == LX_HOST_EVENT_TEXT)
         return processKeyboardEvent(anchor, event);
@@ -360,6 +370,7 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
             WinSetFocus(HWND_DESKTOP, 0);
         memset(anchor->key_down, 0, sizeof anchor->key_down);
         memset(anchor->physical_keys, 0, sizeof anchor->physical_keys);
+        memset(anchor->physical_buttons, 0, sizeof anchor->physical_buttons);
         anchor->modifiers = anchor->text_modifiers = anchor->text_scancode = anchor->text_repeat =
             0;
         return FALSE;
@@ -730,4 +741,24 @@ retry:;
         goto retry;
     }
     return TRUE;
+}
+
+BOOL lx_pm_poll_input(void)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor)
+        return FALSE;
+    LxHostEvent event;
+    while (lx_host_video_poll(&event))
+        processHostEvent(anchor, &event);
+    return TRUE;
+}
+LONG lx_pm_mouse_state(unsigned button)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor || button < 1 || button > 3)
+        return 0;
+    unsigned state = anchor->physical_buttons[button - 1];
+    anchor->physical_buttons[button - 1] &= ~1u;
+    return (SHORT)((state & 2 ? 0x8000 : 0) | (state & 1));
 }

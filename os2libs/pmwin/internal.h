@@ -160,6 +160,7 @@ typedef struct PmTimer
 {
     HWND hwnd;
     ULONG id, interval;
+    void (*callback)(void);
     uint64_t due;
     struct PmTimer *next;
 } PmTimer;
@@ -178,6 +179,7 @@ typedef struct
     HWND focus, active, capture;
     ULONG modifiers, text_modifiers, text_scancode, text_repeat;
     uint8 key_down[256], key_toggled[256], physical_keys[256];
+    uint8 physical_buttons[3];
     PmTimer *timers;
     HAB hab;
     Window object_window;

@@ -100,6 +100,40 @@ void doFixup(uint8 *page, const sint16 offset, const uint32 finalval, const uint
     }
 }
 
+static void fixupInternalChain(uint8 *page, sint16 offset, uint32 target)
+{
+    uint8 occupied[4096] = {0};
+    uint32 current = (uint32)offset;
+    uint32 base = 0;
+
+    /* Validate the complete page-local chain before replacing its link words. */
+    do
+    {
+        if (current > 4092 || occupied[current] || occupied[current + 1] || occupied[current + 2] ||
+            occupied[current + 3])
+        {
+            fprintf(stderr, "Invalid LX internal fixup chain at page offset 0x%X\n", current);
+            lx_host_process_exit(1);
+        }
+        memset(occupied + current, 1, 4);
+        uint32 link;
+        memcpy(&link, page + current, sizeof(link));
+        if (current == (uint32)offset)
+            base = target - (link & 0xFFFFF);
+        current = link >> 20;
+    } while (current != 0xFFF);
+
+    current = (uint32)offset;
+    do
+    {
+        uint32 link;
+        memcpy(&link, page + current, sizeof(link));
+        const uint32 value = base + (link & 0xFFFFF);
+        memcpy(page + current, &value, sizeof(value));
+        current = link >> 20;
+    } while (current != 0xFFF);
+}
+
 void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                const uint32 pagenum, uint8 *page)
 {
@@ -122,6 +156,13 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
 
         const uint8 srctype = *(fixup++);
         const uint8 fixupflags = *(fixup++);
+        const int internal_chain = (fixupflags & 0x08) != 0;
+        if (internal_chain &&
+            (((srctype & 0x1F) != 0x07) || ((fixupflags & 3) != 0 && (fixupflags & 3) != 3)))
+        {
+            fprintf(stderr, "Invalid LX internal fixup chain type\n");
+            lx_host_process_exit(1);
+        }
         uint8 srclist_count = 0;
         sint16 srcoffset = 0;
 
@@ -441,7 +482,11 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
             {
                 const sint16 offset = *((sint16 *)fixup);
                 fixup += 2;
-                if ((srctype & 0xF) == 0x08)
+                if (internal_chain)
+                {
+                    fixupInternalChain(page, offset, finalval);
+                }
+                else if ((srctype & 0xF) == 0x08)
                 { // self-relative fixup?
                     assert(finalval2 == 0);
                     doFixup(page, offset, finalval - (guest_page + offset + 4), 0, finalsize);
@@ -454,7 +499,11 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
         }
         else
         {
-            if ((srctype & 0xF) == 0x08)
+            if (internal_chain)
+            {
+                fixupInternalChain(page, srcoffset, finalval);
+            }
+            else if ((srctype & 0xF) == 0x08)
             { // self-relative fixup?
                 assert(finalval2 == 0);
                 doFixup(page, srcoffset, finalval - (guest_page + srcoffset + 4), 0, finalsize);
@@ -638,7 +687,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         void *base = relocatable ? NULL : (void *)((size_t)obj->reloc_base_addr);
         LxGuestMapping *mapping =
             lx_execution_map(GLoaderState.execution, (uint32)(uintptr_t)base, vsize,
-                             LX_GUEST_READ | LX_GUEST_WRITE, !relocatable);
+                             LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, !relocatable);
         void *mmapaddr = mapping ? lx_execution_mapping_host(mapping) : NULL;
 
         if (!mmapaddr)
@@ -912,6 +961,13 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         }
     }
 
+    /* Publish exports before traversing dependencies, including circular imports. */
+    retval->os2path = makeOS2Path(fname);
+    if (!retval->os2path)
+        goto loadlx_failed;
+    retval->loading = 1;
+    registerLxModule(retval);
+
     const uint8 *import_modules_table = exe + lx->import_module_table_offset;
     for (uint32 i = 0; i < lx->num_import_mod_entries; i++)
     {
@@ -985,32 +1041,16 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
     dumpLoadedModule(retval);
 
-    retval->os2path = makeOS2Path(fname);
-    if (!retval->os2path)
-        goto loadlx_failed;
-
-    if (!isDLL)
-    {
-        retval->initialized = 1;
-    }
-    else
-    {
-
-        assert(GLoaderState.main_module != NULL);
-        assert(GLoaderState.main_module != retval);
-        if (GLoaderState.loaded_modules)
-        {
-            retval->next = GLoaderState.loaded_modules;
-            GLoaderState.loaded_modules->prev = retval;
-        }
-        GLoaderState.loaded_modules = retval;
-        runLxLibraryInit(retval);
-        retval->initialized = 1;
-    }
+    retval->loading = 0;
 
     return retval;
 
 loadlx_failed:
+    if (retval)
+    {
+        retval->loading = 0;
+        retval->load_failed = 1;
+    }
     freeLxModule(retval);
     return NULL;
 }

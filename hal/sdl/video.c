@@ -527,6 +527,18 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
             event->type = LX_HOST_EVENT_SHOWN;
             id = input->window.windowID;
             break;
+        case SDL_EVENT_WINDOW_MOVED:
+            id = input->window.windowID;
+            {
+                SDL_Window *moved = SDL_GetWindowFromID(id);
+                LxHostWindow *window = moved
+                                           ? SDL_GetPointerProperty(SDL_GetWindowProperties(moved),
+                                                                    "2ine.window", NULL)
+                                           : NULL;
+                if (window)
+                    window->dirty = 1;
+            }
+            break;
         case SDL_EVENT_WINDOW_EXPOSED:
             event->type = LX_HOST_EVENT_EXPOSED;
             id = input->window.windowID;

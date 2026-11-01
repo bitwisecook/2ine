@@ -806,8 +806,7 @@ static void fixupLinearCodeSegmentReferences(uint8 *addr, size_t size)
     }
 }
 
-static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int slot,
-                                                                     ucontext_t *uctx)
+static void handleThreadLocalStorageAccess(const int slot, ucontext_t *uctx)
 {
     greg_t *gregs = uctx->uc_mcontext.gregs;
 
@@ -830,22 +829,56 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
 
     int handled = 1;
     uint8 *eip = (void *)(size_t)gregs[REG_EIP];
+    const uint8 operand = eip[1];
+    if ((operand & 0xC0) || ((operand & 7) == 4) || ((operand & 7) == 5))
+    {
+        fprintf(stderr, "Unsupported TLS memory addressing at %p\n", eip);
+        abort();
+    }
     switch (eip[0])
     {
         case 0xC7: /* MOV immediate to TLS memory. */
+            if (operand & 0x38)
+            {
+                handled = 0;
+                break;
+            }
             *tls = *((uint32 *)(eip + 2));
             gregs[REG_EIP] += 6;
             break;
 
         case 0x89: /* MOV register to TLS memory. */
-            *tls = (uint32)gregs[x86RegisterToUContextEnum[eip[1] >> 3]];
+            *tls = (uint32)gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]];
             gregs[REG_EIP] += 2;
             break;
 
         case 0x8B: /* MOV TLS memory to register. */
-            gregs[x86RegisterToUContextEnum[eip[1] >> 3]] = (greg_t)*tls;
+            gregs[x86RegisterToUContextEnum[(operand >> 3) & 7]] = (greg_t)*tls;
             gregs[REG_EIP] += 2;
             break;
+
+        case 0x81:
+        case 0x83: /* CMP TLS memory with a full or sign-extended immediate. */
+        {
+            if ((operand & 0x38) != 0x38)
+            {
+                handled = 0;
+                break;
+            }
+            uint32 immediate, flags;
+            if (*eip == 0x83)
+                immediate = (uint32)(int32_t)(int8_t)eip[2];
+            else
+                memcpy(&immediate, eip + 2, 4);
+            __asm__ __volatile__("cmpl %2, %1; pushfl; popl %0"
+                                 : "=r"(flags)
+                                 : "r"(*tls), "r"(immediate)
+                                 : "cc");
+            /* CMP changes OF, SF, ZF, AF, PF and CF; preserve all control flags. */
+            gregs[REG_EFL] = (gregs[REG_EFL] & ~0x8D5) | (flags & 0x8D5);
+            gregs[REG_EIP] += *eip == 0x83 ? 3 : 6;
+            break;
+        }
 
         default:
             handled = 0;
@@ -859,10 +892,8 @@ static __attribute__((noreturn)) void handleThreadLocalStorageAccess(const int s
     }
     else
     {
-        /* Advance EIP past the emulated TLS instruction before returning from the signal. */
-        setcontext(uctx);
-        fprintf(stderr, "panic: setcontext() failed in the TLS access handler! Aborting! (%s)\n",
-                strerror(errno));
+        /* The signal return restores both guest registers and arithmetic flags. */
+        return;
     }
 
     fflush(stderr);
@@ -924,7 +955,10 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
         // was the app accessing one of the OS/2 TLS slots?
         const int slot = (int)(addr - tlspage);
         if (slot < 32)
+        {
             handleThreadLocalStorageAccess(slot, uctx);
+            return;
+        }
     }
 
     static int faults = 0;
@@ -1274,23 +1308,12 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     uintptr_t sp;
     __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
     uintptr_t base = (uintptr_t)NativeHostAllocation;
-    if (!NativeBridge || sp < base || sp >= base + 65536)
-    {
-        uint32_t words[4] = {a, b, c, d}, value;
-        /* Restore the host frame for caller- and callee-cleaned guest entries. */
-        __asm__ __volatile__(
-            "pushfl\n\tpushal\n\tmovl %%esp,%%esi\n\tandl $-16,%%esp\n\t"
-            "pushl 12(%%ebx)\n\tpushl 8(%%ebx)\n\tpushl 4(%%ebx)\n\tpushl (%%ebx)\n\t"
-            "call *%%edi\n\tmovl %%eax,28(%%esi)\n\tmovl %%esi,%%esp\n\tpopal\n\tpopfl"
-            : "=a"(value)
-            : "b"(words), "D"(entry)
-            : "memory");
-        return value;
-    }
+    int suspended = NativeBridge && sp >= base && sp < base + 65536;
     uint32_t words[4] = {a, b, c, d}, value;
     void *previous = NativeHostStack;
-    NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
-    uint32_t stack = NativeBridge->guest_stack;
+    if (suspended)
+        NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
+    uint32_t stack = suspended ? NativeBridge->guest_stack : (uint32_t)(sp - 128);
     /* ESI retains the saved host frame across the guest procedure and nested imports. */
     __asm__ __volatile__("pushfl\n\tpushal\n\tmovl %%esp,%%esi\n\t"
                          "movl %%eax,%%esp\n\tandl $-16,%%esp\n\t"
@@ -1502,14 +1525,56 @@ static int nativeEntry(LxExecution *e, void *host, uint32_t *address)
     *address = (uint32_t)(uintptr_t)host;
     return 1;
 }
+typedef struct NativeApiCall
+{
+    uint32_t *registers;
+    uint32_t arguments;
+    struct NativeApiCall *previous;
+} NativeApiCall;
+static _Thread_local NativeApiCall *NativeApi;
+static uint32_t dispatchApi32(LxExecutionApi16 callback, uint8_t *arguments, uint32_t *registers)
+{
+    NativeApiCall call = {
+        registers, arguments == (uint8_t *)(registers + 7) ? 0 : (uint32_t)(uintptr_t)arguments,
+        NativeApi};
+    NativeApi = &call;
+    uint32_t result = callback(arguments);
+    NativeApi = call.previous;
+    return result;
+}
+static uint32_t apiArguments(void)
+{
+    return NativeApi ? NativeApi->arguments : 0;
+}
+static int apiRegisters32(LxExecutionRegisters32 *out)
+{
+    if (!NativeApi)
+        return 0;
+    const uint32_t *r = NativeApi->registers;
+    memset(out, 0, sizeof *out);
+    out->edi = r[0];
+    out->esi = r[1];
+    out->ebp = r[2];
+    out->ebx = r[4];
+    out->edx = r[5];
+    out->ecx = r[6];
+    out->eax = r[7];
+    out->eflags = r[8];
+    out->eip = r[9];
+    out->esp = (uint32_t)(uintptr_t)(r + 10);
+    __asm__ __volatile__(
+        "mov %%cs,%0; mov %%ds,%1; mov %%es,%2; mov %%fs,%3; mov %%gs,%4; mov %%ss,%5"
+        : "=m"(out->cs), "=m"(out->ds), "=m"(out->es), "=m"(out->fs), "=m"(out->gs), "=m"(out->ss));
+    return 1;
+}
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *binding)
 {
     if (capacity < 64)
         return 0;
     uint8_t *p = output;
     const int eax_argument = binding->convention == LX_ABI_EAX32;
-    if (eax_argument)
-        *p++ = 0x60; /* pushad: preserve the register-argument ABI */
+    *p++ = 0x9c;
+    *p++ = 0x60; /* pushfd; pushad: retain the suspended guest registers */
     *p++ = 0x55;
     *p++ = 0x89;
     *p++ = 0xe5; /* push ebp; mov ebp,esp */
@@ -1518,26 +1583,31 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
     *p++ = 0xf0; /* align host call stack */
     *p++ = 0x83;
     *p++ = 0xec;
-    *p++ = 12;
+    *p++ = 4;
     *p++ = 0x8d;
     *p++ = 0x45;
-    *p++ = eax_argument ? 32 : 8; /* argument frame */
+    *p++ = 4;
+    *p++ = 0x50; /* saved registers */
+    *p++ = 0x8d;
+    *p++ = 0x45;
+    *p++ = eax_argument ? 32 : 44;
     *p++ = 0x50;
-    *p++ = 0xb8;
+    *p++ = 0x68;
     uint32_t callback = (uint32_t)(uintptr_t)binding->callback;
     memcpy(p, &callback, 4);
     p += 4;
+    *p++ = 0xb8;
+    uint32_t dispatch = (uint32_t)(uintptr_t)dispatchApi32;
+    memcpy(p, &dispatch, 4);
+    p += 4;
     *p++ = 0xff;
-    *p++ = 0xd0; /* call host ABI bridge */
-    if (eax_argument)
-    {
-        *p++ = 0x89;
-        *p++ = 0x45;
-        *p++ = 32;
-    } /* saved EAX result */
+    *p++ = 0xd0;
+    *p++ = 0x89;
+    *p++ = 0x45;
+    *p++ = 32; /* callback result replaces saved EAX */
     *p++ = 0xc9;
-    if (eax_argument)
-        *p++ = 0x61;
+    *p++ = 0x61;
+    *p++ = 0x9d; /* leave; popad; popfd */
     if (binding->callee_pop)
     {
         *p++ = 0xc2;
@@ -1598,4 +1668,6 @@ const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          destroyThread32,
                                                          endThread,
                                                          copyIn,
-                                                         callback4};
+                                                         callback4,
+                                                         apiArguments,
+                                                         apiRegisters32};

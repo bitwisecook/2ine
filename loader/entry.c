@@ -81,13 +81,7 @@ __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
 
     freeLxModule(GLoaderState.main_module);
 
-    /* Dependencies precede their dependents in the load list; teardown starts at its head. */
-    while (GLoaderState.loaded_modules)
-    {
-        LxModule *lxmod = GLoaderState.loaded_modules;
-        lxmod->refcount = 1;
-        freeLxModule(lxmod);
-    }
+    unloadAllModules();
 
     GLoaderState.lib2ine_shutdown();
 

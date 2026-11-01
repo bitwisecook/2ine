@@ -57,6 +57,37 @@ fail:
     return FALSE;
 }
 
+LONG lx_pm_visible_box(HPS handle, RECTL *rectangle)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps || !rectangle)
+        return 0;
+    PmRegion visible = {0};
+    BOOL result;
+    if (ps->window)
+        result = lx_pm_window_clip(handle, NULL, &visible);
+    else
+    {
+        PmBitmap *bitmap = ps->bitmap_lease.resource;
+        RECTL bounds =
+            bitmap ? (RECTL){0, 0, (LONG)bitmap->width, (LONG)bitmap->height} : ps->viewport;
+        PmRegion source = {.rects = &bounds, .count = WinIsRectEmpty(0, &bounds) ? 0 : 1};
+        result = regionBoolean(&visible, &source, ps->clip_lease.resource,
+                               ps->clip_lease.resource ? 6 : 2);
+    }
+    if (!result)
+    {
+        free(visible.rects);
+        return 0;
+    }
+    *rectangle = (RECTL){0};
+    for (size_t i = 0; i < visible.count; i++)
+        WinUnionRect(0, rectangle, rectangle, &visible.rects[i]);
+    LONG type = !visible.count ? 1 : visible.count == 1 ? 2 : 3;
+    free(visible.rects);
+    return type;
+}
+
 void notifyVisibleRegions(AnchorBlock *anchor, Window *window)
 {
     if (window->visible_region_notify)

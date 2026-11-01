@@ -290,6 +290,143 @@ def exit_program():
     return linear_image(g.code, g.fixups, ["DOSCALLS", "EXITDLL.DLL"], "EXITLIFE", data=g.data)
 
 
+def cycle_library(name, peer, missing=False):
+    g = FlatGuest()
+    strings = []
+
+    def marker(text):
+        g.code.extend(b"\x6a\x00\x89\xe1\x51\x68" + struct.pack("<I", len(text)))
+        g.code.extend(b"\xe8\x00\x00\x00\x00\x58\x05")
+        origin, patch = len(g.code) - 2, len(g.code)
+        g.code.extend(bytes(4) + b"\x50\x6a\x01")
+        g.call(1, 282)
+        g.code.extend(b"\x83\xc4\x14")
+        g.result(0, 110)
+        strings.append((origin, patch, text))
+
+    g.code.extend(b"\x83\x7c\x24\x08\x00\x0f\x85" + bytes(4))
+    branch = len(g.code) - 4
+    if name == "CYCLEB":
+        # A's import of B must already be relocated when B's initializer calls A.
+        g.call(2, 1)
+        g.result(43, 111)
+    marker((name[-1] + "i\n").encode())
+    g.code.extend(b"\xb8\x01\x00\x00\x00\xc3")
+    struct.pack_into("<i", g.code, branch, len(g.code) - branch - 4)
+    marker((name[-1] + "t\n").encode())
+    g.code.extend(b"\xb8\x01\x00\x00\x00\xc3")
+    export = len(g.code)
+    if name == "CYCLEA":
+        g.call(2, 1)
+        g.code.extend(b"\x40\xc3")
+    else:
+        g.code.extend(b"\xb8\x2a\x00\x00\x00\xc3")
+    for origin, patch, text in strings:
+        struct.pack_into("<I", g.code, patch, len(g.code) - origin)
+        g.code.extend(text)
+    return linear_image(
+        g.code,
+        g.fixups,
+        ["DOSCALLS", peer] + (["ABSENT"] if missing else []),
+        name,
+        library=True,
+        exports=[export],
+    )
+
+
+def cycle_program():
+    g = FlatGuest()
+    a, b, function = (g.field(bytes(4)) for _ in range(3))
+    name_a, name_b = g.field(b"CYCLEA\0"), g.field(b"CYCLEB\0")
+    for _ in range(2):
+        g.call(1, 318, 0, 0, name_a, a)
+        g.result(0, 112)
+        g.call(1, 318, 0, 0, name_b, b)
+        g.result(0, 113)
+        g.call(1, 322, (a,))
+        g.result(0, 114)
+        g.call(1, 321, (a,), 1, 0, function)
+        g.result(0, 115)
+        g.load(function)
+        g.code.extend(b"\xff\xd0")
+        g.result(43, 116)
+        g.call(1, 322, (b,))
+        g.result(0, 117)
+        g.call(1, 321, (a,), 1, 0, function)
+        g.result(6, 118)
+    for name in (b"BROKENA\0", b"BROKENB\0"):
+        address = g.field(name)
+        g.call(1, 318, 0, 0, address, a)
+        g.require(b"\x85\xc0\x0f\x95\xc0\x0f\xb6\xc0\x3d\x01\x00\x00\x00", 119)
+        g.call(1, 319, address, a)
+        g.result(123, 120)
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "CYCLETEST", data=g.data)
+
+
+def tls_program():
+    g = FlatGuest()
+    slot, allocation = g.field(bytes(4)), g.field(bytes(4))
+    g.call(1, 454, 1, slot)
+    g.result(0, 80)
+    g.call(1, 299, allocation, 4096, 0x13)
+    g.result(0, 81)
+    g.load(allocation)
+    # Generate and call a tiny function in a DosAllocMem READ|WRITE page.
+    g.code.extend(b"\xc7\x00\xb8\x2a\x00\x00\xc6\x40\x04\x00\xc6\x40\x05\xc3\xff\xd0")
+    g.result(42, 82)
+    for value, immediate, short, expected, status in (
+        (0, 0, True, 0x44, 83),
+        (0, -1, True, 0x11, 84),
+        (0x7FFFFFFF, -1, True, 0x885, 85),
+        (0x80000000, 1, False, 0x814, 86),
+    ):
+        g.load(slot)
+        g.code.extend(b"\x89\xc1\xc7\x01" + struct.pack("<I", value))
+        if short:
+            g.code.extend(b"\x83\x39" + struct.pack("<b", immediate))
+        else:
+            g.code.extend(b"\x81\x39" + struct.pack("<i", immediate))
+        g.code.extend(b"\x9c\x58\x25\xd5\x08\x00\x00")
+        g.result(expected, status)
+        g.code.extend(b"\x8b\x01")
+        g.result(value, status + 10)
+    g.call(1, 455, (slot,))
+    g.result(0, 97)
+    g.call(1, 304, (allocation,))
+    g.result(0, 98)
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "TLSCMP", data=g.data)
+
+
+def chain_program(malformed=None):
+    g = FlatGuest()
+    for address, target, status in (
+        (0x10400, 0x20080, 70),
+        (0x10500, 0x200C0, 71),
+        (0x10FFC, 0x20060, 72),
+    ):
+        g.word(address, target, status)
+    g.exit(0)
+    g.code.extend(bytes(4096 - len(g.code)))
+    struct.pack_into("<I", g.code, 0x400, (0x500 << 20) | 0x345)
+    struct.pack_into("<I", g.code, 0x500, (0xFFC << 20) | 0x385)
+    struct.pack_into("<I", g.code, 0xFFC, 0xFFF00000 | 0x325)
+    source, kind = 0x400, 7
+    if malformed == "cycle":
+        struct.pack_into("<I", g.code, 0x500, (0x400 << 20) | 0x385)
+    elif malformed == "bounds":
+        struct.pack_into("<I", g.code, 0x500, (0xFFD << 20) | 0x385)
+    elif malformed == "overlap":
+        struct.pack_into("<I", g.code, 0x500, (0x402 << 20) | 0x385)
+    elif malformed == "negative":
+        source = -1
+    elif malformed == "type":
+        kind = 8
+    g.fixups.append(struct.pack("<BBhBH", kind, 8, source, 2, 0x80))
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "CHAIN", data=bytes(256))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -300,6 +437,52 @@ def main():
     env["LD_LIBRARY_PATH"] = str(build)
     with tempfile.TemporaryDirectory(prefix="twoine-legacy-") as scratch:
         work = Path(scratch)
+        (work / "cyclea.dll").write_bytes(cycle_library("CYCLEA", "CYCLEB"))
+        (work / "cycleb.dll").write_bytes(cycle_library("CYCLEB", "CYCLEA"))
+        (work / "brokena.dll").write_bytes(cycle_library("BROKENA", "BROKENB", missing=True))
+        (work / "brokenb.dll").write_bytes(cycle_library("BROKENB", "BROKENA"))
+        cycle = work / "cycle.exe"
+        cycle.write_bytes(cycle_program())
+        result = subprocess.run(
+            [str(build / "lx_loader"), str(cycle)],
+            cwd=work,
+            env=env,
+            capture_output=True,
+            timeout=15,
+        )
+        if result.returncode or result.stdout != b"Bi\nAi\nAt\nBt\n" * 2:
+            raise RuntimeError(
+                f"circular DLL lifecycle exit={result.returncode}\n"
+                + repr(result.stdout)
+                + result.stderr.decode(errors="replace")
+            )
+        tls = work / "tlscmp.exe"
+        tls.write_bytes(tls_program())
+        result = subprocess.run(
+            [str(build / "lx_loader"), str(tls)], cwd=work, env=env, capture_output=True, timeout=15
+        )
+        if result.returncode:
+            raise RuntimeError(
+                f"TLS comparisons exit={result.returncode}\n"
+                + result.stderr.decode(errors="replace")
+            )
+        for malformed in (None, "cycle", "bounds", "overlap", "negative", "type"):
+            chain = work / "chain.exe"
+            chain.write_bytes(chain_program(malformed))
+            result = subprocess.run(
+                [str(build / "lx_loader"), str(chain)],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                timeout=15,
+            )
+            if result.returncode != int(malformed is not None) or (
+                malformed and b"Invalid LX internal fixup chain" not in result.stderr
+            ):
+                raise RuntimeError(
+                    f"internal chain {malformed}: exit={result.returncode}\n"
+                    + result.stderr.decode(errors="replace")
+                )
         (work / "input.txt").write_bytes(b"NE16 fixture\n")
         paths = work / "paths.exe"
         paths.write_bytes(path_program())
@@ -391,6 +574,7 @@ def main():
             )
         print("NLS ordinals/case mapping, NE preload stack, FindFirst2 and Open2 passed")
         print("LX critical-section nesting, checked must-complete counts and DLL rollback passed")
+        print("LX internal chains relocate distinct targets and reject malformed page links")
 
 
 if __name__ == "__main__":

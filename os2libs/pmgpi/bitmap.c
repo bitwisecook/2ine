@@ -59,6 +59,12 @@ static BOOL bitmap_decode(PmBitmap *bitmap, const BitmapLayout *b, const uint8 *
 {
     if (!bitmap || !bits || (b->colors && !palette))
         return FALSE;
+    bitmap->palette_count = b->colors;
+    for (unsigned i = 0; i < b->colors; i++)
+    {
+        const uint8 *c = palette + i * b->palette_entry;
+        bitmap->palette[i] = (uint32)c[2] << 16 | (uint32)c[1] << 8 | c[0];
+    }
     for (unsigned y = 0; y < b->height; y++)
     {
         const uint8 *row = bits + (size_t)y * b->stride;
@@ -162,10 +168,14 @@ ULONG GpiLoadBitmap(HPS ps, HMODULE module, ULONG id, LONG width, LONG height)
         PmBitmap *src = lx_pm_bitmap(result, &old),
                  *dst = scaled ? lx_pm_bitmap(scaled, &next) : NULL;
         if (src && dst)
+        {
+            dst->palette_count = src->palette_count;
+            memcpy(dst->palette, src->palette, sizeof dst->palette);
             for (unsigned y = 0; y < h; y++)
                 for (unsigned x = 0; x < w; x++)
                     dst->pixels[(size_t)y * w + x] =
                         src->pixels[(size_t)(y * b.height / h) * b.width + x * b.width / w];
+        }
         lx_handle_release(&next);
         lx_handle_release(&old);
         lx_pm_bitmap_delete(result);

@@ -130,7 +130,12 @@ static BOOL property(const char *setup, const char *name, char *value, size_t ca
                 key[at++] = c;
         }
         key[at] = 0;
-        BOOL match = *setup == '=' && !strcasecmp(key, name);
+        while (at && (key[at - 1] == ' ' || key[at - 1] == '\t'))
+            key[--at] = 0;
+        char *start = key;
+        while (*start == ' ' || *start == '\t')
+            start++;
+        BOOL match = *setup == '=' && !strcasecmp(start, name);
         if (*setup == '=')
             setup++;
         at = 0;
@@ -208,7 +213,9 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
 {
     TRACE_NATIVE("WinCreateObject('%s', '%s', '%s', '%s', %u)", class_name, title, setup, location,
                  (unsigned)flags);
-    if (!class_name || (strcmp(class_name, "WPFolder") && strcmp(class_name, "WPProgram")) ||
+    if (!class_name ||
+        (strcmp(class_name, "WPFolder") && strcmp(class_name, "WPProgram") &&
+         strcmp(class_name, "WPShadow")) ||
         !title || !*title || strlen(title) > 4096 || !setup || strlen(setup) > 32767 || !location ||
         !*location || flags > 2)
         return 0;
@@ -217,6 +224,47 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
     ULONG result = 0;
     if (!profile)
         goto done;
+    char shadow_title[4097], shadow_target[4097];
+    if (!strcmp(class_name, "WPShadow"))
+    {
+        if (!property(setup, "SHADOWID", shadow_target, sizeof shadow_target))
+            goto done;
+        char *target = shadow_target;
+        while (*target == ' ' || *target == '\t')
+            target++;
+        size_t length = strlen(target);
+        while (length && (target[length - 1] == ' ' || target[length - 1] == '\t'))
+            target[--length] = 0;
+        if (!length)
+            goto done;
+        ULONG source = find(profile, target, NULL, NULL);
+        Object original = {0};
+        if (source == 1)
+            strcpy(shadow_title, "Desktop");
+        else if (source && load(profile, source, &original))
+        {
+            snprintf(shadow_title, sizeof shadow_title, "%s", original.title);
+            free(original.data);
+        }
+        else
+        {
+            uint32 error;
+            char *host =
+                GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(target, &error) : NULL;
+            BOOL exists = host && lx_host_path_exists(host);
+            free(host);
+            if (!exists)
+                goto done;
+            const char *base = target;
+            for (const char *p = target; *p; p++)
+                if (*p == '\\' || *p == '/')
+                    base = p + 1;
+            if (!*base)
+                goto done;
+            snprintf(shadow_title, sizeof shadow_title, "%s", base);
+        }
+        title = shadow_title;
+    }
     ULONG parent = find(profile, location, NULL, NULL);
     Object container = {0};
     if (!parent || (parent != 1 && (!load(profile, parent, &container) ||
@@ -227,10 +275,9 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
     }
     free(container.data);
     char identifier[1024];
-    ULONG existing = property(setup, "OBJECTID", identifier, sizeof identifier)
-                         ? find(profile, identifier, NULL, NULL)
-                         : 0;
-    if (!existing)
+    BOOL has_identifier = property(setup, "OBJECTID", identifier, sizeof identifier);
+    ULONG existing = has_identifier ? find(profile, identifier, NULL, NULL) : 0;
+    if (!existing && !has_identifier)
         existing = find(profile, NULL, location, title);
     if (existing == 1 || (existing && flags == 0))
         goto done;

@@ -64,6 +64,12 @@ struct LxModule
     uint32 esp;
     uint16 autodatasize; // only used for NE binaries.
     int initialized;
+    int listed;
+    int loading;
+    int load_failed;
+    int init_started;
+    uint32 incoming_references;
+    int reachable;
     char *os2path;
     uint32 signal_exception_focus_count;
     LxModule *prev;

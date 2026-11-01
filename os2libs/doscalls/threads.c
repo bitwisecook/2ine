@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
+#include "os2libs/doscalls/host.h"
 APIRET DosEnterMustComplete(PULONG pulNesting)
 {
     TRACE_NATIVE("DosEnterMustComplete(%p)", pulNesting);
@@ -70,7 +71,58 @@ void os2ThreadCleanup(void *arg)
     GLoaderState.deinitOs2Tib(thread->selector);
     grabLock(&GMutexDosCalls);
     thread->finished = 1;
+    int detached = thread->detached;
+    if (detached)
+        for (Thread **link = &GThreads; *link; link = &(*link)->next)
+            if (*link == thread)
+            {
+                *link = thread->next;
+                break;
+            }
     ungrabLock(&GMutexDosCalls);
+    if (detached)
+    {
+        lx_host_thread_detach(thread->thread);
+        lx_handle_close(thread->handle, LX_HANDLE_THREAD);
+    }
+}
+
+APIRET lx_doscalls_detach_thread(TID id)
+{
+    grabLock(&GMutexDosCalls);
+    Thread **link = &GThreads;
+    while (*link && (*link)->id != id)
+        link = &(*link)->next;
+    Thread *thread = *link;
+    if (!thread || thread->joining || thread->detached)
+    {
+        ungrabLock(&GMutexDosCalls);
+        return ERROR_INVALID_THREADID;
+    }
+    if (!thread->finished)
+    {
+        thread->detached = 1;
+        ungrabLock(&GMutexDosCalls);
+        return NO_ERROR;
+    }
+    thread->joining = 1;
+    ungrabLock(&GMutexDosCalls);
+    int result = lx_host_thread_join(thread->thread, NULL);
+    grabLock(&GMutexDosCalls);
+    if (!result)
+    {
+        link = &GThreads;
+        while (*link && *link != thread)
+            link = &(*link)->next;
+        if (*link)
+            *link = thread->next;
+    }
+    else
+        thread->joining = 0;
+    ungrabLock(&GMutexDosCalls);
+    if (!result)
+        lx_handle_close(thread->handle, LX_HANDLE_THREAD);
+    return result ? ERROR_INVALID_THREADID : NO_ERROR;
 }
 
 void *os2ThreadEntry(void *arg)

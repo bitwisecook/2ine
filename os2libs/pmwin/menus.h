@@ -18,4 +18,8 @@ typedef struct PmMenu
     HWND focus;
 } PmMenu;
 LX_PRIVATE BOOL createSystemMenu(Window *frame, ULONG flags);
+Window *lx_pm_menu_window(HWND handle);
+BOOL lx_pm_menu_attach(HWND menu, HWND parent);
+BOOL lx_pm_menu_owner(HWND menu, HWND owner);
+BOOL lx_pm_menu_remove(HWND handle, size_t index, BOOL destroy_submenu);
 #endif

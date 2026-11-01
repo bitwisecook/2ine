@@ -22,6 +22,7 @@ struct RGNRECT;
 BOOL lx_pm_region_query_rects(HPS ps, ULONG region, PRECTL bounds, struct RGNRECT *control,
                               PRECTL rects);
 BOOL lx_pm_window_clip(HPS ps, const RECTL *bounds, PmRegion *visible);
+LONG lx_pm_visible_box(HPS ps, RECTL *rectangle);
 ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles);
 BOOL lx_pm_region_destroy(HPS ps, ULONG region);
 LONG lx_pm_region_set(HPS ps, ULONG region, LONG count, const RECTL *rectangles);
@@ -41,6 +42,8 @@ typedef struct PmBitmap
     ULONG handle;
     unsigned width, height, planes, depth, selected;
     uint32_t *pixels;
+    unsigned palette_count;
+    uint32_t palette[256];
 } PmBitmap;
 PmBitmap *lx_pm_bitmap(ULONG handle, LxHandleBorrow *borrow);
 ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsigned depth);
@@ -76,6 +79,8 @@ BOOL lx_pm_fill_span(HPS ps, LONG x, LONG y, LONG count, unsigned primitive);
 LONG lx_pm_rgb(LONG index);
 LONG lx_pm_text(HPS ps, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *clip);
+LONG lx_pm_draw_text(HPS ps, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
+                     ULONG flags, BOOL clip, BOOL opaque_runs);
 BOOL lx_pm_valid_ps(HPS hps);
 HDC lx_pm_open_dc(HAB anchor, LONG type, HDC compatible);
 LONG lx_pm_close_dc(HDC dc);

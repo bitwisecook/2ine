@@ -28,7 +28,9 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     void *addr;
     if (GLoaderState.execution)
     {
-        mapping = lx_execution_map(GLoaderState.execution, 0, size, 3 | ((flag & 4) ? 4 : 0), 0);
+        /* The original 386 page tables cannot inhibit instruction fetch from readable memory. */
+        mapping = lx_execution_map(GLoaderState.execution, 0, size,
+                                   LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 0);
         if (!mapping)
             return ERROR_NOT_ENOUGH_MEMORY;
         addr = lx_execution_mapping_host(mapping);
@@ -116,7 +118,8 @@ void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
 APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG flags)
 {
     if (!output || !name || !*name ||
-        (flags & ~(PAG_READ | PAG_WRITE | PAG_COMMIT | OBJ_TILE | OBJ_GETTABLE | OBJ_GIVEABLE)))
+        (flags & ~(PAG_READ | PAG_WRITE | PAG_EXECUTE | PAG_COMMIT | OBJ_TILE | OBJ_GETTABLE |
+                   OBJ_GIVEABLE)))
         return ERROR_INVALID_PARAMETER;
     char identifier[128];
     makeSharedMemName(name, identifier, sizeof identifier);
@@ -148,6 +151,12 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
     lx_host_shared_close(object);
     if (!mapping)
         return ERROR_NOT_ENOUGH_MEMORY;
+    if (!lx_execution_protect(GLoaderState.execution, mapping,
+                              LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE))
+    {
+        lx_execution_unmap(GLoaderState.execution, mapping);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
     SharedMemBlock *block = calloc(1, sizeof *block);
     if (!block)
     {

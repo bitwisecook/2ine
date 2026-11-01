@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Invalidations accumulate before painting; one queued paint represents their union. */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/paint.h"
 static void remove_paint(AnchorBlock *anchor, HWND handle)
 {
     MessageQueueItem *previous = NULL, *item = anchor->message_queue.head;
@@ -120,4 +121,22 @@ HWND WinWindowFromDC(HDC dc)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     return anchor && getWindowFromHWND(anchor, dc) ? dc : 0;
+}
+
+BOOL lx_pm_validate_rect(HWND handle, const RECTL *rectangle, BOOL internal_only)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    if (!window)
+        return FALSE;
+    const RECTL *old = &window->invalid;
+    if (internal_only)
+    {
+        if (WinIsRectEmpty(0, old))
+            validateWindowPaint(anchor, window);
+    }
+    else if (!rectangle || (rectangle->xLeft <= old->xLeft && rectangle->yBottom <= old->yBottom &&
+                            rectangle->xRight >= old->xRight && rectangle->yTop >= old->yTop))
+        validateWindowPaint(anchor, window);
+    return TRUE;
 }

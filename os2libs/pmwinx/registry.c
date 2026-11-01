@@ -23,6 +23,7 @@ enum
     KEY_QUERY_VALUE = 1,
     KEY_SET_VALUE = 2,
     KEY_CREATE_SUB_KEY = 4,
+    /* Open32 KEY_ALL_ACCESS includes SYNCHRONIZE in STANDARD_RIGHTS_ALL. */
     KEY_ALL_ACCESS = 0x001f003f
 };
 
@@ -187,7 +188,7 @@ LONG RegOpenKey(ULONG key, PSZ name, PULONG output)
         return NO_ERROR;
     }
     /* The registry provider has no ACLs; its default grants the supported key rights. */
-    const ULONG default_access = 0x000f003fu;
+    const ULONG default_access = KEY_ALL_ACCESS;
     return RegOpenKeyEx(key, name, 0, default_access, output);
 }
 LONG RegCreateKey(ULONG key, PSZ name, PULONG output)
@@ -196,7 +197,7 @@ LONG RegCreateKey(ULONG key, PSZ name, PULONG output)
         return RegOpenKey(key, name, output);
     if (!name)
         return ERROR_INVALID_PARAMETER;
-    return RegCreateKeyEx(key, name, 0, NULL, 0, 0x000f003fu, NULL, output, NULL);
+    return RegCreateKeyEx(key, name, 0, NULL, 0, KEY_ALL_ACCESS, NULL, output, NULL);
 }
 LONG RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name, ULONG options,
                     ULONG access, PVOID security, PULONG output, PULONG disposition)

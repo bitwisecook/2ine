@@ -1081,6 +1081,9 @@ extern "C"
     OS2EXPORT ULONG OS2API WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id,
                                          ULONG style) OS2APIINFO(789);
     OS2EXPORT ERRORID OS2API WinGetLastError(HAB hab) OS2APIINFO(753);
+    OS2EXPORT UCHAR OS2API WinCpTranslateChar(HAB hab, ULONG source, UCHAR character,
+                                              ULONG destination) OS2APIINFO(711);
+    OS2EXPORT ULONG OS2API WinQueryCp(HMQ queue) OS2APIINFO(810);
     OS2EXPORT HMQ OS2API WinCreateMsgQueue(HAB hab, LONG cmsg) OS2APIINFO(716);
     OS2EXPORT BOOL OS2API WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst,
                                     ULONG msgFilterLast) OS2APIINFO(915);
