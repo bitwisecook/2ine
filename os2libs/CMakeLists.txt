@@ -9,7 +9,54 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
     elseif(module STREQUAL "pmctls")
         set(sources pmctls/module.c)
     elseif(module STREQUAL "pmwinx")
-        set(sources pmwinx/module.c pmwinx/context.c pmwinx/registry.c pmwinx/modules.c pmwinx/resources.c pmwinx/profiles.c pmwinx/atoms.c pmwinx/classes.c pmwinx/windows.c pmwinx/bitmap.c pmwinx/brushes.c pmwinx/metrics.c pmwinx/drawing.c pmwinx/fonts.c pmwinx/font_metrics.c pmwinx/text.c pmwinx/files.c pmwinx/format.c pmwinx/pointers.c pmwinx/icons.c pmwinx/focus.c pmwinx/critical.c pmwinx/threads.c)
+        set(sources
+            pmwinx/module.c
+            pmwinx/alerts.c
+            pmwinx/time.c
+            pmwinx/locale.c
+            pmwinx/context.c
+            pmwinx/registry.c
+            pmwinx/modules.c
+            pmwinx/resources.c
+            pmwinx/profiles.c
+            pmwinx/atoms.c
+            pmwinx/classes.c
+            pmwinx/windows.c
+            pmwinx/mdi.c
+            pmwinx/properties.c
+            pmwinx/caret.c
+            pmwinx/clipboard.c
+            pmwinx/hooks.c
+            pmwinx/input.c
+            pmwinx/geometry.c
+            pmwinx/regions.c
+            pmwinx/rectangles.c
+            pmwinx/redraw.c
+            pmwinx/messages.c
+            pmwinx/memory.c
+            pmwinx/menus.c
+            pmwinx/bitmap.c
+            pmwinx/brushes.c
+            pmwinx/pens.c
+            pmwinx/palettes.c
+            pmwinx/metrics.c
+            pmwinx/dib.c
+            pmwinx/drawing.c
+            pmwinx/fonts.c
+            pmwinx/font_metrics.c
+            pmwinx/scroll.c
+            pmwinx/strings.c
+            pmwinx/text.c
+            pmwinx/files.c
+            pmwinx/find.c
+            pmwinx/paths.c
+            pmwinx/format.c
+            pmwinx/pointers.c
+            pmwinx/icons.c
+            pmwinx/focus.c
+            pmwinx/critical.c
+            pmwinx/threads.c
+        )
     elseif(module STREQUAL "pmshapi")
         set(sources pmshapi.c pmshapi/profiles.c)
     else()

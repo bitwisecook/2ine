@@ -10,14 +10,33 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from images import FlatGuest, linear_image
 from open32_contracts import (
+    api_window_program,
+    bitmap_program,
+    caret_program,
     critical_program,
+    dib_program,
+    directory_program,
     drawing_program,
     file_program,
+    filetime_program,
+    find_program,
     font_program,
     format_program,
+    keyboard_program,
+    locale_program,
+    memory_program,
+    menu_program,
+    message_program,
+    palette_program,
+    rectangle_program,
+    region_program,
+    repaint_program,
+    string_resource_program,
+    stroke_program,
     thread_program,
     time_program,
 )
@@ -225,13 +244,83 @@ def main():
 
         run(program(), ["alpha", "beta"])
         run(window_program())
+        run(api_window_program())
+        run(keyboard_program())
+        run(repaint_program())
+        run(caret_program())
+        run(message_program())
         run(drawing_program())
+        run(dib_program())
+        run(bitmap_program())
+        run(stroke_program())
+        run(palette_program())
+        run(region_program())
+        run(rectangle_program())
+        run(menu_program())
+        run(memory_program())
+        run(string_resource_program())
+        (work / "subdir").mkdir()
+        assert run(directory_program()).stdout.decode() == "C:" + str(work / "subdir").replace(
+            "/", "\\"
+        )
         run(file_program())
         assert (work / "io.txt").read_bytes() == b"he"
         run(format_program())
         run(font_program())
+        directory = work / "finders"
+        directory.mkdir()
+        (directory / "cell1.wk").write_bytes(b"cell one")
+        (directory / "cell2.WK").write_bytes(b"cell two")
+        (directory / "skip.bin").write_bytes(b"skip")
+        (directory / "sub.wk").mkdir()
+        with (directory / "size.dat").open("wb") as stream:
+            stream.truncate((1 << 32) + 7)
+        found = run(find_program(r"finders\*.wk")).stdout
+        assert len(found) == 3 * 320
+        entries = [found[i : i + 320] for i in range(0, len(found), 320)]
+        by_name = {entry[44:304].split(b"\0", 1)[0].decode(): entry for entry in entries}
+        assert set(by_name) == {"cell1.wk", "cell2.WK", "sub.wk"}
+        assert struct.unpack_from("<I", by_name["sub.wk"])[0] & 0x10
+        for filename in ("cell1.wk", "cell2.WK"):
+            info = (directory / filename).stat()
+            entry = by_name[filename]
+            assert struct.unpack_from("<II", entry, 28) == (0, info.st_size)
+            assert (
+                struct.unpack_from("<Q", entry, 20)[0]
+                == (int(info.st_mtime) + 11644473600) * 10000000
+            )
+        found = run(find_program(r"finders\SIZE.DAT")).stdout
+        assert struct.unpack_from("<II", found, 28) == (1, 7)
+        run(find_program(r"finders\absent.*", missing=2))
+        run(find_program(r"missing-directory\*", missing=3))
         run(critical_program())
         run(thread_program())
+
+        epoch = datetime(1601, 1, 1)
+        for fields in (
+            (1601, 1, 99, 1, 0, 0, 0, 0),
+            (1970, 1, 0, 1, 0, 0, 0, 0),
+            (2000, 2, 4, 29, 23, 59, 59, 999),
+            (2400, 2, 0, 29, 12, 3, 5, 7),
+        ):
+            year, month, _, day, hour, minute, second, ms = fields
+            difference = datetime(year, month, day, hour, minute, second, ms * 1000) - epoch
+            expected = (
+                difference.days * 86400 + difference.seconds
+            ) * 10000000 + difference.microseconds * 10
+            run(filetime_program(fields, expected))
+        for fields in (
+            (1600, 1, 0, 1, 0, 0, 0, 0),
+            (1900, 2, 0, 29, 0, 0, 0, 0),
+            (2100, 2, 0, 29, 0, 0, 0, 0),
+            (2000, 13, 0, 1, 0, 0, 0, 0),
+            (2000, 1, 0, 1, 24, 0, 0, 0),
+            (2000, 1, 0, 1, 0, 60, 0, 0),
+            (2000, 1, 0, 1, 0, 0, 60, 0),
+            (2000, 1, 0, 1, 0, 0, 0, 1000),
+            (30828, 1, 0, 1, 0, 0, 0, 0),
+        ):
+            run(filetime_program(fields, None))
         before = datetime.now(UTC)
         timestamp = run(time_program()).stdout
         after = datetime.now(UTC)
@@ -242,6 +331,30 @@ def main():
         assert weekday == (observed.weekday() + 1) % 7
         assert before - timedelta(milliseconds=1) <= observed <= after
 
+        before = datetime.now(UTC)
+        timestamp = run(time_program(local=True)).stdout
+        after = datetime.now(UTC)
+        year, month, weekday, day, hour, minute, second, milliseconds = struct.unpack(
+            "<8H", timestamp
+        )
+        observed = datetime(
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            milliseconds * 1000,
+            ZoneInfo("Pacific/Honolulu"),
+        )
+        assert weekday == (observed.weekday() + 1) % 7
+        assert before - timedelta(milliseconds=1) <= observed <= after
+        locale_reference = (
+            Path(__file__).resolve().parents[2]
+            / "research/reference_screenshots/123/locale-contracts.json"
+        )
+        for kind, text in json.loads(locale_reference.read_text())["values"].items():
+            run(locale_program(int(kind), text))
         reference = (
             Path(__file__).resolve().parents[2]
             / "research/reference_screenshots/123/pm-contracts.json"

@@ -131,3 +131,43 @@ ULONG GlobalGetAtomName(ULONG atom, PSZ output, LONG capacity)
         open32SetError(6);
     return (ULONG)copied;
 }
+
+/* Registered clipboard and message names share a permanent worker name pool. */
+static char *clipboard_formats[0x4000];
+ULONG RegisterClipboardFormat(PSZ name)
+{
+    if (!name || !*name || strlen(name) > 255)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    lx_host_once(&once, initialize);
+    lx_host_monitor_lock(monitor);
+    ULONG result = 0, free_slot = 0x4000;
+    for (ULONG i = 0; i < 0x4000; i++)
+        if (clipboard_formats[i])
+        {
+            if (!strcasecmp(clipboard_formats[i], name))
+            {
+                result = 0xC000 + i;
+                break;
+            }
+        }
+        else if (free_slot == 0x4000)
+            free_slot = i;
+    if (!result && free_slot < 0x4000)
+    {
+        clipboard_formats[free_slot] = strdup(name);
+        if (clipboard_formats[free_slot])
+            result = free_slot + 0xC000;
+    }
+    lx_host_monitor_unlock(monitor);
+    if (!result)
+        open32SetError(8);
+    return result;
+}
+
+ULONG RegisterWindowMessage(PSZ name)
+{
+    return RegisterClipboardFormat(name);
+}

@@ -7,7 +7,7 @@
 #define LX_NATIVE_MODULE_SHUTDOWN()
 #endif
 #define LX_NATIVE_MODULE_32BIT_SUPPORT() static LxMmaps obj32;
-#define LX_NATIVE_MODULE_32BIT_API(fn) static void *fn##32;
+#define LX_NATIVE_MODULE_32BIT_API(fn) static void *bridge_address_##fn;
 #define LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()                                                      \
     memset(&obj32, 0, sizeof obj32);                                                               \
     obj32.alias = 0xffff;                                                                          \
@@ -21,7 +21,7 @@
 #define LX_NATIVE_INIT_32BIT_BRIDGE(fn, bytes, pop, abi)                                           \
     {                                                                                              \
         const LxExecutionApi32 api = {bridge32_##fn, bytes, pop, abi};                             \
-        fn##32 = ptr;                                                                              \
+        bridge_address_##fn = ptr;                                                                 \
         size_t n = lx_execution_emit_bridge32(                                                     \
             GLoaderState.execution, ptr, 0x10000 - (size_t)(ptr - (uint8 *)obj32.addr), &api);     \
         if (!n)                                                                                    \
@@ -35,15 +35,17 @@
     LX_NATIVE_MODULE_SHUTDOWN();                                                                   \
     if (obj32.mapping)                                                                             \
         lx_execution_unmap(GLoaderState.execution, obj32.mapping);
-#define LX_NATIVE_EXPORT32_BRIDGED(fn, ord) {ord, #fn, &fn##32, &obj32, 1}
-#define LX_NATIVE_EXPORT32_BRIDGED_DIFFERENT_NAME(fn, name, ord) {ord, name, &fn##32, &obj32, 1}
+#define LX_NATIVE_EXPORT32_BRIDGED(fn, ord) {ord, #fn, &bridge_address_##fn, &obj32, 1}
+#define LX_NATIVE_EXPORT32_BRIDGED_DIFFERENT_NAME(fn, name, ord)                                   \
+    {ord, name, &bridge_address_##fn, &obj32, 1}
 #if TWOINE_PORTABLE_LOADER
 #define LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT() LX_NATIVE_MODULE_DEINIT_BRIDGED_SUPPORT()
 #define LX_NATIVE_INIT_32BIT_MODULE(module)                                                        \
     if (!init32_##module())                                                                        \
         return 0;
-#define LX_NATIVE_EXPORT32(fn, ord) {ord, #fn, &fn##32, &obj32, 1}
-#define LX_NATIVE_EXPORT32_DIFFERENT_NAME(fn, name, ord) {ord, name, &fn##32, &obj32, 1}
+#define LX_NATIVE_EXPORT32(fn, ord) {ord, #fn, &bridge_address_##fn, &obj32, 1}
+#define LX_NATIVE_EXPORT32_DIFFERENT_NAME(fn, name, ord)                                           \
+    {ord, name, &bridge_address_##fn, &obj32, 1}
 #else
 #define LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT() LX_NATIVE_MODULE_SHUTDOWN()
 #define LX_NATIVE_INIT_32BIT_MODULE(module)

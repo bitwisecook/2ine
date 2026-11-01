@@ -124,6 +124,10 @@ LONG open32FontObject(ULONG handle, LONG capacity, PVOID output)
 
 ULONG GetStockObject(LONG index)
 {
+    if (index == 15)
+        return open32StockPalette();
+    if (index >= 6 && index <= 8)
+        return open32StockPen(index);
     if (index >= 0 && index <= 5)
         return open32StockBrush(index);
     static _Thread_local ULONG stocks[18];
@@ -147,4 +151,21 @@ ULONG GetStockObject(LONG index)
         stocks[index] = handle;
     }
     return stocks[index];
+}
+
+ULONG CreateFont(LONG height, LONG width, LONG escapement, LONG orientation, LONG weight,
+                 ULONG italic, ULONG underline, ULONG strikeout, ULONG charset, ULONG out_precision,
+                 ULONG clip_precision, ULONG quality, ULONG pitch, PSZ face)
+{
+    uint8 record[60] = {0};
+    const LONG dimensions[] = {height, width, escapement, orientation, weight};
+    for (unsigned i = 0; i < 5; i++)
+        lx_guest_store_u32(record + i * 4, (ULONG)dimensions[i]);
+    const ULONG options[] = {italic,        underline,      strikeout, charset,
+                             out_precision, clip_precision, quality,   pitch};
+    for (unsigned i = 0; i < 8; i++)
+        record[20 + i] = (uint8)options[i];
+    if (face)
+        memcpy(record + 28, face, strnlen(face, 31));
+    return CreateFontIndirect(record);
 }

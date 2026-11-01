@@ -2,6 +2,7 @@
 /* Open32 resource identifiers pack the OS/2 type and name into one word. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwin.h"
 
 static HMODULE resource_module(HMODULE module)
 {
@@ -68,4 +69,22 @@ ULONG LockResource(ULONG resource)
         return 0;
     }
     return resource;
+}
+
+LONG LoadString(HMODULE module, ULONG identity, PCHAR output, LONG capacity)
+{
+    TRACE_NATIVE("LoadString(%u, %u, %p, %d)", module, identity, output, capacity);
+    if (!module || !output || capacity <= 0)
+    {
+        if (output && capacity > 0)
+            output[0] = 0;
+        open32SetError(module ? 87 : 6);
+        return 0;
+    }
+    if (identity & 0xFF000000u)
+        identity &= 0xFFFF;
+    LONG result = WinLoadString(0, resource_module(module), identity, capacity, output);
+    if (!result)
+        open32SetError(1814);
+    return result;
 }

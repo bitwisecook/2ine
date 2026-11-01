@@ -65,7 +65,8 @@ LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
     TRACE_NATIVE("DrawText(%u, '%.*s', %d, %p, %X)", handle, count >= 0 ? count : 80, text, count,
                  rectangle, flags);
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || !rectangle || !text || count < -1 || (flags & 0xFFFF8000))
+    if (!dc || (!open32CanDraw(handle) && !(flags & 0x400)) || !rectangle || !text || count < -1 ||
+        (flags & 0xFFFF8000))
     {
         open32SetError(87);
         return 0;
@@ -115,7 +116,9 @@ BOOL TextOut(ULONG handle, LONG x, LONG y, PSZ text, LONG count)
 {
     Open32DC *dc = open32FindDC(handle);
     LONG length;
-    char *copy = dc && count >= 0 ? text_copy(text, count, FALSE, 0, &length) : NULL;
+    char *copy = dc && open32CanDraw(handle) && count >= 0
+                     ? text_copy(text, count, FALSE, 0, &length)
+                     : NULL;
     LxHostFontMetrics metrics;
     if (!copy || !lx_host_font_metrics(lx_pm_font(handle), &metrics))
     {
@@ -143,4 +146,45 @@ BOOL TextOut(ULONG handle, LONG x, LONG y, PSZ text, LONG count)
     BOOL result = lx_pm_text(handle, &point, length, copy, rgb_color(dc->text_color), NULL);
     free(copy);
     return result;
+}
+
+BOOL GetTextExtentPoint32(ULONG handle, PCHAR text, LONG count, PVOID output)
+{
+    if (!open32FindDC(handle) || !output || count < 0 || count > 65536 || (count && !text))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LxHostFont *font = lx_pm_font(handle);
+    LxHostFontMetrics metrics;
+    if (!lx_host_font_metrics(font, &metrics))
+    {
+        open32SetError(6);
+        return FALSE;
+    }
+    int64_t width = 0;
+    for (LONG i = 0; i < count; i++)
+    {
+        uint8 c = WinCpTranslateChar(0, 1004, (uint8)text[i], 437);
+        int advance = lx_host_font_advance(font, lx_pm_codepoint(c));
+        if (advance < 0)
+        {
+            open32SetError(87);
+            return FALSE;
+        }
+        width += advance;
+    }
+    if (width > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    lx_guest_store_u32(output, (ULONG)width);
+    lx_guest_store_u32((uint8 *)output + 4, count ? (ULONG)(metrics.ascent + metrics.descent) : 0);
+    return TRUE;
+}
+
+BOOL GetTextExtentPoint(ULONG dc, PCHAR text, LONG count, PVOID size)
+{
+    return GetTextExtentPoint32(dc, text, count, size);
 }

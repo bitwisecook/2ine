@@ -1,6 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/windows.h"
+#include "os2libs/pmwinx/input.h"
 #include "hal/host.h"
 #include "os2libs/pmshapi.h"
 static void open32Shutdown(void);
@@ -10,19 +12,35 @@ static void open32Shutdown(void);
 static uint32 references;
 static void open32Shutdown(void)
 {
+    open32QueueCleanup();
+    open32CaretCleanup();
+    open32HooksCleanup();
     open32WindowsCleanup();
+    open32MenusCleanup();
+    open32ClipboardCleanup();
     open32DrawingCleanup();
     open32ClassesCleanup();
     open32IconsCleanup();
     open32CriticalCleanup();
     open32ContextCleanup();
+    open32MemoryCleanup();
     references = 0;
 }
 BOOL WinXProcessMsg(PVOID message)
 {
-    (void)message;
-    /* This worker creates OS/2 PM windows; no Open32 window owns their messages. */
-    return FALSE;
+    const uint8 *wire = message;
+    ULONG handle = wire ? lx_guest_load_u32(wire) : 0;
+    if (!open32FindWindow(handle))
+        return FALSE;
+    QMSG native = {handle,
+                   lx_guest_load_u32(wire + 4),
+                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 8),
+                   (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 12),
+                   lx_guest_load_u32(wire + 16),
+                   {(LONG)lx_guest_load_u32(wire + 20), (LONG)lx_guest_load_u32(wire + 24)},
+                   lx_guest_load_u32(wire + 28)};
+    WinDispatchMsg(open32Presentation(), &native);
+    return TRUE;
 }
 
 VOID WinInitializeOpen32(ULONG reserved)
@@ -118,21 +136,4 @@ ULONG GetOEMCP(void)
 {
     /* The NLS provider currently exposes CP437 as the process OEM code page. */
     return 437;
-}
-
-VOID GetSystemTime(PVOID output)
-{
-    uint64_t now = lx_host_realtime_us();
-    LxHostCalendar value;
-    if (!output || !lx_host_calendar((int64_t)(now / 1000000), 1, &value))
-    {
-        open32SetError(87);
-        return;
-    }
-    uint16 fields[] = {(uint16)value.year,    (uint16)value.month,
-                       (uint16)value.weekday, (uint16)value.day,
-                       (uint16)value.hour,    (uint16)value.minute,
-                       (uint16)value.second,  (uint16)((now % 1000000) / 1000)};
-    for (unsigned i = 0; i < sizeof fields / sizeof *fields; i++)
-        lx_guest_store_u16((uint8 *)output + 2 * i, fields[i]);
 }

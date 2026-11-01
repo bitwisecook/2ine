@@ -729,6 +729,38 @@ BOOL WinIsWindowVisible(HWND hwnd)
     return ((win->style & WS_VISIBLE) == WS_VISIBLE) ? TRUE : FALSE;
 }
 
+static BOOL set_window_order(AnchorBlock *anchor, Window *window, HWND behind)
+{
+    if (!window->parent)
+        return FALSE;
+    if (behind == window->hwnd)
+        return TRUE;
+    Window *previous = NULL;
+    if (behind != HWND_TOP && behind != HWND_BOTTOM)
+    {
+        previous = getWindowFromHWND(anchor, behind);
+        if (!previous || previous->parent != window->parent || previous->destroying)
+            return FALSE;
+    }
+    Window **slot = &window->parent->children;
+    while (*slot && *slot != window)
+        slot = &(*slot)->sibling;
+    if (!*slot)
+        return FALSE;
+    *slot = window->sibling;
+    if (behind == HWND_BOTTOM)
+    {
+        slot = &window->parent->children;
+        while (*slot)
+            slot = &(*slot)->sibling;
+    }
+    else
+        slot = previous ? &previous->sibling : &window->parent->children;
+    window->sibling = *slot;
+    *slot = window;
+    return TRUE;
+}
+
 BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, ULONG flags)
 {
     TRACE_NATIVE("WinSetWindowPos(%u, %u, %d, %d, %d, %d, %u)", (uint)hwnd, (uint)behind, (int)x,
@@ -751,6 +783,12 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     flags = swp.fl;
     if (!(flags & SWP_NOADJUST))
         sendWindowPos(win, WM_ADJUSTWINDOWPOS, &swp);
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
+    flags = swp.fl;
+    if ((flags & SWP_ZORDER) && !set_window_order(anchor, win, swp.hwndInsertBehind))
+        return FALSE;
     LONG oldw = win->w, oldh = win->h;
     win->x = swp.x;
     win->y = swp.y;
@@ -773,27 +811,47 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     }
     if (was_visible != ((win->style & WS_VISIBLE) != 0))
         sendMessage(win, WM_SHOW, (MPARAM)(uintptr_t)((win->style & WS_VISIBLE) != 0), 0);
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
     if (oldw != win->w || oldh != win->h)
     {
         sendMessage(win, WM_SIZE, (MPARAM)(uintptr_t)(((uint32)(uint16)oldh << 16) | (uint16)oldw),
                     (MPARAM)(uintptr_t)(((uint32)(uint16)win->h << 16) | (uint16)win->w));
+        win = getWindowFromHWND(anchor, hwnd);
+        if (!win || win->destroying)
+            return FALSE;
         HWND menu = WinWindowFromID(win->hwnd, FID_MENU);
         LONG menu_height = menu ? 24 : 0;
         if (menu && win->h > menu_height)
             WinSetWindowPos(menu, HWND_TOP, 0, win->h - menu_height, win->w, menu_height,
                             SWP_MOVE | SWP_SIZE | SWP_SHOW);
+        win = getWindowFromHWND(anchor, hwnd);
+        if (!win || win->destroying)
+            return FALSE;
         for (Window *child = win->children; child; child = child->sibling)
             if (child->id == FID_CLIENT && win->h > menu_height)
                 WinSetWindowPos(child->hwnd, HWND_BOTTOM, 0, 0, win->w, win->h - menu_height,
                                 SWP_MOVE | SWP_SIZE | SWP_SHOW);
     }
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
     if (oldw != win->w || oldh != win->h)
         for (Window *child = win->children; child; child = child->sibling)
             if (child->style & WS_MAXIMIZED)
                 WinSetWindowPos(child->hwnd, HWND_TOP, 0, 0, win->w, win->h,
                                 SWP_MOVE | SWP_SIZE | SWP_NOADJUST);
+    win = getWindowFromHWND(anchor, hwnd);
+    if (!win || win->destroying)
+        return FALSE;
     if (!(flags & SWP_NOREDRAW) && (flags & (SWP_SIZE | SWP_SHOW)))
         postExposedMessages(anchor, win, currentSystemTicks());
+    if ((flags & SWP_ZORDER) && !(flags & SWP_NOREDRAW))
+        WinInvalidateRect(win->parent->hwnd, NULL, TRUE);
+    if ((flags & (SWP_ZORDER | SWP_ACTIVATE)) == (SWP_ZORDER | SWP_ACTIVATE) &&
+        swp.hwndInsertBehind == HWND_TOP && win->parent == &desktop_window)
+        lx_host_window_focus(win->heavy.window);
     if (flags & SWP_ACTIVATE)
         WinSetActiveWindow(HWND_DESKTOP, topLevelWindow(anchor, hwnd));
     return TRUE;

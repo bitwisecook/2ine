@@ -9,7 +9,8 @@ typedef struct Open32Class
     unsigned references;
     char *name, *menu;
     void *class_data;
-    LxGuestMapping *names;
+    LxGuestMapping *names, *procedure_mapping;
+    ULONG builtin;
     struct Open32Class *next;
 } Open32Class;
 /* An acquired class cannot be unregistered until its reference is released. */

@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwinx/drawing.h"
+#include "os2libs/pmwinx/input.h"
 static _Thread_local Open32DC *contexts;
 Open32DC *open32FindDC(ULONG handle)
 {
@@ -22,6 +23,14 @@ LONG open32DCHeight(ULONG handle)
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     return bitmap ? (LONG)bitmap->height : ps->window ? ps->window->h : 0;
 }
+LONG open32DCWidth(ULONG handle)
+{
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    if (!ps)
+        return 0;
+    PmBitmap *bitmap = ps->bitmap_lease.resource;
+    return bitmap ? (LONG)bitmap->width : ps->window ? ps->window->w : 0;
+}
 static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
 {
     Open32DC *dc = calloc(1, sizeof *dc);
@@ -31,6 +40,7 @@ static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
     dc->window = window;
     dc->kind = kind;
     dc->background_mode = 2;
+    dc->rop2 = 13;
     dc->background_color = 0xFFFFFF;
     GpiCreateLogColorTable(ps, 0, 3, 0, 0, NULL);
     GpiSetColor(ps, 0);
@@ -49,8 +59,26 @@ static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
         free(dc);
         return NULL;
     }
+    open32SelectPen(dc, GetStockObject(7));
+    if (!dc->pen.resource)
+    {
+        lx_handle_release(&dc->brush);
+        lx_handle_release(&dc->font);
+        free(dc);
+        return NULL;
+    }
     dc->next = contexts;
     contexts = dc;
+    SelectPalette(ps, open32StockPalette(), FALSE);
+    if (!dc->palette.resource)
+    {
+        contexts = dc->next;
+        lx_handle_release(&dc->pen);
+        lx_handle_release(&dc->brush);
+        lx_handle_release(&dc->font);
+        free(dc);
+        return NULL;
+    }
     return dc;
 }
 static BOOL discard_context(Open32DC *dc)
@@ -59,6 +87,11 @@ static BOOL discard_context(Open32DC *dc)
     while (*link != dc)
         link = &(*link)->next;
     *link = dc->next;
+    if (dc->clip_region)
+    {
+        GpiSetClipRegion(dc->ps, 0, NULL);
+        GpiDestroyRegion(dc->ps, dc->clip_region);
+    }
     if (dc->kind == 1)
     {
         GpiSetBitmap(dc->ps, 0);
@@ -70,6 +103,8 @@ static BOOL discard_context(Open32DC *dc)
         WinEndPaint(dc->ps);
     else
         WinReleasePS(dc->ps);
+    lx_handle_release(&dc->pen);
+    lx_handle_release(&dc->palette);
     lx_handle_release(&dc->brush);
     lx_handle_release(&dc->font);
     free(dc);
@@ -137,7 +172,7 @@ ULONG CreateCompatibleDC(ULONG source)
 BOOL DeleteDC(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || dc->kind != 1)
+    if (!dc || (dc->kind != 1 && dc->kind != 4))
     {
         open32SetError(6);
         return FALSE;
@@ -153,7 +188,10 @@ ULONG SelectObject(ULONG handle, ULONG object)
     {
         lx_handle_release(&borrow);
         ULONG brush = open32SelectBrush(dc, object);
-        return brush ? brush : open32SelectFont(dc, object);
+        if (brush)
+            return brush;
+        ULONG pen = open32SelectPen(dc, object);
+        return pen ? pen : open32SelectFont(dc, object);
     }
     if (!dc || dc->kind != 1 || !bitmap)
     {
@@ -173,7 +211,7 @@ ULONG SelectObject(ULONG handle, ULONG object)
 BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG source, LONG source_x,
             LONG source_y, ULONG operation)
 {
-    if (!open32FindDC(destination) || !open32FindDC(source) || width <= 0 || height <= 0 ||
+    if (!open32CanDraw(destination) || !open32CanDraw(source) || width <= 0 || height <= 0 ||
         width > 16384 || height > 16384)
     {
         open32SetError(87);
@@ -202,14 +240,26 @@ ULONG BeginPaint(ULONG window, PVOID output)
         return 0;
     }
     RECTL rect;
+    open32CaretPaint(window, TRUE);
     HPS ps = WinBeginPaint(window, 0, &rect);
-    if (!ps || !register_context(ps, window, 2))
+    Open32DC *context = ps ? register_context(ps, window, 2) : NULL;
+    if (!context)
     {
         if (ps)
             WinEndPaint(ps);
+        open32CaretPaint(window, FALSE);
         open32SetError(1400);
         return 0;
     }
+    context->clip_region = GpiCreateRegion(ps, WinIsRectEmpty(0, &rect) ? 0 : 1, &rect);
+    if (!context->clip_region || !GpiSetClipRegion(ps, context->clip_region, NULL))
+    {
+        discard_context(context);
+        open32CaretPaint(window, FALSE);
+        open32SetError(8);
+        return 0;
+    }
+    open32ValidateQueuedPaint(window);
     uint8 bytes[64] = {0};
     lx_guest_store_u32(bytes, ps);
     lx_guest_store_u32(bytes + 4, !open32EraseBackground(window, ps));
@@ -228,7 +278,9 @@ BOOL EndPaint(ULONG window, PVOID input)
         open32SetError(6);
         return FALSE;
     }
-    return discard_context(dc);
+    BOOL result = discard_context(dc);
+    open32CaretPaint(window, FALSE);
+    return result;
 }
 
 LONG SetBkMode(ULONG handle, LONG mode)
@@ -302,11 +354,47 @@ ULONG CreateCompatibleBitmap(ULONG handle, LONG width, LONG height)
 ULONG GetPixel(ULONG handle, LONG x, LONG y)
 {
     uint32 pixel;
-    if (!open32FindDC(handle) || x < 0 || y < 0 || y >= open32DCHeight(handle) ||
+    if (!open32CanDraw(handle) || x < 0 || y < 0 || y >= open32DCHeight(handle) ||
         !lx_pm_raster_read(handle, x, open32DCHeight(handle) - 1 - y, 1, 1, &pixel))
     {
         open32SetError(87);
         return UINT32_MAX;
     }
     return (ULONG)rgb_color(pixel);
+}
+
+ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
+{
+    TRACE_NATIVE("CreateIC('%s', '%s', '%s', %p)", driver, device, output, mode);
+    BOOL display = (driver && !strcasecmp(driver, "DISPLAY")) ||
+                   (!driver && device && !strcasecmp(device, "DISPLAY"));
+    if (!display)
+    {
+        open32SetError(1801);
+        return 0;
+    }
+    if (mode || (output && *output))
+    {
+        open32SetError(50);
+        return 0;
+    }
+    if (!open32Presentation())
+    {
+        open32SetError(8);
+        return 0;
+    }
+    HPS ps = WinGetPS(HWND_DESKTOP);
+    if (!ps || !register_context(ps, 0, 4))
+    {
+        if (ps)
+            WinReleasePS(ps);
+        open32SetError(8);
+        return 0;
+    }
+    return ps;
+}
+BOOL open32CanDraw(ULONG handle)
+{
+    Open32DC *dc = open32FindDC(handle);
+    return dc && dc->kind != 4;
 }

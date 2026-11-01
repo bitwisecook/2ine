@@ -16,6 +16,7 @@ typedef struct PmRegion
 } PmRegion;
 BOOL regionBoolean(PmRegion *out, const PmRegion *a, const PmRegion *b, LONG mode);
 BOOL lx_pm_window_clip(HPS ps, const RECTL *bounds, PmRegion *visible);
+LONG lx_pm_visible_box(HPS ps, RECTL *rectangle);
 ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles);
 BOOL lx_pm_region_destroy(HPS ps, ULONG region);
 LONG lx_pm_region_set(HPS ps, ULONG region, LONG count, const RECTL *rectangles);
@@ -35,6 +36,8 @@ typedef struct PmBitmap
     ULONG handle;
     unsigned width, height, planes, depth, selected;
     uint32_t *pixels;
+    unsigned palette_count;
+    uint32_t palette[256];
 } PmBitmap;
 PmBitmap *lx_pm_bitmap(ULONG handle, LxHandleBorrow *borrow);
 ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsigned depth);

@@ -16,18 +16,20 @@ LX_PRIVATE Window desktop_window;
 PFNWP defaultGuestWindowProc(void)
 {
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
-    if (GLoaderState.execution && obj32.mapping && WinDefWindowProc32)
+    if (GLoaderState.execution && obj32.mapping && bridge_address_WinDefWindowProc)
         return (PFNWP)(uintptr_t)(obj32.guest_base +
-                                  (uint32)((uint8 *)WinDefWindowProc32 - (uint8 *)obj32.addr));
+                                  (uint32)((uint8 *)bridge_address_WinDefWindowProc -
+                                           (uint8 *)obj32.addr));
 #endif
     return WinDefWindowProc;
 }
 PFNWP defaultGuestDialogProc(void)
 {
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
-    if (GLoaderState.execution && obj32.mapping && WinDefDlgProc32)
+    if (GLoaderState.execution && obj32.mapping && bridge_address_WinDefDlgProc)
         return (PFNWP)(uintptr_t)(obj32.guest_base +
-                                  (uint32)((uint8 *)WinDefDlgProc32 - (uint8 *)obj32.addr));
+                                  (uint32)((uint8 *)bridge_address_WinDefDlgProc -
+                                           (uint8 *)obj32.addr));
 #endif
     return WinDefDlgProc;
 }

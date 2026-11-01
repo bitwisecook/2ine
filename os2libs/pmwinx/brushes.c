@@ -93,7 +93,7 @@ LONG open32BrushObject(ULONG handle, LONG capacity, PVOID output)
 }
 LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
 {
-    if (!open32FindDC(handle) || !rectangle)
+    if (!open32CanDraw(handle) || !rectangle)
     {
         open32SetError(87);
         return 0;
@@ -129,4 +129,50 @@ LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
     if (!result)
         open32SetError(87);
     return result;
+}
+
+LONG FrameRect(ULONG handle, PVOID input, ULONG brush)
+{
+    if (!input || !open32CanDraw(handle))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    const uint8 *wire = input;
+    LONG left = (LONG)lx_guest_load_u32(wire), top = (LONG)lx_guest_load_u32(wire + 4);
+    LONG right = (LONG)lx_guest_load_u32(wire + 8), bottom = (LONG)lx_guest_load_u32(wire + 12);
+    if (left >= right || top >= bottom)
+        return 0;
+    const LONG edges[4][4] = {{left, top, right, top + 1},
+                              {left, bottom - 1, right, bottom},
+                              {left, top, left + 1, bottom},
+                              {right - 1, top, right, bottom}};
+    for (unsigned edge = 0; edge < 4; edge++)
+    {
+        uint8 rectangle[16];
+        for (unsigned i = 0; i < 4; i++)
+            lx_guest_store_u32(rectangle + i * 4, (ULONG)edges[edge][i]);
+        if (!FillRect(handle, rectangle, brush))
+            return 0;
+    }
+    return 1;
+}
+BOOL InvertRect(ULONG handle, PVOID input)
+{
+    if (!input || !open32CanDraw(handle))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LONG height = open32DCHeight(handle);
+    LONG left = (LONG)lx_guest_load_u32(input), right = (LONG)lx_guest_load_u32((uint8 *)input + 8);
+    int64_t top = (int64_t)height - (LONG)lx_guest_load_u32((uint8 *)input + 4);
+    int64_t bottom = (int64_t)height - (LONG)lx_guest_load_u32((uint8 *)input + 12);
+    if (top < INT32_MIN || top > INT32_MAX || bottom < INT32_MIN || bottom > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    RECTL rectangle = {left, (LONG)bottom, right, (LONG)top};
+    return WinInvertRect(handle, &rectangle);
 }

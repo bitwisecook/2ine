@@ -119,3 +119,21 @@ void *open32DosService(const char *name)
             return lx_host_library_symbol(m->nativelib, name);
     return NULL;
 }
+
+BOOL open32ValidProcedure(ULONG address)
+{
+    if (!address)
+        return FALSE;
+    /* Native imported APIs are executable host entries outside guest mappings. */
+    for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+        if (module->nativelib)
+            for (ULONG i = 0; i < module->num_exports; i++)
+            {
+                const LxExport *entry = &module->exports[i];
+                void *target = entry->indirect ? *(void **)entry->addr : entry->addr;
+                if ((uintptr_t)target == address &&
+                    (!entry->object || (entry->object->prot & LX_GUEST_EXECUTE)))
+                    return TRUE;
+            }
+    return lx_execution_memory(GLoaderState.execution, address, 1, LX_GUEST_EXECUTE) != NULL;
+}

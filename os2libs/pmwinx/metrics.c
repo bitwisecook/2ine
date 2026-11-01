@@ -19,6 +19,14 @@ LONG GetSystemMetrics(LONG index)
             return WinQuerySysValue(HWND_DESKTOP, 48); /* SM_MOUSEPRESENT */
         case 23:
             return WinQuerySysValue(HWND_DESKTOP, 0); /* SM_SWAPBUTTON */
+        case 20:
+            return WinQuerySysValue(HWND_DESKTOP, 24); /* SM_CYVSCROLL */
+        case 21:
+            return WinQuerySysValue(HWND_DESKTOP, 25); /* SM_CXHSCROLL */
+        case 30:
+            return WinQuerySysValue(HWND_DESKTOP, 33); /* SM_CXSIZE */
+        case 31:
+            return WinQuerySysValue(HWND_DESKTOP, 34); /* SM_CYSIZE */
         case 32:
             return WinQuerySysValue(HWND_DESKTOP, 4); /* SM_CXSIZEFRAME */
         case 33:

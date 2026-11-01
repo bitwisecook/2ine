@@ -1,0 +1,105 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
+/* Rectangle and point queries translate PM coordinates at drawable boundaries. */
+#include "os2libs/os2native.h"
+#include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/windows.h"
+BOOL GetClientRect(ULONG window, PVOID output)
+{
+    RECTL rect;
+    if (!output || !open32Presentation() || !WinQueryWindowRect(window, &rect))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    lx_guest_store_u32(output, 0);
+    lx_guest_store_u32((uint8 *)output + 4, 0);
+    lx_guest_store_u32((uint8 *)output + 8, (ULONG)(rect.xRight - rect.xLeft));
+    lx_guest_store_u32((uint8 *)output + 12, (ULONG)(rect.yTop - rect.yBottom));
+    return TRUE;
+}
+BOOL GetWindowRect(ULONG window, PVOID output)
+{
+    RECTL rect;
+    if (!output || !open32Presentation() || !WinQueryWindowRect(window, &rect))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    POINTL points[2] = {{rect.xLeft, rect.yBottom}, {rect.xRight, rect.yTop}};
+    if (!WinMapWindowPoints(window, HWND_DESKTOP, points, 2))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    LONG height = WinQuerySysValue(HWND_DESKTOP, 21);
+    lx_guest_store_u32(output, (ULONG)points[0].x);
+    lx_guest_store_u32((uint8 *)output + 4, (ULONG)(height - points[1].y));
+    lx_guest_store_u32((uint8 *)output + 8, (ULONG)points[1].x);
+    lx_guest_store_u32((uint8 *)output + 12, (ULONG)(height - points[0].y));
+    return TRUE;
+}
+static BOOL map_point(ULONG window, PVOID point, BOOL to_screen)
+{
+    RECTL rect;
+    if (!point || !open32Presentation() || !WinQueryWindowRect(window, &rect))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    LONG screen = WinQuerySysValue(HWND_DESKTOP, 21);
+    LONG x = (LONG)lx_guest_load_u32(point), y = (LONG)lx_guest_load_u32((uint8 *)point + 4);
+    int64_t converted = (int64_t)(to_screen ? rect.yTop : screen) - y;
+    if (converted < INT32_MIN || converted > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    POINTL mapped = {x, (LONG)converted};
+    if (!WinMapWindowPoints(to_screen ? window : HWND_DESKTOP, to_screen ? HWND_DESKTOP : window,
+                            &mapped, 1))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    converted = (int64_t)(to_screen ? screen : rect.yTop) - mapped.y;
+    if (converted < INT32_MIN || converted > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    lx_guest_store_u32(point, (ULONG)mapped.x);
+    lx_guest_store_u32((uint8 *)point + 4, (ULONG)converted);
+    return TRUE;
+}
+BOOL ClientToScreen(ULONG window, PVOID point)
+{
+    return map_point(window, point, TRUE);
+}
+BOOL ScreenToClient(ULONG window, PVOID point)
+{
+    return map_point(window, point, FALSE);
+}
+ULONG GetDesktopWindow(void)
+{
+    return open32Presentation() ? HWND_DESKTOP : 0;
+}
+
+BOOL IsIconic(ULONG window)
+{
+    return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
+           (WinQueryWindowULong(window, -2) & WS_MINIMIZED) != 0;
+}
+
+ULONG GetParent(ULONG window)
+{
+    if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    Open32Window *w = open32FindWindow(window);
+    if (w)
+        return (w->style & (0x40000000u | 0x80000000u)) ? w->parent : 0;
+    ULONG parent = WinQueryWindow(window, 5);
+    return parent == HWND_DESKTOP ? WinQueryWindow(window, 4) : parent;
+}

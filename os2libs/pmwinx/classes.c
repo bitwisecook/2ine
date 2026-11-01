@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Registered Open32 classes own callback metadata, extra bytes and copied names. */
-#include "os2libs/pmwinx/classes.h"
+#include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
 #include "hal/host_sync.h"
 static LxHostOnce once = LX_HOST_ONCE_INIT;
@@ -22,11 +22,61 @@ static Open32Class *find_class(ULONG instance, PSZ name)
             return c;
     return NULL;
 }
+static uint32 builtin_procedure(uint8 *arguments)
+{
+    return open32BuiltinWindowProc(lx_guest_load_u32(arguments), lx_guest_load_u32(arguments + 4),
+                                   lx_guest_load_u32(arguments + 8),
+                                   lx_guest_load_u32(arguments + 12));
+}
+static Open32Class *builtin_class(const char *name)
+{
+    if (strcasecmp(name, "MDICLIENT"))
+        return NULL;
+    Open32Class *c = calloc(1, sizeof *c);
+    if (!c)
+        return NULL;
+    c->name = strdup("MDICLIENT");
+    c->style = 0x4008;
+    c->builtin = 1;
+    c->brush = 13;
+    c->names = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    c->procedure_mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    const LxExecutionApi32 bridge = {builtin_procedure, 16, 0, LX_ABI_STACK32};
+    if (!c->name || !c->names || !c->procedure_mapping ||
+        !lx_execution_emit_bridge32(GLoaderState.execution,
+                                    lx_execution_mapping_host(c->procedure_mapping), 4096, &bridge))
+        goto fail;
+    strcpy(lx_execution_mapping_host(c->names), c->name);
+    if (!lx_execution_protect(GLoaderState.execution, c->names, LX_GUEST_READ) ||
+        !lx_execution_protect(GLoaderState.execution, c->procedure_mapping,
+                              LX_GUEST_READ | LX_GUEST_EXECUTE))
+        goto fail;
+    c->procedure = lx_execution_mapping_address(c->procedure_mapping);
+    return c;
+fail:
+    if (c->names)
+        lx_execution_unmap(GLoaderState.execution, c->names);
+    if (c->procedure_mapping)
+        lx_execution_unmap(GLoaderState.execution, c->procedure_mapping);
+    free(c->name);
+    free(c);
+    return NULL;
+}
 Open32Class *open32ClassAcquire(ULONG instance, PSZ name)
 {
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(monitor);
     Open32Class *c = find_class(instance, name);
+    if (!c && (uintptr_t)name > UINT16_MAX && next_atom <= UINT16_MAX)
+    {
+        c = builtin_class(name);
+        if (c)
+        {
+            c->atom = next_atom++;
+            c->next = classes;
+            classes = c;
+        }
+    }
     if (c)
         c->references++;
     lx_host_monitor_unlock(monitor);
@@ -43,6 +93,8 @@ static void destroy_class(Open32Class *c)
 {
     if (c->names)
         lx_execution_unmap(GLoaderState.execution, c->names);
+    if (c->procedure_mapping)
+        lx_execution_unmap(GLoaderState.execution, c->procedure_mapping);
     free(c->class_data);
     free(c->menu);
     free(c->name);
@@ -75,8 +127,7 @@ ULONG RegisterClass(PVOID record)
     if (c->menu_id > UINT16_MAX)
         c->menu = lx_execution_copy_string(GLoaderState.execution, c->menu_id, 256);
     if (!c->name || !*c->name || c->class_extra > 4096 || c->window_extra > 4096 ||
-        (c->menu_id > UINT16_MAX && !c->menu) ||
-        !lx_execution_memory(GLoaderState.execution, c->procedure, 1, LX_GUEST_EXECUTE))
+        (c->menu_id > UINT16_MAX && !c->menu) || !open32ValidProcedure(c->procedure))
     {
         destroy_class(c);
         open32SetError(87);
@@ -127,7 +178,7 @@ BOOL UnregisterClass(PSZ name, ULONG instance)
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(monitor);
     Open32Class *c = find_class(instance, name);
-    if (!c || c->references)
+    if (!c || c->references || c->builtin)
     {
         lx_host_monitor_unlock(monitor);
         open32SetError(c ? 1412 : 1411);
@@ -179,4 +230,63 @@ void open32ClassesCleanup(void)
         classes = c->next;
         destroy_class(c);
     }
+}
+
+ULONG GetClassLong(ULONG handle, LONG index)
+{
+    Open32Window *window = open32FindWindow(handle);
+    if (!window)
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    Open32Class *c = window->class;
+    if (index >= 0)
+    {
+        if ((ULONG)index <= c->class_extra && c->class_extra - (ULONG)index >= 4)
+            return lx_guest_load_u32((uint8 *)c->class_data + index);
+        open32SetError(1413);
+        return 0;
+    }
+    switch (index)
+    {
+        case -8:
+            return c->menu ? lx_execution_mapping_address(c->names) + 256 : c->menu_id;
+        case -10:
+            return c->brush;
+        case -12:
+            return c->cursor;
+        case -14:
+            return c->icon;
+        case -16:
+            return c->instance;
+        case -18:
+            return c->window_extra;
+        case -20:
+            return c->class_extra;
+        case -24:
+            return c->procedure;
+        case -26:
+            return c->style;
+        case -32:
+            return c->atom;
+        default:
+            open32SetError(1413);
+            return 0;
+    }
+}
+LONG GetClassName(ULONG handle, PCHAR output, LONG capacity)
+{
+    Open32Window *window = open32FindWindow(handle);
+    if (!window || !output || capacity <= 0)
+    {
+        open32SetError(window ? 87 : 1400);
+        return 0;
+    }
+    size_t length = strlen(window->class->name);
+    if (length >= (size_t)capacity)
+        length = (size_t)capacity - 1;
+    memcpy(output, window->class->name, length);
+    output[length] = 0;
+    return (LONG)length;
 }
