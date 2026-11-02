@@ -286,39 +286,68 @@ void lx_host_file_close(LxHostFile *file)
         lx_host_file_dispose(file);
     }
 }
-static void refresh_image(LxHostFile *file)
+static LxHostFsError refresh_image(LxHostFile *file)
 {
     if (!file->image || tb_image_device_kind(file->image_path) == 1)
-        return;
+        return LX_HOST_FS_OK;
     char *source = tb_image_source(file->image_path);
     int same = source && !strcmp(source, file->image_source);
     free(source);
     if (!same)
-        return;
+        return LX_HOST_FS_OK;
     FILE *snapshot = tb_image_fopen(file->image_path);
     if (!snapshot)
-        return;
-    unsigned char data[65536];
+        return LX_HOST_FS_OK;
+    enum
+    {
+        BUFFER_SIZE = 65536
+    };
+    unsigned char *data = malloc(BUFFER_SIZE);
+    if (!data)
+    {
+        fclose(snapshot);
+        return LX_HOST_FS_NO_MEMORY;
+    }
     size_t n;
     off_t at = 0;
-    int ok = 1;
-    while ((n = fread(data, 1, sizeof data, snapshot)))
+    LxHostFsError status = LX_HOST_FS_OK;
+    while ((n = fread(data, 1, BUFFER_SIZE, snapshot)))
     {
-        if (pwrite(file->fd, data, n, at) != (ssize_t)n)
+        ssize_t written;
+        do
+            written = pwrite(file->fd, data, n, at);
+        while (written < 0 && errno == EINTR);
+        if (written != (ssize_t)n)
         {
-            ok = 0;
+            status = written < 0 ? fs_error(errno) : LX_HOST_FS_IO;
             break;
         }
         at += n;
     }
-    if (ok && !ferror(snapshot))
-        ftruncate(file->fd, at);
+    if (status == LX_HOST_FS_OK && ferror(snapshot))
+        status = LX_HOST_FS_IO;
+    if (status == LX_HOST_FS_OK)
+    {
+        int result;
+        do
+            result = ftruncate(file->fd, at);
+        while (result < 0 && errno == EINTR);
+        if (result < 0)
+            status = fs_error(errno);
+    }
+    free(data);
     fclose(snapshot);
+    return status;
 }
 LxHostFsError lx_host_file_read(LxHostFile *file, void *data, size_t size, size_t *actual)
 {
     image_lock(file);
-    refresh_image(file);
+    LxHostFsError refreshed = refresh_image(file);
+    if (refreshed != LX_HOST_FS_OK)
+    {
+        *actual = 0;
+        return image_done(file, refreshed);
+    }
     ssize_t result;
     do
     {
@@ -356,7 +385,9 @@ LxHostFsError lx_host_file_seek(LxHostFile *file, int64_t distance, unsigned ori
     if (origin > 2 || (int64_t)(off_t)distance != distance)
         return LX_HOST_FS_INVALID;
     image_lock(file);
-    refresh_image(file);
+    LxHostFsError refreshed = refresh_image(file);
+    if (refreshed != LX_HOST_FS_OK)
+        return image_done(file, refreshed);
     const int origins[] = {SEEK_SET, SEEK_CUR, SEEK_END};
     off_t result = lseek(file->fd, (off_t)distance, origins[origin]);
     if (result < 0)
@@ -380,7 +411,9 @@ static void describe(const struct stat *native, LxHostFileInfo *info)
 LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info)
 {
     image_lock(file);
-    refresh_image(file);
+    LxHostFsError refreshed = refresh_image(file);
+    if (refreshed != LX_HOST_FS_OK)
+        return image_done(file, refreshed);
     struct stat native;
     if (fstat(file->fd, &native))
         return image_done(file, fs_error(errno));

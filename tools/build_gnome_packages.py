@@ -46,7 +46,7 @@ def stage(build, destination):
     app = destination / "usr/lib/2ine-balls"
     runtime = app / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)
-    for name in ("gnome_balls.py", "balls.py"):
+    for name in ("gnome_balls.py", "gnome_views.py", "balls.py"):
         copy(ROOT / "tools" / name, app / "tools" / name)
     for name in ("window.ui", APP_ID + ".svg", APP_ID + "-symbolic.svg"):
         copy(ROOT / "tools/gnome" / name, app / "tools/gnome" / name)

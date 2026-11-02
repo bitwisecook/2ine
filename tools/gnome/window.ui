@@ -16,6 +16,13 @@
       <item><attribute name="label" translatable="yes">Choose Runtime…</attribute><attribute name="action">win.runtime</attribute></item>
       <item><attribute name="label" translatable="yes">Undo Ball Change</attribute><attribute name="action">win.undo</attribute></item>
     </section>
+    <section>
+      <item><attribute name="label" translatable="yes">Redo Ball Change</attribute><attribute name="action">win.redo</attribute></item>
+      <item><attribute name="label" translatable="yes">Add Drive…</attribute><attribute name="action">win.add-drive</attribute></item>
+      <item><attribute name="label" translatable="yes">Create Disk Image…</attribute><attribute name="action">win.create-disk</attribute></item>
+      <item><attribute name="label" translatable="yes">Create Floppy Image…</attribute><attribute name="action">win.create-floppy</attribute></item>
+      <item><attribute name="label" translatable="yes">Stop Operation</attribute><attribute name="action">win.stop</attribute></item>
+    </section>
     <section><item><attribute name="label" translatable="yes">About 2ine</attribute><attribute name="action">win.about</attribute></item></section>
   </menu>
   <object class="AdwToastOverlay" id="overlay">

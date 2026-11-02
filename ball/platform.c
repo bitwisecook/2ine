@@ -612,6 +612,15 @@ int tb_replace(const char *source, const char *destination)
 #endif
 }
 
+int tb_file_descriptor(FILE *file)
+{
+#ifdef _WIN32
+    return _fileno(file);
+#else
+    return fileno(file);
+#endif
+}
+
 int tb_file_mode(FILE *file, int mode)
 {
 #ifdef _WIN32

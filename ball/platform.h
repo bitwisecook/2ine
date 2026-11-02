@@ -13,6 +13,7 @@ int tb_mkdirs(const char *path);
 char **tb_names(const char *directory, size_t *count);
 void tb_names_free(char **names, size_t count);
 FILE *tb_fopen(const char *path, const char *mode);
+int tb_file_descriptor(FILE *file);
 int tb_atomic_write(const char *path, const void *data, size_t length);
 int tb_directory_readable(const char *path);
 int tb_is_link(const char *path);

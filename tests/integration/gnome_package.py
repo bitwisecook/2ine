@@ -60,6 +60,10 @@ def main():
             [sys.executable, ROOT / "tests/integration/gnome_balls.py", "--build", runtime],
             env=environment,
         )
+        run(
+            [sys.executable, ROOT / "tests/integration/gnome_features.py", "--build", runtime],
+            env=environment,
+        )
         print(f"{args.package.name}: relocated ELF closure and GTK/LX workflows passed")
 
 

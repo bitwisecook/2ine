@@ -417,16 +417,23 @@ FILE *tb_fat_fopen(const char *path)
         snapshot = tmpfile();
         ok = snapshot != NULL;
     }
-    unsigned char data[65536];
+    enum
+    {
+        BUFFER_SIZE = 65536
+    };
+    unsigned char *data = ok ? malloc(BUFFER_SIZE) : NULL;
+    if (ok && !data)
+        ok = 0;
     UINT n;
     while (ok)
     {
-        ok = result(f_read(&file, data, sizeof data, &n));
+        ok = result(f_read(&file, data, BUFFER_SIZE, &n));
         if (!ok || !n)
             break;
         if (fwrite(data, 1, n, snapshot) != n)
             ok = 0;
     }
+    free(data);
     if (opened)
         f_close(&file);
     end();
