@@ -9,6 +9,7 @@ import os
 import struct
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 from disk_images import iso_image
@@ -56,6 +57,8 @@ def main():
     args = parser.parse_args()
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=True)
+    # Keep repeated runs independent without deleting an existing ball or image.
+    work = Path(tempfile.mkdtemp(prefix="run-", dir=work))
     ball = work / "Installer.2ineball"
     media = work / "Installer.iso"
     payload = installer()

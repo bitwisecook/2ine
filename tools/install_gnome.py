@@ -37,6 +37,12 @@ def main():
     icon = data / "icons/hicolor/scalable/apps" / (APP_ID + ".svg")
     icon.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / "tools/gnome" / icon.name, icon)
+    symbolic = data / "icons/hicolor/symbolic/apps" / (APP_ID + "-symbolic.svg")
+    symbolic.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / "tools/gnome" / symbolic.name, symbolic)
+    metadata = data / "metainfo" / (APP_ID + ".metainfo.xml")
+    metadata.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / "tools/gnome" / metadata.name, metadata)
     print(f"Installed {desktop}; the source checkout must remain at {ROOT}")
 
 

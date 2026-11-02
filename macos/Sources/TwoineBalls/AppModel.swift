@@ -56,6 +56,7 @@ struct BallViewActions {
     var importFiles: (() -> Void)?
     var unmap: (() -> Void)?
     var setDefaultFolder: (() -> Void)?
+    var changeMountpoint: (() -> Void)?
 }
 struct BallViewActionsKey: FocusedValueKey { typealias Value = BallViewActions }
 extension FocusedValues {
@@ -288,9 +289,14 @@ final class AppModel {
         let images = NSButton(checkboxWithTitle: "Include disk images", target: nil, action: nil)
         images.setAccessibilityIdentifier("includeDiskImages")
         let note = NSTextField(wrappingLabelWithString: "Includes attached images and images stored in the ball. Without images, media drives import as ejected. Unavailable folders can be reconnected after import.")
+        note.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        note.textColor = .secondaryLabelColor
         note.preferredMaxLayoutWidth = 400
         let accessory = NSStackView(views: [images, note])
         accessory.orientation = .vertical; accessory.alignment = .leading; accessory.spacing = 8
+        accessory.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 16, right: 20)
+        accessory.widthAnchor.constraint(equalToConstant: 440).isActive = true
+        accessory.setFrameSize(accessory.fittingSize)
         panel.accessoryView = accessory
         if panel.runModal() == .OK, let destination = panel.url {
             exportBall(to: destination, includeImages: images.state == .on)

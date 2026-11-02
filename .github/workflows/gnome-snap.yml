@@ -1,0 +1,25 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+name: GNOME Snap
+on:
+  pull_request:
+    paths: ['snap/**', 'tools/gnome/**', 'tools/gnome_balls.py', 'tools/balls.py', 'tools/build_gnome_packages.py', '.github/workflows/gnome-snap.yml']
+  workflow_dispatch:
+jobs:
+  snap:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build strict core26 GNOME Snap
+        id: snapcraft
+        uses: canonical/action-build@v1
+        with:
+          snapcraft-args: pack --platform amd64
+      - name: Diagnose Snap setup or build failure
+        if: failure()
+        run: |
+          sudo snap debug connectivity || true
+          sudo journalctl --unit snapd --no-pager --lines 100
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnome-snap
+          path: ${{ steps.snapcraft.outputs.snap }}

@@ -52,8 +52,8 @@ struct MediaDeviceMenu: View {
                 if let letter = model.availableMediaLetter(kind) { model.mediaCommand(["device", letter, kind.rawValue]) }
             }.disabled(model.availableMediaLetter(kind) == nil || model.busy)
             if let letter = model.availableMediaLetter(kind) {
-                if kind == .floppy { Button("Create Floppy Image…") { model.creatingFloppy = letter }.disabled(model.busy) }
-                if kind == .disk { Button("Create Disk Image…") { model.creatingDisk = letter }.disabled(model.busy) }
+                if kind == .floppy { Button("Create Floppy Image…") { model.creatingFloppy = letter }.disabled(model.busy || model.mediaBusy) }
+                if kind == .disk { Button("Create Disk Image…") { model.creatingDisk = letter }.disabled(model.busy || model.mediaBusy) }
             }
         } label: {
             if kind == .cdrom { Label("CD Drives", systemImage: "opticaldisc") }
@@ -118,8 +118,9 @@ struct CreateFloppySheet: View {
             Text("Creates a formatted FAT12 disk and attaches it to \(letter):. Floppies are writable unless Read Only is selected for this device.").foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             HStack {
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.mediaBusy)
                 Spacer()
+                if model.mediaBusy { ProgressView("Creating image…").controlSize(.small) }
                 Button("Create and Attach") {
                     Task {
                         do { try await model.createFloppy(letter: letter, path: path, kib: kib); dismiss() }
@@ -137,11 +138,12 @@ struct DeviceSettingsView: View {
         Section("Removable Devices") {
             ForEach(snapshot.manifest.drives.keys.sorted().filter { snapshot.manifest.drives[$0]?.isRemovable == true }, id: \.self) { letter in
                 if let device = snapshot.manifest.drives[letter] {
+                    let unavailable = snapshot.unavailableDrives?[letter]
                     VStack(alignment: .leading, spacing: 8) {
                         Text(letter + ": — " + (device.device?.title ?? "") + " Drive").font(.headline)
-                        Text(device.image ?? "Ejected").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        Text(unavailable.map { "Ejected — " + $0 } ?? device.image ?? "Ejected").font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         Toggle("Lock Device to Image", isOn: Binding(get: { device.isLocked }, set: { model.mediaCommand(["device-lock", letter, $0 ? "on" : "off"]) }))
-                            .toggleStyle(.checkbox).disabled(device.image == nil || !model.canChangeMedia)
+                            .toggleStyle(.checkbox).disabled(((device.image == nil || unavailable != nil) && !device.isLocked) || !model.canChangeMedia)
                         if device.device != .cdrom {
                             Toggle("Read Only", isOn: Binding(get: { device.isReadOnly }, set: { model.mediaCommand(["media-readonly", letter, $0 ? "on" : "off"]) }))
                                 .toggleStyle(.checkbox).disabled(device.isLocked || !model.canChangeMedia)
@@ -183,8 +185,9 @@ struct CreateDiskSheet: View {
             Text("Creates a formatted image and attaches it to \(letter):. Use device settings to select Read Only or lock the image in place.").foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             HStack {
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.mediaBusy)
                 Spacer()
+                if model.mediaBusy { ProgressView("Creating image…").controlSize(.small) }
                 Button("Create and Attach") {
                     Task {
                         do { try await model.createDisk(letter: letter, path: path, filesystem: filesystem, mib: mib); dismiss() }

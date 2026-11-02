@@ -20,15 +20,17 @@ struct ContentView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button("Import Ball…", systemImage: "square.and.arrow.down") { model.chooseImportBall() }
+                    .help("Import a ball from a ZIP archive")
                     .disabled(model.busy || model.mediaBusy).accessibilityIdentifier("importBall")
                 Button("Export Ball…", systemImage: "square.and.arrow.up") { model.chooseExportBall() }
+                    .help("Export the selected ball as a ZIP archive")
                     .disabled(model.snapshot == nil || model.busy || model.mediaBusy).accessibilityIdentifier("exportBall")
                 MediaDeviceMenu(model: model, kind: .cdrom)
                 MediaDeviceMenu(model: model, kind: .floppy)
                 MediaDeviceMenu(model: model, kind: .disk)
-                if model.busy { ProgressView().controlSize(.small).accessibilityLabel("Operation in progress") }
-                Button("Refresh", systemImage: "arrow.clockwise") { model.refresh() }.disabled(model.busy)
-                Button("Runtime…", systemImage: "cpu") { model.chooseRuntime() }.disabled(model.selected == nil || model.busy)
+                if model.busy || model.mediaBusy { ProgressView().controlSize(.small).accessibilityLabel(model.mediaBusy ? "Updating media" : "Operation in progress") }
+                Button("Refresh", systemImage: "arrow.clockwise") { model.refresh() }.disabled(model.busy || model.mediaBusy)
+                Button("Runtime…", systemImage: "cpu") { model.chooseRuntime() }.disabled(model.selected == nil || model.busy || model.mediaBusy)
             }
         }
         .sheet(item: $model.programAction) { action in ProgramSheet(model: model, action: action) }
@@ -73,13 +75,13 @@ struct ContentView: View {
             }
         }
         .accessibilityIdentifier("ballList")
-        .disabled(model.busy)
+        .disabled(model.busy || model.mediaBusy)
         .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
         .safeAreaInset(edge: .bottom) {
             HStack {
                 Button("New Ball", systemImage: "plus") { model.chooseBall(create: true) }
                 Button("Open", systemImage: "folder") { model.chooseBall(create: false) }
-            }.padding().disabled(model.busy)
+            }.padding().disabled(model.busy || model.mediaBusy)
         }
     }
     @ViewBuilder private var detail: some View {
@@ -139,7 +141,7 @@ struct ApplicationsView: View {
                 Button("Run Executable…", systemImage: "play") { model.beginProgram(.run) }
                 Spacer()
                 Button("Add Application…", systemImage: "plus") { model.beginProgram(.save) }
-            }.disabled(model.busy)
+            }.disabled(model.busy || model.mediaBusy)
             Table(rows, selection: $selection, sortOrder: $sortOrder, columnCustomization: $columns) {
                 TableColumn("Application", value: \.name) { row in
                     HStack {
@@ -158,9 +160,9 @@ struct ApplicationsView: View {
             .overlay { if rows.isEmpty { ContentUnavailableView("No Saved Applications", systemImage: "app.dashed", description: Text("Install your software, then add its executable here.")) } }
             .contextMenu(forSelectionType: String.self) { names in
                 if let name = names.first, names.count == 1 {
-                    Button("Launch \(name)") { model.execute(["launch", name]) }.disabled(model.busy)
-                    Button("Edit Application…") { model.editApplication(name) }.disabled(model.busy)
-                    Button("Remove Launcher") { model.command(["remove-app", name]) }.disabled(model.busy)
+                    Button("Launch \(name)") { model.execute(["launch", name]) }.disabled(model.busy || model.mediaBusy)
+                    Button("Edit Application…") { model.editApplication(name) }.disabled(model.busy || model.mediaBusy)
+                    Button("Remove Launcher") { model.command(["remove-app", name]) }.disabled(model.busy || model.mediaBusy)
                 }
                 Button("Copy") { copy(names) }.disabled(names.isEmpty)
             } primaryAction: { names in if let name = names.first { model.execute(["launch", name]) } }
@@ -168,10 +170,10 @@ struct ApplicationsView: View {
             .onDeleteCommand { if selection.count == 1, let name = selection.first { model.command(["remove-app", name]) } }
             HStack {
                 Button("Launch", systemImage: "play.fill") { if let name = selection.first { model.execute(["launch", name]) } }
-                    .disabled(selection.count != 1 || model.busy)
-                Button("Edit…") { if let name = selection.first { model.editApplication(name) } }.disabled(selection.count != 1 || model.busy)
+                    .disabled(selection.count != 1 || model.busy || model.mediaBusy)
+                Button("Edit…") { if let name = selection.first { model.editApplication(name) } }.disabled(selection.count != 1 || model.busy || model.mediaBusy)
                 Button("Remove Launcher", systemImage: "minus") { if let name = selection.first { model.command(["remove-app", name]) } }
-                    .disabled(selection.count != 1 || model.busy)
+                    .disabled(selection.count != 1 || model.busy || model.mediaBusy)
                 Spacer()
                 Text("Removing a launcher keeps installed files.").font(.caption).foregroundStyle(.secondary)
             }

@@ -100,13 +100,13 @@ struct GuestBrowserView: View {
                 Text(listing?.path ?? path).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 if allowsImport && !readOnly && !ejected {
                     Button("Import Files…") { model.chooseImport(into: listing?.path ?? path) }
-                        .disabled(loading || listing == nil || model.busy).accessibilityIdentifier("importFiles")
+                        .disabled(loading || listing == nil || model.busy || model.mediaBusy).accessibilityIdentifier("importFiles")
                 }
                 if removable { Label(ejected ? "Ejected" : readOnly ? "Read-only image" : "Writable image", systemImage: ejected ? "eject" : "opticaldisc").font(.caption).foregroundStyle(.secondary) }
                 Spacer()
                 if let choose {
                     Button(directoriesOnly ? "Choose Folder" : "Choose File") { if let chosenPath { choose(chosenPath) } }
-                        .disabled(chosenPath == nil || loading || model.busy)
+                        .disabled(chosenPath == nil || loading || model.busy || model.mediaBusy)
                         .keyboardShortcut(.defaultAction).accessibilityIdentifier("chooseGuestItem")
                 }
             }
@@ -179,6 +179,13 @@ struct DrivesView: View {
     @State private var selected: String? = "C"
     @State private var defaultPicker = false
     private var letter: String { selected ?? snapshot.currentDrive }
+    private var driveActions: BallViewActions {
+        let mapping = snapshot.manifest.drives[letter]
+        let available = snapshot.roots[letter] != nil && snapshot.unavailableDrives?[letter] == nil
+        return BallViewActions(unmap: letter != "C" && mapping?.isLocked != true ? { model.command(["unmap", letter]) } : nil,
+                               setDefaultFolder: available ? { defaultPicker = true } : nil,
+                               changeMountpoint: letter != "C" && mapping?.isRemovable == false ? { model.chooseMountpoint(letter) } : nil)
+    }
     private var rows: [DriveRow] {
         snapshot.manifest.drives.keys.sorted().map { letter in
             let mapping = snapshot.manifest.drives[letter]
@@ -191,13 +198,13 @@ struct DrivesView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Button("Map Drive…", systemImage: "plus") { model.mapping = true }
-                Button("Unmap", systemImage: "minus") { model.command(["unmap", letter]) }.disabled(letter == "C" || snapshot.manifest.drives[letter]?.isLocked == true || model.busy)
+                Button("Unmap", systemImage: "minus") { model.command(["unmap", letter]) }.disabled(letter == "C" || snapshot.manifest.drives[letter]?.isLocked == true || model.busy || model.mediaBusy)
                 Button("Change Mountpoint…") { model.chooseMountpoint(letter) }
-                    .disabled(letter == "C" || snapshot.manifest.drives[letter]?.isRemovable != false || model.busy)
+                    .disabled(letter == "C" || snapshot.manifest.drives[letter]?.isRemovable != false || model.busy || model.mediaBusy)
                     .accessibilityIdentifier("changeMountpoint")
                 Spacer()
-                Button("Set Default Folder…") { defaultPicker = true }.disabled(model.busy || snapshot.roots[letter] == nil || snapshot.unavailableDrives?[letter] != nil)
-            }.disabled(model.busy)
+                Button("Set Default Folder…") { defaultPicker = true }.disabled(model.busy || snapshot.roots[letter] == nil || snapshot.unavailableDrives?[letter] != nil || model.mediaBusy)
+            }.disabled(model.busy || model.mediaBusy)
             Table(of: DriveRow.self, selection: $selected) {
                 TableColumn("Drive") { row in
                     Text(row.letter + ":").font(.system(.body, design: .monospaced).bold())
@@ -221,14 +228,13 @@ struct DrivesView: View {
                 ContentUnavailableView {
                     Label("\(letter): — Ejected", systemImage: "eject")
                 } description: {
-                    Text("The previous folder is unavailable: " + (snapshot.manifest.drives[letter]?.source ?? ""))
+                    Text("The previous folder is unavailable: " + (snapshot.manifest.drives[letter]?.source ?? "")).textSelection(.enabled)
                 } actions: {
                     Button("Choose Folder…") { model.chooseMountpoint(letter) }.disabled(model.busy || model.mediaBusy)
                 }
             } else {
                 GuestBrowserView(model: model, snapshot: snapshot, initialPath: snapshot.workingDirectories[letter] ?? letter + ":\\", allowsImport: true,
-                             driveActions: BallViewActions(unmap: letter != "C" ? { model.command(["unmap", letter]) } : nil,
-                                                           setDefaultFolder: { defaultPicker = true }))
+                             driveActions: driveActions)
                 .id("\(model.selected ?? "")|\(letter)")
             }
             if !model.driveNotice.isEmpty { Text(model.driveNotice).font(.callout) }
@@ -241,5 +247,6 @@ struct DrivesView: View {
         .sheet(isPresented: $defaultPicker) {
             GuestPickerSheet(model: model, snapshot: snapshot, path: snapshot.workingDirectories[letter] ?? letter + ":\\", directoriesOnly: true, requiredDrive: letter) { model.setWorkingDirectory($0) }
         }
+        .focusedSceneValue(\.ballViewActions, driveActions)
     }
 }

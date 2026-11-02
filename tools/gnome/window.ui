@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.18"/>
+  <requires lib="Adw" version="1.9"/>
+  <menu id="menu">
+    <section>
+      <item><attribute name="label" translatable="yes">New Ball…</attribute><attribute name="action">win.new</attribute></item>
+      <item><attribute name="label" translatable="yes">Open Ball…</attribute><attribute name="action">win.open</attribute></item>
+      <item><attribute name="label" translatable="yes">Import Ball from ZIP…</attribute><attribute name="action">win.import</attribute></item>
+      <item><attribute name="label" translatable="yes">Export Ball as ZIP…</attribute><attribute name="action">win.export</attribute></item>
+      <item><attribute name="label" translatable="yes">Export Ball with Disk Images…</attribute><attribute name="action">win.export-images</attribute></item>
+    </section>
+    <section>
+      <item><attribute name="label" translatable="yes">Open Ball Folder</attribute><attribute name="action">win.reveal</attribute></item>
+      <item><attribute name="label" translatable="yes">Copy Ball Path</attribute><attribute name="action">win.copy</attribute></item>
+      <item><attribute name="label" translatable="yes">Choose Runtime…</attribute><attribute name="action">win.runtime</attribute></item>
+      <item><attribute name="label" translatable="yes">Undo Ball Change</attribute><attribute name="action">win.undo</attribute></item>
+    </section>
+    <section><item><attribute name="label" translatable="yes">About 2ine Balls</attribute><attribute name="action">win.about</attribute></item></section>
+  </menu>
+  <object class="AdwToastOverlay" id="overlay">
+    <property name="child">
+      <object class="AdwNavigationSplitView" id="split">
+        <property name="min-sidebar-width">220</property>
+        <property name="max-sidebar-width">290</property>
+        <property name="sidebar">
+          <object class="AdwNavigationPage">
+            <property name="title" translatable="yes">Balls</property>
+            <property name="child">
+              <object class="AdwToolbarView" id="sidebar">
+                <child type="top">
+                  <object class="AdwHeaderBar">
+                    <property name="show-end-title-buttons">false</property>
+                    <child type="start"><object class="GtkButton"><property name="icon-name">list-add-symbolic</property><property name="tooltip-text" translatable="yes">New Ball (Ctrl+N)</property><property name="action-name">win.new</property><accessibility><property name="label" translatable="yes">New ball</property></accessibility></object></child>
+                    <child type="end"><object class="GtkMenuButton"><property name="icon-name">open-menu-symbolic</property><property name="tooltip-text" translatable="yes">Main Menu</property><property name="primary">true</property><property name="menu-model">menu</property><accessibility><property name="label" translatable="yes">Main menu</property></accessibility></object></child>
+                  </object>
+                </child>
+                <property name="content"><object class="GtkScrolledWindow"><property name="hscrollbar-policy">never</property><property name="child"><object class="GtkListBox" id="ball_list"><property name="selection-mode">single</property><style><class name="navigation-sidebar"/></style><accessibility><property name="label" translatable="yes">Balls</property></accessibility></object></property></object></property>
+              </object>
+            </property>
+          </object>
+        </property>
+        <property name="content">
+          <object class="AdwNavigationPage" id="detail">
+            <property name="title">2ine Balls</property>
+            <property name="child">
+              <object class="AdwToolbarView">
+                <child type="top"><object class="AdwHeaderBar" id="header">
+                  <child type="start"><object class="GtkButton"><property name="icon-name">view-refresh-symbolic</property><property name="tooltip-text" translatable="yes">Refresh Ball (Ctrl+R)</property><property name="action-name">win.refresh</property><accessibility><property name="label" translatable="yes">Refresh ball</property></accessibility></object></child>
+                  <child type="end"><object class="GtkButton"><property name="icon-name">document-open-symbolic</property><property name="tooltip-text" translatable="yes">Import Ball from ZIP</property><property name="action-name">win.import</property><accessibility><property name="label" translatable="yes">Import ball</property></accessibility></object></child>
+                  <child type="end"><object class="GtkButton"><property name="icon-name">document-save-as-symbolic</property><property name="tooltip-text" translatable="yes">Export Ball as ZIP Without Disk Images</property><property name="action-name">win.export</property><accessibility><property name="label" translatable="yes">Export ball</property></accessibility></object></child>
+                  <child type="end"><object class="GtkSpinner" id="spinner"><property name="visible">false</property><accessibility><property name="label" translatable="yes">Working</property></accessibility></object></child>
+                </object></child>
+                <child type="top"><object class="AdwBanner" id="banner"><property name="revealed">false</property><property name="use-markup">false</property></object></child>
+                <property name="content"><object class="GtkBox" id="content"><property name="orientation">vertical</property><property name="vexpand">true</property></object></property>
+              </object>
+            </property>
+          </object>
+        </property>
+      </object>
+    </property>
+  </object>
+</interface>

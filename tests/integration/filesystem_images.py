@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--work", required=True, type=Path)
     parser.add_argument("--stress", action="store_true")
     parser.add_argument("--hpfs-checker", type=Path)
+    parser.add_argument("--hpfs-formatter", type=Path)
     parser.add_argument("--exfat-checker", type=Path)
     parser.add_argument("--exfat-formatter", type=Path)
     args = parser.parse_args()
@@ -129,6 +130,34 @@ def main():
                 "independent_check": independent,
             }
         )
+    if args.hpfs_formatter:
+        existing = work / "external-hpfs.img"
+        with existing.open("wb") as output:
+            output.truncate(64 * 1024 * 1024)
+        subprocess.run(
+            [str(args.hpfs_formatter), "-i", str(existing)], check=True, capture_output=True
+        )
+        snapshot = command("map-image", "F", str(existing))
+        command("media-readonly", "F", "off")
+        subprocess.run(
+            [
+                str(args.program),
+                "--writable",
+                snapshot["roots"]["F"],
+                str(ball / "devices/F.media"),
+            ],
+            check=True,
+        )
+        if args.hpfs_checker:
+            check = subprocess.run(
+                [str(args.hpfs_checker), "check", "-p", "-s", "-u", str(existing)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            assert "total errors: 0" in (check.stdout + check.stderr).lower(), (
+                check.stdout + check.stderr
+            )
     if args.exfat_formatter:
         existing = work / "external-exfat.img"
         with existing.open("wb") as output:

@@ -1,0 +1,38 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+name: 2ine-balls
+version: '0.1.0'
+summary: Give your OS/2 applications a home on GNOME
+description: |
+  Install and run OS/2 applications in balls of 2ine. Each ball keeps its own
+  drives, runtime settings, CONFIG.SYS, profiles, registry and installed files.
+  Includes the portable Unicorn runtime and the shared native ball engine.
+base: core26
+grade: devel
+confinement: strict
+license: Zlib AND GPL-2.0-only AND LGPL-2.1-or-later AND MIT AND OFL-1.1
+platforms:
+  amd64:
+  arm64:
+apps:
+  2ine-balls:
+    extensions: [gnome]
+    command: bin/2ine-balls-snap
+    desktop: usr/share/applications/io.github.bitwisecook.Twoine.Balls.desktop
+    common-id: io.github.bitwisecook.Twoine.Balls
+    plugs: [home, removable-media, audio-playback, network, network-bind]
+parts:
+  2ine:
+    plugin: nil
+    source: .
+    build-packages: [libarchive-dev, cmake, ninja-build, build-essential, clang, patchelf, python3, libunicorn-dev, libgl-dev, libegl-dev, libncurses-dev, libx11-dev, libxext-dev, libxrandr-dev, libxcursor-dev, libxi-dev, libxfixes-dev, libxss-dev, libwayland-dev, libxkbcommon-dev, libasound2-dev, libpulse-dev]
+    stage-packages: [python3, python3-gi]
+    override-build: |
+      cmake -S . -B build-snap -G Ninja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=ON -DTWOINE_SDL3_PROVIDER=source -DTWOINE_OPENGL=ON
+      cmake --build build-snap --parallel "$CRAFT_PARALLEL_BUILD_COUNT"
+      python3 tools/build_gnome_packages.py --build build-snap --stage "$CRAFT_PART_INSTALL" --output build-snap-packaging
+      install -Dm755 snap/2ine-balls-snap "$CRAFT_PART_INSTALL/bin/2ine-balls-snap"
+slots:
+  2ine-balls:
+    interface: dbus
+    bus: session
+    name: io.github.bitwisecook.Twoine.Balls

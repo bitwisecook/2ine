@@ -116,7 +116,7 @@ struct BallCommands: Commands {
         }
         CommandGroup(replacing: .saveItem) {
             Button("Save CONFIG.SYS") { model.configSys(model.configText, expected: model.configBase) }
-                .keyboardShortcut("s").disabled(model.busy || !model.configDirty)
+                .keyboardShortcut("s").disabled(model.busy || !model.configDirty || model.mediaBusy)
             Divider()
             Button("Import Ball from ZIP…") { model.chooseImportBall() }
                 .disabled(model.busy || model.mediaBusy)
@@ -126,30 +126,32 @@ struct BallCommands: Commands {
         }
         CommandMenu("Ball") {
             Button("Choose Runtime…") { model.chooseRuntime() }.keyboardShortcut("r", modifiers: [.command, .shift])
-                .disabled(model.selected == nil || model.busy)
+                .disabled(model.selected == nil || model.busy || model.mediaBusy)
             Button("Use Bundled Runtime") { model.useBundledRuntime() }
-                .disabled(model.snapshot?.manifest.runtime["build"] == nil || model.busy)
+                .disabled(model.snapshot?.manifest.runtime["build"] == nil || model.busy || model.mediaBusy)
             Button("Refresh") { model.refresh() }.keyboardShortcut("r").disabled(model.busy || model.mediaBusy)
             Divider()
-            Button("Install Software…") { model.beginProgram(.install) }.keyboardShortcut("i").disabled(model.snapshot == nil || model.busy)
-            Button("Run Executable…") { model.beginProgram(.run) }.keyboardShortcut("r", modifiers: [.command, .option]).disabled(model.snapshot == nil || model.busy)
-            Button("Add Application…") { model.beginProgram(.save) }.keyboardShortcut("a", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy)
+            Button("Install Software…") { model.beginProgram(.install) }.keyboardShortcut("i").disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+            Button("Run Executable…") { model.beginProgram(.run) }.keyboardShortcut("r", modifiers: [.command, .option]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+            Button("Add Application…") { model.beginProgram(.save) }.keyboardShortcut("a", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Launch Application") { actions?.launch?() }.keyboardShortcut(.return, modifiers: .command)
-                .disabled(actions?.launch == nil || model.busy)
+                .disabled(actions?.launch == nil || model.busy || model.mediaBusy)
             Button("Edit Application…") { actions?.edit?() }.keyboardShortcut("e", modifiers: [.command, .shift])
-                .disabled(actions?.edit == nil || model.busy)
-            Button("Remove Launcher") { actions?.remove?() }.disabled(actions?.remove == nil || model.busy)
+                .disabled(actions?.edit == nil || model.busy || model.mediaBusy)
+            Button("Remove Launcher") { actions?.remove?() }.disabled(actions?.remove == nil || model.busy || model.mediaBusy)
             Divider()
             Button("Import Files…") { actions?.importFiles?() }.keyboardShortcut("i", modifiers: [.command, .shift])
-                .disabled(actions?.importFiles == nil || model.busy)
-            Button("Map Drive…") { model.mapping = true }.keyboardShortcut("d", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy)
+                .disabled(actions?.importFiles == nil || model.busy || model.mediaBusy)
+            Button("Map Drive…") { model.mapping = true }.keyboardShortcut("d", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+            Button("Change Mountpoint…") { actions?.changeMountpoint?() }
+                .disabled(actions?.changeMountpoint == nil || model.busy || model.mediaBusy)
             Divider()
             MediaDeviceMenu(model: model, kind: .cdrom)
             MediaDeviceMenu(model: model, kind: .floppy)
             MediaDeviceMenu(model: model, kind: .disk)
             Divider()
-            Button("Unmap Drive") { actions?.unmap?() }.disabled(actions?.unmap == nil || model.busy)
-            Button("Set Default Folder…") { actions?.setDefaultFolder?() }.disabled(actions?.setDefaultFolder == nil || model.busy)
+            Button("Unmap Drive") { actions?.unmap?() }.disabled(actions?.unmap == nil || model.busy || model.mediaBusy)
+            Button("Set Default Folder…") { actions?.setDefaultFolder?() }.disabled(actions?.setDefaultFolder == nil || model.busy || model.mediaBusy)
             Divider()
             Button("Stop Operation…") { model.stopConfirmation = true }.keyboardShortcut(".")
                 .disabled(!model.processRunning || model.stopRequested)
@@ -185,9 +187,9 @@ private struct BallUndoMenu: View {
         let undo = manager
         Group {
             Button(undo.undoMenuItemTitle) { manager.undo(); refresh() }
-                .keyboardShortcut("z").disabled(model.busy || !undo.canUndo)
+                .keyboardShortcut("z").disabled(model.busy || !undo.canUndo || model.mediaBusy)
             Button(undo.redoMenuItemTitle) { manager.redo(); refresh() }
-                .keyboardShortcut("z", modifiers: [.command, .shift]).disabled(model.busy || !undo.canRedo)
+                .keyboardShortcut("z", modifiers: [.command, .shift]).disabled(model.busy || !undo.canRedo || model.mediaBusy)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didUpdateNotification)) { _ in refresh() }
         .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup)) { _ in refresh() }

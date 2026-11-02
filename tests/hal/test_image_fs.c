@@ -110,7 +110,9 @@ static int writable_test(const char *root, const char *control)
     CHECK(lx_host_path_remove(directory, 1) == LX_HOST_FS_OK);
     CHECK(lx_host_path_info(moved, &(LxHostFileInfo){0}) == LX_HOST_FS_OK);
     CHECK(lx_host_path_remove(moved, 0) == LX_HOST_FS_OK);
-    CHECK(lx_host_path_space(root, &total, &available) == LX_HOST_FS_OK && available == initial);
+    /* An existing HPFS root may move from general space into its reserved
+       directory band. That releases sectors; the cycle must not leak space. */
+    CHECK(lx_host_path_space(root, &total, &available) == LX_HOST_FS_OK && available >= initial);
     /* Keep one file for independent filesystem readers. */
     file = lx_host_file_open(
         moved, LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE | LX_HOST_FILE_EXCLUSIVE, 0, &error);

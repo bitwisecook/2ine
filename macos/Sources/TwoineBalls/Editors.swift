@@ -11,6 +11,11 @@ private struct FolderChoice: Identifiable {
     var id: String { letter }
 }
 struct ProgramSheet: View {
+    private enum Panel: String, CaseIterable {
+        case general = "General"
+        case directories = "Working Directories"
+        case environment = "Environment"
+    }
     @Bindable var model: AppModel
     let action: ProgramAction
     @Environment(\.dismiss) private var dismiss
@@ -35,81 +40,97 @@ struct ProgramSheet: View {
     }
     @State private var folderChoice: FolderChoice?
     @State private var error: String?
+    @State private var panel = Panel.general
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(model.editingApplication == nil ? action.rawValue : "Edit Application").font(.title2.bold())
             if let snapshot = model.snapshot {
-                TabView {
-                    Form {
-                        if action == .install {
-                            Section("Installation Media") {
-                                HStack {
-                                    Picker("Device", selection: $mediaKind) {
-                                        Text("CD").tag(MediaDeviceKind.cdrom)
-                                        Text("Floppy").tag(MediaDeviceKind.floppy)
-                                    }.frame(width: 150)
-                                    Picker("Drive", selection: $mediaLetter) {
-                                        ForEach(mediaLetters, id: \.self) { Text($0 + ":").tag($0) }
-                                    }.frame(width: 130)
-                                    Button("Attach Image…") { chooseInstallerMedia() }.disabled(discovering || mediaLetters.isEmpty || snapshot.manifest.drives[mediaLetter]?.isLocked == true)
-                                }
-                                Text(model.snapshot?.manifest.drives[mediaLetter]?.image.map { URL(filePath: $0).lastPathComponent } ?? "No image attached").foregroundStyle(.secondary)
-                                if discovering { ProgressView("Looking for installers…") }
-                                if !mediaNotice.isEmpty { Text(mediaNotice).font(.callout).foregroundStyle(.secondary) }
-                                if !candidates.isEmpty {
-                                    Menu("Suggested Installers") {
-                                        ForEach(candidates, id: \.self) { path in Button(path) { program = path } }
-                                    }
-                                }
-                            }
-                        }
-                        if action == .save { TextField("Application name", text: $name).accessibilityIdentifier("applicationName") }
-                        LabeledContent("Program") {
-                            HStack {
-                                TextField("OS/2 program or command file", text: $program, prompt: Text("C:\\OS2\\APP.EXE"))
-                                    .labelsHidden().accessibilityIdentifier("programPath").frame(minWidth: 240)
-                                Button("Browse Drives…") { executablePicker = true }.accessibilityIdentifier("browseExecutable")
-                            }
-                        }
-                        TextField("Arguments", text: $arguments, prompt: Text("\"a value with spaces\" C:\\DATA\\FILE")).accessibilityIdentifier("programArguments")
-                        Text(action == .install ? "Quotes group arguments; backslashes remain literal. Installers start in their own folder. Use the other tabs to set overrides." : "Quotes group arguments; backslashes remain literal. Working directories and environment inherit from the ball unless overridden below.")
-                            .font(.callout).foregroundStyle(.secondary)
-                        if action == .save {
-                            HStack(spacing: 16) {
-                                if let icon { Image(nsImage: icon).resizable().interpolation(.none).scaledToFit().frame(width: 48, height: 48).accessibilityLabel("Application icon") }
-                                else { Image(systemName: "app.dashed").font(.largeTitle).frame(width: 48, height: 48).accessibilityLabel("No embedded icon found") }
-                                VStack(alignment: .leading) {
-                                    Text(iconDescription).font(.callout)
-                                    HStack {
-                                        Button("Choose Icon…") { chooseIcon() }
-                                        Button("Use Executable Icon") { iconSource = ""; icon = nil; iconDescription = "Uses the icon embedded in the executable."; refreshIcon() }
-                                    }
-                                }
-                            }
-                        }
-                        if action == .install { Text("Choose any program or command file on your original media. CMD and BAT files require the original OS/2 CMD.EXE. After the installer exits, you can keep or eject the media.").font(.callout) }
-                    }.formStyle(.grouped).tabItem { Text("General") }
-                    Form {
-                        Section("Working Directory Overrides") {
-                            Text("Each drive has its own directory. Leave an override off to use the ball’s default for that drive.").foregroundStyle(.secondary)
-                            ForEach(snapshot.roots.keys.sorted(), id: \.self) { letter in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Toggle("Override \(letter):", isOn: Binding(get: { directories[letter] != nil }, set: { enabled in
-                                        directories[letter] = enabled ? snapshot.workingDirectories[letter] : nil
-                                    })).toggleStyle(.checkbox).accessibilityIdentifier("overrideDirectory" + letter)
-                                    if directories[letter] != nil {
+                VStack(spacing: 12) {
+                    Picker("Program Options", selection: $panel) {
+                        ForEach(Panel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .labelsHidden().pickerStyle(.segmented).controlSize(.regular)
+                    // Preserve the full segment labels in a sheet’s sizing proposal.
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("programOptions")
+                    Group {
+                        switch panel {
+                        case .general:
+                            Form {
+                                if action == .install {
+                                    Section("Installation Media") {
                                         HStack {
-                                            TextField(letter + ": directory", text: Binding(get: { directories[letter] ?? "" }, set: { directories[letter] = $0 }))
-                                                .font(.system(.body, design: .monospaced)).accessibilityIdentifier("directoryOverride" + letter)
-                                            Button("Choose…") { folderChoice = FolderChoice(letter: letter, path: directories[letter] ?? letter + ":\\") }
+                                            Picker("Device", selection: $mediaKind) {
+                                                Text("CD").tag(MediaDeviceKind.cdrom)
+                                                Text("Floppy").tag(MediaDeviceKind.floppy)
+                                            }.frame(width: 150)
+                                            Picker("Drive", selection: $mediaLetter) {
+                                                ForEach(mediaLetters, id: \.self) { Text($0 + ":").tag($0) }
+                                            }.frame(width: 130)
+                                            Button("Attach Image…") { chooseInstallerMedia() }.disabled(discovering || mediaLetters.isEmpty || snapshot.manifest.drives[mediaLetter]?.isLocked == true)
+                                        }
+                                        Text(model.snapshot?.manifest.drives[mediaLetter]?.image.map { URL(filePath: $0).lastPathComponent } ?? "No image attached").foregroundStyle(.secondary)
+                                        if discovering { ProgressView("Looking for installers…") }
+                                        if !mediaNotice.isEmpty { Text(mediaNotice).font(.callout).foregroundStyle(.secondary) }
+                                        if !candidates.isEmpty {
+                                            Menu("Suggested Installers") {
+                                                ForEach(candidates, id: \.self) { path in Button(path) { program = path } }
+                                            }
                                         }
                                     }
-                                    Text("Ball default: " + (snapshot.workingDirectories[letter] ?? letter + ":\\")).font(.caption).foregroundStyle(.secondary)
                                 }
-                            }
+                                if action == .save { TextField("Application name", text: $name).accessibilityIdentifier("applicationName") }
+                                LabeledContent("Program") {
+                                    HStack {
+                                        TextField("OS/2 program or command file", text: $program, prompt: Text("C:\\OS2\\APP.EXE"))
+                                            .labelsHidden().accessibilityIdentifier("programPath").frame(minWidth: 240)
+                                        Button("Browse Drives…") { executablePicker = true }.accessibilityIdentifier("browseExecutable")
+                                    }
+                                }
+                                TextField("Arguments", text: $arguments, prompt: Text("\"a value with spaces\" C:\\DATA\\FILE")).accessibilityIdentifier("programArguments")
+                                Text(action == .install ? "Quotes group arguments; backslashes remain literal. Installers start in their own folder. Use the other tabs to set overrides." : "Quotes group arguments; backslashes remain literal. Working directories and environment inherit from the ball unless overridden below.")
+                                    .font(.callout).foregroundStyle(.secondary)
+                                if action == .save {
+                                    HStack(spacing: 16) {
+                                        if let icon { Image(nsImage: icon).resizable().interpolation(.none).scaledToFit().frame(width: 48, height: 48).accessibilityLabel("Application icon") }
+                                        else { Image(systemName: "app.dashed").font(.largeTitle).frame(width: 48, height: 48).accessibilityLabel("No embedded icon found") }
+                                        VStack(alignment: .leading) {
+                                            Text(iconDescription).font(.callout)
+                                            HStack {
+                                                Button("Choose Icon…") { chooseIcon() }
+                                                Button("Use Executable Icon") { iconSource = ""; icon = nil; iconDescription = "Uses the icon embedded in the executable."; refreshIcon() }
+                                            }
+                                        }
+                                    }
+                                }
+                                if action == .install { Text("Choose any program or command file on your original media. CMD and BAT files require the original OS/2 CMD.EXE. After the installer exits, you can keep or eject the media.").font(.callout) }
+                            }.formStyle(.grouped)
+                        case .directories:
+                            Form {
+                                Section("Working Directory Overrides") {
+                                    Text("Each drive has its own directory. Leave an override off to use the ball’s default for that drive.").foregroundStyle(.secondary)
+                                    ForEach(snapshot.roots.keys.sorted(), id: \.self) { letter in
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Toggle("Override \(letter):", isOn: Binding(get: { directories[letter] != nil }, set: { enabled in
+                                                directories[letter] = enabled ? snapshot.workingDirectories[letter] : nil
+                                            })).toggleStyle(.checkbox).accessibilityIdentifier("overrideDirectory" + letter)
+                                            if directories[letter] != nil {
+                                                HStack {
+                                                    TextField(letter + ": directory", text: Binding(get: { directories[letter] ?? "" }, set: { directories[letter] = $0 }))
+                                                        .font(.system(.body, design: .monospaced)).accessibilityIdentifier("directoryOverride" + letter)
+                                                    Button("Choose…") { folderChoice = FolderChoice(letter: letter, path: directories[letter] ?? letter + ":\\") }
+                                                }
+                                            }
+                                            Text("Ball default: " + (snapshot.workingDirectories[letter] ?? letter + ":\\")).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
+                                }
+                            }.formStyle(.grouped)
+                        case .environment:
+                            EnvironmentOverridesView(defaults: snapshot.environmentDefaults, values: $environment)
                         }
-                    }.formStyle(.grouped).tabItem { Text("Working Directories") }
-                    EnvironmentOverridesView(defaults: snapshot.environmentDefaults, values: $environment).tabItem { Text("Environment") }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .sheet(isPresented: $executablePicker) {
                     GuestPickerSheet(model: model, snapshot: snapshot, path: program.isEmpty ? (action == .install ? mediaLetter + ":\\" : (snapshot.workingDirectories[snapshot.currentDrive] ?? snapshot.currentDrive + ":\\")) : program, directoriesOnly: false) {
@@ -122,7 +143,7 @@ struct ProgramSheet: View {
             }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("programError") }
             HStack {
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.busy).accessibilityIdentifier("cancelProgram")
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.busy || model.mediaBusy).accessibilityIdentifier("cancelProgram")
                 Spacer()
                 Button(model.editingApplication == nil ? action.rawValue : "Save Application") {
                     Task {
@@ -271,19 +292,19 @@ struct MapDriveSheet: View {
                 Text("ISO 9660/Joliet CDs are read-only. FAT, FAT32, exFAT and HPFS images are writable by default, with Read Only available in device settings. Images stay inside 2ine.")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            Text("An existing mapping for this letter will be replaced. Source files are kept.").foregroundStyle(.secondary)
+            Text(initialLetter == nil ? "An existing mapping for this letter will be replaced. Source files are kept." : "The drive letter and guest paths stay the same. Files in the previous folder are kept.").foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("mapDriveError") }
             HStack {
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.busy)
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.busy || model.mediaBusy)
                 Spacer()
                 if model.busy { ProgressView().controlSize(.small).accessibilityLabel("Mapping drive") }
-                Button("Map Drive") {
+                Button(initialLetter == nil ? "Map Drive" : image ? "Attach Image" : "Connect Folder") {
                     Task {
                         do { try await model.mapDrive(letter, directory: directory, image: image); dismiss() }
                         catch { self.error = error.localizedDescription }
                     }
                 }
-                    .keyboardShortcut(.defaultAction).disabled(directory.isEmpty || model.busy)
+                    .keyboardShortcut(.defaultAction).disabled(directory.isEmpty || model.busy || model.mediaBusy)
             }
         }.padding(24).frame(width: 520)
     }
@@ -365,12 +386,12 @@ struct ConfigSysView: View {
                 .foregroundStyle(.secondary)
             TextEditor(text: $model.configText).font(.system(.body, design: .monospaced)).border(.separator)
                 .accessibilityLabel("CONFIG.SYS contents").accessibilityIdentifier("configSysEditor")
-                .disabled(model.busy)
+                .disabled(model.busy || model.mediaBusy)
             HStack {
-                Button("Reload from Disk") { if model.configDirty { discard = true } else { model.discardConfigDraft() } }.disabled(model.busy)
+                Button("Reload from Disk") { if model.configDirty { discard = true } else { model.discardConfigDraft() } }.disabled(model.busy || model.mediaBusy)
                 Spacer()
                 Button("Save CONFIG.SYS") { model.configSys(model.configText, expected: model.configBase) }
-                    .disabled(model.busy || !model.configDirty)
+                    .disabled(model.busy || !model.configDirty || model.mediaBusy)
             }
         }.padding(20)
         .confirmationDialog("Discard unsaved CONFIG.SYS edits?", isPresented: $discard) {
