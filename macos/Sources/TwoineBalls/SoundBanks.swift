@@ -166,7 +166,7 @@ struct ProjectAboutView: View {
         }
         .frame(minWidth: 540, idealWidth: 640, minHeight: 420, idealHeight: 660)
         .task(id: model.build) {
-            do { catalogue = try await model.backend.request(DesktopRequest("project-sources", build: model.build), as: ProjectCatalogue.self) }
+            do { catalogue = try await model.projectCatalogue() }
             catch { self.error = error.localizedDescription }
         }
     }

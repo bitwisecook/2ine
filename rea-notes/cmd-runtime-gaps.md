@@ -135,3 +135,22 @@ regression was rerun with the selected media in build-original-rexx-final and
 passed all original CMD/REXX/service/profile cases. No proprietary inputs are
 included in the commit. Native i386 runtime remains for CI; help rendering and
 a completed SmartSuite installation are not asserted.
+
+## Integration with updated main
+
+Rebased onto the incoming sources/MIDI changes at 1b1ecad. The ARM64 runtime
+build and all 49 configured CTest checks pass with TWOINE_MIDI_EXTENDED=OFF
+(the production default remains ON; extra synthesis dependencies are outside
+this installer validation profile). The new pinned FluidR3 bank is present.
+Its stereo zone offsets apply to TinySoundFont as well as FluidSynth, and its
+contrabass zones end at key 57; the MIDI regression now checks directional pan
+and uses a sampled key for that instrument without changing synthesis code.
+
+109 Python tooling tests and 23 Swift tests pass after integration. The credits
+view reads the catalogue through AppModel rather than accessing its private
+backend. Formatting, Ruff, ty, binding generation and project-source checks
+pass. The supplied original CMD/REXX regression passes again in
+build-original-rexx-integrated, including original REXXUTIL/profile operations
+and the separate shared service's last-client retirement. The no-argument
+loader startup regression also passes. Extended MIDI and native i386 are not
+claimed as locally tested profiles.

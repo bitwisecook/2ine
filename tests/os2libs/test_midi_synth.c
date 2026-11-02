@@ -57,14 +57,10 @@ static void stereo_contracts(LxMidiSynth *synth)
             }
     }
     CHECK(energy[0][0] > 0.000001 && energy[1][1] > 0.000001);
-#if TWOINE_MIDI_EXTENDED
-    /* FluidR3's stereo zone pan offsets retain width at controller extremes. */
+    /* FluidR3's stereo zone pan offsets retain width at controller extremes
+       with both FluidSynth and TinySoundFont. */
     CHECK(energy[0][0] > energy[0][1] * 4);
     CHECK(energy[1][1] > energy[1][0] * 4);
-#else
-    CHECK(energy[0][0] > energy[0][1] * 100);
-    CHECK(energy[1][1] > energy[1][0] * 100);
-#endif
     CHECK(lx_midi_synth_reset(synth));
     lx_midi_synth_event(synth, 0x90, 60, 100);
     memset(stereo, 0, sizeof stereo);
@@ -84,7 +80,9 @@ int main(void)
     stereo_contracts(synth);
     for (unsigned program = 0; program < 128; program++)
     {
-        double energy = note(synth, 0, program, 60, second);
+        /* FluidR3's contrabass zones end at key 57. Exercise a sampled key. */
+        unsigned key = program == 43 ? 48 : 60;
+        double energy = note(synth, 0, program, key, second);
         if (energy <= 0.000001)
             fprintf(stderr, "silent program %u\n", program);
         CHECK(energy > 0.000001);

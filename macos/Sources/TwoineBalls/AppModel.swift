@@ -426,6 +426,9 @@ final class AppModel {
     func createFloppy(letter: String, path: String, kib: Int) async throws {
         try await changeMedia(["create-floppy", letter, path, String(kib)])
     }
+    func projectCatalogue() async throws -> ProjectCatalogue {
+        try await backend.request(DesktopRequest("project-sources", build: build), as: ProjectCatalogue.self)
+    }
     func audioSnapshot(ball: String) async throws -> AudioSnapshot {
         try await backend.request(DesktopRequest("audio-snapshot", ball: ball), as: AudioSnapshot.self)
     }
