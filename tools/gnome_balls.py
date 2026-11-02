@@ -63,9 +63,7 @@ def clear(box):
 
 class BallWindow(Adw.ApplicationWindow):
     def __init__(self, app, build, initial=None):
-        super().__init__(
-            application=app, title="2ine", default_width=1080, default_height=760
-        )
+        super().__init__(application=app, title="2ine", default_width=1080, default_height=760)
         self.default_build = (
             build or Path(os.environ.get("TWOINE_BUILD", balls.ROOT / "build"))
         ).resolve()
