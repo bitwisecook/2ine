@@ -27,7 +27,7 @@ are user-supplied and are not licensed or redistributed by this project.
 - License: Zlib; public-domain additions
 - Used as: origin
 - Authors / origin credits: Ryan C. Gordon (original author); 2ine contributors (fork extensions)
-- [Project](https://icculus.org/2ine/) · [Source](https://github.com/icculus/2ine) · [Download](https://github.com/bitwisecook/2ine/archive/refs/heads/main.tar.gz)
+- [Project](https://github.com/icculus/2ine) · [Source](https://github.com/icculus/2ine) · [Download](https://github.com/bitwisecook/2ine/archive/refs/heads/main.tar.gz)
 
 ## Unicorn Engine
 
@@ -219,7 +219,7 @@ are user-supplied and are not licensed or redistributed by this project.
 - License: BSD-3-Clause option
 - Used as: host dependency
 - Authors / origin credits: Yann Collet; Zstandard contributors
-- [Project](https://facebook.github.io/zstd/) · [Source](https://github.com/facebook/zstd) · [Download](https://launchpad.net/ubuntu/+source/libzstd/1.5.7+dfsg-3)
+- [Project](https://github.com/facebook/zstd) · [Source](https://github.com/facebook/zstd) · [Download](https://launchpad.net/ubuntu/+source/libzstd/1.5.7+dfsg-3)
 
 ## LZ4
 

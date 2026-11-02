@@ -13,7 +13,7 @@
         "Ryan C. Gordon (original author)",
         "2ine contributors (fork extensions)"
       ],
-      "homepage": "https://icculus.org/2ine/",
+      "homepage": "https://github.com/icculus/2ine",
       "source": "https://github.com/icculus/2ine",
       "download": "https://github.com/bitwisecook/2ine/archive/refs/heads/main.tar.gz",
       "role": "origin",
@@ -413,7 +413,7 @@
         "Yann Collet",
         "Zstandard contributors"
       ],
-      "homepage": "https://facebook.github.io/zstd/",
+      "homepage": "https://github.com/facebook/zstd",
       "source": "https://github.com/facebook/zstd",
       "download": "https://launchpad.net/ubuntu/+source/libzstd/1.5.7+dfsg-3",
       "role": "host dependency",
