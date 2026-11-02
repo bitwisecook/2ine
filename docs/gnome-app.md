@@ -71,7 +71,8 @@ This produces `2ine-balls_0.1.0_amd64.deb` and
 `2ine-balls-0.1.0-1.x86_64.rpm` on x86-64. Choose `--format deb` or
 `--format rpm` for one format. Builders require `patchelf`, `binutils`, `ldd`
 and the selected format's `dpkg-deb` or `rpmbuild`. Use a fresh output directory;
-an existing nonempty staging directory is rejected. Build on each target
+an existing staged 2ine installation is rejected. Other parts may populate the
+prefix first, as Snapcraft does with Python dependencies. Build on each target
 architecture and distribution baseline. Debian's libc floor is derived from
 the selected ELF symbols; RPM retains system ABI requirements and excludes
 bundled modules from public providers and external requirements.

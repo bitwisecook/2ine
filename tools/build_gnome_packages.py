@@ -35,8 +35,12 @@ def elf(path):
 
 def stage(build, destination):
     """Copy only declared runtime assets, close private ELF dependencies and relocate them."""
-    if destination.exists() and any(destination.iterdir()):
-        raise ValueError(f"Staging directory already exists: {destination}")
+    if (destination / "usr/lib/2ine-balls").exists() or (
+        destination / "usr/bin/2ine-balls"
+    ).exists():
+        raise ValueError(
+            f"A 2ine installation already exists in the staging directory: {destination}"
+        )
     if not (build / "lx_loader").is_file() or not (build / "libtwoine_ball.so").is_file():
         raise ValueError("Build the full portable runtime and shared ball engine first")
     app = destination / "usr/lib/2ine-balls"
@@ -159,7 +163,7 @@ Section: otherosfs
 Priority: optional
 Architecture: {architecture}
 Maintainer: 2ine Contributors <noreply@github.com>
-Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libgl1, libegl1
+Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libgl1, libegl1, libgles2
 Homepage: https://github.com/bitwisecook/2ine
 Description: Native GNOME manager for OS/2 applications
  Persistent balls of 2ine with private drives, settings and application state.
@@ -192,7 +196,8 @@ Release: 1
 Summary: Native GNOME manager for OS/2 applications
 License: Zlib AND GPL-2.0-only AND MIT AND OFL-1.1
 URL: https://github.com/bitwisecook/2ine
-Requires: python3 >= 3.11, python3-gobject, gtk4 >= 4.18, libadwaita >= 1.9, mesa-libGL, mesa-libEGL
+Requires: python3 >= 3.11, python3-gobject, gtk4 >= 4.18, libadwaita >= 1.9, mesa-libGL, mesa-libEGL, libglvnd-gles
+Recommends: mesa-dri-drivers
 # Private runtime modules must not satisfy unrelated system packages.
 %global __provides_exclude_from ^/usr/lib/2ine-balls/.*$
 %global __requires_exclude ^({private})([(].*)?$
