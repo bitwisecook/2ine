@@ -208,7 +208,7 @@ def main():
                 window.stack.set_visible_child_name(page)
                 until = time.monotonic() + 0.3
                 pump(lambda until=until: time.monotonic() > until)
-                windows = [(w, name) for w, name in display.windows() if name == "2ine Balls"]
+                windows = [(w, name) for w, name in display.windows() if name == "2ine"]
                 assert windows, display.windows()
                 display.capture(windows[0][0], args.screenshots / (page + ".png"))
         execute(["launch", "Test application"])

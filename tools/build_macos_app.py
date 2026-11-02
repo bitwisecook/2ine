@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING or __package__:
-    from tools import macos_bundle
+    from tools import macos_build_number, macos_bundle
 else:
+    import macos_build_number
     import macos_bundle
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,14 +79,20 @@ def main():
         except subprocess.CalledProcessError:
             print(build_log.read_text())
             raise
-    app = output / "2ine Balls.app"
+    app = output / "2ine.app"
+    build_number = macos_build_number.next_build_number(
+        minimum=max(
+            macos_build_number.bundle_build(app / "Contents/Info.plist"),
+            macos_build_number.bundle_build(Path("/Applications/2ine.app/Contents/Info.plist")),
+        )
+    )
     if app.exists():
         shutil.rmtree(app)
     contents = app / "Contents"
     resources = contents / "Resources"
     (contents / "MacOS").mkdir(parents=True)
     resources.mkdir(parents=True)
-    shutil.copy2(output / "swift/release/TwoineBalls", contents / "MacOS/TwoineBalls")
+    shutil.copy2(output / "swift/release/TwoineBalls", contents / "MacOS/2ine")
     copied = macos_bundle.bundle_runtime(
         args.runtime_build.resolve(),
         resources / "Runtime",
@@ -155,13 +162,13 @@ def main():
             )
     command(["iconutil", "-c", "icns", iconset, "-o", resources / "Twoine.icns"])
     info = {
-        "CFBundleExecutable": "TwoineBalls",
+        "CFBundleExecutable": "2ine",
         "CFBundleIdentifier": "io.github.bitwisecook.2ine.Balls",
-        "CFBundleName": "2ine Balls",
-        "CFBundleDisplayName": "2ine Balls",
+        "CFBundleName": "2ine",
+        "CFBundleDisplayName": "2ine",
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "1.0",
-        "CFBundleVersion": "1",
+        "CFBundleShortVersionString": "0.1",
+        "CFBundleVersion": str(build_number),
         "LSMinimumSystemVersion": "27.0",
         "NSHighResolutionCapable": True,
         "CFBundleIconFile": "Twoine",
@@ -191,7 +198,7 @@ def main():
         macos_bundle.notarize(app, args.notary_profile, output)
     (output / "build-info.json").write_text(
         json.dumps(
-            {"swift": swift.strip(), "architecture": platform.machine()},
+            {"swift": swift.strip(), "architecture": platform.machine(), "build": build_number},
             indent=2,
         )
         + "\n"

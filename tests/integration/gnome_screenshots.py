@@ -45,7 +45,7 @@ def main():
 
     def capture(name, caption):
         settle()
-        matches = [(wid, title) for wid, title in display.windows() if title == "2ine Balls"]
+        matches = [(wid, title) for wid, title in display.windows() if title == "2ine"]
         assert matches, display.windows()
         path = output / (name + ".png")
         display.capture(matches[0][0], path)
@@ -149,7 +149,7 @@ def main():
     (output / "manifest.json").write_text(
         json.dumps(
             {
-                "application": "2ine Balls for GNOME 0.2.0",
+                "application": "2ine for GNOME 0.1",
                 "ball": window.ball.name,
                 "screenshots": screenshots,
             },
@@ -172,7 +172,7 @@ def main():
         for item in screenshots
     )
     (output / "index.html").write_text(
-        '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>2ine Balls — GNOME screenshots</title><style>body{font:16px system-ui;background:#f6f5f4;color:#241f31;margin:32px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:24px}figure{margin:0}img{width:100%;border-radius:10px;box-shadow:0 3px 12px #0002}figcaption{padding:12px 0}a{color:inherit}</style><h1>2ine Balls for GNOME</h1><p>Actual application captures in light and dark appearances. Click a view for its full-size image.</p><main>'
+        '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>2ine — GNOME screenshots</title><style>body{font:16px system-ui;background:#f6f5f4;color:#241f31;margin:32px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:24px}figure{margin:0}img{width:100%;border-radius:10px;box-shadow:0 3px 12px #0002}figcaption{padding:12px 0}a{color:inherit}</style><h1>2ine for GNOME</h1><p>Actual application captures in light and dark appearances. Click a view for its full-size image.</p><main>'
         + cards
         + "</main></html>"
     )

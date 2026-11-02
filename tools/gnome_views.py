@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Native drive browsing, application editors and media controls for 2ine Balls."""
+"""Native drive browsing, application editors and media controls for 2ine."""
 
 import base64
 from pathlib import Path
@@ -1318,7 +1318,7 @@ class ExportDialog(FormDialog):
                     build=str(self.build),
                     path=str(path),
                     includeImages=include,
-                    exporter={"name": "2ine Balls for GNOME", "version": "0.2.0"},
+                    exporter={"name": "2ine for GNOME", "version": "0.1"},
                 ),
                 completed,
             )

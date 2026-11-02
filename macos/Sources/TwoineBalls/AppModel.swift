@@ -144,7 +144,7 @@ final class AppModel {
         let url = URL(filePath: path)
         return (url.pathExtension == "2ineball" ? url.deletingPathExtension() : url).lastPathComponent
     }
-    var title: String { selected.map(Self.displayName) ?? "2ine Balls" }
+    var title: String { selected.map(Self.displayName) ?? "2ine" }
     var runtimeDescription: String {
         build == bundledRuntime ? "Bundled 2ine Runtime" : "Runtime: " + URL(filePath: build).lastPathComponent
     }
@@ -314,7 +314,7 @@ final class AppModel {
                 self.revision += 1
             }
             var request = DesktopRequest("export-ball", ball: selected, build: self.build)
-            request.exporter = ["name": "2ine Balls for macOS",
+            request.exporter = ["name": "2ine for macOS",
                                 "version": Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unversioned",
                                 "build": Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"]
             request.path = destination.path; request.includeImages = includeImages

@@ -233,11 +233,11 @@ def main():
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "build-gnome/packages")
     parser.add_argument("--stage", type=Path, help="stage only, e.g. for Snapcraft")
-    parser.add_argument("--version", default="0.2.0")
+    parser.add_argument("--version", default="0.1")
     parser.add_argument("--format", choices=("deb", "rpm", "all"), default="all")
     args = parser.parse_args()
-    if not re.fullmatch(r"\d+\.\d+\.\d+(?:[.+~][a-zA-Z0-9.]+)?", args.version):
-        parser.error("Use a numeric release version such as 0.2.0")
+    if not re.fullmatch(r"\d+(?:\.\d+){1,2}(?:[.+~][a-zA-Z0-9.]+)?", args.version):
+        parser.error("Use a numeric release version such as 0.1")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     stage_root = stage(

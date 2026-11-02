@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-<title>2ine Balls</title><desc>A warm ball of twine forms the O in OS/2; its loose strand draws S/2.</desc>
+<title>2ine</title><desc>A warm ball of twine forms the O in OS/2; its loose strand draws S/2.</desc>
 <defs>
  <linearGradient id="ball" x2="0" y2="1"><stop stop-color="#f9dda5"/><stop offset="1" stop-color="#d4a66a"/></linearGradient>
  <linearGradient id="cord" x2="0" y2="1"><stop stop-color="#f8dca6"/><stop offset="1" stop-color="#d7ac72"/></linearGradient>

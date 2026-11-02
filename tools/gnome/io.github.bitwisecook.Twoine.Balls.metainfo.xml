@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>io.github.bitwisecook.Twoine.Balls</id>
-  <name>2ine Balls</name>
+  <name>2ine</name>
   <summary>Give your OS/2 applications a home on GNOME</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Zlib AND GPL-2.0-only AND MIT AND OFL-1.1</project_license>
@@ -18,5 +18,5 @@
   <supports><control>pointing</control><control>keyboard</control><control>touch</control></supports>
   <recommends><display_length compare="ge">360</display_length></recommends>
   <content_rating type="oars-1.1"/>
-  <releases><release version="0.2.0" date="2026-11-02"/><release version="0.1.0" date="2026-11-02"/></releases>
+  <releases><release version="0.1" date="2026-11-02"/></releases>
 </component>

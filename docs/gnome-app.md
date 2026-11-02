@@ -1,6 +1,6 @@
 # GNOME ball manager
 
-2ine Balls uses GTK 4, libadwaita and PyGObject. GNOME 51 is the design target;
+2ine uses GTK 4, libadwaita and PyGObject. GNOME 51 is the design target;
 GTK 4.18+ and libadwaita 1.9+ are the supported library floor, including Ubuntu
 26.04. The shared C engine owns ball persistence, drive translation, runtime
 selection, CONFIG.SYS validation, launch plans and installer receipts. The
@@ -109,8 +109,8 @@ The package includes third-party license notices and runtime input hashes.
 python3 tools/build_gnome_packages.py --build build-portable --output build-gnome/packages
 ```
 
-This produces `2ine-balls_0.2.0_amd64.deb` and
-`2ine-balls-0.2.0-1.x86_64.rpm` on x86-64. Choose `--format deb` or
+This produces `2ine-balls_0.1_amd64.deb` and
+`2ine-balls-0.1-1.x86_64.rpm` on x86-64. Choose `--format deb` or
 `--format rpm` for one format. Builders require `patchelf`, `binutils`, `ldd`
 and the selected format's `dpkg-deb` or `rpmbuild`. Use a fresh output directory;
 an existing staged 2ine installation is rejected. Other parts may populate the
@@ -167,7 +167,7 @@ desktop-file-validate tools/gnome/*.desktop
 appstreamcli validate --no-net tools/gnome/*.metainfo.xml
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_balls.py --build build-portable
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_features.py --build build-portable
-dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-balls_0.2.0_amd64.deb
+dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-balls_0.1_amd64.deb
 ```
 
 The GTK integration executes a generated LX installer and saved launcher using
