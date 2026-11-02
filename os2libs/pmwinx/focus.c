@@ -19,12 +19,12 @@ ULONG SetActiveWindow(ULONG window)
 }
 ULONG GetFocus(void)
 {
-    return open32Presentation() ? WinQueryFocus(HWND_DESKTOP) : 0;
+    return open32Presentation() ? open32PublicWindow(WinQueryFocus(HWND_DESKTOP)) : 0;
 }
 ULONG SetFocus(ULONG window)
 {
     ULONG previous = GetFocus();
-    if (!WinSetFocus(HWND_DESKTOP, window))
+    if (!WinSetFocus(HWND_DESKTOP, open32ClientWindow(window)))
     {
         open32SetError(1400);
         return 0;
@@ -34,12 +34,12 @@ ULONG SetFocus(ULONG window)
 
 ULONG GetCapture(void)
 {
-    return open32Presentation() ? WinQueryCapture(HWND_DESKTOP) : 0;
+    return open32Presentation() ? open32PublicWindow(WinQueryCapture(HWND_DESKTOP)) : 0;
 }
 ULONG SetCapture(ULONG window)
 {
     ULONG previous = GetCapture();
-    if (!WinSetCapture(HWND_DESKTOP, window))
+    if (!WinSetCapture(HWND_DESKTOP, open32ClientWindow(window)))
     {
         open32SetError(1400);
         return 0;

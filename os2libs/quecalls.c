@@ -19,12 +19,11 @@
 
 typedef struct Queue
 {
-    struct Queue *next;
-    char *name;
-    HQUEUE handle;
-    BOOL private_writer;
     LxHostMailbox *mailbox;
     ULONG owner, flags;
+    HQUEUE handle;
+    char *name;
+    struct Queue *next;
     LxHostMutex *mutex;
     LxHostThread *notifier;
     HEV event;
@@ -40,19 +39,19 @@ enum
 };
 #include "os2libs/generated/quecalls-lx.h"
 
-static LxHostOnce catalog_once = LX_HOST_ONCE_INIT;
-static LxHostMutex *catalog_lock;
-static Queue *catalog;
-static void initialize_catalog(void)
+static LxHostOnce registry_once = LX_HOST_ONCE_INIT;
+static LxHostMutex *registry_lock;
+static Queue *queue_registry;
+static void registry_initialize(void)
 {
-    catalog_lock = lx_host_mutex_create(0, 0);
-    if (!catalog_lock)
+    registry_lock = lx_host_mutex_create(0, 0);
+    if (!registry_lock)
         abort();
 }
-static void lock_catalog(void)
+static void registry_enter(void)
 {
-    lx_host_once(&catalog_once, initialize_catalog);
-    lx_host_mutex_lock(catalog_lock, UINT32_MAX);
+    lx_host_once(&registry_once, registry_initialize);
+    lx_host_mutex_lock(registry_lock, UINT32_MAX);
 }
 static void destroy_queue(void *value)
 {
@@ -60,18 +59,10 @@ static void destroy_queue(void *value)
     __atomic_store_n(&queue->stopped, 1, __ATOMIC_RELEASE);
     if (queue->notifier)
         lx_host_thread_join(queue->notifier, NULL);
-    lock_catalog();
-    for (Queue **link = &catalog; *link; link = &(*link)->next)
-        if (*link == queue)
-        {
-            *link = queue->next;
-            break;
-        }
-    lx_host_mutex_unlock(catalog_lock);
     lx_host_mailbox_close(queue->mailbox);
-    free(queue->name);
     if (queue->mutex)
         lx_host_mutex_destroy(queue->mutex);
+    free(queue->name);
     free(queue);
 }
 static int notify_revision(Queue *queue)
@@ -102,11 +93,9 @@ static void *notify_queue(void *value)
 }
 static APIRET register_notification(Queue *queue, HEV event)
 {
-    if (!event)
-        return ERROR_INVALID_PARAMETER;
     lx_host_mutex_lock(queue->mutex, UINT32_MAX);
     APIRET result = NO_ERROR;
-    if (queue->event && queue->event != event)
+    if (!event || (queue->event && queue->event != event))
         result = ERROR_INVALID_PARAMETER;
     else if (!queue->event && event)
     {
@@ -129,8 +118,8 @@ static APIRET register_notification(Queue *queue, HEV event)
     lx_host_mutex_unlock(queue->mutex);
     return result;
 }
-static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int create, ULONG flags,
-                         int reuse)
+static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, int create,
+                                ULONG flags, BOOL private)
 {
     if (!output)
         return ERROR_INVALID_PARAMETER;
@@ -138,21 +127,16 @@ static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int creat
         return ERROR_QUE_INVALID_NAME;
     if ((flags & ~7u) || (flags & 3) == 3)
         return ERROR_INVALID_PARAMETER;
-    if (!create && reuse)
-    {
-        lock_catalog();
-        for (Queue *q = catalog; q; q = q->next)
-            if (!q->private_writer && !strcasecmp(q->name, name) &&
-                !__atomic_load_n(&q->stopped, __ATOMIC_ACQUIRE))
-            {
-                *output = q->handle;
-                if (owner)
-                    *owner = q->owner;
-                lx_host_mutex_unlock(catalog_lock);
-                return NO_ERROR;
-            }
-        lx_host_mutex_unlock(catalog_lock);
-    }
+    for (Queue *q = queue_registry; q; q = q->next)
+        if (!private && !strcasecmp(q->name, name))
+        {
+            if (create)
+                return ERROR_QUE_DUPLICATE;
+            *output = q->handle;
+            if (owner)
+                *owner = q->owner;
+            return NO_ERROR;
+        }
     uint64_t hash = 1469598103934665603ULL;
     const char *ball = getenv("TWOINE_BALL");
     for (const char *p = ball ? ball : ""; *p; p++)
@@ -180,7 +164,12 @@ static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int creat
                              : ERROR_QUE_NO_MEMORY;
     }
     queue->flags = flags;
-    queue->private_writer = !create && !reuse;
+    queue->name = strdup(name);
+    if (!queue->name)
+    {
+        destroy_queue(queue);
+        return ERROR_QUE_NO_MEMORY;
+    }
     queue->mutex = lx_host_mutex_create(0, 0);
     if (!queue->mutex)
     {
@@ -193,26 +182,35 @@ static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int creat
         destroy_queue(queue);
         return ERROR_QUE_NO_MEMORY;
     }
-    queue->name = strdup(name);
-    if (!queue->name)
-    {
-        lx_handle_close(handle, LX_HANDLE_QUEUE);
-        return ERROR_QUE_NO_MEMORY;
-    }
     queue->handle = handle;
-    lock_catalog();
-    queue->next = catalog;
-    catalog = queue;
-    lx_host_mutex_unlock(catalog_lock);
+    if (!private)
+    {
+        queue->next = queue_registry;
+        queue_registry = queue;
+    }
     *output = handle;
     if (owner)
         *owner = queue->owner;
     return NO_ERROR;
 }
+static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int create, ULONG flags)
+{
+    registry_enter();
+    APIRET result = open_queue_locked(output, owner, name, create, flags, FALSE);
+    lx_host_mutex_unlock(registry_lock);
+    return result;
+}
+APIRET lx_queue_open_private(PPID owner, PHQUEUE output, const char *name)
+{
+    registry_enter();
+    APIRET result = open_queue_locked(output, owner, name, 0, 0, TRUE);
+    lx_host_mutex_unlock(registry_lock);
+    return result;
+}
 APIRET DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ name)
 {
     TRACE_NATIVE("DosCreateQueue(%p, %u, '%s')", phq, (uint)priority, name);
-    return open_queue(phq, NULL, name, 1, priority, 0);
+    return open_queue(phq, NULL, name, 1, priority);
 }
 APIRET DosCloseQueue(HQUEUE handle)
 {
@@ -221,8 +219,20 @@ APIRET DosCloseQueue(HQUEUE handle)
     if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
         return ERROR_QUE_INVALID_HANDLE;
     Queue *queue = borrow.resource;
-    __atomic_store_n(&queue->stopped, 1, __ATOMIC_RELEASE);
-    APIRET result = lx_handle_close(handle, LX_HANDLE_QUEUE) ? NO_ERROR : ERROR_QUE_INVALID_HANDLE;
+    registry_enter();
+    BOOL closed = __atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE);
+    if (!closed)
+    {
+        __atomic_store_n(&queue->stopped, 1, __ATOMIC_RELEASE);
+        Queue **link = &queue_registry;
+        while (*link && *link != queue)
+            link = &(*link)->next;
+        if (*link)
+            *link = queue->next;
+    }
+    lx_host_mutex_unlock(registry_lock);
+    APIRET result =
+        !closed && lx_handle_close(handle, LX_HANDLE_QUEUE) ? NO_ERROR : ERROR_QUE_INVALID_HANDLE;
     lx_handle_release(&borrow);
     return result;
 }
@@ -231,51 +241,37 @@ APIRET DosOpenQueue(PPID owner, PHQUEUE output, PSZ name)
     TRACE_NATIVE("DosOpenQueue(%p, %p, '%s')", owner, output, name);
     if (!owner)
         return ERROR_INVALID_PARAMETER;
-    return open_queue(output, owner, name, 0, 0, 1);
+    return open_queue(output, owner, name, 0, 0);
 }
-APIRET lx_queue_open_writer(PPID owner, PHQUEUE output, PSZ name)
+typedef struct QueueReceive
 {
-    return open_queue(output, owner, name, 0, 0, 0);
-}
-typedef struct ReceiveCall
-{
-    HQUEUE handle;
+    LxHandleBorrow borrow;
     PREQUESTDATA request;
-    PULONG length;
+    PULONG length, element;
     PPVOID output;
-    PULONG element;
-    BOOL32 nowait;
     PBYTE priority;
+    BOOL32 nowait;
     HEV event;
     int peek;
-    LxHandleBorrow borrow;
     uint8 *bytes;
-} ReceiveCall;
-static void receive_cleanup(void *argument)
+} QueueReceive;
+static void queue_receive_cleanup(void *argument)
 {
-    ReceiveCall *call = argument;
+    QueueReceive *call = argument;
     free(call->bytes);
     lx_handle_release(&call->borrow);
 }
-static uint32 receive_operation(void *argument)
+static uint32 queue_receive_operation(void *argument)
 {
-    ReceiveCall *call = argument;
-    HQUEUE handle = call->handle;
+    QueueReceive *call = argument;
+    Queue *queue = call->borrow.resource;
     PREQUESTDATA request = call->request;
     PULONG length = call->length, element = call->element;
     PPVOID output = call->output;
-    BOOL32 nowait = call->nowait;
     PBYTE priority = call->priority;
+    BOOL32 nowait = call->nowait;
     HEV event = call->event;
     int peek = call->peek;
-    if (!request || !length || !output || !priority || !element)
-        return ERROR_INVALID_PARAMETER;
-    if (nowait > 1)
-        return 433; /* ERROR_QUE_INVALID_WAIT */
-    LxHandleBorrow *borrow = &call->borrow;
-    if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, borrow))
-        return ERROR_QUE_INVALID_HANDLE;
-    Queue *queue = borrow->resource;
     if (queue->owner != GLoaderState.pib.pib_ulpid)
     {
         return ERROR_QUE_PROC_NOT_OWNED;
@@ -288,19 +284,18 @@ static uint32 receive_operation(void *argument)
             return result;
         }
     }
-    uint8 *bytes = malloc(sizeof(Packet) + QUEUE_PAYLOAD_LIMIT);
+    uint8 *bytes = call->bytes = malloc(sizeof(Packet) + QUEUE_PAYLOAD_LIMIT);
     if (!bytes)
     {
         return ERROR_QUE_NO_MEMORY;
     }
-    call->bytes = bytes;
     size_t size = 0;
     unsigned importance;
     uint32 token = *element;
     int received;
     while ((received =
                 lx_host_mailbox_receive(queue->mailbox, bytes, sizeof(Packet) + QUEUE_PAYLOAD_LIMIT,
-                                        &size, &importance, &token, peek)) == 1 &&
+                                        &size, &importance, &token, peek ? 2 : 0)) == 1 &&
            !nowait && !__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
         lx_host_sleep_ms(10);
     APIRET result = received == 1   ? ERROR_QUE_EMPTY
@@ -318,14 +313,12 @@ static uint32 receive_operation(void *argument)
         else
         {
             memcpy(&packet, bytes, sizeof packet);
-            size_t payload = size - sizeof packet;
-            if (payload && packet.length != payload)
+            if (size != sizeof packet && packet.length != size - sizeof packet)
                 result = ERROR_QUE_MEMORY_ERROR;
             else
             {
                 void *memory = (void *)(uintptr_t)packet.address;
-                if (packet.length && payload &&
-                    (!packet.address || packet.sender != GLoaderState.pib.pib_ulpid))
+                if (size > sizeof packet)
                 {
                     result = DosAllocMem(&memory, packet.length, PAG_READ | PAG_WRITE | PAG_COMMIT);
                     if (!result)
@@ -337,7 +330,7 @@ static uint32 receive_operation(void *argument)
                     request->ulData = packet.request;
                     *length = packet.length;
                     *output = memory;
-                    *priority = (queue->flags & 3) == 2 ? importance : 0;
+                    *priority = (queue->flags & 3) == QUE_PRIORITY ? importance : 0;
                     *element = token;
                 }
             }
@@ -348,17 +341,16 @@ static uint32 receive_operation(void *argument)
 static APIRET receive_queue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID output,
                             PULONG element, BOOL32 nowait, PBYTE priority, HEV event, int peek)
 {
-    ReceiveCall call = {0};
-    call.handle = handle;
-    call.request = request;
-    call.length = length;
-    call.output = output;
-    call.element = element;
-    call.nowait = nowait;
-    call.priority = priority;
-    call.event = event;
-    call.peek = peek;
-    return lx_host_guarded_call(receive_operation, &call, receive_cleanup, &call);
+    if (!request || !length || !output || !priority || !element)
+        return ERROR_INVALID_PARAMETER;
+    if (nowait > 1)
+        return 433; /* ERROR_QUE_INVALID_WAIT */
+    LxHandleBorrow borrow;
+    if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
+        return ERROR_QUE_INVALID_HANDLE;
+    QueueReceive call = {borrow,   request, length, element, output,
+                         priority, nowait,  event,  peek,    NULL};
+    return lx_host_guarded_call(queue_receive_operation, &call, queue_receive_cleanup, &call);
 }
 APIRET DosPeekQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID output,
                     PULONG element, BOOL32 nowait, PBYTE priority, HEV event)
@@ -401,45 +393,75 @@ APIRET DosReadQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID o
                  output, (uint)element, (uint)nowait, priority, (uint)event);
     return receive_queue(handle, request, length, output, &element, nowait, priority, event, 0);
 }
-APIRET DosWriteQueue(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority)
+static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority,
+                          BOOL copy)
 {
-    TRACE_NATIVE("DosWriteQueue(%u, %u, %u, %p, %u)", (uint)handle, (uint)request, (uint)length,
-                 data, (uint)priority);
-    if (priority > 15)
-        priority = 15;
     LxHandleBorrow borrow;
     if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
         return ERROR_QUE_INVALID_HANDLE;
     Queue *queue = borrow.resource;
+    BOOL copied = copy || queue->owner != GLoaderState.pib.pib_ulpid;
+    APIRET result = NO_ERROR;
     uint32 address = (uint32)(uintptr_t)data;
-    size_t copied = 0;
-    if (length && length <= QUEUE_PAYLOAD_LIMIT && data)
+    PVOID source = data;
+    if (priority > 15)
+        priority = 15;
+    if (queue->owner == GLoaderState.pib.pib_ulpid && (queue->flags & 3) != QUE_PRIORITY)
+        priority = 0;
+    if (__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
+        result = ERROR_QUE_INVALID_HANDLE;
+    else if (copied && length && !data)
+        result = ERROR_INVALID_PARAMETER;
+    if (!result && GLoaderState.execution)
     {
-        if (queue->private_writer)
+        if (!lx_execution_address(GLoaderState.execution, data, 0, 0, &address))
         {
-            copied = length;
-            address = 0;
+            if (copy)
+                address = 0;
+            else if (copied && length)
+            {
+                source = lx_execution_memory(GLoaderState.execution, (uint32)(uintptr_t)data,
+                                             length, LX_GUEST_READ);
+                if (!source)
+                    result = ERROR_INVALID_PARAMETER;
+            }
         }
-        else if (!GLoaderState.execution || lx_execution_address(GLoaderState.execution, data,
-                                                                 length, LX_GUEST_READ, &address))
-            copied = length;
+        else if (copied && length &&
+                 !lx_execution_address(GLoaderState.execution, data, length, LX_GUEST_READ,
+                                       &address))
+            result = ERROR_INVALID_PARAMETER;
     }
-    uint8 *bytes = malloc(sizeof(Packet) + copied);
-    if (!bytes)
-    {
-        lx_handle_release(&borrow);
-        return ERROR_QUE_NO_MEMORY;
-    }
-    Packet packet = {GLoaderState.pib.pib_ulpid, request, length, address};
-    memcpy(bytes, &packet, sizeof packet);
-    if (copied)
-        memcpy(bytes + sizeof packet, data, copied);
-    APIRET result = lx_host_mailbox_send(queue->mailbox, bytes, sizeof packet + copied, priority)
-                        ? ERROR_QUE_UNABLE_TO_ADD
-                        : NO_ERROR;
-    free(bytes);
+    /* Named shared mappings retain the sender's pointer and pool ownership. */
+    if (!copy && !result && lx_dos_shared_address(address, length))
+        copied = FALSE;
+    if (!result && copied && length > QUEUE_PAYLOAD_LIMIT)
+        result = ERROR_INVALID_PARAMETER;
+    size_t bytes = sizeof(Packet) + (copied ? length : 0);
+    uint8 *packet = !result ? malloc(bytes) : NULL;
+    if (!result && !packet)
+        result = ERROR_QUE_NO_MEMORY;
     if (!result)
-        notify_revision(queue);
+    {
+        Packet header = {GLoaderState.pib.pib_ulpid, request, length, address};
+        memcpy(packet, &header, sizeof header);
+        if (copied && length)
+            memcpy(packet + sizeof header, source, length);
+        result = lx_host_mailbox_send(queue->mailbox, packet, bytes, priority)
+                     ? ERROR_QUE_UNABLE_TO_ADD
+                     : NO_ERROR;
+        if (!result)
+            notify_revision(queue);
+    }
+    free(packet);
     lx_handle_release(&borrow);
     return result;
+}
+APIRET DosWriteQueue(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority)
+{
+    TRACE_NATIVE("DosWriteQueue(%u, %u, %u, %p, %u)", handle, request, length, data, priority);
+    return write_queue(handle, request, length, data, priority, FALSE);
+}
+APIRET lx_queue_write_copy(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority)
+{
+    return write_queue(handle, request, length, data, priority, TRUE);
 }

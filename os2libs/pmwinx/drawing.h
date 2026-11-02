@@ -18,8 +18,10 @@ typedef struct Open32DC
     ULONG palette_handle, clip_region;
     ULONG brush_handle;
     LONG brush_origin_x, brush_origin_y;
+    struct Open32SavedDC *saved;
     struct Open32DC *next;
 } Open32DC;
+void open32SavedDCCleanup(Open32DC *dc);
 BOOL open32BrushPixel(Open32DC *dc, LONG x, LONG y, uint32 *rgb);
 Open32DC *open32FindDC(ULONG handle);
 BOOL open32CanDraw(ULONG handle);

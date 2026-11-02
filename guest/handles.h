@@ -36,6 +36,8 @@ typedef enum LxHandleKind
     LX_HANDLE_OPEN32_MEMORY,
     LX_HANDLE_OPEN32_PEN,
     LX_HANDLE_MUX,
+    LX_HANDLE_OPEN32_FILE,
+    LX_HANDLE_OPEN32_DDE,
     LX_HANDLE_KIND_LIMIT
 } LxHandleKind;
 typedef struct LxHandleBorrow

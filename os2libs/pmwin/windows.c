@@ -26,7 +26,9 @@ Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
         return &desktop_window;
     }
     else if (hwnd == HWND_OBJECT)
+    {
         return (Window *)&anchor->object_window;
+    }
     return NULL;
 }
 

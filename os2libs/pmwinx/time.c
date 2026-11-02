@@ -63,3 +63,88 @@ BOOL SystemTimeToFileTime(PVOID input, PVOID output)
     lx_guest_store_u32((uint8 *)output + 4, (uint32)(ticks >> 32));
     return TRUE;
 }
+static uint64_t load_filetime(const void *input)
+{
+    return lx_guest_load_u32(input) | (uint64_t)lx_guest_load_u32((const uint8 *)input + 4) << 32;
+}
+static BOOL local_filetime(PVOID input, PVOID output, BOOL utc)
+{
+    if (!input || !output || input == output)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint64_t value = load_filetime(input);
+    LxHostCalendar now;
+    if (value > INT64_MAX || !lx_host_calendar((int64_t)(lx_host_realtime_us() / 1000000), 0, &now))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    /* These Windows APIs use the current timezone/DST bias, even for historical dates. */
+    int64_t adjustment = (int64_t)now.utc_offset_minutes * 60 * 10000000;
+    if (utc)
+        adjustment = -adjustment;
+    if ((adjustment < 0 && value < (uint64_t)-adjustment) ||
+        (adjustment >= 0 && value > (uint64_t)(INT64_MAX - adjustment)))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint64_t result =
+        adjustment >= 0 ? value + (uint64_t)adjustment : value - (uint64_t)-adjustment;
+    lx_guest_store_u32(output, (uint32)result);
+    lx_guest_store_u32((uint8 *)output + 4, (uint32)(result >> 32));
+    return TRUE;
+}
+BOOL FileTimeToLocalFileTime(PVOID input, PVOID output)
+{
+    return local_filetime(input, output, FALSE);
+}
+BOOL LocalFileTimeToFileTime(PVOID input, PVOID output)
+{
+    return local_filetime(input, output, TRUE);
+}
+static uint64_t year_days(unsigned year)
+{
+    uint64_t previous = year - 1;
+    return previous * 365 + previous / 4 - previous / 100 + previous / 400 - 584388;
+}
+BOOL FileTimeToSystemTime(PVOID input, PVOID output)
+{
+    if (!input || !output || load_filetime(input) > INT64_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint64_t ticks = load_filetime(input), seconds = ticks / 10000000;
+    uint64_t days = seconds / 86400;
+    unsigned low = 1601, high = 30829;
+    while (low + 1 < high)
+    {
+        unsigned middle = low + (high - low) / 2;
+        if (year_days(middle) <= days)
+            low = middle;
+        else
+            high = middle;
+    }
+    static const unsigned month_days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    BOOL leap = low % 4 == 0 && (low % 100 != 0 || low % 400 == 0);
+    unsigned day = (unsigned)(days - year_days(low)), month = 0;
+    while (month < 11 && day >= month_days[month] + (month == 1 && leap))
+    {
+        day -= month_days[month] + (month == 1 && leap);
+        month++;
+    }
+    uint16_t fields[] = {(uint16_t)low,
+                         (uint16_t)(month + 1),
+                         (uint16_t)((days + 1) % 7),
+                         (uint16_t)(day + 1),
+                         (uint16_t)((seconds / 3600) % 24),
+                         (uint16_t)((seconds / 60) % 60),
+                         (uint16_t)(seconds % 60),
+                         (uint16_t)((ticks % 10000000) / 10000)};
+    for (unsigned i = 0; i < 8; i++)
+        lx_guest_store_u16((uint8 *)output + i * 2, fields[i]);
+    return TRUE;
+}

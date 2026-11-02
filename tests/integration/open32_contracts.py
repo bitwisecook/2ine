@@ -192,6 +192,11 @@ API = {
     "RealizePalette": 536,
     "GetPaletteEntries": 332,
     "GetNearestPaletteIndex": 321,
+    "GetDriveType": 277,
+    "GetLogicalDrives": 303,
+    "GetLogicalDriveStrings": 302,
+    "GetFullPathName": 292,
+    "GetWindowsDirectory": 393,
     "GetCurrentDirectory": 253,
     "SetCurrentDirectory": 604,
     "RegisterClipboardFormat": 557,
@@ -696,12 +701,55 @@ def directory_program():
     absent = g.field(b"no-such-directory\0")
     name = g.field(b"TestFormat\0")
     lower = g.field(b"testformat\0")
+    path_output = g.field(bytes(1024))
+    full_name = g.field(b"C:\\future.lwp\0")
+    filepart = g.field(bytes(4))
+    call(g, "GetFullPathName", full_name, 0, 0, 0)
+    g.result(14, 189)
+    call(g, "GetFullPathName", full_name, 1, path_output, filepart)
+    g.result(14, 190)
+    g.word(path_output, 0, 191)
+    g.word(filepart, 0, 192)
+    call(g, "GetFullPathName", full_name, 1024, path_output, filepart)
+    g.result(13, 193)
+    g.word(path_output, int.from_bytes(b"C:\\f", "little"), 194)
+    g.word(filepart, path_output + 3, 195)
+    root = g.field(b"c:\\\0")
+    missing_drive = g.field(b"z:\\\0")
+    call(g, "GetDriveType", root)
+    g.result(3, 196)
+    call(g, "GetDriveType", 0)
+    g.result(3, 197)
+    call(g, "GetDriveType", missing_drive)
+    g.result(1, 198)
+    call(g, "GetLogicalDrives")
+    g.result(4, 199)
+    call(g, "GetLogicalDriveStrings", 0, 0)
+    g.result(5, 200)
+    call(g, "GetLogicalDriveStrings", 2, output)
+    g.result(5, 201)
+    g.word(output, 0, 202)
+    call(g, "GetLogicalDriveStrings", 1024, output)
+    g.result(4, 203)
+    g.word(output, int.from_bytes(b"C:\\\0", "little"), 204)
+    g.word(output + 4, 0, 205)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", output, 0))
     call(g, "RegisterClipboardFormat", name)
     store(g, length)
     call(g, "GlobalAddAtom", name)
     call(g, "GlobalDeleteAtom", (length,))
     call(g, "RegisterClipboardFormat", lower)
     g.require(b"\x3b\x05" + struct.pack("<I", length), 180)
+    call(g, "GetWindowsDirectory", 0, 0)
+    g.result(7, 206)
+    call(g, "GetWindowsDirectory", output, 6)
+    g.result(7, 207)
+    g.word(output, 0, 208)
+    call(g, "GetWindowsDirectory", output, 7)
+    g.result(6, 209)
+    g.word(output, int.from_bytes(b"C:\\O", "little"), 210)
+    g.word(output + 3, int.from_bytes(b"OS2\0", "little"), 211)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", output, 0))
     call(g, "GetCurrentDirectory", 0, 0)
     store(g, required)
     call(g, "GetCurrentDirectory", 1, output)
@@ -1137,6 +1185,17 @@ def keyboard_program():
     g.word(delivered, 2, 12)
     g.word(character, ord("a"), 13)
     g.word(sequence, 1, 14)
+    for flags, data, expected in [
+        (0x0E010007, 0x00050008, 8),
+        (0x1C010007, 0x0008000D, 13),
+        (0x0F010007, 0x00060009, 9),
+        (0x01010007, 0x000F001B, 27),
+        (0x00010001, 10, 10),
+        (0x00010001, 127, 127),
+        (0x00010001, 0x82, 0xE9),
+    ]:
+        g.call(3, 920, (window,), 0x7A, flags, data)
+        g.word(character, expected, 22)
     call(g, "DestroyWindow", (window,))
     call(g, "UnregisterClass", name, 0xFFFFFFFF)
     g.exit(0)

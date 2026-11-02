@@ -234,3 +234,14 @@ ULONG WinDeleteAtom(ULONG table, ULONG atom)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
+ULONG lx_pm_clipboard_count(void)
+{
+    if (!lock_clipboard())
+        return 0;
+    ULONG count = 0;
+    for (ClipFormat *item = formats; item; item = item->next)
+        count++;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return count;
+}

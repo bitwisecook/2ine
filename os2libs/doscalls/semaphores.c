@@ -6,74 +6,6 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
-typedef struct EventReference
-{
-    struct EventReference *next;
-    uint32 public_handle, internal_handle;
-    size_t opens;
-} EventReference;
-static EventReference *event_references;
-static LxHostOnce event_pool_once = LX_HOST_ONCE_INIT;
-static LxHostShared *event_pool;
-static uint32 *event_sequence;
-enum
-{
-    SHARED_EVENT_SIZE = 12
-};
-static uint64 eventScope(void)
-{
-    uint64 hash = 1469598103934665603ULL;
-    const char *scope = getenv("TWOINE_BALL");
-    if (!scope)
-        scope = getenv("TWOINE_IPC_DIR");
-    for (const char *p = scope; p && *p; p++)
-        hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
-    return (hash ^ 0xff) * 1099511628211ULL;
-}
-static void initializeEventPool(void)
-{
-    char name[64];
-    /* Host shared-memory names also fit Darwin's 31-character limit. */
-    snprintf(name, sizeof name, "/2ine-epool4-%016llx", (unsigned long long)eventScope());
-    LxHostSharedResult result = lx_host_shared_open(name, 8, &event_pool);
-    int created = result == LX_HOST_SHARED_OK;
-    if (result == LX_HOST_SHARED_EXISTS)
-        result = lx_host_shared_open(name, 0, &event_pool);
-    if (result != LX_HOST_SHARED_OK || lx_host_shared_size(event_pool) != 8 ||
-        !(event_sequence = lx_host_shared_map(event_pool, NULL, 0)))
-        return;
-    if (created)
-        __atomic_store_n(&event_sequence[1], 1, __ATOMIC_RELEASE);
-    else
-    {
-        uint64 deadline = lx_host_monotonic_us() + 1000000;
-        while (!__atomic_load_n(&event_sequence[1], __ATOMIC_ACQUIRE))
-        {
-            if (lx_host_monotonic_us() >= deadline)
-            {
-                event_sequence = NULL;
-                return;
-            }
-            lx_host_sleep_ms(1);
-        }
-    }
-}
-static int borrowEvent(HEV handle, LxHandleBorrow *borrow)
-{
-    if (!(handle & 0x80000000u))
-        return lx_handle_borrow(handle, LX_HANDLE_EVENT, borrow);
-    grabLock(&GMutexDosCalls);
-    uint32 internal = 0;
-    for (EventReference *r = event_references; r; r = r->next)
-        if (r->public_handle == handle)
-        {
-            internal = r->internal_handle;
-            break;
-        }
-    int result = internal && lx_handle_borrow(internal, LX_HANDLE_EVENT, borrow);
-    ungrabLock(&GMutexDosCalls);
-    return result;
-}
 typedef struct SemaphoreSharing
 {
     struct SemaphoreSharing *next;
@@ -130,6 +62,74 @@ BOOL semaphoreResourceShared(void *resource)
         }
     lx_host_monitor_unlock(sharing_lock);
     return shared;
+}
+typedef struct EventReference
+{
+    struct EventReference *next;
+    uint32 public_handle, internal_handle;
+    size_t opens;
+} EventReference;
+static EventReference *event_references;
+static LxHostOnce event_pool_once = LX_HOST_ONCE_INIT;
+static LxHostShared *event_pool;
+static uint32 *event_sequence;
+enum
+{
+    SHARED_EVENT_SIZE = 12
+};
+static uint64 eventScope(void)
+{
+    uint64 hash = 1469598103934665603ULL;
+    const char *scope = getenv("TWOINE_BALL");
+    if (!scope)
+        scope = getenv("TWOINE_IPC_DIR");
+    for (const char *p = scope; p && *p; p++)
+        hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
+    return (hash ^ 0xff) * 1099511628211ULL;
+}
+static void initializeEventPool(void)
+{
+    char name[64];
+    /* Host shared-memory names also fit Darwin's 31-character limit. */
+    snprintf(name, sizeof name, "/2ine-epool4-%016llx", (unsigned long long)eventScope());
+    LxHostSharedResult result = lx_host_shared_open(name, 8, &event_pool);
+    int created = result == LX_HOST_SHARED_OK;
+    if (result == LX_HOST_SHARED_EXISTS)
+        result = lx_host_shared_open(name, 0, &event_pool);
+    if (result != LX_HOST_SHARED_OK || lx_host_shared_size(event_pool) != 8 ||
+        !(event_sequence = lx_host_shared_map(event_pool, NULL, 0)))
+        return;
+    if (created)
+        __atomic_store_n(&event_sequence[1], 1, __ATOMIC_RELEASE);
+    else
+    {
+        uint64 deadline = lx_host_monotonic_us() + 1000000;
+        while (!__atomic_load_n(&event_sequence[1], __ATOMIC_ACQUIRE))
+        {
+            if (lx_host_monotonic_us() >= deadline)
+            {
+                event_sequence = NULL;
+                return;
+            }
+            lx_host_sleep_ms(1);
+        }
+    }
+}
+int borrowEventResource(HEV handle, LxHandleBorrow *borrow)
+{
+    if (!(handle & 0x80000000u))
+        return lx_handle_borrow(handle, LX_HANDLE_EVENT, borrow);
+    grabLock(&GMutexDosCalls);
+    uint32 internal = 0;
+    for (EventReference *r = event_references; r; r = r->next)
+        if (r->public_handle == handle)
+        {
+            internal = r->internal_handle;
+            break;
+        }
+    int result = internal && lx_handle_borrow(internal, LX_HANDLE_EVENT, borrow);
+    ungrabLock(&GMutexDosCalls);
+    return result;
 }
 void destroyEventResource(void *value)
 {
@@ -512,7 +512,7 @@ APIRET DosResetEventSemResource(HEV hev, PULONG pulPostCt, EventSem *sem)
 APIRET DosResetEventSem(HEV hev, PULONG pulPostCt)
 {
     LxHandleBorrow object;
-    if (!borrowEvent(hev, &object))
+    if (!borrowEventResource(hev, &object))
         return ERROR_INVALID_HANDLE;
     APIRET result;
     result = guardedResource(RESOURCE_RESET_EVENT, hev, 0, &object, NULL, pulPostCt);
@@ -561,7 +561,7 @@ APIRET DosPostEventSemResource(HEV hev, EventSem *sem)
 APIRET DosPostEventSem(HEV hev)
 {
     LxHandleBorrow object;
-    if (!borrowEvent(hev, &object))
+    if (!borrowEventResource(hev, &object))
         return ERROR_INVALID_HANDLE;
     APIRET result;
     result = guardedResource(RESOURCE_POST_EVENT, hev, 0, &object, NULL, NULL);
@@ -610,7 +610,7 @@ APIRET DosWaitEventSemResource(HEV hev, ULONG timeout, EventSem *sem)
 APIRET DosWaitEventSem(HEV hev, ULONG timeout)
 {
     LxHandleBorrow object;
-    if (!borrowEvent(hev, &object))
+    if (!borrowEventResource(hev, &object))
         return ERROR_INVALID_HANDLE;
     APIRET result;
     result = guardedResource(RESOURCE_WAIT_EVENT, hev, timeout, &object, NULL, NULL);
@@ -643,7 +643,7 @@ APIRET DosQueryEventSemResource(HEV hev, PULONG pulPostCt, EventSem *sem)
 APIRET DosQueryEventSem(HEV hev, PULONG pulPostCt)
 {
     LxHandleBorrow object;
-    if (!borrowEvent(hev, &object))
+    if (!borrowEventResource(hev, &object))
         return ERROR_INVALID_HANDLE;
     APIRET result;
     result = guardedResource(RESOURCE_QUERY_EVENT, hev, 0, &object, NULL, pulPostCt);

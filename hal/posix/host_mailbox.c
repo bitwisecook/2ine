@@ -28,15 +28,14 @@ typedef struct
 } Record;
 struct LxHostMailbox
 {
-    int fd, owner, lifetime, cancel_state;
+    int fd, owner, lifetime;
     char *path;
     pthread_mutex_t mutex;
+    int cancel_state;
 };
 static void lock_mailbox(LxHostMailbox *mailbox)
 {
     int previous;
-    /* File IO is a cancellation point. Retire buffers and both locks before
-       delivering a pending cancellation to the caller's cleanup handlers. */
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &previous);
     pthread_mutex_lock(&mailbox->mutex);
     mailbox->cancel_state = previous;
@@ -53,7 +52,9 @@ static unsigned char *snapshot(LxHostMailbox *mailbox, size_t *size)
     lock_mailbox(mailbox);
     if (flock(mailbox->fd, LOCK_EX) < 0)
     {
-        unlock(mailbox);
+        int previous = mailbox->cancel_state;
+        pthread_mutex_unlock(&mailbox->mutex);
+        pthread_setcancelstate(previous, NULL);
         return NULL;
     }
     struct stat st;
@@ -192,34 +193,35 @@ int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity,
     if (!bytes)
         return -1;
     Header *header = (void *)bytes;
-    int result = header->count ? (*token ? (peek ? 3 : 2) : -1) : 1;
-    size_t selected = 0, at = sizeof *header;
-    Record chosen = {0}, cursor = {0};
-    if (peek && *token)
+    int result = header->count ? -1 : 1;
+    size_t selected = 0, at = sizeof *header, previous_at = 0;
+    Record chosen = {0}, previous = {0};
+    if (*token && peek == 2)
     {
-        size_t scan = sizeof *header;
-        while (scan < used)
+        while (at < used)
         {
             Record record;
-            if (used - scan < sizeof record)
+            if (used - at < sizeof record)
                 break;
-            memcpy(&record, bytes + scan, sizeof record);
-            if (record.size > used - scan - sizeof record)
+            memcpy(&record, bytes + at, sizeof record);
+            if (record.size > used - at - sizeof record)
                 break;
             if (record.token == *token)
             {
-                cursor = record;
-                break;
+                previous = record;
+                previous_at = at;
             }
-            scan += sizeof record + record.size;
+            at += sizeof record + record.size;
         }
-        if (!cursor.token)
+        if (at != used)
+            goto finished;
+        if (!previous_at)
         {
-            free(bytes);
-            unlock(mailbox);
-            return 2;
+            result = 2;
+            goto finished;
         }
     }
+    at = sizeof *header;
     while (at < used)
     {
         Record record;
@@ -228,13 +230,13 @@ int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity,
         memcpy(&record, bytes + at, sizeof record);
         if (record.size > used - at - sizeof record)
             break;
-        int eligible = !*token || (!peek && *token == record.token);
-        if (peek && *token)
-            eligible = header->order == 1 ? record.token < cursor.token
-                       : header->order == 2
-                           ? record.priority < cursor.priority ||
-                                 (record.priority == cursor.priority && record.token > cursor.token)
-                           : record.token > cursor.token;
+        int eligible = !*token || (peek != 2 && *token == record.token);
+        if (*token && peek == 2)
+            eligible = header->order == 0 ? at > previous_at
+                       : header->order == 1
+                           ? at < previous_at
+                           : record.priority < previous.priority ||
+                                 (record.priority == previous.priority && at > previous_at);
         if (eligible && (!selected || header->order == 1 ||
                          (header->order == 2 && record.priority > chosen.priority)))
         {
@@ -243,6 +245,8 @@ int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity,
         }
         at += sizeof record + record.size;
     }
+    if (at == used && !selected && *token)
+        result = peek == 2 ? 3 : 2;
     if (at == used && selected && chosen.size <= capacity)
     {
         memcpy(data, bytes + selected + sizeof chosen, chosen.size);
@@ -258,6 +262,7 @@ int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity,
             result = commit(mailbox, bytes, used - sizeof chosen - chosen.size);
         }
     }
+finished:
     free(bytes);
     unlock(mailbox);
     return result;
@@ -286,7 +291,9 @@ int lx_host_mailbox_revision(LxHostMailbox *mailbox, uint32_t *revision)
     lock_mailbox(mailbox);
     if (flock(mailbox->fd, LOCK_SH))
     {
-        unlock(mailbox);
+        int previous = mailbox->cancel_state;
+        pthread_mutex_unlock(&mailbox->mutex);
+        pthread_setcancelstate(previous, NULL);
         return -1;
     }
     Header header;

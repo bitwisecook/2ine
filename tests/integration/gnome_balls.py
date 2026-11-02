@@ -201,7 +201,7 @@ def main():
         assert receipt["runtime_id"]
         window.execute(["run", r"D:\MISSING.EXE"])
         pump(lambda: not window.busy)
-        assert "Program does not exist" in window.banner.get_title()
+        assert "program does not exist" in window.banner.get_title().casefold()
         execute(["launch", "Test application"])
         execute(["unset", "env.TEST_VALUE"])
         execute(["remove-app", "Test application"])

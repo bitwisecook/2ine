@@ -17,7 +17,8 @@ static _Thread_local ULONG blink_time = 530;
 static BOOL invert_caret(void)
 {
     RECTL bounds;
-    if (!caret.owner || !WinQueryWindowRect(caret.owner, &bounds))
+    ULONG drawable = open32ClientWindow(caret.owner);
+    if (!caret.owner || !WinQueryWindowRect(drawable, &bounds))
         return FALSE;
     int64_t left = caret.x, top = caret.y, right = left + caret.width, bottom = top + caret.height;
     if (left < 0)
@@ -32,7 +33,7 @@ static BOOL invert_caret(void)
         return TRUE;
     unsigned width = (unsigned)(right - left), height = (unsigned)(bottom - top);
     uint32 *pixels = malloc((size_t)width * height * 4);
-    HPS ps = pixels ? WinGetPS(caret.owner) : 0;
+    HPS ps = pixels ? WinGetPS(drawable) : 0;
     BOOL result =
         ps && lx_pm_raster_read(ps, (LONG)left, bounds.yTop - (LONG)bottom, width, height, pixels);
     PmBitmap *image = caret.image.resource;

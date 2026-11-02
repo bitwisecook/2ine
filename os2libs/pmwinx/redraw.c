@@ -23,6 +23,7 @@ static LONG clamped_coordinate(int64_t value)
 }
 static BOOL redraw_rect(ULONG handle, const RECTL *rect, ULONG flags)
 {
+    handle = open32ClientWindow(handle);
     RECTL bounds;
     if (!WinQueryWindowRect(handle, &bounds))
         return FALSE;
@@ -61,6 +62,7 @@ static BOOL redraw_rect(ULONG handle, const RECTL *rect, ULONG flags)
 }
 static BOOL update_tree(ULONG handle, ULONG flags)
 {
+    handle = open32ClientWindow(handle);
     if ((flags & RDW_ALLCHILDREN) && !(flags & RDW_NOCHILDREN))
     {
         ULONG child = WinQueryWindow(handle, 2);
@@ -91,6 +93,7 @@ BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flag
         return FALSE;
     if (!handle)
         handle = HWND_DESKTOP;
+    handle = open32ClientWindow(handle);
     RECTL bounds;
     if (!WinQueryWindowRect(handle, &bounds))
     {
@@ -151,6 +154,7 @@ BOOL ValidateRgn(ULONG window, ULONG region)
 }
 BOOL GetUpdateRect(ULONG window, PVOID output, BOOL erase)
 {
+    window = open32ClientWindow(window);
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
     {
         open32SetError(1400);

@@ -114,6 +114,37 @@ class Image(C.Structure):
     ]
 
 
+class WindowAttributes(C.Structure):
+    _fields_ = [
+        ("x", Int),
+        ("y", Int),
+        ("width", Int),
+        ("height", Int),
+        ("border_width", Int),
+        ("depth", Int),
+        ("visual", P),
+        ("root", U),
+        ("window_class", Int),
+        ("bit_gravity", Int),
+        ("win_gravity", Int),
+        ("backing_store", Int),
+        ("backing_planes", U),
+        ("backing_pixel", U),
+        ("save_under", Int),
+        ("colormap", U),
+        ("map_installed", Int),
+        ("map_state", Int),
+        ("all_event_masks", C.c_long),
+        ("your_event_mask", C.c_long),
+        ("do_not_propagate_mask", C.c_long),
+        ("override_redirect", Int),
+        ("screen", P),
+    ]
+
+
+fn(x, "XGetWindowAttributes", Int, [P, U, C.POINTER(WindowAttributes)])
+
+
 class Display:
     def __init__(self, name):
         self.d = x.XOpenDisplay(name.encode())
@@ -134,6 +165,13 @@ class Display:
                 x.XFree(name)
         x.XFree(children)
         return result
+
+    def viewable(self, w):
+        attributes = WindowAttributes()
+        return (
+            bool(x.XGetWindowAttributes(self.d, w, C.byref(attributes)))
+            and attributes.map_state == 2
+        )
 
     def geometry(self, w):
         r = U()

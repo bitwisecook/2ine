@@ -1,0 +1,18 @@
+{
+  "notice": "Public domain. No rights reserved. Wholly AI-authored measurements.",
+  "reference": "OS/2 Warp 4.52 original PMWINX.DLL",
+  "reference_sha256": "07a7368235f8b5b0b42b955dc5d8130eb0fdf178c3f20bc62ab334b1da339655",
+  "probe": "Watcom32 PM executable, original ordinal393 GetWindowsDirectory; caller-cleaned (char *, ULONG); disposable Warp reference overlay",
+  "observations": {
+    "directory": "C:\\OS2",
+    "capacities_0_through_6": {
+      "result": 7,
+      "output": "unchanged"
+    },
+    "capacities_7_through_24": {
+      "result": 6,
+      "output_hex": "433a5c4f533200",
+      "following_bytes": "unchanged"
+    }
+  }
+}

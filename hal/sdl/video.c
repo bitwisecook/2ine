@@ -279,7 +279,7 @@ void *lx_host_window_data(LxHostWindow *window)
 int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height)
 {
     prepareRenderer();
-    if (width <= 0 || height <= 0)
+    if (width <= 0 || height <= 0 || !SDL_FlushRenderer(window->renderer))
         return 0;
     if (width != window->width || height != window->height)
     {
@@ -309,7 +309,7 @@ int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int h
         return 1;
     }
     return SDL_SetWindowPosition(window->window, x, y) &&
-           SDL_SetWindowSize(window->window, width, height);
+           SDL_SetWindowSize(window->window, width, height) && SDL_SyncWindow(window->window);
 }
 int lx_host_window_fullscreen(LxHostWindow *window, int enabled)
 {
