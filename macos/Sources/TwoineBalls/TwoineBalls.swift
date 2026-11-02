@@ -89,14 +89,22 @@ struct TwoineBallsApp: App {
         .windowResizability(.contentMinSize)
         .commands { BallCommands(model: model) }
         Settings { AppSettingsView() }
+        Window("About 2ine", id: "about") { ProjectAboutView(model: model) }
+            .defaultSize(width: 640, height: 660)
+            .defaultLaunchBehavior(.suppressed)
+            .windowResizability(.contentMinSize)
     }
 }
 
 struct BallCommands: Commands {
     @Bindable var model: AppModel
     @FocusedValue(\.ballViewActions) private var actions
+    @Environment(\.openWindow) private var openWindow
     var body: some Commands {
         SidebarCommands()
+        CommandGroup(replacing: .appInfo) {
+            Button("About 2ine") { openWindow(id: "about") }
+        }
         CommandGroup(replacing: .undoRedo) { BallUndoMenu(model: model) }
         CommandGroup(replacing: .newItem) {
             Button("New Ball…") { model.chooseBall(create: true) }.keyboardShortcut("n").disabled(model.busy || model.mediaBusy)

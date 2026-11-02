@@ -10,12 +10,18 @@ import shlex
 import shutil
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING or __package__:
+    from tools.project_sources import installed_catalogue
+else:
+    from project_sources import installed_catalogue
 
 ROOT = Path(__file__).resolve().parents[1]
 APP_ID = "io.github.bitwisecook.Twoine.Balls"
 # Host libc and graphics/desktop drivers remain owned by the distribution.
 HOST_LIBRARIES = re.compile(
-    r"lib(c|m|dl|pthread|rt|resolv|util|gcc_s|stdc\+\+|GL\w*|EGL|X\w*|xcb\w*|drm\w*|gbm|wayland\w*|expat)\.so|ld-linux"
+    r"lib(c|m|mvec|dl|pthread|rt|resolv|util|gcc_s|stdc\+\+|GL\w*|EGL|X\w*|xcb\w*|drm\w*|gbm|wayland\w*|expat)\.so|ld-linux"
 )
 
 
@@ -46,7 +52,7 @@ def stage(build, destination):
     app = destination / "usr/lib/2ine-balls"
     runtime = app / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)
-    for name in ("gnome_balls.py", "gnome_views.py", "balls.py"):
+    for name in ("gnome_balls.py", "gnome_views.py", "gnome_audio.py", "balls.py"):
         copy(ROOT / "tools" / name, app / "tools" / name)
     for name in ("window.ui", APP_ID + ".svg", APP_ID + "-symbolic.svg"):
         copy(ROOT / "tools/gnome" / name, app / "tools/gnome" / name)
@@ -74,6 +80,8 @@ def stage(build, destination):
         )
     licenses = destination / "usr/share/doc/2ine-balls"
     copy(ROOT / "LICENSE.txt", licenses / "copyright")
+    copy(ROOT / "docs/project-sources.md", licenses / "project-sources.md")
+    copy(ROOT / "ball/vendor/sha256/README.md", licenses / "SHA256-public-domain.md")
     shutil.copytree(ROOT / "docs/licenses", licenses / "licenses")
     copy(ROOT / "ball/vendor/cjson/LICENSE", licenses / "licenses/cJSON-MIT.txt")
     copy(ROOT / "ball/vendor/fatfs/LICENSE.txt", licenses / "licenses/FatFs-license.txt")
@@ -123,11 +131,22 @@ def stage(build, destination):
         "TWOINE_FREETYPE_SOURCE_DIR",
         "TWOINE_SDL3_SOURCE_DIR",
         "TWOINE_UNICORN_SOURCE_DIR",
+        "TWOINE_FLUIDSYNTH_SOURCE_DIR",
+        "TWOINE_INSTPATCH_SOURCE_DIR",
+        "TWOINE_LIQUIDSFZ_SOURCE_DIR",
     ):
         match = re.search(rf"^{key}:\w+=(.+)$", cache, re.M)
         if match:
             source = Path(match[1])
-            for name in ("LICENSE.txt", "LICENSE.TXT", "LICENSE", "COPYING", "docs/FTL.TXT"):
+            for name in (
+                "LICENSE.txt",
+                "LICENSE.TXT",
+                "LICENSE",
+                "COPYING",
+                "AUTHORS",
+                "AUTHORS.md",
+                "docs/FTL.TXT",
+            ):
                 if (source / name).is_file():
                     copy(
                         source / name, licenses / "licenses" / (source.name + "-" + Path(name).name)
@@ -139,6 +158,12 @@ def stage(build, destination):
             copyright_file = Path("/usr/share/doc") / package / "copyright"
             if copyright_file.is_file():
                 copy(copyright_file, licenses / "licenses" / (package + "-copyright"))
+    for name in ("LGPL-2.1", "MPL-2.0"):
+        source = Path("/usr/share/common-licenses") / name
+        if source.is_file():
+            copy(source, licenses / "licenses" / name)
+    catalogue = installed_catalogue(dependency_paths)
+    (runtime / "project-sources.json").write_text(json.dumps(catalogue, indent=2) + "\n")
     (licenses / "runtime-inputs.json").write_text(json.dumps(copied, indent=2) + "\n")
     return destination
 
@@ -167,7 +192,7 @@ Section: otherosfs
 Priority: optional
 Architecture: {architecture}
 Maintainer: 2ine Contributors <noreply@github.com>
-Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libgl1, libegl1, libgles2
+Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libstdc++6, libgcc-s1, libgl1, libegl1, libgles2
 Homepage: https://github.com/bitwisecook/2ine
 Description: Native GNOME manager for OS/2 applications
  Persistent balls of 2ine with private drives, settings and application state.
@@ -198,7 +223,7 @@ def rpm(stage_root, output, version):
 Version: {version}
 Release: 1
 Summary: Native GNOME manager for OS/2 applications
-License: Zlib AND GPL-2.0-only AND MIT AND OFL-1.1
+License: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND bzip2-1.0.6
 URL: https://github.com/bitwisecook/2ine
 Requires: python3 >= 3.11, python3-gobject, gtk4 >= 4.18, libadwaita >= 1.9, mesa-libGL, mesa-libEGL, libglvnd-gles
 Recommends: mesa-dri-drivers

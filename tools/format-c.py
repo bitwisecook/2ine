@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Format maintained C/H sources using the repository's pinned clang-format."""
+"""Format maintained C/C++ sources using the repository's pinned clang-format."""
 
 from __future__ import annotations
 
@@ -44,13 +44,24 @@ def sources(paths: list[Path]) -> list[str]:
             path = path.resolve(strict=True)
             path.relative_to(ROOT)
             if path.is_dir():
-                raise ValueError(f"expected a C/H file: {path}")
-            if path.suffix not in (".c", ".h"):
-                raise ValueError(f"expected a C/H file: {path}")
+                raise ValueError(f"expected a C/C++ file: {path}")
+            if path.suffix not in (".c", ".h", ".cpp"):
+                raise ValueError(f"expected a C/C++ file: {path}")
             files.append(str(path))
         return sorted(set(files))
     result = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.c", "*.h"],
+        [
+            "git",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+            "--",
+            "*.c",
+            "*.h",
+            "*.cpp",
+        ],
         cwd=ROOT,
         capture_output=True,
         check=True,
@@ -73,14 +84,14 @@ def main() -> int:
     )
     mode.add_argument("--write", action="store_true", help="format sources in place")
     parser.add_argument(
-        "paths", nargs="*", type=Path, help="C/H files; defaults to all maintained sources"
+        "paths", nargs="*", type=Path, help="C/C++ files; defaults to all maintained sources"
     )
     args = parser.parse_args()
     try:
         executable = formatter()
         files = sources(args.paths)
         if not files:
-            raise ValueError("no C/H sources selected")
+            raise ValueError("no C/C++ sources selected")
         command = [
             executable,
             "--style=file",
@@ -91,7 +102,7 @@ def main() -> int:
         command += ["--dry-run", "--ferror-limit=3"] if args.check else ["-i"]
         result = subprocess.run([*command, *files], cwd=ROOT)
         if result.returncode == 0:
-            print("C/H formatting check passed" if args.check else "C/H sources formatted")
+            print("C/C++ formatting check passed" if args.check else "C/C++ sources formatted")
         return result.returncode
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         print(f"format-c: {error}", file=sys.stderr)

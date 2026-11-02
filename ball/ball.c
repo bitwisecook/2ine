@@ -5,6 +5,7 @@
 #include "disk_image.h"
 #include "icon.h"
 #include "vendor/cjson/cJSON.h"
+#include "project_sources.h"
 #include "vendor/sha256/sha256.h"
 #include <ctype.h>
 #include <errno.h>
@@ -916,6 +917,8 @@ static char *hex(Context *c, const unsigned char hash[32])
         sprintf(out + i * 2, "%02x", hash[i]);
     return keep(c, out);
 }
+#include "audio.h"
+
 static int runtime_name(const char *s)
 {
     size_t n = strlen(s);
@@ -1230,7 +1233,7 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
     if (!env)
         return NULL;
     const char *assets[][2] = {{"TWOINE_FONT_DIRECTORY", "fonts"},
-                               {"TWOINE_SOUNDFONT", "soundfonts/GeneralUser-GS.sf2"},
+                               {"TWOINE_SOUNDFONT", "soundfonts/FluidR3_GM.sf2"},
                                {"TWOINE_KOSMICKRISP_ICD", "vulkan/icd.d/kosmickrisp.json"}};
     for (int i = 0; i < 3; i++)
     {
@@ -1238,6 +1241,8 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
         if (tb_is_file(asset) || tb_is_dir(asset))
             put(env, assets[i][0], cJSON_CreateString(asset));
     }
+    if (!audio_config(c, build, env))
+        goto failed;
     const char *backend = override ? override : field(get(c->manifest, "runtime"), "backend");
     const char *inherited = getenv("TWOINE_BACKEND");
     const char *selected = backend ? backend : (inherited && *inherited ? inherited : "default");
@@ -2369,6 +2374,40 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         free(encoded);
         return result;
     }
+    if (!strcmp(action, "project-sources"))
+    {
+        const char *build = field(request, "build");
+        if (build && *build)
+        {
+            char *path = join(c, build, "project-sources.json");
+            if (tb_is_file(path))
+            {
+                char *text = read_file(c, path, NULL, 0);
+                cJSON *catalogue = text ? cJSON_Parse(text) : NULL;
+                if (!catalogue || !cJSON_IsArray(get(catalogue, "projects")))
+                {
+                    cJSON_Delete(catalogue);
+                    fail(c, "Invalid packaged source catalogue");
+                    return NULL;
+                }
+                return catalogue;
+            }
+        }
+        cJSON *catalogue = cJSON_Parse(tb_project_sources);
+        cJSON *project = cJSON_GetArrayItem(get(catalogue, "projects"), 0);
+        if (project && strlen(TB_SOURCE_REVISION) == 40)
+        {
+            put(project, "version", cJSON_CreateString(TB_SOURCE_VERSION));
+            put(project, "source",
+                cJSON_CreateString(
+                    format(c, "https://github.com/bitwisecook/2ine/tree/%s", TB_SOURCE_REVISION)));
+            put(project, "download",
+                cJSON_CreateString(format(c,
+                                          "https://github.com/bitwisecook/2ine/archive/%s.tar.gz",
+                                          TB_SOURCE_REVISION)));
+        }
+        return catalogue;
+    }
     if (!strcmp(action, "defaults"))
     {
         cJSON *v = cJSON_CreateObject();
@@ -2449,6 +2488,12 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     }
     if (!load(c, request))
         return NULL;
+    if (!strcmp(action, "audio-snapshot"))
+        return audio_snapshot(c);
+    if (!strcmp(action, "save-audio"))
+        return audio_save(c, request);
+    if (!strcmp(action, "import-soundfont"))
+        return audio_import_archive(c, request);
     if (!strcmp(action, "export-ball"))
         return export_ball(c, request);
     if (!strcmp(action, "os2-support"))

@@ -3,6 +3,9 @@
 #include "os2libs/midi_synth.h"
 #include "os2libs/midi_mt32.h"
 #include "os2libs/midi_config.h"
+#if TWOINE_MIDI_EXTENDED
+#include "os2libs/midi_banks.h"
+#endif
 #include "hal/host.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,9 +27,12 @@ struct LxMidiSynth
     tsf *font;
 #endif
     LxMidiMt32 *mt32;
+#if TWOINE_MIDI_EXTENDED
+    LxMidiBanks *banks;
+#endif
     unsigned rate;
 };
-#if TWOINE_MIDI_SYNTH
+#if TWOINE_MIDI_SYNTH && !TWOINE_MIDI_EXTENDED
 static tsf *open_font(const char *path)
 {
     const char *trace = getenv("TWOINE_TRACE_AUDIO");
@@ -55,11 +61,11 @@ static tsf *load_font(void)
         if (slash)
         {
             slash[1] = 0;
-            size_t length = strlen(executable) + sizeof "soundfonts/GeneralUser-GS.sf2";
+            size_t length = strlen(executable) + sizeof "soundfonts/FluidR3_GM.sf2";
             char *path = malloc(length);
             if (path)
             {
-                snprintf(path, length, "%ssoundfonts/GeneralUser-GS.sf2", executable);
+                snprintf(path, length, "%ssoundfonts/FluidR3_GM.sf2", executable);
                 tsf *font = open_font(path);
                 free(path);
                 if (font)
@@ -80,6 +86,10 @@ int lx_midi_synth_reset(LxMidiSynth *synth)
         return 0;
     if (synth->mt32)
         return lx_midi_mt32_reset(synth->mt32);
+#if TWOINE_MIDI_EXTENDED
+    if (synth->banks)
+        return lx_midi_banks_reset(synth->banks);
+#endif
 #if TWOINE_MIDI_SYNTH
     tsf_reset(synth->font);
     float discarded[4096];
@@ -121,6 +131,43 @@ LxMidiSynth *lx_midi_synth_create(void)
         return synth;
     }
 #if TWOINE_MIDI_SYNTH
+#if TWOINE_MIDI_EXTENDED
+    char *executable = lx_host_executable_path(), *bank_path = NULL;
+    if (executable)
+    {
+        char *slash = strrchr(executable, '/'), *backslash = strrchr(executable, '\\');
+        if (backslash && (!slash || backslash > slash))
+            slash = backslash;
+        if (slash)
+        {
+            slash[1] = 0;
+            size_t size = strlen(executable) + sizeof "soundfonts/FluidR3_GM.sf2";
+            bank_path = malloc(size);
+            if (bank_path)
+            {
+                snprintf(bank_path, size, "%ssoundfonts/FluidR3_GM.sf2", executable);
+                FILE *file = fopen(bank_path, "rb");
+                if (file)
+                    fclose(file);
+                else
+                {
+                    free(bank_path);
+                    bank_path = NULL;
+                }
+            }
+        }
+        free(executable);
+    }
+    synth->banks = lx_midi_banks_create(bank_path ? bank_path : TWOINE_SOUNDFONT_FILE, synth->rate);
+    free(bank_path);
+    if (!synth->banks)
+    {
+        fprintf(stderr, "2ine: Cannot load the selected sound bank or channel mapping.\n");
+        free(synth);
+        return NULL;
+    }
+    return synth;
+#else
     synth->font = load_font();
     if (!synth->font)
     {
@@ -148,6 +195,7 @@ LxMidiSynth *lx_midi_synth_create(void)
         return NULL;
     }
     return synth;
+#endif
 #else
     free(synth);
     return NULL;
@@ -158,6 +206,9 @@ void lx_midi_synth_destroy(LxMidiSynth *synth)
     if (!synth)
         return;
     lx_midi_mt32_destroy(synth->mt32);
+#if TWOINE_MIDI_EXTENDED
+    lx_midi_banks_destroy(synth->banks);
+#endif
 #if TWOINE_MIDI_SYNTH
     if (synth->font)
         tsf_close(synth->font);
@@ -174,6 +225,13 @@ void lx_midi_synth_event(LxMidiSynth *synth, unsigned status, unsigned key, unsi
         return;
     }
 #if TWOINE_MIDI_SYNTH
+#if TWOINE_MIDI_EXTENDED
+    if (synth->banks)
+    {
+        lx_midi_banks_event(synth->banks, status, key, value);
+        return;
+    }
+#endif
     unsigned channel = status & 15;
     switch (status & 0xf0)
     {
@@ -204,6 +262,13 @@ void lx_midi_synth_sysex(LxMidiSynth *synth, const unsigned char *message, size_
         lx_midi_mt32_sysex(synth->mt32, message, length);
         return;
     }
+#if TWOINE_MIDI_EXTENDED
+    if (synth->banks)
+    {
+        lx_midi_banks_sysex(synth->banks, message, length);
+        return;
+    }
+#endif
     if (length == 6 && message[1] == 0x7e && message[3] == 9 && message[4] >= 1 && message[4] <= 3)
         lx_midi_synth_reset(synth);
 }
@@ -224,6 +289,13 @@ static void render(LxMidiSynth *synth, float *samples, unsigned count, unsigned 
         return;
     }
 #if TWOINE_MIDI_SYNTH
+#if TWOINE_MIDI_EXTENDED
+    if (synth->banks)
+    {
+        lx_midi_banks_render(synth->banks, samples, count, rate, volume, channels);
+        return;
+    }
+#endif
     if (rate != synth->rate)
     {
         synth->rate = rate;

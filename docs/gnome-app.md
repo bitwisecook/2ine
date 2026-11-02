@@ -194,3 +194,9 @@ xvfb-run -a -s '-screen 0 1440x1000x24' dbus-run-session -- \
 
 Use a separate preview copy when selecting real application media/state. Original
 applications and media are never included in the distributable manager packages.
+
+## Sound banks and source credits
+
+Settings provides [sound-bank installation and 16-channel MIDI mapping](sound-banks.md).
+About prominently credits original author Ryan C. Gordon and lists the
+[project versions, authors, sources and downloads](project-sources.md).

@@ -17,7 +17,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes libarchive-dev
       - name: Install Linux application dependencies
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: sudo apt-get update && sudo apt-get install --yes libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 dbus-x11 patchelf rpm desktop-file-utils appstream
+        run: sudo apt-get update && sudo apt-get install --yes libglib2.0-dev libsndfile1-dev libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 dbus-x11 patchelf rpm desktop-file-utils appstream
+      - name: Install Mac application synthesis dependencies
+        if: runner.os == 'macOS' && matrix.profile == 'application'
+        run: brew install glib libsndfile pkgconf
       - name: Fetch hash-verified archived PMStars fixture
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: python3 tests/integration/fetch_gui_fixture.py --destination "$RUNNER_TEMP/hobbes"
@@ -48,6 +51,9 @@ jobs:
       - name: Test native GNOME drive and application editors
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_features.py --build build-runtime
+      - name: Test native bank import, channel mapping and source credits
+        if: runner.os == 'Linux' && matrix.profile == 'application'
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_audio.py --build build-runtime
       - name: Validate GNOME metadata and build native packages
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: |

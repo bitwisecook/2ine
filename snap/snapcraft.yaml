@@ -9,7 +9,7 @@ description: |
 base: core26
 grade: devel
 confinement: strict
-license: Zlib AND GPL-2.0-only AND LGPL-2.1-or-later AND MIT AND OFL-1.1
+license: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND bzip2-1.0.6
 platforms:
   amd64:
   arm64:
@@ -24,7 +24,7 @@ parts:
   2ine:
     plugin: nil
     source: .
-    build-packages: [libarchive-dev, cmake, ninja-build, build-essential, clang, patchelf, python3, libunicorn-dev, libgl-dev, libegl-dev, libncurses-dev, libx11-dev, libxext-dev, libxrandr-dev, libxcursor-dev, libxi-dev, libxfixes-dev, libxss-dev, libwayland-dev, libxkbcommon-dev, libasound2-dev, libpulse-dev]
+    build-packages: [libarchive-dev, libglib2.0-dev, libsndfile1-dev, cmake, ninja-build, build-essential, clang, patchelf, python3, libunicorn-dev, libgl-dev, libegl-dev, libncurses-dev, libx11-dev, libxext-dev, libxrandr-dev, libxcursor-dev, libxi-dev, libxfixes-dev, libxss-dev, libwayland-dev, libxkbcommon-dev, libasound2-dev, libpulse-dev]
     stage-packages: [python3, python3-gi]
     override-build: |
       cmake -S . -B build-snap -G Ninja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=ON -DTWOINE_SDL3_PROVIDER=source -DTWOINE_OPENGL=ON

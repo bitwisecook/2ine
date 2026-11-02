@@ -30,8 +30,12 @@ notices and meet their source/distribution requirements.
 Historical compiler/SDK fixtures are supplied separately and are not licensed
 or redistributed by this project. `LICENSE.txt` is preserved unchanged.
 
-Sampled MIDI retains TinySoundFont's MIT notice and GeneralUser GS's own bank
-license, staged together in `build/soundfonts/`. [Doom source builds](doom.md)
+Sampled MIDI defaults to FluidR3 GM under Frank Wen's MIT license, with his
+recording/contributor account retained. FluidSynth uses LGPL-2.1-or-later;
+libInstPatch is LGPL-2.1-only. LiquidSFZ retains MPL-2.0, with its
+secondary-license-compatible terms used when combined with the GPLv2 runtime;
+its embedded pugixml retains MIT. The explicit minimal TinySoundFont fallback
+retains MIT. GeneralUser GS is an optional user download and is not bundled. [Doom source builds](doom.md)
 use separately supplied third-party source under its existing notices; neither
 that source nor game WADs are relicensed or distributed here.
 
@@ -40,3 +44,9 @@ notices and applicable source/relinking requirements when distributing linked
 builds. SoundFont forum discovery records author and license claims separately
 from the forum's own post license. Fetched/user-imported banks stay in the
 user's cache with receipts; the downloader does not change their licenses.
+
+The [project source and credit catalogue](project-sources.md) is generated from
+`tools/data/project-sources.json` and shared by both native About views. Packaged
+inventories record actual host dependency versions. Source/download links and
+license texts do not by themselves replace the complete corresponding-source
+distribution required for GPL/LGPL binary releases.

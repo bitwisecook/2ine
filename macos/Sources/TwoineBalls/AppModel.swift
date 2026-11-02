@@ -93,6 +93,7 @@ final class AppModel {
         return draft
     }
     var activity = "No process has run in this session."
+    var audioEditor = false
     var operation = "Ready"
     var log: URL?
     var exitCode: Int32?
@@ -424,6 +425,24 @@ final class AppModel {
     }
     func createFloppy(letter: String, path: String, kib: Int) async throws {
         try await changeMedia(["create-floppy", letter, path, String(kib)])
+    }
+    func audioSnapshot(ball: String) async throws -> AudioSnapshot {
+        try await backend.request(DesktopRequest("audio-snapshot", ball: ball), as: AudioSnapshot.self)
+    }
+    func importSoundBank(_ path: String, ball: String) async throws -> AudioSnapshot {
+        guard !busy, !mediaBusy, selected == ball else { throw BallError("Wait for the operation to finish and keep this ball selected.") }
+        busy = true; defer { busy = false }
+        var request = DesktopRequest("import-soundfont", ball: ball); request.path = path
+        let value = try await backend.request(request, as: AudioSnapshot.self)
+        try await reload(ball)
+        return value
+    }
+    func saveAudio(_ settings: AudioSettings, ball: String) async throws {
+        guard !busy, !mediaBusy, selected == ball else { throw BallError("Wait for the operation to finish and keep this ball selected.") }
+        busy = true; defer { busy = false }
+        var request = DesktopRequest("save-audio", ball: ball); request.settings = settings
+        _ = try await backend.request(request, as: AudioSnapshot.self)
+        try await reload(ball)
     }
     func chooseOS2Support() async throws -> OS2SupportStatus? {
         guard !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }

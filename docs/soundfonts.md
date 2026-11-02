@@ -5,12 +5,15 @@
 For named choices from the external collection, see
 [mt32-pi recommended sources and downloads](recommended-soundfonts.md).
 
+[FluidR3 GM](https://github.com/pianobooster/fluid-soundfont) by Frank Wen is the
+default stereo General MIDI bank. Its original release, MIT license, author
+recording account and contributor credits are pinned and distributed together.
+See [GUI installation and channel mapping](sound-banks.md).
+
 [GeneralUser GS](https://www.schristiancollins.com/generaluser.php) by S. Christian
-Collins is the default complete General MIDI and Roland GS compatible bank.
-It supplies sampled instruments and percussion; it does not contain a licensed
-Roland ROM set or emulate the SC-55 or MT-32 hardware. The author's
-[official repository](https://github.com/mrbumpy409/GeneralUser-GS) provides the
-bank, documentation and its license.
+Collins remains an optional user download. It is not bundled. Its author
+discloses that some sample origins cannot be confirmed; selecting or downloading
+it does not change its license or that provenance limitation.
 
 [TimGM6mb](https://www.timbrechbill.com/saxguru/Timidity.php) by Tim Brechbill is a
 small complete GM alternative. The catalog pins the GPL-2.0 copy retained in
@@ -22,8 +25,8 @@ are kept separate.
 is another primary source for banks and formats, including FluidR3.
 [FreePats](https://freepats.zenvoid.org/) publishes openly licensed instrument
 samples and banks. Check each bank's format, instrument coverage and license:
-2ine's sampled backend requires a complete SF2 GM set. SF3 and SFZ use different
-formats.
+the minimal TinySoundFont fallback and legacy complete-GM downloader require a
+complete SF2 set. The native GUI supports SF2, SF3, DLS and SFZ instruments.
 
 For actual MT-32/CM-32L synthesis, [Munt](https://github.com/munt/munt) emulates
 those pre-GM devices using separately supplied control and PCM ROM images.
@@ -35,9 +38,9 @@ From the checkout:
 
 ```sh
 python3 tools/fetch_soundfonts.py list
-python3 tools/fetch_soundfonts.py details generaluser-gs
-python3 tools/fetch_soundfonts.py fetch generaluser-gs
-python3 tools/fetch_soundfonts.py use generaluser-gs
+python3 tools/fetch_soundfonts.py details fluidr3-gm
+python3 tools/fetch_soundfonts.py fetch fluidr3-gm
+python3 tools/fetch_soundfonts.py use fluidr3-gm
 python3 tools/fetch_soundfonts.py use timgm6mb
 python3 tools/fetch_soundfonts.py use-file /path/to/your/SC-55.sf2
 ```

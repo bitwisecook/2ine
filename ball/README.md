@@ -264,3 +264,18 @@ Reads reject traversal members and links. Work and expansion limits apply:
 100000 entries per container/search, 2 GiB per expanded ordinary member,
 and 16 MiB per IBM compressed member. Those limits constrain resource use,
 not nesting depth. Unsupported/encrypted/corrupt containers report errors.
+
+## Audio library and credits
+
+`project-sources` works without a selected ball and returns project versions,
+authors, license names and project/source/download links. A `build` containing
+`project-sources.json` supplies that package's actual dependency inventory.
+The built-in catalogue carries the compiled engine's source identity.
+
+`audio-snapshot` returns `settings`, `banks` and `profiles` for a ball.
+`import-soundfont` accepts a local `path` to SF2/SF3/DLS/SFZ or a one-bank ZIP.
+SFZ imports retain the containing instrument folder. `save-audio` accepts the
+complete `settings` object; its `channels` array contains all 16 inputs. Known
+fields are validated and unknown settings/channel fields are preserved. Launch
+preparation resolves ball-relative bank paths and writes the worker audio file.
+[Sound-bank interface and channel semantics](../docs/sound-banks.md).

@@ -99,6 +99,26 @@ def main():
         args.mesa_prefix.resolve(),
         args.vulkan_loader.resolve(),
     )
+    if TYPE_CHECKING or __package__:
+        from tools.project_sources import installed_catalogue
+    else:
+        from project_sources import installed_catalogue
+    catalogue = installed_catalogue(copied.keys())
+    swift_version = command(
+        ["swift", "--version"], capture_output=True, text=True
+    ).stdout.splitlines()[0]
+    sdk_version = command(
+        ["xcrun", "--sdk", "macosx", "--show-sdk-version"], capture_output=True, text=True
+    ).stdout.strip()
+    catalogue["buildTools"] = {"swift": swift_version, "macOSSDK": sdk_version}
+    for project in catalogue["projects"]:
+        if project["id"] == "swift":
+            project["version"] = swift_version
+        elif project["id"] == "apple-frameworks":
+            project["version"] = "macOS SDK " + sdk_version + "; deployment target 27.0"
+
+    (resources / "Runtime/project-sources.json").write_text(json.dumps(catalogue, indent=2) + "\n")
+    shutil.copy2(ROOT / "docs/project-sources.md", resources / "Project Sources.md")
     shutil.copy2(ROOT / "LICENSE.txt", resources / "LICENSE.txt")
     shutil.copytree(ROOT / "docs/licenses", resources / "Licenses")
     shutil.copy2(ROOT / "ball/vendor/cjson/LICENSE", resources / "Licenses/cJSON-MIT.txt")
