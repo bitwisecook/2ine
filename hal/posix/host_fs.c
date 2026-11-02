@@ -298,11 +298,20 @@ static LxHostFsError refresh_image(LxHostFile *file)
     FILE *snapshot = tb_image_fopen(file->image_path);
     if (!snapshot)
         return LX_HOST_FS_OK;
-    unsigned char data[65536];
+    enum
+    {
+        BUFFER_SIZE = 65536
+    };
+    unsigned char *data = malloc(BUFFER_SIZE);
+    if (!data)
+    {
+        fclose(snapshot);
+        return LX_HOST_FS_NO_MEMORY;
+    }
     size_t n;
     off_t at = 0;
     LxHostFsError status = LX_HOST_FS_OK;
-    while ((n = fread(data, 1, sizeof data, snapshot)))
+    while ((n = fread(data, 1, BUFFER_SIZE, snapshot)))
     {
         ssize_t written;
         do
@@ -326,6 +335,7 @@ static LxHostFsError refresh_image(LxHostFile *file)
         if (result < 0)
             status = fs_error(errno);
     }
+    free(data);
     fclose(snapshot);
     return status;
 }

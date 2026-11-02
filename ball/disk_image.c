@@ -1053,6 +1053,11 @@ FILE *tb_image_fopen(const char *path)
         return NULL;
     Node node;
     FILE *output = NULL;
+    unsigned char *buffer = NULL, *visited = NULL;
+    enum
+    {
+        BUFFER_SIZE = 65536
+    };
     if (!lookup(&disk, member, &node))
         goto done;
     if (node.directory)
@@ -1065,13 +1070,15 @@ FILE *tb_image_fopen(const char *path)
         goto done;
     uint64_t remaining = node.size, offset = node.offset;
     uint32_t cluster = node.cluster, steps = 0, within = 0;
-    unsigned char buffer[65536];
-    unsigned char *visited = disk.fat_bits ? calloc((disk.clusters + 9u) / 8u, 1) : NULL;
+    buffer = malloc(BUFFER_SIZE);
+    if (!buffer)
+        goto failed;
+    visited = disk.fat_bits ? calloc((disk.clusters + 9u) / 8u, 1) : NULL;
     if (disk.fat_bits && !visited)
         goto failed;
     while (remaining)
     {
-        size_t chunk = remaining > sizeof buffer ? sizeof buffer : (size_t)remaining;
+        size_t chunk = remaining > BUFFER_SIZE ? BUFFER_SIZE : (size_t)remaining;
         if (disk.fat_bits)
         {
             if (cluster < 2 || cluster >= disk.clusters + 2 ||
@@ -1113,8 +1120,6 @@ FILE *tb_image_fopen(const char *path)
             }
         }
     }
-    free(visited);
-    visited = NULL;
     if (fflush(output) || fseeko(output, 0, SEEK_SET))
         goto failed;
     goto done;
@@ -1126,6 +1131,8 @@ failed:
     errno = error;
 }
 done:
+    free(visited);
+    free(buffer);
     close_disk(&disk);
     return output;
 }
