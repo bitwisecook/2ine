@@ -1050,15 +1050,15 @@
     {
       "id": "pkgconf",
       "name": "pkgconf / pkg-config",
-      "version": "2.5.1-4pkgconf|2.5.1-4",
+      "version": "2.5.1-4",
       "license": "ISC",
       "authors": [
         "Ariadne Conill",
         "pkgconf contributors"
       ],
       "homepage": "https://github.com/pkgconf/pkgconf",
-      "source": "https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4",
-      "download": "https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4",
+      "source": "https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4",
+      "download": "https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4",
       "role": "build/packaging tool; not bundled",
       "versionPolicy": "host"
     },

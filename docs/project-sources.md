@@ -540,11 +540,11 @@ are user-supplied and are not licensed or redistributed by this project.
 
 ## pkgconf / pkg-config
 
-- Version: 2.5.1-4pkgconf|2.5.1-4 (host selected)
+- Version: 2.5.1-4 (host selected)
 - License: ISC
 - Used as: build/packaging tool; not bundled
 - Authors / origin credits: Ariadne Conill; pkgconf contributors
-- [Project](https://github.com/pkgconf/pkgconf) · [Source](https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4) · [Download](https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4)
+- [Project](https://github.com/pkgconf/pkgconf) · [Source](https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4) · [Download](https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4)
 
 ## dpkg
 
