@@ -1083,7 +1083,7 @@
       "id": "rpm",
       "name": "RPM",
       "version": "6.0.1-1build1",
-      "license": "GPL-2.0-or-later and LGPL-2.1-or-later components",
+      "license": "GPL-2.0-or-later; LGPL-2.0-or-later and BSD-3-Clause components",
       "authors": [
         "Erik Troan",
         "Marc Ewing",

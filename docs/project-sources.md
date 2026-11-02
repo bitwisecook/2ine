@@ -557,7 +557,7 @@ are user-supplied and are not licensed or redistributed by this project.
 ## RPM
 
 - Version: 6.0.1-1build1 (host selected)
-- License: GPL-2.0-or-later and LGPL-2.1-or-later components
+- License: GPL-2.0-or-later; LGPL-2.0-or-later and BSD-3-Clause components
 - Used as: build/packaging tool; not bundled
 - Authors / origin credits: Erik Troan; Marc Ewing; RPM contributors
 - [Project](https://rpm.org/) · [Source](https://launchpad.net/ubuntu/+source/rpm/6.0.1-1build1) · [Download](https://launchpad.net/ubuntu/+source/rpm/6.0.1-1build1)
