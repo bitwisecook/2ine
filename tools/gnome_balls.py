@@ -12,9 +12,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 if __package__:
-    from . import balls, gnome_views
+    from . import balls, gnome_audio, gnome_views
 else:
     import balls
+    import gnome_audio
     import gnome_views
 
 try:
@@ -134,6 +135,7 @@ class BallWindow(Adw.ApplicationWindow):
             ("install", lambda: self.program_dialog("install")),
             ("run", lambda: self.program_dialog("run")),
             ("about", self.about),
+            ("audio", self.audio_dialog),
             ("copy", lambda: self.get_clipboard().set(str(self.ball)) if self.ball else None),
             ("reveal", lambda: self.open_path(self.ball) if self.ball else None),
         ):
@@ -223,6 +225,7 @@ class BallWindow(Adw.ApplicationWindow):
             "add-drive",
             "create-disk",
             "create-floppy",
+            "audio",
             "save",
         ):
             self.lookup_action(name).set_enabled(
@@ -569,6 +572,16 @@ class BallWindow(Adw.ApplicationWindow):
         )
         backend.connect("notify::selected", self.backend_changed)
         group.add(backend)
+        audio = Adw.PreferencesGroup(title="Sound Banks and MIDI")
+        row = Adw.ActionRow(
+            title="Sound Banks and Channel Mapping",
+            subtitle="Import SF2, SF3, SFZ and DLS; configure all 16 channels.",
+            activatable=True,
+        )
+        row.add_suffix(button("preferences-system-symbolic", self.audio_dialog, True))
+        row.connect("activated", lambda *_: self.audio_dialog())
+        audio.add(row)
+        settings.append(audio)
         group = Adw.PreferencesGroup(
             title="2ine Settings", description="Reset an override to inherit the runtime default."
         )
@@ -1574,16 +1587,68 @@ class BallWindow(Adw.ApplicationWindow):
             self.request_work(lambda: self.read_log(path), updated, locked=False)
         return self.process is not None
 
+    def audio_dialog(self):
+        if self.ball and not self.busy:
+            return gnome_audio.AudioDialog(self)
+        return None
+
     def about(self):
-        Adw.AboutDialog(
-            application_name="2ine",
-            application_icon=APP_ID,
-            developer_name="2ine Contributors",
-            version="0.1",
-            website="https://github.com/bitwisecook/2ine",
-            license_type=Gtk.License.ZLIB,
-            comments="OS/2 applications, comfortably at home on GNOME.",
-        ).present(self)
+        def show(catalogue):
+            dialog = Adw.AboutDialog(
+                application_name="2ine",
+                application_icon=APP_ID,
+                developer_name="Ryan C. Gordon and 2ine Contributors",
+                developers=[
+                    "Ryan C. Gordon (original 2ine) https://icculus.org/",
+                    "2ine Contributors https://github.com/bitwisecook/2ine",
+                ],
+                copyright="Original 2ine © 2016–2022 Ryan C. Gordon",
+                version="0.1",
+                website="https://github.com/bitwisecook/2ine",
+                license_type=Gtk.License.CUSTOM,
+                license="Original 2ine: zlib-style license. The Unicorn-linked runtime is distributed under GPLv2-compatible terms. Bundled components retain their own licenses; see Legal for sources and credits.",
+                comments="Created by Ryan C. Gordon (icculus). This fork builds on his original OS/2 compatibility layer.",
+            )
+            dialog.add_link("All Project Sources, Versions and Downloads", catalogue["catalogue"])
+            dialog.add_link("Original 2ine by Ryan C. Gordon", "https://github.com/icculus/2ine")
+            dialog.add_credit_section(
+                "Running Frontend",
+                [
+                    f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro} https://www.python.org/",
+                    f"GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()} https://www.gtk.org/",
+                    f"libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}.{Adw.get_micro_version()} https://gitlab.gnome.org/GNOME/libadwaita",
+                ],
+            )
+            for item in catalogue["projects"]:
+                links = " · ".join(
+                    f'<a href="{GLib.markup_escape_text(item[key])}">{label}</a>'
+                    for key, label in (
+                        ("homepage", "Project"),
+                        ("source", "Source"),
+                        ("download", "Download"),
+                    )
+                )
+                text = (
+                    GLib.markup_escape_text(item.get("role", "Component"))
+                    + "\n"
+                    + GLib.markup_escape_text(item["license"])
+                    + "\n"
+                    + links
+                )
+                dialog.add_legal_section(
+                    item["name"] + " — " + item["version"],
+                    "; ".join(item["authors"]),
+                    Gtk.License.CUSTOM,
+                    text,
+                )
+            dialog.present(self)
+            self.about_dialog = dialog
+
+        self.request_work(
+            lambda: balls.native_request({"action": "project-sources", "build": str(self.build)}),
+            show,
+            locked=False,
+        )
 
     def open_path(self, path):
         try:

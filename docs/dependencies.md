@@ -53,12 +53,21 @@ choice for that linked distribution. Keep the applicable notices and source
 requirements. Liberation retains its [SIL OFL 1.1](licenses/liberation-OFL.txt)
 notice; no font data is relicensed by this project.
 
-MIDI uses pinned [TinySoundFont](https://github.com/schellingb/TinySoundFont)
-(MIT) and [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS)
-(its own permissive license). Revisions and four SHA-256 checks are declared in
-`cmake/Midi.cmake`. Source/header, bank and license files are fetched separately;
-none is stored as a repository binary. CMake stages the bank and both notices
-in `build/soundfonts/`. See [audio](audio.md) for offline and runtime options.
+MIDI defaults to hash-pinned **FluidR3 GM 3.1** by Frank Wen (MIT),
+**FluidSynth 2.4.8** (LGPL-2.1-or-later), **libInstPatch 1.1.7**
+(LGPL-2.1-only) and **liquidsfz 0.4.2** (MPL-2.0, including retained MIT pugixml).
+The releases and build options are in `cmake/Midi.cmake` and `cmake/MidiBanks.cmake`.
+GLib and libsndfile supply matching host/worker ABIs. Optional device drivers,
+JACK/LV2 plugins and GUI dependencies of these synthesis libraries are disabled.
+TinySoundFont remains the explicit minimal SF2-only fallback. GeneralUser GS
+is user-downloadable, rather than bundled.
+
+[Project source and credit catalogue](project-sources.md) records every direct
+component, bundled-library family, declared version, source/download location,
+license and named origin authors. Packaged builds bind host dependency versions
+to the actual inputs in their runtime `project-sources.json` inventory. Both
+native About views expose that catalogue. [Bank installation and mapping](sound-banks.md)
+describes the shared native GUI and runtime interface.
 
 The optional [Munt backend](midi-mt32.md) pins libmt32emu 2.8.3 in
 `cmake/Munt.cmake`, SHA-256

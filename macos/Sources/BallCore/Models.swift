@@ -85,6 +85,7 @@ public struct BallSnapshot: Decodable, Sendable {
 }
 
 public struct DesktopRequest: Encodable, Sendable {
+    public var settings: AudioSettings?
     public var exporter: [String: String]?
     public var includeImages: Bool?
     public var path: String?

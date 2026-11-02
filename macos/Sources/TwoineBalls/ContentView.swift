@@ -41,6 +41,9 @@ struct ContentView: View {
             if let letter = model.creatingDisk { CreateDiskSheet(model: model, letter: letter) }
         }
         .sheet(item: $model.installCompletion) { completion in InstallCompletionSheet(model: model, completion: completion) }
+        .sheet(isPresented: $model.audioEditor) {
+            if let selected = model.selected { AudioSheet(model: model, ball: selected) }
+        }
         .sheet(isPresented: $model.mapping, onDismiss: { model.mappingDrive = nil }) {
             MapDriveSheet(model: model, initialLetter: model.mappingDrive,
                           initialSource: model.mappingDrive.flatMap { model.snapshot?.manifest.drives[$0]?.source } ?? "")

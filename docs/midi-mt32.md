@@ -5,7 +5,7 @@
 The optional backend uses [Munt libmt32emu 2.8.3](https://github.com/munt/munt/tree/libmt32emu_2_8_3/mt32emu)
 for native MT-32, CM-32L and LAPC-I MIDI. It preserves those devices' instrument
 numbers, channel assignments and SysEx messages. It does not translate General
-MIDI programs into MT-32 patches. Keep the default GeneralUser GS bank for
+MIDI programs into MT-32 patches. Keep the default FluidR3 GM bank for
 Doom's General MIDI score; select MT-32 explicitly for suitable MIDI material.
 
 Build with a C++ compiler and the optional source dependency:
@@ -36,7 +36,7 @@ by their content and rejects missing, unknown, wrongly typed or mismatched pairs
 Split ROM-chip dumps must first be combined into a supported full image.
 
 The backend renders at its creation sample rate using Munt's internal converter.
-The current multimedia mixer consumes a mono mix of its stereo output. Reset
+The multimedia mixer consumes its stereo output. Reset
 reopens the synthesizer with the same ROMs and clears sounding notes/state.
 
 The default MT-32 contract checks enabled/disabled builds and missing/invalid

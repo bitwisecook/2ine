@@ -45,3 +45,16 @@ configuration, installer execution and saved application launchers on Ubuntu 26.
 The [native macOS manager](docs/macos-app.md) uses SwiftUI and a shared C ball
 engine, with a Python-free app bundle and Make targets for development and
 Developer ID notarized distribution.
+
+## Origins, credits and project sources
+
+2ine was created by **[Ryan C. Gordon (icculus)](https://icculus.org/)**.
+This fork builds on his original OS/2 compatibility layer and retains his
+copyright and [zlib-style license](LICENSE.txt).
+
+[Project sources, versions, authors and downloads](docs/project-sources.md)
+lists incorporated projects, bundled assets and platform dependencies. Both
+native applications expose the same catalogue in About. See also
+[licensing](docs/licensing.md).
+
+Both native clients provide [sound-bank import and MIDI channel mapping](docs/sound-banks.md).

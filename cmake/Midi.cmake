@@ -3,12 +3,11 @@ option(TWOINE_MIDI_SYNTH "Render General MIDI with TinySoundFont and a complete 
 set(TWOINE_MIDI_DATA_DIR "" CACHE PATH "Offline pinned TinySoundFont and GeneralUser GS files")
 add_library(twoine_midi_config INTERFACE)
 if(NOT TWOINE_MIDI_SYNTH)
-    target_compile_definitions(twoine_midi_config INTERFACE TWOINE_MIDI_SYNTH=0)
+    target_compile_definitions(twoine_midi_config INTERFACE TWOINE_MIDI_SYNTH=0 TWOINE_MIDI_EXTENDED=0)
     message(WARNING "General MIDI synthesis disabled: music uses the basic oscillator fallback")
     return()
 endif()
 set(_twoine_tsf_revision 853a0a171759f1ddba0de1442133a75912bbeffa)
-set(_twoine_bank_revision 684543d5e5efaef08d02be50dcda8d552478fa60)
 if(TWOINE_MIDI_DATA_DIR)
     set(_twoine_midi_data "${TWOINE_MIDI_DATA_DIR}")
 else()
@@ -39,17 +38,23 @@ twoine_midi_input(tsf.h
 twoine_midi_input(TinySoundFont-LICENSE
     "https://raw.githubusercontent.com/schellingb/TinySoundFont/${_twoine_tsf_revision}/LICENSE"
     ef10cb839de73fb6d5d32ea7151979e87809a6df70dc7e7ee8457ae1c9e7aa7e)
-twoine_midi_input(GeneralUser-GS.sf2
-    "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/${_twoine_bank_revision}/GeneralUser-GS.sf2"
-    9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe)
-twoine_midi_input(GeneralUser-GS-LICENSE.txt
-    "https://raw.githubusercontent.com/mrbumpy409/GeneralUser-GS/${_twoine_bank_revision}/documentation/LICENSE.txt"
-    7b32efefdf95ce38a043799f0659853ddc00fbaa14d8c50f0aca16b9b8b405be)
+twoine_midi_input(FluidR3_GM.sf2
+    "https://github.com/pianobooster/fluid-soundfont/releases/download/v3.1/FluidR3_GM.sf2"
+    74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0)
+twoine_midi_input(FluidR3-MIT.txt
+    "https://raw.githubusercontent.com/pianobooster/fluid-soundfont/v3.1/COPYING"
+    8ef830b65c97a976b86e34bb5fde08d99dfb1db13c4149b5b20bc837ac6c4568)
+twoine_midi_input(FluidR3-README.txt
+    "https://raw.githubusercontent.com/pianobooster/fluid-soundfont/v3.1/README"
+    2f92d462684629f207e43815115b79d7f1ce130d30ca8792b7d82b398a8306f9)
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/soundfonts")
-foreach(filename GeneralUser-GS.sf2 GeneralUser-GS-LICENSE.txt TinySoundFont-LICENSE)
+file(REMOVE "${PROJECT_BINARY_DIR}/soundfonts/GeneralUser-GS.sf2" "${PROJECT_BINARY_DIR}/soundfonts/GeneralUser-GS-LICENSE.txt")
+foreach(filename FluidR3_GM.sf2 FluidR3-MIT.txt FluidR3-README.txt TinySoundFont-LICENSE)
     configure_file("${_twoine_midi_data}/${filename}"
         "${PROJECT_BINARY_DIR}/soundfonts/${filename}" COPYONLY)
 endforeach()
 target_include_directories(twoine_midi_config SYSTEM INTERFACE "${_twoine_midi_data}")
 target_compile_definitions(twoine_midi_config INTERFACE TWOINE_MIDI_SYNTH=1
-    TWOINE_SOUNDFONT_FILE="${PROJECT_BINARY_DIR}/soundfonts/GeneralUser-GS.sf2")
+    TWOINE_SOUNDFONT_FILE="${PROJECT_BINARY_DIR}/soundfonts/FluidR3_GM.sf2")
+
+include("${PROJECT_SOURCE_DIR}/cmake/MidiBanks.cmake")

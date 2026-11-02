@@ -353,6 +353,12 @@ struct BallSettingsView: View {
                 Text("Native x86 execution requires Linux. Use Unicorn on macOS. External runtime provider assets remain in the selected build.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Sound Banks & MIDI") {
+                Button("Sound Banks & Channel Mapping…") { model.audioEditor = true }
+                    .accessibilityIdentifier("soundBanks")
+                Text("Import SF2, SF3, SFZ and DLS instruments and configure each MIDI channel.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }.disabled(model.busy || model.mediaBusy)
             Section("2ine Settings") {
                 ForEach(snapshot.manifest.system.keys.sorted(), id: \.self) { name in
                     LabeledContent(name, value: snapshot.manifest.system[name]?.text ?? "")

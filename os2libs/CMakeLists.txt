@@ -112,3 +112,9 @@ endif()
 target_link_libraries(dive PRIVATE pmwin)
 
 target_link_libraries(mdm PRIVATE mmio pmwin m twoine_midi_config twoine_mt32_config)
+
+if(TWOINE_MIDI_EXTENDED AND TWOINE_MIDI_SYNTH)
+    target_sources(mdm PRIVATE midi_banks.cpp)
+    target_compile_features(mdm PRIVATE cxx_std_17)
+    set_target_properties(mdm PROPERTIES CXX_VISIBILITY_PRESET hidden)
+endif()

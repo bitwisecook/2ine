@@ -1,14 +1,45 @@
 {
   "_notice": "Public domain. No rights reserved. Wholly AI-authored.",
   "schema": 1,
-  "default": "generaluser-gs",
+  "default": "fluidr3-gm",
   "banks": [
+    {
+      "id": "fluidr3-gm",
+      "name": "FluidR3 GM",
+      "version": "3.1",
+      "author": "Frank Wen and contributors credited in the original README",
+      "description": "Default stereo General MIDI bank. Original author recordings and public-domain samples, published under the MIT license.",
+      "homepage": "https://github.com/pianobooster/fluid-soundfont",
+      "source": "https://github.com/pianobooster/fluid-soundfont/tree/v3.1",
+      "license": "MIT",
+      "bank": "FluidR3_GM.sf2",
+      "files": [
+        {
+          "name": "FluidR3_GM.sf2",
+          "url": "https://github.com/pianobooster/fluid-soundfont/releases/download/v3.1/FluidR3_GM.sf2",
+          "size": 148398306,
+          "sha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0"
+        },
+        {
+          "name": "LICENSE.txt",
+          "url": "https://raw.githubusercontent.com/pianobooster/fluid-soundfont/v3.1/COPYING",
+          "size": 1086,
+          "sha256": "8ef830b65c97a976b86e34bb5fde08d99dfb1db13c4149b5b20bc837ac6c4568"
+        },
+        {
+          "name": "README.txt",
+          "url": "https://raw.githubusercontent.com/pianobooster/fluid-soundfont/v3.1/README",
+          "size": 1042,
+          "sha256": "2f92d462684629f207e43815115b79d7f1ce130d30ca8792b7d82b398a8306f9"
+        }
+      ]
+    },
     {
       "id": "generaluser-gs",
       "name": "GeneralUser GS",
       "version": "2.0.3",
       "author": "S. Christian Collins",
-      "description": "Complete General MIDI and Roland GS compatible sampled bank; the default. It is not a Roland ROM bank or an SC-55/MT-32 emulator.",
+      "description": "Optional user-selected General MIDI/Roland GS bank. The author discloses incomplete sample-origin records; it is not bundled.",
       "homepage": "https://www.schristiancollins.com/generaluser.php",
       "source": "https://github.com/mrbumpy409/GeneralUser-GS/tree/684543d5e5efaef08d02be50dcda8d552478fa60",
       "license": "GeneralUser GS License v2.0",

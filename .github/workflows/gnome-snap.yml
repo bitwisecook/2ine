@@ -2,7 +2,7 @@
 name: GNOME Snap
 on:
   pull_request:
-    paths: ['snap/**', 'tools/gnome/**', 'tools/gnome_balls.py', 'tools/gnome_views.py', 'ball/**', 'tools/balls.py', 'tools/build_gnome_packages.py', '.github/workflows/gnome-snap.yml']
+    paths: ['snap/**', 'tools/gnome/**', 'tools/gnome_balls.py', 'tools/gnome_views.py, tools/gnome_audio.py, tools/project_sources.py, tools/data/project-sources.json, docs/project-sources.md', 'ball/**', 'tools/balls.py', 'tools/build_gnome_packages.py', '.github/workflows/gnome-snap.yml']
   workflow_dispatch:
 jobs:
   snap:

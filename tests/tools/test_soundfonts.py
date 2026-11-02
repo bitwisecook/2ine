@@ -116,7 +116,7 @@ class SoundfontTests(unittest.TestCase):
 
     def test_catalog_rejects_traversal_insecure_urls_and_duplicate_ids(self):
         original = json.loads(sf.CATALOG.read_text())
-        self.assertEqual(sf.load_catalog()[1], "generaluser-gs")
+        self.assertEqual(sf.load_catalog()[1], "fluidr3-gm")
         for mutation in ("filename", "url", "duplicate"):
             raw = json.loads(json.dumps(original))
             if mutation == "filename":

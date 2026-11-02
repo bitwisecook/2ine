@@ -285,3 +285,9 @@ to reconnect it. The drive letter, launchers and working directories remain
 unchanged. Runtime selection resets to the receiving host’s bundled runtime;
 cached native binaries are recreated locally. Original runtime build/version
 details remain in the export record.
+
+## Sound banks and source credits
+
+Settings provides [sound-bank installation and 16-channel MIDI mapping](sound-banks.md).
+About prominently credits original author Ryan C. Gordon and lists the
+[project versions, authors, sources and downloads](project-sources.md).
