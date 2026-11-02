@@ -18,7 +18,7 @@
       "kind": "group",
       "name": "Products",
       "children": [
-        { "path": "<PRODUCTS>/TwoineBalls.app", "id": "B96C113D3097EDCE005E53CF", "type": "wrapper.application", "index": false },
+        { "path": "<PRODUCTS>/2ine.app", "id": "B96C113D3097EDCE005E53CF", "type": "wrapper.application", "index": false },
         { "path": "<PRODUCTS>/TwoineBallsTests.xctest", "id": "B96C114A3097EDD0005E53CF", "type": "wrapper.cfbundle", "index": false },
         { "path": "<PRODUCTS>/TwoineBallsUITests.xctest", "id": "B96C11543097EDD0005E53CF", "type": "wrapper.cfbundle", "index": false },
       ],
@@ -28,7 +28,7 @@
     {
       "name": "TwoineBalls",
       "id": "B96C113C3097EDCE005E53CF",
-      "product": "Products/TwoineBalls.app",
+      "product": "Products/2ine.app",
       "product-type": "application",
       "build-phases": [
         "compile-sources",
@@ -77,7 +77,8 @@
           "\"$(SRCROOT)/../../../build-ball-engine/libtwoine_ball_core.a\"",
         ],
         "PRODUCT_BUNDLE_IDENTIFIER": "io.github.bitwisecook.TwoineBalls",
-        "PRODUCT_NAME": "$(TARGET_NAME)",
+        "PRODUCT_NAME": "2ine",
+        "PRODUCT_MODULE_NAME": "TwoineBalls",
         "REGISTER_APP_GROUPS": "YES",
         "SDKROOT": "macosx",
         "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
@@ -129,7 +130,7 @@
         "SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY": "YES",
         "SWIFT_VERSION": "6.0",
         "TARGETED_DEVICE_FAMILY": "1,2,7",
-        "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/TwoineBalls.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TwoineBalls",
+        "TEST_HOST": "$(BUILT_PRODUCTS_DIR)/2ine.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/2ine",
         "XROS_DEPLOYMENT_TARGET": "27.2",
       },
     }, {

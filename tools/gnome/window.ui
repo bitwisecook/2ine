@@ -16,7 +16,7 @@
       <item><attribute name="label" translatable="yes">Choose Runtime…</attribute><attribute name="action">win.runtime</attribute></item>
       <item><attribute name="label" translatable="yes">Undo Ball Change</attribute><attribute name="action">win.undo</attribute></item>
     </section>
-    <section><item><attribute name="label" translatable="yes">About 2ine Balls</attribute><attribute name="action">win.about</attribute></item></section>
+    <section><item><attribute name="label" translatable="yes">About 2ine</attribute><attribute name="action">win.about</attribute></item></section>
   </menu>
   <object class="AdwToastOverlay" id="overlay">
     <property name="child">
@@ -42,7 +42,7 @@
         </property>
         <property name="content">
           <object class="AdwNavigationPage" id="detail">
-            <property name="title">2ine Balls</property>
+            <property name="title">2ine</property>
             <property name="child">
               <object class="AdwToolbarView">
                 <child type="top"><object class="AdwHeaderBar" id="header">

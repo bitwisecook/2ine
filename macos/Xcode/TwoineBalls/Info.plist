@@ -3,7 +3,8 @@
 <plist version="1.0"><dict>
     <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-    <key>CFBundleName</key><string>2ine Balls</string>
+    <key>CFBundleName</key><string>2ine</string>
+    <key>CFBundleDisplayName</key><string>2ine</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleVersion</key><string>1</string>
     <key>CFBundleShortVersionString</key><string>1.0</string>
@@ -23,5 +24,5 @@
             <key>public.filename-extension</key><array><string>2ineball</string></array>
         </dict>
     </dict></array>
-    <key>TwoineDeveloperResources</key><string>$(SRCROOT)/../../../build-macos/2ine Balls.app/Contents/Resources</string>
+    <key>TwoineDeveloperResources</key><string>$(SRCROOT)/../../../build-macos/2ine.app/Contents/Resources</string>
 </dict></plist>

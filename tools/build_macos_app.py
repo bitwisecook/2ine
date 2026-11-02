@@ -78,14 +78,14 @@ def main():
         except subprocess.CalledProcessError:
             print(build_log.read_text())
             raise
-    app = output / "2ine Balls.app"
+    app = output / "2ine.app"
     if app.exists():
         shutil.rmtree(app)
     contents = app / "Contents"
     resources = contents / "Resources"
     (contents / "MacOS").mkdir(parents=True)
     resources.mkdir(parents=True)
-    shutil.copy2(output / "swift/release/TwoineBalls", contents / "MacOS/TwoineBalls")
+    shutil.copy2(output / "swift/release/TwoineBalls", contents / "MacOS/2ine")
     copied = macos_bundle.bundle_runtime(
         args.runtime_build.resolve(),
         resources / "Runtime",
@@ -155,10 +155,10 @@ def main():
             )
     command(["iconutil", "-c", "icns", iconset, "-o", resources / "Twoine.icns"])
     info = {
-        "CFBundleExecutable": "TwoineBalls",
+        "CFBundleExecutable": "2ine",
         "CFBundleIdentifier": "io.github.bitwisecook.2ine.Balls",
-        "CFBundleName": "2ine Balls",
-        "CFBundleDisplayName": "2ine Balls",
+        "CFBundleName": "2ine",
+        "CFBundleDisplayName": "2ine",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": "1.0",
         "CFBundleVersion": "1",

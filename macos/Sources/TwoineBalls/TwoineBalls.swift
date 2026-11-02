@@ -78,7 +78,7 @@ struct TwoineBallsApp: App {
     @State private var model = AppModel()
     var body: some Scene {
         // One manager owns one operation. Avoid concurrent edits from duplicate windows.
-        WindowGroup("2ine Balls", id: "balls") {
+        WindowGroup("2ine", id: "balls") {
             ContentView(model: model)
                 .background(ManagerWindowAttachment(delegate: delegate))
                 .onAppear { delegate.model = model; model.start() }
@@ -161,7 +161,7 @@ struct BallCommands: Commands {
             Button("Show Ball in Finder") { if let path = model.selected { model.reveal(path) } }.disabled(model.selected == nil)
         }
         CommandGroup(replacing: .help) {
-            Button("2ine Balls Help") { NSWorkspace.shared.open(URL(string: "https://github.com/bitwisecook/2ine/blob/main/docs/balls.md")!) }
+            Button("2ine Help") { NSWorkspace.shared.open(URL(string: "https://github.com/bitwisecook/2ine/blob/main/docs/balls.md")!) }
         }
     }
 }

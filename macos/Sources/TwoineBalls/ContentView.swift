@@ -51,7 +51,7 @@ struct ContentView: View {
         .confirmationDialog("Force stop the running operation?", isPresented: $model.forceStopConfirmation) {
             Button("Force Stop", role: .destructive) { model.stopProcess(force: true) }
         } message: { Text("Use this if the guest does not respond to Stop. Unsaved work may be lost. Its output log will be kept.") }
-        .alert("2ine Balls", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
+        .alert("2ine", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK", role: .cancel) { model.error = nil }
         } message: { Text(model.error ?? "") }
     }

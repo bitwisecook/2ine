@@ -183,7 +183,7 @@ def sign(app, identity, entitlements):
 
 
 def notarize(app, profile, output):
-    archive = output / "2ine-Balls-notary.zip"
+    archive = output / "2ine-notary.zip"
     run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", app, archive])
     submitted = run(
         [
@@ -239,4 +239,4 @@ def notarize(app, profile, output):
     run(["xcrun", "stapler", "staple", app])
     run(["xcrun", "stapler", "validate", app])
     run(["spctl", "--assess", "--type", "execute", "--verbose=2", app])
-    run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", app, output / "2ine-Balls.zip"])
+    run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", app, output / "2ine.zip"])

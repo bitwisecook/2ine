@@ -23,7 +23,7 @@ try:
     from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 except (ImportError, ValueError) as error:
     raise SystemExit(
-        "2ine Balls requires GTK 4, libadwaita and PyGObject. On Ubuntu install "
+        "2ine requires GTK 4, libadwaita and PyGObject. On Ubuntu install "
         "python3-gi gir1.2-gtk-4.0 gir1.2-adw-1.\n" + str(error)
     ) from error
 
@@ -62,7 +62,7 @@ def clear(box):
 class BallWindow(Adw.ApplicationWindow):
     def __init__(self, app, build, initial=None):
         super().__init__(
-            application=app, title="2ine Balls", default_width=1080, default_height=760
+            application=app, title="2ine", default_width=1080, default_height=760
         )
         self.default_build = (
             build or Path(os.environ.get("TWOINE_BUILD", balls.ROOT / "build"))
@@ -864,7 +864,7 @@ class BallWindow(Adw.ApplicationWindow):
                                 "path": path,
                                 "build": str(build),
                                 "includeImages": include_images,
-                                "exporter": {"name": "2ine Balls for GNOME"},
+                                "exporter": {"name": "2ine for GNOME"},
                             }
                         ),
                         lambda result: self.toast("Ball exported to " + result),
@@ -1225,7 +1225,7 @@ class BallWindow(Adw.ApplicationWindow):
 
     def about(self):
         Adw.AboutDialog(
-            application_name="2ine Balls",
+            application_name="2ine",
             application_icon=APP_ID,
             developer_name="2ine Contributors",
             version="0.1.0",

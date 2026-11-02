@@ -6,7 +6,7 @@ final class TwoineBallsUITests: XCTestCase {
         continueAfterFailure = false
         var repo = URL(filePath: #filePath)
         for _ in 0..<5 { repo.deleteLastPathComponent() }
-        let resources = repo.appending(path: "build-macos/2ine Balls.app/Contents/Resources")
+        let resources = repo.appending(path: "build-macos/2ine.app/Contents/Resources")
         let work = FileManager.default.temporaryDirectory.appending(path: "2ine-ui-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: work) }

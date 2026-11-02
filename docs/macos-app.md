@@ -18,7 +18,7 @@ make macos-app \
   NOTARY_PROFILE='your-existing-keychain-profile'
 ```
 
-The output is `build-macos/2ine Balls.app` and `build-macos/2ine-Balls.zip`.
+The output is `build-macos/2ine.app` and `build-macos/2ine.zip`.
 This target fails when signing/notarization credentials are absent or Apple
 rejects the submission. It never silently produces an unnotarized release.
 Use an existing `notarytool` Keychain profile; do not put passwords or API keys
@@ -28,7 +28,7 @@ For local development, with the identical runtime contents and an ad-hoc signatu
 
 ```sh
 make macos-app-dev
-open 'build-macos/2ine Balls.app'
+open 'build-macos/2ine.app'
 ```
 
 Build prerequisites are Xcode 27 with Swift 6.4, CMake, Ninja, Python 3.11+ for
@@ -72,10 +72,10 @@ The release bundle has no development resource path.
 ```sh
 make macos-test
 python3 tests/integration/macos_balls.py \
-  --app 'build-macos/2ine Balls.app' --work build-macos/relocation-check
-TWOINE_KOSMICKRISP_ICD="$PWD/build-macos/2ine Balls.app/Contents/Resources/Runtime/vulkan/icd.d/kosmickrisp.json" \
+  --app 'build-macos/2ine.app' --work build-macos/relocation-check
+TWOINE_KOSMICKRISP_ICD="$PWD/build-macos/2ine.app/Contents/Resources/Runtime/vulkan/icd.d/kosmickrisp.json" \
   python3 tests/integration/opengl.py \
-    --build 'build-macos/2ine Balls.app/Contents/Resources/Runtime' \
+    --build 'build-macos/2ine.app/Contents/Resources/Runtime' \
     --backend unicorn --work build-macos/bundle-gl-tests
 ```
 

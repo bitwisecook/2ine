@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=2ine Balls
+Name=2ine
 Comment=Install and run OS/2 applications in persistent balls
 Exec=2ine-balls %F
 Icon=io.github.bitwisecook.Twoine.Balls

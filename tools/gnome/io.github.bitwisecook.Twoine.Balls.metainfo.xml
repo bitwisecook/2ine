@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>io.github.bitwisecook.Twoine.Balls</id>
-  <name>2ine Balls</name>
+  <name>2ine</name>
   <summary>Give your OS/2 applications a home on GNOME</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Zlib AND GPL-2.0-only AND MIT AND OFL-1.1</project_license>

@@ -1,6 +1,6 @@
 # GNOME ball manager
 
-2ine Balls uses GTK 4, libadwaita and PyGObject. GNOME 51 is the design target;
+2ine uses GTK 4, libadwaita and PyGObject. GNOME 51 is the design target;
 GTK 4.18+ and libadwaita 1.9+ are the supported library floor, including Ubuntu
 26.04. The shared C engine owns ball persistence, drive translation, runtime
 selection, CONFIG.SYS validation, launch plans and installer receipts. The
