@@ -55,7 +55,7 @@ def main():
         window.set_default_size(1180, 820)
         fixture_root = root / "fixtures"
         fixture_root.mkdir()
-        sfz = fixtures(fixture_root)[-1]
+        sfz = fixtures(fixture_root, include_compressed=False)[-1]
         dialog.import_file(sfz)
         pump(lambda: not window.busy and len(dialog.data["banks"]) == 2)
         capture("sound-bank-library")

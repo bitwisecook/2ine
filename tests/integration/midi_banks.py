@@ -4,6 +4,7 @@
 
 import argparse
 import ctypes
+import ctypes.util
 import math
 import os
 import struct
@@ -118,7 +119,17 @@ def ogg(path):
             ],
         ]
 
-    library = ctypes.CDLL("libsndfile.dylib" if sys.platform == "darwin" else "libsndfile.so.1")
+    filename = "libsndfile.dylib" if sys.platform == "darwin" else "libsndfile.so.1"
+    candidate = ctypes.util.find_library("sndfile")
+    if not candidate:
+        prefix = subprocess.run(
+            ["pkg-config", "--variable=libdir", "sndfile"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        candidate = str(Path(prefix) / filename)
+    library = ctypes.CDLL(candidate)
     library.sf_open.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.POINTER(Info)]
     library.sf_open.restype = ctypes.c_void_p
     library.sf_writef_short.argtypes = [
@@ -139,9 +150,10 @@ def ogg(path):
     return path.read_bytes()
 
 
-def fixtures(root):
+def fixtures(root, *, include_compressed=True):
     (root / "Tone.sf2").write_bytes(sf2())
-    (root / "Tone.sf3").write_bytes(sf2(ogg(root / "sample.ogg")))
+    if include_compressed:
+        (root / "Tone.sf3").write_bytes(sf2(ogg(root / "sample.ogg")))
     (root / "Tone.dls").write_bytes(dls())
     folder = root / "SFZ Instrument"
     folder.mkdir()
