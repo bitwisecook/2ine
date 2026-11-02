@@ -367,6 +367,7 @@ class BallWindow(Adw.ApplicationWindow):
             create.set_halign(Gtk.Align.CENTER)
             page.set_child(create)
             self.content.append(page)
+            self.set_busy(False)
 
     def selected(self, _list, row):
         if row is None or self.busy:
@@ -384,6 +385,7 @@ class BallWindow(Adw.ApplicationWindow):
                 snapshot["manifest"].get("runtime", {}).get("build") or self.default_build
             )
             self.render()
+            self.set_busy(False)
             self.persist_preferences()
             self.split.set_show_content(True)
 
@@ -1178,9 +1180,8 @@ def main():
     parser.add_argument("--ball", type=Path, help="open an existing ball")
     parser.add_argument("files", nargs="*", type=Path)
     args = parser.parse_args()
-    return BallApplication(args.build, args.ball or (args.files[0] if args.files else None)).run(
-        [sys.argv[0]]
-    )
+    files = ([args.ball] if args.ball else []) + args.files
+    return BallApplication(args.build).run([sys.argv[0], *(str(path.resolve()) for path in files)])
 
 
 if __name__ == "__main__":

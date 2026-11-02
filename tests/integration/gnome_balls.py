@@ -5,6 +5,7 @@
 import argparse
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import threading
@@ -61,11 +62,17 @@ def main():
         root = Path(temporary)
         os.environ["XDG_DATA_HOME"] = str(root / "data")
         os.environ["XDG_CONFIG_HOME"] = str(root / "config")
+        balls.configure_library(args.build.resolve())
+        initial = balls.balls_home() / "Initial ball.2ineball"
+        balls.init(initial)
         app = gnome_balls.BallApplication(args.build.resolve())
         app.register(None)
         app.activate()
         window = app.get_active_window()
         pump(lambda: not window.busy)
+        assert window.ball == initial
+        for name in ("runtime", "install", "run", "save", "undo"):
+            assert window.lookup_action(name).get_enabled(), name
         entries = window.new_ball()
         entries["name"].set_text("Office")
         assert click(window.get_visible_dialog(), "Create")
@@ -140,6 +147,17 @@ def main():
         assert window.drafts[path] == draft
         other = root / "Other.2ineball"
         balls.init(other)
+        # Desktop file arguments and --ball must reach the existing D-Bus instance.
+        for options, target in (([], other), (["--ball"], path)):
+            with subprocess.Popen(
+                [sys.executable, gnome_balls.__file__, *options, str(target)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            ) as secondary:
+                pump(lambda: secondary.poll() is not None)
+                output, _ = secondary.communicate()
+                assert secondary.returncode == 0, output.decode(errors="replace")
+            pump(lambda target=target: not window.busy and window.ball == target)
         window.remember(other)
         pump(lambda: not window.busy)
         assert window.ball == other and window.drafts[path] == draft
