@@ -61,6 +61,26 @@ Build commands are reproducible; notarization timestamps are inherently variable
 The build retains `swift-build.log`, toolchain metadata, icon renders and notary
 submission/status/log evidence under `build-macos/`.
 
+## Version and build number
+
+The application version is **0.1**. Each application-bundle build reserves a new
+integer `CFBundleVersion`, independently of the version number. Xcode runs the
+allocator on every build, including incremental builds, and processes a derived
+Info.plist before signing. The packaging script uses the same allocator.
+
+The shared counter is stored at
+`~/Library/Application Support/2ine/builds/build-number`, outside checkouts,
+DerivedData and build folders. A stable file lock and atomic replacement prevent
+concurrent builds from reusing a number. Existing output and installed bundle
+numbers also provide a lower bound. Failed builds may leave gaps; reserved
+numbers are never reused. Invalid counter contents fail the build rather than
+silently restarting the sequence.
+
+Build agents must retain this state across runs. Set `TWOINE_BUILD_COUNTER_DIR`
+(or pass that Xcode build setting) to a persistent shared directory when builds
+run from multiple machines. Independent machines without shared state have
+independent counters. Preserve the counter when migrating build infrastructure.
+
 ## Xcode and tests
 
 Open `macos/Xcode/TwoineBalls/TwoineBalls.xcodeproj` in Xcode 27. Its source

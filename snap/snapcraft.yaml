@@ -1,6 +1,6 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 name: 2ine-balls
-version: '0.1.0'
+version: '0.1'
 summary: Give your OS/2 applications a home on GNOME
 description: |
   Install and run OS/2 applications in balls of 2ine. Each ball keeps its own

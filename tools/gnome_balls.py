@@ -61,9 +61,7 @@ def clear(box):
 
 class BallWindow(Adw.ApplicationWindow):
     def __init__(self, app, build, initial=None):
-        super().__init__(
-            application=app, title="2ine", default_width=1080, default_height=760
-        )
+        super().__init__(application=app, title="2ine", default_width=1080, default_height=760)
         self.default_build = (
             build or Path(os.environ.get("TWOINE_BUILD", balls.ROOT / "build"))
         ).resolve()
@@ -1228,7 +1226,7 @@ class BallWindow(Adw.ApplicationWindow):
             application_name="2ine",
             application_icon=APP_ID,
             developer_name="2ine Contributors",
-            version="0.1.0",
+            version="0.1",
             website="https://github.com/bitwisecook/2ine",
             license_type=Gtk.License.ZLIB,
             comments="OS/2 applications, comfortably at home on GNOME.",
