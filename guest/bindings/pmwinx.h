@@ -1784,6 +1784,28 @@ static uint32 bridge32_GetMenuString(uint8 *a)
     return result;
 }
 
+static uint32 bridge32_WinHelp(uint8 *a)
+{
+    ULONG address = lx_guest_load_u32(a + 4);
+    char *filename = address ? o32_string(address) : NULL;
+    if (address && !filename)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    uint32 result = WinHelp(lx_guest_load_u32(a), filename, lx_guest_load_u32(a + 8),
+                            lx_guest_load_u32(a + 12));
+    free(filename);
+    return result;
+}
+static uint32 bridge32_GetMenu(uint8 *a)
+{
+    return GetMenu(lx_guest_load_u32(a));
+}
+static uint32 bridge32_SetMenu(uint8 *a)
+{
+    return SetMenu(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
 static uint32 bridge32_DrawMenuBar(uint8 *a)
 {
     return DrawMenuBar(lx_guest_load_u32(a));

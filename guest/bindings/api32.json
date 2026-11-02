@@ -2652,6 +2652,21 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "WinHelp": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetMenu": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetMenu": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "DrawMenuBar": {
       "argument_bytes": 4,
       "callee_pop": 0,

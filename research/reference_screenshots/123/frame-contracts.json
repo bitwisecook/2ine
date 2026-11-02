@@ -1,0 +1,21 @@
+{
+  "notice": "Public domain. No rights reserved. Wholly AI-authored measurements.",
+  "reference": "OS/2 Warp4.52 original PMWINX.DLL",
+  "reference_sha256": "07a7368235f8b5b0b42b955dc5d8130eb0fdf178c3f20bc62ab334b1da339655",
+  "probe": "Watcom32 PM executable invoking original RegisterClass556/CreateWindowEx99/DefWindowProc131/DestroyWindow146 and native PM window queries",
+  "observations": {
+    "captioned_top_level": {
+      "windows_style": "00cf0000",
+      "public_handle_native_class": "#1",
+      "native_client_class": "DEFCLIENT",
+      "native_client_id": "8008"
+    },
+    "mdi_client": {
+      "windows_style": "50000000",
+      "windows_parent": "public top-level frame",
+      "native_parent": "DEFCLIENT",
+      "native_owner": "DEFCLIENT",
+      "control_id": 33
+    }
+  }
+}

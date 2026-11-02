@@ -125,7 +125,7 @@ ULONG GetDlgItem(ULONG handle, LONG identity)
         open32SetError(87);
         return 0;
     }
-    return WinWindowFromID(handle, (ULONG)identity);
+    return WinWindowFromID(open32ClientWindow(handle), (ULONG)identity);
 }
 BOOL SetDlgItemText(ULONG handle, LONG identity, PSZ text)
 {

@@ -1,0 +1,22 @@
+{
+  "notice": "Public domain. No rights reserved. Wholly AI-authored measurements.",
+  "reference": "OS/2 Warp4.52 original PMWINX.DLL",
+  "reference_sha256": "07a7368235f8b5b0b42b955dc5d8130eb0fdf178c3f20bc62ab334b1da339655",
+  "probe": "Watcom32 PM executable invoking original WinHelp715 with no help viewer open",
+  "observations": [
+    {
+      "window": 0,
+      "filename": null,
+      "command": 2,
+      "data": 0,
+      "result": 0
+    },
+    {
+      "window": 0,
+      "filename": "MISSING.HLP",
+      "command": 2,
+      "data": 0,
+      "result": 1
+    }
+  ]
+}

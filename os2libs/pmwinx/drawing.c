@@ -7,6 +7,7 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/input.h"
+#include "os2libs/pmwinx/windows.h"
 static _Thread_local Open32DC *contexts;
 Open32DC *open32FindDC(ULONG handle)
 {
@@ -118,7 +119,7 @@ ULONG GetDC(ULONG window)
         open32SetError(8);
         return 0;
     }
-    HWND target = window ? window : HWND_DESKTOP;
+    HWND target = window ? open32ClientWindow(window) : HWND_DESKTOP;
     if (!WinIsWindow(0, target))
     {
         open32SetError(1400);
@@ -251,7 +252,7 @@ ULONG BeginPaint(ULONG window, PVOID output)
     }
     RECTL rect;
     open32CaretPaint(window, TRUE);
-    HPS ps = WinBeginPaint(window, 0, &rect);
+    HPS ps = WinBeginPaint(open32ClientWindow(window), 0, &rect);
     Open32DC *context = ps ? register_context(ps, window, 2) : NULL;
     if (!context)
     {

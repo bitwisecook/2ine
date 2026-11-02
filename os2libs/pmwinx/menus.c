@@ -376,6 +376,73 @@ LONG GetMenuString(ULONG handle, ULONG identity, PCHAR output, LONG capacity, UL
     return (LONG)length;
 }
 
+ULONG GetMenu(ULONG handle)
+{
+    Open32Window *window = open32FindWindow(handle);
+    if (!window)
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    return window->style & 0x40000000u ? 0 : window->menu;
+}
+BOOL SetMenu(ULONG handle, ULONG menu)
+{
+    TRACE_NATIVE("SetMenu(%u, %u)", (uint)handle, (uint)menu);
+    Open32Window *window = open32FindWindow(handle);
+    if (!window || (window->style & 0x40000000u))
+    {
+        open32SetError(window ? 87 : 1400);
+        return FALSE;
+    }
+    Window *next = menu ? menu_window(menu) : NULL;
+    if (menu && (!next || (next->parent->hwnd != HWND_DESKTOP && next->parent->hwnd != handle)))
+    {
+        open32SetError(1401);
+        return FALSE;
+    }
+    ULONG old = window->menu;
+    Window *previous = old ? menu_window(old) : NULL;
+    if (previous && old != menu && previous->parent->hwnd == handle)
+    {
+        if (!WinShowWindow(old, FALSE))
+            return FALSE;
+        if (!WinSetParent(old, HWND_DESKTOP, FALSE))
+        {
+            WinShowWindow(old, TRUE);
+            return FALSE;
+        }
+        WinSetOwner(old, 0);
+        WinSetWindowUShort(old, -1, 0); /* QWS_ID */
+    }
+    if (menu && !lx_pm_menu_attach(menu, handle))
+    {
+        if (previous && old != menu)
+            lx_pm_menu_attach(old, handle);
+        open32SetError(8);
+        return FALSE;
+    }
+    window = open32FindWindow(handle);
+    if (!window || window->destroyed)
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    window->menu = menu;
+    ULONG client = window->client;
+    RECTL bounds;
+    if (!WinQueryWindowRect(handle, &bounds))
+        return FALSE;
+    if (client != handle)
+    {
+        LONG height = bounds.yTop - (menu ? 24 : 0);
+        if (height <= 0 || !WinSetWindowPos(client, HWND_BOTTOM, 0, 0, bounds.xRight, height,
+                                            SWP_MOVE | SWP_SIZE | SWP_SHOW))
+            return FALSE;
+    }
+    return WinInvalidateRect(handle, NULL, TRUE);
+}
+
 BOOL DrawMenuBar(ULONG handle)
 {
     Open32Window *window = open32FindWindow(handle);
@@ -384,7 +451,7 @@ BOOL DrawMenuBar(ULONG handle)
         open32SetError(1400);
         return FALSE;
     }
-    return !window->menu || lx_pm_menu_attach(window->menu, handle);
+    return SetMenu(handle, window->menu);
 }
 
 ULONG GetSystemMenu(ULONG handle, BOOL revert)

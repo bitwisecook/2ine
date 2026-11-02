@@ -7,7 +7,7 @@
 BOOL GetClientRect(ULONG window, PVOID output)
 {
     RECTL rect;
-    if (!output || !open32Presentation() || !WinQueryWindowRect(window, &rect))
+    if (!output || !open32Presentation() || !WinQueryWindowRect(open32ClientWindow(window), &rect))
     {
         open32SetError(1400);
         return FALSE;
@@ -41,6 +41,7 @@ BOOL GetWindowRect(ULONG window, PVOID output)
 }
 static BOOL map_point(ULONG window, PVOID point, BOOL to_screen)
 {
+    window = open32ClientWindow(window);
     RECTL rect;
     if (!point || !open32Presentation() || !WinQueryWindowRect(window, &rect))
     {
@@ -156,6 +157,7 @@ BOOL WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count, 
                  direction);
     /* WINX2PM and PM2WINX use the same involution in the original adapter. */
     (void)direction;
+    window = open32ClientWindow(window);
     LONG height;
     RECTL rectangle;
     if (dc && open32FindDC(dc))
@@ -191,7 +193,7 @@ BOOL WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count, 
 ULONG SetParent(ULONG window, ULONG parent)
 {
     HAB hab = open32Presentation();
-    HWND target = parent ? parent : HWND_DESKTOP;
+    HWND target = parent ? open32ClientWindow(parent) : HWND_DESKTOP;
     if (!hab || !WinIsWindow(hab, window) || !WinIsWindow(hab, target))
     {
         open32SetError(1400);
@@ -210,5 +212,5 @@ ULONG SetParent(ULONG window, ULONG parent)
         /* Reapply the top-left position using the new PM parent's height. */
         SetWindowPos(window, 0, w->x, w->y, 0, 0, 1 | 4 | 16);
     }
-    return previous == HWND_DESKTOP ? 0 : previous;
+    return previous == HWND_DESKTOP ? 0 : open32PublicWindow(previous);
 }

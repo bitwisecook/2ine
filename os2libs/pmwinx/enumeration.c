@@ -11,7 +11,8 @@ static BOOL collect(WindowSnapshot *snapshot, ULONG parent, unsigned depth)
 {
     if (depth > 256)
         return FALSE;
-    for (ULONG child = WinQueryWindow(parent, 2); child; child = WinQueryWindow(child, 0))
+    for (ULONG child = WinQueryWindow(open32ClientWindow(parent), 2); child;
+         child = WinQueryWindow(child, 0))
     {
         if (open32FindWindow(child) || open32NativeDialogWindow(child))
         {

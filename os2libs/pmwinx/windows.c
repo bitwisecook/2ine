@@ -7,15 +7,28 @@
 #include "os2libs/pmwin/internal.h"
 #include <stdio.h>
 static _Thread_local Open32Window *windows, *creating;
+static _Thread_local LxGuestMapping *pm_procedure_mapping, *pm_frame_mapping;
 Open32Window *open32FindWindow(HWND handle)
 {
+    if (!handle)
+        return NULL;
     for (Open32Window *w = windows; w; w = w->next)
-        if (w->handle == handle)
+        if (w->handle == handle || w->client == handle)
             return w;
     for (Open32Window *w = creating; w; w = w->creating_previous)
-        if (w->handle == handle)
+        if (w->handle == handle || w->client == handle)
             return w;
     return NULL;
+}
+ULONG open32ClientWindow(ULONG handle)
+{
+    Open32Window *window = open32FindWindow(handle);
+    return window && window->client ? window->client : handle;
+}
+ULONG open32PublicWindow(ULONG handle)
+{
+    Open32Window *window = open32FindWindow(handle);
+    return window ? window->handle : handle;
 }
 ULONG open32WindowCallback(Open32Window *w, ULONG message, ULONG first, ULONG second)
 {
@@ -24,13 +37,20 @@ ULONG open32WindowCallback(Open32Window *w, ULONG message, ULONG first, ULONG se
 }
 static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
-    if (creating && !creating->handle)
+    if (creating && !creating->client)
     {
-        creating->handle = handle;
+        creating->client = handle;
+        if (!creating->handle)
+            creating->handle = handle;
         lx_pm_mark_open32_window(handle);
     }
     Open32Window *w = open32FindWindow(handle);
     if (!w)
+        return WinDefWindowProc(handle, message, first, second);
+    /* A native frame subclass controls whether its Windows client is still attached. */
+    if (w->handle != handle && message != WM_CREATE &&
+        (!pm_frame_mapping ||
+         WinQueryWindowULong(w->handle, -3) != lx_execution_mapping_address(pm_frame_mapping)))
         return WinDefWindowProc(handle, message, first, second);
     ULONG queued_result;
     if (open32QueuedCallback(handle, message, &queued_result))
@@ -45,7 +65,7 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
             return (MRESULT)(uintptr_t)(open32WindowCallback(w, 1, 0, record) == UINT32_MAX);
         }
         case WM_DESTROY:
-            open32CaretWindowDestroyed(handle);
+            open32CaretWindowDestroyed(w->handle);
             if (w->system_menu)
             {
                 ULONG menu = w->system_menu;
@@ -56,7 +76,7 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
             open32WindowCallback(w, 2, 0, 0);
             open32WindowCallback(w, 0x82, 0, 0);
             w->destroyed = 1;
-            open32QueueWindowDestroyed(handle);
+            open32QueueWindowDestroyed(w->handle);
             return NULL;
         case WM_SIZE:
             return (MRESULT)(uintptr_t)open32WindowCallback(w, 5, 0, (ULONG)(uintptr_t)second);
@@ -112,19 +132,26 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
             return WinDefWindowProc(handle, message, first, second);
     }
 }
-static _Thread_local LxGuestMapping *pm_procedure_mapping;
 static uint32 pm_window_bridge(uint8 *a)
 {
     return (uint32)(uintptr_t)window_procedure(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
                                                (MPARAM)(uintptr_t)lx_guest_load_u32(a + 8),
                                                (MPARAM)(uintptr_t)lx_guest_load_u32(a + 12));
 }
-static PFNWP pm_window_procedure(void)
+static uint32 pm_frame_bridge(uint8 *a)
 {
-    if (!pm_procedure_mapping)
+    return (uint32)(uintptr_t)WinDefWindowProc(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                                               (MPARAM)(uintptr_t)lx_guest_load_u32(a + 8),
+                                               (MPARAM)(uintptr_t)lx_guest_load_u32(a + 12));
+}
+static PFNWP pm_window_procedure(BOOL frame)
+{
+    LxGuestMapping **slot = frame ? &pm_frame_mapping : &pm_procedure_mapping;
+    if (!*slot)
     {
         LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
-        const LxExecutionApi32 api = {pm_window_bridge, 16, 0, LX_ABI_STACK32};
+        const LxExecutionApi32 api = {frame ? pm_frame_bridge : pm_window_bridge, 16, 0,
+                                      LX_ABI_STACK32};
         if (!mapping)
             return NULL;
         if (!lx_execution_emit_bridge32(GLoaderState.execution, lx_execution_mapping_host(mapping),
@@ -135,9 +162,9 @@ static PFNWP pm_window_procedure(void)
             lx_execution_unmap(GLoaderState.execution, mapping);
             return NULL;
         }
-        pm_procedure_mapping = mapping;
+        *slot = mapping;
     }
-    return (PFNWP)(uintptr_t)lx_execution_mapping_address(pm_procedure_mapping);
+    return (PFNWP)(uintptr_t)lx_execution_mapping_address(*slot);
 }
 static void discard_window(Open32Window *w)
 {
@@ -172,7 +199,7 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     }
     char pm_class[32];
     snprintf(pm_class, sizeof pm_class, "Open32_%u", class->atom);
-    PFNWP native_procedure = pm_window_procedure();
+    PFNWP native_procedure = pm_window_procedure(FALSE);
     if (!native_procedure || !WinRegisterClass(hab, pm_class, native_procedure, CS_SIZEREDRAW, 0))
     {
         open32ClassRelease(class);
@@ -241,7 +268,7 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     w->creating_previous = previous;
     creating = w;
     RECTL bounds;
-    HWND pm_parent = (style & 0x40000000u) ? parent : HWND_DESKTOP;
+    HWND pm_parent = (style & 0x40000000u) ? open32ClientWindow(parent) : HWND_DESKTOP;
     if (!pm_parent)
     {
         creating = previous;
@@ -259,23 +286,63 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     ULONG pm_style =
         ((style & 0x10000000) ? WS_VISIBLE : 0) | ((style & 0x08000000) ? WS_DISABLED : 0) |
         ((style & 0x02000000) ? WS_CLIPCHILDREN : 0) | ((style & 0x04000000) ? WS_CLIPSIBLINGS : 0);
-    HWND handle = WinCreateWindow(pm_parent, pm_class, w->title, pm_style, w->x,
-                                  bounds.yTop - w->y - w->height, w->width, w->height, parent,
-                                  HWND_TOP, (style & 0x40000000u) ? menu : 0, NULL, NULL);
+    BOOL framed = !(style & 0x40000000u) && (style & 0x00c00000u) == 0x00c00000u;
+    if (framed)
+    {
+        FRAMECDATA frame = {sizeof frame, (style & 0x00080000u) ? 2 : 0, 0, 0};
+        w->handle = WinCreateWindow(pm_parent, (PSZ)WC_FRAME, w->title, pm_style, w->x,
+                                    bounds.yTop - w->y - w->height, w->width, w->height,
+                                    parent ? parent : HWND_DESKTOP, HWND_TOP, 0, &frame, NULL);
+        if (!w->handle)
+        {
+            creating = previous;
+            discard_window(w);
+            open32SetError(8);
+            return 0;
+        }
+        PFNWP frame_procedure = pm_window_procedure(TRUE);
+        if (!frame_procedure || !WinSubclassWindow(w->handle, frame_procedure))
+        {
+            WinDestroyWindow(w->handle);
+            creating = previous;
+            discard_window(w);
+            open32SetError(8);
+            return 0;
+        }
+        pm_parent = w->handle;
+    }
+    HWND handle =
+        WinCreateWindow(pm_parent, pm_class, w->title, framed ? pm_style | WS_VISIBLE : pm_style,
+                        framed ? 0 : w->x, framed ? 0 : bounds.yTop - w->y - w->height, w->width,
+                        w->height, framed || (style & 0x40000000u) ? pm_parent : parent, HWND_TOP,
+                        framed                  ? FID_CLIENT
+                        : (style & 0x40000000u) ? menu
+                                                : 0,
+                        NULL, NULL);
     creating = previous;
     w->creating_previous = NULL;
     lx_execution_unmap(GLoaderState.execution, w->creation);
     w->creation = NULL;
     if (!handle)
     {
+        if (framed)
+            WinDestroyWindow(w->handle);
         discard_window(w);
         open32SetError(1407);
         return 0;
     }
-    w->handle = handle;
+    if (!framed)
+        w->handle = handle;
+    w->client = handle;
     w->next = windows;
     windows = w;
-    return handle;
+    ULONG result = w->handle;
+    if (!(style & 0x40000000u) && menu && !SetMenu(result, menu))
+    {
+        DestroyWindow(result);
+        return 0;
+    }
+    return result;
 }
 BOOL open32EraseBackground(ULONG handle, ULONG dc)
 {
@@ -346,7 +413,7 @@ LONG DefWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
     {
         Open32Window *w = open32FindWindow(handle);
         RECTL rect;
-        if (!w || !w->class->brush || !WinQueryWindowRect(handle, &rect))
+        if (!w || !w->class->brush || !WinQueryWindowRect(open32ClientWindow(handle), &rect))
             return 0;
         uint8 wire[16] = {0};
         lx_guest_store_u32(wire + 8, (ULONG)rect.xRight);
@@ -570,7 +637,7 @@ BOOL UpdateWindow(ULONG handle)
         open32SetError(1400);
         return FALSE;
     }
-    return WinUpdateWindow(handle);
+    return WinUpdateWindow(open32ClientWindow(handle));
 }
 
 void open32WindowsCleanup(void)
@@ -581,7 +648,7 @@ void open32WindowsCleanup(void)
         Open32Window *w = windows;
         if (!w->destroyed)
         {
-            WinSubclassWindow(w->handle, WinDefWindowProc);
+            WinSubclassWindow(w->client, WinDefWindowProc);
             WinDestroyWindow(w->handle);
         }
         windows = w->next;
@@ -592,11 +659,16 @@ void open32WindowsCleanup(void)
         Open32Window *w = creating;
         if (w->handle && !w->destroyed)
         {
-            WinSubclassWindow(w->handle, WinDefWindowProc);
+            WinSubclassWindow(w->client, WinDefWindowProc);
             WinDestroyWindow(w->handle);
         }
         creating = NULL;
         discard_window(w);
+    }
+    if (pm_frame_mapping)
+    {
+        lx_execution_unmap(GLoaderState.execution, pm_frame_mapping);
+        pm_frame_mapping = NULL;
     }
     if (pm_procedure_mapping)
     {
@@ -722,7 +794,7 @@ ULONG GetWindow(ULONG handle, ULONG command)
             return result == HWND_DESKTOP ? 0 : result;
         }
         case 5:
-            result = WinQueryWindow(handle, 2);
+            result = WinQueryWindow(open32ClientWindow(handle), 2);
             direction = 0;
             break;
         default:

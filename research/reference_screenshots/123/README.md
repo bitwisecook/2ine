@@ -5,13 +5,16 @@ Original Warp 4.52 and SmartSuite 1.7 with Fixpack 3, captured in an isolated QE
 These are stock masters. A passing 2ine comparison requires the same create, formula, font, save, reopen and recalculation cycle. Font rasterization and confirmed display DPI differences may be reviewed leniently; missing controls, cells or formatting are defects.
 
 
-The `lotus-123` branch accepts quantity/double in A1/B1, 21 in A2 and +A2*2
-in B2, displaying 42. Native Lotus saves a real original-format workbook and
-reopens it through its original Open dialog with those values intact. Qualified
-captures and known visual defects are in [2ine/manifest.json](2ine/manifest.json).
-Font selection, editing and recalculating after reopening, the complete Unicorn
-workflow and the full visual comparison remain unverified. Font/DPI lenience
-does not excuse the missing grid, headers, menu/formula bar or frame controls.
+The `lotus-123` branch has editable spreadsheets on native and Unicorn. Both
+enter quantity/double in A1/B1, 21 in A2 and +A2*2 in B2, displaying 42; choose
+Courier headers; save and reopen; change A2 to24 and observe48; choose Helv
+numbers; save and cold-reopen those values and fonts. Qualified captures,
+workbook hashes and known differences are in [2ine/manifest.json](2ine/manifest.json).
+The complete visual and shutdown gates remain unverified. Native teardown
+returns1 without a missing import; its stock return code is unverified.
+Unicorn teardown faults in original guest code. Font/DPI lenience does not
+excuse missing grid, headers, menu/formula bar or frame controls.
+
 Current contracts include native resource dialogs/icons, pattern and polygon
 drawing, text alignment, scrollbar controls, worker-to-window posting, PM object
 windows and hooked Open32 single-file dialogs. `gpi-contracts.json` records
@@ -33,8 +36,8 @@ Open32 DDE supports thread-owned initialization, ANSI string references and loca
 
 The original SOMDD executable can be run separately with the same private runtime,
 repositories and `TWOINE_IPC_DIR` as Lotus. PMWP does not start it automatically.
-Initialization reaches the workbook input and save paths. Native labels, a formula, save and reopen are verified; the complete cycle
-remains unverified.
+Initialization reaches the workbook input and save paths. Native and Unicorn labels, formula recalculation, fonts, save, cold reopen
+and further editing are verified; visual and shutdown gates remain unverified.
 
 `string-contracts.json` records original bytewise `lstrcmp` results, including
 punctuation and high bytes. `profile-contracts.json` records native private-profile
@@ -42,3 +45,8 @@ storage and key normalization; those APIs do not read Windows text INI values.
 
 `directory-contracts.json` records original `GetWindowsDirectory` output and
 small-buffer behavior on the isolated Warp reference.
+
+`frame-contracts.json` records the original native frame/DEFCLIENT relationship.
+`help-contracts.json` records no-viewer `HELP_QUIT` results. Captioned overlapped
+Open32 windows have native frame/client separation; other frame mappings and
+complete MDI decorations remain incomplete.

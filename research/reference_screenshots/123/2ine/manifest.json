@@ -1,12 +1,14 @@
 {
   "notice": "Public domain. No rights reserved. Wholly AI-authored captures.",
   "application_sha256": "be8d2129f73ac08abe90c839cdb1458d333361403575ea95a618c226095a2c9e",
-  "status": "Partial native workflow; fonts, re-edit, Unicorn full cycle and visual comparison remain unverified",
+  "status": "Editable spreadsheet verified on native and Unicorn: labels, formula recalculation, fonts, save, cold reopen and further edit. Complete visual and shutdown gates remain unverified.",
   "known_differences": [
     "Missing gray grid and row/column header treatment",
-    "Missing menu and address/formula bar",
-    "Incomplete native frame and MDI layout",
-    "Green icon backgrounds and red font-selector text"
+    "Empty menu bar and missing address/formula bar",
+    "Incomplete native and MDI frame layout; captures retain the first blank workbook while opening another",
+    "Green icon backgrounds and incomplete popup repainting",
+    "Native teardown returns1; stock normal return code is unverified",
+    "Unicorn teardown faults in original SOM-related guest code"
   ],
   "screenshots": [
     {
@@ -18,6 +20,70 @@
       "file": "native/reopened.png",
       "sha256": "abba32bf7a424318d5a50d9f1641d3c01dcc8b891f97ab950afafc252efaeb69",
       "observation": "Original Ctrl+O reopens actual4268byte workbook, retaining labels and21/42"
+    },
+    {
+      "file": "native/header-courier.png",
+      "sha256": "b08351be799e2dd8301b3f44179f164128873ced3435dc8e145a0a5afb125b85",
+      "observation": "Courier applied to both headers before saving"
+    },
+    {
+      "file": "native/edited-saved.png",
+      "sha256": "4d1bd9db93122405921893dcf41c3d3e0b2f5e4b133b01035d5b49b20acd711c",
+      "observation": "24/48 with Helv numeric cells saved"
+    },
+    {
+      "file": "native/cold-reopened.png",
+      "sha256": "e7d35e913ae60227dbeff0b2d9305d425e8667c6f64e697a61f89c2901f2c6b2",
+      "observation": "Fresh process reopens the saved24/48 workbook"
+    },
+    {
+      "file": "unicorn/populated-saved.png",
+      "sha256": "0631d234afef53942ee8bd060ffb343f432cb32e162a03e9d9fc177e4911f14c",
+      "observation": "Unicorn creates21/42, applies Courier headers and saves"
+    },
+    {
+      "file": "unicorn/edited-saved.png",
+      "sha256": "45d64649feaab42106ec60b1421c3d47accbe3080b39916d5f74c7d68bf76143",
+      "observation": "Unicorn edits the reopened workbook to24/48, chooses Helv and saves"
+    },
+    {
+      "file": "unicorn/cold-reopened.png",
+      "sha256": "e7d35e913ae60227dbeff0b2d9305d425e8667c6f64e697a61f89c2901f2c6b2",
+      "observation": "Fresh Unicorn process reopens24/48 with font formatting retained"
     }
-  ]
+  ],
+  "workbooks": {
+    "native": {
+      "bytes": 4952,
+      "sha256": "3e83424a862713aba5e25dd3891b28f9648a165aa1a27aedf2b998be711857b0",
+      "bundled": false,
+      "observed_cells": {
+        "A1": "quantity",
+        "B1": "double",
+        "A2": 24,
+        "B2": 48
+      },
+      "formula": "B2=+A2*2",
+      "fonts": {
+        "A1..B1": "Courier",
+        "A2..B2": "Helv"
+      }
+    },
+    "unicorn": {
+      "bytes": 3992,
+      "sha256": "1b0b50c2bdcf4570d972204421649b34104acf19bac261887d355072932fb2ee",
+      "bundled": false,
+      "observed_cells": {
+        "A1": "quantity",
+        "B1": "double",
+        "A2": 24,
+        "B2": 48
+      },
+      "formula": "B2=+A2*2",
+      "fonts": {
+        "A1..B1": "Courier",
+        "A2..B2": "Helv"
+      }
+    }
+  }
 }

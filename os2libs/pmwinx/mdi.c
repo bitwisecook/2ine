@@ -103,6 +103,15 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
             window->mdi_active = 0;
         return DestroyWindow(first);
     }
+    if (message == 0x230) /* WM_MDISETMENU */
+    {
+        ULONG previous = GetMenu(window->parent);
+        if (first && !SetMenu(window->parent, first))
+            return 0;
+        if (second)
+            window->mdi_menu = second;
+        return previous;
+    }
     if (message == 0x229)
     {
         if (second)

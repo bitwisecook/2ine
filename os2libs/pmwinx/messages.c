@@ -143,7 +143,8 @@ static BOOL accept_native(const QMSG *native)
 {
     ULONG message, first, second;
     Open32Key key = {0};
-    if (native->msg != WM_QUIT && !open32FindWindow(native->hwnd))
+    Open32Window *window = open32FindWindow(native->hwnd);
+    if (native->msg != WM_QUIT && (!window || native->hwnd != window->client))
     {
         WinDispatchMsg(open32Presentation(), (PQMSG)native);
         return TRUE;
@@ -162,10 +163,10 @@ static BOOL accept_native(const QMSG *native)
     }
     if (message == 15)
         for (QueuedMessage *node = pending; node; node = node->next)
-            if (lx_guest_load_u32(node->wire) == native->hwnd &&
+            if (lx_guest_load_u32(node->wire) == open32PublicWindow(native->hwnd) &&
                 lx_guest_load_u32(node->wire + 4) == 15)
                 return TRUE;
-    QueuedMessage *node = new_message(native->hwnd, message, first, second);
+    QueuedMessage *node = new_message(open32PublicWindow(native->hwnd), message, first, second);
     if (!node)
         return FALSE;
     node->native = *native;
@@ -381,9 +382,11 @@ LONG DispatchMessage(PVOID input)
     }
     else if ((node && node->native_valid) || message == 15)
     {
-        QMSG native =
-            node && node->native_valid ? node->native : (QMSG){.hwnd = handle, .msg = WM_PAINT};
-        DispatchOverride current = {handle, native.msg, message, first, second, FALSE, dispatch};
+        QMSG native = node && node->native_valid
+                          ? node->native
+                          : (QMSG){.hwnd = open32ClientWindow(handle), .msg = WM_PAINT};
+        DispatchOverride current = {native.hwnd, native.msg, message, first,
+                                    second,      FALSE,      dispatch};
         dispatch = &current;
         result = (LONG)(intptr_t)WinDispatchMsg(open32Presentation(), &native);
         dispatch = current.previous;

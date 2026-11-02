@@ -374,6 +374,10 @@ extern "C"
         OS2APIINFO(ord = 540, name = REDRAWWINDOW);
     OS2EXPORT LONG OS2API GetMenuString(ULONG menu, ULONG item, PCHAR output, LONG capacity,
                                         ULONG flags) OS2APIINFO(ord = 310, name = GETMENUSTRING);
+    OS2EXPORT BOOL OS2API WinHelp(ULONG window, PSZ filename, ULONG command, ULONG data)
+        OS2APIINFO(ord = 715, name = WINHELP);
+    OS2EXPORT ULONG OS2API GetMenu(ULONG window) OS2APIINFO(ord = 305, name = GETMENU);
+    OS2EXPORT BOOL OS2API SetMenu(ULONG window, ULONG menu) OS2APIINFO(ord = 628, name = SETMENU);
     OS2EXPORT BOOL OS2API DrawMenuBar(ULONG window) OS2APIINFO(ord = 161, name = DRAWMENUBAR);
     OS2EXPORT ULONG OS2API FindFirstFile(PSZ name, PVOID output)
         OS2APIINFO(ord = 211, name = FINDFIRSTFILE);

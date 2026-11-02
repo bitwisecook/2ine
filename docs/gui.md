@@ -227,6 +227,16 @@ Callers permitting multiselection may choose one file and receive its full path.
 Selecting multiple files, template handles, named templates and Explorer dialogs
 are unsupported. Saved DC levels retain selected objects and independent clip copies.
 
+Captioned overlapped Open32 windows expose a native frame with a separate
+`FID_CLIENT` drawable. Child parenting, focus, capture, coordinates, DCs and
+paint messages map to that client while callbacks retain the public frame
+handle. Native frame subclass replacement controls client callback forwarding.
+Supplied menus and `WM_MDISETMENU` attach actual PM menu bars and resize the
+client; detached menus remain available to their caller. Other frame mappings,
+full MDI decorations and automatic Window-menu entries are incomplete.
+`WinHelp` supports no-viewer `HELP_QUIT` cleanup; help-viewer commands are
+unsupported.
+
 Synchronous Open32 file handles support creation dispositions, reads/writes,
 64-bit seeking and file sizes, truncation, flushing and nonblocking byte-range
 locks. Sharing checks cover handles in the same worker. Linux uses descriptor
