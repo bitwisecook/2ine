@@ -157,7 +157,9 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
     {
         native = WM_CHAR;
         a = 1 | 1u << 16 | (message == 0x106 ? 0x20 : 0);
-        b = WinCpTranslateChar(0, 1004, (UCHAR)first, 437);
+        b = (UCHAR)first;
+        if (b >= 32 && b != 127)
+            b = WinCpTranslateChar(0, 1004, (UCHAR)b, 437);
     }
     else if (message == 2)
         native = WM_DESTROY;

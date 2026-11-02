@@ -288,8 +288,11 @@ def main():
         parent_image.write_bytes(lock_program(False))
         with (work / "file-lock-parent.log").open("wb") as lock_log:
             parent = subprocess.Popen(
-                [str(build / "lx_loader"), str(parent_image)], cwd=work, env=env,
-                stdout=subprocess.PIPE, stderr=lock_log,
+                [str(build / "lx_loader"), str(parent_image)],
+                cwd=work,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=lock_log,
             )
             try:
                 assert parent.stdout and select.select([parent.stdout], [], [], 15)[0]

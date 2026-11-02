@@ -122,9 +122,15 @@ def conversion_program(checked):
     g.result(1, 8)
     g.word(output + 4, int.from_bytes(b"\0\xe1!X", "little"), 9)
     for first, second, expected in [
-        (b"a", b"A", 32), (b"A", b"a", -32), (b"a-b", b"ab", -53),
-        (b"\xe9", b"e", 132), (b"\x80", b"\xe9", -105), (b"", b"a", -97),
-        (b"a_b", b"ab", -3), (b"ab", b"a-b", 53), (b"equal", b"equal", 0),
+        (b"a", b"A", 32),
+        (b"A", b"a", -32),
+        (b"a-b", b"ab", -53),
+        (b"\xe9", b"e", 132),
+        (b"\x80", b"\xe9", -105),
+        (b"", b"a", -97),
+        (b"a_b", b"ab", -3),
+        (b"ab", b"a-b", 53),
+        (b"equal", b"equal", 0),
     ]:
         a, b = g.field(first + b"\0"), g.field(second + b"\0")
         g.call(2, 479, a, b)

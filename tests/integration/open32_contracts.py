@@ -1163,6 +1163,17 @@ def keyboard_program():
     g.word(delivered, 2, 12)
     g.word(character, ord("a"), 13)
     g.word(sequence, 1, 14)
+    for flags, data, expected in [
+        (0x0E010007, 0x00050008, 8),
+        (0x1C010007, 0x0008000D, 13),
+        (0x0F010007, 0x00060009, 9),
+        (0x01010007, 0x000F001B, 27),
+        (0x00010001, 10, 10),
+        (0x00010001, 127, 127),
+        (0x00010001, 0x82, 0xE9),
+    ]:
+        g.call(3, 920, (window,), 0x7A, flags, data)
+        g.word(character, expected, 22)
     call(g, "DestroyWindow", (window,))
     call(g, "UnregisterClass", name, 0xFFFFFFFF)
     g.exit(0)
