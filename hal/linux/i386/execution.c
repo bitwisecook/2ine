@@ -1743,4 +1743,7 @@ const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          copyIn,
                                                          callback4,
                                                          apiArguments,
-                                                         apiRegisters32};
+                                                         apiRegisters32,
+                                                         NULL,
+                                                         NULL,
+                                                         NULL};

@@ -14,7 +14,10 @@ Window *lx_pm_menu_window(HWND handle)
 }
 BOOL createSystemMenu(Window *frame, ULONG flags)
 {
-    HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, 1 | (flags & 1 ? WS_VISIBLE : 0), 0,
+    /* Native top-level decorations already provide the system controls. Keep the
+       PM menu handle for application queries without drawing it over client content. */
+    ULONG style = 1 | (frame->parent != &desktop_window && (flags & 1) ? WS_VISIBLE : 0);
+    HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, style, 0,
                                frame->h > 24 ? frame->h - 24 : 0, 24, 24, frame->hwnd, HWND_TOP,
                                FID_SYSMENU, NULL, NULL);
     if (!bar)

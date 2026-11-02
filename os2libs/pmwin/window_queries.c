@@ -179,3 +179,29 @@ BOOL WinSetOwner(HWND handle, HWND owner_handle)
     window->owner = owner;
     return TRUE;
 }
+
+HWND WinWindowFromPoint(HWND parent, PPOINTL point, BOOL children)
+{
+    TRACE_NATIVE("WinWindowFromPoint(%u, %p, %u)", (uint)parent, point, (uint)children);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, parent) : NULL;
+    if (!window || !point || !windowAcceptsUpdates(window) || point->x < 0 || point->y < 0 ||
+        point->x >= window->w || point->y >= window->h)
+        return 0;
+    LONG x = point->x, y = point->y;
+    do
+    {
+        Window *child;
+        for (child = window->children; child; child = child->sibling)
+            if ((child->style & WS_VISIBLE) && x >= child->x && y >= child->y &&
+                (int64_t)x < (int64_t)child->x + child->w &&
+                (int64_t)y < (int64_t)child->y + child->h)
+                break;
+        if (!child)
+            break;
+        x -= child->x;
+        y -= child->y;
+        window = child;
+    } while (children);
+    return window->hwnd;
+}

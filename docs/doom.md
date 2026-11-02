@@ -93,8 +93,8 @@ capture. Changing focus releases it and returning to the window leaves it
 released. Guest pointer warps and cursor hiding are suppressed while released.
 Set `TWOINE_MOUSE_CAPTURE=0` to disable capture and guest pointer warps entirely.
 Leaving it unset retains the application's original pointer behaviour.
-These environment options are independent launch settings that a bottle manager
-can store per bottle; they do not change a global preference or Doom's config.
+These environment options are independent launch settings that a ball manager
+can store per ball; they do not change a global preference or Doom's config.
 
 In the OS/2 reconstruction workspace, `scripts/2ine-doom` runs the prepared
 persistent game directory. `TWOINE_BACKEND=unicorn scripts/2ine-doom` selects

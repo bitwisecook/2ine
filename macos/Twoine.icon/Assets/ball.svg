@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="fiber" cx=".32" cy=".25" r=".8">
+      <stop stop-color="#f8dba0"/><stop offset=".6" stop-color="#c79758"/><stop offset="1" stop-color="#80532f"/>
+    </radialGradient>
+    <linearGradient id="cord" x1="0" y1="0" x2=".8" y2="1">
+      <stop stop-color="#fff1c7"/><stop offset=".45" stop-color="#e2bb7c"/><stop offset="1" stop-color="#ad7c43"/>
+    </linearGradient>
+    <clipPath id="sphere"><circle cx="272" cy="478" r="146"/></clipPath>
+  </defs>
+  <circle cx="272" cy="478" r="147" fill="url(#fiber)" stroke="#6e472b" stroke-width="5"/>
+  <g clip-path="url(#sphere)" fill="none" stroke-linecap="round">
+    <g stroke="#80552f" stroke-width="20">
+      <path d="M145 391 Q261 403 379 570 M130 415 Q250 422 366 594 M124 440 Q228 439 345 614 M126 468 Q206 459 321 628 M134 497 Q190 482 292 635"/>
+      <path d="M183 346 Q196 472 389 548 M204 337 Q219 461 404 524 M228 329 Q243 451 417 498 M254 327 Q266 434 422 471 M283 330 Q291 417 420 443 M312 338 Q320 401 412 414"/>
+    </g>
+    <g stroke="url(#cord)" stroke-width="14">
+      <path d="M145 391 Q261 403 379 570 M130 415 Q250 422 366 594 M124 440 Q228 439 345 614 M126 468 Q206 459 321 628 M134 497 Q190 482 292 635"/>
+      <path d="M183 346 Q196 472 389 548 M204 337 Q219 461 404 524 M228 329 Q243 451 417 498 M254 327 Q266 434 422 471 M283 330 Q291 417 420 443 M312 338 Q320 401 412 414"/>
+    </g>
+    <g stroke="#7c502c" stroke-width="22">
+      <path d="M161 572 C161 436 285 345 364 364 M181 594 C179 456 303 355 385 380 M206 611 C198 486 325 374 399 402 M232 623 C218 516 347 392 410 430 M260 628 C243 544 367 416 417 457"/>
+    </g>
+    <g stroke="url(#cord)" stroke-width="16">
+      <path d="M161 572 C161 436 285 345 364 364 M181 594 C179 456 303 355 385 380 M206 611 C198 486 325 374 399 402 M232 623 C218 516 347 392 410 430 M260 628 C243 544 367 416 417 457"/>
+    </g>
+    <g stroke="#fff1c6" stroke-width="3" opacity=".72">
+      <path d="M157 570 C157 433 281 343 360 362 M177 592 C175 453 299 353 381 378 M202 609 C194 483 321 372 395 400 M228 621 C214 513 343 390 406 428 M256 626 C239 541 363 414 413 455"/>
+    </g>
+  </g>
+  <path d="M151 419 A132 132 0 0 1 323 355" fill="none" stroke="#fff3cf" stroke-width="5" stroke-linecap="round" opacity=".65"/>
+</svg>

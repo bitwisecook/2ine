@@ -365,6 +365,8 @@ extern "C"
     OS2EXPORT BOOL OS2API GetWindowPlacement(ULONG window, PVOID output)
         OS2APIINFO(ord = 387, name = GETWINDOWPLACEMENT);
     OS2EXPORT ULONG OS2API GetParent(ULONG window) OS2APIINFO(ord = 333, name = GETPARENT);
+    OS2EXPORT ULONG OS2API SetParent(ULONG window, ULONG parent)
+        OS2APIINFO(ord = 633, name = SETPARENT);
     OS2EXPORT BOOL OS2API RedrawWindow(ULONG window, PVOID rectangle, ULONG region, ULONG flags)
         OS2APIINFO(ord = 540, name = REDRAWWINDOW);
     OS2EXPORT LONG OS2API GetMenuString(ULONG menu, ULONG item, PCHAR output, LONG capacity,

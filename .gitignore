@@ -10,6 +10,9 @@ __pycache__/
 .ty_cache/
 
 _deps/
+macos/.build/
+**/xcuserdata/
+*.xcuserstate
 
 # Original Warp fonts are private, user-supplied runtime inputs.
 *.[pP][fF][bB]

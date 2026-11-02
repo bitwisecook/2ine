@@ -2,6 +2,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(2ine C)
 include(CTest)
+add_subdirectory(ball)
 find_package(Threads REQUIRED)
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)

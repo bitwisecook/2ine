@@ -7,9 +7,12 @@
 #include <string.h>
 int lx_host_gl_platform_prepare(char *error, size_t size)
 {
-    if (setenv("VK_DRIVER_FILES", TWOINE_KOSMICKRISP_ICD, 1) ||
-        setenv("GALLIUM_DRIVER", "zink", 1) || setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1) ||
-        unsetenv("VK_ADD_DRIVER_FILES") || unsetenv("LIBGL_ALWAYS_SOFTWARE"))
+    const char *icd = getenv("TWOINE_KOSMICKRISP_ICD");
+    if (!icd || !*icd)
+        icd = TWOINE_KOSMICKRISP_ICD;
+    if (setenv("VK_DRIVER_FILES", icd, 1) || setenv("GALLIUM_DRIVER", "zink", 1) ||
+        setenv("MESA_LOADER_DRIVER_OVERRIDE", "zink", 1) || unsetenv("VK_ADD_DRIVER_FILES") ||
+        unsetenv("LIBGL_ALWAYS_SOFTWARE"))
     {
         snprintf(error, size, "Cannot select the KosmicKrisp Mesa renderer");
         return 0;

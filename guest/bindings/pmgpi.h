@@ -205,6 +205,9 @@ static uint32 bridge32_GpiQueryCp(uint8 *a)
 static uint32 bridge32_GpiCreateLogColorTable(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 4);
+    if (gpi_word(a, 2) == 3)
+        return GpiCreateLogColorTable(gpi_word(a, 0), gpi_word(a, 1), 3, (LONG)gpi_word(a, 3),
+                                      count, NULL);
     if (count < 0 || count > 256)
         return 0;
     LxGuestBorrow colors = {0};

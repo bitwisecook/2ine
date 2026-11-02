@@ -1,0 +1,42 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Scheme LastUpgradeVersion="2720" version="1.7">
+  <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+    <PreActions>
+      <ExecutionAction ActionType="Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+        <ActionContent title="Build shared C ball engine" scriptText="export PATH=&quot;/opt/homebrew/bin:/usr/local/bin:$PATH&quot;&#10;unset IPHONEOS_DEPLOYMENT_TARGET TVOS_DEPLOYMENT_TARGET WATCHOS_DEPLOYMENT_TARGET XROS_DEPLOYMENT_TARGET DRIVERKIT_DEPLOYMENT_TARGET SWIFT_DEBUG_INFORMATION_FORMAT SWIFT_DEBUG_INFORMATION_VERSION&#10;export SDKROOT=&quot;$(xcrun --sdk macosx --show-sdk-path)&quot;&#10;export MACOSX_DEPLOYMENT_TARGET=27.0&#10;cmake -S &quot;$SRCROOT/../../../ball&quot; -B &quot;$SRCROOT/../../../build-ball-engine&quot; -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_DEPLOYMENT_TARGET=27.0 -DCMAKE_OSX_SYSROOT=&quot;$SDKROOT&quot;&#10;cmake --build &quot;$SRCROOT/../../../build-ball-engine&quot; --target twoine_ball_static --parallel 2&#10;">
+          <EnvironmentBuildable>
+            <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B96C113C3097EDCE005E53CF" BuildableName="TwoineBalls.app" BlueprintName="TwoineBalls" ReferencedContainer="container:TwoineBalls.xcodeproj" />
+          </EnvironmentBuildable>
+        </ActionContent>
+      </ExecutionAction>
+    </PreActions>
+    <BuildActionEntries>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B96C113C3097EDCE005E53CF" BuildableName="TwoineBalls.app" BlueprintName="TwoineBalls" ReferencedContainer="container:TwoineBalls.xcodeproj" />
+      </BuildActionEntry>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B96C11493097EDD0005E53CF" BuildableName="TwoineBallsTests.xctest" BlueprintName="TwoineBallsTests" ReferencedContainer="container:TwoineBalls.xcodeproj" />
+      </BuildActionEntry>
+      <BuildActionEntry buildForTesting="YES" buildForRunning="NO" buildForProfiling="NO" buildForArchiving="NO" buildForAnalyzing="YES">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B96C11533097EDD0005E53CF" BuildableName="TwoineBallsUITests.xctest" BlueprintName="TwoineBallsUITests" ReferencedContainer="container:TwoineBalls.xcodeproj" />
+      </BuildActionEntry>
+    </BuildActionEntries>
+  </BuildAction>
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
+    <Testables>
+      <TestableReference skipped="NO">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B96C11493097EDD0005E53CF" BuildableName="TwoineBallsTests.xctest" BlueprintName="TwoineBallsTests" ReferencedContainer="container:TwoineBalls.xcodeproj" />
+      </TestableReference>
+      <TestableReference skipped="NO">
+        <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B96C11533097EDD0005E53CF" BuildableName="TwoineBallsUITests.xctest" BlueprintName="TwoineBallsUITests" ReferencedContainer="container:TwoineBalls.xcodeproj" />
+      </TestableReference>
+    </Testables>
+  </TestAction>
+  <LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES">
+    <BuildableProductRunnable runnableDebuggingMode="0">
+      <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="B96C113C3097EDCE005E53CF" BuildableName="TwoineBalls.app" BlueprintName="TwoineBalls" ReferencedContainer="container:TwoineBalls.xcodeproj" />
+    </BuildableProductRunnable>
+  </LaunchAction>
+  <AnalyzeAction buildConfiguration="Debug" />
+  <ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES" />
+</Scheme>

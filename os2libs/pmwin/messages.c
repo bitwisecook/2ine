@@ -512,6 +512,7 @@ void pumpEvents(AnchorBlock *anchor)
     LxHostEvent event;
     while (!anchor->message_queue.head)
     {
+        lx_execution_poll_termination(GLoaderState.execution);
         drainForeignMessages(anchor);
         lx_pm_dive_pump(anchor);
         presentWindows(anchor);
@@ -519,7 +520,7 @@ void pumpEvents(AnchorBlock *anchor)
             lx_pm_host_event(&event);
         int wait = pumpTimers(anchor);
         if (wait < 0 || wait > 10)
-            wait = 10; /* Cross-process posts arrive through the bottle's mailbox. */
+            wait = 10; /* Cross-process posts arrive through the ball's mailbox. */
         QMSG paint;
         if (anchor->message_queue.head || paintMessage(anchor, &paint, 0, 0, 0))
             break;

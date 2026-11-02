@@ -182,8 +182,8 @@ def segmented():
 
 def queue_program(writer):
     g = FlatGuest()
-    event_name = g.field(b"\\SEM32\\Bottle_Install_Test\0")
-    folded_name = g.field(b"\\sem32\\bottle_install_test\0")
+    event_name = g.field(b"\\SEM32\\Ball_Install_Test\0")
+    folded_name = g.field(b"\\sem32\\ball_install_test\0")
     event, duplicate, posts = (g.field(bytes(4)) for _ in range(3))
     if writer:
         g.call(1, 325, folded_name, event)
@@ -198,11 +198,11 @@ def queue_program(writer):
     else:
         g.call_handle(1, 328, event)
         g.result(0, 103)
-    name = g.field(b"\\QUEUES\\BOTTLE_INSTALL_TEST\0")
+    name = g.field(b"\\QUEUES\\BALL_INSTALL_TEST\0")
     queue, owner, count = (g.field(bytes(4)) for _ in range(3))
-    gate_name = g.field(b"\\SEM32\\BOTTLE_SESSION_GATE\0")
+    gate_name = g.field(b"\\SEM32\\BALL_SESSION_GATE\0")
     gate = g.field(bytes(4))
-    shared_name = g.field(b"\\SHAREMEM\\BOTTLE_INSTALL_TEST\0")
+    shared_name = g.field(b"\\SHAREMEM\\BALL_INSTALL_TEST\0")
     shared, again = g.field(bytes(4)), g.field(bytes(4))
     hab, pmqueue, pmwindow = (g.field(bytes(4)) for _ in range(3))
     g.call(4, 763, 0)
@@ -508,7 +508,7 @@ def grandchild_program():
     g.code.extend(b"\x8b\x40\x0c\x83\xc0" + bytes([len(b"C:\\OS2\\grand.exe\0")]))
     for i in range(0, len(COMMAND_TAIL) - 3, 4):
         g.require(b"\x81\x78" + bytes([i]) + COMMAND_TAIL[i : i + 4], 131 + i)
-    name = g.field(b"\\QUEUES\\BOTTLE_INSTALL_TEST\0")
+    name = g.field(b"\\QUEUES\\BALL_INSTALL_TEST\0")
     owner, queue, pointer = (g.field(bytes(4)) for _ in range(3))
     path = g.field(b"PATH\0")
     g.call(1, 227, path, pointer)
@@ -630,19 +630,19 @@ def main():
     parser.add_argument("--backend", choices=("native", "unicorn"), required=True)
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="twoine-install-apis-") as temporary:
-        bottle = Path(temporary) / "bottle"
+        ball = Path(temporary) / "ball"
         base = [
             sys.executable,
-            str(ROOT / "tools/bottles.py"),
-            "--bottle",
-            str(bottle),
+            str(ROOT / "tools/balls.py"),
+            "--ball",
+            str(ball),
             "--build",
             str(args.build.resolve()),
             "--backend",
             args.backend,
         ]
         subprocess.run([*base, "init"], check=True, capture_output=True)
-        directory = bottle / "drive_c/OS2"
+        directory = ball / "drive_c/OS2"
         with (directory / "large.dat").open("wb") as sparse:
             sparse.truncate((1 << 32) + 7)
         for filename, data in (

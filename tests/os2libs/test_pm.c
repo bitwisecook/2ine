@@ -462,6 +462,43 @@ static MPARAM menu_point(Window *window, unsigned id)
     CHECK(0);
     return 0;
 }
+static void point_lookup_contracts(HAB hab)
+{
+    CHECK(WinRegisterClass(hab, "point-test", WinDefWindowProc, 0, 0));
+    HWND parent = WinCreateWindow(HWND_DESKTOP, "point-test", "point lookup", WS_VISIBLE, 0, 0, 64,
+                                  64, 0, HWND_TOP, 995, NULL, NULL);
+    HWND lower = WinCreateWindow(parent, "point-test", "lower", WS_VISIBLE, 5, 6, 30, 30, parent,
+                                 HWND_TOP, 996, NULL, NULL);
+    HWND nested = WinCreateWindow(lower, "point-test", "nested", WS_VISIBLE, 1, 2, 10, 10, lower,
+                                  HWND_TOP, 997, NULL, NULL);
+    HWND upper = WinCreateWindow(parent, "point-test", "upper", WS_VISIBLE, 5, 6, 20, 20, parent,
+                                 HWND_TOP, 998, NULL, NULL);
+    CHECK(parent && lower && nested && upper);
+    POINTL point = {7, 9};
+    CHECK(WinWindowFromPoint(parent, &point, TRUE) == upper);
+    CHECK(WinShowWindow(upper, FALSE));
+    CHECK(WinWindowFromPoint(parent, &point, FALSE) == lower);
+    CHECK(WinWindowFromPoint(parent, &point, TRUE) == nested);
+    CHECK(point.x == 7 && point.y == 9);
+    point = (POINTL){63, 63};
+    CHECK(WinWindowFromPoint(parent, &point, TRUE) == parent);
+    point.x = 64;
+    CHECK(!WinWindowFromPoint(parent, &point, TRUE));
+    point = (POINTL){7, 9};
+    CHECK(WinShowWindow(parent, FALSE) && !WinWindowFromPoint(parent, &point, TRUE));
+    CHECK(!WinWindowFromPoint(0, &point, TRUE) && !WinWindowFromPoint(parent, NULL, TRUE));
+    CHECK(WinDestroyWindow(parent));
+    ULONG flags = 2;
+    HWND client;
+    HWND frame =
+        WinCreateStdWindow(HWND_DESKTOP, 0, &flags, "point-test", "system menu", 0, 0, 0, &client);
+    CHECK(frame && client);
+    HWND menu = WinWindowFromID(frame, FID_SYSMENU);
+    CHECK(menu && !WinIsWindowVisible(menu));
+    CHECK(WinSetWindowPos(frame, HWND_TOP, 0, 0, 100, 100, SWP_SIZE | SWP_SHOW));
+    CHECK(!WinIsWindowVisible(menu)); /* Native decorations own the visible system controls. */
+    CHECK(WinDestroyWindow(frame));
+}
 static void paint_scheduling_contracts(HAB hab)
 {
     QMSG message;
@@ -603,7 +640,7 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(GpiCreateLogColorTable(ps, 0, 2, 20, 1, &custom));
     CHECK(GpiQueryColorData(ps, 3, color_data) && color_data[0] == 2 && color_data[2] == 20);
     LONG color_state = GpiSavePS(ps);
-    CHECK(color_state > 0 && GpiCreateLogColorTable(ps, 0, 3, 0, 0, NULL));
+    CHECK(color_state > 0 && GpiCreateLogColorTable(ps, 0, 3, 0, 16, NULL));
     CHECK(GpiQueryColorData(ps, 3, color_data) && color_data[0] == 3);
     CHECK(GpiRestorePS(ps, color_state) && GpiQueryColorData(ps, 3, color_data) &&
           color_data[0] == 2 && color_data[2] == 20);
@@ -657,6 +694,18 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(WinFillRect(ps, &fill, CLR_RED));
     uint32_t pixel;
     CHECK(lx_pm_raster_read(ps, 3, 4, 1, 1, &pixel) && pixel == 0xff0000);
+    /* SmartIconBar selects RGB mode while still supplying its old palette count. */
+    LONG rgb_state = GpiSavePS(ps);
+    CHECK(rgb_state > 0 && GpiCreateLogColorTable(ps, 0, 3, 0, 16, NULL));
+    uint8 strip[24] = {0};
+    lx_guest_store_u32(strip, 0x408080);
+    lx_guest_store_u16(strip + 8, 2);
+    lx_guest_store_u16(strip + 14, 16);
+    CHECK(GpiSetAttrs(ps, 4, 1 | 4 | 32, 0, strip));
+    POINTL strip_from = {1, 1}, strip_to = {7, 7};
+    CHECK(GpiMove(ps, &strip_from) && GpiBox(ps, 1, &strip_to, 0, 0));
+    CHECK(lx_pm_raster_read(ps, 3, 4, 1, 1, &pixel) && pixel == 0x408080);
+    CHECK(GpiRestorePS(ps, rgb_state) && WinFillRect(ps, &fill, CLR_RED));
     RECTL outer = {0, 0, 16, 16}, hole = {4, 4, 12, 12};
     ULONG a = GpiCreateRegion(ps, 1, &outer), b = GpiCreateRegion(ps, 1, &hole),
           clipped = GpiCreateRegion(ps, 0, NULL);
@@ -989,6 +1038,7 @@ int main(void)
     hook_contracts(hab, client);
     busy_queue_host_events(hab, client);
     paint_scheduling_contracts(hab);
+    point_lookup_contracts(hab);
     keyboard_contracts(hab, client);
     host_focus_contracts(hab, frame, client);
     capture_release_contracts(hab, client);

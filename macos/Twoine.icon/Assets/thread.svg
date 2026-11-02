@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="twine" x1="0" y1="0" x2=".2" y2="1">
+      <stop stop-color="#ffe9b5"/><stop offset=".6" stop-color="#e1b878"/><stop offset="1" stop-color="#bd8b4c"/>
+    </linearGradient>
+    <!-- A single unbroken strand leaves the O and draws S, slash, 2, then a loose end. -->
+    <path id="strand" d="M368 375 C427 324 512 330 546 391 C500 348 435 368 434 416 C433 466 550 455 554 516 C559 579 467 600 427 554 C454 609 553 636 588 581 L674 341 C691 297 729 315 727 365 C757 327 826 341 833 391 C841 443 748 497 700 558 L839 558 C875 558 875 607 847 628 C820 648 781 645 787 623 C795 596 849 631 827 658 C806 684 754 670 760 647 C766 626 805 657 785 678 C768 697 723 693 712 675"/>
+  </defs>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <use href="#strand" stroke="#6e472b" stroke-width="34"/>
+    <use href="#strand" stroke="url(#twine)" stroke-width="25"/>
+    <use href="#strand" stroke="#fff2c9" stroke-width="5" opacity=".66"/>
+    <use href="#strand" stroke="#986533" stroke-width="25" stroke-dasharray="1.8 10" opacity=".22"/>
+  </g>
+</svg>

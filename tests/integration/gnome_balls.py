@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Exercise real GTK bottle management and an LX installer through the GUI launcher."""
+"""Exercise real GTK ball management and an LX installer through the GUI launcher."""
 
 import argparse
 import json
@@ -14,10 +14,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from images import FlatGuest, linear_image
 
-from tools import bottles, gnome_bottles
+from tools import balls, gnome_balls
 
-GLib = gnome_bottles.GLib
-Gtk = gnome_bottles.Gtk
+GLib = gnome_balls.GLib
+Gtk = gnome_balls.Gtk
 
 
 def click(widget, label):
@@ -54,17 +54,17 @@ def main():
         root = Path(temporary)
         os.environ["XDG_DATA_HOME"] = str(root / "data")
         os.environ["XDG_CONFIG_HOME"] = str(root / "config")
-        app = gnome_bottles.BottleApplication(args.build.resolve())
+        app = gnome_balls.BallApplication(args.build.resolve())
         app.register(None)
         app.activate()
         window = app.get_active_window()
         pump()
-        entries = window.new_bottle()
+        entries = window.new_ball()
         entries["name"].set_text("Office")
         assert click(window.get_visible_dialog(), "Create")
         pump()
-        path = bottles.bottles_home() / "Office"
-        assert window.bottle == path
+        path = balls.balls_home() / "Office"
+        assert window.ball == path
         assert window.stack.get_pages().get_n_items() == 4
 
         def execute(arguments, expected=0):
@@ -92,7 +92,7 @@ def main():
         execute(["config", "runtime.backend", "unicorn"])
         execute(["config", "env.TEST_VALUE", "A value with spaces"])
         execute(["add-app", "Test application", r"D:\SETUP.EXE", "argument with spaces"])
-        assert gnome_bottles.parse_arguments(r"""C:\suite.rsp "C:\My Documents\one.lwp" '' """) == [
+        assert gnome_balls.parse_arguments(r"""C:\suite.rsp "C:\My Documents\one.lwp" '' """) == [
             r"C:\suite.rsp",
             r"C:\My Documents\one.lwp",
             "",
@@ -106,7 +106,7 @@ def main():
                 window.stack.set_visible_child_name(page)
                 until = time.monotonic() + 0.3
                 pump(lambda until=until: time.monotonic() > until)
-                windows = [(w, name) for w, name in display.windows() if name == "2ine Bottles"]
+                windows = [(w, name) for w, name in display.windows() if name == "2ine Balls"]
                 assert windows, display.windows()
                 display.capture(windows[0][0], args.screenshots / (page + ".png"))
         execute(["launch", "Test application"])
@@ -120,7 +120,7 @@ def main():
         execute(["unset", "env.TEST_VALUE"])
         execute(["remove-app", "Test application"])
         execute(["unmap", "D"])
-        data = bottles.load(path)
+        data = balls.load(path)
         assert data["environment"] == {}
         assert data["applications"] == {}
         assert set(data["drives"]) == {"C"}

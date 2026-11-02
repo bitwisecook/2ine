@@ -38,7 +38,10 @@ Raise an issue on GH or find a way to contact me.
 [Tools](docs/tools.md) · [Tests](docs/testing.md) · [GUI applications](docs/gui.md) ·
 [OS/2 Doom](docs/doom.md) · [Sound](docs/sound.md) · [C/H formatting](docs/formatting.md) · [Licensing](docs/licensing.md)
 
-Use [bottles](docs/bottles.md) to keep application installations, drive mappings,
+Use [balls](docs/balls.md) to keep application installations, drive mappings,
 profiles, registry and launch settings in separate persistent environments.
-The [native GNOME manager](docs/bottles.md#gnome-application) provides bottle creation,
+The [native GNOME manager](docs/balls.md#gnome-application) provides ball creation,
 configuration, installer execution and saved application launchers on Ubuntu 26.04+.
+The [native macOS manager](docs/macos-app.md) uses SwiftUI and a shared C ball
+engine, with a Python-free app bundle and Make targets for development and
+Developer ID notarized distribution.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Native GTK 4/libadwaita manager for persistent 2ine bottles."""
+"""Native GTK 4/libadwaita manager for persistent 2ine balls."""
 
 import argparse
 import json
@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 if __package__:
-    from . import bottles
+    from . import balls
 else:
-    import bottles
+    import balls
 
 try:
     import gi
@@ -23,11 +23,11 @@ try:
     from gi.repository import Adw, Gio, GLib, Gtk
 except (ImportError, ValueError) as error:
     raise SystemExit(
-        "2ine Bottles requires GTK 4, libadwaita and PyGObject. On Ubuntu install "
+        "2ine Balls requires GTK 4, libadwaita and PyGObject. On Ubuntu install "
         "python3-gi gir1.2-gtk-4.0 gir1.2-adw-1.\n" + str(error)
     ) from error
 
-APP_ID = "io.github.bitwisecook.Twoine.Bottles"
+APP_ID = "io.github.bitwisecook.Twoine.Balls"
 
 
 def parse_arguments(text):
@@ -42,9 +42,9 @@ def button(label, callback, icon=False):
     widget = Gtk.Button(icon_name=label) if icon else Gtk.Button(label=label)
     if icon:
         name = {
-            "list-add-symbolic": "Create bottle",
+            "list-add-symbolic": "Create ball",
             "folder-open-symbolic": "Choose folder or file",
-            "view-refresh-symbolic": "Refresh bottle",
+            "view-refresh-symbolic": "Refresh ball",
         }.get(label, label)
         widget.set_tooltip_text(name)
         widget.update_property([Gtk.AccessibleProperty.LABEL], [name])
@@ -57,24 +57,24 @@ def clear(box):
         box.remove(child)
 
 
-class BottleWindow(Adw.ApplicationWindow):
+class BallWindow(Adw.ApplicationWindow):
     def __init__(self, app, build, initial=None):
         super().__init__(
-            application=app, title="2ine Bottles", default_width=1080, default_height=760
+            application=app, title="2ine Balls", default_width=1080, default_height=760
         )
         self.build = build
-        self.bottle = None
+        self.ball = None
         self.process = None
         self.last_result = None
         self.last_log = None
         self.preferences = (
             Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
-            / "2ine/bottles-gnome.json"
+            / "2ine/balls-gnome.json"
         )
         self.external = []
         try:
             prefs = json.loads(self.preferences.read_text())
-            self.external = [Path(path) for path in prefs.get("bottles", [])]
+            self.external = [Path(path) for path in prefs.get("balls", [])]
             if build is None and prefs.get("build"):
                 self.build = Path(prefs["build"])
         except FileNotFoundError:
@@ -82,8 +82,9 @@ class BottleWindow(Adw.ApplicationWindow):
         except (OSError, ValueError, TypeError):
             self.external = []
         self.build = (
-            self.build or Path(os.environ.get("TWOINE_BUILD", bottles.ROOT / "build"))
+            self.build or Path(os.environ.get("TWOINE_BUILD", balls.ROOT / "build"))
         ).resolve()
+        balls.configure_library(self.build)
         self.connect("close-request", self.close_requested)
         self.overlay = Adw.ToastOverlay()
         self.set_content(self.overlay)
@@ -91,16 +92,16 @@ class BottleWindow(Adw.ApplicationWindow):
         self.overlay.set_child(self.split)
         sidebar = self.sidebar = Adw.ToolbarView()
         header = Adw.HeaderBar(show_end_title_buttons=False)
-        header.pack_start(button("list-add-symbolic", self.new_bottle, True))
-        header.pack_end(button("folder-open-symbolic", self.open_bottle, True))
+        header.pack_start(button("list-add-symbolic", self.new_ball, True))
+        header.pack_end(button("folder-open-symbolic", self.open_ball, True))
         sidebar.add_top_bar(header)
-        self.bottle_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
-        self.bottle_list.add_css_class("navigation-sidebar")
-        self.bottle_list.connect("row-selected", self.selected)
+        self.ball_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE)
+        self.ball_list.add_css_class("navigation-sidebar")
+        self.ball_list.connect("row-selected", self.selected)
         scroll = Gtk.ScrolledWindow(vexpand=True)
-        scroll.set_child(self.bottle_list)
+        scroll.set_child(self.ball_list)
         sidebar.set_content(scroll)
-        self.split.set_sidebar(Adw.NavigationPage.new(sidebar, "Bottles"))
+        self.split.set_sidebar(Adw.NavigationPage.new(sidebar, "Balls"))
         view = Adw.ToolbarView()
         self.header = Adw.HeaderBar()
         self.header.pack_start(button("view-refresh-symbolic", self.refresh, True))
@@ -108,7 +109,7 @@ class BottleWindow(Adw.ApplicationWindow):
         view.add_top_bar(self.header)
         self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         view.set_content(self.content)
-        self.detail = Adw.NavigationPage.new(view, "2ine Bottles")
+        self.detail = Adw.NavigationPage.new(view, "2ine Balls")
         self.split.set_content(self.detail)
         if initial:
             self.remember(initial.resolve())
@@ -116,7 +117,7 @@ class BottleWindow(Adw.ApplicationWindow):
 
     def close_requested(self, *_):
         if self.process:
-            self.toast("Close the running application before closing Bottles.")
+            self.toast("Close the running application before closing Balls.")
             return True
         return False
 
@@ -124,42 +125,42 @@ class BottleWindow(Adw.ApplicationWindow):
         self.overlay.add_toast(Adw.Toast(title=str(message)))
 
     def remember(self, path):
-        bottles.load(path)
+        balls.load(path)
         if path not in self.external:
             self.external.append(path)
         self.persist_preferences()
 
     def persist_preferences(self):
         self.preferences.parent.mkdir(parents=True, exist_ok=True)
-        bottles.save(
+        balls.save(
             self.preferences,
-            {"build": str(self.build), "bottles": [str(path) for path in self.external]},
+            {"build": str(self.build), "balls": [str(path) for path in self.external]},
         )
 
     def refresh(self, select=None):
         if self.process:
             self.toast("Wait for the current operation to finish.")
             return
-        target = select or self.bottle
-        clear(self.bottle_list)
+        target = select or self.ball
+        clear(self.ball_list)
         paths = set(self.external) | {
-            path.parent for path in bottles.bottles_home().glob("*/bottle.json")
+            path.parent for path in balls.balls_home().glob("*/ball.json")
         }
         chosen = None
         for path in sorted(paths):
             row = Adw.ActionRow(title=path.name, subtitle=str(path))
-            row.bottle_path = path
-            self.bottle_list.append(row)
+            row.ball_path = path
+            self.ball_list.append(row)
             if path == target:
                 chosen = row
-        self.bottle_list.select_row(chosen or self.bottle_list.get_row_at_index(0))
+        self.ball_list.select_row(chosen or self.ball_list.get_row_at_index(0))
         if not paths:
-            self.bottle = None
+            self.ball = None
             clear(self.content)
             self.content.append(
                 Adw.StatusPage(
                     title="Your OS/2 applications, at home",
-                    description="Create a bottle, map your installation media, and install an application.",
+                    description="Create a ball, map your installation media, and install an application.",
                     icon_name="application-x-executable-symbolic",
                     vexpand=True,
                 )
@@ -168,22 +169,22 @@ class BottleWindow(Adw.ApplicationWindow):
     def selected(self, _list, row):
         if row is None:
             return
-        if self.bottle != row.bottle_path:
+        if self.ball != row.ball_path:
             self.last_log = None
             self.last_result = None
-        self.bottle = row.bottle_path
+        self.ball = row.ball_path
         self.render()
         self.split.set_show_content(True)
 
     def render(self):
         clear(self.content)
         try:
-            data = bottles.load(self.bottle)
-            roots = bottles.drive_roots(self.bottle, data)
+            data = balls.load(self.ball)
+            roots = balls.drive_roots(self.ball, data)
         except (OSError, ValueError, KeyError) as error:
-            self.content.append(Adw.StatusPage(title="Cannot open bottle", description=str(error)))
+            self.content.append(Adw.StatusPage(title="Cannot open ball", description=str(error)))
             return
-        self.detail.set_title(self.bottle.name)
+        self.detail.set_title(self.ball.name)
         self.stack = Adw.ViewStack(vexpand=True)
         switcher = Adw.ViewSwitcher(stack=self.stack, policy=Adw.ViewSwitcherPolicy.WIDE)
         self.content.append(switcher)
@@ -269,15 +270,15 @@ class BottleWindow(Adw.ApplicationWindow):
         activity = self.page("activity", "Activity", "document-open-recent-symbolic")
         self.status = Gtk.Label(xalign=0, wrap=True)
         activity.append(self.status)
-        activity.append(button("Open bottle folder", lambda: self.open_path(self.bottle)))
-        activity.append(button("Open logs", lambda: self.open_path(self.bottle / "logs")))
+        activity.append(button("Open ball folder", lambda: self.open_path(self.ball)))
+        activity.append(button("Open logs", lambda: self.open_path(self.ball / "logs")))
         self.log_view = Gtk.TextView(
             editable=False, monospace=True, wrap_mode=Gtk.WrapMode.WORD_CHAR
         )
         log_scroll = Gtk.ScrolledWindow(min_content_height=300, vexpand=True)
         log_scroll.set_child(self.log_view)
         activity.append(log_scroll)
-        receipt = self.bottle / "logs/last-install.json"
+        receipt = self.ball / "logs/last-install.json"
         if receipt.exists():
             try:
                 result = json.loads(receipt.read_text())
@@ -367,20 +368,20 @@ class BottleWindow(Adw.ApplicationWindow):
         dialog.present(self)
         return entries
 
-    def new_bottle(self):
+    def new_ball(self):
         def create(values):
             name = values["name"].strip()
             if not name or name in (".", "..") or any(c in name for c in "/\\\r\n"):
-                raise ValueError("Choose a bottle name without slashes.")
-            path = bottles.bottles_home() / name
+                raise ValueError("Choose a ball name without slashes.")
+            path = balls.balls_home() / name
             if path.exists():
-                raise ValueError("A bottle with that name already exists.")
-            bottles.init(path)
+                raise ValueError("A ball with that name already exists.")
+            balls.init(path)
             self.refresh(path)
 
-        return self.form("New bottle", [("name", "Bottle name", "", None)], create, "Create")
+        return self.form("New ball", [("name", "Ball name", "", None)], create, "Create")
 
-    def open_bottle(self):
+    def open_ball(self):
         def opened(path):
             try:
                 self.remember(path)
@@ -388,7 +389,7 @@ class BottleWindow(Adw.ApplicationWindow):
             except (OSError, ValueError, KeyError) as error:
                 self.toast(error)
 
-        self.choose("Open bottle folder", opened, folder=True)
+        self.choose("Open ball folder", opened, folder=True)
 
     def runtime_dialog(self):
         def update(values):
@@ -491,7 +492,7 @@ class BottleWindow(Adw.ApplicationWindow):
     def execute(self, arguments):
         if self.process:
             raise ValueError("Wait for the current operation to finish.")
-        path = self.bottle
+        path = self.ball
         (path / "logs").mkdir(exist_ok=True)
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
         self.last_log = path / "logs" / f"desktop-{stamp}.log"
@@ -502,8 +503,8 @@ class BottleWindow(Adw.ApplicationWindow):
             self.process = launcher.spawnv(
                 [
                     sys.executable,
-                    str(Path(bottles.__file__).resolve()),
-                    "--bottle",
+                    str(Path(balls.__file__).resolve()),
+                    "--ball",
                     str(path),
                     "--build",
                     str(self.build),
@@ -563,25 +564,25 @@ class BottleWindow(Adw.ApplicationWindow):
             self.toast(error.message)
 
 
-class BottleApplication(Adw.Application):
-    def __init__(self, build=None, bottle=None):
+class BallApplication(Adw.Application):
+    def __init__(self, build=None, ball=None):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
         self.build = build
-        self.initial = bottle
+        self.initial = ball
 
     def do_activate(self):
         window = self.get_active_window()
         if window is None:
-            window = BottleWindow(self, self.build, self.initial)
+            window = BallWindow(self, self.build, self.initial)
         window.present()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, help="2ine build directory containing lx_loader")
-    parser.add_argument("--bottle", type=Path, help="open an existing bottle")
+    parser.add_argument("--ball", type=Path, help="open an existing ball")
     args = parser.parse_args()
-    return BottleApplication(args.build, args.bottle).run([sys.argv[0]])
+    return BallApplication(args.build, args.ball).run([sys.argv[0]])
 
 
 if __name__ == "__main__":
