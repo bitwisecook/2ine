@@ -192,7 +192,7 @@ Section: otherosfs
 Priority: optional
 Architecture: {architecture}
 Maintainer: 2ine Contributors <noreply@github.com>
-Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libgl1, libegl1, libgles2
+Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libstdc++6, libgcc-s1, libgl1, libegl1, libgles2
 Homepage: https://github.com/bitwisecook/2ine
 Description: Native GNOME manager for OS/2 applications
  Persistent balls of 2ine with private drives, settings and application state.
