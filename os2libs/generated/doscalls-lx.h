@@ -478,6 +478,24 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_Dos16GetModHandle(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, module);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, name);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_strings(GLoaderState.execution, name_guest, 1, 260, 0, &__abi_args[0])) goto __abi_done;
+    name = (PSZ) __abi_args[0].host;
+    if (!lx_guest_argument_far(GLoaderState.execution, module_guest, 2, 3, 0, 0, &__abi_args[1])) goto __abi_done;
+    module = (PUSHORT) __abi_args[1].host;
+    __abi_result = Dos16GetModHandle(name, module);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
 static uint32 bridge16to32_Dos16GetMachineMode(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, pmode);
     LxGuestArgument __abi_args[1] = {0};
@@ -1494,6 +1512,7 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(Dos16FreeSeg)
     LX_NATIVE_MODULE_16BIT_API(Dos16GetHugeShift)
     LX_NATIVE_MODULE_16BIT_API(Dos16CreateCSAlias)
+    LX_NATIVE_MODULE_16BIT_API(Dos16GetModHandle)
     LX_NATIVE_MODULE_16BIT_API(Dos16GetMachineMode)
     LX_NATIVE_MODULE_16BIT_API(Dos16Beep)
     LX_NATIVE_MODULE_16BIT_API(Dos16DevConfig)
@@ -1581,6 +1600,7 @@ static int init16_doscalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16FreeSeg, 2)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetHugeShift, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CreateCSAlias, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetModHandle, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetMachineMode, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16Beep, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16DevConfig, 8)
@@ -1982,6 +2002,7 @@ LX_NATIVE_MODULE_INIT({
     LX_NATIVE_EXPORT16(Dos16FreeSeg, 39),
     LX_NATIVE_EXPORT16(Dos16GetHugeShift, 41),
     LX_NATIVE_EXPORT16(Dos16CreateCSAlias, 43),
+    LX_NATIVE_EXPORT16(Dos16GetModHandle, 47),
     LX_NATIVE_EXPORT16(Dos16GetMachineMode, 49),
     LX_NATIVE_EXPORT16(Dos16Beep, 50),
     LX_NATIVE_EXPORT16(Dos16DevConfig, 52),

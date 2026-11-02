@@ -91,6 +91,7 @@
         "OTHER_LDFLAGS": [
           "$(inherited)",
           "-larchive",
+          "-lz",
           "\"$(SRCROOT)/../../../build-ball-engine/libtwoine_ball_core.a\"",
         ],
         "PRODUCT_BUNDLE_IDENTIFIER": "io.github.bitwisecook.TwoineBalls",

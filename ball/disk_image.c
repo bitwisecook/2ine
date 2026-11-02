@@ -1041,16 +1041,8 @@ char **tb_image_names(const char *path, size_t *count)
     *count = names.count;
     return names.items;
 }
-FILE *tb_image_fopen(const char *path)
+static FILE *disk_fopen(Disk *disk, const char *member)
 {
-    if (tb_hpfs_volume(path))
-        return tb_hpfs_fopen(path);
-    if (tb_fat_volume(path))
-        return tb_fat_fopen(path);
-    Disk disk;
-    const char *member;
-    if (!open_disk(path, &disk, &member))
-        return NULL;
     Node node;
     FILE *output = NULL;
     unsigned char *buffer = NULL, *visited = NULL;
@@ -1058,7 +1050,7 @@ FILE *tb_image_fopen(const char *path)
     {
         BUFFER_SIZE = 65536
     };
-    if (!lookup(&disk, member, &node))
+    if (!lookup(disk, member, &node))
         goto done;
     if (node.directory)
     {
@@ -1073,16 +1065,16 @@ FILE *tb_image_fopen(const char *path)
     buffer = malloc(BUFFER_SIZE);
     if (!buffer)
         goto failed;
-    visited = disk.fat_bits ? calloc((disk.clusters + 9u) / 8u, 1) : NULL;
-    if (disk.fat_bits && !visited)
+    visited = disk->fat_bits ? calloc((disk->clusters + 9u) / 8u, 1) : NULL;
+    if (disk->fat_bits && !visited)
         goto failed;
     while (remaining)
     {
         size_t chunk = remaining > BUFFER_SIZE ? BUFFER_SIZE : (size_t)remaining;
-        if (disk.fat_bits)
+        if (disk->fat_bits)
         {
-            if (cluster < 2 || cluster >= disk.clusters + 2 ||
-                cluster >= (disk.fat_bits == 12 ? 0xff0u : 0xfff0u) || steps >= disk.clusters)
+            if (cluster < 2 || cluster >= disk->clusters + 2 ||
+                cluster >= (disk->fat_bits == 12 ? 0xff0u : 0xfff0u) || steps >= disk->clusters)
             {
                 errno = EIO;
                 goto failed;
@@ -1096,20 +1088,20 @@ FILE *tb_image_fopen(const char *path)
                 }
                 visited[cluster / 8] |= (unsigned char)(1u << (cluster % 8));
             }
-            offset = disk.data_offset + (uint64_t)(cluster - 2) * disk.cluster_bytes + within;
-            if (chunk > disk.cluster_bytes - within)
-                chunk = disk.cluster_bytes - within;
+            offset = disk->data_offset + (uint64_t)(cluster - 2) * disk->cluster_bytes + within;
+            if (chunk > disk->cluster_bytes - within)
+                chunk = disk->cluster_bytes - within;
         }
-        if (!read_at(&disk, offset, buffer, chunk) || fwrite(buffer, 1, chunk, output) != chunk)
+        if (!read_at(disk, offset, buffer, chunk) || fwrite(buffer, 1, chunk, output) != chunk)
             goto failed;
         remaining -= chunk;
         offset += chunk;
-        if (disk.fat_bits)
+        if (disk->fat_bits)
         {
             within += (uint32_t)chunk;
-            if (within == disk.cluster_bytes && remaining)
+            if (within == disk->cluster_bytes && remaining)
             {
-                cluster = next_cluster(&disk, cluster);
+                cluster = next_cluster(disk, cluster);
                 within = 0;
                 steps++;
                 if (!cluster || cluster == UINT32_MAX)
@@ -1133,8 +1125,117 @@ failed:
 done:
     free(visited);
     free(buffer);
+    return output;
+}
+
+FILE *tb_image_fopen(const char *path)
+{
+    if (tb_hpfs_volume(path))
+        return tb_hpfs_fopen(path);
+    if (tb_fat_volume(path))
+        return tb_fat_fopen(path);
+    Disk disk;
+    const char *member;
+    if (!open_disk(path, &disk, &member))
+        return NULL;
+    FILE *output = disk_fopen(&disk, member);
     close_disk(&disk);
     return output;
+}
+
+static int stream_disk(FILE *file, Disk *disk)
+{
+    memset(disk, 0, sizeof *disk);
+    disk->file = file;
+    if (fseeko(file, 0, SEEK_END))
+        return 0;
+    int64_t size = ftello(file);
+    if (size < 0)
+        return 0;
+    disk->bytes = (uint64_t)size;
+    return identify(disk);
+}
+FILE *tb_image_stream_fopen(FILE *file, const char *member)
+{
+    Disk disk;
+    if (!stream_disk(file, &disk))
+    {
+        free(disk.fat);
+        return NULL;
+    }
+    FILE *out = disk_fopen(&disk, member);
+    free(disk.fat);
+    return out;
+}
+typedef struct StreamWalk
+{
+    TbImageVisitor visitor;
+    void *context;
+    const char *parent;
+    char **directories;
+    size_t count, visited;
+    int result;
+} StreamWalk;
+static int stream_entry(void *opaque, const char *name, const Node *node)
+{
+    StreamWalk *walk = opaque;
+    if (!strcmp(name, ".") || !strcmp(name, ".."))
+        return 1;
+    if (++walk->visited > 100000u)
+    {
+        errno = EFBIG;
+        return -1;
+    }
+    size_t n = strlen(walk->parent) + strlen(name) + 2;
+    char *path = malloc(n);
+    if (!path)
+        return -1;
+    snprintf(path, n, "%s%s%s", walk->parent, *walk->parent ? "/" : "", name);
+    int result = walk->visitor(walk->context, path, node->size, node->directory);
+    if (result != 1)
+        walk->result = result;
+    if (result == 1 && node->directory)
+    {
+        if (walk->count >= 100000u)
+        {
+            free(path);
+            errno = EFBIG;
+            return -1;
+        }
+        char **next = realloc(walk->directories, (walk->count + 1) * sizeof *next);
+        if (!next)
+        {
+            free(path);
+            return -1;
+        }
+        walk->directories = next;
+        walk->directories[walk->count++] = path;
+    }
+    else
+        free(path);
+    return result == 1 ? 1 : result == 2 ? 0 : -1;
+}
+int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context)
+{
+    Disk disk;
+    if (!stream_disk(file, &disk))
+    {
+        free(disk.fat);
+        return 0;
+    }
+    StreamWalk walk = {.visitor = visitor, .context = context, .parent = ""};
+    int result = entries(&disk, disk.root, stream_entry, &walk);
+    for (size_t i = 0; result == 1 && i < walk.count; i++)
+    {
+        walk.parent = walk.directories[i];
+        Node node;
+        result = lookup(&disk, walk.parent, &node) ? entries(&disk, node, stream_entry, &walk) : 0;
+    }
+    for (size_t i = 0; i < walk.count; i++)
+        free(walk.directories[i]);
+    free(walk.directories);
+    free(disk.fat);
+    return walk.result ? walk.result : result;
 }
 
 /* FAT updates stage a complete filesystem in memory before touching the source.

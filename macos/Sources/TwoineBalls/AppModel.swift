@@ -425,6 +425,42 @@ final class AppModel {
     func createFloppy(letter: String, path: String, kib: Int) async throws {
         try await changeMedia(["create-floppy", letter, path, String(kib)])
     }
+    func chooseOS2Support() async throws -> OS2SupportStatus? {
+        guard !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }
+        let panel = NSOpenPanel()
+        panel.title = "Choose OS/2 Installation ISO or Floppy Images"
+        panel.message = "CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG will be extracted into this ball’s C: drive."
+        panel.prompt = "Extract Support Files"
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return nil }
+        return try await installOS2Support(panel.urls.map(\.path))
+    }
+    func installOS2SupportFromPicker() {
+        Task {
+            do {
+                if let result = try await chooseOS2Support(), !result.complete {
+                    error = "Some support files were installed. Still missing: " + result.missing + ". Choose more OS/2 installation media to continue."
+                }
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+    func os2Support() async throws -> OS2SupportStatus {
+        guard let selected else { throw BallError("Choose a ball first.") }
+        return try await backend.request(DesktopRequest("os2-support", ball: selected), as: OS2SupportStatus.self)
+    }
+    func browseMedia(_ path: String) async throws -> MediaDirectory {
+        var request = DesktopRequest("browse-media", ball: selected); request.path = path
+        return try await backend.request(request, as: MediaDirectory.self)
+    }
+    func installOS2Support(_ sources: [String]) async throws -> OS2SupportStatus {
+        guard let selected, !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }
+        busy = true; defer { busy = false }
+        var request = DesktopRequest("import-os2-support", ball: selected); request.sources = sources
+        let result = try await backend.request(request, as: OS2SupportStatus.self)
+        try await reload(selected)
+        revision += 1
+        return result
+    }
     func attachInstallerMedia(_ url: URL, kind: MediaDeviceKind, letter: String) async throws -> [String] {
         let expectedBall = selected
         if snapshot?.manifest.drives[letter] == nil { try await changeMedia(["device", letter, kind.rawValue]) }

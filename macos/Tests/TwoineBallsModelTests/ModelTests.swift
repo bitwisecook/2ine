@@ -221,3 +221,26 @@ private func waitForOperation(_ model: AppModel) async throws {
         #expect(model.snapshot?.manifest.drives["F"]?.isReadOnly == false)
     }
 }
+
+@Test @MainActor func supportImportUpdatesTheSelectedBallAndPreservesApplicationMedia() async throws {
+    let (model, root) = try fixture()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let media = root.appending(path: "OS2 Media")
+    try FileManager.default.createDirectory(at: media, withIntermediateDirectories: true)
+    var command = Data(count: 100)
+    command.replaceSubrange(0..<2, with: [77, 90])
+    command.replaceSubrange(60..<64, with: [64, 0, 0, 0])
+    command.replaceSubrange(64..<66, with: [76, 88])
+    try command.write(to: media.appending(path: "CMD.EXE"))
+    try Data([255, 255] + Array("SYSLEVEL".utf8)).write(to: media.appending(path: "SYSLEVEL.OS2"))
+    try Data([255] + Array("MKMSGF".utf8) + [0]).write(to: media.appending(path: "OSO001.MSG"))
+    try await model.mapDrive("D", directory: media.path)
+    let before = try #require(model.snapshot?.manifest.drives["D"]?.source)
+    #expect(try await model.os2Support().complete == false)
+    let status = try await model.installOS2Support([media.path])
+    #expect(status.complete)
+    #expect(status.imported?.count == 3)
+    #expect(model.snapshot?.os2Support?.complete == true)
+    #expect(model.snapshot?.manifest.drives["D"]?.source == before)
+    #expect(model.busy == false)
+}

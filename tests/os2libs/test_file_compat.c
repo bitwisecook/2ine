@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <dlfcn.h>
+static __typeof__(Dos16GetModHandle) *call_module16;
 static __typeof__(DosOpen) *call_open;
 static __typeof__(DosClose) *call_close;
 static __typeof__(DosQueryFileInfo) *call_file_info;
@@ -117,6 +118,33 @@ static void priority(void)
     details->tib2_ultid = saved_id;
     details->tib2_ulpri = saved_priority;
 }
+static void module16(void)
+{
+    LxModule module = {0};
+    strcpy(module.name, "LEGACYMOD");
+    module.os2path = "C:\\OS2\\DLL\\LEGACYMOD.DLL";
+    module.handle = lx_handle_create(LX_HANDLE_MODULE, &module, NULL);
+    CHECK(module.handle > UINT16_MAX);
+    LxModule *saved = GLoaderState.loaded_modules;
+    module.next = saved;
+    GLoaderState.loaded_modules = &module;
+    struct
+    {
+        USHORT before, handle, after;
+    } output = {0xA55A, 0, 0x5AA5};
+    const char *names[] = {"LEGACYMOD", "legacymod.dll", "C:\\OS2\\DLL\\LEGACYMOD.DLL"};
+    for (unsigned i = 0; i < 3; i++)
+    {
+        CHECK(!call_module16((PSZ)names[i], &output.handle));
+        CHECK(output.handle == (module.handle & UINT16_MAX));
+        CHECK(output.before == 0xA55A && output.after == 0x5AA5);
+    }
+    CHECK(call_module16("NOT_LOADED", &output.handle) == ERROR_INVALID_NAME);
+    CHECK(call_module16(NULL, &output.handle) == ERROR_INVALID_PARAMETER);
+    CHECK(call_module16("LEGACYMOD", NULL) == ERROR_INVALID_PARAMETER);
+    GLoaderState.loaded_modules = saved;
+    CHECK(lx_handle_close(module.handle, LX_HANDLE_MODULE));
+}
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
@@ -127,6 +155,9 @@ int main(int argc, char **argv)
     if (!library)
         fprintf(stderr, "%s\n", dlerror());
     CHECK(library);
+    call_module16 = dlsym(library, "Dos16GetModHandle");
+    CHECK(call_module16);
+    module16();
     call_open = dlsym(library, "DosOpen");
     call_close = dlsym(library, "DosClose");
     call_file_info = dlsym(library, "DosQueryFileInfo");

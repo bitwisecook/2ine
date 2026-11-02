@@ -741,6 +741,7 @@ static int write_config(Context *c)
                : fail(c, "Cannot write 2ine.cfg");
 }
 static cJSON *guest_environment(Context *c, const cJSON *overrides);
+static cJSON *os2_support(Context *c);
 static cJSON *snapshot(Context *c)
 {
     if (!roots(c))
@@ -752,6 +753,7 @@ static cJSON *snapshot(Context *c)
         return NULL;
     cJSON *value = cJSON_CreateObject(), *mapping = cJSON_CreateObject();
     cJSON_AddItemToObject(value, "manifest", cJSON_Duplicate(c->manifest, 1));
+    cJSON_AddItemToObject(value, "os2Support", os2_support(c));
     cJSON *records = cJSON_AddObjectToObject(value, "applicationRecords"), *application;
     cJSON_ArrayForEach(application, get(c->manifest, "applications"))
     {
@@ -1158,6 +1160,11 @@ static cJSON *guest_environment(Context *c, const cJSON *overrides)
     cJSON *env = cJSON_CreateObject();
     for (int i = 0; default_keys[i]; i++)
         cJSON_AddStringToObject(env, default_keys[i], default_values[i]);
+    char *interpreter = host_path(c, "C:\\OS2\\CMD.EXE", 0);
+    if (!interpreter)
+        goto failed;
+    if (tb_is_file(interpreter))
+        cJSON_AddStringToObject(env, "COMSPEC", "C:\\OS2\\CMD.EXE");
     size_t n = 0;
     char *bytes = read_file(c, join(c, c->roots[2], "CONFIG.SYS"), &n, 1);
     if (!bytes)
@@ -1356,9 +1363,11 @@ static char *command_interpreter(Context *c)
     }
     fail(
         c,
-        "This command file needs the original OS/2 CMD.EXE. Add it at C:\\OS2\\CMD.EXE or set COMSPEC to its mapped OS/2 path, then run the command file again.");
+        "This command file needs the original OS/2 CMD.EXE. Choose Install OS/2 Support Files to extract it from your OS/2 CD or floppy images, or use install-os2-support in the CLI. Then run the command file again.");
     return NULL;
 }
+#include "os2_support.h"
+
 static cJSON *prepare(Context *c, const cJSON *request)
 {
     const char *build_path = field(request, "build");
@@ -1422,6 +1431,37 @@ static cJSON *prepare(Context *c, const cJSON *request)
     {
         fail(c, "Program does not exist: %s", program);
         goto failed;
+    }
+    /* SmartSuite's executable installer invokes CMD.EXE for child commands. */
+    if (!strcmp(action, "install"))
+    {
+        char *folder = keep(c, strdup(host));
+        char *slash = folder ? strrchr(folder, '/') : NULL;
+        if (slash)
+        {
+            *slash = 0;
+            size_t n = 0;
+            char **names = tb_names(folder, &n);
+            int suite = 0;
+            if (n != (size_t)-1)
+                for (size_t i = 0; i < n; i++)
+                    if (equal_case(names[i], "SUITE.RSP"))
+                        suite = 1;
+            tb_names_free(names, n == (size_t)-1 ? 0 : n);
+            if (suite)
+            {
+                cJSON *support = os2_support(c);
+                int complete = support && cJSON_IsTrue(get(support, "complete"));
+                cJSON_Delete(support);
+                if (!complete)
+                {
+                    fail(
+                        c,
+                        "SmartSuite needs original OS/2 support files, including CMD.EXE. Choose Install OS/2 Support Files and select your OS/2 CD or floppy images, then retry the installer.");
+                    goto failed;
+                }
+            }
+        }
     }
     /* Installers usually open companion files relative to their own directory. */
     if (!strcmp(action, "install") && !cwd)
@@ -2411,6 +2451,12 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return NULL;
     if (!strcmp(action, "export-ball"))
         return export_ball(c, request);
+    if (!strcmp(action, "os2-support"))
+        return os2_support(c);
+    if (!strcmp(action, "browse-media"))
+        return browse_media(c, field(request, "path"));
+    if (!strcmp(action, "import-os2-support"))
+        return import_os2_support(c, request);
     if (!strcmp(action, "snapshot"))
         return snapshot(c);
     if (!strcmp(action, "browse"))

@@ -94,6 +94,23 @@ def program():
     ea = g.field(bytes(12))
     content = g.field(bytes(4))
 
+    module = g.field(struct.pack("<HH", 0, 0xA55A))
+    repeated = g.field(bytes(2))
+    for query, output in ((b"DOSCALLS\0", module), (b"doscalls.dll\0", repeated)):
+        g.pointer(g.field(query))
+        g.pointer(output)
+        g.call(1, 47)  # Dos16GetModHandle writes a two-byte module ID.
+        g.zero(80)
+    g.word(module + 2, 0xA55A, 81)
+    g.code.extend(b"\xa1" + struct.pack("<H", module))
+    g.require(b"\x3b\x06" + struct.pack("<H", repeated), 82)
+    g.code.extend(b"\x85\xc0\x75\x0b")
+    g.exit(83)
+    g.pointer(g.field(b"NO_SUCH_MODULE\0"))
+    g.pointer(repeated)
+    g.call(1, 47)
+    g.require(b"\x3d" + struct.pack("<H", 123), 84)  # ERROR_INVALID_NAME
+
     g.push(5)
     g.pointer(country)
     g.pointer(text)

@@ -236,3 +236,31 @@ on Debian/Ubuntu, `libarchive` via vcpkg on Windows). The BSD-licensed API heade
 and license in `vendor/libarchive/` are pinned to
 [libarchive v3.7.4](https://github.com/libarchive/libarchive/tree/v3.7.4), allowing
 macOS SDKs that omit the headers to use the system library.
+
+## Original OS/2 installer support and nested media
+
+`{"action":"os2-support","ball":"..."}` reports whether CMD.EXE,
+SYSLEVEL.OS2 and OSO001.MSG are installed. `import-os2-support` accepts a
+`sources` array of user-selected ISO/floppy images, directories, archives or
+opaque media paths. It discovers those three files, decompresses IBM bundles,
+and installs missing files at C:\OS2\CMD.EXE, C:\OS2\SYSLEVEL.OS2 and
+C:\OS2\SYSTEM\OSO001.MSG. Existing files and drive mappings are preserved.
+An installed C:\OS2\CMD.EXE also supplies the default guest COMSPEC; explicit
+CONFIG.SYS, ball and application settings take precedence.
+Missing files are returned in the status so additional floppy images can be
+supplied later. Conflicting selected versions fail before installing files.
+
+`browse-media` accepts `path` and returns `path`, `label`, `parent` and
+`entries` with name/path/directory/container/size. Pass the returned path back
+unchanged to enter a folder or container. Media paths preserve each archive
+boundary with linear growth; mixed archive/image nesting has no fixed depth
+limit. Reads resolve boundaries iteratively into anonymous temporary files.
+The browser supports ISO, FAT floppy images, IBM PACK/PACK2, WarpIN WPI
+revisions 3/4, and libarchive's ZIP, RAR, 7z, LHA/LZH, TAR, CAB and compressed
+stream formats, subject to the linked library's codec support. WPI browsing
+and extraction do not execute its installation script.
+
+Reads reject traversal members and links. Work and expansion limits apply:
+100000 entries per container/search, 2 GiB per expanded ordinary member,
+and 16 MiB per IBM compressed member. Those limits constrain resource use,
+not nesting depth. Unsupported/encrypted/corrupt containers report errors.

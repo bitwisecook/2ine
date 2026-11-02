@@ -26,7 +26,7 @@ let package = Package(
     platforms: [.macOS("27.0")],
     products: [.executable(name: "TwoineBalls", targets: ["TwoineBalls"])],
     targets: [
-        .target(name: "BallEngine", path: "Sources/BallEngine", exclude: ["CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md", "vendor/libarchive/COPYING", "vendor/fatfs/README.md", "vendor/fatfs/LICENSE.txt"], publicHeadersPath: "include", cSettings: ballBuildSettings, linkerSettings: [.linkedLibrary("archive")]),
+        .target(name: "BallEngine", path: "Sources/BallEngine", exclude: ["CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md", "vendor/libarchive/COPYING", "vendor/fatfs/README.md", "vendor/fatfs/LICENSE.txt"], publicHeadersPath: "include", cSettings: ballBuildSettings, linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
         .target(name: "BallCore", dependencies: ["BallEngine"], swiftSettings: [.unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"])]),
         .executableTarget(name: "TwoineBalls", dependencies: ["BallCore"],
                           swiftSettings: [.unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"])]),

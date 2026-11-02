@@ -193,6 +193,16 @@ def main(argv=None):
     sub.add_parser("list", help="list balls in the default data directory")
     sub.add_parser("show", help="show the persistent configuration")
     sub.add_parser("apps", help="list saved application launchers")
+    sub.add_parser("os2-support", help="show missing original OS/2 support files")
+    support = sub.add_parser(
+        "install-os2-support",
+        help="extract original support files from CD/floppy images, folders or nested archives",
+    )
+    support.add_argument("sources", nargs="+")
+    browse = sub.add_parser(
+        "browse-media", help="browse an image/archive or an opaque nested member path"
+    )
+    browse.add_argument("path")
     export = sub.add_parser("export", help="export the ball as a ZIP archive")
     export.add_argument("archive", type=Path)
     export.add_argument("--include-images", action="store_true", help="bundle disk images")
@@ -250,6 +260,19 @@ def main(argv=None):
     configure_library(args.build)
     ball = args.ball.resolve()
     try:
+        if args.action in ("os2-support", "install-os2-support", "browse-media"):
+            message = {
+                "action": "import-os2-support"
+                if args.action == "install-os2-support"
+                else args.action,
+                "ball": str(ball),
+            }
+            if args.action == "install-os2-support":
+                message["sources"] = args.sources
+            if args.action == "browse-media":
+                message["path"] = args.path
+            print(json.dumps(native_request(message), indent=2))
+            return 0
         if args.action in ("import", "export"):
             result = native_request(
                 {

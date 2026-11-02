@@ -34,6 +34,8 @@ struct ProgramSheet: View {
     @State private var candidates: [String] = []
     @State private var discovering = false
     @State private var mediaNotice = ""
+    @State private var support: OS2SupportStatus?
+    @State private var supportPicker = false
     private var mediaLetters: [String] {
         let existing = (model.snapshot?.manifest.drives ?? [:]).filter { $0.value.device == mediaKind }.keys
         return Array(Set(existing).union(model.availableMediaLetter(mediaKind).map { [$0] } ?? [])).sorted()
@@ -59,6 +61,20 @@ struct ProgramSheet: View {
                         case .general:
                             Form {
                                 if action == .install {
+                                    Section("OS/2 Support Files") {
+                                        if let support {
+                                            Text(support.complete ? "OS/2 support files are installed." : "Missing: " + support.missing)
+                                                .accessibilityIdentifier("os2SupportStatus")
+                                        }
+                                        Button("Choose OS/2 ISO and Extract Support Files…") {
+                                            Task {
+                                                do { if let result = try await model.chooseOS2Support() { support = result } }
+                                                catch { self.error = error.localizedDescription }
+                                            }
+                                        }.accessibilityIdentifier("installOS2Support")
+                                        Button("Browse Installation Media…") { supportPicker = true }
+                                            .accessibilityIdentifier("browseOS2Support")
+                                    }
                                     Section("Installation Media") {
                                         HStack {
                                             Picker("Device", selection: $mediaKind) {
@@ -137,6 +153,9 @@ struct ProgramSheet: View {
                         program = $0; refreshIcon()
                     }
                 }
+                .sheet(isPresented: $supportPicker, onDismiss: { Task { support = try? await model.os2Support() } }) {
+                    OS2SupportSheet(model: model)
+                }
                 .sheet(item: $folderChoice) { choice in
                     GuestPickerSheet(model: model, snapshot: snapshot, path: choice.path, directoriesOnly: true, requiredDrive: choice.letter) { directories[choice.letter] = $0 }
                 }
@@ -162,6 +181,7 @@ struct ProgramSheet: View {
                 if app.icon != nil { iconDescription = "Custom icon saved in the ball." }
             }
             if action == .install {
+                Task { support = try? await model.os2Support() }
                 selectMediaLetter()
                 if model.snapshot?.manifest.drives[mediaLetter]?.image != nil { discoverInstallers() }
             }

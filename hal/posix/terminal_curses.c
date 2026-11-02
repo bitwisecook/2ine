@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <string.h>
 
 #include <curses.h>
 
@@ -40,8 +41,21 @@ enum
     TEXT_BLINK = 0x80
 };
 
+static int redirected;
+static unsigned char log_cells[25][80];
+static unsigned char log_dirty[25];
+
 int lx_host_terminal_open(int *width, int *height)
 {
+    redirected = !isatty(STDOUT_FILENO);
+    if (redirected)
+    {
+        memset(log_cells, ' ', sizeof log_cells);
+        memset(log_dirty, 0, sizeof log_dirty);
+        *width = 80;
+        *height = 25;
+        return 1;
+    }
     setlocale(LC_CTYPE, "");
     if (initscr() == NULL)
     {
@@ -86,6 +100,8 @@ int lx_host_terminal_open(int *width, int *height)
 }
 void lx_host_terminal_close(void)
 {
+    if (redirected)
+        return;
     if (!stdscr)
         return;
     reset_shell_mode();
@@ -96,16 +112,57 @@ void lx_host_terminal_close(void)
 }
 void lx_host_terminal_refresh(void)
 {
+    if (redirected)
+    {
+        for (int y = 0; y < 25; y++)
+        {
+            if (!log_dirty[y])
+                continue;
+            log_dirty[y] = 0;
+            int length = 80;
+            while (length && log_cells[y][length - 1] == ' ')
+                length--;
+            if (length)
+            {
+                fwrite(log_cells[y], 1, (size_t)length, stdout);
+                fputc('\n', stdout);
+            }
+        }
+        fflush(stdout);
+        return;
+    }
     refresh();
 }
 void lx_host_terminal_cursor(int x, int y)
 {
+    if (redirected)
+        return;
     move(y, x);
     refresh();
 }
 void lx_host_terminal_cells(int x, int y, const uint16_t *cells, int count, int cursor_x,
                             int cursor_y, int commit)
 {
+    if (redirected)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            int row = y + (x + i) / 80, column = (x + i) % 80;
+            if (row < 0 || row >= 25 || column < 0)
+                continue;
+            unsigned char ch = (unsigned char)(cells[i] & 0xff);
+            if (ch < ' ' || ch == 0x7f)
+                ch = ' ';
+            if (log_cells[row][column] != ch)
+            {
+                log_cells[row][column] = ch;
+                log_dirty[row] = 1;
+            }
+        }
+        if (commit)
+            lx_host_terminal_refresh();
+        return;
+    }
     const uint8_t *src = (const uint8_t *)cells;
     move(y, x);
 

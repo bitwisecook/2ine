@@ -48,4 +48,7 @@ int tb_image_mkdir(const char *path);
 int tb_image_move(const char *source, const char *target);
 int tb_image_readonly(const char *path, int readonly);
 int tb_image_copy(FILE *source, const char *destination, int exclusive);
+typedef int (*TbImageVisitor)(void *, const char *, uint64_t, int);
+int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context);
+FILE *tb_image_stream_fopen(FILE *file, const char *member);
 #endif

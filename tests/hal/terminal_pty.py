@@ -12,6 +12,14 @@ import sys
 import termios
 import time
 
+redirected = subprocess.run(
+    [sys.argv[1]], stdin=subprocess.DEVNULL, capture_output=True, timeout=10
+)
+assert redirected.returncode == 0, redirected.stderr
+assert redirected.stdout == b"HAL\nterminal closed\n", redirected.stdout
+assert b"\x1b" not in redirected.stdout + redirected.stderr
+print("Redirected terminal output stays readable without escape sequences")
+
 master, slave = pty.openpty()
 try:
     fcntl.ioctl(slave, termios.TIOCSWINSZ, array.array("H", [24, 80, 0, 0]))

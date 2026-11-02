@@ -142,6 +142,17 @@ struct ApplicationsView: View {
                 Spacer()
                 Button("Add Application…", systemImage: "plus") { model.beginProgram(.save) }
             }.disabled(model.busy || model.mediaBusy)
+            if let support = snapshot.os2Support, !support.complete {
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text("OS/2 Installer Support").font(.headline)
+                        Text("Missing: " + support.missing).font(.callout).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Choose OS/2 ISO…") { model.installOS2SupportFromPicker() }
+                        .disabled(model.busy || model.mediaBusy).accessibilityIdentifier("setupOS2Support")
+                }
+            }
             Table(rows, selection: $selection, sortOrder: $sortOrder, columnCustomization: $columns) {
                 TableColumn("Application", value: \.name) { row in
                     HStack {

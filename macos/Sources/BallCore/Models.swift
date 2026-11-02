@@ -71,6 +71,7 @@ public enum SettingValue: Decodable, Sendable {
 }
 
 public struct BallSnapshot: Decodable, Sendable {
+    public let os2Support: OS2SupportStatus?
     public let unavailableDrives: [String: String]?
     public let manifest: BallManifest
     public let roots: [String: String]
@@ -172,4 +173,35 @@ public struct ExecutableIcon: Decodable, Sendable {
     public let image: Data?
     public let width: Int?
     public let height: Int?
+}
+
+public struct OS2SupportStatus: Decodable, Sendable {
+    public struct File: Decodable, Sendable, Identifiable {
+        public let name: String
+        public let path: String
+        public let present: Bool
+        public var id: String { name }
+    }
+    public struct Imported: Decodable, Sendable {
+        public let path: String
+        public let source: String
+    }
+    public let files: [File]
+    public let complete: Bool
+    public let imported: [Imported]?
+    public var missing: String { files.filter { !$0.present }.map(\.name).joined(separator: ", ") }
+}
+public struct MediaDirectory: Decodable, Sendable {
+    public struct Entry: Decodable, Sendable, Identifiable {
+        public let name: String
+        public let path: String
+        public let directory: Bool
+        public let container: Bool
+        public let size: UInt64
+        public var id: String { path }
+    }
+    public let path: String
+    public let label: String
+    public let parent: String?
+    public let entries: [Entry]
 }

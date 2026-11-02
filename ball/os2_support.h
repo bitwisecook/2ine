@@ -1,0 +1,328 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
+/* Shared installation-media browser and original OS/2 support-file import. */
+#include "media.h"
+static const char *support_names[] = {"CMD.EXE", "SYSLEVEL.OS2", "OSO001.MSG"};
+static const char *support_paths[] = {"C:\\OS2\\CMD.EXE", "C:\\OS2\\SYSLEVEL.OS2",
+                                      "C:\\OS2\\SYSTEM\\OSO001.MSG"};
+static cJSON *os2_support(Context *c)
+{
+    cJSON *result = cJSON_CreateObject(), *files = cJSON_AddArrayToObject(result, "files");
+    int complete = 1;
+    for (int i = 0; i < 3; i++)
+    {
+        char *host = host_path(c, support_paths[i], 0);
+        if (!host)
+        {
+            cJSON_Delete(result);
+            return NULL;
+        }
+        int present = tb_is_file(host);
+        cJSON *file = cJSON_CreateObject();
+        cJSON_AddStringToObject(file, "name", support_names[i]);
+        cJSON_AddStringToObject(file, "path", support_paths[i]);
+        cJSON_AddBoolToObject(file, "present", present);
+        cJSON_AddItemToArray(files, file);
+        complete &= present;
+    }
+    cJSON_AddBoolToObject(result, "complete", complete);
+    return result;
+}
+static int media_candidate(const char *name)
+{
+    const char *extension = strrchr(name, '.');
+    if (!extension)
+        return 1;
+    const char *extensions[] = {".zip", ".iso", ".img", ".ima", ".dsk",  ".rar",   ".7z", ".lha",
+                                ".lzh", ".tar", ".gz",  ".tgz", ".bz2",  ".tbz",   ".xz", ".txz",
+                                ".Z",   ".cab", ".wpi", ".exe", ".pack", ".pack2", NULL};
+    for (int i = 0; extensions[i]; i++)
+        if (equal_case(extension, extensions[i]))
+            return 1;
+    return 0;
+}
+static cJSON *browse_media(Context *c, const char *input)
+{
+    if (!input)
+    {
+        fail(c, "Choose OS/2 installation media or an archive");
+        return NULL;
+    }
+    char *path = tb_media_path(input) ? keep(c, strdup(input)) : keep(c, tb_media_root(input));
+    if (!path)
+        return NULL;
+    size_t count = 0;
+    TbMediaEntry *items = tb_media_entries(path, &count);
+    if (count == (size_t)-1 && tb_media_path(input))
+    {
+        path = keep(c, tb_media_root(input));
+        if (path)
+            items = tb_media_entries(path, &count);
+    }
+    if (count == (size_t)-1)
+    {
+        fail(c, "Cannot open this media or archive: %s", strerror(errno));
+        return NULL;
+    }
+    cJSON *result = cJSON_CreateObject(), *entries = cJSON_AddArrayToObject(result, "entries");
+    cJSON_AddStringToObject(result, "path", path);
+    char *label = tb_media_label(path), *parent = tb_media_parent(path);
+    cJSON_AddStringToObject(result, "label", label ? label : input);
+    if (parent)
+        cJSON_AddStringToObject(result, "parent", parent);
+    else
+        cJSON_AddNullToObject(result, "parent");
+    free(label);
+    free(parent);
+    for (size_t i = 0; i < count; i++)
+    {
+        cJSON *entry = cJSON_CreateObject();
+        char *child = tb_media_child(path, items[i].name);
+        if (!child)
+        {
+            fail(c, "Cannot name archive member");
+            break;
+        }
+        cJSON_AddStringToObject(entry, "name", items[i].name);
+        cJSON_AddStringToObject(entry, "path", child);
+        cJSON_AddBoolToObject(entry, "directory", items[i].directory);
+        int container = !items[i].directory && media_candidate(items[i].name);
+        for (int file = 0; file < 3 && !items[i].directory; file++)
+            if (equal_case(items[i].name, support_names[file]))
+                container = tb_media_container(child);
+        cJSON_AddBoolToObject(entry, "container", container);
+        cJSON_AddNumberToObject(entry, "size", (double)items[i].size);
+        cJSON_AddItemToArray(entries, entry);
+        free(child);
+    }
+    tb_media_entries_free(items, count);
+    if (c->error)
+    {
+        cJSON_Delete(result);
+        return NULL;
+    }
+    return result;
+}
+typedef struct SupportFile
+{
+    unsigned char *data;
+    size_t size;
+    char *source;
+} SupportFile;
+static int support_read(Context *c, const char *source, int index, SupportFile *file)
+{
+    FILE *input = tb_media_path(source) ? tb_media_fopen(source) : tb_fopen(source, "rb");
+    if (!input)
+        return fail(c, "Cannot extract %s: %s", support_names[index], strerror(errno));
+    int ok = !fseek(input, 0, SEEK_END);
+    long size = ok ? ftell(input) : -1;
+    rewind(input);
+    if (size <= 0 || size > 16 * 1024 * 1024)
+    {
+        fclose(input);
+        return fail(c, "Invalid support file size: %s", support_names[index]);
+    }
+    unsigned char *data = malloc((size_t)size);
+    ok = data && fread(data, 1, (size_t)size, input) == (size_t)size;
+    fclose(input);
+    if (!ok)
+    {
+        free(data);
+        return fail(c, "Cannot read %s", support_names[index]);
+    }
+    size_t executable = size >= 64 ? (size_t)data[60] | (size_t)data[61] << 8 |
+                                         (size_t)data[62] << 16 | (size_t)data[63] << 24
+                                   : 0;
+    int valid =
+        index == 0
+            ? size >= 64 && data[0] == 'M' && data[1] == 'Z' && executable <= (size_t)size - 2 &&
+                  (!memcmp(data + executable, "NE", 2) || !memcmp(data + executable, "LX", 2))
+        : index == 1 ? size >= 10 && !memcmp(data, "\xff\xffSYSLEVEL", 10)
+                     : size >= 8 && !memcmp(data, "\xffMKMSGF", 7);
+    if (!valid)
+    {
+        free(data);
+        return fail(c, "%s is not an original OS/2 support file", support_names[index]);
+    }
+    if (file->data)
+    {
+        ok = file->size == (size_t)size && !memcmp(file->data, data, (size_t)size);
+        free(data);
+        return ok ? 1
+                  : fail(
+                        c,
+                        "Different versions of %s were found. Select one OS/2 release or language.",
+                        support_names[index]);
+    }
+    file->data = data;
+    file->size = (size_t)size;
+    file->source = strdup(source);
+    return file->source != NULL || fail(c, "Out of memory");
+}
+static cJSON *import_os2_support(Context *c, const cJSON *request)
+{
+    const cJSON *sources = get(request, "sources");
+    if (!array_strings(c, sources) || !cJSON_GetArraySize(sources))
+    {
+        fail(c, "Choose OS/2 CD, floppy images or archives");
+        return NULL;
+    }
+    cJSON *queue = cJSON_Duplicate(sources, 1), *imported = cJSON_CreateArray();
+    SupportFile files[3] = {{0}};
+    unsigned visited = 0;
+    /* A work queue handles mixed nesting without a recursion-depth limit. */
+    for (int at = 0; at < cJSON_GetArraySize(queue) && !c->error; at++)
+    {
+        if (++visited > 100000u)
+        {
+            fail(c,
+                 "Media search exceeded 100000 entries. Browse to a smaller folder and try again.");
+            break;
+        }
+        const char *input = str(cJSON_GetArrayItem(queue, at));
+        if (!tb_media_path(input) && tb_is_dir(input))
+        {
+            size_t count = 0;
+            char **names = tb_names(input, &count);
+            if (count == (size_t)-1)
+                fail(c, "Cannot read media folder");
+            else
+                for (size_t n = 0; n < count; n++)
+                {
+                    char *child = join(c, input, names[n]);
+                    if (!tb_is_link(child))
+                        cJSON_AddItemToArray(queue, cJSON_CreateString(child));
+                }
+            tb_names_free(names, count == (size_t)-1 ? 0 : count);
+            continue;
+        }
+        const char *base = strrchr(input, '/');
+        base = base ? base + 1 : input;
+        char *decoded = NULL;
+        if (tb_media_path(input))
+        {
+            decoded = tb_media_label(input);
+            if (!decoded)
+            {
+                fail(c, "Invalid media path");
+                break;
+            }
+            base = strrchr(decoded, '/');
+            base = base ? base + 1 : decoded;
+            const char *boundary = strstr(base, " ▸ ");
+            while (boundary)
+            {
+                base = boundary + strlen(" ▸ ");
+                boundary = strstr(base, " ▸ ");
+            }
+        }
+        int index = -1;
+        for (int i = 0; i < 3; i++)
+            if (equal_case(base, support_names[i]))
+                index = i;
+        if (index >= 0)
+        {
+            char *destination = host_path(c, support_paths[index], 0);
+            if (!destination || tb_is_file(destination))
+            {
+                free(decoded);
+                continue;
+            }
+            /* Some installation disks give a compressed member its final filename. */
+            if (!tb_media_container(input))
+            {
+                support_read(c, input, index, &files[index]);
+                free(decoded);
+                continue;
+            }
+        }
+        free(decoded);
+        size_t count = 0;
+        TbMediaEntry *entries = NULL;
+        char *root = NULL;
+        if (tb_media_path(input))
+            entries = tb_media_entries(input, &count);
+        else
+            count = (size_t)-1;
+        if (count == (size_t)-1)
+        {
+            if (!tb_media_container(input))
+            {
+                if (at < cJSON_GetArraySize(sources))
+                    fail(c, "Cannot read selected installation media or archive: %s", input);
+                continue;
+            }
+            root = tb_media_root(input);
+            if (!root)
+            {
+                fail(c, "Cannot open media");
+                break;
+            }
+            entries = tb_media_entries(root, &count);
+        }
+        const char *directory = root ? root : input;
+        if (count == (size_t)-1)
+            fail(c, "Cannot read archive or installation image: %s", strerror(errno));
+        else
+            for (size_t n = 0; n < count; n++)
+            {
+                int wanted = entries[n].directory || media_candidate(entries[n].name);
+                for (int i = 0; i < 3; i++)
+                    if (equal_case(entries[n].name, support_names[i]))
+                        wanted = 1;
+                if (wanted)
+                {
+                    char *child = tb_media_child(directory, entries[n].name);
+                    if (child)
+                    {
+                        cJSON_AddItemToArray(queue, cJSON_CreateString(child));
+                        free(child);
+                    }
+                    else
+                        fail(c, "Cannot name archive member");
+                }
+            }
+        tb_media_entries_free(entries, count == (size_t)-1 ? 0 : count);
+        free(root);
+    }
+    for (int i = 0; i < 3 && !c->error; i++)
+        if (files[i].data)
+        {
+            char *destination = host_path(c, support_paths[i], 0);
+            char *parent = destination ? keep(c, strdup(destination)) : NULL;
+            if (parent)
+            {
+                char *slash = strrchr(parent, '/');
+                if (slash)
+                    *slash = 0;
+            }
+            if (!parent || !tb_mkdirs(parent) || tb_is_file(destination) ||
+                !tb_atomic_write(destination, files[i].data, files[i].size))
+            {
+                fail(c, "Cannot install %s", support_paths[i]);
+                break;
+            }
+            cJSON *entry = cJSON_CreateObject();
+            cJSON_AddStringToObject(entry, "path", support_paths[i]);
+            char *label = tb_media_label(files[i].source);
+            cJSON_AddStringToObject(entry, "source", label ? label : files[i].source);
+            free(label);
+            cJSON_AddItemToArray(imported, entry);
+        }
+    for (int i = 0; i < 3; i++)
+    {
+        free(files[i].data);
+        free(files[i].source);
+    }
+    cJSON_Delete(queue);
+    if (c->error)
+    {
+        cJSON_Delete(imported);
+        return NULL;
+    }
+    cJSON *result = os2_support(c);
+    if (result)
+        cJSON_AddItemToObject(result, "imported", imported);
+    else
+        cJSON_Delete(imported);
+    return result;
+}

@@ -125,8 +125,27 @@ a ball alone is not a standalone runtime distribution.
 ## Lotus SmartSuite installation
 
 The English SmartSuite base 1.7 installer uses OS/2's command processor and
-system-version files. Supply `CMD.EXE` and `SYSLEVEL.OS2` from your OS/2 system
-in `drive_c/OS2`, and `OSO001.MSG` in `drive_c/OS2/SYSTEM`. Attach the original
+system-version files. In Applications or Install Software, choose **Choose
+OS/2 ISO…** to extract CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG into the ball's C:
+drive. Select your original OS/2 installation ISO, or select several floppy
+images together. This installs only the three support files; existing files
+and the application's CD mapping are preserved. **Browse Installation Media…**
+opens folders and nested archives when you need to inspect the contents.
+
+The CLI provides the same extraction in one command:
+
+```sh
+python3 -m tools.balls --ball balls/office install-os2-support /path/to/OS2.iso
+python3 -m tools.balls --ball balls/office os2-support
+```
+
+Missing files stay listed so you can supply more images. Nested ZIP,
+PACK/PACK2, ISO, FAT, WarpIN and standard libarchive formats can be mixed
+in any order without a fixed depth limit. The support files land at
+`drive_c/OS2/CMD.EXE`, `drive_c/OS2/SYSLEVEL.OS2` and
+`drive_c/OS2/SYSTEM/OSO001.MSG`.
+
+Attach the original
 SmartSuite ISO as D: with `map-image D /path/to/SmartSuite.iso` and copy its `ENGLISH/SUITE.RSP` into the ball's C: drive.
 
 Edit that response file with your registration and license choices. To install

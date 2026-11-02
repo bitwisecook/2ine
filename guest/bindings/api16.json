@@ -827,6 +827,22 @@
         "kind": "string",
         "nullable": false
       }
+    ],
+    "Dos16GetModHandle": [
+      {
+        "name": "name",
+        "size": "260",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      },
+      {
+        "name": "module",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
     ]
   },
   "msg": {

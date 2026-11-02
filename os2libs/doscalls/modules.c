@@ -69,6 +69,18 @@ APIRET DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod)
     return lxmod ? NO_ERROR : ERROR_INVALID_NAME;
 }
 
+APIRET16 Dos16GetModHandle(PSZ name, PUSHORT module)
+{
+    if (!module)
+        return ERROR_INVALID_PARAMETER;
+    HMODULE handle = 0;
+    APIRET result = DosQueryModuleHandle(name, &handle);
+    /* Legacy module IDs use the registry's nonzero 16-bit slot index. */
+    if (!result)
+        *module = (USHORT)handle;
+    return result;
+}
+
 APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppfn,
                               const LxModule *lxmod)
 {

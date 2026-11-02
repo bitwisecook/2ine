@@ -493,6 +493,16 @@ class BallWindow(Adw.ApplicationWindow):
         controls.append(button("Run Program…", lambda: self.program_dialog("run")))
         controls.append(button("Add Application…", lambda: self.program_dialog("add-app")))
         apps.append(controls)
+        support = self.snapshot.get("os2Support", {})
+        missing = [file["name"] for file in support.get("files", []) if not file["present"]]
+        if missing:
+            apps.append(
+                Gtk.Label(
+                    label="Missing OS/2 support files: " + ", ".join(missing), wrap=True, xalign=0
+                )
+            )
+        apps.append(button("Choose OS/2 ISO and Extract Support Files…", self.choose_os2_support))
+        apps.append(button("Browse Installation Media…", self.support_media_dialog))
         group = Adw.PreferencesGroup(title="Applications")
         apps.append(group)
         for name, app in sorted(data.get("applications", {}).items()):
@@ -735,6 +745,163 @@ class BallWindow(Adw.ApplicationWindow):
             if selected == 0
             else ["config", "runtime.backend", ("native", "unicorn")[selected - 1]]
         )
+
+    def choose_os2_support(self):
+        ball = str(self.ball)
+        picker = Gtk.FileDialog(
+            title="Choose OS/2 Installation ISO or Floppy Images",
+            accept_label="Extract Support Files",
+        )
+
+        def chosen(picker, result):
+            try:
+                files = picker.open_multiple_finish(result)
+                sources = [files.get_item(i).get_path() for i in range(files.get_n_items())]
+            except GLib.Error as error:
+                if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
+                    self.report_error(error)
+                return
+
+            def installed(value):
+                missing = [file["name"] for file in value["files"] if not file["present"]]
+                self.toast(
+                    "Still missing: " + ", ".join(missing)
+                    if missing
+                    else "OS/2 installer support files installed"
+                )
+                self.request({"action": "snapshot"})
+
+            self.request_work(
+                lambda: balls.native_request(
+                    {"action": "import-os2-support", "ball": ball, "sources": sources}
+                ),
+                installed,
+            )
+
+        picker.open_multiple(self, None, chosen)
+
+    def support_media_dialog(self):
+        ball = str(self.ball)
+        dialog = Adw.Dialog(
+            title="Install OS/2 Support Files", content_width=720, content_height=600
+        )
+        view = Adw.ToolbarView()
+        view.add_top_bar(Adw.HeaderBar())
+        box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=12,
+            margin_top=16,
+            margin_bottom=16,
+            margin_start=20,
+            margin_end=20,
+        )
+        view.set_content(box)
+        box.append(
+            Gtk.Label(
+                label="Choose your original OS/2 CD, floppy images or archives. Open nested containers to inspect them, or search all selected media.",
+                wrap=True,
+                xalign=0,
+            )
+        )
+        sources = []
+        location = {"path": None, "parent": None}
+        toolbar = Gtk.Box(spacing=8)
+        box.append(toolbar)
+        address = Gtk.Label(wrap=True, xalign=0, selectable=True)
+        box.append(address)
+        rows = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        scroll = Gtk.ScrolledWindow(vexpand=True, min_content_height=240)
+        scroll.set_child(rows)
+        box.append(scroll)
+        status = Gtk.Label(wrap=True, xalign=0, selectable=True)
+        box.append(status)
+
+        def show_status(value):
+            missing = [file["name"] for file in value["files"] if not file["present"]]
+            status.set_text(
+                "Missing: " + ", ".join(missing) if missing else "OS/2 support files are ready."
+            )
+
+        def navigate(path):
+            def loaded(value):
+                location.update(path=value["path"], parent=value["parent"])
+                address.set_text(value["label"])
+                clear(rows)
+                for entry in sorted(value["entries"], key=lambda entry: entry["name"].lower()):
+                    row = Adw.ActionRow(title=entry["name"])
+                    if entry["directory"] or entry["container"]:
+                        row.add_suffix(button("Open", lambda path=entry["path"]: navigate(path)))
+                    rows.append(row)
+
+            self.request_work(
+                lambda: balls.native_request(
+                    {"action": "browse-media", "ball": ball, "path": path}
+                ),
+                loaded,
+            )
+
+        def choose_images():
+            picker = Gtk.FileDialog(title="Choose OS/2 CD, Floppy Images or Archives")
+
+            def chosen(picker, result):
+                try:
+                    files = picker.open_multiple_finish(result)
+                    sources[:] = [files.get_item(i).get_path() for i in range(files.get_n_items())]
+                    if sources:
+                        navigate(sources[0])
+                except GLib.Error as error:
+                    if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
+                        status.set_text(error.message)
+
+            picker.open_multiple(self, None, chosen)
+
+        def choose_folder(path):
+            sources[:] = [str(path)]
+            location.update(path=str(path), parent=None)
+            address.set_text(str(path))
+            clear(rows)
+
+        def install(paths):
+            if not paths:
+                status.set_text("Choose OS/2 media first.")
+                return
+            status.set_text("Searching installation media…")
+
+            def installed(value):
+                show_status(value)
+                self.request({"action": "snapshot"})
+
+            self.request_work(
+                lambda: balls.native_request(
+                    {"action": "import-os2-support", "ball": ball, "sources": list(paths)}
+                ),
+                installed,
+            )
+
+        toolbar.append(button("Choose Images or Archives…", choose_images))
+        toolbar.append(
+            button(
+                "Choose Folder…",
+                lambda: self.choose("OS/2 Media Folder", choose_folder, folder=True),
+            )
+        )
+        toolbar.append(
+            button("Up", lambda: navigate(location["parent"]) if location["parent"] else None)
+        )
+        controls = Gtk.Box(spacing=8)
+        controls.append(button("Done", dialog.close))
+        controls.append(
+            button(
+                "Install from Here",
+                lambda: install([location["path"]]) if location["path"] else None,
+            )
+        )
+        controls.append(button("Search Selected Media and Install", lambda: install(sources)))
+        box.append(controls)
+        if self.snapshot.get("os2Support"):
+            show_status(self.snapshot["os2Support"])
+        dialog.set_child(view)
+        dialog.present(self)
 
     def choose(self, title, callback, folder=False):
         dialog = Gtk.FileDialog(title=title)
