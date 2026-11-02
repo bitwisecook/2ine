@@ -251,7 +251,7 @@
       "authors": [
         "Tim Janik"
       ],
-      "homepage": "https://testbit.org/",
+      "homepage": "https://github.com/swesterfeld/liquidsfz",
       "source": "https://github.com/swesterfeld/liquidsfz/blob/0.4.2/lib/pcg32rng.hh",
       "download": "https://github.com/swesterfeld/liquidsfz/releases/download/0.4.2/liquidsfz-0.4.2.tar.bz2",
       "role": "runtime",
@@ -381,7 +381,7 @@
         "Nettle contributors"
       ],
       "homepage": "https://www.lysator.liu.se/~nisse/nettle/",
-      "source": "https://git.lysator.liu.se/nettle/nettle",
+      "source": "https://launchpad.net/ubuntu/+source/nettle/3.10.2-1",
       "download": "https://launchpad.net/ubuntu/+source/nettle/3.10.2-1",
       "role": "host dependency",
       "versionPolicy": "host",

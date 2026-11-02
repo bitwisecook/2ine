@@ -138,7 +138,7 @@ are user-supplied and are not licensed or redistributed by this project.
 - License: MPL-2.0
 - Used as: runtime
 - Authors / origin credits: Tim Janik
-- [Project](https://testbit.org/) · [Source](https://github.com/swesterfeld/liquidsfz/blob/0.4.2/lib/pcg32rng.hh) · [Download](https://github.com/swesterfeld/liquidsfz/releases/download/0.4.2/liquidsfz-0.4.2.tar.bz2)
+- [Project](https://github.com/swesterfeld/liquidsfz) · [Source](https://github.com/swesterfeld/liquidsfz/blob/0.4.2/lib/pcg32rng.hh) · [Download](https://github.com/swesterfeld/liquidsfz/releases/download/0.4.2/liquidsfz-0.4.2.tar.bz2)
 
 ## Munt / libmt32emu
 
@@ -203,7 +203,7 @@ are user-supplied and are not licensed or redistributed by this project.
 - License: GPL-2.0-or-later option (alternative LGPL-3.0-or-later)
 - Used as: host dependency
 - Authors / origin credits: Niels Möller; Nettle contributors
-- [Project](https://www.lysator.liu.se/~nisse/nettle/) · [Source](https://git.lysator.liu.se/nettle/nettle) · [Download](https://launchpad.net/ubuntu/+source/nettle/3.10.2-1)
+- [Project](https://www.lysator.liu.se/~nisse/nettle/) · [Source](https://launchpad.net/ubuntu/+source/nettle/3.10.2-1) · [Download](https://launchpad.net/ubuntu/+source/nettle/3.10.2-1)
 
 ## libacl
 

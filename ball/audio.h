@@ -328,7 +328,7 @@ static cJSON *audio_import(Context *c, const cJSON *request)
     {
         if (inside(c->ball, folder))
         {
-            fail(c, "Move the instrument folder outside this ball before importing it");
+            fail(c, "Choose an instrument folder that does not contain this ball");
             return NULL;
         }
         SHA256_CTX state;
