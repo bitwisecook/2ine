@@ -3,6 +3,31 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/doscalls.h"
+ULONG GetWindowsDirectory(PSZ output, ULONG capacity)
+{
+    TRACE_NATIVE("GetWindowsDirectory(%p, %u)", output, (uint)capacity);
+    typedef APIRET(OS2API * QueryFn)(ULONG, ULONG, PVOID, ULONG);
+    QueryFn query = (QueryFn)open32DosService("DosQuerySysInfo");
+    ULONG drive = 0;
+    ULONG error = query ? query(QSV_BOOT_DRIVE, QSV_BOOT_DRIVE, &drive, sizeof drive) : 120;
+    if (error || drive < 1 || drive > 26)
+    {
+        open32SetError(error ? error : 15);
+        return 0;
+    }
+    char directory[] = "C:\\OS2";
+    directory[0] = (char)('A' + drive - 1);
+    if (capacity < sizeof directory)
+        return sizeof directory;
+    if (!output)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    memcpy(output, directory, sizeof directory);
+    return sizeof directory - 1;
+}
+
 ULONG GetCurrentDirectory(ULONG capacity, PSZ output)
 {
     ULONG drive = GLoaderState.current_disk;

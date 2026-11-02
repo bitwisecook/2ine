@@ -90,6 +90,11 @@ BOOL IsIconic(ULONG window)
     return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
            (WinQueryWindowULong(window, -2) & WS_MINIMIZED) != 0;
 }
+BOOL IsZoomed(ULONG window)
+{
+    return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
+           (WinQueryWindowULong(window, -2) & WS_MAXIMIZED) != 0;
+}
 BOOL GetWindowPlacement(ULONG window, PVOID output)
 {
     if (!output || lx_guest_load_u32(output) != 44)

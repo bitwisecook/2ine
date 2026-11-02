@@ -93,7 +93,7 @@ def file_dialog_program(work, mode, checked):
             64,
             initial,
             0,
-            0x86C | (0x1000 if mode == "open" else 0),
+            0x86C | (0x1200 if mode == "open" else 0),
             0,
             extension,
             0x12345678,

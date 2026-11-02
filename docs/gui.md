@@ -223,8 +223,9 @@ hooks, format selection, default extensions, checked output lengths and
 overwrite prompts are supported. Native dialog controls retain Windows subclass
 chains, properties, text conversion, button state and entry/combo/list messages.
 User buttons send native `BN_PAINT` or Windows `WM_DRAWITEM` notifications.
-Template handles, named templates, Explorer dialogs and multiselection are
-unsupported. Saved DC levels retain selected objects and independent clip copies.
+Callers permitting multiselection may choose one file and receive its full path.
+Selecting multiple files, template handles, named templates and Explorer dialogs
+are unsupported. Saved DC levels retain selected objects and independent clip copies.
 
 Synchronous Open32 file handles support creation dispositions, reads/writes,
 64-bit seeking and file sizes, truncation, flushing and nonblocking byte-range

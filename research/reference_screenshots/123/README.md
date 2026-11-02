@@ -5,19 +5,23 @@ Original Warp 4.52 and SmartSuite 1.7 with Fixpack 3, captured in an isolated QE
 These are stock masters. A passing 2ine comparison requires the same create, formula, font, save, reopen and recalculation cycle. Font rasterization and confirmed display DPI differences may be reviewed leniently; missing controls, cells or formatting are defects.
 
 
-The `lotus-123` compatibility branch can open a blank workbook, enter a text cell
-and save a nonempty original-format workbook containing that label. Reopening,
-formula recalculation, font selection and the full screenshot comparison remain
-unverified. Current contracts include native resource dialogs/icons, pattern and
-polygon drawing, text alignment, scrollbar controls, worker-to-window posting,
-PM object windows and hooked Open32 file dialogs. `gpi-contracts.json` records
-focused stock API measurements in addition to the locale and PM contracts.
+The `lotus-123` branch accepts quantity/double in A1/B1, 21 in A2 and +A2*2
+in B2, displaying 42. Native Lotus saves a real original-format workbook and
+reopens it through its original Open dialog with those values intact. Qualified
+captures and known visual defects are in [2ine/manifest.json](2ine/manifest.json).
+Font selection, editing and recalculating after reopening, the complete Unicorn
+workflow and the full visual comparison remain unverified. Font/DPI lenience
+does not excuse the missing grid, headers, menu/formula bar or frame controls.
+Current contracts include native resource dialogs/icons, pattern and polygon
+drawing, text alignment, scrollbar controls, worker-to-window posting, PM object
+windows and hooked Open32 single-file dialogs. `gpi-contracts.json` records
+focused stock API measurements in addition to locale and PM contracts.
 
 The original Lotus OLE runtime also requires private Warp SOM runtime DLLs, `SOM.IR`, the installation's `LOTUSW4/ETC/*.IR` interface repositories and the `OS2/ETC/DSOM/SOMD*.DAT`/`SOMD*.TOC` implementation repository. Point `SOMIR` to the semicolon-separated guest paths and `SOMDDIR` to a writable private copy of the DSOM directory; the reference installation sets `SOMDTHREADPEER=1`. These original files are not bundled. Each test session must use separate writable profiles and DSOM registration files.
 
 The current PM provider has no distributed SOM daemon: its readiness query returns false and starting it returns `ERROR_NOT_SUPPORTED`. PM error-state exchange stores and returns the previous error ID; optional extended error records are not retained.
 
-Named OS/2 queue contracts are recorded in `queue-contracts.json`. Named queues use bottle-local host mailboxes between 2ine processes. Same-process writes preserve opaque guest addresses; cross-process named shared-memory records preserve their original pointer and pool ownership. Private cross-process payloads are copied. Session termination uses a private queue reference so closing the session does not invalidate the application's queue handle.
+Named OS/2 queue contracts are recorded in `queue-contracts.json`. Named queues use ball-local host mailboxes between 2ine processes. Same-process writes preserve opaque guest addresses; cross-process named shared-memory records preserve their original pointer and pool ownership. Private cross-process payloads are copied. Session termination uses a private queue reference so closing the session does not invalidate the application's queue handle.
 
 Mux-wait contracts are recorded in `mux-contracts.json`. Event posts and mutex releases notify blocked ANY/ALL waits. PM wait exports currently delegate to the DOS semaphore waits; synchronous cross-thread PM message pumping is not implemented.
 
@@ -29,9 +33,12 @@ Open32 DDE supports thread-owned initialization, ANSI string references and loca
 
 The original SOMDD executable can be run separately with the same private runtime,
 repositories and `TWOINE_IPC_DIR` as Lotus. PMWP does not start it automatically.
-Initialization reaches the workbook input and save paths. A saved text cell is
-verified; the complete document cycle remains unverified.
+Initialization reaches the workbook input and save paths. Native labels, a formula, save and reopen are verified; the complete cycle
+remains unverified.
 
 `string-contracts.json` records original bytewise `lstrcmp` results, including
 punctuation and high bytes. `profile-contracts.json` records native private-profile
 storage and key normalization; those APIs do not read Windows text INI values.
+
+`directory-contracts.json` records original `GetWindowsDirectory` output and
+small-buffer behavior on the isolated Warp reference.

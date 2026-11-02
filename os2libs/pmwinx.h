@@ -256,6 +256,8 @@ extern "C"
         OS2APIINFO(ord = 302, name = GETLOGICALDRIVESTRINGS);
     OS2EXPORT ULONG OS2API GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
         OS2APIINFO(ord = 292, name = GETFULLPATHNAME);
+    OS2EXPORT ULONG OS2API GetWindowsDirectory(PSZ output, ULONG capacity)
+        OS2APIINFO(ord = 393, name = GETWINDOWSDIRECTORY);
     OS2EXPORT ULONG OS2API GetCurrentDirectory(ULONG capacity, PSZ output)
         OS2APIINFO(ord = 253, name = GETCURRENTDIRECTORY);
     OS2EXPORT BOOL OS2API SetCurrentDirectory(PSZ name)
@@ -361,6 +363,7 @@ extern "C"
     OS2EXPORT LONG OS2API CallNextHookEx(ULONG hook, LONG code, ULONG key, ULONG parameter)
         OS2APIINFO(ord = 21, name = CALLNEXTHOOKEX);
     OS2EXPORT SHORT OS2API GetKeyState(LONG key) OS2APIINFO(ord = 297, name = GETKEYSTATE);
+    OS2EXPORT BOOL OS2API IsZoomed(ULONG window) OS2APIINFO(ord = 451, name = ISZOOMED);
     OS2EXPORT BOOL OS2API IsIconic(ULONG window) OS2APIINFO(ord = 445, name = ISICONIC);
     OS2EXPORT BOOL OS2API GetWindowPlacement(ULONG window, PVOID output)
         OS2APIINFO(ord = 387, name = GETWINDOWPLACEMENT);

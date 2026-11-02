@@ -1,0 +1,23 @@
+{
+  "notice": "Public domain. No rights reserved. Wholly AI-authored captures.",
+  "application_sha256": "be8d2129f73ac08abe90c839cdb1458d333361403575ea95a618c226095a2c9e",
+  "status": "Partial native workflow; fonts, re-edit, Unicorn full cycle and visual comparison remain unverified",
+  "known_differences": [
+    "Missing gray grid and row/column header treatment",
+    "Missing menu and address/formula bar",
+    "Incomplete native frame and MDI layout",
+    "Green icon backgrounds and red font-selector text"
+  ],
+  "screenshots": [
+    {
+      "file": "native/populated.png",
+      "sha256": "c4600cae48e0c55ef042c1fe4b575c57026016de0966a8e7520aa9d2f9935fe3",
+      "observation": "Fresh workbook with quantity/double and21/42 before save"
+    },
+    {
+      "file": "native/reopened.png",
+      "sha256": "abba32bf7a424318d5a50d9f1641d3c01dcc8b891f97ab950afafc252efaeb69",
+      "observation": "Original Ctrl+O reopens actual4268byte workbook, retaining labels and21/42"
+    }
+  ]
+}

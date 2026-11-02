@@ -1235,6 +1235,23 @@ static uint32 bridge32_IsDBCSLeadByte(uint8 *a)
     return IsDBCSLeadByte(lx_guest_load_u32(a));
 }
 
+static uint32 bridge32_GetWindowsDirectory(uint8 *a)
+{
+    ULONG capacity = lx_guest_load_u32(a + 4);
+    ULONG required = GetWindowsDirectory(NULL, 0);
+    if (!required || capacity < required)
+        return required;
+    LxGuestBorrow output = {0};
+    uint32 result = 0;
+    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), required, LX_GUEST_WRITE,
+                            &output))
+        result = GetWindowsDirectory(output.host, capacity);
+    else
+        open32SetError(87);
+    lx_execution_release(&output);
+    return result;
+}
+
 static uint32 bridge32_GetCurrentDirectory(uint8 *a)
 {
     ULONG capacity = lx_guest_load_u32(a);
@@ -1716,6 +1733,11 @@ static uint32 bridge32_CallNextHookEx(uint8 *a)
 static uint32 bridge32_GetKeyState(uint8 *a)
 {
     return (uint32)GetKeyState((LONG)lx_guest_load_u32(a));
+}
+
+static uint32 bridge32_IsZoomed(uint8 *a)
+{
+    return IsZoomed(lx_guest_load_u32(a));
 }
 
 static uint32 bridge32_IsIconic(uint8 *a)

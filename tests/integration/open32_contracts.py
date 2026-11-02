@@ -196,6 +196,7 @@ API = {
     "GetLogicalDrives": 303,
     "GetLogicalDriveStrings": 302,
     "GetFullPathName": 292,
+    "GetWindowsDirectory": 393,
     "GetCurrentDirectory": 253,
     "SetCurrentDirectory": 604,
     "RegisterClipboardFormat": 557,
@@ -739,6 +740,16 @@ def directory_program():
     call(g, "GlobalDeleteAtom", (length,))
     call(g, "RegisterClipboardFormat", lower)
     g.require(b"\x3b\x05" + struct.pack("<I", length), 180)
+    call(g, "GetWindowsDirectory", 0, 0)
+    g.result(7, 206)
+    call(g, "GetWindowsDirectory", output, 6)
+    g.result(7, 207)
+    g.word(output, 0, 208)
+    call(g, "GetWindowsDirectory", output, 7)
+    g.result(6, 209)
+    g.word(output, int.from_bytes(b"C:\\O", "little"), 210)
+    g.word(output + 3, int.from_bytes(b"OS2\0", "little"), 211)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", output, 0))
     call(g, "GetCurrentDirectory", 0, 0)
     store(g, required)
     call(g, "GetCurrentDirectory", 1, output)

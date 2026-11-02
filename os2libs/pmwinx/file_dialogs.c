@@ -17,6 +17,7 @@ enum
     OFN_SHOWHELP = 0x10,
     OFN_ENABLEHOOK = 0x20,
     OFN_ENABLETEMPLATE = 0x40,
+    OFN_ALLOWMULTISELECT = 0x200,
     OFN_EXTENSIONDIFFERENT = 0x400,
     OFN_PATHMUSTEXIST = 0x800,
     OFN_FILEMUSTEXIST = 0x1000,
@@ -297,15 +298,19 @@ static BOOL common_dialog(PVOID address, BOOL save)
         !lx_execution_read(GLoaderState.execution, (ULONG)pointer, record, sizeof record))
         return fail(1);
     ULONG size = lx_guest_load_u32(record), flags = lx_guest_load_u32(record + 52);
+    TRACE_NATIVE("Open32 file dialog size=%u flags=%08x custom=%08x", (uint)size, (uint)flags,
+                 (uint)lx_guest_load_u32(record + 16));
     if (size != OPENFILENAME_SIZE)
         return fail(1);
     if (!lx_execution_memory(GLoaderState.execution, (ULONG)pointer, size, LX_GUEST_WRITE))
         return fail(0xffff);
+    /* The picker offers one file. ALLOWMULTISELECT callers receive the ordinary
+       full-path result required for a single selection. */
     ULONG supported = OFN_READONLY | OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY | OFN_NOCHANGEDIR |
-                      OFN_SHOWHELP | OFN_ENABLEHOOK | OFN_ENABLETEMPLATE | OFN_EXTENSIONDIFFERENT |
-                      OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_CREATEPROMPT |
-                      OFN_NOREADONLYRETURN | OFN_NOTESTFILECREATE | OFN_NONETWORKBUTTON |
-                      OFN_NOLONGNAMES;
+                      OFN_SHOWHELP | OFN_ENABLEHOOK | OFN_ENABLETEMPLATE | OFN_ALLOWMULTISELECT |
+                      OFN_EXTENSIONDIFFERENT | OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST |
+                      OFN_CREATEPROMPT | OFN_NOREADONLYRETURN | OFN_NOTESTFILECREATE |
+                      OFN_NONETWORKBUTTON | OFN_NOLONGNAMES;
     if (flags & ~supported || lx_guest_load_u32(record + 16))
     {
         open32SetError(50);
