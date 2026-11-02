@@ -10,7 +10,7 @@ typedef struct Open32Scroll
 } Open32Scroll;
 typedef struct Open32Window
 {
-    HWND handle;
+    HWND handle, client;
     Open32Class *class;
     ULONG style, extended_style, parameter, instance, menu, parent, procedure, user_data;
     ULONG mdi_menu, mdi_next_id, mdi_active, system_menu;
@@ -27,6 +27,8 @@ typedef struct Open32Window
     struct Open32Window *next, *creating_previous;
 } Open32Window;
 Open32Window *open32FindWindow(ULONG handle);
+ULONG open32ClientWindow(ULONG handle);
+ULONG open32PublicWindow(ULONG handle);
 ULONG open32WindowCallback(Open32Window *window, ULONG message, ULONG first, ULONG second);
 void open32PropertiesCleanup(Open32Window *window);
 #endif

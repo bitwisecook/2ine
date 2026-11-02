@@ -139,7 +139,7 @@ static void *session_wait(void *value)
     if (!DosWaitChild(0, 0, &result, &ended, session->pid) && session->queue)
     {
         USHORT message[2] = {(USHORT)session->id, (USHORT)result.codeResult};
-        DosWriteQueue(session->queue, 0, sizeof message, message, 0);
+        lx_queue_write_copy(session->queue, 0, sizeof message, message, 0);
     }
     remove_session(session);
     destroy_session(session);
@@ -161,7 +161,7 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     if (data->TermQ && *data->TermQ)
     {
         PID owner;
-        APIRET result = lx_queue_open_writer(&owner, &session->queue, (PSZ)data->TermQ);
+        APIRET result = lx_queue_open_private(&owner, &session->queue, (PSZ)data->TermQ);
         if (result)
         {
             destroy_session(session);

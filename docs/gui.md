@@ -217,6 +217,41 @@ Full list keyboard navigation, modifier-key multiselection and scrollbars are
 incomplete. File dialogs accept a typed single filename; allocated multiselection
 lists and complete modeless behavior are unsupported.
 
+Open32 single-file Open/Save dialogs adapt the 76-byte `OPENFILENAME` record to
+native PM controls. Numeric custom templates, initialization and file-validation
+hooks, format selection, default extensions, checked output lengths and
+overwrite prompts are supported. Native dialog controls retain Windows subclass
+chains, properties, text conversion, button state and entry/combo/list messages.
+User buttons send native `BN_PAINT` or Windows `WM_DRAWITEM` notifications.
+Callers permitting multiselection may choose one file and receive its full path.
+Selecting multiple files, template handles, named templates and Explorer dialogs
+are unsupported. Saved DC levels retain selected objects and independent clip copies.
+
+Captioned overlapped Open32 windows expose a native frame with a separate
+`FID_CLIENT` drawable. Child parenting, focus, capture, coordinates, DCs and
+paint messages map to that client while callbacks retain the public frame
+handle. Native frame subclass replacement controls client callback forwarding.
+Supplied menus and `WM_MDISETMENU` attach actual PM menu bars and resize the
+client; detached menus remain available to their caller. Other frame mappings,
+full MDI decorations and automatic Window-menu entries are incomplete.
+`WinHelp` supports no-viewer `HELP_QUIT` cleanup; help-viewer commands are
+unsupported.
+
+Synchronous Open32 file handles support creation dispositions, reads/writes,
+64-bit seeking and file sizes, truncation, flushing and nonblocking byte-range
+locks. Sharing checks cover handles in the same worker. Linux uses descriptor
+locks; macOS retains otherwise closed descriptors until the inode's process
+locks are released. Reads/writes check range conflicts, but a peer's lock
+acquisition is not interlocked with an in-flight host I/O operation. Host locks
+are advisory to other host software. Read-only-handle locking, asynchronous I/O,
+security descriptors and delete-on-close are unsupported.
+
+Private Open32 profile strings use native OS/2 binary profiles with unchanged
+section names and uppercase keys. Text INI files do not supply these records.
+Fallback strings retain trailing spaces. Writes use the profile provider's
+atomic 2ine format. Mapped-drive queries reuse DOS volume labels and filesystem
+identity; they do not advertise host ACL or compression support.
+
 Glyph masks use coverage alpha and visible-window clipping. Current-thread
 input hooks can modify or consume queued input. Other hook types and cross-thread
 hook operation remain unsupported. Unsupported API paths return failure rather

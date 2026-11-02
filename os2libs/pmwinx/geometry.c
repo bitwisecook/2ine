@@ -7,7 +7,7 @@
 BOOL GetClientRect(ULONG window, PVOID output)
 {
     RECTL rect;
-    if (!output || !open32Presentation() || !WinQueryWindowRect(window, &rect))
+    if (!output || !open32Presentation() || !WinQueryWindowRect(open32ClientWindow(window), &rect))
     {
         open32SetError(1400);
         return FALSE;
@@ -41,6 +41,7 @@ BOOL GetWindowRect(ULONG window, PVOID output)
 }
 static BOOL map_point(ULONG window, PVOID point, BOOL to_screen)
 {
+    window = open32ClientWindow(window);
     RECTL rect;
     if (!point || !open32Presentation() || !WinQueryWindowRect(window, &rect))
     {
@@ -90,6 +91,51 @@ BOOL IsIconic(ULONG window)
     return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
            (WinQueryWindowULong(window, -2) & WS_MINIMIZED) != 0;
 }
+BOOL IsZoomed(ULONG window)
+{
+    return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
+           (WinQueryWindowULong(window, -2) & WS_MAXIMIZED) != 0;
+}
+BOOL GetWindowPlacement(ULONG window, PVOID output)
+{
+    if (!output || lx_guest_load_u32(output) != 44)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    SWP position;
+    RECTL parent;
+    if (!open32Presentation() || !WinQueryWindowPos(window, &position) ||
+        !WinQueryWindowRect(WinQueryWindow(window, 5), &parent))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    ULONG style = WinQueryWindowULong(window, -2);
+    ULONG state = style & WS_MINIMIZED ? 2 : style & WS_MAXIMIZED ? 3 : 1;
+    LONG x = position.x, y = position.y, width = position.cx, height = position.cy;
+    char name[16];
+    if (state != 1 && WinQueryClassName(window, sizeof name, name) && !strcmp(name, "#1"))
+    {
+        x = (SHORT)WinQueryWindowUShort(window, 0x0c);
+        y = (SHORT)WinQueryWindowUShort(window, 0x0e);
+        width = WinQueryWindowUShort(window, 0x10);
+        height = WinQueryWindowUShort(window, 0x12);
+    }
+    int64_t top = (int64_t)parent.yTop - y - height;
+    int64_t right = (int64_t)x + width, bottom = top + height;
+    if (top < INT32_MIN || top > INT32_MAX || right < INT32_MIN || right > INT32_MAX ||
+        bottom < INT32_MIN || bottom > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint32 fields[] = {44,         0,        state,      UINT32_MAX,   UINT32_MAX,   UINT32_MAX,
+                       UINT32_MAX, (ULONG)x, (ULONG)top, (ULONG)right, (ULONG)bottom};
+    for (unsigned i = 0; i < sizeof fields / sizeof *fields; i++)
+        lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
+    return TRUE;
+}
 
 ULONG GetParent(ULONG window)
 {
@@ -111,6 +157,7 @@ BOOL WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count, 
                  direction);
     /* WINX2PM and PM2WINX use the same involution in the original adapter. */
     (void)direction;
+    window = open32ClientWindow(window);
     LONG height;
     RECTL rectangle;
     if (dc && open32FindDC(dc))
@@ -146,7 +193,7 @@ BOOL WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count, 
 ULONG SetParent(ULONG window, ULONG parent)
 {
     HAB hab = open32Presentation();
-    HWND target = parent ? parent : HWND_DESKTOP;
+    HWND target = parent ? open32ClientWindow(parent) : HWND_DESKTOP;
     if (!hab || !WinIsWindow(hab, window) || !WinIsWindow(hab, target))
     {
         open32SetError(1400);
@@ -165,5 +212,5 @@ ULONG SetParent(ULONG window, ULONG parent)
         /* Reapply the top-left position using the new PM parent's height. */
         SetWindowPos(window, 0, w->x, w->y, 0, 0, 1 | 4 | 16);
     }
-    return previous == HWND_DESKTOP ? 0 : previous;
+    return previous == HWND_DESKTOP ? 0 : open32PublicWindow(previous);
 }

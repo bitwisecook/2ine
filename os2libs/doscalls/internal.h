@@ -198,6 +198,7 @@ extern LX_PRIVATE LxHostOnce GCritSecOnce;
 extern LX_PRIVATE LxHostMutex *GCritSec;
 LX_PRIVATE void notifyMuxWaiters(void);
 LX_PRIVATE BOOL semaphoreResourceShared(void *resource);
+LX_PRIVATE int borrowEventResource(HEV handle, LxHandleBorrow *borrow);
 LX_PRIVATE void destroyEventResource(void *value);
 LX_PRIVATE void destroyMutexResource(void *value);
 LX_PRIVATE NamedSem *findNamedSemLocked(const char *name, int is_mutex);

@@ -410,12 +410,14 @@ BOOL WinDeregisterObjectClass(PSZ name)
     end(profile, lock);
     return result;
 }
+#include "os2libs/generated/pmwp-lx.h"
+
 BOOL WinIsSomDDReady(void)
 {
     return FALSE;
 }
+
 APIRET WinRestartSomDD(BOOL state)
 {
-    return state ? 50 : 0;
+    return state ? 50 : 0; /* ERROR_NOT_SUPPORTED: no DSOM daemon provider. */
 }
-#include "os2libs/generated/pmwp-lx.h"

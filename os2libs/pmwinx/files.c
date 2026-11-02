@@ -155,6 +155,9 @@ BOOL ReadFile(ULONG handle, PVOID output, ULONG size, PULONG actual, PVOID overl
         return FALSE;
     }
     *actual = 0;
+    int typed = open32FileIO(handle, output, size, actual, FALSE);
+    if (typed >= 0)
+        return typed;
     ULONG count = _lread(handle, output, size);
     if (count == UINT32_MAX)
         return FALSE;
@@ -169,6 +172,9 @@ BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overl
         return FALSE;
     }
     *actual = 0;
+    int typed = open32FileIO(handle, input, size, actual, TRUE);
+    if (typed >= 0)
+        return typed;
     if (!size)
     {
         typedef APIRET(OS2API * WriteFn)(HFILE, PVOID, ULONG, PULONG);
@@ -186,5 +192,5 @@ BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overl
 }
 BOOL CloseHandle(ULONG handle)
 {
-    return open32CloseThread(handle) || _lclose(handle) == 0;
+    return open32CloseThread(handle) || open32CloseFile(handle) || _lclose(handle) == 0;
 }

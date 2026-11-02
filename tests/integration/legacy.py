@@ -520,7 +520,13 @@ def main():
     parser.add_argument("--backend", choices=("native", "unicorn"), required=True)
     args = parser.parse_args()
     build = args.build.resolve()
-    env = dict(os.environ, TWOINE_BACKEND=args.backend, TWOINE_LIBPATH=str(build))
+    env = dict(
+        os.environ,
+        TWOINE_BACKEND=args.backend,
+        TWOINE_LIBPATH=str(build),
+        SDL_VIDEO_DRIVER="dummy",
+        SDL_RENDER_DRIVER="software",
+    )
     env["LD_LIBRARY_PATH"] = str(build)
     with tempfile.TemporaryDirectory(prefix="twoine-legacy-") as scratch:
         work = Path(scratch)

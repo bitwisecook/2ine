@@ -7,4 +7,5 @@ struct LxHostFile
 {
     int fd;
 };
+void lx_host_file_dispose(LxHostFile *file);
 #endif

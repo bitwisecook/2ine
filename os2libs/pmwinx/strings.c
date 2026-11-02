@@ -3,7 +3,63 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/case_tables.h"
+#include "os2libs/pmwin.h"
 #define STRING_LIMIT (1024u * 1024u)
+static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG from, ULONG to)
+{
+    if (!count)
+        return TRUE;
+    if (count > STRING_LIMIT)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint8 *copy = malloc(count);
+    if (!copy)
+    {
+        open32SetError(8);
+        return FALSE;
+    }
+    BOOL result = lx_execution_read(GLoaderState.execution, source, copy, count);
+    if (result)
+    {
+        for (ULONG i = 0; i < count; i++)
+            copy[i] = WinCpTranslateChar(0, from, copy[i], to);
+        result = lx_execution_write(GLoaderState.execution, destination, copy, count);
+    }
+    free(copy);
+    if (!result)
+        open32SetError(87);
+    return result;
+}
+static BOOL convert_string(ULONG source, ULONG destination, ULONG from, ULONG to)
+{
+    char *text = lx_execution_copy_string(GLoaderState.execution, source, STRING_LIMIT);
+    if (!text)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    ULONG count = (ULONG)strlen(text) + 1;
+    free(text);
+    return convert_buffer(source, destination, count, from, to);
+}
+BOOL OemToChar(ULONG source, ULONG destination)
+{
+    return convert_string(source, destination, 437, 1004);
+}
+BOOL CharToOem(ULONG source, ULONG destination)
+{
+    return convert_string(source, destination, 1004, 437);
+}
+BOOL OemToCharBuff(ULONG source, ULONG destination, ULONG count)
+{
+    return convert_buffer(source, destination, count, 437, 1004);
+}
+BOOL CharToOemBuff(ULONG source, ULONG destination, ULONG count)
+{
+    return convert_buffer(source, destination, count, 1004, 437);
+}
 static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
 {
     char *input = lx_execution_copy_string(GLoaderState.execution, source, STRING_LIMIT);
@@ -155,6 +211,27 @@ LONG lstrcmpi(ULONG first, ULONG second)
             if (result || !*p)
                 break;
         }
+    }
+    free(a);
+    free(b);
+    return result;
+}
+LONG lstrcmp(ULONG first, ULONG second)
+{
+    char *a = lx_execution_copy_string(GLoaderState.execution, first, STRING_LIMIT);
+    char *b = lx_execution_copy_string(GLoaderState.execution, second, STRING_LIMIT);
+    LONG result = 0;
+    if (!a || !b)
+        open32SetError(87);
+    else
+    {
+        const unsigned char *p = (const unsigned char *)a, *q = (const unsigned char *)b;
+        while (*p && *p == *q)
+        {
+            p++;
+            q++;
+        }
+        result = (LONG)*p - (LONG)*q;
     }
     free(a);
     free(b);

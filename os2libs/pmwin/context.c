@@ -55,8 +55,6 @@ HAB WinInitialize(ULONG flOptions)
         return NULLHANDLE;
     }
 
-    anchor->object_window.hwnd = HWND_OBJECT;
-    anchor->object_window.enabled = TRUE;
     anchor->windows_array_len = 16;
     anchor->windows = calloc(anchor->windows_array_len, sizeof *anchor->windows);
     if (!anchor->windows)

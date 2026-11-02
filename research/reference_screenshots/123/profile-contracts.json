@@ -1,0 +1,30 @@
+{
+  "notice": "Public domain. No rights reserved. Wholly AI-authored measurements.",
+  "reference": "OS/2 Warp4.52 original PMWINX.DLL",
+  "reference_sha256": "07a7368235f8b5b0b42b955dc5d8130eb0fdf178c3f20bc62ab334b1da339655",
+  "probe": "Watcom32 PM executable; original ordinals340/718 and native PrfOpenProfile/WriteProfileString/QueryProfileData in disposable Warp overlay",
+  "observations": {
+    "text_ini_key_query": {
+      "contents": "[General] Key=\"quoted value\"",
+      "fallback": "fallback  ",
+      "result": 10,
+      "output": "fallback  "
+    },
+    "native_section_case_preserved": true,
+    "query_key_normalized_to_uppercase": true,
+    "native_lowercase_key_is_not_found": true,
+    "write_section": "General",
+    "write_key": "api",
+    "write_value": "written",
+    "stored_section": "General",
+    "stored_key": "API",
+    "stored_data_hex": "7772697474656e00",
+    "readback_result": 7,
+    "readback": "written",
+    "enumeration_uses_native_names": true,
+    "empty_enumeration": {
+      "result": 0,
+      "first_byte": 0
+    }
+  }
+}

@@ -116,7 +116,7 @@ def main():
         assert receipt["command"][1] == r"D:\SETUP.EXE"
         assert receipt["runtime_id"]
         execute(["run", r"D:\MISSING.EXE"], 2)
-        assert "program does not exist" in window.last_log.read_text()
+        assert "program does not exist" in window.last_log.read_text().casefold()
         execute(["unset", "env.TEST_VALUE"])
         execute(["remove-app", "Test application"])
         execute(["unmap", "D"])

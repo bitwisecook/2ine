@@ -192,6 +192,7 @@ def main():
     )
     with tempfile.TemporaryDirectory(prefix="twoine-queues-") as temporary:
         path = Path(temporary) / "queues.exe"
+        env["TWOINE_IPC_DIR"] = str(Path(temporary) / "ipc")
         payloads = [
             *(queue_program(order, args.backend == "unicorn") for order in range(3)),
             blocking_program(),

@@ -63,8 +63,9 @@ def program(checked):
     g.result(1, 40)
     g.call_handle(2, 900, window, point, 1)  # WinWindowFromPoint, checked POINTL bridge
     g.require(b"\x3b\x05" + struct.pack("<I", child), 33)
-    g.call_handle(2, 900, window, 0xFFFFFFFF, 1)
-    g.result(0, 34)
+    if checked:
+        g.call_handle(2, 900, window, 0xFFFFFFFF, 1)
+        g.result(0, 34)
     space = g.field(bytes(4))
     g.call_handle(2, 757, child)  # WinGetPS
     g.code.extend(b"\xa3" + struct.pack("<I", space))

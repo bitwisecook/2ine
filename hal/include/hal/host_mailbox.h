@@ -10,6 +10,8 @@ int lx_host_mailbox_open(const char *directory, const char *name, int create, un
                          LxHostMailbox **output, uint32_t *owner);
 void lx_host_mailbox_close(LxHostMailbox *mailbox);
 int lx_host_mailbox_send(LxHostMailbox *mailbox, const void *data, size_t size, unsigned priority);
+/* Receive returns 2 for an unknown token, 3 at end of a peek cursor.
+   peek=2 selects the successor of token; peek=1 selects that token. */
 int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity, size_t *size,
                             unsigned *priority, uint32_t *token, int peek);
 int lx_host_mailbox_count(LxHostMailbox *mailbox, uint32_t *count, int purge);

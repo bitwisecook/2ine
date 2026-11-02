@@ -65,16 +65,8 @@ static uint32 bridge32_DosQueryQueue(uint8 *a)
 }
 static uint32 bridge32_DosWriteQueue(uint8 *a)
 {
-    uint32 size = lx_guest_load_u32(a + 8), pointer = lx_guest_load_u32(a + 12);
-    LxGuestBorrow input = {0};
-    PVOID data = (PVOID)(uintptr_t)pointer;
-    if (size && size <= QUEUE_PAYLOAD_LIMIT &&
-        lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_READ, &input))
-        data = input.host;
-    uint32 result = DosWriteQueue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), size, data,
-                                  lx_guest_load_u32(a + 16));
-    lx_execution_release(&input);
-    return result;
+    return DosWriteQueue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                         (PVOID)(uintptr_t)lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
 }
 typedef struct QueueReceive32
 {
@@ -118,8 +110,12 @@ static uint32 queue_receive32_operation(void *argument)
         lx_guest_store_u32((uint8 *)outputs[0].host + 4, request.ulData);
         lx_guest_store_u32(outputs[1].host, size);
         uint32 address = (uint32)(uintptr_t)data;
-        if (data && size)
-            lx_execution_address(GLoaderState.execution, data, size, LX_GUEST_READ, &address);
+        if (data && !lx_execution_address(GLoaderState.execution, data, 0, 0, &address) &&
+            (uintptr_t)data > UINT32_MAX)
+        {
+            result = ERROR_QUE_MEMORY_ERROR;
+            goto done;
+        }
         lx_guest_store_u32(outputs[2].host, address);
         *(uint8 *)outputs[3].host = priority;
         if (peek)

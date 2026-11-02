@@ -3,10 +3,10 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "hal/host_sync.h"
+#include "os2libs/pmwin/open32_post.h"
 #include "hal/host_mailbox.h"
 #include "hal/host_shared.h"
 #include "guest/abi.h"
-#include "os2libs/pmwin/open32_post.h"
 typedef struct Target
 {
     struct Target *next;
@@ -130,13 +130,15 @@ void unregisterWindowMessages(HWND window)
     lx_host_mutex_unlock(lock);
 }
 static BOOL post_packet(HWND window, ULONG message, MPARAM first, MPARAM second, ULONG reserved,
-                        BOOL open32)
+                        BOOL require_open32)
 {
     lx_host_once(&initialized, initialize);
     if (!lock || !window || window < 0x10000 || window >= 0xffff0000u)
         return FALSE;
     if ((window >> 16) != window_prefix)
     {
+        if (require_open32)
+            return FALSE;
         if ((uintptr_t)first > UINT32_MAX || (uintptr_t)second > UINT32_MAX)
             return FALSE;
         char name[64];
@@ -174,7 +176,7 @@ static BOOL post_packet(HWND window, ULONG message, MPARAM first, MPARAM second,
         return FALSE;
     lx_host_mutex_lock(lock, UINT32_MAX);
     for (Target *target = targets; target; target = target->next)
-        if (target->window == window && (!open32 || target->open32))
+        if (target->window == window && (!require_open32 || target->open32))
         {
             item->anchor = target->anchor;
             break;
@@ -279,10 +281,6 @@ BOOL lx_pm_host_event(const LxHostEvent *event)
     }
     return item != NULL;
 }
-BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
-{
-    return post_packet(window, message, first, second, 0, FALSE);
-}
 void drainForeignMessages(AnchorBlock *anchor)
 {
     if (!lock)
@@ -343,6 +341,10 @@ void drainForeignMessages(AnchorBlock *anchor)
     }
 }
 
+BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
+{
+    return post_packet(window, message, first, second, 0, FALSE);
+}
 BOOL lx_pm_mark_open32_window(HWND window)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

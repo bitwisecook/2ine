@@ -1081,13 +1081,13 @@ extern "C"
     OS2EXPORT BOOL OS2API WinStopTimer(HAB hab, HWND hwnd, ULONG id) OS2APIINFO(885);
     OS2EXPORT HAB OS2API WinInitialize(ULONG flOptions) OS2APIINFO(763);
     OS2EXPORT BOOL OS2API WinTerminate(HAB hab) OS2APIINFO(888);
-    OS2EXPORT BOOL OS2API WinAlarm(HWND desktop, ULONG type) OS2APIINFO(701);
-    OS2EXPORT ULONG OS2API WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id,
-                                         ULONG style) OS2APIINFO(789);
     OS2EXPORT APIRET OS2API WinWaitEventSem(HEV handle, ULONG timeout) OS2APIINFO(978);
     OS2EXPORT APIRET OS2API WinRequestMutexSem(HMTX handle, ULONG timeout) OS2APIINFO(979);
     OS2EXPORT APIRET OS2API WinWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
         OS2APIINFO(980);
+    OS2EXPORT BOOL OS2API WinAlarm(HWND desktop, ULONG type) OS2APIINFO(701);
+    OS2EXPORT ULONG OS2API WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id,
+                                         ULONG style) OS2APIINFO(789);
     OS2EXPORT ERRORID OS2API WinGetLastError(HAB hab) OS2APIINFO(753);
     OS2EXPORT ERRORID OS2API WinSetErrorInfo(ERRORID error, ULONG flags, ...) OS2APIINFO(977);
     OS2EXPORT UCHAR OS2API WinCpTranslateChar(HAB hab, ULONG source, UCHAR character,
@@ -1119,6 +1119,7 @@ extern "C"
     OS2EXPORT HPS OS2API WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint) OS2APIINFO(703);
     OS2EXPORT BOOL OS2API WinEndPaint(HPS hps) OS2APIINFO(738);
     OS2EXPORT BOOL OS2API WinFillRect(HPS hps, PRECTL prcl, LONG lColor) OS2APIINFO(743);
+    OS2EXPORT ULONG lx_pm_clipboard_count(void);
     OS2EXPORT BOOL OS2API WinOpenClipbrd(HAB hab) OS2APIINFO(793);
     OS2EXPORT BOOL OS2API WinCloseClipbrd(HAB hab) OS2APIINFO(707);
     OS2EXPORT BOOL OS2API WinEmptyClipbrd(HAB hab) OS2APIINFO(733);

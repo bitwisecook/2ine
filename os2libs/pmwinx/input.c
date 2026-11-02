@@ -24,7 +24,10 @@ void open32DecodeKey(ULONG flags, ULONG data, Open32Key *decoded)
     ULONG scan = flags >> 24, key = flags & 2                 ? virtual_key(data >> 16)
                                     : scan < sizeof scan_keys ? scan_keys[scan]
                                                               : 0;
-    ULONG character = WinCpTranslateChar(0, 437, (UCHAR)data, 1004);
+    ULONG character = (UCHAR)data;
+    /* Keyboard control bytes retain their input meaning, independent of display glyphs. */
+    if (character >= 32 && character != 127)
+        character = WinCpTranslateChar(0, 437, (UCHAR)character, 1004);
     if (!key && character < 128)
         key = character >= 'a' && character <= 'z' ? character - 'a' + 'A' : character;
     BOOL up = (flags & 0x40) != 0;
