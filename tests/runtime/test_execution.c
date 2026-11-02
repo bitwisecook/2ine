@@ -25,6 +25,7 @@ static jmp_buf ProgramReturn;
 static uint32_t ProgramResult;
 static LxExecution *Execution;
 static uint32_t CallbackEntry, TlsWindow, ReturnCallback, Leaf16Entry;
+static uint32_t FixedTibEntry;
 static int Concurrent, Arrivals;
 static pthread_mutex_t BarrierMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t BarrierCondition = PTHREAD_COND_INITIALIZER;
@@ -62,9 +63,11 @@ static uint32_t bridge(uint8_t *args)
     CHECK(lx_execution_borrow(Execution, TlsWindow, 4, 3, &pinned));
     CHECK(pinned.host == tls);
     uint32_t prior = lx_guest_load_u32(tls);
+    CHECK(lx_execution_callback32_4(Execution, FixedTibEntry, 0, 0, 0, 0) == prior);
     lx_execution_callback32(Execution, CallbackEntry, 0xabcdef01);
     CHECK(lx_execution_api_arguments(Execution) == api_arguments);
     CHECK(lx_guest_load_u32(tls) == prior + 1);
+    CHECK(lx_execution_callback32_4(Execution, FixedTibEntry, 0, 0, 0, 0) == prior + 1);
     CHECK(lx_execution_callback32_4(Execution, CallbackEntry + 0x300, 7, 11, 13, 17) == 34);
     CHECK(lx_execution_api_arguments(Execution) == api_arguments);
     lx_execution_release(&pinned);
@@ -295,6 +298,10 @@ static void invoke16(void)
     const uint8_t four_words[] = {0x8b, 0x44, 0x24, 4,    0x6b, 0xc0, 3,    0x03, 0x44, 0x24, 8,
                                   0xd1, 0xe0, 0x2b, 0x44, 0x24, 12,   0x33, 0x44, 0x24, 16,   0xc3};
     memcpy((uint8_t *)lx_execution_mapping_host(nested) + 0x300, four_words, sizeof four_words);
+    const uint8_t fixed_tib[] = {0x0f, 0xa0, 0x66, 0xb8, 0x0b, 0x15, 0x8e, 0xe0, 0x64,
+                                 0xa1, 40,   0,    0,    0,    0x0f, 0xa1, 0xc3};
+    FixedTibEntry = CallbackEntry + 0x400;
+    memcpy((uint8_t *)lx_execution_mapping_host(nested) + 0x400, fixed_tib, sizeof fixed_tib);
     pthread_t callback_thread;
     CHECK(!pthread_create(&callback_thread, NULL, asynchronous_callback,
                           lx_execution_current_tib(Execution)));

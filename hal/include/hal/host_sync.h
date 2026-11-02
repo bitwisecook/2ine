@@ -20,6 +20,17 @@ typedef enum LxHostLockResult
     LX_HOST_LOCK_FAILED
 } LxHostLockResult;
 LxHostMutex *lx_host_mutex_create(int recursive, int owned);
+typedef enum LxHostNamedMutexResult
+{
+    LX_HOST_NAMED_MUTEX_OK,
+    LX_HOST_NAMED_MUTEX_MISSING,
+    LX_HOST_NAMED_MUTEX_EXISTS,
+    LX_HOST_NAMED_MUTEX_DENIED,
+    LX_HOST_NAMED_MUTEX_NOMEM
+} LxHostNamedMutexResult;
+/* Named recursive objects remain alive while any process retains an open handle. */
+LxHostNamedMutexResult lx_host_mutex_open_named(const char *name, int create, int owned,
+                                                LxHostMutex **output);
 /* UINT32_MAX waits indefinitely; zero never waits. */
 LxHostLockResult lx_host_mutex_lock(LxHostMutex *mutex, uint32_t timeout_ms);
 LxHostLockResult lx_host_mutex_unlock(LxHostMutex *mutex);

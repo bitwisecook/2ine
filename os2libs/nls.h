@@ -44,6 +44,8 @@ extern "C"
     OS2EXPORT APIRET OS2API DosMapCase(ULONG cb, PCOUNTRYCODE pcc, PCHAR pch) OS2APIINFO(7);
     OS2EXPORT APIRET OS2API DosQueryCtryInfo(ULONG cb, PCOUNTRYCODE pcc, PCOUNTRYINFO pci,
                                              PULONG pcbActual) OS2APIINFO(5);
+    OS2EXPORT APIRET OS2API DosQueryCollate(ULONG len, PCOUNTRYCODE pcc, PCHAR pch, PULONG dlen)
+        OS2APIINFO(8);
 
     typedef struct
     {
@@ -73,6 +75,9 @@ extern "C"
         OS2APIINFO(ord = 4, name = DOSGETDBCSEV);
     OS2EXPORT APIRET16 OS2API16 Dos16CaseMap(USHORT len, PCOUNTRYCODE16 pcc, PCHAR pch)
         OS2APIINFO(ord = 1, name = DOSCASEMAP);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetCollate(USHORT len, PCOUNTRYCODE16 pcc, PCHAR pch,
+                                                PUSHORT dlen)
+        OS2APIINFO(ord = 2, name = DOSGETCOLLATE);
     OS2EXPORT APIRET16 OS2API16 Dos16GetCtryInfo(USHORT len, PCOUNTRYCODE16 pcc, PCOUNTRYINFO16 pch,
                                                  PUSHORT dlen)
         OS2APIINFO(ord = 3, name = DOSGETCTRYINFO);

@@ -36,6 +36,24 @@ extern "C"
     } VIOMODEINFO, *PVIOMODEINFO;
 #pragma pack(pop)
 
+#pragma pack(push, 2)
+    typedef struct
+    {
+        USHORT cb;
+        USHORT adapter;
+        USHORT display;
+        ULONG cbMemory;
+        USHORT Configuration;
+        USHORT VDHVersion;
+        USHORT Flags;
+        ULONG HWBufferSize;
+        ULONG FullSaveSize;
+        ULONG PartSaveSize;
+        USHORT EMAdaptersOFF;
+        USHORT EMDisplaysOFF;
+    } VIOCONFIGINFO, *PVIOCONFIGINFO;
+#pragma pack(pop)
+
     enum
     {
         VGMT_OTHER = 0x1,
@@ -53,6 +71,16 @@ extern "C"
 
     OS2EXPORT APIRET16 OS2API16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
         OS2APIINFO(ord = 21, name = VIOGETMODE);
+    OS2EXPORT APIRET16 OS2API16 VioSetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
+        OS2APIINFO(ord = 22, name = VIOSETMODE);
+    OS2EXPORT APIRET16 OS2API16 VioGetAnsi(PUSHORT enabled, HVIO hvio)
+        OS2APIINFO(ord = 3, name = VIOGETANSI);
+    OS2EXPORT APIRET16 OS2API16 VioGetConfig(USHORT config, PVIOCONFIGINFO info, HVIO hvio)
+        OS2APIINFO(ord = 46, name = VIOGETCONFIG);
+    OS2EXPORT APIRET16 OS2API16 VioWrtTty(PCH pch, USHORT cb, HVIO hvio)
+        OS2APIINFO(ord = 19, name = VIOWRTTTY);
+    OS2EXPORT APIRET16 OS2API16 VioSetCp(USHORT reserved, USHORT codepage, HVIO hvio)
+        OS2APIINFO(ord = 42, name = VIOSETCP);
     OS2EXPORT APIRET16 OS2API16 VioGetCp(USHORT reserved, PUSHORT codepage, HVIO hvio)
         OS2APIINFO(ord = 40, name = VIOGETCP);
     OS2EXPORT APIRET16 OS2API16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio)
@@ -71,6 +99,12 @@ extern "C"
     OS2EXPORT APIRET16 OS2API16 VioReadCellStr(PCH pchCellStr, PUSHORT pcb, USHORT usRow,
                                                USHORT usColumn, HVIO hvio)
         OS2APIINFO(ord = 24, name = VIOREADCELLSTR);
+    OS2EXPORT APIRET16 OS2API16 VioReadCharStr(PCH pch, PUSHORT pcb, USHORT row, USHORT column,
+                                               HVIO hvio)
+        OS2APIINFO(ord = 30, name = VIOREADCHARSTR);
+    OS2EXPORT APIRET16 OS2API16 VioScrollDn(USHORT top, USHORT left, USHORT bottom, USHORT right,
+                                            USHORT lines, PBYTE cell, HVIO hvio)
+        OS2APIINFO(ord = 47, name = VIOSCROLLDN);
     OS2EXPORT APIRET16 OS2API16 VioWrtCellStr(PCH pchCellStr, USHORT cb, USHORT usRow,
                                               USHORT usColumn, HVIO hvio)
         OS2APIINFO(ord = 10, name = VIOWRTCELLSTR);

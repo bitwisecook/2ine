@@ -51,6 +51,7 @@ LX_PRIVATE void runNeLibraryTerm(LxModule *lxmod);
 LX_PRIVATE void runLibraryTerm(LxModule *lxmod);
 LX_PRIVATE void freeLxModule(LxModule *lxmod);
 LX_PRIVATE void destroyLxModule(void *resource);
+LX_PRIVATE const LxExport *findModuleOrdinal(const LxModule *module, uint32 ordinal);
 LX_PRIVATE void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
                                             const LxExport **_lxexp, const int want16bit,
                                             const int native);
@@ -80,6 +81,8 @@ LX_PRIVATE LxModule *loadModuleByModuleNameInternal(const char *modname,
                                                     const int dependency_tree_depth);
 LX_PRIVATE LxModule *loadModuleByModuleName(const char *modname);
 LX_PRIVATE LxModule *loadModuleByPathOrModuleName(const char *modname);
+LX_PRIVATE int ensureRexxService(void);
+LX_PRIVATE int runRexxService(void);
 LX_PRIVATE int describeModuleAddress(const void *ptr, char *buf, const size_t buflen);
 LX_PRIVATE int executableAt(void *unused, uint32 address);
 LX_PRIVATE int describeExecutionAddress(void *unused, uint32 address, char *buffer, size_t size);

@@ -35,6 +35,8 @@
 #include "hal/host_shared.h"
 #include <limits.h>
 
+void cleanupSuballocation(void);
+APIRET DosGetSharedMemAddress(ULONG address, ULONG flags);
 APIRET applyEas16(HFILE handle, const void *operation);
 APIRET queryAllEas16(HFILE handle, void *operation);
 
@@ -116,6 +118,7 @@ typedef struct SharedMemBlock
     size_t size;
     LxGuestMapping *mapping;
     int freed;
+    ULONG flags;
     char shared_name[128];
     struct SharedMemBlock *next;
 } SharedMemBlock;

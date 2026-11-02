@@ -10,6 +10,7 @@
 #define LX_NATIVE_MODULE_32BIT_API(fn) static void *bridge_address_##fn;
 #define LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()                                                      \
     memset(&obj32, 0, sizeof obj32);                                                               \
+    obj32.bits = 32;                                                                               \
     obj32.alias = 0xffff;                                                                          \
     obj32.mapping = lx_execution_map(GLoaderState.execution, 0, 0x10000, 3, 0);                    \
     if (!obj32.mapping)                                                                            \

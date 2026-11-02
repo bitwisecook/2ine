@@ -29,7 +29,8 @@ typedef struct SharedView
 static SharedView *views;
 static pthread_mutex_t view_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShared **output)
+static LxHostSharedResult shared_open(const char *name, size_t size, LxHostShared **output,
+                                      int create_locks)
 {
     *output = NULL;
     if (!name || name[0] != '/' || strchr(name + 1, '/'))
@@ -41,7 +42,7 @@ LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShar
         snprintf(fallback, sizeof fallback, "/tmp/2ine-%lu", (unsigned long)getuid());
         directory = fallback;
     }
-    if (mkdir(directory, 0700) && errno != EEXIST)
+    if (create_locks && mkdir(directory, 0700) && errno != EEXIST)
         return LX_HOST_SHARED_DENIED;
     size_t capacity = strlen(directory) + strlen(name) + 16;
     char *path = malloc(capacity);
@@ -53,17 +54,17 @@ LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShar
         return LX_HOST_SHARED_NOMEM;
     }
     snprintf(path, capacity, "%s/%s.open", directory, name + 1);
-    int operation = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    int operation = open(path, O_RDWR | O_CLOEXEC | (create_locks ? O_CREAT : 0), 0600);
     if (operation < 0 || flock(operation, LOCK_EX))
     {
         if (operation >= 0)
             close(operation);
         free(path);
         free(s);
-        return LX_HOST_SHARED_DENIED;
+        return errno == ENOENT ? LX_HOST_SHARED_MISSING : LX_HOST_SHARED_DENIED;
     }
     snprintf(path, capacity, "%s/%s.live", directory, name + 1);
-    int lifetime = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    int lifetime = open(path, O_RDWR | O_CLOEXEC | (create_locks ? O_CREAT : 0), 0600);
     LxHostSharedResult result = LX_HOST_SHARED_DENIED;
     int fd = -1;
     if (lifetime < 0)
@@ -85,6 +86,11 @@ LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShar
     {
         result = errno == ENOENT ? LX_HOST_SHARED_MISSING : LX_HOST_SHARED_DENIED;
         goto done;
+    }
+    if (size)
+    {
+        snprintf(path, capacity, "%s/%s.access", directory, name + 1);
+        unlink(path);
     }
     struct stat info;
     if ((size && ftruncate(fd, (off_t)size)) || fstat(fd, &info) || info.st_size <= 0 ||
@@ -113,6 +119,10 @@ done:
         free(s);
     }
     return result;
+}
+LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShared **output)
+{
+    return shared_open(name, size, output, 1);
 }
 
 void *lx_host_shared_map(LxHostShared *s, void *hint, int exact)
@@ -296,6 +306,207 @@ done:
     if (fd >= 0)
         close(fd);
     free(rows);
+    free(path);
+    return result;
+}
+
+LxHostSharedResult lx_host_shared_find(uint64_t slot, LxHostShared **output, char *name,
+                                       size_t capacity)
+{
+    *output = NULL;
+    const char *directory = getenv("TWOINE_IPC_DIR");
+    char fallback[80];
+    if (!directory || !*directory)
+    {
+        snprintf(fallback, sizeof fallback, "/tmp/2ine-%lu", (unsigned long)getuid());
+        directory = fallback;
+    }
+    size_t length = strlen(directory) + 32;
+    char *path = malloc(length);
+    if (!path)
+        return LX_HOST_SHARED_NOMEM;
+    snprintf(path, length, "%s/shared-slots", directory);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    free(path);
+    if (fd < 0)
+        return errno == ENOENT ? LX_HOST_SHARED_MISSING : LX_HOST_SHARED_DENIED;
+    LxHostSharedResult result = LX_HOST_SHARED_DENIED;
+    struct stat table;
+    if (flock(fd, LOCK_SH) || fstat(fd, &table) || table.st_size < 0 || table.st_size % SLOT_ROW ||
+        table.st_size > SLOT_LIMIT * SLOT_ROW)
+        goto done;
+    result = LX_HOST_SHARED_MISSING;
+    for (off_t at = 0; at < table.st_size; at += SLOT_ROW)
+    {
+        unsigned char row[SLOT_ROW];
+        if (pread(fd, row, sizeof row, at) != sizeof row)
+        {
+            result = LX_HOST_SHARED_DENIED;
+            break;
+        }
+        if (!row[0] || slot_word(row + 136) != slot)
+            continue;
+        char identifier[SLOT_NAME + 1];
+        if (!memchr(row, 0, SLOT_NAME) || strlen((const char *)row) + 2 > capacity || !name)
+        {
+            result = LX_HOST_SHARED_DENIED;
+            break;
+        }
+        snprintf(identifier, sizeof identifier, "/%s", row);
+        LxHostShared *object = NULL;
+        result = shared_open(identifier, 0, &object, 0);
+        if (result != LX_HOST_SHARED_OK)
+            break;
+        struct stat identity;
+        if (fstat(object->fd, &identity) ||
+            ((uint64_t)identity.st_ino ^ ((uint64_t)identity.st_dev << 32)) !=
+                slot_word(row + 128) ||
+            object->size != slot_word(row + 144))
+        {
+            lx_host_shared_close(object);
+            result = LX_HOST_SHARED_MISSING;
+            break;
+        }
+        strcpy(name, identifier);
+        *output = object;
+        break;
+    }
+done:
+    close(fd);
+    return result;
+}
+
+/* A header identifies the live inode, owner and attributes. Peer rows contain
+   two fixed-width words, so 32-bit and 64-bit workers share the same format. */
+enum
+{
+    ACCESS_HEADER = 16,
+    ACCESS_ROW = 8,
+    ACCESS_PEERS = 4096
+};
+static int shared_access(LxHostShared *object, unsigned operation, uint32_t peer, uint32_t *owner,
+                         uint32_t *attributes, uint32_t *permissions)
+{
+    size_t length = strlen(object->directory) + strlen(object->name) + 16;
+    char *path = malloc(length);
+    if (!path)
+        return 0;
+    snprintf(path, length, "%s/%s.access", object->directory, object->name);
+    int fd = open(path, O_RDWR | O_CLOEXEC | (operation == 1 ? O_CREAT : 0), 0600);
+    free(path);
+    if (fd < 0)
+        return 0;
+    int success = 0;
+    struct stat info, backing;
+    unsigned char header[ACCESS_HEADER];
+    if (flock(fd, LOCK_EX) || fstat(object->fd, &backing))
+        goto done;
+    uint64_t identity = (uint64_t)backing.st_ino ^ ((uint64_t)backing.st_dev << 32);
+    if (operation == 1)
+    {
+        store_slot(header, identity);
+        memcpy(header + 8, owner, 4);
+        memcpy(header + 12, attributes, 4);
+        success =
+            !ftruncate(fd, sizeof header) && pwrite(fd, header, sizeof header, 0) == sizeof header;
+        goto done;
+    }
+    if (fstat(fd, &info) || info.st_size < ACCESS_HEADER ||
+        (info.st_size - ACCESS_HEADER) % ACCESS_ROW ||
+        info.st_size > ACCESS_HEADER + ACCESS_ROW * ACCESS_PEERS ||
+        pread(fd, header, sizeof header, 0) != sizeof header || slot_word(header) != identity)
+        goto done;
+    if (!operation)
+    {
+        memcpy(owner, header + 8, 4);
+        memcpy(attributes, header + 12, 4);
+        *permissions = 0;
+    }
+    for (off_t at = ACCESS_HEADER; at < info.st_size; at += ACCESS_ROW)
+    {
+        uint32_t row[2];
+        if (pread(fd, row, sizeof row, at) != sizeof row)
+            goto done;
+        if (row[0] != peer)
+            continue;
+        if (operation == 2)
+        {
+            row[1] |= *permissions;
+            success = pwrite(fd, row, sizeof row, at) == sizeof row;
+        }
+        else
+        {
+            *permissions = row[1];
+            success = 1;
+        }
+        goto done;
+    }
+    if (!operation)
+        success = 1;
+    else if (info.st_size < ACCESS_HEADER + ACCESS_ROW * ACCESS_PEERS)
+    {
+        uint32_t row[2] = {peer, *permissions};
+        success = pwrite(fd, row, sizeof row, info.st_size) == sizeof row;
+    }
+done:
+    close(fd);
+    return success;
+}
+int lx_host_shared_publish(LxHostShared *object, uint32_t owner, uint32_t attributes)
+{
+    return shared_access(object, 1, 0, &owner, &attributes, NULL);
+}
+int lx_host_shared_query_access(LxHostShared *object, uint32_t peer, uint32_t *owner,
+                                uint32_t *attributes, uint32_t *permissions)
+{
+    return shared_access(object, 0, peer, owner, attributes, permissions);
+}
+int lx_host_shared_grant(LxHostShared *object, uint32_t peer, uint32_t permissions)
+{
+    return shared_access(object, 2, peer, NULL, NULL, &permissions);
+}
+
+int lx_host_shared_live(const char *name)
+{
+    if (!name || name[0] != '/' || !name[1] || strchr(name + 1, '/'))
+        return -1;
+    const char *directory = getenv("TWOINE_IPC_DIR");
+    char fallback[80];
+    if (!directory || !*directory)
+    {
+        snprintf(fallback, sizeof fallback, "/tmp/2ine-%lu", (unsigned long)getuid());
+        directory = fallback;
+    }
+    size_t capacity = strlen(directory) + strlen(name) + 16;
+    char *path = malloc(capacity);
+    if (!path)
+        return -1;
+    snprintf(path, capacity, "%s/%s.open", directory, name + 1);
+    int operation = open(path, O_RDWR | O_CLOEXEC);
+    if (operation < 0)
+    {
+        int result = errno == ENOENT ? 0 : -1;
+        free(path);
+        return result;
+    }
+    if (flock(operation, LOCK_SH | LOCK_NB))
+    {
+        int result = errno == EWOULDBLOCK || errno == EAGAIN ? 1 : -1;
+        close(operation);
+        free(path);
+        return result;
+    }
+    snprintf(path, capacity, "%s/%s.live", directory, name + 1);
+    int lifetime = open(path, O_RDWR | O_CLOEXEC);
+    int result = 0;
+    if (lifetime < 0)
+        result = errno == ENOENT ? 0 : -1;
+    else if (flock(lifetime, LOCK_EX | LOCK_NB))
+        result = errno == EWOULDBLOCK || errno == EAGAIN ? 1 : -1;
+    if (lifetime >= 0)
+        close(lifetime);
+    flock(operation, LOCK_UN);
+    close(operation);
     free(path);
     return result;
 }

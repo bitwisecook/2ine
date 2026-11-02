@@ -22,6 +22,7 @@ typedef struct LxHostCalendar
     int year, month, day, weekday, hour, minute, second, utc_offset_minutes;
 } LxHostCalendar;
 uint64_t lx_host_realtime_us(void);
+int lx_host_calendar_seconds(const LxHostCalendar *calendar, int utc, int64_t *seconds);
 int lx_host_calendar(int64_t seconds, int utc, LxHostCalendar *result);
 void lx_host_process_ids(uint32_t *process, uint32_t *parent);
 size_t lx_host_stack_limit(void);

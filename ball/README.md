@@ -265,6 +265,15 @@ Reads reject traversal members and links. Work and expansion limits apply:
 and 16 MiB per IBM compressed member. Those limits constrain resource use,
 not nesting depth. Unsupported/encrypted/corrupt containers report errors.
 
+The OS/2 support import also extracts the original classic REXX interpreter,
+REXXAPI/REXXUTIL/REXXINIT DLLs, REX/REXH messages and RXQUEUE/RXSUBCOM utilities
+when present on the selected media. It puts DLLs in `C:\OS2\DLL`, messages in
+`C:\OS2\SYSTEM` and command utilities in `C:\OS2`. Existing files are preserved.
+REXX readiness is reported separately from the three baseline installer support
+files; a REXX command file reports missing original interpreter files before
+launch. The interpreter and other proprietary OS/2 files are supplied by the
+user's installation media.
+
 ## Audio library and credits
 
 `project-sources` works without a selected ball and returns project versions,

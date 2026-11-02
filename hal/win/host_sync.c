@@ -28,6 +28,29 @@ LxHostMutex *lx_host_mutex_create(int recursive, int owned)
     }
     return m;
 }
+LxHostNamedMutexResult lx_host_mutex_open_named(const char *name, int create, int owned,
+                                                LxHostMutex **output)
+{
+    *output = NULL;
+    LxHostMutex *mutex = calloc(1, sizeof *mutex);
+    if (!mutex)
+        return LX_HOST_NAMED_MUTEX_NOMEM;
+    mutex->object = create ? CreateMutexA(NULL, owned != 0, name)
+                           : OpenMutexA(SYNCHRONIZE | MUTEX_MODIFY_STATE, FALSE, name);
+    DWORD error = GetLastError();
+    if (!mutex->object || (create && error == ERROR_ALREADY_EXISTS))
+    {
+        if (mutex->object)
+            CloseHandle(mutex->object);
+        free(mutex);
+        return create && error == ERROR_ALREADY_EXISTS ? LX_HOST_NAMED_MUTEX_EXISTS
+               : error == ERROR_FILE_NOT_FOUND         ? LX_HOST_NAMED_MUTEX_MISSING
+                                                       : LX_HOST_NAMED_MUTEX_DENIED;
+    }
+    mutex->held = create && owned ? 1 : 0;
+    *output = mutex;
+    return LX_HOST_NAMED_MUTEX_OK;
+}
 LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
 {
     DWORD result = WaitForSingleObject(m->object, timeout == UINT32_MAX ? INFINITE : timeout);

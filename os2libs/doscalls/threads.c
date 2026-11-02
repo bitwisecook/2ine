@@ -7,6 +7,7 @@
  */
 #include "os2libs/doscalls/internal.h"
 #include "os2libs/doscalls/host.h"
+static void releaseThreadCriticalSection(void);
 APIRET DosEnterMustComplete(PULONG pulNesting)
 {
     TRACE_NATIVE("DosEnterMustComplete(%p)", pulNesting);
@@ -68,6 +69,7 @@ void destroyThreadResource(void *value)
 void os2ThreadCleanup(void *arg)
 {
     Thread *thread = arg;
+    releaseThreadCriticalSection();
     lx_execution_cleanup_thread32(GLoaderState.execution);
     GLoaderState.deinitOs2Tib(thread->selector);
     grabLock(&GMutexDosCalls);
@@ -401,8 +403,14 @@ APIRET16 Dos16EnterCritSec(VOID)
 APIRET DosEnterCritSec(VOID)
 {
     TRACE_NATIVE("DosEnterCritSec()");
+    LxHostThreadState *thread = lxHostThreadState();
+    if (thread->critical_depth == UINT32_MAX)
+        return ERROR_CRITSEC_OVERFLOW;
     lx_host_once(&GCritSecOnce, initCritSec);
-    lx_host_mutex_lock(GCritSec, UINT32_MAX);
+    LxHostLockResult result = lx_host_mutex_lock(GCritSec, UINT32_MAX);
+    if (result != LX_HOST_LOCK_OK && result != LX_HOST_LOCK_OWNER_DIED)
+        return ERROR_CRITSEC_OVERFLOW;
+    thread->critical_depth++;
     return NO_ERROR;
 }
 
@@ -415,14 +423,27 @@ APIRET16 Dos16ExitCritSec(VOID)
 APIRET DosExitCritSec(VOID)
 {
     TRACE_NATIVE("DosExitCritSec()");
-    lx_host_once(&GCritSecOnce, initCritSec);
-    lx_host_mutex_unlock(GCritSec);
+    LxHostThreadState *thread = lxHostThreadState();
+    if (!thread->critical_depth || lx_host_mutex_unlock(GCritSec) != LX_HOST_LOCK_OK)
+        return ERROR_CRITSEC_UNDERFLOW;
+    thread->critical_depth--;
     return NO_ERROR;
+}
+
+static void releaseThreadCriticalSection(void)
+{
+    LxHostThreadState *thread = lxHostThreadState();
+    while (thread->critical_depth)
+    {
+        lx_host_mutex_unlock(GCritSec);
+        thread->critical_depth--;
+    }
 }
 
 void neThreadCleanup(void *argument)
 {
     NeThreadStart *start = argument;
+    releaseThreadCriticalSection();
     GLoaderState.deinitOs2Tib(start->tib_selector);
     lx_execution_destroy_thread16(GLoaderState.execution, start->invocation);
     free(start);

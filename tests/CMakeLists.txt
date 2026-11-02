@@ -108,6 +108,14 @@ if(TARGET viocalls)
     set_tests_properties(host_terminal PROPERTIES TIMEOUT 20)
 endif()
 
+if(TARGET sesmgr AND TARGET quecalls)
+    add_executable(twoine_legacy_session_tests os2libs/test_legacy_sessions.c)
+    twoine_application_target(twoine_legacy_session_tests)
+    target_link_libraries(twoine_legacy_session_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
+    add_test(NAME legacy_sessions COMMAND twoine_legacy_session_tests $<TARGET_FILE:quecalls> $<TARGET_FILE:sesmgr>)
+    set_tests_properties(legacy_sessions PROPERTIES TIMEOUT 20)
+endif()
+
 if(TARGET pmwin)
     add_executable(twoine_pm_tests os2libs/test_pm.c)
     twoine_application_target(twoine_pm_tests)
@@ -182,10 +190,22 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/queues.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(queue_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME legacy_session_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/legacy_sessions.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(legacy_session_apis PROPERTIES TIMEOUT 20)
     add_test(NAME exception_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/exceptions.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(exception_apis PROPERTIES TIMEOUT 20)
+    add_test(NAME rexx_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/rexx_apis.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(rexx_apis PROPERTIES TIMEOUT 60)
+    add_test(NAME critical_section_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/critical_sections.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(critical_section_apis PROPERTIES TIMEOUT 40)
     add_test(NAME open32_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
@@ -260,6 +280,11 @@ if(TARGET doscalls)
     target_link_libraries(twoine_file_compat_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
     add_test(NAME file_compat COMMAND twoine_file_compat_tests $<TARGET_FILE:doscalls>)
     set_tests_properties(file_compat PROPERTIES TIMEOUT 20)
+    add_executable(twoine_legacy_core_tests os2libs/test_legacy_core.c)
+    twoine_application_target(twoine_legacy_core_tests)
+    target_link_libraries(twoine_legacy_core_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
+    add_test(NAME legacy_core COMMAND twoine_legacy_core_tests $<TARGET_FILE:doscalls>)
+    set_tests_properties(legacy_core PROPERTIES TIMEOUT 20)
 endif()
 
 if(TARGET dive)
@@ -349,4 +374,30 @@ if(TARGET 2ine)
     target_link_libraries(twoine_shared_lifetime_tests PRIVATE 2ine)
     add_test(NAME shared_lifetime COMMAND twoine_shared_lifetime_tests)
     set_tests_properties(shared_lifetime PROPERTIES TIMEOUT 20)
+endif()
+
+if(TARGET kbdcalls AND TARGET viocalls AND TARGET nls)
+    add_executable(twoine_console_compat_tests os2libs/test_console_compat.c)
+    twoine_application_target(twoine_console_compat_tests)
+    target_link_libraries(twoine_console_compat_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
+    add_test(NAME console_compat COMMAND twoine_console_compat_tests $<TARGET_FILE:kbdcalls> $<TARGET_FILE:viocalls> $<TARGET_FILE:nls>)
+    set_tests_properties(console_compat PROPERTIES TIMEOUT 20)
+endif()
+
+if(TARGET doscalls)
+    add_test(NAME shared_memory_apis COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/shared_memory.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(shared_memory_apis PROPERTIES TIMEOUT 60)
+endif()
+
+if(TARGET doscalls)
+    add_test(NAME named_mutex_apis COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/named_mutex.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(named_mutex_apis PROPERTIES TIMEOUT 60)
+endif()
+
+if(TARGET lx_loader)
+    add_test(NAME loader_startup COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/loader_startup.py"
+        --build "${PROJECT_BINARY_DIR}")
+    set_tests_properties(loader_startup PROPERTIES TIMEOUT 10)
 endif()

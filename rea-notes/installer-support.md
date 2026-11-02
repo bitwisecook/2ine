@@ -2,7 +2,7 @@
 
 Bounded unit: the ball engine's installer prerequisites/media reader, its desktop
 entry points, DOSCALLS ordinal 47, and redirected VIO output. Acceptance is a
-single ISO selection installing **only** CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG
+single ISO selection installing CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG
 into the ball's C: drive, plus mixed nested-media navigation and a real 16-bit
 module-handle implementation. This does not change a reconstruction milestone
 or establish a complete SmartSuite installation gate.
@@ -21,7 +21,7 @@ Media traversal uses libarchive for standard archives and the existing ISO/FAT
 reader on seekable streams. An iterative boundary resolver and linearly encoded
 paths avoid a fixed nesting limit or exponential path growth. Resource limits
 are documented in `ball/README.md`; unsupported formats are not universal
-archive support. The importer searches for the three support files, validates
+archive support. The baseline importer searches for the three support files, validates
 their file signatures, stages candidate data, rejects conflicting selected
 versions, preserves existing destinations and leaves mapped media untouched. An installed C:\OS2\CMD.EXE supplies the
 default guest COMSPEC while explicit configuration layers retain precedence.
@@ -112,3 +112,11 @@ Native UI review completed the direct ISO chooser and verified the missing-file
 card disappeared after installation. Install Software then reported all files
 installed. The advanced browser reached CMD.EXE through ZIP → PACK2 → ISO →
 INSTALL using its actual controls; both setup sheets were visually inspected.
+
+## Classic REXX follow-up
+
+The later explicit request to use the original interpreter adds eight classic
+REXX support files to extraction: REXX.DLL, REXXAPI.DLL, REXXUTIL.DLL,
+REXXINIT.DLL, REX.MSG, REXH.MSG, RXQUEUE.EXE and RXSUBCOM.EXE. These are
+installer support dependencies, not a whole-OS installation. Baseline and REXX
+readiness are reported separately. See [runtime job](cmd-runtime-gaps.md).

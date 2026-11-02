@@ -31,6 +31,36 @@ static void require_string(HINI profile, char *app, char *key, const char *expec
           strlen(expected));
     CHECK(!strcmp(text, expected));
 }
+static void profile_names(void)
+{
+    char *saved[26];
+    for (unsigned i = 0; i < 26; i++)
+    {
+        saved[i] = GLoaderState.disks[i];
+        GLoaderState.disks[i] = NULL;
+    }
+    GLoaderState.disks[2] = "/";
+    CHECK(!PrfQueryProfile(0, NULL));
+    PRFPROFILE query = {0};
+    CHECK(!PrfQueryProfile(0, &query));
+    CHECK(query.cchUserName > 1 && query.cchSysName > 1);
+    ULONG user_size = query.cchUserName, system_size = query.cchSysName;
+    char user[1024], system[1024];
+    memset(user, 0xa5, sizeof user);
+    memset(system, 0xa5, sizeof system);
+    query = (PRFPROFILE){1, user, 1, system};
+    CHECK(!PrfQueryProfile(0, &query));
+    CHECK(query.cchUserName == user_size && query.cchSysName == system_size);
+    CHECK((unsigned char)user[0] == 0xa5 && (unsigned char)system[0] == 0xa5);
+    query = (PRFPROFILE){sizeof user, user, sizeof system, system};
+    CHECK(PrfQueryProfile(0, &query));
+    CHECK(query.pszUserName == user && query.pszSysName == system);
+    CHECK(query.cchUserName == strlen(user) + 1 && query.cchSysName == strlen(system) + 1);
+    CHECK(!strncmp(user, "C:\\", 3) && !strncmp(system, "C:\\", 3));
+    CHECK((unsigned char)user[user_size] == 0xa5 && (unsigned char)system[system_size] == 0xa5);
+    for (unsigned i = 0; i < 26; i++)
+        GLoaderState.disks[i] = saved[i];
+}
 static void *error_thread(void *unused)
 {
     (void)unused;
@@ -47,6 +77,7 @@ static LONG OS2API winmain(ULONG instance, ULONG previous, PSZ command, LONG sho
 }
 int main(int argc, char **argv)
 {
+    profile_names();
     CHECK(argc == 3);
     HAB anchor = WinInitialize(0);
     CHECK(anchor);

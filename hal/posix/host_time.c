@@ -27,3 +27,26 @@ int lx_host_calendar(int64_t seconds, int utc, LxHostCalendar *result)
     result->second = value.tm_sec;
     return 1;
 }
+
+int lx_host_calendar_seconds(const LxHostCalendar *calendar, int utc, int64_t *seconds)
+{
+    if (!calendar || !seconds)
+        return 0;
+    struct tm value = {0};
+    value.tm_year = calendar->year - 1900;
+    value.tm_mon = calendar->month - 1;
+    value.tm_mday = calendar->day;
+    value.tm_hour = calendar->hour;
+    value.tm_min = calendar->minute;
+    value.tm_sec = calendar->second;
+    value.tm_isdst = -1;
+    time_t result = utc ? timegm(&value) : mktime(&value);
+    LxHostCalendar check;
+    if (!lx_host_calendar((int64_t)result, utc, &check) || check.year != calendar->year ||
+        check.month != calendar->month || check.day != calendar->day ||
+        check.hour != calendar->hour || check.minute != calendar->minute ||
+        check.second != calendar->second)
+        return 0;
+    *seconds = (int64_t)result;
+    return 1;
+}

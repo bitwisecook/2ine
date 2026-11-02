@@ -12,6 +12,44 @@ ULONG _DosFlatToSel(PVOID ptr)
     return GLoaderState.convert32to1616(ptr);
 }
 
+static LxGuestMapping *allocateTiledMemory(size_t size)
+{
+    /* Data selectors encode 64-KiB bases; the final LDT tile is the near sentinel. */
+    const uint32 first = 0x10000000, limit = 0x1fff0000, tile_size = 0x10000;
+    if (size > limit - first)
+        return NULL;
+    for (uint32 base = first; base <= limit - size; base += tile_size)
+    {
+        LxGuestMapping *mapping =
+            lx_execution_map(GLoaderState.execution, base, size,
+                             LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 1);
+        if (!mapping)
+            continue;
+        size_t installed = 0;
+        for (; installed < size; installed += tile_size)
+        {
+            uint16 selector, offset;
+            uint32 address = base + (uint32)installed;
+            if (!GLoaderState.findSelector(address, &selector, &offset, 0))
+                break;
+            if (offset || selector != address >> 16)
+            {
+                GLoaderState.freeSelector(selector);
+                break;
+            }
+        }
+        if (installed >= size)
+            return mapping;
+        while (installed)
+        {
+            installed -= tile_size;
+            GLoaderState.freeSelector((base + (uint32)installed) >> 16);
+        }
+        lx_execution_unmap(GLoaderState.execution, mapping);
+    }
+    return NULL;
+}
+
 APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
 {
     TRACE_NATIVE("DosAllocMem(%p, %u, %u)", ppb, (uint)cb, (uint)flag);
@@ -20,6 +58,8 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
         return ERROR_INVALID_PARAMETER;
 
     const size_t pagesize = 4096;
+    if (cb > UINT32_MAX - (pagesize - 1))
+        return ERROR_NOT_ENOUGH_MEMORY;
     size_t size = (size_t)cb;
     if ((size % pagesize) != 0)
         size += pagesize - (size % pagesize);
@@ -29,8 +69,10 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     if (GLoaderState.execution)
     {
         /* The original 386 page tables cannot inhibit instruction fetch from readable memory. */
-        mapping = lx_execution_map(GLoaderState.execution, 0, size,
-                                   LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 0);
+        mapping = flag & OBJ_TILE
+                      ? allocateTiledMemory(size)
+                      : lx_execution_map(GLoaderState.execution, 0, size,
+                                         LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 0);
         if (!mapping)
             return ERROR_NOT_ENOUGH_MEMORY;
         addr = lx_execution_mapping_host(mapping);
@@ -56,6 +98,7 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     block->size = size;
     block->mapping = mapping;
     block->freed = 0;
+    block->flags = flag;
 
     grabLock(&GMutexDosCalls);
     block->next = GSharedMem;
@@ -95,7 +138,8 @@ void makeSharedMemName(const char *os2name, char *buf, const size_t buflen)
     snprintf(buf, buflen, "/2ine-shm2-%016llx", (unsigned long long)hash);
 }
 
-APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG flags)
+static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG flags,
+                              BOOL anonymous)
 {
     if (!output || !name || !*name ||
         (flags & ~(PAG_READ | PAG_WRITE | PAG_EXECUTE | PAG_COMMIT | OBJ_TILE | OBJ_GETTABLE |
@@ -109,10 +153,13 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
         for (SharedMemBlock *block = GSharedMem; block; block = block->next)
             if (!strcmp(block->shared_name, identifier))
             {
-                block->freed = 0;
-                *output = block->addr;
+                ULONG address = lx_execution_mapping_address(block->mapping);
+                void *host = block->addr;
                 ungrabLock(&GMutexDosCalls);
-                return NO_ERROR;
+                APIRET result = DosGetSharedMemAddress(address, flags & 7u);
+                if (!result)
+                    *output = host;
+                return result;
             }
         ungrabLock(&GMutexDosCalls);
     }
@@ -122,6 +169,23 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
         return opened == LX_HOST_SHARED_MISSING  ? ERROR_FILE_NOT_FOUND
                : opened == LX_HOST_SHARED_EXISTS ? ERROR_ALREADY_EXISTS
                                                  : ERROR_NOT_ENOUGH_MEMORY;
+    ULONG attributes = flags | (anonymous ? 0 : OBJ_GETTABLE);
+    if (size && !lx_host_shared_publish(object, GLoaderState.pib.pib_ulpid, attributes))
+    {
+        lx_host_shared_close(object);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+    if (!size)
+    {
+        ULONG owner, permissions;
+        if (!lx_host_shared_query_access(object, GLoaderState.pib.pib_ulpid, &owner, &attributes,
+                                         &permissions) ||
+            ((flags & 7u) & ~(attributes & 7u)))
+        {
+            lx_host_shared_close(object);
+            return ERROR_ACCESS_DENIED;
+        }
+    }
     /* OS/2 shared pointers retain one linear address in every attached process. */
     uint64_t address = 0;
     LxGuestMapping *mapping =
@@ -131,8 +195,10 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
     lx_host_shared_close(object);
     if (!mapping)
         return ERROR_NOT_ENOUGH_MEMORY;
-    if (!lx_execution_protect(GLoaderState.execution, mapping,
-                              LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE))
+    unsigned protection = flags & (PAG_READ | PAG_WRITE | PAG_EXECUTE);
+    if (protection & (PAG_READ | PAG_WRITE))
+        protection |= LX_GUEST_READ | LX_GUEST_EXECUTE;
+    if (!lx_execution_protect(GLoaderState.execution, mapping, protection))
     {
         lx_execution_unmap(GLoaderState.execution, mapping);
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -147,12 +213,17 @@ APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG f
     block->mapping = mapping;
     block->addr = lx_execution_mapping_host(mapping);
     block->size = lx_execution_mapping_size(mapping);
+    block->flags = (flags & 7u) | (attributes & (OBJ_GETTABLE | OBJ_GIVEABLE));
     grabLock(&GMutexDosCalls);
     block->next = GSharedMem;
     GSharedMem = block;
     ungrabLock(&GMutexDosCalls);
     *output = block->addr;
     return NO_ERROR;
+}
+APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG flags)
+{
+    return mapSharedMemory(output, name, size, flags, FALSE);
 }
 
 BOOL lx_dos_shared_address(ULONG address, ULONG size)
@@ -188,15 +259,161 @@ APIRET DosAllocSharedMem(PPVOID output, PSZ name, ULONG size, ULONG flags)
     if (!size || size > UINT32_MAX - 4095)
         return ERROR_INVALID_PARAMETER;
     if (!name || !*name)
-        return DosAllocMem(output, size, flags);
+    {
+        static ULONG serial;
+        grabLock(&GMutexDosCalls);
+        ULONG identity = ++serial;
+        ungrabLock(&GMutexDosCalls);
+        char generated[96];
+        snprintf(generated, sizeof generated, "\\SHAREMEM\\2INE-ANON-%08x-%08x",
+                 (unsigned)GLoaderState.pib.pib_ulpid, (unsigned)identity);
+        return mapSharedMemory(output, generated, (size + 4095) & ~4095u, flags, TRUE);
+    }
     return mapNamedSharedMemory(output, name, (size + 4095) & ~4095u, flags);
 }
 
 APIRET DosGiveSharedMem(PVOID pb, PID pid, ULONG flag)
 {
     TRACE_NATIVE("DosGiveSharedMem(%p, %u, %u)", pb, (uint)pid, (uint)flag);
-    /* Named shared mappings need no additional per-process host grant. */
-    return NO_ERROR;
+    if ((flag & ~(PAG_READ | PAG_WRITE | PAG_EXECUTE | PAG_DEFAULT)) ||
+        ((flag & PAG_DEFAULT) && flag != PAG_DEFAULT))
+        return ERROR_INVALID_PARAMETER;
+    ULONG address;
+    if (!pid)
+        return ERROR_INVALID_PROCID;
+    if (!GLoaderState.execution ||
+        !lx_execution_address(GLoaderState.execution, pb, 1, 0, &address))
+        return ERROR_INVALID_ADDRESS;
+    APIRET result = ERROR_INVALID_ADDRESS;
+    char name[128] = {0};
+    grabLock(&GMutexDosCalls);
+    BOOL known = pid == GLoaderState.pib.pib_ulpid || pid == GLoaderState.pib.pib_ulppid;
+    for (ChildProcess *child = GChildren; child && !known; child = child->next)
+        known = lx_host_child_id(child->host) == pid;
+    if (!known)
+        known = lxIsProcessPeer(pid);
+    if (!known)
+        result = ERROR_INVALID_PROCID;
+    else
+        for (SharedMemBlock *block = GSharedMem; block; block = block->next)
+            if (block->mapping && block->shared_name[0] && !block->freed &&
+                lx_execution_mapping_address(block->mapping) == address)
+            {
+                if (!(block->flags & (OBJ_GIVEABLE | OBJ_GETTABLE)))
+                    result = ERROR_ACCESS_DENIED;
+                else
+                {
+                    if (flag & PAG_DEFAULT)
+                        flag = block->flags & 7u;
+                    result = (flag & ~(block->flags & 7u)) ? ERROR_ACCESS_DENIED : NO_ERROR;
+                    strcpy(name, block->shared_name);
+                }
+                break;
+            }
+    ungrabLock(&GMutexDosCalls);
+    if (result)
+        return result;
+    LxHostShared *object = NULL;
+    if (lx_host_shared_open(name, 0, &object) != LX_HOST_SHARED_OK)
+        return ERROR_INVALID_ADDRESS;
+    result = lx_host_shared_grant(object, pid, flag) ? NO_ERROR : ERROR_NOT_ENOUGH_MEMORY;
+    lx_host_shared_close(object);
+    return result;
+}
+
+APIRET DosGetSharedMemAddress(ULONG address, ULONG flags)
+{
+    if ((flags & ~(PAG_READ | PAG_WRITE | PAG_EXECUTE | PAG_DEFAULT)) ||
+        ((flags & PAG_DEFAULT) && flags != PAG_DEFAULT))
+        return ERROR_INVALID_PARAMETER;
+    if (!GLoaderState.execution || !address)
+        return ERROR_INVALID_ADDRESS;
+    LxHostShared *object = NULL;
+    char name[128];
+    LxHostSharedResult found = lx_host_shared_find(address, &object, name, sizeof name);
+    if (found != LX_HOST_SHARED_OK)
+        return found == LX_HOST_SHARED_DENIED ? ERROR_ACCESS_DENIED : ERROR_INVALID_ADDRESS;
+    ULONG owner, attributes, permission;
+    APIRET result = ERROR_ACCESS_DENIED;
+    if (!lx_host_shared_query_access(object, GLoaderState.pib.pib_ulpid, &owner, &attributes,
+                                     &permission))
+        goto done;
+    if (owner == GLoaderState.pib.pib_ulpid || (attributes & OBJ_GETTABLE))
+        permission = attributes & 7u;
+    else if (!permission)
+        goto done;
+    if (flags & PAG_DEFAULT)
+        flags = permission;
+    if (flags & ~permission)
+        goto done;
+    grabLock(&GMutexDosCalls);
+    for (SharedMemBlock *existing = GSharedMem; existing; existing = existing->next)
+        if (existing->mapping && existing->shared_name[0] &&
+            lx_execution_mapping_address(existing->mapping) == address)
+        {
+            unsigned protection = (existing->flags | flags) & 7u;
+            if (protection & (PAG_READ | PAG_WRITE))
+                protection |= LX_GUEST_READ | LX_GUEST_EXECUTE;
+            result = lx_execution_protect(GLoaderState.execution, existing->mapping, protection)
+                         ? NO_ERROR
+                         : ERROR_ACCESS_DENIED;
+            if (!result)
+            {
+                existing->flags |= flags;
+                existing->freed = 0;
+            }
+            ungrabLock(&GMutexDosCalls);
+            goto done;
+        }
+    SharedMemBlock *block = calloc(1, sizeof *block);
+    if (!block)
+    {
+        ungrabLock(&GMutexDosCalls);
+        result = ERROR_NOT_ENOUGH_MEMORY;
+        goto done;
+    }
+    LxGuestMapping *mapping = lx_execution_map_shared_at(GLoaderState.execution, object, address);
+    if (!mapping)
+    {
+        ungrabLock(&GMutexDosCalls);
+        free(block);
+        result = ERROR_INVALID_ADDRESS;
+        goto done;
+    }
+    /* Readable original x86 pages also permit instruction fetch. */
+    unsigned protection = flags;
+    if (protection & (PAG_READ | PAG_WRITE))
+        protection |= LX_GUEST_READ | LX_GUEST_EXECUTE;
+    if (!lx_execution_protect(GLoaderState.execution, mapping, protection))
+    {
+        lx_execution_unmap(GLoaderState.execution, mapping);
+        ungrabLock(&GMutexDosCalls);
+        free(block);
+        result = ERROR_ACCESS_DENIED;
+        goto done;
+    }
+    block->mapping = mapping;
+    block->addr = lx_execution_mapping_host(mapping);
+    block->size = lx_execution_mapping_size(mapping);
+    block->flags = flags | (attributes & (OBJ_GETTABLE | OBJ_GIVEABLE));
+    strcpy(block->shared_name, name);
+    block->next = GSharedMem;
+    GSharedMem = block;
+    ungrabLock(&GMutexDosCalls);
+    result = NO_ERROR;
+done:
+    lx_host_shared_close(object);
+    return result;
+}
+APIRET DosGetSharedMem(PVOID pointer, ULONG flags)
+{
+    ULONG address;
+    if (GLoaderState.execution &&
+        lx_execution_address(GLoaderState.execution, pointer, 1, 0, &address))
+        return DosGetSharedMemAddress(address, flags);
+    return (uintptr_t)pointer <= UINT32_MAX
+               ? DosGetSharedMemAddress((ULONG)(uintptr_t)pointer, flags)
+               : ERROR_INVALID_ADDRESS;
 }
 
 APIRET DosFreeMem(PVOID pb)
@@ -236,6 +453,61 @@ APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
     return NO_ERROR;
 }
 
+static ULONG segment_sizes[LX_MAX_LDT_SLOTS];
+static ULONG segment_capacities[LX_MAX_LDT_SLOTS];
+static unsigned char owned_segments[LX_MAX_LDT_SLOTS];
+APIRET16 Dos16SizeSeg(USHORT selector, PULONG size)
+{
+    if (!size || !(selector & 4))
+        return ERROR_INVALID_PARAMETER;
+    unsigned index = selector >> 3;
+    grabLock(&GMutexDosCalls);
+    ULONG length = segment_sizes[index];
+    if (!length)
+        for (LxModule *module = GLoaderState.loaded_modules; module && !length;
+             module = module->next)
+            for (ULONG i = 0; i < module->num_mmaps; i++)
+                if (module->mmaps[i].alias == index)
+                    length = module->mmaps[i].size > 65536 ? 65536 : module->mmaps[i].size;
+    if (!length && GLoaderState.main_module)
+        for (ULONG i = 0; i < GLoaderState.main_module->num_mmaps; i++)
+            if (GLoaderState.main_module->mmaps[i].alias == index)
+            {
+                size_t extent = GLoaderState.main_module->mmaps[i].size;
+                length = extent > 65536 ? 65536 : extent;
+                break;
+            }
+    if (length && !segment_capacities[index])
+        segment_capacities[index] = length;
+    ungrabLock(&GMutexDosCalls);
+    if (!length)
+        return ERROR_INVALID_SEGMENT_NUMBER;
+    *size = length;
+    return NO_ERROR;
+}
+APIRET16 Dos16GetShrSeg(PSZ name, PUSHORT selector)
+{
+    if (!name || !selector)
+        return ERROR_INVALID_PARAMETER;
+    PVOID memory = NULL;
+    APIRET result = DosGetNamedSharedMem(&memory, name, PAG_READ | PAG_WRITE);
+    if (result)
+        return result;
+    ULONG pointer = GLoaderState.convert32to1616(memory);
+    if (!pointer || (pointer & UINT16_MAX))
+        return ERROR_INVALID_ADDRESS;
+    *selector = pointer >> 16;
+    grabLock(&GMutexDosCalls);
+    for (SharedMemBlock *block = GSharedMem; block; block = block->next)
+        if (block->addr == memory)
+        {
+            segment_sizes[*selector >> 3] = block->size > 65536 ? 65536 : block->size;
+            segment_capacities[*selector >> 3] = segment_sizes[*selector >> 3];
+            break;
+        }
+    ungrabLock(&GMutexDosCalls);
+    return NO_ERROR;
+}
 APIRET16 Dos16AllocSeg(USHORT size, PUSHORT psel, USHORT flags)
 {
     TRACE_NATIVE("Dos16AllocSeg(%u, %p, %u)", (uint)size, psel, (uint)flags);
@@ -270,6 +542,11 @@ APIRET16 Dos16AllocSeg(USHORT size, PUSHORT psel, USHORT flags)
     }
 
     /* OS/2 exposes the tiled segment value through this API. */
+    grabLock(&GMutexDosCalls);
+    segment_sizes[sel] = size ? size : 65536;
+    segment_capacities[sel] = 65536;
+    owned_segments[sel] = 1;
+    ungrabLock(&GMutexDosCalls);
     *psel = (USHORT)((sel << 3) | 7);
     return NO_ERROR;
 }
@@ -278,9 +555,19 @@ APIRET16 Dos16ReallocSeg(USHORT size, USHORT sel)
 {
     TRACE_NATIVE("Dos16ReallocSeg(%u, %u)", (uint)size, (uint)sel);
 
-    /* Segments keep their full 64-KiB allocation until process exit. */
-    FIXME("this implementation is severely lacking");
-
+    ULONG previous;
+    APIRET result = Dos16SizeSeg(sel, &previous);
+    if (result)
+        return result;
+    grabLock(&GMutexDosCalls);
+    ULONG requested = size ? size : 65536;
+    if (requested > segment_capacities[sel >> 3])
+    {
+        ungrabLock(&GMutexDosCalls);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+    segment_sizes[sel >> 3] = requested;
+    ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
 
@@ -356,20 +643,24 @@ APIRET16 Dos16GetHugeShift(PUSHORT pcount)
 APIRET16 Dos16FreeSeg(USHORT sel)
 {
     TRACE_NATIVE("Dos16FreeSeg(%u)", (uint)sel);
-    FIXME("this needs to deal with reference counting and shared segments");
-    /* OS/2 exposes the tiled segment value through this API. */
-    LxModule *mod = GLoaderState.main_module;
-    if (mod)
+    if (!(sel & 4))
+        return ERROR_INVALID_SEGMENT_NUMBER;
+    unsigned index = sel >> 3;
+    grabLock(&GMutexDosCalls);
+    if (owned_segments[index])
     {
-        const uint16 alias = (uint16)(sel >> 3);
-        for (uint32 i = 0; i < mod->num_mmaps; i++)
-        {
-            if (mod->mmaps[i].alias == alias)
-                return NO_ERROR;
-        }
-    } /* CS aliases share data backing; retaining mappings keeps both aliases valid. */
-    (void)sel;
-    return NO_ERROR;
+        owned_segments[index] = 0;
+        segment_sizes[index] = 0;
+        segment_capacities[index] = 0;
+        ungrabLock(&GMutexDosCalls);
+        GLoaderState.freeSegment(index);
+        return NO_ERROR;
+    }
+    /* Module segments and shared mappings retain backing owned by their loader. */
+    ULONG size;
+    ungrabLock(&GMutexDosCalls);
+    APIRET result = Dos16SizeSeg(sel, &size);
+    return result;
 }
 
 /* Family API suballocation reserves eight bytes and rounds blocks to four bytes. */

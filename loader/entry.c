@@ -79,8 +79,8 @@ __attribute__((noreturn)) void lxTerminate(const uint32 exitcode)
     if (__atomic_load_n(&GLoaderState.ne_threads_started, __ATOMIC_ACQUIRE))
         lx_host_process_exit((int)(exitcode & 0xff));
 
-    freeLxModule(GLoaderState.main_module);
-
+    /* Dynamic DLLs can outlive the main module's ordinary reference graph.
+       Terminate the entire graph while the main invocation stack is mapped. */
     unloadAllModules();
 
     GLoaderState.lib2ine_shutdown();

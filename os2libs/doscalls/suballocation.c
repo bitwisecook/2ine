@@ -10,6 +10,40 @@ enum
     POOL_OPTIONS = 12,
     POOL_LOCK = 16
 };
+typedef struct PoolAttachment
+{
+    uint32 address;
+    void *base;
+    BOOL active;
+    struct PoolAttachment *next;
+} PoolAttachment;
+static PoolAttachment *PoolAttachments;
+static PoolAttachment *pool_attachment(uint32 address, void *base, BOOL create)
+{
+    for (PoolAttachment *p = PoolAttachments; p; p = p->next)
+        if (p->address == address && p->base == base)
+            return p;
+    if (!create)
+        return NULL;
+    PoolAttachment *p = calloc(1, sizeof *p);
+    if (p)
+    {
+        p->address = address;
+        p->base = base;
+        p->next = PoolAttachments;
+        PoolAttachments = p;
+    }
+    return p;
+}
+void cleanupSuballocation(void)
+{
+    while (PoolAttachments)
+    {
+        PoolAttachment *next = PoolAttachments->next;
+        free(PoolAttachments);
+        PoolAttachments = next;
+    }
+}
 static uint32 word(const uint8 *pool, uint32 offset)
 {
     return lx_guest_load_u32(pool + offset);
@@ -18,7 +52,7 @@ static void store(uint8 *pool, uint32 offset, uint32 value)
 {
     lx_guest_store_u32(pool + offset, value);
 }
-static APIRET open_pool(void *base, LxGuestBorrow *borrow)
+static APIRET open_pool(void *base, LxGuestBorrow *borrow, BOOL attached)
 {
     uint32 address;
     if (!lx_execution_address(GLoaderState.execution, base, POOL_HEADER,
@@ -40,7 +74,12 @@ static APIRET open_pool(void *base, LxGuestBorrow *borrow)
         uint32 expected = 0;
         if (__atomic_compare_exchange_n(lock, &expected, 1, 0, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
         {
-            if (word(borrow->host, 0) == POOL_MAGIC && word(borrow->host, POOL_SIZE) == size)
+            grabLock(&GMutexDosCalls);
+            PoolAttachment *attachment = pool_attachment(address, base, FALSE);
+            BOOL active = attachment && attachment->active;
+            ungrabLock(&GMutexDosCalls);
+            if (word(borrow->host, 0) == POOL_MAGIC && word(borrow->host, POOL_SIZE) == size &&
+                (!attached || active))
                 return NO_ERROR;
             __atomic_store_n(lock, 0, __ATOMIC_RELEASE);
             lx_execution_release(borrow);
@@ -100,7 +139,7 @@ static APIRET release_block(uint8 *pool, uint32 offset, uint32 length)
     }
     return NO_ERROR;
 }
-APIRET DosSubSetMem(PVOID base, ULONG flags, ULONG size)
+static APIRET set_pool(PVOID base, ULONG flags, ULONG size)
 {
     TRACE_NATIVE("DosSubSetMem(%p, %u, %u)", base, (uint)flags, (uint)size);
     uint32 address;
@@ -114,6 +153,11 @@ APIRET DosSubSetMem(PVOID base, ULONG flags, ULONG size)
     if (size < POOL_HEADER + 8 || size > UINT32_MAX - 7)
         return ERROR_INVALID_PARAMETER;
     size &= ~7u;
+    grabLock(&GMutexDosCalls);
+    PoolAttachment *attachment = pool_attachment(address, base, TRUE);
+    ungrabLock(&GMutexDosCalls);
+    if (!attachment)
+        return ERROR_NOT_ENOUGH_MEMORY;
     if (flags & 1)
     {
         LxGuestBorrow pool;
@@ -127,11 +171,14 @@ APIRET DosSubSetMem(PVOID base, ULONG flags, ULONG size)
         store(pool.host, POOL_HEADER + 4, size - POOL_HEADER);
         store(pool.host, POOL_HEADER, 0);
         store(pool.host, 0, POOL_MAGIC);
+        grabLock(&GMutexDosCalls);
+        attachment->active = TRUE;
+        ungrabLock(&GMutexDosCalls);
         lx_execution_release(&pool);
         return NO_ERROR;
     }
     LxGuestBorrow pool;
-    APIRET result = open_pool(base, &pool);
+    APIRET result = open_pool(base, &pool, FALSE);
     if (result)
         return result;
     uint32 old_size = word(pool.host, POOL_SIZE);
@@ -159,7 +206,21 @@ APIRET DosSubSetMem(PVOID base, ULONG flags, ULONG size)
     }
     else if (size != old_size)
         result = ERROR_INVALID_PARAMETER;
+    if (!result)
+    {
+        grabLock(&GMutexDosCalls);
+        attachment->active = TRUE;
+        ungrabLock(&GMutexDosCalls);
+    }
     close_pool(&pool);
+    return result;
+}
+APIRET DosSubSetMem(PVOID base, ULONG flags, ULONG size)
+{
+    APIRET result = set_pool(base, flags, size);
+    if (getenv("TWOINE_TRACE_RET"))
+        fprintf(stderr, "2INE RET: DosSubSetMem(%p, %u, %u) -> %u\n", base, (uint)flags, (uint)size,
+                (uint)result);
     return result;
 }
 APIRET DosSubAllocMem(PVOID base, PPVOID output, ULONG size)
@@ -169,7 +230,7 @@ APIRET DosSubAllocMem(PVOID base, PPVOID output, ULONG size)
         return ERROR_INVALID_PARAMETER;
     size = (size + 7) & ~7u;
     LxGuestBorrow pool;
-    APIRET result = open_pool(base, &pool);
+    APIRET result = open_pool(base, &pool, TRUE);
     if (result)
         return result;
     uint8 *bytes = pool.host;
@@ -204,7 +265,7 @@ APIRET DosSubFreeMem(PVOID base, PVOID memory, ULONG size)
     if (!size || size > UINT32_MAX - 7)
         return ERROR_INVALID_PARAMETER;
     LxGuestBorrow pool;
-    APIRET result = open_pool(base, &pool);
+    APIRET result = open_pool(base, &pool, TRUE);
     if (result)
         return result;
     uintptr_t first = (uintptr_t)pool.host, pointer = (uintptr_t)memory;
@@ -218,10 +279,20 @@ APIRET DosSubUnsetMem(PVOID base)
 {
     TRACE_NATIVE("DosSubUnsetMem(%p)", base);
     LxGuestBorrow pool;
-    APIRET result = open_pool(base, &pool);
+    APIRET result = open_pool(base, &pool, TRUE);
     if (!result)
     {
-        store(pool.host, 0, 0);
+        uint32 address;
+        if (!lx_execution_address(GLoaderState.execution, base, POOL_HEADER, 0, &address))
+            result = ERROR_INVALID_PARAMETER;
+        else
+        {
+            grabLock(&GMutexDosCalls);
+            PoolAttachment *attachment = pool_attachment(address, base, FALSE);
+            if (attachment)
+                attachment->active = FALSE;
+            ungrabLock(&GMutexDosCalls);
+        }
         close_pool(&pool);
     }
     return result;

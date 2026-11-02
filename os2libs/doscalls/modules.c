@@ -51,6 +51,9 @@ APIRET DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod)
     TRACE_NATIVE("DosQueryModuleHandle('%s', %p)", pszModname, phmod);
     if (!pszModname || !*pszModname || !phmod)
         return ERROR_INVALID_PARAMETER;
+    for (const unsigned char *p = (const unsigned char *)pszModname; *p; p++)
+        if (*p < 32 || strchr("\"<>|?*", *p))
+            return ERROR_INVALID_NAME;
     grabLock(&GMutexDosCalls);
     LxModule *lxmod;
     for (lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next)
@@ -66,7 +69,7 @@ APIRET DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod)
     if (phmod)
         *phmod = lxmod ? lxmod->handle : 0;
 
-    return lxmod ? NO_ERROR : ERROR_INVALID_NAME;
+    return lxmod ? NO_ERROR : ERROR_MOD_NOT_FOUND;
 }
 
 APIRET16 Dos16GetModHandle(PSZ name, PUSHORT module)
@@ -101,7 +104,8 @@ APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppf
             if (exports->ordinal == ordinal)
             {
                 if (ppfn)
-                    *ppfn = (PFN)(exports->indirect ? *(void **)exports->addr : exports->addr);
+                    *ppfn = (PFN)(exports->indirect == LX_EXPORT_INDIRECT ? *(void **)exports->addr
+                                                                          : exports->addr);
                 return NO_ERROR;
             }
         }
@@ -116,7 +120,8 @@ APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppf
             if (exports->name && (strcmp(exports->name, pszName) == 0))
             {
                 if (ppfn)
-                    *ppfn = (PFN)(exports->indirect ? *(void **)exports->addr : exports->addr);
+                    *ppfn = (PFN)(exports->indirect == LX_EXPORT_INDIRECT ? *(void **)exports->addr
+                                                                          : exports->addr);
                 return NO_ERROR;
             }
         }
@@ -243,15 +248,42 @@ APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
     free(path);
     if (!file)
         return fileError(error);
-    uint8 mz[64], lx[24];
+    uint8 mz[64], lx[64];
     size_t actual;
     APIRET result = ERROR_INVALID_EXE_SIGNATURE;
     if (lx_host_file_read(file, mz, sizeof mz, &actual) || actual != sizeof mz || mz[0] != 'M' ||
         mz[1] != 'Z')
         goto done;
-    if (lx_host_file_seek(file, lx_guest_load_u32(mz + 60), 0, NULL) ||
-        lx_host_file_read(file, lx, sizeof lx, &actual) || actual != sizeof lx || lx[0] != 'L' ||
-        lx[1] != 'X')
+    /* A plain MZ executable is a DOS program; NE headers also describe Win16. */
+    *pFlags = FAPPTYP_DOS;
+    result = NO_ERROR;
+    const uint32 header = lx_guest_load_u32(mz + 60);
+    if (header < sizeof mz || lx_host_file_seek(file, header, 0, NULL) ||
+        lx_host_file_read(file, lx, sizeof lx, &actual) || actual < 24)
+        goto done;
+    if (lx[0] == 'N' && lx[1] == 'E')
+    {
+        if (actual < sizeof lx)
+        {
+            result = ERROR_BAD_EXE_FORMAT;
+            goto done;
+        }
+        const USHORT module_flags = lx_guest_load_u16(lx + 12);
+        if (module_flags & 0x2000)
+        {
+            result = ERROR_EXE_MARKED_INVALID;
+            goto done;
+        }
+        ULONG flags = (module_flags >> 8) & 3;
+        if (module_flags & 0x8000)
+            flags |= FAPPTYP_DLL;
+        if (lx[54] == 2 || lx[54] == 4)
+            flags |=
+                lx_guest_load_u16(lx + 62) >= 0x300 ? FAPPTYP_WINDOWSPROT31 : FAPPTYP_WINDOWSPROT;
+        *pFlags = flags;
+        goto done;
+    }
+    if (lx[0] != 'L' || (lx[1] != 'X' && lx[1] != 'E'))
         goto done;
     const uint32 module_flags = lx_guest_load_u32(lx + 16);
     if (module_flags & 0x2000)
@@ -331,15 +363,70 @@ APIRET DosQueryHeaderInfo(HMODULE hmod, ULONG ulIndex, PVOID pvBuffer, ULONG cbB
     return ERROR_INVALID_PARAMETER;
 }
 
-APIRET DosQueryExtLIBPATH(PSZ pszExtLIBPATH, ULONG flags)
+APIRET DosQueryExtLIBPATH(PSZ path, ULONG flags)
 {
-    TRACE_NATIVE("DosQueryExtLIBPATH('%s', %u)", pszExtLIBPATH, (uint)flags);
-
-    if ((flags != BEGIN_LIBPATH) && (flags != END_LIBPATH))
+    if (!path || flags < BEGIN_LIBPATH || flags > LIBPATHSTRICT)
         return ERROR_INVALID_PARAMETER;
-
-    if (pszExtLIBPATH)
-        *pszExtLIBPATH = '\0';
-
+    grabLock(&GMutexDosCalls);
+    if (flags == LIBPATHSTRICT)
+        strcpy(path, GLoaderState.libpath_strict ? "T" : "F");
+    else
+        strcpy(path,
+               flags == BEGIN_LIBPATH ? GLoaderState.begin_libpath : GLoaderState.end_libpath);
+    ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
+}
+APIRET DosSetExtLIBPATH(PSZ path, ULONG flags)
+{
+    if (flags < BEGIN_LIBPATH || flags > LIBPATHSTRICT || (path && strlen(path) >= 1024))
+        return ERROR_INVALID_PARAMETER;
+    if (flags == LIBPATHSTRICT && path && *path && strcasecmp(path, "T") && strcasecmp(path, "F"))
+        return ERROR_INVALID_PARAMETER;
+    grabLock(&GMutexDosCalls);
+    if (flags == LIBPATHSTRICT)
+        GLoaderState.libpath_strict = path && !strcasecmp(path, "T");
+    else
+        strcpy(flags == BEGIN_LIBPATH ? GLoaderState.begin_libpath : GLoaderState.end_libpath,
+               path ? path : "");
+    ungrabLock(&GMutexDosCalls);
+    return NO_ERROR;
+}
+APIRET16 Dos16QueryExtLIBPATH(PCHAR path, ULONG flags)
+{
+    return DosQueryExtLIBPATH(path, flags);
+}
+APIRET16 Dos16SetExtLIBPATH(PSZ path, ULONG flags)
+{
+    return DosSetExtLIBPATH(path, flags);
+}
+
+APIRET DosQueryProcType(HMODULE handle, ULONG ordinal, PSZ name, PULONG type)
+{
+    if (!type || (!ordinal && !name))
+        return ERROR_INVALID_PARAMETER;
+    LxHandleBorrow borrow;
+    if (!lx_handle_borrow(handle, LX_HANDLE_MODULE, &borrow))
+        return ERROR_INVALID_HANDLE;
+    const LxModule *module = borrow.resource;
+    const LxExport *entry = NULL;
+    for (ULONG i = 0; i < module->num_exports; i++)
+        if (ordinal ? module->exports[i].ordinal == ordinal
+                    : module->exports[i].name && !strcmp(module->exports[i].name, name))
+        {
+            entry = &module->exports[i];
+            break;
+        }
+    APIRET result = entry ? NO_ERROR : ordinal ? ERROR_INVALID_ORDINAL : ERROR_INVALID_NAME;
+    if (entry)
+    {
+        *type = 1;
+        if (!module->nativelib && !module->is_lx)
+            *type = 0;
+        else if (entry->object && entry->object->bits)
+            *type = entry->object->bits == 32;
+        else if (entry->object && entry->object->alias != UINT16_MAX)
+            *type = 0;
+    }
+    lx_handle_release(&borrow);
+    return result;
 }

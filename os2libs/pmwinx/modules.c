@@ -102,7 +102,8 @@ PFN GetProcAddress(HMODULE module, PSZ name)
         const LxExport *entry = &loaded->exports[i];
         if (ordinal ? entry->ordinal == ordinal : entry->name && !strcmp(entry->name, name))
         {
-            address = (PFN)(entry->indirect ? *(void **)entry->addr : entry->addr);
+            address =
+                (PFN)(entry->indirect == LX_EXPORT_INDIRECT ? *(void **)entry->addr : entry->addr);
             break;
         }
     }
@@ -130,7 +131,8 @@ BOOL open32ValidProcedure(ULONG address)
             for (ULONG i = 0; i < module->num_exports; i++)
             {
                 const LxExport *entry = &module->exports[i];
-                void *target = entry->indirect ? *(void **)entry->addr : entry->addr;
+                void *target =
+                    entry->indirect == LX_EXPORT_INDIRECT ? *(void **)entry->addr : entry->addr;
                 if ((uintptr_t)target == address &&
                     (!entry->object || (entry->object->prot & LX_GUEST_EXECUTE)))
                     return TRUE;

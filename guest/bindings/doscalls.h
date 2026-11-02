@@ -716,25 +716,21 @@ static uint32 bridge32_DosQueryCurrentDir(uint8 *a)
 static uint32 bridge32_DosQueryCp(uint8 *a)
 {
     const uint32 capacity = lx_guest_load_u32(a);
-    if (capacity < 8)
-        return ERROR_CPLIST_TOO_SMALL;
+    const uint32 count = capacity / 4 > 3 ? 3 : capacity / 4;
     LxGuestBorrow list = {0}, length = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
-                             &list) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
-                             &length))
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
+                             &length) ||
+        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), count * 4,
+                                       LX_GUEST_WRITE, &list)))
     {
-        lx_execution_release(&list);
+        lx_execution_release(&length);
         return ERROR_INVALID_PARAMETER;
     }
-    ULONG values[2] = {0}, size = 0;
-    const uint32 result = DosQueryCp(sizeof values, values, &size);
-    if (!result)
-    {
-        lx_guest_store_u32(list.host, values[0]);
-        lx_guest_store_u32((uint8 *)list.host + 4, values[1]);
-        lx_guest_store_u32(length.host, size);
-    }
+    ULONG values[3] = {0}, size = 0;
+    const uint32 result = DosQueryCp(count * 4, values, &size);
+    for (uint32 i = 0; i < count; i++)
+        lx_guest_store_u32((uint8 *)list.host + i * 4, values[i]);
+    lx_guest_store_u32(length.host, size);
     lx_execution_release(&list);
     lx_execution_release(&length);
     return result;
@@ -1046,6 +1042,10 @@ static uint32 bridge32_DosUnwindException(uint8 *a)
     return DosUnwindException((PVOID)(uintptr_t)lx_guest_load_u32(a),
                               (PVOID)(uintptr_t)lx_guest_load_u32(a + 4),
                               (PVOID)(uintptr_t)lx_guest_load_u32(a + 8));
+}
+static uint32 bridge32_DosRaiseException(uint8 *a)
+{
+    return DosRaiseException((PVOID)(uintptr_t)lx_guest_load_u32(a));
 }
 
 static void wireLoadDateTime(const uint8 *p, FDATE *date, FTIME *time)
@@ -1493,14 +1493,19 @@ static uint32 bridge32_DosFlatToSel(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a);
     void *memory = lx_execution_memory(GLoaderState.execution, address, 1, 0);
-    return memory ? GLoaderState.convert32to1616(memory) : 0;
+    uint32 result = memory ? GLoaderState.convert32to1616(memory) : 0;
+    TRACE_RET("DosFlatToSel(%08x) -> %08x", (uint)address, (uint)result);
+    return result;
 }
 static uint32 bridge32_DosSelToFlat(uint8 *a)
 {
     void *memory = GLoaderState.convert1616to32(lx_guest_load_u32(a));
     uint32 address = 0;
-    return memory && lx_execution_address(GLoaderState.execution, memory, 1, 0, &address) ? address
-                                                                                          : 0;
+    uint32 result = memory && lx_execution_address(GLoaderState.execution, memory, 1, 0, &address)
+                        ? address
+                        : 0;
+    TRACE_RET("DosSelToFlat(%08x) -> %08x", (uint)lx_guest_load_u32(a), (uint)result);
+    return result;
 }
 
 static uint32 bridge32_DosSubSetMem(uint8 *a)
@@ -1543,4 +1548,134 @@ static uint32 bridge32_DosSubUnsetMem(uint8 *a)
     void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
                                      LX_GUEST_READ | LX_GUEST_WRITE);
     return base ? DosSubUnsetMem(base) : ERROR_INVALID_PARAMETER;
+}
+
+static uint32 bridge32_DosBeep(uint8 *arguments)
+{
+    return DosBeep(lx_guest_load_u32(arguments), lx_guest_load_u32(arguments + 4));
+}
+
+static uint32 bridge32_DosQueryProcType(uint8 *a)
+{
+    const uint32 pointer = lx_guest_load_u32(a + 8);
+    char *name = pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 256) : NULL;
+    LxGuestBorrow type = {0};
+    if ((pointer && !name) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
+                             &type))
+    {
+        free(name);
+        return ERROR_INVALID_PARAMETER;
+    }
+    ULONG value;
+    uint32 result = DosQueryProcType(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), name, &value);
+    if (!result)
+        lx_guest_store_u32(type.host, value);
+    lx_execution_release(&type);
+    free(name);
+    return result;
+}
+static uint32 bridge32_DosEditName(uint8 *a)
+{
+    char *source = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 260);
+    char *edit = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 8), 260);
+    LxGuestBorrow output = {0};
+    uint32 capacity = lx_guest_load_u32(a + 16), result = ERROR_INVALID_PARAMETER;
+    if (source && edit && capacity &&
+        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), capacity,
+                            LX_GUEST_WRITE, &output))
+        result = DosEditName(lx_guest_load_u32(a), source, edit, output.host, capacity);
+    lx_execution_release(&output);
+    free(source);
+    free(edit);
+    return result;
+}
+static uint32 bridge32_DosTmrQueryFreq(uint8 *a)
+{
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 4, LX_GUEST_WRITE,
+                             &output))
+        return ERROR_INVALID_PARAMETER;
+    ULONG value;
+    uint32 result = DosTmrQueryFreq(&value);
+    if (!result)
+        lx_guest_store_u32(output.host, value);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_DosTmrQueryTime(uint8 *a)
+{
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
+                             &output))
+        return ERROR_INVALID_PARAMETER;
+    uint32 result = DosTmrQueryTime(output.host);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_DosEnumAttribute(uint8 *a)
+{
+    uint32 reference_type = lx_guest_load_u32(a), pointer = lx_guest_load_u32(a + 4);
+    char *path =
+        reference_type == 1 ? lx_execution_copy_string(GLoaderState.execution, pointer, 260) : NULL;
+    LxGuestBorrow reference = {0}, output = {0}, count = {0};
+    uint32 capacity = lx_guest_load_u32(a + 16), result = ERROR_INVALID_PARAMETER;
+    if (reference_type > 1 || (reference_type == 1 && !path) ||
+        (reference_type == 0 &&
+         !lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_READ, &reference)) ||
+        (capacity && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12),
+                                          capacity, LX_GUEST_WRITE, &output)) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &count))
+        goto done;
+    ULONG number = lx_guest_load_u32(count.host),
+          handle = reference.host ? lx_guest_load_u32(reference.host) : 0;
+    result =
+        DosEnumAttribute(reference_type, path ? (void *)path : &handle, lx_guest_load_u32(a + 8),
+                         output.host, capacity, &number, lx_guest_load_u32(a + 24));
+    lx_guest_store_u32(count.host, number);
+done:
+    lx_execution_release(&reference);
+    lx_execution_release(&output);
+    lx_execution_release(&count);
+    free(path);
+    return result;
+}
+static uint32 bridge32_DosShutdown(uint8 *a)
+{
+    return DosShutdown(lx_guest_load_u32(a));
+}
+static uint32 bridge32_DosGetSharedMem(uint8 *a)
+{
+    return DosGetSharedMemAddress(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_DosGiveSharedMem(uint8 *a)
+{
+    void *address = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 1, 0);
+    return address ? DosGiveSharedMem(address, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8))
+                   : ERROR_INVALID_ADDRESS;
+}
+
+static uint32 bridge32_DosSetExtLIBPATH(uint8 *a)
+{
+    uint32 pointer = lx_guest_load_u32(a);
+    char *path = pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 1024) : NULL;
+    uint32 result = pointer && !path ? ERROR_INVALID_PARAMETER
+                                     : DosSetExtLIBPATH(path, lx_guest_load_u32(a + 4));
+    free(path);
+    return result;
+}
+
+static uint32 bridge32_DosQueryExtLIBPATH(uint8 *a)
+{
+    uint32 flags = lx_guest_load_u32(a + 4);
+    if (flags < BEGIN_LIBPATH || flags > LIBPATHSTRICT)
+        return ERROR_INVALID_PARAMETER;
+    LxGuestBorrow output = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a),
+                             flags == LIBPATHSTRICT ? 2 : 1024, LX_GUEST_WRITE, &output))
+        return ERROR_INVALID_PARAMETER;
+    uint32 result = DosQueryExtLIBPATH(output.host, flags);
+    lx_execution_release(&output);
+    return result;
 }

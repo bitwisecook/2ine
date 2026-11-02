@@ -91,3 +91,93 @@ APIRET applyEas16(HFILE handle, const void *operation)
     lx_execution_release(&list);
     return result;
 }
+
+APIRET DosEnumAttribute(ULONG reference_type, PVOID reference, ULONG first, PVOID buffer,
+                        ULONG capacity, PULONG count, ULONG level)
+{
+    if (!count || !reference || (!buffer && capacity) || !first || reference_type > 1)
+        return ERROR_INVALID_PARAMETER;
+    if (level != 1)
+        return ERROR_INVALID_LEVEL;
+    ULONG requested = *count;
+    *count = 0;
+    HFILE handle = 0;
+    int opened = 0;
+    APIRET result;
+    if (reference_type == 0)
+        memcpy(&handle, reference, sizeof handle);
+    else
+    {
+        ULONG action;
+        result = DosOpen(reference, &handle, &action, 0, 0, OPEN_ACTION_OPEN_IF_EXISTS,
+                         OPEN_ACCESS_READONLY | OPEN_SHARE_DENYNONE, NULL);
+        if (result)
+            return result;
+        opened = 1;
+    }
+    LxHandleBorrow file;
+    if (!borrowFile(handle, &file))
+        return ERROR_INVALID_HANDLE;
+    size_t size = 0;
+    LxHostFsError error = lx_host_file_metadata_get(file.resource, NULL, 0, &size);
+    if (error == LX_HOST_FS_INVALID)
+        error = LX_HOST_FS_OK;
+    unsigned char *metadata = size ? malloc(size) : NULL;
+    if (!error && size && !metadata)
+        error = LX_HOST_FS_NO_MEMORY;
+    if (!error && size)
+        error = lx_host_file_metadata_get(file.resource, metadata, size, &size);
+    lx_handle_release(&file);
+    if (opened)
+        DosClose(handle);
+    result = fileError(error);
+    if (result || !size || !requested)
+    {
+        free(metadata);
+        return result;
+    }
+    if (size < 4 || lx_guest_load_u32(metadata) != size)
+    {
+        free(metadata);
+        return ERROR_EA_LIST_INCONSISTENT;
+    }
+    size_t at = 4, used = 0, previous = 0;
+    ULONG index = 1;
+    while (at < size && *count < requested)
+    {
+        if (size - at < 5)
+        {
+            result = ERROR_EA_LIST_INCONSISTENT;
+            break;
+        }
+        const unsigned char *entry = metadata + at;
+        size_t name = entry[1], value = lx_guest_load_u16(entry + 2);
+        size_t span = 5 + name + value;
+        if (!name || span > size - at || entry[4 + name] || memchr(entry + 4, 0, name))
+        {
+            result = ERROR_EA_LIST_INCONSISTENT;
+            break;
+        }
+        if (index++ >= first)
+        {
+            size_t output_size = 9 + name;
+            size_t aligned = (used + 3) & ~(size_t)3;
+            if (aligned > capacity || output_size > capacity - aligned)
+            {
+                result = *count ? NO_ERROR : ERROR_BUFFER_OVERFLOW;
+                break;
+            }
+            unsigned char *out = (unsigned char *)buffer + aligned;
+            if (*count)
+                lx_guest_store_u32((unsigned char *)buffer + previous, aligned - previous);
+            lx_guest_store_u32(out, 0);
+            memcpy(out + 4, entry, 4 + name + 1);
+            previous = aligned;
+            used = aligned + output_size;
+            (*count)++;
+        }
+        at += span;
+    }
+    free(metadata);
+    return result;
+}

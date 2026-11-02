@@ -94,10 +94,12 @@ def read_policies16(path: Path) -> Policies16:
                 kind = string(fields.get("kind"), name)
                 permissions = integer(fields.get("permissions"), name)
                 nullable = fields.get("nullable")
-                if kind not in {"string", "command", "environment", "live", "copy"}:
+                if kind not in {"string", "command", "environment", "live", "copy", "struct16"}:
                     raise ValueError(f"{name}: invalid pointer kind {kind!r}")
                 if permissions not in range(8) or not isinstance(nullable, bool):
                     raise ValueError(f"{name}: invalid permissions or nullable flag")
+                if kind == "struct16" and nullable:
+                    raise ValueError(f"{name}: struct16 requires a non-null structure")
                 policies.append(
                     PointerPolicy(
                         string(fields.get("name"), name),
@@ -221,6 +223,21 @@ def bridge16(function: Function, policy: tuple[PointerPolicy, ...] | None) -> st
             if entry.kind in {"string", "command", "environment"}:
                 count = {"string": 1, "command": 2, "environment": 0}[entry.kind]
                 call = f"lx_guest_argument_strings(GLoaderState.execution, {entry.name}_guest, {count}, {entry.size}, {nullable}, &__abi_args[{index}])"
+            elif entry.kind == "struct16":
+                lines.append("    {\n        LxGuestArgument __abi_prefix = {0};\n")
+                lines.append(
+                    f"        if (!lx_guest_argument_far(GLoaderState.execution, {entry.name}_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;\n"
+                )
+                lines.append(
+                    "        size_t __abi_size = lx_guest_load_u16(__abi_prefix.host);\n"
+                    "        lx_guest_argument_finish(&__abi_prefix, 0);\n"
+                    "        if (__abi_size < 2) __abi_size = 2;\n"
+                    f"        if (__abi_size > ({entry.size})) __abi_size = ({entry.size});\n"
+                    f"        if (!lx_guest_argument_far(GLoaderState.execution, {entry.name}_guest, __abi_size, {entry.permissions}, 0, 0, &__abi_args[{index}])) goto __abi_done;\n"
+                    "    }\n"
+                    f"    {entry.name} = ({pointers[entry.name]}) __abi_args[{index}].host;\n"
+                )
+                continue
             else:
                 live = int(entry.kind == "live")
                 call = f"lx_guest_argument_far(GLoaderState.execution, {entry.name}_guest, {entry.size}, {entry.permissions}, {live}, {nullable}, &__abi_args[{index}])"

@@ -21,7 +21,8 @@ typedef struct LxMmaps
     void *addr;
     size_t size;
     int prot;
-    uint16 alias; // 16:16 alias, if one.
+    uint16 alias;  // 16:16 alias, if one.
+    unsigned bits; // Default operand/address width of this object.
 } LxMmaps;
 
 typedef struct LxExport
@@ -32,6 +33,13 @@ typedef struct LxExport
     const LxMmaps *object;
     int indirect;
 } LxExport;
+/* Absolute exports carry an immediate value rather than a mapped guest entry. */
+enum
+{
+    LX_EXPORT_DIRECT = 0,
+    LX_EXPORT_INDIRECT = 1,
+    LX_EXPORT_ABSOLUTE = 2
+};
 
 struct LxModule;
 typedef struct LxModule LxModule;
@@ -74,6 +82,7 @@ struct LxModule
     uint32 signal_exception_focus_count;
     LxModule *prev;
     LxModule *next;
+    uint64 initialization_order;
 };
 
 #endif

@@ -10,7 +10,8 @@ int main(int argc, char **argv, char **envp)
 {
     if (argc < 2)
     {
-        fprintf(stderr, "USAGE: %s <program.exe> [...programargs...]\n", argv[0]);
+        fprintf(stderr, "USAGE: %s <program.exe> [...programargs...]\n",
+                argc && argv && argv[0] ? argv[0] : "lx_loader");
         return 1;
     }
 
@@ -64,6 +65,7 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.setOs2Tib = lxSetOs2Tib;
     GLoaderState.getOs2Tib = lxGetOs2Tib;
     GLoaderState.deinitOs2Tib = lxDeinitOs2Tib;
+    GLoaderState.findModuleOrdinal = findModuleOrdinal;
     GLoaderState.allocSegment = lxAllocSegment;
     GLoaderState.freeSegment = lxFreeSegment;
     GLoaderState.createCodeAlias = lxCreateCodeAlias;
@@ -84,6 +86,15 @@ int main(int argc, char **argv, char **envp)
         fprintf(stderr, "\n2INE CMD='%s'\n",
                 GLoaderState.pib.pib_pchcmd ? GLoaderState.pib.pib_pchcmd : "(null)");
     }
+
+    if (!lxRegisterProcessPeer())
+    {
+        fprintf(stderr, "Cannot register this OS/2 process in its ball IPC scope\n");
+        return 1;
+    }
+
+    if (!strcmp(argv[1], "--rexx-service"))
+        return runRexxService();
 
     const char *modulename = GLoaderState.subprocess ? getenv("IS_2INE") : argv[1];
     uint32 path_error = 0;

@@ -324,6 +324,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             goto loadne_failed;
         }
         retval->mmaps[i].mapping = lx_execution_mapping_at(GLoaderState.execution, guest_address);
+        retval->mmaps[i].bits = 16;
         retval->mmaps[i].guest_base = guest_address;
         retval->mmaps[i].mapped = mmapaddr;
         retval->mmaps[i].size = vsize;

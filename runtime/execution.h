@@ -32,6 +32,9 @@ typedef struct LxExecutionRegisters32
 } LxExecutionRegisters32;
 /* Snapshot the suspended caller of a generated 32-bit API bridge. */
 int lx_execution_api_registers32(LxExecution *execution, LxExecutionRegisters32 *registers);
+/* Resume the suspended API caller with this context after the host bridge returns.
+   A successful request replaces the ordinary API result and return sequence. */
+int lx_execution_api_resume32(LxExecution *execution, const LxExecutionRegisters32 *registers);
 /* Current generated API argument frame, or zero outside a stack-based API call. */
 uint32_t lx_execution_api_arguments(LxExecution *execution);
 typedef struct LxGuestBorrow
@@ -168,6 +171,7 @@ void lx_execution_stack_segments(LxExecution *execution, uint32_t address, uint3
                                  int release);
 void lx_execution_near_base(LxExecution *execution, uint32_t address);
 uint16_t lx_execution_flat_code_selector(LxExecution *execution);
+uint16_t lx_execution_flat_data_selector(LxExecution *execution);
 void lx_execution_prepare_code(LxExecution *execution, uint8_t *code, size_t size);
 void *lx_execution_missing_entry(LxExecution *execution, const char *module, const char *entry,
                                  unsigned bits, LxExecutionBridge *bridge);

@@ -12,7 +12,7 @@ static unsigned editNameFold(unsigned char value)
     return value >= 'a' && value <= 'z' ? value - ('a' - 'A') : value;
 }
 
-APIRET16 Dos16EditName(USHORT level, PSZ source, PSZ edit, PBYTE target, USHORT capacity)
+APIRET DosEditName(ULONG level, PSZ source, PSZ edit, PBYTE target, ULONG capacity)
 {
     TRACE_NATIVE("Dos16EditName(%u, '%s', '%s', %p, %u)", level, source, edit, target, capacity);
     if (level != 1 || !source || !edit || !target || !capacity)
@@ -66,6 +66,11 @@ APIRET16 Dos16EditName(USHORT level, PSZ source, PSZ edit, PBYTE target, USHORT 
         return ERROR_INVALID_PARAMETER;
     memcpy(target, result, used + 1);
     return NO_ERROR;
+}
+
+APIRET16 Dos16EditName(USHORT level, PSZ source, PSZ edit, PBYTE target, USHORT capacity)
+{
+    return DosEditName(level, source, edit, target, capacity);
 }
 
 APIRET DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal, ULONG ulFSAInfoLevel, PFSQBUFFER2 pfsqb,

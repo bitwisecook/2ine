@@ -109,7 +109,7 @@ def program():
     g.pointer(g.field(b"NO_SUCH_MODULE\0"))
     g.pointer(repeated)
     g.call(1, 47)
-    g.require(b"\x3d" + struct.pack("<H", 123), 84)  # ERROR_INVALID_NAME
+    g.require(b"\x3d" + struct.pack("<H", 126), 84)  # ERROR_MOD_NOT_FOUND
 
     g.push(5)
     g.pointer(country)
@@ -463,7 +463,7 @@ def cycle_program():
         g.call(1, 318, 0, 0, address, a)
         g.require(b"\x85\xc0\x0f\x95\xc0\x0f\xb6\xc0\x3d\x01\x00\x00\x00", 119)
         g.call(1, 319, address, a)
-        g.result(123, 120)
+        g.result(126, 120)
     g.exit(0)
     return linear_image(g.code, g.fixups, ["DOSCALLS"], "CYCLETEST", data=g.data)
 

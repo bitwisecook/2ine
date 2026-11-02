@@ -538,6 +538,67 @@
       "argument_bytes": 4,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DosRaiseException": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32",
+      "native_bridge": true
+    },
+    "DosBeep": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosQueryProcType": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosEditName": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosTmrQueryFreq": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosTmrQueryTime": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosEnumAttribute": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosShutdown": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosGetSharedMem": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosGiveSharedMem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosSetExtLIBPATH": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosQueryExtLIBPATH": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "nls": {
@@ -552,6 +613,11 @@
       "convention": "LX_ABI_STACK32"
     },
     "DosQueryCtryInfo": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosQueryCollate": {
       "argument_bytes": 16,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
@@ -3689,6 +3755,11 @@
       "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "PrfQueryProfile": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmctls": {
@@ -3997,6 +4068,11 @@
     },
     "DosSelectSession": {
       "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosStopSession": {
+      "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

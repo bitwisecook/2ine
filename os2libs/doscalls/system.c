@@ -127,11 +127,36 @@ APIRET DosQuerySysInfo(ULONG first, ULONG last, PVOID _buf, ULONG buflen)
     return NO_ERROR;
 }
 
+/* Clock adjustments belong to the emulated process and never change host time. */
+static int64_t guest_clock_offset;
+APIRET16 Dos16SetDateTime(PDATETIME datetime)
+{
+    if (!datetime || datetime->year < 1980 || datetime->year > 2079 || datetime->hundredths > 99 ||
+        datetime->timezone < -720 || datetime->timezone > 720)
+        return ERROR_TS_DATETIME;
+    LxHostCalendar value = {0};
+    value.year = datetime->year;
+    value.month = datetime->month;
+    value.day = datetime->day;
+    value.hour = datetime->hours;
+    value.minute = datetime->minutes;
+    value.second = datetime->seconds;
+    int64_t seconds;
+    if (!lx_host_calendar_seconds(&value, 0, &seconds))
+        return ERROR_TS_DATETIME;
+    grabLock(&GMutexDosCalls);
+    guest_clock_offset =
+        seconds * 1000000 + datetime->hundredths * 10000 - (int64_t)lx_host_realtime_us();
+    ungrabLock(&GMutexDosCalls);
+    return NO_ERROR;
+}
 APIRET DosGetDateTime(PDATETIME pdt)
 {
     TRACE_NATIVE("DosGetDateTime(%p)", pdt);
 
-    const uint64 now = lx_host_realtime_us();
+    grabLock(&GMutexDosCalls);
+    const uint64 now = lx_host_realtime_us() + guest_clock_offset;
+    ungrabLock(&GMutexDosCalls);
     LxHostCalendar value;
     if (!pdt || !lx_host_calendar((int64_t)(now / 1000000), 0, &value))
         return ERROR_INVALID_PARAMETER;
@@ -152,18 +177,18 @@ APIRET DosQueryCp(ULONG cb, PULONG arCP, PULONG pcCP)
 {
     TRACE_NATIVE("DosQueryCp(%u, %p, %p)", (uint)cb, arCP, pcCP);
 
-    FIXME("This is mostly a stub");
-
-    // 437 == United States codepage.
-    if (cb >= 2)
-        arCP[0] = 437; // current process codepage
-    if (cb >= 4)
-        arCP[1] = 437; // prepared system codepage
-
+    if (cb && !arCP)
+        return ERROR_INVALID_PARAMETER;
+    const ULONG pages[] = {GLoaderState.process_codepage ? GLoaderState.process_codepage : 437, 437,
+                           850};
+    ULONG count = cb / sizeof(ULONG);
+    if (count > 3)
+        count = 3;
+    if (count)
+        memcpy(arCP, pages, count * sizeof(ULONG));
     if (pcCP)
-        *pcCP = cb >= 4 ? 4 : cb >= 2 ? 2 : 0;
-
-    return cb < 4 ? ERROR_CPLIST_TOO_SMALL : NO_ERROR;
+        *pcCP = count * sizeof(ULONG);
+    return count < 3 ? ERROR_CPLIST_TOO_SMALL : NO_ERROR;
 }
 
 APIRET DosDevConfig(PVOID pdevinfo, ULONG item)
@@ -277,20 +302,18 @@ APIRET16 Dos16GetCp(USHORT cb, PUSHORT arCP, PUSHORT pcCP)
 {
     TRACE_NATIVE("Dos16GetCp(%u, %p, %p)", (uint)cb, arCP, pcCP);
 
-    FIXME("This is mostly a stub");
-    FIXME("...and mostly copy/paste from DosQueryCp()...");
-
-    if (cb < sizeof(*arCP) * 2)
-        return ERROR_CPLIST_TOO_SMALL;
-
-    // 437 == United States codepage.
-    arCP[0] = 437; // current process codepage
-    arCP[1] = 437; // prepared system codepage
-
+    if (cb && !arCP)
+        return ERROR_INVALID_PARAMETER;
+    const USHORT pages[] = {GLoaderState.process_codepage ? GLoaderState.process_codepage : 437,
+                            437, 850};
+    USHORT count = cb / sizeof(USHORT);
+    if (count > 3)
+        count = 3;
+    if (count)
+        memcpy(arCP, pages, count * sizeof(USHORT));
     if (pcCP)
-        *pcCP = sizeof(*arCP) * 2;
-
-    return NO_ERROR;
+        *pcCP = count * sizeof(USHORT);
+    return count < 3 ? ERROR_CPLIST_TOO_SMALL : NO_ERROR;
 }
 
 APIRET16 Dos16GetInfoSeg(PSEL globalseg, PSEL localseg)
@@ -315,5 +338,22 @@ APIRET DosQueryDBCSEnv(ULONG buflen, PCOUNTRYCODE pcc, PCHAR buf)
     if ((pcc->country != 0) || (pcc->codepage != 0))
         return ERROR_CODE_PAGE_NOT_FOUND;
     memset(buf, '\0', buflen);
+    return NO_ERROR;
+}
+
+APIRET DosTmrQueryFreq(PULONG frequency)
+{
+    if (!frequency)
+        return ERROR_INVALID_PARAMETER;
+    *frequency = 1000000;
+    return NO_ERROR;
+}
+APIRET DosTmrQueryTime(PVOID ticks)
+{
+    if (!ticks)
+        return ERROR_INVALID_PARAMETER;
+    uint64 value = lx_host_monotonic_us();
+    lx_guest_store_u32(ticks, (ULONG)value);
+    lx_guest_store_u32((uint8 *)ticks + 4, (ULONG)(value >> 32));
     return NO_ERROR;
 }

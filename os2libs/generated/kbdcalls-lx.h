@@ -3,6 +3,22 @@
 
 #if LX_LEGACY
 
+static uint32 bridge16to32_KbdGetCp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, codepage);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, reserved);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GLoaderState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    codepage = (PUSHORT) __abi_args[0].host;
+    __abi_result = KbdGetCp(reserved, codepage, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
 static uint32 bridge16to32_KbdCharIn(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, fWait);
@@ -17,6 +33,13 @@ static uint32 bridge16to32_KbdCharIn(uint8 *args) {
 __abi_done:
     lx_guest_argument_finish(&__abi_args[0], __abi_copy);
     return __abi_result;
+}
+
+static uint32 bridge16to32_KbdSetCp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, codepage);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, reserved);
+    return KbdSetCp(reserved, codepage, hkbd);
 }
 
 static uint32 bridge16to32_KbdStringIn(uint8 *args) {
@@ -41,12 +64,12 @@ __abi_done:
 
 static uint32 bridge16to32_KbdGetStatus(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDKEYINFO, pkbci);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDINFO, pkbci);
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
-    pkbci = (PKBDKEYINFO) __abi_args[0].host;
+    if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pkbci = (PKBDINFO) __abi_args[0].host;
     __abi_result = KbdGetStatus(pkbci, hkbd);
     __abi_copy = 1;
 __abi_done:
@@ -56,12 +79,12 @@ __abi_done:
 
 static uint32 bridge16to32_KbdSetStatus(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDKEYINFO, pkbci);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDINFO, pkbci);
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
     if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 1, 0, 0, &__abi_args[0])) goto __abi_done;
-    pkbci = (PKBDKEYINFO) __abi_args[0].host;
+    pkbci = (PKBDINFO) __abi_args[0].host;
     __abi_result = KbdSetStatus(pkbci, hkbd);
     __abi_copy = 1;
 __abi_done:
@@ -69,11 +92,35 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_KbdFlushBuffer(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    return KbdFlushBuffer(hkbd);
+}
+
+static uint32 bridge16to32_KbdPeek(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDKEYINFO, pkbci);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    pkbci = (PKBDKEYINFO) __abi_args[0].host;
+    __abi_result = KbdPeek(pkbci, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
 LX_NATIVE_MODULE_16BIT_SUPPORT()
+    LX_NATIVE_MODULE_16BIT_API(KbdGetCp)
     LX_NATIVE_MODULE_16BIT_API(KbdCharIn)
+    LX_NATIVE_MODULE_16BIT_API(KbdSetCp)
     LX_NATIVE_MODULE_16BIT_API(KbdStringIn)
     LX_NATIVE_MODULE_16BIT_API(KbdGetStatus)
     LX_NATIVE_MODULE_16BIT_API(KbdSetStatus)
+    LX_NATIVE_MODULE_16BIT_API(KbdFlushBuffer)
+    LX_NATIVE_MODULE_16BIT_API(KbdPeek)
 LX_NATIVE_MODULE_16BIT_SUPPORT_END()
 
 LX_NATIVE_MODULE_DEINIT({
@@ -82,10 +129,14 @@ LX_NATIVE_MODULE_DEINIT({
 
 static int init16_kbdcalls(void) {
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdGetCp, 10)
         LX_NATIVE_INIT_16BIT_BRIDGE(KbdCharIn, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdSetCp, 6)
         LX_NATIVE_INIT_16BIT_BRIDGE(KbdStringIn, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(KbdGetStatus, 6)
         LX_NATIVE_INIT_16BIT_BRIDGE(KbdSetStatus, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdFlushBuffer, 2)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdPeek, 6)
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
     return 1;
 }
@@ -93,10 +144,14 @@ static int init16_kbdcalls(void) {
 LX_NATIVE_MODULE_INIT({
     if (!init16_kbdcalls()) return 0;
 })
+    LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdGetCp, "KBDGETCP", 3),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdCharIn, "KBDCHARIN", 4),
+    LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdSetCp, "KBDSETCP", 5),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdStringIn, "KBDSTRINGIN", 9),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdGetStatus, "KBDGETSTATUS", 10),
     LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdSetStatus, "KBDSETSTATUS", 11),
+    LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdFlushBuffer, "KBDFLUSHBUFFER", 13),
+    LX_NATIVE_EXPORT16_DIFFERENT_NAME(KbdPeek, "KBDPEEK", 22),
 
 LX_NATIVE_MODULE_INIT_END()
 

@@ -5,6 +5,9 @@
 int lx_host_terminal_open(int *width, int *height);
 void lx_host_terminal_close(void);
 void lx_host_terminal_refresh(void);
+void lx_host_terminal_flush_input(void);
+/* Return one input byte, or -1 at EOF/when nonblocking input is unavailable. */
+int lx_host_terminal_read_input(int wait);
 void lx_host_terminal_cursor(int x, int y);
 /* Cells contain a PC character byte followed by its color/attribute byte. */
 void lx_host_terminal_cells(int x, int y, const uint16_t *cells, int count, int cursor_x,

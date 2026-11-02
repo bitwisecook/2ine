@@ -17,7 +17,80 @@ LX_NATIVE_MODULE_32BIT_API(DosReadQueue)
 LX_NATIVE_MODULE_32BIT_API(DosWriteQueue)
 #endif
 
-LX_NATIVE_MODULE_DEINIT({ LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT(); })
+static uint32 bridge16to32_Dos16ReadQueue(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, semaphore);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, priority);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, nowait);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, element);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PULONG, buffer);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, length);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PULONG, request);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, queue);
+    LxGuestArgument __abi_args[4] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GLoaderState.execution, request_guest, 4, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    request = (PULONG) __abi_args[0].host;
+    if (!lx_guest_argument_far(GLoaderState.execution, length_guest, 2, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    length = (PUSHORT) __abi_args[1].host;
+    if (!lx_guest_argument_far(GLoaderState.execution, buffer_guest, 4, 2, 0, 0, &__abi_args[2])) goto __abi_done;
+    buffer = (PULONG) __abi_args[2].host;
+    if (!lx_guest_argument_far(GLoaderState.execution, priority_guest, 1, 2, 0, 0, &__abi_args[3])) goto __abi_done;
+    priority = (PBYTE) __abi_args[3].host;
+    __abi_result = Dos16ReadQueue(queue, request, length, buffer, element, nowait, priority, semaphore);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[2], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[3], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_Dos16CloseQueue(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, queue);
+    return Dos16CloseQueue(queue);
+}
+
+static uint32 bridge16to32_Dos16CreateQueue(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, name);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, order);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, queue);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GLoaderState.execution, queue_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    queue = (PUSHORT) __abi_args[0].host;
+    if (!lx_guest_argument_strings(GLoaderState.execution, name_guest, 1, 256, 0, &__abi_args[1])) goto __abi_done;
+    name = (PSZ) __abi_args[1].host;
+    __abi_result = Dos16CreateQueue(queue, order, name);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
+LX_NATIVE_MODULE_16BIT_SUPPORT()
+    LX_NATIVE_MODULE_16BIT_API(Dos16ReadQueue)
+    LX_NATIVE_MODULE_16BIT_API(Dos16CloseQueue)
+    LX_NATIVE_MODULE_16BIT_API(Dos16CreateQueue)
+LX_NATIVE_MODULE_16BIT_SUPPORT_END()
+
+LX_NATIVE_MODULE_DEINIT({
+    LX_NATIVE_MODULE_DEINIT_16BIT_SUPPORT();
+    LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT();
+})
+
+static int init16_quecalls(void) {
+    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16ReadQueue, 26)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CloseQueue, 2)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CreateQueue, 10)
+    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
+    return 1;
+}
+
 #if TWOINE_PORTABLE_LOADER
 static int init32_quecalls(void) {
     LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()
@@ -34,8 +107,12 @@ static int init32_quecalls(void) {
 }
 #endif
 LX_NATIVE_MODULE_INIT({
+    if (!init16_quecalls()) return 0;
     LX_NATIVE_INIT_32BIT_MODULE(quecalls)
 })
+    LX_NATIVE_EXPORT16(Dos16ReadQueue, 1),
+    LX_NATIVE_EXPORT16(Dos16CloseQueue, 2),
+    LX_NATIVE_EXPORT16(Dos16CreateQueue, 8),
     LX_NATIVE_EXPORT32(DosReadQueue, 9),
     LX_NATIVE_EXPORT32(DosPurgeQueue, 10),
     LX_NATIVE_EXPORT32(DosCloseQueue, 11),

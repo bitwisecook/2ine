@@ -4,17 +4,89 @@
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 #include "hal/host_sync.h"
+#include "hal/host_shared.h"
 #include "sync_platform.h"
 #include "hal/host.h"
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/file.h>
+#include <fcntl.h>
+#include <unistd.h>
 struct LxHostMutex
 {
     pthread_mutex_t object;
     uint32_t held, waiting;
+    LxHostShared *shared;
+    uint32_t *state;
+    int file;
 };
+typedef struct NamedOwner
+{
+    LxHostMutex *mutex;
+    struct NamedOwner *next;
+} NamedOwner;
+enum
+{
+    NAMED_MUTEX_BYTES = 8,
+    NAMED_MUTEX_OWNER = 0,
+    NAMED_MUTEX_READY = 1
+};
+static pthread_key_t named_owner_key;
+static pthread_once_t named_owner_once = PTHREAD_ONCE_INIT;
+static int named_owner_ready;
+static void abandon_named(void *value)
+{
+    NamedOwner *owner = value;
+    while (owner)
+    {
+        NamedOwner *next = owner->next;
+        LxHostMutex *mutex = owner->mutex;
+        uint32_t count = __atomic_exchange_n(&mutex->held, 0, __ATOMIC_SEQ_CST);
+        /* A nonzero owner marker plus an obtainable file lock signals abandonment. */
+        flock(mutex->file, LOCK_UN);
+        while (count--)
+            pthread_mutex_unlock(&mutex->object);
+        free(owner);
+        owner = next;
+    }
+}
+static void initialize_named_owner(void)
+{
+    named_owner_ready = !pthread_key_create(&named_owner_key, abandon_named);
+}
+static int retain_named_owner(LxHostMutex *mutex)
+{
+    pthread_once(&named_owner_once, initialize_named_owner);
+    if (!named_owner_ready)
+        return 0;
+    NamedOwner *owner = malloc(sizeof *owner);
+    if (!owner)
+        return 0;
+    *owner = (NamedOwner){mutex, pthread_getspecific(named_owner_key)};
+    if (pthread_setspecific(named_owner_key, owner))
+    {
+        free(owner);
+        return 0;
+    }
+    return 1;
+}
+static void release_named_owner(LxHostMutex *mutex)
+{
+    NamedOwner *first = pthread_getspecific(named_owner_key);
+    for (NamedOwner **link = &first; *link; link = &(*link)->next)
+        if ((*link)->mutex == mutex)
+        {
+            NamedOwner *owner = *link;
+            *link = owner->next;
+            free(owner);
+            break;
+        }
+    pthread_setspecific(named_owner_key, first);
+}
 LxHostMutex *lx_host_mutex_create(int recursive, int owned)
 {
     LxHostMutex *m = calloc(1, sizeof *m);
@@ -66,8 +138,74 @@ static void stopWaiting(void *p)
     LxHostMutex *m = p;
     __atomic_sub_fetch(&m->waiting, 1, __ATOMIC_SEQ_CST);
 }
+static LxHostLockResult lock_named(LxHostMutex *mutex, uint32_t timeout)
+{
+    uint64_t deadline =
+        timeout == UINT32_MAX ? UINT64_MAX : lx_host_monotonic_us() + (uint64_t)timeout * 1000;
+    LxHostLockResult result = LX_HOST_LOCK_FAILED;
+    __atomic_add_fetch(&mutex->waiting, 1, __ATOMIC_SEQ_CST);
+    pthread_cleanup_push(stopWaiting, mutex);
+    for (;;)
+    {
+        int cancellation;
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancellation);
+        int locked = pthread_mutex_trylock(&mutex->object);
+        if (!locked)
+        {
+            if (__atomic_load_n(&mutex->held, __ATOMIC_SEQ_CST))
+            {
+                __atomic_add_fetch(&mutex->held, 1, __ATOMIC_SEQ_CST);
+                result = LX_HOST_LOCK_OK;
+                pthread_setcancelstate(cancellation, NULL);
+                break;
+            }
+            if (!flock(mutex->file, LOCK_EX | LOCK_NB))
+            {
+                if (!retain_named_owner(mutex))
+                {
+                    flock(mutex->file, LOCK_UN);
+                    pthread_mutex_unlock(&mutex->object);
+                    pthread_setcancelstate(cancellation, NULL);
+                    break;
+                }
+                uint32_t process, parent;
+                lx_host_process_ids(&process, &parent);
+                uint32_t abandoned = __atomic_exchange_n(&mutex->state[NAMED_MUTEX_OWNER], process,
+                                                         __ATOMIC_ACQ_REL);
+                __atomic_store_n(&mutex->held, 1, __ATOMIC_SEQ_CST);
+                result = abandoned ? LX_HOST_LOCK_OWNER_DIED : LX_HOST_LOCK_OK;
+                pthread_setcancelstate(cancellation, NULL);
+                break;
+            }
+            int error = errno;
+            pthread_mutex_unlock(&mutex->object);
+            if (error != EWOULDBLOCK && error != EAGAIN)
+            {
+                pthread_setcancelstate(cancellation, NULL);
+                break;
+            }
+        }
+        else if (locked != EBUSY)
+        {
+            pthread_setcancelstate(cancellation, NULL);
+            break;
+        }
+        pthread_setcancelstate(cancellation, NULL);
+        if (!timeout || lx_host_monotonic_us() >= deadline)
+        {
+            result = timeout ? LX_HOST_LOCK_TIMEOUT : LX_HOST_LOCK_BUSY;
+            break;
+        }
+        const struct timespec pause = {0, 1000000};
+        nanosleep(&pause, NULL);
+    }
+    pthread_cleanup_pop(1);
+    return result;
+}
 LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
 {
+    if (m->shared)
+        return lock_named(m, timeout);
     int rc;
     __atomic_add_fetch(&m->waiting, 1, __ATOMIC_SEQ_CST);
     pthread_cleanup_push(stopWaiting, m);
@@ -99,6 +237,35 @@ LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
 }
 LxHostLockResult lx_host_mutex_unlock(LxHostMutex *m)
 {
+    if (m->shared)
+    {
+        int cancellation;
+        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancellation);
+        int rc = pthread_mutex_trylock(&m->object);
+        if (rc)
+        {
+            pthread_setcancelstate(cancellation, NULL);
+            return rc == EBUSY ? LX_HOST_LOCK_NOT_OWNER : LX_HOST_LOCK_FAILED;
+        }
+        uint32_t count = __atomic_load_n(&m->held, __ATOMIC_SEQ_CST);
+        if (!count)
+        {
+            pthread_mutex_unlock(&m->object);
+            pthread_setcancelstate(cancellation, NULL);
+            return LX_HOST_LOCK_NOT_OWNER;
+        }
+        if (count == 1)
+        {
+            __atomic_store_n(&m->state[NAMED_MUTEX_OWNER], 0, __ATOMIC_RELEASE);
+            flock(m->file, LOCK_UN);
+            release_named_owner(m);
+        }
+        __atomic_sub_fetch(&m->held, 1, __ATOMIC_SEQ_CST);
+        pthread_mutex_unlock(&m->object);
+        pthread_mutex_unlock(&m->object);
+        pthread_setcancelstate(cancellation, NULL);
+        return LX_HOST_LOCK_OK;
+    }
     int rc = pthread_mutex_unlock(&m->object);
     if (!rc)
         __atomic_sub_fetch(&m->held, 1, __ATOMIC_SEQ_CST);
@@ -115,8 +282,86 @@ LxHostLockResult lx_host_mutex_destroy(LxHostMutex *m)
         return LX_HOST_LOCK_BUSY;
     int rc = pthread_mutex_destroy(&m->object);
     if (!rc)
+    {
+        if (m->shared)
+        {
+            lx_host_shared_unmap(m->state, NAMED_MUTEX_BYTES);
+            lx_host_shared_close(m->shared);
+            close(m->file);
+        }
         free(m);
+    }
     return result(rc);
+}
+
+LxHostNamedMutexResult lx_host_mutex_open_named(const char *name, int create, int owned,
+                                                LxHostMutex **output)
+{
+    *output = NULL;
+    LxHostShared *shared = NULL;
+    LxHostSharedResult opened = lx_host_shared_open(name, create ? NAMED_MUTEX_BYTES : 0, &shared);
+    if (opened != LX_HOST_SHARED_OK)
+        return opened == LX_HOST_SHARED_MISSING  ? LX_HOST_NAMED_MUTEX_MISSING
+               : opened == LX_HOST_SHARED_EXISTS ? LX_HOST_NAMED_MUTEX_EXISTS
+               : opened == LX_HOST_SHARED_NOMEM  ? LX_HOST_NAMED_MUTEX_NOMEM
+                                                 : LX_HOST_NAMED_MUTEX_DENIED;
+    LxHostMutex *mutex = lx_host_mutex_create(1, 0);
+    uint32_t *state = lx_host_shared_size(shared) == NAMED_MUTEX_BYTES
+                          ? lx_host_shared_map(shared, NULL, 0)
+                          : NULL;
+    const char *directory = getenv("TWOINE_IPC_DIR");
+    char fallback[80];
+    if (!directory || !*directory)
+    {
+        snprintf(fallback, sizeof fallback, "/tmp/2ine-%lu", (unsigned long)getuid());
+        directory = fallback;
+    }
+    size_t length = strlen(directory) + strlen(name) + 16;
+    char *path = malloc(length);
+    int fd = -1;
+    if (path)
+    {
+        snprintf(path, length, "%s/%s.mutex", directory, name + 1);
+        fd = open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+        free(path);
+    }
+    if (!mutex || !state || fd < 0)
+        goto failed;
+    if (create)
+    {
+        __atomic_store_n(&state[NAMED_MUTEX_OWNER], 0, __ATOMIC_RELAXED);
+    }
+    else
+    {
+        uint64_t deadline = lx_host_monotonic_us() + 1000000;
+        while (!__atomic_load_n(&state[NAMED_MUTEX_READY], __ATOMIC_ACQUIRE))
+        {
+            if (lx_host_monotonic_us() >= deadline)
+                goto failed;
+            lx_host_sleep_ms(1);
+        }
+    }
+    mutex->shared = shared;
+    mutex->state = state;
+    mutex->file = fd;
+    if (owned && lx_host_mutex_lock(mutex, 0) != LX_HOST_LOCK_OK)
+    {
+        lx_host_mutex_destroy(mutex);
+        return LX_HOST_NAMED_MUTEX_DENIED;
+    }
+    if (create)
+        __atomic_store_n(&state[NAMED_MUTEX_READY], 1, __ATOMIC_RELEASE);
+    *output = mutex;
+    return LX_HOST_NAMED_MUTEX_OK;
+failed:
+    if (mutex)
+        lx_host_mutex_destroy(mutex);
+    if (state)
+        lx_host_shared_unmap(state, NAMED_MUTEX_BYTES);
+    lx_host_shared_close(shared);
+    if (fd >= 0)
+        close(fd);
+    return LX_HOST_NAMED_MUTEX_NOMEM;
 }
 
 struct LxHostMonitor

@@ -251,6 +251,19 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 {
                     const uint32 base = lxmod->mmaps[objectid - 1].guest_base;
                     finalval = base + targetoffset;
+                    const LxObjectTableEntry *objects =
+                        (const LxObjectTableEntry *)(exe + lx->object_table_offset);
+                    const uint32 target_flags = objects[objectid - 1].object_flags;
+                    const uint16 flat_selector =
+                        (target_flags & 0x4)
+                            ? lx_execution_flat_code_selector(GLoaderState.execution)
+                            : lx_execution_flat_data_selector(GLoaderState.execution);
+                    if ((srctype & 0xF) == 2)
+                        finalval = (target_flags & 0x2000)
+                                       ? flat_selector
+                                       : lxSelectorToSegment(lxmod->mmaps[objectid - 1].alias);
+                    else if ((srctype & 0xF) == 6)
+                        finalval2 = flat_selector;
                 }
                 else
                 {
@@ -330,8 +343,11 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 else
                 {
 
-                    finalval = guestEntryAddress(getModuleProcAddrByOrdinal(
-                        lxmod->dependencies[moduleid - 1], importid, &lxexp, fixup_to_alias, 1));
+                    void *entry = getModuleProcAddrByOrdinal(lxmod->dependencies[moduleid - 1],
+                                                             importid, &lxexp, fixup_to_alias, 1);
+                    finalval = lxexp && lxexp->indirect == LX_EXPORT_ABSOLUTE
+                                   ? (uint32)(uintptr_t)entry
+                                   : guestEntryAddress(entry);
                 }
 
                 if (fixup_to_alias)
@@ -409,8 +425,11 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     memcpy(name, import_name, namelen);
                     name[namelen] = '\0';
 
-                    finalval = guestEntryAddress(getModuleProcAddrByName(
-                        lxmod->dependencies[moduleid - 1], name, &lxexp, fixup_to_alias));
+                    void *entry = getModuleProcAddrByName(lxmod->dependencies[moduleid - 1], name,
+                                                          &lxexp, fixup_to_alias);
+                    finalval = lxexp && lxexp->indirect == LX_EXPORT_ABSOLUTE
+                                   ? (uint32)(uintptr_t)entry
+                                   : guestEntryAddress(entry);
                 }
 
                 if (fixup_to_alias)
@@ -658,6 +677,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     const LxObjectTableEntry *obj = ((const LxObjectTableEntry *)(exe + lx->object_table_offset));
     for (uint32 i = 0; i < lx->module_num_objects; i++, obj++)
     {
+        retval->mmaps[i].bits = (obj->object_flags & 0x2000) ? 32 : 16;
         const int relocatable = isDLL || (obj->object_flags & 0x8);
 
         uint32 vsize = obj->virtual_size;

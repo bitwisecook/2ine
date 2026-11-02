@@ -6,7 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native.h"
+#include "os2native16.h"
 #include "quecalls.h"
 
 #include "guest/handles.h"
@@ -16,6 +16,7 @@
 #include "hal/host_mailbox.h"
 #include "hal/host_thread.h"
 #include "hal/host_sync.h"
+#include "hal/host_shared.h"
 
 typedef struct Queue
 {
@@ -27,6 +28,8 @@ typedef struct Queue
     LxHostMutex *mutex;
     LxHostThread *notifier;
     HEV event;
+    ULONG semaphore16;
+    BOOL legacy;
     uint32 stopped, revision;
 } Queue;
 typedef struct Packet
@@ -70,6 +73,18 @@ static int notify_revision(Queue *queue)
     lx_host_mutex_lock(queue->mutex, UINT32_MAX);
     uint32 revision;
     int failed = lx_host_mailbox_revision(queue->mailbox, &revision);
+    if (!failed && queue->semaphore16 && revision != queue->revision)
+    {
+        LxGuestArgument sem = {0};
+        if (!lx_guest_argument_far(GLoaderState.execution, queue->semaphore16, 4,
+                                   LX_GUEST_READ | LX_GUEST_WRITE, 1, 0, &sem))
+            failed = 1;
+        else
+            failed = DosSemClear(sem.host) != NO_ERROR;
+        lx_guest_argument_finish(&sem, 0);
+        if (!failed)
+            queue->revision = revision;
+    }
     if (!failed && queue->event && revision != queue->revision)
     {
         APIRET result = DosPostEventSem(queue->event);
@@ -95,7 +110,7 @@ static APIRET register_notification(Queue *queue, HEV event)
 {
     lx_host_mutex_lock(queue->mutex, UINT32_MAX);
     APIRET result = NO_ERROR;
-    if (!event || (queue->event && queue->event != event))
+    if (!event || queue->semaphore16 || (queue->event && queue->event != event))
         result = ERROR_INVALID_PARAMETER;
     else if (!queue->event && event)
     {
@@ -119,7 +134,7 @@ static APIRET register_notification(Queue *queue, HEV event)
     return result;
 }
 static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, int create,
-                                ULONG flags, BOOL private)
+                                ULONG flags, BOOL private, BOOL legacy)
 {
     if (!output)
         return ERROR_INVALID_PARAMETER;
@@ -132,6 +147,8 @@ static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, in
         {
             if (create)
                 return ERROR_QUE_DUPLICATE;
+            if (q->legacy && !legacy)
+                return ERROR_QUE_PROC_NO_ACCESS;
             *output = q->handle;
             if (owner)
                 *owner = q->owner;
@@ -164,6 +181,7 @@ static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, in
                              : ERROR_QUE_NO_MEMORY;
     }
     queue->flags = flags;
+    queue->legacy = legacy;
     queue->name = strdup(name);
     if (!queue->name)
     {
@@ -196,14 +214,14 @@ static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, in
 static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int create, ULONG flags)
 {
     registry_enter();
-    APIRET result = open_queue_locked(output, owner, name, create, flags, FALSE);
+    APIRET result = open_queue_locked(output, owner, name, create, flags, FALSE, FALSE);
     lx_host_mutex_unlock(registry_lock);
     return result;
 }
 APIRET lx_queue_open_private(PPID owner, PHQUEUE output, const char *name)
 {
     registry_enter();
-    APIRET result = open_queue_locked(output, owner, name, 0, 0, TRUE);
+    APIRET result = open_queue_locked(output, owner, name, 0, 0, TRUE, FALSE);
     lx_host_mutex_unlock(registry_lock);
     return result;
 }
@@ -253,6 +271,7 @@ typedef struct QueueReceive
     BOOL32 nowait;
     HEV event;
     int peek;
+    BOOL legacy;
     uint8 *bytes;
 } QueueReceive;
 static void queue_receive_cleanup(void *argument)
@@ -276,7 +295,7 @@ static uint32 queue_receive_operation(void *argument)
     {
         return ERROR_QUE_PROC_NOT_OWNED;
     }
-    if (nowait)
+    if (nowait && !call->legacy)
     {
         APIRET result = register_notification(queue, event);
         if (result)
@@ -318,9 +337,38 @@ static uint32 queue_receive_operation(void *argument)
             else
             {
                 void *memory = (void *)(uintptr_t)packet.address;
+                if (size == sizeof packet && packet.address && GLoaderState.execution &&
+                    !lx_execution_memory(GLoaderState.execution, packet.address,
+                                         packet.length ? packet.length : 1, 0))
+                {
+                    LxHostShared *shared = NULL;
+                    char name[128];
+                    if (lx_host_shared_find(packet.address, &shared, name, sizeof name) ==
+                        LX_HOST_SHARED_OK)
+                    {
+                        if (packet.length > lx_host_shared_size(shared) ||
+                            DosGetSharedMemAddress(packet.address, PAG_DEFAULT))
+                            result = ERROR_QUE_MEMORY_ERROR;
+                        lx_host_shared_close(shared);
+                    }
+                }
                 if (size > sizeof packet)
                 {
-                    result = DosAllocMem(&memory, packet.length, PAG_READ | PAG_WRITE | PAG_COMMIT);
+                    if (call->legacy)
+                    {
+                        USHORT selector = 0;
+                        result = Dos16AllocSeg((USHORT)packet.length, &selector, 0);
+                        if (!result)
+                            memory = GLoaderState.convert1616to32((ULONG)selector << 16);
+                        if (!result && !memory)
+                        {
+                            Dos16FreeSeg(selector);
+                            result = ERROR_QUE_MEMORY_ERROR;
+                        }
+                    }
+                    else
+                        result =
+                            DosAllocMem(&memory, packet.length, PAG_READ | PAG_WRITE | PAG_COMMIT);
                     if (!result)
                         memcpy(memory, bytes + sizeof packet, packet.length);
                 }
@@ -339,7 +387,8 @@ static uint32 queue_receive_operation(void *argument)
     return result;
 }
 static APIRET receive_queue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID output,
-                            PULONG element, BOOL32 nowait, PBYTE priority, HEV event, int peek)
+                            PULONG element, BOOL32 nowait, PBYTE priority, HEV event, int peek,
+                            BOOL legacy)
 {
     if (!request || !length || !output || !priority || !element)
         return ERROR_INVALID_PARAMETER;
@@ -348,15 +397,16 @@ static APIRET receive_queue(HQUEUE handle, PREQUESTDATA request, PULONG length, 
     LxHandleBorrow borrow;
     if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
         return ERROR_QUE_INVALID_HANDLE;
-    QueueReceive call = {borrow,   request, length, element, output,
-                         priority, nowait,  event,  peek,    NULL};
+    QueueReceive call = {borrow, request, length, element, output, priority,
+                         nowait, event,   peek,   legacy,  NULL};
     return lx_host_guarded_call(queue_receive_operation, &call, queue_receive_cleanup, &call);
 }
 APIRET DosPeekQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID output,
                     PULONG element, BOOL32 nowait, PBYTE priority, HEV event)
 {
     TRACE_NATIVE("DosPeekQueue(%u)", (uint)handle);
-    return receive_queue(handle, request, length, output, element, nowait, priority, event, 1);
+    return receive_queue(handle, request, length, output, element, nowait, priority, event, 1,
+                         FALSE);
 }
 APIRET DosPurgeQueue(HQUEUE handle)
 {
@@ -391,7 +441,11 @@ APIRET DosReadQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID o
 {
     TRACE_NATIVE("DosReadQueue(%u, %p, %p, %p, %u, %u, %p, %u)", (uint)handle, request, length,
                  output, (uint)element, (uint)nowait, priority, (uint)event);
-    return receive_queue(handle, request, length, output, &element, nowait, priority, event, 0);
+    APIRET result =
+        receive_queue(handle, request, length, output, &element, nowait, priority, event, 0, FALSE);
+    if (getenv("TWOINE_TRACE_RET"))
+        fprintf(stderr, "2INE RET: DosReadQueue(%u) -> %u\n", (uint)handle, (uint)result);
+    return result;
 }
 static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority,
                           BOOL copy)
@@ -464,4 +518,112 @@ APIRET DosWriteQueue(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULO
 APIRET lx_queue_write_copy(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority)
 {
     return write_queue(handle, request, length, data, priority, TRUE);
+}
+
+/* Legacy queue IDs name the same registry slots as the generation-checked handles. */
+static HQUEUE queue_handle16(USHORT id, LxHandleBorrow *borrow)
+{
+    HQUEUE handle = 0;
+    registry_enter();
+    for (Queue *queue = queue_registry; queue; queue = queue->next)
+        if ((USHORT)queue->handle == id && lx_handle_borrow(queue->handle, LX_HANDLE_QUEUE, borrow))
+        {
+            handle = queue->handle;
+            break;
+        }
+    lx_host_mutex_unlock(registry_lock);
+    return handle;
+}
+APIRET16 Dos16CreateQueue(PUSHORT output, USHORT order, PSZ name)
+{
+    if (!output || order > QUE_PRIORITY)
+        return ERROR_INVALID_PARAMETER;
+    HQUEUE handle;
+    registry_enter();
+    APIRET result = open_queue_locked(&handle, NULL, name, 1, order, FALSE, TRUE);
+    lx_host_mutex_unlock(registry_lock);
+    if (!result)
+        *output = (USHORT)handle;
+    return result;
+}
+APIRET16 Dos16CloseQueue(USHORT id)
+{
+    LxHandleBorrow borrow = {0};
+    HQUEUE handle = queue_handle16(id, &borrow);
+    APIRET result = handle ? DosCloseQueue(handle) : ERROR_QUE_INVALID_HANDLE;
+    lx_handle_release(&borrow);
+    return result;
+}
+static APIRET queue_notification16(Queue *queue, ULONG semaphore)
+{
+    if (!semaphore)
+        return NO_ERROR;
+    LxGuestArgument argument = {0};
+    if (!lx_guest_argument_far(GLoaderState.execution, semaphore, 4, LX_GUEST_READ | LX_GUEST_WRITE,
+                               1, 0, &argument))
+        return ERROR_INVALID_PARAMETER;
+    lx_guest_argument_finish(&argument, 0);
+    lx_host_mutex_lock(queue->mutex, UINT32_MAX);
+    APIRET result = NO_ERROR;
+    if (queue->event || (queue->semaphore16 && queue->semaphore16 != semaphore))
+        result = ERROR_INVALID_PARAMETER;
+    else if (!queue->semaphore16)
+    {
+        if (lx_host_mailbox_revision(queue->mailbox, &queue->revision))
+            result = ERROR_QUE_MEMORY_ERROR;
+        else
+        {
+            queue->semaphore16 = semaphore;
+            queue->notifier = lx_host_thread_create(notify_queue, queue, NULL);
+            if (!queue->notifier)
+            {
+                queue->semaphore16 = 0;
+                result = ERROR_QUE_NO_MEMORY;
+            }
+        }
+    }
+    lx_host_mutex_unlock(queue->mutex);
+    return result;
+}
+APIRET16 Dos16ReadQueue(USHORT id, PULONG request, PUSHORT length, PULONG buffer, USHORT element,
+                        USHORT nowait, PBYTE priority, ULONG semaphore)
+{
+    if (!request || !length || !buffer || !priority)
+        return ERROR_INVALID_PARAMETER;
+    if (nowait > 1)
+        return ERROR_QUE_INVALID_WAIT;
+    LxHandleBorrow borrow = {0};
+    HQUEUE handle = queue_handle16(id, &borrow);
+    if (!handle)
+        return ERROR_QUE_INVALID_HANDLE;
+    APIRET result = nowait ? queue_notification16(borrow.resource, semaphore) : NO_ERROR;
+    REQUESTDATA data;
+    ULONG bytes, token = element;
+    PVOID output;
+    if (!result)
+        result =
+            receive_queue(handle, &data, &bytes, &output, &token, nowait, priority, 0, 0, TRUE);
+    if (!result)
+    {
+        void *host = output;
+        if (output && GLoaderState.execution)
+        {
+            uint32 address;
+            if (!lx_execution_address(GLoaderState.execution, output, 0, 0, &address))
+                host = lx_execution_memory(GLoaderState.execution, (ULONG)(uintptr_t)output,
+                                           bytes ? bytes : 1, LX_GUEST_READ);
+        }
+        ULONG pointer = host ? GLoaderState.convert32to1616(host) : 0;
+        if (bytes > QUEUE_PAYLOAD_LIMIT ||
+            (output && (!pointer || bytes > 65536u - (pointer & 0xffff))))
+            result = ERROR_QUE_MEMORY_ERROR;
+        else
+        {
+            *request = (USHORT)data.pid | ((ULONG)(USHORT)data.ulData << 16);
+            *length = (USHORT)bytes;
+            *buffer = pointer;
+        }
+    }
+    lx_handle_release(&borrow);
+    return result;
 }

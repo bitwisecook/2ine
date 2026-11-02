@@ -448,7 +448,7 @@ final class AppModel {
         guard !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }
         let panel = NSOpenPanel()
         panel.title = "Choose OS/2 Installation ISO or Floppy Images"
-        panel.message = "CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG will be extracted into this ball’s C: drive."
+        panel.message = "CMD.EXE, installer support files and the original REXX interpreter will be extracted into this ball’s C: drive."
         panel.prompt = "Extract Support Files"
         panel.allowsMultipleSelection = true
         guard panel.runModal() == .OK else { return nil }

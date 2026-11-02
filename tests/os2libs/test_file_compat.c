@@ -139,7 +139,7 @@ static void module16(void)
         CHECK(output.handle == (module.handle & UINT16_MAX));
         CHECK(output.before == 0xA55A && output.after == 0x5AA5);
     }
-    CHECK(call_module16("NOT_LOADED", &output.handle) == ERROR_INVALID_NAME);
+    CHECK(call_module16("NOT_LOADED", &output.handle) == ERROR_MOD_NOT_FOUND);
     CHECK(call_module16(NULL, &output.handle) == ERROR_INVALID_PARAMETER);
     CHECK(call_module16("LEGACYMOD", NULL) == ERROR_INVALID_PARAMETER);
     GLoaderState.loaded_modules = saved;

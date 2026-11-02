@@ -10,6 +10,9 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <string.h>
+#include <termios.h>
+#include <poll.h>
+#include <errno.h>
 
 #include <curses.h>
 
@@ -44,6 +47,31 @@ enum
 static int redirected;
 static unsigned char log_cells[25][80];
 static unsigned char log_dirty[25];
+
+int lx_host_terminal_read_input(int wait)
+{
+    struct pollfd input = {STDIN_FILENO, POLLIN, 0};
+    int ready;
+    do
+        ready = poll(&input, 1, wait ? -1 : 0);
+    while (ready < 0 && errno == EINTR);
+    if (ready <= 0 || !(input.revents & (POLLIN | POLLHUP)))
+        return -1;
+    unsigned char byte;
+    ssize_t count;
+    do
+        count = read(STDIN_FILENO, &byte, 1);
+    while (count < 0 && errno == EINTR);
+    return count == 1 ? byte : -1;
+}
+
+void lx_host_terminal_flush_input(void)
+{
+    if (isatty(STDIN_FILENO))
+        tcflush(STDIN_FILENO, TCIFLUSH);
+    if (stdscr)
+        flushinp();
+}
 
 int lx_host_terminal_open(int *width, int *height)
 {

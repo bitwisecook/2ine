@@ -53,6 +53,8 @@ typedef struct LxExecutionOperations
     void (*cleanup_thread32)(void);
     void (*terminate)(LxExecution *, void (*)(uint32_t), uint32_t);
     void (*poll_termination)(LxExecution *);
+    int (*api_resume32)(const LxExecutionRegisters32 *);
+    uint16_t (*flat_data_selector)(void);
 } LxExecutionOperations;
 struct LxExecution
 {

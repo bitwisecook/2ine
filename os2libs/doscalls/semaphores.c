@@ -399,8 +399,35 @@ APIRET DosOpenEventSem(PSZ name, PHEV output)
 APIRET DosCreateMutexSem(PSZ name, PHMTX output, ULONG attr, BOOL32 state)
 {
     TRACE_NATIVE("DosCreateMutexSem('%s', %p, %u, %u)", name, output, (uint)attr, (uint)state);
-    if (!output)
+    if (!output || (attr & ~1u) || state > 1)
         return ERROR_INVALID_PARAMETER;
+    if (name && *name)
+    {
+        if (strncasecmp(name, "\\SEM32\\", 7) || strlen(name) > 255 || !name[7])
+            return ERROR_INVALID_NAME;
+        uint64 hash = eventScope();
+        for (const char *p = name; *p; p++)
+        {
+            unsigned char c = (unsigned char)*p;
+            if (c >= 'A' && c <= 'Z')
+                c += 'a' - 'A';
+            hash = (hash ^ c) * 1099511628211ULL;
+        }
+        char identifier[64];
+        snprintf(identifier, sizeof identifier, "/2ine-mutex1-%016llx", (unsigned long long)hash);
+        LxHostMutex *mutex = NULL;
+        LxHostNamedMutexResult opened = lx_host_mutex_open_named(identifier, 1, state, &mutex);
+        if (opened != LX_HOST_NAMED_MUTEX_OK)
+            return opened == LX_HOST_NAMED_MUTEX_EXISTS  ? ERROR_DUPLICATE_NAME
+                   : opened == LX_HOST_NAMED_MUTEX_NOMEM ? ERROR_NOT_ENOUGH_MEMORY
+                                                         : ERROR_ACCESS_DENIED;
+        if (!set_sharing(mutex, TRUE))
+        {
+            destroyMutexResource(mutex);
+            return ERROR_NOT_ENOUGH_MEMORY;
+        }
+        return publishSemaphore(mutex, LX_HANDLE_MUTEX, name, output);
+    }
     LxHostMutex *mutex = lx_host_mutex_create(1, state);
     if (!mutex)
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -415,7 +442,34 @@ APIRET DosCreateMutexSem(PSZ name, PHMTX output, ULONG attr, BOOL32 state)
 APIRET DosOpenMutexSem(PSZ name, PHMTX output)
 {
     TRACE_NATIVE("DosOpenMutexSem('%s', %p)", name, output);
-    return openSemaphore(name, LX_HANDLE_MUTEX, output);
+    APIRET local = openSemaphore(name, LX_HANDLE_MUTEX, output);
+    if (local != ERROR_SEM_NOT_FOUND || !name || !*name)
+        return local;
+    if (strncasecmp(name, "\\SEM32\\", 7) || strlen(name) > 255 || !name[7])
+        return ERROR_INVALID_NAME;
+    uint64 hash = eventScope();
+    for (const char *p = name; *p; p++)
+    {
+        unsigned char c = (unsigned char)*p;
+        if (c >= 'A' && c <= 'Z')
+            c += 'a' - 'A';
+        hash = (hash ^ c) * 1099511628211ULL;
+    }
+    char identifier[64];
+    snprintf(identifier, sizeof identifier, "/2ine-mutex1-%016llx", (unsigned long long)hash);
+    LxHostMutex *mutex = NULL;
+    LxHostNamedMutexResult opened = lx_host_mutex_open_named(identifier, 0, 0, &mutex);
+    if (opened != LX_HOST_NAMED_MUTEX_OK)
+        return opened == LX_HOST_NAMED_MUTEX_MISSING ? ERROR_SEM_NOT_FOUND
+               : opened == LX_HOST_NAMED_MUTEX_NOMEM ? ERROR_NOT_ENOUGH_MEMORY
+                                                     : ERROR_ACCESS_DENIED;
+    if (!set_sharing(mutex, TRUE))
+    {
+        destroyMutexResource(mutex);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+    APIRET result = publishSemaphore(mutex, LX_HANDLE_MUTEX, name, output);
+    return result == ERROR_DUPLICATE_NAME ? openSemaphore(name, LX_HANDLE_MUTEX, output) : result;
 }
 
 APIRET DosRequestMutexSemResource(HMTX hmtx, ULONG ulTimeout, LxHostMutex *mutex)

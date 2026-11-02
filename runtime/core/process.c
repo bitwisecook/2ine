@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "runtime/core/internal.h"
+#include "hal/host_shared.h"
 void initPib(void)
 {
     LxPIB *pib = &GLoaderState.pib;
@@ -25,6 +26,13 @@ void initPib(void)
         {
             argc++;
         }
+    }
+
+    if (!argc || !cmdlinebuflen || cmdlinebuf[cmdlinebuflen - 1])
+    {
+        fprintf(stderr, "2ine: invalid host command line\n");
+        free(cmdlinebuf);
+        lx_host_process_exit(1);
     }
 
     char **argv = (char **)calloc(argc + 1, sizeof(char *));
@@ -65,6 +73,8 @@ void initPib(void)
         argv++;
         argc--;
     }
+    /* The loader can be launched by Finder before a guest program is selected. */
+    const char *program_name = argc && argv[0] ? argv[0] : "";
     const char *original_arguments =
         GLoaderState.subprocess ? getenv("TWOINE_CHILD_ARGUMENTS") : NULL;
 
@@ -91,7 +101,7 @@ void initPib(void)
         len++;
     }
 
-    len += strlen(argv[0]) + 1;
+    len += strlen(program_name) + 1;
     if (original_arguments)
         len += strlen(original_arguments) + 1;
 
@@ -164,12 +174,19 @@ void initPib(void)
     GLoaderState.libpath = strdup(libpath);
     GLoaderState.libpathlen = strlen(libpath) + 1;
 
-    strcpy(ptr, argv[0]);
-    ptr += strlen(argv[0]) + 1;
+    const char *begin = getenv("TWOINE_EXT_LIBPATH_BEGIN"), *end = getenv("TWOINE_EXT_LIBPATH_END");
+    snprintf(GLoaderState.begin_libpath, sizeof GLoaderState.begin_libpath, "%s",
+             begin ? begin : "");
+    snprintf(GLoaderState.end_libpath, sizeof GLoaderState.end_libpath, "%s", end ? end : "");
+    const char *strict = getenv("TWOINE_EXT_LIBPATH_STRICT");
+    GLoaderState.libpath_strict = strict && !strcasecmp(strict, "T");
+
+    strcpy(ptr, program_name);
+    ptr += strlen(program_name) + 1;
 
     char *cmd = ptr;
-    strcpy(ptr, argv[0]);
-    ptr += strlen(argv[0]);
+    strcpy(ptr, program_name);
+    ptr += strlen(program_name);
     *(ptr++) = '\0';
     if (original_arguments)
     {
@@ -222,4 +239,42 @@ void initPib(void)
     free(path);
     free(cmdlinebuf);
     free(argv);
+}
+
+static LxHostShared *ProcessPeerLease;
+static void processPeerName(uint32 pid, char name[64])
+{
+    uint64 hash = UINT64_C(1469598103934665603);
+    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"), GLoaderState.disks[2]};
+    for (size_t i = 0; i < sizeof scope / sizeof scope[0]; i++)
+    {
+        for (const char *p = scope[i]; p && *p; p++)
+            hash = (hash ^ (unsigned char)*p) * UINT64_C(1099511628211);
+        hash = (hash ^ 0xff) * UINT64_C(1099511628211);
+    }
+    snprintf(name, 64, "/2ine-peer-%016llx-%08x", (unsigned long long)hash, (unsigned)pid);
+}
+int lxRegisterProcessPeer(void)
+{
+    if (ProcessPeerLease)
+        return 1;
+    char name[64];
+    processPeerName(GLoaderState.pib.pib_ulpid, name);
+    return lx_host_shared_open(name, 1, &ProcessPeerLease) == LX_HOST_SHARED_OK;
+}
+int lxIsProcessPeer(uint32 pid)
+{
+    if (!pid)
+        return 0;
+    char name[64];
+    processPeerName(pid, name);
+    return lx_host_shared_live(name) == 1;
+}
+void lxUnregisterProcessPeer(void)
+{
+    if (ProcessPeerLease)
+    {
+        lx_host_shared_close(ProcessPeerLease);
+        ProcessPeerLease = NULL;
+    }
 }

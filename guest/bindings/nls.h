@@ -89,3 +89,31 @@ static uint32 bridge32_DosQueryCtryInfo(uint8 *arguments)
     lx_execution_release(&codepage);
     return result;
 }
+
+static uint32 bridge32_DosQueryCollate(uint8 *arguments)
+{
+    const uint32 size = lx_guest_load_u32(arguments), cc_pointer = lx_guest_load_u32(arguments + 4);
+    const uint32 pointer = lx_guest_load_u32(arguments + 8);
+    const uint32 actual_pointer = lx_guest_load_u32(arguments + 12);
+    LxGuestBorrow codepage = {0}, buffer = {0}, actual = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
+        (size &&
+         !lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_WRITE, &buffer)) ||
+        !lx_execution_borrow(GLoaderState.execution, actual_pointer, 4, LX_GUEST_WRITE, &actual))
+    {
+        lx_execution_release(&actual);
+        lx_execution_release(&buffer);
+        lx_execution_release(&codepage);
+        return ERROR_INVALID_PARAMETER;
+    }
+    COUNTRYCODE cc = {lx_guest_load_u32(codepage.host),
+                      lx_guest_load_u32((uint8 *)codepage.host + 4)};
+    ULONG length = 0;
+    uint32 result = DosQueryCollate(size, &cc, buffer.host, &length);
+    if (!result || result == ERROR_NLS_TABLE_TRUNCATED)
+        lx_guest_store_u32(actual.host, length);
+    lx_execution_release(&actual);
+    lx_execution_release(&buffer);
+    lx_execution_release(&codepage);
+    return result;
+}

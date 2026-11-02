@@ -47,6 +47,10 @@ typedef struct LxLoaderState
     uint32 mainstacksize;
     char *libpath;
     uint32 libpathlen;
+    char begin_libpath[1024], end_libpath[1024];
+    int libpath_strict;
+    const LxExport *(*findModuleOrdinal)(const LxModule *module, uint32 ordinal);
+    uint16 process_codepage;
     uint32 *tlspage;
     uint32 tlsmask; // one bit for each TLS slot in use.
     uint8 tlsallocs

@@ -142,23 +142,26 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
 
             return 1;
         }
+        else if (iscode == 0)
+            return 0;
     }
 
-    for (int i = 0; i < LX_MAX_LDT_SLOTS; i++)
-    {
-        if (i == LX_NEAR16_SENTINEL_SELECTOR)
-            continue; // reserved for the Microsoft 16-bit DS sentinel.
-        const uint32 tile = ldt[i];
-        if (tile == 0)
-            available = i;
-        else if ((tile <= addr) && ((tile + 0x10000) > addr))
+    if (iscode != 0 || preferred == -1)
+        for (int i = 0; i < LX_MAX_LDT_SLOTS; i++)
         {
-            *outselector = (uint16)i;
-            *outoffset = (uint16)(addr - tile);
+            if (i == LX_NEAR16_SENTINEL_SELECTOR)
+                continue; // reserved for the Microsoft 16-bit DS sentinel.
+            const uint32 tile = ldt[i];
+            if (tile == 0)
+                available = i;
+            else if ((tile <= addr) && ((tile + 0x10000) > addr))
+            {
+                *outselector = (uint16)i;
+                *outoffset = (uint16)(addr - tile);
 
-            return 1;
+                return 1;
+            }
         }
-    }
 
     if (available == -1)
     {
@@ -962,8 +965,8 @@ static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
     fclose(io);
 }
 
-/* OS/2's flat GDT selectors cannot be installed by an unprivileged Linux task.
-   Translate a faulting data-selector load to the equivalent host flat segment. */
+/* OS/2's fixed GDT selectors cannot be installed by an unprivileged Linux task.
+   Translate data and TIB selector loads to their host equivalents. */
 static int handleFlatDataSelector(ucontext_t *context)
 {
     greg_t *registers = context->uc_mcontext.gregs;
@@ -998,19 +1001,20 @@ static int handleFlatDataSelector(ucontext_t *context)
     else if (*instruction == 0x8e && (instruction[1] & 0xc0) == 0xc0)
     {
         unsigned segment = (instruction[1] >> 3) & 7;
-        if (segment != 0 && segment != 3)
+        if (segment != 0 && segment != 3 && segment != 4)
             return 0;
         static const int source[] = {REG_EAX, REG_ECX, REG_EDX, REG_EBX,
                                      REG_ESP, REG_EBP, REG_ESI, REG_EDI};
         selector = (uint16_t)registers[source[instruction[1] & 7]];
-        if (selector != 0x53)
+        if (selector != (segment == 4 ? 0x150b : 0x53))
             return 0;
-        destination = segment == 3 ? REG_DS : REG_ES;
+        destination = segment == 4 ? REG_FS : segment == 3 ? REG_DS : REG_ES;
         bytes = 2;
     }
     else
         return 0;
-    registers[destination] = Native->original_ds;
+    registers[destination] =
+        destination == REG_FS ? (Native->tib_gdt_entry << 3) | 3 : Native->original_ds;
     registers[REG_EIP] = code16 ? (uint16_t)(ip + bytes) : ip + bytes;
     return 1;
 }
@@ -1603,16 +1607,42 @@ typedef struct NativeApiCall
     uint32_t *registers;
     uint32_t arguments;
     struct NativeApiCall *previous;
+    LxExecutionRegisters32 resume_registers;
+    int resume;
 } NativeApiCall;
 static _Thread_local NativeApiCall *NativeApi;
+static _Thread_local uint32_t NativeResumeWords[14];
+static __attribute__((noreturn)) void resumeApi32(const LxExecutionRegisters32 *r)
+{
+    /* POPAD ignores its ESP slot; switch to the target stack before restoring
+       integer registers, selectors, flags and the continuation address. */
+    const uint32_t words[] = {r->edi, r->esi, r->ebp, 0,     r->ebx, r->edx,    r->ecx,
+                              r->eax, r->gs,  r->fs,  r->es, r->ds,  r->eflags, r->eip};
+    /* The destination may overlap this C invocation's stack. Retain the frame
+       in thread-local host storage and make no C calls after changing ESP. */
+    memcpy(NativeResumeWords, words, sizeof words);
+    __asm__ __volatile__("movl %1,%%esp; "
+                         "pushl 52(%0); pushl 48(%0); pushl 44(%0); pushl 40(%0); "
+                         "pushl 36(%0); pushl 32(%0); pushl 28(%0); pushl 24(%0); "
+                         "pushl 20(%0); pushl 16(%0); pushl 12(%0); pushl 8(%0); "
+                         "pushl 4(%0); pushl 0(%0); "
+                         "popal; pop %%gs; pop %%fs; pop %%es; pop %%ds; popfl; ret"
+                         :
+                         : "a"(NativeResumeWords), "d"(r->esp)
+                         : "memory");
+    __builtin_unreachable();
+}
 static uint32_t dispatchApi32(LxExecutionApi16 callback, uint8_t *arguments, uint32_t *registers)
 {
-    NativeApiCall call = {
-        registers, arguments == (uint8_t *)(registers + 7) ? 0 : (uint32_t)(uintptr_t)arguments,
-        NativeApi};
+    NativeApiCall call = {0};
+    call.registers = registers;
+    call.arguments = arguments == (uint8_t *)(registers + 7) ? 0 : (uint32_t)(uintptr_t)arguments;
+    call.previous = NativeApi;
     NativeApi = &call;
     uint32_t result = callback(arguments);
     NativeApi = call.previous;
+    if (call.resume)
+        resumeApi32(&call.resume_registers);
     return result;
 }
 static uint32_t apiArguments(void)
@@ -1639,6 +1669,22 @@ static int apiRegisters32(LxExecutionRegisters32 *out)
         "mov %%cs,%0; mov %%ds,%1; mov %%es,%2; mov %%fs,%3; mov %%gs,%4; mov %%ss,%5"
         : "=m"(out->cs), "=m"(out->ds), "=m"(out->es), "=m"(out->fs), "=m"(out->gs), "=m"(out->ss));
     return 1;
+}
+static int apiResume32(const LxExecutionRegisters32 *registers)
+{
+    uint16_t cs, ss;
+    __asm__ __volatile__("mov %%cs,%0; mov %%ss,%1" : "=r"(cs), "=r"(ss));
+    if (!NativeApi || registers->cs != cs || registers->ss != ss || registers->esp < 56 ||
+        !lx_execution_memory(Native->execution, registers->eip, 1, LX_GUEST_EXECUTE) ||
+        !lx_execution_memory(Native->execution, registers->esp - 56, 56, LX_GUEST_WRITE))
+        return 0;
+    NativeApi->resume_registers = *registers;
+    NativeApi->resume = 1;
+    return 1;
+}
+static uint16_t flatDataSelector(void)
+{
+    return Native->original_ds;
 }
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *binding)
 {
@@ -1746,4 +1792,6 @@ const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          apiRegisters32,
                                                          NULL,
                                                          NULL,
-                                                         NULL};
+                                                         NULL,
+                                                         apiResume32,
+                                                         flatDataSelector};

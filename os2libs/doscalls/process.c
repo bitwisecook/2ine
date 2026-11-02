@@ -276,11 +276,14 @@ APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,
             retval = ERROR_NO_PROC_SLOTS;
         else if (execFlag == EXEC_SYNC)
         {
-            LxHostChildStatus status;
-            if (lx_host_child_wait(child, 0, &status) != 1)
+            LxHostChildStatus status = {0};
+            int waited = lx_host_child_wait(child, 0, &status);
+            if (waited != 1)
                 retval = ERROR_GEN_FAILURE;
             else
                 setProcessResultCode(pRes, &status);
+            TRACE_RET("DosExecPgm('%s', EXEC_SYNC) -> %u, wait=%d reason=%u result=%u", pName,
+                      (uint)retval, waited, (uint)status.reason, (uint)status.result);
             lx_host_child_release(child);
         }
         else
@@ -338,6 +341,23 @@ APIRET DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ 
     return DosExecPgm_implementation(pObjname, cbObjname, execFlag, pArg, pEnv, pRes, pName);
 }
 
+static PID legacyChildPid(USHORT pid)
+{
+    PID result = pid;
+    grabLock(&GMutexDosCalls);
+    for (ChildProcess *child = GChildren; child; child = child->next)
+        if ((USHORT)lx_host_child_id(child->host) == pid)
+        {
+            result = lx_host_child_id(child->host);
+            break;
+        }
+    ungrabLock(&GMutexDosCalls);
+    return result;
+}
+APIRET16 Dos16KillProcess(USHORT scope, USHORT pid)
+{
+    return DosKillProcess(scope, legacyChildPid(pid));
+}
 APIRET DosKillProcess(ULONG action, PID pid)
 {
     TRACE_NATIVE("DosKillProcess(%u, %u)", (unsigned)action, (unsigned)pid);
@@ -436,11 +456,12 @@ APIRET DosR3ExitAddr(void)
 APIRET DosSetProcessCp(ULONG cp)
 {
     TRACE_NATIVE("DosSetProcessCp(%u)", (unsigned int)cp);
-    if (cp != 437)
+    if (cp != 437 && cp != 850)
     { // United States
         FIXME("non-US codepages unsupported at the moment");
         return ERROR_INVALID_CODE_PAGE;
     }
+    GLoaderState.process_codepage = (USHORT)cp;
     return NO_ERROR;
 }
 
@@ -497,13 +518,14 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
         *err = ERROR_INVALID_PARAMETER;
         return NULL;
     }
-    size_t count = 30;
+    size_t count = 33;
     for (const char *p = guest; *p; p += strlen(p) + 1)
         count++;
     char *const *host = lx_host_environment();
     for (size_t i = 0; host[i]; i++)
         if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
             strncmp(host[i], "TWOINE_DRIVE_CWD_", 17) &&
+            strncmp(host[i], "TWOINE_EXT_LIBPATH_", 19) &&
             strncmp(host[i], "TWOINE_CURRENT_DRIVE=", 21))
             count++;
     char **result = calloc(count, sizeof *result);
@@ -516,6 +538,7 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
     for (size_t i = 0; host[i]; i++)
         if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
             strncmp(host[i], "TWOINE_DRIVE_CWD_", 17) &&
+            strncmp(host[i], "TWOINE_EXT_LIBPATH_", 19) &&
             strncmp(host[i], "TWOINE_CURRENT_DRIVE=", 21))
         {
             result[at] = strdup(host[i]);
@@ -529,6 +552,17 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
             if (!result[at++])
                 goto failed;
         }
+    const char *extended[] = {GLoaderState.begin_libpath, GLoaderState.end_libpath,
+                              GLoaderState.libpath_strict ? "T" : "F"};
+    const char *extended_names[] = {"BEGIN", "END", "STRICT"};
+    for (unsigned i = 0; i < 3; i++)
+    {
+        size_t length = strlen(extended[i]) + 40;
+        result[at] = malloc(length);
+        if (!result[at])
+            goto failed;
+        snprintf(result[at++], length, "TWOINE_EXT_LIBPATH_%s=%s", extended_names[i], extended[i]);
+    }
     for (int drive = 0; drive < 26; drive++)
         if (GLoaderState.current_dir[drive])
         {
@@ -650,7 +684,9 @@ APIRET16 Dos16CWait(USHORT action, USHORT option, PRESULTCODES16 pres, PUSHORT p
                  (uint)pid);
     RESULTCODES res;
     PID cpid;
-    APIRET ret = DosWaitChild(action, option, &res, &cpid, pid);
+    APIRET ret = DosWaitChild(action, option, &res, &cpid, pid ? legacyChildPid(pid) : 0);
+    if (ret)
+        return ret;
     pres->codeTerminate = res.codeTerminate;
     pres->codeResult = res.codeResult;
     *ppid = cpid;

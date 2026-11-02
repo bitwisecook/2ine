@@ -100,7 +100,6 @@ int lx_host_mailbox_open(const char *directory, const char *name, int create, un
         return -1;
     snprintf(path, length, "%s/%s", directory, name);
     int lifetime = -1;
-    if (create)
     {
         char *lockpath = malloc(length + 6);
         if (!lockpath)
@@ -109,17 +108,34 @@ int lx_host_mailbox_open(const char *directory, const char *name, int create, un
             return -1;
         }
         snprintf(lockpath, length + 6, "%s.lock", path);
-        lifetime = open(lockpath, O_RDWR | O_CLOEXEC | O_CREAT, 0600);
+        lifetime = open(lockpath, O_RDWR | O_CLOEXEC | (create ? O_CREAT : 0), 0600);
         free(lockpath);
-        if (lifetime < 0 || flock(lifetime, LOCK_EX | LOCK_NB))
+        if (create && (lifetime < 0 || flock(lifetime, LOCK_EX | LOCK_NB)))
         {
             if (lifetime >= 0)
                 close(lifetime);
             free(path);
             return 2;
         }
-        /* The lifetime lock is released by the kernel even after a crash. */
-        unlink(path);
+        if (create)
+        {
+            /* The lifetime lock is released by the kernel even after a crash. */
+            unlink(path);
+        }
+        else
+        {
+            /* A data file can survive a crashed owner. Only a held creator
+               lifetime lock establishes that this named queue is still live. */
+            int live = lifetime >= 0 && flock(lifetime, LOCK_SH | LOCK_NB) < 0 &&
+                       (errno == EWOULDBLOCK || errno == EAGAIN);
+            if (!live)
+            {
+                if (lifetime >= 0)
+                    close(lifetime);
+                free(path);
+                return 1;
+            }
+        }
     }
     int fd = open(path, O_RDWR | O_CLOEXEC | (create ? O_CREAT | O_EXCL : 0), 0600);
     if (fd < 0)

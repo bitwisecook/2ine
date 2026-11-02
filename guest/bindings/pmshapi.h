@@ -68,6 +68,32 @@ static uint32 bridge32_PrfCloseProfile(uint8 *a)
 {
     return PrfCloseProfile(lx_guest_load_u32(a));
 }
+static uint32 bridge32_PrfQueryProfile(uint8 *a)
+{
+    LxGuestBorrow record = {0}, user = {0}, system = {0};
+    uint32 result = FALSE;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &record))
+        return FALSE;
+    uint8 *wire = record.host;
+    ULONG user_capacity = lx_guest_load_u32(wire), system_capacity = lx_guest_load_u32(wire + 8);
+    uint32 user_pointer = lx_guest_load_u32(wire + 4),
+           system_pointer = lx_guest_load_u32(wire + 12);
+    if ((user_capacity && !lx_execution_borrow(GLoaderState.execution, user_pointer, user_capacity,
+                                               LX_GUEST_WRITE, &user)) ||
+        (system_capacity && !lx_execution_borrow(GLoaderState.execution, system_pointer,
+                                                 system_capacity, LX_GUEST_WRITE, &system)))
+        goto done;
+    PRFPROFILE profile = {user_capacity, user.host, system_capacity, system.host};
+    result = PrfQueryProfile(lx_guest_load_u32(a), &profile);
+    lx_guest_store_u32(wire, profile.cchUserName);
+    lx_guest_store_u32(wire + 8, profile.cchSysName);
+done:
+    lx_execution_release(&system);
+    lx_execution_release(&user);
+    lx_execution_release(&record);
+    return result;
+}
 static uint32 bridge32_PrfQueryProfileInt(uint8 *a)
 {
     char *s[2];

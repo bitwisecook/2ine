@@ -65,6 +65,7 @@ enum
 LxHostFile *lx_host_file_open(const char *path, unsigned flags, int readonly, LxHostFsError *error);
 /* A bounded regular-file snapshot is caller-owned and has an extra NUL byte. */
 void *lx_host_file_snapshot(const char *path, size_t maximum, size_t *size, LxHostFsError *error);
+LxHostFsError lx_host_file_pipe(LxHostFile **reader, LxHostFile **writer);
 LxHostFile *lx_host_file_standard(unsigned stream);
 LxHostFsError lx_host_file_inherit(LxHostFile *file, int inherit);
 LxHostFile *lx_host_file_duplicate(LxHostFile *file, LxHostFsError *error);

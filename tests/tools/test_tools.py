@@ -193,6 +193,20 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
         self.assertTrue(output.startswith("#if !TWOINE_PORTABLE_LOADER"))
         self.assertIn("Exit();\n    return 0;", output)
 
+    def test_use16_length_prefixed_structure(self) -> None:
+        function = lxapigen.parse_functions(
+            "OS2EXPORT APIRET16 OS2API16 Info(PVOID info) OS2APIINFO(1);"
+        )[0]
+        policy = lxapigen.PointerPolicy("info", "32", 3, "struct16", False)
+        output = lxapigen.bridge16(function, (policy,))
+        prefix = "info_guest, 2, 1, 0, 0, &__abi_prefix"
+        extent = "info_guest, __abi_size, 3, 0, 0, &__abi_args[0]"
+        self.assertLess(output.index(prefix), output.index("lx_guest_load_u16"))
+        self.assertLess(
+            output.index("lx_guest_argument_finish(&__abi_prefix, 0)"), output.index(extent)
+        )
+        self.assertIn("if (__abi_size > (32)) __abi_size = (32)", output)
+
     def test_native_bridge_keeps_the_wire_entry_on_both_workers(self) -> None:
         functions = lxapigen.parse_functions(
             "OS2EXPORT APIRET OS2API Jump(ULONG target) OS2APIINFO(7);\n"

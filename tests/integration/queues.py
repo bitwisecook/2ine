@@ -7,6 +7,7 @@ import os
 import struct
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from images import FlatGuest, linear_image
@@ -178,6 +179,66 @@ def cancelled_program(spin=False):
     return linear_image(g.code, g.fixups, ["DOSCALLS", "QUECALLS"], "QUEUEKILL", data=g.data)
 
 
+def stale_owner_program(create):
+    g = FlatGuest()
+    name = g.field(b"\\QUEUES\\CrashOwner\0")
+    owner, queue = g.field(bytes(4)), g.field(bytes(4))
+    if create:
+        g.call(2, 16, queue, 0, name)
+        g.result(0, 60)
+        g.call(1, 229, 0xFFFFFFFF)
+        g.exit(61)
+    else:
+        g.call(2, 15, owner, queue, name)
+        g.result(343, 62)
+        g.call(2, 16, queue, 0, name)
+        g.result(0, 63)
+        g.call_handle(2, 11, queue)
+        g.result(0, 64)
+        g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "QUECALLS"], "STALEQUEUE", data=g.data)
+
+
+def stale_owner_contract(build, path, env):
+    path.write_bytes(stale_owner_program(True))
+    producer = subprocess.Popen(
+        [str(build / "lx_loader"), str(path)],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while True:
+            published = False
+            for mailbox in Path(env["TWOINE_IPC_DIR"]).glob("queue-*"):
+                if mailbox.name.endswith(".lock"):
+                    continue
+                data = mailbox.read_bytes()
+                if len(data) >= 20 and struct.unpack_from("<I", data, 4)[0] == producer.pid:
+                    published = True
+                    break
+            if published:
+                break
+            if producer.poll() is not None or time.monotonic() >= deadline:
+                raise RuntimeError("Queue owner did not publish its mailbox before cancellation")
+            time.sleep(0.01)
+        producer.kill()
+        producer.communicate(timeout=5)
+    finally:
+        if producer.poll() is None:
+            producer.kill()
+            producer.communicate(timeout=5)
+    path.write_bytes(stale_owner_program(False))
+    result = subprocess.run(
+        [str(build / "lx_loader"), str(path)], env=env, capture_output=True, timeout=10
+    )
+    if result.returncode:
+        raise RuntimeError(
+            f"Stale queue owner exit={result.returncode}\n" + result.stderr.decode(errors="replace")
+        )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -213,6 +274,8 @@ def main():
                 raise RuntimeError(
                     f"queue exit={result.returncode}\n" + result.stderr.decode(errors="replace")
                 )
+        if os.name == "posix":
+            stale_owner_contract(build, path, env)
     print(
         "Queue ordering, pointer payloads, event notifications, blocking reads and close wakeups passed"
     )

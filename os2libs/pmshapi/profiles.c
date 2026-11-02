@@ -379,6 +379,36 @@ BOOL PrfCloseProfile(HINI profile)
     return profile && profile != HINI_USERPROFILE && profile != HINI_SYSTEMPROFILE &&
            lx_handle_close(profile, LX_HANDLE_PROFILE);
 }
+BOOL PrfQueryProfile(HANDLE hab, PPRFPROFILE output)
+{
+    TRACE_NATIVE("PrfQueryProfile(%u, %p)", (uint)hab, output);
+    if (!output)
+        return FALSE;
+    lx_host_once(&once, initialize);
+    lx_host_monitor_lock(mutex);
+    char *user = user_profile ? lxHostPathToGuest(user_profile->path) : NULL;
+    char *system = system_profile ? lxHostPathToGuest(system_profile->path) : NULL;
+    lx_host_monitor_unlock(mutex);
+    if (!user || !system)
+    {
+        free(user);
+        free(system);
+        return FALSE;
+    }
+    ULONG user_capacity = output->cchUserName, system_capacity = output->cchSysName;
+    output->cchUserName = (ULONG)strlen(user) + 1;
+    output->cchSysName = (ULONG)strlen(system) + 1;
+    BOOL result = output->pszUserName && output->pszSysName &&
+                  user_capacity >= output->cchUserName && system_capacity >= output->cchSysName;
+    if (result)
+    {
+        memcpy(output->pszUserName, user, output->cchUserName);
+        memcpy(output->pszSysName, system, output->cchSysName);
+    }
+    free(user);
+    free(system);
+    return result;
+}
 static ProfileEntry *find_entry(Profile *p, const char *app, const char *key)
 {
     for (ProfileEntry *e = p ? p->entries : NULL; e; e = e->next)

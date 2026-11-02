@@ -1487,6 +1487,23 @@ static cJSON *prepare(Context *c, const cJSON *request)
         host = command_interpreter(c);
         if (!host || !script)
             goto failed;
+        FILE *command = tb_fopen(original_host, "rb");
+        int rexx = command && fgetc(command) == '/' && fgetc(command) == '*';
+        if (command)
+            fclose(command);
+        if (rexx)
+        {
+            cJSON *support = os2_support(c);
+            int ready = support && cJSON_IsTrue(get(support, "rexxComplete"));
+            cJSON_Delete(support);
+            if (!ready)
+            {
+                fail(
+                    c,
+                    "This REXX command file needs the original OS/2 REXX interpreter and DLLs. Choose Install OS/2 Support Files and select your OS/2 CD or REXX installation floppy, then retry.");
+                goto failed;
+            }
+        }
         cJSON_InsertItemInArray(argv, 0, cJSON_CreateString(script));
         cJSON_InsertItemInArray(argv, 0, cJSON_CreateString("CALL"));
         cJSON_InsertItemInArray(argv, 0, cJSON_CreateString("/C"));

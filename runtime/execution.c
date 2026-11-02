@@ -245,6 +245,16 @@ int lx_execution_api_registers32(LxExecution *e, LxExecutionRegisters32 *registe
     return e && registers && e->ops->api_registers32 ? e->ops->api_registers32(registers) : 0;
 }
 
+int lx_execution_api_resume32(LxExecution *e, const LxExecutionRegisters32 *registers)
+{
+    return e && registers && e->ops->api_resume32 ? e->ops->api_resume32(registers) : 0;
+}
+
+uint16_t lx_execution_flat_data_selector(LxExecution *e)
+{
+    return e && e->ops->flat_data_selector ? e->ops->flat_data_selector() : 0;
+}
+
 void lx_execution_terminate(LxExecution *e, void (*cleanup)(uint32_t), uint32_t code)
 {
     if (e && e->ops->terminate)

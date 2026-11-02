@@ -16,11 +16,16 @@ static uint32 bridge32_DosSelectSession(uint8 *a)
 {
     return DosSelectSession(lx_guest_load_u32(a));
 }
+static uint32 bridge32_DosStopSession(uint8 *a)
+{
+    return DosStopSession(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
 static uint32 bridge32_DosStartSession(uint8 *a)
 {
-    LxGuestBorrow input = {0}, sid = {0}, pid = {0};
+    LxGuestBorrow input = {0}, sid = {0}, pid = {0}, object = {0};
     uint32 pointer = lx_guest_load_u32(a), result = ERROR_INVALID_PARAMETER;
     char *strings[5] = {0};
+    char *environment = NULL;
     if (!lx_execution_borrow(GLoaderState.execution, pointer, 2, LX_GUEST_READ, &input))
         return result;
     unsigned length = lx_guest_load_u16(input.host);
@@ -55,27 +60,58 @@ static uint32 bridge32_DosStartSession(uint8 *a)
     data.PgmInputs = (PBYTE)strings[2];
     data.TermQ = (PBYTE)strings[3];
     data.IconFile = strings[4];
-    /* Explicit guest environment blocks use the existing process bridge contract. */
     if (length >= 28 && lx_guest_load_u32(p + 24))
-        goto done;
-    if (length >= 32)
     {
+        environment =
+            lx_execution_copy_strings(GLoaderState.execution, lx_guest_load_u32(p + 24), 65536, 0);
+        if (!environment)
+            goto done;
+        data.Environment = (PBYTE)environment;
+    }
+    if (length >= 30)
         data.InheritOpt = lx_guest_load_u16(p + 28);
+    if (length >= 32)
         data.SessionType = lx_guest_load_u16(p + 30);
+    if (length >= 40)
+        data.PgmHandle = lx_guest_load_u32(p + 36);
+    if (length >= 42)
+        data.PgmControl = lx_guest_load_u16(p + 40);
+    if (length >= 44)
+        data.InitXPos = lx_guest_load_u16(p + 42);
+    if (length >= 46)
+        data.InitYPos = lx_guest_load_u16(p + 44);
+    if (length >= 48)
+        data.InitXSize = lx_guest_load_u16(p + 46);
+    if (length >= 50)
+        data.InitYSize = lx_guest_load_u16(p + 48);
+    if (length >= 52)
+        data.Reserved = lx_guest_load_u16(p + 50);
+    if (length >= 60)
+    {
+        data.ObjectBuffLen = lx_guest_load_u32(p + 56);
+        uint32 address = lx_guest_load_u32(p + 52);
+        if (address && !lx_execution_borrow(GLoaderState.execution, address, data.ObjectBuffLen,
+                                            LX_GUEST_WRITE, &object))
+            goto done;
+        if (!address && data.ObjectBuffLen)
+            goto done;
+        data.ObjectBuffer = object.host;
     }
     ULONG session;
     PID process;
     result = DosStartSession(&data, &session, &process);
-    if (!result)
+    if (!result && data.Related == 1)
     {
         lx_guest_store_u32(sid.host, session);
         lx_guest_store_u32(pid.host, process);
     }
 done:
+    free(environment);
     for (unsigned i = 0; i < 5; i++)
         free(strings[i]);
     lx_execution_release(&input);
     lx_execution_release(&sid);
     lx_execution_release(&pid);
+    lx_execution_release(&object);
     return result;
 }

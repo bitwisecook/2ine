@@ -3,6 +3,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "hal/host_sync.h"
 #include "hal/host_thread.h"
+#include "hal/host.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -130,6 +131,45 @@ static void once_guard_test(void)
     CHECK(!pthread_join(thread, &result) && result == PTHREAD_CANCELED);
     CHECK(Cleanups == 5);
 }
+static void *abandon_named_mutex(void *unused)
+{
+    (void)unused;
+    CHECK(lx_host_mutex_lock(Mutex, UINT32_MAX) == LX_HOST_LOCK_OK);
+    CHECK(lx_host_mutex_lock(Mutex, 0) == LX_HOST_LOCK_OK);
+    return NULL;
+}
+static void named_mutex_test(void)
+{
+    uint32_t process, parent;
+    lx_host_process_ids(&process, &parent);
+    char name[64];
+    snprintf(name, sizeof name, "/twoine-mutex-test-%u", process);
+    LxHostMutex *duplicate;
+    CHECK(lx_host_mutex_open_named(name, 0, 0, &Mutex) == LX_HOST_NAMED_MUTEX_MISSING);
+    CHECK(lx_host_mutex_open_named(name, 1, 1, &Mutex) == LX_HOST_NAMED_MUTEX_OK);
+    CHECK(lx_host_mutex_open_named(name, 1, 0, &duplicate) == LX_HOST_NAMED_MUTEX_EXISTS);
+    pthread_t cancelled;
+    CHECK(!pthread_create(&cancelled, NULL, cancelled_mutex_wait, NULL));
+    CHECK(!pthread_cancel(cancelled));
+    void *cancelled_result;
+    CHECK(!pthread_join(cancelled, &cancelled_result) && cancelled_result == PTHREAD_CANCELED);
+    CHECK(lx_host_mutex_lock(Mutex, 0) == LX_HOST_LOCK_OK);
+    CHECK(lx_host_mutex_unlock(Mutex) == LX_HOST_LOCK_OK);
+    pthread_t thread;
+    CHECK(!pthread_create(&thread, NULL, contender, NULL));
+    CHECK(!pthread_join(thread, NULL));
+    CHECK(lx_host_mutex_unlock(Mutex) == LX_HOST_LOCK_OK);
+    CHECK(!pthread_create(&thread, NULL, abandon_named_mutex, NULL));
+    CHECK(!pthread_join(thread, NULL));
+    CHECK(lx_host_mutex_lock(Mutex, 0) == LX_HOST_LOCK_OWNER_DIED);
+    CHECK(lx_host_mutex_unlock(Mutex) == LX_HOST_LOCK_OK);
+    CHECK(lx_host_mutex_destroy(Mutex) == LX_HOST_LOCK_OK);
+    CHECK(lx_host_mutex_open_named(name, 0, 0, &Mutex) == LX_HOST_NAMED_MUTEX_MISSING);
+    CHECK(lx_host_mutex_open_named(name, 1, 0, &Mutex) == LX_HOST_NAMED_MUTEX_OK);
+    CHECK(lx_host_mutex_lock(Mutex, 0) == LX_HOST_LOCK_OK);
+    CHECK(lx_host_mutex_unlock(Mutex) == LX_HOST_LOCK_OK);
+    CHECK(lx_host_mutex_destroy(Mutex) == LX_HOST_LOCK_OK);
+}
 int main(void)
 {
     Mutex = lx_host_mutex_create(1, 1);
@@ -147,6 +187,7 @@ int main(void)
     monitor_test(1);
     mutex_cancel_test();
     once_guard_test();
+    named_mutex_test();
     puts(
         "recursive ownership, timed contention, monitor rendezvous and cancelled-wait cleanup passed");
     return 0;

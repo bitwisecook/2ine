@@ -49,6 +49,13 @@ extern "C"
         OS2APIINFO(ord = 37);
     OS2EXPORT APIRET OS2API DosSelectSession(ULONG session) OS2APIINFO(38);
     OS2EXPORT APIRET OS2API DosSetSession(ULONG session, PSTATUSDATA status) OS2APIINFO(39);
+    OS2EXPORT APIRET OS2API DosStopSession(ULONG scope, ULONG session) OS2APIINFO(40);
+    OS2EXPORT APIRET16 OS2API16 Dos16StopSession(USHORT scope, USHORT session, ULONG reserved)
+        OS2APIINFO(8);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetSession(USHORT session, PSTATUSDATA status) OS2APIINFO(14);
+    /* STARTDATA embeds encoded 16:16 pointers and is decoded by this entry. */
+    OS2EXPORT APIRET16 OS2API16 Dos16StartSession(ULONG data, PUSHORT session, PUSHORT pid)
+        OS2APIINFO(17);
     OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PCHAR title)
         OS2APIINFO(ord = 5, name = DOSSMSETTITLE);
 

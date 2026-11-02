@@ -54,10 +54,24 @@ struct OS2SupportSheet: View {
                 ContentUnavailableView("Choose OS/2 Media", systemImage: "opticaldisc", description: Text("ZIP, IBM PACK/PACK2, ISO and floppy images can be opened inside other archives."))
             }
             if let status {
-                ForEach(status.files) { file in
-                    Label(file.path + (file.present ? " — Installed" : " — Missing"), systemImage: file.present ? "checkmark.circle" : "circle")
-                        .font(.callout)
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(status.files.filter { $0.required != false }) { file in
+                        supportFile(file)
+                    }
+                    DisclosureGroup {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(status.files.filter { $0.required == false }) { file in
+                                    supportFile(file)
+                                }
+                            }.frame(maxWidth: .infinity, alignment: .leading)
+                        }.frame(maxHeight: 130)
+                    } label: {
+                        Label(status.rexxComplete == true ? "REXX Support — Ready" : "REXX Support — Additional Files Needed", systemImage: status.rexxComplete == true ? "checkmark.circle" : "circle")
+                            .font(.callout)
+                    }
                 }
+
             }
             if !notice.isEmpty { Text(notice).font(.callout).textSelection(.enabled) }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("supportMediaError") }
@@ -75,6 +89,10 @@ struct OS2SupportSheet: View {
         }.padding(24).frame(width: 760, height: 640)
             .interactiveDismissDisabled(loading || model.busy)
             .task { status = try? await model.os2Support() }
+    }
+    private func supportFile(_ file: OS2SupportStatus.File) -> some View {
+        Label(file.path + (file.present ? " — Installed" : " — Missing"), systemImage: file.present ? "checkmark.circle" : "circle")
+            .font(.callout)
     }
     private func chooseMedia() {
         let panel = NSOpenPanel()
@@ -107,7 +125,7 @@ struct OS2SupportSheet: View {
                 let result = try await model.installOS2Support(paths)
                 status = result
                 let count = result.imported?.count ?? 0
-                notice = result.complete ? "OS/2 support files are ready. Installed \(count) files." : "Installed \(count) files. Still missing: \(result.missing). Choose more OS/2 media to continue."
+                notice = result.complete ? "OS/2 support files are ready. Installed \(count) files." + (result.rexxComplete == true ? " REXX support is ready." : " Choose the REXX installation disk or CD to add REXX support.") : "Installed \(count) files. Still missing: \(result.missing). Choose more OS/2 media to continue."
             } catch { notice = ""; self.error = error.localizedDescription }
         }
     }

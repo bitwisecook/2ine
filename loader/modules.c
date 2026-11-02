@@ -14,15 +14,52 @@
 void freeLxModule(LxModule *lxmod);
 void destroyLxModule(void *resource);
 
+static LxModule *loadGuestLibraryPath(const char *paths, const char *name, int depth)
+{
+    if (!paths)
+        return NULL;
+    while (*paths)
+    {
+        const char *end = strchr(paths, ';');
+        size_t length = end ? (size_t)(end - paths) : strlen(paths);
+        char path[2048];
+        if (length && length + strlen(name) + 6 < sizeof path)
+        {
+            snprintf(path, sizeof path, "%.*s\\%s.dll", (int)length, paths, name);
+            uint32 error = 0;
+            char *host = lxMakeUnixPath(path, &error);
+            if (host)
+            {
+                LxModule *module =
+                    lx_host_path_exists(host) ? loadModuleByPathInternal(host, depth) : NULL;
+                free(host);
+                if (module)
+                    return module;
+            }
+        }
+        paths = end ? end + 1 : paths + length;
+    }
+    return NULL;
+}
 LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependency_tree_depth);
 
-static void initializeModuleGraph(LxModule *module)
+static uint64 ModuleInitializationOrder;
+
+static int initializeModuleGraph(LxModule *module)
 {
-    if (!module || module->initialized || module->init_started)
-        return;
+    if (!module)
+        return 0;
+    if (module->initialized || module->init_started)
+        return 1;
     module->init_started = 1;
+    /* OS/2 starts this system service before applications. Bring up the
+       original service only when an original REXX API image needs it. */
+    const int rexx_api = !module->nativelib && !strcasecmp(module->name, "REXXAPI");
     for (uint32 i = 0; i < module->num_dependencies; i++)
-        initializeModuleGraph(module->dependencies[i]);
+        if (!initializeModuleGraph(module->dependencies[i]))
+            goto failed;
+    if (rexx_api && !ensureRexxService())
+        goto failed;
     if (module != GLoaderState.main_module)
     {
         if (module->is_lx)
@@ -30,7 +67,12 @@ static void initializeModuleGraph(LxModule *module)
         else
             runNeLibraryInit(module);
     }
+    module->initialization_order = ++ModuleInitializationOrder;
     module->initialized = 1;
+    return 1;
+failed:
+    module->init_started = 0;
+    return 0;
 }
 
 /* LX ("Linear Executable") modules are 32-bit binaries that can contain 16-bit segments. */
@@ -234,13 +276,43 @@ static void collectModules(void)
                     }
         } while (changed);
 
-        /* Termination callbacks run while the whole unreachable graph is mapped. */
-        LxModule *tail = GLoaderState.loaded_modules;
-        while (tail && tail->next)
-            tail = tail->next;
-        for (LxModule *m = tail; m; m = m->prev)
-            if (!m->reachable)
-                terminateModule(m);
+        /* A DLL's termination entry can still call its dependencies, including
+           native API bridges. Retire dependents before their dependencies. */
+        for (;;)
+        {
+            LxModule *selected = NULL, *cycle = NULL;
+            for (LxModule *candidate = GLoaderState.loaded_modules; candidate;
+                 candidate = candidate->next)
+            {
+                if (candidate->reachable || !candidate->initialized)
+                    continue;
+                if (!cycle || (!candidate->nativelib &&
+                               (cycle->nativelib ||
+                                candidate->initialization_order > cycle->initialization_order)))
+                    cycle = candidate;
+                int dependent = 0;
+                for (LxModule *m = GLoaderState.loaded_modules; m && !dependent; m = m->next)
+                    if (m != candidate && !m->reachable && m->initialized)
+                        for (uint32 i = 0; i < m->num_dependencies; i++)
+                            if (m->dependencies[i] == candidate)
+                            {
+                                dependent = 1;
+                                break;
+                            }
+                if (!dependent)
+                {
+                    selected = candidate;
+                    break;
+                }
+            }
+            /* Circular guests retire in reverse initialization order. Keep
+               native services until every guest callback has returned. */
+            if (!selected)
+                selected = cycle;
+            if (!selected)
+                break;
+            terminateModule(selected);
+        }
         for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
             if (!m->reachable)
             {
@@ -428,8 +500,7 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
 LxModule *loadModuleByPath(const char *fname)
 {
     LxModule *module = loadModuleByPathInternal(fname, 0);
-    initializeModuleGraph(module);
-    return module;
+    return initializeModuleGraph(module) ? module : NULL;
 }
 
 LxModule *loadNativeModule(const char *fname, const char *modname)
@@ -510,7 +581,8 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
 
     for (LxModule *i = GLoaderState.loaded_modules; i != NULL; i = i->next)
     {
-        if (!i->load_failed && strcasecmp(i->name, modname) == 0)
+        if (!i->load_failed && (!GLoaderState.libpath_strict || i->nativelib) &&
+            strcasecmp(i->name, modname) == 0)
         {
             i->refcount++;
 
@@ -522,8 +594,9 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
     snprintf(fname, sizeof(fname), "%s.dll", modname);
     locatePathCaseInsensitive(fname);
 
-    LxModule *retval = NULL;
-    if (lx_host_path_exists(fname))
+    LxModule *retval =
+        loadGuestLibraryPath(GLoaderState.begin_libpath, modname, dependency_tree_depth);
+    if (!retval && lx_host_path_exists(fname))
         retval = loadModuleByPathInternal(fname, dependency_tree_depth);
 
     if (!retval)
@@ -546,6 +619,11 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
             }
         }
     }
+
+    if (!retval)
+        retval = loadGuestLibraryPath(GLoaderState.libpath, modname, dependency_tree_depth);
+    if (!retval)
+        retval = loadGuestLibraryPath(GLoaderState.end_libpath, modname, dependency_tree_depth);
 
     /* DOSCALL1 is the implementation behind the system DOSCALLS forwarder. */
     if (!retval && strcasecmp(modname, "DOSCALL1") == 0)
@@ -592,8 +670,7 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
 LxModule *loadModuleByModuleName(const char *modname)
 {
     LxModule *module = loadModuleByModuleNameInternal(modname, 0);
-    initializeModuleGraph(module);
-    return module;
+    return initializeModuleGraph(module) ? module : NULL;
 }
 
 LxModule *loadModuleByPathOrModuleName(const char *modname)

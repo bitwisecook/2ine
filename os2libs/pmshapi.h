@@ -19,6 +19,13 @@ extern "C"
 #define HINI_PROFILE ((HINI)0)
 #define HINI_USERPROFILE ((HINI)0xffffffffu)
 #define HINI_SYSTEMPROFILE ((HINI)0xfffffffeu)
+    typedef struct
+    {
+        ULONG cchUserName;
+        PSZ pszUserName;
+        ULONG cchSysName;
+        PSZ pszSysName;
+    } PRFPROFILE, *PPRFPROFILE;
 
     typedef struct
     {
@@ -34,6 +41,7 @@ extern "C"
 
     OS2EXPORT HINI OS2API PrfOpenProfile(HANDLE hab, PSZ name) OS2APIINFO(102);
     OS2EXPORT BOOL OS2API PrfCloseProfile(HINI profile) OS2APIINFO(103);
+    OS2EXPORT BOOL OS2API PrfQueryProfile(HANDLE hab, PPRFPROFILE profile) OS2APIINFO(107);
     OS2EXPORT LONG OS2API PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback)
         OS2APIINFO(114);
     OS2EXPORT ULONG OS2API PrfQueryProfileString(HINI profile, PSZ app, PSZ key, PSZ fallback,

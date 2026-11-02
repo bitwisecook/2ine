@@ -47,6 +47,12 @@ extern "C"
                                          HEV hsem) OS2APIINFO(9);
     OS2EXPORT APIRET OS2API DosWriteQueue(HQUEUE hq, ULONG request, ULONG cbData, PVOID pbData,
                                           ULONG priority) OS2APIINFO(14);
+    OS2EXPORT APIRET16 OS2API16 Dos16ReadQueue(USHORT queue, PULONG request, PUSHORT length,
+                                               PULONG buffer, USHORT element, USHORT nowait,
+                                               PBYTE priority, ULONG semaphore) OS2APIINFO(1);
+    OS2EXPORT APIRET16 OS2API16 Dos16CloseQueue(USHORT queue) OS2APIINFO(2);
+    OS2EXPORT APIRET16 OS2API16 Dos16CreateQueue(PUSHORT queue, USHORT order, PSZ name)
+        OS2APIINFO(8);
 
 #ifdef __cplusplus
 }

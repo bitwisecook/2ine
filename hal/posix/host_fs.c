@@ -42,6 +42,31 @@ struct LxHostDirectory
     size_t count, position;
     int image;
 };
+LxHostFsError lx_host_file_pipe(LxHostFile **reader, LxHostFile **writer)
+{
+    if (!reader || !writer)
+        return LX_HOST_FS_INVALID;
+    *reader = *writer = NULL;
+    LxHostFile *input = calloc(1, sizeof *input), *output = calloc(1, sizeof *output);
+    if (!input || !output)
+    {
+        free(input);
+        free(output);
+        return LX_HOST_FS_NO_MEMORY;
+    }
+    int descriptors[2];
+    if (pipe(descriptors))
+    {
+        free(input);
+        free(output);
+        return LX_HOST_FS_TOO_MANY_FILES;
+    }
+    input->fd = descriptors[0];
+    output->fd = descriptors[1];
+    *reader = input;
+    *writer = output;
+    return LX_HOST_FS_OK;
+}
 LxHostFsError lx_host_file_lock(LxHostFile *file, int acquire)
 {
     struct flock lock = {0};

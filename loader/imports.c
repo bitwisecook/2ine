@@ -27,10 +27,22 @@ void *generateMissingTrampoline16(const char *m, const char *n, const LxExport *
     return address;
 }
 
-void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
-                                 const LxExport **_lxexp, const int want16bit, const int native)
+static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
+                                  const LxExport **_lxexp, const int want16bit, const int native,
+                                  const int missing)
 {
 
+    if (module->nativelib && !strcasecmp(module->name, "DOSCALLS") && ordinal == 295)
+    {
+        static LxExport exported;
+        exported =
+            (LxExport){295, "Thk32R3DS",
+                       (void *)(uintptr_t)lx_execution_flat_data_selector(GLoaderState.execution),
+                       NULL, LX_EXPORT_ABSOLUTE};
+        if (_lxexp)
+            *_lxexp = &exported;
+        return exported.addr;
+    }
     const LxExport *lxexp = module->exports;
     for (uint32 i = 0; i < module->num_exports; i++, lxexp++)
     {
@@ -39,7 +51,8 @@ void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
             if (_lxexp)
                 *_lxexp = lxexp;
             void *retval = lxexp->addr;
-            if (lxexp->indirect) /* Bridge exports store an indirect host entry pointer. */
+            if (lxexp->indirect ==
+                LX_EXPORT_INDIRECT) /* Bridge exports store an indirect host entry pointer. */
                 retval = *((void **)retval);
             if (getenv("TWOINE_TRACE_FIXUPS"))
                 fprintf(stderr, "2INE FIXUP: %s@%u want16=%d native=%d -> %p\n", module->name,
@@ -80,7 +93,17 @@ void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
         }
         const char *target = NULL;
         uint32 number = 0;
-        if (ordinal >= 745 && ordinal <= 769)
+        if (ordinal == 674 || ordinal == 675 || ordinal == 681)
+        {
+            target = "QUECALLS";
+            number = ordinal - 673;
+        }
+        else if (ordinal == 693 || ordinal == 699 || ordinal == 702)
+        {
+            target = "SESMGR";
+            number = ordinal - 685;
+        }
+        else if (ordinal >= 745 && ordinal <= 769)
         {
             target = "KBDCALLS";
             number = ordinal - 744;
@@ -104,12 +127,14 @@ void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
         {
             LxModule *forward = GLoaderState.loadModule(target);
             if (forward)
-                return getModuleProcAddrByOrdinal(forward, number, _lxexp, want16bit, native);
+                return resolveModuleOrdinal(forward, number, _lxexp, want16bit, native, missing);
         }
     }
 
     if (_lxexp)
         *_lxexp = NULL;
+    if (!missing)
+        return NULL;
 
 #if 1
     char entry[128];
@@ -121,6 +146,18 @@ void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
 #endif
 }
 
+void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
+                                 const LxExport **exported, const int want16bit, const int native)
+{
+    return resolveModuleOrdinal(module, ordinal, exported, want16bit, native, 1);
+}
+const LxExport *findModuleOrdinal(const LxModule *module, uint32 ordinal)
+{
+    const LxExport *exported = NULL;
+    resolveModuleOrdinal(module, ordinal, &exported, 1, 0, 0);
+    return exported;
+}
+
 void *getModuleProcAddrByName(const LxModule *module, const char *name, const LxExport **_lxexp,
                               const int want16bit)
 {
@@ -130,12 +167,13 @@ void *getModuleProcAddrByName(const LxModule *module, const char *name, const Lx
     const LxExport *lxexp = module->exports;
     for (uint32 i = 0; i < module->num_exports; i++, lxexp++)
     {
-        if (strcmp(lxexp->name, name) == 0)
+        if (lxexp->name && strcmp(lxexp->name, name) == 0)
         {
             if (_lxexp)
                 *_lxexp = lxexp;
             void *retval = lxexp->addr;
-            if (lxexp->indirect) /* Bridge exports store an indirect host entry pointer. */
+            if (lxexp->indirect ==
+                LX_EXPORT_INDIRECT) /* Bridge exports store an indirect host entry pointer. */
                 retval = *((void **)retval);
             if (getenv("TWOINE_TRACE_FIXUPS"))
                 fprintf(stderr, "2INE FIXNAME: %s@'%s' -> %p\n", module->name, name, retval);

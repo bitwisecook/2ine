@@ -1,14 +1,24 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared installation-media browser and original OS/2 support-file import. */
 #include "media.h"
-static const char *support_names[] = {"CMD.EXE", "SYSLEVEL.OS2", "OSO001.MSG"};
-static const char *support_paths[] = {"C:\\OS2\\CMD.EXE", "C:\\OS2\\SYSLEVEL.OS2",
-                                      "C:\\OS2\\SYSTEM\\OSO001.MSG"};
+enum
+{
+    BASE_SUPPORT_COUNT = 3,
+    SUPPORT_COUNT = 11
+};
+static const char *support_names[] = {"CMD.EXE",     "SYSLEVEL.OS2", "OSO001.MSG",   "REXX.DLL",
+                                      "REXXAPI.DLL", "REXXUTIL.DLL", "REXXINIT.DLL", "REX.MSG",
+                                      "REXH.MSG",    "RXQUEUE.EXE",  "RXSUBCOM.EXE"};
+static const char *support_paths[] = {
+    "C:\\OS2\\CMD.EXE",           "C:\\OS2\\SYSLEVEL.OS2",     "C:\\OS2\\SYSTEM\\OSO001.MSG",
+    "C:\\OS2\\DLL\\REXX.DLL",     "C:\\OS2\\DLL\\REXXAPI.DLL", "C:\\OS2\\DLL\\REXXUTIL.DLL",
+    "C:\\OS2\\DLL\\REXXINIT.DLL", "C:\\OS2\\SYSTEM\\REX.MSG",  "C:\\OS2\\SYSTEM\\REXH.MSG",
+    "C:\\OS2\\RXQUEUE.EXE",       "C:\\OS2\\RXSUBCOM.EXE"};
 static cJSON *os2_support(Context *c)
 {
     cJSON *result = cJSON_CreateObject(), *files = cJSON_AddArrayToObject(result, "files");
-    int complete = 1;
-    for (int i = 0; i < 3; i++)
+    int complete = 1, rexx_complete = 1;
+    for (int i = 0; i < SUPPORT_COUNT; i++)
     {
         char *host = host_path(c, support_paths[i], 0);
         if (!host)
@@ -22,9 +32,14 @@ static cJSON *os2_support(Context *c)
         cJSON_AddStringToObject(file, "path", support_paths[i]);
         cJSON_AddBoolToObject(file, "present", present);
         cJSON_AddItemToArray(files, file);
-        complete &= present;
+        cJSON_AddBoolToObject(file, "required", i < BASE_SUPPORT_COUNT);
+        if (i < BASE_SUPPORT_COUNT)
+            complete &= present;
+        else
+            rexx_complete &= present;
     }
     cJSON_AddBoolToObject(result, "complete", complete);
+    cJSON_AddBoolToObject(result, "rexxComplete", rexx_complete);
     return result;
 }
 static int media_candidate(const char *name)
@@ -86,7 +101,7 @@ static cJSON *browse_media(Context *c, const char *input)
         cJSON_AddStringToObject(entry, "path", child);
         cJSON_AddBoolToObject(entry, "directory", items[i].directory);
         int container = !items[i].directory && media_candidate(items[i].name);
-        for (int file = 0; file < 3 && !items[i].directory; file++)
+        for (int file = 0; file < SUPPORT_COUNT && !items[i].directory; file++)
             if (equal_case(items[i].name, support_names[file]))
                 container = tb_media_container(child);
         cJSON_AddBoolToObject(entry, "container", container);
@@ -133,7 +148,7 @@ static int support_read(Context *c, const char *source, int index, SupportFile *
                                          (size_t)data[62] << 16 | (size_t)data[63] << 24
                                    : 0;
     int valid =
-        index == 0
+        index == 0 || (index >= 3 && index <= 6) || index >= 9
             ? size >= 64 && data[0] == 'M' && data[1] == 'Z' && executable <= (size_t)size - 2 &&
                   (!memcmp(data + executable, "NE", 2) || !memcmp(data + executable, "LX", 2))
         : index == 1 ? size >= 10 && !memcmp(data, "\xff\xffSYSLEVEL", 10)
@@ -167,7 +182,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
         return NULL;
     }
     cJSON *queue = cJSON_Duplicate(sources, 1), *imported = cJSON_CreateArray();
-    SupportFile files[3] = {{0}};
+    SupportFile files[SUPPORT_COUNT] = {{0}};
     unsigned visited = 0;
     /* A work queue handles mixed nesting without a recursion-depth limit. */
     for (int at = 0; at < cJSON_GetArraySize(queue) && !c->error; at++)
@@ -216,7 +231,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
             }
         }
         int index = -1;
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < SUPPORT_COUNT; i++)
             if (equal_case(base, support_names[i]))
                 index = i;
         if (index >= 0)
@@ -266,7 +281,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
             for (size_t n = 0; n < count; n++)
             {
                 int wanted = entries[n].directory || media_candidate(entries[n].name);
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < SUPPORT_COUNT; i++)
                     if (equal_case(entries[n].name, support_names[i]))
                         wanted = 1;
                 if (wanted)
@@ -284,7 +299,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
         tb_media_entries_free(entries, count == (size_t)-1 ? 0 : count);
         free(root);
     }
-    for (int i = 0; i < 3 && !c->error; i++)
+    for (int i = 0; i < SUPPORT_COUNT && !c->error; i++)
         if (files[i].data)
         {
             char *destination = host_path(c, support_paths[i], 0);
@@ -308,7 +323,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
             free(label);
             cJSON_AddItemToArray(imported, entry);
         }
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < SUPPORT_COUNT; i++)
     {
         free(files[i].data);
         free(files[i].source);

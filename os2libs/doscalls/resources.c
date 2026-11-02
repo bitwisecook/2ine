@@ -37,7 +37,19 @@ uint32 resourceOperation(void *argument)
         case RESOURCE_READ:
             return lx_host_file_read(call->resource, call->buffer, call->value, call->output);
         case RESOURCE_WRITE:
-            return lx_host_file_write(call->resource, call->buffer, call->value, call->output);
+        {
+            LxHostFsError result =
+                lx_host_file_write(call->resource, call->buffer, call->value, call->output);
+            USHORT verify = 0;
+            Dos16QVerify(&verify);
+            if (!result && verify)
+            {
+                LxHostFileInfo info;
+                if (!lx_host_file_info(call->resource, &info) && info.kind == LX_HOST_FILE_REGULAR)
+                    result = lx_host_file_flush(call->resource);
+            }
+            return result;
+        }
         case RESOURCE_REQUEST_MUTEX:
             return DosRequestMutexSemResource(call->handle, call->value, call->resource);
         case RESOURCE_RELEASE_MUTEX:

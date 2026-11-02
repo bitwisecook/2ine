@@ -14,6 +14,7 @@
 #define SELECTOR_COUNT 8192
 #define FLAT_CODE 0x1b
 #define FLAT_DATA 0x23
+#define OS2_TIB_SELECTOR 0x150b
 #define API_VECTOR 0xf1
 #define RETURN_VECTOR 0xf0
 #define BINDING_BUCKETS 2048
@@ -35,6 +36,8 @@ typedef struct Invocation
     LxGuestBorrow arguments;
     uint32_t api_arguments;
     const LxCpuRegisters *api_registers;
+    LxExecutionRegisters32 resume_registers;
+    int resume;
 } Invocation;
 typedef struct EmulatedState
 {
@@ -172,10 +175,12 @@ static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, 
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
     unsigned slot = 0;
     const uint32_t base = address & ~0xffffu;
+    const unsigned tile = base >> 16;
+    const int canonical = code == 0 && tile > 0 && tile < SELECTOR_COUNT - 1;
     for (unsigned i = 1; i < SELECTOR_COUNT - 1; i++)
     {
         if (s->selectors[i].selector && s->selectors[i].base == base &&
-            (code < 0 || s->selectors[i].executable == code))
+            (code < 0 || s->selectors[i].executable == code) && (!canonical || i == tile))
         {
             *selector = i;
             *offset = address - base;
@@ -187,7 +192,11 @@ static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, 
     }
     /* Fixed USE16 LX objects can contain prebound tiled selectors. Keep the
        same base-to-selector relation as OS/2 and the native worker. */
-    unsigned tile = base >> 16;
+    if (canonical && s->selectors[tile].selector)
+    {
+        lx_host_mutex_unlock(s->mutex);
+        return 0;
+    }
     if (tile && tile < SELECTOR_COUNT - 1 && !s->selectors[tile].selector)
         slot = tile;
     if (!slot)
@@ -315,6 +324,10 @@ static uint16_t flatCode(void)
 {
     return FLAT_CODE;
 }
+static uint16_t flatData(void)
+{
+    return FLAT_DATA;
+}
 static void prepareCode(uint8_t *code, size_t size)
 {
     (void)code;
@@ -330,6 +343,8 @@ static uint16_t attachTib(uint8_t *tib)
         failure("TIB must be in guest memory at a segment boundary");
     ThreadTib = tib;
     ThreadFs = (slot << 3) | 7;
+    if (!lx_execution_tls_window(Emulated->execution))
+        failure("Could not allocate the thread-local TIB window");
     return slot;
 }
 static void *currentTib(void)
@@ -408,6 +423,11 @@ static void bindThreadWindow(EmulatedState *s)
     if (!ThreadTib)
         failure("Thread window requires an attached TIB");
     const uint32_t base = s->execution->tls_address - s->execution->services.tls_offset;
+    /* IBM mixed-width thunks load this fixed GDT selector. Point it at the
+       same process-wide TIB alias that is rebound for each running thread. */
+    const LxSegment tib = {OS2_TIB_SELECTOR, base, 4095, 32, 0};
+    if (!lx_cpu_set_segment(s->cpu, &tib))
+        failure(lx_cpu_error(s->cpu));
     if (!lx_cpu_unmap(s->cpu, base, 4096) ||
         !lx_cpu_map_borrowed(s->cpu, base, 4096, LX_MEM_READ | LX_MEM_WRITE, ThreadTib))
         failure(lx_cpu_error(s->cpu));
@@ -535,6 +555,27 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
         frame->api_registers = &registers;
         lx_host_thread_test_cancel();
         registers.eax = b->callback(args);
+        if (frame->resume)
+        {
+            const LxExecutionRegisters32 *r = &frame->resume_registers;
+            registers.eax = r->eax;
+            registers.ebx = r->ebx;
+            registers.ecx = r->ecx;
+            registers.edx = r->edx;
+            registers.esi = r->esi;
+            registers.edi = r->edi;
+            registers.ebp = r->ebp;
+            registers.esp = r->esp;
+            registers.eip = r->eip;
+            registers.eflags = r->eflags;
+            registers.cs = r->cs;
+            registers.ds = r->ds;
+            registers.es = r->es;
+            registers.fs = r->fs;
+            registers.gs = r->gs;
+            registers.ss = r->ss;
+            frame->resume = 0;
+        }
         frame->api_registers = NULL;
         frame->api_arguments = 0;
         lx_execution_release(arguments);
@@ -975,6 +1016,17 @@ static int apiRegisters32(LxExecutionRegisters32 *out)
     out->ss = r->ss;
     return 1;
 }
+static int apiResume32(const LxExecutionRegisters32 *registers)
+{
+    if (!Active || !Active->api_registers ||
+        !lx_execution_memory(Emulated->execution, registers->eip, 1, LX_GUEST_EXECUTE) ||
+        registers->esp < 4 ||
+        !lx_execution_memory(Emulated->execution, registers->esp - 4, 4, LX_GUEST_WRITE))
+        return 0;
+    Active->resume_registers = *registers;
+    Active->resume = 1;
+    return 1;
+}
 const LxExecutionOperations lx_execution_unicorn = {"unicorn",
                                                     initialize,
                                                     destroy,
@@ -1018,4 +1070,6 @@ const LxExecutionOperations lx_execution_unicorn = {"unicorn",
                                                     apiRegisters32,
                                                     cleanupThread32,
                                                     terminateProcess,
-                                                    pollTermination};
+                                                    pollTermination,
+                                                    apiResume32,
+                                                    flatData};

@@ -118,6 +118,7 @@ void __attribute__((noreturn)) terminate_lib2ine(const uint32 exitcode)
 void lib2ine_shutdown(void)
 {
     lxAudioShutdown();
+    lxUnregisterProcessPeer();
 
     for (int i = 0; i < (sizeof(GLoaderState.disks) / sizeof(GLoaderState.disks[0])); i++)
     {

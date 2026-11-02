@@ -56,9 +56,16 @@ typedef struct LxHostThreadState
     void *anchor_block;
     void (*pm_cleanup)(void);
     uint32 pm_error;
+    uint32 raised_report;
+    unsigned raise_depth;
+    uint32 critical_depth;
     LxGuestMapping *tib_mapping;
 } LxHostThreadState;
 LxHostThreadState *lxHostThreadState(void);
 void lxHostThreadCleanup(void);
+/* Live runtime peers share the configured ball, IPC scope and C: mapping. */
+int lxRegisterProcessPeer(void);
+int lxIsProcessPeer(uint32 pid);
+void lxUnregisterProcessPeer(void);
 
 #endif

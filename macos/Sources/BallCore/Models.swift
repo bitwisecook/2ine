@@ -181,6 +181,7 @@ public struct OS2SupportStatus: Decodable, Sendable {
         public let name: String
         public let path: String
         public let present: Bool
+        public let required: Bool?
         public var id: String { name }
     }
     public struct Imported: Decodable, Sendable {
@@ -189,8 +190,9 @@ public struct OS2SupportStatus: Decodable, Sendable {
     }
     public let files: [File]
     public let complete: Bool
+    public let rexxComplete: Bool?
     public let imported: [Imported]?
-    public var missing: String { files.filter { !$0.present }.map(\.name).joined(separator: ", ") }
+    public var missing: String { files.filter { !$0.present && $0.required != false }.map(\.name).joined(separator: ", ") }
 }
 public struct MediaDirectory: Decodable, Sendable {
     public struct Entry: Decodable, Sendable, Identifiable {

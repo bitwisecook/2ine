@@ -158,6 +158,7 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
 
 LX_NATIVE_DESTRUCTOR(doscalls)
 {
+    cleanupSuballocation();
     GLoaderState.dosExit = NULL;
     GLoaderState.writeFile = NULL;
     GLoaderState.getResource = NULL;
