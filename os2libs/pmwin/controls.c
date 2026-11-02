@@ -379,6 +379,12 @@ static void paint(Window *window)
         edge = (RECTL){window->w - 1, 0, window->w, window->h};
         WinFillRect(space, &edge, CLR_WHITE);
     }
+    if (c->kind == 3 && (window->style & 15) == 7)
+    {
+        paintUserButton(window, space);
+        WinEndPaint(space);
+        return;
+    }
     if (c->kind == 3 && (window->style & 15))
     {
         int size = window->h > 15 ? 13 : window->h - 2;
@@ -513,7 +519,7 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
     {
         unsigned kind = (unsigned)strtoul(window->window_class_name + 1, NULL, 10);
         /* These static and button styles require a different control representation. */
-        if ((kind == 3 && (window->style & 15) > 6) ||
+        if ((kind == 3 && (window->style & 15) > 7) ||
             (kind == 5 && (window->style & 0x7f) != 1 && (window->style & 0x7f) != 2 &&
              (window->style & 0x7f) != 3 && (window->style & 0x7f) != 4 &&
              (window->style & 0x7f) != 8))

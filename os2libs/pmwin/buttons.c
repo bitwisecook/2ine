@@ -10,6 +10,7 @@ enum
     BS_AUTORADIO = 4,
     BS_THREE = 5,
     BS_AUTOTHREE = 6,
+    BS_USER = 7,
     BM_CLICK = 0x120,
     BM_QUERYINDEX = 0x121,
     BM_QUERYHILITE = 0x122,
@@ -18,6 +19,36 @@ enum
     BM_SETCHECK = 0x125,
     BM_SETDEFAULT = 0x126
 };
+void paintUserButton(Window *window, HPS space)
+{
+    if (!window->owner)
+        return;
+    ULONG state = (window->control->pressed ? 0x100 : 0) | (!window->enabled ? 0x200 : 0) |
+                  (window->style & 0x400);
+    uint32 data[] = {window->hwnd, space, state, window->control->button_draw_state};
+    window->control->button_draw_state = state;
+    Window *owner = window->owner;
+    ULONG packed = (USHORT)window->id | 3u << 16; /* BN_PAINT */
+    LxExecution *execution = GLoaderState.execution;
+    BOOL guest =
+        execution && (uintptr_t)owner->window_proc <= UINT32_MAX &&
+        lx_execution_memory(execution, (uint32)(uintptr_t)owner->window_proc, 1, LX_GUEST_EXECUTE);
+    LxGuestMapping *mapping =
+        guest ? lx_execution_map(execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0) : NULL;
+    if (guest && !mapping)
+        return;
+    MPARAM parameter = data;
+    if (mapping)
+    {
+        uint8 *wire = lx_execution_mapping_host(mapping);
+        for (unsigned i = 0; i < 4; i++)
+            lx_guest_store_u32(wire + i * 4, data[i]);
+        parameter = (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping);
+    }
+    WinSendMsg(owner->hwnd, WM_CONTROL, (MPARAM)(uintptr_t)packed, parameter);
+    if (mapping)
+        lx_execution_unmap(execution, mapping);
+}
 static Window *group_start(Window *window)
 {
     Window *first = window->parent ? window->parent->children : window;
@@ -81,7 +112,7 @@ MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second
         }
         case WM_QUERYDLGCODE:
             return controlReply(2 |
-                                (type == BS_PUSH                            ? 0x20
+                                (type == BS_PUSH || type == BS_USER         ? 0x20
                                  : type == BS_RADIO || type == BS_AUTORADIO ? 4
                                                                             : 0x40) |
                                 (window->style & 0x400 ? 0x10 : 0));

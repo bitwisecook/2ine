@@ -168,3 +168,64 @@ ULONG GetLogicalDriveStrings(ULONG capacity, PSZ output)
     memcpy(output, roots, size + 1);
     return size;
 }
+BOOL GetVolumeInformation(PSZ root, PSZ label, ULONG label_capacity, PULONG serial,
+                          PULONG component_length, PULONG flags, PSZ filesystem,
+                          ULONG filesystem_capacity)
+{
+    TRACE_NATIVE("GetVolumeInformation('%s', %p, %u, %p, %p, %p, %p, %u)", root ? root : "", label,
+                 (uint)label_capacity, serial, component_length, flags, filesystem,
+                 (uint)filesystem_capacity);
+    if (GetDriveType(root) == 1)
+    {
+        open32SetError(3);
+        return FALSE;
+    }
+    ULONG drive =
+        root ? (ULONG)((root[0] >= 'a' && root[0] <= 'z' ? root[0] - 'a' : root[0] - 'A') + 1)
+             : GLoaderState.current_disk;
+    typedef APIRET(OS2API * VolumeFn)(ULONG, ULONG, PVOID, ULONG);
+    typedef APIRET(OS2API * AttachFn)(PSZ, ULONG, ULONG, PFSQBUFFER2, PULONG);
+    VolumeFn volume = (VolumeFn)open32DosService("DosQueryFSInfo");
+    AttachFn attach = (AttachFn)open32DosService("DosQueryFSAttach");
+    uint8 information[17], attachment[128];
+    char device[3] = {(char)('A' + drive - 1), ':', 0};
+    ULONG bytes = sizeof attachment;
+    ULONG error = volume && attach ? volume(drive, 2, information, sizeof information) : 120;
+    if (!error)
+        error = attach(device, 0, 1, (PFSQBUFFER2)attachment, &bytes);
+    if (error)
+    {
+        open32SetError(error);
+        return FALSE;
+    }
+    size_t length = information[4];
+    size_t fs_offset = 8 + lx_guest_load_u16(attachment + 2) + 1;
+    size_t fs_length = lx_guest_load_u16(attachment + 4);
+    if (length > 11 || fs_offset >= bytes || fs_length >= bytes - fs_offset)
+    {
+        open32SetError(13);
+        return FALSE;
+    }
+    if ((label && label_capacity <= length) || (filesystem && filesystem_capacity <= fs_length))
+    {
+        open32SetError(234);
+        return FALSE;
+    }
+    if (label)
+    {
+        memcpy(label, information + 5, length);
+        label[length] = 0;
+    }
+    if (filesystem)
+    {
+        memcpy(filesystem, attachment + fs_offset, fs_length);
+        filesystem[fs_length] = 0;
+    }
+    if (serial)
+        *serial = lx_guest_load_u32(information);
+    if (component_length)
+        *component_length = 255;
+    if (flags)
+        *flags = 2; /* FILE_CASE_PRESERVED_NAMES: the virtual DOS volume preserves spelling. */
+    return TRUE;
+}

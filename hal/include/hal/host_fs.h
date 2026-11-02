@@ -66,6 +66,11 @@ LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size);
 LxHostFsError lx_host_file_flush(LxHostFile *file);
 /* Blocking advisory whole-file lock, released on descriptor close or process exit. */
 LxHostFsError lx_host_file_lock(LxHostFile *file, int acquire);
+/* Nonblocking advisory byte ranges. Offsets and lengths must fit a signed host file offset. */
+LxHostFsError lx_host_file_lock_range(LxHostFile *file, uint64_t offset, uint64_t length,
+                                      int acquire);
+LxHostFsError lx_host_file_range_conflict(LxHostFile *file, uint64_t offset, uint64_t length,
+                                          int *conflict);
 LxHostFsError lx_host_file_readonly(LxHostFile *file, int readonly);
 /* Opaque application metadata follows a file through renames. A missing value is empty. */
 LxHostFsError lx_host_file_metadata_set(LxHostFile *file, const void *data, size_t size);

@@ -13,7 +13,7 @@ static BOOL collect(WindowSnapshot *snapshot, ULONG parent, unsigned depth)
         return FALSE;
     for (ULONG child = WinQueryWindow(parent, 2); child; child = WinQueryWindow(child, 0))
     {
-        if (open32FindWindow(child))
+        if (open32FindWindow(child) || open32NativeDialogWindow(child))
         {
             if (snapshot->count == snapshot->capacity)
             {
@@ -55,7 +55,7 @@ BOOL EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
     for (size_t i = 0; i < snapshot.count; i++)
     {
         ULONG child = snapshot.handles[i];
-        if (!open32FindWindow(child))
+        if (!open32FindWindow(child) && !open32NativeDialogWindow(child))
             continue;
         ULONG ancestor = WinQueryWindow(child, 5);
         while (ancestor && ancestor != parent)

@@ -5,7 +5,13 @@ Original Warp 4.52 and SmartSuite 1.7 with Fixpack 3, captured in an isolated QE
 These are stock masters. A passing 2ine comparison requires the same create, formula, font, save, reopen and recalculation cycle. Font rasterization and confirmed display DPI differences may be reviewed leniently; missing controls, cells or formatting are defects.
 
 
-The `lotus-123` compatibility branch can open a blank workbook. Cell entry, workbook persistence and the screenshot comparison are not yet verified. Current contracts include native resource dialogs/icons, pattern and polygon drawing, text alignment, scrollbar controls, worker-to-window posting and PM object windows. `gpi-contracts.json` records focused stock API measurements in addition to the locale and PM contracts.
+The `lotus-123` compatibility branch can open a blank workbook, enter a text cell
+and save a nonempty original-format workbook containing that label. Reopening,
+formula recalculation, font selection and the full screenshot comparison remain
+unverified. Current contracts include native resource dialogs/icons, pattern and
+polygon drawing, text alignment, scrollbar controls, worker-to-window posting,
+PM object windows and hooked Open32 file dialogs. `gpi-contracts.json` records
+focused stock API measurements in addition to the locale and PM contracts.
 
 The original Lotus OLE runtime also requires private Warp SOM runtime DLLs, `SOM.IR`, the installation's `LOTUSW4/ETC/*.IR` interface repositories and the `OS2/ETC/DSOM/SOMD*.DAT`/`SOMD*.TOC` implementation repository. Point `SOMIR` to the semicolon-separated guest paths and `SOMDDIR` to a writable private copy of the DSOM directory; the reference installation sets `SOMDTHREADPEER=1`. These original files are not bundled. Each test session must use separate writable profiles and DSOM registration files.
 
@@ -21,4 +27,11 @@ POSIX thread cancellation runs cleanup at host cancellation points; Unicorn also
 
 Open32 DDE supports thread-owned initialization, ANSI string references and local service-name registration/filter state. Peer registration notifications and DDE conversations are not implemented; registering a service when a local peer requires notification fails with `DMLERR_DLL_USAGE`. This does not provide DDE exchange between applications or host processes.
 
-The original SOMDD executable can be run separately with the same private runtime, repositories and `TWOINE_IPC_DIR` as Lotus. PMWP does not start it automatically. Initialization now reaches the workbook input path; committed cell contents and workbook persistence remain unverified.
+The original SOMDD executable can be run separately with the same private runtime,
+repositories and `TWOINE_IPC_DIR` as Lotus. PMWP does not start it automatically.
+Initialization reaches the workbook input and save paths. A saved text cell is
+verified; the complete document cycle remains unverified.
+
+`string-contracts.json` records original bytewise `lstrcmp` results, including
+punctuation and high bytes. `profile-contracts.json` records native private-profile
+storage and key normalization; those APIs do not read Windows text INI values.

@@ -161,6 +161,17 @@ static void populate_files(PmFileDialog *dialog)
     }
     lx_host_directory_close(directory);
 }
+BOOL lx_pm_file_set_filter(HWND handle, const char *pattern)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
+    PmFileDialog *dialog = window ? window->standard_file : NULL;
+    if (!dialog || !pattern || strlen(pattern) >= sizeof dialog->filter)
+        return FALSE;
+    snprintf(dialog->filter, sizeof dialog->filter, "%s", pattern);
+    populate_files(dialog);
+    return TRUE;
+}
 static void initialize_file(PmFileDialog *dialog)
 {
     if (dialog->initialized)

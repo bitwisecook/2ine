@@ -6,6 +6,16 @@
 void open32SetError(ULONG error);
 ULONG open32ScrollWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);
 BOOL open32NativeDialogWindow(ULONG handle);
+BOOL open32FileDialogWindow(ULONG handle);
+struct Open32Window *open32PropertyWindow(ULONG handle);
+LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG second,
+                                BOOL original);
+LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set);
+void open32NativeControlsPrune(void);
+ULONG open32ControlNotification(ULONG handle, ULONG packed);
+int open32FileIO(ULONG handle, PVOID data, ULONG size, PULONG actual, BOOL writing);
+BOOL open32CloseFile(ULONG handle);
+void open32FilesCleanup(void);
 BOOL open32ValidProcedure(ULONG address);
 ULONG open32BuiltinWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);
 BOOL open32EraseBackground(ULONG window, ULONG dc);

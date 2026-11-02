@@ -28,6 +28,8 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
             pmwinx/windows.c
             pmwinx/enumeration.c
             pmwinx/dialogs.c
+            pmwinx/file_dialogs.c
+            pmwinx/native_controls.c
             pmwinx/mdi.c
             pmwinx/properties.c
             pmwinx/caret.c
@@ -49,6 +51,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
             pmwinx/metrics.c
             pmwinx/dib.c
             pmwinx/drawing.c
+            pmwinx/dc_state.c
             pmwinx/fonts.c
             pmwinx/font_metrics.c
             pmwinx/scroll.c
@@ -56,6 +59,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmwin pmsh
             pmwinx/strings.c
             pmwinx/text.c
             pmwinx/files.c
+            pmwinx/file_handles.c
             pmwinx/find.c
             pmwinx/paths.c
             pmwinx/format.c

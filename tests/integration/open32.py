@@ -5,6 +5,7 @@
 import argparse
 import json
 import os
+import select
 import struct
 import subprocess
 import tempfile
@@ -43,12 +44,19 @@ from open32_contracts import (
     thread_program,
     time_program,
 )
+from open32_dc_state import dc_state_program
 from open32_dde import clipboard_program, dde_program
+from open32_file_dialogs import file_dialog_program
+from open32_file_handles import conversion_program, file_handle_program, volume_program
+from open32_file_locks import lock_program
+from open32_geometry import placement_program
 from open32_icons import icon_program
 from open32_patterns import pattern_program
 from open32_posts import posted_program
+from open32_profiles import profile_program
 from open32_scroll import scroll_program
 from open32_text import alignment_program
+from open32_time import file_time_conversion_program
 from open32_timers import timer_program
 
 
@@ -232,6 +240,7 @@ def main():
             TWOINE_USER_PROFILE=str(work / "user.profile"),
             TWOINE_SYSTEM_PROFILE=str(work / "system.profile"),
             TWOINE_REGISTRY=str(work / "registry.profile"),
+            TWOINE_IPC_DIR=str(work / "ipc"),
         )
         (work / "openlib.dll").write_bytes(
             linear_image(b"\xb8\x2a\0\0\0\xc3", [], [], "OPENLIB", library=True, exports=[0])
@@ -259,6 +268,7 @@ def main():
         run(timer_program())
         run(window_program())
         run(api_window_program())
+        run(placement_program(args.backend == "unicorn"))
         run(keyboard_program())
         run(repaint_program())
         run(caret_program())
@@ -266,6 +276,35 @@ def main():
         run(drawing_program())
         run(dib_program())
         run(dialog_program())
+        run(dc_state_program())
+        run(conversion_program(args.backend == "unicorn"))
+        (work / "text.ini").write_text('[General]\napi="text value"\n')
+        run(profile_program(args.backend == "unicorn"))
+        run(volume_program(args.backend == "unicorn"))
+        run(file_time_conversion_program(args.backend == "unicorn"))
+        run(file_handle_program(args.backend == "unicorn"))
+        assert (work / "windows-file.bin").read_bytes() == b"hello"
+        parent_image = work / "file-lock-parent.exe"
+        parent_image.write_bytes(lock_program(False))
+        with (work / "file-lock-parent.log").open("wb") as lock_log:
+            parent = subprocess.Popen(
+                [str(build / "lx_loader"), str(parent_image)], cwd=work, env=env,
+                stdout=subprocess.PIPE, stderr=lock_log,
+            )
+            try:
+                assert parent.stdout and select.select([parent.stdout], [], [], 15)[0]
+                assert parent.stdout.readline() == b"LOCKED\n"
+                run(lock_program(True))
+                parent.communicate(timeout=20)
+                assert parent.returncode == 0, (work / "file-lock-parent.log").read_text()
+            finally:
+                if parent.poll() is None:
+                    parent.kill()
+                    parent.wait(timeout=5)
+        assert (work / "locked-file.bin").read_bytes() == b"hello"
+        (work / "existing.123").write_bytes(b"existing")
+        for mode in ("save", "open", "cancel", "short", "veto"):
+            run(file_dialog_program(work, mode, args.backend == "unicorn"))
         run(icon_program())
         run(pattern_program())
         run(posted_program())

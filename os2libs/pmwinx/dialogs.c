@@ -13,6 +13,8 @@ typedef struct Open32Dialog
 static _Thread_local Open32Dialog *dialogs;
 BOOL open32NativeDialogWindow(ULONG handle)
 {
+    if (open32FileDialogWindow(handle))
+        return TRUE;
     for (Open32Dialog *dialog = dialogs; dialog; dialog = dialog->previous)
         for (ULONG parent = handle; parent; parent = WinQueryWindow(parent, 5))
             if (dialog->window && parent == dialog->window)
@@ -41,6 +43,8 @@ static MRESULT OS2API dialog_procedure(HWND handle, ULONG message, MPARAM first,
         b = WinWindowFromID(handle, a & 0xffff);
         if (message == WM_COMMAND)
             a &= 0xffff;
+        else
+            a = open32ControlNotification(b, a);
     }
     else if (message == WM_CHAR)
     {
@@ -85,6 +89,7 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
     ULONG result =
         WinDlgBox(HWND_DESKTOP, owner, dialog_procedure, module, (ULONG)(uintptr_t)resource, NULL);
     dialogs = dialog.previous;
+    open32NativeControlsPrune();
     if (dialog.finished)
         return dialog.result;
     if (result == 0xffff)
@@ -114,6 +119,7 @@ BOOL EndDialog(ULONG handle, LONG result)
 }
 ULONG GetDlgItem(ULONG handle, LONG identity)
 {
+    TRACE_NATIVE("GetDlgItem(%u, %d)", (uint)handle, (int)identity);
     if (identity < 0 || identity > UINT16_MAX || !open32Presentation())
     {
         open32SetError(87);
@@ -129,28 +135,7 @@ BOOL SetDlgItemText(ULONG handle, LONG identity, PSZ text)
         open32SetError(87);
         return FALSE;
     }
-    if (open32FindWindow(child))
-        return SetWindowText(child, text);
-    if (!open32NativeDialogWindow(child))
-    {
-        open32SetError(1400);
-        return FALSE;
-    }
-    size_t length = strnlen(text, 65536);
-    if (length == 65536)
-        return FALSE;
-    char *copy = malloc(length + 1);
-    if (!copy)
-    {
-        open32SetError(8);
-        return FALSE;
-    }
-    for (size_t i = 0; i < length; i++)
-        copy[i] = WinCpTranslateChar(0, 1004, (UCHAR)text[i], 437);
-    copy[length] = 0;
-    BOOL result = WinSetWindowText(child, copy);
-    free(copy);
-    return result;
+    return SetWindowText(child, text);
 }
 ULONG GetDlgItemText(ULONG handle, LONG identity, PCHAR output, LONG capacity)
 {
@@ -160,21 +145,13 @@ ULONG GetDlgItemText(ULONG handle, LONG identity, PCHAR output, LONG capacity)
         open32SetError(87);
         return 0;
     }
-    if (open32FindWindow(child))
-        return (ULONG)GetWindowText(child, output, capacity);
-    if (!open32NativeDialogWindow(child))
-    {
-        open32SetError(1400);
-        return 0;
-    }
-    LONG count = WinQueryWindowText(child, capacity, output);
-    for (LONG i = 0; i < count; i++)
-        output[i] = WinCpTranslateChar(0, 437, (UCHAR)output[i], 1004);
-    return (ULONG)count;
+    return (ULONG)GetWindowText(child, output, capacity);
 }
 
 LONG SendDlgItemMessage(ULONG dialog, LONG identity, ULONG message, ULONG first, ULONG second)
 {
+    TRACE_NATIVE("SendDlgItemMessage(%u, %d, %x, %x, %x)", (uint)dialog, (int)identity,
+                 (uint)message, (uint)first, (uint)second);
     ULONG child = GetDlgItem(dialog, identity);
     if (!child)
         return 0;
@@ -185,50 +162,21 @@ LONG SendDlgItemMessage(ULONG dialog, LONG identity, ULONG message, ULONG first,
         open32SetError(1400);
         return 0;
     }
-    ULONG native;
-    switch (message)
+    return open32NativeControlMessage(child, message, first, second, FALSE);
+}
+
+ULONG IsDlgButtonChecked(ULONG dialog, LONG identity)
+{
+    return (ULONG)SendDlgItemMessage(dialog, identity, 0xf0, 0, 0);
+}
+BOOL CheckDlgButton(ULONG dialog, LONG identity, ULONG check)
+{
+    ULONG child = GetDlgItem(dialog, identity);
+    if (!child || check > 2)
     {
-        case 0xf0:
-            native = 0x124;
-            break; /* BM_GETCHECK */
-        case 0xf1:
-            native = 0x125;
-            break; /* BM_SETCHECK */
-        case 0xf2: /* BM_GETSTATE */
-            return ((LONG)(intptr_t)WinSendMsg(child, 0x124, 0, 0) & 3) |
-                   (WinSendMsg(child, 0x122, 0, 0) ? 4 : 0) |
-                   (WinQueryFocus(HWND_DESKTOP) == child ? 8 : 0);
-        case 0xf3:
-            native = 0x123;
-            break; /* BM_SETSTATE */
-        case 0xf5:
-            native = 0x120;
-            break; /* BM_CLICK */
-        case 0xf4: /* BM_SETSTYLE */
-        {
-            char name[16];
-            if (!WinQueryClassName(child, sizeof name, name) || strcmp(name, "#3"))
-            {
-                open32SetError(87);
-                return 0;
-            }
-            static const LONG styles[] = {0, 0, 1, 2, 3, 5, 6, -1, -1, 4};
-            if (first >= sizeof styles / sizeof *styles || styles[first] < 0)
-            {
-                open32SetError(50);
-                return 0;
-            }
-            ULONG style = (ULONG)styles[first] | (first == 1 ? 0x400 : 0);
-            WinSetWindowULong(child, -2, (WinQueryWindowULong(child, -2) & ~0x40fu) | style);
-            if (second)
-                WinInvalidateRect(child, NULL, FALSE);
-            return 0;
-        }
-        default:
-            open32SetError(50);
-            return 0;
+        open32SetError(87);
+        return FALSE;
     }
-    LONG result = (LONG)(intptr_t)WinSendMsg(child, native, (MPARAM)(uintptr_t)first,
-                                             (MPARAM)(uintptr_t)second);
-    return message == 0xf0 ? result : 0;
+    SendDlgItemMessage(dialog, identity, 0xf1, check, 0);
+    return TRUE;
 }

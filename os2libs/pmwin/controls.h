@@ -19,6 +19,7 @@ typedef struct PmControl
     LONG lower, upper, value;
     LONG item_height;
     LONG drag_offset;
+    ULONG button_draw_state;
     HWND edit, list;
     BOOL dropped, updating;
     MPARAM transfer;
@@ -38,6 +39,7 @@ char *controlCopyText(MPARAM address);
 BOOL controlTextOutput(MPARAM address, const char *text, size_t capacity);
 MRESULT controlReply(LONG value);
 MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second);
+void paintUserButton(Window *window, HPS space);
 void controlReplaceSelection(Window *window, const char *text, size_t bytes);
 MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second);
 MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second);

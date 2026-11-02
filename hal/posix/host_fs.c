@@ -142,8 +142,7 @@ void lx_host_file_close(LxHostFile *file)
 {
     if (file)
     {
-        close(file->fd);
-        free(file);
+        lx_host_file_dispose(file);
     }
 }
 LxHostFsError lx_host_file_read(LxHostFile *file, void *data, size_t size, size_t *actual)

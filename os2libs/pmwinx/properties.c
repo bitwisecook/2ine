@@ -16,7 +16,7 @@ static ULONG property_atom(PSZ name, BOOL add)
 }
 BOOL SetProp(ULONG handle, PSZ name, ULONG data)
 {
-    Open32Window *window = open32FindWindow(handle);
+    Open32Window *window = open32PropertyWindow(handle);
     if (!window)
     {
         open32SetError(1400);
@@ -56,7 +56,7 @@ BOOL SetProp(ULONG handle, PSZ name, ULONG data)
 }
 ULONG GetProp(ULONG handle, PSZ name)
 {
-    Open32Window *window = open32FindWindow(handle);
+    Open32Window *window = open32PropertyWindow(handle);
     if (!window)
     {
         open32SetError(1400);
@@ -70,7 +70,7 @@ ULONG GetProp(ULONG handle, PSZ name)
 }
 ULONG RemoveProp(ULONG handle, PSZ name)
 {
-    Open32Window *window = open32FindWindow(handle);
+    Open32Window *window = open32PropertyWindow(handle);
     if (!window)
     {
         open32SetError(1400);

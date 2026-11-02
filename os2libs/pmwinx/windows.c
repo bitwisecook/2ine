@@ -427,9 +427,12 @@ static ULONG *window_long(Open32Window *w, LONG index)
 }
 LONG GetWindowLong(ULONG handle, LONG index)
 {
+    TRACE_NATIVE("GetWindowLong(%u, %d)", (uint)handle, (int)index);
     Open32Window *w = open32FindWindow(handle);
     if (!w)
     {
+        if (open32NativeDialogWindow(handle))
+            return open32NativeWindowLong(handle, index, 0, FALSE);
         open32SetError(1400);
         return 0;
     }
@@ -446,9 +449,12 @@ LONG GetWindowLong(ULONG handle, LONG index)
 }
 LONG SetWindowLong(ULONG handle, LONG index, LONG value)
 {
+    TRACE_NATIVE("SetWindowLong(%u, %d, %x)", (uint)handle, (int)index, (uint)value);
     Open32Window *w = open32FindWindow(handle);
     if (!w)
     {
+        if (open32NativeDialogWindow(handle))
+            return open32NativeWindowLong(handle, index, value, TRUE);
         open32SetError(1400);
         return 0;
     }
@@ -601,9 +607,13 @@ void open32WindowsCleanup(void)
 
 LONG SendMessage(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
+    TRACE_NATIVE("SendMessage(%u, %x, %x, %x)", (uint)handle, (uint)message, (uint)first,
+                 (uint)second);
     Open32Window *window = open32FindWindow(handle);
     if (!window)
     {
+        if (open32NativeDialogWindow(handle))
+            return open32NativeControlMessage(handle, message, first, second, FALSE);
         open32SetError(1400);
         return 0;
     }
@@ -623,7 +633,7 @@ LONG CallWindowProc(ULONG procedure, ULONG handle, ULONG message, ULONG first, U
 BOOL SetWindowText(ULONG handle, PSZ text)
 {
     Open32Window *window = open32FindWindow(handle);
-    if (!window)
+    if (!window && !open32NativeDialogWindow(handle))
     {
         open32SetError(1400);
         return FALSE;
@@ -642,7 +652,9 @@ BOOL SetWindowText(ULONG handle, PSZ text)
         return FALSE;
     }
     memcpy(lx_execution_mapping_host(mapping), text ? text : "", size);
-    BOOL result = open32WindowCallback(window, 12, 0, lx_execution_mapping_address(mapping)) != 0;
+    ULONG address = lx_execution_mapping_address(mapping);
+    BOOL result = window ? open32WindowCallback(window, 12, 0, address) != 0
+                         : open32NativeControlMessage(handle, 12, 0, address, FALSE) != 0;
     lx_execution_unmap(GLoaderState.execution, mapping);
     return result;
 }
@@ -651,6 +663,8 @@ LONG GetWindowTextLength(ULONG handle)
     Open32Window *window = open32FindWindow(handle);
     if (!window)
     {
+        if (open32NativeDialogWindow(handle))
+            return open32NativeControlMessage(handle, 14, 0, 0, FALSE);
         open32SetError(1400);
         return 0;
     }
@@ -659,9 +673,10 @@ LONG GetWindowTextLength(ULONG handle)
 LONG GetWindowText(ULONG handle, PCHAR output, LONG capacity)
 {
     Open32Window *window = open32FindWindow(handle);
-    if (!window || !output || capacity <= 0)
+    BOOL native = !window && open32NativeDialogWindow(handle);
+    if ((!window && !native) || !output || capacity <= 0)
     {
-        open32SetError(window ? 87 : 1400);
+        open32SetError(window || native ? 87 : 1400);
         return 0;
     }
     uint32 address;
@@ -671,7 +686,8 @@ LONG GetWindowText(ULONG handle, PCHAR output, LONG capacity)
         open32SetError(87);
         return 0;
     }
-    return (LONG)open32WindowCallback(window, 13, (ULONG)capacity, address);
+    return window ? (LONG)open32WindowCallback(window, 13, (ULONG)capacity, address)
+                  : open32NativeControlMessage(handle, 13, (ULONG)capacity, address, FALSE);
 }
 
 ULONG GetWindow(ULONG handle, ULONG command)

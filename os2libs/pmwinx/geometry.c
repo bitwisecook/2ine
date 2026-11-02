@@ -90,6 +90,46 @@ BOOL IsIconic(ULONG window)
     return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
            (WinQueryWindowULong(window, -2) & WS_MINIMIZED) != 0;
 }
+BOOL GetWindowPlacement(ULONG window, PVOID output)
+{
+    if (!output || lx_guest_load_u32(output) != 44)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    SWP position;
+    RECTL parent;
+    if (!open32Presentation() || !WinQueryWindowPos(window, &position) ||
+        !WinQueryWindowRect(WinQueryWindow(window, 5), &parent))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    ULONG style = WinQueryWindowULong(window, -2);
+    ULONG state = style & WS_MINIMIZED ? 2 : style & WS_MAXIMIZED ? 3 : 1;
+    LONG x = position.x, y = position.y, width = position.cx, height = position.cy;
+    char name[16];
+    if (state != 1 && WinQueryClassName(window, sizeof name, name) && !strcmp(name, "#1"))
+    {
+        x = (SHORT)WinQueryWindowUShort(window, 0x0c);
+        y = (SHORT)WinQueryWindowUShort(window, 0x0e);
+        width = WinQueryWindowUShort(window, 0x10);
+        height = WinQueryWindowUShort(window, 0x12);
+    }
+    int64_t top = (int64_t)parent.yTop - y - height;
+    int64_t right = (int64_t)x + width, bottom = top + height;
+    if (top < INT32_MIN || top > INT32_MAX || right < INT32_MIN || right > INT32_MAX ||
+        bottom < INT32_MIN || bottom > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint32 fields[] = {44,         0,        state,      UINT32_MAX,   UINT32_MAX,   UINT32_MAX,
+                       UINT32_MAX, (ULONG)x, (ULONG)top, (ULONG)right, (ULONG)bottom};
+    for (unsigned i = 0; i < sizeof fields / sizeof *fields; i++)
+        lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
+    return TRUE;
+}
 
 ULONG GetParent(ULONG window)
 {

@@ -83,6 +83,7 @@ static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
 }
 static BOOL discard_context(Open32DC *dc)
 {
+    open32SavedDCCleanup(dc);
     Open32DC **link = &contexts;
     while (*link != dc)
         link = &(*link)->next;

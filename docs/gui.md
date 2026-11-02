@@ -217,6 +217,30 @@ Full list keyboard navigation, modifier-key multiselection and scrollbars are
 incomplete. File dialogs accept a typed single filename; allocated multiselection
 lists and complete modeless behavior are unsupported.
 
+Open32 single-file Open/Save dialogs adapt the 76-byte `OPENFILENAME` record to
+native PM controls. Numeric custom templates, initialization and file-validation
+hooks, format selection, default extensions, checked output lengths and
+overwrite prompts are supported. Native dialog controls retain Windows subclass
+chains, properties, text conversion, button state and entry/combo/list messages.
+User buttons send native `BN_PAINT` or Windows `WM_DRAWITEM` notifications.
+Template handles, named templates, Explorer dialogs and multiselection are
+unsupported. Saved DC levels retain selected objects and independent clip copies.
+
+Synchronous Open32 file handles support creation dispositions, reads/writes,
+64-bit seeking and file sizes, truncation, flushing and nonblocking byte-range
+locks. Sharing checks cover handles in the same worker. Linux uses descriptor
+locks; macOS retains otherwise closed descriptors until the inode's process
+locks are released. Reads/writes check range conflicts, but a peer's lock
+acquisition is not interlocked with an in-flight host I/O operation. Host locks
+are advisory to other host software. Read-only-handle locking, asynchronous I/O,
+security descriptors and delete-on-close are unsupported.
+
+Private Open32 profile strings use native OS/2 binary profiles with unchanged
+section names and uppercase keys. Text INI files do not supply these records.
+Fallback strings retain trailing spaces. Writes use the profile provider's
+atomic 2ine format. Mapped-drive queries reuse DOS volume labels and filesystem
+identity; they do not advertise host ACL or compression support.
+
 Glyph masks use coverage alpha and visible-window clipping. Current-thread
 input hooks can modify or consume queued input. Other hook types and cross-thread
 hook operation remain unsupported. Unsupported API paths return failure rather

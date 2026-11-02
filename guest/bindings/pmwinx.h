@@ -1,5 +1,139 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/doscalls.h"
+static uint32 bridge32_GetWindowPlacement(uint8 *a)
+{
+    LxGuestBorrow output = {0};
+    uint32 result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 44,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
+        open32SetError(87);
+    else
+        result = GetWindowPlacement(lx_guest_load_u32(a), output.host);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_LockFile(uint8 *a)
+{
+    return LockFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                    lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
+}
+static uint32 bridge32_UnlockFile(uint8 *a)
+{
+    return UnlockFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                      lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
+}
+static uint32 bridge32_lstrcmp(uint8 *a)
+{
+    return (uint32)lstrcmp(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_CreateFile(uint8 *a)
+{
+    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 32768);
+    uint32 security = lx_guest_load_u32(a + 12);
+    uint8 attributes[12];
+    uint32 result = UINT32_MAX;
+    if (!name || (security && !lx_execution_read(GLoaderState.execution, security, attributes,
+                                                 sizeof attributes)))
+        open32SetError(87);
+    else
+        result = CreateFile(name, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                            security ? attributes : NULL, lx_guest_load_u32(a + 16),
+                            lx_guest_load_u32(a + 20), lx_guest_load_u32(a + 24));
+    free(name);
+    return result;
+}
+static uint32 bridge32_SetFilePointer(uint8 *a)
+{
+    uint32 address = lx_guest_load_u32(a + 8), result = UINT32_MAX;
+    LxGuestBorrow high = {0};
+    if (address && !lx_execution_borrow(GLoaderState.execution, address, 4,
+                                        LX_GUEST_READ | LX_GUEST_WRITE, &high))
+        open32SetError(87);
+    else
+    {
+        LONG value = address ? (LONG)lx_guest_load_u32(high.host) : 0;
+        result = SetFilePointer(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
+                                address ? &value : NULL, lx_guest_load_u32(a + 12));
+        if (address && (result != UINT32_MAX || !GetLastError()))
+            lx_guest_store_u32(high.host, (ULONG)value);
+    }
+    lx_execution_release(&high);
+    return result;
+}
+static uint32 bridge32_GetFileSize(uint8 *a)
+{
+    uint32 address = lx_guest_load_u32(a + 4), result = UINT32_MAX;
+    LxGuestBorrow high = {0};
+    if (address && !lx_execution_borrow(GLoaderState.execution, address, 4, LX_GUEST_WRITE, &high))
+        open32SetError(87);
+    else
+    {
+        ULONG value = 0;
+        result = GetFileSize(lx_guest_load_u32(a), address ? &value : NULL);
+        if (address && (result != UINT32_MAX || !GetLastError()))
+            lx_guest_store_u32(high.host, value);
+    }
+    lx_execution_release(&high);
+    return result;
+}
+static uint32 bridge32_SetEndOfFile(uint8 *a)
+{
+    return SetEndOfFile(lx_guest_load_u32(a));
+}
+static uint32 bridge32_FlushFileBuffers(uint8 *a)
+{
+    return FlushFileBuffers(lx_guest_load_u32(a));
+}
+static uint32 bridge32_GetFileType(uint8 *a)
+{
+    return GetFileType(lx_guest_load_u32(a));
+}
+static uint32 bridge32_OemToChar(uint8 *a)
+{
+    return OemToChar(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_CharToOem(uint8 *a)
+{
+    return CharToOem(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_OemToCharBuff(uint8 *a)
+{
+    return OemToCharBuff(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
+}
+static uint32 bridge32_CharToOemBuff(uint8 *a)
+{
+    return CharToOemBuff(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
+}
+static uint32 bridge32_SaveDC(uint8 *a)
+{
+    return (uint32)SaveDC(lx_guest_load_u32(a));
+}
+static uint32 bridge32_RestoreDC(uint8 *a)
+{
+    return RestoreDC(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_IsDlgButtonChecked(uint8 *a)
+{
+    return IsDlgButtonChecked(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_CheckDlgButton(uint8 *a)
+{
+    return CheckDlgButton(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
+                          lx_guest_load_u32(a + 8));
+}
+static uint32 bridge32_GetSaveFileName(uint8 *a)
+{
+    return GetSaveFileName((PVOID)(uintptr_t)lx_guest_load_u32(a));
+}
+static uint32 bridge32_GetOpenFileName(uint8 *a)
+{
+    return GetOpenFileName((PVOID)(uintptr_t)lx_guest_load_u32(a));
+}
+static uint32 bridge32_CommDlgExtendedError(uint8 *a)
+{
+    (void)a;
+    return CommDlgExtendedError();
+}
 static uint32 bridge32_GetProfileString(uint8 *a)
 {
     uint32 key_pointer = lx_guest_load_u32(a + 4), fallback_pointer = lx_guest_load_u32(a + 8);
@@ -3043,4 +3177,135 @@ static uint32 bridge32_GetLogicalDriveStrings(uint8 *a)
     memcpy(output.host, roots, length + 1);
     lx_execution_release(&output);
     return length;
+}
+
+static uint32 bridge32_GetVolumeInformation(uint8 *a)
+{
+    uint32 root_address = lx_guest_load_u32(a);
+    char *root = root_address ? o32_string(root_address) : NULL;
+    LxGuestBorrow buffers[5] = {0};
+    const unsigned slots[] = {4, 12, 16, 20, 24};
+    const uint32 sizes[] = {lx_guest_load_u32(a + 8), 4, 4, 4, lx_guest_load_u32(a + 28)};
+    BOOL valid = !root_address || root;
+    for (unsigned i = 0; valid && i < 5; i++)
+    {
+        uint32 pointer = lx_guest_load_u32(a + slots[i]);
+        if (pointer && sizes[i])
+            valid = lx_execution_borrow(GLoaderState.execution, pointer, sizes[i], LX_GUEST_WRITE,
+                                        &buffers[i]);
+    }
+    uint32 result = 0;
+    ULONG serial = 0, component = 0, flags = 0;
+    char empty[1];
+    if (valid)
+        result = GetVolumeInformation(
+            root, lx_guest_load_u32(a + 4) ? (sizes[0] ? buffers[0].host : empty) : NULL, sizes[0],
+            lx_guest_load_u32(a + 12) ? &serial : NULL,
+            lx_guest_load_u32(a + 16) ? &component : NULL,
+            lx_guest_load_u32(a + 20) ? &flags : NULL,
+            lx_guest_load_u32(a + 24) ? (sizes[4] ? buffers[4].host : empty) : NULL, sizes[4]);
+    else
+        open32SetError(87);
+    if (result)
+    {
+        if (buffers[1].host)
+            lx_guest_store_u32(buffers[1].host, serial);
+        if (buffers[2].host)
+            lx_guest_store_u32(buffers[2].host, component);
+        if (buffers[3].host)
+            lx_guest_store_u32(buffers[3].host, flags);
+    }
+    for (unsigned i = 0; i < 5; i++)
+        lx_execution_release(&buffers[i]);
+    free(root);
+    return result;
+}
+
+static uint32 bridge32_FileTimeToLocalFileTime(uint8 *a)
+{
+    LxGuestBorrow input = {0}, output = {0};
+    uint32 result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
+                             &input) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
+                             &output))
+        open32SetError(87);
+    else
+        result = FileTimeToLocalFileTime(input.host, output.host);
+    lx_execution_release(&output);
+    lx_execution_release(&input);
+    return result;
+}
+
+static uint32 bridge32_LocalFileTimeToFileTime(uint8 *a)
+{
+    LxGuestBorrow input = {0}, output = {0};
+    uint32 result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
+                             &input) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
+                             &output))
+        open32SetError(87);
+    else
+        result = LocalFileTimeToFileTime(input.host, output.host);
+    lx_execution_release(&output);
+    lx_execution_release(&input);
+    return result;
+}
+
+static uint32 bridge32_FileTimeToSystemTime(uint8 *a)
+{
+    LxGuestBorrow input = {0}, output = {0};
+    uint32 result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
+                             &input) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
+                             &output))
+        open32SetError(87);
+    else
+        result = FileTimeToSystemTime(input.host, output.host);
+    lx_execution_release(&output);
+    lx_execution_release(&input);
+    return result;
+}
+
+static uint32 bridge32_GetPrivateProfileString(uint8 *a)
+{
+    uint32 section_pointer = lx_guest_load_u32(a), key_pointer = lx_guest_load_u32(a + 4);
+    char *section = o32_string(section_pointer), *key = o32_string(key_pointer);
+    char *fallback = o32_string(lx_guest_load_u32(a + 8));
+    char *filename = o32_string(lx_guest_load_u32(a + 20));
+    uint32 capacity = lx_guest_load_u32(a + 16), result = 0;
+    LxGuestBorrow output = {0};
+    if ((section_pointer && !section) || (key_pointer && !key) || !fallback || !filename ||
+        !capacity ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), capacity,
+                             LX_GUEST_WRITE, &output))
+        open32SetError(87);
+    else
+        result = GetPrivateProfileString(section, key, fallback, output.host, capacity, filename);
+    lx_execution_release(&output);
+    free(section);
+    free(key);
+    free(fallback);
+    free(filename);
+    return result;
+}
+static uint32 bridge32_WritePrivateProfileString(uint8 *a)
+{
+    uint32 section_pointer = lx_guest_load_u32(a), key_pointer = lx_guest_load_u32(a + 4);
+    uint32 value_pointer = lx_guest_load_u32(a + 8);
+    char *section = o32_string(section_pointer), *key = o32_string(key_pointer);
+    char *value = o32_string(value_pointer), *filename = o32_string(lx_guest_load_u32(a + 12));
+    uint32 result = 0;
+    if ((section_pointer && !section) || (key_pointer && !key) || (value_pointer && !value) ||
+        !filename)
+        open32SetError(87);
+    else
+        result = WritePrivateProfileString(section, key, value, filename);
+    free(section);
+    free(key);
+    free(value);
+    free(filename);
+    return result;
 }
