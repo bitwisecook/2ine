@@ -46,7 +46,7 @@ def stage(build, destination):
     app = destination / "usr/lib/2ine-balls"
     runtime = app / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)
-    for name in ("gnome_balls.py", "balls.py"):
+    for name in ("gnome_balls.py", "gnome_views.py", "balls.py"):
         copy(ROOT / "tools" / name, app / "tools" / name)
     for name in ("window.ui", APP_ID + ".svg", APP_ID + "-symbolic.svg"):
         copy(ROOT / "tools/gnome" / name, app / "tools/gnome" / name)
@@ -233,11 +233,11 @@ def main():
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "build-gnome/packages")
     parser.add_argument("--stage", type=Path, help="stage only, e.g. for Snapcraft")
-    parser.add_argument("--version", default="0.1.0")
+    parser.add_argument("--version", default="0.2.0")
     parser.add_argument("--format", choices=("deb", "rpm", "all"), default="all")
     args = parser.parse_args()
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:[.+~][a-zA-Z0-9.]+)?", args.version):
-        parser.error("Use a numeric release version such as 0.1.0")
+        parser.error("Use a numeric release version such as 0.2.0")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     stage_root = stage(

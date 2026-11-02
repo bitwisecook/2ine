@@ -71,7 +71,7 @@ def main():
         window = app.get_active_window()
         pump(lambda: not window.busy)
         assert window.ball == initial
-        for name in ("runtime", "install", "run", "save", "undo"):
+        for name in ("runtime", "install", "run", "save"):
             assert window.lookup_action(name).get_enabled(), name
         entries = window.new_ball()
         entries["name"].set_text("Office")
@@ -98,10 +98,10 @@ def main():
         executable.write_bytes(
             linear_image(g.code, g.fixups, ["DOSCALLS"], "GNOMETEST", data=g.data)
         )
-        entries = window.map_dialog()
-        entries["drive"].set_text("D")
-        entries["folder"].set_text(str(media))
-        assert click(window.get_visible_dialog(), "Map")
+        dialog = window.map_dialog()
+        dialog.source.set_text(str(media))
+        dialog.letter.set_selected(dialog.letters.index("D"))
+        dialog.accept.emit("clicked")
         pump(lambda: not window.busy)
         assert "D" in balls.load(path)["drives"]
         execute(["config", "runtime.backend", "unicorn"])
@@ -189,7 +189,7 @@ def main():
         pump(lambda: not window.busy)
         window.undo()
         pump(lambda: not window.busy)
-        assert window.ball == other and balls.load(other)["applications"] == {}
+        assert window.ball == path and balls.load(other)["applications"] == {}
         window.remember(path)
         pump(lambda: not window.busy)
         assert balls.load(path)["applications"]["Test application"]["arguments"][-1] == ""
