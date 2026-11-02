@@ -103,29 +103,37 @@ def main():
         assert "Ryan C. Gordon" in about.get_copyright()
         assert about.get_license_type() == gnome_balls.Gtk.License.CUSTOM
         capture("about-credits")
-        if args.screenshots:
 
-            def activate_legal(widget):
-                if isinstance(widget, gnome_balls.Gtk.Label) and widget.get_text() == "Legal":
-                    parent = widget.get_ancestor(gnome_balls.Gtk.Button)
-                    if parent:
-                        parent.emit("clicked")
-                        return True
-                if (
-                    isinstance(widget, gnome_balls.Adw.PreferencesRow)
-                    and widget.get_title().replace("_", "") == "Legal"
-                ):
-                    widget.emit("activated")
-                    return True
-                child = widget.get_first_child()
-                while child:
-                    if activate_legal(child):
-                        return True
-                    child = child.get_next_sibling()
-                return False
+        def find(widget, predicate):
+            if predicate(widget):
+                return widget
+            child = widget.get_first_child()
+            while child:
+                found = find(child, predicate)
+                if found:
+                    return found
+                child = child.get_next_sibling()
+            return None
 
-            assert activate_legal(window)
-            capture("project-sources-and-licenses")
+        legal = find(
+            about,
+            lambda widget: (
+                isinstance(widget, gnome_balls.Adw.ActionRow)
+                and widget.get_title().replace("_", "") == "Legal"
+            ),
+        )
+        assert legal
+        assert legal.activate_action("navigation.push", gnome_balls.GLib.Variant("s", "legal"))
+        navigation = legal.get_ancestor(gnome_balls.Adw.NavigationView)
+        pump(lambda: navigation.get_visible_page().get_tag() == "legal")
+        page = navigation.get_visible_page()
+        assert find(
+            page,
+            lambda widget: (
+                isinstance(widget, gnome_balls.Gtk.Label) and "FluidSynth" in widget.get_text()
+            ),
+        )
+        capture("project-sources-and-licenses")
         about.close()
         pump(lambda: window.get_visible_dialog() is None)
         app.quit()
