@@ -405,13 +405,13 @@ are user-supplied and are not licensed or redistributed by this project.
 - Authors / origin credits: Khronos Group; Vulkan Loader contributors
 - [Project](https://github.com/KhronosGroup/Vulkan-Loader) · [Source](https://github.com/KhronosGroup/Vulkan-Loader) · [Download](https://github.com/KhronosGroup/Vulkan-Loader/releases)
 
-## Swift / SwiftUI / AppKit
+## Swift compiler and runtime
 
-- Version: Swift 6.4; macOS SDK 27+ (host selected)
-- License: Swift Apache-2.0 with Runtime Library Exception; Apple SDK terms
+- Version: 6.4 required; actual Mac compiler is build-selected (host selected)
+- License: Apache-2.0 WITH Swift runtime library exception
 - Used as: platform
 - Authors / origin credits: Apple; Swift contributors
-- [Project](https://www.swift.org/) · [Source](https://www.swift.org/) · [Download](https://www.swift.org/download/)
+- [Project](https://www.swift.org/) · [Source](https://github.com/swiftlang/swift) · [Download](https://www.swift.org/download/)
 
 ## GNU C Library (host)
 
@@ -520,3 +520,68 @@ are user-supplied and are not licensed or redistributed by this project.
 - Used as: SDL3 incorporated component
 - Authors / origin credits: Alan Ott; Signal 11 Software; HIDAPI contributors
 - [Project](https://github.com/libusb/hidapi) · [Source](https://github.com/libsdl-org/SDL/tree/release-3.4.18/src/hidapi) · [Download](https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.4.18.tar.gz)
+
+## SwiftUI / AppKit / macOS SDK
+
+- Version: macOS 27+ target; exact SDK is build-selected (host selected)
+- License: Apple SDK terms; implementation source is not published
+- Used as: OS-provided frameworks; not redistributed
+- Authors / origin credits: Apple
+- [Project](https://developer.apple.com/) · [Source](https://developer.apple.com/documentation/swiftui) · [Download](https://developer.apple.com/xcode/)
+- Notes: The source link is API documentation, not implementation source. Apple frameworks come from the operating system/SDK and are not included in our source archives.
+
+## Git
+
+- Version: 1:2.53.0-1ubuntu1.1 (host selected)
+- License: GPL-2.0-only
+- Used as: build/packaging tool; not bundled
+- Authors / origin credits: Linus Torvalds; Junio C Hamano; Git contributors
+- [Project](https://git-scm.com/) · [Source](https://launchpad.net/ubuntu/+source/git/1:2.53.0-1ubuntu1.1) · [Download](https://launchpad.net/ubuntu/+source/git/1:2.53.0-1ubuntu1.1)
+
+## pkgconf / pkg-config
+
+- Version: 2.5.1-4pkgconf|2.5.1-4 (host selected)
+- License: ISC
+- Used as: build/packaging tool; not bundled
+- Authors / origin credits: Ariadne Conill; pkgconf contributors
+- [Project](https://github.com/pkgconf/pkgconf) · [Source](https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4) · [Download](https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4)
+
+## dpkg
+
+- Version: 1.23.7ubuntu1 (host selected)
+- License: GPL-2.0-or-later and retained notices
+- Used as: build/packaging tool; not bundled
+- Authors / origin credits: Ian Jackson; Ian Murdock; Guillem Jover; dpkg contributors
+- [Project](https://www.dpkg.org/) · [Source](https://launchpad.net/ubuntu/+source/dpkg/1.23.7ubuntu1) · [Download](https://launchpad.net/ubuntu/+source/dpkg/1.23.7ubuntu1)
+
+## RPM
+
+- Version: 6.0.1-1build1 (host selected)
+- License: GPL-2.0-or-later and LGPL-2.1-or-later components
+- Used as: build/packaging tool; not bundled
+- Authors / origin credits: Erik Troan; Marc Ewing; RPM contributors
+- [Project](https://rpm.org/) · [Source](https://launchpad.net/ubuntu/+source/rpm/6.0.1-1build1) · [Download](https://launchpad.net/ubuntu/+source/rpm/6.0.1-1build1)
+
+## Ruff
+
+- Version: 0.15.20 (host selected)
+- License: MIT
+- Used as: development-time validation; not bundled
+- Authors / origin credits: Charlie Marsh; Astral and Ruff contributors
+- [Project](https://github.com/astral-sh/ruff) · [Source](https://github.com/astral-sh/ruff/tree/0.15.20) · [Download](https://github.com/astral-sh/ruff/archive/refs/tags/0.15.20.tar.gz)
+
+## ty
+
+- Version: 0.0.57 (host selected)
+- License: MIT
+- Used as: development-time validation; not bundled
+- Authors / origin credits: Astral and ty contributors
+- [Project](https://github.com/astral-sh/ty) · [Source](https://github.com/astral-sh/ty/tree/0.0.57) · [Download](https://github.com/astral-sh/ty/archive/refs/tags/0.0.57.tar.gz)
+
+## clang-format
+
+- Version: 21.1.8 (host selected)
+- License: Apache-2.0 WITH LLVM-exception
+- Used as: development-time validation; not bundled
+- Authors / origin credits: LLVM contributors
+- [Project](https://github.com/llvm/llvm-project) · [Source](https://github.com/llvm/llvm-project/tree/llvmorg-21.1.8) · [Download](https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-21.1.8.tar.gz)

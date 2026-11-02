@@ -797,15 +797,15 @@
     },
     {
       "id": "swift",
-      "name": "Swift / SwiftUI / AppKit",
-      "version": "Swift 6.4; macOS SDK 27+",
-      "license": "Swift Apache-2.0 with Runtime Library Exception; Apple SDK terms",
+      "name": "Swift compiler and runtime",
+      "version": "6.4 required; actual Mac compiler is build-selected",
+      "license": "Apache-2.0 WITH Swift runtime library exception",
       "authors": [
         "Apple",
         "Swift contributors"
       ],
       "homepage": "https://www.swift.org/",
-      "source": "https://www.swift.org/",
+      "source": "https://github.com/swiftlang/swift",
       "download": "https://www.swift.org/download/",
       "role": "platform",
       "versionPolicy": "host",
@@ -1015,6 +1015,128 @@
       "download": "https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.4.18.tar.gz",
       "role": "SDL3 incorporated component",
       "versionPolicy": "pinned"
+    },
+    {
+      "id": "apple-frameworks",
+      "name": "SwiftUI / AppKit / macOS SDK",
+      "version": "macOS 27+ target; exact SDK is build-selected",
+      "license": "Apple SDK terms; implementation source is not published",
+      "authors": [
+        "Apple"
+      ],
+      "homepage": "https://developer.apple.com/",
+      "source": "https://developer.apple.com/documentation/swiftui",
+      "download": "https://developer.apple.com/xcode/",
+      "role": "OS-provided frameworks; not redistributed",
+      "versionPolicy": "host",
+      "notes": "The source link is API documentation, not implementation source. Apple frameworks come from the operating system/SDK and are not included in our source archives."
+    },
+    {
+      "id": "git",
+      "name": "Git",
+      "version": "1:2.53.0-1ubuntu1.1",
+      "license": "GPL-2.0-only",
+      "authors": [
+        "Linus Torvalds",
+        "Junio C Hamano",
+        "Git contributors"
+      ],
+      "homepage": "https://git-scm.com/",
+      "source": "https://launchpad.net/ubuntu/+source/git/1:2.53.0-1ubuntu1.1",
+      "download": "https://launchpad.net/ubuntu/+source/git/1:2.53.0-1ubuntu1.1",
+      "role": "build/packaging tool; not bundled",
+      "versionPolicy": "host"
+    },
+    {
+      "id": "pkgconf",
+      "name": "pkgconf / pkg-config",
+      "version": "2.5.1-4pkgconf|2.5.1-4",
+      "license": "ISC",
+      "authors": [
+        "Ariadne Conill",
+        "pkgconf contributors"
+      ],
+      "homepage": "https://github.com/pkgconf/pkgconf",
+      "source": "https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4",
+      "download": "https://launchpad.net/ubuntu/+source/pkgconf/2.5.1-4pkgconf|2.5.1-4",
+      "role": "build/packaging tool; not bundled",
+      "versionPolicy": "host"
+    },
+    {
+      "id": "dpkg",
+      "name": "dpkg",
+      "version": "1.23.7ubuntu1",
+      "license": "GPL-2.0-or-later and retained notices",
+      "authors": [
+        "Ian Jackson",
+        "Ian Murdock",
+        "Guillem Jover",
+        "dpkg contributors"
+      ],
+      "homepage": "https://www.dpkg.org/",
+      "source": "https://launchpad.net/ubuntu/+source/dpkg/1.23.7ubuntu1",
+      "download": "https://launchpad.net/ubuntu/+source/dpkg/1.23.7ubuntu1",
+      "role": "build/packaging tool; not bundled",
+      "versionPolicy": "host"
+    },
+    {
+      "id": "rpm",
+      "name": "RPM",
+      "version": "6.0.1-1build1",
+      "license": "GPL-2.0-or-later and LGPL-2.1-or-later components",
+      "authors": [
+        "Erik Troan",
+        "Marc Ewing",
+        "RPM contributors"
+      ],
+      "homepage": "https://rpm.org/",
+      "source": "https://launchpad.net/ubuntu/+source/rpm/6.0.1-1build1",
+      "download": "https://launchpad.net/ubuntu/+source/rpm/6.0.1-1build1",
+      "role": "build/packaging tool; not bundled",
+      "versionPolicy": "host"
+    },
+    {
+      "id": "ruff",
+      "name": "Ruff",
+      "version": "0.15.20",
+      "license": "MIT",
+      "authors": [
+        "Charlie Marsh",
+        "Astral and Ruff contributors"
+      ],
+      "homepage": "https://github.com/astral-sh/ruff",
+      "source": "https://github.com/astral-sh/ruff/tree/0.15.20",
+      "download": "https://github.com/astral-sh/ruff/archive/refs/tags/0.15.20.tar.gz",
+      "role": "development-time validation; not bundled",
+      "versionPolicy": "host"
+    },
+    {
+      "id": "ty",
+      "name": "ty",
+      "version": "0.0.57",
+      "license": "MIT",
+      "authors": [
+        "Astral and ty contributors"
+      ],
+      "homepage": "https://github.com/astral-sh/ty",
+      "source": "https://github.com/astral-sh/ty/tree/0.0.57",
+      "download": "https://github.com/astral-sh/ty/archive/refs/tags/0.0.57.tar.gz",
+      "role": "development-time validation; not bundled",
+      "versionPolicy": "host"
+    },
+    {
+      "id": "clang-format",
+      "name": "clang-format",
+      "version": "21.1.8",
+      "license": "Apache-2.0 WITH LLVM-exception",
+      "authors": [
+        "LLVM contributors"
+      ],
+      "homepage": "https://github.com/llvm/llvm-project",
+      "source": "https://github.com/llvm/llvm-project/tree/llvmorg-21.1.8",
+      "download": "https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-21.1.8.tar.gz",
+      "role": "development-time validation; not bundled",
+      "versionPolicy": "host"
     }
   ]
 }
