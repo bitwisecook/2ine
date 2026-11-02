@@ -1,0 +1,22 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+name: GNOME Snap
+on:
+  pull_request:
+    paths: ['snap/**', 'tools/gnome/**', 'tools/gnome_balls.py', 'tools/balls.py', 'tools/build_gnome_packages.py', '.github/workflows/gnome-snap.yml']
+  workflow_dispatch:
+jobs:
+  snap:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare isolated Snapcraft builder
+        run: |
+          sudo snap install snapcraft --classic
+          sudo snap install lxd --channel=5.21/stable
+          sudo lxd init --auto
+      - name: Build strict core26 GNOME Snap
+        run: sudo snapcraft pack --use-lxd --platform amd64 --output build-gnome-snap
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gnome-snap
+          path: build-gnome-snap/*.snap

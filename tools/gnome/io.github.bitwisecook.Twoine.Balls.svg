@@ -1,14 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <defs>
-    <linearGradient id="glass" x2="0" y2="1">
-      <stop stop-color="#78d6f8"/>
-      <stop offset="1" stop-color="#2864b4"/>
-    </linearGradient>
-  </defs>
-  <path fill="#164077" d="M25 15h78l-7 39c-3 16-14 28-28 30v20l24 7v7H36v-7l24-7V84C46 82 35 70 32 54Z"/>
-  <path fill="url(#glass)" d="M29 11h70l-7 40c-3 16-14 26-28 26S39 67 36 51Z"/>
-  <path fill="#9ae8f8" d="m38 22 8 31c2 7 5 11 9 14-9-3-14-9-16-18l-5-27Z"/>
-  <path fill="#f7f8fa" d="m48 34 15-8 13 7v16l-13 8-15-8Zm6 3v9l9 5 7-4V36l-7-4Z"/>
-  <path fill="#f7f8fa" d="m80 47 6 4-7 13-16 7-15-8 6-4 9 5 12-5Z"/>
-  <path fill="#4fbde3" d="M61 78h6v26l20 7H41l20-7Z"/>
+<title>2ine Balls</title><desc>A warm ball of twine forms the O in OS/2; its loose strand draws S/2.</desc>
+<defs>
+ <linearGradient id="ball" x2="0" y2="1"><stop stop-color="#f9dda5"/><stop offset="1" stop-color="#d4a66a"/></linearGradient>
+ <linearGradient id="cord" x2="0" y2="1"><stop stop-color="#f8dca6"/><stop offset="1" stop-color="#d7ac72"/></linearGradient>
+ <clipPath id="clip"><path d="M14 61 C14 39 30 25 49 25 C68 25 82 40 82 60 C82 81 66 98 47 98 C27 98 14 81 14 61 Z"/></clipPath>
+</defs>
+<g transform="translate(0 18) scale(.73)">
+ <path d="M14 61 C14 39 30 25 49 25 C68 25 82 40 82 60 C82 81 66 98 47 98 C27 98 14 81 14 61 Z" transform="translate(0 3)" fill="#986a44"/>
+ <path d="M14 61 C14 39 30 25 49 25 C68 25 82 40 82 60 C82 81 66 98 47 98 C27 98 14 81 14 61 Z" fill="url(#ball)"/>
+ <g clip-path="url(#clip)" fill="none" stroke-linecap="round">
+  <g stroke="#b58350" stroke-width="8">
+   <path d="M14 48 Q48 40 79 76 M14 60 Q42 50 73 88 M18 72 Q39 63 62 98 M30 25 Q27 62 82 69 M42 24 Q39 52 84 55 M55 24 Q53 42 84 42"/>
+  </g>
+  <g stroke="#efcb91" stroke-width="5">
+   <path d="M14 46 Q48 38 79 74 M14 58 Q42 48 73 86 M18 70 Q39 61 62 96 M30 23 Q27 60 82 67 M42 22 Q39 50 84 53 M55 22 Q53 40 84 40"/>
+  </g>
+  <g stroke="#aa7849" stroke-width="9">
+   <path d="M19 86 C15 60 41 29 63 27 M28 95 C23 70 48 34 73 32 M40 100 C33 77 57 43 81 41 M53 102 C45 86 63 55 85 53"/>
+  </g>
+  <g stroke="#f8dca6" stroke-width="6">
+   <path d="M19 84 C15 58 41 27 63 25 M28 93 C23 68 48 32 73 30 M40 98 C33 75 57 41 81 39 M53 100 C45 84 63 53 85 51"/>
+  </g>
+ </g>
+ <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M72 39 C82 28 99 31 102 43 C92 34 81 39 82 47 C83 56 103 53 104 65 C105 78 87 82 80 73 C84 85 102 89 109 78 L121 38 C124 29 132 32 131 42 C140 30 158 36 158 47 C158 58 142 67 135 77 L161 77 C171 77 171 87 166 90 C160 94 152 92 153 88" stroke="#986a44" stroke-width="6" transform="translate(0 2)"/>
+  <path d="M72 39 C82 28 99 31 102 43 C92 34 81 39 82 47 C83 56 103 53 104 65 C105 78 87 82 80 73 C84 85 102 89 109 78 L121 38 C124 29 132 32 131 42 C140 30 158 36 158 47 C158 58 142 67 135 77 L161 77 C171 77 171 87 166 90 C160 94 152 92 153 88" stroke="url(#cord)" stroke-width="5"/>
+  <path d="M17 50 C20 37 32 29 45 28" stroke="#fff1d3" stroke-width="2"/>
+ </g>
+</g>
 </svg>

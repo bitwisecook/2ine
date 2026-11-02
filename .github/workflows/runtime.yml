@@ -7,14 +7,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-26.04, macos-latest]
         profile: [runtime, application]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux application dependencies
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: sudo apt-get update && sudo apt-get install --yes libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 dbus-x11
+        run: sudo apt-get update && sudo apt-get install --yes libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 dbus-x11 patchelf rpm desktop-file-utils appstream
       - name: Fetch hash-verified archived PMStars fixture
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: python3 tests/integration/fetch_gui_fixture.py --destination "$RUNNER_TEMP/hobbes"
@@ -42,9 +42,41 @@ jobs:
       - name: Test native GNOME ball manager
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/integration/gnome_balls.py --build build-runtime
+      - name: Validate GNOME metadata and build native packages
+        if: runner.os == 'Linux' && matrix.profile == 'application'
+        run: |
+          desktop-file-validate tools/gnome/*.desktop
+          appstreamcli validate --no-net tools/gnome/*.metainfo.xml
+          python3 tools/build_gnome_packages.py --build build-runtime
+      - name: Test relocated Debian package
+        if: runner.os == 'Linux' && matrix.profile == 'application'
+        run: dbus-run-session -- xvfb-run -a /usr/bin/python3 tests/integration/gnome_package.py build-gnome/packages/*.deb
+      - name: Upload native Linux packages
+        if: runner.os == 'Linux' && matrix.profile == 'application'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnome-packages
+          path: |
+            build-gnome/packages/*.deb
+            build-gnome/packages/*.rpm
       - name: Retain GUI failure evidence
         if: failure() && runner.os == 'Linux' && matrix.profile == 'application'
         uses: actions/upload-artifact@v4
         with:
           name: portable-gui-failure
           path: build-runtime/gui-results/
+
+  gnome51:
+    needs: runtime
+    runs-on: ubuntu-26.04
+    container: fedora:45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: gnome-packages
+          path: packages
+      - name: Install RPM on GNOME 51 libraries
+        run: dnf install -y packages/*.rpm xorg-x11-server-Xvfb xorg-x11-xauth dbus-daemon patchelf cpio
+      - name: Exercise installed frontend and relocated RPM
+        run: dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py packages/*.rpm

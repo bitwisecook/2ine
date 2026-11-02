@@ -14,41 +14,12 @@ prerequisites, credential parameters, tests and the `.2ineball` Finder format.
 
 ## GNOME application
 
-The native GTK 4/libadwaita manager runs on Ubuntu 26.04 or newer. Install its
-system dependencies and launch it from this checkout:
-
-```sh
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1
-/usr/bin/python3 tools/gnome_balls.py --build "$PWD/build-portable"
-```
-
-Use **+** to create a ball, or the folder button to open an existing ball.
-**Runtime…** chooses the build folder containing `lx_loader`; this choice and
-opened balls are remembered. **Drives** maps installation-media folders.
-**Applications** runs an installer or executable and saves application launchers.
-Executable paths must be inside a mapped drive. The arguments field accepts
-quoted values such as `"a value with spaces"`; no shell is invoked.
-Backslashes in OS/2 paths are retained literally.
-
-**Settings** selects the execution backend, tracing, beep volume and environment
-overrides, and provides a CONFIG.SYS editor. Resetting a variable restores its
-inherited value. Profiles and the registry persist in the same ball as CLI
-launches; this manager does not provide a registry or binary-profile editor.
-**Activity** shows the running operation, its final exit code and the last 64 KiB
-of output. Full output is saved under `logs/desktop-*.log`; installer receipts
-retain the CLI format. One operation runs at a time in the manager. Close the
-guest application's windows before closing the manager.
-
-Install the launcher and icon in the current user's application menu:
-
-```sh
-python3 tools/install_gnome.py
-```
-
-The launcher refers to this checkout, which must remain in place. The GTK GUI
-uses asynchronous subprocesses to invoke `tools/balls.py`, so installations
-and application execution leave the interface's event loop responsive. Its
-preferences live in `$XDG_CONFIG_HOME/2ine/balls-gnome.json`.
+The [native GTK 4/libadwaita app](gnome-app.md) manages balls through the shared
+C backend, including drives, per-ball runtimes, saved applications, settings,
+conflict-aware CONFIG.SYS drafts, undo and live activity. It follows GNOME 51
+patterns and uses a ball-of-twine OS/2 icon with a simplified symbolic variant.
+The GNOME guide covers source launchers, relocatable Debian/RPM packages and
+the strict core26 Snap recipe.
 
 ## Command line
 

@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -14,7 +15,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from images import FlatGuest, linear_image
 
-from tools import balls, gnome_balls
+if os.environ.get("TWOINE_GNOME_FRONTEND"):
+    sys.path.insert(0, os.environ["TWOINE_GNOME_FRONTEND"])
+    import gnome_balls
+
+    balls = gnome_balls.balls
+else:
+    from tools import balls, gnome_balls
 
 GLib = gnome_balls.GLib
 Gtk = gnome_balls.Gtk
@@ -58,21 +65,22 @@ def main():
         app.register(None)
         app.activate()
         window = app.get_active_window()
-        pump()
+        pump(lambda: not window.busy)
         entries = window.new_ball()
         entries["name"].set_text("Office")
         assert click(window.get_visible_dialog(), "Create")
-        pump()
-        path = balls.balls_home() / "Office"
+        pump(lambda: not window.busy)
+        path = balls.balls_home() / "Office.2ineball"
         assert window.ball == path
-        assert window.stack.get_pages().get_n_items() == 4
+        assert window.stack.get_pages().get_n_items() == 5
 
         def execute(arguments, expected=0):
             window.execute(arguments)
-            assert window.process is not None
+            assert window.busy
             assert not window.sidebar.get_sensitive()
-            pump(lambda: window.process is None)
-            assert window.last_result == expected, window.last_log.read_text()
+            pump(lambda: not window.busy)
+            if arguments[0] in ("launch", "run", "install"):
+                assert window.last_result == expected, window.log_text
             assert window.sidebar.get_sensitive()
 
         media = root / "Installation media"
@@ -87,11 +95,87 @@ def main():
         entries["drive"].set_text("D")
         entries["folder"].set_text(str(media))
         assert click(window.get_visible_dialog(), "Map")
-        pump(lambda: window.process is None)
-        assert window.last_result == 0, window.last_log.read_text()
+        pump(lambda: not window.busy)
+        assert "D" in balls.load(path)["drives"]
         execute(["config", "runtime.backend", "unicorn"])
         execute(["config", "env.TEST_VALUE", "A value with spaces"])
-        execute(["add-app", "Test application", r"D:\SETUP.EXE", "argument with spaces"])
+        execute(
+            [
+                "add-app",
+                "--cwd",
+                r"C:\TEMP",
+                "Test application",
+                r"D:\SETUP.EXE",
+                "argument with spaces",
+                "",
+            ]
+        )
+        assert balls.load(path)["applications"]["Test application"]["cwd"] == r"C:\TEMP"
+        # Runtime selection is shared with the Mac app and survives a fresh snapshot.
+        original_request = balls.native_request
+        request_threads = []
+        ticks = []
+
+        def observed_request(message):
+            request_threads.append(threading.get_ident())
+            time.sleep(0.15)
+            return original_request(message)
+
+        balls.native_request = observed_request
+        timer = GLib.timeout_add(10, lambda: ticks.append(True) or GLib.SOURCE_CONTINUE)
+        window.request({"action": "runtime-build", "build": str(args.build.resolve())})
+        pump(lambda: not window.busy)
+        GLib.source_remove(timer)
+        balls.native_request = original_request
+        assert (
+            ticks and request_threads and all(t != threading.get_ident() for t in request_threads)
+        )
+        assert balls.load(path)["runtime"]["build"] == str(args.build.resolve())
+        # Drafts survive navigation and refresh; installer changes cause a visible conflict.
+        window.config_editor.get_buffer().insert_at_cursor("REM café\r\n")
+        draft = window.drafts[path]
+        window.show_page("drives")
+        window.refresh()
+        pump(lambda: not window.busy)
+        assert window.drafts[path] == draft
+        other = root / "Other.2ineball"
+        balls.init(other)
+        window.remember(other)
+        pump(lambda: not window.busy)
+        assert window.ball == other and window.drafts[path] == draft
+        window.remember(path)
+        pump(lambda: not window.busy)
+        assert window.drafts[path] == draft
+        config = path / "drive_c/CONFIG.SYS"
+        config.write_bytes(config.read_bytes() + b"SET INSTALLER=kept\r\n")
+        window.save_config()
+        pump(lambda: not window.busy)
+        assert "changed on disk" in window.banner.get_title()
+        assert window.drafts[path] == draft
+        window.drafts.clear()
+        window.refresh()
+        pump(lambda: not window.busy)
+        window.config_editor.get_buffer().insert_at_cursor("REM café\r\n")
+        window.save_config()
+        pump(lambda: not window.busy)
+        assert not window.drafts
+        assert b"caf\xe9" in config.read_bytes()
+        assert b"INSTALLER=kept" in config.read_bytes()
+        # Undo applies to the captured ball rather than whichever ball is selected later.
+        execute(["unmap", "D"])
+        window.undo()
+        pump(lambda: not window.busy)
+        assert balls.load(path)["drives"]["D"] == str(media)
+        execute(["remove-app", "Test application"])
+        window.remember(other)
+        pump(lambda: not window.busy)
+        window.undo()
+        pump(lambda: not window.busy)
+        assert window.ball == other and balls.load(other)["applications"] == {}
+        window.remember(path)
+        pump(lambda: not window.busy)
+        assert balls.load(path)["applications"]["Test application"]["arguments"][-1] == ""
+
         assert gnome_balls.parse_arguments(r"""C:\suite.rsp "C:\My Documents\one.lwp" '' """) == [
             r"C:\suite.rsp",
             r"C:\My Documents\one.lwp",
@@ -102,7 +186,7 @@ def main():
 
             args.screenshots.mkdir(parents=True, exist_ok=True)
             display = Display(os.environ["DISPLAY"])
-            for page in ("apps", "drives", "settings"):
+            for page in ("apps", "drives", "settings", "config", "activity"):
                 window.stack.set_visible_child_name(page)
                 until = time.monotonic() + 0.3
                 pump(lambda until=until: time.monotonic() > until)
@@ -115,8 +199,10 @@ def main():
         assert receipt["exit_code"] == 0
         assert receipt["command"][1] == r"D:\SETUP.EXE"
         assert receipt["runtime_id"]
-        execute(["run", r"D:\MISSING.EXE"], 2)
-        assert "program does not exist" in window.last_log.read_text()
+        window.execute(["run", r"D:\MISSING.EXE"])
+        pump(lambda: not window.busy)
+        assert "Program does not exist" in window.banner.get_title()
+        execute(["launch", "Test application"])
         execute(["unset", "env.TEST_VALUE"])
         execute(["remove-app", "Test application"])
         execute(["unmap", "D"])
@@ -124,8 +210,29 @@ def main():
         assert data["environment"] == {}
         assert data["applications"] == {}
         assert set(data["drives"]) == {"C"}
+        window.set_default_size(390, 680)
+        pump(lambda: window.split.get_collapsed())
+        assert window.split.get_collapsed()
+        assert (
+            window.switcher.get_display_mode()
+            == gnome_balls.Adw.InlineViewSwitcherDisplayMode.ICONS
+        )
+        if args.screenshots:
+            until = time.monotonic() + 0.5
+            pump(lambda: time.monotonic() > until)
+            display.capture(windows[0][0], args.screenshots / "narrow.png")
+        window.config_editor.get_buffer().insert_at_cursor("REM close-save\r\n")
         window.close()
-        pump()
+        dialog = window.get_visible_dialog()
+        assert isinstance(dialog, gnome_balls.Adw.AlertDialog)
+        assert click(dialog, "Cancel")
+        pump(lambda: window.get_visible_dialog() is None)
+        assert path in window.drafts and window.get_visible()
+        window.close()
+        pump(lambda: window.get_visible_dialog() is not None)
+        assert click(window.get_visible_dialog(), "Save Changes")
+        pump(lambda: not window.busy and not window.drafts)
+        assert not window.drafts and b"REM close-save" in config.read_bytes()
         app.quit()
         print("GNOME management, async LX launch, installer receipt and failure recovery passed")
 
