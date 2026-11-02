@@ -219,7 +219,7 @@ def queue_program(writer):
         g.call(1, 300, again, shared_name, 4096, 19)
         g.result(183, 153)  # DosAllocSharedMem: ERROR_ALREADY_EXISTS.
         g.word(again, 0, 154)
-    pool_name = g.field(b"\\SHAREMEM\\BOTTLE_SUBALLOC_TEST\0")
+    pool_name = g.field(b"\\SHAREMEM\\BALL_SUBALLOC_TEST\0")
     pool, allocation, second_allocation = (g.field(bytes(4)) for _ in range(3))
     g.call(1, 301 if writer else 300, pool, pool_name, *([3] if writer else [8192, 19]))
     g.result(0, 160)

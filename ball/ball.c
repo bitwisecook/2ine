@@ -1440,6 +1440,14 @@ static cJSON *browse_directory(Context *c, const char *path)
         if (*p == '/')
             *p = '\\';
     cJSON *result = cJSON_CreateObject(), *entries = cJSON_AddArrayToObject(result, "entries");
+    if (strlen(guest) > 3)
+    {
+        const char *last = strrchr(guest, '\\');
+        size_t length = last == guest + 2 ? 3 : (size_t)(last - guest);
+        cJSON_AddStringToObject(result, "parent", format(c, "%.*s", (int)length, guest));
+    }
+    else
+        cJSON_AddNullToObject(result, "parent");
     cJSON_AddStringToObject(result, "path", guest);
     cJSON_AddStringToObject(result, "hostPath", host);
     size_t count = 0;

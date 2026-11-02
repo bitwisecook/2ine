@@ -31,7 +31,7 @@ Request actions:
 | `prepare-launch` | `ball`, `build`, `arguments` | Structured command, cwd, environment changes, receipt seed |
 | `record-install` | `ball`, `receipt`, `programHost`, `exitCode` | Snapshot after recording the actual result |
 | `host-path` / `guest-path` | `ball`, `path` | Canonical host path / mapped guest path |
-| `browse` | `ball`, `path` | Drive-letter directory and entries (`name`, guest `path`, `hostPath`, `directory`) |
+| `browse` | `ball`, `path` | Drive-letter directory, canonical parent and entries (`name`, guest `path`, `hostPath`, `directory`) |
 | `import-files` | `ball`, destination guest `path`, host `sources` array | Updated directory after a non-replacing recursive copy |
 | `set-working-directory` | `ball`, absolute guest `path` | Snapshot with that drive's saved default |
 | `save-application` | `ball`, `name`, `program`, `arguments`, optional `originalName`, `workingDirectories`, `environment`, `iconSource` | Snapshot after one validated manifest write |

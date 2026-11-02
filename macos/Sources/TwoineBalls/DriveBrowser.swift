@@ -35,7 +35,7 @@ struct GuestBrowserView: View {
                     ForEach(snapshot.roots.keys.sorted().filter { requiredDrive == nil || $0 == requiredDrive }, id: \.self) { Text($0 + ":").tag($0) }
                 }.frame(width: 145).accessibilityIdentifier("guestDrivePicker")
                 Button("Up", systemImage: "arrow.up") { goUp() }
-                    .disabled(listing?.path.count ?? 0 <= 3 || loading)
+                    .disabled(listing?.parent == nil || loading)
                     .keyboardShortcut(.upArrow, modifiers: .command)
                 TextField("OS/2 path", text: $address).onSubmit { navigate(address) }
                     .font(.system(.body, design: .monospaced)).accessibilityIdentifier("guestBrowserPath")
@@ -117,10 +117,7 @@ struct GuestBrowserView: View {
         path = value; address = value; selection = nil
     }
     private func goUp() {
-        guard let current = listing?.path, current.count > 3 else { return }
-        var parent = current
-        if let separator = parent.lastIndex(of: "\\") { parent.removeSubrange(separator...) }
-        navigate(parent.count == 2 ? parent + "\\" : parent)
+        if let parent = listing?.parent { navigate(parent) }
     }
 }
 

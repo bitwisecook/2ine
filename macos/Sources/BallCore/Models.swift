@@ -123,6 +123,7 @@ public struct GuestEntry: Decodable, Sendable, Identifiable {
     public var id: String { path }
 }
 public struct GuestDirectory: Decodable, Sendable {
+    public let parent: String?
     public let path: String
     public let hostPath: String
     public let entries: [GuestEntry]
