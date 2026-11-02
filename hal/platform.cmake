@@ -1,6 +1,12 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 # Select exactly one host OS and reuse common POSIX implementations.
-set(TWOINE_HOST_SOURCES "${TWOINE_HAL_SOURCE_DIR}/common/host_arch.c")
+set(TWOINE_HOST_SOURCES
+    "${TWOINE_HAL_SOURCE_DIR}/common/host_arch.c"
+    "${PROJECT_SOURCE_DIR}/ball/disk_image.c"
+    "${PROJECT_SOURCE_DIR}/ball/fat_volume.c"
+    "${PROJECT_SOURCE_DIR}/ball/hpfs_volume.c"
+    "${PROJECT_SOURCE_DIR}/ball/vendor/fatfs/ff.c"
+    "${PROJECT_SOURCE_DIR}/ball/vendor/fatfs/ffunicode.c")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(TWOINE_HOST_PLATFORM linux)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")

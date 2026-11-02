@@ -3,6 +3,8 @@
 #define TB_PLATFORM_H
 #include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
+/* Path results are owned allocations. NULL preserves an errno failure reason. */
 char *tb_absolute(const char *path);
 char *tb_canonical(const char *path);
 int tb_is_dir(const char *path);
@@ -17,6 +19,11 @@ int tb_is_link(const char *path);
 int tb_mkdir_new(const char *path);
 int tb_copy_new(const char *source, const char *destination);
 int tb_copy(const char *source, const char *destination);
+int tb_file_info(FILE *file, int64_t *size, int *mode);
+int tb_file_mode(FILE *file, int mode);
+int tb_replace(const char *source, const char *destination);
+int tb_remove_tree(const char *path);
+char *tb_archive_workspace(const char *parent);
 char *tb_home(void);
 int tb_path_equal(const char *a, const char *b, size_t length);
 #endif

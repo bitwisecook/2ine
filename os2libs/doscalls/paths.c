@@ -100,8 +100,13 @@ APIRET DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal, ULONG ulFSAInfoLevel
         return ERROR_INVALID_LEVEL;
     if (drive >= 26 || !GLoaderState.disks[drive])
         return ERROR_INVALID_DRIVE;
-    const char filesystem[] = "HPFS";
-    const ULONG size = 8 + 3 + sizeof filesystem;
+    LxHostVolumeInfo volume;
+    LxHostFsError volume_error = lx_host_path_volume(GLoaderState.disks[drive], &volume);
+    if (volume_error)
+        return fileError(volume_error);
+    const char *filesystem = volume.filesystem;
+    const ULONG filesystem_size = (ULONG)strlen(filesystem) + 1;
+    const ULONG size = 8 + 3 + filesystem_size;
     ULONG capacity = *pcbBuffLength;
     *pcbBuffLength = size;
     if (!pfsqb || capacity < size)
@@ -109,26 +114,34 @@ APIRET DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal, ULONG ulFSAInfoLevel
     uint8 *output = (uint8 *)pfsqb;
     lx_guest_store_u16(output, 3); /* FSAT_LOCALDRV */
     lx_guest_store_u16(output + 2, 2);
-    lx_guest_store_u16(output + 4, sizeof filesystem - 1);
+    lx_guest_store_u16(output + 4, filesystem_size - 1);
     lx_guest_store_u16(output + 6, 0);
     output[8] = 'A' + drive;
     output[9] = ':';
     output[10] = 0;
-    memcpy(output + 11, filesystem, sizeof filesystem);
+    memcpy(output + 11, filesystem, filesystem_size);
     return NO_ERROR;
 }
 
 APIRET16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf, USHORT infobufsize)
 {
     TRACE_NATIVE("Dos16QFsInfo(%d, %d, %p, %d)", drivenum, fslevel, infobuf, infobufsize);
-    const char label[] = "host";
+    if (!drivenum)
+        drivenum = (USHORT)GLoaderState.current_disk;
+    if (!drivenum || drivenum > 26 || !GLoaderState.disks[drivenum - 1])
+        return ERROR_INVALID_DRIVE;
+    LxHostVolumeInfo volume;
+    LxHostFsError error = lx_host_path_volume(GLoaderState.disks[drivenum - 1], &volume);
+    if (error)
+        return fileError(error);
+    const char *label = volume.label;
     if (fslevel != 2)
         return ERROR_INVALID_LEVEL;
-    if (infobufsize < 5 + sizeof label)
+    if (infobufsize < 5 + strlen(label) + 1)
         return ERROR_BUFFER_OVERFLOW;
-    memset(infobuf, 0, 4);
-    infobuf[4] = sizeof label - 1;
-    memcpy(infobuf + 5, label, sizeof label);
+    lx_guest_store_u32(infobuf, volume.serial);
+    infobuf[4] = (uint8)strlen(label);
+    memcpy(infobuf + 5, label, strlen(label) + 1);
     return NO_ERROR;
 }
 
@@ -575,12 +588,17 @@ APIRET DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
         LxHostFsError error = lx_host_path_space(GLoaderState.disks[drive - 1], &total, &available);
         if (error)
             return fileError(error);
-        uint64_t units = total / 4096, free_units = available / 4096;
+        LxHostVolumeInfo volume;
+        error = lx_host_path_volume(GLoaderState.disks[drive - 1], &volume);
+        if (error)
+            return fileError(error);
+        uint64_t units = total / volume.cluster_bytes,
+                 free_units = available / volume.cluster_bytes;
         lx_guest_store_u32(output, 0);
-        lx_guest_store_u32(output + 4, 8);
+        lx_guest_store_u32(output + 4, volume.cluster_bytes / volume.sector_bytes);
         lx_guest_store_u32(output + 8, units > UINT32_MAX ? UINT32_MAX : units);
         lx_guest_store_u32(output + 12, free_units > UINT32_MAX ? UINT32_MAX : free_units);
-        lx_guest_store_u16(output + 16, 512);
+        lx_guest_store_u16(output + 16, volume.sector_bytes);
         return NO_ERROR;
     }
     if (level == 2)
@@ -588,8 +606,13 @@ APIRET DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
         if (capacity < 17)
             return ERROR_BUFFER_OVERFLOW;
         memset(output, 0, 17);
-        output[4] = 4;
-        memcpy(output + 5, "2ine", 5);
+        LxHostVolumeInfo volume;
+        LxHostFsError error = lx_host_path_volume(GLoaderState.disks[drive - 1], &volume);
+        if (error)
+            return fileError(error);
+        lx_guest_store_u32(output, volume.serial);
+        output[4] = (uint8)strlen(volume.label);
+        memcpy(output + 5, volume.label, strlen(volume.label) + 1);
         return NO_ERROR;
     }
     return ERROR_INVALID_LEVEL;

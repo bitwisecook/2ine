@@ -193,6 +193,11 @@ def main(argv=None):
     sub.add_parser("list", help="list balls in the default data directory")
     sub.add_parser("show", help="show the persistent configuration")
     sub.add_parser("apps", help="list saved application launchers")
+    export = sub.add_parser("export", help="export the ball as a ZIP archive")
+    export.add_argument("archive", type=Path)
+    export.add_argument("--include-images", action="store_true", help="bundle disk images")
+    archive_import = sub.add_parser("import", help="import a ZIP into a new --ball directory")
+    archive_import.add_argument("archive", type=Path)
     app = sub.add_parser("add-app", help="save an installed application's command")
     app.add_argument("--cwd", help="guest or mapped host working directory")
     app.add_argument("name")
@@ -206,6 +211,27 @@ def main(argv=None):
     mapping = sub.add_parser("map", help="map a host directory as an OS/2 drive")
     mapping.add_argument("drive")
     mapping.add_argument("directory", type=Path)
+    image = sub.add_parser("map-image", help="map an ISO or FAT floppy image internally, read-only")
+    image.add_argument("drive")
+    image.add_argument("image", type=Path)
+    device = sub.add_parser("device", help="allocate an ejected CD or floppy device")
+    device.add_argument("drive")
+    device.add_argument("kind", choices=["cdrom", "floppy", "disk"])
+    eject = sub.add_parser("eject", help="eject media while retaining its drive letter")
+    eject.add_argument("drive")
+    create = sub.add_parser("create-floppy", help="create a formatted FAT12 image and attach it")
+    create.add_argument("drive")
+    create.add_argument("image", type=Path)
+    create.add_argument("kib", type=int, choices=[360, 720, 1200, 1440, 2880])
+    disk = sub.add_parser("create-disk", help="create and attach a formatted filesystem image")
+    disk.add_argument("drive")
+    disk.add_argument("image", type=Path)
+    disk.add_argument("filesystem", choices=["fat32", "exfat", "hpfs"])
+    disk.add_argument("mib", type=int)
+    for name in ("device-lock", "media-readonly"):
+        option = sub.add_parser(name)
+        option.add_argument("drive")
+        option.add_argument("state", choices=["on", "off"])
     unmap = sub.add_parser("unmap")
     unmap.add_argument("drive")
     setting = sub.add_parser(
@@ -224,6 +250,18 @@ def main(argv=None):
     configure_library(args.build)
     ball = args.ball.resolve()
     try:
+        if args.action in ("import", "export"):
+            result = native_request(
+                {
+                    "action": args.action + "-ball",
+                    "ball": str(ball),
+                    "path": str(args.archive.resolve()),
+                    "includeImages": getattr(args, "include_images", False),
+                    "build": str(args.build.resolve()),
+                }
+            )
+            print(result if args.action == "export" else ball)
+            return 0
         if args.action == "list":
             for path in native_request({"action": "discover"}):
                 print(path)
@@ -252,6 +290,24 @@ def main(argv=None):
             command = ["remove-app", args.name]
         elif args.action == "map":
             command = ["map", args.drive, str(args.directory)]
+        elif args.action == "map-image":
+            command = ["map-image", args.drive, str(args.image.resolve())]
+        elif args.action == "device":
+            command = ["device", args.drive, args.kind]
+        elif args.action == "eject":
+            command = ["eject", args.drive]
+        elif args.action == "create-floppy":
+            command = ["create-floppy", args.drive, str(args.image.resolve()), str(args.kib)]
+        elif args.action == "create-disk":
+            command = [
+                "create-disk",
+                args.drive,
+                str(args.image.resolve()),
+                args.filesystem,
+                str(args.mib),
+            ]
+        elif args.action in ("device-lock", "media-readonly"):
+            command = [args.action, args.drive, args.state]
         elif args.action == "unmap":
             command = ["unmap", args.drive]
         else:

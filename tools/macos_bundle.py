@@ -61,6 +61,8 @@ def resolve(name, binary, roots):
 
 def bundle_runtime(build, destination, mesa, vulkan_loader):
     destination.mkdir(parents=True)
+    if (build / "2ine-build.json").is_file():
+        shutil.copy2(build / "2ine-build.json", destination / "2ine-build.json")
     sources = [
         build / "lx_loader",
         build / "2ine-ball",

@@ -15,6 +15,8 @@ APIRET fileError(LxHostFsError error)
             return NO_ERROR;
         case LX_HOST_FS_MISSING:
             return ERROR_FILE_NOT_FOUND;
+        case LX_HOST_FS_NOT_READY:
+            return ERROR_NOT_READY;
         case LX_HOST_FS_NOT_DIRECTORY:
             return ERROR_PATH_NOT_FOUND;
         case LX_HOST_FS_NOT_EMPTY:
@@ -944,20 +946,34 @@ APIRET DosDevIOCtl(HFILE device, ULONG category, ULONG function, PVOID parameter
         LxHostFsError error = lx_host_path_space(GLoaderState.disks[input[1]], &total, &available);
         if (error)
             return fileError(error);
-        /* A mapped directory is a local virtual fixed disk, with 512-byte sectors. */
-        uint64_t sectors = total / 512;
-        uint64_t cylinders = sectors / (255 * 63);
+        LxHostVolumeInfo volume;
+        error = lx_host_path_volume(GLoaderState.disks[input[1]], &volume);
+        if (error)
+            return fileError(error);
+        int floppy = volume.removable && !strcmp(volume.filesystem, "FAT");
+        unsigned sector_bytes = volume.sector_bytes;
+        unsigned track = floppy ? volume.sectors_per_track : 63;
+        unsigned heads = floppy ? volume.heads : 255;
+        uint64_t sectors = total / sector_bytes;
+        uint64_t cylinders = track && heads ? sectors / ((uint64_t)track * heads) : 0;
         uint8 *output = data;
         memset(output, 0, 36);
-        lx_guest_store_u16(output, 512);
-        output[2] = 8;     /* 4-KiB allocation unit. */
-        output[10] = 0xf8; /* Fixed-media descriptor. */
-        lx_guest_store_u16(output + 13, 63);
-        lx_guest_store_u16(output + 15, 255);
+        lx_guest_store_u16(output, sector_bytes);
+        output[2] = volume.cluster_bytes / sector_bytes;
+        lx_guest_store_u16(output + 3, volume.reserved_sectors);
+        output[5] = volume.fat_count;
+        lx_guest_store_u16(output + 6, volume.root_entries);
+        lx_guest_store_u16(output + 8, sectors <= 65535 ? sectors : 0);
+        output[10] = floppy ? volume.media : 0xf8;
+        lx_guest_store_u16(output + 11, volume.fat_sectors);
+        lx_guest_store_u16(output + 13, track);
+        lx_guest_store_u16(output + 15, heads);
+        lx_guest_store_u32(output + 17, volume.hidden_sectors);
         lx_guest_store_u32(output + 21, sectors > UINT32_MAX ? UINT32_MAX : sectors);
         lx_guest_store_u16(output + 31, cylinders > 65535 ? 65535 : cylinders);
-        output[33] = 5;                     /* DEVTYPE_FIXED, Toolkit bsedev.h. */
-        lx_guest_store_u16(output + 34, 1); /* Non-removable medium. */
+        /* Toolkit bsedev.h: 3.5-inch = 2, fixed = 5, unknown = 7. */
+        output[33] = floppy ? 2 : volume.removable ? 7 : 5;
+        lx_guest_store_u16(output + 34, volume.removable ? 0 : 1);
         *data_size = 36;
         if (parameter_size)
             *parameter_size = 2;

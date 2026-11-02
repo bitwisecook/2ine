@@ -83,8 +83,10 @@ Run the `TwoineBalls` shared scheme's tests in Xcode for the native UI smoke tes
 a real ball, navigates its settings, edits/saves CONFIG.SYS, uses launch
 shortcuts, verifies a missing-executable error and recovery, and creates a new
 ball through the native save panel. Test captures remain in the `.xcresult` bundle. Swift package
-tests verify argv, bounded/full output, exit status, preferences, and interaction
-with the shared C engine. C-engine regressions verify unknown manifest fields,
+tests verify argv, bounded/full output, exit status, stop/force-stop recovery,
+preferences, runtime reset, application directory summaries, and interaction with
+the shared C engine. Model tests cover failed and successful mapping, Undo/Redo,
+settings drafts and default-folder resolution. C-engine regressions verify unknown manifest fields,
 installer edits, Latin-1/CRLF preservation and saved working directories.
 
 ## Native workflow and shared storage
@@ -98,14 +100,47 @@ build path; older clients retain this additive field. CLI launches can select
 the same build with `--build`. The native C helper accepts JSON as described in
 [../ball/README.md](../ball/README.md).
 
-Map installer media under Drives. Run an installer or executable through the
-Ball menu. Its native chooser browses mapped drive letters, with a drive
+In Drives → Map Drive, choose Folder or ISO or Floppy Image, select a source,
+and assign a letter (for example D: for an installation CD or A: for a floppy).
+Images use internal ISO 9660/Joliet, FAT12/16/32, exFAT or standard HPFS v2
+filesystems, with no host mounting or extracted drive folder. CDs are read-only;
+floppies and disk images default to read/write with selectable read-only
+protection. The browser shows the source filename and supports the same program
+and working-directory pickers. Unmap and Undo/Redo retain device metadata.
+Use original installation media; mounting it does not boot OS/2 or establish
+that every installer or installed application is supported.
+
+New macOS balls reserve A: as an ejected floppy and D: as an ejected CD drive.
+The title-bar CD, floppy and disk menus show each drive letter and source
+filename, attach/replace media, eject without removing the letter, and add devices.
+The Ball menu provides the same controls. Create Floppy Image offers 360 KB,
+720 KB, 1.2 MB, 1.44 MB and 2.88 MB. Create Disk Image offers FAT32, exFAT and HPFS.
+Ball Settings can lock a device to its image and access mode, preventing eject,
+replacement and mode changes until unlocked.
+Media can change while a guest is running; existing file handles keep their
+previous member snapshots until closed.
+
+Choose Ball → Install Software. Attach a CD or floppy image and review the
+suggested installer path. Suggestions include common EXE and CMD names in the
+root and installation/language folders; Browse Drives can select any file.
+CMD and BAT selection uses the original OS/2 CMD.EXE from mapped OS2 folders,
+the OS/2 installation CD, or a guest COMSPEC setting. Installers start in their own folder unless an
+explicit directory override is selected. After actual exit, the manager offers
+to keep the image attached or eject it, while retaining the device letter.
+Locked devices cannot be ejected. Built-in formatting creates new images; the
+original OS/2 FORMAT utility still needs raw-device API support. See the
+[filesystem limits](../ball/README.md#image-backed-drives) before using existing
+HPFS media.
+
+Run an installer or program through the Ball menu. Its native chooser browses mapped drive letters, with a drive
 selector, OS/2 path field, folder navigation and file table. Backslashes
 are literal; quotes group whitespace and `""` represents an empty argument.
 Each drive has a saved default working directory. Use Drives → Set Default
 Folder to change it. Drives is the first section, with a minimum-width drive
 letter column. Drop files/folders onto a drive row to copy to its root, or onto
-its browser/folders to copy there. Conflicts are reported without replacing
+its browser/folders to copy there. Import Files in the browser or Ball menu
+(Shift-Command-I) provides the same copy operation through a native file chooser,
+targeting the displayed folder. Conflicts are reported without replacing
 existing files; symbolic links are rejected.
 
 Add/Edit Application has General, Working Directories and Environment tabs.
@@ -120,11 +155,27 @@ Applications display their embedded OS/2 icon by default. Choose Icon imports a
 custom image into the ball; Use Executable Icon restores automatic extraction.
 Missing/unsupported embedded artwork uses the native application symbol. Removing a launcher preserves installed files. Select application rows
 to copy tab-separated text; use their context menu or Command-Return to launch.
-Drive unmapping and launcher removal support Undo. The manager serializes its
-operations; close guest windows and wait for exit before closing or quitting it.
+Drive mapping/replacement, unmapping, settings changes, runtime selection and
+launcher removal support Undo/Redo. Failed edits do not add history. Undo returns
+to the affected ball, and operation-specific menu labels identify the change.
+Mapping failures keep the sheet and its entries available for correction. Missing
+paths, access denials, non-directory paths and allocation failures have distinct
+shared-core diagnostics; the manager displays the underlying error.
+Settings drafts remain with their ball across navigation and unrelated changes.
+Use Bundled Runtime removes an external runtime selection; the backend has a
+separate inheritance control.
+
+The manager serializes operations. Close guest windows normally, or choose Stop
+Operation from Activity or the Ball menu (Command-Period). Stopping requires
+confirmation because guest work may be lost. Force Stop is available after Stop
+if the guest ignores termination. Both paths wait for actual process exit and
+retain its log and exit status before allowing another operation or quitting.
 
 Use View shortcuts Command-1 through Command-5 for Drives, Applications, Settings,
-CONFIG.SYS and Activity. The sidebar, native table columns, window geometry and
+CONFIG.SYS and Activity. The Ball menu also exposes selection-aware application
+launch/edit/remove and drive unmap/default-folder commands. File → Save CONFIG.SYS
+uses Command-S. Finder commands reveal packages/files without opening them;
+Open Full Log opens the log in its associated application. The sidebar, native table columns, window geometry and
 last section retain system/user state. Command-Comma opens application settings.
 Native text controls provide standard editing/undo. Ball paths drag to Finder
 or other apps and copy from their context menu. Standard semantic colors and
@@ -191,3 +242,26 @@ An installed SmartSuite tree was available, but original installer media,
 CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG were not found. The original all-components
 macOS installation and Word Pro font/save/reopen qualification remain unverified.
 Use the separately supplied media and procedure in [balls.md](balls.md).
+
+## ZIP archives
+
+The toolbar and File menu expose **Import Ball from ZIP** and **Export Ball as
+ZIP**. Export's native save panel has an **Include disk images** checkbox,
+initially off. Import chooses a ZIP and a new `.2ineball` location, then selects
+the imported ball. Dropping a ZIP onto the manager opens the same import flow.
+Existing balls are never replaced. Export saves a pending CONFIG.SYS draft
+using its normal conflict check before creating the ZIP. Archive work runs on
+the backend actor, with guest launches and media changes blocked until complete.
+
+Every export includes `2ine-export.json` with engine Git version/revision and
+build details, app version/build, selected runtime settings and runtime content
+fingerprints when available. New runtime builds also supply their own version,
+compiler, architecture and build configuration. Images included in the archive
+use paths relative to the imported ball. Without images, media devices import
+as ejected. Folder paths inside the ball are normalized to relative paths.
+Unavailable external folders also appear as ejected drives with their previous
+paths shown. Select the drive and choose Change Mountpoint or Choose Folder
+to reconnect it. The drive letter, launchers and working directories remain
+unchanged. Runtime selection resets to the receiving host’s bundled runtime;
+cached native binaries are recreated locally. Original runtime build/version
+details remain in the export record.

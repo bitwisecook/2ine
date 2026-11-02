@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 #if canImport(BallEngine)
 import BallEngine
 #endif
@@ -15,6 +16,12 @@ public struct ProcessResult: Sendable {
 public actor ProcessRunner {
     private var process: Process?
     public init() {}
+
+    public func stop(force: Bool = false) {
+        guard let process, process.isRunning else { return }
+        if force { kill(process.processIdentifier, SIGKILL) }
+        else { process.terminate() }
+    }
 
     public func run(executable: URL, arguments: [String],
                     environment: [String: String]? = nil, cwd: URL? = nil,
@@ -70,6 +77,8 @@ public actor BallBackend {
     private let runner = ProcessRunner()
     public init() {}
 
+    public func stop(force: Bool = false) async { await runner.stop(force: force) }
+
     public func request<T: Decodable & Sendable>(_ message: DesktopRequest, as type: T.Type) throws -> T {
         try NativeBallCore.request(message, as: type)
     }
@@ -84,6 +93,7 @@ public actor BallBackend {
         var environment = ProcessInfo.processInfo.environment
         for key in plan.unsetEnvironment { environment.removeValue(forKey: key) }
         environment.merge(plan.environment) { _, value in value }
+        if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
         let log = URL(filePath: ball).appending(path: "logs/macos-\(UUID().uuidString).log")
         var result = try await runner.run(executable: URL(filePath: executable), arguments: Array(plan.command.dropFirst()), environment: environment, cwd: URL(filePath: plan.cwd), log: log, update: update)
         if plan.installer {

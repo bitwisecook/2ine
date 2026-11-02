@@ -24,6 +24,15 @@ struct ProgramSheet: View {
     @State private var iconRequest = UUID()
     @State private var iconDescription = "Uses the icon embedded in the executable."
     @State private var executablePicker = false
+    @State private var mediaLetter = "D"
+    @State private var mediaKind = MediaDeviceKind.cdrom
+    @State private var candidates: [String] = []
+    @State private var discovering = false
+    @State private var mediaNotice = ""
+    private var mediaLetters: [String] {
+        let existing = (model.snapshot?.manifest.drives ?? [:]).filter { $0.value.device == mediaKind }.keys
+        return Array(Set(existing).union(model.availableMediaLetter(mediaKind).map { [$0] } ?? [])).sorted()
+    }
     @State private var folderChoice: FolderChoice?
     @State private var error: String?
     var body: some View {
@@ -32,16 +41,38 @@ struct ProgramSheet: View {
             if let snapshot = model.snapshot {
                 TabView {
                     Form {
+                        if action == .install {
+                            Section("Installation Media") {
+                                HStack {
+                                    Picker("Device", selection: $mediaKind) {
+                                        Text("CD").tag(MediaDeviceKind.cdrom)
+                                        Text("Floppy").tag(MediaDeviceKind.floppy)
+                                    }.frame(width: 150)
+                                    Picker("Drive", selection: $mediaLetter) {
+                                        ForEach(mediaLetters, id: \.self) { Text($0 + ":").tag($0) }
+                                    }.frame(width: 130)
+                                    Button("Attach Image…") { chooseInstallerMedia() }.disabled(discovering || mediaLetters.isEmpty || snapshot.manifest.drives[mediaLetter]?.isLocked == true)
+                                }
+                                Text(model.snapshot?.manifest.drives[mediaLetter]?.image.map { URL(filePath: $0).lastPathComponent } ?? "No image attached").foregroundStyle(.secondary)
+                                if discovering { ProgressView("Looking for installers…") }
+                                if !mediaNotice.isEmpty { Text(mediaNotice).font(.callout).foregroundStyle(.secondary) }
+                                if !candidates.isEmpty {
+                                    Menu("Suggested Installers") {
+                                        ForEach(candidates, id: \.self) { path in Button(path) { program = path } }
+                                    }
+                                }
+                            }
+                        }
                         if action == .save { TextField("Application name", text: $name).accessibilityIdentifier("applicationName") }
-                        LabeledContent("Executable") {
+                        LabeledContent("Program") {
                             HStack {
-                                TextField("OS/2 executable", text: $program, prompt: Text("C:\\OS2\\APP.EXE"))
+                                TextField("OS/2 program or command file", text: $program, prompt: Text("C:\\OS2\\APP.EXE"))
                                     .labelsHidden().accessibilityIdentifier("programPath").frame(minWidth: 240)
                                 Button("Browse Drives…") { executablePicker = true }.accessibilityIdentifier("browseExecutable")
                             }
                         }
                         TextField("Arguments", text: $arguments, prompt: Text("\"a value with spaces\" C:\\DATA\\FILE")).accessibilityIdentifier("programArguments")
-                        Text("Quotes group arguments; backslashes remain literal. Working directories and environment inherit from the ball unless overridden below.")
+                        Text(action == .install ? "Quotes group arguments; backslashes remain literal. Installers start in their own folder. Use the other tabs to set overrides." : "Quotes group arguments; backslashes remain literal. Working directories and environment inherit from the ball unless overridden below.")
                             .font(.callout).foregroundStyle(.secondary)
                         if action == .save {
                             HStack(spacing: 16) {
@@ -56,7 +87,7 @@ struct ProgramSheet: View {
                                 }
                             }
                         }
-                        if action == .install { Text("Use your original media. The installer’s exit code and runtime identity are recorded in its receipt.").font(.callout) }
+                        if action == .install { Text("Choose any program or command file on your original media. CMD and BAT files require the original OS/2 CMD.EXE. After the installer exits, you can keep or eject the media.").font(.callout) }
                     }.formStyle(.grouped).tabItem { Text("General") }
                     Form {
                         Section("Working Directory Overrides") {
@@ -81,7 +112,7 @@ struct ProgramSheet: View {
                     EnvironmentOverridesView(defaults: snapshot.environmentDefaults, values: $environment).tabItem { Text("Environment") }
                 }
                 .sheet(isPresented: $executablePicker) {
-                    GuestPickerSheet(model: model, snapshot: snapshot, path: program.isEmpty ? (snapshot.workingDirectories[snapshot.currentDrive] ?? snapshot.currentDrive + ":\\") : program, directoriesOnly: false) {
+                    GuestPickerSheet(model: model, snapshot: snapshot, path: program.isEmpty ? (action == .install ? mediaLetter + ":\\" : (snapshot.workingDirectories[snapshot.currentDrive] ?? snapshot.currentDrive + ":\\")) : program, directoriesOnly: false) {
                         program = $0; refreshIcon()
                     }
                 }
@@ -95,10 +126,10 @@ struct ProgramSheet: View {
                 Spacer()
                 Button(model.editingApplication == nil ? action.rawValue : "Save Application") {
                     Task {
-                        do { try await model.program(action, name: name, program: program, arguments: arguments, directories: directories, environment: environment, iconSource: iconSource) }
+                        do { try await model.program(action, name: name, program: program, arguments: arguments, directories: directories, environment: environment, iconSource: iconSource, mediaDrive: action == .install && model.snapshot?.manifest.drives[mediaLetter]?.image != nil ? mediaLetter : nil) }
                         catch { self.error = error.localizedDescription }
                     }
-                }.keyboardShortcut(.defaultAction).disabled(program.isEmpty || model.busy).accessibilityIdentifier("confirmProgram")
+                }.keyboardShortcut(.defaultAction).disabled(program.isEmpty || model.busy || model.mediaBusy || discovering).accessibilityIdentifier("confirmProgram")
             }
         }.padding(24).frame(width: 740, height: 600)
         .onAppear {
@@ -109,9 +140,41 @@ struct ProgramSheet: View {
                 icon = model.applicationIcons[name]
                 if app.icon != nil { iconDescription = "Custom icon saved in the ball." }
             }
+            if action == .install {
+                selectMediaLetter()
+                if model.snapshot?.manifest.drives[mediaLetter]?.image != nil { discoverInstallers() }
+            }
             refreshIcon()
         }
+        .onChange(of: mediaKind) { _, _ in selectMediaLetter(); candidates = []; mediaNotice = "" }
+        .onChange(of: mediaLetter) { _, _ in if action == .install { candidates = []; discoverInstallers() } }
         .onChange(of: program) { _, _ in if iconSource == nil || iconSource == "" { refreshIcon() } }
+    }
+    private func selectMediaLetter() {
+        if !mediaLetters.contains(mediaLetter) { mediaLetter = mediaLetters.first ?? "D" }
+    }
+    private func chooseInstallerMedia() {
+        guard let url = AppModel.pick(directory: false, title: "Choose Installation \(mediaKind.title) Image") else { return }
+        discovering = true; error = nil
+        Task {
+            defer { discovering = false }
+            do { setSuggestions(try await model.attachInstallerMedia(url, kind: mediaKind, letter: mediaLetter)) }
+            catch { self.error = error.localizedDescription }
+        }
+    }
+    private func discoverInstallers() {
+        guard !discovering, model.snapshot?.manifest.drives[mediaLetter]?.image != nil else { return }
+        discovering = true
+        Task {
+            defer { discovering = false }
+            do { setSuggestions(try await model.installerCandidates(letter: mediaLetter)) }
+            catch { self.error = error.localizedDescription }
+        }
+    }
+    private func setSuggestions(_ paths: [String]) {
+        candidates = paths
+        program = paths.first ?? ""
+        mediaNotice = paths.isEmpty ? "Browse the image to choose its installer or command file." : "Suggested a likely installer. Browse Drives to choose any other file."
     }
     private func refreshIcon() {
         guard let ball = model.selected, !program.isEmpty else { return }
@@ -178,22 +241,48 @@ struct MapDriveSheet: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var letter = "D"
+    @State private var image = false
     @State private var directory = ""
+    @State private var error: String?
+    let initialLetter: String?
+    init(model: AppModel, initialLetter: String? = nil, initialSource: String = "") {
+        self.model = model; self.initialLetter = initialLetter
+        _letter = State(initialValue: initialLetter ?? "D")
+        _directory = State(initialValue: initialSource)
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Map Drive").font(.title2.bold())
+            Text(initialLetter == nil ? "Map Drive" : "Change Mountpoint").font(.title2.bold())
             Picker("Drive letter", selection: $letter) {
                 ForEach(Array("ABDEFGHIJKLMNOPQRSTUVWXYZ").map(String.init), id: \.self) { Text($0 + ":").tag($0) }
-            }
+            }.disabled(initialLetter != nil)
+            Picker("Source", selection: $image) {
+                Text("Folder").tag(false)
+                Text("Disk Image").tag(true)
+            }.pickerStyle(.segmented).accessibilityIdentifier("driveSourceType")
             HStack {
-                TextField("Host folder", text: $directory)
-                Button("Choose…") { if let url = AppModel.pick(directory: true, title: "Choose Drive Folder") { directory = url.path } }
+                TextField(image ? "Image file" : "Host folder", text: $directory)
+                    .accessibilityIdentifier(image ? "mappedImage" : "mappedHostFolder")
+                Button("Choose…") {
+                    if let url = AppModel.pick(directory: !image, title: image ? "Choose ISO or Floppy Image" : "Choose Drive Folder") { directory = url.path }
+                }
             }
-            Text("An existing mapping for this letter will be replaced. Files in both folders are kept.").foregroundStyle(.secondary)
+            if image {
+                Text("ISO 9660/Joliet CDs are read-only. FAT, FAT32, exFAT and HPFS images are writable by default, with Read Only available in device settings. Images stay inside 2ine.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            Text("An existing mapping for this letter will be replaced. Source files are kept.").foregroundStyle(.secondary)
+            if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("mapDriveError") }
             HStack {
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.busy)
                 Spacer()
-                Button("Map Drive") { model.command(["map", letter, directory]); dismiss() }
+                if model.busy { ProgressView().controlSize(.small).accessibilityLabel("Mapping drive") }
+                Button("Map Drive") {
+                    Task {
+                        do { try await model.mapDrive(letter, directory: directory, image: image); dismiss() }
+                        catch { self.error = error.localizedDescription }
+                    }
+                }
                     .keyboardShortcut(.defaultAction).disabled(directory.isEmpty || model.busy)
             }
         }.padding(24).frame(width: 520)
@@ -203,19 +292,22 @@ struct MapDriveSheet: View {
 struct BallSettingsView: View {
     @Bindable var model: AppModel
     let snapshot: BallSnapshot
-    @State private var key = "system.beep_volume"
-    @State private var value = ""
-    @State private var envName = ""
-    @State private var envValue = ""
+    @Bindable var draft: SettingsDraft
     var body: some View {
         Form {
+            DeviceSettingsView(model: model, snapshot: snapshot)
+            Group {
             Section("Execution Runtime") {
                 LabeledContent("Build", value: model.build.isEmpty ? "Not selected" : model.build)
-                Button("Choose Runtime Build…") { model.chooseRuntime() }
+                HStack {
+                    Button("Choose Runtime Build…") { model.chooseRuntime() }
+                    Button("Use Bundled Runtime") { model.useBundledRuntime() }
+                        .disabled(snapshot.manifest.runtime["build"] == nil)
+                }
                 LabeledContent("Backend", value: snapshot.manifest.runtime["backend"] ?? "Inherited (portable on macOS)")
                 HStack {
                     Button("Use Unicorn") { model.command(["config", "runtime.backend", "unicorn"]) }
-                    Button("Reset to Inherited") { model.command(["unset", "runtime.backend"]) }
+                    Button("Use Inherited Backend") { model.command(["unset", "runtime.backend"]) }
                 }
                 Text("Native x86 execution requires Linux. Use Unicorn on macOS. External runtime provider assets remain in the selected build.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -224,15 +316,15 @@ struct BallSettingsView: View {
                 ForEach(snapshot.manifest.system.keys.sorted(), id: \.self) { name in
                     LabeledContent(name, value: snapshot.manifest.system[name]?.text ?? "")
                 }
-                Picker("Setting", selection: $key) {
+                Picker("Setting", selection: $draft.key) {
                     Text("Beep volume (0–1)").tag("system.beep_volume")
                     Text("Trace native calls (true/false)").tag("system.trace_native")
                     Text("Trace events (true/false)").tag("system.trace_events")
                 }
-                TextField("Override value", text: $value)
+                TextField("Override value", text: $draft.value)
                 HStack {
-                    Button("Set Override") { model.command(["config", key, value]) }.disabled(value.isEmpty)
-                    Button("Reset Selected Setting") { model.command(["unset", key]) }
+                    Button("Set Override") { model.command(["config", draft.key, draft.value]) }.disabled(draft.value.isEmpty)
+                    Button("Reset Selected Setting") { model.command(["unset", draft.key]) }
                 }
             }
             Section("Default Guest Environment") {
@@ -248,17 +340,18 @@ struct BallSettingsView: View {
                         Button("Reset") { model.command(["unset", "env." + name]) }
                     }
                 }
-                TextField("Variable name", text: $envName, prompt: Text("LANG, LIBPATH or OS2PATH"))
-                TextField("Value", text: $envValue)
-                Button("Set Environment Override") { model.command(["config", "env." + envName, envValue]) }.disabled(envName.isEmpty)
+                TextField("Variable name", text: $draft.envName, prompt: Text("LANG, LIBPATH or OS2PATH"))
+                TextField("Value", text: $draft.envValue)
+                Button("Set Environment Override") { model.command(["config", "env." + draft.envName, draft.envValue]) }.disabled(draft.envName.isEmpty)
                 Text("Explicit overrides take precedence over CONFIG.SYS and defaults. Reset restores inheritance. PATH and OS2PATH both configure the guest search path. %NAME% expands inherited defaults; the host PATH is unchanged.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Persistent Application State") {
                 Text("Profiles, registry and shell metadata remain in the ball’s C:\\OS2 folder. This app does not edit binary profiles, registry entries or Workplace Shell objects.")
-                Button("Open State Folder") { if let root = snapshot.roots["C"] { model.reveal(root + "/OS2") } }
+                Button("Open State Folder") { if let root = snapshot.roots["C"] { model.openFile(root + "/OS2") } }
             }
-        }.formStyle(.grouped).disabled(model.busy)
+            }.disabled(model.busy || model.mediaBusy)
+        }.formStyle(.grouped)
     }
 }
 
@@ -277,7 +370,7 @@ struct ConfigSysView: View {
                 Button("Reload from Disk") { if model.configDirty { discard = true } else { model.discardConfigDraft() } }.disabled(model.busy)
                 Spacer()
                 Button("Save CONFIG.SYS") { model.configSys(model.configText, expected: model.configBase) }
-                    .keyboardShortcut("s").disabled(model.busy || !model.configDirty)
+                    .disabled(model.busy || !model.configDirty)
             }
         }.padding(20)
         .confirmationDialog("Discard unsaved CONFIG.SYS edits?", isPresented: $discard) {

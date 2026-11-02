@@ -111,7 +111,7 @@ class BallTests(unittest.TestCase):
             self.assertEqual(
                 call.args[0], [str(runtime / "lx_loader"), r"C:\OS2\app.exe", "space argument", ""]
             )
-            self.assertEqual(call.kwargs["cwd"], (self.ball / "drive_c").resolve())
+            self.assertEqual(call.kwargs["cwd"], (self.ball / "drive_c/OS2").resolve())
             env = call.kwargs["env"]
             self.assertEqual(env["TWOINE_REGISTRY"], str(self.ball / "drive_c/OS2/REGISTRY.INI"))
             self.assertNotIn("IS_2INE", env)

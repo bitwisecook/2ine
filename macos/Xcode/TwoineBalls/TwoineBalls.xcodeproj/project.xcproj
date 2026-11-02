@@ -51,6 +51,7 @@
         "GENERATE_INFOPLIST_FILE": "NO",
         "HEADER_SEARCH_PATHS": [
           "$(inherited)",
+          "-larchive",
           "$(SRCROOT)/../../../ball",
           "$(SRCROOT)/../../../ball/vendor/cjson",
           "$(SRCROOT)/../../../ball/vendor/sha256",

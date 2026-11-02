@@ -24,9 +24,9 @@ Request actions:
 | Action | Input | Result |
 | --- | --- | --- |
 | `discover` | none | Default ball directories |
-| `snapshot` | `ball` | `manifest`, canonical `roots`, effective `workingDirectories`, guest `environmentDefaults`, opaque `applicationRecords`, Latin-1 `configSys` text |
+| `snapshot` | `ball` | `manifest`, canonical `roots`, effective `workingDirectories`, guest `environmentDefaults`, opaque `applicationRecords`, `unavailableDrives` path hints, Latin-1 `configSys` text |
 | `command` | `ball`, `arguments`, optional `build` | Updated snapshot |
-| `runtime-build` | `ball`, `build` | Snapshot with selected runtime |
+| `runtime-build` | `ball`, optional `build` | Snapshot with selected runtime; omitting `build` removes the external runtime selection and preserves the backend |
 | `save-config-sys` | `ball`, `expected`, `text` | Snapshot; rejects a conflicting disk edit |
 | `prepare-launch` | `ball`, `build`, `arguments` | Structured command, cwd, environment changes, receipt seed |
 | `record-install` | `ball`, `receipt`, `programHost`, `exitCode` | Snapshot after recording the actual result |
@@ -70,6 +70,9 @@ Vendored dependencies:
 - Brad Conte's public-domain SHA-256 implementation, commit
   `cfbde48414baacf51fc7c74f275190881f037d32`. Used for runtime identity and
   installer receipts, verified against Python hashlib in the engine tests.
+- FatFs R0.16 with upstream patches 1 and 2, July 10, 2026, under its permissive
+  license. Used for FAT32/exFAT, with in-process image-file disk callbacks. See
+  [configuration and local changes](vendor/fatfs/README.md).
 
 ## Per-drive and per-application state
 
@@ -116,3 +119,120 @@ and asynchronous operation presentation. The core owns these data/path rules.
 
 Format references: [IBM LX format](https://komh.github.io/os2books/os2tk45/lxref.htm),
 [Open Watcom NE structures](https://github.com/open-watcom/open-watcom-v2/blob/master/bld/watcom/h/exeos2.h).
+
+## Image-backed drives
+
+`["map-image", "D", "/media/SmartSuite.iso"]` attaches an image directly through
+2ine's internal filesystem. A drive value may be a directory string or a device
+descriptor such as `{"device":"cdrom","image":"/media/SmartSuite.iso"}`.
+`{"device":"floppy"}` reserves an ejected drive. `device LETTER cdrom|floppy|disk`
+reserves an unused letter; `eject LETTER` removes its medium while retaining the
+allocation. `map-image` inserts or replaces matching media. `unmap` removes the
+allocation. C: remains private to the ball and cannot be image-backed. Older
+image-only descriptors remain readable.
+
+ISO 9660/Joliet CDs are read-only. Raw FAT12/FAT16 floppy images default to
+read/write. FAT32, exFAT and standard HPFS v2 disk images support existing images
+and creation, read/write access, directories, long filenames and file attributes.
+Supported primary MBR partitions are handled internally. No host disk attachment,
+mount point or extracted drive tree is created. HPFS also preserves and exposes
+native OS/2 extended attributes; FAT and exFAT cannot store OS/2 extended attributes.
+Filesystem queries expose the volume type, label, geometry, capacity and free space.
+
+`create-floppy LETTER /path/new.img KIB` creates and attaches a formatted FAT12
+image. Supported capacities are 360, 720, 1200, 1440 and 2880 KiB.
+`create-disk LETTER /path/new.img fat32|exfat|hpfs MIB` creates and attaches a
+formatted disk image. FAT32 requires at least 64 MiB; exFAT and HPFS accept at
+least 8 MiB. The current HPFS formatter supports up to 64 GiB, in 8 MiB increments.
+Creation never overwrites an existing file. `media-readonly LETTER on|off` controls
+floppy/disk write protection, including already open writers. The chosen mode
+persists when changing images. CDs remain read-only. `device-lock LETTER on|off`
+locks an attached image and its access mode: replacing, ejecting, unmapping and
+changing protection are rejected until the device is explicitly unlocked in ball
+settings. Descriptors retain the optional `readonly` and `locked` booleans.
+
+Internal member paths are opaque and must be passed to the engine/HAL rather
+than opened as host paths. A stable per-ball device path reads the atomically
+replaced `devices/LETTER.media` descriptor on each operation, so a running guest
+sees media swaps. Ejected access returns OS/2 ERROR_NOT_READY. Handles retain a
+private member snapshot after eject/replacement; writes require the same source
+to remain attached and writable. Source-image locks serialize access across
+processes. Writes update the image itself; make a separate copy when the original
+must be preserved. These filesystems do not provide a transactional image backup.
+Images remain referenced by filename. Missing sources become unavailable without
+preventing the rest of the ball from opening.
+
+The native executable picker browses ordinary guest paths such as
+`D:\ENGLISH\INSTALL.EXE`. Installer launch defaults to the selected program's
+parent directory; explicit overrides take precedence. CMD/BAT selection resolves
+the original OS/2 command processor through guest COMSPEC, then mapped OS2/CMD.EXE,
+CMD.EXE or the OS/2 CD's OS2IMAGE/DISK_2/CMD.EXE. It runs `/C CALL` through that
+interpreter; missing interpreters produce an actionable error. No host shell
+interprets guest scripts. The host process starts in the ball's C: directory while
+the guest retains the image's per-drive working directory. The receipt captures
+the selected program hash before execution, so later ejection cannot change it.
+Snapshots expose `driveRecords` for opaque Undo/Redo and `imageSources` for the
+resolved source filenames, including ball-relative media paths.
+
+Limits: HPFS uses supported single-byte code pages; DBCS, HPFS386 and active hotfix
+remapping are rejected. Flux floppy formats, raw 2352-byte CD tracks and
+multi-extent ISO files are unsupported. These are filesystem devices, not a
+bootable OS/2 VM or raw-sector/DASD interface. Original OS/2 FORMAT.COM/FORMAT.EXE
+still requires missing legacy disk IOCTL/export support; use the built-in image
+creation controls for formatting. Attaching original media does not establish
+that its full installer or installed applications are supported. Qualification
+compares actual OS/2 and SmartSuite CD listings and selected bytes against
+libarchive, and validates writable images with independent filesystem checkers.
+Original installation media is supplied separately and is never committed.
+
+## ZIP import and export
+
+`export-ball` takes `ball`, output ZIP `path`, optional `includeImages` (false
+by default), and optional selected runtime `build` and frontend `exporter` object.
+It returns the ZIP path. `import-ball` takes a ZIP `path` and a **new** destination
+`ball`; it returns the imported snapshot. Both actions use the same C API as the
+native managers. The CLI exposes `export archive.zip [--include-images]` and
+`import archive.zip` with the destination selected by `--ball`.
+
+Archives contain `ball.json` and the ball's private files at their root.
+Bundled attached images live under `bundled-media/` and use ball-relative
+manifest paths; unattached image files already inside the ball are included
+when requested. Without images, mapped media devices remain allocated but
+are ejected, and common image extensions inside the ball are omitted. External
+mapped folders retain their previous paths as reconnect hints. Missing or
+foreign-host paths keep their drive letters but are ejected until reconnected.
+Folder paths inside the ball are normalized to relative paths with forward
+slashes. Imported balls select the receiving host’s runtime: external build
+locations and cached native runtime binaries are omitted from the portable
+configuration, while the original runtime identity stays in 2ine-export.json.
+
+`2ine-export.json` records the export time, image option, engine ABI, Git
+version/revision (including the dirty marker), compiler/build time, frontend
+version/build when supplied, and selected runtime settings. An available runtime
+also records its content identity and loader SHA-256. New CMake builds emit
+`2ine-build.json` with source version/revision, build configuration, platform,
+architecture and compiler; exports retain that record as runtime build
+information, and macOS bundles copy it with the runtime. Older/unavailable
+runtimes are identified by their fingerprints or explicitly marked unavailable;
+missing source metadata is never inferred from the exporter's source revision.
+Imports preserve the export record; a later export creates a fresh record.
+
+Generated media controls, IPC and `2ine.cfg` are recreated for the destination.
+Snapshots expose `unavailableDrives` as drive letters and previous path hints;
+these drives stay in the manifest, preserve guest working directories and
+launchers, and do not prevent other drives from working. Choose Change Mountpoint
+in Drives (or `map LETTER folder` in the CLI) to reconnect a folder. Missing
+image paths behave as ejected media and use the existing image attach controls.
+A folder reconnects on refresh if its original path becomes available again.
+The private C: folder remains required.
+Imports reject links, special/encrypted entries, traversal and duplicate files,
+and remove a failed import. Existing destinations are never replaced. Exports
+reject symbolic links and destinations inside the source ball, stream file data,
+and replace the destination ZIP only after successfully completing the archive.
+Stop guests before archiving; the managers serialize these operations.
+
+ZIP support links against libarchive (system library on macOS, `libarchive-dev`
+on Debian/Ubuntu, `libarchive` via vcpkg on Windows). The BSD-licensed API headers
+and license in `vendor/libarchive/` are pinned to
+[libarchive v3.7.4](https://github.com/libarchive/libarchive/tree/v3.7.4), allowing
+macOS SDKs that omit the headers to use the system library.

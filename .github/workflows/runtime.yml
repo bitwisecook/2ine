@@ -12,6 +12,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install Linux archive dependency
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libarchive-dev
       - name: Install Linux application dependencies
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: sudo apt-get update && sudo apt-get install --yes libncurses-dev libasound2-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libegl1-mesa-dev libgl1-mesa-dri xvfb libxtst6 python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 dbus-x11

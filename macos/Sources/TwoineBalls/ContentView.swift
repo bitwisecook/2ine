@@ -8,84 +8,111 @@ struct ContentView: View {
     @Bindable var model: AppModel
     @AppStorage("lastPage") private var lastPage = Page.drives.rawValue
     var body: some View {
-        NavigationSplitView {
-            List(selection: Binding(get: { model.selected }, set: { if let path = $0 { model.select(path) } })) {
-                Section("Balls") {
-                    ForEach(model.paths, id: \.self) { path in
-                        Label {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(AppModel.displayName(path)).font(.headline)
-                                Text(path).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                            }
-                        } icon: { Image(systemName: "shippingbox") }
-                        .tag(path).help(path)
-                        .draggable(URL(filePath: path))
-                        .contextMenu {
-                            Button("Open in Finder") { model.reveal(path) }
-                            Button("Copy Ball Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) }
-                        }
-                    }
-                }
-            }
-            .accessibilityIdentifier("ballList")
-            .disabled(model.busy)
-            .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
-            .safeAreaInset(edge: .bottom) {
-                HStack {
-                    Button("New Ball", systemImage: "plus") { model.chooseBall(create: true) }
-                    Button("Open", systemImage: "folder") { model.chooseBall(create: false) }
-                }.padding().disabled(model.busy)
-            }
-        } detail: {
-            if let snapshot = model.snapshot {
-                VStack(spacing: 0) {
-                    Picker("Ball section", selection: $model.page) {
-                        ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
-                    }.pickerStyle(.segmented).padding()
-                    Divider()
-                    Group {
-                        switch model.page {
-                        case .applications: ApplicationsView(model: model, snapshot: snapshot)
-                        case .drives: DrivesView(model: model, snapshot: snapshot)
-                        case .settings: BallSettingsView(model: model, snapshot: snapshot).id(model.revision)
-                        case .config: ConfigSysView(model: model)
-                        case .activity: ActivityView(model: model)
-                        }
-                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .navigationTitle(model.title)
-                .navigationSubtitle(model.runtimeDescription)
-            } else {
-                ContentUnavailableView {
-                    Label(model.selected == nil ? "Your OS/2 applications, at home" : "Cannot Open Ball", systemImage: "shippingbox")
-                } description: {
-                    Text(model.selected == nil ? "Create a ball, map your installation media, and install an application." : "Check the folder and its mapped drives, then refresh or open another ball.")
-                } actions: {
-                    Button("Create Ball…") { model.chooseBall(create: true) }
-                    Button("Open Ball…") { model.chooseBall(create: false) }
-                }
-            }
-        }
+        NavigationSplitView { sidebar } detail: { detail }
         .frame(minWidth: 880, minHeight: 590)
         .onAppear { model.page = Page(rawValue: lastPage) ?? .drives }
         .onChange(of: model.page) { _, page in lastPage = page.rawValue }
         .dropDestination(for: URL.self) { urls, _ in
-            guard !model.busy, let url = urls.first, url.pathExtension == "2ineball" || url.hasDirectoryPath else { return false }
+            guard !model.busy, !model.mediaBusy, let url = urls.first,
+                  ["2ineball", "zip"].contains(url.pathExtension.lowercased()) || url.hasDirectoryPath else { return false }
             model.open(url, create: false); return true
         }
         .toolbar {
             ToolbarItemGroup {
+                Button("Import Ball…", systemImage: "square.and.arrow.down") { model.chooseImportBall() }
+                    .disabled(model.busy || model.mediaBusy).accessibilityIdentifier("importBall")
+                Button("Export Ball…", systemImage: "square.and.arrow.up") { model.chooseExportBall() }
+                    .disabled(model.snapshot == nil || model.busy || model.mediaBusy).accessibilityIdentifier("exportBall")
+                MediaDeviceMenu(model: model, kind: .cdrom)
+                MediaDeviceMenu(model: model, kind: .floppy)
+                MediaDeviceMenu(model: model, kind: .disk)
                 if model.busy { ProgressView().controlSize(.small).accessibilityLabel("Operation in progress") }
                 Button("Refresh", systemImage: "arrow.clockwise") { model.refresh() }.disabled(model.busy)
                 Button("Runtime…", systemImage: "cpu") { model.chooseRuntime() }.disabled(model.selected == nil || model.busy)
             }
         }
         .sheet(item: $model.programAction) { action in ProgramSheet(model: model, action: action) }
-        .sheet(isPresented: $model.mapping) { MapDriveSheet(model: model) }
+        .sheet(isPresented: Binding(get: { model.creatingFloppy != nil }, set: { if !$0 { model.creatingFloppy = nil } })) {
+            if let letter = model.creatingFloppy { CreateFloppySheet(model: model, letter: letter) }
+        }
+        .sheet(isPresented: Binding(get: { model.creatingDisk != nil }, set: { if !$0 { model.creatingDisk = nil } })) {
+            if let letter = model.creatingDisk { CreateDiskSheet(model: model, letter: letter) }
+        }
+        .sheet(item: $model.installCompletion) { completion in InstallCompletionSheet(model: model, completion: completion) }
+        .sheet(isPresented: $model.mapping, onDismiss: { model.mappingDrive = nil }) {
+            MapDriveSheet(model: model, initialLetter: model.mappingDrive,
+                          initialSource: model.mappingDrive.flatMap { model.snapshot?.manifest.drives[$0]?.source } ?? "")
+        }
+        .confirmationDialog("Stop the running operation?", isPresented: $model.stopConfirmation) {
+            Button("Stop Operation", role: .destructive) { model.stopProcess() }
+        } message: { Text("Unsaved work in the guest may be lost. Its output log will be kept.") }
+        .confirmationDialog("Force stop the running operation?", isPresented: $model.forceStopConfirmation) {
+            Button("Force Stop", role: .destructive) { model.stopProcess(force: true) }
+        } message: { Text("Use this if the guest does not respond to Stop. Unsaved work may be lost. Its output log will be kept.") }
         .alert("2ine Balls", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK", role: .cancel) { model.error = nil }
         } message: { Text(model.error ?? "") }
     }
+    private var sidebar: some View {
+        List(selection: Binding(get: { model.selected }, set: { if let path = $0 { model.select(path) } })) {
+            Section("Balls") {
+                ForEach(model.paths, id: \.self) { path in
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(AppModel.displayName(path)).font(.headline)
+                            Text(path).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    } icon: { Image(systemName: "shippingbox") }
+                    .tag(path).help(path)
+                    .draggable(URL(filePath: path))
+                    .contextMenu {
+                        Button("Open in Finder") { model.reveal(path) }
+                        Button("Copy Ball Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) }
+                    }
+                }
+            }
+        }
+        .accessibilityIdentifier("ballList")
+        .disabled(model.busy)
+        .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 340)
+        .safeAreaInset(edge: .bottom) {
+            HStack {
+                Button("New Ball", systemImage: "plus") { model.chooseBall(create: true) }
+                Button("Open", systemImage: "folder") { model.chooseBall(create: false) }
+            }.padding().disabled(model.busy)
+        }
+    }
+    @ViewBuilder private var detail: some View {
+        if let snapshot = model.snapshot {
+            VStack(spacing: 0) {
+                Picker("Ball section", selection: $model.page) {
+                    ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
+                }.pickerStyle(.segmented).padding()
+                Divider()
+                Group {
+                    switch model.page {
+                    case .applications: ApplicationsView(model: model, snapshot: snapshot)
+                    case .drives: DrivesView(model: model, snapshot: snapshot)
+                    case .settings: BallSettingsView(model: model, snapshot: snapshot, draft: model.settingsDraft).id(model.selected)
+                    case .config: ConfigSysView(model: model)
+                    case .activity: ActivityView(model: model)
+                    }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .navigationTitle(model.title)
+            .navigationSubtitle(model.runtimeDescription)
+        } else {
+            ContentUnavailableView {
+                Label(model.selected == nil ? "Your OS/2 applications, at home" : "Cannot Open Ball", systemImage: "shippingbox")
+            } description: {
+                Text(model.selected == nil ? "Create a ball, map your installation media, and install an application." : "Check the folder and its mapped drives, then refresh or open another ball.")
+            } actions: {
+                Button("Create Ball…") { model.chooseBall(create: true) }
+                Button("Open Ball…") { model.chooseBall(create: false) }
+            }
+        }
+    }
+
 }
 
 struct ApplicationRow: Identifiable {
@@ -98,12 +125,11 @@ struct ApplicationRow: Identifiable {
 struct ApplicationsView: View {
     @Bindable var model: AppModel
     let snapshot: BallSnapshot
-    @Environment(\.undoManager) private var undo
     @State private var selection: Set<String> = []
     @State private var sortOrder = [KeyPathComparator(\ApplicationRow.name)]
     @SceneStorage("applicationColumns") private var columns: TableColumnCustomization<ApplicationRow>
     var rows: [ApplicationRow] {
-        snapshot.manifest.applications.map { ApplicationRow(name: $0.key, program: $0.value.program, cwd: $0.value.cwd ?? "Per-drive defaults") }.sorted(using: sortOrder)
+        snapshot.manifest.applications.map { ApplicationRow(name: $0.key, program: $0.value.program, cwd: $0.value.workingDirectorySummary) }.sorted(using: sortOrder)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -134,23 +160,28 @@ struct ApplicationsView: View {
                 if let name = names.first, names.count == 1 {
                     Button("Launch \(name)") { model.execute(["launch", name]) }.disabled(model.busy)
                     Button("Edit Application…") { model.editApplication(name) }.disabled(model.busy)
-                    Button("Remove Launcher") { model.command(["remove-app", name], undo: undo) }.disabled(model.busy)
+                    Button("Remove Launcher") { model.command(["remove-app", name]) }.disabled(model.busy)
                 }
                 Button("Copy") { copy(names) }.disabled(names.isEmpty)
             } primaryAction: { names in if let name = names.first { model.execute(["launch", name]) } }
             .onCopyCommand { rows.filter { selection.contains($0.id) }.map { NSItemProvider(object: "\($0.name)\t\($0.program)\t\($0.cwd)" as NSString) } }
-            .onDeleteCommand { if selection.count == 1, let name = selection.first { model.command(["remove-app", name], undo: undo) } }
+            .onDeleteCommand { if selection.count == 1, let name = selection.first { model.command(["remove-app", name]) } }
             HStack {
                 Button("Launch", systemImage: "play.fill") { if let name = selection.first { model.execute(["launch", name]) } }
-                    .keyboardShortcut(.return, modifiers: [.command]).disabled(selection.count != 1 || model.busy)
+                    .disabled(selection.count != 1 || model.busy)
                 Button("Edit…") { if let name = selection.first { model.editApplication(name) } }.disabled(selection.count != 1 || model.busy)
-                Button("Remove Launcher", systemImage: "minus") { if let name = selection.first { model.command(["remove-app", name], undo: undo) } }
+                Button("Remove Launcher", systemImage: "minus") { if let name = selection.first { model.command(["remove-app", name]) } }
                     .disabled(selection.count != 1 || model.busy)
                 Spacer()
                 Text("Removing a launcher keeps installed files.").font(.caption).foregroundStyle(.secondary)
             }
         }.padding(20)
+        .focusedSceneValue(\.ballViewActions, BallViewActions(
+            launch: selection.count == 1 ? { launchSelection() } : nil,
+            edit: selection.count == 1 ? { if let name = selection.first { model.editApplication(name) } } : nil,
+            remove: selection.count == 1 ? { if let name = selection.first { model.command(["remove-app", name]) } } : nil))
     }
+    private func launchSelection() { if let name = selection.first { model.execute(["launch", name]) } }
     private func copy(_ names: Set<String>) {
         let text = rows.filter { names.contains($0.id) }.map { "\($0.name)\t\($0.program)\t\($0.cwd)" }.joined(separator: "\n")
         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
@@ -165,7 +196,11 @@ struct ActivityView: View {
             HStack {
                 Label(model.operation, systemImage: model.busy ? "clock" : "terminal")
                 Spacer()
-                if let log = model.log { Button("Open Full Log") { model.reveal(log.path) } }
+                if model.processRunning {
+                    Button("Stop Operation", systemImage: "stop.fill") { model.stopConfirmation = true }.disabled(model.stopRequested)
+                    if model.stopRequested { Button("Force Stop…") { model.forceStopConfirmation = true } }
+                }
+                if let log = model.log { Button("Open Full Log") { model.openFile(log.path) } }
             }
             ScrollView([.horizontal, .vertical]) {
                 Text(model.activity).font(.system(size: logFontSize, design: .monospaced))

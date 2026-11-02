@@ -13,8 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if model?.busy == true {
-            model?.error = "Close the guest application's windows and wait for the operation to finish before quitting Balls."
+        if model?.busy == true || model?.mediaBusy == true {
+            model?.error = "Stop the running guest from the Ball menu before quitting. Other operations must finish before quitting."
             return .terminateCancel
         }
         guard let model, model.hasUnsavedConfigs else { return .terminateNow }
@@ -30,8 +30,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if model?.busy == true {
-            model?.error = "The operation is still running. Close its guest windows and wait for its exit code before closing Balls."
+        if model?.busy == true || model?.mediaBusy == true {
+            model?.error = "Stop the running guest from the Ball menu before closing. Other operations must finish before closing."
             return false
         }
         guard let model, model.hasUnsavedConfigs else { return true }
@@ -46,12 +46,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         default: return false
         }
     }
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? { model?.undoManager }
     private func confirmSave() -> NSApplication.ModalResponse {
         let alert = NSAlert()
         alert.messageText = "Save changes to CONFIG.SYS?"
         alert.informativeText = "Your unsaved edits will be lost if you close Balls."
         alert.addButton(withTitle: "Save"); alert.addButton(withTitle: "Cancel"); alert.addButton(withTitle: "Don’t Save")
         return alert.runModal()
+    }
+}
+
+private struct ManagerWindowAttachment: NSViewRepresentable {
+    let delegate: AppDelegate
+    func makeNSView(context: Context) -> ManagerWindowView {
+        let view = ManagerWindowView(); view.appDelegate = delegate; return view
+    }
+    func updateNSView(_ view: ManagerWindowView, context: Context) { view.appDelegate = delegate }
+}
+private final class ManagerWindowView: NSView {
+    weak var appDelegate: AppDelegate?
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.delegate = appDelegate
+        window?.contentView?.setAccessibilityLabel("Ball manager")
     }
 }
 
@@ -63,47 +80,125 @@ struct TwoineBallsApp: App {
         // One manager owns one operation. Avoid concurrent edits from duplicate windows.
         WindowGroup("2ine Balls", id: "balls") {
             ContentView(model: model)
+                .background(ManagerWindowAttachment(delegate: delegate))
                 .onAppear { delegate.model = model; model.start() }
                 .onOpenURL { model.open($0, create: false) }
         }
         .defaultSize(width: 1100, height: 740)
         .defaultLaunchBehavior(.presented)
         .windowResizability(.contentMinSize)
-        .commands {
-            SidebarCommands()
-            CommandGroup(replacing: .newItem) {
-                Button("New Ball…") { model.chooseBall(create: true) }.keyboardShortcut("n").disabled(model.busy)
-                Button("Open Ball…") { model.chooseBall(create: false) }.keyboardShortcut("o").disabled(model.busy)
-                Menu("Open Recent") {
-                    ForEach(NSDocumentController.shared.recentDocumentURLs, id: \.self) { url in
-                        Button(url.deletingPathExtension().lastPathComponent) { model.open(url, create: false) }
-                    }
-                    Divider()
-                    Button("Clear Menu") { NSDocumentController.shared.clearRecentDocuments(nil) }
-                }.disabled(model.busy)
-            }
-            CommandGroup(after: .sidebar) {
-                ForEach(Array(Page.allCases.enumerated()), id: \.element.id) { index, page in
-                    Button(page.rawValue) { model.page = page }.keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
+        .commands { BallCommands(model: model) }
+        Settings { AppSettingsView() }
+    }
+}
+
+struct BallCommands: Commands {
+    @Bindable var model: AppModel
+    @FocusedValue(\.ballViewActions) private var actions
+    var body: some Commands {
+        SidebarCommands()
+        CommandGroup(replacing: .undoRedo) { BallUndoMenu(model: model) }
+        CommandGroup(replacing: .newItem) {
+            Button("New Ball…") { model.chooseBall(create: true) }.keyboardShortcut("n").disabled(model.busy || model.mediaBusy)
+            Button("Open Ball…") { model.chooseBall(create: false) }.keyboardShortcut("o").disabled(model.busy || model.mediaBusy)
+            Menu("Open Recent") {
+                ForEach(NSDocumentController.shared.recentDocumentURLs, id: \.self) { url in
+                    Button(url.deletingPathExtension().lastPathComponent) { model.open(url, create: false) }
                 }
-            }
-            CommandMenu("Ball") {
-                Button("Choose Runtime…") { model.chooseRuntime() }.keyboardShortcut("r", modifiers: [.command, .shift])
-                    .disabled(model.selected == nil || model.busy)
-                Button("Refresh") { model.refresh() }.keyboardShortcut("r").disabled(model.busy)
                 Divider()
-                Button("Install Software…") { model.beginProgram(.install) }.keyboardShortcut("i").disabled(model.snapshot == nil || model.busy)
-                Button("Run Executable…") { model.beginProgram(.run) }.keyboardShortcut("r", modifiers: [.command, .option]).disabled(model.snapshot == nil || model.busy)
-                Button("Add Application…") { model.beginProgram(.save) }.keyboardShortcut("a", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy)
-                Button("Map Drive…") { model.mapping = true }.keyboardShortcut("d", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy)
-                Divider()
-                Button("Open Ball in Finder") { if let path = model.selected { model.reveal(path) } }.disabled(model.selected == nil)
-            }
-            CommandGroup(replacing: .help) {
-                Button("2ine Balls Help") { NSWorkspace.shared.open(URL(string: "https://github.com/bitwisecook/2ine/blob/main/docs/balls.md")!) }
+                Button("Clear Menu") { NSDocumentController.shared.clearRecentDocuments(nil) }
+            }.disabled(model.busy || model.mediaBusy)
+        }
+        CommandGroup(after: .sidebar) {
+            ForEach(Array(Page.allCases.enumerated()), id: \.element.id) { index, page in
+                Button(page.rawValue) { model.page = page }.keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
             }
         }
-        Settings { AppSettingsView() }
+        CommandGroup(replacing: .saveItem) {
+            Button("Save CONFIG.SYS") { model.configSys(model.configText, expected: model.configBase) }
+                .keyboardShortcut("s").disabled(model.busy || !model.configDirty)
+            Divider()
+            Button("Import Ball from ZIP…") { model.chooseImportBall() }
+                .disabled(model.busy || model.mediaBusy)
+            Button("Export Ball as ZIP…") { model.chooseExportBall() }
+                .keyboardShortcut("e", modifiers: [.command, .option])
+                .disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+        }
+        CommandMenu("Ball") {
+            Button("Choose Runtime…") { model.chooseRuntime() }.keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(model.selected == nil || model.busy)
+            Button("Use Bundled Runtime") { model.useBundledRuntime() }
+                .disabled(model.snapshot?.manifest.runtime["build"] == nil || model.busy)
+            Button("Refresh") { model.refresh() }.keyboardShortcut("r").disabled(model.busy || model.mediaBusy)
+            Divider()
+            Button("Install Software…") { model.beginProgram(.install) }.keyboardShortcut("i").disabled(model.snapshot == nil || model.busy)
+            Button("Run Executable…") { model.beginProgram(.run) }.keyboardShortcut("r", modifiers: [.command, .option]).disabled(model.snapshot == nil || model.busy)
+            Button("Add Application…") { model.beginProgram(.save) }.keyboardShortcut("a", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy)
+            Button("Launch Application") { actions?.launch?() }.keyboardShortcut(.return, modifiers: .command)
+                .disabled(actions?.launch == nil || model.busy)
+            Button("Edit Application…") { actions?.edit?() }.keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(actions?.edit == nil || model.busy)
+            Button("Remove Launcher") { actions?.remove?() }.disabled(actions?.remove == nil || model.busy)
+            Divider()
+            Button("Import Files…") { actions?.importFiles?() }.keyboardShortcut("i", modifiers: [.command, .shift])
+                .disabled(actions?.importFiles == nil || model.busy)
+            Button("Map Drive…") { model.mapping = true }.keyboardShortcut("d", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy)
+            Divider()
+            MediaDeviceMenu(model: model, kind: .cdrom)
+            MediaDeviceMenu(model: model, kind: .floppy)
+            MediaDeviceMenu(model: model, kind: .disk)
+            Divider()
+            Button("Unmap Drive") { actions?.unmap?() }.disabled(actions?.unmap == nil || model.busy)
+            Button("Set Default Folder…") { actions?.setDefaultFolder?() }.disabled(actions?.setDefaultFolder == nil || model.busy)
+            Divider()
+            Button("Stop Operation…") { model.stopConfirmation = true }.keyboardShortcut(".")
+                .disabled(!model.processRunning || model.stopRequested)
+            Button("Force Stop Operation…") { model.forceStopConfirmation = true }
+                .disabled(!model.processRunning || !model.stopRequested)
+            Divider()
+            Button("Show Ball in Finder") { if let path = model.selected { model.reveal(path) } }.disabled(model.selected == nil)
+        }
+        CommandGroup(replacing: .help) {
+            Button("2ine Balls Help") { NSWorkspace.shared.open(URL(string: "https://github.com/bitwisecook/2ine/blob/main/docs/balls.md")!) }
+        }
+    }
+}
+
+private struct UndoMenuState: Equatable {
+    let manager: ObjectIdentifier
+    let undo: String
+    let redo: String
+    let canUndo: Bool
+    let canRedo: Bool
+}
+
+private struct BallUndoMenu: View {
+    @Bindable var model: AppModel
+    @State private var state: UndoMenuState?
+    private var manager: UndoManager {
+        if let editor = NSApp.keyWindow?.firstResponder as? NSTextView, editor.isEditable,
+           let undo = editor.undoManager { return undo }
+        return model.undoManager
+    }
+    var body: some View {
+        let _ = state
+        let undo = manager
+        Group {
+            Button(undo.undoMenuItemTitle) { manager.undo(); refresh() }
+                .keyboardShortcut("z").disabled(model.busy || !undo.canUndo)
+            Button(undo.redoMenuItemTitle) { manager.redo(); refresh() }
+                .keyboardShortcut("z", modifiers: [.command, .shift]).disabled(model.busy || !undo.canRedo)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didUpdateNotification)) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidCloseUndoGroup)) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidUndoChange)) { _ in refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .NSUndoManagerDidRedoChange)) { _ in refresh() }
+    }
+    private func refresh() {
+        let undo = manager
+        let next = UndoMenuState(manager: ObjectIdentifier(undo), undo: undo.undoMenuItemTitle,
+                                 redo: undo.redoMenuItemTitle, canUndo: undo.canUndo, canRedo: undo.canRedo)
+        if state != next { state = next }
     }
 }
 

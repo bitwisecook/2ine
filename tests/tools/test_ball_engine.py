@@ -4,6 +4,7 @@
 import concurrent.futures
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,6 +19,63 @@ class EngineTests(unittest.TestCase):
         self.root = Path(self.temporary.name).resolve()
         self.ball = self.root / "Ball with café and spaces.2ineball"
         balls.init(self.ball)
+
+    def test_mapping_reports_missing_paths_and_non_directories_without_memory_errors(self):
+        missing = self.root / "missing"
+        with self.assertRaisesRegex(ValueError, "Path does not exist:") as error:
+            balls.native_request(
+                {
+                    "action": "command",
+                    "ball": str(self.ball),
+                    "arguments": ["map", "D", str(missing)],
+                }
+            )
+        self.assertNotIn("memory", str(error.exception).lower())
+        file = self.root / "file.txt"
+        file.write_text("file")
+        with self.assertRaisesRegex(ValueError, "Not a directory:"):
+            balls.native_request(
+                {"action": "command", "ball": str(self.ball), "arguments": ["map", "D", str(file)]}
+            )
+        nested_error = "Path does not exist:" if os.name == "nt" else "not a directory:"
+        with self.assertRaisesRegex(ValueError, nested_error):
+            balls.native_request(
+                {
+                    "action": "command",
+                    "ball": str(self.ball),
+                    "arguments": ["map", "D", str(file / "nested")],
+                }
+            )
+
+    @unittest.skipIf(
+        os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+        "requires POSIX permission checks as a non-root user",
+    )
+    def test_mapping_reports_permission_failure(self):
+        blocked = self.root / "blocked"
+        blocked.mkdir()
+        child = blocked / "child"
+        child.mkdir()
+        blocked.chmod(0)
+        try:
+            with self.assertRaisesRegex(ValueError, "Permission denied"):
+                balls.native_request(
+                    {
+                        "action": "command",
+                        "ball": str(self.ball),
+                        "arguments": ["map", "D", str(child)],
+                    }
+                )
+            with self.assertRaisesRegex(ValueError, "Permission denied"):
+                balls.native_request(
+                    {
+                        "action": "command",
+                        "ball": str(self.ball),
+                        "arguments": ["map", "D", str(blocked)],
+                    }
+                )
+        finally:
+            blocked.chmod(0o700)
 
     def test_large_unknown_numbers_and_nested_metadata_are_lossless(self):
         data = balls.load(self.ball)
@@ -112,6 +170,50 @@ class WorkspaceTests(unittest.TestCase):
         self.assertNotIn("PATH", plan["environment"])
         self.assertEqual((self.ball / "ball.json").read_bytes(), before)
         self.assertEqual(self.request("snapshot")["workingDirectories"]["C"], "C:\\OS2")
+
+    def test_install_command_file_uses_original_interpreter_and_script_directory(self):
+        folder = self.media / "Installer Files"
+        folder.mkdir()
+        script = folder / "Start Here.cmd"
+        script.write_text("echo installer")
+        with self.assertRaisesRegex(ValueError, "original OS/2 CMD.EXE"):
+            self.request(
+                "prepare-launch",
+                build=str(self.build),
+                arguments=["install", r"D:\Installer Files\Start Here.cmd"],
+            )
+        interpreter = self.drive / "OS2/CMD.EXE"
+        interpreter.write_bytes(b"original interpreter fixture")
+        plan = self.request(
+            "prepare-launch",
+            build=str(self.build),
+            arguments=["install", r"D:\Installer Files\Start Here.cmd", "a value", r"C:\TARGET"],
+        )
+        self.assertEqual(
+            plan["command"][1:],
+            [
+                r"C:\OS2\CMD.EXE",
+                "/C",
+                "CALL",
+                r"D:\Installer Files\Start Here.cmd",
+                "a value",
+                r"C:\TARGET",
+            ],
+        )
+        self.assertEqual(plan["cwd"], str(folder))
+        self.assertEqual(plan["environment"]["TWOINE_CURRENT_DRIVE"], "D")
+        self.assertEqual(plan["environment"]["TWOINE_DRIVE_CWD_D"], "Installer Files")
+        self.assertEqual(plan["programHost"], str(script))
+        self.assertEqual(
+            plan["receipt"]["program_sha256"], hashlib.sha256(script.read_bytes()).hexdigest()
+        )
+        script.unlink()
+        self.request(
+            "record-install", receipt=plan["receipt"], programHost=plan["programHost"], exitCode=7
+        )
+        receipt = json.loads((self.ball / "logs/last-install.json").read_text())
+        self.assertEqual(receipt["program_sha256"], plan["receipt"]["program_sha256"])
+        self.assertEqual(receipt["exit_code"], 7)
 
     def test_environment_templates_are_order_independent_and_cyclic_edits_are_atomic(self):
         result = self.request(

@@ -131,7 +131,8 @@ Shell desktop and host desktop shortcuts are not provided.
 
 `run` and `install` accept a guest path or a host executable path inside a mapped
 directory. Path lookup is case insensitive. The default working directory is
-the ball's default for the executable's drive (the drive root until configured);
+the ball's default for the executable's drive (the drive root until configured).
+`install` starts in the installer's own folder unless explicitly overridden;
 `run --cwd 'C:\WORK'` overrides it. Arguments after
 the executable are passed through. Subprocesses inherit the ball's drive and
 settings environment. Applications that require additional DLL directories can
@@ -154,8 +155,8 @@ a ball alone is not a standalone runtime distribution.
 
 The English SmartSuite base 1.7 installer uses OS/2's command processor and
 system-version files. Supply `CMD.EXE` and `SYSLEVEL.OS2` from your OS/2 system
-in `drive_c/OS2`, and `OSO001.MSG` in `drive_c/OS2/SYSTEM`. Map the extracted
-SmartSuite CD as D: and copy its `ENGLISH/SUITE.RSP` into the ball's C: drive.
+in `drive_c/OS2`, and `OSO001.MSG` in `drive_c/OS2/SYSTEM`. Attach the original
+SmartSuite ISO as D: with `map-image D /path/to/SmartSuite.iso` and copy its `ENGLISH/SUITE.RSP` into the ball's C: drive.
 
 Edit that response file with your registration and license choices. To install
 all suite components, select these seven `COMP` entries and retain the default
@@ -192,3 +193,63 @@ icons. Its `browse`, `import-files`, `save-application` and `application-icon`
 actions serve native frontends. Default executable icons come from their OS/2
 resources. Directory and environment inheritance are evaluated by the core;
 frontends do not implement competing persistence rules.
+
+### Internal image drives
+
+```sh
+python3 -m tools.balls --ball My.2ineball device D cdrom
+python3 -m tools.balls --ball My.2ineball map-image D /path/to/SmartSuite.iso
+python3 -m tools.balls --ball My.2ineball create-floppy A /path/to/new.img 1440
+python3 -m tools.balls --ball My.2ineball create-disk F /path/to/data.img hpfs 64
+python3 -m tools.balls --ball My.2ineball media-readonly A on
+python3 -m tools.balls --ball My.2ineball device-lock D on
+```
+
+ISO 9660/Joliet CDs, FAT12/FAT16 floppies, and FAT32/exFAT/HPFS disk images use
+2ine's internal filesystems without host mounting. CDs are read-only. Floppies
+and disks default to read/write, with selectable persistent read-only protection.
+Floppy creation supports 360 KB, 720 KB, 1.2 MB, 1.44 MB and 2.88 MB.
+Disk creation supports FAT32, exFAT and standard HPFS v2. Existing images and
+supported primary MBR partitions can also be attached.
+
+`device D cdrom`, `device A floppy` or `device F disk` reserves an ejected device.
+`map-image` infers the type when the letter is unused. `eject D` removes the
+medium while retaining D:; `map-image D /path/to/other.iso` inserts another CD,
+including while the guest runs. Media must match the device type. Unmap removes
+the allocation while preserving its image. Device locking prevents eject,
+replacement, unmapping and changes to write protection until explicitly unlocked.
+See the [shared engine's formats and limits](../ball/README.md#image-backed-drives).
+
+In the macOS app, Install Software attaches media, suggests common INSTALL/SETUP
+EXE and CMD entry points, and provides unrestricted image browsing. CMD and BAT
+files use `/C CALL` through the original OS/2 command interpreter, resolved from
+guest COMSPEC, mapped OS2/CMD.EXE or the original OS/2 installation CD. No host
+shell interprets them. After actual process exit the manager displays the exit
+status and offers Keep Attached or Eject. Locked devices cannot be ejected.
+Receipts hash the selected program before launch.
+
+Built-in formatting creates new images. Original OS/2 FORMAT still needs legacy
+raw-device API support. HPFS DBCS, HPFS386 and active hotfix remapping are not
+supported; mounting media does not boot OS/2 or qualify every installer.
+
+## Transfer a ball as ZIP
+
+Use Import Ball and Export Ball in the native manager, or the CLI:
+
+```sh
+python3 tools/balls.py --ball balls/office export office.zip
+python3 tools/balls.py --ball balls/office export office-with-media.zip --include-images
+python3 tools/balls.py --ball balls/imported-office import office.zip
+python3 tools/balls.py --ball balls/imported-office map E /path/to/replacement-folder
+```
+
+Export includes installed files, settings, launchers and `2ine-export.json`
+build/version information. Select **Include disk images** to bundle attached
+media and image files stored inside the ball. Without that option, image files
+are omitted and media devices import as ejected. Import creates a new ball;
+it never overwrites an existing ball. Paths inside the ball become relative.
+Unavailable external folders retain their drive letters and appear ejected;
+select the drive and use Change Mountpoint to choose a replacement folder.
+Guest paths such as E:\APPS stay the same. The receiving host selects its own
+2ine runtime; source build information remains in the export record.
+See the [archive format and metadata](../ball/README.md#zip-import-and-export).

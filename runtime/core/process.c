@@ -193,8 +193,7 @@ void initPib(void)
             for (const char *arg = argv[i]; *arg; arg++)
             {
                 const char ch = *arg;
-                if ((ch == '\\') || (ch == '\n'))
-                    *(ptr++) = '\\';
+                /* OS/2 command tails keep backslashes literal inside quotes. */
                 *(ptr++) = ch;
             }
             *(ptr++) = '"';

@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "include/twoine_ball.h"
 #include "platform.h"
+#include "disk_image.h"
 #include "icon.h"
 #include "vendor/cjson/cJSON.h"
 #include "vendor/sha256/sha256.h"
@@ -26,6 +27,7 @@ typedef struct Context
     char *error;
     char *ball;
     char *roots[26];
+    int unavailable[26];
     cJSON *manifest;
     const cJSON *application;
 } Context;
@@ -54,7 +56,7 @@ static char *keep(Context *c, char *p)
 {
     if (!p)
     {
-        fail(c, "Out of memory or inaccessible path");
+        fail(c, "Out of memory");
         return NULL;
     }
     char **next = realloc(c->allocations, (c->count + 1) * sizeof(*next));
@@ -67,6 +69,48 @@ static char *keep(Context *c, char *p)
     c->allocations = next;
     c->allocations[c->count++] = p;
     return p;
+}
+static char *resolve_path(Context *c, const char *path, int existing)
+{
+    if (!path)
+        return NULL;
+    errno = 0;
+    char *result = existing ? tb_canonical(path) : tb_absolute(path);
+    if (!result)
+    {
+        int error = errno;
+        if (tb_image_device(path) && error == ENXIO)
+        {
+            fail(c, "No media is inserted in this drive. Attach an image and try again.");
+            return NULL;
+        }
+        if (tb_image_path(path) && error != ENOMEM)
+        {
+            char *source = tb_image_source(path);
+            if (source)
+            {
+                if (error == ENOENT && tb_is_file(source))
+                    fail(c, "File or folder not found in image %s: %s", source,
+                         tb_image_member(path));
+                else
+                    fail(c, "Cannot read image %s: %s", source, strerror(error ? error : EIO));
+                free(source);
+                return NULL;
+            }
+        }
+        if (error == ENOMEM)
+            fail(c, "Out of memory");
+        else if (error == ENOENT)
+            fail(c, "Path does not exist: %s", path);
+        else if (error == EACCES || error == EPERM)
+            fail(c, "Permission denied accessing path: %s", path);
+        else if (error == ENOTDIR)
+            fail(c, "A path component is not a directory: %s", path);
+        else
+            fail(c, "Cannot resolve path %s: %s", path, strerror(error ? error : EIO));
+        return NULL;
+    }
+    return keep(c, result);
 }
 static char *format(Context *c, const char *fmt, ...)
 {
@@ -104,6 +148,21 @@ static cJSON *get(const cJSON *j, const char *key)
 static const char *field(const cJSON *j, const char *key)
 {
     return str(get(j, key));
+}
+/* Recognize host paths from either platform without treating DOS paths as relative. */
+static int host_absolute(const char *path)
+{
+    return path && (path[0] == '/' || path[0] == '\\' ||
+                    (isalpha((unsigned char)path[0]) && path[1] == ':'));
+}
+static int native_host_path(const char *path)
+{
+#ifdef _WIN32
+    return !(path[0] == '/' && path[1] != '/');
+#else
+    return path[0] != '\\' && !(path[0] == '/' && path[1] == '/') &&
+           !(isalpha((unsigned char)path[0]) && path[1] == ':');
+#endif
 }
 static void put(cJSON *j, const char *key, cJSON *value)
 {
@@ -262,12 +321,19 @@ static char *utf8_to_latin1(Context *c, const char *text, size_t *length)
 }
 static char *case_path(Context *c, const char *path)
 {
-    char *absolute = keep(c, tb_absolute(path));
+    if (tb_image_path(path))
+    {
+        TbImageInfo info;
+        if (tb_image_info(path, &info))
+            return resolve_path(c, path, 1);
+        return resolve_path(c, path, errno == ENOENT ? 0 : 1);
+    }
+    char *absolute = resolve_path(c, path, 0);
     if (!absolute)
         return NULL;
 #ifdef _WIN32
     if (tb_is_file(absolute) || tb_is_dir(absolute))
-        return keep(c, tb_canonical(absolute));
+        return resolve_path(c, absolute, 1);
     /* Canonicalize an existing ancestor before appending a new file name, so
        a junction cannot redirect a profile outside the mapped drive. */
     char *copy = keep(c, strdup(absolute));
@@ -314,9 +380,49 @@ static char *case_path(Context *c, const char *path)
             return NULL;
     }
     if (tb_is_file(result) || tb_is_dir(result))
-        return keep(c, tb_canonical(result));
-    return keep(c, tb_absolute(result));
+        return resolve_path(c, result, 1);
+    return resolve_path(c, result, 0);
 #endif
+}
+static char *device_root(Context *c, const char *letter, const char *kind, const char *image,
+                         int readonly)
+{
+    char *directory = join(c, c->ball, "devices");
+    char *control = join(c, directory, format(c, "%s.media", letter));
+    if (!directory || !control || !tb_mkdirs(directory))
+    {
+        fail(c, "Cannot create media device directory: %s", strerror(errno));
+        return NULL;
+    }
+    size_t n = image ? strlen(image) : 0;
+    if (n > 32768)
+    {
+        fail(c, "Image path is too long");
+        return NULL;
+    }
+    unsigned char *bytes = (unsigned char *)keep(c, calloc(1, n + 16));
+    if (!bytes)
+        return NULL;
+    memcpy(bytes, "2INEMED1", 8);
+    bytes[8] = !strcmp(kind, "floppy") ? 2 : !strcmp(kind, "disk") ? 3 : 1;
+    bytes[9] = readonly || bytes[8] == 1;
+    for (unsigned i = 0; i < 4; i++)
+        bytes[12 + i] = (unsigned char)(n >> (8 * i));
+    if (n)
+        memcpy(bytes + 16, image, n);
+    unsigned char *old = (unsigned char *)keep(c, malloc(n + 17));
+    if (!old)
+        return NULL;
+    FILE *file = tb_fopen(control, "rb");
+    int same = file && fread(old, 1, n + 17, file) == n + 16 && !memcmp(old, bytes, n + 16);
+    if (file)
+        fclose(file);
+    if (!same && !tb_atomic_write(control, bytes, n + 16))
+    {
+        fail(c, "Cannot update %s: media: %s", letter, strerror(errno));
+        return NULL;
+    }
+    return keep(c, tb_image_device_root(control));
 }
 static int roots(Context *c)
 {
@@ -324,21 +430,82 @@ static int roots(Context *c)
     if (!cJSON_IsObject(drives) || !get(drives, "C"))
         return fail(c, "Invalid ball.json: missing private C: drive");
     memset(c->roots, 0, sizeof(c->roots));
+    memset(c->unavailable, 0, sizeof(c->unavailable));
     cJSON *entry;
     cJSON_ArrayForEach(entry, drives)
     {
         if (!entry->string || strlen(entry->string) != 1 || entry->string[0] < 'A' ||
-            entry->string[0] > 'Z' || !str(entry))
+            entry->string[0] > 'Z' ||
+            (!str(entry) && !field(entry, "image") && !field(entry, "device")))
             return fail(c, "Invalid drive mapping");
+        const char *image = field(entry, "image"), *kind = field(entry, "device");
+        if (kind && strcmp(kind, "cdrom") && strcmp(kind, "floppy") && strcmp(kind, "disk"))
+            return fail(c, "Unknown removable device type");
+        if (image || kind)
+        {
+            if (image && !host_absolute(image))
+            {
+                image = join(c, c->ball, image);
+                if (!image)
+                    return 0;
+            }
+            if (entry->string[0] == 'C')
+                return fail(c, "C: must remain the ball's private directory");
+            if (!kind && image)
+            {
+                char *raw = keep(c, tb_image_root(image));
+                TbImageInfo info;
+                kind = raw && tb_image_info(raw, &info)
+                           ? (!strcmp(info.filesystem, "CDFS")  ? "cdrom"
+                              : !strcmp(info.filesystem, "FAT") ? "floppy"
+                                                                : "disk")
+                           : "cdrom";
+                cJSON_AddStringToObject(entry, "device", kind);
+            }
+            FILE *media = image && native_host_path(image) && tb_is_file(image)
+                              ? tb_fopen(image, "rb")
+                              : NULL;
+            if (image && !media)
+            {
+                c->unavailable[entry->string[0] - 'A'] = 1;
+                image = NULL;
+            }
+            if (media)
+                fclose(media);
+            c->roots[entry->string[0] - 'A'] =
+                device_root(c, entry->string, kind, image, cJSON_IsTrue(get(entry, "readonly")));
+            continue;
+        }
         const char *value = str(entry);
         char *path;
-#ifdef _WIN32
-        int absolute =
-            (strlen(value) > 2 && value[1] == ':') || value[0] == '\\' || value[0] == '/';
-#else
-        int absolute = value[0] == '/';
-#endif
-        path = keep(c, tb_canonical(absolute ? value : join(c, c->ball, value)));
+        if (!*value)
+        {
+            if (entry->string[0] == 'C')
+                return fail(c, "Invalid private C: directory");
+            c->unavailable[entry->string[0] - 'A'] = 1;
+            continue;
+        }
+        if (strpbrk(value, "\r\n"))
+            return fail(c, "Invalid drive mapping");
+        const char *source = host_absolute(value) ? value : join(c, c->ball, value);
+        if (!source)
+            return 0;
+        if (entry->string[0] != 'C')
+        {
+            errno = 0;
+            char *resolved = native_host_path(source) ? tb_canonical(source) : NULL;
+            if (!resolved && errno == ENOMEM)
+                return fail(c, "Out of memory");
+            if (!resolved || !tb_is_dir(resolved) || !tb_directory_readable(resolved))
+            {
+                free(resolved);
+                c->unavailable[entry->string[0] - 'A'] = 1;
+                continue;
+            }
+            path = keep(c, resolved);
+        }
+        else
+            path = resolve_path(c, source, 1);
         if (!path || !tb_is_dir(path) || strpbrk(path, "\r\n"))
             return fail(c, "Drive %s: is not an accessible directory", entry->string);
         c->roots[entry->string[0] - 'A'] = path;
@@ -350,7 +517,7 @@ static int load(Context *c, const cJSON *request)
     const char *path = field(request, "ball");
     if (!path)
         return fail(c, "A ball path is required");
-    c->ball = keep(c, tb_absolute(path));
+    c->ball = resolve_path(c, path, 0);
     if (!c->ball)
         return 0;
     const cJSON *provided = get(request, "manifest");
@@ -405,6 +572,21 @@ static char *host_path(Context *c, const char *name, int explicit_host)
     if (guest)
     {
         int drive = named_drive ? toupper((unsigned char)name[0]) - 'A' : current_drive(c);
+        if (c->unavailable[drive])
+        {
+            char key[2] = {(char)('A' + drive), 0};
+            if (field(get(get(c->manifest, "drives"), key), "image"))
+                fail(
+                    c,
+                    "No media is inserted in drive %c: because its image is unavailable. Attach an image to reconnect it.",
+                    drive + 'A');
+            else
+                fail(
+                    c,
+                    "Drive %c: is ejected because its folder is unavailable. Choose a mountpoint in Drives.",
+                    drive + 'A');
+            return NULL;
+        }
         if (!c->roots[drive])
         {
             fail(c, "Drive %c: is not mapped", drive + 'A');
@@ -580,7 +762,34 @@ static cJSON *snapshot(Context *c)
             cJSON_free(encoded);
         }
     }
+    cJSON *drive_records = cJSON_AddObjectToObject(value, "driveRecords"), *drive_entry;
+    cJSON_ArrayForEach(drive_entry, get(c->manifest, "drives"))
+    {
+        char *encoded = cJSON_PrintUnformatted(drive_entry);
+        if (encoded)
+        {
+            cJSON_AddStringToObject(drive_records, drive_entry->string, encoded);
+            cJSON_free(encoded);
+        }
+    }
+    cJSON *image_sources = cJSON_AddObjectToObject(value, "imageSources");
+    for (int i = 0; i < 26; i++)
+        if (c->roots[i] && tb_image_path(c->roots[i]))
+        {
+            char *source = tb_image_source(c->roots[i]);
+            if (source)
+            {
+                char letter[2] = {(char)('A' + i), 0};
+                cJSON_AddStringToObject(image_sources, letter, source);
+                free(source);
+            }
+        }
     cJSON_AddItemToObject(value, "roots", mapping);
+    cJSON *unavailable = cJSON_AddObjectToObject(value, "unavailableDrives");
+    cJSON_ArrayForEach(drive_entry,
+                       get(c->manifest, "drives")) if (c->unavailable[drive_entry->string[0] - 'A'])
+        cJSON_AddStringToObject(unavailable, drive_entry->string,
+                                str(drive_entry) ? str(drive_entry) : field(drive_entry, "image"));
     for (int i = 0; i < 26; i++)
         if (c->roots[i])
         {
@@ -589,7 +798,7 @@ static cJSON *snapshot(Context *c)
         }
     cJSON *directories = cJSON_AddObjectToObject(value, "workingDirectories");
     for (int i = 0; i < 26; i++)
-        if (c->roots[i])
+        if (c->roots[i] || c->unavailable[i])
         {
             char key[2] = {(char)('A' + i), 0};
             cJSON_AddStringToObject(directories, key, drive_directory(c, i));
@@ -635,7 +844,7 @@ static int init_ball(Context *c, const char *path)
 {
     if (!path)
         return fail(c, "A ball path is required");
-    c->ball = keep(c, tb_absolute(path));
+    c->ball = resolve_path(c, path, 0);
     if (!c->ball || !tb_mkdirs(c->ball))
         return fail(c, "Cannot create ball directory");
     char *manifest = join(c, c->ball, "ball.json");
@@ -1047,6 +1256,12 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
             *next++ = 0;
         if (*part)
         {
+            if (isalpha((unsigned char)part[0]) && part[1] == ':' &&
+                c->unavailable[toupper((unsigned char)part[0]) - 'A'])
+            {
+                part = next;
+                continue;
+            }
             char *path = !strcmp(part, ".") ? part : host_path(c, part, 0);
             if (!path)
                 goto failed;
@@ -1105,6 +1320,45 @@ static int array_strings(Context *c, const cJSON *array)
     return 1;
 }
 static int validate_directories(Context *c, const cJSON *directories);
+static char *command_interpreter(Context *c)
+{
+    cJSON *env = guest_environment(c, get(c->application, "environment"));
+    if (!env)
+        return NULL;
+    const char *comspec = field(env, "COMSPEC");
+    if (comspec && *comspec)
+    {
+        char *host = host_path(c, comspec, 0);
+        cJSON_Delete(env);
+        if (host && tb_is_file(host))
+            return host;
+        fail(c, "COMSPEC must name an accessible original OS/2 command interpreter");
+        return NULL;
+    }
+    cJSON_Delete(env);
+    for (int i = 0; i < 26; i++)
+    {
+        int drive = i == 0 ? 2 : i <= 2 ? i - 1 : i;
+        if (!c->roots[drive])
+            continue;
+        const char *suffixes[] = {"OS2/CMD.EXE", "CMD.EXE", "OS2IMAGE/DISK_2/CMD.EXE",
+                                  "OS2IMAGE/DISK_1/CMD.EXE", NULL};
+        for (int j = 0; suffixes[j]; j++)
+        {
+            char *host = case_path(c, join(c, c->roots[drive], suffixes[j]));
+            if (host && tb_is_file(host))
+                return host;
+            if (errno == ENOMEM)
+                return NULL;
+            free(c->error);
+            c->error = NULL;
+        }
+    }
+    fail(
+        c,
+        "This command file needs the original OS/2 CMD.EXE. Add it at C:\\OS2\\CMD.EXE or set COMSPEC to its mapped OS/2 path, then run the command file again.");
+    return NULL;
+}
 static cJSON *prepare(Context *c, const cJSON *request)
 {
     const char *build_path = field(request, "build");
@@ -1113,7 +1367,7 @@ static cJSON *prepare(Context *c, const cJSON *request)
         fail(c, "Choose a runtime build");
         return NULL;
     }
-    char *build = keep(c, tb_canonical(build_path));
+    char *build = resolve_path(c, build_path, 1);
     if (!build)
         return NULL;
     const char *loader = loader_name(c, build);
@@ -1166,15 +1420,38 @@ static cJSON *prepare(Context *c, const cJSON *request)
         goto failed;
     if (!tb_is_file(host))
     {
-        fail(c, "Program does not exist: %s", host);
+        fail(c, "Program does not exist: %s", program);
         goto failed;
+    }
+    /* Installers usually open companion files relative to their own directory. */
+    if (!strcmp(action, "install") && !cwd)
+    {
+        const char *guest = guest_for_input(c, host, program);
+        if (guest && !field(get(c->application, "workingDirectories"), format(c, "%c", guest[0])))
+        {
+            const char *slash = strrchr(guest, '\\');
+            if (slash)
+                cwd = format(c, "%.*s", (int)(slash == guest + 2 ? 3 : slash - guest), guest);
+        }
+    }
+    char *original_host = host;
+    const char *extension = strrchr(program, '.');
+    if (extension && (equal_case(extension, ".CMD") || equal_case(extension, ".BAT")))
+    {
+        const char *script = guest_for_input(c, host, program);
+        host = command_interpreter(c);
+        if (!host || !script)
+            goto failed;
+        cJSON_InsertItemInArray(argv, 0, cJSON_CreateString(script));
+        cJSON_InsertItemInArray(argv, 0, cJSON_CreateString("CALL"));
+        cJSON_InsertItemInArray(argv, 0, cJSON_CreateString("/C"));
     }
     char *working = NULL;
     if (cwd && *cwd)
         working = host_path(c, cwd, 0);
     else
     {
-        const char *guest = guest_for_input(c, host, program);
+        const char *guest = guest_for_input(c, original_host, program);
         if (guest)
             working = host_path(c, drive_directory(c, guest[0] - 'A'), 0);
     }
@@ -1230,8 +1507,8 @@ static cJSON *prepare(Context *c, const cJSON *request)
     cJSON_ArrayForEach(a, argv) cJSON_AddItemToArray(command, cJSON_Duplicate(a, 1));
     cJSON *result = cJSON_CreateObject();
     cJSON_AddItemToObject(result, "command", command);
-    cJSON_AddStringToObject(result, "cwd", working);
-    cJSON_AddStringToObject(result, "programHost", host);
+    cJSON_AddStringToObject(result, "cwd", tb_image_path(working) ? c->roots[2] : working);
+    cJSON_AddStringToObject(result, "programHost", original_host);
     cJSON_AddItemToObject(result, "environment", env);
     cJSON *unset = cJSON_AddArrayToObject(result, "unsetEnvironment");
     for (int i = 0; unset_keys[i]; i++)
@@ -1241,6 +1518,27 @@ static cJSON *prepare(Context *c, const cJSON *request)
     cJSON_AddStringToObject(receipt, "runtime_id", identity);
     cJSON_AddStringToObject(receipt, "cwd", working);
     cJSON_AddStringToObject(receipt, "started", now(c));
+    if (!strcmp(action, "install"))
+    {
+        unsigned char digest[32];
+        if (!digest_file(c, original_host, digest))
+        {
+            cJSON_Delete(result);
+            goto failed;
+        }
+        cJSON_AddStringToObject(receipt, "program_sha256", hex(c, digest));
+        cJSON_AddStringToObject(receipt, "program", guest_for_input(c, original_host, program));
+        if (tb_image_path(original_host))
+        {
+            char *source = keep(c, tb_image_source(original_host));
+            if (!source)
+            {
+                cJSON_Delete(result);
+                goto failed;
+            }
+            cJSON_AddStringToObject(receipt, "media_image", source);
+        }
+    }
     cJSON_AddBoolToObject(result, "installer", !strcmp(action, "install"));
     cJSON_Delete(argv);
     return result;
@@ -1258,7 +1556,10 @@ static int command(Context *c, const cJSON *request)
     if (!action)
         return fail(c, "A command is required");
     const char *name = str(cJSON_GetArrayItem(args, 1));
-    if (!strcmp(action, "map") || !strcmp(action, "unmap"))
+    if (!strcmp(action, "map") || !strcmp(action, "map-image") || !strcmp(action, "unmap") ||
+        !strcmp(action, "device") || !strcmp(action, "eject") || !strcmp(action, "restore-drive") ||
+        !strcmp(action, "create-floppy") || !strcmp(action, "create-disk") ||
+        !strcmp(action, "device-lock") || !strcmp(action, "media-readonly"))
     {
         if (!name || !isalpha((unsigned char)name[0]) || (name[1] && strcmp(name + 1, ":")))
             return fail(c, "Choose a drive A-Z other than C:");
@@ -1268,12 +1569,172 @@ static int command(Context *c, const cJSON *request)
         cJSON *drives = object(c->manifest, "drives");
         if (!drives)
             return fail(c, "Invalid drives object");
-        if (!strcmp(action, "map"))
+        cJSON *existing = get(drives, letter);
+        if (cJSON_IsTrue(get(existing, "locked")) && strcmp(action, "device-lock"))
+            return fail(
+                c,
+                "Drive %s: is locked to its image. Unlock it in Settings before changing its media or access mode.",
+                letter);
+        if (!strcmp(action, "device-lock") || !strcmp(action, "media-readonly"))
+        {
+            const char *value = str(cJSON_GetArrayItem(args, 2));
+            if (!value || (strcmp(value, "on") && strcmp(value, "off")))
+                return fail(c, "Choose on or off");
+            if (!field(existing, "device"))
+                return fail(c, "Choose a removable device");
+            int enabled = !strcmp(value, "on");
+            if (!strcmp(action, "device-lock"))
+            {
+                if (enabled && !field(existing, "image"))
+                    return fail(c, "Attach an image before locking this device");
+                put(existing, "locked", cJSON_CreateBool(enabled));
+            }
+            else
+            {
+                if (!strcmp(field(existing, "device"), "cdrom") && !enabled)
+                    return fail(c, "CD images are read-only");
+                put(existing, "readonly", cJSON_CreateBool(enabled));
+            }
+            return write_config(c) && save_manifest(c);
+        }
+        if (!strcmp(action, "create-disk"))
+        {
+            const char *source = str(cJSON_GetArrayItem(args, 2)),
+                       *filesystem = str(cJSON_GetArrayItem(args, 3)),
+                       *size = str(cJSON_GetArrayItem(args, 4));
+            char *end = NULL;
+            unsigned long long mib = size ? strtoull(size, &end, 10) : 0;
+            if (!source || !filesystem || !size || !end || *end || mib < 8 || mib > 2097152)
+                return fail(c, "Choose an image size from 8 MiB to 2 TiB");
+            if (strcmp(filesystem, "fat32") && strcmp(filesystem, "exfat") &&
+                strcmp(filesystem, "hpfs"))
+                return fail(c, "Choose FAT32, exFAT or HPFS");
+            if (!strcmp(filesystem, "fat32") && mib < 64)
+                return fail(c, "FAT32 images need at least 64 MiB");
+            if (!strcmp(filesystem, "hpfs") && (mib > 65536 || mib % 8))
+                return fail(c, "Choose an HPFS size from 8 MiB to 64 GiB, in multiples of 8 MiB");
+            if (existing &&
+                (!field(existing, "device") || strcmp(field(existing, "device"), "disk")))
+                return fail(c, "Choose a disk device or an unused drive letter");
+            char *path = resolve_path(c, source, 0);
+            if (!path)
+                return 0;
+            if (!tb_image_create_volume(path, filesystem, (uint64_t)mib * 1024 * 1024))
+                return fail(c, "Cannot create %s image %s: %s", filesystem, path, strerror(errno));
+            cJSON *mapping = existing ? cJSON_Duplicate(existing, 1) : cJSON_CreateObject();
+            put(mapping, "device", cJSON_CreateString("disk"));
+            put(mapping, "image", cJSON_CreateString(path));
+            put(drives, letter, mapping);
+            return write_config(c) && save_manifest(c);
+        }
+        if (!strcmp(action, "create-floppy"))
+        {
+            const char *source = str(cJSON_GetArrayItem(args, 2)),
+                       *size = str(cJSON_GetArrayItem(args, 3));
+            char *end = NULL;
+            unsigned long kib = size ? strtoul(size, &end, 10) : 0;
+            if (!source || !size || !end || *end ||
+                (kib != 360 && kib != 720 && kib != 1200 && kib != 1440 && kib != 2880))
+                return fail(c, "Choose a 360, 720, 1200, 1440 or 2880 KiB floppy image");
+            if (existing &&
+                (!field(existing, "device") || strcmp(field(existing, "device"), "floppy")))
+                return fail(c, "Choose a floppy device or an unused drive letter");
+            char *path = resolve_path(c, source, 0);
+            if (!path)
+                return 0;
+            if (!tb_image_create_floppy(path, (unsigned)kib))
+                return fail(c, "Cannot create floppy image %s: %s", path, strerror(errno));
+            cJSON *mapping = existing ? cJSON_Duplicate(existing, 1) : cJSON_CreateObject();
+            put(mapping, "device", cJSON_CreateString("floppy"));
+            put(mapping, "image", cJSON_CreateString(path));
+            put(drives, letter, mapping);
+            return write_config(c) && save_manifest(c);
+        }
+        if (!strcmp(action, "map-image"))
+        {
+            const char *source = str(cJSON_GetArrayItem(args, 2));
+            if (!source)
+                return fail(c, "An ISO or floppy image is required");
+            char *image = resolve_path(c, source, 1);
+            if (!image)
+                return 0;
+            char *root = keep(c, tb_image_root(image));
+            TbImageInfo info;
+            if (!root || !tb_image_info(root, &info))
+            {
+                int error = errno;
+                return fail(c, "Cannot read ISO 9660 or FAT12/FAT16 image %s: %s", image,
+                            strerror(error));
+            }
+            cJSON *previous = get(drives, letter);
+            cJSON *mapping =
+                cJSON_IsObject(previous) ? cJSON_Duplicate(previous, 1) : cJSON_CreateObject();
+            const char *detected = !strcmp(info.filesystem, "CDFS")  ? "cdrom"
+                                   : !strcmp(info.filesystem, "FAT") ? "floppy"
+                                                                     : "disk";
+            const char *kind = field(get(drives, letter), "device");
+            if (kind && strcmp(kind, detected) &&
+                (strcmp(kind, "disk") || !strcmp(detected, "cdrom")))
+            {
+                cJSON_Delete(mapping);
+                return fail(c, "Choose %s media for %s:",
+                            !strcmp(kind, "floppy") ? "a FAT12/FAT16 floppy" : "an ISO 9660 CD",
+                            letter);
+            }
+            put(mapping, "device", cJSON_CreateString(kind ? kind : detected));
+            put(mapping, "image", cJSON_CreateString(image));
+            put(drives, letter, mapping);
+        }
+        else if (!strcmp(action, "device"))
+        {
+            const char *kind = str(cJSON_GetArrayItem(args, 2));
+            if (!kind || (strcmp(kind, "cdrom") && strcmp(kind, "floppy") && strcmp(kind, "disk")))
+                return fail(c, "Choose a cdrom, floppy or disk device");
+            if (get(drives, letter))
+                return fail(c, "Drive %s: is already allocated", letter);
+            cJSON *mapping = cJSON_CreateObject();
+            cJSON_AddStringToObject(mapping, "device", kind);
+            put(drives, letter, mapping);
+        }
+        else if (!strcmp(action, "eject"))
+        {
+            cJSON *mapping = get(drives, letter);
+            const char *kind = field(mapping, "device");
+            if (!kind && !field(mapping, "image"))
+                return fail(c, "%s: is not a removable device", letter);
+            if (!kind)
+                cJSON_AddStringToObject(mapping, "device", "cdrom");
+            cJSON_DeleteItemFromObjectCaseSensitive(mapping, "image");
+            cJSON_DeleteItemFromObjectCaseSensitive(get(c->manifest, "workingDirectories"), letter);
+        }
+        else if (!strcmp(action, "restore-drive"))
+        {
+            const char *record = str(cJSON_GetArrayItem(args, 2));
+            cJSON *mapping = record ? cJSON_Parse(record) : NULL;
+            if (!mapping ||
+                (!str(mapping) && !field(mapping, "device") && !field(mapping, "image")))
+            {
+                cJSON_Delete(mapping);
+                return fail(c, "Invalid drive record");
+            }
+            put(drives, letter, mapping);
+        }
+        else if (!strcmp(action, "map"))
         {
             const char *dir = str(cJSON_GetArrayItem(args, 2));
-            char *path = dir ? keep(c, tb_canonical(dir)) : NULL;
-            if (!path || !tb_is_dir(path))
-                return fail(c, "Choose an accessible host directory");
+            if (!dir)
+                return fail(c, "A host directory is required");
+            char *path = resolve_path(c, dir, 1);
+            if (!path)
+                return 0;
+            if (!tb_is_dir(path))
+                return fail(c, "Not a directory: %s", path);
+            if (!tb_directory_readable(path))
+            {
+                int error = errno;
+                return fail(c, "Cannot read directory %s: %s", path,
+                            strerror(error ? error : EACCES));
+            }
             put(drives, letter, cJSON_CreateString(path));
         }
         else
@@ -1307,7 +1768,7 @@ static int command(Context *c, const cJSON *request)
             put(settings, key, cJSON_CreateString(value));
         }
         const char *build = field(request, "build");
-        char *absolute = keep(c, tb_absolute(build && *build ? build : "."));
+        char *absolute = resolve_path(c, build && *build ? build : ".", 0);
         if (!absolute)
             return 0;
         cJSON *env = environment(c, absolute, field(request, "backend"), NULL);
@@ -1394,9 +1855,12 @@ static int validate_directories(Context *c, const cJSON *directories)
     cJSON_ArrayForEach(entry, directories)
     {
         const char *path = str(entry), *key = entry->string;
-        if (!key || strlen(key) != 1 || key[0] < 'A' || key[0] > 'Z' || !c->roots[key[0] - 'A'] ||
-            !path || strlen(path) < 3 || path[0] != key[0] || path[1] != ':' || path[2] != '\\')
+        if (!key || strlen(key) != 1 || key[0] < 'A' || key[0] > 'Z' ||
+            (!c->roots[key[0] - 'A'] && !c->unavailable[key[0] - 'A']) || !path ||
+            strlen(path) < 3 || path[0] != key[0] || path[1] != ':' || path[2] != '\\')
             return fail(c, "Use a mapped drive letter and its absolute OS/2 directory");
+        if (c->unavailable[key[0] - 'A'])
+            continue;
         char *host = host_path(c, path, 0);
         if (!host || !tb_is_dir(host))
             return fail(c, "Working directory does not exist: %s", path);
@@ -1534,6 +1998,15 @@ static cJSON *import_files(Context *c, const cJSON *request)
 {
     const char *directory = field(request, "path");
     char *destination = directory ? host_path(c, directory, 0) : NULL;
+    if (destination && tb_image_path(destination))
+    {
+        TbImageInfo info;
+        if (!tb_image_info(destination, &info) || info.readonly)
+        {
+            fail(c, "This image drive is read-only or not ready");
+            return NULL;
+        }
+    }
     cJSON *sources = get(request, "sources");
     if (!destination || !tb_is_dir(destination) || !array_strings(c, sources) ||
         !cJSON_GetArraySize(sources))
@@ -1550,7 +2023,7 @@ static cJSON *import_files(Context *c, const cJSON *request)
             fail(c, "Symbolic links cannot be imported: %s", raw);
             break;
         }
-        char *path = keep(c, tb_canonical(raw));
+        char *path = resolve_path(c, raw, 1);
         if (!path)
             break;
         const char *name = path;
@@ -1740,6 +2213,8 @@ static cJSON *application_icon(Context *c, const cJSON *request)
     cJSON_AddStringToObject(result, "source", "none");
     return result;
 }
+#include "ball_archive.h"
+
 static cJSON *dispatch(Context *c, const cJSON *request)
 {
     const char *action = field(request, "action");
@@ -1897,7 +2372,13 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "discover"))
     {
         const char *xdg = getenv("XDG_DATA_HOME");
-        char *home = keep(c, tb_home());
+        char *home = tb_home();
+        if (!home)
+        {
+            fail(c, errno == ENOMEM ? "Out of memory" : "Home directory is unavailable");
+            return NULL;
+        }
+        home = keep(c, home);
         if (!home)
             return NULL;
         char *base = xdg && *xdg ? keep(c, strdup(xdg)) : join(c, home, ".local/share");
@@ -1916,6 +2397,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         tb_names_free(names, n);
         return list;
     }
+    if (!strcmp(action, "import-ball"))
+        return import_ball(c, request);
     cJSON *args = get(request, "arguments");
     const char *first = str(cJSON_GetArrayItem(args, 0));
     if (!strcmp(action, "command") && first && !strcmp(first, "init"))
@@ -1926,6 +2409,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     }
     if (!load(c, request))
         return NULL;
+    if (!strcmp(action, "export-ball"))
+        return export_ball(c, request);
     if (!strcmp(action, "snapshot"))
         return snapshot(c);
     if (!strcmp(action, "browse"))
@@ -1975,8 +2460,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "runtime-build"))
     {
         const char *name = field(request, "build");
-        char *build = name ? keep(c, tb_canonical(name)) : NULL;
-        if (!build || !loader_name(c, build))
+        char *build = name ? resolve_path(c, name, 1) : NULL;
+        if (name && (!build || !loader_name(c, build)))
             return NULL;
         cJSON *runtime = object(c->manifest, "runtime");
         if (!runtime)
@@ -1984,7 +2469,10 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             fail(c, "Invalid runtime object");
             return NULL;
         }
-        put(runtime, "build", cJSON_CreateString(build));
+        if (build)
+            put(runtime, "build", cJSON_CreateString(build));
+        else
+            cJSON_DeleteItemFromObjectCaseSensitive(runtime, "build");
         if (!save_manifest(c))
             return NULL;
         return snapshot(c);
@@ -2029,12 +2517,13 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         }
         cJSON *saved = cJSON_Duplicate(receipt, 1);
         unsigned char digest[32];
-        if (!digest_file(c, program, digest))
+        if (!field(saved, "program_sha256") && !digest_file(c, program, digest))
         {
             cJSON_Delete(saved);
             return NULL;
         }
-        put(saved, "program_sha256", cJSON_CreateString(hex(c, digest)));
+        if (!field(saved, "program_sha256"))
+            put(saved, "program_sha256", cJSON_CreateString(hex(c, digest)));
         put(saved, "exit_code", cJSON_Duplicate(exit, 1));
         put(saved, "finished", cJSON_CreateString(now(c)));
         int ok = write_json(c, join(c, c->ball, "logs/last-install.json"), saved);
@@ -2052,7 +2541,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "environment"))
     {
         const char *b = field(request, "build");
-        char *build = keep(c, tb_absolute(b && *b ? b : "."));
+        char *build = resolve_path(c, b && *b ? b : ".", 0);
         return build ? environment(c, build, field(request, "backend"),
                                    get(c->application, "environment"))
                      : NULL;

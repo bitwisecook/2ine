@@ -8,6 +8,7 @@ import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Thread
 
 if __package__:
     from . import balls
@@ -60,6 +61,7 @@ class BallWindow(Adw.ApplicationWindow):
         self.build = build
         self.ball = None
         self.process = None
+        self.archive_busy = False
         self.last_result = None
         self.last_log = None
         self.preferences = (
@@ -101,6 +103,22 @@ class BallWindow(Adw.ApplicationWindow):
         self.header = Adw.HeaderBar()
         self.header.pack_start(button("view-refresh-symbolic", self.refresh, True))
         self.header.pack_end(button("Runtime…", self.runtime_dialog))
+        self.header.pack_end(button("Import Ball…", self.import_ball))
+        export = Gtk.MenuButton(label="Export Ball…")
+        options = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        popover = Gtk.Popover(child=options)
+        for include_images, label in (
+            (False, "Without disk images…"),
+            (True, "Include disk images…"),
+        ):
+
+            def selected_export(include_images=include_images):
+                popover.popdown()
+                self.export_ball(include_images)
+
+            options.append(button(label, selected_export))
+        export.set_popover(popover)
+        self.header.pack_end(export)
         view.add_top_bar(self.header)
         self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         view.set_content(self.content)
@@ -111,6 +129,9 @@ class BallWindow(Adw.ApplicationWindow):
         self.refresh(initial.resolve() if initial else None)
 
     def close_requested(self, *_):
+        if self.archive_busy:
+            self.toast("Wait for the archive operation to finish.")
+            return True
         if self.process:
             self.toast("Close the running application before closing Balls.")
             return True
@@ -174,8 +195,10 @@ class BallWindow(Adw.ApplicationWindow):
     def render(self):
         clear(self.content)
         try:
-            data = balls.load(self.ball)
-            roots = balls.drive_roots(self.ball, data)
+            snapshot = balls.native_request({"action": "snapshot", "ball": str(self.ball)})
+            data = snapshot["manifest"]
+            roots = {key: Path(value) for key, value in snapshot["roots"].items()}
+            self.unavailable = snapshot.get("unavailableDrives", {})
         except (OSError, ValueError, KeyError) as error:
             self.content.append(Adw.StatusPage(title="Cannot open ball", description=str(error)))
             return
@@ -205,9 +228,33 @@ class BallWindow(Adw.ApplicationWindow):
             description="Map a folder or extracted installation CD to an OS/2 drive.",
         )
         drives.append(group)
-        for letter, path in roots.items():
-            row = Adw.ActionRow(title=letter + ":", subtitle=str(path))
-            row.add_suffix(button("Open", lambda path=path: self.open_path(path)))
+        for letter, mapping in sorted(data["drives"].items()):
+            path = roots.get(letter)
+            source = mapping if isinstance(mapping, str) else mapping.get("image", "Ejected")
+            connected = (
+                path is not None
+                and letter not in self.unavailable
+                and (isinstance(mapping, str) or mapping.get("image") is not None)
+            )
+            row = Adw.ActionRow(
+                title=letter + ":", subtitle=str(path) if connected else "Ejected — " + source
+            )
+            if connected:
+                row.add_suffix(button("Open", lambda path=path: self.open_path(path)))
+            if letter != "C" and isinstance(mapping, str):
+                row.add_suffix(
+                    button(
+                        "Change Mountpoint…",
+                        lambda letter=letter, source=source: self.map_dialog(letter, source),
+                    )
+                )
+            elif isinstance(mapping, dict):
+                row.add_suffix(
+                    button(
+                        "Replace Image…" if connected else "Attach Image…",
+                        lambda letter=letter: self.attach_image(letter),
+                    )
+                )
             if letter != "C":
                 row.add_suffix(
                     button("Unmap", lambda letter=letter: self.execute(["unmap", letter]))
@@ -386,6 +433,85 @@ class BallWindow(Adw.ApplicationWindow):
 
         self.choose("Open ball folder", opened, folder=True)
 
+    def archive_operation(self, message, imported=None):
+        if self.process or self.archive_busy:
+            self.toast("Wait for the current operation to finish.")
+            return
+        self.archive_busy = True
+        self.set_sensitive(False)
+
+        def finish(error):
+            self.archive_busy = False
+            self.set_sensitive(True)
+            if error:
+                self.toast(error)
+            elif imported:
+                self.remember(imported)
+                self.refresh(imported)
+                if self.unavailable:
+                    self.stack.set_visible_child_name("drives")
+            else:
+                self.toast("Ball exported to " + message["path"])
+            return False
+
+        def work():
+            error = None
+            try:
+                balls.native_request(message)
+            except (OSError, ValueError, KeyError) as failure:
+                error = str(failure)
+            GLib.idle_add(finish, error)
+
+        Thread(target=work, daemon=True).start()
+
+    def import_ball(self):
+        def selected(source):
+            dialog = Gtk.FileDialog(
+                title="Import into a new ball", initial_name=source.stem + ".2ineball"
+            )
+
+            def saved(dialog, result):
+                try:
+                    path = dialog.save_finish(result).get_path()
+                    if path:
+                        self.archive_operation(
+                            {"action": "import-ball", "ball": path, "path": str(source)}, Path(path)
+                        )
+                except GLib.Error as error:
+                    if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
+                        self.toast(error.message)
+
+            dialog.save(self, None, saved)
+
+        self.choose("Import ball ZIP", selected)
+
+    def export_ball(self, include_images):
+        if not self.ball or self.process or self.archive_busy:
+            self.toast("Select a ball and wait for the current operation to finish.")
+            return
+        ball = self.ball
+        dialog = Gtk.FileDialog(title="Export ball as ZIP", initial_name=ball.stem + ".zip")
+
+        def saved(dialog, result):
+            try:
+                path = dialog.save_finish(result).get_path()
+                if path:
+                    self.archive_operation(
+                        {
+                            "action": "export-ball",
+                            "ball": str(ball),
+                            "path": path,
+                            "build": str(self.build),
+                            "includeImages": include_images,
+                            "exporter": {"name": "2ine Balls for GNOME"},
+                        }
+                    )
+            except GLib.Error as error:
+                if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
+                    self.toast(error.message)
+
+        dialog.save(self, None, saved)
+
     def runtime_dialog(self):
         def update(values):
             path = Path(values["build"]).expanduser().resolve()
@@ -398,10 +524,15 @@ class BallWindow(Adw.ApplicationWindow):
             "Runtime location", [("build", "2ine build folder", str(self.build), "folder")], update
         )
 
-    def map_dialog(self):
+    def attach_image(self, letter):
+        self.choose(
+            "Choose disk image", lambda path: self.execute(["map-image", letter, str(path)])
+        )
+
+    def map_dialog(self, letter="D", folder=""):
         return self.form(
             "Map drive",
-            [("drive", "Drive letter", "D", None), ("folder", "Host folder", "", "folder")],
+            [("drive", "Drive letter", letter, None), ("folder", "Host folder", folder, "folder")],
             lambda values: self.execute(["map", values["drive"], values["folder"]]),
             "Map",
         )

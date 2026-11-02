@@ -7,13 +7,46 @@ public struct SavedApplication: Decodable, Sendable {
     public let workingDirectories: [String: String]?
     public let environment: [String: String]?
     public let icon: String?
+
+    public var workingDirectorySummary: String {
+        var directories = workingDirectories ?? [:]
+        if let cwd, let drive = cwd.first { directories[String(drive).uppercased()] = cwd }
+        guard !directories.isEmpty else { return "Per-drive defaults" }
+        return directories.keys.sorted().compactMap { directories[$0] }.joined(separator: "; ")
+    }
 }
 
 /// Read-only projection. All manifest writes go through the shared C engine,
 /// retaining unknown fields and installer-owned state.
+public enum MediaDeviceKind: String, Codable, Sendable, CaseIterable {
+    case cdrom, floppy, disk
+    public var title: String { switch self { case .cdrom: "CD"; case .floppy: "Floppy"; case .disk: "Disk" } }
+    public var symbol: String { switch self { case .cdrom: "opticaldisc"; case .floppy: "floppy"; case .disk: "externaldrive" } }
+}
+public enum DriveMapping: Decodable, Sendable {
+    case directory(String), image(String), removable(MediaDeviceKind, String?, Bool, Bool)
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let path = try? container.decode(String.self) { self = .directory(path) }
+        else {
+            struct ImageSource: Decodable { let image: String?; let device: MediaDeviceKind?; let readonly: Bool?; let locked: Bool? }
+            let value = try container.decode(ImageSource.self)
+            if let device = value.device { self = .removable(device, value.image, device == .cdrom || value.readonly == true, value.locked == true) }
+            else if let image = value.image { self = .image(image) }
+            else { throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid drive mapping") }
+        }
+    }
+    public var source: String { switch self { case .directory(let path), .image(let path): path; case .removable(_, let path, _, _): path ?? "Ejected" } }
+    public var image: String? { switch self { case .image(let path): path; case .removable(_, let path, _, _): path; default: nil } }
+    public var device: MediaDeviceKind? { switch self { case .image: .cdrom; case .removable(let kind, _, _, _): kind; default: nil } }
+    public var isRemovable: Bool { device != nil }
+    public var isReadOnly: Bool { switch self { case .image: true; case .removable(_, _, let readonly, _): readonly; default: false } }
+    public var isLocked: Bool { if case .removable(_, _, _, let locked) = self { return locked }; return false }
+}
+
 public struct BallManifest: Decodable, Sendable {
     public let version: Int
-    public let drives: [String: String]
+    public let drives: [String: DriveMapping]
     public let environment: [String: String]
     public let system: [String: SettingValue]
     public let runtime: [String: String]
@@ -38,16 +71,21 @@ public enum SettingValue: Decodable, Sendable {
 }
 
 public struct BallSnapshot: Decodable, Sendable {
+    public let unavailableDrives: [String: String]?
     public let manifest: BallManifest
     public let roots: [String: String]
     public let configSys: String
     public let workingDirectories: [String: String]
     public let applicationRecords: [String: String]
+    public let driveRecords: [String: String]?
+    public let imageSources: [String: String]?
     public let currentDrive: String
     public let environmentDefaults: [String: String]
 }
 
 public struct DesktopRequest: Encodable, Sendable {
+    public var exporter: [String: String]?
+    public var includeImages: Bool?
     public var path: String?
     public var sources: [String]?
     public var name: String?

@@ -23,7 +23,8 @@ typedef enum LxHostFsError
     LX_HOST_FS_CROSS_DEVICE,
     LX_HOST_FS_INVALID,
     LX_HOST_FS_IO,
-    LX_HOST_FS_NOT_EMPTY
+    LX_HOST_FS_NOT_EMPTY,
+    LX_HOST_FS_NOT_READY
 } LxHostFsError;
 typedef enum LxHostFileKind
 {
@@ -39,6 +40,18 @@ typedef struct LxHostFileInfo
     LxHostFileKind kind;
     int readonly;
 } LxHostFileInfo;
+typedef struct LxHostVolumeInfo
+{
+    char filesystem[8], label[12];
+    uint32_t serial;
+    unsigned sector_bytes, cluster_bytes;
+    unsigned reserved_sectors, fat_count, root_entries, fat_sectors, sectors_per_track, heads,
+        media;
+    uint32_t hidden_sectors;
+    int removable;
+    int readonly;
+} LxHostVolumeInfo;
+LxHostFsError lx_host_path_volume(const char *path, LxHostVolumeInfo *info);
 enum
 {
     LX_HOST_FILE_READ = 1,

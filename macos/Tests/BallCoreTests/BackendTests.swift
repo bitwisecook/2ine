@@ -52,7 +52,7 @@ private func temporary() throws -> URL {
     let backend = BallBackend()
     let ball = root.appending(path: "Ball with spaces").path
     let created = try await backend.request(DesktopRequest("command", ball: ball, arguments: ["init"]), as: BallSnapshot.self)
-    #expect(created.manifest.drives["C"] == "drive_c")
+    #expect(created.manifest.drives["C"]?.source == "drive_c")
     let changed = created.configSys + "SET DESKTOP=roundtrip\r\n"
     let saved = try await backend.request(DesktopRequest("save-config-sys", ball: ball, expected: created.configSys, text: changed), as: BallSnapshot.self)
     #expect(saved.configSys == changed)
@@ -91,4 +91,47 @@ private func temporary() throws -> URL {
     #expect(try Arguments.parse(text) == ["a b", "", #"C:\DATA\FILE"#])
     var browse = DesktopRequest("browse", ball: ball); browse.path = "C:"
     #expect(try await backend.request(browse, as: GuestDirectory.self).path == "C:\\Game Files")
+}
+
+@Test(arguments: [false, true])
+func runningProcessCanBeStoppedWithoutLosingItsLog(force: Bool) async throws {
+    let root = try temporary()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let runner = ProcessRunner()
+    let log = root.appending(path: "stopped.log")
+    let result = try await runner.run(executable: URL(filePath: "/bin/sleep"), arguments: ["30"], log: log) { _ in
+        await runner.stop(force: force)
+    }
+    #expect(result.signalled)
+    #expect(result.code == (force ? 9 : 15))
+    #expect(FileManager.default.fileExists(atPath: log.path))
+    let recovery = try await runner.run(executable: URL(filePath: "/usr/bin/true"), arguments: [], log: root.appending(path: "recovered.log"))
+    #expect(recovery.code == 0)
+}
+
+@Test func bundledRuntimeResetPreservesBackendAndOtherSettings() async throws {
+    let root = try temporary()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let backend = BallBackend()
+    let ball = root.appending(path: "Runtime.2ineball").path
+    _ = try await backend.request(DesktopRequest("command", ball: ball, arguments: ["init"]), as: BallSnapshot.self)
+    let manifest = URL(filePath: ball).appending(path: "ball.json")
+    var json = try JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as! [String: Any]
+    json["runtime"] = ["backend": "unicorn", "build": "/missing/external/runtime"]
+    try JSONSerialization.data(withJSONObject: json).write(to: manifest)
+    let result = try await backend.request(DesktopRequest("runtime-build", ball: ball), as: BallSnapshot.self)
+    #expect(result.manifest.runtime["build"] == nil)
+    #expect(result.manifest.runtime["backend"] == "unicorn")
+}
+
+@Test func applicationWorkingDirectorySummaryReflectsOverridesAndLegacyRecords() throws {
+    let decoder = JSONDecoder()
+    let overrides = try decoder.decode(SavedApplication.self, from: Data(#"{"program":"APP.EXE","arguments":[],"workingDirectories":{"C":"C:\\APP","D":"D:\\DATA"}}"#.utf8))
+    #expect(overrides.workingDirectorySummary == #"C:\APP; D:\DATA"#)
+    let legacy = try decoder.decode(SavedApplication.self, from: Data(#"{"program":"APP.EXE","arguments":[],"cwd":"C:\\OLD"}"#.utf8))
+    #expect(legacy.workingDirectorySummary == #"C:\OLD"#)
+    let mixed = try decoder.decode(SavedApplication.self, from: Data(#"{"program":"APP.EXE","arguments":[],"cwd":"C:\\OLD","workingDirectories":{"C":"C:\\OVERRIDE","D":"D:\\DATA"}}"#.utf8))
+    #expect(mixed.workingDirectorySummary == #"C:\OLD; D:\DATA"#)
+    let inherited = try decoder.decode(SavedApplication.self, from: Data(#"{"program":"APP.EXE","arguments":[]}"#.utf8))
+    #expect(inherited.workingDirectorySummary == "Per-drive defaults")
 }

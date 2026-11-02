@@ -1,4 +1,7 @@
 # Derived from original 2ine; zlib-style license. See LICENSE.txt.
+# Finder metadata and scratch output from the legacy binding generator.
+.DS_Store
+/native/*-new
 cmake-*
 build/
 build-*/

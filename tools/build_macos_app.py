@@ -98,6 +98,7 @@ def main():
     shutil.copy2(
         ROOT / "ball/vendor/sha256/README.md", resources / "Licenses/SHA256-public-domain.txt"
     )
+    shutil.copy2(ROOT / "ball/vendor/fatfs/LICENSE.txt", resources / "Licenses/FatFs-license.txt")
     for source in copied:
         for parent in source.parents:
             if (parent / "INSTALL_RECEIPT.json").is_file():
