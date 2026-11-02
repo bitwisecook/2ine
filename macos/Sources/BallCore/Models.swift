@@ -4,6 +4,9 @@ public struct SavedApplication: Decodable, Sendable {
     public let program: String
     public let arguments: [String]
     public let cwd: String?
+    public let workingDirectories: [String: String]?
+    public let environment: [String: String]?
+    public let icon: String?
 }
 
 /// Read-only projection. All manifest writes go through the shared C engine,
@@ -38,9 +41,22 @@ public struct BallSnapshot: Decodable, Sendable {
     public let manifest: BallManifest
     public let roots: [String: String]
     public let configSys: String
+    public let workingDirectories: [String: String]
+    public let applicationRecords: [String: String]
+    public let currentDrive: String
+    public let environmentDefaults: [String: String]
 }
 
 public struct DesktopRequest: Encodable, Sendable {
+    public var path: String?
+    public var sources: [String]?
+    public var name: String?
+    public var originalName: String?
+    public var program: String?
+    public var workingDirectories: [String: String]?
+    public var environment: [String: String]?
+    public var iconSource: String?
+    public var cwd: String?
     public var action: String
     public var ball: String?
     public var build: String?
@@ -92,18 +108,29 @@ public struct BallError: LocalizedError, Sendable {
 /// Quotes group whitespace; backslashes are always literal OS/2 separators.
 public enum Arguments {
     public static func parse(_ text: String) throws -> [String] {
-        var result: [String] = [], word = "", quote: Character?, started = false
-        for character in text {
-            if let current = quote {
-                if character == current { quote = nil } else { word.append(character) }
-            } else if character == "\"" || character == "'" {
-                quote = character; started = true
-            } else if character.isWhitespace {
-                if started { result.append(word); word = ""; started = false }
-            } else { word.append(character); started = true }
-        }
-        guard quote == nil else { throw BallError("Close the quote in the arguments field.") }
-        if started { result.append(word) }
-        return result
+        try NativeBallCore.request(DesktopRequest("parse-arguments", text: text), as: [String].self)
     }
+    public static func format(_ arguments: [String]) throws -> String {
+        try NativeBallCore.request(DesktopRequest("format-arguments", arguments: arguments), as: String.self)
+    }
+}
+
+public struct GuestEntry: Decodable, Sendable, Identifiable {
+    public let name: String
+    public let path: String
+    public let hostPath: String
+    public let directory: Bool
+    public var id: String { path }
+}
+public struct GuestDirectory: Decodable, Sendable {
+    public let path: String
+    public let hostPath: String
+    public let entries: [GuestEntry]
+}
+public struct ExecutableIcon: Decodable, Sendable {
+    public let source: String
+    public let rgba: Data?
+    public let image: Data?
+    public let width: Int?
+    public let height: Int?
 }

@@ -6,7 +6,7 @@ import AppKit
 
 struct ContentView: View {
     @Bindable var model: AppModel
-    @AppStorage("lastPage") private var lastPage = Page.applications.rawValue
+    @AppStorage("lastPage") private var lastPage = Page.drives.rawValue
     var body: some View {
         NavigationSplitView {
             List(selection: Binding(get: { model.selected }, set: { if let path = $0 { model.select(path) } })) {
@@ -67,10 +67,10 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 880, minHeight: 590)
-        .onAppear { model.page = Page(rawValue: lastPage) ?? .applications }
+        .onAppear { model.page = Page(rawValue: lastPage) ?? .drives }
         .onChange(of: model.page) { _, page in lastPage = page.rawValue }
         .dropDestination(for: URL.self) { urls, _ in
-            guard !model.busy, let url = urls.first else { return false }
+            guard !model.busy, let url = urls.first, url.pathExtension == "2ineball" || url.hasDirectoryPath else { return false }
             model.open(url, create: false); return true
         }
         .toolbar {
@@ -103,20 +103,25 @@ struct ApplicationsView: View {
     @State private var sortOrder = [KeyPathComparator(\ApplicationRow.name)]
     @SceneStorage("applicationColumns") private var columns: TableColumnCustomization<ApplicationRow>
     var rows: [ApplicationRow] {
-        snapshot.manifest.applications.map { ApplicationRow(name: $0.key, program: $0.value.program, cwd: $0.value.cwd ?? "Executable folder") }.sorted(using: sortOrder)
+        snapshot.manifest.applications.map { ApplicationRow(name: $0.key, program: $0.value.program, cwd: $0.value.cwd ?? "Per-drive defaults") }.sorted(using: sortOrder)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Button("Install Software…", systemImage: "shippingbox.and.arrow.backward") { model.programAction = .install }
+                Button("Install Software…", systemImage: "shippingbox.and.arrow.backward") { model.beginProgram(.install) }
                     .accessibilityIdentifier("installSoftware")
-                Button("Run Executable…", systemImage: "play") { model.programAction = .run }
+                Button("Run Executable…", systemImage: "play") { model.beginProgram(.run) }
                 Spacer()
-                Button("Add Application…", systemImage: "plus") { model.programAction = .save }
+                Button("Add Application…", systemImage: "plus") { model.beginProgram(.save) }
             }.disabled(model.busy)
             Table(rows, selection: $selection, sortOrder: $sortOrder, columnCustomization: $columns) {
-                TableColumn("Application", value: \.name)
-                    .customizationID("name")
+                TableColumn("Application", value: \.name) { row in
+                    HStack {
+                        if let icon = model.applicationIcons[row.name] { Image(nsImage: icon).resizable().interpolation(.none).scaledToFit().frame(width: 28, height: 28).accessibilityHidden(true) }
+                        else { Image(systemName: "app.dashed").frame(width: 28, height: 28).accessibilityHidden(true) }
+                        Text(row.name)
+                    }
+                }.customizationID("name")
                 TableColumn("Executable", value: \.program)
                     .customizationID("program")
                 TableColumn("Working Directory", value: \.cwd)
@@ -128,6 +133,7 @@ struct ApplicationsView: View {
             .contextMenu(forSelectionType: String.self) { names in
                 if let name = names.first, names.count == 1 {
                     Button("Launch \(name)") { model.execute(["launch", name]) }.disabled(model.busy)
+                    Button("Edit Application…") { model.editApplication(name) }.disabled(model.busy)
                     Button("Remove Launcher") { model.command(["remove-app", name], undo: undo) }.disabled(model.busy)
                 }
                 Button("Copy") { copy(names) }.disabled(names.isEmpty)
@@ -137,6 +143,7 @@ struct ApplicationsView: View {
             HStack {
                 Button("Launch", systemImage: "play.fill") { if let name = selection.first { model.execute(["launch", name]) } }
                     .keyboardShortcut(.return, modifiers: [.command]).disabled(selection.count != 1 || model.busy)
+                Button("Edit…") { if let name = selection.first { model.editApplication(name) } }.disabled(selection.count != 1 || model.busy)
                 Button("Remove Launcher", systemImage: "minus") { if let name = selection.first { model.command(["remove-app", name], undo: undo) } }
                     .disabled(selection.count != 1 || model.busy)
                 Spacer()
@@ -147,31 +154,6 @@ struct ApplicationsView: View {
     private func copy(_ names: Set<String>) {
         let text = rows.filter { names.contains($0.id) }.map { "\($0.name)\t\($0.program)\t\($0.cwd)" }.joined(separator: "\n")
         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string)
-    }
-}
-
-struct DrivesView: View {
-    @Bindable var model: AppModel
-    let snapshot: BallSnapshot
-    @Environment(\.undoManager) private var undo
-    var body: some View {
-        Form {
-            Section("Mapped Drives") {
-                ForEach(snapshot.roots.keys.sorted(), id: \.self) { letter in
-                    LabeledContent(letter + ":") {
-                        Text(snapshot.roots[letter] ?? "").textSelection(.enabled)
-                        Spacer()
-                        Button("Open") { model.reveal(snapshot.roots[letter] ?? "") }
-                        if letter != "C" { Button("Unmap") { model.command(["unmap", letter], undo: undo) }.disabled(model.busy) }
-                    }
-                }
-                Button("Map Drive…") { model.mapping = true }.disabled(model.busy)
-            }
-            Section {
-                Text("C: is private to this ball. Map a folder or extracted installation CD to another drive. Mapped folders are writable host directories.")
-                    .foregroundStyle(.secondary)
-            }
-        }.formStyle(.grouped)
     }
 }
 

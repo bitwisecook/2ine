@@ -497,12 +497,14 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
         *err = ERROR_INVALID_PARAMETER;
         return NULL;
     }
-    size_t count = 3;
+    size_t count = 30;
     for (const char *p = guest; *p; p += strlen(p) + 1)
         count++;
     char *const *host = lx_host_environment();
     for (size_t i = 0; host[i]; i++)
-        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23))
+        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
+            strncmp(host[i], "TWOINE_DRIVE_CWD_", 17) &&
+            strncmp(host[i], "TWOINE_CURRENT_DRIVE=", 21))
             count++;
     char **result = calloc(count, sizeof *result);
     if (!result)
@@ -512,7 +514,9 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
     }
     size_t at = 0;
     for (size_t i = 0; host[i]; i++)
-        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23))
+        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
+            strncmp(host[i], "TWOINE_DRIVE_CWD_", 17) &&
+            strncmp(host[i], "TWOINE_CURRENT_DRIVE=", 21))
         {
             result[at] = strdup(host[i]);
             if (!result[at++])
@@ -525,6 +529,20 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
             if (!result[at++])
                 goto failed;
         }
+    for (int drive = 0; drive < 26; drive++)
+        if (GLoaderState.current_dir[drive])
+        {
+            size_t length = strlen(GLoaderState.current_dir[drive]) + 32;
+            result[at] = malloc(length);
+            if (!result[at])
+                goto failed;
+            snprintf(result[at++], length, "TWOINE_DRIVE_CWD_%c=%s", 'A' + drive,
+                     GLoaderState.current_dir[drive]);
+        }
+    result[at] = malloc(32);
+    if (!result[at])
+        goto failed;
+    snprintf(result[at++], 32, "TWOINE_CURRENT_DRIVE=%c", 'A' + GLoaderState.current_disk - 1);
     result[at] = malloc(strlen(exe) + 9);
     if (!result[at])
         goto failed;

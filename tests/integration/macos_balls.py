@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import shutil
+import struct
 import subprocess
 from pathlib import Path
 
@@ -63,6 +64,17 @@ def main():
             result.stderr.decode(errors="replace"),
         )
 
+    def request(action, **fields):
+        result = subprocess.run(
+            [str(helper)],
+            input=json.dumps({"action": action, "ball": str(ball), **fields}).encode(),
+            env=environment,
+            capture_output=True,
+            check=True,
+            timeout=90,
+        )
+        return json.loads(result.stdout)
+
     command(["init"])
     guest = FlatGuest()
     guest.exit(0)
@@ -79,12 +91,50 @@ def main():
     command(["launch", "Smoke"])
     command(["run", "C:\\missing.exe"], expected=2)
     command(["launch", "Smoke"])
+    # The guest must see every inherited/overridden drive directory and the
+    # expanded guest PATH, including tails beyond the old 254-byte limit.
+    media = work / "Media"
+    (media / "GAME").mkdir(parents=True)
+    request("command", arguments=["map", "D", str(media)])
+    request("set-working-directory", path=r"D:\GAME")
+    request("set-working-directory", path=r"C:\OS2")
+    probe = FlatGuest()
+    for disk, expected in ((3, b"TEMP"), (4, b"GAME")):
+        output = probe.field(bytes(256))
+        length = probe.field(struct.pack("<I", 256))
+        probe.call(1, 274, disk, output, length)
+        probe.result(0, 50 + disk)
+        probe.word(output, int.from_bytes(expected, "little"), 60 + disk)
+    name = probe.field(b"PATH\0")
+    pointer = probe.field(bytes(4))
+    inherited_path = r"C:\OS2;C:\OS2\SYSTEM;" + r"C:\LONGPATH;" * 40
+    request("command", arguments=["config", "env.PATH", inherited_path])
+    expected_path = (inherited_path + r";C:\DOOM").encode()
+    probe.call(1, 227, name, pointer)
+    probe.result(0, 70)
+    probe.load(pointer)
+    probe.code.extend(b"\x05" + struct.pack("<I", len(expected_path) - 4))
+    probe.require(b"\x81\x38" + expected_path[-4:], 71)
+    probe.exit(0)
+    (ball / "drive_c/OS2/defaults.exe").write_bytes(
+        linear_image(probe.code, probe.fixups, ["DOSCALLS"], "DEFAULTS", data=probe.data)
+    )
+    request(
+        "save-application",
+        name="Defaults",
+        program=r"C:\OS2\defaults.exe",
+        arguments=[],
+        workingDirectories={"C": r"C:\TEMP"},
+        environment={"PATH": r"%PATH%;C:\DOOM"},
+    )
+    command(["launch", "Defaults"])
+    assert request("snapshot")["workingDirectories"]["C"] == r"C:\OS2"
     profile = ball / "drive_c/OS2/OS2.INI"
     profile.write_bytes(b"retained-profile")
     command(["remove-app", "Smoke"])
     assert profile.read_bytes() == b"retained-profile" and executable.is_file()
     print(
-        f"Python-free relocated bundle: installer receipt, cwd, argv, saved launch, recovery and persistence passed: {work}"
+        f"Python-free relocated bundle: installer receipt, cwd, argv, saved launch, drive defaults, environment expansion, recovery and persistence passed: {work}"
     )
 
 

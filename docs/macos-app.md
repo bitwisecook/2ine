@@ -99,15 +99,31 @@ the same build with `--build`. The native C helper accepts JSON as described in
 [../ball/README.md](../ball/README.md).
 
 Map installer media under Drives. Run an installer or executable through the
-Ball menu, with its arguments and optional working directory. Backslashes
+Ball menu. Its native chooser browses mapped drive letters, with a drive
+selector, OS/2 path field, folder navigation and file table. Backslashes
 are literal; quotes group whitespace and `""` represents an empty argument.
-Saved launchers accept an optional `cwd`; existing launchers keep their original
-behavior. Removing a launcher preserves installed files. Select application rows
+Each drive has a saved default working directory. Use Drives → Set Default
+Folder to change it. Drives is the first section, with a minimum-width drive
+letter column. Drop files/folders onto a drive row to copy to its root, or onto
+its browser/folders to copy there. Conflicts are reported without replacing
+existing files; symbolic links are rejected.
+
+Add/Edit Application has General, Working Directories and Environment tabs.
+Overrides inherit independently for each drive/variable. For example,
+`PATH=%PATH%;C:\DOOM` appends to the ball's guest PATH without changing its
+stored default or the host PATH. The shared core expands the expressions and
+prepares all drive directories; guest subprocesses inherit the live directories.
+The default launch cwd is the program drive's configured default, initially its
+root. Existing explicit `cwd`/`--cwd` launchers still override it.
+
+Applications display their embedded OS/2 icon by default. Choose Icon imports a
+custom image into the ball; Use Executable Icon restores automatic extraction.
+Missing/unsupported embedded artwork uses the native application symbol. Removing a launcher preserves installed files. Select application rows
 to copy tab-separated text; use their context menu or Command-Return to launch.
 Drive unmapping and launcher removal support Undo. The manager serializes its
 operations; close guest windows and wait for exit before closing or quitting it.
 
-Use View shortcuts Command-1 through Command-5 for Applications, Drives, Settings,
+Use View shortcuts Command-1 through Command-5 for Drives, Applications, Settings,
 CONFIG.SYS and Activity. The sidebar, native table columns, window geometry and
 last section retain system/user state. Command-Comma opens application settings.
 Native text controls provide standard editing/undo. Ball paths drag to Finder
@@ -150,12 +166,12 @@ and [toolbars](https://developer.apple.com/design/human-interface-guidelines/too
 Validated on Apple Silicon macOS 27.2, Xcode 27.2 (27B52), Swift 6.4.2:
 
 - Strict Swift package and Xcode builds pass with warnings as errors.
-- Four Swift tests pass, including the native C-engine round trip.
+- Five Swift tests pass, including the native C-engine round trip.
 - The native Xcode UI workflow passes when run individually, including creation
   through the save panel. Combined runs passed all four core tests but lost UI
   targets when another application took the foreground; the combined run is
   not qualified as passing.
-- All 59 Python tool tests, Ruff and ty pass.
+- All 65 Python tool tests, Ruff and ty pass.
 - A generated OS/2 executable passes bundled-runtime installer and saved-launch
   checks, including cwd, argv, receipt identity and recovery from a missing file.
 - All eight LX OpenGL scenes pass with the bundled Mesa/Vulkan/KosmicKrisp stack.

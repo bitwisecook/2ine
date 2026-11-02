@@ -5,7 +5,6 @@
 import argparse
 import json
 import os
-import shlex
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,11 +30,7 @@ APP_ID = "io.github.bitwisecook.Twoine.Balls"
 
 
 def parse_arguments(text):
-    lexer = shlex.shlex(text, posix=True)
-    lexer.whitespace_split = True
-    lexer.commenters = ""
-    lexer.escape = ""
-    return list(lexer)
+    return balls.native_request({"action": "parse-arguments", "text": text})
 
 
 def button(label, callback, icon=False):

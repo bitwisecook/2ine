@@ -6,7 +6,7 @@ import Observation
 import UniformTypeIdentifiers
 
 enum Page: String, CaseIterable, Identifiable {
-    case applications = "Applications", drives = "Drives", settings = "Settings", config = "CONFIG.SYS", activity = "Activity"
+    case drives = "Drives", applications = "Applications", settings = "Settings", config = "CONFIG.SYS", activity = "Activity"
     var id: String { rawValue }
 }
 enum ProgramAction: String, Identifiable {
@@ -19,7 +19,7 @@ final class AppModel {
     var paths: [String] = []
     var selected: String?
     var snapshot: BallSnapshot?
-    var page: Page = .applications
+    var page: Page = .drives
     var busy = false
     var activity = "No process has run in this session."
     var operation = "Ready"
@@ -27,6 +27,9 @@ final class AppModel {
     var exitCode: Int32?
     var error: String?
     var programAction: ProgramAction?
+    var editingApplication: String?
+    var applicationIcons: [String: NSImage] = [:]
+    var driveNotice = ""
     var mapping = false
     var revision = 0
     var configDrafts: [String: String] = [:]
@@ -105,6 +108,7 @@ final class AppModel {
 
     private func reload(_ ball: String) async throws {
         snapshot = try await backend.request(DesktopRequest("snapshot", ball: ball), as: BallSnapshot.self)
+        await loadIcons(ball)
         revision += 1
         prefs.balls = paths; prefs.selected = ball
         try await preferences.save(prefs)
@@ -140,7 +144,8 @@ final class AppModel {
                                          arguments: create ? ["init"] : nil)
             let value = try await self.backend.request(message, as: BallSnapshot.self)
             if !self.paths.contains(path) { self.paths.append(path); self.paths.sort() }
-            self.selected = path; self.snapshot = value; self.revision += 1
+            self.selected = path; self.snapshot = value
+            await self.loadIcons(path); self.revision += 1
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
             self.prefs.balls = self.paths; self.prefs.selected = path
             try await self.preferences.save(self.prefs)
@@ -192,9 +197,8 @@ final class AppModel {
             let old = parts[0] == "env" ? manifest.environment[parts[1]] : parts[0] == "runtime" ? manifest.runtime[parts[1]] : manifest.system[parts[1]]?.text
             return old.map { ["config", key, $0] } ?? ["unset", key]
         }
-        if action == "remove-app", let app = manifest.applications[key] {
-            return ["add-app"] + (app.cwd.map { ["--cwd", $0] } ?? []) + [key, app.program] + app.arguments
-        }
+        if action == "remove-app", let record = snapshot?.applicationRecords[key] { return ["restore-app", key, record] }
+        if action == "restore-app" { return ["remove-app", key] }
         if action == "add-app" {
             let index = key == "--cwd" ? 3 : 1
             return args.count > index ? ["remove-app", args[index]] : nil
@@ -213,19 +217,82 @@ final class AppModel {
         if let selected { configDrafts.removeValue(forKey: selected); configBases.removeValue(forKey: selected) }
         refresh()
     }
-    func program(_ action: ProgramAction, name: String, program: String, arguments: String, cwd: String) {
-        do {
-            let argv = try Arguments.parse(arguments)
-            let working = cwd.isEmpty ? [] : ["--cwd", cwd]
-            if action == .save {
-                guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw BallError("Enter an application name.") }
-                if snapshot?.manifest.applications[name] != nil { throw BallError("That name already exists. Remove its launcher or choose a different name.") }
-                command(["add-app"] + working + [name, program] + argv)
-            } else { execute([action == .install ? "install" : "run"] + working + [program] + argv) }
-            programAction = nil
-        } catch { self.error = error.localizedDescription }
+    func beginProgram(_ action: ProgramAction) { editingApplication = nil; programAction = action }
+    func editApplication(_ name: String) { editingApplication = name; programAction = .save }
+    func browse(_ path: String, ball: String) async throws -> GuestDirectory {
+        var request = DesktopRequest("browse", ball: ball); request.path = path
+        return try await backend.request(request, as: GuestDirectory.self)
     }
-    func execute(_ arguments: [String]) {
+    func setWorkingDirectory(_ path: String) {
+        guard let selected else { return }
+        perform {
+            var request = DesktopRequest("set-working-directory", ball: selected); request.path = path
+            self.snapshot = try await self.backend.request(request, as: BallSnapshot.self)
+            self.revision += 1
+        }
+    }
+    @discardableResult func importFiles(_ urls: [URL], into path: String) -> Bool {
+        guard !busy, let selected, !urls.isEmpty, urls.allSatisfy(\.isFileURL) else { return false }
+        perform {
+            self.driveNotice = "Copying files…"
+            var request = DesktopRequest("import-files", ball: selected)
+            request.path = path; request.sources = urls.map(\.path)
+            do {
+                _ = try await self.backend.request(request, as: GuestDirectory.self)
+                self.driveNotice = "Copied \(urls.count) item(s) to \(path)."
+                self.revision += 1
+            } catch { self.driveNotice = "Copy did not complete."; throw error }
+        }
+        return true
+    }
+    func program(_ action: ProgramAction, name: String, program: String, arguments: String,
+                 directories: [String: String], environment: [String: String], iconSource: String?) async throws {
+        guard !busy, let selected else { throw BallError("Wait for the current operation to finish.") }
+        let argv = try Arguments.parse(arguments)
+        if action == .save {
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw BallError("Enter an application name.") }
+            if editingApplication == nil && snapshot?.manifest.applications[name] != nil { throw BallError("That application name already exists.") }
+            busy = true; defer { busy = false }
+            var request = DesktopRequest("save-application", ball: selected, arguments: argv)
+            request.name = name; request.originalName = editingApplication; request.program = program
+            request.workingDirectories = directories; request.environment = environment; request.iconSource = iconSource
+            snapshot = try await backend.request(request, as: BallSnapshot.self)
+            await loadIcons(selected); revision += 1
+            programAction = nil; editingApplication = nil
+        } else {
+            programAction = nil; editingApplication = nil
+            execute([action == .install ? "install" : "run", program] + argv, directories: directories, environment: environment)
+        }
+    }
+    func executableIcon(program: String, name: String? = nil, ball: String) async throws -> ExecutableIcon {
+        var request = DesktopRequest("application-icon", ball: ball); request.program = program; request.name = name
+        return try await backend.request(request, as: ExecutableIcon.self)
+    }
+    func previewImage(_ path: String) async throws -> ExecutableIcon {
+        var request = DesktopRequest("image-preview"); request.path = path
+        return try await backend.request(request, as: ExecutableIcon.self)
+    }
+    static func image(_ icon: ExecutableIcon) -> NSImage? {
+        if let data = icon.image { return NSImage(data: data) }
+        guard let data = icon.rgba, let width = icon.width, let height = icon.height,
+              width > 0, height > 0, width <= 1024, height <= 1024, data.count == width * height * 4,
+              let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                 colorSpaceName: .deviceRGB, bitmapFormat: .alphaNonpremultiplied, bytesPerRow: width * 4, bitsPerPixel: 32),
+              let destination = bitmap.bitmapData else { return nil }
+        data.copyBytes(to: destination, count: data.count)
+        let image = NSImage(size: NSSize(width: width, height: height)); image.addRepresentation(bitmap)
+        return image
+    }
+    private func loadIcons(_ ball: String) async {
+        applicationIcons = [:]
+        for (name, app) in snapshot?.manifest.applications ?? [:] {
+            if let icon = try? await executableIcon(program: app.program, name: name, ball: ball), let image = Self.image(icon) {
+                applicationIcons[name] = image
+            }
+        }
+    }
+    func execute(_ arguments: [String], directories: [String: String]? = nil, environment: [String: String]? = nil) {
         guard let selected, !busy else { return }
         guard !build.isEmpty else { error = "Choose a runtime build before launching software."; return }
         let build = self.build
@@ -234,7 +301,7 @@ final class AppModel {
         perform {
             let result: ProcessResult
             do {
-                result = try await self.backend.execute(ball: selected, build: build, arguments: arguments) { [weak self] text in
+                result = try await self.backend.execute(ball: selected, build: build, arguments: arguments, workingDirectories: directories, environment: environment) { [weak self] text in
                     await self?.updateActivity(text)
                 }
             } catch {

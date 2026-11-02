@@ -594,7 +594,7 @@ def main():
         executables.append("selectors.exe")
         for executable in executables:
             result = subprocess.run(
-                [*base, "run", "C:\\OS2\\" + executable],
+                [*base, "run", "--cwd", "C:\\OS2", "C:\\OS2\\" + executable],
                 capture_output=True,
                 timeout=15,
                 env=dict(os.environ, SDL_VIDEO_DRIVER="dummy", SDL_AUDIO_DRIVER="dummy"),

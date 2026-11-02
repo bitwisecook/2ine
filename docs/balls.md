@@ -112,8 +112,9 @@ python3 tools/balls.py --ball balls/office unmap D
 `system.trace_native`, `system.trace_events` and `system.beep_volume` are loader
 settings. `runtime.backend` selects `native` or `unicorn`; `--backend` overrides
 it for one command. Other application and graphics/audio environment settings
-can be saved as `env.NAME`. The host's executable PATH stays intact; use OS2PATH
-or the guest CONFIG.SYS PATH for guest programs. Installer changes to CONFIG.SYS
+can be saved as `env.NAME`. The host's executable PATH stays intact; PATH and OS2PATH both configure the
+guest search path. `%NAME%` expressions inherit defaults, so an application
+override `PATH=%PATH%;C:\DOOM` appends the Doom directory. Installer changes to CONFIG.SYS
 are read at each launch; explicit ball environment settings take precedence.
 The default DPATH searches C:\OS2 and C:\OS2\SYSTEM for message files.
 The default LANG is en_US, matching the current United States NLS provider;
@@ -130,7 +131,8 @@ Shell desktop and host desktop shortcuts are not provided.
 
 `run` and `install` accept a guest path or a host executable path inside a mapped
 directory. Path lookup is case insensitive. The default working directory is
-the executable's directory; `run --cwd 'C:\WORK'` overrides it. Arguments after
+the ball's default for the executable's drive (the drive root until configured);
+`run --cwd 'C:\WORK'` overrides it. Arguments after
 the executable are passed through. Subprocesses inherit the ball's drive and
 settings environment. Applications that require additional DLL directories can
 add them to LIBPATH through CONFIG.SYS or `config env.LIBPATH`.
@@ -183,3 +185,10 @@ the process result in `logs/last-install.json`. A fresh ball launch reloads
 CONFIG.SYS after the installer's reboot message. The installer configures the
 five main applications, shared components and online-documentation payloads;
 optional features follow the response-file selections.
+
+The [shared C core](../ball/README.md#per-drive-and-per-application-state) stores
+per-drive defaults, per-application directory/environment overrides and custom
+icons. Its `browse`, `import-files`, `save-application` and `application-icon`
+actions serve native frontends. Default executable icons come from their OS/2
+resources. Directory and environment inheritance are evaluated by the core;
+frontends do not implement competing persistence rules.

@@ -71,21 +71,15 @@ public actor BallBackend {
     public init() {}
 
     public func request<T: Decodable & Sendable>(_ message: DesktopRequest, as type: T.Type) throws -> T {
-        let text = String(decoding: try JSONEncoder().encode(message), as: UTF8.self)
-        var result: UnsafeMutablePointer<CChar>?
-        var diagnostic: UnsafeMutablePointer<CChar>?
-        let status = text.withCString { tb_request($0, &result, &diagnostic) }
-        defer { if let result { tb_free(result) }; if let diagnostic { tb_free(diagnostic) } }
-        guard status == 0, let result else {
-            throw BallError(diagnostic.map { String(cString: $0) } ?? "Ball operation failed.")
-        }
-        let data = Data(String(cString: result).utf8)
-        return try JSONDecoder().decode(type, from: data)
+        try NativeBallCore.request(message, as: type)
     }
 
     public func execute(ball: String, build: String, arguments: [String],
+                        workingDirectories: [String: String]? = nil, environment overrides: [String: String]? = nil,
                         update: @Sendable (String) async -> Void) async throws -> ProcessResult {
-        let plan = try request(DesktopRequest("prepare-launch", ball: ball, build: build, arguments: arguments), as: LaunchPlan.self)
+        var message = DesktopRequest("prepare-launch", ball: ball, build: build, arguments: arguments)
+        message.workingDirectories = workingDirectories; message.environment = overrides
+        let plan = try request(message, as: LaunchPlan.self)
         guard let executable = plan.command.first else { throw BallError("The runtime launch command is empty.") }
         var environment = ProcessInfo.processInfo.environment
         for key in plan.unsetEnvironment { environment.removeValue(forKey: key) }
@@ -99,4 +93,20 @@ public actor BallBackend {
         }
         return result
     }
+}
+
+public enum NativeBallCore {
+    public static func request<T: Decodable & Sendable>(_ message: DesktopRequest, as type: T.Type) throws -> T {
+        let text = String(decoding: try JSONEncoder().encode(message), as: UTF8.self)
+        var result: UnsafeMutablePointer<CChar>?
+        var diagnostic: UnsafeMutablePointer<CChar>?
+        let status = text.withCString { tb_request($0, &result, &diagnostic) }
+        defer { if let result { tb_free(result) }; if let diagnostic { tb_free(diagnostic) } }
+        guard status == 0, let result else {
+            throw BallError(diagnostic.map { String(cString: $0) } ?? "Ball operation failed.")
+        }
+        let data = Data(String(cString: result).utf8)
+        return try JSONDecoder().decode(type, from: data)
+    }
+
 }

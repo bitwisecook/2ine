@@ -15,8 +15,6 @@ void prepOs2Drives(void)
     int lowestcwd = 0;
     int i;
 
-    FIXME("need to pass current dirs and disks to OS/2 subprocesses");
-
     char *cwd = lx_host_path_current();
     char *rp = cwd ? lx_host_path_canonical(cwd) : NULL;
     if ((cwd == NULL) || (rp == NULL))
@@ -118,6 +116,54 @@ void prepOs2Drives(void)
 
     free(cwd);
 
+    /* Launchers and guest subprocesses supply every drive's own directory.
+       Canonicalize before accepting it so a forged environment cannot escape a mount. */
+    for (i = 0; i < 26; i++)
+    {
+        if (!GLoaderState.disks[i])
+            continue;
+        char key[32];
+        snprintf(key, sizeof(key), "TWOINE_DRIVE_CWD_%c", 'A' + i);
+        const char *relative = getenv(key);
+        if (!relative)
+            continue;
+        char *candidate = malloc(strlen(GLoaderState.disks[i]) + strlen(relative) + 2);
+        if (!candidate)
+            continue;
+        sprintf(candidate, "%s/%s", GLoaderState.disks[i], relative);
+        for (char *p = candidate; *p; p++)
+            if (*p == '\\')
+                *p = '/';
+        char *full = lx_host_path_canonical(candidate),
+             *root = lx_host_path_canonical(GLoaderState.disks[i]);
+        free(candidate);
+        if (full && root)
+        {
+            size_t length = strlen(root);
+            if (!strncmp(full, root, length) &&
+                (!full[length] || full[length] == '/' || (length == 1 && root[0] == '/')))
+            {
+                const char *tail = full + length;
+                while (*tail == '/')
+                    tail++;
+                char *directory = strdup(tail);
+                if (directory)
+                {
+                    for (char *p = directory; *p; p++)
+                        if (*p == '/')
+                            *p = '\\';
+                    free(GLoaderState.current_dir[i]);
+                    GLoaderState.current_dir[i] = directory;
+                }
+            }
+        }
+        free(full);
+        free(root);
+    }
+    const char *current = getenv("TWOINE_CURRENT_DRIVE");
+    if (current && strlen(current) == 1 && current[0] >= 'A' && current[0] <= 'Z' &&
+        GLoaderState.disks[current[0] - 'A'])
+        GLoaderState.current_disk = current[0] - 'A' + 1;
     GLoaderState.diskmap = diskmap;
 
 #if 0

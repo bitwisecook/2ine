@@ -165,6 +165,7 @@ char *tb_home(void)
 #else
 #include <dirent.h>
 #include <unistd.h>
+#include <fcntl.h>
 char *tb_canonical(const char *p)
 {
     return realpath(p, NULL);
@@ -392,4 +393,93 @@ int tb_atomic_write(const char *p, const void *d, size_t n)
 int tb_copy(const char *s, const char *d)
 {
     return write_atomic(d, NULL, 0, s);
+}
+
+/* Import operations never replace existing items, including dangling links. */
+int tb_is_link(const char *path)
+{
+#ifdef _WIN32
+    DWORD a = attributes(path);
+    return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_REPARSE_POINT);
+#else
+    struct stat s;
+    return !lstat(path, &s) && S_ISLNK(s.st_mode);
+#endif
+}
+int tb_mkdir_new(const char *path)
+{
+#ifdef _WIN32
+    wchar_t *w = wide(path);
+    int ok = w && CreateDirectoryW(w, NULL);
+    free(w);
+    return ok;
+#else
+    return !mkdir(path, 0700);
+#endif
+}
+int tb_copy_new(const char *source, const char *destination)
+{
+#ifdef _WIN32
+    wchar_t *a = wide(source), *b = wide(destination);
+    int ok = a && b && CopyFileW(a, b, TRUE);
+    free(a);
+    free(b);
+    return ok;
+#else
+    FILE *in = fopen(source, "rb");
+    if (!in)
+        return 0;
+    int fd = open(destination, O_WRONLY | O_CREAT | O_EXCL, 0600);
+    FILE *out = fd >= 0 ? fdopen(fd, "wb") : NULL;
+    if (!out)
+    {
+        if (fd >= 0)
+            close(fd);
+        fclose(in);
+        return 0;
+    }
+    int ok = 1;
+    unsigned char buffer[65536];
+    size_t n;
+    while ((n = fread(buffer, 1, sizeof(buffer), in)))
+        if (fwrite(buffer, 1, n, out) != n)
+        {
+            ok = 0;
+            break;
+        }
+    if (ferror(in))
+        ok = 0;
+    struct stat info;
+    if (!fstat(fileno(in), &info) && fchmod(fd, info.st_mode & 0777))
+        ok = 0;
+    fclose(in);
+    if (fclose(out))
+        ok = 0;
+    if (!ok)
+        unlink(destination);
+    return ok;
+#endif
+}
+
+int tb_directory_readable(const char *path)
+{
+#ifdef _WIN32
+    wchar_t *w = wide(path);
+    if (!w)
+        return 0;
+    HANDLE handle =
+        CreateFileW(w, FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                    NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+    free(w);
+    if (handle == INVALID_HANDLE_VALUE)
+        return 0;
+    CloseHandle(handle);
+    return 1;
+#else
+    DIR *directory = opendir(path);
+    if (!directory)
+        return 0;
+    closedir(directory);
+    return 1;
+#endif
 }

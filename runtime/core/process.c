@@ -97,8 +97,13 @@ void initPib(void)
 
     char *const *envp = lx_host_environment();
 
-    char path[255];
-    snprintf(path, 254, "PATH=%s", getenv("OS2PATH"));
+    const char *guest_path = getenv("OS2PATH");
+    if (!guest_path)
+        guest_path = "";
+    char *path = malloc(strlen(guest_path) + 6);
+    if (!path)
+        abort();
+    sprintf(path, "PATH=%s", guest_path);
     for (int i = 0; envp[i]; i++)
     {
         const char *str = envp[i];
@@ -215,6 +220,7 @@ void initPib(void)
         argv--;
     }
 
+    free(path);
     free(cmdlinebuf);
     free(argv);
 }

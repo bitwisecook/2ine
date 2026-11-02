@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "include/twoine_ball.h"
 #include "platform.h"
+#include "icon.h"
 #include "vendor/cjson/cJSON.h"
 #include "vendor/sha256/sha256.h"
 #include <ctype.h>
@@ -26,6 +27,7 @@ typedef struct Context
     char *ball;
     char *roots[26];
     cJSON *manifest;
+    const cJSON *application;
 } Context;
 
 static int fail(Context *c, const char *format, ...)
@@ -373,33 +375,72 @@ static int inside(const char *path, const char *root)
         return 0;
     return !path[n] || path[n] == '/' || path[n] == '\\' || (n == 1 && root[0] == '/');
 }
+static int current_drive(Context *c)
+{
+    const char *letter = field(c->manifest, "currentDrive");
+    return letter && strlen(letter) == 1 && letter[0] >= 'A' && letter[0] <= 'Z' &&
+                   c->roots[letter[0] - 'A']
+               ? letter[0] - 'A'
+               : 2;
+}
+static const char *drive_directory(Context *c, int drive)
+{
+    char key[2] = {(char)('A' + drive), 0};
+    const char *path = field(get(c->application, "workingDirectories"), key);
+    if (!path)
+        path = field(get(c->manifest, "workingDirectories"), key);
+    return path ? path : format(c, "%c:\\", 'A' + drive);
+}
 static char *host_path(Context *c, const char *name, int explicit_host)
 {
-    if (!name)
+    if (!name || !*name)
     {
         fail(c, "An executable or directory path is required");
         return NULL;
     }
-    char *path;
-    if (!explicit_host && isalpha((unsigned char)name[0]) && name[1] == ':' &&
-        (name[2] == '\\' || name[2] == '/'))
+    int named_drive = isalpha((unsigned char)name[0]) && name[1] == ':';
+    /* Absolute host paths remain available to CLI adapters. Windows callers
+       disambiguate host drive letters with explicit_host. */
+    int guest = !explicit_host && (named_drive || name[0] == '\\' || name[0] != '/');
+    if (guest)
     {
-        int drive = toupper((unsigned char)name[0]) - 'A';
+        int drive = named_drive ? toupper((unsigned char)name[0]) - 'A' : current_drive(c);
         if (!c->roots[drive])
         {
             fail(c, "Drive %c: is not mapped", drive + 'A');
             return NULL;
         }
-        char *tail = keep(c, strdup(name + 3));
-        if (!tail)
+        const char *tail = name + (named_drive ? 2 : 0);
+        int rooted = *tail == '\\' || *tail == '/';
+        while (*tail == '\\' || *tail == '/')
+            tail++;
+        const char *base = rooted ? "" : drive_directory(c, drive);
+        if (!base)
             return NULL;
-        for (char *p = tail; *p; p++)
+        if (*base)
+        {
+            if (strlen(base) < 3 || toupper((unsigned char)base[0]) != drive + 'A' ||
+                base[1] != ':' || (base[2] != '\\' && base[2] != '/'))
+            {
+                fail(c, "Invalid working directory for drive %c:", drive + 'A');
+                return NULL;
+            }
+            base += 3;
+        }
+        char *relative = format(c, "%s/%s", base, tail);
+        if (!relative)
+            return NULL;
+        for (char *p = relative; *p; p++)
             if (*p == '\\')
                 *p = '/';
-        path = case_path(c, join(c, c->roots[drive], tail));
+        char *path = case_path(c, join(c, c->roots[drive], relative));
+        /* A path must stay in its own drive, even when another drive contains it. */
+        if (path && inside(path, c->roots[drive]))
+            return path;
+        fail(c, "Path is outside mapped drive %c: %s", drive + 'A', name);
+        return NULL;
     }
-    else
-        path = case_path(c, name);
+    char *path = case_path(c, name);
     if (!path)
         return NULL;
     for (int i = 0; i < 26; i++)
@@ -432,6 +473,26 @@ static char *guest_path(Context *c, const char *host)
             if (*p == '/')
                 *p = '\\';
     return result;
+}
+static char *guest_for_input(Context *c, const char *host, const char *input)
+{
+    if (input && isalpha((unsigned char)input[0]) && input[1] == ':')
+    {
+        int drive = toupper((unsigned char)input[0]) - 'A';
+        if (c->roots[drive] && inside(host, c->roots[drive]))
+        {
+            const char *relative = host + strlen(c->roots[drive]);
+            while (*relative == '/' || *relative == '\\')
+                relative++;
+            char *path = format(c, "%c:\\%s", 'A' + drive, relative);
+            if (path)
+                for (char *p = path; *p; p++)
+                    if (*p == '/')
+                        *p = '\\';
+            return path;
+        }
+    }
+    return guest_path(c, host);
 }
 static const char *setting_text(Context *c, const cJSON *v)
 {
@@ -497,6 +558,7 @@ static int write_config(Context *c)
                ? 1
                : fail(c, "Cannot write 2ine.cfg");
 }
+static cJSON *guest_environment(Context *c, const cJSON *overrides);
 static cJSON *snapshot(Context *c)
 {
     if (!roots(c))
@@ -508,6 +570,16 @@ static cJSON *snapshot(Context *c)
         return NULL;
     cJSON *value = cJSON_CreateObject(), *mapping = cJSON_CreateObject();
     cJSON_AddItemToObject(value, "manifest", cJSON_Duplicate(c->manifest, 1));
+    cJSON *records = cJSON_AddObjectToObject(value, "applicationRecords"), *application;
+    cJSON_ArrayForEach(application, get(c->manifest, "applications"))
+    {
+        char *encoded = cJSON_PrintUnformatted(application);
+        if (encoded)
+        {
+            cJSON_AddStringToObject(records, application->string, encoded);
+            cJSON_free(encoded);
+        }
+    }
     cJSON_AddItemToObject(value, "roots", mapping);
     for (int i = 0; i < 26; i++)
         if (c->roots[i])
@@ -515,6 +587,26 @@ static cJSON *snapshot(Context *c)
             char letter[2] = {(char)('A' + i), 0};
             cJSON_AddStringToObject(mapping, letter, c->roots[i]);
         }
+    cJSON *directories = cJSON_AddObjectToObject(value, "workingDirectories");
+    for (int i = 0; i < 26; i++)
+        if (c->roots[i])
+        {
+            char key[2] = {(char)('A' + i), 0};
+            cJSON_AddStringToObject(directories, key, drive_directory(c, i));
+        }
+    cJSON_AddStringToObject(value, "currentDrive", format(c, "%c", 'A' + current_drive(c)));
+    cJSON *env = guest_environment(c, NULL);
+    if (!env)
+    {
+        cJSON_Delete(value);
+        return NULL;
+    }
+    if (field(env, "OS2PATH"))
+    {
+        put(env, "PATH", cJSON_CreateString(field(env, "OS2PATH")));
+        cJSON_DeleteItemFromObjectCaseSensitive(env, "OS2PATH");
+    }
+    cJSON_AddItemToObject(value, "environmentDefaults", env);
     cJSON_AddStringToObject(value, "configSys", latin1_to_utf8(c, bytes, size));
     return value;
 }
@@ -747,20 +839,116 @@ static int reserved_env(const char *key)
             return 1;
     return 0;
 }
-static cJSON *environment(Context *c, const char *build, const char *override)
+/* Overlay expressions resolve against the complete inherited layer. A
+   self-reference appends to the inherited value; other overrides resolve
+   recursively so JSON key ordering cannot affect results. */
+static char *expand_env(Context *c, const cJSON *base, const cJSON *overlay, const char *key,
+                        const char **stack, unsigned depth)
+{
+    if (depth >= 64)
+    {
+        fail(c, "Environment expansion is too deep");
+        return NULL;
+    }
+    for (unsigned i = 0; i < depth; i++)
+        if (!strcmp(stack[i], key))
+        {
+            fail(c, "Environment expansion cycle at %s", key);
+            return NULL;
+        }
+    const char *raw = field(overlay, key);
+    if (!raw)
+        return keep(c, strdup(field(base, key) ? field(base, key) : ""));
+    stack[depth] = key;
+    char *out = keep(c, strdup(""));
+    for (const char *at = raw; *at && out;)
+    {
+        const char *begin = strchr(at, '%');
+        if (!begin)
+            return format(c, "%s%s", out, at);
+        const char *end = strchr(begin + 1, '%');
+        if (!end)
+            return format(c, "%s%s", out, at);
+        char *ref = keep(c, strdup(begin + 1));
+        if (!ref)
+            return NULL;
+        ref[end - begin - 1] = 0;
+        for (char *p = ref; *p; p++)
+            *p = (char)toupper((unsigned char)*p);
+        if (!strcmp(ref, "PATH"))
+            ref = "OS2PATH";
+        char *value;
+        if (!strcmp(ref, key))
+            value = keep(c, strdup(field(base, key) ? field(base, key) : ""));
+        else if (field(overlay, ref))
+            value = expand_env(c, base, overlay, ref, stack, depth + 1);
+        else
+            value = keep(c, strdup(field(base, ref) ? field(base, ref) : ""));
+        if (!value)
+            return NULL;
+        out = format(c, "%s%.*s%s", out, (int)(begin - at), at, value);
+        if (out && strlen(out) > 1024 * 1024)
+        {
+            fail(c, "Expanded environment value is too large");
+            return NULL;
+        }
+        at = end + 1;
+    }
+    return out;
+}
+static int overlay_environment(Context *c, cJSON *env, const cJSON *settings)
+{
+    if (!settings)
+        return 1;
+    if (!cJSON_IsObject(settings))
+        return fail(c, "Invalid environment object");
+    cJSON *normalized = cJSON_CreateObject(), *entry;
+    cJSON_ArrayForEach(entry, settings)
+    {
+        if (!entry->string || !valid_env_key(entry->string) || !str(entry))
+        {
+            fail(c, "Invalid environment entry");
+            break;
+        }
+        char *key = keep(c, strdup(entry->string));
+        if (!key)
+            break;
+        for (char *p = key; *p; p++)
+            *p = (char)toupper((unsigned char)*p);
+        if (!strcmp(key, "PATH"))
+            key = "OS2PATH";
+        if (reserved_env(key) || !strncmp(key, "TWOINE_DRIVE_CWD_", 17) ||
+            !strcmp(key, "TWOINE_CURRENT_DRIVE"))
+        {
+            fail(c, "Reserved host environment variable: %s", key);
+            break;
+        }
+        if (get(normalized, key))
+        {
+            fail(c, "Duplicate environment variable: %s", key);
+            break;
+        }
+        put(normalized, key, cJSON_CreateString(str(entry)));
+    }
+    cJSON *inherited = cJSON_Duplicate(env, 1);
+    if (!c->error)
+        cJSON_ArrayForEach(entry, normalized)
+        {
+            const char *stack[64];
+            char *value = expand_env(c, inherited, normalized, entry->string, stack, 0);
+            if (!value)
+                break;
+            put(env, entry->string, cJSON_CreateString(value));
+        }
+    cJSON_Delete(inherited);
+    cJSON_Delete(normalized);
+    return !c->error;
+}
+static cJSON *guest_environment(Context *c, const cJSON *overrides)
 {
     cJSON *env = cJSON_CreateObject();
     for (int i = 0; default_keys[i]; i++)
         cJSON_AddStringToObject(env, default_keys[i], default_values[i]);
-    const char *assets[][2] = {{"TWOINE_FONT_DIRECTORY", "fonts"},
-                               {"TWOINE_SOUNDFONT", "soundfonts/GeneralUser-GS.sf2"},
-                               {"TWOINE_KOSMICKRISP_ICD", "vulkan/icd.d/kosmickrisp.json"}};
-    for (int i = 0; i < 3; i++)
-    {
-        char *asset = join(c, build, assets[i][1]);
-        if (tb_is_file(asset) || tb_is_dir(asset))
-            put(env, assets[i][0], cJSON_CreateString(asset));
-    }
     size_t n = 0;
     char *bytes = read_file(c, join(c, c->roots[2], "CONFIG.SYS"), &n, 1);
     if (!bytes)
@@ -803,26 +991,36 @@ static cJSON *environment(Context *c, const char *build, const char *override)
         }
         line = next;
     }
-    cJSON *entry;
-    cJSON *settings = get(c->manifest, "environment");
-    if (!cJSON_IsObject(settings))
-    {
-        fail(c, "Invalid environment object");
+    if (!overlay_environment(c, env, get(c->manifest, "environment")) ||
+        !overlay_environment(c, env, overrides))
         goto failed;
-    }
-    cJSON_ArrayForEach(entry, settings) put(env, entry->string, cJSON_Duplicate(entry, 1));
+    cJSON *entry;
     cJSON_ArrayForEach(entry, env)
     {
-        if (!valid_env_key(entry->string) || !str(entry))
+        if (!valid_env_key(entry->string) || !str(entry) || reserved_env(entry->string))
         {
-            fail(c, "Invalid environment entry");
+            fail(c, "Invalid or reserved environment entry: %s", entry->string);
             goto failed;
         }
-        if (reserved_env(entry->string))
-        {
-            fail(c, "Use OS2PATH/LIBPATH or launcher options for %s", entry->string);
-            goto failed;
-        }
+    }
+    return env;
+failed:
+    cJSON_Delete(env);
+    return NULL;
+}
+static cJSON *environment(Context *c, const char *build, const char *override, const cJSON *app_env)
+{
+    cJSON *env = guest_environment(c, app_env);
+    if (!env)
+        return NULL;
+    const char *assets[][2] = {{"TWOINE_FONT_DIRECTORY", "fonts"},
+                               {"TWOINE_SOUNDFONT", "soundfonts/GeneralUser-GS.sf2"},
+                               {"TWOINE_KOSMICKRISP_ICD", "vulkan/icd.d/kosmickrisp.json"}};
+    for (int i = 0; i < 3; i++)
+    {
+        char *asset = join(c, build, assets[i][1]);
+        if (tb_is_file(asset) || tb_is_dir(asset))
+            put(env, assets[i][0], cJSON_CreateString(asset));
     }
     const char *backend = override ? override : field(get(c->manifest, "runtime"), "backend");
     const char *inherited = getenv("TWOINE_BACKEND");
@@ -906,6 +1104,7 @@ static int array_strings(Context *c, const cJSON *array)
     cJSON_ArrayForEach(a, array) if (!str(a)) return fail(c, "Arguments must be strings");
     return 1;
 }
+static int validate_directories(Context *c, const cJSON *directories);
 static cJSON *prepare(Context *c, const cJSON *request)
 {
     const char *build_path = field(request, "build");
@@ -924,6 +1123,9 @@ static cJSON *prepare(Context *c, const cJSON *request)
     if (!array_strings(c, args) || !cJSON_GetArraySize(args))
         return NULL;
     const char *action = str(cJSON_GetArrayItem(args, 0));
+    c->application = request;
+    if (!validate_directories(c, get(request, "workingDirectories")))
+        return NULL;
     int count = cJSON_GetArraySize(args), at = 1;
     const char *cwd = NULL, *program = NULL;
     cJSON *argv = cJSON_CreateArray();
@@ -936,6 +1138,7 @@ static cJSON *prepare(Context *c, const cJSON *request)
             fail(c, "Saved application does not exist: %s", name ? name : "");
             goto failed;
         }
+        c->application = app;
         program = field(app, "program");
         cwd = field(app, "cwd");
         cJSON *a;
@@ -971,18 +1174,9 @@ static cJSON *prepare(Context *c, const cJSON *request)
         working = host_path(c, cwd, 0);
     else
     {
-        working = keep(c, strdup(host));
-        if (working)
-        {
-            char *slash = strrchr(working, '/');
-#ifdef _WIN32
-            char *back = strrchr(working, '\\');
-            if (back && (!slash || back > slash))
-                slash = back;
-#endif
-            if (slash)
-                *slash = 0;
-        }
+        const char *guest = guest_for_input(c, host, program);
+        if (guest)
+            working = host_path(c, drive_directory(c, guest[0] - 'A'), 0);
     }
     if (!working || !tb_is_dir(working))
     {
@@ -991,9 +1185,32 @@ static cJSON *prepare(Context *c, const cJSON *request)
     }
     if (!write_config(c))
         goto failed;
-    cJSON *env = environment(c, build, field(request, "backend"));
+    cJSON *env =
+        environment(c, build, field(request, "backend"), get(c->application, "environment"));
     if (!env)
         goto failed;
+    for (int i = 0; i < 26; i++)
+        if (c->roots[i])
+        {
+            const char *directory = drive_directory(c, i);
+            char *mapped = directory ? host_path(c, directory, 0) : NULL;
+            if (!mapped || !tb_is_dir(mapped))
+            {
+                cJSON_Delete(env);
+                fail(c, "Working directory for %c: is not accessible", 'A' + i);
+                goto failed;
+            }
+            put(env, format(c, "TWOINE_DRIVE_CWD_%c", 'A' + i), cJSON_CreateString(directory + 3));
+        }
+    const char *guest_working = guest_for_input(c, working, cwd && *cwd ? cwd : program);
+    if (!guest_working)
+    {
+        cJSON_Delete(env);
+        goto failed;
+    }
+    put(env, "TWOINE_CURRENT_DRIVE", cJSON_CreateString(format(c, "%c", guest_working[0])));
+    put(env, format(c, "TWOINE_DRIVE_CWD_%c", guest_working[0]),
+        cJSON_CreateString(guest_working + 3));
     const char *identity = field(env, "TWOINE_RUNTIME_ID");
     const char *selected = field(env, "TWOINE_BACKEND");
     if (!selected)
@@ -1008,7 +1225,7 @@ static cJSON *prepare(Context *c, const cJSON *request)
     }
     cJSON *command = cJSON_CreateArray();
     cJSON_AddItemToArray(command, cJSON_CreateString(join(c, runtime, loader)));
-    cJSON_AddItemToArray(command, cJSON_CreateString(guest_path(c, host)));
+    cJSON_AddItemToArray(command, cJSON_CreateString(guest_for_input(c, host, program)));
     cJSON *a;
     cJSON_ArrayForEach(a, argv) cJSON_AddItemToArray(command, cJSON_Duplicate(a, 1));
     cJSON *result = cJSON_CreateObject();
@@ -1093,7 +1310,7 @@ static int command(Context *c, const cJSON *request)
         char *absolute = keep(c, tb_absolute(build && *build ? build : "."));
         if (!absolute)
             return 0;
-        cJSON *env = environment(c, absolute, field(request, "backend"));
+        cJSON *env = environment(c, absolute, field(request, "backend"), NULL);
         if (!env)
             return 0;
         cJSON_Delete(env);
@@ -1118,9 +1335,11 @@ static int command(Context *c, const cJSON *request)
         cJSON *apps = object(c->manifest, "applications");
         if (!apps)
             return fail(c, "Invalid applications object");
-        cJSON *app = cJSON_CreateObject();
-        cJSON_AddStringToObject(app, "program", guest_path(c, host));
-        cJSON *argv = cJSON_AddArrayToObject(app, "arguments");
+        cJSON *existing = get(apps, name);
+        cJSON *app = existing ? cJSON_Duplicate(existing, 1) : cJSON_CreateObject();
+        put(app, "program", cJSON_CreateString(guest_for_input(c, host, program)));
+        cJSON *argv = cJSON_CreateArray();
+        put(app, "arguments", argv);
         for (; at < n; at++)
             cJSON_AddItemToArray(argv, cJSON_Duplicate(cJSON_GetArrayItem(args, at), 1));
         if (cwd && *cwd)
@@ -1131,7 +1350,26 @@ static int command(Context *c, const cJSON *request)
                 cJSON_Delete(app);
                 return fail(c, "Working directory must be a mapped directory");
             }
-            cJSON_AddStringToObject(app, "cwd", guest_path(c, directory));
+            put(app, "cwd", cJSON_CreateString(guest_for_input(c, directory, cwd)));
+        }
+        put(apps, name, app);
+        return save_manifest(c);
+    }
+    if (!strcmp(action, "restore-app"))
+    {
+        const char *encoded = str(cJSON_GetArrayItem(args, 2));
+        cJSON *app = encoded ? cJSON_ParseWithOpts(encoded, NULL, 1) : NULL;
+        if (!name || !cJSON_IsObject(app) || !field(app, "program") ||
+            !cJSON_IsArray(get(app, "arguments")))
+        {
+            cJSON_Delete(app);
+            return fail(c, "Invalid application record");
+        }
+        cJSON *apps = object(c->manifest, "applications");
+        if (!apps || get(apps, name))
+        {
+            cJSON_Delete(app);
+            return fail(c, "An application with that name already exists");
         }
         put(apps, name, app);
         return save_manifest(c);
@@ -1145,6 +1383,355 @@ static int command(Context *c, const cJSON *request)
     }
     return fail(c, "Unsupported ball command: %s", action);
 }
+
+static int validate_directories(Context *c, const cJSON *directories)
+{
+    if (!directories)
+        return 1;
+    if (!cJSON_IsObject(directories))
+        return fail(c, "Working directories must be an object");
+    cJSON *entry;
+    cJSON_ArrayForEach(entry, directories)
+    {
+        const char *path = str(entry), *key = entry->string;
+        if (!key || strlen(key) != 1 || key[0] < 'A' || key[0] > 'Z' || !c->roots[key[0] - 'A'] ||
+            !path || strlen(path) < 3 || path[0] != key[0] || path[1] != ':' || path[2] != '\\')
+            return fail(c, "Use a mapped drive letter and its absolute OS/2 directory");
+        char *host = host_path(c, path, 0);
+        if (!host || !tb_is_dir(host))
+            return fail(c, "Working directory does not exist: %s", path);
+    }
+    return 1;
+}
+static cJSON *browse_directory(Context *c, const char *path)
+{
+    char *host = host_path(c, path, 0);
+    if (host && tb_is_file(host))
+    {
+        host = keep(c, strdup(host));
+        if (host)
+        {
+            char *slash = strrchr(host, '/');
+#ifdef _WIN32
+            char *back = strrchr(host, '\\');
+            if (back && (!slash || back > slash))
+                slash = back;
+#endif
+            if (slash)
+                *slash = 0;
+        }
+    }
+    if (!host || !tb_is_dir(host) || !tb_directory_readable(host))
+    {
+        fail(c, "Choose an accessible mapped directory");
+        return NULL;
+    }
+    /* Preserve the drive the user chose for nested or duplicate mappings. */
+    int drive = path && isalpha((unsigned char)path[0]) && path[1] == ':'
+                    ? toupper((unsigned char)path[0]) - 'A'
+                    : current_drive(c);
+    const char *tail = host + strlen(c->roots[drive]);
+    while (*tail == '/' || *tail == '\\')
+        tail++;
+    char *guest = format(c, "%c:\\%s", 'A' + drive, tail);
+    if (!guest)
+        return NULL;
+    for (char *p = guest; *p; p++)
+        if (*p == '/')
+            *p = '\\';
+    cJSON *result = cJSON_CreateObject(), *entries = cJSON_AddArrayToObject(result, "entries");
+    cJSON_AddStringToObject(result, "path", guest);
+    cJSON_AddStringToObject(result, "hostPath", host);
+    size_t count = 0;
+    char **names = tb_names(host, &count);
+    if (!names && count == (size_t)-1)
+    {
+        cJSON_Delete(result);
+        fail(c, "Cannot read directory: %s", guest);
+        return NULL;
+    }
+    if (count > 1)
+        qsort(names, count, sizeof(*names), compare_names);
+    for (size_t i = 0; i < count; i++)
+    {
+        char *child = join(c, host, names[i]);
+        if (strpbrk(names[i], "\\:"))
+            continue;
+        char *resolved = case_path(c, child);
+        if (!resolved || !inside(resolved, c->roots[drive]))
+            continue;
+        int directory = tb_is_dir(child);
+        if (!directory && !tb_is_file(child))
+            continue;
+        cJSON *entry = cJSON_CreateObject();
+        cJSON_AddStringToObject(entry, "name", names[i]);
+        cJSON_AddStringToObject(
+            entry, "path",
+            format(c, "%s%s%s", guest, guest[strlen(guest) - 1] == '\\' ? "" : "\\", names[i]));
+        cJSON_AddStringToObject(entry, "hostPath", child);
+        cJSON_AddBoolToObject(entry, "directory", directory);
+        cJSON_AddItemToArray(entries, entry);
+    }
+    tb_names_free(names, count);
+    return result;
+}
+static int plan_copy(Context *c, cJSON *plan, const char *source, const char *destination,
+                     unsigned depth)
+{
+    if (depth > 64 || cJSON_GetArraySize(plan) > 100000)
+        return fail(c, "The dropped folder is too deep or contains too many files");
+    if (tb_is_link(source))
+        return fail(c, "Symbolic links cannot be imported: %s", source);
+    if (!tb_is_dir(source) && !tb_is_file(source))
+        return fail(c, "Not a regular file or folder: %s", source);
+    char *target = case_path(c, destination);
+    if (!target)
+        return 0;
+    if (tb_is_dir(target) || tb_is_file(target) || tb_is_link(target))
+        return fail(c, "A file or folder already exists: %s. Nothing was replaced.", target);
+    cJSON *other;
+    cJSON_ArrayForEach(
+        other, plan) if (equal_case(field(other, "destination"),
+                                    target)) return fail(c, "Dropped items have conflicting names");
+    cJSON *entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(entry, "source", source);
+    cJSON_AddStringToObject(entry, "destination", target);
+    cJSON_AddBoolToObject(entry, "directory", tb_is_dir(source));
+    cJSON_AddItemToArray(plan, entry);
+    if (tb_is_dir(source))
+    {
+        if (!tb_directory_readable(source))
+            return fail(c, "Cannot read dropped folder: %s", source);
+        size_t count = 0;
+        char **names = tb_names(source, &count);
+        if (!names && count == (size_t)-1)
+            return fail(c, "Cannot read dropped folder: %s", source);
+        int ok = 1;
+        for (size_t i = 0; i < count && ok; i++)
+        {
+            if (strpbrk(names[i], "\\:"))
+            {
+                ok = fail(c, "Filename is not an OS/2 filename: %s", names[i]);
+                break;
+            }
+            ok =
+                plan_copy(c, plan, join(c, source, names[i]), join(c, target, names[i]), depth + 1);
+        }
+        tb_names_free(names, count);
+        return ok;
+    }
+    return 1;
+}
+static cJSON *import_files(Context *c, const cJSON *request)
+{
+    const char *directory = field(request, "path");
+    char *destination = directory ? host_path(c, directory, 0) : NULL;
+    cJSON *sources = get(request, "sources");
+    if (!destination || !tb_is_dir(destination) || !array_strings(c, sources) ||
+        !cJSON_GetArraySize(sources))
+    {
+        fail(c, "Choose a mapped destination and files to copy");
+        return NULL;
+    }
+    cJSON *plan = cJSON_CreateArray(), *source;
+    cJSON_ArrayForEach(source, sources)
+    {
+        const char *raw = str(source);
+        if (tb_is_link(raw))
+        {
+            fail(c, "Symbolic links cannot be imported: %s", raw);
+            break;
+        }
+        char *path = keep(c, tb_canonical(raw));
+        if (!path)
+            break;
+        const char *name = path;
+        for (const char *p = path; *p; p++)
+            if (*p == '/' || *p == '\\')
+                name = p + 1;
+        if (!*name || strpbrk(name, ":\\"))
+        {
+            fail(c, "Choose a file or named folder to copy");
+            break;
+        }
+        if (inside(destination, path))
+        {
+            fail(c, "Cannot copy a folder into itself");
+            break;
+        }
+        if (!plan_copy(c, plan, path, join(c, destination, name), 0))
+            break;
+    }
+    if (!c->error)
+    {
+        cJSON *entry;
+        cJSON_ArrayForEach(entry, plan)
+        {
+            const char *src = field(entry, "source"), *dst = field(entry, "destination");
+            if (tb_is_link(src) || (cJSON_IsTrue(get(entry, "directory")) ? !tb_mkdir_new(dst)
+                                                                          : !tb_copy_new(src, dst)))
+            {
+                fail(
+                    c,
+                    "Copy stopped at %s. Existing files were kept; earlier copied items may remain.",
+                    dst);
+                break;
+            }
+        }
+    }
+    cJSON_Delete(plan);
+    return c->error ? NULL : browse_directory(c, directory);
+}
+static int save_application(Context *c, const cJSON *request)
+{
+    const char *name = field(request, "name"), *program = field(request, "program"),
+               *previous = field(request, "originalName");
+    if (!name || !*name || !program || !array_strings(c, get(request, "arguments")))
+        return fail(c, "Application name, executable and arguments are required");
+    cJSON *apps = object(c->manifest, "applications");
+    if (!apps)
+        return fail(c, "Invalid applications object");
+    if (previous && strcmp(previous, name) && get(apps, name))
+        return fail(c, "An application with this name already exists");
+    cJSON *existing = get(apps, previous ? previous : name);
+    cJSON *app = cJSON_IsObject(existing) ? cJSON_Duplicate(existing, 1) : cJSON_CreateObject();
+    if (!app)
+        return fail(c, "Out of memory");
+    cJSON *dirs = get(request, "workingDirectories"), *env = get(request, "environment");
+    if (!validate_directories(c, dirs))
+        goto failed;
+    if (dirs)
+        put(app, "workingDirectories", cJSON_Duplicate(dirs, 1));
+    if (env)
+        put(app, "environment", cJSON_Duplicate(env, 1));
+    c->application = app;
+    char *host = host_path(c, program, 0);
+    if (!host || !tb_is_file(host))
+    {
+        fail(c, "Program does not exist: %s", program);
+        goto failed;
+    }
+    put(app, "program", cJSON_CreateString(guest_for_input(c, host, program)));
+    put(app, "arguments", cJSON_Duplicate(get(request, "arguments"), 1));
+    const char *cwd = field(request, "cwd");
+    if (cwd && *cwd)
+    {
+        char *host_cwd = host_path(c, cwd, 0);
+        if (!host_cwd || !tb_is_dir(host_cwd))
+        {
+            fail(c, "Working directory does not exist");
+            goto failed;
+        }
+        put(app, "cwd", cJSON_CreateString(guest_for_input(c, host_cwd, cwd)));
+    }
+    else
+        cJSON_DeleteItemFromObjectCaseSensitive(app, "cwd");
+    cJSON *checked = guest_environment(c, get(app, "environment"));
+    if (!checked)
+        goto failed;
+    cJSON_Delete(checked);
+    if (get(request, "iconSource"))
+    {
+        const char *source = field(request, "iconSource");
+        if (!source || !*source)
+            cJSON_DeleteItemFromObjectCaseSensitive(app, "icon");
+        else
+        {
+            if (!tb_is_file(source))
+            {
+                fail(c, "Choose an accessible icon image");
+                goto failed;
+            }
+            unsigned char hash[32];
+            if (!digest_file(c, source, hash))
+                goto failed;
+            const char *relative = format(c, "icons/%s.image", hex(c, hash));
+            char *target = join(c, c->ball, relative);
+            if (!tb_mkdirs(join(c, c->ball, "icons")) ||
+                (!tb_is_file(target) && !tb_copy_new(source, target)))
+            {
+                fail(c, "Cannot import application icon");
+                goto failed;
+            }
+            put(app, "icon", cJSON_CreateString(relative));
+        }
+    }
+    c->application = NULL;
+    put(apps, name, app);
+    if (previous && strcmp(previous, name))
+        cJSON_DeleteItemFromObjectCaseSensitive(apps, previous);
+    return save_manifest(c);
+failed:
+    c->application = NULL;
+    cJSON_Delete(app);
+    return 0;
+}
+static cJSON *application_icon(Context *c, const cJSON *request)
+{
+    const char *name = field(request, "name"), *program = field(request, "program");
+    cJSON *app = name ? get(get(c->manifest, "applications"), name) : NULL;
+    if (!program)
+        program = field(app, "program");
+    const char *custom = field(app, "icon");
+    cJSON *result = cJSON_CreateObject();
+    if (custom)
+    {
+        char *path = case_path(c, join(c, c->ball, custom));
+        if (!path || !inside(path, c->ball))
+        {
+            cJSON_Delete(result);
+            fail(c, "Icon path leaves the ball");
+            return NULL;
+        }
+        size_t size = 0;
+        char *bytes = read_file(c, path, &size, 0);
+        if (bytes)
+        {
+            TbIconImage *icon = tb_icon_bitmap((const unsigned char *)bytes, size);
+            if (icon)
+            {
+                char *rgba = tb_icon_rgba_base64(icon);
+                cJSON_AddStringToObject(result, "rgba", rgba);
+                cJSON_AddNumberToObject(result, "width", icon->width);
+                cJSON_AddNumberToObject(result, "height", icon->height);
+                free(rgba);
+                tb_icon_free(icon);
+            }
+            else
+            {
+                char *encoded = tb_base64((const unsigned char *)bytes, size);
+                cJSON_AddStringToObject(result, "image", encoded);
+                free(encoded);
+            }
+            cJSON_AddStringToObject(result, "source", "custom");
+            return result;
+        }
+    }
+    else if (program)
+    {
+        char *host = host_path(c, program, 0);
+        if (host && tb_is_file(host))
+        {
+            size_t size = 0;
+            char *bytes = read_file(c, host, &size, 0);
+            TbIconImage *icon =
+                bytes ? tb_icon_executable((const unsigned char *)bytes, size) : NULL;
+            if (icon)
+            {
+                char *rgba = tb_icon_rgba_base64(icon);
+                cJSON_AddStringToObject(result, "rgba", rgba);
+                cJSON_AddNumberToObject(result, "width", icon->width);
+                cJSON_AddNumberToObject(result, "height", icon->height);
+                cJSON_AddStringToObject(result, "source", "embedded");
+                free(rgba);
+                tb_icon_free(icon);
+                return result;
+            }
+        }
+    }
+    cJSON_AddStringToObject(result, "source", "none");
+    return result;
+}
 static cJSON *dispatch(Context *c, const cJSON *request)
 {
     const char *action = field(request, "action");
@@ -1152,6 +1739,112 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     {
         fail(c, "An action is required");
         return NULL;
+    }
+    if (!strcmp(action, "format-arguments"))
+    {
+        const cJSON *args = get(request, "arguments");
+        if (!array_strings(c, args))
+            return NULL;
+        char *out = keep(c, strdup(""));
+        cJSON *item;
+        cJSON_ArrayForEach(item, args)
+        {
+            const char *value = str(item);
+            char *quoted = keep(c, strdup("\""));
+            for (const char *p = value; *p && quoted; p++)
+                quoted = format(c, "%s%c%s", quoted, *p, *p == '\"' ? "\"" : "");
+            out = format(c, "%s%s%s\"", out, *out ? " " : "", quoted);
+            if (!out)
+                return NULL;
+        }
+        return cJSON_CreateString(out);
+    }
+    if (!strcmp(action, "parse-arguments"))
+    {
+        const char *text = field(request, "text");
+        if (!text)
+        {
+            fail(c, "Argument text is required");
+            return NULL;
+        }
+        cJSON *args = cJSON_CreateArray();
+        char *word = keep(c, strdup(""));
+        int started = 0;
+        char quote = 0;
+        for (const char *p = text; *p; p++)
+        {
+            if (quote)
+            {
+                if (*p == quote)
+                {
+                    if (p[1] == quote)
+                    {
+                        word = format(c, "%s%c", word, *p);
+                        p++;
+                    }
+                    else
+                        quote = 0;
+                }
+                else
+                    word = format(c, "%s%c", word, *p);
+            }
+            else if (*p == '\"' || *p == '\'')
+            {
+                quote = *p;
+                started = 1;
+            }
+            else if (isspace((unsigned char)*p))
+            {
+                if (started)
+                {
+                    cJSON_AddItemToArray(args, cJSON_CreateString(word));
+                    word = keep(c, strdup(""));
+                    started = 0;
+                }
+            }
+            else
+            {
+                word = format(c, "%s%c", word, *p);
+                started = 1;
+            }
+            if (!word)
+                break;
+        }
+        if (quote)
+            fail(c, "Close the quote in the arguments field.");
+        if (c->error)
+        {
+            cJSON_Delete(args);
+            return NULL;
+        }
+        if (started)
+            cJSON_AddItemToArray(args, cJSON_CreateString(word));
+        return args;
+    }
+    if (!strcmp(action, "image-preview"))
+    {
+        const char *path = field(request, "path");
+        if (!path)
+        {
+            fail(c, "An image path is required");
+            return NULL;
+        }
+        size_t size = 0;
+        char *bytes = read_file(c, path, &size, 0);
+        if (!bytes)
+            return NULL;
+        cJSON *result = cJSON_CreateObject();
+        char *encoded = tb_base64((const uint8_t *)bytes, size);
+        if (!encoded)
+        {
+            cJSON_Delete(result);
+            fail(c, "Image is too large");
+            return NULL;
+        }
+        cJSON_AddStringToObject(result, "source", "custom");
+        cJSON_AddStringToObject(result, "image", encoded);
+        free(encoded);
+        return result;
     }
     if (!strcmp(action, "defaults"))
     {
@@ -1227,6 +1920,44 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return NULL;
     if (!strcmp(action, "snapshot"))
         return snapshot(c);
+    if (!strcmp(action, "browse"))
+        return browse_directory(c, field(request, "path")
+                                       ? field(request, "path")
+                                       : format(c, "%c:", 'A' + current_drive(c)));
+    if (!strcmp(action, "import-files"))
+        return import_files(c, request);
+    if (!strcmp(action, "guest-environment"))
+        return guest_environment(c, get(request, "environment"));
+    if (!strcmp(action, "save-application"))
+        return save_application(c, request) ? snapshot(c) : NULL;
+    if (!strcmp(action, "application-icon"))
+        return application_icon(c, request);
+    if (!strcmp(action, "set-working-directory"))
+    {
+        const char *path = field(request, "path");
+        if (!path || strlen(path) < 3 || path[1] != ':' || path[2] != '\\')
+        {
+            fail(c, "Use an absolute drive-letter directory");
+            return NULL;
+        }
+        char key[2] = {path[0], 0};
+        cJSON *check = cJSON_CreateObject();
+        cJSON_AddStringToObject(check, key, path);
+        int valid = validate_directories(c, check);
+        cJSON_Delete(check);
+        if (!valid)
+            return NULL;
+        cJSON *dirs = object(c->manifest, "workingDirectories");
+        if (!dirs)
+        {
+            fail(c, "Invalid working directories");
+            return NULL;
+        }
+        char *host = host_path(c, path, 0);
+        put(dirs, key, cJSON_CreateString(guest_for_input(c, host, path)));
+        put(c->manifest, "currentDrive", cJSON_CreateString(key));
+        return save_manifest(c) ? snapshot(c) : NULL;
+    }
     if (!strcmp(action, "command"))
     {
         if (!command(c, request))
@@ -1314,7 +2045,9 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     {
         const char *b = field(request, "build");
         char *build = keep(c, tb_absolute(b && *b ? b : "."));
-        return build ? environment(c, build, field(request, "backend")) : NULL;
+        return build ? environment(c, build, field(request, "backend"),
+                                   get(c->application, "environment"))
+                     : NULL;
     }
     if (!strcmp(action, "write-config"))
         return write_config(c) ? snapshot(c) : NULL;

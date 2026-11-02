@@ -21,5 +21,9 @@ typedef int64_t sint64;
 
 typedef unsigned int uint;
 
+#ifdef _MSC_VER
+#define LX_PRIVATE
+#else
 #define LX_PRIVATE __attribute__((visibility("hidden")))
+#endif
 #endif
