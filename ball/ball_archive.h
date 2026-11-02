@@ -446,7 +446,7 @@ static int extract_ball(Context *c, const char *source, const char *destination)
     int ok = file && archive;
     if (ok)
         ok = archive_read_support_format_zip(archive) == ARCHIVE_OK &&
-             archive_read_open_FILE(archive, file) == ARCHIVE_OK;
+             archive_read_open_fd(archive, tb_file_descriptor(file), 65536) == ARCHIVE_OK;
     struct archive_entry *entry;
     int status = ARCHIVE_FATAL;
     while (ok && (status = archive_read_next_header(archive, &entry)) == ARCHIVE_OK)
