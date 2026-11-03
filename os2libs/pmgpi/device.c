@@ -56,16 +56,19 @@ BOOL DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
     caps[8] = caps[9] = (LONG)((dpi * 10000 + 127) / 254); /* pels per metre */
     caps[10] = caps[12] = caps[35] = m.average_width;
     caps[11] = caps[13] = caps[36] = m.ascent + m.descent;
-    caps[14] = 16; /* indexed drawing palette */
+    /* Device colors are independent of a PS's initial 16 indexed entries.
+       The retained canvas supports all 24-bit RGB values simultaneously. */
+    caps[14] = 16777216;
     caps[15] = 1;  /* planes */
-    caps[16] = 24; /* RGB components in the host texture */
+    caps[16] = 24; /* preferred bitmap bits per pel */
+    caps[17] = 1;  /* CAPS_COLTABL_RGB_8: 8 bits for each primary */
     caps[18] = 3;  /* pointer buttons */
     caps[19] = 2;  /* CAPS_FM_OVERPAINT */
     caps[22] = 1;  /* byte alignment */
     caps[27] = (LONG)lx_host_font_count();
     caps[31] = 1;                    /* CAPS_DEV_WINDOWING_SUPPORT */
     caps[33] = 16777216;             /* physical RGB colors */
-    caps[34] = 15;                   /* highest indexed color */
+    caps[34] = 255;                  /* highest custom logical-table index */
     caps[37] = caps[38] = (LONG)dpi; /* logical font dpi */
     unsigned printer = lx_pm_printer_kind(dc);
     if (printer)

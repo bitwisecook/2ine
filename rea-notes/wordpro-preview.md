@@ -113,7 +113,12 @@ file. `preview-code-disassembly.txt` was produced with ndisasm 32-bit base 0x200
 REA's original WordPro import exposes `.image` and reports no analyzed procedure
 at this caller; those failed lookups are retained as diagnostic limitations,
 not interpreted as decompilation evidence. The bounded loaded-code observation
-establishes the arithmetic independently. The remaining likely prerequisite is
-dialog-unit/font-cell geometry: the original resource's 126-DLU pane becomes 204
-pels with the current cell metrics. The font owner is checking original SDK and
-IBM font metrics before any correction. No bitmap fit override was introduced.
+establishes the arithmetic independently. The prerequisite is dialog-unit
+geometry: the original resource's 126-DLU pane became 204 pels with the
+window-selected Helv metrics. The printing/font investigation subsequently
+verified the original WinMapDlgPoints helper uses cached system-font dimensions,
+not the window's selected font. Original System Proportional at 96 DPI has a
+16-pel baseline, while original Helv 8 has a 13-pel baseline. The corresponding
+WinMapDlgPoints correction produces a 248×252 pane in focused resource tests,
+without changing Helv's text metrics. Integrated acceptance remains with the
+root agent after the coherent runtime rebuild. No bitmap fit override was added.

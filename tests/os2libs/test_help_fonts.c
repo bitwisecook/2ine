@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* A forced physical face keeps its match identity when a simulated style is selected. */
+/* Physical face identity and grayscale glyph coverage survive repeated font-state queries. */
 #include "os2libs/pmwin.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
@@ -30,8 +30,46 @@ static FATTRS attributes(const FONTMETRICS *metrics, USHORT selection)
     result.fsFontUse = 2; /* FATTR_FONTUSE_OUTLINE */
     return result;
 }
+static int stable_glyph_masks(void)
+{
+    const unsigned sizes[] = {11, 16, 24};
+    const uint32_t points[] = {'U', 'n', 't', 'i', 'l', 'e', 'd', '?', 0x2022};
+    for (unsigned index = 0; index < lx_host_font_count(); index++)
+        for (unsigned size = 0; size < sizeof sizes / sizeof sizes[0]; size++)
+        {
+            LxHostFont *font = lx_host_font_open(index, sizes[size]);
+            CHECK(font);
+            for (unsigned point = 0; point < sizeof points / sizeof points[0]; point++)
+            {
+                LxHostGlyph reference;
+                CHECK(lx_host_font_glyph(font, points[point], &reference));
+                for (unsigned iteration = 0; iteration < 4; iteration++)
+                {
+                    LxHostFontMetrics metrics;
+                    CHECK(lx_host_font_metrics(font, &metrics));
+                    CHECK(metrics.em == (int)sizes[size]);
+                    CHECK(lx_host_font_advance(font, 'M') > 0);
+                    (void)lx_host_font_kerning(font, 'A', 'V');
+                    LxHostGlyph other, repeated;
+                    CHECK(lx_host_font_glyph(font, 'W', &other));
+                    lx_host_glyph_free(&other);
+                    CHECK(lx_host_font_glyph(font, points[point], &repeated));
+                    CHECK(repeated.width == reference.width &&
+                          repeated.height == reference.height && repeated.left == reference.left &&
+                          repeated.top == reference.top && repeated.advance == reference.advance);
+                    size_t bytes = (size_t)reference.width * reference.height;
+                    CHECK(!bytes || !memcmp(repeated.coverage, reference.coverage, bytes));
+                    lx_host_glyph_free(&repeated);
+                }
+                lx_host_glyph_free(&reference);
+            }
+            lx_host_font_close(font);
+        }
+    return 0;
+}
 int main(void)
 {
+    CHECK(!stable_glyph_masks());
     HAB anchor = WinInitialize(0);
     CHECK(anchor);
     HMQ queue = WinCreateMsgQueue(anchor, 0);

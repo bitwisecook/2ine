@@ -515,3 +515,127 @@ The later document capture in that same probe retains the restored caption
 gradient. The dialog capture is guest retained pixels at1×, not native host
 titlebar/Retina presentation acceptance. Production source was unchanged by
 this last capture.
+
+## Native flicker follow-up: pattern provenance and device colors
+
+The user's later native screenshots show a real remaining two-yellow flicker
+and apparent modal text weight changes. The previous headless success does
+not close that report. New bounded original probes include full invalidation,
+File/Edit transitions, deactivation/reactivation, original private-document
+WM_CHAR input to mark it dirty, original WM_CLOSE, and repeated full modal
+invalidation. No desktop input or active-ball/document writes are used.
+
+`build-lotus-visuals/repeat-colors-s3cm_v9j` contains the actual original Save
+Changes modal at `canvas-181.png`, then `canvas-201.png`, `canvas-221.png` and
+`canvas-231.png`. All four complete495×104 retained modal images are
+byte-identical; the workspace comparison rectangle stays identical through
+each tested document/menu/focus/full-paint transition. The text PS is repeatedly
+fresh, regular font0 at16pixels, with the same indexed colors and mix defaults.
+This is SDL software retained-target readback, not an independent CPU canvas
+or acceptance of native Metal presentation. The font agent separately measures
+actual glyph masks and partial repaints.
+
+`build-lotus-visuals/pattern-colors-k_zcpyag` adds scratch-only pattern logging
+inside the actual span writer. The original document paints into its CPU
+memory bitmap in RGB mode using an8×8,1-bit checker tile, foreground`0x808000`,
+background`0xc0c0c0`, both mixes OVERPAINT(2), pattern reference(99,604).
+These values repeat across repaints. The resulting workspace is olive/gray,
+not olive/white: its95×605 sample contains28,737olive and28,738gray pixels.
+The alternating black/white source tile chooses those two primitive colors;
+its white bits do not imply a white workspace background. This corrects the
+earlier visual impression reported in agent status messages. Its modal and
+workspace comparison JSON again records no differences on the software path.
+
+The further scratch-only probe `build-lotus-visuals/cpu-patterns-9np2ki9v`
+hashes the actual original CPU memory bitmap before GpiBitBlt copies it to
+the window. Across seven original copies, the993×636,24-bit source has the
+same workspace sample hash`83aa8b4ad9e38879`. The sample is x2..96,y1..605;
+28,453pixels are gray and28,452olive, with the remaining570 in six source
+rows outside the rendered destination. The source/destination mapping stays
+source(0,0) to target(0,-7)-(993,629), ROP_SRCCOPY`0xcc`, options2. This gives
+independent CPU-side stability evidence in addition to the software renderer
+readback. It still does not demonstrate stable native presentation or every
+possible incremental clipping region. `cpu-comparison.json` retains the seven
+copy counts and raw sample hash.
+
+The device capability audit found a separate concrete error: the display
+reported CAPS_COLORS=16 while claiming1plane×24bits and16,777,216physical
+colors. Microsoft's original OS/2 Reference Volume2 AppendixB, printed
+pages554–556, defines CAPS_COLORS as simultaneous device colors, while
+CAPS_COLOR_INDEX is the highest logical-table index and
+CAPS_COLOR_TABLE_SUPPORT bit0 means RGB tables with8bits per primary.
+The display now reports16,777,216colors,24bitmap bits per pel, RGB8 table
+support, and maximum custom table index255. Its initial logical PS table
+remains the original16entries. The existing printer-specific overrides remain.
+
+`test_pm.c` verifies these device values, the unchanged initial palette, a
+custom entry at advertised index255, and rejection beyond that limit. Focused
+PM/display-DPI/bitmap/printer tests pass8/8 in2.72seconds; the full runtime
+suite passes66/66 in8.46seconds
+(`/tmp/2ine-device-color-caps-full-tests.log`). Build, format and diff checks
+pass. This does not establish a causal fix for the native flicker: the original
+Word Pro trace in this scenario queries only capabilities2,8,9,37and38, with
+no query covering14/15/16/17/33/34. No application-specific pattern override,
+forced color change or font workaround was introduced.
+
+## Hidden native Metal: retained target versus pre-present window buffer
+
+Following the axiom-graphics Metal diagnostics, the private probes explicitly
+enable `MTL_DEBUG_LAYER=1` and `MTL_SHADER_VALIDATION=1`. Each successful run
+logs both “Metal API Validation Enabled” and “Metal GPU Validation Enabled”,
+without validation errors. These are diagnostic environment variables only.
+
+`build-lotus-visuals/probe-native-metal.py` recompiles the current HAL video
+source into a private native dependency closure. It draws the measured
+olive/gray checker and a real regular16px font coverage mask into a hidden
+Cocoa/Metal window, then intercepts SDL_RenderPresent to read the window
+backbuffer immediately before presenting it. It separately reads the retained
+texture and logs renderer/target, output/window/pixel sizes, viewport, scale,
+logical presentation, clip, texture blend/filter/modulation, alpha range and
+output color-space/HDR state. It does not reuse an old probe dylib or change
+production HAL code.
+
+`build-lotus-visuals/native-metal-69zunkmb` compares twelve presentations,
+border/resizability changes, position changes and resizing away/back. At1×,
+retained and pre-present RGB hashes match. At2×, SDL's default LINEAR sampler
+changes the checker and antialiased mask, but the resulting hashes remain
+stable across repeated presents and surface transitions. All retained pixels
+are opaque; texture modulation is255,255,255,255, scale1, and HDR is disabled.
+There is no measured frame-to-frame flicker in this fixture.
+
+The scratch-only nearest/linear A/B run
+`build-lotus-visuals/native-metal-ygqb7loo/ab-comparison.json` confirms that
+nearest gives exact integer2× copies of the retained pixels; linear does not.
+At1× both match the source. This identifies resampling, not a demonstrated
+cause of the reported native instability. No production filter policy change
+was made, and no noninteger or video-texture sampling policy is inferred.
+
+The stronger original-binary run is
+`build-lotus-visuals/native-original-zfqk6iuo`, generated by
+`probe-native-original.py`. It clones only the prior private acceptance ball,
+suppresses native window show/raise in its scratch HAL, and sets
+`SDL_MAC_BACKGROUND_APP=1`, `SDL_WINDOW_ACTIVATE_WHEN_SHOWN=0` and
+`SDL_WINDOW_ACTIVATE_WHEN_RAISED=0`. All captured windows report HIDDEN and
+none report native INPUT_FOCUS. PM focus/deactivation/menu messages and the
+original dirty-document/Save Changes sequence still execute. Its22second
+termination is deliberate. Earlier exploratory runs suppressed window show/
+raise but did not yet set the explicit application-level background hint;
+the final evidence uses all three hints.
+
+All34 actual original Metal pre-present frames byte-match their retained
+targets. Nineteen comparable workspace samples remain identical through the
+tested menu/focus/full-invalidation sequence. The four complete495×104 Save
+Changes images are identical. The final root canvas is1512×982, reflecting
+the native display bounds; it is not the software dummy's1024×768 desktop.
+The actual default native windows report1× pixel density, no logical renderer
+scaling, default linear texture sampling, opaque retained pixels and HDR off.
+`comparison.json` retains per-frame results and `main-prepresent.png` /
+`modal-prepresent.png` are direct backbuffer captures. The accompanying
+`analyze-native-original.py` can regenerate their comparisons.
+
+This leaves the user's visible native flicker open. Hidden windows cannot
+exercise real visible-window activation, WindowServer/Core Animation
+composition, display migration, or live compositor resampling. Neither stable
+hidden Metal output nor the nearest A/B result justifies claiming the native
+report fixed. No production HAL/font/pattern change followed this negative
+reproduction result.

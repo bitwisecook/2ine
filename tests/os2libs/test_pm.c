@@ -1180,6 +1180,18 @@ int main(void)
     CHECK(DevQueryCaps(HWND_DESKTOP, 8, 2, capabilities) && capabilities[0] == 3780 &&
           capabilities[1] == 3780);
     CHECK(!DevQueryCaps(HWND_DESKTOP, 41, 2, capabilities));
+    LONG display_caps[42];
+    CHECK(DevQueryCaps(HWND_DESKTOP, 0, 42, display_caps));
+    CHECK(display_caps[14] == 16777216 && display_caps[15] == 1 && display_caps[16] == 24 &&
+          display_caps[17] == 1 && display_caps[33] == display_caps[14] && display_caps[34] == 255);
+    LONG initial_palette[16];
+    CHECK(GpiQueryLogColorTable(screen, 0, 0, 16, initial_palette) == 16 &&
+          initial_palette[CLR_RED] == 0xff0000);
+    LONG last_custom = 0x123456;
+    CHECK(GpiCreateLogColorTable(screen, 0, 2, display_caps[34], 1, &last_custom) &&
+          GpiQueryRGBColor(screen, 0, display_caps[34]) == last_custom);
+    CHECK(!GpiCreateLogColorTable(screen, 0, 2, display_caps[34] + 1, 1, &last_custom));
+    CHECK(GpiCreateLogColorTable(screen, 0, 0, 0, 0, NULL));
     CHECK(GpiQueryColorIndex(screen, 0, 0xff0000) == CLR_RED);
     CHECK(GpiQueryColorIndex(screen, 0, 0x0100fe) == CLR_BLUE);
     CHECK(GpiQueryRGBColor(screen, 0, CLR_RED) == 0xff0000);
