@@ -59,16 +59,16 @@ class ApplicationsPage(Gtk.Box):
         )
         self.list.set_filter_func(self.matches)
         self.list.connect("row-selected", self.selected)
-        self.list.connect(
-            "row-activated", lambda _list, row: window.execute(["launch", row.application_name])
-        )
         self.search.set_key_capture_widget(self.list)
         self.search.connect("search-changed", self.filter)
         self.append(self.list)
         self.rows = {}
         applications = window.snapshot["manifest"].get("applications", {})
         for name, application in sorted(applications.items()):
-            row = Adw.ActionRow(title=name, subtitle=application["program"], use_markup=False)
+            row = Adw.ActionRow(
+                title=name, subtitle=application["program"], use_markup=False, activatable=True
+            )
+            row.connect("activated", lambda row: window.execute(["launch", row.application_name]))
             row.application_name = name
             row.search_text = gnome_files.folded(name + " " + application["program"])
             image = Gtk.Image(icon_name="application-x-executable-symbolic", pixel_size=40)

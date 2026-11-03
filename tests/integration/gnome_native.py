@@ -118,6 +118,13 @@ def main():
         pump(lambda: window.get_visible_dialog() is not None)
         window.get_visible_dialog().close()
         pump(lambda: window.get_visible_dialog() is None)
+        # Run the native row action, then the explicit window accelerator.
+        pump(lambda: not window.busy)
+        page.rows["Café Notes"].activate()
+        pump(lambda: not window.busy and window.last_result is not None)
+        assert window.last_result == 0, window.log_text
+        window.show_page("apps")
+        page = window.applications_page
         page.search.set_text("")
         page.search.emit("search-changed")
         page.list.select_row(page.rows["Calculator"])
