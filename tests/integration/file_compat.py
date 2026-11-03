@@ -85,6 +85,75 @@ def program(checked):
     return linear_image(g.code, g.fixups, ["DOSCALLS"], "FILECOMPAT", data=g.data)
 
 
+def locking_program(checked):
+    g = FlatGuest()
+    name = g.field(b"sample.txt\0")
+    action = g.field(bytes(4))
+    untouched = g.field(bytes([0xCC]) * 32)
+    # Independent opens must observe exclusive byte ranges. A failed lock or
+    # read leaves the caller's buffers and file position usable.
+    first, second = g.field(bytes(4)), g.field(bytes(4))
+    for opened in (first, second):
+        g.call(1, 273, name, opened, action, 0, 0, 1, 0x42, 0)
+        g.result(0, 120)
+    region = g.field(struct.pack("<ii", 0, 2))
+    empty = g.field(bytes(8))
+    g.call(1, 428, (first,), 0, region, 0, 0)
+    g.result(0, 121)
+    for timeout in (0, 15):
+        g.call(1, 428, (second,), 0, region, timeout, 0)
+        g.result(33, 122)
+    g.call(1, 281, (second,), untouched, 2, action)
+    g.result(33, 123)
+    g.word(action, 0, 124)
+    g.word(untouched, 0xCCCCCCCC, 125)
+    g.call(1, 428, (first,), 0, region, 0, 4)
+    g.result(87, 126)
+    g.call(1, 428, (first,), region, region, 0, 2)
+    g.result(174, 127)
+    g.call(1, 428, (first,), 0, region, 0, 1)
+    g.result(50, 128)
+    g.call(1, 428, (first,), empty, empty, 0, 0)
+    g.result(33, 129)
+    if checked:
+        g.call(1, 428, (first,), 0, 0xDEADBEEF, 0, 0)
+        g.result(87, 130)
+    g.call(1, 428, (first,), region, 0, 0, 0)
+    g.result(0, 131)
+    g.call(1, 428, (second,), 0, region, 0, 0)
+    g.result(0, 132)
+    for opened in (first, second):
+        g.call(1, 257, (opened,))
+        g.result(0, 133)
+
+    # A failed dynamically loaded dependency must report its real identity,
+    # clear the handle, and leave subsequent loads usable.
+    error = g.field(b"HEAD" + bytes([0xCC]) * 64 + b"TAIL")
+    module = g.field(struct.pack("<I", 0xDEADBEEF))
+    for library, expected, failure_name in (("ABSENT", 126, b"ABSE"), ("BROKEN", 126, b"DEPE")):
+        library_name = g.field(library.encode() + b"\0")
+        g.call(1, 318, error + 4, 5, library_name, module)
+        g.result(expected, 140)
+        g.word(module, 0, 141)
+        g.word(error + 4, int.from_bytes(failure_name, "little"), 142)
+        g.word(error, int.from_bytes(b"HEAD", "little"), 143)
+        g.word(error + 68, int.from_bytes(b"TAIL", "little"), 144)
+        g.require(b"\x80\x3d" + struct.pack("<I", error + 8) + b"\0", 150)
+        g.word(error + 9, 0xCCCCCCCC, 151)
+    bad = g.field(b"BAD\0")
+    g.call(1, 318, error + 4, 64, bad, module)
+    g.result(11, 145)
+    g.word(module, 0, 146)
+    good = g.field(b"GOOD\0")
+    g.call(1, 318, error + 4, 64, good, module)
+    g.result(0, 147)
+    g.require(b"\x80\x3d" + struct.pack("<I", error + 4) + b"\0", 148)
+    g.call(1, 322, (module,))
+    g.result(0, 149)
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "LOCKMODULE", data=g.data)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
@@ -94,26 +163,31 @@ def main():
     with tempfile.TemporaryDirectory(prefix="twoine-file-compat-") as temporary:
         work = Path(temporary)
         (work / "sample.txt").write_bytes(b"hello")
-        executable = work / "file_compat.exe"
-        executable.write_bytes(program(args.backend == "unicorn"))
-        result = subprocess.run(
-            [str(build / "lx_loader"), str(executable)],
-            cwd=work,
-            env={
-                **os.environ,
-                "TWOINE_BACKEND": args.backend,
-                "TWOINE_LIBPATH": str(build),
-                "LD_LIBRARY_PATH": str(build),
-            },
-            capture_output=True,
-            timeout=15,
+        (work / "broken.dll").write_bytes(
+            linear_image(b"\xb8\x01\0\0\0\xc3", [], ["DEPENDENCY"], "BROKEN", library=True)
         )
-        if result.returncode:
-            raise RuntimeError(
-                f"file compatibility guest exit={result.returncode}\n"
-                + result.stderr.decode(errors="replace")
+        (work / "bad.dll").write_bytes(b"invalid module")
+        (work / "good.dll").write_bytes(
+            linear_image(b"\xb8\x01\0\0\0\xc3", [], [], "GOOD", library=True)
+        )
+        for stem, factory in (("file_compat", program), ("lock_module", locking_program)):
+            executable = work / (stem + ".exe")
+            executable.write_bytes(factory(args.backend == "unicorn"))
+            result = subprocess.run(
+                [str(build / "lx_loader"), str(executable)],
+                cwd=work,
+                env=dict(os.environ, TWOINE_LIBPATH=str(build), TWOINE_BACKEND=args.backend),
+                capture_output=True,
+                timeout=15,
             )
-        print("22-byte guest file status, boundary spans and caller canaries passed")
+            if result.returncode:
+                raise RuntimeError(
+                    f"{stem} guest exit={result.returncode}\n"
+                    + result.stderr.decode(errors="replace")
+                )
+        print(
+            "22-byte guest file status, file locks, module errors, recovery and caller canaries passed"
+        )
 
 
 if __name__ == "__main__":

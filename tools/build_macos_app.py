@@ -25,6 +25,62 @@ def command(argv, **kwargs):
     return subprocess.run([str(a) for a in argv], check=True, **kwargs)
 
 
+def ball_document_declarations():
+    document = {
+        "CFBundleTypeName": "2ine Ball",
+        "CFBundleTypeRole": "Editor",
+        "CFBundleTypeIconFile": "TwoineBall.icns",
+        "LSHandlerRank": "Owner",
+        "LSItemContentTypes": ["io.github.bitwisecook.2ine.ball"],
+        "LSTypeIsPackage": True,
+    }
+    exported = {
+        "UTTypeIdentifier": "io.github.bitwisecook.2ine.ball",
+        "UTTypeDescription": "2ine Ball",
+        "UTTypeConformsTo": ["com.apple.package"],
+        "UTTypeIconFile": "TwoineBall.icns",
+        "UTTypeTagSpecification": {"public.filename-extension": ["2ineball"]},
+    }
+    return document, exported
+
+
+def make_icns(png, iconset, destination):
+    iconset.mkdir(parents=True, exist_ok=True)
+    for size in (16, 32, 128, 256, 512):
+        for scale in (1, 2):
+            suffix = "@2x" if scale == 2 else ""
+            command(
+                [
+                    "sips",
+                    "-z",
+                    size * scale,
+                    size * scale,
+                    png,
+                    "--out",
+                    iconset / f"icon_{size}x{size}{suffix}.png",
+                ],
+                stdout=subprocess.DEVNULL,
+            )
+    command(["iconutil", "-c", "icns", iconset, "-o", destination])
+
+
+def build_document_icon(output, resources, environment):
+    png = output / "icon-renders/TwoineBall.png"
+    png.parent.mkdir(parents=True, exist_ok=True)
+    command(
+        [
+            "swift",
+            "-module-cache-path",
+            output / "clang-cache",
+            ROOT / "tools/render_svg.swift",
+            ROOT / "tools/icons/TwoineBall.svg",
+            png,
+        ],
+        env=environment,
+    )
+    make_icns(png, output / "TwoineBall.iconset", resources / "TwoineBall.icns")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=ROOT / "build-macos")
@@ -92,7 +148,7 @@ def main():
     resources = contents / "Resources"
     (contents / "MacOS").mkdir(parents=True)
     resources.mkdir(parents=True)
-    shutil.copy2(output / "swift/release/TwoineBalls", contents / "MacOS/2ine")
+    shutil.copy2(output / "swift/release/TwoineBall", contents / "MacOS/2ine")
     copied = macos_bundle.bundle_runtime(
         args.runtime_build.resolve(),
         resources / "Runtime",
@@ -126,6 +182,7 @@ def main():
         ROOT / "ball/vendor/sha256/README.md", resources / "Licenses/SHA256-public-domain.txt"
     )
     shutil.copy2(ROOT / "ball/vendor/fatfs/LICENSE.txt", resources / "Licenses/FatFs-license.txt")
+    shutil.copy2(ROOT / "ball/vendor/hwzip/LICENSE", resources / "Licenses/HWZIP-Unlicense.txt")
     for source in copied:
         for parent in source.parents:
             if (parent / "INSTALL_RECEIPT.json").is_file():
@@ -181,9 +238,11 @@ def main():
                 stdout=subprocess.DEVNULL,
             )
     command(["iconutil", "-c", "icns", iconset, "-o", resources / "Twoine.icns"])
+    build_document_icon(output, resources, environment)
+    document, exported = ball_document_declarations()
     info = {
         "CFBundleExecutable": "2ine",
-        "CFBundleIdentifier": "io.github.bitwisecook.2ine.Balls",
+        "CFBundleIdentifier": "io.github.bitwisecook.2ine.Ball",
         "CFBundleName": "2ine",
         "CFBundleDisplayName": "2ine",
         "CFBundlePackageType": "APPL",
@@ -193,22 +252,8 @@ def main():
         "NSHighResolutionCapable": True,
         "CFBundleIconFile": "Twoine",
         "NSPrincipalClass": "NSApplication",
-        "CFBundleDocumentTypes": [
-            {
-                "CFBundleTypeName": "2ine Ball",
-                "CFBundleTypeRole": "Editor",
-                "LSHandlerRank": "Owner",
-                "LSItemContentTypes": ["io.github.bitwisecook.2ine.ball"],
-            }
-        ],
-        "UTExportedTypeDeclarations": [
-            {
-                "UTTypeIdentifier": "io.github.bitwisecook.2ine.ball",
-                "UTTypeDescription": "2ine Ball",
-                "UTTypeConformsTo": ["com.apple.package"],
-                "UTTypeTagSpecification": {"public.filename-extension": ["2ineball"]},
-            }
-        ],
+        "CFBundleDocumentTypes": [document],
+        "UTExportedTypeDeclarations": [exported],
     }
     with (contents / "Info.plist").open("wb") as file:
         plistlib.dump(info, file)

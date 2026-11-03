@@ -55,3 +55,9 @@ normalized rectangles/events. VIO retains its OS/2 screen buffer and delegates
 terminal rendering to `posix/terminal_curses.c`. TCP/IP translates OS/2 socket
 structures and flags before calling `posix/host_socket.c`. No SDL or curses types
 cross the public HAL boundary.
+
+[Digital-video frames](video.md) cross `hal/video_frame.h` as borrowed planar
+YUV420/NV12 or BGRA with explicit stride, length and colorspace. Decoder-owned
+frames reach the PM owner through a retained mailbox. SDL reuses one streaming
+texture and uploads each frame once before drawing its visible rectangles.
+Workers use the shared audio mixer and never call the renderer.

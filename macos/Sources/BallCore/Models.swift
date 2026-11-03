@@ -72,6 +72,7 @@ public enum SettingValue: Decodable, Sendable {
 
 public struct BallSnapshot: Decodable, Sendable {
     public let os2Support: OS2SupportStatus?
+    public let dependencyAudit: DependencyAudit?
     public let unavailableDrives: [String: String]?
     public let manifest: BallManifest
     public let roots: [String: String]
@@ -85,11 +86,13 @@ public struct BallSnapshot: Decodable, Sendable {
 }
 
 public struct DesktopRequest: Encodable, Sendable {
+    public var application: String?
     public var settings: AudioSettings?
     public var exporter: [String: String]?
     public var includeImages: Bool?
     public var path: String?
     public var sources: [String]?
+    public var categories: [String]?
     public var name: String?
     public var originalName: String?
     public var program: String?
@@ -97,6 +100,8 @@ public struct DesktopRequest: Encodable, Sendable {
     public var environment: [String: String]?
     public var iconSource: String?
     public var cwd: String?
+    public var key: String?
+    public var remove: Bool?
     public var action: String
     public var ball: String?
     public var build: String?
@@ -160,6 +165,8 @@ public struct GuestEntry: Decodable, Sendable, Identifiable {
     public let path: String
     public let hostPath: String
     public let directory: Bool
+    public let size: UInt64?
+    public let modified: Double?
     public var id: String { path }
 }
 public struct GuestDirectory: Decodable, Sendable {
@@ -170,10 +177,26 @@ public struct GuestDirectory: Decodable, Sendable {
 }
 public struct ExecutableIcon: Decodable, Sendable {
     public let source: String
+    public let displayName: String?
     public let rgba: Data?
     public let image: Data?
     public let width: Int?
     public let height: Int?
+}
+
+public struct DependencyAudit: Decodable, Sendable {
+    public struct Imported: Decodable, Sendable {
+        public let path: String
+        public let source: String
+        public let sha256: String?
+    }
+    public let summary: String
+    public let logPath: String
+    public let jsonPath: String
+    public let missing: [String]
+    public let imported: [Imported]
+    public let complete: Bool?
+    public let staticOnly: Bool?
 }
 
 public struct OS2SupportStatus: Decodable, Sendable {
@@ -201,10 +224,66 @@ public struct MediaDirectory: Decodable, Sendable {
         public let directory: Bool
         public let container: Bool
         public let size: UInt64
+        public let modified: Double?
         public var id: String { path }
     }
     public let path: String
     public let label: String
     public let parent: String?
     public let entries: [Entry]
+}
+
+public struct OS2MediaSource: Decodable, Sendable {
+    public let sources: [String]
+    public let directory: MediaDirectory
+    public let detectedISO: Bool
+    public let installationDirectory: Bool?
+}
+public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Identifiable {
+    case cmd, fonts, assets, printers, help, full
+    public var id: String { rawValue }
+    public var title: String {
+        switch self {
+        case .cmd: "CMD and REXX Support"
+        case .fonts: "Fonts"
+        case .assets: "Sounds, Images and Video"
+        case .printers: "Printer Support"
+        case .help: "Full Help"
+        case .full: "Full OS/2 File Set"
+        }
+    }
+    public var detail: String {
+        switch self {
+        case .cmd: "CMD.EXE, installer messages, system version, and the original REXX interpreter and utilities."
+        case .fonts: "Original bitmap, TrueType, and PostScript fonts."
+        case .assets: "Desktop backgrounds, icons, sounds, MIDI files, and videos."
+        case .printers: "Original printer drivers and their support files."
+        case .help: "Original help manager, viewer, and help books."
+        case .full: "Includes all options above and remaining OS/2 files. Components supplied by 2ine are excluded."
+        }
+    }
+    public static let defaults: Set<Self> = [.cmd]
+}
+public struct OS2ExtractionPlan: Decodable, Sendable {
+    public struct File: Decodable, Sendable, Identifiable {
+        public let path: String
+        public let source: String
+        public let category: OS2ExtractionCategory
+        public let provided: Bool
+        public let present: Bool
+        public let size: UInt64
+        public let priority: Int?
+        public var id: String { source }
+        public func selected(by categories: Set<OS2ExtractionCategory>) -> Bool {
+            !provided && !present && (categories.contains(.full) || categories.contains(category))
+        }
+    }
+    public let files: [File]
+    public let unmapped: [String]
+    public func selectedFiles(_ categories: Set<OS2ExtractionCategory>) -> [File] {
+        let eligible = files.filter { $0.selected(by: categories) }
+        let priorities = Dictionary(grouping: eligible, by: { $0.path.uppercased() }).mapValues { $0.map { $0.priority ?? 1 }.max() ?? 1 }
+        var paths: Set<String> = []
+        return eligible.filter { ($0.priority ?? 1) == priorities[$0.path.uppercased()] && paths.insert($0.path.uppercased()).inserted }
+    }
 }

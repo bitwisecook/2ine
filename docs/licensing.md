@@ -50,3 +50,10 @@ The [project source and credit catalogue](project-sources.md) is generated from
 inventories record actual host dependency versions. Source/download links and
 license texts do not by themselves replace the complete corresponding-source
 distribution required for GPL/LGPL binary releases.
+
+The pinned FFmpeg source profile reports LGPL 2.1 or later. System FFmpeg
+providers can enable GPL or other options: packaged `ffmpeg-build.json` and
+the installed catalogue record the actual linked library's license and build
+configuration. Retain the applicable FFmpeg notices and source/relinking
+materials for the chosen distribution; the source profile's license does not
+describe every possible system provider.

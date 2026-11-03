@@ -8,7 +8,8 @@ static uint32 bridge32_mciSendCommand(uint8 *a)
     USHORT message = lx_guest_load_u32(a + 4);
     LxGuestBorrow parameters = {0};
     if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12),
-                             parameter_size(message), LX_GUEST_READ | LX_GUEST_WRITE, &parameters))
+                             parameter_size(message, lx_guest_load_u32(a + 8)),
+                             LX_GUEST_READ | LX_GUEST_WRITE, &parameters))
         return MCIERR_INVALID_BUFFER;
     uint32 result = mciSendCommand(lx_guest_load_u32(a), message, lx_guest_load_u32(a + 8),
                                    parameters.host, lx_guest_load_u32(a + 16));

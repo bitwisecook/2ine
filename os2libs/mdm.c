@@ -2,8 +2,11 @@
 /* DART queues retain PCM until playback completion. Callbacks run off the SDL thread. */
 #include "os2native.h"
 #include "mdm.h"
+#include "os2libs/mdm_video.h"
+#include "runtime/audio.h"
 #include "mmio.h"
 #include "os2libs/midi_synth.h"
+#include "runtime/features.h"
 #include "os2libs/midi_sequence.h"
 #include "pmwin.h"
 #include "hal/host_sync.h"
@@ -622,12 +625,12 @@ static LONG OS2API mixWrite(ULONG handle, PVOID records, ULONG count)
 }
 #endif
 #if TWOINE_PORTABLE_LOADER
-static size_t parameter_size(USHORT message)
+static size_t parameter_size(USHORT message, ULONG flags)
 {
     switch (message)
     {
         case MCI_OPEN:
-            return 20;
+            return flags & 0x01000000 ? 24 : 20;
         case MCI_MIXSETUP:
             return 56;
         case MCI_BUFFER:
@@ -635,7 +638,17 @@ static size_t parameter_size(USHORT message)
         case MCI_SET:
             return 32;
         case MCI_PLAY:
-            return 12;
+            return flags & 0x4000 ? 16 : 12;
+        case 5:
+        case 22:
+            return 8; /* MCI_SEEK, MCI_LOAD */
+        case 9:
+        case 10:
+            return 16; /* MCI_GETDEVCAPS, MCI_STATUS */
+        case 44:
+        case 51:
+        case 52:
+            return 20; /* MCI_PUT, MCI_WHERE, MCI_WINDOW */
         default:
             return 4;
     }
@@ -647,6 +660,10 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
                  user);
     if (!parameters)
         return MCIERR_INVALID_BUFFER;
+    int video_handled = 0;
+    ULONG video_result = lx_mci_video_command(id, message, flags, parameters, user, &video_handled);
+    if (video_handled)
+        return video_result;
     unsigned char *p = parameters;
     lx_host_once(&once, initialize);
     if (message == MCI_OPEN)
@@ -658,6 +675,13 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
             kind = 2;
         if (!kind)
             return MCIERR_DEVICE_NOT_READY;
+        if (!lxRuntimeFeatureEnabled(kind == 1 ? LX_FEATURE_PCM : LX_FEATURE_MIDI))
+        {
+            fprintf(stderr,
+                    "2ine: %s playback is disabled in this ball's Graphics & Media settings\n",
+                    kind == 1 ? "PCM audio" : "MIDI");
+            return MCIERR_DEVICE_NOT_READY;
+        }
         lx_host_monitor_lock(monitor);
         Device *d = NULL;
         for (unsigned i = 0; i < DEVICE_COUNT; i++)
@@ -666,7 +690,7 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
                 d = &devices[i];
                 break;
             }
-        if (!d || !next_id)
+        if (!d || !next_id || next_id >= 0x8000)
         {
             lx_host_monitor_unlock(monitor);
             return MCIERR_OUT_OF_MEMORY;
@@ -860,12 +884,12 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
 }
 ULONG mciSendString(PSZ command, PSZ output, USHORT length, ULONG window, USHORT user)
 {
-    (void)window;
-    (void)user;
     TRACE_NATIVE("mciSendString(%s)", command ? command : "<null>");
     if (output && length)
         output[0] = 0;
-    return MCIERR_DEVICE_NOT_READY;
+    int video_handled = 0;
+    ULONG result = lx_mci_video_string(command, output, length, window, user, &video_handled);
+    return video_handled ? result : MCIERR_DEVICE_NOT_READY;
 }
 ULONG mciGetErrorString(ULONG error, PSZ output, USHORT length)
 {
@@ -875,4 +899,21 @@ ULONG mciGetErrorString(ULONG error, PSZ output, USHORT length)
              error == MCIERR_DEVICE_NOT_READY ? ": device unavailable" : "");
     return 1;
 }
+static void shutdown_mdm(void)
+{
+    lx_mci_video_shutdown();
+    if (audio_registered)
+    {
+        lxUnregisterAudioGenerator(generate, NULL);
+        audio_registered = 0;
+    }
+    if (monitor)
+        for (unsigned i = 0; i < DEVICE_COUNT; i++)
+            if (devices[i].id)
+            {
+                unsigned char parameters[4] = {0};
+                mciSendCommand(devices[i].id, MCI_CLOSE, 0, parameters, 0);
+            }
+}
+#define LX_NATIVE_MODULE_SHUTDOWN() shutdown_mdm()
 #include "os2libs/generated/mdm-lx.h"

@@ -8,6 +8,7 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwinx/windows.h"
+#include "os2libs/printer_catalogue.h"
 static _Thread_local Open32DC *contexts;
 Open32DC *open32FindDC(ULONG handle)
 {
@@ -103,6 +104,12 @@ static BOOL discard_context(Open32DC *dc)
     }
     else if (dc->kind == 2)
         WinEndPaint(dc->ps);
+    else if (dc->kind == 5 || dc->kind == 6)
+    {
+        HDC printer = GpiQueryDevice(dc->ps);
+        GpiDestroyPS(dc->ps);
+        DevCloseDC(printer);
+    }
     else
         WinReleasePS(dc->ps);
     lx_handle_release(&dc->pen);
@@ -183,7 +190,7 @@ ULONG CreateCompatibleDC(ULONG source)
 BOOL DeleteDC(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || (dc->kind != 1 && dc->kind != 4))
+    if (!dc || (dc->kind != 1 && dc->kind != 4 && dc->kind != 5 && dc->kind != 6))
     {
         open32SetError(6);
         return FALSE;
@@ -377,6 +384,13 @@ ULONG GetPixel(ULONG handle, LONG x, LONG y)
 ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
 {
     TRACE_NATIVE("CreateIC('%s', '%s', '%s', %p)", driver, device, output, mode);
+    int printer = lx_printer_index(device);
+    if (printer < 0)
+        printer = lx_printer_index(driver);
+    if (printer >= 0)
+        return open32PrinterDefaults((unsigned)printer + 1, output, mode)
+                   ? open32CreatePrinterContext((unsigned)printer + 1, TRUE)
+                   : 0;
     BOOL display = (driver && !strcasecmp(driver, "DISPLAY")) ||
                    (!driver && device && !strcasecmp(device, "DISPLAY"));
     if (!display)
@@ -407,5 +421,36 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
 BOOL open32CanDraw(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    return dc && dc->kind != 4 && !dc->foreign_window;
+    return dc && dc->kind != 4 && dc->kind != 6 && !dc->foreign_window;
+}
+ULONG open32CreatePrinterContext(unsigned kind, BOOL information)
+{
+    if (!open32Presentation())
+        return 0;
+    HDC printer = lx_pm_open_printer_dc(0, information ? 6 : 2, kind);
+    SIZEL size = {0, 0};
+    HPS ps = printer ? GpiCreatePS(0, printer, &size, PU_PELS | GPIA_ASSOC) : 0;
+    if (!ps || !register_context(ps, 0, information ? 6 : 5))
+    {
+        if (ps)
+            GpiDestroyPS(ps);
+        if (printer)
+            DevCloseDC(printer);
+        open32SetError(8);
+        return 0;
+    }
+    return ps;
+}
+ULONG CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
+{
+    TRACE_NATIVE("CreateDC('%s', '%s', '%s', %p)", driver, device, output, mode);
+    int printer = lx_printer_index(device);
+    if (printer < 0)
+        printer = lx_printer_index(driver);
+    if (printer >= 0)
+        return open32PrinterDefaults((unsigned)printer + 1, output, mode)
+                   ? open32CreatePrinterContext((unsigned)printer + 1, FALSE)
+                   : 0;
+    open32SetError(1801);
+    return 0;
 }

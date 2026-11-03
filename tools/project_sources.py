@@ -140,6 +140,19 @@ def installed_catalogue(sources):
                     download="https://github.com/bitwisecook/2ine/archive/" + revision + ".tar.gz",
                 )
             break
+    for source in sources:
+        metadata = Path(source).parent / "ffmpeg-build.json"
+        if metadata.is_file():
+            multimedia = json.loads(metadata.read_text())
+            data["multimediaBuild"] = multimedia
+            entry = next(item for item in data["projects"] if item["id"] == "ffmpeg")
+            entry.update(
+                version=multimedia["version"],
+                license=multimedia["license"],
+                provider=multimedia["provider"],
+                buildConfiguration=multimedia["configuration"],
+            )
+            break
     data["installedInputs"] = records
     return data
 

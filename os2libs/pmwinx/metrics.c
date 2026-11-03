@@ -4,6 +4,8 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin.h"
 #include "os2libs/pmwinx/drawing.h"
+#include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmgpi.h"
 LONG GetSystemMetrics(LONG index)
 {
     TRACE_NATIVE("GetSystemMetrics(%d)", index);
@@ -49,36 +51,43 @@ LONG GetDeviceCaps(ULONG handle, LONG index)
         open32SetError(6);
         return 0;
     }
-    LONG width = WinQuerySysValue(HWND_DESKTOP, 20), height = WinQuerySysValue(HWND_DESKTOP, 21);
+    unsigned printer = lx_pm_printer_kind(GpiQueryDevice(handle));
+    LONG width = printer ? 2480 : WinQuerySysValue(HWND_DESKTOP, 20),
+         height = printer ? 3508 : WinQuerySysValue(HWND_DESKTOP, 21);
     switch (index)
     {
         case 0:
             return 0x100; /* DRIVERVERSION */
         case 2:
-            return 1; /* TECHNOLOGY: DT_RASDISPLAY */
+            return printer ? 2 : 1; /* DT_RASPRINTER or DT_RASDISPLAY */
         case 4:
-            return (LONG)((int64_t)width * 254 / 960); /* HORZSIZE in mm at 96 DPI */
+            return printer ? 210 : (LONG)((int64_t)width * 254 / (lx_pm_dc_dpi(0) * 10));
         case 6:
-            return (LONG)((int64_t)height * 254 / 960); /* VERTSIZE */
+            return printer ? 297 : (LONG)((int64_t)height * 254 / (lx_pm_dc_dpi(0) * 10));
         case 8:
             return width; /* HORZRES */
         case 10:
             return height; /* VERTRES */
         case 12:
-            return 24; /* BITSPIXEL */
+            return printer == 2 ? 1 : 24;
         case 14:
             return 1; /* PLANES */
         case 16:
         case 18:
-        case 24:
             return -1; /* Unlimited RGB brushes/pens/colors */
+        case 24:
+            return printer == 2 ? 2 : -1;
         case 38:
             return 1; /* RASTERCAPS: RC_BITBLT */
         case 88:
         case 90:
-            return 96; /* LOGPIXELSX / LOGPIXELSY */
+            return printer ? 300 : (LONG)lx_pm_dc_dpi(0);
+        case 110:
+            return printer ? width : 0; /* PHYSICALWIDTH */
+        case 111:
+            return printer ? height : 0; /* PHYSICALHEIGHT */
         case 108:
-            return 24; /* COLORRES */
+            return printer == 2 ? 1 : 24; /* COLORRES */
         default:
             return 0;
     }

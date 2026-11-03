@@ -6,6 +6,7 @@
 static void notify(AnchorBlock *anchor, Window *window, ULONG id)
 {
     HWND subject = window->hwnd;
+    WinInvalidateRect(subject, NULL, FALSE);
     sendMessage(window, WM_PRESPARAMCHANGED, (MPARAM)(uintptr_t)id, 0);
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {
@@ -15,10 +16,19 @@ static void notify(AnchorBlock *anchor, Window *window, ULONG id)
         for (Window *owner = w->owner; owner; owner = owner->owner)
             if (owner->hwnd == subject)
             {
+                WinInvalidateRect(w->hwnd, NULL, FALSE);
                 sendMessage(w, WM_PRESPARAMCHANGED, (MPARAM)(uintptr_t)id, 0);
                 break;
             }
     }
+}
+LONG windowPresentationColor(Window *window, BOOL foreground, LONG fallback)
+{
+    ULONG color = 0;
+    if (WinQueryPresParam(window->hwnd, foreground ? 1 : 3, foreground ? 2 : 4, NULL, sizeof color,
+                          &color, 4) == sizeof color)
+        return color <= 0xffffff ? (LONG)color : fallback;
+    return fallback;
 }
 void destroyPresentationParameters(Window *window)
 {

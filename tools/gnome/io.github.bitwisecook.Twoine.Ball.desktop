@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=2ine
+Comment=Install and run OS/2 applications in a persistent ball
+Exec=2ine-ball %F
+Icon=io.github.bitwisecook.Twoine.Ball
+Terminal=false
+Categories=System;Emulator;
+StartupNotify=true
+Keywords=OS/2;Warp;Wine;Lotus;
+MimeType=application/x-2ine-ball;

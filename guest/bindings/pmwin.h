@@ -1112,3 +1112,86 @@ static uint32 bridge32_WinWaitMuxWaitSem(uint8 *a)
         return 87;
     return lx_host_guarded_call(pm_mux_operation, &call, pm_mux_cleanup, &call);
 }
+
+static uint32 bridge32_WinCreateFrameControls(uint8 *a)
+{
+    uint8 bytes[10];
+    if (!lx_execution_read(GLoaderState.execution, pm_word(a, 1), bytes, sizeof bytes))
+        return 0;
+    FRAMECDATA data = {lx_guest_load_u16(bytes), lx_guest_load_u32(bytes + 2),
+                       lx_guest_load_u16(bytes + 6), lx_guest_load_u16(bytes + 8)};
+    char *title = pm_string(pm_word(a, 2));
+    if (pm_word(a, 2) && !title)
+        return 0;
+    uint32 result = WinCreateFrameControls(pm_word(a, 0), &data, title);
+    free(title);
+    return result;
+}
+
+static uint32 bridge32_WinCompareStrings(uint8 *a)
+{
+    char *first = pm_string(pm_word(a, 3)), *second = pm_string(pm_word(a, 4));
+    uint32 result = first && second ? WinCompareStrings(pm_word(a, 0), pm_word(a, 1), pm_word(a, 2),
+                                                        first, second, pm_word(a, 5))
+                                    : 0;
+    free(first);
+    free(second);
+    return result;
+}
+static uint32 bridge32_WinCreateAtomTable(uint8 *a)
+{
+    return WinCreateAtomTable(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinDestroyAtomTable(uint8 *a)
+{
+    return WinDestroyAtomTable(pm_word(a, 0));
+}
+static uint32 bridge32_WinQueryDesktopWindow(uint8 *a)
+{
+    return WinQueryDesktopWindow(pm_word(a, 0), pm_word(a, 1));
+}
+static uint32 bridge32_WinQueryPointer(uint8 *a)
+{
+    return WinQueryPointer(pm_word(a, 0));
+}
+static uint32 bridge32_WinQueryWindowProcess(uint8 *a)
+{
+    LxGuestBorrow process = {0}, thread = {0};
+    uint32 result = 0;
+    if ((!pm_word(a, 1) ||
+         lx_execution_borrow(GLoaderState.execution, pm_word(a, 1), 4, LX_GUEST_WRITE, &process)) &&
+        (!pm_word(a, 2) ||
+         lx_execution_borrow(GLoaderState.execution, pm_word(a, 2), 4, LX_GUEST_WRITE, &thread)))
+    {
+        ULONG pid, tid;
+        result = WinQueryWindowProcess(pm_word(a, 0), &pid, &tid);
+        if (result && process.host)
+            lx_guest_store_u32(process.host, pid);
+        if (result && thread.host)
+            lx_guest_store_u32(thread.host, tid);
+    }
+    lx_execution_release(&thread);
+    lx_execution_release(&process);
+    return result;
+}
+static uint32 bridge32_WinScrollWindow(uint8 *a)
+{
+    RECTL scroll, clip, update;
+    LxGuestBorrow output = {0};
+    uint32 result = 0;
+    if ((!pm_word(a, 3) ||
+         lx_execution_read(GLoaderState.execution, pm_word(a, 3), &scroll, sizeof scroll)) &&
+        (!pm_word(a, 4) ||
+         lx_execution_read(GLoaderState.execution, pm_word(a, 4), &clip, sizeof clip)) &&
+        (!pm_word(a, 6) ||
+         lx_execution_borrow(GLoaderState.execution, pm_word(a, 6), 16, LX_GUEST_WRITE, &output)))
+    {
+        result = WinScrollWindow(pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2),
+                                 pm_word(a, 3) ? &scroll : NULL, pm_word(a, 4) ? &clip : NULL,
+                                 pm_word(a, 5), &update, pm_word(a, 7));
+        if (result && output.host)
+            memcpy(output.host, &update, sizeof update);
+    }
+    lx_execution_release(&output);
+    return result;
+}

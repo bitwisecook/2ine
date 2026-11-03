@@ -15,6 +15,9 @@ BOOL WinSetWindowText(HWND handle, PSZ text)
     window->text = copy;
     if (window->parent == &desktop_window)
         lx_host_window_title(window->heavy.window, copy);
+    HWND title = isFrameWindow(window) ? WinWindowFromID(handle, FID_TITLEBAR) : 0;
+    if (title)
+        WinSetWindowText(title, copy);
     WinInvalidateRect(handle, NULL, FALSE);
     controlTextChanged(window);
     return TRUE;

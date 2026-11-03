@@ -19,6 +19,7 @@ typedef struct
     PFNWP procedure;
     HMODULE module;
     PVOID parameters;
+    POINTL content_origin;
 } DialogTemplate;
 static USHORT word(const uint8 *p, size_t offset)
 {
@@ -123,6 +124,11 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
     {
         if (!WinMapDlgPoints(root, position, 2, TRUE))
             return 0;
+        if (parent == root)
+        {
+            position[0].x += t->content_origin.x;
+            position[0].y += t->content_origin.y;
+        }
         AnchorBlock *anchor = getAnchorBlockNoHAB();
         WindowClass *class = findRegisteredClass(anchor, class_name);
         if (control_data && t->guest && class && (uintptr_t)class->window_proc <= UINT32_MAX &&
@@ -148,9 +154,16 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
     if (!index)
     {
         root = handle;
-        if (!WinMapDlgPoints(root, position, 2, TRUE) ||
-            !WinSetWindowPos(handle, HWND_TOP, position[0].x, position[0].y, position[1].x,
-                             position[1].y, SWP_MOVE | SWP_SIZE | SWP_NOADJUST | SWP_NOREDRAW))
+        if (!WinMapDlgPoints(root, position, 2, TRUE))
+            goto failed;
+        RECTL frame_rect = {0, 0, position[1].x, position[1].y};
+        if (!WinCalcFrameRect(handle, &frame_rect, FALSE))
+            goto failed;
+        t->content_origin = (POINTL){-frame_rect.xLeft, -frame_rect.yBottom};
+        if (!WinSetWindowPos(handle, HWND_TOP, position[0].x, position[0].y,
+                             frame_rect.xRight - frame_rect.xLeft,
+                             frame_rect.yTop - frame_rect.yBottom,
+                             SWP_MOVE | SWP_SIZE | SWP_NOADJUST | SWP_NOREDRAW))
             goto failed;
         window->window_proc = t->procedure ? t->procedure : WinDefDlgProc;
     }

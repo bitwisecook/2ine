@@ -7,7 +7,7 @@
     {
       "id": "2ine",
       "name": "2ine",
-      "version": "0.1; original upstream lineage 2016–2022",
+      "version": "0.1; original upstream lineage 2016\u20132022",
       "license": "Zlib; public-domain additions",
       "authors": [
         "Ryan C. Gordon (original author)",
@@ -165,7 +165,7 @@
       "role": "asset",
       "versionPolicy": "pinned",
       "sourcePackage": null,
-      "provenance": "Frank Wen states that Fluid uses his own/collaborators’ recordings and edited public-domain samples. The unchanged release is distributed through Ubuntu and PianoBooster. This records the author’s published provenance, rather than claiming an independent rights audit of each sample.",
+      "provenance": "Frank Wen states that Fluid uses his own/collaborators\u2019 recordings and edited public-domain samples. The unchanged release is distributed through Ubuntu and PianoBooster. This records the author\u2019s published provenance, rather than claiming an independent rights audit of each sample.",
       "sha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0",
       "licenseUrl": "https://github.com/pianobooster/fluid-soundfont/blob/v3.1/COPYING",
       "creditsUrl": "https://github.com/pianobooster/fluid-soundfont/blob/v3.1/README"
@@ -377,7 +377,7 @@
       "version": "3.10.2-1",
       "license": "GPL-2.0-or-later option (alternative LGPL-3.0-or-later)",
       "authors": [
-        "Niels Möller",
+        "Niels M\u00f6ller",
         "Nettle contributors"
       ],
       "homepage": "https://www.lysator.liu.se/~nisse/nettle/",
@@ -1137,6 +1137,37 @@
       "download": "https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-21.1.8.tar.gz",
       "role": "development-time validation; not bundled",
       "versionPolicy": "host"
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "version": "9.0.2",
+      "license": "LGPL-2.1-or-later in the pinned source profile; actual system-provider license is recorded in ffmpeg-build.json",
+      "authors": [
+        "Fabrice Bellard",
+        "FFmpeg developers and contributors"
+      ],
+      "homepage": "https://ffmpeg.org/",
+      "source": "https://github.com/FFmpeg/FFmpeg/tree/n9.0.2",
+      "download": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+      "role": "digital-video and synchronized audio decoding; pixel/sample conversion",
+      "versionPolicy": "pinned",
+      "sourcePackage": null
+    },
+    {
+      "id": "hwzip",
+      "name": "HWZIP legacy ZIP codecs",
+      "version": "2.4 (2024-09-01)",
+      "license": "Unlicense / public domain",
+      "authors": [
+        "Hans Wennborg"
+      ],
+      "homepage": "https://www.hanshq.net/zip.html",
+      "source": "https://www.hanshq.net/files/hwzip/hwzip-2.4.zip",
+      "download": "https://www.hanshq.net/files/hwzip/hwzip-2.4.zip",
+      "role": "runtime",
+      "versionPolicy": "pinned",
+      "sourcePackage": null
     }
   ]
 }

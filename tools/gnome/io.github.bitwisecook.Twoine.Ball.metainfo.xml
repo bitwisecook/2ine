@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.bitwisecook.Twoine.Ball</id>
+  <name>2ine</name>
+  <summary>Give your OS/2 applications a home on GNOME</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND bzip2-1.0.6</project_license>
+  <developer id="io.github.bitwisecook"><name>2ine Contributors</name></developer>
+  <description>
+    <p>Install and run OS/2 applications in a ball of 2ine. Each ball keeps its own drives, runtime settings, CONFIG.SYS, profiles, registry and installed files.</p>
+    <p>Map your original installation media, save application launchers and follow application output in a native GNOME interface.</p>
+  </description>
+  <launchable type="desktop-id">io.github.bitwisecook.Twoine.Ball.desktop</launchable>
+  <url type="homepage">https://github.com/bitwisecook/2ine</url>
+  <url type="bugtracker">https://github.com/bitwisecook/2ine/issues</url>
+  <categories><category>System</category><category>Emulator</category></categories>
+  <provides><binary>2ine-ball</binary></provides>
+  <supports><control>pointing</control><control>keyboard</control><control>touch</control></supports>
+  <recommends><display_length compare="ge">360</display_length></recommends>
+  <content_rating type="oars-1.1"/>
+  <releases><release version="0.1" date="2026-11-02"/></releases>
+</component>

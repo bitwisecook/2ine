@@ -151,7 +151,7 @@ int main(int argc, char **argv)
 {
     if (argc > 1 && !strcmp(argv[1], "--help"))
     {
-        puts("2ine-ball [--execute]: read one UTF-8 JSON request from stdin; see docs/balls.md");
+        puts("2ine-ball [--execute]: read one UTF-8 JSON request from stdin; see docs/ball.md");
         return 0;
     }
     int execute = argc > 1 && !strcmp(argv[1], "--execute");

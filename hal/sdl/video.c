@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host windows and render targets contain no OS/2 window/message state. */
 #include "hal/video.h"
+#include "hal/video_frame.h"
 #include "hal/host_sync.h"
 #include "window_chrome.h"
 #include <SDL3/SDL.h>
@@ -92,6 +93,8 @@ struct LxHostWindow
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Texture *texture;
+    SDL_Texture *video_texture;
+    unsigned video_width, video_height, video_format, video_colors;
     void *data;
     int x, y;
     int width, height;
@@ -105,6 +108,31 @@ struct LxHostWindow
         suppress_click; /* 0 legacy, 1 managed, 2 disabled. */
     LxWindowChrome *chrome;
 };
+static int activateWindowSurface(LxHostWindow *window)
+{
+    const char *renderer = SDL_GetRendererName(window->renderer);
+    if (!renderer)
+        return 0;
+    if (SDL_strcmp(renderer, "software"))
+    {
+        /* Hardware renderers retain their texture targets across native surface
+           changes. Drawing to their window here can acquire an unpresented
+           drawable whose dimensions become stale during another resize. */
+        window->dirty = 1;
+        return 1;
+    }
+    SDL_Texture *target = SDL_GetRenderTarget(window->renderer);
+    /* Native surface changes can invalidate the software renderer's window
+       surface. Activate it explicitly before returning to a retained target;
+       otherwise its first draw can be redirected to the window surface. */
+    int ready = SDL_SetRenderTarget(window->renderer, NULL) &&
+                SDL_SetRenderDrawColor(window->renderer, 0, 0, 0, 255) &&
+                SDL_RenderClear(window->renderer) && SDL_FlushRenderer(window->renderer);
+    int restored = SDL_SetRenderTarget(window->renderer, target);
+    if (ready && restored)
+        window->dirty = 1;
+    return ready && restored;
+}
 static LxHostWindow *focused_window(void)
 {
     SDL_Window *sdl = SDL_GetKeyboardFocus();
@@ -267,6 +295,7 @@ void lx_host_window_destroy(LxHostWindow *window)
         lx_window_chrome_destroy(window->chrome);
         ControlledWindows--;
     }
+    SDL_DestroyTexture(window->video_texture);
     SDL_DestroyTexture(window->texture);
     SDL_DestroyRenderer(window->renderer);
     SDL_DestroyWindow(window->window);
@@ -281,15 +310,25 @@ int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int h
     prepareRenderer();
     if (width <= 0 || height <= 0 || !SDL_FlushRenderer(window->renderer))
         return 0;
+    if (!window->fullscreen &&
+        !(SDL_SetWindowPosition(window->window, x, y) &&
+          SDL_SetWindowSize(window->window, width, height) && SDL_SyncWindow(window->window)))
+        return 0;
+    if (!activateWindowSurface(window))
+        return 0;
     if (width != window->width || height != window->height)
     {
         SDL_Texture *texture = SDL_CreateTexture(window->renderer, SDL_PIXELFORMAT_RGBA8888,
                                                  SDL_TEXTUREACCESS_TARGET, width, height);
         if (!texture)
+        {
+            SDL_SetRenderTarget(window->renderer, window->texture);
             return 0;
+        }
         if (!SDL_SetRenderTarget(window->renderer, texture))
         {
             SDL_DestroyTexture(texture);
+            SDL_SetRenderTarget(window->renderer, window->texture);
             return 0;
         }
         SDL_SetRenderDrawColor(window->renderer, 0, 0, 0, 255);
@@ -308,8 +347,7 @@ int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int h
         window->windowed_y = y;
         return 1;
     }
-    return SDL_SetWindowPosition(window->window, x, y) &&
-           SDL_SetWindowSize(window->window, width, height) && SDL_SyncWindow(window->window);
+    return 1;
 }
 int lx_host_window_fullscreen(LxHostWindow *window, int enabled)
 {
@@ -331,11 +369,12 @@ int lx_host_window_fullscreen(LxHostWindow *window, int enabled)
     window->dirty = 1;
     if (!SDL_SyncWindow(window->window))
         return 0;
-    if (!enabled)
-        return SDL_SetWindowPosition(window->window, window->windowed_x, window->windowed_y) &&
-               SDL_SetWindowSize(window->window, window->width, window->height) &&
-               SDL_SyncWindow(window->window);
-    return 1;
+    if (!enabled &&
+        !(SDL_SetWindowPosition(window->window, window->windowed_x, window->windowed_y) &&
+          SDL_SetWindowSize(window->window, window->width, window->height) &&
+          SDL_SyncWindow(window->window)))
+        return 0;
+    return activateWindowSurface(window);
 }
 int lx_host_window_is_fullscreen(LxHostWindow *window)
 {
@@ -346,7 +385,9 @@ void lx_host_window_show(LxHostWindow *window)
     prepareRenderer();
     if (!SDL_FlushRenderer(window->renderer))
         return;
-    SDL_ShowWindow(window->window);
+    if (!SDL_ShowWindow(window->window) || !SDL_SyncWindow(window->window) ||
+        !activateWindowSurface(window))
+        return;
     if (!window->startup_checked)
     {
         const char *fullscreen = getenv("TWOINE_FULLSCREEN");
@@ -360,6 +401,13 @@ void lx_host_window_hide(LxHostWindow *window)
     prepareRenderer();
     SDL_HideWindow(window->window);
 }
+int lx_host_window_minimize(LxHostWindow *window, int minimized)
+{
+    prepareRenderer();
+    return window && SDL_FlushRenderer(window->renderer) &&
+           (minimized ? SDL_MinimizeWindow(window->window) : SDL_RestoreWindow(window->window)) &&
+           SDL_SyncWindow(window->window) && activateWindowSurface(window);
+}
 int lx_host_window_title(LxHostWindow *window, const char *title)
 {
     prepareRenderer();
@@ -368,12 +416,25 @@ int lx_host_window_title(LxHostWindow *window, const char *title)
 int lx_host_window_border(LxHostWindow *window, int bordered)
 {
     prepareRenderer();
-    return window && SDL_SetWindowBordered(window->window, bordered != 0);
+    return window && SDL_FlushRenderer(window->renderer) &&
+           SDL_SetWindowBordered(window->window, bordered != 0) && SDL_SyncWindow(window->window) &&
+           activateWindowSurface(window);
 }
 int lx_host_window_focus(LxHostWindow *window)
 {
     prepareRenderer();
     return window && SDL_RaiseWindow(window->window);
+}
+int lx_host_window_resizable(LxHostWindow *window, int resizable)
+{
+    prepareRenderer();
+    return window && SDL_FlushRenderer(window->renderer) &&
+           SDL_SetWindowResizable(window->window, resizable != 0) &&
+           SDL_SyncWindow(window->window) && activateWindowSurface(window);
+}
+int lx_host_window_is_resizable(LxHostWindow *window)
+{
+    return window && (SDL_GetWindowFlags(window->window) & SDL_WINDOW_RESIZABLE) != 0;
 }
 int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int y, int width,
                         int height, const uint8_t *coverage, uint8_t red, uint8_t green,
@@ -557,6 +618,12 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
             event->type = LX_HOST_EVENT_SHOWN;
             id = input->window.windowID;
             break;
+        case SDL_EVENT_WINDOW_MINIMIZED:
+        case SDL_EVENT_WINDOW_RESTORED:
+            event->type = input->type == SDL_EVENT_WINDOW_MINIMIZED ? LX_HOST_EVENT_MINIMIZED
+                                                                    : LX_HOST_EVENT_RESTORED;
+            id = input->window.windowID;
+            break;
         case SDL_EVENT_WINDOW_MOVED:
             id = input->window.windowID;
             {
@@ -689,6 +756,7 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
             id = input->button.windowID;
             event->x = (int)input->button.x;
             event->y = (int)input->button.y;
+            event->clicks = input->button.clicks;
             event->button = input->button.button == SDL_BUTTON_LEFT     ? 1
                             : input->button.button == SDL_BUTTON_RIGHT  ? 2
                             : input->button.button == SDL_BUTTON_MIDDLE ? 3
@@ -933,4 +1001,99 @@ int lx_host_mouse_warp(int x, int y)
 int lx_host_pointer_show(int show)
 {
     return cursor_visible(show);
+}
+
+static int video_plane(const LxHostVideoFrame *frame, unsigned plane, size_t width, size_t height)
+{
+    return frame->planes[plane] && height && frame->strides[plane] >= width &&
+           frame->strides[plane] <= INT32_MAX &&
+           height - 1 <= (SIZE_MAX - width) / frame->strides[plane] &&
+           (height - 1) * frame->strides[plane] + width <= frame->lengths[plane];
+}
+int lx_host_window_video_frame(LxHostWindow *window, const LxHostVideoFrame *frame,
+                               const LxHostRect *destination, const LxHostRect *clips, size_t count)
+{
+    if (!window || !frame || !destination || (count && !clips) || count > 4096 || !frame->width ||
+        !frame->height || frame->width > 16384 || frame->height > 16384 || destination->w <= 0 ||
+        destination->h <= 0 || (unsigned)frame->colors > LX_HOST_FRAME_BT709_FULL)
+        return 0;
+    unsigned chroma_width = (frame->width + 1) / 2, chroma_height = (frame->height + 1) / 2;
+    SDL_PixelFormat format;
+    if (frame->format == LX_HOST_FRAME_BGRA)
+    {
+        format = SDL_PIXELFORMAT_BGRA32;
+        if (!video_plane(frame, 0, (size_t)frame->width * 4, frame->height))
+            return 0;
+    }
+    else if (frame->format == LX_HOST_FRAME_YUV420P)
+    {
+        format = SDL_PIXELFORMAT_IYUV;
+        if (!video_plane(frame, 0, frame->width, frame->height) ||
+            !video_plane(frame, 1, chroma_width, chroma_height) ||
+            !video_plane(frame, 2, chroma_width, chroma_height))
+            return 0;
+    }
+    else if (frame->format == LX_HOST_FRAME_NV12)
+    {
+        format = SDL_PIXELFORMAT_NV12;
+        if (!video_plane(frame, 0, frame->width, frame->height) ||
+            !video_plane(frame, 1, (size_t)chroma_width * 2, chroma_height))
+            return 0;
+    }
+    else
+        return 0;
+    prepareRenderer();
+    if (!window->video_texture || window->video_width != frame->width ||
+        window->video_height != frame->height || window->video_format != (unsigned)format ||
+        window->video_colors != (unsigned)frame->colors)
+    {
+        SDL_DestroyTexture(window->video_texture);
+        window->video_texture = NULL;
+        SDL_PropertiesID properties = SDL_CreateProperties();
+        if (!properties)
+            return 0;
+        SDL_Colorspace colors =
+            frame->format == LX_HOST_FRAME_BGRA            ? SDL_COLORSPACE_SRGB
+            : frame->colors == LX_HOST_FRAME_BT601_FULL    ? SDL_COLORSPACE_BT601_FULL
+            : frame->colors == LX_HOST_FRAME_BT709_LIMITED ? SDL_COLORSPACE_BT709_LIMITED
+            : frame->colors == LX_HOST_FRAME_BT709_FULL    ? SDL_COLORSPACE_BT709_FULL
+                                                           : SDL_COLORSPACE_BT601_LIMITED;
+        SDL_SetNumberProperty(properties, SDL_PROP_TEXTURE_CREATE_FORMAT_NUMBER, format);
+        SDL_SetNumberProperty(properties, SDL_PROP_TEXTURE_CREATE_ACCESS_NUMBER,
+                              SDL_TEXTUREACCESS_STREAMING);
+        SDL_SetNumberProperty(properties, SDL_PROP_TEXTURE_CREATE_WIDTH_NUMBER, frame->width);
+        SDL_SetNumberProperty(properties, SDL_PROP_TEXTURE_CREATE_HEIGHT_NUMBER, frame->height);
+        SDL_SetNumberProperty(properties, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER, colors);
+        window->video_texture = SDL_CreateTextureWithProperties(window->renderer, properties);
+        SDL_DestroyProperties(properties);
+        if (!window->video_texture)
+            return 0;
+        window->video_width = frame->width;
+        window->video_height = frame->height;
+        window->video_format = format;
+        window->video_colors = frame->colors;
+        SDL_SetTextureBlendMode(window->video_texture, SDL_BLENDMODE_NONE);
+    }
+    int ok;
+    if (frame->format == LX_HOST_FRAME_YUV420P)
+        ok = SDL_UpdateYUVTexture(window->video_texture, NULL, frame->planes[0],
+                                  (int)frame->strides[0], frame->planes[1], (int)frame->strides[1],
+                                  frame->planes[2], (int)frame->strides[2]);
+    else if (frame->format == LX_HOST_FRAME_NV12)
+        ok = SDL_UpdateNVTexture(window->video_texture, NULL, frame->planes[0],
+                                 (int)frame->strides[0], frame->planes[1], (int)frame->strides[1]);
+    else
+        ok = SDL_UpdateTexture(window->video_texture, NULL, frame->planes[0],
+                               (int)frame->strides[0]);
+    SDL_FRect target = {(float)destination->x, (float)destination->y, (float)destination->w,
+                        (float)destination->h};
+    for (size_t i = 0; ok && i < count; i++)
+    {
+        SDL_Rect clip = {clips[i].x, clips[i].y, clips[i].w, clips[i].h};
+        ok = SDL_SetRenderClipRect(window->renderer, &clip) &&
+             SDL_RenderTexture(window->renderer, window->video_texture, NULL, &target);
+    }
+    if (ok && count)
+        window->dirty = 1;
+    return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
 }

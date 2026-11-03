@@ -89,6 +89,12 @@ hash-checked TinySoundFont source and the GeneralUser GS bank. Use
 when relocating a worker. `TWOINE_MIDI_SYNTH=OFF` explicitly selects the basic
 oscillator fallback. Runtime-only builds omit these dependencies.
 
+[Digital-video playback](video.md) builds pinned FFmpeg 9.0.2 by default.
+`TWOINE_FFMPEG_SOURCE_DIR` accepts offline release sources;
+`TWOINE_FFMPEG_PROVIDER=system` uses matching pkg-config libraries.
+`TWOINE_VIDEO=OFF` omits decoding. Packages retain `ffmpeg-build.json` with the
+linked library's actual license and configuration.
+
 [OS/2 Doom setup and verification](doom.md).
 
 Optional [Munt MT-32 synthesis](midi-mt32.md) is selected with

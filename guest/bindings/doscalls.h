@@ -245,8 +245,7 @@ static uint32 bridge32_DosLoadModule(uint8 *arguments)
     HMODULE value = 0;
     const uint32 result =
         DosLoadModule(error.host ? error.host : &unused, error_size, name, &value);
-    if (!result)
-        lx_guest_store_u32(module.host, value);
+    lx_guest_store_u32(module.host, value);
     lx_execution_release(&module);
     lx_execution_release(&error);
     free(name);
@@ -1677,5 +1676,29 @@ static uint32 bridge32_DosQueryExtLIBPATH(uint8 *a)
         return ERROR_INVALID_PARAMETER;
     uint32 result = DosQueryExtLIBPATH(output.host, flags);
     lx_execution_release(&output);
+    return result;
+}
+
+static uint32 bridge32_DosSetFileLocks(uint8 *arguments)
+{
+    LxGuestBorrow borrowed[2] = {{0}};
+    FILELOCK ranges[2] = {{0}}, *pointers[2] = {NULL, NULL};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    for (unsigned i = 0; i < 2; i++)
+    {
+        uint32 address = lx_guest_load_u32(arguments + 4 + i * 4);
+        if (!address)
+            continue;
+        if (!lx_execution_borrow(GLoaderState.execution, address, 8, LX_GUEST_READ, &borrowed[i]))
+            goto done;
+        ranges[i].lOffset = (LONG)lx_guest_load_u32(borrowed[i].host);
+        ranges[i].lRange = (LONG)lx_guest_load_u32((uint8 *)borrowed[i].host + 4);
+        pointers[i] = &ranges[i];
+    }
+    result = DosSetFileLocks(lx_guest_load_u32(arguments), pointers[0], pointers[1],
+                             lx_guest_load_u32(arguments + 12), lx_guest_load_u32(arguments + 16));
+done:
+    for (unsigned i = 0; i < 2; i++)
+        lx_execution_release(&borrowed[i]);
     return result;
 }

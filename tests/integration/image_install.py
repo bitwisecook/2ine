@@ -16,7 +16,7 @@ from disk_images import iso_image
 from images import FlatGuest, linear_image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools import balls
+from tools import ball as ball_api
 
 
 def installer():
@@ -66,7 +66,7 @@ def main():
     before = hashlib.sha256(media.read_bytes()).hexdigest()
 
     def request(action, **fields):
-        return balls.native_request({"action": action, "ball": str(ball), **fields})
+        return ball_api.native_request({"action": action, "ball": str(ball), **fields})
 
     request("command", arguments=["init"])
     request("command", arguments=["device", "A", "floppy"])

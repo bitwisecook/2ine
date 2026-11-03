@@ -1,19 +1,27 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Window DC capabilities describe the PM renderer and its logical 96 dpi display. */
+/* Window DC capabilities describe the PM renderer and its configured logical display DPI. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmgpi.h"
 #include "hal/font.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/printer_catalogue.h"
 
 HDC DevOpenDC(HAB hab, LONG type, PSZ token, LONG count, PVOID data, HDC compatible)
 {
     TRACE_NATIVE("DevOpenDC(%u, %d, '%s', %d, %p, %u)", (uint)hab, (int)type, token, (int)count,
                  data, (uint)compatible);
-    if (count < 0 || count > 9 || (count && !data) ||
-        (token && strcmp(token, "*") && strcasecmp(token, "DISPLAY")))
+    if (count < 0 || count > 9 || (count && !data))
         return 0;
     PSZ *fields = data;
-    if (count > 1 && fields[1] && strcasecmp(fields[1], "DISPLAY"))
+    int printer = count > 1 ? lx_printer_index(fields[1]) : -1;
+    if (printer < 0 && count)
+        printer = lx_printer_index(fields[0]);
+    if (printer < 0)
+        printer = lx_printer_index(token);
+    if (printer >= 0)
+        return lx_pm_open_printer_dc(hab, type, (unsigned)printer + 1);
+    if ((token && strcmp(token, "*") && strcasecmp(token, "DISPLAY")) ||
+        (count > 1 && fields[1] && strcasecmp(fields[1], "DISPLAY")))
         return 0;
     return lx_pm_open_dc(hab, type, compatible);
 }
@@ -29,7 +37,8 @@ BOOL DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
         !lx_pm_dc_valid(dc))
         return FALSE;
     LONG caps[42] = {0};
-    LxHostFont *font = lx_host_font_open(0, 16);
+    unsigned dpi = lx_pm_dc_dpi(dc);
+    LxHostFont *font = lx_host_font_open(0, (16 * dpi + 48) / 96);
     LxHostFontMetrics m;
     if (!lx_host_font_metrics(font, &m))
     {
@@ -44,7 +53,7 @@ BOOL DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
     caps[5] = height;
     caps[6] = m.average_width ? width / m.average_width : 0;
     caps[7] = m.ascent + m.descent ? height / (m.ascent + m.descent) : 0;
-    caps[8] = caps[9] = 3780; /* pels per metre at logical 96 dpi */
+    caps[8] = caps[9] = (LONG)((dpi * 10000 + 127) / 254); /* pels per metre */
     caps[10] = caps[12] = caps[35] = m.average_width;
     caps[11] = caps[13] = caps[36] = m.ascent + m.descent;
     caps[14] = 16; /* indexed drawing palette */
@@ -54,10 +63,28 @@ BOOL DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
     caps[19] = 2;  /* CAPS_FM_OVERPAINT */
     caps[22] = 1;  /* byte alignment */
     caps[27] = (LONG)lx_host_font_count();
-    caps[31] = 1;             /* CAPS_DEV_WINDOWING_SUPPORT */
-    caps[33] = 16777216;      /* physical RGB colors */
-    caps[34] = 15;            /* highest indexed color */
-    caps[37] = caps[38] = 96; /* logical font dpi */
+    caps[31] = 1;                    /* CAPS_DEV_WINDOWING_SUPPORT */
+    caps[33] = 16777216;             /* physical RGB colors */
+    caps[34] = 15;                   /* highest indexed color */
+    caps[37] = caps[38] = (LONG)dpi; /* logical font dpi */
+    unsigned printer = lx_pm_printer_kind(dc);
+    if (printer)
+    {
+        caps[2] = 3; /* CAPS_TECH_RASTER_PRINTER */
+        caps[4] = 2480;
+        caps[5] = 3508;
+        caps[6] = caps[7] = 0;
+        caps[8] = caps[9] = 11811; /* 300 dpi, rounded pels/metre */
+        caps[14] = caps[33] = printer == 1 ? 16777216 : 2;
+        caps[16] = printer == 1 ? 24 : 1;
+        caps[18] = 0;
+        caps[19] = caps[20] = 127; /* supported Boolean raster mixes */
+        caps[23] = 2;              /* 1-plane, 24-bit page bitmap */
+        caps[24] = 0x1ff;          /* bitblt, scaling, pel and bitmap support */
+        caps[31] = 0;
+        caps[34] = 15;
+        caps[37] = caps[38] = 300;
+    }
     for (LONG i = 0; i < count; i++)
         output[i] = caps[start + i];
     return TRUE;
@@ -72,7 +99,8 @@ BOOL DevQueryDeviceNames(HAB hab, PSZ driver, PLONG devices, PVOID names, PVOID 
         return FALSE;
     LONG device_capacity = *devices, type_capacity = *types;
     *devices = *types = 0;
-    if (strcasecmp(driver, "DISPLAY"))
+    int printer = lx_printer_index(driver);
+    if (printer < 0 && strcasecmp(driver, "DISPLAY"))
         return FALSE;
     if (device_capacity && (!names || !descriptions))
         return FALSE;
@@ -82,8 +110,8 @@ BOOL DevQueryDeviceNames(HAB hab, PSZ driver, PLONG devices, PVOID names, PVOID 
     {
         memset(names, 0, 32);
         memset(descriptions, 0, 64);
-        memcpy(names, "DISPLAY", 8);
-        memcpy(descriptions, "2ine display", 13);
+        strcpy(names, printer >= 0 ? lx_printer_queues[printer] : "DISPLAY");
+        strcpy(descriptions, printer >= 0 ? lx_printer_descriptions[printer] : "2ine display");
     }
     if (type_capacity)
     {
@@ -99,6 +127,43 @@ LONG DevQueryHardcopyCaps(HDC dc, LONG first, LONG count, PVOID output)
     TRACE_NATIVE("DevQueryHardcopyCaps(%u, %d, %d, %p)", (uint)dc, (int)first, (int)count, output);
     if (!lx_pm_dc_valid(dc) || first < 0 || count < 0 || (count && !output))
         return -1;
-    /* Display and display-compatible memory devices have no hardcopy forms. */
-    return 0;
+    if (!lx_pm_printer_kind(dc))
+        return 0;
+    if (first > 1 || count > 1)
+        return -1;
+    if (!count)
+        return 1;
+    if (first == 1)
+        return 0;
+    unsigned char *record = output;
+    memset(record, 0, 68);
+    memcpy(record, "A4", 3);
+    const LONG values[9] = {210, 297, 0, 0, 210, 297, 2480, 3508, 3};
+    for (unsigned i = 0; i < 9; i++)
+        lx_guest_store_u32(record + 32 + i * 4, (ULONG)values[i]);
+    return 1;
+}
+
+LONG DevEscape(HDC dc, LONG code, LONG input_count, PVOID input, PLONG output_count, PVOID output)
+{
+    TRACE_NATIVE("DevEscape(%u, %d, %d, %p, %p, %p)", (uint)dc, (int)code, (int)input_count, input,
+                 output_count, output);
+    return lx_pm_print_escape(dc, code, input_count, input, output_count, output);
+}
+LONG DevPostDeviceModes(HAB hab, PVOID data, PSZ driver, PSZ device, PSZ name, ULONG options)
+{
+    (void)hab;
+    (void)device;
+    (void)name;
+    int printer = lx_printer_index(driver);
+    if (printer < 0 || options > 2)
+        return -1;
+    /* The fixed native devices have no private job properties. DRIVDATA's
+       public 40-byte prefix is sufficient and can be queried without a UI. */
+    if (!data)
+        return LX_PRINTER_DRIVER_DATA_SIZE;
+    if (lx_guest_load_u32(data) < LX_PRINTER_DRIVER_DATA_SIZE)
+        return -1;
+    lx_printer_driver_data(data, (unsigned)printer);
+    return 1;
 }

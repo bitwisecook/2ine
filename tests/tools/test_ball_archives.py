@@ -13,7 +13,7 @@ import warnings
 import zipfile
 from pathlib import Path
 
-from tools import balls
+from tools import ball as ball_api
 
 
 class ArchiveTests(unittest.TestCase):
@@ -24,7 +24,7 @@ class ArchiveTests(unittest.TestCase):
         self.ball = self.root / "Source café.2ineball"
         self.archive = self.root / "Ball café.zip"
         self.destination = self.root / "Imported café.2ineball"
-        balls.init(self.ball)
+        ball_api.init(self.ball)
         self.document = self.ball / "drive_c/document.txt"
         self.document.write_bytes(b"installed document\x00\xff")
         self.image = self.root / "external.img"
@@ -34,13 +34,13 @@ class ArchiveTests(unittest.TestCase):
         self.original = (self.ball / "ball.json").read_bytes()
 
     def request(self, action, **kwargs):
-        return balls.native_request({"action": action, "ball": str(self.ball), **kwargs})
+        return ball_api.native_request({"action": action, "ball": str(self.ball), **kwargs})
 
     def export(self, images=False):
         return self.request("export-ball", path=str(self.archive), includeImages=images)
 
     def import_ball(self):
-        return balls.native_request(
+        return ball_api.native_request(
             {"action": "import-ball", "ball": str(self.destination), "path": str(self.archive)}
         )
 
@@ -77,13 +77,13 @@ class ArchiveTests(unittest.TestCase):
         self.image.unlink()
         self.ball.rename(self.root / "Moved.2ineball")
         result = self.import_ball()
-        listing = balls.native_request(
+        listing = ball_api.native_request(
             {"action": "browse", "ball": str(self.destination), "path": "A:\\"}
         )
         self.assertEqual(listing["entries"], [])
         self.assertTrue((self.destination / result["manifest"]["drives"]["A"]["image"]).is_file())
         # Re-exporting imported relative image mappings must also work.
-        balls.native_request(
+        ball_api.native_request(
             {
                 "action": "export-ball",
                 "ball": str(self.destination),
@@ -225,7 +225,7 @@ class ArchiveTests(unittest.TestCase):
     def test_cli_import_and_export(self):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(
-                balls.main(
+                ball_api.main(
                     [
                         "--ball",
                         str(self.ball),
@@ -239,7 +239,7 @@ class ArchiveTests(unittest.TestCase):
                 0,
             )
             self.assertEqual(
-                balls.main(["--ball", str(self.destination), "import", str(self.archive)]), 0
+                ball_api.main(["--ball", str(self.destination), "import", str(self.archive)]), 0
             )
         self.assertTrue((self.destination / "ball.json").is_file())
 
@@ -312,7 +312,7 @@ class ArchiveTests(unittest.TestCase):
         external = self.root / "external-folder"
         external.mkdir()
         self.request("command", arguments=["map", "E", str(external)])
-        data = balls.load(self.ball)
+        data = ball_api.load(self.ball)
         data["workingDirectories"] = {"E": "E:\\DATA"}
         data["currentDrive"] = "E"
         data["environment"]["LIBPATH"] = "C:\\OS2\\DLL;E:\\DLL"
@@ -332,13 +332,13 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(result["manifest"]["applications"], data["applications"])
         self.assertIn("mountpoint.E = \n", (self.destination / "2ine.cfg").read_text())
         with self.assertRaisesRegex(ValueError, "ejected"):
-            balls.native_request(
+            ball_api.native_request(
                 {"action": "browse", "ball": str(self.destination), "path": "E:\\"}
             )
-        balls.environment(self.destination, result["manifest"], self.root, "unicorn")
+        ball_api.environment(self.destination, result["manifest"], self.root, "unicorn")
         replacement = self.root / "replacement"
         (replacement / "DATA").mkdir(parents=True)
-        updated = balls.native_request(
+        updated = ball_api.native_request(
             {
                 "action": "command",
                 "ball": str(self.destination),
@@ -348,7 +348,7 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(updated["roots"]["E"], str(replacement))
         self.assertNotIn("E", updated["unavailableDrives"])
         self.assertEqual(updated["workingDirectories"]["E"], "E:\\DATA")
-        reopened = balls.load(self.destination)
+        reopened = ball_api.load(self.destination)
         self.assertEqual(reopened["workingDirectories"], {"E": "E:\\DATA"})
         self.assertEqual(reopened["applications"], data["applications"])
 

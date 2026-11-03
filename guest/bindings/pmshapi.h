@@ -185,3 +185,19 @@ static uint32 bridge32_PrfWriteProfileData(uint8 *a)
     profile_strings_free(s, 2);
     return result;
 }
+
+static uint32 bridge32_WinQueryTaskSizePos(uint8 *a)
+{
+    LxGuestBorrow output = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 36, LX_GUEST_WRITE,
+                            &output))
+    {
+        SWP position;
+        result = WinQueryTaskSizePos(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), &position);
+        if (!result)
+            memcpy(output.host, &position, sizeof position);
+    }
+    lx_execution_release(&output);
+    return result;
+}

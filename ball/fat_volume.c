@@ -3,6 +3,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
 #include "image_internal.h"
+#include "file_time.h"
 #include "vendor/fatfs/ff.h"
 #include "vendor/fatfs/diskio.h"
 #include <errno.h>
@@ -315,6 +316,7 @@ int tb_fat_info(const char *path, TbImageInfo *info)
         memset(info, 0, sizeof *info);
         info->directory = !!(file.fattrib & AM_DIR);
         info->size = file.fsize;
+        info->modified = tb_dos_time(file.fdate, file.ftime);
         info->fat = 1;
         info->readonly = tb_image_protected(path) || !!(file.fattrib & AM_RDO);
         info->sector_bytes = media.sector;

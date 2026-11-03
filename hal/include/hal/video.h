@@ -43,7 +43,9 @@ typedef enum LxHostEventType
     LX_HOST_EVENT_TEXT,
     LX_HOST_EVENT_FOCUS_GAINED,
     LX_HOST_EVENT_FOCUS_LOST,
-    LX_HOST_EVENT_INPUT_RESET
+    LX_HOST_EVENT_INPUT_RESET,
+    LX_HOST_EVENT_MINIMIZED,
+    LX_HOST_EVENT_RESTORED
 } LxHostEventType;
 typedef enum
 {
@@ -81,6 +83,7 @@ typedef struct LxHostEvent
     int x, y, width, height, button;
     uint32_t key, modifiers, repeat;
     uint32_t scancode; /* IBM PC set 1 physical key position, without release bit. */
+    unsigned clicks;
     char text[64];
 } LxHostEvent;
 /* Each successful initialization owns one reference, released by video_quit. */
@@ -104,8 +107,11 @@ int lx_host_window_fullscreen(LxHostWindow *window, int enabled);
 int lx_host_window_is_fullscreen(LxHostWindow *window);
 void lx_host_window_show(LxHostWindow *window);
 void lx_host_window_hide(LxHostWindow *window);
+int lx_host_window_minimize(LxHostWindow *window, int minimized);
 int lx_host_window_title(LxHostWindow *window, const char *title);
 int lx_host_window_border(LxHostWindow *window, int bordered);
+int lx_host_window_resizable(LxHostWindow *window, int resizable);
+int lx_host_window_is_resizable(LxHostWindow *window);
 int lx_host_window_focus(LxHostWindow *window);
 /* Opt-in mouse capture starts released and is never restored by focus alone. */
 int lx_host_window_set_capture(LxHostWindow *window, int captured);

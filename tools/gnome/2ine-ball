@@ -1,0 +1,13 @@
+#!/usr/bin/python3
+# Public domain. No rights reserved. Wholly AI-authored.
+"""Locate the installed frontend, shared engine and portable runtime."""
+import os
+import runpy
+import sys
+from pathlib import Path
+
+root = Path(__file__).resolve().parents[1] / "lib/2ine-ball"
+os.environ.setdefault("TWOINE_BUILD", str(root / "runtime"))
+os.environ.setdefault("TWOINE_BALL_LIBRARY", str(root / "runtime/libtwoine_ball.so"))
+sys.path.insert(0, str(root / "tools"))
+runpy.run_path(str(root / "tools/gnome_ball.py"), run_name="__main__")

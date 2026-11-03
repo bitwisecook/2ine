@@ -128,11 +128,11 @@ reached the ball's native-library snapshot. The loader now requires the candidat
 file to exist before opening it, retaining the explicit search order and the
 actual guest-visible snapshot filename.
 
-The generated guest in `tests/integration/balls.py` now loads PMWINX, queries its
+The generated guest in `tests/integration/ball.py` now loads PMWINX, queries its
 filename and uses that filename to query file metadata. Against app build 3 it
 failed with guest status 102 at the metadata query. This regression exercises
 the prerequisite without accepting a licence or installing SmartSuite.
-The rebuilt app (build 4) passes the complete balls integration harness with
+The rebuilt app (build 4) passes the complete ball integration harness with
 the Unicorn backend and strict signature verification. A complete original
 SmartSuite installation after the fix remains unverified.
 

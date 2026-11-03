@@ -75,6 +75,12 @@ extern "C"
     } TIB, *PTIB;
 #pragma pack(pop)
 
+    typedef struct
+    {
+        LONG lOffset;
+        LONG lRange;
+    } FILELOCK, *PFILELOCK;
+
     typedef struct PIB
     {
         ULONG pib_ulpid;
@@ -857,6 +863,8 @@ extern "C"
                                              ULONG ulFSAInfoLevel, PFSQBUFFER2 pfsqb,
                                              PULONG pcbBuffLength) OS2APIINFO(277);
     OS2EXPORT APIRET OS2API DosSetFileSize(HFILE hFile, ULONG cbSize) OS2APIINFO(272);
+    OS2EXPORT APIRET OS2API DosSetFileLocks(HFILE hFile, PFILELOCK unlock, PFILELOCK lock,
+                                            ULONG timeout, ULONG flags) OS2APIINFO(428);
     OS2EXPORT APIRET OS2API DosSetCurrentDir(PSZ pszName) OS2APIINFO(255);
     OS2EXPORT APIRET OS2API DosBeep(ULONG freq, ULONG dur) OS2APIINFO(286);
     OS2EXPORT APIRET OS2API DosCreateDir(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(270);

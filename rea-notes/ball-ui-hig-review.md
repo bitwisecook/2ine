@@ -44,7 +44,7 @@ requirements.
 - Editors and MediaDevices use labeled native text controls, pickers and
   checkboxes; sheets have padded content, explicit primary/cancel actions, and
   visible error text. Source files are retained when mappings change.
-- TwoineBalls commands expose archive, media, runtime and drive operations;
+- TwoineBall commands expose archive, media, runtime and drive operations;
   stop/force-stop retain their explicit confirmation and actual-exit handling.
   The native control and menu architecture preserves standard editing/undo.
 - Standard system colors and semantic text styles remain in place. No custom

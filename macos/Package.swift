@@ -22,15 +22,15 @@ let ballBuildSettings: [CSetting] = [
 ]
 
 let package = Package(
-    name: "TwoineBalls",
+    name: "TwoineBall",
     platforms: [.macOS("27.0")],
-    products: [.executable(name: "TwoineBalls", targets: ["TwoineBalls"])],
+    products: [.executable(name: "TwoineBall", targets: ["TwoineBall"])],
     targets: [
-        .target(name: "BallEngine", path: "Sources/BallEngine", exclude: ["CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md", "vendor/libarchive/COPYING", "vendor/fatfs/README.md", "vendor/fatfs/LICENSE.txt"], publicHeadersPath: "include", cSettings: ballBuildSettings, linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
+        .target(name: "BallEngine", path: "Sources/BallEngine", exclude: ["CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md", "vendor/libarchive/COPYING", "vendor/fatfs/README.md", "vendor/fatfs/LICENSE.txt", "vendor/hwzip/LICENSE", "vendor/hwzip/README.md"], publicHeadersPath: "include", cSettings: ballBuildSettings, linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
         .target(name: "BallCore", dependencies: ["BallEngine"], swiftSettings: [.unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"])]),
-        .executableTarget(name: "TwoineBalls", dependencies: ["BallCore"],
+        .executableTarget(name: "TwoineBall", dependencies: ["BallCore"],
                           swiftSettings: [.unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"])]),
-        .testTarget(name: "TwoineBallsModelTests", dependencies: ["TwoineBalls", "BallCore"],
+        .testTarget(name: "TwoineBallModelTests", dependencies: ["TwoineBall", "BallCore"],
                     swiftSettings: [.unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"])]),
         .testTarget(name: "BallCoreTests", dependencies: ["BallCore"],
                     swiftSettings: [.unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"])])

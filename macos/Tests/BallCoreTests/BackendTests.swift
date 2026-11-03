@@ -1,7 +1,7 @@
 #if canImport(BallCore)
 import BallCore
 #else
-@testable import TwoineBalls
+@testable import TwoineBall
 #endif
 import Foundation
 import Testing
@@ -35,13 +35,23 @@ private func temporary() throws -> URL {
     defer { try? FileManager.default.removeItem(at: root) }
     let path = root.appending(path: "state/preferences.json")
     let store = PreferenceStore(url: path)
-    #expect(try await store.load().balls.isEmpty)
+    #expect(try await store.load().ballPaths.isEmpty)
     var prefs = Preferences()
-    prefs.balls = ["/a path/with spaces", #"/OS2\data"#]
-    prefs.selected = prefs.balls[0]
+    prefs.ballPaths = ["/a path/with spaces", #"/OS2\data"#]
+    prefs.selected = prefs.ballPaths[0]
     try await store.save(prefs)
-    #expect(try await store.load().balls == prefs.balls)
+    #expect(try await store.load().ballPaths == prefs.ballPaths)
     #expect(try await store.load().selected == prefs.selected)
+    let legacy = root.appending(path: "state/legacy.json")
+    let original = Data(#"{"balls":["/legacy/Existing.2ineball"],"selected":"/legacy/Existing.2ineball"}"#.utf8)
+    try original.write(to: legacy)
+    let migrated = PreferenceStore(url: root.appending(path: "state/current.json"), legacyURL: legacy)
+    let old = try await migrated.load()
+    #expect(old.ballPaths == ["/legacy/Existing.2ineball"])
+    #expect(old.selected == old.ballPaths.first)
+    try await migrated.save(old)
+    #expect(try await migrated.load().ballPaths == old.ballPaths)
+    #expect(try Data(contentsOf: legacy) == original)
     try Data("broken".utf8).write(to: path)
     await #expect(throws: (any Error).self) { try await store.load() }
 }

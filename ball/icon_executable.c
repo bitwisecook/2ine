@@ -152,3 +152,49 @@ TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size)
         return ne_icon(bytes, size, h);
     return NULL;
 }
+char *tb_executable_description(const uint8_t *bytes, size_t size)
+{
+    if (!bytes || size < 64)
+        return NULL;
+    size_t h = !memcmp(bytes, "MZ", 2) ? u32(bytes + 60) : 0;
+    if (!extent(size, h, 64))
+        return NULL;
+    uint32_t offset = 0, length = 0;
+    if (!memcmp(bytes + h, "LX", 2) && extent(size, h, 196))
+    {
+        offset = u32(bytes + h + 136);
+        length = u32(bytes + h + 140);
+    }
+    else if (!memcmp(bytes + h, "NE", 2))
+    {
+        offset = u32(bytes + h + 44);
+        length = u16(bytes + h + 32);
+    }
+    if (!offset || !length || !extent(size, offset, length))
+        return NULL;
+    size_t n = bytes[offset];
+    if (!n || n + 3 > length || u16(bytes + offset + n + 1))
+        return NULL;
+    const uint8_t *name = bytes + offset + 1;
+    /* Module descriptions have no declared code page. Retain printable ASCII
+       exactly; ambiguous encodings use the caller's filename fallback. */
+    for (size_t i = 0; i < n; i++)
+        if (name[i] < 32 || name[i] > 126)
+            return NULL;
+    while (n && *name == ' ')
+    {
+        name++;
+        n--;
+    }
+    while (n && name[n - 1] == ' ')
+        n--;
+    if (!n)
+        return NULL;
+    char *result = malloc(n + 1);
+    if (result)
+    {
+        memcpy(result, name, n);
+        result[n] = 0;
+    }
+    return result;
+}

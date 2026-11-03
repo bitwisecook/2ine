@@ -74,3 +74,22 @@ The optional [Munt backend](midi-mt32.md) pins libmt32emu 2.8.3 in
 `81f8c462f46bc8901618762ae34cf9de93894ff81f41db73c79472fa3baef875`.
 It retains Munt's LGPL-2.1-or-later notices and requires separately supplied
 ROM images. Default builds do not fetch or link this optional component.
+
+[Digital-video playback](video.md) pins **FFmpeg 9.0.2**, SHA-256
+`8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`.
+The source profile disables automatic external dependencies and network support
+and selects its demuxers/decoders in `cmake/Video.cmake`. It reports LGPL 2.1
+or later. The optional system provider retains the linked library's actual
+version, license and configuration in `ffmpeg-build.json`; GPL-enabled system
+libraries can have a different license. Runtime-only profiles omit FFmpeg.
+The [catalogue](project-sources.md) and bundled FFmpeg license texts retain its
+upstream credits and notices.
+
+OS/2 media import uses vendored **HWZIP 2.4** by Hans Wennborg for legacy ZIP
+methods 1–6 (Shrink, Reduce and Implode), alongside libarchive's other formats.
+The unchanged codec sources retain their public-domain dedication and complete
+[Unlicense text](../ball/vendor/hwzip/LICENSE). The original
+[source archive](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip) SHA-256 is
+`5a3fecfaf362972673d40ca0611622cfa94170c70029fbd8c9aa64a9e7d387ac`.
+Only individual selected members are decoded; legacy compressed members have a
+16 MiB input/output bound, and size, header bounds and CRC-32 are checked.

@@ -17,7 +17,7 @@ extern "C"
     /* UTF-8 JSON in/out. Synchronous, reentrant, no UI and no subprocesses.
  * Call on a worker thread/actor. Success returns 0 and an allocated result;
  * failure returns 2 and an allocated diagnostic. Free either with tb_free.
- * Independent balls may be used concurrently. Serialize writes to the same
+ * Each independent ball may be used concurrently. Serialize writes to the same
  * ball; CONFIG.SYS saves additionally compare their expected original bytes.
  */
     TB_API int tb_request(const char *request_json, char **result_json, char **error_utf8);

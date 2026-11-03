@@ -20,6 +20,7 @@ LX_NATIVE_MODULE_32BIT_API(WinAddSwitchEntry)
 LX_NATIVE_MODULE_32BIT_API(WinChangeSwitchEntry)
 LX_NATIVE_MODULE_32BIT_API(WinQuerySwitchEntry)
 LX_NATIVE_MODULE_32BIT_API(WinQuerySwitchHandle)
+LX_NATIVE_MODULE_32BIT_API(WinQueryTaskSizePos)
 LX_NATIVE_MODULE_32BIT_API(WinRemoveSwitchEntry)
 #endif
 
@@ -40,6 +41,7 @@ static int init32_pmshapi(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(WinChangeSwitchEntry, 8, 0, LX_ABI_STACK32)
     LX_NATIVE_INIT_32BIT_BRIDGE(WinQuerySwitchEntry, 8, 0, LX_ABI_STACK32)
     LX_NATIVE_INIT_32BIT_BRIDGE(WinQuerySwitchHandle, 8, 0, LX_ABI_STACK32)
+    LX_NATIVE_INIT_32BIT_BRIDGE(WinQueryTaskSizePos, 12, 0, LX_ABI_STACK32)
     LX_NATIVE_INIT_32BIT_BRIDGE(WinRemoveSwitchEntry, 4, 0, LX_ABI_STACK32)
     LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
     return 1;
@@ -61,6 +63,7 @@ LX_NATIVE_MODULE_INIT({
     LX_NATIVE_EXPORT32(WinChangeSwitchEntry, 123),
     LX_NATIVE_EXPORT32(WinQuerySwitchEntry, 124),
     LX_NATIVE_EXPORT32(WinQuerySwitchHandle, 125),
+    LX_NATIVE_EXPORT32(WinQueryTaskSizePos, 127),
     LX_NATIVE_EXPORT32(WinRemoveSwitchEntry, 129),
 
 LX_NATIVE_MODULE_INIT_END()

@@ -151,9 +151,13 @@ APIRET DosLoadModule(PSZ pszName, ULONG cbName, PSZ pszModname, PHMODULE phmod)
         *pszName = 0;
 
     FIXME("there's no mutex on this global state at the moment!");
-    LxModule *lxmod = GLoaderState.loadModule(pszModname);
+    *phmod = 0;
+    uint32 error = ERROR_BAD_FORMAT;
+    LxModule *lxmod = GLoaderState.loadModuleWithError
+                          ? GLoaderState.loadModuleWithError(pszModname, &error, pszName, cbName)
+                          : GLoaderState.loadModule(pszModname);
     if (!lxmod)
-        return ERROR_BAD_FORMAT;
+        return error ? error : ERROR_BAD_FORMAT;
 
     *phmod = lxmod ? lxmod->handle : 0;
     return NO_ERROR;

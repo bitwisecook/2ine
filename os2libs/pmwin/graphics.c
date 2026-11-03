@@ -72,9 +72,11 @@ BOOL lx_pm_erase(HPS hps)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
-    if (!ps || !ps->window)
+    if (!ps || (!ps->window && !ps->bitmap_lease.resource))
         return FALSE;
-    RECTL rect = {0, 0, ps->window->w, ps->window->h};
+    PmBitmap *bitmap = ps->bitmap_lease.resource;
+    RECTL rect = {0, 0, bitmap ? (LONG)bitmap->width : ps->window->w,
+                  bitmap ? (LONG)bitmap->height : ps->window->h};
     return WinFillRect(hps, &rect, CLR_BACKGROUND);
 }
 
@@ -115,7 +117,8 @@ LxHostFont *lx_pm_font(HPS hps)
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
     if (!ps)
         return NULL;
-    unsigned index = 0, pixels = 16;
+    unsigned dpi = lx_pm_dc_dpi(ps->dc);
+    unsigned index = 0, pixels = (16 * dpi + 48) / 96;
     char attribute[128] = {0};
     ULONG bytes = ps->window ? WinQueryPresParam(ps->window->hwnd, 15, 0, NULL,
                                                  sizeof attribute - 1, attribute, 0)
@@ -127,7 +130,7 @@ LxHostFont *lx_pm_font(HPS hps)
         if (points && points <= 384 && *end == '.')
         {
             const char *family = end + 1;
-            pixels = (unsigned)(points * 96 + 36) / 72;
+            pixels = (unsigned)(points * dpi + 36) / 72;
             if (!strncasecmp(family, "Courier", 7) || !strncasecmp(family, "System Monospaced", 17))
                 index = 8;
             else if (!strncasecmp(family, "Tms Rmn", 7) ||
@@ -171,7 +174,9 @@ unsigned lx_pm_font_index(HPS hps)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
-    return ps ? ps->font_index : 0;
+    return ps ? ps->logical_fonts[ps->charset].defined ? ps->logical_fonts[ps->charset].metric_index
+                                                       : ps->font_index
+              : 0;
 }
 BOOL lx_pm_set_cp(HPS handle, ULONG codepage)
 {

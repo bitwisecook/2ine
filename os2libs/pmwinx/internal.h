@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include "os2libs/pmwinx.h"
 void open32SetError(ULONG error);
+void open32CommonDialogError(ULONG error);
 ULONG open32ScrollWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);
 BOOL open32NativeDialogWindow(ULONG handle);
 BOOL open32FileDialogWindow(ULONG handle);

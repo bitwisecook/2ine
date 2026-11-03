@@ -325,7 +325,7 @@ BOOL lx_pm_bitmap_delete(ULONG handle)
 ULONG lx_pm_bitmap_select(HPS handle, ULONG bitmap)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
-    if (!ps || ps->window)
+    if (!ps || ps->window || lx_pm_printer_kind(ps->dc))
         return (ULONG)-1;
     PmBitmap *previous = ps->bitmap_lease.resource;
     if (previous && previous->handle == bitmap)

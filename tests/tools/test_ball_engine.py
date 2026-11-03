@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools import balls
+from tools import ball as ball_api
 
 
 class EngineTests(unittest.TestCase):
@@ -18,12 +18,12 @@ class EngineTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.ball = self.root / "Ball with café and spaces.2ineball"
-        balls.init(self.ball)
+        ball_api.init(self.ball)
 
     def test_mapping_reports_missing_paths_and_non_directories_without_memory_errors(self):
         missing = self.root / "missing"
         with self.assertRaisesRegex(ValueError, "Path does not exist:") as error:
-            balls.native_request(
+            ball_api.native_request(
                 {
                     "action": "command",
                     "ball": str(self.ball),
@@ -34,12 +34,12 @@ class EngineTests(unittest.TestCase):
         file = self.root / "file.txt"
         file.write_text("file")
         with self.assertRaisesRegex(ValueError, "Not a directory:"):
-            balls.native_request(
+            ball_api.native_request(
                 {"action": "command", "ball": str(self.ball), "arguments": ["map", "D", str(file)]}
             )
         nested_error = "Path does not exist:" if os.name == "nt" else "not a directory:"
         with self.assertRaisesRegex(ValueError, nested_error):
-            balls.native_request(
+            ball_api.native_request(
                 {
                     "action": "command",
                     "ball": str(self.ball),
@@ -59,7 +59,7 @@ class EngineTests(unittest.TestCase):
         blocked.chmod(0)
         try:
             with self.assertRaisesRegex(ValueError, "Permission denied"):
-                balls.native_request(
+                ball_api.native_request(
                     {
                         "action": "command",
                         "ball": str(self.ball),
@@ -67,7 +67,7 @@ class EngineTests(unittest.TestCase):
                     }
                 )
             with self.assertRaisesRegex(ValueError, "Permission denied"):
-                balls.native_request(
+                ball_api.native_request(
                     {
                         "action": "command",
                         "ball": str(self.ball),
@@ -78,15 +78,15 @@ class EngineTests(unittest.TestCase):
             blocked.chmod(0o700)
 
     def test_large_unknown_numbers_and_nested_metadata_are_lossless(self):
-        data = balls.load(self.ball)
+        data = ball_api.load(self.ball)
         data["future"] = {
             "integer": 18446744073709551615,
             "negative": -9007199254740993,
             "nested": [True, None, "café"],
         }
-        balls.save(self.ball / "ball.json", data)
-        balls.main(["--ball", str(self.ball), "config", "env.LANG", "de_DE"])
-        self.assertEqual(balls.load(self.ball)["future"], data["future"])
+        ball_api.save(self.ball / "ball.json", data)
+        ball_api.main(["--ball", str(self.ball), "config", "env.LANG", "de_DE"])
+        self.assertEqual(ball_api.load(self.ball)["future"], data["future"])
 
     def test_runtime_identity_matches_independent_sha256(self):
         build = self.root / "build"
@@ -101,21 +101,21 @@ class EngineTests(unittest.TestCase):
         for path in sorted(build.iterdir()):
             digest.update(path.name.encode())
             digest.update(hashlib.sha256(path.read_bytes()).digest())
-        env = balls.environment(self.ball, balls.load(self.ball), build, "unicorn")
+        env = ball_api.environment(self.ball, ball_api.load(self.ball), build, "unicorn")
         self.assertEqual(env["TWOINE_RUNTIME_ID"], digest.hexdigest())
 
     def test_nonexistent_traversal_cannot_escape_mapped_roots(self):
         with self.assertRaisesRegex(ValueError, "outside mapped"):
-            balls.host_path(r"C:\missing\..\..\escape.ini", self.ball, balls.load(self.ball))
+            ball_api.host_path(r"C:\missing\..\..\escape.ini", self.ball, ball_api.load(self.ball))
 
     def test_independent_calls_are_reentrant(self):
         # Initialize the ctypes binding before issuing simultaneous C calls.
-        balls.load(self.ball)
+        ball_api.load(self.ball)
 
         def create(index):
             path = self.root / f"Parallel {index}"
-            balls.init(path)
-            snapshot = balls.native_request({"action": "snapshot", "ball": str(path)})
+            ball_api.init(path)
+            snapshot = ball_api.native_request({"action": "snapshot", "ball": str(path)})
             return json.dumps(snapshot["manifest"], sort_keys=True)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
@@ -129,7 +129,7 @@ class WorkspaceTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
         self.ball = self.root / "ball"
-        balls.init(self.ball)
+        ball_api.init(self.ball)
         self.drive = self.ball / "drive_c"
         self.media = self.root / "Media with spaces"
         self.media.mkdir()
@@ -140,7 +140,7 @@ class WorkspaceTests(unittest.TestCase):
         (self.drive / "OS2/DOOM.EXE").write_bytes(b"fixture")
 
     def request(self, action, **fields):
-        return balls.native_request({"action": action, "ball": str(self.ball), **fields})
+        return ball_api.native_request({"action": action, "ball": str(self.ball), **fields})
 
     def test_drive_defaults_relative_paths_and_override_inheritance(self):
         self.request("set-working-directory", path="C:\\OS2")
@@ -276,9 +276,9 @@ class WorkspaceTests(unittest.TestCase):
             environment={"X": "one"},
             workingDirectories={"D": "D:\\"},
         )
-        data = balls.load(self.ball)
+        data = ball_api.load(self.ball)
         data["applications"]["Doom"]["future"] = {"value": 18446744073709551615}
-        balls.save(self.ball / "ball.json", data)
+        ball_api.save(self.ball / "ball.json", data)
         self.request(
             "save-application",
             name="Doom",
@@ -292,12 +292,46 @@ class WorkspaceTests(unittest.TestCase):
         record = current["applicationRecords"]["Doom"]
         self.request("command", arguments=["remove-app", "Doom"])
         self.request("command", arguments=["restore-app", "Doom", record])
-        restored = balls.load(self.ball)["applications"]["Doom"]
+        restored = ball_api.load(self.ball)["applications"]["Doom"]
         self.assertEqual(restored["future"], data["applications"]["Doom"]["future"])
         self.assertEqual(restored["environment"], {"X": "two"})
         arguments = ["a b", "", "both\"and'quotes", "C:\\DATA\\", "%PATH%"]
         formatted = self.request("format-arguments", arguments=arguments)
         self.assertEqual(self.request("parse-arguments", text=formatted), arguments)
+
+    def test_application_name_uses_checked_module_description_and_filename_fallback(self):
+        import struct
+
+        for signature in (b"LX", b"NE"):
+            image = bytearray(512)
+            image[:2] = b"MZ"
+            struct.pack_into("<I", image, 60, 64)
+            image[64:66] = signature
+            description = b"  Example OS/2 Application  "
+            table = bytes([len(description)]) + description + bytes(3)
+            image[400 : 400 + len(table)] = table
+            if signature == b"LX":
+                struct.pack_into("<II", image, 64 + 136, 400, len(table))
+            else:
+                struct.pack_into("<I", image, 64 + 44, 400)
+                struct.pack_into("<H", image, 64 + 32, len(table))
+            program = self.drive / "OS2/Example.exe"
+            program.write_bytes(image)
+            result = self.request("application-icon", program="C:\\OS2\\Example.exe")
+            self.assertEqual(result["displayName"], "Example OS/2 Application")
+            self.assertEqual(result["source"], "none")
+            # An exported name is not an ordinal-zero module description.
+            image[400 + len(description) + 1] = 1
+            program.write_bytes(image)
+            self.assertEqual(
+                self.request("application-icon", program="C:\\OS2\\Example.exe")["displayName"],
+                "Example",
+            )
+            program.write_bytes(image[:410])
+            self.assertEqual(
+                self.request("application-icon", program="C:\\OS2\\Example.exe")["displayName"],
+                "Example",
+            )
 
     def test_lx_ne_and_array_icons_use_resource_bytes_and_alpha_masks(self):
         import base64

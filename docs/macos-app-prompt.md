@@ -24,7 +24,7 @@ macOS and concurrency guidance, strictly follow the macOS 27 Apple Human
 Interface Guidelines, and use Icon Composer tooling to author and
 validate the icon. These are development tools, not application runtime libraries.
 
-Use `tools/balls.py`, `docs/balls.md` and `tools/gnome_balls.py` as the
+Use `tools/ball.py`, `docs/ball.md` and `tools/gnome_ball.py` as the
 existing behavior and interoperability contract. Preserve version-1 ball
 manifests, private C: drives, additional mapped drives, CONFIG.SYS, 2ine settings,
 environment overrides, profiles, registry, shell objects, IPC directories,
@@ -39,7 +39,7 @@ required because no existing user data needs migration.
 
 Implement a complete native workflow:
 
-- Create, discover and open balls, with clear selection and empty states.
+- Create, discover and open a ball, with clear selection and empty states.
 - Map and unmap host directories as guest drives, retaining the private C: drive.
 - Select a 2ine runtime/build and execution backend; persist these choices.
 - Configure supported 2ine settings, guest environment overrides and CONFIG.SYS.
@@ -70,7 +70,7 @@ check on macOS. Integrate the result into the built app.
 Validate with real Swift 6.4 strict-concurrency builds, meaningful persistence
 and argument-handling tests, UI smoke tests, and a real ball launch on macOS.
 Exercise the original Lotus SmartSuite installation workflow from
-`docs/balls.md` using separately supplied media when available. Its existing
+`docs/ball.md` using separately supplied media when available. Its existing
 Linux installer gate covers all seven components: Shared Components, Freelance,
 Word Pro, 1-2-3, Approach, Organizer and DocOnline. The original installer exited
 0 and all five main executable hashes matched original base-1.7 media. This is

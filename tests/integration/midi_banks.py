@@ -15,7 +15,7 @@ import wave
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools import balls
+from tools import ball as ball_api
 
 
 def chunk(kind, data):
@@ -174,13 +174,13 @@ def main():
     parser.add_argument("--build", required=True, type=Path)
     args = parser.parse_args()
     build = args.build.resolve()
-    balls.configure_library(build)
+    ball_api.configure_library(build)
     with tempfile.TemporaryDirectory(prefix="2ine-midi-banks-") as temporary:
         root = Path(temporary)
         ball = root / "MIDI.2ineball"
-        balls.init(ball)
+        ball_api.init(ball)
         for source in fixtures(root):
-            library = balls.native_request(
+            library = ball_api.native_request(
                 {"action": "import-soundfont", "ball": str(ball), "path": str(source)}
             )
             bank = library["banks"][-1]
@@ -195,7 +195,7 @@ def main():
                 settings["bank"] = bank["id"]
                 # Channel 2 routes to 16; custom bank/program/type survive persistence.
                 settings["channels"][1].update(target=16, program=0, bankNumber=0, percussion=0)
-                saved = balls.native_request(
+                saved = ball_api.native_request(
                     {"action": "save-audio", "ball": str(ball), "settings": settings}
                 )
                 assert saved["settings"] == settings

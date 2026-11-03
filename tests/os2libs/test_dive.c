@@ -3,6 +3,7 @@
 #include "os2libs/dive.h"
 #include "os2libs/pmwin/graphics.h"
 #include "runtime/runtime.h"
+#include "runtime/features.h"
 #include "hal/host_thread.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,6 +39,11 @@ int main(void)
     caps.ulStructLen = sizeof caps;
     caps.ulFormatLength = sizeof formats;
     caps.pFormatData = formats;
+    CHECK(lxRuntimeConfigureFeature("dive", "false") == 1);
+    CHECK(DiveQueryCaps(&caps, 0) == DIVE_ERR_NO_DIRECT_ACCESS);
+    CHECK(DiveOpen(&instance, 0, NULL) == DIVE_ERR_NO_DIRECT_ACCESS);
+    CHECK(!instance);
+    CHECK(lxRuntimeConfigureFeature("dive", "true") == 1);
     CHECK(DiveQueryCaps(&caps, 0) == DIVE_SUCCESS);
     CHECK(caps.ulDepth == 32 && !caps.fScreenDirect && caps.ulInputFormats == 1 &&
           caps.ulOutputFormats == 1 && formats[0] == DIVE_FOURCC_LUT8 &&

@@ -17,7 +17,7 @@ Validation on Apple Silicon, macOS 27.2, Swift 6.4.2, AppleClang 21:
 
 - `cmake -S ball -B build-ball-engine -DCMAKE_BUILD_TYPE=Debug` and
   `cmake --build build-ball-engine --parallel 2`: pass.
-- `TWOINE_BUILD="$PWD/build-ball-engine" TWOINE_BALL_LIBRARY="$PWD/build-ball-engine/libtwoine_ball.dylib" python3 -m unittest tests.tools.test_ball_archives tests.tools.test_ball_engine tests.tools.test_balls tests.tools.test_balls_desktop`:
+- `TWOINE_BUILD="$PWD/build-ball-engine" TWOINE_BALL_LIBRARY="$PWD/build-ball-engine/libtwoine_ball.dylib" python3 -m unittest tests.tools.test_ball_archives tests.tools.test_ball_engine tests.tools.test_ball tests.tools.test_ball_desktop`:
   39 tests pass. The build override avoids the unrelated broken Linux
   `build/clbr20.dll` symlink in this checkout.
 - `CLANG_MODULE_CACHE_PATH=/tmp/2ine-archive-module-cache swift test --package-path macos --disable-sandbox --cache-path /tmp/2ine-archive-spm-cache --config-path /tmp/2ine-archive-spm-config --security-path /tmp/2ine-archive-spm-security`:
@@ -42,7 +42,7 @@ source-machine runtime selections/cached binaries are omitted. Old runtimes may
 lack source-version records; exported content fingerprints identify their bytes
 without attributing the exporter's Git revision to them. New CMake builds emit
 2ine-build.json and macOS runtime bundles carry it. The archive format and
-commands are documented in ball/README.md and docs/balls.md.
+commands are documented in ball/README.md and docs/ball.md.
 
 
 Path portability and reconnect acceptance: 44 Python tests and 19 Swift tests

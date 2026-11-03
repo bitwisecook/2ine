@@ -1,6 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM owns its palette and control metrics; screen dimensions come from the HAL display. */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/graphics.h"
+
+static LONG display_metric(LONG pixels)
+{
+    return lx_pm_display_scale(pixels);
+}
 
 LONG WinQuerySysColor(HWND desktop, LONG index, LONG reserved)
 {
@@ -74,10 +80,10 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
             return 500; /* SV_DBLCLKTIME */
         case 2:
         case 3:
-            return 4; /* double-click rectangle */
+            return display_metric(4); /* double-click rectangle */
         case 4:
         case 5:
-            return 4; /* sizing borders */
+            return display_metric(4); /* sizing borders */
         case 9:
             return 500; /* cursor blink */
         case 10:
@@ -93,28 +99,29 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         case 23:
         case 24:
         case 25:
-            return 16;
+            return display_metric(16);
         case 26:
         case 27:
-            return 1;
+            return display_metric(1);
         case 28:
         case 29:
-            return 4;
+            return display_metric(4);
         case 30:
         case 34:
         case 35:
-            return 20;
+            return display_metric(20);
         case 31:
         case 32:
         case 33:
-            return 16;
+            return display_metric(16);
         case 37:
-            return desktop_window.h > 20 ? desktop_window.h - 20 : 0;
+            return desktop_window.h > display_metric(20) ? desktop_window.h - display_metric(20)
+                                                         : 0;
         case 38:
         case 39:
         case 40:
         case 41:
-            return 32;
+            return display_metric(32);
         case 42:
             return 0; /* SV_DEBUG */
         case 43:

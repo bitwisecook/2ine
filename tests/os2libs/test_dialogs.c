@@ -19,6 +19,68 @@
 static uint8_t bytes[256];
 static HWND owner;
 static unsigned mode, initialized, destroyed, released;
+static unsigned pointer_commands;
+static MRESULT OS2API pointer_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
+{
+    if (message == WM_COMMAND)
+    {
+        CHECK((USHORT)(uintptr_t)first == 1);
+        pointer_commands++;
+        return 0;
+    }
+    return WinDefDlgProc(window, message, first, second);
+}
+static Window *native_window(HWND handle)
+{
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        if (anchor->windows[i] && anchor->windows[i]->hwnd == handle)
+            return anchor->windows[i];
+    return NULL;
+}
+static MRESULT OS2API paint_modal_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
+{
+    if (message == WM_INITDLG)
+    {
+        CHECK(WinPostMsg(window, WM_USER, 0, 0));
+        return 0;
+    }
+    if (message == WM_USER)
+    {
+        AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+        Window *modal = native_window(window), *painting = native_window(owner);
+        CHECK(modal && painting && anchor->paint_depth);
+        CHECK(WinUpdateWindow(window));
+        for (Window *child = modal->children; child; child = child->sibling)
+            CHECK(WinUpdateWindow(child->hwnd));
+        HPS display = WinGetPS(window);
+        CHECK(display && WinReleasePS(display));
+        CHECK(modal->last_present);
+        HPS validate = WinBeginPaint(owner, 0, NULL);
+        CHECK(validate && WinEndPaint(validate));
+        display = WinGetPS(owner);
+        CHECK(display && WinReleasePS(display));
+        CHECK(!painting->last_present);
+        CHECK(WinDismissDlg(window, 123));
+        return 0;
+    }
+    return WinDefDlgProc(window, message, first, second);
+}
+static MRESULT OS2API paint_owner_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
+{
+    if (message == WM_PAINT)
+    {
+        HPS paint = WinBeginPaint(window, 0, NULL);
+        RECTL rect = {0, 0, 100, 100};
+        CHECK(paint && WinFillRect(paint, &rect, CLR_BLUE) && WinEndPaint(paint));
+        HWND modal = WinCreateDlg(HWND_DESKTOP, window, paint_modal_procedure, (void *)bytes, NULL);
+        CHECK(modal && WinShowWindow(modal, TRUE));
+        CHECK(WinProcessDlg(modal) == 123 && WinDestroyWindow(modal));
+        CHECK(!native_window(window)->last_present);
+        return 0;
+    }
+    return WinDefWindowProc(window, message, first, second);
+}
 static void make_template(void)
 {
     memset(bytes, 0, sizeof bytes);
@@ -214,6 +276,64 @@ int main(void)
     CHECK(WinSetWindowUShort(list, 2, 0xabcd) && WinQueryWindowUShort(list, 2) == 0xabcd);
     CHECK(!WinSetWindowUShort(list, 3, 0));
     CHECK(WinDestroyWindow(dialog));
+    make_template();
+    items = (void *)(bytes + 14);
+    items[0].flStyle |= 0x80; /* FS_DLGBORDER */
+    items[3].y = 72;
+    items[3].cy = 8;
+    for (unsigned dpi = 96; dpi <= 192; dpi *= 2)
+    {
+        GLoaderState.display_dpi = dpi;
+        dialog = WinCreateDlg(1, 0, pointer_procedure, (void *)bytes, NULL);
+        CHECK(dialog);
+        RECTL content;
+        CHECK(WinQueryWindowRect(dialog, &content) && WinCalcFrameRect(dialog, &content, TRUE));
+        POINTL expected = {100, 80};
+        CHECK(WinMapDlgPoints(dialog, &expected, 1, TRUE));
+        CHECK(content.xRight - content.xLeft == expected.x &&
+              content.yTop - content.yBottom == expected.y);
+        SWP top, bottom, caption;
+        CHECK(WinQueryWindowPos(WinWindowFromID(dialog, 30), &top));
+        CHECK(WinQueryWindowPos(WinWindowFromID(dialog, 1), &bottom));
+        CHECK(WinQueryWindowPos(WinWindowFromID(dialog, FID_TITLEBAR), &caption));
+        CHECK(top.y + top.cy <= caption.y && bottom.y >= content.yBottom &&
+              bottom.x >= content.xLeft);
+        CHECK(WinShowWindow(dialog, TRUE));
+        AnchorBlock *state = lxHostThreadState()->anchor_block;
+        Window *root = NULL;
+        for (size_t i = 0; i < state->windows_array_len; i++)
+            if (state->windows[i] && state->windows[i]->hwnd == dialog)
+                root = state->windows[i];
+        CHECK(root);
+        LxHostEvent click = {.type = LX_HOST_EVENT_BUTTON_DOWN,
+                             .window_data = root,
+                             .x = bottom.x + bottom.cx / 2,
+                             .y = root->h - 1 - (bottom.y + bottom.cy / 2),
+                             .button = 1};
+        unsigned previous = pointer_commands;
+        CHECK(processHostEvent(state, &click));
+        click.type = LX_HOST_EVENT_BUTTON_UP;
+        CHECK(processHostEvent(state, &click));
+        QMSG event;
+        unsigned dispatched = 0;
+        while (WinPeekMsg(anchor, &event, 0, 0, 0, 1))
+        {
+            CHECK(dispatched++ < 100);
+            WinDispatchMsg(anchor, &event);
+        }
+        CHECK(pointer_commands == previous + 1);
+        CHECK(WinDestroyWindow(dialog));
+    }
+    GLoaderState.display_dpi = 96;
+    make_template();
+    CHECK(WinRegisterClass(anchor, "PaintModalOwner", paint_owner_procedure, 0, 0));
+    owner = WinCreateWindow(HWND_DESKTOP, "PaintModalOwner", "Paint owner", WS_VISIBLE, 0, 0, 100,
+                            100, 0, HWND_TOP, 800, NULL, NULL);
+    CHECK(owner && native_window(owner) && !native_window(owner)->last_present);
+    WinSendMsg(owner, WM_PAINT, 0, 0);
+    HPS display = WinGetPS(owner);
+    CHECK(display && WinReleasePS(display));
+    CHECK(native_window(owner)->last_present && WinDestroyWindow(owner));
     CHECK(WinDestroyMsgQueue(queue) && WinTerminate(anchor));
     puts(
         "modal resources, callback dismissal, owner restoration, nested dialogs and quit repost passed");

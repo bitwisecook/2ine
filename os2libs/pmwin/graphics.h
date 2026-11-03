@@ -87,6 +87,12 @@ LONG lx_pm_draw_text(HPS ps, LONG count, PCH text, PRECTL rect, LONG foreground,
                      ULONG flags, BOOL clip, BOOL opaque_runs);
 BOOL lx_pm_valid_ps(HPS hps);
 HDC lx_pm_open_dc(HAB anchor, LONG type, HDC compatible);
+HDC lx_pm_open_printer_dc(HAB anchor, LONG type, unsigned kind);
+unsigned lx_pm_dc_dpi(HDC dc);
+LONG lx_pm_display_scale(LONG pixels);
+unsigned lx_pm_printer_kind(HDC dc);
+LONG lx_pm_print_escape(HDC dc, LONG code, LONG input_count, const void *input, PLONG output_count,
+                        void *output);
 LONG lx_pm_close_dc(HDC dc);
 BOOL lx_pm_dc_valid(HDC dc);
 HDC lx_pm_query_dc(HPS ps);

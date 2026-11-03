@@ -9,7 +9,7 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tests.integration.gnome_balls import gnome_balls, pump
+from tests.integration.gnome_ball import gnome_ball, pump
 from tests.integration.midi_banks import fixtures
 
 
@@ -40,11 +40,11 @@ def main():
         root = Path(temporary)
         os.environ["XDG_CONFIG_HOME"] = str(root / "config")
         os.environ["XDG_DATA_HOME"] = str(root / "data")
-        balls = gnome_balls.balls
-        balls.configure_library(build)
+        ball_api = gnome_ball.ball_api
+        ball_api.configure_library(build)
         ball = root / "Audio.2ineball"
-        balls.init(ball)
-        app = gnome_balls.BallApplication(build, ball)
+        ball_api.init(ball)
+        app = gnome_ball.BallApplication(build, ball)
         app.register(None)
         app.activate()
         window = app.get_active_window()
@@ -76,7 +76,7 @@ def main():
         percussion.set_selected(1)
         muted.set_active(True)
         expected = dialog.settings()
-        row = target.get_ancestor(gnome_balls.Adw.ExpanderRow)
+        row = target.get_ancestor(gnome_ball.Adw.ExpanderRow)
         row.set_expanded(True)
         target.grab_focus()
         if args.screenshots:
@@ -84,14 +84,14 @@ def main():
 
             deadline = time.monotonic() + 0.4
             pump(lambda: time.monotonic() >= deadline)
-            scroll = target.get_ancestor(gnome_balls.Gtk.ScrolledWindow)
+            scroll = target.get_ancestor(gnome_ball.Gtk.ScrolledWindow)
             success, bounds = target.compute_bounds(scroll.get_child())
             assert success
             scroll.get_vadjustment().set_value(max(0, bounds.get_y() - 24))
         capture("midi-channel-mapping")
         dialog.submit()
         pump(lambda: not window.busy and window.get_visible_dialog() is None)
-        saved = balls.native_request({"action": "audio-snapshot", "ball": str(ball)})
+        saved = ball_api.native_request({"action": "audio-snapshot", "ball": str(ball)})
         assert saved["settings"] == expected
         installed = ball / saved["banks"][-1]["file"]
         assert (installed.parent / "tone.wav").is_file()
@@ -101,7 +101,7 @@ def main():
         about = window.about_dialog
         assert "Ryan C. Gordon" in about.get_developer_name()
         assert "Ryan C. Gordon" in about.get_copyright()
-        assert about.get_license_type() == gnome_balls.Gtk.License.CUSTOM
+        assert about.get_license_type() == gnome_ball.Gtk.License.CUSTOM
         capture("about-credits")
 
         def find(widget, predicate):
@@ -118,19 +118,19 @@ def main():
         legal = find(
             about,
             lambda widget: (
-                isinstance(widget, gnome_balls.Adw.ActionRow)
+                isinstance(widget, gnome_ball.Adw.ActionRow)
                 and widget.get_title().replace("_", "") == "Legal"
             ),
         )
         assert legal
-        assert legal.activate_action("navigation.push", gnome_balls.GLib.Variant("s", "legal"))
-        navigation = legal.get_ancestor(gnome_balls.Adw.NavigationView)
+        assert legal.activate_action("navigation.push", gnome_ball.GLib.Variant("s", "legal"))
+        navigation = legal.get_ancestor(gnome_ball.Adw.NavigationView)
         pump(lambda: navigation.get_visible_page().get_tag() == "legal")
         page = navigation.get_visible_page()
         assert find(
             page,
             lambda widget: (
-                isinstance(widget, gnome_balls.Gtk.Label) and "FluidSynth" in widget.get_text()
+                isinstance(widget, gnome_ball.Gtk.Label) and "FluidSynth" in widget.get_text()
             ),
         )
         capture("project-sources-and-licenses")

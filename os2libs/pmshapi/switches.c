@@ -125,3 +125,23 @@ ULONG WinQuerySwitchHandle(ULONG window, ULONG process)
     lx_host_monitor_unlock(mutex);
     return result;
 }
+
+ULONG WinQueryTaskSizePos(HANDLE hab, ULONG session, PSWP position)
+{
+    TRACE_NATIVE("WinQueryTaskSizePos(%u, %u, %p)", (uint)hab, (uint)session, position);
+    if (!position)
+        return ERROR_INVALID_PARAMETER;
+    lx_host_once(&once, initialize);
+    HWND window = 0;
+    lx_host_monitor_lock(mutex);
+    for (SwitchEntry *entry = entries; entry; entry = entry->next)
+        if (entry->value.idSession == session)
+        {
+            window = entry->value.hwnd;
+            break;
+        }
+    lx_host_monitor_unlock(mutex);
+    if (!window)
+        return ERROR_SMG_SESSION_NOT_FOUND;
+    return WinQueryWindowPos(window, position) ? NO_ERROR : ERROR_SMG_NO_TARGET_WINDOW;
+}

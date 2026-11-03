@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/video_frames.h"
 #include "os2libs/pmwin/input.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/menus.h"
@@ -162,6 +163,14 @@ const char *messageName(const ULONG msg)
     return "???";
 }
 
+typedef struct PaintScope
+{
+    AnchorBlock *anchor;
+    HWND window;
+    struct PaintScope *previous;
+} PaintScope;
+static LX_HOST_THREAD_LOCAL PaintScope *ActivePaint;
+
 MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
     PFNWP winproc = win->window_proc;
@@ -173,8 +182,12 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
                 (uint)msg, messageName(msg), mp1, mp2, winproc);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     HWND painted = msg == WM_PAINT ? win->hwnd : 0;
+    PaintScope scope = {anchor, painted, ActivePaint};
     if (msg == WM_PAINT)
+    {
         anchor->paint_depth++;
+        ActivePaint = &scope;
+    }
     MRESULT result;
     if (GLoaderState.execution && (uintptr_t)winproc <= UINT32_MAX &&
         lx_execution_memory(GLoaderState.execution, (uint32_t)(uintptr_t)winproc, 1,
@@ -186,6 +199,7 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
         result = winproc(win->hwnd, msg, mp1, mp2);
     if (msg == WM_PAINT)
     {
+        ActivePaint = scope.previous;
         anchor->paint_depth--;
         /* An animation may invalidate its next frame inside WM_PAINT. */
         if (getWindowFromHWND(anchor, painted) == win && win->paint_pending)
@@ -347,6 +361,15 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return postTimestampedMsg(anchor, 0, WM_QUIT, 0, 0, ticks);
     if (!win || !win->hwnd)
         return FALSE;
+    if (isFrameWindow(win) &&
+        (event->type == LX_HOST_EVENT_MINIMIZED || event->type == LX_HOST_EVENT_RESTORED))
+    {
+        BOOL minimized = (win->style & WS_MINIMIZED) != 0;
+        if (minimized != (event->type == LX_HOST_EVENT_MINIMIZED))
+            return WinSetWindowPos(win->hwnd, HWND_TOP, 0, 0, 0, 0,
+                                   minimized ? SWP_RESTORE : SWP_MINIMIZE);
+        return FALSE;
+    }
     if ((event->type == LX_HOST_EVENT_BUTTON_DOWN || event->type == LX_HOST_EVENT_BUTTON_UP) &&
         event->button >= 1 && event->button <= 3)
     {
@@ -389,6 +412,12 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     {
         if (event->width == win->w && event->height == win->h)
             return FALSE;
+        if (isFrameWindow(win) && !frameResizable(win))
+        {
+            lx_host_window_position(win->heavy.window, win->x, desktop_window.h - win->y - win->h,
+                                    win->w, win->h);
+            return FALSE;
+        }
         return WinSetWindowPos(win->hwnd, HWND_TOP, win->x, win->y, event->width, event->height,
                                SWP_SIZE | SWP_NOADJUST);
     }
@@ -396,7 +425,17 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         event->type != LX_HOST_EVENT_BUTTON_UP)
         return FALSE;
     int x = event->x, y = win->h - 1 - event->y;
-    for (;;)
+    Window *capture = getWindowFromHWND(anchor, anchor->capture);
+    if (capture)
+    {
+        POINTL point = {x, y};
+        if (!WinMapWindowPoints(win->hwnd, capture->hwnd, &point, 1))
+            return FALSE;
+        x = point.x;
+        y = point.y;
+        win = capture;
+    }
+    for (; !capture;)
     {
         Window *child;
         for (child = win->children; child; child = child->sibling)
@@ -427,6 +466,8 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
             return FALSE;
         message =
             WM_BUTTON1DOWN + (event->button - 1) * 3 + (event->type == LX_HOST_EVENT_BUTTON_UP);
+        if (event->type == LX_HOST_EVENT_BUTTON_DOWN && event->clicks && !(event->clicks & 1))
+            message = WM_BUTTON1DBLCLK + (event->button - 1) * 3;
     }
     MPARAM point = (MPARAM)(uintptr_t)(((uint32)(uint16)y << 16) | (uint16)x);
     BOOL result = postTimestampedMsg(anchor, win->hwnd, message, point, 0, ticks);
@@ -438,8 +479,18 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
 
 void presentWindow(AnchorBlock *anchor, Window *window)
 {
-    if (!window || !window->heavy.window || anchor->paint_depth)
+    if (!window || !window->heavy.window)
         return;
+    /* A synchronous modal loop can run inside another window's WM_PAINT.
+       Defer only canvases involved in an active paint callback, allowing a
+       separate modal host window to present while that callback is waiting. */
+    for (PaintScope *scope = ActivePaint; scope; scope = scope->previous)
+    {
+        Window *painting =
+            scope->anchor == anchor ? getWindowFromHWND(anchor, scope->window) : NULL;
+        if (painting && painting->heavy.window == window->heavy.window)
+            return;
+    }
     Window *root = window;
     while (root->parent && root->parent != &desktop_window)
         root = root->parent;
@@ -525,6 +576,7 @@ void pumpEvents(AnchorBlock *anchor)
         lx_execution_poll_termination(GLoaderState.execution);
         drainForeignMessages(anchor);
         lx_pm_dive_pump(anchor);
+        lx_pm_video_pump(anchor);
         presentWindows(anchor);
         while (lx_host_video_poll(&event))
             lx_pm_host_event(&event);
@@ -581,6 +633,7 @@ BOOL WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst, ULON
         /* Present retained drawing even while queued timers keep the queue busy. */
         drainForeignMessages(anchor);
         lx_pm_dive_pump(anchor);
+        lx_pm_video_pump(anchor);
         LxHostEvent event;
         while (lx_host_video_poll(&event))
             lx_pm_host_event(&event);
@@ -744,6 +797,7 @@ BOOL WinPeekMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULO
         return FALSE;
     drainForeignMessages(anchor);
     lx_pm_dive_pump(anchor);
+    lx_pm_video_pump(anchor);
     LxHostEvent event;
     while (lx_host_video_poll(&event))
         lx_pm_host_event(&event);

@@ -99,6 +99,28 @@ int lxRegisterStereoAudioGenerator(LxAudioGeneratorFn function, void *data, int 
 {
     return register_generator(function, data, singleton, 1);
 }
+void lxUnregisterAudioGenerator(LxAudioGeneratorFn function, void *data)
+{
+    lx_host_once(&once, initialize);
+    if (!control || lx_host_mutex_lock(control, UINT32_MAX) != LX_HOST_LOCK_OK)
+        return;
+    if (device)
+        lx_host_audio_lock(device);
+    for (Generator **link = &generators; *link;)
+    {
+        Generator *generator = *link;
+        if (generator->function == function && generator->data == data)
+        {
+            *link = generator->next;
+            free(generator);
+        }
+        else
+            link = &generator->next;
+    }
+    if (device)
+        lx_host_audio_unlock(device);
+    lx_host_mutex_unlock(control);
+}
 void lxAudioShutdown(void)
 {
     lx_host_once(&once, initialize);

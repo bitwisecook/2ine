@@ -74,6 +74,7 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.convert1616to32 = lxConvert1616to32;
     GLoaderState.convert32to1616 = lxConvert32to1616;
     GLoaderState.loadModule = loadModuleByPathOrModuleName;
+    GLoaderState.loadModuleWithError = loadModuleWithError;
     GLoaderState.freeModule = freeLxModule;
     GLoaderState.makeUnixPath = lxMakeUnixPath;
     GLoaderState.terminate = lxTerminate;

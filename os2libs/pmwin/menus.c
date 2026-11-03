@@ -14,12 +14,12 @@ Window *lx_pm_menu_window(HWND handle)
 }
 BOOL createSystemMenu(Window *frame, ULONG flags)
 {
-    /* Native top-level decorations already provide the system controls. Keep the
-       PM menu handle for application queries without drawing it over client content. */
-    ULONG style = 1 | (frame->parent != &desktop_window && (flags & 1) ? WS_VISIBLE : 0);
-    HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, style, 0,
-                               frame->h > 24 ? frame->h - 24 : 0, 24, 24, frame->hwnd, HWND_TOP,
-                               FID_SYSMENU, NULL, NULL);
+    ULONG style = 3 | ((flags & 1) ? WS_VISIBLE : 0);
+    HWND bar =
+        WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, style, 0,
+                        frame->h > lx_pm_display_scale(24) ? frame->h - lx_pm_display_scale(24) : 0,
+                        lx_pm_display_scale(24), lx_pm_display_scale(24), frame->hwnd, HWND_TOP,
+                        FID_SYSMENU, NULL, NULL);
     if (!bar)
         return FALSE;
     HWND popup = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_MENU, NULL, 0, 0, 0, 1, 1, bar, HWND_TOP, 0,
@@ -49,6 +49,25 @@ fail:
     WinDestroyWindow(bar);
     return FALSE;
 }
+BOOL createMinMaxMenu(Window *frame, ULONG flags)
+{
+    HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, 3 | WS_VISIBLE, 0, 0, 1, 1,
+                               frame->hwnd, HWND_TOP, FID_MINMAX, NULL, NULL);
+    if (!bar)
+        return FALSE;
+    const USHORT commands[] = {0x8002, 0x8003}; /* SC_MINIMIZE, SC_MAXIMIZE */
+    for (unsigned i = 0; i < 2; i++)
+        if (flags & (0x10u << i)) /* FCF_MINBUTTON / FCF_MAXBUTTON */
+        {
+            MENUITEM item = {-1, 0x41, 0, commands[i], 0, 0};
+            if ((intptr_t)WinSendMsg(bar, 0x180, &item, "") == -1)
+            {
+                WinDestroyWindow(bar);
+                return FALSE;
+            }
+        }
+    return TRUE;
+}
 void destroyMenu(Window *window)
 {
     PmMenu *menu = window->menu;
@@ -62,8 +81,15 @@ void destroyMenu(Window *window)
 }
 static Window *menu_root(Window *window)
 {
-    while (window->owner && window->owner->menu)
-        window = window->owner;
+    for (unsigned depth = 0; depth < 4096; depth++)
+    {
+        Window *parent = window->menu->active_parent
+                             ? lx_pm_menu_window(window->menu->active_parent)
+                             : window->owner;
+        if (!parent || !parent->menu || parent == window)
+            break;
+        window = parent;
+    }
     return window;
 }
 static PmMenuItem *menu_find(Window *window, unsigned id, BOOL recursive, Window **found)
@@ -102,28 +128,48 @@ static LONG text_width(LxHostFont *font, const char *text)
     }
     return width;
 }
+static BOOL title_menu_item(const Window *window, const PmMenuItem *item)
+{
+    if (!(window->style & 1))
+        return FALSE;
+    if (item->item.id == 0x8007 && item->item.hwndSubMenu)
+        return !(item->item.afStyle & (2 | 8)); /* Preserve custom bitmap/owner drawing. */
+    return (window->style & 2) && window->id == FID_MINMAX && isFrameWindow(window->parent) &&
+           (item->item.afStyle & 0x40) && (item->item.id == 0x8002 || item->item.id == 0x8003);
+}
 static void menu_layout(Window *window)
 {
     PmMenu *menu = window->menu;
     HPS ps = WinGetPS(window->hwnd);
     LxHostFont *font = lx_pm_font(ps);
     BOOL bar = (window->style & 1) != 0;
-    LONG width = bar ? window->w : 80, height = bar ? 24 : 4, x = 0;
+    LONG row = (window->style & 2) && window->h > 0 ? window->h : lx_pm_display_scale(24),
+         padding = lx_pm_display_scale(4);
+    LONG width = bar ? window->w : lx_pm_display_scale(80), height = bar ? row : padding, x = 0;
     if (!bar)
         for (size_t i = 0; i < menu->count; i++)
         {
-            LONG item_width = text_width(font, menu->items[i].text) + 64;
+            LONG item_width = text_width(font, menu->items[i].text) + lx_pm_display_scale(64);
             if (item_width > width)
                 width = item_width;
-            height += (menu->items[i].item.afStyle & 4) ? 8 : 24;
+            height += (menu->items[i].item.afStyle & 4) ? lx_pm_display_scale(8) : row;
         }
-    LONG y = height - 2;
+    LONG y = height - padding / 2;
     for (size_t i = 0; i < menu->count; i++)
     {
         PmMenuItem *item = &menu->items[i];
-        LONG w = bar ? text_width(font, item->text) + 24 : width;
-        LONG h = bar ? 24 : (item->item.afStyle & 4) ? 8 : 24;
-        item->rect = bar ? (RECTL){x, 0, x + w, 24} : (RECTL){2, y - h, width - 2, y};
+        LONG glyph_width = row;
+        if ((window->style & 2) && isFrameWindow(window->parent))
+        {
+            if (window->id == FID_MINMAX)
+                glyph_width = WinQuerySysValue(HWND_DESKTOP, 33); /* SV_CXMINMAXBUTTON */
+        }
+        LONG w =
+            bar ? title_menu_item(window, item) ? glyph_width : text_width(font, item->text) + row
+                : width;
+        LONG h = bar ? row : (item->item.afStyle & 4) ? lx_pm_display_scale(8) : row;
+        item->rect =
+            bar ? (RECTL){x, 0, x + w, row} : (RECTL){padding / 2, y - h, width - padding / 2, y};
         x += w;
         y -= h;
         item->item.iPosition = (SHORT)i;
@@ -144,6 +190,7 @@ static void menu_close(Window *window)
     if (!(window->style & 1))
         WinShowWindow(window->hwnd, FALSE);
     menu->selected = -1;
+    menu->active_parent = 0;
     WinInvalidateRect(window->hwnd, NULL, FALSE);
 }
 static void menu_finish(Window *window)
@@ -205,6 +252,7 @@ static void menu_open(Window *window, PmMenuItem *item)
     submenu = item ? lx_pm_menu_window(item->item.hwndSubMenu) : NULL;
     if (!submenu)
         return;
+    submenu->menu->active_parent = window->hwnd;
     window->menu->selected = item->item.iPosition;
     menu_layout(submenu);
     POINTL point = {(window->style & 1) ? item->rect.xLeft : window->w,
@@ -242,6 +290,17 @@ static void menu_activate(Window *window, int index)
                     : (item->item.afStyle & 0x80) ? WM_HELP
                                                   : WM_COMMAND;
     USHORT id = item->item.id;
+    if (message == WM_SYSCOMMAND)
+    {
+        /* A merged document's system menu still commands its document frame. */
+        Window *origin = window;
+        while (origin->owner && origin->owner->menu)
+            origin = origin->owner;
+        owner = origin->owner ? origin->owner->hwnd : 0;
+        Window *frame = origin->owner;
+        if (frame && id == 0x8003 && (frame->style & WS_MAXIMIZED))
+            id = 0x8008; /* SC_RESTORE */
+    }
     menu_finish(window);
     if (owner)
         WinPostMsg(owner, message, (MPARAM)(uintptr_t)id, (MPARAM)(uintptr_t)1); /* CMDSRC_MENU */
@@ -251,7 +310,11 @@ static void menu_paint(Window *window)
     menu_layout(window);
     HPS ps = WinBeginPaint(window->hwnd, 0, NULL);
     RECTL whole = {0, 0, window->w, window->h};
-    WinFillRect(ps, &whole, CLR_PALEGRAY);
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    BOOL active = anchor->active == topLevelWindow(anchor, window->hwnd);
+    LONG ordinary_background = (window->style & 2) ? (active ? -23 : -22) : CLR_PALEGRAY;
+    LONG ordinary_foreground = (window->style & 2) ? (active ? -28 : -29) : CLR_BLACK;
+    WinFillRect(ps, &whole, ordinary_background);
     PmMenu *menu = window->menu;
     for (size_t i = 0; i < menu->count; i++)
     {
@@ -267,9 +330,51 @@ static void menu_paint(Window *window)
         BOOL selected = (int)i == menu->selected;
         LONG foreground = (item->item.afAttribute & 0x4000) ? CLR_DARKGRAY
                           : selected                        ? CLR_WHITE
-                                                            : CLR_BLACK;
-        LONG background = selected ? CLR_DARKBLUE : CLR_PALEGRAY;
+                                                            : ordinary_foreground;
+        LONG background = selected ? CLR_DARKBLUE : ordinary_background;
         WinFillRect(ps, &rect, background);
+        if (title_menu_item(window, item))
+        {
+            background = selected ? CLR_DARKBLUE : CLR_PALEGRAY;
+            foreground = selected ? CLR_WHITE : CLR_BLACK;
+            WinFillRect(ps, &rect, background);
+            LONG pel = lx_pm_display_scale(1);
+            RECTL top = {rect.xLeft, rect.yTop - pel, rect.xRight, rect.yTop},
+                  left = {rect.xLeft, rect.yBottom, rect.xLeft + pel, rect.yTop},
+                  bottom = {rect.xLeft, rect.yBottom, rect.xRight, rect.yBottom + pel},
+                  right = {rect.xRight - pel, rect.yBottom, rect.xRight, rect.yTop};
+            WinFillRect(ps, &top, selected ? CLR_DARKGRAY : CLR_WHITE);
+            WinFillRect(ps, &left, selected ? CLR_DARKGRAY : CLR_WHITE);
+            WinFillRect(ps, &bottom, selected ? CLR_WHITE : CLR_DARKGRAY);
+            WinFillRect(ps, &right, selected ? CLR_WHITE : CLR_DARKGRAY);
+            LONG x = (rect.xLeft + rect.xRight) / 2, y = (rect.yBottom + rect.yTop) / 2;
+            if (item->item.id == 0x8002)
+            {
+                RECTL glyph = {x - pel * 3, y - pel * 3, x + pel * 3, y - pel};
+                WinFillRect(ps, &glyph, foreground);
+            }
+            else if (item->item.id == 0x8003)
+            {
+                BOOL restore = window->parent && (window->parent->style & WS_MAXIMIZED);
+                LONG side = restore ? 3 : 5;
+                RECTL outline[] = {{x - side * pel, y - side * pel, x + side * pel, y + side * pel},
+                                   {x - (side - 1) * pel, y - (side - 1) * pel,
+                                    x + (side - 1) * pel, y + (side - 2) * pel}};
+                WinFillRect(ps, &outline[0], foreground);
+                WinFillRect(ps, &outline[1], background);
+                if (restore)
+                {
+                    RECTL back = {x - pel, y + 3 * pel, x + 5 * pel, y + 5 * pel};
+                    WinFillRect(ps, &back, foreground);
+                }
+            }
+            else
+            {
+                RECTL glyph = {x - pel * 5, y - pel * 2, x + pel * 5, y + pel * 2};
+                WinFillRect(ps, &glyph, foreground);
+            }
+            continue;
+        }
         rect.xLeft += 12;
         rect.xRight -= 12;
         const char *text = item->text ? item->text : "";
@@ -301,8 +406,9 @@ static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size,
     unsigned cp = lx_guest_load_u16(bytes + 4), count = lx_guest_load_u16(bytes + 8);
     if (length < 10 || length > size || (cp && cp != 437 && cp != 850) || count > 4096)
         return 0;
-    HWND handle = WinCreateWindow(parent, (PSZ)WC_MENU, NULL, depth ? 0 : WS_VISIBLE | 1, 0, 0, 1,
-                                  24, owner, HWND_TOP, depth ? 0 : FID_MENU, NULL, NULL);
+    HWND handle =
+        WinCreateWindow(parent, (PSZ)WC_MENU, NULL, depth ? 0 : WS_VISIBLE | 1, 0, 0, 1,
+                        lx_pm_display_scale(24), owner, HWND_TOP, depth ? 0 : FID_MENU, NULL, NULL);
     Window *window = lx_pm_menu_window(handle);
     if (!window)
         return 0;
@@ -440,6 +546,12 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
     if (!menu)
         return 0;
     ULONG p = (ULONG)(uintptr_t)first, q = (ULONG)(uintptr_t)second;
+    if (message == WM_BUTTON1DBLCLK && window->id == FID_SYSMENU && isFrameWindow(window->parent))
+    {
+        menu_finish(window);
+        WinPostMsg(window->parent->hwnd, WM_SYSCOMMAND, (MPARAM)(uintptr_t)0x8004, 0);
+        return 0;
+    }
     if (message == WM_PAINT)
     {
         menu_paint(window);
@@ -671,8 +783,8 @@ BOOL lx_pm_menu_attach(HWND handle, HWND parent_handle)
     window->owner = parent;
     window->style |= 1;  /* MS_ACTIONBAR */
     window->id = 0x8005; /* FID_MENU */
-    if (!WinSetWindowPos(handle, HWND_TOP, 0, parent->h - 24, parent->w, 24,
-                         SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ZORDER))
+    if (!WinSetWindowPos(handle, HWND_TOP, 0, parent->h - lx_pm_display_scale(24), parent->w,
+                         lx_pm_display_scale(24), SWP_MOVE | SWP_SIZE | SWP_SHOW | SWP_ZORDER))
         return FALSE;
     return WinInvalidateRect(handle, NULL, FALSE) && WinUpdateWindow(handle);
 }

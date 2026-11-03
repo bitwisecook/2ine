@@ -785,3 +785,171 @@ int tb_directory_readable(const char *path)
     return 1;
 #endif
 }
+
+int tb_path_info(const char *path, uint64_t *size, int64_t *modified)
+{
+    *modified = INT64_MIN;
+    if (tb_image_path(path))
+    {
+        TbImageInfo info;
+        if (!tb_image_info(path, &info))
+            return 0;
+        *size = info.size;
+        *modified = info.modified;
+        return 1;
+    }
+#ifdef _WIN32
+    wchar_t *name = wide(path);
+    if (!name)
+        return 0;
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    int ok = GetFileAttributesExW(name, GetFileExInfoStandard, &data);
+    free(name);
+    if (!ok)
+    {
+        path_errno(GetLastError());
+        return 0;
+    }
+    *size = ((uint64_t)data.nFileSizeHigh << 32) | data.nFileSizeLow;
+    uint64_t ticks =
+        ((uint64_t)data.ftLastWriteTime.dwHighDateTime << 32) | data.ftLastWriteTime.dwLowDateTime;
+    if (ticks)
+        *modified = (int64_t)(ticks / 10000000) - INT64_C(11644473600);
+#else
+    struct stat info;
+    if (stat(path, &info))
+        return 0;
+    *size = info.st_size < 0 ? 0 : (uint64_t)info.st_size;
+    *modified = (int64_t)info.st_mtime;
+#endif
+    return 1;
+}
+
+/* Host runtime selection probes headers only; guest executables are not run. */
+static uint32_t runtime_word(const unsigned char *p, int big)
+{
+    return big ? (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]
+               : (uint32_t)p[3] << 24 | (uint32_t)p[2] << 16 | (uint32_t)p[1] << 8 | p[0];
+}
+static int runtime_read(FILE *file, uint64_t size, uint64_t at, void *buffer, size_t length)
+{
+    if (at > size || length > size - at || at > INT64_MAX)
+        return 0;
+#ifdef _WIN32
+    if (_fseeki64(file, (__int64)at, SEEK_SET))
+#else
+    if (fseeko(file, (off_t)at, SEEK_SET))
+#endif
+        return 0;
+    return fread(buffer, 1, length, file) == length;
+}
+static int runtime_cpu(uint32_t cpu, int format)
+{
+#if defined(__aarch64__) || defined(__arm64__) || defined(_M_ARM64)
+    return cpu == (format == 1 ? 183u : format == 2 ? 0x0100000cu : 0xaa64u);
+#elif defined(__x86_64__) || defined(_M_X64)
+    if (format == 1)
+        return cpu == 62 || cpu == 3; /* Native i386 workers also run on Linux x86-64. */
+    return cpu == (format == 2 ? 0x01000007u : 0x8664u) || (format == 3 && cpu == 0x14c);
+#elif defined(__i386__) || defined(_M_IX86)
+    return cpu == (format == 1 ? 3u : format == 2 ? 7u : 0x14cu);
+#else
+    (void)cpu;
+    (void)format;
+    return 0;
+#endif
+}
+int tb_host_native_execution(void)
+{
+#if defined(__linux__) && (defined(__i386__) || defined(__x86_64__))
+    return 1;
+#else
+    return 0;
+#endif
+}
+int tb_host_uses_dyld(void)
+{
+#ifdef __APPLE__
+    return 1;
+#else
+    return 0;
+#endif
+}
+int tb_host_executable(const char *path)
+{
+    if (!path || tb_image_path(path))
+        return 0;
+#ifndef _WIN32
+    if (access(path, X_OK))
+        return 0;
+#endif
+    FILE *file = tb_fopen(path, "rb");
+    if (!file)
+        return 0;
+    int64_t signed_size;
+    int mode, ok = 0;
+    unsigned char header[64];
+    if (!tb_file_info(file, &signed_size, &mode) || signed_size < 64)
+        goto done;
+    uint64_t size = (uint64_t)signed_size;
+    if (!runtime_read(file, size, 0, header, sizeof header))
+        goto done;
+#ifdef _WIN32
+    if (header[0] == 'M' && header[1] == 'Z')
+    {
+        unsigned char pe[24];
+        uint32_t at = runtime_word(header + 60, 0);
+        if (runtime_read(file, size, at, pe, sizeof pe) && !memcmp(pe, "PE\0\0", 4))
+        {
+            unsigned machine = pe[4] | pe[5] << 8, flags = pe[22] | pe[23] << 8;
+            ok = runtime_cpu(machine, 3) && (flags & 2) && !(flags & 0x2000);
+        }
+    }
+#elif defined(__APPLE__)
+    uint32_t magic = runtime_word(header, 1);
+    if (magic == 0xcffaedfe || magic == 0xcefaedfe)
+        ok = runtime_cpu(runtime_word(header + 4, 0), 2) && runtime_word(header + 12, 0) == 2 &&
+             ((magic == 0xcffaedfe) == !!(runtime_word(header + 4, 0) & 0x01000000));
+    else if (magic == 0xcafebabe || magic == 0xbebafeca || magic == 0xcafebabf ||
+             magic == 0xbfbafeca)
+    {
+        int big = magic == 0xcafebabe || magic == 0xcafebabf;
+        int wide = magic == 0xcafebabf || magic == 0xbfbafeca;
+        uint32_t count = runtime_word(header + 4, big);
+        for (uint32_t i = 0; !ok && count <= 64 && i < count; i++)
+        {
+            unsigned char arch[32], image[16];
+            if (!runtime_read(file, size, 8 + (uint64_t)i * (wide ? 32 : 20), arch, wide ? 32 : 20))
+                break;
+            uint64_t offset = runtime_word(arch + 8, big);
+            if (wide)
+                offset = big ? offset << 32 | runtime_word(arch + 12, big)
+                             : (uint64_t)runtime_word(arch + 12, big) << 32 | offset;
+            uint64_t slice_size = runtime_word(arch + (wide ? 16 : 12), big);
+            if (wide)
+                slice_size = big ? slice_size << 32 | runtime_word(arch + 20, big)
+                                 : (uint64_t)runtime_word(arch + 20, big) << 32 | slice_size;
+            if (runtime_cpu(runtime_word(arch, big), 2) && slice_size >= sizeof image &&
+                offset <= size && slice_size <= size - offset &&
+                runtime_read(file, size, offset, image, sizeof image))
+                ok = (runtime_word(image, 1) == 0xcffaedfe ||
+                      runtime_word(image, 1) == 0xcefaedfe) &&
+                     runtime_cpu(runtime_word(image + 4, 0), 2) &&
+                     runtime_word(image + 12, 0) == 2 &&
+                     ((runtime_word(image, 1) == 0xcffaedfe) ==
+                      !!(runtime_word(image + 4, 0) & 0x01000000));
+        }
+    }
+#else
+    if (!memcmp(header, "\177ELF", 4) && header[5] == 1 && header[6] == 1)
+    {
+        uint32_t identity = runtime_word(header + 16, 0);
+        unsigned type = identity & 0xffff, cpu = identity >> 16;
+        ok = header[4] == (cpu == 62 || cpu == 183 ? 2 : 1) && (type == 2 || type == 3) &&
+             (header[7] == 0 || header[7] == 3) && runtime_cpu(cpu, 1);
+    }
+#endif
+done:
+    fclose(file);
+    return ok;
+}

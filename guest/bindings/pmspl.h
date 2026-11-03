@@ -1,38 +1,85 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-static uint32 bridge32_SplQueryQueue(uint8 *a)
+/* Checked guest strings, packed queue records and output counts. */
+static uint32 spl_queue_bridge(uint8 *a, BOOL query)
 {
-    uint32 needed = lx_guest_load_u32(a + 20);
-    if (!lx_execution_memory(GLoaderState.execution, needed, 4, LX_GUEST_WRITE))
+    uint32 computer = lx_guest_load_u32(a), queue = query ? lx_guest_load_u32(a + 4) : 0;
+    unsigned offset = query ? 4 : 0;
+    uint32 level = lx_guest_load_u32(a + 4 + offset), address = lx_guest_load_u32(a + 8 + offset),
+           capacity = lx_guest_load_u32(a + 12 + offset);
+    uint32 counters[3] = {query ? 0 : lx_guest_load_u32(a + 16),
+                          query ? 0 : lx_guest_load_u32(a + 20),
+                          lx_guest_load_u32(a + (query ? 20 : 24))};
+    if (capacity > 16 * 1024 * 1024 || (!query && lx_guest_load_u32(a + 28)))
         return 87;
-    ULONG bytes;
-    ULONG result = SplQueryQueue(NULL, NULL, lx_guest_load_u32(a + 8), NULL,
-                                 lx_guest_load_u32(a + 16), &bytes);
-    return lx_execution_write(GLoaderState.execution, needed, &bytes, 4) ? result : 87;
-}
-
-static uint32 bridge32_SplEnumQueue(uint8 *a)
-{
-    LxGuestBorrow returned = {0}, total = {0}, needed = {0};
-    ULONG rc = 87, nreturned, ntotal, nneeded;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16), 4, LX_GUEST_WRITE,
-                            &returned) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20), 4, LX_GUEST_WRITE,
-                            &total) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 24), 4, LX_GUEST_WRITE,
-                            &needed))
+    char *host = computer ? lx_execution_copy_string(GLoaderState.execution, computer, 256) : NULL,
+         *name = queue ? lx_execution_copy_string(GLoaderState.execution, queue, 256) : NULL;
+    if ((computer && !host) || (query && (!name || !*name)) || (host && *host))
     {
-        rc = SplEnumQueue(NULL, lx_guest_load_u32(a + 4), NULL, lx_guest_load_u32(a + 12),
-                          &nreturned, &ntotal, &nneeded,
-                          (PVOID)(uintptr_t)lx_guest_load_u32(a + 28));
-        if (rc == 0)
+        free(host);
+        free(name);
+        return 87;
+    }
+    LxGuestBorrow buffer = {0}, counts[3] = {{0}};
+    ULONG result = 87, returned = 0, total = 0, needed = 0;
+    BOOL valid = !capacity || lx_execution_borrow(GLoaderState.execution, address, capacity,
+                                                  LX_GUEST_WRITE, &buffer);
+    for (unsigned i = query ? 2 : 0; valid && i < 3; i++)
+        valid =
+            lx_execution_borrow(GLoaderState.execution, counters[i], 4, LX_GUEST_WRITE, &counts[i]);
+    if (valid)
+    {
+        result = lx_spl_catalogue(name, level, buffer.host, capacity, address, &returned, &total,
+                                  &needed);
+        if (result == 0 || result == 234 || result == 2150)
         {
-            lx_guest_store_u32(returned.host, nreturned);
-            lx_guest_store_u32(total.host, ntotal);
-            lx_guest_store_u32(needed.host, nneeded);
+            if (!query)
+            {
+                lx_guest_store_u32(counts[0].host, returned);
+                lx_guest_store_u32(counts[1].host, total);
+            }
+            lx_guest_store_u32(counts[2].host, needed);
         }
     }
-    lx_execution_release(&needed);
-    lx_execution_release(&total);
-    lx_execution_release(&returned);
-    return rc;
+    for (unsigned i = 0; i < 3; i++)
+        lx_execution_release(&counts[i]);
+    lx_execution_release(&buffer);
+    free(host);
+    free(name);
+    return result;
+}
+static uint32 bridge32_SplQueryQueue(uint8 *a)
+{
+    return spl_queue_bridge(a, TRUE);
+}
+static uint32 bridge32_SplEnumQueue(uint8 *a)
+{
+    return spl_queue_bridge(a, FALSE);
+}
+
+static uint32 bridge32_SplQueryDevice(uint8 *a)
+{
+    uint32 computer = lx_guest_load_u32(a), device = lx_guest_load_u32(a + 4),
+           capacity = lx_guest_load_u32(a + 16), address = lx_guest_load_u32(a + 12);
+    if (capacity > 16 * 1024 * 1024)
+        return 87;
+    char *host = computer ? lx_execution_copy_string(GLoaderState.execution, computer, 256) : NULL,
+         *name = device ? lx_execution_copy_string(GLoaderState.execution, device, 256) : NULL;
+    LxGuestBorrow buffer = {0}, count = {0};
+    ULONG result = 87, needed = 0;
+    if ((!computer || (host && !*host)) && name && *name &&
+        (!capacity ||
+         lx_execution_borrow(GLoaderState.execution, address, capacity, LX_GUEST_WRITE, &buffer)) &&
+        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20), 4, LX_GUEST_WRITE,
+                            &count))
+    {
+        result =
+            lx_spl_device(name, lx_guest_load_u32(a + 8), buffer.host, capacity, address, &needed);
+        if (result == 0 || result == 234 || result == 2152)
+            lx_guest_store_u32(count.host, needed);
+    }
+    lx_execution_release(&count);
+    lx_execution_release(&buffer);
+    free(host);
+    free(name);
+    return result;
 }

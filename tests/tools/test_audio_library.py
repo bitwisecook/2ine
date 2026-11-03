@@ -9,7 +9,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from tools import balls, project_sources
+from tools import ball as ball_api
+from tools import project_sources
 
 
 class AudioLibraryTests(unittest.TestCase):
@@ -18,7 +19,7 @@ class AudioLibraryTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.ball = self.root / "Audio.2ineball"
-        balls.init(self.ball)
+        ball_api.init(self.ball)
         self.instrument = self.root / "Instrument"
         self.instrument.mkdir()
         self.sfz = self.instrument / "Piano.sfz"
@@ -27,7 +28,7 @@ class AudioLibraryTests(unittest.TestCase):
         (self.instrument / "LICENSE.txt").write_text("Original test input; public domain.\n")
 
     def request(self, action, **fields):
-        return balls.native_request({"action": action, "ball": str(self.ball), **fields})
+        return ball_api.native_request({"action": action, "ball": str(self.ball), **fields})
 
     def test_folder_contents_determine_identity_and_existing_install_is_preserved(self):
         first = self.request("import-soundfont", path=str(self.sfz))
@@ -102,7 +103,7 @@ class AudioLibraryTests(unittest.TestCase):
             self.request("import-soundfont", path=str(invalid))
 
     def test_catalogue_links_credits_and_generated_files_agree(self):
-        catalogue = balls.native_request({"action": "project-sources"})
+        catalogue = ball_api.native_request({"action": "project-sources"})
         self.assertIn("Ryan C. Gordon", catalogue["originCredit"])
         projects = catalogue["projects"]
         self.assertGreater(len(projects), 50)
@@ -117,6 +118,26 @@ class AudioLibraryTests(unittest.TestCase):
         raw = json.loads(project_sources.CATALOGUE.read_text())
         author = next(item for item in raw["projects"] if item["id"] == "sha256")
         self.assertIn("Brad Conte", author["authors"])
+
+
+class ProjectSourceProviderTests(unittest.TestCase):
+    def test_ffmpeg_records_the_linked_provider_and_license(self):
+        with tempfile.TemporaryDirectory(prefix="2ine-video-catalogue-") as directory:
+            root = Path(directory)
+            metadata = {
+                "version": "9.0.2-test",
+                "license": "GPL version 3 or later",
+                "provider": "system",
+                "configuration": "--enable-gpl --enable-version3",
+            }
+            (root / "ffmpeg-build.json").write_text(json.dumps(metadata))
+            catalogue = project_sources.installed_catalogue([root / "lx_loader"])
+            self.assertEqual(catalogue["multimediaBuild"], metadata)
+            entry = next(item for item in catalogue["projects"] if item["id"] == "ffmpeg")
+            self.assertEqual(entry["version"], metadata["version"])
+            self.assertEqual(entry["license"], metadata["license"])
+            self.assertEqual(entry["provider"], metadata["provider"])
+            self.assertEqual(entry["buildConfiguration"], metadata["configuration"])
 
 
 if __name__ == "__main__":

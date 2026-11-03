@@ -10,6 +10,7 @@ public struct ProcessResult: Sendable {
     public let output: String
     public let log: URL
     public var receiptError: String? = nil
+    public var dependencyAudit: DependencyAudit? = nil
 }
 
 /// Native process presentation. Shared launch and persistence rules live in C.
@@ -98,7 +99,8 @@ public actor BallBackend {
         var result = try await runner.run(executable: URL(filePath: executable), arguments: Array(plan.command.dropFirst()), environment: environment, cwd: URL(filePath: plan.cwd), log: log, update: update)
         if plan.installer {
             do {
-                _ = try request(DesktopRequest("record-install", ball: ball, receipt: plan.receipt, programHost: plan.programHost, exitCode: result.signalled ? -result.code : result.code), as: BallSnapshot.self)
+                let installed = try request(DesktopRequest("record-install", ball: ball, build: build, receipt: plan.receipt, programHost: plan.programHost, exitCode: result.signalled ? -result.code : result.code), as: BallSnapshot.self)
+                result.dependencyAudit = installed.dependencyAudit
             } catch { result.receiptError = error.localizedDescription }
         }
         return result

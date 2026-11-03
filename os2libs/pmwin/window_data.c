@@ -31,6 +31,34 @@ static PFNWP previous_control_procedure(AnchorBlock *anchor)
     }
     return (PFNWP)(uintptr_t)lx_execution_mapping_address(anchor->control_bridge);
 }
+static uint32 frame_control_callback(uint8 *args)
+{
+    return (uint32)(uintptr_t)frameControlProcedure(
+        lx_guest_load_u32(args), lx_guest_load_u32(args + 4),
+        (MPARAM)(uintptr_t)lx_guest_load_u32(args + 8),
+        (MPARAM)(uintptr_t)lx_guest_load_u32(args + 12));
+}
+static PFNWP previous_frame_control_procedure(AnchorBlock *anchor)
+{
+    if (!anchor->frame_control_bridge)
+    {
+        LxGuestMapping *mapping =
+            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        const LxExecutionApi32 api = {frame_control_callback, 16, 0, LX_ABI_STACK32};
+        if (!mapping)
+            return NULL;
+        if (!lx_execution_emit_bridge32(GLoaderState.execution, lx_execution_mapping_host(mapping),
+                                        4096, &api) ||
+            !lx_execution_protect(GLoaderState.execution, mapping,
+                                  LX_GUEST_READ | LX_GUEST_EXECUTE))
+        {
+            lx_execution_unmap(GLoaderState.execution, mapping);
+            return NULL;
+        }
+        anchor->frame_control_bridge = mapping;
+    }
+    return (PFNWP)(uintptr_t)lx_execution_mapping_address(anchor->frame_control_bridge);
+}
 static uint32 menu_callback(uint8 *args)
 {
     return (uint32)(uintptr_t)menuProcedure(lx_guest_load_u32(args), lx_guest_load_u32(args + 4),
@@ -117,6 +145,17 @@ ULONG WinQueryWindowULong(HWND window, LONG index)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
     return lx_guest_load_u32((uint8 *)w->data + index);
 }
+static void resume_style_damage(Window *window)
+{
+    if (windowAcceptsUpdates(window) && !WinIsRectEmpty(0, &window->invalid))
+    {
+        RECTL damage = window->invalid;
+        WinInvalidateRect(window->hwnd, &damage, FALSE);
+    }
+    for (Window *child = window->children; child; child = child->sibling)
+        resume_style_damage(child);
+}
+
 BOOL WinSetWindowULong(HWND window, LONG index, ULONG value)
 {
     TRACE_NATIVE("WinSetWindowULong(%u, %d, %u)", (uint)window, (int)index, (uint)value);
@@ -130,7 +169,17 @@ BOOL WinSetWindowULong(HWND window, LONG index, ULONG value)
         return WinSubclassWindow(window, (PFNWP)(uintptr_t)value) != NULL;
     if (index == -2)
     {
+        BOOL was_visible = (w->style & WS_VISIBLE) != 0;
+        ULONG previous_style = w->style;
         w->style = value;
+        if (isFrameWindow(w) && ((previous_style ^ value) & 0x800)) /* FS_SIZEBORDER */
+            applyHostWindowChrome(w);
+        /* Applications can hide an ancestor through QWL_STYLE while changing
+           several controls, then restore its style. Damage recorded while the
+           ancestor was hidden must become eligible for paint again. This does
+           not manufacture damage or change WinEnableWindowUpdate semantics. */
+        if (!was_visible && (value & WS_VISIBLE))
+            resume_style_damage(w);
         return TRUE;
     }
     if (index < 0 || (size_t)index > w->data_len || w->data_len - index < 4)
@@ -180,6 +229,8 @@ PFNWP callableWindowProcedure(AnchorBlock *anchor, PFNWP previous)
         callable = previous_menu_procedure(anchor);
     else if (previous == controlProcedure && GLoaderState.execution)
         callable = previous_control_procedure(anchor);
+    else if (previous == frameControlProcedure && GLoaderState.execution)
+        callable = previous_frame_control_procedure(anchor);
 #endif
     return callable;
 }

@@ -301,18 +301,18 @@ def main():
     args.initial_profiles_sha256 = {}
     if args.ball:
         sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-        from tools import balls
+        from tools import ball as ball_api
 
         args.ball = args.ball.resolve()
-        data = balls.load(args.ball)
-        args.installation = balls.host_path(r"C:\LOTUSW4", args.ball, data)
-        balls.write_config(args.ball, data)
-        env = balls.environment(args.ball, data, build, args.backend)
+        data = ball_api.load(args.ball)
+        args.installation = ball_api.host_path(r"C:\LOTUSW4", args.ball, data)
+        ball_api.write_config(args.ball, data)
+        env = ball_api.environment(args.ball, data, build, args.backend)
         runtime = Path(env["TWOINE_LIBPATH"].split(os.pathsep)[0])
-        balls.sync_runtime(build, runtime)
+        ball_api.sync_runtime(build, runtime)
         args.launch_command = [str(runtime / "lx_loader"), r"C:\LOTUSW4\WORDPRO\WORDPRO.EXE"]
         args.document_guest = rf"C:\TEMP\wordpro-{work.name}\document.lwp"
-        args.document_path = balls.host_path(args.document_guest, args.ball, data)
+        args.document_path = ball_api.host_path(args.document_guest, args.ball, data)
         args.document_path.parent.mkdir(parents=True, exist_ok=True)
         args.preferences_sha256 = None
         for key in ("TWOINE_USER_PROFILE", "TWOINE_SYSTEM_PROFILE", "TWOINE_REGISTRY"):

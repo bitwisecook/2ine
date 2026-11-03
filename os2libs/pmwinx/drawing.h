@@ -9,6 +9,7 @@ typedef struct Open32DC
     HWND window;
     BOOL foreign_window;
     ULONG kind, default_bitmap, text_color, background_color;
+    BOOL print_active, print_page;
     LONG background_mode;
     ULONG text_alignment;
     ULONG font_handle;
@@ -24,6 +25,8 @@ typedef struct Open32DC
 void open32SavedDCCleanup(Open32DC *dc);
 BOOL open32BrushPixel(Open32DC *dc, LONG x, LONG y, uint32 *rgb);
 Open32DC *open32FindDC(ULONG handle);
+ULONG open32CreatePrinterContext(unsigned kind, BOOL information);
+BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode);
 BOOL open32CanDraw(ULONG handle);
 LONG open32DCHeight(ULONG handle);
 LONG open32DCWidth(ULONG handle);

@@ -5,7 +5,7 @@ on:
     paths:
       - 'snap/**'
       - 'tools/gnome/**'
-      - 'tools/gnome_balls.py'
+      - 'tools/gnome_ball.py'
       - 'tools/gnome_views.py'
       - 'tools/gnome_audio.py'
       - 'tools/project_sources.py'
@@ -15,7 +15,7 @@ on:
       - 'ball/**'
       - 'cmake/**'
       - 'os2libs/midi*'
-      - 'tools/balls.py'
+      - 'tools/ball.py'
       - 'tools/build_gnome_packages.py'
       - '.github/workflows/gnome-snap.yml'
 

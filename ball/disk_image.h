@@ -4,10 +4,12 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include "read_stream.h"
 /* Internal paths name an image plus a member; they never name a host mount. */
 typedef struct TbImageInfo
 {
     uint64_t size, capacity, available;
+    int64_t modified; /* INT64_MIN when the media has no timestamp. */
     int directory;
     int readonly;
     int fat;
@@ -48,7 +50,9 @@ int tb_image_mkdir(const char *path);
 int tb_image_move(const char *source, const char *target);
 int tb_image_readonly(const char *path, int readonly);
 int tb_image_copy(FILE *source, const char *destination, int exclusive);
-typedef int (*TbImageVisitor)(void *, const char *, uint64_t, int);
+typedef int (*TbImageVisitor)(void *, const char *, uint64_t, int, int64_t);
 int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context);
+int tb_image_reader_walk(TbReadStream *stream, TbImageVisitor visitor, void *context);
+TbReadStream *tb_image_reader_member(TbReadStream *stream, const char *member);
 FILE *tb_image_stream_fopen(FILE *file, const char *member);
 #endif

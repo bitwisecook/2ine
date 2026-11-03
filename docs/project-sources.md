@@ -585,3 +585,19 @@ are user-supplied and are not licensed or redistributed by this project.
 - Used as: development-time validation; not bundled
 - Authors / origin credits: LLVM contributors
 - [Project](https://github.com/llvm/llvm-project) · [Source](https://github.com/llvm/llvm-project/tree/llvmorg-21.1.8) · [Download](https://github.com/llvm/llvm-project/archive/refs/tags/llvmorg-21.1.8.tar.gz)
+
+## FFmpeg
+
+- Version: 9.0.2
+- License: LGPL-2.1-or-later in the pinned source profile; actual system-provider license is recorded in ffmpeg-build.json
+- Used as: digital-video and synchronized audio decoding; pixel/sample conversion
+- Authors / origin credits: Fabrice Bellard; FFmpeg developers and contributors
+- [Project](https://ffmpeg.org/) · [Source](https://github.com/FFmpeg/FFmpeg/tree/n9.0.2) · [Download](https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz)
+
+## HWZIP legacy ZIP codecs
+
+- Version: 2.4 (2024-09-01)
+- License: Unlicense / public domain
+- Used as: runtime
+- Authors / origin credits: Hans Wennborg
+- [Project](https://www.hanshq.net/zip.html) · [Source](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip) · [Download](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip)

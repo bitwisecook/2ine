@@ -202,7 +202,7 @@ are ejected, and common image extensions inside the ball are omitted. External
 mapped folders retain their previous paths as reconnect hints. Missing or
 foreign-host paths keep their drive letters but are ejected until reconnected.
 Folder paths inside the ball are normalized to relative paths with forward
-slashes. Imported balls select the receiving host’s runtime: external build
+slashes. An imported ball selects the receiving host’s runtime: external build
 locations and cached native runtime binaries are omitted from the portable
 configuration, while the original runtime identity stays in 2ine-export.json.
 

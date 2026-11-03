@@ -35,8 +35,17 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
 
     /* Use a low amplitude to match the PC speaker mix. */
     GLoaderState.beep_volume = 0.05f;
+    GLoaderState.display_dpi = 96;
 
     cfgLoadFiles();
+    const char *display_dpi = getenv("TWOINE_DISPLAY_DPI");
+    if (display_dpi)
+    {
+        char *end = NULL;
+        unsigned long dpi = strtoul(display_dpi, &end, 10);
+        if (end != display_dpi && !*end && dpi >= 72 && dpi <= 384)
+            GLoaderState.display_dpi = (unsigned)dpi;
+    }
     prepOs2Drives();
 
     const size_t stack_limit = lx_host_stack_limit();

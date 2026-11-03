@@ -11,7 +11,10 @@ wire callbacks. Guest addresses are never passed directly to host OpenGL.
 | Linux | Mesa desktop OpenGL through EGL | Mesa EGL, desktop compatibility contexts and framebuffer objects; libraries matching the worker architecture |
 | macOS | Mesa OpenGL → Zink → KosmicKrisp → Metal | Apple Silicon, macOS 26+, Mesa built with EGL/Zink/KosmicKrisp |
 
-OpenGL is opt-in. Ordinary application/runtime builds do not acquire Mesa.
+Mesa support is an optional build dependency. Ordinary application/runtime builds
+do not acquire Mesa. An unset per-ball OpenGL preference selects Mesa; runtimes
+without it report the provider as unavailable rather than selecting an original
+renderer automatically.
 The public interface in `hal/opengl.h` separates context creation, dispatch,
 buffer exchange and readback from OS/2 handles, PGL visuals and PM windows.
 Other graphics adapters can implement that contract. Vulkan and DirectX adapters

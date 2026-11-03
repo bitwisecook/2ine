@@ -906,6 +906,7 @@ int tb_hpfs_info(const char *path, TbImageInfo *info)
     size_t index = 0;
     int ok = name != NULL;
     memset(info, 0, sizeof *info);
+    info->modified = INT64_MIN;
     if (ok && *name)
     {
         ok = locate(&disk, path, &list, &index, 0);

@@ -3,6 +3,7 @@
    pointers are decoded independently of the host ABI, including native i386. */
 #include "internal.h"
 #include "guest/bindings/opengl.h"
+#include "runtime/features.h"
 
 static const GlEntry GlEntries[] = {
 #include "os2libs/generated/opengl-entries.h"
@@ -24,6 +25,11 @@ void lxNativeModuleDeinit(void)
 }
 const LxExport *lxNativeModuleInit(uint32 *count)
 {
+    if (lxRuntimeOpenGLProvider() != LX_OPENGL_MESA)
+    {
+        fprintf(stderr, "2ine: the Mesa OpenGL provider is not selected\n");
+        return NULL;
+    }
     const char *profile = getenv("TWOINE_OPENGL_ABI");
     int gold = profile && !strcmp(profile, "gold11");
     if (profile && strcmp(profile, "warp") && !gold)

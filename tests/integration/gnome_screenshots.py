@@ -14,8 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from linux.x11 import Display
 
-from tests.integration.gnome_balls import pump
-from tools import gnome_balls, gnome_views
+from tests.integration.gnome_ball import pump
+from tools import gnome_ball, gnome_views
 
 
 def main():
@@ -30,7 +30,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     os.environ["XDG_CONFIG_HOME"] = str(output / "preferences")
     os.environ["XDG_DATA_HOME"] = str(output / "data")
-    app = gnome_balls.BallApplication(args.build.resolve(), args.ball.resolve())
+    app = gnome_ball.BallApplication(args.build.resolve(), args.ball.resolve())
     app.register(None)
     app.activate()
     window = app.get_active_window()
@@ -63,10 +63,10 @@ def main():
     if hasattr(window.overlay, "dismiss_all"):
         window.overlay.dismiss_all()
     for appearance, scheme in (
-        ("light", gnome_balls.Adw.ColorScheme.FORCE_LIGHT),
-        ("dark", gnome_balls.Adw.ColorScheme.FORCE_DARK),
+        ("light", gnome_ball.Adw.ColorScheme.FORCE_LIGHT),
+        ("dark", gnome_ball.Adw.ColorScheme.FORCE_DARK),
     ):
-        gnome_balls.Adw.StyleManager.get_default().set_color_scheme(scheme)
+        gnome_ball.Adw.StyleManager.get_default().set_color_scheme(scheme)
         window.set_default_size(1180, 820)
         window.show_page("apps")
         capture(appearance + "-applications", "Applications and extracted OS/2 icons")

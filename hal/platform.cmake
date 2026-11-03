@@ -3,6 +3,7 @@
 set(TWOINE_HOST_SOURCES
     "${TWOINE_HAL_SOURCE_DIR}/common/host_arch.c"
     "${PROJECT_SOURCE_DIR}/ball/disk_image.c"
+    "${PROJECT_SOURCE_DIR}/ball/read_stream.c"
     "${PROJECT_SOURCE_DIR}/ball/fat_volume.c"
     "${PROJECT_SOURCE_DIR}/ball/hpfs_volume.c"
     "${PROJECT_SOURCE_DIR}/ball/vendor/fatfs/ff.c"

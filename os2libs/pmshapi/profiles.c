@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmshapi/profiles.h"
+#include "os2libs/nls.h"
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "runtime/process.h"
@@ -416,6 +417,52 @@ static ProfileEntry *find_entry(Profile *p, const char *app, const char *key)
             return e;
     return NULL;
 }
+typedef struct PrinterProfileDefault
+{
+    const char *app, *key, *value;
+} PrinterProfileDefault;
+static const PrinterProfileDefault printer_profile_defaults[] = {
+    {"PM_SPOOLER", "QUEUE", "2INEPDF;"},
+    {"PM_SPOOLER", "PRINTER", "2INEPDF;"},
+    {"PM_SPOOLER_QUEUE_DD", "2INEPDF", "2INEPDF.PDF"},
+    {"PM_SPOOLER_QUEUE_DD", "2INEPCL", "2INEPCL.PCL"},
+    {"PM_SPOOLER_QUEUE_DESCR", "2INEPDF", "Save as PDF"},
+    {"PM_SPOOLER_QUEUE_DESCR", "2INEPCL", "PCL 5 Printer"},
+    {"PM_SPOOLER_PRINTER", "2INEPDF", "FILE;2INEPDF.PDF;2INEPDF;"},
+    {"PM_SPOOLER_PRINTER", "2INEPCL", "FILE;2INEPCL.PCL;2INEPCL;"}};
+enum
+{
+    NATIONAL_DEFAULT_COUNT = 11
+};
+static BOOL national_profile_defaults(ProfileEntry *entries, char text[NATIONAL_DEFAULT_COUNT][16])
+{
+    COUNTRYCODE code = {0};
+    COUNTRYINFO info;
+    if (DosQueryCtryInfo(sizeof info, &code, &info, NULL))
+        return FALSE;
+    static const char *keys[NATIONAL_DEFAULT_COUNT] = {
+        "iCountry",  "iDate",    "iCurrency", "iDigits", "iTime", "sCurrency",
+        "sThousand", "sDecimal", "sDate",     "sTime",   "sList"};
+    snprintf(text[0], 16, "%u", info.country);
+    snprintf(text[1], 16, "%u", info.fsDateFmt);
+    snprintf(text[2], 16, "%u", info.fsCurrencyFmt & 3u);
+    snprintf(text[3], 16, "%u", info.cDecimalPlace);
+    snprintf(text[4], 16, "%u", info.fsTimeFmt & 1u);
+    snprintf(text[5], 16, "%.3s", info.szCurrency);
+    snprintf(text[6], 16, "%.1s", info.szThousandsSeparator);
+    snprintf(text[7], 16, "%.1s", info.szDecimal);
+    snprintf(text[8], 16, "%.1s", info.szDateSeparator);
+    snprintf(text[9], 16, "%.1s", info.szTimeSeparator);
+    snprintf(text[10], 16, "%.1s", info.szDataSeparator);
+    for (unsigned i = 0; i < NATIONAL_DEFAULT_COUNT; i++)
+        entries[i] =
+            (ProfileEntry){.app = "PM_National",
+                           .key = (char *)keys[i],
+                           .data = (uint8 *)text[i],
+                           .size = (ULONG)strlen(text[i]) + 1,
+                           .next = i + 1 < NATIONAL_DEFAULT_COUNT ? &entries[i + 1] : NULL};
+    return TRUE;
+}
 /* The caller owns the returned snapshot, including a byte beyond binary data. */
 static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
 {
@@ -424,9 +471,43 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     uint8 *data = NULL;
     *size = 0;
     lx_host_monitor_lock(mutex);
+    /* Reserved profiles expose native national settings and printer services.
+       Virtual service defaults remain reads,
+       never stored INI entries, and explicit/private profile handles do not
+       gain them even when they refer to the same backing file. */
+    ProfileEntry defaults[sizeof printer_profile_defaults / sizeof printer_profile_defaults[0]];
+    ProfileEntry national_defaults[NATIONAL_DEFAULT_COUNT];
+    char national_text[NATIONAL_DEFAULT_COUNT][16];
+    Profile printer_profile = {0};
+    if (p && (handle == HINI_PROFILE || handle == HINI_USERPROFILE || handle == HINI_SYSTEMPROFILE))
+    {
+        ProfileEntry *preferred = find_entry(user_profile, "PM_SPOOLER", "QUEUE");
+        if (!preferred)
+            preferred = find_entry(system_profile, "PM_SPOOLER", "QUEUE");
+        for (unsigned i = 0; i < sizeof defaults / sizeof defaults[0]; i++)
+        {
+            const PrinterProfileDefault *value = &printer_profile_defaults[i];
+            defaults[i] = (ProfileEntry){
+                .app = (char *)value->app,
+                .key = (char *)value->key,
+                .data = (uint8 *)value->value,
+                .size = (ULONG)strlen(value->value) + 1,
+                .next = i + 1 < sizeof defaults / sizeof defaults[0] ? &defaults[i + 1] : NULL};
+            if (preferred && !strcmp(value->app, "PM_SPOOLER"))
+            {
+                defaults[i].data = preferred->data;
+                defaults[i].size = preferred->size;
+            }
+        }
+        printer_profile.entries = defaults;
+        if (national_profile_defaults(national_defaults, national_text))
+            defaults[sizeof defaults / sizeof *defaults - 1].next = national_defaults;
+    }
     ProfileEntry *entry = app && key ? find_entry(p, app, key) : NULL;
     if (!entry && !handle && app && key)
         entry = find_entry(system_profile, app, key);
+    if (!entry && app && key)
+        entry = find_entry(&printer_profile, app, key);
     if (entry)
     {
         data = calloc((size_t)entry->size + 1, 1);
@@ -440,8 +521,8 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     {
         size_t used = 0;
         data = calloc(1, 1);
-        Profile *sources[2] = {p, !handle ? system_profile : NULL};
-        for (unsigned i = 0; data && i < 2; i++)
+        Profile *sources[3] = {p, !handle ? system_profile : NULL, &printer_profile};
+        for (unsigned i = 0; data && i < 3; i++)
             for (ProfileEntry *e = sources[i] ? sources[i]->entries : NULL; e; e = e->next)
             {
                 if (app && strcmp(app, e->app))

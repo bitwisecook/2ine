@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from disk_images import PAYLOAD, fat_image, iso_image
 
-from tools import balls
+from tools import ball as ball_api
 
 
 def image_hash(path):
@@ -23,7 +23,7 @@ def image_hash(path):
 
 
 def request(ball, action, **fields):
-    return balls.native_request({"action": action, "ball": str(ball), **fields})
+    return ball_api.native_request({"action": action, "ball": str(ball), **fields})
 
 
 def walk(ball, directory="D:\\"):

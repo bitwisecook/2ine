@@ -106,7 +106,7 @@ exercising compressed FTCOMP rather than just synthetic stored members.
 Commands and retained logs are in build-macos/support-swift-test-final.log,
 /tmp/2ine-support-tools-final.log, /tmp/2ine-support-runtime-build.log and
 /tmp/2ine-support-image-install.log. Desktop review uses an isolated
-build-macos/support-review app and ball; it does not modify user balls.
+build-macos/support-review app and ball; it does not modify any user ball.
 
 Native UI review completed the direct ISO chooser and verified the missing-file
 card disappeared after installation. Install Software then reported all files

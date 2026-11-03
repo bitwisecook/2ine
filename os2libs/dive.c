@@ -5,6 +5,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "hal/video.h"
 #include "hal/host_sync.h"
+#include "runtime/features.h"
 #define DIVE_MAX_BUFFERS 256
 #define DIVE_FIRST_BUFFER 16
 #define DIVE_MAX_DIMENSION 16384
@@ -363,6 +364,8 @@ static ULONG impl_DiveBlitImage(ULONG handle, ULONG source, ULONG destination)
 /* Serialize instance/buffer ownership with setup and worker submissions. */
 ULONG DiveQueryCaps(PDIVE_CAPS caps, ULONG plane)
 {
+    if (!lxRuntimeFeatureEnabled(LX_FEATURE_DIVE))
+        return DIVE_ERR_NO_DIRECT_ACCESS;
     if (!dive_lock())
         return DIVE_ERR_ALLOCATION_ERROR;
     ULONG result = impl_DiveQueryCaps(caps, plane);
@@ -371,6 +374,8 @@ ULONG DiveQueryCaps(PDIVE_CAPS caps, ULONG plane)
 }
 ULONG DiveOpen(PULONG handle, ULONG non_screen, PVOID framebuffer)
 {
+    if (!lxRuntimeFeatureEnabled(LX_FEATURE_DIVE))
+        return DIVE_ERR_NO_DIRECT_ACCESS;
     if (!dive_lock())
         return DIVE_ERR_ALLOCATION_ERROR;
     ULONG result = impl_DiveOpen(handle, non_screen, framebuffer);

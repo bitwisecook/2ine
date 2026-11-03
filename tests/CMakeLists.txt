@@ -122,6 +122,39 @@ if(TARGET pmwin)
     target_link_libraries(twoine_pm_tests PRIVATE pmgpi pmwin 2ine)
     add_test(NAME presentation_manager COMMAND twoine_pm_tests)
     set_tests_properties(presentation_manager PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+    add_executable(twoine_help_font_tests os2libs/test_help_fonts.c)
+    twoine_application_target(twoine_help_font_tests)
+    target_link_libraries(twoine_help_font_tests PRIVATE pmgpi pmwin 2ine)
+    add_test(NAME help_font_transitions COMMAND twoine_help_font_tests)
+    set_tests_properties(help_font_transitions PROPERTIES TIMEOUT 20
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;TWOINE_DISPLAY_DPI=96")
+    add_executable(twoine_frame_format_tests os2libs/test_frame_format.c)
+    twoine_application_target(twoine_frame_format_tests)
+    target_link_libraries(twoine_frame_format_tests PRIVATE pmwin 2ine)
+    add_test(NAME frame_format_protocol COMMAND twoine_frame_format_tests)
+    set_tests_properties(frame_format_protocol PROPERTIES TIMEOUT 20
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+    add_executable(twoine_display_dpi_tests os2libs/test_display_dpi.c)
+    twoine_application_target(twoine_display_dpi_tests)
+    target_link_libraries(twoine_display_dpi_tests PRIVATE pmgpi pmwin 2ine)
+    foreach(dpi 96 120 144 192)
+        add_test(NAME display_dpi_${dpi} COMMAND twoine_display_dpi_tests ${dpi})
+        set_tests_properties(display_dpi_${dpi} PROPERTIES TIMEOUT 20
+            ENVIRONMENT "TWOINE_DISPLAY_DPI=${dpi};SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+    endforeach()
+    add_executable(twoine_menu_chrome_tests os2libs/test_menu_chrome.c)
+    twoine_application_target(twoine_menu_chrome_tests)
+    target_link_libraries(twoine_menu_chrome_tests PRIVATE pmwin 2ine)
+    add_test(NAME pm_menu_chrome COMMAND twoine_menu_chrome_tests)
+    set_tests_properties(pm_menu_chrome PROPERTIES ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_AUDIO_DRIVER=dummy")
+    add_executable(twoine_printing_tests os2libs/test_printing.c)
+    twoine_application_target(twoine_printing_tests)
+    target_link_libraries(twoine_printing_tests PRIVATE pmgpi pmwin pmshapi pmspl 2ine)
+    add_test(NAME printer_output COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/printing.py" --build "${PROJECT_BINARY_DIR}"
+        --backend "$<IF:$<BOOL:${TWOINE_PORTABLE_LOADER}>,unicorn,native>")
+    set_tests_properties(printer_output PROPERTIES TIMEOUT 60
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
     add_executable(twoine_dialog_tests os2libs/test_dialogs.c)
     twoine_application_target(twoine_dialog_tests)
     target_link_libraries(twoine_dialog_tests PRIVATE pmwin 2ine)
@@ -206,6 +239,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/critical_sections.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(critical_section_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME titlebar_subclass_apis COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/titlebar.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(titlebar_subclass_apis PROPERTIES TIMEOUT 20)
     add_test(NAME open32_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
@@ -359,9 +396,9 @@ endif()
 if(TARGET pmwinx)
     add_test(NAME image_install COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/image_install.py" --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/image-install-tests")
     set_tests_properties(image_install PROPERTIES TIMEOUT 30 ENVIRONMENT "TWOINE_BALL_LIBRARY=$<TARGET_FILE:twoine_ball>")
-    add_test(NAME balls COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/balls.py"
+    add_test(NAME ball COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
-    set_tests_properties(balls PROPERTIES TIMEOUT 60)
+    set_tests_properties(ball PROPERTIES TIMEOUT 60)
 endif()
 if(TARGET quecalls)
     add_test(NAME installer_apis COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/install_apis.py"
@@ -400,4 +437,64 @@ if(TARGET lx_loader)
     add_test(NAME loader_startup COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/loader_startup.py"
         --build "${PROJECT_BINARY_DIR}")
     set_tests_properties(loader_startup PROPERTIES TIMEOUT 10)
+endif()
+
+if(TARGET pmmerge AND TARGET pmgpi)
+    add_executable(twoine_help_api_tests os2libs/test_help_apis.c)
+    twoine_application_target(twoine_help_api_tests)
+    target_link_libraries(twoine_help_api_tests PRIVATE pmwin pmgpi pmmerge 2ine)
+    add_test(NAME help_prerequisite_apis COMMAND twoine_help_api_tests)
+    set_tests_properties(help_prerequisite_apis PROPERTIES TIMEOUT 20
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+endif()
+
+if(TARGET mdm AND TWOINE_VIDEO)
+    add_executable(twoine_video_tests os2libs/test_video.c)
+    twoine_application_target(twoine_video_tests)
+    target_link_libraries(twoine_video_tests PRIVATE mdm pmwin 2ine)
+    add_test(NAME digital_video COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/video.py"
+        --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/video-tests"
+        --backend "${_twoine_legacy_backend}")
+    set_tests_properties(digital_video PROPERTIES TIMEOUT 40)
+    add_test(NAME digital_video_audio COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/video.py"
+        --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/video-audio-tests"
+        --backend "${_twoine_legacy_backend}" --audio-driver disk)
+    set_tests_properties(digital_video_audio PROPERTIES TIMEOUT 40)
+endif()
+
+if(TARGET lx_loader AND TARGET twoine_ball_cli)
+    add_test(NAME runtime_features COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/runtime_features.py"
+        --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/runtime-feature-tests"
+        --backend "${_twoine_legacy_backend}")
+    set_tests_properties(runtime_features PROPERTIES TIMEOUT 40)
+    add_test(NAME ball_relocation COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/ball_relocation.py"
+        --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/ball-relocation-tests"
+        --backend "${_twoine_legacy_backend}")
+    set_tests_properties(ball_relocation PROPERTIES TIMEOUT 40)
+    if(APPLE)
+        add_test(NAME macos_native_cache COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/macos_native_cache.py"
+            --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/macos-native-cache-tests")
+        set_tests_properties(macos_native_cache PROPERTIES TIMEOUT 60)
+    endif()
+endif()
+
+if(TARGET pmgpi AND TARGET pmwin)
+    add_executable(twoine_bitmap_bits_tests os2libs/test_bitmap_bits.c)
+    twoine_application_target(twoine_bitmap_bits_tests)
+    target_link_libraries(twoine_bitmap_bits_tests PRIVATE pmgpi pmwin 2ine)
+    add_test(NAME bitmap_bits COMMAND twoine_bitmap_bits_tests)
+    set_tests_properties(bitmap_bits PROPERTIES TIMEOUT 15
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_AUDIO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+endif()
+if(TARGET lx_loader AND TARGET pmgpi)
+    add_test(NAME bitmap_bits_guest COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/bitmap_bits.py"
+        --build "${PROJECT_BINARY_DIR}" --work "${PROJECT_BINARY_DIR}/bitmap-bits-tests"
+        --backend "${_twoine_legacy_backend}")
+    set_tests_properties(bitmap_bits_guest PROPERTIES TIMEOUT 30)
 endif()

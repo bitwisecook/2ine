@@ -80,6 +80,10 @@ BOOL WinInvalidateRect(HWND handle, PRECTL rectangle, BOOL children)
     RECTL bounds = {0, 0, window->w, window->h}, damaged;
     if (!WinIntersectRect(0, &damaged, &bounds, rectangle ? rectangle : &bounds))
         return TRUE;
+    BOOL expanded = WinIsRectEmpty(0, &window->invalid) || damaged.xLeft < window->invalid.xLeft ||
+                    damaged.yBottom < window->invalid.yBottom ||
+                    damaged.xRight > window->invalid.xRight || damaged.yTop > window->invalid.yTop;
+    BOOL was_pending = window->paint_pending;
     WinUnionRect(0, &window->invalid, &window->invalid, &damaged);
     if (windowAcceptsUpdates(window))
     {
@@ -87,10 +91,25 @@ BOOL WinInvalidateRect(HWND handle, PRECTL rectangle, BOOL children)
             window->paint_offered = FALSE;
         window->paint_pending = TRUE;
     }
+    /* Lightweight siblings share one retained canvas. A repaint that is not
+       sibling-clipped can overwrite an overlapping upper sibling, including
+       a transparent frame. Schedule its affected pixels for later restoration. */
+    if ((expanded || !was_pending) && window->parent && window->parent != &desktop_window &&
+        windowAcceptsUpdates(window) && !((window->style | window->class_style) & WS_CLIPSIBLINGS))
+        for (Window *above = window->parent->children; above && above != window;
+             above = above->sibling)
+        {
+            RECTL local = window->invalid;
+            WinOffsetRect(0, &local, window->x - above->x, window->y - above->y);
+            WinInvalidateRect(above->hwnd, &local, TRUE);
+        }
     if (children)
         for (Window *child = window->children; child; child = child->sibling)
         {
-            RECTL local = damaged;
+            /* The update area is conservatively stored as a bounding box.
+               Propagate that same area: combining disjoint damage can make
+               the parent repaint a previously clean gap over a child. */
+            RECTL local = window->invalid;
             WinOffsetRect(0, &local, -child->x, -child->y);
             WinInvalidateRect(child->hwnd, &local, TRUE);
         }
@@ -131,7 +150,7 @@ BOOL lx_pm_validate_rect(HWND handle, const RECTL *rectangle, BOOL internal_only
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     if (!window)
         return FALSE;
-    const RECTL *old = &window->invalid;
+    RECTL *old = &window->invalid;
     if (internal_only)
     {
         if (WinIsRectEmpty(0, old))

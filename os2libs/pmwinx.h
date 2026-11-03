@@ -325,6 +325,14 @@ extern "C"
         OS2APIINFO(ord = 566, name = REMOVEPROP);
     OS2EXPORT ULONG OS2API CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
         OS2APIINFO(ord = 78, name = CREATEIC);
+    OS2EXPORT ULONG OS2API CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
+        OS2APIINFO(ord = 64, name = CREATEDC);
+    OS2EXPORT BOOL OS2API PrintDlg(PVOID data) OS2APIINFO(ord = 530, name = PRINTDLG);
+    OS2EXPORT LONG OS2API StartDoc(ULONG dc, PVOID info) OS2APIINFO(ord = 674, name = STARTDOC);
+    OS2EXPORT LONG OS2API StartPage(ULONG dc) OS2APIINFO(ord = 675, name = STARTPAGE);
+    OS2EXPORT LONG OS2API EndPage(ULONG dc) OS2APIINFO(ord = 172, name = ENDPAGE);
+    OS2EXPORT LONG OS2API EndDoc(ULONG dc) OS2APIINFO(ord = 171, name = ENDDOC);
+    OS2EXPORT LONG OS2API AbortDoc(ULONG dc) OS2APIINFO(ord = 1, name = ABORTDOC);
     OS2EXPORT ULONG OS2API CreateRectRgn(LONG left, LONG top, LONG right, LONG bottom)
         OS2APIINFO(ord = 93, name = CREATERECTRGN);
     OS2EXPORT BOOL OS2API SetRectRgn(ULONG region, LONG left, LONG top, LONG right, LONG bottom)

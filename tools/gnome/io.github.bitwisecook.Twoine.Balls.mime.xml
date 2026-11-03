@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
-  <mime-type type="application/x-2ine-ball">
-    <comment>Ball of 2ine</comment>
-    <glob pattern="*.2ineball"/>
-    <icon name="io.github.bitwisecook.Twoine.Balls"/>
-  </mime-type>
-</mime-info>

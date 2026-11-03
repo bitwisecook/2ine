@@ -318,4 +318,13 @@ static const char tb_project_sources[] =
 "\",\"authors\":[\"LLVM contributors\"],\"homepage\":\"https://github.com/llvm/llvm-project\",\"source\":\"ht"
 "tps://github.com/llvm/llvm-project/tree/llvmorg-21.1.8\",\"download\":\"https://github.com/llvm/llvm"
 "-project/archive/refs/tags/llvmorg-21.1.8.tar.gz\",\"role\":\"development-time validation; not bundl"
-"ed\",\"versionPolicy\":\"host\"}]}";
+"ed\",\"versionPolicy\":\"host\"},{\"id\":\"ffmpeg\",\"name\":\"FFmpeg\",\"version\":\"9.0.2\",\"license\":\"LGPL-2.1"
+"-or-later in the pinned source profile; actual system-provider license is recorded in ffmpeg-bui"
+"ld.json\",\"authors\":[\"Fabrice Bellard\",\"FFmpeg developers and contributors\"],\"homepage\":\"https://"
+"ffmpeg.org/\",\"source\":\"https://github.com/FFmpeg/FFmpeg/tree/n9.0.2\",\"download\":\"https://ffmpeg."
+"org/releases/ffmpeg-9.0.2.tar.xz\",\"role\":\"digital-video and synchronized audio decoding; pixel/s"
+"ample conversion\",\"versionPolicy\":\"pinned\",\"sourcePackage\":null},{\"id\":\"hwzip\",\"name\":\"HWZIP leg"
+"acy ZIP codecs\",\"version\":\"2.4 (2024-09-01)\",\"license\":\"Unlicense / public domain\",\"authors\":[\"H"
+"ans Wennborg\"],\"homepage\":\"https://www.hanshq.net/zip.html\",\"source\":\"https://www.hanshq.net/fil"
+"es/hwzip/hwzip-2.4.zip\",\"download\":\"https://www.hanshq.net/files/hwzip/hwzip-2.4.zip\",\"role\":\"ru"
+"ntime\",\"versionPolicy\":\"pinned\",\"sourcePackage\":null}]}";

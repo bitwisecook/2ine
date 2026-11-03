@@ -9,12 +9,14 @@
 #ifndef _INCL_PMMERGE_H_
 #define _INCL_PMMERGE_H_
 
-#include "os2types.h"
+#include "pmwin.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
+
+    OS2EXPORT ULONG OS2API WinQueryCpType(HMQ queue) OS2APIINFO(5480);
 
 #ifdef __cplusplus
 }

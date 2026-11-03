@@ -81,6 +81,8 @@ LX_PRIVATE LxModule *loadModuleByModuleNameInternal(const char *modname,
                                                     const int dependency_tree_depth);
 LX_PRIVATE LxModule *loadModuleByModuleName(const char *modname);
 LX_PRIVATE LxModule *loadModuleByPathOrModuleName(const char *modname);
+LX_PRIVATE LxModule *loadModuleWithError(const char *modname, uint32 *error, char *module,
+                                         size_t capacity);
 LX_PRIVATE int ensureRexxService(void);
 LX_PRIVATE int runRexxService(void);
 LX_PRIVATE int describeModuleAddress(const void *ptr, char *buf, const size_t buflen);

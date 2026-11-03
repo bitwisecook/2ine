@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/video_frames.h"
 #include "os2libs/pmwin/graphics.h"
 static void cleanupThreadPM(void);
 /* OS/2 deduces the anchor from the calling thread; HAB arguments are advisory. */
@@ -134,6 +135,8 @@ static void cleanupThreadPM(void)
         lx_execution_unmap(GLoaderState.execution, anchor->menu_bridge);
     if (anchor->control_bridge)
         lx_execution_unmap(GLoaderState.execution, anchor->control_bridge);
+    if (anchor->frame_control_bridge)
+        lx_execution_unmap(GLoaderState.execution, anchor->frame_control_bridge);
 
     WindowClass *winclassnext = NULL;
     for (WindowClass *i = anchor->registered_classes; i; i = winclassnext)
@@ -155,6 +158,7 @@ static void cleanupThreadPM(void)
         anchor->timers = next;
     }
     lx_pm_dive_cleanup(anchor);
+    lx_pm_video_cleanup(anchor);
     free(anchor);
     lxHostThreadState()->anchor_block = NULL;
 

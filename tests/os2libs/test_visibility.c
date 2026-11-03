@@ -86,7 +86,8 @@ static MRESULT OS2API page_procedure(HWND window, ULONG message, MPARAM first, M
         RECTL rect;
         HPS ps = WinBeginPaint(window, 0, &rect);
         CHECK(ps);
-        CHECK(WinFillRect(ps, &rect, WinQueryWindowUShort(window, -1) == 1 ? CLR_RED : CLR_BLUE));
+        USHORT id = WinQueryWindowUShort(window, -1);
+        CHECK(WinFillRect(ps, &rect, id == 1 ? CLR_RED : id == 3 ? CLR_GREEN : CLR_BLUE));
         CHECK(WinEndPaint(ps));
         return 0;
     }
@@ -104,6 +105,26 @@ static void page_exposure(HAB hab)
     HPS ps = WinGetPS(parent);
     uint32_t pixel;
     CHECK(ps && lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    HWND overlay = WinCreateWindow(parent, (PSZ)WC_STATIC, "", WS_VISIBLE | 8, 5, 5, 20, 20, parent,
+                                   HWND_TOP, 4, NULL, NULL);
+    CHECK(overlay);
+    notifications(hab, parent, WM_PAINT);
+    uint32_t framed[80 * 60], repainted[80 * 60];
+    CHECK(lx_pm_raster_read(ps, 0, 0, 80, 60, framed));
+    CHECK(WinInvalidateRect(page, NULL, FALSE));
+    notifications(hab, parent, WM_PAINT);
+    CHECK(lx_pm_raster_read(ps, 0, 0, 80, 60, repainted));
+    CHECK(!memcmp(framed, repainted, sizeof framed));
+    CHECK(WinDestroyWindow(overlay));
+    notifications(hab, parent, WM_PAINT);
+    /* Two disjoint parent rectangles produce a bounding update box spanning
+       a clean child. The child's corresponding pixels must also be repainted,
+       because the parent's conservative bounding fill covers that gap. */
+    RECTL first_gap = {0, 0, 4, 4}, second_gap = {30, 30, 40, 40};
+    CHECK(WinInvalidateRect(parent, &first_gap, TRUE));
+    CHECK(WinInvalidateRect(parent, &second_gap, TRUE));
+    notifications(hab, parent, WM_PAINT);
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
     /* Lotus explicitly sends WM_PAINT between updates. With no damage this
        must not clear the dialog and erase unchanged labels or timer text. */
     WinSendMsg(parent, WM_PAINT, 0, 0);
@@ -151,6 +172,31 @@ static void page_exposure(HAB hab)
     CHECK(WinShowWindow(page, TRUE));
     notifications(hab, page, WM_PAINT);
     CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    /* Word Pro switches Welcome pages with the ancestor's WS_VISIBLE style
+       temporarily cleared. Newly shown controls retain damage while hidden;
+       restoring QWL_STYLE must schedule that existing damage before a host
+       activation/exposure arrives. */
+    HWND second = WinCreateWindow(parent, "PageExposure", "Second", 0, 5, 5, 20, 20, parent,
+                                  HWND_TOP, 3, NULL, NULL);
+    CHECK(second);
+    ULONG style = WinQueryWindowULong(parent, -2);
+    for (unsigned pass = 0; pass < 2; pass++)
+    {
+        CHECK(WinSetWindowULong(parent, -2, style & ~WS_VISIBLE));
+        CHECK(WinShowWindow(pass ? second : page, FALSE));
+        CHECK(WinShowWindow(pass ? page : second, TRUE));
+        CHECK(WinSetWindowULong(parent, -2, style));
+        notifications(hab, parent, WM_PAINT);
+        CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == (pass ? 0xffu : 0xff00u));
+        uint32_t before[80 * 60], after[80 * 60];
+        CHECK(lx_pm_raster_read(ps, 0, 0, 80, 60, before));
+        LxHostEvent expose = {.type = LX_HOST_EVENT_EXPOSED, .window_data = root};
+        CHECK(processHostEvent(anchor, &expose));
+        notifications(hab, parent, WM_PAINT);
+        CHECK(lx_pm_raster_read(ps, 0, 0, 80, 60, after));
+        CHECK(!memcmp(before, after, sizeof before));
+    }
+    CHECK(WinDestroyWindow(second));
     CHECK(WinSetWindowPos(page, HWND_TOP, 40, 5, 20, 20, SWP_MOVE));
     notifications(hab, parent, WM_PAINT);
     CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff0000);

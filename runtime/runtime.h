@@ -43,6 +43,7 @@ typedef struct LxLoaderState
     int current_disk;      // 1==A:\\, 2==B:\\, etc.
     uint32 diskmap;        // 1<<0==drive A mounted, 1<<1==drive B mounted, etc.
     float beep_volume;
+    unsigned display_dpi;
     uint16 main_tib_selector;
     uint32 mainstacksize;
     char *libpath;
@@ -79,6 +80,8 @@ typedef struct LxLoaderState
     void (*lib2ine_shutdown)(void);
     uint32 (*beep)(uint32 frequency, uint32 duration);
     int (*registerStereoAudioGenerator)(LxAudioGeneratorFn fn, void *data, const int singleton);
+    LxModule *(*loadModuleWithError)(const char *modname, uint32 *error, char *module,
+                                     size_t capacity);
 } LxLoaderState;
 
 typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);

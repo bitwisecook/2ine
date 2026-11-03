@@ -12,7 +12,7 @@ the main loop. No Python subprocess or shell mediates application launches.
 ```sh
 cmake -S ball -B build-ball-engine -G Ninja
 cmake --build build-ball-engine
-python3 tools/gnome_balls.py --build build-portable
+python3 tools/gnome_ball.py --build build-portable
 ```
 
 The full runtime must be built separately as described in the main README.
@@ -24,11 +24,11 @@ checkout. Distribution packages use a separate relocatable launcher.
 
 Create a ball with Ctrl+N or open a directory with Ctrl+O or a file-manager
 drop. New directories have the `.2ineball` suffix. Existing directories with
-`ball.json` also open. The sidebar remembers external balls and the last
+`ball.json` also open. The sidebar remembers each external ball and the last
 selection. A narrow window becomes a navigation view with a Back button.
 Drives is the initial workspace. The five section buttons show labels where space allows and icons with
-native tooltips at smaller sizes. Alt+1 through Alt+5 select Drives,
-Applications, Settings, CONFIG.SYS and Activity.
+native tooltips at smaller sizes. Alt+1 through Alt+4 select Drives,
+Applications, Settings and Activity.
 
 Install Software (Ctrl+I), Run (Ctrl+Shift+R) and saved applications all use
 structured argument arrays. Backslashes stay literal; quotes group spaces;
@@ -63,8 +63,8 @@ Activity shows the actual process exit or signal, last installer receipt and
 the last 64 KiB of output; complete logs remain in `logs/gnome-*.log`. An
 installer exit does not establish that every installed application works.
 Profiles, registry and shell objects persist in the common engine's formats;
-binary state has no editor in this frontend. The manager does not provide an
-interactive stdin terminal.
+Settings provides binary-safe OS/2 file editors and a Registry key tree. The manager
+does not provide an interactive stdin terminal.
 
 ## Drives and portable transfers
 
@@ -109,8 +109,8 @@ The package includes third-party license notices and runtime input hashes.
 python3 tools/build_gnome_packages.py --build build-portable --output build-gnome/packages
 ```
 
-This produces `2ine-balls_0.1_amd64.deb` and
-`2ine-balls-0.1-1.x86_64.rpm` on x86-64. Choose `--format deb` or
+This produces `2ine-ball_0.1_amd64.deb` and
+`2ine-ball-0.1-1.x86_64.rpm` on x86-64. Choose `--format deb` or
 `--format rpm` for one format. Builders require `patchelf`, `binutils`, `ldd`
 and the selected format's `dpkg-deb` or `rpmbuild`. Use a fresh output directory;
 an existing staged 2ine installation is rejected. Other parts may populate the
@@ -119,10 +119,22 @@ architecture and distribution baseline. Debian's libc floor is derived from
 the selected ELF symbols; RPM retains system ABI requirements and excludes
 bundled modules from public providers and external requirements.
 
-Install using `sudo apt install ./2ine-balls_*.deb` or
-`sudo dnf install ./2ine-balls-*.rpm`. The installed launcher locates its shared
+Install using `sudo apt install ./2ine-ball_*.deb` or
+`sudo dnf install ./2ine-ball-*.rpm`. The installed launcher locates its shared
 engine and bundled runtime relative to its installation prefix. A ball can
 still select an external build without replacing the packaged engine.
+
+The icon theme includes a standalone twine-ball MIME icon. After opening or
+creating a ball, the frontend optionally assigns that themed icon name in
+the local GVFS metadata database, preserving any existing custom icon. No
+`.directory` file, image path or host icon resource is stored in the ball.
+Headless/remote sessions without GVFS metadata keep the ordinary folder icon.
+The source installer refreshes available MIME, desktop and icon caches.
+
+Missing or foreign saved runtime overrides fall back to the receiving runtime.
+Its `runtime-capabilities.json` determines the effective backend: an unavailable
+saved native preference can use declared Unicorn support. Saved choices and
+Undo records remain unchanged, and unavailable explicit requests fail clearly.
 
 Ubuntu's cross-distribution format is **Snap**. The strict `core26` recipe in
 [`../snap/snapcraft.yaml`](../snap/snapcraft.yaml) uses the official GNOME
@@ -131,8 +143,8 @@ With Snapcraft 9.2+, snapd and an initialized LXD builder:
 
 ```sh
 snapcraft pack --use-lxd --platform amd64 --output build-gnome-snap
-sudo snap install --dangerous build-gnome-snap/2ine-balls_*.snap
-sudo snap connect 2ine-balls:removable-media
+sudo snap install --dangerous build-gnome-snap/2ine-ball_*.snap
+sudo snap connect 2ine-ball:removable-media
 ```
 
 Removable-media access is optional and must be connected to map media outside
@@ -165,9 +177,9 @@ python3 -m unittest discover -s tests/tools
 python3 tools/lxapigen.py --check
 desktop-file-validate tools/gnome/*.desktop
 appstreamcli validate --no-net tools/gnome/*.metainfo.xml
-xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_balls.py --build build-portable
+xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_ball.py --build build-portable
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_features.py --build build-portable
-dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-balls_0.1_amd64.deb
+dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-ball_0.1_amd64.deb
 ```
 
 The GTK integration executes a generated LX installer and saved launcher using
@@ -197,6 +209,45 @@ applications and media are never included in the distributable manager packages.
 
 ## Sound banks and source credits
 
-Settings provides [sound-bank installation and 16-channel MIDI mapping](sound-banks.md).
+Settings → Graphics & Sound provides [sound-bank installation and 16-channel MIDI mapping](sound-banks.md).
 About prominently credits original author Ryan C. Gordon and lists the
 [project versions, authors, sources and downloads](project-sources.md).
+
+Settings groups General, Graphics & Sound, Environment, Printing, Config Files and Registry
+in an inner tab strip. General contains runtime and diagnostic preferences.
+Environment shows CONFIG.SYS values, ball overrides and the backend-resolved
+effective guest environment together; edit an override or reset it to inherit.
+Config Files discovers CONFIG.SYS, User Profile (OS2.INI), System Profile
+(OS2SYS.INI) and other INI files. Text files use revision-checked edits; binary
+profiles edit individual application/key records; unsupported binaries stay
+read-only. Registry has a key tree and typed values, preserving unknown types.
+Profile and registry dialogs
+edit individual values as exact hexadecimal, Latin-1 text, or
+little-endian DWORDs and check the file revision before saving. Stop the guest
+before editing binary profiles or the registry. CONFIG.SYS polls external changes
+while the owned guest runs, retaining unsaved drafts and showing conflicts.
+Display DPI is per ball and applies next launch; presets are 96/120/144/192, with
+custom whole-number values 72–384 accepted by `system.display_dpi`.
+Title Bars selects Native, OS/2 or Both for top-level standard frames. Both is
+the default; document windows retain their OS/2 controls in every mode. This
+per-ball preference also applies next launch.
+Graphics & Sound also selects OpenGL (receiving-runtime default, Mesa, Original
+OS/2 or Off) and toggles video, PCM audio, MIDI synthesis and DIVE. Reset each
+override to follow the receiving runtime. Capability and missing-support reasons
+appear beside the saved choices; unavailable options remain selectable for a
+future host, and apply on the next launch. Original OS/2 OpenGL requires the
+user's renderer DLLs and remains unqualified. Installer audits retain the build
+used for that launch even if the selected runtime later changes.
+Beep volume, sound-bank installation and MIDI channel mapping are on this same
+tab. Printing chooses PDF or PCL through the OS/2 User Profile with revision
+checks. A stored unknown queue remains visible and unchanged until explicitly
+replaced; resetting the preference inherits the System Profile or virtual PDF
+default. Merely opening Printing does not write a default.
+
+The shared backend and native macOS controls are tested. The GTK configuration
+code passes Python syntax and Ruff checks; its new controls still need Linux
+runtime, keyboard and visual acceptance with:
+
+```sh
+xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_configuration.py --build build-portable
+```

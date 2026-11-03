@@ -47,7 +47,7 @@ jobs:
         run: ctest --test-dir build-runtime -C Release --output-on-failure
       - name: Test native GNOME ball manager
         if: runner.os == 'Linux' && matrix.profile == 'application'
-        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_balls.py --build build-runtime
+        run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_ball.py --build build-runtime
       - name: Test native GNOME drive and application editors
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_features.py --build build-runtime

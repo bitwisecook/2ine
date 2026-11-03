@@ -53,7 +53,7 @@ filesystem adapters and a language-neutral C ABI. macOS binds it statically.
 The CLI and GTK adapters call the same C library; their Python interpreters
 remain frontend dependencies on Linux and build/test tooling, never Mac app
 runtime dependencies. No ball persistence or launch rules are duplicated in
-Swift. New balls use `ball.json` and `.2ineball` with no compatibility layer.
+Swift. A new ball uses `ball.json` and `.2ineball` with no compatibility layer.
 
 The supplied Mesa prefix is an input, not downloaded application media. OS/2
 and application binaries, private fonts and installation media are never bundled.
@@ -83,15 +83,22 @@ independent counters. Preserve the counter when migrating build infrastructure.
 
 ## Xcode and tests
 
-Open `macos/Xcode/TwoineBalls/TwoineBalls.xcodeproj` in Xcode 27. Its source
+Open `macos/Xcode/TwoineBall/TwoineBall.xcodeproj` in Xcode 27. Its source
 and test folders link to the Swift package's sources; there is one implementation.
 Build `make macos-app-dev` first. The development Info.plist locates its bundled
 resources at the standard output path, with no Python runtime dependency.
 The release bundle has no development resource path.
 
+Release bundles include `TwoineBall.icns`, rendered from the existing twine
+vector separately from the application icon. The `.2ineball` document and
+exported package UTI both reference it; an individual ball carries no Finder icon
+resource files. Invalid saved host-runtime paths fall back read-only to this
+app's bundled runtime, and saved native preferences use its declared Unicorn
+backend without changing the ball's settings.
+
 ```sh
 make macos-test
-python3 tests/integration/macos_balls.py \
+python3 tests/integration/macos_ball.py \
   --app 'build-macos/2ine.app' --work build-macos/relocation-check
 TWOINE_KOSMICKRISP_ICD="$PWD/build-macos/2ine.app/Contents/Resources/Runtime/vulkan/icd.d/kosmickrisp.json" \
   python3 tests/integration/opengl.py \
@@ -99,7 +106,7 @@ TWOINE_KOSMICKRISP_ICD="$PWD/build-macos/2ine.app/Contents/Resources/Runtime/vul
     --backend unicorn --work build-macos/bundle-gl-tests
 ```
 
-Run the `TwoineBalls` shared scheme's tests in Xcode for the native UI smoke test. It opens
+Run the `TwoineBall` shared scheme's tests in Xcode for the native UI smoke test. It opens
 a real ball, navigates its settings, edits/saves CONFIG.SYS, uses launch
 shortcuts, verifies a missing-executable error and recovery, and creates a new
 ball through the native save panel. Test captures remain in the `.xcresult` bundle. Swift package
@@ -113,8 +120,8 @@ installer edits, Latin-1/CRLF preservation and saved working directories.
 
 Create a ball with Command-N, or open one with Command-O, Open Recent, a Finder
 drop, or its `.2ineball` Finder association. A ball is a directory package
-containing the version-1 `ball.json` and private C: drive. Existing
-plain-directory balls still open. New balls use the bundled runtime unless
+containing the version-1 `ball.json` and private C: drive. An existing
+plain-directory ball still opens. A new ball uses the bundled runtime unless
 an external build was selected. `runtime.build` records an optional external
 build path; older clients retain this additive field. CLI launches can select
 the same build with `--build`. The native C helper accepts JSON as described in
@@ -130,7 +137,7 @@ and working-directory pickers. Unmap and Undo/Redo retain device metadata.
 Use original installation media; mounting it does not boot OS/2 or establish
 that every installer or installed application is supported.
 
-New macOS balls reserve A: as an ejected floppy and D: as an ejected CD drive.
+A new macOS ball reserves A: as an ejected floppy and D: as an ejected CD drive.
 The title-bar CD, floppy and disk menus show each drive letter and source
 filename, attach/replace media, eject without removing the letter, and add devices.
 The Ball menu provides the same controls. Create Floppy Image offers 360 KB,
@@ -191,8 +198,8 @@ confirmation because guest work may be lost. Force Stop is available after Stop
 if the guest ignores termination. Both paths wait for actual process exit and
 retain its log and exit status before allowing another operation or quitting.
 
-Use View shortcuts Command-1 through Command-5 for Drives, Applications, Settings,
-CONFIG.SYS and Activity. The Ball menu also exposes selection-aware application
+Use View shortcuts Command-1 through Command-4 for Drives, Applications, Settings
+and Activity. The Ball menu also exposes selection-aware application
 launch/edit/remove and drive unmap/default-folder commands. File → Save CONFIG.SYS
 uses Command-S. Finder commands reveal packages/files without opening them;
 Open Full Log opens the log in its associated application. The sidebar, native table columns, window geometry and
@@ -206,8 +213,8 @@ to detect installer/CLI changes, preserving original Latin-1 bytes and line endi
 Closing with unsaved drafts offers Save, Cancel and Don't Save. A conflict stays
 editable until resolved. Only SET and LIBPATH affect execution, as in the CLI.
 Profiles, registry, shell objects, IPC, immutable runtime snapshots and installer
-receipts retain the backend's locations and formats. Binary profiles, registry
-records and shell objects have no editor in this app.
+receipts retain the backend's locations and formats. Settings provides binary-safe file and registry value editors. Workplace
+Shell objects remain application-managed.
 
 This is a library/utility app with a manager window and one owned operation, not
 a document editor for OS/2 applications. The manager presents GUI programs and output logs; it does not provide an interactive stdin terminal. Text copy is available for multiple
@@ -261,7 +268,7 @@ Linux/Windows jobs have not been run from this checkout.
 An installed SmartSuite tree was available, but original installer media,
 CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG were not found. The original all-components
 macOS installation and Word Pro font/save/reopen qualification remain unverified.
-Use the separately supplied media and procedure in [balls.md](balls.md).
+Use the separately supplied media and procedure in [ball.md](ball.md).
 
 ## ZIP archives
 
@@ -269,7 +276,7 @@ The toolbar and File menu expose **Import Ball from ZIP** and **Export Ball as
 ZIP**. Export's native save panel has an **Include disk images** checkbox,
 initially off. Import chooses a ZIP and a new `.2ineball` location, then selects
 the imported ball. Dropping a ZIP onto the manager opens the same import flow.
-Existing balls are never replaced. Export saves a pending CONFIG.SYS draft
+An existing ball is never replaced. Export saves a pending CONFIG.SYS draft
 using its normal conflict check before creating the ZIP. Archive work runs on
 the backend actor, with guest launches and media changes blocked until complete.
 
@@ -288,6 +295,27 @@ details remain in the export record.
 
 ## Sound banks and source credits
 
-Settings provides [sound-bank installation and 16-channel MIDI mapping](sound-banks.md).
+Settings → Graphics & Sound provides [sound-bank installation and 16-channel MIDI mapping](sound-banks.md), DPI, title bars, OpenGL, DIVE, video and audio controls.
 About prominently credits original author Ryan C. Gordon and lists the
 [project versions, authors, sources and downloads](project-sources.md).
+
+Settings (Cmd-3) groups General, Graphics & Sound, Environment, Printing,
+Config Files and Registry. Config Files lists CONFIG.SYS, OS2.INI, OS2SYS.INI
+and discovered INI files by filename. Environment shows effective values and
+their source, including CONFIG.SYS and ball overrides. While a guest runs, CONFIG.SYS follows
+installer changes automatically. An unsaved draft is retained and a conflict is
+shown if the file changes. Saving preserves Latin-1/CRLF and checks its original
+contents.
+
+INI profile editors work on application/key records. Registry uses a key tree
+and typed values, including strings, multi-strings, DWORD and QWORD; unfamiliar
+or malformed records retain exact hexadecimal bytes. Stop the guest before editing these
+cached databases. Saving checks the file revision and preserves unedited values.
+Native OS/2 INI files are read and saved in the same 2ine profile format used by
+the runtime. Registry values retain their numeric types.
+
+Display DPI is stored per ball and applies at next launch. Choose 96, 120, 144 or
+192 DPI under Settings → Graphics & Sound. `system.display_dpi` also accepts whole
+numbers 72–384 through Settings. Fonts, dialog units, physical drawing units and
+control metrics share the setting; printer DPI stays at 300. Applications with
+custom pixel layouts must still honor the OS/2 DPI APIs.

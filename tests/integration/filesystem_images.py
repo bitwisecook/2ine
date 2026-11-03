@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools import balls
+from tools import ball as ball_api
 
 
 def digest(path):
@@ -35,7 +35,7 @@ def main():
     ball = work / "Filesystems.2ineball"
 
     def request(action, **fields):
-        return balls.native_request({"action": action, "ball": str(ball), **fields})
+        return ball_api.native_request({"action": action, "ball": str(ball), **fields})
 
     def command(*arguments):
         return request("command", arguments=list(arguments))

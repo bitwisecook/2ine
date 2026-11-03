@@ -1,7 +1,7 @@
 #if canImport(BallCore)
 import BallCore
 #else
-@testable import TwoineBalls
+@testable import TwoineBall
 #endif
 import Testing
 

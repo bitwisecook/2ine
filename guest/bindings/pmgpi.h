@@ -449,6 +449,60 @@ static uint8 *bitmap_bridge_info(uint32 address, size_t *bytes, BOOL palette)
     *bytes = ((size_t)width * depth + 31) / 32 * 4 * height;
     return info;
 }
+static uint32 bridge32_GpiDrawBits(uint8 *a)
+{
+    LONG count = (LONG)gpi_word(a, 3);
+    POINTL points[4];
+    if ((count != 3 && count != 4) || !lx_execution_read(GLoaderState.execution, gpi_word(a, 4),
+                                                         points, (size_t)count * sizeof *points))
+        return 0;
+    size_t bytes;
+    uint8 *info = bitmap_bridge_info(gpi_word(a, 2), &bytes, TRUE);
+    LxGuestBorrow bits = {0};
+    uint32 result = 0;
+    if (info &&
+        lx_execution_borrow(GLoaderState.execution, gpi_word(a, 1), bytes, LX_GUEST_READ, &bits))
+        result = (uint32)GpiDrawBits(gpi_word(a, 0), bits.host, info, count, points,
+                                     (LONG)gpi_word(a, 5), gpi_word(a, 6));
+    lx_execution_release(&bits);
+    free(info);
+    return result;
+}
+static uint32 bridge32_GpiQueryBitmapBits(uint8 *a)
+{
+    LONG start = (LONG)gpi_word(a, 1), scans = (LONG)gpi_word(a, 2);
+    uint8 header[64];
+    if (start < 0 || scans < 0 ||
+        !lx_execution_read(GLoaderState.execution, gpi_word(a, 4), header, 4))
+        return (uint32)-1;
+    unsigned fixed = lx_guest_load_u32(header);
+    if ((fixed != 12 && fixed != 64) ||
+        !lx_execution_read(GLoaderState.execution, gpi_word(a, 4), header, fixed))
+        return (uint32)-1;
+    unsigned planes = lx_guest_load_u16(header + (fixed == 12 ? 8 : 12));
+    unsigned depth = lx_guest_load_u16(header + (fixed == 12 ? 10 : 14));
+    if (planes != 1 || (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
+        return (uint32)-1;
+    PresentationSpace *ps = lx_pm_font_space(gpi_word(a, 0));
+    PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
+    if (!bitmap || (ULONG)start > bitmap->height)
+        return (uint32)-1;
+    unsigned rows =
+        (ULONG)scans > bitmap->height - (ULONG)start ? bitmap->height - (ULONG)start : (ULONG)scans;
+    size_t size = fixed + (depth <= 8 ? (1u << depth) * (fixed == 12 ? 3 : 4) : 0);
+    size_t bytes = ((size_t)bitmap->width * depth + 31) / 32 * 4 * rows;
+    LxGuestBorrow info = {0}, bits = {0};
+    uint32 result = (uint32)-1;
+    if (lx_execution_borrow(GLoaderState.execution, gpi_word(a, 4), size,
+                            LX_GUEST_READ | LX_GUEST_WRITE, &info) &&
+        (!bytes ||
+         lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3), bytes, LX_GUEST_WRITE, &bits)))
+        result = (uint32)GpiQueryBitmapBits(gpi_word(a, 0), start, scans, bits.host, info.host);
+    lx_execution_release(&bits);
+    lx_execution_release(&info);
+    return result;
+}
+
 static uint32 bridge32_GpiCreateBitmap(uint8 *a)
 {
     size_t bytes = 0, initial_bytes = 0;
@@ -721,10 +775,16 @@ static uint32 bridge32_GpiBox(uint8 *a)
 static uint32 bridge32_DevQueryHardcopyCaps(uint8 *a)
 {
     LONG count = (LONG)gpi_word(a, 2);
-    if (count < 0 || (count && !gpi_word(a, 3)))
+    if (count < 0 || count > 1)
         return (uint32)-1;
-    return (uint32)DevQueryHardcopyCaps(gpi_word(a, 0), (LONG)gpi_word(a, 1), count,
-                                        (PVOID)(uintptr_t)gpi_word(a, 3));
+    LxGuestBorrow output = {0};
+    uint32 result = (uint32)-1;
+    if (!count ||
+        lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3), 68, LX_GUEST_WRITE, &output))
+        result =
+            (uint32)DevQueryHardcopyCaps(gpi_word(a, 0), (LONG)gpi_word(a, 1), count, output.host);
+    lx_execution_release(&output);
+    return result;
 }
 
 static uint32 bridge32_GpiQueryColor(uint8 *a)
@@ -899,4 +959,143 @@ static uint32 bridge32_GpiQueryCharDirection(uint8 *a)
 static uint32 bridge32_GpiSetTextAlignment(uint8 *a)
 {
     return GpiSetTextAlignment(gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2));
+}
+
+static uint32 bridge32_DevEscape(uint8 *a)
+{
+    LONG input_count = (LONG)gpi_word(a, 2), output_count = 0;
+    if (input_count < 0 || input_count > 1048576)
+        return (uint32)-1;
+    LxGuestBorrow input = {0}, count = {0}, output = {0};
+    uint32 result = (uint32)-1;
+    if (input_count && !lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3),
+                                            (size_t)input_count, LX_GUEST_READ, &input))
+        goto done;
+    if (gpi_word(a, 4))
+    {
+        if (!lx_execution_borrow(GLoaderState.execution, gpi_word(a, 4), 4,
+                                 LX_GUEST_READ | LX_GUEST_WRITE, &count))
+            goto done;
+        output_count = (LONG)lx_guest_load_u32(count.host);
+        if (output_count < 0 || output_count > 1048576 ||
+            (output_count && !lx_execution_borrow(GLoaderState.execution, gpi_word(a, 5),
+                                                  (size_t)output_count, LX_GUEST_WRITE, &output)))
+            goto done;
+    }
+    result = (uint32)DevEscape(gpi_word(a, 0), (LONG)gpi_word(a, 1), input_count, input.host,
+                               count.host ? &output_count : NULL, output.host);
+    if (count.host)
+        lx_guest_store_u32(count.host, (ULONG)output_count);
+done:
+    lx_execution_release(&output);
+    lx_execution_release(&count);
+    lx_execution_release(&input);
+    return result;
+}
+static uint32 bridge32_DevPostDeviceModes(uint8 *a)
+{
+    char *strings[3] = {NULL, NULL, NULL};
+    LxGuestBorrow data = {0};
+    uint32 result = (uint32)-1;
+    for (unsigned i = 0; i < 3; i++)
+        if (gpi_word(a, i + 2) && !(strings[i] = lx_execution_copy_string(GLoaderState.execution,
+                                                                          gpi_word(a, i + 2), 256)))
+            goto done;
+    if (gpi_word(a, 1) && !lx_execution_borrow(GLoaderState.execution, gpi_word(a, 1), 40,
+                                               LX_GUEST_READ | LX_GUEST_WRITE, &data))
+        goto done;
+    result = (uint32)DevPostDeviceModes(gpi_word(a, 0), data.host, strings[0], strings[1],
+                                        strings[2], gpi_word(a, 5));
+done:
+    lx_execution_release(&data);
+    for (unsigned i = 0; i < 3; i++)
+        free(strings[i]);
+    return result;
+}
+
+static uint32 bridge32_GpiDeleteMetaFile(uint8 *a)
+{
+    return GpiDeleteMetaFile(gpi_word(a, 0));
+}
+static uint32 bridge32_GpiLoadMetaFile(uint8 *a)
+{
+    char *filename = lx_execution_copy_string(GLoaderState.execution, gpi_word(a, 1), 65536);
+    uint32 result = filename ? GpiLoadMetaFile(gpi_word(a, 0), filename) : 0;
+    free(filename);
+    return result;
+}
+static uint32 bridge32_GpiPlayMetaFile(uint8 *a)
+{
+    /* The unavailable metafile engine neither reads nor writes guest arrays. */
+    return (uint32)GpiPlayMetaFile(gpi_word(a, 0), gpi_word(a, 1), (LONG)gpi_word(a, 2), NULL, NULL,
+                                   (LONG)gpi_word(a, 5), NULL);
+}
+static uint32 bridge32_GpiSetMetaFileBits(uint8 *a)
+{
+    LONG length = (LONG)gpi_word(a, 2);
+    LxGuestBorrow input = {0};
+    uint32 result = 0;
+    if (length >= 0 && length <= 64 * 1024 * 1024 &&
+        (!length || lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3), (size_t)length,
+                                        LX_GUEST_READ, &input)))
+        result = GpiSetMetaFileBits(gpi_word(a, 0), (LONG)gpi_word(a, 1), length, input.host);
+    lx_execution_release(&input);
+    return result;
+}
+static uint32 bridge32_GpiQueryBoundaryData(uint8 *a)
+{
+    LxGuestBorrow output = {0};
+    uint32 result = 0;
+    if (lx_execution_borrow(GLoaderState.execution, gpi_word(a, 1), 16, LX_GUEST_WRITE, &output))
+    {
+        RECTL bounds;
+        result = GpiQueryBoundaryData(gpi_word(a, 0), &bounds);
+        if (result)
+            memcpy(output.host, &bounds, sizeof bounds);
+    }
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_GpiSetDrawControl(uint8 *a)
+{
+    return GpiSetDrawControl(gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2));
+}
+static uint32 bridge32_GpiSetDefaultViewMatrix(uint8 *a)
+{
+    uint8 matrix[36];
+    return (LONG)gpi_word(a, 1) == 9 &&
+           lx_execution_read(GLoaderState.execution, gpi_word(a, 2), matrix, sizeof matrix) &&
+           GpiSetDefaultViewMatrix(gpi_word(a, 0), 9, matrix, (LONG)gpi_word(a, 3));
+}
+static uint32 bridge32_GpiSetBitmapBits(uint8 *a)
+{
+    LONG scans = (LONG)gpi_word(a, 2), start = (LONG)gpi_word(a, 1);
+    size_t ignored;
+    uint8 *info = bitmap_bridge_info(gpi_word(a, 4), &ignored, TRUE);
+    if (!info || scans < 0 || scans > 16384 || start < 0)
+    {
+        free(info);
+        return (uint32)-1;
+    }
+    PresentationSpace *ps = lx_pm_font_space(gpi_word(a, 0));
+    PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
+    if (!bitmap || (ULONG)start > bitmap->height)
+    {
+        free(info);
+        return (uint32)-1;
+    }
+    unsigned rows =
+        (ULONG)scans > bitmap->height - (ULONG)start ? bitmap->height - (ULONG)start : (ULONG)scans;
+    ULONG fixed = lx_guest_load_u32(info);
+    ULONG width = fixed == 12 ? lx_guest_load_u16(info + 4) : lx_guest_load_u32(info + 4);
+    ULONG depth = lx_guest_load_u16(info + (fixed == 12 ? 10 : 14));
+    size_t bytes = ((size_t)width * depth + 31) / 32 * 4 * rows;
+    LxGuestBorrow input = {0};
+    uint32 result = (uint32)-1;
+    if (!bytes ||
+        lx_execution_borrow(GLoaderState.execution, gpi_word(a, 3), bytes, LX_GUEST_READ, &input))
+        result = (uint32)GpiSetBitmapBits(gpi_word(a, 0), start, scans, input.host, info);
+    lx_execution_release(&input);
+    free(info);
+    return result;
 }

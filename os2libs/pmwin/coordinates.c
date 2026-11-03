@@ -4,7 +4,7 @@
 #include "os2libs/pmwin/graphics.h"
 static void unit_scale(PresentationSpace *ps, LONG *pels, LONG *units)
 {
-    *pels = 96; /* Display DCs expose 96 logical pels per inch. */
+    *pels = (LONG)lx_pm_dc_dpi(ps->dc);
     switch (ps->page_units)
     {
         case 0x0c:

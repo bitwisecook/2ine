@@ -61,6 +61,44 @@ static void profile_names(void)
     for (unsigned i = 0; i < 26; i++)
         GLoaderState.disks[i] = saved[i];
 }
+static void national_defaults(void)
+{
+    char value[16];
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iCountry", -1) == 1);
+    CHECK(PrfQueryProfileInt(HINI_USERPROFILE, "PM_National", "iCountry", -1) == 1);
+    CHECK(PrfQueryProfileInt(HINI_SYSTEMPROFILE, "PM_National", "iCountry", -1) == 1);
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iDate", -1) == 0);
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iDigits", -1) == 2);
+    require_string(HINI_PROFILE, "PM_National", "sCurrency", "$");
+    require_string(HINI_PROFILE, "PM_National", "sDate", "-");
+    ULONG size = 0;
+    CHECK(PrfQueryProfileSize(HINI_PROFILE, "PM_National", "iCountry", &size) && size == 2);
+    size = sizeof value;
+    CHECK(PrfQueryProfileData(HINI_PROFILE, "PM_National", "iCountry", value, &size) && size == 2 &&
+          value[0] == '1' && value[1] == 0);
+    HINI private_profile = PrfOpenProfile(0, "national-private.ini");
+    CHECK(private_profile);
+    CHECK(PrfQueryProfileInt(private_profile, "PM_National", "iCountry", -77) == -77);
+    CHECK(PrfCloseProfile(private_profile));
+    HINI alias = PrfOpenProfile(0, getenv("TWOINE_USER_PROFILE"));
+    CHECK(alias && !PrfQueryProfileSize(alias, "PM_National", "iCountry", &size));
+    CHECK(PrfCloseProfile(alias));
+    CHECK(PrfWriteProfileString(HINI_SYSTEMPROFILE, "PM_National", "iCountry", "49"));
+    CHECK(PrfWriteProfileString(HINI_USERPROFILE, "PM_National", "iCountry", "44"));
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iCountry", -1) == 44);
+    CHECK(PrfQueryProfileInt(HINI_SYSTEMPROFILE, "PM_National", "iCountry", -1) == 49);
+    CHECK(PrfWriteProfileString(HINI_USERPROFILE, "PM_National", "iCountry", "0"));
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iCountry", -1) == 0);
+    CHECK(PrfWriteProfileString(HINI_USERPROFILE, "PM_National", "iCountry", ""));
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iCountry", -77) == -77);
+    CHECK(PrfWriteProfileString(HINI_USERPROFILE, "PM_National", "iCountry", NULL));
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iCountry", -1) == 49);
+    CHECK(PrfWriteProfileString(HINI_SYSTEMPROFILE, "PM_National", "iCountry", NULL));
+    CHECK(PrfQueryProfileInt(HINI_PROFILE, "PM_National", "iCountry", -1) == 1);
+    alias = PrfOpenProfile(0, getenv("TWOINE_USER_PROFILE"));
+    CHECK(alias && !PrfQueryProfileSize(alias, "PM_National", "iCountry", &size));
+    CHECK(PrfCloseProfile(alias));
+}
 static void *error_thread(void *unused)
 {
     (void)unused;
@@ -82,6 +120,7 @@ int main(int argc, char **argv)
     HAB anchor = WinInitialize(0);
     CHECK(anchor);
     GLoaderState.makeUnixPath = host_path;
+    national_defaults();
     int writing = !strcmp(argv[1], "write");
     ULONG desktop = WinQueryObject("<WP_DESKTOP>");
     CHECK(desktop && !WinDestroyObject(desktop));

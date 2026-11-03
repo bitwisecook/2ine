@@ -6,6 +6,29 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+#include "runtime/features.h"
+
+typedef struct ModuleFailure
+{
+    uint32 code;
+    char module[256];
+} ModuleFailure;
+static _Thread_local ModuleFailure LastModuleFailure;
+static _Thread_local ModuleFailure *ActiveModuleFailure;
+
+static void moduleLoadError(uint32 code, const char *name)
+{
+    ModuleFailure *failure = ActiveModuleFailure ? ActiveModuleFailure : &LastModuleFailure;
+    if (!failure->code)
+    {
+        failure->code = code;
+        snprintf(failure->module, sizeof failure->module, "%s", name);
+    }
+}
+static int moduleLoadFailed(void)
+{
+    return ActiveModuleFailure && ActiveModuleFailure->code;
+}
 
 /* EXEPACK2 overlap expands newly written bytes; memmove would preserve stale input. */
 
@@ -33,7 +56,7 @@ static LxModule *loadGuestLibraryPath(const char *paths, const char *name, int d
                 LxModule *module =
                     lx_host_path_exists(host) ? loadModuleByPathInternal(host, depth) : NULL;
                 free(host);
-                if (module)
+                if (module || moduleLoadFailed())
                     return module;
             }
         }
@@ -471,6 +494,17 @@ LxModule *loadModule(const char *fname, uint8 *exe, uint32 exelen, int dependenc
 
 LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_depth)
 {
+    const char *base = strrchr(fname, '/');
+    base = base ? base + 1 : fname;
+    if (((!strcasecmp(base, "OPENGL.DLL") || !strcasecmp(base, "PGL.DLL")) &&
+         lxRuntimeOpenGLProvider() != LX_OPENGL_ORIGINAL) ||
+        (!strcasecmp(base, "DIVE.DLL") && !lxRuntimeFeatureEnabled(LX_FEATURE_DIVE)))
+    {
+        fprintf(stderr, "2ine: original %s is excluded by this ball's Graphics & Media settings\n",
+                base);
+        moduleLoadError(126, base);
+        return NULL;
+    }
     char *os2path = makeOS2Path(fname);
     if (os2path)
     {
@@ -488,19 +522,32 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
     uint8 *module = lx_host_file_snapshot(fname, UINT32_MAX, &size, &error);
     if (!module)
     {
-        fprintf(stderr, "Cannot read module '%s' (host filesystem result %u)\n", fname,
-                (unsigned)error);
+        moduleLoadError(error == LX_HOST_FS_MISSING ? 2 : 5, fname);
+        if (GLoaderState.trace_native)
+            fprintf(stderr, "Cannot read module '%s' (host filesystem result %u)\n", fname,
+                    (unsigned)error);
         return NULL;
     }
     LxModule *result = loadModule(fname, module, (uint32)size, dependency_tree_depth);
     free(module);
+    if (!result)
+        moduleLoadError(11, fname);
     return result;
 }
 
 LxModule *loadModuleByPath(const char *fname)
 {
+    ModuleFailure failure = {0}, *previous = ActiveModuleFailure;
+    ActiveModuleFailure = &failure;
     LxModule *module = loadModuleByPathInternal(fname, 0);
-    return initializeModuleGraph(module) ? module : NULL;
+    if (!initializeModuleGraph(module))
+    {
+        moduleLoadError(11, fname);
+        module = NULL;
+    }
+    ActiveModuleFailure = previous;
+    LastModuleFailure = failure;
+    return module;
 }
 
 LxModule *loadNativeModule(const char *fname, const char *modname)
@@ -585,6 +632,15 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
         modname = canonical;
     }
 
+    const int gl_module = !strcasecmp(modname, "OPENGL") || !strcasecmp(modname, "PGL");
+    const int provider = lxRuntimeOpenGLProvider();
+    if ((gl_module && provider == LX_OPENGL_OFF) ||
+        (!strcasecmp(modname, "DIVE") && !lxRuntimeFeatureEnabled(LX_FEATURE_DIVE)))
+    {
+        fprintf(stderr, "2ine: %s is disabled in this ball's Graphics & Media settings\n", modname);
+        moduleLoadError(126, modname);
+        return NULL;
+    }
     for (LxModule *i = GLoaderState.loaded_modules; i != NULL; i = i->next)
     {
         if (!i->load_failed && (!GLoaderState.libpath_strict || i->nativelib) &&
@@ -600,10 +656,17 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
     snprintf(fname, sizeof(fname), "%s.dll", modname);
     locatePathCaseInsensitive(fname);
 
-    LxModule *retval =
-        loadGuestLibraryPath(GLoaderState.begin_libpath, modname, dependency_tree_depth);
+    LxModule *retval = NULL;
+    /* A selected provider is exclusive: guest DLLs cannot silently replace Mesa. */
+    if (gl_module && provider == LX_OPENGL_MESA)
+        goto native_provider;
+    retval = loadGuestLibraryPath(GLoaderState.begin_libpath, modname, dependency_tree_depth);
+    if (!retval && moduleLoadFailed())
+        return NULL;
     if (!retval && lx_host_path_exists(fname))
         retval = loadModuleByPathInternal(fname, dependency_tree_depth);
+    if (!retval && moduleLoadFailed())
+        return NULL;
 
     if (!retval)
     {
@@ -621,6 +684,8 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
                 locatePathCaseInsensitive(dllpath);
                 if (lx_host_path_exists(dllpath))
                     retval = loadModuleByPathInternal(dllpath, dependency_tree_depth);
+                if (!retval && moduleLoadFailed())
+                    return NULL;
                 ptr = end ? end + 1 : ptr + len;
             }
         }
@@ -631,11 +696,15 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
     if (!retval)
         retval = loadGuestLibraryPath(GLoaderState.end_libpath, modname, dependency_tree_depth);
 
+    if (!retval && moduleLoadFailed())
+        return NULL;
+
     /* DOSCALL1 is the implementation behind the system DOSCALLS forwarder. */
     if (!retval && strcasecmp(modname, "DOSCALL1") == 0)
         return loadModuleByModuleNameInternal("DOSCALLS", dependency_tree_depth);
 
-    if (!retval)
+native_provider:
+    if (!retval && !(gl_module && provider == LX_OPENGL_ORIGINAL))
     {
         snprintf(fname, sizeof(fname), "./lib%s.so", modname);
         for (char *ptr = fname; *ptr; ptr++)
@@ -670,13 +739,40 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
             registerLxModule(retval);
         }
     }
+    if (!retval && gl_module)
+        fprintf(stderr, "2ine: selected %s OpenGL provider is unavailable; %s\n",
+                provider == LX_OPENGL_MESA ? "Mesa" : "original software",
+                provider == LX_OPENGL_MESA
+                    ? "choose a runtime with Mesa OpenGL support"
+                    : "extract original OS/2 OPENGL.DLL and its dependencies");
+    if (!retval)
+        moduleLoadError(126, modname);
     return retval;
 }
 
 LxModule *loadModuleByModuleName(const char *modname)
 {
+    ModuleFailure failure = {0}, *previous = ActiveModuleFailure;
+    ActiveModuleFailure = &failure;
     LxModule *module = loadModuleByModuleNameInternal(modname, 0);
-    return initializeModuleGraph(module) ? module : NULL;
+    if (!initializeModuleGraph(module))
+    {
+        moduleLoadError(11, modname);
+        module = NULL;
+    }
+    ActiveModuleFailure = previous;
+    LastModuleFailure = failure;
+    return module;
+}
+
+LxModule *loadModuleWithError(const char *modname, uint32 *error, char *name, size_t capacity)
+{
+    LxModule *module = loadModuleByPathOrModuleName(modname);
+    if (error)
+        *error = module ? 0 : LastModuleFailure.code;
+    if (name && capacity)
+        snprintf(name, capacity, "%s", module ? "" : LastModuleFailure.module);
+    return module;
 }
 
 LxModule *loadModuleByPathOrModuleName(const char *modname)
@@ -701,7 +797,12 @@ LxModule *loadModuleByPathOrModuleName(const char *modname)
         uint32 err = 0;
         char *path = lxMakeUnixPath(modname, &err);
         if (!path)
+        {
+            memset(&LastModuleFailure, 0, sizeof LastModuleFailure);
+            LastModuleFailure.code = err ? err : 2;
+            snprintf(LastModuleFailure.module, sizeof LastModuleFailure.module, "%s", modname);
             return NULL;
+        }
         retval = loadModuleByPath(path);
         free(path);
     }

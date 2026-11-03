@@ -65,6 +65,13 @@ typedef struct Window
     ULONG id;
     ULONG class_style;
     ULONG style;
+    ULONG frame_flags;
+    BOOL formatting_frame;
+    BOOL frame_chrome_hidden;
+    BOOL frame_chrome_visible;
+    ULONG frame_tracking;
+    POINTL frame_track_start;
+    RECTL frame_track_rect;
     HWND hwnd;
     LONG x;
     LONG y;
@@ -78,6 +85,22 @@ typedef struct Window
     BOOL visible_region_notify;
 } Window;
 LX_PRIVATE BOOL prepareFrameState(Window *window, SWP *position);
+LX_PRIVATE BOOL isFrameWindow(const Window *window);
+LX_PRIVATE BOOL frameGuestChrome(const Window *window);
+LX_PRIVATE BOOL frameResizable(const Window *window);
+LX_PRIVATE BOOL frameControlSuppressed(const Window *window);
+LX_PRIVATE void applyHostWindowChrome(Window *window);
+LX_PRIVATE MRESULT frameSystemCommand(Window *window, USHORT command);
+LX_PRIVATE BOOL frameTrackMessage(Window *window, ULONG message, MPARAM first);
+LX_PRIVATE POINTL frameBorderSize(const Window *window);
+LX_PRIVATE BOOL frameClientRect(Window *window, PRECTL rect, BOOL client);
+LX_PRIVATE void formatFrame(Window *window);
+LX_PRIVATE ULONG frameControlCount(Window *window);
+LX_PRIVATE ULONG frameFormatPositions(Window *window, MPARAM positions, MPARAM client_rect);
+LX_PRIVATE void paintFrameBorder(Window *window, HPS space);
+LX_PRIVATE MRESULT OS2API frameControlProcedure(HWND handle, ULONG message, MPARAM first,
+                                                MPARAM second);
+LX_PRIVATE LONG windowPresentationColor(Window *window, BOOL foreground, LONG fallback);
 
 typedef struct MessageQueueItem
 {
@@ -118,7 +141,7 @@ typedef struct PresentationSpace
     unsigned font_index, font_pixels;
     struct
     {
-        unsigned index, pixels;
+        unsigned index, metric_index, pixels;
         BOOL defined;
     } logical_fonts[255];
     LxHandleBorrow bitmap_ids[255];
@@ -162,6 +185,10 @@ typedef struct PmDeviceContext
     HDC handle;
     LONG type;
     unsigned spaces;
+    unsigned printer_kind;
+    ULONG printer_bitmap;
+    struct LxPrintJob *print_job;
+    unsigned print_pages;
     struct PmDeviceContext *next;
 } PmDeviceContext;
 
@@ -184,7 +211,7 @@ typedef struct
     struct PmPointer *pointers;
     struct PmHook *hooks;
     struct PmFileDialog *pending_file;
-    LxGuestMapping *control_bridge, *menu_bridge;
+    LxGuestMapping *control_bridge, *menu_bridge, *frame_control_bridge;
     HWND focus, active, capture;
     ULONG modifiers, text_modifiers, text_scancode, text_repeat;
     uint8 key_down[256], key_toggled[256], physical_keys[256];

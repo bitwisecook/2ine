@@ -35,7 +35,7 @@ def main():
             )
         else:
             parser.error("Supply a .deb or .rpm package")
-        runtime = destination / "usr/lib/2ine-balls/runtime"
+        runtime = destination / "usr/lib/2ine-ball/runtime"
         for binary in runtime.iterdir():
             if binary.is_dir():
                 continue
@@ -49,15 +49,15 @@ def main():
             dependencies = run(["ldd", binary], capture_output=True, text=True).stdout
             assert "not found" not in dependencies, (binary, dependencies)
             assert str(ROOT) not in dependencies, (binary, dependencies)
-        run([destination / "usr/bin/2ine-balls", "--help"], capture_output=True)
-        frontend = destination / "usr/lib/2ine-balls/tools"
+        run([destination / "usr/bin/2ine-ball", "--help"], capture_output=True)
+        frontend = destination / "usr/lib/2ine-ball/tools"
         environment = dict(
             os.environ,
             TWOINE_GNOME_FRONTEND=str(frontend),
             TWOINE_BALL_LIBRARY=str(runtime / "libtwoine_ball.so"),
         )
         run(
-            [sys.executable, ROOT / "tests/integration/gnome_balls.py", "--build", runtime],
+            [sys.executable, ROOT / "tests/integration/gnome_ball.py", "--build", runtime],
             env=environment,
         )
         run(

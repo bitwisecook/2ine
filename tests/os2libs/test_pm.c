@@ -827,6 +827,80 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(!GpiDeleteBitmap(bitmap) && GpiDestroyPS(ps) && DevCloseDC(memory) == 0);
     CHECK(!DevQueryCaps(memory, 0, 1, widths));
 }
+static void frame_border_contracts(void)
+{
+    FRAMECDATA data = {sizeof data, 0x100 | 1, 0, 0};
+    HWND frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Dialog", WS_VISIBLE, 0, 0, 100, 80,
+                                 0, HWND_TOP, 991, &data, NULL);
+    CHECK(frame && WinWindowFromID(frame, FID_TITLEBAR));
+    struct
+    {
+        POINTL border;
+        uint32_t guard;
+    } output = {{-1, -1}, 0x12345678};
+    CHECK(WinSendMsg(frame, WM_QUERYBORDERSIZE, &output.border, 0));
+    CHECK(output.border.x == 4 && output.border.y == 4 && output.guard == 0x12345678);
+    CHECK(!WinSendMsg(frame, WM_QUERYBORDERSIZE, &output.border, (MPARAM)1));
+    RECTL rectangle = {0, 0, 100, 80};
+    CHECK(WinCalcFrameRect(frame, &rectangle, TRUE));
+    CHECK(rectangle.xLeft == 4 && rectangle.yBottom == 4 && rectangle.xRight == 96 &&
+          rectangle.yTop == 56);
+    CHECK(WinCalcFrameRect(frame, &rectangle, FALSE));
+    CHECK(rectangle.xLeft == 0 && rectangle.yBottom == 0 && rectangle.xRight == 100 &&
+          rectangle.yTop == 80);
+    HPS ps = WinGetPS(frame);
+    CHECK(ps && WinFillRect(ps, &rectangle, CLR_RED));
+    CHECK(WinInvalidateRect(frame, NULL, FALSE));
+    WinDefWindowProc(frame, WM_PAINT, 0, 0);
+    uint32_t pixel;
+    CHECK(lx_pm_raster_read(ps, 0, 40, 1, 1, &pixel) && pixel == 0x808080);
+    CHECK(lx_pm_raster_read(ps, 1, 40, 1, 1, &pixel) && pixel == 0xffffff);
+    CHECK(lx_pm_raster_read(ps, 50, 20, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(WinReleasePS(ps));
+    CHECK(WinSetWindowText(frame, "Updated"));
+    char title[32];
+    CHECK(WinQueryWindowText(WinWindowFromID(frame, FID_TITLEBAR), sizeof title, title) == 7 &&
+          !strcmp(title, "Updated"));
+    CHECK(WinDestroyWindow(frame));
+    frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Thin", WS_VISIBLE | 0x100, 0, 0, 80, 60,
+                            0, HWND_TOP, 992, NULL, NULL);
+    CHECK(frame && WinSendMsg(frame, WM_QUERYBORDERSIZE, &output.border, 0));
+    CHECK(output.border.x == 1 && output.border.y == 1);
+    CHECK(WinDestroyWindow(frame));
+}
+static void native_control_paint_contracts(void)
+{
+    HWND frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Controls", WS_VISIBLE, 0, 0, 240,
+                                 100, 0, HWND_TOP, 993, NULL, NULL);
+    HWND combo = WinCreateWindow(frame, (PSZ)WC_COMBOBOX, "C:", WS_VISIBLE | 4, 0, 0, 180, 80,
+                                 frame, HWND_TOP, 994, NULL, NULL);
+    CHECK(frame && combo);
+    CHECK(WinUpdateWindow(frame) && WinUpdateWindow(combo));
+    Window *window = test_window(combo);
+    CHECK(WinUpdateWindow(window->control->edit));
+    LONG width = window->h, left = window->w - width;
+    CHECK(width > 0 && width <= 64);
+    uint32_t before[4096], after[4096];
+    HPS ps = WinGetPS(combo);
+    CHECK(ps && lx_pm_raster_read(ps, left, 0, width, width, before));
+    CHECK(WinSetWindowText(combo, "C: drive with a very long free-space description"));
+    CHECK(WinUpdateWindow(combo));
+    CHECK(WinUpdateWindow(window->control->edit));
+    CHECK(lx_pm_raster_read(ps, left, 0, width, width, after));
+    CHECK(!memcmp(before, after, (size_t)width * width * sizeof *before));
+    ULONG color = 0xe5ddab;
+    CHECK(WinSetPresParam(frame, 3, sizeof color, &color));
+    HWND label = WinCreateWindow(frame, (PSZ)WC_STATIC, "", WS_VISIBLE | 1, 190, 0, 40, 30, frame,
+                                 HWND_TOP, 995, NULL, NULL);
+    CHECK(label && WinUpdateWindow(label));
+    HPS label_ps = WinGetPS(label);
+    uint32_t pixel;
+    CHECK(label_ps && lx_pm_raster_read(label_ps, 10, 10, 1, 1, &pixel) && pixel == color);
+    color = 0xabcde5;
+    CHECK(WinSetPresParam(frame, 3, sizeof color, &color) && WinUpdateWindow(label));
+    CHECK(lx_pm_raster_read(label_ps, 10, 10, 1, 1, &pixel) && pixel == color);
+    CHECK(WinReleasePS(label_ps) && WinReleasePS(ps) && WinDestroyWindow(frame));
+}
 static void frame_state_contracts(void)
 {
     HWND parent = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "", 0, 0, 0, 64, 48, 0, HWND_TOP, 0,
@@ -1109,6 +1183,8 @@ int main(void)
     dialog_frame_contracts(client);
     class_clip_contracts(hab, client);
     frame_state_contracts();
+    frame_border_contracts();
+    native_control_paint_contracts();
     SWP position;
     RECTL rectangle;
     CHECK(WinQueryWindowPos(client, &position) && position.cx == 64 && position.cy == 48);

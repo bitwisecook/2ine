@@ -3358,3 +3358,51 @@ static uint32 bridge32_WritePrivateProfileString(uint8 *a)
     free(filename);
     return result;
 }
+
+static uint32 bridge32_PrintDlg(uint8 *a)
+{
+    return PrintDlg((PVOID)(uintptr_t)lx_guest_load_u32(a));
+}
+static uint32 bridge32_CreateDC(uint8 *a)
+{
+    char *strings[3] = {NULL, NULL, NULL};
+    uint32 result = 0;
+    for (unsigned i = 0; i < 3; i++)
+        if (lx_guest_load_u32(a + i * 4) &&
+            !(strings[i] = o32_string(lx_guest_load_u32(a + i * 4))))
+            goto done;
+    result =
+        CreateDC(strings[0], strings[1], strings[2], (PVOID)(uintptr_t)lx_guest_load_u32(a + 12));
+done:
+    for (unsigned i = 0; i < 3; i++)
+        free(strings[i]);
+    return result;
+}
+static uint32 bridge32_StartDoc(uint8 *a)
+{
+    LxGuestBorrow info = {0};
+    uint32 result = (uint32)-1;
+    uint32 size = 0, address = lx_guest_load_u32(a + 4);
+    if (lx_execution_read(GLoaderState.execution, address, &size, 4) &&
+        (size == 12 || size == 16 || size == 20) &&
+        lx_execution_borrow(GLoaderState.execution, address, size, LX_GUEST_READ, &info))
+        result = (uint32)StartDoc(lx_guest_load_u32(a), info.host);
+    lx_execution_release(&info);
+    return result;
+}
+static uint32 bridge32_StartPage(uint8 *a)
+{
+    return (uint32)StartPage(lx_guest_load_u32(a));
+}
+static uint32 bridge32_EndPage(uint8 *a)
+{
+    return (uint32)EndPage(lx_guest_load_u32(a));
+}
+static uint32 bridge32_EndDoc(uint8 *a)
+{
+    return (uint32)EndDoc(lx_guest_load_u32(a));
+}
+static uint32 bridge32_AbortDoc(uint8 *a)
+{
+    return (uint32)AbortDoc(lx_guest_load_u32(a));
+}

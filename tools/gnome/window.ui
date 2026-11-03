@@ -32,7 +32,7 @@
         <property name="max-sidebar-width">290</property>
         <property name="sidebar">
           <object class="AdwNavigationPage">
-            <property name="title" translatable="yes">Balls</property>
+            <property name="title" translatable="yes">Ball</property>
             <property name="child">
               <object class="AdwToolbarView" id="sidebar">
                 <child type="top">
@@ -42,7 +42,7 @@
                     <child type="end"><object class="GtkMenuButton"><property name="icon-name">open-menu-symbolic</property><property name="tooltip-text" translatable="yes">Main Menu</property><property name="primary">true</property><property name="menu-model">menu</property><accessibility><property name="label" translatable="yes">Main menu</property></accessibility></object></child>
                   </object>
                 </child>
-                <property name="content"><object class="GtkScrolledWindow"><property name="hscrollbar-policy">never</property><property name="child"><object class="GtkListBox" id="ball_list"><property name="selection-mode">single</property><style><class name="navigation-sidebar"/></style><accessibility><property name="label" translatable="yes">Balls</property></accessibility></object></property></object></property>
+                <property name="content"><object class="GtkScrolledWindow"><property name="hscrollbar-policy">never</property><property name="child"><object class="GtkListBox" id="ball_list"><property name="selection-mode">single</property><style><class name="navigation-sidebar"/></style><accessibility><property name="label" translatable="yes">Ball</property></accessibility></object></property></object></property>
               </object>
             </property>
           </object>

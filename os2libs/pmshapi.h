@@ -9,7 +9,7 @@
 #ifndef _INCL_PMSHAPI_H_
 #define _INCL_PMSHAPI_H_
 
-#include "os2types.h"
+#include "pmwin.h"
 #ifdef __cplusplus
 extern "C"
 {
@@ -38,6 +38,9 @@ extern "C"
     OS2EXPORT ULONG OS2API WinChangeSwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(123);
     OS2EXPORT ULONG OS2API WinQuerySwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(124);
     OS2EXPORT ULONG OS2API WinQuerySwitchHandle(ULONG window, ULONG process) OS2APIINFO(125);
+
+    OS2EXPORT ULONG OS2API WinQueryTaskSizePos(HANDLE hab, ULONG session, PSWP position)
+        OS2APIINFO(127);
 
     OS2EXPORT HINI OS2API PrfOpenProfile(HANDLE hab, PSZ name) OS2APIINFO(102);
     OS2EXPORT BOOL OS2API PrfCloseProfile(HINI profile) OS2APIINFO(103);

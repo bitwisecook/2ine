@@ -129,3 +129,8 @@ released by its caller.
 See [OS/2 Doom](doom.md) for the optional real-game input/save/load/audio/quit
 check and separately supplied source/WAD fixtures. [Audio](audio.md) describes
 DART and sampled MIDI synthesis. The service contracts require no game media.
+
+[Digital-video checks](video.md) generate raw, planar YUV, Cinepak and stereo
+PCM movies locally. `digital_video` and `digital_video_audio` verify decoding,
+timestamps, retained uploads/clipping, audio capture and native/LX MCI commands,
+including the Toolkit's empty-open/load sequence. They need no external movie.

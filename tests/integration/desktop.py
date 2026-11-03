@@ -30,7 +30,7 @@ def program(checked):
     g.load(first)
     g.require(b"\x3b\x05" + struct.pack("<I", second), 12)
     g.call(1, 318, 0, 0, missing, second)
-    g.result(11, 13)
+    g.result(126, 13)
     g.call_handle(1, 322, first)  # DosFreeModule
     g.result(0, 14)
     g.call_handle(1, 322, first)
@@ -191,9 +191,11 @@ def program(checked):
         g.result(87, 63)
     spool = g.field(bytes([0xFF]) * 12)
     g.call(5, 399, 0, 3, 0, 0, spool, spool + 4, spool + 8, 0)
-    g.result(0, 150)
-    for offset in (0, 4, 8):
-        g.word(spool + offset, 0, 151)
+    g.result(234, 150)  # Two native print queues; query their required buffer size.
+    g.word(spool, 0, 151)
+    g.word(spool + 4, 2, 151)
+    g.load(spool + 8)
+    g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 151)
     g.exit(0)
     return linear_image(
         g.code,

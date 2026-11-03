@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/video_frames.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/controls.h"
 #include "os2libs/pmwin/menus.h"
@@ -91,6 +92,10 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
                 return &scrollbar;
             }
             case WC_TITLEBAR:
+            {
+                static WindowClass title = {"#9", frameControlProcedure, CS_SIZEREDRAW, 4, NULL};
+                return &title;
+            }
             case WC_APPSTAT:
             case WC_KBDSTAT:
             case WC_PECIC:
@@ -137,6 +142,7 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
 
     unregisterWindowMessages(win->hwnd);
     lx_pm_dive_forget(win);
+    lx_pm_video_forget(win);
     win->destroying = TRUE;
     BOOL was_visible = (win->style & WS_VISIBLE) != 0;
     RECTL exposed = {win->x, win->y, win->x + win->w, win->y + win->h};
@@ -359,7 +365,6 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     {
         win->heavy.window = parent->heavy.window;
     }
-
     win->parent = parent;
     win->children = NULL;
     win->hwnd = registerWindowMessages(anchor);
@@ -387,6 +392,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     win->y = y;
     win->w = cx;
     win->h = cy;
+    applyHostWindowChrome(win);
 
     Window *insertBehind = NULL;
     if ((hwndInsertBehind != HWND_TOP) && (hwndInsertBehind != HWND_BOTTOM))
@@ -482,20 +488,6 @@ HWND WinCreateStdWindow(HWND hwndParent, ULONG flStyle, PULONG pflCreateFlags, P
         return NULLHANDLE;
     }
 
-    if (*pflCreateFlags & 4)
-    {
-        if (!WinLoadMenu(retval, hmod, idResources))
-        {
-            WinDestroyWindow(retval);
-            return 0;
-        }
-    }
-    if (*pflCreateFlags & 0x8000)
-    {
-        ULONG table = WinLoadAccelTable(WinQueryAnchorBlock(retval), hmod, idResources);
-        if (table)
-            WinSetAccelTable(WinQueryAnchorBlock(retval), table, retval);
-    }
     if (pszClientClass)
     {
         HWND clientwin = WinCreateWindow(retval, pszClientClass, NULL, styleClient | WS_VISIBLE, 0,
@@ -551,6 +543,8 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     {
         return (MRESULT)0;
     }
+    if (frameTrackMessage(win, msg, mp1))
+        return 0;
 
     if (win->window_class_name && !strcmp(win->window_class_name, "#1") &&
         (msg == WM_COMMAND || msg == WM_HELP || msg == WM_INITMENU || msg == WM_MENUSELECT ||
@@ -562,13 +556,29 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
     switch (msg)
     {
+        case WM_ACTIVATE:
+            if (isFrameWindow(win))
+                for (Window *control = win->children; control; control = control->sibling)
+                    if (control->id == FID_TITLEBAR || control->id == FID_SYSMENU ||
+                        control->id == FID_MINMAX)
+                        WinInvalidateRect(control->hwnd, NULL, FALSE);
+            for (Window *child = win->children; child; child = child->sibling)
+                if (child->id == FID_CLIENT)
+                    return sendMessage(child, msg, mp1, mp2);
+            return 0;
+        case WM_SYSCOMMAND:
+            return frameSystemCommand(win, (USHORT)(uintptr_t)mp1);
+        case WM_BUTTON1DBLCLK:
+            if (isFrameWindow(win) && (win->style & WS_MINIMIZED))
+                return frameSystemCommand(win, 0x8008); /* SC_RESTORE */
+            return 0;
         case WM_CREATE:
             if (mp1 && win->window_class_name && !strcmp(win->window_class_name, "#1"))
             {
                 FRAMECDATA data;
                 if (!controlRead(mp1, &data, sizeof data) || data.cb != sizeof data)
                     return (MRESULT)(uintptr_t)TRUE;
-                if ((data.flCreateFlags & 2) && !createSystemMenu(win, data.flCreateFlags))
+                if (!WinCreateFrameControls(hwnd, &data, win->text))
                     return (MRESULT)(uintptr_t)TRUE;
             }
             return 0;
@@ -587,15 +597,8 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
             WinPostMsg(hwnd, WM_QUIT, 0, 0);
             return 0;
         }
-
-        case WM_ACTIVATE:
-            for (Window *child = win->children; child; child = child->sibling)
-                if (child->id == FID_CLIENT)
-                    return sendMessage(child, msg, mp1, mp2);
-            return 0;
         case WM_APPTERMINATENOTIFY:
         case WM_ADJUSTWINDOWPOS:
-        case WM_CALCFRAMERECT:
         case WM_COMMAND:
         case WM_CONTROL:
         case WM_CTLCOLORCHANGE:
@@ -604,7 +607,6 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_ENABLE:
         case WM_ERASEBACKGROUND:
         case WM_ERROR:
-        case WM_FORMATFRAME:
         case WM_HSCROLL:
         case WM_INITDLG:
         case WM_INITMENU:
@@ -638,13 +640,11 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_SIZE:
         case WM_SUBSTITUTESTRING:
         case WM_SYSCOLORCHANGE:
-        case WM_SYSCOMMAND:
         case WM_SYSVALUECHANGED:
         case WM_TIMER:
         case WM_TRACKFRAME:
         case WM_TRANSLATEACCEL:
 
-        case WM_UPDATEFRAME:
         case WM_VRNDISABLED:
         case WM_VRNENABLED:
         case WM_VSCROLL:
@@ -660,7 +660,6 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_BEGINDRAG:
         case WM_BEGINSELECT:
         case WM_BUTTON1CLICK:
-        case WM_BUTTON1DBLCLK:
         case WM_BUTTON1MOTIONSTART:
         case WM_BUTTON1MOTIONEND:
         case WM_BUTTON1UP:
@@ -689,10 +688,45 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
             return win->owner ? sendMessage(win->owner, msg, mp1, mp2) : (MRESULT)0;
 
         case WM_HITTEST:
-            return HT_NORMAL;
+            return (MRESULT)(uintptr_t)HT_NORMAL;
 
         case WM_PAINT:
+            if (isFrameWindow(win))
+            {
+                HPS space = WinBeginPaint(hwnd, 0, NULL);
+                if (space)
+                {
+                    paintFrameBorder(win, space);
+                    WinEndPaint(space);
+                }
+                return 0;
+            }
             validateWindowPaint(anchor, win);
+            return 0;
+
+        case WM_QUERYBORDERSIZE:
+        {
+            POINTL border = frameBorderSize(win);
+            return (MRESULT)(uintptr_t)(isFrameWindow(win) && !mp2 && mp1 &&
+                                        controlWrite(mp1, &border, sizeof border));
+        }
+        case WM_QUERYFRAMEINFO:
+            return (MRESULT)(uintptr_t)(isFrameWindow(win) ? 1u | 4u : 0u);
+        case WM_CALCFRAMERECT:
+        {
+            RECTL rect;
+            BOOL valid = isFrameWindow(win) && controlRead(mp1, &rect, sizeof rect) &&
+                         frameClientRect(win, &rect, (USHORT)(uintptr_t)mp2 != 0) &&
+                         controlWrite(mp1, &rect, sizeof rect);
+            return (MRESULT)(uintptr_t)valid;
+        }
+        case WM_QUERYFRAMECTLCOUNT:
+            return (MRESULT)(uintptr_t)(isFrameWindow(win) ? frameControlCount(win) : 0);
+        case WM_FORMATFRAME:
+            return (MRESULT)(uintptr_t)frameFormatPositions(win, mp1, mp2);
+        case WM_UPDATEFRAME:
+            if (isFrameWindow(win))
+                formatFrame(win);
             return 0;
 
         case WM_BUTTON1DOWN:
@@ -705,19 +739,17 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_FOCUSCHANGE:
         case WM_HELP:
         case WM_MOUSEMOVE:
+            return 0;
         case WM_PPAINT:
         case WM_QUERYCONVERTPOS:
         case WM_QUERYWINDOWPARAMS:
         case WM_REALIZEPALETTE:
         case WM_WINDOWPOSCHANGED:
-            fprintf(
-                stderr,
-                "Message that doesn't something other than return 0, %u, in WinDefWindowProc!\n",
-                (uint)msg);
+            TRACE_EVENT("Default window message %u for %u", (uint)msg, (uint)hwnd);
             break;
 
         default:
-            fprintf(stderr, "Unhandled message %u in WinDefWindowProc!\n", (uint)msg);
+            TRACE_EVENT("Default window message %u for %u", (uint)msg, (uint)hwnd);
             break;
     }
 
@@ -825,6 +857,24 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     if (!prepareFrameState(win, &swp))
         return FALSE;
     flags = swp.fl;
+    if (frameControlSuppressed(win))
+    {
+        if (!win->frame_chrome_hidden)
+            win->frame_chrome_visible = (win->style & WS_VISIBLE) != 0;
+        if ((flags & SWP_SHOW) && !win->parent->formatting_frame)
+            win->frame_chrome_visible = TRUE;
+        if ((flags & SWP_HIDE) && !win->parent->formatting_frame)
+            win->frame_chrome_visible = FALSE;
+        win->frame_chrome_hidden = TRUE;
+        flags = (flags & ~SWP_SHOW) | SWP_HIDE;
+    }
+    else if (win->frame_chrome_hidden)
+    {
+        if (!(flags & (SWP_SHOW | SWP_HIDE)))
+            flags |= win->frame_chrome_visible ? SWP_SHOW : SWP_HIDE;
+        win->frame_chrome_hidden = FALSE;
+    }
+    swp.fl = flags;
     if (!(flags & SWP_NOADJUST))
         sendWindowPos(win, WM_ADJUSTWINDOWPOS, &swp);
     win = getWindowFromHWND(anchor, hwnd);
@@ -849,9 +899,9 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
         if (!lx_host_window_position(win->heavy.window, win->x, desktop_window.h - win->y - win->h,
                                      win->w, win->h))
             return FALSE;
-        if (win->style & WS_VISIBLE)
+        if ((win->style & WS_VISIBLE) && !(win->style & WS_MINIMIZED))
             lx_host_window_show(win->heavy.window);
-        else
+        else if (!(win->style & WS_VISIBLE))
             lx_host_window_hide(win->heavy.window);
     }
     if (was_visible != ((win->style & WS_VISIBLE) != 0))
@@ -870,8 +920,10 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
         win = getWindowFromHWND(anchor, hwnd);
         if (!win || win->destroying)
             return FALSE;
-        HWND menu = WinWindowFromID(win->hwnd, FID_MENU);
-        LONG menu_height = menu ? 24 : 0;
+        if (isFrameWindow(win))
+            formatFrame(win);
+        HWND menu = isFrameWindow(win) ? 0 : WinWindowFromID(win->hwnd, FID_MENU);
+        LONG menu_height = menu ? lx_pm_display_scale(24) : 0;
         if (menu && win->h > menu_height)
             WinSetWindowPos(menu, HWND_TOP, 0, win->h - menu_height, win->w, menu_height,
                             SWP_MOVE | SWP_SIZE | SWP_SHOW);
@@ -879,10 +931,12 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
         if (!win || win->destroying)
             return FALSE;
         for (Window *child = win->children; child; child = child->sibling)
-            if (child->id == FID_CLIENT && win->h > menu_height)
+            if (!isFrameWindow(win) && child->id == FID_CLIENT && win->h > menu_height)
                 WinSetWindowPos(child->hwnd, HWND_BOTTOM, 0, 0, win->w, win->h - menu_height,
                                 SWP_MOVE | SWP_SIZE | SWP_SHOW);
     }
+    else if (isFrameWindow(win) && (flags & (SWP_MINIMIZE | SWP_MAXIMIZE | SWP_RESTORE)))
+        formatFrame(win);
     win = getWindowFromHWND(anchor, hwnd);
     if (!win || win->destroying)
         return FALSE;
@@ -1002,6 +1056,9 @@ BOOL WinSetParent(HWND handle, HWND parent_handle, BOOL redraw)
     LxHostWindow *old_drawable = old_parent == &desktop_window ? window->heavy.window : NULL;
     window->parent = parent;
     setDrawable(window, drawable);
+    applyHostWindowChrome(window);
+    if (isFrameWindow(window))
+        formatFrame(window);
     if (old_drawable)
         lx_host_window_destroy(old_drawable);
     if (parent == &desktop_window && (window->style & WS_VISIBLE))
@@ -1039,14 +1096,5 @@ BOOL WinCalcFrameRect(HWND handle, PRECTL rect, BOOL client)
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     if (!window || !rect)
         return FALSE;
-    LONG height = WinWindowFromID(handle, FID_MENU) ? 24 : 0;
-    RECTL calculated = *rect;
-    if (client)
-        calculated.yTop -= height;
-    else
-        calculated.yTop += height;
-    if (WinIsRectEmpty(0, &calculated))
-        return FALSE;
-    *rect = calculated;
-    return TRUE;
+    return frameClientRect(window, rect, client);
 }

@@ -79,6 +79,12 @@ void controlTextChanged(Window *window)
     c->changed = TRUE;
     if (c->kind == 6)
         controlNotify(window, 4); /* EN_CHANGE */
+    else if (c->kind == 2 && c->edit && !c->updating)
+    {
+        c->updating = TRUE;
+        WinSetWindowText(c->edit, window->text ? window->text : "");
+        c->updating = FALSE;
+    }
     else if (c->kind == 32)
         controlNotify(window, 0x20d); /* SPBN_CHANGE */
 }
@@ -301,6 +307,9 @@ static void draw_text(Window *window, HPS space, const char *text, int baseline,
     LxHostRect rect;
     calcHeavyweightRect(window, &rect);
     LxHostRect clip = rect;
+    PmRegion visible = {0};
+    if (!lx_pm_window_clip(space, NULL, &visible))
+        return;
     for (Window *parent = window->parent; parent && parent != &desktop_window;
          parent = parent->parent)
     {
@@ -325,6 +334,7 @@ static void draw_text(Window *window, HPS space, const char *text, int baseline,
             width += advance;
     }
     int x = rect.x + (center && width < rect.w ? (rect.w - width) / 2 : inset);
+    LONG foreground = windowPresentationColor(window, TRUE, window->enabled ? 0 : 0x6e6e6e);
     for (const uint8 *p = (const uint8 *)text; *p; p++)
     {
         if (mnemonics && *p == '~' && p[1])
@@ -338,13 +348,29 @@ static void draw_text(Window *window, HPS space, const char *text, int baseline,
         unsigned high = window->control->first > window->control->last ? window->control->first
                                                                        : window->control->last;
         BOOL highlight = selected || (window->control->kind == 6 && index >= low && index < high);
-        uint8 color = highlight ? 255 : window->enabled ? 0 : 110;
-        lx_host_window_mask(window->heavy.window, &clip, x + glyph.left,
-                            rect.y + baseline - glyph.top, glyph.width, glyph.height,
-                            glyph.coverage, color, color, color);
+        LONG color = highlight ? 0xffffff : foreground;
+        for (size_t i = 0; i < visible.count; i++)
+        {
+            RECTL part = visible.rects[i];
+            LxHostRect drawing = {rect.x + part.xLeft, rect.y + rect.h - part.yTop,
+                                  part.xRight - part.xLeft, part.yTop - part.yBottom};
+            int left = drawing.x > clip.x ? drawing.x : clip.x;
+            int top = drawing.y > clip.y ? drawing.y : clip.y;
+            int right =
+                drawing.x + drawing.w < clip.x + clip.w ? drawing.x + drawing.w : clip.x + clip.w;
+            int bottom =
+                drawing.y + drawing.h < clip.y + clip.h ? drawing.y + drawing.h : clip.y + clip.h;
+            drawing = (LxHostRect){left, top, right > left ? right - left : 0,
+                                   bottom > top ? bottom - top : 0};
+            lx_host_window_mask(window->heavy.window, &drawing, x + glyph.left,
+                                rect.y + baseline - glyph.top, glyph.width, glyph.height,
+                                glyph.coverage, (color >> 16) & 255, (color >> 8) & 255,
+                                color & 255);
+        }
         x += glyph.advance;
         lx_host_glyph_free(&glyph);
     }
+    free(visible.rects);
 }
 static void paint(Window *window)
 {
@@ -362,8 +388,36 @@ static void paint(Window *window)
     /* Group boxes and frames leave the controls inside them visible. */
     BOOL frame = c->kind == 5 && ((window->style & 0x3f) == 2 || (window->style & 0x3f) == 8);
     if (!frame)
-        WinFillRect(space, &rect,
-                    (c->kind == 7 || c->kind == 6 || c->kind == 32) ? CLR_WHITE : CLR_PALEGRAY);
+    {
+        LONG color = windowPresentationColor(
+            window, FALSE,
+            WinQuerySysColor(HWND_DESKTOP,
+                             (c->kind == 7 || c->kind == 6 || c->kind == 32) ? -47 : -34, 0));
+        if (lx_pm_color_table(space, 0, 2, 254, 1, &color))
+            WinFillRect(space, &rect, 254);
+    }
+    if (c->kind == 2)
+    {
+        /* The edit child owns the selected text. Repeating it in the parent
+           paints through the drop button, particularly for long drive labels. */
+        if ((window->style & 7) != 1)
+        {
+            LONG left = window->w > window->h ? window->w - window->h : 0;
+            RECTL button = {left, 0, window->w, window->h};
+            WinFillRect(space, &button, CLR_PALEGRAY);
+            RECTL line = {left, 0, left + 1, window->h};
+            WinFillRect(space, &line, CLR_DARKGRAY);
+            LONG middle = left + (window->w - left) / 2;
+            LONG top = window->h / 2 + 2;
+            for (LONG row = 0; row < 4; row++)
+            {
+                RECTL arrow = {middle - 3 + row, top - row, middle + 4 - row, top - row + 1};
+                WinFillRect(space, &arrow, CLR_BLACK);
+            }
+        }
+        WinEndPaint(space);
+        return;
+    }
     if (c->kind == 5 && ((window->style & 0x3f) == 3 || (window->style & 0x3f) == 11))
     {
         LONG width, height;

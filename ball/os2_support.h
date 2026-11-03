@@ -47,9 +47,12 @@ static int media_candidate(const char *name)
     const char *extension = strrchr(name, '.');
     if (!extension)
         return 1;
-    const char *extensions[] = {".zip", ".iso", ".img", ".ima", ".dsk",  ".rar",   ".7z", ".lha",
-                                ".lzh", ".tar", ".gz",  ".tgz", ".bz2",  ".tbz",   ".xz", ".txz",
-                                ".Z",   ".cab", ".wpi", ".exe", ".pack", ".pack2", NULL};
+    if (strlen(extension) > 1 && extension[strlen(extension) - 1] == '_')
+        return 1;
+    const char *extensions[] = {".zip",   ".iso", ".img", ".ima", ".dsk", ".rar", ".7z",
+                                ".lha",   ".lzh", ".tar", ".gz",  ".tgz", ".bz2", ".tbz",
+                                ".xz",    ".txz", ".Z",   ".cab", ".wpi", ".exe", ".pack",
+                                ".pack2", ".arc", ".arj", ".zoo", NULL};
     for (int i = 0; extensions[i]; i++)
         if (equal_case(extension, extensions[i]))
             return 1;
@@ -62,11 +65,37 @@ static cJSON *browse_media(Context *c, const char *input)
         fail(c, "Choose OS/2 installation media or an archive");
         return NULL;
     }
-    char *path = tb_media_path(input) ? keep(c, strdup(input)) : keep(c, tb_media_root(input));
+    int host_directory = !tb_media_path(input) && tb_is_dir(input);
+    char *path = tb_media_path(input) || host_directory ? keep(c, strdup(input))
+                                                        : keep(c, tb_media_root(input));
     if (!path)
         return NULL;
     size_t count = 0;
-    TbMediaEntry *items = tb_media_entries(path, &count);
+    TbMediaEntry *items = NULL;
+    if (host_directory)
+    {
+        char **names = tb_names(path, &count);
+        if (count != (size_t)-1)
+        {
+            items = calloc(count ? count : 1, sizeof *items);
+            if (!items)
+            {
+                tb_names_free(names, count);
+                fail(c, "Out of memory");
+                return NULL;
+            }
+            for (size_t i = 0; i < count; i++)
+            {
+                items[i].name = strdup(names[i]);
+                char *child = join(c, path, names[i]);
+                items[i].directory = tb_is_dir(child);
+                tb_path_info(child, &items[i].size, &items[i].modified);
+            }
+        }
+        tb_names_free(names, count == (size_t)-1 ? 0 : count);
+    }
+    else
+        items = tb_media_entries(path, &count);
     if (count == (size_t)-1 && tb_media_path(input))
     {
         path = keep(c, tb_media_root(input));
@@ -91,7 +120,8 @@ static cJSON *browse_media(Context *c, const char *input)
     for (size_t i = 0; i < count; i++)
     {
         cJSON *entry = cJSON_CreateObject();
-        char *child = tb_media_child(path, items[i].name);
+        char *child = host_directory ? strdup(join(c, path, items[i].name))
+                                     : tb_media_child(path, items[i].name);
         if (!child)
         {
             fail(c, "Cannot name archive member");
@@ -106,6 +136,8 @@ static cJSON *browse_media(Context *c, const char *input)
                 container = tb_media_container(child);
         cJSON_AddBoolToObject(entry, "container", container);
         cJSON_AddNumberToObject(entry, "size", (double)items[i].size);
+        if (items[i].modified != INT64_MIN)
+            cJSON_AddNumberToObject(entry, "modified", (double)items[i].modified);
         cJSON_AddItemToArray(entries, entry);
         free(child);
     }

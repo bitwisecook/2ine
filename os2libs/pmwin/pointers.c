@@ -13,6 +13,7 @@ typedef struct PmPointer
     PmPointerImage *image;
     unsigned hot_x, hot_y;
 } PmPointer;
+static HPOINTER current_pointer;
 static void release_pointer(void *resource)
 {
     PmPointer *pointer = resource;
@@ -21,6 +22,9 @@ static void release_pointer(void *resource)
         link = &(*link)->next;
     if (*link)
         *link = pointer->next;
+    HPOINTER expected = pointer->handle;
+    __atomic_compare_exchange_n(&current_pointer, &expected, 0, FALSE, __ATOMIC_ACQ_REL,
+                                __ATOMIC_ACQUIRE);
     lx_host_pointer_destroy(pointer->host);
     pmPointerImageFree(pointer->image);
     free(pointer);
@@ -160,7 +164,12 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
     if (desktop != HWND_DESKTOP || !getAnchorBlockNoHAB())
         return FALSE;
     if (!handle)
-        return lx_host_pointer_set(NULL);
+    {
+        BOOL result = lx_host_pointer_set(NULL);
+        if (result)
+            __atomic_store_n(&current_pointer, 0, __ATOMIC_RELEASE);
+        return result;
+    }
     LxHandleBorrow borrow;
     if (!lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &borrow))
         return FALSE;
@@ -185,6 +194,8 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
         }
     }
     BOOL result = pointer->host && lx_host_pointer_set(pointer->host);
+    if (result)
+        __atomic_store_n(&current_pointer, handle, __ATOMIC_RELEASE);
     lx_handle_release(&borrow);
     return result;
 }
@@ -268,4 +279,11 @@ BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
 BOOL WinDrawPointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags)
 {
     return !(flags & ~3u) && draw_pointer(space, x, y, handle, flags);
+}
+
+HPOINTER WinQueryPointer(HWND desktop)
+{
+    return desktop == HWND_DESKTOP && getAnchorBlockNoHAB()
+               ? __atomic_load_n(&current_pointer, __ATOMIC_ACQUIRE)
+               : 0;
 }

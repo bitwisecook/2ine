@@ -13,15 +13,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from images import FlatGuest, linear_image
 
-from tests.integration.gnome_balls import click, pump
+from tests.integration.gnome_ball import click, pump
 
 if os.environ.get("TWOINE_GNOME_FRONTEND"):
     sys.path.insert(0, os.environ["TWOINE_GNOME_FRONTEND"])
-    import gnome_balls
+    import gnome_ball
 
-    balls = gnome_balls.balls
+    ball_api = gnome_ball.ball_api
 else:
-    from tools import balls, gnome_balls
+    from tools import ball as ball_api
+    from tools import gnome_ball
 
 
 def main():
@@ -33,15 +34,15 @@ def main():
         os.environ["XDG_DATA_HOME"] = str(root / "data")
         os.environ["XDG_CONFIG_HOME"] = str(root / "config")
         ball = root / "Work.2ineball"
-        balls.configure_library(args.build.resolve())
-        balls.init(ball)
+        ball_api.configure_library(args.build.resolve())
+        ball_api.init(ball)
         guest = FlatGuest()
         guest.exit(0)
         executable = ball / "drive_c/TEMP/APP.EXE"
         executable.write_bytes(
             linear_image(guest.code, guest.fixups, ["DOSCALLS"], "GTKFEATURE", data=guest.data)
         )
-        app = gnome_balls.BallApplication(args.build.resolve(), ball)
+        app = gnome_ball.BallApplication(args.build.resolve(), ball)
         app.register(None)
         app.activate()
         window = app.get_active_window()
@@ -53,7 +54,7 @@ def main():
         assert any(entry["name"] == "APP.EXE" for entry in browser.directory["entries"])
         browser.set_default()
         pump(lambda: not window.busy)
-        assert balls.load(ball)["workingDirectories"]["C"] == r"C:\TEMP"
+        assert ball_api.load(ball)["workingDirectories"]["C"] == r"C:\TEMP"
 
         dialog = window.program_dialog("add-app")
         pump(lambda: dialog.body.get_sensitive())
@@ -65,12 +66,12 @@ def main():
         entry.set_text(r"C:\TEMP")
         dialog.add_variable("PATH", r"%PATH%;C:\TEMP", True)
         dialog.icon_source = str(
-            Path(gnome_balls.__file__).parent / "gnome/io.github.bitwisecook.Twoine.Balls.svg"
+            Path(gnome_ball.__file__).parent / "gnome/io.github.bitwisecook.Twoine.Ball.svg"
         )
         dialog.accept.emit("clicked")
         pump(lambda: not window.busy)
         assert not dialog.error.get_revealed(), dialog.error.get_title()
-        saved = balls.load(ball)["applications"]["Application"]
+        saved = ball_api.load(ball)["applications"]["Application"]
         assert saved["arguments"] == ["a value with spaces", "", r"C:\DATA"]
         assert saved["workingDirectories"]["C"] == r"C:\TEMP"
         assert saved["environment"]["PATH"] == r"%PATH%;C:\TEMP"
@@ -90,16 +91,16 @@ def main():
         editor.accept.emit("clicked")
         pump(lambda: not window.busy)
         assert (
-            balls.load(ball)["applications"]["Renamed Application"]["future"]["counter"]
+            ball_api.load(ball)["applications"]["Renamed Application"]["future"]["counter"]
             == 9223372036854775807
         )
         pump(lambda: window.get_visible_dialog() is None)
         window.undo(window.undo_commands[-1])
         pump(lambda: not window.busy)
-        assert "Application" in balls.load(ball)["applications"]
+        assert "Application" in ball_api.load(ball)["applications"]
         window.history_operation(window.redo_commands[-1], False)
         pump(lambda: not window.busy)
-        assert "Renamed Application" in balls.load(ball)["applications"]
+        assert "Renamed Application" in ball_api.load(ball)["applications"]
 
         # Creation and writes use the internal HPFS filesystem; no host mount is created.
         creation = window.create_image(letter="F")
@@ -108,7 +109,7 @@ def main():
         creation.accept.emit("clicked")
         pump(lambda: not window.busy, timeout=60)
         assert not creation.error.get_revealed(), creation.error.get_title()
-        assert balls.load(ball)["drives"]["F"]["device"] == "disk"
+        assert ball_api.load(ball)["drives"]["F"]["device"] == "disk"
         pump(lambda: window.get_visible_dialog() is None)
         browser = window.drives_page.browser
         browser.load("F:\\")
@@ -117,14 +118,14 @@ def main():
         text.write_text("Imported through the native GNOME UI\n")
         browser.copy_files([text], "F:\\")
         pump(lambda: not window.busy)
-        listing = balls.native_request({"action": "browse", "ball": str(ball), "path": "F:\\"})
+        listing = ball_api.native_request({"action": "browse", "ball": str(ball), "path": "F:\\"})
         assert any(entry["name"] == text.name for entry in listing["entries"])
         protection = window.device_settings("F")
         protection.readonly.set_active(True)
         protection.locked.set_active(True)
         protection.accept.emit("clicked")
         pump(lambda: not window.busy)
-        assert balls.load(ball)["drives"]["F"]["locked"]
+        assert ball_api.load(ball)["drives"]["F"]["locked"]
         pump(lambda: window.get_visible_dialog() is None)
         window.media_command(["eject", "F"])
         pump(lambda: not window.busy)
@@ -133,7 +134,7 @@ def main():
         pump(lambda: not window.busy)
         window.media_command(["eject", "F"])
         pump(lambda: not window.busy)
-        assert "image" not in balls.load(ball)["drives"]["F"]
+        assert "image" not in ball_api.load(ball)["drives"]["F"]
 
         # Verify a real saved launch still runs with the new per-app overrides and imported icon.
         window.execute(["launch", "Renamed Application"])
@@ -147,20 +148,20 @@ def main():
         )
         window.execute(["run", r"C:\TEMP\WAIT.EXE"])
         pump(lambda: window.process is not None)
-        original_request = balls.native_request
+        original_request = ball_api.native_request
 
         def delayed_media(message):
             if message.get("arguments", [None])[0] == "map-image":
                 time.sleep(0.3)
             return original_request(message)
 
-        balls.native_request = delayed_media
+        ball_api.native_request = delayed_media
         window.media_command(["map-image", "F", str(root / "Working Disk.img")])
         assert window.process is not None and window.busy and window.operation_busy
         window.stop_process()
         assert click(window.get_visible_dialog(), "Stop Application")
         pump(lambda: not window.busy)
-        balls.native_request = original_request
+        ball_api.native_request = original_request
         assert window.pending_operations == 0
         assert window.snapshot["manifest"]["drives"]["F"]["image"]
         assert isinstance(window.last_result, int) and window.last_result != 0
@@ -176,7 +177,7 @@ def main():
         pump(lambda: window.get_visible_dialog() is None)
         window.choose_save = chooser
         imported = root / "Imported.2ineball"
-        balls.native_request({"action": "import-ball", "ball": str(imported), "path": str(archive)})
+        ball_api.native_request({"action": "import-ball", "ball": str(imported), "path": str(archive)})
         window.remember(imported)
         pump(lambda: not window.busy)
         assert (

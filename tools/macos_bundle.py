@@ -63,6 +63,10 @@ def bundle_runtime(build, destination, mesa, vulkan_loader):
     destination.mkdir(parents=True)
     if (build / "2ine-build.json").is_file():
         shutil.copy2(build / "2ine-build.json", destination / "2ine-build.json")
+    if (build / "ffmpeg-build.json").is_file():
+        shutil.copy2(build / "ffmpeg-build.json", destination / "ffmpeg-build.json")
+    if (build / "runtime-capabilities.json").is_file():
+        shutil.copy2(build / "runtime-capabilities.json", destination / "runtime-capabilities.json")
     sources = [
         build / "lx_loader",
         build / "2ine-ball",

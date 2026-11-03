@@ -62,6 +62,23 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiQueryPageViewport(HPS ps, PRECTL rect) OS2APIINFO(472);
     OS2EXPORT BOOL OS2API GpiSetAttrs(HPS ps, LONG primitive, ULONG mask, ULONG defaults,
                                       PVOID attrs) OS2APIINFO(588);
+    OS2EXPORT BOOL OS2API GpiDeleteMetaFile(ULONG handle) OS2APIINFO(375);
+    OS2EXPORT ULONG OS2API GpiLoadMetaFile(HAB hab, PSZ filename) OS2APIINFO(401);
+    OS2EXPORT LONG OS2API GpiPlayMetaFile(HPS ps, ULONG handle, LONG count, PLONG options,
+                                          PLONG segments, LONG descriptionLength, PSZ description)
+        OS2APIINFO(411);
+    OS2EXPORT BOOL OS2API GpiQueryBoundaryData(HPS ps, PRECTL bounds) OS2APIINFO(428);
+    OS2EXPORT BOOL OS2API GpiSetDefaultViewMatrix(HPS ps, LONG count, PVOID matrix, LONG options)
+        OS2APIINFO(520);
+    OS2EXPORT BOOL OS2API GpiSetDrawControl(HPS ps, LONG control, LONG value) OS2APIINFO(521);
+    OS2EXPORT BOOL OS2API GpiSetMetaFileBits(ULONG handle, LONG offset, LONG length, PVOID bytes)
+        OS2APIINFO(536);
+    OS2EXPORT LONG OS2API GpiSetBitmapBits(HPS ps, LONG start, LONG scans, PVOID bits, PVOID info)
+        OS2APIINFO(602);
+    OS2EXPORT LONG OS2API GpiQueryBitmapBits(HPS ps, LONG start, LONG scans, PVOID bits, PVOID info)
+        OS2APIINFO(599);
+    OS2EXPORT LONG OS2API GpiDrawBits(HPS ps, PVOID bits, PVOID info, LONG count, PPOINTL points,
+                                      LONG rop, ULONG options) OS2APIINFO(603);
     OS2EXPORT ULONG OS2API GpiCreateBitmap(HPS ps, PVOID header, ULONG options, PVOID bits,
                                            PVOID info) OS2APIINFO(598);
     OS2EXPORT ULONG OS2API GpiLoadBitmap(HPS ps, HMODULE module, ULONG id, LONG width, LONG height)
@@ -125,6 +142,10 @@ extern "C"
     };
     OS2EXPORT BOOL OS2API DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
         OS2APIINFO(606);
+    OS2EXPORT LONG OS2API DevEscape(HDC dc, LONG code, LONG input_count, PVOID input,
+                                    PLONG output_count, PVOID output) OS2APIINFO(605);
+    OS2EXPORT LONG OS2API DevPostDeviceModes(HAB hab, PVOID data, PSZ driver, PSZ device, PSZ name,
+                                             ULONG options) OS2APIINFO(609);
     OS2EXPORT BOOL OS2API DevQueryDeviceNames(HAB hab, PSZ driver, PLONG devices, PVOID names,
                                               PVOID descriptions, PLONG types, PVOID data_types)
         OS2APIINFO(607);

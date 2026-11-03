@@ -47,6 +47,10 @@ ULONG CommDlgExtendedError(void)
 {
     return common_error;
 }
+void open32CommonDialogError(ULONG error)
+{
+    common_error = error;
+}
 BOOL open32FileDialogWindow(ULONG handle)
 {
     for (FileDialog *dialog = file_dialogs; dialog; dialog = dialog->previous)

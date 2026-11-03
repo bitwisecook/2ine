@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "runtime/core/internal.h"
+#include "runtime/features.h"
 void cfgWarn(const char *fname, const int lineno, const char *fmt, ...)
 {
     va_list ap;
@@ -119,6 +120,13 @@ void cfgProcessMountPoint(const char *fname, const int lineno, const char *var, 
 
 void cfgProcessSystem(const char *fname, const int lineno, const char *var, const char *val)
 {
+    int feature = lxRuntimeConfigureFeature(var, val);
+    if (feature)
+    {
+        if (feature < 0)
+            cfgWarn(fname, lineno, "Invalid value for system.%s", var);
+        return;
+    }
     if (strcmp(var, "trace_native") == 0)
     {
         cfgProcessBoolString(fname, lineno, &GLoaderState.trace_native, val);
@@ -126,6 +134,15 @@ void cfgProcessSystem(const char *fname, const int lineno, const char *var, cons
     else if (strcmp(var, "trace_events") == 0)
     {
         cfgProcessBoolString(fname, lineno, &GLoaderState.trace_events, val);
+    }
+    else if (strcmp(var, "display_dpi") == 0)
+    {
+        char *end = NULL;
+        unsigned long dpi = strtoul(val, &end, 10);
+        if (end != val && !*end && dpi >= 72 && dpi <= 384)
+            GLoaderState.display_dpi = (unsigned)dpi;
+        else
+            cfgWarn(fname, lineno, "Display DPI must be a whole number between 72 and 384");
     }
     else if (strcmp(var, "beep_volume") == 0)
     {

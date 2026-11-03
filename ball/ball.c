@@ -31,6 +31,7 @@ typedef struct Context
     int unavailable[26];
     cJSON *manifest;
     const cJSON *application;
+    const char *opengl_policy;
 } Context;
 
 static int fail(Context *c, const char *format, ...)
@@ -707,7 +708,26 @@ static int validate_system(Context *c)
             if (end == v || *end || !isfinite(number) || number < 0 || number > 1)
                 return fail(c, "beep_volume must be between 0 and 1");
         }
-        else if (!strcmp(entry->string, "trace_native") || !strcmp(entry->string, "trace_events"))
+        else if (!strcmp(entry->string, "display_dpi"))
+        {
+            char *end = NULL;
+            long number = strtol(v, &end, 10);
+            if (end == v || *end || number < 72 || number > 384)
+                return fail(c, "display_dpi must be a whole number between 72 and 384");
+        }
+        else if (!strcmp(entry->string, "opengl"))
+        {
+            if (strcmp(v, "mesa") && strcmp(v, "original") && strcmp(v, "off"))
+                return fail(c, "opengl must be mesa, original or off");
+        }
+        else if (!strcmp(entry->string, "window_chrome"))
+        {
+            if (strcmp(v, "native") && strcmp(v, "os2") && strcmp(v, "both"))
+                return fail(c, "window_chrome must be native, os2 or both");
+        }
+        else if (!strcmp(entry->string, "trace_native") || !strcmp(entry->string, "trace_events") ||
+                 !strcmp(entry->string, "video") || !strcmp(entry->string, "pcm") ||
+                 !strcmp(entry->string, "midi") || !strcmp(entry->string, "dive"))
         {
             const char *valid[] = {"1",  "yes", "y",     "true", "t",   "on", "0",
                                    "no", "n",   "false", "f",    "off", NULL};
@@ -743,6 +763,7 @@ static int write_config(Context *c)
 }
 static cJSON *guest_environment(Context *c, const cJSON *overrides);
 static cJSON *os2_support(Context *c);
+static cJSON *dependency_audit_latest(Context *c);
 static cJSON *snapshot(Context *c)
 {
     if (!roots(c))
@@ -755,6 +776,9 @@ static cJSON *snapshot(Context *c)
     cJSON *value = cJSON_CreateObject(), *mapping = cJSON_CreateObject();
     cJSON_AddItemToObject(value, "manifest", cJSON_Duplicate(c->manifest, 1));
     cJSON_AddItemToObject(value, "os2Support", os2_support(c));
+    cJSON *dependency_audit = dependency_audit_latest(c);
+    if (dependency_audit)
+        cJSON_AddItemToObject(value, "dependencyAudit", dependency_audit);
     cJSON *records = cJSON_AddObjectToObject(value, "applicationRecords"), *application;
     cJSON_ArrayForEach(application, get(c->manifest, "applications"))
     {
@@ -841,7 +865,9 @@ static const char *unset_keys[] = {"IS_2INE",
                                    "TWOINE_SYSTEM_PROFILE",
                                    "TWOINE_REGISTRY",
                                    "TWOINE_OBJECTS",
+                                   "TWOINE_DISPLAY_DPI",
                                    "TWOINE_IPC_DIR",
+                                   "DYLD_LIBRARY_PATH",
                                    NULL};
 static int init_ball(Context *c, const char *path)
 {
@@ -922,8 +948,8 @@ static char *hex(Context *c, const unsigned char hash[32])
 static int runtime_name(const char *s)
 {
     size_t n = strlen(s);
-    return !strcmp(s, "lx_loader") || !strcmp(s, "lx_loader.exe") ||
-           (n > 4 && !strcmp(s + n - 4, ".dll")) ||
+    return !strcmp(s, "runtime-capabilities.json") || !strcmp(s, "lx_loader") ||
+           !strcmp(s, "lx_loader.exe") || (n > 4 && !strcmp(s + n - 4, ".dll")) ||
            (!strncmp(s, "lib", 3) &&
             ((n > 3 && !strcmp(s + n - 3, ".so")) || (n > 6 && !strcmp(s + n - 6, ".dylib"))));
 }
@@ -1281,11 +1307,17 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
         }
         part = next;
     }
-    const char *keys[] = {"TWOINE_IPC_DIR",        "TWOINE_BALL",
-                          "TWOINE_CONFIG",         "TWOINE_USER_PROFILE",
-                          "TWOINE_SYSTEM_PROFILE", "TWOINE_REGISTRY",
-                          "TWOINE_OBJECTS",        "TWOINE_LIBPATH",
-                          "TWOINE_RUNTIME_ID",     NULL};
+    const char *keys[] = {"TWOINE_IPC_DIR",
+                          "TWOINE_BALL",
+                          "TWOINE_CONFIG",
+                          "TWOINE_USER_PROFILE",
+                          "TWOINE_SYSTEM_PROFILE",
+                          "TWOINE_REGISTRY",
+                          "TWOINE_OBJECTS",
+                          "TWOINE_LIBPATH",
+                          "TWOINE_RUNTIME_ID",
+                          "TWOINE_DISPLAY_DPI",
+                          NULL};
     const char *values[] = {join(c, c->ball, "ipc"),
                             c->ball,
                             join(c, c->ball, "2ine.cfg"),
@@ -1294,7 +1326,10 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
                             join(c, c->roots[2], "OS2/REGISTRY.INI"),
                             join(c, c->roots[2], "OS2/OBJECTS.INI"),
                             libpath,
-                            identity};
+                            identity,
+                            get(get(c->manifest, "system"), "display_dpi")
+                                ? setting_text(c, get(get(c->manifest, "system"), "display_dpi"))
+                                : "96"};
     if (c->error)
         goto failed;
     for (int i = 0; keys[i]; i++)
@@ -1303,6 +1338,13 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
     put(env, "LD_LIBRARY_PATH",
         cJSON_CreateString(format(c, "%s%s%s%s%s", runtime, PATH_SEPARATOR, build,
                                   ld && *ld ? PATH_SEPARATOR : "", ld ? ld : "")));
+    if (tb_host_uses_dyld())
+    {
+        const char *dyld = getenv("DYLD_LIBRARY_PATH");
+        put(env, "DYLD_LIBRARY_PATH",
+            cJSON_CreateString(format(c, "%s%s%s%s%s", runtime, PATH_SEPARATOR, build,
+                                      dyld && *dyld ? PATH_SEPARATOR : "", dyld ? dyld : "")));
+    }
     if (backend)
         put(env, "TWOINE_BACKEND", cJSON_CreateString(backend));
     return env;
@@ -1372,6 +1414,11 @@ static char *command_interpreter(Context *c)
     return NULL;
 }
 #include "os2_support.h"
+#include "os2_extract.h"
+#include "os2_dependencies.h"
+#include "configuration.h"
+#include "runtime_selection.h"
+#include "runtime_features.h"
 
 static cJSON *prepare(Context *c, const cJSON *request)
 {
@@ -1522,10 +1569,18 @@ static cJSON *prepare(Context *c, const cJSON *request)
         fail(c, "Working directory must be a mapped directory");
         goto failed;
     }
-    if (!write_config(c))
+    if (!runtime_features_validate(c, build) || !write_config(c))
         goto failed;
-    cJSON *env =
-        environment(c, build, field(request, "backend"), get(c->application, "environment"));
+    const char *override = field(request, "backend");
+    const char *saved_backend = field(get(c->manifest, "runtime"), "backend");
+    const char *wanted = override        ? override
+                         : saved_backend ? saved_backend
+                                         : getenv("TWOINE_BACKEND");
+    const char *backend = effective_backend(c, build, wanted, !override && saved_backend != NULL);
+    if (!backend)
+        goto failed;
+    cJSON *env = environment(c, build, !strcmp(backend, "default") ? NULL : backend,
+                             get(c->application, "environment"));
     if (!env)
         goto failed;
     for (int i = 0; i < 26; i++)
@@ -1952,6 +2007,7 @@ static cJSON *browse_directory(Context *c, const char *path)
         fail(c, "Choose an accessible mapped directory");
         return NULL;
     }
+
     /* Preserve the drive the user chose for nested or duplicate mappings. */
     int drive = path && isalpha((unsigned char)path[0]) && path[1] == ':'
                     ? toupper((unsigned char)path[0]) - 'A'
@@ -2004,6 +2060,14 @@ static cJSON *browse_directory(Context *c, const char *path)
             format(c, "%s%s%s", guest, guest[strlen(guest) - 1] == '\\' ? "" : "\\", names[i]));
         cJSON_AddStringToObject(entry, "hostPath", child);
         cJSON_AddBoolToObject(entry, "directory", directory);
+        uint64_t size = 0;
+        int64_t modified = INT64_MIN;
+        if (tb_path_info(child, &size, &modified))
+        {
+            cJSON_AddNumberToObject(entry, "size", (double)size);
+            if (modified != INT64_MIN)
+                cJSON_AddNumberToObject(entry, "modified", (double)modified);
+        }
         cJSON_AddItemToArray(entries, entry);
     }
     tb_names_free(names, count);
@@ -2217,6 +2281,18 @@ static cJSON *application_icon(Context *c, const cJSON *request)
         program = field(app, "program");
     const char *custom = field(app, "icon");
     cJSON *result = cJSON_CreateObject();
+    if (program)
+    {
+        const char *base = program;
+        for (const char *p = program; *p; p++)
+            if (*p == '/' || *p == '\\')
+                base = p + 1;
+        char *fallback = keep(c, strdup(base));
+        char *dot = fallback ? strrchr(fallback, '.') : NULL;
+        if (dot && dot != fallback)
+            *dot = 0;
+        cJSON_AddStringToObject(result, "displayName", fallback ? fallback : base);
+    }
     if (custom)
     {
         char *path = case_path(c, join(c, c->ball, custom));
@@ -2257,6 +2333,14 @@ static cJSON *application_icon(Context *c, const cJSON *request)
         {
             size_t size = 0;
             char *bytes = read_file(c, host, &size, 0);
+            char *description =
+                bytes ? tb_executable_description((const uint8_t *)bytes, size) : NULL;
+            if (description)
+            {
+                cJSON_DeleteItemFromObjectCaseSensitive(result, "displayName");
+                cJSON_AddStringToObject(result, "displayName", description);
+                free(description);
+            }
             TbIconImage *icon =
                 bytes ? tb_icon_executable((const unsigned char *)bytes, size) : NULL;
             if (icon)
@@ -2284,6 +2368,28 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     {
         fail(c, "An action is required");
         return NULL;
+    }
+    if (!strcmp(action, "effective-runtime"))
+    {
+        const char *candidates[] = {field(request, "path"), field(request, "build")};
+        for (unsigned i = 0; i < 2; i++)
+            if (candidates[i] && *candidates[i] && native_host_path(candidates[i]) &&
+                (tb_host_executable(join(c, candidates[i], "lx_loader")) ||
+                 tb_host_executable(join(c, candidates[i], "lx_loader.exe"))))
+                return cJSON_CreateString(candidates[i]);
+        fail(c, "No compatible host runtime is available. Choose a runtime for this computer.");
+        return NULL;
+    }
+    if (!strcmp(action, "effective-backend"))
+    {
+        const char *build = field(request, "build");
+        if (!build || !*build)
+        {
+            fail(c, "A receiving host runtime is required");
+            return NULL;
+        }
+        const char *backend = effective_backend(c, build, field(request, "path"), 1);
+        return backend ? cJSON_CreateString(backend) : NULL;
     }
     if (!strcmp(action, "format-arguments"))
     {
@@ -2478,7 +2584,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         if (!home)
             return NULL;
         char *base = xdg && *xdg ? keep(c, strdup(xdg)) : join(c, home, ".local/share");
-        char *directory = join(c, base, "2ine/balls");
+        char *directory = join(c, base, "2ine/ball");
         cJSON *list = cJSON_CreateArray();
         size_t n = 0;
         char **names = tb_names(directory, &n);
@@ -2505,6 +2611,32 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     }
     if (!load(c, request))
         return NULL;
+    if (!strcmp(action, "audit-dependencies") || !strcmp(action, "record-install") ||
+        !strcmp(action, "open-os2-source") || !strcmp(action, "plan-os2-extraction") ||
+        !strcmp(action, "import-os2-support"))
+    {
+        runtime_feature_policy(c, field(request, "build"));
+        if (c->error)
+            return NULL;
+    }
+    if (!strcmp(action, "runtime-features"))
+        return runtime_features(c, field(request, "build"));
+    if (!strcmp(action, "config-sys"))
+    {
+        size_t n = 0;
+        char *bytes = read_file(c, join(c, c->roots[2], "CONFIG.SYS"), &n, 1);
+        return bytes ? cJSON_CreateString(latin1_to_utf8(c, bytes, n)) : NULL;
+    }
+    if (!strcmp(action, "configuration-files"))
+        return configuration_files(c, request);
+    if (!strcmp(action, "configuration-file-read"))
+        return configuration_file_read(c, request);
+    if (!strcmp(action, "configuration-file-write"))
+        return configuration_file_write(c, request);
+    if (!strcmp(action, "configuration-read"))
+        return configuration_read(c, request);
+    if (!strcmp(action, "configuration-write"))
+        return configuration_write(c, request);
     if (!strcmp(action, "audio-snapshot"))
         return audio_snapshot(c);
     if (!strcmp(action, "save-audio"))
@@ -2517,8 +2649,13 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return os2_support(c);
     if (!strcmp(action, "browse-media"))
         return browse_media(c, field(request, "path"));
+    if (!strcmp(action, "open-os2-source"))
+        return open_os2_source(c, request);
+    if (!strcmp(action, "plan-os2-extraction"))
+        return plan_os2_extraction(c, request);
     if (!strcmp(action, "import-os2-support"))
-        return import_os2_support(c, request);
+        return get(request, "categories") ? extract_os2_categories(c, request)
+                                          : import_os2_support(c, request);
     if (!strcmp(action, "snapshot"))
         return snapshot(c);
     if (!strcmp(action, "browse"))
@@ -2565,11 +2702,12 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             return NULL;
         return snapshot(c);
     }
-    if (!strcmp(action, "runtime-build"))
+    if (!strcmp(action, "runtime-build") || !strcmp(action, "restore-runtime"))
     {
+        int restore = !strcmp(action, "restore-runtime");
         const char *name = field(request, "build");
-        char *build = name ? resolve_path(c, name, 1) : NULL;
-        if (name && (!build || !loader_name(c, build)))
+        const char *build = restore ? name : name ? resolve_path(c, name, 1) : NULL;
+        if (!restore && name && (!build || !loader_name(c, build)))
             return NULL;
         cJSON *runtime = object(c->manifest, "runtime");
         if (!runtime)
@@ -2614,6 +2752,16 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     }
     if (!strcmp(action, "prepare-launch"))
         return prepare(c, request);
+    if (!strcmp(action, "audit-dependencies"))
+    {
+        const cJSON *resolve = get(request, "resolve");
+        if (resolve && !cJSON_IsBool(resolve))
+        {
+            fail(c, "resolve must be a boolean");
+            return NULL;
+        }
+        return audit_dependencies(c, request, !resolve || cJSON_IsTrue(resolve));
+    }
     if (!strcmp(action, "record-install"))
     {
         cJSON *receipt = get(request, "receipt"), *exit = get(request, "exitCode");
@@ -2634,6 +2782,12 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             put(saved, "program_sha256", cJSON_CreateString(hex(c, digest)));
         put(saved, "exit_code", cJSON_Duplicate(exit, 1));
         put(saved, "finished", cJSON_CreateString(now(c)));
+        cJSON *audit = audit_dependencies(c, request, exit->valuedouble == 0);
+        if (audit)
+        {
+            put(saved, "dependencyAudit", dependency_compact(audit));
+            cJSON_Delete(audit);
+        }
         int ok = write_json(c, join(c, c->ball, "logs/last-install.json"), saved);
         cJSON_Delete(saved);
         return ok ? snapshot(c) : NULL;
@@ -2674,6 +2828,7 @@ int tb_request(const char *text, char **result, char **error)
     *result = NULL;
     *error = NULL;
     Context c = {0};
+    tb_media_session_begin();
     cJSON *request = text ? cJSON_ParseWithOpts(text, NULL, 1) : NULL;
     cJSON *response = NULL;
     if (!cJSON_IsObject(request))
@@ -2691,5 +2846,6 @@ int tb_request(const char *text, char **result, char **error)
         free(c.allocations[i]);
     free(c.allocations);
     *error = c.error;
+    tb_media_session_end();
     return c.error || !*result ? 2 : 0;
 }

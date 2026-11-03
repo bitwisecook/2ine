@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools import balls
+from tools import ball as ball_api
 
 
 def main():
@@ -24,7 +24,7 @@ def main():
     ball = work / "Floppies.2ineball"
 
     def request(*arguments):
-        return balls.native_request(
+        return ball_api.native_request(
             {"action": "command", "ball": str(ball), "arguments": list(arguments)}
         )
 

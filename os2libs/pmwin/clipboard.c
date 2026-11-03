@@ -12,7 +12,7 @@ typedef struct ClipFormat
 typedef struct SystemAtom
 {
     char *name;
-    ULONG id, references;
+    ULONG id, references, table;
     struct SystemAtom *next;
 } SystemAtom;
 static LxHostOnce clipboard_once = LX_HOST_ONCE_INIT;
@@ -21,6 +21,22 @@ static AnchorBlock *clipboard_open;
 static HWND clipboard_owner;
 static ClipFormat *formats;
 static SystemAtom *atoms;
+typedef struct PrivateAtomTable
+{
+    ULONG handle;
+    struct PrivateAtomTable *next;
+} PrivateAtomTable;
+static PrivateAtomTable *atom_tables;
+static ULONG next_atom_table = 2;
+static BOOL valid_atom_table(ULONG table)
+{
+    if (table == 1)
+        return TRUE;
+    for (PrivateAtomTable *item = atom_tables; item; item = item->next)
+        if (item->handle == table)
+            return TRUE;
+    return FALSE;
+}
 static void initialize_clipboard(void)
 {
     clipboard_mutex = lx_host_mutex_create(0, 0);
@@ -163,18 +179,29 @@ ULONG WinQuerySystemAtomTable(VOID)
 }
 static ULONG atom_name(ULONG table, PSZ name, BOOL add)
 {
-    if (table != WinQuerySystemAtomTable() || !name)
+    if (!name)
         return 0;
     uintptr_t value = (uintptr_t)name;
     if (value < 0x10000 || (value <= UINT32_MAX && value >= 0xffff0000))
-        return value & 0xffff;
+    {
+        if (!lock_clipboard())
+            return 0;
+        ULONG result = valid_atom_table(table) ? (ULONG)(value & 0xffff) : 0;
+        lx_host_mutex_unlock(clipboard_mutex);
+        return result;
+    }
     if (!*name || strlen(name) > 255 || !lock_clipboard())
         return 0;
+    if (!valid_atom_table(table))
+    {
+        lx_host_mutex_unlock(clipboard_mutex);
+        return 0;
+    }
     SystemAtom *item = atoms;
     ULONG id = 0xc000;
-    while (item && strcasecmp(item->name, name))
+    while (item && (item->table != table || strcasecmp(item->name, name)))
     {
-        if (item->id >= id)
+        if (item->table == table && item->id >= id)
             id = item->id + 1;
         item = item->next;
     }
@@ -194,6 +221,7 @@ static ULONG atom_name(ULONG table, PSZ name, BOOL add)
             else
             {
                 item->id = id;
+                item->table = table;
                 item->references = 1;
                 item->next = atoms;
                 atoms = item;
@@ -214,14 +242,22 @@ ULONG WinFindAtom(ULONG table, PSZ name)
 }
 ULONG WinDeleteAtom(ULONG table, ULONG atom)
 {
-    if (table != WinQuerySystemAtomTable() || !atom)
+    if (!atom)
         return atom;
-    if (atom < 0xc000)
-        return 0;
     if (!lock_clipboard())
         return atom;
+    if (!valid_atom_table(table))
+    {
+        lx_host_mutex_unlock(clipboard_mutex);
+        return atom;
+    }
+    if (atom < 0xc000)
+    {
+        lx_host_mutex_unlock(clipboard_mutex);
+        return 0;
+    }
     SystemAtom **slot = &atoms;
-    while (*slot && (*slot)->id != atom)
+    while (*slot && ((*slot)->table != table || (*slot)->id != atom))
         slot = &(*slot)->next;
     ULONG result = *slot ? 0 : atom;
     if (*slot && !--(*slot)->references)
@@ -244,4 +280,50 @@ ULONG lx_pm_clipboard_count(void)
         count++;
     lx_host_mutex_unlock(clipboard_mutex);
     return count;
+}
+
+ULONG WinCreateAtomTable(ULONG initial, ULONG buckets)
+{
+    if (initial > 16 * 1024 * 1024 || buckets > 65535 || !lock_clipboard())
+        return 0;
+    PrivateAtomTable *table = next_atom_table < UINT32_MAX ? calloc(1, sizeof *table) : NULL;
+    if (table)
+    {
+        table->handle = next_atom_table++;
+        table->next = atom_tables;
+        atom_tables = table;
+    }
+    ULONG result = table ? table->handle : 0;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return result;
+}
+ULONG WinDestroyAtomTable(ULONG handle)
+{
+    if (!lock_clipboard())
+        return handle;
+    PrivateAtomTable **slot = &atom_tables;
+    while (*slot && (*slot)->handle != handle)
+        slot = &(*slot)->next;
+    BOOL valid = *slot != NULL;
+    if (valid)
+    {
+        PrivateAtomTable *table = *slot;
+        *slot = table->next;
+        free(table);
+        SystemAtom **atom = &atoms;
+        while (*atom)
+        {
+            SystemAtom *item = *atom;
+            if (item->table == handle)
+            {
+                *atom = item->next;
+                free(item->name);
+                free(item);
+            }
+            else
+                atom = &item->next;
+        }
+    }
+    lx_host_mutex_unlock(clipboard_mutex);
+    return valid ? 0 : handle;
 }

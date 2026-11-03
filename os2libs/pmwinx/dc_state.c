@@ -113,8 +113,11 @@ BOOL RestoreDC(ULONG handle, LONG level)
     lx_handle_release(&dc->palette);
     Open32SavedDC *end = saved->next, *top = dc->saved;
     Open32DC *next = dc->next;
+    BOOL print_active = dc->print_active, print_page = dc->print_page;
     *dc = saved->state;
     dc->next = next;
+    dc->print_active = print_active;
+    dc->print_page = print_page;
     dc->saved = end;
     saved->state.font = (LxHandleBorrow){0};
     saved->state.brush = (LxHandleBorrow){0};

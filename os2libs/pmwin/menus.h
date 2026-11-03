@@ -16,8 +16,10 @@ typedef struct PmMenu
     size_t count;
     int selected;
     HWND focus;
+    HWND active_parent;
 } PmMenu;
 LX_PRIVATE BOOL createSystemMenu(Window *frame, ULONG flags);
+LX_PRIVATE BOOL createMinMaxMenu(Window *frame, ULONG flags);
 Window *lx_pm_menu_window(HWND handle);
 BOOL lx_pm_menu_attach(HWND menu, HWND parent);
 BOOL lx_pm_menu_owner(HWND menu, HWND owner);

@@ -10,7 +10,7 @@
 static const char *families[] = {"Helv", "Tms Rmn", "Courier"};
 static const char *styles[] = {"", " Bold", " Italic", " Bold Italic"};
 
-static int font_metrics(unsigned index, LxHostFont *font, FONTMETRICS *output)
+static int font_metrics(unsigned index, LxHostFont *font, unsigned dpi, FONTMETRICS *output)
 {
     LxHostFontMetrics m;
     if (index >= 12 || !lx_host_font_metrics(font, &m))
@@ -31,18 +31,18 @@ static int font_metrics(unsigned index, LxHostFont *font, FONTMETRICS *output)
     output->lMaxCharInc = m.maximum_width;
     output->lEmInc = m.em;
     output->lMaxBaselineExt = m.ascent + m.descent;
-    output->usWeightClass = m.bold ? 7 : 5;
+    output->usWeightClass = (index & 1) ? 7 : 5;
     output->usWidthClass = 5;
-    output->sXDeviceRes = output->sYDeviceRes = 96;
+    output->sXDeviceRes = output->sYDeviceRes = (SHORT)dpi;
     output->sLastChar = 255;
     output->sDefaultChar = '?';
     output->sBreakChar = ' ';
-    output->sNominalPointSize = (SHORT)(m.em * 720 / 96);
+    output->sNominalPointSize = (SHORT)(m.em * 720 / (int)dpi);
     output->sMinimumPointSize = 10;
     output->sMaximumPointSize = 3840;
     output->fsType = m.fixed ? 1 : 0; /* FM_TYPE_FIXED */
     output->fsDefn = 1;               /* FM_DEFN_OUTLINE */
-    output->fsSelection = (m.bold ? 0x20 : 0) | (m.italic ? 1 : 0);
+    output->fsSelection = ((index & 1) ? 0x20 : 0) | ((index & 2) ? 1 : 0);
     output->lUnderscoreSize = m.underline_size;
     output->lUnderscorePosition = m.underline_position;
     output->lStrikeoutSize = m.strikeout_size;
@@ -59,15 +59,16 @@ LONG GpiQueryFonts(HPS hps, ULONG options, PSZ face, PLONG requested, LONG recor
         (options & ~15u) || (*requested && (!record_size || !output)) ||
         (uint64)(uint32)*requested * (uint32)record_size > SIZE_MAX)
         return -255;
+    unsigned dpi = lx_pm_dc_dpi(GpiQueryDevice(hps));
     LONG found = 0, copied = 0, capacity = *requested;
     if ((options & 1) && !(options & 8)) /* public device fonts */
         for (unsigned index = 0; index < lx_host_font_count(); index++)
         {
-            LxHostFont *font = lx_host_font_open(index, 16);
+            LxHostFont *font = lx_host_font_open(index, (16 * dpi + 48) / 96);
             FONTMETRICS metrics;
             LxHostFontMetrics host;
-            int valid =
-                font && font_metrics(index, font, &metrics) && lx_host_font_metrics(font, &host);
+            int valid = font && font_metrics(index, font, dpi, &metrics) &&
+                        lx_host_font_metrics(font, &host);
             lx_host_font_close(font);
             if (!valid ||
                 (face && strcmp(face, metrics.szFamilyname) && strcmp(face, metrics.szFacename) &&
@@ -92,7 +93,7 @@ BOOL GpiQueryFontMetrics(HPS hps, LONG record_size, PFONTMETRICS output)
         return FALSE;
     FONTMETRICS metrics;
     LxHostFont *font = lx_pm_font(hps);
-    if (!font_metrics(lx_pm_font_index(hps), font, &metrics))
+    if (!font_metrics(lx_pm_font_index(hps), font, lx_pm_dc_dpi(GpiQueryDevice(hps)), &metrics))
         return FALSE;
     size_t bytes = (size_t)record_size < sizeof metrics ? (size_t)record_size : sizeof metrics;
     if (bytes)
@@ -143,6 +144,11 @@ LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
         memcpy(ps->font_names[id], name, 8);
     else
         memset(ps->font_names[id], 0, 8);
+    TRACE_NATIVE(
+        "Logical font id=%d face='%s' select=%X match=%d baseline=%d average=%d codepage=%u type=%X use=%X",
+        (int)id, attrs->szFacename, attrs->fsSelection, (int)attrs->lMatch,
+        (int)attrs->lMaxBaselineExt, (int)attrs->lAveCharWidth, attrs->usCodePage, attrs->fsType,
+        attrs->fsFontUse);
     unsigned index = 0;
     BOOL matched = FALSE;
     for (unsigned i = 0; i < 12; i++)
@@ -156,26 +162,36 @@ LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
             break;
         }
     }
+    BOOL forced_match = FALSE;
     if (attrs->lMatch > 0 && attrs->lMatch <= 12)
     {
         unsigned candidate = (unsigned)attrs->lMatch - 1;
         char face[64];
         snprintf(face, sizeof face, "%s%s", families[candidate / 4], styles[candidate % 4]);
         if (!strcasecmp(attrs->szFacename, face))
+        {
             index = candidate;
+            forced_match = TRUE;
+        }
     }
+    /* A valid lMatch fixes the physical face. Requested style can be simulated
+       without changing the match number/design attributes returned by queries. */
+    unsigned physical_index = index;
     index = (index & ~3u) | (index % 4) | ((attrs->fsSelection & 0x20) ? 1 : 0) |
             ((attrs->fsSelection & 1) ? 2 : 0);
-    unsigned pixels = attrs->lMaxBaselineExt > 0 && attrs->lMaxBaselineExt <= 512
-                          ? (unsigned)attrs->lMaxBaselineExt
-                          : 16;
+    unsigned pixels =
+        !(attrs->fsFontUse & 2) && attrs->lMaxBaselineExt > 0 && attrs->lMaxBaselineExt <= 512
+            ? (unsigned)attrs->lMaxBaselineExt
+            : (16 * lx_pm_dc_dpi(ps->dc) + 48) / 96;
     ps->logical_fonts[id].index = index;
+    ps->logical_fonts[id].metric_index = forced_match ? physical_index : index;
     ps->logical_fonts[id].pixels = pixels;
     ps->logical_fonts[id].defined = TRUE;
     return matched ? 2 : 1;
 }
 BOOL GpiSetCharSet(HPS handle, LONG id)
 {
+    TRACE_NATIVE("GpiSetCharSet(%u, %d)", (uint)handle, (int)id);
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || id < 0 || id > 254 || (id && !ps->logical_fonts[id].defined))
         return FALSE;
@@ -189,6 +205,7 @@ LONG GpiQueryCharSet(HPS handle)
 }
 BOOL GpiDeleteSetId(HPS handle, LONG id)
 {
+    TRACE_NATIVE("GpiDeleteSetId(%u, %d)", (uint)handle, (int)id);
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || id < -1 || id > 254 || (id > 0 && ps->charset == id))
         return FALSE;
@@ -208,6 +225,7 @@ BOOL GpiDeleteSetId(HPS handle, LONG id)
 }
 BOOL GpiSetCharBox(HPS handle, PSIZEF box)
 {
+    TRACE_NATIVE("GpiSetCharBox(%u, %d, %d)", (uint)handle, box ? box->cx : 0, box ? box->cy : 0);
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || !box)
         return FALSE;
@@ -220,8 +238,9 @@ BOOL GpiQueryCharBox(HPS handle, PSIZEF box)
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || !box)
         return FALSE;
-    box->cx = ps->char_width ? ps->char_width : 16 * 65536;
-    box->cy = ps->char_height ? ps->char_height : 16 * 65536;
+    LONG pixels = (LONG)((16 * lx_pm_dc_dpi(ps->dc) + 48) / 96);
+    box->cx = ps->char_width ? ps->char_width : pixels * 65536;
+    box->cy = ps->char_height ? ps->char_height : pixels * 65536;
     return TRUE;
 }
 
@@ -270,6 +289,7 @@ BOOL GpiQueryWidthTable(HPS handle, LONG first, LONG count, PLONG output)
 }
 LONG GpiCharStringAt(HPS handle, PPOINTL point, LONG count, PCH text)
 {
+    TRACE_NATIVE("GpiCharStringAt(%u, %p, %d, %p)", (uint)handle, point, (int)count, text);
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? lx_pm_text(handle, point, count, text, ps->primitive_color[1], NULL) : 0;
 }

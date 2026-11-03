@@ -339,7 +339,11 @@ MRESULT WinDefDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
         HPS space = WinBeginPaint(window, 0, &rect);
         if (space)
         {
-            WinFillRect(space, &rect, CLR_PALEGRAY);
+            LONG color = windowPresentationColor(getWindowFromHWND(getAnchorBlockNoHAB(), window),
+                                                 FALSE, WinQuerySysColor(HWND_DESKTOP, -34, 0));
+            if (lx_pm_color_table(space, 0, 2, 254, 1, &color))
+                WinFillRect(space, &rect, 254);
+            paintFrameBorder(getWindowFromHWND(getAnchorBlockNoHAB(), window), space);
             WinEndPaint(space);
         }
         return 0;
@@ -350,38 +354,55 @@ MRESULT WinSendDlgItemMsg(HWND window, ULONG id, ULONG message, MPARAM first, MP
 {
     return WinSendMsg(WinWindowFromID(window, id), message, first, second);
 }
+typedef struct
+{
+    unsigned dpi;
+    LONG width, height;
+} SystemDialogMetrics;
+static LX_HOST_THREAD_LOCAL SystemDialogMetrics DialogMetrics;
+static BOOL mapDialogCoordinate(LONG input, LONG numerator, LONG divisor, LONG *output)
+{
+    int64_t value = (int64_t)input * numerator;
+    value = (value + (value < 0 ? -(int64_t)divisor / 2 : divisor / 2)) / divisor;
+    if (value < INT32_MIN || value > INT32_MAX)
+        return FALSE;
+    *output = (LONG)value;
+    return TRUE;
+}
 BOOL WinMapDlgPoints(HWND window, PPOINTL points, ULONG count, BOOL to_pixels)
 {
-    if (count > 65536 || (count && !points))
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (count > 65536 || (count && !points) || !anchor || !getWindowFromHWND(anchor, window))
         return FALSE;
-    HPS space = WinGetPS(window);
-    LxHostFontMetrics metrics;
-    BOOL valid = space && lx_host_font_metrics(lx_pm_font(space), &metrics) &&
-                 metrics.average_width > 0 && metrics.ascent + metrics.descent > 0;
-    if (space)
-        WinReleasePS(space);
-    if (!valid)
-        return FALSE;
-    LONG factors[2] = {metrics.average_width, metrics.ascent + metrics.descent};
+    unsigned dpi = lx_pm_dc_dpi(0);
+    if (DialogMetrics.dpi != dpi)
+    {
+        /* System Proportional's 96-DPI average width and maximum baseline.
+           Presentation fonts affect text, independently of template coordinates. */
+        DialogMetrics.width = lx_pm_display_scale(6);
+        DialogMetrics.height = lx_pm_display_scale(16);
+        DialogMetrics.dpi = dpi;
+    }
+    LONG factors[2] = {DialogMetrics.width, DialogMetrics.height};
     for (ULONG i = 0; i < count; i++)
     {
         for (unsigned j = 0; j < 2; j++)
         {
-            sint64 value = (sint64)(j ? points[i].y : points[i].x) * (to_pixels ? factors[j]
-                                                                      : j       ? 8
-                                                                                : 4);
-            LONG divisor = to_pixels ? (j ? 8 : 4) : factors[j];
-            value /= divisor;
-            if (value < INT32_MIN || value > INT32_MAX)
+            LONG output;
+            if (!mapDialogCoordinate(j ? points[i].y : points[i].x,
+                                     to_pixels ? factors[j]
+                                     : j       ? 8
+                                               : 4,
+                                     to_pixels ? (j ? 8 : 4) : factors[j], &output))
                 return FALSE;
         }
     }
     for (ULONG i = 0; i < count; i++)
     {
-        points[i].x = (LONG)((sint64)points[i].x * (to_pixels ? factors[0] : 4) /
-                             (to_pixels ? 4 : factors[0]));
-        points[i].y = (LONG)((sint64)points[i].y * (to_pixels ? factors[1] : 8) /
-                             (to_pixels ? 8 : factors[1]));
+        mapDialogCoordinate(points[i].x, to_pixels ? factors[0] : 4, to_pixels ? 4 : factors[0],
+                            &points[i].x);
+        mapDialogCoordinate(points[i].y, to_pixels ? factors[1] : 8, to_pixels ? 8 : factors[1],
+                            &points[i].y);
     }
     return TRUE;
 }

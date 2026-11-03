@@ -30,7 +30,7 @@ if(CMAKE_CONFIGURATION_TYPES)
 endif()
 file(GENERATE OUTPUT "${TWOINE_BUILD_INFO_DIRECTORY}/2ine-build.json" CONTENT
 "{\n  \"sourceVersion\": \"${TWOINE_SOURCE_VERSION}\",\n  \"sourceRevision\": \"${TWOINE_SOURCE_REVISION}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"system\": \"${CMAKE_SYSTEM_NAME}\",\n  \"architecture\": \"${CMAKE_SYSTEM_PROCESSOR}\",\n  \"compiler\": \"${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}\"\n}\n")
-set(TWOINE_BALL_SOURCES hpfs_volume.c fat_volume.c vendor/fatfs/ff.c vendor/fatfs/ffunicode.c disk_image.c media.c pack.c ball.c platform.c icon_bitmap.c icon_executable.c format_decompress.c vendor/cjson/cJSON.c vendor/sha256/sha256.c)
+set(TWOINE_BALL_SOURCES hpfs_volume.c fat_volume.c vendor/fatfs/ff.c vendor/fatfs/ffunicode.c disk_image.c read_stream.c media.c pack.c ball.c platform.c icon_bitmap.c icon_executable.c format_decompress.c vendor/cjson/cJSON.c vendor/sha256/sha256.c vendor/hwzip/implode.c vendor/hwzip/huffman.c vendor/hwzip/lz77.c vendor/hwzip/tables.c vendor/hwzip/shrink.c vendor/hwzip/reduce.c)
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})
 target_link_libraries(twoine_ball PRIVATE LibArchive::LibArchive ZLIB::ZLIB)
 target_include_directories(twoine_ball PUBLIC include)

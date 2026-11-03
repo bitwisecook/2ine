@@ -1013,6 +1013,8 @@ extern "C"
         LONG idItem;
         ULONG hItem;
     } OWNERITEM;
+    OS2EXPORT BOOL OS2API WinCreateFrameControls(HWND frame, PFRAMECDATA data, PSZ title)
+        OS2APIINFO(906);
     OS2EXPORT BOOL OS2API WinCalcFrameRect(HWND frame, PRECTL rect, BOOL client) OS2APIINFO(704);
     OS2EXPORT HWND OS2API WinLoadMenu(HWND frame, HMODULE module, ULONG id) OS2APIINFO(778);
     OS2EXPORT HWND OS2API WinCreateMenu(HWND parent, PVOID data) OS2APIINFO(907);
@@ -1131,6 +1133,16 @@ extern "C"
     OS2EXPORT ULONG OS2API WinQueryClipbrdData(HAB hab, ULONG format) OS2APIINFO(806);
     OS2EXPORT BOOL OS2API WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
         OS2APIINFO(854);
+    OS2EXPORT ULONG OS2API WinCompareStrings(HAB hab, ULONG codepage, ULONG country, PSZ first,
+                                             PSZ second, ULONG reserved) OS2APIINFO(708);
+    OS2EXPORT ULONG OS2API WinCreateAtomTable(ULONG initial, ULONG buckets) OS2APIINFO(714);
+    OS2EXPORT ULONG OS2API WinDestroyAtomTable(ULONG table) OS2APIINFO(724);
+    OS2EXPORT HWND OS2API WinQueryDesktopWindow(HAB hab, HDC dc) OS2APIINFO(813);
+    OS2EXPORT HPOINTER OS2API WinQueryPointer(HWND desktop) OS2APIINFO(821);
+    OS2EXPORT BOOL OS2API WinQueryWindowProcess(HWND window, PULONG process, PULONG thread)
+        OS2APIINFO(838);
+    OS2EXPORT LONG OS2API WinScrollWindow(HWND window, LONG dx, LONG dy, PRECTL scroll, PRECTL clip,
+                                          ULONG region, PRECTL update, ULONG flags) OS2APIINFO(849);
     OS2EXPORT ULONG OS2API WinQuerySystemAtomTable(VOID) OS2APIINFO(830);
     OS2EXPORT ULONG OS2API WinAddAtom(ULONG table, PSZ name) OS2APIINFO(700);
     OS2EXPORT ULONG OS2API WinFindAtom(ULONG table, PSZ name) OS2APIINFO(744);

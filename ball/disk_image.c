@@ -5,6 +5,7 @@
 #define _FILE_OFFSET_BITS 64
 #include "disk_image.h"
 #include "image_internal.h"
+#include "file_time.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -29,6 +30,7 @@
 typedef struct Node
 {
     uint64_t offset, size;
+    int64_t modified;
     uint32_t cluster;
     int directory;
     uint64_t record;
@@ -37,6 +39,7 @@ typedef struct Node
 typedef struct Disk
 {
     FILE *file;
+    TbReadStream *stream;
     unsigned char *memory;
     int readonly;
     uint64_t bytes;
@@ -157,6 +160,8 @@ static int read_at(Disk *d, uint64_t offset, void *data, size_t n)
 {
     if (offset > d->bytes || n > d->bytes - offset || offset > INT64_MAX)
         return failure(EIO);
+    if (d->stream)
+        return tb_stream_read_at(d->stream, offset, data, n);
     if (d->memory)
     {
         memcpy(data, d->memory + offset, n);
@@ -185,6 +190,7 @@ static int iso_node(Disk *d, const unsigned char *r, size_t length, Node *node)
     node->size = le32(r + 10);
     node->directory = !!(r[25] & 2);
     node->cluster = 0;
+    node->modified = tb_iso_time(r + 18);
     if (node->offset > d->bytes || node->size > d->bytes - node->offset)
         return failure(EIO);
     return 1;
@@ -271,12 +277,10 @@ static int identify(Disk *d)
         return 0;
     if (!read_at(d, (uint64_t)reserved * sector, d->fat, d->fat_size))
         return 0;
-    d->root = (Node){((uint64_t)reserved + (uint64_t)fats * fat_sectors) * sector,
-                     (uint64_t)entries * 32,
-                     0,
-                     1,
-                     0,
-                     0};
+    d->root = (Node){.offset = ((uint64_t)reserved + (uint64_t)fats * fat_sectors) * sector,
+                     .size = (uint64_t)entries * 32,
+                     .modified = INT64_MIN,
+                     .directory = 1};
     if (b[38] == 0x29)
     {
         d->serial = le32(b + 39);
@@ -741,6 +745,7 @@ static int entries(Disk *d, Node directory, EntryCallback callback, void *contex
             memset(lfn, 0xff, sizeof lfn);
             node.record = directory_offset(d, directory, at - 32);
             node.attributes = r[11];
+            node.modified = tb_dos_time(le16(r + 24), le16(r + 22));
             node.cluster = le16(r + 26);
             node.size = le32(r + 28);
             node.directory = !!(r[11] & 16);
@@ -876,7 +881,7 @@ int tb_image_info(const char *path, TbImageInfo *info)
             free(source);
             if (errno != ENXIO)
                 return 0;
-            *info = (TbImageInfo){0};
+            *info = (TbImageInfo){.modified = INT64_MIN};
             info->directory = 1;
             info->fat = kind == 2;
             strcpy(info->filesystem, kind == 2 ? "FAT" : kind == 1 ? "CDFS" : "UNKNOWN");
@@ -889,7 +894,7 @@ int tb_image_info(const char *path, TbImageInfo *info)
     int ok = lookup(&disk, member, &node);
     if (ok)
     {
-        *info = (TbImageInfo){0};
+        *info = (TbImageInfo){.modified = node.modified};
         info->size = node.size;
         info->readonly = disk.readonly || !!(node.attributes & 1);
         if (disk.fat_bits && !disk.readonly)
@@ -1191,7 +1196,7 @@ static int stream_entry(void *opaque, const char *name, const Node *node)
     if (!path)
         return -1;
     snprintf(path, n, "%s%s%s", walk->parent, *walk->parent ? "/" : "", name);
-    int result = walk->visitor(walk->context, path, node->size, node->directory);
+    int result = walk->visitor(walk->context, path, node->size, node->directory, node->modified);
     if (result != 1)
         walk->result = result;
     if (result == 1 && node->directory)
@@ -1215,6 +1220,28 @@ static int stream_entry(void *opaque, const char *name, const Node *node)
         free(path);
     return result == 1 ? 1 : result == 2 ? 0 : -1;
 }
+static int reader_disk(TbReadStream *stream, Disk *disk)
+{
+    memset(disk, 0, sizeof *disk);
+    disk->stream = stream;
+    disk->bytes = tb_stream_size(stream);
+    return identify(disk);
+}
+static int disk_walk(Disk *disk, TbImageVisitor visitor, void *context)
+{
+    StreamWalk walk = {.visitor = visitor, .context = context, .parent = ""};
+    int result = entries(disk, disk->root, stream_entry, &walk);
+    for (size_t i = 0; result == 1 && i < walk.count; i++)
+    {
+        walk.parent = walk.directories[i];
+        Node node;
+        result = lookup(disk, walk.parent, &node) ? entries(disk, node, stream_entry, &walk) : 0;
+    }
+    for (size_t i = 0; i < walk.count; i++)
+        free(walk.directories[i]);
+    free(walk.directories);
+    return walk.result ? walk.result : result;
+}
 int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context)
 {
     Disk disk;
@@ -1223,19 +1250,116 @@ int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context)
         free(disk.fat);
         return 0;
     }
-    StreamWalk walk = {.visitor = visitor, .context = context, .parent = ""};
-    int result = entries(&disk, disk.root, stream_entry, &walk);
-    for (size_t i = 0; result == 1 && i < walk.count; i++)
-    {
-        walk.parent = walk.directories[i];
-        Node node;
-        result = lookup(&disk, walk.parent, &node) ? entries(&disk, node, stream_entry, &walk) : 0;
-    }
-    for (size_t i = 0; i < walk.count; i++)
-        free(walk.directories[i]);
-    free(walk.directories);
+    int result = disk_walk(&disk, visitor, context);
     free(disk.fat);
-    return walk.result ? walk.result : result;
+    return result;
+}
+int tb_image_reader_walk(TbReadStream *stream, TbImageVisitor visitor, void *context)
+{
+    Disk disk;
+    if (!reader_disk(stream, &disk))
+    {
+        free(disk.fat);
+        return 0;
+    }
+    int result = disk_walk(&disk, visitor, context);
+    free(disk.fat);
+    return result;
+}
+typedef struct ClusterStream
+{
+    TbReadStream *parent;
+    uint64_t data_offset;
+    uint32_t cluster_bytes;
+    uint32_t *clusters;
+} ClusterStream;
+static void cluster_close(void *context)
+{
+    ClusterStream *stream = context;
+    tb_stream_close(stream->parent);
+    free(stream->clusters);
+    free(stream);
+}
+static int cluster_read(void *context, uint64_t offset, void *data, size_t size)
+{
+    ClusterStream *stream = context;
+    unsigned char *output = data;
+    while (size)
+    {
+        uint64_t index = offset / stream->cluster_bytes;
+        size_t within = (size_t)(offset % stream->cluster_bytes);
+        size_t amount = stream->cluster_bytes - within;
+        if (amount > size)
+            amount = size;
+        uint64_t source = stream->data_offset +
+                          (uint64_t)(stream->clusters[index] - 2) * stream->cluster_bytes + within;
+        if (!tb_stream_read_at(stream->parent, source, output, amount))
+            return 0;
+        offset += amount;
+        output += amount;
+        size -= amount;
+    }
+    return 1;
+}
+TbReadStream *tb_image_reader_member(TbReadStream *stream, const char *member)
+{
+    Disk disk;
+    Node node;
+    TbReadStream *result = NULL;
+    if (!reader_disk(stream, &disk) || !lookup(&disk, member, &node))
+        goto done;
+    if (node.directory)
+    {
+        errno = EISDIR;
+        goto done;
+    }
+    if (!disk.fat_bits)
+    {
+        result = tb_stream_slice(stream, node.offset, node.size);
+        goto done;
+    }
+    size_t count = (size_t)((node.size + disk.cluster_bytes - 1) / disk.cluster_bytes);
+    if (count > disk.clusters)
+    {
+        errno = EIO;
+        goto done;
+    }
+    ClusterStream *context = calloc(1, sizeof *context);
+    unsigned char *visited = calloc((disk.clusters + 9u) / 8u, 1);
+    if (!context || !visited)
+    {
+        free(context);
+        free(visited);
+        goto done;
+    }
+    context->parent = tb_stream_retain(stream);
+    context->data_offset = disk.data_offset;
+    context->cluster_bytes = disk.cluster_bytes;
+    context->clusters = calloc(count ? count : 1, sizeof *context->clusters);
+    int valid = context->clusters != NULL;
+    uint32_t cluster = node.cluster;
+    for (size_t i = 0; valid && i < count; i++)
+    {
+        if (cluster < 2 || cluster >= disk.clusters + 2 ||
+            cluster >= (disk.fat_bits == 12 ? 0xff0u : 0xfff0u) ||
+            (visited[cluster / 8] & (1u << (cluster % 8))))
+        {
+            valid = failure(EIO);
+            break;
+        }
+        visited[cluster / 8] |= (unsigned char)(1u << (cluster % 8));
+        context->clusters[i] = cluster;
+        if (i + 1 < count)
+            cluster = next_cluster(&disk, cluster);
+    }
+    free(visited);
+    if (valid)
+        result = tb_stream_create(node.size, context, cluster_read, cluster_close);
+    if (!result)
+        cluster_close(context);
+done:
+    free(disk.fat);
+    return result;
 }
 
 /* FAT updates stage a complete filesystem in memory before touching the source.

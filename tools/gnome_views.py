@@ -16,6 +16,12 @@ except (ImportError, ValueError) as error:
     raise SystemExit("GTK 4, libadwaita and PyGObject are required: " + str(error)) from error
 
 
+if __package__:
+    from .gnome_files import FileList, display_path
+else:
+    from gnome_files import FileList, display_path
+
+
 def action_button(label, callback, icon=None):
     widget = Gtk.Button(icon_name=icon, tooltip_text=label) if icon else Gtk.Button(label=label)
     widget.set_valign(Gtk.Align.CENTER)
@@ -162,15 +168,17 @@ class GuestBrowser(Gtk.Box):
         self.append(self.status)
         self.loading = Gtk.Spinner(visible=False, halign=Gtk.Align.CENTER)
         self.append(self.loading)
-        self.list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.SINGLE, vexpand=True)
-        self.list.add_css_class("boxed-list")
-        self.list.connect("row-selected", self.selected)
-        self.list.update_property([Gtk.AccessibleProperty.LABEL], ["Drive contents"])
-        scroll = Gtk.ScrolledWindow(
-            vexpand=True, min_content_height=180, hscrollbar_policy=Gtk.PolicyType.NEVER
+        self.relevant_only = Gtk.CheckButton(label="Relevant Files Only", active=True)
+        self.relevant_only.set_visible(bool(choose) or directories_only)
+        self.relevant_only.connect("toggled", lambda *_: self.files.refresh())
+        self.append(self.relevant_only)
+        self.files = FileList(
+            selected=self.selected,
+            activated=self.activate,
+            accept=self.accept_entry,
+            dropped=self.drop_into if allow_import else None,
         )
-        scroll.set_child(self.list)
-        self.append(scroll)
+        self.append(self.files)
         self.empty_state = Adw.StatusPage(
             title="This Folder Is Empty", icon_name="folder-symbolic", visible=False
         )
@@ -254,7 +262,7 @@ class GuestBrowser(Gtk.Box):
             self.loading.set_visible(False)
             self.loading.set_spinning(False)
             self.directory = None
-            empty(self.list)
+            self.files.set_entries([])
             self.status.set_label(str(error))
             self.copy_button.set_sensitive(False)
             self.folder_button.set_sensitive(False)
@@ -269,61 +277,45 @@ class GuestBrowser(Gtk.Box):
             lambda: self.api("browse", path=path), loaded, locked=False, on_error=failed
         )
 
+    def accept_entry(self, entry):
+        if entry["directory"]:
+            return True
+        if self.directories_only and self.relevant_only.get_active():
+            return False
+        return (
+            not self.choose
+            or not self.relevant_only.get_active()
+            or Path(entry["name"]).suffix.lower() in (".exe", ".com", ".cmd", ".bat")
+        )
+
     def populate(self, entries):
-        empty(self.list)
         self.default_button.set_sensitive(not self.window.busy)
-        filtered = [entry for entry in entries if not self.directories_only or entry["directory"]]
-        self.empty_state.set_visible(not filtered)
-        self.empty_state.set_title("This Folder Is Empty")
+        self.files.set_entries(entries)
+        self.empty_state.set_visible(not any(self.accept_entry(entry) for entry in entries))
+        self.empty_state.set_title("No Matching Files")
         self.empty_state.set_description("")
-        for entry in sorted(filtered, key=lambda e: (not e["directory"], e["name"].casefold())):
-            row = Adw.ActionRow(
-                title=entry["name"],
-                subtitle="Folder" if entry["directory"] else "File",
-                use_markup=False,
-                activatable=True,
-            )
-            row.entry = entry
-            row.add_prefix(
-                Gtk.Image(
-                    icon_name="folder-symbolic"
-                    if entry["directory"]
-                    else "application-x-executable-symbolic"
-                )
-            )
-            if entry["directory"]:
-                row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
-            row.connect("activated", lambda _row, entry=entry: self.activate(entry))
-            if entry["directory"] and self.allow_import:
-                drop = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
-                drop.connect(
-                    "drop",
-                    lambda _drop, files, _x, _y, path=entry["path"]: self.drop_into(files, path),
-                )
-                row.add_controller(drop)
-            self.list.append(row)
 
     def activate(self, entry):
         if entry["directory"]:
             self.load(entry["path"])
-        elif self.choose:
+        elif self.choose and not self.directories_only:
             self.choose(entry["path"])
         else:
             self.window.program_dialog("run", program=entry["path"])
 
-    def selected(self, _list, row):
-        self.selection = row.entry if row else None
+    def selected(self, entry):
+        self.selection = entry
         if self.choose:
             self.choose_button.set_sensitive(
                 bool(self.directory)
                 if self.directories_only
-                else bool(row and not row.entry["directory"])
+                else bool(entry and not entry["directory"])
             )
 
     def confirm(self):
         path = (
             self.selection["path"]
-            if self.selection and (self.directories_only or not self.selection["directory"])
+            if self.selection and self.selection["directory"] == self.directories_only
             else self.directory["path"]
             if self.directory and self.directories_only
             else None
@@ -729,6 +721,7 @@ class ProgramDialog(FormDialog):
             height=650,
         )
         self.action, self.original_name = action, name
+        self.suggested_name = ""
         self.ball = window.ball
         self.initial = window.snapshot["manifest"]["applications"].get(name, {})
         self.icon_source = None
@@ -998,6 +991,11 @@ class ProgramDialog(FormDialog):
         def ready(result):
             if serial != self.preview_serial:
                 return
+            suggested = result.get("displayName")
+            if self.action == "add-app" and not self.original_name and not source and suggested:
+                if self.name.get_text() in ("", self.suggested_name):
+                    self.name.set_text(suggested)
+                self.suggested_name = suggested
             try:
                 paintable = texture(result)
                 if paintable:
@@ -1219,7 +1217,7 @@ class DrivesPage(Gtk.Box):
                 "disk": "drive-harddisk-symbolic",
             }[kind]
         self.summary.set_title(letter + ": · " + description)
-        self.summary.set_subtitle(str(source))
+        self.summary.set_subtitle(display_path(source))
         if hasattr(self, "drive_icon"):
             self.summary.remove(self.drive_icon)
         self.drive_icon = Gtk.Image(icon_name=icon)
@@ -1285,7 +1283,7 @@ class ExportDialog(FormDialog):
         page = self.page()
         group = self.group(
             "Portable ZIP Archive",
-            "The archive keeps installed applications, settings, profiles and icons. Imported balls use the receiving computer's runtime.",
+            "The archive keeps installed applications, settings, profiles and icons. An imported ball uses the receiving computer's runtime.",
         )
         page.add(group)
         self.include_images = Adw.SwitchRow(
