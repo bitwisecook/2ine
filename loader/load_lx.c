@@ -6,6 +6,15 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+
+enum
+{
+    LX_NO_INTERNAL_FIXUPS = 0x10, /* E32NOINTFIX */
+    LX_LIBRARY_MODULE = 0x8000,   /* E32NOTP */
+    LX_OBJECT_RESOURCE = 0x8,
+    LX_OBJECT_ALIAS16 = 0x1000,
+    LX_OBJECT_BIG = 0x2000
+};
 int sanityCheckLxModule(const uint8 *exe, const uint32 exelen)
 {
     if (sizeof(LxHeader) >= exelen)
@@ -247,13 +256,26 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     }
                 }
 
-                if (!fixup_to_alias)
+                if (!objectid || objectid > lxmod->num_mmaps)
+                {
+                    fprintf(stderr, "Module '%s': invalid internal fixup object #%u\n", lxmod->name,
+                            (unsigned)objectid);
+                    lx_host_process_exit(1);
+                }
+                const LxObjectTableEntry *objects =
+                    (const LxObjectTableEntry *)(exe + lx->object_table_offset);
+                const uint32 target_flags = objects[objectid - 1].object_flags;
+                /* NOINTFIX images retain preferred linear offsets. A selector-only
+                   reference to an unaliased USE32 object must preserve that base. */
+                const int prebound_flat_selector =
+                    (lx->module_flags & LX_NO_INTERNAL_FIXUPS) &&
+                    !(lx->module_flags & LX_LIBRARY_MODULE) && (srctype & 0xF) == 2 &&
+                    (target_flags & LX_OBJECT_BIG) &&
+                    !(target_flags & (LX_OBJECT_ALIAS16 | LX_OBJECT_RESOURCE));
+                if (!fixup_to_alias || prebound_flat_selector)
                 {
                     const uint32 base = lxmod->mmaps[objectid - 1].guest_base;
                     finalval = base + targetoffset;
-                    const LxObjectTableEntry *objects =
-                        (const LxObjectTableEntry *)(exe + lx->object_table_offset);
-                    const uint32 target_flags = objects[objectid - 1].object_flags;
                     const uint16 flat_selector =
                         (target_flags & 0x4)
                             ? lx_execution_flat_code_selector(GLoaderState.execution)
@@ -271,7 +293,15 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     {
                         fprintf(
                             stderr,
-                            "uhoh, need a 16-bit alias fixup, but object has no 16:16 alias!\n");
+                            "Module '%s' object #%u page #%u offset %d: alias fixup "
+                            "type 0x%02X targets object #%u offset 0x%X without a 16:16 alias\n",
+                            lxmod->name,
+                            (unsigned)(obj -
+                                       (const LxObjectTableEntry *)(exe + lx->object_table_offset) +
+                                       1),
+                            (unsigned)pagenum, (int)srcoffset, (unsigned)srctype,
+                            (unsigned)objectid, (unsigned)targetoffset);
+                        lx_host_process_exit(1);
                     }
                     else
                     {

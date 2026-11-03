@@ -113,11 +113,11 @@ def dynamic_termination_program():
     return linear_image(g.code, g.fixups, ["DOSCALLS"], "DYNTERM", data=g.data)
 
 
-def selector_program():
+def selector_program(alias=False):
     g = FlatGuest()
     for target, segment, status in ((1, b"\x8c\xca", 70), (2, b"\x8c\xda", 71)):
         g.code.extend(b"\x66\xb8\0\0")
-        g.fixups.append(struct.pack("<BBhB", 2, 0, len(g.code) - 2, target))
+        g.fixups.append(struct.pack("<BBhB", 0x12 if alias else 2, 0, len(g.code) - 2, target))
         g.require(segment + b"\x66\x39\xd0", status)
         g.code.extend(b"\xeb\x06")
         pointer = 0x10000 + len(g.code)
@@ -126,7 +126,49 @@ def selector_program():
         g.word(pointer, target * 0x10000, status + 2)
         g.require(segment + b"\x66\x3b\x15" + struct.pack("<I", pointer + 4), status + 4)
     g.exit(0)
-    return linear_image(g.code, g.fixups, ["DOSCALLS"], "SELECTORS", data=bytes(4))
+    image = linear_image(g.code, g.fixups, ["DOSCALLS"], "SELECTORS", data=bytes(4))
+    if alias:
+        struct.pack_into("<I", image, 64 + 16, 0x10)  # E32NOINTFIX, preferred linear offsets.
+    return image
+
+
+def mixed_selector_program():
+    g = FlatGuest()
+    # A USE32 far jump enters a USE16 object, which jumps back with a 32-bit offset.
+    g.code.extend(b"\x66\xea\0\0\0\0")
+    g.fixups.append(struct.pack("<BBhB", 0x12, 0, len(g.code) - 2, 3))
+    continuation = 0x10000 + len(g.code)
+    g.exit(0)
+    stub = b"\x66\xea" + struct.pack("<I", continuation) + bytes(2)
+    image = linear_image(
+        g.code, g.fixups, ["DOSCALLS"], "MIXEDSEL", data=bytes(4), resources=((1, 1, stub),)
+    )
+    header = 64
+    struct.pack_into("<I", image, header + 16, 0x10)  # E32NOINTFIX
+    objects = struct.unpack_from("<I", image, header + 64)[0]
+    struct.pack_into("<II", image, header + objects + 2 * 24 + 4, 0x30000, 0x1004)
+    page_table, records = struct.unpack_from("<II", image, header + 104)
+    record = struct.pack("<BBBBh", 0x32, 0, 1, 1, 6)
+    insert = header + records + sum(len(fixup) for fixup in g.fixups)
+    image[insert:insert] = record
+    # Only the third object's page owns the selector-list relocation.
+    struct.pack_into(
+        "<I", image, header + page_table + 3 * 4, sum(map(len, g.fixups)) + len(record)
+    )
+    for field in (112, 120):
+        old = struct.unpack_from("<I", image, header + field)[0]
+        struct.pack_into("<I", image, header + field, old + len(record))
+    data_offset = struct.unpack_from("<I", image, header + 128)[0]
+    struct.pack_into("<I", image, header + 128, data_offset + len(record))
+    return image
+
+
+def invalid_selector_program(target):
+    g = FlatGuest()
+    g.code.extend(bytes(2))
+    g.fixups.append(struct.pack("<BBhH", 2, 0x40, len(g.code) - 2, target))
+    g.exit(0)
+    return linear_image(g.code, g.fixups, ["DOSCALLS"], "BADSELECTOR", data=bytes(4))
 
 
 def raise_program():
@@ -245,6 +287,10 @@ def main():
             ("unwind", program(), 0),
             ("dynamic_termination", dynamic_termination_program(), 0),
             ("selectors", selector_program(), 0),
+            ("prebound_selectors", selector_program(alias=True), 0),
+            ("mixed_selectors", mixed_selector_program(), 0),
+            ("invalid_selector_zero", invalid_selector_program(0), 1),
+            ("invalid_selector_range", invalid_selector_program(65535), 1),
             ("raise", raise_program(), 0),
             ("nested", nested_raise_program(), 0),
             ("unhandled", fatal_raise_program(), 2),
@@ -269,6 +315,11 @@ def main():
             if name == "dynamic_termination" and not result.returncode:
                 if (work / "term-result.bin").read_bytes() != b"TERM":
                     raise RuntimeError("Dynamic DLL termination did not retain the guest stack")
+            if (
+                name.startswith("invalid_selector_")
+                and b"invalid internal fixup object" not in result.stderr
+            ):
+                raise RuntimeError("Invalid selector target did not produce a checked loader error")
             if result.returncode != expected:
                 raise RuntimeError(
                     f"{name} exit={result.returncode}, expected={expected}\n"
