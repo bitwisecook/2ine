@@ -2,6 +2,8 @@
 /* Region enumeration ordering, pages and child visible-region notification. */
 #include "os2libs/pmwin.h"
 #include "os2libs/pmgpi.h"
+#include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmwin/internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,12 +79,80 @@ static void enumeration(HPS ps)
     CHECK(!GpiQueryRegionRects(ps, region, NULL, &control, actual));
     CHECK(GpiDestroyRegion(ps, region));
 }
+static MRESULT OS2API page_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
+{
+    if (message == WM_PAINT)
+    {
+        RECTL rect;
+        HPS ps = WinBeginPaint(window, 0, &rect);
+        CHECK(ps);
+        CHECK(WinFillRect(ps, &rect, WinQueryWindowUShort(window, -1) == 1 ? CLR_RED : CLR_BLUE));
+        CHECK(WinEndPaint(ps));
+        return 0;
+    }
+    return WinDefWindowProc(window, message, first, second);
+}
+static void page_exposure(HAB hab)
+{
+    CHECK(WinRegisterClass(hab, "PageExposure", page_procedure, 0, 0));
+    HWND parent = WinCreateWindow(HWND_DESKTOP, "PageExposure", "Pages", WS_VISIBLE, 0, 0, 80, 60,
+                                  0, HWND_TOP, 1, NULL, NULL);
+    HWND page = WinCreateWindow(parent, "PageExposure", "Page", WS_VISIBLE, 5, 5, 20, 20, parent,
+                                HWND_TOP, 2, NULL, NULL);
+    CHECK(parent && page);
+    notifications(hab, page, WM_PAINT);
+    HPS ps = WinGetPS(parent);
+    uint32_t pixel;
+    CHECK(ps && lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    /* A slow parent repaint must not expose its background before the child. */
+    CHECK(WinInvalidateRect(parent, NULL, TRUE));
+    QMSG repaint;
+    CHECK(WinPeekMsg(hab, &repaint, parent, WM_PAINT, WM_PAINT, 1));
+    WinDispatchMsg(hab, &repaint);
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    Window *root = NULL;
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        if (anchor->windows[i] && anchor->windows[i]->hwnd == parent)
+            root = anchor->windows[i];
+    CHECK(root);
+    uint64_t presented = root->last_present;
+    lx_host_sleep_ms(25);
+    CHECK(WinPeekMsg(hab, &repaint, page, WM_PAINT, WM_PAINT, 1));
+    CHECK(root->last_present == presented);
+    WinDispatchMsg(hab, &repaint);
+    notifications(hab, parent, WM_PAINT);
+    CHECK(root->last_present != presented);
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    /* Retained drawing still presents when the app deliberately defers paint. */
+    CHECK(WinInvalidateRect(page, NULL, FALSE));
+    CHECK(WinPeekMsg(hab, &repaint, page, WM_PAINT, WM_PAINT, 1));
+    presented = root->last_present;
+    lx_host_sleep_ms(25);
+    CHECK(WinPeekMsg(hab, &repaint, page, WM_PAINT, WM_PAINT, 1));
+    CHECK(root->last_present != presented);
+    WinDispatchMsg(hab, &repaint);
+    CHECK(WinShowWindow(page, FALSE));
+    notifications(hab, parent, WM_PAINT);
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(WinShowWindow(page, TRUE));
+    notifications(hab, page, WM_PAINT);
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    CHECK(WinSetWindowPos(page, HWND_TOP, 40, 5, 20, 20, SWP_MOVE));
+    notifications(hab, parent, WM_PAINT);
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(lx_pm_raster_read(ps, 45, 10, 1, 1, &pixel) && pixel == 0xff);
+    CHECK(WinDestroyWindow(page));
+    notifications(hab, parent, WM_PAINT);
+    CHECK(lx_pm_raster_read(ps, 45, 10, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(WinReleasePS(ps) && WinDestroyWindow(parent));
+}
 int main(void)
 {
     HAB hab = WinInitialize(0);
     CHECK(hab);
     HMQ queue = WinCreateMsgQueue(hab, 0);
     CHECK(queue);
+    page_exposure(hab);
     CHECK(WinRegisterClass(hab, "VisibleContract", WinDefWindowProc, 0, 0));
     HWND parent = WinCreateWindow(HWND_DESKTOP, "VisibleContract", "Visibility", WS_VISIBLE, 10, 10,
                                   40, 30, 0, HWND_TOP, 1, NULL, NULL);

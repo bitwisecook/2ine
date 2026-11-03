@@ -172,6 +172,7 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
     TRACE_EVENT("EVENT SEND { hwnd=%u, msg=%u (%s), mp1=%p, mp2=%p, proc=%p }", (uint)win->hwnd,
                 (uint)msg, messageName(msg), mp1, mp2, winproc);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
+    HWND painted = msg == WM_PAINT ? win->hwnd : 0;
     if (msg == WM_PAINT)
         anchor->paint_depth++;
     MRESULT result;
@@ -184,7 +185,12 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
     else
         result = winproc(win->hwnd, msg, mp1, mp2);
     if (msg == WM_PAINT)
+    {
         anchor->paint_depth--;
+        /* An animation may invalidate its next frame inside WM_PAINT. */
+        if (getWindowFromHWND(anchor, painted) == win && win->paint_pending)
+            win->paint_offered = TRUE;
+    }
     return result;
 }
 
@@ -443,7 +449,8 @@ void presentWindow(AnchorBlock *anchor, Window *window)
         Window *pending = anchor->windows[i];
         if (pending && pending->hwnd && pending->heavy.window == window->heavy.window &&
             pending->paint_pending && !WinIsRectEmpty(0, &pending->invalid) &&
-            WinIsWindowVisible(pending->hwnd) && now - root->last_present < 16)
+            windowAcceptsUpdates(pending) &&
+            (!pending->paint_offered || now - root->last_present < 16))
             return;
     }
     lx_host_window_present(window->heavy.window);
@@ -482,6 +489,9 @@ static BOOL paintMessage(AnchorBlock *anchor, PQMSG output, HWND filter, ULONG f
     Window *window = nextPaintSibling(anchor, desktop_window.children, filter, first, last);
     if (!window || getWindowFromHWND(anchor, window->hwnd) != window)
         return FALSE;
+    /* Do not expose a cleared parent before its children have had a paint
+       request. Keep the timed fallback only for damage the app has deferred. */
+    window->paint_offered = TRUE;
     *output = (QMSG){.hwnd = window->hwnd, .msg = WM_PAINT, .time = currentSystemTicks()};
     return TRUE;
 }

@@ -729,6 +729,24 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(lx_pm_raster_read(ps, 4, 2, 1, 1, &pixel) && pixel == 0xff);
     CHECK(lx_pm_raster_read(ps, 2, 2, 1, 1, &pixel) && pixel == 0xffffff);
     CHECK(GpiDeleteBitmap(system_bitmap));
+    /* Owner-drawn application lists crop checked/unchecked cells from this atlas. */
+    ULONG checkboxes = WinGetSysBitmap(HWND_DESKTOP, 48);
+    CHECK(checkboxes);
+    uint8_t checks_header[64] = {64};
+    CHECK(GpiQueryBitmapInfoHeader(checkboxes, checks_header));
+    LONG cell_width = lx_guest_load_u32(checks_header + 4) / 4;
+    LONG cell_height = lx_guest_load_u32(checks_header + 8) / 3;
+    CHECK(cell_width >= 9 && cell_height >= 9);
+    RECTL unchecked = {0, cell_height * 2, cell_width, cell_height * 3};
+    RECTL checked = {cell_width * 3, cell_height * 2, cell_width * 4, cell_height * 3};
+    uint32_t empty[256], marked[256];
+    CHECK(cell_width * cell_height <= 256);
+    CHECK(WinDrawBitmap(ps, checkboxes, &unchecked, &origin, 0, 0, 8));
+    CHECK(lx_pm_raster_read(ps, 0, 0, cell_width, cell_height, empty));
+    CHECK(WinDrawBitmap(ps, checkboxes, &checked, &origin, 0, 0, 8));
+    CHECK(lx_pm_raster_read(ps, 0, 0, cell_width, cell_height, marked));
+    CHECK(memcmp(empty, marked, (size_t)cell_width * cell_height * sizeof *empty));
+    CHECK(GpiDeleteBitmap(checkboxes));
     CHECK(!WinGetSysBitmap(0, 18) && !WinGetSysBitmap(HWND_DESKTOP, 0));
     pointer_contracts(ps);
     CHECK(WinFillRect(ps, &outer, CLR_RED));
@@ -1119,6 +1137,10 @@ int main(void)
     CHECK(timer);
     CHECK(WinGetMsg(hab, &q, client, WM_TIMER, WM_TIMER) && (uintptr_t)q.mp1 == timer);
     CHECK(WinStopTimer(hab, client, timer) && !WinStopTimer(hab, client, timer));
+    /* A zero interval requests the fastest OS/2 timer, rather than disabling it. */
+    CHECK(WinStartTimer(hab, client, 42, 0) == 42);
+    CHECK(WinGetMsg(hab, &q, client, WM_TIMER, WM_TIMER) && (uintptr_t)q.mp1 == 42);
+    CHECK(WinStopTimer(hab, client, 42));
     CHECK(WinDestroyWindow(frame));
     CHECK(GpiQueryDevice(ps) == 0 && GpiMove(ps, &point) && GpiDestroyPS(ps));
     HENUM abandoned = WinBeginEnumWindows(HWND_DESKTOP);

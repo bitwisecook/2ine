@@ -191,10 +191,52 @@ static void memory_and_faults(void)
     CHECK(!lx_cpu_write(cpu, 0x50000, &value, sizeof value));
     LxCpuEvent e = lx_cpu_run(cpu, 1000, 100000);
     CHECK(e.reason == LX_CPU_FAULT && e.address == 0x50000 && e.memory_access == LX_MEM_WRITE);
+    /* A fault exit must spill live guest registers before returning to the host. */
+    const unsigned char resume_write[] = {0xb8, 0x78, 0x56, 0x34, 0x12, 0x40,
+                                          0xa3, 0,    0,    5,    0,    0xcc};
+    CHECK(lx_cpu_write(cpu, 0x10000, resume_write, sizeof resume_write));
+    start_at(cpu, 0x1b, 0x10000);
+    e = lx_cpu_run(cpu, 1000, 100000);
+    CHECK(e.reason == LX_CPU_FAULT && e.address == 0x50000);
+    LxCpuRegisters stopped;
+    CHECK(lx_cpu_get_registers(cpu, &stopped));
+    CHECK(stopped.eax == 0x12345679 && stopped.eip == 0x10006);
+    CHECK(lx_cpu_protect(cpu, 0x50000, 0x10000, LX_MEM_READ | LX_MEM_WRITE));
+    run_trap(cpu, 3);
+    CHECK(lx_cpu_read(cpu, 0x50000, &value, sizeof value) && value == 0x12345679);
     CHECK(lx_cpu_unmap(cpu, 0x50000, 0x10000));
     CHECK(!lx_cpu_translate(cpu, 0x50000, sizeof value, LX_MEM_READ));
     lx_cpu_destroy(cpu);
     puts("guest pointer bounds, overlap, permissions, unmap and write fault passed");
+}
+
+static void remapped_memory(void)
+{
+    LxCpu *cpu = make_cpu();
+    const unsigned char code[] = {0xa1, 0, 0, 5, 0, 0x40, 0xa3, 0, 0, 5, 0, 0xcc};
+    CHECK(lx_cpu_write(cpu, 0x10000, code, sizeof code));
+    uint32_t value = 7;
+    CHECK(lx_cpu_write(cpu, 0x50000, &value, sizeof value));
+    CHECK(run_trap(cpu, 3).eax == 8);
+    /* Changing another mapping must leave this writable region usable. */
+    CHECK(lx_cpu_protect(cpu, 0x20000, 0x10000, LX_MEM_READ | LX_MEM_EXECUTE));
+    start_at(cpu, 0x1b, 0x10000);
+    CHECK(run_trap(cpu, 3).eax == 9);
+    CHECK(lx_cpu_protect(cpu, 0x50000, 0x10000, LX_MEM_READ));
+    start_at(cpu, 0x1b, 0x10000);
+    LxCpuEvent event = lx_cpu_run(cpu, 1000, 100000);
+    CHECK(event.reason == LX_CPU_FAULT && event.address == 0x50000 &&
+          event.memory_access == LX_MEM_WRITE);
+    CHECK(lx_cpu_read(cpu, 0x50000, &value, sizeof value) && value == 9);
+    CHECK(lx_cpu_unmap(cpu, 0x50000, 0x10000));
+    CHECK(lx_cpu_map(cpu, 0x50000, 0x10000, LX_MEM_READ | LX_MEM_WRITE));
+    value = 100;
+    CHECK(lx_cpu_write(cpu, 0x50000, &value, sizeof value));
+    start_at(cpu, 0x1b, 0x10000);
+    CHECK(run_trap(cpu, 3).eax == 101);
+    CHECK(lx_cpu_read(cpu, 0x50000, &value, sizeof value) && value == 101);
+    lx_cpu_destroy(cpu);
+    puts("cached mappings follow protection changes, unmap and remap passed");
 }
 
 static void bounded_execution(void)
@@ -212,6 +254,20 @@ static void bounded_execution(void)
     CHECK(e.reason == LX_CPU_BUDGET);
     e = lx_cpu_run_blocks(cpu, 0);
     CHECK(e.reason == LX_CPU_FAULT);
+    /* Budget stops must retain loop progress, including across cached blocks. */
+    const unsigned char counter[] = {0x40, 0xeb, 0xfd};
+    CHECK(lx_cpu_write(cpu, 0x10000, counter, sizeof counter));
+    LxCpuRegisters progress;
+    CHECK(lx_cpu_get_registers(cpu, &progress));
+    progress.eax = 0;
+    progress.eip = 0x10000;
+    CHECK(lx_cpu_set_registers(cpu, &progress));
+    for (unsigned pass = 1; pass <= 2; pass++)
+    {
+        e = lx_cpu_run_blocks(cpu, 100);
+        CHECK(e.reason == LX_CPU_BUDGET);
+        CHECK(lx_cpu_get_registers(cpu, &progress) && progress.eax == 100 * pass);
+    }
     /* A block slice must resume after a budget stop and preserve API traps. */
     const unsigned char trap[] = {0x40, 0xcd, 0xf1, 0x40, 0xcc};
     CHECK(lx_cpu_write(cpu, 0x10000, trap, sizeof trap));
@@ -303,6 +359,7 @@ int main(void)
     ldt_and_api_trap();
     floating_point_context();
     memory_and_faults();
+    remapped_memory();
     bounded_execution();
     interrupted_segmented_copies();
     puts("CPU execution contracts passed");

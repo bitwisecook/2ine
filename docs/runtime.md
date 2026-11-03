@@ -26,5 +26,14 @@ the application links the HAL for its selected execution profile. Native ABI
 bridges are compiled into their OS/2 API modules. Existing build options and
 runtime target names select the same execution profiles.
 
+Embedded Unicorn builds on AArch64 inline the normal exit-flag check and cache
+resolved RAM regions alongside page translations. Requested exits still use the
+original helper; execution budgets, protection checks and fault handling remain.
+Region caching follows translation invalidation, with original lookup paths for
+snapshots and MMIO. The build uses a private source copy and enables these changes
+only for verified upstream sources; unknown revisions and system libraries retain
+the original code. Configure with `-DTWOINE_UNICORN_OPTIMIZATIONS=OFF` to compare
+against the unmodified backend.
+
 [Full diagrams](architecture.md) · [Platform adapters](hal.md) · [Guest ABI](guest-abi.md) ·
 [Licensing](licensing.md).

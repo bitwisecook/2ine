@@ -5,8 +5,11 @@
 ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !getWindowFromHWND(anchor, hwnd) || !milliseconds || id > 0xffff)
+    if (!anchor || !getWindowFromHWND(anchor, hwnd) || id > 0xffff)
         return 0;
+    /* OS/2 defines zero as the fastest timer (approximately one 55 ms tick). */
+    if (!milliseconds)
+        milliseconds = 55;
     if (!id)
     {
         for (id = 1; id < 0x8000; id++)

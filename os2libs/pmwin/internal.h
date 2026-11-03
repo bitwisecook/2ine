@@ -72,6 +72,7 @@ typedef struct Window
     LONG h;
     RECTL invalid;
     BOOL paint_pending;
+    BOOL paint_offered;
     uint64_t last_present;
     BOOL enabled;
     BOOL visible_region_notify;

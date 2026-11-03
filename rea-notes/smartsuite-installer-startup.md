@@ -111,3 +111,213 @@ this work leaves HMERR_LOAD_DLL honest rather than claiming help support.
 
 The installer is proven to unpack its helpers and create its Lotus main frame.
 Proceeding past the optional warning or completing installation is unverified.
+
+## Native DLL filename and OS-level check on macOS
+
+A subsequent run with the user's original media and a separate copy of the
+Lotus ball reached the licence agreement after acknowledging the optional help
+warning. The original CMD.EXE reports version 4.50 and revision 14.089 for
+`VER /R`. The installer also loads PMWINX, queries its module filename, and
+queries that file's modification date. Its `CITOS2_CheckOSLevel` routine requires
+the PMWINX date to be at least 1997-12-20 after accepting the version/revision.
+
+The trace returned the bare module name `PMWINX` to DosQueryPathInfo, which could
+not identify a file. macOS dyld had resolved the loader's nonexistent relative
+`./libpmwinx.so` through its runtime search paths before the explicit search
+reached the ball's native-library snapshot. The loader now requires the candidate
+file to exist before opening it, retaining the explicit search order and the
+actual guest-visible snapshot filename.
+
+The generated guest in `tests/integration/balls.py` now loads PMWINX, queries its
+filename and uses that filename to query file metadata. Against app build 3 it
+failed with guest status 102 at the metadata query. This regression exercises
+the prerequisite without accepting a licence or installing SmartSuite.
+The rebuilt app (build 4) passes the complete balls integration harness with
+the Unicorn backend and strict signature verification. A complete original
+SmartSuite installation after the fix remains unverified.
+
+The original EPFIDLDS.EXE was then launched with build 4 in the separate test
+ball. After acknowledging the optional help warning, its trace queries
+`C:\OS2\DLL\2INE\unicorn\de2b8b50d1a2a9ff\libpmwinx.so` instead of the bare
+`PMWINX` name and reaches the Lotus licence agreement. The copied library is
+424,752 bytes with a 2026-11-02 modification date. Evidence is retained under
+`build-lotus-version-review/fixed.stderr` and `verification.json`. Continuing
+past the licence agreement requires the user's explicit acceptance approval.
+
+The user subsequently continued this isolated installer interactively. The
+trace progressed through application selection, disk-space warnings, program
+folder and CONFIG.SYS choices, and Begin Copying Files. It launched
+`C:\PROBE\EPFIDLD2.EXE` with the generated INSTALL.RSP, then eventually exited.
+This confirms the original OS-level rejection was cleared. It does not confirm
+installation: neither the test ball nor the original Documents/Lotus.2ineball
+contains LOTUSW4 or any suite application executable, and the test CONFIG.SYS
+remains unchanged. The later installer process did not copy the suite payload.
+Its startup/copy-stage behavior remains the next blocker; the earlier free-space
+warnings alone do not establish the reason it stopped.
+
+
+## Application checks, page repainting and copy-stage startup
+
+The user's report of missing application ticks and retained wizard pages exposed
+separate PM gaps. Lotus uses its own owner-drawn application list and crops the
+checked and unchecked cells from SBMP_CHECKBOXES (WinGetSysBitmap id 48). That
+system bitmap was unsupported. It now supplies an independently drawn four-column,
+three-row checkbox/radio atlas. A pixel regression draws the same top-row cells
+used by the original installer and verifies their checked states differ.
+
+Hidden, moved and destroyed child pages also left their old pixels in the shared
+host surface. These operations now invalidate the exposed parent rectangle and
+repaint affected children. A regression paints a blue child over a red parent,
+then checks the actual pixels after hide, show, move and destruction. Both new
+regressions failed before the fixes and pass afterwards.
+
+The original EPFIDLD2.EXE starts timer 2 with a zero millisecond interval. PM
+previously rejected zero, leaving its copy thread waiting indefinitely for the
+startup event. WinStartTimer now treats zero as an approximately 55 ms tick,
+as specified by the original Presentation Manager reference:
+https://bitsavers.org/pdf/ibm/pc/os2/OS2_1.x/Microsoft_-_OS2_Windows_Presentation_Manager_Reference_Volume_2_1987.pdf
+A regression checks that the zero-interval timer starts, delivers WM_TIMER and
+can be stopped; it failed before this change. The original copy worker now
+posts its startup event and launches EPFINSTS.EXE with the user's saved response
+file. That child first displays another optional missing-help notice.
+
+After the user's explicit approval to run the isolated probe, the child installer
+was launched directly with those arguments and the optional notice dismissed.
+Its original Install - progress window now shows a Transferring bar, and it
+creates C:\LOTUSW4 and writes payload files there. This is evidence of actual
+copying; full suite installation and application startup remain unverified.
+The isolated probe logs are engine.stderr and copy-ui.stderr under the ignored
+build-lotus-version-review directory. The seven PM/dialog/window/thread/Open32
+regressions pass with SDL's dummy drivers and the rebuilt app packages successfully.
+
+
+The standalone engine probe copied approximately 38 MB, then displayed EPFIE232:
+an expression contained an empty operand in `(%SECOND_LANGUAGE% == 0)` after
+substitution. SECOND_LANGUAGE is absent from the saved INSTALL.RSP; the original
+main wizard contains a separate initialization of that shared installer variable.
+Therefore this standalone probe does not establish a new emulator defect. A
+fresh, complete wizard run is required to distinguish missing probe initialization
+from a runtime compatibility failure. No package expression or media file has
+been patched to bypass the check. The error window is retained for inspection.
+
+
+The user approved and manually advanced a fresh full-wizard run with build 6 in
+LotusFullProbe.2ineball, accepting the licence and retaining local defaults.
+The main wizard's owner-drawn list now calls WinDrawBitmap with a valid bitmap
+handle (65852), instead of zero. A screenshot at the folder-name stage shows
+only the current page; previous pages have been cleared. The full flow launched
+EPFIDLD2 and EPFINSTS, and the user dismissed the child's optional help notice.
+Copying passed 40 MB without reproducing the standalone engine's EPFIE232 error.
+This supports missing main-wizard initialization as the standalone probe limitation.
+Full installation and application startup are still being checked.
+
+
+The fresh full wizard completed successfully: EPFINSTS reported "All files have
+been transferred successfully" and requested a reboot; the main installer exited
+0. The user confirmed seeing this completion message. LOTUSW4 contains 1,693 files
+and 154,602,960 bytes, including all five application executables. CONFIG.SYS now
+contains the suite PATH/LIBPATH, HELP, SOM and application environment entries.
+A new launch reads this updated configuration without rebooting macOS. The
+original Documents/Lotus.2ineball was not replaced by this isolated installation.
+Full evidence is in build-lotus-version-review/full-install-verification.json.
+
+After explicit user approval, Word Pro was launched without tracing from the
+installed ball. The native window "Word Pro - Untitled1" was observed rendering
+text and a table entered by the user. This verifies startup and visible drawing,
+not document save/reopen. Bounded startup checks used private settings copies:
+Freelance encounters the loader's unsupported LX export-bundle type at
+loader/load_lx.c (OVRFLWKR.DLL exists); 1-2-3 and Approach fail on missing OS/2
+SOM dependencies such as somd/somtc; Organizer remains running but repeatedly
+reports missing somd through LTOLEO20/TZBACK32. Those startup limits are separate
+from successful suite installation and are retained in application-startup.json.
+
+## Progress-dialog flicker and unpacking performance
+
+A native PM regression reproduces premature presentation: repainting a parent,
+waiting 25 ms and then retrieving its child's pending WM_PAINT presented the
+parent's cleared background before that child had redrawn. The previous 16 ms
+fallback expired during slow guest paints. The regression failed before the fix.
+Each damaged window now tracks whether its paint request has been offered to
+the application. Presentation waits for previously unoffered, visible child
+damage; the timed fallback remains for an application that defers a delivered
+paint request. Hidden ancestors do not block presentation, and self-invalidating
+paint callbacks retain the fallback. The delayed parent/child regression and a
+separate deferred-paint check both pass. All seven PM/dialog/window/thread/Open32
+checks pass, and app build 7 packages with a valid strict signature. The original
+full installer has not been rerun after this final flicker fix.
+
+The diagnostic install produced 1,422,671 trace lines (89.7 MiB). However, a bounded
+original EPFIUPK2 benchmark decompressing LWPIENVO.DL_ produced the same 189,952-byte
+DLL in 0.306/0.313 seconds without tracing and 0.316 seconds with TRACE_NATIVE.
+Tracing therefore does not explain the main unpacking cost in this sample.
+The no-argument helper exited in 0.024 seconds (0.019 CPU seconds); an absent
+source-file lookup took 0.139 seconds (0.132 CPU seconds); decompression took
+0.309 seconds (0.297 CPU seconds). These are small-sample measurements, not a
+full-install speed comparison. A five-second CPU Profiler capture of the larger
+WORDPRO.EX_ unpack is dominated by Unicorn execution and memory helpers:
+helper_check_exit_request_x86_64 29.8% of sampled cycle weight, store_helper 13.0%,
+block_boundary 8.4%, address_space_translate_internal 8.0%, flatview_translate_x86_64
+5.9%. The bounded profile ended by its time limit and is not an unpack completion
+check. No CPU-budget/termination checks were weakened or bypassed. Installation
+speed remains a measured emulator-performance limitation; this change fixes the
+reproduced paint scheduling bug without claiming a decompression speedup.
+
+## AArch64 execution optimizations
+
+Follow-up profiling isolated two avoidable costs in the embedded Unicorn backend.
+The normal exit-request check called a C helper despite no pending exit. Native
+AArch64 emission now tests the same signed counter flag at every existing check
+site and calls the original helper when an exit is requested. This preserves
+guest register synchronization and cooperative termination checks. A bounded
+20-million-iteration CPU loop improved from 0.6185 to 0.5281 seconds in the initial
+exit-only comparison, but original Lotus unpacking improved by only about 3%.
+UC_TLB_VIRTUAL and a helper-call annotation were also tried and discarded: the
+former slowed unpacking substantially and the latter had no measurable benefit.
+
+A subsequent 20-second CPU Profiler capture of original WORDPRO.EX_ unpacking
+showed store_helper at 23.3% of cycle weight and repeated address-space/region
+tree lookups at 34.4% combined. The memory helpers now reuse the RAM region
+already resolved during page translation. The pointer lives in CPUIOTLBEntry,
+following the same invalidation and victim-entry movement as the cached host
+address. Protection checks, dirty/code tracking and fresh lookups after hooks
+remain; snapshots and MMIO use the original region lookup. No guest execution
+budget or API/exception interception was relaxed.
+
+Both changes are generated in a private build-tree source copy by
+hal/emulator/unicorn_optimizations.cmake. The supplied upstream tree is unchanged.
+They apply only to AArch64 embedded builds with matching implementation hashes;
+other hosts, unknown sources and system libraries use the original implementation.
+TWOINE_UNICORN_OPTIMIZATIONS=OFF disables the overlay. Manual CMake checks cover
+disabled, unknown-revision, incomplete-source and non-ARM fallback, plus unchanged
+configure timestamps. CPU regressions verify live registers at a write fault,
+resumption after protection changes, unmap/remap and exact block-budget progress.
+
+The signed macOS app build 13 passes all 53 project CTests and 81 applicable
+upstream Unicorn memory, x86 and control checks. One upstream test using an ARM64
+guest is excluded from this x86-only build; its initial unfiltered invocation
+failed because that guest architecture is unavailable. Snapshot, MMIO, virtual
+translation and memory-hook tests are included in the passing checks. Build and
+test evidence is under build-perf-lotus/optimized-build.log, optimized-tests.log
+and upstream-tests-final.log. The prior Word Pro session was left open; it keeps
+its original runtime until relaunched. A full installer timing has not been
+repeated after these optimizations.
+
+The final comparison uses the original EPFIUPK2.EXE and compressed ISO files in
+LotusFullProbe.2ineball, comparing preserved signed build 7 with signed build 13.
+Tracing is disabled and build order alternates. Each destination file is deleted
+before its timed run; all 24 runs exit 0, recreate the output and match the
+installed-file SHA-256. The first round warms both builds; the following five
+rounds give these median elapsed times:
+
+| Original input | Output bytes | Build 7 | Build 13 | Less elapsed time |
+| --- | ---: | ---: | ---: | ---: |
+| LWPIENVO.DL_ | 189,952 | 0.26281 s | 0.23968 s | 8.8% |
+| WORDPRO.EX_ | 4,542,816 | 3.42938 s | 2.35244 s | 31.4% |
+
+Results and the isolated comparison script are retained in
+build-perf-lotus/optimized-fresh-comparison.json and compare-optimized-fresh.py.
+An earlier comparison that overwrote existing destinations gave 23% and 30%
+reductions, respectively; the fresh-output measurements above are the final
+reported values. Some large-file runs show substantial host timing variation
+(baseline up to 5.82 s, optimized up to 3.07 s after warmup), so these are local
+sample medians rather than a prediction of whole-install or application speed.

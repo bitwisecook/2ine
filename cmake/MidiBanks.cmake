@@ -87,13 +87,19 @@ else()
         URL_HASH SHA256=fd93c122e3f92c83e82cd76050416d4e77c7bab3a91c84315bc249618d3d6e6e)
 endif()
 find_program(TWOINE_DEPENDENCY_MAKE NAMES gmake make REQUIRED)
+find_package(PkgConfig REQUIRED)
+execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env ${_midi_environment}
+        "${PKG_CONFIG_EXECUTABLE}" --libs sndfile
+    OUTPUT_VARIABLE _sfz_sndfile_libs OUTPUT_STRIP_TRAILING_WHITESPACE
+    COMMAND_ERROR_IS_FATAL ANY)
 ExternalProject_Add(twoine_liquidsfz_dependency ${_sfz_source}
     CONFIGURE_COMMAND "${CMAKE_COMMAND}" -E env ${_midi_environment}
         "CC=${CMAKE_C_COMPILER}" "CXX=${CMAKE_CXX_COMPILER}"
         "CFLAGS=${_midi_flags}" "CXXFLAGS=${_midi_flags}"
         <SOURCE_DIR>/configure --prefix=${_midi_prefix} --libdir=${_midi_prefix}/lib
         --without-jack --without-lv2 --without-fftw --enable-shared --disable-static
-    BUILD_COMMAND "${TWOINE_DEPENDENCY_MAKE}" -j4 -C lib
+    BUILD_COMMAND "${TWOINE_DEPENDENCY_MAKE}" -j4 -C lib "libliquidsfz_la_LIBADD=${_sfz_sndfile_libs}"
     INSTALL_COMMAND "${TWOINE_DEPENDENCY_MAKE}" -C lib install
     BUILD_BYPRODUCTS "${_midi_prefix}/lib/${CMAKE_SHARED_LIBRARY_PREFIX}liquidsfz${CMAKE_SHARED_LIBRARY_SUFFIX}")
 foreach(dependency fluidsynth liquidsfz)

@@ -505,6 +505,12 @@ LxModule *loadModuleByPath(const char *fname)
 
 LxModule *loadNativeModule(const char *fname, const char *modname)
 {
+    /* dyld may resolve a missing relative filename through an executable's
+       rpaths. Keep the explicit search order so module names describe the
+       actual file, including the ball's guest-visible runtime snapshot. */
+    if (!lx_host_path_exists(fname))
+        return NULL;
+
     LxModule *retval = (LxModule *)malloc(sizeof(LxModule));
     LxHostLibrary *lib = NULL;
     LxNativeModuleInitEntryPoint fn = NULL;

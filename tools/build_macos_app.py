@@ -187,7 +187,7 @@ def main():
         "CFBundleName": "2ine",
         "CFBundleDisplayName": "2ine",
         "CFBundlePackageType": "APPL",
-        "CFBundleShortVersionString": "0.1",
+        "CFBundleShortVersionString": "0.2",
         "CFBundleVersion": str(build_number),
         "LSMinimumSystemVersion": "27.0",
         "NSHighResolutionCapable": True,

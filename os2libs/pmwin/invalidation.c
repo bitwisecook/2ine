@@ -28,6 +28,7 @@ void validateWindowPaint(AnchorBlock *anchor, Window *window)
 {
     window->invalid = (RECTL){0, 0, 0, 0};
     window->paint_pending = FALSE;
+    window->paint_offered = FALSE;
     remove_paint(anchor, window->hwnd);
 }
 BOOL windowAcceptsUpdates(const Window *window)
@@ -40,6 +41,7 @@ BOOL windowAcceptsUpdates(const Window *window)
 static void suspend_paint(AnchorBlock *anchor, Window *window)
 {
     window->paint_pending = FALSE;
+    window->paint_offered = FALSE;
     remove_paint(anchor, window->hwnd);
     for (Window *child = window->children; child; child = child->sibling)
         suspend_paint(anchor, child);
@@ -80,7 +82,11 @@ BOOL WinInvalidateRect(HWND handle, PRECTL rectangle, BOOL children)
         return TRUE;
     WinUnionRect(0, &window->invalid, &window->invalid, &damaged);
     if (windowAcceptsUpdates(window))
+    {
+        if (!window->paint_pending)
+            window->paint_offered = FALSE;
         window->paint_pending = TRUE;
+    }
     if (children)
         for (Window *child = window->children; child; child = child->sibling)
         {

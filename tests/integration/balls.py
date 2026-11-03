@@ -33,6 +33,18 @@ def program(previous):
     expected_path = b"C:\\OS2\\probe.exe\0"
     for i in range(0, len(expected_path) - 3, 4):
         g.word(output + i, int.from_bytes(expected_path[i : i + 4], "little"), 15 + i)
+    # Installers query native API DLL metadata through the returned guest path.
+    native_name = g.field(b"PMWINX\0")
+    native_module = g.field(bytes(4))
+    native_info = g.field(bytes(24))
+    g.call(1, 318, 0, 0, native_name, native_module)
+    g.result(0, 100)
+    g.call_handle(1, 320, native_module, 128, output)
+    g.result(0, 101)
+    g.call(1, 223, output, 1, native_info, 24)
+    g.result(0, 102)
+    g.call_handle(1, 322, native_module)
+    g.result(0, 103)
     g.call(1, 223, path, 5, output, 128)
     g.result(0, 40)
     g.word(output, int.from_bytes(expected_path[:4], "little"), 41)

@@ -1,13 +1,16 @@
 # Public domain. No rights reserved.
 # Wholly AI-authored.
 set(TWOINE_UNICORN_SOURCE_DIR "" CACHE PATH "Local Unicorn source tree for an embedded build")
+option(TWOINE_UNICORN_OPTIMIZATIONS "Optimize verified embedded Unicorn sources on AArch64" ON)
 if(TWOINE_UNICORN_SOURCE_DIR)
+    include("${CMAKE_CURRENT_LIST_DIR}/unicorn_optimizations.cmake")
+    twoine_optimize_unicorn("${TWOINE_UNICORN_SOURCE_DIR}" _twoine_unicorn_source)
     set(UNICORN_ARCH "x86" CACHE STRING "Unicorn guest architecture" FORCE)
     set(UNICORN_BUILD_TESTS OFF CACHE BOOL "Unicorn tests" FORCE)
     set(UNICORN_INSTALL OFF CACHE BOOL "Unicorn install" FORCE)
     set(UNICORN_LEGACY_STATIC_ARCHIVE OFF CACHE BOOL "Unicorn archive bundling" FORCE)
     set(BUILD_SHARED_LIBS OFF)
-    add_subdirectory("${TWOINE_UNICORN_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/unicorn" EXCLUDE_FROM_ALL)
+    add_subdirectory("${_twoine_unicorn_source}" "${CMAKE_CURRENT_BINARY_DIR}/unicorn" EXCLUDE_FROM_ALL)
     set(TWOINE_UNICORN_TARGET unicorn)
 else()
 find_package(PkgConfig QUIET)

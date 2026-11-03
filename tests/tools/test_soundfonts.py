@@ -139,7 +139,7 @@ class SoundfontTests(unittest.TestCase):
             cache, config = root / "cache", root / "audio.conf"
             result = sf.use_file(source, cache, config)
             sha = hashlib.sha256(source.read_bytes()).hexdigest()
-            self.assertEqual(result, cache / "user" / sha / "bank.sf2")
+            self.assertEqual(result, (cache / "user" / sha / "bank.sf2").resolve())
             self.assertEqual(result.read_bytes(), source.read_bytes())
             receipt = json.loads(result.with_name("receipt.json").read_text())
             self.assertEqual(receipt["origin"], "user-supplied")

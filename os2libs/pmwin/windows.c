@@ -138,6 +138,8 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
     unregisterWindowMessages(win->hwnd);
     lx_pm_dive_forget(win);
     win->destroying = TRUE;
+    BOOL was_visible = (win->style & WS_VISIBLE) != 0;
+    RECTL exposed = {win->x, win->y, win->x + win->w, win->y + win->h};
     if (anchor->focus == win->hwnd)
         WinSetFocus(HWND_DESKTOP, 0);
     if (anchor->active == win->hwnd)
@@ -204,6 +206,8 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
         }
     }
     discardWindowMessages(anchor, win->hwnd);
+    if (was_visible && win->parent != &desktop_window && !win->parent->destroying)
+        WinInvalidateRect(win->parent->hwnd, &exposed, TRUE);
     destroyPresentationParameters(win);
     free(win->text);
     free(win->data);
@@ -830,6 +834,7 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     if ((flags & SWP_ZORDER) && !set_window_order(anchor, win, swp.hwndInsertBehind))
         return FALSE;
     LONG oldw = win->w, oldh = win->h;
+    RECTL exposed = {win->x, win->y, win->x + oldw, win->y + oldh};
     win->x = swp.x;
     win->y = swp.y;
     win->w = swp.cx;
@@ -854,6 +859,10 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     win = getWindowFromHWND(anchor, hwnd);
     if (!win || win->destroying)
         return FALSE;
+    if (was_visible && win->parent != &desktop_window && !(flags & SWP_NOREDRAW) &&
+        ((flags & SWP_HIDE) || win->x != exposed.xLeft || win->y != exposed.yBottom ||
+         win->w != oldw || win->h != oldh))
+        WinInvalidateRect(win->parent->hwnd, &exposed, TRUE);
     if (oldw != win->w || oldh != win->h)
     {
         sendMessage(win, WM_SIZE, (MPARAM)(uintptr_t)(((uint32)(uint16)oldh << 16) | (uint16)oldw),
@@ -887,7 +896,7 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
         return FALSE;
     if (flags & (SWP_SIZE | SWP_MOVE | SWP_SHOW | SWP_HIDE))
         notifyVisibleRegions(anchor, win);
-    if (!(flags & SWP_NOREDRAW) && (flags & (SWP_SIZE | SWP_SHOW)))
+    if (!(flags & SWP_NOREDRAW) && (flags & (SWP_SIZE | SWP_SHOW | SWP_MOVE)))
         postExposedMessages(anchor, win, currentSystemTicks());
     if ((flags & SWP_ZORDER) && !(flags & SWP_NOREDRAW))
         WinInvalidateRect(win->parent->hwnd, NULL, TRUE);
