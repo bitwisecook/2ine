@@ -70,7 +70,9 @@ TWOINE_CUPS_BINDIR to its own absolute helper directory. System clients remain
 the default outside Snap. No shell interprets titles or printer names. A real
 process-level fixture checks enumeration and PCL submission from a helper
 directory containing spaces, with the captured argv and output verified.
-Sources, reference versions and notices for both helpers were added to the
+RPM now owns the new MIME icon, which the incoming package manifest omitted.
+Debian/RPM replacement metadata upgrades the older plural 2ine-balls package
+without removing user ball data. Sources, reference versions and notices for both helpers were added to the
 shared catalogue. Full physical-printer/service qualification remains separate.
 
 Primary design/API references: GNOME HIG adaptive design/dialog guidance,

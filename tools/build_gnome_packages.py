@@ -212,6 +212,9 @@ Section: otherosfs
 Priority: optional
 Architecture: {architecture}
 Maintainer: 2ine Contributors <noreply@github.com>
+Provides: 2ine-balls (= {version})
+Conflicts: 2ine-balls
+Replaces: 2ine-balls
 Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libstdc++6, libgcc-s1, libgl1, libegl1, libgles2, zenity, cups-client
 Homepage: https://github.com/bitwisecook/2ine
 Description: Native GNOME manager for OS/2 applications
@@ -247,6 +250,8 @@ License: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2
 URL: https://github.com/bitwisecook/2ine
 Requires: python3 >= 3.11, python3-gobject, gtk4 >= 4.18, libadwaita >= 1.9, mesa-libGL, mesa-libEGL, libglvnd-gles, zenity, cups-client
 Recommends: mesa-dri-drivers
+Provides: 2ine-balls = %{{version}}-%{{release}}
+Obsoletes: 2ine-balls < %{{version}}-%{{release}}
 # Private runtime modules must not satisfy unrelated system packages.
 %global __provides_exclude_from ^/usr/lib/2ine-ball/.*$
 %global __requires_exclude ^({private})([(].*)?$
@@ -266,6 +271,7 @@ cp -a {shlex.quote(str(stage_root / "usr"))} %{{buildroot}}/
 /usr/share/mime/packages/{APP_ID}.xml
 /usr/share/icons/hicolor/scalable/apps/{APP_ID}.svg
 /usr/share/icons/hicolor/symbolic/apps/{APP_ID}-symbolic.svg
+/usr/share/icons/hicolor/scalable/mimetypes/application-x-2ine-ball.svg
 %doc /usr/share/doc/2ine-ball
 """)
     run(["rpmbuild", "-bb", "--define", "_tmppath /tmp", "--define", f"_topdir {top}", spec])
