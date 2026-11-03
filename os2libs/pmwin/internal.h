@@ -106,6 +106,9 @@ typedef struct PresentationSpace
     LONG primitive_mix[5], primitive_back_mix[5];
     RECTL viewport;
     BOOL viewport_set;
+    RECTL paint_clip;
+    BOOL paint_clip_set;
+    ULONG page_units;
     SIZEL page_size;
     struct PmSavedSpace *saved;
     LONG save_id;

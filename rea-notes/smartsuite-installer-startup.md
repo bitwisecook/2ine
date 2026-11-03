@@ -321,3 +321,48 @@ reductions, respectively; the fresh-output measurements above are the final
 reported values. Some large-file runs show substantial host timing variation
 (baseline up to 5.82 s, optimized up to 3.07 s after warmup), so these are local
 sample medians rather than a prediction of whole-install or application speed.
+
+## Remaining rendering failures reported after 0.2
+
+The user's report that progress text disappears except when its timer ticks
+matches a specific sequence in full.stderr (for example around line 1419788):
+the installer explicitly sends WM_PAINT to its progress dialog with an empty
+update region. acquirePresentationSpace treated that empty region as the whole
+window, so the dialog cleared itself and erased unchanged child labels. It also
+reported nonempty damage to the caller and never clipped drawing to damage.
+WinBeginPaint now snapshots the actual update rectangle before validating it,
+including an empty rectangle, and retains that paint clip separately from the
+application's GPI clip. Window fill, raster, text and accelerated line output
+honor that clip. WinEndPaint removes the temporary clip from persistent spaces.
+The [IBM PM reference](https://ftpmirror.your.org/pub/misc/bitsavers/pdf/ibm/pc/os2/OS2_2.x/IBM_OS2_2.0_Technical_Library_1992/S10G-6265-00_OS2_2.0_Presentation_Manager_Programming_Reference_Volume_2_199203.pdf)
+describes WinBeginPaint clipping to the update region. A regression sends the
+same unsolicited paint and then partial fill/line paints over a parent with an
+unchanged child. It fails before the fix and preserves the child afterward.
+
+The black backdrop has another concrete failed call in that trace: after filling
+black, Lotus requests GpiCreatePS with 0x5014 (PU_LOENGLISH | GPIT_MICRO |
+GPIA_ASSOC). Only pixel units were admitted. Fixed physical page units now map
+through the renderer's logical 96-dpi display, including metric, English and
+twip units, with forward/inverse conversion tests. Explicit viewport mapping
+remains supported, and WC bitmap destinations use world-to-device conversion.
+
+SS_BITMAP statics previously accepted a bitmap style but drew no image and did
+not bind their resource ordinal. They now share the existing validated bitmap
+decoder with GpiLoadBitmap, hold a typed bitmap lease, draw the image and release
+owned resources correctly. SS_AUTOSIZE no longer interferes with static type
+recognition; zero-sized image controls also acquire their natural size. Stock
+information/question/error/warning icons can now be drawn, and message boxes
+use their requested icon. Native checks cover image pixels, autosizing, pinned
+bitmap lifetime and copied/shared system icon handles.
+
+An offscreen probe independently extracted the unchanged EPFIDLDS.EXE resource
+pages, decoded all six bitmap resources (including the Lotus logo tile and
+40x40 clock), and loaded original dialog 4148 with its bitmap bound. No old
+installer code or licence action was executed by this resource-only probe.
+Evidence is in build-perf-lotus/original-image-verification.log and
+lotus-resources/; the original copying wizard has not been rerun visually after
+these changes. App build 15 packages the fixes. All 53 project CTests pass;
+installer-rendering-tests.log and installer-rendering-app-build.log record the
+checks. The help-manager limitation remains: there is no IPF/HLP panel renderer,
+so WinCreateHelpInstance still reports HMERR_LOAD_DLL and the optional warning
+is expected.

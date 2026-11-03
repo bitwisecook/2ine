@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Standard message boxes use resource-template controls and the PM modal loop. */
 #include "os2libs/pmwin/internal.h"
+#include "os2libs/pmwin/controls.h"
 #include "guest/abi.h"
 ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, ULONG style)
 {
@@ -11,6 +12,7 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
     static const char *labels[] = {"",       "OK",  "Cancel", "Abort", "Retry",
                                    "Ignore", "Yes", "No",     "Help",  "Enter"};
     unsigned kind = style & 15;
+    unsigned icon = (style >> 4) & 7;
     if (kind >= sizeof buttons / sizeof *buttons || (style & 0x8000))
         return 0xffff;
     if (!text)
@@ -46,7 +48,7 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
     unsigned button_count = 0;
     while (button_count < 3 && buttons[kind][button_count])
         button_count++;
-    unsigned count = line_count + button_count;
+    unsigned count = line_count + button_count + (icon >= 1 && icon <= 4);
     size_t offset = 14 + (count + 1) * 30;
     uint8 *bytes = calloc(1, 16384);
     if (!bytes)
@@ -76,14 +78,14 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
         {
             item->offClassName = 5;
             item->id = 100 + i;
-            item->x = 8;
+            item->x = icon >= 1 && icon <= 4 ? 32 : 8;
             item->y = 26 + (line_count - i) * 12;
-            item->cx = 314;
+            item->cx = 322 - item->x;
             item->cy = 12;
             item->flStyle = WS_VISIBLE | 1;
             content = lines[i - 1];
         }
-        else if (i)
+        else if (i && i <= line_count + button_count)
         {
             unsigned b = i - line_count - 1;
             item->offClassName = 3;
@@ -95,6 +97,16 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
             item->flStyle = WS_VISIBLE | 0x20000 | (b == selected ? 0x400 : 0);
             content = labels[item->id];
         }
+        else if (i)
+        {
+            item->offClassName = 5;
+            item->id = 99;
+            item->x = 8;
+            item->y = 26;
+            item->cx = item->cy = 16;
+            item->flStyle = WS_VISIBLE | 11;
+            content = "";
+        }
         item->cchText = strlen(content);
         item->offText = offset;
         memcpy(bytes + offset, content, item->cchText + 1);
@@ -105,6 +117,11 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
     free(bytes);
     if (!window)
         return 0xffff;
+    if (icon >= 1 && icon <= 4)
+    {
+        static const unsigned system[] = {0, 12, 14, 11, 13};
+        controlResourcePointer(WinWindowFromID(window, 99), 0, system[icon]);
+    }
     ULONG result = WinProcessDlg(window);
     WinDestroyWindow(window);
     return result;

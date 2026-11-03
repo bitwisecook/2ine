@@ -104,6 +104,20 @@ static void page_exposure(HAB hab)
     HPS ps = WinGetPS(parent);
     uint32_t pixel;
     CHECK(ps && lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    /* Lotus explicitly sends WM_PAINT between updates. With no damage this
+       must not clear the dialog and erase unchanged labels or timer text. */
+    WinSendMsg(parent, WM_PAINT, 0, 0);
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    RECTL corner = {0, 0, 4, 4};
+    CHECK(WinInvalidateRect(parent, &corner, FALSE));
+    WinSendMsg(parent, WM_PAINT, 0, 0);
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
+    CHECK(WinInvalidateRect(parent, &corner, FALSE));
+    HPS clipped = WinBeginPaint(parent, 0, NULL);
+    POINTL start = {0, 0}, end = {20, 20};
+    CHECK(clipped && GpiSetColor(clipped, CLR_GREEN) && GpiMove(clipped, &start) &&
+          GpiLine(clipped, &end) && WinEndPaint(clipped));
+    CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff);
     /* A slow parent repaint must not expose its background before the child. */
     CHECK(WinInvalidateRect(parent, NULL, TRUE));
     QMSG repaint;

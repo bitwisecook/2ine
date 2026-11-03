@@ -158,14 +158,22 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
     if (ps->window && ps->window->heavy.window && !ps->clip_lease.resource &&
         ps->primitive_mix[0] == 2 && ps->line_type == 7)
     {
-        LxHostRect clip;
-        calcHeavyweightRect(ps->window, &clip);
-        return lx_host_window_line(ps->window->heavy.window, &clip, clip.x + from.x,
-                                   clip.y + clip.h - 1 - from.y, clip.x + point->x,
-                                   clip.y + clip.h - 1 - point->y, (rgb >> 16) & 255,
-                                   (rgb >> 8) & 255, rgb & 255)
-                   ? 1
-                   : 0;
+        LxHostRect origin;
+        calcHeavyweightRect(ps->window, &origin);
+        PmRegion visible = {0};
+        BOOL ok = lx_pm_window_clip(handle, NULL, &visible);
+        for (size_t i = 0; ok && i < visible.count; i++)
+        {
+            RECTL part = visible.rects[i];
+            LxHostRect clip = {origin.x + part.xLeft, origin.y + origin.h - part.yTop,
+                               part.xRight - part.xLeft, part.yTop - part.yBottom};
+            ok = lx_host_window_line(ps->window->heavy.window, &clip, origin.x + from.x,
+                                     origin.y + origin.h - 1 - from.y, origin.x + point->x,
+                                     origin.y + origin.h - 1 - point->y, (rgb >> 16) & 255,
+                                     (rgb >> 8) & 255, rgb & 255);
+        }
+        free(visible.rects);
+        return ok ? 1 : 0;
     }
     int64_t dx = llabs((int64_t)point->x - from.x), dy = llabs((int64_t)point->y - from.y);
     if (dx > 65536 || dy > 65536)

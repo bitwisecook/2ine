@@ -169,7 +169,10 @@ BOOL GpiQueryPageViewport(HPS handle, PRECTL rect)
     if (!ps || !rect)
         return FALSE;
     SIZEL page = lx_pm_page_dimensions(ps);
-    *rect = ps->viewport_set ? ps->viewport : (RECTL){0, 0, page.cx, page.cy};
+    POINTL corner = {page.cx, page.cy};
+    if (!ps->viewport_set && !lx_pm_transform_point(ps, &corner, TRUE))
+        return FALSE;
+    *rect = ps->viewport_set ? ps->viewport : (RECTL){0, 0, corner.x, corner.y};
     return TRUE;
 }
 BOOL GpiConvert(HPS handle, LONG source, LONG target, LONG count, PPOINTL points)

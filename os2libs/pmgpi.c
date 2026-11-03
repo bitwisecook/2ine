@@ -16,13 +16,16 @@
 HPS GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags)
 {
     TRACE_NATIVE("GpiCreatePS(%u, %u, %p, %u)", (uint)hab, (uint)dc, size, (uint)flags);
-    if (!size || (flags & ~(PU_PELS | GPIA_ASSOC | 0x1000 | 0x300)) || (flags & 0x300) == 0x300 ||
+    if (!size || (flags & ~(0x1c | GPIA_ASSOC | 0x1000 | 0x300)) || (flags & 0x300) == 0x300 ||
         size->cx < 0 || size->cy < 0)
         return 0;
     HPS handle = lx_pm_create_ps(hab, dc);
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (ps)
+    {
         ps->page_size = *size;
+        ps->page_units = flags & 0x1c;
+    }
     return handle;
 }
 BOOL GpiDestroyPS(HPS hps)

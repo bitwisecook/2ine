@@ -2,6 +2,184 @@
 /* Selected bitmap lifetimes are pinned by the presentation space. Pixels are bottom-up RGB. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include "guest/abi.h"
+typedef struct
+{
+    unsigned width, height, planes, depth, fixed, palette_entry, colors, compression;
+    size_t stride, bytes;
+} BitmapLayout;
+static BOOL bitmap_layout(const uint8 *p, BitmapLayout *b)
+{
+    if (!p)
+        return FALSE;
+    memset(b, 0, sizeof *b);
+    b->fixed = lx_guest_load_u32(p);
+    if (b->fixed == 12)
+    {
+        b->width = lx_guest_load_u16(p + 4);
+        b->height = lx_guest_load_u16(p + 6);
+        b->planes = lx_guest_load_u16(p + 8);
+        b->depth = lx_guest_load_u16(p + 10);
+        b->palette_entry = 3;
+    }
+    else if (b->fixed == 40 || b->fixed == 64)
+    {
+        b->width = lx_guest_load_u32(p + 4);
+        b->height = lx_guest_load_u32(p + 8);
+        b->planes = lx_guest_load_u16(p + 12);
+        b->depth = lx_guest_load_u16(p + 14);
+        b->compression = lx_guest_load_u32(p + 16);
+        b->palette_entry = 4;
+        b->colors = lx_guest_load_u32(p + 32);
+    }
+    else
+        return FALSE;
+    if (!b->width || !b->height || b->width > 16384 || b->height > 16384 ||
+        (uint64)b->width * b->height > 16777216 || b->planes != 1 ||
+        (b->depth != 1 && b->depth != 4 && b->depth != 8 && b->depth != 24 && b->depth != 32))
+        return FALSE;
+    if (b->depth <= 8)
+    {
+        unsigned total = 1u << b->depth;
+        if (!b->colors)
+            b->colors = total;
+        if (b->colors > total)
+            return FALSE;
+    }
+    else if (b->colors)
+        return FALSE;
+    b->stride = ((size_t)b->width * b->depth + 31) / 32 * 4;
+    b->bytes = b->stride * b->height;
+    return b->compression == 0;
+}
+static BOOL bitmap_decode(PmBitmap *bitmap, const BitmapLayout *b, const uint8 *bits,
+                          const uint8 *palette)
+{
+    if (!bitmap || !bits || (b->colors && !palette))
+        return FALSE;
+    bitmap->palette_count = b->colors;
+    for (unsigned i = 0; i < b->colors; i++)
+    {
+        const uint8 *c = palette + i * b->palette_entry;
+        bitmap->palette[i] = (uint32)c[2] << 16 | (uint32)c[1] << 8 | c[0];
+    }
+    for (unsigned y = 0; y < b->height; y++)
+    {
+        const uint8 *row = bits + (size_t)y * b->stride;
+        for (unsigned x = 0; x < b->width; x++)
+        {
+            uint32 rgb;
+            if (b->depth <= 8)
+            {
+                unsigned bit = x * b->depth, index = (row[bit / 8] >> (8 - b->depth - (bit % 8))) &
+                                                     ((1u << b->depth) - 1);
+                if (index >= b->colors)
+                    return FALSE;
+                const uint8 *c = palette + index * b->palette_entry;
+                rgb = (uint32)c[2] << 16 | (uint32)c[1] << 8 | c[0];
+            }
+            else
+            {
+                const uint8 *c = row + x * (b->depth / 8);
+                rgb = (uint32)c[2] << 16 | (uint32)c[1] << 8 | c[0];
+            }
+            bitmap->pixels[(size_t)y * bitmap->width + x] = rgb;
+        }
+    }
+    return TRUE;
+}
+ULONG lx_pm_bitmap_create_data(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info)
+{
+    BitmapLayout layout;
+    if (!lx_pm_valid_ps(ps) || !header ||
+        (lx_guest_load_u32(header) != 12 && lx_guest_load_u32(header) != 64) || (options & ~4u) ||
+        !bitmap_layout(header, &layout) || ((options & 4) && (!bits || !info)))
+        return 0;
+    ULONG handle = lx_pm_bitmap_create(layout.width, layout.height, layout.planes, layout.depth);
+    if (!handle)
+        return 0;
+    if (options & 4)
+    {
+        BitmapLayout source;
+        LxHandleBorrow borrow = {0};
+        PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
+        BOOL ok = bitmap_layout(info, &source) && source.width == layout.width &&
+                  source.height == layout.height &&
+                  bitmap_decode(bitmap, &source, bits, (const uint8 *)info + source.fixed);
+        lx_handle_release(&borrow);
+        if (!ok)
+        {
+            lx_pm_bitmap_delete(handle);
+            return 0;
+        }
+    }
+    return handle;
+}
+ULONG lx_pm_bitmap_load(HPS ps, HMODULE module, ULONG id, LONG width, LONG height)
+{
+    if (!lx_pm_valid_ps(ps) || width < 0 || height < 0 || !GLoaderState.queryResourceSize ||
+        !GLoaderState.getResource)
+        return 0;
+    uint32 size = 0;
+    void *resource = NULL;
+    if (GLoaderState.queryResourceSize(module, 2, id, &size) || size < 26 ||
+        GLoaderState.getResource(module, 2, id, &resource))
+        return 0;
+    const uint8 *p = resource;
+    size_t offset = lx_guest_load_u16(p) == 0x4142 ? 14 : 0;
+    ULONG result = 0;
+    if (size - offset < 26 || lx_guest_load_u16(p + offset) != 0x4d42)
+        goto done;
+    uint32 fixed = lx_guest_load_u32(p + offset + 14);
+    if (fixed > size - offset - 14 || (fixed != 12 && fixed != 40 && fixed != 64))
+        goto done;
+    BitmapLayout b;
+    if (!bitmap_layout(p + offset + 14, &b) ||
+        (size_t)b.colors * b.palette_entry > size - offset - 14 - b.fixed)
+        goto done;
+    uint32 bits = lx_guest_load_u32(p + offset + 10);
+    if (bits > size || b.bytes > size - bits)
+        goto done;
+    result = lx_pm_bitmap_create(b.width, b.height, b.planes, b.depth);
+    if (result)
+    {
+        LxHandleBorrow borrow = {0};
+        PmBitmap *bitmap = lx_pm_bitmap(result, &borrow);
+        BOOL decoded = bitmap_decode(bitmap, &b, p + bits, p + offset + 14 + b.fixed);
+        lx_handle_release(&borrow);
+        if (!decoded)
+        {
+            lx_pm_bitmap_delete(result);
+            result = 0;
+        }
+    }
+    if (result &&
+        ((width && (unsigned)width != b.width) || (height && (unsigned)height != b.height)))
+    {
+        unsigned w = width ? (unsigned)width : b.width, h = height ? (unsigned)height : b.height;
+        ULONG scaled = lx_pm_bitmap_create(w, h, 1, b.depth);
+        LxHandleBorrow old = {0}, next = {0};
+        PmBitmap *src = lx_pm_bitmap(result, &old),
+                 *dst = scaled ? lx_pm_bitmap(scaled, &next) : NULL;
+        if (src && dst)
+        {
+            dst->palette_count = src->palette_count;
+            memcpy(dst->palette, src->palette, sizeof dst->palette);
+            for (unsigned y = 0; y < h; y++)
+                for (unsigned x = 0; x < w; x++)
+                    dst->pixels[(size_t)y * w + x] =
+                        src->pixels[(size_t)(y * b.height / h) * b.width + x * b.width / w];
+        }
+        lx_handle_release(&next);
+        lx_handle_release(&old);
+        lx_pm_bitmap_delete(result);
+        result = scaled;
+    }
+done:
+    if (GLoaderState.freeResource)
+        GLoaderState.freeResource(resource);
+    return result;
+}
 static void destroy_bitmap(void *resource)
 {
     PmBitmap *bitmap = resource;

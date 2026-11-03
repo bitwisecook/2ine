@@ -49,6 +49,8 @@ typedef struct PmBitmap
 } PmBitmap;
 PmBitmap *lx_pm_bitmap(ULONG handle, LxHandleBorrow *borrow);
 ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsigned depth);
+ULONG lx_pm_bitmap_create_data(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info);
+ULONG lx_pm_bitmap_load(HPS ps, HMODULE module, ULONG id, LONG width, LONG height);
 BOOL lx_pm_bitmap_delete(ULONG handle);
 ULONG lx_pm_bitmap_select(HPS ps, ULONG bitmap);
 void lx_pm_bitmap_cleanup(void *anchor);

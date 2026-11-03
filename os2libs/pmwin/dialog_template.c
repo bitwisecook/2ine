@@ -57,10 +57,11 @@ static BOOL parameters_valid(const DialogTemplate *t, unsigned offset)
     }
     return TRUE;
 }
-static BOOL icon_ordinal(const DialogTemplate *t, const uint8 *item)
+static BOOL image_ordinal(const DialogTemplate *t, const uint8 *item)
 {
     unsigned offset = word(item, 10);
-    return !word(item, 4) && word(item, 6) == 5 && (lx_guest_load_u32(item + 12) & 0x7f) == 3 &&
+    unsigned kind = lx_guest_load_u32(item + 12) & 0x3f;
+    return !word(item, 4) && word(item, 6) == 5 && (kind == 3 || kind == 4 || kind == 11) &&
            word(item, 8) == 3 && offset <= t->size && t->size - offset >= 3 &&
            t->bytes[offset] == 0xff;
 }
@@ -135,7 +136,7 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
     if (!handle)
         return 0;
     t->windows[index] = handle;
-    if (icon_ordinal(t, item) &&
+    if (image_ordinal(t, item) &&
         !controlResourcePointer(handle, t->module, word(t->bytes + text_offset, 1)))
         goto failed;
     AnchorBlock *anchor = getAnchorBlockNoHAB();

@@ -6,6 +6,7 @@
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmwin/controls.h"
 #include "os2libs/pmwin/menus.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -88,6 +89,39 @@ static void pointer_contracts(HPS ps)
     GLoaderState.queryResourceSize = old_query;
     GLoaderState.getResource = old_get;
     GLoaderState.freeResource = old_free;
+    for (LONG id = 10; id <= 14; id++)
+    {
+        HPOINTER shared = WinQuerySysPointer(HWND_DESKTOP, id, FALSE);
+        HPOINTER copy = WinQuerySysPointer(HWND_DESKTOP, id, TRUE);
+        LONG width, height;
+        CHECK(shared && copy && shared != copy &&
+              WinQuerySysPointer(HWND_DESKTOP, id, FALSE) == shared);
+        CHECK(lx_pm_pointer_dimensions(shared, &width, &height) && width == 32 && height == 32);
+        CHECK(WinDrawPointer(ps, 0, 0, shared, 0));
+        CHECK(!WinDestroyPointer(shared) && WinDestroyPointer(copy));
+    }
+    CHECK(!WinQuerySysPointer(HWND_DESKTOP, 15, FALSE));
+    HWND bitmap_control =
+        WinCreateWindow(HWND_DESKTOP, (PSZ)(uintptr_t)0xffff0005, "", WS_VISIBLE | 4 | 0x40, 0, 0,
+                        32, 24, 0, HWND_TOP, 987, NULL, NULL);
+    ULONG bitmap = lx_pm_bitmap_create(2, 2, 1, 24);
+    LxHandleBorrow borrow = {0};
+    PmBitmap *image = lx_pm_bitmap(bitmap, &borrow);
+    CHECK(bitmap_control && image);
+    image->pixels[0] = 0x123456;
+    image->pixels[1] = 0xabcdef;
+    image->pixels[2] = 0xfedcba;
+    image->pixels[3] = 0x654321;
+    lx_handle_release(&borrow);
+    CHECK(!WinSendMsg(bitmap_control, 0x100, (MPARAM)(uintptr_t)bitmap, 0));
+    CHECK((ULONG)(uintptr_t)WinSendMsg(bitmap_control, 0x101, 0, 0) == bitmap);
+    RECTL sized;
+    CHECK(WinQueryWindowRect(bitmap_control, &sized) && sized.xRight == 2 && sized.yTop == 2);
+    CHECK(!GpiDeleteBitmap(bitmap) && WinUpdateWindow(bitmap_control));
+    HPS shown = WinGetPS(bitmap_control);
+    CHECK(shown && lx_pm_raster_read(shown, 0, 0, 1, 1, &pixel) && pixel == 0x123456);
+    CHECK(lx_pm_raster_read(shown, 1, 1, 1, 1, &pixel) && pixel == 0x654321);
+    CHECK(WinReleasePS(shown) && WinDestroyWindow(bitmap_control) && GpiDeleteBitmap(bitmap));
 }
 static HWND changing_menu;
 static unsigned menu_initializations;
@@ -628,6 +662,17 @@ static void graphics_contracts(HAB hab, HWND window)
     SIZEL size = {32, 24};
     HPS ps = GpiCreatePS(hab, memory, &size, 0x5008);
     CHECK(ps && GpiQueryDevice(ps) == memory && DevCloseDC(memory) == (ULONG)-1);
+    /* The Lotus backdrop uses a micro PS in hundredths of an inch. */
+    const LONG units[] = {254, 2540, 100, 1000, 1440};
+    for (unsigned i = 0; i < 5; i++)
+    {
+        HPS physical = GpiCreatePS(hab, memory, &size, 0x500c + i * 4);
+        POINTL inch = {units[i], -units[i]};
+        CHECK(physical && GpiConvert(physical, 1, 5, 1, &inch));
+        CHECK(inch.x == 96 && inch.y == -96);
+        CHECK(GpiConvert(physical, 5, 1, 1, &inch) && inch.x == units[i] && inch.y == -units[i]);
+        CHECK(GpiDestroyPS(physical));
+    }
     LONG colors[40];
     LONG color_data[4] = {-1, -1, -1, -1};
     CHECK(GpiQueryColorData(ps, 2, color_data) && color_data[0] == 0 && color_data[1] == 0 &&

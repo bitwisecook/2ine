@@ -137,15 +137,16 @@ HPS acquirePresentationSpace(HWND hwnd, HPS hps, PRECTL prclPaint, BOOL paint)
         ps->viewport = (RECTL){0, 0, win->w, win->h};
     }
 
-    if (prclPaint)
-    {
-        FIXME("report the update region, not the whole window");
-        *prclPaint =
-            WinIsRectEmpty(0, &win->invalid) ? (RECTL){0, 0, win->w, win->h} : win->invalid;
-    }
-
     if (paint)
+    {
+        /* Capture before validation. An empty update region must stay empty,
+           including when an app sends WM_PAINT itself between timer ticks. */
+        ps->paint_clip = win->invalid;
+        ps->paint_clip_set = TRUE;
+        if (prclPaint)
+            *prclPaint = ps->paint_clip;
         validateWindowPaint(anchor, win);
+    }
     return hps;
 }
 
@@ -167,6 +168,7 @@ BOOL WinEndPaint(HPS hps)
     if (win && win->heavy.window)
         presentWindow(anchor, win);
 
+    ps->paint_clip_set = FALSE;
     if (!ps->persistent)
         destroyPresentationSpace(anchor, ps);
     return TRUE;

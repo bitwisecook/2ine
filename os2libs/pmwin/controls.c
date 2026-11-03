@@ -29,7 +29,12 @@ void destroyControl(Window *window)
         return;
     lx_handle_release(&control->image_lease);
     if (control->owns_image)
-        WinDestroyPointer(control->image);
+    {
+        if ((window->style & 0x3f) == 4)
+            lx_pm_bitmap_delete(control->image);
+        else
+            WinDestroyPointer(control->image);
+    }
     for (size_t i = 0; i < control->count; i++)
         free(control->items[i].text);
     free(control->items);
@@ -355,11 +360,11 @@ static void paint(Window *window)
         return;
     }
     /* Group boxes and frames leave the controls inside them visible. */
-    BOOL frame = c->kind == 5 && ((window->style & 0x7f) == 2 || (window->style & 0x7f) == 8);
+    BOOL frame = c->kind == 5 && ((window->style & 0x3f) == 2 || (window->style & 0x3f) == 8);
     if (!frame)
         WinFillRect(space, &rect,
                     (c->kind == 7 || c->kind == 6 || c->kind == 32) ? CLR_WHITE : CLR_PALEGRAY);
-    if (c->kind == 5 && (window->style & 0x7f) == 3)
+    if (c->kind == 5 && ((window->style & 0x3f) == 3 || (window->style & 0x3f) == 11))
     {
         LONG width, height;
         if (c->image && lx_pm_pointer_dimensions(c->image, &width, &height))
@@ -367,8 +372,20 @@ static void paint(Window *window)
         WinEndPaint(space);
         return;
     }
+    if (c->kind == 5 && (window->style & 0x3f) == 4)
+    {
+        PmBitmap *bitmap = c->image_lease.resource;
+        if (bitmap)
+        {
+            POINTL at = {(window->w - (LONG)bitmap->width) / 2,
+                         (window->h - (LONG)bitmap->height) / 2};
+            WinDrawBitmap(space, c->image, NULL, &at, CLR_BLACK, CLR_WHITE, 0);
+        }
+        WinEndPaint(space);
+        return;
+    }
     if ((c->kind == 3 && !(window->style & 15)) || c->kind == 2 || c->kind == 6 || c->kind == 32 ||
-        (c->kind == 5 && (window->style & 0x7f) != 1))
+        (c->kind == 5 && (window->style & 0x3f) != 1))
     {
         RECTL edge = {0, 0, window->w, 1};
         WinFillRect(space, &edge, CLR_DARKGRAY);
@@ -501,7 +518,7 @@ static void paint(Window *window)
                       c->items[i].selected, 3);
         }
     }
-    else if (!(c->kind == 5 && ((window->style & 0x7f) == 3 || (window->style & 0x7f) == 4)))
+    else if (!(c->kind == 5 && ((window->style & 0x3f) == 3 || (window->style & 0x3f) == 4)))
         draw_text(window, space, window->text,
                   c->kind == 3 ? (window->h + metrics.ascent - metrics.descent) / 2
                                : metrics.ascent,
@@ -520,9 +537,9 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         unsigned kind = (unsigned)strtoul(window->window_class_name + 1, NULL, 10);
         /* These static and button styles require a different control representation. */
         if ((kind == 3 && (window->style & 15) > 7) ||
-            (kind == 5 && (window->style & 0x7f) != 1 && (window->style & 0x7f) != 2 &&
-             (window->style & 0x7f) != 3 && (window->style & 0x7f) != 4 &&
-             (window->style & 0x7f) != 8))
+            (kind == 5 && (window->style & 0x3f) != 1 && (window->style & 0x3f) != 2 &&
+             (window->style & 0x3f) != 3 && (window->style & 0x3f) != 4 &&
+             (window->style & 0x3f) != 8 && (window->style & 0x3f) != 11))
             return controlReply(TRUE);
         window->control = calloc(1, sizeof *window->control);
         if (!window->control)
@@ -548,7 +565,9 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         return 0;
     }
     PmControl *c = window->control;
-    if (c && c->kind == 5 && (window->style & 0x7f) == 3)
+    if (c && c->kind == 5 &&
+        ((window->style & 0x3f) == 3 || (window->style & 0x3f) == 4 ||
+         (window->style & 0x3f) == 11))
     {
         if (message == 0x101)
             return controlReply(c->image); /* SM_QUERYHANDLE */
@@ -557,21 +576,43 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
             ULONG next = (ULONG)(uintptr_t)first;
             LxHandleBorrow image = {0};
             LONG width, height;
-            if (next && (!lx_pm_pointer_dimensions(next, &width, &height) ||
-                         !lx_handle_borrow(next, LX_HANDLE_PM_POINTER, &image)))
-                return 0;
+            BOOL bitmap = (window->style & 0x3f) == 4;
+            if (next)
+            {
+                if (bitmap)
+                {
+                    PmBitmap *pixels = lx_pm_bitmap(next, &image);
+                    if (!pixels)
+                        return 0;
+                    width = (LONG)pixels->width;
+                    height = (LONG)pixels->height;
+                }
+                else if (!lx_pm_pointer_dimensions(next, &width, &height) ||
+                         !lx_handle_borrow(next, LX_HANDLE_PM_POINTER, &image))
+                    return 0;
+            }
             ULONG previous = c->image;
+            BOOL owned = c->owns_image;
             lx_handle_release(&c->image_lease);
             c->image_lease = image;
             c->image = next;
-            c->owns_image = FALSE;
+            c->owns_image = owned && previous == next;
+            if (owned && previous != next)
+            {
+                if (bitmap)
+                    lx_pm_bitmap_delete(previous);
+                else
+                    WinDestroyPointer(previous);
+            }
+            if (next && ((window->style & 0x40) || !window->w || !window->h))
+                WinSetWindowPos(handle, 0, 0, 0, width, height, SWP_SIZE);
             controlRepaint(window);
             return controlReply(previous);
         }
     }
     if (message == WM_HITTEST && c)
         return controlReply(c->kind == 5 &&
-                                    ((window->style & 0x7f) == 2 || (window->style & 0x7f) == 8)
+                                    ((window->style & 0x3f) == 2 || (window->style & 0x3f) == 8)
                                 ? HT_TRANSPARENT
                                 : HT_NORMAL);
     if (!c)
@@ -635,17 +676,28 @@ BOOL controlResourcePointer(HWND handle, HMODULE module, ULONG identity)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
-    if (!window || !window->control || window->control->kind != 5 || (window->style & 0x7f) != 3)
+    if (!window || !window->control || window->control->kind != 5)
         return FALSE;
-    HPOINTER image = WinLoadPointer(HWND_DESKTOP, module, identity);
+    unsigned kind = window->style & 0x3f;
+    if (kind != 3 && kind != 4 && kind != 11)
+        return FALSE;
+    HPS ps = kind == 4 ? WinGetPS(handle) : 0;
+    ULONG image = kind == 4    ? (ps ? lx_pm_bitmap_load(ps, module, identity, 0, 0) : 0)
+                  : kind == 11 ? WinQuerySysPointer(HWND_DESKTOP, identity, FALSE)
+                               : WinLoadPointer(HWND_DESKTOP, module, identity);
+    if (ps)
+        WinReleasePS(ps);
     if (!image)
         return FALSE;
     WinSendMsg(handle, 0x100, (MPARAM)(uintptr_t)image, 0);
     if (window->control->image != image)
     {
-        WinDestroyPointer(image);
+        if (kind == 4)
+            lx_pm_bitmap_delete(image);
+        else if (kind != 11)
+            WinDestroyPointer(image);
         return FALSE;
     }
-    window->control->owns_image = TRUE;
+    window->control->owns_image = kind != 11;
     return TRUE;
 }

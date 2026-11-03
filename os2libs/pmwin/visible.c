@@ -24,6 +24,8 @@ BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
     if (!windowAcceptsUpdates(window))
         return TRUE;
     RECTL rect = {0, 0, window->w, window->h};
+    if (ps->paint_clip_set)
+        WinIntersectRect(0, &rect, &rect, &ps->paint_clip);
     if (bounds)
         WinIntersectRect(0, &rect, &rect, (PRECTL)bounds);
     LxHostRect origin;
