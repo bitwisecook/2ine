@@ -683,6 +683,18 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(colors[0] == 0xffffff && colors[1] == 0xff && colors[2] == 0xff0000);
     LONG custom = 0x123456;
     CHECK(GpiCreateLogColorTable(ps, 0, 2, 20, 1, &custom));
+    CHECK(GpiQueryRGBColor(ps, 1, 20) == custom && GpiQueryRGBColor(ps, 2, 20) == custom);
+    CHECK(GpiQueryColorIndex(ps, 1, custom) == 20);
+    LONG pairs[] = {23, 0x408080, 6, 0x654321};
+    CHECK(GpiCreateLogColorTable(ps, 0, 1, -99, 4, pairs));
+    CHECK(GpiQueryRGBColor(ps, 3, 23) == 0x408080 && GpiQueryRGBColor(ps, 0, 6) == 0x654321 &&
+          GpiQueryRGBColor(ps, 0, 20) == custom);
+    CHECK(GpiQueryColorIndex(ps, 0, 0x408080) == 23);
+    CHECK(!GpiCreateLogColorTable(ps, 0, 1, 0, 3, pairs));
+    LONG invalid_pairs[] = {23, 0x111111, 256, 0x222222};
+    CHECK(!GpiCreateLogColorTable(ps, 1, 1, 0, 4, invalid_pairs) &&
+          GpiQueryRGBColor(ps, 0, 23) == 0x408080);
+    CHECK(GpiCreateLogColorTable(ps, 1, 2, 20, 1, &custom));
     CHECK(GpiQueryColorData(ps, 3, color_data) && color_data[0] == 2 && color_data[2] == 20);
     LONG color_state = GpiSavePS(ps);
     CHECK(color_state > 0 && GpiCreateLogColorTable(ps, 0, 3, 0, 16, NULL));
@@ -694,6 +706,16 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(GpiQueryLogColorTable(ps, 2, 16, 3, colors) == 2 && colors[0] == 20 &&
           colors[1] == custom);
     CHECK(GpiCreateLogColorTable(ps, 0, 0, 0, 0, NULL));
+    CHECK(GpiCreateLogColorTable(ps, 0, 2, 20, 1, &custom));
+    CHECK(GpiCreateLogColorTable(ps, 0, 3, 0, 0, NULL));
+    CHECK(GpiQueryRGBColor(ps, 1, CLR_BLACK) == 0 &&
+          GpiQueryRGBColor(ps, 1, 0x408080) == 0x408080 &&
+          GpiQueryColorIndex(ps, 1, 0x408080) == 0x408080);
+    CHECK(GpiQueryRGBColor(ps, 0, CLR_DEFAULT) == -255 &&
+          GpiQueryRGBColor(ps, 4, CLR_RED) == -255 && GpiQueryColorIndex(ps, 2, 0x408080) == -255);
+    CHECK(GpiCreateLogColorTable(ps, 0, 1, 0, 0, NULL));
+    CHECK(GpiQueryColorData(ps, 3, color_data) && color_data[0] == 1 && color_data[2] == 15);
+    CHECK(GpiQueryRGBColor(ps, 1, 6) == 0xffff00 && GpiQueryRGBColor(ps, 0, 20) == -255);
     CHECK(GpiSetColor(ps, CLR_RED) && GpiQueryColor(ps) == CLR_RED);
     CHECK(GpiSetCp(ps, 437) && GpiQueryCp(ps) == 437 && !GpiSetCp(ps, 932));
     FATTRS attrs = {0};
@@ -1161,7 +1183,7 @@ int main(void)
     CHECK(GpiQueryColorIndex(screen, 0, 0xff0000) == CLR_RED);
     CHECK(GpiQueryColorIndex(screen, 0, 0x0100fe) == CLR_BLUE);
     CHECK(GpiQueryRGBColor(screen, 0, CLR_RED) == 0xff0000);
-    CHECK(GpiQueryRGBColor(screen, 1, CLR_RED) == -255);
+    CHECK(GpiQueryRGBColor(screen, 1, CLR_RED) == 0xff0000);
     CHECK(WinReleasePS(screen) && !WinReleasePS(screen));
     CHECK(WinSetWindowPos(frame, HWND_TOP, 10, 10, 64, 48, SWP_MOVE | SWP_SIZE | SWP_SHOW));
     graphics_contracts(hab, client);

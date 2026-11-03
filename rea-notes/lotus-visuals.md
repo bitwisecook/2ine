@@ -435,3 +435,83 @@ that the original call entered through WM_PAINT. The live accepted DPI app
 was left unchanged for comparison. A subsequent coherent build is required
 because the concurrent frame-chrome work changed shared Window/LxHostEvent
 layouts, independently of this paint-stack change.
+
+## Original Word Pro caption colors and bounded menu repaint, 2026-11-03
+
+The final diagnostic uses the original installed Word Pro and LTCAPO10.DLL in a
+new private clone of `build-lotus-visuals/modal-acceptance/WordPro.2ineball`.
+`build-lotus-visuals/probe-actual-colors.py` builds diagnostic copies of native
+PM source units, freezes their full dependency closure, and uses dummy SDL
+video/software rendering. It activates the original Welcome default button,
+opens File, moves to Edit, closes the menu, and captures the actual root frame's
+retained canvas through `lx_pm_raster_read`. It terminates the process after
+12 seconds; termination is deliberate, not a guest crash. It neither patches
+guest code nor changes the active acceptance ball. The remembered document
+in this private source ball is a Letter template, not a blank document.
+
+The initial capture `build-lotus-visuals/actual-colors-fezgovsi/canvas-7.png`
+confirmed that the custom LTCAPO10 caption was black with white text. Actual
+calls during its WM_PAINT established two missing GPI contracts:
+
+* `GpiQueryRGBColor(ps, LCOLOPT_REALIZED, CLR_BLACK)` and the same call with
+  RGB `0x408080` both returned `GPI_ALTERROR` (-255). The implementation
+  rejected every nonzero option and ignored the PS's logical color mode.
+* The original switches to RGB mode with `GpiCreateLogColorTable(...,3,...)`
+  and restores indexed mode with `GpiCreateLogColorTable(...,1,0,0,NULL)`.
+  Format1 is `LCOLF_INDRGB`; it was rejected, leaving the PS in RGB mode.
+
+The local IBM Toolkit `h/pmgpi.h` defines `LCOLOPT_REALIZED=1`,
+`LCOLOPT_INDEX=2`, `LCOLF_INDRGB=1`, and `LCOLF_RGB=3`. Microsoft's original
+[OS/2 Programmer's Reference Volume2](https://bitsavers.trailing-edge.com/pdf/ibm/pc/os2/OS2_1.x/Microsoft_-_OS2_Programmers_Reference_Volume_2_Version_1.1_1989.pdf),
+printed pages51–52 and146–147, specifies index/RGB pairs counted in LONGs,
+realized color queries, and RGB-mode query interpretation. The SDK's documented
+RGB-to-indexed transition resets the logical table, including a zero-entry
+INDRGB call. The host is true color, so realized and unrealized RGB results
+coincide; there is no synthesized application-specific gradient.
+
+`pmgpi.c` now resolves RGB queries through the selected PS, accepts the valid
+query flags, rejects CLR_DEFAULT, and maps RGB to that PS's logical table (or
+identity in RGB mode). `pmwin/graphics.c` accepts INDRGB pairs, checks the entire
+array before mutation, ignores lStart for that format, and resets custom entries
+when leaving RGB mode. Existing format0/CONSECRGB behavior is preserved.
+
+The rerun `build-lotus-visuals/actual-colors-9ywqd677/canvas-7.png` visibly
+restores the original caption's black-to-teal fade. Actual original queries
+now return `0x000000` and the current SYSCLR active title background `0x408080`;
+the zero-entry INDRGB restoration succeeds. Caption row20 has62 distinct
+colors, with sampled RGB values progressing `(0,0,0)`, `(8,16,16)`,
+`(38,76,76)`, `(64,128,128)`. No blue/teal override was introduced.
+`pixel-comparison.json` records these measurements and matching SHA256 hashes
+for the original WORDPRO.EXE and LTCAPO10.DLL in source and probe clones.
+
+The yellow workspace did not flicker in this bounded File/Edit/menu-close
+sequence: all four captures have exactly70,954 olive `(128,128,0)` pixels,
+and the fixed workspace rectangle `(10,120)-(105,725)` is byte-identical.
+This is a retained-canvas result with the software host, not acceptance of every
+live Metal/menu/resize path. Native system titlebar/window composition was not
+captured. No claim is made that every historical yellow flicker is resolved.
+
+Regression coverage in `test_pm.c` checks per-PS custom colors, INDRGB pairs,
+odd/invalid pairs without partial mutation, valid/invalid query options,
+RGB-mode identity, CLR_DEFAULT rejection, and the original zero-entry reset.
+The full runtime build succeeds, the focused PM/frame/menu/help-font/printer
+set passes5/5, and the complete runtime suite passes66/66 in8.39seconds with
+four workers (`/tmp/2ine-caption-color-full-tests.log`). `git diff --check`
+passes. The original probe retains all four PNGs, raw PPMs, native digests,
+launch plan and complete bounded trace under the directory above.
+
+A final scratch-only probe adds a retained capture immediately before the
+original Welcome default command:
+`build-lotus-visuals/actual-colors-vjpidkm4/canvas-0.png`. The genuine frame is
+511×356 with style`0x940002a0`; the original preview control (id25700) is at
+(244,48), size248×252. Visual inspection shows the complete Letter thumbnail,
+including its top heading and bottom paper/shadow, and all dialog controls.
+There is no blank strip above the tabs/body and no preview cropping. This
+uses the latest system dialog-unit conversion (6×16 at96DPI) and the original
+preview: the same trace records original `GpiDrawBits` points
+`{1,1;189,244;0,0;188,243}`, successful source188×243 depth8, target188×243.
+There is no application coordinate patch.
+The later document capture in that same probe retains the restored caption
+gradient. The dialog capture is guest retained pixels at1×, not native host
+titlebar/Retina presentation acceptance. Production source was unchanged by
+this last capture.

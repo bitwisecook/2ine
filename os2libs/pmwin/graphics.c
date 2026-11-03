@@ -214,7 +214,7 @@ BOOL lx_pm_color_table(HPS handle, ULONG options, LONG format, LONG start, LONG 
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, handle) : NULL;
-    if (!ps || (options & ~1u) || (format != 0 && format != 2 && format != 3))
+    if (!ps || (options & ~1u) || format < 0 || format > 3)
         return FALSE;
     if (format == 3)
     {
@@ -225,19 +225,37 @@ BOOL lx_pm_color_table(HPS handle, ULONG options, LONG format, LONG start, LONG 
         ps->color = current < 0 ? 0 : current;
         return TRUE;
     }
-    if (start < 0 || count < 0 || start > 256 || count > 256 - start || (count && !colors))
+    if (count < 0 || (count && !colors))
         return FALSE;
-    for (LONG i = 0; i < count; i++)
-        if (colors[i] < 0 || colors[i] > 0xffffff)
+    if (format == 1)
+    {
+        /* INDRGB counts LONGs, not pairs; lStart is ignored. Validate the
+           entire array before changing the logical color table. */
+        if (count > 512 || (count & 1))
             return FALSE;
+        for (LONG i = 0; i < count; i += 2)
+            if (colors[i] < 0 || colors[i] >= 256 || colors[i + 1] < 0 || colors[i + 1] > 0xffffff)
+                return FALSE;
+    }
+    else
+    {
+        if (start < 0 || start > 256 || count > 256 - start)
+            return FALSE;
+        for (LONG i = 0; i < count; i++)
+            if (colors[i] < 0 || colors[i] > 0xffffff)
+                return FALSE;
+    }
+    /* Changing RGB to either indexed format implies LCOL_RESET, including
+       the zero-entry switch used by the original Lotus caption procedure. */
+    if (options & 1 || format == 0 || ps->rgb_colors)
+        memset(ps->color_valid, 0, sizeof ps->color_valid);
     ps->rgb_colors = FALSE;
     ps->color_format = format;
-    if (options & 1 || format == 0)
-        memset(ps->color_valid, 0, sizeof ps->color_valid);
-    for (LONG i = 0; i < count; i++)
+    for (LONG i = 0; i < count; i += format == 1 ? 2 : 1)
     {
-        ps->colors[start + i] = colors[i];
-        ps->color_valid[start + i] = TRUE;
+        LONG index = format == 1 ? colors[i] : start + i;
+        ps->colors[index] = colors[i + (format == 1)];
+        ps->color_valid[index] = TRUE;
     }
     return TRUE;
 }

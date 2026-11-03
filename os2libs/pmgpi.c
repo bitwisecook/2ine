@@ -91,17 +91,26 @@ BOOL GpiErase(HPS hps)
 
 LONG GpiQueryRGBColor(HPS hps, ULONG options, LONG index)
 {
-    return !options && lx_pm_valid_ps(hps) ? lx_pm_rgb(index) : -255;
+    /* The true-color host realizes every logical RGB value exactly. INDEX and
+       REALIZED therefore agree, but both still use this PS's logical table. */
+    return !(options & ~3u) && index != CLR_DEFAULT && lx_pm_valid_ps(hps)
+               ? lx_pm_resolve_color(hps, index)
+               : -255;
 }
 LONG GpiQueryColorIndex(HPS hps, ULONG options, LONG rgb)
 {
-    if (options || !lx_pm_valid_ps(hps) || rgb < 0 || rgb > 0xffffff)
+    PresentationSpace *ps = lx_pm_font_space(hps);
+    if ((options & ~1u) || !ps || rgb < 0 || rgb > 0xffffff)
         return -255;
+    if (ps->rgb_colors)
+        return rgb;
     LONG nearest = CLR_WHITE;
     ULONG best = UINT32_MAX;
-    for (LONG index = CLR_WHITE; index <= CLR_PALEGRAY; index++)
+    for (LONG index = CLR_WHITE; index < 256; index++)
     {
-        LONG candidate = lx_pm_rgb(index);
+        LONG candidate = lx_pm_resolve_color(hps, index);
+        if (candidate < 0)
+            continue;
         LONG r = ((rgb >> 16) & 255) - ((candidate >> 16) & 255);
         LONG g = ((rgb >> 8) & 255) - ((candidate >> 8) & 255);
         LONG b = (rgb & 255) - (candidate & 255);
