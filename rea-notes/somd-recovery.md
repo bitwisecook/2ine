@@ -87,3 +87,17 @@ be launched on this host because PyGObject is unavailable; live chooser input is
 not claimed. Logs: `/tmp/2ine-somd-all-tools-final.log` and
 `/tmp/2ine-somd-swift-source-final.log`. Reproducers are ignored diagnostic scripts under
 `build-lotus-visuals/probe-somd-{client-recovery,load}.py`.
+
+## Subsequent actual-ball repair
+
+After the repeated missing-SOMD report, recovery was run against the actual
+`Documents/Lotus.2ineball`, using the same verified client ISO. It recovered 15
+files, including all eight qualified SOM hashes, with zero audit errors. The
+saved manifest, CONFIG.SYS and standard profile hashes were unchanged. Its audit
+was saved inside the ball, with a separate diagnostic copy under the ignored
+`build-lotus-visuals/user-som-repair/` directory.
+
+The user then deleted that ball before the isolated 1-2-3 startup check could
+begin, and confirmed the deletion. It was not restored. The repair's file/hash
+checks passed; startup of that particular repaired ball was therefore not
+verified. The user intends to rebuild it after installing the updated manager.
