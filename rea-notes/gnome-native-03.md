@@ -110,6 +110,17 @@ passing. The compiled default package runtime does not advertise i386 support.
 Native printing and PMStars are separately verified; full i386 qualification
 remains an explicit limitation.
 
+Final CI also reproduced a shared-lifetime failure on both portable and i386:
+an unlinked backing inode can be immediately reused for the next named object.
+Inode/device identity alone then wrongly accepts the retired numeric slot.
+The persistent lifetime file now supplies a monotonically increasing 64-bit
+generation under the existing operation lock. Slot rows retain their 160-byte
+size and use their reserved final word for the generation. Existing zero-
+generation coordination files remain readable; recreated objects get a new
+generation. Exhaustion or malformed counters fail closed. The original
+lifetime/retired-object regression passes 200 consecutive runs, and native
+shared-lifetime, shared-memory API and named-mutex checks all pass.
+
 Logs are /tmp/2ine-gnome03-*.log; owning runtime output is under build-portable
 and build-native. Real GTK captures and deliverables are under
 build-gnome/native03. Final package, CI and merge receipts will be appended when

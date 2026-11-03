@@ -17,6 +17,7 @@ struct LxHostShared
 {
     int fd, lifetime;
     size_t size;
+    uint64_t generation;
     char *directory, *name;
 };
 
@@ -94,7 +95,22 @@ static LxHostSharedResult shared_open(const char *name, size_t size, LxHostShare
     }
     struct stat info;
     if ((size && ftruncate(fd, (off_t)size)) || fstat(fd, &info) || info.st_size <= 0 ||
-        (uint64_t)info.st_size > SIZE_MAX || flock(lifetime, LOCK_SH))
+        (uint64_t)info.st_size > SIZE_MAX)
+        goto done;
+    /* The persistent lifetime file supplies identity across backing-inode reuse.
+       The operation lock serializes generation changes and handle acquisition. */
+    ssize_t generation_size = pread(lifetime, &s->generation, sizeof s->generation, 0);
+    if (generation_size != 0 && generation_size != sizeof s->generation)
+        goto done;
+    if (size)
+    {
+        if (s->generation == UINT64_MAX)
+            goto done;
+        s->generation++;
+        if (pwrite(lifetime, &s->generation, sizeof s->generation, 0) != sizeof s->generation)
+            goto done;
+    }
+    if (flock(lifetime, LOCK_SH))
         goto done;
     s->directory = strdup(directory);
     s->name = strdup(name + 1);
@@ -242,7 +258,8 @@ int lx_host_shared_slot(LxHostShared *s, uint64_t first, uint64_t limit, uint64_
         if (row_address < first || row_address >= limit || row_address % alignment || !row_size ||
             row_size > limit - row_address)
             goto done;
-        if (!strcmp((const char *)row, s->name) && slot_word(row + 128) == identity)
+        if (!strcmp((const char *)row, s->name) && slot_word(row + 128) == identity &&
+            slot_word(row + 152) == s->generation)
         {
             uint64_t address = slot_word(row + 136), size = slot_word(row + 144);
             if (address >= first && address % alignment == 0 && address < limit &&
@@ -294,6 +311,7 @@ int lx_host_shared_slot(LxHostShared *s, uint64_t first, uint64_t limit, uint64_
     store_slot(row + 128, identity);
     store_slot(row + 136, candidate);
     store_slot(row + 144, s->size);
+    store_slot(row + 152, s->generation);
     if (vacant == count)
         count++;
     if (pwrite(fd, rows, count * SLOT_ROW, 0) != (ssize_t)(count * SLOT_ROW))
@@ -364,7 +382,7 @@ LxHostSharedResult lx_host_shared_find(uint64_t slot, LxHostShared **output, cha
         if (fstat(object->fd, &identity) ||
             ((uint64_t)identity.st_ino ^ ((uint64_t)identity.st_dev << 32)) !=
                 slot_word(row + 128) ||
-            object->size != slot_word(row + 144))
+            object->size != slot_word(row + 144) || object->generation != slot_word(row + 152))
         {
             lx_host_shared_close(object);
             result = LX_HOST_SHARED_MISSING;
