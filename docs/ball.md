@@ -167,6 +167,24 @@ in any order without a fixed depth limit. The support files land at
 `drive_c/OS2/CMD.EXE`, `drive_c/OS2/SYSLEVEL.OS2` and
 `drive_c/OS2/SYSTEM/OSO001.MSG`.
 
+For an existing installation reporting a missing system DLL such as SOMD, restore
+its original dependencies from your OS/2 ISO or archive without installing the
+full operating system:
+
+```sh
+python3 -m tools.ball --ball Office.2ineball audit-dependencies --source /path/to/OS2.iso
+```
+
+Repeat `--source` for a set of floppy images or additional installation media.
+ISO images nested inside archives are detected automatically.
+The audit follows imported DLL dependencies, including the original SOM runtime,
+and copies missing files into their C: locations. Existing files and CD mappings
+are preserved. The source must contain verified OS/2 installation files; a Lotus
+application CD alone does not supply the IBM SOM runtime. The report identifies
+remaining missing libraries and retains a log in the ball. `--no-resolve` reports
+dependencies without copying files. Later audits also use remembered OS/2 media
+when it is available.
+
 Attach the original
 SmartSuite ISO as D: with `map-image D /path/to/SmartSuite.iso` and copy its `ENGLISH/SUITE.RSP` into the ball's C: drive.
 

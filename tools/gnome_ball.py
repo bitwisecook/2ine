@@ -140,6 +140,7 @@ class BallWindow(Adw.ApplicationWindow):
             ("create-floppy", lambda: self.create_image(floppy=True)),
             ("install", lambda: self.program_dialog("install")),
             ("run", lambda: self.program_dialog("run")),
+            ("restore-libraries", self.audit_dependencies),
             ("about", self.about),
             ("audio", self.audio_dialog),
             ("copy", lambda: self.get_clipboard().set(str(self.ball)) if self.ball else None),
@@ -226,6 +227,7 @@ class BallWindow(Adw.ApplicationWindow):
             "runtime",
             "install",
             "run",
+            "restore-libraries",
             "undo",
             "redo",
             "add-drive",
@@ -574,6 +576,7 @@ class BallWindow(Adw.ApplicationWindow):
                 )
             )
         apps.append(button("Install OS/2 Files…", self.choose_os2_support))
+        apps.append(button("Check and Restore System Libraries…", self.audit_dependencies))
         group = Adw.PreferencesGroup(title="Applications")
         apps.append(group)
         for name, app in sorted(data.get("applications", {}).items()):
@@ -797,6 +800,66 @@ class BallWindow(Adw.ApplicationWindow):
             if selected == 0
             else ["config", "runtime.backend", ("native", "unicorn")[selected - 1]]
         )
+
+    def audit_dependencies(self, sources=None):
+        if not self.ball or self.busy:
+            return
+        ball = str(self.ball)
+        build = str(self.build)
+        self.activity_title = "Checking installed libraries…"
+        self.show_page("activity")
+        self.update_activity()
+
+        def work():
+            fields = {}
+            warnings = []
+            if sources:
+                opened = ball_api.native_request(
+                    {"action": "open-os2-source", "ball": ball, "build": build, "sources": sources}
+                )
+                fields["sources"] = opened["sources"]
+                warnings = opened.get("skippedSources", [])
+            report = ball_api.native_request(
+                {"action": "audit-dependencies", "ball": ball, "build": build, **fields}
+            )
+            snapshot = ball_api.native_request({"action": "snapshot", "ball": ball})
+            return report, snapshot, warnings
+
+        def finished(result):
+            if str(self.ball) != ball:
+                return
+            report, snapshot, warnings = result
+            self.activity_title = "Dependency audit finished"
+            notices = ["Skipped " + item["path"] + ": " + item["reason"] for item in warnings]
+            self.install_summary = "\n\n".join([*notices, report["summary"]])
+            self.last_log = Path(report["logPath"])
+            self.log_text = self.last_log.read_text(errors="replace")
+            self.apply_snapshot(snapshot)
+            self.show_page("activity")
+            self.update_activity()
+            if not sources and ball_api.needs_dependency_media(report):
+                self.choose_dependency_media(ball)
+
+        self.request_work(work, finished)
+
+    def choose_dependency_media(self, ball):
+        picker = Gtk.FileDialog(
+            title="Restore Missing Libraries from OS/2 ISO, Images or Archives",
+            accept_label="Restore Libraries",
+        )
+
+        def chosen(picker, result):
+            try:
+                files = picker.open_multiple_finish(result)
+                sources = [files.get_item(i).get_path() for i in range(files.get_n_items())]
+            except GLib.Error as error:
+                if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
+                    self.report_error(error)
+                return
+            if sources and str(self.ball) == ball:
+                self.audit_dependencies(sources)
+
+        picker.open_multiple(self, None, chosen)
 
     def choose_os2_support(self):
         ball = str(self.ball)

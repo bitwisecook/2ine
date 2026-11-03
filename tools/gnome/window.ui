@@ -14,6 +14,7 @@
       <item><attribute name="label" translatable="yes">Open Ball Folder</attribute><attribute name="action">win.reveal</attribute></item>
       <item><attribute name="label" translatable="yes">Copy Ball Path</attribute><attribute name="action">win.copy</attribute></item>
       <item><attribute name="label" translatable="yes">Choose Runtime…</attribute><attribute name="action">win.runtime</attribute></item>
+      <item><attribute name="label" translatable="yes">Check and Restore System Libraries…</attribute><attribute name="action">win.restore-libraries</attribute></item>
       <item><attribute name="label" translatable="yes">Undo Ball Change</attribute><attribute name="action">win.undo</attribute></item>
     </section>
     <section>

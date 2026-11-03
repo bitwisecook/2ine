@@ -4,6 +4,7 @@
 import bz2
 import io
 import itertools
+import json
 import struct
 import sys
 import tarfile
@@ -80,6 +81,20 @@ class OS2SupportTests(unittest.TestCase):
         path.write_bytes(payload)
         return str(path)
 
+    def test_unreadable_detected_iso_is_reported_without_hiding_readable_iso(self):
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zip:
+            zip.writestr("0-broken.iso", b"Invalid ISO")
+            zip.writestr("valid.iso", iso_image())
+        source = self.media("mixed.zip", archive.getvalue())
+        opened = self.request("open-os2-source", sources=[source])
+        self.assertEqual(len(opened["sources"]), 1)
+        self.assertIn("0-broken.iso", opened["skippedSources"][0]["path"])
+        self.assertTrue(opened["directory"]["entries"])
+        invalid = self.media("broken.iso", b"Invalid ISO")
+        with self.assertRaisesRegex(ValueError, "No readable ISO images"):
+            self.request("open-os2-source", sources=[invalid])
+
     def test_empty_ball_reports_missing_files_and_import_preserves_existing_files_and_drives(self):
         status = self.request("os2-support")
         self.assertFalse(status["complete"])
@@ -98,6 +113,8 @@ class OS2SupportTests(unittest.TestCase):
         media = self.media("OS2.zip", archive.getvalue())
         manifest = (self.ball / "ball.json").read_bytes()
         status = self.request("import-os2-support", sources=[media])
+        remembered = json.loads((self.ball / "os2-media.json").read_text())
+        self.assertEqual(remembered["sources"], [media])
         self.assertTrue(status["complete"])
         self.assertEqual(len(status["imported"]), 3)
         self.assertEqual(self.request("guest-environment")["COMSPEC"], "C:\\OS2\\CMD.EXE")

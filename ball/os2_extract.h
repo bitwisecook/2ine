@@ -139,13 +139,45 @@ static cJSON *open_os2_source(Context *c, const cJSON *request)
         return NULL;
     }
     int found = cJSON_GetArraySize(detected);
-    cJSON *chosen = found ? detected : cJSON_Duplicate(sources, 1);
-    if (!found)
-        cJSON_Delete(detected);
-    cJSON *directory = browse_media(c, str(cJSON_GetArrayItem(chosen, 0)));
+    cJSON *chosen = found ? cJSON_CreateArray() : cJSON_Duplicate(sources, 1),
+          *skipped = cJSON_CreateArray(), *directory = NULL;
+    if (found)
+    {
+        const cJSON *image;
+        cJSON_ArrayForEach(image, detected)
+        {
+            cJSON *opened = browse_media(c, str(image));
+            if (!opened)
+            {
+                cJSON *warning = cJSON_CreateObject();
+                char *label = tb_media_label(str(image));
+                cJSON_AddStringToObject(warning, "path", label ? label : str(image));
+                cJSON_AddStringToObject(warning, "reason",
+                                        c->error ? c->error : "Unreadable ISO image");
+                cJSON_AddItemToArray(skipped, warning);
+                free(label);
+                free(c->error);
+                c->error = NULL;
+                continue;
+            }
+            cJSON_AddItemToArray(chosen, cJSON_Duplicate(image, 1));
+            if (!directory)
+                directory = opened;
+            else
+                cJSON_Delete(opened);
+        }
+        found = cJSON_GetArraySize(chosen);
+        if (!found)
+            fail(c, "No readable ISO images were found: %s",
+                 field(cJSON_GetArrayItem(skipped, 0), "reason"));
+    }
+    else
+        directory = browse_media(c, str(cJSON_GetArrayItem(chosen, 0)));
+    cJSON_Delete(detected);
     if (!directory)
     {
         cJSON_Delete(chosen);
+        cJSON_Delete(skipped);
         return NULL;
     }
     int installation_directory = 0;
@@ -175,6 +207,7 @@ static cJSON *open_os2_source(Context *c, const cJSON *request)
     cJSON_AddItemToObject(result, "directory", directory);
     cJSON_AddBoolToObject(result, "detectedISO", found != 0);
     cJSON_AddBoolToObject(result, "installationDirectory", installation_directory);
+    cJSON_AddItemToObject(result, "skippedSources", skipped);
     cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
     return result;
 }

@@ -21,6 +21,13 @@ def configure_library(build):
     _BUILD_HINT = Path(build)
 
 
+def needs_dependency_media(report):
+    return bool(report.get("missing")) and not any(
+        source.get("status") in ("verified-os2-media", "verified-os2-set")
+        for source in report.get("media", [])
+    )
+
+
 def native_request(message):
     global _LIBRARY
     if _LIBRARY is None:
@@ -203,6 +210,7 @@ def main(argv=None):
     support.add_argument("--plan", action="store_true", help="list extraction destinations without copying files")
     audit = sub.add_parser("audit-dependencies", help="audit installed binaries and restore missing system DLLs from attached OS/2 media")
     audit.add_argument("--no-resolve", action="store_true", help="write the audit log without copying missing libraries")
+    audit.add_argument("--source", dest="sources", action="append", default=[], help="OS/2 ISO, archive or installation folder to restore libraries from; may be repeated")
     browse = sub.add_parser(
         "browse-media", help="browse an image/archive or an opaque nested member path"
     )
@@ -265,6 +273,7 @@ def main(argv=None):
     ball = args.ball.resolve()
     try:
         if args.action in ("os2-support", "install-os2-support", "browse-media", "audit-dependencies"):
+            skipped_sources = []
             message = {
                 "action": "import-os2-support"
                 if args.action == "install-os2-support"
@@ -279,9 +288,19 @@ def main(argv=None):
                     message["categories"] = args.categories
             if args.action == "audit-dependencies":
                 message["resolve"] = not args.no_resolve
+                message["sources"] = args.sources
+                if args.build is not None:
+                    message["build"] = str(args.build.resolve())
+                if args.sources:
+                    opened = native_request({**message, "action": "open-os2-source"})
+                    message["sources"] = opened["sources"]
+                    skipped_sources = opened.get("skippedSources", [])
             if args.action == "browse-media":
                 message["path"] = args.path
-            print(json.dumps(native_request(message), indent=2))
+            result = native_request(message)
+            if skipped_sources:
+                result["skippedSources"] = skipped_sources
+            print(json.dumps(result, indent=2))
             return 0
         if args.action in ("import", "export"):
             result = native_request(

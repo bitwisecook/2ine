@@ -185,6 +185,10 @@ public struct ExecutableIcon: Decodable, Sendable {
 }
 
 public struct DependencyAudit: Decodable, Sendable {
+    public struct Media: Decodable, Sendable {
+        public let path: String
+        public let status: String?
+    }
     public struct Imported: Decodable, Sendable {
         public let path: String
         public let source: String
@@ -197,6 +201,12 @@ public struct DependencyAudit: Decodable, Sendable {
     public let imported: [Imported]
     public let complete: Bool?
     public let staticOnly: Bool?
+    public let media: [Media]?
+    public var needsMediaSelection: Bool {
+        !missing.isEmpty && !(media ?? []).contains {
+            $0.status == "verified-os2-media" || $0.status == "verified-os2-set"
+        }
+    }
 }
 
 public struct OS2SupportStatus: Decodable, Sendable {
@@ -234,10 +244,18 @@ public struct MediaDirectory: Decodable, Sendable {
 }
 
 public struct OS2MediaSource: Decodable, Sendable {
+    public struct SkippedSource: Decodable, Sendable {
+        public let path: String
+        public let reason: String
+    }
     public let sources: [String]
     public let directory: MediaDirectory
     public let detectedISO: Bool
     public let installationDirectory: Bool?
+    public let skippedSources: [SkippedSource]?
+    public var warningSummary: String {
+        (skippedSources ?? []).map { "Skipped \($0.path): \($0.reason)" }.joined(separator: "\n")
+    }
 }
 public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Identifiable {
     case cmd, fonts, assets, printers, help, full

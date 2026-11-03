@@ -171,6 +171,12 @@ class OS2MediaDialog(FormDialog):
                 if result.get("detectedISO")
                 else ""
             )
+            warnings = [
+                "Skipped " + item["path"] + ": " + item["reason"]
+                for item in result.get("skippedSources", [])
+            ]
+            if warnings:
+                self.notice.set_label(self.notice.get_label() + "\n" + "\n".join(warnings))
 
         self.run(lambda: self.api("open-os2-source", sources=list(sources)), loaded)
 

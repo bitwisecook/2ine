@@ -361,6 +361,14 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
         free(files[i].source);
     }
     cJSON_Delete(queue);
+    if (!c->error && !cJSON_IsFalse(get(request, "rememberSources")))
+    {
+        cJSON *media = cJSON_CreateObject();
+        cJSON_AddItemToObject(media, "sources", cJSON_Duplicate(sources, 1));
+        cJSON_AddStringToObject(media, "recorded", now(c));
+        write_json(c, join(c, c->ball, "os2-media.json"), media);
+        cJSON_Delete(media);
+    }
     if (c->error)
     {
         cJSON_Delete(imported);

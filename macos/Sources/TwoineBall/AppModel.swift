@@ -508,12 +508,32 @@ final class AppModel {
         return file.path.hasPrefix(logs.path + "/") && FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
     func auditDependencies() {
-        guard let selected else { return }
+        guard let selected, !busy, !mediaBusy, !processRunning else { return }
         perform {
             self.operation = "Checking installed libraries…"
-            let audit = try await self.backend.request(DesktopRequest("audit-dependencies", ball: selected, build: self.build), as: DependencyAudit.self)
+            var audit = try await self.backend.request(DesktopRequest("audit-dependencies", ball: selected, build: self.build), as: DependencyAudit.self)
             self.page = .activity; self.activity = audit.summary
             self.exitCode = nil
+            if audit.needsMediaSelection {
+                let panel = NSOpenPanel()
+                panel.title = "Restore Missing OS/2 Libraries"
+                panel.message = "Choose your OS/2 ISO, archive, floppy images or installation folder. Only missing libraries needed by installed applications will be restored. Existing files are preserved."
+                panel.prompt = "Restore Libraries"
+                panel.canChooseDirectories = true; panel.canChooseFiles = true
+                panel.allowsMultipleSelection = true
+                self.operation = "Choose OS/2 installation media"
+                if panel.runModal() == .OK {
+                    self.operation = "Finding OS/2 installation files…"
+                    var source = DesktopRequest("open-os2-source", ball: selected, build: self.build)
+                    source.sources = panel.urls.map(\.path)
+                    let media = try await self.backend.request(source, as: OS2MediaSource.self)
+                    var restore = DesktopRequest("audit-dependencies", ball: selected, build: self.build)
+                    restore.sources = media.sources
+                    self.operation = "Restoring missing system libraries…"
+                    audit = try await self.backend.request(restore, as: DependencyAudit.self)
+                    self.activity = [media.warningSummary, audit.summary].filter { !$0.isEmpty }.joined(separator: "\n\n")
+                }
+            }
             self.operation = "Dependency audit finished"
             try await self.reload(selected)
         }

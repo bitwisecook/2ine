@@ -182,6 +182,7 @@ struct OS2SupportSheet: View {
                 sources = source.sources; listing = source.directory
                 useCurrentFolder = false
                 notice = source.installationDirectory == true ? "Found the OS/2 installation file set. Browse it or continue to choose components." : source.detectedISO ? "Detected \(sources.count) ISO image\(sources.count == 1 ? "" : "s") in the selected media." : ""
+                notice = [notice, source.warningSummary].filter { !$0.isEmpty }.joined(separator: "\n")
             } catch { self.error = error.localizedDescription; notice = "" }
         }
     }

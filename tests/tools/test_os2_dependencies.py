@@ -1,14 +1,18 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Checked static imports, post-install auditing and original-media recovery."""
 
+import contextlib
 import hashlib
+import io
 import json
 import struct
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
+from tests.integration.disk_images import iso_image
 from tools import ball as ball_api
 
 
@@ -68,6 +72,22 @@ class DependencyAuditTests(unittest.TestCase):
         (dlls / "SOMD.DLL").write_bytes(segmented(["DOSCALLS"]))
         self.request("command", arguments=["map", "D", str(media)])
         return media
+
+    def test_media_chooser_only_when_missing_and_no_verified_source(self):
+        self.assertFalse(ball_api.needs_dependency_media({"missing": []}))
+        self.assertTrue(ball_api.needs_dependency_media({"missing": ["SOMD"], "media": []}))
+        for status in (None, "unavailable", "unverified", "not-os2-media"):
+            self.assertTrue(
+                ball_api.needs_dependency_media(
+                    {"missing": ["SOMD"], "media": [{"status": status}]}
+                )
+            )
+        for status in ("verified-os2-media", "verified-os2-set"):
+            self.assertFalse(
+                ball_api.needs_dependency_media(
+                    {"missing": ["SOMD"], "media": [{"status": status}]}
+                )
+            )
 
     def test_graphics_provider_policy_suppresses_disabled_or_native_recovery(self):
         self.installed("Apps/APP.EXE", linear(["OPENGL", "DIVE"]))
@@ -194,6 +214,66 @@ class DependencyAuditTests(unittest.TestCase):
         self.assertFalse((self.ball / "drive_c/OS2/CMD.EXE").exists())
         self.assertEqual(result["media"][0]["status"], "verified-os2-media")
         self.assertEqual(self.request("audit-dependencies")["imported"], [])
+
+    def test_cli_sources_restore_without_changing_cd_mapping(self):
+        self.installed("Apps/APP.EXE", linear(["SOM"]))
+        media = self.os2_media()
+        self.request("command", arguments=["unmap", "D"])
+        extra = self.root / "Additional OS2 disk"
+        extra.mkdir()
+        before = ball_api.load(self.ball)["drives"]
+        output = io.StringIO()
+        build = self.root / "Receiving runtime"
+        build.mkdir()
+        with patch.object(ball_api, "configure_library"), contextlib.redirect_stdout(output):
+            code = ball_api.main(
+                [
+                    "--ball",
+                    str(self.ball),
+                    "--build",
+                    str(build),
+                    "audit-dependencies",
+                    "--source",
+                    str(media),
+                    "--source",
+                    str(extra),
+                ]
+            )
+        self.assertEqual(code, 0)
+        report = json.loads(output.getvalue())
+        self.assertTrue(report["complete"])
+        self.assertEqual({entry["path"] for entry in report["media"]}, {str(media), str(extra)})
+        self.assertEqual(ball_api.load(self.ball)["drives"], before)
+        self.assertTrue((self.ball / "drive_c/OS2/DLL/SOM.DLL").is_file())
+        self.assertTrue((self.ball / "drive_c/OS2/DLL/SOMD.DLL").is_file())
+
+    def test_cli_detects_iso_inside_zip_before_dependency_recovery(self):
+        self.installed("Apps/APP.EXE", linear(["SOMD"]))
+        payload = io.BytesIO()
+        original = segmented(["DOSCALLS"])
+        with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("OS2/CMD.EXE", linear())
+            archive.writestr("OS2/SYSLEVEL.OS2", b"\xff\xffSYSLEVEL" + bytes(40))
+            archive.writestr("OS2/DLL/SOMD.DLL", original)
+        source = self.root / "OS2 nested.zip"
+        with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("0-unreadable.iso", b"Not a readable ISO filesystem")
+            archive.writestr("OS2.iso", iso_image(payload=payload.getvalue(), filename="FILES.ZIP"))
+        output = io.StringIO()
+        with patch.object(ball_api, "configure_library"), contextlib.redirect_stdout(output):
+            self.assertEqual(
+                ball_api.main(
+                    ["--ball", str(self.ball), "audit-dependencies", "--source", str(source)]
+                ),
+                0,
+            )
+        report = json.loads(output.getvalue())
+        self.assertTrue(report["complete"])
+        self.assertTrue(report["media"][0]["path"].startswith("/@2ine-media/"))
+        self.assertEqual(len(report["skippedSources"]), 1)
+        self.assertIn("0-unreadable.iso", report["skippedSources"][0]["path"])
+        self.assertIn("Cannot open", report["skippedSources"][0]["reason"])
+        self.assertEqual((self.ball / "drive_c/OS2/DLL/SOMD.DLL").read_bytes(), original)
 
     def test_unrelated_attached_application_media_is_not_a_recovery_source(self):
         self.installed("Apps/APP.EXE", linear(["SOM"]))
