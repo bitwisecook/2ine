@@ -133,6 +133,15 @@ struct BallCommands: Commands {
                 .disabled(model.snapshot == nil || model.busy || model.mediaBusy)
         }
         CommandMenu("Ball") {
+            Button("Rename Ball…") { if let path = model.selected { model.beginRenameBall(path) } }
+                .disabled(model.selected == nil || !model.canManageBalls || model.snapshot == nil)
+            if let path = model.selected, !FileManager.default.fileExists(atPath: path) {
+                Button("Remove Missing Ball from List") { model.removeMissingBall(path) }.disabled(!model.canManageBalls)
+            } else {
+                Button("Move Ball to Trash…", role: .destructive) { if let path = model.selected { model.beginTrashBall(path) } }
+                    .disabled(model.selected == nil || !model.canManageBalls)
+            }
+            Divider()
             Button("Choose Runtime…") { model.chooseRuntime() }.keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(model.selected == nil || model.busy || model.mediaBusy)
             Button("Use Bundled Runtime") { model.useBundledRuntime() }

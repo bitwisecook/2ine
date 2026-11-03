@@ -2360,6 +2360,7 @@ static cJSON *application_icon(Context *c, const cJSON *request)
     return result;
 }
 #include "ball_archive.h"
+#include "ball_rename.h"
 
 static cJSON *dispatch(Context *c, const cJSON *request)
 {
@@ -2601,6 +2602,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     }
     if (!strcmp(action, "import-ball"))
         return import_ball(c, request);
+    if (!strcmp(action, "rename-ball"))
+        return rename_ball(c, request);
     cJSON *args = get(request, "arguments");
     const char *first = str(cJSON_GetArrayItem(args, 0));
     if (!strcmp(action, "command") && first && !strcmp(first, "init"))

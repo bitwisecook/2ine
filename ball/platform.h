@@ -28,6 +28,8 @@ int tb_file_info(FILE *file, int64_t *size, int *mode);
 int tb_path_info(const char *path, uint64_t *size, int64_t *modified);
 int tb_file_mode(FILE *file, int mode);
 int tb_replace(const char *source, const char *destination);
+/* Atomic same-filesystem move; an existing destination is never replaced. */
+int tb_move_new(const char *source, const char *destination);
 int tb_remove_tree(const char *path);
 char *tb_archive_workspace(const char *parent);
 char *tb_home(void);

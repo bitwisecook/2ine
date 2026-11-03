@@ -6,6 +6,8 @@
     <section>
       <item><attribute name="label" translatable="yes">New Ball…</attribute><attribute name="action">win.new</attribute></item>
       <item><attribute name="label" translatable="yes">Open Ball…</attribute><attribute name="action">win.open</attribute></item>
+      <item><attribute name="label" translatable="yes">Rename Ball…</attribute><attribute name="action">win.rename-ball</attribute></item>
+      <item><attribute name="label" translatable="yes">Move Ball to Trash…</attribute><attribute name="action">win.trash-ball</attribute></item>
       <item><attribute name="label" translatable="yes">Import Ball from ZIP…</attribute><attribute name="action">win.import</attribute></item>
       <item><attribute name="label" translatable="yes">Export Ball as ZIP…</attribute><attribute name="action">win.export</attribute></item>
       <item><attribute name="label" translatable="yes">Export Ball with Disk Images…</attribute><attribute name="action">win.export-images</attribute></item>

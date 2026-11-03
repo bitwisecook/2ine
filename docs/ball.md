@@ -12,6 +12,12 @@ complete 2ine runtime. Use `make macos-app` for Developer ID signing and notariz
 `make macos-app-dev` for local development. See [macos-app.md](macos-app.md) for
 prerequisites, credential parameters, tests and the `.2ineball` Finder format.
 
+Right-click a ball in the sidebar, or use the Ball menu, to rename it or move it
+to the Trash. Renaming preserves installed documents and pending CONFIG.SYS edits,
+updates saved paths, and never replaces another package. A running guest must be
+stopped first. On macOS, a trashed ball can be restored using Finder. Missing
+packages can be removed from the sidebar without changing any files.
+
 ## GNOME application
 
 The [native GTK 4/libadwaita app](gnome-app.md) manages each ball through the shared

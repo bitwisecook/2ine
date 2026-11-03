@@ -22,6 +22,15 @@ struct InstallCompletion: Identifiable {
     let code: Int32
     let signalled: Bool
 }
+struct BallRenameRequest: Identifiable {
+    let id = UUID()
+    let path: String
+    let identity: BallFileIdentity
+}
+struct BallFileIdentity: Equatable {
+    let device: UInt64
+    let inode: UInt64
+}
 enum ProgramAction: String, Identifiable {
     case run = "Run Executable", install = "Install Software", save = "Add Application"
     var id: String { rawValue }
@@ -104,6 +113,9 @@ final class AppModel {
     var log: URL?
     var exitCode: Int32?
     var error: String?
+    var ballRename: BallRenameRequest?
+    var ballToTrash: BallRenameRequest?
+    var canManageBalls: Bool { !busy && !mediaBusy && !processRunning && !configSaving }
     var programAction: ProgramAction?
     var editingApplication: String?
     var applicationIcons: [String: NSImage] = [:]
@@ -163,7 +175,7 @@ final class AppModel {
     }
     static func displayName(_ path: String) -> String {
         let url = URL(filePath: path)
-        return (url.pathExtension == "2ineball" ? url.deletingPathExtension() : url).lastPathComponent
+        return (url.pathExtension.lowercased() == "2ineball" ? url.deletingPathExtension() : url).lastPathComponent
     }
     var title: String { selected.map(Self.displayName) ?? "2ine" }
     var runtimeDescription: String {
@@ -221,6 +233,113 @@ final class AppModel {
         guard !busy, !mediaBusy else { return }
         selected = path; snapshot = nil
         perform { try await self.reload(path) }
+    }
+
+    func canManageBall(_ path: String) -> Bool {
+        canManageBalls && (paths.contains(path) || selected == path)
+    }
+    func beginRenameBall(_ path: String) {
+        guard canManageBall(path) else { return }
+        do { ballRename = BallRenameRequest(path: path, identity: try Self.ballIdentity(path)) }
+        catch { self.error = error.localizedDescription }
+    }
+    func beginTrashBall(_ path: String) {
+        guard canManageBall(path) else { return }
+        do { ballToTrash = BallRenameRequest(path: path, identity: try Self.ballIdentity(path)) }
+        catch { self.error = error.localizedDescription }
+    }
+    func renameBall(_ path: String, to name: String, expectedIdentity: BallFileIdentity? = nil) async throws {
+        guard canManageBall(path) else { throw BallError("Stop the running operation before renaming a ball.") }
+        if let expectedIdentity, try Self.ballIdentity(path) != expectedIdentity {
+            throw BallError("The ball changed after the rename dialog opened. Choose Rename Ball again.")
+        }
+        busy = true
+        defer { busy = false; operation = "Ready" }
+        operation = "Renaming ball…"
+        var request = DesktopRequest("rename-ball", ball: path)
+        request.text = name
+        let renamed = try await backend.request(request, as: RenamedBall.self)
+        paths = Array(Set(paths.map { $0 == path ? renamed.path : $0 })).sorted()
+        if let value = settingsDrafts.removeValue(forKey: path) { settingsDrafts[renamed.path] = value }
+        if let value = configDrafts.removeValue(forKey: path) { configDrafts[renamed.path] = value }
+        if let value = configBases.removeValue(forKey: path) { configBases[renamed.path] = value }
+        if let value = liveConfigTexts.removeValue(forKey: path) { liveConfigTexts[renamed.path] = value }
+        if let log, log.path.hasPrefix(path + "/") {
+            self.log = URL(filePath: renamed.path + log.path.dropFirst(path.count))
+        }
+        undoManager.removeAllActions()
+        if selected == path {
+            selected = renamed.path; snapshot = renamed.snapshot
+            browseDrive = nil
+            await loadIcons(renamed.path)
+        }
+        revision += 1
+        prefs.ballPaths = paths; prefs.selected = selected
+        try await preferences.save(prefs)
+        updateRecentBallPath(path, to: renamed.path)
+    }
+    func trashBall(_ path: String, expectedIdentity: BallFileIdentity? = nil, using trash: (URL) throws -> Void = {
+        try FileManager.default.trashItem(at: $0, resultingItemURL: nil)
+    }) async throws {
+        guard canManageBall(path) else { throw BallError("Stop the running operation before moving a ball to the Trash.") }
+        let url = try Self.managedBallURL(path)
+        if let expectedIdentity, try Self.ballIdentity(path) != expectedIdentity {
+            throw BallError("The ball changed after the Trash confirmation opened. Choose Move Ball to Trash again.")
+        }
+        busy = true
+        defer { busy = false; operation = "Ready" }
+        operation = "Moving ball to the Trash…"
+        try trash(url)
+        try await forgetBallPath(path)
+    }
+    func removeMissingBall(_ path: String) {
+        guard canManageBall(path), !FileManager.default.fileExists(atPath: path) else { return }
+        perform { try await self.forgetBallPath(path) }
+    }
+    static func managedBallURL(_ path: String) throws -> URL {
+        let url = URL(filePath: path).standardizedFileURL
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard url.pathExtension.lowercased() == "2ineball", values.isDirectory == true,
+              values.isSymbolicLink != true else { throw BallError("Choose a .2ineball package, rather than an ordinary folder or symbolic link.") }
+        let manifest = try url.appending(path: "ball.json").resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard manifest.isRegularFile == true, manifest.isSymbolicLink != true else {
+            throw BallError("The selected package does not contain a regular ball.json file.")
+        }
+        return url
+    }
+    static func ballIdentity(_ path: String) throws -> BallFileIdentity {
+        let url = try managedBallURL(path)
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        guard let device = attributes[.systemNumber] as? NSNumber, let inode = attributes[.systemFileNumber] as? NSNumber else {
+            throw BallError("Cannot identify the selected ball package.")
+        }
+        return BallFileIdentity(device: device.uint64Value, inode: inode.uint64Value)
+    }
+    private func updateRecentBallPath(_ path: String, to replacement: String?) {
+        let controller = NSDocumentController.shared
+        let recent = controller.recentDocumentURLs
+        controller.clearRecentDocuments(nil)
+        for url in recent.reversed() where url.standardizedFileURL.path != path {
+            controller.noteNewRecentDocumentURL(url)
+        }
+        if let replacement { controller.noteNewRecentDocumentURL(URL(filePath: replacement)) }
+    }
+    private func forgetBallPath(_ path: String) async throws {
+        paths.removeAll { $0 == path }
+        settingsDrafts.removeValue(forKey: path); configDrafts.removeValue(forKey: path)
+        configBases.removeValue(forKey: path); liveConfigTexts.removeValue(forKey: path)
+        if log?.path.hasPrefix(path + "/") == true { log = nil }
+        undoManager.removeAllActions()
+        updateRecentBallPath(path, to: nil)
+        if selected == path {
+            selected = paths.first { FileManager.default.fileExists(atPath: $0 + "/ball.json") }
+            snapshot = nil; applicationIcons = [:]; browseDrive = nil
+            activity = "No process has run in this session."; exitCode = nil
+            if let selected { try await reload(selected) }
+        }
+        revision += 1
+        prefs.ballPaths = paths; prefs.selected = selected
+        try await preferences.save(prefs)
     }
     func refresh() {
         guard let selected else { start(); return }

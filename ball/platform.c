@@ -1,5 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #define _XOPEN_SOURCE 700
 #include "platform.h"
@@ -8,6 +9,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef __linux__
+#include <fcntl.h>
+#include <sys/syscall.h>
+#endif
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -32,6 +37,10 @@ static void path_errno(DWORD error)
             break;
         case ERROR_DIRECTORY:
             errno = ENOTDIR;
+            break;
+        case ERROR_FILE_EXISTS:
+        case ERROR_ALREADY_EXISTS:
+            errno = EEXIST;
             break;
         case ERROR_FILENAME_EXCED_RANGE:
             errno = ENAMETOOLONG;
@@ -609,6 +618,29 @@ int tb_replace(const char *source, const char *destination)
     return ok;
 #else
     return !rename(source, destination);
+#endif
+}
+
+int tb_move_new(const char *source, const char *destination)
+{
+#ifdef _WIN32
+    wchar_t *a = wide(source), *b = wide(destination);
+    int ok = a && b && MoveFileExW(a, b, MOVEFILE_WRITE_THROUGH);
+    if (!ok && a && b)
+        path_errno(GetLastError());
+    free(a);
+    free(b);
+    return ok;
+#elif defined(__APPLE__)
+    return !renamex_np(source, destination, RENAME_EXCL);
+#elif defined(__linux__) && defined(SYS_renameat2)
+    return !syscall(SYS_renameat2, AT_FDCWD, source, AT_FDCWD, destination,
+                    1 /* RENAME_NOREPLACE */);
+#else
+    (void)source;
+    (void)destination;
+    errno = ENOTSUP;
+    return 0;
 #endif
 }
 

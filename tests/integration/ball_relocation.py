@@ -81,6 +81,11 @@ def main():
     old_cache = Path("drive_c/OS2/DLL/2INE/default/old-machine/lx_loader")
     (ball / old_cache).parent.mkdir(parents=True)
     (ball / old_cache).write_bytes(b"foreign cached runtime")
+    renamed = request("rename-ball", text="Renamed café.2ineball")
+    ball = Path(renamed["path"])
+    assert ball == work / "Renamed café.2ineball" and not original.exists()
+    for name, content in protected.items():
+        assert (ball / name).read_bytes() == content, name
     moved.parent.mkdir(parents=True)
     ball.rename(moved)
     ball = moved

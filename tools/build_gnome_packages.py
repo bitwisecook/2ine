@@ -59,6 +59,7 @@ def stage(build, destination):
         "gnome_media.py",
         "gnome_audio.py",
         "gnome_ball_icons.py",
+        "gnome_ball_lifecycle.py",
         "gnome_configuration.py",
         "ball.py",
     ):

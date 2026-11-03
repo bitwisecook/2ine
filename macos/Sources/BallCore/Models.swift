@@ -85,6 +85,11 @@ public struct BallSnapshot: Decodable, Sendable {
     public let environmentDefaults: [String: String]
 }
 
+public struct RenamedBall: Decodable, Sendable {
+    public let path: String
+    public let snapshot: BallSnapshot
+}
+
 public struct DesktopRequest: Encodable, Sendable {
     public var application: String?
     public var settings: AudioSettings?

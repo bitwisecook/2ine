@@ -5,6 +5,7 @@
 import argparse
 import json
 import os
+import shutil
 import signal
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -13,10 +14,17 @@ from pathlib import Path
 
 if __package__:
     from . import ball as ball_api
-    from . import gnome_audio, gnome_ball_icons, gnome_configuration, gnome_views
+    from . import (
+        gnome_audio,
+        gnome_ball_icons,
+        gnome_ball_lifecycle,
+        gnome_configuration,
+        gnome_views,
+    )
 else:
     import gnome_audio
     import gnome_ball_icons
+    import gnome_ball_lifecycle
     import gnome_configuration
     import gnome_views
 
@@ -125,6 +133,8 @@ class BallWindow(Adw.ApplicationWindow):
         for name, callback in (
             ("new", self.new_ball),
             ("open", self.open_ball),
+            ("rename-ball", self.rename_ball),
+            ("trash-ball", self.trash_ball),
             ("import", self.import_ball),
             ("export", self.export_ball),
             ("export-images", lambda: self.export_ball(True)),
@@ -148,6 +158,15 @@ class BallWindow(Adw.ApplicationWindow):
         ):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda _a, _p, callback=callback: callback())
+            self.add_action(action)
+        for name, callback in (
+            ("rename-ball-at", self.rename_ball),
+            ("trash-ball-at", self.trash_ball),
+        ):
+            action = Gio.SimpleAction.new(name, GLib.VariantType.new("s"))
+            action.connect(
+                "activate", lambda _a, value, callback=callback: callback(Path(value.get_string()))
+            )
             self.add_action(action)
         for name, shortcut in (
             ("new", "<Control>n"),
@@ -220,6 +239,10 @@ class BallWindow(Adw.ApplicationWindow):
         for name in (
             "new",
             "open",
+            "rename-ball",
+            "trash-ball",
+            "rename-ball-at",
+            "trash-ball-at",
             "import",
             "export",
             "export-images",
@@ -466,6 +489,22 @@ class BallWindow(Adw.ApplicationWindow):
                 ),
             )
             row.add_controller(drag)
+            menu = Gio.Menu()
+            for label, action in (
+                ("Rename Ball…", "rename-ball-at"),
+                ("Move Ball to Trash…", "trash-ball-at"),
+            ):
+                item = Gio.MenuItem.new(label, None)
+                item.set_action_and_target_value("win." + action, GLib.Variant("s", str(path)))
+                menu.append_item(item)
+            more = Gtk.MenuButton(
+                icon_name="view-more-symbolic", menu_model=menu, tooltip_text="Ball Actions"
+            )
+            more.update_property([Gtk.AccessibleProperty.LABEL], ["Actions for " + path.name])
+            row.add_suffix(more)
+            gesture = Gtk.GestureClick(button=3)
+            gesture.connect("pressed", self.ball_context_menu, row, menu)
+            row.add_controller(gesture)
             self.ball_list.append(row)
             if path == target:
                 chosen = row
@@ -988,6 +1027,128 @@ class BallWindow(Adw.ApplicationWindow):
 
     def open_ball(self):
         self.choose("Open Ball", self.remember, folder=True)
+
+    def ball_context_menu(self, _gesture, _count, x, y, row, menu):
+        if self.busy or self.process:
+            return
+        popover = Gtk.PopoverMenu.new_from_model(menu)
+        popover.set_parent(row)
+        rectangle = Gdk.Rectangle()
+        rectangle.x, rectangle.y, rectangle.width, rectangle.height = int(x), int(y), 1, 1
+        popover.set_pointing_to(rectangle)
+        popover.connect("closed", lambda widget: widget.unparent())
+        popover.popup()
+
+    def rename_ball(self, path=None):
+        if self.busy or self.process or not (path or self.ball):
+            return
+        try:
+            source = gnome_ball_lifecycle.package(path or self.ball)
+            expected = gnome_ball_lifecycle.identity(source)
+        except (OSError, ValueError) as error:
+            self.report_error(error)
+            return
+
+        def rename(values):
+            if self.busy or self.process:
+                return
+            destination = gnome_ball_lifecycle.rename_destination(source, values["name"])
+            if destination == source:
+                return
+
+            def renamed(result):
+                target = Path(result["path"])
+                selected = self.ball is not None and self.ball.resolve() == source
+                gnome_ball_lifecycle.update_references(self, source, target)
+                if selected:
+                    self.snapshot = result["snapshot"]
+                self.persist_preferences()
+                self.refresh(self.ball)
+                self.toast("Renamed ball to " + target.name)
+
+            def work():
+                gnome_ball_lifecycle.package(source, expected)
+                return ball_api.native_request(
+                    {"action": "rename-ball", "ball": str(source), "text": values["name"]}
+                )
+
+            self.request_work(work, renamed)
+
+        return self.form(
+            "Rename Ball", [("name", "Ball Name", source.name[:-9], None)], rename, "Rename"
+        )
+
+    def trash_ball(self, path=None):
+        if self.busy or self.process or not (path or self.ball):
+            return
+        try:
+            source = gnome_ball_lifecycle.package(path or self.ball)
+            expected = gnome_ball_lifecycle.identity(source)
+        except (OSError, ValueError) as error:
+            self.report_error(error)
+            return
+        dialog = Adw.AlertDialog(
+            heading="Move “" + source.name + "” to the Trash?",
+            body="This moves the ball package and everything stored inside it to the Trash. Unsaved drafts for this ball will be discarded.",
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("trash", "Move to Trash")
+        dialog.set_response_appearance("trash", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect(
+            "response",
+            lambda _dialog, choice: (
+                self.remove_ball_package(source, expected) if choice == "trash" else None
+            ),
+        )
+        dialog.present(self)
+
+    def remove_ball_package(self, source, expected, permanent=False):
+        if self.busy or self.process:
+            return
+
+        def work():
+            path = gnome_ball_lifecycle.package(source, expected)
+            if permanent:
+                shutil.rmtree(path)
+                return True
+            try:
+                if not Gio.File.new_for_path(str(path)).trash(None):
+                    raise OSError("The ball could not be moved to the Trash.")
+            except GLib.Error as error:
+                if error.matches(Gio.io_error_quark(), Gio.IOErrorEnum.NOT_SUPPORTED):
+                    return False
+                raise ValueError(str(error)) from error
+            return True
+
+        def finished(removed):
+            if not removed:
+                dialog = Adw.AlertDialog(
+                    heading="Permanently delete “" + source.name + "”?",
+                    body="Trash is not supported at this location. Permanently deleting this ball and its contents cannot be undone.",
+                )
+                dialog.add_response("cancel", "Cancel")
+                dialog.add_response("delete", "Delete Permanently")
+                dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+                dialog.set_default_response("cancel")
+                dialog.set_close_response("cancel")
+                dialog.connect(
+                    "response",
+                    lambda _dialog, choice: (
+                        self.remove_ball_package(source, expected, permanent=True)
+                        if choice == "delete"
+                        else None
+                    ),
+                )
+                dialog.present(self)
+                return
+            gnome_ball_lifecycle.update_references(self, source)
+            self.persist_preferences()
+            self.refresh(self.ball)
+            self.toast("Deleted ball" if permanent else "Moved ball to Trash")
+
+        self.request_work(work, finished)
 
     def import_ball(self, source=None):
         if self.busy:

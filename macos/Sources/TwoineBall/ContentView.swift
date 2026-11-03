@@ -35,6 +35,7 @@ struct ContentView: View {
         }
         .sheet(item: $model.supportImport) { request in OS2SupportSheet(model: model, request: request) }
         .sheet(item: $model.programAction) { action in ProgramSheet(model: model, action: action) }
+        .sheet(item: $model.ballRename) { request in RenameBallSheet(model: model, request: request) }
         .sheet(isPresented: Binding(get: { model.creatingFloppy != nil }, set: { if !$0 { model.creatingFloppy = nil } })) {
             if let letter = model.creatingFloppy { CreateFloppySheet(model: model, letter: letter) }
         }
@@ -52,6 +53,21 @@ struct ContentView: View {
         .confirmationDialog("Stop the running operation?", isPresented: $model.stopConfirmation) {
             Button("Stop Operation", role: .destructive) { model.stopProcess() }
         } message: { Text("Unsaved work in the guest may be lost. Its output log will be kept.") }
+        .confirmationDialog("Move \(model.ballToTrash.map { "“" + AppModel.displayName($0.path) + "”" } ?? "ball") to the Trash?",
+                            isPresented: Binding(get: { model.ballToTrash != nil }, set: { if !$0 { model.ballToTrash = nil } }),
+                            titleVisibility: .visible) {
+            Button("Move to Trash", role: .destructive) {
+                guard let request = model.ballToTrash else { return }
+                model.ballToTrash = nil
+                Task { do { try await model.trashBall(request.path, expectedIdentity: request.identity) } catch { model.error = error.localizedDescription } }
+            }
+            Button("Cancel", role: .cancel) { model.ballToTrash = nil }
+        } message: {
+            Text("This moves the entire ball, including its installed applications and documents, to the Trash. You can restore it using Finder.")
+            if let request = model.ballToTrash, let draft = model.configDrafts[request.path], draft != model.configBases[request.path] {
+                Text("Unsaved configuration edits in this ball will also be discarded.")
+            }
+        }
         .confirmationDialog("Force stop the running operation?", isPresented: $model.forceStopConfirmation) {
             Button("Force Stop", role: .destructive) { model.stopProcess(force: true) }
         } message: { Text("Use this if the guest does not respond to Stop. Unsaved work may be lost. Its output log will be kept.") }
@@ -72,6 +88,16 @@ struct ContentView: View {
                     .tag(path).help(DisplayPath.homeAbbreviated(path))
                     .draggable(URL(filePath: path))
                     .contextMenu {
+                        Button("Rename Ball…") { model.beginRenameBall(path) }
+                            .disabled(!model.canManageBall(path) || !FileManager.default.fileExists(atPath: path))
+                        if FileManager.default.fileExists(atPath: path) {
+                            Button("Move Ball to Trash…", role: .destructive) { model.beginTrashBall(path) }
+                                .disabled(!model.canManageBall(path))
+                        } else {
+                            Button("Remove Missing Ball from List") { model.removeMissingBall(path) }
+                                .disabled(!model.canManageBall(path))
+                        }
+                        Divider()
                         Button("Open in Finder") { model.reveal(path) }
                         Button("Copy Ball Path") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(path, forType: .string) }
                     }
