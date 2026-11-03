@@ -50,7 +50,11 @@ The pulled runtime could not compile on Linux: runtime/features.h shadowed
 glibc's features.h through the runtime include directory. It is now named
 runtime/runtime_features.h with its references updated. A legacy test needed
 strings.h for strcasecmp. The native i386 target selected host x86_64 zlib;
-the compiler's -m32 library lookup now selects the target library. Static
+the compiler's -m32 library lookup now selects the target library. GCC CI also
+found an unproven snprintf bound in shared-slot name copying and a temporary
+owner value across pthread cleanup machinery. Explicit validated-length copying
+and direct assignment of the atomic owner result retain behavior without
+disabling warnings. Static
 FFmpeg codec tables referenced by PC-relative assembly must bind locally in
 ELF modules; the private static-library exports are excluded on Linux.
 

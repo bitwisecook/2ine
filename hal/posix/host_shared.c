@@ -347,12 +347,15 @@ LxHostSharedResult lx_host_shared_find(uint64_t slot, LxHostShared **output, cha
         if (!row[0] || slot_word(row + 136) != slot)
             continue;
         char identifier[SLOT_NAME + 1];
-        if (!memchr(row, 0, SLOT_NAME) || strlen((const char *)row) + 2 > capacity || !name)
+        const unsigned char *end = memchr(row, 0, SLOT_NAME);
+        size_t name_length = end ? (size_t)(end - row) : 0;
+        if (!end || name_length + 2 > capacity || !name)
         {
             result = LX_HOST_SHARED_DENIED;
             break;
         }
-        snprintf(identifier, sizeof identifier, "/%s", row);
+        identifier[0] = '/';
+        memcpy(identifier + 1, row, name_length + 1);
         LxHostShared *object = NULL;
         result = shared_open(identifier, 0, &object, 0);
         if (result != LX_HOST_SHARED_OK)
