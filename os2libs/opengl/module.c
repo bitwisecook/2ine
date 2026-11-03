@@ -3,7 +3,7 @@
    pointers are decoded independently of the host ABI, including native i386. */
 #include "internal.h"
 #include "guest/bindings/opengl.h"
-#include "runtime/features.h"
+#include "runtime/runtime_features.h"
 
 static const GlEntry GlEntries[] = {
 #include "os2libs/generated/opengl-entries.h"

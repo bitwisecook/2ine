@@ -3,7 +3,7 @@
 #include "os2libs/dive.h"
 #include "os2libs/pmwin/graphics.h"
 #include "runtime/runtime.h"
-#include "runtime/features.h"
+#include "runtime/runtime_features.h"
 #include "hal/host_thread.h"
 #include <stdio.h>
 #include <stdlib.h>

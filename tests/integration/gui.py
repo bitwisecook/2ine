@@ -36,8 +36,11 @@ def wait_for(condition, process, seconds=8):
     raise AssertionError("GUI condition timed out")
 
 
-def colored_pixels(rgb):
-    """Count colored stars independently of grayscale frame controls."""
+def colored_pixels(rgb, width):
+    """Count stars below the 96-DPI fixture's title-bar and frame area."""
+    # Native and OS/2 title bars can use colored accents. Sample the client
+    # interior, retaining the actual dots/streaks assertion independently of chrome.
+    rgb = rgb[32 * width * 3 : -4 * width * 3]
     return sum(
         1 for r, g, b in zip(rgb[::3], rgb[1::3], rgb[2::3], strict=True) if r != g or g != b
     )
@@ -141,7 +144,7 @@ def main():
 
                 def painted():
                     rgb = display.capture(handle, args.work / "initial.png")
-                    return rgb if colored_pixels(rgb) > 100 else None
+                    return rgb if colored_pixels(rgb, display.geometry(handle)[0]) > 100 else None
 
                 initial = wait_for(painted, process)
                 time.sleep(0.2)
@@ -164,7 +167,7 @@ def main():
 
                 def dot_mode():
                     dots = display.capture(handle, args.work / "dots.png")
-                    return 5 <= colored_pixels(dots) <= 100
+                    return 5 <= colored_pixels(dots, display.geometry(handle)[0]) <= 100
 
                 wait_for(dot_mode, process, 2)
                 display.resize(handle, 600, 450)
@@ -172,7 +175,7 @@ def main():
 
                 def repainted():
                     resized = display.capture(handle, args.work / "resized.png")
-                    return colored_pixels(resized) > 5
+                    return colored_pixels(resized, display.geometry(handle)[0]) > 5
 
                 wait_for(repainted, process, 2)
                 result.update(

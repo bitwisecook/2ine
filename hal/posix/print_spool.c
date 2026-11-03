@@ -38,6 +38,19 @@ static int wait_child(pid_t child)
     while (result < 0 && errno == EINTR);
     return result == child && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
+static char *cups_program(const char *name)
+{
+    const char *directory = getenv("TWOINE_CUPS_BINDIR");
+    if (!directory || !*directory)
+        directory = "/usr/bin";
+    if (*directory != '/')
+        return NULL;
+    size_t size = strlen(directory) + strlen(name) + 2;
+    char *path = malloc(size);
+    if (path)
+        snprintf(path, size, "%s/%s", directory, name);
+    return path;
+}
 char **lx_host_print_printers(size_t *count)
 {
     if (!count)
@@ -46,6 +59,13 @@ char **lx_host_print_printers(size_t *count)
     int descriptors[2];
     if (pipe(descriptors))
         return NULL;
+    char *program = cups_program("lpstat");
+    if (!program)
+    {
+        close(descriptors[0]);
+        close(descriptors[1]);
+        return NULL;
+    }
     pid_t child = fork();
     if (!child)
     {
@@ -53,16 +73,18 @@ char **lx_host_print_printers(size_t *count)
         if (dup2(descriptors[1], STDOUT_FILENO) < 0)
             _exit(127);
         close(descriptors[1]);
-        execl("/usr/bin/lpstat", "lpstat", "-a", (char *)NULL);
+        execl(program, "lpstat", "-a", (char *)NULL);
         _exit(127);
     }
+    free(program);
     close(descriptors[1]);
-    char output[65536];
+    const size_t capacity = 65536;
+    char *output = malloc(capacity);
     size_t used = 0;
-    int ok = child > 0;
-    while (ok && used < sizeof output - 1)
+    int ok = child > 0 && output;
+    while (ok && used < capacity - 1)
     {
-        ssize_t got = read(descriptors[0], output + used, sizeof output - used - 1);
+        ssize_t got = read(descriptors[0], output + used, capacity - used - 1);
         if (got < 0 && errno == EINTR)
             continue;
         if (got < 0)
@@ -72,9 +94,12 @@ char **lx_host_print_printers(size_t *count)
         used += (size_t)got;
     }
     close(descriptors[0]);
-    ok = wait_child(child) && ok && used < sizeof output - 1;
+    ok = wait_child(child) && ok && used < capacity - 1;
     if (!ok)
+    {
+        free(output);
         return NULL;
+    }
     output[used] = 0;
     char **printers = NULL;
     for (char *line = output; *line;)
@@ -100,6 +125,7 @@ char **lx_host_print_printers(size_t *count)
             break;
         line = end + 1;
     }
+    free(output);
     return printers;
 }
 int lx_host_print_submit_helper(const char *program, const char *printer, const char *title,
@@ -132,5 +158,8 @@ int lx_host_print_submit_helper(const char *program, const char *printer, const 
 }
 int lx_host_print_submit_pcl(const char *printer, const char *title, unsigned copies, FILE *source)
 {
-    return lx_host_print_submit_helper("/usr/bin/lp", printer, title, copies, source);
+    char *program = cups_program("lp");
+    int ok = program && lx_host_print_submit_helper(program, printer, title, copies, source);
+    free(program);
+    return ok;
 }

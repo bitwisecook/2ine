@@ -65,6 +65,11 @@ else()
         target_link_libraries(twoine_video_config INTERFACE twoine_ffmpeg_${component})
     endforeach()
     target_link_libraries(twoine_video_config INTERFACE Threads::Threads m)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # Static codec tables referenced by PC-relative assembly are private to
+        # the consuming module, not interposable ELF exports.
+        target_link_options(twoine_video_config INTERFACE "LINKER:--exclude-libs,ALL")
+    endif()
 
 endif() # source provider
 add_executable(twoine_ffmpeg_info "${PROJECT_SOURCE_DIR}/tools/ffmpeg_build_info.c")

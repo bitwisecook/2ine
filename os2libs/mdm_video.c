@@ -8,7 +8,7 @@
 #include "hal/host.h"
 #include "hal/host_sync.h"
 #include "runtime/audio.h"
-#include "runtime/features.h"
+#include "runtime/runtime_features.h"
 #include <ctype.h>
 #include <errno.h>
 enum
