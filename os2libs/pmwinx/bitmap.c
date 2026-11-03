@@ -6,6 +6,67 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwinx/drawing.h"
+/* Windows mask transfers convert between monochrome bits and DC colors before
+   applying the raster operation. PM's RGB raster backing has no implicit GDI
+   conversion: copying colored pixels into a one-bit mask retains color noise. */
+BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
+{
+    PresentationSpace *source_ps = lx_pm_font_space(source);
+    PresentationSpace *destination_ps = lx_pm_font_space(destination);
+    Open32DC *source_dc = open32FindDC(source), *destination_dc = open32FindDC(destination);
+    if (!source_ps || !destination_ps || !source_dc || !destination_dc)
+        return FALSE;
+    PmBitmap *source_bitmap = source_ps->bitmap_lease.resource;
+    PmBitmap *destination_bitmap = destination_ps->bitmap_lease.resource;
+    BOOL source_mono = source_bitmap && source_bitmap->planes * source_bitmap->depth == 1;
+    BOOL destination_mono =
+        destination_bitmap && destination_bitmap->planes * destination_bitmap->depth == 1;
+    if (source_mono == destination_mono)
+        return GpiBitBlt(destination, source, 4, points, rop, 0) == 1;
+    LONG width = points[3].x - points[2].x, height = points[3].y - points[2].y;
+    if (width <= 0 || height <= 0 || (uint64)width * height > 16777216)
+        return FALSE;
+    ULONG converted = lx_pm_bitmap_create((unsigned)width, (unsigned)height, 1, 24);
+    LxHandleBorrow borrow = {0};
+    PmBitmap *bitmap = converted ? lx_pm_bitmap(converted, &borrow) : NULL;
+    SIZEL size = {0, 0};
+    HPS memory = bitmap ? GpiCreatePS(0, 0, &size, 0) : 0;
+    BOOL ok = bitmap && memory &&
+              lx_pm_raster_read(source, points[2].x, points[2].y, (unsigned)width, (unsigned)height,
+                                bitmap->pixels);
+    if (ok)
+    {
+        ULONG background =
+            source_mono ? destination_dc->background_color : source_dc->background_color;
+        ULONG foreground = destination_dc->text_color;
+        background = (background & 255) << 16 | (background & 0xFF00) | (background >> 16 & 255);
+        foreground = (foreground & 255) << 16 | (foreground & 0xFF00) | (foreground >> 16 & 255);
+        for (size_t i = 0; i < (size_t)width * height; i++)
+        {
+            uint32 pixel = bitmap->pixels[i];
+            BOOL bit = source_mono
+                           ? (source_bitmap->palette_count == 2 ? pixel == source_bitmap->palette[1]
+                                                                : pixel != 0)
+                           : pixel == background;
+            bitmap->pixels[i] =
+                destination_mono ? (bit ? 0xFFFFFF : 0) : (bit ? background : foreground);
+        }
+        POINTL copy[4] = {points[0], points[1], {0, 0}, {width, height}};
+        ok = GpiSetBitmap(memory, converted) != UINT32_MAX &&
+             GpiBitBlt(destination, memory, 4, copy, rop, 0) == 1;
+    }
+    if (memory)
+    {
+        GpiSetBitmap(memory, 0);
+        GpiDestroyPS(memory);
+    }
+    lx_handle_release(&borrow);
+    if (converted)
+        GpiDeleteBitmap(converted);
+    if (!ok)
+        open32SetError(87);
+    return ok;
+}
 ULONG LoadBitmap(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadBitmap(%u, %p)", module, name);

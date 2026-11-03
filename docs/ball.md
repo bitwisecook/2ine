@@ -81,6 +81,15 @@ Explicit CLI backend overrides remain strict. Current workers carry
 `runtime-capabilities.json`; an older worker without that declaration must not
 be assumed to contain Unicorn. Unavailable requested backends produce an error.
 
+Optional `startupPrograms` in `ball.json` contains up to 16 application records
+with `program`, `arguments`, `cwd` and `environment`. The desktop and CLI launch
+these services before the main program, with independent prepared environments,
+and stop their own services when the main program exits or fails to start.
+They do not recursively start more services. For original IBM SOM/DSOM programs,
+the Lotus ball starts `C:\OS2\SOMDD.EXE` from `C:\OS2`, with the original
+`C:\OS2\ETC\SOM.IR` prepended to its `SOMIR` environment. These files must first
+be installed from the user's OS/2 media.
+
 Runtime snapshots are disposable host caches selected by backend and a hash
 of the loader, API modules and capability declaration. They do not become the
 receiving computer's runtime merely because they were copied with a ball.
@@ -153,12 +162,17 @@ a ball alone is not a standalone runtime distribution.
 ## Lotus SmartSuite installation
 
 The English SmartSuite base 1.7 installer uses OS/2's command processor and
-system-version files. In Applications or Install Software, choose **Choose
-OS/2 ISO…** to extract CMD.EXE, SYSLEVEL.OS2 and OSO001.MSG into the ball's C:
-drive. Select your original OS/2 installation ISO, or select several floppy
-images together. This installs only the three support files; existing files
-and the application's CD mapping are preserved. **Browse Installation Media…**
-opens folders and nested archives when you need to inspect the contents.
+system-version files. In Applications or Install Software, choose **Install
+Components…**, then select your original OS/2 ISO or archive. The source is
+remembered for that ball. Installed components are ticked and marked Installed;
+the review shows only files still needed. CMD and original REXX support are the
+default selection. Existing files and the application's CD mapping are preserved.
+**Browse…** is optional when you need a particular folder or nested archive.
+
+To add the original help manager, viewer and books, select **Full Help** in
+**Install Components…** and click **Install**. It reuses the remembered media.
+Damaged optional fonts are skipped with their paths and integrity errors listed
+after installation; required support-file errors still stop extraction.
 
 The CLI provides the same extraction in one command:
 

@@ -3,6 +3,19 @@
 #define TB_FILE_TIME_H
 #include <stdint.h>
 #include <time.h>
+void tb_file_time_cache_reset(void);
+#ifdef TB_MEDIA_TIME_CACHE
+int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts);
+#else
+/* Mounted writable volumes use the current local zone on every call. Media
+   requests opt into a request-scoped snapshot provided by platform.c. */
+static inline int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
+{
+    (void)date;
+    (void)clock;
+    return (int64_t)mktime(parts);
+}
+#endif
 static inline int tb_calendar_day(int year, int month, int day)
 {
     static const int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -25,7 +38,7 @@ static inline int64_t tb_dos_time(unsigned date, unsigned clock)
     if (!tb_calendar_day(parts.tm_year + 1900, parts.tm_mon, parts.tm_mday) || parts.tm_hour > 23 ||
         parts.tm_min > 59 || parts.tm_sec > 59)
         return INT64_MIN;
-    return (int64_t)mktime(&parts);
+    return tb_local_file_time(date, clock, &parts);
 }
 static inline int64_t tb_iso_time(const unsigned char *date)
 {

@@ -293,6 +293,15 @@ static uint32 bridge32_RegDeleteValue(uint8 *a)
     free(name);
     return result;
 }
+static uint32 bridge32_RegDeleteKey(uint8 *a)
+{
+    const uint32 pointer = lx_guest_load_u32(a + 4);
+    char *name = o32_string(pointer);
+    uint32 result = pointer && !name ? ERROR_INVALID_PARAMETER
+                                     : (uint32)RegDeleteKey(lx_guest_load_u32(a), name);
+    free(name);
+    return result;
+}
 static uint32 bridge32_RegSetValueEx(uint8 *a)
 {
     const uint32 np = lx_guest_load_u32(a + 4), dp = lx_guest_load_u32(a + 16),

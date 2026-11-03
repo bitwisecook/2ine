@@ -14,6 +14,10 @@ struct OS2ImportRequest: Identifiable {
     let id = UUID()
     let ball: String
     let sources: [String]
+    let categories: Set<OS2ExtractionCategory>
+    init(ball: String, sources: [String] = [], categories: Set<OS2ExtractionCategory> = OS2ExtractionCategory.defaults) {
+        self.ball = ball; self.sources = sources; self.categories = categories
+    }
 }
 struct InstallCompletion: Identifiable {
     let id = UUID()
@@ -593,16 +597,20 @@ final class AppModel {
         guard !busy, !mediaBusy else { return nil }
         let panel = NSOpenPanel()
         panel.title = directory ? "Choose OS/2 Media Folder" : "Choose OS/2 ISO or Archive"
-        panel.message = "Next, browse the source and choose which OS/2 files to extract. ISO images inside archives are detected automatically."
-        panel.prompt = "Browse Media"
+        panel.message = "Choose your OS/2 installation ISO. It will be remembered for this ball. An ISO inside a ZIP or another archive is supported."
+        panel.prompt = "Use This Media"
         panel.canChooseDirectories = directory; panel.canChooseFiles = !directory
         panel.allowsMultipleSelection = !directory
         guard panel.runModal() == .OK else { return nil }
         return panel.urls.map(\.path)
     }
-    func installOS2SupportFromPicker() {
-        guard let sources = pickOS2Media(), let selected else { return }
-        supportImport = OS2ImportRequest(ball: selected, sources: sources)
+    func installComponents() {
+        guard let selected, !busy, !mediaBusy else { return }
+        supportImport = OS2ImportRequest(ball: selected)
+    }
+    func rememberOS2Media(_ sources: [String], ball: String) async throws {
+        var request = DesktopRequest("remember-os2-media", ball: ball); request.sources = sources
+        _ = try await backend.request(request, as: OS2SupportStatus.self)
     }
     func openOS2Source(_ sources: [String], ball: String) async throws -> OS2MediaSource {
         guard selected == ball, !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }

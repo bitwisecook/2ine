@@ -179,7 +179,7 @@ struct ApplicationsView: View {
                         Text(support.complete ? "CMD support is installed. Add more OS/2 components from your media." : "Missing: " + support.missing).font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Install OS/2 Files…") { model.installOS2SupportFromPicker() }
+                    Button("Install Components…") { model.installComponents() }
                         .disabled(model.busy || model.mediaBusy).accessibilityIdentifier("setupOS2Support")
                 }
             }

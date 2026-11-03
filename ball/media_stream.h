@@ -2,11 +2,11 @@
 /* Private lazy archive members. No intermediate container is written to disk. */
 enum
 {
-    MEDIA_CACHE_BYTES = 16 * 1024 * 1024
+    MEDIA_CACHE_BYTES = 1024 * 1024
 };
 typedef struct LazyArchive
 {
-    TbReadStream *parent;
+    TbReadStream *parent, *self;
     char *name;
     struct archive *archive;
     ArchiveInput input;
@@ -57,7 +57,6 @@ static void lazy_close(void *opaque)
         archive_read_free(lazy->archive);
     tb_stream_close(lazy->parent);
     free(lazy->name);
-    media_session.cache_bytes -= lazy->capacity;
     free(lazy->cache);
     free(lazy);
 }
@@ -73,13 +72,16 @@ static int lazy_append(LazyArchive *lazy)
         size_t capacity = lazy->capacity ? lazy->capacity * 2 : sizeof data;
         if (capacity > MEDIA_CACHE_BYTES)
             capacity = MEDIA_CACHE_BYTES;
+        if (!tb_stream_cache_resize(lazy->self, capacity))
+            return 0;
         unsigned char *next = realloc(lazy->cache, capacity);
         if (!next)
+        {
+            tb_stream_cache_resize(lazy->self, lazy->capacity);
             return 0;
+        }
         lazy->cache = next;
-        media_session.cache_bytes += capacity - lazy->capacity;
-        if (media_session.cache_bytes > media_session.stats.peak_cache_bytes)
-            media_session.stats.peak_cache_bytes = media_session.cache_bytes;
+        media_cache_peak();
         lazy->capacity = capacity;
     }
     if (lazy->used + n > lazy->capacity)
@@ -127,6 +129,8 @@ static TbReadStream *lazy_member(TbReadStream *parent, const char *name, uint64_
     lazy->expected = size;
     lazy->raw = raw;
     TbReadStream *stream = lazy->name ? tb_stream_create(size, lazy, lazy_read, lazy_close) : NULL;
+    lazy->self = stream;
+    tb_stream_inherit_budget(stream, parent);
     if (!stream)
         lazy_close(lazy);
     return stream;
@@ -149,6 +153,7 @@ static TbReadStream *stored_zip_member(TbReadStream *parent, struct archive *arc
     return stream;
 }
 #include "zip_legacy.h"
+#include "zip_seek.h"
 typedef struct ExtractStream
 {
     const char *name;
@@ -206,6 +211,10 @@ static int stream_extract_visit(void *opaque, const char *name, uint64_t size, i
         e->out = legacy_zip_member(e->parent, input, name, size, &legacy);
         if (legacy)
             return e->out ? 2 : 0;
+        int indexed = 0;
+        e->out = indexed_zip_member(e->parent, input, name, size, &indexed);
+        if (indexed)
+            return e->out ? 2 : 0;
         e->out = stored_zip_member(e->parent, input, size);
         if (!e->out)
             e->out = lazy_member(e->parent, name, size, 0);
@@ -214,6 +223,14 @@ static int stream_extract_visit(void *opaque, const char *name, uint64_t size, i
 }
 static TbReadStream *extract_member(TbReadStream *file, const char *member)
 {
+    if (image_reader(file))
+    {
+        uint64_t builds, hits;
+        tb_image_reader_cache_stats(file, &builds, &hits);
+        TbReadStream *result = tb_image_reader_member(file, member);
+        image_stats(file, builds, hits);
+        return result;
+    }
     ExtractStream e = {.name = member, .parent = file};
     int result = archive_walk(file, stream_extract_visit, &e);
     if (result != 2)

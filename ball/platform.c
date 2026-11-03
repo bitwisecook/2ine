@@ -9,6 +9,76 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+static _Thread_local CFCalendarRef file_time_calendar;
+#endif
+/* mktime on macOS may reload zoneinfo for every DOS archive timestamp. A
+   request uses one local-zone interpretation; no process-wide TZ is changed. */
+static _Thread_local struct
+{
+    uint64_t key;
+    int64_t value;
+    int valid;
+} file_time_cache[4096];
+void tb_file_time_cache_reset(void)
+{
+    memset(file_time_cache, 0, sizeof file_time_cache);
+#ifdef __APPLE__
+    if (file_time_calendar)
+        CFRelease(file_time_calendar);
+    file_time_calendar = NULL;
+#endif
+}
+int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
+{
+    uint64_t key = ((uint64_t)date << 32) | clock;
+    size_t slot =
+        (size_t)((key ^ (key >> 17)) * UINT64_C(11400714819323198485)) >> (sizeof(size_t) * 8 - 12);
+    if (!file_time_cache[slot].valid || file_time_cache[slot].key != key)
+    {
+        file_time_cache[slot].key = key;
+#ifdef __APPLE__
+        if (!file_time_calendar)
+        {
+            const char *environment = getenv("TZ");
+            CFTimeZoneRef zone = NULL;
+            if (environment && *environment)
+            {
+                CFStringRef name =
+                    CFStringCreateWithCString(NULL, environment, kCFStringEncodingUTF8);
+                if (name)
+                {
+                    zone = CFTimeZoneCreateWithName(NULL, name, true);
+                    CFRelease(name);
+                }
+                if (!zone && (!strcmp(environment, "UTC0") || !strcmp(environment, "GMT0")))
+                    zone = CFTimeZoneCreateWithTimeIntervalFromGMT(NULL, 0);
+            }
+            else
+                zone = CFTimeZoneCopySystem();
+            if (zone)
+            {
+                file_time_calendar = CFCalendarCreateWithIdentifier(NULL, kCFGregorianCalendar);
+                if (file_time_calendar)
+                    CFCalendarSetTimeZone(file_time_calendar, zone);
+                CFRelease(zone);
+            }
+        }
+        CFAbsoluteTime absolute;
+        if (file_time_calendar &&
+            CFCalendarComposeAbsoluteTime(file_time_calendar, &absolute, "yMdHms",
+                                          parts->tm_year + 1900, parts->tm_mon + 1, parts->tm_mday,
+                                          parts->tm_hour, parts->tm_min, parts->tm_sec))
+            file_time_cache[slot].value = (int64_t)(absolute + kCFAbsoluteTimeIntervalSince1970);
+        else
+#endif
+            file_time_cache[slot].value = (int64_t)mktime(parts);
+        file_time_cache[slot].valid = 1;
+    }
+    return file_time_cache[slot].value;
+}
 #ifdef __linux__
 #include <fcntl.h>
 #include <sys/syscall.h>
@@ -853,6 +923,54 @@ int tb_path_info(const char *path, uint64_t *size, int64_t *modified)
         return 0;
     *size = info.st_size < 0 ? 0 : (uint64_t)info.st_size;
     *modified = (int64_t)info.st_mtime;
+#endif
+    return 1;
+}
+
+int tb_path_identity(const char *path, TbFileIdentity *identity)
+{
+    memset(identity, 0, sizeof *identity);
+    if (tb_image_path(path))
+        return 0; /* Virtual/mutable volumes are never retained as host media. */
+#ifdef _WIN32
+    wchar_t *name = wide(path);
+    if (!name)
+        return 0;
+    HANDLE file = CreateFileW(name, FILE_READ_ATTRIBUTES,
+                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    free(name);
+    if (file == INVALID_HANDLE_VALUE)
+        return 0;
+    BY_HANDLE_FILE_INFORMATION info;
+    FILE_BASIC_INFO times;
+    int ok = GetFileInformationByHandle(file, &info) &&
+             GetFileInformationByHandleEx(file, FileBasicInfo, &times, sizeof times) &&
+             !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+    CloseHandle(file);
+    if (!ok)
+        return 0;
+    identity->device = info.dwVolumeSerialNumber;
+    identity->file = ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
+    identity->size = ((uint64_t)info.nFileSizeHigh << 32) | info.nFileSizeLow;
+    identity->modified = (uint64_t)times.LastWriteTime.QuadPart;
+    identity->changed = (uint64_t)times.ChangeTime.QuadPart;
+#else
+    struct stat info;
+    if (stat(path, &info) || !S_ISREG(info.st_mode))
+        return 0;
+    identity->device = (uint64_t)info.st_dev;
+    identity->file = (uint64_t)info.st_ino;
+    identity->size = (uint64_t)info.st_size;
+    identity->modified = (uint64_t)info.st_mtime;
+    identity->changed = (uint64_t)info.st_ctime;
+#ifdef __APPLE__
+    identity->modified_fraction = (uint64_t)info.st_mtimespec.tv_nsec;
+    identity->changed_fraction = (uint64_t)info.st_ctimespec.tv_nsec;
+#else
+    identity->modified_fraction = (uint64_t)info.st_mtim.tv_nsec;
+    identity->changed_fraction = (uint64_t)info.st_ctim.tv_nsec;
+#endif
 #endif
     return 1;
 }

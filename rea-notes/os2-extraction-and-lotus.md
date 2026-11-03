@@ -209,3 +209,69 @@ Bindings, architecture, Ruff, ty, catalogue and pinned C formatting checks pass.
 No proprietary binary/media payload is tracked. Diagnostic apps/balls and logs
 remain ignored local evidence. Native acceleration is a proposed phased design
 in multimedia-acceleration-plan.md; it does not claim the missing APIs are done.
+
+## Media performance and direct Help follow-up (2026-11-03 evening)
+
+This supersedes the three-stage macOS workflow and replay-only DEFLATE description
+above. Following the user's correction, Applications offers one Install Components
+action and the sheet has one Install button; Help is a component checkbox. The
+source is remembered per ball before copying; component selection, installed
+checkboxes and missing-file counts share one sheet. Browsing is optional. Explicit
+remembered folders inside an ISO stay at that folder instead of searching their
+contents for more disc images. The final native UI check verified the saved
+`os2image` source and ticked Installed CMD/REXX and Help. The earlier separate Help
+action and Up to Date button label were removed at the user's request. A regression
+fixture covers an unrelated invalid ISO inside a saved
+folder; the previous reopening search failed on that fixture and the real disc.
+
+The media cache retains at most four exclusively leased source states, each with
+sixteen parent readers and a 64 MiB decoder/index budget. Source identity includes
+file identity, size, modification and change times with fractional precision.
+Concurrent requests never share a mutable stream cursor. ISO/FAT directory records
+retain file/cluster offsets and are populated lazily. Standard ZIP DEFLATE readers
+retain zlib inflateCopy checkpoints every 4 MiB; stored members retain direct
+slices. ZIP64 and other codecs use the bounded library fallback. Intermediate
+images remain in streams rather than temporary files. See the upstream zlib
+manual's inflateCopy contract: https://zlib.net/manual.html .
+
+Sampling the supplied 514 MiB Warp Server ISO exposed repeated macOS zoneinfo
+reloads in mktime. Media requests now snapshot the local zone and cache validated
+DOS timestamp conversions, releasing calendar state at request end. Mounted
+writable volumes retain their ordinary live local-time behavior. The first
+calendar probe crashed because an extra argument supplied a null component format
+to CFCalendarComposeAbsoluteTime; this was corrected before packaging. Timestamp
+regressions compare winter/summer values in UTC, New York and London and refresh
+between requests. The full-root 17,655-file plan fell from 84.2 seconds to roughly
+11–14 seconds locally. These are backend measurements, not another laptop's UI
+latency. The original direct ISO folder listing was already about 8 ms; the new
+cache also avoids repeating image-directory parsing and compressed-image replay.
+
+The real ISO's `os2image/FI/FONT/moekai.zip` contains damaged compressed data.
+Independent tar extraction matches the native member bytes; independent zlib
+expands 11,290,846 bytes against a declared 11,290,996, with CRC 8f5ad610 instead
+of 5fd3038b. The reader preserves integrity checks. The requested optional-font
+policy skips this member and reports its source/path and size/CRC failure;
+required files and explicit module recovery remain strict. A mixed fixture proves
+that readable Help and fonts still install. The actual damaged font was also
+skipped successfully in the isolated ball.
+
+A fresh isolated Help installation copied 150 files in 7.7 seconds, including
+HELPMGR.DLL (250157), HPMGRMRI.DLL (21881), VIEW.EXE (33304), and VIEWDOC.EXE (31511).
+At the user's request, the same Help set was then installed into the real Lotus
+ball in 7.4 seconds, preserving existing files and remembering the source. The
+original VIEW launcher opened CMDREF.INF and spawned VIEWDOC without a missing
+import abort in the isolated ball; this is startup evidence, not full help-panel
+visual acceptance. The probe child was stopped after inspection.
+
+The reported installer abort is separately identified by the real log's missing
+PMWINX ordinal 544, REGDELETEKEY. A leaf-key implementation plus explicit portable
+guest bridge now handles deletion, missing keys, access checks and nonempty keys.
+The real-LX desktop registry test passes. A presentation regression also covers
+retained damage on a child reduced to zero size by WM_ADJUSTWINDOWPOS; such a child
+cannot receive WM_PAINT and must not block its entire host canvas until Cmd-Tab.
+The actual SmartMaster reinstall stage has not been rerun for visual acceptance.
+
+Validation: runtime CTest 70/70; macOS model/core 23/22; original OS/2 media tests
+48/48; new cache/seek/invalidation/concurrency/font/source-reopening checks 6/6.
+Generated bindings, source boundaries, Ruff, pinned C formatting and app signature
+checks pass. Local evidence remains under ignored `build-media-browser-perf`.

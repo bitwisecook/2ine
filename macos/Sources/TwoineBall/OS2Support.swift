@@ -9,7 +9,7 @@ struct OS2SupportSheet: View {
     let request: OS2ImportRequest
     @Environment(\.dismiss) private var dismiss
     private enum Step { case source, options, finished }
-    @State private var step: Step = .source
+    @State private var step: Step = .options
     @State private var sources: [String] = []
     @State private var listing: MediaDirectory?
     @State private var relevantOnly = true
@@ -24,11 +24,13 @@ struct OS2SupportSheet: View {
     @State private var error: String?
     @State private var result: OS2SupportStatus?
     private var blocked: Bool { loading || model.busy || model.mediaBusy }
-    private var files: [OS2ExtractionPlan.File] { plan?.selectedFiles(categories) ?? [] }
+    @State private var files: [OS2ExtractionPlan.File] = []
+    @State private var availableCounts: [OS2ExtractionCategory: Int] = [:]
+    @State private var installedCounts: [OS2ExtractionCategory: Int] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(step == .source ? "Browse OS/2 Media" : step == .options ? "Extract OS/2 Files" : "OS/2 Extraction Complete")
+            Text(step == .source ? "Browse Installation Media" : step == .options ? "Install Components" : "Components Installed")
                 .font(.title2.bold())
             switch step {
             case .source: sourceBrowser
@@ -43,12 +45,11 @@ struct OS2SupportSheet: View {
                 if loading { ProgressView().controlSize(.small) }
                 Spacer()
                 if step == .options {
-                    Button("Back") { step = .source; error = nil; notice = "" }.disabled(blocked)
-                    Button("Extract " + fileCount(files.count)) { extract() }
+                    Button("Install") { extract() }
                         .keyboardShortcut(.defaultAction).disabled(blocked || files.isEmpty)
                         .accessibilityIdentifier("extractOS2Support")
                 } else if step == .source {
-                    Button("Continue") { prepare() }
+                    Button(useCurrentFolder ? "Use This Folder" : "Done Browsing") { if useCurrentFolder { prepare() } else { step = .options } }
                         .keyboardShortcut(.defaultAction).disabled(blocked || listing == nil)
                         .accessibilityIdentifier("reviewOS2Extraction")
                 }
@@ -57,7 +58,7 @@ struct OS2SupportSheet: View {
             .onChange(of: query) { _, _ in selected = nil }
             .onChange(of: relevantOnly) { _, _ in selected = nil }
             .interactiveDismissDisabled(blocked)
-            .task { open(request.sources) }
+            .task { await loadInitial() }
     }
     private var sourceBrowser: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -118,27 +119,45 @@ struct OS2SupportSheet: View {
     @State private var useCurrentFolder = false
     private var extractionOptions: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Choose what to copy into this ball’s C: drive. Existing files are kept.")
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("OS/2 Installation Media", systemImage: "opticaldisc").font(.headline)
+                    Text(listing.map { DisplayPath.homeAbbreviated($0.label) } ?? "Choose your OS/2 ISO once to install components from it.")
+                        .font(.callout).foregroundStyle(.secondary).lineLimit(3).textSelection(.enabled)
+                }
+                Spacer()
+                Button(sources.isEmpty ? "Choose ISO…" : "Change…") { if let paths = model.pickOS2Media() { open(paths) } }
+                    .accessibilityIdentifier("chooseSupportMedia").disabled(blocked)
+                if listing != nil {
+                    Button("Browse…") { step = .source }.disabled(blocked)
+                }
+            }
+            Text("Select the components to add. Installed components are already ticked; existing files are kept.")
+                .foregroundStyle(.secondary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     ForEach(OS2ExtractionCategory.allCases) { category in
                         Toggle(isOn: Binding(get: { categories.contains(category) || categories.contains(.full) }, set: { enabled in
                             if enabled { categories.insert(category) } else { categories.remove(category) }
+                            refreshSelection()
                         })) {
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack {
                                     Text(category.title).font(.headline)
                                     Spacer()
-                                    Text(fileCount(count(category))).foregroundStyle(.secondary).monospacedDigit()
+                                    Text(componentStatus(category)).foregroundStyle(.secondary).monospacedDigit()
                                 }
                                 Text(category.detail).font(.callout).foregroundStyle(.secondary)
                             }
                         }.toggleStyle(.checkbox)
-                            .disabled(blocked || (categories.contains(.full) && category != .full))
+                            .disabled(blocked || (categories.contains(.full) && category != .full) || ((installedCounts[category] ?? 0) > 0 && count(category) == 0))
                             .accessibilityIdentifier("extractCategory_" + category.rawValue)
                     }
                     Divider()
-                    DisclosureGroup("Files to Extract (\(files.count))") {
+                    if plan != nil && files.isEmpty {
+                        Text("The selected components are already installed.").foregroundStyle(.secondary)
+                    }
+                    DisclosureGroup("Files to Install (\(files.count))") {
                         LazyVStack(alignment: .leading, spacing: 4) {
                             ForEach(files) { file in
                                 Text(file.path).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
@@ -162,29 +181,83 @@ struct OS2SupportSheet: View {
     }
     private var completion: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label("Extracted " + fileCount(result?.imported?.count ?? 0), systemImage: "checkmark.circle.fill").font(.headline)
+            Label("Installed " + fileCount(result?.imported?.count ?? 0), systemImage: "checkmark.circle.fill").font(.headline)
             if let result, categories.contains(.cmd) || categories.contains(.full) {
                 Text(result.complete && result.rexxComplete == true ? "CMD and REXX support are ready." : "Some CMD or REXX files are still missing. Choose additional installation media to add them.")
             }
-            Text("The extracted files are in their C: folders. You can return to your installer or application.")
+            if let skipped = result?.skippedFiles, !skipped.isEmpty {
+                Label("\(skipped.count) damaged fonts were skipped", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(skipped) { file in
+                            VStack(alignment: .leading) {
+                                Text(file.path).font(.headline)
+                                Text(file.reason)
+                                Text(DisplayPath.homeAbbreviated(file.source)).font(.caption).foregroundStyle(.secondary)
+                            }.textSelection(.enabled)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            Text("You can now return to your installer or application. Newly installed Help is available when it next starts.")
             Spacer()
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     private func count(_ category: OS2ExtractionCategory) -> Int {
-        plan?.selectedFiles([category]).count ?? 0
+        availableCounts[category] ?? 0
+    }
+    private func componentStatus(_ category: OS2ExtractionCategory) -> String {
+        let present = installedCounts[category] ?? 0
+        if count(category) > 0 {
+            return present > 0 ? "\(present) installed · \(count(category)) to add" : "\(count(category)) files to add"
+        }
+        if present > 0 { return "Installed" }
+        return plan == nil ? "" : "Not on this media"
+    }
+    private func refreshSelection() {
+        files = plan?.selectedFiles(categories) ?? []
+    }
+    private func applyPlan(_ value: OS2ExtractionPlan) {
+        plan = value
+        for category in OS2ExtractionCategory.allCases {
+            availableCounts[category] = value.selectedFiles([category]).count
+            installedCounts[category] = Set(value.files.filter {
+                !$0.provided && $0.present && (category == .full || $0.category == category)
+            }.map { $0.path.uppercased() }).count
+        }
+        categories.formUnion(value.installedCategories)
+        refreshSelection()
+    }
+    private func loadInitial() async {
+        categories = request.categories
+        loading = true
+        do {
+            let status = try await model.os2Support()
+            if status.complete && status.rexxComplete == true {
+                categories.insert(.cmd); installedCounts[.cmd] = 11
+            }
+            let saved = request.sources.isEmpty ? status.mediaSources ?? [] : request.sources
+            loading = false
+            if !saved.isEmpty { await loadSources(saved) }
+        } catch { loading = false; self.error = error.localizedDescription }
     }
     private func open(_ paths: [String]) {
-        loading = true; error = nil; notice = "Looking for ISO images…"; selected = nil
-        Task {
-            defer { loading = false }
-            do {
-                let source = try await model.openOS2Source(paths, ball: request.ball)
-                sources = source.sources; listing = source.directory
-                useCurrentFolder = false
-                notice = source.installationDirectory == true ? "Found the OS/2 installation file set. Browse it or continue to choose components." : source.detectedISO ? "Detected \(sources.count) ISO image\(sources.count == 1 ? "" : "s") in the selected media." : ""
-                notice = [notice, source.warningSummary].filter { !$0.isEmpty }.joined(separator: "\n")
-            } catch { self.error = error.localizedDescription; notice = "" }
-        }
+        Task { await loadSources(paths) }
+    }
+    private func loadSources(_ paths: [String]) async {
+        loading = true; error = nil; notice = "Reading installation media…"; selected = nil
+        defer { loading = false }
+        do {
+            let source = try await model.openOS2Source(paths, ball: request.ball)
+            sources = source.sources; listing = source.directory
+            useCurrentFolder = false
+            try await model.rememberOS2Media(source.sources, ball: request.ball)
+            extractionSources = source.sources
+            notice = "Checking installed components…"
+            applyPlan(try await model.planOS2Extraction(extractionSources, ball: request.ball))
+            step = .options; notice = source.warningSummary
+        } catch { self.error = error.localizedDescription; notice = "" }
     }
     private func navigate(_ path: String) {
         loading = true; error = nil; selected = nil; query = ""
@@ -202,13 +275,13 @@ struct OS2SupportSheet: View {
         Task {
             defer { loading = false }
             do {
-                plan = try await model.planOS2Extraction(extractionSources, ball: request.ball)
+                applyPlan(try await model.planOS2Extraction(extractionSources, ball: request.ball))
                 step = .options; notice = ""
             } catch { self.error = error.localizedDescription; notice = "" }
         }
     }
     private func extract() {
-        loading = true; error = nil; notice = "Extracting selected files…"
+        loading = true; error = nil; notice = "Installing selected components…"
         Task {
             defer { loading = false }
             do {

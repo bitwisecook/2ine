@@ -2,6 +2,57 @@
 /* The MDI client owns workbook children and their active-window state. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
+BOOL open32ShowMdiChild(Open32Window *window, LONG command)
+{
+    Open32Window *parent = open32FindWindow(window->parent);
+    if (!(window->extended_style & 0x40) || !parent || parent->class->builtin != 1 ||
+        (command != 1 && command != 3 && command != 5 && command != 8 && command != 9))
+        return FALSE;
+    ULONG handle = window->handle, owner = parent->handle, old_style = window->style;
+    LONG x = window->x, y = window->y, width = window->width, height = window->height;
+    if (command == 3)
+    {
+        RECTL bounds;
+        if (!WinQueryWindowRect(open32ClientWindow(owner), &bounds))
+            return TRUE;
+        if (!(old_style & 0x01000000))
+        {
+            window->mdi_normal_x = x;
+            window->mdi_normal_y = y;
+            window->mdi_normal_width = width;
+            window->mdi_normal_height = height;
+            window->mdi_normal_valid = TRUE;
+        }
+        x = y = 0;
+        width = bounds.xRight - bounds.xLeft;
+        height = bounds.yTop - bounds.yBottom;
+        window->style = (old_style & ~0x20000000u) | 0x01000000;
+    }
+    else if (command == 1 || command == 9)
+    {
+        if (window->mdi_normal_valid && (old_style & 0x21000000))
+        {
+            x = window->mdi_normal_x;
+            y = window->mdi_normal_y;
+            width = window->mdi_normal_width;
+            height = window->mdi_normal_height;
+        }
+        window->style &= ~0x21000000u;
+    }
+    /* Native PM maximisation accepts WC_FRAME only. An Open32 MDI child is
+       positioned within its MDICLIENT instead, with Windows state retained. */
+    BOOL moved = SetWindowPos(handle, 0, x, y, width, height, 4 | 64 | (command == 8 ? 16 : 0));
+    window = open32FindWindow(handle);
+    if (!moved)
+    {
+        if (window)
+            window->style = old_style;
+        return TRUE;
+    }
+    if (window && command != 8)
+        SendMessage(owner, 0x222, handle, 0);
+    return TRUE;
+}
 static ULONG mdi_create(Open32Window *client, ULONG definition)
 {
     uint8 bytes[36];

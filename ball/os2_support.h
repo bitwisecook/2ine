@@ -40,7 +40,28 @@ static cJSON *os2_support(Context *c)
     }
     cJSON_AddBoolToObject(result, "complete", complete);
     cJSON_AddBoolToObject(result, "rexxComplete", rexx_complete);
+    size_t media_size = 0;
+    char *media_bytes = read_file(c, join(c, c->ball, "os2-media.json"), &media_size, 1);
+    cJSON *media =
+        media_bytes && media_size ? cJSON_ParseWithLength(media_bytes, media_size) : NULL;
+    cJSON *sources = get(media, "sources");
+    cJSON_AddItemToObject(result, "mediaSources",
+                          cJSON_IsArray(sources) ? cJSON_Duplicate(sources, 1)
+                                                 : cJSON_CreateArray());
+    cJSON_Delete(media);
     return result;
+}
+static cJSON *remember_os2_media(Context *c, const cJSON *request)
+{
+    const cJSON *sources = get(request, "sources");
+    if (!array_strings(c, sources))
+        return NULL;
+    cJSON *media = cJSON_CreateObject();
+    cJSON_AddItemToObject(media, "sources", cJSON_Duplicate(sources, 1));
+    cJSON_AddStringToObject(media, "recorded", now(c));
+    int ok = write_json(c, join(c, c->ball, "os2-media.json"), media);
+    cJSON_Delete(media);
+    return ok ? os2_support(c) : NULL;
 }
 static int media_candidate(const char *name)
 {
@@ -57,6 +78,21 @@ static int media_candidate(const char *name)
         if (equal_case(extension, extensions[i]))
             return 1;
     return 0;
+}
+static cJSON *extraction_read_stats(void)
+{
+    TbMediaReadStats stats = tb_media_read_stats();
+    cJSON *result = cJSON_CreateObject();
+    cJSON_AddNumberToObject(result, "decompressedBytes", (double)stats.decompressed_bytes);
+    cJSON_AddNumberToObject(result, "peakCacheBytes", (double)stats.peak_cache_bytes);
+    cJSON_AddNumberToObject(result, "directSlices", (double)stats.direct_slices);
+    cJSON_AddNumberToObject(result, "materializedFiles", (double)stats.materialized_files);
+    cJSON_AddNumberToObject(result, "containerCacheHits", (double)stats.container_cache_hits);
+    cJSON_AddNumberToObject(result, "directoryIndexBuilds", (double)stats.directory_index_builds);
+    cJSON_AddNumberToObject(result, "directoryIndexHits", (double)stats.directory_index_hits);
+    cJSON_AddNumberToObject(result, "inflateCheckpoints", (double)stats.inflate_checkpoints);
+    cJSON_AddNumberToObject(result, "inflateRestores", (double)stats.inflate_restores);
+    return result;
 }
 static cJSON *browse_media(Context *c, const char *input)
 {
@@ -141,6 +177,7 @@ static cJSON *browse_media(Context *c, const char *input)
         cJSON_AddItemToArray(entries, entry);
         free(child);
     }
+    cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
     tb_media_entries_free(items, count);
     if (c->error)
     {
@@ -217,7 +254,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
     SupportFile files[SUPPORT_COUNT] = {{0}};
     unsigned visited = 0;
     /* A work queue handles mixed nesting without a recursion-depth limit. */
-    for (int at = 0; at < cJSON_GetArraySize(queue) && !c->error; at++)
+    for (const cJSON *node = queue->child; node && !c->error; node = node->next)
     {
         if (++visited > 100000u)
         {
@@ -225,7 +262,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
                  "Media search exceeded 100000 entries. Browse to a smaller folder and try again.");
             break;
         }
-        const char *input = str(cJSON_GetArrayItem(queue, at));
+        const char *input = str(node);
         if (!tb_media_path(input) && tb_is_dir(input))
         {
             size_t count = 0;
@@ -294,7 +331,7 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
         {
             if (!tb_media_container(input))
             {
-                if (at < cJSON_GetArraySize(sources))
+                if (visited <= (unsigned)cJSON_GetArraySize(sources))
                     fail(c, "Cannot read selected installation media or archive: %s", input);
                 continue;
             }

@@ -2078,6 +2078,11 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "RegDeleteKey": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "RegEnumValue": {
       "argument_bytes": 32,
       "callee_pop": 0,

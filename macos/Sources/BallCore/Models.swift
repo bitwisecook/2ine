@@ -215,6 +215,12 @@ public struct DependencyAudit: Decodable, Sendable {
 }
 
 public struct OS2SupportStatus: Decodable, Sendable {
+    public struct SkippedFile: Decodable, Sendable, Identifiable {
+        public let path: String
+        public let source: String
+        public let reason: String
+        public var id: String { path + source }
+    }
     public struct File: Decodable, Sendable, Identifiable {
         public let name: String
         public let path: String
@@ -230,6 +236,8 @@ public struct OS2SupportStatus: Decodable, Sendable {
     public let complete: Bool
     public let rexxComplete: Bool?
     public let imported: [Imported]?
+    public let mediaSources: [String]?
+    public let skippedFiles: [SkippedFile]?
     public var missing: String { files.filter { !$0.present && $0.required != false }.map(\.name).joined(separator: ", ") }
 }
 public struct MediaDirectory: Decodable, Sendable {
@@ -303,6 +311,10 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
     }
     public let files: [File]
     public let unmapped: [String]
+    public var installedCategories: Set<OS2ExtractionCategory> {
+        let present = Set(files.filter { !$0.provided && $0.present && $0.category != .full }.map(\.category))
+        return Set(present.filter { selectedFiles([$0]).isEmpty })
+    }
     public func selectedFiles(_ categories: Set<OS2ExtractionCategory>) -> [File] {
         let eligible = files.filter { $0.selected(by: categories) }
         let priorities = Dictionary(grouping: eligible, by: { $0.path.uppercased() }).mapValues { $0.map { $0.priority ?? 1 }.max() ?? 1 }

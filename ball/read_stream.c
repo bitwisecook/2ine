@@ -16,6 +16,10 @@ struct TbReadStream
     void *context;
     TbReadAt read;
     TbReadClose close;
+    TbReadBudget *budget;
+    size_t cache_bytes, index_bytes;
+    void *index;
+    TbReadClose index_close;
 };
 TbReadStream *tb_stream_create(uint64_t size, void *context, TbReadAt read, TbReadClose close)
 {
@@ -35,10 +39,78 @@ void tb_stream_close(TbReadStream *stream)
 {
     if (stream && !--stream->references)
     {
+        if (stream->index_close)
+            stream->index_close(stream->index);
         if (stream->close)
             stream->close(stream->context);
+        if (stream->budget)
+            stream->budget->used -= stream->cache_bytes + stream->index_bytes;
         free(stream);
     }
+}
+void tb_stream_set_budget(TbReadStream *stream, TbReadBudget *budget)
+{
+    if (stream)
+        stream->budget = budget;
+}
+void tb_stream_inherit_budget(TbReadStream *stream, TbReadStream *parent)
+{
+    tb_stream_set_budget(stream, parent->budget);
+}
+int tb_stream_cache_resize(TbReadStream *stream, size_t bytes)
+{
+    if (stream->budget)
+    {
+        TbReadBudget *budget = stream->budget;
+        if (bytes > stream->cache_bytes &&
+            bytes - stream->cache_bytes > budget->limit - budget->used)
+        {
+            errno = ENOMEM;
+            return 0;
+        }
+        budget->used -= stream->cache_bytes;
+        budget->used += bytes;
+    }
+    stream->cache_bytes = bytes;
+    return 1;
+}
+size_t tb_stream_cache_size(TbReadStream *stream)
+{
+    return stream->cache_bytes;
+}
+void *tb_stream_index(TbReadStream *stream)
+{
+    return stream->index;
+}
+int tb_stream_set_index(TbReadStream *stream, void *index, size_t bytes, TbReadClose close)
+{
+    if (stream->index || (stream->budget && bytes > stream->budget->limit - stream->budget->used))
+    {
+        errno = ENOMEM;
+        return 0;
+    }
+    stream->index = index;
+    stream->index_bytes = bytes;
+    stream->index_close = close;
+    if (stream->budget)
+        stream->budget->used += bytes;
+    return 1;
+}
+int tb_stream_index_resize(TbReadStream *stream, size_t bytes)
+{
+    if (stream->budget)
+    {
+        TbReadBudget *budget = stream->budget;
+        if (bytes > stream->index_bytes &&
+            bytes - stream->index_bytes > budget->limit - budget->used)
+        {
+            errno = ENOMEM;
+            return 0;
+        }
+        budget->used = budget->used - stream->index_bytes + bytes;
+    }
+    stream->index_bytes = bytes;
+    return 1;
 }
 uint64_t tb_stream_size(const TbReadStream *stream)
 {
@@ -165,6 +237,7 @@ TbReadStream *tb_stream_slice(TbReadStream *parent, uint64_t offset, uint64_t si
         return NULL;
     *slice = (SliceStream){tb_stream_retain(parent), offset};
     TbReadStream *stream = tb_stream_create(size, slice, slice_read, slice_close);
+    tb_stream_inherit_budget(stream, parent);
     if (!stream)
         slice_close(slice);
     return stream;

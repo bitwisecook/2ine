@@ -170,7 +170,27 @@ def run(args, ball, data):
     for key in plan["unsetEnvironment"]:
         env.pop(key, None)
     env.update(plan["environment"])
-    result = subprocess.run(plan["command"], cwd=Path(plan["cwd"]), env=env)
+    services = []
+    try:
+        for startup in plan.get("startup", []):
+            service_env = dict(os.environ)
+            for key in startup["unsetEnvironment"]:
+                service_env.pop(key, None)
+            service_env.update(startup["environment"])
+            services.append(
+                subprocess.Popen(
+                    startup["command"],
+                    cwd=startup["cwd"],
+                    env=service_env,
+                    stdin=subprocess.DEVNULL,
+                )
+            )
+        result = subprocess.run(plan["command"], cwd=Path(plan["cwd"]), env=env)
+    finally:
+        for service in services:
+            if service.poll() is None:
+                service.kill()
+            service.wait()
     if plan["installer"]:
         native_request(
             {

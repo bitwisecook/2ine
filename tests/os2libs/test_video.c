@@ -104,6 +104,11 @@ static void renderer_contracts(const char *path)
     CHECK(lx_host_video_initialize(&width, &height));
     LxHostWindow *resized = lx_host_window_create("Retained resize", 0, 0, 30, 20, NULL);
     CHECK(resized);
+    uint32_t initial[30 * 20];
+    LxHostRect initial_bounds = {0, 0, 30, 20};
+    CHECK(lx_host_window_read(resized, &initial_bounds, initial));
+    for (unsigned i = 0; i < 30 * 20; i++)
+        CHECK(initial[i] == 0);
     CHECK(lx_host_window_position(resized, 0, 0, 30, 20));
     for (unsigned pass = 0; pass < 3; pass++)
     {

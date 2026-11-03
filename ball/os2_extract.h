@@ -9,16 +9,6 @@ static int extract_category(const char *name)
             return i;
     return -1;
 }
-static cJSON *extraction_read_stats(void)
-{
-    TbMediaReadStats stats = tb_media_read_stats();
-    cJSON *result = cJSON_CreateObject();
-    cJSON_AddNumberToObject(result, "decompressedBytes", (double)stats.decompressed_bytes);
-    cJSON_AddNumberToObject(result, "peakCacheBytes", (double)stats.peak_cache_bytes);
-    cJSON_AddNumberToObject(result, "directSlices", (double)stats.direct_slices);
-    cJSON_AddNumberToObject(result, "materializedFiles", (double)stats.materialized_files);
-    return result;
-}
 static int extract_extension(const char *name, const char *extension)
 {
     const char *dot = strrchr(name, '.');
@@ -104,14 +94,17 @@ static cJSON *open_os2_source(Context *c, const cJSON *request)
     const cJSON *source;
     cJSON_ArrayForEach(source, sources)
         extract_queue(queue, str(source), "", extract_directory(str(source)), 0);
-    for (int at = 0; at < cJSON_GetArraySize(queue) && !c->error; at++)
+    int at = 0;
+    int selected_sources = cJSON_GetArraySize(sources);
+    /* Children are appended while walking. Advancing the linked list visits
+       those additions without rescanning the entire queue for each file. */
+    for (const cJSON *node = queue->child; node && !c->error; node = node->next, at++)
     {
         if (at >= 100000)
         {
             fail(c, "Media search exceeded 100000 entries. Choose a smaller source.");
             break;
         }
-        cJSON *node = cJSON_GetArrayItem(queue, at);
         const char *path = field(node, "source");
         char *name = keep(c, tb_media_member_name(path));
         if (name && extract_extension(name, ".iso"))
@@ -119,9 +112,10 @@ static cJSON *open_os2_source(Context *c, const cJSON *request)
             cJSON_AddItemToArray(detected, cJSON_CreateString(path));
             continue;
         }
-        /* Folder selection stays at the chosen folder. Archive directories are
-           searched for disc images, without descending into the images. */
-        if (!tb_media_path(path) && tb_is_dir(path))
+        /* Explicit folders, including remembered folders inside an ISO, stay
+           at that folder. Discovered archive directories are searched for ISOs. */
+        if ((!tb_media_path(path) && tb_is_dir(path)) ||
+            (at < selected_sources && name && *name && cJSON_IsTrue(get(node, "directory"))))
             continue;
         if (cJSON_IsTrue(get(node, "directory")))
             extract_children(c, queue, path, "");
@@ -421,14 +415,14 @@ static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
         if (name)
             extract_queue(queue, str(source), name, extract_directory(str(source)), 0);
     }
-    for (int at = 0; at < cJSON_GetArraySize(queue) && !c->error; at++)
+    int at = 0;
+    for (const cJSON *node = queue->child; node && !c->error; node = node->next, at++)
     {
         if (at >= 100000)
         {
             fail(c, "Media search exceeded 100000 entries. Browse to a smaller source.");
             break;
         }
-        const cJSON *node = cJSON_GetArrayItem(queue, at);
         const char *path = field(node, "source"), *layout = field(node, "layout");
         if (!tb_media_path(path) && tb_is_link(path))
         {
@@ -564,6 +558,7 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     char *workspace = keep(c, tb_archive_workspace(c->ball));
     cJSON *staged = cJSON_CreateObject(), *imported = cJSON_CreateArray(), *file;
     cJSON *priorities = cJSON_CreateObject();
+    cJSON *skipped = cJSON_CreateArray();
     cJSON *ambiguous = cJSON_CreateObject(), *variants = cJSON_CreateArray();
     cJSON_ArrayForEach(file, get(plan, "files"))
     {
@@ -599,9 +594,27 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         FILE *input = tb_media_path(source) ? tb_media_fopen(source) : tb_fopen(source, "rb");
         if (!input || fseek(input, 0, SEEK_END))
         {
+            int reason = errno;
             if (input)
                 fclose(input);
-            fail(c, "Cannot read %s", destination);
+            if (index == 1 && !modules &&
+                (reason == EILSEQ || reason == EINVAL || reason == EIO || reason == ENOTSUP))
+            {
+                cJSON *warning = cJSON_CreateObject();
+                cJSON_AddStringToObject(warning, "path", destination);
+                char *label = tb_media_label(source);
+                cJSON_AddStringToObject(warning, "source", label ? label : source);
+                free(label);
+                cJSON_AddStringToObject(
+                    warning, "reason",
+                    reason == EILSEQ ? "The source archive failed its size or CRC integrity check."
+                                     : "The source font could not be read or decompressed.");
+                cJSON_AddItemToArray(skipped, warning);
+                continue;
+            }
+            fail(c, "Cannot read %s from the selected media: %s", destination,
+                 reason == EILSEQ ? "archive size or CRC integrity check failed"
+                                  : strerror(reason));
             break;
         }
         long size = ftell(input);
@@ -737,6 +750,7 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     {
         cJSON_Delete(imported);
         cJSON_Delete(variants);
+        cJSON_Delete(skipped);
         return NULL;
     }
     int remembered = 1;
@@ -752,6 +766,7 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     {
         cJSON_Delete(imported);
         cJSON_Delete(variants);
+        cJSON_Delete(skipped);
         return NULL;
     }
     char *variant_log = NULL;
@@ -776,6 +791,7 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         {
             cJSON_Delete(imported);
             cJSON_Delete(variants);
+            cJSON_Delete(skipped);
             return NULL;
         }
     }
@@ -784,6 +800,8 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     {
         cJSON_AddItemToObject(result, "imported", imported);
         cJSON_AddItemToObject(result, "preservedVariants", variants);
+        cJSON_AddItemToObject(result, "skippedFiles", skipped);
+        cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
         if (variant_log)
             cJSON_AddStringToObject(result, "variantManifestPath", variant_log);
     }
@@ -791,6 +809,7 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     {
         cJSON_Delete(imported);
         cJSON_Delete(variants);
+        cJSON_Delete(skipped);
     }
     return result;
 }

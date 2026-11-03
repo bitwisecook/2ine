@@ -28,6 +28,7 @@ Open32DC *open32FindDC(ULONG handle);
 ULONG open32CreatePrinterContext(unsigned kind, BOOL information);
 BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode);
 BOOL open32CanDraw(ULONG handle);
+BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop);
 LONG open32DCHeight(ULONG handle);
 LONG open32DCWidth(ULONG handle);
 ULONG open32SelectFont(Open32DC *dc, ULONG handle);

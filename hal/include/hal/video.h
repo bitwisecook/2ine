@@ -45,7 +45,8 @@ typedef enum LxHostEventType
     LX_HOST_EVENT_FOCUS_LOST,
     LX_HOST_EVENT_INPUT_RESET,
     LX_HOST_EVENT_MINIMIZED,
-    LX_HOST_EVENT_RESTORED
+    LX_HOST_EVENT_RESTORED,
+    LX_HOST_EVENT_MOVED
 } LxHostEventType;
 typedef enum
 {

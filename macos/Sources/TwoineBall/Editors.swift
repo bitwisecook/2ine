@@ -67,9 +67,9 @@ struct ProgramSheet: View {
                                             Text(support.complete ? "OS/2 support files are installed." : "Missing: " + support.missing)
                                                 .accessibilityIdentifier("os2SupportStatus")
                                         }
-                                        Button("Choose OS/2 ISO or Archive…") {
-                                            if let sources = model.pickOS2Media(), let ball = model.selected {
-                                                supportRequest = OS2ImportRequest(ball: ball, sources: sources)
+                                        Button("Install Components…") {
+                                            if let ball = model.selected {
+                                                supportRequest = OS2ImportRequest(ball: ball)
                                             }
                                         }.accessibilityIdentifier("installOS2Support")
                                     }

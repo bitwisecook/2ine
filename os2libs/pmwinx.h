@@ -623,6 +623,8 @@ extern "C"
     OS2EXPORT LONG OS2API MulDiv(LONG number, LONG numerator, LONG denominator)
         OS2APIINFO(ord = 494, name = MULDIV);
     OS2EXPORT LONG OS2API RegCloseKey(ULONG key) OS2APIINFO(ord = 541, name = REGCLOSEKEY);
+    OS2EXPORT LONG OS2API RegDeleteKey(ULONG key, PSZ name)
+        OS2APIINFO(ord = 544, name = REGDELETEKEY);
     OS2EXPORT LONG OS2API RegOpenKey(ULONG key, PSZ name, PULONG output)
         OS2APIINFO(ord = 549, name = REGOPENKEY);
     OS2EXPORT LONG OS2API RegOpenKeyEx(ULONG key, PSZ name, ULONG options, ULONG access,

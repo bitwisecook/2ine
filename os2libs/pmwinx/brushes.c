@@ -20,7 +20,10 @@ static void free_brush(void *resource)
 }
 ULONG CreateSolidBrush(ULONG color)
 {
-    if (color & 0xFF000000)
+    TRACE_NATIVE("CreateSolidBrush(%08X)", (uint)color);
+    /* PALETTERGB is ordinary RGB on our true-color display. Retain the
+       specifier in LOGBRUSH; raster conversion already uses its RGB bytes. */
+    if ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u)
     {
         open32SetError(87);
         return 0;

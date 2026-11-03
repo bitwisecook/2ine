@@ -16,6 +16,8 @@ typedef struct Open32Window
     ULONG mdi_menu, mdi_next_id, mdi_active, system_menu;
     uint8 *extra;
     LONG x, y, width, height;
+    LONG mdi_normal_x, mdi_normal_y, mdi_normal_width, mdi_normal_height;
+    BOOL mdi_normal_valid;
     char *title;
     LxGuestMapping *creation;
     struct Open32Property *properties;
@@ -30,5 +32,6 @@ Open32Window *open32FindWindow(ULONG handle);
 ULONG open32ClientWindow(ULONG handle);
 ULONG open32PublicWindow(ULONG handle);
 ULONG open32WindowCallback(Open32Window *window, ULONG message, ULONG first, ULONG second);
+BOOL open32ShowMdiChild(Open32Window *window, LONG command);
 void open32PropertiesCleanup(Open32Window *window);
 #endif

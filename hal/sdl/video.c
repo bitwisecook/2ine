@@ -275,7 +275,10 @@ LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, 
         goto failed;
     window->texture = SDL_CreateTexture(window->renderer, SDL_PIXELFORMAT_RGBA8888,
                                         SDL_TEXTUREACCESS_TARGET, width, height);
-    if (!window->texture || !SDL_SetRenderTarget(window->renderer, window->texture))
+    if (!window->texture || !SDL_SetRenderTarget(window->renderer, window->texture) ||
+        !SDL_SetTextureBlendMode(window->texture, SDL_BLENDMODE_NONE) ||
+        !SDL_SetRenderDrawColor(window->renderer, 0, 0, 0, 255) ||
+        !SDL_RenderClear(window->renderer))
         goto failed;
     SDL_StartTextInput(window->window);
     SDL_SetWindowPosition(window->window, x, y);
@@ -633,7 +636,16 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
                                                                     "2ine.window", NULL)
                                            : NULL;
                 if (window)
+                {
                     window->dirty = 1;
+                    if (!window->fullscreen && !window->restoring)
+                    {
+                        event->type = LX_HOST_EVENT_MOVED;
+                        SDL_GetWindowPosition(moved, &window->x, &window->y);
+                        event->x = window->x;
+                        event->y = window->y;
+                    }
+                }
             }
             break;
         case SDL_EVENT_WINDOW_EXPOSED:

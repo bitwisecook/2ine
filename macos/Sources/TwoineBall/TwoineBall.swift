@@ -148,7 +148,7 @@ struct BallCommands: Commands {
                 .disabled(model.snapshot?.manifest.runtime["build"] == nil || model.busy || model.mediaBusy)
             Button("Refresh") { model.refresh() }.keyboardShortcut("r").disabled(model.busy || model.mediaBusy)
             Divider()
-            Button("Install OS/2 Files…") { model.installOS2SupportFromPicker() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+            Button("Install Components…") { model.installComponents() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Check and Restore System Libraries…") { model.auditDependencies() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Install Software…") { model.beginProgram(.install) }.keyboardShortcut("i").disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Run Executable…") { model.beginProgram(.run) }.keyboardShortcut("r", modifiers: [.command, .option]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)

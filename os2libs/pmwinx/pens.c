@@ -12,7 +12,9 @@ typedef struct Open32Pen
 } Open32Pen;
 ULONG CreatePen(LONG style, LONG width, ULONG color)
 {
-    if (style < 0 || style > 6 || width < 0 || width > 512 || (color & 0xFF000000u))
+    TRACE_NATIVE("CreatePen(%d, %d, %08X)", (int)style, (int)width, (uint)color);
+    if (style < 0 || style > 6 || width < 0 || width > 512 ||
+        ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
     {
         open32SetError(87);
         return 0;

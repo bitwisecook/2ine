@@ -1,5 +1,10 @@
 # Lotus 1-2-3 original SOM startup
 
+The original startup-only investigation below is followed by the 2026-11-03
+interactive editing verification. That follow-up modifies the real Lotus ball
+with the user's authorization; the earlier isolated-run limitations describe
+the earlier investigation only.
+
 ## Scope and selected inputs
 
 User-reported 123W.EXE startup failed through LTOLEO20 -> LTSIO40 -> MAIN123W after an absent SOMD runtime, followed by an unmapped guest instruction fetch. The real Documents/Lotus.2ineball was inspected read-only; all execution and supplied-DLL staging used isolated ball copies.
@@ -56,3 +61,73 @@ TWOINE_BALL_LIBRARY="$PWD/build-ball-engine/libtwoine_ball.dylib" python3 tests/
 Pass: creates its named 1-2-3 frame and enters WinGetMsg without missing imports, failed dependencies or guest CPU faults. `build-lotus-123-original2` retains hashes, prepared launch plan, stdout/stderr and result.json. The harness detaches all non-C drive mappings and uses an isolated copied C drive. It makes no UI/license choices and deliberately terminates after that startup checkpoint. Its return 84 is the post-stop process status, not an application success code. A first harness version incorrectly waited for TEMP_SOMD_WIN, which occurs during cleanup; that false checkpoint was removed. Original cleanup after our stop logs DosExit(1,30036); a clean interactive application exit remains unverified.
 
 Full spreadsheet operations, OLE/DSOM servers, printer use, native i386 and interactive clean exit are not claimed. The real user ball and installed app bundle were not modified. No original DLL or Lotus binary is included in source changes.
+
+## 2026-11-03: editing and repaint verification
+
+Restored the eight genuine IBM SOM DLLs plus SOMDD, SOMDSVR, the SOM repository,
+messages and DSOM configuration from the user's remembered Warp 4.52 ISO into
+`Documents/Lotus.2ineball`. These original binaries remain outside the repository.
+Opening a workbook without SOMDD stalls in `DosOpenQueue` for the DSOM endpoint;
+starting the original service resolves that wait. The saved `Lotus 1-2-3`
+application now launches `C:\LOTUSW4\123\123W.EXE` from `C:\LOTUSW4`.
+The ball's `startupPrograms` record starts the original `C:\OS2\SOMDD.EXE`
+from `C:\OS2`, prepending `C:\OS2\ETC\SOM.IR` to the service's SOMIR.
+
+The C engine prepares independent, nonrecursive startup plans. Both the macOS
+backend and Python CLI own those processes and reap them when the main program
+ends, including unsuccessful exits. The macOS backend rejects a concurrent
+launch before starting another set of services. No global background service
+or machine startup item is installed.
+
+Concrete rendering fixes established during this run:
+
+- Accept PALETTERGB brushes, pens, foreground and background colours on a true
+  colour drawable. This restores the gray grid, headers and cell cursor.
+- Convert monochrome mask transfers using the source background colour or
+  destination foreground/background colours before applying the raster operation.
+  The green button backgrounds disappear.
+- Initialize new retained host textures to opaque black, with presentation
+  blending disabled, so unpainted pixels cannot expose arbitrary texture data.
+- Maximize an MDI child within its MDICLIENT instead of asking native PM to
+  maximize a non-frame window. Scrollbars now fill the workbook area.
+- Preserve Windows top edges while resizing over PM's bottom-left origin,
+  including the positions of Windows children when their parent changes height.
+  The toolbar was at PM y=456 with height=23 inside a height=456 parent, so its
+  entire paint was clipped. It now sits at y=433, and its address/formula controls
+  retain their top-left positions. The black strip and invisible address text
+  are gone.
+- Permit a submenu to be inserted into a replacement menu while retaining
+  explicit cycle checks. Forward native frame messages to the Windows client
+  even after the frame is subclassed. This restores headings and the lazy
+  initialization callback that fills the drop-downs.
+- Translate actual host move events into guest window positions. Popup placement
+  no longer uses the pre-drag position. The coordinate mapping has a native
+  regression check; exact popup decoration alignment still needs visual review.
+
+Through CUA, edited `C:\LOTUSW4\WORK\123\2ine-Edit-Test.123`, created B1's
+`+A1*2` formula, changed A1 from 2 to 3 and observed B1 recalculate from 4 to 6.
+Saved with Ctrl+S. A cold process, started through the real CLI's saved launcher
+and owned-service path, reopened A1=3, B1=6 and displayed `+A1*2` in the formula
+bar. The 3460-byte saved workbook has SHA-256
+`560946d43983d8c0c76a17cc366a30b207f13c1e4d0c9ce7157d12bd84e36cda`.
+Its private display wrapper only identifies the test window; runtime libraries
+come from the freshly prepared ball snapshot, verified with loaded-file hashes.
+
+Focused `open32_apis`, `pm_visible_regions` and `digital_video` tests pass.
+The guest tests cover palette-relative pixels, both mask conversion directions,
+MDI maximize/restore, top-edge and child-position preservation, shared submenu
+insertion and cycle rejection. The native tests cover initial texture contents
+and coordinate mapping after host moves. Nineteen ball engine/desktop Python
+tests pass. The macOS service ownership test observes a running helper, lets the
+main mock process return a failure code, and verifies the helper no longer exists.
+Both macOS test targets also pass (46 tests total).
+
+Evidence and build logs are retained under ignored
+`build-123-edit-verification/`. The final real CLI test's main PID 37715 was
+force-stopped after verification; its owner automatically reaped SOMDD PID 37714,
+and both were checked absent. This follows the user's instruction to kill test
+apps when finished. The earlier PID 29733 report is an original guest worker's
+unmapped-read abort during SIGTERM cleanup. Clean interactive guest shutdown,
+complete native/MDI title decorations, printing and general OLE workflows remain
+unverified; this run establishes editing, recalculation, persistence and the
+specific rendering fixes above.

@@ -416,9 +416,23 @@ def registry_enumeration(checked):
         g.result(87, 24)
         g.call(2, 547, (parent,), 0, name, length, 0, 0, 0, 0xDEADBEEF)
         g.result(87, 25)
+    g.call(2, 544, (parent,), child_name)
+    g.result(5, 27)  # A non-leaf key cannot be deleted.
+    g.call(2, 544, (restricted,), child_name)
+    g.result(5, 28)
+    g.call(2, 544, (child,), grand_name)
+    g.result(0, 29)
+    g.call(2, 549, (child,), grand_name, grand)
+    g.result(2, 30)
+    g.call(2, 544, (child,), grand_name)
+    g.result(2, 31)
+    g.call(2, 544, (parent,), child_name)
+    g.result(0, 32)
     for handle in (restricted, grand, child, parent):
         g.call(2, 541, (handle,))
         g.result(0, 26)
+    g.call(2, 544, 0x80000001, parent_name)
+    g.result(0, 33)
     g.exit(0)
     return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX"], "REGENUM", data=g.data)
 

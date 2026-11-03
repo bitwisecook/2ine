@@ -323,3 +323,29 @@ private func waitForOperation(_ model: AppModel) async throws {
     let saved = try await model.saveConfiguration("registry", ball: ball, revision: profile.revision, application: "hkcu\\software\\fixture", key: "v:test", data: "0400000001000000")
     #expect(saved.entries.contains { $0.key == "v:test" && $0.registryType == 4 })
 }
+
+@Test @MainActor func componentInstallationReusesMediaAndMarksInstalledComponents() async throws {
+    let (model, root) = try fixture()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let ball = try #require(model.selected)
+    let media = root.appending(path: "Original OS2")
+    try FileManager.default.createDirectory(at: media.appending(path: "OS2/HELP"), withIntermediateDirectories: true)
+    try Data("original Help".utf8).write(to: media.appending(path: "OS2/HELP/BOOK.HLP"))
+    try await model.rememberOS2Media([media.path], ball: ball)
+    let status = try await model.os2Support()
+    #expect(status.mediaSources == [media.path])
+    model.installComponents()
+    let request = try #require(model.supportImport)
+    #expect(request.ball == ball)
+    #expect(request.categories == OS2ExtractionCategory.defaults)
+    let sources = try #require(status.mediaSources)
+    let plan = try await model.planOS2Extraction(sources, ball: ball)
+    #expect(plan.selectedFiles([.help]).count == 1)
+    let imported = try await model.installOS2Support(sources, categories: [.help], ball: ball)
+    #expect(imported.imported?.count == 1)
+    #expect(!imported.complete)
+    let installed = try await model.planOS2Extraction(sources, ball: ball)
+    #expect(installed.installedCategories == [.help])
+    #expect(installed.selectedFiles([.help]).isEmpty)
+    #expect(try Data(contentsOf: URL(filePath: ball).appending(path: "drive_c/OS2/HELP/BOOK.HLP")) == Data("original Help".utf8))
+}

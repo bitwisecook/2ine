@@ -1657,6 +1657,63 @@ static cJSON *prepare(Context *c, const cJSON *request)
         }
     }
     cJSON_AddBoolToObject(result, "installer", !strcmp(action, "install"));
+    cJSON *startup = cJSON_AddArrayToObject(result, "startup");
+    cJSON *services = get(c->manifest, "startupPrograms");
+    if (!cJSON_IsFalse(get(request, "includeStartup")) && services)
+    {
+        if (!cJSON_IsArray(services) || cJSON_GetArraySize(services) > 16)
+        {
+            fail(c, "startupPrograms must contain at most 16 application records");
+            cJSON_Delete(result);
+            goto failed;
+        }
+        cJSON *service;
+        cJSON_ArrayForEach(service, services)
+        {
+            const char *path = field(service, "program");
+            if (!path || !*path || !cJSON_IsObject(service))
+            {
+                fail(c, "A startup program needs an executable path");
+                cJSON_Delete(result);
+                goto failed;
+            }
+            if (equal_case(path, program))
+                continue;
+            cJSON *launch = cJSON_Duplicate(service, 1);
+            cJSON *arguments = cJSON_CreateArray();
+            cJSON_AddItemToArray(arguments, cJSON_CreateString("run"));
+            const char *directory = field(service, "cwd");
+            if (directory && *directory)
+            {
+                cJSON_AddItemToArray(arguments, cJSON_CreateString("--cwd"));
+                cJSON_AddItemToArray(arguments, cJSON_CreateString(directory));
+            }
+            cJSON_AddItemToArray(arguments, cJSON_CreateString(path));
+            cJSON *extra = get(service, "arguments");
+            if (extra && !array_strings(c, extra))
+            {
+                cJSON_Delete(arguments);
+                cJSON_Delete(launch);
+                cJSON_Delete(result);
+                goto failed;
+            }
+            cJSON_ArrayForEach(a, extra) cJSON_AddItemToArray(arguments, cJSON_Duplicate(a, 1));
+            put(launch, "arguments", arguments);
+            put(launch, "includeStartup", cJSON_CreateFalse());
+            put(launch, "build", cJSON_CreateString(build));
+            put(launch, "backend", cJSON_CreateString(backend));
+            const cJSON *application = c->application;
+            cJSON *prepared = prepare(c, launch);
+            c->application = application;
+            cJSON_Delete(launch);
+            if (!prepared)
+            {
+                cJSON_Delete(result);
+                goto failed;
+            }
+            cJSON_AddItemToArray(startup, prepared);
+        }
+    }
     cJSON_Delete(argv);
     return result;
 failed:
@@ -2650,6 +2707,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return export_ball(c, request);
     if (!strcmp(action, "os2-support"))
         return os2_support(c);
+    if (!strcmp(action, "remember-os2-media"))
+        return remember_os2_media(c, request);
     if (!strcmp(action, "browse-media"))
         return browse_media(c, field(request, "path"));
     if (!strcmp(action, "open-os2-source"))

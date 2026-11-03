@@ -142,6 +142,38 @@ class WorkspaceTests(unittest.TestCase):
     def request(self, action, **fields):
         return ball_api.native_request({"action": action, "ball": str(self.ball), **fields})
 
+    def test_startup_programs_have_independent_checked_launch_plans(self):
+        (self.drive / "OS2/SERVICE.EXE").write_bytes(b"service")
+        data = ball_api.load(self.ball)
+        data["startupPrograms"] = [
+            {
+                "program": r"C:\OS2\SERVICE.EXE",
+                "cwd": r"C:\OS2",
+                "arguments": ["a b"],
+                "environment": {"SERVICE": "yes"},
+            }
+        ]
+        ball_api.save(self.ball / "ball.json", data)
+        plan = self.request(
+            "prepare-launch", build=str(self.build), arguments=["run", r"C:\OS2\DOOM.EXE"]
+        )
+        self.assertEqual(len(plan["startup"]), 1)
+        service = plan["startup"][0]
+        self.assertEqual(service["command"][1:], [r"C:\OS2\SERVICE.EXE", "a b"])
+        self.assertEqual(service["cwd"], str(self.drive / "OS2"))
+        self.assertEqual(service["environment"]["SERVICE"], "yes")
+        self.assertNotIn("SERVICE", plan["environment"])
+        self.assertEqual(service["startup"], [])
+        direct = self.request(
+            "prepare-launch", build=str(self.build), arguments=["run", r"C:\OS2\SERVICE.EXE"]
+        )
+        self.assertEqual(direct["startup"], [])
+        (self.drive / "OS2/SERVICE.EXE").unlink()
+        with self.assertRaisesRegex(ValueError, "Program does not exist"):
+            self.request(
+                "prepare-launch", build=str(self.build), arguments=["run", r"C:\OS2\DOOM.EXE"]
+            )
+
     def test_drive_defaults_relative_paths_and_override_inheritance(self):
         self.request("set-working-directory", path="C:\\OS2")
         (self.media / "INSTALL").mkdir()

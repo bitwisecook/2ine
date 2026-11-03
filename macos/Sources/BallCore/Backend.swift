@@ -70,12 +70,14 @@ private struct LaunchPlan: Decodable, Sendable {
     let programHost: String
     let receipt: JSONValue
     let installer: Bool
+    let startup: [LaunchPlan]?
 }
 
 /// All synchronous C filesystem/hash work runs on this actor, off MainActor.
 /// C results are copied into Sendable Swift values before freeing C storage.
 public actor BallBackend {
     private let runner = ProcessRunner()
+    private var executing = false
     public init() {}
 
     public func stop(force: Bool = false) async { await runner.stop(force: force) }
@@ -87,6 +89,9 @@ public actor BallBackend {
     public func execute(ball: String, build: String, arguments: [String],
                         workingDirectories: [String: String]? = nil, environment overrides: [String: String]? = nil,
                         update: @Sendable (String) async -> Void) async throws -> ProcessResult {
+        guard !executing else { throw BallError("Wait for the current operation to finish.") }
+        executing = true
+        defer { executing = false }
         var message = DesktopRequest("prepare-launch", ball: ball, build: build, arguments: arguments)
         message.workingDirectories = workingDirectories; message.environment = overrides
         let plan = try request(message, as: LaunchPlan.self)
@@ -96,6 +101,35 @@ public actor BallBackend {
         environment.merge(plan.environment) { _, value in value }
         if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
         let log = URL(filePath: ball).appending(path: "logs/macos-\(UUID().uuidString).log")
+        var services: [Process] = []
+        defer {
+            // These services belong to this launch, including on cancellation
+            // or a failed main executable. Never leave detached helpers behind.
+            for service in services where service.isRunning {
+                kill(service.processIdentifier, SIGKILL)
+                service.waitUntilExit()
+            }
+        }
+        for (index, startup) in (plan.startup ?? []).enumerated() {
+            guard let executable = startup.command.first else { throw BallError("A startup program has an empty command.") }
+            let service = Process()
+            service.executableURL = URL(filePath: executable)
+            service.arguments = Array(startup.command.dropFirst())
+            var serviceEnvironment = ProcessInfo.processInfo.environment
+            for key in startup.unsetEnvironment { serviceEnvironment.removeValue(forKey: key) }
+            serviceEnvironment.merge(startup.environment) { _, value in value }
+            service.environment = serviceEnvironment
+            service.currentDirectoryURL = URL(filePath: startup.cwd)
+            let serviceLog = log.deletingPathExtension().appendingPathExtension("startup-\(index).log")
+            try FileManager.default.createDirectory(at: serviceLog.deletingLastPathComponent(), withIntermediateDirectories: true)
+            guard FileManager.default.createFile(atPath: serviceLog.path, contents: nil) else { throw BallError("Cannot create startup program log.") }
+            let output = try FileHandle(forWritingTo: serviceLog)
+            service.standardOutput = output; service.standardError = output
+            service.standardInput = FileHandle.nullDevice
+            defer { try? output.close() }
+            try service.run()
+            services.append(service)
+        }
         var result = try await runner.run(executable: URL(filePath: executable), arguments: Array(plan.command.dropFirst()), environment: environment, cwd: URL(filePath: plan.cwd), log: log, update: update)
         if plan.installer {
             do {

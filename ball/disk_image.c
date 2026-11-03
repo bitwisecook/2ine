@@ -38,6 +38,7 @@ typedef struct Node
 } Node;
 typedef struct Disk
 {
+    struct ImageIndex *index;
     FILE *file;
     TbReadStream *stream;
     unsigned char *memory;
@@ -607,7 +608,7 @@ static int safe_name(const char *name)
 {
     return *name && strcmp(name, ".") && strcmp(name, "..") && !strpbrk(name, "/\\:");
 }
-static int entries(Disk *d, Node directory, EntryCallback callback, void *context)
+static int read_entries(Disk *d, Node directory, EntryCallback callback, void *context)
 {
     if (!directory.directory)
         return failure(ENOTDIR);
@@ -767,6 +768,7 @@ static int entries(Disk *d, Node directory, EntryCallback callback, void *contex
     free(data);
     return ok;
 }
+#include "image_index.h"
 typedef struct Find
 {
     const char *name;
@@ -1222,10 +1224,30 @@ static int stream_entry(void *opaque, const char *name, const Node *node)
 }
 static int reader_disk(TbReadStream *stream, Disk *disk)
 {
+    ImageIndex *index = tb_stream_index(stream);
+    if (index)
+    {
+        *disk = index->disk;
+        return 1;
+    }
     memset(disk, 0, sizeof *disk);
     disk->stream = stream;
     disk->bytes = tb_stream_size(stream);
-    return identify(disk);
+    if (!identify(disk))
+        return 0;
+    index = calloc(1, sizeof *index);
+    if (index)
+    {
+        index->bytes = sizeof *index + disk->fat_size;
+        if (tb_stream_set_index(stream, index, index->bytes, image_index_free))
+        {
+            disk->index = index;
+            index->disk = *disk;
+        }
+        else
+            free(index);
+    }
+    return 1;
 }
 static int disk_walk(Disk *disk, TbImageVisitor visitor, void *context)
 {
@@ -1259,12 +1281,39 @@ int tb_image_reader_walk(TbReadStream *stream, TbImageVisitor visitor, void *con
     Disk disk;
     if (!reader_disk(stream, &disk))
     {
-        free(disk.fat);
+        if (!disk.index)
+            free(disk.fat);
         return 0;
     }
     int result = disk_walk(&disk, visitor, context);
-    free(disk.fat);
+    if (!disk.index)
+        free(disk.fat);
     return result;
+}
+int tb_image_reader_list(TbReadStream *stream, const char *member, TbImageVisitor visitor,
+                         void *context)
+{
+    Disk disk;
+    Node node;
+    if (!reader_disk(stream, &disk))
+    {
+        free(disk.fat);
+        return 0;
+    }
+    StreamWalk walk = {.visitor = visitor, .context = context, .parent = member};
+    int result = lookup(&disk, member, &node) ? entries(&disk, node, stream_entry, &walk) : 0;
+    for (size_t i = 0; i < walk.count; i++)
+        free(walk.directories[i]);
+    free(walk.directories);
+    if (!disk.index)
+        free(disk.fat);
+    return walk.result ? walk.result : result;
+}
+void tb_image_reader_cache_stats(TbReadStream *stream, uint64_t *builds, uint64_t *hits)
+{
+    ImageIndex *index = tb_stream_index(stream);
+    *builds = index ? index->builds : 0;
+    *hits = index ? index->hits : 0;
 }
 typedef struct ClusterStream
 {
@@ -1358,7 +1407,8 @@ TbReadStream *tb_image_reader_member(TbReadStream *stream, const char *member)
     if (!result)
         cluster_close(context);
 done:
-    free(disk.fat);
+    if (!disk.index)
+        free(disk.fat);
     return result;
 }
 

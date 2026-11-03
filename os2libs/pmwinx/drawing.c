@@ -229,6 +229,9 @@ ULONG SelectObject(ULONG handle, ULONG object)
 BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG source, LONG source_x,
             LONG source_y, ULONG operation)
 {
+    TRACE_NATIVE("BitBlt(%u, %d, %d, %d, %d, %u, %d, %d, %08X)", (uint)destination, (int)x, (int)y,
+                 (int)width, (int)height, (uint)source, (int)source_x, (int)source_y,
+                 (uint)operation);
     if (!open32CanDraw(destination) || !open32CanDraw(source) || width <= 0 || height <= 0 ||
         width > 16384 || height > 16384)
     {
@@ -248,7 +251,7 @@ BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG so
                         {(LONG)right, (LONG)(bottom + height)},
                         {source_x, (LONG)src_bottom},
                         {source_x + width, (LONG)(src_bottom + height)}};
-    return GpiBitBlt(destination, source, 4, points, (LONG)((operation >> 16) & 255), 0) == 1;
+    return open32BitmapBlt(destination, source, points, (LONG)((operation >> 16) & 255));
 }
 ULONG BeginPaint(ULONG window, PVOID output)
 {
@@ -322,7 +325,7 @@ static LONG rgb_color(ULONG color)
 ULONG SetTextColor(ULONG handle, ULONG color)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || (color & 0xFF000000))
+    if (!dc || ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
     {
         open32SetError(dc ? 87 : 6);
         return UINT32_MAX;
@@ -336,7 +339,7 @@ ULONG SetTextColor(ULONG handle, ULONG color)
 ULONG SetBkColor(ULONG handle, ULONG color)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || (color & 0xFF000000))
+    if (!dc || ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
     {
         open32SetError(dc ? 87 : 6);
         return UINT32_MAX;

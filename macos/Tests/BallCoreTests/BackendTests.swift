@@ -5,11 +5,54 @@ import BallCore
 #endif
 import Foundation
 import Testing
+import Darwin
 
 private func temporary() throws -> URL {
     let url = FileManager.default.temporaryDirectory.appending(path: "2ine-tests-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
     return url
+}
+
+@Test func launchOwnsAndStopsItsStartupPrograms() async throws {
+    let root = try temporary()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let backend = BallBackend()
+    let ball = root.appending(path: "Service Ball")
+    _ = try await backend.request(DesktopRequest("command", ball: ball.path, arguments: ["init"]), as: BallSnapshot.self)
+    let manifest = ball.appending(path: "ball.json")
+    var object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
+    object["startupPrograms"] = [["program": #"C:\OS2\SERVICE.EXE"#, "arguments": [], "cwd": #"C:\OS2"#]]
+    try JSONSerialization.data(withJSONObject: object).write(to: manifest)
+    for name in ["MAIN.EXE", "SERVICE.EXE"] {
+        try Data("fixture".utf8).write(to: ball.appending(path: "drive_c/OS2/\(name)"))
+    }
+    let build = root.appending(path: "runtime")
+    try FileManager.default.createDirectory(at: build, withIntermediateDirectories: true)
+    let loader = build.appending(path: "lx_loader")
+    let script = #"""
+    #!/bin/sh
+    case "$1" in
+      *SERVICE.EXE) echo $$ > "$TWOINE_BALL/drive_c/service.pid"; exec /bin/sleep 30 ;;
+      *MAIN.EXE)
+        n=0
+        while [ ! -s "$TWOINE_BALL/drive_c/service.pid" ] && [ "$n" -lt 100 ]; do
+          /bin/sleep 0.01
+          n=$((n + 1))
+        done
+        test -s "$TWOINE_BALL/drive_c/service.pid" || exit 12
+        echo "service running"
+        exit 7 ;;
+    esac
+    """#
+    try Data(script.utf8).write(to: loader)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: loader.path)
+    let result = try await backend.execute(ball: ball.path, build: build.path,
+                                           arguments: ["run", #"C:\OS2\MAIN.EXE"#], update: { _ in })
+    #expect(result.code == 7)
+    #expect(result.output.contains("service running"))
+    let pidText = try String(contentsOf: ball.appending(path: "drive_c/service.pid"), encoding: .utf8)
+    let pid = try #require(Int32(pidText.trimmingCharacters(in: .whitespacesAndNewlines)))
+    #expect(kill(pid, 0) == -1 && errno == ESRCH)
 }
 
 @Test func processUsesExactArgvAndKeepsFullLog() async throws {

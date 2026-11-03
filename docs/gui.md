@@ -230,7 +230,8 @@ are unsupported. Saved DC levels retain selected objects and independent clip co
 Captioned overlapped Open32 windows expose a native frame with a separate
 `FID_CLIENT` drawable. Child parenting, focus, capture, coordinates, DCs and
 paint messages map to that client while callbacks retain the public frame
-handle. Native frame subclass replacement controls client callback forwarding.
+handle. A native frame subclass can forward messages to that client, including
+the initialization callback that populates a lazily constructed submenu.
 Supplied menus and `WM_MDISETMENU` attach actual PM menu bars and resize the
 client; detached menus remain available to their caller. Other frame mappings,
 full MDI decorations and automatic Window-menu entries are incomplete.

@@ -408,6 +408,20 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return postTimestampedMsg(anchor, win->hwnd, WM_CLOSE, 0, 0, ticks);
     if (event->type == LX_HOST_EVENT_SHOWN || event->type == LX_HOST_EVENT_EXPOSED)
         return postExposedMessages(anchor, win, ticks);
+    if (event->type == LX_HOST_EVENT_MOVED)
+    {
+        LONG y = desktop_window.h - event->y - win->h;
+        if (event->x == win->x && y == win->y)
+            return FALSE;
+        /* The host already moved it. Reissuing the move would feed stale
+           queued position events back into the native window manager. */
+        win->x = event->x;
+        win->y = y;
+        notifyVisibleRegions(anchor, win);
+        SWP position = {SWP_MOVE, win->h, win->w, y, win->x, HWND_TOP, win->hwnd, 0, 0};
+        sendWindowPos(win, WM_WINDOWPOSCHANGED, &position);
+        return TRUE;
+    }
     if (event->type == LX_HOST_EVENT_RESIZED)
     {
         if (event->width == win->w && event->height == win->h)
@@ -499,8 +513,8 @@ void presentWindow(AnchorBlock *anchor, Window *window)
     {
         Window *pending = anchor->windows[i];
         if (pending && pending->hwnd && pending->heavy.window == window->heavy.window &&
-            pending->paint_pending && !WinIsRectEmpty(0, &pending->invalid) &&
-            windowAcceptsUpdates(pending) &&
+            pending->w > 0 && pending->h > 0 && pending->paint_pending &&
+            !WinIsRectEmpty(0, &pending->invalid) && windowAcceptsUpdates(pending) &&
             (!pending->paint_offered || now - root->last_present < 16))
             return;
     }

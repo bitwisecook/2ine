@@ -53,6 +53,9 @@ int tb_image_copy(FILE *source, const char *destination, int exclusive);
 typedef int (*TbImageVisitor)(void *, const char *, uint64_t, int, int64_t);
 int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context);
 int tb_image_reader_walk(TbReadStream *stream, TbImageVisitor visitor, void *context);
+int tb_image_reader_list(TbReadStream *stream, const char *member, TbImageVisitor visitor,
+                         void *context);
+void tb_image_reader_cache_stats(TbReadStream *stream, uint64_t *builds, uint64_t *hits);
 TbReadStream *tb_image_reader_member(TbReadStream *stream, const char *member);
 FILE *tb_image_stream_fopen(FILE *file, const char *member);
 #endif

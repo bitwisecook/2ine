@@ -8,6 +8,25 @@
 #include <stdio.h>
 static _Thread_local Open32Window *windows, *creating;
 static _Thread_local LxGuestMapping *pm_procedure_mapping, *pm_frame_mapping;
+static void resize_children(Open32Window *parent, LONG delta)
+{
+    /* PM child origins follow the bottom edge; Windows child origins follow
+       the top edge. Preserve Windows positions before delivering WM_SIZE. */
+    if (!delta)
+        return;
+    for (Open32Window *child = windows; child; child = child->next)
+    {
+        SWP position;
+        if (child->parent == parent->handle && WinQueryWindow(child->handle, 5) == parent->client &&
+            WinQueryWindowPos(child->handle, &position))
+        {
+            int64_t y = (int64_t)position.y + delta;
+            if (y >= INT32_MIN && y <= INT32_MAX)
+                WinSetWindowPos(child->handle, 0, position.x, (LONG)y, 0, 0,
+                                SWP_MOVE | SWP_NOADJUST | SWP_NOREDRAW);
+        }
+    }
+}
 Open32Window *open32FindWindow(HWND handle)
 {
     if (!handle)
@@ -47,11 +66,6 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
     Open32Window *w = open32FindWindow(handle);
     if (!w)
         return WinDefWindowProc(handle, message, first, second);
-    /* A native frame subclass controls whether its Windows client is still attached. */
-    if (w->handle != handle && message != WM_CREATE &&
-        (!pm_frame_mapping ||
-         WinQueryWindowULong(w->handle, -3) != lx_execution_mapping_address(pm_frame_mapping)))
-        return WinDefWindowProc(handle, message, first, second);
     ULONG queued_result;
     if (open32QueuedCallback(handle, message, &queued_result))
         return (MRESULT)(uintptr_t)queued_result;
@@ -79,6 +93,8 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
             open32QueueWindowDestroyed(w->handle);
             return NULL;
         case WM_SIZE:
+            resize_children(w, (LONG)((uintptr_t)second >> 16 & 0xFFFF) -
+                                   (LONG)((uintptr_t)first >> 16 & 0xFFFF));
             return (MRESULT)(uintptr_t)open32WindowCallback(w, 5, 0, (ULONG)(uintptr_t)second);
         case WM_PAINT:
             return (MRESULT)(uintptr_t)open32WindowCallback(w, 15, 0, 0);
@@ -560,14 +576,20 @@ BOOL SetWindowPos(ULONG handle, ULONG after, LONG x, LONG y, LONG width, LONG he
         open32SetError(w || native ? 87 : 1400);
         return FALSE;
     }
-    LONG new_width = flags & 1 ? (w ? w->width : old.cx) : width;
-    LONG new_height = flags & 1 ? (w ? w->height : old.cy) : height;
-    LONG new_x = flags & 2 ? (w ? w->x : old.x) : x;
-    LONG new_y = flags & 2 ? (w ? w->y : parent_bounds.yTop - old.y - old.cy) : y;
+    if (!WinQueryWindowPos(handle, &old) ||
+        !WinQueryWindowRect(WinQueryWindow(handle, 5), &parent_bounds))
+        return FALSE;
+    LONG new_width = flags & 1 ? old.cx : width;
+    LONG new_height = flags & 1 ? old.cy : height;
+    LONG new_x = flags & 2 ? old.x : x;
+    LONG new_y = flags & 2 ? parent_bounds.yTop - old.y - old.cy : y;
     RECTL bounds;
     if (!WinQueryWindowRect(WinQueryWindow(handle, 5), &bounds))
         return FALSE;
-    ULONG pm_flags = (flags & 1 ? 0 : SWP_SIZE) | (flags & 2 ? 0 : SWP_MOVE) |
+    /* Windows keeps the top edge when resizing with SWP_NOMOVE; PM keeps
+       the bottom edge. A height change therefore also moves the PM origin. */
+    BOOL move = !(flags & 2) || new_height != old.cy;
+    ULONG pm_flags = (flags & 1 ? 0 : SWP_SIZE) | (move ? SWP_MOVE : 0) |
                      (flags & 4 ? 0 : SWP_ZORDER) | (flags & 8 ? SWP_NOREDRAW : 0) |
                      (flags & 16 ? 0 : SWP_ACTIVATE) | (flags & 64 ? SWP_SHOW : 0) |
                      (flags & 128 ? SWP_HIDE : 0);
@@ -612,6 +634,8 @@ BOOL ShowWindow(ULONG handle, LONG command)
         return FALSE;
     }
     BOOL previous = (w->style & 0x10000000) != 0;
+    if (open32ShowMdiChild(w, command))
+        return previous;
     ULONG flags = command ? SWP_SHOW : SWP_HIDE;
     if (command == 2 || command == 6 || command == 7)
         flags |= SWP_MINIMIZE;

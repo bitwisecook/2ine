@@ -126,6 +126,18 @@ static PmMenuItem *menu_item(Window **target, ULONG item, ULONG flags, unsigned 
     }
     return NULL;
 }
+static BOOL menu_contains(Window *menu, Window *target, unsigned depth)
+{
+    if (menu == target || depth >= 32)
+        return TRUE;
+    for (size_t i = 0; i < menu->menu->count; i++)
+    {
+        Window *sub = menu_window(menu->menu->items[i].item.hwndSubMenu);
+        if (sub && menu_contains(sub, target, depth + 1))
+            return TRUE;
+    }
+    return FALSE;
+}
 BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ text)
 {
     TRACE_NATIVE("InsertMenu(%u, %u, %X, %u, %p)", handle, position, flags, identifier, text);
@@ -163,13 +175,7 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
     }
     if (submenu)
     {
-        for (Window *owner = window; owner && owner->menu; owner = owner->owner)
-            if (owner == submenu)
-            {
-                open32SetError(87);
-                return FALSE;
-            }
-        if (submenu->owner && submenu->owner->menu)
+        if (menu_contains(submenu, window, 0))
         {
             open32SetError(87);
             return FALSE;

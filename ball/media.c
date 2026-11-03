@@ -20,73 +20,7 @@
 #define MEDIA_PREFIX "/@2ine-media/"
 #define MEDIA_MEMBER_LIMIT (UINT64_C(2) * 1024 * 1024 * 1024)
 #define MEDIA_ENTRY_LIMIT 100000u
-typedef struct MediaCacheEntry
-{
-    char *path;
-    TbReadStream *stream;
-    uint64_t used;
-} MediaCacheEntry;
-static _Thread_local struct
-{
-    MediaCacheEntry entries[16];
-    uint64_t clock, cache_bytes;
-    int active;
-    TbMediaReadStats stats;
-} media_session;
-void tb_media_session_end(void)
-{
-    for (size_t i = 0; i < 16; i++)
-    {
-        free(media_session.entries[i].path);
-        tb_stream_close(media_session.entries[i].stream);
-        media_session.entries[i] = (MediaCacheEntry){0};
-    }
-    media_session.active = 0;
-}
-void tb_media_session_begin(void)
-{
-    tb_media_session_end();
-    memset(&media_session, 0, sizeof media_session);
-    media_session.active = 1;
-}
-TbMediaReadStats tb_media_read_stats(void)
-{
-    return media_session.stats;
-}
-static TbReadStream *cached_parent(const char *path, size_t length)
-{
-    if (!media_session.active)
-        return NULL;
-    for (size_t i = 0; i < 16; i++)
-    {
-        MediaCacheEntry *entry = &media_session.entries[i];
-        if (entry->path && strlen(entry->path) == length && !strncmp(entry->path, path, length))
-        {
-            entry->used = ++media_session.clock;
-            return tb_stream_retain(entry->stream);
-        }
-    }
-    return NULL;
-}
-static void cache_parent(const char *path, size_t length, TbReadStream *stream)
-{
-    if (!media_session.active || !stream)
-        return;
-    size_t oldest = 0;
-    for (size_t i = 0; i < 16; i++)
-        if (!media_session.entries[i].path ||
-            media_session.entries[i].used < media_session.entries[oldest].used)
-            oldest = i;
-    char *name = malloc(length + 1);
-    if (!name)
-        return;
-    memcpy(name, path, length);
-    name[length] = 0;
-    MediaCacheEntry *entry = &media_session.entries[oldest];
-    free(entry->path);
-    tb_stream_close(entry->stream);
-    *entry = (MediaCacheEntry){name, tb_stream_retain(stream), ++media_session.clock};
-}
+#include "media_cache.h"
 static unsigned u16(const unsigned char *p)
 {
     return p[0] | (unsigned)p[1] << 8;
@@ -559,6 +493,24 @@ static int disk_visit(void *opaque, const char *name, uint64_t size, int directo
     DiskVisit *d = opaque;
     return d->visit(d->context, name, size, directory, d->file, 0, 0, 3, modified);
 }
+static int image_reader(TbReadStream *file)
+{
+    unsigned char magic[512] = {0}, iso[7] = {0};
+    tb_stream_read_at(file, 0, magic,
+                      tb_stream_size(file) < sizeof magic ? (size_t)tb_stream_size(file)
+                                                          : sizeof magic);
+    if (tb_stream_size(file) >= 16 * 2048 + sizeof iso)
+        tb_stream_read_at(file, 16 * 2048, iso, sizeof iso);
+    return !memcmp(iso + 1, "CD001", 5) ||
+           (magic[510] == 0x55 && magic[511] == 0xaa && (magic[0] == 0xeb || magic[0] == 0xe9));
+}
+static void image_stats(TbReadStream *file, uint64_t before_builds, uint64_t before_hits)
+{
+    uint64_t builds, hits;
+    tb_image_reader_cache_stats(file, &builds, &hits);
+    media_session.stats.directory_index_builds += builds - before_builds;
+    media_session.stats.directory_index_hits += hits - before_hits;
+}
 static int archive_walk(TbReadStream *file, Visit visit, void *context)
 {
     unsigned char magic[512] = {0};
@@ -663,10 +615,13 @@ static TbReadStream *open_parent(const char *path, char **member)
     char *host = decode(p, (size_t)(end - p));
     if (!host)
         return NULL;
+    select_media_cache(host);
     TbReadStream *file = cached_parent(path, (size_t)(end - path));
     if (!file)
     {
         file = tb_stream_file(tb_fopen(host, "rb"), 1);
+        if (file && media_session.current)
+            tb_stream_set_budget(file, &media_session.current->budget);
         cache_parent(path, (size_t)(end - path), file);
     }
     free(host);
@@ -790,7 +745,19 @@ TbMediaEntry *tb_media_entries(const char *path, size_t *count)
     TbReadStream *file = open_parent(path, &l.member);
     if (!file)
         return NULL;
-    int ok = archive_walk(file, list_visit, &l);
+    int ok;
+    if (image_reader(file))
+    {
+        uint64_t builds, hits;
+        tb_image_reader_cache_stats(file, &builds, &hits);
+        DiskVisit visit = {list_visit, &l, file};
+        ok = tb_image_reader_list(file, l.member, disk_visit, &visit);
+        image_stats(file, builds, hits);
+        if (ok)
+            l.found = 1;
+    }
+    else
+        ok = archive_walk(file, list_visit, &l);
     if (ok && *l.member && !l.found)
         ok = bad(ENOENT);
     free(l.member);
@@ -823,7 +790,9 @@ int tb_media_container(const char *path)
         TbReadStream *parent = open_parent(path, &member);
         if (parent)
         {
-            file = extract_member(parent, member);
+            file = cached_parent(path, strlen(path));
+            if (!file)
+                file = extract_member(parent, member);
             tb_stream_close(parent);
         }
         free(member);
@@ -833,6 +802,8 @@ int tb_media_container(const char *path)
     if (!file)
         return 0;
     int ok = archive_walk(file, probe_visit, NULL);
+    if ((ok == 2 || ok == 1) && tb_media_path(path))
+        cache_parent(path, strlen(path), file);
     tb_stream_close(file);
     return ok == 2 || ok == 1;
 }

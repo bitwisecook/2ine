@@ -215,6 +215,47 @@ LONG RegOpenKey(ULONG key, PSZ name, PULONG output)
     const ULONG default_access = KEY_ALL_ACCESS;
     return RegOpenKeyEx(key, name, 0, default_access, output);
 }
+LONG RegDeleteKey(ULONG key, PSZ name)
+{
+    TRACE_NATIVE("RegDeleteKey(%08X, '%s')", (uint)key, name);
+    if (!name || !*name)
+        return ERROR_INVALID_PARAMETER;
+    lx_host_once(&once, initialize);
+    if (!database)
+        return ERROR_OPEN_FAILED;
+    ULONG access;
+    char *path = key_path(key, name, &access);
+    if (!path)
+        return ERROR_INVALID_HANDLE;
+    LONG result = ERROR_FILE_NOT_FOUND;
+    char *names = NULL;
+    if (!key_exists(path))
+        goto done;
+    result = ERROR_ACCESS_DENIED;
+    if (!(access & KEY_CREATE_SUB_KEY))
+        goto done;
+    ULONG bytes = 0;
+    if (!PrfQueryProfileSize(database, NULL, NULL, &bytes))
+        goto done;
+    result = ERROR_NOT_ENOUGH_MEMORY;
+    if (bytes == UINT32_MAX || !(names = calloc((size_t)bytes + 1, 1)))
+        goto done;
+    result = ERROR_OPEN_FAILED;
+    if (!PrfQueryProfileData(database, NULL, NULL, names, &bytes))
+        goto done;
+    size_t prefix = strlen(path);
+    for (char *entry = names; *entry; entry += strlen(entry) + 1)
+        if (!strncmp(entry, path, prefix) && entry[prefix] == '\\')
+        {
+            result = ERROR_ACCESS_DENIED; /* Leaf deletion never removes subkeys. */
+            goto done;
+        }
+    result = PrfWriteProfileData(database, path, NULL, NULL, 0) ? NO_ERROR : ERROR_OPEN_FAILED;
+done:
+    free(names);
+    free(path);
+    return result;
+}
 LONG RegCreateKey(ULONG key, PSZ name, PULONG output)
 {
     if ((!name || !*name) && root_name(key))

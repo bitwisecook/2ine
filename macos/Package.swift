@@ -16,6 +16,7 @@ func sourceIdentity(_ arguments: [String], fallback: String) -> String {
 }
 
 let ballBuildSettings: [CSetting] = [
+    .define("TB_MEDIA_TIME_CACHE"),
     .define("CJSON_HIDE_SYMBOLS"),
     .define("TB_SOURCE_VERSION", to: "\"" + sourceIdentity(["describe", "--tags", "--always", "--dirty"], fallback: "unversioned") + "\""),
     .define("TB_SOURCE_REVISION", to: "\"" + sourceIdentity(["rev-parse", "HEAD"], fallback: "unknown") + "\"")

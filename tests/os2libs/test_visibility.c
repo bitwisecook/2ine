@@ -81,6 +81,13 @@ static void enumeration(HPS ps)
 }
 static MRESULT OS2API page_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
+    if (message == WM_ADJUSTWINDOWPOS && WinQueryWindowUShort(window, -1) == 9)
+    {
+        SWP *position = first;
+        if (position->fl & SWP_SIZE)
+            position->cx = position->cy = 0;
+        return 0;
+    }
     if (message == WM_PAINT)
     {
         RECTL rect;
@@ -166,6 +173,23 @@ static void page_exposure(HAB hab)
     CHECK(WinPeekMsg(hab, &repaint, page, WM_PAINT, WM_PAINT, 1));
     CHECK(root->last_present != presented);
     WinDispatchMsg(hab, &repaint);
+    /* A resized-away child cannot receive WM_PAINT. Its retained damage must
+       not hold the entire dialog black until a host exposure (Cmd-Tab). */
+    HWND empty = WinCreateWindow(parent, "PageExposure", "Empty", WS_VISIBLE, 0, 0, 10, 10, parent,
+                                 HWND_TOP, 9, NULL, NULL);
+    CHECK(empty && WinInvalidateRect(empty, NULL, FALSE));
+    CHECK(WinSetWindowPos(empty, 0, 0, 0, 10, 10, SWP_SIZE | SWP_NOREDRAW));
+    Window *empty_window = NULL;
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+        if (anchor->windows[i] && anchor->windows[i]->hwnd == empty)
+            empty_window = anchor->windows[i];
+    CHECK(empty_window && empty_window->paint_pending);
+    CHECK(WinInvalidateRect(parent, NULL, TRUE));
+    presented = root->last_present;
+    lx_host_sleep_ms(20);
+    notifications(hab, parent, WM_PAINT);
+    CHECK(root->last_present != presented);
+    CHECK(WinDestroyWindow(empty));
     CHECK(WinShowWindow(page, FALSE));
     notifications(hab, parent, WM_PAINT);
     CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff0000);
@@ -197,6 +221,16 @@ static void page_exposure(HAB hab)
         CHECK(!memcmp(before, after, sizeof before));
     }
     CHECK(WinDestroyWindow(second));
+    LONG old_x = root->x, old_y = root->y;
+    LxHostEvent moved = {.type = LX_HOST_EVENT_MOVED,
+                         .window_data = root,
+                         .x = old_x + 37,
+                         .y = WinQuerySysValue(HWND_DESKTOP, 21) - old_y - root->h + 19};
+    CHECK(processHostEvent(anchor, &moved));
+    POINTL mapped = {0, 0};
+    CHECK(WinMapWindowPoints(parent, HWND_DESKTOP, &mapped, 1));
+    CHECK(mapped.x == old_x + 37 && mapped.y == old_y - 19);
+    CHECK(!processHostEvent(anchor, &moved));
     CHECK(WinSetWindowPos(page, HWND_TOP, 40, 5, 20, 20, SWP_MOVE));
     notifications(hab, parent, WM_PAINT);
     CHECK(lx_pm_raster_read(ps, 10, 10, 1, 1, &pixel) && pixel == 0xff0000);

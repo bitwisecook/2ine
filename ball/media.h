@@ -30,6 +30,8 @@ void tb_media_session_end(void);
 typedef struct TbMediaReadStats
 {
     uint64_t decompressed_bytes, peak_cache_bytes, direct_slices, materialized_files;
+    uint64_t container_cache_hits, directory_index_builds, directory_index_hits;
+    uint64_t inflate_checkpoints, inflate_restores;
 } TbMediaReadStats;
 TbMediaReadStats tb_media_read_stats(void);
 #endif
