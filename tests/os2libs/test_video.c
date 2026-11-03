@@ -10,7 +10,7 @@
 #include "hal/video_frame.h"
 #include "hal/host_sync.h"
 #include "runtime/audio.h"
-#include "runtime/features.h"
+#include "runtime/runtime_features.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

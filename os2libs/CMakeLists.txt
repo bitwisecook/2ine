@@ -94,7 +94,20 @@ target_link_libraries(kbdcalls PRIVATE viocalls)
 target_link_libraries(quecalls PRIVATE doscalls)
 target_link_libraries(sesmgr PRIVATE doscalls quecalls pmwin)
 find_package(ZLIB REQUIRED)
-target_link_libraries(pmwin PRIVATE ZLIB::ZLIB)
+if(TWOINE_NATIVE_LOADER)
+    # This target uses -m32 while CMake's configure process runs on the host ABI.
+    # Ask the compiler for its target library instead of FindZLIB's host result.
+    execute_process(COMMAND "${CMAKE_C_COMPILER}" -m32 -print-file-name=libz.so
+        OUTPUT_VARIABLE _twoine_native_zlib OUTPUT_STRIP_TRAILING_WHITESPACE
+        COMMAND_ERROR_IS_FATAL ANY)
+    if(NOT IS_ABSOLUTE "${_twoine_native_zlib}" OR NOT EXISTS "${_twoine_native_zlib}")
+        message(FATAL_ERROR "Install the i386 zlib development library for the native worker")
+    endif()
+    target_include_directories(pmwin PRIVATE ${ZLIB_INCLUDE_DIRS})
+    target_link_libraries(pmwin PRIVATE "${_twoine_native_zlib}")
+else()
+    target_link_libraries(pmwin PRIVATE ZLIB::ZLIB)
+endif()
 target_link_libraries(pmgpi PRIVATE pmwin)
 target_link_libraries(pmwinx PRIVATE pmshapi pmwin pmgpi)
 target_link_libraries(pmwp PRIVATE pmshapi)

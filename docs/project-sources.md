@@ -601,3 +601,19 @@ are user-supplied and are not licensed or redistributed by this project.
 - Used as: runtime
 - Authors / origin credits: Hans Wennborg
 - [Project](https://www.hanshq.net/zip.html) · [Source](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip) · [Download](https://www.hanshq.net/files/hwzip/hwzip-2.4.zip)
+
+## Zenity
+
+- Version: 4.2.1-1 (host selected)
+- License: LGPL-2.0-or-later file headers; LGPL-2.1-or-later COPYING
+- Used as: Linux native printing dialogs; system package for Debian/RPM, staged helper for Snap
+- Authors / origin credits: Glynn Foster; Lucas Rocha; Arx Cruz; Logan Rathbone; GNOME and Zenity contributors
+- [Project](https://gitlab.gnome.org/GNOME/zenity) · [Source](https://gitlab.gnome.org/GNOME/zenity) · [Download](https://launchpad.net/ubuntu/+source/zenity/4.2.1-1)
+
+## CUPS clients
+
+- Version: 2.4.16-1ubuntu1.3 (host selected)
+- License: Apache-2.0 with GPL-2.0/LGPL-2.0 linking exception; retained per-file notices
+- Used as: External Linux printer discovery and raw PCL submission; system package or staged Snap helper
+- Authors / origin credits: Michael R Sweet; Apple; OpenPrinting and CUPS contributors
+- [Project](https://openprinting.github.io/cups/) · [Source](https://github.com/OpenPrinting/cups) · [Download](https://launchpad.net/ubuntu/+source/cups/2.4.16-1ubuntu1.3)

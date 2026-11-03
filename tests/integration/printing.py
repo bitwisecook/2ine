@@ -358,6 +358,23 @@ def main():
             check=True,
             timeout=20,
         )
+        helpers = work / "CUPS helpers"
+        helpers.mkdir(exist_ok=True)
+        (helpers / "lp").write_bytes(command.read_bytes())
+        (helpers / "lp").chmod(0o700)
+        (helpers / "lpstat").write_text(
+            "#!/bin/sh\nprintf 'Fixture_Printer accepting requests\\n'\n"
+        )
+        (helpers / "lpstat").chmod(0o700)
+        submission.update(TWOINE_CUPS_BINDIR=str(helpers), TWOINE_PRINT_TEST_STATUS="0")
+        subprocess.run(
+            [driver, "--cups", str(work / "printing.pcl")],
+            env=submission,
+            cwd=work,
+            check=True,
+            timeout=20,
+        )
+        assert json.loads((work / "spool-argv.json").read_text())[:2] == ["-d", "Fixture_Printer"]
         pages = pdf_pages(work / "printing.pdf", 2)
         for (_, height, pixels), color in zip(pages, (b"\xff\0\0", b"\0\0\xff"), strict=True):
             offset = ((height - 151) * 2480 + 150) * 3
@@ -403,8 +420,11 @@ def main():
             output = work / (label + (".pcl" if queue == "2INEPCL" else ".pdf"))
             environment["TWOINE_PRINT_OUTPUT"] = str(output)
             result = subprocess.run(
-                [str(build / "lx_loader"), str(guest)], cwd=work, env=environment,
-                capture_output=True, timeout=20,
+                [str(build / "lx_loader"), str(guest)],
+                cwd=work,
+                env=environment,
+                capture_output=True,
+                timeout=20,
             )
             assert result.returncode == 0, (label, result.returncode, result.stdout, result.stderr)
             if queue == "2INEPDF":

@@ -137,6 +137,19 @@ int main(int argc, char **argv)
         fclose(source);
         return 0;
     }
+    if (argc == 3 && !strcmp(argv[1], "--cups"))
+    {
+        size_t count = 0;
+        char **printers = lx_host_print_printers(&count);
+        CHECK(printers && count == 1 && !strcmp(printers[0], "Fixture_Printer"));
+        free(printers[0]);
+        free(printers);
+        FILE *source = fopen(argv[2], "rb");
+        CHECK(source &&
+              lx_host_print_submit_pcl("Fixture_Printer", "Packaged printing", 1, source));
+        fclose(source);
+        return 0;
+    }
     CHECK(argc == 2);
     HAB anchor = WinInitialize(0);
     CHECK(anchor);

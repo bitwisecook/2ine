@@ -2,7 +2,7 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Native OS/2 settings editors and graphics/sound preferences."""
 
-from gi.repository import Gio, GObject
+from gi.repository import Gio, GObject, Pango
 
 if __package__:
     from . import gnome_views
@@ -285,13 +285,20 @@ class ProfilePage(Gtk.Box):
         self.entries = []
         self.search = Gtk.SearchEntry(hexpand=True, placeholder_text="Search keys and values")
         self.search.connect("search-changed", lambda *_: self.render())
-        bar = Gtk.Box(spacing=12)
+        bar = Adw.WrapBox(child_spacing=6, line_spacing=6)
         bar.append(self.search)
         bar.append(button("Reload", self.load))
         self.add = button("Add Value…", lambda: self.edit(None))
         bar.append(self.add)
         self.append(bar)
-        self.path = Gtk.Label(xalign=0, wrap=True, selectable=True, css_classes=["dim-label"])
+        self.path = Gtk.Label(
+            xalign=0,
+            selectable=True,
+            hexpand=True,
+            max_width_chars=1,
+            ellipsize=Pango.EllipsizeMode.MIDDLE,
+            css_classes=["dim-label"],
+        )
         self.append(self.path)
         self.notice = Adw.Banner(use_markup=False, revealed=False)
         self.append(self.notice)
@@ -632,20 +639,44 @@ class RegistryPage(ProfilePage):
         factory.connect("setup", self.setup_node)
         factory.connect("bind", self.bind_node)
         self.tree_view.set_factory(factory)
-        tree_scroll = Gtk.ScrolledWindow(min_content_width=180, vexpand=True)
-        tree_scroll.set_child(self.tree_view)
-        panes = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL, vexpand=True)
-        panes.set_start_child(tree_scroll)
-        panes.set_end_child(values_scroll)
-        panes.set_position(230)
-        self.append(panes)
+        self.tree_view.update_property([Gtk.AccessibleProperty.LABEL], ["Registry keys"])
+        tree_scroll = Gtk.ScrolledWindow(vexpand=True, child=self.tree_view)
+        self.split = Adw.OverlaySplitView(
+            min_sidebar_width=180,
+            max_sidebar_width=260,
+            sidebar=tree_scroll,
+            content=values_scroll,
+            vexpand=True,
+        )
+        self.keys_button = Gtk.ToggleButton(
+            icon_name="sidebar-show-symbolic",
+            tooltip_text="Show Registry Keys",
+            visible=False,
+        )
+        self.keys_button.update_property([Gtk.AccessibleProperty.LABEL], ["Show registry keys"])
+        self.keys_button.bind_property(
+            "active",
+            self.split,
+            "show-sidebar",
+            GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE,
+        )
+        self.split.set_show_sidebar(True)
+        self.get_first_child().prepend(self.keys_button)
+        self.layout = Adw.BreakpointBin(
+            child=self.split, vexpand=True, width_request=280, height_request=220
+        )
+        breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 600sp"))
+        breakpoint.add_setter(self.split, "collapsed", True)
+        breakpoint.add_setter(self.keys_button, "visible", True)
+        self.layout.add_breakpoint(breakpoint)
+        self.append(self.layout)
         self.key_path = Gtk.Label(xalign=0, selectable=True, wrap=True)
         self.append(self.key_path)
 
     @staticmethod
     def setup_node(_factory, item):
         expander = Gtk.TreeExpander()
-        expander.set_child(Gtk.Label(xalign=0))
+        expander.set_child(Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END))
         item.set_child(expander)
 
     @staticmethod
@@ -654,6 +685,7 @@ class RegistryPage(ProfilePage):
         expander = item.get_child()
         expander.set_list_row(row)
         expander.get_child().set_label(row.get_item().name)
+        expander.set_tooltip_text(row.get_item().path)
 
     def select_key(self, path):
         for position in range(self.tree_model.get_n_items()):
@@ -679,6 +711,8 @@ class RegistryPage(ProfilePage):
         if selected:
             self.selected_key = selected.get_item().path
             self.render_values()
+            if self.split.get_collapsed():
+                self.split.set_show_sidebar(False)
 
     def render(self):
         if self.building_tree:
@@ -1016,7 +1050,7 @@ class GraphicsMediaPage(Adw.PreferencesPage):
         self.opengl.connect("notify::selected", self.opengl_changed)
         graphics.add(self.opengl)
         media = Adw.PreferencesGroup(
-            title="Playback & DIVE",
+            title="Playback and DIVE",
             description="Changes apply next launch. Reset an override to follow the receiving runtime. Unavailable options can be saved for another computer; enabling them requires a supporting runtime before launch.",
         )
         self.add(media)

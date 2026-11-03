@@ -6,7 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
-#include "runtime/features.h"
+#include "runtime/runtime_features.h"
 
 typedef struct ModuleFailure
 {

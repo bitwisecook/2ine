@@ -170,10 +170,11 @@ static LxHostLockResult lock_named(LxHostMutex *mutex, uint32_t timeout)
                 }
                 uint32_t process, parent;
                 lx_host_process_ids(&process, &parent);
-                uint32_t abandoned = __atomic_exchange_n(&mutex->state[NAMED_MUTEX_OWNER], process,
-                                                         __ATOMIC_ACQ_REL);
+                result =
+                    __atomic_exchange_n(&mutex->state[NAMED_MUTEX_OWNER], process, __ATOMIC_ACQ_REL)
+                        ? LX_HOST_LOCK_OWNER_DIED
+                        : LX_HOST_LOCK_OK;
                 __atomic_store_n(&mutex->held, 1, __ATOMIC_SEQ_CST);
-                result = abandoned ? LX_HOST_LOCK_OWNER_DIED : LX_HOST_LOCK_OK;
                 pthread_setcancelstate(cancellation, NULL);
                 break;
             }

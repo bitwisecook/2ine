@@ -27,12 +27,13 @@ static LxHostSaveResult dialog(char *const arguments[], char **output)
         _exit(127);
     }
     close(descriptors[1]);
-    char buffer[65536];
+    const size_t capacity = 65536;
+    char *buffer = malloc(capacity);
     size_t length = 0;
     ssize_t n = 0;
-    if (child > 0)
-        while (length < sizeof buffer - 1 &&
-               (n = read(descriptors[0], buffer + length, sizeof buffer - 1 - length)) != 0)
+    if (child > 0 && buffer)
+        while (length < capacity - 1 &&
+               (n = read(descriptors[0], buffer + length, capacity - 1 - length)) != 0)
         {
             if (n < 0)
             {
@@ -48,23 +49,35 @@ static LxHostSaveResult dialog(char *const arguments[], char **output)
     do
         waited = child > 0 ? waitpid(child, &status, 0) : -1;
     while (waited < 0 && errno == EINTR);
-    if (child < 0 || waited != child || !WIFEXITED(status) || n < 0 || length == sizeof buffer - 1)
+    if (child < 0 || waited != child || !WIFEXITED(status) || n < 0 || !buffer ||
+        length == capacity - 1)
+    {
+        free(buffer);
         return LX_HOST_SAVE_ERROR;
+    }
     if (WEXITSTATUS(status) == 1)
+    {
+        free(buffer);
         return LX_HOST_SAVE_CANCEL;
+    }
     if (WEXITSTATUS(status) != 0)
     {
         fprintf(
             stderr,
             "2ine: Cannot open the GNOME print dialog. Install zenity and run in a desktop session.\n");
+        free(buffer);
         return LX_HOST_SAVE_ERROR;
     }
     if (length && buffer[length - 1] == '\n')
         length--;
     if (!length || memchr(buffer, 0, length))
+    {
+        free(buffer);
         return LX_HOST_SAVE_ERROR;
+    }
     buffer[length] = 0;
     *output = strdup(buffer);
+    free(buffer);
     return *output ? LX_HOST_SAVE_OK : LX_HOST_SAVE_ERROR;
 }
 LxHostSaveResult lx_host_print_save_path(const char *title, const char *extension, char **path)

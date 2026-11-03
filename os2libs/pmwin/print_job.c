@@ -198,13 +198,16 @@ static int commit_output(LxPrintJob *job)
             break;
     }
     int ok = file && !fflush(job->spool) && !fseek(job->spool, 0, SEEK_SET);
-    unsigned char buffer[65536];
+    const size_t capacity = 65536;
+    unsigned char *buffer = malloc(capacity);
+    ok = ok && buffer;
     size_t count;
-    while (ok && (count = fread(buffer, 1, sizeof buffer, job->spool)))
+    while (ok && (count = fread(buffer, 1, capacity, job->spool)))
     {
         size_t written = 0;
         ok = lx_host_file_write(file, buffer, count, &written) == LX_HOST_FS_OK && written == count;
     }
+    free(buffer);
     ok = ok && !ferror(job->spool) && lx_host_file_flush(file) == LX_HOST_FS_OK;
     lx_host_file_close(file);
     if (ok)

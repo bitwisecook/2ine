@@ -6,7 +6,7 @@
 #include "runtime/audio.h"
 #include "mmio.h"
 #include "os2libs/midi_synth.h"
-#include "runtime/features.h"
+#include "runtime/runtime_features.h"
 #include "os2libs/midi_sequence.h"
 #include "pmwin.h"
 #include "hal/host_sync.h"

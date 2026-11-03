@@ -7,7 +7,7 @@
     {
       "id": "2ine",
       "name": "2ine",
-      "version": "0.1; original upstream lineage 2016\u20132022",
+      "version": "0.1; original upstream lineage 2016–2022",
       "license": "Zlib; public-domain additions",
       "authors": [
         "Ryan C. Gordon (original author)",
@@ -165,7 +165,7 @@
       "role": "asset",
       "versionPolicy": "pinned",
       "sourcePackage": null,
-      "provenance": "Frank Wen states that Fluid uses his own/collaborators\u2019 recordings and edited public-domain samples. The unchanged release is distributed through Ubuntu and PianoBooster. This records the author\u2019s published provenance, rather than claiming an independent rights audit of each sample.",
+      "provenance": "Frank Wen states that Fluid uses his own/collaborators’ recordings and edited public-domain samples. The unchanged release is distributed through Ubuntu and PianoBooster. This records the author’s published provenance, rather than claiming an independent rights audit of each sample.",
       "sha256": "74594e8f4250680adf590507a306655a299935343583256f3b722c48a1bc1cb0",
       "licenseUrl": "https://github.com/pianobooster/fluid-soundfont/blob/v3.1/COPYING",
       "creditsUrl": "https://github.com/pianobooster/fluid-soundfont/blob/v3.1/README"
@@ -377,7 +377,7 @@
       "version": "3.10.2-1",
       "license": "GPL-2.0-or-later option (alternative LGPL-3.0-or-later)",
       "authors": [
-        "Niels M\u00f6ller",
+        "Niels Möller",
         "Nettle contributors"
       ],
       "homepage": "https://www.lysator.liu.se/~nisse/nettle/",
@@ -1168,6 +1168,42 @@
       "role": "runtime",
       "versionPolicy": "pinned",
       "sourcePackage": null
+    },
+    {
+      "id": "zenity",
+      "name": "Zenity",
+      "version": "4.2.1-1",
+      "license": "LGPL-2.0-or-later file headers; LGPL-2.1-or-later COPYING",
+      "authors": [
+        "Glynn Foster",
+        "Lucas Rocha",
+        "Arx Cruz",
+        "Logan Rathbone",
+        "GNOME and Zenity contributors"
+      ],
+      "homepage": "https://gitlab.gnome.org/GNOME/zenity",
+      "source": "https://gitlab.gnome.org/GNOME/zenity",
+      "download": "https://launchpad.net/ubuntu/+source/zenity/4.2.1-1",
+      "sourcePackage": "zenity",
+      "role": "Linux native printing dialogs; system package for Debian/RPM, staged helper for Snap",
+      "versionPolicy": "host"
+    },
+    {
+      "id": "cups",
+      "name": "CUPS clients",
+      "version": "2.4.16-1ubuntu1.3",
+      "license": "Apache-2.0 with GPL-2.0/LGPL-2.0 linking exception; retained per-file notices",
+      "authors": [
+        "Michael R Sweet",
+        "Apple",
+        "OpenPrinting and CUPS contributors"
+      ],
+      "homepage": "https://openprinting.github.io/cups/",
+      "source": "https://github.com/OpenPrinting/cups",
+      "download": "https://launchpad.net/ubuntu/+source/cups/2.4.16-1ubuntu1.3",
+      "sourcePackage": "cups",
+      "role": "External Linux printer discovery and raw PCL submission; system package or staged Snap helper",
+      "versionPolicy": "host"
     }
   ]
 }

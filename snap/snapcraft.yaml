@@ -1,6 +1,6 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 name: 2ine-ball
-version: '0.1'
+version: '0.3'
 summary: Give your OS/2 applications a home on GNOME
 description: |
   Install and run OS/2 applications in a ball of 2ine. Each ball keeps its own
@@ -9,7 +9,7 @@ description: |
 base: core26
 grade: devel
 confinement: strict
-license: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND bzip2-1.0.6
+license: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND Unlicense AND Apache-2.0 AND bzip2-1.0.6
 platforms:
   amd64:
   arm64:
@@ -19,18 +19,24 @@ apps:
     command: bin/2ine-ball-snap
     desktop: usr/share/applications/io.github.bitwisecook.Twoine.Ball.desktop
     common-id: io.github.bitwisecook.Twoine.Ball
-    plugs: [home, removable-media, audio-playback, network, network-bind]
+    plugs: [home, removable-media, audio-playback, network, network-bind, cups]
 parts:
   2ine:
     plugin: nil
     source: .
-    build-packages: [libarchive-dev, libglib2.0-dev, libsndfile1-dev, cmake, ninja-build, build-essential, clang, patchelf, python3, libunicorn-dev, libgl-dev, libegl-dev, libncurses-dev, libx11-dev, libxext-dev, libxrandr-dev, libxcursor-dev, libxi-dev, libxfixes-dev, libxss-dev, libwayland-dev, libxkbcommon-dev, libasound2-dev, libpulse-dev]
-    stage-packages: [python3, python3-gi]
+    build-packages: [libarchive-dev, zlib1g-dev, libglib2.0-dev, libsndfile1-dev, cmake, ninja-build, build-essential, clang, patchelf, python3, libunicorn-dev, libgl-dev, libegl-dev, libncurses-dev, libx11-dev, libxext-dev, libxrandr-dev, libxcursor-dev, libxi-dev, libxfixes-dev, libxss-dev, libwayland-dev, libxkbcommon-dev, libasound2-dev, libpulse-dev]
+    stage-packages: [python3, python3-gi, zenity, cups-client]
     override-build: |
       cmake -S . -B build-snap -G Ninja -DCMAKE_BUILD_TYPE=Release -DTWOINE_PORTABLE_LOADER=ON -DTWOINE_SDL3_PROVIDER=source -DTWOINE_OPENGL=ON
       cmake --build build-snap --parallel "$CRAFT_PARALLEL_BUILD_COUNT"
       python3 tools/build_gnome_packages.py --build build-snap --stage "$CRAFT_PART_INSTALL" --output build-snap-packaging
       install -Dm755 snap/2ine-ball-snap "$CRAFT_PART_INSTALL/bin/2ine-ball-snap"
+plugs:
+  install-cups:
+    interface: content
+    content: twoine-printing-provider
+    default-provider: cups
+    target: $SNAP_DATA/cups
 slots:
   2ine-ball:
     interface: dbus

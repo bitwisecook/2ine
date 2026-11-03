@@ -14,7 +14,7 @@ PDF uses the host's ordinary save-location and filename dialog. PCL offers a
 system-printer destination or Save PCL File. Choose a printer that understands
 PCL 5: raw PCL is sent without conversion by another host printer driver.
 macOS uses Cocoa dialogs. Linux uses GNOME Zenity dialogs and the CUPS `lp` and
-`lpstat` commands; install `zenity` and the CUPS client tools and run in a desktop
+`lpstat` commands; packages install `zenity` and the CUPS client tools; run in a desktop
 session. Windows adapters use the common Save/Print dialogs and RAW spool API;
 the full Windows runtime is not yet built or qualified.
 
@@ -53,3 +53,11 @@ device; an empty value simulates Cancel. Interactive applications do not need
 these overrides. Printer names, titles and filenames are passed as literal
 arguments or native API data; no shell interprets them. The production POSIX
 spooler executable is fixed at `/usr/bin/lp`.
+
+The Snap stages the same dialog and client helpers, declares the restricted
+`cups` printing interface and selects its bundled clients with
+`TWOINE_CUPS_BINDIR=$SNAP/usr/bin` and the interface socket at
+`CUPS_SERVER=/var/cups/cups.sock`. Debian/RPM use `/usr/bin` clients.
+The CUPS interface permits job submission and discovery; it does not request
+printer administration. Physical printing still requires a configured printer
+and CUPS service.

@@ -5,7 +5,8 @@ on:
     paths:
       - 'snap/**'
       - 'tools/gnome/**'
-      - 'tools/gnome_ball.py'
+      - 'tools/gnome_*.py'
+      - 'VERSION'
       - 'tools/gnome_views.py'
       - 'tools/gnome_audio.py'
       - 'tools/project_sources.py'

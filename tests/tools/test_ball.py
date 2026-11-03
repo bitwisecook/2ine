@@ -75,8 +75,12 @@ class BallTests(unittest.TestCase):
         program.write_bytes(b"fixture")
         self.data["drives"]["D"] = str(media)
         ball_api.write_config(self.ball, self.data)
-        self.assertEqual(ball_api.host_path(r"D:\english\install.exe", self.ball, self.data), program)
-        self.assertEqual(ball_api.guest_path(program, self.ball, self.data), r"D:\ENGLISH\INSTALL.EXE")
+        self.assertEqual(
+            ball_api.host_path(r"D:\english\install.exe", self.ball, self.data), program
+        )
+        self.assertEqual(
+            ball_api.guest_path(program, self.ball, self.data), r"D:\ENGLISH\INSTALL.EXE"
+        )
         config = (self.ball / "2ine.cfg").read_text()
         self.assertIn(f"mountpoint.D = {media}\n", config)
         self.assertIn("mountpoint.Z = \n", config)

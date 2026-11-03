@@ -5,7 +5,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "hal/video.h"
 #include "hal/host_sync.h"
-#include "runtime/features.h"
+#include "runtime/runtime_features.h"
 #define DIVE_MAX_BUFFERS 256
 #define DIVE_FIRST_BUFFER 16
 #define DIVE_MAX_DIMENSION 16384

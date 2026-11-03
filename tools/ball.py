@@ -206,11 +206,32 @@ def main(argv=None):
         help="extract original support files from CD/floppy images, folders or nested archives",
     )
     support.add_argument("sources", nargs="+")
-    support.add_argument("--include", dest="categories", action="append", choices=("cmd", "fonts", "assets", "printers", "help", "full"), help="select extraction categories; full includes all except 2ine-provided components")
-    support.add_argument("--plan", action="store_true", help="list extraction destinations without copying files")
-    audit = sub.add_parser("audit-dependencies", help="audit installed binaries and restore missing system DLLs from attached OS/2 media")
-    audit.add_argument("--no-resolve", action="store_true", help="write the audit log without copying missing libraries")
-    audit.add_argument("--source", dest="sources", action="append", default=[], help="OS/2 ISO, archive or installation folder to restore libraries from; may be repeated")
+    support.add_argument(
+        "--include",
+        dest="categories",
+        action="append",
+        choices=("cmd", "fonts", "assets", "printers", "help", "full"),
+        help="select extraction categories; full includes all except 2ine-provided components",
+    )
+    support.add_argument(
+        "--plan", action="store_true", help="list extraction destinations without copying files"
+    )
+    audit = sub.add_parser(
+        "audit-dependencies",
+        help="audit installed binaries and restore missing system DLLs from attached OS/2 media",
+    )
+    audit.add_argument(
+        "--no-resolve",
+        action="store_true",
+        help="write the audit log without copying missing libraries",
+    )
+    audit.add_argument(
+        "--source",
+        dest="sources",
+        action="append",
+        default=[],
+        help="OS/2 ISO, archive or installation folder to restore libraries from; may be repeated",
+    )
     browse = sub.add_parser(
         "browse-media", help="browse an image/archive or an opaque nested member path"
     )
@@ -272,7 +293,12 @@ def main(argv=None):
     configure_library(args.build)
     ball = args.ball.resolve()
     try:
-        if args.action in ("os2-support", "install-os2-support", "browse-media", "audit-dependencies"):
+        if args.action in (
+            "os2-support",
+            "install-os2-support",
+            "browse-media",
+            "audit-dependencies",
+        ):
             skipped_sources = []
             message = {
                 "action": "import-os2-support"
