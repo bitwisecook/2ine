@@ -145,7 +145,8 @@ int main(int argc, char **argv)
         free(printers[0]);
         free(printers);
         FILE *source = fopen(argv[2], "rb");
-        CHECK(source && lx_host_print_submit_pcl("Fixture_Printer", "Packaged printing", 1, source));
+        CHECK(source &&
+              lx_host_print_submit_pcl("Fixture_Printer", "Packaged printing", 1, source));
         fclose(source);
         return 0;
     }

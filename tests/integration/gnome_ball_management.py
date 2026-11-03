@@ -3,12 +3,14 @@
 """Exercise GTK package rename, captured menu targets and deletion confirmations."""
 
 import argparse
+import importlib
 import json
 import os
 import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -21,7 +23,14 @@ def main():
         root = Path(temporary).resolve()
         os.environ.update(XDG_DATA_HOME=str(root / "data"), XDG_CONFIG_HOME=str(root / "config"))
         from tools import ball as api
-        from tools import gnome_ball as gui
+
+        if TYPE_CHECKING:
+            from tools import gnome_ball as gui
+        elif os.environ.get("TWOINE_GNOME_FRONTEND"):
+            sys.path.insert(0, os.environ["TWOINE_GNOME_FRONTEND"])
+            gui = importlib.import_module("gnome_ball")
+        else:
+            from tools import gnome_ball as gui
 
         def pump(until, timeout=30):
             deadline = time.monotonic() + timeout
@@ -91,7 +100,7 @@ def main():
         window.lookup_action("trash-ball-at").activate(gui.GLib.Variant("s", str(other)))
         dialog = window.get_visible_dialog()
         assert other.name in dialog.get_heading()
-        dialog.emit("response", "cancel")
+        assert click(dialog, "Cancel")
         pump(lambda: window.get_visible_dialog() is None)
         assert other.exists() and window.ball == renamed
 
@@ -104,7 +113,7 @@ def main():
         window.request_work = original
         dialog = window.get_visible_dialog()
         assert "Permanently delete" in dialog.get_heading()
-        dialog.emit("response", "cancel")
+        assert click(dialog, "Cancel")
         pump(lambda: window.get_visible_dialog() is None)
         assert other.exists()
         window.request_work = lambda _work, finished: finished(False)

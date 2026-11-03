@@ -327,4 +327,15 @@ static const char tb_project_sources[] =
 "acy ZIP codecs\",\"version\":\"2.4 (2024-09-01)\",\"license\":\"Unlicense / public domain\",\"authors\":[\"H"
 "ans Wennborg\"],\"homepage\":\"https://www.hanshq.net/zip.html\",\"source\":\"https://www.hanshq.net/fil"
 "es/hwzip/hwzip-2.4.zip\",\"download\":\"https://www.hanshq.net/files/hwzip/hwzip-2.4.zip\",\"role\":\"ru"
-"ntime\",\"versionPolicy\":\"pinned\",\"sourcePackage\":null}]}";
+"ntime\",\"versionPolicy\":\"pinned\",\"sourcePackage\":null},{\"id\":\"zenity\",\"name\":\"Zenity\",\"version\":\""
+"4.2.1-1\",\"license\":\"LGPL-2.0-or-later file headers; LGPL-2.1-or-later COPYING\",\"authors\":[\"Glynn"
+" Foster\",\"Lucas Rocha\",\"Arx Cruz\",\"Logan Rathbone\",\"GNOME and Zenity contributors\"],\"homepage\":\""
+"https://gitlab.gnome.org/GNOME/zenity\",\"source\":\"https://gitlab.gnome.org/GNOME/zenity\",\"downloa"
+"d\":\"https://launchpad.net/ubuntu/+source/zenity/4.2.1-1\",\"sourcePackage\":\"zenity\",\"role\":\"Linux "
+"native printing dialogs; system package for Debian/RPM, staged helper for Snap\",\"versionPolicy\":"
+"\"host\"},{\"id\":\"cups\",\"name\":\"CUPS clients\",\"version\":\"2.4.16-1ubuntu1.3\",\"license\":\"Apache-2.0 w"
+"ith GPL-2.0/LGPL-2.0 linking exception; retained per-file notices\",\"authors\":[\"Michael R Sweet\","
+"\"Apple\",\"OpenPrinting and CUPS contributors\"],\"homepage\":\"https://openprinting.github.io/cups/\","
+"\"source\":\"https://github.com/OpenPrinting/cups\",\"download\":\"https://launchpad.net/ubuntu/+source"
+"/cups/2.4.16-1ubuntu1.3\",\"sourcePackage\":\"cups\",\"role\":\"External Linux printer discovery and raw"
+" PCL submission; system package or staged Snap helper\",\"versionPolicy\":\"host\"}]}";

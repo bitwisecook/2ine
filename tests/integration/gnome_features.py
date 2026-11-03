@@ -177,7 +177,9 @@ def main():
         pump(lambda: window.get_visible_dialog() is None)
         window.choose_save = chooser
         imported = root / "Imported.2ineball"
-        ball_api.native_request({"action": "import-ball", "ball": str(imported), "path": str(archive)})
+        ball_api.native_request(
+            {"action": "import-ball", "ball": str(imported), "path": str(archive)}
+        )
         window.remember(imported)
         pump(lambda: not window.busy)
         assert (

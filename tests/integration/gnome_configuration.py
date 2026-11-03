@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Exercise GTK profile/registry tabs, typed editing and live CONFIG.SYS conflicts."""
+"""Exercise GTK profile/registry sections, typed editing and live CONFIG.SYS conflicts."""
 
 import argparse
 import os
@@ -179,7 +179,7 @@ def main():
         assert window.snapshot["manifest"]["system"]["display_dpi"] == "144"
         window.destroy()
     print(
-        "GTK Settings tabs, printer inheritance, typed registry, conflict guard, live CONFIG.SYS and DPI passed"
+        "GTK Settings sections, printer inheritance, typed registry, conflict guard, live CONFIG.SYS and DPI passed"
     )
 
 

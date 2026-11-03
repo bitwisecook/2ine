@@ -41,9 +41,7 @@ def elf(path):
 
 def stage(build, destination):
     """Copy only declared runtime assets, close private ELF dependencies and relocate them."""
-    if (destination / "usr/lib/2ine-ball").exists() or (
-        destination / "usr/bin/2ine-ball"
-    ).exists():
+    if (destination / "usr/lib/2ine-ball").exists() or (destination / "usr/bin/2ine-ball").exists():
         raise ValueError(
             f"A 2ine installation already exists in the staging directory: {destination}"
         )
@@ -52,8 +50,11 @@ def stage(build, destination):
     app = destination / "usr/lib/2ine-ball"
     runtime = app / "runtime"
     runtime.mkdir(parents=True, exist_ok=True)
+    copy(ROOT / "VERSION", app / "VERSION")
     for name in (
         "gnome_ball.py",
+        "gnome_navigation.py",
+        "gnome_applications.py",
         "gnome_views.py",
         "gnome_files.py",
         "gnome_media.py",
@@ -211,7 +212,7 @@ Section: otherosfs
 Priority: optional
 Architecture: {architecture}
 Maintainer: 2ine Contributors <noreply@github.com>
-Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libstdc++6, libgcc-s1, libgl1, libegl1, libgles2
+Depends: python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0 (>= 4.18), gir1.2-adw-1 (>= 1.9), libc6 (>= {libc_floor(stage_root)}), libstdc++6, libgcc-s1, libgl1, libegl1, libgles2, zenity, cups-client
 Homepage: https://github.com/bitwisecook/2ine
 Description: Native GNOME manager for OS/2 applications
  A persistent ball of 2ine with private drives, settings and application state.
@@ -242,9 +243,9 @@ def rpm(stage_root, output, version):
 Version: {version}
 Release: 1
 Summary: Native GNOME manager for OS/2 applications
-License: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND bzip2-1.0.6
+License: Zlib AND GPL-2.0-only AND LGPL-2.1-only AND LGPL-2.1-or-later AND MPL-2.0 AND MIT AND OFL-1.1 AND BSD-2-Clause AND BSD-3-Clause AND 0BSD AND Unlicense AND bzip2-1.0.6
 URL: https://github.com/bitwisecook/2ine
-Requires: python3 >= 3.11, python3-gobject, gtk4 >= 4.18, libadwaita >= 1.9, mesa-libGL, mesa-libEGL, libglvnd-gles
+Requires: python3 >= 3.11, python3-gobject, gtk4 >= 4.18, libadwaita >= 1.9, mesa-libGL, mesa-libEGL, libglvnd-gles, zenity, cups-client
 Recommends: mesa-dri-drivers
 # Private runtime modules must not satisfy unrelated system packages.
 %global __provides_exclude_from ^/usr/lib/2ine-ball/.*$
@@ -277,7 +278,7 @@ def main():
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / "build-gnome/packages")
     parser.add_argument("--stage", type=Path, help="stage only, e.g. for Snapcraft")
-    parser.add_argument("--version", default="0.1")
+    parser.add_argument("--version", default=(ROOT / "VERSION").read_text().strip())
     parser.add_argument("--format", choices=("deb", "rpm", "all"), default="all")
     args = parser.parse_args()
     if not re.fullmatch(r"\d+(?:\.\d+){1,2}(?:[.+~][a-zA-Z0-9.]+)?", args.version):
@@ -287,6 +288,7 @@ def main():
     stage_root = stage(
         args.build.resolve(), args.stage.resolve() if args.stage else output / "stage"
     )
+    (stage_root / "usr/lib/2ine-ball/VERSION").write_text(args.version + "\n")
     if args.stage:
         return
     if args.format in ("deb", "all"):

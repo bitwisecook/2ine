@@ -80,7 +80,7 @@ def main():
         pump(lambda: not window.busy)
         path = ball_api.ball_home() / "Office.2ineball"
         assert window.ball == path
-        assert window.stack.get_pages().get_n_items() == 5
+        assert window.stack.get_pages().get_n_items() == 4
 
         def execute(arguments, expected=0):
             window.execute(arguments)

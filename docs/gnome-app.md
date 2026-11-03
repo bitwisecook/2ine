@@ -26,7 +26,7 @@ Create a ball with Ctrl+N or open a directory with Ctrl+O or a file-manager
 drop. New directories have the `.2ineball` suffix. Existing directories with
 `ball.json` also open. The sidebar remembers each external ball and the last
 selection. A narrow window becomes a navigation view with a Back button.
-Drives is the initial workspace. The five section buttons show labels where space allows and icons with
+Drives is the initial workspace. The four section buttons show labels where space allows and icons with
 native tooltips at smaller sizes. Alt+1 through Alt+4 select Drives,
 Applications, Settings and Activity.
 
@@ -65,6 +65,49 @@ installer exit does not establish that every installed application works.
 Profiles, registry and shell objects persist in the common engine's formats;
 Settings provides binary-safe OS/2 file editors and a Registry key tree. The manager
 does not provide an interactive stdin terminal.
+
+## Native settings and application preferences
+
+Settings opens a searchable list of six sections with native Back navigation.
+General holds runtime selection and diagnostics. Graphics & Sound combines
+native/OS/2 window title bars, DPI, OpenGL providers, DIVE, video, PCM, MIDI,
+PC-speaker volume and sound banks. Runtime availability and inherited defaults
+come from the shared backend. Environment shows effective values and their
+origins, Printing edits the inherited PDF/PCL queue, Config Files discovers
+startup/profile files, and Registry presents a key tree and typed value editor.
+On narrow windows the registry's Keys button opens an overlay; choosing a key
+returns to its values. File tables keep names visible while secondary columns
+return as space permits.
+
+The main menu is available in both sidebar and detail navigation. Preferences
+(Ctrl+,) selects a default location for new balls and an optional Activity log
+text size. Text otherwise follows the desktop's settings. These application
+preferences stay on the host and are separate from portable ball settings.
+Keyboard Shortcuts (Ctrl+?) lists the actual window accelerators; F1 opens help.
+Ctrl+F focuses search in the current view or dialog. Applications supports
+search by name or guest program, double-click/Return activation, Ctrl+Return to
+launch the selected application, Ctrl+Shift+E to edit it, and a native action
+menu with program-path copying and launcher removal.
+
+## Functionality shared with the Mac app
+
+| Function | GNOME interface |
+|---|---|
+| Open/create, rename, Trash and missing-ball cleanup | Sidebar, per-ball action menu and native dialogs |
+| Runtime selection, inheritance and backend fallback | Settings → General |
+| Guest directories, image media, file import, search/sort | Drives and native guest/media pickers |
+| Saved applications, icons, arguments, cwd and environment | Applications and application editor |
+| Original OS/2 file extraction and missing-library recovery | Applications → OS/2 Support and main menu |
+| Display, graphics, video, audio and bank/channel mapping | Settings → Graphics & Sound |
+| Effective environment and default printer | Settings → Environment / Printing |
+| Binary-safe startup/profile files and registry values | Settings → Config Files / Registry |
+| Portable archive transfer and opaque Undo/Redo | Main menu, native file dialogs and Undo toast |
+| Actual exit/output, Stop/Force Stop, complete logs | Activity |
+| Default ball folder and activity text size | Preferences |
+| Source/version/download links and original-author credit | About 2ine → Legal |
+
+Both clients use the same ball and backend contracts. Platform integration uses
+GNOME file dialogs, Trash, clipboard, icon themes and system printing on Linux.
 
 ## Drives and portable transfers
 
@@ -109,8 +152,8 @@ The package includes third-party license notices and runtime input hashes.
 python3 tools/build_gnome_packages.py --build build-portable --output build-gnome/packages
 ```
 
-This produces `2ine-ball_0.1_amd64.deb` and
-`2ine-ball-0.1-1.x86_64.rpm` on x86-64. Choose `--format deb` or
+This produces `2ine-ball_0.3_amd64.deb` and
+`2ine-ball-0.3-1.x86_64.rpm` on x86-64. Choose `--format deb` or
 `--format rpm` for one format. Builders require `patchelf`, `binutils`, `ldd`
 and the selected format's `dpkg-deb` or `rpmbuild`. Use a fresh output directory;
 an existing staged 2ine installation is rejected. Other parts may populate the
@@ -179,7 +222,7 @@ desktop-file-validate tools/gnome/*.desktop
 appstreamcli validate --no-net tools/gnome/*.metainfo.xml
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_ball.py --build build-portable
 xvfb-run -a dbus-run-session -- python3 tests/integration/gnome_features.py --build build-portable
-dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-ball_0.1_amd64.deb
+dbus-run-session -- xvfb-run -a python3 tests/integration/gnome_package.py build-gnome/packages/2ine-ball_0.3_amd64.deb
 ```
 
 The GTK integration executes a generated LX installer and saved launcher using

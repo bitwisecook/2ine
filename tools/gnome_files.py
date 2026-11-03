@@ -8,8 +8,10 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Adw", "1")
 try:
-    from gi.repository import Gdk, Gio, GLib, GObject, Gtk
+    from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 except ImportError as error:
     raise SystemExit("GTK 4 is required: " + str(error)) from error
 
@@ -97,7 +99,15 @@ class FileList(Gtk.Box):
         self.table.sort_by_column(columns[0], Gtk.SortType.ASCENDING)
         scroll = Gtk.ScrolledWindow(vexpand=True, min_content_height=180)
         scroll.set_child(self.table)
-        self.append(scroll)
+        self.layout = Adw.BreakpointBin(
+            child=scroll, vexpand=True, width_request=240, height_request=180
+        )
+        breakpoint = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 600sp"))
+        for column in columns[1:]:
+            breakpoint.add_setter(column, "visible", False)
+        breakpoint.add_setter(columns[0], "fixed-width", -1)
+        self.layout.add_breakpoint(breakpoint)
+        self.append(self.layout)
 
     def accept_item(self, item, *_):
         return (not self.accept or self.accept(item.entry)) and matches(

@@ -56,18 +56,18 @@ def main():
             TWOINE_GNOME_FRONTEND=str(frontend),
             TWOINE_BALL_LIBRARY=str(runtime / "libtwoine_ball.so"),
         )
-        run(
-            [sys.executable, ROOT / "tests/integration/gnome_ball.py", "--build", runtime],
-            env=environment,
-        )
-        run(
-            [sys.executable, ROOT / "tests/integration/gnome_features.py", "--build", runtime],
-            env=environment,
-        )
-        run(
-            [sys.executable, ROOT / "tests/integration/gnome_audio.py", "--build", runtime],
-            env=environment,
-        )
+        for test in (
+            "gnome_ball.py",
+            "gnome_features.py",
+            "gnome_audio.py",
+            "gnome_configuration.py",
+            "gnome_ball_management.py",
+            "gnome_native.py",
+        ):
+            run(
+                [sys.executable, ROOT / "tests/integration" / test, "--build", runtime],
+                env=environment,
+            )
         print(f"{args.package.name}: relocated ELF closure and GTK/LX workflows passed")
 
 

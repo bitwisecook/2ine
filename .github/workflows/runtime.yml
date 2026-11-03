@@ -54,6 +54,12 @@ jobs:
       - name: Test native bank import, channel mapping and source credits
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_audio.py --build build-runtime
+      - name: Test native configuration, ball lifecycle and adaptive navigation
+        if: runner.os == 'Linux' && matrix.profile == 'application'
+        run: |
+          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_configuration.py --build build-runtime
+          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_ball_management.py --build build-runtime
+          xvfb-run -a dbus-run-session -- /usr/bin/python3 tests/integration/gnome_native.py --build build-runtime
       - name: Validate GNOME metadata and build native packages
         if: runner.os == 'Linux' && matrix.profile == 'application'
         run: |
