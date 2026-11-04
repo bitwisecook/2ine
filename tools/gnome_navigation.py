@@ -164,7 +164,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
         self.reset.connect("activated", lambda *_: self.set_folder(None))
         group.add(self.reset)
         group = Adw.PreferencesGroup(
-            title="Activity",
+            title="Logs",
             description="Text size applies to application output. Other text follows your desktop preferences.",
         )
         page.add(group)
@@ -228,7 +228,7 @@ def shortcuts(window):
             ("Drives", "page1"),
             ("Applications", "page2"),
             ("Ball Settings", "page3"),
-            ("Activity", "page4"),
+            ("Logs", "page4"),
             ("Preferences", "preferences"),
             ("Keyboard Shortcuts", "shortcuts"),
             ("Close Window", "close"),

@@ -32,6 +32,7 @@ typedef struct Context
     cJSON *manifest;
     const cJSON *application;
     const char *opengl_policy;
+    char *registration_warning;
 } Context;
 
 static int fail(Context *c, const char *format, ...)
@@ -764,9 +765,11 @@ static int write_config(Context *c)
 static cJSON *guest_environment(Context *c, const cJSON *overrides);
 static cJSON *os2_support(Context *c);
 static cJSON *dependency_audit_latest(Context *c);
+static int wps_sync(Context *c);
+static cJSON *wps_latest(Context *c);
 static cJSON *snapshot(Context *c)
 {
-    if (!roots(c))
+    if (!roots(c) || !wps_sync(c))
         return NULL;
     char *path = join(c, c->roots[2], "CONFIG.SYS");
     size_t size = 0;
@@ -774,7 +777,12 @@ static cJSON *snapshot(Context *c)
     if (!bytes)
         return NULL;
     cJSON *value = cJSON_CreateObject(), *mapping = cJSON_CreateObject();
+    if (c->registration_warning)
+        cJSON_AddStringToObject(value, "applicationRegistrationWarning", c->registration_warning);
     cJSON_AddItemToObject(value, "manifest", cJSON_Duplicate(c->manifest, 1));
+    cJSON *registration = wps_latest(c);
+    if (registration)
+        cJSON_AddItemToObject(value, "applicationRegistration", registration);
     cJSON_AddItemToObject(value, "os2Support", os2_support(c));
     cJSON *dependency_audit = dependency_audit_latest(c);
     if (dependency_audit)
@@ -846,12 +854,13 @@ static cJSON *snapshot(Context *c)
     cJSON_AddStringToObject(value, "configSys", latin1_to_utf8(c, bytes, size));
     return value;
 }
-static const char *default_keys[] = {"LANG", "OS2PATH",  "LIBPATH",    "DPATH", "TEMP",
-                                     "TMP",  "USER_INI", "SYSTEM_INI", NULL};
+static const char *default_keys[] = {"LANG", "OS2PATH", "LIBPATH",  "DPATH",      "HELP",
+                                     "TEMP", "TMP",     "USER_INI", "SYSTEM_INI", NULL};
 static const char *default_values[] = {"en_US",
                                        "C:\\OS2;C:\\OS2\\SYSTEM",
                                        "C:\\OS2\\DLL",
                                        "C:\\OS2;C:\\OS2\\SYSTEM",
+                                       "C:\\OS2\\HELP",
                                        "C:\\TEMP",
                                        "C:\\TEMP",
                                        "C:\\OS2\\OS2.INI",
@@ -1211,7 +1220,7 @@ static cJSON *guest_environment(Context *c, const cJSON *overrides)
         char *key = NULL;
         if (strlen(entry) >= 4 && toupper((unsigned char)entry[0]) == 'S' &&
             toupper((unsigned char)entry[1]) == 'E' && toupper((unsigned char)entry[2]) == 'T' &&
-            entry[3] == ' ')
+            isspace((unsigned char)entry[3]))
             key = entry + 4;
         else if (strlen(entry) >= 8)
         {
@@ -1417,11 +1426,14 @@ static char *command_interpreter(Context *c)
 #include "os2_extract.h"
 #include "os2_dependencies.h"
 #include "configuration.h"
+#include "wps_applications.h"
 #include "runtime_selection.h"
 #include "runtime_features.h"
 
 static cJSON *prepare(Context *c, const cJSON *request)
 {
+    if (!wps_sync(c))
+        return NULL;
     const char *build_path = field(request, "build");
     if (!build_path || !*build_path)
     {
@@ -1972,6 +1984,7 @@ static int command(Context *c, const cJSON *request)
             return fail(c, "Invalid applications object");
         cJSON *existing = get(apps, name);
         cJSON *app = existing ? cJSON_Duplicate(existing, 1) : cJSON_CreateObject();
+        wps_detach(c, app);
         put(app, "program", cJSON_CreateString(guest_for_input(c, host, program)));
         cJSON *argv = cJSON_CreateArray();
         put(app, "arguments", argv);
@@ -2006,6 +2019,9 @@ static int command(Context *c, const cJSON *request)
             cJSON_Delete(app);
             return fail(c, "An application with that name already exists");
         }
+        const char *registration = field(get(app, "wpsRegistration"), "handle");
+        if (registration)
+            cJSON_DeleteItemFromObjectCaseSensitive(get(c->manifest, "wpsHidden"), registration);
         put(apps, name, app);
         return save_manifest(c);
     }
@@ -2013,6 +2029,7 @@ static int command(Context *c, const cJSON *request)
     {
         if (!name)
             return fail(c, "An application name is required");
+        wps_hide(c, get(get(c->manifest, "applications"), name));
         cJSON_DeleteItemFromObjectCaseSensitive(get(c->manifest, "applications"), name);
         return save_manifest(c);
     }
@@ -2296,6 +2313,7 @@ static int save_application(Context *c, const cJSON *request)
     cJSON_Delete(checked);
     if (get(request, "iconSource"))
     {
+        cJSON_DeleteItemFromObjectCaseSensitive(app, "wpsIcon");
         const char *source = field(request, "iconSource");
         if (!source || !*source)
             cJSON_DeleteItemFromObjectCaseSensitive(app, "icon");
@@ -2321,6 +2339,7 @@ static int save_application(Context *c, const cJSON *request)
         }
     }
     c->application = NULL;
+    wps_detach(c, app);
     put(apps, name, app);
     if (previous && strcmp(previous, name))
         cJSON_DeleteItemFromObjectCaseSensitive(apps, previous);
@@ -2338,6 +2357,9 @@ static cJSON *application_icon(Context *c, const cJSON *request)
         program = field(app, "program");
     const char *custom = field(app, "icon");
     cJSON *result = cJSON_CreateObject();
+    if (get(app, "wpsRegistration"))
+        cJSON_AddItemToObject(result, "wpsRegistration",
+                              cJSON_Duplicate(get(app, "wpsRegistration"), 1));
     if (program)
     {
         const char *base = program;
@@ -2349,6 +2371,11 @@ static cJSON *application_icon(Context *c, const cJSON *request)
         if (dot && dot != fallback)
             *dot = 0;
         cJSON_AddStringToObject(result, "displayName", fallback ? fallback : base);
+    }
+    if (name && get(app, "wpsRegistration"))
+    {
+        cJSON_DeleteItemFromObjectCaseSensitive(result, "displayName");
+        cJSON_AddStringToObject(result, "displayName", name);
     }
     if (custom)
     {
@@ -2383,7 +2410,50 @@ static cJSON *application_icon(Context *c, const cJSON *request)
             return result;
         }
     }
-    else if (program)
+    if (get(app, "wpsIcon"))
+    {
+        const cJSON *setting = get(app, "wpsIcon"), *resource = get(setting, "resource");
+        const char *guest = field(setting, "path");
+        char *path = guest ? host_path(c, guest, 0) : NULL;
+        uint64_t length = 0;
+        int64_t modified = 0;
+        size_t size = 0;
+        char *bytes =
+            path && tb_path_info(path, &length, &modified) && length <= 64u * 1024u * 1024u
+                ? read_file(c, path, &size, 1)
+                : NULL;
+        TbIconImage *icon =
+            bytes ? (resource ? tb_icon_executable_resource((uint8_t *)bytes, size,
+                                                            (unsigned)resource->valuedouble)
+                              : tb_icon_bitmap((uint8_t *)bytes, size))
+                  : NULL;
+        if (icon)
+        {
+            char *rgba = tb_icon_rgba_base64(icon);
+            cJSON_AddStringToObject(result, "rgba", rgba);
+            cJSON_AddNumberToObject(result, "width", icon->width);
+            cJSON_AddNumberToObject(result, "height", icon->height);
+            cJSON_AddStringToObject(result, "source",
+                                    resource ? "wps-iconresource" : "wps-iconfile");
+            cJSON_AddStringToObject(result, "iconPath", guest);
+            if (field(setting, "declaredPath"))
+            {
+                cJSON_AddStringToObject(result, "declaredIconPath", field(setting, "declaredPath"));
+                cJSON_AddStringToObject(result, "fallbackReason", field(setting, "fallbackReason"));
+            }
+            free(rgba);
+            tb_icon_free(icon);
+            if (name)
+            {
+                cJSON_DeleteItemFromObjectCaseSensitive(result, "displayName");
+                cJSON_AddStringToObject(result, "displayName", name);
+            }
+            return result;
+        }
+        free(c->error);
+        c->error = NULL;
+    }
+    if (program)
     {
         char *host = host_path(c, program, 0);
         if (host && tb_is_file(host))
@@ -2392,12 +2462,14 @@ static cJSON *application_icon(Context *c, const cJSON *request)
             char *bytes = read_file(c, host, &size, 0);
             char *description =
                 bytes ? tb_executable_description((const uint8_t *)bytes, size) : NULL;
-            if (description)
+            if (description && !get(app, "wpsRegistration"))
             {
                 cJSON_DeleteItemFromObjectCaseSensitive(result, "displayName");
                 cJSON_AddStringToObject(result, "displayName", description);
                 free(description);
             }
+            else
+                free(description);
             TbIconImage *icon =
                 bytes ? tb_icon_executable((const unsigned char *)bytes, size) : NULL;
             if (icon)
@@ -2671,6 +2743,10 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     }
     if (!load(c, request))
         return NULL;
+    if ((!strcmp(action, "command") || !strcmp(action, "save-application") ||
+         !strcmp(action, "application-icon")) &&
+        !wps_sync(c))
+        return NULL;
     if (!strcmp(action, "audit-dependencies") || !strcmp(action, "record-install") ||
         !strcmp(action, "open-os2-source") || !strcmp(action, "plan-os2-extraction") ||
         !strcmp(action, "import-os2-support"))
@@ -2844,6 +2920,14 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             put(saved, "program_sha256", cJSON_CreateString(hex(c, digest)));
         put(saved, "exit_code", cJSON_Duplicate(exit, 1));
         put(saved, "finished", cJSON_CreateString(now(c)));
+        if (!wps_sync(c))
+        {
+            cJSON_Delete(saved);
+            return NULL;
+        }
+        cJSON *registered = wps_latest(c);
+        if (registered)
+            put(saved, "applicationRegistration", registered);
         cJSON *audit = audit_dependencies(c, request, exit->valuedouble == 0);
         if (audit)
         {

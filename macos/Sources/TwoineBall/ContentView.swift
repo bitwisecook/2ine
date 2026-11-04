@@ -10,7 +10,13 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView { sidebar } detail: { detail }
         .frame(minWidth: 880, minHeight: 590)
-        .onAppear { model.page = lastPage == "Configuration" ? .settings : Page(rawValue: lastPage) ?? .drives }
+        .onAppear {
+            switch lastPage {
+            case "Configuration": model.page = .settings
+            case "Activity": model.page = .activity
+            default: model.page = Page(rawValue: lastPage) ?? .drives
+            }
+        }
         .onChange(of: model.page) { _, page in lastPage = page.rawValue }
         .dropDestination(for: URL.self) { urls, _ in
             guard !model.busy, !model.mediaBusy, let url = urls.first,
@@ -245,6 +251,7 @@ struct ActivityView: View {
                 }
                 if let log = model.log { Button("Open Full Log") { model.openFile(log.path) } }
                 if let audit = model.dependencyAuditLog { Button("Open Dependency Audit") { model.openFile(audit.path) }.accessibilityIdentifier("openDependencyAudit") }
+                if let registrations = model.applicationRegistrationLog { Button("Open Application Registrations") { model.openFile(registrations.path) } }
             }
             ScrollView([.horizontal, .vertical]) {
                 Text(model.activity).font(.system(size: logFontSize, design: .monospaced))

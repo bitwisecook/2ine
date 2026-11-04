@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 import SwiftUI
 
 enum Page: String, CaseIterable, Identifiable {
-    case drives = "Drives", applications = "Applications", settings = "Settings", activity = "Activity"
+    case drives = "Drives", applications = "Applications", settings = "Settings", activity = "Logs"
     var id: String { rawValue }
 }
 struct OS2ImportRequest: Identifiable {
@@ -632,6 +632,12 @@ final class AppModel {
         guard let selected, let path = snapshot?.dependencyAudit?.logPath else { return nil }
         let logs = URL(filePath: selected).appending(path: "logs").resolvingSymlinksInPath()
         let file = URL(filePath: path).resolvingSymlinksInPath()
+        return file.path.hasPrefix(logs.path + "/") && FileManager.default.fileExists(atPath: file.path) ? file : nil
+    }
+    var applicationRegistrationLog: URL? {
+        guard let selected else { return nil }
+        let logs = URL(filePath: selected).appending(path: "logs").resolvingSymlinksInPath()
+        let file = logs.appending(path: "wps-registration-latest.json").resolvingSymlinksInPath()
         return file.path.hasPrefix(logs.path + "/") && FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
     func auditDependencies() {

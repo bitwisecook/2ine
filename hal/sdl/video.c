@@ -86,7 +86,7 @@ LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned wid
 }
 int lx_host_pointer_set(LxHostPointer *pointer)
 {
-    return pointer ? SDL_SetCursor(pointer->cursor) && cursor_visible(1) : cursor_visible(0);
+    return pointer ? SDL_SetCursor(pointer->cursor) : cursor_visible(0);
 }
 struct LxHostWindow
 {

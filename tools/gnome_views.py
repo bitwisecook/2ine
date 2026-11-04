@@ -1130,7 +1130,7 @@ class ProgramDialog(FormDialog):
                     self.close()
                 else:
                     self.error_message(
-                        "The program could not be started. Check Activity for details."
+                        "The program could not be started. Check Logs for details."
                     )
                 return
             undo = [{"action": "command", "arguments": ["remove-app", name]}]

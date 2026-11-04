@@ -735,11 +735,27 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
         case WM_BUTTON2DOWN:
         case WM_BUTTON3DOWN:
         case WM_CALCVALIDRECTS:
-        case WM_CONTROLPOINTER:
         case WM_FOCUSCHANGE:
         case WM_HELP:
-        case WM_MOUSEMOVE:
             return 0;
+        case WM_CONTROLPOINTER:
+            return (MRESULT)mp2;
+        case WM_MOUSEMOVE:
+        {
+            LONG shape = win->control && (win->control->kind == (USHORT)WC_ENTRYFIELD ||
+                                          win->control->kind == (USHORT)WC_MLE)
+                             ? 2  /* SPTR_TEXT */
+                             : 1; /* SPTR_ARROW */
+            HPOINTER pointer = WinQuerySysPointer(HWND_DESKTOP, shape, FALSE);
+            if (!pointer)
+                return 0;
+            if (win->control && win->owner)
+                pointer = (HPOINTER)(uintptr_t)sendMessage(win->owner, WM_CONTROLPOINTER,
+                                                           (MPARAM)(uintptr_t)(USHORT)win->id,
+                                                           (MPARAM)(uintptr_t)pointer);
+            WinSetPointer(HWND_DESKTOP, pointer);
+            return (MRESULT)(uintptr_t)TRUE;
+        }
         case WM_PPAINT:
         case WM_QUERYCONVERTPOS:
         case WM_QUERYWINDOWPARAMS:

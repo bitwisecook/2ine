@@ -250,3 +250,128 @@ panel. Arbitrary metafile images, standalone VIEW cross-process delivery, search
 all books and full help interaction remain separately unqualified; unsupported
 metafile operations still return an explicit error. Passing the text panel does
 not qualify those independent features.
+
+## Existing-ball help search path, 2026-11-04
+
+Read-only inspection of `/Users/jimd/Documents/Lotus.2ineball` after support
+extraction found HELPMGR.DLL250157 bytes, HPMGRMRI.DLL21881 bytes, VIEW.EXE33304
+bytes, VIEWDOC.EXE and HMHELP.HLP/HMHELPA.HLP/HMHELPH.HLP in their intended
+OS2/DLL, OS2 and OS2/HELP directories. The manager, resource DLL and default
+book match the hashes recorded above. CONFIG.SYS has correct
+`LIBPATH=C:\OS2\DLL`, but no HELP entry; its DPATH is
+`C:\OS2;C:\OS2\SYSTEM`. The manifest environment is empty. Existing ball
+defaults likewise omitted HELP. Extraction therefore succeeded, while the
+original manager's independent default HMHELP.HLP lookup could not find its
+book even when the caller specified an absolute application book path.
+
+Fresh evidence is confined to `build-help-current/`. The isolated
+`probe-help-paths.py` copies only the three required original files and uses
+the installed `/Applications/2ine.app/Contents/Resources/Runtime` runtime:
+
+- `without-help-path/result.json`: guest exit0, original HELPINIT error0x2003
+  (HMERR_OPEN_LIB_FILE, Toolkit45 pmhelp.h), HWND0.
+- `with-help-path/result.json`: changing only HELP to `C:\OS2\HELP` yields
+  original HELPINIT error0 and genuine HWND720306186.
+- Native trace proves the failing second `DosSearchPath(7,"HELP","HMHELP.HLP")`
+  falls back to `DosOpen("HMHELP.HLP")`; the successful comparison opens
+  `C:\OS2\HELP\HMHELP.HLP`.
+
+`ball/ball.c` now provides `HELP=C:\OS2\HELP` through its shared default table.
+New CONFIG.SYS files contain it; existing balls receive it in the launch
+environment without rewriting their CONFIG.SYS. Explicit CONFIG.SYS, manifest
+and application values retain the existing override precedence.
+`verify-default.py` creates an isolated ball, copies the real existing
+CONFIG.SYS read-only, obtains the actual updated guest environment, and launches
+the genuine installed manager: error0, HWND769523722. No active user process or
+user ball was changed; the already running installer must receive the updated
+environment on its next launch.
+
+Persistent `test_help_search_default_applies_to_existing_balls_and_respects_configuration`
+checks the existing-ball default, unchanged CONFIG.SYS bytes, configured search
+path preservation and application override. The support suite passes19/19;
+ball engine/CLI suites pass23/23; rebuild, Ruff, ty and diff checks pass. This fixes initialization's
+book lookup; independent full-book/metafile/viewer interaction gates above
+retain their separate scope.
+
+## Component search paths after extraction, 2026-11-04
+
+Original 4.52 OS2/INSTALL/INSTALL.EXE, SHA256
+`7297cf99a312e658da751494ac18f69955162d17e26176ecd18b42ccce63a447`,
+contains CONFIG.SYS template strings for native OS2/DLL, SYSTEM, INSTALL,
+APPS, APPS/DLL, MDOS and WINOS2 search directories. Its DPATH includes BITMAP;
+HELP points to OS2/HELP and BOOKSHELF to OS2/BOOK. Exact selected original
+path/hash and the bounded template strings are retained in
+`build-help-current/os2-config-template-evidence.json`. This is static template
+evidence, not an observed complete original installation.
+
+`ball/os2_paths.h` now derives search-list additions from selected files
+actually present at their canonical installation destinations. Both the
+legacy CMD/REXX support importer and category extraction use it. Native
+EXE/CMD parent directories join PATH and DPATH, DLL parents join LIBPATH,
+HLP parents join HELP, INF parents join BOOKSHELF, and message/bitmap data
+parents join DPATH. Directory allowlists cover the native OS2, MMOS2 and
+bounded network BIN/DLL/HELP/BOOK layouts, plus WinOS2 executable locations.
+WinOS2 DLLs never enter the native LIBPATH. Preserved alternate media variants,
+runtime cache, boot driver and unrelated source directories cannot contribute.
+No DEVICE, BASEDEV, IFS, service, network configuration or unrelated setting is
+copied from the installer template.
+
+Configuration preserves all original bytes and appends only changed final
+assignments. Existing custom search order stays first. Directory matching
+ignores case, slash direction, surrounding quotes and trailing separators.
+Existing manifest search overrides receive the same required additions while
+retaining custom entries, so they cannot mask the newly installed components.
+CONFIG.SYS is rechecked against its original bytes before atomic replacement.
+Repeated extraction can repair paths for already present selected files without
+overwriting or reimporting those files; a second unchanged pass is idempotent.
+This also provides a safe replay through the existing extraction operation,
+using the remembered media and selected support categories.
+
+Fonts do not use a fabricated FONT environment variable. The current host font
+renderer opens its own packaged font directory or explicit warp font override;
+OS/2 PM_Fonts profile registration is a separate unimplemented extraction
+integration and is not claimed by these search-list changes.
+
+Focused extraction suite23/23 passes, including custom CONFIG search order,
+new category selection, existing-file repair without payload writes, tabbed SET
+assignments, case/slash/quote deduplication, both supported PATH aliases,
+manifest overrides, full-extraction books/apps/network paths and exclusion of
+driver/font path variables. Related ball/dependency suites38/38 pass. Fresh
+logs are `build-help-current/component-path-{build,tests,related-tests}.log`.
+No user ball or active installer process was changed.
+
+### Repair after an installer replaces HELP
+
+A subsequent read-only snapshot of the actual Lotus CONFIG.SYS showed its new
+HELP assignment contains only six C:\LOTUSW4 application directories. Default
+fallbacks correctly do not override an explicit configuration value; the
+original manager again returns0x2003. This requires persistence of the missing
+component directory rather than a forced launch-time override.
+
+`build-help-current/verify-current-config-repair.py` copies that exact current
+configuration and seven original support files into a disposable ball. It
+replays the remembered nested ZIP/ISO/os2image source through the existing
+`import-os2-support` action, categories `cmd,help`, modules
+`HMHELP.HLP,CMDREF.INF,CMD.EXE,REXX.DLL,OSO001.MSG`, rememberSourcesfalse.
+All selected payloads already exist. The extraction result has imported[];
+all seven SHA256 values remain equal, and a second replay changes no bytes.
+HELP retains all six Lotus directories and adds C:\OS2\HELP; BOOKSHELF becomes
+C:\OS2\BOOK. The unified genuine manager probe returns error0 and
+HWND2819162122. Result, before/after CONFIG, environment, extraction result and
+native trace are retained under `build-help-current/current-config-repair/`.
+
+The exact real-ball request is saved for the root agent as
+`build-help-current/repair-actual-request.json`; supported invocation is
+`build-image-app-runtime/2ine-ball < build-help-current/repair-actual-request.json`.
+This child agent did not execute that real-ball mutation. New targeted
+regression verifies a fresh ball initially contains its normal HELP path,
+simulates the installer replacing it, and checks that narrow replay restores
+the missing directory with no imported payloads or remembered-source changes.
+
+The root integration run subsequently applied that verified request to the
+actual Documents ball. Its result again has imported[]; the original Lotus
+directories remain first and the missing HELP/BOOKSHELF directories are present.
+The repair summary is persisted in the ball's logs/os2-support-path-repair.json.
+The isolated genuine-manager probe using the repaired actual CONFIG returns
+error0 and HWND2831089674 under the receiving runtime. The final tool suite,
+including the new overwritten-HELP regression, passes199/199.

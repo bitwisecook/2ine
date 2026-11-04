@@ -63,7 +63,7 @@ submission/status/log evidence under `build-macos/`.
 
 ## Version and build number
 
-The application version is **0.1**. Each application-bundle build reserves a new
+The application version is **0.3**. Each application-bundle build reserves a new
 integer `CFBundleVersion`, independently of the version number. Xcode runs the
 allocator on every build, including incremental builds, and processes a derived
 Info.plist before signing. The packaging script uses the same allocator.
@@ -178,7 +178,18 @@ prepares all drive directories; guest subprocesses inherit the live directories.
 The default launch cwd is the program drive's configured default, initially its
 root. Existing explicit `cwd`/`--cwd` launchers still override it.
 
-Applications display their embedded OS/2 icon by default. Choose Icon imports a
+Applications imports program objects registered by installers with the OS/2
+Workplace Shell, including their names, arguments, working directories and icons.
+Refreshing a ball reconciles those registrations while preserving manual launchers.
+Editing or removing an imported launcher prevents later refreshes from replacing
+or recreating it. Logs provides Open Application Registrations for the persisted
+registration report.
+
+Extracting OS/2 support also adds the standard search directories for the selected
+installed components to CONFIG.SYS. Existing custom path order is preserved;
+repeating extraction can repair missing paths without replacing installed files.
+
+Applications display their registered or embedded OS/2 icon by default. Choose Icon imports a
 custom image into the ball; Use Executable Icon restores automatic extraction.
 Missing/unsupported embedded artwork uses the native application symbol. Removing a launcher preserves installed files. Select application rows
 to copy tab-separated text; use their context menu or Command-Return to launch.
@@ -193,13 +204,13 @@ Use Bundled Runtime removes an external runtime selection; the backend has a
 separate inheritance control.
 
 The manager serializes operations. Close guest windows normally, or choose Stop
-Operation from Activity or the Ball menu (Command-Period). Stopping requires
+Operation from Logs or the Ball menu (Command-Period). Stopping requires
 confirmation because guest work may be lost. Force Stop is available after Stop
 if the guest ignores termination. Both paths wait for actual process exit and
 retain its log and exit status before allowing another operation or quitting.
 
 Use View shortcuts Command-1 through Command-4 for Drives, Applications, Settings
-and Activity. The Ball menu also exposes selection-aware application
+and Logs. The Ball menu also exposes selection-aware application
 launch/edit/remove and drive unmap/default-folder commands. File → Save CONFIG.SYS
 uses Command-S. Finder commands reveal packages/files without opening them;
 Open Full Log opens the log in its associated application. The sidebar, native table columns, window geometry and
@@ -219,7 +230,7 @@ Shell objects remain application-managed.
 This is a library/utility app with a manager window and one owned operation, not
 a document editor for OS/2 applications. The manager presents GUI programs and output logs; it does not provide an interactive stdin terminal. Text copy is available for multiple
 application rows; execution and launcher removal operate on one selection at a
-time. Full logs are saved under `logs/macos-*.log`; Activity shows the last 64 KiB
+time. Full logs are saved under `logs/macos-*.log`; Logs shows the last 64 KiB
 and actual process exit status. An installer exit code does not establish that
 its installed applications are functional.
 

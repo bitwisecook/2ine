@@ -127,6 +127,7 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         case 43:
             return 3; /* pointer buttons */
         case 44:
+            return queryPointerLevel(); /* SV_POINTERLEVEL */
         case 45:
         case 46:
             return 0;

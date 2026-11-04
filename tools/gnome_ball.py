@@ -839,7 +839,7 @@ class BallWindow(Adw.ApplicationWindow):
         self.profile_pages.append(registry)
         self.configuration_stack.add_titled(registry, "registry", "Registry")
         self.configuration_stack.set_visible_child_name(configuration_tab or "overview")
-        activity = self.page("activity", "Activity", "document-open-recent-symbolic")
+        activity = self.page("activity", "Logs", "document-open-recent-symbolic")
         self.status = Gtk.Label(xalign=0, wrap=True)
         self.status.add_css_class("heading")
         activity.append(self.status)

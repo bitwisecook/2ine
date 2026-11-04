@@ -129,8 +129,8 @@ int main(int argc, char **argv)
         CHECK(!WinRegisterObjectClass(NULL, "missing.dll"));
         CHECK(!WinRegisterObjectClass("TestDocument", ""));
         CHECK(WinRegisterObjectClass("TestDocument", "C:\\OS2\\DLL\\missing.dll"));
-        ULONG folder =
-            WinCreateObject("WPFolder", "Suite", "OBJECTID=<TEST_SUITE>;", "<WP_DESKTOP>", 0);
+        ULONG folder = WinCreateObject("WPFolder", "Initial", "TITLE=Suite;OBJECTID=<TEST_SUITE>;",
+                                       "<WP_DESKTOP>", 0);
         CHECK(folder && folder == WinQueryObject("<test_suite>"));
         CHECK(!WinCreateObject("WPFolder", "Suite", "", "<WP_DESKTOP>", 0));
         CHECK(!WinCreateObject("Unknown", "Title", "", "<WP_DESKTOP>", 0));
@@ -143,6 +143,8 @@ int main(int argc, char **argv)
               WinCreateObject("WPProgram", "Editor", "PARAMETERS=one^;two;", "<TEST_SUITE>", 2));
         CHECK(app == WinQueryObject("<TEST_APP>"));
         CHECK(WinSetObjectData(app, "OBJECTID=<TEST_RENAMED>;"));
+        CHECK(WinSetObjectData(app, "TITLE=Changed;"));
+        CHECK(!WinCreateObject("WPProgram", "Changed", "", "<TEST_SUITE>", 0));
         CHECK(!WinQueryObject("<TEST_APP>") && WinQueryObject("<TEST_RENAMED>") == app);
         CHECK(!WinCreateObject("WPShadow", "Ignored", "SHADOWID=<MISSING>;", "<TEST_SUITE>", 1));
         CHECK(WinCreateObject("WPShadow", "Ignored",

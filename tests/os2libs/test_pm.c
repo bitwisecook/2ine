@@ -50,6 +50,15 @@ static uint32 icon_release(void *resource)
 }
 static void pointer_contracts(HPS ps)
 {
+    CHECK((uintptr_t)WinDefWindowProc(HWND_DESKTOP, WM_CONTROLPOINTER, (MPARAM)(uintptr_t)123,
+                                      (MPARAM)(uintptr_t)0x4567) == 0x4567);
+    CHECK(WinQuerySysValue(HWND_DESKTOP, 44) == 0);
+    CHECK(WinShowPointer(HWND_DESKTOP, FALSE) && WinShowPointer(HWND_DESKTOP, FALSE));
+    CHECK(WinQuerySysValue(HWND_DESKTOP, 44) == 2);
+    CHECK(WinSetPointer(HWND_DESKTOP, 0) && WinQuerySysValue(HWND_DESKTOP, 44) == 2);
+    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) && WinQuerySysValue(HWND_DESKTOP, 44) == 1);
+    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) && WinQuerySysValue(HWND_DESKTOP, 44) == 0);
+    CHECK(WinShowPointer(HWND_DESKTOP, TRUE) && WinQuerySysValue(HWND_DESKTOP, 44) == 0);
     for (unsigned offset = 0; offset <= 32; offset += 32)
     {
         uint8_t *header = icon_resource + offset;

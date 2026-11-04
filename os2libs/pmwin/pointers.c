@@ -14,6 +14,17 @@ typedef struct PmPointer
     unsigned hot_x, hot_y;
 } PmPointer;
 static HPOINTER current_pointer;
+static LONG pointer_level;
+static BOOL pointer_selected = TRUE; /* The host starts with its default arrow. */
+LONG queryPointerLevel(void)
+{
+    return __atomic_load_n(&pointer_level, __ATOMIC_ACQUIRE);
+}
+static BOOL applyPointerVisibility(void)
+{
+    return lx_host_pointer_show(!queryPointerLevel() &&
+                                __atomic_load_n(&pointer_selected, __ATOMIC_ACQUIRE));
+}
 static void release_pointer(void *resource)
 {
     PmPointer *pointer = resource;
@@ -161,13 +172,17 @@ HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
 }
 BOOL WinSetPointer(HWND desktop, HPOINTER handle)
 {
+    TRACE_NATIVE("WinSetPointer(%u, %u)", (uint)desktop, (uint)handle);
     if (desktop != HWND_DESKTOP || !getAnchorBlockNoHAB())
         return FALSE;
     if (!handle)
     {
         BOOL result = lx_host_pointer_set(NULL);
         if (result)
+        {
             __atomic_store_n(&current_pointer, 0, __ATOMIC_RELEASE);
+            __atomic_store_n(&pointer_selected, FALSE, __ATOMIC_RELEASE);
+        }
         return result;
     }
     LxHandleBorrow borrow;
@@ -195,7 +210,11 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
     }
     BOOL result = pointer->host && lx_host_pointer_set(pointer->host);
     if (result)
+    {
         __atomic_store_n(&current_pointer, handle, __ATOMIC_RELEASE);
+        __atomic_store_n(&pointer_selected, TRUE, __ATOMIC_RELEASE);
+        result = applyPointerVisibility();
+    }
     lx_handle_release(&borrow);
     return result;
 }
@@ -217,7 +236,18 @@ BOOL WinSetPointerPos(HWND desktop, LONG x, LONG y)
 }
 BOOL WinShowPointer(HWND desktop, BOOL show)
 {
-    return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() && lx_host_pointer_show(show != 0);
+    TRACE_NATIVE("WinShowPointer(%u, %u)", (uint)desktop, (uint)show);
+    if (desktop != HWND_DESKTOP || !getAnchorBlockNoHAB())
+        return FALSE;
+    LONG previous = queryPointerLevel(), next;
+    do
+    {
+        if (!show && previous == INT32_MAX)
+            return FALSE;
+        next = show ? (previous ? previous - 1 : 0) : previous + 1;
+    } while (!__atomic_compare_exchange_n(&pointer_level, &previous, next, FALSE, __ATOMIC_ACQ_REL,
+                                          __ATOMIC_ACQUIRE));
+    return applyPointerVisibility();
 }
 BOOL WinShowCursor(HWND handle, BOOL show)
 {

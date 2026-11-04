@@ -291,6 +291,7 @@ LX_PRIVATE MRESULT sendOwnerItem(Window *owner, ULONG id, OWNERITEM *item);
 LX_PRIVATE void validateWindowPaint(AnchorBlock *anchor, Window *window);
 LX_PRIVATE void destroyDeviceContexts(AnchorBlock *anchor);
 LX_PRIVATE void destroyPointers(AnchorBlock *anchor);
+LX_PRIVATE LONG queryPointerLevel(void);
 LX_PRIVATE void destroyHooks(AnchorBlock *anchor);
 LX_PRIVATE BOOL filterInputMessage(AnchorBlock *anchor, QMSG *message, ULONG flags);
 #endif

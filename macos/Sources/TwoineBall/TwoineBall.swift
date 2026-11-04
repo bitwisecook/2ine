@@ -233,7 +233,7 @@ struct AppSettingsView: View {
                 Button("Choose Folder…") { if let url = AppModel.pick(directory: true, title: "Default Ball Folder") { folder = url.path } }
                 Button("Reset to Documents") { folder = "" }
             }
-            Section("Activity") {
+            Section("Logs") {
                 Slider(value: $logFontSize, in: 10...24, step: 1) { Text("Log text size") }
                 Text("\(Int(logFontSize)) pt").foregroundStyle(.secondary)
             }

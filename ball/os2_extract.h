@@ -745,6 +745,19 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     cJSON_Delete(priorities);
     cJSON_Delete(ambiguous);
     cJSON_Delete(staged);
+    if (!c->error)
+    {
+        cJSON *paths = cJSON_CreateArray();
+        cJSON_ArrayForEach(file, get(plan, "files"))
+        {
+            int index = extract_category(field(file, "category"));
+            if (!cJSON_IsTrue(get(file, "provided")) && (selected[5] || selected[index]) &&
+                extraction_wants_module(modules, field(file, "path")))
+                cJSON_AddItemToArray(paths, cJSON_Duplicate(file, 1));
+        }
+        os2_configure_paths(c, paths);
+        cJSON_Delete(paths);
+    }
     cJSON_Delete(plan);
     if (c->error)
     {

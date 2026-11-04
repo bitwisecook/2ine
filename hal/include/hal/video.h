@@ -22,6 +22,8 @@ LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape);
 LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
                                             unsigned hot_x, unsigned hot_y);
 void lx_host_pointer_destroy(LxHostPointer *pointer);
+/* Selecting a shape preserves visibility; NULL removes the current pointer.
+   The caller applies its display-level policy through lx_host_pointer_show. */
 int lx_host_pointer_set(LxHostPointer *pointer);
 typedef struct LxHostRect
 {

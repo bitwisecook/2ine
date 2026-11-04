@@ -300,6 +300,13 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
         snprintf(merged, size, "%s;%s", previous.setup, setup);
         object.setup = merged;
     }
+    char configured_title[32768];
+    if (property(object.setup, "TITLE", configured_title, sizeof configured_title))
+    {
+        if (!*configured_title || strlen(configured_title) > 4096)
+            goto free_previous;
+        object.title = configured_title;
+    }
     ULONG handle = existing;
     if (!handle)
     {
@@ -341,7 +348,14 @@ BOOL WinSetObjectData(ULONG handle, PSZ setup)
         {
             snprintf(merged, size, "%s;%s", object.setup, setup);
             object.setup = merged;
-            result = save(profile, handle, &object);
+            char title[32768];
+            BOOL titled = property(merged, "TITLE", title, sizeof title);
+            if (!titled || (*title && strlen(title) <= 4096))
+            {
+                if (titled)
+                    object.title = title;
+                result = save(profile, handle, &object);
+            }
         }
         free(merged);
     }

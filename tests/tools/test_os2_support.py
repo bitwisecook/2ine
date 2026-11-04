@@ -81,6 +81,21 @@ class OS2SupportTests(unittest.TestCase):
         path.write_bytes(payload)
         return str(path)
 
+    def test_help_search_default_applies_to_existing_balls_and_respects_configuration(self):
+        config = self.ball / "drive_c/CONFIG.SYS"
+        config.write_text("SET DPATH=C:\\OS2;C:\\OS2\\SYSTEM\n")
+        original = config.read_bytes()
+        self.assertEqual(self.request("guest-environment")["HELP"], "C:\\OS2\\HELP")
+        self.assertEqual(config.read_bytes(), original)
+        config.write_text("SET HELP=D:\\CUSTOM\\HELP;C:\\OS2\\HELP\n")
+        self.assertEqual(
+            self.request("guest-environment")["HELP"], "D:\\CUSTOM\\HELP;C:\\OS2\\HELP"
+        )
+        self.assertEqual(
+            self.request("guest-environment", environment={"HELP": "E:\\BOOKS"})["HELP"],
+            "E:\\BOOKS",
+        )
+
     def test_unreadable_detected_iso_is_reported_without_hiding_readable_iso(self):
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zip:
@@ -183,6 +198,111 @@ class OS2SupportTests(unittest.TestCase):
         self.assertIn("media.iso", opened["directory"]["label"])
         plan = self.request("plan-os2-extraction", sources=opened["sources"])
         self.assertEqual([file["path"] for file in plan["files"]], ["C:\\OS2\\CMD.EXE"])
+
+    def test_extraction_persists_component_paths_and_preserves_custom_search_order(self):
+        source, _ = self.extraction_media()
+        config = self.ball / "drive_c/CONFIG.SYS"
+        original = (
+            b"REM Custom configuration\r\nSET PATH=D:\\TOOLS\r\n"
+            b"SET\tHELP=D:\\HELP\r\nLIBPATH=D:\\DLL\r\nSET DPATH=D:\\DATA\r\n"
+        )
+        config.write_bytes(original)
+        self.request("import-os2-support", sources=[source], categories=["cmd", "help"])
+        self.assertTrue(config.read_bytes().startswith(original))
+        env = self.request("guest-environment")
+        self.assertEqual(env["OS2PATH"], "D:\\TOOLS;C:\\OS2")
+        self.assertEqual(env["LIBPATH"], "D:\\DLL;C:\\OS2\\DLL")
+        self.assertEqual(env["DPATH"], "D:\\DATA;C:\\OS2;C:\\OS2\\SYSTEM")
+        self.assertEqual(env["HELP"], "D:\\HELP;C:\\OS2\\HELP")
+        self.assertNotIn("BOOKSHELF", env)
+        self.assertNotIn("C:\\OS2\\APPS", env["OS2PATH"])
+        persisted = config.read_bytes()
+        self.request("import-os2-support", sources=[source], categories=["cmd", "help"])
+        self.assertEqual(config.read_bytes(), persisted)
+
+    def test_existing_selected_files_repair_paths_with_case_and_slash_deduplication(self):
+        source, _ = self.extraction_media()
+        self.request("import-os2-support", sources=[source], categories=["help"])
+        config = self.ball / "drive_c/CONFIG.SYS"
+        original = b'SET\tHELP=D:\\HELP;"c:/os2/help/"\r\nSET PATH=D:\\TOOLS\r\n'
+        config.write_bytes(original)
+        result = self.request("import-os2-support", sources=[source], categories=["help"])
+        self.assertEqual(result["imported"], [])
+        self.assertTrue(config.read_bytes().startswith(original))
+        self.assertEqual(config.read_bytes().count(b"SET\tHELP="), 1)
+        self.assertNotIn(b"SET HELP=", config.read_bytes())
+        self.assertEqual(self.request("guest-environment")["HELP"], 'D:\\HELP;"c:/os2/help/"')
+        self.assertEqual(self.request("guest-environment")["OS2PATH"], "D:\\TOOLS;C:\\OS2")
+
+    def test_reimport_repairs_installer_replaced_help_path_without_importing_payloads(self):
+        source, _ = self.extraction_media()
+        config = self.ball / "drive_c/CONFIG.SYS"
+        self.assertIn(b"SET HELP=C:\\OS2\\HELP", config.read_bytes())
+        self.request("import-os2-support", sources=[source], categories=["help"])
+        original = b"SET HELP=C:\\LOTUSW4\\COMPNENT;C:\\LOTUSW4\\WORDPRO;\r\n"
+        config.write_bytes(original)
+        book = self.ball / "drive_c/OS2/HELP/TEST.HLP"
+        payload = book.read_bytes()
+        remembered = (self.ball / "os2-media.json").read_bytes()
+        result = self.request(
+            "import-os2-support",
+            sources=[source],
+            categories=["help"],
+            modules=["TEST.HLP"],
+            rememberSources=False,
+        )
+        self.assertEqual(result["imported"], [])
+        self.assertEqual(book.read_bytes(), payload)
+        self.assertEqual((self.ball / "os2-media.json").read_bytes(), remembered)
+        self.assertTrue(config.read_bytes().startswith(original))
+        self.assertEqual(
+            self.request("guest-environment")["HELP"],
+            "C:\\LOTUSW4\\COMPNENT;C:\\LOTUSW4\\WORDPRO;C:\\OS2\\HELP",
+        )
+
+    def test_full_extraction_adds_books_and_apps_without_driver_or_font_path_variables(self):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            for name, payload in {
+                "OS2/BOOK/TEST.INF": b"book",
+                "OS2/APPS/UTILITY.EXE": CMD,
+                "OS2/APPS/DLL/UTILITY.DLL": CMD,
+                "OS2/BITMAP/DESKTOP.BMP": b"bitmap",
+                "OS2/BOOT/DRIVER.SYS": b"driver",
+                "MPTN/DLL/SUPPORT.DLL": CMD,
+                "TCPIP/BIN/UTILITY.EXE": CMD,
+                "PSFONTS/FACE.PFB": b"font",
+            }.items():
+                archive.writestr(name, payload)
+        source = self.media("full-paths.zip", output.getvalue())
+        self.request("import-os2-support", sources=[source], categories=["full"])
+        env = self.request("guest-environment")
+        self.assertEqual(env["BOOKSHELF"], "C:\\OS2\\BOOK")
+        self.assertIn("C:\\OS2\\APPS", env["OS2PATH"].split(";"))
+        self.assertIn("C:\\OS2\\APPS\\DLL", env["LIBPATH"].split(";"))
+        self.assertIn("C:\\OS2\\BITMAP", env["DPATH"].split(";"))
+        self.assertIn("C:\\MPTN\\DLL", env["LIBPATH"].split(";"))
+        self.assertIn("C:\\TCPIP\\BIN", env["OS2PATH"].split(";"))
+        text = (self.ball / "drive_c/CONFIG.SYS").read_text()
+        self.assertNotIn("DEVICE=", text)
+        self.assertNotIn("PSFONTS", text)
+        self.assertNotIn("OS2\\BOOT", text)
+
+    def test_extraction_adds_paths_to_manifest_overrides_preserving_custom_entries(self):
+        source, _ = self.extraction_media()
+        manifest = self.ball / "ball.json"
+        settings = json.loads(manifest.read_text())
+        settings["environment"] = {"help": "E:\\MANUALS", "PATH": "E:\\TOOLS"}
+        manifest.write_text(json.dumps(settings))
+        self.request("import-os2-support", sources=[source], categories=["help"])
+        env = self.request("guest-environment")
+        self.assertEqual(env["HELP"], "E:\\MANUALS;C:\\OS2\\HELP")
+        self.assertEqual(env["OS2PATH"], "E:\\TOOLS;C:\\OS2")
+        settings = json.loads(manifest.read_text())
+        settings["environment"] = {"OS2PATH": "F:\\TOOLS"}
+        manifest.write_text(json.dumps(settings))
+        self.request("import-os2-support", sources=[source], categories=["help"])
+        self.assertEqual(self.request("guest-environment")["OS2PATH"], "F:\\TOOLS;C:\\OS2")
 
     def test_nested_iso_browsing_uses_lazy_memory_reads_without_materializing_the_image(self):
         image = iso_image(payload=CMD, filename="CMD.EXE") + bytes(64 * 1024 * 1024)

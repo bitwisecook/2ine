@@ -17,7 +17,7 @@ static int extent(size_t size, uint64_t offset, uint64_t count)
 {
     return offset <= size && count <= size - offset;
 }
-static TbIconImage *lx_icon(const uint8_t *bytes, size_t size, size_t h)
+static TbIconImage *lx_icon(const uint8_t *bytes, size_t size, size_t h, int resource_id)
 {
     const uint8_t *header = bytes + h;
     uint32_t table = u32(header + 80), count = u32(header + 84), objects = u32(header + 64),
@@ -30,7 +30,7 @@ static TbIconImage *lx_icon(const uint8_t *bytes, size_t size, size_t h)
     for (uint32_t r = 0; r < count; r++)
     {
         const uint8_t *entry = bytes + h + table + (size_t)r * 14;
-        if (u16(entry) != 1)
+        if (u16(entry) != 1 || (resource_id >= 0 && u16(entry + 2) != (unsigned)resource_id))
             continue;
         uint32_t length = u32(entry + 4), object = u16(entry + 8), offset = u32(entry + 10);
         if (!length || length > 16 * 1024 * 1024 || !object || object > object_count)
@@ -98,7 +98,7 @@ static TbIconImage *lx_icon(const uint8_t *bytes, size_t size, size_t h)
     }
     return NULL;
 }
-static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h)
+static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h, int resource_id)
 {
     const uint8_t *header = bytes + h;
     unsigned segments = u16(header + 28), resources = u16(header + 52), shift = u16(header + 50);
@@ -109,7 +109,8 @@ static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h)
         return NULL;
     for (unsigned i = 0; i < resources; i++)
     {
-        if (u16(bytes + (size_t)table + i * 4) != 1)
+        if (u16(bytes + (size_t)table + i * 4) != 1 ||
+            (resource_id >= 0 && u16(bytes + (size_t)table + i * 4 + 2) != (unsigned)resource_id))
             continue;
         const uint8_t *segment = bytes + (size_t)segtab + (size_t)(segments - resources + i) * 8;
         uint64_t origin = (uint64_t)u16(segment) << shift;
@@ -133,7 +134,7 @@ static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h)
     }
     return NULL;
 }
-TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size)
+static TbIconImage *executable_icon(const uint8_t *bytes, size_t size, int id)
 {
     if (!bytes || size < 2)
         return NULL;
@@ -147,10 +148,18 @@ TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size)
     if (!extent(size, h, 64))
         return NULL;
     if (!memcmp(bytes + h, "LX", 2) && extent(size, h, 196) && !bytes[h + 2] && !bytes[h + 3])
-        return lx_icon(bytes, size, h);
+        return lx_icon(bytes, size, h, id);
     if (!memcmp(bytes + h, "NE", 2))
-        return ne_icon(bytes, size, h);
+        return ne_icon(bytes, size, h, id);
     return NULL;
+}
+TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size)
+{
+    return executable_icon(bytes, size, -1);
+}
+TbIconImage *tb_icon_executable_resource(const uint8_t *bytes, size_t size, unsigned id)
+{
+    return id <= 65535 ? executable_icon(bytes, size, (int)id) : NULL;
 }
 char *tb_executable_description(const uint8_t *bytes, size_t size)
 {

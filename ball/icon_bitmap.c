@@ -146,6 +146,80 @@ static TbIconImage *decode_one(const uint8_t *bytes, size_t size, size_t offset)
         }
     return image;
 }
+static TbIconImage *windows_icon(const uint8_t *bytes, size_t size)
+{
+    unsigned count = size >= 6 ? read16(bytes + 4) : 0;
+    if (!count || count > 256 || (size_t)count * 16 > size - 6)
+        return NULL;
+    TbIconImage *best = NULL;
+    for (unsigned i = 0; i < count; i++)
+    {
+        const uint8_t *entry = bytes + 6 + i * 16;
+        size_t offset = read32(entry + 12), length = read32(entry + 8);
+        if (offset > size || length > size - offset || length < 40)
+            continue;
+        const uint8_t *dib = bytes + offset;
+        IconBitmap color = {0};
+        color.width = read32(dib + 4);
+        unsigned height = read32(dib + 8), planes = read16(dib + 12);
+        color.depth = read16(dib + 14);
+        if (read32(dib) != 40 || !color.width || color.width > 1024 || !height || height > 2048 ||
+            height % 2 || planes != 1 || read32(dib + 16) ||
+            (color.depth != 1 && color.depth != 4 && color.depth != 8 && color.depth != 24))
+            continue;
+        color.height = height / 2;
+        color.colors = read32(dib + 32);
+        color.palette_bytes = 4;
+        if (!color.colors && color.depth <= 8)
+            color.colors = 1u << color.depth;
+        if (color.depth <= 8 ? color.colors > 1u << color.depth : color.colors != 0)
+            continue;
+        color.header = offset + 40;
+        size_t palette = (size_t)color.colors * 4;
+        color.stride = ((size_t)color.width * color.depth + 31) / 32 * 4;
+        size_t mask_stride = ((size_t)color.width + 31) / 32 * 4,
+               xor_bytes = color.stride * color.height, mask_bytes = mask_stride * color.height;
+        if (palette > length - 40 || xor_bytes > length - 40 - palette ||
+            mask_bytes > length - 40 - palette - xor_bytes)
+            continue;
+        color.bits = color.header + palette;
+        size_t mask_bits = color.bits + xor_bytes;
+        TbIconImage *image = calloc(1, sizeof *image);
+        size_t pixels = (size_t)color.width * color.height;
+        if (image)
+        {
+            image->pixels = malloc(pixels * sizeof *image->pixels);
+            image->mask = malloc(pixels);
+        }
+        if (!image || !image->pixels || !image->mask)
+        {
+            tb_icon_free(image);
+            break;
+        }
+        image->width = color.width;
+        image->height = color.height;
+        int valid = 1;
+        for (unsigned y = 0; y < color.height && valid; y++)
+            for (unsigned x = 0; x < color.width; x++)
+            {
+                size_t at = (size_t)y * color.width + x;
+                image->mask[at] = (bytes[mask_bits + mask_stride * y + x / 8] >> (7 - x % 8)) & 1;
+                if (!pixel(bytes, &color, x, y, &image->pixels[at]))
+                {
+                    valid = 0;
+                    break;
+                }
+            }
+        if (valid && (!best || pixels > (size_t)best->width * best->height))
+        {
+            tb_icon_free(best);
+            best = image;
+        }
+        else
+            tb_icon_free(image);
+    }
+    return best;
+}
 
 /* Bitmap-array links and bitmap data offsets are relative to the complete
    resource. Decode every valid member and prefer the largest useful image. */
@@ -153,6 +227,8 @@ TbIconImage *tb_icon_bitmap(const uint8_t *bytes, size_t size)
 {
     if (!bytes || size < 2)
         return NULL;
+    if (size >= 6 && !read16(bytes) && read16(bytes + 2) == 1)
+        return windows_icon(bytes, size);
     if (read16(bytes) != 0x4142)
         return decode_one(bytes, size, 0);
     TbIconImage *best = NULL;

@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared installation-media browser and original OS/2 support-file import. */
 #include "media.h"
+#include "os2_paths.h"
 enum
 {
     BASE_SUPPORT_COUNT = 3,
@@ -398,6 +399,18 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
         free(files[i].source);
     }
     cJSON_Delete(queue);
+    if (!c->error)
+    {
+        cJSON *paths = cJSON_CreateArray();
+        for (int i = 0; i < SUPPORT_COUNT; i++)
+        {
+            cJSON *entry = cJSON_CreateObject();
+            cJSON_AddStringToObject(entry, "path", support_paths[i]);
+            cJSON_AddItemToArray(paths, entry);
+        }
+        os2_configure_paths(c, paths);
+        cJSON_Delete(paths);
+    }
     if (!c->error && !cJSON_IsFalse(get(request, "rememberSources")))
     {
         cJSON *media = cJSON_CreateObject();
