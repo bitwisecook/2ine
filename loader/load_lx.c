@@ -601,6 +601,127 @@ int loadLxNameTable(LxModule *lxmod, const uint8 *name_table)
     return 1;
 }
 
+static int loadLxExports(LxModule *module, const uint8 *exe, uint32 length)
+{
+    const LxHeader *lx = &module->header.lx;
+    const uint8 *end = exe + length;
+    if (lx->entry_table_offset >= length)
+        goto corrupt;
+    const uint8 *table = exe + lx->entry_table_offset;
+    uint32 count = 0;
+    for (const uint8 *p = table;;)
+    {
+        if (p == end)
+            goto corrupt;
+        unsigned entries = *p++;
+        if (!entries)
+            break;
+        if (p == end)
+            goto corrupt;
+        unsigned type = *p++ & 0x7f;
+        if (!type)
+            continue;
+        if (type == 2)
+        {
+            fprintf(stderr, "LX 286 call-gate exports are unsupported\n");
+            return 0;
+        }
+        if (type != 1 && type != 3 && type != 4)
+            goto corrupt;
+        size_t bytes = 2 + entries * (type == 1 ? 3 : type == 3 ? 5 : 7);
+        if ((size_t)(end - p) < bytes)
+            goto corrupt;
+        p += bytes;
+        count += entries;
+    }
+    if (!count)
+        return 1;
+    LxExport *exports = calloc(count, sizeof *exports);
+    if (!exports)
+        return 0;
+    module->exports = exports;
+    uint32 ordinal = 1;
+    const uint8 *p = table;
+    while (*p)
+    {
+        unsigned entries = *p++;
+        unsigned type = *p++ & 0x7f;
+        if (!type)
+        {
+            ordinal += entries;
+            continue;
+        }
+        unsigned object = lx_guest_load_u16(p);
+        p += 2;
+        if (type != 4 && (!object || object > module->num_mmaps))
+            goto corrupt;
+        for (unsigned i = 0; i < entries; i++)
+        {
+            LxExport *entry = &exports[module->num_exports++];
+            entry->ordinal = ordinal++;
+            unsigned flags = *p++;
+            if (type == 4)
+            {
+                unsigned dependency = lx_guest_load_u16(p);
+                uint32 target = lx_guest_load_u32(p + 2);
+                p += 6;
+                if (object || (flags & ~1u) || !dependency ||
+                    dependency > module->num_dependencies ||
+                    lx->import_module_table_offset >= length)
+                    goto corrupt;
+                LxForwarder *forward = calloc(1, sizeof *forward);
+                if (!forward)
+                    return 0;
+                entry->indirect = LX_EXPORT_FORWARDER;
+                entry->addr = forward;
+                forward->owner = module;
+                forward->module_ordinal = dependency;
+                const uint8 *name = exe + lx->import_module_table_offset;
+                for (unsigned j = 1; j < dependency; j++)
+                {
+                    if (name == end || (size_t)(end - name - 1) < *name)
+                        goto corrupt;
+                    name += 1 + *name;
+                }
+                if (name == end || !*name || *name >= sizeof forward->module_name ||
+                    (size_t)(end - name - 1) < *name)
+                    goto corrupt;
+                memcpy(forward->module_name, name + 1, *name);
+                if (flags & 1)
+                {
+                    if (!target)
+                        goto corrupt;
+                    forward->ordinal = target;
+                }
+                else
+                {
+                    if (lx->import_proc_table_offset >= length ||
+                        target >= length - lx->import_proc_table_offset)
+                        goto corrupt;
+                    name = exe + lx->import_proc_table_offset + target;
+                    if (!*name || (size_t)(end - name - 1) < *name)
+                        goto corrupt;
+                    memcpy(forward->name, name + 1, *name);
+                }
+            }
+            else
+            {
+                uint32 offset = type == 1 ? lx_guest_load_u16(p) : lx_guest_load_u32(p);
+                p += type == 1 ? 2 : 4;
+                if (offset >= module->mmaps[object - 1].size)
+                    goto corrupt;
+                entry->addr = (uint8 *)module->mmaps[object - 1].addr + offset;
+                entry->object = &module->mmaps[object - 1];
+            }
+        }
+    }
+    return 1;
+
+corrupt:
+    fprintf(stderr, "Invalid LX entry table in %s\n", module->name);
+    return 0;
+}
+
 LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint32 exelen,
                        int dependency_tree_depth)
 {
@@ -893,84 +1014,8 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         }
     }
 
-    uint32 total_ordinals = 0;
-    const uint8 *entryptr = exe + lx->entry_table_offset;
-    while (*entryptr)
-    {
-        const uint8 numentries = *(entryptr++); /* number of entries in this bundle */
-        const uint8 bundletype = *(entryptr++) & ~0x80;
-        if (bundletype != 0x00)
-        {
-            total_ordinals += numentries;
-            entryptr += 2 + ((bundletype == 0x01) ? 3 : 5) * numentries;
-        }
-    }
-
-    LxExport *lxexp = (LxExport *)calloc(1, sizeof(LxExport) * total_ordinals);
-    if (!lxexp)
-    {
-        fprintf(stderr, "Out of memory!\n");
+    if (!loadLxExports(retval, exe, exelen))
         goto loadlx_failed;
-    }
-    memset(lxexp, '\0', sizeof(LxExport) * total_ordinals);
-    retval->exports = lxexp;
-
-    uint32 ordinal = 1;
-    entryptr = exe + lx->entry_table_offset;
-    while (*entryptr)
-    {
-        const uint8 numentries = *(entryptr++); /* number of entries in this bundle */
-        const uint8 bundletype = *(entryptr++) & ~0x80;
-        uint16 objidx = 0;
-
-        switch (bundletype)
-        {
-            case 0x00:
-                ordinal += numentries;
-                break;
-
-            case 0x01:
-                objidx = *((const uint16 *)entryptr) - 1;
-                entryptr += 2;
-                for (uint8 i = 0; i < numentries; i++)
-                {
-                    entryptr++;
-                    lxexp->ordinal = ordinal++;
-                    lxexp->addr =
-                        ((uint8 *)retval->mmaps[objidx].addr) + *((const uint16 *)entryptr);
-                    lxexp->object = &retval->mmaps[objidx];
-                    lxexp++;
-                    entryptr += 2;
-                }
-                break;
-
-            case 0x03:
-                objidx = *((const uint16 *)entryptr) - 1;
-                entryptr += 2;
-                for (uint8 i = 0; i < numentries; i++)
-                {
-                    entryptr++;
-                    lxexp->ordinal = ordinal++;
-                    lxexp->addr =
-                        ((uint8 *)retval->mmaps[objidx].addr) + *((const uint32 *)entryptr);
-                    lxexp->object = &retval->mmaps[objidx];
-                    lxexp++;
-                    entryptr += 4;
-                }
-                break;
-
-            case 0x02:
-            case 0x04:
-                fprintf(stderr, "WRITE ME %s:%d\n", __FILE__, __LINE__);
-                goto loadlx_failed;
-
-            default:
-                fprintf(stderr, "UNKNOWN ENTRY TYPE (%u)\n\n", (uint)bundletype);
-                goto loadlx_failed;
-        }
-    }
-
-    retval->num_exports = (uint32)(lxexp - retval->exports);
 
     if (lx->resident_name_table_offset)
     {
@@ -1039,6 +1084,9 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             goto loadlx_failed;
         }
     }
+
+    if (!resolveLxForwarders(retval))
+        goto loadlx_failed;
 
     obj = ((const LxObjectTableEntry *)(exe + lx->object_table_offset));
     for (uint32 i = 0; i < lx->module_num_objects; i++, obj++)

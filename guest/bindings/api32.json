@@ -2193,6 +2193,26 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "GetACP": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "timeGetTime": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetVersion": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCommandLine": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "LoadBitmap": {
       "argument_bytes": 8,
       "callee_pop": 0,

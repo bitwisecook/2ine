@@ -27,6 +27,76 @@ void *generateMissingTrampoline16(const char *m, const char *n, const LxExport *
     return address;
 }
 
+static void *resolveModuleOrdinal(const LxModule *module, uint32 ordinal, const LxExport **exported,
+                                  int want16bit, int native, int missing);
+
+static const LxExport *resolveExport(const LxExport *entry)
+{
+    const LxExport *visited[1024];
+    unsigned count = 0;
+    while (entry && entry->indirect == LX_EXPORT_FORWARDER)
+    {
+        if (count == sizeof visited / sizeof *visited)
+        {
+            fprintf(stderr, "LX forwarder chain exceeds 1024 entries\n");
+            return NULL;
+        }
+        for (unsigned i = 0; i < count; i++)
+            if (visited[i] == entry)
+            {
+                fprintf(stderr, "Circular LX forwarder chain\n");
+                return NULL;
+            }
+        visited[count++] = entry;
+        const LxForwarder *forward = entry->addr;
+        const LxModule *target = forward->owner->dependencies[forward->module_ordinal - 1];
+        /* Circular DLL imports publish exports before filling every dependency slot. */
+        if (!target)
+            for (target = GLoaderState.loaded_modules; target; target = target->next)
+                if (!target->load_failed && !strcasecmp(target->name, forward->module_name))
+                    break;
+        if (!target)
+            return NULL;
+        entry = NULL;
+        for (uint32 i = 0; i < target->num_exports; i++)
+        {
+            const LxExport *candidate = &target->exports[i];
+            if (forward->ordinal ? candidate->ordinal == forward->ordinal
+                                 : candidate->name && !strcmp(candidate->name, forward->name))
+            {
+                entry = candidate;
+                break;
+            }
+        }
+        if (!entry && forward->ordinal && target->nativelib)
+            resolveModuleOrdinal(target, forward->ordinal, &entry, 1, 0, 0);
+    }
+    return entry;
+}
+
+int resolveLxForwarders(LxModule *module)
+{
+    for (uint32 i = 0; i < module->num_exports; i++)
+    {
+        LxExport *entry = (LxExport *)&module->exports[i];
+        if (entry->indirect != LX_EXPORT_FORWARDER)
+            continue;
+        const LxExport *target = resolveExport(entry);
+        if (!target)
+        {
+            fprintf(stderr, "Cannot resolve LX forwarder %s@%u\n", module->name,
+                    (unsigned)entry->ordinal);
+            return 0;
+        }
+        void *forward = entry->addr;
+        entry->addr = target->addr;
+        entry->object = target->object;
+        entry->indirect = target->indirect;
+        free(forward);
+    }
+    return 1;
+}
+
 static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
                                   const LxExport **_lxexp, const int want16bit, const int native,
                                   const int missing)
@@ -48,8 +118,11 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
     {
         if (ordinal && lxexp->ordinal == ordinal)
         {
+            lxexp = resolveExport(lxexp);
             if (_lxexp)
                 *_lxexp = lxexp;
+            if (!lxexp)
+                return NULL;
             void *retval = lxexp->addr;
             if (lxexp->indirect ==
                 LX_EXPORT_INDIRECT) /* Bridge exports store an indirect host entry pointer. */
@@ -169,8 +242,11 @@ void *getModuleProcAddrByName(const LxModule *module, const char *name, const Lx
     {
         if (lxexp->name && strcmp(lxexp->name, name) == 0)
         {
+            lxexp = resolveExport(lxexp);
             if (_lxexp)
                 *_lxexp = lxexp;
+            if (!lxexp)
+                return NULL;
             void *retval = lxexp->addr;
             if (lxexp->indirect ==
                 LX_EXPORT_INDIRECT) /* Bridge exports store an indirect host entry pointer. */

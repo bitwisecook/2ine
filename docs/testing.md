@@ -14,6 +14,10 @@ output-pointer validation, and DLL termination during failed process loading.
 Nonempty extended attributes and higher `DosFindFirst2` information levels
 remain unsupported and return errors.
 
+`lx_forwarded_exports` executes LX name/ordinal forwarding chains, function and
+data imports, mixed entry bundles, procedure queries and circular DLL dependencies.
+It also verifies rejection of malformed targets and cyclic forwarder chains.
+
 The `host_platform` test checks argument packing (including empty arguments),
 executable/process discovery, memory protection, clocks and UTC calendar
 conversion. Linux additionally runs `host_mutex_owner` for robust mutex

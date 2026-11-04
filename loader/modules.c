@@ -438,7 +438,11 @@ void destroyLxModule(void *resource)
     else
     {
         for (uint32 i = 0; i < lxmod->num_exports; i++)
+        {
             free((void *)lxmod->exports[i].name);
+            if (lxmod->exports[i].indirect == LX_EXPORT_FORWARDER)
+                free(lxmod->exports[i].addr);
+        }
         free((void *)lxmod->exports);
     }
 

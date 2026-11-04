@@ -63,6 +63,25 @@ from open32_timers import timer_program
 
 def program():
     g = FlatGuest()
+    g.call(2, 224)  # GetACP uses the Windows ANSI identifier, matching GetLocaleInfo.
+    g.result(1252, 9)
+    g.call(2, 1019)
+    g.result(0x3303, 8)
+    command, tick = g.field(bytes(4)), g.field(bytes(4))
+    g.call(2, 252)
+    g.code.extend(b"\xa3" + struct.pack("<I", command))
+    g.call(2, 252)
+    g.require(b"\x3b\x05" + struct.pack("<I", command), 7)
+    g.call(2, 482, (command,))  # lstrlen: locate the original command tail.
+    g.code.extend(b"\x03\x05" + struct.pack("<I", command) + b"\x83\xe8\x0a")
+    g.require(b"\x81\x38" + b"alph", 6)
+    g.require(b"\x81\x78\x06" + b"beta", 5)
+    g.call(2, 691)
+    g.code.extend(b"\xa3" + struct.pack("<I", tick))
+    g.call(2, 373)
+    g.code.extend(b"\x2b\x05" + struct.pack("<I", tick))
+    g.code.extend(b"\x3d\xe8\x03\0\0\x0f\x96\xc0\x0f\xb6\xc0")
+    g.result(1, 4)
     handle, other, pointer = (g.field(bytes(4)) for _ in range(3))
     output, needed = g.field(bytes(300)), g.field(bytes(4))
     name, path, text = g.field(b"OPENLIB\0"), g.field(b".\\openlib.dll\0"), g.field(b"hello\0")

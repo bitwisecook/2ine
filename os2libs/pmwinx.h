@@ -100,6 +100,10 @@ extern "C"
     OS2EXPORT LONG OS2API SetWindowLong(ULONG handle, LONG index, LONG value)
         OS2APIINFO(ord = 659, name = SETWINDOWLONG);
     OS2EXPORT ULONG OS2API GetOEMCP(void) OS2APIINFO(ord = 325, name = GETOEMCP);
+    OS2EXPORT ULONG OS2API GetACP(void) OS2APIINFO(ord = 224, name = GETACP);
+    OS2EXPORT ULONG OS2API GetCommandLine(void) OS2APIINFO(ord = 252, name = GETCOMMANDLINE);
+    OS2EXPORT ULONG OS2API GetVersion(void) OS2APIINFO(ord = 1019, name = GETVERSION);
+    OS2EXPORT ULONG OS2API timeGetTime(void) OS2APIINFO(ord = 691, name = TIMEGETTIME);
     OS2EXPORT BOOL OS2API OemToChar(ULONG source, ULONG destination)
         OS2APIINFO(ord = 495, name = OEMTOCHAR);
     OS2EXPORT BOOL OS2API CharToOem(ULONG source, ULONG destination)

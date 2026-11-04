@@ -4,7 +4,19 @@
 import struct
 
 
-def linear_image(code, fixups, modules, name, library=False, data=b"", resources=(), exports=()):
+def linear_image(
+    code,
+    fixups,
+    modules,
+    name,
+    library=False,
+    data=b"",
+    resources=(),
+    exports=(),
+    entry_table=None,
+    export_names=(),
+    import_names=b"\0",
+):
     header = bytearray(196)
     header[:2] = b"LX"
     struct.pack_into("<HH", header, 8, 2, 1)
@@ -47,9 +59,16 @@ def linear_image(code, fixups, modules, name, library=False, data=b"", resources
         struct.pack_into("<II", header, 80, len(header) + len(tables), len(resources))
         tables.extend(resource_table)
     struct.pack_into("<I", header, 88, len(header) + len(tables))
-    tables.extend(bytes([len(name)]) + name.encode() + b"\x00\x00\x00")
+    tables.extend(bytes([len(name)]) + name.encode() + b"\x00\x00")
+    for ordinal, exported_name in export_names:
+        tables.extend(
+            bytes([len(exported_name)]) + exported_name.encode() + struct.pack("<H", ordinal)
+        )
+    tables.extend(b"\x00")
     struct.pack_into("<I", header, 92, len(header) + len(tables))
-    if exports:
+    if entry_table is not None:
+        tables.extend(entry_table)
+    elif exports:
         tables.extend(bytes([len(exports), 3]) + struct.pack("<H", 1))
         for offset in exports:
             tables.extend(b"\x01" + struct.pack("<I", offset))
@@ -63,7 +82,7 @@ def linear_image(code, fixups, modules, name, library=False, data=b"", resources
     for module in modules:
         tables.extend(bytes([len(module)]) + module.encode())
     struct.pack_into("<I", header, 120, len(header) + len(tables))
-    tables.extend(b"\x00")
+    tables.extend(import_names)
     mz = bytearray(64)
     mz[:2] = b"MZ"
     struct.pack_into("<I", mz, 60, 64)

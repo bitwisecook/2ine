@@ -11,6 +11,7 @@ static void open32Shutdown(void);
 #include "os2libs/generated/pmwinx-lx.h"
 
 static uint32 references;
+static ULONG command_line;
 static void open32Shutdown(void)
 {
     open32TimersCleanup();
@@ -29,6 +30,7 @@ static void open32Shutdown(void)
     open32CriticalCleanup();
     open32ContextCleanup();
     open32MemoryCleanup();
+    command_line = 0;
     references = 0;
 }
 BOOL WinXProcessMsg(PVOID message)
@@ -146,4 +148,51 @@ ULONG GetOEMCP(void)
 {
     /* The NLS provider currently exposes CP437 as the process OEM code page. */
     return 437;
+}
+
+ULONG GetACP(void)
+{
+    /* Windows code-page identifier for the ANSI encoding exposed by GetLocaleInfo. */
+    return 1252;
+}
+
+ULONG timeGetTime(void)
+{
+    return GetTickCount();
+}
+
+ULONG GetVersion(void)
+{
+    /* Open32 reports Windows NT 3.51, with the major version in the low byte. */
+    return 0x00003303;
+}
+
+ULONG GetCommandLine(void)
+{
+    ULONG result = __atomic_load_n(&command_line, __ATOMIC_ACQUIRE);
+    if (result)
+        return result;
+    const char *program = GLoaderState.pib.pib_pchcmd;
+    const char *tail = program ? program + strlen(program) + 1 : "";
+    if (!program)
+        program = "";
+    size_t length = strlen(program) + strlen(tail) + 4;
+    if (length > UINT32_MAX)
+        return 0;
+    ULONG address = LocalAlloc(0, (ULONG)length);
+    if (!address)
+        return 0;
+    char *text = lx_execution_memory(GLoaderState.execution, address, length,
+                                     LX_GUEST_READ | LX_GUEST_WRITE);
+    if (!text)
+    {
+        LocalFree(address);
+        return 0;
+    }
+    snprintf(text, length, "\"%s\"%s%s", program, *tail ? " " : "", tail);
+    if (__atomic_compare_exchange_n(&command_line, &result, address, 0, __ATOMIC_RELEASE,
+                                    __ATOMIC_ACQUIRE))
+        return address;
+    LocalFree(address);
+    return result;
 }

@@ -52,6 +52,7 @@ LX_PRIVATE void runLibraryTerm(LxModule *lxmod);
 LX_PRIVATE void freeLxModule(LxModule *lxmod);
 LX_PRIVATE void destroyLxModule(void *resource);
 LX_PRIVATE const LxExport *findModuleOrdinal(const LxModule *module, uint32 ordinal);
+LX_PRIVATE int resolveLxForwarders(LxModule *module);
 LX_PRIVATE void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
                                             const LxExport **_lxexp, const int want16bit,
                                             const int native);

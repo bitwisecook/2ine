@@ -38,11 +38,20 @@ enum
 {
     LX_EXPORT_DIRECT = 0,
     LX_EXPORT_INDIRECT = 1,
-    LX_EXPORT_ABSOLUTE = 2
+    LX_EXPORT_ABSOLUTE = 2,
+    LX_EXPORT_FORWARDER = 3
 };
 
 struct LxModule;
 typedef struct LxModule LxModule;
+typedef struct LxForwarder
+{
+    LxModule *owner;
+    uint32 module_ordinal;
+    uint32 ordinal;
+    char module_name[128];
+    char name[256];
+} LxForwarder;
 struct LxModule
 {
     uint32 refcount;

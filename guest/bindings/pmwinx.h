@@ -663,6 +663,30 @@ static uint32 bridge32_GetOEMCP(uint8 *a)
     return GetOEMCP();
 }
 
+static uint32 bridge32_GetACP(uint8 *a)
+{
+    (void)a;
+    return GetACP();
+}
+
+static uint32 bridge32_GetCommandLine(uint8 *a)
+{
+    (void)a;
+    return GetCommandLine();
+}
+
+static uint32 bridge32_GetVersion(uint8 *a)
+{
+    (void)a;
+    return GetVersion();
+}
+
+static uint32 bridge32_timeGetTime(uint8 *a)
+{
+    (void)a;
+    return timeGetTime();
+}
+
 static uint32 bridge32_LoadBitmap(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4);

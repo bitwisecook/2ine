@@ -231,6 +231,11 @@ SOM dependencies such as somd/somtc; Organizer remains running but repeatedly
 reports missing somd through LTOLEO20/TZBACK32. Those startup limits are separate
 from successful suite installation and are retained in application-startup.json.
 
+The later [Lotus export/startup investigation](lotus-startup-exports.md) implements
+LX forwarded exports and the first Open32 startup calls. It reproduces and clears
+the reported worker-DLL and GetACP failures; all three applications still have
+later startup blockers recorded there.
+
 ## Progress-dialog flicker and unpacking performance
 
 A native PM regression reproduces premature presentation: repainting a parent,

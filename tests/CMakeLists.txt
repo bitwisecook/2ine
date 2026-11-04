@@ -236,6 +236,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/legacy.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(legacy_file_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME lx_forwarded_exports COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/lx_exports.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(lx_forwarded_exports PROPERTIES TIMEOUT 30)
     add_test(NAME desktop_apis COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/desktop.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
