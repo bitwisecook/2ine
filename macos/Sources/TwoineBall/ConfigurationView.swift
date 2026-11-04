@@ -95,7 +95,7 @@ struct DisplayConfigurationView: View {
                     Button("Sound Banks & Channel Mapping…") { model.audioEditor = true }.accessibilityIdentifier("soundBanks")
                     Text("Import SF2, SF3, SFZ and DLS instruments and configure each MIDI channel.").foregroundStyle(.secondary)
                 }
-            }.formStyle(.grouped).disabled(model.busy || model.mediaBusy)
+            }.formStyle(.grouped).disabled(model.busy || model.mediaBusy || model.componentOperationRunning)
             .task(id: "\(model.selected ?? "")|\(model.build)|\(model.revision)") { await load() }
             .onChange(of: features != nil, initial: true) { _, ready in
                 if ready, let target = model.highlightedSetting { proxy.scrollTo(target, anchor: .center) }

@@ -547,6 +547,8 @@ static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
     int at = 0;
     for (const cJSON *node = queue->child; node && !c->error; node = node->next, at++)
     {
+        if (!(at % 64) && component_cancelled(c))
+            break;
         if (at >= 100000)
         {
             fail(c, "Media search exceeded 100000 entries. Browse to a smaller source.");
@@ -664,7 +666,7 @@ static int extract_preserve_variant(Context *c, cJSON *staged, cJSON *file)
         cJSON_AddItemToObject(staged, key, file);
     return 1;
 }
-static cJSON *extract_os2_categories(Context *c, const cJSON *request)
+static cJSON *extract_os2_categories_impl(Context *c, const cJSON *request)
 {
     const cJSON *categories = get(request, "categories"), *category;
     const cJSON *modules = get(request, "modules");
@@ -762,6 +764,9 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
             cJSON_AddNumberToObject(priorities, key, priority);
         }
     }
+    if (c->component_operation)
+        put(c->component_operation->progress, "totalCount",
+            cJSON_CreateNumber(cJSON_GetArraySize(priorities)));
     if (!workspace)
         fail(c, "Cannot create extraction workspace");
     uint64_t total = 0;
@@ -780,6 +785,11 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         if (!selection.explicit &&
             get(file, "priority")->valuedouble < get(priorities, key)->valuedouble)
             continue;
+        if (component_cancelled(c))
+            break;
+        component_progress(c, "extracting", source, destination);
+        if (c->error)
+            break;
         FILE *input = tb_media_path(source) ? tb_media_fopen(source) : tb_fopen(source, "rb");
         if (!input || fseek(input, 0, SEEK_END))
         {
@@ -886,18 +896,25 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         total += (uint64_t)size;
         cJSON_AddStringToObject(file, "temporary", temporary);
         cJSON_AddStringToObject(file, "sha256", hex(c, digest));
+        component_progress(c, "staged", source, destination);
         cJSON *copy = cJSON_Duplicate(file, 1);
         if (preserve)
             extract_preserve_variant(c, staged, copy);
         else
             cJSON_AddItemToObject(staged, key, copy);
     }
+    if (c->component_operation)
+        put(c->component_operation->progress, "totalCount",
+            cJSON_CreateNumber(cJSON_GetArraySize(staged)));
     cJSON_ArrayForEach(file, staged)
     {
-        if (c->error)
+        if (component_cancelled(c))
             break;
         const char *path = field(file, "path");
-        char *destination = host_path(c, path, 0),
+        component_progress(c, "installing", field(file, "source"), path);
+        if (c->error)
+            break;
+        char *destination = component_private_path(c, path),
              *parent = destination ? keep(c, strdup(destination)) : NULL;
         if (parent && strrchr(parent, '/'))
             *strrchr(parent, '/') = 0;
@@ -927,14 +944,20 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         if (present_variant)
             cJSON_Delete(entry);
         else
+        {
             cJSON_AddItemToArray(imported, entry);
+            component_record(c, path, field(file, "source"), field(file, "category"),
+                             field(file, "sha256"));
+            component_progress(c, "installing", field(file, "source"), path);
+        }
     }
     if (workspace)
         tb_remove_tree(workspace);
     cJSON_Delete(priorities);
     cJSON_Delete(ambiguous);
     cJSON_Delete(staged);
-    if (!c->error)
+    component_progress(c, "finishing", NULL, NULL);
+    if (!component_cancelled(c))
     {
         cJSON *paths = cJSON_CreateArray();
         cJSON_ArrayForEach(file, get(plan, "files"))
@@ -1035,6 +1058,23 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         cJSON_Delete(imported);
         cJSON_Delete(variants);
         cJSON_Delete(skipped);
+    }
+    return result;
+}
+
+/* Dependency recovery uses the same ownership and cooperative locking contract. */
+static cJSON *extract_os2_categories(Context *c, const cJSON *request)
+{
+    int owns_job = c->component_operation == NULL;
+    cJSON *result = NULL;
+    if ((!owns_job || component_begin(c, request, "install")) && !component_cancelled(c))
+        result = extract_os2_categories_impl(c, request);
+    if (owns_job)
+        component_finish(c, result);
+    if (c->error)
+    {
+        cJSON_Delete(result);
+        return NULL;
     }
     return result;
 }

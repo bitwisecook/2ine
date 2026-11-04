@@ -61,6 +61,7 @@ class NativeBrowser(Gtk.Box):
         icon=None,
         tooltip=None,
         muted=None,
+        activity=None,
         dropped=None,
         context=None,
         leading_sort=None,
@@ -79,7 +80,7 @@ class NativeBrowser(Gtk.Box):
         self.accept, self.on_selected, self.on_activated = accept, selected, activated
         self.check, self.on_toggled, self.icon = check, toggled, icon
         self.tooltip, self.on_dropped, self.on_context = tooltip, dropped, context
-        self.muted = muted
+        self.muted, self.activity = muted, activity
         self.leading_sort = leading_sort
         self.roots, self.expanded = [], set()
         self.last_query = ""
@@ -259,6 +260,8 @@ class NativeBrowser(Gtk.Box):
                 box.append(check)
             if self.icon:
                 box.append(Gtk.Image())
+            if self.activity:
+                box.append(Gtk.Spinner())
             box.append(Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END, hexpand=True))
             if self.on_dropped:
                 target = Gtk.DropTarget.new(Gdk.FileList, Gdk.DragAction.COPY)
@@ -291,6 +294,11 @@ class NativeBrowser(Gtk.Box):
                 child = child.get_next_sibling()
             if self.icon:
                 child.set_from_icon_name(self.icon(data))
+                child = child.get_next_sibling()
+            if self.activity:
+                running = bool(self.activity(data))
+                child.set_spinning(running)
+                child.set_visible(running)
                 child = child.get_next_sibling()
             child.set_text(str(definition.text(data)))
             if self.muted and self.muted(data):

@@ -19,6 +19,7 @@ if __package__:
         gnome_audio,
         gnome_ball_icons,
         gnome_ball_lifecycle,
+        gnome_component_jobs,
         gnome_configuration,
         gnome_media_preferences,
         gnome_navigation,
@@ -29,6 +30,7 @@ else:
     import gnome_audio
     import gnome_ball_icons
     import gnome_ball_lifecycle
+    import gnome_component_jobs
     import gnome_configuration
     import gnome_media_preferences
     import gnome_navigation
@@ -95,6 +97,14 @@ class BallWindow(Adw.ApplicationWindow):
         self.busy = False
         self.operation_busy = False
         self.pending_operations = 0
+        self.component_jobs, self.component_panes = {}, {}
+        self.component_closed = False
+        self.component_status_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="os2-component-status"
+        )
+        self.component_executor = ThreadPoolExecutor(
+            max_workers=4, thread_name_prefix="os2-components"
+        )
         self.last_result = None
         self.last_log = None
         self.log_text = ""
@@ -131,6 +141,9 @@ class BallWindow(Adw.ApplicationWindow):
         )
         self.connect("close-request", self.close_requested)
         self.connect("destroy", lambda *_: self.worker.shutdown(wait=False))
+        self.connect("destroy", lambda *_: self.component_executor.shutdown(wait=False))
+        self.connect("destroy", lambda *_: self.component_status_executor.shutdown(wait=False))
+        self.connect("destroy", lambda *_: setattr(self, "component_closed", True))
         builder = Gtk.Builder.new_from_file(str(Path(__file__).parent / "gnome/window.ui"))
         for name in (
             "overlay",
@@ -351,6 +364,29 @@ class BallWindow(Adw.ApplicationWindow):
         self.lookup_action("undo").set_enabled(not busy and bool(self.undo_commands))
         self.lookup_action("redo").set_enabled(not busy and bool(self.redo_commands))
         self.update_application_actions()
+        if self.component_active():
+            for name in (
+                "run",
+                "install",
+                "runtime",
+                "export",
+                "export-images",
+                "rename-ball",
+                "trash-ball",
+                "restore-libraries",
+                "add-app",
+                "launch-application",
+                "edit-application",
+                "remove-application",
+                "undo",
+                "redo",
+                "add-drive",
+                "create-disk",
+                "create-floppy",
+                "audio",
+                "save",
+            ):
+                self.lookup_action(name).set_enabled(False)
         if hasattr(self, "stack"):
             for name in ("apps", "drives", "settings"):
                 child = self.stack.get_child_by_name(name)
@@ -418,6 +454,11 @@ class BallWindow(Adw.ApplicationWindow):
         self.refresh(target)
 
     def close_requested(self, *_):
+        if any(job.get("active") for job in self.component_jobs.values()):
+            self.toast(
+                "A component job is running. Finish or cancel it in OS/2 System Components before closing."
+            )
+            return True
         if self.busy:
             self.toast("Wait for the running application or operation to finish.")
             return True
@@ -579,6 +620,10 @@ class BallWindow(Adw.ApplicationWindow):
             )
             row.ball_path = path
             row.add_prefix(Gtk.Image(icon_name=APP_ID + "-symbolic"))
+            row.component_spinner = Gtk.Spinner(
+                spinning=self.component_active(path), visible=self.component_active(path)
+            )
+            row.add_suffix(row.component_spinner)
             drag = Gtk.DragSource(actions=Gdk.DragAction.COPY)
             drag.connect(
                 "prepare",
@@ -723,16 +768,20 @@ class BallWindow(Adw.ApplicationWindow):
         apps = self.page("apps", "Applications", "application-x-executable-symbolic")
         self.applications_page = gnome_applications.ApplicationsPage(self)
         apps.append(self.applications_page)
-        for name, title, icon, system in (
-            ("components", "OS/2 System Components", "applications-system-symbolic", True),
-            (
-                "application-installation",
-                "Application Installation",
-                "system-software-install-symbolic",
-                False,
-            ),
-        ):
-            self.page(name, title, icon).append(gnome_navigation.InstallationPage(self, system))
+        components = self.page(
+            "components", "OS/2 System Components", "applications-system-symbolic"
+        )
+        pane = self.component_pane()
+        pane.build = self.build
+        parent = pane.get_parent()
+        if parent:
+            parent.remove(pane)
+        components.append(pane)
+        self.page(
+            "application-installation",
+            "Application Installation",
+            "system-software-install-symbolic",
+        ).append(gnome_navigation.InstallationPage(self))
         configuration = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
         self.stack.add_titled_with_icon(
             configuration, "settings", "Settings", "preferences-system-symbolic"
@@ -917,7 +966,7 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def audit_dependencies(self, sources=None, after=None):
-        if not self.ball or self.busy:
+        if not self.ball or self.busy or self.component_active():
             return
         ball = str(self.ball)
         build = str(self.build)
@@ -1054,28 +1103,76 @@ class BallWindow(Adw.ApplicationWindow):
         if gnome_media_preferences.forget(self.app_preferences):
             self.persist_preferences()
 
-    def present_os2_media(self, sources, categories=None):
+    def component_active(self, path=None):
+        return gnome_component_jobs.active(
+            self.component_jobs, path if path is not None else self.ball
+        )
+
+    def update_component_indicators(self):
+        row = self.ball_list.get_first_child()
+        while row:
+            if hasattr(row, "component_spinner"):
+                active = self.component_active(row.ball_path)
+                row.component_spinner.set_spinning(active)
+                row.component_spinner.set_visible(active)
+                row.component_spinner.set_tooltip_text(
+                    "OS/2 component job is running" if active else None
+                )
+            row = row.get_next_sibling()
+
+    def component_work(self, work, completed, failed, *, monitor=False):
+        executor = self.component_status_executor if monitor else self.component_executor
+        future = executor.submit(work)
+
+        def deliver():
+            if self.component_closed:
+                return GLib.SOURCE_REMOVE
+            try:
+                result = future.result()
+            except Exception as error:
+                failed(error)
+            else:
+                completed(result)
+            return GLib.SOURCE_REMOVE
+
+        future.add_done_callback(lambda _future: GLib.idle_add(deliver))
+
+    def component_api(self, action, **fields):
+        return ball_api.native_request({"action": action, **fields})
+
+    def component_pane(self):
         if __package__:
-            from .gnome_media import OS2MediaDialog
+            from .gnome_media import OS2ComponentsPane
         else:
-            from gnome_media import OS2MediaDialog
-        dialog = OS2MediaDialog(self, sources, categories)
-        self.os2_component_dialog = dialog
-        dialog.present(self)
+            from gnome_media import OS2ComponentsPane
+        key = str(self.ball)
+        if key not in self.component_panes:
+            self.component_panes[key] = OS2ComponentsPane(self)
+        return self.component_panes[key]
+
+    def present_os2_media(self, sources, categories=None):
+        self.show_page("components")
+        pane = self.component_pane()
+        pane.categories = set(categories or {"cmd"})
+        pane.focus_category = (
+            next(iter(categories)) if categories and len(categories) == 1 else None
+        )
+        pane.open_sources(sources)
 
     def show_component_media(self, category):
-        if not self.ball or self.busy or self.process:
+        if not self.ball or self.busy or self.process or self.component_active():
             return
         self.show_page("components")
-        pending = getattr(self, "os2_component_dialog", None)
-        if pending and pending.ball == self.ball and pending.stage == "options":
-            pending.resume_components(category)
-            return
-        sources = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
-        if sources:
-            self.present_os2_media(sources, {category})
+        pane = self.component_pane()
+        pane.focus_category = category
+        if pane.plan:
+            pane.resume_components(category)
         else:
-            self.choose_os2_support({category})
+            sources = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
+            if sources:
+                self.present_os2_media(sources, {category})
+            else:
+                self.choose_os2_support({category}, force_picker=True)
 
     def show_component_setting(self, token):
         if token not in ("graphics.opengl", "graphics", "printing"):
@@ -1094,7 +1191,7 @@ class BallWindow(Adw.ApplicationWindow):
         gnome_navigation.highlight_setting(target)
 
     def install_opengl_component(self):
-        if not self.ball or self.busy or self.process:
+        if not self.ball or self.busy or self.process or self.component_active():
             return
         if self.snapshot["manifest"].get("system", {}).get("opengl", "mesa") == "original":
             self.show_component_media("opengl")
@@ -1200,7 +1297,7 @@ class BallWindow(Adw.ApplicationWindow):
         self.request_work(verify_missing, forgotten)
 
     def rename_ball(self, path=None):
-        if self.busy or self.process or not (path or self.ball):
+        if self.busy or self.process or self.component_active(path) or not (path or self.ball):
             return
         try:
             source = gnome_ball_lifecycle.package(path or self.ball)
@@ -1210,7 +1307,7 @@ class BallWindow(Adw.ApplicationWindow):
             return
 
         def rename(values, dialog):
-            if self.busy or self.process:
+            if self.busy or self.process or self.component_active(source):
                 return
             destination = gnome_ball_lifecycle.rename_destination(source, values["name"])
             if destination == source:
@@ -1245,7 +1342,7 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def trash_ball(self, path=None):
-        if self.busy or self.process or not (path or self.ball):
+        if self.busy or self.process or self.component_active(path) or not (path or self.ball):
             return
         try:
             source = gnome_ball_lifecycle.package(path or self.ball)
@@ -1271,7 +1368,7 @@ class BallWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def remove_ball_package(self, source, expected, permanent=False):
-        if self.busy or self.process:
+        if self.busy or self.process or self.component_active(source):
             return
 
         def work():
@@ -1358,7 +1455,7 @@ class BallWindow(Adw.ApplicationWindow):
         dialog.save(self, None, saved)
 
     def export_ball(self, include_images=False):
-        if self.busy or not self.ball:
+        if self.busy or not self.ball or self.component_active():
             return
         if self.ball in self.drafts or any(
             key[0] == str(self.ball) for key in self.settings_file_drafts
@@ -1429,7 +1526,7 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def program_dialog(self, action, name=None, program=""):
-        if not self.ball or self.busy:
+        if not self.ball or self.busy or self.component_active():
             return None
         dialog = gnome_views.ProgramDialog(self, action, name=name, program=program)
         dialog.present(self)
@@ -1454,6 +1551,9 @@ class BallWindow(Adw.ApplicationWindow):
         self.config_conflict.set_revealed(conflict)
 
     def save_config(self):
+        if self.component_active():
+            self.toast("Wait for this ball’s component job before saving CONFIG.SYS.")
+            return
         if self.ball not in self.drafts:
             return
         path = self.ball
@@ -1503,6 +1603,24 @@ class BallWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def api(self, action, **fields):
+        readonly = {
+            "snapshot",
+            "browse",
+            "browse-media",
+            "configuration-read",
+            "configuration-file-read",
+            "configuration-files",
+            "runtime-features",
+            "os2-component-state",
+            "application-icon",
+            "open-os2-source",
+            "validate-os2-media",
+            "plan-os2-extraction",
+        }
+        if self.component_active(fields.get("ball", self.ball)) and action not in readonly:
+            raise ValueError(
+                "A component job is changing this ball. Wait or cancel it before editing."
+            )
         return ball_api.native_request(
             {"action": action, "ball": str(self.ball), "build": str(self.build), **fields}
         )
@@ -1590,6 +1708,9 @@ class BallWindow(Adw.ApplicationWindow):
         completed=None,
         on_error=None,
     ):
+        if self.component_active(message.get("ball", self.ball)):
+            self.toast("Wait for this ball’s component job to finish before changing it.")
+            return False
         if inverse is None and message["action"] == "command":
             inverse = self.inverse(message["arguments"])
         if inverse is None and message["action"] == "runtime-build":
@@ -1628,6 +1749,9 @@ class BallWindow(Adw.ApplicationWindow):
         return self.commit_request(message, undo)
 
     def history_operation(self, item, reverse):
+        if self.component_active(item["ball"]):
+            self.toast("Wait for this ball’s component job before undoing or redoing a change.")
+            return
         messages = item["undo" if reverse else "redo"]
         messages = messages if isinstance(messages, list) else [messages]
         path = item["ball"]
@@ -1703,7 +1827,7 @@ class BallWindow(Adw.ApplicationWindow):
         return plan, log
 
     def execute(self, arguments, **fields):
-        if self.busy or not self.ball:
+        if self.busy or not self.ball or self.component_active():
             return False
         self.banner.set_revealed(False)
         if arguments[0] not in ("run", "install", "launch"):

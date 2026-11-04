@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from images import FlatGuest, linear_image
 
 from tests.integration.gnome_ball import gnome_ball, pump
+from tests.tools.test_os2_support import LEVEL
 
 
 def main():
@@ -136,22 +137,25 @@ def main():
         media = root / "OS2 Media" / "OS2"
         media.mkdir(parents=True)
         (media / "CMD.EXE").write_bytes(image)
+        (media / "SYSLEVEL.OS2").write_bytes(LEVEL)
         window.present_os2_media([str(media.parent)])
-        recovery = window.get_visible_dialog()
-        pump(lambda: recovery.directory is not None and not window.busy)
+        recovery = window.component_pane()
+        pump(lambda: recovery.directory is not None and not recovery.working)
+        assert window.get_visible_dialog() is None
         capture("os2-media-browser")
-        recovery.submit()
-        pump(lambda: recovery.stage == "options" and not window.busy)
+        if recovery.plan is None:
+            recovery.plan_sources()
+        pump(lambda: recovery.component_tree is not None and not recovery.working)
         assert any(
             file["path"].replace("\\", "/").rsplit("/", 1)[-1].upper() == "CMD.EXE"
-            for file in recovery.selected_files()
+            for file in recovery.plan["files"]
+            if file["source"] in recovery.component_tree.selected
         )
         capture("os2-extraction-options")
-        recovery.submit()
-        pump(lambda: recovery.stage == "finished" and not window.busy)
+        recovery.install_selected()
+        pump(lambda: not window.component_active(ball) and not recovery.polling)
         assert (ball / "drive_c/OS2/CMD.EXE").read_bytes() == image
-        recovery.submit()
-        pump(lambda: window.get_visible_dialog() is None)
+        assert window.get_visible_dialog() is None
         window.audit_dependencies()
         pump(lambda: window.activity_title == "Dependency audit finished" and not window.busy)
         assert window.last_log and window.last_log.is_file()

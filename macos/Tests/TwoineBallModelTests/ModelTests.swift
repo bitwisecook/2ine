@@ -336,7 +336,6 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(status.mediaSources == [media.path])
     model.installComponents()
     #expect(model.page == .systemComponents)
-    #expect(model.supportImport == nil)
     #expect(model.suggestedOS2MediaSources(status.mediaSources) == [media.path])
     let sources = try #require(status.mediaSources)
     let plan = try await model.planOS2Extraction(sources, ball: ball)
@@ -394,7 +393,11 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(model.page == .settings)
     #expect(model.settingsSection == .graphics)
     #expect(model.highlightedSetting == "graphics.opengl")
+    let cachedBall = try #require(model.selected)
+    let cached = try JSONDecoder().decode(OS2ExtractionPlan.self, from: Data(#"{"files":[],"unmapped":[]}"#.utf8))
+    model.componentPlans[cachedBall] = cached
     model.installOriginalOpenGL(); try await waitForOperation(model)
+    #expect(model.componentPlans[cachedBall] == nil)
     #expect(model.snapshot?.manifest.system["opengl"]?.text == "original")
     #expect(model.page == .systemComponents)
     #expect(model.componentNavigation?.category == .opengl)
@@ -412,7 +415,9 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(model.componentSelection(in: plan, preserving: [], ball: ball) == ["gl-source"])
     #expect(model.componentSelection(in: plan, preserving: [], ball: ball).isEmpty)
     #expect(model.undoManager.canUndo)
+    model.componentPlans[ball] = plan
     model.undoManager.undo(); try await waitForOperation(model)
+    #expect(model.componentPlans[ball] == nil)
     #expect(model.snapshot?.manifest.system["opengl"] == nil)
     model.openComponentSetting("printing")
     #expect(model.settingsSection == .printing)
@@ -420,4 +425,44 @@ private func waitForOperation(_ model: AppModel) async throws {
     model.openOS2ComponentGroup(.printers)
     #expect(model.page == .systemComponents)
     #expect(model.componentNavigation?.category == .printers)
+}
+
+@Test @MainActor func componentJobsLeaveNavigationFreeAndRemoveOnlyTheirRecordedFiles() async throws {
+    let (model, root) = try fixture()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let ball = try #require(model.selected)
+    let second = root.appending(path: "Second.2ineball").path
+    _ = try NativeBallCore.request(DesktopRequest("command", ball: second, arguments: ["init"]), as: BallSnapshot.self)
+    model.paths = [ball, second]
+    let media = root.appending(path: "Media/OS2/HELP")
+    try FileManager.default.createDirectory(at: media, withIntermediateDirectories: true)
+    try Data("controlled help content".utf8).write(to: media.appending(path: "FIXTURE.HLP"))
+    let sources = [root.appending(path: "Media").path]
+    let plan = try await model.planOS2Extraction(sources, ball: ball)
+    let file = try #require(plan.files.first { $0.path.hasSuffix("FIXTURE.HLP") })
+    model.startComponentOperation(ball: ball, kind: "install", sources: sources, files: [file])
+    let job = try #require(model.componentJobs[ball])
+    #expect(job.running)
+    #expect(!model.busy && !model.mediaBusy)
+    #expect(!model.canManageBall(ball))
+    model.select(second)
+    let deadline = ContinuousClock.now + .seconds(15)
+    while job.running || model.busy {
+        guard ContinuousClock.now < deadline else { throw BallError("Background component job did not finish") }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(model.selected == second)
+    #expect(job.error == nil)
+    let state = try await model.componentState(ball: ball, paths: [file.path])
+    #expect(state.managedPaths == [file.path])
+    model.select(ball); try await waitForOperation(model)
+    model.startComponentOperation(ball: ball, kind: "remove", sources: [], files: [file])
+    let removal = try #require(model.componentJobs[ball])
+    while removal.running || model.busy {
+        guard ContinuousClock.now < deadline else { throw BallError("Background removal did not finish") }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(removal.error == nil)
+    let removed = try await model.componentState(ball: ball, paths: [file.path])
+    #expect(removed.installedPaths.isEmpty)
 }

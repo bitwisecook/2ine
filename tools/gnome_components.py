@@ -6,14 +6,17 @@ from gi.repository import GLib
 if __package__:
     from .gnome_browser import Column, NativeBrowser
     from .gnome_browser_model import CheckedTree
+    from .gnome_component_jobs import file_tooltip, state_label
 else:
     from gnome_browser import Column, NativeBrowser
     from gnome_browser_model import CheckedTree
+    from gnome_component_jobs import file_tooltip, state_label
 
 
 class ComponentTree(NativeBrowser):
     def __init__(self, root, selected, *, changed, setting):
         self.root, self.changed, self.setting = root, changed, setting
+        self.active_ids = set()
         self.checks = CheckedTree(
             [root],
             selected,
@@ -70,9 +73,10 @@ class ComponentTree(NativeBrowser):
                 else "document-properties-symbolic"
             ),
             muted=lambda data: data["id"] in self.checks.disabled,
+            activity=lambda data: data["id"] in self.active_ids,
             check=lambda data: self.checks.state(data["id"]),
             toggled=self.toggle_node,
-            tooltip=lambda data: data.get("path") or data.get("detail") or data["title"],
+            tooltip=file_tooltip,
             height=280,
         )
         self.set_rows([root], expanded={root["id"]})
@@ -108,7 +112,7 @@ class ComponentTree(NativeBrowser):
         if node["id"] in self.checks.disabled:
             return "Provided by 2ine"
         if node["kind"] == "file":
-            return "Installed" if node.get("present") else "Available"
+            return state_label(node)
         sources = self.sources.get(node["id"], set())
         count = len(sources & self.selected)
         return f"{count} of {len(sources)} selected" if sources else "No files on this media"

@@ -353,6 +353,7 @@ char *tb_home(void)
 #include <dirent.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/file.h>
 char *tb_canonical(const char *p)
 {
     if (tb_image_path(p))
@@ -927,6 +928,43 @@ int tb_path_info(const char *path, uint64_t *size, int64_t *modified)
     return 1;
 }
 
+#ifdef _WIN32
+static int file_identity(HANDLE file, TbFileIdentity *identity)
+{
+    memset(identity, 0, sizeof *identity);
+    BY_HANDLE_FILE_INFORMATION info;
+    FILE_BASIC_INFO times;
+    int ok = GetFileInformationByHandle(file, &info) &&
+             GetFileInformationByHandleEx(file, FileBasicInfo, &times, sizeof times) &&
+             !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+    if (!ok)
+        return 0;
+    identity->device = info.dwVolumeSerialNumber;
+    identity->file = ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
+    identity->size = ((uint64_t)info.nFileSizeHigh << 32) | info.nFileSizeLow;
+    identity->modified = (uint64_t)times.LastWriteTime.QuadPart;
+    identity->changed = (uint64_t)times.ChangeTime.QuadPart;
+    return 1;
+}
+#else
+static void stat_identity(const struct stat *info, TbFileIdentity *identity)
+{
+    memset(identity, 0, sizeof *identity);
+    identity->device = (uint64_t)info->st_dev;
+    identity->file = (uint64_t)info->st_ino;
+    identity->size = (uint64_t)info->st_size;
+    identity->modified = (uint64_t)info->st_mtime;
+    identity->changed = (uint64_t)info->st_ctime;
+#ifdef __APPLE__
+    identity->modified_fraction = (uint64_t)info->st_mtimespec.tv_nsec;
+    identity->changed_fraction = (uint64_t)info->st_ctimespec.tv_nsec;
+#else
+    identity->modified_fraction = (uint64_t)info->st_mtim.tv_nsec;
+    identity->changed_fraction = (uint64_t)info->st_ctim.tv_nsec;
+#endif
+}
+#endif
+
 int tb_path_identity(const char *path, TbFileIdentity *identity)
 {
     memset(identity, 0, sizeof *identity);
@@ -942,37 +980,266 @@ int tb_path_identity(const char *path, TbFileIdentity *identity)
     free(name);
     if (file == INVALID_HANDLE_VALUE)
         return 0;
-    BY_HANDLE_FILE_INFORMATION info;
-    FILE_BASIC_INFO times;
-    int ok = GetFileInformationByHandle(file, &info) &&
-             GetFileInformationByHandleEx(file, FileBasicInfo, &times, sizeof times) &&
-             !(info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
+    int ok = file_identity(file, identity);
     CloseHandle(file);
-    if (!ok)
-        return 0;
-    identity->device = info.dwVolumeSerialNumber;
-    identity->file = ((uint64_t)info.nFileIndexHigh << 32) | info.nFileIndexLow;
-    identity->size = ((uint64_t)info.nFileSizeHigh << 32) | info.nFileSizeLow;
-    identity->modified = (uint64_t)times.LastWriteTime.QuadPart;
-    identity->changed = (uint64_t)times.ChangeTime.QuadPart;
+    return ok;
 #else
     struct stat info;
     if (stat(path, &info) || !S_ISREG(info.st_mode))
         return 0;
-    identity->device = (uint64_t)info.st_dev;
-    identity->file = (uint64_t)info.st_ino;
-    identity->size = (uint64_t)info.st_size;
-    identity->modified = (uint64_t)info.st_mtime;
-    identity->changed = (uint64_t)info.st_ctime;
-#ifdef __APPLE__
-    identity->modified_fraction = (uint64_t)info.st_mtimespec.tv_nsec;
-    identity->changed_fraction = (uint64_t)info.st_ctimespec.tv_nsec;
-#else
-    identity->modified_fraction = (uint64_t)info.st_mtim.tv_nsec;
-    identity->changed_fraction = (uint64_t)info.st_ctim.tv_nsec;
-#endif
-#endif
+    stat_identity(&info, identity);
     return 1;
+#endif
+}
+
+struct TbMutationLock
+{
+#ifdef _WIN32
+    HANDLE file;
+#else
+    int file;
+#endif
+};
+
+#ifndef _WIN32
+/* Resolve every directory without following symbolic links. */
+static int directory_nofollow(const char *path)
+{
+    char *copy = strdup(path);
+    if (!copy)
+        return -1;
+    int fd = open(path[0] == '/' ? "/" : ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    char *save = NULL;
+    for (char *part = strtok_r(copy, "/", &save); fd >= 0 && part;
+         part = strtok_r(NULL, "/", &save))
+    {
+        if (!strcmp(part, "."))
+            continue;
+        if (!strcmp(part, ".."))
+        {
+            close(fd);
+            fd = -1;
+            errno = EINVAL;
+            break;
+        }
+        int next = openat(fd, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        int error = errno;
+        close(fd);
+        fd = next;
+        errno = error;
+    }
+    int error = errno;
+    free(copy);
+    errno = error;
+    return fd;
+}
+#endif
+
+TbMutationLock *tb_mutation_lock(const char *directory)
+{
+    if (!directory || !*directory || tb_image_path(directory))
+    {
+        errno = EINVAL;
+        return NULL;
+    }
+    TbMutationLock *lock = malloc(sizeof *lock);
+    if (!lock)
+        return NULL;
+#ifdef _WIN32
+    if (tb_is_link(directory) || !tb_is_dir(directory))
+    {
+        errno = EINVAL;
+        free(lock);
+        return NULL;
+    }
+    const char suffix[] = "/.component-mutation.lock";
+    size_t length = strlen(directory);
+    char *path = malloc(length + sizeof suffix);
+    if (!path)
+    {
+        free(lock);
+        return NULL;
+    }
+    memcpy(path, directory, length);
+    memcpy(path + length, suffix, sizeof suffix);
+    wchar_t *name = wide(path);
+    free(path);
+    if (!name)
+    {
+        free(lock);
+        return NULL;
+    }
+    lock->file = CreateFileW(name, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                             NULL, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    DWORD open_error = GetLastError();
+    free(name);
+    if (lock->file != INVALID_HANDLE_VALUE)
+    {
+        BY_HANDLE_FILE_INFORMATION info;
+        OVERLAPPED overlap = {0};
+        int valid = GetFileInformationByHandle(lock->file, &info);
+        DWORD error = GetLastError();
+        if (valid &&
+            (info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)))
+        {
+            valid = 0;
+            error = ERROR_INVALID_NAME;
+        }
+        if (valid && LockFileEx(lock->file, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0,
+                                1, 0, &overlap))
+            return lock;
+        if (valid)
+            error = GetLastError();
+        CloseHandle(lock->file);
+        if (error == ERROR_LOCK_VIOLATION || error == ERROR_SHARING_VIOLATION)
+            errno = EBUSY;
+        else
+            path_errno(error);
+    }
+    else if (open_error == ERROR_SHARING_VIOLATION)
+        errno = EBUSY;
+    else
+        path_errno(open_error);
+#else
+    int parent = directory_nofollow(directory);
+    lock->file = parent >= 0 ? openat(parent, ".component-mutation.lock",
+                                      O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600)
+                             : -1;
+    int error = errno;
+    if (parent >= 0)
+        close(parent);
+    errno = error;
+    if (lock->file >= 0)
+    {
+        struct stat info;
+        if (!fstat(lock->file, &info) && S_ISREG(info.st_mode))
+        {
+            if (!flock(lock->file, LOCK_EX | LOCK_NB))
+                return lock;
+            if (errno == EWOULDBLOCK || errno == EAGAIN)
+                errno = EBUSY;
+        }
+        else
+            errno = EINVAL;
+        error = errno;
+        close(lock->file);
+        errno = error;
+    }
+#endif
+    free(lock);
+    return NULL;
+}
+
+void tb_mutation_unlock(TbMutationLock *lock)
+{
+    if (!lock)
+        return;
+#ifdef _WIN32
+    CloseHandle(lock->file);
+#else
+    close(lock->file);
+#endif
+    free(lock);
+}
+
+int tb_remove_managed_file(const char *path, const TbFileIdentity *expected)
+{
+    if (!path || !*path || !expected || tb_image_path(path))
+    {
+        errno = EINVAL;
+        return 0;
+    }
+    TbFileIdentity identity;
+#ifdef _WIN32
+    wchar_t *name = wide(path);
+    if (!name)
+        return 0;
+    HANDLE file = CreateFileW(name, DELETE | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, NULL,
+                              OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, NULL);
+    DWORD open_error = GetLastError();
+    free(name);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        path_errno(open_error);
+        return 0;
+    }
+    BY_HANDLE_FILE_INFORMATION info;
+    int ok = GetFileInformationByHandle(file, &info) &&
+             !(info.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) &&
+             file_identity(file, &identity);
+    if (ok && memcmp(&identity, expected, sizeof identity))
+    {
+        errno = EBUSY;
+        ok = 0;
+    }
+    else if (ok)
+    {
+        FILE_DISPOSITION_INFO remove = {TRUE};
+        ok = SetFileInformationByHandle(file, FileDispositionInfo, &remove, sizeof remove);
+        if (!ok)
+            path_errno(GetLastError());
+    }
+    else
+        errno = EINVAL;
+    int error = errno;
+    CloseHandle(file);
+    errno = error;
+    return ok;
+#else
+    char *copy = strdup(path);
+    if (!copy)
+        return 0;
+    char *slash = strrchr(copy, '/');
+    char *name = slash ? slash + 1 : copy;
+    int parent;
+    if (!*name || !strcmp(name, ".") || !strcmp(name, ".."))
+    {
+        free(copy);
+        errno = EINVAL;
+        return 0;
+    }
+    if (slash)
+    {
+        *slash = 0;
+        parent = directory_nofollow(*copy ? copy : "/");
+    }
+    else
+        parent = directory_nofollow(".");
+    int file =
+        parent >= 0 ? openat(parent, name, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK) : -1;
+    int ok = 0;
+    if (file >= 0)
+    {
+        struct stat held, entry;
+        if (!fstat(file, &held) && S_ISREG(held.st_mode))
+        {
+            stat_identity(&held, &identity);
+            if (!memcmp(&identity, expected, sizeof identity))
+            {
+                if (!fstatat(parent, name, &entry, AT_SYMLINK_NOFOLLOW))
+                {
+                    stat_identity(&entry, &identity);
+                    if (S_ISREG(entry.st_mode) && !memcmp(&identity, expected, sizeof identity))
+                        ok = unlinkat(parent, name, 0) == 0;
+                    else
+                        errno = ESTALE;
+                }
+            }
+            else
+                errno = ESTALE;
+        }
+        else
+            errno = EINVAL;
+    }
+    int error = errno;
+    if (file >= 0)
+        close(file);
+    if (parent >= 0)
+        close(parent);
+    free(copy);
+    errno = error;
+    return ok;
+#endif
 }
 
 /* Host runtime selection probes headers only; guest executables are not run. */

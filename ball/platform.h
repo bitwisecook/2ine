@@ -31,6 +31,15 @@ typedef struct TbFileIdentity
     uint64_t device, file, size, modified, changed, modified_fraction, changed_fraction;
 } TbFileIdentity;
 int tb_path_identity(const char *path, TbFileIdentity *identity);
+typedef struct TbMutationLock TbMutationLock;
+/* Nonblocking cooperative process/thread lock. directory must already exist.
+ * Contention returns NULL with errno EBUSY. The persistent lock file is not removed. */
+TbMutationLock *tb_mutation_lock(const char *directory);
+void tb_mutation_unlock(TbMutationLock *lock);
+/* Remove a regular host file only when its identity still matches expected.
+ * Call while holding the ball mutation lock. POSIX checks the held descriptor and
+ * directory entry, but cannot exclude an uncooperative rename after its final check. */
+int tb_remove_managed_file(const char *path, const TbFileIdentity *expected);
 int tb_file_mode(FILE *file, int mode);
 int tb_replace(const char *source, const char *destination);
 /* Atomic same-filesystem move; an existing destination is never replaced. */

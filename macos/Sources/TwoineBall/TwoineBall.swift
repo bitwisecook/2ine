@@ -13,6 +13,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if model?.hasComponentOperations == true {
+            model?.componentNotice = "Component files are being updated. Finish or cancel the background jobs before quitting."
+            return .terminateCancel
+        }
         if model?.busy == true || model?.mediaBusy == true {
             model?.error = "Stop the running guest from the Ball menu before quitting. Other operations must finish before quitting."
             return .terminateCancel

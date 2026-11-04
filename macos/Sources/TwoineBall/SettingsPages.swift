@@ -100,7 +100,7 @@ struct PrintingSettingsView: View {
                 LabeledContent("Source", value: queue(user) != nil ? "OS2.INI" : queue(system) != nil ? "OS2SYS.INI" : "2ine Default")
                 Button("Use Inherited Default") { save(nil) }.disabled(queue(user) == nil)
                 Text("Changes apply when an application next starts. Stop the guest before changing its printer preference.").foregroundStyle(.secondary)
-            }.disabled(loading || model.busy || model.mediaBusy || model.processRunning || user == nil)
+            }.disabled(loading || model.busy || model.mediaBusy || model.componentOperationRunning || model.processRunning || user == nil)
             Section("Output") {
                 Text("PDF opens the system Save dialog so you can choose a file name and location. PCL 5 output supports compatible printers and can also be saved to a file.")
                 LabeledContent("Resolution", value: "300 DPI")

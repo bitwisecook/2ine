@@ -57,3 +57,40 @@ group before supplying actual files. Such a request remains pending until
 eligible sources exist, then applies once. The real command/navigation/Undo
 test passes in 0.218 seconds after this refinement. The initially packaged
 build17 was not installed; a subsequent build contains this final correction.
+
+## Inline component operations
+
+The subsequent UI pass replaces the extraction wizard/dialog with a retained
+component pane in both desktop frontends. Media browsing and the component
+outline can remain visible together. Media validation/planning run off the UI
+thread; imports/removals use independent workers and progress readers. Install,
+Remove and Cancel controls, completion/error text and log links stay inline.
+There is no automatic missing-media chooser: dependency recovery routes to this
+pane with a notice and the relevant group selected.
+
+Jobs are scoped to a ball. Navigation and other balls remain usable; writes,
+guest launches, export, rename and trash of the affected ball wait until its
+component operation ends. Native row and ancestor throbbers show active work.
+Checks are locked during mutation while disclosure, search and provider links
+remain usable. Termination preserves the running worker until it finishes or
+is cancelled explicitly.
+
+File polling uses read-only source-aware ownership state, without re-opening
+media or rebuilding an archive plan. Planned source IDs and hierarchy remain
+stable; installed alternate versions resolve to their recorded destinations.
+Removal uses exact sources and keeps modified/unowned/protected files. Changing
+the OpenGL provider or undoing that change invalidates the cached component
+plan so native-disabled rows reflect the saved provider when the pane returns.
+
+See [os2-component-operations.md](os2-component-operations.md) for the engine
+contract and bounded safety guarantees. Live GTK display acceptance still
+requires a Linux desktop; pure model tests, native-core probes and the retained
+Linux integration gate cover the headless checks on this host.
+
+UI acceptance after the inline pass: 71 Swift tests pass (39 app-model/native
+control tests and 32 core-model tests). The shared tooling suite passed 261
+cases before the final output-cardinality guard; the source-aware lifecycle
+suite separately passes all 12 cases with that guard. Eight offscreen captures
+cover the production tree and inline pane in light/dark idle/activity states;
+`build-tree-current/inline-activity-qa/README.md` retains the rendering method
+and limits. All production source was free of temporary QA harnesses afterward.

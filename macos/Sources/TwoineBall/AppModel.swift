@@ -111,7 +111,7 @@ final class AppModel {
     let undoManager = OperationUndoManager()
     var busy = false { didSet { undoManager.blocked = busy || mediaBusy } }
     var mediaBusy = false { didSet { undoManager.blocked = busy || mediaBusy } }
-    var canChangeMedia: Bool { selected != nil && !mediaBusy && (!busy || processRunning) }
+    var canChangeMedia: Bool { selected != nil && !componentOperationRunning && !mediaBusy && (!busy || processRunning) }
     var installCompletion: InstallCompletion?
     var processRunning = false { didSet { if oldValue != processRunning { updateConfigObservation() } } }
     var stopRequested = false
@@ -125,17 +125,20 @@ final class AppModel {
         return draft
     }
     var activity = "No process has run in this session."
-    var supportImport: OS2ImportRequest?
     var settingsSection: SettingsSection = .general
     var highlightedSetting: String?
     var componentNavigation: ComponentNavigation?
     private var appliedComponentNavigation: UUID?
     var componentDrafts: [String: ComponentDraft] = [:]
+    var componentJobs: [String: ComponentJob] = [:]
+    var componentPlans: [String: OS2ExtractionPlan] = [:]
+    var componentPlanSources: [String: [String]] = [:]
+    var componentMedia: [String: OS2MediaSource] = [:]
+    var componentNotice: String?
     func openComponentSetting(_ token: String) {
         guard ["graphics.opengl", "graphics", "printing"].contains(token) else { return }
         settingsSection = token == "printing" ? .printing : .graphics
         highlightedSetting = token
-        supportImport = nil
         page = .settings
     }
     func openOS2ComponentGroup(_ category: OS2ExtractionCategory) {
@@ -178,12 +181,13 @@ final class AppModel {
         do {
             var request = DesktopRequest("validate-os2-media", ball: ball, build: build)
             request.sources = sources
-            let validated = try await backend.request(request, as: ValidatedOS2Media.self)
+            let payload = request
+            let validated = try await Task.detached { try NativeBallCore.request(payload, as: ValidatedOS2Media.self) }.value
             guard validated.complete, !validated.sources.isEmpty else { return }
             prefs.lastOS2MediaSources = validated.sources
             prefs.lastOS2MediaFiles = validated.physicalSources ?? []
             try await preferences.save(prefs)
-        } catch { self.error = "Could not remember OS/2 media for new balls: " + error.localizedDescription }
+        } catch { componentNotice = "Could not remember OS/2 media for new balls: " + error.localizedDescription }
     }
     var audioEditor = false
     var operation = "Ready"
@@ -288,8 +292,8 @@ final class AppModel {
         }
     }
 
-    func perform(_ work: @escaping @MainActor () async throws -> Void) {
-        guard !busy, !mediaBusy else { return }
+    func perform(allowComponentRead: Bool = false, _ work: @escaping @MainActor () async throws -> Void) {
+        guard !busy, !mediaBusy, allowComponentRead || !componentOperationRunning else { return }
         busy = true
         Task {
             defer { busy = false }
@@ -311,11 +315,11 @@ final class AppModel {
     func select(_ path: String) {
         guard !busy, !mediaBusy else { return }
         selected = path; snapshot = nil
-        perform { try await self.reload(path) }
+        perform(allowComponentRead: true) { try await self.reload(path) }
     }
 
     func canManageBall(_ path: String) -> Bool {
-        canManageBalls && (paths.contains(path) || selected == path)
+        canManageBalls && componentJobs[path]?.running != true && (paths.contains(path) || selected == path)
     }
     func beginRenameBall(_ path: String) {
         guard canManageBall(path) else { return }
@@ -340,6 +344,8 @@ final class AppModel {
         let renamed = try await backend.request(request, as: RenamedBall.self)
         paths = Array(Set(paths.map { $0 == path ? renamed.path : $0 })).sorted()
         componentDrafts.removeValue(forKey: path)
+        componentPlans.removeValue(forKey: path); componentMedia.removeValue(forKey: path)
+        componentPlanSources.removeValue(forKey: path); componentJobs.removeValue(forKey: path)
         if componentNavigation?.ball == path { componentNavigation = nil }
         if let value = settingsDrafts.removeValue(forKey: path) { settingsDrafts[renamed.path] = value }
         if let value = configDrafts.removeValue(forKey: path) { configDrafts[renamed.path] = value }
@@ -408,6 +414,8 @@ final class AppModel {
     private func forgetBallPath(_ path: String) async throws {
         paths.removeAll { $0 == path }
         componentDrafts.removeValue(forKey: path)
+        componentPlans.removeValue(forKey: path); componentMedia.removeValue(forKey: path)
+        componentPlanSources.removeValue(forKey: path); componentJobs.removeValue(forKey: path)
         if componentNavigation?.ball == path { componentNavigation = nil }
         settingsDrafts.removeValue(forKey: path); configDrafts.removeValue(forKey: path)
         configBases.removeValue(forKey: path); liveConfigTexts.removeValue(forKey: path)
@@ -426,7 +434,7 @@ final class AppModel {
     }
     func refresh() {
         guard let selected else { start(); return }
-        perform { try await self.reload(selected) }
+        perform(allowComponentRead: true) { try await self.reload(selected) }
     }
     func chooseBall(create: Bool) {
         guard !busy, !mediaBusy else { return }
@@ -443,8 +451,9 @@ final class AppModel {
     }
     func open(_ url: URL, create: Bool) {
         guard !busy, !mediaBusy else { return }
+        if create, componentJobs[url.resolvingSymlinksInPath().path]?.running == true { return }
         if !create && url.pathExtension.lowercased() == "zip" { chooseImportBall(url); return }
-        perform {
+        perform(allowComponentRead: true) {
             let path = url.resolvingSymlinksInPath().path
             if let sources = self.snapshot?.os2Support?.mediaSources, !sources.isEmpty { self.recentMediaCandidates = sources }
             let message = DesktopRequest(create ? "command" : "snapshot", ball: path,
@@ -489,7 +498,8 @@ final class AppModel {
         if panel.runModal() == .OK, let destination = panel.url { importBall(source, to: destination) }
     }
     func importBall(_ source: URL, to destination: URL) {
-        perform {
+        guard componentJobs[destination.resolvingSymlinksInPath().path]?.running != true else { return }
+        perform(allowComponentRead: true) {
             self.operation = "Importing ball…"
             defer { self.operation = "Ready" }
             let path = destination.resolvingSymlinksInPath().path
@@ -509,7 +519,7 @@ final class AppModel {
         }
     }
     func chooseExportBall() {
-        guard let selected, snapshot != nil, !busy, !mediaBusy else { return }
+        guard let selected, snapshot != nil, !busy, !mediaBusy, !componentOperationRunning else { return }
         let panel = NSSavePanel()
         panel.title = "Export Ball as ZIP"; panel.prompt = "Export"
         panel.allowedContentTypes = [.zip]; panel.canCreateDirectories = true
@@ -599,8 +609,16 @@ final class AppModel {
     }
     private func mutate(_ request: DesktopRequest, inverse: DesktopRequest?, name: String) async throws {
         let value = try await backend.request(request, as: BallSnapshot.self)
+        invalidateComponentPlan(after: request)
         if selected == request.ball { snapshot = value; revision += 1 }
         if let inverse { register(BallUndoEntry(request: request, inverse: inverse, name: name), reverse: true) }
+    }
+    private func invalidateComponentPlan(after request: DesktopRequest) {
+        guard let ball = request.ball else { return }
+        if ["runtime-build", "restore-runtime"].contains(request.action) ||
+            (request.action == "command" && ["config", "unset"].contains(request.arguments?.first ?? "") && request.arguments?.dropFirst().first == "system.opengl") {
+            componentPlans.removeValue(forKey: ball)
+        }
     }
     private func register(_ entry: BallUndoEntry, reverse: Bool) {
         let ownGroup = !undoManager.isUndoing && !undoManager.isRedoing && undoManager.groupingLevel == 0
@@ -615,6 +633,7 @@ final class AppModel {
                 do {
                     let request = reverse ? entry.inverse : entry.request
                     let value = try await self.backend.request(request, as: BallSnapshot.self)
+                    self.invalidateComponentPlan(after: request)
                     if let ball = request.ball {
                         self.selected = ball; self.snapshot = value; self.revision += 1
                         await self.loadIcons(ball)
@@ -668,13 +687,13 @@ final class AppModel {
         return value
     }
     func saveAudio(_ settings: AudioSettings, ball: String) async throws {
-        guard !busy, !mediaBusy, selected == ball else { throw BallError("Wait for the operation to finish and keep this ball selected.") }
+        guard !busy, !mediaBusy, componentJobs[ball]?.running != true, selected == ball else { throw BallError("Wait for the operation to finish and keep this ball selected.") }
         busy = true; defer { busy = false }
         var request = DesktopRequest("save-audio", ball: ball); request.settings = settings
         _ = try await backend.request(request, as: AudioSnapshot.self)
         try await reload(ball)
     }
-    func pickOS2Media(directory: Bool = false) -> [String]? {
+    func pickOS2Media(directory: Bool = false) async -> [String]? {
         guard !busy, !mediaBusy else { return nil }
         let panel = NSOpenPanel()
         panel.title = directory ? "Choose OS/2 Media Folder" : "Choose OS/2 ISO or Archive"
@@ -686,8 +705,13 @@ final class AppModel {
             panel.directoryURL = URL(filePath: path).deletingLastPathComponent()
             if !directory { panel.nameFieldStringValue = URL(filePath: path).lastPathComponent }
         }
-        guard panel.runModal() == .OK else { return nil }
-        return panel.urls.map(\.path)
+        return await withCheckedContinuation { continuation in
+            let completion: (NSApplication.ModalResponse) -> Void = { response in
+                continuation.resume(returning: response == .OK ? panel.urls.map(\.path) : nil)
+            }
+            if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: completion) }
+            else { panel.begin(completionHandler: completion) }
+        }
     }
     func installComponents() {
         guard selected != nil, !busy, !mediaBusy else { return }
@@ -696,19 +720,19 @@ final class AppModel {
     func rememberOS2Media(_ sources: [String], ball: String) async throws {
         var request = DesktopRequest("remember-os2-media", ball: ball); request.sources = sources
         _ = try await backend.request(request, as: OS2SupportStatus.self)
-        await cacheOS2Media(sources, ball: ball)
+        if selected == ball { await cacheOS2Media(sources, ball: ball) }
     }
     func openOS2Source(_ sources: [String], ball: String) async throws -> OS2MediaSource {
         guard selected == ball, !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }
-        busy = true; defer { busy = false }
         var request = DesktopRequest("open-os2-source", ball: ball, build: build); request.sources = sources
-        return try await backend.request(request, as: OS2MediaSource.self)
+        let payload = request
+        return try await Task.detached { try NativeBallCore.request(payload, as: OS2MediaSource.self) }.value
     }
     func planOS2Extraction(_ sources: [String], ball: String) async throws -> OS2ExtractionPlan {
         guard selected == ball, !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }
-        busy = true; defer { busy = false }
         var request = DesktopRequest("plan-os2-extraction", ball: ball, build: build); request.sources = sources
-        return try await backend.request(request, as: OS2ExtractionPlan.self)
+        let payload = request
+        return try await Task.detached { try NativeBallCore.request(payload, as: OS2ExtractionPlan.self) }.value
     }
     func os2Support() async throws -> OS2SupportStatus {
         guard let selected else { throw BallError("Choose a ball first.") }
@@ -726,34 +750,22 @@ final class AppModel {
         let file = logs.appending(path: "wps-registration-latest.json").resolvingSymlinksInPath()
         return file.path.hasPrefix(logs.path + "/") && FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
-    private func restoreDependencyMedia(_ audit: DependencyAudit, ball: String, build: String) async throws -> DependencyAudit? {
+    private func requestDependencyComponents(_ audit: DependencyAudit, ball: String) -> DependencyAudit? {
         guard audit.needsMediaSelection else { return audit }
-        let panel = NSOpenPanel()
-        panel.title = "Restore Missing OS/2 Components"
+        guard selected == ball else { return nil }
         let groups = (audit.componentGroups ?? []).map(\.title).joined(separator: ", ")
-        panel.message = (groups.isEmpty ? "Installed applications require additional OS/2 libraries." : "Installed applications require: " + groups + ".") + " Choose your OS/2 ISO, archive, floppy images or installation folder. Existing files are preserved."
-        panel.prompt = "Restore Components"
-        panel.canChooseDirectories = true; panel.canChooseFiles = true
-        panel.allowsMultipleSelection = true
-        operation = "Choose OS/2 installation media"
-        guard panel.runModal() == .OK else { return nil }
-        operation = "Finding OS/2 installation files…"
-        var source = DesktopRequest("open-os2-source", ball: ball, build: build)
-        source.sources = panel.urls.map(\.path)
-        let media = try await backend.request(source, as: OS2MediaSource.self)
-        await cacheOS2Media(media.sources, ball: ball)
-        var restore = DesktopRequest("audit-dependencies", ball: ball, build: build)
-        restore.sources = media.sources
-        operation = "Restoring missing OS/2 components…"
-        let restored = try await backend.request(restore, as: DependencyAudit.self)
-        activity = [media.warningSummary, restored.summary].filter { !$0.isEmpty }.joined(separator: "\n\n")
-        return restored
+        componentNotice = (groups.isEmpty ? "Additional OS/2 components are required." : "Required OS/2 components: " + groups + ".")
+            + " Choose media and install them here, then start the application again."
+        let category = (audit.componentGroups ?? []).compactMap { OS2ExtractionCategory(rawValue: $0.id) }.first ?? .cmd
+        showOS2ComponentGroup(category)
+        return nil
     }
     func dependencyRequirements() async throws -> DependencyAudit {
         guard let selected else { throw BallError("Choose a ball first.") }
         var request = DesktopRequest("audit-dependencies", ball: selected, build: build)
         request.resolve = false
-        return try await backend.request(request, as: DependencyAudit.self)
+        let payload = request
+        return try await Task.detached { try NativeBallCore.request(payload, as: DependencyAudit.self) }.value
     }
     func auditDependencies() {
         guard let selected, !busy, !mediaBusy, !processRunning else { return }
@@ -762,7 +774,7 @@ final class AppModel {
             let audit = try await self.backend.request(DesktopRequest("audit-dependencies", ball: selected, build: self.build), as: DependencyAudit.self)
             self.page = .activity; self.activity = audit.summary
             self.exitCode = nil
-            _ = try await self.restoreDependencyMedia(audit, ball: selected, build: self.build)
+            _ = self.requestDependencyComponents(audit, ball: selected)
             self.operation = "Dependency audit finished"
             try await self.reload(selected)
         }
@@ -821,7 +833,7 @@ final class AppModel {
         return candidates.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }.prefix(32).map(\.0)
     }
     func mapDrive(_ letter: String, directory: String, image: Bool = false) async throws {
-        guard !busy, !mediaBusy, let selected else { throw BallError("Wait for the current operation to finish.") }
+        guard !busy, !mediaBusy, !componentOperationRunning, let selected else { throw BallError("Wait for this ball’s component operation to finish.") }
         busy = true; defer { busy = false }
         try await runCommand([image ? "map-image" : "map", letter, directory], ball: selected)
     }
@@ -912,20 +924,24 @@ final class AppModel {
     }
     func saveConfigurationFile(_ path: String, ball: String, revision: String, text: String,
                                application: String? = nil, key: String? = nil, remove: Bool = false) async throws -> ConfigurationFileSnapshot {
-        guard !busy, !mediaBusy, !processRunning, selected == ball else { throw BallError("Stop the guest before editing OS/2 files.") }
+        guard !busy, !mediaBusy, !processRunning, !componentOperationRunning, selected == ball else { throw BallError("Finish this ball’s operations before editing OS/2 files.") }
         busy = true; defer { busy = false }
         var request = DesktopRequest("configuration-file-write", ball: ball, expected: revision, text: text)
         request.path = path; request.application = application; request.key = key; request.remove = remove
         return try await backend.request(request, as: ConfigurationFileSnapshot.self)
     }
     func saveConfiguration(_ area: String, ball: String, revision: String, application: String, key: String, data: String, remove: Bool = false) async throws -> ConfigurationSnapshot {
-        guard !busy, !mediaBusy, !processRunning, selected == ball else { throw BallError("Stop the guest before editing profiles or the registry.") }
+        guard !busy, !mediaBusy, !processRunning, !componentOperationRunning, selected == ball else { throw BallError("Finish this ball’s operations before editing profiles or the registry.") }
         busy = true; defer { busy = false }
         var request = DesktopRequest("configuration-write", ball: ball, expected: revision, text: data)
         request.name = area; request.path = application; request.key = key; request.remove = remove
         return try await backend.request(request, as: ConfigurationSnapshot.self)
     }
     func beginProgram(_ action: ProgramAction) {
+        if componentOperationRunning, action != .install {
+            componentNotice = "Finish or cancel this ball’s component job before starting or changing applications."
+            return
+        }
         editingApplication = nil
         if action == .install { page = .installation }
         else { programAction = action }
@@ -1022,7 +1038,7 @@ final class AppModel {
                 self.operation = "Checking installed components…"
                 let audit = try await self.backend.request(DesktopRequest("ensure-dependencies", ball: selected, build: build), as: DependencyAudit.self)
                 self.activity = audit.summary
-                guard try await self.restoreDependencyMedia(audit, ball: selected, build: build) != nil else {
+                guard self.requestDependencyComponents(audit, ball: selected) != nil else {
                     self.operation = "Launch Cancelled"
                     try await self.reload(selected)
                     return
@@ -1043,7 +1059,7 @@ final class AppModel {
             self.operation = result.signalled ? "Terminated by signal \(result.code)" : "Exited \(result.code)"
             if let error = result.receiptError { self.error = "The process exited, but its installer receipt could not be saved: " + error }
             if let audit = result.dependencyAudit, audit.needsMediaSelection {
-                _ = try await self.restoreDependencyMedia(audit, ball: selected, build: build)
+                _ = self.requestDependencyComponents(audit, ball: selected)
             }
             try await self.reload(selected)
         }

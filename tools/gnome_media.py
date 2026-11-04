@@ -1,5 +1,7 @@
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Review and extract original OS/2 files from nested installation media."""
+"""Inline OS/2 component media browsing and independently owned background jobs."""
+
+import uuid
 
 import gi
 
@@ -11,83 +13,114 @@ except ImportError as error:
     raise SystemExit("GTK 4 and libadwaita are required: " + str(error)) from error
 
 if __package__:
-    from . import gnome_media_preferences
+    from . import gnome_component_jobs, gnome_media_preferences
     from .gnome_components import ComponentTree
     from .gnome_files import FileList, display_path
-    from .gnome_views import FormDialog, action_button
+    from .gnome_views import action_button
 else:
+    import gnome_component_jobs
     import gnome_media_preferences
     from gnome_components import ComponentTree
     from gnome_files import FileList, display_path
-    from gnome_views import FormDialog, action_button
-
-CATEGORIES = (
-    (
-        "cmd",
-        "CMD and REXX Support",
-        "Command interpreter, installer support files and original REXX.",
-    ),
-    ("fonts", "Fonts", "Original OS/2 font files."),
-    ("assets", "Sounds, Images and Video", "Desktop images, sounds and sample videos."),
-    ("printers", "Printer Support", "Original printer drivers and supporting files."),
-    ("help", "Full Help", "Original help manager, viewers, help files and books."),
-    ("full", "Full OS File Set", "All available files except components supplied by 2ine."),
-)
+    from gnome_views import action_button
 
 
-class OS2MediaDialog(FormDialog):
-    def __init__(self, window, sources, categories=None):
-        super().__init__(window, "Browse OS/2 Media", accept="Continue", width=820, height=680)
-        self.sources = []
-        self.validation = None
-        self.focus_category = (
-            next(iter(categories)) if categories and len(categories) == 1 else None
-        )
+class OS2ComponentsPane(Gtk.Box):
+    def __init__(self, window):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=12, vexpand=True)
+        self.window, self.ball, self.build = window, window.ball, window.build
+        self.sources, self.validation, self.directory = [], None, None
+        self.focus_category = None
         self.restore_selection = None
         self.opening_sources = None
-        self.directory = None
-        self.selected = None
-        self.plan = None
-        self.stage = "source"
-        self.categories = set(categories or {"cmd"})
-        self.component_tree = None
-        self.updating_categories = False
-        self.stack = Gtk.Stack(vexpand=True)
-        self.body.append(self.stack)
-        self.source_page = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL,
-            spacing=12,
-            margin_top=16,
-            margin_bottom=16,
-            margin_start=20,
-            margin_end=20,
-        )
-        self.stack.add_named(self.source_page, "source")
-        self.source_page.append(
-            Gtk.Label(
-                label="Browse the installation media, or continue to search the selected media. Folders and archives can be opened inside other archives.",
-                wrap=True,
-                xalign=0,
-            )
-        )
+        self.queued_sources = None
+        self.selected, self.plan, self.component_tree = None, None, None
+        self.extraction_sources = []
+        self.categories = {"cmd"}
+        self.working, self.polling = False, False
+        self.job = None
+        self.append(Gtk.Label(label="OS/2 System Components", xalign=0, css_classes=["title-1"]))
+        self.error = Adw.Banner(use_markup=False, revealed=False)
+        self.append(self.error)
         bar = Adw.WrapBox(child_spacing=6, line_spacing=6)
         bar.append(action_button("Choose ISO or Archive…", self.choose_media))
         bar.append(action_button("Choose Folder…", self.choose_folder))
         self.up = action_button("Parent Folder", self.go_up, "go-up-symbolic")
         bar.append(self.up)
-        self.source_page.append(bar)
+        bar.append(action_button("Check and Restore Libraries…", window.audit_dependencies))
+        self.append(bar)
         self.address = Gtk.Label(xalign=0, wrap=True, selectable=True)
-        self.source_page.append(self.address)
+        self.append(self.address)
         self.relevant_only = Gtk.CheckButton(label="Relevant Files Only", active=True)
         self.relevant_only.connect("toggled", lambda *_: self.files.refresh())
-        self.source_page.append(self.relevant_only)
+        self.append(self.relevant_only)
         self.files = FileList(selected=self.select, activated=self.activate, accept=self.relevant)
-        self.source_page.append(self.files)
+        self.files.set_size_request(-1, 150)
+        self.append(self.files)
         self.current_only = Gtk.CheckButton(label="Search only the current folder or selected item")
-        self.source_page.append(self.current_only)
-        self.notice = Gtk.Label(xalign=0, wrap=True, selectable=True, css_classes=["dim-label"])
-        self.body.append(self.notice)
-        self.open_sources(sources)
+        self.append(self.current_only)
+        self.scan = action_button("Browse Components", self.plan_sources)
+        self.append(self.scan)
+        self.tree_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, vexpand=True)
+        self.append(self.tree_box)
+        controls = Adw.WrapBox(child_spacing=6, line_spacing=6)
+        self.accept = action_button("Install Selected", self.install_selected)
+        self.accept.add_css_class("suggested-action")
+        controls.append(self.accept)
+        self.remove = action_button("Remove Selected", self.remove_selected)
+        controls.append(self.remove)
+        self.refresh = action_button("Refresh Installed Status", self.refresh_state)
+        controls.append(self.refresh)
+        self.cancel = action_button("Cancel Job", self.cancel_job)
+        controls.append(self.cancel)
+        self.append(controls)
+        status = Gtk.Box(spacing=8)
+        self.progress = Gtk.Spinner()
+        status.append(self.progress)
+        self.notice = Gtk.Label(
+            label="Choose original OS/2 media to browse components.",
+            xalign=0,
+            wrap=True,
+            selectable=True,
+        )
+        status.append(self.notice)
+        self.append(status)
+        self.connect("map", lambda *_: GLib.idle_add(self.shown))
+        self.update_count()
+
+    def shown(self):
+        if self.plan:
+            self.refresh_state()
+        elif not self.sources and not self.working and self.window.ball == self.ball:
+            sources = gnome_media_preferences.preferred(
+                self.window.snapshot, self.window.app_preferences
+            )
+            if sources:
+                self.open_sources(sources)
+
+    def api(self, action, **fields):
+        return self.window.component_api(
+            action, ball=str(self.ball), build=str(self.build), **fields
+        )
+
+    def pending(self, active):
+        self.working = active
+        self.progress.set_spinning(active or bool(self.job and self.job.get("active")))
+        self.scan.set_sensitive(not active and bool(self.sources))
+        self.update_count()
+
+    def run(self, work, completed):
+        if self.working:
+            return False
+        self.error.set_revealed(False)
+        self.pending(True)
+
+        def finished(result):
+            self.pending(False)
+            completed(result)
+
+        self.window.component_work(work, finished, self.error_message)
+        return True
 
     def relevant(self, entry):
         if not self.relevant_only.get_active() or entry["directory"] or entry["container"]:
@@ -169,10 +202,22 @@ class OS2MediaDialog(FormDialog):
         self.run(lambda: self.api("browse-media", path=path), self.show_directory)
 
     def open_sources(self, sources):
+        if self.working:
+            self.queued_sources = list(sources)
+            return
+        if self.window.component_active(self.ball):
+            self.error_message(
+                "Wait or cancel this ball’s component job before choosing different media."
+            )
+            return
         self.opening_sources = list(sources)
         self.notice.set_label("Looking for ISO images…")
 
         def loaded(payload):
+            if self.queued_sources is not None:
+                queued, self.queued_sources = self.queued_sources, None
+                self.open_sources(queued)
+                return
             result, self.validation = payload
             self.opening_sources = None
             if self.validation.get("complete"):
@@ -181,6 +226,9 @@ class OS2MediaDialog(FormDialog):
                 self.window.app_preferences.get("lastOS2MediaSources")
             ):
                 self.window.forget_os2_media()
+            if self.sources != result["sources"]:
+                self.component_tree = None
+                self.restore_selection = None
             self.sources = result["sources"]
             self.show_directory(result["directory"])
             self.current_only.set_active(False)
@@ -201,8 +249,8 @@ class OS2MediaDialog(FormDialog):
                 self.notice.set_label(
                     "This source could not be verified as OS/2 installation media. Choose another ISO, folder or image set, or browse this source manually."
                 )
-            elif self.focus_category:
-                self.submit()
+            if self.validation.get("complete"):
+                self.plan_sources()
 
         def open_verified():
             validation = self.api("validate-os2-media", sources=list(sources))
@@ -220,7 +268,13 @@ class OS2MediaDialog(FormDialog):
         ):
             self.window.forget_os2_media()
         self.opening_sources = None
-        super().error_message(error)
+        self.pending(False)
+        if self.queued_sources is not None:
+            queued, self.queued_sources = self.queued_sources, None
+            self.open_sources(queued)
+            return
+        self.error.set_title(str(error))
+        self.error.set_revealed(True)
 
     def choose_media(self):
         picker = Gtk.FileDialog(title="Choose OS/2 ISO, Floppy Images or Archives")
@@ -251,293 +305,274 @@ class OS2MediaDialog(FormDialog):
         self.window.initial_os2_picker(picker, folder=True)
         picker.select_folder(self.window, None, chosen)
 
-    def selected_files(self, categories=None):
-        if not self.plan:
-            return []
-        if self.component_tree is not None and categories is None:
-            return [
-                item
-                for item in self.plan["files"]
-                if item["source"] in self.component_tree.selected
-                and not item["provided"]
-                and not item["present"]
-            ]
-        categories = categories if categories is not None else self.categories
-        categories = self.effective_categories(categories)
-        files = [
-            file
-            for file in self.plan["files"]
-            if not file["provided"]
-            and not file["present"]
-            and ("full" in categories or file["category"] in categories)
-        ]
-        priorities = {}
-        for file in files:
-            key = file["path"].casefold()
-            priorities[key] = max(priorities.get(key, -1), file.get("priority", 0))
-        unique = {}
-        for file in files:
-            key = file["path"].casefold()
-            if file.get("priority", 0) == priorities[key]:
-                unique[key] = file
-        return list(unique.values())
-
-    def effective_categories(self, categories):
-        result = set(categories)
-        for _ in range(len((self.plan or {}).get("groups", [])) + 1):
-            required = {
-                item
-                for group in (self.plan or {}).get("groups", [])
-                if group["id"] in result
-                for item in group.get("requires", [])
-            }
-            if required <= result:
-                break
-            result.update(required)
-        return result
-
-    def required_categories(self):
-        return {
-            item
-            for group in (self.plan or {}).get("groups", [])
-            if group["id"] in self.categories
-            for item in group.get("requires", [])
-        }
-
-    def show_options(self, plan):
-        self.plan = plan
-        self.categories.update(item["id"] for item in plan.get("gnomeRequirements", []))
-        self.categories = self.effective_categories(self.categories)
-        self.stage = "options"
-        self.set_title("Extract OS/2 Files")
-        self.accept.set_label("Extract Files")
-        if plan.get("tree"):
-            selected = {
-                item["source"]
-                for item in plan["files"]
-                if not item["provided"]
-                and ("full" in self.categories or item["category"] in self.categories)
-            }
-            selected.update(
-                item["source"] for item in plan["files"] if item["present"] and not item["provided"]
-            )
-            if self.restore_selection is not None:
-                selected = self.restore_selection
-                self.restore_selection = None
-            self.component_tree = ComponentTree(
-                plan["tree"], selected, changed=self.update_count, setting=self.open_setting
-            )
-            container = Gtk.Box(
-                orientation=Gtk.Orientation.VERTICAL,
-                spacing=10,
-                vexpand=True,
-                margin_top=12,
-                margin_bottom=12,
-                margin_start=16,
-                margin_end=16,
-            )
-            container.append(
-                Gtk.Label(
-                    label="Select whole groups, expand them to choose individual files, or follow a provider link to its 2ine settings. Existing files are preserved.",
-                    wrap=True,
-                    xalign=0,
-                )
-            )
-            container.append(self.component_tree)
-            container.append(action_button("Back to Media", self.back))
-            old = self.stack.get_child_by_name("options")
-            if old:
-                self.stack.remove(old)
-            self.stack.add_named(container, "options")
-            self.stack.set_visible_child_name("options")
-            if self.focus_category:
-                self.component_tree.select_group(self.focus_category)
-                node = self.component_tree.nodes.get(self.focus_category, {})
-                provider = node.get("provider", {})
-                if provider.get("nativeSelected") and not provider.get("choiceSupported"):
-                    self.notice.set_label(
-                        "This component is provided by 2ine. Loading original OS/2 drivers is not currently supported; use its 2ine Settings link to configure it."
-                    )
-            self.update_count()
+    def plan_sources(self):
+        if not self.directory or self.working or self.window.component_active(self.ball):
             return
-        page = Adw.PreferencesPage()
-        group = Adw.PreferencesGroup(
-            title="Choose What to Extract",
-            description="Files are copied into their C: folders. Existing files are kept.",
+        self.extraction_sources = (
+            [self.selected["path"] if self.selected else self.directory["path"]]
+            if self.current_only.get_active()
+            else list(self.sources)
         )
-        page.add(group)
-        self.switches = {}
-        definitions = plan.get("groups") or [
-            {"id": key, "title": title, "detail": detail, "requires": []}
-            for key, title, detail in CATEGORIES
-        ]
-        definitions = sorted(definitions, key=lambda item: item["id"] == "full")
-        requirements = {item["id"]: item for item in plan.get("gnomeRequirements", [])}
-        for definition in definitions:
-            key = definition["id"]
-            count = len(self.selected_files({key}))
-            present = sum(
-                not item["provided"] and item["present"] and item["category"] == key
-                for item in plan["files"]
-            )
-            if present and not count:
-                self.categories.add(key)
-            status = (
-                f"{present} installed; {count} files to add."
-                if present
-                else f"{count} files available."
-                if count
-                else "Not on this media."
-            )
-            required_by = requirements.get(key, {}).get("requiredBy", [])
-            if required_by:
-                status += (
-                    " Required by "
-                    + ", ".join(path.rsplit("\\", 1)[-1] for path in required_by)
-                    + "."
-                )
-            row = Adw.SwitchRow(
-                title=definition["title"], subtitle=definition["detail"] + " " + status
-            )
-            row.set_active(key in self.categories or "full" in self.categories)
-            row.set_sensitive(
-                key not in self.required_categories()
-                and (key == "full" or "full" not in self.categories)
-            )
-            row.connect(
-                "notify::active",
-                lambda row, _, key=key: self.toggle_category(key, row.get_active()),
-            )
-            self.switches[key] = row
-            group.add(row)
-        controls = Gtk.Box(
-            spacing=8, margin_top=12, margin_bottom=12, margin_start=20, margin_end=20
-        )
-        controls.append(action_button("Back", self.back))
-        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
-        container.append(page)
-        container.append(controls)
-        old = self.stack.get_child_by_name("options")
-        if old:
-            self.stack.remove(old)
-        self.stack.add_named(container, "options")
-        self.stack.set_visible_child_name("options")
-        self.update_count()
-
-    def toggle_category(self, key, enabled):
-        if self.updating_categories:
-            return
-        if enabled:
-            self.categories.add(key)
-        else:
-            self.categories.discard(key)
-        self.categories = self.effective_categories(self.categories)
-        self.updating_categories = True
-        for category, row in self.switches.items():
-            row.set_active(category in self.categories or "full" in self.categories)
-            row.set_sensitive(
-                category not in self.required_categories()
-                and (category == "full" or "full" not in self.categories)
-            )
-        self.updating_categories = False
-        self.update_count()
-
-    def open_setting(self, setting):
-        if setting not in ("graphics.opengl", "graphics", "printing"):
-            return
-        self.window.os2_component_dialog = self
-        self.close()
-        self.window.show_component_setting(setting)
-
-    def resume_components(self, category):
-        self.focus_category = category
-        self.restore_selection = set(self.component_tree.selected) if self.component_tree else None
-        self.present(self.window)
-        self.notice.set_label("Refreshing component providers…")
+        self.notice.set_label("Examining OS/2 files… You can continue using other pages or balls.")
         self.run(
             lambda: self.api("plan-os2-extraction", sources=self.extraction_sources),
             self.show_options,
         )
 
+    def show_options(self, plan):
+        previous = self.restore_selection
+        if previous is None and self.component_tree:
+            previous = set(self.component_tree.selected)
+        self.restore_selection = None
+        self.plan = plan
+        while (child := self.tree_box.get_first_child()) is not None:
+            self.tree_box.remove(child)
+        selected = (
+            previous
+            if previous is not None
+            else {
+                item["source"]
+                for item in plan["files"]
+                if not item["provided"] and (item["category"] in self.categories or item["present"])
+            }
+        )
+        self.component_tree = ComponentTree(
+            plan["tree"], selected, changed=self.update_count, setting=self.open_setting
+        )
+        self.tree_box.append(self.component_tree)
+        if self.focus_category:
+            self.component_tree.select_group(self.focus_category)
+        self.notice.set_label(
+            "Select files to install or remove. Removal preserves modified and unowned files."
+        )
+        self.update_count()
+        self.refresh_state()
+
+    def open_setting(self, setting):
+        self.window.show_component_setting(setting)
+
+    def resume_components(self, category):
+        self.focus_category = category
+        if self.plan:
+            self.restore_selection = set(self.component_tree.selected)
+            self.plan_sources()
+        elif self.sources:
+            self.plan_sources()
+
     def update_count(self):
-        count = len(self.selected_files())
-        if self.component_tree is not None:
-            self.accept.set_label(f"Install {count} Files" if count else "Apply Components")
-            self.accept.set_sensitive(bool(self.component_tree.selected))
+        active = self.window.component_active(self.ball)
+        selected = set(self.component_tree.selected) if self.component_tree else set()
+        files = [file for file in (self.plan or {}).get("files", []) if file["source"] in selected]
+        count = sum(not file.get("present") for file in files)
+        removable = sum(file.get("removableCount", 0) for file in files)
+        self.accept.set_label(f"Install {count} Files" if count else "Apply Selected Components")
+        self.accept.set_sensitive(bool(selected) and not self.working and not active)
+        self.remove.set_label(f"Remove {removable} Files" if removable else "Remove Selected")
+        self.remove.set_sensitive(bool(removable) and not self.working and not active)
+        self.refresh.set_sensitive(bool(self.plan) and not self.polling)
+        self.cancel.set_sensitive(active)
+        if self.component_tree:
+            self.component_tree.table.set_sensitive(True)
+
+    def install_selected(self):
+        if not self.component_tree:
             return
-        self.accept.set_label(
-            f"Extract {count} File{'s' if count != 1 else ''}" if count else "Apply Components"
-        )
-        self.accept.set_sensitive(
-            any(
-                not item["provided"]
-                and ("full" in self.categories or item["category"] in self.categories)
-                for item in (self.plan or {}).get("files", [])
-            )
+        self.start_job(
+            "import-os2-support",
+            sources=list(self.extraction_sources),
+            fileSelection=sorted(self.component_tree.selected),
+            categories=sorted(self.categories),
+            configureComponents=self.component_tree.configured_components(),
         )
 
-    def back(self):
-        self.stage = "source"
-        self.set_title("Browse OS/2 Media")
-        self.stack.set_visible_child_name("source")
-        self.accept.set_label("Continue")
-        self.accept.set_sensitive(True)
-        self.notice.set_label("")
-
-    def submit(self):
-        if self.stage == "source":
-            if not self.directory:
-                return
-            self.extraction_sources = (
-                [self.selected["path"] if self.selected else self.directory["path"]]
-                if self.current_only.get_active()
-                else list(self.sources)
+    def remove_selected(self):
+        if not self.component_tree:
+            return
+        selected = sorted(
+            file["source"]
+            for file in self.plan["files"]
+            if file["source"] in self.component_tree.selected and file.get("removable")
+        )
+        if selected:
+            self.start_job(
+                "remove-os2-components",
+                sources=list(self.extraction_sources),
+                fileSelection=selected,
             )
-            self.notice.set_label("Examining OS/2 files…")
 
-            def planned(plan):
-                self.notice.set_label("")
-                self.show_options(plan)
+    def start_job(self, action, **fields):
+        if self.working or self.window.component_active(self.ball):
+            return
+        if self.window.ball == self.ball and (self.window.process or self.window.operation_busy):
+            self.error_message("Wait for this ball’s current operation to finish.")
+            return
+        operation_id = uuid.uuid4().hex
+        self.job = {
+            "id": operation_id,
+            "active": True,
+            "action": action,
+            "sources": set(fields.get("fileSelection", [])),
+            "paths": set(fields.get("paths", [])),
+            "progress": {},
+            "syncedPaths": set(),
+        }
+        self.window.component_jobs[str(self.ball)] = self.job
+        self.window.set_busy(False)
+        self.window.update_component_indicators()
+        self.notice.set_label(
+            "Installing components…"
+            if action == "import-os2-support"
+            else "Removing unchanged owned components…"
+        )
+        self.progress.set_spinning(True)
+        self.update_count()
+        self.update_row_activity()
+        GLib.timeout_add(300, self.poll_job)
 
-            def plan_components():
-                plan = self.api("plan-os2-extraction", sources=self.extraction_sources)
-                audit = self.api("audit-dependencies", build=str(self.window.build), resolve=False)
-                plan["gnomeRequirements"] = audit.get("componentGroups", [])
-                return plan
-
-            self.run(plan_components, planned)
-        elif self.stage == "options":
-            self.notice.set_label("Extracting selected files…")
-
-            def installed(result):
-                self.stage = "finished"
-                self.set_title("OS/2 Extraction Complete")
-                self.accept.set_label("Done")
-                self.accept.set_sensitive(True)
-                page = Adw.StatusPage(
-                    title="OS/2 Files Extracted",
-                    description=f"Copied {len(result.get('imported', []))} files into this ball’s C: drive.",
-                    icon_name="emblem-ok-symbolic",
+        def completed(result):
+            self.job["active"] = False
+            self.job["result"] = result
+            if action == "remove-os2-components":
+                self.notice.set_label(
+                    f"Removed {len(result.get('removedPaths', []))} unchanged owned files; preserved {len(result.get('preserved', []))} other files."
                 )
-                self.stack.add_named(page, "finished")
-                self.stack.set_visible_child_name("finished")
-                self.notice.set_label("You can return to your installer or application.")
-                self.window.request({"action": "snapshot"})
+            else:
+                self.notice.set_label(
+                    f"Installed {len(result.get('imported', []))} files. Existing files were preserved."
+                )
+            self.progress.set_spinning(False)
+            self.window.set_busy(False)
+            self.window.update_component_indicators()
+            self.update_row_activity()
+            self.refresh_state()
+            self.refresh_ball_summary()
+            self.window.toast("OS/2 component job finished for " + self.ball.name)
 
-            selection = {}
-            if self.component_tree is not None:
-                selection = {
-                    "fileSelection": sorted(self.component_tree.selected),
-                    "configureComponents": self.component_tree.configured_components(),
-                }
-            self.run(
-                lambda: self.api(
-                    "import-os2-support",
-                    sources=self.extraction_sources,
-                    categories=sorted(self.categories),
-                    **selection,
-                ),
-                installed,
+        def failed(error):
+            self.job["active"] = False
+            self.progress.set_spinning(False)
+            self.window.set_busy(False)
+            self.window.update_component_indicators()
+            self.update_row_activity()
+            self.error_message(error)
+            self.refresh_state()
+            self.refresh_ball_summary()
+
+        self.window.component_work(
+            lambda: self.api(action, operationID=operation_id, **fields), completed, failed
+        )
+
+    def poll_job(self):
+        if self.window.component_closed:
+            return GLib.SOURCE_REMOVE
+        if not self.job or not self.job.get("active"):
+            return GLib.SOURCE_REMOVE
+        if not self.polling:
+            self.polling = True
+            job = self.job
+            progress = job.get("progress", {})
+            paths = [
+                path
+                for path in progress.get("completedPaths", [])
+                if path not in job["syncedPaths"]
+            ]
+            paths.extend(progress.get("activePaths", []))
+            source_ids = set(progress.get("activeSources", []))
+            changed_paths = {path.casefold() for path in paths}
+            for file in (self.plan or {}).get("files", []):
+                if any(
+                    path.casefold() in changed_paths
+                    for path in [file["path"], *file.get("actualPaths", [])]
+                ):
+                    source_ids.add(file["source"])
+            selection = gnome_component_jobs.state_selection(
+                (self.plan or {}).get("files", []), source_ids
             )
-        else:
-            self.close()
+            self.window.component_work(
+                lambda: self.api(
+                    "os2-component-state", selection=selection, paths=[], operationID=job["id"]
+                ),
+                lambda result: self.progress_received(result, job),
+                self.poll_failed,
+                monitor=True,
+            )
+        return GLib.SOURCE_CONTINUE
+
+    def poll_failed(self, _error):
+        self.polling = False
+
+    def progress_received(self, progress, job):
+        self.polling = False
+        if self.job is not job:
+            return
+        if not job.get("active"):
+            self.refresh_state()
+            return
+        self.apply_file_state(progress)
+        self.job["syncedPaths"].update(entry["path"] for entry in progress.get("files", []))
+        progress = progress.get("progress") or {}
+        self.job["progress"] = progress
+        self.window.update_component_indicators()
+        self.notice.set_label(progress.get("detail") or progress.get("phase") or "Working…")
+        self.update_row_activity()
+
+    def update_row_activity(self):
+        if self.component_tree:
+            job = self.job if self.job and self.job.get("active") else None
+            self.component_tree.active_ids = gnome_component_jobs.activity_ids(
+                self.plan["tree"], job
+            )
+            self.component_tree.refresh_cells()
+        self.update_count()
+
+    def cancel_job(self):
+        if self.job and self.job.get("active"):
+            self.window.component_work(
+                lambda: self.api("cancel-os2-component-operation", operationID=self.job["id"]),
+                lambda _result: self.notice.set_label(
+                    "Cancellation requested; finishing the current file safely…"
+                ),
+                self.error_message,
+                monitor=True,
+            )
+
+    def refresh_ball_summary(self):
+        def received(snapshot):
+            if self.window.ball == self.ball:
+                snapshot["gnomeRuntimeBuild"] = str(self.build)
+                self.window.apply_snapshot(snapshot)
+
+        self.window.component_work(
+            lambda: self.api("snapshot"), received, lambda _error: None, monitor=True
+        )
+
+    def refresh_state(self):
+        if not self.plan or self.polling:
+            return
+        self.polling = True
+        selection = gnome_component_jobs.state_selection(self.plan["files"])
+
+        def received(result):
+            self.polling = False
+            self.apply_file_state(result)
+
+        self.window.component_work(
+            lambda: self.api("os2-component-state", selection=selection, paths=[]),
+            received,
+            self.poll_failed,
+            monitor=True,
+        )
+
+    def apply_file_state(self, result):
+        records = gnome_component_jobs.source_states(result.get("files", []))
+        for file in self.plan["files"]:
+            entry = records.get(file["source"])
+            if entry:
+                file.update(entry)
+        if self.component_tree:
+            for node in self.component_tree.nodes.values():
+                entry = records.get(node.get("source")) if node.get("kind") == "file" else None
+                if entry:
+                    node.update(entry)
+            self.component_tree.refresh_cells()
+        self.update_count()

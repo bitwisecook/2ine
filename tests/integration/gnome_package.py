@@ -51,7 +51,12 @@ def main():
             assert str(ROOT) not in dependencies, (binary, dependencies)
         run([destination / "usr/bin/2ine-ball", "--help"], capture_output=True)
         frontend = destination / "usr/lib/2ine-ball/tools"
-        for module in ("gnome_browser.py", "gnome_browser_model.py", "gnome_media_preferences.py"):
+        for module in (
+            "gnome_browser.py",
+            "gnome_browser_model.py",
+            "gnome_media_preferences.py",
+            "gnome_component_jobs.py",
+        ):
             assert (frontend / module).is_file(), module
         environment = dict(
             os.environ,

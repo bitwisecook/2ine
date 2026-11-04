@@ -4,13 +4,9 @@ import BallCore
 import SwiftUI
 import AppKit
 
-struct OS2SupportSheet: View {
+struct OS2ComponentsPane: View {
     @Bindable var model: AppModel
     let request: OS2ImportRequest
-    var embedded = false
-    @Environment(\.dismiss) private var dismiss
-    private enum Step { case source, options, finished }
-    @State private var step: Step = .options
     @State private var sources: [String] = []
     @State private var listing: MediaDirectory?
     @State private var relevantOnly = true
@@ -23,7 +19,6 @@ struct OS2SupportSheet: View {
     @State private var loading = false
     @State private var notice = ""
     @State private var error: String?
-    @State private var result: OS2SupportStatus?
     private var blocked: Bool { loading || model.busy || model.mediaBusy }
     @State private var files: [OS2ExtractionPlan.File] = []
     @State private var availableCounts: [OS2ExtractionCategory: Int] = [:]
@@ -33,43 +28,67 @@ struct OS2SupportSheet: View {
     @State private var componentSearchFocused = false
     @State private var requiredBy: [OS2ExtractionCategory: [String]] = [:]
 
+    @State private var browsing = false
+    @State private var componentState: OS2ComponentState?
+    @State private var planToken = UUID()
+    private var job: ComponentJob? { model.componentJobs[request.ball] }
+    private var selectedFiles: [OS2ExtractionPlan.File] {
+        guard let plan else { return [] }
+        return plan.tree == nil ? plan.selectedFiles(categories) : plan.files.filter { fileSelection.contains($0.source) && !$0.provided }
+    }
+    private var removableFiles: [OS2ExtractionPlan.File] {
+        let managed = Set((componentState?.files ?? []).filter { $0.present && $0.managed && $0.status == "managed" }.compactMap(\.selectedSource))
+        return selectedFiles.filter { managed.contains($0.source) }
+    }
+    private var fileStates: [String: OS2ComponentState.File] {
+        Dictionary((componentState?.files ?? []).compactMap { file in file.selectedSource.map { ($0, file) } },
+                   uniquingKeysWith: { previous, newest in
+                       let severity = ["missing": 0, "managed": 1, "unowned": 2, "modified": 3, "protected": 4]
+                       return (severity[newest.status] ?? 5) > (severity[previous.status] ?? 5) ? newest : previous
+                   })
+    }
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(embedded ? "OS/2 System Components" : step == .source ? "Browse OS/2 Media" : step == .options ? "Install Components" : "Components Installed")
-                .font(.title2.bold())
-            switch step {
-            case .source: sourceBrowser
-            case .options: extractionOptions
-            case .finished: completion
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("OS/2 System Components").font(.title2.bold())
+            if browsing {
+                HSplitView {
+                    sourceBrowser.frame(minWidth: 260, idealWidth: 320)
+                    extractionOptions.frame(minWidth: 300)
+                }
+            } else { extractionOptions }
             if !notice.isEmpty { Text(notice).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("supportMediaError") }
-            HStack {
-                if !embedded {
-                    Button(step == .finished ? "Done" : "Cancel", role: .cancel) { dismiss() }
-                        .keyboardShortcut(.cancelAction).disabled(blocked)
-                } else if step == .finished {
-                    Button("Review Components") { step = .options }.disabled(blocked)
+            if let job {
+                HStack {
+                    if job.running { ProgressView().controlSize(.small) }
+                    Text(job.summary).textSelection(.enabled)
+                    if job.running {
+                        Button(job.cancelling ? "Cancelling…" : "Cancel Job") { model.cancelComponentOperation(job) }.disabled(job.cancelling)
+                    }
+                    if let path = job.progress?.logPath {
+                        Button("Show Log") { model.reveal(path) }
+                    }
                 }
-                if loading { ProgressView().controlSize(.small) }
-                Spacer()
-                if step == .options {
-                    Button("Install") { extract() }
-                        .keyboardShortcut(.defaultAction).disabled(blocked || !hasSelectedComponents)
-                        .accessibilityIdentifier("extractOS2Support")
-                } else if step == .source {
-                    Button(useCurrentFolder ? "Use This Folder" : "Done Browsing") { if useCurrentFolder { prepare() } else { step = .options } }
-                        .keyboardShortcut(.defaultAction).disabled(blocked || listing == nil)
-                        .accessibilityIdentifier("reviewOS2Extraction")
-                }
+                if let error = job.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+                if let error = job.progressError { Text(error).foregroundStyle(.secondary).textSelection(.enabled) }
             }
-        }.padding(24)
-            .frame(minWidth: embedded ? nil : 780, maxWidth: embedded ? .infinity : 780,
-                   minHeight: embedded ? nil : 680, maxHeight: embedded ? .infinity : 680)
+            HStack {
+                if loading { ProgressView().controlSize(.small); Text("Reading media…").foregroundStyle(.secondary) }
+                Spacer()
+                Button("Remove Selected") { remove() }
+                    .disabled(blocked || job?.running == true || model.processRunning || removableFiles.isEmpty)
+                Button("Install Selected") { extract() }
+                    .disabled(blocked || job?.running == true || model.processRunning || selectedFiles.isEmpty)
+                    .accessibilityIdentifier("extractOS2Support")
+            }
+            Text("Changes run in the background. Existing or modified files are kept; removal uses the component installation record.")
+                .font(.caption).foregroundStyle(.secondary)
+        }.padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onChange(of: query) { _, _ in selected = nil }
             .onChange(of: relevantOnly) { _, _ in selected = nil }
-            .interactiveDismissDisabled(blocked)
             .task { await loadInitial() }
+            .task(id: planToken) { await observeFiles() }
             .onDisappear {
                 if !extractionSources.isEmpty, FileManager.default.fileExists(atPath: request.ball) {
                     model.componentDrafts[request.ball] = ComponentDraft(sources: extractionSources, selection: fileSelection)
@@ -81,9 +100,9 @@ struct OS2SupportSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Browse the installation media, or continue to search the selected media. Folders and archives can be opened inside other archives.")
             HStack {
-                Button("Choose ISO or Archive…") { if let paths = model.pickOS2Media() { open(paths) } }
+                Button("Choose ISO or Archive…") { chooseMedia() }
                     .accessibilityIdentifier("chooseSupportMedia")
-                Button("Choose Folder…") { if let paths = model.pickOS2Media(directory: true) { open(paths) } }
+                Button("Choose Folder…") { chooseMedia(directory: true) }
                 if sources.count > 1 {
                     Menu("\(sources.count) Sources") {
                         ForEach(Array(sources.enumerated()), id: \.offset) { index, source in
@@ -91,7 +110,7 @@ struct OS2SupportSheet: View {
                         }
                     }
                 }
-            }.disabled(blocked)
+            }.disabled(blocked || job?.running == true)
             if let listing {
                 HStack {
                     Button("Up", systemImage: "arrow.up") { if let parent = listing.parent { navigate(parent) } }
@@ -114,8 +133,9 @@ struct OS2SupportSheet: View {
                                          guard let entry = mediaEntries.first(where: { $0.path == id }), entry.directory || entry.container else { return [] }
                                          return [OutlineMenuAction(id: "open", title: "Open")]
                                      })
-                Toggle("Search only the current folder or selected item", isOn: $useCurrentFolder)
-                    .disabled(blocked)
+                Toggle("Use only the current folder or selected item", isOn: $useCurrentFolder)
+                    .disabled(blocked || job?.running == true)
+                Button("Use This Location") { prepare() }.disabled(blocked || job?.running == true)
             } else {
                 ContentUnavailableView("Opening OS/2 Media", systemImage: "opticaldisc")
             }
@@ -135,10 +155,10 @@ struct OS2SupportSheet: View {
                         .font(.callout).foregroundStyle(.secondary).lineLimit(3).textSelection(.enabled)
                 }
                 Spacer()
-                Button(sources.isEmpty ? "Choose ISO…" : "Change…") { if let paths = model.pickOS2Media() { open(paths) } }
-                    .accessibilityIdentifier("chooseSupportMedia").disabled(blocked)
+                Button(sources.isEmpty ? "Choose ISO…" : "Change…") { chooseMedia() }
+                    .accessibilityIdentifier("chooseSupportMedia").disabled(blocked || job?.running == true)
                 if listing != nil {
-                    Button("Browse…") { step = .source }.disabled(blocked)
+                    Button(browsing ? "Hide Media Browser" : "Browse Media…") { browsing.toggle() }.disabled(blocked)
                 }
             }
             Text("Select a component, expand it to choose individual files, or search. Installed components are already ticked; existing files are kept.")
@@ -150,12 +170,13 @@ struct OS2SupportSheet: View {
                 OS2ComponentTree(root: tree, selection: $fileSelection, query: $componentQuery,
                                  searchFocused: $componentSearchFocused, disabled: blocked,
                                  toggle: { node, enabled in
-                                     guard let plan else { return }
+                                     guard job?.running != true, let plan else { return }
                                      fileSelection = plan.selecting(node, in: fileSelection, enabled: enabled)
                                      refreshTreeSelection()
                                  }, openSetting: { token in
                                      model.openComponentSetting(token)
-                                 }, focusRequest: model.componentNavigation.flatMap { $0.ball == request.ball ? OutlineFocusRequest(id: $0.id, row: $0.category.rawValue) : nil })
+                                 }, focusRequest: model.componentNavigation.flatMap { $0.ball == request.ball ? OutlineFocusRequest(id: $0.id, row: $0.category.rawValue) : nil },
+                                 activePaths: Set(job?.activePaths.map { $0.uppercased() } ?? []), fileStates: fileStates, mutating: job?.running == true)
                 HStack {
                     Text("\(fileSelection.count) selected · \(files.count) files to add")
                     Spacer()
@@ -234,31 +255,6 @@ struct OS2SupportSheet: View {
         }
         return categories.contains(.cmd) || categories.contains(.full)
     }
-    private var completion: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label("Installed " + fileCount(result?.imported?.count ?? 0), systemImage: "checkmark.circle.fill").font(.headline)
-            if let result, hasCMDSupportSelection {
-                Text(result.complete && result.rexxComplete == true ? "CMD and REXX support are ready." : "Some CMD or REXX files are still missing. Choose additional installation media to add them.")
-            }
-            if let skipped = result?.skippedFiles, !skipped.isEmpty {
-                Label("\(skipped.count) damaged fonts were skipped", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(skipped) { file in
-                            VStack(alignment: .leading) {
-                                Text(file.path).font(.headline)
-                                Text(file.reason)
-                                Text(DisplayPath.homeAbbreviated(file.source)).font(.caption).foregroundStyle(.secondary)
-                            }.textSelection(.enabled)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            Text("You can now return to your installer or application. Newly installed Help is available when it next starts.")
-            Spacer()
-        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
     private func count(_ category: OS2ExtractionCategory) -> Int {
         availableCounts[category] ?? 0
     }
@@ -285,6 +281,9 @@ struct OS2SupportSheet: View {
     }
     private func applyPlan(_ value: OS2ExtractionPlan) {
         plan = value
+        model.componentPlans[request.ball] = value
+        model.componentPlanSources[request.ball] = extractionSources
+        planToken = UUID()
         for category in OS2ExtractionCategory.allCases {
             availableCounts[category] = value.selectedFiles([category]).count
             installedCounts[category] = Set(value.files.filter {
@@ -314,7 +313,6 @@ struct OS2SupportSheet: View {
         componentQuery = ""
         fileSelection = model.componentSelection(in: plan, preserving: fileSelection, ball: request.ball)
         refreshTreeSelection()
-        step = .options
     }
     private func loadInitial() async {
         categories = request.categories
@@ -337,7 +335,12 @@ struct OS2SupportSheet: View {
             }
             let saved = request.sources.isEmpty ? model.suggestedOS2MediaSources(status.mediaSources) : request.sources
             loading = false
-            if !saved.isEmpty { await loadSources(saved) }
+            if let cached = model.componentPlans[request.ball], let media = model.componentMedia[request.ball],
+               media.sources == saved {
+                sources = media.sources; listing = media.directory
+                extractionSources = model.componentPlanSources[request.ball] ?? media.sources
+                applyPlan(cached)
+            } else if !saved.isEmpty { await loadSources(saved) }
         } catch { loading = false; self.error = error.localizedDescription }
     }
     private func open(_ paths: [String]) {
@@ -348,13 +351,14 @@ struct OS2SupportSheet: View {
         defer { loading = false }
         do {
             let source = try await model.openOS2Source(paths, ball: request.ball)
+            model.componentMedia[request.ball] = source
             sources = source.sources; listing = source.directory
             useCurrentFolder = false
             try await model.rememberOS2Media(source.sources, ball: request.ball)
             extractionSources = source.sources
             notice = "Checking installed components…"
             applyPlan(try await model.planOS2Extraction(extractionSources, ball: request.ball))
-            step = .options; notice = source.warningSummary
+            notice = source.warningSummary
         } catch { self.error = error.localizedDescription; notice = "" }
     }
     private func navigate(_ path: String) {
@@ -374,20 +378,38 @@ struct OS2SupportSheet: View {
             defer { loading = false }
             do {
                 applyPlan(try await model.planOS2Extraction(extractionSources, ball: request.ball))
-                step = .options; notice = ""
+                notice = ""
             } catch { self.error = error.localizedDescription; notice = "" }
         }
     }
+    private func chooseMedia(directory: Bool = false) {
+        Task { if let paths = await model.pickOS2Media(directory: directory) { await loadSources(paths) } }
+    }
     private func extract() {
-        loading = true; error = nil; notice = "Installing selected components…"
-        Task {
-            defer { loading = false }
+        guard let plan else { return }
+        model.startComponentOperation(ball: request.ball, kind: "install", sources: extractionSources,
+                                      files: selectedFiles, configure: plan.configuredComponents(for: fileSelection))
+    }
+    private func remove() {
+        model.startComponentOperation(ball: request.ball, kind: "remove", sources: extractionSources, files: removableFiles)
+    }
+    private func observeFiles() async {
+        guard let plan else { return }
+        let selection = plan.files.filter { !$0.provided }.map { OS2ComponentSelection(source: $0.source, path: $0.path) }
+        while !Task.isCancelled {
             do {
-                result = try await model.installOS2Support(extractionSources, categories: categories, ball: request.ball,
-                                                          fileSelection: plan?.tree == nil ? nil : fileSelection.sorted(),
-                                                          configureComponents: plan?.tree == nil ? nil : plan?.configuredComponents(for: fileSelection))
-                step = .finished; notice = ""
-            } catch { self.error = error.localizedDescription; notice = "" }
+                let state = try await model.componentState(ball: request.ball, selection: selection)
+                guard !Task.isCancelled else { return }
+                if componentState != state {
+                    componentState = state
+                    if let current = self.plan {
+                        self.plan = current.updatingSourcePresence(Set(state.files.filter(\.present).compactMap(\.selectedSource)))
+                        model.componentPlans[request.ball] = self.plan
+                        refreshTreeSelection()
+                    }
+                }
+            } catch { if !Task.isCancelled { self.error = "Could not refresh component files: " + error.localizedDescription } }
+            try? await Task.sleep(for: .seconds(1))
         }
     }
 }

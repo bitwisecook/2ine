@@ -36,6 +36,7 @@ struct OutlineBrowserNode: Equatable, Sendable, Identifiable {
     var tooltip: String? = nil
     var searchText: String? = nil
     var sortRank = 0
+    var busy = false
     func filtered(_ query: String) -> Self? {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if needle.isEmpty || FileSearch.matches(searchText ?? title, query: needle) { return self }
@@ -283,7 +284,8 @@ struct NativeOutlineBrowser: NSViewRepresentable {
         func original(_ item: Item) -> OutlineBrowserNode { originals[item.node.id] ?? item.node }
         @discardableResult func toggle(_ item: Item) -> Bool {
             let node = original(item)
-            guard !parent.disabled, node.enabled, let state = node.check, let toggle = parent.onToggle else { return false }
+            guard !parent.disabled, node.enabled, node.cells[parent.columns.first?.id ?? ""]?.enabled != false,
+                  let state = node.check, let toggle = parent.onToggle else { return false }
             toggle(node.id, state != .on)
             return true
         }
@@ -363,6 +365,20 @@ struct NativeOutlineBrowser: NSViewRepresentable {
             guard let item = item as? Item, let column = tableColumn else { return nil }
             let node = original(item)
             let cell = node.cells[column.identifier.rawValue] ?? OutlineCell(text: column.identifier.rawValue == parent.columns.first?.id ? node.title : "")
+            func activity(_ view: NSView) -> NSView {
+                guard node.busy, column.identifier.rawValue == parent.columns.first?.id else { return view }
+                let spinner = NSProgressIndicator()
+                spinner.style = .spinning; spinner.controlSize = .small
+                spinner.isIndeterminate = true
+                spinner.setAccessibilityLabel("Updating " + node.title)
+                spinner.translatesAutoresizingMaskIntoConstraints = false
+                spinner.widthAnchor.constraint(equalToConstant: 14).isActive = true
+                spinner.heightAnchor.constraint(equalToConstant: 14).isActive = true
+                spinner.startAnimation(nil)
+                let stack = NSStackView(views: [spinner, view])
+                stack.orientation = .horizontal; stack.spacing = 5; stack.alignment = .centerY
+                return stack
+            }
             if column.identifier.rawValue == parent.columns.first?.id, let check = node.check {
                 let button = CheckButton(checkboxWithTitle: cell.text, target: self, action: #selector(check(_:)))
                 button.rowID = node.id
@@ -387,9 +403,9 @@ struct NativeOutlineBrowser: NSViewRepresentable {
                     let stack = NSStackView(views: [button, image, label])
                     stack.orientation = .horizontal; stack.spacing = 5; stack.alignment = .centerY
                     stack.toolTip = button.toolTip
-                    return stack
+                    return activity(stack)
                 }
-                return button
+                return activity(button)
             }
             if let action = cell.action {
                 let button = ActionButton(title: cell.text, target: self, action: #selector(Coordinator.action(_:)))
@@ -406,7 +422,7 @@ struct NativeOutlineBrowser: NSViewRepresentable {
             field.lineBreakMode = .byTruncatingMiddle
             field.toolTip = cell.tooltip ?? node.tooltip ?? cell.text
             if parent.columns.first(where: { $0.id == column.identifier.rawValue })?.rightAligned == true { field.alignment = .right }
-            guard let icon = cell.icon else { return field }
+            guard let icon = cell.icon else { return activity(field) }
             let image = NSImageView(image: NSImage(systemSymbolName: icon, accessibilityDescription: cell.warning ? "Warning" : nil) ?? NSImage())
             image.contentTintColor = cell.warning ? .systemOrange : .secondaryLabelColor
             image.translatesAutoresizingMaskIntoConstraints = false
@@ -414,7 +430,7 @@ struct NativeOutlineBrowser: NSViewRepresentable {
             image.heightAnchor.constraint(equalToConstant: 16).isActive = true
             let stack = NSStackView(views: [image, field])
             stack.orientation = .horizontal; stack.spacing = 5; stack.alignment = .centerY
-            return stack
+            return activity(stack)
         }
     }
 }

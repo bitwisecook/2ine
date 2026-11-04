@@ -89,3 +89,27 @@ private func componentFixture() throws -> OS2ExtractionPlan {
     #expect(old.groups == nil)
     #expect(old.sourceSelection([.full]).isEmpty)
 }
+
+@Test func filesystemPresenceRefreshPreservesMediaIdentity() throws {
+    let plan = try componentFixture()
+    let updated = plan.updatingPresence([#"C:\OS2\HELPMGR.DLL"#, #"c:\os2\helv.ttf"#])
+    #expect(updated.files.first { $0.id == "engine" }?.present == true)
+    #expect(updated.tree?.find("ttf")?.present == true)
+    #expect(updated.files.first { $0.id == "cmd" }?.present == false)
+    #expect(updated.files.map(\.source) == plan.files.map(\.source))
+    #expect(updated.tree?.find("engine")?.path == plan.tree?.find("engine")?.path)
+    #expect(updated.tree?.find("engine")?.id == "engine")
+    #expect(updated.tree?.eligibleSources == plan.tree?.eligibleSources)
+}
+
+@Test func sourcePresenceDistinguishesVariantsAtTheSameDestination() throws {
+    let plan = try componentFixture()
+    let updated = plan.updatingSourcePresence(["engine", "ttf"])
+    #expect(updated.files.first { $0.source == "engine" }?.present == true)
+    #expect(updated.tree?.find("ttf")?.present == true)
+    #expect(updated.tree?.files.first { $0.source == "cmd" }?.present == false)
+    #expect(updated.files.map(\.source) == plan.files.map(\.source))
+    #expect(updated.files.map(\.path) == plan.files.map(\.path))
+    let state = try JSONDecoder().decode(OS2ComponentState.self, from: Data(#"{"files":[{"path":"C:\\OS2\\DLL\\2INE\\OTHER\\HELPMGR.DLL","selectedSource":"engine","source":"engine","present":true,"managed":true,"status":"managed"},{"path":"C:\\OS2\\HELPMGR.DLL","selectedSource":"another-engine","present":false,"managed":false,"status":"missing"}],"installedPaths":[],"managedPaths":[],"protectedPaths":[],"modifiedPaths":[],"unownedPaths":[]}"#.utf8))
+    #expect(Set(state.files.filter(\.present).compactMap(\.selectedSource)) == ["engine"])
+}

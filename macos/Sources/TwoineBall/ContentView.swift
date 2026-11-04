@@ -31,7 +31,7 @@ struct ContentView: View {
                     .disabled(model.busy || model.mediaBusy).accessibilityIdentifier("importBall")
                 Button("Export Ball…", systemImage: "square.and.arrow.up") { model.chooseExportBall() }
                     .help("Export the selected ball as a ZIP archive")
-                    .disabled(model.snapshot == nil || model.busy || model.mediaBusy).accessibilityIdentifier("exportBall")
+                    .disabled(model.snapshot == nil || model.busy || model.mediaBusy || model.componentOperationRunning).accessibilityIdentifier("exportBall")
                 MediaDeviceMenu(model: model, kind: .cdrom)
                 MediaDeviceMenu(model: model, kind: .floppy)
                 MediaDeviceMenu(model: model, kind: .disk)
@@ -40,7 +40,6 @@ struct ContentView: View {
                 Button("Runtime…", systemImage: "cpu") { model.chooseRuntime() }.disabled(model.selected == nil || model.busy || model.mediaBusy)
             }
         }
-        .sheet(item: $model.supportImport) { request in OS2SupportSheet(model: model, request: request) }
         .sheet(item: $model.programAction) { action in ProgramSheet(model: model, action: action) }
         .sheet(item: $model.ballRename) { request in RenameBallSheet(model: model, request: request) }
         .sheet(isPresented: Binding(get: { model.creatingFloppy != nil }, set: { if !$0 { model.creatingFloppy = nil } })) {
@@ -132,6 +131,23 @@ struct ContentView: View {
                         ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
                     }.labelsHidden().pickerStyle(.menu)
                 }.padding()
+                ForEach(model.componentJobs.values.filter(\.running).sorted { $0.ball < $1.ball }) { job in
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Button(AppModel.displayName(job.ball) + ": " + job.summary) {
+                            model.select(job.ball); model.page = .systemComponents
+                        }.buttonStyle(.link)
+                        Spacer()
+                        Button(job.cancelling ? "Cancelling…" : "Cancel") { model.cancelComponentOperation(job) }.disabled(job.cancelling)
+                    }.padding(.horizontal).padding(.bottom, 8)
+                }
+                if let notice = model.componentNotice {
+                    HStack {
+                        Text(notice).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Dismiss") { model.componentNotice = nil }
+                    }.padding(.horizontal).padding(.bottom, 8)
+                }
                 Divider()
                 Group {
                     switch model.page {
@@ -139,7 +155,7 @@ struct ContentView: View {
                     case .drives: DrivesView(model: model, snapshot: snapshot)
                     case .systemComponents:
                         if let ball = model.selected {
-                            OS2SupportSheet(model: model, request: OS2ImportRequest(ball: ball), embedded: true).id(ball)
+                            OS2ComponentsPane(model: model, request: OS2ImportRequest(ball: ball)).id(ball)
                         }
                     case .installation: ProgramSheet(model: model, action: .install, embedded: true).id(model.selected)
                     case .settings: ConfigurationView(model: model).id(model.selected)

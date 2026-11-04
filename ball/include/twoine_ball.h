@@ -19,6 +19,9 @@ extern "C"
  * failure returns 2 and an allocated diagnostic. Free either with tb_free.
  * Each independent ball may be used concurrently. Serialize writes to the same
  * ball; CONFIG.SYS saves additionally compare their expected original bytes.
+ * Component install/remove jobs enforce a cooperative per-ball mutation lock.
+ * os2-component-state and cancellation may run concurrently with those jobs;
+ * their progress reads never wait for the mutation lock.
  */
     TB_API int tb_request(const char *request_json, char **result_json, char **error_utf8);
     TB_API void tb_free(void *allocation);

@@ -400,3 +400,6 @@ On macOS, launches put the ball's runtime cache first in `DYLD_LIBRARY_PATH`, th
 the receiving build and inherited host entries. This keeps development-build
 Mach-O dependencies and guest native API lookup in one module instance. Packaged
 runtimes also carry their relocated dependency closure.
+
+
+Component installation can run in the background while the component browser remains available. `os2-component-state` reads installed destinations and per-operation progress without rescanning the installation media; `cancel-os2-component-operation` requests cooperative cancellation. `remove-os2-components` removes only unchanged files recorded by recent installations. Existing files and edited files remain protected. Completed and partial operations have reports under `logs/os2-components/`. See [the operation contract](../rea-notes/os2-component-operations.md) for the request fields and concurrency rules.

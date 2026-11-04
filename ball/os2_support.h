@@ -210,6 +210,11 @@ typedef struct SupportFile
 } SupportFile;
 static int support_read(Context *c, const char *source, int index, SupportFile *file)
 {
+    if (component_cancelled(c))
+        return 0;
+    component_progress(c, "extracting", source, support_paths[index]);
+    if (c->error)
+        return 0;
     FILE *input = tb_media_path(source) ? tb_media_fopen(source) : tb_fopen(source, "rb");
     if (!input)
         return fail(c, "Cannot extract %s: %s", support_names[index], strerror(errno));
@@ -272,6 +277,8 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
     /* A work queue handles mixed nesting without a recursion-depth limit. */
     for (const cJSON *node = queue->child; node && !c->error; node = node->next)
     {
+        if (component_cancelled(c))
+            break;
         if (++visited > 100000u)
         {
             fail(c,
@@ -384,10 +391,26 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
         tb_media_entries_free(entries, count == (size_t)-1 ? 0 : count);
         free(root);
     }
+    char *workspace = NULL;
+    for (int i = 0; i < SUPPORT_COUNT && !c->error; i++)
+        if (files[i].data && !workspace)
+            workspace = keep(c, tb_archive_workspace(c->ball));
+    if (c->component_operation)
+    {
+        int count = 0;
+        for (int i = 0; i < SUPPORT_COUNT; i++)
+            count += files[i].data != NULL;
+        put(c->component_operation->progress, "totalCount", cJSON_CreateNumber(count));
+    }
     for (int i = 0; i < SUPPORT_COUNT && !c->error; i++)
         if (files[i].data)
         {
-            char *destination = host_path(c, support_paths[i], 0);
+            if (component_cancelled(c))
+                break;
+            component_progress(c, "installing", files[i].source, support_paths[i]);
+            if (c->error)
+                break;
+            char *destination = component_private_path(c, support_paths[i]);
             char *parent = destination ? keep(c, strdup(destination)) : NULL;
             if (parent)
             {
@@ -395,8 +418,10 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
                 if (slash)
                     *slash = 0;
             }
-            if (!parent || !tb_mkdirs(parent) || tb_is_file(destination) ||
-                !tb_atomic_write(destination, files[i].data, files[i].size))
+            char *temporary = workspace ? format(c, "%s/%d", workspace, i) : NULL;
+            if (!parent || !temporary ||
+                !tb_atomic_write(temporary, files[i].data, files[i].size) || !tb_mkdirs(parent) ||
+                !tb_copy_new(temporary, destination))
             {
                 fail(c, "Cannot install %s", support_paths[i]);
                 break;
@@ -407,7 +432,17 @@ static cJSON *import_os2_support(Context *c, const cJSON *request)
             cJSON_AddStringToObject(entry, "source", label ? label : files[i].source);
             free(label);
             cJSON_AddItemToArray(imported, entry);
+            SHA256_CTX hash;
+            unsigned char digest[32];
+            sha256_init(&hash);
+            sha256_update(&hash, files[i].data, files[i].size);
+            sha256_final(&hash, digest);
+            component_record(c, support_paths[i], files[i].source, "cmd", hex(c, digest));
+            component_progress(c, "installing", files[i].source, support_paths[i]);
         }
+    if (workspace)
+        tb_remove_tree(workspace);
+    component_progress(c, "finishing", NULL, NULL);
     for (int i = 0; i < SUPPORT_COUNT; i++)
     {
         free(files[i].data);

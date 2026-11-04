@@ -140,6 +140,30 @@ import Testing
     #expect(toggled)
 }
 
+@MainActor @Test func componentRowsShowNativeActivityAndLockChecksWithoutLockingTheBrowser() throws {
+    let data = Data(#"""
+    {"id":"directory","title":"OS2","kind":"directory","path":"C:\\OS2","children":[
+     {"id":"source","title":"SOME.DLL","kind":"file","source":"source","path":"C:\\OS2\\SOME.DLL","size":8192}]}
+    """#.utf8)
+    let node = try JSONDecoder().decode(OS2ExtractionPlan.Node.self, from: data)
+    let row = OS2ComponentTree.row(node, selected: ["source"], activePaths: [#"C:\OS2\SOME.DLL"#], mutating: true)
+    #expect(row.busy)
+    #expect(row.children.first?.busy == true)
+    let view = OS2ComponentTree(root: node, selection: .constant(["source"]), query: .constant(""),
+                               searchFocused: .constant(false), disabled: false,
+                               toggle: { _, _ in Issue.record("Updating component checks are locked") }, openSetting: { _ in },
+                               activePaths: [#"C:\OS2\SOME.DLL"#], mutating: true)
+    let (hosting, coordinator, outline) = try hostComponents(view)
+    defer { _ = hosting }
+    let item = try #require(coordinator.items.first)
+    let column = try #require(outline.tableColumns.first)
+    let cell = try #require(coordinator.outlineView(outline, viewFor: column, item: item) as? NSStackView)
+    #expect(cell.arrangedSubviews.contains { $0 is NSProgressIndicator })
+    #expect(coordinator.toggle(item) == false)
+    outline.expandItem(item)
+    #expect(outline.numberOfRows == 2)
+}
+
 @MainActor @Test func OS2ComponentOutlineLayoutPreservesCheckboxStatusAndSize() throws {
     let data = Data(#"""
     {"id":"all","title":"Full OS/2 File Set","kind":"group","category":"full","children":[

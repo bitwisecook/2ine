@@ -21,6 +21,7 @@
 #define PATH_SEPARATOR ":"
 #endif
 
+typedef struct ComponentOperation ComponentOperation;
 typedef struct Context
 {
     char **allocations;
@@ -33,6 +34,7 @@ typedef struct Context
     const cJSON *application;
     const char *opengl_policy;
     char *registration_warning;
+    ComponentOperation *component_operation;
 } Context;
 
 static int fail(Context *c, const char *format, ...)
@@ -1426,6 +1428,7 @@ static char *command_interpreter(Context *c)
         "This command file needs the original OS/2 CMD.EXE. Choose Install OS/2 Support Files to extract it from your OS/2 CD or floppy images, or use install-os2-support in the CLI. Then run the command file again.");
     return NULL;
 }
+#include "os2_component_store.h"
 #include "os2_support.h"
 #include "os2_extract.h"
 #include "os2_dependencies.h"
@@ -1433,6 +1436,7 @@ static char *command_interpreter(Context *c)
 #include "wps_applications.h"
 #include "runtime_selection.h"
 #include "runtime_features.h"
+#include "os2_component_operations.h"
 
 static cJSON *prepare(Context *c, const cJSON *request)
 {
@@ -2811,9 +2815,13 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "plan-os2-extraction"))
         return plan_os2_extraction(c, request);
     if (!strcmp(action, "import-os2-support"))
-        return get(request, "categories") || get(request, "fileSelection")
-                   ? extract_os2_categories(c, request)
-                   : import_os2_support(c, request);
+        return component_import(c, request);
+    if (!strcmp(action, "os2-component-state"))
+        return os2_component_state(c, request);
+    if (!strcmp(action, "remove-os2-components"))
+        return remove_os2_components(c, request);
+    if (!strcmp(action, "cancel-os2-component-operation"))
+        return cancel_os2_component_operation(c, request);
     if (!strcmp(action, "snapshot"))
         return snapshot(c);
     if (!strcmp(action, "browse"))

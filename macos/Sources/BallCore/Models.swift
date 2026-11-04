@@ -100,6 +100,9 @@ public struct DesktopRequest: Encodable, Sendable {
     public var sources: [String]?
     public var categories: [String]?
     public var fileSelection: [String]?
+    public var paths: [String]?
+    public var selection: [OS2ComponentSelection]?
+    public var operationID: String?
     public var configureComponents: [String]?
     public var name: String?
     public var originalName: String?
@@ -356,7 +359,7 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
         public let path: String?
         public let size: UInt64?
         public let provided: Bool?
-        public let present: Bool?
+        public var present: Bool?
         public let disabled: Bool?
         public let priority: Int?
         public let preferred: Bool?
@@ -364,7 +367,19 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
         public let setting: String?
         public let selection: String?
         public let group: String?
-        public let children: [Node]?
+        public var children: [Node]?
+        public func updatingPresence(_ installed: Set<String>) -> Self {
+            var copy = self
+            if kind == "file", let path { copy.present = installed.contains(path.uppercased()) }
+            copy.children = children?.map { $0.updatingPresence(installed) }
+            return copy
+        }
+        public func updatingSourcePresence(_ installed: Set<String>) -> Self {
+            var copy = self
+            if kind == "file", let source { copy.present = installed.contains(source) }
+            copy.children = children?.map { $0.updatingSourcePresence(installed) }
+            return copy
+        }
         public var eligibleSources: Set<String> {
             if disabled == true { return [] }
             if kind == "file", provided != true, disabled != true, let source { return [source] }
@@ -410,7 +425,7 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
         public let source: String
         public let category: OS2ExtractionCategory
         public let provided: Bool
-        public let present: Bool
+        public var present: Bool
         public let size: UInt64
         public let priority: Int?
         public var id: String { source }
@@ -418,10 +433,23 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
             !provided && !present && (categories.contains(.full) || categories.contains(category))
         }
     }
-    public let files: [File]
+    public var files: [File]
     public let unmapped: [String]
     public let groups: [Group]?
-    public let tree: Node?
+    public var tree: Node?
+    public func updatingPresence(_ paths: Set<String>) -> Self {
+        let installed = Set(paths.map { $0.uppercased() })
+        var copy = self
+        copy.files = files.map { file in var updated = file; updated.present = installed.contains(file.path.uppercased()); return updated }
+        copy.tree = tree?.updatingPresence(installed)
+        return copy
+    }
+    public func updatingSourcePresence(_ sources: Set<String>) -> Self {
+        var copy = self
+        copy.files = files.map { file in var updated = file; updated.present = sources.contains(file.source); return updated }
+        copy.tree = tree?.updatingSourcePresence(sources)
+        return copy
+    }
     public func sourceSelection(_ categories: Set<OS2ExtractionCategory>) -> Set<String> {
         let expanded = expanded(categories)
         return Set((tree?.files ?? []).filter {
