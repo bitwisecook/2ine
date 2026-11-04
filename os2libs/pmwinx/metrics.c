@@ -79,6 +79,11 @@ LONG GetDeviceCaps(ULONG handle, LONG index)
             return printer == 2 ? 2 : -1;
         case 38:
             return 1; /* RASTERCAPS: RC_BITBLT */
+        case 40:
+        case 42:
+            return 36; /* ASPECTX/Y: square raster pixels in conventional GDI aspect units. */
+        case 44:
+            return 51; /* ASPECTXY: rounded diagonal of the 36-by-36 aspect vector. */
         case 88:
         case 90:
             return printer ? 300 : (LONG)lx_pm_dc_dpi(0);

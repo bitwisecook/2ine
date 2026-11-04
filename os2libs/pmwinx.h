@@ -128,6 +128,7 @@ extern "C"
         OS2APIINFO(ord = 671, name = SHOWWINDOW);
     OS2EXPORT BOOL OS2API UpdateWindow(ULONG handle) OS2APIINFO(ord = 706, name = UPDATEWINDOW);
     OS2EXPORT ULONG OS2API GetDC(ULONG window) OS2APIINFO(ord = 263, name = GETDC);
+    OS2EXPORT LONG OS2API GetDialogBaseUnits(void) OS2APIINFO(ord = 270, name = GETDIALOGBASEUNITS);
     OS2EXPORT LONG OS2API SaveDC(ULONG dc) OS2APIINFO(ord = 576, name = SAVEDC);
     OS2EXPORT BOOL OS2API RestoreDC(ULONG dc, LONG level) OS2APIINFO(ord = 572, name = RESTOREDC);
     OS2EXPORT LONG OS2API ReleaseDC(ULONG window, ULONG dc) OS2APIINFO(ord = 560, name = RELEASEDC);
@@ -235,6 +236,12 @@ extern "C"
     OS2EXPORT ULONG OS2API ResumeThread(ULONG handle) OS2APIINFO(ord = 573, name = RESUMETHREAD);
     OS2EXPORT ULONG OS2API WaitForSingleObject(ULONG handle, ULONG timeout)
         OS2APIINFO(ord = 711, name = WAITFORSINGLEOBJECT);
+    OS2EXPORT ULONG OS2API CreateSemaphore(PVOID security, LONG initial, LONG maximum, PSZ name)
+        OS2APIINFO(ord = 96, name = CREATESEMAPHORE);
+    OS2EXPORT ULONG OS2API OpenSemaphore(ULONG access, BOOL inherit, PSZ name)
+        OS2APIINFO(ord = 507, name = OPENSEMAPHORE);
+    OS2EXPORT BOOL OS2API ReleaseSemaphore(ULONG handle, LONG count, PLONG previous)
+        OS2APIINFO(ord = 562, name = RELEASESEMAPHORE);
     OS2EXPORT VOID OS2API ExitThread(ULONG result) OS2APIINFO(ord = 193, name = EXITTHREAD);
     OS2EXPORT BOOL OS2API SetThreadPriority(ULONG thread, LONG priority)
         OS2APIINFO(ord = 651, name = SETTHREADPRIORITY);
@@ -633,6 +640,7 @@ extern "C"
     OS2EXPORT ULONG OS2API GetFileAttributes(PSZ name)
         OS2APIINFO(ord = 284, name = GETFILEATTRIBUTES);
     OS2EXPORT ULONG OS2API GetTickCount(void) OS2APIINFO(ord = 373, name = GETTICKCOUNT);
+    OS2EXPORT ULONG OS2API GetCurrentTime(void) OS2APIINFO(ord = 260, name = GETCURRENTTIME);
     OS2EXPORT LONG OS2API MulDiv(LONG number, LONG numerator, LONG denominator)
         OS2APIINFO(ord = 494, name = MULDIV);
     OS2EXPORT LONG OS2API RegCloseKey(ULONG key) OS2APIINFO(ord = 541, name = REGCLOSEKEY);

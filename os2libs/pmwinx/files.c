@@ -192,5 +192,6 @@ BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overl
 }
 BOOL CloseHandle(ULONG handle)
 {
-    return open32CloseThread(handle) || open32CloseFile(handle) || _lclose(handle) == 0;
+    return open32CloseSemaphore(handle) || open32CloseThread(handle) || open32CloseFile(handle) ||
+           _lclose(handle) == 0;
 }

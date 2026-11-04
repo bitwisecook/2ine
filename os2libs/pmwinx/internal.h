@@ -22,6 +22,8 @@ ULONG open32BuiltinWindowProc(ULONG window, ULONG message, ULONG first, ULONG se
 BOOL open32EraseBackground(ULONG window, ULONG dc);
 void *open32DosService(const char *name);
 BOOL open32CloseThread(ULONG handle);
+BOOL open32CloseSemaphore(ULONG handle);
+int open32WaitSemaphore(ULONG handle, ULONG timeout, ULONG *result);
 void open32CriticalCleanup(void);
 void open32IconsCleanup(void);
 ULONG open32Presentation(void);

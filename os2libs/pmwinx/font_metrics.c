@@ -5,6 +5,25 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
 #include "hal/font.h"
+LONG GetDialogBaseUnits(void)
+{
+    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    ULONG dc = GetDC(0);
+    uint8 metrics[56], extent[8];
+    LONG result = 0;
+    if (dc && GetTextMetrics(dc, metrics) &&
+        GetTextExtentPoint(dc, (PCHAR)alphabet, sizeof alphabet - 1, extent))
+    {
+        ULONG width = (lx_guest_load_u32(extent) / 26 + 1) / 2;
+        ULONG height = lx_guest_load_u32(metrics);
+        if (width && width <= UINT16_MAX && height && height <= UINT16_MAX)
+            result = (LONG)(width | (height << 16));
+    }
+    if (dc)
+        ReleaseDC(0, dc);
+    return result;
+}
+
 static void encode_metrics(const FONTMETRICS *fm, const LxHostFontMetrics *host,
                            const uint8 *logfont, uint8 *output)
 {

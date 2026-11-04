@@ -687,6 +687,12 @@ static uint32 bridge32_timeGetTime(uint8 *a)
     return timeGetTime();
 }
 
+static uint32 bridge32_GetCurrentTime(uint8 *a)
+{
+    (void)a;
+    return GetCurrentTime();
+}
+
 static uint32 bridge32_LoadBitmap(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4);
@@ -754,6 +760,12 @@ static uint32 bridge32_UpdateWindow(uint8 *a)
 static uint32 bridge32_GetDC(uint8 *a)
 {
     return GetDC(lx_guest_load_u32(a));
+}
+
+static uint32 bridge32_GetDialogBaseUnits(uint8 *a)
+{
+    (void)a;
+    return (uint32)GetDialogBaseUnits();
 }
 static uint32 bridge32_ReleaseDC(uint8 *a)
 {
@@ -1180,6 +1192,56 @@ static uint32 bridge32_ResumeThread(uint8 *a)
 static uint32 bridge32_WaitForSingleObject(uint8 *a)
 {
     return WaitForSingleObject(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+
+static uint32 bridge32_CreateSemaphore(uint8 *a)
+{
+    uint32 security_pointer = lx_guest_load_u32(a), name_pointer = lx_guest_load_u32(a + 12);
+    LxGuestBorrow security = {0};
+    char *name = name_pointer ? o32_string(name_pointer) : NULL;
+    uint32 result = 0;
+    if ((name_pointer && !name) ||
+        (security_pointer && !lx_execution_borrow(GLoaderState.execution, security_pointer, 12,
+                                                  LX_GUEST_READ, &security)))
+        open32SetError(87);
+    else
+        result = CreateSemaphore(security.host, (LONG)lx_guest_load_u32(a + 4),
+                                 (LONG)lx_guest_load_u32(a + 8), name);
+    lx_execution_release(&security);
+    free(name);
+    return result;
+}
+
+static uint32 bridge32_OpenSemaphore(uint8 *a)
+{
+    char *name = o32_string(lx_guest_load_u32(a + 8));
+    if (!name)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    uint32 result = OpenSemaphore(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), name);
+    free(name);
+    return result;
+}
+
+static uint32 bridge32_ReleaseSemaphore(uint8 *a)
+{
+    uint32 pointer = lx_guest_load_u32(a + 8);
+    LxGuestBorrow previous = {0};
+    if (pointer &&
+        !lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_WRITE, &previous))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LONG count = 0;
+    uint32 result = ReleaseSemaphore(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
+                                     pointer ? &count : NULL);
+    if (result && pointer)
+        lx_guest_store_u32(previous.host, (uint32)count);
+    lx_execution_release(&previous);
+    return result;
 }
 static uint32 bridge32_ExitThread(uint8 *a)
 {

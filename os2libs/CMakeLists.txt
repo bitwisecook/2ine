@@ -70,6 +70,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/focus.c
             pmwinx/critical.c
             pmwinx/threads.c
+            pmwinx/semaphores.c
         )
     elseif(module STREQUAL "pmshapi")
         set(sources pmshapi.c pmshapi/profiles.c pmshapi/switches.c)

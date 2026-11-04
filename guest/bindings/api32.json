@@ -2013,6 +2013,11 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "GetCurrentTime": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "WinCallWinMain": {
       "argument_bytes": 16,
       "callee_pop": 0,
@@ -2258,6 +2263,11 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "GetDialogBaseUnits": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "ReleaseDC": {
       "argument_bytes": 8,
       "callee_pop": 0,
@@ -2485,6 +2495,21 @@
     },
     "WaitForSingleObject": {
       "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateSemaphore": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "OpenSemaphore": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ReleaseSemaphore": {
+      "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },

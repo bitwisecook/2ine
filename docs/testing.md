@@ -18,6 +18,10 @@ remain unsupported and return errors.
 data imports, mixed entry bundles, procedure queries and circular DLL dependencies.
 It also verifies rejection of malformed targets and cyclic forwarder chains.
 
+`open32_semaphores` covers count consumption, overflow, timed waits, access rights,
+stale handles, worker wakeups and named semaphores shared between processes.
+The Unicorn profile also checks cleanup when a blocked waiter is killed.
+
 The `host_platform` test checks argument packing (including empty arguments),
 executable/process discovery, memory protection, clocks and UTC calendar
 conversion. Linux additionally runs `host_mutex_owner` for robust mutex

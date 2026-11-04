@@ -174,6 +174,9 @@ ULONG ResumeThread(ULONG handle)
 }
 ULONG WaitForSingleObject(ULONG handle, ULONG timeout)
 {
+    ULONG semaphore_result;
+    if (open32WaitSemaphore(handle, timeout, &semaphore_result))
+        return semaphore_result;
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {

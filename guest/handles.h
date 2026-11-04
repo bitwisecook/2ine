@@ -40,6 +40,7 @@ typedef enum LxHandleKind
     LX_HANDLE_OPEN32_DDE,
     LX_HANDLE_TLS_CONTEXT,
     LX_HANDLE_TLS_SESSION,
+    LX_HANDLE_OPEN32_SEMAPHORE,
     LX_HANDLE_KIND_LIMIT
 } LxHandleKind;
 typedef struct LxHandleBorrow

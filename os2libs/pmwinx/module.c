@@ -161,6 +161,11 @@ ULONG timeGetTime(void)
     return GetTickCount();
 }
 
+ULONG GetCurrentTime(void)
+{
+    return GetTickCount();
+}
+
 ULONG GetVersion(void)
 {
     /* Open32 reports Windows NT 3.51, with the major version in the low byte. */
