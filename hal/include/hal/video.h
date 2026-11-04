@@ -3,6 +3,9 @@
 #define TWOINE_HOST_VIDEO_H
 #include <stdint.h>
 typedef struct LxHostWindow LxHostWindow;
+/* Guest semantics annotate native window cycling; auxiliary views are excluded. */
+void lx_host_window_set_cycle_policy(LxHostWindow *window, int eligible, int modal);
+void lx_host_window_get_cycle_policy(LxHostWindow *window, int *eligible, int *modal);
 typedef struct LxHostPointer LxHostPointer;
 typedef enum
 {

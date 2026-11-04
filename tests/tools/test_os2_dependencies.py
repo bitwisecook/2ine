@@ -138,6 +138,23 @@ class DependencyAuditTests(unittest.TestCase):
         refreshed = self.request("audit-dependencies", recover=False)
         self.assertEqual(refreshed["componentGroups"], [])
 
+    def test_network_and_help_advice_links_only_verified_os2_groups(self):
+        self.installed(
+            "Apps/APP.EXE", linear(["NETAPI", "NETAPI32", "HELPMGR", "INOTES", "DB2APP"])
+        )
+        result = self.request("audit-dependencies", resolve=False)
+        groups = {group["id"]: group for group in result["componentGroups"]}
+        self.assertEqual(set(groups), {"network", "help"})
+        self.assertEqual(groups["network"]["modules"], ["NETAPI", "NETAPI32"])
+        self.assertEqual(groups["network"]["requiredBy"], [r"C:\Apps\APP.EXE"])
+        advice = ball_api.dependency_advice(result)
+        self.assertIn("INOTES, DB2APP", advice[1])
+        self.assertNotIn("NETAPI", advice[1])
+        self.assertEqual(ball_api.dependency_advice({"missing": []}), [])
+        stale = ball_api.dependency_advice({**result, "stale": True})
+        self.assertEqual(len(stale), 1)
+        self.assertIn("out of date", stale[0])
+
     def test_som_component_marks_runtime_as_required_without_claiming_it_missing(self):
         self.installed("Apps/APP.EXE", linear(["SOM"]))
         result = self.request("audit-dependencies", recover=False)

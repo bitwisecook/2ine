@@ -282,6 +282,29 @@ class ArchiveTests(unittest.TestCase):
         self.import_ball()
         self.assertEqual(json.loads((self.destination / "2ine-export.json").read_bytes()), updated)
 
+    def test_desktop_wrapper_cache_is_not_exported_or_reused_on_import(self):
+        desktop = self.ball / "cache/desktop-sessions/fixture/Program.app/Contents/Resources"
+        desktop.mkdir(parents=True)
+        (desktop / "Runtime").symlink_to("../../../../../drive_c/OS2/DLL/2INE")
+        (self.ball / "cache/keep.txt").write_text("unrelated cache is preserved")
+        self.export()
+        with zipfile.ZipFile(self.archive) as archive:
+            self.assertFalse(
+                any(name.startswith("cache/desktop-sessions/") for name in archive.namelist())
+            )
+            self.assertIn("cache/keep.txt", archive.namelist())
+        # Older exports may contain ordinary wrapper files; they must be reset on import.
+        with zipfile.ZipFile(self.archive, "a") as archive:
+            archive.writestr(
+                "cache/desktop-sessions/old/Program.app/Contents/MacOS/lx_loader",
+                b"old host loader",
+            )
+        self.import_ball()
+        self.assertFalse((self.destination / "cache/desktop-sessions").exists())
+        self.assertEqual(
+            (self.destination / "cache/keep.txt").read_text(), "unrelated cache is preserved"
+        )
+
     def test_internal_mounts_are_relative_and_host_runtime_is_reselected(self):
         extra = self.ball / "extra"
         extra.mkdir()

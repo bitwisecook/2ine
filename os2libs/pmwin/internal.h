@@ -270,6 +270,7 @@ LX_PRIVATE void destroyDialog(Window *window);
 LX_PRIVATE BOOL initializeDialog(Window *window);
 LX_PRIVATE BOOL initializeDialogProcedure(HWND window, HWND focus, PVOID parameters);
 LX_PRIVATE void dialogWordChanged(Window *window, LONG index, USHORT value);
+LX_PRIVATE void updateWindowCyclePolicy(Window *window);
 LX_PRIVATE BOOL windowAcceptsInput(Window *window);
 LX_PRIVATE BOOL windowAcceptsUpdates(const Window *window);
 LX_PRIVATE void destroyControl(Window *window);

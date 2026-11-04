@@ -16,6 +16,39 @@ typedef struct PmDialog
     HWND disabled_owner;
     HWND window, previous_focus;
 } PmDialog;
+static BOOL containsModal(Window *window)
+{
+    if (!window->destroying && window->dialog && window->dialog->processing &&
+        !window->dialog->dismissed)
+        return TRUE;
+    for (Window *child = window->children; child; child = child->sibling)
+        if (containsModal(child))
+            return TRUE;
+    return FALSE;
+}
+static BOOL windowCyclePolicy(Window *window, BOOL *eligible, BOOL *modal)
+{
+    if (!window || window == &desktop_window)
+        return FALSE;
+    while (window->parent && window->parent != &desktop_window)
+        window = window->parent;
+    if (window->parent != &desktop_window || !window->heavy.window)
+        return FALSE;
+    BOOL menu =
+        window->menu || (window->window_class_name && !strcmp(window->window_class_name, "#4"));
+    *eligible = window->enabled && !window->destroying && !window->dialog && !menu;
+    *modal = containsModal(window);
+    return TRUE;
+}
+void updateWindowCyclePolicy(Window *window)
+{
+    BOOL eligible, modal;
+    if (!windowCyclePolicy(window, &eligible, &modal))
+        return;
+    while (window->parent && window->parent != &desktop_window)
+        window = window->parent;
+    lx_host_window_set_cycle_policy(window->heavy.window, eligible, modal);
+}
 BOOL windowAcceptsInput(Window *window)
 {
     PmDialog *modal = NULL;
@@ -36,6 +69,7 @@ void dialogWordChanged(Window *window, LONG index, USHORT value)
         window->dialog->dismissed = (value & 0x10) != 0;
     if (index == 10) /* QWS_RESULT */
         window->dialog->result = value;
+    updateWindowCyclePolicy(window);
 }
 
 BOOL initializeDialog(Window *window)
@@ -47,6 +81,7 @@ BOOL initializeDialog(Window *window)
     window->dialog->result = DIALOG_ERROR;
     window->dialog->window = window->hwnd;
     window->dialog->previous_focus = WinQueryFocus(HWND_DESKTOP);
+    updateWindowCyclePolicy(window);
     return TRUE;
 }
 static void release(PmDialog *dialog)
@@ -158,6 +193,7 @@ void destroyDialog(Window *window)
     if (!dialog)
         return;
     window->dialog = NULL;
+    updateWindowCyclePolicy(window);
     dialog->dismissed = TRUE;
     restore_owner(dialog);
     release(dialog);
@@ -251,6 +287,7 @@ ULONG WinProcessDlg(HWND handle)
         return DIALOG_ERROR;
     dialog->references++;
     dialog->processing = TRUE;
+    updateWindowCyclePolicy(window);
     if (!dialog->dismissed && window->owner && window->owner != &desktop_window &&
         window->owner->enabled)
     {
@@ -279,6 +316,9 @@ ULONG WinProcessDlg(HWND handle)
     }
     ULONG result = dialog->result;
     dialog->processing = FALSE;
+    window = getWindowFromHWND(anchor, handle);
+    if (window)
+        updateWindowCyclePolicy(window);
     restore_owner(dialog);
     release(dialog);
     return result;

@@ -31,6 +31,9 @@ class OS2ComponentsPane(Gtk.Box):
         self.window, self.ball, self.build = window, window.ball, window.build
         self.sources, self.validation, self.directory = [], None, None
         self.focus_category = None
+        self.selects_focus = True
+        self.explicit_intent = False
+        self.focus_only = False
         self.restore_selection = None
         self.opening_sources = None
         self.queued_sources = None
@@ -39,6 +42,15 @@ class OS2ComponentsPane(Gtk.Box):
         self.categories = {"cmd"}
         self.working, self.polling = False, False
         self.job = None
+        self.desired_queue = None
+        self.state_ready, self.finalizing = False, False
+        self.drain_timer = None
+        self.failed_batch = None
+        self.initial_state = False
+        self.read_failure = False
+        self.read_failure_batch = None
+        self.continuation_needs_check = False
+        self.queue_had_error = False
         self.append(Gtk.Label(label="OS/2 System Components", xalign=0, css_classes=["title-1"]))
         self.error = Adw.Banner(use_markup=False, revealed=False)
         self.append(self.error)
@@ -64,11 +76,6 @@ class OS2ComponentsPane(Gtk.Box):
         self.tree_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, vexpand=True)
         self.append(self.tree_box)
         controls = Adw.WrapBox(child_spacing=6, line_spacing=6)
-        self.accept = action_button("Install Selected", self.install_selected)
-        self.accept.add_css_class("suggested-action")
-        controls.append(self.accept)
-        self.remove = action_button("Remove Selected", self.remove_selected)
-        controls.append(self.remove)
         self.refresh = action_button("Refresh Installed Status", self.refresh_state)
         controls.append(self.refresh)
         self.cancel = action_button("Cancel Job", self.cancel_job)
@@ -228,6 +235,8 @@ class OS2ComponentsPane(Gtk.Box):
                 self.window.forget_os2_media()
             if self.sources != result["sources"]:
                 self.component_tree = None
+                self.desired_queue = None
+                self.state_ready = False
                 self.restore_selection = None
             self.sources = result["sources"]
             self.show_directory(result["directory"])
@@ -320,6 +329,7 @@ class OS2ComponentsPane(Gtk.Box):
         )
 
     def show_options(self, plan):
+        previous_queue = self.desired_queue if self.component_tree is not None else None
         previous = self.restore_selection
         if previous is None and self.component_tree:
             previous = set(self.component_tree.selected)
@@ -333,17 +343,37 @@ class OS2ComponentsPane(Gtk.Box):
             else {
                 item["source"]
                 for item in plan["files"]
-                if not item["provided"] and (item["category"] in self.categories or item["present"])
+                if not item["provided"] and item["category"] in self.categories
             }
         )
+        self.state_ready = False
+        self.initial_state = previous_queue is None or not previous_queue.initialized
+        self.explicit_intent = previous is not None
         self.component_tree = ComponentTree(
-            plan["tree"], selected, changed=self.update_count, setting=self.open_setting
+            plan["tree"], selected, changed=self.selection_changed, setting=self.open_setting
         )
+        allowed = self.component_tree.sources.get(plan["tree"]["id"], set())
+        if previous_queue is None:
+            self.desired_queue = gnome_component_jobs.DesiredComponents(
+                allowed, self.component_tree.selected
+            )
+        else:
+            self.desired_queue = previous_queue
+            self.desired_queue.allowed = set(allowed)
+            self.desired_queue.actual = {
+                source: state
+                for source, state in self.desired_queue.actual.items()
+                if source in allowed
+            }
+            self.desired_queue.desired.intersection_update(allowed)
         self.tree_box.append(self.component_tree)
         if self.focus_category:
-            self.component_tree.select_group(self.focus_category)
+            if self.focus_only or not self.selects_focus:
+                self.component_tree.focus_group(self.focus_category)
+            else:
+                self.component_tree.select_group(self.focus_category)
         self.notice.set_label(
-            "Select files to install or remove. Removal preserves modified and unowned files."
+            "Tick files to install; untick to remove unchanged owned files. Changes apply in the background."
         )
         self.update_count()
         self.refresh_state()
@@ -351,59 +381,99 @@ class OS2ComponentsPane(Gtk.Box):
     def open_setting(self, setting):
         self.window.show_component_setting(setting)
 
-    def resume_components(self, category):
+    def resume_components(self, category, selecting=True):
         self.focus_category = category
+        self.selects_focus = selecting
         if self.plan:
             self.restore_selection = set(self.component_tree.selected)
             self.plan_sources()
         elif self.sources:
             self.plan_sources()
 
-    def update_count(self):
-        active = self.window.component_active(self.ball) or bool(
-            self.window.sessions.active(self.ball)
-        )
-        selected = set(self.component_tree.selected) if self.component_tree else set()
-        files = [file for file in (self.plan or {}).get("files", []) if file["source"] in selected]
-        count = sum(not file.get("present") for file in files)
-        removable = sum(file.get("removableCount", 0) for file in files)
-        self.accept.set_label(f"Install {count} Files" if count else "Apply Selected Components")
-        self.accept.set_sensitive(bool(selected) and not self.working and not active)
-        self.remove.set_label(f"Remove {removable} Files" if removable else "Remove Selected")
-        self.remove.set_sensitive(bool(removable) and not self.working and not active)
-        self.refresh.set_sensitive(bool(self.plan) and not self.polling)
-        self.cancel.set_sensitive(active)
-        if self.component_tree:
-            self.component_tree.table.set_sensitive(True)
-
-    def install_selected(self):
-        if not self.component_tree:
-            return
-        self.start_job(
-            "import-os2-support",
-            sources=list(self.extraction_sources),
-            fileSelection=sorted(self.component_tree.selected),
-            categories=sorted(self.categories),
-            configureComponents=self.component_tree.configured_components(),
+    def pending_mutations(self):
+        return bool(
+            self.finalizing
+            or (self.state_ready and self.desired_queue and self.desired_queue.pending())
         )
 
-    def remove_selected(self):
-        if not self.component_tree:
+    def selection_changed(self):
+        self.explicit_intent = True
+        if not self.desired_queue or not self.component_tree:
             return
-        selected = sorted(
-            file["source"]
-            for file in self.plan["files"]
-            if file["source"] in self.component_tree.selected and file.get("removable")
-        )
-        if selected:
+        protected = self.desired_queue.edit(self.component_tree.selected)
+        if protected:
+            self.notice.set_label(
+                "Modified, unowned or protected files are preserved and remain checked."
+            )
+        self.queue_had_error = False
+        self.sync_selection()
+        self.schedule_drain()
+
+    def sync_selection(self):
+        if self.component_tree and self.desired_queue:
+            self.component_tree.selected.clear()
+            self.component_tree.selected.update(self.desired_queue.desired)
+            self.component_tree.protected_sources = self.desired_queue.protected()
+            self.component_tree.refresh_cells()
+        self.update_row_activity()
+
+    def schedule_drain(self):
+        if self.state_ready and self.drain_timer is None:
+            self.drain_timer = GLib.timeout_add(100, self.drain_changes)
+        self.window.set_busy(False)
+
+    def drain_changes(self):
+        self.drain_timer = None
+        if (
+            not self.state_ready
+            or self.working
+            or self.finalizing
+            or (self.job and self.job.get("active"))
+        ):
+            return GLib.SOURCE_REMOVE
+        if self.window.sessions.active(self.ball):
+            return GLib.SOURCE_REMOVE
+        if self.window.ball == self.ball and self.window.operation_busy:
+            self.schedule_drain()
+            return GLib.SOURCE_REMOVE
+        kind, attempted = self.desired_queue.next_step()
+        self.sync_selection()
+        if kind:
+            fields = {}
+            if kind == "install":
+                fields.update(
+                    sources=list(self.extraction_sources),
+                    fileSelection=sorted(self.desired_queue.desired),
+                    categories=sorted(self.categories),
+                    configureComponents=self.component_tree.configured_components(),
+                )
+            else:
+                fields["selection"] = gnome_component_jobs.state_selection(
+                    self.plan["files"], attempted
+                )
             self.start_job(
-                "remove-os2-components",
-                sources=list(self.extraction_sources),
-                fileSelection=selected,
+                "import-os2-support" if kind == "install" else "remove-os2-components",
+                attempted=attempted,
+                **fields,
+            )
+        if not kind and self.continuation_needs_check:
+            self.continuation_needs_check = False
+            self.window.refresh_pending_launch(self.ball, auto_allowed=True)
+        self.window.set_busy(False)
+        return GLib.SOURCE_REMOVE
+
+    def update_count(self):
+        active = bool(self.job and self.job.get("active"))
+        queued = bool(self.desired_queue and self.desired_queue.pending())
+        self.refresh.set_sensitive(bool(self.plan) and not self.polling)
+        self.cancel.set_sensitive(active or queued)
+        if self.component_tree:
+            self.component_tree.table.set_sensitive(
+                not bool(self.window.sessions.active(self.ball))
             )
 
-    def start_job(self, action, **fields):
-        if self.working or self.window.component_active(self.ball):
+    def start_job(self, action, *, attempted=None, **fields):
+        if self.working or (self.job and self.job.get("active")):
             return
         if self.window.sessions.active(self.ball) or (
             self.window.ball == self.ball and self.window.operation_busy
@@ -415,7 +485,8 @@ class OS2ComponentsPane(Gtk.Box):
             "id": operation_id,
             "active": True,
             "action": action,
-            "sources": set(fields.get("fileSelection", [])),
+            "sources": set(attempted or fields.get("fileSelection", [])),
+            "batch": self.desired_queue.batch(attempted or set()),
             "paths": set(fields.get("paths", [])),
             "progress": {},
             "syncedPaths": set(),
@@ -434,6 +505,9 @@ class OS2ComponentsPane(Gtk.Box):
         GLib.timeout_add(300, self.poll_job)
 
         def completed(result):
+            self.failed_batch = self.job["batch"]
+            self.continuation_needs_check = True
+            self.finalizing = True
             self.job["active"] = False
             self.job["result"] = result
             if action == "remove-os2-components":
@@ -453,6 +527,10 @@ class OS2ComponentsPane(Gtk.Box):
             self.window.toast("OS/2 component job finished for " + self.ball.name)
 
         def failed(error):
+            self.continuation_needs_check = True
+            self.queue_had_error = True
+            self.failed_batch = self.job["batch"]
+            self.finalizing = True
             self.job["active"] = False
             self.progress.set_spinning(False)
             self.window.set_busy(False)
@@ -504,6 +582,8 @@ class OS2ComponentsPane(Gtk.Box):
 
     def poll_failed(self, _error):
         self.polling = False
+        if self.finalizing:
+            self.refresh_state()
 
     def progress_received(self, progress, job):
         self.polling = False
@@ -523,13 +603,34 @@ class OS2ComponentsPane(Gtk.Box):
     def update_row_activity(self):
         if self.component_tree:
             job = self.job if self.job and self.job.get("active") else None
-            self.component_tree.active_ids = gnome_component_jobs.activity_ids(
-                self.plan["tree"], job
+            active = gnome_component_jobs.activity_ids(self.plan["tree"], job)
+            queued = (
+                self.desired_queue.pending() if self.desired_queue and self.state_ready else set()
             )
+            active.update(
+                gnome_component_jobs.activity_ids(
+                    self.plan["tree"], {"active": bool(queued), "sources": queued}
+                )
+            )
+            self.component_tree.active_ids = active
             self.component_tree.refresh_cells()
         self.update_count()
 
     def cancel_job(self):
+        self.queue_had_error = True
+        if not (self.job and self.job.get("active")):
+            if self.desired_queue and self.finalizing:
+                self.failed_batch = self.desired_queue.batch(self.desired_queue.allowed)
+                self.notice.set_label(
+                    "Queued changes cancelled; finishing installed-status refresh…"
+                )
+                return
+            if self.desired_queue:
+                self.desired_queue.cancel_queued()
+                self.sync_selection()
+                self.notice.set_label("Queued component changes cancelled.")
+                self.window.set_busy(False)
+            return
         if self.job and self.job.get("active"):
             self.window.component_work(
                 lambda: self.api("cancel-os2-component-operation", operationID=self.job["id"]),
@@ -559,16 +660,55 @@ class OS2ComponentsPane(Gtk.Box):
         def received(result):
             self.polling = False
             self.apply_file_state(result)
+            self.state_ready, self.finalizing = True, False
+            if self.read_failure:
+                self.desired_queue.failed(self.read_failure_batch or {})
+                self.read_failure_batch = None
+                self.read_failure = False
+            if self.initial_state:
+                self.desired_queue.initialize(
+                    has_history=result.get("progress") is not None, explicit=self.explicit_intent
+                )
+                self.initial_state = False
+            if self.failed_batch is not None:
+                unfinished = self.desired_queue.settle(self.failed_batch)
+                if unfinished:
+                    self.queue_had_error = True
+                    self.notice.set_label(
+                        "Some requested changes could not be applied. Existing or protected files were preserved; checks now show actual state."
+                    )
+                self.failed_batch = None
+            self.desired_queue.clamp_protected()
+            self.sync_selection()
+            self.schedule_drain()
 
         self.window.component_work(
             lambda: self.api("os2-component-state", selection=selection, paths=[]),
             received,
-            self.poll_failed,
+            self.state_failed,
             monitor=True,
         )
 
+    def state_failed(self, error):
+        self.queue_had_error = True
+        self.polling = False
+        self.state_ready, self.finalizing = False, False
+        self.read_failure = True
+        self.read_failure_batch = (
+            self.desired_queue.batch(self.desired_queue.allowed) if self.desired_queue else None
+        )
+        self.initial_state = False
+        self.update_row_activity()
+        self.error_message(
+            "Could not refresh installed status; refresh before applying more changes. "
+            + str(error)
+        )
+        self.window.set_busy(False)
+
     def apply_file_state(self, result):
         records = gnome_component_jobs.source_states(result.get("files", []))
+        if self.desired_queue:
+            self.desired_queue.update_actual(records)
         for file in self.plan["files"]:
             entry = records.get(file["source"])
             if entry:

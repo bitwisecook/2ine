@@ -17,9 +17,16 @@ except (ImportError, ValueError) as error:
 
 
 if __package__:
+    from .ball import dependency_advice
     from .gnome_files import FileList, display_path
+    from .gnome_lazy_folders import FolderChildren
+    from .gnome_program_choice import ProgramChoice, installer_candidates
 else:
     from gnome_files import FileList, display_path
+    from gnome_lazy_folders import FolderChildren
+    from gnome_program_choice import ProgramChoice, installer_candidates
+
+    from ball import dependency_advice
 
 
 def action_button(label, callback, icon=None):
@@ -28,6 +35,52 @@ def action_button(label, callback, icon=None):
     widget.update_property([Gtk.AccessibleProperty.LABEL], [label])
     widget.connect("clicked", lambda *_: callback())
     return widget
+
+
+def dependency_advice_box(window):
+    audit = window.snapshot.get("dependencyAudit") or {}
+    lines = dependency_advice(audit)
+    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, visible=bool(lines))
+
+    def activate_component(_link, category):
+        window.focus_missing_component(category)
+        return True
+
+    for index, text in enumerate(lines):
+        box.append(
+            Gtk.Label(
+                label=text,
+                xalign=0,
+                wrap=True,
+                selectable=True,
+                css_classes=["dim-label", "caption"],
+            )
+        )
+        if index == 0 and not audit.get("stale"):
+            for group in audit.get("componentGroups") or []:
+                link = Gtk.LinkButton.new_with_label(
+                    "2ine-component:" + group["id"], group["title"]
+                )
+                link.connect("activate-link", activate_component, group["id"])
+                link.set_tooltip_text(
+                    "Show and highlight " + group["title"] + " in OS/2 Components"
+                )
+                link.add_css_class("caption")
+                link.set_halign(Gtk.Align.START)
+                box.append(link)
+    if lines:
+        if audit.get("stale"):
+            check = action_button("Check Libraries", window.audit_dependencies)
+            check.set_sensitive(
+                not window.busy and not window.process and not window.component_active()
+            )
+            box.append(check)
+        elif audit.get("logPath"):
+            log = Path(audit["logPath"]).resolve()
+            logs = (window.ball / "logs").resolve()
+            if log.is_relative_to(logs) and log.is_file():
+                box.append(action_button("Open Dependency Audit", lambda: window.open_path(log)))
+    return box
 
 
 def empty(box):
@@ -139,6 +192,7 @@ class GuestBrowser(Gtk.Box):
         self.allow_import = allow_import
         self.required_drive = required_drive
         self.locations = {}
+        self.folder_children = FolderChildren()
         self.letters = (
             [required_drive] if required_drive else sorted(window.snapshot["manifest"]["drives"])
         )
@@ -177,6 +231,12 @@ class GuestBrowser(Gtk.Box):
             activated=self.activate,
             accept=self.accept_entry,
             dropped=self.drop_into if allow_import else None,
+            children=self.folder_children.children,
+            expanded_changed=self.folder_expanded,
+            activity=lambda entry: (
+                entry["path"].casefold() in self.folder_children.pending
+                or (entry.get("placeholder") and not entry.get("error"))
+            ),
         )
         self.append(self.files)
         self.empty_state = Adw.StatusPage(
@@ -233,6 +293,7 @@ class GuestBrowser(Gtk.Box):
             self.loading.set_visible(False)
             self.loading.set_spinning(False)
             self.directory = result
+            self.folder_children.complete(result["path"], result["entries"])
             self.address.set_text(result["path"])
             self.locations[result["path"][0]] = result["path"]
             index = (
@@ -277,7 +338,29 @@ class GuestBrowser(Gtk.Box):
             lambda: self.api("browse", path=path), loaded, locked=False, on_error=failed
         )
 
+    def folder_expanded(self, entry, expanded):
+        if not expanded or entry.get("placeholder") or not entry.get("directory"):
+            return
+        path = entry["path"]
+        if not self.folder_children.begin(path):
+            return
+        self.files.refresh_cells()
+
+        def received(result):
+            self.folder_children.complete(path, result["entries"])
+            self.files.refresh()
+
+        def failed(error):
+            self.folder_children.fail(path, error)
+            self.files.refresh()
+
+        self.window.request_work(
+            lambda: self.api("browse", path=path), received, locked=False, on_error=failed
+        )
+
     def accept_entry(self, entry):
+        if entry.get("placeholder"):
+            return True
         if entry["directory"]:
             return True
         if self.directories_only and self.relevant_only.get_active():
@@ -296,6 +379,8 @@ class GuestBrowser(Gtk.Box):
         self.empty_state.set_description("")
 
     def activate(self, entry):
+        if entry.get("placeholder"):
+            return
         if entry["directory"]:
             self.load(entry["path"])
         elif self.choose and not self.directories_only:
@@ -304,6 +389,8 @@ class GuestBrowser(Gtk.Box):
             self.window.program_dialog("run", program=entry["path"])
 
     def selected(self, entry):
+        if entry and entry.get("placeholder"):
+            entry = None
         self.selection = entry
         if self.choose:
             self.choose_button.set_sensitive(
@@ -682,27 +769,46 @@ class DriveSettingsDialog(FormDialog):
         self.run(work, finished, allow_running=True)
 
 
-def installer_candidates(api, letter):
-    pending, found, scanned = [(letter + ":\\", 0)], [], 0
-    stems = ["install", "setup", "inst", "os2inst", "autorun"]
-    while pending and scanned < 96:
-        path, depth = pending.pop(0)
-        scanned += 1
-        for entry in api("browse", path=path)["entries"]:
-            name = entry["name"].casefold()
-            if entry["directory"] and depth < 2:
-                if depth == 0 or name in ("english", "os2") or "install" in name or "setup" in name:
-                    pending.append((entry["path"], depth + 1))
-            elif not entry["directory"] and "." in name:
-                stem, extension = name.rsplit(".", 1)
-                if stem in stems and extension in ("exe", "cmd", "bat", "com"):
-                    rank = (
-                        stems.index(stem) * 10
-                        + depth * 3
-                        - (2 if "\\ENGLISH\\" in entry["path"].upper() else 0)
-                    )
-                    found.append((rank, entry["path"]))
-    return [path for _rank, path in sorted(found)[:32]]
+class ProgramChooser(Gtk.Box):
+    def __init__(self, text=""):
+        super().__init__(spacing=6)
+        self.choice = ProgramChoice(text)
+        self.updating = False
+        self.combo = Gtk.ComboBoxText.new_with_entry()
+        self.combo.set_hexpand(True)
+        self.entry = self.combo.get_child()
+        self.entry.set_text(text)
+        self.entry.set_placeholder_text("OS/2 executable or command file")
+        self.entry.update_property(
+            [Gtk.AccessibleProperty.LABEL], ["Program or suggested installer"]
+        )
+        self.entry.connect("changed", self.edited)
+        self.append(self.combo)
+
+    def edited(self, entry):
+        if not self.updating:
+            self.choice.edit(entry.get_text())
+
+    def get_text(self):
+        return self.entry.get_text()
+
+    def set_text(self, text):
+        self.choice.edit(text)
+        self.entry.set_text(text)
+
+    def add_suffix(self, widget):
+        self.append(widget)
+
+    def set_candidates(self, candidates):
+        text = self.choice.update(candidates)
+        self.updating = True
+        try:
+            self.combo.remove_all()
+            for candidate in self.choice.candidates:
+                self.combo.append_text(candidate)
+            self.entry.set_text(text)
+        finally:
+            self.updating = False
 
 
 class ProgramDialog(FormDialog):
@@ -721,6 +827,7 @@ class ProgramDialog(FormDialog):
             height=650,
         )
         self.action, self.original_name = action, name
+        self.media_busy, self.suggestions_ready, self.candidate_serial = False, False, 0
         self.suggested_name = ""
         self.ball = window.ball
         self.initial = window.snapshot["manifest"]["applications"].get(name, {})
@@ -747,8 +854,12 @@ class ProgramDialog(FormDialog):
         self.name = Adw.EntryRow(title="Application Name", text=name or "")
         if action == "add-app":
             group.add(self.name)
-        self.program = Adw.EntryRow(
-            title="OS/2 Executable or Command File", text=self.initial.get("program", program)
+        self.program = (
+            ProgramChooser(self.initial.get("program", program))
+            if action == "install"
+            else Adw.EntryRow(
+                title="OS/2 Executable or Command File", text=self.initial.get("program", program)
+            )
         )
         self.program.add_suffix(
             action_button(
@@ -762,7 +873,10 @@ class ProgramDialog(FormDialog):
                 "folder-open-symbolic",
             )
         )
-        self.program.connect("notify::text", self.schedule_preview)
+        text_widget = (
+            self.program.entry if isinstance(self.program, ProgramChooser) else self.program
+        )
+        text_widget.connect("notify::text", self.schedule_preview)
         group.add(self.program)
         self.arguments = Adw.EntryRow(title="Arguments")
         group.add(self.arguments)
@@ -797,22 +911,23 @@ class ProgramDialog(FormDialog):
             )
             media.add(self.media_kind)
             self.media_letter = Adw.ComboRow(title="Drive Letter")
+            self.media_letter.connect("notify::selected", self.media_changed)
             media.add(self.media_letter)
             self.media_kind.connect("notify::selected", self.media_choices)
             self.media_choices()
-            row = Adw.ActionRow(
-                title="Attach Installation Image",
-                subtitle="Browse and suggest installers from the attached medium",
-                activatable=True,
+            self.media_row = Adw.ActionRow(
+                title="Attach Image", subtitle="Browse installers from the selected medium"
             )
-            row.add_suffix(
-                action_button("Attach Image", self.attach_installer, "media-optical-symbolic")
+            self.media_button = action_button(
+                "Attach Image", self.attach_installer, "media-optical-symbolic"
             )
-            row.connect("activated", lambda *_: self.attach_installer())
-            media.add(row)
-            self.suggestions = Adw.ComboRow(title="Suggested Installers", visible=False)
-            self.suggestions.connect("notify::selected", self.suggestion_selected)
-            media.add(self.suggestions)
+            self.media_row.add_suffix(self.media_button)
+            self.eject_button = action_button(
+                "Eject Medium", self.eject_installer, "media-eject-symbolic"
+            )
+            self.media_row.add_suffix(self.eject_button)
+            media.add(self.media_row)
+            self.media_controls()
             self.candidates = []
         if action == "add-app":
             icon_group = self.group("Application Icon")
@@ -896,6 +1011,9 @@ class ProgramDialog(FormDialog):
                     key in self.initial.get("environment", {}),
                 )
             self.body.set_sensitive(True)
+            if self.action == "install":
+                self.suggestions_ready = True
+                self.discover_installers()
             self.refresh_preview()
 
         window.request_work(initial_values, initialized, locked=False, on_error=self.error_message)
@@ -1026,7 +1144,13 @@ class ProgramDialog(FormDialog):
         drives = self.window.snapshot["manifest"]["drives"]
         self.media_letters = [
             letter
-            for letter, value in sorted(drives.items())
+            for letter, value in sorted(
+                drives.items(),
+                key=lambda item: (
+                    not isinstance(item[1], dict) or not item[1].get("image"),
+                    item[0],
+                ),
+            )
             if isinstance(value, dict) and value.get("device", "cdrom") == kind
         ]
         free = next(
@@ -1045,7 +1169,82 @@ class ProgramDialog(FormDialog):
             Gtk.StringList.new([letter + ":" for letter in self.media_letters])
         )
 
+    def pending(self, active):
+        super().pending(active)
+        self.media_busy = active
+        if self.action == "install":
+            self.media_controls()
+
+    def media_mapping(self):
+        if not getattr(self, "media_letters", None):
+            return None, {}
+        index = self.media_letter.get_selected()
+        if index >= len(self.media_letters):
+            return None, {}
+        letter = self.media_letters[index]
+        mapping = self.window.snapshot["manifest"]["drives"].get(letter, {})
+        return letter, mapping if isinstance(mapping, dict) else {}
+
+    def media_controls(self):
+        if not hasattr(self, "media_row"):
+            return
+        letter, mapping = self.media_mapping()
+        attached = bool(mapping.get("image"))
+        allowed = (
+            letter is not None
+            and not mapping.get("locked")
+            and not self.media_busy
+            and not self.window.operation_busy
+            and not self.window.component_active(self.ball)
+        )
+        self.media_row.set_title("Change Image" if attached else "Attach Image")
+        self.media_button.set_tooltip_text("Change Image" if attached else "Attach Image")
+        self.media_button.set_sensitive(allowed)
+        self.eject_button.set_sensitive(allowed and attached)
+
+    def media_changed(self, *_):
+        self.media_controls()
+        if self.suggestions_ready:
+            self.discover_installers()
+
+    def discover_installers(self):
+        self.candidate_serial += 1
+        serial = self.candidate_serial
+        letter, mapping = self.media_mapping()
+        self.program.set_candidates([])
+        if not letter or not mapping.get("image"):
+            self.candidates = []
+            return
+
+        def received(candidates):
+            if serial != self.candidate_serial or self.ball != self.window.ball:
+                return
+            self.candidates = candidates
+            self.program.set_candidates(candidates)
+
+        def failed(error):
+            if serial == self.candidate_serial:
+                self.error.set_title(str(error))
+                self.error.set_revealed(True)
+
+        self.window.component_work(lambda: installer_candidates(self.api, letter), received, failed)
+
+    def eject_installer(self):
+        letter, mapping = self.media_mapping()
+        if not letter or mapping.get("locked") or self.media_busy or not mapping.get("image"):
+            return
+
+        def finished(snapshot):
+            self.window.apply_snapshot(snapshot)
+            self.media_controls()
+            self.discover_installers()
+
+        self.run(lambda: self.api("command", arguments=["eject", letter]), finished)
+
     def attach_installer(self):
+        letter, mapping = self.media_mapping()
+        if mapping.get("locked") or self.media_busy:
+            return
         if not self.media_letters:
             self.error_message("No drive letter is available.")
             return
@@ -1053,6 +1252,9 @@ class ProgramDialog(FormDialog):
         kind = ("cdrom", "floppy")[self.media_kind.get_selected()]
 
         def chosen(path):
+            self.candidate_serial += 1
+            self.program.set_candidates([])
+
             def work():
                 if letter not in self.window.snapshot["manifest"]["drives"]:
                     self.api("command", arguments=["device", letter, kind])
@@ -1062,11 +1264,9 @@ class ProgramDialog(FormDialog):
             def attached(result):
                 snapshot, self.candidates = result
                 self.window.apply_snapshot(snapshot)
-                self.suggestions.set_model(Gtk.StringList.new(self.candidates))
-                self.suggestions.set_visible(bool(self.candidates))
-                if self.candidates:
-                    self.program.set_text(self.candidates[0])
-                else:
+                self.program.set_candidates(self.candidates)
+                self.media_controls()
+                if not self.candidates:
                     self.error.set_title(
                         "No suggested installer found. Browse this drive to choose a program."
                     )
@@ -1075,10 +1275,6 @@ class ProgramDialog(FormDialog):
             self.run(work, attached)
 
         self.window.choose("Choose Installation Image", chosen)
-
-    def suggestion_selected(self, *_):
-        if self.candidates and self.suggestions.get_selected() < len(self.candidates):
-            self.program.set_text(self.candidates[self.suggestions.get_selected()])
 
     def submit(self):
         name, program, arguments = (

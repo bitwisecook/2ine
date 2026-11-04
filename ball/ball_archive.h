@@ -285,7 +285,8 @@ static int archive_tree(Context *c, struct archive *archive, const char *relativ
         /* Live IPC, media control files and generated host paths are recreated. */
         if (!strcmp(relative, "ball.json") || !strcmp(relative, "2ine-export.json") ||
             !strcmp(relative, "2ine.cfg") || !strcmp(relative, "audio.conf") ||
-            !strcmp(relative, "devices") || !strcmp(relative, "ipc"))
+            !strcmp(relative, "devices") || !strcmp(relative, "ipc") ||
+            !strcmp(relative, "cache/desktop-sessions"))
             return 1;
         char *cache = c->roots[2] ? join(c, c->roots[2], "OS2/DLL/2INE") : NULL;
         if (cache && !strcmp(path, cache))
@@ -546,7 +547,8 @@ static cJSON *import_ball(Context *c, const cJSON *request)
             write_json(c, join(c, c->ball, "ball.json"), manifest) && load(c, request))
         {
             /* Never reuse source-machine IPC or media-control state. */
-            const char *generated[] = {"ipc", "devices", "2ine.cfg", "audio.conf", NULL};
+            const char *generated[] = {
+                "ipc", "devices", "2ine.cfg", "audio.conf", "cache/desktop-sessions", NULL};
             for (int i = 0; generated[i]; i++)
             {
                 char *path = join(c, c->ball, generated[i]);

@@ -454,6 +454,7 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
 
     if (hwndParent == HWND_DESKTOP && win->w > 0 && win->h > 0)
     {
+        updateWindowCyclePolicy(win);
         lx_host_window_position(win->heavy.window, win->x, (parent->h - win->y) - win->h, win->w,
                                 win->h);
         if (win->style & WS_VISIBLE)
@@ -913,6 +914,7 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
         win->style &= ~WS_VISIBLE;
     if (win->parent == &desktop_window)
     {
+        updateWindowCyclePolicy(win);
         if (!lx_host_window_position(win->heavy.window, win->x, desktop_window.h - win->y - win->h,
                                      win->w, win->h))
             return FALSE;
@@ -1073,7 +1075,9 @@ BOOL WinSetParent(HWND handle, HWND parent_handle, BOOL redraw)
     LxHostWindow *old_drawable = old_parent == &desktop_window ? window->heavy.window : NULL;
     window->parent = parent;
     setDrawable(window, drawable);
+    updateWindowCyclePolicy(old_parent);
     applyHostWindowChrome(window);
+    updateWindowCyclePolicy(window);
     if (isFrameWindow(window))
         formatFrame(window);
     if (old_drawable)
@@ -1102,6 +1106,7 @@ BOOL WinEnableWindow(HWND window, BOOL enable)
         w->style &= ~WS_DISABLED;
     else
         w->style |= WS_DISABLED;
+    updateWindowCyclePolicy(w);
     if (was_enabled != w->enabled)
         sendMessage(w, WM_ENABLE, (MPARAM)(uintptr_t)w->enabled, 0);
     return TRUE;

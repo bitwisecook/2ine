@@ -20,10 +20,10 @@ import Testing
     var ordering: Binding<OutlineBrowserSort?> { Binding(get: { self.sort }, set: { self.sort = $0 }) }
 }
 
-@MainActor private func renderBrowser(_ browser: NativeOutlineBrowser) -> (NSScrollView, NativeOutlineBrowser.Coordinator, NativeOutlineBrowser.BrowserOutline) {
+@MainActor private func renderBrowser(_ browser: NativeOutlineBrowser, width: Double = 760) -> (NSScrollView, NativeOutlineBrowser.Coordinator, NativeOutlineBrowser.BrowserOutline) {
     let coordinator = browser.makeCoordinator()
     let scroll = browser.makeScrollView(coordinator: coordinator)
-    scroll.frame = NSRect(x: 0, y: 0, width: 760, height: 360)
+    scroll.frame = NSRect(x: 0, y: 0, width: width, height: 360)
     scroll.layoutSubtreeIfNeeded()
     return (scroll, coordinator, coordinator.outline!)
 }
@@ -208,4 +208,112 @@ private func guestEntries() throws -> [GuestEntry] {
     #expect(rendered(OS2FilesSettingsView(model: model)) == ["configurationFiles"])
     #expect(rendered(GuestBrowserView(model: model, snapshot: snapshot)) == ["guestFilesTable"])
     #expect(rendered(DrivesView(model: model, snapshot: snapshot)) == ["drivesTable", "guestFilesTable"])
+}
+
+@MainActor @Test func nativeGuestFoldersExposeLazyDisclosureWithoutReplacingDoubleClickNavigation() async throws {
+    let state = BrowserState()
+    let tree = GuestBrowserTree()
+    let roots = try guestEntries()
+    let children = try JSONDecoder().decode(GuestDirectory.self, from: Data(#"""
+    {"path":"C:\\Folder","hostPath":"/private/Folder","entries":[
+      {"name":"Subfolder","path":"C:\\Folder\\Subfolder","hostPath":"/private/Folder/Subfolder","directory":true},
+      {"name":"Setup.exe","path":"C:\\Folder\\Setup.exe","hostPath":"/private/Folder/Setup.exe","directory":false,"size":200,"modified":1730000000},
+      {"name":"Notes.txt","path":"C:\\Folder\\Notes.txt","hostPath":"/private/Folder/Notes.txt","directory":false,"size":500}]}
+    """#.utf8))
+    var expanded: [String] = []
+    var request: Task<Void, Never>?
+    func browser() -> NativeOutlineBrowser {
+        NativeOutlineBrowser(nodes: tree.nodes(roots, programsOnly: true), columns: BrowserRows.fileColumns,
+                             selection: state.selection, query: state.search, searchFocused: state.focus,
+                             sort: state.ordering, onActivate: { state.activated.append($0) },
+                             onActivateBranch: { state.activated.append($0) }, onExpand: { path in
+                                 request = tree.expand(path) { path in expanded.append(path); return children }
+                             })
+    }
+    let (scroll, coordinator, outline) = renderBrowser(browser())
+    defer { _ = scroll }
+    let folder = try #require(coordinator.find("C:\\Folder", in: coordinator.items))
+    #expect(outline.isExpandable(folder))
+    #expect(folder.children.isEmpty && expanded.isEmpty)
+    outline.expandItem(folder)
+    await request?.value
+    #expect(expanded == ["C:\\Folder"])
+    coordinator.parent = browser(); coordinator.update()
+    let loaded = try #require(coordinator.find("C:\\Folder", in: coordinator.items))
+    #expect(outline.isItemExpanded(loaded))
+    #expect(loaded.children.map(\.node.id) == ["C:\\Folder\\Subfolder", "C:\\Folder\\Setup.exe"])
+    let subfolder = try #require(coordinator.find("C:\\Folder\\Subfolder", in: coordinator.items))
+    #expect(outline.isExpandable(subfolder))
+    #expect(expanded.count == 1) // Restoring expansion must not walk nested folders.
+    state.selected = "C:\\Folder"
+    coordinator.update()
+    #expect(coordinator.activate(nil))
+    #expect(state.activated == ["C:\\Folder"])
+    #expect(expanded.count == 1)
+    state.selected = "C:\\Folder\\Setup.exe"
+    state.sort = .init(column: "size", ascending: false)
+    coordinator.update()
+    #expect(coordinator.activate(nil))
+    #expect(state.activated.last == "C:\\Folder\\Setup.exe")
+    let sizeCell = try #require(outline.view(atColumn: 1, row: outline.selectedRow, makeIfNecessary: true) as? NSTextField)
+    #expect(sizeCell.stringValue == browserSize(200, directory: false))
+    coordinator.parent.disabled = true
+    outline.expandItem(subfolder)
+    #expect(expanded.count == 1)
+    coordinator.parent.disabled = false
+    state.query = "setupexe"
+    coordinator.update()
+    #expect(coordinator.items.map(\.node.id) == ["C:\\Folder"])
+    #expect((outline.item(atRow: outline.selectedRow) as? NativeOutlineBrowser.Item)?.node.id == "C:\\Folder\\Setup.exe")
+    #expect(expanded.count == 1)
+    #expect(outline.window == nil)
+}
+
+@MainActor @Test func nativeOutlineFitsFlexibleNameColumnAtRealViewportWidthsAndPreservesUserResizes() throws {
+    var branch = OutlineBrowserNode(id: "leaf", title: "Original File", cells: ["name": OutlineCell(text: "Original File"), "status": OutlineCell(text: "Installed"), "size": OutlineCell(text: "125 KB")])
+    for depth in (0..<5).reversed() { branch = OutlineBrowserNode(id: "folder\(depth)", title: "Folder \(depth)", children: [branch]) }
+    let columns = [OutlineBrowserColumn(id: "name", title: "Name", width: 360, minimum: 180, sortable: true),
+                   OutlineBrowserColumn(id: "status", title: "Status", width: 205, minimum: 150),
+                   OutlineBrowserColumn(id: "size", title: "Size", width: 85, minimum: 70, sortable: true, rightAligned: true)]
+    for width in [640.0, 760.0, 1100.0] {
+        let state = BrowserState()
+        let browser = NativeOutlineBrowser(nodes: [branch], columns: columns, selection: state.selection,
+                                           query: state.search, searchFocused: state.focus, sort: state.ordering)
+        let (scroll, coordinator, outline) = renderBrowser(browser, width: width)
+        outline.expandItem(nil, expandChildren: true)
+        coordinator.update(); scroll.layoutSubtreeIfNeeded()
+        #expect(outline.rect(ofColumn: 2).maxX <= outline.visibleRect.maxX + 2, "All columns fit at \(width) when their minima permit it")
+        #expect(outline.tableColumns[0].width >= columns[0].minimum)
+        state.selected = "leaf"
+        outline.sortDescriptors = [NSSortDescriptor(key: "size", ascending: false)]
+        coordinator.update()
+        #expect((outline.item(atRow: outline.selectedRow) as? NativeOutlineBrowser.Item)?.node.id == "leaf")
+        let size = try #require(outline.view(atColumn: 2, row: outline.selectedRow, makeIfNecessary: true) as? NSTextField)
+        #expect(size.stringValue == "125 KB")
+        #expect(size.frame.maxX <= outline.visibleRect.maxX + 2)
+        outline.tableColumns[0].width = 225
+        outline.tableColumns[1].width = 240
+        let userWidths = outline.tableColumns.map(\.width)
+        coordinator.update(); scroll.layoutSubtreeIfNeeded()
+        #expect(outline.tableColumns.map(\.width) == userWidths)
+        #expect(state.selected == "leaf" && state.sort == OutlineBrowserSort(column: "size", ascending: false))
+        #expect(scroll.window == nil)
+    }
+}
+
+@MainActor @Test func nativeOutlineKeepsHorizontalScrollingWhenColumnMinimaCannotFit() throws {
+    let state = BrowserState()
+    let browser = NativeOutlineBrowser(nodes: [OutlineBrowserNode(id: "leaf", title: "File", cells: ["size": OutlineCell(text: "125 KB")])],
+        columns: [OutlineBrowserColumn(id: "name", title: "Name", width: 360, minimum: 320),
+                  OutlineBrowserColumn(id: "status", title: "Status", width: 300, minimum: 260),
+                  OutlineBrowserColumn(id: "size", title: "Size", width: 180, minimum: 160, rightAligned: true)],
+        selection: state.selection, query: state.search, searchFocused: state.focus)
+    let (scroll, _, outline) = renderBrowser(browser, width: 640)
+    #expect(scroll.hasHorizontalScroller && outline.rect(ofColumn: 2).maxX > outline.visibleRect.maxX)
+    #expect(outline.tableColumns[0].width >= 320 && outline.tableColumns[1].width >= 260 && outline.tableColumns[2].width >= 160)
+    let end = outline.rect(ofColumn: 2).maxX - scroll.contentView.bounds.width
+    scroll.contentView.scroll(to: NSPoint(x: end, y: scroll.contentView.bounds.origin.y))
+    scroll.reflectScrolledClipView(scroll.contentView)
+    #expect(outline.visibleRect.maxX + 2 >= outline.rect(ofColumn: 2).maxX)
+    #expect(scroll.window == nil)
 }

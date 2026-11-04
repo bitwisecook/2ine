@@ -35,6 +35,7 @@ typedef struct Context
     const char *opengl_policy;
     char *registration_warning;
     ComponentOperation *component_operation;
+    int readonly_drives;
 } Context;
 
 static int fail(Context *c, const char *format, ...)
@@ -477,6 +478,15 @@ static int roots(Context *c)
             }
             if (media)
                 fclose(media);
+            if (c->readonly_drives)
+            {
+                char *root = image ? tb_image_root(image) : NULL;
+                if (root)
+                    c->roots[entry->string[0] - 'A'] = keep(c, root);
+                else
+                    c->unavailable[entry->string[0] - 'A'] = 1;
+                continue;
+            }
             c->roots[entry->string[0] - 'A'] =
                 device_root(c, entry->string, kind, image, cJSON_IsTrue(get(entry, "readonly")));
             continue;
@@ -538,6 +548,11 @@ static int load(Context *c, const cJSON *request)
     if (!cJSON_IsObject(c->manifest) || !cJSON_IsNumber(get(c->manifest, "version")) ||
         get(c->manifest, "version")->valuedouble != 1)
         return fail(c, "Unsupported or invalid ball.json");
+    const char *action = field(request, "action");
+    c->readonly_drives =
+        action &&
+        (!strcmp(action, "launch-prerequisites") || !strcmp(action, "ball-navigation-state") ||
+         !strcmp(action, "os2-component-state") || !strcmp(action, "validate-os2-media"));
     return roots(c);
 }
 static int inside(const char *path, const char *root)
@@ -869,6 +884,10 @@ static const char *default_values[] = {"en_US",
                                        "C:\\OS2\\OS2.INI",
                                        "C:\\OS2\\OS2SYS.INI"};
 static const char *unset_keys[] = {"IS_2INE",
+                                   "TWOINE_DESKTOP_AUXILIARY",
+                                   "TWOINE_DESKTOP_SESSION",
+                                   "TWOINE_DESKTOP_NAME",
+                                   "TWOINE_DESKTOP_ICON",
                                    "TWOINE_CHILD_ARGUMENTS",
                                    "TWOINE_OPERATION_LEASE_FD",
                                    "TWOINE_OPERATION_OWNER_FD",
@@ -1073,6 +1092,10 @@ static int valid_env_key(const char *key)
 static int reserved_env(const char *key)
 {
     const char *reserved[] = {"HOME",
+                              "TWOINE_DESKTOP_AUXILIARY",
+                              "TWOINE_DESKTOP_SESSION",
+                              "TWOINE_DESKTOP_NAME",
+                              "TWOINE_DESKTOP_ICON",
                               "PATH",
                               "IS_2INE",
                               "TWOINE_CHILD_ARGUMENTS",
@@ -1390,7 +1413,7 @@ static int array_strings(Context *c, const cJSON *array)
     return 1;
 }
 static int validate_directories(Context *c, const cJSON *directories);
-static char *command_interpreter(Context *c)
+static char *find_command_interpreter(Context *c)
 {
     cJSON *env = guest_environment(c, get(c->application, "environment"));
     if (!env)
@@ -1424,10 +1447,16 @@ static char *command_interpreter(Context *c)
             c->error = NULL;
         }
     }
-    fail(
-        c,
-        "This command file needs the original OS/2 CMD.EXE. Choose Install OS/2 Support Files to extract it from your OS/2 CD or floppy images, or use install-os2-support in the CLI. Then run the command file again.");
     return NULL;
+}
+static char *command_interpreter(Context *c)
+{
+    char *host = find_command_interpreter(c);
+    if (!host && !c->error)
+        fail(
+            c,
+            "This command file needs the original OS/2 CMD.EXE, which is not installed. Select CMD and REXX Support in OS/2 Components and wait for it to finish installing before retrying this command file.");
+    return host;
 }
 #include "os2_component_store.h"
 #include "os2_support.h"
@@ -1438,7 +1467,9 @@ static char *command_interpreter(Context *c)
 #include "runtime_selection.h"
 #include "runtime_features.h"
 #include "os2_component_operations.h"
+#include "launch_prerequisites.h"
 
+static cJSON *launch_desktop_identity(Context *c, const char *program, const char *name);
 static cJSON *prepare(Context *c, const cJSON *request)
 {
     if (!wps_sync(c))
@@ -1506,34 +1537,17 @@ static cJSON *prepare(Context *c, const cJSON *request)
         goto failed;
     }
     /* SmartSuite's executable installer invokes CMD.EXE for child commands. */
-    if (!strcmp(action, "install"))
+    if (!strcmp(action, "install") && installer_support_required(c, host))
     {
-        char *folder = keep(c, strdup(host));
-        char *slash = folder ? strrchr(folder, '/') : NULL;
-        if (slash)
+        cJSON *support = os2_support(c);
+        int complete = support && cJSON_IsTrue(get(support, "complete"));
+        cJSON_Delete(support);
+        if (!complete)
         {
-            *slash = 0;
-            size_t n = 0;
-            char **names = tb_names(folder, &n);
-            int suite = 0;
-            if (n != (size_t)-1)
-                for (size_t i = 0; i < n; i++)
-                    if (equal_case(names[i], "SUITE.RSP"))
-                        suite = 1;
-            tb_names_free(names, n == (size_t)-1 ? 0 : n);
-            if (suite)
-            {
-                cJSON *support = os2_support(c);
-                int complete = support && cJSON_IsTrue(get(support, "complete"));
-                cJSON_Delete(support);
-                if (!complete)
-                {
-                    fail(
-                        c,
-                        "SmartSuite needs original OS/2 support files, including CMD.EXE. Choose Install OS/2 Support Files and select your OS/2 CD or floppy images, then retry the installer.");
-                    goto failed;
-                }
-            }
+            fail(
+                c,
+                "SmartSuite needs original OS/2 support files, including CMD.EXE. Select CMD and REXX Support in OS/2 Components and wait for it to finish installing before retrying the installer.");
+            goto failed;
         }
     }
     /* Installers usually open companion files relative to their own directory. */
@@ -1568,7 +1582,7 @@ static cJSON *prepare(Context *c, const cJSON *request)
             {
                 fail(
                     c,
-                    "This REXX command file needs the original OS/2 REXX interpreter and DLLs. Choose Install OS/2 Support Files and select your OS/2 CD or REXX installation floppy, then retry.");
+                    "This command file needs the original OS/2 REXX interpreter and DLLs. Select CMD and REXX Support in OS/2 Components and wait for it to finish installing before retrying this command file.");
                 goto failed;
             }
         }
@@ -1660,6 +1674,10 @@ static cJSON *prepare(Context *c, const cJSON *request)
     cJSON_AddItemToObject(result, "command", command);
     cJSON_AddStringToObject(result, "cwd", tb_image_path(working) ? c->roots[2] : working);
     cJSON_AddStringToObject(result, "programHost", original_host);
+    cJSON_AddItemToObject(
+        result, "desktopIdentity",
+        launch_desktop_identity(
+            c, program, !strcmp(action, "launch") ? str(cJSON_GetArrayItem(args, 1)) : NULL));
     cJSON_AddItemToObject(result, "environment", env);
     cJSON *unset = cJSON_AddArrayToObject(result, "unsetEnvironment");
     for (int i = 0; unset_keys[i]; i++)
@@ -2514,6 +2532,45 @@ static cJSON *application_icon(Context *c, const cJSON *request)
     cJSON_AddStringToObject(result, "source", "none");
     return result;
 }
+/* Presentation metadata is optional and cannot prevent a valid guest launch. */
+static cJSON *launch_desktop_identity(Context *parent, const char *program, const char *name)
+{
+    Context storage = *parent;
+    storage.allocations = NULL;
+    storage.count = 0;
+    storage.error = NULL;
+    Context *c = &storage;
+    cJSON *request = cJSON_CreateObject();
+    cJSON_AddStringToObject(request, "program", program);
+    if (name)
+        cJSON_AddStringToObject(request, "name", name);
+    cJSON *icon = application_icon(c, request), *result = cJSON_CreateObject();
+    const char *base = program;
+    for (const char *at = program; *at; at++)
+        if (*at == '/' || *at == '\\')
+            base = at + 1;
+    char *fallback = keep(c, strdup(base));
+    char *suffix = fallback ? strrchr(fallback, '.') : NULL;
+    if (suffix && suffix != fallback)
+        *suffix = 0;
+    const char *display = name ? name : field(icon, "displayName");
+    if (!display || !*display)
+        display = fallback && *fallback ? fallback : "OS2 Application";
+    cJSON_AddStringToObject(result, "name", display);
+    cJSON_AddStringToObject(result, "nameSource",
+                            name                                    ? "launcher"
+                            : fallback && strcmp(display, fallback) ? "module-description"
+                                                                    : "filename");
+    if (icon && (field(icon, "rgba") || field(icon, "image")))
+        cJSON_AddItemToObject(result, "icon", cJSON_Duplicate(icon, 1));
+    cJSON_Delete(icon);
+    cJSON_Delete(request);
+    for (size_t i = 0; i < c->count; i++)
+        free(c->allocations[i]);
+    free(c->allocations);
+    free(c->error);
+    return result;
+}
 #include "ball_archive.h"
 #include "ball_rename.h"
 
@@ -2809,6 +2866,10 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return export_ball(c, request);
     if (!strcmp(action, "os2-support"))
         return os2_support(c);
+    if (!strcmp(action, "launch-prerequisites"))
+        return launch_prerequisites(c, request);
+    if (!strcmp(action, "ball-navigation-state"))
+        return ball_navigation_state(c);
     if (!strcmp(action, "remember-os2-media"))
         return remember_os2_media(c, request);
     if (!strcmp(action, "browse-media"))

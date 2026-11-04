@@ -30,6 +30,7 @@ struct OutlineBrowserNode: Equatable, Sendable, Identifiable {
     var title: String
     var cells: [String: OutlineCell] = [:]
     var children: [Self] = []
+    var canExpand = false
     var check: OutlineCheck? = nil
     var enabled = true
     var emphasized = false
@@ -87,6 +88,8 @@ struct NativeOutlineBrowser: NSViewRepresentable {
     var onToggle: ((String, Bool) -> Void)? = nil
     var onAction: ((String?, String) -> Void)? = nil
     var onActivate: ((String) -> Void)? = nil
+    var onActivateBranch: ((String) -> Void)? = nil
+    var onExpand: ((String) -> Void)? = nil
     var contextActions: ((String?) -> [OutlineMenuAction])? = nil
     var dragURL: ((String) -> URL?)? = nil
     var canDrop: ((String?) -> Bool)? = nil
@@ -105,6 +108,8 @@ struct NativeOutlineBrowser: NSViewRepresentable {
         outline.allowsMultipleSelection = false
         outline.allowsEmptySelection = true
         outline.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
+        // Expanding deeper rows must not widen the flexible column behind the viewport.
+        outline.autoresizesOutlineColumn = false
         outline.indentationPerLevel = 16
         outline.target = coordinator
         outline.doubleAction = #selector(Coordinator.activateRow(_:))
@@ -270,7 +275,14 @@ struct NativeOutlineBrowser: NSViewRepresentable {
         }
         func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int { (item as? Item)?.children.count ?? items.count }
         func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any { (item as? Item)?.children[index] ?? items[index] }
-        func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool { (item as? Item).map { !$0.children.isEmpty } ?? false }
+        func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool { (item as? Item).map { $0.node.canExpand || !$0.children.isEmpty } ?? false }
+        func outlineView(_ outlineView: NSOutlineView, shouldExpandItem item: Any) -> Bool {
+            if !updating, !parent.disabled, let item = item as? Item {
+                expanded.insert(item.node.id)
+                parent.onExpand?(item.node.id)
+            }
+            return true
+        }
         func outlineViewSelectionDidChange(_ notification: Notification) {
             guard !updating, let outline else { return }
             parent.selection = outline.selectedRow < 0 ? nil : (outline.item(atRow: outline.selectedRow) as? Item)?.node.id
@@ -306,8 +318,10 @@ struct NativeOutlineBrowser: NSViewRepresentable {
             guard !parent.disabled, let outline else { return false }
             let row = clicked.flatMap { $0 >= 0 ? $0 : nil } ?? outline.selectedRow
             guard row >= 0, let item = outline.item(atRow: row) as? Item, item.node.enabled else { return false }
-            if !item.children.isEmpty {
-                if outline.isItemExpanded(item) { outline.collapseItem(item) } else { outline.expandItem(item) }
+            if item.node.canExpand || !item.children.isEmpty {
+                if let activate = parent.onActivateBranch { activate(item.node.id) }
+                else if outline.isItemExpanded(item) { outline.collapseItem(item) }
+                else { outline.expandItem(item) }
                 return true
             }
             guard let activate = parent.onActivate else { return false }

@@ -114,3 +114,110 @@ def state_label(record):
     if record.get("managed"):
         return "Installed · managed"
     return "Installed · not managed"
+
+
+class DesiredComponents:
+    def __init__(self, allowed, selected):
+        self.allowed = set(allowed)
+        self.desired = set(selected) & self.allowed
+        self.actual, self.revisions = {}, {}
+        self.revision = 0
+        self.initialized = False
+
+    def edit(self, selected):
+        selected = set(selected) & self.allowed
+        self.revision += 1
+        for source in self.desired ^ selected:
+            self.revisions[source] = self.revision
+        self.desired = selected
+        return self.clamp_protected()
+
+    def update_actual(self, records):
+        previous = self.present()
+        protected_intent = self.pending() | self.revisions.keys()
+        self.actual.update(
+            {source: record for source, record in records.items() if source in self.allowed}
+        )
+        if self.initialized:
+            actual = self.present()
+            self.desired.update(actual - previous - protected_intent)
+            self.desired.difference_update(previous - actual - protected_intent)
+
+    def present(self):
+        return {source for source, record in self.actual.items() if record.get("present")}
+
+    def initialize(self, *, has_history, explicit=False):
+        if has_history and not explicit:
+            self.desired = self.present()
+        else:
+            self.desired.update(self.present() - self.revisions.keys())
+        self.initialized = True
+        self.clamp_protected()
+
+    def protected(self):
+        return {
+            source
+            for source, record in self.actual.items()
+            if record.get("status") == "protected"
+            or (
+                record.get("present")
+                and (record.get("status") != "managed" or not record.get("removable"))
+            )
+        }
+
+    def clamp_protected(self):
+        changed = set()
+        for source in self.protected():
+            present = bool(self.actual[source].get("present"))
+            if (source in self.desired) != present:
+                changed.add(source)
+                if present:
+                    self.desired.add(source)
+                else:
+                    self.desired.discard(source)
+        return changed
+
+    def pending(self):
+        return self.desired ^ self.present()
+
+    def next_step(self):
+        self.clamp_protected()
+        remove = self.present() - self.desired
+        remove = {
+            source
+            for source in remove
+            if self.actual[source].get("status") == "managed"
+            and self.actual[source].get("removable")
+        }
+        install = self.desired - self.present()
+        if remove:
+            return "remove", remove
+        if install:
+            return "install", install
+        return None, set()
+
+    def batch(self, attempted):
+        return {source: self.revisions.get(source, 0) for source in attempted}
+
+    def failed(self, batch):
+        for source, revision in batch.items():
+            if self.revisions.get(source, 0) != revision:
+                continue
+            if self.actual.get(source, {}).get("present"):
+                self.desired.add(source)
+            else:
+                self.desired.discard(source)
+        self.clamp_protected()
+
+    def settle(self, batch):
+        unfinished = {
+            source
+            for source, revision in batch.items()
+            if self.revisions.get(source, 0) == revision
+            and ((source in self.desired) != bool(self.actual.get(source, {}).get("present")))
+        }
+        self.failed(batch)
+        return unfinished
+
+    def cancel_queued(self):
+        self.desired = self.present()

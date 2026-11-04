@@ -166,8 +166,13 @@ def main():
             if file["source"] in recovery.component_tree.selected
         )
         capture("os2-extraction-options")
-        recovery.install_selected()
-        pump(lambda: not window.component_active(ball) and not recovery.polling)
+        pump(
+            lambda: (
+                (ball / "drive_c/OS2/CMD.EXE").is_file()
+                and not window.component_active(ball)
+                and not recovery.polling
+            )
+        )
         assert (ball / "drive_c/OS2/CMD.EXE").read_bytes() == image
         assert window.get_visible_dialog() is None
         window.audit_dependencies()

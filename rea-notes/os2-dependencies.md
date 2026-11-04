@@ -1,5 +1,36 @@
 # Post-install OS/2 dependency auditing
 
+## Missing-component advice (2026-11-04)
+
+Both desktop frontends show compact advice in Applications and Application
+Installation from the selected ball's saved dependency audit. Recognized OS/2
+component groups link to their component-tree rows; the tree clears its search,
+expands ancestors, highlights and scrolls to the target. Advice navigation is
+focus-only: it does not tick the target or seed default installation choices.
+Existing user selections are preserved. Other missing libraries remain plain
+text with an audit link rather than claiming they are available OS/2 components.
+Stale audits offer a refresh instead of showing outdated component links.
+
+Exact NETAPI/NETAPI32 names now map to Networking Files; HELPMGR/HPMGRMRI map to
+Full Help. SOM and runtime mappings are unchanged. The dependency metadata
+fingerprint is version 3 so older saved audits are refreshed before presenting
+these mappings. This is advice about static dependencies, not proof that optional
+network or database integrations execute.
+
+The focused Swift run built the UI and passed four model/audit checks, including
+focus-only navigation preserving check state. The dependency/freshness/tree
+Python suites passed 39 tests. Logs: `/tmp/2ine-advice-swift-final.log` and
+`/tmp/2ine-advice-python.log`. A final freshness/grouping rerun passed seven tests
+after the version-3 fingerprint change (`/tmp/2ine-advice-freshness-final.log`).
+The wider Swift run compiled but reported two navigation assertions outside the
+advice code: `allNavigationDestinationsRemainVisibleAndOrdered` (segment width)
+and `importedMissingFolderCanBeReconnectedAndUndone` (starting page). Its log is
+`/tmp/2ine-advice-swift-suite.log`; no full-suite pass is claimed.
+GTK UI execution is not available on this macOS
+host (PyGObject is absent). GTK's documented
+[ColumnView.scroll_to](https://docs.gtk.org/gtk4/method.ColumnView.scroll_to.html)
+retains scroll requests until an unmapped view is shown.
+
 The 2026-11-03 request is general application support: audit after every installer
 exit, resolve missing original system libraries from remembered or attached OS/2
 media after a successful install, and retain all results. This work does not mark

@@ -6,9 +6,11 @@ from pathlib import Path
 
 if __package__:
     from . import gnome_media_preferences, gnome_views
+    from .gnome_navigation_state import PAGE_ITEMS
 else:
     import gnome_media_preferences
     import gnome_views
+    from gnome_navigation_state import PAGE_ITEMS
 
 Adw, Gtk, GLib = gnome_views.Adw, gnome_views.Gtk, gnome_views.GLib
 
@@ -268,6 +270,52 @@ def shortcuts(window):
     return dialog
 
 
+class PageNavigation(Gtk.Box):
+    def __init__(self):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.wrap = Adw.WrapBox(child_spacing=4, line_spacing=4)
+        self.append(self.wrap)
+        self.stack, self.handler, self.syncing = None, None, False
+        self.buttons = {}
+        for name, title, icon in PAGE_ITEMS:
+            item = Gtk.ToggleButton()
+            if self.buttons:
+                item.set_group(next(iter(self.buttons.values())))
+            item.add_css_class("flat")
+            content = Gtk.Box(spacing=6)
+            content.append(Gtk.Image(icon_name=icon))
+            content.append(Gtk.Label(label=title))
+            item.set_child(content)
+            item.update_property([Gtk.AccessibleProperty.LABEL], [title])
+            item.connect("toggled", self.toggled, name)
+            self.buttons[name] = item
+            self.wrap.append(item)
+
+    def set_stack(self, stack):
+        if self.stack is not None and self.handler is not None:
+            self.stack.disconnect(self.handler)
+        self.stack = stack
+        self.handler = stack.connect("notify::visible-child-name", lambda *_: self.sync())
+        self.sync()
+
+    def sync(self):
+        self.syncing = True
+        try:
+            selected = self.stack.get_visible_child_name() if self.stack else None
+            for name, item in self.buttons.items():
+                item.set_active(name == selected)
+        finally:
+            self.syncing = False
+
+    def toggled(self, item, name):
+        if self.syncing or self.stack is None:
+            return
+        if item.get_active():
+            self.stack.set_visible_child_name(name)
+        elif self.stack.get_visible_child_name() == name:
+            self.sync()
+
+
 class InstallationPage(Gtk.Box):
     def __init__(self, window, system=False):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=18)
@@ -290,6 +338,38 @@ class InstallationPage(Gtk.Box):
                 wrap=True,
             )
         )
+        pending = window.pending_launches.get(str(window.ball)) if not system else None
+        if pending:
+            status = pending.get("status", {})
+            support = Adw.PreferencesGroup(
+                title="Waiting for OS/2 Support",
+                description=status.get("reason", "Checking prerequisites…"),
+            )
+            self.append(support)
+            actions = Adw.WrapBox(child_spacing=6, line_spacing=6)
+            if "cmd" in status.get("requiredCategories", []):
+                install = Gtk.Button(label="CMD and REXX Support…")
+                install.connect("clicked", lambda *_: window.show_component_media("cmd"))
+                install.set_sensitive(not bool(window.sessions.active(window.ball)))
+                actions.append(install)
+            again = Gtk.Button(label="Check Again")
+            again.connect("clicked", lambda *_: window.refresh_pending_launch(window.ball))
+            again.set_sensitive(not pending.get("checking"))
+            actions.append(again)
+            proceed = Gtk.Button(label="Continue")
+            proceed.connect("clicked", lambda *_: window.continue_pending_launch())
+            proceed.set_sensitive(
+                bool(status.get("ready"))
+                and not window.component_active()
+                and not pending.get("checking")
+            )
+            actions.append(proceed)
+            cancel = Gtk.Button(label="Cancel Pending Launch")
+            cancel.connect("clicked", lambda *_: window.cancel_pending_launch())
+            actions.append(cancel)
+            support.add(actions)
+        if not system:
+            self.append(gnome_views.dependency_advice_box(window))
         tasks = Adw.PreferencesGroup()
         self.append(tasks)
         if system:

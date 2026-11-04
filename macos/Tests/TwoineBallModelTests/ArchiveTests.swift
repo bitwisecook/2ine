@@ -66,7 +66,7 @@ import Testing
     #expect(model.error == nil)
     #expect(model.snapshot?.unavailableDrives?["E"] != nil)
     #expect(model.snapshot?.roots["E"] == nil)
-    #expect(model.page == .drives)
+    #expect(model.page == .systemComponents)
     #expect(model.browseDrive == "E")
     model.chooseMountpoint("E")
     #expect(model.mapping && model.mappingDrive == "E")

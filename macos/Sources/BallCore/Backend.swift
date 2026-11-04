@@ -87,6 +87,7 @@ struct LaunchPlan: Decodable, Sendable {
     let startup: [LaunchPlan]?
     let program: String?
     let owner: String?
+    let desktopIdentity: DesktopIdentity?
 }
 
 /// All synchronous C filesystem/hash work runs on this actor, off MainActor.
@@ -160,7 +161,12 @@ public actor BallBackend {
             for key in plan.unsetEnvironment { environment.removeValue(forKey: key) }
             environment.merge(plan.environment) { _, value in value }
             if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
-            var result = try await runner.run(executable: URL(filePath: executable),
+            let desktop = try DesktopLaunchBundle.create(ball: canonicalBall, sessionID: sessionID,
+                                                          loader: URL(filePath: executable), identity: plan.desktopIdentity)
+            environment["TWOINE_DESKTOP_SESSION"] = sessionID
+            environment["TWOINE_DESKTOP_NAME"] = desktop.name
+            if let icon = desktop.icon { environment["TWOINE_DESKTOP_ICON"] = icon.path }
+            var result = try await runner.run(executable: desktop.executable,
                                               arguments: Array(plan.command.dropFirst()), environment: environment,
                                               cwd: URL(filePath: plan.cwd), log: log,
                                               operationSupervised: plan.operationSupervised == true, update: update)

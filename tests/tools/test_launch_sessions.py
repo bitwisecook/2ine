@@ -1,6 +1,8 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Launch preparation avoids recovery around peers and retains startup provenance."""
 
+import json
+import struct
 import unittest
 from pathlib import Path
 
@@ -65,6 +67,51 @@ class LaunchPreparationTests(unittest.TestCase):
             service["environment"]["TWOINE_IPC_DIR"], plan["environment"]["TWOINE_IPC_DIR"]
         )
         self.assertEqual(service["startup"], [])
+
+    def test_desktop_identity_prefers_launcher_then_original_description(self):
+        image = bytearray(fixtures.linear([]))
+        description = b"Original OS/2 Fixture Application"
+        table = bytes([len(description)]) + description + bytes(3)
+        offset = len(image)
+        image.extend(table)
+        struct.pack_into("<II", image, 64 + 136, offset, len(table))
+        self.installed("Apps/APP.EXE", image)
+        build = self.root / "runtime"
+        build.mkdir()
+        (build / "lx_loader").write_bytes(b"fixture")
+        plan = self.request(
+            "prepare-launch", build=str(build), arguments=["run", r"C:\Apps\APP.EXE"]
+        )
+        self.assertEqual(
+            plan["desktopIdentity"],
+            {"name": description.decode(), "nameSource": "module-description"},
+        )
+        manifest = self.ball / "ball.json"
+        data = json.loads(manifest.read_text())
+        data["applications"]["Registered Program Name"] = {
+            "program": r"C:\Apps\APP.EXE",
+            "icon": "missing-icon.ico",
+        }
+        manifest.write_text(json.dumps(data))
+        named = self.request(
+            "prepare-launch", build=str(build), arguments=["launch", "Registered Program Name"]
+        )
+        self.assertEqual(named["desktopIdentity"]["name"], "Registered Program Name")
+        self.assertEqual(named["desktopIdentity"]["nameSource"], "launcher")
+        for key in (
+            "TWOINE_DESKTOP_SESSION",
+            "TWOINE_DESKTOP_AUXILIARY",
+            "TWOINE_DESKTOP_NAME",
+            "TWOINE_DESKTOP_ICON",
+        ):
+            self.assertIn(key, named["unsetEnvironment"])
+            with self.assertRaisesRegex(ValueError, "[Rr]eserved"):
+                self.request(
+                    "prepare-launch",
+                    build=str(build),
+                    arguments=["run", r"C:\Apps\APP.EXE"],
+                    environment={key: "guest-override"},
+                )
 
 
 if __name__ == "__main__":

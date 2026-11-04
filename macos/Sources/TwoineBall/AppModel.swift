@@ -7,8 +7,8 @@ import UniformTypeIdentifiers
 import SwiftUI
 
 enum Page: String, CaseIterable, Identifiable {
-    case drives = "Drives", applications = "Applications"
-    case systemComponents = "OS/2 System Components", installation = "Application Installation"
+    case drives = "Drives", systemComponents = "OS/2 Components"
+    case installation = "Application Installation", applications = "Applications"
     case settings = "Settings", activity = "Logs"
     var id: String { rawValue }
 }
@@ -28,6 +28,7 @@ struct ComponentNavigation: Equatable {
     let id = UUID()
     let ball: String
     let category: OS2ExtractionCategory
+    var selectsComponent = true
 }
 struct ComponentDraft {
     let sources: [String]
@@ -136,11 +137,13 @@ final class AppModel {
     var componentNavigation: ComponentNavigation?
     private var appliedComponentNavigation: UUID?
     var componentDrafts: [String: ComponentDraft] = [:]
+    var componentReconcilers: [String: ComponentReconciler] = [:]
     var componentJobs: [String: ComponentJob] = [:]
     var componentPlans: [String: OS2ExtractionPlan] = [:]
     var componentPlanSources: [String: [String]] = [:]
     var componentMedia: [String: OS2MediaSource] = [:]
     var componentNotice: String?
+    var pendingLaunches: [String: PendingApplicationLaunch] = [:]
     func openComponentSetting(_ token: String) {
         guard ["graphics.opengl", "graphics", "printing"].contains(token) else { return }
         settingsSection = token == "printing" ? .printing : .graphics
@@ -151,9 +154,9 @@ final class AppModel {
         guard selected != nil, !busy, !mediaBusy, !processRunning else { return }
         showOS2ComponentGroup(category)
     }
-    private func showOS2ComponentGroup(_ category: OS2ExtractionCategory) {
+    func showOS2ComponentGroup(_ category: OS2ExtractionCategory, selecting: Bool = true) {
         guard let selected else { return }
-        componentNavigation = ComponentNavigation(ball: selected, category: category)
+        componentNavigation = ComponentNavigation(ball: selected, category: category, selectsComponent: selecting)
         page = .systemComponents
     }
     func setOpenGLProvider(_ provider: String) {
@@ -165,7 +168,7 @@ final class AppModel {
     }
     func installOriginalOpenGL() { setOpenGLProvider("original") }
     func componentSelection(in plan: OS2ExtractionPlan, preserving selection: Set<String>, ball: String) -> Set<String> {
-        guard let navigation = componentNavigation, navigation.ball == ball,
+        guard let navigation = componentNavigation, navigation.ball == ball, navigation.selectsComponent,
               navigation.id != appliedComponentNavigation,
               let node = plan.tree?.find(navigation.category.rawValue) else { return selection }
         guard !node.eligibleSources.isEmpty else { return selection }
@@ -295,6 +298,7 @@ final class AppModel {
             if let selected = self.selected {
                 if !self.paths.contains(selected) { self.paths.append(selected) }
                 try await self.reload(selected)
+                await self.selectStartingPage(ball: selected)
             }
         }
     }
@@ -325,11 +329,14 @@ final class AppModel {
     func select(_ path: String) {
         guard !busy, !mediaBusy else { return }
         selected = path; snapshot = nil
-        perform(allowComponentRead: true) { try await self.reload(path) }
+        perform(allowComponentRead: true) {
+            try await self.reload(path)
+            await self.selectStartingPage(ball: path)
+        }
     }
 
     func canManageBall(_ path: String) -> Bool {
-        canManageBalls && !hasRunningSession(in: path) && !(processRunning && path == selected) && componentJobs[path]?.running != true && (paths.contains(path) || selected == path)
+        canManageBalls && !hasRunningSession(in: path) && !(processRunning && path == selected) && componentJobs[path]?.running != true && componentReconcilers[path]?.reconciling != true && (paths.contains(path) || selected == path)
     }
     func beginRenameBall(_ path: String) {
         guard canManageBall(path) else { return }
@@ -354,6 +361,8 @@ final class AppModel {
         let renamed = try await backend.request(request, as: RenamedBall.self)
         paths = Array(Set(paths.map { $0 == path ? renamed.path : $0 })).sorted()
         componentDrafts.removeValue(forKey: path)
+        componentReconcilers.removeValue(forKey: path)
+        cancelPendingLaunch(ball: path)
         componentPlans.removeValue(forKey: path); componentMedia.removeValue(forKey: path)
         componentPlanSources.removeValue(forKey: path); componentJobs.removeValue(forKey: path)
         sessions.removeAll { $0.ball == path }
@@ -425,6 +434,8 @@ final class AppModel {
     private func forgetBallPath(_ path: String) async throws {
         paths.removeAll { $0 == path }
         componentDrafts.removeValue(forKey: path)
+        componentReconcilers.removeValue(forKey: path)
+        cancelPendingLaunch(ball: path)
         componentPlans.removeValue(forKey: path); componentMedia.removeValue(forKey: path)
         componentPlanSources.removeValue(forKey: path); componentJobs.removeValue(forKey: path)
         sessions.removeAll { $0.ball == path }
@@ -486,7 +497,8 @@ final class AppModel {
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
             self.prefs.ballPaths = self.paths; self.prefs.selected = path
             try await self.preferences.save(self.prefs)
-            if create { self.page = .systemComponents }
+            if create { self.page = .drives }
+            else { await self.selectStartingPage(ball: path) }
         }
     }
     func chooseImportBall(_ archive: URL? = nil) {
@@ -528,6 +540,7 @@ final class AppModel {
                 self.page = .drives; self.browseDrive = letter
                 self.driveNotice = "Unavailable paths are ejected. Choose a replacement folder or attach an image to reconnect a drive."
             }
+            await self.selectStartingPage(ball: path)
         }
     }
     func chooseExportBall() {
@@ -821,9 +834,10 @@ final class AppModel {
     /// Bounded discovery keeps large installation CDs responsive. The picker accepts every file.
     func installerCandidates(letter: String) async throws -> [String] {
         guard let selected else { return [] }
-        var pending = [(letter + ":\\", 0)], candidates: [(String, Int)] = []
+        var pending = [(letter + ":\\", 0)], candidates: [String] = []
         var scanned = 0
         while !pending.isEmpty && scanned < 96 {
+            try Task.checkCancellation()
             let (path, depth) = pending.removeFirst(); scanned += 1
             let listing = try await browse(path, ball: selected)
             for entry in listing.entries {
@@ -836,14 +850,13 @@ final class AppModel {
                     let stems = ["install", "setup", "inst", "os2inst", "autorun"]
                     let url = URL(filePath: name)
                     let stem = url.deletingPathExtension().lastPathComponent
-                    if let rank = stems.firstIndex(of: stem), ["exe", "cmd", "bat", "com"].contains(url.pathExtension) {
-                        let languageBonus = entry.path.uppercased().contains("\\ENGLISH\\") ? -2 : 0
-                        candidates.append((entry.path, rank * 10 + depth * 3 + languageBonus))
+                    if (stems.contains(stem) || depth == 0), ["exe", "cmd", "bat", "com"].contains(url.pathExtension) {
+                        candidates.append(entry.path)
                     }
                 }
             }
         }
-        return candidates.sorted { $0.1 == $1.1 ? $0.0 < $1.0 : $0.1 < $1.1 }.prefix(32).map(\.0)
+        return Array(InstallerSuggestions.sorted(candidates).prefix(32))
     }
     func mapDrive(_ letter: String, directory: String, image: Bool = false) async throws {
         guard !busy, !mediaBusy, !componentOperationRunning, let selected else { throw BallError("Wait for this ball’s component operation to finish.") }
@@ -1047,6 +1060,7 @@ final class AppModel {
             return
         }
         let build = self.build
+        cancelPendingLaunch(ball: selected)
         let media = arguments.first == "install" ? mediaDrive ?? arguments.dropFirst().first.flatMap { value -> String? in
             let letter = String(value.prefix(1)).uppercased()
             return snapshot?.manifest.drives[letter]?.image != nil ? letter : nil
@@ -1061,6 +1075,18 @@ final class AppModel {
             defer { session.running = false; session.preparing = false; self.syncSessionPresentation() }
             let result: ProcessResult
             do {
+                let status = try await self.launchReadiness(ball: selected, arguments: arguments, directories: directories, environment: environment)
+                if !status.ready {
+                    session.status = status.requiredCategories.isEmpty ? "Needs Configuration" : "Waiting for OS/2 Components"
+                    session.output = status.reason; session.preparing = false
+                    self.pendingLaunches[selected] = PendingApplicationLaunch(ball: selected, sessionID: session.id,
+                        arguments: arguments, directories: directories, environment: environment, mediaDrive: media,
+                        needsComponents: !status.requiredCategories.isEmpty, reason: status.reason)
+                    self.busy = false
+                    if status.requiredCategories.contains("cmd") { self.showOS2ComponentGroup(.cmd) }
+                    else { self.page = .installation }
+                    return
+                }
                 var request = DesktopRequest(peers.isEmpty ? "ensure-dependencies" : "audit-dependencies", ball: selected, build: build)
                 if !peers.isEmpty { request.resolve = false }
                 let audit = try await self.backend.request(request, as: DependencyAudit.self)
