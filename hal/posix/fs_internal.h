@@ -13,5 +13,7 @@ struct LxHostFile
     char *image_path, *image_source;
     struct LxImageLock *image_lock;
 };
+/* Platform stat layouts stay inside the selected macOS/Linux adapter. */
+int lx_host_path_native_identity(const char *path, LxHostFileIdentity *identity);
 void lx_host_file_dispose(LxHostFile *file);
 #endif

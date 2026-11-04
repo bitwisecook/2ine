@@ -23,6 +23,10 @@ typedef struct Profile
     char *path;
     size_t references;
     ProfileEntry *entries;
+    uint8 *snapshot;
+    size_t snapshot_size;
+    LxHostFileIdentity identity;
+    int identity_known;
     struct Profile *next;
 } Profile;
 typedef struct ProfileHandle
@@ -159,6 +163,22 @@ static char *profile_path(const char *path)
     free(directory);
     return resolved;
 }
+static int same_identity(const LxHostFileIdentity *a, const LxHostFileIdentity *b)
+{
+    return a->device == b->device && a->file == b->file && a->size == b->size &&
+           a->modified == b->modified && a->changed == b->changed &&
+           a->modified_nanoseconds == b->modified_nanoseconds &&
+           a->changed_nanoseconds == b->changed_nanoseconds;
+}
+/* Associate a snapshot only with an identity stable across its read. */
+static void profile_identity(Profile *p, const LxHostFileIdentity *before, int known)
+{
+    LxHostFileIdentity after;
+    p->identity_known = known && lx_host_path_identity(p->path, &after) == LX_HOST_FS_OK &&
+                        same_identity(before, &after);
+    if (p->identity_known)
+        p->identity = after;
+}
 static Profile *profile_load(const char *path)
 {
     Profile *p = calloc(1, sizeof *p);
@@ -167,6 +187,8 @@ static Profile *profile_load(const char *path)
         free(p);
         return NULL;
     }
+    LxHostFileIdentity before;
+    int known = lx_host_path_identity(p->path, &before) == LX_HOST_FS_OK;
     size_t size = 0;
     LxHostFsError error;
     uint8 *file = lx_host_file_snapshot(path, PROFILE_LIMIT, &size, &error);
@@ -180,7 +202,9 @@ static Profile *profile_load(const char *path)
     {
         if (!native_load(p, file, size))
             goto failed;
-        free(file);
+        p->snapshot = file;
+        p->snapshot_size = size;
+        profile_identity(p, &before, known);
         return p;
     }
     if (size < 12 || memcmp(file, signature, 8))
@@ -207,14 +231,77 @@ static Profile *profile_load(const char *path)
     }
     if (at != size)
         goto failed;
-    free(file);
+    p->snapshot = file;
+    p->snapshot_size = size;
+    profile_identity(p, &before, known);
     return p;
 failed:
     free(file);
     free_entries(p->entries);
+    free(p->snapshot);
     free(p->path);
     free(p);
     return NULL;
+}
+/* Atomic replacement gives readers a complete version without taking a write lock.
+   Compare bytes rather than timestamps: two equal-sized commits can share a host
+   timestamp. The retained snapshot avoids reparsing unchanged binary profiles. */
+static int profile_refresh(Profile *p, int force)
+{
+    if (!p)
+        return 0;
+    LxHostFileIdentity before;
+    int known = lx_host_path_identity(p->path, &before) == LX_HOST_FS_OK;
+    if (!force && known && p->identity_known && same_identity(&p->identity, &before))
+        return 1;
+    if (!force)
+    {
+        size_t size = 0;
+        LxHostFsError error;
+        uint8 *file = lx_host_file_snapshot(p->path, PROFILE_LIMIT, &size, &error);
+        int unchanged =
+            file ? p->snapshot && size == p->snapshot_size && !memcmp(file, p->snapshot, size)
+                 : error == LX_HOST_FS_MISSING && !p->snapshot && !p->entries;
+        free(file);
+        if (unchanged)
+        {
+            profile_identity(p, &before, known);
+            return 1;
+        }
+    }
+    Profile *fresh = profile_load(p->path);
+    if (!fresh)
+        return 0;
+    free_entries(p->entries);
+    free(p->snapshot);
+    p->entries = fresh->entries;
+    p->snapshot = fresh->snapshot;
+    p->snapshot_size = fresh->snapshot_size;
+    p->identity = fresh->identity;
+    p->identity_known = fresh->identity_known;
+    free(fresh->path);
+    free(fresh);
+    return 1;
+}
+/* Use a stable inode distinct from the atomically replaced INI and WPS's outer
+   .lock. Closing this descriptor releases the transaction, including on death. */
+static LxHostFile *profile_lock(Profile *p)
+{
+    size_t length = strlen(p->path) + sizeof ".prf-lock";
+    char *path = malloc(length);
+    if (!path)
+        return NULL;
+    snprintf(path, length, "%s.prf-lock", p->path);
+    LxHostFile *lock = lx_host_file_open(
+        path, LX_HOST_FILE_READ | LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE | LX_HOST_FILE_NOINHERIT,
+        0, NULL);
+    free(path);
+    if (lock && lx_host_file_lock(lock, 1) != LX_HOST_FS_OK)
+    {
+        lx_host_file_close(lock);
+        lock = NULL;
+    }
+    return lock;
 }
 static int write_all(LxHostFile *file, const void *data, size_t size)
 {
@@ -236,6 +323,8 @@ static int profile_save(Profile *p, ProfileEntry *entries)
     if (!temporary)
         return 0;
     snprintf(temporary, strlen(p->path) + 40, "%s.tmp-%p", p->path, (void *)p);
+    /* Only the sidecar lock owner publishes; discard a previous interrupted save. */
+    lx_host_path_remove(temporary, 0);
     LxHostFile *file = lx_host_file_open(
         temporary, LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE | LX_HOST_FILE_EXCLUSIVE, 0, NULL);
     if (!file)
@@ -309,6 +398,7 @@ static void profile_destroy(void *value)
         *slot = p->next;
     lx_host_monitor_unlock(mutex);
     free_entries(p->entries);
+    free(p->snapshot);
     free(p->path);
     free(p);
 }
@@ -368,6 +458,7 @@ HINI lx_profile_open_host(const char *name)
             slot = &(*slot)->next;
         *slot = p->next;
         free_entries(p->entries);
+        free(p->snapshot);
         free(p->path);
         free(p);
     }
@@ -471,6 +562,23 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     uint8 *data = NULL;
     *size = 0;
     lx_host_monitor_lock(mutex);
+    int current = profile_refresh(p, 0);
+    Profile *visible_user = user_profile, *visible_system = system_profile;
+    if (current &&
+        (handle == HINI_PROFILE || handle == HINI_USERPROFILE || handle == HINI_SYSTEMPROFILE))
+    {
+        if (p != user_profile && !profile_refresh(user_profile, 0))
+            visible_user = NULL;
+        if (p != system_profile && !profile_refresh(system_profile, 0))
+            visible_system = NULL;
+    }
+    if (!current)
+    {
+        lx_host_monitor_unlock(mutex);
+        lx_handle_release(&borrow);
+        lxHostThreadState()->pm_error = 0x1115; /* PMERR_INVALID_INI_FILE_HANDLE */
+        return NULL;
+    }
     /* Reserved profiles expose native national settings and printer services.
        Virtual service defaults remain reads,
        never stored INI entries, and explicit/private profile handles do not
@@ -481,9 +589,9 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     Profile printer_profile = {0};
     if (p && (handle == HINI_PROFILE || handle == HINI_USERPROFILE || handle == HINI_SYSTEMPROFILE))
     {
-        ProfileEntry *preferred = find_entry(user_profile, "PM_SPOOLER", "QUEUE");
+        ProfileEntry *preferred = find_entry(visible_user, "PM_SPOOLER", "QUEUE");
         if (!preferred)
-            preferred = find_entry(system_profile, "PM_SPOOLER", "QUEUE");
+            preferred = find_entry(visible_system, "PM_SPOOLER", "QUEUE");
         for (unsigned i = 0; i < sizeof defaults / sizeof defaults[0]; i++)
         {
             const PrinterProfileDefault *value = &printer_profile_defaults[i];
@@ -505,7 +613,7 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     }
     ProfileEntry *entry = app && key ? find_entry(p, app, key) : NULL;
     if (!entry && !handle && app && key)
-        entry = find_entry(system_profile, app, key);
+        entry = find_entry(visible_system, app, key);
     if (!entry && app && key)
         entry = find_entry(&printer_profile, app, key);
     if (entry)
@@ -521,7 +629,7 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
     {
         size_t used = 0;
         data = calloc(1, 1);
-        Profile *sources[3] = {p, !handle ? system_profile : NULL, &printer_profile};
+        Profile *sources[3] = {p, !handle ? visible_system : NULL, &printer_profile};
         for (unsigned i = 0; data && i < 3; i++)
             for (ProfileEntry *e = sources[i] ? sources[i]->entries : NULL; e; e = e->next)
             {
@@ -644,9 +752,10 @@ BOOL PrfWriteProfileData(HINI handle, PSZ app, PSZ key, PVOID data, ULONG size)
     if (!p)
         return FALSE;
     lx_host_monitor_lock(mutex);
+    LxHostFile *transaction = profile_lock(p);
     ProfileEntry *copy = NULL, **tail = &copy;
-    int ok = 1;
-    for (ProfileEntry *e = p->entries; e; e = e->next)
+    int ok = transaction && profile_refresh(p, 1);
+    for (ProfileEntry *e = ok ? p->entries : NULL; e; e = e->next)
     {
         if (!app || (!strcmp(e->app, app) && (!key || !strcmp(e->key, key))))
             continue;
@@ -669,9 +778,14 @@ BOOL PrfWriteProfileData(HINI handle, PSZ app, PSZ key, PVOID data, ULONG size)
     {
         free_entries(p->entries);
         p->entries = copy;
+        free(p->snapshot);
+        p->snapshot = NULL;
+        p->snapshot_size = 0;
+        p->identity_known = 0;
     }
     else
         free_entries(copy);
+    lx_host_file_close(transaction);
     lx_host_monitor_unlock(mutex);
     lx_handle_release(&borrow);
     return ok;
@@ -695,6 +809,7 @@ LX_NATIVE_DESTRUCTOR(pmshapi_profiles)
         if (builtins[i])
         {
             free_entries(builtins[i]->entries);
+            free(builtins[i]->snapshot);
             free(builtins[i]->path);
             free(builtins[i]);
         }

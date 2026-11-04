@@ -3,8 +3,9 @@
 """Searchable native application rows and their shared window actions."""
 
 if __package__:
-    from . import gnome_files, gnome_views
+    from . import gnome_application_order, gnome_files, gnome_views
 else:
+    import gnome_application_order
     import gnome_files
     import gnome_views
 
@@ -24,6 +25,13 @@ class ApplicationsPage(Gtk.Box):
         ):
             button = Gtk.Button(label=label, action_name="win." + action)
             controls.append(button)
+        self.sort_mode = gnome_application_order.mode(window.app_preferences.get("applicationSort"))
+        self.sort = Gtk.DropDown.new_from_strings(["Icons First", "Name", "Program"])
+        self.sort.set_selected(gnome_application_order.MODES.index(self.sort_mode))
+        self.sort.set_tooltip_text("Sort Applications")
+        self.sort.update_property([Gtk.AccessibleProperty.LABEL], ["Sort applications"])
+        self.sort.connect("notify::selected", self.sort_changed)
+        controls.append(self.sort)
         self.append(controls)
         self.search = Gtk.SearchEntry(placeholder_text="Search Applications")
         self.search.update_property([Gtk.AccessibleProperty.LABEL], ["Search applications"])
@@ -36,6 +44,7 @@ class ApplicationsPage(Gtk.Box):
             [Gtk.AccessibleProperty.LABEL], ["Installed application launchers"]
         )
         self.list.set_filter_func(self.matches)
+        self.list.set_sort_func(self.compare)
         self.list.connect("row-selected", self.selected)
         self.search.set_key_capture_widget(self.list)
         self.search.connect("search-changed", self.filter)
@@ -48,9 +57,13 @@ class ApplicationsPage(Gtk.Box):
             )
             row.connect("activated", lambda row: window.execute(["launch", row.application_name]))
             row.application_name = name
+            row.application_program = application["program"]
+            row.has_icon = False
             row.search_text = gnome_files.folded(name + " " + application["program"])
             image = Gtk.Image(icon_name="application-x-executable-symbolic", pixel_size=40)
-            window.load_application_icon(name, image)
+            window.load_application_icon(
+                name, image, lambda available, row=row: self.icon_loaded(row, available)
+            )
             row.add_prefix(image)
             play = Gtk.Button(
                 icon_name="media-playback-start-symbolic",
@@ -61,6 +74,20 @@ class ApplicationsPage(Gtk.Box):
             play.set_action_target_value(GLib.Variant("s", name))
             play.update_property([Gtk.AccessibleProperty.LABEL], ["Launch " + name])
             row.add_suffix(play)
+            row.sessions_button = Gtk.Button(valign=Gtk.Align.CENTER)
+            row.sessions_button.connect(
+                "clicked", lambda _button, name=name: self.open_sessions(name)
+            )
+            row.add_suffix(row.sessions_button)
+            remove = Gtk.Button(
+                icon_name="list-remove-symbolic",
+                tooltip_text="Remove Launcher",
+                valign=Gtk.Align.CENTER,
+            )
+            remove.set_action_name("win.remove-application")
+            remove.set_action_target_value(GLib.Variant("s", name))
+            remove.update_property([Gtk.AccessibleProperty.LABEL], ["Remove launcher for " + name])
+            row.add_suffix(remove)
             menu = Gio.Menu()
             for title, action in (
                 ("Launch", "launch-application"),
@@ -94,6 +121,52 @@ class ApplicationsPage(Gtk.Box):
                 "Install software from your OS/2 media, then add its executable to keep it here."
             )
         self.filter()
+        self.update_sessions()
+
+    def update_sessions(self):
+        for name, row in self.rows.items():
+            sessions = [
+                session
+                for session in self.window.sessions.active(self.window.ball)
+                if session.name == name
+            ]
+            row.sessions_button.set_visible(bool(sessions))
+            row.sessions_button.set_label(
+                f"{len(sessions)} session" + ("s" if len(sessions) != 1 else "")
+            )
+            row.sessions_button.set_tooltip_text("View sessions for " + name)
+
+    def open_sessions(self, name):
+        sessions = [
+            session
+            for session in self.window.sessions.active(self.window.ball)
+            if session.name == name
+        ]
+        if sessions:
+            self.window.selected_session = sessions[-1].id
+            self.window.refresh_session_selector()
+            self.window.show_page("activity")
+            self.window.session_changed(self.window.session_selector, None)
+
+    def compare(self, left, right):
+        left_key = gnome_application_order.key(
+            left.application_name, left.application_program, left.has_icon, self.sort_mode
+        )
+        right_key = gnome_application_order.key(
+            right.application_name, right.application_program, right.has_icon, self.sort_mode
+        )
+        return (left_key > right_key) - (left_key < right_key)
+
+    def sort_changed(self, row, _property):
+        self.sort_mode = gnome_application_order.MODES[row.get_selected()]
+        self.window.app_preferences["applicationSort"] = self.sort_mode
+        self.window.persist_preferences()
+        self.list.invalidate_sort()
+
+    def icon_loaded(self, row, available):
+        row.has_icon = bool(available)
+        if self.sort_mode == "icons":
+            self.list.invalidate_sort()
 
     def matches(self, row):
         return all(

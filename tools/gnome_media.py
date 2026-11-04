@@ -360,7 +360,9 @@ class OS2ComponentsPane(Gtk.Box):
             self.plan_sources()
 
     def update_count(self):
-        active = self.window.component_active(self.ball)
+        active = self.window.component_active(self.ball) or bool(
+            self.window.sessions.active(self.ball)
+        )
         selected = set(self.component_tree.selected) if self.component_tree else set()
         files = [file for file in (self.plan or {}).get("files", []) if file["source"] in selected]
         count = sum(not file.get("present") for file in files)
@@ -403,7 +405,9 @@ class OS2ComponentsPane(Gtk.Box):
     def start_job(self, action, **fields):
         if self.working or self.window.component_active(self.ball):
             return
-        if self.window.ball == self.ball and (self.window.process or self.window.operation_busy):
+        if self.window.sessions.active(self.ball) or (
+            self.window.ball == self.ball and self.window.operation_busy
+        ):
             self.error_message("Wait for this ball’s current operation to finish.")
             return
         operation_id = uuid.uuid4().hex

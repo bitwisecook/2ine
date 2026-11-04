@@ -154,7 +154,7 @@ struct ProgramSheet: View {
                         do { try await model.program(action, name: name, program: program, arguments: arguments, directories: directories, environment: environment, iconSource: iconSource, mediaDrive: action == .install && model.snapshot?.manifest.drives[mediaLetter]?.image != nil ? mediaLetter : nil) }
                         catch { self.error = error.localizedDescription }
                     }
-                }.keyboardShortcut(.defaultAction).disabled(program.isEmpty || model.busy || model.mediaBusy || model.componentOperationRunning || discovering).accessibilityIdentifier("confirmProgram")
+                }.keyboardShortcut(.defaultAction).disabled(program.isEmpty || model.busy || model.mediaBusy || model.componentOperationRunning || (action == .install && model.processRunning) || discovering).accessibilityIdentifier("confirmProgram")
             }
         }.padding(24)
         .frame(minWidth: embedded ? nil : 740, maxWidth: embedded ? .infinity : 740,

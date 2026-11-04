@@ -1646,8 +1646,8 @@ static cJSON *prepare(Context *c, const cJSON *request)
         cJSON_Delete(env);
         goto failed;
     }
-    int supervised =
-        !strcmp(action, "install") && cJSON_IsTrue(get(capabilities, "operationSupervisor"));
+    int supervised = (!strcmp(action, "install") || cJSON_IsTrue(get(request, "startupService"))) &&
+                     cJSON_IsTrue(get(capabilities, "operationSupervisor"));
     cJSON_Delete(capabilities);
     if (supervised)
         cJSON_AddItemToArray(command, cJSON_CreateString("--operation"));
@@ -1733,6 +1733,7 @@ static cJSON *prepare(Context *c, const cJSON *request)
             cJSON_ArrayForEach(a, extra) cJSON_AddItemToArray(arguments, cJSON_Duplicate(a, 1));
             put(launch, "arguments", arguments);
             put(launch, "includeStartup", cJSON_CreateFalse());
+            put(launch, "startupService", cJSON_CreateTrue());
             put(launch, "build", cJSON_CreateString(build));
             put(launch, "backend", cJSON_CreateString(backend));
             const cJSON *application = c->application;
@@ -1744,6 +1745,9 @@ static cJSON *prepare(Context *c, const cJSON *request)
                 cJSON_Delete(result);
                 goto failed;
             }
+            cJSON_AddStringToObject(prepared, "program", path);
+            if (field(service, "owner"))
+                cJSON_AddStringToObject(prepared, "owner", field(service, "owner"));
             cJSON_AddItemToArray(startup, prepared);
         }
     }
@@ -2918,7 +2922,14 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     }
     if (!strcmp(action, "prepare-launch"))
     {
-        cJSON *audit = ensure_dependencies(c, request);
+        const cJSON *resolve = get(request, "resolve");
+        if (resolve && !cJSON_IsBool(resolve))
+        {
+            fail(c, "resolve must be a boolean");
+            return NULL;
+        }
+        cJSON *audit = cJSON_IsFalse(resolve) ? audit_dependencies(c, request, 0)
+                                              : ensure_dependencies(c, request);
         if (!audit)
             return NULL;
         cJSON *plan = prepare(c, request);

@@ -56,6 +56,8 @@ def main():
             "gnome_browser_model.py",
             "gnome_media_preferences.py",
             "gnome_component_jobs.py",
+            "gnome_application_order.py",
+            "gnome_sessions.py",
         ):
             assert (frontend / module).is_file(), module
         environment = dict(

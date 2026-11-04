@@ -106,6 +106,91 @@ class WpsApplicationTests(unittest.TestCase):
         self.assertEqual(apps["My Launcher"]["arguments"], ["user"])
         self.assertNotIn("wpsRegistration", apps["My Launcher"])
 
+    def test_removed_managed_entry_stays_hidden_across_refresh_and_duplicate_ids(self):
+        self.records["00020002"] = (
+            "WPProgram",
+            "Other Registration",
+            "<SUITE>",
+            self.records["00020001"][3],
+        )
+        self.save_objects()
+        before = self.objects.read_bytes()
+        first = self.request()
+        encoded = first["applicationRecords"]["Word Processor"]
+        self.request("command", arguments=["remove-app", "Word Processor"])
+        for _ in range(3):
+            apps = self.request()["manifest"]["applications"]
+            self.assertEqual(set(apps), {"Other Registration"})
+        hidden = self.records["00020001"]
+        self.records["00020001"] = (
+            *hidden[:3],
+            hidden[3] + "TITLE=Hidden Renamed;PARAMETERS=updated;",
+        )
+        self.save_objects()
+        self.assertEqual(set(self.request()["manifest"]["applications"]), {"Other Registration"})
+        self.records["00020001"] = hidden
+        self.save_objects()
+        self.assertEqual(self.objects.read_bytes(), before)
+        self.assertTrue((self.app / "APP.EXE").is_file())
+        self.request("command", arguments=["restore-app", "Word Processor", encoded])
+        self.assertEqual(
+            set(self.request()["manifest"]["applications"]),
+            {"Word Processor", "Other Registration"},
+        )
+        self.request("command", arguments=["remove-app", "Word Processor"])
+        self.request("command", arguments=["add-app", "My Manual Launcher", r"C:\APPS\APP.EXE"])
+        self.assertEqual(
+            set(self.request()["manifest"]["applications"]),
+            {"Other Registration", "My Manual Launcher"},
+        )
+
+    def test_reused_handle_for_another_object_is_not_hidden(self):
+        self.save_objects()
+        self.request()
+        self.request("command", arguments=["remove-app", "Word Processor"])
+        tombstone = api.load(self.ball)["wpsHidden"]["00020001"]
+        self.assertEqual(tombstone["objectID"], "<APP>")
+        self.records["00020001"] = (
+            "WPProgram",
+            "A Different App",
+            "<SUITE>",
+            r"EXENAME=C:\APPS\APP.EXE;OBJECTID=<OTHER>;",
+        )
+        self.save_objects()
+        self.assertEqual(set(self.request()["manifest"]["applications"]), {"A Different App"})
+
+    def test_legacy_hidden_policy_and_unidentified_object_hash_remain_supported(self):
+        original = self.records["00020001"]
+        self.records["00020001"] = (*original[:3], original[3].replace("OBJECTID=<APP>;", ""))
+        self.save_objects()
+        self.request()
+        self.request("command", arguments=["remove-app", "Word Processor"])
+        self.assertNotIn("Word Processor", self.request()["manifest"]["applications"])
+        self.records["00020001"] = (
+            "WPProgram",
+            "Replacement Without ID",
+            "<SUITE>",
+            r"EXENAME=C:\APPS\APP.EXE;",
+        )
+        self.save_objects()
+        self.assertIn("Replacement Without ID", self.request()["manifest"]["applications"])
+        manifest = api.load(self.ball)
+        manifest["wpsHidden"]["00020001"] = True
+        (self.ball / "ball.json").write_text(json.dumps(manifest))
+        self.assertNotIn("Replacement Without ID", self.request()["manifest"]["applications"])
+
+    def test_manual_remove_restore_and_readd_do_not_modify_object_profile(self):
+        self.save_objects()
+        self.request("command", arguments=["add-app", "Manual", r"C:\APPS\APP.EXE"])
+        before = self.objects.read_bytes()
+        encoded = self.request()["applicationRecords"]["Manual"]
+        self.request("command", arguments=["remove-app", "Manual"])
+        self.assertNotIn("Manual", self.request()["manifest"]["applications"])
+        self.request("command", arguments=["restore-app", "Manual", encoded])
+        self.assertIn("Manual", self.request()["manifest"]["applications"])
+        self.assertEqual(self.objects.read_bytes(), before)
+        self.assertFalse(api.load(self.ball).get("wpsHidden"))
+
     def test_iconfile_iconresource_id_and_executable_fallback(self):
         (self.app / "EXPLICIT.ICO").write_bytes(icon(False))
         dib = struct.pack("<3I2H6I", 40, 1, 2, 1, 4, 0, 4, 0, 0, 16, 0)

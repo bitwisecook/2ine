@@ -107,6 +107,12 @@ def main():
         window.show_page("apps")
         settle()
         page = window.applications_page
+        page.sort.set_selected(1)
+        assert page.list.get_row_at_index(0).application_name == "Café Notes"
+        page.icon_loaded(page.rows["Calculator"], True)
+        assert page.list.get_row_at_index(0).application_name == "Café Notes"
+        page.sort.set_selected(0)
+        assert page.list.get_row_at_index(0).application_name == "Calculator"
         assert window.find()
         page.search.set_text("cafe")
         page.search.emit("search-changed")
@@ -133,6 +139,14 @@ def main():
         pump(lambda: window.process is not None or not window.busy)
         pump(lambda: not window.busy)
         assert window.last_result == 0, window.log_text
+
+        window.activate_action("win.remove-application", gnome_ball.GLib.Variant("s", "Calculator"))
+        pump(lambda: not window.busy and "Calculator" not in window.applications_page.rows)
+        window.refresh()
+        pump(lambda: not window.busy)
+        assert "Calculator" not in window.applications_page.rows
+        window.undo(window.undo_commands[-1])
+        pump(lambda: not window.busy and "Calculator" in window.applications_page.rows)
 
         media = root / "OS2 Media" / "OS2"
         media.mkdir(parents=True)

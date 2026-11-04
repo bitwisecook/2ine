@@ -142,7 +142,7 @@ class WorkspaceTests(unittest.TestCase):
     def request(self, action, **fields):
         return ball_api.native_request({"action": action, "ball": str(self.ball), **fields})
 
-    def test_installer_supervision_requires_runtime_support_and_excludes_services(self):
+    def test_supervision_requires_runtime_support_and_covers_owned_startup_services(self):
         arguments = ["install", r"C:\OS2\DOOM.EXE", "a value"]
         legacy = self.request("prepare-launch", build=str(self.build), arguments=arguments)
         self.assertFalse(legacy["operationSupervised"])
@@ -173,8 +173,8 @@ class WorkspaceTests(unittest.TestCase):
         self.assertTrue(plan["operationSupervised"])
         self.assertEqual(plan["command"][1:], ["--operation", r"C:\OS2\DOOM.EXE", "a value"])
         service = plan["startup"][0]
-        self.assertFalse(service["operationSupervised"])
-        self.assertEqual(service["command"][1:], [r"C:\OS2\SERVICE.EXE"])
+        self.assertTrue(service["operationSupervised"])
+        self.assertEqual(service["command"][1:], ["--operation", r"C:\OS2\SERVICE.EXE"])
         for launch in (plan, service):
             for key in ("TWOINE_OPERATION_LEASE_FD", "TWOINE_OPERATION_OWNER_FD"):
                 self.assertNotIn(key, launch["environment"])

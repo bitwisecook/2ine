@@ -55,6 +55,7 @@ def stage(build, destination):
         "gnome_ball.py",
         "gnome_navigation.py",
         "gnome_applications.py",
+        "gnome_application_order.py",
         "gnome_views.py",
         "gnome_files.py",
         "gnome_browser.py",
@@ -66,6 +67,7 @@ def stage(build, destination):
         "gnome_audio.py",
         "gnome_ball_icons.py",
         "gnome_ball_lifecycle.py",
+        "gnome_sessions.py",
         "gnome_configuration.py",
         "ball.py",
     ):

@@ -9,6 +9,8 @@ public struct ProcessResult: Sendable {
     public let signalled: Bool
     public let output: String
     public let log: URL
+    public var sessionID: String? = nil
+    public var startupLogs: [URL] = []
     public var receiptError: String? = nil
     public var dependencyAudit: DependencyAudit? = nil
 }
@@ -17,7 +19,13 @@ public struct ProcessResult: Sendable {
 public actor ProcessRunner {
     private var process: Process?
     private var operationSupervised = false
+    private var pendingStop = false
     public init() {}
+
+    func stopLaunch(force: Bool = false) {
+        pendingStop = true
+        stop(force: force)
+    }
 
     public func stop(force: Bool = false) {
         guard let process, process.isRunning else { return }
@@ -30,12 +38,13 @@ public actor ProcessRunner {
                     log: URL, operationSupervised: Bool = false,
                     update: @Sendable (String) async -> Void = { _ in }) async throws -> ProcessResult {
         guard process == nil else { throw BallError("Wait for the current operation to finish.") }
+        guard !pendingStop else { pendingStop = false; throw CancellationError() }
         let files = FileManager.default
         try files.createDirectory(at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard files.createFile(atPath: log.path, contents: nil) else { throw BallError("Cannot create process log at \(log.path).") }
         let output = try FileHandle(forWritingTo: log)
         let reader = try FileHandle(forReadingFrom: log)
-        defer { process = nil; self.operationSupervised = false; try? output.close(); try? reader.close() }
+        defer { process = nil; self.operationSupervised = false; pendingStop = false; try? output.close(); try? reader.close() }
         let child = Process()
         child.executableURL = executable; child.arguments = arguments
         child.environment = environment ?? ProcessInfo.processInfo.environment
@@ -60,12 +69,12 @@ public actor ProcessRunner {
             }
             // The manager owns this operation until actual exit; view/task
             // cancellation never abandons a still-running guest process.
-            try? await Task.sleep(for: .milliseconds(100))
+            await processPollingPause(.milliseconds(100))
         }
     }
 }
 
-private struct LaunchPlan: Decodable, Sendable {
+struct LaunchPlan: Decodable, Sendable {
     let command: [String]
     let cwd: String
     let environment: [String: String]
@@ -76,16 +85,48 @@ private struct LaunchPlan: Decodable, Sendable {
     let operationSupervised: Bool?
     let dependencyAudit: DependencyAudit?
     let startup: [LaunchPlan]?
+    let program: String?
+    let owner: String?
 }
 
 /// All synchronous C filesystem/hash work runs on this actor, off MainActor.
 /// C results are copied into Sendable Swift values before freeing C storage.
 public actor BallBackend {
-    private let runner = ProcessRunner()
-    private var executing = false
+    private struct Session {
+        let runner: ProcessRunner
+        let ball: String
+    }
+    private var sessions: [String: Session] = [:]
+    private var pendingStops: Set<String> = []
+    private var completedSessions: Set<String> = []
     public init() {}
 
-    public func stop(force: Bool = false) async { await runner.stop(force: force) }
+    private func retire(_ id: String) {
+        sessions.removeValue(forKey: id)
+        if completedSessions.count >= 256, let oldest = completedSessions.first { completedSessions.remove(oldest) }
+        completedSessions.insert(id)
+    }
+
+    /// Compatibility for callers with one launch. Ambiguous Stop never affects other sessions.
+    public func stop(force: Bool = false) async {
+        guard sessions.count == 1, let id = sessions.keys.first else { return }
+        await stop(sessionID: id, force: force)
+    }
+
+    public func stop(sessionID: String, force: Bool = false) async {
+        guard let session = sessions[sessionID] else {
+            if validLaunchSessionID(sessionID), !completedSessions.contains(sessionID) {
+                if pendingStops.count >= 256, let oldest = pendingStops.first { pendingStops.remove(oldest) }
+                pendingStops.insert(sessionID)
+            }
+            return
+        }
+        await session.runner.stopLaunch(force: force)
+    }
+
+    public func activeSessionIDs(ball: String? = nil) async -> Set<String> {
+        await LaunchCoordinator.shared.activeSessionIDs(ball: ball)
+    }
 
     public func request<T: Decodable & Sendable>(_ message: DesktopRequest, as type: T.Type) throws -> T {
         try NativeBallCore.request(message, as: type)
@@ -93,57 +134,57 @@ public actor BallBackend {
 
     public func execute(ball: String, build: String, arguments: [String],
                         workingDirectories: [String: String]? = nil, environment overrides: [String: String]? = nil,
+                        sessionID: String = UUID().uuidString,
                         update: @Sendable (String) async -> Void) async throws -> ProcessResult {
-        guard !executing else { throw BallError("Wait for the current operation to finish.") }
-        executing = true
-        defer { executing = false }
-        var message = DesktopRequest("prepare-launch", ball: ball, build: build, arguments: arguments)
-        message.workingDirectories = workingDirectories; message.environment = overrides
-        let plan = try request(message, as: LaunchPlan.self)
-        guard let executable = plan.command.first else { throw BallError("The runtime launch command is empty.") }
-        var environment = ProcessInfo.processInfo.environment
-        for key in plan.unsetEnvironment { environment.removeValue(forKey: key) }
-        environment.merge(plan.environment) { _, value in value }
-        if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
-        let log = URL(filePath: ball).appending(path: "logs/macos-\(UUID().uuidString).log")
-        var services: [Process] = []
-        defer {
-            // These services belong to this launch, including on cancellation
-            // or a failed main executable. Never leave detached helpers behind.
-            for service in services where service.isRunning {
-                kill(service.processIdentifier, SIGKILL)
-                service.waitUntilExit()
+        guard validLaunchSessionID(sessionID), sessions[sessionID] == nil, !completedSessions.contains(sessionID) else {
+            throw BallError("Choose a unique application session ID containing letters, digits, hyphens or underscores.")
+        }
+        if pendingStops.remove(sessionID) != nil { retire(sessionID); throw CancellationError() }
+        let canonicalBall = canonicalLaunchBall(ball)
+        let runner = ProcessRunner()
+        sessions[sessionID] = Session(runner: runner, ball: canonicalBall)
+        let coordinator = LaunchCoordinator.shared
+        var reserved = false
+        var lease: StartupLease?
+        do {
+            var message = DesktopRequest("prepare-launch", ball: canonicalBall, build: build, arguments: arguments)
+            message.workingDirectories = workingDirectories; message.environment = overrides
+            let plan = try await coordinator.prepare(sessionID: sessionID, ball: canonicalBall,
+                                                     installer: arguments.first == "install", message: message)
+            reserved = true
+            guard let executable = plan.command.first else { throw BallError("The runtime launch command is empty.") }
+            let log = URL(filePath: canonicalBall).appending(path: "logs/macos-\(sessionID).log")
+            lease = try await coordinator.acquireStartup(sessionID: sessionID, ball: canonicalBall,
+                                                         plans: plan.startup ?? [], log: log)
+            var environment = ProcessInfo.processInfo.environment
+            for key in plan.unsetEnvironment { environment.removeValue(forKey: key) }
+            environment.merge(plan.environment) { _, value in value }
+            if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
+            var result = try await runner.run(executable: URL(filePath: executable),
+                                              arguments: Array(plan.command.dropFirst()), environment: environment,
+                                              cwd: URL(filePath: plan.cwd), log: log,
+                                              operationSupervised: plan.operationSupervised == true, update: update)
+            result.sessionID = sessionID
+            result.startupLogs = lease?.logs ?? []
+            result.dependencyAudit = plan.dependencyAudit
+            if plan.installer {
+                do {
+                    let installed = try request(DesktopRequest("record-install", ball: canonicalBall, build: build,
+                                                               receipt: plan.receipt, programHost: plan.programHost,
+                                                               exitCode: result.signalled ? -result.code : result.code), as: BallSnapshot.self)
+                    result.dependencyAudit = installed.dependencyAudit
+                } catch { result.receiptError = error.localizedDescription }
             }
+            if let lease { await coordinator.releaseStartup(lease) }
+            await coordinator.finish(sessionID: sessionID)
+            retire(sessionID)
+            return result
+        } catch {
+            if let lease { await coordinator.releaseStartup(lease) }
+            if reserved { await coordinator.finish(sessionID: sessionID) }
+            retire(sessionID)
+            throw error
         }
-        for (index, startup) in (plan.startup ?? []).enumerated() {
-            guard let executable = startup.command.first else { throw BallError("A startup program has an empty command.") }
-            let service = Process()
-            service.executableURL = URL(filePath: executable)
-            service.arguments = Array(startup.command.dropFirst())
-            var serviceEnvironment = ProcessInfo.processInfo.environment
-            for key in startup.unsetEnvironment { serviceEnvironment.removeValue(forKey: key) }
-            serviceEnvironment.merge(startup.environment) { _, value in value }
-            service.environment = serviceEnvironment
-            service.currentDirectoryURL = URL(filePath: startup.cwd)
-            let serviceLog = log.deletingPathExtension().appendingPathExtension("startup-\(index).log")
-            try FileManager.default.createDirectory(at: serviceLog.deletingLastPathComponent(), withIntermediateDirectories: true)
-            guard FileManager.default.createFile(atPath: serviceLog.path, contents: nil) else { throw BallError("Cannot create startup program log.") }
-            let output = try FileHandle(forWritingTo: serviceLog)
-            service.standardOutput = output; service.standardError = output
-            service.standardInput = FileHandle.nullDevice
-            defer { try? output.close() }
-            try service.run()
-            services.append(service)
-        }
-        var result = try await runner.run(executable: URL(filePath: executable), arguments: Array(plan.command.dropFirst()), environment: environment, cwd: URL(filePath: plan.cwd), log: log, operationSupervised: plan.operationSupervised == true, update: update)
-        result.dependencyAudit = plan.dependencyAudit
-        if plan.installer {
-            do {
-                let installed = try request(DesktopRequest("record-install", ball: ball, build: build, receipt: plan.receipt, programHost: plan.programHost, exitCode: result.signalled ? -result.code : result.code), as: BallSnapshot.self)
-                result.dependencyAudit = installed.dependencyAudit
-            } catch { result.receiptError = error.localizedDescription }
-        }
-        return result
     }
 }
 

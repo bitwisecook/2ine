@@ -345,6 +345,21 @@ shell interprets them. After actual process exit the manager displays the exit
 status and offers Keep Attached or Eject. Locked devices cannot be ejected.
 Receipts hash the selected program before launch.
 
+Applications created by an installer through the Workplace Shell appear in the
+Applications list, including documentation and license shortcuts. The default
+order puts entries with extracted icons first; column sorting can select a
+different order. Remove Launcher hides only that entry and keeps installed
+files. Undo restores it, and refreshing registrations does not re-add a hidden
+entry.
+
+The desktop managers support separate application sessions in the same ball.
+Use the Logs session selector to inspect output or stop one application.
+Startup programs are shared until the last application using them exits.
+Installers require the other applications in that ball to finish; other balls
+remain available. Shared files, the host clipboard and the implemented OS/2
+IPC APIs can connect applications, but DDE/OLE document embedding and full
+SmartSuite application interoperability are not qualified.
+
 Built-in formatting creates new images. Original OS/2 FORMAT still needs legacy
 raw-device API support. HPFS DBCS, HPFS386 and active hotfix remapping are not
 supported; mounting media does not boot OS/2 or qualify every installer.
@@ -403,3 +418,6 @@ runtimes also carry their relocated dependency closure.
 
 
 Component installation can run in the background while the component browser remains available. `os2-component-state` reads installed destinations and per-operation progress without rescanning the installation media; `cancel-os2-component-operation` requests cooperative cancellation. `remove-os2-components` removes only unchanged files recorded by recent installations. Existing files and edited files remain protected. Completed and partial operations have reports under `logs/os2-components/`. See [the operation contract](../rea-notes/os2-component-operations.md) for the request fields and concurrency rules.
+
+
+Ordinary application launches can share a ball while retaining separate sessions, logs and Stop controls. Installation remains exclusive within that ball. Startup helpers are shared until the last manager-owned lease ends. Shared memory, queues, files and some native PM posts support cooperation; complete DDE/OLE and safe concurrent profile merging remain separate gaps. See [concurrent application sessions](../rea-notes/multiple-application-sessions.md) for the verified scope and backend API.

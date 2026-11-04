@@ -152,7 +152,26 @@ static void wps_hide(Context *c, const cJSON *app)
 {
     const char *handle = field(get(app, "wpsRegistration"), "handle");
     if (handle)
-        put(object(c->manifest, "wpsHidden"), handle, cJSON_CreateBool(1));
+    {
+        const cJSON *registration = get(app, "wpsRegistration");
+        cJSON *hidden = cJSON_CreateObject();
+        const char *id = field(registration, "objectID"), *hash = field(registration, "hash");
+        if (id && *id)
+            cJSON_AddStringToObject(hidden, "objectID", id);
+        if (hash && *hash)
+            cJSON_AddStringToObject(hidden, "hash", hash);
+        put(object(c->manifest, "wpsHidden"), handle, hidden);
+    }
+}
+static int wps_hidden(Context *c, const char *handle, const cJSON *record)
+{
+    const cJSON *hidden = get(get(c->manifest, "wpsHidden"), handle);
+    if (cJSON_IsTrue(hidden))
+        return 1; /* Preserve the original handle-only suppression policy. */
+    const char *id = field(hidden, "objectID"), *hash = field(hidden, "hash");
+    if (id && *id)
+        return equal_case(id, field(record, "id"));
+    return hash && *hash && equal_case(hash, field(record, "hash"));
 }
 static void wps_detach(Context *c, cJSON *app)
 {
@@ -349,8 +368,7 @@ static int wps_sync(Context *c)
         cJSON_AddStringToObject(event, "handle", handle);
         cJSON_AddItemToArray(events, event);
         cJSON *folders = wps_folders(c, objects, field(record, "location"));
-        if (!program || !*program || !folders ||
-            cJSON_IsTrue(get(get(c->manifest, "wpsHidden"), handle)))
+        if (!program || !*program || !folders || wps_hidden(c, handle, record))
         {
             cJSON_Delete(folders);
             skipped++;

@@ -111,3 +111,45 @@ contain valid32×32 RGBA payloads. Evidence is retained in
 build-macos/current/lotus-live-verification.json. Full tool tests pass199/199;
 the receiving runtime suite passes66/66, with the four affected installer/ball
 integration cases repeated successfully after the final icon change.
+
+## Individual removal and GTK ordering (2026-11-04)
+
+The retained original installer record set contains 26 WPProgram objects,
+including **11 separate language License Agreement objects** (handles
+00020007–00020011) below the Lotus Software License Directory folder
+`<LSUITELIC99EN>`. Each launches `E.EXE` with its own installed
+`C:\LOTUSW4\LICENSE\*.TXT` argument and distinct OBJECTID. They are genuine
+registered menu objects, so discovery retains them; no name, extension or
+license blacklist is used. This conclusion uses the existing SHA-bound
+`build-wps-current/actual-object-records.json` evidence, because the formerly
+recorded Documents/Lotus.2ineball path was no longer present during this check.
+
+Ordinary removal was already persisted by the shared engine's `wpsHidden`
+handle map, and the frontends call the undoable `remove-app` command. A new
+bounded fix prevents an unrelated object from being suppressed when a
+recreated/replaced profile reuses the same handle: new map values record
+OBJECTID plus source hash. At that handle, a nonempty OBJECTID identifies the
+same suppressed registration across title/argument changes; unidentified
+objects require the exact source-record hash. Legacy boolean map values retain
+their old handle-only policy. Suppression never matches all objects with the
+same executable or OBJECTID: two separate handles remain independent. Restore
+clears that handle's tombstone, and explicit manually re-added launchers are
+independent. No source object/profile or installed program is deleted.
+
+GTK defaults to Icons First, using resolved genuine/custom icon availability;
+the fallback generic executable symbol does not count as a supplied icon.
+Cached icons and late asynchronous icon results update ordering. Explicit Name
+or Program ordering is saved in application preferences and is not overwritten
+by late icon completion. Every row now exposes Remove Launcher directly as
+well as through its existing context/actions menu; both use the same normal
+command and Undo route. The sorting model is GI-independent and staged in the
+Linux package. Existing native GTK integration now covers late-icon ordering,
+explicit-order precedence, removal through the action, refresh persistence and
+Undo; it is not executed on this macOS host because GI is unavailable.
+
+Focused checks use the fresh `build-applications-current` shared engine and
+disposable synthetic profiles. They cover repeated reconciliation, duplicate
+OBJECTIDs, source/profile and program-byte preservation, managed Restore and
+manual re-add, object changes while hidden, reused handles, unidentified-object
+hashes, legacy boolean policies, and async sorting precedence. Root owns the
+unified application/session integration and release.

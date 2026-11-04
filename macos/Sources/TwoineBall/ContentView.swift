@@ -31,7 +31,7 @@ struct ContentView: View {
                     .disabled(model.busy || model.mediaBusy).accessibilityIdentifier("importBall")
                 Button("Export Ball…", systemImage: "square.and.arrow.up") { model.chooseExportBall() }
                     .help("Export the selected ball as a ZIP archive")
-                    .disabled(model.snapshot == nil || model.busy || model.mediaBusy || model.componentOperationRunning).accessibilityIdentifier("exportBall")
+                    .disabled(model.snapshot == nil || model.busy || model.mediaBusy || model.processRunning || model.componentOperationRunning).accessibilityIdentifier("exportBall")
                 MediaDeviceMenu(model: model, kind: .cdrom)
                 MediaDeviceMenu(model: model, kind: .floppy)
                 MediaDeviceMenu(model: model, kind: .disk)
@@ -56,8 +56,9 @@ struct ContentView: View {
             MapDriveSheet(model: model, initialLetter: model.mappingDrive,
                           initialSource: model.mappingDrive.flatMap { model.snapshot?.manifest.drives[$0]?.source } ?? "")
         }
-        .confirmationDialog("Stop the running operation?", isPresented: $model.stopConfirmation) {
-            Button("Stop Operation", role: .destructive) { model.stopProcess() }
+        .confirmationDialog("Stop the selected application?", isPresented: $model.stopConfirmation) {
+            Button("Stop Application", role: .destructive) { model.stopProcess() }
+            Button("Cancel", role: .cancel) { model.cancelStopRequest() }
         } message: { Text("Unsaved work in the guest may be lost. Its output log will be kept.") }
         .confirmationDialog("Move \(model.ballToTrash.map { "“" + AppModel.displayName($0.path) + "”" } ?? "ball") to the Trash?",
                             isPresented: Binding(get: { model.ballToTrash != nil }, set: { if !$0 { model.ballToTrash = nil } }),
@@ -74,8 +75,9 @@ struct ContentView: View {
                 Text("Unsaved configuration edits in this ball will also be discarded.")
             }
         }
-        .confirmationDialog("Force stop the running operation?", isPresented: $model.forceStopConfirmation) {
+        .confirmationDialog("Force stop the selected application?", isPresented: $model.forceStopConfirmation) {
             Button("Force Stop", role: .destructive) { model.stopProcess(force: true) }
+            Button("Cancel", role: .cancel) { model.cancelStopRequest() }
         } message: { Text("Use this if the guest does not respond to Stop. Unsaved work may be lost. Its output log will be kept.") }
         .alert("2ine", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK", role: .cancel) { model.error = nil }
@@ -89,6 +91,8 @@ struct ContentView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(AppModel.displayName(path)).font(.headline)
                             Text(DisplayPath.homeAbbreviated(path)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                            let count = model.sessions.filter { $0.ball == path && $0.running }.count
+                            if count > 0 { Text("\(count) running").font(.caption).foregroundStyle(.secondary) }
                         }
                     } icon: { Image(systemName: "shippingbox") }
                     .tag(path).help(DisplayPath.homeAbbreviated(path))
@@ -185,16 +189,23 @@ struct ApplicationRow: Identifiable {
     let cwd: String
     var icon: NSImage? = nil
     var id: String { name }
+    static func sorted(_ rows: [Self], using order: [KeyPathComparator<Self>]) -> [Self] {
+        if !order.isEmpty { return rows.sorted(using: order) }
+        return rows.sorted {
+            if ($0.icon != nil) != ($1.icon != nil) { return $0.icon != nil }
+            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+    }
 }
 
 struct ApplicationsView: View {
     @Bindable var model: AppModel
     let snapshot: BallSnapshot
     @State private var selection: Set<String> = []
-    @State private var sortOrder = [KeyPathComparator(\ApplicationRow.name)]
+    @State private var sortOrder: [KeyPathComparator<ApplicationRow>] = []
     @SceneStorage("applicationColumns") private var columns: TableColumnCustomization<ApplicationRow>
     var rows: [ApplicationRow] {
-        snapshot.manifest.applications.map { ApplicationRow(name: $0.key, program: $0.value.program, cwd: $0.value.workingDirectorySummary, icon: model.applicationIcons[$0.key]) }.sorted(using: sortOrder)
+        ApplicationRow.sorted(snapshot.manifest.applications.map { ApplicationRow(name: $0.key, program: $0.value.program, cwd: $0.value.workingDirectorySummary, icon: model.applicationIcons[$0.key]) }, using: sortOrder)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -203,6 +214,10 @@ struct ApplicationsView: View {
                     .accessibilityIdentifier("installSoftware")
                 Button("Run Executable…", systemImage: "play") { model.beginProgram(.run) }
                 Spacer()
+                Menu("Sort", systemImage: "arrow.up.arrow.down") {
+                    Button("Icons First") { sortOrder = [] }
+                    Button("Name") { sortOrder = [KeyPathComparator(\ApplicationRow.name)] }
+                }.help("Icons first by default; click a column to choose another order.")
                 Button("Add Application…", systemImage: "plus") { model.beginProgram(.save) }
             }.disabled(model.busy || model.mediaBusy)
             Table(rows, selection: $selection, sortOrder: $sortOrder, columnCustomization: $columns) {
@@ -258,21 +273,29 @@ struct ActivityView: View {
     @AppStorage("logFontSize") private var logFontSize = 12.0
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            if !model.ballSessions.isEmpty {
+                Picker("Application", selection: Binding(get: { model.selectedSessionID ?? "" }, set: { model.selectSession($0) })) {
+                    Text("Activity and Audits").tag("")
+                    ForEach(model.ballSessions) { session in
+                        Text(session.label + " · " + session.status).tag(session.id)
+                    }
+                }.accessibilityIdentifier("applicationLogSession")
+            }
             HStack {
-                Label(model.operation, systemImage: model.busy ? "clock" : "terminal")
+                Label(model.currentSession?.status ?? model.operation, systemImage: model.busy ? "clock" : "terminal")
                 Spacer()
-                if model.processRunning {
+                if model.canStopCurrentSession {
                     Button("Stop Operation", systemImage: "stop.fill") { model.stopConfirmation = true }.disabled(model.stopRequested)
                     if model.stopRequested { Button("Force Stop…") { model.forceStopConfirmation = true } }
                 }
-                if let log = model.log { Button("Open Full Log") { model.openFile(log.path) } }
+                if let log = model.currentSession == nil ? model.log : model.currentSession?.log { Button("Open Full Log") { model.openFile(log.path) } }
                 if model.snapshot?.dependencyAudit?.stale == true {
                     Button("Refresh Dependency Audit") { model.auditDependencies() }.disabled(model.busy || model.mediaBusy)
                 } else if let audit = model.dependencyAuditLog { Button("Open Dependency Audit") { model.openFile(audit.path) }.accessibilityIdentifier("openDependencyAudit") }
                 if let registrations = model.applicationRegistrationLog { Button("Open Application Registrations") { model.openFile(registrations.path) } }
             }
             ScrollView([.horizontal, .vertical]) {
-                Text(model.activity).font(.system(size: logFontSize, design: .monospaced))
+                Text(model.currentSession?.output ?? model.activity).font(.system(size: logFontSize, design: .monospaced))
                     .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .topLeading).padding(12)
             }.background(.background.secondary).border(.separator)
                 .accessibilityIdentifier("processOutput")

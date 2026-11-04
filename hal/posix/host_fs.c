@@ -507,6 +507,12 @@ LxHostFsError lx_host_path_readonly(const char *path, int readonly)
         mode |= S_IWUSR;
     return chmod(path, mode) ? fs_error(errno) : LX_HOST_FS_OK;
 }
+LxHostFsError lx_host_path_identity(const char *path, LxHostFileIdentity *identity)
+{
+    if (!path || !identity || tb_image_path(path))
+        return LX_HOST_FS_INVALID;
+    return lx_host_path_native_identity(path, identity) == 0 ? LX_HOST_FS_OK : fs_error(errno);
+}
 LxHostFsError lx_host_path_info(const char *path, LxHostFileInfo *info)
 {
     if (tb_image_path(path))

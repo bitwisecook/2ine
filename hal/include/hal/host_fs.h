@@ -40,6 +40,14 @@ typedef struct LxHostFileInfo
     LxHostFileKind kind;
     int readonly;
 } LxHostFileInfo;
+/* Identity of one host-file version; unavailable for virtual/image paths. */
+typedef struct LxHostFileIdentity
+{
+    uint64_t device, file, size;
+    int64_t modified, changed;
+    uint32_t modified_nanoseconds, changed_nanoseconds;
+} LxHostFileIdentity;
+LxHostFsError lx_host_path_identity(const char *path, LxHostFileIdentity *identity);
 typedef struct LxHostVolumeInfo
 {
     char filesystem[8], label[12];

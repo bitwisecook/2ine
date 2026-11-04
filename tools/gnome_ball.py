@@ -23,6 +23,7 @@ if __package__:
         gnome_configuration,
         gnome_media_preferences,
         gnome_navigation,
+        gnome_sessions,
         gnome_views,
     )
 else:
@@ -34,6 +35,7 @@ else:
     import gnome_configuration
     import gnome_media_preferences
     import gnome_navigation
+    import gnome_sessions
     import gnome_views
 
     import ball as ball_api
@@ -94,6 +96,9 @@ class BallWindow(Adw.ApplicationWindow):
         self.ball = None
         self.snapshot = None
         self.process = None
+        self.sessions = gnome_sessions.Sessions()
+        self.selected_session = None
+        self.updating_sessions = False
         self.busy = False
         self.operation_busy = False
         self.pending_operations = 0
@@ -134,6 +139,8 @@ class BallWindow(Adw.ApplicationWindow):
         self.icon_cache = {}
         self.icon_requests = set()
         self.stop_sent = False
+        self.log_polling, self.config_polling = False, False
+        self.log_timer, self.config_timer = None, None
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ball-engine")
         self.preferences = (
             Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
@@ -273,7 +280,10 @@ class BallWindow(Adw.ApplicationWindow):
         if (
             locked
             and not allow_queue
-            and (self.operation_busy or (self.process and not allow_running))
+            and (
+                self.operation_busy
+                or (self.process and not allow_running and not self.sessions.active())
+            )
         ):
             self.toast("Wait for the current operation to finish.")
             return False
@@ -307,8 +317,8 @@ class BallWindow(Adw.ApplicationWindow):
 
     def set_busy(self, busy):
         self.operation_busy = bool(busy or self.pending_operations)
-        self.busy = bool(self.operation_busy or self.process)
-        busy = self.busy
+        self.busy = bool(self.operation_busy or self.process or self.sessions.active(self.ball))
+        busy = self.operation_busy or bool(self.process and not self.sessions.active())
         self.sidebar.set_sensitive(not busy)
         self.spinner.set_spinning(busy)
         self.spinner.set_visible(busy)
@@ -359,12 +369,14 @@ class BallWindow(Adw.ApplicationWindow):
                 )
             )
         self.lookup_action("forget-ball").set_enabled(not busy and self.ball in self.missing_balls)
-        self.lookup_action("stop").set_enabled(bool(self.process) and not self.stop_sent)
-        self.lookup_action("force-stop").set_enabled(bool(self.process) and self.stop_sent)
+        selected = self.sessions.records.get(self.selected_session)
+        stoppable = selected and selected.active and selected.state != "finishing"
+        self.lookup_action("stop").set_enabled(bool(stoppable) and not self.stop_sent)
+        self.lookup_action("force-stop").set_enabled(bool(stoppable) and self.stop_sent)
         self.lookup_action("undo").set_enabled(not busy and bool(self.undo_commands))
         self.lookup_action("redo").set_enabled(not busy and bool(self.redo_commands))
         self.update_application_actions()
-        if self.component_active():
+        if self.component_active() or self.sessions.active(self.ball):
             for name in (
                 "run",
                 "install",
@@ -387,6 +399,17 @@ class BallWindow(Adw.ApplicationWindow):
                 "save",
             ):
                 self.lookup_action(name).set_enabled(False)
+        can_launch = (
+            not busy
+            and self.ball is not None
+            and not self.component_active()
+            and self.sessions.can_start(self.ball)
+        )
+        for name in ("run", "launch-application"):
+            self.lookup_action(name).set_enabled(can_launch)
+        self.lookup_action("install").set_enabled(
+            can_launch and not self.sessions.active(self.ball)
+        )
         if hasattr(self, "stack"):
             for name in ("apps", "drives", "settings"):
                 child = self.stack.get_child_by_name(name)
@@ -458,6 +481,9 @@ class BallWindow(Adw.ApplicationWindow):
             self.toast(
                 "A component job is running. Finish or cancel it in OS/2 System Components before closing."
             )
+            return True
+        if self.sessions.active():
+            self.toast("Close or stop the running application sessions before closing the manager.")
             return True
         if self.busy:
             self.toast("Wait for the running application or operation to finish.")
@@ -590,7 +616,7 @@ class BallWindow(Adw.ApplicationWindow):
         self.request_work(lambda: self.read_snapshot(path), opened)
 
     def refresh(self, select=None):
-        if self.busy:
+        if self.operation_busy:
             return
         target = select if isinstance(select, Path) else self.ball
 
@@ -673,7 +699,7 @@ class BallWindow(Adw.ApplicationWindow):
             self.set_busy(False)
 
     def selected(self, _list, row):
-        if row is None or self.busy:
+        if row is None or self.operation_busy:
             return
         path = row.ball_path
         previous = self.ball
@@ -684,6 +710,7 @@ class BallWindow(Adw.ApplicationWindow):
                 self.last_log, self.last_result, self.log_text = None, None, ""
                 self.activity_title = "Ready"
             self.ball, self.snapshot = path, snapshot
+            self.bind_session_for_ball()
             self.build = Path(snapshot.get("gnomeRuntimeBuild", str(self.build)))
             self.render()
             self.set_busy(False)
@@ -901,6 +928,13 @@ class BallWindow(Adw.ApplicationWindow):
         self.configuration_stack.add_titled(registry, "registry", "Registry")
         self.configuration_stack.set_visible_child_name(configuration_tab or "overview")
         activity = self.page("activity", "Logs", "document-open-recent-symbolic")
+        self.session_selector = Gtk.DropDown()
+        self.session_selector.update_property(
+            [Gtk.AccessibleProperty.LABEL], ["Application session"]
+        )
+        self.session_selector.connect("notify::selected", self.session_changed)
+        activity.append(self.session_selector)
+        self.refresh_session_selector()
         self.status = Gtk.Label(xalign=0, wrap=True)
         self.status.add_css_class("heading")
         activity.append(self.status)
@@ -1057,7 +1091,7 @@ class BallWindow(Adw.ApplicationWindow):
         picker.open_multiple(self, None, chosen)
 
     def choose_os2_support(self, categories=None, force_picker=False):
-        if not self.ball or self.busy or self.process:
+        if not self.ball or self.operation_busy or self.sessions.active(self.ball):
             return
         self.show_page("components")
         remembered = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
@@ -1297,7 +1331,12 @@ class BallWindow(Adw.ApplicationWindow):
         self.request_work(verify_missing, forgotten)
 
     def rename_ball(self, path=None):
-        if self.busy or self.process or self.component_active(path) or not (path or self.ball):
+        if (
+            self.operation_busy
+            or self.sessions.active(path or self.ball)
+            or self.component_active(path)
+            or not (path or self.ball)
+        ):
             return
         try:
             source = gnome_ball_lifecycle.package(path or self.ball)
@@ -1307,7 +1346,7 @@ class BallWindow(Adw.ApplicationWindow):
             return
 
         def rename(values, dialog):
-            if self.busy or self.process or self.component_active(source):
+            if self.operation_busy or self.sessions.active(source) or self.component_active(source):
                 return
             destination = gnome_ball_lifecycle.rename_destination(source, values["name"])
             if destination == source:
@@ -1342,7 +1381,12 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def trash_ball(self, path=None):
-        if self.busy or self.process or self.component_active(path) or not (path or self.ball):
+        if (
+            self.operation_busy
+            or self.sessions.active(path or self.ball)
+            or self.component_active(path)
+            or not (path or self.ball)
+        ):
             return
         try:
             source = gnome_ball_lifecycle.package(path or self.ball)
@@ -1368,7 +1412,7 @@ class BallWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def remove_ball_package(self, source, expected, permanent=False):
-        if self.busy or self.process or self.component_active(source):
+        if self.operation_busy or self.sessions.active(source) or self.component_active(source):
             return
 
         def work():
@@ -1455,7 +1499,12 @@ class BallWindow(Adw.ApplicationWindow):
         dialog.save(self, None, saved)
 
     def export_ball(self, include_images=False):
-        if self.busy or not self.ball or self.component_active():
+        if (
+            self.operation_busy
+            or not self.ball
+            or self.component_active()
+            or self.sessions.active(self.ball)
+        ):
             return
         if self.ball in self.drafts or any(
             key[0] == str(self.ball) for key in self.settings_file_drafts
@@ -1526,7 +1575,16 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def program_dialog(self, action, name=None, program=""):
-        if not self.ball or self.busy or self.component_active():
+        if (
+            not self.ball
+            or self.operation_busy
+            or self.component_active()
+            or (self.sessions.active(self.ball) and action == "add-app")
+            or (
+                action in ("run", "install")
+                and not self.sessions.can_start(self.ball, action == "install")
+            )
+        ):
             return None
         dialog = gnome_views.ProgramDialog(self, action, name=name, program=program)
         dialog.present(self)
@@ -1551,8 +1609,10 @@ class BallWindow(Adw.ApplicationWindow):
         self.config_conflict.set_revealed(conflict)
 
     def save_config(self):
-        if self.component_active():
-            self.toast("Wait for this ball’s component job before saving CONFIG.SYS.")
+        if self.component_active() or self.sessions.active(self.ball):
+            self.toast(
+                "Wait for this ball’s applications or component job before saving CONFIG.SYS."
+            )
             return
         if self.ball not in self.drafts:
             return
@@ -1605,6 +1665,12 @@ class BallWindow(Adw.ApplicationWindow):
     def api(self, action, **fields):
         readonly = {
             "snapshot",
+            "config-sys",
+            "guest-environment",
+            "parse-arguments",
+            "format-arguments",
+            "image-preview",
+            "application-details",
             "browse",
             "browse-media",
             "configuration-read",
@@ -1617,9 +1683,12 @@ class BallWindow(Adw.ApplicationWindow):
             "validate-os2-media",
             "plan-os2-extraction",
         }
-        if self.component_active(fields.get("ball", self.ball)) and action not in readonly:
+        if (
+            self.component_active(fields.get("ball", self.ball))
+            or self.sessions.active(fields.get("ball", self.ball))
+        ) and action not in readonly:
             raise ValueError(
-                "A component job is changing this ball. Wait or cancel it before editing."
+                "An application or component job is active in this ball. Finish it before editing."
             )
         return ball_api.native_request(
             {"action": action, "ball": str(self.ball), "build": str(self.build), **fields}
@@ -1708,8 +1777,10 @@ class BallWindow(Adw.ApplicationWindow):
         completed=None,
         on_error=None,
     ):
-        if self.component_active(message.get("ball", self.ball)):
-            self.toast("Wait for this ball’s component job to finish before changing it.")
+        if self.component_active(message.get("ball", self.ball)) or (
+            self.sessions.active(message.get("ball", self.ball)) and not allow_running
+        ):
+            self.toast("Wait for this ball’s applications or component job before changing it.")
             return False
         if inverse is None and message["action"] == "command":
             inverse = self.inverse(message["arguments"])
@@ -1749,8 +1820,10 @@ class BallWindow(Adw.ApplicationWindow):
         return self.commit_request(message, undo)
 
     def history_operation(self, item, reverse):
-        if self.component_active(item["ball"]):
-            self.toast("Wait for this ball’s component job before undoing or redoing a change.")
+        if self.component_active(item["ball"]) or self.sessions.active(item["ball"]):
+            self.toast(
+                "Wait for this ball’s applications or component job before undoing or redoing."
+            )
             return
         messages = item["undo" if reverse else "redo"]
         messages = messages if isinstance(messages, list) else [messages]
@@ -1814,44 +1887,90 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def prepare_launch(self, arguments, **fields):
+        path = Path(fields.pop("ball", self.ball))
         receiving_build = str(fields.pop("build", self.build))
-        plan = self.api("prepare-launch", arguments=arguments, build=receiving_build, **fields)
+        plan = ball_api.native_request(
+            {
+                "action": "prepare-launch",
+                "ball": str(path),
+                "build": receiving_build,
+                "arguments": arguments,
+                **fields,
+            }
+        )
         plan["gnomeReceivingBuild"] = receiving_build
         if arguments[0] == "install":
             program = arguments[3 if len(arguments) > 1 and arguments[1] == "--cwd" else 1]
             if len(program) > 1 and program[1] == ":":
                 plan["gnomeMediaDrive"] = program[0].upper()
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-        log = self.ball / "logs" / f"gnome-{stamp}.log"
+        log = path / "logs" / f"gnome-{stamp}.log"
         log.parent.mkdir(parents=True, exist_ok=True)
         return plan, log
 
     def execute(self, arguments, **fields):
-        if self.busy or not self.ball or self.component_active():
+        if self.operation_busy or not self.ball or self.component_active():
             return False
         self.banner.set_revealed(False)
         if arguments[0] not in ("run", "install", "launch"):
             return self.commit_request({"action": "command", "arguments": arguments})
-        path = self.ball
+        path, build = self.ball, self.build
+        peers = bool(self.sessions.active(path))
+        try:
+            at = 3 if len(arguments) > 1 and arguments[1] == "--cwd" else 1
+            title = arguments[at] if len(arguments) > at else "Application"
+            if arguments[0] != "launch":
+                title = title.replace("\\", "/").rsplit("/", 1)[-1]
+            session = self.sessions.reserve(path, arguments[0] == "install", title)
+        except ValueError as error:
+            self.toast(str(error))
+            return False
+        self.selected_session = session.id
         self.activity_title = "Preparing application…"
+        self.last_log, self.last_result, self.log_text = None, None, ""
+        self.refresh_session_selector()
+        self.set_busy(False)
         self.show_page("activity")
 
+        def failed(error):
+            session.state = "failed"
+            self.refresh_session_selector()
+            self.set_busy(False)
+            if self.ball == path:
+                self.report_error(error)
+            else:
+                self.toast(f"Could not start {session.name}: {error}")
+
         def prepared(result):
-            plan, log = result
-            if str(self.ball) != str(path):
+            if session.stop_sent:
+                session.state = "cancelled"
+                self.refresh_session_selector()
+                self.set_busy(False)
                 return
+            plan, log = result
             audit = plan.get("dependencyAudit", {})
             if ball_api.needs_dependency_media(audit):
-                self.activity_title = "Additional OS/2 components are required"
-                self.log_text = audit.get("summary", "")
-                self.update_activity()
-                self.choose_dependency_media(
-                    str(path), after=lambda: self.execute(arguments, **fields)
-                )
+                session.state = "failed"
+                self.refresh_session_selector()
+                self.set_busy(False)
+                if self.ball == path and not peers:
+                    self.choose_dependency_media(
+                        str(path), after=lambda: self.execute(arguments, **fields)
+                    )
+                else:
+                    self.toast(
+                        "Required OS/2 components are missing; install them after this ball’s running sessions finish."
+                    )
                 return
-            self.launch(path, plan, log)
+            self.launch(path, plan, log, session)
 
-        return self.request_work(lambda: self.prepare_launch(arguments, **fields), prepared)
+        fields["resolve"] = not peers and fields.get("resolve", True)
+        self.component_work(
+            lambda: self.prepare_launch(arguments, ball=str(path), build=str(build), **fields),
+            prepared,
+            failed,
+        )
+        return True
 
     def choose_save(self, title, initial, callback):
         dialog = Gtk.FileDialog(title=title, initial_name=initial)
@@ -1891,12 +2010,14 @@ class BallWindow(Adw.ApplicationWindow):
         else:
             dialog.open_multiple(self, None, chosen)
 
-    def load_application_icon(self, name, image):
+    def load_application_icon(self, name, image, completed=None):
         path = self.ball
         key = (str(path), name, self.snapshot["applicationRecords"].get(name))
         if key in self.icon_cache:
             if self.icon_cache[key]:
                 image.set_from_paintable(self.icon_cache[key])
+            if completed:
+                completed(bool(self.icon_cache[key]))
             return
 
         def loaded(result):
@@ -1909,20 +2030,95 @@ class BallWindow(Adw.ApplicationWindow):
                     image.set_from_paintable(paintable)
             except GLib.Error:
                 self.icon_cache[key] = None
+            if completed:
+                completed(bool(self.icon_cache.get(key)))
+
+        def failed(_error):
+            self.icon_cache[key] = None
+            if completed:
+                completed(False)
 
         self.request_work(
             lambda: self.api("application-icon", ball=str(path), name=name),
             loaded,
             locked=False,
-            on_error=lambda _error: None,
+            on_error=failed,
         )
 
+    def bind_session_for_ball(self, update_output=True):
+        items = self.sessions.for_ball(self.ball) if self.ball else []
+        session = next((item for item in items if item.id == self.selected_session), None)
+        if session is None:
+            session = items[-1] if items else None
+            self.selected_session = session.id if session else None
+        self.process = session.process if session and session.active else None
+        self.stop_sent = session.stop_sent if session else False
+        self.operation_supervised = bool(session and session.plan.get("operationSupervised"))
+        if session and update_output:
+            self.last_log, self.last_result = session.log, session.code
+            self.activity_title = (
+                f"{session.name} · {session.state}"
+                if session.active
+                else f"{session.name} · exit {session.code}"
+                if session.code is not None
+                else f"{session.name} · {session.state}"
+            )
+        return session
+
+    def refresh_session_selector(self):
+        if hasattr(self, "applications_page"):
+            self.applications_page.update_sessions()
+        if not hasattr(self, "session_selector"):
+            return
+        items = self.sessions.for_ball(self.ball) if self.ball else []
+        self.bind_session_for_ball(update_output=False)
+        self.session_ids = [session.id for session in items]
+        self.updating_sessions = True
+        try:
+            self.session_selector.set_model(
+                Gtk.StringList.new(
+                    [
+                        f"{session.name} · Session {session.ordinal} · {session.state}"
+                        for session in items
+                    ]
+                )
+            )
+            if self.selected_session in self.session_ids:
+                self.session_selector.set_selected(self.session_ids.index(self.selected_session))
+            self.session_selector.set_visible(bool(items))
+        finally:
+            self.updating_sessions = False
+
+    def session_changed(self, selector, _property):
+        if self.updating_sessions:
+            return
+        index = selector.get_selected()
+        if index >= len(self.session_ids):
+            return
+        self.selected_session = self.session_ids[index]
+        session = self.bind_session_for_ball()
+        self.set_busy(False)
+        self.update_activity()
+        if session and session.log:
+
+            def received(text):
+                if self.selected_session == session.id:
+                    self.log_text = text
+                    self.update_activity()
+
+            self.component_work(
+                lambda: self.read_log(session.log), received, lambda _error: None, monitor=True
+            )
+        if self.process:
+            self.start_session_polling()
+
     def stop_process(self, force=False):
-        if not self.process:
+        session = self.sessions.records.get(self.selected_session)
+        if not session or not session.active or session.state == "finishing":
             return
         dialog = Adw.AlertDialog(
             heading="Force Stop Application?" if force else "Stop Application?",
-            body="Unsaved work in the guest application may be lost.",
+            body=f"Unsaved work in {session.name} may be lost. Other application sessions keep running.",
         )
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("stop", "Force Stop" if force else "Stop Application")
@@ -1930,67 +2126,141 @@ class BallWindow(Adw.ApplicationWindow):
         dialog.set_close_response("cancel")
 
         def response(_dialog, choice):
-            if choice == "stop" and self.process:
-                if (
-                    force
-                    and getattr(self, "operation_supervised", False)
-                    and hasattr(signal, "SIGUSR2")
-                ):
-                    self.process.send_signal(signal.SIGUSR2)
-                elif force:
-                    self.process.force_exit()
-                else:
-                    self.process.send_signal(signal.SIGTERM)
-                self.stop_sent = True
-                self.activity_title = "Waiting for application to exit…"
-                self.set_busy(False)
-                self.update_activity()
+            if choice != "stop" or not session.active or session.state == "finishing":
+                return
+            if session.process is None:
+                session.stop_sent, session.state = True, "cancelling"
+            else:
+                try:
+                    if (
+                        force
+                        and session.plan.get("operationSupervised")
+                        and hasattr(signal, "SIGUSR2")
+                    ):
+                        session.process.send_signal(signal.SIGUSR2)
+                    elif force:
+                        session.process.force_exit()
+                    else:
+                        session.process.send_signal(signal.SIGTERM)
+                    session.stop_sent, session.state = True, "stopping"
+                except GLib.Error as error:
+                    self.report_error(error)
+            self.refresh_session_selector()
+            self.set_busy(False)
+            self.update_activity()
 
         dialog.connect("response", response)
         dialog.present(self)
 
-    def launch(self, path, plan, log):
-        plan.setdefault("gnomeReceivingBuild", str(self.build))
-        launcher = Gio.SubprocessLauncher.new(Gio.SubprocessFlags.STDERR_MERGE)
+    def spawn_session_process(self, plan, log, *, service=False):
+        launcher = Gio.SubprocessLauncher.new(
+            Gio.SubprocessFlags.STDERR_MERGE
+            | (Gio.SubprocessFlags.STDIN_PIPE if service else Gio.SubprocessFlags.NONE)
+        )
         launcher.set_stdout_file_path(str(log))
         launcher.set_cwd(plan["cwd"])
         for key in plan["unsetEnvironment"]:
             launcher.unsetenv(key)
         for key, value in plan["environment"].items():
             launcher.setenv(key, value, True)
+        process = launcher.spawnv(plan["command"])
+        if service and process.get_stdin_pipe():
+            process.get_stdin_pipe().close(None)
+        return process
+
+    @staticmethod
+    def stop_owned_service(process):
+        if getattr(process, "twoine_alive", False):
+            try:
+                if getattr(process, "twoine_supervised", False) and hasattr(signal, "SIGUSR2"):
+                    process.send_signal(signal.SIGUSR2)
+                else:
+                    process.force_exit()
+            except GLib.Error:
+                pass
+
+    def launch(self, path, plan, log, session=None):
+        if session is None:
+            try:
+                session = self.sessions.reserve(
+                    path, plan.get("installer", False), plan.get("program", "Application")
+                )
+            except ValueError as error:
+                self.toast(str(error))
+                return False
+        session.plan, session.log = plan, log
+        plan.setdefault("gnomeReceivingBuild", str(self.build))
+
+        def spawn_service(startup, index):
+            service_log = log.with_suffix(f".startup-{index}.log")
+            child = self.spawn_session_process(startup, service_log, service=True)
+            child.twoine_alive = True
+            child.twoine_supervised = startup.get("operationSupervised", False)
+
+            def exited(process, result):
+                process.wait_finish(result)
+                process.twoine_alive = False
+
+            child.wait_async(None, exited)
+            return child
+
+        session.leases, error = gnome_sessions.STARTUP_POOL.acquire(
+            path,
+            plan.get("startup", []),
+            session.id,
+            spawn_service,
+            lambda child: getattr(child, "twoine_alive", False),
+        )
         try:
-            self.process = launcher.spawnv(plan["command"])
-            self.operation_supervised = plan.get("operationSupervised", False)
-        except GLib.Error as error:
-            self.report_error(error.message)
-            self.activity_title = "Could not start application"
-            self.update_activity()
+            if error:
+                raise error
+            session.process = self.spawn_session_process(plan, log)
+            session.state = "running"
+        except (GLib.Error, OSError, ValueError) as error:
+            gnome_sessions.STARTUP_POOL.release(session.leases, session.id, self.stop_owned_service)
+            session.state = "failed"
+            self.refresh_session_selector()
+            self.set_busy(False)
+            self.report_error(error)
             return False
-        self.last_log, self.last_result, self.log_text = log, None, ""
-        self.activity_title = "Running… Close the application's windows to finish."
-        self.stop_sent = False
+        if self.ball == path:
+            self.selected_session = session.id
+            self.log_text = ""
+            self.bind_session_for_ball()
+            self.show_page("activity")
+        self.refresh_session_selector()
         self.set_busy(False)
-        self.show_page("activity")
         self.update_activity()
-        self.process.wait_async(None, self.completed, (path, plan, log))
-        self.log_polling = False
-        GLib.timeout_add(250, self.poll_log)
-        self.config_polling = False
-        GLib.timeout_add(1000, self.poll_config)
+        session.process.wait_async(None, self.completed, session.id)
+        self.start_session_polling()
         return True
 
-    def completed(self, process, result, context):
-        path, plan, log = context
+    def start_session_polling(self):
+        for name, delay, callback in (
+            ("log_timer", 250, self.poll_log),
+            ("config_timer", 1000, self.poll_config),
+        ):
+            previous = getattr(self, name, None)
+            if previous:
+                GLib.source_remove(previous)
+
+            def tick(callback=callback, name=name):
+                keep = callback()
+                if not keep:
+                    setattr(self, name, None)
+                return keep
+
+            setattr(self, name, GLib.timeout_add(delay, tick))
+
+    def completed(self, process, result, session_id):
+        session = self.sessions.records[session_id]
         process.wait_finish(result)
         code = process.get_exit_status() if process.get_if_exited() else -process.get_term_sig()
-        self.process = None
-        self.operation_supervised = False
-        self.last_result = code
-        self.activity_title = (
-            f"Application finished: exit {code}"
-            if code >= 0
-            else f"Application ended by signal {-code}"
-        )
+        session.code, session.state = code, "finishing"
+        gnome_sessions.STARTUP_POOL.release(session.leases, session.id, self.stop_owned_service)
+        path, plan, log = Path(session.ball), session.plan, session.log
+        self.refresh_session_selector()
+        self.set_busy(False)
 
         def finish():
             receipt_error = None
@@ -2016,27 +2286,31 @@ class BallWindow(Adw.ApplicationWindow):
             )
 
         def finished(result):
-            self.snapshot, self.log_text, error, self.install_summary = result
-            self.render()
-            self.show_page("activity")
-            if error:
-                self.report_error("Installer receipt could not be saved: " + error)
-            self.toast(self.activity_title)
-            audit = self.snapshot.get("dependencyAudit") or {}
-            if plan["installer"] and ball_api.needs_dependency_media(audit):
-                self.choose_dependency_media(str(path))
-            letter = plan.get("gnomeMediaDrive")
-            mapping = self.snapshot["manifest"]["drives"].get(letter)
-            if isinstance(mapping, dict) and mapping.get("image") and not mapping.get("locked"):
-                toast = Adw.Toast(
-                    title="Installer finished. Installation media is still attached.",
-                    button_label="Eject",
-                )
-                toast.connect("button-clicked", lambda *_: self.media_command(["eject", letter]))
-                self.overlay.add_toast(toast)
+            snapshot, text, error, summary = result
+            session.state = "finished"
+            if self.ball == path:
+                if self.selected_session == session.id:
+                    self.log_text = text
+                self.install_summary = summary
+                self.apply_snapshot(snapshot)
+                self.bind_session_for_ball()
+                self.update_activity()
+                if error:
+                    self.report_error("Installer receipt could not be saved: " + error)
+                audit = snapshot.get("dependencyAudit") or {}
+                if plan["installer"] and ball_api.needs_dependency_media(audit):
+                    self.choose_dependency_media(str(path))
+            self.refresh_session_selector()
+            self.set_busy(False)
+            self.toast(f"{session.name} finished: exit {code}")
 
-        self.set_busy(False)
-        self.request_work(finish, finished, allow_queue=True)
+        def failed(error):
+            session.state = "finished"
+            self.refresh_session_selector()
+            self.set_busy(False)
+            self.toast(f"Could not refresh {session.name}: {error}")
+
+        self.component_work(finish, finished, failed)
 
     @staticmethod
     def read_log(path):
@@ -2149,13 +2423,21 @@ class BallWindow(Adw.ApplicationWindow):
         selected = page.selected_name() if page else None
         for action in ("launch-selected", "edit-selected"):
             self.lookup_action(action).set_enabled(
-                bool(selected) and self.snapshot is not None and not self.busy
+                bool(selected)
+                and self.snapshot is not None
+                and not self.operation_busy
+                and (
+                    self.sessions.can_start(self.ball)
+                    if action == "launch-selected"
+                    else not self.sessions.active(self.ball)
+                )
+                and not self.component_active()
             )
 
     def selected_application_action(self, action):
         page = getattr(self, "applications_page", None)
         name = page.selected_name() if page else None
-        if name and not self.busy:
+        if name and not self.operation_busy:
             if action == "launch":
                 self.execute(["launch", name])
             else:

@@ -103,7 +103,10 @@ final class AppModel {
     var paths: [String] = []
     var selected: String? {
         didSet {
+            if selected != oldValue { applicationIcons = [:]; iconLoadID = UUID() }
             if let selected, settingsDrafts[selected] == nil { settingsDrafts[selected] = SettingsDraft() }
+            syncSessionPresentation(selectDefault: true)
+            updateConfigObservation()
         }
     }
     var snapshot: BallSnapshot?
@@ -111,12 +114,15 @@ final class AppModel {
     let undoManager = OperationUndoManager()
     var busy = false { didSet { undoManager.blocked = busy || mediaBusy } }
     var mediaBusy = false { didSet { undoManager.blocked = busy || mediaBusy } }
-    var canChangeMedia: Bool { selected != nil && !componentOperationRunning && !mediaBusy && (!busy || processRunning) }
+    var canChangeMedia: Bool { selected != nil && !componentOperationRunning && !launchPreparing && !mediaBusy && (!busy || processRunning) }
     var installCompletion: InstallCompletion?
     var processRunning = false { didSet { if oldValue != processRunning { updateConfigObservation() } } }
     var stopRequested = false
-    var stopConfirmation = false
-    var forceStopConfirmation = false
+    var stopConfirmation = false { didSet { if stopConfirmation { stopTargetID = selectedSessionID } } }
+    var forceStopConfirmation = false { didSet { if forceStopConfirmation { stopTargetID = selectedSessionID } } }
+    private var stopTargetID: String?
+    var sessions: [ApplicationSession] = []
+    var selectedSessionID: String?
     var settingsDrafts: [String: SettingsDraft] = [:]
     var settingsDraft: SettingsDraft {
         guard let selected else { return SettingsDraft() }
@@ -196,10 +202,11 @@ final class AppModel {
     var error: String?
     var ballRename: BallRenameRequest?
     var ballToTrash: BallRenameRequest?
-    var canManageBalls: Bool { !busy && !mediaBusy && !processRunning && !configSaving }
+    var canManageBalls: Bool { !busy && !mediaBusy && !configSaving }
     var programAction: ProgramAction?
     var editingApplication: String?
     var applicationIcons: [String: NSImage] = [:]
+    private var iconLoadID = UUID()
     var driveNotice = ""
     var browseDrive: String?
     var mapping = false
@@ -264,11 +271,11 @@ final class AppModel {
         build == bundledRuntime ? "Bundled 2ine Runtime" : "Runtime: " + URL(filePath: build).lastPathComponent
     }
 
-    init(preferencesURL: URL? = nil) {
+    init(preferencesURL: URL? = nil, runtimeURL: URL? = nil) {
         let resources = ProcessInfo.processInfo.environment["TWOINE_MACOS_RESOURCES"].map { URL(filePath: $0) }
             ?? (Bundle.main.object(forInfoDictionaryKey: "TwoineDeveloperResources") as? String).map { URL(filePath: $0) }
             ?? Bundle.main.resourceURL ?? Bundle.main.bundleURL
-        bundledRuntime = resources.appending(path: "Runtime").path
+        bundledRuntime = (runtimeURL ?? resources.appending(path: "Runtime")).path
         backend = BallBackend()
         let override = ProcessInfo.processInfo.environment["TWOINE_MACOS_PREFERENCES"]
         let path = override.map { URL(filePath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser
@@ -303,10 +310,13 @@ final class AppModel {
     }
 
     private func reload(_ ball: String) async throws {
-        snapshot = try await backend.request(DesktopRequest("snapshot", ball: ball), as: BallSnapshot.self)
+        let value = try await backend.request(DesktopRequest("snapshot", ball: ball), as: BallSnapshot.self)
+        guard selected == ball else { return }
+        snapshot = value
         if let sources = snapshot?.os2Support?.mediaSources, !sources.isEmpty { recentMediaCandidates = sources }
         if let text = snapshot?.configSys { applyLiveConfig(text, ball: ball) }
         await loadIcons(ball)
+        guard selected == ball else { return }
         revision += 1
         prefs.ballPaths = paths; prefs.selected = ball
         try await preferences.save(prefs)
@@ -319,7 +329,7 @@ final class AppModel {
     }
 
     func canManageBall(_ path: String) -> Bool {
-        canManageBalls && componentJobs[path]?.running != true && (paths.contains(path) || selected == path)
+        canManageBalls && !hasRunningSession(in: path) && !(processRunning && path == selected) && componentJobs[path]?.running != true && (paths.contains(path) || selected == path)
     }
     func beginRenameBall(_ path: String) {
         guard canManageBall(path) else { return }
@@ -346,6 +356,7 @@ final class AppModel {
         componentDrafts.removeValue(forKey: path)
         componentPlans.removeValue(forKey: path); componentMedia.removeValue(forKey: path)
         componentPlanSources.removeValue(forKey: path); componentJobs.removeValue(forKey: path)
+        sessions.removeAll { $0.ball == path }
         if componentNavigation?.ball == path { componentNavigation = nil }
         if let value = settingsDrafts.removeValue(forKey: path) { settingsDrafts[renamed.path] = value }
         if let value = configDrafts.removeValue(forKey: path) { configDrafts[renamed.path] = value }
@@ -416,6 +427,7 @@ final class AppModel {
         componentDrafts.removeValue(forKey: path)
         componentPlans.removeValue(forKey: path); componentMedia.removeValue(forKey: path)
         componentPlanSources.removeValue(forKey: path); componentJobs.removeValue(forKey: path)
+        sessions.removeAll { $0.ball == path }
         if componentNavigation?.ball == path { componentNavigation = nil }
         settingsDrafts.removeValue(forKey: path); configDrafts.removeValue(forKey: path)
         configBases.removeValue(forKey: path); liveConfigTexts.removeValue(forKey: path)
@@ -519,7 +531,7 @@ final class AppModel {
         }
     }
     func chooseExportBall() {
-        guard let selected, snapshot != nil, !busy, !mediaBusy, !componentOperationRunning else { return }
+        guard let selected, snapshot != nil, !busy, !mediaBusy, !processRunning, !componentOperationRunning else { return }
         let panel = NSSavePanel()
         panel.title = "Export Ball as ZIP"; panel.prompt = "Export"
         panel.allowedContentTypes = [.zip]; panel.canCreateDirectories = true
@@ -541,7 +553,7 @@ final class AppModel {
         }
     }
     func exportBall(to destination: URL, includeImages: Bool) {
-        guard let selected else { return }
+        guard let selected, !processRunning else { return }
         perform {
             self.operation = "Exporting ball…"
             defer { self.operation = "Ready" }
@@ -769,6 +781,7 @@ final class AppModel {
     }
     func auditDependencies() {
         guard let selected, !busy, !mediaBusy, !processRunning else { return }
+        selectedSessionID = nil
         perform {
             self.operation = "Checking installed components…"
             let audit = try await self.backend.request(DesktopRequest("audit-dependencies", ball: selected, build: self.build), as: DependencyAudit.self)
@@ -863,7 +876,7 @@ final class AppModel {
         return nil
     }
     func configSys(_ text: String, expected: String) {
-        guard let selected, !mediaBusy, !configSaving, !busy || processRunning else { return }
+        guard let selected, !mediaBusy, !configSaving, !launchPreparing, !busy || processRunning else { return }
         configSaving = true
         let ownsBusy = !busy
         if ownsBusy { busy = true }
@@ -1013,63 +1026,94 @@ final class AppModel {
         return image
     }
     private func loadIcons(_ ball: String) async {
-        applicationIcons = [:]
-        for (name, app) in snapshot?.manifest.applications ?? [:] {
+        guard selected == ball else { return }
+        let token = UUID(); iconLoadID = token
+        let applications = snapshot?.manifest.applications ?? [:]
+        var icons: [String: NSImage] = [:]
+        for (name, app) in applications {
+            guard selected == ball, iconLoadID == token else { return }
             if let icon = try? await executableIcon(program: app.program, name: name, ball: ball), let image = Self.image(icon) {
-                applicationIcons[name] = image
+                icons[name] = image
             }
         }
+        if selected == ball, iconLoadID == token { applicationIcons = icons }
     }
     func execute(_ arguments: [String], directories: [String: String]? = nil, environment: [String: String]? = nil, mediaDrive: String? = nil) {
-        guard let selected, !busy, !mediaBusy else { return }
+        guard let selected, !busy, !mediaBusy, !configSaving, !componentOperationRunning else { return }
         guard !build.isEmpty else { error = "Choose a runtime build before launching software."; return }
+        let peers = sessions.filter { $0.ball == selected && $0.running }
+        guard !peers.contains(where: \.installer), arguments.first != "install" || peers.isEmpty else {
+            componentNotice = "Finish this ball’s running applications before installing software."
+            return
+        }
         let build = self.build
         let media = arguments.first == "install" ? mediaDrive ?? arguments.dropFirst().first.flatMap { value -> String? in
             let letter = String(value.prefix(1)).uppercased()
             return snapshot?.manifest.drives[letter]?.image != nil ? letter : nil
         } : nil
-        installCompletion = nil
-        page = .activity; activity = "Starting…"; operation = arguments.first ?? "Run"
-        exitCode = nil; log = nil; stopRequested = false
-        perform {
-            defer { self.processRunning = false }
+        let session = ApplicationSession(ball: selected, arguments: arguments)
+        let sessionID = session.id
+        sessions.append(session); selectedSessionID = session.id
+        installCompletion = nil; page = .activity
+        syncSessionPresentation()
+        busy = true
+        Task {
+            defer { session.running = false; session.preparing = false; self.syncSessionPresentation() }
             let result: ProcessResult
             do {
-                self.operation = "Checking installed components…"
-                let audit = try await self.backend.request(DesktopRequest("ensure-dependencies", ball: selected, build: build), as: DependencyAudit.self)
-                self.activity = audit.summary
+                var request = DesktopRequest(peers.isEmpty ? "ensure-dependencies" : "audit-dependencies", ball: selected, build: build)
+                if !peers.isEmpty { request.resolve = false }
+                let audit = try await self.backend.request(request, as: DependencyAudit.self)
+                session.output = audit.summary
+                self.presentSession(session)
                 guard self.requestDependencyComponents(audit, ball: selected) != nil else {
-                    self.operation = "Launch Cancelled"
+                    session.status = "Launch Cancelled"
+                    session.preparing = false
+                    self.busy = false
                     try await self.reload(selected)
                     return
                 }
-                self.operation = "Starting…"
-                result = try await self.backend.execute(ball: selected, build: build, arguments: arguments, workingDirectories: directories, environment: environment) { [weak self] text in
-                    await self?.updateActivity(text)
+                session.status = "Running"
+                session.preparing = false
+                self.busy = false
+                self.presentSession(session)
+                result = try await self.backend.execute(ball: selected, build: build, arguments: arguments, workingDirectories: directories, environment: environment, sessionID: sessionID) { [weak self] text in
+                    await self?.updateActivity(text, sessionID: sessionID)
                 }
             } catch {
-                self.operation = "Could Not Start"; self.activity = error.localizedDescription
+                if session.preparing { self.busy = false }
+                session.status = "Could Not Start"; session.output = error.localizedDescription
                 return
             }
-            self.activity = result.output; self.exitCode = result.code; self.log = result.log
-            if let audit = result.dependencyAudit { self.activity += "\n\n" + audit.summary }
-            if let media {
+            session.output = result.output; session.exitCode = result.code; session.log = result.log
+            if let audit = result.dependencyAudit { session.output += "\n\n" + audit.summary }
+            if let media, self.selected == selected {
                 self.installCompletion = InstallCompletion(ball: selected, letter: media, code: result.code, signalled: result.signalled)
             }
-            self.operation = result.signalled ? "Terminated by signal \(result.code)" : "Exited \(result.code)"
-            if let error = result.receiptError { self.error = "The process exited, but its installer receipt could not be saved: " + error }
-            if let audit = result.dependencyAudit, audit.needsMediaSelection {
+            session.status = result.signalled ? "Terminated by signal \(result.code)" : "Exited \(result.code)"
+            if let error = result.receiptError { session.output += "\nThe installer receipt could not be saved: " + error }
+            if self.selected == selected, let audit = result.dependencyAudit, audit.needsMediaSelection {
                 _ = self.requestDependencyComponents(audit, ball: selected)
             }
-            try await self.reload(selected)
+            if self.selected == selected {
+                do { try await self.reload(selected) }
+                catch { session.output += "\nCould not refresh the ball: " + error.localizedDescription }
+            }
         }
     }
-    private func updateActivity(_ text: String) { processRunning = true; activity = text }
+    private func updateActivity(_ text: String, sessionID: String) {
+        guard let session = sessions.first(where: { $0.id == sessionID }) else { return }
+        session.output = text; presentSession(session)
+    }
+    func cancelStopRequest() { stopTargetID = nil }
     func stopProcess(force: Bool = false) {
-        guard processRunning else { return }
-        stopRequested = true
-        operation = force ? "Force stopping…" : "Stopping…"
-        Task { await backend.stop(force: force) }
+        let target = stopTargetID ?? selectedSessionID
+        stopTargetID = nil
+        guard let session = sessions.first(where: { $0.id == target }), session.running, !session.preparing else { return }
+        session.stopRequested = true
+        session.status = force ? "Force stopping…" : "Stopping…"
+        presentSession(session)
+        Task { await backend.stop(sessionID: session.id, force: force) }
     }
     func chooseImport(into path: String) {
         guard !busy, !mediaBusy else { return }

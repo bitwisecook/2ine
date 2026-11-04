@@ -1105,11 +1105,7 @@ class ProgramDialog(FormDialog):
         def work():
             argv = self.api("parse-arguments", text=arguments)
             if self.action != "add-app":
-                return self.window.prepare_launch(
-                    [self.action, *(["--cwd", cwd] if cwd else []), program, *argv],
-                    workingDirectories=directories,
-                    environment=environment,
-                )
+                return [self.action, *(["--cwd", cwd] if cwd else []), program, *argv]
             request = {
                 "name": name,
                 "program": program,
@@ -1126,7 +1122,9 @@ class ProgramDialog(FormDialog):
 
         def finished(result):
             if self.action != "add-app":
-                if self.window.launch(self.ball, *result):
+                if self.window.execute(
+                    result, workingDirectories=directories, environment=environment
+                ):
                     self.close()
                 else:
                     self.error_message("The program could not be started. Check Logs for details.")

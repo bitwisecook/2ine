@@ -17,7 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             model?.componentNotice = "Component files are being updated. Finish or cancel the background jobs before quitting."
             return .terminateCancel
         }
-        if model?.busy == true || model?.mediaBusy == true {
+        if model?.busy == true || model?.mediaBusy == true || model?.hasRunningSessions == true {
             model?.error = "Stop the running guest from the Ball menu before quitting. Other operations must finish before quitting."
             return .terminateCancel
         }
@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if model?.busy == true || model?.mediaBusy == true {
+        if model?.busy == true || model?.mediaBusy == true || model?.hasRunningSessions == true {
             model?.error = "Stop the running guest from the Ball menu before closing. Other operations must finish before closing."
             return false
         }
@@ -81,7 +81,7 @@ struct TwoineBallApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel()
     var body: some Scene {
-        // One manager owns one operation. Avoid concurrent edits from duplicate windows.
+        // One manager owns session and mutation state for every open ball.
         WindowGroup("2ine", id: "ball") {
             ContentView(model: model)
                 .background(ManagerWindowAttachment(delegate: delegate))
@@ -134,16 +134,16 @@ struct BallCommands: Commands {
                 .disabled(model.busy || model.mediaBusy)
             Button("Export Ball as ZIP…") { model.chooseExportBall() }
                 .keyboardShortcut("e", modifiers: [.command, .option])
-                .disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+                .disabled(model.snapshot == nil || model.busy || model.mediaBusy || model.processRunning || model.componentOperationRunning)
         }
         CommandMenu("Ball") {
             Button("Rename Ball…") { if let path = model.selected { model.beginRenameBall(path) } }
-                .disabled(model.selected == nil || !model.canManageBalls || model.snapshot == nil)
+                .disabled((model.selected.map { !model.canManageBall($0) } ?? true) || model.snapshot == nil)
             if let path = model.selected, !FileManager.default.fileExists(atPath: path) {
-                Button("Remove Missing Ball from List") { model.removeMissingBall(path) }.disabled(!model.canManageBalls)
+                Button("Remove Missing Ball from List") { model.removeMissingBall(path) }.disabled(!model.canManageBall(path))
             } else {
                 Button("Move Ball to Trash…", role: .destructive) { if let path = model.selected { model.beginTrashBall(path) } }
-                    .disabled(model.selected == nil || !model.canManageBalls)
+                    .disabled(model.selected.map { !model.canManageBall($0) } ?? true)
             }
             Divider()
             Button("Choose Runtime…") { model.chooseRuntime() }.keyboardShortcut("r", modifiers: [.command, .shift])
@@ -177,9 +177,9 @@ struct BallCommands: Commands {
             Button("Set Default Folder…") { actions?.setDefaultFolder?() }.disabled(actions?.setDefaultFolder == nil || model.busy || model.mediaBusy)
             Divider()
             Button("Stop Operation…") { model.stopConfirmation = true }.keyboardShortcut(".")
-                .disabled(!model.processRunning || model.stopRequested)
+                .disabled(!model.canStopCurrentSession || model.stopRequested)
             Button("Force Stop Operation…") { model.forceStopConfirmation = true }
-                .disabled(!model.processRunning || !model.stopRequested)
+                .disabled(!model.canStopCurrentSession || !model.stopRequested)
             Divider()
             Button("Show Ball in Finder") { if let path = model.selected { model.reveal(path) } }.disabled(model.selected == nil)
         }
