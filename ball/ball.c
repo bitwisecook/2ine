@@ -551,7 +551,8 @@ static int load(Context *c, const cJSON *request)
     const char *action = field(request, "action");
     c->readonly_drives =
         action &&
-        (!strcmp(action, "launch-prerequisites") || !strcmp(action, "ball-navigation-state") ||
+        (!strcmp(action, "launch-prerequisites") || !strcmp(action, "ensure-launch-dependencies") ||
+         !strcmp(action, "launch-dependency-status") || !strcmp(action, "ball-navigation-state") ||
          !strcmp(action, "os2-component-state") || !strcmp(action, "validate-os2-media"));
     return roots(c);
 }
@@ -1468,6 +1469,7 @@ static char *command_interpreter(Context *c)
 #include "runtime_features.h"
 #include "os2_component_operations.h"
 #include "launch_prerequisites.h"
+#include "launch_dependencies.h"
 
 static cJSON *launch_desktop_identity(Context *c, const char *program, const char *name);
 static cJSON *prepare(Context *c, const cJSON *request)
@@ -2574,6 +2576,11 @@ static cJSON *launch_desktop_identity(Context *parent, const char *program, cons
 #include "ball_archive.h"
 #include "ball_rename.h"
 
+static void dependency_refresh_mutation(Context *c, const cJSON *request)
+{
+    cJSON *audit = audit_dependencies(c, request, 0);
+    cJSON_Delete(audit);
+}
 static cJSON *dispatch(Context *c, const cJSON *request)
 {
     const char *action = field(request, "action");
@@ -2831,8 +2838,9 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         !wps_sync(c))
         return NULL;
     if (!strcmp(action, "audit-dependencies") || !strcmp(action, "record-install") ||
-        !strcmp(action, "open-os2-source") || !strcmp(action, "plan-os2-extraction") ||
-        !strcmp(action, "import-os2-support"))
+        !strcmp(action, "prepare-launch") || !strcmp(action, "launch-dependency-status") ||
+        !strcmp(action, "ensure-launch-dependencies") || !strcmp(action, "open-os2-source") ||
+        !strcmp(action, "plan-os2-extraction") || !strcmp(action, "import-os2-support"))
     {
         runtime_feature_policy(c, field(request, "build"));
         if (c->error)
@@ -2881,11 +2889,19 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "plan-os2-extraction"))
         return plan_os2_extraction(c, request);
     if (!strcmp(action, "import-os2-support"))
-        return component_import(c, request);
+    {
+        cJSON *result = component_import(c, request);
+        dependency_refresh_mutation(c, request);
+        return result;
+    }
     if (!strcmp(action, "os2-component-state"))
         return os2_component_state(c, request);
     if (!strcmp(action, "remove-os2-components"))
-        return remove_os2_components(c, request);
+    {
+        cJSON *result = remove_os2_components(c, request);
+        dependency_refresh_mutation(c, request);
+        return result;
+    }
     if (!strcmp(action, "cancel-os2-component-operation"))
         return cancel_os2_component_operation(c, request);
     if (!strcmp(action, "snapshot"))
@@ -2895,11 +2911,27 @@ static cJSON *dispatch(Context *c, const cJSON *request)
                                        ? field(request, "path")
                                        : format(c, "%c:", 'A' + current_drive(c)));
     if (!strcmp(action, "import-files"))
-        return import_files(c, request);
+    {
+        cJSON *result = import_files(c, request);
+        dependency_refresh_mutation(c, request);
+        return result;
+    }
     if (!strcmp(action, "guest-environment"))
         return guest_environment(c, get(request, "environment"));
     if (!strcmp(action, "save-application"))
-        return save_application(c, request) ? snapshot(c) : NULL;
+    {
+        const char *name = field(request, "originalName");
+        if (!name || !*name)
+            name = field(request, "name");
+        const cJSON *previous = name ? get(get(c->manifest, "applications"), name) : NULL;
+        int changed =
+            !previous || !equal_case(field(previous, "program"), field(request, "program"));
+        if (!save_application(c, request))
+            return NULL;
+        if (changed)
+            dependency_refresh_mutation(c, request);
+        return snapshot(c);
+    }
     if (!strcmp(action, "application-icon"))
         return application_icon(c, request);
     if (!strcmp(action, "set-working-directory"))
@@ -2932,6 +2964,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     {
         if (!command(c, request))
             return NULL;
+        if (first && (!strcmp(first, "add-app") || !strcmp(first, "restore-app")))
+            dependency_refresh_mutation(c, request);
         return snapshot(c);
     }
     if (!strcmp(action, "runtime-build") || !strcmp(action, "restore-runtime"))
@@ -2990,8 +3024,11 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             fail(c, "resolve must be a boolean");
             return NULL;
         }
-        cJSON *audit = cJSON_IsFalse(resolve) ? audit_dependencies(c, request, 0)
-                                              : ensure_dependencies(c, request);
+        /* WPS projection is launch registration, independent of dependency
+           discovery. Resolve newly registered names before the cached query. */
+        if (!wps_sync(c))
+            return NULL;
+        cJSON *audit = launch_dependencies(c, request);
         if (!audit)
             return NULL;
         cJSON *plan = prepare(c, request);
@@ -3000,6 +3037,9 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         cJSON_Delete(audit);
         return plan;
     }
+    if (!strcmp(action, "ensure-launch-dependencies") ||
+        !strcmp(action, "launch-dependency-status"))
+        return launch_dependencies(c, request);
     if (!strcmp(action, "ensure-dependencies"))
         return ensure_dependencies(c, request);
     if (!strcmp(action, "audit-dependencies"))

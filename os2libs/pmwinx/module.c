@@ -28,6 +28,7 @@ static void open32Shutdown(void)
     open32ClassesCleanup();
     open32IconsCleanup();
     open32CriticalCleanup();
+    open32TlsCleanup();
     open32ContextCleanup();
     open32MemoryCleanup();
     command_line = 0;

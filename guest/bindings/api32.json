@@ -2158,6 +2158,16 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "RegisterClassAlias": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetClassLong": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "UnregisterClass": {
       "argument_bytes": 8,
       "callee_pop": 0,
@@ -2474,6 +2484,11 @@
       "convention": "LX_ABI_STACK32"
     },
     "GetCurrentThreadId": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCurrentThread": {
       "argument_bytes": 0,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
@@ -3850,6 +3865,26 @@
     },
     "GetClipboardOwner": {
       "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TlsAlloc": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TlsFree": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TlsGetValue": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TlsSetValue": {
+      "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

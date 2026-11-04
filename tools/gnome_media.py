@@ -59,7 +59,7 @@ class OS2ComponentsPane(Gtk.Box):
         bar.append(action_button("Choose Folder…", self.choose_folder))
         self.up = action_button("Parent Folder", self.go_up, "go-up-symbolic")
         bar.append(self.up)
-        bar.append(action_button("Check and Restore Libraries…", window.audit_dependencies))
+        bar.append(action_button("Rescan Dependencies", window.audit_dependencies))
         self.append(bar)
         self.address = Gtk.Label(xalign=0, wrap=True, selectable=True)
         self.append(self.address)

@@ -6,6 +6,13 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/pmwin/internal.h"
+#undef LX_NATIVE_MODULE_DEINIT
+#define LX_NATIVE_MODULE_DEINIT(code)                                                              \
+    void lxNativeModuleDeinit(void)                                                                \
+    {                                                                                              \
+        destroySharedPointers();                                                                   \
+        code;                                                                                      \
+    }
 #include "os2libs/generated/pmwin-lx.h"
 
 LX_PRIVATE uint32 GHABCounter;

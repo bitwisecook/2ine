@@ -20,6 +20,7 @@ class LaunchPreparationTests(unittest.TestCase):
     def test_read_only_prepare_never_recovers_available_modules_or_service(self):
         self.installed("Apps/APP.EXE", fixtures.linear(["SOMD"]))
         self.os2_media()
+        self.request("audit-dependencies", resolve=False)
         build = self.root / "runtime"
         build.mkdir()
         (build / "lx_loader").write_bytes(b"fixture")
@@ -28,6 +29,8 @@ class LaunchPreparationTests(unittest.TestCase):
             "prepare-launch", build=str(build), arguments=["run", r"C:\Apps\APP.EXE"], resolve=False
         )
         self.assertFalse(plan["dependencyAudit"]["automaticRecovery"])
+        self.assertTrue(plan["dependencyAudit"]["cached"])
+        self.assertEqual(plan["dependencyAudit"]["scannedBinaries"], 0)
         self.assertEqual(plan["dependencyAudit"]["missing"], ["SOMD"])
         self.assertEqual(plan["dependencyAudit"]["imported"], [])
         self.assertFalse((self.ball / "drive_c/OS2/DLL/SOMD.DLL").exists())
@@ -46,6 +49,8 @@ class LaunchPreparationTests(unittest.TestCase):
     def test_prepared_service_has_owner_program_and_existing_operation_supervision(self):
         self.installed("Apps/APP.EXE", fixtures.linear(["SOMD"]))
         self.os2_media()
+        # Installation/recovery is explicit setup; prepare uses the saved graph.
+        self.request("audit-dependencies")
         build = self.root / "runtime"
         build.mkdir()
         (build / "lx_loader").write_bytes(b"fixture")

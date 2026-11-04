@@ -22,18 +22,31 @@ def configure_library(build):
 
 
 def needs_dependency_media(report):
-    missing = bool(report.get("missing")) or any(
-        item.get("status") == "missing" for item in report.get("componentFiles", [])
-    )
-    return missing and not any(
-        source.get("status") in ("verified-os2-media", "verified-os2-set")
-        for source in report.get("media", [])
+    if report.get("cached"):
+        return False
+    # Only verified OS/2 package classifications can justify an OS/2 chooser.
+    # A third-party static import may be required, but OS/2 media cannot supply it.
+    missing = any(
+        group.get("modules") or group.get("files") for group in report.get("componentGroups", [])
+    ) or any(item.get("status") == "missing" for item in report.get("componentFiles", []))
+    return (
+        missing
+        and not report.get("stale", False)
+        and not any(
+            source.get("status") in ("verified-os2-media", "verified-os2-set")
+            for source in report.get("media", [])
+        )
     )
 
 
 def dependency_advice(report):
     """Describe unresolved libraries without treating third-party DLLs as OS/2 packages."""
     report = report or {}
+    if report.get("unknown"):
+        return [
+            report.get("summary")
+            or "Dependency status is unknown. Use Rescan Dependencies to update the stored index."
+        ]
     if report.get("stale"):
         return [
             "The library check is out of date. Check again to see which OS/2 components are missing."
@@ -41,16 +54,29 @@ def dependency_advice(report):
     groups = report.get("componentGroups") or []
     grouped = {name.upper() for group in groups for name in group.get("modules") or []}
     missing = [name for name in report.get("missing", []) if name.upper() not in grouped]
+    for item in report.get("unreachable", []):
+        name = item.get("module", "")
+        if name and name.upper() not in grouped and name not in missing:
+            missing.append(name)
     lines = []
     if groups:
         lines.append(
             "Missing OS/2 components — click a component to find it, then tick it to install:"
         )
     if missing:
-        lines.append("Other missing libraries: " + ", ".join(missing) + ".")
-        lines.append(
-            "Some may belong to optional features or require separate software. See the audit for details."
-        )
+        if report.get("scope") == "launch":
+            lines.append("Required libraries for this launch: " + ", ".join(missing) + ".")
+            lines.append(
+                "The selected executable or its static dependencies import these libraries. "
+                "They may require separate software; OS/2 media may not provide them."
+            )
+        else:
+            lines.append("Other missing libraries: " + ", ".join(missing) + ".")
+            lines.append(
+                "Some may belong to optional features or require separate software. See the audit for details."
+            )
+    if report.get("disabled"):
+        lines.append("Libraries disabled in settings: " + ", ".join(report["disabled"]) + ".")
     if (
         not groups
         and not missing

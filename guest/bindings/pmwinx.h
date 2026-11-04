@@ -581,6 +581,24 @@ static uint32 bridge32_RegisterClass(uint8 *a)
     lx_execution_release(&record);
     return result;
 }
+static uint32 bridge32_RegisterClassAlias(uint8 *a)
+{
+    char *name = o32_string(lx_guest_load_u32(a));
+    char *alias = o32_string(lx_guest_load_u32(a + 4));
+    uint32 result = 0;
+    if (name && alias)
+        result = RegisterClassAlias(name, alias);
+    else
+        open32SetError(87);
+    free(name);
+    free(alias);
+    return result;
+}
+static uint32 bridge32_SetClassLong(uint8 *a)
+{
+    return SetClassLong(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
+                        lx_guest_load_u32(a + 8));
+}
 static uint32 bridge32_UnregisterClass(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a);
@@ -1148,6 +1166,11 @@ static uint32 bridge32_GetCurrentThreadId(uint8 *a)
 {
     (void)a;
     return GetCurrentThreadId();
+}
+static uint32 bridge32_GetCurrentThread(uint8 *a)
+{
+    (void)a;
+    return GetCurrentThread();
 }
 
 static uint32 bridge32_CreateThread(uint8 *a)
@@ -3533,4 +3556,23 @@ static uint32 bridge32_GetClipboardFormatName(uint8 *a)
     ULONG result = GetClipboardFormatName(lx_guest_load_u32(a), output.host, capacity);
     lx_execution_release(&output);
     return result;
+}
+
+/* TLS data are opaque guest values, not buffers to translate or dereference. */
+static uint32 bridge32_TlsAlloc(uint8 *a)
+{
+    (void)a;
+    return TlsAlloc();
+}
+static uint32 bridge32_TlsFree(uint8 *a)
+{
+    return TlsFree(lx_guest_load_u32(a));
+}
+static uint32 bridge32_TlsGetValue(uint8 *a)
+{
+    return TlsGetValue(lx_guest_load_u32(a));
+}
+static uint32 bridge32_TlsSetValue(uint8 *a)
+{
+    return TlsSetValue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }

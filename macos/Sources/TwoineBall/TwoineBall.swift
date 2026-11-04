@@ -153,7 +153,7 @@ struct BallCommands: Commands {
             Button("Refresh") { model.refresh() }.keyboardShortcut("r").disabled(model.busy || model.mediaBusy)
             Divider()
             Button("Install Components…") { model.installComponents() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy)
-            Button("Check and Restore System Libraries…") { model.auditDependencies() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+            Button("Rescan Dependencies") { model.auditDependencies() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy || model.processRunning)
             Button("Install Software…") { model.beginProgram(.install) }.keyboardShortcut("i").disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Run Executable…") { model.beginProgram(.run) }.keyboardShortcut("r", modifiers: [.command, .option]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Add Application…") { model.beginProgram(.save) }.keyboardShortcut("a", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)

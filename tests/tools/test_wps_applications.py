@@ -288,6 +288,12 @@ class WpsApplicationTests(unittest.TestCase):
         report = self.ball / "logs/wps-registration-latest.json"
         self.assertTrue(report.is_file())
         self.assertEqual(json.loads(report.read_text())["added"], 1)
+        self.assertTrue(plan["dependencyAudit"]["cached"])
+        self.assertTrue(plan["dependencyAudit"]["unknown"])
+        self.assertEqual(plan["dependencyAudit"]["scannedBinaries"], 0)
+        self.assertFalse((self.ball / "cache/dependency-index.json").exists())
+        self.assertFalse((self.ball / "logs/dependencies-latest.json").exists())
+        self.assertIn("Word Processor", api.load(self.ball)["applications"])
 
 
 if __name__ == "__main__":

@@ -118,6 +118,24 @@ static void mapping_contract(void)
     CHECK(!lx_execution_memory(Execution, 0x05000000, 1, LX_GUEST_WRITE));
     CHECK(lx_execution_unmap(Execution, m));
     CHECK(!lx_execution_memory(Execution, 0x05000000, 1, 0));
+    /* DOS allocations need stronger base alignment without padding their lengths.
+       Exact module maps must still accept ordinary 4-KiB guest addresses. */
+    LxGuestMapping *occupied = lx_execution_map(Execution, 0x05010000, 0x1000, 3, 1);
+    CHECK(occupied);
+    uint8_t *sentinel = lx_execution_mapping_host(occupied);
+    sentinel[0] = 0xa7;
+    CHECK(!lx_execution_map_aligned(Execution, 0, 0x1000, 3, 0));
+    CHECK(!lx_execution_map_aligned(Execution, 0, 0x1000, 3, 0x3000));
+    CHECK(!lx_execution_map_aligned(Execution, 0, 0x1000, 3, 0x800));
+    m = lx_execution_map_aligned(Execution, 0x05004000, 0x1000, 3, 0x10000);
+    CHECK(m && lx_execution_mapping_address(m) == 0x05020000);
+    CHECK(lx_execution_mapping_size(m) == 0x1000);
+    CHECK(sentinel[0] == 0xa7);
+    CHECK(lx_execution_unmap(Execution, m));
+    CHECK(lx_execution_unmap(Execution, occupied));
+    m = lx_execution_map(Execution, 0x05004000, 0x1000, 3, 1);
+    CHECK(m && lx_execution_mapping_address(m) == 0x05004000);
+    CHECK(lx_execution_unmap(Execution, m));
     puts("guest mapping ownership, address translation, collision and permission checks passed");
 }
 static void argument_contract(void)

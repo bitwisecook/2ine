@@ -16,6 +16,7 @@ typedef struct PmPointer
 static HPOINTER current_pointer;
 static LONG pointer_level;
 static BOOL pointer_selected = TRUE; /* The host starts with its default arrow. */
+static HPOINTER shared_system_pointers[23];
 LONG queryPointerLevel(void)
 {
     return __atomic_load_n(&pointer_level, __ATOMIC_ACQUIRE);
@@ -28,11 +29,14 @@ static BOOL applyPointerVisibility(void)
 static void release_pointer(void *resource)
 {
     PmPointer *pointer = resource;
-    PmPointer **link = &pointer->anchor->pointers;
-    while (*link && *link != pointer)
-        link = &(*link)->next;
-    if (*link)
-        *link = pointer->next;
+    if (pointer->anchor)
+    {
+        PmPointer **link = &pointer->anchor->pointers;
+        while (*link && *link != pointer)
+            link = &(*link)->next;
+        if (*link)
+            *link = pointer->next;
+    }
     HPOINTER expected = pointer->handle;
     __atomic_compare_exchange_n(&current_pointer, &expected, 0, FALSE, __ATOMIC_ACQ_REL,
                                 __ATOMIC_ACQUIRE);
@@ -135,22 +139,14 @@ static PmPointerImage *system_icon(LONG id)
         }
     return image;
 }
-HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
+static HPOINTER system_pointer(AnchorBlock *anchor, LONG id, BOOL copy)
 {
-    AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || desktop != HWND_DESKTOP || !((id >= 1 && id <= 14) || (id >= 18 && id <= 22)))
-        return 0;
-    for (PmPointer *p = anchor->pointers; p && !copy; p = p->next)
-        if (!p->copy && p->id == id)
-            return p->handle;
     PmPointer *p = calloc(1, sizeof *p);
     if (!p)
         return 0;
     if ((id >= 10 && id <= 14) || id >= 19)
         p->image = system_icon(id);
-    else
-        p->host = lx_host_pointer_create(id == 18 ? LX_HOST_POINTER_ILLEGAL : id - 1);
-    if (!p->host && !p->image)
+    if (((id >= 10 && id <= 14) || id >= 19) && !p->image)
     {
         free(p);
         return 0;
@@ -166,9 +162,48 @@ HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
         free(p);
         return 0;
     }
-    p->next = anchor->pointers;
-    anchor->pointers = p;
+    if (anchor)
+    {
+        p->next = anchor->pointers;
+        anchor->pointers = p;
+    }
     return p->handle;
+}
+HPOINTER lx_pm_system_pointer(LONG id)
+{
+    if (!((id >= 1 && id <= 14) || (id >= 18 && id <= 22)))
+        return 0;
+    HPOINTER shared = __atomic_load_n(&shared_system_pointers[id], __ATOMIC_ACQUIRE);
+    if (shared)
+        return shared;
+    HPOINTER created = system_pointer(NULL, id, FALSE);
+    if (!created)
+        return 0;
+    if (__atomic_compare_exchange_n(&shared_system_pointers[id], &shared, created, FALSE,
+                                    __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE))
+        return created;
+    lx_handle_close(created, LX_HANDLE_PM_POINTER);
+    return shared;
+}
+HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    if (!anchor || desktop != HWND_DESKTOP || !((id >= 1 && id <= 14) || (id >= 18 && id <= 22)))
+        return 0;
+    return copy ? system_pointer(anchor, id, TRUE) : lx_pm_system_pointer(id);
+}
+void destroySharedPointers(void)
+{
+    for (unsigned id = 0; id < sizeof shared_system_pointers / sizeof *shared_system_pointers; id++)
+    {
+        HPOINTER pointer = __atomic_exchange_n(&shared_system_pointers[id], 0, __ATOMIC_ACQ_REL);
+        if (pointer)
+            lx_handle_close(pointer, LX_HANDLE_PM_POINTER);
+    }
+}
+LX_NATIVE_DESTRUCTOR(pmwin_system_pointers)
+{
+    destroySharedPointers();
 }
 BOOL WinSetPointer(HWND desktop, HPOINTER handle)
 {
@@ -189,7 +224,11 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
     if (!lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &borrow))
         return FALSE;
     PmPointer *pointer = borrow.resource;
-    if (!pointer->host && pointer->image)
+    LxHostPointer *host = __atomic_load_n(&pointer->host, __ATOMIC_ACQUIRE), *created = NULL;
+    if (!host && !pointer->image && pointer->id)
+        created =
+            lx_host_pointer_create(pointer->id == 18 ? LX_HOST_POINTER_ILLEGAL : pointer->id - 1);
+    if (!host && pointer->image)
     {
         PmPointerImage *image = pointer->image;
         size_t count = (size_t)image->width * image->height;
@@ -203,12 +242,20 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
                     pixels[(size_t)y * image->width + x] =
                         image->mask[at] && !image->pixels[at] ? 0 : 0xff000000 | image->pixels[at];
                 }
-            pointer->host = lx_host_pointer_create_color(pixels, image->width, image->height,
-                                                         pointer->hot_x, pointer->hot_y);
+            created = lx_host_pointer_create_color(pixels, image->width, image->height,
+                                                   pointer->hot_x, pointer->hot_y);
             free(pixels);
         }
     }
-    BOOL result = pointer->host && lx_host_pointer_set(pointer->host);
+    if (created)
+    {
+        if (__atomic_compare_exchange_n(&pointer->host, &host, created, FALSE, __ATOMIC_ACQ_REL,
+                                        __ATOMIC_ACQUIRE))
+            host = created;
+        else
+            lx_host_pointer_destroy(created);
+    }
+    BOOL result = host && lx_host_pointer_set(host);
     if (result)
     {
         __atomic_store_n(&current_pointer, handle, __ATOMIC_RELEASE);

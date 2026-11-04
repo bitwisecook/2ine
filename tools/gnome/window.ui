@@ -25,7 +25,7 @@
         <section>
           <item><attribute name="label" translatable="yes">Choose Runtime…</attribute><attribute name="action">win.runtime</attribute></item>
           <item><attribute name="label" translatable="yes">Install OS/2 Files…</attribute><attribute name="action">win.os2-files</attribute></item>
-          <item><attribute name="label" translatable="yes">Check and Restore System Libraries…</attribute><attribute name="action">win.restore-libraries</attribute></item>
+          <item><attribute name="label" translatable="yes">Rescan Dependencies</attribute><attribute name="action">win.restore-libraries</attribute></item>
         </section>
       </submenu>
       <submenu><attribute name="label" translatable="yes">Drives</attribute>

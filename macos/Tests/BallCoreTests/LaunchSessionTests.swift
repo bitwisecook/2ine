@@ -221,11 +221,11 @@ func installerIsExclusiveButAnotherBallCanRun(installFirst: Bool) async throws {
             #expect(secondResult.signalled && secondResult.output.contains("reader-shared-ok"))
             let firstAudit = try #require(firstResult.dependencyAudit)
             let secondAudit = try #require(secondResult.dependencyAudit)
-            #expect(firstAudit.jsonPath != secondAudit.jsonPath)
-            let firstJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: URL(filePath: firstAudit.jsonPath))) as? [String: Any])
-            let secondJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: URL(filePath: secondAudit.jsonPath))) as? [String: Any])
-            #expect(firstJSON["automaticRecovery"] as? Bool == true)
-            #expect(secondJSON["automaticRecovery"] as? Bool == false)
+            #expect(firstAudit.cached == true && secondAudit.cached == true)
+            #expect(firstAudit.scope == "launch" && secondAudit.scope == "launch")
+            #expect(firstAudit.jsonPath.isEmpty && secondAudit.jsonPath.isEmpty)
+            let auditFolders = try FileManager.default.contentsOfDirectory(atPath: fixture.ball.appending(path: "logs").path)
+            #expect(!auditFolders.contains { $0.hasPrefix("dependency-audit-") })
         } catch {
             await backend.stop(sessionID: firstID, force: true); await backend.stop(sessionID: secondID, force: true)
             _ = try? await first.value; if let second { _ = try? await second.value }

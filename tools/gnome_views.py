@@ -70,7 +70,7 @@ def dependency_advice_box(window):
                 box.append(link)
     if lines:
         if audit.get("stale"):
-            check = action_button("Check Libraries", window.audit_dependencies)
+            check = action_button("Rescan Dependencies", window.audit_dependencies)
             check.set_sensitive(
                 not window.busy and not window.process and not window.component_active()
             )

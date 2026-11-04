@@ -226,6 +226,12 @@ public struct DependencyAudit: Decodable, Sendable {
     public let stale: Bool?
     public let componentGroups: [ComponentGroup]?
     public let componentFiles: [ComponentFile]?
+    public let scope: String?
+    public let cached: Bool?
+    public let unknown: Bool?
+    public var statusSummary: String {
+        summary + (missing.isEmpty ? "" : "\nMissing libraries: " + missing.joined(separator: ", "))
+    }
     public var ungroupedMissingLibraries: [String] {
         let grouped = Set((componentGroups ?? []).flatMap { $0.modules ?? [] }.map { $0.uppercased() })
         return missing.filter { !grouped.contains($0.uppercased()) }
@@ -235,6 +241,7 @@ public struct DependencyAudit: Decodable, Sendable {
             (componentFiles ?? []).contains { $0.status == "missing" }
     }
     public var needsMediaSelection: Bool {
+        !(componentGroups ?? []).isEmpty &&
         (!missing.isEmpty || (componentFiles ?? []).contains { $0.status == "missing" }) && !(media ?? []).contains {
             $0.status == "verified-os2-media" || $0.status == "verified-os2-set"
         }

@@ -776,31 +776,29 @@ final class AppModel {
         return file.path.hasPrefix(logs.path + "/") && FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
     private func requestDependencyComponents(_ audit: DependencyAudit, ball: String) -> DependencyAudit? {
+        guard audit.cached != true else { return audit }
         guard audit.needsMediaSelection else { return audit }
         guard selected == ball else { return nil }
+        guard let category = (audit.componentGroups ?? []).compactMap({ OS2ExtractionCategory(rawValue: $0.id) }).first else { return audit }
         let groups = (audit.componentGroups ?? []).map(\.title).joined(separator: ", ")
         componentNotice = (groups.isEmpty ? "Additional OS/2 components are required." : "Required OS/2 components: " + groups + ".")
             + " Choose media and install them here, then start the application again."
-        let category = (audit.componentGroups ?? []).compactMap { OS2ExtractionCategory(rawValue: $0.id) }.first ?? .cmd
-        showOS2ComponentGroup(category)
+        showOS2ComponentGroup(category, selecting: false)
         return nil
     }
-    func dependencyRequirements() async throws -> DependencyAudit {
-        guard let selected else { throw BallError("Choose a ball first.") }
-        var request = DesktopRequest("audit-dependencies", ball: selected, build: build)
-        request.resolve = false
-        let payload = request
-        return try await Task.detached { try NativeBallCore.request(payload, as: DependencyAudit.self) }.value
+    func dependencyRequirements() -> DependencyAudit? {
+        snapshot?.dependencyAudit
     }
     func auditDependencies() {
         guard let selected, !busy, !mediaBusy, !processRunning else { return }
         selectedSessionID = nil
         perform {
             self.operation = "Checking installed components…"
-            let audit = try await self.backend.request(DesktopRequest("audit-dependencies", ball: selected, build: self.build), as: DependencyAudit.self)
+            var request = DesktopRequest("audit-dependencies", ball: selected, build: self.build)
+            request.resolve = false
+            let audit = try await self.backend.request(request, as: DependencyAudit.self)
             self.page = .activity; self.activity = audit.summary
             self.exitCode = nil
-            _ = self.requestDependencyComponents(audit, ball: selected)
             self.operation = "Dependency audit finished"
             try await self.reload(selected)
         }
@@ -1087,10 +1085,11 @@ final class AppModel {
                     else { self.page = .installation }
                     return
                 }
-                var request = DesktopRequest(peers.isEmpty ? "ensure-dependencies" : "audit-dependencies", ball: selected, build: build)
+                var request = DesktopRequest("launch-dependency-status", ball: selected, build: build, arguments: arguments)
+                request.workingDirectories = directories; request.environment = environment
                 if !peers.isEmpty { request.resolve = false }
                 let audit = try await self.backend.request(request, as: DependencyAudit.self)
-                session.output = audit.summary
+                session.output = audit.statusSummary
                 self.presentSession(session)
                 guard self.requestDependencyComponents(audit, ball: selected) != nil else {
                     session.status = "Launch Cancelled"
@@ -1112,13 +1111,13 @@ final class AppModel {
                 return
             }
             session.output = result.output; session.exitCode = result.code; session.log = result.log
-            if let audit = result.dependencyAudit { session.output += "\n\n" + audit.summary }
+            if let audit = result.dependencyAudit { session.output += "\n\n" + audit.statusSummary }
             if let media, self.selected == selected {
                 self.installCompletion = InstallCompletion(ball: selected, letter: media, code: result.code, signalled: result.signalled)
             }
             session.status = result.signalled ? "Terminated by signal \(result.code)" : "Exited \(result.code)"
             if let error = result.receiptError { session.output += "\nThe installer receipt could not be saved: " + error }
-            if self.selected == selected, let audit = result.dependencyAudit, audit.needsMediaSelection {
+            if self.selected == selected, let audit = result.dependencyAudit, audit.scope == "launch", audit.needsMediaSelection {
                 _ = self.requestDependencyComponents(audit, ball: selected)
             }
             if self.selected == selected {

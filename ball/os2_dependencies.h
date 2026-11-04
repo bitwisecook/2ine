@@ -254,6 +254,29 @@ static void dependency_index_binary(Context *c, cJSON *binaries, cJSON *index, c
         dependency_array_unique(locations, guest);
     }
 }
+static void dependency_index_script(Context *c, cJSON *binaries, cJSON *seen, cJSON *errors,
+                                    const char *host, const char *guest)
+{
+    const char *key = component_key(c, guest);
+    if (get(seen, key))
+        return;
+    cJSON_AddBoolToObject(seen, key, 1);
+    FILE *script = tb_media_path(host) ? tb_media_fopen(host) : tb_fopen(host, "rb");
+    if (!script)
+    {
+        dependency_error(errors, guest, "Cannot index command-file metadata");
+        return;
+    }
+    int rexx = fgetc(script) == '/' && fgetc(script) == '*';
+    fclose(script);
+    cJSON *entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(entry, "path", guest);
+    cJSON_AddStringToObject(entry, "format", "command-file");
+    cJSON_AddBoolToObject(entry, "valid", 1);
+    cJSON_AddBoolToObject(entry, "rexx", rexx);
+    cJSON_AddArrayToObject(entry, "modules");
+    cJSON_AddItemToArray(binaries, entry);
+}
 static cJSON *dependency_scan(Context *c, cJSON *index, cJSON *seen, cJSON *errors, cJSON *limits)
 {
     cJSON *binaries = cJSON_CreateArray(), *queue = cJSON_CreateArray();
@@ -298,6 +321,8 @@ static cJSON *dependency_scan(Context *c, cJSON *index, cJSON *seen, cJSON *erro
             }
             else if (dependency_candidate(names[i]))
                 dependency_index_binary(c, binaries, index, seen, errors, child_host, child_guest);
+            else if (extract_extension(names[i], ".cmd") || extract_extension(names[i], ".bat"))
+                dependency_index_script(c, binaries, seen, errors, child_host, child_guest);
         }
         tb_names_free(names, count);
         if (visited > DEPENDENCY_ENTRY_LIMIT ||
@@ -1127,14 +1152,35 @@ static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON
     }
     cJSON_Delete(wanted);
 }
+#include "dependency_database.h"
 #include "dependency_freshness.h"
 static cJSON *dependency_compact(const cJSON *report)
 {
-    static const char *fields[] = {
-        "summary",           "logPath",         "jsonPath",    "missing",      "imported",
-        "disabled",          "complete",        "staticOnly",  "unreachable",  "media",
-        "componentGroups",   "componentFiles",  "fingerprint", "runtimeBuild", "stale",
-        "automaticRecovery", "scannedBinaries", NULL};
+    static const char *fields[] = {"summary",
+                                   "logPath",
+                                   "jsonPath",
+                                   "missing",
+                                   "imported",
+                                   "disabled",
+                                   "complete",
+                                   "staticOnly",
+                                   "unreachable",
+                                   "media",
+                                   "componentGroups",
+                                   "componentFiles",
+                                   "fingerprint",
+                                   "runtimeBuild",
+                                   "stale",
+                                   "automaticRecovery",
+                                   "scannedBinaries",
+                                   "scope",
+                                   "roots",
+                                   "selectedProgram",
+                                   "unknown",
+                                   "cached",
+                                   "indexGenerated",
+                                   "cachedBinaries",
+                                   NULL};
     cJSON *value = cJSON_CreateObject();
     for (int i = 0; fields[i]; i++)
     {
@@ -1171,7 +1217,7 @@ static cJSON *dependency_audit_latest(Context *c)
     cJSON *summary = report ? dependency_compact(report) : NULL;
     cJSON_Delete(report);
     if (summary)
-        dependency_mark_freshness(c, summary);
+        put(summary, "cached", cJSON_CreateTrue());
     return summary;
 }
 static int dependency_write_text(const cJSON *report, const char *path)
@@ -1377,6 +1423,7 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
           *limits = cJSON_AddArrayToObject(report, "limits"),
           *imported = cJSON_AddArrayToObject(report, "imported"), *index = cJSON_CreateObject(),
           *seen = cJSON_CreateObject(), *media_index = cJSON_CreateObject();
+    cJSON_AddStringToObject(report, "scope", "ball");
     cJSON_AddBoolToObject(report, "staticOnly", 1);
     cJSON_AddStringToObject(report, "logPath", "");
     cJSON_AddStringToObject(report, "jsonPath", "");
@@ -1396,6 +1443,28 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
     const char *build = field(request, "build");
     char *initial_fingerprint = dependency_fingerprint(c, sources, build, NULL);
     cJSON *binaries = dependency_scan(c, index, seen, errors, limits);
+    const cJSON *application;
+    cJSON_ArrayForEach(application, get(c->manifest, "applications"))
+    {
+        const char *program = field(application, "program");
+        if (!program || !*program)
+            continue;
+        c->application = application;
+        char *host = host_path(c, program, 0);
+        if (host && tb_is_file(host))
+        {
+            const char *guest = guest_for_input(c, host, program);
+            if (guest)
+            {
+                if (extract_extension(program, ".cmd") || extract_extension(program, ".bat"))
+                    dependency_index_script(c, binaries, seen, errors, host, guest);
+                else
+                    dependency_index_binary(c, binaries, index, seen, errors, host, guest);
+            }
+        }
+        dependency_take_error(c, errors, program);
+    }
+    c->application = NULL;
     cJSON *paths = dependency_search_paths(c, errors), *eligible = NULL;
     cJSON_AddItemToObject(report, "searchPaths", cJSON_Duplicate(paths, 1));
     for (unsigned round = 0; round <= DEPENDENCY_ROUND_LIMIT; round++)
@@ -1471,10 +1540,17 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
         cJSON_AddStringToObject(entry, "format", field(binary, "format"));
         cJSON_AddBoolToObject(entry, "valid", cJSON_IsTrue(get(binary, "valid")));
         cJSON_AddNumberToObject(entry, "moduleCount", cJSON_GetArraySize(get(binary, "modules")));
+        cJSON_AddItemToObject(entry, "modules", cJSON_Duplicate(get(binary, "modules"), 1));
+        if (get(binary, "companions"))
+            cJSON_AddItemToObject(entry, "companions",
+                                  cJSON_Duplicate(get(binary, "companions"), 1));
+        if (get(binary, "rexx"))
+            cJSON_AddItemToObject(entry, "rexx", cJSON_Duplicate(get(binary, "rexx"), 1));
         cJSON_AddItemToArray(inventory, entry);
         if (cJSON_IsTrue(get(binary, "valid")) && !equal_case(field(binary, "format"), "LX") &&
             !equal_case(field(binary, "format"), "NE") &&
-            !equal_case(field(binary, "format"), "LE"))
+            !equal_case(field(binary, "format"), "LE") &&
+            !equal_case(field(binary, "format"), "command-file"))
             unsupported++;
     }
     if (unsupported)
@@ -1526,6 +1602,8 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
             limits, "The metadata inventory changed during this audit; its result is stale.");
     }
     cJSON_AddBoolToObject(report, "stale", fingerprint == NULL || changed);
+    dependency_database_save(c, report);
+    dependency_take_error(c, errors, "Dependency index");
     dependency_save_report(c, report);
     dependency_take_error(c, errors, "Dependency report");
     cJSON_Delete(index);
@@ -1540,61 +1618,21 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
     free(c->error);
     return report;
 }
-/* A current recovery attempt is reusable even when optional imports remain.
-   Explicit audits always run; only preflight uses this cache. */
+/* Compatibility query only. Explicit audit-dependencies is the rescan action;
+   normal preflight must never discover or recover files as a side effect. */
 static cJSON *ensure_dependencies(Context *c, const cJSON *request)
 {
-    const cJSON *resolve = get(request, "resolve");
-    if (resolve && !cJSON_IsBool(resolve))
-    {
-        fail(c, "resolve must be a boolean");
-        return NULL;
-    }
-    int recover = !resolve || cJSON_IsTrue(resolve);
+    (void)request;
     cJSON *latest = dependency_audit_latest(c);
-    const char *build = field(request, "build");
-    const char *previous_build = field(latest, "runtimeBuild");
-    int changed_build =
-        (build || previous_build) && (!build || !previous_build || strcmp(build, previous_build));
-    int readonly_missing = recover && !cJSON_IsTrue(get(latest, "automaticRecovery")) &&
-                           cJSON_GetArraySize(get(latest, "missing"));
-    int refresh = !latest || cJSON_IsTrue(get(latest, "stale")) || changed_build ||
-                  readonly_missing || cJSON_GetArraySize(get(request, "sources"));
-    cJSON *report = NULL;
-    const char *path = field(latest, "jsonPath");
-    char *prefix = join(c, c->ball, "logs/dependency-audit-");
-    if (!refresh && path && prefix && !strncmp(path, prefix, strlen(prefix)))
+    if (!latest)
     {
-        uint64_t length = 0;
-        int64_t modified = 0;
-        if (tb_path_info(path, &length, &modified) && length && length <= 32u * 1024u * 1024u)
-        {
-            size_t n = 0;
-            char *bytes = read_file(c, path, &n, 1);
-            if (!bytes && c->error)
-            {
-                free(c->error);
-                c->error = NULL;
-            }
-            report = bytes && n ? cJSON_ParseWithLength(bytes, n) : NULL;
-            if (!cJSON_IsArray(get(report, "binaries")) || !cJSON_IsArray(get(report, "imports")) ||
-                !field(report, "fingerprint") ||
-                strcmp(field(report, "fingerprint"), field(latest, "fingerprint")))
-            {
-                cJSON_Delete(report);
-                report = NULL;
-            }
-        }
+        latest = cJSON_CreateObject();
+        cJSON_AddBoolToObject(latest, "unknown", 1);
+        cJSON_AddBoolToObject(latest, "complete", 0);
+        cJSON_AddStringToObject(
+            latest, "summary",
+            "No saved dependency audit. Use Rescan Dependencies to build the index.");
     }
-    cJSON_Delete(latest);
-    if (report)
-    {
-        put(report, "stale", cJSON_CreateBool(0));
-        cJSON_AddBoolToObject(report, "cacheHit", 1);
-        return report;
-    }
-    report = audit_dependencies(c, request, recover);
-    if (report)
-        cJSON_AddBoolToObject(report, "cacheHit", 0);
-    return report;
+    put(latest, "cached", cJSON_CreateTrue());
+    return latest;
 }

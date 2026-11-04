@@ -17,7 +17,7 @@ import Testing
     let model = AppModel(preferencesURL: root.appending(path: "preferences.json"))
     model.importBall(archive, to: destination)
     #expect(model.busy)
-    let deadline = ContinuousClock.now + .seconds(10)
+    var deadline = ContinuousClock.now + .seconds(10)
     while model.busy {
         try #require(ContinuousClock.now < deadline)
         try await Task.sleep(for: .milliseconds(1))
@@ -28,6 +28,7 @@ import Testing
     #expect(model.paths == [selected])
     #expect(model.operation == "Ready")
     model.importBall(archive, to: destination)
+    deadline = ContinuousClock.now + .seconds(10)
     while model.busy {
         try #require(ContinuousClock.now < deadline)
         try await Task.sleep(for: .milliseconds(1))
@@ -58,7 +59,7 @@ import Testing
     let model = AppModel(preferencesURL: root.appending(path: "preferences.json"))
     model.undoManager.groupsByEvent = false
     model.importBall(archive, to: destination)
-    let deadline = ContinuousClock.now + .seconds(10)
+    var deadline = ContinuousClock.now + .seconds(10)
     while model.busy {
         try #require(ContinuousClock.now < deadline)
         try await Task.sleep(for: .milliseconds(1))
@@ -74,6 +75,7 @@ import Testing
     #expect(model.snapshot?.roots["E"]?.hasSuffix("New Folder") == true)
     #expect(model.snapshot?.unavailableDrives?["E"] == nil)
     model.undoManager.undo()
+    deadline = ContinuousClock.now + .seconds(10)
     while model.busy {
         try #require(ContinuousClock.now < deadline)
         try await Task.sleep(for: .milliseconds(1))

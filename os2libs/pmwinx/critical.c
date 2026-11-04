@@ -19,6 +19,10 @@ static void initialize(void)
     if (!monitor)
         abort();
 }
+ULONG GetCurrentThread(void)
+{
+    return (ULONG)-2; /* Win32's calling-thread pseudo-handle, not an owned handle. */
+}
 ULONG GetCurrentThreadId(void)
 {
     LxTIB *tib = GLoaderState.getOs2Tib ? GLoaderState.getOs2Tib() : NULL;

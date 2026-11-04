@@ -19,3 +19,7 @@ int lx_desktop_grouped(void)
 {
     return 0;
 }
+int lx_desktop_native_main_thread(void)
+{
+    return 1;
+}

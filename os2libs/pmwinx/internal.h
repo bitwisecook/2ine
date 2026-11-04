@@ -25,6 +25,7 @@ BOOL open32CloseThread(ULONG handle);
 BOOL open32CloseSemaphore(ULONG handle);
 int open32WaitSemaphore(ULONG handle, ULONG timeout, ULONG *result);
 void open32CriticalCleanup(void);
+void open32TlsCleanup(void);
 void open32IconsCleanup(void);
 ULONG open32Presentation(void);
 void open32ContextCleanup(void);

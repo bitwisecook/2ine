@@ -385,7 +385,7 @@ class InstallationPage(Gtk.Box):
                     lambda: window.choose_os2_support(force_picker=True),
                 ),
                 (
-                    "Check and Restore System Libraries…",
+                    "Rescan Dependencies",
                     "Find required components for installed applications",
                     window.audit_dependencies,
                 ),

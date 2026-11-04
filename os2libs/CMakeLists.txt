@@ -69,6 +69,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/icons.c
             pmwinx/focus.c
             pmwinx/critical.c
+            pmwinx/tls.c
             pmwinx/threads.c
             pmwinx/semaphores.c
         )
