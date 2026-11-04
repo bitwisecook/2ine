@@ -840,6 +840,23 @@ class BallWindow(Adw.ApplicationWindow):
         )
         backend.connect("notify::selected", self.backend_changed)
         group.add(backend)
+        network = Adw.PreferencesGroup(
+            title="Network Security",
+            description="Allows supported applications to use TLS 1.2 or 1.3 through host OpenSSL. Off preserves the application's protocol selection. Certificate checks stay enabled. Applies next launch.",
+        )
+        settings.add(network)
+        tls_upgrade = Adw.SwitchRow(title="Upgrade Legacy TLS")
+        tls_upgrade.set_active(
+            str(data.get("system", {}).get("tls_upgrade", "1")).lower()
+            in ("1", "yes", "y", "true", "t", "on")
+        )
+        tls_upgrade.connect(
+            "notify::active",
+            lambda row, _: self.execute(
+                ["config", "system.tls_upgrade", str(int(row.get_active()))]
+            ),
+        )
+        network.add(tls_upgrade)
         group = Adw.PreferencesGroup(
             title="Diagnostics", description="Reset an override to inherit the runtime default."
         )

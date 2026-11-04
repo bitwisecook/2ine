@@ -500,6 +500,8 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
 {
     const char *base = strrchr(fname, '/');
     base = base ? base + 1 : fname;
+    if (!strcasecmp(base, "SSLEAY32.DLL") && lxRuntimeTlsUpgrade())
+        return loadModuleByModuleNameInternal("SSLEAY32", dependency_tree_depth);
     if (((!strcasecmp(base, "OPENGL.DLL") || !strcasecmp(base, "PGL.DLL")) &&
          lxRuntimeOpenGLProvider() != LX_OPENGL_ORIGINAL) ||
         (!strcasecmp(base, "DIVE.DLL") && !lxRuntimeFeatureEnabled(LX_FEATURE_DIVE)))
@@ -663,6 +665,9 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
     LxModule *retval = NULL;
     /* A selected provider is exclusive: guest DLLs cannot silently replace Mesa. */
     if (gl_module && provider == LX_OPENGL_MESA)
+        goto native_provider;
+    /* An opted-in upgrade must replace the guest TLS DLL as a whole. */
+    if (!strcasecmp(modname, "SSLEAY32") && lxRuntimeTlsUpgrade())
         goto native_provider;
     retval = loadGuestLibraryPath(GLoaderState.begin_libpath, modname, dependency_tree_depth);
     if (!retval && moduleLoadFailed())

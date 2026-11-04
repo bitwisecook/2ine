@@ -132,6 +132,16 @@ class BallTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ball_api.init(self.root)
 
+    def test_tls_upgrade_setting_persists_and_rejects_invalid_values(self):
+        base = ["--ball", str(self.ball), "config", "system.tls_upgrade"]
+        for value in ("false", "true"):
+            self.assertEqual(ball_api.main([*base, value]), 0)
+            self.assertIn(f"system.tls_upgrade = {value}\n", (self.ball / "2ine.cfg").read_text())
+        before = (self.ball / "ball.json").read_bytes()
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(ball_api.main([*base, "invalid"]), 2)
+        self.assertEqual((self.ball / "ball.json").read_bytes(), before)
+
     def test_installed_config_and_profile_locations_are_reloaded(self):
         config = self.ball / "drive_c/CONFIG.SYS"
         config.write_text(

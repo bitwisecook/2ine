@@ -8,6 +8,7 @@
 static int features[LX_FEATURE_COUNT] = {TWOINE_VIDEO, 1, 1, 1};
 static int opengl = LX_OPENGL_MESA;
 static int window_chrome = LX_CHROME_BOTH;
+static int tls_upgrade = 1;
 static int same(const char *a, const char *b)
 {
     while (*a && *b)
@@ -27,8 +28,23 @@ int lxRuntimeWindowChrome(void)
 {
     return window_chrome;
 }
+int lxRuntimeTlsUpgrade(void)
+{
+    return tls_upgrade;
+}
 int lxRuntimeConfigureFeature(const char *name, const char *value)
 {
+    if (!strcmp(name, "tls_upgrade"))
+    {
+        const char *yes[] = {"1", "yes", "y", "true", "t", "on"};
+        const char *no[] = {"0", "no", "n", "false", "f", "off"};
+        for (unsigned i = 0; i < sizeof yes / sizeof *yes; i++)
+        {
+            if (same(value, yes[i])) { tls_upgrade = 1; return 1; }
+            if (same(value, no[i])) { tls_upgrade = 0; return 1; }
+        }
+        return -1;
+    }
     if (!strcmp(name, "window_chrome"))
     {
         if (!strcmp(value, "native"))

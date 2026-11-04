@@ -11,8 +11,42 @@
 
 #include "hal/socket.h"
 #include "hal/host_thread.h"
+#include "network.h"
 
 #include "os2libs/generated/tcpip32-lx.h"
+
+int OS2_os2_ioctl(int sock, uint32_t command, void *argument, int length)
+{
+    if (!argument || length < 0) { errno = EFAULT; return -1; }
+    unsigned cmd = command & 0xffff;
+    if ((cmd == 0x667e || cmd == 0x667f) && length >= 4)
+    {
+        int value;
+        memcpy(&value, argument, 4);
+        int result = cmd == 0x667e ? lx_host_socket_nonblocking(sock, value != 0) :
+                                    lx_host_socket_available(sock, &value);
+        if (!result && cmd == 0x667f) memcpy(argument, &value, 4);
+        return result;
+    }
+    if (cmd == 0x6914 || cmd == 0x6924)
+    {
+        uint32_t capacity, pointer;
+        if (length < 8) { errno = EFAULT; return -1; }
+        memcpy(&capacity, argument, 4);
+        memcpy(&pointer, (char *)argument + 4, 4);
+        if (capacity > INT32_MAX) { errno = EINVAL; return -1; }
+        size_t used;
+        int result = lx_os2_network_ifconf((void *)(uintptr_t)pointer, capacity, &used, 1);
+        if (!result) { capacity = (uint32_t)used; memcpy(argument, &capacity, 4); }
+        return result;
+    }
+    return lx_os2_network_ioctl(command, argument, (size_t)length, 1);
+}
+int OS2_ioctl(int sock, uint32_t command, void *argument)
+{
+    /* The three-argument BSD API carries the extent in the command itself. */
+    return OS2_os2_ioctl(sock, command, argument, (int)((command >> 16) & 0x1fff));
+}
 
 int OS2_sock_init(void)
 {
@@ -224,7 +258,7 @@ int OS2_getsockname(int sock, OS2_sockaddr *os2name, int *os2namelen)
     {
         return -1;
     }
-    else if (*os2namelen < sizeof(OS2_sockaddr_in))
+    else if (*os2namelen < (int)sizeof(OS2_sockaddr_in))
     {
         return -1;
     }

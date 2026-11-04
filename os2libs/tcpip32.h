@@ -121,6 +121,10 @@ extern "C"
 #pragma pack(pop)
 
     OS2EXPORT int OS2API OS2_sock_init(void) OS2APIINFO(ord = 26, name = sock_init);
+    OS2EXPORT int OS2API OS2_ioctl(int sock, uint32_t command, void *argument)
+        OS2APIINFO(ord = 8, name = ioctl);
+    OS2EXPORT int OS2API OS2_os2_ioctl(int sock, uint32_t command, void *argument, int length)
+        OS2APIINFO(ord = 200, name = os2_ioctl);
     OS2EXPORT int OS2API OS2_recv(int sock, void *buf, size_t len, int os2flags)
         OS2APIINFO(ord = 10, name = recv);
     OS2EXPORT int OS2API OS2_connect(int sock, const OS2_sockaddr *os2addr, int addrlen)

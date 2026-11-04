@@ -730,7 +730,8 @@ static int validate_system(Context *c)
         }
         else if (!strcmp(entry->string, "trace_native") || !strcmp(entry->string, "trace_events") ||
                  !strcmp(entry->string, "video") || !strcmp(entry->string, "pcm") ||
-                 !strcmp(entry->string, "midi") || !strcmp(entry->string, "dive"))
+                 !strcmp(entry->string, "midi") || !strcmp(entry->string, "dive") ||
+                 !strcmp(entry->string, "tls_upgrade"))
         {
             const char *valid[] = {"1",  "yes", "y",     "true", "t",   "on", "0",
                                    "no", "n",   "false", "f",    "off", NULL};

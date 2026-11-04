@@ -53,7 +53,9 @@ conversion. A stream stays open until runtime shutdown. Closing PM video does
 not close audio. PM windows/messages/painting use opaque HAL windows and
 normalized rectangles/events. VIO retains its OS/2 screen buffer and delegates
 terminal rendering to `posix/terminal_curses.c`. TCP/IP translates OS/2 socket
-structures and flags before calling `posix/host_socket.c`. No SDL or curses types
+structures and flags before calling `posix/host_socket.c`. Host network identity
+queries use `posix/host_network.c`; modern TLS uses OpenSSL behind `hal/tls.h`.
+See [host networking and TLS](networking.md) for policy and ABI coverage. No SDL or curses types
 cross the public HAL boundary.
 
 [Digital-video frames](video.md) cross `hal/video_frame.h` as borrowed planar

@@ -82,6 +82,8 @@ int lx_host_socket_close(int fd)
 int lx_host_socket_connect(int fd, const LxHostSocketAddress *address)
 {
     struct sockaddr_in a = address_in(address);
+    if (bind_sender(fd) < 0)
+        return -1;
     return connect(fd, (struct sockaddr *)&a, sizeof a);
 }
 int lx_host_socket_bind(int fd, const LxHostSocketAddress *address)
@@ -124,7 +126,15 @@ int lx_host_socket_shutdown(int fd, int how)
 }
 int64_t lx_host_socket_send(int fd, const void *buffer, size_t size, unsigned flags)
 {
-    return send(fd, buffer, size, message_flags(flags));
+    int native = message_flags(flags);
+#ifdef MSG_NOSIGNAL
+    native |= MSG_NOSIGNAL;
+#elif defined(SO_NOSIGPIPE)
+    int enabled = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &enabled, sizeof enabled) < 0)
+        return -1;
+#endif
+    return send(fd, buffer, size, native);
 }
 int64_t lx_host_socket_recv(int fd, void *buffer, size_t size, unsigned flags)
 {
@@ -185,8 +195,11 @@ int lx_host_socket_bsd_error(void)
     case host:                                                                                     \
         return bsd
         ERROR(EPERM, 1);
+        ERROR(ENOENT, 2);
         ERROR(EINTR, 4);
+        ERROR(ENXIO, 6);
         ERROR(EBADF, 9);
+        ERROR(ENOMEM, 12);
         ERROR(EACCES, 13);
         ERROR(EFAULT, 14);
         ERROR(EINVAL, 22);

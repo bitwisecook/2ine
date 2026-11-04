@@ -345,6 +345,14 @@ struct BallSettingsView: View {
                 Text("Native x86 execution requires Linux. Use Unicorn on macOS. External runtime provider assets remain in the selected build.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("Network Security") {
+                Toggle("Upgrade Legacy TLS", isOn: Binding(get: {
+                    ["1", "yes", "y", "true", "t", "on"].contains(snapshot.manifest.system["tls_upgrade"]?.text.lowercased() ?? "true")
+                }, set: { model.command(["config", "system.tls_upgrade", $0 ? "true" : "false"]) }))
+                    .accessibilityIdentifier("tlsUpgrade")
+                Text("Allows supported applications to use TLS 1.2 or 1.3 through host OpenSSL. Off preserves the application's protocol selection. Certificate checks stay enabled. Applies next launch.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             Section("Diagnostics") {
                 ForEach(["trace_native", "trace_events"], id: \.self) { name in
                     Toggle(name == "trace_native" ? "Trace Native Calls" : "Trace Events", isOn: Binding(get: {

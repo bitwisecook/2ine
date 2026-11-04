@@ -1,5 +1,5 @@
 # Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
-foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pmwin pmshapi pmwp pmgpi tcpip32 pmwinx pmctls helpmgr mdm mmio pmspl pmdrag dive pmgre so32dll tcp32dll)
+foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pmwin pmshapi pmwp pmgpi tcpip32 pmwinx pmctls helpmgr mdm mmio pmspl pmdrag dive pmgre so32dll tcp32dll ssleay32)
     if(module STREQUAL "doscalls")
         set(sources doscalls/module.c doscalls/legacy.c doscalls/files.c doscalls/fileinfo.c doscalls/eas.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/suballocation.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/modules.c doscalls/system.c doscalls/audio.c doscalls/mux_wait.c)
     elseif(module STREQUAL "mdm")
@@ -84,6 +84,8 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
         set_target_properties(${module} PROPERTIES SUFFIX ".so")
     endif()
 endforeach()
+target_sources(so32dll PRIVATE network.c)
+target_sources(tcpip32 PRIVATE network.c)
 if(TWOINE_NATIVE_LOADER)
     twoine_hal_add_native_abi(doscalls doscalls)
     twoine_hal_add_native_abi(msg msg)

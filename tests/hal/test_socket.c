@@ -33,6 +33,13 @@ int main(void)
     CHECK(lx_host_socket_select(server + 1, &reads, NULL, NULL, 1, 0, 1) == 1);
     CHECK(lx_host_socket_recv(server, output, sizeof output, LX_MSG_WAITALL) == sizeof output);
     CHECK(!memcmp(message, output, sizeof message));
+    CHECK(!lx_host_socket_shutdown(server, 2));
+    CHECK(lx_host_socket_recv(client, output, sizeof output, 0) == 0);
+    CHECK(!lx_host_socket_shutdown(client, 1));
+    int failed = 0;
+    for (int i = 0; i < 3; i++)
+        failed |= lx_host_socket_send(client, message, sizeof message, 0) < 0;
+    CHECK(failed); /* A broken stream returns errors without terminating on SIGPIPE. */
     CHECK(!lx_host_socket_close(client) && !lx_host_socket_close(server) &&
           !lx_host_socket_close(listener));
     int receiver = lx_host_socket_open(LX_SOCKET_DGRAM);
@@ -70,6 +77,8 @@ int main(void)
     CHECK(!setenv("TWOINE_SOCKET_BIND_ADDRESS", "invalid", 1));
     receiver = lx_host_socket_open(LX_SOCKET_DGRAM);
     CHECK(lx_host_socket_bind(receiver, &address) == -1);
+    CHECK(lx_host_socket_bsd_error() == 22);
+    CHECK(lx_host_socket_connect(receiver, &address) == -1);
     CHECK(lx_host_socket_bsd_error() == 22);
     CHECK(!lx_host_socket_close(receiver));
     CHECK(!unsetenv("TWOINE_SOCKET_BIND_ADDRESS"));

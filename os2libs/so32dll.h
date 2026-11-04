@@ -9,6 +9,16 @@ typedef struct Os2LegacyAddress
     uint32_t address;
     uint8_t padding[8];
 } Os2LegacyAddress;
+OS2EXPORT int OS2API Os2LegacyAccept(int socket, Os2LegacyAddress *address, int *length)
+    OS2APIINFO(ord = 1, name = accept);
+OS2EXPORT int OS2API Os2LegacyConnect(int socket, const Os2LegacyAddress *address, int length)
+    OS2APIINFO(ord = 3, name = connect);
+OS2EXPORT int OS2API Os2LegacyListen(int socket, int backlog) OS2APIINFO(ord = 9, name = listen);
+OS2EXPORT int OS2API Os2LegacyRecv(int socket, void *buffer, int length, int flags)
+    OS2APIINFO(ord = 10, name = recv);
+OS2EXPORT int OS2API Os2LegacySend(int socket, const void *buffer, int length, int flags)
+    OS2APIINFO(ord = 13, name = send);
+OS2EXPORT int OS2API Os2LegacyShutdown(int socket, int how) OS2APIINFO(ord = 25, name = shutdown);
 OS2EXPORT int OS2API Os2LegacyBind(int socket, const Os2LegacyAddress *address, int length)
     OS2APIINFO(ord = 2, name = bind);
 OS2EXPORT int OS2API Os2LegacyGetSocketName(int socket, Os2LegacyAddress *address, int *length)

@@ -24,6 +24,7 @@ enum
 int lxRuntimeFeatureEnabled(LxRuntimeFeature feature);
 int lxRuntimeOpenGLProvider(void);
 int lxRuntimeWindowChrome(void);
+int lxRuntimeTlsUpgrade(void);
 /* Configuration is read before guest threads start. */
 int lxRuntimeConfigureFeature(const char *name, const char *value);
 #endif
