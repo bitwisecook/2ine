@@ -18,6 +18,7 @@ struct ProgramSheet: View {
     }
     @Bindable var model: AppModel
     let action: ProgramAction
+    var embedded = false
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var suggestedName = ""
@@ -35,8 +36,6 @@ struct ProgramSheet: View {
     @State private var candidates: [String] = []
     @State private var discovering = false
     @State private var mediaNotice = ""
-    @State private var support: OS2SupportStatus?
-    @State private var supportRequest: OS2ImportRequest?
     private var mediaLetters: [String] {
         let existing = (model.snapshot?.manifest.drives ?? [:]).filter { $0.value.device == mediaKind }.keys
         return Array(Set(existing).union(model.availableMediaLetter(mediaKind).map { [$0] } ?? [])).sorted()
@@ -46,7 +45,7 @@ struct ProgramSheet: View {
     @State private var panel = Panel.general
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(model.editingApplication == nil ? action.rawValue : "Edit Application").font(.title2.bold())
+            Text(embedded ? "Application Installation" : model.editingApplication == nil ? action.rawValue : "Edit Application").font(.title2.bold())
             if let snapshot = model.snapshot {
                 VStack(spacing: 12) {
                     Picker("Program Options", selection: $panel) {
@@ -62,17 +61,6 @@ struct ProgramSheet: View {
                         case .general:
                             Form {
                                 if action == .install {
-                                    Section("OS/2 Support Files") {
-                                        if let support {
-                                            Text(support.complete ? "OS/2 support files are installed." : "Missing: " + support.missing)
-                                                .accessibilityIdentifier("os2SupportStatus")
-                                        }
-                                        Button("Install Components…") {
-                                            if let ball = model.selected {
-                                                supportRequest = OS2ImportRequest(ball: ball)
-                                            }
-                                        }.accessibilityIdentifier("installOS2Support")
-                                    }
                                     Section("Installation Media") {
                                         HStack {
                                             Picker("Device", selection: $mediaKind) {
@@ -151,16 +139,15 @@ struct ProgramSheet: View {
                         program = $0; refreshIcon()
                     }
                 }
-                .sheet(item: $supportRequest, onDismiss: { Task { support = try? await model.os2Support() } }) { request in
-                    OS2SupportSheet(model: model, request: request)
-                }
                 .sheet(item: $folderChoice) { choice in
                     GuestPickerSheet(model: model, snapshot: snapshot, path: choice.path, directoriesOnly: true, requiredDrive: choice.letter) { directories[choice.letter] = $0 }
                 }
             }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("programError") }
             HStack {
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.busy || model.mediaBusy).accessibilityIdentifier("cancelProgram")
+                if !embedded {
+                    Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction).disabled(model.busy || model.mediaBusy).accessibilityIdentifier("cancelProgram")
+                }
                 Spacer()
                 Button(model.editingApplication == nil ? action.rawValue : "Save Application") {
                     Task {
@@ -169,7 +156,9 @@ struct ProgramSheet: View {
                     }
                 }.keyboardShortcut(.defaultAction).disabled(program.isEmpty || model.busy || model.mediaBusy || discovering).accessibilityIdentifier("confirmProgram")
             }
-        }.padding(24).frame(width: 740, height: 600)
+        }.padding(24)
+        .frame(minWidth: embedded ? nil : 740, maxWidth: embedded ? .infinity : 740,
+               minHeight: embedded ? nil : 600, maxHeight: embedded ? .infinity : 600)
         .onAppear {
             if let name = model.editingApplication, let app = model.snapshot?.manifest.applications[name] {
                 self.name = name; program = app.program; arguments = (try? Arguments.format(app.arguments)) ?? ""
@@ -179,7 +168,6 @@ struct ProgramSheet: View {
                 if app.icon != nil { iconDescription = "Custom icon saved in the ball." }
             }
             if action == .install {
-                Task { support = try? await model.os2Support() }
                 selectMediaLetter()
                 if model.snapshot?.manifest.drives[mediaLetter]?.image != nil { discoverInstallers() }
             }

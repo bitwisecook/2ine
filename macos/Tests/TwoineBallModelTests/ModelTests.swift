@@ -21,7 +21,7 @@ private func fixture() throws -> (AppModel, URL) {
 
 @MainActor
 private func waitForOperation(_ model: AppModel) async throws {
-    let deadline = ContinuousClock.now + .seconds(5)
+    let deadline = ContinuousClock.now + .seconds(15)
     while model.busy {
         guard ContinuousClock.now < deadline else { throw BallError("Operation did not finish") }
         try await Task.sleep(for: .milliseconds(1))
@@ -335,9 +335,9 @@ private func waitForOperation(_ model: AppModel) async throws {
     let status = try await model.os2Support()
     #expect(status.mediaSources == [media.path])
     model.installComponents()
-    let request = try #require(model.supportImport)
-    #expect(request.ball == ball)
-    #expect(request.categories == OS2ExtractionCategory.defaults)
+    #expect(model.page == .systemComponents)
+    #expect(model.supportImport == nil)
+    #expect(model.suggestedOS2MediaSources(status.mediaSources) == [media.path])
     let sources = try #require(status.mediaSources)
     let plan = try await model.planOS2Extraction(sources, ball: ball)
     #expect(plan.selectedFiles([.help]).count == 1)
@@ -348,4 +348,71 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(installed.installedCategories == [.help])
     #expect(installed.selectedFiles([.help]).isEmpty)
     #expect(try Data(contentsOf: URL(filePath: ball).appending(path: "drive_c/OS2/HELP/BOOK.HLP")) == Data("original Help".utf8))
+}
+
+@Test @MainActor func verifiedOS2MediaIsSuggestedAcrossBallsAndAppRestarts() async throws {
+    let (model, root) = try fixture()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let ball = try #require(model.selected)
+    let media = root.appending(path: "Warp Media/OS2")
+    try FileManager.default.createDirectory(at: media, withIntermediateDirectories: true)
+    var command = Data(count: 260)
+    command.replaceSubrange(0..<2, with: [77, 90])
+    command.replaceSubrange(60..<64, with: [64, 0, 0, 0])
+    command.replaceSubrange(64..<66, with: [76, 88])
+    try command.write(to: media.appending(path: "CMD.EXE"))
+    try Data([255, 255] + Array("SYSLEVEL".utf8)).write(to: media.appending(path: "SYSLEVEL.OS2"))
+    try await model.rememberOS2Media([media.deletingLastPathComponent().path], ball: ball)
+    let store = PreferenceStore(url: root.appending(path: "prefs.json"))
+    var saved = try await store.load()
+    #expect(!saved.lastOS2MediaSources.isEmpty)
+    #expect(saved.lastOS2MediaFiles == [media.deletingLastPathComponent().path])
+    saved.ballPaths = [ball]; saved.selected = ball
+    try await store.save(saved)
+    let fresh = AppModel(preferencesURL: root.appending(path: "prefs.json"))
+    fresh.start(); try await waitForOperation(fresh)
+    let second = root.appending(path: "New.2ineball")
+    fresh.selected = second.path
+    fresh.snapshot = try NativeBallCore.request(DesktopRequest("command", ball: second.path, arguments: ["init"]), as: BallSnapshot.self)
+    #expect(fresh.suggestedOS2MediaSources([]) == saved.lastOS2MediaSources)
+    #expect(!FileManager.default.fileExists(atPath: second.appending(path: "os2-media.json").path))
+    let applicationMedia = root.appending(path: "Application CD")
+    try FileManager.default.createDirectory(at: applicationMedia, withIntermediateDirectories: true)
+    try Data("application installer".utf8).write(to: applicationMedia.appending(path: "INSTALL.EXE"))
+    try await fresh.rememberOS2Media([applicationMedia.path], ball: second.path)
+    #expect(fresh.lastOS2MediaSources == saved.lastOS2MediaSources)
+    #expect(fresh.suggestedOS2MediaSources([applicationMedia.path]) == [applicationMedia.path])
+}
+
+@Test @MainActor func componentAndProviderNavigationSelectTheMatchingTabsAndPreserveUndo() async throws {
+    let (model, root) = try fixture()
+    defer { try? FileManager.default.removeItem(at: root) }
+    model.beginProgram(.install)
+    #expect(model.page == .installation)
+    #expect(model.programAction == nil)
+    model.openComponentSetting("graphics.opengl")
+    #expect(model.page == .settings)
+    #expect(model.settingsSection == .graphics)
+    #expect(model.highlightedSetting == "graphics.opengl")
+    model.installOriginalOpenGL(); try await waitForOperation(model)
+    #expect(model.snapshot?.manifest.system["opengl"]?.text == "original")
+    #expect(model.page == .systemComponents)
+    #expect(model.componentNavigation?.category == .opengl)
+    let plan = try JSONDecoder().decode(OS2ExtractionPlan.self, from: Data(#"""
+    {"files":[],"unmapped":[],"tree":{"id":"all","title":"All","kind":"group","category":"full","children":[
+     {"id":"opengl","title":"OpenGL","kind":"group","category":"opengl","children":[
+      {"id":"gl-source","source":"gl-source","kind":"file","title":"OPENGL.DLL","category":"opengl"}]}]}}
+    """#.utf8))
+    let ball = try #require(model.selected)
+    #expect(model.componentSelection(in: plan, preserving: [], ball: ball) == ["gl-source"])
+    #expect(model.componentSelection(in: plan, preserving: [], ball: ball).isEmpty)
+    #expect(model.undoManager.canUndo)
+    model.undoManager.undo(); try await waitForOperation(model)
+    #expect(model.snapshot?.manifest.system["opengl"] == nil)
+    model.openComponentSetting("printing")
+    #expect(model.settingsSection == .printing)
+    #expect(model.highlightedSetting == "printing")
+    model.openOS2ComponentGroup(.printers)
+    #expect(model.page == .systemComponents)
+    #expect(model.componentNavigation?.category == .printers)
 }

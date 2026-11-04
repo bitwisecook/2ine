@@ -61,7 +61,7 @@ import Testing
     let item = try #require(coordinator.items.first)
     let column = NSTableColumn(identifier: .init("status"))
     let button = try #require(coordinator.outlineView(outline, viewFor: column, item: item) as? NativeOutlineBrowser.ActionButton)
-    #expect(button.title == "Mesa · Settings…")
+    #expect(button.title == "2ine (Mesa)")
     #expect(button.isEnabled)
     #expect(button.actionID == "graphics.opengl")
     #expect(item.node.check == nil)
@@ -84,6 +84,60 @@ import Testing
     defer { _ = hosting }
     #expect(coordinator.items.first?.children.first?.children.count == 11_000)
     #expect(outline.numberOfRows == 2)
+}
+
+@MainActor @Test func nativeProviderGreysOriginalDestinationsButKeepsItsSettingsButtonEnabled() throws {
+    let data = Data(#"""
+    {"id":"opengl","title":"OpenGL","kind":"group","category":"opengl","disabled":true,
+     "provider":{"title":"Selected OpenGL Provider","selection":"mesa","setting":"graphics.opengl","group":"opengl","nativeSelected":true,"choiceSupported":true,"originalAvailable":true},
+     "children":[{"id":"destination","title":"C:\\","kind":"directory","path":"C:\\","disabled":true,
+      "children":[{"id":"source","title":"OPENGL.DLL","kind":"file","source":"source","path":"C:\\OS2\\DLL\\OPENGL.DLL","size":8192,"disabled":true}]}]}
+    """#.utf8)
+    let node = try JSONDecoder().decode(OS2ExtractionPlan.Node.self, from: data)
+    let row = OS2ComponentTree.row(node, selected: [])
+    #expect(node.eligibleSources.isEmpty)
+    #expect(row.cells["name"]?.secondary == true)
+    #expect(row.cells["status"]?.text == "2ine (Mesa)")
+    #expect(row.cells["status"]?.action == "graphics.opengl")
+    #expect(row.enabled)
+    #expect(row.check == nil)
+    #expect(row.children.first?.enabled == false)
+    #expect(row.children.first?.children.first?.cells["size"]?.text != ByteCountFormatter.string(fromByteCount: 0, countStyle: .file))
+    let view = OS2ComponentTree(root: node, selection: .constant([]), query: .constant(""),
+                               searchFocused: .constant(false), disabled: false, toggle: { _, _ in }, openSetting: { _ in })
+    let (hosting, coordinator, outline) = try hostComponents(view)
+    defer { _ = hosting }
+    let item = try #require(coordinator.items.first)
+    let name = try #require(outline.tableColumns.first)
+    let label = try #require(coordinator.outlineView(outline, viewFor: name, item: item) as? NSTextField)
+    #expect(label.textColor == .disabledControlTextColor)
+    let status = NSTableColumn(identifier: .init("status"))
+    let button = try #require(coordinator.outlineView(outline, viewFor: status, item: item) as? NSButton)
+    #expect(button.isEnabled)
+}
+
+@MainActor @Test func destinationDirectoriesKeepBothTheirCheckboxAndFolderIcon() throws {
+    let data = Data(#"""
+    {"id":"directory","title":"OS2","kind":"directory","path":"C:\\OS2","children":[
+     {"id":"source","title":"SOME.DLL","kind":"file","source":"source","size":8192}]}
+    """#.utf8)
+    let node = try JSONDecoder().decode(OS2ExtractionPlan.Node.self, from: data)
+    var toggled = false
+    let view = OS2ComponentTree(root: node, selection: .constant([]), query: .constant(""),
+                               searchFocused: .constant(false), disabled: false,
+                               toggle: { item, enabled in toggled = item.id == "directory" && enabled }, openSetting: { _ in })
+    let (hosting, coordinator, outline) = try hostComponents(view)
+    defer { _ = hosting }
+    let item = try #require(coordinator.items.first)
+    let column = try #require(outline.tableColumns.first)
+    let cell = try #require(coordinator.outlineView(outline, viewFor: column, item: item) as? NSStackView)
+    #expect(cell.arrangedSubviews.contains { $0 is NSImageView })
+    #expect(cell.arrangedSubviews.compactMap { $0 as? NSTextField }.first?.stringValue == "OS2")
+    let button = try #require(cell.arrangedSubviews.compactMap { $0 as? NativeOutlineBrowser.CheckButton }.first)
+    #expect(button.isEnabled)
+    #expect(button.accessibilityLabel() == "OS2")
+    coordinator.check(button)
+    #expect(toggled)
 }
 
 @MainActor @Test func OS2ComponentOutlineLayoutPreservesCheckboxStatusAndSize() throws {

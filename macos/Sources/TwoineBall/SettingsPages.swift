@@ -96,6 +96,7 @@ struct PrintingSettingsView: View {
                     Text("PCL 5 Printer").tag("2INEPCL")
                     if !["2INEPDF", "2INEPCL"].contains(selectedQueue) { Text(selectedQueue.isEmpty ? "Stored Queue: None" : "Stored Queue: " + selectedQueue).tag(selectedQueue) }
                 }.accessibilityIdentifier("defaultPrinter")
+                    .settingHighlight(model.highlightedSetting == "printing")
                 LabeledContent("Source", value: queue(user) != nil ? "OS2.INI" : queue(system) != nil ? "OS2SYS.INI" : "2ine Default")
                 Button("Use Inherited Default") { save(nil) }.disabled(queue(user) == nil)
                 Text("Changes apply when an application next starts. Stop the guest before changing its printer preference.").foregroundStyle(.secondary)
@@ -105,8 +106,10 @@ struct PrintingSettingsView: View {
                 LabeledContent("Resolution", value: "300 DPI")
                 LabeledContent("Page", value: "A4")
                 if showMediaLinks {
-                    Button("Browse Original Printer Files…") { model.openOS2ComponentGroup(.printers) }
+                    Button("Install OS/2 System Component") { model.openOS2ComponentGroup(.printers) }
                         .disabled(model.busy || model.mediaBusy || model.processRunning)
+                    Text("2ine supplies PDF and PCL printing. Original OS/2 printer drivers cannot currently be selected.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
             }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }

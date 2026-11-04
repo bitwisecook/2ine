@@ -11,10 +11,12 @@ except ImportError as error:
     raise SystemExit("GTK 4 and libadwaita are required: " + str(error)) from error
 
 if __package__:
+    from . import gnome_media_preferences
     from .gnome_components import ComponentTree
     from .gnome_files import FileList, display_path
     from .gnome_views import FormDialog, action_button
 else:
+    import gnome_media_preferences
     from gnome_components import ComponentTree
     from gnome_files import FileList, display_path
     from gnome_views import FormDialog, action_button
@@ -37,6 +39,12 @@ class OS2MediaDialog(FormDialog):
     def __init__(self, window, sources, categories=None):
         super().__init__(window, "Browse OS/2 Media", accept="Continue", width=820, height=680)
         self.sources = []
+        self.validation = None
+        self.focus_category = (
+            next(iter(categories)) if categories and len(categories) == 1 else None
+        )
+        self.restore_selection = None
+        self.opening_sources = None
         self.directory = None
         self.selected = None
         self.plan = None
@@ -161,9 +169,18 @@ class OS2MediaDialog(FormDialog):
         self.run(lambda: self.api("browse-media", path=path), self.show_directory)
 
     def open_sources(self, sources):
+        self.opening_sources = list(sources)
         self.notice.set_label("Looking for ISO images…")
 
-        def loaded(result):
+        def loaded(payload):
+            result, self.validation = payload
+            self.opening_sources = None
+            if self.validation.get("complete"):
+                self.window.remember_os2_media(self.validation)
+            elif list(sources) == gnome_media_preferences.sources(
+                self.window.app_preferences.get("lastOS2MediaSources")
+            ):
+                self.window.forget_os2_media()
             self.sources = result["sources"]
             self.show_directory(result["directory"])
             self.current_only.set_active(False)
@@ -180,8 +197,30 @@ class OS2MediaDialog(FormDialog):
             ]
             if warnings:
                 self.notice.set_label(self.notice.get_label() + "\n" + "\n".join(warnings))
+            if not self.validation.get("complete"):
+                self.notice.set_label(
+                    "This source could not be verified as OS/2 installation media. Choose another ISO, folder or image set, or browse this source manually."
+                )
+            elif self.focus_category:
+                self.submit()
 
-        self.run(lambda: self.api("open-os2-source", sources=list(sources)), loaded)
+        def open_verified():
+            validation = self.api("validate-os2-media", sources=list(sources))
+            opened = self.api(
+                "open-os2-source",
+                sources=validation["sources"] if validation.get("complete") else list(sources),
+            )
+            return opened, validation
+
+        self.run(open_verified, loaded)
+
+    def error_message(self, error):
+        if self.opening_sources == gnome_media_preferences.sources(
+            self.window.app_preferences.get("lastOS2MediaSources")
+        ):
+            self.window.forget_os2_media()
+        self.opening_sources = None
+        super().error_message(error)
 
     def choose_media(self):
         picker = Gtk.FileDialog(title="Choose OS/2 ISO, Floppy Images or Archives")
@@ -196,6 +235,7 @@ class OS2MediaDialog(FormDialog):
                 if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
                     self.error_message(error)
 
+        self.window.initial_os2_picker(picker)
         picker.open_multiple(self.window, None, chosen)
 
     def choose_folder(self):
@@ -208,6 +248,7 @@ class OS2MediaDialog(FormDialog):
                 if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
                     self.error_message(error)
 
+        self.window.initial_os2_picker(picker, folder=True)
         picker.select_folder(self.window, None, chosen)
 
     def selected_files(self, categories=None):
@@ -280,6 +321,9 @@ class OS2MediaDialog(FormDialog):
             selected.update(
                 item["source"] for item in plan["files"] if item["present"] and not item["provided"]
             )
+            if self.restore_selection is not None:
+                selected = self.restore_selection
+                self.restore_selection = None
             self.component_tree = ComponentTree(
                 plan["tree"], selected, changed=self.update_count, setting=self.open_setting
             )
@@ -306,6 +350,14 @@ class OS2MediaDialog(FormDialog):
                 self.stack.remove(old)
             self.stack.add_named(container, "options")
             self.stack.set_visible_child_name("options")
+            if self.focus_category:
+                self.component_tree.select_group(self.focus_category)
+                node = self.component_tree.nodes.get(self.focus_category, {})
+                provider = node.get("provider", {})
+                if provider.get("nativeSelected") and not provider.get("choiceSupported"):
+                    self.notice.set_label(
+                        "This component is provided by 2ine. Loading original OS/2 drivers is not currently supported; use its 2ine Settings link to configure it."
+                    )
             self.update_count()
             return
         page = Adw.PreferencesPage()
@@ -395,22 +447,17 @@ class OS2MediaDialog(FormDialog):
             return
         self.window.os2_component_dialog = self
         self.close()
-        self.window.show_page("settings")
-        self.window.configuration_stack.set_visible_child_name(
-            "printing" if setting == "printing" else "display"
-        )
+        self.window.show_component_setting(setting)
 
     def resume_components(self, category):
-        if self.component_tree is not None:
-            provider = self.window.snapshot["manifest"].get("system", {}).get("opengl", "mesa")
-            for node in self.component_tree.nodes.values():
-                if node.get("setting") == "graphics.opengl":
-                    node["selection"] = provider
-                if node.get("provider", {}).get("setting") == "graphics.opengl":
-                    node["provider"]["selection"] = provider
-            self.component_tree.refresh()
-            self.component_tree.focus_group(category)
+        self.focus_category = category
+        self.restore_selection = set(self.component_tree.selected) if self.component_tree else None
         self.present(self.window)
+        self.notice.set_label("Refreshing component providers…")
+        self.run(
+            lambda: self.api("plan-os2-extraction", sources=self.extraction_sources),
+            self.show_options,
+        )
 
     def update_count(self):
         count = len(self.selected_files())

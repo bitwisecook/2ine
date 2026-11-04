@@ -341,6 +341,9 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
         public let selection: String
         public let setting: String
         public let group: String
+        public let nativeSelected: Bool?
+        public let originalAvailable: Bool?
+        public let choiceSupported: Bool?
     }
     public struct Node: Decodable, Sendable, Identifiable, Equatable {
         public enum SelectionState { case off, mixed, on }
@@ -363,6 +366,7 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
         public let group: String?
         public let children: [Node]?
         public var eligibleSources: Set<String> {
+            if disabled == true { return [] }
             if kind == "file", provided != true, disabled != true, let source { return [source] }
             return Set((children ?? []).flatMap { $0.eligibleSources })
         }
@@ -425,6 +429,7 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
         }.compactMap(\.source))
     }
     public func selecting(_ node: Node, in selected: Set<String>, enabled: Bool) -> Set<String> {
+        guard node.disabled != true else { return selected }
         if !enabled { return selected.subtracting(node.eligibleSources) }
         var result = selected.union(node.eligibleSources)
         if node.kind == "group", let category = node.category,

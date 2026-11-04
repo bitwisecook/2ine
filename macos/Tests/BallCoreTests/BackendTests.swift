@@ -82,9 +82,13 @@ private func temporary() throws -> URL {
     var prefs = Preferences()
     prefs.ballPaths = ["/a path/with spaces", #"/OS2\data"#]
     prefs.selected = prefs.ballPaths[0]
+    prefs.lastOS2MediaSources = ["/@2ine-media/verified-archive!iso!os2image"]
+    prefs.lastOS2MediaFiles = ["/media/Warp CD.zip"]
     try await store.save(prefs)
     #expect(try await store.load().ballPaths == prefs.ballPaths)
     #expect(try await store.load().selected == prefs.selected)
+    #expect(try await store.load().lastOS2MediaSources == prefs.lastOS2MediaSources)
+    #expect(try await store.load().lastOS2MediaFiles == prefs.lastOS2MediaFiles)
     let legacy = root.appending(path: "state/legacy.json")
     let original = Data(#"{"balls":["/legacy/Existing.2ineball"],"selected":"/legacy/Existing.2ineball"}"#.utf8)
     try original.write(to: legacy)
@@ -92,6 +96,7 @@ private func temporary() throws -> URL {
     let old = try await migrated.load()
     #expect(old.ballPaths == ["/legacy/Existing.2ineball"])
     #expect(old.selected == old.ballPaths.first)
+    #expect(old.lastOS2MediaSources.isEmpty)
     try await migrated.save(old)
     #expect(try await migrated.load().ballPaths == old.ballPaths)
     #expect(try Data(contentsOf: legacy) == original)

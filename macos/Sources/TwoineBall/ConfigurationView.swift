@@ -4,15 +4,15 @@ import SwiftUI
 struct ConfigurationView: View {
     @Bindable var model: AppModel
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") {
+        TabView(selection: $model.settingsSection) {
+            Tab("General", systemImage: "gearshape", value: SettingsSection.general) {
                 if let snapshot = model.snapshot { BallSettingsView(model: model, snapshot: snapshot, draft: model.settingsDraft) }
             }
-            Tab("Graphics & Sound", systemImage: "display") { DisplayConfigurationView(model: model) }
-            Tab("Environment", systemImage: "terminal") { EnvironmentSettingsView(model: model) }
-            Tab("Printing", systemImage: "printer") { PrintingSettingsView(model: model) }
-            Tab("Config Files", systemImage: "doc.text") { OS2FilesSettingsView(model: model) }
-            Tab("Registry", systemImage: "list.bullet.indent") { RegistrySettingsView(model: model) }
+            Tab("Graphics & Sound", systemImage: "display", value: SettingsSection.graphics) { DisplayConfigurationView(model: model) }
+            Tab("Environment", systemImage: "terminal", value: SettingsSection.environment) { EnvironmentSettingsView(model: model) }
+            Tab("Printing", systemImage: "printer", value: SettingsSection.printing) { PrintingSettingsView(model: model) }
+            Tab("Config Files", systemImage: "doc.text", value: SettingsSection.files) { OS2FilesSettingsView(model: model) }
+            Tab("Registry", systemImage: "list.bullet.indent", value: SettingsSection.registry) { RegistrySettingsView(model: model) }
         }
         .padding(12)
     }
@@ -27,76 +27,90 @@ struct DisplayConfigurationView: View {
     @State private var editingBeep = false
     private var dpi: Int { Int(Double(model.snapshot?.manifest.system["display_dpi"]?.text ?? "96") ?? 96) }
     var body: some View {
-        Form {
-            Section("OS/2 Display") {
-                Picker("Title Bars", selection: Binding(get: { model.snapshot?.manifest.system["window_chrome"]?.text ?? "both" }, set: {
-                    model.command(["config", "system.window_chrome", $0])
-                })) {
-                    Text("Native").tag("native")
-                    Text("OS/2").tag("os2")
-                    Text("Both").tag("both")
-                }.accessibilityIdentifier("windowChrome")
-                Text("Controls the title bars of top-level application windows. Embedded OS/2 document windows keep their own controls.")
-                    .foregroundStyle(.secondary)
-                Picker("Resolution", selection: Binding(get: { dpi }, set: { model.command(["config", "system.display_dpi", String($0)]) })) {
-                    ForEach([96, 120, 144, 192], id: \.self) { value in Text("\(value) DPI (\(value * 100 / 96)%)").tag(value) }
-                    if ![96, 120, 144, 192].contains(dpi) { Text("\(dpi) DPI (Custom)").tag(dpi) }
-                }.accessibilityIdentifier("displayDPI")
-                Text("Applies when an application next starts. OS/2 fonts, dialog units and control metrics scale together. Printer resolution remains 300 DPI.")
-                    .foregroundStyle(.secondary)
-            }
-            if let features {
-                Section("Graphics") {
-                    Picker("OpenGL", selection: Binding(get: { features.opengl.requested ?? "automatic" }, set: {
-                        model.command($0 == "automatic" ? ["unset", "system.opengl"] : ["config", "system.opengl", $0])
+        ScrollViewReader { proxy in
+            Form {
+                Section("OS/2 Display") {
+                    Picker("Title Bars", selection: Binding(get: { model.snapshot?.manifest.system["window_chrome"]?.text ?? "both" }, set: {
+                        model.command(["config", "system.window_chrome", $0])
                     })) {
-                        Text("Runtime Default (\(providerName(features.opengl.default)))").tag("automatic")
-                        Text("Mesa").tag("mesa")
-                        Text("Original OS/2 Software Renderer").tag("original")
-                        Text("Off").tag("off")
-                    }.accessibilityIdentifier("openGLProvider")
-                    if !features.opengl.reason.isEmpty {
-                        Text(features.opengl.reason).foregroundStyle(.secondary)
-                    }
-                    if showMediaLinks {
-                        Button("Install Original OpenGL Files…") { model.openOS2ComponentGroup(.opengl) }
-                    }
-                    featureToggle("DIVE", key: "dive", feature: features.dive,
-                                  detail: "Direct video buffer access used by games such as OS/2 Doom.")
-                }
-                Section("Multimedia") {
-                    featureToggle("Video Playback", key: "video", feature: features.video)
-                    featureToggle("PCM Sound", key: "pcm", feature: features.pcm)
-                    featureToggle("MIDI Music", key: "midi", feature: features.midi)
-                    if showMediaLinks {
-                        Button("Browse Original Multimedia Files…") { model.openOS2ComponentGroup(.multimedia) }
-                    }
-                }
-                Section {
-                    Text("Changes apply when an application next starts. Settings travel with the ball. An unavailable feature can be selected for use with another runtime or after extracting OS/2 files; applications require that feature to be available before starting.")
+                        Text("Native").tag("native")
+                        Text("OS/2").tag("os2")
+                        Text("Both").tag("both")
+                    }.accessibilityIdentifier("windowChrome")
+                    Text("Controls the title bars of top-level application windows. Embedded OS/2 document windows keep their own controls.")
+                        .foregroundStyle(.secondary)
+                    Picker("Resolution", selection: Binding(get: { dpi }, set: { model.command(["config", "system.display_dpi", String($0)]) })) {
+                        ForEach([96, 120, 144, 192], id: \.self) { value in Text("\(value) DPI (\(value * 100 / 96)%)").tag(value) }
+                        if ![96, 120, 144, 192].contains(dpi) { Text("\(dpi) DPI (Custom)").tag(dpi) }
+                    }.accessibilityIdentifier("displayDPI")
+                    Text("Applies when an application next starts. OS/2 fonts, dialog units and control metrics scale together. Printer resolution remains 300 DPI.")
                         .foregroundStyle(.secondary)
                 }
-            } else if let error {
-                Text(error).foregroundStyle(.red).textSelection(.enabled)
-            } else { ProgressView("Checking runtime capabilities…") }
-            Section("Sound") {
-                Slider(value: $beep, in: 0...1, onEditingChanged: { editing in
-                    editingBeep = editing
-                    if !editing { model.command(["config", "system.beep_volume", String(beep)]) }
-                }) { Text("PC Speaker Volume") }
-                LabeledContent("Volume", value: "\(Int(beep * 100))%")
-                Button("Use Default PC Speaker Volume") { model.command(["unset", "system.beep_volume"]) }
-                    .disabled(model.snapshot?.manifest.system["beep_volume"] == nil)
-                Button("Sound Banks & Channel Mapping…") { model.audioEditor = true }.accessibilityIdentifier("soundBanks")
-                Text("Import SF2, SF3, SFZ and DLS instruments and configure each MIDI channel.").foregroundStyle(.secondary)
+                if let features {
+                    Section("Graphics") {
+                        Picker("OpenGL", selection: Binding(get: { features.opengl.requested ?? "automatic" }, set: {
+                            model.setOpenGLProvider($0)
+                        })) {
+                            Text("Runtime Default (\(providerName(features.opengl.default)))").tag("automatic")
+                            Text("Mesa").tag("mesa")
+                            Text("Original OS/2 Software Renderer").tag("original")
+                            Text("Off").tag("off")
+                        }.accessibilityIdentifier("openGLProvider")
+                            .settingHighlight(model.highlightedSetting == "graphics.opengl")
+                            .id("graphics.opengl")
+                        if !features.opengl.reason.isEmpty {
+                            Text(features.opengl.reason).foregroundStyle(.secondary)
+                        }
+                        if showMediaLinks {
+                            Button("Install OS/2 System Component") { model.installOriginalOpenGL() }
+                        }
+                        featureToggle("DIVE", key: "dive", feature: features.dive,
+                                      detail: "Direct video buffer access used by games such as OS/2 Doom.")
+                    }
+                    Section("Multimedia") {
+                        featureToggle("Video Playback", key: "video", feature: features.video)
+                        featureToggle("PCM Sound", key: "pcm", feature: features.pcm)
+                        featureToggle("MIDI Music", key: "midi", feature: features.midi)
+                        if showMediaLinks {
+                            Button("Install OS/2 System Component") { model.openOS2ComponentGroup(.multimedia) }
+                            Text("2ine provides video decoding, PCM and MIDI. An original OS/2 playback engine cannot currently be selected.")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                    }
+                    Section {
+                        Text("Changes apply when an application next starts. Settings travel with the ball. An unavailable feature can be selected for use with another runtime or after extracting OS/2 files; applications require that feature to be available before starting.")
+                            .foregroundStyle(.secondary)
+                    }
+                } else if let error {
+                    Text(error).foregroundStyle(.red).textSelection(.enabled)
+                } else { ProgressView("Checking runtime capabilities…") }
+                Section("Sound") {
+                    Slider(value: $beep, in: 0...1, onEditingChanged: { editing in
+                        editingBeep = editing
+                        if !editing { model.command(["config", "system.beep_volume", String(beep)]) }
+                    }) { Text("PC Speaker Volume") }
+                    LabeledContent("Volume", value: "\(Int(beep * 100))%")
+                    Button("Use Default PC Speaker Volume") { model.command(["unset", "system.beep_volume"]) }
+                        .disabled(model.snapshot?.manifest.system["beep_volume"] == nil)
+                    Button("Sound Banks & Channel Mapping…") { model.audioEditor = true }.accessibilityIdentifier("soundBanks")
+                    Text("Import SF2, SF3, SFZ and DLS instruments and configure each MIDI channel.").foregroundStyle(.secondary)
+                }
+            }.formStyle(.grouped).disabled(model.busy || model.mediaBusy)
+            .task(id: "\(model.selected ?? "")|\(model.build)|\(model.revision)") { await load() }
+            .onChange(of: features != nil, initial: true) { _, ready in
+                if ready, let target = model.highlightedSetting { proxy.scrollTo(target, anchor: .center) }
             }
-        }.formStyle(.grouped).disabled(model.busy || model.mediaBusy)
-        .task(id: "\(model.selected ?? "")|\(model.build)|\(model.revision)") { await load() }
+            .onChange(of: model.highlightedSetting) { _, target in
+                if let target { proxy.scrollTo(target, anchor: .center) }
+            }
+        }
     }
     @ViewBuilder private func featureToggle(_ title: String, key: String, feature: RuntimeFeature, detail: String? = nil) -> some View {
         Toggle(title, isOn: Binding(get: { feature.requested ?? feature.default }, set: {
             model.command(["config", "system." + key, $0 ? "true" : "false"])
         })).accessibilityIdentifier("runtimeFeature." + key)
+            .settingHighlight(key == "video" && model.highlightedSetting == "graphics")
+            .id(key == "video" ? "graphics" : "runtimeFeature." + key)
         if let detail { Text(detail).font(.callout).foregroundStyle(.secondary) }
         if !feature.reason.isEmpty { Text(feature.reason).font(.callout).foregroundStyle(.secondary) }
         if feature.requested != nil {
@@ -119,6 +133,14 @@ struct DisplayConfigurationView: View {
             guard !Task.isCancelled, ball == model.selected else { return }
             features = nil; self.error = error.localizedDescription
         }
+    }
+}
+
+extension View {
+    func settingHighlight(_ highlighted: Bool) -> some View {
+        padding(highlighted ? 8 : 0)
+            .background(highlighted ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .overlay { if highlighted { RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor, lineWidth: 2) } }
     }
 }
 
@@ -417,25 +439,5 @@ private struct ConfigurationTextSheet: View {
         }.padding(24).frame(width: 680, height: 520)
         .task { text = snapshot.text ?? "" }
         .interactiveDismissDisabled(saving || text != snapshot.text)
-    }
-}
-
-struct ComponentSettingsSheet: View {
-    @Bindable var model: AppModel
-    let request: ComponentSettingsRequest
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(request.token == "printing" ? "Printing" : "Graphics & Sound").font(.title2.bold())
-            if request.token == "printing" {
-                PrintingSettingsView(model: model, showMediaLinks: false)
-            } else {
-                DisplayConfigurationView(model: model, showMediaLinks: false)
-            }
-            HStack {
-                Spacer()
-                Button("Return to Components") { dismiss() }.keyboardShortcut(.defaultAction)
-            }
-        }.padding(20).frame(width: 700, height: 620)
     }
 }

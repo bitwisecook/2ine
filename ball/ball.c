@@ -2806,6 +2806,8 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return browse_media(c, field(request, "path"));
     if (!strcmp(action, "open-os2-source"))
         return open_os2_source(c, request);
+    if (!strcmp(action, "validate-os2-media"))
+        return validate_os2_media(c, request);
     if (!strcmp(action, "plan-os2-extraction"))
         return plan_os2_extraction(c, request);
     if (!strcmp(action, "import-os2-support"))

@@ -34,6 +34,13 @@ checkboxes; each screen retains its own selection and editing rules. Mac rows
 follow system light/dark appearance. File browsers retain their relevant-files
 filter and sortable size/date columns.
 
+The ball has separate **OS/2 System Components** and **Application Installation**
+tabs. The former installs original operating-system files; the latter attaches
+application media and runs its installer. The last verified OS/2 media choice is
+remembered in desktop preferences and suggested for new balls. A ball's own media
+choice takes priority, and nested archive paths are retained without copying the
+media into every ball.
+
 Guest Copy and Paste commands can use the [host clipboard](clipboard.md) for
 text, rich text, HTML and bitmap images.
 
@@ -186,11 +193,25 @@ the review distinguishes installed files from files to extract. CMD and original
 default selection. Existing files and the application's CD mapping are preserved.
 **Browse…** is optional when you need a particular folder or nested archive.
 
+Components show files under their full guest destination folders, such as
+`C:\` → `OS2` → `DLL`. Components supplied by the selected 2ine provider remain
+visible but cannot be ticked; their settings link stays available. Choosing the
+original OpenGL provider enables its media files. OpenGL Off also allows files
+to be staged before enabling a provider. Printer and multimedia engines
+currently use 2ine.
+
 Expand a group to choose subgroups or individual files. Fonts are divided into
 bitmap, TrueType, OpenType, PostScript and metrics; help separates its engine,
 viewers, help books and reference books. Group checkboxes show a mixed state
 when only some descendants are selected. Selecting a whole group includes its
 declared requirements; individual file choices copy only the selected sources.
+Each subgroup contains expandable destination folders such as
+`C:\ → OS2 → DLL → font.ttf`; a folder checkbox selects its eligible descendants.
+Groups using a 2ine provider are greyed out. Their **2ine** button opens and
+highlights the matching setting. **Install OS/2 System Component** returns to
+the component tab; choosing original OpenGL enables, ticks and highlights that
+group. Native-only printing and video groups stay disabled, with their current
+provider limits explained in Settings.
 
 To add the original help manager, viewer and books, select **Full Help** in
 **Install Components…** and click **Install**. It reuses the remembered media.

@@ -5,8 +5,9 @@
 from pathlib import Path
 
 if __package__:
-    from . import gnome_views
+    from . import gnome_media_preferences, gnome_views
 else:
+    import gnome_media_preferences
     import gnome_views
 
 Adw, Gtk, GLib = gnome_views.Adw, gnome_views.Gtk, gnome_views.GLib
@@ -178,7 +179,29 @@ class PreferencesDialog(Adw.PreferencesDialog):
         group.add(self.size)
         self.system_size.connect("notify::active", self.font_changed)
         self.size.connect("notify::value", self.font_changed)
+        media = Adw.PreferencesGroup(
+            title="OS/2 Installation Media",
+            description="The last verified media is reused by new balls. Each ball’s remembered source takes priority.",
+        )
+        page.add(media)
+        self.media = Adw.ActionRow(title="Last Verified OS/2 Media", use_markup=False)
+        media.add(self.media)
+        self.forget_media = Adw.ActionRow(title="Forget OS/2 Media", activatable=True)
+        self.forget_media.connect("activated", lambda *_: self.clear_media())
+        media.add(self.forget_media)
+        self.update_media()
         self.update_folder()
+
+    def update_media(self):
+        paths = gnome_media_preferences.sources(
+            self.window.app_preferences.get("lastOS2MediaSources")
+        )
+        self.media.set_subtitle("\n".join(paths) if paths else "No verified media remembered")
+        self.forget_media.set_sensitive(bool(paths))
+
+    def clear_media(self):
+        self.window.forget_os2_media()
+        self.update_media()
 
     def update_folder(self):
         folder = self.window.app_preferences.get("ballFolder")
@@ -243,3 +266,110 @@ def shortcuts(window):
         dialog.add(section)
     dialog.present(window)
     return dialog
+
+
+class InstallationPage(Gtk.Box):
+    def __init__(self, window, system=False):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        self.window, self.system = window, system
+        self.append(
+            Gtk.Label(
+                label="OS/2 System Components" if system else "Application Installation",
+                xalign=0,
+                css_classes=["title-1"],
+            )
+        )
+        self.append(
+            Gtk.Label(
+                label=(
+                    "Choose original OS/2 media and install system components into this ball. Files supplied by 2ine are configured in Settings."
+                    if system
+                    else "Choose an application installer from a drive, folder or image. Installed application launchers remain in Applications."
+                ),
+                xalign=0,
+                wrap=True,
+            )
+        )
+        tasks = Adw.PreferencesGroup()
+        self.append(tasks)
+        if system:
+            actions = [
+                (
+                    "Browse OS/2 System Components…",
+                    "Reuse this ball's media, or the last verified OS/2 media",
+                    lambda: window.choose_os2_support(),
+                ),
+                (
+                    "Choose Different OS/2 Media…",
+                    "Select an ISO, archive, folder or floppy images",
+                    lambda: window.choose_os2_support(force_picker=True),
+                ),
+                (
+                    "Check and Restore System Libraries…",
+                    "Find required components for installed applications",
+                    window.audit_dependencies,
+                ),
+            ]
+        else:
+            actions = [
+                (
+                    "Choose Application Installer…",
+                    "Browse the ball's drives and attached media",
+                    lambda: window.program_dialog("install"),
+                ),
+                (
+                    "Manage Installation Media…",
+                    "Attach a CD image or folder before starting the installer",
+                    lambda: window.show_page("drives"),
+                ),
+                (
+                    "Installed Applications",
+                    "Launch and manage installed application shortcuts",
+                    lambda: window.show_page("apps"),
+                ),
+            ]
+        for title, detail, callback in actions:
+            row = Adw.ActionRow(title=title, subtitle=detail, activatable=True, use_markup=False)
+            row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+            row.connect("activated", lambda _row, callback=callback: callback())
+            tasks.add(row)
+        if system:
+            support = window.snapshot.get("os2Support", {})
+            self.append(
+                Gtk.Label(
+                    label="CMD and installer support are installed."
+                    if support.get("complete")
+                    else "Original CMD and installer support are not yet complete.",
+                    xalign=0,
+                    wrap=True,
+                    css_classes=["dim-label"],
+                )
+            )
+
+
+def highlight_setting(widget):
+    """Use the native focus target plus a temporary theme-relative highlight."""
+    display = widget.get_display()
+    if not hasattr(highlight_setting, "displays"):
+        highlight_setting.displays = set()
+    if display not in highlight_setting.displays:
+        provider = Gtk.CssProvider()
+        provider.load_from_string(
+            ".twoine-setting-highlight { box-shadow: inset 0 0 0 2px alpha(currentColor, 0.5); background-color: alpha(currentColor, 0.07); }"
+        )
+        Gtk.StyleContext.add_provider_for_display(
+            display, provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+        highlight_setting.displays.add(display)
+    widget.add_css_class("twoine-setting-highlight")
+    widget.set_focusable(True)
+    if widget.get_mapped():
+        widget.grab_focus()
+    else:
+
+        def mapped(target):
+            target.disconnect(handler)
+            target.grab_focus()
+
+        handler = widget.connect("map", mapped)
+    GLib.timeout_add(5000, lambda: widget.remove_css_class("twoine-setting-highlight") or False)

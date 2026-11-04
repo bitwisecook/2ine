@@ -143,7 +143,7 @@ class PrintingPage(Adw.PreferencesPage):
         self.loading = False
         group = Adw.PreferencesGroup(
             title="Printing",
-            description="PDF is the runtime default and opens the system save dialog for a name and location. PCL 5 output can be saved for a compatible printer. Changes apply next launch.",
+            description="PDF is the runtime default and opens the system save dialog for a name and location. PCL 5 output can be saved for a compatible printer. Printing is provided by 2ine; original OS/2 printer drivers cannot currently be selected. Changes apply next launch.",
         )
         self.add(group)
         self.queue = Adw.ComboRow(title="Default Printer", use_markup=False)
@@ -152,7 +152,7 @@ class PrintingPage(Adw.PreferencesPage):
         group.add(self.queue)
         group.add(
             button(
-                "Browse Original Printer Files…", lambda: window.show_component_media("printers")
+                "Install OS/2 System Component…", lambda: window.show_component_media("printers")
             )
         )
         self.reset = button("Use Inherited Default", self.remove)
@@ -1061,17 +1061,15 @@ class GraphicsMediaPage(Adw.PreferencesPage):
         self.opengl.set_selected(self.providers.index(requested))
         self.opengl.connect("notify::selected", self.opengl_changed)
         graphics.add(self.opengl)
-        graphics.add(
-            button("Install Original OpenGL Files…", lambda: window.show_component_media("opengl"))
-        )
+        graphics.add(button("Install OS/2 System Component…", window.install_opengl_component))
         media = Adw.PreferencesGroup(
             title="Playback and DIVE",
-            description="Changes apply next launch. Reset an override to follow the receiving runtime. Unavailable options can be saved for another computer; enabling them requires a supporting runtime before launch.",
+            description="Playback is provided by 2ine; original OS/2 multimedia drivers cannot currently be selected. Changes apply next launch. Reset an override to follow the receiving runtime. Unavailable options can be saved for another computer; enabling them requires a supporting runtime before launch.",
         )
         self.add(media)
         media.add(
             button(
-                "Browse Original Multimedia Files…",
+                "Install OS/2 System Component…",
                 lambda: window.show_component_media("multimedia"),
             )
         )
@@ -1157,7 +1155,11 @@ class GraphicsMediaPage(Adw.PreferencesPage):
         self.window.execute(arguments)
 
     def opengl_changed(self, row, _property):
-        self.save("opengl", self.providers[row.get_selected()])
+        value = self.providers[row.get_selected()]
+        if value == "original" and not self.updating and self.current() and not self.window.busy:
+            self.window.install_opengl_component()
+        else:
+            self.save("opengl", value)
 
     def feature_changed(self, key, row):
         self.save(key, str(row.get_active()).lower())

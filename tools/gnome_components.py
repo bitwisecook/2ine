@@ -59,6 +59,17 @@ class ComponentTree(NativeBrowser):
             title="Components and files",
             search_hint="Search Components and Files",
             identity=lambda data: data["id"],
+            children=lambda data: [
+                child
+                for child in data.get("children", [])
+                if not (data.get("provider") and child.get("kind") == "setting")
+            ],
+            icon=lambda data: (
+                "folder-symbolic"
+                if data["kind"] in ("directory", "group")
+                else "document-properties-symbolic"
+            ),
+            muted=lambda data: data["id"] in self.checks.disabled,
             check=lambda data: self.checks.state(data["id"]),
             toggled=self.toggle_node,
             tooltip=lambda data: data.get("path") or data.get("detail") or data["title"],
@@ -76,17 +87,26 @@ class ComponentTree(NativeBrowser):
         }.get(value, value)
 
     def provider_action(self, node):
-        if node["kind"] != "setting" or not node.get("setting"):
+        provider = node.get("provider") or (node if node["kind"] == "setting" else {})
+        if not provider.get("setting"):
             return None
+        selected = provider.get("selection", "2ine")
+        native = provider.get("nativeSelected", selected in ("mesa", "2ine"))
         return {
-            "label": self.provider_name(node.get("selection", "Settings")),
-            "tooltip": "Open " + node.get("title", "2ine settings"),
-            "activate": lambda: self.setting(node["setting"]),
+            "label": "2ine (Mesa)"
+            if native and selected == "mesa"
+            else "2ine"
+            if native
+            else self.provider_name(selected),
+            "tooltip": "Open " + provider.get("title", "2ine settings"),
+            "activate": lambda: self.setting(provider["setting"]),
         }
 
     def status(self, node):
         if node.get("provider"):
             return self.provider_name(node["provider"].get("selection", "2ine"))
+        if node["id"] in self.checks.disabled:
+            return "Provided by 2ine"
         if node["kind"] == "file":
             return "Installed" if node.get("present") else "Available"
         sources = self.sources.get(node["id"], set())
@@ -99,6 +119,16 @@ class ComponentTree(NativeBrowser):
 
     def focus_group(self, category):
         self.focus(category)
+
+    def select_group(self, category):
+        values = self.sources.get(category, set())
+        if values:
+            self.checks.selected.update(values)
+            for required in self.nodes[category].get("requires", []):
+                self.checks.selected.update(self.sources.get(required, set()))
+            self.refresh()
+            self.changed()
+        self.focus_group(category)
 
     def configured_components(self):
         return ["som"] if self.checks.complete("som") else []

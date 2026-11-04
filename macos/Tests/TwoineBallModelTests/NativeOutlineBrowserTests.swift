@@ -37,6 +37,23 @@ private func guestEntries() throws -> [GuestEntry] {
     """#.utf8))
 }
 
+@MainActor @Test func nativeBrowserRevealsAnExplicitDestinationThroughCollapsedDirectories() throws {
+    let state = BrowserState()
+    let file = OutlineBrowserNode(id: "source", title: "SOME.DLL")
+    let os2 = OutlineBrowserNode(id: "C:\\OS2", title: "OS2", children: [file])
+    let drive = OutlineBrowserNode(id: "C:\\", title: "C:\\", children: [os2])
+    let component = OutlineBrowserNode(id: "runtime", title: "Runtime", children: [drive])
+    let browser = NativeOutlineBrowser(nodes: [component], columns: [OutlineBrowserColumn(id: "name", title: "Name")],
+                                       selection: state.selection, query: state.search, searchFocused: state.focus,
+                                       focusRequest: OutlineFocusRequest(id: UUID(), row: "source"))
+    let (scroll, coordinator, outline) = renderBrowser(browser)
+    defer { _ = scroll }
+    #expect(outline.numberOfRows == 4)
+    #expect(state.selected == "source")
+    #expect((outline.item(atRow: outline.selectedRow) as? NativeOutlineBrowser.Item)?.node.id == "source")
+    #expect(coordinator.expanded == ["runtime", "C:\\", "C:\\OS2"])
+}
+
 @MainActor @Test func nativeBrowserSortFilterAndActivationKeepStableSelection() throws {
     let state = BrowserState()
     state.selected = "C:\\Alpha.exe"

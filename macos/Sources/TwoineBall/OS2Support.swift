@@ -7,6 +7,7 @@ import AppKit
 struct OS2SupportSheet: View {
     @Bindable var model: AppModel
     let request: OS2ImportRequest
+    var embedded = false
     @Environment(\.dismiss) private var dismiss
     private enum Step { case source, options, finished }
     @State private var step: Step = .options
@@ -34,7 +35,7 @@ struct OS2SupportSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(step == .source ? "Browse Installation Media" : step == .options ? "Install Components" : "Components Installed")
+            Text(embedded ? "OS/2 System Components" : step == .source ? "Browse OS/2 Media" : step == .options ? "Install Components" : "Components Installed")
                 .font(.title2.bold())
             switch step {
             case .source: sourceBrowser
@@ -44,8 +45,12 @@ struct OS2SupportSheet: View {
             if !notice.isEmpty { Text(notice).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("supportMediaError") }
             HStack {
-                Button(step == .finished ? "Done" : "Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction).disabled(blocked)
+                if !embedded {
+                    Button(step == .finished ? "Done" : "Cancel", role: .cancel) { dismiss() }
+                        .keyboardShortcut(.cancelAction).disabled(blocked)
+                } else if step == .finished {
+                    Button("Review Components") { step = .options }.disabled(blocked)
+                }
                 if loading { ProgressView().controlSize(.small) }
                 Spacer()
                 if step == .options {
@@ -58,14 +63,19 @@ struct OS2SupportSheet: View {
                         .accessibilityIdentifier("reviewOS2Extraction")
                 }
             }
-        }.padding(24).frame(width: 780, height: 680)
+        }.padding(24)
+            .frame(minWidth: embedded ? nil : 780, maxWidth: embedded ? .infinity : 780,
+                   minHeight: embedded ? nil : 680, maxHeight: embedded ? .infinity : 680)
             .onChange(of: query) { _, _ in selected = nil }
             .onChange(of: relevantOnly) { _, _ in selected = nil }
             .interactiveDismissDisabled(blocked)
-            .sheet(item: $model.componentSettingsRequest, onDismiss: refreshProviderMetadata) { request in
-                ComponentSettingsSheet(model: model, request: request)
-            }
             .task { await loadInitial() }
+            .onDisappear {
+                if !extractionSources.isEmpty, FileManager.default.fileExists(atPath: request.ball) {
+                    model.componentDrafts[request.ball] = ComponentDraft(sources: extractionSources, selection: fileSelection)
+                }
+            }
+            .onChange(of: model.componentNavigation) { _, _ in applyNavigation() }
     }
     private var sourceBrowser: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -145,7 +155,7 @@ struct OS2SupportSheet: View {
                                      refreshTreeSelection()
                                  }, openSetting: { token in
                                      model.openComponentSetting(token)
-                                 })
+                                 }, focusRequest: model.componentNavigation.flatMap { $0.ball == request.ball ? OutlineFocusRequest(id: $0.id, row: $0.category.rawValue) : nil })
                 HStack {
                     Text("\(fileSelection.count) selected · \(files.count) files to add")
                     Spacer()
@@ -285,9 +295,12 @@ struct OS2SupportSheet: View {
         refreshSelection()
         if value.tree != nil {
             let installed = Set(value.files.filter { $0.present && !$0.provided }.map(\.source))
-            fileSelection = value.sourceSelection(categories).union(installed)
+            let draft = model.componentDrafts[request.ball]
+            let initial = draft?.sources == extractionSources ? draft?.selection ?? [] : value.sourceSelection(categories).union(installed)
+            fileSelection = initial
                 .intersection(value.tree?.eligibleSources ?? [])
             refreshTreeSelection()
+            applyNavigation()
         }
     }
     private func refreshTreeSelection() {
@@ -295,23 +308,22 @@ struct OS2SupportSheet: View {
         files = plan.files.filter { fileSelection.contains($0.source) && !$0.provided && !$0.present }
         categories = Set(plan.files.filter { fileSelection.contains($0.source) }.map(\.category))
     }
-    private func refreshProviderMetadata() {
-        guard !extractionSources.isEmpty else { return }
-        loading = true
-        Task {
-            defer { loading = false }
-            do {
-                let updated = try await model.planOS2Extraction(extractionSources, ball: request.ball)
-                plan = updated
-                if let tree = updated.tree { fileSelection.formIntersection(tree.eligibleSources) }
-                refreshTreeSelection()
-            } catch { self.error = error.localizedDescription }
-        }
+    private func applyNavigation() {
+        guard let navigation = model.componentNavigation, navigation.ball == request.ball,
+              let plan, plan.tree?.find(navigation.category.rawValue) != nil else { return }
+        componentQuery = ""
+        fileSelection = model.componentSelection(in: plan, preserving: fileSelection, ball: request.ball)
+        refreshTreeSelection()
+        step = .options
     }
     private func loadInitial() async {
         categories = request.categories
         loading = true
         do {
+            while model.busy || model.mediaBusy {
+                try Task.checkCancellation()
+                try await Task.sleep(for: .milliseconds(20))
+            }
             let status = try await model.os2Support()
             if status.complete && status.rexxComplete == true {
                 categories.insert(.cmd); installedCounts[.cmd] = 11
@@ -323,7 +335,7 @@ struct OS2SupportSheet: View {
                     requiredBy[category] = group.requiredBy ?? []
                 }
             }
-            let saved = request.sources.isEmpty ? status.mediaSources ?? [] : request.sources
+            let saved = request.sources.isEmpty ? model.suggestedOS2MediaSources(status.mediaSources) : request.sources
             loading = false
             if !saved.isEmpty { await loadSources(saved) }
         } catch { loading = false; self.error = error.localizedDescription }

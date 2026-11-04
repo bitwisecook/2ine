@@ -787,7 +787,7 @@ static void dependency_cache_media(Context *c, const char *source, const char *v
     }
 }
 static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *errors,
-                                          cJSON *media_index)
+                                          cJSON *media_index, int cache_media)
 {
     cJSON *eligible = cJSON_CreateArray(), *indexes = cJSON_CreateObject();
     int remembered_cmd = 0, remembered_level = 0;
@@ -803,7 +803,7 @@ static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *err
                 cJSON_CreateString("Remembered or attached media is no longer available"));
             continue;
         }
-        if (!remembered && !dependency_possible_media(c, path))
+        if (cache_media && !remembered && !dependency_possible_media(c, path))
         {
             put(item, "status", cJSON_CreateString(c->error ? "unavailable" : "not-os2-media"));
             put(item, "reason",
@@ -822,8 +822,12 @@ static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *err
             cJSON_AddStringToObject(item, "fingerprint", fingerprint);
         int command = 0, level = 0;
         cJSON *source_index =
-            dependency_cached_media(c, path, "core", fingerprint, &command, &level);
-        put(item, "coreIndexCache", cJSON_CreateString(source_index ? "hit" : "miss"));
+            cache_media ? dependency_cached_media(c, path, "core", fingerprint, &command, &level)
+                        : NULL;
+        put(item, "coreIndexCache",
+            cJSON_CreateString(!cache_media   ? "disabled"
+                               : source_index ? "hit"
+                                              : "miss"));
         if (!source_index)
         {
             cJSON *request = cJSON_CreateObject(),
@@ -862,7 +866,8 @@ static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *err
             source_index = cJSON_CreateObject();
             dependency_index_media(c, source_index, plan);
             cJSON_Delete(plan);
-            dependency_cache_media(c, path, "core", fingerprint, command, level, source_index);
+            if (cache_media)
+                dependency_cache_media(c, path, "core", fingerprint, command, level, source_index);
         }
         cJSON_AddItemToObject(indexes, path, source_index);
         cJSON_AddBoolToObject(item, "commandSignature", command);
@@ -889,6 +894,94 @@ static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *err
         dependency_merge_media(media_index, get(indexes, field(item, "path")));
     cJSON_Delete(indexes);
     return eligible;
+}
+static cJSON *validate_os2_media(Context *c, const cJSON *request)
+{
+    const cJSON *requested = get(request, "sources"), *source;
+    if (!array_strings(c, requested) || !cJSON_GetArraySize(requested))
+    {
+        fail(c, "Choose OS/2 installation media");
+        return NULL;
+    }
+    cJSON *opened = cJSON_CreateObject(), *normalized = cJSON_AddArrayToObject(opened, "sources"),
+          *skipped = cJSON_AddArrayToObject(opened, "skippedSources");
+    /* Normalize each explicit input so finding an ISO in one archive cannot
+       silently omit a separately selected folder, floppy or archive. */
+    cJSON_ArrayForEach(source, requested)
+    {
+        cJSON *one_request = cJSON_CreateObject(),
+              *one_sources = cJSON_AddArrayToObject(one_request, "sources");
+        cJSON_AddItemToArray(one_sources, cJSON_Duplicate(source, 1));
+        cJSON *one = open_os2_source(c, one_request);
+        cJSON_Delete(one_request);
+        if (!one)
+        {
+            cJSON_Delete(opened);
+            return NULL;
+        }
+        const cJSON *item;
+        cJSON_ArrayForEach(item, get(one, "sources"))
+            dependency_array_unique(normalized, str(item));
+        cJSON_ArrayForEach(item, get(one, "skippedSources"))
+            cJSON_AddItemToArray(skipped, cJSON_Duplicate(item, 1));
+        cJSON_Delete(one);
+    }
+    cJSON *result = cJSON_CreateObject(), *media = cJSON_AddArrayToObject(result, "media"),
+          *errors = cJSON_AddArrayToObject(result, "errors"), *index = cJSON_CreateObject(),
+          *physical = cJSON_AddArrayToObject(result, "physicalSources");
+    cJSON *installation_set = cJSON_CreateArray();
+    cJSON_ArrayForEach(source, get(opened, "sources"))
+    {
+        cJSON *siblings = cJSON_CreateArray();
+        cJSON_AddItemToArray(siblings, cJSON_Duplicate(source, 1));
+        if (extract_expand_installation_roots(c, siblings))
+        {
+            const cJSON *sibling;
+            cJSON_ArrayForEach(sibling, siblings)
+                dependency_array_unique(installation_set, str(sibling));
+        }
+        cJSON_Delete(siblings);
+    }
+    cJSON_ArrayForEach(source, get(opened, "sources"))
+    {
+        /* The explicitly selected images form one installation set, using
+           the same combined-signature rule as remembered floppy sets. Only
+           installation layouts and their discovered siblings join that set;
+           unrelated application media cannot inherit another CD's proof. */
+        int member = dependency_possible_media(c, str(source));
+        const cJSON *known;
+        cJSON_ArrayForEach(known, installation_set) if (!strcmp(str(known), str(source))) member =
+            1;
+        dependency_source(media, str(source), member);
+        char *host = keep(c, tb_media_host_source(str(source)));
+        if (host)
+            dependency_array_unique(physical, host);
+    }
+    cJSON *eligible = dependency_verified_sources(c, media, errors, index, 0);
+    cJSON_AddItemToObject(result, "sources", eligible);
+    int complete = cJSON_GetArraySize(eligible) > 0 && !cJSON_GetArraySize(errors);
+    cJSON *item;
+    cJSON_ArrayForEach(item, media)
+    {
+        cJSON_DeleteItemFromObjectCaseSensitive(item, "remembered");
+        cJSON_AddBoolToObject(item, "selected", 1);
+        const char *status = field(item, "status");
+        if (!equal_case(status, "verified-os2-media") && !equal_case(status, "verified-os2-set"))
+            complete = 0;
+    }
+    cJSON_AddBoolToObject(result, "complete", complete);
+    cJSON_AddItemToObject(result, "skippedSources",
+                          cJSON_Duplicate(get(opened, "skippedSources"), 1));
+    cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
+    cJSON_Delete(index);
+    cJSON_Delete(installation_set);
+    cJSON_Delete(opened);
+    if (c->error)
+    {
+        cJSON_Delete(result);
+        return NULL;
+    }
+    return result;
 }
 static int dependency_secondary_sources(Context *c, cJSON *sources, cJSON *media_index,
                                         cJSON *errors)
@@ -1321,7 +1414,7 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
             break;
         }
         if (!eligible)
-            eligible = dependency_verified_sources(c, sources, errors, media_index);
+            eligible = dependency_verified_sources(c, sources, errors, media_index, 1);
         if (!cJSON_GetArraySize(eligible))
         {
             dependency_array_unique(

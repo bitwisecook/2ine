@@ -19,34 +19,12 @@ class ApplicationsPage(Gtk.Box):
         self.window = window
         controls = Adw.WrapBox(child_spacing=6, line_spacing=6)
         for label, action in (
-            ("Install Software…", "install"),
             ("Run Program…", "run"),
             ("Add Application…", "add-app"),
         ):
             button = Gtk.Button(label=label, action_name="win." + action)
-            if action == "install":
-                button.add_css_class("suggested-action")
             controls.append(button)
         self.append(controls)
-        support = Adw.PreferencesGroup(title="OS/2 Support")
-        self.append(support)
-        for title, subtitle, action in (
-            (
-                "Install OS/2 Files…",
-                "Browse original media and choose files to install",
-                "os2-files",
-            ),
-            (
-                "Check and Restore System Libraries…",
-                "Find dependencies required by installed applications",
-                "restore-libraries",
-            ),
-        ):
-            row = Adw.ActionRow(
-                title=title, subtitle=subtitle, activatable=True, action_name="win." + action
-            )
-            row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
-            support.add(row)
         self.search = Gtk.SearchEntry(placeholder_text="Search Applications")
         self.search.update_property([Gtk.AccessibleProperty.LABEL], ["Search applications"])
         self.append(self.search)

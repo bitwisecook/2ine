@@ -140,6 +140,44 @@ class BrowserModelTests(unittest.TestCase):
         checks.toggle("all")
         self.assertEqual(checks.selected, set())
 
+    def test_disabled_group_blocks_descendants_but_settings_remain_visible(self):
+        root = self.nodes()
+        root["children"][0]["disabled"] = True
+        root["children"][0]["children"].append(
+            {"id": "native-settings", "kind": "setting", "disabled": False}
+        )
+        checks = CheckedTree([root], ["a", "b"], value=lambda data: data.get("source"))
+        self.assertEqual(checks.selected, set())
+        self.assertFalse(checks.state("som").enabled)
+        self.assertFalse(checks.state("a").enabled)
+        self.assertFalse(checks.state("native-settings").visible)
+        self.assertIn("native-settings", checks.nodes)
+        checks.toggle("som")
+        self.assertEqual(checks.selected, set())
+        checks.toggle("all")
+        self.assertEqual(checks.selected, {"c"})
+
+    def test_directory_selection_does_not_add_semantic_component_requirements(self):
+        root = self.nodes()
+        som = root["children"][0]
+        som["children"] = [
+            {
+                "id": "som-dir",
+                "kind": "directory",
+                "path": "C:\\OS2\\DLL",
+                "children": som["children"],
+            }
+        ]
+        checks = CheckedTree(
+            [root], [], value=lambda data: data.get("source") if not data.get("disabled") else None
+        )
+        checks.toggle("som-dir")
+        self.assertEqual(checks.selected, {"a", "b"})
+        checks.toggle("b")
+        self.assertTrue(checks.state("som-dir").mixed)
+        checks.toggle("som")
+        self.assertEqual(checks.selected, {"a", "b", "c"})
+
     def test_packaging_registers_both_shared_browser_modules(self):
         source = Path(__file__).resolve().parents[2] / "tools/build_gnome_packages.py"
         tree = ast.parse(source.read_text())
@@ -153,7 +191,9 @@ class BrowserModelTests(unittest.TestCase):
                 }
                 if "gnome_files.py" in names:
                     staged.update(names)
-        self.assertTrue({"gnome_browser.py", "gnome_browser_model.py"} <= staged)
+        self.assertTrue(
+            {"gnome_browser.py", "gnome_browser_model.py", "gnome_media_preferences.py"} <= staged
+        )
 
 
 if __name__ == "__main__":

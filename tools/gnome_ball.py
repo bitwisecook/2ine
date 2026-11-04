@@ -20,6 +20,7 @@ if __package__:
         gnome_ball_icons,
         gnome_ball_lifecycle,
         gnome_configuration,
+        gnome_media_preferences,
         gnome_navigation,
         gnome_views,
     )
@@ -29,6 +30,7 @@ else:
     import gnome_ball_icons
     import gnome_ball_lifecycle
     import gnome_configuration
+    import gnome_media_preferences
     import gnome_navigation
     import gnome_views
 
@@ -168,7 +170,7 @@ class BallWindow(Adw.ApplicationWindow):
             ("add-drive", self.map_dialog),
             ("create-disk", self.create_image),
             ("create-floppy", lambda: self.create_image(floppy=True)),
-            ("install", lambda: self.program_dialog("install")),
+            ("install", lambda: self.show_page("application-installation")),
             ("run", lambda: self.program_dialog("run")),
             ("restore-libraries", self.audit_dependencies),
             ("about", self.about),
@@ -182,7 +184,7 @@ class BallWindow(Adw.ApplicationWindow):
             ),
             ("close", self.close),
             ("find", self.find),
-            ("os2-files", self.choose_os2_support),
+            ("os2-files", lambda: self.show_page("components")),
             ("add-app", lambda: self.program_dialog("add-app")),
             ("launch-selected", lambda: self.selected_application_action("launch")),
             ("edit-selected", lambda: self.selected_application_action("edit")),
@@ -721,6 +723,16 @@ class BallWindow(Adw.ApplicationWindow):
         apps = self.page("apps", "Applications", "application-x-executable-symbolic")
         self.applications_page = gnome_applications.ApplicationsPage(self)
         apps.append(self.applications_page)
+        for name, title, icon, system in (
+            ("components", "OS/2 System Components", "applications-system-symbolic", True),
+            (
+                "application-installation",
+                "Application Installation",
+                "system-software-install-symbolic",
+                False,
+            ),
+        ):
+            self.page(name, title, icon).append(gnome_navigation.InstallationPage(self, system))
         configuration = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
         self.stack.add_titled_with_icon(
             configuration, "settings", "Settings", "preferences-system-symbolic"
@@ -909,6 +921,9 @@ class BallWindow(Adw.ApplicationWindow):
             return
         ball = str(self.ball)
         build = str(self.build)
+        selected_sources = sources or gnome_media_preferences.preferred(
+            self.snapshot, self.app_preferences
+        )
         self.activity_title = "Checking installed libraries…"
         self.show_page("activity")
         self.update_activity()
@@ -916,22 +931,42 @@ class BallWindow(Adw.ApplicationWindow):
         def work():
             fields = {}
             warnings = []
-            if sources:
-                opened = ball_api.native_request(
-                    {"action": "open-os2-source", "ball": ball, "build": build, "sources": sources}
+            validation = None
+            if selected_sources:
+                validation = ball_api.native_request(
+                    {
+                        "action": "validate-os2-media",
+                        "ball": ball,
+                        "build": build,
+                        "sources": selected_sources,
+                    }
                 )
-                fields["sources"] = opened["sources"]
-                warnings = opened.get("skippedSources", [])
+                if validation.get("complete"):
+                    fields["sources"] = validation["sources"]
+                else:
+                    fields["resolve"] = False
+                    warnings = [
+                        {
+                            "path": "OS/2 media",
+                            "reason": "The selected source is unavailable or is not verified OS/2 media; choose another source.",
+                        }
+                    ]
             report = ball_api.native_request(
                 {"action": "audit-dependencies", "ball": ball, "build": build, **fields}
             )
             snapshot = ball_api.native_request({"action": "snapshot", "ball": ball})
-            return report, snapshot, warnings, self.read_log(Path(report["logPath"]))
+            return report, snapshot, warnings, self.read_log(Path(report["logPath"])), validation
 
         def finished(result):
             if str(self.ball) != ball:
                 return
-            report, snapshot, warnings, log_text = result
+            report, snapshot, warnings, log_text, validation = result
+            if validation and validation.get("complete"):
+                self.remember_os2_media(validation)
+            elif selected_sources == gnome_media_preferences.sources(
+                self.app_preferences.get("lastOS2MediaSources")
+            ):
+                self.forget_os2_media()
             self.activity_title = "Dependency audit finished"
             notices = ["Skipped " + item["path"] + ": " + item["reason"] for item in warnings]
             self.install_summary = "\n\n".join([*notices, report["summary"]])
@@ -969,9 +1004,17 @@ class BallWindow(Adw.ApplicationWindow):
             if sources and str(self.ball) == ball:
                 self.audit_dependencies(sources, after=after)
 
+        self.initial_os2_picker(picker)
         picker.open_multiple(self, None, chosen)
 
-    def choose_os2_support(self, categories=None):
+    def choose_os2_support(self, categories=None, force_picker=False):
+        if not self.ball or self.busy or self.process:
+            return
+        self.show_page("components")
+        remembered = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
+        if remembered and not force_picker:
+            self.present_os2_media(remembered, categories)
+            return
         ball = str(self.ball)
         picker = Gtk.FileDialog(
             title="Choose OS/2 Installation ISO or Floppy Images",
@@ -990,27 +1033,76 @@ class BallWindow(Adw.ApplicationWindow):
             if sources and str(self.ball) == ball:
                 self.present_os2_media(sources, categories)
 
+        self.initial_os2_picker(picker)
         picker.open_multiple(self, None, chosen)
+
+    def initial_os2_picker(self, picker, folder=False):
+        path = gnome_media_preferences.picker_path(self.app_preferences)
+        if path:
+            if folder and path.is_file():
+                path = path.parent
+            if path.is_dir():
+                picker.set_initial_folder(Gio.File.new_for_path(str(path)))
+            else:
+                picker.set_initial_file(Gio.File.new_for_path(str(path)))
+
+    def remember_os2_media(self, validation):
+        if gnome_media_preferences.remember(self.app_preferences, validation):
+            self.persist_preferences()
+
+    def forget_os2_media(self):
+        if gnome_media_preferences.forget(self.app_preferences):
+            self.persist_preferences()
 
     def present_os2_media(self, sources, categories=None):
         if __package__:
             from .gnome_media import OS2MediaDialog
         else:
             from gnome_media import OS2MediaDialog
-        OS2MediaDialog(self, sources, categories).present(self)
+        dialog = OS2MediaDialog(self, sources, categories)
+        self.os2_component_dialog = dialog
+        dialog.present(self)
 
     def show_component_media(self, category):
         if not self.ball or self.busy or self.process:
             return
+        self.show_page("components")
         pending = getattr(self, "os2_component_dialog", None)
         if pending and pending.ball == self.ball and pending.stage == "options":
             pending.resume_components(category)
             return
-        sources = (self.snapshot.get("os2Support") or {}).get("mediaSources", [])
+        sources = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
         if sources:
             self.present_os2_media(sources, {category})
         else:
             self.choose_os2_support({category})
+
+    def show_component_setting(self, token):
+        if token not in ("graphics.opengl", "graphics", "printing"):
+            return
+        self.show_page("settings")
+        self.configuration_stack.set_visible_child_name(
+            "printing" if token == "printing" else "display"
+        )
+        target = (
+            self.printing_configuration.queue
+            if token == "printing"
+            else self.display_configuration.opengl
+            if token == "graphics.opengl"
+            else self.display_configuration.rows["video"]
+        )
+        gnome_navigation.highlight_setting(target)
+
+    def install_opengl_component(self):
+        if not self.ball or self.busy or self.process:
+            return
+        if self.snapshot["manifest"].get("system", {}).get("opengl", "mesa") == "original":
+            self.show_component_media("opengl")
+        else:
+            self.commit_request(
+                {"action": "command", "arguments": ["config", "system.opengl", "original"]},
+                completed=lambda _: self.show_component_media("opengl"),
+            )
 
     def support_media_dialog(self):
         self.choose_os2_support()
@@ -1337,6 +1429,8 @@ class BallWindow(Adw.ApplicationWindow):
         )
 
     def program_dialog(self, action, name=None, program=""):
+        if not self.ball or self.busy:
+            return None
         dialog = gnome_views.ProgramDialog(self, action, name=name, program=program)
         dialog.present(self)
         return dialog

@@ -60,6 +60,7 @@ def stage(build, destination):
         "gnome_browser.py",
         "gnome_browser_model.py",
         "gnome_media.py",
+        "gnome_media_preferences.py",
         "gnome_components.py",
         "gnome_audio.py",
         "gnome_ball_icons.py",

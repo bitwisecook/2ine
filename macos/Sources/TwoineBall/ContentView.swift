@@ -14,6 +14,7 @@ struct ContentView: View {
             switch lastPage {
             case "Configuration": model.page = .settings
             case "Activity": model.page = .activity
+            case "Installation": model.page = .installation
             default: model.page = Page(rawValue: lastPage) ?? .drives
             }
         }
@@ -123,14 +124,24 @@ struct ContentView: View {
     @ViewBuilder private var detail: some View {
         if let snapshot = model.snapshot {
             VStack(spacing: 0) {
-                Picker("Ball section", selection: $model.page) {
-                    ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
-                }.labelsHidden().pickerStyle(.segmented).padding()
+                ViewThatFits(in: .horizontal) {
+                    Picker("Ball section", selection: $model.page) {
+                        ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
+                    }.labelsHidden().pickerStyle(.segmented).fixedSize()
+                    Picker("Ball section", selection: $model.page) {
+                        ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
+                    }.labelsHidden().pickerStyle(.menu)
+                }.padding()
                 Divider()
                 Group {
                     switch model.page {
                     case .applications: ApplicationsView(model: model, snapshot: snapshot)
                     case .drives: DrivesView(model: model, snapshot: snapshot)
+                    case .systemComponents:
+                        if let ball = model.selected {
+                            OS2SupportSheet(model: model, request: OS2ImportRequest(ball: ball), embedded: true).id(ball)
+                        }
+                    case .installation: ProgramSheet(model: model, action: .install, embedded: true).id(model.selected)
                     case .settings: ConfigurationView(model: model).id(model.selected)
                     case .activity: ActivityView(model: model)
                     }
@@ -178,17 +189,6 @@ struct ApplicationsView: View {
                 Spacer()
                 Button("Add Application…", systemImage: "plus") { model.beginProgram(.save) }
             }.disabled(model.busy || model.mediaBusy)
-            if let support = snapshot.os2Support {
-                HStack {
-                    VStack(alignment: .leading) {
-                        Text("OS/2 Installer Support").font(.headline)
-                        Text(support.complete ? "CMD support is installed. Add more OS/2 components from your media." : "Missing: " + support.missing).font(.callout).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Install Components…") { model.installComponents() }
-                        .disabled(model.busy || model.mediaBusy).accessibilityIdentifier("setupOS2Support")
-                }
-            }
             Table(rows, selection: $selection, sortOrder: $sortOrder, columnCustomization: $columns) {
                 TableColumn("Application", value: \.name) { row in
                     HStack {

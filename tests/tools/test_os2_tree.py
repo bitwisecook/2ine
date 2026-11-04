@@ -16,6 +16,14 @@ def walk(node):
         yield from walk(child)
 
 
+def eligible_sources(node):
+    if node.get("disabled") or node["kind"] == "setting":
+        return set()
+    if node["kind"] == "file":
+        return {node["source"]} if not node.get("provided") and not node.get("present") else set()
+    return set().union(*(eligible_sources(child) for child in node.get("children", [])))
+
+
 def hierarchy_iso(files):
     directories = {""}
     for name in files:
@@ -175,6 +183,111 @@ class OS2TreeTests(unittest.TestCase):
             json.loads((self.ball / "ball.json").read_text())["system"]["opengl"], "off"
         )
 
+    def test_provider_policy_disables_original_native_groups_but_keeps_settings_actionable(self):
+        source = self.source(
+            {
+                "OS2/DLL/OPENGL.DLL": fixtures.CMD,
+                "OS2/DLL/PGL.DLL": fixtures.CMD,
+                "OS2/DLL/PRINTER/OUTPUT.PDR": fixtures.CMD,
+                "MMOS2/PLAYER/PLAYER.EXE": fixtures.CMD,
+                "OS2/HELP/BOOK.HLP": b"help",
+            }
+        )
+        for choice in (None, "mesa", "original", "off"):
+            with self.subTest(choice=choice):
+                if choice is not None:
+                    self.request("command", arguments=["config", "system.opengl", choice])
+                plan = self.request("plan-os2-extraction", sources=[source])
+                groups = {group["id"]: group for group in plan["tree"]["children"]}
+                native = choice in (None, "mesa")
+                for id in ("opengl", "printers", "multimedia"):
+                    group = groups[id]
+                    disabled = native if id == "opengl" else True
+                    self.assertEqual(group["disabled"], disabled)
+                    self.assertEqual(group["provider"]["nativeSelected"], disabled)
+                    self.assertEqual(group["provider"]["choiceSupported"], id == "opengl")
+                    self.assertTrue(group["provider"]["originalAvailable"])
+                    for node in walk(group):
+                        self.assertEqual(
+                            node["disabled"], False if node["kind"] == "setting" else disabled
+                        )
+                        if node["kind"] == "setting":
+                            self.assertFalse(node["selectable"])
+                            self.assertTrue(node["setting"])
+                        else:
+                            self.assertEqual(node["selectable"], not disabled)
+                    self.assertEqual(bool(eligible_sources(group)), not disabled)
+                selected = eligible_sources(plan["tree"])
+                selected_categories = {
+                    file["category"] for file in plan["files"] if file["source"] in selected
+                }
+                self.assertNotIn("printers", selected_categories)
+                self.assertNotIn("multimedia", selected_categories)
+                self.assertEqual("opengl" in selected_categories, not native)
+        # The UI policy does not forbid deliberate original-file staging.
+        self.request("command", arguments=["config", "system.opengl", "mesa"])
+        plan = self.request("plan-os2-extraction", sources=[source])
+        original = [file for file in plan["files"] if file["category"] == "opengl"]
+        self.assertTrue(all(not file["provided"] for file in original))
+        result = self.request(
+            "import-os2-support",
+            sources=[source],
+            fileSelection=[file["source"] for file in original],
+        )
+        self.assertEqual(len(result["imported"]), 2)
+        self.assertEqual(
+            json.loads((self.ball / "ball.json").read_text())["system"]["opengl"], "mesa"
+        )
+
+    def test_destination_directory_paths_are_stable_case_insensitive_and_scoped_to_subgroup(self):
+        source = self.source(
+            {
+                "OS2/DLL/FIRST.TTF": b"first",
+                "os2/dll/SECOND.TTF": b"second",
+                "OS2/DLL/BITMAP.FON": b"bitmap font",
+                "OS2/HELP/BOOK.HLP": b"help",
+                "OS2/DLL/PRINTER/OUTPUT.PDR": fixtures.CMD,
+            }
+        )
+        plan = self.request("plan-os2-extraction", sources=[source])
+        nodes = {node["id"]: node for node in walk(plan["tree"])}
+        truetype = nodes["fonts.truetype"]
+        drive = next(node for node in truetype["children"] if node["kind"] == "directory")
+        self.assertEqual(drive["title"], "C:\\")
+        self.assertEqual(drive["path"], "C:\\")
+        self.assertEqual(len(drive["children"]), 1)
+        os2 = drive["children"][0]
+        dll = os2["children"][0]
+        self.assertEqual(os2["path"], "C:\\OS2")
+        self.assertEqual(dll["path"], "C:\\OS2\\DLL")
+        self.assertEqual({node["title"] for node in dll["children"]}, {"FIRST.TTF", "SECOND.TTF"})
+        bitmap_drive = next(
+            node for node in nodes["fonts.bitmap"]["children"] if node["kind"] == "directory"
+        )
+        self.assertNotEqual(bitmap_drive["id"], drive["id"])
+        self.assertEqual(bitmap_drive["path"], drive["path"])
+        for node in nodes.values():
+            if node["kind"] == "directory":
+                self.assertEqual(
+                    node["category"],
+                    "printers"
+                    if node["disabled"]
+                    else "fonts"
+                    if node["id"].startswith("fonts.")
+                    else "help",
+                )
+                self.assertNotIn("requires", node)
+        leaves = [node for node in nodes.values() if node["kind"] == "file"]
+        self.assertEqual(len(leaves), len(plan["files"]))
+        self.assertEqual(
+            {node["source"] for node in leaves}, {file["source"] for file in plan["files"]}
+        )
+        again = self.request("plan-os2-extraction", sources=[source])
+        self.assertEqual(
+            {node["id"] for node in walk(again["tree"]) if node["kind"] == "directory"},
+            {node["id"] for node in nodes.values() if node["kind"] == "directory"},
+        )
+
     def test_exact_file_selection_overrides_categories_requires_and_rejects_injection(self):
         source = self.source(
             {
@@ -321,6 +434,86 @@ class OS2TreeTests(unittest.TestCase):
         leaves = {node["title"] for node in walk(plan["tree"]) if node["kind"] == "file"}
         for name in ("COUNTRY.SYS", "KEYBOARD.DCP", "DATA.SYS", "OUTPUT.PDR", "OUTPUT.DRV"):
             self.assertIn(name, leaves)
+
+    def test_media_validation_is_read_only_and_returns_nested_physical_sources(self):
+        payload = self.source({"OS2/CMD.EXE": fixtures.CMD, "OS2/SYSLEVEL.OS2": fixtures.LEVEL})
+        image = fixtures.iso_image(payload=Path(payload).read_bytes(), filename="FILES.ZIP")
+        source = self.media("nested-media.zip", fixtures.zip_bytes("OS2.iso", image))
+        remembered = self.ball / "os2-media.json"
+        remembered.write_text('{"sources":["previous"],"selectedCategories":["help"]}\n')
+        before = {
+            str(path.relative_to(self.ball)): path.read_bytes()
+            for path in self.ball.rglob("*")
+            if path.is_file()
+        }
+        result = self.request("validate-os2-media", sources=[source])
+        self.assertTrue(result["complete"])
+        self.assertTrue(result["sources"][0].startswith("/@2ine-media/"))
+        self.assertEqual(result["physicalSources"], [source])
+        self.assertEqual(result["media"][0]["status"], "verified-os2-media")
+        self.assertEqual(result["media"][0]["coreIndexCache"], "disabled")
+        self.assertTrue(result["media"][0]["commandSignature"])
+        self.assertTrue(result["media"][0]["versionSignature"])
+        self.assertEqual(result["errors"], [])
+        after = {
+            str(path.relative_to(self.ball)): path.read_bytes()
+            for path in self.ball.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(after, before)
+
+    def test_media_validation_rejects_application_iso_alone_or_with_valid_os2_media(self):
+        valid = self.source(
+            {"OS2/CMD.EXE": fixtures.CMD, "OS2/SYSLEVEL.OS2": fixtures.LEVEL}, "os2.zip"
+        )
+        application = self.media("Lotus.iso", hierarchy_iso({"LOTUS/INSTALL.EXE": fixtures.CMD}))
+        before = {
+            str(path.relative_to(self.ball)): path.read_bytes()
+            for path in self.ball.rglob("*")
+            if path.is_file()
+        }
+        for sources in ([application], [valid, application]):
+            with self.subTest(sources=sources):
+                result = self.request("validate-os2-media", sources=sources)
+                self.assertFalse(result["complete"])
+                wrong = next(
+                    item
+                    for item in result["media"]
+                    if not item.get("commandSignature") and not item.get("versionSignature")
+                )
+                self.assertEqual(wrong["status"], "unverified")
+                self.assertEqual(result["sources"], [] if len(sources) == 1 else [valid])
+                self.assertFalse((self.ball / "os2-media.json").exists())
+        after = {
+            str(path.relative_to(self.ball)): path.read_bytes()
+            for path in self.ball.rglob("*")
+            if path.is_file()
+        }
+        self.assertEqual(after, before)
+
+    def test_media_validation_accepts_signature_split_set_and_normalized_siblings(self):
+        command = self.source({"OS2/CMD.EXE": fixtures.CMD}, "disk1.zip")
+        level = self.source({"OS2/SYSLEVEL.OS2": fixtures.LEVEL}, "disk2.zip")
+        checked = self.request("validate-os2-media", sources=[command, level])
+        self.assertTrue(checked["complete"])
+        self.assertEqual({item["status"] for item in checked["media"]}, {"verified-os2-set"})
+        image = hierarchy_iso(
+            {
+                "OS2IMAGE/OS2/CMD.EXE": fixtures.CMD,
+                "OS2IMAGE/OS2/SYSLEVEL.OS2": fixtures.LEVEL,
+                "CID/SERVER/MPTS/MPTN/BIN/PING.EXE": fixtures.CMD,
+            }
+        )
+        iso = self.media("server.iso", image)
+        checked = self.request("validate-os2-media", sources=[iso])
+        self.assertTrue(checked["complete"])
+        self.assertEqual(len(checked["sources"]), 2)
+        self.assertEqual(
+            {item["status"] for item in checked["media"]},
+            {"verified-os2-media", "verified-os2-set"},
+        )
+        self.assertEqual(checked["physicalSources"], [iso])
+        self.assertFalse((self.ball / "os2-media.json").exists())
 
 
 if __name__ == "__main__":

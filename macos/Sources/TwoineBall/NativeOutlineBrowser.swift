@@ -64,6 +64,10 @@ struct OutlineMenuAction {
     let title: String
     var enabled = true
 }
+struct OutlineFocusRequest: Equatable {
+    let id: UUID
+    let row: String
+}
 
 /// A single native renderer for hierarchical and flat browser rows. Domain
 /// adapters supply immutable metadata and handle edits, navigation and copying.
@@ -78,6 +82,7 @@ struct NativeOutlineBrowser: NSViewRepresentable {
     var identifier = "nativeOutlineBrowser"
     var accessibilityLabel = "Items"
     var defaultExpanded: Set<String> = []
+    var focusRequest: OutlineFocusRequest? = nil
     var onToggle: ((String, Bool) -> Void)? = nil
     var onAction: ((String?, String) -> Void)? = nil
     var onActivate: ((String) -> Void)? = nil
@@ -178,6 +183,7 @@ struct NativeOutlineBrowser: NSViewRepresentable {
         var expanded: Set<String>
         var columns: [OutlineBrowserColumn] = []
         var updating = false
+        var revealedFocus: UUID?
         var appliedDefaults = false
         init(_ parent: NativeOutlineBrowser) { self.parent = parent; expanded = parent.defaultExpanded }
         func update() {
@@ -211,6 +217,21 @@ struct NativeOutlineBrowser: NSViewRepresentable {
             }
             let filtered = sorted(source.compactMap { $0.filtered(parent.query) })
             if displayed != filtered { displayed = filtered; items = filtered.map(Item.init) }
+            var didReveal = false
+            if let focus = parent.focusRequest, revealedFocus != focus.id {
+                func reveal(_ nodes: [Item], ancestors: [String]) -> Bool {
+                    for item in nodes {
+                        if item.node.id == focus.row {
+                            expanded.formUnion(ancestors)
+                            parent.selection = focus.row
+                            return true
+                        }
+                        if reveal(item.children, ancestors: ancestors + [item.node.id]) { return true }
+                    }
+                    return false
+                }
+                if reveal(items, ancestors: []) { revealedFocus = focus.id; didReveal = true }
+            }
             let descriptors = parent.sort.wrappedValue.map { [NSSortDescriptor(key: $0.column, ascending: $0.ascending)] } ?? []
             if outline.sortDescriptors != descriptors { outline.sortDescriptors = descriptors }
             outline.reloadData()
@@ -225,6 +246,9 @@ struct NativeOutlineBrowser: NSViewRepresentable {
                let item = find(identity, in: items), outline.row(forItem: item) >= 0 {
                 outline.selectRowIndexes(IndexSet(integer: outline.row(forItem: item)), byExtendingSelection: false)
             } else { outline.deselectAll(nil) }
+            if didReveal, outline.selectedRow >= 0 {
+                outline.scrollRowToVisible(outline.selectedRow)
+            }
         }
         func find(_ id: String, in items: [Item]) -> Item? {
             for item in items { if item.node.id == id { return item }; if let found = find(id, in: item.children) { return found } }
@@ -344,10 +368,27 @@ struct NativeOutlineBrowser: NSViewRepresentable {
                 button.rowID = node.id
                 button.allowsMixedState = true
                 button.state = check == .off ? .off : check == .on ? .on : .mixed
-                button.isEnabled = !parent.disabled && node.enabled
+                button.isEnabled = !parent.disabled && node.enabled && cell.enabled
                 button.font = .systemFont(ofSize: 13, weight: node.emphasized ? .semibold : .regular)
                 button.toolTip = cell.tooltip ?? node.tooltip
                 button.setAccessibilityIdentifier(parent.identifier + ".check." + node.id)
+                if let icon = cell.icon {
+                    button.title = ""
+                    button.setAccessibilityLabel(cell.text)
+                    let image = NSImageView(image: NSImage(systemSymbolName: icon, accessibilityDescription: nil) ?? NSImage())
+                    image.contentTintColor = .secondaryLabelColor
+                    image.translatesAutoresizingMaskIntoConstraints = false
+                    image.widthAnchor.constraint(equalToConstant: 16).isActive = true
+                    image.heightAnchor.constraint(equalToConstant: 16).isActive = true
+                    let label = NSTextField(labelWithString: cell.text)
+                    label.font = button.font
+                    label.textColor = !node.enabled || !cell.enabled ? .disabledControlTextColor : cell.secondary ? .secondaryLabelColor : .labelColor
+                    label.lineBreakMode = .byTruncatingMiddle
+                    let stack = NSStackView(views: [button, image, label])
+                    stack.orientation = .horizontal; stack.spacing = 5; stack.alignment = .centerY
+                    stack.toolTip = button.toolTip
+                    return stack
+                }
                 return button
             }
             if let action = cell.action {
@@ -361,7 +402,7 @@ struct NativeOutlineBrowser: NSViewRepresentable {
             }
             let field = NSTextField(labelWithString: cell.text)
             field.font = cell.monospaced ? .monospacedSystemFont(ofSize: 12, weight: .regular) : .systemFont(ofSize: 12, weight: node.emphasized && column.identifier.rawValue == parent.columns.first?.id ? .semibold : .regular)
-            field.textColor = cell.secondary ? .secondaryLabelColor : .labelColor
+            field.textColor = !node.enabled || !cell.enabled ? .disabledControlTextColor : cell.secondary ? .secondaryLabelColor : .labelColor
             field.lineBreakMode = .byTruncatingMiddle
             field.toolTip = cell.tooltip ?? node.tooltip ?? cell.text
             if parent.columns.first(where: { $0.id == column.identifier.rawValue })?.rightAligned == true { field.alignment = .right }

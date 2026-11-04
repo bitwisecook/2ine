@@ -7,7 +7,9 @@ import UniformTypeIdentifiers
 import SwiftUI
 
 enum Page: String, CaseIterable, Identifiable {
-    case drives = "Drives", applications = "Applications", settings = "Settings", activity = "Logs"
+    case drives = "Drives", applications = "Applications"
+    case systemComponents = "OS/2 System Components", installation = "Application Installation"
+    case settings = "Settings", activity = "Logs"
     var id: String { rawValue }
 }
 struct OS2ImportRequest: Identifiable {
@@ -19,9 +21,17 @@ struct OS2ImportRequest: Identifiable {
         self.ball = ball; self.sources = sources; self.categories = categories
     }
 }
-struct ComponentSettingsRequest: Identifiable {
-    let token: String
-    var id: String { token }
+enum SettingsSection: String {
+    case general, graphics, environment, printing, files, registry
+}
+struct ComponentNavigation: Equatable {
+    let id = UUID()
+    let ball: String
+    let category: OS2ExtractionCategory
+}
+struct ComponentDraft {
+    let sources: [String]
+    let selection: Set<String>
 }
 struct InstallCompletion: Identifiable {
     let id = UUID()
@@ -116,14 +126,63 @@ final class AppModel {
     }
     var activity = "No process has run in this session."
     var supportImport: OS2ImportRequest?
-    var componentSettingsRequest: ComponentSettingsRequest?
+    var settingsSection: SettingsSection = .general
+    var highlightedSetting: String?
+    var componentNavigation: ComponentNavigation?
+    private var appliedComponentNavigation: UUID?
+    var componentDrafts: [String: ComponentDraft] = [:]
     func openComponentSetting(_ token: String) {
         guard ["graphics.opengl", "graphics", "printing"].contains(token) else { return }
-        componentSettingsRequest = ComponentSettingsRequest(token: token)
+        settingsSection = token == "printing" ? .printing : .graphics
+        highlightedSetting = token
+        supportImport = nil
+        page = .settings
     }
     func openOS2ComponentGroup(_ category: OS2ExtractionCategory) {
-        guard let selected, !busy, !mediaBusy, !processRunning else { return }
-        supportImport = OS2ImportRequest(ball: selected, categories: [category])
+        guard selected != nil, !busy, !mediaBusy, !processRunning else { return }
+        showOS2ComponentGroup(category)
+    }
+    private func showOS2ComponentGroup(_ category: OS2ExtractionCategory) {
+        guard let selected else { return }
+        componentNavigation = ComponentNavigation(ball: selected, category: category)
+        page = .systemComponents
+    }
+    func setOpenGLProvider(_ provider: String) {
+        guard let ball = selected, !busy, !mediaBusy else { return }
+        perform {
+            try await self.runCommand(provider == "automatic" ? ["unset", "system.opengl"] : ["config", "system.opengl", provider], ball: ball)
+            if provider == "original", !self.processRunning { self.showOS2ComponentGroup(.opengl) }
+        }
+    }
+    func installOriginalOpenGL() { setOpenGLProvider("original") }
+    func componentSelection(in plan: OS2ExtractionPlan, preserving selection: Set<String>, ball: String) -> Set<String> {
+        guard let navigation = componentNavigation, navigation.ball == ball,
+              navigation.id != appliedComponentNavigation,
+              let node = plan.tree?.find(navigation.category.rawValue) else { return selection }
+        appliedComponentNavigation = navigation.id
+        return plan.selecting(node, in: selection, enabled: true)
+    }
+    var lastOS2MediaSources: [String] { prefs.lastOS2MediaSources }
+    func suggestedOS2MediaSources(_ ballSources: [String]?) -> [String] {
+        if let ballSources, !ballSources.isEmpty { return ballSources }
+        return prefs.lastOS2MediaSources.isEmpty ? recentMediaCandidates : prefs.lastOS2MediaSources
+    }
+    private struct ValidatedOS2Media: Decodable, Sendable {
+        let complete: Bool
+        let sources: [String]
+        let physicalSources: [String]?
+    }
+    private func cacheOS2Media(_ sources: [String], ball: String) async {
+        guard !sources.isEmpty else { return }
+        do {
+            var request = DesktopRequest("validate-os2-media", ball: ball, build: build)
+            request.sources = sources
+            let validated = try await backend.request(request, as: ValidatedOS2Media.self)
+            guard validated.complete, !validated.sources.isEmpty else { return }
+            prefs.lastOS2MediaSources = validated.sources
+            prefs.lastOS2MediaFiles = validated.physicalSources ?? []
+            try await preferences.save(prefs)
+        } catch { self.error = "Could not remember OS/2 media for new balls: " + error.localizedDescription }
     }
     var audioEditor = false
     var operation = "Ready"
@@ -183,6 +242,7 @@ final class AppModel {
     private let backend: BallBackend
     private let preferences: PreferenceStore
     private var prefs = Preferences()
+    private var recentMediaCandidates: [String] = []
     private let bundledRuntime: String
     var build: String {
         let fallback = ProcessInfo.processInfo.environment["TWOINE_BUILD"] ?? bundledRuntime
@@ -239,6 +299,7 @@ final class AppModel {
 
     private func reload(_ ball: String) async throws {
         snapshot = try await backend.request(DesktopRequest("snapshot", ball: ball), as: BallSnapshot.self)
+        if let sources = snapshot?.os2Support?.mediaSources, !sources.isEmpty { recentMediaCandidates = sources }
         if let text = snapshot?.configSys { applyLiveConfig(text, ball: ball) }
         await loadIcons(ball)
         revision += 1
@@ -277,6 +338,8 @@ final class AppModel {
         request.text = name
         let renamed = try await backend.request(request, as: RenamedBall.self)
         paths = Array(Set(paths.map { $0 == path ? renamed.path : $0 })).sorted()
+        componentDrafts.removeValue(forKey: path)
+        if componentNavigation?.ball == path { componentNavigation = nil }
         if let value = settingsDrafts.removeValue(forKey: path) { settingsDrafts[renamed.path] = value }
         if let value = configDrafts.removeValue(forKey: path) { configDrafts[renamed.path] = value }
         if let value = configBases.removeValue(forKey: path) { configBases[renamed.path] = value }
@@ -343,6 +406,8 @@ final class AppModel {
     }
     private func forgetBallPath(_ path: String) async throws {
         paths.removeAll { $0 == path }
+        componentDrafts.removeValue(forKey: path)
+        if componentNavigation?.ball == path { componentNavigation = nil }
         settingsDrafts.removeValue(forKey: path); configDrafts.removeValue(forKey: path)
         configBases.removeValue(forKey: path); liveConfigTexts.removeValue(forKey: path)
         if log?.path.hasPrefix(path + "/") == true { log = nil }
@@ -380,6 +445,7 @@ final class AppModel {
         if !create && url.pathExtension.lowercased() == "zip" { chooseImportBall(url); return }
         perform {
             let path = url.resolvingSymlinksInPath().path
+            if let sources = self.snapshot?.os2Support?.mediaSources, !sources.isEmpty { self.recentMediaCandidates = sources }
             let message = DesktopRequest(create ? "command" : "snapshot", ball: path,
                                          arguments: create ? ["init"] : nil)
             var value = try await self.backend.request(message, as: BallSnapshot.self)
@@ -398,6 +464,7 @@ final class AppModel {
             NSDocumentController.shared.noteNewRecentDocumentURL(url)
             self.prefs.ballPaths = self.paths; self.prefs.selected = path
             try await self.preferences.save(self.prefs)
+            if create { self.page = .systemComponents }
         }
     }
     func chooseImportBall(_ archive: URL? = nil) {
@@ -610,20 +677,25 @@ final class AppModel {
         guard !busy, !mediaBusy else { return nil }
         let panel = NSOpenPanel()
         panel.title = directory ? "Choose OS/2 Media Folder" : "Choose OS/2 ISO or Archive"
-        panel.message = "Choose your OS/2 installation ISO. It will be remembered for this ball. An ISO inside a ZIP or another archive is supported."
+        panel.message = "Choose your OS/2 installation ISO. Verified OS/2 media will also be suggested for new balls. An ISO inside a ZIP or another archive is supported."
         panel.prompt = "Use This Media"
         panel.canChooseDirectories = directory; panel.canChooseFiles = !directory
         panel.allowsMultipleSelection = !directory
+        if let path = prefs.lastOS2MediaFiles.first, FileManager.default.fileExists(atPath: path) {
+            panel.directoryURL = URL(filePath: path).deletingLastPathComponent()
+            if !directory { panel.nameFieldStringValue = URL(filePath: path).lastPathComponent }
+        }
         guard panel.runModal() == .OK else { return nil }
         return panel.urls.map(\.path)
     }
     func installComponents() {
-        guard let selected, !busy, !mediaBusy else { return }
-        supportImport = OS2ImportRequest(ball: selected)
+        guard selected != nil, !busy, !mediaBusy else { return }
+        page = .systemComponents
     }
     func rememberOS2Media(_ sources: [String], ball: String) async throws {
         var request = DesktopRequest("remember-os2-media", ball: ball); request.sources = sources
         _ = try await backend.request(request, as: OS2SupportStatus.self)
+        await cacheOS2Media(sources, ball: ball)
     }
     func openOS2Source(_ sources: [String], ball: String) async throws -> OS2MediaSource {
         guard selected == ball, !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }
@@ -668,6 +740,7 @@ final class AppModel {
         var source = DesktopRequest("open-os2-source", ball: ball, build: build)
         source.sources = panel.urls.map(\.path)
         let media = try await backend.request(source, as: OS2MediaSource.self)
+        await cacheOS2Media(media.sources, ball: ball)
         var restore = DesktopRequest("audit-dependencies", ball: ball, build: build)
         restore.sources = media.sources
         operation = "Restoring missing OS/2 components…"
@@ -707,6 +780,7 @@ final class AppModel {
         request.configureComponents = configureComponents
         request.categories = categories.map(\.rawValue).sorted()
         let result = try await backend.request(request, as: OS2SupportStatus.self)
+        await cacheOS2Media(result.mediaSources ?? sources, ball: selected)
         try await reload(selected)
         revision += 1
         return result
@@ -850,7 +924,11 @@ final class AppModel {
         request.name = area; request.path = application; request.key = key; request.remove = remove
         return try await backend.request(request, as: ConfigurationSnapshot.self)
     }
-    func beginProgram(_ action: ProgramAction) { editingApplication = nil; programAction = action }
+    func beginProgram(_ action: ProgramAction) {
+        editingApplication = nil
+        if action == .install { page = .installation }
+        else { programAction = action }
+    }
     func editApplication(_ name: String) { editingApplication = name; programAction = .save }
     func browse(_ path: String, ball: String) async throws -> GuestDirectory {
         var request = DesktopRequest("browse", ball: ball); request.path = path

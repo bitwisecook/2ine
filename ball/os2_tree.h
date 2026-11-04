@@ -118,19 +118,83 @@ static cJSON *extract_tree_branch(cJSON *parent, const char *id, const char *tit
     return branch;
 }
 static void extract_tree_provider(cJSON *group, const char *id, const char *title,
-                                  const char *selection, const char *setting)
+                                  const char *selection, const char *setting, int native_selected,
+                                  int choice_supported)
 {
     cJSON *provider = cJSON_CreateObject();
     cJSON_AddStringToObject(provider, "title", title);
     cJSON_AddStringToObject(provider, "selection", selection);
     cJSON_AddStringToObject(provider, "setting", setting);
     cJSON_AddStringToObject(provider, "group", field(group, "category"));
+    cJSON_AddBoolToObject(provider, "nativeSelected", native_selected);
+    cJSON_AddBoolToObject(provider, "choiceSupported", choice_supported);
     cJSON_AddItemToObject(group, "provider", provider);
     cJSON *link = cJSON_Duplicate(provider, 1);
     cJSON_AddStringToObject(link, "id", id);
     cJSON_AddStringToObject(link, "kind", "setting");
     cJSON_AddBoolToObject(link, "selectable", 0);
+    cJSON_AddBoolToObject(link, "disabled", 0);
     cJSON_AddItemToArray(get(group, "children"), link);
+}
+static int extract_tree_has_files(const cJSON *node)
+{
+    if (equal_case(field(node, "kind"), "file"))
+        return 1;
+    const cJSON *child;
+    cJSON_ArrayForEach(child, get(node, "children")) if (extract_tree_has_files(child)) return 1;
+    return 0;
+}
+static void extract_tree_disable(cJSON *node, int disabled)
+{
+    int setting = equal_case(field(node, "kind"), "setting");
+    put(node, "disabled",
+        cJSON_CreateBool(!setting && (disabled || cJSON_IsTrue(get(node, "disabled")))));
+    if (!setting)
+        put(node, "selectable", cJSON_CreateBool(!cJSON_IsTrue(get(node, "disabled"))));
+    cJSON *child;
+    cJSON_ArrayForEach(child, get(node, "children")) extract_tree_disable(child, disabled);
+}
+static void extract_tree_provider_policy(cJSON *group)
+{
+    cJSON *provider = get(group, "provider");
+    int available = extract_tree_has_files(group);
+    cJSON_AddBoolToObject(provider, "originalAvailable", available);
+    cJSON *child;
+    cJSON_ArrayForEach(child,
+                       get(group, "children")) if (equal_case(field(child, "kind"), "setting"))
+        cJSON_AddBoolToObject(child, "originalAvailable", available);
+    extract_tree_disable(group, cJSON_IsTrue(get(provider, "nativeSelected")));
+}
+static cJSON *extract_tree_directories(Context *c, cJSON *parent, const char *path,
+                                       const char *category)
+{
+    const char *name_space = field(parent, "id");
+    const char *end = strrchr(path, '\\');
+    if (!end || strlen(path) < 3 || path[1] != ':' || path[2] != '\\')
+        return parent;
+    for (const char *part = path; part <= end;)
+    {
+        const char *slash = part == path ? path + 2 : strchr(part, '\\');
+        if (!slash || slash > end)
+            break;
+        size_t length = (size_t)(slash - path) + (part == path ? 1 : 0);
+        char *directory = format(c, "%.*s", (int)length, path);
+        char *title = format(c, "%.*s", (int)(slash - part) + (part == path ? 1 : 0), part);
+        if (!directory || !title)
+            return parent;
+        for (char *at = directory; *at; at++)
+            *at = (char)toupper((unsigned char)*at);
+        char *id = format(c, "%s.directory.%s", name_space, directory);
+        if (!id)
+            return parent;
+        parent = extract_tree_branch(parent, id, title, category);
+        put(parent, "kind", cJSON_CreateString("directory"));
+        put(parent, "path", cJSON_CreateString(directory));
+        put(parent, "selectable", cJSON_CreateBool(1));
+        put(parent, "disabled", cJSON_CreateBool(0));
+        part = slash + 1;
+    }
+    return parent;
 }
 static cJSON *extract_tree(Context *c, cJSON *files)
 {
@@ -155,11 +219,11 @@ static cJSON *extract_tree(Context *c, cJSON *files)
     if (!opengl || !*opengl)
         opengl = "mesa";
     extract_tree_provider(groups[EXTRACT_OPENGL], "opengl.provider", "Selected OpenGL Provider",
-                          opengl, "graphics.opengl");
+                          opengl, "graphics.opengl", equal_case(opengl, "mesa"), 1);
     extract_tree_provider(groups[EXTRACT_PRINTERS], "printers.provider",
-                          "Printing Provided by 2ine", "2ine", "printing");
+                          "Printing Provided by 2ine", "2ine", "printing", 1, 0);
     extract_tree_provider(groups[EXTRACT_MULTIMEDIA], "multimedia.provider",
-                          "Audio and Video Provided by 2ine", "2ine", "graphics");
+                          "Audio and Video Provided by 2ine", "2ine", "graphics", 1, 0);
     const cJSON *file;
     cJSON_ArrayForEach(file, files)
     {
@@ -225,6 +289,7 @@ static cJSON *extract_tree(Context *c, cJSON *files)
         }
         if (id)
             parent = extract_tree_branch(parent, id, title, extract_categories[category]);
+        parent = extract_tree_directories(c, parent, path, extract_categories[category]);
         cJSON *leaf = cJSON_Duplicate(file, 1);
         cJSON_AddStringToObject(leaf, "id", field(file, "source"));
         cJSON_AddStringToObject(leaf, "title", base);
@@ -233,5 +298,8 @@ static cJSON *extract_tree(Context *c, cJSON *files)
             cJSON_CreateBool(category != EXTRACT_OPENGL && cJSON_IsTrue(get(file, "disabled"))));
         cJSON_AddItemToArray(get(parent, "children"), leaf);
     }
+    extract_tree_provider_policy(groups[EXTRACT_OPENGL]);
+    extract_tree_provider_policy(groups[EXTRACT_PRINTERS]);
+    extract_tree_provider_policy(groups[EXTRACT_MULTIMEDIA]);
     return root;
 }

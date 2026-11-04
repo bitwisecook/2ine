@@ -59,13 +59,18 @@ class CheckedTree:
     def __init__(self, roots, selected, *, value, children=lambda data: data.get("children", [])):
         self.nodes, self.values = {}, {}
 
-        def index(data):
+        self.disabled = set()
+
+        def index(data, inherited=False):
             key = data["id"]
             self.nodes[key] = data
-            own = value(data)
+            blocked = inherited or bool(data.get("disabled"))
+            if blocked:
+                self.disabled.add(key)
+            own = None if blocked else value(data)
             values = {own} if own is not None else set()
             for child in children(data):
-                values.update(index(child))
+                values.update(index(child, blocked))
             self.values[key] = values
             return values
 
@@ -81,6 +86,8 @@ class CheckedTree:
 
     def toggle(self, key):
         values = self.values[key]
+        if not values:
+            return
         if values <= self.selected:
             self.selected.difference_update(values)
             return

@@ -60,6 +60,7 @@ class NativeBrowser(Gtk.Box):
         toggled=None,
         icon=None,
         tooltip=None,
+        muted=None,
         dropped=None,
         context=None,
         leading_sort=None,
@@ -78,6 +79,7 @@ class NativeBrowser(Gtk.Box):
         self.accept, self.on_selected, self.on_activated = accept, selected, activated
         self.check, self.on_toggled, self.icon = check, toggled, icon
         self.tooltip, self.on_dropped, self.on_context = tooltip, dropped, context
+        self.muted = muted
         self.leading_sort = leading_sort
         self.roots, self.expanded = [], set()
         self.last_query = ""
@@ -291,6 +293,10 @@ class NativeBrowser(Gtk.Box):
                 child.set_from_icon_name(self.icon(data))
                 child = child.get_next_sibling()
             child.set_text(str(definition.text(data)))
+            if self.muted and self.muted(data):
+                child.add_css_class("dim-label")
+            else:
+                child.remove_css_class("dim-label")
             widget.set_tooltip_text(
                 self.tooltip(data) if self.tooltip else str(definition.text(data))
             )

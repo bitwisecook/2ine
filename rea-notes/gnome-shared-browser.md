@@ -56,3 +56,47 @@ and a staged Linux package were not executed here. The existing native GTK
 integration tests preserve the typed edit/conflict checks for a Linux host;
 source/model checks do not substitute for those display/interaction gates.
 No actual user ball or guest process was modified during this refactor.
+
+## Verified media, installation pages and provider navigation (2026-11-04)
+
+GTK now has separate first-class **OS/2 System Components** and
+**Application Installation** pages. They offer the existing native source
+browser/extraction wizard and application installer dialog. The Applications
+page remains the installed launcher list with Run/Add actions. Existing four
+page keyboard shortcuts retain their targets.
+
+`gnome_media_preferences.py` stores only successful `validate-os2-media`
+results in application preferences (`lastOS2MediaSources` and
+`lastOS2MediaFiles`), never a ball manifest. A ball's own remembered source
+has priority; a new ball falls back to the last verified global source.
+Virtual paths remain opaque and normalized by the core. Physical validated
+paths give the native picker an initial file/folder. Invalid global reuse is
+cleared while the source browser's Choose ISO/Archive and Choose Folder
+controls remain available; the component overview also has a force-picker
+Choose Different Media action. Preferences provides a global Forget action.
+Dependency recovery validates supplied/reused media before remembering it.
+
+The shared check model now inherits disabled ancestors, so Select All cannot
+select original driver leaves under native-selected groups. Directory nodes
+use folder icons and the same mixed checkbox state; selecting a directory
+adds its files without adding a semantic parent's component requirements.
+Native-disabled names use the theme's dim-label style. The parent provider
+status has an active `2ine` / `2ine (Mesa)` button; duplicate setting children
+are hidden in this adapter. The button opens the real Settings section and
+briefly highlights/focuses its actual OpenGL, video or printer control.
+
+Settings' **Install OS/2 System Component…** links return to the component
+page/wizard and focus the matching group. OpenGL's link or choosing Original
+saves that supported provider choice through normal undoable configuration,
+replans the media tree, and selects the enabled original group. Native-only
+printing/multimedia links explain that original drivers are not supported
+and highlight the still-disabled group. Returning from Settings rebuilds
+provider flags from the core instead of editing display labels alone.
+
+Verification: 20 focused pure search/checkbox/preferences/lifecycle tests
+pass, global Ruff check and formatting pass (143 registered files), focused
+ty and Python compile checks pass. Packaging registers the preference helper
+and its presence is asserted by Linux package integration. GI is unavailable
+on this macOS host; the native GTK runtime/interaction tests remain a Linux
+verification gate. No user ball, user preferences file, or active guest app
+was modified while implementing these changes.
