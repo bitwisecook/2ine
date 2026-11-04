@@ -159,6 +159,7 @@ final class AppModel {
         guard let navigation = componentNavigation, navigation.ball == ball,
               navigation.id != appliedComponentNavigation,
               let node = plan.tree?.find(navigation.category.rawValue) else { return selection }
+        guard !node.eligibleSources.isEmpty else { return selection }
         appliedComponentNavigation = navigation.id
         return plan.selecting(node, in: selection, enabled: true)
     }

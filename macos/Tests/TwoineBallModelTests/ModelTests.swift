@@ -404,6 +404,11 @@ private func waitForOperation(_ model: AppModel) async throws {
       {"id":"gl-source","source":"gl-source","kind":"file","title":"OPENGL.DLL","category":"opengl"}]}]}}
     """#.utf8))
     let ball = try #require(model.selected)
+    let empty = try JSONDecoder().decode(OS2ExtractionPlan.self, from: Data(#"""
+    {"files":[],"unmapped":[],"tree":{"id":"all","title":"All","kind":"group","category":"full","children":[
+     {"id":"opengl","title":"OpenGL","kind":"group","category":"opengl","children":[]}]}}
+    """#.utf8))
+    #expect(model.componentSelection(in: empty, preserving: [], ball: ball).isEmpty)
     #expect(model.componentSelection(in: plan, preserving: [], ball: ball) == ["gl-source"])
     #expect(model.componentSelection(in: plan, preserving: [], ball: ball).isEmpty)
     #expect(model.undoManager.canUndo)

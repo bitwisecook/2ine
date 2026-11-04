@@ -51,3 +51,9 @@ in 0.207 seconds; the shared helper now permits fifteen seconds while retaining
 a finite failure bound. The final suite passes with the real command/Undo and
 preference-store paths. Initial checks also updated assertions for the new
 first-class component destination and provider button label.
+
+A final provider-navigation regression also checks media with an empty OpenGL
+group before supplying actual files. Such a request remains pending until
+eligible sources exist, then applies once. The real command/navigation/Undo
+test passes in 0.218 seconds after this refinement. The initially packaged
+build17 was not installed; a subsequent build contains this final correction.
