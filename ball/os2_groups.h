@@ -95,9 +95,11 @@ static int extract_module_group(const char *module)
     static const char *som[] = {"SOM",   "SOMD",   "SOMIR", "SOMU",     "SOMUC", "SOMEM",
                                 "SOMTC", "SOMSEC", "SOMS",  "OREXXSOM", NULL};
     static const char *runtime[] = {"LIBCS", "LIBUNI", "UCONV", NULL};
-    const char *const *lists[] = {som, runtime};
-    const int categories[] = {EXTRACT_SOM, EXTRACT_RUNTIME};
-    for (int list = 0; list < 2; list++)
+    static const char *help[] = {"HELPMGR", "HPMGRMRI", NULL};
+    static const char *network[] = {"NETAPI", "NETAPI32", NULL};
+    const char *const *lists[] = {som, runtime, help, network};
+    const int categories[] = {EXTRACT_SOM, EXTRACT_RUNTIME, EXTRACT_HELP, EXTRACT_NETWORK};
+    for (int list = 0; list < (int)(sizeof lists / sizeof lists[0]); list++)
         for (int i = 0; lists[list][i]; i++)
         {
             if (equal_case(stem, lists[list][i]))

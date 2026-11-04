@@ -60,6 +60,29 @@ def reader():
     return linear_image(guest.code, guest.fixups, ["DOSCALLS"], "SESSIONREAD", data=guest.data)
 
 
+def desktop_child(parent):
+    guest = FlatGuest()
+    if parent:
+        filename = guest.field(b"C:\\OS2\\CHILD.EXE\0")
+        command = guest.field(b"C:\\OS2\\CHILD.EXE\0\0")
+        result = guest.field(bytes(8))
+        guest.call(1, 283, 0, 0, 0, command, 0, result, filename)
+        guest.result(0, 80)
+        guest.word(result + 4, 0, 81)
+        announce(guest, "desktop-parent-complete\n")
+    else:
+        announce(guest, "desktop-child-ready\n")
+        guest.call(1, 229, 2000)
+    guest.exit(0)
+    return linear_image(
+        guest.code,
+        guest.fixups,
+        ["DOSCALLS"],
+        "DESKTOPPARENT" if parent else "DESKTOPCHILD",
+        data=guest.data,
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
@@ -67,6 +90,8 @@ def main():
     args.directory.mkdir(parents=True, exist_ok=True)
     (args.directory / "ONE.EXE").write_bytes(writer())
     (args.directory / "TWO.EXE").write_bytes(reader())
+    (args.directory / "PARENT.EXE").write_bytes(desktop_child(True))
+    (args.directory / "CHILD.EXE").write_bytes(desktop_child(False))
 
 
 if __name__ == "__main__":

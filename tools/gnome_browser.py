@@ -52,6 +52,7 @@ class NativeBrowser(Gtk.Box):
         search_hint="Search",
         identity=None,
         children=None,
+        expanded_changed=None,
         searchable=None,
         accept=None,
         selected=None,
@@ -73,6 +74,9 @@ class NativeBrowser(Gtk.Box):
         self.identity = identity or (
             lambda data: data.get("id", data.get("path", data.get("name", "")))
         )
+        self.on_expanded = expanded_changed
+        self.watched_rows = {}
+        self.rebuilding = False
         self.children = children or (lambda data: data.get("children", []))
         self.searchable = searchable or (
             lambda data: " ".join(str(data.get(key, "")) for key in ("title", "name", "path"))
@@ -205,6 +209,13 @@ class NativeBrowser(Gtk.Box):
         self.selection.set_can_unselect(True)
         self.selection.connect("notify::selected-item", self.selection_changed)
         self.table.set_model(self.selection)
+        for row, handler in self.watched_rows.items():
+            row.disconnect(handler)
+        self.watched_rows = {}
+        self.rebuilding = True
+        if self.on_expanded:
+            self.model.connect("items-changed", lambda *_: self.watch_expansion())
+            self.watch_expansion()
         index = 0
         while index < self.model.get_n_items():
             row = self.model.get_item(index)
@@ -214,6 +225,25 @@ class NativeBrowser(Gtk.Box):
         restored = self.focus(self.identity(selected)) if selected else False
         if selected and not restored and self.on_selected:
             self.on_selected(None)
+        self.rebuilding = False
+
+    def watch_expansion(self):
+        for index in range(self.model.get_n_items()):
+            row = self.model.get_item(index)
+            if row not in self.watched_rows:
+                self.watched_rows[row] = row.connect("notify::expanded", self.expansion_changed)
+
+    def expansion_changed(self, row, _property):
+        if self.rebuilding:
+            return
+        data = row.get_item().data
+        key = self.identity(data)
+        if row.get_expanded():
+            self.expanded.add(key)
+        else:
+            self.expanded.discard(key)
+        if self.on_expanded:
+            self.on_expanded(data, row.get_expanded())
 
     def selected_data(self):
         row = self.selection.get_selected_item() if hasattr(self, "selection") else None
@@ -245,6 +275,7 @@ class NativeBrowser(Gtk.Box):
                 row.set_expanded(True)
             if own == key:
                 self.selection.set_selected(index)
+                self.table.scroll_to(index, None, Gtk.ListScrollFlags.FOCUS, None)
                 return True
             index += 1
         return False

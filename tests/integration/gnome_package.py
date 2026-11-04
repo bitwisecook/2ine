@@ -58,6 +58,9 @@ def main():
             "gnome_component_jobs.py",
             "gnome_application_order.py",
             "gnome_sessions.py",
+            "gnome_program_choice.py",
+            "gnome_lazy_folders.py",
+            "gnome_navigation_state.py",
         ):
             assert (frontend / module).is_file(), module
         environment = dict(

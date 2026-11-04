@@ -34,12 +34,31 @@ checkboxes; each screen retains its own selection and editing rules. Mac rows
 follow system light/dark appearance. File browsers retain their relevant-files
 filter and sortable size/date columns.
 
-The ball has separate **OS/2 System Components** and **Application Installation**
+The ball has separate **OS/2 Components** and **Application Installation**
 tabs. The former installs original operating-system files; the latter attaches
 application media and runs its installer. The last verified OS/2 media choice is
 remembered in desktop preferences and suggested for new balls. A ball's own media
 choice takes priority, and nested archive paths are retained without copying the
 media into every ball.
+
+Navigation stays visible in this order: Drives, OS/2 Components, Application
+Installation, Applications, Settings, Logs. New balls start at Drives. Opening an
+existing ball selects Applications when it has a valid launcher, Application
+Installation when operating-system components are present, or OS/2 Components
+otherwise. Refreshing metadata preserves the page you are using.
+
+Component checkboxes apply immediately: tick to install, untick to remove.
+Changes run in the background and can be queued while another row is working.
+CMD and REXX are selected by default during first setup; an explicit later
+removal stays removed. Only unchanged, owned files are removed, and uninstalling
+does not require the original installation image. Modified or unowned files
+remain protected.
+
+The installer program field is an editable suggestions dropdown with a Browse
+button. Root-directory installers are preferred; typing or browsing a different
+program preserves that choice. Attached media provides Change Image and Eject
+controls. A command-file launch missing CMD/REXX waits at the component pane and
+continues after the required files have finished installing.
 
 Guest Copy and Paste commands can use the [host clipboard](clipboard.md) for
 text, rich text, HTML and bitmap images.
@@ -69,6 +88,13 @@ The dependency audit runs after that operation completes. A changed binary,
 configuration or media inventory marks an earlier audit stale; launching an
 application refreshes it and can recover missing OS/2 dependencies from remembered
 media. Audit details remain in the ball's Logs.
+
+Applications and Application Installation show compact advice when the library
+check finds missing components. Click a component name to open OS/2 Components
+with its row highlighted, then tick it to install. Following an advice link does
+not tick the component. Libraries supplied by separate applications or database
+clients remain listed separately, with a link to the full audit. An out-of-date
+check offers **Check Libraries** before showing component advice.
 
 The ball contains:
 

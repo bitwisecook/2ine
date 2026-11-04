@@ -114,7 +114,7 @@ static char *dependency_fingerprint(Context *parent, const cJSON *sources, const
     SHA256_CTX state;
     unsigned char digest[32];
     sha256_init(&state);
-    dependency_token_text(&state, "2ine-installed-dependencies-v2");
+    dependency_token_text(&state, "2ine-installed-dependencies-v3");
     unsigned visited = 0, binaries = 0;
     int ok = dependency_token_tree(c, &state, c->roots[2], 1, 1, &visited, &binaries);
     static const char *keys[] = {"environment", "system",          "runtime",
@@ -173,7 +173,7 @@ static char *dependency_fingerprint(Context *parent, const cJSON *sources, const
     if (ok && !c->error)
     {
         sha256_final(&state, digest);
-        result = format(parent, "metadata-v2:%s", hex(c, digest));
+        result = format(parent, "metadata-v3:%s", hex(c, digest));
     }
     for (size_t i = 0; i < c->count; i++)
         free(c->allocations[i]);

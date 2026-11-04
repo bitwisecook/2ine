@@ -1,10 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _DEFAULT_SOURCE 1
-#include "hal/posix/network_internal.h"
+#include "../posix/network_internal.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <ifaddrs.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
@@ -14,18 +13,23 @@
 #include <net/route.h>
 #include <sys/sysctl.h>
 #include <SystemConfiguration/SystemConfiguration.h>
-int lx_network_mac(const struct ifaddrs *link, LxHostNetworkInterface *entry)
+
+int lx_host_network_platform_mac(const struct sockaddr *address, uint32_t flags, uint8_t mac[6])
 {
-    if (link->ifa_addr->sa_family != AF_LINK)
+    (void)flags;
+    if (address->sa_family != AF_LINK)
         return 0;
-    const struct sockaddr_dl *dl = (const struct sockaddr_dl *)link->ifa_addr;
+    const struct sockaddr_dl *dl = (const struct sockaddr_dl *)address;
     if (dl->sdl_alen != 6)
         return 0;
-    memcpy(entry->mac, LLADDR(dl), 6);
+    memcpy(mac, LLADDR(dl), 6);
     return 1;
 }
-
-int lx_network_routes(LxHostNetwork *out)
+static uint32_t ipv4(const struct sockaddr *a)
+{
+    return a && a->sa_family == AF_INET ? ((const struct sockaddr_in *)a)->sin_addr.s_addr : 0;
+}
+int lx_host_network_platform_routes(LxHostNetwork *out)
 {
     int mib[] = {CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_DUMP, 0};
     size_t size = 0;
@@ -64,18 +68,18 @@ int lx_network_routes(LxHostNetwork *out)
                 break;
             if (i == RTAX_DST && sa->sa_family == AF_INET && sa->sa_len >= 8)
             {
-                entry.destination = lx_network_ipv4(sa);
+                entry.destination = ipv4(sa);
                 has_destination = 1;
             }
             if (i == RTAX_GATEWAY && sa->sa_family == AF_INET && sa->sa_len >= 8)
-                entry.gateway = lx_network_ipv4(sa);
+                entry.gateway = ipv4(sa);
             /* BSD masks can have family zero and omit trailing zero bytes. */
             if (i == RTAX_NETMASK && sa->sa_len > 4)
                 memcpy(&entry.netmask, a + 4, sa->sa_len - 4 < 4 ? sa->sa_len - 4 : 4);
             a += n;
         }
         if (has_destination &&
-            lx_network_append((void **)&out->routes, &out->route_count, sizeof entry, &entry))
+            lx_host_network_append((void **)&out->routes, &out->route_count, sizeof entry, &entry))
         {
             result = -1;
             break;
@@ -85,8 +89,7 @@ int lx_network_routes(LxHostNetwork *out)
     free(buffer);
     return result;
 }
-
-int lx_network_dns(LxHostNetworkDns *out)
+int lx_host_network_platform_dns(LxHostNetworkDns *out)
 {
     CFDictionaryRef config = SCDynamicStoreCopyValue(NULL, CFSTR("State:/Network/Global/DNS"));
     if (!config)
@@ -104,9 +107,9 @@ int lx_network_dns(LxHostNetworkDns *out)
             char text[1024];
             if (CFGetTypeID(s) == CFStringGetTypeID() &&
                 CFStringGetCString(s, text, sizeof text, kCFStringEncodingUTF8))
-                result =
-                    lx_network_string_append(k ? &out->search : &out->servers,
-                                             k ? &out->search_count : &out->server_count, text);
+                result = lx_host_network_string_append(k ? &out->search : &out->servers,
+                                                       k ? &out->search_count : &out->server_count,
+                                                       text);
             if (result)
                 break;
         }

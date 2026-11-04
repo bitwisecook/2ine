@@ -341,10 +341,83 @@ static cJSON *remove_os2_components(Context *c, const cJSON *request)
     cJSON *result = cJSON_CreateObject(), *removed = cJSON_AddArrayToObject(result, "removedPaths"),
           *preserved = cJSON_AddArrayToObject(result, "preserved");
     cJSON *owned_paths = NULL, *plan = NULL;
-    const cJSON *paths = get(request, "paths"), *item;
+    const cJSON *paths = get(request, "paths"), *selected = get(request, "selection"), *item;
     if (!component_begin(c, request, "remove"))
         goto finished;
-    if (!paths && get(request, "fileSelection"))
+    if (selected)
+    {
+        if (paths || get(request, "fileSelection") || !cJSON_IsArray(selected) ||
+            cJSON_GetArraySize(selected) > 100000)
+        {
+            fail(
+                c,
+                "Select up to 100000 exact sources without a separate paths or fileSelection list");
+            goto finished;
+        }
+        cJSON_ArrayForEach(item, selected) if (!cJSON_IsObject(item) || !field(item, "source") ||
+                                               !*field(item, "source") || !field(item, "path") ||
+                                               !*field(item, "path"))
+        {
+            fail(c, "Each component selection needs a source and planned destination path");
+            goto finished;
+        }
+        paths = owned_paths = cJSON_CreateArray();
+        size_t capacity = (size_t)cJSON_GetArraySize(c->component_operation->ledger), count = 0,
+               resolved = 0;
+        ComponentSourceRecord *index = capacity ? malloc(capacity * sizeof *index) : NULL;
+        if (index)
+            keep(c, (char *)index);
+        if (capacity && !index)
+        {
+            fail(c, "Cannot index installed component sources");
+            goto finished;
+        }
+        const cJSON *record;
+        cJSON_ArrayForEach(record, c->component_operation->ledger) if (field(record, "source") &&
+                                                                       field(record, "path"))
+            index[count++] = (ComponentSourceRecord){field(record, "source"), record};
+        if (count > 1)
+            qsort(index, count, sizeof *index, component_source_compare);
+        cJSON_ArrayForEach(item, selected)
+        {
+            const char *source = field(item, "source"), *planned = field(item, "path");
+            size_t low = 0, high = count;
+            while (low < high)
+            {
+                size_t middle = low + (high - low) / 2;
+                if (strcmp(index[middle].source, source) < 0)
+                    low = middle + 1;
+                else
+                    high = middle;
+            }
+            int matched = 0;
+            for (size_t at = low; at < count && !strcmp(index[at].source, source); at++)
+            {
+                if (resolved++ >= 100000)
+                {
+                    fail(c, "Exact source selection resolves to more than 100000 destinations");
+                    goto finished;
+                }
+                cJSON_AddItemToArray(owned_paths,
+                                     cJSON_CreateString(field(index[at].record, "path")));
+                matched = 1;
+            }
+            if (!matched)
+            {
+                cJSON *file = component_file_state(c, planned, c->component_operation->ledger, 0);
+                put(file, "managed", cJSON_CreateFalse());
+                put(file, "status",
+                    cJSON_CreateString(cJSON_IsTrue(get(file, "present")) ? "protected"
+                                                                          : "missing"));
+                put(file, "reason",
+                    cJSON_CreateString(
+                        "This source has no installed ownership record; existing files were preserved."));
+                cJSON_AddStringToObject(file, "selectedSource", source);
+                cJSON_AddItemToArray(preserved, file);
+            }
+        }
+    }
+    else if (!paths && get(request, "fileSelection"))
     {
         plan = plan_os2_extraction(c, request);
         ExtractFileSelection selection = {0};

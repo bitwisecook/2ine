@@ -68,6 +68,9 @@ def stage(build, destination):
         "gnome_ball_icons.py",
         "gnome_ball_lifecycle.py",
         "gnome_sessions.py",
+        "gnome_program_choice.py",
+        "gnome_lazy_folders.py",
+        "gnome_navigation_state.py",
         "gnome_configuration.py",
         "ball.py",
     ):

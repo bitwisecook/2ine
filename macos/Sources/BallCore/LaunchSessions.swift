@@ -116,6 +116,7 @@ actor LaunchCoordinator {
                 var environment = ProcessInfo.processInfo.environment
                 for name in plan.unsetEnvironment { environment.removeValue(forKey: name) }
                 environment.merge(plan.environment) { _, value in value }
+                environment["TWOINE_DESKTOP_AUXILIARY"] = "1"
                 service.environment = environment; service.currentDirectoryURL = URL(filePath: plan.cwd)
                 let serviceLog = log.deletingPathExtension().appendingPathExtension("startup-\(index).log")
                 try FileManager.default.createDirectory(at: serviceLog.deletingLastPathComponent(), withIntermediateDirectories: true)

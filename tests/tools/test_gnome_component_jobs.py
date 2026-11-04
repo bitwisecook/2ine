@@ -225,5 +225,122 @@ class ComponentJobsTests(unittest.TestCase):
         self.assertIn("Protected", jobs.state_label({"present": False, "status": "protected"}))
 
 
+class DesiredComponentsTests(unittest.TestCase):
+    @staticmethod
+    def actual(status="managed", present=True):
+        return {
+            "present": present,
+            "status": status,
+            "managed": status == "managed",
+            "removable": status == "managed" and present,
+        }
+
+    def test_default_cmd_selection_immediately_produces_real_install_delta(self):
+        queue = jobs.DesiredComponents({"cmd", "font"}, {"cmd"})
+        self.assertEqual(queue.next_step(), ("install", {"cmd"}))
+        queue.update_actual({"cmd": self.actual()})
+        self.assertEqual(queue.next_step(), (None, set()))
+
+    def test_restart_after_prior_operation_does_not_reinstall_unchecked_cmd_default(self):
+        queue = jobs.DesiredComponents({"cmd"}, {"cmd"})
+        queue.initialize(has_history=True)
+        self.assertEqual(queue.next_step(), (None, set()))
+        explicit = jobs.DesiredComponents({"cmd"}, {"cmd"})
+        explicit.initialize(has_history=True, explicit=True)
+        self.assertEqual(explicit.next_step(), ("install", {"cmd"}))
+        first = jobs.DesiredComponents({"cmd"}, {"cmd"})
+        first.initialize(has_history=False)
+        self.assertEqual(first.next_step(), ("install", {"cmd"}))
+
+    def test_external_installed_presence_is_observed_without_automatic_uninstall(self):
+        queue = jobs.DesiredComponents({"font"}, set())
+        queue.initialize(has_history=True)
+        queue.update_actual({"font": self.actual()})
+        self.assertEqual(queue.desired, {"font"})
+        self.assertEqual(queue.next_step(), (None, set()))
+        queue.update_actual({"font": self.actual("missing", False)})
+        self.assertEqual(queue.desired, set())
+        self.assertEqual(queue.next_step(), (None, set()))
+
+    def test_initial_status_does_not_overwrite_an_explicit_uncheck_while_reading(self):
+        queue = jobs.DesiredComponents({"font"}, {"font"})
+        queue.edit(set())
+        queue.update_actual({"font": self.actual()})
+        queue.initialize(has_history=True, explicit=True)
+        self.assertEqual(queue.next_step(), ("remove", {"font"}))
+
+    def test_toggles_during_install_coalesce_then_remove_committed_file(self):
+        queue = jobs.DesiredComponents({"cmd"}, {"cmd"})
+        queue.batch({"cmd"})
+        queue.edit(set())
+        queue.update_actual({"cmd": self.actual()})
+        self.assertEqual(queue.next_step(), ("remove", {"cmd"}))
+        queue.edit({"cmd"})
+        self.assertEqual(queue.next_step(), (None, set()))
+
+    def test_parent_uncheck_clamps_modified_unowned_and_protected_presence(self):
+        queue = jobs.DesiredComponents({"owned", "modified", "unowned", "protected"}, set())
+        queue.update_actual(
+            {
+                name: self.actual(status)
+                for name, status in (
+                    ("owned", "managed"),
+                    ("modified", "modified"),
+                    ("unowned", "unowned"),
+                    ("protected", "protected"),
+                )
+            }
+        )
+        blocked = queue.edit(set())
+        self.assertEqual(blocked, {"modified", "unowned", "protected"})
+        self.assertEqual(queue.desired, blocked)
+        self.assertEqual(queue.next_step(), ("remove", {"owned"}))
+
+    def test_successful_zero_copy_batch_cannot_retry_preserved_other_source_forever(self):
+        queue = jobs.DesiredComponents({"alternate"}, {"alternate"})
+        batch = queue.batch({"alternate"})
+        queue.update_actual({"alternate": self.actual("missing", False)})
+        self.assertEqual(queue.settle(batch), {"alternate"})
+        self.assertEqual(queue.next_step(), (None, set()))
+        self.assertFalse(queue.pending())
+
+    def test_failed_unchanged_intent_snaps_to_actual_and_never_retries(self):
+        queue = jobs.DesiredComponents({"cmd"}, {"cmd"})
+        batch = queue.batch({"cmd"})
+        queue.update_actual({"cmd": self.actual("missing", False)})
+        queue.failed(batch)
+        self.assertEqual(queue.desired, set())
+        self.assertEqual(queue.next_step(), (None, set()))
+
+    def test_edits_during_failed_batch_survive_using_per_source_revisions(self):
+        queue = jobs.DesiredComponents({"cmd", "font"}, {"cmd"})
+        batch = queue.batch({"cmd"})
+        queue.edit(set())
+        queue.edit({"cmd", "font"})
+        queue.update_actual({"cmd": self.actual("missing", False)})
+        queue.failed(batch)
+        self.assertEqual(queue.next_step(), ("install", {"cmd", "font"}))
+
+    def test_partial_cancel_keeps_successful_files_checked_and_missing_files_off(self):
+        queue = jobs.DesiredComponents({"cmd", "rexx"}, {"cmd", "rexx"})
+        batch = queue.batch({"cmd", "rexx"})
+        queue.update_actual({"cmd": self.actual(), "rexx": self.actual("missing", False)})
+        queue.failed(batch)
+        self.assertEqual(queue.desired, {"cmd"})
+        self.assertFalse(queue.pending())
+
+    def test_unrelated_new_selection_survives_a_failure_without_retrying_old_source(self):
+        queue = jobs.DesiredComponents({"cmd", "font"}, {"cmd"})
+        batch = queue.batch({"cmd"})
+        queue.edit({"cmd", "font"})
+        queue.failed(batch)
+        self.assertEqual(queue.next_step(), ("install", {"font"}))
+
+    def test_native_disabled_sources_are_never_inferred_as_removal_targets(self):
+        queue = jobs.DesiredComponents({"cmd"}, set())
+        queue.update_actual({"opengl-native-disabled": self.actual()})
+        self.assertEqual(queue.next_step(), (None, set()))
+
+
 if __name__ == "__main__":
     unittest.main()

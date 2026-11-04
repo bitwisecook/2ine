@@ -38,6 +38,38 @@ static Window *native_window(HWND handle)
             return anchor->windows[i];
     return NULL;
 }
+static void check_cycle(HWND window, BOOL wanted_eligible, BOOL wanted_modal)
+{
+    int eligible = !wanted_eligible, modal = !wanted_modal;
+    Window *native = native_window(window);
+    CHECK(native && native->heavy.window);
+    lx_host_window_get_cycle_policy(native->heavy.window, &eligible, &modal);
+    CHECK(eligible == wanted_eligible && modal == wanted_modal);
+}
+static HWND cycle_previous, cycle_other;
+static MRESULT OS2API cycle_reparent_procedure(HWND window, ULONG message, MPARAM first,
+                                               MPARAM second)
+{
+    if (message == WM_INITDLG)
+    {
+        CHECK(WinPostMsg(window, WM_USER, 0, 0));
+        return 0;
+    }
+    if (message == WM_USER)
+    {
+        check_cycle(cycle_previous, FALSE, TRUE);
+        check_cycle(cycle_other, TRUE, FALSE);
+        CHECK(WinSetParent(window, cycle_other, FALSE));
+        check_cycle(cycle_previous, FALSE, FALSE);
+        check_cycle(cycle_other, TRUE, TRUE);
+        CHECK(WinSetParent(window, cycle_previous, FALSE));
+        check_cycle(cycle_previous, FALSE, TRUE);
+        check_cycle(cycle_other, TRUE, FALSE);
+        CHECK(WinDismissDlg(window, 42));
+        return 0;
+    }
+    return WinDefDlgProc(window, message, first, second);
+}
 static MRESULT OS2API paint_modal_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_INITDLG)
@@ -49,6 +81,8 @@ static MRESULT OS2API paint_modal_procedure(HWND window, ULONG message, MPARAM f
     {
         AnchorBlock *anchor = lxHostThreadState()->anchor_block;
         Window *modal = native_window(window), *painting = native_window(owner);
+        check_cycle(window, FALSE, TRUE);
+        check_cycle(owner, FALSE, FALSE); /* Disabled owner is not a cycle target. */
         CHECK(modal && painting && anchor->paint_depth);
         CHECK(WinUpdateWindow(window));
         for (Window *child = modal->children; child; child = child->sibling)
@@ -62,6 +96,8 @@ static MRESULT OS2API paint_modal_procedure(HWND window, ULONG message, MPARAM f
         CHECK(display && WinReleasePS(display));
         CHECK(!painting->last_present);
         CHECK(WinDismissDlg(window, 123));
+        check_cycle(window, FALSE, FALSE);
+        check_cycle(owner, TRUE, FALSE);
         return 0;
     }
     return WinDefDlgProc(window, message, first, second);
@@ -245,6 +281,19 @@ int main(void)
         }
     }
     CHECK(initialized == 7 && destroyed == 7 && released == 7);
+    ULONG cycle_flags = 0;
+    cycle_previous =
+        WinCreateStdWindow(HWND_DESKTOP, WS_VISIBLE, &cycle_flags, NULL, "First", 0, 0, 0, NULL);
+    cycle_other =
+        WinCreateStdWindow(HWND_DESKTOP, WS_VISIBLE, &cycle_flags, NULL, "Second", 0, 0, 0, NULL);
+    CHECK(cycle_previous && cycle_other);
+    HWND cycle_dialog =
+        WinCreateDlg(cycle_previous, cycle_previous, cycle_reparent_procedure, (void *)bytes, NULL);
+    CHECK(cycle_dialog && WinProcessDlg(cycle_dialog) == 42);
+    check_cycle(cycle_previous, TRUE, FALSE);
+    check_cycle(cycle_other, TRUE, FALSE);
+    CHECK(WinDestroyWindow(cycle_dialog) && WinDestroyWindow(cycle_previous) &&
+          WinDestroyWindow(cycle_other));
     CHECK(WinDlgBox(1, 0, procedure, 0, 999, NULL) == 0xffff);
     DLGTITEM *items = (void *)(bytes + 14);
     items[1].offText = 255;

@@ -106,3 +106,33 @@ was made for that diagnostic capture limitation. Images verify adaptive stripes,
 disclosure/checkbox controls, icons, readable columns, correct sizes/dates, typed
 registry summaries and the single provider action. They do not qualify an active
 window's focus/selection accent or a physical drag-and-drop interaction.
+
+## Expansion-driven column growth and final narrow layout gate
+
+Final offscreen native QA exposed a real shared-outline sizing defect: the default
+`NSOutlineView.autoresizesOutlineColumn` expands the name column when a deeper child is
+revealed, independently of its first-column viewport resizing policy. The macOS SDK
+NSOutlineView.h (lines 106–108) documents that default. Five disclosed levels grew the
+360-point name column to 440, putting the Size values outside a 760-point pane's 718-point
+viewport. The same values were visible in the wider 1100-point ContentView.
+
+The renderer now disables only that expansion-driven growth. Native flexible-column
+resizing still handles the viewport: a 640-point pane has viewport/document 598 and columns
+262/205/85; a 760-point pane has viewport/document 718 and columns 360/205/85. No custom
+redistribution or resetting of user-resized widths was introduced. Legitimate horizontal
+scrolling remains when column minima cannot fit.
+
+Two permanent native regressions cover initial 640/760/1100-point NSScrollView layouts,
+deep disclosure, visible size text, stable sorting/selection, user column widths retained
+through updates and usable horizontal scrolling under oversized minima. The first failed
+before the property correction, then both passed. Full Swift passed 105/105 afterward:
+63 app/model and 42 BallCore tests.
+
+Fourteen light/dark no-window captures, synthetic fixtures, the archived/removed temporary
+harness, geometry and logs are under `build-immediate-components-current/offscreen-qa/`.
+They verify six native fit navigation segments (586-point intrinsic width), actual generated
+installer discovery, grouped dropdown+Browse, attached Change/Eject and empty Attach states,
+and immediate/active component views at 640/760 detail and 1100 full host widths. All images
+were inspected. The no-window SwiftUI sidebar List and opened combo popup remain outside
+this visual gate; no live app registration, desktop input, user-ball writes or original
+application execution occurred.

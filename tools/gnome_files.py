@@ -40,7 +40,17 @@ def file_date(entry):
 
 
 class FileList(NativeBrowser):
-    def __init__(self, *, selected=None, activated=None, accept=None, dropped=None):
+    def __init__(
+        self,
+        *,
+        selected=None,
+        activated=None,
+        accept=None,
+        dropped=None,
+        children=None,
+        expanded_changed=None,
+        activity=None,
+    ):
         self.dropped = dropped
         super().__init__(
             [
@@ -73,7 +83,9 @@ class FileList(NativeBrowser):
             title="Files",
             search_hint="Search Files",
             identity=lambda data: data["path"],
-            children=lambda _data: [],
+            children=children or (lambda _data: []),
+            expanded_changed=expanded_changed,
+            activity=activity,
             searchable=lambda data: data["name"],
             accept=accept,
             selected=selected,

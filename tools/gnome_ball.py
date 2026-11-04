@@ -23,6 +23,7 @@ if __package__:
         gnome_configuration,
         gnome_media_preferences,
         gnome_navigation,
+        gnome_navigation_state,
         gnome_sessions,
         gnome_views,
     )
@@ -35,6 +36,7 @@ else:
     import gnome_configuration
     import gnome_media_preferences
     import gnome_navigation
+    import gnome_navigation_state
     import gnome_sessions
     import gnome_views
 
@@ -95,6 +97,9 @@ class BallWindow(Adw.ApplicationWindow):
         ball_api.configure_library(self.build)
         self.ball = None
         self.snapshot = None
+        self.new_balls = set()
+        self.next_page = None
+        self.pending_launches = {}
         self.process = None
         self.sessions = gnome_sessions.Sessions()
         self.selected_session = None
@@ -703,9 +708,16 @@ class BallWindow(Adw.ApplicationWindow):
             return
         path = row.ball_path
         previous = self.ball
+        newly_created = path.resolve() in self.new_balls
+        needs_landing = newly_created or previous != path
 
         def loaded(result):
-            snapshot, self.install_summary = result
+            snapshot, self.install_summary, navigation = result
+            if needs_landing:
+                self.next_page = gnome_navigation_state.initial_page(
+                    navigation, newly_created=newly_created
+                )
+                self.new_balls.discard(path.resolve())
             if previous != path:
                 self.last_log, self.last_result, self.log_text = None, None, ""
                 self.activity_title = "Ready"
@@ -739,7 +751,13 @@ class BallWindow(Adw.ApplicationWindow):
             self.set_busy(False)
 
         self.request_work(
-            lambda: (self.read_snapshot(path), self.read_receipt(path)),
+            lambda: (
+                self.read_snapshot(path),
+                self.read_receipt(path),
+                ball_api.native_request({"action": "ball-navigation-state", "ball": str(path)})
+                if needs_landing and not newly_created
+                else None,
+            ),
             loaded,
             on_error=unavailable,
         )
@@ -762,7 +780,10 @@ class BallWindow(Adw.ApplicationWindow):
             self.stack.set_visible_child_name(name)
 
     def render(self):
-        previous = self.stack.get_visible_child_name() if hasattr(self, "stack") else "drives"
+        previous = self.next_page or (
+            self.stack.get_visible_child_name() if hasattr(self, "stack") else "drives"
+        )
+        self.next_page = None
         configuration_tab = (
             self.configuration_stack.get_visible_child_name()
             if hasattr(self, "configuration_stack")
@@ -776,15 +797,9 @@ class BallWindow(Adw.ApplicationWindow):
         self.detail.set_title(self.ball.name.removesuffix(".2ineball"))
         self.stack = Adw.ViewStack(vexpand=True, hhomogeneous=False, vhomogeneous=False)
         if not hasattr(self, "switcher"):
-            self.switcher = Adw.InlineViewSwitcher(
-                display_mode=Adw.InlineViewSwitcherDisplayMode.BOTH, halign=Gtk.Align.CENTER
-            )
+            self.switcher = gnome_navigation.PageNavigation()
             self.switcher.set_margin_top(6)
             self.switcher.set_margin_bottom(6)
-            for breakpoint in (self.medium_breakpoint, self.narrow_breakpoint):
-                breakpoint.add_setter(
-                    self.switcher, "display-mode", Adw.InlineViewSwitcherDisplayMode.ICONS
-                )
         self.switcher.set_stack(self.stack)
         self.content.append(self.switcher)
         self.content.append(self.stack)
@@ -792,12 +807,7 @@ class BallWindow(Adw.ApplicationWindow):
         self.stack.add_titled_with_icon(
             self.drives_page, "drives", "Drives", "drive-harddisk-symbolic"
         )
-        apps = self.page("apps", "Applications", "application-x-executable-symbolic")
-        self.applications_page = gnome_applications.ApplicationsPage(self)
-        apps.append(self.applications_page)
-        components = self.page(
-            "components", "OS/2 System Components", "applications-system-symbolic"
-        )
+        components = self.page("components", "OS/2 Components", "applications-system-symbolic")
         pane = self.component_pane()
         pane.build = self.build
         parent = pane.get_parent()
@@ -809,6 +819,9 @@ class BallWindow(Adw.ApplicationWindow):
             "Application Installation",
             "system-software-install-symbolic",
         ).append(gnome_navigation.InstallationPage(self))
+        apps = self.page("apps", "Applications", "application-x-executable-symbolic")
+        self.applications_page = gnome_applications.ApplicationsPage(self)
+        apps.append(self.applications_page)
         configuration = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
         self.stack.add_titled_with_icon(
             configuration, "settings", "Settings", "preferences-system-symbolic"
@@ -1107,13 +1120,13 @@ class BallWindow(Adw.ApplicationWindow):
         self.initial_os2_picker(picker)
         picker.open_multiple(self, None, chosen)
 
-    def choose_os2_support(self, categories=None, force_picker=False):
+    def choose_os2_support(self, categories=None, force_picker=False, selecting=True):
         if not self.ball or self.operation_busy or self.sessions.active(self.ball):
             return
         self.show_page("components")
         remembered = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
         if remembered and not force_picker:
-            self.present_os2_media(remembered, categories)
+            self.present_os2_media(remembered, categories, selecting)
             return
         ball = str(self.ball)
         picker = Gtk.FileDialog(
@@ -1131,7 +1144,7 @@ class BallWindow(Adw.ApplicationWindow):
                 return
 
             if sources and str(self.ball) == ball:
-                self.present_os2_media(sources, categories)
+                self.present_os2_media(sources, categories, selecting)
 
         self.initial_os2_picker(picker)
         picker.open_multiple(self, None, chosen)
@@ -1155,8 +1168,10 @@ class BallWindow(Adw.ApplicationWindow):
             self.persist_preferences()
 
     def component_active(self, path=None):
-        return gnome_component_jobs.active(
-            self.component_jobs, path if path is not None else self.ball
+        target = path if path is not None else self.ball
+        pane = self.component_panes.get(str(target))
+        return gnome_component_jobs.active(self.component_jobs, target) or bool(
+            pane and pane.pending_mutations()
         )
 
     def update_component_indicators(self):
@@ -1201,29 +1216,49 @@ class BallWindow(Adw.ApplicationWindow):
             self.component_panes[key] = OS2ComponentsPane(self)
         return self.component_panes[key]
 
-    def present_os2_media(self, sources, categories=None):
+    def present_os2_media(self, sources, categories=None, selecting=True):
         self.show_page("components")
         pane = self.component_pane()
-        pane.categories = set(categories or {"cmd"})
+        pane.focus_only = not selecting
+        pane.categories = set(categories or {"cmd"}) if selecting else set()
+        pane.selects_focus = selecting
         pane.focus_category = (
             next(iter(categories)) if categories and len(categories) == 1 else None
         )
         pane.open_sources(sources)
 
-    def show_component_media(self, category):
-        if not self.ball or self.busy or self.process or self.component_active():
+    def show_component_media(self, category, selecting=True):
+        if not self.ball or self.operation_busy or (selecting and self.sessions.active(self.ball)):
             return
         self.show_page("components")
         pane = self.component_pane()
+        pane.focus_only, pane.selects_focus = not selecting, selecting
         pane.focus_category = category
         if pane.plan:
-            pane.resume_components(category)
+            if self.component_active():
+                if selecting:
+                    pane.component_tree.select_group(category)
+                else:
+                    pane.component_tree.focus_group(category)
+            else:
+                pane.resume_components(category, selecting)
         else:
             sources = gnome_media_preferences.preferred(self.snapshot, self.app_preferences)
             if sources:
-                self.present_os2_media(sources, {category})
+                self.present_os2_media(sources, {category}, selecting)
             else:
-                self.choose_os2_support({category}, force_picker=True)
+                self.choose_os2_support({category}, force_picker=True, selecting=selecting)
+
+    def focus_missing_component(self, category):
+        if not self.ball:
+            return
+        pane = self.component_pane()
+        pane.focus_category, pane.focus_only, pane.selects_focus = category, True, False
+        if pane.component_tree:
+            pane.component_tree.focus_group(category)
+        else:
+            pane.categories = set()
+        self.show_page("components")
 
     def show_component_setting(self, token):
         if token not in ("graphics.opengl", "graphics", "printing"):
@@ -1297,6 +1332,7 @@ class BallWindow(Adw.ApplicationWindow):
                 return snapshot
 
             def created(snapshot):
+                self.new_balls.add(path.resolve())
                 self.external.append(path)
                 self.ball, self.snapshot = path, snapshot
                 dialog.close()
@@ -1688,6 +1724,8 @@ class BallWindow(Adw.ApplicationWindow):
             "format-arguments",
             "image-preview",
             "application-details",
+            "launch-prerequisites",
+            "ball-navigation-state",
             "browse",
             "browse-media",
             "configuration-read",
@@ -1964,6 +2002,24 @@ class BallWindow(Adw.ApplicationWindow):
                 self.refresh_session_selector()
                 self.set_busy(False)
                 return
+            if isinstance(result, dict) and result.get("prerequisites"):
+                session.state = "needs-components"
+                self.pending_launches[str(path)] = {
+                    "arguments": list(arguments),
+                    "fields": dict(original_fields),
+                    "status": result["prerequisites"],
+                    "autoResume": True,
+                    "checking": False,
+                }
+                self.refresh_session_selector()
+                self.set_busy(False)
+                if self.ball == path:
+                    self.render()
+                    if "cmd" in result["prerequisites"].get("requiredCategories", []):
+                        self.show_component_media("cmd")
+                    else:
+                        self.show_page("application-installation")
+                return
             plan, log = result
             audit = plan.get("dependencyAudit", {})
             if ball_api.needs_dependency_media(audit):
@@ -1981,13 +2037,93 @@ class BallWindow(Adw.ApplicationWindow):
                 return
             self.launch(path, plan, log, session)
 
+        original_fields = dict(fields)
         fields["resolve"] = not peers and fields.get("resolve", True)
+
+        def prepare_checked():
+            requirements = ball_api.native_request(
+                {
+                    "action": "launch-prerequisites",
+                    "ball": str(path),
+                    "arguments": arguments,
+                    **original_fields,
+                }
+            )
+            if not requirements.get("ready"):
+                return {"prerequisites": requirements}
+            return self.prepare_launch(arguments, ball=str(path), build=str(build), **fields)
+
         self.component_work(
-            lambda: self.prepare_launch(arguments, ball=str(path), build=str(build), **fields),
+            prepare_checked,
             prepared,
             failed,
         )
         return True
+
+    def refresh_pending_launch(self, ball, *, auto_allowed=False):
+        key = str(ball)
+        pending = self.pending_launches.get(key)
+        if not pending or pending.get("checking"):
+            return
+        pending["checking"] = True
+
+        def received(status):
+            if self.pending_launches.get(key) is not pending:
+                return
+            pending["checking"], pending["status"] = False, status
+            if self.ball != Path(ball):
+                pending["autoResume"] = False
+            if (
+                auto_allowed
+                and status.get("ready")
+                and pending.get("autoResume")
+                and self.ball == Path(ball)
+                and not self.operation_busy
+                and not self.component_active(ball)
+                and not self.sessions.active()
+            ):
+                self.continue_pending_launch(ball)
+            elif self.ball == Path(ball):
+                self.render()
+
+        def failed(error):
+            if self.pending_launches.get(key) is pending:
+                pending["checking"], pending["autoResume"] = False, False
+                pending["status"] = {"ready": False, "reason": str(error)}
+                if self.ball == Path(ball):
+                    self.render()
+
+        self.component_work(
+            lambda: ball_api.native_request(
+                {
+                    "action": "launch-prerequisites",
+                    "ball": key,
+                    "arguments": pending["arguments"],
+                    **pending["fields"],
+                }
+            ),
+            received,
+            failed,
+            monitor=True,
+        )
+
+    def continue_pending_launch(self, ball=None):
+        ball = ball or self.ball
+        pending = self.pending_launches.get(str(ball))
+        if (
+            not pending
+            or self.ball != Path(ball)
+            or self.component_active(ball)
+            or not pending.get("status", {}).get("ready")
+        ):
+            return
+        del self.pending_launches[str(ball)]
+        if not self.execute(pending["arguments"], **pending["fields"]):
+            self.pending_launches[str(ball)] = pending
+
+    def cancel_pending_launch(self, ball=None):
+        self.pending_launches.pop(str(ball or self.ball), None)
+        self.render()
 
     def choose_save(self, title, initial, callback):
         dialog = Gtk.FileDialog(title=title, initial_name=initial)
@@ -2319,6 +2455,9 @@ class BallWindow(Adw.ApplicationWindow):
                     self.choose_dependency_media(str(path))
             self.refresh_session_selector()
             self.set_busy(False)
+            pane = self.component_panes.get(str(path))
+            if pane and pane.pending_mutations():
+                pane.schedule_drain()
             self.toast(f"{session.name} finished: exit {code}")
 
         def failed(error):

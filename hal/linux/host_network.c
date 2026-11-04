@@ -1,10 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _DEFAULT_SOURCE 1
-#include "hal/posix/network_internal.h"
+#include "../posix/network_internal.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <ifaddrs.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdio.h>
@@ -14,18 +13,18 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <sys/time.h>
-int lx_network_mac(const struct ifaddrs *link, LxHostNetworkInterface *entry)
+
+int lx_host_network_platform_mac(const struct sockaddr *address, uint32_t flags, uint8_t mac[6])
 {
-    if (link->ifa_addr->sa_family != AF_PACKET)
+    if (address->sa_family != AF_PACKET || (flags & LX_IFF_LOOPBACK))
         return 0;
-    const struct sockaddr_ll *dl = (const struct sockaddr_ll *)link->ifa_addr;
-    if (dl->sll_halen != 6 || (entry->flags & LX_IFF_LOOPBACK))
+    const struct sockaddr_ll *dl = (const struct sockaddr_ll *)address;
+    if (dl->sll_halen != 6)
         return 0;
-    memcpy(entry->mac, dl->sll_addr, 6);
+    memcpy(mac, dl->sll_addr, 6);
     return 1;
 }
-
-int lx_network_routes(LxHostNetwork *out)
+int lx_host_network_platform_routes(LxHostNetwork *out)
 {
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
     if (fd < 0)
@@ -119,21 +118,20 @@ int lx_network_routes(LxHostNetwork *out)
                         break;
                 }
             }
-            if (lx_network_append((void **)&out->routes, &out->route_count, sizeof entry, &entry))
+            if (lx_host_network_append((void **)&out->routes, &out->route_count, sizeof entry,
+                                       &entry))
                 goto done;
         }
     }
 done:
     {
         int saved = errno;
-        free(buffer);
         close(fd);
         errno = saved;
     }
     return result;
 }
-
-int lx_network_dns(LxHostNetworkDns *out)
+int lx_host_network_platform_dns(LxHostNetworkDns *out)
 {
     FILE *f = fopen("/etc/resolv.conf", "r");
     if (!f)
@@ -154,7 +152,8 @@ int lx_network_dns(LxHostNetworkDns *out)
             continue;
         for (char *s = strtok_r(NULL, " \t\r\n", &state); s; s = strtok_r(NULL, " \t\r\n", &state))
         {
-            result = lx_network_string_append(server ? &out->servers : &out->search,
+            result =
+                lx_host_network_string_append(server ? &out->servers : &out->search,
                                               server ? &out->server_count : &out->search_count, s);
             if (result || server)
                 break;

@@ -4,6 +4,7 @@
 
 import argparse
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -41,13 +42,6 @@ def main():
         app.activate()
         window = app.get_active_window()
         pump(lambda: not window.busy and window.ball == first)
-        window.present_os2_media([str(media.parent)], {"cmd"})
-        pane = window.component_pane()
-        pump(lambda: pane.plan is not None and not pane.working and not pane.polling)
-        assert pane.get_parent() is not None
-        assert window.get_visible_dialog() is None, "Component browser must remain inline"
-        assert window.app_preferences["lastOS2MediaSources"]
-
         # Hold owned task I/O before entering the core so navigation has a deterministic gate.
         entered, release = threading.Event(), threading.Event()
         original = window.component_api
@@ -60,7 +54,21 @@ def main():
             return original(action, **fields)
 
         window.component_api = held
-        pane.install_selected()
+        (other / "drive_c/TEMP/APP.EXE").write_bytes(CMD)
+        ball_api.native_request(
+            {
+                "action": "command",
+                "ball": str(other),
+                "arguments": ["add-app", "App", r"C:\TEMP\APP.EXE"],
+            }
+        )
+        window.present_os2_media([str(media.parent)], {"cmd"})
+        pane = window.component_pane()
+        pump(lambda: pane.plan is not None and not pane.working and not pane.polling)
+        assert pane.get_parent() is not None
+        assert window.get_visible_dialog() is None, "Component browser must remain inline"
+        assert window.app_preferences["lastOS2MediaSources"]
+
         pump(entered.is_set)
         assert window.component_active(first)
         assert not window.busy
@@ -79,7 +87,8 @@ def main():
         pump(lambda: any(file.get("status") == "managed" for file in pane.plan["files"]))
         assert (first / "drive_c/OS2/CMD.EXE").read_bytes() == CMD
 
-        # Metadata-only refresh cannot replan or reopen the ISO/source.
+        # Status and uninstall retain exact provenance after the source is removed.
+        shutil.rmtree(media.parent)
         window.component_api = original
         command = first / "drive_c/OS2/CMD.EXE"
         command.write_bytes(CMD + b"user modification")
@@ -87,7 +96,8 @@ def main():
         pump(lambda: not pane.polling)
         record = next(file for file in pane.plan["files"] if file["name"] == "CMD.EXE")
         assert record["status"] == "modified" and not record["removable"]
-        pane.remove_selected()
+        pane.component_tree.checks.toggle("cmd")
+        pane.selection_changed()
         pump(lambda: not window.component_active(first) and not pane.polling)
         assert command.read_bytes().endswith(b"user modification")
         assert not (first / "drive_c/OS2/OSO001.MSG").exists()

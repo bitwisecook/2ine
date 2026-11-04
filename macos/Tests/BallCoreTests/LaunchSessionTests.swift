@@ -25,13 +25,14 @@ private struct LaunchFixture {
         let script = #"""
         #!/bin/sh
         case "$1" in
-          *SERVICE.EXE) echo $$ >> "$TWOINE_BALL/service-pids"; echo service-ready; exec /bin/sleep 30 ;;
+          *SERVICE.EXE) echo $$ >> "$TWOINE_BALL/service-pids"; echo "${TWOINE_DESKTOP_AUXILIARY}:${TWOINE_DESKTOP_SESSION}" > "$TWOINE_BALL/service-desktop"; echo service-ready; exec /bin/sleep 30 ;;
           *ONE.EXE) name=one ;;
           *TWO.EXE) name=two ;;
           *SETUP.EXE) name=installer ;;
           *) exit 88 ;;
         esac
         echo "${name}:$TWOINE_BALL:$TWOINE_IPC_DIR"
+        echo "${TWOINE_DESKTOP_SESSION}:${TWOINE_DESKTOP_AUXILIARY}" > "$TWOINE_BALL/${name}-desktop"
         echo $$ > "$TWOINE_BALL/${name}-pid"
         exec /bin/sleep 30
         """#
@@ -79,6 +80,8 @@ private func awaitCondition(_ condition: @Sendable () async throws -> Bool) asyn
         free(canonical)
         #expect(firstResult.output.contains("one:" + canonicalBall + ":" + canonicalBall + "/ipc"))
         #expect(kill(servicePID, 0) == 0 && kill(secondPID, 0) == 0)
+        #expect(try String(contentsOf: fixture.ball.appending(path: "service-desktop"), encoding: .utf8) == "1:\n")
+        #expect(try String(contentsOf: fixture.ball.appending(path: "two-desktop"), encoding: .utf8) == two + ":\n")
         #expect(unrelated.isRunning)
         await otherBackend.stop(sessionID: two)
         let secondResult = try await #require(second).value
@@ -163,49 +166,6 @@ func installerIsExclusiveButAnotherBallCanRun(installFirst: Bool) async throws {
     #expect(await backend.activeSessionIDs(ball: fixture.ball.path).isEmpty)
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["TWOINE_TEST_RUNTIME"] != nil,
-               "Requires an explicitly selected built portable runtime."))
-func independentLXAppsExchangeSharedMemoryInOneBall() async throws {
-    let runtime = try #require(ProcessInfo.processInfo.environment["TWOINE_TEST_RUNTIME"])
-    let fixture = try LaunchFixture(startup: false)
-    defer { fixture.cleanup() }
-    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let generator = try await ProcessRunner().run(executable: URL(filePath: "/usr/bin/python3"),
-                                                 arguments: [repository.appending(path: "tests/integration/session_guests.py").path,
-                                                             fixture.ball.appending(path: "drive_c/OS2").path],
-                                                 log: fixture.root.appending(path: "generate.log"))
-    #expect(generator.code == 0)
-    let backend = BallBackend(), firstID = UUID().uuidString, secondID = UUID().uuidString
-    let firstLog = fixture.ball.appending(path: "logs/macos-\(firstID).log")
-    let secondLog = fixture.ball.appending(path: "logs/macos-\(secondID).log")
-    let first = Task { try await backend.execute(ball: fixture.ball.path, build: runtime, arguments: ["run", #"C:\OS2\ONE.EXE"#], sessionID: firstID) { _ in } }
-    var second: Task<ProcessResult, any Error>?
-    do {
-        try await awaitCondition { (try? String(contentsOf: firstLog, encoding: .utf8).contains("writer-ready")) == true }
-        second = Task { try await backend.execute(ball: fixture.ball.path, build: runtime, arguments: ["run", #"C:\OS2\TWO.EXE"#], sessionID: secondID) { _ in } }
-        try await awaitCondition { (try? String(contentsOf: firstLog, encoding: .utf8).contains("writer-shared-ok")) == true }
-        await backend.stop(sessionID: firstID)
-        let firstResult = try await first.value
-        #expect(firstResult.signalled && firstResult.sessionID == firstID)
-        try await awaitCondition { (try? String(contentsOf: secondLog, encoding: .utf8).contains("reader-after-peer-exit")) == true }
-        #expect(await backend.activeSessionIDs(ball: fixture.ball.path) == [secondID])
-        await backend.stop(sessionID: secondID)
-        let secondResult = try await #require(second).value
-        #expect(secondResult.signalled && secondResult.output.contains("reader-shared-ok"))
-        let firstAudit = try #require(firstResult.dependencyAudit)
-        let secondAudit = try #require(secondResult.dependencyAudit)
-        #expect(firstAudit.jsonPath != secondAudit.jsonPath)
-        let firstJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: URL(filePath: firstAudit.jsonPath))) as? [String: Any])
-        let secondJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: URL(filePath: secondAudit.jsonPath))) as? [String: Any])
-        #expect(firstJSON["automaticRecovery"] as? Bool == true)
-        #expect(secondJSON["automaticRecovery"] as? Bool == false)
-    } catch {
-        await backend.stop(sessionID: firstID, force: true); await backend.stop(sessionID: secondID, force: true)
-        _ = try? await first.value; if let second { _ = try? await second.value }
-        throw error
-    }
-}
-
 @Test func cancellingObserverTaskDoesNotAbandonItsOwnedProcess() async throws {
     let fixture = try LaunchFixture(startup: false)
     defer { fixture.cleanup() }
@@ -225,5 +185,96 @@ func independentLXAppsExchangeSharedMemoryInOneBall() async throws {
     } catch {
         await runner.stop(force: true); _ = try? await running.value
         throw error
+    }
+}
+
+// Each gate still runs multiple guests concurrently; serialize unrelated cold runtime copies.
+@Suite(.serialized) struct NativeDesktopRuntimeTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TWOINE_TEST_RUNTIME"] != nil,
+                   "Requires an explicitly selected built portable runtime."))
+    func independentLXAppsExchangeSharedMemoryInOneBall() async throws {
+        let runtime = try #require(ProcessInfo.processInfo.environment["TWOINE_TEST_RUNTIME"])
+        let fixture = try LaunchFixture(startup: false)
+        defer { fixture.cleanup() }
+        let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let generator = try await ProcessRunner().run(executable: URL(filePath: "/usr/bin/python3"),
+                                                     arguments: [repository.appending(path: "tests/integration/session_guests.py").path,
+                                                                 fixture.ball.appending(path: "drive_c/OS2").path],
+                                                     log: fixture.root.appending(path: "generate.log"))
+        #expect(generator.code == 0)
+        let backend = BallBackend(), firstID = UUID().uuidString, secondID = UUID().uuidString
+        let firstLog = fixture.ball.appending(path: "logs/macos-\(firstID).log")
+        let secondLog = fixture.ball.appending(path: "logs/macos-\(secondID).log")
+        let first = Task { try await backend.execute(ball: fixture.ball.path, build: runtime, arguments: ["run", #"C:\OS2\ONE.EXE"#], sessionID: firstID) { _ in } }
+        var second: Task<ProcessResult, any Error>?
+        do {
+            try await awaitCondition { (try? String(contentsOf: firstLog, encoding: .utf8).contains("writer-ready")) == true }
+            second = Task { try await backend.execute(ball: fixture.ball.path, build: runtime, arguments: ["run", #"C:\OS2\TWO.EXE"#], sessionID: secondID) { _ in } }
+            try await awaitCondition { (try? String(contentsOf: firstLog, encoding: .utf8).contains("writer-shared-ok")) == true }
+            await backend.stop(sessionID: firstID)
+            let firstResult = try await first.value
+            #expect(firstResult.signalled && firstResult.sessionID == firstID)
+            try await awaitCondition { (try? String(contentsOf: secondLog, encoding: .utf8).contains("reader-after-peer-exit")) == true }
+            #expect(await backend.activeSessionIDs(ball: fixture.ball.path) == [secondID])
+            await backend.stop(sessionID: secondID)
+            let secondResult = try await #require(second).value
+            #expect(secondResult.signalled && secondResult.output.contains("reader-shared-ok"))
+            let firstAudit = try #require(firstResult.dependencyAudit)
+            let secondAudit = try #require(secondResult.dependencyAudit)
+            #expect(firstAudit.jsonPath != secondAudit.jsonPath)
+            let firstJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: URL(filePath: firstAudit.jsonPath))) as? [String: Any])
+            let secondJSON = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: URL(filePath: secondAudit.jsonPath))) as? [String: Any])
+            #expect(firstJSON["automaticRecovery"] as? Bool == true)
+            #expect(secondJSON["automaticRecovery"] as? Bool == false)
+        } catch {
+            await backend.stop(sessionID: firstID, force: true); await backend.stop(sessionID: secondID, force: true)
+            _ = try? await first.value; if let second { _ = try? await second.value }
+            throw error
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["TWOINE_TEST_RUNTIME"] != nil,
+                   "Requires an explicitly selected built portable runtime."))
+    func execChildUsesItsParentsImmutableDesktopLoader() async throws {
+        let runtime = try #require(ProcessInfo.processInfo.environment["TWOINE_TEST_RUNTIME"])
+        let fixture = try LaunchFixture(startup: false)
+        defer { fixture.cleanup() }
+        let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let generator = try await ProcessRunner().run(executable: URL(filePath: "/usr/bin/python3"),
+            arguments: [repository.appending(path: "tests/integration/session_guests.py").path, fixture.ball.appending(path: "drive_c/OS2").path],
+            log: fixture.root.appending(path: "generate.log"))
+        #expect(generator.code == 0)
+        let backend = BallBackend(), session = UUID().uuidString
+        let log = fixture.ball.appending(path: "logs/macos-\(session).log")
+        let running = Task { try await backend.execute(ball: fixture.ball.path, build: runtime, arguments: ["run", #"C:\OS2\PARENT.EXE"#], sessionID: session) { _ in } }
+        do {
+            try await awaitCondition { (try? String(contentsOf: log, encoding: .utf8).contains("desktop-child-ready")) == true }
+            let inventory = try await ProcessRunner().run(executable: URL(filePath: "/bin/ps"), arguments: ["-axo", "pid="], log: fixture.root.appending(path: "owned-process-paths.log"))
+            #expect(inventory.code == 0)
+            let marker = "/cache/desktop-sessions/" + session + "/"
+            // Child argv[0] is deliberately lx_loader; proc_pidpath reports its actual Mach-O path.
+            let owned = inventory.output.split(whereSeparator: \.isWhitespace).compactMap { token -> String? in
+                guard let pid = Int32(token) else { return nil }
+                var bytes = [CChar](repeating: 0, count: 4096)
+                let length = proc_pidpath(pid, &bytes, UInt32(bytes.count))
+                guard length > 0 else { return nil }
+                let path = String(decoding: bytes.prefix(Int(length)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+                return path.contains(marker) ? path : nil
+            }
+            #expect(owned.count == 2)
+            #expect(owned.allSatisfy { $0.hasSuffix("/Contents/MacOS/lx_loader") })
+            let result = try await running.value
+            #expect(result.code == 0 && result.output.contains("desktop-parent-complete"))
+        } catch {
+            let markerExists = FileManager.default.fileExists(atPath: log.path)
+            await backend.stop(sessionID: session, force: true)
+            let result = try? await running.value
+            let guestLog = result?.output ?? ((try? String(contentsOf: log, encoding: .utf8)) ?? "(guest log not created)")
+            let evidence = repository.appending(path: "build-desktop-current/child-wrapper-failure-\(session).log")
+            try? FileManager.default.createDirectory(at: evidence.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let diagnostic = "\(error)\nRuntime: \(runtime)\nGuest log existed at failure: \(markerExists)\nExit: \(result?.code.description ?? "unknown")\n\(guestLog)"
+            try? Data(diagnostic.utf8).write(to: evidence)
+            throw BallError("Generated child-wrapper checkpoint failed; evidence: \(evidence.path)\n\(diagnostic)")
+        }
     }
 }

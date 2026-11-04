@@ -1,5 +1,19 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 add_test(NAME source_boundaries COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/architecture/check_boundaries.py")
+if(UNIX)
+    add_executable(twoine_desktop_group_tests hal/test_desktop_group.c
+        ../hal/common/desktop_group.c ../hal/posix/desktop_lease.c)
+    target_include_directories(twoine_desktop_group_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_features(twoine_desktop_group_tests PRIVATE c_std_99)
+    add_test(NAME desktop_group COMMAND twoine_desktop_group_tests)
+    set_tests_properties(desktop_group PROPERTIES TIMEOUT 15)
+    add_executable(twoine_desktop_cycle_tests hal/test_desktop_cycle.c
+        ../hal/common/desktop_cycle.c ../hal/posix/desktop_cycle.c ../hal/posix/desktop_lease.c)
+    target_include_directories(twoine_desktop_cycle_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    target_compile_features(twoine_desktop_cycle_tests PRIVATE c_std_99)
+    add_test(NAME desktop_cycle COMMAND twoine_desktop_cycle_tests)
+    set_tests_properties(desktop_cycle PROPERTIES TIMEOUT 15)
+endif()
 if(TARGET opengl)
     add_executable(twoine_opengl_tests hal/test_opengl.c)
     twoine_application_target(twoine_opengl_tests)

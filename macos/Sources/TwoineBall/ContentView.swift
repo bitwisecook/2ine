@@ -6,19 +6,9 @@ import AppKit
 
 struct ContentView: View {
     @Bindable var model: AppModel
-    @AppStorage("lastPage") private var lastPage = Page.drives.rawValue
     var body: some View {
         NavigationSplitView { sidebar } detail: { detail }
         .frame(minWidth: 880, minHeight: 590)
-        .onAppear {
-            switch lastPage {
-            case "Configuration": model.page = .settings
-            case "Activity": model.page = .activity
-            case "Installation": model.page = .installation
-            default: model.page = Page(rawValue: lastPage) ?? .drives
-            }
-        }
-        .onChange(of: model.page) { _, page in lastPage = page.rawValue }
         .dropDestination(for: URL.self) { urls, _ in
             guard !model.busy, !model.mediaBusy, let url = urls.first,
                   ["2ineball", "zip"].contains(url.pathExtension.lowercased()) || url.hasDirectoryPath else { return false }
@@ -127,14 +117,23 @@ struct ContentView: View {
     @ViewBuilder private var detail: some View {
         if let snapshot = model.snapshot {
             VStack(spacing: 0) {
-                ViewThatFits(in: .horizontal) {
-                    Picker("Ball section", selection: $model.page) {
-                        ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
-                    }.labelsHidden().pickerStyle(.segmented).fixedSize()
-                    Picker("Ball section", selection: $model.page) {
-                        ForEach(Page.allCases) { Text($0.rawValue).tag($0) }
-                    }.labelsHidden().pickerStyle(.menu)
-                }.padding()
+                BallNavigation(page: $model.page).padding()
+                if let pending = model.pendingLaunch {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(pending.ready ? "Ready to continue \(pending.title)" : pending.needsComponents ? "\(pending.title) is waiting for OS/2 components." : "Review the configuration for \(pending.title).").font(.headline)
+                        Text(pending.reason).foregroundStyle(.secondary).textSelection(.enabled)
+                        HStack {
+                            if pending.needsComponents {
+                                Button("Show CMD + REXX") { model.showOS2ComponentGroup(.cmd) }
+                            } else {
+                                Button("Review Program Options") { model.page = .installation }
+                            }
+                            Button(pending.ready ? "Continue" : "Retry Launch") { model.continuePendingLaunch(ball: pending.ball) }
+                                .disabled(model.busy || model.mediaBusy || model.componentOperationRunning || model.processRunning)
+                            Button("Cancel Pending Launch") { model.cancelPendingLaunch(ball: pending.ball) }
+                        }
+                    }.padding(.horizontal).padding(.bottom, 10)
+                }
                 ForEach(model.componentJobs.values.filter(\.running).sorted { $0.ball < $1.ball }) { job in
                     HStack {
                         ProgressView().controlSize(.small)
@@ -167,6 +166,7 @@ struct ContentView: View {
                     }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(minWidth: 640)
             .navigationTitle(model.title)
             .navigationSubtitle(model.runtimeDescription)
         } else {
@@ -181,6 +181,33 @@ struct ContentView: View {
         }
     }
 
+}
+
+struct BallNavigation: NSViewRepresentable {
+    @Binding var page: Page
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let control = NSSegmentedControl(labels: Page.allCases.map(\.rawValue), trackingMode: .selectOne,
+                                         target: context.coordinator, action: #selector(Coordinator.choose(_:)))
+        control.segmentDistribution = .fit
+        control.setAccessibilityLabel("Ball Navigation")
+        control.setAccessibilityIdentifier("ballNavigationTabs")
+        control.selectedSegment = Page.allCases.firstIndex(of: page) ?? 0
+        return control
+    }
+    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        context.coordinator.parent = self
+        control.selectedSegment = Page.allCases.firstIndex(of: page) ?? 0
+        control.isEnabled = context.environment.isEnabled
+    }
+    @MainActor final class Coordinator: NSObject {
+        var parent: BallNavigation
+        init(_ parent: BallNavigation) { self.parent = parent }
+        @objc func choose(_ sender: NSSegmentedControl) {
+            guard Page.allCases.indices.contains(sender.selectedSegment) else { return }
+            parent.page = Page.allCases[sender.selectedSegment]
+        }
+    }
 }
 
 struct ApplicationRow: Identifiable {
@@ -220,6 +247,7 @@ struct ApplicationsView: View {
                 }.help("Icons first by default; click a column to choose another order.")
                 Button("Add Application…", systemImage: "plus") { model.beginProgram(.save) }
             }.disabled(model.busy || model.mediaBusy)
+            DependencyAdviceView(model: model, audit: snapshot.dependencyAudit)
             Table(rows, selection: $selection, sortOrder: $sortOrder, columnCustomization: $columns) {
                 TableColumn("Application", value: \.name) { row in
                     HStack {

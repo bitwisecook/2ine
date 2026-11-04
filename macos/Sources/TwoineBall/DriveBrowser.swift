@@ -18,6 +18,7 @@ struct GuestBrowserView: View {
     @State private var address = "C:"
     @State private var locations: [String: String] = [:]
     @State private var listing: GuestDirectory?
+    @State private var tree = GuestBrowserTree()
     @State private var selection: String?
     @State private var loading = false
     @State private var error: String?
@@ -30,12 +31,13 @@ struct GuestBrowserView: View {
     private var readOnly: Bool { snapshot.manifest.drives[drive]?.isReadOnly == true }
     private var ejected: Bool { removable && (imageSource == nil || snapshot.unavailableDrives?[drive] != nil) }
     private var imageSource: String? { model.imageSource(drive) }
-    private var selectedEntry: GuestEntry? { entries.first { $0.path == selection } }
+    private var selectedEntry: GuestEntry? { tree.entry(selection, roots: listing?.entries ?? []) }
     private var chosenPath: String? { directoriesOnly ? (selectedEntry?.directory == true ? selection : listing?.path) : (selectedEntry?.directory == false ? selection : nil) }
-    private var entries: [GuestEntry] {
-        BrowserRows.filteredGuestEntries(listing?.entries ?? [], directoriesOnly: directoriesOnly,
-                                         programsOnly: programsOnly, relevantOnly: relevantOnly, query: query)
+    private var browserNodes: [OutlineBrowserNode] {
+        tree.nodes(listing?.entries ?? [], directoriesOnly: directoriesOnly,
+                   programsOnly: programsOnly, relevantOnly: relevantOnly)
     }
+    private func entry(_ path: String?) -> GuestEntry? { tree.entry(path, roots: listing?.entries ?? []) }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -57,27 +59,32 @@ struct GuestBrowserView: View {
                     .help(directoriesOnly ? "Show folders only. Turn off to show all files." : "Show executable and command files. Turn off to show all files.")
                     .onChange(of: relevantOnly) { _, _ in selection = nil }
             }
-            NativeOutlineBrowser(nodes: BrowserRows.guest(entries), columns: BrowserRows.fileColumns,
+            NativeOutlineBrowser(nodes: browserNodes, columns: BrowserRows.fileColumns,
                                  selection: $selection, query: $query, searchFocused: $searchFocused,
                                  sort: $browserSort, disabled: loading,
                                  identifier: "guestFilesTable", accessibilityLabel: "Files on drive " + drive,
                                  onAction: { id, action in
-                                     guard let entry = entries.first(where: { $0.path == id }) else { return }
+                                     guard let entry = entry(id) else { return }
                                      if action == "open" { navigate(entry.path) }
                                      if action == "reveal" { model.reveal(imageSource ?? entry.hostPath) }
                                  }, onActivate: { id in
-                                     guard let entry = entries.first(where: { $0.path == id }) else { return }
+                                     guard let entry = entry(id) else { return }
                                      if entry.directory { navigate(entry.path) } else if !directoriesOnly { choose?(entry.path) }
+                                 }, onActivateBranch: { id in
+                                     if let entry = entry(id), entry.directory { navigate(entry.path) }
+                                 }, onExpand: { id in
+                                     guard let ball = model.selected, entry(id)?.directory == true else { return }
+                                     tree.expand(id) { path in try await model.browse(path, ball: ball) }
                                  }, contextActions: { id in
-                                     guard let entry = entries.first(where: { $0.path == id }) else { return [] }
+                                     guard let entry = entry(id) else { return [] }
                                      return (entry.directory ? [OutlineMenuAction(id: "open", title: "Open Folder")] : []) +
                                          [OutlineMenuAction(id: "reveal", title: removable ? "Show Image in Finder" : "Show in Finder")]
                                  }, dragURL: { id in
-                                     guard !removable, let entry = entries.first(where: { $0.path == id }) else { return nil }
+                                     guard !removable, let entry = entry(id) else { return nil }
                                      return URL(filePath: entry.hostPath)
                                  }, canDrop: { id in
                                      guard allowsImport, !readOnly, !ejected, !loading, !model.busy, !model.mediaBusy else { return false }
-                                     return id == nil ? listing != nil : entries.first(where: { $0.path == id })?.directory == true
+                                     return id == nil ? listing != nil : entry(id)?.directory == true
                                  }, onDrop: { urls, id in
                                      guard allowsImport, !readOnly, !ejected, let target = id ?? listing?.path else { return false }
                                      return model.importFiles(urls, into: target)
@@ -90,13 +97,13 @@ struct GuestBrowserView: View {
                     } description: { Text("Attach an image using the drive menus in the title bar.") }
                       actions: { Button("Attach Image…") { model.chooseMedia(drive) }.disabled(!model.canChangeMedia) }
                 }
-                else if entries.isEmpty {
+                else if browserNodes.compactMap({ $0.filtered(query) }).isEmpty {
                     ContentUnavailableView("Empty Folder", systemImage: "folder", description: Text(allowsImport && !readOnly && !ejected ? "Drop files or folders here to copy them into this drive." : "This folder has no matching items."))
                         .allowsHitTesting(false)
                 }
             }
             .overlay { if targeted && allowsImport && !readOnly && !ejected { RoundedRectangle(cornerRadius: 6).stroke(.tint, lineWidth: 3).allowsHitTesting(false) } }
-            if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("guestBrowserError") }
+            if let error = error ?? tree.errors.keys.sorted().first.flatMap({ tree.errors[$0] }) { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("guestBrowserError") }
             HStack {
                 Text(listing?.path ?? path).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 if allowsImport && !readOnly && !ejected {
@@ -115,13 +122,14 @@ struct GuestBrowserView: View {
         .focusedSceneValue(\.ballViewActions, allowsImport ? browserActions : nil)
         .onChange(of: query) { _, _ in selection = nil }
         .onAppear { navigate(initialPath) }
+        .onDisappear { tree.reset() }
         .onChange(of: drive) { _, letter in
             guard !path.hasPrefix(letter + ":") else { return }
             navigate(locations[letter] ?? snapshot.workingDirectories[letter] ?? letter + ":\\")
         }
         .task(id: "\(model.selected ?? "")|\(path)|\(model.revision)") {
             guard let ball = model.selected else { return }
-            loading = true; error = nil
+            loading = true; error = nil; tree.reset()
             if ejected { listing = nil; loading = false; return }
             do {
                 let result = try await model.browse(path, ball: ball)

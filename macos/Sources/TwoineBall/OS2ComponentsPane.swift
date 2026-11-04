@@ -19,11 +19,16 @@ struct OS2ComponentsPane: View {
     @State private var loading = false
     @State private var notice = ""
     @State private var error: String?
-    private var blocked: Bool { loading || model.busy || model.mediaBusy }
+    private var blocked: Bool { loading || model.busy || model.mediaBusy || model.hasRunningSession(in: request.ball) }
+    private var adviceNavigation: Bool {
+        model.componentNavigation?.ball == request.ball && model.componentNavigation?.selectsComponent == false
+    }
     @State private var files: [OS2ExtractionPlan.File] = []
     @State private var availableCounts: [OS2ExtractionCategory: Int] = [:]
     @State private var installedCounts: [OS2ExtractionCategory: Int] = [:]
-    @State private var fileSelection: Set<String> = []
+    @State private var initialSelection: Set<String> = []
+    @State private var reconciler: ComponentReconciler?
+    private var fileSelection: Set<String> { reconciler?.desired ?? initialSelection }
     @State private var componentQuery = ""
     @State private var componentSearchFocused = false
     @State private var requiredBy: [OS2ExtractionCategory: [String]] = [:]
@@ -32,16 +37,8 @@ struct OS2ComponentsPane: View {
     @State private var componentState: OS2ComponentState?
     @State private var planToken = UUID()
     private var job: ComponentJob? { model.componentJobs[request.ball] }
-    private var selectedFiles: [OS2ExtractionPlan.File] {
-        guard let plan else { return [] }
-        return plan.tree == nil ? plan.selectedFiles(categories) : plan.files.filter { fileSelection.contains($0.source) && !$0.provided }
-    }
-    private var removableFiles: [OS2ExtractionPlan.File] {
-        let managed = Set((componentState?.files ?? []).filter { $0.present && $0.managed && $0.status == "managed" }.compactMap(\.selectedSource))
-        return selectedFiles.filter { managed.contains($0.source) }
-    }
     private var fileStates: [String: OS2ComponentState.File] {
-        Dictionary((componentState?.files ?? []).compactMap { file in file.selectedSource.map { ($0, file) } },
+        Dictionary((reconciler?.state?.files ?? componentState?.files ?? []).compactMap { file in file.selectedSource.map { ($0, file) } },
                    uniquingKeysWith: { previous, newest in
                        let severity = ["missing": 0, "managed": 1, "unowned": 2, "modified": 3, "protected": 4]
                        return (severity[newest.status] ?? 5) > (severity[previous.status] ?? 5) ? newest : previous
@@ -49,7 +46,7 @@ struct OS2ComponentsPane: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("OS/2 System Components").font(.title2.bold())
+            Text("OS/2 Components").font(.title2.bold())
             if browsing {
                 HSplitView {
                     sourceBrowser.frame(minWidth: 260, idealWidth: 320)
@@ -72,16 +69,10 @@ struct OS2ComponentsPane: View {
                 if let error = job.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
                 if let error = job.progressError { Text(error).foregroundStyle(.secondary).textSelection(.enabled) }
             }
-            HStack {
-                if loading { ProgressView().controlSize(.small); Text("Reading media…").foregroundStyle(.secondary) }
-                Spacer()
-                Button("Remove Selected") { remove() }
-                    .disabled(blocked || job?.running == true || model.processRunning || removableFiles.isEmpty)
-                Button("Install Selected") { extract() }
-                    .disabled(blocked || job?.running == true || model.processRunning || selectedFiles.isEmpty)
-                    .accessibilityIdentifier("extractOS2Support")
-            }
-            Text("Changes run in the background. Existing or modified files are kept; removal uses the component installation record.")
+            if let message = reconciler?.error { Text(message).foregroundStyle(.red).textSelection(.enabled) }
+            if let message = reconciler?.notice { Text(message).foregroundStyle(.secondary).textSelection(.enabled) }
+            if loading { HStack { ProgressView().controlSize(.small); Text("Reading media…").foregroundStyle(.secondary) } }
+            Text("Tick to install; untick to remove. Changes run in the background. Existing, modified and protected files are kept.")
                 .font(.caption).foregroundStyle(.secondary)
         }.padding(20)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -94,6 +85,7 @@ struct OS2ComponentsPane: View {
                     model.componentDrafts[request.ball] = ComponentDraft(sources: extractionSources, selection: fileSelection)
                 }
             }
+            .onChange(of: reconciler?.desired) { _, _ in refreshTreeSelection() }
             .onChange(of: model.componentNavigation) { _, _ in applyNavigation() }
     }
     private var sourceBrowser: some View {
@@ -110,7 +102,7 @@ struct OS2ComponentsPane: View {
                         }
                     }
                 }
-            }.disabled(blocked || job?.running == true)
+            }.disabled(blocked || reconciler?.reconciling == true || job?.running == true)
             if let listing {
                 HStack {
                     Button("Up", systemImage: "arrow.up") { if let parent = listing.parent { navigate(parent) } }
@@ -134,8 +126,8 @@ struct OS2ComponentsPane: View {
                                          return [OutlineMenuAction(id: "open", title: "Open")]
                                      })
                 Toggle("Use only the current folder or selected item", isOn: $useCurrentFolder)
-                    .disabled(blocked || job?.running == true)
-                Button("Use This Location") { prepare() }.disabled(blocked || job?.running == true)
+                    .disabled(blocked || reconciler?.reconciling == true || job?.running == true)
+                Button("Use This Location") { prepare() }.disabled(blocked || reconciler?.reconciling == true || job?.running == true)
             } else {
                 ContentUnavailableView("Opening OS/2 Media", systemImage: "opticaldisc")
             }
@@ -156,31 +148,33 @@ struct OS2ComponentsPane: View {
                 }
                 Spacer()
                 Button(sources.isEmpty ? "Choose ISO…" : "Change…") { chooseMedia() }
-                    .accessibilityIdentifier("chooseSupportMedia").disabled(blocked || job?.running == true)
+                    .accessibilityIdentifier("chooseSupportMedia").disabled(blocked || reconciler?.reconciling == true || job?.running == true)
                 if listing != nil {
                     Button(browsing ? "Hide Media Browser" : "Browse Media…") { browsing.toggle() }.disabled(blocked)
                 }
             }
-            Text("Select a component, expand it to choose individual files, or search. Installed components are already ticked; existing files are kept.")
+            Text("Tick components to install them, or untick to remove their managed files. Expand folders to choose individual files. Changes apply immediately.")
                 .foregroundStyle(.secondary)
             if let tree = plan?.tree {
                 BrowserSearchField(text: $componentQuery, focused: $componentSearchFocused,
                                    placeholder: "Search Components and Files", identifier: "componentSearch")
                     .frame(height: 32)
-                OS2ComponentTree(root: tree, selection: $fileSelection, query: $componentQuery,
+                OS2ComponentTree(root: tree, selection: .constant(fileSelection), query: $componentQuery,
                                  searchFocused: $componentSearchFocused, disabled: blocked,
                                  toggle: { node, enabled in
-                                     guard job?.running != true, let plan else { return }
-                                     fileSelection = plan.selecting(node, in: fileSelection, enabled: enabled)
+                                     guard let plan else { return }
+                                     reconciler?.setDesired(plan.selecting(node, in: fileSelection, enabled: enabled))
                                      refreshTreeSelection()
                                  }, openSetting: { token in
                                      model.openComponentSetting(token)
                                  }, focusRequest: model.componentNavigation.flatMap { $0.ball == request.ball ? OutlineFocusRequest(id: $0.id, row: $0.category.rawValue) : nil },
-                                 activePaths: Set(job?.activePaths.map { $0.uppercased() } ?? []), fileStates: fileStates, mutating: job?.running == true)
+                                 activePaths: Set(job?.activePaths.map { $0.uppercased() } ?? []), fileStates: fileStates,
+                                 activeSources: job?.activeSources ?? [], queuedSources: reconciler?.pendingSources ?? [])
                 HStack {
-                    Text("\(fileSelection.count) selected · \(files.count) files to add")
+                    let pendingCount = reconciler?.pendingSources.count ?? files.count
+                    Text("\(fileSelection.count) ticked · \(pendingCount) \(pendingCount == 1 ? "change" : "changes") pending")
                     Spacer()
-                    Text("Installed files are kept.")
+                    Text("Only managed files can be removed.")
                 }.font(.caption).foregroundStyle(.secondary)
                 if !requiredBy.isEmpty {
                     DisclosureGroup("Recommended for Installed Applications") {
@@ -204,6 +198,10 @@ struct OS2ComponentsPane: View {
                     Toggle(isOn: Binding(get: { categories.contains(category) || categories.contains(.full) }, set: { enabled in
                         if enabled { categories.insert(category) } else { categories.remove(category) }
                         refreshSelection()
+                        if let plan {
+                            let selected = Set(plan.files.filter { !$0.provided && (categories.contains(.full) || categories.contains($0.category)) }.map(\.source))
+                            reconciler?.setDesired(selected)
+                        }
                     })) {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
@@ -226,7 +224,7 @@ struct OS2ComponentsPane: View {
                 }
                 Divider()
                 if plan != nil && files.isEmpty {
-                    Text("The selected files are already installed. Install will repair their search paths and component configuration.").foregroundStyle(.secondary)
+                    Text("The ticked files are installed.").foregroundStyle(.secondary)
                 }
                 DisclosureGroup("Files to Install (\(files.count))") {
                     LazyVStack(alignment: .leading, spacing: 4) {
@@ -292,15 +290,14 @@ struct OS2ComponentsPane: View {
         }
         categories.formUnion(value.installedCategories)
         refreshSelection()
-        if value.tree != nil {
-            let installed = Set(value.files.filter { $0.present && !$0.provided }.map(\.source))
-            let draft = model.componentDrafts[request.ball]
-            let initial = draft?.sources == extractionSources ? draft?.selection ?? [] : value.sourceSelection(categories).union(installed)
-            fileSelection = initial
-                .intersection(value.tree?.eligibleSources ?? [])
-            refreshTreeSelection()
-            applyNavigation()
-        }
+        let installed = Set(value.files.filter { $0.present && !$0.provided }.map(\.source))
+        let draft = model.componentDrafts[request.ball]
+        let defaults = value.tree != nil ? value.sourceSelection(request.categories) : Set(value.files.filter { !$0.provided && (request.categories.contains(.full) || request.categories.contains($0.category)) }.map(\.source))
+        initialSelection = draft?.sources == extractionSources ? draft?.selection ?? [] : adviceNavigation ? installed : defaults.union(installed)
+        reconciler = model.componentReconciler(ball: request.ball, plan: value, sources: extractionSources, selection: initialSelection, explicitIntent: draft?.sources == extractionSources)
+        reconciler?.start()
+        refreshTreeSelection()
+        applyNavigation()
     }
     private func refreshTreeSelection() {
         guard let plan else { return }
@@ -309,9 +306,10 @@ struct OS2ComponentsPane: View {
     }
     private func applyNavigation() {
         guard let navigation = model.componentNavigation, navigation.ball == request.ball,
-              let plan, plan.tree?.find(navigation.category.rawValue) != nil else { return }
+              let plan, let node = plan.tree?.find(navigation.category.rawValue) else { return }
         componentQuery = ""
-        fileSelection = model.componentSelection(in: plan, preserving: fileSelection, ball: request.ball)
+        let selection = model.componentSelection(in: plan, preserving: fileSelection, ball: request.ball)
+        if navigation.selectsComponent && !node.eligibleSources.isEmpty { reconciler?.setDesired(selection) }
         refreshTreeSelection()
     }
     private func loadInitial() async {
@@ -385,23 +383,18 @@ struct OS2ComponentsPane: View {
     private func chooseMedia(directory: Bool = false) {
         Task { if let paths = await model.pickOS2Media(directory: directory) { await loadSources(paths) } }
     }
-    private func extract() {
-        guard let plan else { return }
-        model.startComponentOperation(ball: request.ball, kind: "install", sources: extractionSources,
-                                      files: selectedFiles, configure: plan.configuredComponents(for: fileSelection))
-    }
-    private func remove() {
-        model.startComponentOperation(ball: request.ball, kind: "remove", sources: extractionSources, files: removableFiles)
-    }
     private func observeFiles() async {
         guard let plan else { return }
         let selection = plan.files.filter { !$0.provided }.map { OS2ComponentSelection(source: $0.source, path: $0.path) }
         while !Task.isCancelled {
             do {
+                let revision = reconciler?.observationRevision
                 let state = try await model.componentState(ball: request.ball, selection: selection)
                 guard !Task.isCancelled else { return }
+                guard revision == reconciler?.observationRevision else { continue }
                 if componentState != state {
                     componentState = state
+                    reconciler?.observe(state, expectedRevision: revision)
                     if let current = self.plan {
                         self.plan = current.updatingSourcePresence(Set(state.files.filter(\.present).compactMap(\.selectedSource)))
                         model.componentPlans[request.ball] = self.plan

@@ -47,14 +47,46 @@ def main():
         app.activate()
         window = app.get_active_window()
         pump(lambda: not window.busy and window.ball == ball)
-        assert window.stack.get_visible_child_name() == "drives"
+        assert window.stack.get_visible_child_name() == "components"
+        window.show_page("drives")
         browser = window.drives_page.browser
         browser.load(r"C:\TEMP")
         pump(lambda: browser.directory is not None and browser.directory["path"] == r"C:\TEMP")
         assert any(entry["name"] == "APP.EXE" for entry in browser.directory["entries"])
+        nested = ball / "drive_c/TEMP/Nested"
+        nested.mkdir()
+        (nested / "DEEP.EXE").write_bytes(executable.read_bytes())
+        browser.load(r"C:\TEMP")
+        pump(lambda: any(entry["name"] == "Nested" for entry in browser.directory["entries"]))
+        folder_row = next(
+            browser.files.model.get_item(i)
+            for i in range(browser.files.model.get_n_items())
+            if browser.files.model.get_item(i).get_item().data["name"] == "Nested"
+        )
+        folder_row.set_expanded(True)
+        pump(
+            lambda: any(
+                browser.files.model.get_item(i).get_item().data["name"] == "DEEP.EXE"
+                for i in range(browser.files.model.get_n_items())
+            )
+        )
+        assert browser.directory["path"] == r"C:\TEMP", (
+            "Disclosure must not navigate away from the parent"
+        )
+
         browser.set_default()
         pump(lambda: not window.busy)
         assert ball_api.load(ball)["workingDirectories"]["C"] == r"C:\TEMP"
+
+        installer = window.program_dialog("install")
+        pump(lambda: installer.body.get_sensitive())
+        installer.program.set_candidates([r"D:\INSTALL.CMD", r"D:\ENGLISH\INSTALL.EXE"])
+        assert installer.program.get_text() == r"D:\INSTALL.CMD"
+        installer.program.entry.set_text(r"C:\TEMP\APP.EXE")
+        installer.program.set_candidates([r"E:\SETUP.EXE"])
+        assert installer.program.get_text() == r"C:\TEMP\APP.EXE"
+        installer.close()
+        pump(lambda: window.get_visible_dialog() is None)
 
         dialog = window.program_dialog("add-app")
         pump(lambda: dialog.body.get_sensitive())

@@ -52,7 +52,7 @@ static LxHostChild *spawnRexxService(void)
     size_t count = 0;
     while (host[count])
         count++;
-    char **environment = calloc(count + 1, sizeof *environment);
+    char **environment = calloc(count + 2, sizeof *environment);
     if (!environment)
     {
         free(executable);
@@ -60,8 +60,10 @@ static LxHostChild *spawnRexxService(void)
     }
     size_t output = 0;
     for (size_t i = 0; i < count; i++)
-        if (strncmp(host[i], "IS_2INE=", 8) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23))
+        if (strncmp(host[i], "IS_2INE=", 8) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
+            strncmp(host[i], "TWOINE_DESKTOP_AUXILIARY=", 25))
             environment[output++] = host[i];
+    environment[output++] = "TWOINE_DESKTOP_AUXILIARY=1";
     char *arguments[] = {executable, "--rexx-service", NULL};
     LxHostChild *child = lx_host_child_spawn_service(executable, arguments, environment);
     free(environment);

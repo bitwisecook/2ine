@@ -34,6 +34,10 @@ struct ProgramSheet: View {
     @State private var mediaLetter = "D"
     @State private var mediaKind = MediaDeviceKind.cdrom
     @State private var candidates: [String] = []
+    @State private var previousSuggestion: String?
+    @State private var discoveryTask: Task<Void, Never>?
+    @State private var discoveryID = UUID()
+    @State private var attachingMedia = false
     @State private var discovering = false
     @State private var mediaNotice = ""
     private var mediaLetters: [String] {
@@ -47,6 +51,9 @@ struct ProgramSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(embedded ? "Application Installation" : model.editingApplication == nil ? action.rawValue : "Edit Application").font(.title2.bold())
             if let snapshot = model.snapshot {
+                if embedded && action == .install {
+                    DependencyAdviceView(model: model, audit: snapshot.dependencyAudit)
+                }
                 VStack(spacing: 12) {
                     Picker("Program Options", selection: $panel) {
                         ForEach(Panel.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -61,36 +68,40 @@ struct ProgramSheet: View {
                         case .general:
                             Form {
                                 if action == .install {
-                                    Section("Installation Media") {
+                                    Section("Installer") {
                                         HStack {
-                                            Picker("Device", selection: $mediaKind) {
+                                            Picker("Device", selection: Binding(get: { mediaKind }, set: {
+                                                mediaKind = $0; selectMediaLetter(); discoverInstallers(reset: true)
+                                            })) {
                                                 Text("CD").tag(MediaDeviceKind.cdrom)
                                                 Text("Floppy").tag(MediaDeviceKind.floppy)
-                                            }.frame(width: 150)
-                                            Picker("Drive", selection: $mediaLetter) {
+                                            }.frame(width: 150).disabled(attachingMedia)
+                                            Picker("Drive", selection: Binding(get: { mediaLetter }, set: {
+                                                mediaLetter = $0; discoverInstallers(reset: true)
+                                            })) {
                                                 ForEach(mediaLetters, id: \.self) { Text($0 + ":").tag($0) }
-                                            }.frame(width: 130)
-                                            Button("Attach Image…") { chooseInstallerMedia() }.disabled(discovering || mediaLetters.isEmpty || snapshot.manifest.drives[mediaLetter]?.isLocked == true)
+                                            }.frame(width: 130).disabled(attachingMedia)
+                                            Button(snapshot.manifest.drives[mediaLetter]?.image == nil ? "Attach Image…" : "Change Image…") { chooseInstallerMedia() }
+                                                .disabled(attachingMedia || mediaLetters.isEmpty || snapshot.manifest.drives[mediaLetter]?.isLocked == true || !model.canChangeMedia)
+                                            if snapshot.manifest.drives[mediaLetter]?.image != nil {
+                                                Button("Eject Image", systemImage: "eject") { ejectInstallerMedia() }
+                                                    .labelStyle(.iconOnly).help("Eject \(mediaLetter):")
+                                                    .accessibilityIdentifier("ejectInstallerMedia")
+                                                    .disabled(attachingMedia || snapshot.manifest.drives[mediaLetter]?.isLocked == true || !model.canChangeMedia)
+                                            }
                                         }
                                         Text(model.snapshot?.manifest.drives[mediaLetter]?.image.map { URL(filePath: $0).lastPathComponent } ?? "No image attached").foregroundStyle(.secondary)
                                         if discovering { ProgressView("Looking for installers…") }
                                         if !mediaNotice.isEmpty { Text(mediaNotice).font(.callout).foregroundStyle(.secondary) }
-                                        if !candidates.isEmpty {
-                                            Menu("Suggested Installers") {
-                                                ForEach(candidates, id: \.self) { path in Button(path) { program = path } }
-                                            }
-                                        }
+                                        programRow
+                                        argumentRow
                                     }
                                 }
                                 if action == .save { TextField("Application name", text: $name).accessibilityIdentifier("applicationName") }
-                                LabeledContent("Program") {
-                                    HStack {
-                                        TextField("OS/2 program or command file", text: $program, prompt: Text("C:\\OS2\\APP.EXE"))
-                                            .labelsHidden().accessibilityIdentifier("programPath").frame(minWidth: 240)
-                                        Button("Browse Drives…") { executablePicker = true }.accessibilityIdentifier("browseExecutable")
-                                    }
+                                if action != .install {
+                                    programRow
+                                    argumentRow
                                 }
-                                TextField("Arguments", text: $arguments, prompt: Text("\"a value with spaces\" C:\\DATA\\FILE")).accessibilityIdentifier("programArguments")
                                 Text(action == .install ? "Quotes group arguments; backslashes remain literal. Installers start in their own folder. Use the other tabs to set overrides." : "Quotes group arguments; backslashes remain literal. Working directories and environment inherit from the ball unless overridden below.")
                                     .font(.callout).foregroundStyle(.secondary)
                                 if action == .save {
@@ -168,40 +179,95 @@ struct ProgramSheet: View {
                 if app.icon != nil { iconDescription = "Custom icon saved in the ball." }
             }
             if action == .install {
+                if let pending = model.pendingLaunch, pending.arguments.first == "install" {
+                    program = pending.title
+                    arguments = (try? Arguments.format(Array(pending.arguments.dropFirst(2)))) ?? ""
+                    directories = pending.directories ?? [:]; environment = pending.environment ?? [:]
+                    if let letter = pending.mediaDrive {
+                        mediaLetter = letter; mediaKind = model.snapshot?.manifest.drives[letter]?.device ?? .cdrom
+                    }
+                }
                 selectMediaLetter()
-                if model.snapshot?.manifest.drives[mediaLetter]?.image != nil { discoverInstallers() }
+                if model.snapshot?.manifest.drives[mediaLetter]?.image != nil { discoverInstallers(reset: program.isEmpty) }
             }
             refreshIcon()
         }
-        .onChange(of: mediaKind) { _, _ in selectMediaLetter(); candidates = []; mediaNotice = "" }
-        .onChange(of: mediaLetter) { _, _ in if action == .install { candidates = []; discoverInstallers() } }
+        .onChange(of: model.snapshot?.manifest.drives[mediaLetter]?.image) { _, _ in
+            if action == .install, !attachingMedia { discoverInstallers(reset: true) }
+        }
         .onChange(of: program) { _, _ in refreshIcon() }
+        .onDisappear { discoveryID = UUID(); discoveryTask?.cancel() }
+    }
+    private var programRow: some View {
+        LabeledContent(action == .install ? "Installer" : "Program") {
+            HStack {
+                if action == .install {
+                    InstallerProgramPicker(program: $program, suggestions: candidates).frame(minWidth: 240)
+                } else {
+                    TextField("OS/2 program or command file", text: $program, prompt: Text("C:\\OS2\\APP.EXE"))
+                        .labelsHidden().accessibilityIdentifier("programPath").frame(minWidth: 240)
+                }
+                Button("Browse…") { executablePicker = true }.accessibilityIdentifier("browseExecutable")
+            }
+        }
+    }
+    private var argumentRow: some View {
+        TextField("Arguments", text: $arguments, prompt: Text("\"a value with spaces\" C:\\DATA\\FILE")).accessibilityIdentifier("programArguments")
     }
     private func selectMediaLetter() {
         if !mediaLetters.contains(mediaLetter) { mediaLetter = mediaLetters.first ?? "D" }
     }
     private func chooseInstallerMedia() {
         guard let url = AppModel.pick(directory: false, title: "Choose Installation \(mediaKind.title) Image") else { return }
-        discovering = true; error = nil
+        discoveryID = UUID(); discoveryTask?.cancel()
+        program = ""; previousSuggestion = nil
+        attachingMedia = true; discovering = true; error = nil
         Task {
-            defer { discovering = false }
-            do { setSuggestions(try await model.attachInstallerMedia(url, kind: mediaKind, letter: mediaLetter)) }
+            defer { attachingMedia = false; discovering = false }
+            do { setSuggestions(try await model.attachInstallerMedia(url, kind: mediaKind, letter: mediaLetter), reset: false) }
             catch { self.error = error.localizedDescription }
         }
     }
-    private func discoverInstallers() {
-        guard !discovering, model.snapshot?.manifest.drives[mediaLetter]?.image != nil else { return }
+    private func ejectInstallerMedia() {
+        discoveryID = UUID(); discoveryTask?.cancel()
+        attachingMedia = true
+        Task {
+            defer { attachingMedia = false; discovering = false }
+            do {
+                try await model.changeMedia(["eject", mediaLetter])
+                setSuggestions([], reset: program.uppercased().hasPrefix(mediaLetter.uppercased() + ":"))
+                mediaNotice = "Image ejected. Attach an image or browse another drive."
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+    private func discoverInstallers(reset: Bool) {
+        guard action == .install, !attachingMedia else { return }
+        discoveryTask?.cancel()
+        let token = UUID(); discoveryID = token
+        if reset { program = ""; previousSuggestion = nil }
+        guard model.snapshot?.manifest.drives[mediaLetter]?.image != nil else {
+            discovering = false
+            setSuggestions([], reset: reset && program.uppercased().hasPrefix(mediaLetter.uppercased() + ":"))
+            return
+        }
         discovering = true
-        Task {
-            defer { discovering = false }
-            do { setSuggestions(try await model.installerCandidates(letter: mediaLetter)) }
-            catch { self.error = error.localizedDescription }
+        let letter = mediaLetter, ball = model.selected
+        discoveryTask = Task {
+            defer { if discoveryID == token { discovering = false } }
+            do {
+                let paths = try await model.installerCandidates(letter: letter)
+                guard !Task.isCancelled, discoveryID == token, model.selected == ball else { return }
+                setSuggestions(paths, reset: false)
+            } catch {
+                if !Task.isCancelled, discoveryID == token { self.error = error.localizedDescription }
+            }
         }
     }
-    private func setSuggestions(_ paths: [String]) {
-        candidates = paths
-        program = paths.first ?? ""
-        mediaNotice = paths.isEmpty ? "Browse the image to choose its installer or command file." : "Suggested a likely installer. Browse Drives to choose any other file."
+    private func setSuggestions(_ paths: [String], reset: Bool) {
+        candidates = InstallerSuggestions.sorted(paths)
+        program = InstallerSuggestions.selectedProgram(current: program, previousSuggestion: previousSuggestion, suggestions: candidates, reset: reset)
+        previousSuggestion = candidates.first
+        mediaNotice = candidates.isEmpty ? "Browse to choose an installer or command file." : "The root installer is preferred. Choose another suggestion, enter a path or browse."
     }
     private func refreshIcon() {
         guard let ball = model.selected, !program.isEmpty else { return }

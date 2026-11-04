@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int lx_network_append(void **items, size_t *count, size_t size, const void *item)
+int lx_host_network_append(void **items, size_t *count, size_t size, const void *item)
 {
     if (*count >= SIZE_MAX / size - 1)
     {
@@ -28,7 +28,7 @@ int lx_network_append(void **items, size_t *count, size_t size, const void *item
     ++*count;
     return 0;
 }
-uint32_t lx_network_ipv4(const struct sockaddr *a)
+static uint32_t ipv4(const struct sockaddr *a)
 {
     return a && a->sa_family == AF_INET ? ((const struct sockaddr_in *)a)->sin_addr.s_addr : 0;
 }
@@ -45,8 +45,8 @@ static int interfaces(LxHostNetwork *out)
         LxHostNetworkInterface entry = {0};
         snprintf(entry.name, sizeof entry.name, "%s", p->ifa_name);
         entry.index = if_nametoindex(p->ifa_name);
-        entry.address = lx_network_ipv4(p->ifa_addr);
-        entry.netmask = lx_network_ipv4(p->ifa_netmask);
+        entry.address = ipv4(p->ifa_addr);
+        entry.netmask = ipv4(p->ifa_netmask);
 #define FLAG(host, guest)                                                                          \
     if (p->ifa_flags & host)                                                                       \
     entry.flags |= guest
@@ -58,9 +58,9 @@ static int interfaces(LxHostNetwork *out)
         FLAG(IFF_MULTICAST, LX_IFF_MULTICAST);
 #undef FLAG
         if (entry.flags & LX_IFF_BROADCAST)
-            entry.broadcast = lx_network_ipv4(p->ifa_broadaddr);
+            entry.broadcast = ipv4(p->ifa_broadaddr);
         if (entry.flags & LX_IFF_POINTOPOINT)
-            entry.destination = lx_network_ipv4(p->ifa_dstaddr);
+            entry.destination = ipv4(p->ifa_dstaddr);
         struct ifreq req = {0};
         snprintf(req.ifr_name, sizeof req.ifr_name, "%s", p->ifa_name);
         if (fd >= 0 && !ioctl(fd, SIOCGIFMTU, &req))
@@ -69,15 +69,14 @@ static int interfaces(LxHostNetwork *out)
         {
             if (!link->ifa_addr || strcmp(link->ifa_name, p->ifa_name))
                 continue;
-            if (!lx_network_mac(link, &entry))
+            if (!lx_host_network_platform_mac(link->ifa_addr, entry.flags, entry.mac))
                 continue;
-
             entry.mac_length = 6;
             entry.flags |= LX_IFF_ETHER;
             break;
         }
-        result = lx_network_append((void **)&out->interfaces, &out->interface_count, sizeof entry,
-                                   &entry);
+        result = lx_host_network_append((void **)&out->interfaces, &out->interface_count,
+                                        sizeof entry, &entry);
     }
     int saved = errno;
     if (fd >= 0)
@@ -86,8 +85,7 @@ static int interfaces(LxHostNetwork *out)
     errno = saved;
     return result;
 }
-
-int lx_network_string_append(char ***list, size_t *count, const char *value)
+int lx_host_network_string_append(char ***list, size_t *count, const char *value)
 {
     for (size_t i = 0; i < *count; i++)
         if (!strcmp((*list)[i], value))
@@ -95,7 +93,7 @@ int lx_network_string_append(char ***list, size_t *count, const char *value)
     char *copy = strdup(value);
     if (!copy)
         return -1;
-    if (lx_network_append((void **)list, count, sizeof copy, &copy))
+    if (lx_host_network_append((void **)list, count, sizeof copy, &copy))
     {
         free(copy);
         return -1;
@@ -124,7 +122,8 @@ int lx_host_network_snapshot(LxHostNetwork *out)
         return -1;
     }
     memset(out, 0, sizeof *out);
-    if (interfaces(out) || lx_network_routes(out) || lx_network_dns(&out->dns))
+    if (interfaces(out) || lx_host_network_platform_routes(out) ||
+        lx_host_network_platform_dns(&out->dns))
     {
         int saved = errno;
         lx_host_network_destroy(out);

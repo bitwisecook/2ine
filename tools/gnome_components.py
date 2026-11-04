@@ -5,11 +5,11 @@ from gi.repository import GLib
 
 if __package__:
     from .gnome_browser import Column, NativeBrowser
-    from .gnome_browser_model import CheckedTree
+    from .gnome_browser_model import CheckedTree, CheckState
     from .gnome_component_jobs import file_tooltip, state_label
 else:
     from gnome_browser import Column, NativeBrowser
-    from gnome_browser_model import CheckedTree
+    from gnome_browser_model import CheckedTree, CheckState
     from gnome_component_jobs import file_tooltip, state_label
 
 
@@ -17,6 +17,7 @@ class ComponentTree(NativeBrowser):
     def __init__(self, root, selected, *, changed, setting):
         self.root, self.changed, self.setting = root, changed, setting
         self.active_ids = set()
+        self.protected_sources = set()
         self.checks = CheckedTree(
             [root],
             selected,
@@ -74,12 +75,18 @@ class ComponentTree(NativeBrowser):
             ),
             muted=lambda data: data["id"] in self.checks.disabled,
             activity=lambda data: data["id"] in self.active_ids,
-            check=lambda data: self.checks.state(data["id"]),
+            check=self.check_state,
             toggled=self.toggle_node,
             tooltip=file_tooltip,
             height=280,
         )
         self.set_rows([root], expanded={root["id"]})
+
+    def check_state(self, node):
+        state = self.checks.state(node["id"])
+        if node.get("source") in self.protected_sources:
+            return CheckState(state.active, state.mixed, False, state.visible)
+        return state
 
     @staticmethod
     def provider_name(value):
@@ -122,6 +129,8 @@ class ComponentTree(NativeBrowser):
         self.changed()
 
     def focus_group(self, category):
+        self.search.set_text("")
+        self.refresh()
         self.focus(category)
 
     def select_group(self, category):

@@ -178,7 +178,7 @@ private func waitForOperation(_ model: AppModel) async throws {
     try await model.mapDrive("D", directory: media.path)
     let candidates = try await model.installerCandidates(letter: "D")
     #expect(candidates.contains("D:\\setup.cmd"))
-    #expect(candidates.first == "D:\\ENGLISH\\install.exe")
+    #expect(candidates.first == "D:\\setup.cmd")
     let listing = try await model.browse("D:\\", ball: try #require(model.selected))
     #expect(listing.entries.contains { $0.name == "unusual-tool.cmd" && !$0.directory })
 }
@@ -425,6 +425,12 @@ private func waitForOperation(_ model: AppModel) async throws {
     model.openOS2ComponentGroup(.printers)
     #expect(model.page == .systemComponents)
     #expect(model.componentNavigation?.category == .printers)
+    model.showOS2ComponentGroup(.opengl, selecting: false)
+    #expect(model.page == .systemComponents)
+    #expect(model.componentNavigation?.category == .opengl)
+    #expect(model.componentNavigation?.selectsComponent == false)
+    #expect(model.componentSelection(in: plan, preserving: [], ball: ball).isEmpty)
+    #expect(model.componentSelection(in: plan, preserving: ["existing"], ball: ball) == ["existing"])
 }
 
 @Test @MainActor func componentJobsLeaveNavigationFreeAndRemoveOnlyTheirRecordedFiles() async throws {

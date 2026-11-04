@@ -4,6 +4,7 @@
 #include "hal/video_frame.h"
 #include "hal/host_sync.h"
 #include "window_chrome.h"
+#include "desktop_session.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 static void (*GraphicsRelease)(void);
@@ -183,6 +184,24 @@ static void toggle_capture(void *opaque)
     LxHostWindow *window = opaque;
     lx_host_window_set_capture(window, !window->captured);
 }
+void lx_host_window_set_cycle_policy(LxHostWindow *window, int eligible, int modal)
+{
+    if (!window || !window->window)
+        return;
+    SDL_PropertiesID properties = SDL_GetWindowProperties(window->window);
+    SDL_SetBooleanProperty(properties, "2ine.cycle.eligible", eligible != 0);
+    SDL_SetBooleanProperty(properties, "2ine.cycle.modal", modal != 0);
+    lx_desktop_poll();
+}
+void lx_host_window_get_cycle_policy(LxHostWindow *window, int *eligible, int *modal)
+{
+    SDL_PropertiesID properties =
+        window && window->window ? SDL_GetWindowProperties(window->window) : 0;
+    if (eligible)
+        *eligible = properties && SDL_GetBooleanProperty(properties, "2ine.cycle.eligible", true);
+    if (modal)
+        *modal = properties && SDL_GetBooleanProperty(properties, "2ine.cycle.modal", false);
+}
 int lx_host_video_initialize(int *width, int *height)
 {
     lx_host_once(&VideoOnce, initializeVideoLock);
@@ -190,9 +209,12 @@ int lx_host_video_initialize(int *width, int *height)
     int result = 0;
     /* Popup-to-document focus changes must retain the dismissing click. */
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
+    lx_desktop_prepare();
     /* Every client owns one SDL subsystem reference, including PM worker threads. */
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO))
         goto done;
+    if (!lx_desktop_initialized())
+        goto failed;
     if (!WakeEvent)
     {
         WakeEvent = SDL_RegisterEvents(2);
@@ -298,6 +320,7 @@ void lx_host_window_destroy(LxHostWindow *window)
         lx_window_chrome_destroy(window->chrome);
         ControlledWindows--;
     }
+    lx_desktop_forget(window->window);
     SDL_DestroyTexture(window->video_texture);
     SDL_DestroyTexture(window->texture);
     SDL_DestroyRenderer(window->renderer);
@@ -391,6 +414,7 @@ void lx_host_window_show(LxHostWindow *window)
     if (!SDL_ShowWindow(window->window) || !SDL_SyncWindow(window->window) ||
         !activateWindowSurface(window))
         return;
+    lx_desktop_visible(window->window, 1);
     if (!window->startup_checked)
     {
         const char *fullscreen = getenv("TWOINE_FULLSCREEN");
@@ -402,7 +426,8 @@ void lx_host_window_show(LxHostWindow *window)
 void lx_host_window_hide(LxHostWindow *window)
 {
     prepareRenderer();
-    SDL_HideWindow(window->window);
+    if (SDL_HideWindow(window->window))
+        lx_desktop_visible(window->window, 0);
 }
 int lx_host_window_minimize(LxHostWindow *window, int minimized)
 {
@@ -880,14 +905,40 @@ int lx_host_window_line(LxHostWindow *window, const LxHostRect *clip, int x1, in
 int lx_host_video_wait_timeout(LxHostEvent *event, int milliseconds)
 {
     SDL_Event input;
-    if (!SDL_WaitEventTimeout(&input, milliseconds))
-        return 0;
-    event_from_sdl(&input, event);
-    return 1;
+    Uint64 started = SDL_GetTicks();
+    for (;;)
+    {
+        lx_desktop_poll();
+        int wait = milliseconds;
+        if (lx_desktop_grouped())
+        {
+            if (milliseconds >= 0)
+            {
+                Uint64 elapsed = SDL_GetTicks() - started;
+                wait = elapsed >= (Uint64)milliseconds ? 0 : milliseconds - (int)elapsed;
+            }
+            if (wait < 0 || wait > 100)
+                wait = 100;
+        }
+        SDL_ClearError();
+        if (SDL_WaitEventTimeout(&input, wait))
+        {
+            lx_desktop_poll();
+            event_from_sdl(&input, event);
+            return 1;
+        }
+        if (*SDL_GetError())
+            return 0;
+        lx_desktop_poll();
+        if (!lx_desktop_grouped() ||
+            (milliseconds >= 0 && SDL_GetTicks() - started >= (Uint64)milliseconds))
+            return 0;
+    }
 }
 int lx_host_video_poll(LxHostEvent *event)
 {
     SDL_Event input;
+    lx_desktop_poll();
     if (!SDL_PollEvent(&input))
         return 0;
     event_from_sdl(&input, event);
@@ -895,11 +946,7 @@ int lx_host_video_poll(LxHostEvent *event)
 }
 int lx_host_video_wait(LxHostEvent *event)
 {
-    SDL_Event input;
-    if (!SDL_WaitEvent(&input))
-        return 0;
-    event_from_sdl(&input, event);
-    return 1;
+    return lx_host_video_wait_timeout(event, -1);
 }
 int lx_host_video_push(const LxHostEvent *event)
 {

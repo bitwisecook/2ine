@@ -81,11 +81,14 @@ function(twoine_add_media target)
     target_compile_definitions(${target} PRIVATE TWOINE_FONT_DIRECTORY="${TWOINE_RUNTIME_FONT_DIR}")
     target_link_libraries(${target} PRIVATE SDL3::SDL3 twoine_freetype)
     if(APPLE)
-        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/macos/window_chrome.m" "${TWOINE_HAL_SOURCE_DIR}/macos/print_dialog.m")
+        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/macos/window_chrome.m" "${TWOINE_HAL_SOURCE_DIR}/macos/print_dialog.m"
+            "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_session.m" "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_lease.c"
+            "${TWOINE_HAL_SOURCE_DIR}/common/desktop_group.c"
+            "${TWOINE_HAL_SOURCE_DIR}/common/desktop_cycle.c" "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_cycle.c")
         target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:OBJC>:-fobjc-arc>")
-        target_link_libraries(${target} PRIVATE "-framework AppKit" "-framework UniformTypeIdentifiers")
+        target_link_libraries(${target} PRIVATE "-framework AppKit" "-framework UniformTypeIdentifiers" "-framework ImageIO")
     else()
-        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/sdl/window_chrome_none.c")
+        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/sdl/window_chrome_none.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_session_none.c")
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/linux/print_dialog.c")
         elseif(WIN32)

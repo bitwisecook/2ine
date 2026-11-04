@@ -31,6 +31,35 @@ def needs_dependency_media(report):
     )
 
 
+def dependency_advice(report):
+    """Describe unresolved libraries without treating third-party DLLs as OS/2 packages."""
+    report = report or {}
+    if report.get("stale"):
+        return [
+            "The library check is out of date. Check again to see which OS/2 components are missing."
+        ]
+    groups = report.get("componentGroups") or []
+    grouped = {name.upper() for group in groups for name in group.get("modules") or []}
+    missing = [name for name in report.get("missing", []) if name.upper() not in grouped]
+    lines = []
+    if groups:
+        lines.append(
+            "Missing OS/2 components — click a component to find it, then tick it to install:"
+        )
+    if missing:
+        lines.append("Other missing libraries: " + ", ".join(missing) + ".")
+        lines.append(
+            "Some may belong to optional features or require separate software. See the audit for details."
+        )
+    if (
+        not groups
+        and not missing
+        and any(item.get("status") == "missing" for item in report.get("componentFiles") or [])
+    ):
+        lines.append("OS/2 support files are missing. See the audit for details.")
+    return lines
+
+
 def native_request(message):
     global _LIBRARY
     if _LIBRARY is None:

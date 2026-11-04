@@ -256,6 +256,40 @@ class ComponentOperationTests(unittest.TestCase):
             before,
             {str(path): path.read_bytes() for path in self.ball.rglob("*") if path.is_file()},
         )
+
+    def test_exact_source_removal_is_offline_and_keeps_modified_variants(self):
+        sources = [
+            self.source({"OS2/ALT.TXT": value}, name=f"offline-{i}.zip")
+            for i, value in enumerate([b"first original", b"second original"])
+        ]
+        plan = self.request("plan-os2-extraction", sources=sources)
+        pairs = [{"source": file["source"], "path": file["path"]} for file in plan["files"]]
+        self.request(
+            "import-os2-support",
+            sources=sources,
+            fileSelection=[p["source"] for p in pairs],
+            operationID="offline-install",
+        )
+        state = self.request("os2-component-state", selection=pairs)
+        by_source = {file["selectedSource"]: file for file in state["files"]}
+        changed = (
+            self.ball / "drive_c" / by_source[pairs[1]["source"]]["path"][3:].replace("\\", "/")
+        )
+        changed.write_bytes(b"user modified")
+        for source in sources:
+            Path(source).unlink()
+        unknown = {"source": "not-installed-source", "path": by_source[pairs[0]["source"]]["path"]}
+        protected = self.request(
+            "remove-os2-components", selection=[unknown], operationID="offline-other"
+        )
+        self.assertEqual(protected["removedPaths"], [])
+        self.assertEqual(protected["preserved"][0]["status"], "protected")
+        result = self.request(
+            "remove-os2-components", selection=pairs, operationID="offline-remove"
+        )
+        self.assertEqual(result["removedPaths"], [by_source[pairs[0]["source"]]["path"]])
+        self.assertEqual(result["preserved"][0]["status"], "modified")
+        self.assertEqual(changed.read_bytes(), b"user modified")
         for invalid in ["bad", [{}], [{"source": "id"}], [{"source": 4, "path": r"C:\A"}]]:
             with self.assertRaisesRegex(ValueError, "selection|pairs"):
                 self.request("os2-component-state", selection=invalid)

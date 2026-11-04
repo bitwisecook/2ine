@@ -232,9 +232,15 @@ def main():
         window.set_default_size(390, 680)
         pump(lambda: window.split.get_collapsed())
         assert window.split.get_collapsed()
-        assert (
-            window.switcher.get_display_mode() == gnome_ball.Adw.InlineViewSwitcherDisplayMode.ICONS
+        assert tuple(window.switcher.buttons) == (
+            "drives",
+            "components",
+            "application-installation",
+            "apps",
+            "settings",
+            "activity",
         )
+        assert all(button.get_visible() for button in window.switcher.buttons.values())
         if args.screenshots:
             until = time.monotonic() + 0.5
             pump(lambda: time.monotonic() > until)

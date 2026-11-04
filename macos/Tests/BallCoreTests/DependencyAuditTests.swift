@@ -35,4 +35,25 @@ import Testing
     let audit = try JSONDecoder().decode(DependencyAudit.self, from: data)
     #expect(audit.needsMediaSelection)
     #expect(audit.componentGroups?.first?.id == "som")
+    #expect(audit.hasComponentAdvice)
+}
+
+@Test func componentAdviceKeepsThirdPartyLibrariesSeparate() throws {
+    let data = Data(#"""
+    {"summary":"Missing","logPath":"/logs/audit.txt","jsonPath":"/logs/audit.json",
+     "missing":["NETAPI","NETAPI32","INOTES","DB2APP"],"imported":[],
+     "componentGroups":[{"id":"network","title":"Networking Files","modules":["NETAPI","netapi32"]}]}
+    """#.utf8)
+    let audit = try JSONDecoder().decode(DependencyAudit.self, from: data)
+    #expect(audit.hasComponentAdvice)
+    #expect(audit.ungroupedMissingLibraries == ["INOTES", "DB2APP"])
+    for (fields, expected) in [
+        (#""missing":[],"stale":false"#, false),
+        (#""missing":[],"stale":true"#, true),
+        (#""missing":["INOTES"]"#, true)
+    ] {
+        let json = "{\"summary\":\"Audit\",\"logPath\":\"/log\",\"jsonPath\":\"/log.json\",\"imported\":[]," + fields + "}"
+        let result = try JSONDecoder().decode(DependencyAudit.self, from: Data(json.utf8))
+        #expect(result.hasComponentAdvice == expected)
+    }
 }

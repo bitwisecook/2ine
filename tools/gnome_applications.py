@@ -33,6 +33,7 @@ class ApplicationsPage(Gtk.Box):
         self.sort.connect("notify::selected", self.sort_changed)
         controls.append(self.sort)
         self.append(controls)
+        self.append(gnome_views.dependency_advice_box(window))
         self.search = Gtk.SearchEntry(placeholder_text="Search Applications")
         self.search.update_property([Gtk.AccessibleProperty.LABEL], ["Search applications"])
         self.append(self.search)
