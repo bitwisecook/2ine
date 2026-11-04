@@ -13,13 +13,15 @@ struct RegistrySettingsView: View {
     @State private var loading = false
     @State private var loadID = UUID()
     @State private var editor: RegistryEditRequest?
-    @State private var sortOrder = [KeyPathComparator(\RegistryValueRecord.displayName)]
+    @State private var keyQuery = ""
+    @State private var keySearchFocused = false
+    @State private var valueSearchFocused = false
+    @State private var valueSort: OutlineBrowserSort? = .init(column: "name")
     private var values: [RegistryValueRecord] {
         guard let selectedKey else { return [] }
         return (tree?.values(at: selectedKey) ?? []).filter {
-            filter.isEmpty || $0.displayName.localizedCaseInsensitiveContains(filter) ||
-            $0.typeName.localizedCaseInsensitiveContains(filter) || $0.summary.localizedCaseInsensitiveContains(filter)
-        }.sorted(using: sortOrder)
+            FileSearch.matches($0.displayName + " " + $0.typeName + " " + $0.summary, query: filter)
+        }
     }
     private var chosen: RegistryValueRecord? { values.first { $0.id == selectedValue } }
     private var canEdit: Bool { !model.busy && !model.mediaBusy && !model.processRunning && !loading }
@@ -40,36 +42,32 @@ struct RegistrySettingsView: View {
             }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             HSplitView {
-                List(selection: $selectedKey) {
-                    if let tree {
-                        OutlineGroup(tree.roots, children: \.children) { key in
-                            Label(key.title.isEmpty ? "(Empty component)" : key.title, systemImage: "folder")
-                                .tag(key.path)
-                                .help(key.path)
-                        }
-                    }
-                }.listStyle(.sidebar).frame(minWidth: 210, idealWidth: 270)
-                    .accessibilityLabel("Registry hives and keys")
+                VStack(alignment: .leading, spacing: 8) {
+                    BrowserSearchField(text: $keyQuery, focused: $keySearchFocused, placeholder: "Search Registry Keys", identifier: "registryKeySearch")
+                        .frame(height: 28)
+                    NativeOutlineBrowser(nodes: BrowserRows.registryKeys(tree?.roots ?? []), columns: [
+                        OutlineBrowserColumn(id: "name", title: "Registry Hives and Keys", width: 270, minimum: 150)
+                    ], selection: $selectedKey, query: $keyQuery, searchFocused: $keySearchFocused,
+                    identifier: "registryKeys", accessibilityLabel: "Registry hives and keys",
+                    defaultExpanded: Set(tree?.roots.map(\.path) ?? []))
+                }.frame(minWidth: 210, idealWidth: 270)
                 VStack(alignment: .leading, spacing: 10) {
                     Text(selectedKey ?? "Select a registry key").font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                    TextField("Filter values in this key", text: $filter).textFieldStyle(.roundedBorder)
-                        .accessibilityIdentifier("registryValueFilter")
-                    Table(values, selection: $selectedValue, sortOrder: $sortOrder) {
-                        TableColumn("Name", value: \.displayName)
-                        TableColumn("Type", value: \.typeName)
-                        TableColumn("Data") { value in
-                            HStack {
-                                if value.warning != nil { Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(value.warning ?? "") }
-                                Text(value.summary).lineLimit(1).font(.system(.body, design: .monospaced))
-                            }
-                        }
-                    }
-                    .contextMenu(forSelectionType: String.self) { selected in
-                        Button("Edit Value…") { if let id = selected.first, let value = values.first(where: { $0.id == id }) { edit(value) } }
-                            .disabled(selected.count != 1 || !canEdit)
-                    } primaryAction: { selected in
-                        if canEdit, let id = selected.first, let value = values.first(where: { $0.id == id }) { edit(value) }
-                    }
+                    BrowserSearchField(text: $filter, focused: $valueSearchFocused, placeholder: "Filter Values in This Key", identifier: "registryValueFilter")
+                        .frame(height: 28)
+                    NativeOutlineBrowser(nodes: BrowserRows.registryValues(values), columns: [
+                        OutlineBrowserColumn(id: "name", title: "Name", width: 180, minimum: 100, sortable: true),
+                        OutlineBrowserColumn(id: "type", title: "Type", width: 145, minimum: 90, sortable: true),
+                        OutlineBrowserColumn(id: "data", title: "Data", width: 270, minimum: 120, sortable: true)
+                    ], selection: $selectedValue, query: $filter, searchFocused: $valueSearchFocused, sort: $valueSort,
+                    identifier: "registryValues", accessibilityLabel: "Registry values",
+                    onAction: { id, _ in
+                        if canEdit, let value = values.first(where: { $0.id == id }) { edit(value) }
+                    }, onActivate: { id in
+                        if canEdit, let value = values.first(where: { $0.id == id }) { edit(value) }
+                    }, contextActions: { id in
+                        id == nil ? [] : [OutlineMenuAction(id: "edit", title: "Edit Value…", enabled: canEdit)]
+                    })
                     HStack {
                         Text(values.count == 1 ? "1 value" : "\(values.count) values").foregroundStyle(.secondary)
                         Spacer()

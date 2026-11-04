@@ -3415,3 +3415,36 @@ static uint32 bridge32_AbortDoc(uint8 *a)
 {
     return (uint32)AbortDoc(lx_guest_load_u32(a));
 }
+
+static uint32 bridge32_GetClipboardData(uint8 *a)
+{
+    return GetClipboardData(lx_guest_load_u32(a));
+}
+static uint32 bridge32_SetClipboardData(uint8 *a)
+{
+    return SetClipboardData(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+
+static uint32 bridge32_EnumClipboardFormats(uint8 *a)
+{
+    return EnumClipboardFormats(lx_guest_load_u32(a));
+}
+static uint32 bridge32_GetClipboardOwner(uint8 *a)
+{
+    (void)a;
+    return GetClipboardOwner();
+}
+static uint32 bridge32_GetClipboardFormatName(uint8 *a)
+{
+    LONG capacity = (LONG)lx_guest_load_u32(a + 8);
+    LxGuestBorrow output = {0};
+    if (capacity <= 0 || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+                                              (ULONG)capacity, LX_GUEST_WRITE, &output))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG result = GetClipboardFormatName(lx_guest_load_u32(a), output.host, capacity);
+    lx_execution_release(&output);
+    return result;
+}

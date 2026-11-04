@@ -18,8 +18,9 @@ struct ConfigurationView: View {
     }
 }
 
-private struct DisplayConfigurationView: View {
+struct DisplayConfigurationView: View {
     @Bindable var model: AppModel
+    var showMediaLinks = true
     @State private var features: RuntimeFeatures?
     @State private var error: String?
     @State private var beep = 0.05
@@ -57,6 +58,9 @@ private struct DisplayConfigurationView: View {
                     if !features.opengl.reason.isEmpty {
                         Text(features.opengl.reason).foregroundStyle(.secondary)
                     }
+                    if showMediaLinks {
+                        Button("Install Original OpenGL Files…") { model.openOS2ComponentGroup(.opengl) }
+                    }
                     featureToggle("DIVE", key: "dive", feature: features.dive,
                                   detail: "Direct video buffer access used by games such as OS/2 Doom.")
                 }
@@ -64,6 +68,9 @@ private struct DisplayConfigurationView: View {
                     featureToggle("Video Playback", key: "video", feature: features.video)
                     featureToggle("PCM Sound", key: "pcm", feature: features.pcm)
                     featureToggle("MIDI Music", key: "midi", feature: features.midi)
+                    if showMediaLinks {
+                        Button("Browse Original Multimedia Files…") { model.openOS2ComponentGroup(.multimedia) }
+                    }
                 }
                 Section {
                     Text("Changes apply when an application next starts. Settings travel with the ball. An unavailable feature can be selected for use with another runtime or after extracting OS/2 files; applications require that feature to be available before starting.")
@@ -115,44 +122,58 @@ private struct DisplayConfigurationView: View {
     }
 }
 
-private struct ProfileConfigurationView: View {
+struct ProfileConfigurationView: View {
     @Bindable var model: AppModel
     let area: String
     var filePath: String? = nil
     @State private var value: ConfigurationSnapshot?
     @State private var selection: String?
     @State private var search = ""
+    @State private var searchFocused = false
+    @State private var profileSort: OutlineBrowserSort? = .init(column: "name")
     @State private var error: String?
     @State private var loading = false
     @State private var editor: ProfileEditRequest?
     private var entries: [ConfigurationEntry] {
         (value?.entries ?? []).filter {
             (area != "registry" || $0.key.hasPrefix("v:")) &&
-            (search.isEmpty || $0.application.localizedCaseInsensitiveContains(search) || $0.key.localizedCaseInsensitiveContains(search))
+            FileSearch.matches($0.application + " " + $0.key, query: search)
         }.sorted { ($0.application, $0.key) < ($1.application, $1.key) }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                TextField(area == "registry" ? "Search registry keys and values" : "Search applications and keys", text: $search)
-                    .textFieldStyle(.roundedBorder)
+                BrowserSearchField(text: $search, focused: $searchFocused,
+                                   placeholder: "Search Applications and Keys", identifier: "profileSearch")
+                    .frame(height: 28)
                 Button("Reload") { Task { await load() } }.disabled(loading)
                 Button("Add Value…") { editor = ProfileEditRequest(entry: nil) }.disabled(value == nil || model.busy || model.mediaBusy)
             }
             if let value { Text(DisplayPath.homeAbbreviated(value.path)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
             if model.processRunning { Label("Stop the guest before editing profiles or the registry.", systemImage: "info.circle").foregroundStyle(.secondary) }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            Table(entries, selection: $selection) {
-                TableColumn(area == "registry" ? "Registry Key" : "Application", value: \.application)
-                TableColumn("Value") { entry in Text(area == "registry" ? String(entry.key.dropFirst(2)) : entry.key) }
-                TableColumn("Data") { entry in Text(summary(entry)).lineLimit(1).font(.system(.body, design: .monospaced)) }
-            }
+            NativeOutlineBrowser(nodes: BrowserRows.profile(entries, summary: summary), columns: [
+                OutlineBrowserColumn(id: "name", title: "Application and Key", width: 270, minimum: 150, sortable: true),
+                OutlineBrowserColumn(id: "data", title: "Data", width: 380, minimum: 180, sortable: true)
+            ], selection: $selection, query: $search, searchFocused: $searchFocused, sort: $profileSort,
+            identifier: "profileEntries", accessibilityLabel: "INI applications and keys",
+            onAction: { id, _ in
+                if let entry = entries.first(where: { $0.id == id }), !model.busy, !model.mediaBusy, !model.processRunning {
+                    editor = ProfileEditRequest(entry: entry)
+                }
+            }, onActivate: { id in
+                if let entry = entries.first(where: { $0.id == id }), !model.busy, !model.mediaBusy, !model.processRunning {
+                    editor = ProfileEditRequest(entry: entry)
+                }
+            }, contextActions: { id in
+                entries.contains(where: { $0.id == id }) ? [OutlineMenuAction(id: "edit", title: "Edit Value…", enabled: !model.busy && !model.mediaBusy && !model.processRunning)] : []
+            })
             HStack {
                 Text(entries.count == 1 ? "1 value" : "\(entries.count) values").foregroundStyle(.secondary)
                 Spacer()
                 Button("Edit Value…") {
                     if let entry = entries.first(where: { $0.id == selection }) { editor = ProfileEditRequest(entry: entry) }
-                }.disabled(selection == nil || model.busy || model.mediaBusy)
+                }.disabled(!entries.contains(where: { $0.id == selection }) || model.busy || model.mediaBusy)
             }
         }.padding(16)
         .task(id: "\(model.selected ?? "")|\(filePath ?? area)") { await load() }
@@ -296,20 +317,22 @@ private struct ProfileValueSheet: View {
     }
 }
 
-private struct OS2FilesSettingsView: View {
+struct OS2FilesSettingsView: View {
     @Bindable var model: AppModel
     @State private var files: ConfigurationFiles?
     @State private var selection: String?
+    @State private var query = ""
+    @State private var searchFocused = false
     @State private var error: String?
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading) {
-                List(files?.files ?? [], selection: $selection) { file in
-                    VStack(alignment: .leading) {
-                        Text(file.label)
-                        Text(file.path).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                    }.tag(file.path)
-                }.accessibilityLabel("OS/2 Configuration Files")
+                BrowserSearchField(text: $query, focused: $searchFocused, placeholder: "Search Config Files", identifier: "configFilesSearch")
+                    .frame(height: 28).padding(.horizontal, 8)
+                NativeOutlineBrowser(nodes: BrowserRows.configurationFiles(files?.files ?? []), columns: [
+                    OutlineBrowserColumn(id: "name", title: "Config Files", width: 210, minimum: 130)
+                ], selection: $selection, query: $query, searchFocused: $searchFocused,
+                identifier: "configurationFiles", accessibilityLabel: "OS/2 Configuration Files")
                 Button("Reload File List") { Task { await load() } }.padding(8)
                 if files?.truncated == true { Text("The file scan reached its limit. Some INI files are not listed.").font(.caption).padding(8) }
             }.frame(minWidth: 160, idealWidth: 210, maxWidth: 260)
@@ -394,5 +417,25 @@ private struct ConfigurationTextSheet: View {
         }.padding(24).frame(width: 680, height: 520)
         .task { text = snapshot.text ?? "" }
         .interactiveDismissDisabled(saving || text != snapshot.text)
+    }
+}
+
+struct ComponentSettingsSheet: View {
+    @Bindable var model: AppModel
+    let request: ComponentSettingsRequest
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(request.token == "printing" ? "Printing" : "Graphics & Sound").font(.title2.bold())
+            if request.token == "printing" {
+                PrintingSettingsView(model: model, showMediaLinks: false)
+            } else {
+                DisplayConfigurationView(model: model, showMediaLinks: false)
+            }
+            HStack {
+                Spacer()
+                Button("Return to Components") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }.padding(20).frame(width: 700, height: 620)
     }
 }

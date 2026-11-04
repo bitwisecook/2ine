@@ -1129,9 +1129,7 @@ class ProgramDialog(FormDialog):
                 if self.window.launch(self.ball, *result):
                     self.close()
                 else:
-                    self.error_message(
-                        "The program could not be started. Check Logs for details."
-                    )
+                    self.error_message("The program could not be started. Check Logs for details.")
                 return
             undo = [{"action": "command", "arguments": ["remove-app", name]}]
             if old_record:

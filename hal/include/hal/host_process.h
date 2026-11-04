@@ -15,9 +15,16 @@ typedef struct LxHostChildStatus
 {
     LxHostTermination reason;
     uint32_t result;
+    uint32_t signal; /* POSIX termination signal, or zero for ordinary exit. */
 } LxHostChildStatus;
 LxHostChild *lx_host_child_spawn(const char *path, char *const *arguments,
                                  char *const *environment);
+/* A new host group retains ordinary guest operation ownership. */
+LxHostChild *lx_host_child_spawn_group(const char *path, char *const *arguments,
+                                       char *const *environment);
+/* Trusted runtime services have independent group/lifetime and no operation lease. */
+LxHostChild *lx_host_child_spawn_service(const char *path, char *const *arguments,
+                                         char *const *environment);
 uint32_t lx_host_child_id(const LxHostChild *child);
 /* 1 observed completion, 0 still running, -1 failure. */
 int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status);

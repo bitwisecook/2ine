@@ -75,6 +75,7 @@ struct EnvironmentSettingsView: View {
 
 struct PrintingSettingsView: View {
     @Bindable var model: AppModel
+    var showMediaLinks = true
     @State private var user: ConfigurationSnapshot?
     @State private var system: ConfigurationSnapshot?
     @State private var loading = false
@@ -103,6 +104,10 @@ struct PrintingSettingsView: View {
                 Text("PDF opens the system Save dialog so you can choose a file name and location. PCL 5 output supports compatible printers and can also be saved to a file.")
                 LabeledContent("Resolution", value: "300 DPI")
                 LabeledContent("Page", value: "A4")
+                if showMediaLinks {
+                    Button("Browse Original Printer Files…") { model.openOS2ComponentGroup(.printers) }
+                        .disabled(model.busy || model.mediaBusy || model.processRunning)
+                }
             }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             Button("Reload Printer Preferences") { Task { await load() } }.disabled(loading)

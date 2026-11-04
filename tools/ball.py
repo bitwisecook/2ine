@@ -22,7 +22,10 @@ def configure_library(build):
 
 
 def needs_dependency_media(report):
-    return bool(report.get("missing")) and not any(
+    missing = bool(report.get("missing")) or any(
+        item.get("status") == "missing" for item in report.get("componentFiles", [])
+    )
+    return missing and not any(
         source.get("status") in ("verified-os2-media", "verified-os2-set")
         for source in report.get("media", [])
     )
@@ -170,6 +173,11 @@ def run(args, ball, data):
     for key in plan["unsetEnvironment"]:
         env.pop(key, None)
     env.update(plan["environment"])
+    audit = plan.get("dependencyAudit")
+    if audit and (not audit.get("complete", False) or audit.get("imported")):
+        print(audit["summary"], file=sys.stderr)
+        if audit.get("logPath"):
+            print("Dependency audit: " + audit["logPath"], file=sys.stderr)
     services = []
     try:
         for startup in plan.get("startup", []):
@@ -196,6 +204,7 @@ def run(args, ball, data):
             {
                 "action": "record-install",
                 "ball": str(ball),
+                "build": str(args.build.resolve()),
                 "receipt": plan["receipt"],
                 "programHost": plan["programHost"],
                 "exitCode": result.returncode,
@@ -230,7 +239,23 @@ def main(argv=None):
         "--include",
         dest="categories",
         action="append",
-        choices=("cmd", "fonts", "assets", "printers", "help", "full"),
+        choices=(
+            "cmd",
+            "fonts",
+            "assets",
+            "printers",
+            "help",
+            "full",
+            "som",
+            "runtime",
+            "multimedia",
+            "network",
+            "utilities",
+            "languages",
+            "diagnostics",
+            "legacy",
+            "opengl",
+        ),
         help="select extraction categories; full includes all except 2ine-provided components",
     )
     support.add_argument(

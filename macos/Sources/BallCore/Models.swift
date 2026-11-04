@@ -95,9 +95,12 @@ public struct DesktopRequest: Encodable, Sendable {
     public var settings: AudioSettings?
     public var exporter: [String: String]?
     public var includeImages: Bool?
+    public var resolve: Bool?
     public var path: String?
     public var sources: [String]?
     public var categories: [String]?
+    public var fileSelection: [String]?
+    public var configureComponents: [String]?
     public var name: String?
     public var originalName: String?
     public var program: String?
@@ -190,6 +193,16 @@ public struct ExecutableIcon: Decodable, Sendable {
 }
 
 public struct DependencyAudit: Decodable, Sendable {
+    public struct ComponentFile: Decodable, Sendable {
+        public let path: String
+        public let status: String
+    }
+    public struct ComponentGroup: Decodable, Sendable, Identifiable {
+        public let id: String
+        public let title: String
+        public let modules: [String]?
+        public let requiredBy: [String]?
+    }
     public struct Media: Decodable, Sendable {
         public let path: String
         public let status: String?
@@ -207,14 +220,18 @@ public struct DependencyAudit: Decodable, Sendable {
     public let complete: Bool?
     public let staticOnly: Bool?
     public let media: [Media]?
+    public let stale: Bool?
+    public let componentGroups: [ComponentGroup]?
+    public let componentFiles: [ComponentFile]?
     public var needsMediaSelection: Bool {
-        !missing.isEmpty && !(media ?? []).contains {
+        (!missing.isEmpty || (componentFiles ?? []).contains { $0.status == "missing" }) && !(media ?? []).contains {
             $0.status == "verified-os2-media" || $0.status == "verified-os2-set"
         }
     }
 }
 
 public struct OS2SupportStatus: Decodable, Sendable {
+    public let selectedCategories: [OS2ExtractionCategory]?
     public struct SkippedFile: Decodable, Sendable, Identifiable {
         public let path: String
         public let source: String
@@ -271,7 +288,8 @@ public struct OS2MediaSource: Decodable, Sendable {
     }
 }
 public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Identifiable {
-    case cmd, fonts, assets, printers, help, full
+    case cmd, fonts, assets, printers, help, som, runtime, multimedia, network
+    case utilities, languages, diagnostics, legacy, opengl, full
     public var id: String { rawValue }
     public var title: String {
         switch self {
@@ -280,6 +298,15 @@ public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Iden
         case .assets: "Sounds, Images and Video"
         case .printers: "Printer Support"
         case .help: "Full Help"
+        case .som: "SOM/DSOM Object Runtime"
+        case .runtime: "Unicode and C Libraries"
+        case .multimedia: "Multimedia Files"
+        case .network: "Networking Files"
+        case .utilities: "System Utilities"
+        case .languages: "Languages and Input"
+        case .diagnostics: "Diagnostics"
+        case .legacy: "DOS and Windows Compatibility"
+        case .opengl: "Original OpenGL Files"
         case .full: "Full OS/2 File Set"
         }
     }
@@ -290,12 +317,90 @@ public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Iden
         case .assets: "Desktop backgrounds, icons, sounds, MIDI files, and videos."
         case .printers: "Original printer drivers and their support files."
         case .help: "Original help manager, viewer, and help books."
+        case .som: "Object libraries, DSOM services, repositories and configuration. Includes supporting language libraries."
+        case .runtime: "Original Unicode conversion and shared C runtime libraries."
+        case .multimedia: "Original multimedia tools and support files. Components supplied by 2ine are excluded."
+        case .network: "Original network tools and configuration files. Components supplied by 2ine are excluded."
+        case .utilities: "Original command-line and desktop utilities."
+        case .languages: "Language resources, keyboard layouts and input support."
+        case .diagnostics: "Original diagnostic and troubleshooting tools."
+        case .legacy: "Original DOS and Windows compatibility files."
+        case .opengl: "Original OpenGL files. Copying these files does not change the selected graphics provider."
         case .full: "Includes all options above and remaining OS/2 files. Components supplied by 2ine are excluded."
         }
     }
     public static let defaults: Set<Self> = [.cmd]
+    public var requires: Set<Self> { self == .som ? [.runtime] : [] }
+    public static func expanded(_ categories: Set<Self>) -> Set<Self> {
+        categories.union(categories.flatMap(\.requires))
+    }
 }
 public struct OS2ExtractionPlan: Decodable, Sendable {
+    public struct Provider: Decodable, Sendable, Equatable {
+        public let title: String
+        public let selection: String
+        public let setting: String
+        public let group: String
+    }
+    public struct Node: Decodable, Sendable, Identifiable, Equatable {
+        public enum SelectionState { case off, mixed, on }
+        public let id: String
+        public let title: String
+        public let kind: String
+        public let detail: String?
+        public let category: OS2ExtractionCategory?
+        public let source: String?
+        public let path: String?
+        public let size: UInt64?
+        public let provided: Bool?
+        public let present: Bool?
+        public let disabled: Bool?
+        public let priority: Int?
+        public let preferred: Bool?
+        public let provider: Provider?
+        public let setting: String?
+        public let selection: String?
+        public let group: String?
+        public let children: [Node]?
+        public var eligibleSources: Set<String> {
+            if kind == "file", provided != true, disabled != true, let source { return [source] }
+            return Set((children ?? []).flatMap { $0.eligibleSources })
+        }
+        public var files: [Node] {
+            kind == "file" ? [self] : (children ?? []).flatMap(\.files)
+        }
+        public func selectionState(_ selected: Set<String>) -> SelectionState {
+            let sources = eligibleSources
+            let count = sources.intersection(selected).count
+            return count == 0 ? .off : count == sources.count ? .on : .mixed
+        }
+        public func find(_ identity: String) -> Node? {
+            if id == identity { return self }
+            for child in children ?? [] {
+                if let found = child.find(identity) { return found }
+            }
+            return nil
+        }
+        public func filtered(query: String) -> Node? {
+            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return self }
+            if FileSearch.matches(title + " " + (path ?? ""), query: query) { return self }
+            let matches = (children ?? []).compactMap { $0.filtered(query: query) }
+            guard !matches.isEmpty else { return nil }
+            return Node(id: id, title: title, kind: kind, detail: detail, category: category, source: source,
+                        path: path, size: size, provided: provided, present: present,
+                        disabled: disabled, priority: priority, preferred: preferred,
+                        provider: provider, setting: setting,
+                        selection: selection, group: group, children: matches)
+        }
+    }
+    public struct Group: Decodable, Sendable, Identifiable {
+        public let id: OS2ExtractionCategory
+        public let title: String
+        public let detail: String
+        public let defaultSelected: Bool
+        public let requires: [OS2ExtractionCategory]
+        public let provider: Provider?
+    }
     public struct File: Decodable, Sendable, Identifiable {
         public let path: String
         public let source: String
@@ -311,12 +416,40 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
     }
     public let files: [File]
     public let unmapped: [String]
+    public let groups: [Group]?
+    public let tree: Node?
+    public func sourceSelection(_ categories: Set<OS2ExtractionCategory>) -> Set<String> {
+        let expanded = expanded(categories)
+        return Set((tree?.files ?? []).filter {
+            !$0.eligibleSources.isEmpty && (expanded.contains(.full) || $0.category.map(expanded.contains) == true)
+        }.compactMap(\.source))
+    }
+    public func selecting(_ node: Node, in selected: Set<String>, enabled: Bool) -> Set<String> {
+        if !enabled { return selected.subtracting(node.eligibleSources) }
+        var result = selected.union(node.eligibleSources)
+        if node.kind == "group", let category = node.category,
+           node.id == category.rawValue || category == .full {
+            result.formUnion(sourceSelection(expanded([category])))
+        }
+        return result
+    }
+    public func configuredComponents(for selected: Set<String>) -> [String] {
+        let som = Set((tree?.files ?? []).filter { $0.category == .som }.flatMap(\.eligibleSources))
+        return !som.isEmpty && som.isSubset(of: selected) ? ["som"] : []
+    }
+    public func expanded(_ categories: Set<OS2ExtractionCategory>) -> Set<OS2ExtractionCategory> {
+        var result = OS2ExtractionCategory.expanded(categories)
+        for group in groups ?? [] where result.contains(group.id) {
+            result.formUnion(group.requires)
+        }
+        return result
+    }
     public var installedCategories: Set<OS2ExtractionCategory> {
         let present = Set(files.filter { !$0.provided && $0.present && $0.category != .full }.map(\.category))
         return Set(present.filter { selectedFiles([$0]).isEmpty })
     }
     public func selectedFiles(_ categories: Set<OS2ExtractionCategory>) -> [File] {
-        let eligible = files.filter { $0.selected(by: categories) }
+        let eligible = files.filter { $0.selected(by: expanded(categories)) }
         let priorities = Dictionary(grouping: eligible, by: { $0.path.uppercased() }).mapValues { $0.map { $0.priority ?? 1 }.max() ?? 1 }
         var paths: Set<String> = []
         return eligible.filter { ($0.priority ?? 1) == priorities[$0.path.uppercased()] && paths.insert($0.path.uppercased()).inserted }

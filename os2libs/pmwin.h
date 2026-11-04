@@ -10,6 +10,7 @@
 #define _INCL_PMWIN_H_
 
 #include "os2types.h"
+#include <stddef.h>
 #ifdef __cplusplus
 extern "C"
 {
@@ -1122,6 +1123,12 @@ extern "C"
     OS2EXPORT BOOL OS2API WinEndPaint(HPS hps) OS2APIINFO(738);
     OS2EXPORT BOOL OS2API WinFillRect(HPS hps, PRECTL prcl, LONG lColor) OS2APIINFO(743);
     OS2EXPORT ULONG lx_pm_clipboard_count(void);
+    OS2EXPORT uint64_t lx_pm_clipboard_serial(void);
+    OS2EXPORT uint64_t lx_pm_clipboard_format_serial(ULONG format);
+    OS2EXPORT ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity);
+    OS2EXPORT BOOL lx_pm_clipboard_set_bytes(HAB hab, ULONG format, const void *bytes, size_t size);
+    OS2EXPORT void *lx_pm_clipboard_copy_bytes(HAB hab, ULONG format, size_t *size);
+    OS2EXPORT void lx_pm_clipboard_window_destroyed(HWND window);
     OS2EXPORT BOOL OS2API WinOpenClipbrd(HAB hab) OS2APIINFO(793);
     OS2EXPORT BOOL OS2API WinCloseClipbrd(HAB hab) OS2APIINFO(707);
     OS2EXPORT BOOL OS2API WinEmptyClipbrd(HAB hab) OS2APIINFO(733);

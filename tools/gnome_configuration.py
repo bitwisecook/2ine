@@ -2,12 +2,14 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Native OS/2 settings editors and graphics/sound preferences."""
 
-from gi.repository import Gio, GObject, Pango
+from gi.repository import GObject, Pango
 
 if __package__:
     from . import gnome_views
+    from .gnome_browser import Column, NativeBrowser
 else:
     import gnome_views
+    from gnome_browser import Column, NativeBrowser
 
 Adw, GLib, Gtk = gnome_views.Adw, gnome_views.GLib, gnome_views.Gtk
 button = gnome_views.action_button
@@ -148,6 +150,11 @@ class PrintingPage(Adw.PreferencesPage):
         self.queue.connect("notify::selected", self.selected)
         self.queue.set_sensitive(False)
         group.add(self.queue)
+        group.add(
+            button(
+                "Browse Original Printer Files…", lambda: window.show_component_media("printers")
+            )
+        )
         self.reset = button("Use Inherited Default", self.remove)
         self.reset.set_sensitive(False)
         group.set_header_suffix(self.reset)
@@ -283,10 +290,7 @@ class ProfilePage(Gtk.Box):
         self.window, self.ball, self.area = window, window.ball, area
         self.snapshot = None
         self.entries = []
-        self.search = Gtk.SearchEntry(hexpand=True, placeholder_text="Search keys and values")
-        self.search.connect("search-changed", lambda *_: self.render())
         bar = Adw.WrapBox(child_spacing=6, line_spacing=6)
-        bar.append(self.search)
         bar.append(button("Reload", self.load))
         self.add = button("Add Value…", lambda: self.edit(None))
         bar.append(self.add)
@@ -302,11 +306,47 @@ class ProfilePage(Gtk.Box):
         self.append(self.path)
         self.notice = Adw.Banner(use_markup=False, revealed=False)
         self.append(self.notice)
-        self.values = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
-        self.values.add_css_class("boxed-list")
-        scroll = Gtk.ScrolledWindow(vexpand=True, min_content_height=220)
-        scroll.set_child(self.values)
-        self.append(scroll)
+        self.values = NativeBrowser(
+            [
+                Column(
+                    "name",
+                    "Key",
+                    lambda row: row["name"],
+                    width=300,
+                    expand=True,
+                    sort_key=lambda row: row["name"].casefold(),
+                ),
+                Column(
+                    "value",
+                    "Value",
+                    lambda row: row["summary"],
+                    width=320,
+                    expand=True,
+                    compact=True,
+                    sort_key=lambda row: row["summary"].casefold(),
+                ),
+                Column(
+                    "edit",
+                    "Edit",
+                    lambda _row: "",
+                    width=110,
+                    compact=True,
+                    action=lambda row: {
+                        "label": "Edit Value…",
+                        "activate": lambda: self.edit(row["entry"]),
+                    },
+                ),
+            ],
+            title="Profile and registry values",
+            search_hint="Search keys and values",
+            identity=lambda row: (row["entry"]["application"], row["entry"]["key"]),
+            searchable=lambda row: row["name"] + " " + row["summary"],
+            activated=lambda row: self.edit(row["entry"]),
+            single_click=True,
+            height=220,
+        )
+        self.search = self.values.search
+        self.append(self.values)
         self.connect("map", lambda *_: self.load() if self.snapshot is None else None)
         self.refresh_editability()
 
@@ -335,16 +375,13 @@ class ProfilePage(Gtk.Box):
 
     def refresh_editability(self):
         self.add.set_sensitive(self.snapshot is not None and not self.window.busy)
-        self.values.set_sensitive(not self.window.busy)
+        self.values.table.set_sensitive(not self.window.busy)
 
     def render(self):
-        gnome_views.empty(self.values)
-        query = self.search.get_text().casefold()
+        rows = []
         for entry in sorted(self.entries, key=lambda value: (value["application"], value["key"])):
             registry = self.area == "registry"
             if registry and not entry["key"].startswith("v:"):
-                continue
-            if query and query not in (entry["application"] + " " + entry["key"]).casefold():
                 continue
             key = entry["key"][2:] if registry else entry["key"]
             data = bytes.fromhex(entry["data"])
@@ -359,27 +396,16 @@ class ProfilePage(Gtk.Box):
                 summary = data[:-1].decode("latin1").replace("\n", " ↵ ")
             else:
                 summary = f"{len(data)} bytes: {data[:32].hex()}"
-            row = Adw.ActionRow(
-                title=entry["application"] + " · " + (key or "(Default)"),
-                subtitle=summary,
-                subtitle_lines=2,
-                use_markup=False,
-                activatable=True,
-            )
+            name = entry["application"] + " · " + (key or "(Default)")
             if registry:
-                row.set_title(key or "(Default)")
-                row.set_subtitle(
+                name = key or "(Default)"
+                summary = (
                     summary
                     if short_header
                     else REGISTRY_TYPES.get(kind, "Type " + str(kind)) + " · " + summary
                 )
-            row.add_suffix(
-                button(
-                    "Edit Value…", lambda entry=entry: self.edit(entry), "document-edit-symbolic"
-                )
-            )
-            row.connect("activated", lambda _row, entry=entry: self.edit(entry))
-            self.values.append(row)
+            rows.append({"name": name, "summary": summary, "entry": entry})
+        self.values.set_rows(rows)
         self.refresh_editability()
 
     def edit(self, entry):
@@ -421,8 +447,31 @@ class Os2FilesPage(Gtk.Box):
         self.records, self.current_record, self.profile = [], None, None
         self.updating = False
         self.serial = 0
-        self.file = Adw.ComboRow(title="OS/2 File", use_markup=False)
-        self.file.connect("notify::selected", self.selected)
+        self.file = NativeBrowser(
+            [
+                Column(
+                    "label",
+                    "OS/2 File",
+                    lambda record: record["label"],
+                    width=240,
+                    expand=True,
+                    sort_key=lambda record: record["label"].casefold(),
+                ),
+                Column(
+                    "path",
+                    "Path",
+                    lambda record: record["path"],
+                    width=320,
+                    expand=True,
+                    sort_key=lambda record: record["path"].casefold(),
+                ),
+            ],
+            title="OS/2 configuration files",
+            search_hint="Search Configuration Files",
+            identity=lambda record: record["path"],
+            selected=self.selected,
+            height=180,
+        )
         group = Adw.PreferencesGroup(
             description="CONFIG.SYS controls startup settings. OS2.INI and OS2SYS.INI hold user and system profile values; installers may use additional INI files. Registry keys have their own Settings tab."
         )
@@ -457,20 +506,17 @@ class Os2FilesPage(Gtk.Box):
                 return
             self.records = [record for record in result["files"] if record["role"] != "registry"]
             self.updating = True
-            self.file.set_model(
-                Gtk.StringList.new(
-                    [record["label"] + " · " + record["path"] for record in self.records]
-                )
-            )
+            self.file.set_rows(self.records)
             selected = next(
                 (
-                    i
-                    for i, record in enumerate(self.records)
+                    record
+                    for record in self.records
                     if record["path"].upper() == self.file_path.upper()
                 ),
-                0,
+                self.records[0] if self.records else None,
             )
-            self.file.set_selected(selected)
+            if selected:
+                self.file.focus(selected["path"])
             self.updating = False
             self.notice.set_title(
                 "File discovery reached its limit. Additional files were not listed."
@@ -478,7 +524,7 @@ class Os2FilesPage(Gtk.Box):
                 else ""
             )
             self.notice.set_revealed(result["truncated"])
-            self.selected(self.file, None)
+            self.selected(self.file.selected_data())
 
         self.window.request_work(
             lambda: self.window.api("configuration-files", ball=str(self.ball)),
@@ -487,10 +533,9 @@ class Os2FilesPage(Gtk.Box):
             on_error=self.error,
         )
 
-    def selected(self, row, _property):
-        if self.updating or not self.current() or row.get_selected() >= len(self.records):
+    def selected(self, record):
+        if self.updating or not self.current() or record is None:
             return
-        record = self.records[row.get_selected()]
         self.file_path = record["path"]
         self.window.settings_file_paths[str(self.ball)] = self.file_path
         self.current_record = record
@@ -576,7 +621,7 @@ class Os2FilesPage(Gtk.Box):
                 self.window.settings_file_drafts.pop(key, None)
                 if self.current():
                     self.notice.set_revealed(False)
-                    self.selected(self.file, None)
+                    self.selected(self.file.selected_data())
 
             self.window.request_work(
                 lambda: self.window.api(
@@ -594,7 +639,7 @@ class Os2FilesPage(Gtk.Box):
             def discard():
                 self.window.settings_file_drafts.pop(key, None)
                 self.notice.set_revealed(False)
-                self.selected(self.file, None)
+                self.selected(self.file.selected_data())
 
             if key not in self.window.settings_file_drafts:
                 discard()
@@ -619,13 +664,6 @@ class Os2FilesPage(Gtk.Box):
         self.content.append(controls)
 
 
-class RegistryNode(GObject.Object):
-    def __init__(self, name, path):
-        super().__init__()
-        self.name, self.path = name, path
-        self.children = Gio.ListStore.new(RegistryNode)
-
-
 class RegistryPage(ProfilePage):
     def __init__(self, window):
         self.selected_key = "hkcu"
@@ -634,17 +672,30 @@ class RegistryPage(ProfilePage):
         self.search.set_placeholder_text("Search values in selected key")
         values_scroll = self.get_last_child()
         self.remove(values_scroll)
-        self.tree_view = Gtk.ListView()
-        factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", self.setup_node)
-        factory.connect("bind", self.bind_node)
-        self.tree_view.set_factory(factory)
-        self.tree_view.update_property([Gtk.AccessibleProperty.LABEL], ["Registry keys"])
-        tree_scroll = Gtk.ScrolledWindow(vexpand=True, child=self.tree_view)
+        self.tree_browser = NativeBrowser(
+            [
+                Column(
+                    "name",
+                    "Registry Key",
+                    lambda node: node["name"],
+                    width=240,
+                    expand=True,
+                    sort_key=lambda node: registry_fold(node["name"]),
+                )
+            ],
+            title="Registry keys",
+            search_hint="Search Registry Keys",
+            identity=lambda node: node["path"],
+            searchable=lambda node: node["name"] + " " + node["path"],
+            tooltip=lambda node: node["path"],
+            selected=self.selection_changed,
+            height=220,
+        )
+        self.tree_view = self.tree_browser.table
         self.split = Adw.OverlaySplitView(
             min_sidebar_width=180,
             max_sidebar_width=260,
-            sidebar=tree_scroll,
+            sidebar=self.tree_browser,
             content=values_scroll,
             vexpand=True,
         )
@@ -673,60 +724,29 @@ class RegistryPage(ProfilePage):
         self.key_path = Gtk.Label(xalign=0, selectable=True, wrap=True)
         self.append(self.key_path)
 
-    @staticmethod
-    def setup_node(_factory, item):
-        expander = Gtk.TreeExpander()
-        expander.set_child(Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END))
-        item.set_child(expander)
-
-    @staticmethod
-    def bind_node(_factory, item):
-        row = item.get_item()
-        expander = item.get_child()
-        expander.set_list_row(row)
-        expander.get_child().set_label(row.get_item().name)
-        expander.set_tooltip_text(row.get_item().path)
-
     def select_key(self, path):
-        for position in range(self.tree_model.get_n_items()):
-            row = self.tree_model.get_item(position)
-            if row.get_item().path == path:
-                self.tree_selection.set_selected(position)
-                return
-        position = 0
-        while position < self.tree_model.get_n_items():
-            row = self.tree_model.get_item(position)
-            key = row.get_item().path
-            if key == path:
-                self.tree_selection.set_selected(position)
-                return
-            if path.startswith(key + "\\"):
-                row.set_expanded(True)
-            position += 1
+        self.tree_browser.focus(path)
 
-    def selection_changed(self, selection, _property):
-        if self.building_tree:
+    def selection_changed(self, selected):
+        if self.building_tree or selected is None:
             return
-        selected = selection.get_selected_item()
-        if selected:
-            self.selected_key = selected.get_item().path
-            self.render_values()
-            if self.split.get_collapsed():
-                self.split.set_show_sidebar(False)
+        self.selected_key = selected["path"]
+        self.render_values()
+        if self.split.get_collapsed():
+            self.split.set_show_sidebar(False)
 
     def render(self):
         if self.building_tree:
             return
         self.building_tree = True
-        roots = Gio.ListStore.new(RegistryNode)
-        nodes = {}
+        roots, nodes = [], {}
         for key, title in (
             ("hkcr", "HKEY_CLASSES_ROOT"),
             ("hkcu", "HKEY_CURRENT_USER"),
             ("hklm", "HKEY_LOCAL_MACHINE"),
             ("hku", "HKEY_USERS"),
         ):
-            nodes[key] = RegistryNode(title, key)
+            nodes[key] = {"name": title, "path": key, "children": []}
             roots.append(nodes[key])
         for entry in sorted(self.entries, key=lambda item: item["application"]):
             pieces = registry_fold(entry["application"]).split("\\")
@@ -736,20 +756,12 @@ class RegistryPage(ProfilePage):
                 if parent is None:
                     break
                 if path not in nodes:
-                    nodes[path] = RegistryNode(pieces[index], path)
-                    parent.children.append(nodes[path])
+                    nodes[path] = {"name": pieces[index], "path": path, "children": []}
+                    parent["children"].append(nodes[path])
                 parent = nodes[path]
         if self.selected_key not in nodes:
             self.selected_key = "hkcu"
-        self.tree_model = Gtk.TreeListModel.new(
-            roots,
-            False,
-            False,
-            lambda node: node.children if node.children.get_n_items() else None,
-        )
-        self.tree_selection = Gtk.SingleSelection.new(self.tree_model)
-        self.tree_selection.connect("notify::selected-item", self.selection_changed)
-        self.tree_view.set_model(self.tree_selection)
+        self.tree_browser.set_rows(roots)
         self.select_key(self.selected_key)
         self.building_tree = False
         self.render_values()
@@ -1049,11 +1061,20 @@ class GraphicsMediaPage(Adw.PreferencesPage):
         self.opengl.set_selected(self.providers.index(requested))
         self.opengl.connect("notify::selected", self.opengl_changed)
         graphics.add(self.opengl)
+        graphics.add(
+            button("Install Original OpenGL Files…", lambda: window.show_component_media("opengl"))
+        )
         media = Adw.PreferencesGroup(
             title="Playback and DIVE",
             description="Changes apply next launch. Reset an override to follow the receiving runtime. Unavailable options can be saved for another computer; enabling them requires a supporting runtime before launch.",
         )
         self.add(media)
+        media.add(
+            button(
+                "Browse Original Multimedia Files…",
+                lambda: window.show_component_media("multimedia"),
+            )
+        )
         self.rows, self.resets = {}, {}
         self.descriptions = {
             "video": "Movie playback. PCM audio controls movie sound.",

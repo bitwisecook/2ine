@@ -63,7 +63,7 @@ static LxHostChild *spawnRexxService(void)
         if (strncmp(host[i], "IS_2INE=", 8) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23))
             environment[output++] = host[i];
     char *arguments[] = {executable, "--rexx-service", NULL};
-    LxHostChild *child = lx_host_child_spawn(executable, arguments, environment);
+    LxHostChild *child = lx_host_child_spawn_service(executable, arguments, environment);
     free(environment);
     free(executable);
     return child;

@@ -27,6 +27,16 @@ patterns and uses a ball-of-twine OS/2 icon with a simplified symbolic variant.
 The GNOME guide covers source launchers, relocatable Debian/RPM packages and
 the strict core26 Snap recipe.
 
+File/media browsing, component selection, registry keys/values and INI/config
+file lists use a shared native tree/table control in each desktop frontend.
+The control supplies disclosures, search, columns and optional mixed-state
+checkboxes; each screen retains its own selection and editing rules. Mac rows
+follow system light/dark appearance. File browsers retain their relevant-files
+filter and sortable size/date columns.
+
+Guest Copy and Paste commands can use the [host clipboard](clipboard.md) for
+text, rich text, HTML and bitmap images.
+
 ## Command line
 
 Build the shared engine first with `cmake -S ball -B build-ball-engine` and
@@ -45,6 +55,13 @@ The installer is an original guest executable. `install` runs it and records its
 process exit status in `logs/last-install.json`. That status is independent of
 whether every installed application works. Installation media and applications
 are supplied separately; 2ine does not bundle them.
+
+Current macOS and Linux workers keep an installation operation open until its
+guest child processes exit, including installers launched by a command script.
+The dependency audit runs after that operation completes. A changed binary,
+configuration or media inventory marks an earlier audit stale; launching an
+application refreshes it and can recover missing OS/2 dependencies from remembered
+media. Audit details remain in the ball's Logs.
 
 The ball contains:
 
@@ -165,20 +182,49 @@ The English SmartSuite base 1.7 installer uses OS/2's command processor and
 system-version files. In Applications or Install Software, choose **Install
 Components…**, then select your original OS/2 ISO or archive. The source is
 remembered for that ball. Installed components are ticked and marked Installed;
-the review shows only files still needed. CMD and original REXX support are the
+the review distinguishes installed files from files to extract. CMD and original REXX support are the
 default selection. Existing files and the application's CD mapping are preserved.
 **Browse…** is optional when you need a particular folder or nested archive.
+
+Expand a group to choose subgroups or individual files. Fonts are divided into
+bitmap, TrueType, OpenType, PostScript and metrics; help separates its engine,
+viewers, help books and reference books. Group checkboxes show a mixed state
+when only some descendants are selected. Selecting a whole group includes its
+declared requirements; individual file choices copy only the selected sources.
 
 To add the original help manager, viewer and books, select **Full Help** in
 **Install Components…** and click **Install**. It reuses the remembered media.
 Damaged optional fonts are skipped with their paths and integrity errors listed
 after installation; required support-file errors still stop extraction.
 
+Optional groups also include **SOM/DSOM Object Runtime**, **Unicode and C
+Libraries**, **Multimedia Files**, and **Networking Files**. SOM/DSOM includes
+the original libraries, daemon/server programs, messages and repositories, and
+also selects its Unicode and C libraries. It adds the original SOMDD daemon to
+the ball's owned startup programs once the complete DSOM package is present.
+The daemon runs with the ball's applications and stops with them. Existing
+startup records and repository files are preserved. Its repository environment
+inherits later application installations' SOMIR entries.
+
+Multimedia and networking groups contain original tools and support files;
+some require services 2ine does not yet support. Fonts, help books and sample
+sounds/images remain in their existing separate groups. Desktop utilities,
+languages/code pages, diagnostics/maintenance, DOS/Win-OS/2 files and original
+OpenGL files are also available. Installing legacy files does not enable an
+unsupported execution mode.
+
+Files provided entirely by 2ine are excluded from the selectable tree. Original
+alternatives such as OpenGL remain visible, with links to their graphics or
+printing settings. Extracting an alternative preserves the active provider.
+These optional groups start unticked unless the
+current dependency check identifies a relevant missing component.
+
 The CLI provides the same extraction in one command:
 
 ```sh
 python3 -m tools.ball --ball Office.2ineball install-os2-support /path/to/OS2.iso
 python3 -m tools.ball --ball Office.2ineball os2-support
+python3 -m tools.ball --ball Office.2ineball install-os2-support /path/to/OS2.iso --include som
 ```
 
 Missing files stay listed so you can supply more images. Nested ZIP,

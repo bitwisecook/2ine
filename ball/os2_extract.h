@@ -1,14 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Category-based OS/2 media planning and staged extraction into a ball. */
 #include "system_modules.h"
-static const char *extract_categories[] = {"cmd", "fonts", "assets", "printers", "help", "full"};
-static int extract_category(const char *name)
-{
-    for (int i = 0; i < 6; i++)
-        if (equal_case(name, extract_categories[i]))
-            return i;
-    return -1;
-}
+#include "os2_groups.h"
+#include "os2_som.h"
 static int extract_extension(const char *name, const char *extension)
 {
     const char *dot = strrchr(name, '.');
@@ -23,6 +17,36 @@ static int extract_video(const char *name)
             return 1;
     return 0;
 }
+/* The host supplies kernel device/volume roles; guest kernel drivers have no
+   load path. Printer resources and code-page/country data remain selectable. */
+static int extract_host_driver(const char *path)
+{
+    if (strlen(path) >= 1024)
+        return 0;
+    char normalized[1024];
+    for (size_t i = 0; i <= strlen(path); i++)
+        normalized[i] = path[i] == '/' ? '\\' : (char)toupper((unsigned char)path[i]);
+    const char *relative = !strncmp(normalized, "C:\\", 3) ? normalized + 3 : normalized;
+    const char *base = strrchr(relative, '\\');
+    if (!base)
+        return 0;
+    base++;
+    if (!strcmp(base, "COUNTRY.SYS") || !strcmp(base, "CONFIG.SYS"))
+        return 0;
+    int kernel = !strncmp(relative, "OS2\\BOOT\\", 9) ||
+                 (!strncmp(relative, "OS2\\", 4) && !strchr(relative + 4, '\\'));
+    if (kernel && (extract_extension(base, ".ADD") || extract_extension(base, ".IFS") ||
+                   extract_extension(base, ".DMD") || extract_extension(base, ".FLT")))
+        return 1;
+    int network_driver =
+        !strncmp(relative, "IBMCOM\\MACS\\", 12) || !strncmp(relative, "IBMCOM\\PROTOCOL\\", 16);
+    if (extract_extension(base, ".SYS") &&
+        (kernel || network_driver || !strncmp(relative, "OS2\\MDOS\\", 9) ||
+         !strncmp(relative, "MMOS2\\", 6)))
+        return 1;
+    return network_driver && extract_extension(base, ".OS2");
+}
+#include "os2_tree.h"
 static char *extract_child(Context *c, const char *directory, const char *name)
 {
     return tb_media_path(directory) ? keep(c, tb_media_child(directory, name))
@@ -81,6 +105,59 @@ static int extract_children(Context *c, cJSON *queue, const char *source, const 
     }
     tb_media_entries_free(entries, count);
     return !c->error;
+}
+/* Optional sibling component trees are discovered by exact installed-root
+   paths inside the same container. Direct folder plans never call this. */
+static char *extract_optional_directory(Context *c, const char *parent, const char *relative)
+{
+    char *current = keep(c, strdup(parent)), *parts = keep(c, strdup(relative));
+    for (char *part = parts; current && part && *part;)
+    {
+        char *next = strchr(part, '/');
+        if (next)
+            *next++ = 0;
+        cJSON *listing = browse_media(c, current);
+        if (!listing)
+        {
+            free(c->error);
+            c->error = NULL;
+            return NULL;
+        }
+        const cJSON *entry;
+        char *found = NULL;
+        cJSON_ArrayForEach(entry,
+                           get(listing, "entries")) if (cJSON_IsTrue(get(entry, "directory")) &&
+                                                        equal_case(field(entry, "name"), part))
+        {
+            found = keep(c, strdup(field(entry, "path")));
+            break;
+        }
+        cJSON_Delete(listing);
+        current = found;
+        part = next;
+    }
+    return current;
+}
+static int extract_expand_installation_roots(Context *c, cJSON *sources)
+{
+    if (cJSON_GetArraySize(sources) != 1)
+        return 0;
+    const char *base = str(cJSON_GetArrayItem(sources, 0));
+    char *member = keep(c, tb_media_member_name(base));
+    if (!tb_media_path(base) || !member || !equal_case(member, "OS2IMAGE"))
+        return 0;
+    char *parent = keep(c, tb_media_parent(base));
+    if (!parent)
+        return 0;
+    static const char *roots[] = {"CID/SERVER/MPTS/MPTN", "CID/SERVER/MPTS/IBMCOM",
+                                  "CID/SERVER/BOOKS", NULL};
+    for (int i = 0; roots[i]; i++)
+    {
+        char *path = extract_optional_directory(c, parent, roots[i]);
+        if (path)
+            cJSON_AddItemToArray(sources, cJSON_CreateString(path));
+    }
+    return 1;
 }
 static cJSON *open_os2_source(Context *c, const cJSON *request)
 {
@@ -196,6 +273,7 @@ static cJSON *open_os2_source(Context *c, const cJSON *request)
             break;
         }
     }
+    installation_directory |= extract_expand_installation_roots(c, chosen);
     cJSON *result = cJSON_CreateObject();
     cJSON_AddItemToObject(result, "sources", chosen);
     cJSON_AddItemToObject(result, "directory", directory);
@@ -264,11 +342,12 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
     for (int i = 0; protected_files[i]; i++)
         if (equal_case(base, protected_files[i]))
             *provided = 1;
-    *category = 5;
-    if (extract_extension(base, ".PFB") || extract_extension(base, ".PFM") ||
+    *category = EXTRACT_FULL;
+    if (extract_extension(base, ".PFB") || extract_extension(base, ".PFA") ||
+        extract_extension(base, ".PFM") || extract_extension(base, ".AFM") ||
         extract_extension(base, ".TTF") || extract_extension(base, ".TTC") ||
-        extract_extension(base, ".FON") || extract_extension(base, ".FNT") ||
-        extract_extension(base, ".OFM"))
+        extract_extension(base, ".OTF") || extract_extension(base, ".FON") ||
+        extract_extension(base, ".FNT") || extract_extension(base, ".OFM"))
         *category = 1;
     else if (extract_extension(base, ".WAV") || extract_extension(base, ".MID") ||
              extract_extension(base, ".BMP") || extract_extension(base, ".ICO") ||
@@ -283,6 +362,15 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
              !strcmp(base, "VIEWDOC.EXE") || !strcmp(base, "VIEW.EXE") ||
              !strcmp(base, "HMHELP.HLP"))
         *category = 4;
+    else if (extract_module_group(base) >= 0)
+        *category = extract_module_group(base);
+    else if (extract_som_file(base))
+        *category = EXTRACT_SOM;
+    if (!strcmp(base, "OPENGL.DLL") || !strcmp(base, "PGL.DLL"))
+    {
+        *category = EXTRACT_OPENGL;
+        *provided = 0;
+    }
     char *label = keep(c, tb_media_label(source));
     if (label)
     {
@@ -322,12 +410,40 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
                   strstr(label, "/DISP_")))
         *priority = 1;
     char *relative = anchor;
+    if (*category == EXTRACT_FULL && anchor)
+    {
+        const char *root = upper + (anchor - path);
+        if (!strncmp(root, "MMOS2/", 6))
+            *category = EXTRACT_MULTIMEDIA;
+        else if (!strncmp(root, "TCPIP/", 6) || !strncmp(root, "MPTN/", 5) ||
+                 !strncmp(root, "IBMLAN/", 7) || !strncmp(root, "IBMCOM/", 7))
+            *category = EXTRACT_NETWORK;
+    }
+    {
+        const char *root = anchor ? upper + (anchor - path) : "";
+        if (!strncmp(root, "OS2/MDOS/", 9))
+            *category = EXTRACT_LEGACY;
+        else if (!strncmp(root, "LANGUAGE/", 9) || !strncmp(root, "OS2/LANGUAGE/", 13) ||
+                 extract_extension(base, ".DCP") || extract_extension(base, ".NLS") ||
+                 !strcmp(base, "COUNTRY.SYS") || !strcmp(base, "GLOCALE.EXE"))
+            *category = EXTRACT_LANGUAGES;
+        else if (!strncmp(root, "MAINTENANCE/", 12) || strstr(root, "/TRACE/") ||
+                 !strcmp(base, "PSTAT.EXE") || !strcmp(base, "TRACE.EXE") ||
+                 !strcmp(base, "TRACEFMT.EXE") || !strcmp(base, "STRACE.EXE") ||
+                 !strcmp(base, "CHKDSK.EXE") || !strcmp(base, "CHKDSK32.EXE") ||
+                 !strcmp(base, "FDISK.EXE") || !strcmp(base, "LVM.EXE") ||
+                 !strcmp(base, "PROCDUMP.EXE") || !strcmp(base, "SYSLOGPM.EXE"))
+            *category = EXTRACT_DIAGNOSTICS;
+        else if ((!strncmp(root, "OS2/APPS/", 9) || !strcmp(base, "E.EXE")) &&
+                 *category != EXTRACT_HELP && *category != EXTRACT_FONTS)
+            *category = EXTRACT_UTILITIES;
+    }
     /* Win-OS/2 is a separate compatibility tree. Its flat Windows packages
        must not collide with native OS/2 help books, DLLs or printer drivers. */
     int windows = label && strstr(label, "/DISK_W");
     if (windows)
     {
-        *category = 5;
+        *category = EXTRACT_LEGACY;
         if (!relative)
         {
             int system = extract_extension(base, ".DLL") || extract_extension(base, ".DRV") ||
@@ -339,11 +455,13 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
         }
     }
     if (!relative && *category == 1)
-        relative = format(c, "%s/%s",
-                          extract_extension(base, ".PFB")   ? "PSFONTS"
-                          : extract_extension(base, ".PFM") ? "PSFONTS/PFM"
-                                                            : "OS2/DLL",
-                          base);
+        relative =
+            format(c, "%s/%s",
+                   extract_extension(base, ".PFB") || extract_extension(base, ".PFA") ? "PSFONTS"
+                   : extract_extension(base, ".PFM") ? "PSFONTS/PFM"
+                   : extract_extension(base, ".AFM") ? "PSFONTS/AFM"
+                                                     : "OS2/DLL",
+                   base);
     else if (!relative && *category == 2)
         relative = format(c, "%s/%s",
                           extract_video(base) ? "MMOS2/MOVIE"
@@ -358,6 +476,14 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
                           extract_extension(base, ".DLL")   ? "OS2/DLL"
                           : extract_extension(base, ".INF") ? "OS2/BOOK"
                           : extract_extension(base, ".HLP") ? "OS2/HELP"
+                                                            : "OS2",
+                          base);
+    else if (!relative && *category == EXTRACT_SOM && !extract_extension(base, ".DLL"))
+        relative = format(c, "%s/%s",
+                          !strcmp(base, "SOM.IR") ? "OS2/ETC"
+                          : !strncmp(base, "SOMDIMPL.", 9) || !strncmp(base, "SOMDCLS.", 8)
+                              ? "OS2/ETC/DSOM"
+                          : extract_extension(base, ".MSG") ? "OS2/SYSTEM"
                                                             : "OS2",
                           base);
     else if (!relative && (extract_extension(base, ".EXE") || extract_extension(base, ".DLL") ||
@@ -376,7 +502,7 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
     if ((label && strstr(label, "/DEBUG/")) || extract_extension(base, ".SYM") ||
         extract_extension(base, ".MAP"))
     {
-        *category = 5;
+        *category = EXTRACT_DIAGNOSTICS;
         *priority = 1;
         relative = extract_extra_path(c, path, source);
     }
@@ -396,6 +522,8 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
     for (char *p = destination; *p; p++)
         if (*p == '/')
             *p = '\\';
+    if (extract_host_driver(destination))
+        *provided = 1;
     return destination;
 }
 static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
@@ -408,6 +536,7 @@ static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
     }
     cJSON *result = cJSON_CreateObject(), *files = cJSON_AddArrayToObject(result, "files"),
           *queue = cJSON_CreateArray(), *unmapped = cJSON_AddArrayToObject(result, "unmapped");
+    cJSON_AddItemToObject(result, "groups", extract_groups());
     const cJSON *source;
     cJSON_ArrayForEach(source, sources)
     {
@@ -443,7 +572,7 @@ static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
                 extract_children(c, queue, root, "");
             continue;
         }
-        int category = 5, provided = 0, priority = 1;
+        int category = EXTRACT_FULL, provided = 0, priority = 1;
         char *destination = extract_destination(c, layout, path, &category, &provided, &priority);
         if (!destination)
         {
@@ -458,6 +587,10 @@ static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
         cJSON_AddStringToObject(file, "source", path);
         cJSON_AddStringToObject(file, "category", extract_categories[category]);
         cJSON_AddBoolToObject(file, "provided", provided);
+        if (extract_host_driver(destination))
+            cJSON_AddStringToObject(
+                file, "providedReason",
+                "The host supplies this kernel driver role; original kernel drivers cannot be loaded by 2ine.");
         const char *filename = strrchr(destination, '\\');
         cJSON_AddBoolToObject(file, "disabled",
                               os2_module_disabled(c, filename ? filename + 1 : destination));
@@ -473,6 +606,7 @@ static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
         return NULL;
     }
     cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
+    cJSON_AddItemToObject(result, "tree", extract_tree(c, files));
     return result;
 }
 static int extraction_wants_module(const cJSON *modules, const char *path)
@@ -534,14 +668,31 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
 {
     const cJSON *categories = get(request, "categories"), *category;
     const cJSON *modules = get(request, "modules");
+    const cJSON *file_selection = get(request, "fileSelection");
+    const cJSON *configure = get(request, "configureComponents"), *component;
+    int configure_som = 0;
+    if (configure && !array_strings(c, configure))
+        return NULL;
+    cJSON_ArrayForEach(component, configure)
+    {
+        if (extract_category(str(component)) < 0)
+        {
+            fail(c, "Unknown OS/2 component configuration option");
+            return NULL;
+        }
+        if (equal_case(str(component), "som"))
+            configure_som = 1;
+    }
     if (modules && !array_strings(c, modules))
         return NULL;
-    if (!array_strings(c, categories) || !cJSON_GetArraySize(categories))
+    if ((!categories && !file_selection) ||
+        (categories &&
+         (!array_strings(c, categories) || (!file_selection && !cJSON_GetArraySize(categories)))))
     {
         fail(c, "Select at least one extraction option");
         return NULL;
     }
-    int selected[6] = {0};
+    int selected[EXTRACT_COUNT] = {0};
     cJSON_ArrayForEach(category, categories)
     {
         int index = extract_category(str(category));
@@ -552,9 +703,45 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         }
         selected[index] = 1;
     }
+    if (!file_selection && selected[EXTRACT_SOM])
+        selected[EXTRACT_RUNTIME] = 1;
     cJSON *plan = plan_os2_extraction(c, request);
     if (!plan)
         return NULL;
+    ExtractFileSelection selection = {0};
+    if (!extract_selection(c, request, plan, &selection))
+    {
+        cJSON_Delete(plan);
+        return NULL;
+    }
+    if (selection.explicit)
+    {
+        memset(selected, 0, sizeof selected);
+        const cJSON *file;
+        cJSON_ArrayForEach(
+            file, get(plan, "files")) if (extract_file_selected(&selection, selected, file))
+            selected[extract_category(field(file, "category"))] = 1;
+        if (configure_som)
+        {
+            int som_files = 0;
+            cJSON_ArrayForEach(file,
+                               get(plan, "files")) if (equal_case(field(file, "category"), "som") &&
+                                                       !cJSON_IsTrue(get(file, "provided")))
+            {
+                som_files++;
+                if (!extract_file_selected(&selection, selected, file))
+                    fail(c, "Select every SOM file before configuring its service");
+            }
+            if (!som_files)
+                fail(c, "The selected source contains no SOM service files");
+            if (c->error)
+            {
+                cJSON_Delete(plan);
+                return NULL;
+            }
+        }
+    }
+    int som_configured = 0;
     char *workspace = keep(c, tb_archive_workspace(c->ball));
     cJSON *staged = cJSON_CreateObject(), *imported = cJSON_CreateArray(), *file;
     cJSON *priorities = cJSON_CreateObject();
@@ -562,10 +749,9 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     cJSON *ambiguous = cJSON_CreateObject(), *variants = cJSON_CreateArray();
     cJSON_ArrayForEach(file, get(plan, "files"))
     {
-        int index = extract_category(field(file, "category"));
         if (cJSON_IsTrue(get(file, "provided")) || cJSON_IsTrue(get(file, "present")) ||
-            (!selected[5] && !selected[index]) ||
-            !extraction_wants_module(modules, field(file, "path")))
+            !extract_file_selected(&selection, selected, file) ||
+            (!selection.explicit && !extraction_wants_module(modules, field(file, "path"))))
             continue;
         char *key = extract_destination_key(c, field(file, "path"));
         const cJSON *old = get(priorities, key);
@@ -584,12 +770,15 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     {
         int index = extract_category(field(file, "category"));
         if (c->error || cJSON_IsTrue(get(file, "provided")) || cJSON_IsTrue(get(file, "present")) ||
-            (!selected[5] && !selected[index]) ||
-            !extraction_wants_module(modules, field(file, "path")))
+            !extract_file_selected(&selection, selected, file) ||
+            (!selection.explicit && !extraction_wants_module(modules, field(file, "path"))))
             continue;
         const char *source = field(file, "source"), *destination = field(file, "path");
         char *key = extract_destination_key(c, destination);
-        if (get(file, "priority")->valuedouble < get(priorities, key)->valuedouble)
+        int alternate = selection.explicit &&
+                        get(file, "priority")->valuedouble < get(priorities, key)->valuedouble;
+        if (!selection.explicit &&
+            get(file, "priority")->valuedouble < get(priorities, key)->valuedouble)
             continue;
         FILE *input = tb_media_path(source) ? tb_media_fopen(source) : tb_fopen(source, "rb");
         if (!input || fseek(input, 0, SEEK_END))
@@ -638,8 +827,8 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
             break;
         }
         /* Case-insensitive destination identity is shared by OS/2 drives. */
-        const cJSON *previous = get(staged, key);
-        int preserve = get(ambiguous, key) != NULL;
+        const cJSON *previous = alternate ? NULL : get(staged, key);
+        int preserve = alternate || get(ambiguous, key) != NULL;
         if (previous)
         {
             FILE *other = tb_fopen(field(previous, "temporary"), "rb");
@@ -659,7 +848,7 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
                 free(data);
                 continue;
             }
-            if (!selected[5] || modules)
+            if (!selection.explicit && (!selected[EXTRACT_FULL] || modules))
             {
                 free(data);
                 fail(c, "Different versions of %s were found. Choose one release or language.",
@@ -750,13 +939,19 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         cJSON *paths = cJSON_CreateArray();
         cJSON_ArrayForEach(file, get(plan, "files"))
         {
-            int index = extract_category(field(file, "category"));
-            if (!cJSON_IsTrue(get(file, "provided")) && (selected[5] || selected[index]) &&
-                extraction_wants_module(modules, field(file, "path")))
+            if (!cJSON_IsTrue(get(file, "provided")) &&
+                extract_file_selected(&selection, selected, file) &&
+                (selection.explicit || extraction_wants_module(modules, field(file, "path"))))
                 cJSON_AddItemToArray(paths, cJSON_Duplicate(file, 1));
         }
         os2_configure_paths(c, paths);
         cJSON_Delete(paths);
+        if ((selection.explicit && configure_som) ||
+            (!selection.explicit && !modules && (selected[EXTRACT_SOM] || selected[EXTRACT_FULL])))
+        {
+            if (os2_som_provision(c, NULL) && os2_som_complete(c))
+                som_configured = 1;
+        }
     }
     cJSON_Delete(plan);
     if (c->error)
@@ -772,6 +967,10 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
         cJSON *media = cJSON_CreateObject();
         cJSON_AddItemToObject(media, "sources", cJSON_Duplicate(get(request, "sources"), 1));
         cJSON_AddStringToObject(media, "recorded", now(c));
+        cJSON *selection = cJSON_AddArrayToObject(media, "selectedCategories");
+        for (int i = 0; i < EXTRACT_COUNT; i++)
+            if (selected[i])
+                cJSON_AddItemToArray(selection, cJSON_CreateString(extract_categories[i]));
         remembered = write_json(c, join(c, c->ball, "os2-media.json"), media);
         cJSON_Delete(media);
     }
@@ -811,6 +1010,19 @@ static cJSON *extract_os2_categories(Context *c, const cJSON *request)
     cJSON *result = os2_support(c);
     if (result)
     {
+        cJSON_AddStringToObject(result, "selectionMode",
+                                selection.explicit ? "files" : "categories");
+        cJSON_AddBoolToObject(result, "automaticRequirementsApplied", !selection.explicit);
+        cJSON_AddBoolToObject(result, "dependenciesChecked", 0);
+        cJSON *configured = cJSON_AddArrayToObject(result, "configuredComponents");
+        if (som_configured)
+            cJSON_AddItemToArray(configured, cJSON_CreateString("som"));
+        cJSON *selection = cJSON_CreateArray();
+        put(result, "selectedCategories", selection);
+        for (int i = 0; i < EXTRACT_COUNT; i++)
+            if (selected[i])
+                cJSON_AddItemToArray(selection, cJSON_CreateString(extract_categories[i]));
+        cJSON_AddItemToObject(result, "groups", extract_groups());
         cJSON_AddItemToObject(result, "imported", imported);
         cJSON_AddItemToObject(result, "preservedVariants", variants);
         cJSON_AddItemToObject(result, "skippedFiles", skipped);

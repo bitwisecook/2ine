@@ -250,7 +250,9 @@ struct ActivityView: View {
                     if model.stopRequested { Button("Force Stop…") { model.forceStopConfirmation = true } }
                 }
                 if let log = model.log { Button("Open Full Log") { model.openFile(log.path) } }
-                if let audit = model.dependencyAuditLog { Button("Open Dependency Audit") { model.openFile(audit.path) }.accessibilityIdentifier("openDependencyAudit") }
+                if model.snapshot?.dependencyAudit?.stale == true {
+                    Button("Refresh Dependency Audit") { model.auditDependencies() }.disabled(model.busy || model.mediaBusy)
+                } else if let audit = model.dependencyAuditLog { Button("Open Dependency Audit") { model.openFile(audit.path) }.accessibilityIdentifier("openDependencyAudit") }
                 if let registrations = model.applicationRegistrationLog { Button("Open Application Registrations") { model.openFile(registrations.path) } }
             }
             ScrollView([.horizontal, .vertical]) {

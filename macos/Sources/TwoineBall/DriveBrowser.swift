@@ -25,7 +25,7 @@ struct GuestBrowserView: View {
     @State private var relevantOnly = true
     @State private var query = ""
     @State private var searchFocused = false
-    @State private var sortOrder = [KeyPathComparator(\GuestEntry.name, comparator: .localizedStandard)]
+    @State private var browserSort: OutlineBrowserSort? = .init(column: "name")
     private var removable: Bool { snapshot.manifest.drives[drive]?.isRemovable == true }
     private var readOnly: Bool { snapshot.manifest.drives[drive]?.isReadOnly == true }
     private var ejected: Bool { removable && (imageSource == nil || snapshot.unavailableDrives?[drive] != nil) }
@@ -33,12 +33,8 @@ struct GuestBrowserView: View {
     private var selectedEntry: GuestEntry? { entries.first { $0.path == selection } }
     private var chosenPath: String? { directoriesOnly ? (selectedEntry?.directory == true ? selection : listing?.path) : (selectedEntry?.directory == false ? selection : nil) }
     private var entries: [GuestEntry] {
-        (listing?.entries ?? []).filter {
-            if $0.directory { return true }
-            if directoriesOnly && relevantOnly { return false }
-            return !programsOnly || !relevantOnly || FileSearch.isProgram($0.name)
-        }.filter { FileSearch.matches($0.name, query: query) }.sorted(using: sortOrder)
-            .sorted { $0.directory && !$1.directory }
+        BrowserRows.filteredGuestEntries(listing?.entries ?? [], directoriesOnly: directoriesOnly,
+                                         programsOnly: programsOnly, relevantOnly: relevantOnly, query: query)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -61,40 +57,31 @@ struct GuestBrowserView: View {
                     .help(directoriesOnly ? "Show folders only. Turn off to show all files." : "Show executable and command files. Turn off to show all files.")
                     .onChange(of: relevantOnly) { _, _ in selection = nil }
             }
-            Table(of: GuestEntry.self, selection: $selection, sortOrder: $sortOrder) {
-                TableColumn("Name", value: \.name) { entry in
-                    Label(entry.name, systemImage: entry.directory ? "folder" : "doc")
-                        .contextMenu {
-                            if entry.directory { Button("Open Folder") { navigate(entry.path) } }
-                            Button(!removable ? "Show in Finder" : "Show Image in Finder") { model.reveal(imageSource ?? entry.hostPath) }
-                        }
-                }.width(min: 160, ideal: 320)
-                TableColumn("Size", value: \.sortSize) { Text(browserSize($0.size, directory: $0.directory)).monospacedDigit() }.width(min: 75, ideal: 90)
-                TableColumn("Date Modified", value: \.sortModified) { Text(browserDate($0.modified)) }.width(min: 135, ideal: 165)
-            } rows: {
-                ForEach(entries) { entry in
-                    if removable {
-                        TableRow(entry)
-                    } else {
-                        TableRow(entry).draggable(URL(filePath: entry.hostPath))
-                            .dropDestination(for: URL.self) { urls in
-                                if allowsImport, entry.directory { model.importFiles(urls, into: entry.path) }
-                            }
-                    }
-                }
-            }
-            .alternatingRowBackgrounds()
-            .modifier(BrowserTypeToSearch(query: $query, focused: $searchFocused))
-            .accessibilityIdentifier("guestFilesTable").accessibilityLabel("Files on drive " + drive)
-            .contextMenu(forSelectionType: String.self) { paths in
-                if let entry = entries.first(where: { paths.contains($0.path) }), entry.directory {
-                    Button("Open Folder") { navigate(entry.path) }
-                }
-            } primaryAction: { paths in
-                if let entry = entries.first(where: { paths.contains($0.path) }) {
-                    if entry.directory { navigate(entry.path) } else if !directoriesOnly { choose?(entry.path) }
-                }
-            }
+            NativeOutlineBrowser(nodes: BrowserRows.guest(entries), columns: BrowserRows.fileColumns,
+                                 selection: $selection, query: $query, searchFocused: $searchFocused,
+                                 sort: $browserSort, disabled: loading,
+                                 identifier: "guestFilesTable", accessibilityLabel: "Files on drive " + drive,
+                                 onAction: { id, action in
+                                     guard let entry = entries.first(where: { $0.path == id }) else { return }
+                                     if action == "open" { navigate(entry.path) }
+                                     if action == "reveal" { model.reveal(imageSource ?? entry.hostPath) }
+                                 }, onActivate: { id in
+                                     guard let entry = entries.first(where: { $0.path == id }) else { return }
+                                     if entry.directory { navigate(entry.path) } else if !directoriesOnly { choose?(entry.path) }
+                                 }, contextActions: { id in
+                                     guard let entry = entries.first(where: { $0.path == id }) else { return [] }
+                                     return (entry.directory ? [OutlineMenuAction(id: "open", title: "Open Folder")] : []) +
+                                         [OutlineMenuAction(id: "reveal", title: removable ? "Show Image in Finder" : "Show in Finder")]
+                                 }, dragURL: { id in
+                                     guard !removable, let entry = entries.first(where: { $0.path == id }) else { return nil }
+                                     return URL(filePath: entry.hostPath)
+                                 }, canDrop: { id in
+                                     guard allowsImport, !readOnly, !ejected, !loading, !model.busy, !model.mediaBusy else { return false }
+                                     return id == nil ? listing != nil : entries.first(where: { $0.path == id })?.directory == true
+                                 }, onDrop: { urls, id in
+                                     guard allowsImport, !readOnly, !ejected, let target = id ?? listing?.path else { return false }
+                                     return model.importFiles(urls, into: target)
+                                 }, dropTargetChanged: { targeted = $0 })
             .overlay {
                 if loading { ProgressView("Reading drive…") }
                 else if ejected {
@@ -109,10 +96,6 @@ struct GuestBrowserView: View {
                 }
             }
             .overlay { if targeted && allowsImport && !readOnly && !ejected { RoundedRectangle(cornerRadius: 6).stroke(.tint, lineWidth: 3).allowsHitTesting(false) } }
-            .dropDestination(for: URL.self) { urls, _ in
-                guard allowsImport, !readOnly, !ejected, let target = listing?.path else { return false }
-                return model.importFiles(urls, into: target)
-            } isTargeted: { targeted = $0 }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).accessibilityIdentifier("guestBrowserError") }
             HStack {
                 Text(listing?.path ?? path).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
@@ -197,6 +180,9 @@ struct DrivesView: View {
     let snapshot: BallSnapshot
     @State private var selected: String? = "C"
     @State private var defaultPicker = false
+    @State private var driveQuery = ""
+    @State private var driveSearchFocused = false
+    @State private var driveSort: OutlineBrowserSort? = .init(column: "drive")
     private var letter: String { selected ?? snapshot.currentDrive }
     private var driveActions: BallViewActions {
         let mapping = snapshot.manifest.drives[letter]
@@ -224,23 +210,27 @@ struct DrivesView: View {
                 Spacer()
                 Button("Set Default Folder…") { defaultPicker = true }.disabled(model.busy || snapshot.roots[letter] == nil || snapshot.unavailableDrives?[letter] != nil || model.mediaBusy)
             }.disabled(model.busy || model.mediaBusy)
-            Table(of: DriveRow.self, selection: $selected) {
-                TableColumn("Drive") { row in
-                    Text(row.letter + ":").font(.system(.body, design: .monospaced).bold())
-                        .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                }.width(min: 70, ideal: 85, max: 110)
-                TableColumn("Default Working Directory", value: \.working).width(min: 150, ideal: 210)
-                TableColumn("Folder or Image", value: \.root).width(min: 180, ideal: 360)
-            } rows: {
-                ForEach(rows) { row in
-                    TableRow(row).dropDestination(for: URL.self) { urls in
-                        if snapshot.unavailableDrives?[row.letter] == nil && snapshot.roots[row.letter] != nil &&
-                            (snapshot.manifest.drives[row.letter]?.isReadOnly != true && snapshot.manifest.drives[row.letter]?.image != nil || snapshot.manifest.drives[row.letter]?.isRemovable != true) {
-                            model.importFiles(urls, into: row.letter + ":\\")
-                        }
-                    }
-                }
-            }.frame(height: 150).accessibilityIdentifier("drivesTable").accessibilityLabel("Mapped OS/2 drives")
+            BrowserSearchField(text: $driveQuery, focused: $driveSearchFocused, placeholder: "Search Drives", identifier: "driveSearch")
+                .frame(height: 28)
+            NativeOutlineBrowser(nodes: rows.map { row in
+                OutlineBrowserNode(id: row.letter, title: row.letter + ":", cells: [
+                    "drive": OutlineCell(text: row.letter + ":", monospaced: true, icon: snapshot.manifest.drives[row.letter]?.isRemovable == true ? "opticaldisc" : "externaldrive"),
+                    "working": OutlineCell(text: row.working), "root": OutlineCell(text: row.root)
+                ], tooltip: row.root, searchText: row.letter + " " + row.working + " " + row.root)
+            }, columns: [
+                OutlineBrowserColumn(id: "drive", title: "Drive", width: 85, minimum: 70, maximum: 110, sortable: true),
+                OutlineBrowserColumn(id: "working", title: "Default Working Directory", width: 210, minimum: 150, sortable: true),
+                OutlineBrowserColumn(id: "root", title: "Folder or Image", width: 360, minimum: 180, sortable: true)
+            ], selection: $selected, query: $driveQuery, searchFocused: $driveSearchFocused, sort: $driveSort,
+            disabled: model.busy || model.mediaBusy, identifier: "drivesTable", accessibilityLabel: "Mapped OS/2 drives",
+            canDrop: { id in
+                guard let id, let mapping = snapshot.manifest.drives[id] else { return false }
+                return snapshot.unavailableDrives?[id] == nil && snapshot.roots[id] != nil && !mapping.isReadOnly &&
+                    (mapping.image != nil || !mapping.isRemovable)
+            }, onDrop: { urls, id in
+                guard let id else { return false }
+                return model.importFiles(urls, into: id + ":\\")
+            }).frame(height: 150)
             Text("Drop files onto writable drives to copy them. CDs and protected floppies are read-only. Existing files are never replaced.")
                 .font(.caption).foregroundStyle(.secondary)
             if snapshot.roots[letter] == nil {

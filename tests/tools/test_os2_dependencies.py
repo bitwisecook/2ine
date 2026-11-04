@@ -45,6 +45,19 @@ def segmented(imports=()):
     return dos + header + references + names
 
 
+def dsom_companions():
+    return {
+        **{f"OS2/{name}.EXE": linear(["DOSCALLS"]) for name in ("SOMDD", "SOMDSVR")},
+        "OS2/ETC/SOM.IR": b"repository",
+        **{
+            f"OS2/ETC/DSOM/{name}.{ext}": b"repository index"
+            for name in ("SOMDIMPL", "SOMDCLS")
+            for ext in ("DAT", "TOC")
+        },
+        **{f"OS2/SYSTEM/{name}.MSG": b"messages" for name in ("SOMD", "SOMK", "SOME_OS2")},
+    }
+
+
 class DependencyAuditTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="2ine-dependencies-")
@@ -70,11 +83,23 @@ class DependencyAuditTests(unittest.TestCase):
         (media / "OS2/SYSLEVEL.OS2").write_bytes(b"\xff\xffSYSLEVEL" + bytes(40))
         (dlls / "SOM.DLL").write_bytes(linear(["SOMD"]))
         (dlls / "SOMD.DLL").write_bytes(segmented(["DOSCALLS"]))
+        for relative, content in dsom_companions().items():
+            path = media / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
         self.request("command", arguments=["map", "D", str(media)])
         return media
 
     def test_media_chooser_only_when_missing_and_no_verified_source(self):
         self.assertFalse(ball_api.needs_dependency_media({"missing": []}))
+        self.assertTrue(
+            ball_api.needs_dependency_media(
+                {
+                    "missing": [],
+                    "componentFiles": [{"path": "C:\\OS2\\SOMDD.EXE", "status": "missing"}],
+                }
+            )
+        )
         self.assertTrue(ball_api.needs_dependency_media({"missing": ["SOMD"], "media": []}))
         for status in (None, "unavailable", "unverified", "not-os2-media"):
             self.assertTrue(
@@ -88,6 +113,38 @@ class DependencyAuditTests(unittest.TestCase):
                     {"missing": ["SOMD"], "media": [{"status": status}]}
                 )
             )
+
+    def test_missing_and_unreachable_components_have_verified_group_metadata(self):
+        self.installed(
+            "Apps/APP.EXE", linear(["SOMD", "LIBUNI", "LIBCS", "UCONV", "ABSENT", "DOSCALLS"])
+        )
+        self.installed("Other/LIBCS.DLL", linear())
+        result = self.request("audit-dependencies", recover=False)
+        groups = {g["id"]: g for g in result["componentGroups"]}
+        self.assertEqual(set(groups), {"som", "runtime"})
+        self.assertEqual(groups["som"]["modules"], ["SOMD"])
+        self.assertEqual(groups["som"]["requires"], ["runtime"])
+        self.assertEqual(set(groups["runtime"]["modules"]), {"LIBUNI", "LIBCS", "UCONV"})
+        self.assertTrue(all(not g["defaultSelected"] for g in groups.values()))
+        self.assertNotIn("DOSCALLS", result["missing"])
+        saved = json.loads(Path(result["jsonPath"]).read_text())
+        self.assertEqual(saved["componentGroups"], result["componentGroups"])
+        self.installed("Apps/SOMD.DLL", linear())
+        self.installed("Apps/LIBUNI.DLL", linear())
+        self.installed("Apps/LIBCS.DLL", linear())
+        self.installed("Apps/UCONV.DLL", linear())
+        for relative, content in dsom_companions().items():
+            self.installed(relative, content)
+        refreshed = self.request("audit-dependencies", recover=False)
+        self.assertEqual(refreshed["componentGroups"], [])
+
+    def test_som_component_marks_runtime_as_required_without_claiming_it_missing(self):
+        self.installed("Apps/APP.EXE", linear(["SOM"]))
+        result = self.request("audit-dependencies", recover=False)
+        groups = {g["id"]: g for g in result["componentGroups"]}
+        self.assertEqual(result["missing"], ["SOM"])
+        self.assertEqual(groups["runtime"]["modules"], [])
+        self.assertTrue(groups["runtime"]["requiredByGroup"])
 
     def test_graphics_provider_policy_suppresses_disabled_or_native_recovery(self):
         self.installed("Apps/APP.EXE", linear(["OPENGL", "DIVE"]))
@@ -128,7 +185,8 @@ class DependencyAuditTests(unittest.TestCase):
             original_gl = next(
                 file for file in plan["files"] if file["path"].upper().endswith("OPENGL.DLL")
             )
-            self.assertTrue(original_gl["provided"])
+            self.assertFalse(original_gl["provided"])
+            self.assertEqual(original_gl["category"], "opengl")
         inherited = self.request("audit-dependencies", build=str(build))
         inherited_status = {entry["module"]: entry["status"] for entry in inherited["imports"]}
         self.assertEqual(inherited_status["OPENGL"], "provided")
@@ -204,7 +262,11 @@ class DependencyAuditTests(unittest.TestCase):
         self.assertEqual(result["missing"], [])
         self.assertTrue(result["complete"])
         imported = {item["path"]: item for item in result["imported"]}
-        self.assertEqual(set(imported), {"C:\\OS2\\DLL\\SOM.DLL", "C:\\OS2\\DLL\\SOMD.DLL"})
+        self.assertEqual(
+            set(imported),
+            {"C:\\OS2\\DLL\\SOM.DLL", "C:\\OS2\\DLL\\SOMD.DLL"}
+            | {"C:\\" + path.replace("/", "\\") for path in dsom_companions()},
+        )
         for name in ("SOM.DLL", "SOMD.DLL"):
             original = (media / "OS2/DLL" / name).read_bytes()
             self.assertEqual((self.ball / "drive_c/OS2/DLL" / name).read_bytes(), original)
@@ -247,6 +309,101 @@ class DependencyAuditTests(unittest.TestCase):
         self.assertTrue((self.ball / "drive_c/OS2/DLL/SOM.DLL").is_file())
         self.assertTrue((self.ball / "drive_c/OS2/DLL/SOMD.DLL").is_file())
 
+    def test_existing_somd_recovers_package_files_and_owns_service_without_overwriting_user_data(
+        self,
+    ):
+        self.installed("Apps/APP.EXE", linear(["SOMD"]))
+        self.installed("OS2/DLL/SOMD.DLL", segmented(["DOSCALLS"]))
+        self.installed("OS2/ETC/DSOM/SOMDIMPL.DAT", b"user repository data")
+        (self.ball / "drive_c/CONFIG.SYS").write_text(
+            "SET SOMIR=C:\\APPS\\APP.IR\nSET SOMBASE=C:\\OS2\n"
+        )
+        manifest = ball_api.load(self.ball)
+        manual = {"program": r"C:\APPS\OTHER.EXE", "arguments": ["keep"], "cwd": r"C:\APPS"}
+        manifest["startupPrograms"] = [manual]
+        ball_api.save(self.ball / "ball.json", manifest)
+        before = self.request("audit-dependencies", resolve=False)
+        self.assertEqual(before["missing"], [])
+        self.assertFalse(before["complete"])
+        self.assertEqual(len(before["componentFiles"]), 10)
+        groups = {g["id"]: g for g in before["componentGroups"]}
+        self.assertIn(r"C:\OS2\ETC\SOM.IR", groups["som"]["files"])
+        self.assertEqual(groups["som"]["modules"], [])
+        media = self.os2_media()
+        recovered = self.request("audit-dependencies")
+        self.assertTrue(recovered["complete"])
+        self.assertEqual(len(recovered["imported"]), 9)
+        self.assertEqual(
+            (self.ball / "drive_c/OS2/ETC/DSOM/SOMDIMPL.DAT").read_bytes(), b"user repository data"
+        )
+        for path in dsom_companions():
+            if not path.endswith("SOMDIMPL.DAT"):
+                self.assertEqual(
+                    (self.ball / "drive_c" / path).read_bytes(), (media / path).read_bytes()
+                )
+        services = ball_api.load(self.ball)["startupPrograms"]
+        self.assertEqual(services[0], manual)
+        self.assertEqual(len(services), 2)
+        self.assertEqual(services[1]["owner"], "os2-som")
+        self.assertEqual(services[1]["environment"]["SOMIR"], r"C:\OS2\ETC\SOM.IR;%SOMIR%")
+        self.assertEqual(services[1]["environment"]["SOMBASE"], r"C:\OS2")
+        self.assertEqual(self.request("audit-dependencies")["imported"], [])
+        self.assertEqual(ball_api.load(self.ball)["startupPrograms"], services)
+        (self.ball / "drive_c/CONFIG.SYS").write_text("SET SOMIR=C:\\APPS\\LATER.IR\n")
+        build = self.root / "runtime"
+        build.mkdir()
+        (build / "lx_loader").write_bytes(b"loader")
+        self.installed("APPS/OTHER.EXE", linear())
+        plan = self.request(
+            "prepare-launch", build=str(build), arguments=["run", r"C:\APPS\APP.EXE"]
+        )
+        self.assertEqual(
+            plan["startup"][1]["environment"]["SOMIR"], r"C:\OS2\ETC\SOM.IR;C:\APPS\LATER.IR"
+        )
+
+    def test_manual_som_daemon_service_is_preserved_and_incomplete_media_is_reported(self):
+        self.installed("Apps/APP.EXE", linear(["SOMD"]))
+        self.installed("OS2/DLL/SOMD.DLL", linear())
+        before = self.request("audit-dependencies")
+        self.assertFalse(before["complete"])
+        self.assertNotIn("startupPrograms", ball_api.load(self.ball))
+        self.os2_media()
+        manifest = ball_api.load(self.ball)
+        manual = {
+            "program": r"C:\OS2\SOMDD.EXE",
+            "arguments": ["custom"],
+            "environment": {"SOMIR": "custom.ir"},
+        }
+        manifest["startupPrograms"] = [manual]
+        ball_api.save(self.ball / "ball.json", manifest)
+        recovered = self.request("audit-dependencies")
+        self.assertTrue(recovered["complete"])
+        self.assertEqual(ball_api.load(self.ball)["startupPrograms"], [manual])
+
+    def test_companion_deletion_and_missing_managed_service_invalidate_recovery_cache(self):
+        self.installed("Apps/APP.EXE", linear(["SOMD"]))
+        self.os2_media()
+        recovered = self.request("ensure-dependencies")
+        self.assertTrue(recovered["complete"])
+        self.assertFalse(self.request("snapshot")["dependencyAudit"]["stale"])
+        (self.ball / "drive_c/OS2/ETC/SOM.IR").unlink()
+        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
+        restored = self.request("ensure-dependencies")
+        self.assertFalse(restored["cacheHit"])
+        self.assertEqual([f["path"] for f in restored["imported"]], [r"C:\OS2\ETC\SOM.IR"])
+        self.assertTrue(restored["complete"])
+        self.assertFalse(restored["stale"])
+        manifest = ball_api.load(self.ball)
+        del manifest["startupPrograms"]
+        ball_api.save(self.ball / "ball.json", manifest)
+        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
+        service = self.request("ensure-dependencies")
+        self.assertEqual(service["imported"], [])
+        self.assertTrue(service["complete"])
+        self.assertFalse(service["stale"])
+        self.assertEqual(len(ball_api.load(self.ball)["startupPrograms"]), 1)
+        self.assertTrue(self.request("ensure-dependencies")["cacheHit"])
+
     def test_cli_detects_iso_inside_zip_before_dependency_recovery(self):
         self.installed("Apps/APP.EXE", linear(["SOMD"]))
         payload = io.BytesIO()
@@ -255,6 +412,8 @@ class DependencyAuditTests(unittest.TestCase):
             archive.writestr("OS2/CMD.EXE", linear())
             archive.writestr("OS2/SYSLEVEL.OS2", b"\xff\xffSYSLEVEL" + bytes(40))
             archive.writestr("OS2/DLL/SOMD.DLL", original)
+            for relative, content in dsom_companions().items():
+                archive.writestr(relative, content)
         source = self.root / "OS2 nested.zip"
         with zipfile.ZipFile(source, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             archive.writestr("0-unreadable.iso", b"Not a readable ISO filesystem")

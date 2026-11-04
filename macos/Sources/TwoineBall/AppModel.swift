@@ -19,6 +19,10 @@ struct OS2ImportRequest: Identifiable {
         self.ball = ball; self.sources = sources; self.categories = categories
     }
 }
+struct ComponentSettingsRequest: Identifiable {
+    let token: String
+    var id: String { token }
+}
 struct InstallCompletion: Identifiable {
     let id = UUID()
     let ball: String
@@ -112,6 +116,15 @@ final class AppModel {
     }
     var activity = "No process has run in this session."
     var supportImport: OS2ImportRequest?
+    var componentSettingsRequest: ComponentSettingsRequest?
+    func openComponentSetting(_ token: String) {
+        guard ["graphics.opengl", "graphics", "printing"].contains(token) else { return }
+        componentSettingsRequest = ComponentSettingsRequest(token: token)
+    }
+    func openOS2ComponentGroup(_ category: OS2ExtractionCategory) {
+        guard let selected, !busy, !mediaBusy, !processRunning else { return }
+        supportImport = OS2ImportRequest(ball: selected, categories: [category])
+    }
     var audioEditor = false
     var operation = "Ready"
     var log: URL?
@@ -640,33 +653,42 @@ final class AppModel {
         let file = logs.appending(path: "wps-registration-latest.json").resolvingSymlinksInPath()
         return file.path.hasPrefix(logs.path + "/") && FileManager.default.fileExists(atPath: file.path) ? file : nil
     }
+    private func restoreDependencyMedia(_ audit: DependencyAudit, ball: String, build: String) async throws -> DependencyAudit? {
+        guard audit.needsMediaSelection else { return audit }
+        let panel = NSOpenPanel()
+        panel.title = "Restore Missing OS/2 Components"
+        let groups = (audit.componentGroups ?? []).map(\.title).joined(separator: ", ")
+        panel.message = (groups.isEmpty ? "Installed applications require additional OS/2 libraries." : "Installed applications require: " + groups + ".") + " Choose your OS/2 ISO, archive, floppy images or installation folder. Existing files are preserved."
+        panel.prompt = "Restore Components"
+        panel.canChooseDirectories = true; panel.canChooseFiles = true
+        panel.allowsMultipleSelection = true
+        operation = "Choose OS/2 installation media"
+        guard panel.runModal() == .OK else { return nil }
+        operation = "Finding OS/2 installation files…"
+        var source = DesktopRequest("open-os2-source", ball: ball, build: build)
+        source.sources = panel.urls.map(\.path)
+        let media = try await backend.request(source, as: OS2MediaSource.self)
+        var restore = DesktopRequest("audit-dependencies", ball: ball, build: build)
+        restore.sources = media.sources
+        operation = "Restoring missing OS/2 components…"
+        let restored = try await backend.request(restore, as: DependencyAudit.self)
+        activity = [media.warningSummary, restored.summary].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        return restored
+    }
+    func dependencyRequirements() async throws -> DependencyAudit {
+        guard let selected else { throw BallError("Choose a ball first.") }
+        var request = DesktopRequest("audit-dependencies", ball: selected, build: build)
+        request.resolve = false
+        return try await backend.request(request, as: DependencyAudit.self)
+    }
     func auditDependencies() {
         guard let selected, !busy, !mediaBusy, !processRunning else { return }
         perform {
-            self.operation = "Checking installed libraries…"
-            var audit = try await self.backend.request(DesktopRequest("audit-dependencies", ball: selected, build: self.build), as: DependencyAudit.self)
+            self.operation = "Checking installed components…"
+            let audit = try await self.backend.request(DesktopRequest("audit-dependencies", ball: selected, build: self.build), as: DependencyAudit.self)
             self.page = .activity; self.activity = audit.summary
             self.exitCode = nil
-            if audit.needsMediaSelection {
-                let panel = NSOpenPanel()
-                panel.title = "Restore Missing OS/2 Libraries"
-                panel.message = "Choose your OS/2 ISO, archive, floppy images or installation folder. Only missing libraries needed by installed applications will be restored. Existing files are preserved."
-                panel.prompt = "Restore Libraries"
-                panel.canChooseDirectories = true; panel.canChooseFiles = true
-                panel.allowsMultipleSelection = true
-                self.operation = "Choose OS/2 installation media"
-                if panel.runModal() == .OK {
-                    self.operation = "Finding OS/2 installation files…"
-                    var source = DesktopRequest("open-os2-source", ball: selected, build: self.build)
-                    source.sources = panel.urls.map(\.path)
-                    let media = try await self.backend.request(source, as: OS2MediaSource.self)
-                    var restore = DesktopRequest("audit-dependencies", ball: selected, build: self.build)
-                    restore.sources = media.sources
-                    self.operation = "Restoring missing system libraries…"
-                    audit = try await self.backend.request(restore, as: DependencyAudit.self)
-                    self.activity = [media.warningSummary, audit.summary].filter { !$0.isEmpty }.joined(separator: "\n\n")
-                }
-            }
+            _ = try await self.restoreDependencyMedia(audit, ball: selected, build: self.build)
             self.operation = "Dependency audit finished"
             try await self.reload(selected)
         }
@@ -675,11 +697,14 @@ final class AppModel {
         var request = DesktopRequest("browse-media", ball: selected); request.path = path
         return try await backend.request(request, as: MediaDirectory.self)
     }
-    func installOS2Support(_ sources: [String], categories: Set<OS2ExtractionCategory> = OS2ExtractionCategory.defaults, ball: String? = nil) async throws -> OS2SupportStatus {
+    func installOS2Support(_ sources: [String], categories: Set<OS2ExtractionCategory> = OS2ExtractionCategory.defaults, ball: String? = nil,
+                           fileSelection: [String]? = nil, configureComponents: [String]? = nil) async throws -> OS2SupportStatus {
         guard let selected, !busy, !mediaBusy else { throw BallError("Wait for the current operation to finish.") }
         busy = true; defer { busy = false }
         guard ball == nil || selected == ball else { throw BallError("The selected ball changed. Open OS/2 extraction again.") }
         var request = DesktopRequest("import-os2-support", ball: selected, build: build); request.sources = sources
+        request.fileSelection = fileSelection
+        request.configureComponents = configureComponents
         request.categories = categories.map(\.rawValue).sorted()
         let result = try await backend.request(request, as: OS2SupportStatus.self)
         try await reload(selected)
@@ -915,6 +940,15 @@ final class AppModel {
             defer { self.processRunning = false }
             let result: ProcessResult
             do {
+                self.operation = "Checking installed components…"
+                let audit = try await self.backend.request(DesktopRequest("ensure-dependencies", ball: selected, build: build), as: DependencyAudit.self)
+                self.activity = audit.summary
+                guard try await self.restoreDependencyMedia(audit, ball: selected, build: build) != nil else {
+                    self.operation = "Launch Cancelled"
+                    try await self.reload(selected)
+                    return
+                }
+                self.operation = "Starting…"
                 result = try await self.backend.execute(ball: selected, build: build, arguments: arguments, workingDirectories: directories, environment: environment) { [weak self] text in
                     await self?.updateActivity(text)
                 }
@@ -929,6 +963,9 @@ final class AppModel {
             }
             self.operation = result.signalled ? "Terminated by signal \(result.code)" : "Exited \(result.code)"
             if let error = result.receiptError { self.error = "The process exited, but its installer receipt could not be saved: " + error }
+            if let audit = result.dependencyAudit, audit.needsMediaSelection {
+                _ = try await self.restoreDependencyMedia(audit, ball: selected, build: build)
+            }
             try await self.reload(selected)
         }
     }

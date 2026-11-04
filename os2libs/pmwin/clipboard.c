@@ -2,11 +2,19 @@
 /* Guest clipboard metadata and system atoms are shared by PM threads. */
 #include "os2libs/pmwin/internal.h"
 #include "hal/host_sync.h"
+#include "hal/clipboard.h"
+#include "os2libs/pmwin/graphics.h"
 #include <strings.h>
+#include <ctype.h>
 
 typedef struct ClipFormat
 {
-    ULONG format, data, flags;
+    ULONG format, data, flags, codepage;
+    uint64_t serial;
+    LxGuestMapping *mapping;
+    size_t length;
+    char *name;
+    int imported;
     struct ClipFormat *next;
 } ClipFormat;
 typedef struct SystemAtom
@@ -19,6 +27,10 @@ static LxHostOnce clipboard_once = LX_HOST_ONCE_INIT;
 static LxHostMutex *clipboard_mutex;
 static AnchorBlock *clipboard_open;
 static HWND clipboard_owner;
+static AnchorBlock *owner_anchor;
+static uint64_t clipboard_revision, clipboard_serial;
+static BOOL clipboard_dirty;
+static _Thread_local ULONG rendering_format;
 static ClipFormat *formats;
 static SystemAtom *atoms;
 typedef struct PrivateAtomTable
@@ -46,136 +58,24 @@ static BOOL lock_clipboard(void)
     lx_host_once(&clipboard_once, initialize_clipboard);
     return clipboard_mutex && lx_host_mutex_lock(clipboard_mutex, UINT32_MAX) == LX_HOST_LOCK_OK;
 }
-BOOL WinOpenClipbrd(HAB hab)
-{
-    AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !lock_clipboard())
-        return FALSE;
-    BOOL result = clipboard_open == NULL;
-    if (result)
-        clipboard_open = anchor;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-BOOL WinCloseClipbrd(HAB hab)
-{
-    AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !lock_clipboard())
-        return FALSE;
-    BOOL result = clipboard_open == anchor;
-    if (result)
-        clipboard_open = NULL;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-BOOL WinEmptyClipbrd(HAB hab)
-{
-    AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !lock_clipboard())
-        return FALSE;
-    BOOL result = clipboard_open == anchor;
-    if (result)
-    {
-        while (formats)
-        {
-            ClipFormat *next = formats->next;
-            free(formats);
-            formats = next;
-        }
-        clipboard_owner = 0;
-    }
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-HWND WinQueryClipbrdOwner(HAB hab)
-{
-    if (!getAnchorBlock(hab) || !lock_clipboard())
-        return 0;
-    HWND result = clipboard_owner;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-BOOL WinSetClipbrdOwner(HAB hab, HWND owner)
-{
-    AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || (owner && !getWindowFromHWND(anchor, owner)) || !lock_clipboard())
-        return FALSE;
-    BOOL result = clipboard_open == anchor;
-    if (result)
-        clipboard_owner = owner;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-ULONG WinEnumClipbrdFmts(HAB hab, ULONG format)
-{
-    AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !lock_clipboard())
-        return 0;
-    ClipFormat *item = clipboard_open == anchor ? formats : NULL;
-    if (format)
-    {
-        while (item && item->format != format)
-            item = item->next;
-        if (item)
-            item = item->next;
-    }
-    ULONG result = item ? item->format : 0;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-BOOL WinQueryClipbrdFmtInfo(HAB hab, ULONG format, PULONG flags)
-{
-    if (!getAnchorBlock(hab) || !flags || !lock_clipboard())
-        return FALSE;
-    ClipFormat *item = formats;
-    while (item && item->format != format)
-        item = item->next;
-    if (item)
-        *flags = item->flags;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return item != NULL;
-}
-ULONG WinQueryClipbrdData(HAB hab, ULONG format)
-{
-    AnchorBlock *anchor = getAnchorBlock(hab);
-    if (!anchor || !lock_clipboard())
-        return 0;
-    ClipFormat *item = clipboard_open == anchor ? formats : NULL;
-    while (item && item->format != format)
-        item = item->next;
-    ULONG result = item ? item->data : 0;
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
-BOOL WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
-{
-    AnchorBlock *anchor = getAnchorBlock(hab);
-    /* Ownership of arbitrary guest pointer allocations is not supported yet. */
-    if (!anchor || !format || !data || (flags & ~0x603u) || ((flags & 0x400) && !(flags & 1)) ||
-        !lock_clipboard())
-        return FALSE;
-    BOOL result = clipboard_open == anchor;
-    if (result)
-    {
-        ClipFormat **slot = &formats;
-        while (*slot && (*slot)->format != format)
-            slot = &(*slot)->next;
-        if (!*slot)
-            *slot = calloc(1, sizeof **slot);
-        result = *slot != NULL;
-        if (result)
-        {
-            (*slot)->format = format;
-            (*slot)->data = data;
-            (*slot)->flags = flags;
-        }
-    }
-    lx_host_mutex_unlock(clipboard_mutex);
-    return result;
-}
+#include "os2libs/pmwin/clipboard_transfer.h"
 ULONG WinQuerySystemAtomTable(VOID)
 {
     return 1;
+}
+ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity)
+{
+    if (!output || !capacity || !lock_clipboard())
+        return 0;
+    const char *name = format_name(format);
+    size_t size = name ? strlen(name) : 0;
+    if (size >= capacity)
+        size = capacity - 1;
+    if (size)
+        memcpy(output, name, size);
+    output[size] = 0;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return (ULONG)size;
 }
 static ULONG atom_name(ULONG table, PSZ name, BOOL add)
 {
@@ -273,6 +173,10 @@ ULONG WinDeleteAtom(ULONG table, ULONG atom)
 
 ULONG lx_pm_clipboard_count(void)
 {
+    synchronize_clipboard();
+    LxHostClipboardState state;
+    if (lx_host_clipboard_state(&state) && !state.owned)
+        import_host_formats();
     if (!lock_clipboard())
         return 0;
     ULONG count = 0;

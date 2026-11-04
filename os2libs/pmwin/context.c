@@ -8,6 +8,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/video_frames.h"
 #include "os2libs/pmwin/graphics.h"
+#include "hal/clipboard.h"
 static void cleanupThreadPM(void);
 /* OS/2 deduces the anchor from the calling thread; HAB arguments are advisory. */
 AnchorBlock *getAnchorBlockNoHAB(void)
@@ -113,6 +114,7 @@ static void cleanupThreadPM(void)
         return;
     }
     WinCloseClipbrd(anchor->hab);
+    lx_host_clipboard_materialize();
 
     for (size_t i = 0; i < anchor->windows_array_len; i++)
     {

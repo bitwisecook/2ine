@@ -355,6 +355,146 @@ class OS2SupportTests(unittest.TestCase):
             [],
         )
 
+    def test_component_groups_expand_som_runtime_and_preserve_other_choices(self):
+        entries = {
+            **{
+                f"OS2/DLL/{name}.DLL": b"original"
+                for name in (
+                    "SOM",
+                    "SOMD",
+                    "SOMIR",
+                    "SOMU",
+                    "SOMEM",
+                    "SOMTC",
+                    "SOMSEC",
+                    "SOMS",
+                    "SOMUC",
+                    "OREXXSOM",
+                    "LIBCS",
+                    "LIBUNI",
+                    "UCONV",
+                )
+            },
+            "OS2/SOMDD.EXE": b"daemon",
+            "OS2/SOMDSVR.EXE": b"server",
+            "OS2/ETC/SOM.IR": b"repository",
+            "OS2/ETC/DSOM/SOMDIMPL.DAT": b"implementation data",
+            "OS2/ETC/DSOM/SOMDIMPL.TOC": b"implementation index",
+            "OS2/ETC/DSOM/SOMDCLS.DAT": b"class data",
+            "OS2/ETC/DSOM/SOMDCLS.TOC": b"class index",
+            "OS2/SYSTEM/SOMD.MSG": b"daemon messages",
+            "OS2/SYSTEM/SOMK.MSG": b"kernel messages",
+            "OS2/SYSTEM/SOME_OS2.MSG": b"event messages",
+            "MMOS2/INSTALL/MMPM.INI": b"media configuration",
+            "MMOS2/DLL/MMIO.DLL": b"provided bridge",
+            "MMOS2/HELP/MEDIA.HLP": b"media help",
+            "MMOS2/SOUNDS/SAMPLE.WAV": b"sample sound",
+            "MMOS2/DLL/HEL08.FON": b"media font",
+            "TCPIP/BIN/PING.EXE": b"network tool",
+            "MPTN/ETC/RESOLV2": b"network configuration",
+            "IBMCOM/DLL/TCPIP32.DLL": b"provided bridge",
+            "IBMLAN/NETPROG/NET.EXE": b"network tool",
+            "OS2/DLL/SOMAPPLICATION.DLL": b"unrelated application",
+        }
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            for name, content in entries.items():
+                archive.writestr(name, content)
+        source = self.media("components.zip", output.getvalue())
+        plan = self.request("plan-os2-extraction", sources=[source])
+        self.assertEqual(
+            [g["id"] for g in plan["groups"]],
+            [
+                "cmd",
+                "fonts",
+                "assets",
+                "printers",
+                "help",
+                "full",
+                "som",
+                "runtime",
+                "multimedia",
+                "network",
+                "utilities",
+                "languages",
+                "diagnostics",
+                "legacy",
+                "opengl",
+            ],
+        )
+        groups = {g["id"]: g for g in plan["groups"]}
+        self.assertEqual(groups["som"]["requires"], ["runtime"])
+        self.assertEqual([g["id"] for g in plan["groups"] if g["defaultSelected"]], ["cmd"])
+        files = {f["path"][3:].replace("\\", "/"): f for f in plan["files"]}
+        for name in entries:
+            if name.startswith("OS2/") and name != "OS2/DLL/SOMAPPLICATION.DLL":
+                self.assertEqual(
+                    files[name]["category"],
+                    "runtime"
+                    if Path(name).stem
+                    in (
+                        "LIBCS",
+                        "LIBUNI",
+                        "UCONV",
+                    )
+                    else "som",
+                    name,
+                )
+        self.assertEqual(files["OS2/DLL/SOMAPPLICATION.DLL"]["category"], "full")
+        self.assertEqual(files["MMOS2/INSTALL/MMPM.INI"]["category"], "multimedia")
+        self.assertEqual(files["MMOS2/HELP/MEDIA.HLP"]["category"], "help")
+        self.assertEqual(files["MMOS2/SOUNDS/SAMPLE.WAV"]["category"], "assets")
+        self.assertEqual(files["MMOS2/DLL/HEL08.FON"]["category"], "fonts")
+        for name in ("TCPIP/BIN/PING.EXE", "MPTN/ETC/RESOLV2", "IBMLAN/NETPROG/NET.EXE"):
+            self.assertEqual(files[name]["category"], "network")
+        self.assertTrue(files["MMOS2/DLL/MMIO.DLL"]["provided"])
+        result = self.request("import-os2-support", sources=[source], categories=["som"])
+        self.assertEqual(result["selectedCategories"], ["som", "runtime"])
+        services = json.loads((self.ball / "ball.json").read_text())["startupPrograms"]
+        self.assertEqual(len(services), 1)
+        self.assertEqual(services[0]["owner"], "os2-som")
+        self.assertEqual(services[0]["environment"]["SOMIR"], r"C:\OS2\ETC\SOM.IR;%SOMIR%")
+        self.assertEqual(
+            json.loads((self.ball / "os2-media.json").read_text())["selectedCategories"],
+            ["som", "runtime"],
+        )
+        for name, content in entries.items():
+            path = self.ball / "drive_c" / name
+            if files[name]["category"] in ("som", "runtime"):
+                self.assertEqual(path.read_bytes(), content)
+            else:
+                self.assertFalse(path.exists(), name)
+        # A group import configures only selected files and never starts daemons.
+        self.assertNotIn("SOMDD", (self.ball / "drive_c/CONFIG.SYS").read_text())
+        self.request("import-os2-support", sources=[source], categories=["multimedia", "network"])
+        self.assertTrue((self.ball / "drive_c/MMOS2/INSTALL/MMPM.INI").is_file())
+        self.assertTrue((self.ball / "drive_c/MPTN/ETC/RESOLV2").is_file())
+        self.assertFalse((self.ball / "drive_c/MMOS2/DLL/MMIO.DLL").exists())
+        self.assertFalse((self.ball / "drive_c/IBMCOM/DLL/TCPIP32.DLL").exists())
+        self.assertFalse((self.ball / "drive_c/MMOS2/HELP/MEDIA.HLP").exists())
+        self.request("import-os2-support", sources=[source], categories=["full"])
+        self.assertTrue((self.ball / "drive_c/MMOS2/HELP/MEDIA.HLP").is_file())
+        self.assertTrue((self.ball / "drive_c/OS2/DLL/SOMAPPLICATION.DLL").is_file())
+
+    def test_flat_som_companions_use_original_install_locations(self):
+        entries = {
+            "SOM.IR": "OS2/ETC/SOM.IR",
+            "somdimPl.dat": "OS2/ETC/DSOM/SOMDIMPL.DAT",
+            "SOMDCLS.TOC": "OS2/ETC/DSOM/SOMDCLS.TOC",
+            "SOMD.MSG": "OS2/SYSTEM/SOMD.MSG",
+            "SOMDD.EXE": "OS2/SOMDD.EXE",
+            "LIBUNI.DLL": "OS2/DLL/LIBUNI.DLL",
+        }
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w") as archive:
+            for name in entries:
+                archive.writestr(name, b"original")
+        source = self.media("flat-som.zip", output.getvalue())
+        result = self.request("import-os2-support", sources=[source], categories=["som"])
+        self.assertEqual(len(result["imported"]), len(entries))
+        for destination in entries.values():
+            self.assertEqual((self.ball / "drive_c" / destination).read_bytes(), b"original")
+
     def test_browse_folder_and_plan_current_archive_folder(self):
         source, _ = self.extraction_media()
         folder = self.request("browse-media", path=str(self.root))

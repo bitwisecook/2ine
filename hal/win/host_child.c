@@ -3,6 +3,7 @@
 #define _GNU_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 #include "hal/host_process.h"
+#include "hal/host_operation.h"
 #include <stdlib.h>
 #include <string.h>
 #define WIN32_LEAN_AND_MEAN
@@ -31,7 +32,8 @@ static wchar_t *wide(const char *s)
     }
     return w;
 }
-LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *const *env)
+static LxHostChild *spawn_child(const char *path, char *const *argv, char *const *env,
+                                DWORD creation_flags)
 {
     size_t size = 1;
     for (unsigned i = 0; argv[i]; i++)
@@ -90,8 +92,9 @@ LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *cons
     PROCESS_INFORMATION process = {0};
     LxHostChild *child = calloc(1, sizeof *child);
     if (ok && child)
-        ok = CreateProcessW(executable, command, NULL, NULL, TRUE, CREATE_UNICODE_ENVIRONMENT,
-                            environment, NULL, &startup, &process) != 0;
+        ok = CreateProcessW(executable, command, NULL, NULL, TRUE,
+                            CREATE_UNICODE_ENVIRONMENT | creation_flags, environment, NULL,
+                            &startup, &process) != 0;
     else
         ok = 0;
     free(command);
@@ -107,6 +110,30 @@ LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *cons
     child->id = process.dwProcessId;
     return child;
 }
+LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *const *env)
+{
+    return spawn_child(path, argv, env, 0);
+}
+LxHostChild *lx_host_child_spawn_group(const char *path, char *const *argv, char *const *env)
+{
+    return spawn_child(path, argv, env, CREATE_NEW_PROCESS_GROUP);
+}
+LxHostChild *lx_host_child_spawn_service(const char *path, char *const *argv, char *const *env)
+{
+    size_t count = 0, output = 0;
+    while (env && env[count])
+        count++;
+    char **clean = calloc(count + 1, sizeof *clean);
+    if (!clean)
+        return NULL;
+    for (size_t i = 0; i < count; i++)
+        if (strncmp(env[i], LX_HOST_OPERATION_LEASE "=", sizeof LX_HOST_OPERATION_LEASE) &&
+            strncmp(env[i], LX_HOST_OPERATION_OWNER "=", sizeof LX_HOST_OPERATION_OWNER))
+            clean[output++] = env[i];
+    LxHostChild *child = spawn_child(path, argv, clean, CREATE_NEW_PROCESS_GROUP);
+    free(clean);
+    return child;
+}
 int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status)
 {
     DWORD rc = WaitForSingleObject(child->handle, nohang ? 0 : INFINITE), result;
@@ -116,6 +143,7 @@ int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status
         return -1;
     status->reason = result >= 0xc0000000u ? LX_HOST_CHILD_EXCEPTION : LX_HOST_CHILD_EXITED;
     status->result = result;
+    status->signal = 0;
     return 1;
 }
 void lx_host_child_release(LxHostChild *child)

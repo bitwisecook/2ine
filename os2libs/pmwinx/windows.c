@@ -71,6 +71,17 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
         return (MRESULT)(uintptr_t)queued_result;
     switch (message)
     {
+        case WM_RENDERFMT:
+        case WM_RENDERALLFMTS:
+        case WM_DESTROYCLIPBOARD:
+        case WM_DRAWCLIPBOARD:
+            return (MRESULT)(uintptr_t)open32WindowCallback(
+                w,
+                message == WM_RENDERFMT          ? 0x305
+                : message == WM_RENDERALLFMTS    ? 0x306
+                : message == WM_DESTROYCLIPBOARD ? 0x307
+                                                 : 0x308,
+                (ULONG)(uintptr_t)first, (ULONG)(uintptr_t)second);
         case WM_CREATE:
         {
             ULONG record = lx_execution_mapping_address(w->creation);

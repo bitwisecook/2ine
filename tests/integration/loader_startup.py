@@ -19,16 +19,22 @@ def main():
         if not key.startswith("TWOINE_") and key != "IS_2INE"
     }
     environment["TWOINE_BACKEND"] = "no-backend-needed-for-usage"
-    result = subprocess.run([str(loader)], env=environment, capture_output=True, timeout=5)
-    if (
-        result.returncode != 1
-        or b"USAGE:" not in result.stderr
-        or b"<program.exe>" not in result.stderr
-    ):
-        raise RuntimeError(
-            f"loader without a guest exit={result.returncode}\n"
-            + result.stderr.decode(errors="replace")
+    for arguments in ([], ["--operation"]):
+        result = subprocess.run(
+            [str(loader), *arguments], env=environment, capture_output=True, timeout=5
         )
+        if (
+            result.returncode != 1
+            or b"USAGE:" not in result.stderr
+            or b"<program.exe>" not in result.stderr
+        ):
+            raise RuntimeError(
+                f"loader without a guest exit={result.returncode}\n"
+                + result.stderr.decode(errors="replace")
+            )
+    malformed = dict(environment, TWOINE_OPERATION_LEASE_FD="not-an-fd")
+    result = subprocess.run([str(loader)], env=malformed, capture_output=True, timeout=5)
+    assert result.returncode == 1 and b"Invalid installer operation channels" in result.stderr
     print("Loader without a guest exits with usage before CPU initialization")
 
 

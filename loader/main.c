@@ -6,13 +6,30 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+#include "hal/host_operation.h"
 int main(int argc, char **argv, char **envp)
 {
-    if (argc < 2)
+#if !defined(_WIN32)
+    if (!lx_host_operation_join())
     {
-        fprintf(stderr, "USAGE: %s <program.exe> [...programargs...]\n",
+        fprintf(stderr, "Invalid installer operation channels\n");
+        return 1;
+    }
+#endif
+    if (argc < 2 || (argc == 2 && !strcmp(argv[1], "--operation")))
+    {
+        fprintf(stderr, "USAGE: %s [--operation] <program.exe> [...programargs...]\n",
                 argc && argv && argv[0] ? argv[0] : "lx_loader");
         return 1;
+    }
+    if (!strcmp(argv[1], "--operation"))
+    {
+#if defined(_WIN32)
+        fprintf(stderr, "Installer operation supervision is unavailable on this host\n");
+        return 1;
+#else
+        return lx_host_operation_supervise(argv[0], argv + 2, envp);
+#endif
     }
 
     GLoaderState.using_lx_loader = 1;

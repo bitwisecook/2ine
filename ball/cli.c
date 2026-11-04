@@ -228,12 +228,27 @@ int main(int argc, char **argv)
         env_set(entry->valuestring, NULL);
     cJSON_ArrayForEach(entry, cJSON_GetObjectItemCaseSensitive(plan, "environment"))
         env_set(entry->string, entry->valuestring);
+    cJSON *audit = cJSON_GetObjectItemCaseSensitive(plan, "dependencyAudit");
+    if (audit && (!cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(audit, "complete")) ||
+                  cJSON_GetArraySize(cJSON_GetObjectItemCaseSensitive(audit, "imported"))))
+    {
+        const char *summary =
+            cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(audit, "summary"));
+        const char *path = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(audit, "logPath"));
+        if (summary)
+            fprintf(stderr, "%s\n", summary);
+        if (path && *path)
+            fprintf(stderr, "Dependency audit: %s\n", path);
+    }
     int code = spawn(arguments, count, cwd);
     free(arguments);
     if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(plan, "installer")))
     {
         cJSON *receipt = cJSON_CreateObject();
         cJSON_AddStringToObject(receipt, "action", "record-install");
+        cJSON *build = cJSON_GetObjectItemCaseSensitive(request, "build");
+        if (cJSON_IsString(build))
+            cJSON_AddItemToObject(receipt, "build", cJSON_Duplicate(build, 1));
         cJSON_AddItemToObject(
             receipt, "ball", cJSON_Duplicate(cJSON_GetObjectItemCaseSensitive(request, "ball"), 1));
         cJSON_AddItemToObject(

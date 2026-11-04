@@ -188,3 +188,38 @@ func runningProcessCanBeStoppedWithoutLosingItsLog(force: Bool) async throws {
     let inherited = try decoder.decode(SavedApplication.self, from: Data(#"{"program":"APP.EXE","arguments":[]}"#.utf8))
     #expect(inherited.workingDirectorySummary == "Per-drive defaults")
 }
+
+@Test func supervisedForceStopAllowsDescendantCleanupBeforeReturn() async throws {
+    let root = try temporary()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let script = root.appending(path: "supervisor")
+    let marker = root.appending(path: "children-reaped")
+    try Data(#"""
+    #!/bin/sh
+    trap 'echo cleaned > "$1"; exit 42' USR2
+    echo ready
+    while :; do /bin/sleep 0.02; done
+    """#.utf8).write(to: script)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+    let runner = ProcessRunner()
+    let result = try await runner.run(executable: script, arguments: [marker.path],
+                                      log: root.appending(path: "operation.log"), operationSupervised: true) { text in
+        if text.contains("ready") { await runner.stop(force: true) }
+    }
+    #expect(result.code == 42 && !result.signalled)
+    #expect(try String(contentsOf: marker, encoding: .utf8).contains("cleaned"))
+}
+
+@Test func componentSelectionIncludesRequiredRuntimeAndReadsSharedMetadata() throws {
+    let data = Data(#"""
+    {"groups":[{"id":"som","title":"SOM/DSOM","detail":"Objects","defaultSelected":false,"requires":["runtime"]}],
+     "files":[{"path":"C:\\OS2\\DLL\\SOMD.DLL","source":"som","category":"som","provided":false,"present":false,"size":1},
+              {"path":"C:\\OS2\\DLL\\LIBUNI.DLL","source":"unicode","category":"runtime","provided":false,"present":false,"size":1},
+              {"path":"C:\\OS2\\DLL\\PMWIN.DLL","source":"pm","category":"full","provided":true,"present":false,"size":1}],"unmapped":[]}
+    """#.utf8)
+    let plan = try JSONDecoder().decode(OS2ExtractionPlan.self, from: data)
+    #expect(Set(plan.selectedFiles([.som]).map(\.category)) == [.som, .runtime])
+    #expect(plan.selectedFiles([.full]).count == 2)
+    #expect(plan.groups?.first?.title == "SOM/DSOM")
+    #expect(OS2ExtractionCategory.defaults == [.cmd])
+}

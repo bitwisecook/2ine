@@ -16,24 +16,26 @@ public struct ProcessResult: Sendable {
 /// Native process presentation. Shared launch and persistence rules live in C.
 public actor ProcessRunner {
     private var process: Process?
+    private var operationSupervised = false
     public init() {}
 
     public func stop(force: Bool = false) {
         guard let process, process.isRunning else { return }
-        if force { kill(process.processIdentifier, SIGKILL) }
+        if force { kill(process.processIdentifier, operationSupervised ? SIGUSR2 : SIGKILL) }
         else { process.terminate() }
     }
 
     public func run(executable: URL, arguments: [String],
                     environment: [String: String]? = nil, cwd: URL? = nil,
-                    log: URL, update: @Sendable (String) async -> Void = { _ in }) async throws -> ProcessResult {
+                    log: URL, operationSupervised: Bool = false,
+                    update: @Sendable (String) async -> Void = { _ in }) async throws -> ProcessResult {
         guard process == nil else { throw BallError("Wait for the current operation to finish.") }
         let files = FileManager.default
         try files.createDirectory(at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
         guard files.createFile(atPath: log.path, contents: nil) else { throw BallError("Cannot create process log at \(log.path).") }
         let output = try FileHandle(forWritingTo: log)
         let reader = try FileHandle(forReadingFrom: log)
-        defer { process = nil; try? output.close(); try? reader.close() }
+        defer { process = nil; self.operationSupervised = false; try? output.close(); try? reader.close() }
         let child = Process()
         child.executableURL = executable; child.arguments = arguments
         child.environment = environment ?? ProcessInfo.processInfo.environment
@@ -42,6 +44,7 @@ public actor ProcessRunner {
         child.standardInput = FileHandle.nullDevice
         try child.run()
         process = child
+        self.operationSupervised = operationSupervised
         var lastSize: UInt64 = .max
         var tail = ""
         while true {
@@ -70,6 +73,8 @@ private struct LaunchPlan: Decodable, Sendable {
     let programHost: String
     let receipt: JSONValue
     let installer: Bool
+    let operationSupervised: Bool?
+    let dependencyAudit: DependencyAudit?
     let startup: [LaunchPlan]?
 }
 
@@ -130,7 +135,8 @@ public actor BallBackend {
             try service.run()
             services.append(service)
         }
-        var result = try await runner.run(executable: URL(filePath: executable), arguments: Array(plan.command.dropFirst()), environment: environment, cwd: URL(filePath: plan.cwd), log: log, update: update)
+        var result = try await runner.run(executable: URL(filePath: executable), arguments: Array(plan.command.dropFirst()), environment: environment, cwd: URL(filePath: plan.cwd), log: log, operationSupervised: plan.operationSupervised == true, update: update)
+        result.dependencyAudit = plan.dependencyAudit
         if plan.installer {
             do {
                 let installed = try request(DesktopRequest("record-install", ball: ball, build: build, receipt: plan.receipt, programHost: plan.programHost, exitCode: result.signalled ? -result.code : result.code), as: BallSnapshot.self)

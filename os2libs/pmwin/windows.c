@@ -141,6 +141,7 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
     }
 
     unregisterWindowMessages(win->hwnd);
+    lx_pm_clipboard_window_destroyed(win->hwnd);
     lx_pm_dive_forget(win);
     lx_pm_video_forget(win);
     win->destroying = TRUE;

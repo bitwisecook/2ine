@@ -82,6 +82,7 @@ typedef struct LxLoaderState
     int (*registerStereoAudioGenerator)(LxAudioGeneratorFn fn, void *data, const int singleton);
     LxModule *(*loadModuleWithError)(const char *modname, uint32 *error, char *module,
                                      size_t capacity);
+    uint32 (*freeSharedMemory)(void *memory);
 } LxLoaderState;
 
 typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);

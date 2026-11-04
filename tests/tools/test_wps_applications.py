@@ -3,6 +3,7 @@
 
 import base64
 import json
+import shutil
 import struct
 import tempfile
 import unittest
@@ -185,6 +186,23 @@ class WpsApplicationTests(unittest.TestCase):
         self.assertNotEqual(before["profileSha256"], after["profileSha256"])
         self.assertEqual(after["skipped"], 1)
         self.assertEqual(self.request()["manifest"]["applications"], {})
+
+    def test_registration_recreates_omitted_logs_before_prepare_launch(self):
+        self.save_objects()
+        shutil.rmtree(self.ball / "logs")
+        build = self.root / "runtime"
+        build.mkdir()
+        (build / "lx_loader").write_bytes(b"runtime")
+        plan = self.request(
+            "prepare-launch",
+            build=str(build),
+            backend="unicorn",
+            arguments=["launch", "Word Processor"],
+        )
+        self.assertIn(r"C:\APPS\APP.EXE", plan["command"])
+        report = self.ball / "logs/wps-registration-latest.json"
+        self.assertTrue(report.is_file())
+        self.assertEqual(json.loads(report.read_text())["added"], 1)
 
 
 if __name__ == "__main__":

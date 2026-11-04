@@ -154,10 +154,13 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     ginfo->csgPMMax = 99;
     linfo->pidCurrent = GLoaderState.pib.pib_ulpid;
     linfo->pidParent = GLoaderState.pib.pib_ulppid;
+    GLoaderState.freeSharedMemory = DosFreeMem;
 }
 
 LX_NATIVE_DESTRUCTOR(doscalls)
 {
+    if (GLoaderState.freeSharedMemory == DosFreeMem)
+        GLoaderState.freeSharedMemory = NULL;
     cleanupSuballocation();
     GLoaderState.dosExit = NULL;
     GLoaderState.writeFile = NULL;

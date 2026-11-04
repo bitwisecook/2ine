@@ -25,3 +25,14 @@ import Testing
     #expect(source.sources == ["valid.iso"])
     #expect(source.warningSummary == "Skipped broken.iso: Unreadable ISO")
 }
+
+@Test func missingServiceCompanionOffersMediaWithoutMissingDlls() throws {
+    let data = Data(#"""
+    {"summary":"DSOM files missing","logPath":"/logs/audit.txt","jsonPath":"/logs/audit.json","missing":[],"imported":[],
+     "componentFiles":[{"path":"C:\\OS2\\SOMDD.EXE","status":"missing"}],
+     "componentGroups":[{"id":"som","title":"SOM/DSOM","modules":[],"requiredBy":["C:\\APPS\\EDITOR.EXE"]}],"media":[]}
+    """#.utf8)
+    let audit = try JSONDecoder().decode(DependencyAudit.self, from: data)
+    #expect(audit.needsMediaSelection)
+    #expect(audit.componentGroups?.first?.id == "som")
+}

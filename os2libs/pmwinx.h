@@ -350,6 +350,15 @@ extern "C"
     OS2EXPORT BOOL OS2API OpenClipboard(ULONG window) OS2APIINFO(ord = 502, name = OPENCLIPBOARD);
     OS2EXPORT BOOL OS2API CloseClipboard(void) OS2APIINFO(ord = 41, name = CLOSECLIPBOARD);
     OS2EXPORT BOOL OS2API EmptyClipboard(void) OS2APIINFO(ord = 165, name = EMPTYCLIPBOARD);
+    OS2EXPORT ULONG OS2API GetClipboardData(ULONG format)
+        OS2APIINFO(ord = 248, name = GETCLIPBOARDDATA);
+    OS2EXPORT ULONG OS2API SetClipboardData(ULONG format, ULONG handle)
+        OS2APIINFO(ord = 602, name = SETCLIPBOARDDATA);
+    OS2EXPORT ULONG OS2API EnumClipboardFormats(ULONG format)
+        OS2APIINFO(ord = 177, name = ENUMCLIPBOARDFORMATS);
+    OS2EXPORT ULONG OS2API GetClipboardFormatName(ULONG format, PSZ output, LONG capacity)
+        OS2APIINFO(ord = 249, name = GETCLIPBOARDFORMATNAME);
+    OS2EXPORT ULONG OS2API GetClipboardOwner(void) OS2APIINFO(ord = 250, name = GETCLIPBOARDOWNER);
     OS2EXPORT BOOL OS2API IsClipboardFormatAvailable(ULONG format)
         OS2APIINFO(ord = 441, name = ISCLIPBOARDFORMATAVAILABLE);
     OS2EXPORT ULONG OS2API SetClipboardViewer(ULONG window)

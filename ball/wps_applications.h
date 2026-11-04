@@ -483,7 +483,11 @@ static int wps_sync(Context *c)
             format(c,
                    "Workplace Shell registrations: %u added, %u updated, %u removed, %u skipped.",
                    added, updated, removed, skipped));
-        write_json(c, report_path, report);
+        char *logs = join(c, c->ball, "logs");
+        if (!logs || !tb_mkdirs(logs))
+            fail(c, "Cannot create application registration logs directory");
+        else
+            write_json(c, report_path, report);
     }
     cJSON_Delete(previous_report);
     cJSON_Delete(environment);

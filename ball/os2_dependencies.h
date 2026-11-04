@@ -608,7 +608,7 @@ static void dependency_index_media(Context *c, cJSON *index, const cJSON *plan)
     {
         const char *path = field(file, "path");
         if ((!extract_extension(path, ".dll") && !equal_case(path, "C:\\OS2\\VIEW.EXE") &&
-             !equal_case(path, "C:\\OS2\\VIEWDOC.EXE")) ||
+             !equal_case(path, "C:\\OS2\\VIEWDOC.EXE") && !os2_som_companion(path)) ||
             cJSON_IsTrue(get(file, "provided")))
             continue;
         char *name = dependency_basename(c, path);
@@ -709,7 +709,7 @@ static char *dependency_cache_path(Context *c, const char *source, const char *v
     sha256_init(&state);
     sha256_update(&state, (const BYTE *)source, strlen(source));
     sha256_final(&state, digest);
-    return format(c, "%s/cache/dependency-media-v1-%s-%s.json", c->ball, hex(c, digest), variant);
+    return format(c, "%s/cache/dependency-media-v2-%s-%s.json", c->ball, hex(c, digest), variant);
 }
 static cJSON *dependency_cached_media(Context *c, const char *source, const char *variant,
                                       const char *fingerprint, int *command, int *level)
@@ -977,6 +977,11 @@ static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON
             if (host && tb_is_file(host))
                 continue;
             dependency_take_error(c, errors, path);
+            if (os2_som_companion(path) && !extract_extension(path, ".exe"))
+            {
+                dependency_array_unique(selected, source);
+                continue;
+            }
             cJSON *checked = dependency_read_binary(c, source, source, errors);
             const char *format = checked ? field(checked, "format") : NULL;
             if (checked && cJSON_IsTrue(get(checked, "valid")) &&
@@ -1018,7 +1023,8 @@ static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON
             if (host && digest_file(c, host, digest))
             {
                 put(recovered, "sha256", cJSON_CreateString(hex(c, digest)));
-                dependency_index_binary(c, binaries, index, seen, errors, host, guest);
+                if (extract_extension(guest, ".dll") || extract_extension(guest, ".exe"))
+                    dependency_index_binary(c, binaries, index, seen, errors, host, guest);
             }
             else
                 dependency_take_error(c, errors, guest);
@@ -1028,10 +1034,14 @@ static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON
     }
     cJSON_Delete(wanted);
 }
+#include "dependency_freshness.h"
 static cJSON *dependency_compact(const cJSON *report)
 {
-    static const char *fields[] = {"summary",  "logPath",  "jsonPath",   "missing", "imported",
-                                   "disabled", "complete", "staticOnly", NULL};
+    static const char *fields[] = {
+        "summary",           "logPath",         "jsonPath",    "missing",      "imported",
+        "disabled",          "complete",        "staticOnly",  "unreachable",  "media",
+        "componentGroups",   "componentFiles",  "fingerprint", "runtimeBuild", "stale",
+        "automaticRecovery", "scannedBinaries", NULL};
     cJSON *value = cJSON_CreateObject();
     for (int i = 0; fields[i]; i++)
     {
@@ -1067,6 +1077,8 @@ static cJSON *dependency_audit_latest(Context *c)
     free(bytes);
     cJSON *summary = report ? dependency_compact(report) : NULL;
     cJSON_Delete(report);
+    if (summary)
+        dependency_mark_freshness(c, summary);
     return summary;
 }
 static int dependency_write_text(const cJSON *report, const char *path)
@@ -1080,8 +1092,9 @@ static int dependency_write_text(const cJSON *report, const char *path)
             "OS/2 dependency audit\n%s\n\nStatic imports and verified package companions only. Other dynamic library loads and API/ordinal compatibility are not checked.\n\nScanned binaries: %d\nAutomatic recovery: %s\n\n",
             field(report, "summary"), (int)get(report, "scannedBinaries")->valuedouble,
             cJSON_IsTrue(get(report, "automaticRecovery")) ? "enabled" : "disabled") >= 0;
-    const char *sections[] = {"media",    "imported", "searchPaths", "missing", "unreachable",
-                              "binaries", "imports",  "errors",      "limits",  NULL};
+    const char *sections[] = {"media",       "imported",       "searchPaths", "missing",
+                              "unreachable", "componentFiles", "binaries",    "imports",
+                              "errors",      "limits",         NULL};
     const cJSON *item;
     for (int section = 0; sections[section] && ok; section++)
     {
@@ -1114,6 +1127,9 @@ static int dependency_write_text(const cJSON *report, const char *path)
                 written = fprintf(output, "  %s <- %s [SHA-256 %s]\n", field(item, "path"),
                                   field(item, "source"),
                                   field(item, "sha256") ? field(item, "sha256") : "unavailable");
+            else if (!strcmp(sections[section], "componentFiles"))
+                written = fprintf(output, "  %s: %s (%s)\n", field(item, "path"),
+                                  field(item, "status"), field(item, "requirement"));
             else if (!strcmp(sections[section], "unreachable"))
             {
                 char *locations = cJSON_PrintUnformatted(get(item, "paths"));
@@ -1174,6 +1190,87 @@ static void dependency_save_report(Context *c, cJSON *report)
         dependency_take_error(c, errors, "logs/dependencies-latest.json");
     cJSON_Delete(latest);
 }
+static int dependency_som_required(Context *c, const cJSON *report)
+{
+    const cJSON *entry;
+    cJSON_ArrayForEach(entry, get(report, "imports")) if (os2_module_matches(field(entry, "module"),
+                                                                             "SOMD")) return 1;
+    return os2_som_present(c, "C:\\OS2\\DLL\\SOMD.DLL");
+}
+static int dependency_som_files(Context *c, cJSON *report, cJSON *unresolved)
+{
+    cJSON *files = cJSON_CreateArray();
+    int missing = 0;
+    if (dependency_som_required(c, report))
+        for (int i = 0; os2_som_companions[i]; i++)
+        {
+            const char *path = os2_som_companions[i];
+            int present = os2_som_present(c, path);
+            cJSON *file = cJSON_CreateObject();
+            cJSON_AddStringToObject(file, "path", path);
+            cJSON_AddStringToObject(file, "status", present ? "found" : "missing");
+            cJSON_AddStringToObject(file, "requirement", "verified-package-companion");
+            cJSON_AddItemToArray(files, file);
+            if (!present)
+            {
+                missing++;
+                if (unresolved)
+                    dependency_array_unique(unresolved, dependency_basename(c, path));
+            }
+        }
+    put(report, "componentFiles", files);
+    return missing;
+}
+static cJSON *dependency_component_groups(const cJSON *report)
+{
+    int needed[EXTRACT_COUNT] = {0};
+    cJSON *groups = cJSON_CreateArray();
+    const cJSON *entry;
+    cJSON_ArrayForEach(entry, get(report, "imports"))
+    {
+        const char *status = field(entry, "status"), *module = field(entry, "module");
+        if (strcmp(status, "missing") && strcmp(status, "unreachable"))
+            continue;
+        int category = extract_module_group(module);
+        if (category >= 0)
+            needed[category] = 1;
+    }
+    cJSON_ArrayForEach(
+        entry, get(report, "componentFiles")) if (equal_case(field(entry, "status"), "missing"))
+        needed[EXTRACT_SOM] = 1;
+    if (needed[EXTRACT_SOM])
+        needed[EXTRACT_RUNTIME] = 1;
+    for (int i = 0; i < EXTRACT_COUNT; i++)
+    {
+        if (!needed[i])
+            continue;
+        cJSON *group = extract_group(i), *modules = cJSON_AddArrayToObject(group, "modules"),
+              *required_by = cJSON_AddArrayToObject(group, "requiredBy"),
+              *files = cJSON_AddArrayToObject(group, "files");
+        cJSON_ArrayForEach(entry, get(report, "imports"))
+        {
+            const char *status = field(entry, "status"), *module = field(entry, "module");
+            if ((!strcmp(status, "missing") || !strcmp(status, "unreachable")) &&
+                extract_module_group(module) == i)
+            {
+                dependency_array_unique(modules, module);
+                dependency_array_unique(required_by, field(entry, "binary"));
+            }
+        }
+        if (i == EXTRACT_SOM)
+            cJSON_ArrayForEach(
+                entry,
+                get(report, "componentFiles")) if (equal_case(field(entry, "status"), "missing"))
+            {
+                dependency_array_unique(files, field(entry, "path"));
+                dependency_array_unique(required_by, "C:\\OS2\\DLL\\SOMD.DLL");
+            }
+        cJSON_AddBoolToObject(group, "requiredByGroup",
+                              i == EXTRACT_RUNTIME && !cJSON_GetArraySize(modules));
+        cJSON_AddItemToArray(groups, group);
+    }
+    return groups;
+}
 static cJSON *audit_dependencies(Context *parent, const cJSON *request, int automatic_recovery)
 {
     /* Auditing failures belong to the audit, never to the installer's exit
@@ -1203,6 +1300,8 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
         "Original HELPMGR requires its dynamically loaded HPMGRMRI resource DLL; this verified companion is included in the audit.");
     cJSON *sources = dependency_sources(c, request, errors);
     cJSON_AddItemToObject(report, "media", sources);
+    const char *build = field(request, "build");
+    char *initial_fingerprint = dependency_fingerprint(c, sources, build, NULL);
     cJSON *binaries = dependency_scan(c, index, seen, errors, limits);
     cJSON *paths = dependency_search_paths(c, errors), *eligible = NULL;
     cJSON_AddItemToObject(report, "searchPaths", cJSON_Duplicate(paths, 1));
@@ -1215,6 +1314,7 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
         put(report, "imports", imports);
         put(report, "missing", missing);
         put(report, "unreachable", unreachable);
+        dependency_som_files(c, report, unresolved);
         if (!automatic_recovery || !cJSON_GetArraySize(unresolved))
         {
             cJSON_Delete(unresolved);
@@ -1248,11 +1348,18 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
     if (cJSON_GetArraySize(imported) && eligible && cJSON_GetArraySize(eligible))
     {
         cJSON *remembered = cJSON_CreateObject();
+        os2_preserve_media_selection(c, remembered);
         cJSON_AddItemToObject(remembered, "sources", cJSON_Duplicate(eligible, 1));
         cJSON_AddStringToObject(remembered, "recorded", now(c));
         if (!write_json(c, join(c, c->ball, "os2-media.json"), remembered))
             dependency_take_error(c, errors, "os2-media.json");
         cJSON_Delete(remembered);
+    }
+    int service_changed = 0;
+    if (automatic_recovery && dependency_som_required(c, report))
+    {
+        os2_som_provision(c, &service_changed);
+        dependency_take_error(c, errors, "DSOM startup service");
     }
     cJSON *disabled = cJSON_AddArrayToObject(report, "disabled");
     const cJSON *requirement;
@@ -1260,6 +1367,7 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
         requirement, get(report, "imports")) if (!strcmp(field(requirement, "status"), "disabled"))
         dependency_array_unique(disabled, field(requirement, "module"));
     int disabled_count = cJSON_GetArraySize(disabled);
+    cJSON_AddItemToObject(report, "componentGroups", dependency_component_groups(report));
     int unsupported = 0;
     cJSON *inventory = cJSON_AddArrayToObject(report, "binaries");
     const cJSON *binary;
@@ -1284,17 +1392,47 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
     cJSON_AddNumberToObject(report, "unsupportedBinaries", unsupported);
     int absent = cJSON_GetArraySize(get(report, "missing")),
         unreachable = cJSON_GetArraySize(get(report, "unreachable"));
-    int complete = !absent && !unreachable && !disabled_count && !cJSON_GetArraySize(errors);
+    int missing_files = dependency_som_files(c, report, NULL);
+    int complete =
+        !absent && !unreachable && !disabled_count && !missing_files && !cJSON_GetArraySize(errors);
     cJSON_AddBoolToObject(report, "complete", complete);
     cJSON_AddStringToObject(report, "finished", now(c));
     cJSON_AddStringToObject(
         report, "summary",
         format(
             c,
-            "Scanned %d binaries; recovered %d files; %d missing libraries, %d unreachable imports, %d disabled libraries and %d audit errors.",
+            "Scanned %d binaries; recovered %d files; %d missing libraries, %d unreachable imports, %d disabled libraries, %d missing package files and %d audit errors.",
             cJSON_GetArraySize(binaries), cJSON_GetArraySize(imported), absent, unreachable,
-            disabled_count, cJSON_GetArraySize(errors)));
+            disabled_count, missing_files, cJSON_GetArraySize(errors)));
     dependency_take_error(c, errors, "Dependency audit");
+    if (build)
+        cJSON_AddStringToObject(report, "runtimeBuild", build);
+    char *fingerprint = dependency_fingerprint(c, sources, build, get(report, "componentFiles"));
+    char *final_inventory = !cJSON_GetArraySize(imported) && !service_changed
+                                ? dependency_fingerprint(c, sources, build, NULL)
+                                : NULL;
+    int changed =
+        !cJSON_GetArraySize(imported) && !service_changed &&
+        (!initial_fingerprint || !final_inventory || strcmp(initial_fingerprint, final_inventory));
+    if (fingerprint)
+        cJSON_AddStringToObject(report, "fingerprint", fingerprint);
+    else
+    {
+        put(report, "complete", cJSON_CreateBool(0));
+        put(report, "summary",
+            cJSON_CreateString(
+                "Dependency audit could not establish current file metadata; check libraries again."));
+    }
+    if (changed)
+    {
+        put(report, "complete", cJSON_CreateBool(0));
+        put(report, "summary",
+            cJSON_CreateString(
+                "Installed files or dependency settings changed during the audit; check libraries again."));
+        dependency_array_unique(
+            limits, "The metadata inventory changed during this audit; its result is stale.");
+    }
+    cJSON_AddBoolToObject(report, "stale", fingerprint == NULL || changed);
     dependency_save_report(c, report);
     dependency_take_error(c, errors, "Dependency report");
     cJSON_Delete(index);
@@ -1307,5 +1445,63 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
         free(c->allocations[i]);
     free(c->allocations);
     free(c->error);
+    return report;
+}
+/* A current recovery attempt is reusable even when optional imports remain.
+   Explicit audits always run; only preflight uses this cache. */
+static cJSON *ensure_dependencies(Context *c, const cJSON *request)
+{
+    const cJSON *resolve = get(request, "resolve");
+    if (resolve && !cJSON_IsBool(resolve))
+    {
+        fail(c, "resolve must be a boolean");
+        return NULL;
+    }
+    int recover = !resolve || cJSON_IsTrue(resolve);
+    cJSON *latest = dependency_audit_latest(c);
+    const char *build = field(request, "build");
+    const char *previous_build = field(latest, "runtimeBuild");
+    int changed_build =
+        (build || previous_build) && (!build || !previous_build || strcmp(build, previous_build));
+    int readonly_missing = recover && !cJSON_IsTrue(get(latest, "automaticRecovery")) &&
+                           cJSON_GetArraySize(get(latest, "missing"));
+    int refresh = !latest || cJSON_IsTrue(get(latest, "stale")) || changed_build ||
+                  readonly_missing || cJSON_GetArraySize(get(request, "sources"));
+    cJSON *report = NULL;
+    const char *path = field(latest, "jsonPath");
+    char *prefix = join(c, c->ball, "logs/dependency-audit-");
+    if (!refresh && path && prefix && !strncmp(path, prefix, strlen(prefix)))
+    {
+        uint64_t length = 0;
+        int64_t modified = 0;
+        if (tb_path_info(path, &length, &modified) && length && length <= 32u * 1024u * 1024u)
+        {
+            size_t n = 0;
+            char *bytes = read_file(c, path, &n, 1);
+            if (!bytes && c->error)
+            {
+                free(c->error);
+                c->error = NULL;
+            }
+            report = bytes && n ? cJSON_ParseWithLength(bytes, n) : NULL;
+            if (!cJSON_IsArray(get(report, "binaries")) || !cJSON_IsArray(get(report, "imports")) ||
+                !field(report, "fingerprint") ||
+                strcmp(field(report, "fingerprint"), field(latest, "fingerprint")))
+            {
+                cJSON_Delete(report);
+                report = NULL;
+            }
+        }
+    }
+    cJSON_Delete(latest);
+    if (report)
+    {
+        put(report, "stale", cJSON_CreateBool(0));
+        cJSON_AddBoolToObject(report, "cacheHit", 1);
+        return report;
+    }
+    report = audit_dependencies(c, request, recover);
+    if (report)
+        cJSON_AddBoolToObject(report, "cacheHit", 0);
     return report;
 }

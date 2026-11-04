@@ -904,7 +904,7 @@ class BallWindow(Adw.ApplicationWindow):
             else ["config", "runtime.backend", ("native", "unicorn")[selected - 1]]
         )
 
-    def audit_dependencies(self, sources=None):
+    def audit_dependencies(self, sources=None, after=None):
         if not self.ball or self.busy:
             return
         ball = str(self.ball)
@@ -941,11 +941,18 @@ class BallWindow(Adw.ApplicationWindow):
             self.show_page("activity")
             self.update_activity()
             if not sources and ball_api.needs_dependency_media(report):
-                self.choose_dependency_media(ball)
+                self.choose_dependency_media(ball, after=after)
+            elif after:
+                if ball_api.needs_dependency_media(report):
+                    self.report_error(
+                        "The selected media did not restore the required OS/2 components. Review the dependency audit."
+                    )
+                else:
+                    after()
 
         self.request_work(work, finished)
 
-    def choose_dependency_media(self, ball):
+    def choose_dependency_media(self, ball, after=None):
         picker = Gtk.FileDialog(
             title="Restore Missing Libraries from OS/2 ISO, Images or Archives",
             accept_label="Restore Libraries",
@@ -960,11 +967,11 @@ class BallWindow(Adw.ApplicationWindow):
                     self.report_error(error)
                 return
             if sources and str(self.ball) == ball:
-                self.audit_dependencies(sources)
+                self.audit_dependencies(sources, after=after)
 
         picker.open_multiple(self, None, chosen)
 
-    def choose_os2_support(self):
+    def choose_os2_support(self, categories=None):
         ball = str(self.ball)
         picker = Gtk.FileDialog(
             title="Choose OS/2 Installation ISO or Floppy Images",
@@ -981,16 +988,29 @@ class BallWindow(Adw.ApplicationWindow):
                 return
 
             if sources and str(self.ball) == ball:
-                self.present_os2_media(sources)
+                self.present_os2_media(sources, categories)
 
         picker.open_multiple(self, None, chosen)
 
-    def present_os2_media(self, sources):
+    def present_os2_media(self, sources, categories=None):
         if __package__:
             from .gnome_media import OS2MediaDialog
         else:
             from gnome_media import OS2MediaDialog
-        OS2MediaDialog(self, sources).present(self)
+        OS2MediaDialog(self, sources, categories).present(self)
+
+    def show_component_media(self, category):
+        if not self.ball or self.busy or self.process:
+            return
+        pending = getattr(self, "os2_component_dialog", None)
+        if pending and pending.ball == self.ball and pending.stage == "options":
+            pending.resume_components(category)
+            return
+        sources = (self.snapshot.get("os2Support") or {}).get("mediaSources", [])
+        if sources:
+            self.present_os2_media(sources, {category})
+        else:
+            self.choose_os2_support({category})
 
     def support_media_dialog(self):
         self.choose_os2_support()
@@ -1597,10 +1617,23 @@ class BallWindow(Adw.ApplicationWindow):
         path = self.ball
         self.activity_title = "Preparing application…"
         self.show_page("activity")
-        return self.request_work(
-            lambda: self.prepare_launch(arguments, **fields),
-            lambda result: self.launch(path, *result),
-        )
+
+        def prepared(result):
+            plan, log = result
+            if str(self.ball) != str(path):
+                return
+            audit = plan.get("dependencyAudit", {})
+            if ball_api.needs_dependency_media(audit):
+                self.activity_title = "Additional OS/2 components are required"
+                self.log_text = audit.get("summary", "")
+                self.update_activity()
+                self.choose_dependency_media(
+                    str(path), after=lambda: self.execute(arguments, **fields)
+                )
+                return
+            self.launch(path, plan, log)
+
+        return self.request_work(lambda: self.prepare_launch(arguments, **fields), prepared)
 
     def choose_save(self, title, initial, callback):
         dialog = Gtk.FileDialog(title=title, initial_name=initial)
@@ -1680,7 +1713,13 @@ class BallWindow(Adw.ApplicationWindow):
 
         def response(_dialog, choice):
             if choice == "stop" and self.process:
-                if force:
+                if (
+                    force
+                    and getattr(self, "operation_supervised", False)
+                    and hasattr(signal, "SIGUSR2")
+                ):
+                    self.process.send_signal(signal.SIGUSR2)
+                elif force:
                     self.process.force_exit()
                 else:
                     self.process.send_signal(signal.SIGTERM)
@@ -1703,6 +1742,7 @@ class BallWindow(Adw.ApplicationWindow):
             launcher.setenv(key, value, True)
         try:
             self.process = launcher.spawnv(plan["command"])
+            self.operation_supervised = plan.get("operationSupervised", False)
         except GLib.Error as error:
             self.report_error(error.message)
             self.activity_title = "Could not start application"
@@ -1726,6 +1766,7 @@ class BallWindow(Adw.ApplicationWindow):
         process.wait_finish(result)
         code = process.get_exit_status() if process.get_if_exited() else -process.get_term_sig()
         self.process = None
+        self.operation_supervised = False
         self.last_result = code
         self.activity_title = (
             f"Application finished: exit {code}"
@@ -1763,6 +1804,9 @@ class BallWindow(Adw.ApplicationWindow):
             if error:
                 self.report_error("Installer receipt could not be saved: " + error)
             self.toast(self.activity_title)
+            audit = self.snapshot.get("dependencyAudit") or {}
+            if plan["installer"] and ball_api.needs_dependency_media(audit):
+                self.choose_dependency_media(str(path))
             letter = plan.get("gnomeMediaDrive")
             mapping = self.snapshot["manifest"]["drives"].get(letter)
             if isinstance(mapping, dict) and mapping.get("image") and not mapping.get("locked"):

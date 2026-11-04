@@ -49,8 +49,22 @@ static cJSON *os2_support(Context *c)
     cJSON_AddItemToObject(result, "mediaSources",
                           cJSON_IsArray(sources) ? cJSON_Duplicate(sources, 1)
                                                  : cJSON_CreateArray());
+    const cJSON *selected = get(media, "selectedCategories");
+    cJSON_AddItemToObject(result, "selectedCategories",
+                          cJSON_IsArray(selected) ? cJSON_Duplicate(selected, 1)
+                                                  : cJSON_CreateArray());
     cJSON_Delete(media);
     return result;
+}
+static void os2_preserve_media_selection(Context *c, cJSON *media)
+{
+    size_t length = 0;
+    char *bytes = read_file(c, join(c, c->ball, "os2-media.json"), &length, 1);
+    cJSON *previous = bytes && length ? cJSON_ParseWithLength(bytes, length) : NULL;
+    const cJSON *selection = get(previous, "selectedCategories");
+    if (cJSON_IsArray(selection))
+        cJSON_AddItemToObject(media, "selectedCategories", cJSON_Duplicate(selection, 1));
+    cJSON_Delete(previous);
 }
 static cJSON *remember_os2_media(Context *c, const cJSON *request)
 {
@@ -58,6 +72,7 @@ static cJSON *remember_os2_media(Context *c, const cJSON *request)
     if (!array_strings(c, sources))
         return NULL;
     cJSON *media = cJSON_CreateObject();
+    os2_preserve_media_selection(c, media);
     cJSON_AddItemToObject(media, "sources", cJSON_Duplicate(sources, 1));
     cJSON_AddStringToObject(media, "recorded", now(c));
     int ok = write_json(c, join(c, c->ball, "os2-media.json"), media);

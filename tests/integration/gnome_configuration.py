@@ -90,7 +90,7 @@ def main():
             for i, record in enumerate(files.records)
             if record["path"].upper() == r"C:\OS2\FIXTURE.INI"
         )
-        files.file.set_selected(index)
+        files.file.focus(files.records[index]["path"])
         pump(
             lambda: (
                 getattr(files, "file_snapshot", {}).get("path", "").upper() == r"C:\OS2\FIXTURE.INI"
@@ -104,8 +104,8 @@ def main():
                 and (ball / "drive_c/OS2/FIXTURE.INI").read_bytes() == b"[App]\r\nvalue=after\r\n"
             )
         )
-        files.file.set_selected(
-            next(i for i, record in enumerate(files.records) if record["role"] == "config")
+        files.file.focus(
+            next(record["path"] for record in files.records if record["role"] == "config")
         )
         path = ball / "drive_c/CONFIG.SYS"
         original = path.read_bytes()

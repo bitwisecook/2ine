@@ -867,6 +867,8 @@ static const char *default_values[] = {"en_US",
                                        "C:\\OS2\\OS2SYS.INI"};
 static const char *unset_keys[] = {"IS_2INE",
                                    "TWOINE_CHILD_ARGUMENTS",
+                                   "TWOINE_OPERATION_LEASE_FD",
+                                   "TWOINE_OPERATION_OWNER_FD",
                                    "TWOINE_LIBPATH",
                                    "TWOINE_CONFIG",
                                    "TWOINE_BALL",
@@ -1071,6 +1073,8 @@ static int reserved_env(const char *key)
                               "PATH",
                               "IS_2INE",
                               "TWOINE_CHILD_ARGUMENTS",
+                              "TWOINE_OPERATION_LEASE_FD",
+                              "TWOINE_OPERATION_OWNER_FD",
                               "TWOINE_CONFIG",
                               "TWOINE_BALL",
                               "TWOINE_IPC_DIR",
@@ -1631,10 +1635,23 @@ static cJSON *prepare(Context *c, const cJSON *request)
     }
     cJSON *command = cJSON_CreateArray();
     cJSON_AddItemToArray(command, cJSON_CreateString(join(c, runtime, loader)));
+    cJSON *capabilities = runtime_feature_metadata(c, build);
+    if (!capabilities)
+    {
+        cJSON_Delete(command);
+        cJSON_Delete(env);
+        goto failed;
+    }
+    int supervised =
+        !strcmp(action, "install") && cJSON_IsTrue(get(capabilities, "operationSupervisor"));
+    cJSON_Delete(capabilities);
+    if (supervised)
+        cJSON_AddItemToArray(command, cJSON_CreateString("--operation"));
     cJSON_AddItemToArray(command, cJSON_CreateString(guest_for_input(c, host, program)));
     cJSON *a;
     cJSON_ArrayForEach(a, argv) cJSON_AddItemToArray(command, cJSON_Duplicate(a, 1));
     cJSON *result = cJSON_CreateObject();
+    cJSON_AddBoolToObject(result, "operationSupervised", supervised);
     cJSON_AddItemToObject(result, "command", command);
     cJSON_AddStringToObject(result, "cwd", tb_image_path(working) ? c->roots[2] : working);
     cJSON_AddStringToObject(result, "programHost", original_host);
@@ -2792,8 +2809,9 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "plan-os2-extraction"))
         return plan_os2_extraction(c, request);
     if (!strcmp(action, "import-os2-support"))
-        return get(request, "categories") ? extract_os2_categories(c, request)
-                                          : import_os2_support(c, request);
+        return get(request, "categories") || get(request, "fileSelection")
+                   ? extract_os2_categories(c, request)
+                   : import_os2_support(c, request);
     if (!strcmp(action, "snapshot"))
         return snapshot(c);
     if (!strcmp(action, "browse"))
@@ -2889,7 +2907,18 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         return snapshot(c);
     }
     if (!strcmp(action, "prepare-launch"))
-        return prepare(c, request);
+    {
+        cJSON *audit = ensure_dependencies(c, request);
+        if (!audit)
+            return NULL;
+        cJSON *plan = prepare(c, request);
+        if (plan)
+            cJSON_AddItemToObject(plan, "dependencyAudit", dependency_compact(audit));
+        cJSON_Delete(audit);
+        return plan;
+    }
+    if (!strcmp(action, "ensure-dependencies"))
+        return ensure_dependencies(c, request);
     if (!strcmp(action, "audit-dependencies"))
     {
         const cJSON *resolve = get(request, "resolve");

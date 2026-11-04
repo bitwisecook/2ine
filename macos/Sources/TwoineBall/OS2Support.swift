@@ -15,7 +15,7 @@ struct OS2SupportSheet: View {
     @State private var relevantOnly = true
     @State private var query = ""
     @State private var searchFocused = false
-    @State private var sortOrder = [KeyPathComparator(\MediaDirectory.Entry.name, comparator: .localizedStandard)]
+    @State private var mediaSort: OutlineBrowserSort? = .init(column: "name")
     @State private var selected: String?
     @State private var plan: OS2ExtractionPlan?
     @State private var categories = OS2ExtractionCategory.defaults
@@ -27,6 +27,10 @@ struct OS2SupportSheet: View {
     @State private var files: [OS2ExtractionPlan.File] = []
     @State private var availableCounts: [OS2ExtractionCategory: Int] = [:]
     @State private var installedCounts: [OS2ExtractionCategory: Int] = [:]
+    @State private var fileSelection: Set<String> = []
+    @State private var componentQuery = ""
+    @State private var componentSearchFocused = false
+    @State private var requiredBy: [OS2ExtractionCategory: [String]] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -46,7 +50,7 @@ struct OS2SupportSheet: View {
                 Spacer()
                 if step == .options {
                     Button("Install") { extract() }
-                        .keyboardShortcut(.defaultAction).disabled(blocked || files.isEmpty)
+                        .keyboardShortcut(.defaultAction).disabled(blocked || !hasSelectedComponents)
                         .accessibilityIdentifier("extractOS2Support")
                 } else if step == .source {
                     Button(useCurrentFolder ? "Use This Folder" : "Done Browsing") { if useCurrentFolder { prepare() } else { step = .options } }
@@ -58,6 +62,9 @@ struct OS2SupportSheet: View {
             .onChange(of: query) { _, _ in selected = nil }
             .onChange(of: relevantOnly) { _, _ in selected = nil }
             .interactiveDismissDisabled(blocked)
+            .sheet(item: $model.componentSettingsRequest, onDismiss: refreshProviderMetadata) { request in
+                ComponentSettingsSheet(model: model, request: request)
+            }
             .task { await loadInitial() }
     }
     private var sourceBrowser: some View {
@@ -86,22 +93,17 @@ struct OS2SupportSheet: View {
                 Toggle("Relevant Files Only", isOn: $relevantOnly)
                     .toggleStyle(.checkbox).accessibilityIdentifier("relevantSupportMediaFiles")
                     .help("Show OS/2 media, archives and installable files. Turn off to show all files.")
-                Table(mediaEntries, selection: $selected, sortOrder: $sortOrder) {
-                    TableColumn("Name", value: \.name) { entry in
-                        Label(entry.name, systemImage: entry.directory ? "folder" : entry.container ? "archivebox" : "doc")
-                    }.width(min: 180, ideal: 310)
-                    TableColumn("Size", value: \.size) { Text(browserSize($0.size, directory: $0.directory)).monospacedDigit() }.width(min: 75, ideal: 90)
-                    TableColumn("Date Modified", value: \.sortModified) { Text(browserDate($0.modified)) }.width(min: 135, ideal: 165)
-                }.contextMenu(forSelectionType: String.self) { paths in
-                    if let entry = mediaEntries.first(where: { paths.contains($0.path) }), entry.directory || entry.container {
-                        Button("Open") { navigate(entry.path) }
-                    }
-                } primaryAction: { paths in
-                    if let entry = mediaEntries.first(where: { paths.contains($0.path) }), entry.directory || entry.container { navigate(entry.path) }
-                }
-                .alternatingRowBackgrounds()
-                .modifier(BrowserTypeToSearch(query: $query, focused: $searchFocused))
-                .accessibilityIdentifier("supportMediaEntries").disabled(blocked)
+                NativeOutlineBrowser(nodes: BrowserRows.media(mediaEntries), columns: BrowserRows.fileColumns,
+                                     selection: $selected, query: $query, searchFocused: $searchFocused,
+                                     sort: $mediaSort, disabled: blocked,
+                                     identifier: "supportMediaEntries", accessibilityLabel: "Installation media files",
+                                     onAction: { id, _ in if let id { navigate(id) } },
+                                     onActivate: { id in
+                                         if let entry = mediaEntries.first(where: { $0.path == id }), entry.directory || entry.container { navigate(entry.path) }
+                                     }, contextActions: { id in
+                                         guard let entry = mediaEntries.first(where: { $0.path == id }), entry.directory || entry.container else { return [] }
+                                         return [OutlineMenuAction(id: "open", title: "Open")]
+                                     })
                 Toggle("Search only the current folder or selected item", isOn: $useCurrentFolder)
                     .disabled(blocked)
             } else {
@@ -110,10 +112,7 @@ struct OS2SupportSheet: View {
         }.frame(maxHeight: .infinity)
     }
     private var mediaEntries: [MediaDirectory.Entry] {
-        (listing?.entries ?? []).filter {
-            (!relevantOnly || $0.directory || FileSearch.isOS2MediaFile($0.name, container: $0.container)) && FileSearch.matches($0.name, query: query)
-        }
-            .sorted(using: sortOrder).sorted { $0.directory && !$1.directory }
+        BrowserRows.filteredMediaEntries(listing?.entries ?? [], relevantOnly: relevantOnly, query: query)
     }
     private func fileCount(_ count: Int) -> String { "\(count) " + (count == 1 ? "File" : "Files") }
     @State private var useCurrentFolder = false
@@ -132,57 +131,103 @@ struct OS2SupportSheet: View {
                     Button("Browse…") { step = .source }.disabled(blocked)
                 }
             }
-            Text("Select the components to add. Installed components are already ticked; existing files are kept.")
+            Text("Select a component, expand it to choose individual files, or search. Installed components are already ticked; existing files are kept.")
                 .foregroundStyle(.secondary)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(OS2ExtractionCategory.allCases) { category in
-                        Toggle(isOn: Binding(get: { categories.contains(category) || categories.contains(.full) }, set: { enabled in
-                            if enabled { categories.insert(category) } else { categories.remove(category) }
-                            refreshSelection()
-                        })) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack {
-                                    Text(category.title).font(.headline)
-                                    Spacer()
-                                    Text(componentStatus(category)).foregroundStyle(.secondary).monospacedDigit()
-                                }
-                                Text(category.detail).font(.callout).foregroundStyle(.secondary)
+            if let tree = plan?.tree {
+                BrowserSearchField(text: $componentQuery, focused: $componentSearchFocused,
+                                   placeholder: "Search Components and Files", identifier: "componentSearch")
+                    .frame(height: 32)
+                OS2ComponentTree(root: tree, selection: $fileSelection, query: $componentQuery,
+                                 searchFocused: $componentSearchFocused, disabled: blocked,
+                                 toggle: { node, enabled in
+                                     guard let plan else { return }
+                                     fileSelection = plan.selecting(node, in: fileSelection, enabled: enabled)
+                                     refreshTreeSelection()
+                                 }, openSetting: { token in
+                                     model.openComponentSetting(token)
+                                 })
+                HStack {
+                    Text("\(fileSelection.count) selected · \(files.count) files to add")
+                    Spacer()
+                    Text("Installed files are kept.")
+                }.font(.caption).foregroundStyle(.secondary)
+                if !requiredBy.isEmpty {
+                    DisclosureGroup("Recommended for Installed Applications") {
+                        ForEach(OS2ExtractionCategory.allCases.filter { requiredBy[$0]?.isEmpty == false }) { category in
+                            Text(category.title + ": " + (requiredBy[category] ?? []).map { $0.components(separatedBy: "\\").last ?? $0 }.joined(separator: ", "))
+                                .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                    }
+                }
+            } else {
+                legacyExtractionOptions
+            }
+        }.frame(maxHeight: .infinity)
+    }
+
+    private var legacyExtractionOptions: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                ForEach(OS2ExtractionCategory.allCases) { category in
+                    let group = plan?.groups?.first { $0.id == category }
+                    Toggle(isOn: Binding(get: { categories.contains(category) || categories.contains(.full) }, set: { enabled in
+                        if enabled { categories.insert(category) } else { categories.remove(category) }
+                        refreshSelection()
+                    })) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(group?.title ?? category.title).font(.headline)
+                                Spacer()
+                                Text(componentStatus(category)).foregroundStyle(.secondary).monospacedDigit()
                             }
-                        }.toggleStyle(.checkbox)
-                            .disabled(blocked || (categories.contains(.full) && category != .full) || ((installedCounts[category] ?? 0) > 0 && count(category) == 0))
-                            .accessibilityIdentifier("extractCategory_" + category.rawValue)
-                    }
-                    Divider()
-                    if plan != nil && files.isEmpty {
-                        Text("The selected components are already installed.").foregroundStyle(.secondary)
-                    }
-                    DisclosureGroup("Files to Install (\(files.count))") {
-                        LazyVStack(alignment: .leading, spacing: 4) {
-                            ForEach(files) { file in
-                                Text(file.path).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                            Text(group?.detail ?? category.detail).font(.callout).foregroundStyle(.secondary)
+                            if let paths = requiredBy[category], !paths.isEmpty {
+                                Text("Required by " + paths.map { $0.components(separatedBy: "\\").last ?? $0 }.joined(separator: ", "))
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(3)
                             }
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if let plan {
-                        Text("\(plan.files.filter(\.present).count) existing files and \(plan.files.filter(\.provided).count) components supplied by 2ine will be skipped.")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if !plan.unmapped.isEmpty {
-                            DisclosureGroup("\(plan.unmapped.count) files without an installation destination") {
-                                ForEach(Array(plan.unmapped.enumerated()), id: \.offset) { _, name in
-                                    Text(name).font(.caption).textSelection(.enabled)
-                                }
+                            if requiredSelection.contains(category) {
+                                Text("Required by another selected component.").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }.toggleStyle(.checkbox)
+                        .disabled(blocked || requiredSelection.contains(category) || (categories.contains(.full) && category != .full) || ((installedCounts[category] ?? 0) > 0 && count(category) == 0))
+                        .accessibilityIdentifier("extractCategory_" + category.rawValue)
+                }
+                Divider()
+                if plan != nil && files.isEmpty {
+                    Text("The selected files are already installed. Install will repair their search paths and component configuration.").foregroundStyle(.secondary)
+                }
+                DisclosureGroup("Files to Install (\(files.count))") {
+                    LazyVStack(alignment: .leading, spacing: 4) {
+                        ForEach(files) { file in
+                            Text(file.path).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if let plan {
+                    Text("\(plan.files.filter(\.present).count) existing files and \(plan.files.filter(\.provided).count) components supplied by 2ine will be skipped.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if !plan.unmapped.isEmpty {
+                        DisclosureGroup("\(plan.unmapped.count) files without an installation destination") {
+                            ForEach(Array(plan.unmapped.enumerated()), id: \.offset) { _, name in
+                                Text(name).font(.caption).textSelection(.enabled)
                             }
                         }
                     }
-                }.padding(.trailing, 8)
-            }
-        }.frame(maxHeight: .infinity)
+                }
+            }.padding(.trailing, 8)
+        }
+    }
+    private var hasCMDSupportSelection: Bool {
+        if let plan, plan.tree != nil {
+            return plan.files.contains { $0.category == .cmd && fileSelection.contains($0.source) }
+        }
+        return categories.contains(.cmd) || categories.contains(.full)
     }
     private var completion: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Installed " + fileCount(result?.imported?.count ?? 0), systemImage: "checkmark.circle.fill").font(.headline)
-            if let result, categories.contains(.cmd) || categories.contains(.full) {
+            if let result, hasCMDSupportSelection {
                 Text(result.complete && result.rexxComplete == true ? "CMD and REXX support are ready." : "Some CMD or REXX files are still missing. Choose additional installation media to add them.")
             }
             if let skipped = result?.skippedFiles, !skipped.isEmpty {
@@ -216,7 +261,17 @@ struct OS2SupportSheet: View {
         return plan == nil ? "" : "Not on this media"
     }
     private func refreshSelection() {
+        categories = plan?.expanded(categories) ?? OS2ExtractionCategory.expanded(categories)
         files = plan?.selectedFiles(categories) ?? []
+    }
+    private var requiredSelection: Set<OS2ExtractionCategory> {
+        Set(categories.flatMap { category in
+            plan?.groups?.first { $0.id == category }?.requires ?? Array(category.requires)
+        })
+    }
+    private var hasSelectedComponents: Bool {
+        if plan?.tree != nil { return !fileSelection.isEmpty }
+        return plan?.files.contains { !$0.provided && (categories.contains(.full) || categories.contains($0.category)) } == true
     }
     private func applyPlan(_ value: OS2ExtractionPlan) {
         plan = value
@@ -228,6 +283,30 @@ struct OS2SupportSheet: View {
         }
         categories.formUnion(value.installedCategories)
         refreshSelection()
+        if value.tree != nil {
+            let installed = Set(value.files.filter { $0.present && !$0.provided }.map(\.source))
+            fileSelection = value.sourceSelection(categories).union(installed)
+                .intersection(value.tree?.eligibleSources ?? [])
+            refreshTreeSelection()
+        }
+    }
+    private func refreshTreeSelection() {
+        guard let plan else { return }
+        files = plan.files.filter { fileSelection.contains($0.source) && !$0.provided && !$0.present }
+        categories = Set(plan.files.filter { fileSelection.contains($0.source) }.map(\.category))
+    }
+    private func refreshProviderMetadata() {
+        guard !extractionSources.isEmpty else { return }
+        loading = true
+        Task {
+            defer { loading = false }
+            do {
+                let updated = try await model.planOS2Extraction(extractionSources, ball: request.ball)
+                plan = updated
+                if let tree = updated.tree { fileSelection.formIntersection(tree.eligibleSources) }
+                refreshTreeSelection()
+            } catch { self.error = error.localizedDescription }
+        }
     }
     private func loadInitial() async {
         categories = request.categories
@@ -236,6 +315,13 @@ struct OS2SupportSheet: View {
             let status = try await model.os2Support()
             if status.complete && status.rexxComplete == true {
                 categories.insert(.cmd); installedCounts[.cmd] = 11
+            }
+            let audit = try await model.dependencyRequirements()
+            for group in audit.componentGroups ?? [] {
+                if let category = OS2ExtractionCategory(rawValue: group.id) {
+                    categories.insert(category)
+                    requiredBy[category] = group.requiredBy ?? []
+                }
             }
             let saved = request.sources.isEmpty ? status.mediaSources ?? [] : request.sources
             loading = false
@@ -285,7 +371,9 @@ struct OS2SupportSheet: View {
         Task {
             defer { loading = false }
             do {
-                result = try await model.installOS2Support(extractionSources, categories: categories, ball: request.ball)
+                result = try await model.installOS2Support(extractionSources, categories: categories, ball: request.ball,
+                                                          fileSelection: plan?.tree == nil ? nil : fileSelection.sorted(),
+                                                          configureComponents: plan?.tree == nil ? nil : plan?.configuredComponents(for: fileSelection))
                 step = .finished; notice = ""
             } catch { self.error = error.localizedDescription; notice = "" }
         }

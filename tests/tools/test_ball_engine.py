@@ -142,6 +142,49 @@ class WorkspaceTests(unittest.TestCase):
     def request(self, action, **fields):
         return ball_api.native_request({"action": action, "ball": str(self.ball), **fields})
 
+    def test_installer_supervision_requires_runtime_support_and_excludes_services(self):
+        arguments = ["install", r"C:\OS2\DOOM.EXE", "a value"]
+        legacy = self.request("prepare-launch", build=str(self.build), arguments=arguments)
+        self.assertFalse(legacy["operationSupervised"])
+        self.assertEqual(legacy["command"][1:], [r"C:\OS2\DOOM.EXE", "a value"])
+
+        (self.build / "runtime-capabilities.json").write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "operationSupervisor": True,
+                    "backends": ["unicorn"],
+                    "defaultBackend": "unicorn",
+                    "features": {
+                        "mesa": False,
+                        "video": True,
+                        "pcm": True,
+                        "midi": True,
+                        "dive": True,
+                    },
+                }
+            )
+        )
+        (self.drive / "OS2/SERVICE.EXE").write_bytes(b"service")
+        data = ball_api.load(self.ball)
+        data["startupPrograms"] = [{"program": r"C:\OS2\SERVICE.EXE"}]
+        ball_api.save(self.ball / "ball.json", data)
+        plan = self.request("prepare-launch", build=str(self.build), arguments=arguments)
+        self.assertTrue(plan["operationSupervised"])
+        self.assertEqual(plan["command"][1:], ["--operation", r"C:\OS2\DOOM.EXE", "a value"])
+        service = plan["startup"][0]
+        self.assertFalse(service["operationSupervised"])
+        self.assertEqual(service["command"][1:], [r"C:\OS2\SERVICE.EXE"])
+        for launch in (plan, service):
+            for key in ("TWOINE_OPERATION_LEASE_FD", "TWOINE_OPERATION_OWNER_FD"):
+                self.assertNotIn(key, launch["environment"])
+                self.assertIn(key, launch["unsetEnvironment"])
+        normal = self.request(
+            "prepare-launch", build=str(self.build), arguments=["run", r"C:\OS2\DOOM.EXE"]
+        )
+        self.assertFalse(normal["operationSupervised"])
+        self.assertEqual(normal["command"][1:], [r"C:\OS2\DOOM.EXE"])
+
     def test_startup_programs_have_independent_checked_launch_plans(self):
         (self.drive / "OS2/SERVICE.EXE").write_bytes(b"service")
         data = ball_api.load(self.ball)
