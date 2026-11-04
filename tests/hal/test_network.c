@@ -84,6 +84,54 @@ int main(void)
     }
     CHECK(!lx_os2_network_ioctl(0x6e2d, routes, sizeof routes, 0));
     CHECK(word16(routes) + word16(routes + 2) == snapshot.route_count);
+    int query[] = {4, 39, 0, 2, 1, 0};
+    size_t needed = 0;
+    CHECK(!lx_os2_network_sysctl(query, 6, NULL, &needed));
+    CHECK(needed == snapshot.route_count * 208);
+    size_t short_size = 1;
+    unsigned char canary = 0xa5;
+    if (needed > 1)
+    {
+        CHECK(lx_os2_network_sysctl(query, 6, &canary, &short_size) == -1 && errno == ENOMEM);
+        CHECK(short_size == needed && canary == 0xa5);
+    }
+    unsigned char *messages = malloc(needed ? needed : 1);
+    CHECK(messages && !lx_os2_network_sysctl(query, 6, messages, &needed));
+    for (size_t offset = 0; offset < needed; offset += 208)
+    {
+        CHECK(word16(messages + offset) == 208 && messages[offset + 2] == 4 &&
+              messages[offset + 3] == 4);
+        CHECK(word32(messages + offset + 12) == 0x37);
+        CHECK(messages[offset + 112] == 16 && messages[offset + 113] == 2);
+        CHECK(messages[offset + 160] == 32 && messages[offset + 161] == 18);
+    }
+    free(messages);
+    query[4] = 3;
+    needed = 0;
+    CHECK(!lx_os2_network_sysctl(query, 6, NULL, &needed));
+    messages = malloc(needed ? needed : 1);
+    CHECK(messages && !lx_os2_network_sysctl(query, 6, messages, &needed));
+    unsigned address_count = 0, interface_count = 0;
+    for (size_t offset = 0; offset < needed;)
+    {
+        unsigned length = word16(messages + offset);
+        CHECK(length && length <= needed - offset && messages[offset + 2] == 4);
+        if (messages[offset + 3] == 14)
+        {
+            CHECK(length == 164 && messages[offset + 133] == 18);
+            interface_count++;
+        }
+        else
+        {
+            CHECK(messages[offset + 3] == 12 && length == 66 && messages[offset + 35] == 2);
+            address_count++;
+        }
+        offset += length;
+    }
+    CHECK(address_count == snapshot.interface_count && interface_count > 0);
+    free(messages);
+    query[1] = 2;
+    CHECK(lx_os2_network_sysctl(query, 6, NULL, &needed) == -1 && errno == ENOPROTOOPT);
     for (size_t i = 0; i < snapshot.dns.server_count; i++)
         CHECK(snapshot.dns.servers[i][0]);
     lx_host_network_destroy(&snapshot);

@@ -1,9 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Legacy resolver results borrow thread-local libc resolver storage. */
+/* Legacy resolver results borrow per-thread host resolver snapshots. */
 #include "os2native.h"
 #include "tcp32dll.h"
 #include "hal/socket.h"
 #include "os2libs/generated/tcp32dll-lx.h"
+static LX_HOST_THREAD_LOCAL int ResolverError;
 uint32_t Os2LegacyLongSwap(uint32_t value)
 {
     return ((value & UINT32_C(0xff)) << 24) | ((value & UINT32_C(0xff00)) << 8) |
@@ -21,7 +22,9 @@ Os2LegacyHost *Os2LegacyGetHostByName(const char *name)
 {
     LxHostSocketHost host;
     static LX_HOST_THREAD_LOCAL Os2LegacyHost output;
-    if (!name || !lx_host_socket_host(name, &host))
+    int ok = lx_host_socket_host(name, &host);
+    ResolverError = lx_host_socket_resolver_error();
+    if (!ok)
         return NULL;
     output.name = host.name;
     output.aliases = host.aliases;
@@ -43,4 +46,58 @@ char *Os2LegacyInetText(uint32_t address)
         return NULL;
     snprintf(text, sizeof text, "%s", formatted);
     return text;
+}
+
+Os2LegacyHost *Os2LegacyGetHostByAddress(const void *address, int length, int family)
+{
+    static LX_HOST_THREAD_LOCAL Os2LegacyHost output;
+    LxHostSocketHost host;
+    if (!address || length != 4 || family != 2)
+    {
+        ResolverError = 3;
+        return NULL;
+    }
+    uint32_t ip;
+    memcpy(&ip, address, 4);
+    int ok = lx_host_socket_reverse(ip, &host);
+    ResolverError = lx_host_socket_resolver_error();
+    if (!ok)
+        return NULL;
+    output = (Os2LegacyHost){host.name, host.aliases, host.family, host.length, host.addresses};
+    return &output;
+}
+static Os2LegacyProtocol *legacy_protocol(const char *name, int number)
+{
+    static LX_HOST_THREAD_LOCAL Os2LegacyProtocol output;
+    return lx_host_socket_protocol(name, number, &output.name, &output.aliases, &output.number)
+               ? &output
+               : NULL;
+}
+Os2LegacyProtocol *Os2LegacyGetProtocolByName(const char *name)
+{
+    return name ? legacy_protocol(name, 0) : NULL;
+}
+Os2LegacyProtocol *Os2LegacyGetProtocolByNumber(int number)
+{
+    return legacy_protocol(NULL, number);
+}
+static Os2LegacyService *legacy_service(LxHostSocketService *host)
+{
+    static LX_HOST_THREAD_LOCAL Os2LegacyService output;
+    output = (Os2LegacyService){host->name, host->aliases, host->port, host->protocol};
+    return &output;
+}
+Os2LegacyService *Os2LegacyGetServiceByPort(int port, const char *protocol)
+{
+    LxHostSocketService host;
+    return lx_host_socket_service_port(port, protocol, &host) ? legacy_service(&host) : NULL;
+}
+Os2LegacyService *Os2LegacyGetServiceByName(const char *name, const char *protocol)
+{
+    LxHostSocketService host;
+    return lx_host_socket_service(name, protocol, &host) ? legacy_service(&host) : NULL;
+}
+int *Os2LegacyResolverError(void)
+{
+    return &ResolverError;
 }

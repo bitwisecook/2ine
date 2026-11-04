@@ -143,6 +143,18 @@ char *lxMakeUnixPath(const char *os2path, uint32 *err)
         memmove(ptr, ptr + 1, strlen(ptr));
     }
 
+    /* OS/2 C runtimes append a dot to extensionless files such as RESOLV2. */
+    if (!lx_host_path_exists(retval))
+    {
+        char *leaf = strrchr(retval, '/');
+        leaf = leaf ? leaf + 1 : retval;
+        if (strcmp(leaf, ".") && strcmp(leaf, ".."))
+        {
+            size_t n = strlen(leaf);
+            while (n && (leaf[n - 1] == '.' || leaf[n - 1] == ' '))
+                leaf[--n] = 0;
+        }
+    }
     locatePathCaseInsensitive(retval);
 
     /* Microsoft linker response files may use a root-relative name for a cwd file.

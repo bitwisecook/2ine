@@ -23,8 +23,64 @@ destination, metric and MTU queries, `SIOCGIFCONF`, `SIOSTATIF`/`SIOSTATIF42`,
 `ioctl` and `os2_ioctl` queries. Nested guest pointers and buffer extents are
 translated explicitly. Interface MIB rows contain the actual host MAC; unknown
 statistics remain zero and host kernel pointers are never returned. Mutating
-network ioctls are unsupported. The underlying socket transport currently uses
-IPv4 TCP/UDP; this is not an NDIS driver, raw Ethernet bridge or IPX stack.
+network ioctls are unsupported. TCPIP32 also implements the OS/2 routing
+`sysctl` queries `NET_RT_DUMP`, `NET_RT_FLAGS` and `NET_RT_IFLIST`, with packed
+OS/2 route/interface messages. This supports the original `netstat -r`,
+`netstat -n` and interface queries such as `ifconfig lo0` on macOS (`lo` on
+Linux). Protocol counters and connection/PCB inventories are not provided;
+unavailable interface statistics remain zero. The transport uses IPv4 host
+sockets; this is not an NDIS driver, raw Ethernet bridge or IPX stack.
+
+## DNS and resolver configuration
+
+TCPIP32 and legacy TCP32DLL provide forward/reverse IPv4 host lookup, protocol
+and service lookup, and per-thread resolver errors and result storage. Guest
+pointer arrays and strings are serialized into guest memory. TCPIP32 exposes
+the Toolkit `_ress` resolver data and `__res_init`; its socket exports support
+the original IBM `DDNSRES.DLL` used by `nslookup.exe`. The original resolver
+library handles DNS message construction, record parsing, search lists,
+retries and UDP-to-TCP fallback.
+
+The loader supplies `ETC=C:\MPTN\ETC` when no `ETC` is set. On launch it
+creates/refreshes `RESOLV2`, `RESOLV` and `HOSTS` there. Resolver files contain
+up to three host IPv4 DNS servers and six search domains with CRLF line endings;
+`HOSTS` comes from the host's hosts file. Only files beginning with the 2ine
+managed-file header are replaced. Existing manual configurations, including
+case variants of those filenames, are preserved. Setting `ETC` selects a
+different guest directory. Extensionless filenames with a trailing dot, as
+opened by the original resolver, resolve correctly.
+
+Host API lookups retain host resolver policies, including split DNS. Programs
+which send DNS packets themselves, such as `nslookup`, use the servers in
+their resolver files or an explicitly selected server. The global DNS snapshot
+does not represent every scoped VPN resolver. Direct DNS requires a reachable
+IPv4 DNS server; IPv6-only DNS servers are retained in the host inventory but
+cannot be used by the guest IPv4 wire transport. The bridge does not synthesize
+DNS answers or hide server timeouts.
+
+## Ping, traceroute and diagnostic sockets
+
+The unchanged OS/2 `ping.exe` and `tracerte.exe` use the TCPIP32 raw socket
+bridge. `SOCK_RAW/IPPROTO_ICMP` supplies IPv4-framed ICMP echo replies and,
+where the host permits it, ICMP errors. Received IP length/fragment fields use
+the OS/2 BSD convention. Both connected `send`/`recv` and `sendto`/`recvfrom`
+are supported. IP TTL/TOS options, nonblocking operation and both OS/2 select
+APIs are translated to host behavior.
+
+Raw UDP (`IPPROTO_UDP` or UDP packets through `IPPROTO_RAW` with `IP_HDRINCL`)
+is sent through host datagram sockets. Probe source/destination ports, payload,
+TTL and TOS are preserved; the host constructs IP/UDP framing and checksums.
+Real ICMP time-exceeded/port-unreachable packets return through the ICMP
+socket, allowing the original traceroute to match its probes. Raw UDP receive,
+fragmented packets, IP header options and other raw protocols are unsupported
+and fail explicitly. This is diagnostic packet translation, not arbitrary
+packet injection.
+
+macOS uses unprivileged ICMP datagram sockets, including for traceroute errors;
+no privileged helper is installed. Linux first tries a raw ICMP socket, which
+requires `CAP_NET_RAW` or equivalent privileges. Its unprivileged ping-socket
+fallback supports echo if permitted by `ping_group_range`; receiving traceroute
+ICMP errors on Linux requires the raw-socket capability.
 
 ## TLS upgrade setting
 
@@ -98,3 +154,16 @@ encrypted transfer, nonblocking retries, certificate/name rejection, retained
 contexts, stale handles and upgrade on/off protocol behavior. `network_guest`
 runs generated LX applications through Unicorn to exercise nested ioctl
 pointers, encrypted TLS 1.3 calls and guest-versus-host provider selection.
+`host_diagnostics` checks echo framing/checksums/identifiers, raw UDP payload and
+port translation, real port-unreachable packets and malformed-packet rejection.
+`network_diagnostics_guest` verifies both resolver ABIs, stable guest error
+pointers, descriptor filtering and managed/manual resolver files.
+
+To test unchanged private IBM tools as well, configure CMake with
+`-DTWOINE_OS2_NETWORK_TOOLS=/path/to/MPTN`, containing `bin/{ping,tracerte,host,nslookup,netstat,ifconfig}.exe`
+and `dll/ddnsres.dll`. The optional `os2_network_tools` test copies them into a
+temporary guest drive and checks ping, traceroute, host lookup, route/interface
+queries, DNS A/PTR/MX records, UDP/TCP, truncation fallback, NXDOMAIN and timeout
+responses against an isolated loopback DNS fixture. Original binaries are not
+distributed with the tests. Linux diagnostic capability requirements apply to
+this test too.

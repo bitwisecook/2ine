@@ -33,6 +33,7 @@ extern "C"
 
 #define OS2_SOCK_STREAM 1
 #define OS2_SOCK_DGRAM 2
+#define OS2_SOCK_RAW 3
 
 #define OS2_SOL_SOCKET 0xffff
 
@@ -98,6 +99,17 @@ extern "C"
         int s_port;
         char *s_proto;
     } OS2_servent;
+    typedef struct OS2_protoent
+    {
+        char *p_name;
+        char **p_aliases;
+        int p_proto;
+    } OS2_protoent;
+    typedef struct OS2_iovec
+    {
+        void *buffer;
+        size_t length;
+    } OS2_iovec;
 
 #define OS2_FD_SETSIZE 64
     typedef struct OS2_fd_set
@@ -121,6 +133,45 @@ extern "C"
 #pragma pack(pop)
 
     OS2EXPORT int OS2API OS2_sock_init(void) OS2APIINFO(ord = 26, name = sock_init);
+    OS2EXPORT int OS2API OS2_sysctl(const int *name, unsigned count, void *output, size_t *length,
+                                    const void *input, size_t input_length)
+        OS2APIINFO(ord = 207, name = sysctl);
+    OS2EXPORT uint32_t OS2API OS2_gethostid(void) OS2APIINFO(ord = 4, name = gethostid);
+    OS2EXPORT int OS2API OS2_getpeername(int sock, OS2_sockaddr *address, int *length)
+        OS2APIINFO(ord = 5, name = getpeername);
+    OS2EXPORT int OS2API OS2_getsockopt(int sock, int level, int option, void *value, int *length)
+        OS2APIINFO(ord = 7, name = getsockopt);
+    OS2EXPORT void OS2API OS2_psock_errno(const char *message)
+        OS2APIINFO(ord = 30, name = psock_errno);
+    OS2EXPORT int OS2API OS2_recvfrom(int sock, void *buffer, int length, int flags,
+                                      OS2_sockaddr *address, int *address_length)
+        OS2APIINFO(ord = 11, name = recvfrom);
+    OS2EXPORT int OS2API OS2_sendto(int sock, const void *buffer, int length, int flags,
+                                    const OS2_sockaddr *address, int address_length)
+        OS2APIINFO(ord = 14, name = sendto);
+    OS2EXPORT OS2_hostent *OS2API OS2_gethostbyaddr(const void *address, int length, int family)
+        OS2APIINFO(ord = 112, name = gethostbyaddr);
+    OS2EXPORT OS2_protoent *OS2API OS2_getprotobyname(const char *name)
+        OS2APIINFO(ord = 121, name = getprotobyname);
+    OS2EXPORT OS2_protoent *OS2API OS2_getprotobynumber(int number)
+        OS2APIINFO(ord = 122, name = getprotobynumber);
+    OS2EXPORT OS2_servent *OS2API OS2_getservbyport(int port, const char *protocol)
+        OS2APIINFO(ord = 123, name = getservbyport);
+    OS2EXPORT void OS2API OS2_setprotoent(int stayopen) OS2APIINFO(ord = 118, name = setprotoent);
+    OS2EXPORT void OS2API OS2_endprotoent(void) OS2APIINFO(ord = 119, name = endprotoent);
+    OS2EXPORT void OS2API OS2_setservent(int stayopen) OS2APIINFO(ord = 125, name = setservent);
+    OS2EXPORT void OS2API OS2_endservent(void) OS2APIINFO(ord = 126, name = endservent);
+    OS2EXPORT int OS2API OS2_res_init(void) OS2APIINFO(ord = 139, name = __res_init);
+    OS2EXPORT uint32_t OS2API OS2_inet_network(const char *name)
+        OS2APIINFO(ord = 109, name = inet_network);
+    OS2EXPORT int *OS2API OS2_tcp_h_errno1(void) OS2APIINFO(ord = 151, name = tcp_h_errno1);
+    OS2EXPORT int OS2API OS2_gethostname(char *name, int length)
+        OS2APIINFO(ord = 144, name = gethostname);
+    OS2EXPORT uint32_t OS2API OS2_htonl(uint32_t value) OS2APIINFO(ord = 203, name = htonl);
+    OS2EXPORT uint32_t OS2API OS2_ntohl(uint32_t value) OS2APIINFO(ord = 204, name = ntohl);
+    OS2EXPORT uint16_t OS2API OS2_ntohs(uint16_t value) OS2APIINFO(ord = 206, name = ntohs);
+    OS2EXPORT int OS2API OS2_writev(int sock, const OS2_iovec *vectors, int count)
+        OS2APIINFO(ord = 24, name = writev);
     OS2EXPORT int OS2API OS2_ioctl(int sock, uint32_t command, void *argument)
         OS2APIINFO(ord = 8, name = ioctl);
     OS2EXPORT int OS2API OS2_os2_ioctl(int sock, uint32_t command, void *argument, int length)

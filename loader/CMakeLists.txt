@@ -1,6 +1,7 @@
 # Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
 if(LX_LEGACY)
     add_executable(lx_loader main.c modules.c entry.c imports.c load_ne.c load_lx.c paths.c service.c)
+    target_sources(lx_loader PRIVATE network_config.c)
     twoine_application_target(lx_loader)
     target_link_libraries(lx_loader PRIVATE 2ine twoine_formats ${CMAKE_DL_LIBS})
     set_target_properties(lx_loader PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")

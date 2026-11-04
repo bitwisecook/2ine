@@ -7,6 +7,7 @@
  */
 #include "loader/internal.h"
 #include "hal/host_operation.h"
+#include "network_config.h"
 int main(int argc, char **argv, char **envp)
 {
 #if !defined(_WIN32)
@@ -95,6 +96,7 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.freeModule = freeLxModule;
     GLoaderState.makeUnixPath = lxMakeUnixPath;
     GLoaderState.terminate = lxTerminate;
+    lxPrepareNetworkConfiguration();
 
     if (getenv("TWOINE_TRACE_ARGS"))
     {

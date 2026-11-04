@@ -94,6 +94,10 @@ if(TARGET twoine_runtime)
     target_link_libraries(twoine_socket_tests PRIVATE twoine_runtime)
     add_test(NAME host_socket COMMAND twoine_socket_tests)
     set_tests_properties(host_socket PROPERTIES TIMEOUT 20)
+    add_executable(twoine_diagnostic_tests hal/test_diagnostics.c)
+    target_link_libraries(twoine_diagnostic_tests PRIVATE twoine_runtime)
+    add_test(NAME host_diagnostics COMMAND twoine_diagnostic_tests)
+    set_tests_properties(host_diagnostics PROPERTIES TIMEOUT 20)
     add_executable(twoine_network_tests hal/test_network.c ${PROJECT_SOURCE_DIR}/os2libs/network.c)
     target_link_libraries(twoine_network_tests PRIVATE twoine_runtime)
     add_test(NAME host_network COMMAND twoine_network_tests)
@@ -213,11 +217,23 @@ if(TARGET lx_loader)
             "${CMAKE_CURRENT_SOURCE_DIR}/integration/network_guest.py"
             --build "${PROJECT_BINARY_DIR}" --openssl "${TWOINE_OPENSSL_TOOL}")
         set_tests_properties(network_guest PROPERTIES TIMEOUT 60)
+        add_test(NAME network_diagnostics_guest COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/network_diagnostics.py"
+            --build "${PROJECT_BINARY_DIR}")
+        set_tests_properties(network_diagnostics_guest PROPERTIES TIMEOUT 45)
     endif()
     if(TWOINE_PORTABLE_LOADER)
         set(_twoine_legacy_backend unicorn)
     else()
         set(_twoine_legacy_backend native)
+    endif()
+    set(TWOINE_OS2_NETWORK_TOOLS "" CACHE PATH "Optional private MPTN directory with unchanged IBM bin and dll files")
+    if(TWOINE_OS2_NETWORK_TOOLS)
+        add_test(NAME os2_network_tools COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/integration/network_diagnostics.py"
+            --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+            --os2-tools "${TWOINE_OS2_NETWORK_TOOLS}")
+        set_tests_properties(os2_network_tools PROPERTIES TIMEOUT 75)
     endif()
     if(TARGET opengl)
         add_test(NAME opengl_guest COMMAND "${Python3_EXECUTABLE}"

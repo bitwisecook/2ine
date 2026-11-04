@@ -42,7 +42,7 @@ for directory in ["runtime", "guest", "loader", "formats", "os2libs"]:
             path,
             hardware
             + [
-                r"#\s*include\s*<[^>]*hal/(?!abi\.h|audio\.h|clipboard\.h|video\.h|video_frame\.h|print\.h|font\.h|opengl\.h|gl_(?:dispatch|constants)\.h|socket\.h|terminal\.h|host(?:_\w+)?\.h)[^>]+>"
+                r"#\s*include\s*<[^>]*hal/(?!abi\.h|audio\.h|clipboard\.h|video\.h|video_frame\.h|print\.h|font\.h|opengl\.h|gl_(?:dispatch|constants)\.h|socket\.h|network\.h|tls\.h|terminal\.h|host(?:_\w+)?\.h)[^>]+>"
             ],
         )
 for path in sorted((root / "hal/include").rglob("*.h")):

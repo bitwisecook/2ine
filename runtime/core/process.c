@@ -9,6 +9,9 @@
 #include "hal/host_shared.h"
 void initPib(void)
 {
+    /* Guest resolver libraries locate RESOLV2/HOSTS through ETC. */
+    if (!getenv("ETC"))
+        setenv("ETC", "C:\\MPTN\\ETC", 0);
     LxPIB *pib = &GLoaderState.pib;
     memset(pib, '\0', sizeof(*pib));
 

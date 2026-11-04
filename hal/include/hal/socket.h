@@ -11,7 +11,7 @@ typedef struct LxHostSocketAddress
 typedef struct LxHostSocketSet
 {
     int count;
-    const int *sockets;
+    int *sockets;
 } LxHostSocketSet;
 typedef struct LxHostSocketHost
 {
@@ -30,7 +30,8 @@ typedef struct LxHostSocketService
 enum
 {
     LX_SOCKET_STREAM = 1,
-    LX_SOCKET_DGRAM = 2
+    LX_SOCKET_DGRAM = 2,
+    LX_SOCKET_RAW = 3
 };
 enum
 {
@@ -65,6 +66,16 @@ typedef enum LxHostSocketOption
     LX_SO_TYPE
 } LxHostSocketOption;
 int lx_host_socket_open(int type);
+int lx_host_socket_open_protocol(int type, int protocol);
+int lx_host_socket_ip_option(int socket, int option, const void *value, int size);
+int lx_host_socket_get_option(int socket, LxHostSocketOption option, void *value, int *size);
+int lx_host_socket_peer(int socket, LxHostSocketAddress *address);
+int lx_host_socket_reverse(uint32_t address, LxHostSocketHost *result);
+int lx_host_socket_resolver_error(void);
+int lx_host_socket_protocol(const char *name, int number, char **official, char ***aliases,
+                            int *protocol);
+int lx_host_socket_service_port(int port, const char *protocol, LxHostSocketService *result);
+int lx_host_socket_poll_update(int *sockets, int reads, int writes, int errors, int timeout_ms);
 int lx_host_socket_close(int socket);
 int lx_host_socket_connect(int socket, const LxHostSocketAddress *address);
 int lx_host_socket_bind(int socket, const LxHostSocketAddress *address);
@@ -85,14 +96,14 @@ int lx_host_socket_hostname(char *name, size_t size);
 int lx_host_socket_bsd_error(void);
 int lx_host_socket_error(void);
 uint32_t lx_host_socket_parse_address(const char *name);
+uint32_t lx_host_socket_parse_network(const char *name);
 char *lx_host_socket_format_address(uint32_t address);
 uint16_t lx_host_socket_network16(uint16_t value);
-/* Query results borrow libc storage and are overwritten by subsequent queries. */
+/* Query results borrow per-thread storage, overwritten by the next query of that kind. */
 int lx_host_socket_host(const char *name, LxHostSocketHost *result);
 int lx_host_socket_service(const char *name, const char *protocol, LxHostSocketService *result);
-int lx_host_socket_select(int limit, const LxHostSocketSet *read, const LxHostSocketSet *write,
-                          const LxHostSocketSet *error, int64_t seconds, int32_t microseconds,
-                          int timed);
+int lx_host_socket_select(int limit, LxHostSocketSet *read, LxHostSocketSet *write,
+                          LxHostSocketSet *error, int64_t seconds, int32_t microseconds, int timed);
 int lx_host_socket_poll(const int *sockets, int reads, int writes, int errors, int timeout_ms);
 int lx_host_socket_option(int socket, LxHostSocketOption option, const void *value, int size);
 int lx_host_wall_time(int64_t *seconds, int32_t *microseconds, int32_t *minutes_west, int32_t *dst);
