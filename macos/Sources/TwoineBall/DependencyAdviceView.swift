@@ -12,7 +12,7 @@ struct DependencyAdviceView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if audit.stale == true {
                         Text("The library check is out of date. Check again to see which OS/2 components are missing.")
-                        Button("Check Libraries") { model.auditDependencies() }
+                        Button("Rescan Dependencies") { model.auditDependencies() }
                             .disabled(model.busy || model.mediaBusy || model.processRunning)
                     } else {
                         if !(audit.componentGroups ?? []).isEmpty {

@@ -1,0 +1,26 @@
+{
+  "censusSha256": "ad2f7ee051d4fe7938dfcbd2371ba75345e59ab48eab84ebd8ddeabac81b9331",
+  "entries": 1280,
+  "fullEvidence": "/Users/jimd/src/os2/.cache/os2-reports/2026-11-05/build-lotus-import-inventory/imports.json",
+  "inventorySha256": "d38408dbedf6d56bf3f18669488f00f2ece96b18559ed7d8717601b001f34fde",
+  "schema": 1,
+  "scope": "All imported interfaces in module families built by 2ine; selected original guest providers remain distinct. Export presence does not prove semantic completeness.",
+  "sourceRevision": "c3e92d1101e3af1b91789447ac6ea01f11d8b29f",
+  "summary": {
+    "binaries": 411,
+    "exportMetadataErrors": 1,
+    "importParseErrors": 0,
+    "missingSelectedNativeExports": 412,
+    "missingTwoineExports": 464,
+    "optionalClosureBinaries": 353,
+    "parseErrors": 1,
+    "staticClosureBinaries": 49,
+    "uniqueImports": 10731,
+    "uniqueSelectedNativeImports": 1225,
+    "uniqueTwoineImports": 1280,
+    "unsupportedFormats": {
+      "unsupported": 1
+    },
+    "verifiedDynamicOnlyBinaries": 9
+  }
+}

@@ -1,5 +1,5 @@
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Cached dependency reports follow installed files, search paths and media."""
+"""Install/add/rescan refresh a portable graph; normal queries never scan."""
 
 import json
 import unittest
@@ -16,101 +16,142 @@ class DependencyFreshnessTests(unittest.TestCase):
     installed = fixtures.DependencyAuditTests.installed
     os2_media = fixtures.DependencyAuditTests.os2_media
 
-    def test_legacy_report_is_stale_and_ensure_retains_full_current_report(self):
-        initial = self.request("audit-dependencies", resolve=False)
-        latest = self.ball / "logs/dependencies-latest.json"
-        legacy = json.loads(latest.read_text())
-        legacy.pop("fingerprint")
-        latest.write_text(json.dumps(legacy))
-        shown = self.request("snapshot")["dependencyAudit"]
-        self.assertTrue(shown["stale"])
-        self.assertFalse(shown["complete"])
-        self.assertIn("stale", shown["summary"])
-        fresh = self.request("ensure-dependencies")
-        self.assertFalse(fresh["cacheHit"])
-        self.assertFalse(fresh["stale"])
-        self.assertNotEqual(initial["jsonPath"], fresh["jsonPath"])
-        cached = self.request("ensure-dependencies")
-        self.assertTrue(cached["cacheHit"])
-        self.assertEqual(cached["jsonPath"], fresh["jsonPath"])
-        self.assertIn("binaries", cached)
-        self.assertIn("imports", cached)
+    @property
+    def index(self):
+        return self.ball / "cache/dependency-index.json"
 
-    def test_delayed_installer_files_refresh_and_recover_before_cached_optional_failures(self):
-        self.os2_media()
-        initial = self.request("audit-dependencies")
-        self.assertEqual(initial["scannedBinaries"], 0)
-        app = self.installed("Apps/LATE.EXE", fixtures.linear(["SOMD", "OPTIONAL"]))
-        original = app.read_bytes()
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        recovered = self.request("ensure-dependencies")
-        self.assertFalse(recovered["cacheHit"])
-        self.assertEqual(recovered["missing"], ["OPTIONAL"])
-        self.assertTrue((self.ball / "drive_c/OS2/DLL/SOMD.DLL").is_file())
-        self.assertEqual(app.read_bytes(), original)
-        self.assertFalse(self.request("snapshot")["dependencyAudit"]["stale"])
-        again = self.request("ensure-dependencies")
-        self.assertTrue(again["cacheHit"])
-        self.assertEqual(again["jsonPath"], recovered["jsonPath"])
+    def status(self, program=r"C:\Apps\APP.EXE", **fields):
+        return self.request("launch-dependency-status", arguments=["run", program], **fields)
 
-    def test_no_resolve_report_gets_one_automatic_recovery_attempt(self):
+    def test_missing_index_is_unknown_without_scan_recovery_or_any_writes(self):
         self.installed("Apps/APP.EXE", fixtures.linear(["SOMD"]))
         self.os2_media()
-        static = self.request("audit-dependencies", resolve=False)
-        self.assertEqual(static["missing"], ["SOMD"])
-        recovered = self.request("ensure-dependencies")
-        self.assertFalse(recovered["cacheHit"])
-        self.assertEqual(recovered["missing"], [])
-        self.assertTrue(self.request("ensure-dependencies")["cacheHit"])
+        before = {
+            p.relative_to(self.ball): p.read_bytes() for p in self.ball.rglob("*") if p.is_file()
+        }
+        report = self.status()
+        self.assertTrue(report["unknown"])
+        self.assertTrue(report["cached"])
+        self.assertEqual(report["scannedBinaries"], 0)
+        self.assertEqual(report["componentGroups"], [])
+        self.assertFalse(fixtures.ball_api.needs_dependency_media(report))
+        self.assertEqual(
+            before,
+            {p.relative_to(self.ball): p.read_bytes() for p in self.ball.rglob("*") if p.is_file()},
+        )
+        self.assertTrue(self.request("ensure-dependencies")["unknown"])
+        self.assertFalse(self.index.exists())
 
-    def test_binary_replacement_config_settings_and_media_invalidate(self):
-        app = self.installed("Apps/APP.EXE", fixtures.linear(["DOSCALLS"]))
-        media = self.os2_media()
-        self.request("audit-dependencies")
-        app.write_bytes(fixtures.linear(["SOMD"]))
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        self.request("ensure-dependencies")
+    def test_explicit_rescan_updates_graph_and_stored_index_is_portable(self):
+        app = self.installed("Apps/APP.EXE", fixtures.linear(["FIRST"]))
+        first = self.request("audit-dependencies", resolve=False)
+        database = json.loads(self.index.read_text())
+        self.assertEqual(database["schema"], 1)
+        self.assertNotIn(str(self.root), self.index.read_text())
+        self.assertEqual(self.status()["missing"], ["FIRST"])
+        original = self.index.read_bytes()
+        app.write_bytes(fixtures.linear(["SECOND"]))
+        # No executable is read during status/snapshot, even when its bytes change.
+        self.assertEqual(self.status()["missing"], ["FIRST"])
+        self.assertTrue(self.request("snapshot")["dependencyAudit"]["cached"])
+        self.assertEqual(self.index.read_bytes(), original)
+        refreshed = self.request("audit-dependencies", resolve=False)
+        self.assertNotEqual(first["jsonPath"], refreshed["jsonPath"])
+        self.assertEqual(self.status()["missing"], ["SECOND"])
+
+    def test_cached_graph_can_launch_even_if_known_executable_bytes_are_unreadable(self):
+        app = self.installed("Apps/APP.EXE", fixtures.linear(["CORE"]))
+        dll = self.installed("Apps/CORE.DLL", fixtures.linear())
+        self.request("audit-dependencies", resolve=False)
+        before = self.index.read_bytes()
+        app.unlink()
+        dll.unlink()
+        report = self.status()
+        self.assertTrue(report["complete"])
+        self.assertFalse(report["unknown"])
+        self.assertEqual(report["scannedBinaries"], 0)
+        self.assertEqual(self.index.read_bytes(), before)
+        self.assertIn("loader", report["limits"][0])
+
+    def test_libpath_changes_reapply_cached_graph_without_rescan(self):
+        self.installed("Apps/APP.EXE", fixtures.linear(["CORE"]))
+        self.installed("Private/CORE.DLL", fixtures.linear())
+        self.request("audit-dependencies", resolve=False)
+        before = self.index.read_bytes()
+        self.assertEqual(self.status()["unreachable"][0]["module"], "CORE")
         config = self.ball / "drive_c/CONFIG.SYS"
-        config.write_bytes(config.read_bytes() + b"\r\nLIBPATH=C:\\OS2\\DLL;C:\\CUSTOM\r\n")
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        self.request("ensure-dependencies")
-        self.request("command", arguments=["config", "system.dive", "false"])
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        self.request("ensure-dependencies")
-        (media / "OS2/NEW.MSG").write_bytes(b"media changed")
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        self.request("ensure-dependencies")
-        remembered = self.ball / "os2-media.json"
-        remembered.write_text(json.dumps({"sources": [str(media)], "recorded": "changed"}))
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
+        config.write_bytes(config.read_bytes() + b"\r\nLIBPATH=C:\\Private\r\n")
+        self.assertTrue(self.status()["complete"])
+        self.assertEqual(self.index.read_bytes(), before)
 
-    def test_runtime_cache_and_unrelated_data_do_not_invalidate(self):
-        self.installed("Apps/APP.EXE", fixtures.linear(["DOSCALLS"]))
-        self.request("audit-dependencies")
-        self.installed("OS2/DLL/2INE/unicorn/hash/NEW.DLL", b"host cache")
-        self.installed("Apps/README.TXT", b"data")
-        self.assertFalse(self.request("snapshot")["dependencyAudit"]["stale"])
-        self.assertTrue(self.request("ensure-dependencies")["cacheHit"])
+    def test_legacy_full_report_is_readonly_fallback_after_ball_move(self):
+        self.installed("Apps/APP.EXE", fixtures.linear(["CORE"]))
+        self.installed("Apps/CORE.DLL", fixtures.linear())
+        saved = self.request("audit-dependencies", resolve=False)
+        path = Path(saved["jsonPath"])
+        data = json.loads(path.read_text())
+        for binary in data["binaries"]:
+            binary.pop("modules", None)
+            binary.pop("companions", None)
+        path.write_text(json.dumps(data))
+        self.index.unlink()
+        latest = self.ball / "logs/dependencies-latest.json"
+        compact = json.loads(latest.read_text())
+        compact["jsonPath"] = "/previous/ball/logs/" + path.parent.name + "/audit.json"
+        latest.write_text(json.dumps(compact))
+        before = {
+            p.relative_to(self.ball): p.read_bytes() for p in self.ball.rglob("*") if p.is_file()
+        }
+        report = self.status()
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["cachedBinaries"], 2)
+        self.assertFalse(self.index.exists())
+        self.assertEqual(
+            before,
+            {p.relative_to(self.ball): p.read_bytes() for p in self.ball.rglob("*") if p.is_file()},
+        )
 
-    def test_prepare_attaches_audit_and_selected_runtime_changes_refresh(self):
-        self.installed("Apps/APP.EXE", fixtures.linear(["OPTIONAL"]))
-        build = self.root / "runtime"
-        build.mkdir()
-        (build / "lx_loader").write_bytes(b"fixture")
-        request = dict(build=str(build), arguments=["run", "C:\\Apps\\APP.EXE"])
-        first = self.request("prepare-launch", **request)
-        audit = first["dependencyAudit"]
-        self.assertEqual(audit["missing"], ["OPTIONAL"])
-        self.assertFalse(audit["stale"])
-        second = self.request("prepare-launch", **request)
-        self.assertEqual(second["dependencyAudit"]["jsonPath"], audit["jsonPath"])
-        (build / "runtime-capabilities.json").write_text('{"schema":1}')
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        refreshed = self.request("ensure-dependencies", build=str(build))
-        self.assertFalse(refreshed["cacheHit"])
-        self.assertNotEqual(refreshed["jsonPath"], audit["jsonPath"])
-        self.assertIn("media", refreshed)
-        self.assertIn("componentGroups", refreshed)
+    def test_add_application_and_component_import_removal_refresh_index(self):
+        self.installed("Apps/APP.EXE", fixtures.linear(["SOMD"]))
+        self.request("command", arguments=["add-app", "Saved", r"C:\Apps\APP.EXE"])
+        self.assertTrue(self.index.is_file())
+        self.assertEqual(self.status()["missing"], ["SOMD"])
+        media = self.os2_media()
+        result = self.request("import-os2-support", sources=[str(media)], categories=["som"])
+        self.assertTrue(result["imported"])
+        self.assertTrue(
+            any(
+                item["path"].endswith("SOMD.DLL")
+                for item in json.loads(self.index.read_text())["binaries"]
+            )
+        )
+        self.request("remove-os2-components", paths=[r"C:\OS2\DLL\SOMD.DLL"])
+        self.assertFalse(
+            any(
+                item["path"].endswith("SOMD.DLL")
+                for item in json.loads(self.index.read_text())["binaries"]
+            )
+        )
+        self.assertEqual(self.status()["missing"], ["SOMD"])
+
+    def test_saved_service_environment_is_independent_from_application(self):
+        self.installed("Apps/APP.EXE", fixtures.linear(["APPONLY"]))
+        self.installed("AppLib/APPONLY.DLL", fixtures.linear())
+        self.installed("Services/DAEMON.EXE", fixtures.linear(["SERVICE"]))
+        self.installed("ServiceLib/SERVICE.DLL", fixtures.linear())
+        manifest = fixtures.ball_api.load(self.ball)
+        manifest["applications"]["Saved"] = {
+            "program": r"C:\Apps\APP.EXE",
+            "environment": {"LIBPATH": r"C:\AppLib"},
+        }
+        manifest["startupPrograms"] = [
+            {"program": r"C:\Services\DAEMON.EXE", "environment": {"LIBPATH": r"C:\ServiceLib"}}
+        ]
+        fixtures.ball_api.save(self.ball / "ball.json", manifest)
+        self.request("audit-dependencies", resolve=False)
+        report = self.request("launch-dependency-status", arguments=["launch", "Saved"])
+        self.assertTrue(report["complete"], report)
+        self.assertEqual(report["missing"], [])
 
 
 if __name__ == "__main__":

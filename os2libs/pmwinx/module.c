@@ -24,11 +24,13 @@ static void open32Shutdown(void)
     open32WindowsCleanup();
     open32NativeControlsPrune();
     open32MenusCleanup();
+    open32AcceleratorsCleanup();
     open32ClipboardCleanup();
     open32DrawingCleanup();
     open32ClassesCleanup();
     open32IconsCleanup();
     open32CriticalCleanup();
+    open32TlsCleanup();
     open32ContextCleanup();
     open32MemoryCleanup();
     command_line = 0;

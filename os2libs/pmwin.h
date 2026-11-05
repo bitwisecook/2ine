@@ -1123,6 +1123,8 @@ extern "C"
     OS2EXPORT BOOL OS2API WinEndPaint(HPS hps) OS2APIINFO(738);
     OS2EXPORT BOOL OS2API WinFillRect(HPS hps, PRECTL prcl, LONG lColor) OS2APIINFO(743);
     OS2EXPORT ULONG lx_pm_clipboard_count(void);
+    /* Shared system resources do not require a caller-owned PM anchor/display. */
+    OS2EXPORT HPOINTER lx_pm_system_pointer(LONG id);
     OS2EXPORT uint64_t lx_pm_clipboard_serial(void);
     OS2EXPORT uint64_t lx_pm_clipboard_format_serial(ULONG format);
     OS2EXPORT ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity);

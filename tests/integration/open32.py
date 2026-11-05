@@ -14,6 +14,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from images import FlatGuest, linear_image
+from open32_class_alias import class_alias_program, class_long_program
 from open32_contracts import (
     api_window_program,
     bitmap_program,
@@ -46,6 +47,7 @@ from open32_contracts import (
 )
 from open32_dc_state import dc_state_program
 from open32_dde import clipboard_program, dde_program
+from open32_default_size import default_size_program
 from open32_file_dialogs import file_dialog_program
 from open32_file_handles import conversion_program, file_handle_program, volume_program
 from open32_file_locks import lock_program
@@ -65,6 +67,8 @@ from open32_timers import timer_program
 
 def program():
     g = FlatGuest()
+    g.call(2, 258)
+    g.result(0xFFFFFFFE, 116)
     g.call(2, 224)  # GetACP uses the Windows ANSI identifier, matching GetLocaleInfo.
     g.result(1252, 9)
     g.call(2, 1019)
@@ -310,6 +314,9 @@ def main():
         run(timer_program())
         run(window_program())
         run(api_window_program())
+        run(class_alias_program())
+        run(class_long_program())
+        run(default_size_program())
         run(placement_program(args.backend == "unicorn"))
         run(sizing_frame_program())
         for mode in ("frame", "invalid", "native", "mdi"):

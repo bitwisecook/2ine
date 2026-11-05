@@ -25,7 +25,21 @@ def macho(path):
 
 def dependencies(path):
     text = run(["otool", "-L", path], capture_output=True, text=True).stdout
-    return [line.strip().split(" (compatibility version", 1)[0] for line in text.splitlines()[1:]]
+    # otool -L includes LC_ID_DYLIB before the actual load commands. That ID is
+    # not a dependency and need not be resolvable from the dylib's own RPATHs.
+    # Source-built SDL, for example, has an @rpath ID and no local LC_RPATH.
+    identities = run(["otool", "-D", path], capture_output=True, text=True).stdout
+    own_ids = {
+        line.strip()
+        for line in identities.splitlines()
+        if line.strip() and not line.rstrip().endswith(":")
+    }
+    return [
+        name
+        for line in text.splitlines()[1:]
+        if " (compatibility version" in line
+        if (name := line.strip().split(" (compatibility version", 1)[0]) not in own_ids
+    ]
 
 
 def rpaths(path):

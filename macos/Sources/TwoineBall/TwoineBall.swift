@@ -7,10 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
-        for window in NSApp.windows where window.canBecomeMain {
-            window.delegate = self
-            window.contentView?.setAccessibilityLabel("Ball manager")
-        }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if model?.hasComponentOperations == true {
@@ -121,6 +117,12 @@ struct BallCommands: Commands {
                 Button("Clear Menu") { NSDocumentController.shared.clearRecentDocuments(nil) }
             }.disabled(model.busy || model.mediaBusy)
         }
+        CommandGroup(after: .newItem) {
+            Divider()
+            Button("Close Window") {
+                NSApp.sendAction(#selector(NSWindow.performClose(_:)), to: nil, from: nil)
+            }.keyboardShortcut("w")
+        }
         CommandGroup(after: .sidebar) {
             ForEach(Array(Page.allCases.enumerated()), id: \.element.id) { index, page in
                 Button(page.rawValue) { model.page = page }.keyboardShortcut(KeyEquivalent(Character(String(index + 1))))
@@ -153,7 +155,7 @@ struct BallCommands: Commands {
             Button("Refresh") { model.refresh() }.keyboardShortcut("r").disabled(model.busy || model.mediaBusy)
             Divider()
             Button("Install Components…") { model.installComponents() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy)
-            Button("Check and Restore System Libraries…") { model.auditDependencies() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy)
+            Button("Rescan Dependencies") { model.auditDependencies() }.disabled(model.snapshot == nil || model.busy || model.mediaBusy || model.processRunning)
             Button("Install Software…") { model.beginProgram(.install) }.keyboardShortcut("i").disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Run Executable…") { model.beginProgram(.run) }.keyboardShortcut("r", modifiers: [.command, .option]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)
             Button("Add Application…") { model.beginProgram(.save) }.keyboardShortcut("a", modifiers: [.command, .shift]).disabled(model.snapshot == nil || model.busy || model.mediaBusy)

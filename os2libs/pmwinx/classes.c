@@ -174,6 +174,31 @@ ULONG RegisterClass(PVOID record)
                  c->procedure, c->atom);
     return c->atom;
 }
+BOOL RegisterClassAlias(PSZ name, PSZ alias)
+{
+    if ((uintptr_t)name <= UINT16_MAX || (uintptr_t)alias <= UINT16_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    TRACE_NATIVE("RegisterClassAlias('%s', '%s')", name, alias);
+    lx_host_once(&once, initialize);
+    lx_host_monitor_lock(monitor);
+    Open32Class *source = NULL, *target = NULL;
+    for (Open32Class *c = classes; c; c = c->next)
+    {
+        if (!source && !strcasecmp(c->name, name))
+            source = c;
+        if (!target && !strcasecmp(c->name, alias))
+            target = c;
+    }
+    if (source && target)
+        source->alias = target;
+    lx_host_monitor_unlock(monitor);
+    if (!source || !target)
+        open32SetError(87);
+    return source && target;
+}
 BOOL UnregisterClass(PSZ name, ULONG instance)
 {
     lx_host_once(&once, initialize);
@@ -189,6 +214,9 @@ BOOL UnregisterClass(PSZ name, ULONG instance)
     while (*link != c)
         link = &(*link)->next;
     *link = c->next;
+    for (Open32Class *other = classes; other; other = other->next)
+        if (other->alias == c)
+            other->alias = NULL;
     lx_host_monitor_unlock(monitor);
     destroy_class(c);
     return TRUE;
@@ -271,10 +299,98 @@ ULONG GetClassLong(ULONG handle, LONG index)
             return c->style;
         case -32:
             return c->atom;
+        case -34:
+            return c->small_icon;
         default:
             open32SetError(1413);
             return 0;
     }
+}
+ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
+{
+    TRACE_NATIVE("SetClassLong(%u, %d, %X)", handle, index, value);
+    Open32Window *window = open32FindWindow(handle);
+    if (!window)
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    if (index == -24 && !open32ValidProcedure(value))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    if (index == -8 && value > UINT16_MAX)
+    {
+        char *name = lx_execution_copy_string(GLoaderState.execution, value, 256);
+        if (!name)
+        {
+            open32SetError(87);
+            return 0;
+        }
+        free(name);
+    }
+    Open32Class *c = window->class;
+    lx_host_monitor_lock(monitor);
+    ULONG previous = 0, *field = NULL;
+    if (index >= 0)
+    {
+        if ((ULONG)index <= c->class_extra && c->class_extra - (ULONG)index >= 4)
+        {
+            previous = lx_guest_load_u32((uint8 *)c->class_data + index);
+            lx_guest_store_u32((uint8 *)c->class_data + index, value);
+        }
+        else
+            open32SetError(1413);
+    }
+    else if (index == -8)
+    {
+        previous = c->menu ? lx_execution_mapping_address(c->names) + 256 : c->menu_id;
+        free(c->menu);
+        c->menu = NULL;
+        c->menu_id = value;
+    }
+    else
+    {
+        switch (index)
+        {
+            case -10:
+                field = &c->brush;
+                break;
+            case -12:
+                field = &c->cursor;
+                break;
+            case -14:
+                field = &c->icon;
+                break;
+            case -16:
+                field = &c->instance;
+                break;
+            case -24:
+                field = &c->procedure;
+                break;
+            case -26:
+                field = &c->style;
+                break;
+            case -34:
+                field = &c->small_icon;
+                break;
+            case -18:
+            case -20:
+                open32SetError(50);
+                break;
+            default:
+                open32SetError(1413);
+                break;
+        }
+        if (field)
+        {
+            previous = *field;
+            *field = value;
+        }
+    }
+    lx_host_monitor_unlock(monitor);
+    return previous;
 }
 LONG GetClassName(ULONG handle, PCHAR output, LONG capacity)
 {

@@ -84,6 +84,10 @@ extern "C"
     OS2EXPORT ULONG OS2API GlobalGetAtomName(ULONG atom, PSZ output, LONG capacity)
         OS2APIINFO(ord = 402, name = GLOBALGETATOMNAME);
     OS2EXPORT ULONG OS2API RegisterClass(PVOID record) OS2APIINFO(ord = 556, name = REGISTERCLASS);
+    OS2EXPORT ULONG OS2API SetClassLong(ULONG window, LONG index, ULONG value)
+        OS2APIINFO(ord = 600, name = SETCLASSLONG);
+    OS2EXPORT BOOL OS2API RegisterClassAlias(PSZ name, PSZ alias)
+        OS2APIINFO(ord = 729, name = REGISTERCLASSALIAS);
     OS2EXPORT BOOL OS2API UnregisterClass(PSZ name, ULONG instance)
         OS2APIINFO(ord = 705, name = UNREGISTERCLASS);
     OS2EXPORT BOOL OS2API GetClassInfo(ULONG instance, PSZ name, PVOID output)
@@ -228,6 +232,7 @@ extern "C"
         OS2APIINFO(ord = 134, name = DELETECRITICALSECTION);
     OS2EXPORT ULONG OS2API GetCurrentThreadId(void)
         OS2APIINFO(ord = 259, name = GETCURRENTTHREADID);
+    OS2EXPORT ULONG OS2API GetCurrentThread(void) OS2APIINFO(ord = 258, name = GETCURRENTTHREAD);
     OS2EXPORT ULONG OS2API CreateThread(PVOID security, ULONG stack, ULONG procedure,
                                         ULONG parameter, ULONG flags, PULONG id)
         OS2APIINFO(ord = 98, name = CREATETHREAD);
@@ -673,6 +678,21 @@ extern "C"
         OS2APIINFO(ord = 545, name = REGDELETEVALUE);
     OS2EXPORT LONG OS2API RegSetValueEx(ULONG key, PSZ name, ULONG reserved, ULONG type, PVOID data,
                                         ULONG size) OS2APIINFO(ord = 555, name = REGSETVALUEEX);
+    OS2EXPORT ULONG OS2API TlsAlloc(void) OS2APIINFO(ord = 692, name = TLSALLOC);
+    OS2EXPORT BOOL OS2API TlsFree(ULONG index) OS2APIINFO(ord = 693, name = TLSFREE);
+    OS2EXPORT ULONG OS2API TlsGetValue(ULONG index) OS2APIINFO(ord = 694, name = TLSGETVALUE);
+    OS2EXPORT BOOL OS2API TlsSetValue(ULONG index, ULONG value)
+        OS2APIINFO(ord = 695, name = TLSSETVALUE);
+    OS2EXPORT ULONG OS2API LoadAccelerators(HMODULE module, PSZ name)
+        OS2APIINFO(ord = 457, name = LOADACCELERATORS);
+    OS2EXPORT ULONG OS2API CreateAcceleratorTable(PVOID data, LONG count)
+        OS2APIINFO(ord = 57, name = CREATEACCELERATORTABLE);
+    OS2EXPORT LONG OS2API CopyAcceleratorTable(ULONG handle, PVOID data, LONG count)
+        OS2APIINFO(ord = 1026, name = COPYACCELERATORTABLE);
+    OS2EXPORT BOOL OS2API DestroyAcceleratorTable(ULONG handle)
+        OS2APIINFO(ord = 141, name = DESTROYACCELERATORTABLE);
+    OS2EXPORT LONG OS2API TranslateAccelerator(ULONG window, ULONG table, PVOID message)
+        OS2APIINFO(ord = 697, name = TRANSLATEACCELERATOR);
 #ifdef __cplusplus
 }
 #endif

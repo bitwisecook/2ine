@@ -249,12 +249,17 @@ def desktop_services():
     g.result(0, 96)
 
     cursor = g.field(bytes(4))
-    g.call(2, 828, 1, 2, 0)  # The dummy driver may have no host cursors.
+    g.call(2, 828, 1, 2, 0)  # Resource acquisition is independent of native cursor support.
     g.code.extend(b"\xa3" + struct.pack("<I", cursor))
+    g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 113)
     g.call(4, 459, 0, 32513)  # Open32 IDC_IBEAM maps to SPTR_TEXT.
     g.require(b"\x3b\x05" + struct.pack("<I", cursor), 114)
     g.call_handle(4, 605, cursor)
     g.result(0, 115)
+    g.call(4, 605, 0xDEADBEEF)  # Invalid resources must not change guest cursor state.
+    g.result(0, 120)
+    g.call(4, 300)
+    g.result(6, 121)
     g.call(4, 605, 0)
     g.require(b"\x3b\x05" + struct.pack("<I", cursor), 116)
     g.call_handle(4, 143, cursor)  # Shared system cursors cannot be destroyed.

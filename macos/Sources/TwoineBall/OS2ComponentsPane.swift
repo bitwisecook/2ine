@@ -324,8 +324,8 @@ struct OS2ComponentsPane: View {
             if status.complete && status.rexxComplete == true {
                 categories.insert(.cmd); installedCounts[.cmd] = 11
             }
-            let audit = try await model.dependencyRequirements()
-            for group in audit.componentGroups ?? [] {
+            let audit = model.dependencyRequirements()
+            for group in audit?.componentGroups ?? [] {
                 if let category = OS2ExtractionCategory(rawValue: group.id) {
                     categories.insert(category)
                     requiredBy[category] = group.requiredBy ?? []

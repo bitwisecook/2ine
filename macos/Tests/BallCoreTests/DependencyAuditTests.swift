@@ -12,6 +12,7 @@ import Testing
         let object: [String: Any] = [
             "summary": "Audit", "logPath": "/private/log", "jsonPath": "/private/log.json",
             "missing": missing, "imported": [],
+            "componentGroups": missing.isEmpty ? [] : [["id": "som", "title": "SOM/DSOM", "modules": ["SOMD"]]],
             "media": statuses.map { ["path": "/media/OS2.iso", "status": $0] }
         ]
         let result = try JSONDecoder().decode(DependencyAudit.self, from: JSONSerialization.data(withJSONObject: object))
@@ -56,4 +57,17 @@ import Testing
         let result = try JSONDecoder().decode(DependencyAudit.self, from: Data(json.utf8))
         #expect(result.hasComponentAdvice == expected)
     }
+}
+
+@Test func thirdPartyMissesDoNotRequireOS2Media() throws {
+    let bytes = Data(#"""
+    {"summary":"Optional connectors","logPath":"/log","jsonPath":"/log.json",
+     "scope":"ball","missing":["INOTES","DB2APP","ORA_D73O","BTRCALLS"],"imported":[],
+     "componentGroups":[],"media":[{"path":"/OS2.iso","status":"not-inspected"}]}
+    """#.utf8)
+    let audit = try JSONDecoder().decode(DependencyAudit.self, from: bytes)
+    #expect(audit.hasComponentAdvice)
+    #expect(!audit.needsMediaSelection)
+    #expect(audit.scope == "ball")
+    #expect(audit.ungroupedMissingLibraries.count == 4)
 }

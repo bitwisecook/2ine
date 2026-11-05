@@ -161,7 +161,7 @@ public actor BallBackend {
             for key in plan.unsetEnvironment { environment.removeValue(forKey: key) }
             environment.merge(plan.environment) { _, value in value }
             if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
-            let desktop = try DesktopLaunchBundle.create(ball: canonicalBall, sessionID: sessionID,
+            let desktop = try await DesktopLaunchBundle.create(ball: canonicalBall, sessionID: sessionID,
                                                           loader: URL(filePath: executable), identity: plan.desktopIdentity)
             environment["TWOINE_DESKTOP_SESSION"] = sessionID
             environment["TWOINE_DESKTOP_NAME"] = desktop.name

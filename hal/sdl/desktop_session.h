@@ -7,4 +7,5 @@ void lx_desktop_visible(void *window, int visible);
 void lx_desktop_forget(void *window);
 void lx_desktop_poll(void);
 int lx_desktop_grouped(void);
+int lx_desktop_native_main_thread(void);
 #endif

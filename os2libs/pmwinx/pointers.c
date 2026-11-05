@@ -3,19 +3,22 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin.h"
+#include "guest/handles.h"
 static _Thread_local ULONG current_cursor;
 ULONG LoadCursor(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadCursor(%u, %p)", module, name);
-    if (!open32Presentation())
-    {
-        open32SetError(8);
-        return 0;
-    }
     if (module)
+    {
+        if (!open32Presentation())
+        {
+            open32SetError(8);
+            return 0;
+        }
         return (uintptr_t)name <= 0xffff
                    ? WinLoadPointer(HWND_DESKTOP, module, (ULONG)(uintptr_t)name)
                    : 0;
+    }
     LONG id = 0;
     if (!module)
         switch ((uintptr_t)name)
@@ -49,20 +52,31 @@ ULONG LoadCursor(HMODULE module, PSZ name)
                 id = 18;
                 break; /* IDC_NO */
         }
-    ULONG result = id ? WinQuerySysPointer(HWND_DESKTOP, id, FALSE) : 0;
+    ULONG result = id ? lx_pm_system_pointer(id) : 0;
     if (!result)
         open32SetError(1814);
     return result;
 }
 ULONG SetCursor(ULONG cursor)
 {
-    if (!WinSetPointer(HWND_DESKTOP, cursor))
+    LxHandleBorrow borrow = {0};
+    if (cursor && !lx_handle_borrow(cursor, LX_HANDLE_PM_POINTER, &borrow))
     {
         open32SetError(6);
         return 0;
     }
+    if (!open32Presentation())
+    {
+        lx_handle_release(&borrow);
+        open32SetError(8);
+        return 0;
+    }
     ULONG previous = current_cursor;
     current_cursor = cursor;
+    /* A valid guest cursor remains current even if a headless host cannot display it. */
+    if (!WinSetPointer(HWND_DESKTOP, cursor))
+        open32SetError(50); /* ERROR_NOT_SUPPORTED: resource validity and presentation differ. */
+    lx_handle_release(&borrow);
     return previous;
 }
 

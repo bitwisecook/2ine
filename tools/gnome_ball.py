@@ -989,6 +989,7 @@ class BallWindow(Adw.ApplicationWindow):
             )
         )
         controls = Gtk.Box(spacing=12)
+        controls.append(button("Rescan Dependencies", self.audit_dependencies))
         controls.append(button("Open Logs", lambda: self.open_path(self.ball / "logs")))
         controls.append(button("Open Ball Folder", lambda: self.open_path(self.ball)))
         activity.append(controls)
@@ -1029,96 +1030,37 @@ class BallWindow(Adw.ApplicationWindow):
             else ["config", "runtime.backend", ("native", "unicorn")[selected - 1]]
         )
 
-    def audit_dependencies(self, sources=None, after=None):
+    def audit_dependencies(self):
         if not self.ball or self.busy or self.component_active():
             return
         ball = str(self.ball)
         build = str(self.build)
-        selected_sources = sources or gnome_media_preferences.preferred(
-            self.snapshot, self.app_preferences
-        )
-        self.activity_title = "Checking installed libraries…"
+        self.activity_title = "Rescanning dependencies…"
         self.show_page("activity")
         self.update_activity()
 
         def work():
-            fields = {}
-            warnings = []
-            validation = None
-            if selected_sources:
-                validation = ball_api.native_request(
-                    {
-                        "action": "validate-os2-media",
-                        "ball": ball,
-                        "build": build,
-                        "sources": selected_sources,
-                    }
-                )
-                if validation.get("complete"):
-                    fields["sources"] = validation["sources"]
-                else:
-                    fields["resolve"] = False
-                    warnings = [
-                        {
-                            "path": "OS/2 media",
-                            "reason": "The selected source is unavailable or is not verified OS/2 media; choose another source.",
-                        }
-                    ]
             report = ball_api.native_request(
-                {"action": "audit-dependencies", "ball": ball, "build": build, **fields}
+                {"action": "audit-dependencies", "ball": ball, "build": build, "resolve": False}
             )
             snapshot = ball_api.native_request({"action": "snapshot", "ball": ball})
-            return report, snapshot, warnings, self.read_log(Path(report["logPath"])), validation
+            log_text = self.read_log(Path(report["logPath"])) if report.get("logPath") else ""
+            return report, snapshot, [], log_text, None
 
         def finished(result):
             if str(self.ball) != ball:
                 return
             report, snapshot, warnings, log_text, validation = result
-            if validation and validation.get("complete"):
-                self.remember_os2_media(validation)
-            elif selected_sources == gnome_media_preferences.sources(
-                self.app_preferences.get("lastOS2MediaSources")
-            ):
-                self.forget_os2_media()
             self.activity_title = "Dependency audit finished"
             notices = ["Skipped " + item["path"] + ": " + item["reason"] for item in warnings]
             self.install_summary = "\n\n".join([*notices, report["summary"]])
-            self.last_log = Path(report["logPath"])
+            self.last_log = Path(report["logPath"]) if report.get("logPath") else None
             self.log_text = log_text
             self.apply_snapshot(snapshot)
             self.show_page("activity")
             self.update_activity()
-            if not sources and ball_api.needs_dependency_media(report):
-                self.choose_dependency_media(ball, after=after)
-            elif after:
-                if ball_api.needs_dependency_media(report):
-                    self.report_error(
-                        "The selected media did not restore the required OS/2 components. Review the dependency audit."
-                    )
-                else:
-                    after()
 
         self.request_work(work, finished)
-
-    def choose_dependency_media(self, ball, after=None):
-        picker = Gtk.FileDialog(
-            title="Restore Missing Libraries from OS/2 ISO, Images or Archives",
-            accept_label="Restore Libraries",
-        )
-
-        def chosen(picker, result):
-            try:
-                files = picker.open_multiple_finish(result)
-                sources = [files.get_item(i).get_path() for i in range(files.get_n_items())]
-            except GLib.Error as error:
-                if not error.matches(Gtk.dialog_error_quark(), Gtk.DialogError.DISMISSED):
-                    self.report_error(error)
-                return
-            if sources and str(self.ball) == ball:
-                self.audit_dependencies(sources, after=after)
-
-        self.initial_os2_picker(picker)
-        picker.open_multiple(self, None, chosen)
 
     def choose_os2_support(self, categories=None, force_picker=False, selecting=True):
         if not self.ball or self.operation_busy or self.sessions.active(self.ball):
@@ -2022,19 +1964,13 @@ class BallWindow(Adw.ApplicationWindow):
                 return
             plan, log = result
             audit = plan.get("dependencyAudit", {})
-            if ball_api.needs_dependency_media(audit):
-                session.state = "failed"
-                self.refresh_session_selector()
-                self.set_busy(False)
-                if self.ball == path and not peers:
-                    self.choose_dependency_media(
-                        str(path), after=lambda: self.execute(arguments, **fields)
-                    )
-                else:
-                    self.toast(
-                        "Required OS/2 components are missing; install them after this ball’s running sessions finish."
-                    )
-                return
+            if not audit.get("complete", True):
+                advice = ball_api.dependency_advice(audit)
+                self.toast(
+                    " ".join(advice)
+                    if advice
+                    else audit.get("summary", "Library check incomplete.")
+                )
             self.launch(path, plan, log, session)
 
         original_fields = dict(fields)
@@ -2450,9 +2386,6 @@ class BallWindow(Adw.ApplicationWindow):
                 self.update_activity()
                 if error:
                     self.report_error("Installer receipt could not be saved: " + error)
-                audit = snapshot.get("dependencyAudit") or {}
-                if plan["installer"] and ball_api.needs_dependency_media(audit):
-                    self.choose_dependency_media(str(path))
             self.refresh_session_selector()
             self.set_busy(False)
             pane = self.component_panes.get(str(path))

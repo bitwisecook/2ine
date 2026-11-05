@@ -13,7 +13,7 @@ struct DesktopLaunchBundle: Sendable {
     let icon: URL?
 
     static func create(ball: String, sessionID: String, loader: URL,
-                       identity: DesktopIdentity?) throws -> DesktopLaunchBundle {
+                       identity: DesktopIdentity?) async throws -> DesktopLaunchBundle {
         guard validLaunchSessionID(sessionID) else { throw BallError("Invalid desktop session ID.") }
         let files = FileManager.default, root = URL(filePath: canonicalLaunchBall(ball))
         let components = ["cache", "desktop-sessions", sessionID]
@@ -44,16 +44,8 @@ struct DesktopLaunchBundle: Sendable {
             try files.createDirectory(at: resources, withIntermediateDirectories: true)
             let executable = macOS.appending(path: "lx_loader")
             try files.copyItem(at: loader, to: executable)
-            let closure = URL(filePath: canonicalLaunchBall(loader.deletingLastPathComponent().path))
-            let rootParts = root.pathComponents, closureParts = closure.pathComponents
-            if closureParts.starts(with: rootParts) {
-                let resourceParts = resources.pathComponents
-                var shared = 0
-                while shared < min(resourceParts.count, closureParts.count), resourceParts[shared] == closureParts[shared] { shared += 1 }
-                let relative = Array(repeating: "..", count: resourceParts.count - shared) + closureParts.dropFirst(shared)
-                try files.createSymbolicLink(atPath: resources.appending(path: "Runtime").path,
-                                             withDestinationPath: relative.joined(separator: "/"))
-            }
+            // prepare-launch's cache-first host library paths pin the shared runtime.
+            // Escaping symlinks inside an application bundle invalidate its resource seal.
             var iconURL: URL?
             if let icon = identity?.icon {
                 if let bytes = icon.rgba, let width = icon.width, let height = icon.height,
@@ -78,6 +70,25 @@ struct DesktopLaunchBundle: Sendable {
                                       "NSHighResolutionCapable": true]
             try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
                 .write(to: bundle.appending(path: "Contents/Info.plist"), options: .atomic)
+            // The copied loader's standalone signature does not seal this new bundle's plist/resources.
+            // Bind its actual identity before AppKit/LaunchServices can register the application.
+            let input = try FileHandle(forReadingFrom: executable)
+            let prefix = try input.read(upToCount: 4) ?? Data()
+            try input.close()
+            let machO = [Data([0xcf, 0xfa, 0xed, 0xfe]), Data([0xce, 0xfa, 0xed, 0xfe]),
+                         Data([0xfe, 0xed, 0xfa, 0xcf]), Data([0xfe, 0xed, 0xfa, 0xce]),
+                         Data([0xca, 0xfe, 0xba, 0xbe]), Data([0xca, 0xfe, 0xba, 0xbf]),
+                         Data([0xbe, 0xba, 0xfe, 0xca]), Data([0xbf, 0xba, 0xfe, 0xca])].contains(prefix)
+            if machO {
+                for (arguments, suffix) in [(["--force", "--sign", "-", "--preserve-metadata=entitlements", "--", bundle.path], "sign"),
+                                             (["--verify", "--strict", "--", bundle.path], "verify")] {
+                    let result = try await ProcessRunner().run(executable: URL(filePath: "/usr/bin/codesign"), arguments: arguments,
+                        log: directory.appending(path: "signature-\(suffix).log"))
+                    guard result.code == 0, !result.signalled else {
+                        throw BallError("Cannot prepare the macOS application identity: \(result.output)")
+                    }
+                }
+            }
             return DesktopLaunchBundle(executable: executable, name: name, icon: iconURL)
         } catch {
             if createdSession { try? files.removeItem(at: directory) }

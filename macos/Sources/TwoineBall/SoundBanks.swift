@@ -125,6 +125,11 @@ struct ProjectAboutView: View {
     @Bindable var model: AppModel
     @State private var catalogue: ProjectCatalogue?
     @State private var error: String?
+    private var versionLabel: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1"
+        guard let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String else { return "Version " + version }
+        return "Version " + version + "(" + build + ")"
+    }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -132,8 +137,7 @@ struct ProjectAboutView: View {
                     Image(nsImage: NSApplication.shared.applicationIconImage).resizable().frame(width: 72, height: 72)
                     VStack(alignment: .leading) {
                         Text("2ine").font(.largeTitle)
-                        Text("Version " + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1")).foregroundStyle(.secondary)
-                        if let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String { Text("Build " + build).font(.caption).foregroundStyle(.secondary) }
+                        Text(versionLabel).foregroundStyle(.secondary)
                     }
                 }
                 Text("Created by Ryan C. Gordon (icculus)").font(.headline)

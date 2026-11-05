@@ -33,9 +33,12 @@ static int available(LxExecution *e, uint32_t a, size_t n)
     return 1;
 }
 static LxGuestMapping *map_unlocked(LxExecution *e, uint32_t address, size_t size,
-                                    unsigned permissions, int exact, LxHostShared *shared)
+                                    unsigned permissions, int exact, size_t requested_alignment,
+                                    LxHostShared *shared)
 {
-    if (!size || size % GUEST_PAGE || (permissions & ~7u) || (!address && exact))
+    if (!size || size % GUEST_PAGE || (permissions & ~7u) || (!address && exact) ||
+        requested_alignment < GUEST_PAGE || requested_alignment > UINT32_MAX ||
+        (requested_alignment & (requested_alignment - 1)))
     {
         lx_execution_fail(e, "Invalid guest mapping request");
         return NULL;
@@ -53,7 +56,7 @@ static LxGuestMapping *map_unlocked(LxExecution *e, uint32_t address, size_t siz
                      : (e->next_address > GUEST_ALLOC_START ? e->next_address : GUEST_ALLOC_START));
     /* The public guest page is 4 KiB. The host may require larger allocations. */
     const size_t host_page = lx_host_page_size();
-    const size_t alignment = host_page > GUEST_PAGE ? host_page : GUEST_PAGE;
+    const size_t alignment = host_page > requested_alignment ? host_page : requested_alignment;
     if (!exact)
         candidate = (candidate + alignment - 1) & ~(uint64_t)(alignment - 1);
     for (; candidate < GUEST_MAP_END && size <= GUEST_MAP_END - candidate; candidate += alignment)
@@ -216,7 +219,20 @@ LxGuestMapping *lx_execution_map(LxExecution *e, uint32_t address, size_t size,
         lx_execution_fail(e, "Cannot acquire guest memory lock");
         return 0;
     }
-    LxGuestMapping *result = map_unlocked(e, address, size, permissions, exact, NULL);
+    LxGuestMapping *result = map_unlocked(e, address, size, permissions, exact, GUEST_PAGE, NULL);
+    lx_host_mutex_unlock(e->memory_mutex);
+    return result;
+}
+
+LxGuestMapping *lx_execution_map_aligned(LxExecution *e, uint32_t address, size_t size,
+                                         unsigned permissions, size_t alignment)
+{
+    if (lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
+    {
+        lx_execution_fail(e, "Cannot acquire guest memory lock");
+        return NULL;
+    }
+    LxGuestMapping *result = map_unlocked(e, address, size, permissions, 0, alignment, NULL);
     lx_host_mutex_unlock(e->memory_mutex);
     return result;
 }
@@ -393,7 +409,7 @@ uint32_t lx_execution_tls_window(LxExecution *e)
     if (!e->tls_window && e->services.tls_offset + 128 <= GUEST_PAGE)
     {
         LxGuestMapping *mapping =
-            map_unlocked(e, 0, GUEST_PAGE, LX_GUEST_READ | LX_GUEST_WRITE, 0, NULL);
+            map_unlocked(e, 0, GUEST_PAGE, LX_GUEST_READ | LX_GUEST_WRITE, 0, GUEST_PAGE, NULL);
         if (mapping && e->ops->identity_memory &&
             !lx_host_vm_protect(mapping->backing, GUEST_PAGE, 0))
         {
@@ -416,7 +432,7 @@ LxGuestMapping *lx_execution_map_shared_at(LxExecution *e, LxHostShared *object,
     if (!object || lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
         return NULL;
     LxGuestMapping *m =
-        map_unlocked(e, address, lx_host_shared_size(object), 3, address != 0, object);
+        map_unlocked(e, address, lx_host_shared_size(object), 3, address != 0, GUEST_PAGE, object);
     lx_host_mutex_unlock(e->memory_mutex);
     return m;
 }
@@ -425,7 +441,7 @@ LxGuestMapping *lx_execution_map_shared(LxExecution *e, LxHostShared *object)
 {
     if (!object || lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
         return NULL;
-    LxGuestMapping *m = map_unlocked(e, 0, lx_host_shared_size(object), 3, 0, object);
+    LxGuestMapping *m = map_unlocked(e, 0, lx_host_shared_size(object), 3, 0, GUEST_PAGE, object);
     lx_host_mutex_unlock(e->memory_mutex);
     return m;
 }

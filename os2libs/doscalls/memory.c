@@ -68,11 +68,15 @@ APIRET DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag)
     void *addr;
     if (GLoaderState.execution)
     {
-        /* The original 386 page tables cannot inhibit instruction fetch from readable memory. */
+        /* OS/2 object bases are 64-KiB aligned, independently of page-sized lengths
+           and OBJ_TILE selector allocation. Original SmartHeap uses this contract
+           to recover a pool header from an interior pointer. The original 386 page
+           tables cannot inhibit instruction fetch from readable memory. */
         mapping = flag & OBJ_TILE
                       ? allocateTiledMemory(size)
-                      : lx_execution_map(GLoaderState.execution, 0, size,
-                                         LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 0);
+                      : lx_execution_map_aligned(GLoaderState.execution, 0, size,
+                                                 LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE,
+                                                 0x10000);
         if (!mapping)
             return ERROR_NOT_ENOUGH_MEMORY;
         addr = lx_execution_mapping_host(mapping);

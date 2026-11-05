@@ -31,36 +31,93 @@ static void prepareRenderer(void)
 }
 struct LxHostPointer
 {
+    struct LxHostPointer *next;
     SDL_Cursor *cursor;
+    LxHostPointerShape shape;
+    uint32_t *pixels;
+    unsigned width, height, hot_x, hot_y;
 };
+static LxHostPointer *Pointers;
+static uint64_t PointerGeneration;
+static const SDL_SystemCursor PointerShapes[] = {
+    SDL_SYSTEM_CURSOR_DEFAULT,     SDL_SYSTEM_CURSOR_TEXT,      SDL_SYSTEM_CURSOR_WAIT,
+    SDL_SYSTEM_CURSOR_NWSE_RESIZE, SDL_SYSTEM_CURSOR_MOVE,      SDL_SYSTEM_CURSOR_NWSE_RESIZE,
+    SDL_SYSTEM_CURSOR_NESW_RESIZE, SDL_SYSTEM_CURSOR_EW_RESIZE, SDL_SYSTEM_CURSOR_NS_RESIZE,
+    SDL_SYSTEM_CURSOR_NOT_ALLOWED};
+static void lock_pointers(void)
+{
+    lx_host_once(&VideoOnce, initializeVideoLock);
+    lx_host_mutex_lock(VideoLock, UINT32_MAX);
+}
+static int native_pointer_thread(void)
+{
+    const char *driver = SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetCurrentVideoDriver() : NULL;
+    return !driver || SDL_strcmp(driver, "cocoa") || lx_desktop_native_main_thread() ||
+           SDL_SetError("Native macOS cursor selection requires the main thread");
+}
+static void invalidate_native_pointers(void)
+{
+    PointerGeneration++;
+    for (LxHostPointer *p = Pointers; p; p = p->next)
+        p->cursor = NULL; /* SDL_VideoQuit freed the native cursor objects. */
+}
 LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape)
 {
-    static const SDL_SystemCursor shapes[] = {
-        SDL_SYSTEM_CURSOR_DEFAULT,     SDL_SYSTEM_CURSOR_TEXT,      SDL_SYSTEM_CURSOR_WAIT,
-        SDL_SYSTEM_CURSOR_NWSE_RESIZE, SDL_SYSTEM_CURSOR_MOVE,      SDL_SYSTEM_CURSOR_NWSE_RESIZE,
-        SDL_SYSTEM_CURSOR_NESW_RESIZE, SDL_SYSTEM_CURSOR_EW_RESIZE, SDL_SYSTEM_CURSOR_NS_RESIZE,
-        SDL_SYSTEM_CURSOR_NOT_ALLOWED};
-    if ((unsigned)shape >= sizeof shapes / sizeof *shapes)
+    if ((unsigned)shape >= sizeof PointerShapes / sizeof *PointerShapes)
         return NULL;
     LxHostPointer *pointer = calloc(1, sizeof *pointer);
     if (pointer)
     {
-        pointer->cursor = SDL_CreateSystemCursor(shapes[shape]);
-        if (!pointer->cursor)
-        {
-            free(pointer);
-            return NULL;
-        }
+        pointer->shape = shape;
+        lock_pointers();
+        pointer->next = Pointers;
+        Pointers = pointer;
+        lx_host_mutex_unlock(VideoLock);
     }
     return pointer;
 }
+typedef struct DeferredCursor
+{
+    SDL_Cursor *cursor;
+    uint64_t generation;
+} DeferredCursor;
+static void destroy_deferred_cursor(void *data)
+{
+    DeferredCursor *item = data;
+    lock_pointers();
+    if (item->generation == PointerGeneration)
+        SDL_DestroyCursor(item->cursor);
+    lx_host_mutex_unlock(VideoLock);
+    free(item);
+}
 void lx_host_pointer_destroy(LxHostPointer *pointer)
 {
-    if (pointer)
+    if (!pointer)
+        return;
+    DeferredCursor *deferred = NULL;
+    lock_pointers();
+    LxHostPointer **link = &Pointers;
+    while (*link && *link != pointer)
+        link = &(*link)->next;
+    if (*link)
+        *link = pointer->next;
+    if (pointer->cursor)
     {
-        SDL_DestroyCursor(pointer->cursor);
-        free(pointer);
+        if (native_pointer_thread())
+            SDL_DestroyCursor(pointer->cursor);
+        else
+        {
+            deferred = malloc(sizeof *deferred);
+            if (deferred)
+                *deferred = (DeferredCursor){pointer->cursor, PointerGeneration};
+            /* On allocation/queue failure SDL still owns and frees it at video shutdown. */
+        }
     }
+    lx_host_mutex_unlock(VideoLock);
+    if (deferred && !SDL_RunOnMainThread(destroy_deferred_cursor, deferred, false))
+        free(deferred);
+    free(pointer->pixels);
+    free(pointer);
 }
 LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
                                             unsigned hot_x, unsigned hot_y)
@@ -68,26 +125,59 @@ LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned wid
     if (!pixels || !width || !height || width > 256 || height > 256 || hot_x >= width ||
         hot_y >= height)
         return NULL;
-    LxHostPointer *pointer = calloc(1, sizeof *pointer);
+    LxHostPointer *pointer = lx_host_pointer_create(LX_HOST_POINTER_ARROW);
     if (!pointer)
         return NULL;
-    SDL_Surface *surface = SDL_CreateSurfaceFrom((int)width, (int)height, SDL_PIXELFORMAT_ARGB8888,
-                                                 (void *)pixels, (int)width * 4);
-    if (surface)
+    pointer->pixels = malloc((size_t)width * height * sizeof *pixels);
+    if (!pointer->pixels)
     {
-        pointer->cursor = SDL_CreateColorCursor(surface, (int)hot_x, (int)hot_y);
-        SDL_DestroySurface(surface);
-    }
-    if (!pointer->cursor)
-    {
-        free(pointer);
+        lx_host_pointer_destroy(pointer);
         return NULL;
     }
+    SDL_memcpy(pointer->pixels, pixels, (size_t)width * height * sizeof *pixels);
+    pointer->width = width;
+    pointer->height = height;
+    pointer->hot_x = hot_x;
+    pointer->hot_y = hot_y;
     return pointer;
 }
 int lx_host_pointer_set(LxHostPointer *pointer)
 {
-    return pointer ? SDL_SetCursor(pointer->cursor) : cursor_visible(0);
+    lock_pointers();
+    int result = 0;
+    if (!native_pointer_thread())
+        goto done;
+    if (!pointer)
+    {
+        result = cursor_visible(0);
+        goto done;
+    }
+    if (!SDL_WasInit(SDL_INIT_VIDEO))
+    {
+        SDL_SetError("Initialize the display before selecting a cursor");
+        goto done;
+    }
+    if (!pointer->cursor)
+    {
+        if (pointer->pixels)
+        {
+            SDL_Surface *surface = SDL_CreateSurfaceFrom((int)pointer->width, (int)pointer->height,
+                                                         SDL_PIXELFORMAT_ARGB8888, pointer->pixels,
+                                                         (int)pointer->width * 4);
+            if (surface)
+            {
+                pointer->cursor =
+                    SDL_CreateColorCursor(surface, (int)pointer->hot_x, (int)pointer->hot_y);
+                SDL_DestroySurface(surface);
+            }
+        }
+        else
+            pointer->cursor = SDL_CreateSystemCursor(PointerShapes[pointer->shape]);
+    }
+    result = pointer->cursor && SDL_SetCursor(pointer->cursor);
+done:
+    lx_host_mutex_unlock(VideoLock);
+    return result;
 }
 struct LxHostWindow
 {
@@ -207,6 +297,14 @@ int lx_host_video_initialize(int *width, int *height)
     lx_host_once(&VideoOnce, initializeVideoLock);
     lx_host_mutex_lock(VideoLock, UINT32_MAX);
     int result = 0;
+    const char *requested = SDL_GetHint(SDL_HINT_VIDEO_DRIVER);
+    if (!SDL_WasInit(SDL_INIT_VIDEO) && !lx_desktop_native_main_thread() &&
+        (!requested || !SDL_strcmp(requested, "cocoa")))
+    {
+        SDL_SetError(
+            "The macOS display must first be initialized on the main thread; a background OS/2 thread requested it");
+        goto done;
+    }
     /* Popup-to-document focus changes must retain the dismissing click. */
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");
     lx_desktop_prepare();
@@ -233,6 +331,7 @@ failed:
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO))
     {
+        invalidate_native_pointers();
         CaptureResetEvent = 0;
         WakeEvent = 0;
     }
@@ -248,6 +347,7 @@ void lx_host_video_quit(void)
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     if (!(SDL_WasInit(SDL_INIT_VIDEO) & SDL_INIT_VIDEO))
     {
+        invalidate_native_pointers();
         CaptureResetEvent = 0;
         WakeEvent = 0;
     }

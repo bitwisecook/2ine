@@ -23,6 +23,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/registry.c
             pmwinx/modules.c
             pmwinx/resources.c
+            pmwinx/accelerators.c
             pmwinx/profiles.c
             pmwinx/atoms.c
             pmwinx/classes.c
@@ -69,6 +70,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/icons.c
             pmwinx/focus.c
             pmwinx/critical.c
+            pmwinx/tls.c
             pmwinx/threads.c
             pmwinx/semaphores.c
         )

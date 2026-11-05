@@ -11,6 +11,7 @@
 #include <unistd.h>
 static LxDesktopGroup *group;
 static int enabled, initialized, auxiliary;
+int lx_desktop_native_main_thread(void) { return NSThread.isMainThread; }
 static LxDesktopCycle *cycle;
 static id cycle_monitor, cycle_focus_observer;
 static uint32_t last_windows[256], last_focus;

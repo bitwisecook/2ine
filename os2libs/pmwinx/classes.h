@@ -4,14 +4,14 @@
 #include "os2libs/os2native.h"
 typedef struct Open32Class
 {
-    ULONG atom, instance, style, procedure, icon, cursor, brush;
+    ULONG atom, instance, style, procedure, icon, small_icon, cursor, brush;
     ULONG class_extra, window_extra, menu_id;
     unsigned references;
     char *name, *menu;
     void *class_data;
     LxGuestMapping *names, *procedure_mapping;
     ULONG builtin;
-    struct Open32Class *next;
+    struct Open32Class *next, *alias;
 } Open32Class;
 /* An acquired class cannot be unregistered until its reference is released. */
 Open32Class *open32ClassAcquire(ULONG instance, PSZ name);

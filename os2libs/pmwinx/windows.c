@@ -268,8 +268,10 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     w->extended_style = extended_style;
     w->x = x == INT32_MIN ? 20 : x;
     w->y = y == INT32_MIN ? 20 : y;
-    w->width = width == INT32_MIN ? 640 : width;
-    w->height = height == INT32_MIN ? 480 : height;
+    BOOL overlapped = !(style & 0xc0000000u);
+    w->width = width == INT32_MIN ? (overlapped ? 640 : 0) : width;
+    /* CW_USEDEFAULT width selects both dimensions; the supplied height is ignored. */
+    w->height = width == INT32_MIN ? (overlapped ? 480 : 0) : height == INT32_MIN ? 480 : height;
     w->instance = instance;
     w->parent = parent;
     w->menu = menu;

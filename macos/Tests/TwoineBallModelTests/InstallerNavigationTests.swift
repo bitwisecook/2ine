@@ -105,3 +105,32 @@ import Testing
     #expect(model.pendingLaunch == nil)
     #expect(try String(contentsOf: ball.appending(path: "started"), encoding: .utf8) == "started")
 }
+
+@Test @MainActor func cachedMissingLibraryAdviceDoesNotScanOrRedirectALaunch() async throws {
+    let root = URL(filePath: "/private/tmp/2ine-cached-launch-" + UUID().uuidString)
+    let runtime = root.appending(path: "Runtime")
+    try FileManager.default.createDirectory(at: runtime, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let loader = runtime.appending(path: "lx_loader")
+    try Data("#!/bin/sh\nprintf started > \"$TWOINE_BALL/started\"\n".utf8).write(to: loader)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: loader.path)
+    let model = AppModel(preferencesURL: root.appending(path: "prefs.json"), runtimeURL: runtime)
+    let ball = root.appending(path: "Cached.2ineball")
+    model.open(ball, create: true); try await settle(model)
+    var executable = Data(count: 84)
+    executable[0] = 77; executable[1] = 90; executable[60] = 64
+    executable[64] = 76; executable[65] = 88
+    try executable.write(to: ball.appending(path: "drive_c/APP.EXE"))
+    let index = ball.appending(path: "cache/dependency-index.json")
+    try FileManager.default.createDirectory(at: index.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let stored = Data(#"{"schema":1,"generated":"fixture","binaries":[{"path":"C:\\APP.EXE","format":"LX","valid":true,"modules":["NETAPI"]}]}"#.utf8)
+    try stored.write(to: index)
+    model.page = .applications
+    model.execute(["run", #"C:\APP.EXE"#])
+    try await settle(model, until: { !model.hasRunningSessions })
+    #expect(model.page == .activity)
+    #expect(model.pendingLaunch == nil)
+    #expect(FileManager.default.fileExists(atPath: ball.appending(path: "started").path))
+    #expect(try Data(contentsOf: index) == stored)
+    #expect(model.currentSession?.output.contains("NETAPI") == true)
+}

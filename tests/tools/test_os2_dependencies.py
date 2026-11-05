@@ -100,18 +100,14 @@ class DependencyAuditTests(unittest.TestCase):
                 }
             )
         )
-        self.assertTrue(ball_api.needs_dependency_media({"missing": ["SOMD"], "media": []}))
+        som = {"missing": ["SOMD"], "componentGroups": [{"id": "som", "modules": ["SOMD"]}]}
+        self.assertTrue(ball_api.needs_dependency_media({**som, "media": []}))
+        self.assertFalse(ball_api.needs_dependency_media({"missing": ["DB2APP"], "media": []}))
         for status in (None, "unavailable", "unverified", "not-os2-media"):
-            self.assertTrue(
-                ball_api.needs_dependency_media(
-                    {"missing": ["SOMD"], "media": [{"status": status}]}
-                )
-            )
+            self.assertTrue(ball_api.needs_dependency_media({**som, "media": [{"status": status}]}))
         for status in ("verified-os2-media", "verified-os2-set"):
             self.assertFalse(
-                ball_api.needs_dependency_media(
-                    {"missing": ["SOMD"], "media": [{"status": status}]}
-                )
+                ball_api.needs_dependency_media({**som, "media": [{"status": status}]})
             )
 
     def test_missing_and_unreachable_components_have_verified_group_metadata(self):
@@ -397,29 +393,28 @@ class DependencyAuditTests(unittest.TestCase):
         self.assertTrue(recovered["complete"])
         self.assertEqual(ball_api.load(self.ball)["startupPrograms"], [manual])
 
-    def test_companion_deletion_and_missing_managed_service_invalidate_recovery_cache(self):
+    def test_explicit_rescan_restores_companions_and_missing_managed_service(self):
         self.installed("Apps/APP.EXE", linear(["SOMD"]))
         self.os2_media()
-        recovered = self.request("ensure-dependencies")
+        recovered = self.request("audit-dependencies")
         self.assertTrue(recovered["complete"])
         self.assertFalse(self.request("snapshot")["dependencyAudit"]["stale"])
         (self.ball / "drive_c/OS2/ETC/SOM.IR").unlink()
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        restored = self.request("ensure-dependencies")
-        self.assertFalse(restored["cacheHit"])
+        self.assertTrue(self.request("snapshot")["dependencyAudit"]["cached"])
+        restored = self.request("audit-dependencies")
         self.assertEqual([f["path"] for f in restored["imported"]], [r"C:\OS2\ETC\SOM.IR"])
         self.assertTrue(restored["complete"])
         self.assertFalse(restored["stale"])
         manifest = ball_api.load(self.ball)
         del manifest["startupPrograms"]
         ball_api.save(self.ball / "ball.json", manifest)
-        self.assertTrue(self.request("snapshot")["dependencyAudit"]["stale"])
-        service = self.request("ensure-dependencies")
+        self.assertTrue(self.request("snapshot")["dependencyAudit"]["cached"])
+        service = self.request("audit-dependencies")
         self.assertEqual(service["imported"], [])
         self.assertTrue(service["complete"])
         self.assertFalse(service["stale"])
         self.assertEqual(len(ball_api.load(self.ball)["startupPrograms"]), 1)
-        self.assertTrue(self.request("ensure-dependencies")["cacheHit"])
+        self.assertTrue(self.request("ensure-dependencies")["cached"])
 
     def test_cli_detects_iso_inside_zip_before_dependency_recovery(self):
         self.installed("Apps/APP.EXE", linear(["SOMD"]))
@@ -572,7 +567,10 @@ class DependencyAuditTests(unittest.TestCase):
             )
             receipt = json.loads((self.ball / "logs/last-install.json").read_text())
             self.assertEqual(receipt["exit_code"], exit_code)
-            self.assertEqual(receipt["dependencyAudit"], result["dependencyAudit"])
+            self.assertEqual(
+                receipt["dependencyAudit"],
+                {key: value for key, value in result["dependencyAudit"].items() if key != "cached"},
+            )
             audit = json.loads(Path(receipt["dependencyAudit"]["jsonPath"]).read_text())
             self.assertEqual(audit["automaticRecovery"], exit_code == 0)
             self.assertTrue(Path(audit["logPath"]).is_file())
@@ -594,6 +592,158 @@ class DependencyAuditTests(unittest.TestCase):
         self.assertEqual(result["imports"][0]["status"], "incompatible")
         self.assertTrue(any("existing file preserved" in e["message"] for e in result["errors"]))
         self.assertEqual(target.read_bytes(), windows)
+
+
+class LaunchDependencyTests(unittest.TestCase):
+    root: Path
+    ball: Path
+    setUp = DependencyAuditTests.setUp
+    request = DependencyAuditTests.request
+
+    def installed(self, path, data):
+        result = self.ball / "drive_c" / path
+        result.parent.mkdir(parents=True, exist_ok=True)
+        result.write_bytes(data)
+        self.request("audit-dependencies", resolve=False)
+        return result
+
+    os2_media = DependencyAuditTests.os2_media
+
+    def launch_audit(self, program=r"C:\Apps\APP.EXE", **fields):
+        return self.request(
+            "launch-dependency-status", arguments=["run", program], resolve=False, **fields
+        )
+
+    def test_optional_plugin_does_not_redirect_or_replace_full_report(self):
+        self.installed("Apps/APP.EXE", linear(["CORE"]))
+        self.installed("Apps/CORE.DLL", linear(["DOSCALLS"]))
+        self.installed("Apps/PLUGIN.DLL", linear(["NETAPI", "DB2APP"]))
+        broad = self.request("audit-dependencies", resolve=False)
+        latest = (self.ball / "logs/dependencies-latest.json").read_bytes()
+        report = self.launch_audit()
+        self.assertEqual(report["scope"], "launch")
+        self.assertEqual(report["roots"], [r"C:\APPS\APP.EXE"])
+        self.assertEqual(report["cachedBinaries"], 2)
+        self.assertEqual(report["scannedBinaries"], 0)
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["missing"], [])
+        self.assertEqual(report["componentGroups"], [])
+        self.assertFalse(ball_api.needs_dependency_media(report))
+        self.assertEqual(set(broad["missing"]), {"NETAPI", "DB2APP"})
+        self.assertEqual((self.ball / "logs/dependencies-latest.json").read_bytes(), latest)
+
+    def test_direct_and_transitive_imports_are_required_and_cycles_bounded(self):
+        self.installed("Apps/APP.EXE", linear(["CORE", "THIRDPARTY"]))
+        self.installed("Apps/CORE.DLL", linear(["CYCLE", "LIBUNI"]))
+        self.installed("Apps/CYCLE.DLL", linear(["CORE"]))
+        report = self.launch_audit()
+        self.assertEqual(report["cachedBinaries"], 3)
+        self.assertEqual(report["scannedBinaries"], 0)
+        self.assertEqual(set(report["missing"]), {"THIRDPARTY", "LIBUNI"})
+        self.assertEqual(report["componentGroups"][0]["modules"], ["LIBUNI"])
+        self.assertFalse(ball_api.needs_dependency_media(report))
+        self.assertFalse(report["complete"])
+        self.assertIn("THIRDPARTY", " ".join(ball_api.dependency_advice(report)))
+        self.assertTrue(
+            any(
+                item["binary"].endswith("CORE.DLL")
+                for item in report["imports"]
+                if item["module"] == "LIBUNI"
+            )
+        )
+
+    def test_third_party_only_import_warns_without_os2_media_or_auto_recovery(self):
+        self.installed("Apps/APP.EXE", linear(["DB2APP"]))
+        report = self.request("launch-dependency-status", arguments=["run", r"C:\Apps\APP.EXE"])
+        self.assertEqual(report["missing"], ["DB2APP"])
+        self.assertFalse(report["complete"])
+        self.assertFalse(ball_api.needs_dependency_media(report))
+        self.assertIn(
+            "Required libraries for this launch: DB2APP", ball_api.dependency_advice(report)[0]
+        )
+        self.assertEqual(report["componentGroups"], [])
+        self.assertEqual(report["jsonPath"], "")
+        self.assertTrue((self.ball / "logs/dependencies-latest.json").exists())
+        self.assertFalse((self.ball / "logs/launch-dependencies-latest.json").exists())
+
+    def test_readonly_launch_checks_do_not_write_any_ball_files(self):
+        self.installed("Apps/APP.EXE", linear(["SOMD"]))
+        self.os2_media()
+        before = {
+            p.relative_to(self.ball): (p.stat().st_mtime_ns, p.read_bytes())
+            for p in self.ball.rglob("*")
+            if p.is_file()
+        }
+        report = self.launch_audit()
+        after = {
+            p.relative_to(self.ball): (p.stat().st_mtime_ns, p.read_bytes())
+            for p in self.ball.rglob("*")
+            if p.is_file()
+        }
+        self.assertEqual(before, after)
+        self.assertEqual(report["missing"], ["SOMD"])
+        self.assertEqual(report["logPath"], "")
+        self.assertTrue(all(source["status"] == "not-inspected" for source in report["media"]))
+
+    def test_launch_never_recovers_modules_from_available_media(self):
+        media = self.os2_media()
+        (media / "OS2/DLL/LIBUNI.DLL").write_bytes(linear(["DOSCALLS"]))
+        (media / "OS2/DLL/UCONV.DLL").write_bytes(linear(["DOSCALLS"]))
+        self.installed("Apps/APP.EXE", linear(["LIBUNI"]))
+        self.installed("Apps/PLUGIN.DLL", linear(["UCONV"]))
+        self.request("audit-dependencies", resolve=False)
+        latest = (self.ball / "logs/dependencies-latest.json").read_bytes()
+        report = self.request("launch-dependency-status", arguments=["run", r"C:\Apps\APP.EXE"])
+        self.assertFalse(report["complete"], report)
+        self.assertEqual(report["missing"], ["LIBUNI"])
+        self.assertTrue(report["cached"])
+        self.assertFalse((self.ball / "drive_c/OS2/DLL/LIBUNI.DLL").exists())
+        self.assertFalse((self.ball / "drive_c/OS2/DLL/UCONV.DLL").exists())
+        self.assertEqual((self.ball / "logs/dependencies-latest.json").read_bytes(), latest)
+
+    def test_saved_application_environment_and_explicit_services_are_checked(self):
+        self.installed("Apps/APP.EXE", linear(["CUSTOM"]))
+        self.installed("Private/CUSTOM.DLL", linear())
+        self.installed("Services/DAEMON.EXE", linear(["LIBUNI"]))
+        manifest = ball_api.load(self.ball)
+        manifest["applications"]["Saved"] = {
+            "program": r"C:\Apps\APP.EXE",
+            "environment": {"LIBPATH": r"C:\Private"},
+        }
+        manifest["startupPrograms"] = [{"program": r"C:\Services\DAEMON.EXE"}]
+        ball_api.save(self.ball / "ball.json", manifest)
+        report = self.request(
+            "launch-dependency-status", arguments=["launch", "Saved"], resolve=False
+        )
+        self.assertEqual(report["missing"], ["LIBUNI"])
+        self.assertEqual(report["roots"], [r"C:\APPS\APP.EXE", r"C:\SERVICES\DAEMON.EXE"])
+        without_service = self.request(
+            "launch-dependency-status",
+            arguments=["launch", "Saved"],
+            includeStartup=False,
+            resolve=False,
+        )
+        self.assertTrue(without_service["complete"])
+
+    def test_unrelated_installed_som_does_not_require_dsom_companions(self):
+        self.installed("Apps/APP.EXE", linear())
+        self.installed("OS2/DLL/SOMD.DLL", linear())
+        report = self.launch_audit()
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["componentFiles"], [])
+
+    def test_command_file_checks_actual_interpreter_and_rexx(self):
+        self.installed("Apps/RUN.CMD", b"/* rexx */\nsay 'hello'")
+        self.installed("OS2/CMD.EXE", linear(["DOSCALLS"]))
+        self.installed("OS2/DLL/REXX.DLL", linear(["REXXAPI"]))
+        self.installed("OS2/DLL/REXXAPI.DLL", linear(["LIBUNI"]))
+        report = self.launch_audit(r"C:\Apps\RUN.CMD")
+        self.assertEqual(
+            set(report["roots"]),
+            {r"C:\OS2\CMD.EXE", r"C:\OS2\DLL\REXX.DLL", r"C:\OS2\DLL\REXXAPI.DLL"},
+        )
+        self.assertEqual(report["missing"], ["LIBUNI"])
+        self.assertTrue(report["selectedProgram"].endswith("RUN.CMD"))
 
 
 if __name__ == "__main__":

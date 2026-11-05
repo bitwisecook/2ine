@@ -68,6 +68,11 @@ enum
    is owned by the mapping. Borrowed host ranges expire at unmap/destroy. */
 LxGuestMapping *lx_execution_map(LxExecution *execution, uint32_t address, size_t size,
                                  unsigned permissions, int exact);
+/* Anonymous address selection with a power-of-two guest alignment >= 4 KiB.
+   The size remains page-granular; occupied ranges are never replaced. A nonzero
+   address is a lower-bound hint, not an exact placement request. */
+LxGuestMapping *lx_execution_map_aligned(LxExecution *execution, uint32_t address, size_t size,
+                                         unsigned permissions, size_t alignment);
 /* The execution instance owns each view, independently of the shared object. */
 LxGuestMapping *lx_execution_map_shared_at(LxExecution *execution, LxHostShared *object,
                                            uint32_t address);
