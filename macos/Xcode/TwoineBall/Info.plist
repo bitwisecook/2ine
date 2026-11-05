@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key><string>2ine</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleVersion</key><string>1</string>
-    <key>CFBundleShortVersionString</key><string>0.2</string>
+    <key>CFBundleShortVersionString</key><string>0.6</string>
     <key>LSMinimumSystemVersion</key><string>27.0</string>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>CFBundleDocumentTypes</key><array><dict>

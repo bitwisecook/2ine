@@ -524,10 +524,14 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             failure("Unregistered guest API trap");
         if (!b->callback)
         {
-            char message[320];
-            snprintf(message, sizeof message, "Missing import %s:%s", b->missing_module,
-                     b->missing_entry);
-            failure(message);
+            fprintf(stderr, "2ine execution: Missing import %s:%s\n", b->missing_module,
+                    b->missing_entry);
+            /* This worker owns one OS/2 process. There is no valid API result
+               with which to resume it, and guest exit handlers may call the
+               same missing import. End only this worker, without SIGABRT or
+               reentering guest/host callbacks during teardown. */
+            fflush(stderr);
+            lx_host_process_exit(1);
         }
         const unsigned ss_index = registers.ss >> 3;
         const uint32_t sp = (registers.ss & 4) ? (registers.esp & 0xffff) : registers.esp;

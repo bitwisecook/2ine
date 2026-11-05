@@ -1,5 +1,43 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/doscalls.h"
+static uint32 bridge32_SetMetaFileBitsEx(uint8 *a)
+{
+    ULONG size = lx_guest_load_u32(a);
+    LxGuestBorrow input = {0};
+    ULONG result = 0;
+    if (size < 24 || size > 64u * 1024 * 1024 ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), size,
+                             LX_GUEST_READ, &input))
+        open32SetError(87);
+    else
+        result = SetMetaFileBitsEx(size, input.host);
+    lx_execution_release(&input);
+    return result;
+}
+static uint32 bridge32_GetMetaFileBitsEx(uint8 *a)
+{
+    ULONG handle = lx_guest_load_u32(a), size = lx_guest_load_u32(a + 4);
+    ULONG address = lx_guest_load_u32(a + 8);
+    ULONG required = GetMetaFileBitsEx(handle, 0, NULL);
+    if (!address || !required)
+        return required;
+    if (size > required)
+        size = required;
+    if (!size)
+        return 0;
+    LxGuestBorrow output = {0};
+    ULONG result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, address, size, LX_GUEST_WRITE, &output))
+        open32SetError(87);
+    else
+        result = GetMetaFileBitsEx(handle, size, output.host);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_DeleteMetaFile(uint8 *a)
+{
+    return DeleteMetaFile(lx_guest_load_u32(a));
+}
 static uint32 bridge32_SetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow input = {0};

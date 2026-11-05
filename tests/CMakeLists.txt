@@ -346,6 +346,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(open32_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME missing_import_exit COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/missing_import.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(missing_import_exit PROPERTIES TIMEOUT 40)
     add_test(NAME open32_semaphores COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_semaphores.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")

@@ -48,6 +48,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/validation.c
             pmwinx/menus.c
             pmwinx/bitmap.c
+            pmwinx/metafile.c
             pmwinx/brushes.c
             pmwinx/pens.c
             pmwinx/palettes.c

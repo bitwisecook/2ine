@@ -30,10 +30,10 @@ Native Linux uses **i386** libraries, even on x86-64; install their multilib
 packages too. EGL development headers are architecture independent.
 
 ```sh
-cmake -S . -B build-gl -DTWOINE_PORTABLE_LOADER=ON -DTWOINE_OPENGL=ON
-cmake --build build-gl --parallel
-ctest --test-dir build-gl -R '^opengl_' --output-on-failure
-TWOINE_BACKEND=unicorn TWOINE_LIBPATH="$PWD/build-gl" build-gl/lx_loader program.exe
+cmake -S . -B build/gl -DTWOINE_PORTABLE_LOADER=ON -DTWOINE_OPENGL=ON
+cmake --build build/gl --parallel
+ctest --test-dir build/gl -R '^opengl_' --output-on-failure
+TWOINE_BACKEND=unicorn TWOINE_LIBPATH="$PWD/build/gl" build/gl/lx_loader program.exe
 ```
 
 For native execution, configure `TWOINE_PORTABLE_LOADER=OFF`. Mesa selects the
@@ -59,14 +59,14 @@ Mesa's runtime search paths: Zink loads Vulkan from its own driver library.
 
 ```sh
 python3 tools/build_mesa_macos.py --source /path/to/mesa \
-  --build "$PWD/build-mesa" --prefix "$PWD/mesa-install"
-cmake -S . -B build-gl-macos -DTWOINE_PORTABLE_LOADER=ON \
+  --build "$PWD/build/mesa" --prefix "$PWD/build/mesa-install"
+cmake -S . -B build/gl-macos -DTWOINE_PORTABLE_LOADER=ON \
   -DTWOINE_OPENGL=ON -DTWOINE_OPENGL_BACKEND=kosmickrisp \
-  -DTWOINE_MESA_ROOT="$PWD/mesa-install" \
+  -DTWOINE_MESA_ROOT="$PWD/build/mesa-install" \
   -DTWOINE_KOSMICKRISP_ICD=/absolute/path/printed/by/the/helper.json \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=26.0
-cmake --build build-gl-macos --parallel
-ctest --test-dir build-gl-macos -R '^opengl_' --output-on-failure
+cmake --build build/gl-macos --parallel
+ctest --test-dir build/gl-macos -R '^opengl_' --output-on-failure
 ```
 
 The selected Mesa prefix supplies EGL and its headers, the Zink driver and the
@@ -128,7 +128,7 @@ shared textures/lists and resize state. `opengl_pm` checks retained PM pixels at
 a child window's origin, context attribute/raster copying, bitmap acquisition
 lifetimes and rendered font glyphs. `opengl_guest` runs generated x86 LX programs through
 both ordinal profiles; results, executable hashes and logs remain under
-`build-gl/opengl-results/guest`. No test substitutes a fake GL renderer.
+`build/gl/opengl-results/guest`. No test substitutes a fake GL renderer.
 On Linux, an available `xvfb-run` enables `opengl_desktop_guest` and
 `opengl_desktop_pm`, which use SDL's OpenGL renderer and verify the graphics
 context handoff. `opengl_macos_policy` checks KosmicKrisp selection and rejection
@@ -138,7 +138,7 @@ With separately supplied SDK and Watcom fixtures, the SDK's unchanged `SIMPLE.C`
 can be compiled and run with a minimal AUX setup adapter:
 
 ```sh
-python3 tests/integration/opengl_sdk.py --build build-gl --backend unicorn \
+python3 tests/integration/opengl_sdk.py --build build/gl --backend unicorn \
   --watcom /path/to/open-watcom --sdk /path/to/os2tk45 \
   --work "$PWD/sdk-opengl-results"
 ```

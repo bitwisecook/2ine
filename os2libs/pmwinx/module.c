@@ -25,6 +25,7 @@ static void open32Shutdown(void)
     open32NativeControlsPrune();
     open32MenusCleanup();
     open32AcceleratorsCleanup();
+    open32MetafilesCleanup();
     open32ClipboardCleanup();
     open32DrawingCleanup();
     open32ClassesCleanup();

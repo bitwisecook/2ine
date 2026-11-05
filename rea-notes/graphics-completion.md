@@ -65,11 +65,11 @@ Unicorn 2.1.4, SDL 3.4.18, Mesa commit
 `6c4d70f284cbad6e7aa1ce15be104bf480cadd94` (27.0.0-devel), Zink/KosmicKrisp.
 Mesa was built from a clean workspace-local checkout with LLVM/libclc 23.1.5,
 SPIR-V translator 23.1.3, SPIR-V tools and Vulkan loader 1.4.363.0, and current
-Meson/Bison/Flex. The source checkout was not modified. Build logs are retained
-under `build-graphics-completion/evidence`; Mesa build files and libraries are
-under `build-graphics-mesa*`.
+Meson/Bison/Flex. The source checkout was not modified. Those temporary build
+trees and logs were subsequently removed at the user’s request. New build and
+validation output belongs under the repository’s single `build/` directory.
 
-Commands:
+Historical qualification commands (before the single `build/` policy):
 
 ```
 cmake --build build-graphics-completion --target twoine_opengl_tests twoine_opengl_pm_tests twoine_dive_tests twoine_dive_format_tests twoine_visibility_tests lx_loader doscalls dive -j8

@@ -315,7 +315,7 @@ static cJSON *launch_dependencies(Context *parent, const cJSON *request)
             ? "Dependency status is unknown for part of this launch. Rescan Dependencies to update the saved index; launching does not scan or install files."
             : format(
                   c,
-                  "Cached launch dependencies: %d executable/dependency records; %d missing libraries, %d unreachable imports, %d disabled libraries, %d missing package files and %d errors.",
+                  "Cached launch dependencies: %d executable/dependency records; %d missing libraries, %d unreachable imports, %d disabled libraries, %d missing package files and %d errors. This checks stored static imports; runtime-loaded APIs can still be missing.",
                   cJSON_GetArraySize(get(report, "binaries")),
                   cJSON_GetArraySize(get(report, "missing")),
                   cJSON_GetArraySize(get(report, "unreachable")),

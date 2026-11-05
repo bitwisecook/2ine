@@ -121,6 +121,12 @@ extern "C"
     OS2EXPORT LONG OS2API GetObject(ULONG handle, LONG capacity, PVOID output)
         OS2APIINFO(ord = 326, name = GETOBJECT);
     OS2EXPORT BOOL OS2API DeleteObject(ULONG handle) OS2APIINFO(ord = 140, name = DELETEOBJECT);
+    OS2EXPORT ULONG OS2API SetMetaFileBitsEx(ULONG size, PVOID data)
+        OS2APIINFO(ord = 630, name = SETMETAFILEBITSEX);
+    OS2EXPORT ULONG OS2API GetMetaFileBitsEx(ULONG handle, ULONG size, PVOID data)
+        OS2APIINFO(ord = 316, name = GETMETAFILEBITSEX);
+    OS2EXPORT BOOL OS2API DeleteMetaFile(ULONG handle)
+        OS2APIINFO(ord = 139, name = DELETEMETAFILE);
     OS2EXPORT LONG OS2API GetSystemMetrics(LONG index)
         OS2APIINFO(ord = 359, name = GETSYSTEMMETRICS);
     OS2EXPORT BOOL OS2API SetWindowPos(ULONG handle, ULONG after, LONG x, LONG y, LONG width,

@@ -3917,6 +3917,21 @@
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "SetMetaFileBitsEx": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetMetaFileBitsEx": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DeleteMetaFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmdrag": {
