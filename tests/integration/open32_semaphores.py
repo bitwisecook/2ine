@@ -262,6 +262,7 @@ def main():
             stderr=subprocess.PIPE,
         )
         try:
+            assert owner.stdout is not None
             ready, _, _ = select.select([owner.stdout], [], [], 10)
             assert ready and owner.stdout.readline() == b"ready\n", "owner did not signal readiness"
             run(ipc_program(False), "peer")

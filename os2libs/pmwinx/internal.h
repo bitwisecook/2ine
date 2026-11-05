@@ -33,6 +33,7 @@ void open32DdeCleanup(void);
 void open32DdeSetError(ULONG id, ULONG error);
 LONG open32FormatGuest(PSZ format, ULONG arguments, PSZ output);
 void open32MenusCleanup(void);
+void open32AcceleratorsCleanup(void);
 void open32ClipboardWindowDestroyed(ULONG window);
 void open32ClipboardCleanup(void);
 LONG open32RunKeyboardHooks(LONG code, ULONG key, ULONG parameter);

@@ -537,6 +537,14 @@ if(TARGET kbdcalls AND TARGET viocalls AND TARGET nls)
 endif()
 
 if(TARGET pmwinx)
+    add_test(NAME open32_accelerators COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_accelerators.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(open32_accelerators PROPERTIES TIMEOUT 30)
+    add_executable(twoine_open32_accelerator_tests os2libs/test_open32_accelerators.c)
+    twoine_application_target(twoine_open32_accelerator_tests)
+    target_link_libraries(twoine_open32_accelerator_tests PRIVATE pmwinx 2ine SDL3::SDL3)
+    add_test(NAME open32_accelerator_ownership COMMAND twoine_open32_accelerator_tests $<TARGET_FILE:pmwinx>)
+    set_tests_properties(open32_accelerator_ownership PROPERTIES TIMEOUT 20)
     add_test(NAME open32_tls COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_tls.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(open32_tls PROPERTIES TIMEOUT 30)

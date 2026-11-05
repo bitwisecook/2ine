@@ -3576,3 +3576,69 @@ static uint32 bridge32_TlsSetValue(uint8 *a)
 {
     return TlsSetValue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
+static uint32 bridge32_LoadAccelerators(uint8 *a)
+{
+    uint32 pointer = lx_guest_load_u32(a + 4);
+    char *name = pointer <= UINT16_MAX ? (char *)(uintptr_t)pointer : o32_string(pointer);
+    if (pointer > UINT16_MAX && !name)
+        return 0;
+    ULONG result = LoadAccelerators(lx_guest_load_u32(a), name);
+    if (pointer > UINT16_MAX)
+        free(name);
+    return result;
+}
+static uint32 bridge32_CreateAcceleratorTable(uint8 *a)
+{
+    LONG count = (LONG)lx_guest_load_u32(a + 4);
+    LxGuestBorrow data = {0};
+    if (count <= 0 || count > 32767 ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), (size_t)count * 6,
+                             LX_GUEST_READ, &data))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG result = CreateAcceleratorTable(data.host, count);
+    lx_execution_release(&data);
+    return result;
+}
+static uint32 bridge32_CopyAcceleratorTable(uint8 *a)
+{
+    ULONG handle = lx_guest_load_u32(a), address = lx_guest_load_u32(a + 4);
+    LONG count = (LONG)lx_guest_load_u32(a + 8);
+    if (!address || count < 0)
+        return (uint32)CopyAcceleratorTable(handle, NULL, count);
+    LONG available = CopyAcceleratorTable(handle, NULL, 0);
+    if (!available)
+        return 0;
+    if (count > available)
+        count = available;
+    if (!count)
+        return 0;
+    LxGuestBorrow data = {0};
+    if (!lx_execution_borrow(GLoaderState.execution, address, (size_t)count * 6, LX_GUEST_WRITE,
+                             &data))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    LONG result = CopyAcceleratorTable(handle, data.host, count);
+    lx_execution_release(&data);
+    return (uint32)result;
+}
+static uint32 bridge32_DestroyAcceleratorTable(uint8 *a)
+{
+    return DestroyAcceleratorTable(lx_guest_load_u32(a));
+}
+static uint32 bridge32_TranslateAccelerator(uint8 *a)
+{
+    uint8 message[28];
+    if (!lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 8), message,
+                           sizeof message))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    return (uint32)TranslateAccelerator(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), message);
+}

@@ -3,10 +3,12 @@
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -34,17 +36,47 @@ def main():
         *sorted(build.glob("lib*.so")),
         *sorted(build.glob("lib*.dylib")),
     ]
-    names = {p.name for p in sources}
-    for source in sources:
+    # Freeze the actual Mach-O closure before removing development RPATHs.
+    # Source-provider dependencies such as SDL live below _deps rather than
+    # beside lx_loader; a root-only glob produces an incomplete test provider.
+    queue = list(sources)
+    copied = {}
+    links = {}
+    while queue:
+        source = queue.pop(0).resolve(strict=True)
+        if source in copied:
+            continue
         target = mirror / source.name
-        shutil.copy2(source, target)
-        # Reproduce a development build, even when testing a relocated provider.
+        if target.exists():
+            assert (
+                hashlib.sha256(target.read_bytes()).digest()
+                == hashlib.sha256(source.read_bytes()).digest()
+            ), f"Conflicting frozen dependency filename: {source.name}"
+        else:
+            shutil.copy2(source, target)
+            target.chmod(target.stat().st_mode | stat.S_IWUSR)
+        copied[source] = target
+        links[source] = []
+        # otool -L includes LC_ID_DYLIB as well as linked libraries. An identity
+        # is not a dependency and may have no independently resolvable RPATH.
+        identities = set(
+            macos_bundle.run(
+                ["otool", "-D", source], capture_output=True, text=True
+            ).stdout.splitlines()[1:]
+        )
         for name in macos_bundle.dependencies(source):
-            if Path(name).name in names:
-                macos_bundle.run(
-                    ["install_name_tool", "-change", name, "@rpath/" + Path(name).name, target],
-                    capture_output=True,
-                )
+            if name in identities or macos_bundle.system_library(name):
+                continue
+            dependency = macos_bundle.resolve(name, source, [build])
+            links[source].append((name, dependency))
+            queue.append(dependency)
+    for source, target in copied.items():
+        # Reproduce a development build, even when testing a relocated provider.
+        for name, dependency in links[source]:
+            macos_bundle.run(
+                ["install_name_tool", "-change", name, "@rpath/" + copied[dependency].name, target],
+                capture_output=True,
+            )
         if source.suffix in (".so", ".dylib"):
             macos_bundle.run(
                 ["install_name_tool", "-id", "@rpath/" + target.name, target], capture_output=True
@@ -64,6 +96,9 @@ def main():
         macos_bundle.run(
             ["codesign", "--force", "--sign", "-", *exception, target], capture_output=True
         )
+    (work / "frozen-closure.json").write_text(
+        json.dumps({str(source): target.name for source, target in copied.items()}, indent=2) + "\n"
+    )
     capabilities = build / "runtime-capabilities.json"
     if capabilities.exists():
         shutil.copy2(capabilities, mirror / capabilities.name)

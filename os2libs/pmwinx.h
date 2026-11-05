@@ -681,6 +681,16 @@ extern "C"
     OS2EXPORT ULONG OS2API TlsGetValue(ULONG index) OS2APIINFO(ord = 694, name = TLSGETVALUE);
     OS2EXPORT BOOL OS2API TlsSetValue(ULONG index, ULONG value)
         OS2APIINFO(ord = 695, name = TLSSETVALUE);
+    OS2EXPORT ULONG OS2API LoadAccelerators(HMODULE module, PSZ name)
+        OS2APIINFO(ord = 457, name = LOADACCELERATORS);
+    OS2EXPORT ULONG OS2API CreateAcceleratorTable(PVOID data, LONG count)
+        OS2APIINFO(ord = 57, name = CREATEACCELERATORTABLE);
+    OS2EXPORT LONG OS2API CopyAcceleratorTable(ULONG handle, PVOID data, LONG count)
+        OS2APIINFO(ord = 1026, name = COPYACCELERATORTABLE);
+    OS2EXPORT BOOL OS2API DestroyAcceleratorTable(ULONG handle)
+        OS2APIINFO(ord = 141, name = DESTROYACCELERATORTABLE);
+    OS2EXPORT LONG OS2API TranslateAccelerator(ULONG window, ULONG table, PVOID message)
+        OS2APIINFO(ord = 697, name = TRANSLATEACCELERATOR);
 #ifdef __cplusplus
 }
 #endif

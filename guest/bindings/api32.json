@@ -3887,6 +3887,31 @@
       "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "LoadAccelerators": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateAcceleratorTable": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CopyAcceleratorTable": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DestroyAcceleratorTable": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TranslateAccelerator": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmdrag": {
