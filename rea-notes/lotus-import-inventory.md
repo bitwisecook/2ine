@@ -3,13 +3,19 @@
 ## Evidence and scope
 
 Read-only census of `/Users/jimd/Documents/Lotus.2ineball`, using private source
-revision `bad21aa8c184bc635b6035b2bbd5c1df76a46c6b` plus the source hashes recorded
+revision `c3e92d1101e3af1b91789447ac6ea01f11d8b29f` plus the source hashes recorded
 in the report. No guest code was run and no user-ball files were written. Each
 scanned file has a SHA-256; manifest, CONFIG.SYS, parser, generated exports and
 located implementation-source files are also hashed. Source changes after the
 census require regeneration before comparing export counts.
 
-Evidence is in ignored `build-lotus-import-inventory/`:
+The committed `lotus-native-apis.csv` enumerates all 1,280 used interfaces in
+libraries built by 2ine, with application membership, selected providers, source
+exports and implementation evidence. `lotus-native-apis.provenance.json` binds
+that compact inventory to the full census and source revision. Semantic
+completeness is explicitly unassessed.
+
+Detailed evidence is in ignored `build-lotus-import-inventory/`:
 
 - `imports.json`: complete deterministic index, app membership, module/name/ordinal,
   binary hashes, source export evidence and reference-file coordinates.
