@@ -1,7 +1,7 @@
 {
   "censusSha256": "ad2f7ee051d4fe7938dfcbd2371ba75345e59ab48eab84ebd8ddeabac81b9331",
   "entries": 1280,
-  "fullEvidence": "build-lotus-import-inventory/imports.json",
+  "fullEvidence": "/Users/jimd/src/os2/.cache/os2-reports/2026-11-05/build-lotus-import-inventory/imports.json",
   "inventorySha256": "d38408dbedf6d56bf3f18669488f00f2ece96b18559ed7d8717601b001f34fde",
   "schema": 1,
   "scope": "All imported interfaces in module families built by 2ine; selected original guest providers remain distinct. Export presence does not prove semantic completeness.",

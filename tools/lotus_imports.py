@@ -727,7 +727,7 @@ def main() -> int:
         "--binary", type=Path, help="inspect one NE/LX/LE file, printing inline-reference JSON"
     )
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument("--output", type=Path, default=Path("build-lotus-import-inventory"))
+    parser.add_argument("--output", type=Path, default=Path("build/lotus-import-inventory"))
     parser.add_argument("--lx-dump", type=Path)
     parser.add_argument("--inline-references", action="store_true")
     args = parser.parse_args()

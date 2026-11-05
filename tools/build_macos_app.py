@@ -83,7 +83,7 @@ def build_document_icon(output, resources, environment):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=ROOT / "build-macos")
+    parser.add_argument("--output", type=Path, default=ROOT / "build/macos")
     parser.add_argument("--runtime-build", type=Path, required=True)
     parser.add_argument("--mesa-prefix", type=Path, required=True)
     parser.add_argument("--vulkan-loader", type=Path, required=True)
@@ -193,7 +193,7 @@ def main():
                             target.mkdir(exist_ok=True)
                             shutil.copy2(license_file, target / license_file.name)
                 break
-    mesa_license = ROOT / "build-inputs/mesa-26.2.6/docs/license.rst"
+    mesa_license = ROOT / "build/inputs/mesa-26.2.6/docs/license.rst"
     if mesa_license.is_file():
         shutil.copy2(mesa_license, resources / "Licenses/Mesa-license.rst")
     developer = Path(command(["xcode-select", "-p"], capture_output=True, text=True).stdout.strip())

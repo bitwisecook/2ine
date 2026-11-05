@@ -7,10 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
-        for window in NSApp.windows where window.canBecomeMain {
-            window.delegate = self
-            window.contentView?.setAccessibilityLabel("Ball manager")
-        }
     }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if model?.hasComponentOperations == true {
@@ -120,6 +116,12 @@ struct BallCommands: Commands {
                 Divider()
                 Button("Clear Menu") { NSDocumentController.shared.clearRecentDocuments(nil) }
             }.disabled(model.busy || model.mediaBusy)
+        }
+        CommandGroup(after: .newItem) {
+            Divider()
+            Button("Close Window") {
+                NSApp.sendAction(#selector(NSWindow.performClose(_:)), to: nil, from: nil)
+            }.keyboardShortcut("w")
         }
         CommandGroup(after: .sidebar) {
             ForEach(Array(Page.allCases.enumerated()), id: \.element.id) { index, page in

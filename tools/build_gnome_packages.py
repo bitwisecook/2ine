@@ -292,7 +292,7 @@ cp -a {shlex.quote(str(stage_root / "usr"))} %{{buildroot}}/
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=ROOT / "build-gnome/packages")
+    parser.add_argument("--output", type=Path, default=ROOT / "build/gnome/packages")
     parser.add_argument("--stage", type=Path, help="stage only, e.g. for Snapcraft")
     parser.add_argument("--version", default=(ROOT / "VERSION").read_text().strip())
     parser.add_argument("--format", choices=("deb", "rpm", "all"), default="all")

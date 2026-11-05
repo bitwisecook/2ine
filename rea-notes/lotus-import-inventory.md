@@ -15,18 +15,16 @@ exports and implementation evidence. `lotus-native-apis.provenance.json` binds
 that compact inventory to the full census and source revision. Semantic
 completeness is explicitly unassessed.
 
-Detailed evidence is in ignored `build-lotus-import-inventory/`:
+Detailed census data is retained in the permanent review cache at
+`/Users/jimd/src/os2/.cache/os2-reports/2026-11-05/build-lotus-import-inventory/`.
+Generated build trees were removed after verification:
 
 - `imports.json`: complete deterministic index, app membership, module/name/ordinal,
   binary hashes, source export evidence and reference-file coordinates.
-- `imports.csv` and `imports.md`: all imported interfaces plus the 2ine-library
-  subset in a reviewable table.
 - `references.jsonl.gz`: **130,557 exact encoded references**, deterministically
   compressed; SHA-256 `4fd03f4ac88afe2478e48072054c80c9fc4439deb86c2eab8f38ec190e28ed81`.
   A binary import's `{file,firstLine,count}` points into decompressed one-based
   JSONL lines. Parser APIs retain inline references.
-- `real-format-probes.json`: hashed driver/kernel/boot and SDK import-lib probes.
-- `tool-tests.log`: focused checks.
 
 ## Census result
 

@@ -44,10 +44,10 @@ the catalogue and Ghidra annotations do not implement them. The accelerator
 family's bounded implementation and remaining limitations are documented in
 `open32-accelerators.md`.
 
-Qualification output is retained under `build-os2-api-catalogue`,
-`build-os2-api-plugin` and `build-os2-api-integration` in the private release
-worktree. These checks qualify offline lookup and annotations, not full Lotus
-application compatibility or a reconstructed kernel.
+Qualification receipts and reusable census data are retained at
+`/Users/jimd/src/os2/.cache/os2-reports/2026-11-05`. Generated build trees were
+removed after their purpose was complete. These checks qualify offline lookup
+and annotations, not full Lotus compatibility or a reconstructed kernel.
 
 ## Reusable DLL analysis and Markdown sources
 
@@ -81,9 +81,25 @@ Installed instructions and implementation are mirrored under
 `OS2_MODULE_CACHE` or `~/.cache/os2-re-module`; `--cache-root` selects a private
 cache. This data is separate from 2ine's application-launch dependency index.
 
-Qualification includes 54 cache/metadata/docs/router tests, 15 API catalogue
+Qualification includes 61 cache/metadata/docs/router/batch tests, 15 API catalogue
 checks, genuine OS/2 and Win16 input, mixed 16/32-bit fixtures, original NE driver
 export, repeated deterministic analysis and reuse with an unavailable provider.
-The module receipt and native Ghidra evidence are retained in
-`build-os2-module-cache` in the private worktree. Original source images and user
-balls were not modified.
+Receipts and native Ghidra evidence were moved to the permanent review cache.
+Original source images and user balls were not modified.
+
+`docs seed` reads the catalogue once, validates existing converted sources and
+batches a module's available full pages and declarations into the shared cache.
+It reports unavailable sources and ambiguous references. Lexical mentions remain
+research-reference candidates; they do not establish an API contract. The first
+PMWINX seed caches all 4,330 actual pages of seven referenced manuals, 780
+source-declaration references and two whole headers. It stores 5,181 associations
+with content deduplication and reports 16 APIs with no source text. No pages,
+prototypes or implementations are fabricated to fill those gaps.
+
+The readable index is
+`/Users/jimd/.cache/os2-re-module/documents/by-name/os2-PMWINX.md`.
+Other modules can be selected with repeated `--module` options, with optional
+exact binary and provider hashes. See the installed `DOCUMENT_SEED.md` for bounds
+and coverage. The permanent default cache also retains the independently tested
+advreg interfaces/type graph and associated documentation, available without the
+original Ghidra installation.
