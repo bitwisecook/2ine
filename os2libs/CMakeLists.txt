@@ -122,9 +122,9 @@ target_link_libraries(pmwin PRIVATE nls)
 target_link_libraries(pmmerge PRIVATE pmwin)
 
 if(TWOINE_OPENGL)
-    add_library(opengl SHARED opengl/module.c opengl/pgl.c opengl/memory.c opengl/custom.c opengl/arrays.c)
+    add_library(opengl SHARED opengl/module.c opengl/pgl.c opengl/memory.c opengl/custom.c opengl/arrays.c opengl/copy.c)
     twoine_application_target(opengl)
-    target_link_libraries(opengl PRIVATE pmwin 2ine)
+    target_link_libraries(opengl PRIVATE pmwin pmgpi 2ine)
     twoine_add_opengl(opengl)
     set_target_properties(opengl PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
     if(APPLE)
@@ -134,6 +134,7 @@ endif()
 
 
 target_link_libraries(dive PRIVATE pmwin)
+target_sources(dive PRIVATE dive_pixels.c)
 
 target_link_libraries(mdm PRIVATE mmio pmwin m twoine_midi_config twoine_mt32_config twoine_video_config)
 

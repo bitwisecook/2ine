@@ -125,8 +125,12 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
             return (MRESULT)(uintptr_t)open32KeyboardMessage(w->handle, (ULONG)(uintptr_t)first,
                                                              (ULONG)(uintptr_t)second);
         case WM_SYSCOMMAND:
-            return (MRESULT)(uintptr_t)open32WindowCallback(w, 0x112,
-                                                            (ULONG)(uintptr_t)first & 0xFFFF, 0);
+        {
+            QMSG native = {.hwnd = handle, .msg = message, .mp1 = first, .mp2 = second};
+            ULONG translated, a, b;
+            open32PmMessage(&native, &translated, &a, &b);
+            return (MRESULT)(uintptr_t)open32WindowCallback(w, translated, a, b);
+        }
         case WM_COMMAND:
             return (MRESULT)(uintptr_t)open32WindowCallback(w, 0x111,
                                                             (ULONG)(uintptr_t)first & 0xFFFF, 0);
@@ -167,6 +171,17 @@ static uint32 pm_window_bridge(uint8 *a)
 }
 static uint32 pm_frame_bridge(uint8 *a)
 {
+    /* Open32 system menus carry Windows SC_* IDs. PM's frame procedure only
+       recognises its own IDs, so let the application's client handle these. */
+    ULONG handle = lx_guest_load_u32(a), message = lx_guest_load_u32(a + 4);
+    if (message == WM_SYSCOMMAND && (lx_guest_load_u32(a + 8) & 0xF000) == 0xF000)
+    {
+        HWND client = WinWindowFromID(handle, FID_CLIENT);
+        if (client)
+            return (uint32)(uintptr_t)WinSendMsg(client, message,
+                                                (MPARAM)(uintptr_t)lx_guest_load_u32(a + 8),
+                                                (MPARAM)(uintptr_t)lx_guest_load_u32(a + 12));
+    }
     return (uint32)(uintptr_t)WinDefWindowProc(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
                                                (MPARAM)(uintptr_t)lx_guest_load_u32(a + 8),
                                                (MPARAM)(uintptr_t)lx_guest_load_u32(a + 12));
@@ -316,7 +331,14 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     BOOL framed = !(style & 0x40000000u) && (style & 0x00c00000u) == 0x00c00000u;
     if (framed)
     {
-        FRAMECDATA frame = {sizeof frame, (style & 0x00080000u) ? 2 : 0, 0, 0};
+        /* Frame controls also set the PM sizing style used by the host window.
+           Retain the Windows sizing and min/max capabilities when making the
+           native frame, rather than leaving every captioned window fixed. */
+        ULONG controls = ((style & 0x00080000u) ? 0x2 : 0) |  /* WS_SYSMENU */
+                         ((style & 0x00040000u) ? 0x8 : 0) |  /* WS_THICKFRAME */
+                         ((style & 0x00020000u) ? 0x10 : 0) | /* WS_MINIMIZEBOX */
+                         ((style & 0x00010000u) ? 0x20 : 0);  /* WS_MAXIMIZEBOX */
+        FRAMECDATA frame = {sizeof frame, controls, 0, 0};
         w->handle = WinCreateWindow(pm_parent, (PSZ)WC_FRAME, w->title, pm_style, w->x,
                                     bounds.yTop - w->y - w->height, w->width, w->height,
                                     parent ? parent : HWND_DESKTOP, HWND_TOP, 0, &frame, NULL);
@@ -364,6 +386,8 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     w->next = windows;
     windows = w;
     ULONG result = w->handle;
+    if (framed)
+        WinSendMsg(result, WM_UPDATEFRAME, 0, 0);
     if (!(style & 0x40000000u) && menu && !SetMenu(result, menu))
     {
         DestroyWindow(result);
@@ -389,6 +413,17 @@ LONG DefWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
         return 0;
     if (message == 16)
         return DestroyWindow(handle) ? 0 : -1;
+    if (message == 0x112)
+    {
+        switch (first & 0xFFF0)
+        {
+            case 0xF020: ShowWindow(handle, 6); return 0;
+            case 0xF030: ShowWindow(handle, 3); return 0;
+            case 0xF060: return SendMessage(handle, 16, 0, 0);
+            case 0xF120: ShowWindow(handle, 9); return 0;
+            default: return 0;
+        }
+    }
     if (message == 12)
     {
         Open32Window *w = open32FindWindow(handle);

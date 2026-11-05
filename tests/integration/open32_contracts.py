@@ -1062,7 +1062,7 @@ def api_window_program():
     g.word(geometry + 8, 100, 243)
     g.word(geometry + 12, 50, 244)
     call(g, "SendMessage", (mdi,), 0x221, (child,), 0)
-    g.result(1, 245)
+    g.result(0, 245)
     call(g, "SendMessage", (mdi,), 0x229, 0, 0)
     g.result(0, 246)
     call(g, "DestroyWindow", (mdi,))
@@ -2031,6 +2031,16 @@ def extended_text_program():
     size = g.field(bytes(8))
     call(g, "GetDC", 0)
     store(g, screen)
+    # Lotus obtains a native screen PS while holding an Open32 DC, then clears
+    # its private low-bit tag before releasing the PS. This must not release
+    # the adjacent Open32 context and break the first welcome-tab measurement.
+    g.call(3, 759, 1)  # WinGetScreenPS(HWND_DESKTOP)
+    g.code.extend(b"\x83\xe0\xfe")
+    store(g, dc)
+    g.call(3, 848, (dc,))  # WinReleasePS
+    g.result(1, 7)
+    call(g, "GetTextExtentPoint", (screen,), text, 2, size)
+    g.result(1, 8)
     call(g, "CreateCompatibleDC", (screen,))
     store(g, dc)
     call(g, "CreateCompatibleBitmap", (screen,), 48, 32)
@@ -2070,7 +2080,7 @@ def extended_text_program():
     call(g, "DeleteObject", (bitmap,))
     call(g, "ReleaseDC", 0, (screen,))
     g.exit(0)
-    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX"], "EXTTEXT32", data=g.data)
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX", "PMWIN"], "EXTTEXT32", data=g.data)
 
 
 def enumeration_program():

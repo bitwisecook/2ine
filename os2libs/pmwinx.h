@@ -395,6 +395,8 @@ extern "C"
     OS2EXPORT BOOL OS2API IsIconic(ULONG window) OS2APIINFO(ord = 445, name = ISICONIC);
     OS2EXPORT BOOL OS2API GetWindowPlacement(ULONG window, PVOID output)
         OS2APIINFO(ord = 387, name = GETWINDOWPLACEMENT);
+    OS2EXPORT BOOL OS2API SetWindowPlacement(ULONG window, PVOID input)
+        OS2APIINFO(ord = 661, name = SETWINDOWPLACEMENT);
     OS2EXPORT ULONG OS2API GetParent(ULONG window) OS2APIINFO(ord = 333, name = GETPARENT);
     OS2EXPORT ULONG OS2API SetParent(ULONG window, ULONG parent)
         OS2APIINFO(ord = 633, name = SETPARENT);

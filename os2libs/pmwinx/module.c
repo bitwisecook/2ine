@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/input.h"
 #include "hal/host.h"
+#include "hal/video.h"
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmwin/open32_post.h"
 static void open32Shutdown(void);
@@ -116,7 +117,8 @@ LONG WinCallWinMain(LONG argc, PSZ *argv, PFNWINMAIN entry, LONG show)
 
 ULONG GetTickCount(void)
 {
-    return (ULONG)(lx_host_monotonic_us() / 1000);
+    /* GetMessageTime and native PM packets use this same millisecond clock. */
+    return (ULONG)lx_host_video_ticks_ms();
 }
 
 static _Thread_local ULONG last_error;

@@ -152,7 +152,8 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
             return 0;
         if (window->mdi_active == first)
             window->mdi_active = 0;
-        return DestroyWindow(first);
+        DestroyWindow(first);
+        return 0; /* WM_MDIDESTROY always returns zero. */
     }
     if (message == 0x230) /* WM_MDISETMENU */
     {

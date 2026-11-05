@@ -83,3 +83,10 @@ external VMAN display-driver mode change, not fallible requests. The software
 backend handles the notifications without exposing/rebinding hardware VRAM;
 there is deliberately no invented API return code. This does not provide VMAN,
 hardware mode switching, or prove the port's hardware fullscreen path works.
+
+
+The later [graphics completion work](../graphics-completion.md) expands this
+original LUT8 path with additional formats, non-screen conversion, short setup
+records, transparent/line-mask blits and a mapped software framebuffer. Its
+acceptance evidence and remaining limits are separate from this historical
+Doom verification record.

@@ -28,6 +28,32 @@ static void clear_frame(PmDiveTarget *target)
     target->pixels = NULL;
     target->rectangles = NULL;
 }
+static BOOL write_pixels(HPS ps, LONG x, LONG y, unsigned width, unsigned height,
+                         const uint32_t *pixels)
+{
+    BOOL partial = FALSE;
+    for (size_t i = 0; i < (size_t)width * height; i++)
+        partial = partial || (pixels[i] & 0x01000000u);
+    if (!partial)
+        return lx_pm_raster_write(ps, x, y, width, height, pixels);
+    for (unsigned row = 0; row < height; row++)
+    {
+        const uint32_t *line = pixels + (size_t)row * width;
+        unsigned column = 0;
+        while (column < width)
+        {
+            while (column < width && (line[column] & 0x01000000u))
+                column++;
+            unsigned start = column;
+            while (column < width && !(line[column] & 0x01000000u))
+                column++;
+            if (column > start &&
+                !lx_pm_raster_write(ps, x + start, y + row, column - start, 1, line + start))
+                return FALSE;
+        }
+    }
+    return TRUE;
+}
 void *lx_pm_dive_target(LONG x, LONG y, unsigned width, unsigned height)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -82,8 +108,9 @@ void lx_pm_dive_release(void *context)
 BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned height,
                      const uint32_t *pixels, ULONG count, const RECTL *rectangles)
 {
-    if (!context || !target_mutex || !pixels || !width || !height ||
-        (count && count != 0xffffffffUL && !rectangles))
+    if (!context || !target_mutex || !pixels || !width || !height || width > 16384 ||
+        height > 16384 || (uint64_t)width * height > 16777216 ||
+        (count != 0xffffffffUL && count > 65536) || (count && count != 0xffffffffUL && !rectangles))
         return FALSE;
     uint32_t *copy = malloc((size_t)width * height * 4);
     RECTL *clips = count && count != 0xffffffffUL ? malloc((size_t)count * sizeof *clips) : NULL;
@@ -96,12 +123,58 @@ BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned hei
     memcpy(copy, pixels, (size_t)width * height * 4);
     if (clips)
         memcpy(clips, rectangles, (size_t)count * sizeof *clips);
+    /* Apply visibility before coalescing partial submissions. Unchanged pixels
+       cannot erase an older pending update, including one with different clips. */
+    if (count != 0xffffffffUL)
+    {
+        size_t stride = (size_t)width + 1;
+        int32_t *coverage = calloc(stride * (height + 1), sizeof *coverage);
+        if (!coverage)
+        {
+            free(copy);
+            free(clips);
+            return FALSE;
+        }
+        /* A rectangular difference image bounds clipping to O(rects + pixels),
+           including heavily overlapping visible-region lists. */
+        for (ULONG i = 0; i < count; i++)
+        {
+            RECTL bounds = {0, 0, (LONG)width, (LONG)height}, rect;
+            if (!WinIntersectRect(0, &rect, &bounds, &clips[i]))
+                continue;
+            coverage[(size_t)rect.yBottom * stride + rect.xLeft]++;
+            coverage[(size_t)rect.yBottom * stride + rect.xRight]--;
+            coverage[(size_t)rect.yTop * stride + rect.xLeft]--;
+            coverage[(size_t)rect.yTop * stride + rect.xRight]++;
+        }
+        for (unsigned y = 0; y < height; y++)
+        {
+            int32_t running = 0;
+            for (unsigned x = 0; x < width; x++)
+            {
+                running += coverage[(size_t)y * stride + x];
+                int32_t visible = running + (y ? coverage[(size_t)(y - 1) * stride + x] : 0);
+                coverage[(size_t)y * stride + x] = visible;
+                if (!visible)
+                    copy[(size_t)y * width + x] = 0x01000000u;
+            }
+        }
+        free(coverage);
+    }
+    free(clips);
+    clips = NULL;
+    count = 0xffffffffUL;
     lx_host_mutex_lock(target_mutex, UINT32_MAX);
     PmDiveTarget *target = context;
     BOOL ok = target->window != NULL;
     BOOL wake = ok && target->pixels == NULL;
     if (ok)
     {
+        if (target->pixels && target->x == x && target->y == y && target->width == width &&
+            target->height == height)
+            for (size_t i = 0; i < (size_t)width * height; i++)
+                if (copy[i] & 0x01000000u)
+                    copy[i] = target->pixels[i];
         clear_frame(target);
         target->pixels = copy;
         target->rectangles = clips;
@@ -125,6 +198,37 @@ BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned hei
     }
     return ok;
 }
+BOOL lx_pm_dive_read(void *context, LONG x, LONG y, unsigned width, unsigned height,
+                     uint32_t *pixels)
+{
+    if (!context || !target_mutex)
+        return FALSE;
+    lx_host_mutex_lock(target_mutex, UINT32_MAX);
+    PmDiveTarget *target = context;
+    BOOL ok = target->window && target->anchor == getAnchorBlockNoHAB();
+    POINTL origin = {0, 0};
+    HPS ps = ok && WinMapWindowPoints(target->window->hwnd, HWND_DESKTOP, &origin, 1)
+                 ? WinGetPS(target->window->hwnd)
+                 : 0;
+    ok = ps && lx_pm_raster_read(ps, x - origin.x, y - origin.y, width, height, pixels);
+    if (ps)
+        WinReleasePS(ps);
+    lx_host_mutex_unlock(target_mutex);
+    return ok;
+}
+BOOL lx_pm_dive_flush(void *context)
+{
+    if (!context || !target_mutex)
+        return FALSE;
+    lx_host_mutex_lock(target_mutex, UINT32_MAX);
+    PmDiveTarget *target = context;
+    AnchorBlock *anchor = target->anchor;
+    BOOL ok = anchor && anchor == getAnchorBlockNoHAB() && target->window;
+    lx_host_mutex_unlock(target_mutex);
+    if (ok)
+        lx_pm_dive_pump(anchor);
+    return ok;
+}
 void lx_pm_dive_pump(void *context)
 {
     if (!target_mutex)
@@ -141,8 +245,8 @@ void lx_pm_dive_pump(void *context)
         if (ps)
         {
             if (target->count == 0xffffffffUL)
-                lx_pm_raster_write(ps, target->x - origin.x, target->y - origin.y, target->width,
-                                   target->height, target->pixels);
+                write_pixels(ps, target->x - origin.x, target->y - origin.y, target->width,
+                             target->height, target->pixels);
             else
             {
                 uint32_t *part = malloc((size_t)target->width * target->height * 4);
@@ -157,8 +261,8 @@ void lx_pm_dive_pump(void *context)
                                target->pixels + (size_t)(clip.yBottom + row) * target->width +
                                    clip.xLeft,
                                (size_t)w * 4);
-                    lx_pm_raster_write(ps, target->x - origin.x + clip.xLeft,
-                                       target->y - origin.y + clip.yBottom, w, h, part);
+                    write_pixels(ps, target->x - origin.x + clip.xLeft,
+                                 target->y - origin.y + clip.yBottom, w, h, part);
                 }
                 free(part);
             }

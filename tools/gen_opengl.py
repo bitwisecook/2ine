@@ -239,10 +239,10 @@ def render(schema):
         "pglChooseConfig": ("choose", 8),
         "pglQueryConfigs": ("query_configs", 4),
         "pglDestroyContext": ("destroy", 8),
-        "pglCopyContext": ("unsupported", 16),
+        "pglCopyContext": ("gl_copy_context", 16),
         "pglIsIndirect": ("indirect", 8),
-        "pglSelectColorIndexPalette": ("unsupported", 12),
-        "pglUseFont": ("unsupported", 28),
+        "pglSelectColorIndexPalette": ("select_palette", 12),
+        "pglUseFont": ("use_font", 28),
         "pglGetCurrentContext": ("current_context", 4),
         "pglGetCurrentWindow": ("current_window", 4),
         "pglWaitGL": ("wait_gl", 4),
@@ -250,9 +250,9 @@ def render(schema):
         "pglSwapBuffers": ("swap", 8),
         "pglQueryCapability": ("capability", 4),
         "pglQueryVersion": ("version", 12),
-        "pglUsePMBitmapFont": ("unsupported", 20),
-        "pglGrabFrontBitmap": ("unsupported", 12),
-        "pglReleaseFrontBitmap": ("unsupported", 4),
+        "pglUsePMBitmapFont": ("use_pm_bitmap_font", 20),
+        "pglGrabFrontBitmap": ("grab_bitmap", 12),
+        "pglReleaseFrontBitmap": ("release_front_bitmap", 4),
     }
     for name, (implementation, size) in implementations.items():
         pgl.append(

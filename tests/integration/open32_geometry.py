@@ -18,7 +18,7 @@ def placement_program(checked):
         g.field(struct.pack("<I", 0xABCDEF13)),
     )
     g.call(2, 556, record)
-    g.call(2, 99, 0, name, 0, 0xCF0000, 10, 20, 100, 50, 0, 0, 0xFFFFFFFF, 0)
+    g.call(2, 99, 0, name, 0, 0xC80000, 10, 20, 100, 50, 0, 0, 0xFFFFFFFF, 0)
     g.code.extend(b"\xa3" + struct.pack("<I", window))
     client, child = g.field(bytes(4)), g.field(bytes(4))
     g.call(3, 899, (window,), 0x8008)
@@ -141,7 +141,7 @@ def placement_program(checked):
     g.call(2, 588, (mdi,), 0x229, 0, maximized)
     g.word(maximized, 0, 63)
     g.call(2, 588, (mdi,), 0x221, (document,), 0)
-    g.result(1, 64)
+    g.result(0, 64)
     g.call(2, 588, (mdi,), 0x230, (menu,), 0)  # WM_MDISETMENU
     g.result(0, 43)
     g.call(2, 628, (window,), (menu,))
@@ -196,3 +196,67 @@ def placement_program(checked):
     return linear_image(
         g.code, g.fixups, ["DOSCALLS", "PMWINX", "PMWIN", "PMGPI"], "PLACEMENT32", data=g.data
     )
+
+
+def sizing_frame_program():
+    """Resizable Open32 frames retain controls and resize their client."""
+    g = FlatGuest()
+    name = g.field(b"SizingFrameWindow\0")
+    record = g.field(struct.pack("<10I", 0, 0xABCDEF12, 0, 0, 0xFFFFFFFF, 0, 0, 0, 0, name))
+    window, client = (g.field(bytes(4)) for _ in range(2))
+    before, after = (g.field(bytes(16)) for _ in range(2))
+    size_count, last_size = g.field(bytes(4)), g.field(bytes(4))
+    g.call(2, 556, record)
+    g.call(2, 99, 0, name, name, 0xCF0000, 10, 20, 300, 200, 0, 0, 0xFFFFFFFF, 0)
+    g.code.extend(b"\xa3" + struct.pack("<I", window))
+    g.call(3, 843, (window,), 0xFFFFFFFE)  # QWL_STYLE
+    g.require(b"\x25\x00\x08\0\0\x3d\x00\x08\0\0", 1)  # PM FS_SIZEBORDER
+    g.call(3, 899, (window,), 0x8004)  # FID_MINMAX
+    g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 2)
+    g.call(3, 899, (window,), 0x8008)  # FID_CLIENT
+    g.code.extend(b"\xa3" + struct.pack("<I", client))
+    g.call(2, 244, (window,), before)
+    g.result(1, 3)
+    g.code.extend(b"\xc7\x05" + struct.pack("<II", size_count, 0))
+    # Exercise the native frame resize path used by host drag events.
+    g.call(3, 875, (window,), 3, 0, 0, 380, 260, 1)
+    g.result(1, 4)
+    g.call(2, 244, (window,), after)
+    g.result(1, 5)
+    for offset, delta in ((8, 80), (12, 60)):
+        g.load(before + offset)
+        g.code.extend(b"\x05" + struct.pack("<I", delta))
+        g.require(b"\x3b\x05" + struct.pack("<I", after + offset), 6)
+    g.load(size_count)
+    g.require(b"\x85\xc0\x0f\x95\xc0\x3c\x01", 7)
+    g.load(last_size)
+    g.code.extend(b"\x0f\xb7\xc0")
+    g.require(b"\x3b\x05" + struct.pack("<I", after + 8), 8)
+    g.load(last_size)
+    g.code.extend(b"\xc1\xe8\x10")
+    g.require(b"\x3b\x05" + struct.pack("<I", after + 12), 9)
+    g.call(2, 671, (window,), 3)  # SW_MAXIMIZE
+    g.call(2, 451, (window,))  # IsZoomed
+    g.result(1, 10)
+    g.call(2, 671, (window,), 9)  # SW_RESTORE
+    g.call(2, 451, (window,))
+    g.result(0, 11)
+    g.call(2, 146, (window,))
+    g.result(1, 12)
+    # A captioned dialog without WS_THICKFRAME remains fixed.
+    g.call(2, 99, 0, name, name, 0xC80000, 10, 20, 300, 200, 0, 0, 0xFFFFFFFF, 0)
+    g.code.extend(b"\xa3" + struct.pack("<I", window))
+    g.call(3, 843, (window,), 0xFFFFFFFE)
+    g.require(b"\x25\x00\x08\0\0\x3d\0\0\0\0", 13)
+    g.call(3, 899, (window,), 0x8004)
+    g.result(0, 14)
+    g.call(2, 146, (window,))
+    g.result(1, 15)
+    g.exit(0)
+    callback = 0x10000 + len(g.code)
+    g.code.extend(b"\x83\x7c\x24\x08\x05\x75\x0f")
+    g.code.extend(b"\xff\x05" + struct.pack("<I", size_count))
+    g.code.extend(b"\x8b\x44\x24\x10\xa3" + struct.pack("<I", last_size))
+    g.code.extend(b"\x31\xc0\x81\x7c\x24\x08\x81\0\0\0\x0f\x94\xc0\xc3")
+    g.data = g.data.replace(struct.pack("<I", 0xABCDEF12), struct.pack("<I", callback))
+    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX", "PMWIN"], "SIZING32", data=g.data)

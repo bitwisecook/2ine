@@ -1,5 +1,17 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/doscalls.h"
+static uint32 bridge32_SetWindowPlacement(uint8 *a)
+{
+    LxGuestBorrow input = {0};
+    uint32 result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 44,
+                             LX_GUEST_READ, &input))
+        open32SetError(87);
+    else
+        result = SetWindowPlacement(lx_guest_load_u32(a), input.host);
+    lx_execution_release(&input);
+    return result;
+}
 static uint32 bridge32_GetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow output = {0};

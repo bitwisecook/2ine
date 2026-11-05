@@ -56,6 +56,9 @@ ULONG lx_pm_bitmap_select(HPS ps, ULONG bitmap);
 void lx_pm_bitmap_cleanup(void *anchor);
 void *lx_pm_dive_target(LONG x, LONG y, unsigned width, unsigned height);
 void lx_pm_dive_release(void *context);
+BOOL lx_pm_dive_flush(void *context);
+BOOL lx_pm_dive_read(void *context, LONG x, LONG y, unsigned width, unsigned height,
+                     uint32_t *pixels);
 BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned height,
                      const uint32_t *pixels, ULONG count, const RECTL *rectangles);
 void lx_pm_dive_pump(void *anchor);

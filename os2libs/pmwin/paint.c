@@ -9,9 +9,9 @@
 #include "os2libs/pmwin/graphics.h"
 PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor, const HPS hps)
 {
-    if (hps >= FIRST_HPS_VALUE)
+    if (hps >= FIRST_HPS_VALUE && !(hps & 1))
     {
-        const size_t idx = (size_t)(hps - FIRST_HPS_VALUE);
+        const size_t idx = (size_t)(hps - FIRST_HPS_VALUE) / 2;
         if (idx >= anchor->pres_spaces_array_len)
         {
             return NULL;
@@ -112,7 +112,9 @@ HPS acquirePresentationSpace(HWND hwnd, HPS hps, PRECTL prclPaint, BOOL paint)
             ps = &anchor->pres_spaces[len];
             anchor->pres_spaces_array_len *= 2;
         }
-        hps = (HPS)(((size_t)(ps - anchor->pres_spaces)) + FIRST_HPS_VALUE);
+        /* Lotus masks bit zero from a screen PS before releasing it. Keep
+           handles even so this cannot select a different, live PS. */
+        hps = (HPS)(((size_t)(ps - anchor->pres_spaces)) * 2 + FIRST_HPS_VALUE);
     }
 
     ps->hps = hps;

@@ -3,6 +3,7 @@
 #include "os2libs/pmwin.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmwin/input.h"
 #include "hal/host_thread.h"
 #include "hal/host_sync.h"
 #include <stdint.h>
@@ -70,6 +71,26 @@ static void *stale(void *argument)
     CHECK(!WinPostMsg((HWND)(uintptr_t)argument, WM_USER + 1, 0, 0));
     return NULL;
 }
+static void *receive_global_quit(void *argument)
+{
+    (void)argument;
+    HAB hab = WinInitialize(0);
+    HMQ queue = WinCreateMsgQueue(hab, 0);
+    HWND first = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "quit worker", 0, 0, 0, 32, 32, 0,
+                                 HWND_TOP, 0, NULL, NULL);
+    HWND second = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "second worker window", 0, 0, 0,
+                                  32, 32, 0, HWND_TOP, 0, NULL, NULL);
+    CHECK(hab && queue && first && second);
+    LxHostEvent event = {.type = LX_HOST_EVENT_QUIT};
+    CHECK(lx_host_video_push(&event) && lx_pm_poll_input());
+    QMSG message;
+    CHECK(WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1) && message.msg == WM_QUIT);
+    CHECK(!WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1));
+    CHECK(WinDestroyWindow(first) && WinDestroyWindow(second));
+    CHECK(WinDestroyMsgQueue(queue) && WinTerminate(hab));
+    lxHostThreadCleanup();
+    return NULL;
+}
 int main(void)
 {
     HAB hab = WinInitialize(0);
@@ -121,6 +142,18 @@ int main(void)
     lx_host_monitor_unlock(delivery.monitor);
     CHECK(!lx_host_thread_join(thread, NULL));
     lx_host_monitor_destroy(delivery.monitor);
+    /* A process-wide Quit consumed by a worker must also reach this queue.
+       Each owner has multiple windows; neither queue may receive duplicates. */
+    HWND transient = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "transient quit target", 0, 0, 0,
+                                     32, 32, 0, HWND_TOP, 0, NULL, NULL);
+    CHECK(transient);
+    thread = lx_host_thread_create(receive_global_quit, NULL, NULL);
+    CHECK(thread && !lx_host_thread_join(thread, NULL));
+    /* Destroy the newest representative target before draining the staged
+       Quit. The application's surviving window must still receive it. */
+    CHECK(WinDestroyWindow(transient));
+    CHECK(WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1) && message.msg == WM_QUIT);
+    CHECK(!WinPeekMsg(hab, &message, 0, WM_QUIT, WM_QUIT, 1));
     HPS space = WinGetPS(client);
     RECTL rectangle = {0, 0, 10, 10};
     CHECK(space && WinFillRect(space, &rectangle, CLR_RED));

@@ -1174,6 +1174,10 @@ int main(void)
     CHECK(WinQuerySysValue(HWND_DESKTOP, 21) == desktop.yTop);
     HPS screen = WinGetScreenPS(HWND_DESKTOP);
     CHECK(screen && sizeof(FONTMETRICS) == 228);
+    HPS nested_screen = WinGetScreenPS(HWND_DESKTOP);
+    CHECK(nested_screen && nested_screen != screen && !(screen & 1) && !(nested_screen & 1));
+    CHECK(!WinReleasePS(nested_screen | 1));
+    CHECK(WinReleasePS(nested_screen & ~1u) && lx_pm_valid_ps(screen));
     LONG requested = 0;
     CHECK(GpiQueryFonts(screen, 1, "Helv", &requested, 228, NULL) == 4 && requested == 0);
     FONTMETRICS metrics[2];

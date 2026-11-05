@@ -3788,6 +3788,11 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "SetWindowPlacement": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "GetWindowPlacement": {
       "argument_bytes": 8,
       "callee_pop": 0,
@@ -4294,6 +4299,36 @@
     },
     "DiveFullScreenTerm": {
       "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveAcquireFrameBuffer": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveSwitchBank": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveDeacquireFrameBuffer": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveCalcFrameBufferAddress": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveSetTransparentBlitMode": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DiveBlitImageLines": {
+      "argument_bytes": 16,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

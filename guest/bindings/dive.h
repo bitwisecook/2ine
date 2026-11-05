@@ -39,12 +39,23 @@ static uint32 bridge32_DiveOpen(uint8 *a)
         return DIVE_ERR_INVALID_INSTANCE;
     }
     ULONG handle = 0;
-    ULONG result = DiveOpen(&handle, dive_word(a, 1), NULL);
+    PVOID pixels = NULL;
+    ULONG result = DiveOpen(&handle, dive_word(a, 1), &pixels);
     if (!result)
     {
         lx_guest_store_u32(output.host, handle);
         if (framebuffer.host)
-            lx_guest_store_u32(framebuffer.host, 0);
+        {
+            uint32 address = 0;
+            if (pixels && !lx_execution_address(GLoaderState.execution, pixels, 1,
+                                                LX_GUEST_READ | LX_GUEST_WRITE, &address))
+            {
+                DiveClose(handle);
+                lx_guest_store_u32(output.host, 0);
+                result = DIVE_ERR_NO_DIRECT_ACCESS;
+            }
+            lx_guest_store_u32(framebuffer.host, address);
+        }
     }
     lx_execution_release(&output);
     lx_execution_release(&framebuffer);
@@ -58,13 +69,17 @@ static uint32 bridge32_DiveSetupBlitter(uint8 *a)
 {
     if (!dive_word(a, 1))
         return DiveSetupBlitter(dive_word(a, 0), NULL);
-    uint8 raw[68];
-    if (!lx_execution_read(GLoaderState.execution, dive_word(a, 1), raw, sizeof raw) ||
-        lx_guest_load_u32(raw) < sizeof raw)
+    uint8 raw[68] = {0};
+    if (!lx_execution_read(GLoaderState.execution, dive_word(a, 1), raw, 4))
+        return DIVE_ERR_INSUFFICIENT_LENGTH;
+    uint32 length = lx_guest_load_u32(raw);
+    if ((length != 8 && length != 28 && length != 32 && length != 52 && length != 60 &&
+         length != 68) ||
+        !lx_execution_read(GLoaderState.execution, dive_word(a, 1), raw, length))
         return DIVE_ERR_INSUFFICIENT_LENGTH;
     SETUP_BLITTER setup = {0};
-    memcpy(&setup, raw, 64);
-    setup.ulStructLen = sizeof setup;
+    memcpy(&setup, raw, length < 64 ? length : 64);
+    setup.ulStructLen = length == 68 ? sizeof setup : length;
     LxGuestBorrow rectangles = {0};
     if (setup.ulNumDstRects && setup.ulNumDstRects != DIVE_FULLY_VISIBLE)
     {
@@ -88,10 +103,21 @@ static uint32 dive_palette_bridge(uint8 *a, int source)
     uint32 address = dive_word(a, 3), count = dive_word(a, 2);
     LxGuestBorrow entries = {0};
     PBYTE pointer = (PBYTE)(uintptr_t)address;
+    unsigned limit = 256;
+    if (!dive_lock())
+        return DIVE_ERR_ALLOCATION_ERROR;
+    DiveInstance *instance = dive_instance(dive_word(a, 0));
+    if (instance && instance->setup &&
+        (source ? instance->blitter.fccSrcColorFormat : instance->blitter.fccDstColorFormat) ==
+            DIVE_FOURCC_LT12)
+        limit = 4096;
+    dive_unlock();
     if (address && address != UINT32_MAX)
     {
-        if (count > 256 || !lx_execution_borrow(GLoaderState.execution, address, count * 4,
-                                                LX_GUEST_READ, &entries))
+        if (!count && dive_word(a, 1) < limit)
+            count = limit - dive_word(a, 1);
+        if (count > limit || !lx_execution_borrow(GLoaderState.execution, address, count * 4,
+                                                  LX_GUEST_READ, &entries))
             return DIVE_ERR_INVALID_PALETTE;
         pointer = entries.host;
     }
@@ -117,7 +143,14 @@ static uint32 bridge32_DiveAllocImageBuffer(uint8 *a)
         return DIVE_ERR_INVALID_BUFFER_NUMBER;
     ULONG value = lx_guest_load_u32(number.host);
     uint32 width = dive_word(a, 3), height = dive_word(a, 4), stride = dive_word(a, 5);
-    uint64 bytes = (uint64)(stride ? stride : (width + 3ULL) & ~3ULL) * height;
+    DiveImage image;
+    if (!dive_image_layout(&image, dive_word(a, 2) ? dive_word(a, 2) : DIVE_FOURCC_BGR4, width,
+                           height, stride))
+    {
+        lx_execution_release(&number);
+        return DIVE_ERR_INVALID_LINESIZE;
+    }
+    uint64 bytes = image.bytes;
     if (dive_word(a, 6) &&
         (bytes > UINT32_MAX || !bytes ||
          !lx_execution_borrow(GLoaderState.execution, dive_word(a, 6), (size_t)bytes,
@@ -200,4 +233,78 @@ static uint32 bridge32_DiveFullScreenTerm(uint8 *a)
     (void)a;
     DiveFullScreenTerm();
     return 0;
+}
+
+static uint32 bridge32_DiveAcquireFrameBuffer(uint8 *a)
+{
+    RECTL rect;
+    if (!lx_execution_read(GLoaderState.execution, dive_word(a, 1), &rect, sizeof rect))
+        return DIVE_ERR_INVALID_DESTINATION_RECTL;
+    return DiveAcquireFrameBuffer(dive_word(a, 0), &rect);
+}
+static uint32 bridge32_DiveSwitchBank(uint8 *a)
+{
+    return DiveSwitchBank(dive_word(a, 0), dive_word(a, 1));
+}
+static uint32 bridge32_DiveDeacquireFrameBuffer(uint8 *a)
+{
+    return DiveDeacquireFrameBuffer(dive_word(a, 0));
+}
+static uint32 bridge32_DiveSetTransparentBlitMode(uint8 *a)
+{
+    return DiveSetTransparentBlitMode(dive_word(a, 0), dive_word(a, 1), dive_word(a, 2),
+                                      dive_word(a, 3));
+}
+static uint32 bridge32_DiveBlitImageLines(uint8 *a)
+{
+    if (!dive_lock())
+        return DIVE_ERR_ALLOCATION_ERROR;
+    DiveInstance *instance = dive_instance(dive_word(a, 0));
+    DiveBuffer *buffer = instance ? dive_buffer(instance, dive_word(a, 1)) : NULL;
+    if (!buffer && instance && dive_word(a, 1) <= DIVE_BUFFER_GRAPHICS_PLANE &&
+        !instance->non_screen)
+        buffer = &instance->framebuffer;
+    LxGuestBorrow mask = {0};
+    ULONG result;
+    if (!instance)
+        result = DIVE_ERR_INVALID_INSTANCE;
+    else if (!buffer)
+        result = DIVE_ERR_INVALID_BUFFER_NUMBER;
+    else if (!lx_execution_borrow(GLoaderState.execution, dive_word(a, 3), buffer->height,
+                                  LX_GUEST_READ, &mask))
+        result = DIVE_ERR_OUT_OF_RANGE;
+    else
+        result = DiveBlitImageLines(dive_word(a, 0), dive_word(a, 1), dive_word(a, 2), mask.host);
+    lx_execution_release(&mask);
+    dive_unlock();
+    return result;
+}
+static uint32 bridge32_DiveCalcFrameBufferAddress(uint8 *a)
+{
+    RECTL rect;
+    if (!lx_execution_read(GLoaderState.execution, dive_word(a, 1), &rect, sizeof rect))
+        return DIVE_ERR_INVALID_DESTINATION_RECTL;
+    LxGuestBorrow outputs[3] = {{0}};
+    ULONG result = DIVE_ERR_OUT_OF_RANGE;
+    for (unsigned i = 0; i < 3; i++)
+        if (!lx_execution_borrow(GLoaderState.execution, dive_word(a, i + 2), 4, LX_GUEST_WRITE,
+                                 &outputs[i]))
+            goto done;
+    PBYTE pointer = NULL;
+    ULONG bank = 0, lines = 0;
+    result = DiveCalcFrameBufferAddress(dive_word(a, 0), &rect, &pointer, &bank, &lines);
+    uint32 address = 0;
+    if (!result && !lx_execution_address(GLoaderState.execution, pointer, 1,
+                                         LX_GUEST_READ | LX_GUEST_WRITE, &address))
+        result = DIVE_ERR_NO_DIRECT_ACCESS;
+    if (!result)
+    {
+        lx_guest_store_u32(outputs[0].host, address);
+        lx_guest_store_u32(outputs[1].host, bank);
+        lx_guest_store_u32(outputs[2].host, lines);
+    }
+done:
+    for (unsigned i = 0; i < 3; i++)
+        lx_execution_release(&outputs[i]);
+    return result;
 }

@@ -10,8 +10,8 @@ import subprocess
 from pathlib import Path
 
 
-def commands(source, build, prefix, jobs):
-    return [
+def commands(source, build, prefix, jobs, vulkan_loader=None):
+    plan = [
         [
             "meson",
             "setup",
@@ -35,6 +35,12 @@ def commands(source, build, prefix, jobs):
         ["meson", "compile", "-C", str(build), "-j", str(jobs)],
         ["meson", "install", "-C", str(build)],
     ]
+    if vulkan_loader:
+        # Zink's dlopen originates in libgallium, so an application's rpath
+        # cannot supply this dependency. Record it on Mesa's own libraries.
+        rpath = f"-Wl,-rpath,{Path(vulkan_loader).parent}"
+        plan[0].extend([f"-Dc_link_args={rpath}", f"-Dcpp_link_args={rpath}"])
+    return plan
 
 
 def main():
@@ -44,16 +50,32 @@ def main():
     parser.add_argument("--prefix", type=Path, required=True)
     parser.add_argument("--jobs", type=int, default=min(os.cpu_count() or 2, 8))
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--vulkan-loader", type=Path, help="Vulkan loader dylib (otherwise found with pkg-config)"
+    )
     args = parser.parse_args()
     source, build, prefix = args.source.resolve(), args.build.resolve(), args.prefix.resolve()
     if args.jobs < 1 or build == source or prefix == source or prefix == build:
         parser.error("use positive jobs and separate source, build and install directories")
-    plan = commands(source, build, prefix, args.jobs)
+    loader = args.vulkan_loader.resolve() if args.vulkan_loader else None
+    plan = commands(source, build, prefix, args.jobs, loader)
     if args.dry_run:
         print(json.dumps(plan, indent=2))
         return
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         parser.error("KosmicKrisp requires an Apple Silicon macOS host")
+    if not loader:
+        result = subprocess.run(
+            ["pkg-config", "--variable=libdir", "vulkan"], capture_output=True, text=True
+        )
+        if result.returncode or not result.stdout.strip():
+            parser.error(
+                "install vulkan-loader or specify --vulkan-loader /path/to/libvulkan.1.dylib"
+            )
+        loader = Path(result.stdout.strip()) / "libvulkan.1.dylib"
+    if not loader.is_file():
+        parser.error(f"Vulkan loader does not exist: {loader}")
+    plan = commands(source, build, prefix, args.jobs, loader)
     version = platform.mac_ver()[0]
     if not version or int(version.split(".")[0]) < 26:
         parser.error("KosmicKrisp requires macOS 26 or newer")
@@ -90,6 +112,7 @@ def main():
         "architecture": platform.machine(),
         "commands": plan,
         "icd": str(manifests[0]),
+        "vulkan_loader": str(loader),
     }
     (build / "twoine-mesa-build.json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"TWOINE_MESA_ROOT={prefix}\nTWOINE_KOSMICKRISP_ICD={manifests[0]}")

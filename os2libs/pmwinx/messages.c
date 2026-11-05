@@ -67,6 +67,19 @@ BOOL open32PmMessage(const QMSG *native, ULONG *message, ULONG *first, ULONG *se
             *first &= 0xFFFF;
             *second = 0;
             return TRUE;
+        case WM_SYSCOMMAND:
+            *message = 0x112;
+            switch (*first & 0xFFFF)
+            {
+                case 0x8000: *first = 0xF000; break; /* SC_SIZE */
+                case 0x8001: *first = 0xF010; break; /* SC_MOVE */
+                case 0x8002: *first = 0xF020; break; /* SC_MINIMIZE */
+                case 0x8003: *first = 0xF030; break; /* SC_MAXIMIZE */
+                case 0x8004: *first = 0xF060; break; /* SC_CLOSE */
+                case 0x8008: *first = 0xF120; break; /* SC_RESTORE */
+            }
+            *second = 0;
+            return TRUE;
         case WM_CONTROL:
             *message = 0x111;
             return TRUE;
@@ -144,7 +157,15 @@ static BOOL accept_native(const QMSG *native)
     ULONG message, first, second;
     Open32Key key = {0};
     Open32Window *window = open32FindWindow(native->hwnd);
-    if (native->msg != WM_QUIT && (!window || native->hwnd != window->client))
+    /* Frame commands and close requests belong to the Windows message loop.
+       Dispatching them here would run the callback inside GetMessage and keep
+       that call blocked, starving application work scheduled by the callback. */
+    BOOL frame_message = window && native->hwnd == window->handle &&
+                         (native->msg == WM_COMMAND || native->msg == WM_CLOSE ||
+                          native->msg == WM_SYSCOMMAND ||
+                          native->msg >= WM_USER);
+    if (native->msg != WM_QUIT &&
+        (!window || (native->hwnd != window->client && !frame_message)))
     {
         WinDispatchMsg(open32Presentation(), (PQMSG)native);
         return TRUE;
@@ -196,6 +217,25 @@ static BOOL matches(const QueuedMessage *node, ULONG filter, ULONG first, ULONG 
             return TRUE;
     return FALSE;
 }
+typedef struct PaintQuery
+{
+    ULONG window, first, last;
+} PaintQuery;
+static BOOL offer_native_paint(HWND handle, void *context)
+{
+    Open32Window *window = open32FindWindow(handle);
+    if (!window || handle != window->client)
+        return TRUE; /* Native chrome and controls still need their normal painting. */
+    for (QueuedMessage *node = pending; node; node = node->next)
+        if (lx_guest_load_u32(node->wire) == window->handle &&
+            lx_guest_load_u32(node->wire + 4) == 15)
+            return FALSE;
+    PaintQuery *query = context;
+    QueuedMessage candidate = {0};
+    lx_guest_store_u32(candidate.wire, window->handle);
+    lx_guest_store_u32(candidate.wire + 4, 15);
+    return matches(&candidate, query->window, query->first, query->last);
+}
 static void retain_history(QueuedMessage *node)
 {
     node->next = history;
@@ -223,6 +263,7 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
         open32SetError(87);
         return -1;
     }
+    PaintQuery paint_query = {filter, first, last};
     for (;;)
     {
         QueuedMessage **slot = &pending;
@@ -256,7 +297,10 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
             return 1;
         }
         QMSG native = {0};
-        if (WinPeekMsg(hab, &native, 0, 0, 0, 1))
+        /* Damage stays invalid until BeginPaint. Do not repeatedly regenerate
+           an unmatched or already queued WM_PAINT while looking for another
+           message, which would make a filtered PeekMessage loop forever. */
+        if (lx_pm_peek_open32_message(hab, &native, offer_native_paint, &paint_query))
         {
             if (!accept_native(&native))
                 return -1;
@@ -264,7 +308,7 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
         }
         if (!wait)
             return 0;
-        BOOL received = WinGetMsg(hab, &native, 0, 0, 0);
+        BOOL received = lx_pm_get_open32_message(hab, &native, offer_native_paint, &paint_query);
         if (!received && native.msg != WM_QUIT)
         {
             open32SetError(87);
@@ -385,7 +429,7 @@ LONG DispatchMessage(PVOID input)
         QMSG native = node && node->native_valid
                           ? node->native
                           : (QMSG){.hwnd = open32ClientWindow(handle), .msg = WM_PAINT};
-        DispatchOverride current = {native.hwnd, native.msg, message, first,
+        DispatchOverride current = {open32ClientWindow(native.hwnd), native.msg, message, first,
                                     second,      FALSE,      dispatch};
         dispatch = &current;
         result = (LONG)(intptr_t)WinDispatchMsg(open32Presentation(), &native);
@@ -408,15 +452,21 @@ LONG DispatchMessage(PVOID input)
 }
 BOOL PostMessage(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
+    TRACE_NATIVE("PostMessage(%u, %x, %x, %x)", (uint)handle, (uint)message, (uint)first,
+                 (uint)second);
     if (!open32Presentation())
         return FALSE;
-    if (handle && !open32FindWindow(handle))
+    if (handle)
     {
-        if (lx_pm_post_open32_message(handle, message, first, second))
+        /* Mixed Open32 applications also run native WinGetMsg loops. Put
+           window packets on the PM owner queue for either loop to consume. */
+        if (lx_pm_post_open32_message(open32ClientWindow(handle), message, first, second))
             return TRUE;
         open32SetError(1400);
         return FALSE;
     }
+    if (message == 18)
+        return WinPostMsg(0, WM_QUIT, (MPARAM)(uintptr_t)first, (MPARAM)(uintptr_t)second);
     QueuedMessage *node = new_message(handle, message, first, second);
     if (!node)
         return FALSE;

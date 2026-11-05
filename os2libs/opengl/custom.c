@@ -121,10 +121,9 @@ uint32_t call_glPopAttrib(uint8_t *a)
         uint32_t *frame = c->attribute_stack[--c->attribute_depth];
         c->api->glPopAttrib();
         if (frame[0] & GL_COLOR_BUFFER_BIT)
-        {
             lx_host_gl_draw_buffer(c->host, frame[1]);
+        if (frame[0] & GL_PIXEL_MODE_BIT)
             lx_host_gl_read_buffer(c->host, frame[2]);
-        }
     }
     return 0;
 }

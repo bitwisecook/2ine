@@ -2,6 +2,7 @@
 /* PGL rendering reaches retained PM pixels at the client window's origin. */
 #include "os2libs/opengl/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmgpi.h"
 #include <stdio.h>
 #include <stdlib.h>
 #define CHECK(x)                                                                                   \
@@ -13,17 +14,21 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
-static uint32_t pgl(const char *name, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+static uint32_t pgl_values(const char *name, const uint32_t *values, unsigned count)
 {
-    uint8_t args[16];
-    lx_guest_store_u32(args, a);
-    lx_guest_store_u32(args + 4, b);
-    lx_guest_store_u32(args + 8, c);
-    lx_guest_store_u32(args + 12, d);
+    uint8_t args[28] = {0};
+    CHECK(count <= 7);
+    for (unsigned i = 0; i < count; i++)
+        lx_guest_store_u32(args + i * 4, values[i]);
     for (size_t i = 0; i < GlPglEntryCount; i++)
         if (!strcmp(GlPglEntries[i].name, name))
             return GlPglEntries[i].call(args);
     abort();
+}
+static uint32_t pgl(const char *name, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
+{
+    uint32_t values[] = {a, b, c, d};
+    return pgl_values(name, values, 4);
 }
 int main(void)
 {
@@ -64,6 +69,74 @@ int main(void)
     ps = WinGetPS(parent);
     CHECK(ps && lx_pm_raster_read(ps, 16, 16, 1, 1, &pixel) && pixel == 0x00ff00);
     CHECK(lx_pm_raster_read(ps, 4, 4, 1, 1, &pixel) && pixel == 0x0000ff);
+    CHECK(WinReleasePS(ps));
+    uint32_t duplicate = pgl("pglCreateContext", hab, config, context, 1);
+    CHECK(duplicate);
+    current = gl_current();
+    CHECK(current);
+    current->api->glDepthFunc(GL_GREATER);
+    current->api->glEnable(GL_DEPTH_TEST);
+    current->api->glColor4d(0.25, 0.5, 0.75, 1);
+    current->api->glRasterPos3d(0.5, 0.5, 0);
+    double raster[4];
+    current->api->glGetDoublev(GL_CURRENT_RASTER_POSITION, raster);
+    CHECK(pgl("pglCopyContext", hab, context, duplicate, GL_ALL_ATTRIB_BITS));
+    CHECK(pgl("pglGetCurrentContext", hab, 0, 0, 0) == context);
+    CHECK(pgl("pglMakeCurrent", hab, duplicate, child, 0));
+    GlContext *copy = gl_current();
+    CHECK(copy && copy->api->glIsEnabled(GL_DEPTH_TEST));
+    int32_t depth_func = 0;
+    copy->api->glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
+    CHECK(depth_func == GL_GREATER);
+    double color[4] = {0}, copied_raster[4] = {0};
+    copy->api->glGetDoublev(GL_CURRENT_COLOR, color);
+    CHECK(color[0] == 0.25 && color[1] == 0.5 && color[2] == 0.75);
+    copy->api->glGetDoublev(GL_CURRENT_RASTER_POSITION, copied_raster);
+    CHECK(copied_raster[0] == raster[0] && copied_raster[1] == raster[1]);
+    CHECK(copy->api->glGetError() == GL_NO_ERROR);
+    CHECK(pgl("pglMakeCurrent", hab, context, child, 0));
+    CHECK(pgl("pglDestroyContext", hab, duplicate, 0, 0));
+    current = gl_current();
+    current->api->glDisable(GL_DEPTH_TEST);
+    CHECK(pgl("pglGrabFrontBitmap", hab, address + 512, address + 516, 0));
+    HPS bitmap_ps = lx_guest_load_u32(host + 512);
+    ULONG bitmap_handle = lx_guest_load_u32(host + 516);
+    CHECK(bitmap_ps && bitmap_handle);
+    uint32_t bitmap_pixel = 0;
+    CHECK(lx_pm_raster_read(bitmap_ps, 8, 8, 1, 1, &bitmap_pixel) && bitmap_pixel == 0x00ff00);
+    CHECK(!pgl("pglGrabFrontBitmap", hab, address + 512, address + 516, 0));
+    CHECK(call_glGetError(NULL) == GL_INVALID_OPERATION);
+    CHECK(pgl("pglReleaseFrontBitmap", hab, 0, 0, 0));
+    CHECK(!pgl("pglReleaseFrontBitmap", hab, 0, 0, 0));
+    LxHandleBorrow bitmap_borrow = {0};
+    CHECK(!lx_pm_bitmap(bitmap_handle, &bitmap_borrow));
+    uint32_t font_args[] = {hab, 0, 'A', 1, 300};
+    CHECK(pgl_values("pglUsePMBitmapFont", font_args, 5));
+    current = gl_current();
+    CHECK(current && current->api->glIsList(300));
+    current->api->glClearColor(0, 0, 0, 1);
+    current->api->glClear(GL_COLOR_BUFFER_BIT);
+    current->api->glColor3f(1, 1, 1);
+    current->api->glRasterPos2f(-0.75, -0.75);
+    current->api->glCallList(300);
+    uint8_t glyph_pixels[16 * 16 * 4] = {0};
+    current->api->glReadPixels(0, 0, 16, 16, GL_RGBA, GL_UNSIGNED_BYTE, glyph_pixels);
+    unsigned lit = 0;
+    for (unsigned n = 0; n < 16 * 16; n++)
+        lit += glyph_pixels[n * 4] != 0;
+    CHECK(lit > 0 && lit < 128 && current->api->glGetError() == GL_NO_ERROR);
+    ps = WinGetPS(child);
+    CHECK(ps);
+    FATTRS *font_attributes = (FATTRS *)(host + 1024);
+    memset(font_attributes, 0, sizeof *font_attributes);
+    font_attributes->usRecordLength = sizeof *font_attributes;
+    font_attributes->lMaxBaselineExt = 12;
+    strcpy(font_attributes->szFacename, "Helv");
+    uint32_t logical_font_args[] = {hab, ps, address + 1024, 20, 'B', 1, 301};
+    CHECK(pgl_values("pglUseFont", logical_font_args, 7));
+    current = gl_current();
+    CHECK(current && current->api->glIsList(301) && current->api->glGetError() == GL_NO_ERROR);
+    CHECK(GpiQueryCharSet(ps) == 0);
     CHECK(WinReleasePS(ps));
     HPS mixed = pgl("pglWaitGL", hab, 0, 0, 0);
     CHECK(mixed);

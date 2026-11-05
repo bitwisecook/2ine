@@ -44,13 +44,18 @@ Mesa prefix can be supplied through `TWOINE_MESA_ROOT`.
 ## macOS
 
 Use an SDK and dependencies suitable for Mesa/KosmicKrisp, including LLVM 20.1.8+
-with libclc, SPIR-V tools/translator, Meson 1.9.1+, CMake, pkg-config, Mako,
-Packaging and PyYAML. See the upstream [KosmicKrisp instructions](https://docs.mesa3d.org/drivers/kosmickrisp.html).
+with libclc, SPIR-V tools/translator, a Vulkan loader, Meson 1.9.1+, current
+Bison/Flex, CMake, pkg-config, Mako, Packaging and PyYAML. Apple's bundled Bison
+cannot build current Mesa's GL parsers. See the upstream
+[KosmicKrisp instructions](https://docs.mesa3d.org/drivers/kosmickrisp.html).
 Zink's macOS support is [experimental](https://docs.mesa3d.org/drivers/zink.html#apple-macos-and-moltenvk).
 
 Supply a clean Mesa checkout containing KosmicKrisp and Zink. The helper builds
 desktop OpenGL and EGL alongside both drivers, without downloading or updating
-the checkout. It records the exact source revision, commands and ICD path.
+the checkout. It records the exact source revision, commands, Vulkan loader and
+ICD path. The loader is found with `pkg-config vulkan`, or supplied explicitly
+with `--vulkan-loader /path/to/libvulkan.1.dylib`. Its directory is recorded in
+Mesa's runtime search paths: Zink loads Vulkan from its own driver library.
 
 ```sh
 python3 tools/build_mesa_macos.py --source /path/to/mesa \
@@ -102,16 +107,26 @@ Mesa before SDL rendering. Keep `glBegin`/`glEnd` sequences free of PM drawing.
 
 `pglWaitGL` presents the front buffer and returns a PM presentation space.
 `pglWaitPM` releases that space and uploads its pixels into the GL front buffer.
-PGL context copying, font display-list helpers and front-bitmap acquisition are
-unavailable and return failure. GLU, GLUT and AUX libraries are not implemented
-by this module. Applications requiring them need compatible guest libraries and
-the other OS/2 services those libraries import.
+`pglCopyContext` transfers selected server attribute groups to an unbound
+destination, including current raster state, lighting, pixel maps, evaluator
+definitions and texture state. Client arrays and matrix stacks remain independent.
+The PM font helpers create bitmap glyph display lists using PM's font catalogue
+and character mapping. `pglGrabFrontBitmap` flushes and returns a selected PM
+bitmap/presentation space; `pglReleaseFrontBitmap` releases both. The capture is
+read-only with respect to GL: changing it does not change the GL front buffer.
+GL commands are rejected while the capture is held.
+
+Color-index palette selection is unavailable with the advertised RGBA visuals.
+GLU, GLUT and AUX libraries are not implemented by this module. Applications
+requiring them need compatible guest libraries and the other OS/2 services those
+libraries import.
 
 ## Verification
 
 `opengl_mesa` renders and reads pixels using real Mesa, checks front/back exchange,
 shared textures/lists and resize state. `opengl_pm` checks retained PM pixels at
-a child window's origin. `opengl_guest` runs generated x86 LX programs through
+a child window's origin, context attribute/raster copying, bitmap acquisition
+lifetimes and rendered font glyphs. `opengl_guest` runs generated x86 LX programs through
 both ordinal profiles; results, executable hashes and logs remain under
 `build-gl/opengl-results/guest`. No test substitutes a fake GL renderer.
 On Linux, an available `xvfb-run` enables `opengl_desktop_guest` and

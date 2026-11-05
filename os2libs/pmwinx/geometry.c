@@ -114,6 +114,18 @@ BOOL GetWindowPlacement(ULONG window, PVOID output)
     ULONG style = WinQueryWindowULong(window, -2);
     ULONG state = style & WS_MINIMIZED ? 2 : style & WS_MAXIMIZED ? 3 : 1;
     LONG x = position.x, y = position.y, width = position.cx, height = position.cy;
+    Open32Window *w = open32FindWindow(window);
+    if (w && (w->extended_style & 0x40) && (w->style & 0x21000000))
+    {
+        state = w->style & 0x20000000 ? 2 : 3;
+        if (w->mdi_normal_valid)
+        {
+            x = w->mdi_normal_x;
+            width = w->mdi_normal_width;
+            height = w->mdi_normal_height;
+            y = parent.yTop - w->mdi_normal_y - height;
+        }
+    }
     char name[16];
     if (state != 1 && WinQueryClassName(window, sizeof name, name) && !strcmp(name, "#1"))
     {
@@ -135,6 +147,112 @@ BOOL GetWindowPlacement(ULONG window, PVOID output)
     for (unsigned i = 0; i < sizeof fields / sizeof *fields; i++)
         lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
     return TRUE;
+}
+
+BOOL SetWindowPlacement(ULONG window, PVOID input)
+{
+    if (!input || lx_guest_load_u32(input) != 44)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    const uint8 *wire = input;
+    ULONG flags = lx_guest_load_u32(wire + 4), command = lx_guest_load_u32(wire + 8);
+    BOOL activate = command == 1 || command == 3 || command == 5 || command == 9 || command == 10;
+    LONG left = (LONG)lx_guest_load_u32(wire + 28), top = (LONG)lx_guest_load_u32(wire + 32);
+    LONG right = (LONG)lx_guest_load_u32(wire + 36), bottom = (LONG)lx_guest_load_u32(wire + 40);
+    int64_t width = (int64_t)right - left, height = (int64_t)bottom - top;
+    if ((flags & ~7u) || command > 11 || width <= 0 || width > INT32_MAX || height <= 0 ||
+        height > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    /* Placement records returned by GetWindowPlacement use default min/max
+       positions. Explicit icon positioning and restore-to-maximized flags need
+       additional retained state; do not silently accept those requests. */
+    if (flags & 3)
+    {
+        open32SetError(50);
+        return FALSE;
+    }
+    SWP position;
+    RECTL parent;
+    if (!open32Presentation() || !WinQueryWindowPos(window, &position) ||
+        !WinQueryWindowRect(WinQueryWindow(window, 5), &parent))
+    {
+        open32SetError(1400);
+        return FALSE;
+    }
+    int64_t y = (int64_t)parent.yTop - bottom;
+    if (y < INT32_MIN || y > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    Open32Window *w = open32FindWindow(window);
+    BOOL mdi = w && (w->extended_style & 0x40);
+    ULONG old_state = WinQueryWindowULong(window, -2) & (WS_MINIMIZED | WS_MAXIMIZED);
+    ULONG old_show = old_state & WS_MINIMIZED ? 2 : old_state ? 3 : 1;
+    if (mdi)
+    {
+        old_state = w->style & 0x21000000;
+        old_show = old_state & 0x20000000 ? 2 : old_state ? 3 : 1;
+    }
+    /* SW_SHOW/SW_SHOWNA retain the current state; SW_SHOWDEFAULT uses normal
+       placement because there is no separate host startup-info show command. */
+    if (command == 5 || command == 8)
+        command = old_state ? old_show : command;
+    if (command == 10)
+        command = 1;
+    BOOL minimize = command == 2 || command == 6 || command == 7 || command == 11;
+    char class_name[16];
+    BOOL frame = WinQueryClassName(window, sizeof class_name, class_name) &&
+                 !strcmp(class_name, "#1");
+    if ((minimize || command == 3) && (!frame && (!mdi || minimize)))
+    {
+        open32SetError(50);
+        return FALSE;
+    }
+    if (frame && (minimize || command == 3) &&
+        (left < INT16_MIN || left > INT16_MAX || y < INT16_MIN || y > INT16_MAX ||
+         width > UINT16_MAX || height > UINT16_MAX))
+    {
+        /* PM frame restore words cannot retain a larger normal rectangle. */
+        open32SetError(87);
+        return FALSE;
+    }
+    if (old_state)
+    {
+        if (mdi)
+            ShowWindow(window, 9);
+        else if (!WinSetWindowPos(window, HWND_TOP, 0, 0, 0, 0, SWP_RESTORE))
+            return FALSE;
+    }
+    /* Set normal geometry before applying min/max so PM and MDI both save the
+       requested restore rectangle rather than their previous on-screen size. */
+    BOOL moved = w ? SetWindowPos(window, 0, left, top, (LONG)width, (LONG)height, 4 | 16)
+                   : WinSetWindowPos(window, HWND_TOP, left, (LONG)y, (LONG)width, (LONG)height,
+                                      SWP_MOVE | SWP_SIZE);
+    if (!moved)
+        return FALSE;
+    if (mdi)
+    {
+        ShowWindow(window, (LONG)command);
+        return WinIsWindow(0, window);
+    }
+    ULONG show = command ? SWP_SHOW : SWP_HIDE;
+    if (minimize)
+        show |= SWP_MINIMIZE;
+    else if (command == 3)
+        show |= SWP_MAXIMIZE;
+    if (activate)
+        show |= SWP_ACTIVATE;
+    BOOL result = WinSetWindowPos(window, HWND_TOP, 0, 0, 0, 0, show);
+    w = open32FindWindow(window);
+    if (result && w)
+        w->style = command ? w->style | 0x10000000 : w->style & ~0x10000000u;
+    return result;
 }
 
 ULONG GetParent(ULONG window)

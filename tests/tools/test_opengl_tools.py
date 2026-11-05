@@ -51,6 +51,11 @@ class OpenGLGeneratorTests(unittest.TestCase):
             self.assertIn(value, setup)
         self.assertFalse(any("moltenvk" in value for value in setup))
         self.assertEqual(plan[1], ["meson", "compile", "-C", "/build", "-j", "3"])
+        with_loader = build_mesa_macos.commands(
+            Path("/mesa"), Path("/build"), Path("/prefix"), 3, Path("/vulkan/lib/libvulkan.1.dylib")
+        )
+        self.assertIn("-Dc_link_args=-Wl,-rpath,/vulkan/lib", with_loader[0])
+        self.assertIn("-Dcpp_link_args=-Wl,-rpath,/vulkan/lib", with_loader[0])
 
     def test_unimplemented_graphics_adapters_fail_configuration(self):
         import subprocess

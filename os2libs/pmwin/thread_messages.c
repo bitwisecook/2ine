@@ -116,6 +116,18 @@ void unregisterWindowMessages(HWND window)
     while (*link)
     {
         Pending *item = *link;
+        if (item->window == window && item->host_event && item->event.type == LX_HOST_EVENT_QUIT)
+        {
+            /* Quit targets the owner's queue, not this particular popup or
+               child. Keep it attached to a surviving window; removing the
+               owner's final window still retires it before the anchor dies. */
+            for (Target *replacement = targets; replacement; replacement = replacement->next)
+                if (replacement->anchor == item->anchor)
+                {
+                    item->window = replacement->window;
+                    break;
+                }
+        }
         if (item->window == window)
         {
             *link = item->next;
@@ -244,6 +256,47 @@ BOOL lx_pm_host_event(const LxHostEvent *event)
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor || !event)
         return FALSE;
+    if (event->type == LX_HOST_EVENT_QUIT && lock)
+    {
+        /* SDL's queue belongs to the process. A PM worker may poll Quit before
+           the application's window thread, so notify each window-owning queue
+           once rather than consuming it only on the polling thread. */
+        BOOL staged = FALSE;
+        lx_host_mutex_lock(lock, UINT32_MAX);
+        for (Target *target = targets; target; target = target->next)
+        {
+            AnchorBlock *owner = target->anchor;
+            if (owner == anchor || !owner->message_queue.hmq)
+                continue;
+            Target *earlier = targets;
+            while (earlier != target && earlier->anchor != owner)
+                earlier = earlier->next;
+            if (earlier != target)
+                continue;
+            Pending *item = calloc(1, sizeof *item);
+            if (!item)
+                continue;
+            item->anchor = owner;
+            /* A representative window ties delivery to the owner's lifetime.
+               unregisterWindowMessages transfers Quit if this window closes. */
+            item->window = target->window;
+            item->host_event = TRUE;
+            item->event = *event;
+            if (tail)
+                tail->next = item;
+            else
+                pending = item;
+            tail = item;
+            staged = TRUE;
+        }
+        lx_host_mutex_unlock(lock);
+        if (staged)
+        {
+            LxHostEvent wake = {0};
+            lx_host_video_push(&wake);
+        }
+        return processHostEvent(anchor, event) || staged;
+    }
     Window *window = event->window_data;
     if (!window || !window->hwnd || !lock)
         return processHostEvent(anchor, event);

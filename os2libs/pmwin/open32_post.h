@@ -6,4 +6,9 @@
 #define LX_PM_OPEN32_POST 0x7ffef001u
 BOOL lx_pm_mark_open32_window(HWND window);
 BOOL lx_pm_post_open32_message(HWND window, ULONG message, ULONG first, ULONG second);
+typedef BOOL (*LxPmPaintFilter)(HWND window, void *context);
+BOOL lx_pm_peek_open32_message(HAB hab, PQMSG message, LxPmPaintFilter paint_filter,
+                               void *context);
+BOOL lx_pm_get_open32_message(HAB hab, PQMSG message, LxPmPaintFilter paint_filter,
+                              void *context);
 #endif

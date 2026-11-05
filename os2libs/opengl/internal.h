@@ -49,6 +49,8 @@ typedef struct GlContext
     uint32_t attribute_stack[16][3];
     unsigned attribute_depth;
     HPS pm_ps;
+    HPS bitmap_ps;
+    ULONG front_bitmap;
     LxHostGlConfig config;
     LxHostGlContext *host;
     const LxHostGlApi *api;
@@ -101,6 +103,7 @@ void gl_fix_query(GlContext *ctx, uint32_t pname, void *output, size_t unit, int
 int gl_present(GlContext *ctx, int swap);
 int gl_resize_current(GlContext *ctx);
 int gl_pgl_initialize(void);
+uint32_t gl_copy_context(uint8_t *arguments);
 void gl_pgl_shutdown(void);
 extern const GlEntry GlPglEntries[];
 extern const size_t GlPglEntryCount;

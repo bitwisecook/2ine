@@ -3,6 +3,23 @@
    typed handle lease and exclusive host-thread ownership until release. */
 #include "internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include "os2libs/pmgpi.h"
+#include "os2libs/pm_text.h"
+
+static void release_bitmap(GlContext *c)
+{
+    if (c->bitmap_ps)
+    {
+        lx_pm_bitmap_select(c->bitmap_ps, 0);
+        lx_pm_destroy_ps(c->bitmap_ps);
+        c->bitmap_ps = 0;
+    }
+    if (c->front_bitmap)
+    {
+        lx_pm_bitmap_delete(c->front_bitmap);
+        c->front_bitmap = 0;
+    }
+}
 
 GlContext *GlContexts;
 LxHostMonitor *GlLock;
@@ -19,6 +36,7 @@ static void release_current(GlThread *t)
 {
     if (t && t->current)
     {
+        release_bitmap(t->current);
         if (t->current->pm_ps)
         {
             WinReleasePS(t->current->pm_ps);
@@ -69,6 +87,11 @@ GlContext *gl_current(void)
         gl_error(GL_INVALID_OPERATION);
         return NULL;
     }
+    if (t->current->front_bitmap)
+    {
+        gl_error(GL_INVALID_OPERATION);
+        return NULL;
+    }
     /* PM drawing can bind its own host graphics context between guest calls. */
     if (!t->current->inside &&
         !lx_host_gl_make_current(t->current->host, t->current->width, t->current->height))
@@ -85,6 +108,7 @@ static int anchor(uint32_t hab)
 static void destroy_context(void *argument)
 {
     GlContext *c = argument;
+    release_bitmap(c);
     lx_host_gl_destroy(c->host);
     if (c->strings)
         lx_execution_unmap(GLoaderState.execution, c->strings);
@@ -274,7 +298,8 @@ static uint32_t make_current(uint8_t *a)
 {
     GlThread *t = gl_thread();
     uint32_t handle = gl_word(a, 4), window = gl_word(a, 8);
-    if (!t || !anchor(gl_word(a, 0)) || (t->current && t->current->inside))
+    if (!t || !anchor(gl_word(a, 0)) ||
+        (t->current && (t->current->inside || t->current->front_bitmap)))
         return 0;
     lx_host_monitor_lock(GlLock);
     if (!handle && !window)
@@ -462,8 +487,135 @@ static uint32_t indirect(uint8_t *a)
     lx_handle_release(&lease);
     return result;
 }
-static uint32_t unsupported(uint8_t *a)
+static uint32_t grab_bitmap(uint8_t *a)
 {
+    GlContext *c = gl_current();
+    if (!c || c->inside || !anchor(gl_word(a, 0)) || !gl_resize_current(c))
+        return 0;
+    GlMemory ps_output = {0}, bitmap_output = {0};
+    uint32_t result = 0;
+    if (!gl_memory(gl_word(a, 4), 1, 4, 1, 0, &ps_output) ||
+        !gl_memory(gl_word(a, 8), 1, 4, 1, 0, &bitmap_output))
+        goto done;
+    c->api->glFlush();
+    c->front_bitmap = lx_pm_bitmap_create(c->width, c->height, 1, 32);
+    c->bitmap_ps = lx_pm_create_ps(c->hab, 0);
+    LxHandleBorrow lease = {0};
+    PmBitmap *bitmap = c->front_bitmap ? lx_pm_bitmap(c->front_bitmap, &lease) : NULL;
+    if (bitmap && c->bitmap_ps &&
+        lx_host_gl_front(c->host, bitmap->pixels, (size_t)c->width * c->height) &&
+        lx_pm_bitmap_select(c->bitmap_ps, c->front_bitmap) != UINT32_MAX)
+    {
+        lx_guest_store_u32(ps_output.host, c->bitmap_ps);
+        lx_guest_store_u32(bitmap_output.host, c->front_bitmap);
+        ps_output.commit = bitmap_output.commit = 1;
+        result = 1;
+    }
+    lx_handle_release(&lease);
+    if (!result)
+        release_bitmap(c);
+done:
+    gl_memory_finish(&bitmap_output);
+    gl_memory_finish(&ps_output);
+    return result;
+}
+static uint32_t release_front_bitmap(uint8_t *a)
+{
+    GlThread *t = gl_thread();
+    if (!anchor(gl_word(a, 0)) || !t || !t->current || !t->current->front_bitmap)
+        return 0;
+    release_bitmap(t->current);
+    return 1;
+}
+static uint32_t bitmap_font(GlContext *c, HPS ps, int first, int count, uint32_t base)
+{
+    if (!c || c->inside || !lx_pm_valid_ps(ps) || first < 0 || first > 255 || count < 0 ||
+        count > 256 - first || !base || (uint64_t)base + count > UINT32_MAX)
+        return 0;
+    int32_t compiling = 0;
+    c->api->glGetIntegerv(GL_LIST_INDEX, &compiling);
+    if (compiling)
+        return 0;
+    LxHostFont *font = lx_pm_font(ps);
+    LxHostGlyph glyphs[256] = {{0}};
+    uint32_t result = 0;
+    for (int n = 0; n < count; n++)
+        if (!lx_host_font_glyph(font, lx_pm_codepoint(first + n), &glyphs[n]))
+            goto done;
+    /* Bitmap unpack state is evaluated while the list is compiled. */
+    c->api->glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
+    c->api->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    c->api->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    c->api->glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+    c->api->glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+    c->api->glPixelStorei(GL_UNPACK_LSB_FIRST, 0);
+    for (int n = 0; n < count; n++)
+    {
+        LxHostGlyph *g = &glyphs[n];
+        size_t stride = ((unsigned)g->width + 7) / 8;
+        uint8_t *bits = calloc(g->height ? (size_t)g->height : 1, stride ? stride : 1);
+        if (!bits)
+        {
+            c->api->glPopClientAttrib();
+            goto done;
+        }
+        for (int y = 0; y < g->height; y++)
+            for (int x = 0; x < g->width; x++)
+                if (g->coverage[(size_t)y * g->width + x] >= 128)
+                    bits[(size_t)(g->height - 1 - y) * stride + x / 8] |= 0x80u >> (x % 8);
+        c->api->glNewList(base + n, GL_COMPILE);
+        c->api->glBitmap(g->width, g->height, -g->left, g->height - g->top, g->advance, 0, bits);
+        c->api->glEndList();
+        free(bits);
+    }
+    c->api->glPopClientAttrib();
+    result = 1;
+done:
+    for (int n = 0; n < count; n++)
+        lx_host_glyph_free(&glyphs[n]);
+    return result;
+}
+static uint32_t use_font(uint8_t *a)
+{
+    GlContext *c = gl_current();
+    HPS ps = gl_word(a, 4);
+    if (!c || c->inside || !anchor(gl_word(a, 0)) || !lx_pm_valid_ps(ps))
+        return 0;
+    GlMemory attributes = {0};
+    if (!gl_memory(gl_word(a, 8), 1, sizeof(FATTRS), 0, 0, &attributes))
+        return 0;
+    FATTRS font;
+    memcpy(&font, attributes.host, sizeof font);
+    gl_memory_finish(&attributes);
+    LONG id = (int32_t)gl_word(a, 12), previous = GpiQueryCharSet(ps);
+    uint32_t result = 0;
+    if (GpiCreateLogFont(ps, NULL, id, &font) && GpiSetCharSet(ps, id))
+        result =
+            bitmap_font(c, ps, (int32_t)gl_word(a, 16), (int32_t)gl_word(a, 20), gl_word(a, 24));
+    if (previous >= 0)
+        GpiSetCharSet(ps, previous);
+    return result;
+}
+static uint32_t use_pm_bitmap_font(uint8_t *a)
+{
+    GlContext *c = gl_current();
+    if (!c || c->inside || !anchor(gl_word(a, 0)))
+        return 0;
+    HPS ps = c->pm_ps ? c->pm_ps : WinGetPS(c->window);
+    LONG id = (int32_t)gl_word(a, 4), previous = ps ? GpiQueryCharSet(ps) : -1;
+    uint32_t result =
+        ps && GpiSetCharSet(ps, id)
+            ? bitmap_font(c, ps, (int32_t)gl_word(a, 8), (int32_t)gl_word(a, 12), gl_word(a, 16))
+            : 0;
+    if (previous >= 0)
+        GpiSetCharSet(ps, previous);
+    if (ps && ps != c->pm_ps)
+        WinReleasePS(ps);
+    return result;
+}
+static uint32_t select_palette(uint8_t *a)
+{
+    /* RGBA visuals do not accept color-index palettes. */
     (void)a;
     return 0;
 }
