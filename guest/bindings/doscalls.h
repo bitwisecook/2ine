@@ -1,5 +1,23 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* DOSCALLS flat 32-bit ABI. Host pointer outputs use private temporary storage. */
+static uint32 bridge32_DosQueryAppType(uint8 *arguments)
+{
+    char *name = lx_execution_copy_string(GLoaderState.execution,
+        lx_guest_load_u32(arguments), 32768);
+    LxGuestBorrow output = {0};
+    uint32 result = ERROR_INVALID_PARAMETER;
+    if (name && lx_execution_borrow(GLoaderState.execution,
+        lx_guest_load_u32(arguments + 4), 4, LX_GUEST_WRITE, &output))
+    {
+        ULONG flags = 0;
+        result = DosQueryAppType(name, &flags);
+        if (!result)
+            lx_guest_store_u32(output.host, flags);
+    }
+    lx_execution_release(&output);
+    free(name);
+    return result;
+}
 static uint32 bridge32_DosAllocMem(uint8 *arguments)
 {
     const uint32 output = lx_guest_load_u32(arguments);
@@ -494,6 +512,19 @@ static uint32 bridge32_DosGetDateTime(uint8 *a)
     }
     lx_execution_release(&output);
     return result;
+}
+static uint32 bridge32_DosSetDateTime(uint8 *a)
+{
+    uint8 p[11];
+    if (!lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a), p, sizeof p))
+        return ERROR_INVALID_PARAMETER;
+    DATETIME value = {0};
+    value.hours = p[0]; value.minutes = p[1]; value.seconds = p[2];
+    value.hundredths = p[3]; value.day = p[4]; value.month = p[5];
+    value.year = lx_guest_load_u16(p + 6);
+    value.timezone = (int16_t)lx_guest_load_u16(p + 8);
+    value.weekday = p[10];
+    return DosSetDateTime(&value);
 }
 static uint32 bridge32_DosOpen(uint8 *a)
 {
@@ -1701,4 +1732,60 @@ done:
     for (unsigned i = 0; i < 2; i++)
         lx_execution_release(&borrowed[i]);
     return result;
+}
+
+static uint32 bridge32_DosSuspendThread(uint8 *a) { return DosSuspendThread(lx_guest_load_u32(a)); }
+static uint32 bridge32_DosResumeThread(uint8 *a) { return DosResumeThread(lx_guest_load_u32(a)); }
+static uint32 armTimerBridge(uint8 *a, APIRET (*arm)(ULONG, HSEM, PHTIMER))
+{
+    const uint32 address = lx_guest_load_u32(a + 8);
+    LxGuestBorrow output = {0};
+    if (address && !lx_execution_borrow(GLoaderState.execution, address, 2, LX_GUEST_WRITE, &output))
+        return ERROR_INVALID_PARAMETER;
+    uint32 result = arm(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), output.host);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_DosAsyncTimer(uint8 *a) { return armTimerBridge(a, DosAsyncTimer); }
+static uint32 bridge32_DosStartTimer(uint8 *a) { return armTimerBridge(a, DosStartTimer); }
+static uint32 bridge32_DosStopTimer(uint8 *a) { return DosStopTimer(lx_guest_load_u32(a)); }
+static uint32 bridge32_DosQueryMutexSem(uint8 *a)
+{
+    PID pid = 0;
+    TID tid = 0;
+    ULONG count = 0;
+    const uint32 result = DosQueryMutexSem(lx_guest_load_u32(a), &pid, &tid, &count);
+    if (result != NO_ERROR && result != ERROR_SEM_OWNER_DIED)
+        return result;
+    uint8 word[4];
+    if (count)
+    {
+        lx_guest_store_u32(word, pid);
+        if (!lx_execution_write(GLoaderState.execution, lx_guest_load_u32(a + 4), word, 4))
+            return ERROR_INVALID_PARAMETER;
+        lx_guest_store_u32(word, tid);
+        if (!lx_execution_write(GLoaderState.execution, lx_guest_load_u32(a + 8), word, 4))
+            return ERROR_INVALID_PARAMETER;
+    }
+    lx_guest_store_u32(word, count);
+    if (!lx_execution_write(GLoaderState.execution, lx_guest_load_u32(a + 12), word, 4))
+        return ERROR_INVALID_PARAMETER;
+    return result;
+}
+/* The drive and level are refused before the label is examined. */
+static uint32 bridge32_DosSetFSInfo(uint8 *a)
+{
+    const uint32 size = lx_guest_load_u32(a + 12) & 0xffff;
+    uint8 label[12];
+    const size_t bytes = size < sizeof label ? size : sizeof label;
+    const int readable =
+        lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 8), label, bytes);
+    return DosSetFSInfo(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), readable ? label : NULL,
+                        size);
+}
+/* No argument frame: the entry reads the caller's registers and stack itself. */
+static uint32 bridge32_THK_UNITHUNK(uint8 *a)
+{
+    (void)a;
+    return THK_UNITHUNK();
 }

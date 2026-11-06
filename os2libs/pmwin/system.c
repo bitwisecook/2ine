@@ -3,6 +3,8 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 
+static LONG changed_colors[41],changed_values[108];
+static unsigned char color_changed[41],value_changed[108];
 static LONG display_metric(LONG pixels)
 {
     return lx_pm_display_scale(pixels);
@@ -61,7 +63,7 @@ LONG WinQuerySysColor(HWND desktop, LONG index, LONG reserved)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
     if (reserved || index < -50 || index > -10)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
-    return colors[index + 50];
+    return __atomic_load_n(&color_changed[index+50],__ATOMIC_ACQUIRE)?__atomic_load_n(&changed_colors[index+50],__ATOMIC_RELAXED):colors[index + 50];
 }
 
 LONG WinQuerySysValue(HWND desktop, LONG index)
@@ -71,6 +73,7 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         return 0;
     if (desktop != HWND_DESKTOP)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, 0);
+    if(index>=0&&index<108&&__atomic_load_n(&value_changed[index],__ATOMIC_ACQUIRE))return __atomic_load_n(&changed_values[index],__ATOMIC_RELAXED);
     /* Pixel metrics describe the controls provided by this PM implementation. */
     switch (index)
     {
@@ -141,4 +144,33 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         default:
             SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
     }
+}
+
+BOOL WinSetSysColors(HWND desktop,ULONG options,ULONG format,LONG first,ULONG count,PLONG input)
+{
+    if(desktop!=HWND_DESKTOP||!getAnchorBlockNoHAB()||(options&~5u)||format>1||count>82||(count&&!input)||(format&&count%2))return FALSE;
+    if(!format&&(first< -50||(int64_t)first+count> -9))return FALSE;
+    /* LCOL_RESET restores the initial colors before applying this request. */
+    if(options&1)for(unsigned i=0;i<41;i++)__atomic_store_n(&color_changed[i],0,__ATOMIC_RELEASE);
+    LONG indices[82],colors[82];ULONG n=format?count/2:count;
+    for(ULONG i=0;i<n;i++){LONG index=format?input[i*2]:first+i,color=format?input[i*2+1]:input[i];if(index< -50||index> -10)return FALSE;if(color>=-50&&color<=-10)color=WinQuerySysColor(desktop,color,0);if(color<0||color>0xffffff)return FALSE;indices[i]=index+50;colors[i]=color;}
+    for(ULONG i=0;i<n;i++){__atomic_store_n(&changed_colors[indices[i]],colors[i],__ATOMIC_RELAXED);__atomic_store_n(&color_changed[indices[i]],1,__ATOMIC_RELEASE);}
+    WinBroadcastMsg(HWND_DESKTOP,0x2b,0,0,5);WinInvalidateRect(HWND_DESKTOP,NULL,TRUE);return TRUE;
+}
+BOOL WinSetSysValue(HWND desktop,LONG index,LONG value)
+{
+    if(desktop!=HWND_DESKTOP||!getAnchorBlockNoHAB())return FALSE;
+    /* Settable identities are 0-6, 9-18 and 57-107. */
+    if(index<0||index>107||(index>18&&index<57)||index==7||index==8)
+    {
+        WinSetErrorInfo(PMERR_PARAMETER_OUT_OF_RANGE,0);
+        return FALSE;
+    }
+    /* A sizing border never becomes narrower than the plain border. */
+    if(index==4||index==5)
+    {
+        LONG minimum=WinQuerySysValue(desktop,index+22);
+        if(value<minimum)value=minimum;
+    }
+    __atomic_store_n(&changed_values[index],value,__ATOMIC_RELAXED);__atomic_store_n(&value_changed[index],1,__ATOMIC_RELEASE);return TRUE;
 }

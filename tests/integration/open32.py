@@ -52,8 +52,10 @@ from open32_file_dialogs import file_dialog_program
 from open32_file_handles import conversion_program, file_handle_program, volume_program
 from open32_file_locks import lock_program
 from open32_geometry import placement_program, sizing_frame_program
+from open32_hit_test import hit_test_program
 from open32_icons import icon_program
 from open32_metafile import metafile_program
+from open32_metafile_drawing import bitmap_metafile_program
 from open32_palette_colors import palette_relative_program
 from open32_patterns import pattern_program
 from open32_placement import set_placement_program
@@ -62,6 +64,7 @@ from open32_profiles import profile_program
 from open32_scroll import scroll_program
 from open32_shutdown import paint_filter_program, system_command_program
 from open32_text import alignment_program
+from open32_text_extent import text_extent_program
 from open32_time import file_time_conversion_program
 from open32_timers import timer_program
 
@@ -365,7 +368,10 @@ def main():
         for mode in ("save", "open", "cancel", "short", "veto"):
             run(file_dialog_program(work, mode, args.backend == "unicorn"))
         run(icon_program())
+        run(hit_test_program())
         run(metafile_program())
+        run(bitmap_metafile_program())
+        run(text_extent_program())
         run(pattern_program())
         run(posted_program())
         run(scroll_program())

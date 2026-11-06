@@ -66,6 +66,8 @@ static EmulatedState *Emulated;
 static __thread Invocation *Active;
 static __thread uint8_t *ThreadTib;
 static __thread uint16_t ThreadFs;
+static __thread const int *ThreadPark;
+static __thread uint32_t ReturnEdx;
 
 static unsigned bindingBucket(uint32_t address)
 {
@@ -76,6 +78,15 @@ static __attribute__((noreturn)) void failure(const char *message)
 {
     fprintf(stderr, "2ine execution: %s\n", message);
     abort();
+}
+static __attribute__((noreturn)) void stopGuest(const char *message)
+{
+    fprintf(stderr, "2ine execution: %s\n", message);
+    /* Each worker owns one OS/2 process. Do not reenter guest exit handlers
+       after an execution fault; they may hit the same unsupported API or
+       damaged state. The launcher observes a normal nonzero worker exit. */
+    fflush(stderr);
+    lx_host_process_exit(1);
 }
 /* Other guest threads remain parked until host process exit. In particular, do
    not run their PM destructors while the primary thread is executing exit handlers. */
@@ -450,7 +461,14 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
     for (;;)
     {
         pollTermination(s->execution);
+        lx_execution_checkpoint(s->execution);
         lx_host_mutex_lock(s->mutex, UINT32_MAX);
+        /* A request made while this thread waited for the CPU applies before its slice. */
+        if (ThreadPark && __atomic_load_n(ThreadPark, __ATOMIC_ACQUIRE))
+        {
+            lx_host_mutex_unlock(s->mutex);
+            continue;
+        }
         if (!lx_cpu_restore(s->cpu, frame->context))
             failure(lx_cpu_error(s->cpu));
         bindThreadWindow(s);
@@ -510,7 +528,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
                 fprintf(stderr, "\n");
             }
             lx_host_mutex_unlock(s->mutex);
-            failure(error);
+            stopGuest(error);
         }
         uint32_t linear = registers.eip - 2;
         if (registers.cs & 4)
@@ -524,14 +542,10 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             failure("Unregistered guest API trap");
         if (!b->callback)
         {
-            fprintf(stderr, "2ine execution: Missing import %s:%s\n", b->missing_module,
-                    b->missing_entry);
-            /* This worker owns one OS/2 process. There is no valid API result
-               with which to resume it, and guest exit handlers may call the
-               same missing import. End only this worker, without SIGABRT or
-               reentering guest/host callbacks during teardown. */
-            fflush(stderr);
-            lx_host_process_exit(1);
+            char message[320];
+            snprintf(message, sizeof message, "Missing import %s:%s", b->missing_module,
+                     b->missing_entry);
+            stopGuest(message);
         }
         const unsigned ss_index = registers.ss >> 3;
         const uint32_t sp = (registers.ss & 4) ? (registers.esp & 0xffff) : registers.esp;
@@ -604,6 +618,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
     }
     lx_host_mutex_unlock(s->mutex);
     free(frame);
+    ReturnEdx = registers.edx;
     return registers.eax;
 }
 static LxCpuRegisters initialRegisters(void)
@@ -966,7 +981,7 @@ static int atomicU32(LxExecution *e, uint32_t address, void *host, int exchange,
     if (exchange)
     {
         uint8_t bytes[4];
-        lx_guest_store_u32(bytes, value);
+        lx_guest_store_u32(bytes, exchange == 2 ? *previous + value : value);
         bindThreadWindow(s);
         ok = lx_cpu_write(s->cpu, address, bytes, sizeof bytes);
     }
@@ -1031,6 +1046,47 @@ static int apiResume32(const LxExecutionRegisters32 *registers)
     Active->resume = 1;
     return 1;
 }
+/* The suspended API caller's stack top, as a linear address. */
+static uint32_t guestStack(void)
+{
+    if (!Active || !Active->api_registers)
+        return 0;
+    const LxCpuRegisters *r = Active->api_registers;
+    if (!(r->ss & 4))
+        return r->esp;
+    return Emulated->selectors[r->ss >> 3].base + (r->esp & 0xffff);
+}
+static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *arguments, uint32_t bytes,
+                  uint32_t *result)
+{
+    const uint32_t stack = top & ~3u;
+    if (stack < bytes + 4)
+        return 0;
+    LxCpuRegisters r = initialRegisters();
+    r.cs = target >> 16;
+    r.eip = target & 0xffff;
+    r.ss = ss;
+    r.esp = stack - bytes - 4;
+    uint8_t return_address[4];
+    lx_guest_store_u16(return_address, 0);
+    lx_guest_store_u16(return_address + 2, Emulated->return_selector);
+    const uint32_t linear = Emulated->selectors[ss >> 3].base + r.esp;
+    if (!lx_execution_write(Emulated->execution, linear, return_address, sizeof return_address) ||
+        (bytes && !lx_execution_write(Emulated->execution, linear + 4, arguments, bytes)))
+        return 0;
+    const uint32_t ax = invoke(r, 0);
+    *result = (ReturnEdx << 16) | (ax & 0xffff);
+    return 1;
+}
+static void quiesce(void)
+{
+    lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
+    lx_host_mutex_unlock(Emulated->mutex);
+}
+static void setParkFlag(const int *flag)
+{
+    ThreadPark = flag;
+}
 const LxExecutionOperations lx_execution_unicorn = {"unicorn",
                                                     initialize,
                                                     destroy,
@@ -1076,4 +1132,8 @@ const LxExecutionOperations lx_execution_unicorn = {"unicorn",
                                                     terminateProcess,
                                                     pollTermination,
                                                     apiResume32,
-                                                    flatData};
+                                                    flatData,
+                                                    guestStack,
+                                                    call16,
+                                                    quiesce,
+                                                    setParkFlag};

@@ -71,6 +71,8 @@ LONG GpiSavePS(HPS handle)
     if (!s)
         return -1;
     s->id = ++ps->save_id;
+    if(ps->gpi.palette&&!lx_handle_borrow(ps->gpi.palette,LX_HANDLE_PM_PALETTE,&s->palette_lease)){free(s);return -1;}
+    s->gpi = ps->gpi;
     s->position = ps->position;
     s->color = ps->color;
     s->back_color = ps->back_color;
@@ -114,6 +116,9 @@ BOOL GpiRestorePS(HPS handle, LONG id)
         s = s->next;
     if (!s)
         return FALSE;
+    lx_handle_release(&ps->palette_lease);
+    ps->palette_lease=s->palette_lease;memset(&s->palette_lease,0,sizeof s->palette_lease);
+    ps->gpi = s->gpi;
     ps->position = s->position;
     ps->color = s->color;
     ps->back_color = s->back_color;
@@ -148,6 +153,7 @@ BOOL GpiRestorePS(HPS handle, LONG id)
     {
         s = ps->saved;
         ps->saved = s->next;
+        lx_handle_release(&s->palette_lease);
         free(s);
     }
     return TRUE;
@@ -188,7 +194,7 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
         return FALSE;
     uint8 zero[52] = {0};
     const uint8 *p = attrs ? attrs : zero;
-    ULONG supported = primitive == 2 ? 0xff : primitive == 1 ? 0x1ff : primitive == 4 ? 0x7f : 15;
+    ULONG supported = primitive == 2 ? 0x1fff : primitive == 1 ? 0x1ff : primitive == 4 ? 0x7f : 15;
     if (mask & ~supported)
         return FALSE;
     /* Current renderer accepts horizontal character axes and unit-width lines. */
@@ -225,7 +231,7 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
     {
         if ((mask & 0x10) && !(defaults & 0x10) && lx_guest_load_u32(p + 12) != 65536)
             return FALSE;
-        if ((mask & 0x20) && !(defaults & 0x20) && lx_guest_load_u32(p + 16) != 1)
+        if ((mask & 0x20) && !(defaults & 0x20) && (LONG)lx_guest_load_u32(p + 16) < 0)
             return FALSE;
         if ((mask & 0x80) && !(defaults & 0x80) && lx_guest_load_u16(p + 22) > 3)
             return FALSE;
@@ -248,6 +254,8 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
                                                       : (POINTL){(LONG)lx_guest_load_u32(p + 16),
                                                                  (LONG)lx_guest_load_u32(p + 20)};
     }
+    if(primitive==1){if((mask&32)&&!GpiSetLineWidthGeom(handle,defaults&32?1:(LONG)lx_guest_load_u32(p+16)))return FALSE;if((mask&128)&&!GpiSetLineEnd(handle,defaults&128?0:lx_guest_load_u16(p+22)))return FALSE;if((mask&256)&&!GpiSetLineJoin(handle,defaults&256?0:lx_guest_load_u16(p+24)))return FALSE;}
+    if(primitive==2&&(mask&2048)&&!GpiSetCharExtra(handle,defaults&2048?0:(LONG)lx_guest_load_u32(p+44)))return FALSE;
     unsigned index = (unsigned)primitive - 1;
     LONG color = (defaults & 1) ? CLR_BLACK : (LONG)lx_guest_load_u32(p);
     LONG back = (defaults & 2) ? CLR_WHITE : (LONG)lx_guest_load_u32(p + 4);

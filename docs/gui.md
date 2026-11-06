@@ -257,3 +257,25 @@ Glyph masks use coverage alpha and visible-window clipping. Current-thread
 input hooks can modify or consume queued input. Other hook types and cross-thread
 hook operation remain unsupported. Unsupported API paths return failure rather
 than fabricating resources.
+
+Open32 memory Windows metafiles own validated copies of their input bytes.
+`SetMetaFileBitsEx`, `GetMetaFileBitsEx` and `DeleteMetaFile` retain those bytes
+independently of application buffers. Enumeration supplies checked guest record
+copies and a five-argument callback, including early termination. Playback
+currently handles mapping/window-origin/window-extent records and bitmap
+`META_STRETCHDIB` records; other record types fail with error 50. Vector object
+creation and enhanced metafiles are not implemented.
+
+`MM_TEXT` and `MM_ANISOTROPIC` retain window/viewport origins and extents through
+saved DC levels. Logical/device point conversion and `StretchDIBits` apply these
+mappings. Other drawing primitives currently reject nonidentity mappings.
+Bitmap transfers support uncompressed RGB DIBs at 1/4/8/24/32 bits per pixel,
+top-down and bottom-up rows, mirrored rectangles, drawable clipping and raster
+operations. Compressed DIBs and palette-index DIB tables remain unsupported.
+Text fitting exposes cumulative advances and the character count that fits a
+width; tabbed text measurement accepts default, repeated and explicit stops.
+
+On the emulated backend, invoking a missing guest import or hitting a guest CPU
+fault logs the diagnostic and exits that OS/2 process's worker with status 1.
+It does not raise SIGABRT or run guest exit callbacks against the failed state.
+The controlling 2ine application and other worker processes remain independent.

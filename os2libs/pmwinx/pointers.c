@@ -2,7 +2,9 @@
 /* Shared Windows system cursors use the corresponding PM host cursor. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwin.h"
+#include "guest/abi.h"
 #include "guest/handles.h"
 static _Thread_local ULONG current_cursor;
 ULONG LoadCursor(HMODULE module, PSZ name)
@@ -83,4 +85,74 @@ ULONG SetCursor(ULONG cursor)
 BOOL DestroyCursor(ULONG cursor)
 {
     return WinDestroyPointer(cursor);
+}
+
+static BOOL cursor_y(LONG input, LONG *output)
+{
+    enum
+    {
+        screen_height = 21
+    }; /* SV_CYSCREEN */
+    LONG height = WinQuerySysValue(HWND_DESKTOP, screen_height);
+    if (height <= 0)
+    {
+        open32SetError(ERROR_GEN_FAILURE);
+        return FALSE;
+    }
+    /* A pointer denotes a pixel, rather than a rectangle's exclusive edge. */
+    int64_t y = (int64_t)height - 1 - input;
+    if (y < INT32_MIN || y > INT32_MAX)
+    {
+        open32SetError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+    *output = (LONG)y;
+    return TRUE;
+}
+
+BOOL GetCursorPos(PVOID output)
+{
+    TRACE_NATIVE("GetCursorPos(%p)", output);
+    if (!output)
+    {
+        open32SetError(ERROR_INVALID_PARAMETER);
+        return FALSE;
+    }
+    if (!open32Presentation())
+    {
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
+    }
+    POINTL point;
+    if (!WinQueryPointerPos(HWND_DESKTOP, &point))
+    {
+        open32SetError(ERROR_GEN_FAILURE);
+        return FALSE;
+    }
+    LONG y;
+    if (!cursor_y(point.y, &y))
+        return FALSE;
+    lx_guest_store_u32(output, (ULONG)point.x);
+    lx_guest_store_u32((uint8 *)output + 4, (ULONG)y);
+    return TRUE;
+}
+
+BOOL SetCursorPos(LONG x, LONG y)
+{
+    TRACE_NATIVE("SetCursorPos(%d, %d)", x, y);
+    if (!open32Presentation())
+    {
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
+    }
+    open32ClipCursorPoint(&x, &y);
+    LONG native_y;
+    if (!cursor_y(y, &native_y))
+        return FALSE;
+    if (!WinSetPointerPos(HWND_DESKTOP, x, native_y))
+    {
+        open32SetError(ERROR_GEN_FAILURE);
+        return FALSE;
+    }
+    return TRUE;
 }

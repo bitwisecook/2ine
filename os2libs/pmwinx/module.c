@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/input.h"
 #include "hal/host.h"
@@ -15,9 +16,14 @@ static uint32 references;
 static ULONG command_line;
 static void open32Shutdown(void)
 {
+    lx_pm_set_open32_thread_exit(NULL);
+    lx_pm_set_pointer_clip(NULL);
     open32TimersCleanup();
     open32FilesCleanup();
+    open32SyncCleanup();
     open32DdeCleanup();
+    open32DeferredCleanup();
+    open32DialogsCleanup();
     open32QueueCleanup();
     open32CaretCleanup();
     open32HooksCleanup();

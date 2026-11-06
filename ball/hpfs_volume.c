@@ -1619,6 +1619,11 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
                 action == TB_FS_READONLY ? entry->record[3] | 1 : entry->record[3] & ~1u;
             ok = directory_save(&disk, parent_sector, &parent);
         }
+        else if (action == TB_FS_TOUCH)
+        {
+            p32(entry->record + 8, (uint32_t)offset);
+            ok = directory_save(&disk, parent_sector, &parent);
+        }
         else if (action == TB_FS_DELETE || action == TB_FS_RMDIR)
         {
             int directory = !!(entry->record[3] & 16);

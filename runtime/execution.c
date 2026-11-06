@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Selection and dispatch for the process execution boundary. */
 #include "execution_internal.h"
+#include "hal/host_thread.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -262,8 +263,88 @@ void lx_execution_terminate(LxExecution *e, void (*cleanup)(uint32_t), uint32_t 
     else
         cleanup(code);
 }
-void lx_execution_poll_termination(LxExecution *e)
+void lx_execution_poll_exit(LxExecution *e)
 {
     if (e && e->ops->poll_termination)
         e->ops->poll_termination(e);
+}
+void lx_execution_poll_termination(LxExecution *e)
+{
+    lx_execution_poll_exit(e);
+    lx_execution_checkpoint(e);
+}
+void lx_execution_set_checkpoint(LxExecution *e, void (*checkpoint)(void *), void *argument)
+{
+    if (e) { e->checkpoint_argument = argument; e->checkpoint = checkpoint; }
+}
+void lx_execution_checkpoint(LxExecution *e)
+{
+    if (e && e->checkpoint) e->checkpoint(e->checkpoint_argument);
+}
+void lx_execution_set_park_flag(LxExecution *e, const int *flag)
+{
+    if (e && e->ops->set_park_flag)
+        e->ops->set_park_flag(flag);
+}
+int lx_execution_quiesce(LxExecution *e)
+{
+    if (!e || !e->ops->quiesce)
+        return 0;
+    e->ops->quiesce();
+    return 1;
+}
+
+/* A 16-bit target owns the rest of its tile; the original leaves the caller's
+   stack only when fewer than this many bytes remain below SP. */
+#define CALL16_MINIMUM_STACK 0x1000u
+#define CALL16_TILE 0x10000u
+/* Tiled selectors reach only the first 512 MiB of the guest address space. */
+#define CALL16_TILED_LIMIT 0x20000000u
+#define CALL16_MAXIMUM_ARGUMENTS 0x400u
+typedef struct Call16
+{
+    LxExecution *execution;
+    uint32_t target, bytes;
+    const void *arguments;
+    uint32_t *result;
+    LxGuestMapping *stack;
+    uint16_t selector;
+} Call16;
+static uint32_t call16Operation(void *argument)
+{
+    Call16 *call = argument;
+    LxExecution *e = call->execution;
+    uint32_t stack = e->ops->guest_stack();
+    uint16_t selector = 0, offset = 0;
+    if (!stack || stack >= CALL16_TILED_LIMIT || (stack & 0xffff) <= CALL16_MINIMUM_STACK ||
+        !lx_execution_find_selector(e, stack, &selector, &offset, 0))
+    {
+        call->stack = lx_execution_map_aligned(e, 0, CALL16_TILE, LX_GUEST_READ | LX_GUEST_WRITE,
+                                               CALL16_TILE);
+        if (!call->stack)
+            return 0;
+        stack = lx_execution_mapping_address(call->stack) + CALL16_TILE - 16;
+        if (!lx_execution_find_selector(e, stack, &selector, &offset, 0))
+            return 0;
+        call->selector = selector;
+    }
+    return (uint32_t)e->ops->call16(call->target, (uint16_t)((selector << 3) | 7), offset,
+                                    call->arguments, call->bytes, call->result);
+}
+static void call16Cleanup(void *argument)
+{
+    Call16 *call = argument;
+    if (call->selector)
+        lx_execution_free_selector(call->execution, call->selector);
+    if (call->stack)
+        lx_execution_unmap(call->execution, call->stack);
+}
+int lx_execution_call16(LxExecution *e, uint32_t target, const void *arguments, uint32_t bytes,
+                        uint32_t *result)
+{
+    if (!e || !e->ops->call16 || !e->ops->guest_stack || !result || !(target >> 16) ||
+        bytes > CALL16_MAXIMUM_ARGUMENTS || (bytes && !arguments))
+        return 0;
+    Call16 call = {e, target, bytes, arguments, result, NULL, 0};
+    return (int)lx_host_guarded_call(call16Operation, &call, call16Cleanup, &call);
 }

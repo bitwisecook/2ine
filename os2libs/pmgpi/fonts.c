@@ -118,7 +118,7 @@ BOOL GpiQueryTextBox(HPS hps, LONG count, PCH text, LONG points, PPOINTL output)
         int advance = lx_host_font_advance(font, codepoint);
         if (advance < 0)
             return FALSE;
-        width += advance;
+        width += advance + lx_pm_char_extra(lx_pm_font_space(hps));
     }
     POINTL box[5] = {{0, metrics.ascent},
                      {0, -metrics.descent},

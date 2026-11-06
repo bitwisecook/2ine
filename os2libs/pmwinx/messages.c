@@ -2,6 +2,8 @@
 /* Windows messages retain native PM packets so native subclasses see dispatch. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
+#include "hal/host_sync.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwin/open32_post.h"
 typedef struct QueuedMessage
@@ -19,6 +21,8 @@ typedef struct DispatchOverride
     BOOL consumed;
     struct DispatchOverride *previous;
 } DispatchOverride;
+static _Thread_local ULONG thread_receiver;
+static _Thread_local BOOL thread_receiver_failed;
 static _Thread_local QueuedMessage *pending, *history;
 static _Thread_local unsigned history_count;
 static _Thread_local uint64 next_sequence;
@@ -71,18 +75,35 @@ BOOL open32PmMessage(const QMSG *native, ULONG *message, ULONG *first, ULONG *se
             *message = 0x112;
             switch (*first & 0xFFFF)
             {
-                case 0x8000: *first = 0xF000; break; /* SC_SIZE */
-                case 0x8001: *first = 0xF010; break; /* SC_MOVE */
-                case 0x8002: *first = 0xF020; break; /* SC_MINIMIZE */
-                case 0x8003: *first = 0xF030; break; /* SC_MAXIMIZE */
-                case 0x8004: *first = 0xF060; break; /* SC_CLOSE */
-                case 0x8008: *first = 0xF120; break; /* SC_RESTORE */
+                case 0x8000:
+                    *first = 0xF000;
+                    break; /* SC_SIZE */
+                case 0x8001:
+                    *first = 0xF010;
+                    break; /* SC_MOVE */
+                case 0x8002:
+                    *first = 0xF020;
+                    break; /* SC_MINIMIZE */
+                case 0x8003:
+                    *first = 0xF030;
+                    break; /* SC_MAXIMIZE */
+                case 0x8004:
+                    *first = 0xF060;
+                    break; /* SC_CLOSE */
+                case 0x8008:
+                    *first = 0xF120;
+                    break; /* SC_RESTORE */
             }
             *second = 0;
             return TRUE;
         case WM_CONTROL:
+        {
+            ULONG control = WinWindowFromID(native->hwnd, *first & 0xffff);
+            *first = open32ControlNotification(control, *first);
+            *second = control;
             *message = 0x111;
             return TRUE;
+        }
         case WM_MOUSEMOVE:
             *message = 0x200;
             break;
@@ -162,9 +183,9 @@ static BOOL accept_native(const QMSG *native)
        that call blocked, starving application work scheduled by the callback. */
     BOOL frame_message = window && native->hwnd == window->handle &&
                          (native->msg == WM_COMMAND || native->msg == WM_CLOSE ||
-                          native->msg == WM_SYSCOMMAND ||
-                          native->msg >= WM_USER);
-    if (native->msg != WM_QUIT &&
+                          native->msg == WM_SYSCOMMAND || native->msg >= WM_USER);
+    BOOL thread_packet = thread_receiver && native->hwnd == thread_receiver;
+    if (!thread_packet && native->msg != WM_QUIT &&
         (!window || (native->hwnd != window->client && !frame_message)))
     {
         WinDispatchMsg(open32Presentation(), (PQMSG)native);
@@ -187,7 +208,9 @@ static BOOL accept_native(const QMSG *native)
             if (lx_guest_load_u32(node->wire) == open32PublicWindow(native->hwnd) &&
                 lx_guest_load_u32(node->wire + 4) == 15)
                 return TRUE;
-    QueuedMessage *node = new_message(open32PublicWindow(native->hwnd), message, first, second);
+    QueuedMessage *node =
+        new_message(native->hwnd == thread_receiver ? 0 : open32PublicWindow(native->hwnd), message,
+                    first, second);
     if (!node)
         return FALSE;
     node->native = *native;
@@ -223,6 +246,8 @@ typedef struct PaintQuery
 } PaintQuery;
 static BOOL offer_native_paint(HWND handle, void *context)
 {
+    if (open32WindowUpdateLocked(handle))
+        return FALSE;
     Open32Window *window = open32FindWindow(handle);
     if (!window || handle != window->client)
         return TRUE; /* Native chrome and controls still need their normal painting. */
@@ -429,8 +454,8 @@ LONG DispatchMessage(PVOID input)
         QMSG native = node && node->native_valid
                           ? node->native
                           : (QMSG){.hwnd = open32ClientWindow(handle), .msg = WM_PAINT};
-        DispatchOverride current = {open32ClientWindow(native.hwnd), native.msg, message, first,
-                                    second,      FALSE,      dispatch};
+        DispatchOverride current = {
+            open32ClientWindow(native.hwnd), native.msg, message, first, second, FALSE, dispatch};
         dispatch = &current;
         result = (LONG)(intptr_t)WinDispatchMsg(open32Presentation(), &native);
         dispatch = current.previous;
@@ -530,4 +555,144 @@ void open32QueueCleanup(void)
     history_count = 0;
     next_sequence = 0;
     memset(last_message, 0, sizeof last_message);
+}
+
+/* Each Open32 PM queue has a private receiver for foreign thread packets. The
+   public MSG retains hwnd==NULL, as required for PostThreadMessage. */
+typedef struct Open32ThreadQueue
+{
+    ULONG thread, window;
+    struct Open32ThreadQueue *next;
+} Open32ThreadQueue;
+static LxHostOnce thread_queue_once = LX_HOST_ONCE_INIT;
+static LxHostMonitor *thread_queue_lock;
+static Open32ThreadQueue *thread_queues;
+static void initialize_thread_queues(void)
+{
+    thread_queue_lock = lx_host_monitor_create();
+    if (!thread_queue_lock)
+        abort();
+}
+static void thread_exit(void)
+{
+    open32DialogsCleanup();
+    open32DeferredCleanup();
+    open32UnregisterThreadQueue();
+    thread_receiver_failed = TRUE; /* Window destruction must not register this thread again. */
+}
+void open32RegisterThreadQueue(void)
+{
+    if (thread_receiver || thread_receiver_failed)
+        return;
+    lx_host_once(&thread_queue_once, initialize_thread_queues);
+    lx_pm_set_open32_thread_exit(thread_exit);
+    ULONG receiver = WinCreateWindow(HWND_OBJECT, (PSZ)(uintptr_t)0xffff0005u, "", 0, 0, 0, 0, 0,
+                                     0, HWND_BOTTOM, 0, NULL, NULL);
+    Open32ThreadQueue *queue = receiver ? calloc(1, sizeof *queue) : NULL;
+    if (!queue || !lx_pm_mark_open32_window(receiver))
+    {
+        if (receiver)
+            WinDestroyWindow(receiver);
+        free(queue);
+        thread_receiver_failed = TRUE;
+        return;
+    }
+    queue->thread = GetCurrentThreadId();
+    queue->window = receiver;
+    thread_receiver = receiver;
+    lx_host_monitor_lock(thread_queue_lock);
+    queue->next = thread_queues;
+    thread_queues = queue;
+    lx_host_monitor_unlock(thread_queue_lock);
+}
+void open32UnregisterThreadQueue(void)
+{
+    if (!thread_receiver)
+        return;
+    lx_host_monitor_lock(thread_queue_lock);
+    Open32ThreadQueue **link = &thread_queues;
+    while (*link && (*link)->window != thread_receiver)
+        link = &(*link)->next;
+    Open32ThreadQueue *queue = *link;
+    if (queue)
+        *link = queue->next;
+    lx_host_monitor_unlock(thread_queue_lock);
+    WinDestroyWindow(thread_receiver);
+    thread_receiver = 0;
+    free(queue);
+}
+BOOL PostThreadMessage(ULONG thread, ULONG message, ULONG first, ULONG second)
+{
+    if (thread == GetCurrentThreadId())
+        return PostMessage(0, message, first, second);
+    lx_host_once(&thread_queue_once, initialize_thread_queues);
+    lx_host_monitor_lock(thread_queue_lock);
+    ULONG receiver = 0;
+    for (Open32ThreadQueue *queue = thread_queues; queue; queue = queue->next)
+        if (queue->thread == thread)
+        {
+            receiver = queue->window;
+            break;
+        }
+    BOOL found = receiver != 0;
+    BOOL result = found && lx_pm_post_open32_message(receiver, message, first, second);
+    lx_host_monitor_unlock(thread_queue_lock);
+    if (!result)
+        open32SetError(found ? 0 : 87);
+    return result;
+}
+BOOL ReplyMessage(LONG result)
+{
+    (void)result;
+    /* PMWIN currently dispatches SendMessage synchronously on the calling
+       thread. Windows specifies FALSE outside an interthread SendMessage. */
+    return FALSE;
+}
+BOOL WinXTranslateMsg(ULONG anchor, PVOID input, PVOID output)
+{
+    (void)anchor;
+    if (!input || !output)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    uint8 *wire = input;
+    QMSG message = {0};
+    message.hwnd = lx_guest_load_u32(wire);
+    message.msg = lx_guest_load_u32(wire + 4);
+    message.mp1 = (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 8);
+    message.mp2 = (MPARAM)(uintptr_t)lx_guest_load_u32(wire + 12);
+    message.time = lx_guest_load_u32(wire + 16);
+    message.ptl.x = lx_guest_load_u32(wire + 20);
+    message.ptl.y = lx_guest_load_u32(wire + 24);
+    message.reserved = lx_guest_load_u32(wire + 28);
+    ULONG kind, first, second;
+    Open32Key key = {0};
+    if (message.msg == WM_CHAR)
+    {
+        open32DecodeKey((ULONG)(uintptr_t)message.mp1, (ULONG)(uintptr_t)message.mp2, &key);
+        open32UpdateKey(&key);
+        kind = key.message;
+        first = key.key;
+        second = key.parameter;
+    }
+    else if (!open32PmMessage(&message, &kind, &first, &second))
+        return FALSE;
+    QueuedMessage *node =
+        new_message(message.hwnd == thread_receiver ? 0 : open32PublicWindow(message.hwnd), kind,
+                    first, second);
+    if (!node)
+        return FALSE;
+    node->native = message;
+    node->native_valid = message.msg != LX_PM_OPEN32_POST;
+    node->keyboard = message.msg == WM_CHAR;
+    node->key = key;
+    lx_guest_store_u32(node->wire + 16, message.time);
+    lx_guest_store_u32(node->wire + 20, (ULONG)message.ptl.x);
+    lx_guest_store_u32(node->wire + 24,
+                       (ULONG)(WinQuerySysValue(HWND_DESKTOP, 21) - 1 - message.ptl.y));
+    memcpy(output, node->wire, 28);
+    retain_history(node);
+    TranslateMessage(output);
+    return TRUE;
 }

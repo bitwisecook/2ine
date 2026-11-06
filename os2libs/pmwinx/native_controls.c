@@ -352,6 +352,155 @@ static BOOL prepare_bridges(void)
     bridges = mapping;
     return TRUE;
 }
+enum
+{
+    win_style_visible = 0x10000000,
+    win_style_disabled = 0x08000000,
+    win_style_border = 0x00800000,
+    win_style_vscroll = 0x00200000,
+    win_style_hscroll = 0x00100000,
+    win_style_group = 0x00020000,
+    win_style_tabstop = 0x00010000,
+    win_style_child = 0x40000000
+};
+static ULONG button_style(ULONG style, unsigned *kind)
+{
+    switch (style & 15)
+    {
+    case 1:
+        return 0x400; /* BS_DEFPUSHBUTTON to BS_DEFAULT */
+    case 2:
+        return 1; /* BS_CHECKBOX */
+    case 3:
+        return 2; /* BS_AUTOCHECKBOX */
+    case 4:
+        return 3; /* BS_RADIOBUTTON */
+    case 5:
+        return 5; /* BS_3STATE */
+    case 6:
+        return 6; /* BS_AUTO3STATE */
+    case 7:
+        *kind = 5;
+        return 2; /* BS_GROUPBOX to SS_GROUPBOX */
+    case 8:
+    case 11:
+        return 7; /* user and owner-drawn buttons to BS_USERBUTTON */
+    case 9:
+        return 4; /* BS_AUTORADIOBUTTON */
+    default:
+        return 0;
+    }
+}
+static ULONG static_style(ULONG style)
+{
+    static const ULONG types[] = {1,     0x101, 0x201, 3,  5,     6,
+                                  7,     8,     9,     10, 1,     1,
+                                  1};
+    ULONG type = style & 15;
+    ULONG value = type < sizeof types / sizeof *types ? types[type] : 1;
+    if ((value & 0xff) == 1 && type != 11 && type != 12)
+        value |= 0x4000; /* DT_WORDBREAK */
+    if ((value & 0xff) == 1 && !(style & 0x80))
+        value |= 0x2000; /* DT_MNEMONIC unless SS_NOPREFIX */
+    return value;
+}
+static ULONG control_style(ULONG style, unsigned *kind)
+{
+    ULONG value = (style & win_style_visible ? WS_VISIBLE : 0) |
+                  (style & win_style_disabled ? WS_DISABLED : 0) |
+                  (style & win_style_tabstop ? 0x20000 : 0) |
+                  (style & win_style_group ? 0x10000 : 0);
+    if (*kind == 3)
+        return value | button_style(style, kind);
+    if (*kind == 5)
+        return value | static_style(style);
+    if (*kind == 10)
+        return value | 1 | (style & win_style_border ? 2 : 0) |
+               (style & win_style_vscroll ? 4 : 0) | (style & win_style_hscroll ? 8 : 0) |
+               (style & 0x800 ? 0x10 : 0);
+    if (*kind == 6)
+        return value | (style & 3) | (style & 0x80 ? 4 : 0) |
+               (style & win_style_border ? 8 : 0) | (style & 0x800 ? 0x20 : 0) |
+               (style & 0x20 ? 0x80 : 0);
+    if (*kind == 7)
+        return value | (style & 8 ? 1 : 0) | (style & 0x30 ? 2 : 0) | (style & 0x100 ? 4 : 0) |
+               (style & win_style_hscroll ? 8 : 0) | (style & 0x800 ? 0x10 : 0);
+    ULONG type = style & 3;
+    return value | (type == 3 ? 4 : type);
+}
+ULONG open32ControlStyle(ULONG style, unsigned *kind)
+{
+    return control_style(style, kind);
+}
+static unsigned control_kind(const char *name, ULONG style)
+{
+    if ((uintptr_t)name <= UINT16_MAX)
+        return 0;
+    if (!strcasecmp(name, "BUTTON"))
+        return 3;
+    if (!strcasecmp(name, "EDIT"))
+        return style & 4 ? 10 : 6;
+    if (!strcasecmp(name, "STATIC"))
+        return 5;
+    if (!strcasecmp(name, "LISTBOX"))
+        return 7;
+    return !strcasecmp(name, "COMBOBOX") ? 2 : 0;
+}
+BOOL open32NativeControlOwned(ULONG handle)
+{
+    for (NativeControl *control = controls; control; control = control->next)
+        if (control->window.handle == handle)
+            return TRUE;
+    return FALSE;
+}
+/* Creates a predefined Windows control class as its PM control. Returns FALSE
+   when the class is not predefined, leaving the caller to report the failure. */
+BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style, LONG x, LONG y,
+                               LONG width, LONG height, ULONG parent, ULONG id, ULONG *handle)
+{
+    unsigned kind = control_kind(name, style);
+    *handle = 0;
+    if (!kind || !(style & win_style_child) || !parent)
+        return FALSE;
+    HWND owner = open32ClientWindow(parent);
+    RECTL area;
+    if (!WinQueryWindowRect(owner, &area))
+    {
+        open32SetError(1400);
+        return TRUE;
+    }
+    NativeControl *control = calloc(1, sizeof *control);
+    char *text = strdup(title ? title : "");
+    if (!control || !text)
+    {
+        free(control);
+        free(text);
+        open32SetError(8);
+        return TRUE;
+    }
+    for (char *p = text; *p; p++)
+        *p = (char)WinCpTranslateChar(0, 1004, (UCHAR)*p, 437);
+    ULONG pm_style = control_style(style, &kind);
+    char pm_class[8];
+    snprintf(pm_class, sizeof pm_class, "#%u", kind);
+    HWND created = WinCreateWindow(owner, pm_class, text, pm_style, x,
+                                   area.yTop - area.yBottom - y - height, width, height, owner,
+                                   HWND_TOP, id, NULL, NULL);
+    free(text);
+    if (!created)
+    {
+        free(control);
+        open32SetError(1407);
+        return TRUE;
+    }
+    control->window.handle = created;
+    control->window.instance = GLoaderState.main_module ? GLoaderState.main_module->handle : 0;
+    control->original = WinQueryWindowULong(created, -3);
+    control->next = controls;
+    controls = control;
+    *handle = created;
+    return TRUE;
+}
 LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set)
 {
     NativeControl *control = find_control(handle, TRUE);

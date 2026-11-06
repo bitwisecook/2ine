@@ -3,10 +3,27 @@
 #include "os2native.h"
 #include "so32dll.h"
 #include "hal/socket.h"
+#include "hal/network.h"
 #include "network.h"
 static int socket_result(int result);
 #include "os2libs/generated/so32dll-lx.h"
 static LX_HOST_THREAD_LOCAL int socket_error;
+uint32_t Os2LegacyGetHostId(void)
+{
+    LxHostNetwork network;
+    if (lx_host_network_snapshot(&network))
+        return 0;
+    uint32_t address = 0;
+    for (size_t i = 0; i < network.interface_count; i++)
+        if ((network.interfaces[i].flags & LX_IFF_UP) &&
+            !(network.interfaces[i].flags & LX_IFF_LOOPBACK))
+        {
+            address = network.interfaces[i].address;
+            break;
+        }
+    lx_host_network_destroy(&network);
+    return address;
+}
 enum
 {
     OS2_AF_INET_LEGACY = 2,

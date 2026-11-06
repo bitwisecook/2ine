@@ -173,6 +173,17 @@ int lx_handle_close(uint32_t handle, LxHandleKind kind)
 {
     return lx_handle_close_guarded(handle, kind, SIZE_MAX, NULL) == 1;
 }
+uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind)
+{
+    LxHandleBorrow borrow;
+    if (!lx_handle_borrow(handle, kind, &borrow))
+        return 0;
+    /* The borrow pins the record, whose value and destructor never change. */
+    const Resource *r = borrow.lease;
+    uint32_t copy = lx_handle_create(kind, r->value, r->destroy);
+    lx_handle_release(&borrow);
+    return copy;
+}
 size_t lx_handle_count(LxHandleKind kind, const void *resource)
 {
     lock();

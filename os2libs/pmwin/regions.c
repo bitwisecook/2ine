@@ -339,6 +339,7 @@ BOOL lx_pm_clip_point(HPS handle, LONG x, LONG y)
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps)
         return FALSE;
+    if(!lx_pm_graphics_clip(ps,x,y))return FALSE;
     PmRegion *clip = ps->clip_lease.resource;
     if (!clip)
         return TRUE;

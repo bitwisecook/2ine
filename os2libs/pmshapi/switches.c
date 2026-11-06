@@ -145,3 +145,32 @@ ULONG WinQueryTaskSizePos(HANDLE hab, ULONG session, PSWP position)
         return ERROR_SMG_SESSION_NOT_FOUND;
     return WinQueryWindowPos(window, position) ? NO_ERROR : ERROR_SMG_NO_TARGET_WINDOW;
 }
+ULONG WinCreateSwitchEntry(HAB hab, PSWCNTRL value)
+{
+    /* Process and session identities have a 16-bit form in the switch list. */
+    if (!hab || !value || value->idProcess > 0xffff || value->idSession > 0xffff) return 0;
+    return WinAddSwitchEntry(value);
+}
+ULONG WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
+{
+    if (!title || !capacity) return ERROR_INVALID_PARAMETER;
+    lx_host_once(&once, initialize);
+    lx_host_monitor_lock(mutex);
+    ULONG result = ERROR_SMG_SESSION_NOT_FOUND;
+    *title = 0;
+    /* Session zero names the caller; a long title is truncated without error. */
+    uint32 process = 0, parent;
+    if (!session)
+        lx_host_process_ids(&process, &parent);
+    for (SwitchEntry *entry = entries; entry; entry = entry->next)
+        if (session ? entry->value.idSession == session : entry->value.idProcess == process)
+        {
+            size_t length = strlen(entry->value.szSwtitle);
+            size_t copied = length < capacity ? length : capacity - 1;
+            memcpy(title, entry->value.szSwtitle, copied); title[copied] = 0;
+            result = NO_ERROR;
+            break;
+        }
+    lx_host_monitor_unlock(mutex);
+    return result;
+}

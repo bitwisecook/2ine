@@ -3,6 +3,7 @@
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #include "hal/host.h"
+#include "hal/host_process.h"
 #include "../common/process.h"
 #include <stdlib.h>
 #include <string.h>
@@ -117,4 +118,29 @@ char *const *lx_host_environment(void)
 {
     extern char **_environ;
     return _environ;
+}
+
+int lx_host_process_set_priority(LxHostProcessPriority priority)
+{
+    DWORD selected;
+    switch (priority)
+    {
+        case LX_HOST_PROCESS_PRIORITY_NORMAL:
+            selected = NORMAL_PRIORITY_CLASS;
+            break;
+        case LX_HOST_PROCESS_PRIORITY_IDLE:
+            selected = IDLE_PRIORITY_CLASS;
+            break;
+        case LX_HOST_PROCESS_PRIORITY_REALTIME:
+            errno = ENOTSUP;
+            return -1;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+    if (SetPriorityClass(GetCurrentProcess(), selected))
+        return 0;
+    DWORD error = GetLastError();
+    errno = error == ERROR_ACCESS_DENIED || error == ERROR_PRIVILEGE_NOT_HELD ? EACCES : EIO;
+    return -1;
 }

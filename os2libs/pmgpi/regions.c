@@ -92,3 +92,80 @@ BOOL GpiQueryRegionRects(HPS ps, ULONG handle, PRECTL bounds, RGNRECT *control, 
 {
     return lx_pm_region_query_rects(ps, handle, bounds, control, rects);
 }
+
+LONG GpiPtInRegion(HPS ps, ULONG handle, PPOINTL point)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_pm_valid_ps(ps) || !point || !lx_handle_borrow(handle, LX_HANDLE_PM_REGION, &borrow))
+        return 0;
+    PmRegion *r = borrow.resource;
+    LONG result = 1;
+    if (r->anchor != lxHostThreadState()->anchor_block || r->selected)
+        result = 0;
+    else
+        for (size_t i = 0; i < r->count; i++)
+        {
+            RECTL q = r->rects[i];
+            if (point->x >= q.xLeft && point->x < q.xRight && point->y >= q.yBottom &&
+                point->y < q.yTop)
+            {
+                result = 2;
+                break;
+            }
+        }
+    lx_handle_release(&borrow);
+    return result;
+}
+LONG GpiRectInRegion(HPS ps, ULONG handle, PRECTL rectangle)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_pm_valid_ps(ps) || !rectangle || rectangle->xRight < rectangle->xLeft ||
+        rectangle->yTop < rectangle->yBottom ||
+        !lx_handle_borrow(handle, LX_HANDLE_PM_REGION, &borrow))
+        return 0;
+    PmRegion *r = borrow.resource;
+    LONG result = 1;
+    if (r->anchor != lxHostThreadState()->anchor_block || r->selected)
+        result = 0;
+    else
+    {
+        PmRegion input = {.rects = rectangle, .count = 1}, remaining = {0};
+        if (!regionBoolean(&remaining, &input, r, 7))
+            result = 0;
+        else if (!remaining.count)
+            result = 3;
+        else
+        {
+            PmRegion overlap = {0};
+            if (!regionBoolean(&overlap, &input, r, 6))
+                result = 0;
+            else if (overlap.count)
+                result = 2;
+            free(overlap.rects);
+        }
+        free(remaining.rects);
+    }
+    lx_handle_release(&borrow);
+    return result;
+}
+LONG GpiPaintRegion(HPS ps, ULONG handle)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_pm_valid_ps(ps) || !lx_handle_borrow(handle, LX_HANDLE_PM_REGION, &borrow))
+        return 0;
+    PmRegion *r = borrow.resource;
+    BOOL ok = r->anchor == lxHostThreadState()->anchor_block && !r->selected;
+    for (size_t i = 0; ok && i < r->count; i++)
+    {
+        RECTL q = r->rects[i];
+        if ((int64_t)q.yTop - q.yBottom > 65536 || (int64_t)q.xRight - q.xLeft > 65536)
+        {
+            ok = FALSE;
+            break;
+        }
+        for (LONG y = q.yBottom; ok && y < q.yTop; y++)
+            ok = lx_pm_fill_span(ps, q.xLeft, y, q.xRight - q.xLeft, 3);
+    }
+    lx_handle_release(&borrow);
+    return ok ? lx_pm_hits(lx_pm_font_space(ps)) : 0;
+}

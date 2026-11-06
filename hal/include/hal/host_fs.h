@@ -84,6 +84,12 @@ LxHostFsError lx_host_file_write(LxHostFile *file, const void *data, size_t size
 LxHostFsError lx_host_file_seek(LxHostFile *file, int64_t distance, unsigned origin,
                                 uint64_t *position);
 LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info);
+/* Seconds since Unix epoch; INT64_MIN preserves an existing timestamp. */
+LxHostFsError lx_host_file_times(LxHostFile *file, int64_t accessed, int64_t modified);
+/* Seconds since Unix epoch. Zero reports a file without a recorded creation time. */
+LxHostFsError lx_host_file_created(LxHostFile *file, int64_t *seconds);
+/* LX_HOST_FS_INVALID reports a file or filesystem that cannot retain a creation time. */
+LxHostFsError lx_host_file_set_created(LxHostFile *file, int64_t seconds);
 LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size);
 LxHostFsError lx_host_file_flush(LxHostFile *file);
 /* Blocking advisory whole-file lock, released on descriptor close or process exit. */

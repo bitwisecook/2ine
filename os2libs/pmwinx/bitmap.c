@@ -137,7 +137,82 @@ BOOL DeleteObject(ULONG handle)
     open32SetError(6);
     return FALSE;
 }
+ULONG GetObjectType(ULONG handle)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (dc)
+        return dc->kind == 1 ? 10 : 3;
+    static const struct
+    {
+        LxHandleKind kind;
+        ULONG type;
+    } types[] = {{LX_HANDLE_OPEN32_PEN, 1},      {LX_HANDLE_OPEN32_BRUSH, 2},
+                 {LX_HANDLE_OPEN32_METAFILE, 9}, {LX_HANDLE_OPEN32_ENHMETAFILE, 13},
+                 {LX_HANDLE_OPEN32_PALETTE, 5},  {LX_HANDLE_OPEN32_FONT, 6},
+                 {LX_HANDLE_PM_BITMAP, 7},       {LX_HANDLE_OPEN32_REGION, 8}};
+    for (unsigned i = 0; i < sizeof types / sizeof types[0]; i++)
+    {
+        LxHandleBorrow borrow = {0};
+        if (lx_handle_borrow(handle, types[i].kind, &borrow))
+        {
+            lx_handle_release(&borrow);
+            return types[i].type;
+        }
+    }
+    open32SetError(6);
+    return 0;
+}
 
+ULONG GetNearestColor(ULONG handle, ULONG color)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc)
+    {
+        open32SetError(6);
+        return UINT32_MAX;
+    }
+    ULONG kind = color >> 24;
+    if (kind == 1)
+    {
+        UCHAR entry[4];
+        if ((color & 0xFF0000) ||
+            GetPaletteEntries(dc->palette_handle, color & 0xFFFF, 1, entry) != 1)
+        {
+            open32SetError(87);
+            return UINT32_MAX;
+        }
+        color = (ULONG)entry[0] | (ULONG)entry[1] << 8 | (ULONG)entry[2] << 16;
+    }
+    else if (kind && kind != 2)
+    {
+        open32SetError(87);
+        return UINT32_MAX;
+    }
+    color &= 0xFFFFFF;
+    PresentationSpace *ps = lx_pm_font_space(handle);
+    PmBitmap *bitmap = ps ? ps->bitmap_lease.resource : NULL;
+    if (!bitmap || bitmap->depth > 8)
+        return color;
+    uint32 colors[256];
+    open32BitmapPalette(bitmap->depth, colors);
+    unsigned count = bitmap->palette_count ? bitmap->palette_count : 1u << bitmap->depth;
+    if (bitmap->palette_count)
+        memcpy(colors, bitmap->palette, count * sizeof *colors);
+    ULONG distance = UINT32_MAX, best = 0;
+    for (unsigned i = 0; i < count; i++)
+    {
+        LONG r = (LONG)(color & 255) - (LONG)((colors[i] >> 16) & 255);
+        LONG g = (LONG)((color >> 8) & 255) - (LONG)((colors[i] >> 8) & 255);
+        LONG b = (LONG)((color >> 16) & 255) - (LONG)(colors[i] & 255);
+        ULONG next = (ULONG)(r * r + g * g + b * b);
+        if (next < distance)
+        {
+            distance = next;
+            best = colors[i];
+        }
+    }
+    return (best & 255) << 16 | (best & 0xFF00) | (best >> 16 & 255);
+}
 BOOL open32BitmapBytes(LONG width, LONG height, ULONG planes, ULONG depth, size_t *bytes)
 {
     if (width < 1 || height < 1 || width > 16384 || height > 16384 ||
@@ -212,4 +287,303 @@ ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bit
     }
     lx_handle_release(&borrow);
     return handle;
+}
+
+static unsigned bitmap_nearest(const uint32 *palette, unsigned count, uint32 rgb)
+{
+    unsigned best = 0, distance = UINT32_MAX;
+    for (unsigned i = 0; i < count; i++)
+    {
+        int r = (int)((rgb >> 16) & 255) - (int)((palette[i] >> 16) & 255),
+            g = (int)((rgb >> 8) & 255) - (int)((palette[i] >> 8) & 255),
+            b = (int)(rgb & 255) - (int)(palette[i] & 255);
+        unsigned d = (unsigned)(r * r + g * g + b * b);
+        if (d < distance)
+        {
+            distance = d;
+            best = i;
+            if (!d)
+                break;
+        }
+    }
+    return best;
+}
+/* DDB scanlines are WORD aligned (unlike DWORD-aligned DIB scanlines). */
+static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
+{
+    LxHandleBorrow borrow = {0};
+    PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
+    if (!bitmap)
+    {
+        open32SetError(6);
+        return 0;
+    }
+    size_t size = 0;
+    if (!open32BitmapBytes((LONG)bitmap->width, (LONG)bitmap->height, bitmap->planes, bitmap->depth,
+                           &size))
+    {
+        lx_handle_release(&borrow);
+        return 0;
+    }
+    if (!data)
+    {
+        lx_handle_release(&borrow);
+        return write ? 0 : (LONG)size;
+    }
+    size_t count = capacity < size ? capacity : size, stride = size / bitmap->height;
+    uint8 *encoded = calloc(size, 1);
+    if (!encoded)
+    {
+        lx_handle_release(&borrow);
+        open32SetError(8);
+        return 0;
+    }
+    uint32 palette[256];
+    open32BitmapPalette(bitmap->depth, palette);
+    if (bitmap->palette_count)
+        memcpy(palette, bitmap->palette, bitmap->palette_count * 4);
+    for (unsigned y = 0; y < bitmap->height; y++)
+        for (unsigned x = 0; x < bitmap->width; x++)
+        {
+            uint32 rgb = bitmap->pixels[(size_t)y * bitmap->width + x];
+            uint8 *row = encoded + y * stride;
+            if (bitmap->depth <= 8)
+            {
+                unsigned bit = x * bitmap->depth,
+                         index = bitmap_nearest(palette, 1u << bitmap->depth, rgb);
+                row[bit / 8] |= (uint8)(index << (8 - bitmap->depth - bit % 8));
+            }
+            else
+            {
+                uint8 *p = row + x * (bitmap->depth / 8);
+                p[0] = (uint8)rgb;
+                p[1] = (uint8)(rgb >> 8);
+                p[2] = (uint8)(rgb >> 16);
+            }
+        }
+    if (write)
+    {
+        memcpy(encoded, data, count);
+        for (unsigned y = 0; y < bitmap->height; y++)
+            for (unsigned x = 0; x < bitmap->width; x++)
+            {
+                uint8 *row = encoded + y * stride;
+                uint32 rgb;
+                if (bitmap->depth <= 8)
+                {
+                    unsigned bit = x * bitmap->depth,
+                             index = (row[bit / 8] >> (8 - bitmap->depth - bit % 8)) &
+                                     ((1u << bitmap->depth) - 1);
+                    rgb = palette[index];
+                }
+                else
+                {
+                    uint8 *p = row + x * (bitmap->depth / 8);
+                    rgb = (uint32)p[2] << 16 | (uint32)p[1] << 8 | p[0];
+                }
+                bitmap->pixels[(size_t)y * bitmap->width + x] = rgb;
+            }
+    }
+    else
+        memcpy(data, encoded, count);
+    free(encoded);
+    lx_handle_release(&borrow);
+    return (LONG)count;
+}
+LONG GetBitmapBits(ULONG h, LONG count, PVOID output)
+{
+    if (count < 0)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    /* A zero capacity is a size query, as is a NULL buffer. */
+    return bitmap_bits(h, (ULONG)count, count ? output : NULL, FALSE);
+}
+LONG SetBitmapBits(ULONG h, ULONG count, PVOID input)
+{
+    if (!count || !input)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    return bitmap_bits(h, count, input, TRUE);
+}
+ULONG _CreateBitmapIndirect(PVOID input)
+{
+    if (!input)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    const uint8 *p = input;
+    LONG w = (LONG)lx_guest_load_u32(p + 4), h = (LONG)lx_guest_load_u32(p + 8),
+         stride = (LONG)lx_guest_load_u32(p + 12);
+    ULONG planes = lx_guest_load_u16(p + 16), depth = lx_guest_load_u16(p + 18),
+          address = lx_guest_load_u32(p + 20);
+    /* An odd row pitch fails without an error code. */
+    if (stride & 1)
+        return 0;
+    if (planes > 32 || depth > 32 || w < 0 || h < 0)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    if (!w || !h)
+    {
+        ULONG empty = lx_pm_bitmap_create(1, 1, 1, 1);
+        if (!empty)
+            open32SetError(8);
+        return empty;
+    }
+    size_t bytes;
+    if (!open32BitmapBytes(w, h, planes, depth, &bytes))
+        return 0;
+    if (!address)
+        return CreateBitmap(w, h, planes, depth, NULL);
+    size_t exact = bytes / (size_t)h, pitch = (size_t)(ULONG)stride;
+    LxGuestBorrow bits = {0};
+    if (pitch < exact || pitch * (size_t)h > 64u * 1024 * 1024 ||
+        !lx_execution_borrow(GLoaderState.execution, address, pitch * (size_t)h, LX_GUEST_READ,
+                             &bits))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    /* Rows are repacked when the record's pitch exceeds the bitmap's WORD-aligned rows. */
+    uint8 *packed = malloc(bytes);
+    if (!packed)
+    {
+        lx_execution_release(&bits);
+        open32SetError(8);
+        return 0;
+    }
+    for (LONG row = 0; row < h; row++)
+        memcpy(packed + (size_t)row * exact, (const uint8 *)bits.host + (size_t)row * pitch, exact);
+    lx_execution_release(&bits);
+    ULONG result = CreateBitmap(w, h, planes, depth, packed);
+    free(packed);
+    return result;
+}
+ULONG CreateDIBitmap(ULONG dc, PVOID header, ULONG options, PVOID bits, PVOID info, ULONG usage)
+{
+    if (!open32FindDC(dc))
+    {
+        open32SetError(6);
+        return 0;
+    }
+    if (!bits)
+        options = 0;
+    if (!header || lx_guest_load_u32(header) != 40 || ((options & 4) && !info))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    LONG w = (LONG)lx_guest_load_u32((uint8 *)header + 4),
+         h = (LONG)lx_guest_load_u32((uint8 *)header + 8);
+    if (h == INT32_MIN)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    LONG height = h < 0 ? -h : h;
+    ULONG result = CreateCompatibleBitmap(dc, w, height);
+    if (!result)
+        return 0;
+    if (options & 4)
+    {
+        if (SetDIBits(dc, result, 0, (ULONG)height, bits, info, usage) != height)
+        {
+            DeleteObject(result);
+            return 0;
+        }
+    }
+    return result;
+}
+BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source, LONG sx, LONG sy,
+                LONG sw, LONG sh, ULONG rop)
+{
+    /* Raster operations that do not read the source accept a NULL source DC. */
+    if (!source && open32FindDC(destination))
+        return !w || !h || PatBlt(destination, x, y, w, h, rop);
+    Open32DC *dc = open32FindDC(source);
+    if (!dc || !open32FindDC(destination))
+    {
+        open32SetError(6);
+        return FALSE;
+    }
+    if (!w || !h || !sw || !sh)
+        return TRUE;
+    int64_t ex = (int64_t)sx + sw, ey = (int64_t)sy + sh;
+    if (ex < INT32_MIN || ex > INT32_MAX || ey < INT32_MIN || ey > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LONG xx = (LONG)ex, yy = (LONG)ey;
+    if (!open32MapPoint(dc, &sx, &sy, TRUE) || !open32MapPoint(dc, &xx, &yy, TRUE))
+        return FALSE;
+    int64_t width = llabs((int64_t)xx - sx), height = llabs((int64_t)yy - sy);
+    if (!width || !height)
+        return TRUE;
+    if (width > 16384 || height > 16384 || width * height > 16777216)
+    {
+        open32SetError(8);
+        return FALSE;
+    }
+    LONG left = sx < xx ? sx : xx, top = sy < yy ? sy : yy;
+    uint32 *pixels = malloc((size_t)width * height * 4);
+    uint8 *bits = malloc((size_t)width * height * 4);
+    BOOL ok = pixels && bits &&
+              lx_pm_raster_read(source, left, open32DCHeight(source) - top - (LONG)height,
+                                (unsigned)width, (unsigned)height, pixels);
+    if (ok)
+    {
+        PresentationSpace *source_ps = lx_pm_font_space(source),
+                          *target_ps = lx_pm_font_space(destination);
+        PmBitmap *source_bitmap = source_ps ? source_ps->bitmap_lease.resource : NULL,
+                 *target_bitmap = target_ps ? target_ps->bitmap_lease.resource : NULL;
+        BOOL source_mono = source_bitmap && source_bitmap->depth == 1,
+             target_mono = target_bitmap && target_bitmap->depth == 1;
+        Open32DC *target_dc = open32FindDC(destination);
+        for (size_t i = 0; i < (size_t)(width * height); i++)
+        {
+            uint32 rgb = pixels[i];
+            if (source_mono != target_mono)
+            {
+                if (source_mono)
+                {
+                    BOOL bit = source_bitmap->palette_count >= 2 ? rgb == source_bitmap->palette[1]
+                                                                 : rgb != 0;
+                    ULONG color = bit ? target_dc->background_color : target_dc->text_color;
+                    rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+                }
+                else
+                {
+                    ULONG color = dc->background_color;
+                    uint32 background =
+                        (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+                    rgb = rgb == background ? 0xffffff : 0;
+                }
+            }
+            bits[i * 4] = (uint8)rgb;
+            bits[i * 4 + 1] = (uint8)(rgb >> 8);
+            bits[i * 4 + 2] = (uint8)(rgb >> 16);
+            bits[i * 4 + 3] = 0;
+        }
+        uint8 info[40] = {0};
+        lx_guest_store_u32(info, 40);
+        lx_guest_store_u32(info + 4, (ULONG)width);
+        lx_guest_store_u32(info + 8, (ULONG)height);
+        lx_guest_store_u16(info + 12, 1);
+        lx_guest_store_u16(info + 14, 32);
+        ok = StretchDIBits(destination, x, y, w, h, sx > xx ? (LONG)width : 0,
+                           sy < yy ? 0 : (LONG)height, sx > xx ? -(LONG)width : (LONG)width,
+                           sy < yy ? (LONG)height : -(LONG)height, bits, info, 0, rop) != 0;
+    }
+    free(bits);
+    free(pixels);
+    if (!ok)
+        open32SetError(87);
+    return ok;
 }

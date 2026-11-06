@@ -36,6 +36,26 @@
     LX_NATIVE_MODULE_SHUTDOWN();                                                                   \
     if (obj32.mapping)                                                                             \
         lx_execution_unmap(GLoaderState.execution, obj32.mapping);
+/* Mutable data exports share one zero-filled guest object. Import fixups resolve
+   them through the execute-checked entry translation, as for DosAllocMem pages. */
+#define LX_NATIVE_MODULE_DATA_SUPPORT() static LxMmaps objdata;
+#define LX_NATIVE_MODULE_DATA(name) static void *data_address_##name;
+#define LX_NATIVE_MODULE_INIT_DATA_SUPPORT(bytes)                                                  \
+    memset(&objdata, 0, sizeof objdata);                                                           \
+    objdata.bits = 32;                                                                             \
+    objdata.alias = 0xffff;                                                                        \
+    objdata.size = ((size_t)(bytes) + 0xfff) & ~(size_t)0xfff;                                     \
+    objdata.mapping = lx_execution_map(GLoaderState.execution, 0, objdata.size,                    \
+                                       LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, 0);      \
+    if (!objdata.mapping)                                                                          \
+        return 0;                                                                                  \
+    objdata.addr = objdata.mapped = lx_execution_mapping_host(objdata.mapping);                    \
+    objdata.guest_base = lx_execution_mapping_address(objdata.mapping);
+#define LX_NATIVE_INIT_DATA(name, offset) data_address_##name = (uint8 *)objdata.addr + (offset);
+#define LX_NATIVE_MODULE_DEINIT_DATA_SUPPORT()                                                     \
+    if (objdata.mapping)                                                                           \
+        lx_execution_unmap(GLoaderState.execution, objdata.mapping);
+#define LX_NATIVE_EXPORT_DATA(name, ord) {ord, #name, &data_address_##name, &objdata, 1}
 #define LX_NATIVE_EXPORT32_BRIDGED(fn, ord) {ord, #fn, &bridge_address_##fn, &obj32, 1}
 #define LX_NATIVE_EXPORT32_BRIDGED_DIFFERENT_NAME(fn, name, ord)                                   \
     {ord, name, &bridge_address_##fn, &obj32, 1}

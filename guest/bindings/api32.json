@@ -604,6 +604,26 @@
       "argument_bytes": 20,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DosQueryAppType": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosSetDateTime": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosSuspendThread": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosResumeThread": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "nls": {
@@ -1423,6 +1443,176 @@
       "argument_bytes": 32,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "WinCancelShutdown": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCpTranslateString": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDeleteLibrary": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFlashWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFocusChange": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFreeErrorInfo": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetErrorInfo": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetMaxPosition": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetMinPosition": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinInvalidateRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsWindowShowing": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadLibrary": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadMessage": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinNextChar": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryAtomName": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryDlgItemShort": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryMsgPos": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryObjectWindow": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryPointerInfo": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryQueueInfo": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryUpdateRegion": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetCp": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetDlgItemShort": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetMultWindowPos": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetSysColors": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetSysValue": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetWindowBits": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinTrackRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinValidateRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinValidateRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinBroadcastMsg": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetKeyboardStateTable": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRealizePalette": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreatePointerIndirect": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmgpi": {
@@ -1970,6 +2160,291 @@
       "argument_bytes": 20,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "GpiBeginArea": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiBeginPath": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiCloseFigure": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiCopyMetaFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiEndArea": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiEndPath": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiFillPath": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiFullArc": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiPaintRegion": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiPointArc": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiPtInRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryDefaultViewMatrix": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryGraphicsField": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryLineEnd": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryLineJoin": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryLineWidthGeom": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryMetaFileBits": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryMetaFileLength": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryModelTransformMatrix": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryNearestColor": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryPS": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryPel": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryPickAperturePosition": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryPickApertureSize": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryRealColors": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryViewingLimits": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiRectInRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiResetBoundaryData": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiResetPS": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSaveMetaFile": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetArcParams": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetGraphicsField": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetLineEnd": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetLineJoin": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetLineWidthGeom": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetModelTransformMatrix": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetPS": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetPickAperturePosition": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetStopDraw": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetViewingLimits": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiStrokePath": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiPathToRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiTranslate": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiScale": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiRotate": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryDefViewingLimits": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetDefViewingLimits": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiDeletePalette": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSelectPalette": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryPalette": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryAttrs": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetPickApertureSize": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiCreatePalette": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryPaletteInfo": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiPartialArc": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiSetCharExtra": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiPolygons": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmwinx": {
@@ -2210,6 +2685,16 @@
     },
     "GetACP": {
       "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "MultiByteToWideChar": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WideCharToMultiByte": {
+      "argument_bytes": 32,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
@@ -3398,6 +3883,41 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     },
+    "SetPriorityClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetPriorityClass": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "LoadMenu": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "AdjustWindowRectEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "InterlockedIncrement": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "InterlockedDecrement": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "InterlockedExchange": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "GetTextFace": {
       "argument_bytes": 12,
       "callee_pop": 0,
@@ -3932,6 +4452,1156 @@
       "argument_bytes": 4,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "GetTextExtentExPoint": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetViewportOrgEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetWindowOrgEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetViewportExtEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetWindowExtEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PlayMetaFile": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "StretchDIBits": {
+      "argument_bytes": 52,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetObjectType": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EnumMetaFile": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PlayMetaFileRecord": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetNearestColor": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetTabbedTextExtent": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCursorPos": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetCursorPos": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetMenuCheckMarkDimensions": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WindowFromPoint": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "AnimatePalette": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Arc": {
+      "argument_bytes": 36,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "BeginPath": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CloseMetaFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CopyMetaFile": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateBrushIndirect": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateDIBitmap": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateEllipticRgn": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateEllipticRgnIndirect": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateHatchBrush": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateIcon": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateMetaFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreatePolyPolygonRgn": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreatePolygonRgn": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateRoundRectRgn": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DeleteEnhMetaFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrawFocusRect": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrawIcon": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Ellipse": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EndPath": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EnumEnhMetaFile": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EnumFonts": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EqualRgn": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Escape": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ExtCreatePen": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ExtSelectClipRgn": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "FillRgn": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "FrameRgn": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetBitmapBits": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetBkColor": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetBkMode": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCharABCWidths": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCharWidth": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetClipRgn": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCurrentObject": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCurrentPositionEx": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetEnhMetaFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetEnhMetaFileBits": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetEnhMetaFileHeader": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetKerningPairs": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetMetaFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetOutlineTextMetrics": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetPolyFillMode": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetSystemPaletteEntries": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetTextColor": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetViewportExtEx": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetViewportOrgEx": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetWinMetaFileBits": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetWindowDC": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetWindowExtEx": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetWindowOrgEx": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "LineDDA": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "OffsetRgn": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "OffsetViewportOrgEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "OffsetWindowOrgEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PaintRgn": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Pie": {
+      "argument_bytes": 36,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PlayEnhMetaFile": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PlayEnhMetaFileRecord": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PolyPolygon": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PolyPolyline": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PtInRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RectInRegion": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RectVisible": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ResetDC": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ResizePalette": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RoundRect": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ScaleViewportExtEx": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ScaleWindowExtEx": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ScrollDC": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ScrollWindow": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ScrollWindowEx": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetBitmapBits": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetDIBitsToDevice": {
+      "argument_bytes": 48,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetEnhMetaFileBits": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetPaletteEntries": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetPixel": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetPolyFillMode": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetStretchBltMode": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetTextCharacterExtra": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetTextJustification": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetWinMetaFileBits": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "StretchBlt": {
+      "argument_bytes": 44,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "StrokePath": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TabbedTextOut": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "UnrealizeObject": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WindowFromDC": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DeviceCapabilities": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "HPSToHDC": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DeleteHDCObjects": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetAbortProc": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "_CreateBitmapIndirect": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinTranslateDeviceRects": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinTranslateGraphicsObjectHandle": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "AddAtom": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "AdjustWindowRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Beep": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "BeginDeferWindowPos": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CheckRadioButton": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ChildWindowFromPoint": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ChooseColor": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ChooseFont": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ClipCursor": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CompareFileTime": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CopyFile": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateDialog": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateDialogParam": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateDirectory": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateEvent": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateMutex": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeAbandonTransaction": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeAccessData": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeAddData": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeClientTransaction": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeConnect": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeCreateDataHandle": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeDisconnect": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeFreeDataHandle": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeGetData": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdePostAdvise": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeQueryConvInfo": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeSetUserHandle": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DdeUnaccessData": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DefDlgProc": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DeferWindowPos": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DeleteAtom": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DeleteFile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DlgDirSelectEx": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosDateTimeToFileTime": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DragAcceptFiles": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DragFinish": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DragQueryFile": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DragQueryPoint": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EndDeferWindowPos": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EnumThreadWindows": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "EnumWindows": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "FileTimeToDosDateTime": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "FindAtom": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "FindWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetCursor": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetDiskFreeSpace": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetDlgCtrlID": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetDlgItemInt": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetDoubleClickTime": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetEnvironmentStrings": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetEnvironmentVariable": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetFileTime": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetFileTitle": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetForegroundWindow": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetKeyNameText": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetLastActivePopup": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetNextDlgTabItem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetNextWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetPriorityClipboardFormat": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetPrivateProfileInt": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetSystemDirectory": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetTempFileName": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetTempPath": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetTimeZoneInformation": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetTopWindow": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetUpdateRgn": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetWindowWord": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GlobalMemoryStatus": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsBadHugeReadPtr": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsBadHugeWritePtr": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsBadStringPtr": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsCharAlpha": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsCharAlphaNumeric": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsCharUpper": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsChild": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "IsDialogMessage": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "LockWindowUpdate": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "MapDialogRect": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "MapWindowPoints": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "MessageBox": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ModifyMenu": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "MoveFile": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "OutputDebugString": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PostThreadMessage": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegQueryInfoKey": {
+      "argument_bytes": 48,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegQueryValue": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RegSetValue": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ReleaseMutex": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RemoveDirectory": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "RemoveFontResource": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ReplyMessage": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ResetEvent": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SearchPath": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetDlgItemInt": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetEnvironmentVariable": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetEvent": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetFileAttributes": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetFileTime": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetHandleCount": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetWindowWord": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ShowCursor": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TrackPopupMenu": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TranslateMDISysAccel": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "VkKeyScan": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WriteProfileString": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ZeroMemory": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "_lcreat": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "_lopen": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "MapVirtualKey": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetMenuContextHelpId": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SetMenuContextHelpId": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ExtractIcon": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "lstrcmp2": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetKeyboardLayout": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetStringTypeEx": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "_CreateDialogIndirectParam": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "_DialogBoxIndirect": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "_DialogBoxIndirectParam": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinXTranslateMsg": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmdrag": {
@@ -3954,6 +5624,81 @@
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DrgAccessDraginfo": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgAllocDraginfo": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgAllocDragtransfer": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgDeleteDraginfoStrHandles": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgDrag": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgFreeDraginfo": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgFreeDragtransfer": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgGetPS": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgPostTransferMsg": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgQueryDragitemCount": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgQueryDragitemPtr": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgReleasePS": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgSendTransferMsg": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgSetDragitem": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DrgVerifyRMF": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmspl": {
@@ -3969,6 +5714,11 @@
     },
     "SplQueryDevice": {
       "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SplEnumPrinter": {
+      "argument_bytes": 36,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }
@@ -4065,6 +5815,16 @@
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateSwitchEntry": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryTaskTitle": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmctls": {
@@ -4080,6 +5840,16 @@
     },
     "WinFreeFileDlgList": {
       "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFontDlg": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDefFontDlgProc": {
+      "argument_bytes": 16,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }
@@ -4124,6 +5894,81 @@
       "argument_bytes": 20,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "WinEnumObjectClasses": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinStoreWindowPos": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRestoreWindowPos": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadFileIcon": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFreeFileIcon": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinReplaceObjectClass": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryActiveDesktopPathname": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryObjectPath": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSaveObject": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinOpenObject": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinMoveObject": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCopyObject": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateShadow": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRestartWPDServer": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsWPDServerReady": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmgre": {
@@ -4163,6 +6008,26 @@
     },
     "mmioClose": {
       "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mmioRead": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mmioWrite": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mmioSeek": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mmioGetHeader": {
+      "argument_bytes": 24,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }
@@ -4245,6 +6110,11 @@
     },
     "Os2LegacyShutdown": {
       "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Os2LegacyGetHostId": {
+      "argument_bytes": 0,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

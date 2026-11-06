@@ -43,6 +43,18 @@ typedef enum LxHandleKind
     LX_HANDLE_OPEN32_SEMAPHORE,
     LX_HANDLE_OPEN32_ACCEL,
     LX_HANDLE_OPEN32_METAFILE,
+    LX_HANDLE_PM_PALETTE,
+    LX_HANDLE_PM_METAFILE,
+    LX_HANDLE_OPEN32_DEFER,
+    LX_HANDLE_OPEN32_EVENT,
+    LX_HANDLE_OPEN32_MUTEX,
+    LX_HANDLE_OPEN32_DDE_DATA,
+    LX_HANDLE_OPEN32_DDE_CONVERSATION,
+    LX_HANDLE_OPEN32_ENHMETAFILE,
+    LX_HANDLE_TIMER,
+    LX_HANDLE_OPEN32_PROCESS,
+    LX_HANDLE_OPEN32_CHILD_THREAD,
+    LX_HANDLE_PM_APP,
     LX_HANDLE_KIND_LIMIT
 } LxHandleKind;
 typedef struct LxHandleBorrow
@@ -57,6 +69,9 @@ uint32_t lx_handle_create(LxHandleKind kind, void *resource, void (*destroy)(voi
 int lx_handle_borrow(uint32_t handle, LxHandleKind kind, LxHandleBorrow *borrow);
 void lx_handle_release(LxHandleBorrow *borrow);
 int lx_handle_close(uint32_t handle, LxHandleKind kind);
+/* A second handle shares the same resource and destructor. Each handle closes
+   independently; the resource ends with its last handle and borrow. Zero on failure. */
+uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind);
 size_t lx_handle_count(LxHandleKind kind, const void *resource);
 /* Guard runs under the registry lock and must not call registry functions.
    Returns 1 on close, 0 for an invalid handle, -1 when busy. */

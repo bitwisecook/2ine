@@ -7,6 +7,9 @@ void open32SetError(ULONG error);
 void open32CommonDialogError(ULONG error);
 ULONG open32ScrollWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);
 BOOL open32NativeDialogWindow(ULONG handle);
+BOOL open32NativeControlOwned(ULONG handle);
+BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style, LONG x, LONG y,
+                               LONG width, LONG height, ULONG parent, ULONG id, ULONG *handle);
 BOOL open32FileDialogWindow(ULONG handle);
 struct Open32Window *open32PropertyWindow(ULONG handle);
 LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG second,
@@ -14,6 +17,8 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
 LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set);
 void open32NativeControlsPrune(void);
 ULONG open32ControlNotification(ULONG handle, ULONG packed);
+/* Maps Win32 control styles to PM; a BS_GROUPBOX button changes *kind to the static class. */
+ULONG open32ControlStyle(ULONG style, unsigned *kind);
 int open32FileIO(ULONG handle, PVOID data, ULONG size, PULONG actual, BOOL writing);
 BOOL open32CloseFile(ULONG handle);
 void open32FilesCleanup(void);

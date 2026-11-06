@@ -2,8 +2,13 @@
 /* Persistent opaque file metadata in a private extended-attribute namespace. */
 #include "hal/posix/fs_internal.h"
 #include "ball/disk_image.h"
+#include <sys/attr.h>
+#include <sys/stat.h>
 #include <sys/xattr.h>
 #include <errno.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 static LxHostFsError metadata_error(void)
 {
     if (errno == EROFS)
@@ -43,4 +48,24 @@ LxHostFsError lx_host_file_metadata_get(LxHostFile *file, void *data, size_t cap
     }
     *size = (size_t)count;
     return LX_HOST_FS_OK;
+}
+LxHostFsError lx_host_file_created(LxHostFile *file, int64_t *seconds)
+{
+    *seconds = 0;
+    struct stat native;
+    if (!file->image && !fstat(file->fd, &native))
+        *seconds = native.st_birthtimespec.tv_sec;
+    return LX_HOST_FS_OK;
+}
+LxHostFsError lx_host_file_set_created(LxHostFile *file, int64_t seconds)
+{
+    if (file->image)
+        return LX_HOST_FS_INVALID;
+    struct attrlist attributes;
+    memset(&attributes, 0, sizeof attributes);
+    attributes.bitmapcount = ATTR_BIT_MAP_COUNT;
+    attributes.commonattr = ATTR_CMN_CRTIME;
+    struct timespec created = {.tv_sec = (time_t)seconds};
+    return fsetattrlist(file->fd, &attributes, &created, sizeof created, 0) == 0 ? LX_HOST_FS_OK
+                                                                                 : metadata_error();
 }

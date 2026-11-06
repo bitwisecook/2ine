@@ -5,9 +5,9 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
     elseif(module STREQUAL "mdm")
         set(sources mdm.c mdm_video.c video_decode.c midi_synth.c midi_config.c midi_mt32.c)
     elseif(module STREQUAL "pmwin")
-        set(sources pmwin/help_compat.c pmwin/module.c pmwin/context.c pmwin/codepages.c pmwin/windows.c pmwin/frame_state.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/raster.c pmwin/coordinates.c pmwin/device_context.c pmwin/print_job.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/message_box.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/scrollbar.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/hooks.c pmwin/visible.c pmwin/dive.c pmwin/video_frames.c pmwin/thread_messages.c pmwin/input.c pmwin/window_text.c pmwin/clipboard.c pmwin/semaphore_waits.c pmwin/pointer_image.c ../ball/icon_bitmap.c)
+        set(sources pmwin/help_compat.c pmwin/module.c pmwin/context.c pmwin/codepages.c pmwin/windows.c pmwin/frame_state.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/raster.c pmwin/coordinates.c pmwin/device_context.c pmwin/print_job.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/message_box.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/scrollbar.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/hooks.c pmwin/visible.c pmwin/dive.c pmwin/video_frames.c pmwin/thread_messages.c pmwin/input.c pmwin/window_text.c pmwin/clipboard.c pmwin/semaphore_waits.c pmwin/pointer_image.c pmwin/compat_services.c pmwin/standard_font.c ../ball/icon_bitmap.c ../ball/icon_executable.c ../formats/decompress.c)
     elseif(module STREQUAL "pmgpi")
-        set(sources pmgpi.c pmgpi/help.c pmgpi/fonts.c pmgpi/device.c pmgpi/state.c pmgpi/bitmap.c pmgpi/regions.c pmgpi/text.c pmgpi/shapes.c)
+        set(sources pmgpi.c pmgpi/help.c pmgpi/fonts.c pmgpi/device.c pmgpi/state.c pmgpi/bitmap.c pmgpi/regions.c pmgpi/text.c pmgpi/shapes.c pmgpi/extensions.c pmgpi/paths.c pmgpi/metafiles.c)
     elseif(module STREQUAL "pmctls")
         set(sources pmctls/module.c)
     elseif(module STREQUAL "pmwinx")
@@ -18,6 +18,7 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/time.c
             pmwinx/timers.c
             pmwinx/locale.c
+            pmwinx/unicode.c
             pmwinx/context.c
             pmwinx/dde.c
             pmwinx/registry.c
@@ -73,7 +74,21 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/critical.c
             pmwinx/tls.c
             pmwinx/threads.c
+            pmwinx/priority.c
+            pmwinx/atomic.c
+            pmwinx/adjust_window.c
             pmwinx/semaphores.c
+            pmwinx/batch_graphics_state.c
+            pmwinx/batch_graphics_paths.c
+            pmwinx/batch_graphics_scroll.c
+            pmwinx/batch_graphics_interop.c
+            pmwinx/batch_services_basic.c
+            pmwinx/batch_services_common_dialogs.c
+            pmwinx/batch_services_drag.c
+            pmwinx/batch_services_paths.c
+            pmwinx/batch_services_presentation.c
+            pmwinx/batch_services_sync.c
+            pmwinx/batch_services_windows.c
         )
     elseif(module STREQUAL "pmshapi")
         set(sources pmshapi.c pmshapi/profiles.c pmshapi/switches.c)
@@ -116,9 +131,10 @@ else()
 endif()
 target_link_libraries(pmgpi PRIVATE pmwin)
 target_link_libraries(pmwinx PRIVATE pmshapi pmwin pmgpi)
-target_link_libraries(pmwp PRIVATE pmshapi)
+target_link_libraries(pmwp PRIVATE pmshapi pmwin sesmgr)
 target_link_libraries(pmshapi PRIVATE pmwin nls)
 target_link_libraries(pmspl PRIVATE pmshapi)
+target_link_libraries(pmdrag PRIVATE pmwin)
 
 target_link_libraries(pmctls PRIVATE pmwin)
 target_link_libraries(pmwin PRIVATE nls)

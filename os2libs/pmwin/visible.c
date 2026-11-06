@@ -28,6 +28,10 @@ BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
         WinIntersectRect(0, &rect, &rect, &ps->paint_clip);
     if (bounds)
         WinIntersectRect(0, &rect, &rect, (PRECTL)bounds);
+    if(ps->gpi.initialized) {
+        if(!ps->gpi.display_enabled)return TRUE;
+        lx_pm_graphics_limits(ps,&rect);
+    }
     LxHostRect origin;
     calcHeavyweightRect(window, &origin);
     for (Window *w = window->parent; w && w != &desktop_window; w = w->parent)

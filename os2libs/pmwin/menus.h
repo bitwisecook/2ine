@@ -17,6 +17,7 @@ typedef struct PmMenu
     int selected;
     HWND focus;
     HWND active_parent;
+    unsigned codepage;
 } PmMenu;
 LX_PRIVATE BOOL createSystemMenu(Window *frame, ULONG flags);
 LX_PRIVATE BOOL createMinMaxMenu(Window *frame, ULONG flags);

@@ -5,6 +5,7 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
 #include "hal/font.h"
+#include "os2libs/pm_text.h"
 LONG GetDialogBaseUnits(void)
 {
     static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -72,7 +73,7 @@ BOOL GetTextMetrics(ULONG handle, PVOID output)
     memcpy(output, record, 56);
     return TRUE;
 }
-LONG EnumFontFamilies(ULONG handle, PSZ family, ULONG procedure, ULONG parameter)
+static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG parameter, LONG result)
 {
     if (!open32FindDC(handle) ||
         !lx_execution_memory(GLoaderState.execution, procedure, 1, LX_GUEST_EXECUTE))
@@ -96,7 +97,6 @@ LONG EnumFontFamilies(ULONG handle, PSZ family, ULONG procedure, ULONG parameter
     }
     uint8 *record = lx_execution_mapping_host(mapping);
     uint32 address = lx_execution_mapping_address(mapping);
-    LONG result = 0;
     for (LONG i = 0; i < count; i++)
     {
         FONTMETRICS *fm = &fonts[i];
@@ -121,12 +121,16 @@ LONG EnumFontFamilies(ULONG handle, PSZ family, ULONG procedure, ULONG parameter
         strcpy((char *)record + 124, style);
         encode_metrics(fm, &metrics, record, record + 256);
         result = (LONG)lx_execution_callback32_4(GLoaderState.execution, procedure, address,
-                                                 address + 256, metrics.sfnt ? 4 : 0, parameter);
+                                                 address + 256, metrics.sfnt ? 4 : 2, parameter);
         if (!result)
             break;
     }
     lx_execution_unmap(GLoaderState.execution, mapping);
     return result;
+}
+LONG EnumFontFamilies(ULONG handle, PSZ family, ULONG procedure, ULONG parameter)
+{
+    return enumerate_fonts(handle, family, procedure, parameter, 0);
 }
 
 LONG GetTextFace(ULONG handle, LONG capacity, PCHAR output)
@@ -148,4 +152,140 @@ LONG GetTextFace(ULONG handle, LONG capacity, PCHAR output)
     memcpy(output, metrics.szFacename, length);
     output[length] = 0;
     return (LONG)length;
+}
+
+LONG EnumFonts(ULONG h, PSZ face, ULONG procedure, ULONG parameter)
+{
+    /* An enumeration that finds no font still reports success. */
+    return enumerate_fonts(h, face, procedure, parameter, 1);
+}
+static uint32 metric_codepoint(ULONG c)
+{
+    return lx_pm_codepoint(WinCpTranslateChar(0, 1004, (uint8)c, 437));
+}
+BOOL GetCharWidth(ULONG h, ULONG first, ULONG last, PVOID output)
+{
+    if (!open32FindDC(h) || !output || first > last || last > 255)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LxHostFont *font = lx_pm_font(h);
+    for (ULONG c = first; c <= last; c++)
+    {
+        LONG width = lx_host_font_advance(font, metric_codepoint(c));
+        if (width < 0)
+            return FALSE;
+        lx_guest_store_u32((uint8 *)output + (c - first) * 4, (ULONG)width);
+    }
+    return TRUE;
+}
+BOOL GetCharABCWidths(ULONG h, ULONG first, ULONG last, PVOID output)
+{
+    if (!open32FindDC(h) || !output || first > last || last > 255)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    /* PMWINX reports the whole advance as abcB, for every font technology. */
+    LxHostFont *font = lx_pm_font(h);
+    for (ULONG c = first; c <= last; c++)
+    {
+        LONG width = lx_host_font_advance(font, metric_codepoint(c));
+        if (width < 0)
+            return FALSE;
+        uint8 *p = (uint8 *)output + (c - first) * 12;
+        lx_guest_store_u32(p, 0);
+        lx_guest_store_u32(p + 4, (ULONG)width);
+        lx_guest_store_u32(p + 8, 0);
+    }
+    return TRUE;
+}
+ULONG GetKerningPairs(ULONG h, ULONG capacity, PVOID output)
+{
+    if (!open32FindDC(h))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    LxHostFont *font = lx_pm_font(h);
+    ULONG count = 0;
+    for (ULONG first = 0; first < 256; first++)
+        for (ULONG second = 0; second < 256; second++)
+        {
+            LONG value =
+                lx_host_font_kerning(font, metric_codepoint(first), metric_codepoint(second));
+            if (!value)
+                continue;
+            if (output && count < capacity)
+            {
+                uint8 *p = (uint8 *)output + count * 8;
+                lx_guest_store_u16(p, (uint16)first);
+                lx_guest_store_u16(p + 2, (uint16)second);
+                lx_guest_store_u32(p + 4, (ULONG)value);
+            }
+            count++;
+        }
+    return output && count > capacity ? capacity : count;
+}
+ULONG GetOutlineTextMetrics(ULONG h, ULONG capacity, PVOID output)
+{
+    LxHostFontMetrics metrics;
+    uint8 tm[56];
+    if (!open32FindDC(h) || !lx_host_font_metrics(lx_pm_font(h), &metrics) ||
+        !GetTextMetrics(h, tm))
+    {
+        open32SetError(6);
+        return 0;
+    }
+    if (!capacity)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    const char *style = metrics.bold ? (metrics.italic ? "Bold Italic" : "Bold")
+                                     : (metrics.italic ? "Italic" : "Regular");
+    const char *names[] = {metrics.family, metrics.face, style, metrics.face};
+    ULONG needed = 212;
+    for (unsigned i = 0; i < 4; i++)
+        needed += (ULONG)strlen(names[i]) + 1;
+    if (!output)
+        return needed;
+    uint8 record[512] = {0};
+    lx_guest_store_u32(record, needed);
+    memcpy(record + 4, tm, 56);
+    record[61] = 2;
+    record[63] = metrics.bold ? 8 : 5;
+    record[64] = metrics.fixed ? 9 : 3;
+    lx_guest_store_u32(record + 72, (metrics.italic ? 1 : 0) | (metrics.bold ? 0x20 : 0) |
+                                        (!metrics.bold && !metrics.italic ? 0x40 : 0));
+    lx_guest_store_u32(record + 80, 1);
+    lx_guest_store_u32(record + 84, 0);
+    lx_guest_store_u32(record + 92, (ULONG)metrics.em);
+    lx_guest_store_u32(record + 96, (ULONG)metrics.ascent);
+    lx_guest_store_u32(record + 100, (ULONG)-metrics.descent);
+    lx_guest_store_u32(record + 104, (ULONG)metrics.leading);
+    lx_guest_store_u32(record + 108, (ULONG)metrics.lowercase_ascent);
+    lx_guest_store_u32(record + 112, (ULONG)metrics.x_height);
+    lx_guest_store_u32(record + 120, (ULONG)metrics.ascent);
+    lx_guest_store_u32(record + 124, (ULONG)metrics.maximum_width);
+    lx_guest_store_u32(record + 128, (ULONG)-metrics.descent);
+    lx_guest_store_u32(record + 132, (ULONG)metrics.ascent);
+    lx_guest_store_u32(record + 136, (ULONG)-metrics.descent);
+    lx_guest_store_u32(record + 140, (ULONG)metrics.leading);
+    lx_guest_store_u32(record + 144, 1);
+    lx_guest_store_u32(record + 180, (ULONG)metrics.strikeout_size);
+    lx_guest_store_u32(record + 184, (ULONG)metrics.strikeout_position);
+    lx_guest_store_u32(record + 188, (ULONG)metrics.underline_size);
+    lx_guest_store_u32(record + 192, (ULONG)metrics.underline_position);
+    ULONG offset = 212;
+    for (unsigned i = 0; i < 4; i++)
+    {
+        lx_guest_store_u32(record + 196 + i * 4, offset);
+        size_t n = strlen(names[i]) + 1;
+        memcpy(record + offset, names[i], n);
+        offset += (ULONG)n;
+    }
+    memcpy(output, record, capacity < needed ? capacity : needed);
+    return 1;
 }

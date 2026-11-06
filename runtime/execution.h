@@ -89,7 +89,8 @@ int lx_execution_address(LxExecution *execution, const void *host, size_t size,
                          unsigned permissions, uint32_t *address);
 
 /* Atomic access to a writable guest synchronization word, including unaligned
-   x86 words. The backend serializes this with guest CPU memory operations. */
+   x86 words. The backend serializes this with guest CPU memory operations.
+   Operation: 0=load, 1=exchange, 2=add; previous receives the original word. */
 int lx_execution_atomic_u32(LxExecution *execution, uint32_t address, int exchange, uint32_t value,
                             uint32_t *previous);
 
@@ -156,6 +157,25 @@ int lx_execution_end_thread(LxExecution *execution);
    service loops poll so a worker's request can interrupt an idle primary thread. */
 void lx_execution_terminate(LxExecution *execution, void (*cleanup)(uint32_t), uint32_t code);
 void lx_execution_poll_termination(LxExecution *execution);
+/* Honour a pending process termination without visiting the checkpoint. */
+void lx_execution_poll_exit(LxExecution *execution);
+/* Process services may park a guest at an execution boundary. The callback
+   runs without the CPU lock; register before guest threads are started. */
+void lx_execution_set_checkpoint(LxExecution *execution, void (*checkpoint)(void *), void *argument);
+void lx_execution_checkpoint(LxExecution *execution);
+/* Backends with bounded guest slices re-test this word for the calling thread
+   immediately before each slice. A nonzero value sends it to the checkpoint. */
+void lx_execution_set_park_flag(LxExecution *execution, const int *flag);
+/* Returns after every guest slice already running has ended. A thread whose
+   park flag was set before this call runs no further guest instruction.
+   Zero means the backend cannot stop guest code at instruction boundaries. */
+int lx_execution_quiesce(LxExecution *execution);
+/* Far-call a USE16 procedure on the calling guest thread. The argument bytes are
+   its stack frame, lowest address first, and it removes them with RETF n. The
+   caller's stack is used while its tile has room, otherwise a private tile.
+   The result is DX:AX. Zero means the procedure was not called. */
+int lx_execution_call16(LxExecution *execution, uint32_t target, const void *arguments,
+                        uint32_t argument_bytes, uint32_t *result);
 /* Four stack words and a 32-bit result; nested calls preserve the suspended CPU state. */
 uint32_t lx_execution_callback32_4(LxExecution *execution, uint32_t entry, uint32_t a, uint32_t b,
                                    uint32_t c, uint32_t d);

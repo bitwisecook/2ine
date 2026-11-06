@@ -1,0 +1,25 @@
+{
+  "date": "2026-11-05",
+  "sourceRevision": "99f5958 plus working-tree changes",
+  "testConfiguration": "Release; pinned SDL 3.4.18 and FreeType; system Unicorn; dummy SDL video/audio; MIDI/video decoding off for compatibility verification only",
+  "installedAppModified": false,
+  "ctest": "Test project /Users/jimd/src/os2/tools/2ine/build/lotus-metafile/runtime\n    Start  1: source_boundaries\n1/7 Test  #1: source_boundaries ................   Passed    0.09 sec\n    Start 11: guest_handles\n2/7 Test #11: guest_handles ....................   Passed    0.18 sec\n    Start 12: runtime_execution\n3/7 Test #12: runtime_execution ................   Passed    0.21 sec\n    Start 26: presentation_manager\n4/7 Test #26: presentation_manager .............   Passed    0.26 sec\n    Start 40: lx_forwarded_exports\n5/7 Test #40: lx_forwarded_exports .............   Passed    0.13 sec\n    Start 50: open32_apis\n6/7 Test #50: open32_apis ......................   Passed    3.88 sec\n    Start 51: missing_import_exit\n7/7 Test #51: missing_import_exit ..............   Passed    0.21 sec\n\n100% tests passed out of 7\n\nTotal Test time (real) =   4.96 sec\n",
+  "processExit": 1,
+  "observations": [
+    "Second tab renders correctly after first/second tab switches",
+    "Amortize a Loan opens loan.12m and renders figures, payment table and bitmap metafile pictures",
+    "Editing the principal changes computed figures; retained screenshot shows 200.00",
+    "Main SDL window reports resizable; resize 640x480 to 900x650 updates content",
+    "SDL host Quit ends the session naturally with status 1; no missing-import or CPU-fault diagnostic in final probe"
+  ],
+  "limitations": [
+    "Physical mouse resize and native green maximize button not exercised by this dummy-driver probe",
+    "Memory WMF playback supports the bitmap record path; vector/enhanced metafiles and nonidentity mappings for other drawing primitives remain unsupported",
+    "Earlier teardown guest null reads remain an underlying compatibility issue, now terminated as logged worker exits rather than SIGABRT"
+  ],
+  "runtimeSha256": {
+    "lib2ine.dylib": "989ccb98f8f4d5b917c0695e428287f2b580d936f4464d617d52c61bedc2f3e4",
+    "libpmwinx.so": "65fdbed9ea4ffe29a6d877e1a96bb0462ab89434dd96e5ade98d8273d0e89b5f"
+  },
+  "templateSha256": "20787c878e68304856e95c21771049c18a12c6bec82bd1987bc4c3e9dc95da8b"
+}

@@ -509,6 +509,14 @@ int tb_fat_modify(const char *path, const char *expected, int action, uint64_t o
             ok = result(f_rename(name, other));
         else if (action == TB_FS_READONLY || action == TB_FS_WRITABLE)
             ok = result(f_chmod(name, action == TB_FS_READONLY ? AM_RDO : 0, AM_RDO));
+        else if (action == TB_FS_TOUCH)
+        {
+            uint32_t stamp = tb_dos_stamp((int64_t)offset);
+            FILINFO info = {0};
+            info.fdate = (WORD)(stamp >> 16);
+            info.ftime = (WORD)stamp;
+            ok = result(f_utime(name, &info));
+        }
         else if (action == TB_FS_DELETE || action == TB_FS_RMDIR)
         {
             FILINFO info;

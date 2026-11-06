@@ -1,9 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Persistent opaque file metadata in a private extended-attribute namespace. */
+#define _GNU_SOURCE 1
 #include "hal/posix/fs_internal.h"
 #include "ball/disk_image.h"
+#include <sys/stat.h>
 #include <sys/xattr.h>
 #include <errno.h>
+#include <fcntl.h>
 static LxHostFsError metadata_error(void)
 {
     if (errno == EROFS)
@@ -43,4 +46,26 @@ LxHostFsError lx_host_file_metadata_get(LxHostFile *file, void *data, size_t cap
     }
     *size = (size_t)count;
     return LX_HOST_FS_OK;
+}
+/* Linux cannot rewrite a birth time, so a guest-set value is retained beside the file. */
+LxHostFsError lx_host_file_created(LxHostFile *file, int64_t *seconds)
+{
+    *seconds = 0;
+    if (file->image)
+        return LX_HOST_FS_OK;
+    if (fgetxattr(file->fd, "user.2ine.created", seconds, sizeof *seconds) == sizeof *seconds)
+        return LX_HOST_FS_OK;
+    struct statx native;
+    if (!statx(file->fd, "", AT_EMPTY_PATH, STATX_BTIME, &native) &&
+        (native.stx_mask & STATX_BTIME))
+        *seconds = native.stx_btime.tv_sec;
+    return LX_HOST_FS_OK;
+}
+LxHostFsError lx_host_file_set_created(LxHostFile *file, int64_t seconds)
+{
+    if (file->image)
+        return LX_HOST_FS_INVALID;
+    return fsetxattr(file->fd, "user.2ine.created", &seconds, sizeof seconds, 0) == 0
+               ? LX_HOST_FS_OK
+               : metadata_error();
 }

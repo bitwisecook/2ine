@@ -150,6 +150,10 @@ APIRET16 Dos16SetDateTime(PDATETIME datetime)
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
+APIRET DosSetDateTime(PDATETIME datetime)
+{
+    return Dos16SetDateTime(datetime);
+}
 APIRET DosGetDateTime(PDATETIME pdt)
 {
     TRACE_NATIVE("DosGetDateTime(%p)", pdt);

@@ -25,6 +25,7 @@ HPS GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags)
     {
         ps->page_size = *size;
         ps->page_units = flags & 0x1c;
+        ps->ps_options = flags;
     }
     return handle;
 }
@@ -41,10 +42,16 @@ LONG GpiPolyLine(HPS hps, LONG count, PPOINTL points)
     TRACE_NATIVE("GpiPolyLine(%u, %d, %p)", (unsigned)hps, (int)count, points);
     if (!lx_pm_valid_ps(hps) || count < 0 || count > 65536 || (count && !points))
         return 0;
+    LONG result = 1;
     for (LONG i = 0; i < count; i++)
-        if (!lx_pm_line(hps, &points[i], 0))
+    {
+        LONG drawn = lx_pm_line(hps, &points[i], 0);
+        if (!drawn)
             return 0;
-    return 1;
+        if (drawn == 2)
+            result = 2;
+    }
+    return result;
 }
 BOOL GpiMove(HPS hps, PPOINTL point)
 {
@@ -60,7 +67,17 @@ HDC GpiQueryDevice(HPS ps)
 }
 BOOL GpiAssociate(HPS ps, HDC dc)
 {
-    return lx_pm_associate_dc(ps, dc);
+    if (!lx_pm_associate_dc(ps, dc))
+        return FALSE;
+    /* Association returns the viewing limits to their default value. */
+    PresentationSpace *space = lx_pm_font_space(ps);
+    if (space)
+    {
+        space->gpi.viewing_limits = space->gpi.default_limits;
+        space->gpi.viewing_set = space->gpi.default_set;
+        space->gpi.viewing_custom = FALSE;
+    }
+    return TRUE;
 }
 BOOL GpiSetCp(HPS ps, ULONG cp)
 {

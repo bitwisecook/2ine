@@ -9,18 +9,6 @@ static BOOL unsupported(void)
     WinSetErrorInfo(PMERR_FUNCTION_NOT_SUPPORTED, 0, NULL);
     return FALSE;
 }
-BOOL GpiDeleteMetaFile(ULONG handle)
-{
-    (void)handle;
-    return unsupported();
-}
-ULONG GpiLoadMetaFile(HAB anchor, PSZ filename)
-{
-    (void)anchor;
-    (void)filename;
-    unsupported();
-    return 0;
-}
 LONG GpiPlayMetaFile(HPS ps, ULONG handle, LONG count, PLONG options, PLONG segments,
                      LONG description_length, PSZ description)
 {
@@ -34,35 +22,28 @@ LONG GpiPlayMetaFile(HPS ps, ULONG handle, LONG count, PLONG options, PLONG segm
     unsupported();
     return -1;
 }
-BOOL GpiSetMetaFileBits(ULONG handle, LONG offset, LONG length, PVOID bytes)
+BOOL GpiQueryBoundaryData(HPS handle, PRECTL bounds)
 {
-    (void)handle;
-    (void)offset;
-    (void)length;
-    (void)bytes;
-    return unsupported();
+    PresentationSpace *ps=lx_pm_font_space(handle);
+    if(!ps||!bounds)return FALSE;
+    *bounds=ps->gpi.boundary_set?ps->gpi.boundary:(RECTL){0,0,0,0};
+    return TRUE;
 }
-BOOL GpiQueryBoundaryData(HPS ps, PRECTL bounds)
+BOOL GpiSetDrawControl(HPS handle,LONG control,LONG value)
 {
-    (void)ps;
-    (void)bounds;
-    return unsupported();
+    PresentationSpace*ps=lx_pm_font_space(handle);
+    if(!ps||control<1||control>5||(value!=0&&value!=1))return FALSE;
+    LONG matrix[9];if(!GpiQueryDefaultViewMatrix(handle,9,matrix))return FALSE;
+    /* DCTL_ERASE and DCTL_DYNAMIC concern retained drawing, which does not exist here. */
+    if(control==2)ps->gpi.display_enabled=value;
+    else if(control==3)ps->gpi.boundary_enabled=value;
+    else if(control==5){ps->gpi.correlate=value;ps->gpi.pick_hit=FALSE;}
+    else if(value&&control==4)return unsupported();
+    return TRUE;
 }
-BOOL GpiSetDrawControl(HPS ps, LONG control, LONG value)
-{
-    if (!lx_pm_valid_ps(ps) || control < 1 || control > 5 || (value != 0 && value != 1))
-        return FALSE;
-    /* Immediate drawing has display enabled; other controls require retained
-       graphics or boundary accumulation and cannot be reported as applied. */
-    return control == 2 && value == 1 ? TRUE : unsupported();
-}
-BOOL GpiSetDefaultViewMatrix(HPS ps, LONG count, PVOID matrix, LONG options)
-{
-    static const LONG identity[9] = {65536, 0, 0, 0, 65536, 0, 0, 0, 1};
-    if (!lx_pm_valid_ps(ps) || count != 9 || !matrix || options < 0 || options > 2)
-        return FALSE;
-    return !memcmp(matrix, identity, sizeof identity) ? TRUE : unsupported();
-}
+extern BOOL lx_gpi_default_matrix(HPS,LONG,PVOID,LONG);
+BOOL GpiSetDefaultViewMatrix(HPS ps,LONG count,PVOID matrix,LONG options)
+{ return lx_gpi_default_matrix(ps,count,matrix,options); }
 LONG GpiSetBitmapBits(HPS handle, LONG start, LONG scans, PVOID bits, PVOID information)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);

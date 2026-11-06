@@ -231,3 +231,13 @@ ULONG WinDestroyAtomTable(ULONG handle)
     lx_host_mutex_unlock(clipboard_mutex);
     return valid ? 0 : handle;
 }
+
+ULONG WinQueryAtomName(ULONG table,ULONG atom,PSZ output,ULONG capacity)
+{
+    if(!output||!capacity||!lock_clipboard())return 0;
+    const char*name=NULL;char number[24];
+    if(atom&&atom<0xc000){snprintf(number,sizeof number,"#%u",(unsigned)atom);name=number;}
+    else for(SystemAtom*p=atoms;p;p=p->next)if(p->table==table&&p->id==atom){name=p->name;break;}
+    size_t n=name?strlen(name):0;if(n>=capacity)n=capacity-1;if(n)memcpy(output,name,n);output[n]=0;
+    lx_host_mutex_unlock(clipboard_mutex);return n;
+}

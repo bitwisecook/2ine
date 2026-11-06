@@ -6,8 +6,14 @@ typedef struct Open32Palette
 {
     ULONG count;
     BOOL stock;
-    uint8 entries[];
+    uint8 *entries;
 } Open32Palette;
+static void free_palette(void *resource)
+{
+    Open32Palette *palette = resource;
+    free(palette->entries);
+    free(palette);
+}
 ULONG CreatePalette(PVOID input)
 {
     if (!input || lx_guest_load_u16(input) != 0x300 || !lx_guest_load_u16((uint8 *)input + 2))
@@ -16,18 +22,22 @@ ULONG CreatePalette(PVOID input)
         return 0;
     }
     ULONG count = lx_guest_load_u16((uint8 *)input + 2);
-    Open32Palette *palette = calloc(1, sizeof *palette + 4 * count);
-    if (!palette)
+    Open32Palette *palette = calloc(1, sizeof *palette);
+    if (palette)
+        palette->entries = calloc(count, 4);
+    if (!palette || !palette->entries)
     {
+        if (palette)
+            free_palette(palette);
         open32SetError(8);
         return 0;
     }
     palette->count = count;
     memcpy(palette->entries, (uint8 *)input + 4, count * 4);
-    ULONG handle = lx_handle_create(LX_HANDLE_OPEN32_PALETTE, palette, free);
+    ULONG handle = lx_handle_create(LX_HANDLE_OPEN32_PALETTE, palette, free_palette);
     if (!handle)
     {
-        free(palette);
+        free_palette(palette);
         open32SetError(8);
     }
     return handle;
@@ -148,4 +158,106 @@ LONG open32PaletteObject(ULONG handle, LONG capacity, PVOID output)
         lx_guest_store_u16(output, (uint16)((Open32Palette *)borrow.resource)->count);
     lx_handle_release(&borrow);
     return result;
+}
+
+/* Open32 animates only PC_RESERVED entries; ordinary writes clear explicit-index flags. */
+ULONG SetPaletteEntries(ULONG handle, ULONG first, ULONG count, PVOID input)
+{
+    LxHandleBorrow borrow = {0};
+    if (!input)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    if (!count)
+        return 1;
+    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
+    {
+        open32SetError(6);
+        return 0;
+    }
+    Open32Palette *palette = borrow.resource;
+    ULONG copied = first < palette->count ? palette->count - first : 0;
+    if (copied > count)
+        copied = count;
+    if (palette->stock)
+        copied = 0;
+    if (copied)
+        memcpy(palette->entries + first * 4, input, copied * 4);
+    lx_handle_release(&borrow);
+    return copied;
+}
+BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
+{
+    LxHandleBorrow borrow = {0};
+    if (!input)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    if (!count)
+        return TRUE;
+    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
+    {
+        open32SetError(6);
+        return FALSE;
+    }
+    Open32Palette *palette = borrow.resource;
+    BOOL valid = !palette->stock && first <= palette->count && count <= palette->count - first;
+    if (valid)
+        for (ULONG i = 0; i < count; i++)
+            if (palette->entries[(first + i) * 4 + 3] & 1)
+                memcpy(palette->entries + (first + i) * 4, (uint8 *)input + i * 4, 3);
+    lx_handle_release(&borrow);
+    if (!valid)
+        open32SetError(87);
+    return valid;
+}
+BOOL ResizePalette(ULONG handle, ULONG count)
+{
+    LxHandleBorrow borrow = {0};
+    if (!count || count > 65535 || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
+    {
+        open32SetError(!count || count > 65535 ? 87 : 6);
+        return FALSE;
+    }
+    Open32Palette *palette = borrow.resource;
+    BOOL valid = !palette->stock;
+    if (valid)
+    {
+        uint8 *entries = realloc(palette->entries, (size_t)count * 4);
+        if (!entries)
+        {
+            lx_handle_release(&borrow);
+            open32SetError(8);
+            return FALSE;
+        }
+        palette->entries = entries;
+    }
+    if (valid)
+    {
+        if (count > palette->count)
+            memset(palette->entries + palette->count * 4, 0, (count - palette->count) * 4);
+        palette->count = count;
+    }
+    lx_handle_release(&borrow);
+    if (!valid)
+        open32SetError(87);
+    return valid;
+}
+ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
+{
+    if (!open32FindDC(dc))
+    {
+        open32SetError(6);
+        return 0;
+    }
+    return GetPaletteEntries(open32StockPalette(), first, count, output);
+}
+BOOL UnrealizeObject(ULONG object)
+{
+    /* Logical objects are applied directly on this true-color backend, so there is no
+       device realization to discard. PMWINX reports success for every handle. */
+    (void)object;
+    return TRUE;
 }

@@ -9,7 +9,17 @@ typedef struct Open32Pen
     LONG style, width;
     ULONG color;
     BOOL stock;
+    ULONG brush_handle;
+    LxHandleBorrow brush;
 } Open32Pen;
+static void free_pen(void *resource)
+{
+    Open32Pen *pen = resource;
+    lx_handle_release(&pen->brush);
+    if (pen->brush_handle)
+        open32DeleteBrush(pen->brush_handle);
+    free(pen);
+}
 ULONG CreatePen(LONG style, LONG width, ULONG color)
 {
     TRACE_NATIVE("CreatePen(%d, %d, %08X)", (int)style, (int)width, (uint)color);
@@ -28,7 +38,7 @@ ULONG CreatePen(LONG style, LONG width, ULONG color)
     pen->style = width > 1 && style >= 1 && style <= 4 ? 0 : style;
     pen->width = width;
     pen->color = color;
-    ULONG handle = lx_handle_create(LX_HANDLE_OPEN32_PEN, pen, free);
+    ULONG handle = lx_handle_create(LX_HANDLE_OPEN32_PEN, pen, free_pen);
     if (!handle)
     {
         free(pen);
@@ -115,6 +125,13 @@ BOOL MoveToEx(ULONG handle, LONG x, LONG y, PVOID previous)
         lx_guest_store_u32(previous, (ULONG)dc->position_x);
         lx_guest_store_u32((uint8 *)previous + 4, (ULONG)dc->position_y);
     }
+    if (open32PathLine(dc, x, y, TRUE) < 0)
+        return FALSE;
+    if (!dc->path)
+    {
+        const LONG values[] = {x, y};
+        open32MetafileWords(handle, 0x214, 2, values);
+    }
     dc->position_x = x;
     dc->position_y = y;
     return TRUE;
@@ -129,10 +146,14 @@ LONG SetROP2(ULONG handle, LONG mode)
     }
     LONG previous = dc->rop2;
     dc->rop2 = mode;
+    open32MetafileWords(handle, 0x104, 1, &mode);
     return previous;
 }
-static BOOL dash_pixel(LONG style, uint64_t step)
+static BOOL dash_pixel(const Open32Pen *pen, uint64_t step)
 {
+    LONG style = pen->style;
+    if (style == 8)
+        return !(step & 1);
     static const unsigned lengths[4][6] = {{6, 2}, {1, 2}, {6, 2, 1, 2}, {6, 2, 1, 2, 1, 2}};
     static const unsigned counts[] = {2, 2, 4, 6}, cycles[] = {8, 3, 11, 14};
     if (style < 1 || style > 4)
@@ -146,6 +167,18 @@ static BOOL dash_pixel(LONG style, uint64_t step)
     }
     return TRUE;
 }
+static BOOL pen_pixel(Open32DC *dc, Open32Pen *pen, LONG x, LONG y, uint32 *rgb)
+{
+    if (pen->brush.resource)
+    {
+        Open32DC temporary = *dc;
+        temporary.brush = pen->brush;
+        return open32BrushPixel(&temporary, x, y, rgb);
+    }
+    ULONG color = pen->color;
+    *rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+    return TRUE;
+}
 BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -154,8 +187,23 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
         open32SetError(6);
         return FALSE;
     }
+    int captured = open32PathLine(dc, target_x, target_y, FALSE);
+    if (captured)
+    {
+        if (captured > 0)
+        {
+            dc->position_x = target_x;
+            dc->position_y = target_y;
+        }
+        return captured > 0;
+    }
+    const LONG recorded[] = {target_x, target_y};
+    open32MetafileWords(handle, 0x213, 2, recorded);
     Open32Pen *pen = dc->pen.resource;
     LONG x = dc->position_x, y = dc->position_y;
+    LONG logical_target_x = target_x, logical_target_y = target_y;
+    if (!open32MapPoint(dc, &x, &y, TRUE) || !open32MapPoint(dc, &target_x, &target_y, TRUE))
+        return FALSE;
     int64_t dx = llabs((int64_t)target_x - x), dy = llabs((int64_t)target_y - y);
     if (dx > 65536 || dy > 65536)
     {
@@ -164,8 +212,8 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     }
     if (pen->style == 5 || (!dx && !dy))
     {
-        dc->position_x = target_x;
-        dc->position_y = target_y;
+        dc->position_x = logical_target_x;
+        dc->position_y = logical_target_y;
         return TRUE;
     }
     LONG diameter = pen->width ? pen->width : 1, before = (diameter - 1) / 2, after = diameter / 2;
@@ -184,8 +232,8 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
         bottom = canvas_height;
     if (right <= left || bottom <= top)
     {
-        dc->position_x = target_x;
-        dc->position_y = target_y;
+        dc->position_x = logical_target_x;
+        dc->position_y = logical_target_y;
         return TRUE;
     }
     uint64_t pixel_count = (uint64_t)(right - left) * (uint64_t)(bottom - top);
@@ -212,7 +260,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     /* The final point is excluded, matching Windows LineTo and joined segments. */
     while (x != target_x || y != target_y)
     {
-        uint8 value = dash_pixel(pen->style, step++) ? 1 : dc->background_mode == 2 ? 2 : 0;
+        uint8 value = dash_pixel(pen, step++) ? 1 : dc->background_mode == 2 ? 2 : 0;
         if (value)
             for (LONG oy = -before; oy <= after; oy++)
                 for (LONG ox = -before; ox <= after; ox++)
@@ -247,6 +295,9 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
             {
                 ULONG color = coverage[i] == 1 ? pen->color : dc->background_color;
                 ULONG rgb = (color & 255) << 16 | (color & 0xFF00) | (color >> 16 & 255);
+                if (coverage[i] == 1 && !pen_pixel(dc, pen, (LONG)(left + i % width),
+                                                   (LONG)(bottom - 1 - i / width), &rgb))
+                    continue;
                 pixels[i] = lx_pm_mix_pixel(rgb, pixels[i], mixes[dc->rop2]);
             }
         result = lx_pm_raster_write(handle, (LONG)left, canvas_height - (LONG)bottom,
@@ -256,8 +307,8 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     free(coverage);
     if (result)
     {
-        dc->position_x = target_x;
-        dc->position_y = target_y;
+        dc->position_x = logical_target_x;
+        dc->position_y = logical_target_y;
     }
     else
         open32SetError(87);
@@ -285,6 +336,23 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
         open32SetError(6);
         return FALSE;
     }
+    if (!open32IdentityMapping(dc))
+    {
+        uint8 points[32];
+        LONG xy[8] = {left, top, right, top, right, bottom, left, bottom};
+        for (unsigned i = 0; i < 8; i++)
+            lx_guest_store_u32(points + i * 4, (ULONG)xy[i]);
+        return Polygon(handle, points, 4);
+    }
+    uint8 path_rectangle[32];
+    LONG path_coords[8] = {left, top, right, top, right, bottom, left, bottom};
+    for (unsigned i = 0; i < 8; i++)
+        lx_guest_store_u32(path_rectangle + i * 4, (ULONG)path_coords[i]);
+    int captured = open32PathCapture(dc, path_rectangle, 4, TRUE);
+    if (captured)
+        return captured > 0;
+    const LONG recorded[] = {left, top, right, bottom};
+    open32MetafileWords(handle, 0x41b, 4, recorded);
     Open32Pen *pen = dc->pen.resource;
     if (left > right)
     {
@@ -381,18 +449,26 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
                 ULONG color;
                 if (stroke)
                 {
-                    if (dash_pixel(pen->style, step))
+                    if (dash_pixel(pen, step))
                         color = pen->color;
                     else if (dc->background_mode == 2)
                         color = dc->background_color;
                     else
                         continue;
                 }
-                else if (inside && !lx_guest_load_u32(brush))
-                    color = lx_guest_load_u32(brush + 4);
                 else
+                {
+                    uint32 fill;
+                    if (inside && open32BrushPixel(dc, (LONG)x, (LONG)y, &fill))
+                    {
+                        size_t filled = (size_t)row * width + column;
+                        pixels[filled] = lx_pm_mix_pixel(fill, pixels[filled], mixes[dc->rop2]);
+                    }
                     continue;
+                }
                 uint32 rgb = (color & 255) << 16 | (color & 0xFF00) | (color >> 16 & 255);
+                if (stroke && dash_pixel(pen, step) && !pen_pixel(dc, pen, (LONG)x, (LONG)y, &rgb))
+                    continue;
                 size_t index = (size_t)row * width + column;
                 pixels[index] = lx_pm_mix_pixel(rgb, pixels[index], mixes[dc->rop2]);
             }
@@ -405,9 +481,14 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     return result;
 }
 
+typedef struct PenCrossing
+{
+    double x;
+    LONG direction;
+} PenCrossing;
 static int compare_crossings(const void *a, const void *b)
 {
-    double left = *(const double *)a, right = *(const double *)b;
+    double left = ((const PenCrossing *)a)->x, right = ((const PenCrossing *)b)->x;
     return left < right ? -1 : left > right;
 }
 static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL filled)
@@ -420,8 +501,12 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
         open32SetError(87);
         return FALSE;
     }
+    int captured = open32PathCapture(dc, input, count, closed);
+    if (captured)
+        return captured > 0;
+    open32MetafilePoints(handle, closed ? 0x324 : 0x325, input, count);
     POINTL *points = malloc((size_t)count * sizeof *points);
-    double *crossings = malloc((size_t)count * sizeof *crossings);
+    PenCrossing *crossings = malloc((size_t)count * sizeof *crossings);
     if (!points || !crossings)
     {
         free(points);
@@ -434,6 +519,12 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     {
         const uint8 *wire = (const uint8 *)input + i * 8;
         points[i] = (POINTL){(LONG)lx_guest_load_u32(wire), (LONG)lx_guest_load_u32(wire + 4)};
+        if (!open32MapPoint(dc, &points[i].x, &points[i].y, TRUE))
+        {
+            free(points);
+            free(crossings);
+            return FALSE;
+        }
         if (points[i].x < left)
             left = points[i].x;
         if (points[i].x > right)
@@ -500,13 +591,19 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
         {
             POINTL a = points[i], b = points[(i + 1) % count];
             if ((a.y <= scan && b.y > scan) || (b.y <= scan && a.y > scan))
-                crossings[n++] = a.x + (scan - a.y) * ((double)b.x - a.x) / ((double)b.y - a.y);
+                crossings[n++] =
+                    (PenCrossing){a.x + (scan - a.y) * ((double)b.x - a.x) / ((double)b.y - a.y),
+                                  b.y > a.y ? 1 : -1};
         }
         qsort(crossings, n, sizeof *crossings, compare_crossings);
-        for (unsigned i = 0; i + 1 < n; i += 2)
+        LONG winding = 0;
+        for (unsigned i = 0; i + 1 < n; i++)
         {
-            int64_t begin = (int64_t)ceil(crossings[i] - 0.5),
-                    end = (int64_t)ceil(crossings[i + 1] - 0.5);
+            winding += crossings[i].direction;
+            if (dc->poly_fill_mode == 2 ? !winding : (i & 1))
+                continue;
+            int64_t begin = (int64_t)ceil(crossings[i].x - 0.5),
+                    end = (int64_t)ceil(crossings[i + 1].x - 0.5);
             if (begin < left)
                 begin = left;
             if (end > right)
@@ -524,7 +621,7 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
         LONG sx = a.x < b.x ? 1 : -1, sy = a.y < b.y ? 1 : -1;
         while (x != b.x || y != b.y)
         {
-            uint8 value = dash_pixel(pen->style, step++) ? 2 : dc->background_mode == 2 ? 3 : 0;
+            uint8 value = dash_pixel(pen, step++) ? 2 : dc->background_mode == 2 ? 3 : 0;
             if (value)
                 for (LONG oy = -before; oy <= after; oy++)
                     for (LONG ox = -before; ox <= after; ox++)
@@ -571,6 +668,9 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
             {
                 ULONG color = coverage[i] == 2 ? pen->color : dc->background_color;
                 rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+                if (coverage[i] == 2 && !pen_pixel(dc, pen, (LONG)(left + i % width),
+                                                   (LONG)(bottom - 1 - i / width), &rgb))
+                    continue;
             }
             pixels[i] = lx_pm_mix_pixel(rgb, pixels[i], mixes[dc->rop2]);
         }
@@ -591,4 +691,57 @@ BOOL Polygon(ULONG handle, PVOID input, LONG count)
 BOOL Polyline(ULONG handle, PVOID input, LONG count)
 {
     return draw_path(handle, input, count, FALSE, FALSE);
+}
+
+ULONG ExtCreatePen(ULONG style, ULONG width, PVOID brush, ULONG count, PVOID entries)
+{
+    (void)count;
+    (void)entries;
+    ULONG basic = style & 15;
+    if (!brush)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    /* PMWINX refuses PS_USERSTYLE and requires cosmetic pens to be one-pel solid. */
+    if (basic == 7)
+    {
+        open32SetError(50);
+        return 0;
+    }
+    ULONG brush_style = lx_guest_load_u32(brush);
+    if (basic > 8 || (style & 0x10000 ? brush_style > 8 : width != 1 || brush_style))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG object = CreatePen((LONG)(basic > 6 ? 0 : basic), (LONG)width,
+                             lx_guest_load_u32((uint8 *)brush + 4));
+    if (!object)
+        return 0;
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(object, LX_HANDLE_OPEN32_PEN, &borrow))
+    {
+        DeleteObject(object);
+        return 0;
+    }
+    Open32Pen *pen = borrow.resource;
+    BOOL valid = TRUE;
+    pen->style = (LONG)basic;
+    if (brush_style == 1)
+        pen->style = 5;
+    if (brush_style >= 2)
+    {
+        pen->brush_handle = CreateBrushIndirect(brush);
+        valid = pen->brush_handle &&
+                lx_handle_borrow(pen->brush_handle, LX_HANDLE_OPEN32_BRUSH, &pen->brush);
+    }
+    lx_handle_release(&borrow);
+    if (!valid)
+    {
+        DeleteObject(object);
+        open32SetError(87);
+        return 0;
+    }
+    return object;
 }

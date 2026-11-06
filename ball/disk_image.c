@@ -2015,6 +2015,33 @@ int tb_image_readonly(const char *path, int readonly)
     close_disk(&disk);
     return ok;
 }
+int tb_image_modified(const char *path, const char *expected, int64_t seconds)
+{
+    if (tb_hpfs_volume(path))
+        return tb_hpfs_modify(path, expected, TB_FS_TOUCH, (uint64_t)seconds, NULL, 0, NULL);
+    if (tb_fat_volume(path))
+        return tb_fat_modify(path, expected, TB_FS_TOUCH, (uint64_t)seconds, NULL, 0, NULL);
+    Disk disk;
+    const char *member;
+    if (!stage_disk(path, expected, &disk, &member))
+        return 0;
+    Node node;
+    int ok = lookup(&disk, member, &node);
+    if (ok && !node.record)
+        ok = failure(EACCES);
+    if (ok)
+    {
+        unsigned char *record = disk.memory + node.record;
+        uint32_t stamp = tb_dos_stamp(seconds);
+        record[22] = (unsigned char)stamp;
+        record[23] = (unsigned char)(stamp >> 8);
+        record[24] = (unsigned char)(stamp >> 16);
+        record[25] = (unsigned char)(stamp >> 24);
+        ok = commit_disk(&disk);
+    }
+    close_disk(&disk);
+    return ok;
+}
 int tb_image_move(const char *source, const char *target)
 {
     if (tb_hpfs_volume(source))

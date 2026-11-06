@@ -6,6 +6,23 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
+#include "os2libs/doscalls/launch.h"
+#include "guest/launch_record.h"
+#include <ctype.h>
+/* Per-launch state reaches the child only through its environment. */
+typedef struct LaunchStart
+{
+    int drive;          /* Zero-based; negative inherits the caller's directories. */
+    char *directory;    /* Below the drive root, without a leading backslash. */
+    const char *record; /* Shared launch record name, or NULL. */
+} LaunchStart;
+typedef struct LaunchPlan
+{
+    char *host_program, *loader;
+    char **argv, **envp;
+} LaunchPlan;
+static char **calcEnvp(const char *os2env, const char *exe, const char *arguments,
+                       const LaunchStart *start, APIRET *err);
 APIRET DosScanEnv(PSZ name, PSZ *outval)
 {
     TRACE_NATIVE("DosScanEnv('%s', %p)", name, outval);
@@ -66,6 +83,10 @@ static void finishProcessExit(uint32 exitcode)
 {
     processExitCode = exitcode;
     processingExitList = 1;
+    /* LINFOSEG rfProcStatus bit 0 marks exit-list processing for 16-bit services. */
+    linfo->rfProcStatus |= 1;
+    releaseThreadSuspension();
+    lx_launch_record_exit(exitcode);
     runDosExitList(TC_EXIT);
     GLoaderState.terminate(exitcode);
 }
@@ -199,6 +220,132 @@ void setProcessResultCode(PRESULTCODES output, const LxHostChildStatus *status)
     output->codeResult = status->result;
 }
 
+static void freeLaunchPlan(LaunchPlan *plan)
+{
+    if (plan->envp)
+        for (char **item = plan->envp; *item; item++)
+            free(*item);
+    free(plan->envp);
+    free(plan->argv);
+    free(plan->loader);
+    free(plan->host_program);
+    memset(plan, 0, sizeof *plan);
+}
+
+static char *driveDirectoryPath(int drive, const char *directory, const char *name)
+{
+    size_t size = strlen(directory) + (name ? strlen(name) : 0) + 6;
+    char *path = malloc(size);
+    if (path)
+        snprintf(path, size, "%c:\\%s%s%s", 'A' + drive, directory,
+                 name && *directory ? "\\" : "", name ? name : "");
+    return path;
+}
+
+/* Absolute, drive-relative and current-directory-relative forms all resolve
+   against the caller's per-drive state without changing it. */
+static APIRET resolveStartDirectory(const char *directory, LaunchStart *start)
+{
+    const char *path = directory;
+    int drive = GLoaderState.current_disk - 1;
+    if (isalpha((unsigned char)path[0]) && path[1] == ':')
+    {
+        drive = toupper((unsigned char)path[0]) - 'A';
+        path += 2;
+    }
+    if (drive < 0 || drive >= 26 || !GLoaderState.disks[drive])
+        return ERROR_INVALID_DRIVE;
+    const char *base = *path == '\\' || *path == '/' ? "" : GLoaderState.current_dir[drive];
+    if (!base)
+        base = "";
+    while (*path == '\\' || *path == '/')
+        path++;
+    size_t size = strlen(base) + strlen(path) + 2;
+    char *joined = malloc(size);
+    if (!joined)
+        return ERROR_NOT_ENOUGH_MEMORY;
+    snprintf(joined, size, "%s%s%s", base, *base && *path ? "\\" : "", path);
+    for (char *p = joined; *p; p++)
+        if (*p == '/')
+            *p = '\\';
+    for (size_t length = strlen(joined); length && joined[length - 1] == '\\'; length--)
+        joined[length - 1] = 0;
+    char *full = driveDirectoryPath(drive, joined, NULL);
+    APIRET result = full ? NO_ERROR : ERROR_NOT_ENOUGH_MEMORY;
+    char *host = full ? makeUnixPath(full, &result) : NULL;
+    LxHostFileInfo information;
+    if (host && (lx_host_path_info(host, &information) != LX_HOST_FS_OK ||
+                 information.kind != LX_HOST_FILE_DIRECTORY))
+        result = ERROR_PATH_NOT_FOUND;
+    free(host);
+    free(full);
+    if (result)
+    {
+        free(joined);
+        return result;
+    }
+    start->drive = drive;
+    start->directory = joined;
+    return NO_ERROR;
+}
+
+static APIRET prepareLaunch(LaunchPlan *plan, PSZ pArg, PSZ pEnv, PSZ pName,
+                            const LaunchStart *start, ULONG flags)
+{
+    APIRET err = NO_ERROR;
+    if (!pName || !*pName)
+        return ERROR_INVALID_PARAMETER;
+    char searched[PATH_MAX];
+    const char *program = pName;
+    char *candidate = NULL;
+    if ((flags & LX_DOS_LAUNCH_SEARCH_DIRECTORY) && start && start->drive >= 0 &&
+        *pName != '\\' && *pName != '/' && pName[1] != ':')
+    {
+        candidate = driveDirectoryPath(start->drive, start->directory, pName);
+        if (!candidate)
+            return ERROR_NOT_ENOUGH_MEMORY;
+        char *host = makeUnixPath(candidate, &err);
+        if (host && lx_host_path_exists(host))
+            program = candidate;
+        free(host);
+        err = NO_ERROR;
+    }
+    if (program == pName && !strpbrk(pName, "\\/:"))
+    {
+        err = DosSearchPath(SEARCH_CUR_DIRECTORY | SEARCH_ENVIRONMENT | SEARCH_IGNORENETERRS,
+                            "PATH", pName, (PBYTE)searched, sizeof searched);
+        if (err)
+        {
+            free(candidate);
+            return err;
+        }
+        program = searched;
+    }
+    plan->host_program = makeUnixPath(program, &err);
+    free(candidate);
+    if (!plan->host_program)
+        return err;
+    /* A launch reports a missing image now rather than as a failed child later. */
+    if (start && !lx_host_path_exists(plan->host_program))
+    {
+        freeLaunchPlan(plan);
+        return ERROR_FILE_NOT_FOUND;
+    }
+    if (!(plan->loader = findExePath(pName, &err)) || !(plan->argv = calcArgv(pArg, pName, &err)))
+    {
+        freeLaunchPlan(plan);
+        return err;
+    }
+    const char *arguments = pArg && *pArg ? pArg + strlen(pArg) + 1 : "";
+    plan->envp = calcEnvp(pEnv, plan->host_program, arguments, start, &err);
+    if (!plan->envp)
+    {
+        freeLaunchPlan(plan);
+        return err;
+    }
+    return NO_ERROR;
+}
+
 APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ pEnv,
                                  PRESULTCODES pRes, PSZ pName)
 {
@@ -221,47 +368,10 @@ APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,
         return ERROR_GEN_FAILURE;
     }
 
-    APIRET err;
-    if (!pName || !*pName)
-        return ERROR_INVALID_PARAMETER;
-    char searched[PATH_MAX];
-    const char *program = pName;
-    if (!strpbrk(pName, "\\/:"))
-    {
-        err = DosSearchPath(SEARCH_CUR_DIRECTORY | SEARCH_ENVIRONMENT | SEARCH_IGNORENETERRS,
-                            "PATH", pName, (PBYTE)searched, sizeof searched);
-        if (err)
-            return err;
-        program = searched;
-    }
-    char *pNameUnix = makeUnixPath(program, &err);
-    if (!pNameUnix)
-        return err;
-
-    char *exe = findExePath(pName, &retval);
-    if (!exe)
-    {
-        free(pNameUnix);
+    LaunchPlan plan = {0};
+    retval = prepareLaunch(&plan, pArg, pEnv, pName, NULL, 0);
+    if (retval)
         return retval;
-    }
-
-    char **argv = calcArgv(pArg, pName, &retval);
-    if (!argv)
-    {
-        free(exe);
-        free(pNameUnix);
-        return retval;
-    }
-
-    const char *arguments = pArg && *pArg ? pArg + strlen(pArg) + 1 : "";
-    char **envp = calcEnvp(pEnv, pNameUnix, arguments, &retval);
-    if (!envp)
-    {
-        free(argv);
-        free(exe);
-        free(pNameUnix);
-        return retval;
-    }
 
     ChildProcess *tracked = execFlag == EXEC_ASYNCRESULT ? calloc(1, sizeof *tracked) : NULL;
     if (execFlag != EXEC_SYNC && execFlag != EXEC_ASYNC && execFlag != EXEC_ASYNCRESULT &&
@@ -271,7 +381,7 @@ APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,
         retval = ERROR_NOT_ENOUGH_MEMORY;
     else
     {
-        LxHostChild *child = lx_host_child_spawn(exe, argv, envp);
+        LxHostChild *child = lx_host_child_spawn(plan.loader, plan.argv, plan.envp);
         if (!child)
             retval = ERROR_NO_PROC_SLOTS;
         else if (execFlag == EXEC_SYNC)
@@ -307,14 +417,58 @@ APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,
         }
     }
     free(tracked);
-    for (char **item = envp; *item; item++)
-        free(*item);
-    free(pNameUnix);
-    free(envp);
-    free(argv);
-    free(exe);
+    freeLaunchPlan(&plan);
 
     return retval;
+}
+
+static APIRET launchChild(const LxDosLaunch *launch, LxHostChild **child)
+{
+    if (!launch || !launch->program || !*launch->program || !child)
+        return ERROR_INVALID_PARAMETER;
+    LaunchStart start = {.drive = -1, .record = launch->record};
+    APIRET result = NO_ERROR;
+    if (launch->directory && *launch->directory)
+        result = resolveStartDirectory(launch->directory, &start);
+    LaunchPlan plan = {0};
+    if (!result)
+        result = prepareLaunch(&plan, launch->arguments, launch->environment, launch->program,
+                               &start, launch->flags);
+    if (!result)
+    {
+        *child = launch->flags & LX_DOS_LAUNCH_SUSPENDED
+                     ? lx_host_child_spawn_suspended(plan.loader, plan.argv, plan.envp)
+                     : lx_host_child_spawn(plan.loader, plan.argv, plan.envp);
+        if (!*child)
+            result = ERROR_NO_PROC_SLOTS;
+    }
+    freeLaunchPlan(&plan);
+    free(start.directory);
+    return result;
+}
+
+APIRET lx_doscalls_launch(const LxDosLaunch *launch, LxHostChild **child)
+{
+    return launchChild(launch, child);
+}
+
+APIRET lx_doscalls_launch_tracked(const LxDosLaunch *launch, PID *pid)
+{
+    ChildProcess *tracked = calloc(1, sizeof *tracked);
+    if (!tracked)
+        return ERROR_NOT_ENOUGH_MEMORY;
+    APIRET result = launchChild(launch, &tracked->host);
+    if (result)
+    {
+        free(tracked);
+        return result;
+    }
+    *pid = lx_host_child_id(tracked->host);
+    grabLock(&GMutexDosCalls);
+    tracked->next = GChildren;
+    GChildren = tracked;
+    ungrabLock(&GMutexDosCalls);
+    return NO_ERROR;
 }
 
 APIRET DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ pEnv,
@@ -510,7 +664,15 @@ static int hostControlVariable(const char *entry)
            !strncmp(entry, "XDG_RUNTIME_DIR=", 16) || !strncmp(entry, "LIBGL_", 6) ||
            !strncmp(entry, "GALLIUM_", 8);
 }
-char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIRET *err)
+static int inheritedHostVariable(const char *entry)
+{
+    return hostControlVariable(entry) && strncmp(entry, "TWOINE_CHILD_ARGUMENTS=", 23) &&
+           strncmp(entry, "TWOINE_DRIVE_CWD_", 17) && strncmp(entry, "TWOINE_EXT_LIBPATH_", 19) &&
+           strncmp(entry, "TWOINE_CURRENT_DRIVE=", 21) &&
+           strncmp(entry, LX_LAUNCH_RECORD_VARIABLE "=", sizeof LX_LAUNCH_RECORD_VARIABLE);
+}
+static char **calcEnvp(const char *os2env, const char *exe, const char *arguments,
+                       const LaunchStart *start, APIRET *err)
 {
     const char *guest = os2env ? os2env : GLoaderState.pib.pib_pchenv;
     if (!guest)
@@ -518,15 +680,12 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
         *err = ERROR_INVALID_PARAMETER;
         return NULL;
     }
-    size_t count = 33;
+    size_t count = 34;
     for (const char *p = guest; *p; p += strlen(p) + 1)
         count++;
     char *const *host = lx_host_environment();
     for (size_t i = 0; host[i]; i++)
-        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
-            strncmp(host[i], "TWOINE_DRIVE_CWD_", 17) &&
-            strncmp(host[i], "TWOINE_EXT_LIBPATH_", 19) &&
-            strncmp(host[i], "TWOINE_CURRENT_DRIVE=", 21))
+        if (inheritedHostVariable(host[i]))
             count++;
     char **result = calloc(count, sizeof *result);
     if (!result)
@@ -536,10 +695,7 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
     }
     size_t at = 0;
     for (size_t i = 0; host[i]; i++)
-        if (hostControlVariable(host[i]) && strncmp(host[i], "TWOINE_CHILD_ARGUMENTS=", 23) &&
-            strncmp(host[i], "TWOINE_DRIVE_CWD_", 17) &&
-            strncmp(host[i], "TWOINE_EXT_LIBPATH_", 19) &&
-            strncmp(host[i], "TWOINE_CURRENT_DRIVE=", 21))
+        if (inheritedHostVariable(host[i]))
         {
             result[at] = strdup(host[i]);
             if (!result[at++])
@@ -563,20 +719,33 @@ char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIR
             goto failed;
         snprintf(result[at++], length, "TWOINE_EXT_LIBPATH_%s=%s", extended_names[i], extended[i]);
     }
+    const int start_drive = start ? start->drive : -1;
     for (int drive = 0; drive < 26; drive++)
-        if (GLoaderState.current_dir[drive])
+    {
+        const char *directory =
+            drive == start_drive ? start->directory : GLoaderState.current_dir[drive];
+        if (directory)
         {
-            size_t length = strlen(GLoaderState.current_dir[drive]) + 32;
+            size_t length = strlen(directory) + 32;
             result[at] = malloc(length);
             if (!result[at])
                 goto failed;
-            snprintf(result[at++], length, "TWOINE_DRIVE_CWD_%c=%s", 'A' + drive,
-                     GLoaderState.current_dir[drive]);
+            snprintf(result[at++], length, "TWOINE_DRIVE_CWD_%c=%s", 'A' + drive, directory);
         }
+    }
     result[at] = malloc(32);
     if (!result[at])
         goto failed;
-    snprintf(result[at++], 32, "TWOINE_CURRENT_DRIVE=%c", 'A' + GLoaderState.current_disk - 1);
+    snprintf(result[at++], 32, "TWOINE_CURRENT_DRIVE=%c",
+             'A' + (start_drive >= 0 ? start_drive : GLoaderState.current_disk - 1));
+    if (start && start->record)
+    {
+        size_t length = strlen(start->record) + sizeof LX_LAUNCH_RECORD_VARIABLE + 1;
+        result[at] = malloc(length);
+        if (!result[at])
+            goto failed;
+        snprintf(result[at++], length, LX_LAUNCH_RECORD_VARIABLE "=%s", start->record);
+    }
     result[at] = malloc(strlen(exe) + 9);
     if (!result[at])
         goto failed;

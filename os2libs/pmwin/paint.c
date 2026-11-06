@@ -28,10 +28,19 @@ void destroyPresentationSpace(AnchorBlock *anchor, PresentationSpace *ps)
     {
         return;
     }
+    while (ps->paths)
+    {
+        PmPath *path = ps->paths;
+        ps->paths = path->next;
+        free(path->points);
+        free(path);
+    }
+    lx_handle_release(&ps->palette_lease);
     while (ps->saved)
     {
         PmSavedSpace *saved = ps->saved;
         ps->saved = saved->next;
+        lx_handle_release(&saved->palette_lease);
         free(saved);
     }
     if (ps->clip_lease.resource)

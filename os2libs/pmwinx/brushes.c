@@ -129,6 +129,47 @@ LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
     const uint8 *wire = rectangle;
     LONG left = (LONG)lx_guest_load_u32(wire), top = (LONG)lx_guest_load_u32(wire + 4);
     LONG right = (LONG)lx_guest_load_u32(wire + 8), bottom = (LONG)lx_guest_load_u32(wire + 12);
+    if (open32IsMetafile(handle))
+    {
+        if ((int64_t)right - left > INT32_MAX || (int64_t)right - left < INT32_MIN ||
+            (int64_t)bottom - top > INT32_MAX || (int64_t)bottom - top < INT32_MIN)
+        {
+            lx_handle_release(&borrow);
+            open32SetError(87);
+            return 0;
+        }
+        ULONG recorded_brush = brush_handle, temporary = 0;
+        if (brush_handle > 0 && brush_handle <= 21)
+        {
+            temporary = CreateSolidBrush(color);
+            recorded_brush = temporary;
+        }
+        open32MetafileObject(handle, recorded_brush);
+        open32MetafilePatBlt(handle, left, top, right - left, bottom - top, 0xf00021);
+        Open32DC *recorded_dc = open32FindDC(handle);
+        open32MetafileObject(handle, recorded_dc->brush_handle);
+        if (temporary)
+            DeleteObject(temporary);
+    }
+    Open32DC *mapping = open32FindDC(handle);
+    if (!open32MapPoint(mapping, &left, &top, TRUE) ||
+        !open32MapPoint(mapping, &right, &bottom, TRUE))
+    {
+        lx_handle_release(&borrow);
+        return 0;
+    }
+    if (left > right)
+    {
+        LONG v = left;
+        left = right;
+        right = v;
+    }
+    if (top > bottom)
+    {
+        LONG v = top;
+        top = bottom;
+        bottom = v;
+    }
     int64_t lower = (int64_t)open32DCHeight(handle) - bottom,
             upper = (int64_t)open32DCHeight(handle) - top;
     BOOL result = FALSE;
@@ -136,11 +177,15 @@ LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
     {
         RECTL rect = {left, (LONG)lower, right, (LONG)upper};
         LONG rgb = (LONG)((color & 255) << 16 | (color & 0xFF00) | (color >> 16 & 255));
-        if (style == 3)
+        if (style == 2 || style == 3)
         {
             if ((int64_t)right - left <= INT32_MAX && (int64_t)bottom - top <= INT32_MAX)
-                result = brush_blt(handle, left, top, right - left, bottom - top, 0xf00021,
-                                   borrow.resource);
+            {
+                LONG lx = left, ly = top, rx = right, ry = bottom;
+                if (open32MapPoint(mapping, &lx, &ly, FALSE) &&
+                    open32MapPoint(mapping, &rx, &ry, FALSE))
+                    result = brush_blt(handle, lx, ly, rx - lx, ry - ly, 0xf00021, borrow.resource);
+            }
         }
         else
             result = style == 1 || WinFillRect(handle, &rect, rgb);
@@ -213,6 +258,24 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
         open32SetError(87);
         return FALSE;
     }
+    int64_t ex = (int64_t)x + width, ey = (int64_t)y + height;
+    if (ex < INT32_MIN || ex > INT32_MAX || ey < INT32_MIN || ey > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LONG mapped_x = (LONG)ex, mapped_y = (LONG)ey;
+    if (!open32MapPoint(dc, &x, &y, TRUE) || !open32MapPoint(dc, &mapped_x, &mapped_y, TRUE))
+        return FALSE;
+    ex = (int64_t)mapped_x - x;
+    ey = (int64_t)mapped_y - y;
+    if (ex < INT32_MIN || ex > INT32_MAX || ey < INT32_MIN || ey > INT32_MAX)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    width = (LONG)ex;
+    height = (LONG)ey;
     BOOL pattern = (rop & 15) != (rop >> 4);
     if (pattern && !brush)
     {
@@ -255,6 +318,21 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
     {
         for (size_t i = 0; i < count; i++)
         {
+            if (pattern && brush->style == 2)
+            {
+                LONG xx = (LONG)(left + i % w), yy = (LONG)(bottom - 1 - i / w);
+                LONG px = (xx - dc->brush_origin_x) & 7, py = (yy - dc->brush_origin_y) & 7;
+                BOOL ink = brush->bitmap == 0   ? py == 0
+                           : brush->bitmap == 1 ? px == 0
+                           : brush->bitmap == 2 ? ((px + py) & 7) == 0
+                           : brush->bitmap == 3 ? ((px - py) & 7) == 0
+                           : brush->bitmap == 4 ? (px == 0 || py == 0)
+                                                : (((px + py) & 7) == 0 || ((px - py) & 7) == 0);
+                if (!ink && dc->background_mode == 1)
+                    continue;
+                ULONG color = ink ? brush->color : dc->background_color;
+                p = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+            }
             if (pattern && brush->style == 3)
             {
                 LONG px = (LONG)((left + (int64_t)(i % w) - dc->brush_origin_x) % brush->width);
@@ -291,6 +369,7 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
 BOOL PatBlt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULONG operation)
 {
     Open32DC *dc = open32FindDC(handle);
+    open32MetafilePatBlt(handle, x, y, width, height, operation);
     return brush_blt(handle, x, y, width, height, operation, dc ? dc->brush.resource : NULL);
 }
 ULONG CreatePatternBrush(ULONG handle)
@@ -338,6 +417,22 @@ BOOL open32BrushPixel(Open32DC *dc, LONG x, LONG y, uint32 *rgb)
     Open32Brush *brush = dc ? dc->brush.resource : NULL;
     if (!brush || brush->style == 1 || !rgb)
         return FALSE;
+    if (brush->style == 2)
+    {
+        LONG px = (LONG)(((int64_t)x - dc->brush_origin_x) & 7),
+             py = (LONG)(((int64_t)y - dc->brush_origin_y) & 7);
+        BOOL ink = brush->bitmap == 0   ? py == 0
+                   : brush->bitmap == 1 ? px == 0
+                   : brush->bitmap == 2 ? ((px + py) & 7) == 0
+                   : brush->bitmap == 3 ? ((px - py) & 7) == 0
+                   : brush->bitmap == 4 ? (px == 0 || py == 0)
+                                        : (((px + py) & 7) == 0 || ((px - py) & 7) == 0);
+        if (!ink && dc->background_mode == 1)
+            return FALSE;
+        ULONG color = ink ? brush->color : dc->background_color;
+        *rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+        return TRUE;
+    }
     if (brush->style == 3)
     {
         LONG tx = (LONG)(((int64_t)x - dc->brush_origin_x) % brush->width);
@@ -390,4 +485,103 @@ BOOL GetBrushOrgEx(ULONG handle, PVOID output)
     lx_guest_store_u32(output, (ULONG)dc->brush_origin_x);
     lx_guest_store_u32((uint8 *)output + 4, (ULONG)dc->brush_origin_y);
     return TRUE;
+}
+
+ULONG CreateHatchBrush(LONG hatch, ULONG color)
+{
+    if (hatch < 0 || hatch > 5)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG handle = CreateSolidBrush(color);
+    LxHandleBorrow borrow = {0};
+    if (handle && lx_handle_borrow(handle, LX_HANDLE_OPEN32_BRUSH, &borrow))
+    {
+        Open32Brush *brush = borrow.resource;
+        brush->style = 2;
+        brush->bitmap = (ULONG)hatch;
+        lx_handle_release(&borrow);
+    }
+    return handle;
+}
+/* DIB pattern brushes decode into the same retained RGB tile as bitmap patterns. */
+ULONG open32DibPatternBrush(PVOID information, PVOID bits, ULONG usage)
+{
+    LONG width = (LONG)lx_guest_load_u32((uint8 *)information + 4),
+         height = (LONG)lx_guest_load_u32((uint8 *)information + 8);
+    LONG rows = height < 0 ? -height : height;
+    ULONG dc = CreateCompatibleDC(0), result = 0;
+    ULONG bitmap = dc ? CreateBitmap(width, rows, 1, 24, NULL) : 0;
+    if (bitmap && SetDIBits(dc, bitmap, 0, (ULONG)rows, bits, information, usage) == rows)
+        result = CreatePatternBrush(bitmap);
+    if (bitmap)
+        DeleteObject(bitmap);
+    if (dc)
+        DeleteDC(dc);
+    return result;
+}
+static ULONG packed_pattern_brush(ULONG address, ULONG usage)
+{
+    uint8 header[40];
+    size_t info_bytes = 0, pixel_bytes = 0, checked_info = 0, checked_pixels = 0;
+    LxGuestBorrow dib = {0};
+    if (!address || !lx_execution_read(GLoaderState.execution, address, header, sizeof header) ||
+        !open32DibBuffers(header, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
+        !pixel_bytes ||
+        !lx_execution_borrow(GLoaderState.execution, address, info_bytes + pixel_bytes,
+                             LX_GUEST_READ, &dib))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    uint8 *packed = malloc(info_bytes + pixel_bytes);
+    if (packed)
+        memcpy(packed, dib.host, info_bytes + pixel_bytes);
+    lx_execution_release(&dib);
+    ULONG result = 0;
+    if (packed && open32DibBuffers(packed, 0, UINT32_MAX, usage, &checked_info, &checked_pixels) &&
+        checked_info == info_bytes && checked_pixels == pixel_bytes)
+        result = open32DibPatternBrush(packed, packed + info_bytes, usage);
+    else
+        open32SetError(packed ? 87 : 8);
+    free(packed);
+    return result;
+}
+ULONG CreateBrushIndirect(PVOID input)
+{
+    if (!input)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG style = lx_guest_load_u32(input), color = lx_guest_load_u32((uint8 *)input + 4),
+          hatch = lx_guest_load_u32((uint8 *)input + 8);
+    if (style == 0)
+        return CreateSolidBrush(color);
+    if (style == 2)
+        return CreateHatchBrush((LONG)hatch, color);
+    if (style == 3)
+        return CreatePatternBrush(hatch);
+    if (style == 6)
+        return packed_pattern_brush(hatch, color & 0xFFFF);
+    if (style == 5)
+    {
+        ULONG result = packed_pattern_brush(GlobalLock(hatch), color & 0xFFFF);
+        GlobalUnlock(hatch);
+        return result;
+    }
+    if (style == 1)
+    {
+        ULONG handle = CreateSolidBrush(0);
+        LxHandleBorrow borrow = {0};
+        if (handle && lx_handle_borrow(handle, LX_HANDLE_OPEN32_BRUSH, &borrow))
+        {
+            ((Open32Brush *)borrow.resource)->style = 1;
+            lx_handle_release(&borrow);
+        }
+        return handle;
+    }
+    open32SetError(87);
+    return 0;
 }

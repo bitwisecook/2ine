@@ -11,23 +11,32 @@ typedef struct Open32DC
     ULONG kind, default_bitmap, text_color, background_color;
     BOOL print_active, print_page;
     LONG background_mode;
+    LONG poly_fill_mode, stretch_mode, character_extra, justify_extra, justify_breaks;
+    ULONG abort_proc;
     ULONG text_alignment;
     ULONG font_handle;
     LxHandleBorrow font, brush, palette, pen;
     ULONG pen_handle;
     LONG position_x, position_y, rop2;
-    ULONG palette_handle, clip_region;
+    ULONG palette_handle, clip_region, lock_region;
     ULONG brush_handle;
     LONG brush_origin_x, brush_origin_y;
+    LONG map_mode, window_x, window_y, viewport_x, viewport_y;
+    LONG window_width, window_height, viewport_width, viewport_height;
+    struct Open32Path *path;
     struct Open32SavedDC *saved;
     struct Open32DC *next;
 } Open32DC;
 void open32SavedDCCleanup(Open32DC *dc);
 BOOL open32BrushPixel(Open32DC *dc, LONG x, LONG y, uint32 *rgb);
+ULONG open32DibPatternBrush(PVOID information, PVOID bits, ULONG usage);
 Open32DC *open32FindDC(ULONG handle);
+BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device);
+BOOL open32IdentityMapping(Open32DC *dc);
 ULONG open32CreatePrinterContext(unsigned kind, BOOL information);
 BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode);
 BOOL open32CanDraw(ULONG handle);
+BOOL open32AbortCheck(ULONG handle);
 BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop);
 LONG open32DCHeight(ULONG handle);
 LONG open32DCWidth(ULONG handle);
@@ -46,4 +55,6 @@ ULONG open32StockPalette(void);
 BOOL open32DeletePalette(ULONG handle);
 LONG open32PaletteObject(ULONG handle, LONG capacity, PVOID output);
 BOOL open32DeleteRegion(ULONG handle);
+#include "os2libs/pmwinx/batch_graphics_paths.h"
+#include "os2libs/pmwinx/batch_graphics_metafile.h"
 #endif

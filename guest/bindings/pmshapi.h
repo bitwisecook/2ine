@@ -201,3 +201,59 @@ static uint32 bridge32_WinQueryTaskSizePos(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+static uint32 bridge32_WinCreateSwitchEntry(uint8 *a)
+{
+    SWCNTRL value;
+    return lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 4), &value, sizeof value)
+        ? WinCreateSwitchEntry(lx_guest_load_u32(a), &value) : 0;
+}
+static uint32 bridge32_WinQueryTaskTitle(uint8 *a)
+{
+    LxGuestBorrow title = {0};
+    ULONG capacity = lx_guest_load_u32(a + 8), result = ERROR_INVALID_PARAMETER;
+    if (capacity && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), capacity,
+                                         LX_GUEST_WRITE, &title))
+        result = WinQueryTaskTitle(lx_guest_load_u32(a), title.host, capacity);
+    lx_execution_release(&title); return result;
+}
+/* PROGDETAILS guest offsets: 4 progc, 8 fbVisible, 12-32 pointers, 36 SWP, 72 total. */
+static uint32 bridge32_WinStartApp(uint8 *a)
+{
+    uint8 wire[72];
+    uint32 address = lx_guest_load_u32(a + 4), parameters = lx_guest_load_u32(a + 8);
+    char *strings[4] = {NULL}, *inputs = NULL;
+    LxGuestArgument environment = {0};
+    uint32 result = 0;
+    if (!address || !lx_execution_read(GLoaderState.execution, address, wire, sizeof wire))
+        goto done;
+    for (unsigned i = 0; i < 4; i++)
+    {
+        uint32 pointer = lx_guest_load_u32(wire + 12 + i * 4);
+        if (pointer &&
+            !(strings[i] = lx_execution_copy_string(GLoaderState.execution, pointer, 65536)))
+            goto done;
+    }
+    if (parameters &&
+        !(inputs = lx_execution_copy_string(GLoaderState.execution, parameters, 65536)))
+        goto done;
+    if (!lx_guest_argument_strings(GLoaderState.execution, lx_guest_load_u32(wire + 32), 0, 65536,
+                                   1, &environment))
+        goto done;
+    PROGDETAILS details = {.Length = lx_guest_load_u32(wire),
+                           .progc = lx_guest_load_u32(wire + 4),
+                           .fbVisible = lx_guest_load_u32(wire + 8),
+                           .pszTitle = strings[0],
+                           .pszExecutable = strings[1],
+                           .pszParameters = strings[2],
+                           .pszStartupDir = strings[3],
+                           .pszEnvironment = environment.host};
+    details.swpInitial.fl = lx_guest_load_u32(wire + 36);
+    result = WinStartApp(lx_guest_load_u32(a), &details, inputs,
+                         (PVOID)(uintptr_t)lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
+done:
+    lx_guest_argument_finish(&environment, 0);
+    free(inputs);
+    for (unsigned i = 0; i < 4; i++)
+        free(strings[i]);
+    return result;
+}

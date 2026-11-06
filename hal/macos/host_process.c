@@ -1,10 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _DARWIN_C_SOURCE 1
 #include "hal/host.h"
+#include "hal/host_process.h"
 #include "../common/process.h"
 #include <errno.h>
 #include <crt_externs.h>
 #include <mach-o/dyld.h>
+#include <sys/resource.h>
 char *lx_host_command_line(size_t *size)
 {
     if (!size)
@@ -40,4 +42,23 @@ char *lx_host_executable_path(void)
 char *const *lx_host_environment(void)
 {
     return *_NSGetEnviron();
+}
+
+int lx_host_process_set_priority(LxHostProcessPriority priority)
+{
+    switch (priority)
+    {
+        case LX_HOST_PROCESS_PRIORITY_NORMAL:
+            return setpriority(PRIO_PROCESS, 0, 0);
+        case LX_HOST_PROCESS_PRIORITY_IDLE:
+            /* 19 is the portable lowest ordinary scheduling priority. */
+            return setpriority(PRIO_PROCESS, 0, 19);
+        case LX_HOST_PROCESS_PRIORITY_REALTIME:
+            /* Mach realtime policies are thread policies, not a process class. */
+            errno = ENOTSUP;
+            return -1;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
 }

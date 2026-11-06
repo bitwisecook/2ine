@@ -1195,3 +1195,352 @@ static uint32 bridge32_WinScrollWindow(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
+static uint32 bridge32_WinCancelShutdown(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinCancelShutdown((HMQ)pm_word(a, 0), (BOOL)pm_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_WinCpTranslateString(uint8 *a)
+{
+    char *s2=lx_execution_copy_string(GLoaderState.execution,pm_word(a, 2),65536);
+    LxGuestBorrow p5={0};
+    uint64_t n5=(uint64_t)pm_word(a, 4);
+    uint32 result=0;
+    if (!s2 ||
+        n5>64*1024*1024 || (n5 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 5),(size_t)n5,LX_GUEST_WRITE,&p5))) goto done;
+    result=(uint32)(uintptr_t)WinCpTranslateString((HAB)pm_word(a, 0), (ULONG)pm_word(a, 1), s2, (ULONG)pm_word(a, 3), (ULONG)pm_word(a, 4), (PSZ)p5.host);
+done:
+    free(s2);
+    lx_execution_release(&p5);
+    return result;
+}
+
+static uint32 bridge32_WinDeleteLibrary(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinDeleteLibrary((HAB)pm_word(a, 0), (ULONG)pm_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_WinFlashWindow(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinFlashWindow((HWND)pm_word(a, 0), (BOOL)pm_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_WinFocusChange(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinFocusChange((HWND)pm_word(a, 0), (HWND)pm_word(a, 1), (ULONG)pm_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_WinFreeErrorInfo(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinFreeErrorInfo((PVOID)(uintptr_t)pm_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_WinGetErrorInfo(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinGetErrorInfo((HAB)pm_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_WinGetMaxPosition(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=36;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_READ|LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)WinGetMaxPosition((HWND)pm_word(a, 0), (PSWP)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinGetMinPosition(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=36;
+    LxGuestBorrow p2={0};
+    /* The preferred position is an optional input. */
+    uint64_t n2=pm_word(a, 2)?8:0;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_READ|LX_GUEST_WRITE,&p1)) ||
+        (n2 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 2),(size_t)n2,LX_GUEST_READ,&p2))) goto done;
+    result=(uint32)(uintptr_t)WinGetMinPosition((HWND)pm_word(a, 0), (PSWP)p1.host, (PPOINTL)p2.host);
+done:
+    lx_execution_release(&p1);
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_WinInvalidateRegion(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinInvalidateRegion((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1), (BOOL)pm_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_WinIsWindowShowing(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinIsWindowShowing((HWND)pm_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_WinLoadLibrary(uint8 *a)
+{
+    char *s1=lx_execution_copy_string(GLoaderState.execution,pm_word(a, 1),65536);
+    uint32 result=0;
+    if (!s1) goto done;
+    result=(uint32)(uintptr_t)WinLoadLibrary((HAB)pm_word(a, 0), s1);
+done:
+    free(s1);
+    return result;
+}
+
+static uint32 bridge32_WinLoadMessage(uint8 *a)
+{
+    LxGuestBorrow p4={0};
+    uint64_t n4=(uint64_t)pm_word(a, 3);
+    uint32 result=0;
+    if (n4>64*1024*1024 || (n4 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 4),(size_t)n4,LX_GUEST_WRITE,&p4))) goto done;
+    result=(uint32)(uintptr_t)WinLoadMessage((HAB)pm_word(a, 0), (HMODULE)pm_word(a, 1), (ULONG)pm_word(a, 2), (LONG)pm_word(a, 3), (PSZ)p4.host);
+done:
+    lx_execution_release(&p4);
+    return result;
+}
+
+static uint32 bridge32_WinQueryAtomName(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=(uint64_t)pm_word(a, 3);
+    uint32 result=0;
+    if (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 2),(size_t)n2,LX_GUEST_WRITE,&p2))) goto done;
+    result=(uint32)(uintptr_t)WinQueryAtomName((ULONG)pm_word(a, 0), (ULONG)pm_word(a, 1), (PSZ)p2.host, (ULONG)pm_word(a, 3));
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_WinQueryDlgItemShort(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    /* The result pointer may be NULL for a validity test. */
+    uint64_t n2=pm_word(a, 2)?2:0;
+    uint32 result=0;
+    if (n2 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 2),(size_t)n2,LX_GUEST_WRITE,&p2)) goto done;
+    result=(uint32)(uintptr_t)WinQueryDlgItemShort((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1), (PSHORT)p2.host, (BOOL)pm_word(a, 3));
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_WinQueryMsgPos(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)WinQueryMsgPos((HAB)pm_word(a, 0), (PPOINTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinQueryObjectWindow(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinQueryObjectWindow((HWND)pm_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_WinQueryPointerInfo(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=28;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)WinQueryPointerInfo((HPOINTER)pm_word(a, 0), (LXPOINTERINFO *)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinQueryQueueInfo(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    /* A NULL buffer succeeds without copying. */
+    uint64_t n1=!pm_word(a, 1)?0:((uint64_t)pm_word(a, 2)<20?(uint64_t)pm_word(a, 2):20);
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)WinQueryQueueInfo((HMQ)pm_word(a, 0), (PVOID)p1.host, (ULONG)pm_word(a, 2));
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinQueryUpdateRegion(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinQueryUpdateRegion((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_WinSetCp(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinSetCp((HMQ)pm_word(a, 0), (ULONG)pm_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_WinSetDlgItemShort(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinSetDlgItemShort((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1), (USHORT)pm_word(a, 2), (BOOL)pm_word(a, 3));
+    return result;
+}
+
+static uint32 bridge32_WinSetMultWindowPos(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=(uint64_t)pm_word(a, 2)*36;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)WinSetMultWindowPos((HAB)pm_word(a, 0), (PSWP)p1.host, (ULONG)pm_word(a, 2));
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinSetSysColors(uint8 *a)
+{
+    LxGuestBorrow p5={0};
+    uint64_t n5=(uint64_t)pm_word(a, 4)*4;
+    uint32 result=0;
+    if (n5>64*1024*1024 || (n5 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 5),(size_t)n5,LX_GUEST_READ,&p5))) goto done;
+    result=(uint32)(uintptr_t)WinSetSysColors((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1), (ULONG)pm_word(a, 2), (LONG)pm_word(a, 3), (ULONG)pm_word(a, 4), (PLONG)p5.host);
+done:
+    lx_execution_release(&p5);
+    return result;
+}
+
+static uint32 bridge32_WinSetSysValue(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinSetSysValue((HWND)pm_word(a, 0), (LONG)pm_word(a, 1), (LONG)pm_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_WinSetWindowBits(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinSetWindowBits((HWND)pm_word(a, 0), (LONG)pm_word(a, 1), (ULONG)pm_word(a, 2), (ULONG)pm_word(a, 3));
+    return result;
+}
+
+static uint32 bridge32_WinTrackRect(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=76;
+    uint32 result=0;
+    if (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 2),(size_t)n2,LX_GUEST_READ|LX_GUEST_WRITE,&p2))) goto done;
+    result=(uint32)(uintptr_t)WinTrackRect((HWND)pm_word(a, 0), (HPS)pm_word(a, 1), (LXTRACKINFO *)p2.host);
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_WinValidateRect(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if ((pm_word(a, 1) && (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))))) goto done;
+    result=(uint32)(uintptr_t)WinValidateRect((HWND)pm_word(a, 0), (PRECTL)p1.host, (BOOL)pm_word(a, 2));
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinValidateRegion(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinValidateRegion((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1), (BOOL)pm_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_WinBroadcastMsg(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)WinBroadcastMsg((HWND)pm_word(a, 0), (ULONG)pm_word(a, 1), (MPARAM)(uintptr_t)pm_word(a, 2), (MPARAM)(uintptr_t)pm_word(a, 3), (ULONG)pm_word(a, 4));
+    return result;
+}
+
+static uint32 bridge32_WinSetKeyboardStateTable(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=256;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_READ|LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)WinSetKeyboardStateTable((HWND)pm_word(a, 0), (PBYTE)p1.host, (BOOL)pm_word(a, 2));
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinRealizePalette(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=4;
+    uint32 result=0;
+    if ((pm_word(a, 2) && (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 2),(size_t)n2,LX_GUEST_WRITE,&p2))))) goto done;
+    result=(uint32)(uintptr_t)WinRealizePalette((HWND)pm_word(a, 0), (HPS)pm_word(a, 1), (PULONG)p2.host);
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_WinCreatePointerIndirect(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=28;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,pm_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)WinCreatePointerIndirect((HWND)pm_word(a, 0), (LXPOINTERINFO *)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_WinNextChar(uint8 *a)
+{
+    uint32 address=pm_word(a,3);char value[2]={0,0};
+    if(!lx_execution_read(GLoaderState.execution,address,value,1))return 0;
+    PSZ result=WinNextChar(pm_word(a,0),pm_word(a,1),pm_word(a,2),value);
+    return result?(address+(uint32)(result-value)):0;
+}

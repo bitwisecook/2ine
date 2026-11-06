@@ -10,6 +10,11 @@
 #include "os2libs/pmwin/graphics.h"
 #include "hal/clipboard.h"
 static void cleanupThreadPM(void);
+static void (*open32_thread_exit)(void);
+void lx_pm_set_open32_thread_exit(void (*callback)(void))
+{
+    __atomic_store_n(&open32_thread_exit, callback, __ATOMIC_RELEASE);
+}
 /* OS/2 deduces the anchor from the calling thread; HAB arguments are advisory. */
 AnchorBlock *getAnchorBlockNoHAB(void)
 {
@@ -113,6 +118,9 @@ static void cleanupThreadPM(void)
     {
         return;
     }
+    void (*thread_exit)(void) = __atomic_load_n(&open32_thread_exit, __ATOMIC_ACQUIRE);
+    if (thread_exit)
+        thread_exit();
     WinCloseClipbrd(anchor->hab);
     lx_host_clipboard_materialize();
 
@@ -122,6 +130,7 @@ static void cleanupThreadPM(void)
     }
     for (size_t i = 0; i < anchor->pres_spaces_array_len; i++)
         destroyPresentationSpace(anchor, &anchor->pres_spaces[i]);
+    cleanupErrorInfo();
     destroyAccelerators(anchor);
     destroyPointers(anchor);
     destroyHooks(anchor);
@@ -198,5 +207,5 @@ ULONG WinQueryCp(HMQ queue)
         return 0;
     if (!queue || anchor->message_queue.hmq != queue)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HMQ, 0);
-    return 437;
+    return anchor->message_queue.codepage ? anchor->message_queue.codepage : 437;
 }

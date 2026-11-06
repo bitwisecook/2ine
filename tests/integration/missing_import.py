@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Unimplemented guest imports end their worker with status 1, never SIGABRT."""
+"""Missing imports and guest CPU faults end their worker with status 1, never SIGABRT."""
 
 import argparse
 import os
@@ -12,7 +12,7 @@ from pathlib import Path
 from images import FlatGuest, linear_image
 
 
-def missing_program(named=False, callback=False):
+def missing_program(named=False, callback=False, fault=False):
     g = FlatGuest()
     if callback:
         message = g.field(bytes(28))
@@ -22,8 +22,11 @@ def missing_program(named=False, callback=False):
         g.exit(99)
         procedure = 0x10000 + len(g.code)
         g.code = g.code.replace(struct.pack("<I", 0x1122CCDD), struct.pack("<I", procedure))
-    g.call(2, 65534)
-    if named:
+    if fault:
+        g.code.extend(b"\x31\xc0\x8b\x00")  # Guest null-pointer read.
+    else:
+        g.call(2, 65534)
+    if named and not fault:
         fixup = bytearray(g.fixups[-1])
         fixup[1] = 2  # Imported procedure name, at offset 1 in the name table.
         fixup[-2:] = b"\x01\0"
@@ -58,10 +61,13 @@ def main():
             SDL_AUDIO_DRIVER="dummy",
             TWOINE_IPC_DIR=str(work / "ipc"),
         )
-        for named in (False, True):
+        cases = [(False, False), (True, False)]
+        if args.backend == "unicorn":
+            cases.append((False, True))
+        for named, fault in cases:
             for callback in (False, True):
                 exe = work / "missing.exe"
-                exe.write_bytes(missing_program(named, callback))
+                exe.write_bytes(missing_program(named, callback, fault))
                 result = subprocess.run(
                     [str(build / "lx_loader"), str(exe)],
                     cwd=work,
@@ -69,9 +75,17 @@ def main():
                     capture_output=True,
                     timeout=10,
                 )
-                expected = b"TwoineMissingForTest" if named else b"ordinal #65534"
+                expected = (
+                    b"CPU stop"
+                    if fault
+                    else b"TwoineMissingForTest"
+                    if named
+                    else b"ordinal #65534"
+                )
                 assert result.returncode == 1, (result.returncode, result.stderr)
-                assert expected in result.stderr and b"PMWINX" in result.stderr, result.stderr
+                assert expected in result.stderr, result.stderr
+                if not fault:
+                    assert b"PMWINX" in result.stderr, result.stderr
                 # The controlling process and future OS/2 sessions remain usable.
                 good = FlatGuest()
                 good.exit(37)
@@ -84,7 +98,7 @@ def main():
                     timeout=10,
                 )
                 assert result.returncode == 37, (result.returncode, result.stderr)
-    print("Missing ordinal/name imports exit 1 from entry and nested GUI callbacks; next sessions run")
+    print("Missing imports and emulated guest faults exit 1; nested callbacks and next sessions pass")
 
 
 if __name__ == "__main__":

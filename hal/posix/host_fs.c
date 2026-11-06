@@ -451,6 +451,30 @@ LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info)
     }
     return image_done(file, LX_HOST_FS_OK);
 }
+LxHostFsError lx_host_file_times(LxHostFile *file, int64_t accessed, int64_t modified)
+{
+    if (!file) return LX_HOST_FS_INVALID;
+    image_lock(file);
+    if (file->image)
+    {
+        if (!file->image_writable)
+            return image_done(file,
+                              file->image_readonly ? LX_HOST_FS_READ_ONLY : LX_HOST_FS_DENIED);
+        /* Volume entries retain the write date; the cache file mirrors the request below. */
+        if (modified != INT64_MIN &&
+            !tb_image_modified(file->image_path, file->image_source, modified))
+            return image_done(file, fs_error(errno));
+    }
+    struct timespec times[2];
+    int64_t values[2] = {accessed, modified};
+    for (unsigned i = 0; i < 2; i++) {
+        times[i].tv_sec = values[i] == INT64_MIN ? 0 : (time_t)values[i];
+        times[i].tv_nsec = values[i] == INT64_MIN ? UTIME_OMIT : 0;
+        if (values[i] != INT64_MIN && (int64_t)times[i].tv_sec != values[i])
+            return image_done(file, LX_HOST_FS_INVALID);
+    }
+    return image_done(file, futimens(file->fd, times) ? fs_error(errno) : LX_HOST_FS_OK);
+}
 LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size)
 {
     if (size > INT64_MAX || (uint64_t)(off_t)size != size)

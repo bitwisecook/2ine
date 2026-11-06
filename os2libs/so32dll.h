@@ -3,6 +3,7 @@
 #ifndef TWOINE_SO32DLL_H
 #define TWOINE_SO32DLL_H
 #include "os2types.h"
+OS2EXPORT uint32_t OS2API Os2LegacyGetHostId(void) OS2APIINFO(ord = 4, name = gethostid);
 typedef struct Os2LegacyAddress
 {
     uint16_t family, port;

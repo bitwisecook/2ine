@@ -390,7 +390,47 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
     endforeach()
 endif()
 
+if(TARGET pmwin AND TARGET pmgpi)
+    add_executable(twoine_pm_display_startup_tests hal/test_pm_display_startup.c)
+    twoine_application_target(twoine_pm_display_startup_tests)
+    target_link_libraries(twoine_pm_display_startup_tests PRIVATE pmgpi pmwin 2ine SDL3::SDL3)
+    foreach(_display_case gui retained vio compatible ne none invalid)
+        add_test(NAME pm_display_startup_${_display_case} COMMAND twoine_pm_display_startup_tests
+            $<TARGET_FILE:pmwin> ${_display_case})
+        if(_display_case STREQUAL "invalid")
+            set(_display_driver "not-a-video-driver")
+        else()
+            set(_display_driver "dummy")
+        endif()
+        set_tests_properties(pm_display_startup_${_display_case} PROPERTIES TIMEOUT 20
+            ENVIRONMENT "SDL_VIDEO_DRIVER=${_display_driver};SDL_RENDER_DRIVER=software;SDL_AUDIO_DRIVER=dummy")
+    endforeach()
+endif()
+
 if(TARGET pmwinx)
+    add_executable(twoine_open32_atomic_tests os2libs/test_open32_atomic.c
+        ../os2libs/pmwinx/atomic.c)
+    twoine_application_target(twoine_open32_atomic_tests)
+    target_link_libraries(twoine_open32_atomic_tests PRIVATE 2ine)
+    add_test(NAME open32_atomic_backing COMMAND twoine_open32_atomic_tests)
+    add_test(NAME open32_atomic COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_atomic.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+        --work "${PROJECT_BINARY_DIR}/open32-atomic-tests")
+    set_tests_properties(open32_atomic PROPERTIES TIMEOUT 30)
+    add_executable(twoine_open32_adjust_window_tests os2libs/test_open32_adjust_window.c
+        ../os2libs/pmwinx/adjust_window.c)
+    twoine_application_target(twoine_open32_adjust_window_tests)
+    add_test(NAME open32_adjust_window COMMAND twoine_open32_adjust_window_tests)
+    add_executable(twoine_open32_load_menu_tests os2libs/test_open32_load_menu.c)
+    twoine_application_target(twoine_open32_load_menu_tests)
+    target_link_libraries(twoine_open32_load_menu_tests PRIVATE pmwinx pmwin pmgpi 2ine SDL3::SDL3)
+    add_test(NAME open32_load_menu_ownership COMMAND twoine_open32_load_menu_tests)
+    add_test(NAME open32_load_menu COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_load_menu.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+        --work-dir "${PROJECT_BINARY_DIR}/open32-load-menu-tests")
+    set_tests_properties(open32_load_menu PROPERTIES TIMEOUT 30)
     add_executable(twoine_settings_tests os2libs/test_settings.c)
     twoine_application_target(twoine_settings_tests)
     target_link_libraries(twoine_settings_tests PRIVATE pmwin pmwinx pmshapi pmwp helpmgr 2ine)
@@ -545,6 +585,62 @@ if(TARGET kbdcalls AND TARGET viocalls AND TARGET nls)
 endif()
 
 if(TARGET pmwinx)
+    add_executable(twoine_open32_unicode_tests os2libs/test_open32_unicode.c
+        ../os2libs/pmwinx/unicode.c)
+    twoine_application_target(twoine_open32_unicode_tests)
+    target_link_libraries(twoine_open32_unicode_tests PRIVATE 2ine)
+    add_test(NAME open32_unicode_conversion COMMAND twoine_open32_unicode_tests)
+    add_test(NAME open32_unicode COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_unicode.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+        --work "${PROJECT_BINARY_DIR}/open32-unicode-tests")
+    set_tests_properties(open32_unicode PROPERTIES TIMEOUT 45)
+    add_executable(twoine_open32_menu_metric_tests os2libs/test_open32_menu_metrics.c
+        ../os2libs/pmwinx/metrics.c)
+    twoine_application_target(twoine_open32_menu_metric_tests)
+    add_test(NAME open32_menu_metric_dimensions COMMAND twoine_open32_menu_metric_tests)
+    add_test(NAME open32_menu_metrics COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_menu_metrics.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+        --work-dir "${PROJECT_BINARY_DIR}/open32-menu-metric-tests")
+    set_tests_properties(open32_menu_metrics PROPERTIES TIMEOUT 30)
+    add_executable(twoine_open32_pointer_tests os2libs/test_open32_pointers.c
+        ../os2libs/pmwinx/pointers.c)
+    twoine_application_target(twoine_open32_pointer_tests)
+    add_test(NAME open32_pointer_coordinates COMMAND twoine_open32_pointer_tests)
+    add_test(NAME open32_pointers COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_pointers.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+        --work-dir "${PROJECT_BINARY_DIR}/open32-pointer-tests")
+    set_tests_properties(open32_pointers PROPERTIES TIMEOUT 30)
+    add_executable(twoine_open32_priority_tests os2libs/test_open32_priority.c
+        ../os2libs/pmwinx/priority.c)
+    twoine_application_target(twoine_open32_priority_tests)
+    target_link_libraries(twoine_open32_priority_tests PRIVATE 2ine)
+    add_test(NAME open32_priority_mapping COMMAND twoine_open32_priority_tests)
+    add_test(NAME open32_priority COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_priority.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
+        --work "${PROJECT_BINARY_DIR}/open32-priority-tests")
+    set_tests_properties(open32_priority PROPERTIES TIMEOUT 30)
+    if(APPLE)
+        add_executable(twoine_open32_priority_host_tests os2libs/test_open32_priority.c
+            ../os2libs/pmwinx/priority.c)
+        twoine_application_target(twoine_open32_priority_host_tests)
+        target_compile_definitions(twoine_open32_priority_host_tests PRIVATE TWOINE_PRIORITY_REAL_HOST=1)
+        target_link_libraries(twoine_open32_priority_host_tests PRIVATE 2ine)
+        add_test(NAME open32_priority_host COMMAND twoine_open32_priority_host_tests)
+    endif()
+    if(UNIX)
+        add_executable(twoine_process_priority_linux_tests hal/test_process_priority_linux.c
+            ../hal/linux/host_process.c)
+        twoine_application_target(twoine_process_priority_linux_tests)
+        target_compile_definitions(twoine_process_priority_linux_tests PRIVATE
+            opendir=priority_test_opendir readdir=priority_test_readdir
+            closedir=priority_test_closedir getpriority=priority_test_getpriority
+            setpriority=priority_test_setpriority)
+        add_test(NAME process_priority_linux_policy COMMAND twoine_process_priority_linux_tests)
+    endif()
     add_test(NAME open32_accelerators COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32_accelerators.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(open32_accelerators PROPERTIES TIMEOUT 30)

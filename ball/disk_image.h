@@ -49,6 +49,8 @@ int tb_image_remove(const char *path, int directory);
 int tb_image_mkdir(const char *path);
 int tb_image_move(const char *source, const char *target);
 int tb_image_readonly(const char *path, int readonly);
+/* Sets an entry's last-write time in the volume itself. Seconds are since the Unix epoch. */
+int tb_image_modified(const char *path, const char *expected, int64_t seconds);
 int tb_image_copy(FILE *source, const char *destination, int exclusive);
 typedef int (*TbImageVisitor)(void *, const char *, uint64_t, int, int64_t);
 int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context);

@@ -213,6 +213,21 @@ APIRET queryFileInfoEasFromList(const LxHostFileInfo *statbuf, PVOID pInfoBuf, U
     return ERROR_INVALID_LEVEL;
 }
 
+/* Zero date and time fields leave the file's stamp unchanged. */
+static int64_t os2DateSeconds(FDATE date, FTIME time)
+{
+    if (!date.day && !date.month && !date.year && !time.twosecs && !time.minutes && !time.hours)
+        return INT64_MIN;
+    LxHostCalendar calendar = {.year = 1980 + date.year,
+                               .month = date.month,
+                               .day = date.day,
+                               .hour = time.hours,
+                               .minute = time.minutes,
+                               .second = time.twosecs * 2};
+    int64_t seconds;
+    return lx_host_calendar_seconds(&calendar, 0, &seconds) ? seconds : INT64_MIN;
+}
+
 APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBuf)
 {
     TRACE_NATIVE("DosQueryFileInfo(%u, %u, %p, %u)", (uint)hf, (uint)ulInfoLevel, pInfo,
@@ -224,12 +239,15 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
     LxHostFileInfo statbuf;
     LxHostFsError error = lx_host_file_info(file.resource, &statbuf);
     size_t ea_size = 0;
+    int64_t created = 0;
     if (!error && ulInfoLevel == FIL_QUERYEASIZE)
     {
         error = lx_host_file_metadata_get(file.resource, NULL, 0, &ea_size);
         if (error == LX_HOST_FS_INVALID)
             error = LX_HOST_FS_OK;
     }
+    if (!error)
+        lx_host_file_created(file.resource, &created);
     lx_handle_release(&file);
     if (error)
         return fileError(error);
@@ -239,6 +257,9 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
     {
         case FIL_STANDARD:
             rc = queryFileInfoStandard(&statbuf, pInfo, cbInfoBuf);
+            if (!rc && created)
+                unixTimeToOs2(created, &((FILESTATUS3 *)pInfo)->fdateCreation,
+                              &((FILESTATUS3 *)pInfo)->ftimeCreation);
             break;
         case FIL_QUERYEASIZE:
             rc = queryFileInfoEaSize(&statbuf, pInfo, cbInfoBuf);
@@ -358,8 +379,18 @@ APIRET DosSetFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBuf)
     if (!borrowFile(hf, &file))
         return ERROR_INVALID_HANDLE;
     const FILESTATUS3 *info = pInfo;
-    const LxHostFsError error =
-        lx_host_file_readonly(file.resource, (info->attrFile & FILE_READONLY) != 0);
+    int64_t created = os2DateSeconds(info->fdateCreation, info->ftimeCreation);
+    int64_t accessed = os2DateSeconds(info->fdateLastAccess, info->ftimeLastAccess);
+    int64_t modified = os2DateSeconds(info->fdateLastWrite, info->ftimeLastWrite);
+    LxHostFsError error = LX_HOST_FS_OK;
+    if (accessed != INT64_MIN || modified != INT64_MIN)
+        error = lx_host_file_times(file.resource, accessed, modified);
+    /* A filesystem that keeps no creation date leaves the remaining fields valid. */
+    if (!error && created != INT64_MIN &&
+        lx_host_file_set_created(file.resource, created) == LX_HOST_FS_INVALID)
+        error = LX_HOST_FS_OK;
+    if (!error)
+        error = lx_host_file_readonly(file.resource, (info->attrFile & FILE_READONLY) != 0);
     lx_handle_release(&file);
     return fileError(error);
 }

@@ -4,6 +4,8 @@
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwin/input.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
+#include <stdio.h>
 static _Thread_local unsigned char down[256], toggled[256];
 static const unsigned char scan_keys[] = {
     0,    0x1B, '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  '0',  0xBD, 0xBB, 8,
@@ -131,4 +133,134 @@ BOOL GetKeyboardState(PVOID output)
     for (unsigned key = 0; key < 256; key++)
         bytes[key] = (down[key] ? 0x80 : 0) | toggled[key];
     return TRUE;
+}
+
+ULONG MapVirtualKey(ULONG code, ULONG kind)
+{
+    if (kind == 0)
+    {
+        for (ULONG scan = 1; scan < sizeof scan_keys; scan++)
+            if (scan_keys[scan] == code)
+                return scan;
+        return 0;
+    }
+    if (kind == 1 || kind == 3)
+        return code < sizeof scan_keys ? scan_keys[code] : 0;
+    if (kind == 2)
+    {
+        if ((code >= 'A' && code <= 'Z') || (code >= '0' && code <= '9') || code == 32)
+            return code;
+        static const ULONG keys[] = {0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
+                                     0xC0, 0xDB, 0xDC, 0xDD, 0xDE};
+        const char values[] = ";=,-./`[\\]'";
+        for (unsigned i = 0; i < sizeof keys / sizeof *keys; i++)
+            if (keys[i] == code)
+                return (uint8)values[i];
+    }
+    return 0;
+}
+SHORT VkKeyScan(ULONG character)
+{
+    if (character >= 'a' && character <= 'z')
+        return character - 'a' + 'A';
+    if (character >= 'A' && character <= 'Z')
+        return 0x100 | character;
+    if ((character >= '0' && character <= '9') || character == ' ')
+        return character;
+    const char unshift[] = ";=,-./`[\\]'", shifted[] = ":+<_>?~{|}\"";
+    static const unsigned char keys[] = {0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
+                                         0xC0, 0xDB, 0xDC, 0xDD, 0xDE};
+    for (unsigned i = 0; i < sizeof keys; i++)
+    {
+        if (character == (uint8)unshift[i])
+            return keys[i];
+        if (character == (uint8)shifted[i])
+            return 0x100 | keys[i];
+    }
+    const char digits[] = ")!@#$%^&*(";
+    for (unsigned i = 0; i < 10; i++)
+        if (character == (uint8)digits[i])
+            return 0x100 | ('0' + i);
+    if (character == '\t' || character == '\r' || character == '\b' || character == 27)
+        return character;
+    return -1;
+}
+ULONG GetKeyboardLayout(ULONG thread)
+{
+    (void)thread;
+    return 0x04090409; /* Current keyboard provider is the US scan map above. */
+}
+LONG GetKeyNameText(ULONG parameter, PSZ output, LONG capacity)
+{
+    if (!output || capacity <= 0)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG scan = (parameter >> 16) & 255, key = MapVirtualKey(scan, 1);
+    const char *name = NULL;
+    char text[16];
+    switch (key)
+    {
+        case 8:
+            name = "Backspace";
+            break;
+        case 9:
+            name = "Tab";
+            break;
+        case 13:
+            name = "Enter";
+            break;
+        case 16:
+            name = "Shift";
+            break;
+        case 17:
+            name = "Ctrl";
+            break;
+        case 18:
+            name = "Alt";
+            break;
+        case 19:
+            name = "Pause";
+            break;
+        case 20:
+            name = "Caps Lock";
+            break;
+        case 27:
+            name = "Esc";
+            break;
+        case 32:
+            name = "Space";
+            break;
+        case 0x90:
+            name = "Num Lock";
+            break;
+        case 0x91:
+            name = "Scroll Lock";
+            break;
+        default:
+            if (key >= 0x70 && key <= 0x87)
+            {
+                snprintf(text, sizeof text, "F%u", key - 0x6F);
+                name = text;
+            }
+            else
+            {
+                ULONG c = MapVirtualKey(key, 2);
+                if (c)
+                {
+                    text[0] = (char)c;
+                    text[1] = 0;
+                    name = text;
+                }
+            }
+    }
+    if (!name)
+        name = "";
+    size_t n = strlen(name);
+    if (n >= (size_t)capacity)
+        n = capacity - 1;
+    memcpy(output, name, n);
+    output[n] = 0;
+    return (LONG)n;
 }

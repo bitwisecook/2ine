@@ -185,11 +185,15 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
         else
             destroyPresentationSpace(anchor, ps);
     }
+    free(win->damage_rects);
+    win->damage_rects = NULL;
+    win->damage_count = 0;
     releaseWindowAccelerator(win);
     destroyDialog(win);
     destroyControl(win);
     destroyMenu(win);
     destroyStandardFile(win);
+    destroyStandardFont(win);
 
     if (win->parent == &desktop_window)
     {
@@ -558,6 +562,10 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     }
     switch (msg)
     {
+        case WM_FLASHWINDOW:
+            win->flash = (USHORT)(uintptr_t)mp1 != 0;
+            WinInvalidateRect(hwnd, NULL, TRUE);
+            return (MRESULT)(uintptr_t)TRUE;
         case WM_ACTIVATE:
             if (isFrameWindow(win))
                 for (Window *control = win->children; control; control = control->sibling)

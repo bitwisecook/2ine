@@ -50,7 +50,7 @@ LONG lx_pm_color(HPS hps, LONG color)
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
     if (!ps || (ps->rgb_colors ? color < CLR_FALSE || color > 0xffffff
                                : color < CLR_FALSE || (color > CLR_PALEGRAY &&
-                                                       (color >= 256 || !ps->color_valid[color]))))
+                                                       (color >= 256 || (!ps->color_valid[color] && (!ps->palette_lease.resource || (ULONG)color>=((PmPalette*)ps->palette_lease.resource)->count))))))
         return -255;
     LONG previous = ps->color;
     ps->color = color;
@@ -58,12 +58,27 @@ LONG lx_pm_color(HPS hps, LONG color)
         ps->primitive_color[i] = color;
     return previous;
 }
+BOOL lx_pm_record_point(PresentationSpace *ps, const POINTL *point, BOOL move)
+{
+    PmPath *path = ps->record_path;
+    if (!path) return TRUE;
+    if (path->count == path->capacity) {
+        size_t capacity = path->capacity ? path->capacity * 2 : 64;
+        if (capacity > 65536) return FALSE;
+        PmPathPoint *points = realloc(path->points, capacity * sizeof *points);
+        if (!points) return FALSE;
+        path->points = points; path->capacity = capacity;
+    }
+    path->points[path->count++] = (PmPathPoint){*point, move};
+    return TRUE;
+}
 BOOL lx_pm_move(HPS hps, const POINTL *point)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
     if (!ps || !point)
         return FALSE;
+    if (!lx_pm_record_point(ps, point, TRUE)) return FALSE;
     ps->position = *point;
     return TRUE;
 }
@@ -205,6 +220,8 @@ LONG lx_pm_resolve_color(HPS handle, LONG color)
         return lx_pm_rgb(color);
     if (ps->rgb_colors)
         return color <= 0xffffff ? color : -255;
+    PmPalette *palette=ps->palette_lease.resource;
+    if(palette&&(ULONG)color<palette->count)return palette->colors[color]&0xffffff;
     if (color < 256 && ps->color_valid[color])
         return ps->colors[color];
     return lx_pm_rgb(color);

@@ -2,6 +2,7 @@
 /* Synchronous Windows file handles retain host objects and process-local sharing contracts. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "hal/host_fs.h"
 #include "hal/host_sync.h"
 #include "hal/host_thread.h"
@@ -468,4 +469,126 @@ void open32FilesCleanup(void)
             break;
         open32CloseFile(handle);
     }
+}
+
+/* FILETIME stays little endian at the ABI boundary. Host precision is one second. */
+static void filetime_store(PVOID output, int64_t seconds)
+{
+    if (!output)
+        return;
+    uint64_t ticks =
+        seconds < -11644473600LL ? 0 : ((uint64_t)(seconds + 11644473600LL) * 10000000ULL);
+    lx_guest_store_u32(output, (ULONG)ticks);
+    lx_guest_store_u32((uint8 *)output + 4, (ULONG)(ticks >> 32));
+}
+static BOOL filetime_seconds(PVOID input, int64_t *seconds)
+{
+    if (!input)
+    {
+        *seconds = INT64_MIN;
+        return TRUE;
+    }
+    uint64_t ticks = lx_guest_load_u32(input) | (uint64_t)lx_guest_load_u32((uint8 *)input + 4)
+                                                    << 32;
+    if (ticks == UINT64_MAX)
+    {
+        *seconds = INT64_MIN;
+        return TRUE;
+    }
+    if (ticks > INT64_MAX)
+        return FALSE;
+    *seconds = (int64_t)(ticks / 10000000ULL) - 11644473600LL;
+    return TRUE;
+}
+BOOL GetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_FILE, &borrow))
+    {
+        typedef APIRET(OS2API * Query)(ULONG, ULONG, PVOID, ULONG);
+        Query query = (Query)open32DosService("DosQueryFileInfo");
+        uint8 status[24];
+        ULONG error = query ? query(handle, 1, status, sizeof status) : 120;
+        if (!error)
+        {
+            PVOID outputs[] = {creation, access, write};
+            for (unsigned i = 0; i < 3; i++)
+                if (outputs[i])
+                {
+                    uint8 local[8];
+                    if (!DosDateTimeToFileTime(lx_guest_load_u16(status + i * 4),
+                                               lx_guest_load_u16(status + i * 4 + 2), local) ||
+                        !LocalFileTimeToFileTime(local, outputs[i]))
+                        error = 87;
+                }
+        }
+        if (error)
+            open32SetError(error);
+        return !error;
+    }
+    Open32File *file = borrow.resource;
+    LxHostFileInfo info;
+    int64_t created = 0;
+    LxHostFsError error = lx_host_file_info(file->file, &info);
+    if (!error && creation)
+        error = lx_host_file_created(file->file, &created);
+    if (!error)
+    {
+        /* A zero FILETIME marks a host without a recorded creation time. */
+        if (creation && created)
+            filetime_store(creation, created);
+        else if (creation)
+            memset(creation, 0, 8);
+        filetime_store(access, info.accessed);
+        filetime_store(write, info.modified);
+    }
+    lx_handle_release(&borrow);
+    return result_error(error);
+}
+BOOL SetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
+{
+    int64_t btime, atime, mtime;
+    if (!filetime_seconds(creation, &btime) || !filetime_seconds(access, &atime) ||
+        !filetime_seconds(write, &mtime))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_FILE, &borrow))
+    {
+        typedef APIRET(OS2API * Query)(ULONG, ULONG, PVOID, ULONG);
+        typedef APIRET(OS2API * Set)(ULONG, ULONG, PVOID, ULONG);
+        Query query = (Query)open32DosService("DosQueryFileInfo");
+        Set set = (Set)open32DosService("DosSetFileInfo");
+        uint8 status[24];
+        ULONG error = !query || !set ? 120 : query(handle, 1, status, sizeof status);
+        PVOID inputs[] = {creation, access, write};
+        for (unsigned i = 0; !error && i < 3; i++)
+            if (inputs[i])
+            {
+                uint8 local[8];
+                if (!FileTimeToLocalFileTime(inputs[i], local) ||
+                    !FileTimeToDosDateTime(local, status + i * 4, status + i * 4 + 2))
+                    error = 87;
+            }
+        if (!error)
+            error = set(handle, 1, status, sizeof status);
+        if (error)
+            open32SetError(error);
+        return !error;
+    }
+    Open32File *file = borrow.resource;
+    ULONG error = !(file->access & 2u) ? 5 : 0;
+    if (!error && btime != INT64_MIN)
+    {
+        LxHostFsError result = lx_host_file_set_created(file->file, btime);
+        error = result == LX_HOST_FS_INVALID ? 50 : file_error(result);
+    }
+    if (!error)
+        error = file_error(lx_host_file_times(file->file, atime, mtime));
+    lx_handle_release(&borrow);
+    if (error)
+        open32SetError(error);
+    return !error;
 }

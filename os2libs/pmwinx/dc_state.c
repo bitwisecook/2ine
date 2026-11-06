@@ -70,6 +70,7 @@ LONG SaveDC(ULONG handle)
         goto failed;
     saved->next = dc->saved;
     dc->saved = saved;
+    open32MetafileWords(handle, 0x1e, 0, NULL);
     return saved->level;
 failed:
     release_state(saved);
@@ -114,18 +115,23 @@ BOOL RestoreDC(ULONG handle, LONG level)
     Open32SavedDC *end = saved->next, *top = dc->saved;
     Open32DC *next = dc->next;
     BOOL print_active = dc->print_active, print_page = dc->print_page;
+    ULONG abort_proc = dc->abort_proc;
+    struct Open32Path *path = dc->path;
+    ULONG lock_region = dc->lock_region;
     *dc = saved->state;
+    dc->path = path;
+    dc->lock_region = lock_region;
     dc->next = next;
     dc->print_active = print_active;
     dc->print_page = print_page;
+    dc->abort_proc = abort_proc;
     dc->saved = end;
     saved->state.font = (LxHandleBorrow){0};
     saved->state.brush = (LxHandleBorrow){0};
     saved->state.pen = (LxHandleBorrow){0};
     saved->state.palette = (LxHandleBorrow){0};
     saved->state.clip_region = 0;
-    if (dc->clip_region)
-        GpiSetClipRegion(handle, dc->clip_region, NULL);
+    GpiSetClipRegion(handle, dc->clip_region, NULL);
     /* Open32 replaces logical font set1 when selecting a different font. */
     BOOL restored = open32SelectFont(dc, dc->font_handle) != 0;
     while (top != end)
@@ -134,6 +140,8 @@ BOOL RestoreDC(ULONG handle, LONG level)
         top = discard->next;
         release_state(discard);
     }
+    if (restored)
+        open32MetafileWords(handle, 0x127, 1, &level);
     return restored;
 }
 void open32SavedDCCleanup(Open32DC *dc)

@@ -1,13 +1,269 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/doscalls.h"
+#include "guest/bindings/pmwinx_unicode.h"
+static uint32 open32_interlocked_bridge(uint8 *a, unsigned operation)
+{
+    LxGuestBorrow value = {0};
+    uint32 result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 4,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &value))
+        open32SetError(87);
+    else if (operation == 0)
+        result = (uint32)InterlockedIncrement(value.host);
+    else if (operation == 1)
+        result = (uint32)InterlockedDecrement(value.host);
+    else
+        result = (uint32)InterlockedExchange(value.host, (LONG)lx_guest_load_u32(a + 4));
+    lx_execution_release(&value);
+    return result;
+}
+static uint32 bridge32_InterlockedIncrement(uint8 *a)
+{
+    return open32_interlocked_bridge(a, 0);
+}
+static uint32 bridge32_InterlockedDecrement(uint8 *a)
+{
+    return open32_interlocked_bridge(a, 1);
+}
+static uint32 bridge32_InterlockedExchange(uint8 *a)
+{
+    return open32_interlocked_bridge(a, 2);
+}
+static uint32 bridge32_AdjustWindowRectEx(uint8 *a)
+{
+    LxGuestBorrow rectangle = {0};
+    uint32 result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16,
+                             LX_GUEST_READ | LX_GUEST_WRITE, &rectangle))
+        open32SetError(87);
+    else
+        result = (uint32)AdjustWindowRectEx(rectangle.host, lx_guest_load_u32(a + 4),
+                                            (BOOL)lx_guest_load_u32(a + 8),
+                                            lx_guest_load_u32(a + 12));
+    lx_execution_release(&rectangle);
+    return result;
+}
+static uint32 bridge32_LoadMenu(uint8 *a)
+{
+    ULONG module = lx_guest_load_u32(a);
+    ULONG resource = lx_guest_load_u32(a + 4);
+    PSZ name = (PSZ)(uintptr_t)resource;
+    if (resource > 0xFFFF &&
+        !(name = lx_execution_copy_string(GLoaderState.execution, resource, 1024u * 1024u)))
+    {
+        open32SetError(87);
+        return 0;
+    }
+    ULONG result = LoadMenu(module, name);
+    if (resource > 0xFFFF)
+        free(name);
+    return result;
+}
+static uint32 bridge32_WindowFromPoint(uint8 *a)
+{
+    return WindowFromPoint((LONG)lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_GetCursorPos(uint8 *a)
+{
+    LxGuestBorrow output = {0};
+    ULONG result = 0;
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
+                             &output))
+        open32SetError(87);
+    else
+        result = GetCursorPos(output.host);
+    lx_execution_release(&output);
+    return result;
+}
+static uint32 bridge32_SetCursorPos(uint8 *a)
+{
+    return SetCursorPos((LONG)lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_GetMenuCheckMarkDimensions(uint8 *a)
+{
+    (void)a;
+    return (uint32)GetMenuCheckMarkDimensions();
+}
+static uint32 bridge32_GetTabbedTextExtent(uint8 *a)
+{
+    LONG count = (LONG)lx_guest_load_u32(a + 8), tab_count = (LONG)lx_guest_load_u32(a + 12);
+    LxGuestBorrow text = {0}, tabs = {0};
+    ULONG result = 0;
+    if (count < 0 || count > 65536 || tab_count < 0 || tab_count > 65536 ||
+        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+                                       (size_t)count, LX_GUEST_READ, &text)) ||
+        (tab_count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16),
+                                           (size_t)tab_count * 4, LX_GUEST_READ, &tabs)))
+        open32SetError(87);
+    else
+        result = GetTabbedTextExtent(lx_guest_load_u32(a), text.host, count, tab_count, tabs.host);
+    lx_execution_release(&tabs);
+    lx_execution_release(&text);
+    return result;
+}
+static uint32 bridge32_GetNearestColor(uint8 *a)
+{
+    return GetNearestColor(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_GetObjectType(uint8 *a)
+{
+    return GetObjectType(lx_guest_load_u32(a));
+}
+static uint32 o32_set_mapping(uint8 *a, unsigned kind)
+{
+    ULONG handle = lx_guest_load_u32(a), address = lx_guest_load_u32(a + 12);
+    LONG x = (LONG)lx_guest_load_u32(a + 4), y = (LONG)lx_guest_load_u32(a + 8);
+    LxGuestBorrow previous = {0};
+    ULONG result = 0;
+    if (address &&
+        !lx_execution_borrow(GLoaderState.execution, address, 8, LX_GUEST_WRITE, &previous))
+        open32SetError(87);
+    else if (kind == 0)
+        result = SetViewportOrgEx(handle, x, y, previous.host);
+    else if (kind == 1)
+        result = SetWindowOrgEx(handle, x, y, previous.host);
+    else if (kind == 2)
+        result = SetViewportExtEx(handle, x, y, previous.host);
+    else
+        result = SetWindowExtEx(handle, x, y, previous.host);
+    lx_execution_release(&previous);
+    return result;
+}
+static uint32 bridge32_SetViewportOrgEx(uint8 *a)
+{
+    return o32_set_mapping(a, 0);
+}
+static uint32 bridge32_SetWindowOrgEx(uint8 *a)
+{
+    return o32_set_mapping(a, 1);
+}
+static uint32 bridge32_SetViewportExtEx(uint8 *a)
+{
+    return o32_set_mapping(a, 2);
+}
+static uint32 bridge32_SetWindowExtEx(uint8 *a)
+{
+    return o32_set_mapping(a, 3);
+}
+static uint32 bridge32_PlayMetaFile(uint8 *a)
+{
+    return PlayMetaFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+static uint32 bridge32_EnumMetaFile(uint8 *a)
+{
+    return EnumMetaFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+                        lx_guest_load_u32(a + 12));
+}
+static uint32 bridge32_PlayMetaFileRecord(uint8 *a)
+{
+    ULONG address = lx_guest_load_u32(a + 8), count = lx_guest_load_u32(a + 12);
+    uint8 header[6];
+    LxGuestBorrow record = {0}, table = {0};
+    ULONG result = 0, words = 0;
+    if (lx_execution_read(GLoaderState.execution, address, header, sizeof header))
+        words = lx_guest_load_u32(header);
+    if (words < 3 || words > 32u * 1024 * 1024 || count > 65535 ||
+        !lx_execution_borrow(GLoaderState.execution, address, (size_t)words * 2, LX_GUEST_READ,
+                             &record) ||
+        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+                                       (size_t)count * 4, LX_GUEST_READ | LX_GUEST_WRITE, &table)))
+        open32SetError(87);
+    else
+    {
+        size_t bytes = (size_t)words * 2;
+        uint8 *copy = malloc(bytes);
+        if (!copy)
+            open32SetError(8);
+        else
+        {
+            memcpy(copy, record.host, bytes);
+            if (lx_guest_load_u32(copy) != words)
+                open32SetError(87);
+            else
+                result = PlayMetaFileRecord(lx_guest_load_u32(a), table.host, copy, count);
+            free(copy);
+        }
+    }
+    lx_execution_release(&table);
+    lx_execution_release(&record);
+    return result;
+}
+static uint32 bridge32_StretchDIBits(uint8 *a)
+{
+    ULONG info_address = lx_guest_load_u32(a + 40), usage = lx_guest_load_u32(a + 44);
+    uint8 header[40];
+    size_t info_bytes, pixel_bytes;
+    LxGuestBorrow info = {0}, bits = {0};
+    ULONG result = 0;
+    if (!lx_execution_read(GLoaderState.execution, info_address, header, sizeof header) ||
+        !open32DibBuffers(header, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
+        !pixel_bytes || pixel_bytes > 64u * 1024 * 1024 ||
+        !lx_execution_borrow(GLoaderState.execution, info_address, info_bytes, LX_GUEST_READ,
+                             &info) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 36), pixel_bytes,
+                             LX_GUEST_READ, &bits))
+        open32SetError(87);
+    else
+    {
+        uint8 *copy = malloc(info_bytes + pixel_bytes);
+        if (!copy)
+            open32SetError(8);
+        else
+        {
+            memcpy(copy, info.host, info_bytes);
+            memcpy(copy + info_bytes, bits.host, pixel_bytes);
+            if (memcmp(copy, header, sizeof header))
+                open32SetError(87);
+            else
+                result = (ULONG)StretchDIBits(
+                    lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
+                    (LONG)lx_guest_load_u32(a + 8), (LONG)lx_guest_load_u32(a + 12),
+                    (LONG)lx_guest_load_u32(a + 16), (LONG)lx_guest_load_u32(a + 20),
+                    (LONG)lx_guest_load_u32(a + 24), (LONG)lx_guest_load_u32(a + 28),
+                    (LONG)lx_guest_load_u32(a + 32), copy + info_bytes, copy, usage,
+                    lx_guest_load_u32(a + 48));
+            free(copy);
+        }
+    }
+    lx_execution_release(&bits);
+    lx_execution_release(&info);
+    return result;
+}
+static uint32 bridge32_GetTextExtentExPoint(uint8 *a)
+{
+    LONG count = (LONG)lx_guest_load_u32(a + 8);
+    ULONG fit_address = lx_guest_load_u32(a + 16), advances_address = lx_guest_load_u32(a + 20);
+    LxGuestBorrow text = {0}, fit = {0}, advances = {0}, size = {0};
+    ULONG result = 0;
+    if (count < 0 || count > 65536 ||
+        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+                                       (size_t)count, LX_GUEST_READ, &text)) ||
+        (fit_address &&
+         !lx_execution_borrow(GLoaderState.execution, fit_address, 4, LX_GUEST_WRITE, &fit)) ||
+        (advances_address && count &&
+         !lx_execution_borrow(GLoaderState.execution, advances_address, (size_t)count * 4,
+                              LX_GUEST_WRITE, &advances)) ||
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 24), 8, LX_GUEST_WRITE,
+                             &size))
+        open32SetError(87);
+    else
+        result = GetTextExtentExPoint(lx_guest_load_u32(a), text.host, count,
+                                      (LONG)lx_guest_load_u32(a + 12), fit.host, advances.host,
+                                      size.host);
+    lx_execution_release(&size);
+    lx_execution_release(&advances);
+    lx_execution_release(&fit);
+    lx_execution_release(&text);
+    return result;
+}
 static uint32 bridge32_SetMetaFileBitsEx(uint8 *a)
 {
     ULONG size = lx_guest_load_u32(a);
     LxGuestBorrow input = {0};
     ULONG result = 0;
     if (size < 24 || size > 64u * 1024 * 1024 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), size,
-                             LX_GUEST_READ, &input))
+        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), size, LX_GUEST_READ,
+                             &input))
         open32SetError(87);
     else
         result = SetMetaFileBitsEx(size, input.host);
@@ -42,8 +298,8 @@ static uint32 bridge32_SetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow input = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 44,
-                             LX_GUEST_READ, &input))
+    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 44, LX_GUEST_READ,
+                             &input))
         open32SetError(87);
     else
         result = SetWindowPlacement(lx_guest_load_u32(a), input.host);
@@ -2880,6 +3136,16 @@ static uint32 bridge32_GetCurrentProcess(uint8 *a)
     return GetCurrentProcess();
 }
 
+static uint32 bridge32_SetPriorityClass(uint8 *a)
+{
+    return SetPriorityClass(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
+}
+
+static uint32 bridge32_GetPriorityClass(uint8 *a)
+{
+    return GetPriorityClass(lx_guest_load_u32(a));
+}
+
 static uint32 bridge32_GetTextFace(uint8 *a)
 {
     LONG capacity = (LONG)lx_guest_load_u32(a + 4);
@@ -3692,3 +3958,5 @@ static uint32 bridge32_TranslateAccelerator(uint8 *a)
     }
     return (uint32)TranslateAccelerator(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), message);
 }
+#include "guest/bindings/pmwinx_batch_graphics.h"
+#include "guest/bindings/pmwinx_batch_services.h"

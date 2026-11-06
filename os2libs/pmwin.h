@@ -897,6 +897,8 @@ extern "C"
     };
 
     // API entry points...
+    typedef struct LXTRACKINFO { LONG cxBorder,cyBorder,cxGrid,cyGrid,cxKeyboard,cyKeyboard; RECTL rclTrack,rclBoundary; POINTL ptlMinTrackSize,ptlMaxTrackSize; ULONG fs; } LXTRACKINFO;
+    typedef struct LXPOINTERINFO { ULONG fPointer; LONG xHotspot,yHotspot; ULONG hbmPointer,hbmColor,hbmMiniPointer,hbmMiniColor; } LXPOINTERINFO;
     OS2EXPORT BOOL OS2API WinIsChild(HWND child, HWND parent) OS2APIINFO(768);
     OS2EXPORT BOOL OS2API WinSetFocus(HWND desktop, HWND window) OS2APIINFO(860);
     OS2EXPORT HWND OS2API WinQueryFocus(HWND desktop) OS2APIINFO(817);
@@ -1123,8 +1125,19 @@ extern "C"
     OS2EXPORT BOOL OS2API WinEndPaint(HPS hps) OS2APIINFO(738);
     OS2EXPORT BOOL OS2API WinFillRect(HPS hps, PRECTL prcl, LONG lColor) OS2APIINFO(743);
     OS2EXPORT ULONG lx_pm_clipboard_count(void);
+    /* A NULL rectangle releases the desktop pointer. Bounds are inclusive PM desktop pixels. */
+    OS2EXPORT void lx_pm_set_pointer_clip(const RECTL *bounds);
+    /* Returns TRUE when the supplied PM desktop point was moved inside the clip. */
+    OS2EXPORT BOOL lx_pm_clip_pointer(LONG *x, LONG *y);
+    /* The callback runs on each exiting PM thread before its windows are destroyed. */
+    OS2EXPORT void lx_pm_set_open32_thread_exit(void (*callback)(void));
     /* Shared system resources do not require a caller-owned PM anchor/display. */
     OS2EXPORT HPOINTER lx_pm_system_pointer(LONG id);
+    /* Copies a window's pending update rectangles in PM coordinates, using its invalid
+       rectangle when no damage list is held. The caller frees *rectangles; a nonzero *count
+       with NULL *rectangles reports allocation failure. FALSE means no such window here. */
+    OS2EXPORT BOOL lx_pm_window_damage(HWND window, RECTL **rectangles, size_t *count,
+                                       LONG *height);
     OS2EXPORT uint64_t lx_pm_clipboard_serial(void);
     OS2EXPORT uint64_t lx_pm_clipboard_format_serial(ULONG format);
     OS2EXPORT ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity);
@@ -1160,6 +1173,41 @@ extern "C"
     OS2EXPORT BOOL OS2API WinIsWindowEnabled(HWND hwnd) OS2APIINFO(773);
     OS2EXPORT BOOL OS2API WinIsWindowVisible(HWND hwnd) OS2APIINFO(775);
 
+
+    OS2EXPORT BOOL OS2API WinCancelShutdown(HMQ a0, BOOL a1) OS2APIINFO(705);
+    OS2EXPORT BOOL OS2API WinCpTranslateString(HAB a0, ULONG a1, PSZ a2, ULONG a3, ULONG a4, PSZ a5) OS2APIINFO(712);
+    OS2EXPORT BOOL OS2API WinDeleteLibrary(HAB a0, ULONG a1) OS2APIINFO(722);
+    OS2EXPORT BOOL OS2API WinFlashWindow(HWND a0, BOOL a1) OS2APIINFO(745);
+    OS2EXPORT BOOL OS2API WinFocusChange(HWND a0, HWND a1, ULONG a2) OS2APIINFO(746);
+    OS2EXPORT BOOL OS2API WinFreeErrorInfo(PVOID a0) OS2APIINFO(748);
+    OS2EXPORT PVOID OS2API WinGetErrorInfo(HAB a0) OS2APIINFO(751);
+    OS2EXPORT BOOL OS2API WinGetMaxPosition(HWND a0, PSWP a1) OS2APIINFO(754);
+    OS2EXPORT BOOL OS2API WinGetMinPosition(HWND a0, PSWP a1, PPOINTL a2) OS2APIINFO(755);
+    OS2EXPORT BOOL OS2API WinInvalidateRegion(HWND a0, ULONG a1, BOOL a2) OS2APIINFO(766);
+    OS2EXPORT BOOL OS2API WinIsWindowShowing(HWND a0) OS2APIINFO(774);
+    OS2EXPORT ULONG OS2API WinLoadLibrary(HAB a0, PSZ a1) OS2APIINFO(777);
+    OS2EXPORT LONG OS2API WinLoadMessage(HAB a0, HMODULE a1, ULONG a2, LONG a3, PSZ a4) OS2APIINFO(779);
+    OS2EXPORT PSZ OS2API WinNextChar(HAB a0, ULONG a1, ULONG a2, PSZ a3) OS2APIINFO(791);
+    OS2EXPORT ULONG OS2API WinQueryAtomName(ULONG a0, ULONG a1, PSZ a2, ULONG a3) OS2APIINFO(802);
+    OS2EXPORT BOOL OS2API WinQueryDlgItemShort(HWND a0, ULONG a1, PSHORT a2, BOOL a3) OS2APIINFO(814);
+    OS2EXPORT BOOL OS2API WinQueryMsgPos(HAB a0, PPOINTL a1) OS2APIINFO(818);
+    OS2EXPORT HWND OS2API WinQueryObjectWindow(HWND a0) OS2APIINFO(820);
+    OS2EXPORT BOOL OS2API WinQueryPointerInfo(HPOINTER a0, LXPOINTERINFO * a1) OS2APIINFO(822);
+    OS2EXPORT BOOL OS2API WinQueryQueueInfo(HMQ a0, PVOID a1, ULONG a2) OS2APIINFO(824);
+    OS2EXPORT LONG OS2API WinQueryUpdateRegion(HWND a0, ULONG a1) OS2APIINFO(832);
+    OS2EXPORT BOOL OS2API WinSetCp(HMQ a0, ULONG a1) OS2APIINFO(857);
+    OS2EXPORT BOOL OS2API WinSetDlgItemShort(HWND a0, ULONG a1, USHORT a2, BOOL a3) OS2APIINFO(858);
+    OS2EXPORT BOOL OS2API WinSetMultWindowPos(HAB a0, PSWP a1, ULONG a2) OS2APIINFO(863);
+    OS2EXPORT BOOL OS2API WinSetSysColors(HWND a0, ULONG a1, ULONG a2, LONG a3, ULONG a4, PLONG a5) OS2APIINFO(871);
+    OS2EXPORT BOOL OS2API WinSetSysValue(HWND a0, LONG a1, LONG a2) OS2APIINFO(873);
+    OS2EXPORT BOOL OS2API WinSetWindowBits(HWND a0, LONG a1, ULONG a2, ULONG a3) OS2APIINFO(874);
+    OS2EXPORT BOOL OS2API WinTrackRect(HWND a0, HPS a1, LXTRACKINFO * a2) OS2APIINFO(890);
+    OS2EXPORT BOOL OS2API WinValidateRect(HWND a0, PRECTL a1, BOOL a2) OS2APIINFO(895);
+    OS2EXPORT BOOL OS2API WinValidateRegion(HWND a0, ULONG a1, BOOL a2) OS2APIINFO(896);
+    OS2EXPORT BOOL OS2API WinBroadcastMsg(HWND a0, ULONG a1, MPARAM a2, MPARAM a3, ULONG a4) OS2APIINFO(901);
+    OS2EXPORT BOOL OS2API WinSetKeyboardStateTable(HWND a0, PBYTE a1, BOOL a2) OS2APIINFO(921);
+    OS2EXPORT LONG OS2API WinRealizePalette(HWND a0, HPS a1, PULONG a2) OS2APIINFO(941);
+    OS2EXPORT HPOINTER OS2API WinCreatePointerIndirect(HWND a0, LXPOINTERINFO * a1) OS2APIINFO(942);
 #ifdef __cplusplus
 }
 #endif

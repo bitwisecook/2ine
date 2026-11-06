@@ -10,7 +10,7 @@
 #include <windows.h>
 struct LxHostChild
 {
-    HANDLE handle;
+    HANDLE handle, thread;
     DWORD id;
 };
 int lx_host_child_terminate(LxHostChild *child)
@@ -18,6 +18,18 @@ int lx_host_child_terminate(LxHostChild *child)
     if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
         return 1;
     return TerminateProcess(child->handle, 1) ? 0 : -1;
+}
+int lx_host_child_suspend(LxHostChild *child)
+{
+    if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
+        return 1;
+    return SuspendThread(child->thread) == (DWORD)-1 ? -1 : 0;
+}
+int lx_host_child_resume(LxHostChild *child)
+{
+    if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
+        return 1;
+    return ResumeThread(child->thread) == (DWORD)-1 ? -1 : 0;
 }
 static wchar_t *wide(const char *s)
 {
@@ -105,7 +117,7 @@ static LxHostChild *spawn_child(const char *path, char *const *argv, char *const
         free(child);
         return NULL;
     }
-    CloseHandle(process.hThread);
+    child->thread = process.hThread;
     child->handle = process.hProcess;
     child->id = process.dwProcessId;
     return child;
@@ -113,6 +125,10 @@ static LxHostChild *spawn_child(const char *path, char *const *argv, char *const
 LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, 0);
+}
+LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, char *const *env)
+{
+    return spawn_child(path, argv, env, CREATE_SUSPENDED);
 }
 LxHostChild *lx_host_child_spawn_group(const char *path, char *const *argv, char *const *env)
 {
@@ -150,6 +166,7 @@ void lx_host_child_release(LxHostChild *child)
 {
     if (child)
     {
+        CloseHandle(child->thread);
         CloseHandle(child->handle);
         free(child);
     }

@@ -1,5 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Flat socket calls pin guest buffers and copy fixed-width legacy addresses. */
+static uint32 bridge32_Os2LegacyGetHostId(uint8 *a)
+{
+    (void)a;
+    return Os2LegacyGetHostId();
+}
 static uint32 socket_word(const uint8 *a, unsigned i)
 {
     return lx_guest_load_u32(a + i * 4);

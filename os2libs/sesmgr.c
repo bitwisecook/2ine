@@ -8,7 +8,9 @@
 
 #include "os2native16.h"
 #include "sesmgr.h"
+#include "sesmgr_start.h"
 #include "doscalls.h"
+#include "os2libs/doscalls/launch.h"
 #include "quecalls.h"
 #include "hal/host_thread.h"
 #include "hal/host_sync.h"
@@ -27,6 +29,8 @@ typedef struct SessionWait
     HQUEUE queue;
     BOOL related;
     BOOL selectable, bonded;
+    LxSessionEnded ended;
+    void *context;
 } SessionWait;
 static SessionWait *sessions;
 static LxHostMutex *session_mutex;
@@ -141,13 +145,15 @@ static void *session_wait(void *value)
         USHORT message[2] = {(USHORT)session->id, (USHORT)result.codeResult};
         lx_queue_write_copy(session->queue, 0, sizeof message, message, 0);
     }
+    if (session->ended)
+        session->ended(session->context, result.codeResult);
     remove_session(session);
     destroy_session(session);
     return NULL;
 }
-APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
+APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid)
 {
-    TRACE_NATIVE("DosStartSession(%p, %p, %p)", data, session_id, pid);
+    PSTARTDATA data = start->data;
     if (!data || data->Length < 24 || !data->PgmName || !*data->PgmName || !session_id || !pid)
         return ERROR_INVALID_PARAMETER;
     if (data->Related > 1)
@@ -193,18 +199,26 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     memcpy(command, data->PgmName, name_size);
     strcpy(command + name_size, inputs);
     command[name_size + strlen(inputs) + 1] = 0;
-    RESULTCODES result = {0};
-    APIRET error = DosExecPgm(data->ObjectBuffer, data->ObjectBuffLen, EXEC_ASYNCRESULT, command,
-                              (PSZ)data->Environment, &result, data->PgmName);
+    if (data->ObjectBuffer && data->ObjectBuffLen)
+        *data->ObjectBuffer = 0;
+    LxDosLaunch launch = {.program = data->PgmName,
+                          .arguments = command,
+                          .environment = (PSZ)data->Environment,
+                          .directory = start->directory,
+                          .flags = start->directory ? LX_DOS_LAUNCH_SEARCH_DIRECTORY : 0};
+    PID child = 0;
+    APIRET error = lx_doscalls_launch_tracked(&launch, &child);
     free(command);
     if (error)
     {
         destroy_session(session);
         return error;
     }
-    session->pid = result.codeTerminate;
+    session->pid = child;
     session->related = data->Related == 1;
     session->selectable = TRUE;
+    session->ended = start->ended;
+    session->context = start->context;
     *session_id = session->id;
     *pid = session->pid;
     lx_host_once(&session_once, initialize_sessions);
@@ -222,6 +236,13 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
         return ERROR_NOT_ENOUGH_MEMORY;
     }
     return NO_ERROR;
+}
+
+APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
+{
+    TRACE_NATIVE("DosStartSession(%p, %p, %p)", data, session_id, pid);
+    LxSessionStart start = {.data = data};
+    return lx_session_start(&start, session_id, pid);
 }
 
 APIRET16 Dos16SMSetTitle(PCHAR title)

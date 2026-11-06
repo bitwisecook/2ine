@@ -1,5 +1,10 @@
 # Lotus imports and reusable offline binary scanner
 
+The tables below preserve the initial census baseline. The compact
+`lotus-native-apis.csv` and its provenance have since been refreshed after the
+SmartMaster work. Use [the current gap report](lotus-api-gaps.md) and its filtered
+backlog for current source-export counts and the separate portable-policy gap.
+
 ## Evidence and scope
 
 Read-only census of `/Users/jimd/Documents/Lotus.2ineball`, using private source

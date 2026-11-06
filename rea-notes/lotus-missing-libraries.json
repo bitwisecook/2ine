@@ -1,0 +1,119 @@
+{
+  "modules": [
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$BSAFE",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$COMPUTE",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$LIB",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$NIF",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$NSF",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$REPLSUB",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$ROUTERL",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX3X.DLL",
+      "module": "$SDK",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\APPROACH\\NMTHX40.DLL",
+      "module": "INOTES",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\L2BTR12.DLL",
+      "module": "BTRCALLS",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\L2DB212.DLL",
+      "module": "DB2APP",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\L2DB212.DLL",
+      "module": "DB2UTIL",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\L2INF512.DLL",
+      "module": "ISQLI501",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\L2OR712.DLL",
+      "module": "ORA_D73O",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\L2SYB12.DLL",
+      "module": "LIBCT",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\LTUNSR02.DLL",
+      "module": "NETAPI32",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\OS2HTAPI.DLL",
+      "module": "INOTES",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\COMPNENT\\PLAYER\\LCMNBEN.DLL",
+      "module": "NETAPI",
+      "otherPaths": [],
+      "reason": "missing"
+    },
+    {
+      "binary": "C:\\LOTUSW4\\WORDPRO\\LWPFXO.DLL",
+      "module": "INOTES",
+      "otherPaths": [],
+      "reason": "missing"
+    }
+  ],
+  "scope": "Conservative installed Lotus/plugin closure; not all are needed by a launch."
+}

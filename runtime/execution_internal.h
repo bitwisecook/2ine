@@ -55,6 +55,10 @@ typedef struct LxExecutionOperations
     void (*poll_termination)(LxExecution *);
     int (*api_resume32)(const LxExecutionRegisters32 *);
     uint16_t (*flat_data_selector)(void);
+    uint32_t (*guest_stack)(void);
+    int (*call16)(uint32_t, uint16_t, uint16_t, const void *, uint32_t, uint32_t *);
+    void (*quiesce)(void);
+    void (*set_park_flag)(const int *);
 } LxExecutionOperations;
 struct LxExecution
 {
@@ -66,6 +70,8 @@ struct LxExecution
     LxGuestMapping *tls_window;
     uint32_t tls_address;
     LxHostMutex *memory_mutex;
+    void (*checkpoint)(void *);
+    void *checkpoint_argument;
     char error[256];
 };
 #if defined(TWOINE_NATIVE_LINUX_I386)

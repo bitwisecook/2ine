@@ -26,6 +26,8 @@ def palette_relative_program():
     g.result(1, 2)
     g.call(2, 335, (dc,), 2, 2)
     g.result(0x00CC8855, 3)
+    g.call(2, 320, (dc,), 0x02CC8855)
+    g.result(0x00CC8855, 21)
     g.call(2, 491, (dc,), 0, 0, 0)
     g.result(1, 4)
     g.call(2, 456, (dc,), 4, 0)
@@ -42,6 +44,12 @@ def palette_relative_program():
     g.code.extend(b"\xa3" + struct.pack("<I", mask))
     g.call(2, 585, (mask_dc,), (mask,))
     g.code.extend(b"\xa3" + struct.pack("<I", old_mask))
+    g.call(2, 320, (mask_dc,), 0xEEEEEE)
+    g.result(0xFFFFFF, 22)
+    g.call(2, 320, (mask_dc,), 0x111111)
+    g.result(0, 23)
+    g.call(2, 320, 0xDEADBEEF, 0)
+    g.result(0xFFFFFFFF, 24)
     # A colored line differs from the source background and must become a
     # black mask bit; the untouched second row must become white mask bits.
     g.call(2, 18, (mask_dc,), 0, 0, 4, 1, (dc,), 0, 0, 0xCC0020)

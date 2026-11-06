@@ -8,13 +8,30 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwinx/windows.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/printer_catalogue.h"
 static _Thread_local Open32DC *contexts;
 Open32DC *open32FindDC(ULONG handle)
 {
     for (Open32DC *dc = contexts; dc; dc = dc->next)
         if (dc->ps == handle && lx_pm_valid_ps(handle))
+        {
+            BOOL locked = dc->window && open32WindowUpdateLocked(dc->window);
+            if (locked)
+            {
+                if (!dc->lock_region)
+                    dc->lock_region = GpiCreateRegion(handle, 0, NULL);
+                if (dc->lock_region)
+                    GpiSetClipRegion(handle, dc->lock_region, NULL);
+            }
+            else if (dc->lock_region)
+            {
+                GpiSetClipRegion(handle, dc->clip_region, NULL);
+                GpiDestroyRegion(handle, dc->lock_region);
+                dc->lock_region = 0;
+            }
             return dc;
+        }
     return NULL;
 }
 LONG open32DCHeight(ULONG handle)
@@ -41,6 +58,10 @@ static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
     dc->ps = ps;
     dc->window = window;
     dc->kind = kind;
+    dc->map_mode = 1;
+    dc->poly_fill_mode = 1;
+    dc->stretch_mode = 1;
+    dc->window_width = dc->window_height = dc->viewport_width = dc->viewport_height = 1;
     dc->background_mode = 2;
     dc->rop2 = 13;
     dc->background_color = 0xFFFFFF;
@@ -85,7 +106,15 @@ static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
 }
 static BOOL discard_context(Open32DC *dc)
 {
+    open32MetafileDCCleanup(dc->ps);
+    open32PathCleanup(dc);
     open32SavedDCCleanup(dc);
+    if (dc->lock_region)
+    {
+        GpiSetClipRegion(dc->ps, dc->clip_region, NULL);
+        GpiDestroyRegion(dc->ps, dc->lock_region);
+        dc->lock_region = 0;
+    }
     Open32DC **link = &contexts;
     while (*link != dc)
         link = &(*link)->next;
@@ -110,7 +139,7 @@ static BOOL discard_context(Open32DC *dc)
         GpiDestroyPS(dc->ps);
         DevCloseDC(printer);
     }
-    else
+    else if (dc->kind != 7)
         WinReleasePS(dc->ps);
     lx_handle_release(&dc->pen);
     lx_handle_release(&dc->palette);
@@ -207,9 +236,15 @@ ULONG SelectObject(ULONG handle, ULONG object)
         lx_handle_release(&borrow);
         ULONG brush = open32SelectBrush(dc, object);
         if (brush)
+        {
+            open32MetafileObject(handle, object);
             return brush;
+        }
         ULONG pen = open32SelectPen(dc, object);
-        return pen ? pen : open32SelectFont(dc, object);
+        ULONG selected = pen ? pen : open32SelectFont(dc, object);
+        if (selected)
+            open32MetafileObject(handle, object);
+        return selected;
     }
     if (!dc || dc->kind != 1 || !bitmap)
     {
@@ -232,6 +267,14 @@ BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG so
     TRACE_NATIVE("BitBlt(%u, %d, %d, %d, %d, %u, %d, %d, %08X)", (uint)destination, (int)x, (int)y,
                  (int)width, (int)height, (uint)source, (int)source_x, (int)source_y,
                  (uint)operation);
+    if (open32IsMetafile(destination))
+        return StretchBlt(destination, x, y, width, height, source, source_x, source_y, width,
+                          height, operation);
+    Open32DC *dst_mapping = open32FindDC(destination), *src_mapping = open32FindDC(source);
+    if (dst_mapping && src_mapping &&
+        (!open32IdentityMapping(dst_mapping) || !open32IdentityMapping(src_mapping)))
+        return StretchBlt(destination, x, y, width, height, source, source_x, source_y, width,
+                          height, operation);
     if (!open32CanDraw(destination) || !open32CanDraw(source) || width <= 0 || height <= 0 ||
         width > 16384 || height > 16384)
     {
@@ -316,6 +359,7 @@ LONG SetBkMode(ULONG handle, LONG mode)
     if (!GpiSetBackMix(handle, mode == 1 ? 5 : 2))
         return 0;
     dc->background_mode = mode;
+    open32MetafileWords(handle, 0x102, 1, &mode);
     return previous;
 }
 static LONG rgb_color(ULONG color)
@@ -334,6 +378,7 @@ ULONG SetTextColor(ULONG handle, ULONG color)
     if (!GpiSetColor(handle, rgb_color(color)))
         return UINT32_MAX;
     dc->text_color = color;
+    open32MetafileColor(handle, 0x209, color);
     return previous;
 }
 ULONG SetBkColor(ULONG handle, ULONG color)
@@ -348,6 +393,7 @@ ULONG SetBkColor(ULONG handle, ULONG color)
     if (!GpiSetBackColor(handle, rgb_color(color)))
         return UINT32_MAX;
     dc->background_color = color;
+    open32MetafileColor(handle, 0x201, color);
     return previous;
 }
 
@@ -456,4 +502,68 @@ ULONG CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
                    : 0;
     open32SetError(1801);
     return 0;
+}
+
+ULONG GetWindowDC(ULONG window)
+{
+    if (!window)
+        return GetDC(0);
+    if (!open32Presentation() || !WinIsWindow(0, window))
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    HPS ps = WinGetPS(window);
+    if (!ps || !register_context(ps, window, 3))
+    {
+        if (ps)
+            WinReleasePS(ps);
+        open32SetError(8);
+        return 0;
+    }
+    return ps;
+}
+ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
+{
+    if (!lx_pm_valid_ps(ps))
+    {
+        open32SetError(6);
+        return 0;
+    }
+    Open32DC *dc = open32FindDC(ps);
+    if (!dc)
+        dc = register_context(ps, window, 7);
+    if (!dc)
+    {
+        open32SetError(8);
+        return 0;
+    }
+    /* The target rectangle applies only when a driver name selects a device mapping. */
+    if (driver && rectangle)
+    {
+        LONG l = (LONG)lx_guest_load_u32(rectangle),
+             t = (LONG)lx_guest_load_u32((uint8 *)rectangle + 4),
+             r = (LONG)lx_guest_load_u32((uint8 *)rectangle + 8),
+             b = (LONG)lx_guest_load_u32((uint8 *)rectangle + 12);
+        if (r < l || b < t)
+        {
+            open32SetError(87);
+            return 0;
+        }
+        dc->viewport_x = l;
+        dc->viewport_y = t;
+    }
+    return ps;
+}
+VOID DeleteHDCObjects(ULONG ps)
+{
+    Open32DC *dc = open32FindDC(ps);
+    if (!dc)
+    {
+        open32SetError(6);
+        return;
+    }
+    /* Only HPSToHDC wrappers own state here; ordinary DCs are left untouched. */
+    if (dc->kind == 7)
+        discard_context(dc);
 }

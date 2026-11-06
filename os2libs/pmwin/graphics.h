@@ -6,6 +6,7 @@
 #include "hal/font.h"
 #include "hal/video.h"
 #include "guest/handles.h"
+HPOINTER lx_pm_pointer_file(const char *filename);
 BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);
 BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle);
 /* Deliver a host event on its window's PM thread, staging it when called elsewhere. */
@@ -37,6 +38,16 @@ BOOL lx_pm_clip_point(HPS ps, LONG x, LONG y);
 BOOL lx_pm_mask(HPS ps, LONG x, LONG y, int width, int height, const uint8_t *coverage, LONG rgb,
                 const RECTL *bounds);
 void lx_pm_region_cleanup(void *anchor);
+struct PresentationSpace;
+typedef struct PmPalette { ULONG count, colors[256]; } PmPalette;
+BOOL lx_pm_graphics_clip(struct PresentationSpace *ps, LONG x, LONG y);
+void lx_pm_boundary(struct PresentationSpace *ps, LONG x, LONG y, LONG width, LONG height);
+/* Intersects a device rectangle with the graphics field and viewing limits. */
+void lx_pm_graphics_limits(struct PresentationSpace *ps, RECTL *rect);
+/* Returns GPI_HITS once for primitives that crossed the pick aperture, else GPI_OK. */
+LONG lx_pm_hits(struct PresentationSpace *ps);
+/* Character-extra spacing converted from world units to device pels. */
+LONG lx_pm_char_extra(struct PresentationSpace *ps);
 typedef struct PmBitmap
 {
     void *anchor;
@@ -69,6 +80,7 @@ BOOL lx_pm_raster_write(HPS ps, LONG x, LONG y, unsigned width, unsigned height,
                         const uint32_t *pixels);
 struct PresentationSpace;
 SIZEL lx_pm_page_dimensions(struct PresentationSpace *ps);
+BOOL lx_pm_record_point(struct PresentationSpace *ps, const POINTL *point, BOOL move);
 BOOL lx_pm_transform_point(struct PresentationSpace *ps, POINTL *point, BOOL to_device);
 BOOL lx_pm_convert_points(HPS ps, LONG source, LONG target, LONG count, POINTL *points);
 struct PresentationSpace *lx_pm_font_space(HPS hps);

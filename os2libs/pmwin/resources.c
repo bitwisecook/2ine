@@ -5,6 +5,10 @@ LONG WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity, PCHAR outpu
 {
     TRACE_NATIVE("WinLoadString(%u, %u, %u, %d, %p)", (uint)hab, (uint)module, (uint)id,
                  (int)capacity, output);
+    return loadStringTable(module, 5, id, capacity, output);
+}
+LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR output)
+{
     if (!output || capacity <= 0 || id > UINT16_MAX)
         return 0;
     output[0] = 0;
@@ -12,8 +16,8 @@ LONG WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity, PCHAR outpu
     ULONG size = 0;
     void *data = NULL;
     if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
-        !GLoaderState.freeResource || GLoaderState.queryResourceSize(module, 5, bundle, &size) ||
-        size < 2 || GLoaderState.getResource(module, 5, bundle, &data))
+        !GLoaderState.freeResource || GLoaderState.queryResourceSize(module, type, bundle, &size) ||
+        size < 2 || GLoaderState.getResource(module, type, bundle, &data))
         return 0;
     const uint8 *bytes = data;
     size_t at = 2;

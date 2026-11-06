@@ -2,6 +2,7 @@
 /* Page units and an explicit viewport map model/view coordinates to device pels. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include <math.h>
 static void unit_scale(PresentationSpace *ps, LONG *pels, LONG *units)
 {
     *pels = (LONG)lx_pm_dc_dpi(ps->dc);
@@ -53,10 +54,27 @@ static BOOL convert_coordinate(LONG value, LONG origin, LONG span, LONG page, BO
     *output = (LONG)converted;
     return TRUE;
 }
+static BOOL matrix_point(const LONG *m, POINTL *p, BOOL inverse)
+{
+    double a=m[0]/65536.0,b=m[1]/65536.0,c=m[3]/65536.0,d=m[4]/65536.0;
+    double x=p->x,y=p->y,tx=m[6],ty=m[7], w=m[8];
+    if (m[2] || m[5] || w != 1) return FALSE;
+    if (inverse) {
+        double det=a*d-b*c;
+        if (fabs(det)<1e-15) return FALSE;
+        x-=tx; y-=ty;
+        double old=x; x=(d*x-c*y)/det; y=(-b*old+a*y)/det;
+    } else { double old=x; x=a*x+c*y+tx; y=b*old+d*y+ty; }
+    if (!isfinite(x)||!isfinite(y)||x<INT32_MIN||x>INT32_MAX||y<INT32_MIN||y>INT32_MAX) return FALSE;
+    p->x=(LONG)llround(x); p->y=(LONG)llround(y); return TRUE;
+}
 BOOL lx_pm_transform_point(PresentationSpace *ps, POINTL *point, BOOL to_device)
 {
     if (!ps || !point)
         return FALSE;
+    POINTL original = *point;
+    if (to_device && ps->gpi.initialized &&
+        (!matrix_point(ps->gpi.model, point, FALSE) || !matrix_point(ps->gpi.view, point, FALSE))) { *point=original; return FALSE; }
     if (!ps->viewport_set)
     {
         LONG pels, units;
@@ -65,6 +83,8 @@ BOOL lx_pm_transform_point(PresentationSpace *ps, POINTL *point, BOOL to_device)
         if (!convert_coordinate(point->x, 0, pels, units, to_device, &output.x) ||
             !convert_coordinate(point->y, 0, pels, units, to_device, &output.y))
             return FALSE;
+        if (!to_device && ps->gpi.initialized &&
+            (!matrix_point(ps->gpi.view, &output, TRUE)||!matrix_point(ps->gpi.model, &output, TRUE))) return FALSE;
         *point = output;
         return TRUE;
     }
@@ -76,6 +96,8 @@ BOOL lx_pm_transform_point(PresentationSpace *ps, POINTL *point, BOOL to_device)
         !convert_coordinate(point->y, view.yBottom, view.yTop - view.yBottom, page.cy, to_device,
                             &output.y))
         return FALSE;
+    if (!to_device && ps->gpi.initialized &&
+        (!matrix_point(ps->gpi.view, &output, TRUE)||!matrix_point(ps->gpi.model, &output, TRUE))) return FALSE;
     *point = output;
     return TRUE;
 }
@@ -85,20 +107,111 @@ BOOL lx_pm_convert_points(HPS handle, LONG source, LONG target, LONG count, PPOI
     if (!ps || source < 1 || source > 5 || target < 1 || target > 5 || count < 0 || count > 65536 ||
         (count && !points))
         return FALSE;
-    /* Model and viewing transforms are identity; page units still scale device pels. */
-    if ((source == 5) == (target == 5) || !count)
-        return TRUE;
-    POINTL *converted = malloc((size_t)count * sizeof *converted);
-    if (!converted)
-        return FALSE;
-    BOOL ok = TRUE;
-    for (LONG i = 0; i < count && ok; i++)
-    {
-        converted[i] = points[i];
-        ok = lx_pm_transform_point(ps, &converted[i], target == 5);
+    POINTL *converted = count ? malloc((size_t)count * sizeof *converted) : NULL;
+    if (count && !converted) return FALSE;
+    BOOL ok=TRUE;
+    for (LONG i=0;i<count && ok;i++) {
+        POINTL p=points[i];
+        /* Device/page conversion uses the common viewport mapper with matrices temporarily disabled. */
+        BOOL enabled=ps->gpi.initialized;
+        if (source==5) { ps->gpi.initialized=FALSE; ok=lx_pm_transform_point(ps,&p,FALSE); ps->gpi.initialized=enabled; }
+        if (ok && enabled && source>=3 && target<=2) ok=matrix_point(ps->gpi.view,&p,TRUE);
+        if (ok && enabled && source>=2 && target==1) ok=matrix_point(ps->gpi.model,&p,TRUE);
+        if (ok && enabled && source==1 && target>=2) ok=matrix_point(ps->gpi.model,&p,FALSE);
+        if (ok && enabled && source<=2 && target>=3) ok=matrix_point(ps->gpi.view,&p,FALSE);
+        if (ok && target==5) { ps->gpi.initialized=FALSE; ok=lx_pm_transform_point(ps,&p,TRUE); ps->gpi.initialized=enabled; }
+        converted[i]=p;
     }
-    if (ok)
-        memcpy(points, converted, (size_t)count * sizeof *points);
-    free(converted);
+    if(ok && count) memcpy(points,converted,(size_t)count*sizeof *points);
+    free(converted); return ok;
+}
+
+/* Page coordinates exclude the model and viewing transforms. */
+static BOOL page_point(PresentationSpace *ps,POINTL *point,BOOL to_device)
+{
+    BOOL enabled=ps->gpi.initialized;
+    ps->gpi.initialized=FALSE;
+    BOOL ok=lx_pm_transform_point(ps,point,to_device);
+    ps->gpi.initialized=enabled;
     return ok;
+}
+/* Graphics fields and viewing limits include their top and right edges. */
+static BOOL inside_inclusive(const RECTL *rect,const POINTL *point)
+{
+    return point->x>=rect->xLeft&&point->x<=rect->xRight&&point->y>=rect->yBottom&&point->y<=rect->yTop;
+}
+/* Bounding device box of a page or model rectangle, in exclusive RECTL form. */
+static BOOL device_box(PresentationSpace *ps,const RECTL *r,BOOL page,RECTL *output)
+{
+    POINTL corners[4]={{r->xLeft,r->yBottom},{r->xRight,r->yBottom},{r->xRight,r->yTop},{r->xLeft,r->yTop}};
+    for(unsigned i=0;i<4;i++)
+        if(!(page?page_point(ps,&corners[i],TRUE):lx_pm_transform_point(ps,&corners[i],TRUE)))return FALSE;
+    RECTL box={corners[0].x,corners[0].y,corners[0].x,corners[0].y};
+    for(unsigned i=1;i<4;i++)
+    {
+        if(corners[i].x<box.xLeft)box.xLeft=corners[i].x;
+        if(corners[i].x>box.xRight)box.xRight=corners[i].x;
+        if(corners[i].y<box.yBottom)box.yBottom=corners[i].y;
+        if(corners[i].y>box.yTop)box.yTop=corners[i].y;
+    }
+    if(box.xRight==INT32_MAX||box.yTop==INT32_MAX)return FALSE;
+    box.xRight++;
+    box.yTop++;
+    *output=box;
+    return TRUE;
+}
+BOOL lx_pm_graphics_clip(PresentationSpace *ps,LONG x,LONG y)
+{
+    if(!ps||!ps->gpi.initialized)return TRUE;
+    if(!ps->gpi.display_enabled)return FALSE;
+    if(ps->gpi.graphics_set)
+    {
+        POINTL page={x,y};
+        if(!page_point(ps,&page,FALSE)||!inside_inclusive(&ps->gpi.graphics_field,&page))return FALSE;
+    }
+    if(ps->gpi.viewing_set)
+    {
+        POINTL model={x,y};
+        if(!lx_pm_transform_point(ps,&model,FALSE)||!inside_inclusive(&ps->gpi.viewing_limits,&model))return FALSE;
+    }
+    return TRUE;
+}
+void lx_pm_graphics_limits(PresentationSpace *ps,RECTL *rect)
+{
+    if(!ps||!ps->gpi.initialized)return;
+    if(ps->gpi.graphics_set)
+    {
+        RECTL device;
+        if(device_box(ps,&ps->gpi.graphics_field,TRUE,&device))WinIntersectRect(0,rect,rect,&device);
+        else *rect=(RECTL){0,0,0,0};
+    }
+    if(ps->gpi.viewing_set)
+    {
+        RECTL device;
+        if(device_box(ps,&ps->gpi.viewing_limits,FALSE,&device))WinIntersectRect(0,rect,rect,&device);
+        else *rect=(RECTL){0,0,0,0};
+    }
+}
+LONG lx_pm_hits(PresentationSpace *ps)
+{
+    if(!ps||!ps->gpi.pick_hit)return 1;
+    ps->gpi.pick_hit=FALSE;
+    return 2;
+}
+void lx_pm_boundary(PresentationSpace *ps,LONG x,LONG y,LONG width,LONG height)
+{
+    if(!ps||!ps->gpi.initialized||width<=0||height<=0)return;
+    RECTL r={x,y,x+width,y+height};
+    if(ps->gpi.correlate)
+    {
+        /* The aperture is centred on its position in page coordinates. */
+        POINTL low={ps->gpi.pick_position.x-ps->gpi.pick_size.cx/2,ps->gpi.pick_position.y-ps->gpi.pick_size.cy/2};
+        POINTL high={low.x+ps->gpi.pick_size.cx,low.y+ps->gpi.pick_size.cy};
+        if(page_point(ps,&low,TRUE)&&page_point(ps,&high,TRUE)&&r.xLeft<=high.x&&r.xRight>low.x&&r.yBottom<=high.y&&r.yTop>low.y)
+            ps->gpi.pick_hit=TRUE;
+    }
+    if(!ps->gpi.boundary_enabled)return;
+    if(!ps->gpi.boundary_set)ps->gpi.boundary=r;
+    else WinUnionRect(0,&ps->gpi.boundary,&ps->gpi.boundary,&r);
+    ps->gpi.boundary_set=TRUE;
 }

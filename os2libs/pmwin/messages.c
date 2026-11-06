@@ -359,7 +359,8 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
     ULONG ticks = (ULONG)event->timestamp;
     Window *win = event->window_data;
     if (event->type == LX_HOST_EVENT_QUIT)
-        return postTimestampedMsg(anchor, 0, WM_QUIT, 0, 0, ticks);
+        return anchor->message_queue.cancel_shutdown ||
+               postTimestampedMsg(anchor, 0, WM_QUIT, 0, 0, ticks);
     if (!win || !win->hwnd)
         return FALSE;
     if (isFrameWindow(win) &&
@@ -440,6 +441,20 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         event->type != LX_HOST_EVENT_BUTTON_UP)
         return FALSE;
     int x = event->x, y = win->h - 1 - event->y;
+    LONG origin_x = 0, origin_y = 0;
+    for (Window *w = win; w && w != &desktop_window; w = w->parent)
+    {
+        origin_x += w->x;
+        origin_y += w->y;
+    }
+    LONG desktop_x = origin_x + x, desktop_y = origin_y + y;
+    if (lx_pm_clip_pointer(&desktop_x, &desktop_y))
+    {
+        x = desktop_x - origin_x;
+        y = desktop_y - origin_y;
+        if (event->type == LX_HOST_EVENT_MOTION)
+            lx_host_mouse_warp(desktop_x, desktop_window.h - 1 - desktop_y);
+    }
     Window *capture = getWindowFromHWND(anchor, anchor->capture);
     if (capture)
     {
@@ -698,6 +713,7 @@ static BOOL getMessage(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFir
             i->next = anchor->message_queue.free_pool;
             anchor->message_queue.free_pool = i;
 
+            anchor->message_queue.last_position = pqmsg->ptl;
             synchronizeInputState(anchor, pqmsg);
             if (filterInputMessage(anchor, pqmsg, 1))
                 continue;
@@ -848,6 +864,7 @@ retry:;
     if (!item)
         return FALSE;
     *output = item->qmsg;
+    anchor->message_queue.last_position = output->ptl;
     QMSG original = item->qmsg;
     if (flags & 1)
     {

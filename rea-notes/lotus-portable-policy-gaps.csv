@@ -1,0 +1,2 @@
+module,kind,ordinal,name,catalogueName,twoineLibrary,policyProvided,exportPresent,exportSymbol,implementationEvidence,applications,staticApplications,knownDynamicApplications,importers,optionalImporters,sourceLocations,sourceMarkers,fixupCount
+DOSCALLS,ordinal,323,,Dos32QueryAppType,True,True,True,DosQueryAppType,export-present-body-located,123;approach;organizer,approach;organizer,123,C:\OS2\DLL\SOMD.DLL,,os2libs/doscalls/modules.c:238,,1

@@ -34,6 +34,7 @@ enum
     TB_FS_MKDIR,
     TB_FS_RENAME,
     TB_FS_READONLY,
-    TB_FS_WRITABLE
+    TB_FS_WRITABLE,
+    TB_FS_TOUCH
 };
 #endif

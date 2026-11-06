@@ -308,7 +308,10 @@ static APIRET try_mux(MuxWait *mux, PULONG user)
     }
     if (mux->members[0].kind == LX_HANDLE_MUTEX)
         for (ULONG i = 0; i < acquired; i++)
+        {
+            mutexReleasing(mux->members[i].borrow.resource);
             lx_host_mutex_unlock(mux->members[i].borrow.resource);
+        }
     return result;
 }
 

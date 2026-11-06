@@ -84,6 +84,7 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
 
     if (!(GMutexDir16 = lx_host_mutex_create(0, 0)))
         abort();
+    initializeThreadSuspension();
 
     MaxHFiles = 20;
     HFiles = (HFileInfo *)malloc(sizeof(HFileInfo) * MaxHFiles);
@@ -161,7 +162,9 @@ LX_NATIVE_DESTRUCTOR(doscalls)
 {
     if (GLoaderState.freeSharedMemory == DosFreeMem)
         GLoaderState.freeSharedMemory = NULL;
+    cleanupTimers();
     cleanupSuballocation();
+    cleanupThreadSuspension();
     GLoaderState.dosExit = NULL;
     GLoaderState.writeFile = NULL;
     GLoaderState.getResource = NULL;

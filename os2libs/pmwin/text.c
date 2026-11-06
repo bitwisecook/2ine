@@ -40,6 +40,17 @@ ULONG WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text)
             text[i] -= 'a' - 'A';
     return (ULONG)length;
 }
+LONG lx_pm_char_extra(PresentationSpace *ps)
+{
+    if (!ps || !ps->gpi.initialized || !ps->gpi.char_extra)
+        return 0;
+    /* Transforming the raw 16.16 value keeps fractional world spacing through scaling. */
+    POINTL origin = {0, 0}, extra = {ps->gpi.char_extra, 0};
+    if (!lx_pm_transform_point(ps, &origin, TRUE) || !lx_pm_transform_point(ps, &extra, TRUE))
+        return 0;
+    int64_t delta = (int64_t)extra.x - origin.x;
+    return (LONG)((delta + (delta < 0 ? -32768 : 32768)) / 65536);
+}
 LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *bounds)
 {
@@ -64,6 +75,7 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
         bounds = &device_bounds;
     }
     int64_t x = origin.x;
+    LONG extra = lx_pm_char_extra(ps);
     for (LONG i = 0; i < count; i++)
     {
         LxHostGlyph glyph;
@@ -73,6 +85,7 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
                   lx_pm_mask(handle, (LONG)x + glyph.left, origin.y + glyph.top - glyph.height,
                              glyph.width, glyph.height, glyph.coverage, rgb, bounds);
         x += glyph.advance;
+        x += extra;
         lx_host_glyph_free(&glyph);
         if (!ok)
             return 0;
@@ -83,7 +96,7 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
     if (!lx_pm_transform_point(ps, &end, FALSE))
         return 0;
     ps->position = end;
-    return 1;
+    return lx_pm_hits(ps);
 }
 LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
                      LONG background, ULONG flags, BOOL clip, BOOL opaque_runs)
@@ -221,6 +234,7 @@ BOOL lx_pm_mask(HPS handle, LONG x, LONG y, int width, int height, const uint8_t
         return FALSE;
     if (!width || !height)
         return TRUE;
+    lx_pm_boundary(ps, x, y, width, height);
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     if (bitmap)
     {

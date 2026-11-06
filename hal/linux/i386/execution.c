@@ -54,6 +54,7 @@ typedef struct NativeState
     LxGuestMapping *segments[LX_MAX_LDT_SLOTS];
     uint32 near16_base;
     uint16 original_cs, original_ds, original_es, original_ss;
+    uint16 call16_return;
     unsigned int tib_gdt_entry;
     LxExecutionServices services;
     struct sigaction previous_segv;
@@ -1578,7 +1579,12 @@ static int atomicU32(LxExecution *e, uint32_t address, void *host, int exchange,
 {
     (void)e;
     (void)address;
-    if (exchange)
+    if (exchange == 2)
+    {
+        __asm__ __volatile__("lock xaddl %0,(%1)" : "+r"(value) : "r"(host) : "memory", "cc");
+        *previous = value;
+    }
+    else if (exchange)
     {
         __asm__ __volatile__("xchgl %0,(%1)" : "+r"(value) : "r"(host) : "memory");
         *previous = value;
@@ -1685,6 +1691,87 @@ static int apiResume32(const LxExecutionRegisters32 *registers)
 static uint16_t flatDataSelector(void)
 {
     return Native->original_ds;
+}
+/* Bytes kept clear of live host frames when the C caller runs on the guest stack. */
+#define CALL16_STACK_MARGIN 1024
+static uint32_t guestStack(void)
+{
+    uintptr_t sp;
+    __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
+    const uintptr_t base = (uintptr_t)NativeHostAllocation;
+    if (NativeBridge && sp >= base && sp < base + 65536)
+        return NativeBridge->guest_stack;
+    return (uint32_t)(sp - CALL16_STACK_MARGIN);
+}
+static pthread_mutex_t Call16Mutex = PTHREAD_MUTEX_INITIALIZER;
+/* The one USE16 instruction every call returns through: a 32-bit far return
+   popping the flat continuation stored directly above the target's arguments. */
+static uint16_t call16Return(void)
+{
+    pthread_mutex_lock(&Call16Mutex);
+    if (!Native->call16_return)
+    {
+        uint16_t selector;
+        uint8_t *code = lxAllocSegment(&selector, 1);
+        if (code)
+        {
+            code[0] = 0x66;
+            code[1] = 0xcb;
+            Native->call16_return = (uint16_t)((selector << 3) | 7);
+        }
+    }
+    const uint16_t selector = Native->call16_return;
+    pthread_mutex_unlock(&Call16Mutex);
+    return selector;
+}
+static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *arguments, uint32_t bytes,
+                  uint32_t *result)
+{
+    const uint16_t return_selector = call16Return();
+    const uint32_t stack = top & ~3u, frame = 24 + bytes;
+    if (!return_selector || stack < frame)
+        return 0;
+    const uint32_t sp0 = stack - frame;
+    /* Frame, low to high: target far pointer, its return far pointer, arguments,
+       flat continuation EIP and CS, saved flat ESP and SS. */
+    uint8_t *p = (uint8_t *)(uintptr_t)(Native->ldt[ss >> 3] + sp0);
+    memset(p, 0, frame);
+    const uint16_t pointers[4] = {(uint16_t)target, (uint16_t)(target >> 16), 0, return_selector};
+    memcpy(p, pointers, sizeof pointers);
+    if (bytes)
+        memcpy(p + 8, arguments, bytes);
+    uint8_t *saved = p + 16 + bytes;
+    uintptr_t sp;
+    __asm__ __volatile__("movl %%esp,%0" : "=r"(sp));
+    const uintptr_t base = (uintptr_t)NativeHostAllocation;
+    void *previous = NativeHostStack;
+    if (NativeBridge && sp >= base && sp < base + 65536)
+        NativeHostStack = (void *)((sp - 128) & ~(uintptr_t)15);
+    uint32_t ax = ss, dx = sp0;
+    /* The frame, not a host register, carries the way back: the target owns every
+       register, and the return path reloads SS:ESP as the original thunk does. */
+    __asm__ __volatile__("pushfl\n\tpushal\n\tpushl %%ds\n\tpushl %%es\n\tpushl %%fs\n\t"
+                         "call 2f\n"
+                         "2:\n\tpopl %%ecx\n\t"
+                         "addl $(1f-2b),%%ecx\n\t"
+                         "movl %%ecx,-8(%%ebx)\n\t"
+                         "movw %%cs,-4(%%ebx)\n\t"
+                         "movl %%esp,(%%ebx)\n\t"
+                         "movw %%ss,4(%%ebx)\n\t"
+                         "movw %%ax,%%ss\n\t"
+                         "movl %%edx,%%esp\n\t"
+                         "lretw\n"
+                         "1:\n\tmovzwl %%sp,%%esp\n\t"
+                         "lss (%%esp),%%esp\n\t"
+                         "movl %%eax,40(%%esp)\n\t"
+                         "movl %%edx,32(%%esp)\n\t"
+                         "popl %%fs\n\tpopl %%es\n\tpopl %%ds\n\tpopal\n\tpopfl"
+                         : "+a"(ax), "+d"(dx)
+                         : "b"(saved)
+                         : "ecx", "memory", "cc");
+    NativeHostStack = previous;
+    *result = (dx << 16) | (ax & 0xffff);
+    return 1;
 }
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *binding)
 {
@@ -1794,4 +1881,8 @@ const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          NULL,
                                                          NULL,
                                                          apiResume32,
-                                                         flatDataSelector};
+                                                         flatDataSelector,
+                                                         guestStack,
+                                                         call16,
+                                                         NULL,
+                                                         NULL};

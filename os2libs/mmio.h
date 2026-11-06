@@ -5,6 +5,11 @@
 #include <stddef.h>
 OS2EXPORT ULONG OS2API mmioOpen(PSZ name, PVOID info, ULONG flags) OS2APIINFO(ord = 27);
 OS2EXPORT USHORT OS2API mmioClose(ULONG handle, USHORT flags) OS2APIINFO(ord = 32);
+OS2EXPORT LONG OS2API mmioRead(ULONG handle, PCHAR buffer, LONG bytes) OS2APIINFO(28);
+OS2EXPORT LONG OS2API mmioWrite(ULONG handle, PCHAR buffer, LONG bytes) OS2APIINFO(29);
+OS2EXPORT LONG OS2API mmioSeek(ULONG handle, LONG offset, LONG origin) OS2APIINFO(30);
+OS2EXPORT ULONG OS2API mmioGetHeader(ULONG handle, PVOID header, LONG capacity, PLONG bytes,
+                                     ULONG reserved, ULONG flags) OS2APIINFO(77);
 /* Returns an owned copy of a memory-backed media element. */
 OS2EXPORT unsigned char *lx_mmio_copy(ULONG handle, size_t *size);
 #endif

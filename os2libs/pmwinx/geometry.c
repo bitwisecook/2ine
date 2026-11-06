@@ -85,6 +85,32 @@ ULONG GetDesktopWindow(void)
 {
     return open32Presentation() ? HWND_DESKTOP : 0;
 }
+static ULONG window_at_point(ULONG parent, LONG x, LONG y, unsigned depth)
+{
+    if (depth >= 256)
+        return parent;
+    for (ULONG child = WinQueryWindow(parent, 2); child; child = WinQueryWindow(child, 0))
+    {
+        SWP position;
+        if (!WinIsWindowVisible(child) || !WinIsWindowEnabled(child) ||
+            !WinQueryWindowPos(child, &position) || x < position.x || y < position.y ||
+            (int64_t)x >= (int64_t)position.x + position.cx ||
+            (int64_t)y >= (int64_t)position.y + position.cy)
+            continue;
+        return window_at_point(child, x - position.x, y - position.y, depth + 1);
+    }
+    return parent;
+}
+ULONG WindowFromPoint(LONG x, LONG y)
+{
+    TRACE_NATIVE("WindowFromPoint(%d, %d)", x, y);
+    if (!open32Presentation())
+        return 0;
+    LONG width = WinQuerySysValue(HWND_DESKTOP, 20), height = WinQuerySysValue(HWND_DESKTOP, 21);
+    if (x < 0 || y < 0 || x >= width || y >= height)
+        return 0;
+    return open32PublicWindow(window_at_point(HWND_DESKTOP, x, height - 1 - y, 0));
+}
 
 BOOL IsIconic(ULONG window)
 {
@@ -207,8 +233,8 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
         command = 1;
     BOOL minimize = command == 2 || command == 6 || command == 7 || command == 11;
     char class_name[16];
-    BOOL frame = WinQueryClassName(window, sizeof class_name, class_name) &&
-                 !strcmp(class_name, "#1");
+    BOOL frame =
+        WinQueryClassName(window, sizeof class_name, class_name) && !strcmp(class_name, "#1");
     if ((minimize || command == 3) && (!frame && (!mdi || minimize)))
     {
         open32SetError(50);
@@ -233,7 +259,7 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
        requested restore rectangle rather than their previous on-screen size. */
     BOOL moved = w ? SetWindowPos(window, 0, left, top, (LONG)width, (LONG)height, 4 | 16)
                    : WinSetWindowPos(window, HWND_TOP, left, (LONG)y, (LONG)width, (LONG)height,
-                                      SWP_MOVE | SWP_SIZE);
+                                     SWP_MOVE | SWP_SIZE);
     if (!moved)
         return FALSE;
     if (mdi)

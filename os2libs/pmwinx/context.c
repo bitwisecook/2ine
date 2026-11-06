@@ -1,8 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 creates a PM anchor and queue lazily, reusing an existing thread context. */
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwin/internal.h"
+#include <math.h>
 static _Thread_local BOOL owns_context;
 ULONG open32Presentation(void)
 {
@@ -16,11 +18,13 @@ ULONG open32Presentation(void)
     }
     if (!anchor->message_queue.hmq && !WinCreateMsgQueue(anchor->hab, 0))
         return 0;
+    open32RegisterThreadQueue();
     return anchor->hab;
 }
 void open32ContextCleanup(void)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    open32UnregisterThreadQueue();
     if (owns_context && anchor)
     {
         if (anchor->message_queue.hmq)
@@ -32,39 +36,176 @@ void open32ContextCleanup(void)
 
 LONG GetMapMode(ULONG dc)
 {
-    if (!open32FindDC(dc))
+    Open32DC *context = open32FindDC(dc);
+    if (!context)
     {
         open32SetError(6);
         return 0;
     }
-    return 1; /* MM_TEXT: one logical unit is one device pixel, y increases down. */
+    return context->map_mode;
 }
 LONG SetMapMode(ULONG dc, LONG mode)
 {
-    if (!open32FindDC(dc))
+    Open32DC *context = open32FindDC(dc);
+    if (!context)
     {
         open32SetError(6);
         return 0;
     }
-    if (mode != 1)
+    if (mode < 1 || mode > 8)
     {
-        open32SetError(mode < 1 || mode > 8 ? 87 : 50);
+        open32SetError(87);
         return 0;
     }
-    return 1;
+    LONG previous = context->map_mode;
+    context->map_mode = mode;
+    open32MetafileWords(dc, 0x103, 1, &mode);
+    if (mode == 1)
+        context->window_width = context->window_height = context->viewport_width =
+            context->viewport_height = 1;
+    else if (mode < 7)
+    {
+        /* Metric, English and twip modes are logical units per inch with y increasing upward. */
+        static const LONG units[] = {254, 2540, 100, 1000, 1440};
+        context->window_width = context->window_height = units[mode - 2];
+        context->viewport_width = GetDeviceCaps(dc, 88);
+        context->viewport_height = -GetDeviceCaps(dc, 90);
+    }
+    return previous;
 }
 
-BOOL DPtoLP(ULONG handle, PVOID points, LONG count)
+BOOL open32IdentityMapping(Open32DC *dc)
 {
-    /* MM_TEXT uses coincident device/logical origins and one pixel per unit. */
-    if (!open32FindDC(handle) || count < 0 || count > 65536 || (count && !points))
+    return dc && dc->window_x == dc->viewport_x && dc->window_y == dc->viewport_y &&
+           dc->window_width == dc->viewport_width && dc->window_height == dc->viewport_height;
+}
+static BOOL map_axis(LONG *value, LONG from, LONG to, LONG numerator, LONG denominator)
+{
+    int64_t product = ((int64_t)*value - from) * numerator;
+    int64_t result = product / denominator + to;
+    if (result < INT32_MIN || result > INT32_MAX)
+        return FALSE;
+    *value = (LONG)result;
+    return TRUE;
+}
+BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device)
+{
+    LONG a = *x, b = *y;
+    BOOL valid =
+        device
+            ? map_axis(&a, dc->window_x, dc->viewport_x, dc->viewport_width, dc->window_width) &&
+                  map_axis(&b, dc->window_y, dc->viewport_y, dc->viewport_height, dc->window_height)
+            : map_axis(&a, dc->viewport_x, dc->window_x, dc->window_width, dc->viewport_width) &&
+                  map_axis(&b, dc->viewport_y, dc->window_y, dc->window_height,
+                           dc->viewport_height);
+    if (!valid)
     {
         open32SetError(87);
         return FALSE;
     }
+    *x = a;
+    *y = b;
     return TRUE;
+}
+static BOOL map_points(ULONG handle, PVOID points, LONG count, BOOL device)
+{
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc || count < 0 || count > 65536 || (count && !points))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    for (LONG i = 0; i < count; i++)
+    {
+        uint8 *wire = (uint8 *)points + i * 8;
+        LONG x = (LONG)lx_guest_load_u32(wire), y = (LONG)lx_guest_load_u32(wire + 4);
+        if (!open32MapPoint(dc, &x, &y, device))
+            return FALSE;
+        lx_guest_store_u32(wire, (ULONG)x);
+        lx_guest_store_u32(wire + 4, (ULONG)y);
+    }
+    return TRUE;
+}
+BOOL DPtoLP(ULONG handle, PVOID points, LONG count)
+{
+    return map_points(handle, points, count, FALSE);
 }
 BOOL LPtoDP(ULONG handle, PVOID points, LONG count)
 {
-    return DPtoLP(handle, points, count);
+    return map_points(handle, points, count, TRUE);
+}
+/* MM_ISOTROPIC shrinks one viewport extent so both axes share the window's aspect ratio. */
+static void isotropic_viewport(Open32DC *dc)
+{
+    double width = fabs((double)dc->viewport_width), height = fabs((double)dc->viewport_height);
+    double aspect = fabs((double)dc->window_width / dc->window_height);
+    if (height * aspect < width)
+        dc->viewport_width =
+            (LONG)lround(dc->viewport_width < 0 ? -height * aspect : height * aspect);
+    else
+        dc->viewport_height =
+            (LONG)lround(dc->viewport_height < 0 ? -width / aspect : width / aspect);
+    if (!dc->viewport_width)
+        dc->viewport_width = 1;
+    if (!dc->viewport_height)
+        dc->viewport_height = 1;
+}
+static BOOL set_mapping(ULONG handle, LONG x, LONG y, PVOID previous, unsigned kind)
+{
+    TRACE_NATIVE("SetMapping(%u, %d, %d, %p, %u)", handle, x, y, previous, kind);
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc)
+    {
+        open32SetError(6);
+        return FALSE;
+    }
+    LONG *first = kind == 0   ? &dc->viewport_x
+                  : kind == 1 ? &dc->window_x
+                  : kind == 2 ? &dc->viewport_width
+                              : &dc->window_width;
+    LONG *second = kind == 0   ? &dc->viewport_y
+                   : kind == 1 ? &dc->window_y
+                   : kind == 2 ? &dc->viewport_height
+                               : &dc->window_height;
+    if (kind >= 2 && dc->map_mode >= 7 && (!x || !y))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    if (previous)
+    {
+        lx_guest_store_u32(previous, (ULONG)*first);
+        lx_guest_store_u32((uint8 *)previous + 4, (ULONG)*second);
+    }
+    if (kind < 2 || dc->map_mode >= 7)
+    {
+        *first = x;
+        *second = y;
+    }
+    if (kind >= 2 && dc->map_mode == 7)
+        isotropic_viewport(dc);
+    const LONG values[] = {x, y};
+    open32MetafileWords(handle,
+                        kind == 0   ? 0x20d
+                        : kind == 1 ? 0x20b
+                        : kind == 2 ? 0x20e
+                                    : 0x20c,
+                        2, values);
+    return TRUE;
+}
+BOOL SetViewportOrgEx(ULONG dc, LONG x, LONG y, PVOID previous)
+{
+    return set_mapping(dc, x, y, previous, 0);
+}
+BOOL SetWindowOrgEx(ULONG dc, LONG x, LONG y, PVOID previous)
+{
+    return set_mapping(dc, x, y, previous, 1);
+}
+BOOL SetViewportExtEx(ULONG dc, LONG x, LONG y, PVOID previous)
+{
+    return set_mapping(dc, x, y, previous, 2);
+}
+BOOL SetWindowExtEx(ULONG dc, LONG x, LONG y, PVOID previous)
+{
+    return set_mapping(dc, x, y, previous, 3);
 }

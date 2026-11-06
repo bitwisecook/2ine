@@ -2,6 +2,7 @@
 /* Open32 thread handles retain completion state independently of DOS worker stacks. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/doscalls.h"
 #include "hal/host_sync.h"
 #include "hal/host.h"
@@ -174,9 +175,11 @@ ULONG ResumeThread(ULONG handle)
 }
 ULONG WaitForSingleObject(ULONG handle, ULONG timeout)
 {
-    ULONG semaphore_result;
-    if (open32WaitSemaphore(handle, timeout, &semaphore_result))
-        return semaphore_result;
+    static int (*const waiters[])(ULONG, ULONG, ULONG *) = {open32WaitSemaphore, open32WaitSync};
+    ULONG object_result;
+    for (size_t i = 0; i < sizeof waiters / sizeof *waiters; i++)
+        if (waiters[i](handle, timeout, &object_result))
+            return object_result;
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {

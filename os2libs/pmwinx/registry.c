@@ -567,3 +567,171 @@ LX_NATIVE_DESTRUCTOR(pmwinx_registry)
     if (mutex)
         lx_host_monitor_destroy(mutex);
 }
+
+LONG RegQueryValue(ULONG key, PSZ subkey, PSZ output, PULONG size)
+{
+    if (!size)
+        return ERROR_INVALID_PARAMETER;
+    ULONG opened = key;
+    LONG error = NO_ERROR;
+    if (subkey && *subkey)
+        error = RegOpenKey(key, subkey, &opened);
+    if (!error)
+        error = RegQueryValueEx(opened, NULL, NULL, NULL, output, size);
+    if (opened != key)
+        RegCloseKey(opened);
+    return error;
+}
+LONG RegSetValue(ULONG key, PSZ subkey, ULONG type, PVOID data, ULONG size)
+{
+    if (type != 1 || !data || !size || size >= 0x3fed)
+        return ERROR_INVALID_PARAMETER;
+    const char *terminator = memchr(data, 0, size);
+    size_t length = terminator ? (size_t)(terminator - (const char *)data) : size;
+    char *text = malloc(length + 1);
+    if (!text)
+        return ERROR_NOT_ENOUGH_MEMORY;
+    memcpy(text, data, length);
+    text[length] = 0;
+    ULONG opened = key;
+    LONG error = NO_ERROR;
+    if (subkey && *subkey)
+        error = RegCreateKey(key, subkey, &opened);
+    if (!error)
+        error = RegSetValueEx(opened, NULL, 0, 1, text, (ULONG)length + 1);
+    if (opened != key)
+        RegCloseKey(opened);
+    free(text);
+    return error;
+}
+LONG RegQueryInfoKey(ULONG key, PSZ class_name, PULONG class_size, PULONG reserved, PULONG subkeys,
+                     PULONG max_subkey, PULONG max_class, PULONG values, PULONG max_value_name,
+                     PULONG max_value_data, PULONG security, PVOID last_write)
+{
+    if (reserved || (class_name && !class_size))
+        return ERROR_INVALID_PARAMETER;
+    lx_host_once(&once, initialize);
+    ULONG access;
+    char *path = key_path(key, NULL, &access);
+    if (!path)
+        return ERROR_INVALID_HANDLE;
+    LONG result = NO_ERROR;
+    ULONG nsub = 0, nvalues = 0, longest_sub = 0, longest_class = 0, longest_value = 0,
+          largest_data = 0;
+    char *classes = NULL, *applications = NULL, *entries = NULL;
+    if (!(access & KEY_QUERY_VALUE) || !(access & KEY_ENUMERATE_SUB_KEYS))
+    {
+        result = ERROR_ACCESS_DENIED;
+        goto info_done;
+    }
+    if (!database || !key_exists(path))
+    {
+        result = ERROR_FILE_NOT_FOUND;
+        goto info_done;
+    }
+    ULONG bytes = 0;
+    if (PrfQueryProfileSize(database, path, "c:", &bytes))
+    {
+        classes = calloc((size_t)bytes + 1, 1);
+        if (!classes)
+        {
+            result = ERROR_NOT_ENOUGH_MEMORY;
+            goto info_done;
+        }
+        if (bytes && !PrfQueryProfileData(database, path, "c:", classes, &bytes))
+        {
+            result = ERROR_READ_FAULT;
+            goto info_done;
+        }
+    }
+    ULONG class_length = classes ? (ULONG)strlen(classes) : 0;
+    if (class_name && *class_size <= class_length)
+        result = ERROR_MORE_DATA;
+    else if (class_name)
+        memcpy(class_name, classes ? classes : "", class_length + 1);
+    if (class_size)
+        *class_size = class_length;
+    bytes = 0;
+    if (PrfQueryProfileSize(database, NULL, NULL, &bytes))
+    {
+        applications = calloc((size_t)bytes + 1, 1);
+        if (!applications)
+        {
+            result = ERROR_NOT_ENOUGH_MEMORY;
+            goto info_done;
+        }
+        if (!PrfQueryProfileData(database, NULL, NULL, applications, &bytes))
+        {
+            result = ERROR_READ_FAULT;
+            goto info_done;
+        }
+        size_t prefix = strlen(path);
+        for (char *entry = applications; *entry; entry += strlen(entry) + 1)
+        {
+            if (strncmp(entry, path, prefix) || entry[prefix] != '\\' || !entry[prefix + 1] ||
+                strchr(entry + prefix + 1, '\\'))
+                continue;
+            nsub++;
+            ULONG length = (ULONG)strlen(entry + prefix + 1);
+            if (length > longest_sub)
+                longest_sub = length;
+            ULONG class_bytes = 0;
+            if (PrfQueryProfileSize(database, entry, "c:", &class_bytes) && class_bytes &&
+                class_bytes - 1 > longest_class)
+                longest_class = class_bytes - 1;
+        }
+    }
+    bytes = 0;
+    if (PrfQueryProfileSize(database, path, NULL, &bytes))
+    {
+        entries = calloc((size_t)bytes + 1, 1);
+        if (!entries)
+        {
+            result = ERROR_NOT_ENOUGH_MEMORY;
+            goto info_done;
+        }
+        if (!PrfQueryProfileData(database, path, NULL, entries, &bytes))
+        {
+            result = ERROR_READ_FAULT;
+            goto info_done;
+        }
+        for (char *entry = entries; *entry; entry += strlen(entry) + 1)
+            if (!strncmp(entry, "v:", 2))
+            {
+                nvalues++;
+                ULONG length = (ULONG)strlen(entry + 2);
+                if (length > longest_value)
+                    longest_value = length;
+                ULONG value_bytes = 0;
+                if (PrfQueryProfileSize(database, path, entry, &value_bytes) && value_bytes >= 4 &&
+                    value_bytes - 4 > largest_data)
+                    largest_data = value_bytes - 4;
+            }
+    }
+    if (subkeys)
+        *subkeys = nsub;
+    if (max_subkey)
+        *max_subkey = longest_sub;
+    if (max_class)
+        *max_class = longest_class;
+    if (values)
+        *values = nvalues;
+    if (max_value_name)
+        *max_value_name = longest_value;
+    if (max_value_data)
+        *max_value_data = largest_data;
+    if (security)
+        *security = 0;
+    if (last_write)
+    {
+        memset(last_write, 0, 8);
+        ULONG timestamp_size = 8;
+        PrfQueryProfileData(database, path, "t:", last_write, &timestamp_size);
+    }
+info_done:
+    free(classes);
+    free(applications);
+    free(entries);
+    free(path);
+    return result;
+}

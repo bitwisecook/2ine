@@ -63,5 +63,5 @@ LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG verti
                 return 0;
         }
     }
-    return 1;
+    return lx_pm_hits(ps);
 }

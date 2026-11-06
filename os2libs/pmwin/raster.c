@@ -2,6 +2,7 @@
 /* Raster primitives share clipping, logical colors, pattern tiles and Boolean mixes. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+#include <math.h>
 
 uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix)
 {
@@ -141,6 +142,10 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     LONG width, height;
+    if (ps && point && ps->record_path && !pel) {
+        if (!lx_pm_record_point(ps, point, FALSE)) return 0;
+        ps->position = *point; return 1;
+    }
     if (!ps || !point || !raster_bounds(ps, &width, &height))
         return 0;
     POINTL from = pel ? *point : ps->position;
@@ -150,8 +155,10 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
     if (!lx_pm_transform_point(ps, &from, TRUE) || !lx_pm_transform_point(ps, &end, TRUE))
         return 0;
     point = &end;
+    lx_pm_boundary(ps,from.x<end.x?from.x:end.x,from.y<end.y?from.y:end.y,(LONG)llabs((int64_t)end.x-from.x)+1,(LONG)llabs((int64_t)end.y-from.y)+1);
+    if(ps->gpi.initialized&&!ps->gpi.display_enabled)return lx_pm_hits(ps);
     if (ps->line_type == 8 || ps->primitive_mix[0] == 5)
-        return 1;
+        return lx_pm_hits(ps);
     LONG rgb = lx_pm_resolve_color(handle, ps->primitive_color[0]);
     if (rgb < 0)
         return 0;
@@ -173,7 +180,7 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
                                      (rgb >> 8) & 255, rgb & 255);
         }
         free(visible.rects);
-        return ok ? 1 : 0;
+        return ok ? lx_pm_hits(ps) : 0;
     }
     int64_t dx = llabs((int64_t)point->x - from.x), dy = llabs((int64_t)point->y - from.y);
     if (dx > 65536 || dy > 65536)
@@ -207,5 +214,5 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
             y += sy;
         }
     }
-    return ok ? 1 : 0;
+    return ok ? lx_pm_hits(ps) : 0;
 }

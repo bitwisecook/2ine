@@ -397,6 +397,8 @@ BOOL lx_pm_raster_write(HPS handle, LONG x, LONG y, unsigned width, unsigned hei
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || !pixels || !width || !height || width > 16384 || height > 16384)
         return FALSE;
+    lx_pm_boundary(ps,x,y,width,height);
+    if(ps->gpi.initialized&&!ps->gpi.display_enabled)return TRUE;
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     if (bitmap)
     {

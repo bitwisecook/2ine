@@ -229,6 +229,10 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     Open32Class *class = open32ClassAcquire(instance, class_name);
     if (!class)
     {
+        ULONG control = 0;
+        if (open32Presentation() && open32CreateNativeControl(class_name, title, style, x, y, width,
+                                                              height, parent, menu, &control))
+            return control;
         open32SetError(1407);
         return 0;
     }

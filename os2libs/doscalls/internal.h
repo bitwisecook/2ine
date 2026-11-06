@@ -89,8 +89,22 @@ typedef struct Thread
     uint32 id, handle;
     uint16 selector;
     int finished, joining, detached;
+    struct ThreadControl *control;
     struct Thread *next;
 } Thread;
+/* One per guest thread from creation until it ends, for every kind of thread. */
+typedef struct ThreadControl
+{
+    struct ThreadControl *next;
+    uint32 id;
+    int suspended;
+} ThreadControl;
+void initializeThreadSuspension(void);
+void cleanupThreadSuspension(void);
+LX_PRIVATE void releaseThreadSuspension(void);
+LX_PRIVATE void cleanupTimers(void);
+LX_PRIVATE void mutexReleasing(void *resource);
+LX_PRIVATE void abandonThreadMutexes(uint32 tid);
 
 typedef struct
 {
@@ -175,6 +189,7 @@ typedef struct NeThreadStart
     uint32 entry, stack;
     void *invocation;
     uint16 tid, tib_selector;
+    ThreadControl *control;
 } NeThreadStart;
 extern LX_PRIVATE LxHostMutex *GMutexDosCalls;
 extern LX_PRIVATE LxHostMutex *GMutexDosBeep;
@@ -255,7 +270,6 @@ LX_PRIVATE void destroyThreadResource(void *value);
 LX_PRIVATE void os2ThreadCleanup(void *arg);
 LX_PRIVATE void *os2ThreadEntry(void *arg);
 LX_PRIVATE char *findExePath(const char *exe, APIRET *err);
-LX_PRIVATE char **calcEnvp(const char *os2env, const char *exe, const char *arguments, APIRET *err);
 LX_PRIVATE char **calcArgv(const char *os2args, const char *progpath, APIRET *err);
 LX_PRIVATE void setProcessResultCode(PRESULTCODES output, const LxHostChildStatus *status);
 LX_PRIVATE APIRET DosExecPgm_implementation(PCHAR pObjname, LONG cbObjname, ULONG execFlag,

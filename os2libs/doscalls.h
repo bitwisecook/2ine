@@ -532,6 +532,10 @@ extern "C"
     OS2EXPORT APIRET16 OS2API16 DosSemClear(PHSEM16 sem) OS2APIINFO(141);
     OS2EXPORT APIRET16 OS2API16 DosSemWait(PHSEM16 sem, LONG ms) OS2APIINFO(142);
     OS2EXPORT APIRET16 OS2API16 DosSemSet(PHSEM16 sem) OS2APIINFO(143);
+    /* DOSFSRSEM: USHORT cb, PID pid, TID tid, USHORT cUsage, USHORT client, ULONG sem. */
+    typedef PVOID PDOSFSRSEM;
+    OS2EXPORT APIRET16 OS2API16 Dos16FSRamSemRequest(PDOSFSRSEM sem, LONG timeout) OS2APIINFO(161);
+    OS2EXPORT APIRET16 OS2API16 Dos16FSRamSemClear(PDOSFSRSEM sem) OS2APIINFO(162);
 
     /* USE16-only exports. */
     OS2EXPORT APIRET16 OS2API16 Dos16EnterCritSec(VOID) OS2APIINFO(3);
@@ -743,7 +747,10 @@ extern "C"
     OS2EXPORT APIRET OS2API DosSubAllocMem(PVOID pbBase, PPVOID ppb, ULONG cb) OS2APIINFO(345);
     OS2EXPORT APIRET OS2API DosQueryHType(HFILE hFile, PULONG pType, PULONG pAttr) OS2APIINFO(224);
     OS2EXPORT APIRET OS2API DosSetMem(PVOID pb, ULONG cb, ULONG flag) OS2APIINFO(305);
+    OS2EXPORT APIRET OS2API DosSuspendThread(TID id) OS2APIINFO(238);
+    OS2EXPORT APIRET OS2API DosResumeThread(TID id) OS2APIINFO(237);
     OS2EXPORT APIRET OS2API DosGetDateTime(PDATETIME pdt) OS2APIINFO(230);
+    OS2EXPORT APIRET OS2API DosSetDateTime(PDATETIME pdt) OS2APIINFO(292);
     OS2EXPORT APIRET OS2API DosOpen(PSZ pszFileName, PHFILE pHf, PULONG pulAction, ULONG cbFile,
                                     ULONG ulAttribute, ULONG fsOpenFlags, ULONG fsOpenMode,
                                     PEAOP2 peaop2) OS2APIINFO(273);
@@ -859,6 +866,8 @@ extern "C"
                                         PULONG data_size) OS2APIINFO(284);
     OS2EXPORT APIRET OS2API DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
         OS2APIINFO(278);
+    OS2EXPORT APIRET OS2API DosSetFSInfo(ULONG drive, ULONG level, PVOID data, ULONG size)
+        OS2APIINFO(222);
     OS2EXPORT APIRET OS2API DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal,
                                              ULONG ulFSAInfoLevel, PFSQBUFFER2 pfsqb,
                                              PULONG pcbBuffLength) OS2APIINFO(277);
@@ -868,6 +877,15 @@ extern "C"
     OS2EXPORT APIRET OS2API DosSetCurrentDir(PSZ pszName) OS2APIINFO(255);
     OS2EXPORT APIRET OS2API DosBeep(ULONG freq, ULONG dur) OS2APIINFO(286);
     OS2EXPORT APIRET OS2API DosCreateDir(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(270);
+    typedef HANDLE HSEM;
+    typedef HANDLE HTIMER, *PHTIMER;
+    OS2EXPORT APIRET OS2API DosAsyncTimer(ULONG msec, HSEM hsem, PHTIMER phtimer) OS2APIINFO(350);
+    OS2EXPORT APIRET OS2API DosStartTimer(ULONG msec, HSEM hsem, PHTIMER phtimer) OS2APIINFO(351);
+    OS2EXPORT APIRET OS2API DosStopTimer(HTIMER htimer) OS2APIINFO(290);
+    OS2EXPORT APIRET OS2API DosQueryMutexSem(HMTX hmtx, PPID ppid, PTID ptid, PULONG pulCount)
+        OS2APIINFO(336);
+    /* Register-driven entry; see os2libs/doscalls/unithunk.c. */
+    OS2EXPORT APIRET OS2API THK_UNITHUNK(VOID) OS2APIINFO(547);
 
 #ifdef __cplusplus
 }

@@ -465,6 +465,7 @@ MRESULT OS2API frameControlProcedure(HWND handle, ULONG message, MPARAM first, M
         if (space)
         {
             BOOL active = anchor->active == topLevelWindow(anchor, handle);
+            if(window->parent && window->parent->flash && ((currentSystemTicks()/500)&1)) active=!active;
             LONG background = active ? -23 : -22; /* SYSCLR_ACTIVE/INACTIVETITLE */
             LONG foreground = active ? -28 : -29; /* SYSCLR_ACTIVE/INACTIVETITLETEXT */
             WinFillRect(space, &rect, background);

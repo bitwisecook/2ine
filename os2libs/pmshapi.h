@@ -33,6 +33,8 @@ extern "C"
         CHAR szSwtitle[64];
         ULONG bProgType;
     } SWCNTRL, *PSWCNTRL;
+    OS2EXPORT ULONG OS2API WinCreateSwitchEntry(HAB hab, PSWCNTRL entry) OS2APIINFO(121);
+    OS2EXPORT ULONG OS2API WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity) OS2APIINFO(128);
     OS2EXPORT ULONG OS2API WinAddSwitchEntry(PSWCNTRL entry) OS2APIINFO(120);
     OS2EXPORT ULONG OS2API WinRemoveSwitchEntry(ULONG handle) OS2APIINFO(129);
     OS2EXPORT ULONG OS2API WinChangeSwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(123);
@@ -41,6 +43,21 @@ extern "C"
 
     OS2EXPORT ULONG OS2API WinQueryTaskSizePos(HANDLE hab, ULONG session, PSWP position)
         OS2APIINFO(127);
+
+    /* Host form of PROGDETAILS; bindings decode the 72-byte guest record into it. */
+    typedef struct
+    {
+        ULONG Length;
+        ULONG progc, fbVisible;
+        PSZ pszTitle, pszExecutable, pszParameters, pszStartupDir, pszIcon, pszEnvironment;
+        SWP swpInitial;
+    } PROGDETAILS, *PPROGDETAILS;
+    OS2EXPORT ULONG OS2API WinStartApp(HWND notify, PPROGDETAILS details, PSZ parameters,
+                                       PVOID reserved, ULONG options) OS2APIINFO(119);
+    /* WinStartApp for callers that need the PM error without a PM anchor block.
+       Returns the HAPP, or zero with the PMERR_ value in *error. */
+    ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, ULONG options,
+                               ULONG *error);
 
     OS2EXPORT HINI OS2API PrfOpenProfile(HANDLE hab, PSZ name) OS2APIINFO(102);
     OS2EXPORT BOOL OS2API PrfCloseProfile(HINI profile) OS2APIINFO(103);

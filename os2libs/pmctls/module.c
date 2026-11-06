@@ -16,3 +16,6 @@ BOOL WinFreeFileDlgList(PVOID list)
 {
     return list == NULL;
 }
+
+HWND WinFontDlg(HWND parent,HWND owner,PVOID data){return lx_pm_font_dialog(parent,owner,data);}
+MRESULT WinDefFontDlgProc(HWND window,ULONG message,MPARAM first,MPARAM second){return lx_pm_font_procedure(window,message,first,second);}

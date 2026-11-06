@@ -37,6 +37,10 @@ HWND WinQueryActiveWindow(HWND desktop)
 BOOL WinSetFocus(HWND desktop, HWND handle)
 {
     TRACE_NATIVE("WinSetFocus(%u, %u)", (uint)desktop, (uint)handle);
+    return changeFocus(desktop, handle, 0);
+}
+BOOL changeFocus(HWND desktop, HWND handle, ULONG flags)
+{
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor || desktop != HWND_DESKTOP)
         return FALSE;
@@ -52,7 +56,7 @@ BOOL WinSetFocus(HWND desktop, HWND handle)
         return TRUE;
     anchor->focus = handle;
     Window *old = getWindowFromHWND(anchor, previous);
-    if (old)
+    if (old && !(flags & 2)) /* FC_NOLOSEFOCUS */
         sendMessage(old, WM_SETFOCUS, (MPARAM)(uintptr_t)handle, 0);
     if (anchor->focus != handle)
         return TRUE; /* A focus notification may redirect focus. */
@@ -63,10 +67,11 @@ BOOL WinSetFocus(HWND desktop, HWND handle)
         Window *root = getWindowFromHWND(anchor, top);
         if (root)
             root->last_focus = handle;
-        sendMessage(window, WM_SETFOCUS, (MPARAM)(uintptr_t)previous, (MPARAM)(uintptr_t)TRUE);
+        if (!(flags & 1)) /* FC_NOSETFOCUS */
+            sendMessage(window, WM_SETFOCUS, (MPARAM)(uintptr_t)previous, (MPARAM)(uintptr_t)TRUE);
         if (root && anchor->focus == handle)
         {
-            if (anchor->active != top)
+            if (anchor->active != top && !(flags & 4)) /* FC_NOSETACTIVE */
                 WinSetActiveWindow(HWND_DESKTOP, top);
             lx_host_window_focus(root->heavy.window);
         }

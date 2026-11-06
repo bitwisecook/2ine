@@ -63,6 +63,12 @@ int pumpTimers(AnchorBlock *anchor)
 {
     uint64_t now = lx_host_video_ticks_ms();
     int wait = -1;
+    for(size_t i=0;i<anchor->windows_array_len;i++){
+        Window*w=anchor->windows[i];if(!w||!w->hwnd||!w->flash)continue;
+        ULONG phase=(ULONG)(now/500);
+        if(w->flash_phase!=phase){w->flash_phase=phase;WinInvalidateRect(w->hwnd,NULL,TRUE);}
+        wait=(int)(500-now%500);
+    }
     for (PmTimer *timer = anchor->timers; timer; timer = timer->next)
     {
         if (timer->due <= now && timer->callback)

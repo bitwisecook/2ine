@@ -128,6 +128,27 @@ BOOL PrintDlg(PVOID pointer)
         GlobalFree(old_names);
     return TRUE;
 }
+/* The abort procedure runs guest code at each page and document boundary, before any device
+   output. It may itself end the job or delete the DC, so state is looked up again afterwards. */
+enum
+{
+    SP_ERROR = -1,
+    SP_APPABORT = -2
+};
+static LONG print_boundary(ULONG handle, Open32DC **context)
+{
+    BOOL proceed = open32AbortCheck(handle);
+    Open32DC *dc = open32FindDC(handle);
+    *context = dc;
+    if (!dc)
+        return SP_ERROR;
+    if (proceed)
+        return 1;
+    if (dc->print_active)
+        DevEscape(GpiQueryDevice(handle), 8153, 0, NULL, NULL, NULL);
+    dc->print_active = dc->print_page = FALSE;
+    return SP_APPABORT;
+}
 LONG StartDoc(ULONG handle, PVOID info)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -151,8 +172,15 @@ LONG StartDoc(ULONG handle, PVOID info)
         open32SetError(50);
         return -1;
     }
-    LONG result =
-        DevEscape(GpiQueryDevice(handle), 8150, (LONG)strlen(title) + 1, title, NULL, NULL);
+    LONG result = print_boundary(handle, &dc);
+    if (result > 0)
+    {
+        if (dc->print_active)
+            result = SP_ERROR;
+        else
+            result =
+                DevEscape(GpiQueryDevice(handle), 8150, (LONG)strlen(title) + 1, title, NULL, NULL);
+    }
     free(title);
     free(destination);
     if (result > 0)
@@ -166,7 +194,12 @@ LONG StartPage(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !dc->print_active || dc->print_page)
-        return -1;
+        return SP_ERROR;
+    LONG result = print_boundary(handle, &dc);
+    if (result <= 0)
+        return result;
+    if (!dc->print_active || dc->print_page)
+        return SP_ERROR;
     dc->print_page = TRUE;
     return 1;
 }
@@ -174,8 +207,13 @@ LONG EndPage(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !dc->print_active || !dc->print_page)
-        return -1;
-    LONG result = DevEscape(GpiQueryDevice(handle), 16300, 0, NULL, NULL, NULL);
+        return SP_ERROR;
+    LONG result = print_boundary(handle, &dc);
+    if (result <= 0)
+        return result;
+    if (!dc->print_active || !dc->print_page)
+        return SP_ERROR;
+    result = DevEscape(GpiQueryDevice(handle), 16300, 0, NULL, NULL, NULL);
     if (result > 0)
         dc->print_page = FALSE;
     return result;
@@ -184,8 +222,13 @@ LONG EndDoc(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !dc->print_active)
-        return -1;
-    LONG result = DevEscape(GpiQueryDevice(handle), 8151, 0, NULL, NULL, NULL);
+        return SP_ERROR;
+    LONG result = print_boundary(handle, &dc);
+    if (result <= 0)
+        return result;
+    if (!dc->print_active)
+        return SP_ERROR;
+    result = DevEscape(GpiQueryDevice(handle), 8151, 0, NULL, NULL, NULL);
     dc->print_active = dc->print_page = FALSE;
     return result;
 }
@@ -193,7 +236,7 @@ LONG AbortDoc(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !dc->print_active)
-        return -1;
+        return SP_ERROR;
     LONG result = DevEscape(GpiQueryDevice(handle), 8153, 0, NULL, NULL, NULL);
     dc->print_active = dc->print_page = FALSE;
     return result;

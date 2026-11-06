@@ -301,7 +301,8 @@ int lx_execution_address(LxExecution *e, const void *host, size_t size, unsigned
 int lx_execution_atomic_u32(LxExecution *e, uint32_t address, int exchange, uint32_t value,
                             uint32_t *previous)
 {
-    if (!previous || lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
+    if (!previous || exchange < 0 || exchange > 2 ||
+        lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
         return 0;
     void *host = memory_unlocked(e, address, 4, LX_GUEST_READ | LX_GUEST_WRITE);
     int ok = host && e->ops->atomic_u32(e, address, host, exchange, value, previous);

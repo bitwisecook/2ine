@@ -1,0 +1,6567 @@
+{
+"WPObject": {
+"name": "WPObject",
+"sci": "0x13f79f14",
+"cds": "0x13f781cc",
+"ccds": "0x13f78464",
+"calls": [
+"som#22",
+"WPObjectNewClass+0x9",
+"M_WPObjectNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 144,
+"maxMethods": 165,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPObject",
+"parents": [
+"SOMObject"
+],
+"numClassDataEntries": 165,
+"cif": 0,
+"smt": [
+{
+"off": 196,
+"name": "wpAddObjectGeneralPage",
+"desc": "::WPObject::wpAddObjectGeneralPage",
+"proc": "obj_wpAddObjectGeneralPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 596,
+"name": "wpAddObjectGeneralPage2",
+"desc": "::WPObject::wpAddObjectGeneralPage2",
+"proc": "obj_wpAddObjectGeneralPage2",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 384,
+"name": "wpAddObjectWindowPage",
+"desc": "::WPObject::wpAddObjectWindowPage",
+"proc": "obj_wpAddObjectWindowPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 192,
+"name": "wpAddSettingsPages",
+"desc": "::WPObject::wpAddSettingsPages",
+"proc": "obj_wpAddSettingsPages",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 120,
+"name": "wpAddToObjUseList",
+"desc": "::WPObject::wpAddToObjUseList",
+"proc": "obj_wpAddToObjUseList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 112,
+"name": "wpAllocMem",
+"desc": "::WPObject::wpAllocMem",
+"proc": "obj_wpAllocMem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 516,
+"name": "wpAppendObject",
+"desc": "::WPObject::wpAppendObject",
+"proc": "obj_wpAppendObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 440,
+"name": "wpAssertObjectMutexSem",
+"desc": "::WPObject::wpAssertObjectMutexSem",
+"proc": "obj_wpAssertObjectMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 264,
+"name": "wpClose",
+"desc": "::WPObject::wpClose",
+"proc": "obj_wpClose",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 232,
+"name": "wpCnrInsertObject",
+"desc": "::WPObject::wpCnrInsertObject",
+"proc": "obj_wpCnrInsertObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 236,
+"name": "wpCnrRemoveObject",
+"desc": "::WPObject::wpCnrRemoveObject",
+"proc": "obj_wpCnrRemoveObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 420,
+"name": "wpCnrSetEmphasis",
+"desc": "::WPObject::wpCnrSetEmphasis",
+"proc": "obj_wpCnrSetEmphasis",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 292,
+"name": "wpConfirmDelete",
+"desc": "::WPObject::wpConfirmDelete",
+"proc": "obj_wpConfirmDelete",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 528,
+"name": "wpConfirmObjectTitle",
+"desc": "::WPObject::wpConfirmObjectTitle",
+"proc": "obj_wpConfirmObjectTitle",
+"redisp": 4294967295,
+"apply": 334988632,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 188,
+"name": "wpCopiedFromTemplate",
+"desc": "::WPObject::wpCopiedFromTemplate",
+"proc": "obj_wpCopiedFromTemplate",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 460,
+"name": "wpCopyObject",
+"desc": "::WPObject::wpCopyObject",
+"proc": "obj_wpCopyObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 452,
+"name": "wpCreateAnother",
+"desc": "::WPObject::wpCreateAnother",
+"proc": "obj_wpCreateAnother",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 432,
+"name": "wpCreateFromTemplate",
+"desc": "::WPObject::wpCreateFromTemplate",
+"proc": "obj_wpCreateFromTemplate",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 456,
+"name": "wpCreateShadowObject",
+"desc": "::WPObject::wpCreateShadowObject",
+"proc": "obj_wpCreateShadowObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 288,
+"name": "wpDelete",
+"desc": "::WPObject::wpDelete",
+"proc": "obj_wpDelete",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 124,
+"name": "wpDeleteFromObjUseList",
+"desc": "::WPObject::wpDeleteFromObjUseList",
+"proc": "obj_wpDeleteFromObjUseList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 200,
+"name": "wpDisplayHelp",
+"desc": "::WPObject::wpDisplayHelp",
+"proc": "obj_wpDisplayHelp",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 580,
+"name": "wpDisplayMenu",
+"desc": "::WPObject::wpDisplayMenu",
+"proc": "obj_wpDisplayMenu",
+"redisp": 4294967295,
+"apply": 334988800,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 324,
+"name": "wpDoesObjectMatch",
+"desc": "::WPObject::wpDoesObjectMatch",
+"proc": "obj_wpDoesObjectMatch",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 340,
+"name": "wpDraggedOverObject",
+"desc": "::WPObject::wpDraggedOverObject",
+"proc": "obj_wpDraggedOverObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 160,
+"name": "wpDragOver",
+"desc": "::WPObject::wpDragOver",
+"proc": "obj_wpDragOver",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 156,
+"name": "wpDrop",
+"desc": "::WPObject::wpDrop",
+"proc": "obj_wpDrop",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 344,
+"name": "wpDroppedOnObject",
+"desc": "::WPObject::wpDroppedOnObject",
+"proc": "obj_wpDroppedOnObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 168,
+"name": "wpEndConversation",
+"desc": "::WPObject::wpEndConversation",
+"proc": "obj_wpEndConversation",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 140,
+"name": "wpFilterPopupMenu",
+"desc": "::WPObject::wpFilterPopupMenu",
+"proc": "obj_wpFilterPopupMenu",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 612,
+"name": "wpFilterMenu",
+"desc": "::WPObject::wpFilterMenu",
+"proc": "obj_wpFilterMenu",
+"redisp": 4294967295,
+"apply": 334988952,
+"applyType": 0,
+"applyList": 28
+},
+{
+"off": 128,
+"name": "wpFindUseItem",
+"desc": "::WPObject::wpFindUseItem",
+"proc": "obj_wpFindUseItem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 152,
+"name": "wpFormatDragItem",
+"desc": "::WPObject::wpFormatDragItem",
+"proc": "obj_wpFormatDragItem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 184,
+"name": "wpFree",
+"desc": "::WPObject::wpFree",
+"proc": "obj_wpFree",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 116,
+"name": "wpFreeMem",
+"desc": "::WPObject::wpFreeMem",
+"proc": "obj_wpFreeMem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 268,
+"name": "wpHide",
+"desc": "::WPObject::wpHide",
+"proc": "obj_wpHide",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 240,
+"name": "wpInitData",
+"desc": "::WPObject::wpInitData",
+"proc": "obj_wpInitData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 212,
+"name": "wpInsertPopupMenuItems",
+"desc": "::WPObject::wpInsertPopupMenuItems",
+"proc": "obj_wpInsertPopupMenuItems",
+"redisp": 4294967295,
+"apply": 334989088,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 616,
+"name": "wpInsertMenuItems",
+"desc": "::WPObject::wpInsertMenuItems",
+"proc": "obj_wpInsertMenuItems",
+"redisp": 4294967295,
+"apply": 334989128,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 208,
+"name": "wpInsertSettingsPage",
+"desc": "::WPObject::wpInsertSettingsPage",
+"proc": "obj_wpInsertSettingsPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 204,
+"name": "wpMenuItemHelpSelected",
+"desc": "::WPObject::wpMenuItemHelpSelected",
+"proc": "obj_wpMenuItemHelpSelected",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 148,
+"name": "wpMenuItemSelected",
+"desc": "::WPObject::wpMenuItemSelected",
+"proc": "obj_wpMenuItemSelected",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 144,
+"name": "wpModifyPopupMenu",
+"desc": "::WPObject::wpModifyPopupMenu",
+"proc": "obj_wpModifyPopupMenu",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 608,
+"name": "wpModifyMenu",
+"desc": "::WPObject::wpModifyMenu",
+"proc": "obj_wpModifyMenu",
+"redisp": 4294967295,
+"apply": 334989232,
+"applyType": 0,
+"applyList": 28
+},
+{
+"off": 464,
+"name": "wpMoveObject",
+"desc": "::WPObject::wpMoveObject",
+"proc": "obj_wpMoveObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 260,
+"name": "wpOpen",
+"desc": "::WPObject::wpOpen",
+"proc": "obj_wpOpen",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 488,
+"name": "wpPrintObject",
+"desc": "::WPObject::wpPrintObject",
+"proc": "obj_wpPrintObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 388,
+"name": "wpQueryConcurrentView",
+"desc": "::WPObject::wpQueryConcurrentView",
+"proc": "obj_wpQueryConcurrentView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 408,
+"name": "wpQueryButtonAppearance",
+"desc": "::WPObject::wpQueryButtonAppearance",
+"proc": "obj_wpQueryButtonAppearance",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 416,
+"name": "wpQueryConfirmations",
+"desc": "::WPObject::wpQueryConfirmations",
+"proc": "obj_wpQueryConfirmations",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 320,
+"name": "wpQueryDefaultHelp",
+"desc": "::WPObject::wpQueryDefaultHelp",
+"proc": "obj_wpQueryDefaultHelp",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 48,
+"name": "wpQueryDefaultView",
+"desc": "::WPObject::wpQueryDefaultView",
+"proc": "obj_wpQueryDefaultView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 484,
+"name": "wpQueryDetailsData",
+"desc": "::WPObject::wpQueryDetailsData",
+"proc": "obj_wpQueryDetailsData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 336,
+"name": "wpQueryError",
+"desc": "::WPObject::wpQueryError",
+"proc": "obj_wpQueryError",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 28,
+"name": "wpSetFolder",
+"desc": "::WPObject::wpSetFolder",
+"proc": "obj_wpSetFolder",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpQueryFolder",
+"desc": "::WPObject::wpQueryFolder",
+"proc": "obj_wpQueryFolder",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpQueryIcon",
+"desc": "::WPObject::wpQueryIcon",
+"proc": "obj_wpQueryIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 280,
+"name": "wpQueryIconData",
+"desc": "::WPObject::wpQueryIconData",
+"proc": "obj_wpQueryIconData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 396,
+"name": "wpQueryMinWindow",
+"desc": "::WPObject::wpQueryMinWindow",
+"proc": "obj_wpQueryMinWindow",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 524,
+"name": "wpQueryNameClashOptions",
+"desc": "::WPObject::wpQueryNameClashOptions",
+"proc": "obj_wpQueryNameClashOptions",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpQueryStyle",
+"desc": "::WPObject::wpQueryStyle",
+"proc": "obj_wpQueryStyle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 496,
+"name": "wpSetTaskRec",
+"desc": "::WPObject::wpSetTaskRec",
+"proc": "obj_wpSetTaskRec",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 512,
+"name": "wpFindTaskRec",
+"desc": "::WPObject::wpFindTaskRec",
+"proc": "obj_wpFindTaskRec",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpQueryTitle",
+"desc": "::WPObject::wpQueryTitle",
+"proc": "obj_wpQueryTitle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 308,
+"name": "wpRegisterView",
+"desc": "::WPObject::wpRegisterView",
+"proc": "obj_wpRegisterView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 444,
+"name": "wpReleaseObjectMutexSem",
+"desc": "::WPObject::wpReleaseObjectMutexSem",
+"proc": "obj_wpReleaseObjectMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 164,
+"name": "wpRender",
+"desc": "::WPObject::wpRender",
+"proc": "obj_wpRender",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 480,
+"name": "wpRenderComplete",
+"desc": "::WPObject::wpRenderComplete",
+"proc": "obj_wpRenderComplete",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 520,
+"name": "wpReplaceObject",
+"desc": "::WPObject::wpReplaceObject",
+"proc": "obj_wpReplaceObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 448,
+"name": "wpRequestObjectMutexSem",
+"desc": "::WPObject::wpRequestObjectMutexSem",
+"proc": "obj_wpRequestObjectMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 272,
+"name": "wpRestore",
+"desc": "::WPObject::wpRestore",
+"proc": "obj_wpRestore",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 104,
+"name": "wpRestoreData",
+"desc": "::WPObject::wpRestoreData",
+"proc": "obj_wpRestoreData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 96,
+"name": "wpRestoreLong",
+"desc": "::WPObject::wpRestoreLong",
+"proc": "obj_wpRestoreLong",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 84,
+"name": "wpRestoreState",
+"desc": "::WPObject::wpRestoreState",
+"proc": "obj_wpRestoreState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 100,
+"name": "wpRestoreString",
+"desc": "::WPObject::wpRestoreString",
+"proc": "obj_wpRestoreString",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 76,
+"name": "wpSaveData",
+"desc": "::WPObject::wpSaveData",
+"proc": "obj_wpSaveData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 256,
+"name": "wpSaveImmediate",
+"desc": "::WPObject::wpSaveImmediate",
+"proc": "obj_wpSaveImmediate",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 380,
+"name": "wpSaveDeferred",
+"desc": "::WPObject::wpSaveDeferred",
+"proc": "obj_wpSaveDeferred",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 68,
+"name": "wpSaveLong",
+"desc": "::WPObject::wpSaveLong",
+"proc": "obj_wpSaveLong",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 56,
+"name": "wpSaveState",
+"desc": "::WPObject::wpSaveState",
+"proc": "obj_wpSaveState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 72,
+"name": "wpSaveString",
+"desc": "::WPObject::wpSaveString",
+"proc": "obj_wpSaveString",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 252,
+"name": "wpScanSetupString",
+"desc": "::WPObject::wpScanSetupString",
+"proc": "obj_wpScanSetupString",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 392,
+"name": "wpSetConcurrentView",
+"desc": "::WPObject::wpSetConcurrentView",
+"proc": "obj_wpSetConcurrentView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 412,
+"name": "wpSetButtonAppearance",
+"desc": "::WPObject::wpSetButtonAppearance",
+"proc": "obj_wpSetButtonAppearance",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 316,
+"name": "wpSetDefaultHelp",
+"desc": "::WPObject::wpSetDefaultHelp",
+"proc": "obj_wpSetDefaultHelp",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpSetDefaultView",
+"desc": "::WPObject::wpSetDefaultView",
+"proc": "obj_wpSetDefaultView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 332,
+"name": "wpSetError",
+"desc": "::WPObject::wpSetError",
+"proc": "obj_wpSetError",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 588,
+"name": "wpQueryScreenGroupID",
+"desc": "::WPObject::wpQueryScreenGroupID",
+"proc": "obj_wpQueryScreenGroupID",
+"redisp": 4294967295,
+"apply": 334989960,
+"applyType": 12,
+"applyList": 8
+},
+{
+"off": 592,
+"name": "wpSetupOnce",
+"desc": "::WPObject::wpSetupOnce",
+"proc": "obj_wpSetupOnce",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpSetIcon",
+"desc": "::WPObject::wpSetIcon",
+"proc": "obj_wpSetIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 276,
+"name": "wpSetIconData",
+"desc": "::WPObject::wpSetIconData",
+"proc": "obj_wpSetIconData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 400,
+"name": "wpSetMinWindow",
+"desc": "::WPObject::wpSetMinWindow",
+"proc": "obj_wpSetMinWindow",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 504,
+"name": "wpModifyStyle",
+"desc": "::WPObject::wpModifyStyle",
+"proc": "obj_wpModifyStyle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpSetTitle",
+"desc": "::WPObject::wpSetTitle",
+"proc": "obj_wpSetTitle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 248,
+"name": "wpSetup",
+"desc": "::WPObject::wpSetup",
+"proc": "obj_wpSetup",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 132,
+"name": "wpSwitchTo",
+"desc": "::WPObject::wpSwitchTo",
+"proc": "obj_wpSwitchTo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 244,
+"name": "wpUnInitData",
+"desc": "::WPObject::wpUnInitData",
+"proc": "obj_wpUnInitData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 404,
+"name": "wpViewObject",
+"desc": "::WPObject::wpViewObject",
+"proc": "obj_wpViewObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 376,
+"name": "wpQueryHandle",
+"desc": "::WPObject::wpQueryHandle",
+"proc": "obj_wpQueryHandle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 472,
+"name": "wpUnlockObject",
+"desc": "::WPObject::wpUnlockObject",
+"proc": "obj_wpUnlockObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 556,
+"name": "wpObjectReady",
+"desc": "::WPObject::wpObjectReady",
+"proc": "obj_wpObjectReady",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 560,
+"name": "wpIsObjectInitialized",
+"desc": "::WPObject::wpIsObjectInitialized",
+"proc": "obj_wpIsObjectInitialized",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 564,
+"name": "wpCreateShadowObjectExt",
+"desc": "::WPObject::wpCreateShadowObjectExt",
+"proc": "obj_wpCreateShadowObjectExt",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 552,
+"name": "wpCnrDeleteUseItem",
+"desc": "::WPObject::wpCnrDeleteUseItem",
+"proc": "obj_wpCnrDeleteUseItem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 372,
+"name": "wpIsDeleteable",
+"desc": "::WPObject::wpIsDeleteable",
+"proc": "obj_wpIsDeleteable",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 424,
+"name": "wpQueryCoreRecord",
+"desc": "::WPObject::wpQueryCoreRecord",
+"proc": "obj_wpQueryCoreRecord",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 364,
+"name": "wpSetObjectID",
+"desc": "::WPObject::wpSetObjectID",
+"proc": "obj_wpSetObjectID",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 368,
+"name": "wpQueryObjectID",
+"desc": "::WPObject::wpQueryObjectID",
+"proc": "obj_wpQueryObjectID",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 348,
+"name": "wpSetDefaultIconPos",
+"desc": "::WPObject::wpSetDefaultIconPos",
+"proc": "obj_wpSetDefaultIconPos",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 352,
+"name": "wpQueryDefaultIconPos",
+"desc": "::WPObject::wpQueryDefaultIconPos",
+"proc": "obj_wpQueryDefaultIconPos",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 328,
+"name": "wpCnrRefreshDetails",
+"desc": "::WPObject::wpCnrRefreshDetails",
+"proc": "obj_wpCnrRefreshDetails",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 428,
+"name": "wpFindViewItem",
+"desc": "::WPObject::wpFindViewItem",
+"proc": "obj_wpFindViewItem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 468,
+"name": "wpLockObject",
+"desc": "::WPObject::wpLockObject",
+"proc": "obj_wpLockObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 476,
+"name": "wpIsLocked",
+"desc": "::WPObject::wpIsLocked",
+"proc": "obj_wpIsLocked",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 536,
+"name": "wpQueryContainerFlagPtr",
+"desc": "::WPObject::wpQueryContainerFlagPtr",
+"proc": "obj_wpQueryContainerFlagPtr",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 584,
+"name": "wpWaitForClose",
+"desc": "::WPObject::wpWaitForClose",
+"proc": "obj_wpWaitForClose",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 620,
+"name": "wpSetMenuStyle",
+"desc": "::WPObject::wpSetMenuStyle",
+"proc": "obj_wpSetMenuStyle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 624,
+"name": "wpQueryMenuStyle",
+"desc": "::WPObject::wpQueryMenuStyle",
+"proc": "obj_wpQueryMenuStyle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 312,
+"name": "wpIdentify",
+"desc": "::WPObject::wpIdentify",
+"proc": "obj_wpIdentify",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpSetStyle",
+"desc": "::WPObject::wpSetStyle",
+"proc": "obj_wpSetStyle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 644,
+"name": "wpSetulFixFlag",
+"desc": "::WPObject::wpSetulFixFlag",
+"proc": "obj_wpSetulFixFlag",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 648,
+"name": "wpResetulFixFlag",
+"desc": "::WPObject::wpResetulFixFlag",
+"proc": "obj_wpResetulFixFlag",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 652,
+"name": "wpCheckulFixFlag",
+"desc": "::WPObject::wpCheckulFixFlag",
+"proc": "obj_wpCheckulFixFlag",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 632,
+"name": "wpOwnerDiscardObject",
+"desc": "::WPObject::wpOwnerDiscardObject",
+"proc": "obj_wpOwnerDiscardObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 640,
+"name": "wpOwnerDroppedOnObject",
+"desc": "::WPObject::wpOwnerDroppedOnObject",
+"proc": "obj_wpOwnerDroppedOnObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 636,
+"name": "wpOwnerPrintObject",
+"desc": "::WPObject::wpOwnerPrintObject",
+"proc": "obj_wpOwnerPrintObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 628,
+"name": "wpNotifyUseListChanged",
+"desc": "::WPObject::wpNotifyUseListChanged",
+"proc": "obj_wpNotifyUseListChanged",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 600,
+"name": "wpFindTaskRec2",
+"desc": "::WPObject::wpFindTaskRec2",
+"proc": "obj_wpFindTaskRec2",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 572,
+"name": "wpQueryContainer",
+"desc": "::WPObject::wpQueryContainer",
+"proc": "obj_wpQueryContainer",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 576,
+"name": "wpSetContainer",
+"desc": "::WPObject::wpSetContainer",
+"proc": "obj_wpSetContainer",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 136,
+"name": "withdrawn1",
+"desc": "::WPObject::withdrawn1",
+"proc": "obj_withdrawn1",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 216,
+"name": "withdrawn5",
+"desc": "::WPObject::withdrawn5",
+"proc": "obj_withdrawn5",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 228,
+"name": "withdrawn3",
+"desc": "::WPObject::withdrawn3",
+"proc": "obj_withdrawn3",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 224,
+"name": "withdrawn4",
+"desc": "::WPObject::withdrawn4",
+"proc": "obj_withdrawn4",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 52,
+"name": "wpMakeDormant",
+"desc": "::WPObject::wpMakeDormant",
+"proc": "obj_wpMakeDormant",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 220,
+"name": "withdrawn6",
+"desc": "::WPObject::withdrawn6",
+"proc": "obj_withdrawn6",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 300,
+"name": "withdrawn11",
+"desc": "::WPObject::withdrawn11",
+"proc": "obj_withdrawn11",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 296,
+"name": "withdrawn2",
+"desc": "::WPObject::withdrawn2",
+"proc": "obj_withdrawn2",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 304,
+"name": "withdrawn7",
+"desc": "::WPObject::withdrawn7",
+"proc": "obj_withdrawn7",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 360,
+"name": "wpQueryState",
+"desc": "::WPObject::wpQueryState",
+"proc": "obj_wpQueryState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 656,
+"name": "wpQueryOpenView",
+"desc": "::WPObject::wpQueryOpenView",
+"proc": "obj_wpQueryOpenView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 660,
+"name": "wpSetOpenView",
+"desc": "::WPObject::wpSetOpenView",
+"proc": "obj_wpSetOpenView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 492,
+"name": "wpQueryTaskRec",
+"desc": "::WPObject::wpQueryTaskRec",
+"proc": "obj_wpQueryTaskRec",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 172,
+"name": "withdrawn10",
+"desc": "::WPObject::withdrawn10",
+"proc": "obj_withdrawn10",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 356,
+"name": "wpSetState",
+"desc": "::WPObject::wpSetState",
+"proc": "obj_wpSetState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 604,
+"name": "wpModifyState",
+"desc": "::WPObject::wpModifyState",
+"proc": "obj_wpModifyState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 80,
+"name": "wpAppendSaveData",
+"desc": "::WPObject::wpAppendSaveData",
+"proc": "obj_wpAppendSaveData",
+"redisp": 4294967295,
+"apply": 334990928,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 88,
+"name": "wpBeginRestore",
+"desc": "::WPObject::wpBeginRestore",
+"proc": "obj_wpBeginRestore",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 60,
+"name": "wpBeginSave",
+"desc": "::WPObject::wpBeginSave",
+"proc": "obj_wpBeginSave",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 180,
+"name": "wpDestroyObject",
+"desc": "::WPObject::wpDestroyObject",
+"proc": "obj_wpDestroyObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 92,
+"name": "wpEndRestore",
+"desc": "::WPObject::wpEndRestore",
+"proc": "obj_wpEndRestore",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 64,
+"name": "wpEndSave",
+"desc": "::WPObject::wpEndSave",
+"proc": "obj_wpEndSave",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 108,
+"name": "wpExtractRestoreData",
+"desc": "::WPObject::wpExtractRestoreData",
+"proc": "obj_wpExtractRestoreData",
+"redisp": 4294967295,
+"apply": 334991048,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 548,
+"name": "wpObjectInsertPreparation",
+"desc": "::WPObject::wpObjectInsertPreparation",
+"proc": "obj_wpObjectInsertPreparation",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 176,
+"name": "wpMakeObject",
+"desc": "::WPObject::wpMakeObject",
+"proc": "obj_wpMakeObject",
+"redisp": 4294967295,
+"apply": 334991104,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 284,
+"name": "wpQueryIconSaved",
+"desc": "::WPObject::wpQueryIconSaved",
+"proc": "obj_wpQueryIconSaved",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpQueryNextObj",
+"desc": "::WPObject::wpQueryNextObj",
+"proc": "obj_wpQueryNextObj",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpSetNextObj",
+"desc": "::WPObject::wpSetNextObj",
+"proc": "obj_wpSetNextObj",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 500,
+"name": "wpSnoozeNotify",
+"desc": "::WPObject::wpSnoozeNotify",
+"proc": "obj_wpSnoozeNotify",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 508,
+"name": "wpSetInsertState",
+"desc": "::WPObject::wpSetInsertState",
+"proc": "obj_wpSetInsertState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 540,
+"name": "wpAddWindowPosKey",
+"desc": "::WPObject::wpAddWindowPosKey",
+"proc": "obj_wpAddWindowPosKey",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 544,
+"name": "wpDeleteWindowPosKeys",
+"desc": "::WPObject::wpDeleteWindowPosKeys",
+"proc": "obj_wpDeleteWindowPosKeys",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 532,
+"name": "_get_pobjNext",
+"desc": "::WPObject::_get_pobjNext",
+"proc": "obj__get_pobjNext",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "SOMObject::somInit",
+"proc": "obj_somInit"
+},
+{
+"name": "SOMObject::somUninit",
+"proc": "obj_somUninit"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "obj_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "obj_somDestruct"
+}
+],
+"pmt": [
+{
+"off": 436,
+"proc": "obj_wpQueryTrueStyle"
+},
+{
+"off": 568,
+"proc": "obj_wpSetIconHandle"
+}
+]
+},
+"M_WPObject": {
+"name": "M_WPObject",
+"sci": "0x13f7a82c",
+"cds": "0x13f79fd8",
+"ccds": "0x13f7a090",
+"calls": [
+"som#21",
+"M_WPObjectNewClass+0xa"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 20,
+"maxMethods": 45,
+"align": 4,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"SOMClass"
+],
+"numClassDataEntries": 45,
+"cif": 0,
+"smt": [
+{
+"off": 64,
+"name": "wpclsCreateDefaultTemplates",
+"desc": "::M_WPObject::wpclsCreateDefaultTemplates",
+"proc": "objM_wpclsCreateDefaultTemplates",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpclsInitData",
+"desc": "::M_WPObject::wpclsInitData",
+"proc": "objM_wpclsInitData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpclsMakeAwake",
+"desc": "::M_WPObject::wpclsMakeAwake",
+"proc": "objM_wpclsMakeAwake",
+"redisp": 4294967295,
+"apply": 334995668,
+"applyType": 0,
+"applyList": 28
+},
+{
+"off": 148,
+"name": "wpclsNew",
+"desc": "::M_WPObject::wpclsNew",
+"proc": "objM_wpclsNew",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpclsQueryDefaultHelp",
+"desc": "::M_WPObject::wpclsQueryDefaultHelp",
+"proc": "objM_wpclsQueryDefaultHelp",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 48,
+"name": "wpclsQueryDefaultView",
+"desc": "::M_WPObject::wpclsQueryDefaultView",
+"proc": "objM_wpclsQueryDefaultView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 52,
+"name": "wpclsQueryDetails",
+"desc": "::M_WPObject::wpclsQueryDetails",
+"proc": "objM_wpclsQueryDetails",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpclsQueryDetailsInfo",
+"desc": "::M_WPObject::wpclsQueryDetailsInfo",
+"proc": "objM_wpclsQueryDetailsInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 60,
+"name": "wpclsQueryExtendedCriteria",
+"desc": "::M_WPObject::wpclsQueryExtendedCriteria",
+"proc": "objM_wpclsQueryExtendedCriteria",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 152,
+"name": "wpclsQueryFolder",
+"desc": "::M_WPObject::wpclsQueryFolder",
+"proc": "objM_wpclsQueryFolder",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpclsQueryIcon",
+"desc": "::M_WPObject::wpclsQueryIcon",
+"proc": "objM_wpclsQueryIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 56,
+"name": "wpclsQuerySearchInfo",
+"desc": "::M_WPObject::wpclsQuerySearchInfo",
+"proc": "objM_wpclsQuerySearchInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpclsQueryStyle",
+"desc": "::M_WPObject::wpclsQueryStyle",
+"proc": "objM_wpclsQueryStyle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 28,
+"name": "wpclsQueryTitle",
+"desc": "::M_WPObject::wpclsQueryTitle",
+"proc": "objM_wpclsQueryTitle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpclsUnInitData",
+"desc": "::M_WPObject::wpclsUnInitData",
+"proc": "objM_wpclsUnInitData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 72,
+"name": "wpclsFindObjectFirst",
+"desc": "::M_WPObject::wpclsFindObjectFirst",
+"proc": "objM_wpclsFindObjectFirst",
+"redisp": 4294967295,
+"apply": 334995900,
+"applyType": 0,
+"applyList": 36
+},
+{
+"off": 76,
+"name": "wpclsFindObjectNext",
+"desc": "::M_WPObject::wpclsFindObjectNext",
+"proc": "objM_wpclsFindObjectNext",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 80,
+"name": "wpclsFindObjectEnd",
+"desc": "::M_WPObject::wpclsFindObjectEnd",
+"proc": "objM_wpclsFindObjectEnd",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 88,
+"name": "wpclsSetError",
+"desc": "::M_WPObject::wpclsSetError",
+"proc": "objM_wpclsSetError",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 92,
+"name": "wpclsQueryError",
+"desc": "::M_WPObject::wpclsQueryError",
+"proc": "objM_wpclsQueryError",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 96,
+"name": "wpclsQuerySettingsPageSize",
+"desc": "::M_WPObject::wpclsQuerySettingsPageSize",
+"proc": "objM_wpclsQuerySettingsPageSize",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 104,
+"name": "wpclsQueryIconData",
+"desc": "::M_WPObject::wpclsQueryIconData",
+"proc": "objM_wpclsQueryIconData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 116,
+"name": "wpclsQueryObject",
+"desc": "::M_WPObject::wpclsQueryObject",
+"proc": "objM_wpclsQueryObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 144,
+"name": "wpclsQueryButtonAppearance",
+"desc": "::M_WPObject::wpclsQueryButtonAppearance",
+"proc": "objM_wpclsQueryButtonAppearance",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpclsDecUsage",
+"desc": "::M_WPObject::wpclsDecUsage",
+"proc": "objM_wpclsDecUsage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpclsIncUsage",
+"desc": "::M_WPObject::wpclsIncUsage",
+"proc": "objM_wpclsIncUsage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 168,
+"name": "wpclsInsertMultipleObjects",
+"desc": "::M_WPObject::wpclsInsertMultipleObjects",
+"proc": "objM_wpclsInsertMultipleObjects",
+"redisp": 4294967295,
+"apply": 334996100,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 176,
+"name": "wpclsFindOneObject",
+"desc": "::M_WPObject::wpclsFindOneObject",
+"proc": "objM_wpclsFindOneObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 100,
+"name": "wpclsSetSettingsPageSize",
+"desc": "::M_WPObject::wpclsSetSettingsPageSize",
+"proc": "objM_wpclsSetSettingsPageSize",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 112,
+"name": "wpclsSetIconData",
+"desc": "::M_WPObject::wpclsSetIconData",
+"proc": "objM_wpclsSetIconData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 108,
+"name": "wpclsSetIcon",
+"desc": "::M_WPObject::wpclsSetIcon",
+"proc": "objM_wpclsSetIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 120,
+"name": "wpclsObjectFromHandle",
+"desc": "::M_WPObject::wpclsObjectFromHandle",
+"proc": "objM_wpclsObjectFromHandle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 164,
+"name": "wpclsRemoveObjects",
+"desc": "::M_WPObject::wpclsRemoveObjects",
+"proc": "objM_wpclsRemoveObjects",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "withdrawn8",
+"desc": "::M_WPObject::withdrawn8",
+"proc": "objM_withdrawn8",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 68,
+"name": "withdrawn9",
+"desc": "::M_WPObject::withdrawn9",
+"proc": "objM_withdrawn9",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 84,
+"name": "wpclsFindObjects",
+"desc": "::M_WPObject::wpclsFindObjects",
+"proc": "objM_wpclsFindObjects",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 124,
+"name": "wpclsSaveDirtyObjects",
+"desc": "::M_WPObject::wpclsSaveDirtyObjects",
+"proc": "objM_wpclsSaveDirtyObjects",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 128,
+"name": "wpclsLockDirtyList",
+"desc": "::M_WPObject::wpclsLockDirtyList",
+"proc": "objM_wpclsLockDirtyList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 132,
+"name": "wpclsUnlockDirtyList",
+"desc": "::M_WPObject::wpclsUnlockDirtyList",
+"proc": "objM_wpclsUnlockDirtyList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 156,
+"name": "wpclsLockSleepyList",
+"desc": "::M_WPObject::wpclsLockSleepyList",
+"proc": "objM_wpclsLockSleepyList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 160,
+"name": "wpclsUnlockSleepyList",
+"desc": "::M_WPObject::wpclsUnlockSleepyList",
+"proc": "objM_wpclsUnlockSleepyList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 136,
+"name": "wpclsLockRestartList",
+"desc": "::M_WPObject::wpclsLockRestartList",
+"proc": "objM_wpclsLockRestartList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 140,
+"name": "wpclsUnlockRestartList",
+"desc": "::M_WPObject::wpclsUnlockRestartList",
+"proc": "objM_wpclsUnlockRestartList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 172,
+"name": "wpclsINew",
+"desc": "::M_WPObject::wpclsINew",
+"proc": "objM_wpclsINew",
+"redisp": 4294967295,
+"apply": 334996396,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 180,
+"name": "wpclsQueryMaxAnimationIcons",
+"desc": "::M_WPObject::wpclsQueryMaxAnimationIcons",
+"proc": "objM_wpclsQueryMaxAnimationIcons",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "SOMObject::somUninit",
+"proc": "objM_somUninit"
+},
+{
+"name": "SOMClass::somClassReady",
+"proc": "objM_somClassReady"
+},
+{
+"name": "SOMClass::somNew",
+"proc": "objM_somNew"
+},
+{
+"name": "SOMClass::somRenew",
+"proc": "objM_somRenew"
+}
+],
+"pmt": []
+},
+"WPAbstract": {
+"name": "WPAbstract",
+"sci": "0x13f70340",
+"cds": "0x13f70294",
+"ccds": "0x13f70298",
+"calls": [
+"WPObjectNewClass",
+"M_WPAbstractNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 4,
+"maxMethods": 0,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPAbstract",
+"parents": [
+"WPObject"
+],
+"numClassDataEntries": 0,
+"cif": 0,
+"smt": [],
+"omt": [
+{
+"name": "WPObject::wpQueryHandle",
+"proc": "ab_wpQueryHandle"
+},
+{
+"name": "WPObject::wpSaveImmediate",
+"proc": "ab_wpSaveImmediate"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "ab_wpSaveState"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "ab_wpRestoreState"
+},
+{
+"name": "WPObject::wpSetTitle",
+"proc": "ab_wpSetTitle"
+},
+{
+"name": "WPObject::wpCopyObject",
+"proc": "ab_wpCopyObject"
+},
+{
+"name": "WPObject::wpMoveObject",
+"proc": "ab_wpMoveObject"
+},
+{
+"name": "WPObject::wpQueryIcon",
+"proc": "ab_wpQueryIcon"
+},
+{
+"name": "WPObject::wpQueryIconData",
+"proc": "ab_wpQueryIconData"
+},
+{
+"name": "WPObject::wpSetIconData",
+"proc": "ab_wpSetIconData"
+},
+{
+"name": "WPObject::wpDragOver",
+"proc": "ab_wpDragOver"
+},
+{
+"name": "WPObject::wpReplaceObject",
+"proc": "ab_wpReplaceObject"
+},
+{
+"name": "WPObject::wpQueryNameClashOptions",
+"proc": "ab_wpQueryNameClashOptions"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "ab_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "ab_somDestruct"
+},
+{
+"name": "WPObject::wpIdentify",
+"proc": "ab_wpIdentify"
+},
+{
+"name": "WPObject::wpMakeObject",
+"proc": "ab_wpMakeObject"
+},
+{
+"name": "WPObject::wpDestroyObject",
+"proc": "ab_wpDestroyObject"
+}
+],
+"pmt": []
+},
+"M_WPAbstract": {
+"name": "M_WPAbstract",
+"sci": "0x13f70508",
+"cds": "0x13f703fc",
+"ccds": "0x13f70414",
+"calls": [
+"M_WPObjectNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 5,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPObject"
+],
+"numClassDataEntries": 5,
+"cif": 0,
+"smt": [
+{
+"off": 16,
+"name": "wpclsQuerySetting",
+"desc": "::M_WPAbstract::wpclsQuerySetting",
+"proc": "abM_wpclsQuerySetting",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpclsSetSetting",
+"desc": "::M_WPAbstract::wpclsSetSetting",
+"proc": "abM_wpclsSetSetting",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpclsSaveCache",
+"desc": "::M_WPAbstract::wpclsSaveCache",
+"proc": "abM_wpclsSaveCache",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpclsLockCache",
+"desc": "::M_WPAbstract::wpclsLockCache",
+"proc": "abM_wpclsLockCache",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpclsUnlockCache",
+"desc": "::M_WPAbstract::wpclsUnlockCache",
+"proc": "abM_wpclsUnlockCache",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "abM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsObjectFromHandle",
+"proc": "abM_wpclsObjectFromHandle"
+},
+{
+"name": "M_WPObject::wpclsFindObjects",
+"proc": "abM_wpclsFindObjects"
+}
+],
+"pmt": []
+},
+"WPFileSystem": {
+"name": "WPFileSystem",
+"sci": "0x13f76004",
+"cds": "0x13f75764",
+"ccds": "0x13f75814",
+"calls": [
+"WPObjectNewClass",
+"M_WPFileSystemNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 92,
+"maxMethods": 43,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPFileSystem",
+"parents": [
+"WPObject"
+],
+"numClassDataEntries": 43,
+"cif": 0,
+"smt": [
+{
+"off": 4,
+"name": "wpSetRealName",
+"desc": "::WPFileSystem::wpSetRealName",
+"proc": "fs_wpSetRealName",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpSetType",
+"desc": "::WPFileSystem::wpSetType",
+"proc": "fs_wpSetType",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpQueryType",
+"desc": "::WPFileSystem::wpQueryType",
+"proc": "fs_wpQueryType",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpSetAttr",
+"desc": "::WPFileSystem::wpSetAttr",
+"proc": "fs_wpSetAttr",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpQueryAttr",
+"desc": "::WPFileSystem::wpQueryAttr",
+"proc": "fs_wpQueryAttr",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpAddFile1Page",
+"desc": "::WPFileSystem::wpAddFile1Page",
+"proc": "fs_wpAddFile1Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpAddFile2Page",
+"desc": "::WPFileSystem::wpAddFile2Page",
+"proc": "fs_wpAddFile2Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpAddFile3Page",
+"desc": "::WPFileSystem::wpAddFile3Page",
+"proc": "fs_wpAddFile3Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpAddFileMenuPage",
+"desc": "::WPFileSystem::wpAddFileMenuPage",
+"proc": "fs_wpAddFileMenuPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 48,
+"name": "wpQueryCreation",
+"desc": "::WPFileSystem::wpQueryCreation",
+"proc": "fs_wpQueryCreation",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 52,
+"name": "wpQueryLastAccess",
+"desc": "::WPFileSystem::wpQueryLastAccess",
+"proc": "fs_wpQueryLastAccess",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 56,
+"name": "wpQueryLastWrite",
+"desc": "::WPFileSystem::wpQueryLastWrite",
+"proc": "fs_wpQueryLastWrite",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 60,
+"name": "wpQueryFileSize",
+"desc": "::WPFileSystem::wpQueryFileSize",
+"proc": "fs_wpQueryFileSize",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 64,
+"name": "wpQueryEASize",
+"desc": "::WPFileSystem::wpQueryEASize",
+"proc": "fs_wpQueryEASize",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 68,
+"name": "wpSetDateInfo",
+"desc": "::WPFileSystem::wpSetDateInfo",
+"proc": "fs_wpSetDateInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 72,
+"name": "wpSetFileSizeInfo",
+"desc": "::WPFileSystem::wpSetFileSizeInfo",
+"proc": "fs_wpSetFileSizeInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 76,
+"name": "wpRefresh",
+"desc": "::WPFileSystem::wpRefresh",
+"proc": "fs_wpRefresh",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 88,
+"name": "wpQueryRefreshFlags",
+"desc": "::WPFileSystem::wpQueryRefreshFlags",
+"proc": "fs_wpQueryRefreshFlags",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 84,
+"name": "wpSetRefreshFlags",
+"desc": "::WPFileSystem::wpSetRefreshFlags",
+"proc": "fs_wpSetRefreshFlags",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 80,
+"name": "wpPrintPlainTextFile",
+"desc": "::WPFileSystem::wpPrintPlainTextFile",
+"proc": "fs_wpPrintPlainTextFile",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 96,
+"name": "wpSetTitleAndRenameFile",
+"desc": "::WPFileSystem::wpSetTitleAndRenameFile",
+"proc": "fs_wpSetTitleAndRenameFile",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 100,
+"name": "wpConfirmRenameFileWithExt",
+"desc": "::WPFileSystem::wpConfirmRenameFileWithExt",
+"proc": "fs_wpConfirmRenameFileWithExt",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 132,
+"name": "wpVerifyUpdateAccess",
+"desc": "::WPFileSystem::wpVerifyUpdateAccess",
+"proc": "fs_wpVerifyUpdateAccess",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 152,
+"name": "wpQueryEASupport",
+"desc": "::WPFileSystem::wpQueryEASupport",
+"proc": "fs_wpQueryEASupport",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 136,
+"name": "wpAddUserItemsToPopupMenu",
+"desc": "::WPFileSystem::wpAddUserItemsToPopupMenu",
+"proc": "fs_wpAddUserItemsToPopupMenu",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 144,
+"name": "wpIsDiskSwapped",
+"desc": "::WPFileSystem::wpIsDiskSwapped",
+"proc": "fs_wpIsDiskSwapped",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 128,
+"name": "wpQueryRealName",
+"desc": "::WPFileSystem::wpQueryRealName",
+"proc": "fs_wpQueryRealName",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 28,
+"name": "wpQueryFilename",
+"desc": "::WPFileSystem::wpQueryFilename",
+"proc": "fs_wpQueryFilename",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 112,
+"name": "wpQueryDisk",
+"desc": "::WPFileSystem::wpQueryDisk",
+"proc": "fs_wpQueryDisk",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 116,
+"name": "wpQueryDateInfo",
+"desc": "::WPFileSystem::wpQueryDateInfo",
+"proc": "fs_wpQueryDateInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 104,
+"name": "wpConfirmKeepAssoc",
+"desc": "::WPFileSystem::wpConfirmKeepAssoc",
+"proc": "fs_wpConfirmKeepAssoc",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 164,
+"name": "wpSetTitleNoRenameFile",
+"desc": "::WPFileSystem::wpSetTitleNoRenameFile",
+"proc": "fs_wpSetTitleNoRenameFile",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 120,
+"name": "wpSetNewRealName",
+"desc": "::WPFileSystem::wpSetNewRealName",
+"proc": "fs_wpSetNewRealName",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 124,
+"name": "wpAdoptNewRealName",
+"desc": "::WPFileSystem::wpAdoptNewRealName",
+"proc": "fs_wpAdoptNewRealName",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "withdrawn_wpQueryRealName",
+"desc": "::WPFileSystem::withdrawn_wpQueryRealName",
+"proc": "fs_withdrawn_wpQueryRealName",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 92,
+"name": "wpQueryDriveData",
+"desc": "::WPFileSystem::wpQueryDriveData",
+"proc": "fs_wpQueryDriveData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 148,
+"name": "wpRefreshFSInfo",
+"desc": "::WPFileSystem::wpRefreshFSInfo",
+"proc": "fs_wpRefreshFSInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 108,
+"name": "wpAddUserMenuItem",
+"desc": "::WPFileSystem::wpAddUserMenuItem",
+"proc": "fs_wpAddUserMenuItem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 140,
+"name": "wpRemoveFileAttrs",
+"desc": "::WPFileSystem::wpRemoveFileAttrs",
+"proc": "fs_wpRemoveFileAttrs",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 156,
+"name": "wpSetEASupport",
+"desc": "::WPFileSystem::wpSetEASupport",
+"proc": "fs_wpSetEASupport",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 160,
+"name": "wpResetHandle",
+"desc": "::WPFileSystem::wpResetHandle",
+"proc": "fs_wpResetHandle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 168,
+"name": "wpQueryFileSizeL",
+"desc": "::WPFileSystem::wpQueryFileSizeL",
+"proc": "fs_wpQueryFileSizeL",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 172,
+"name": "wpSetFileSizeL",
+"desc": "::WPFileSystem::wpSetFileSizeL",
+"proc": "fs_wpSetFileSizeL",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "WPObject::wpUnInitData",
+"proc": "fs_wpUnInitData"
+},
+{
+"name": "WPObject::wpQueryHandle",
+"proc": "fs_wpQueryHandle"
+},
+{
+"name": "WPObject::wpSaveImmediate",
+"proc": "fs_wpSaveImmediate"
+},
+{
+"name": "WPObject::wpSetTitle",
+"proc": "fs_wpSetTitle"
+},
+{
+"name": "WPObject::wpViewObject",
+"proc": "fs_wpViewObject"
+},
+{
+"name": "WPObject::wpSwitchTo",
+"proc": "fs_wpSwitchTo"
+},
+{
+"name": "WPObject::wpAddSettingsPages",
+"proc": "fs_wpAddSettingsPages"
+},
+{
+"name": "WPObject::wpCopyObject",
+"proc": "fs_wpCopyObject"
+},
+{
+"name": "WPObject::wpCreateFromTemplate",
+"proc": "fs_wpCreateFromTemplate"
+},
+{
+"name": "WPObject::wpMoveObject",
+"proc": "fs_wpMoveObject"
+},
+{
+"name": "WPObject::wpQueryIcon",
+"proc": "fs_wpQueryIcon"
+},
+{
+"name": "WPObject::wpQueryIconData",
+"proc": "fs_wpQueryIconData"
+},
+{
+"name": "WPObject::wpSetIconData",
+"proc": "fs_wpSetIconData"
+},
+{
+"name": "WPObject::wpQueryDetailsData",
+"proc": "fs_wpQueryDetailsData"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "fs_wpSaveState"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "fs_wpRestoreState"
+},
+{
+"name": "WPObject::wpMenuItemSelected",
+"proc": "fs_wpMenuItemSelected"
+},
+{
+"name": "WPObject::wpOpen",
+"proc": "fs_wpOpen"
+},
+{
+"name": "WPObject::wpDraggedOverObject",
+"proc": "fs_wpDraggedOverObject"
+},
+{
+"name": "WPObject::wpDroppedOnObject",
+"proc": "fs_wpDroppedOnObject"
+},
+{
+"name": "WPObject::wpFormatDragItem",
+"proc": "fs_wpFormatDragItem"
+},
+{
+"name": "WPObject::wpQueryNameClashOptions",
+"proc": "fs_wpQueryNameClashOptions"
+},
+{
+"name": "WPObject::wpAppendObject",
+"proc": "fs_wpAppendObject"
+},
+{
+"name": "WPObject::wpReplaceObject",
+"proc": "fs_wpReplaceObject"
+},
+{
+"name": "WPObject::wpQueryStyle",
+"proc": "fs_wpQueryStyle"
+},
+{
+"name": "WPObject::wpSetStyle",
+"proc": "fs_wpSetStyle"
+},
+{
+"name": "WPObject::wpModifyMenu",
+"proc": "fs_wpModifyMenu"
+},
+{
+"name": "WPObject::wpFilterMenu",
+"proc": "fs_wpFilterMenu"
+},
+{
+"name": "WPObject::wpDoesObjectMatch",
+"proc": "fs_wpDoesObjectMatch"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "fs_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "fs_somDestruct"
+},
+{
+"name": "WPObject::wpIdentify",
+"proc": "fs_wpIdentify"
+},
+{
+"name": "WPObject::wpIsDeleteable",
+"proc": "fs_wpIsDeleteable"
+},
+{
+"name": "WPObject::wpSetup",
+"proc": "fs_wpSetup"
+},
+{
+"name": "WPObject::wpMakeObject",
+"proc": "fs_wpMakeObject"
+},
+{
+"name": "WPObject::wpDestroyObject",
+"proc": "fs_wpDestroyObject"
+}
+],
+"pmt": []
+},
+"M_WPFileSystem": {
+"name": "M_WPFileSystem",
+"sci": "0x13f76258",
+"cds": "0x13f760f0",
+"ccds": "0x13f7610c",
+"calls": [
+"M_WPObjectNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 6,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPObject"
+],
+"numClassDataEntries": 6,
+"cif": 0,
+"smt": [
+{
+"off": 16,
+"name": "wpclsQueryAwakeObject",
+"desc": "::M_WPFileSystem::wpclsQueryAwakeObject",
+"proc": "fsM_wpclsQueryAwakeObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpclsFileSysExists",
+"desc": "::M_WPFileSystem::wpclsFileSysExists",
+"proc": "fsM_wpclsFileSysExists",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpclsQueryObjectFromPath",
+"desc": "::M_WPFileSystem::wpclsQueryObjectFromPath",
+"proc": "fsM_wpclsQueryObjectFromPath",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpclsQueryInstanceType",
+"desc": "::M_WPFileSystem::wpclsQueryInstanceType",
+"proc": "fsM_wpclsQueryInstanceType",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpclsQueryInstanceFilter",
+"desc": "::M_WPFileSystem::wpclsQueryInstanceFilter",
+"proc": "fsM_wpclsQueryInstanceFilter",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpclsQueryInstanceClass",
+"desc": "::M_WPFileSystem::wpclsQueryInstanceClass",
+"proc": "fsM_wpclsQueryInstanceClass",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "M_WPObject::wpclsInitData",
+"proc": "fsM_wpclsInitData"
+},
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "fsM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryDetailsInfo",
+"proc": "fsM_wpclsQueryDetailsInfo"
+},
+{
+"name": "M_WPObject::wpclsQuerySearchInfo",
+"proc": "fsM_wpclsQuerySearchInfo"
+},
+{
+"name": "M_WPObject::wpclsQueryExtendedCriteria",
+"proc": "fsM_wpclsQueryExtendedCriteria"
+},
+{
+"name": "M_WPObject::wpclsNew",
+"proc": "fsM_wpclsNew"
+},
+{
+"name": "M_WPObject::wpclsObjectFromHandle",
+"proc": "fsM_wpclsObjectFromHandle"
+},
+{
+"name": "M_WPObject::wpclsQuerySettingsPageSize",
+"proc": "fsM_wpclsQuerySettingsPageSize"
+},
+{
+"name": "M_WPObject::wpclsFindObjects",
+"proc": "fsM_wpclsFindObjects"
+}
+],
+"pmt": []
+},
+"WPFolder": {
+"name": "WPFolder",
+"sci": "0x13f751b4",
+"cds": "0x13f73e80",
+"ccds": "0x13f74034",
+"calls": [
+"WPFileSystemNewClass",
+"M_WPFolderNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 302,
+"maxMethods": 106,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPFolder",
+"parents": [
+"WPFileSystem"
+],
+"numClassDataEntries": 108,
+"cif": 0,
+"smt": [
+{
+"off": 4,
+"name": "wpSetFldrFlags",
+"desc": "::WPFolder::wpSetFldrFlags",
+"proc": "fdr_wpSetFldrFlags",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpQueryFldrFlags",
+"desc": "::WPFolder::wpQueryFldrFlags",
+"proc": "fdr_wpQueryFldrFlags",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpSetFldrFont",
+"desc": "::WPFolder::wpSetFldrFont",
+"proc": "fdr_wpSetFldrFont",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpQueryFldrFont",
+"desc": "::WPFolder::wpQueryFldrFont",
+"proc": "fdr_wpQueryFldrFont",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 84,
+"name": "wpSetFldrAttr",
+"desc": "::WPFolder::wpSetFldrAttr",
+"proc": "fdr_wpSetFldrAttr",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 88,
+"name": "wpQueryFldrAttr",
+"desc": "::WPFolder::wpQueryFldrAttr",
+"proc": "fdr_wpQueryFldrAttr",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpSetNextIconPos",
+"desc": "::WPFolder::wpSetNextIconPos",
+"proc": "fdr_wpSetNextIconPos",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpQueryNextIconPos",
+"desc": "::WPFolder::wpQueryNextIconPos",
+"proc": "fdr_wpQueryNextIconPos",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 28,
+"name": "wpPopulate",
+"desc": "::WPFolder::wpPopulate",
+"proc": "fdr_wpPopulate",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpQueryContent",
+"desc": "::WPFolder::wpQueryContent",
+"proc": "fdr_wpQueryContent",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpAddFolderView1Page",
+"desc": "::WPFolder::wpAddFolderView1Page",
+"proc": "fdr_wpAddFolderView1Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpAddFolderView2Page",
+"desc": "::WPFolder::wpAddFolderView2Page",
+"proc": "fdr_wpAddFolderView2Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 48,
+"name": "wpAddFolderView3Page",
+"desc": "::WPFolder::wpAddFolderView3Page",
+"proc": "fdr_wpAddFolderView3Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 52,
+"name": "wpAddFolderIncludePage",
+"desc": "::WPFolder::wpAddFolderIncludePage",
+"proc": "fdr_wpAddFolderIncludePage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 56,
+"name": "wpAddFolderSortPage",
+"desc": "::WPFolder::wpAddFolderSortPage",
+"proc": "fdr_wpAddFolderSortPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 60,
+"name": "wpAddFolderBackgroundPage",
+"desc": "::WPFolder::wpAddFolderBackgroundPage",
+"proc": "fdr_wpAddFolderBackgroundPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 384,
+"name": "wpAddFolderMenu2Page",
+"desc": "::WPFolder::wpAddFolderMenu2Page",
+"proc": "fdr_wpAddFolderMenu2Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 336,
+"name": "wpAddFolderSelfClosePage",
+"desc": "::WPFolder::wpAddFolderSelfClosePage",
+"proc": "fdr_wpAddFolderSelfClosePage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 64,
+"name": "wpInitIconPosData",
+"desc": "::WPFolder::wpInitIconPosData",
+"proc": "fdr_wpInitIconPosData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 68,
+"name": "wpFreeIconPosData",
+"desc": "::WPFolder::wpFreeIconPosData",
+"proc": "fdr_wpFreeIconPosData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 76,
+"name": "wpStoreIconPosData",
+"desc": "::WPFolder::wpStoreIconPosData",
+"proc": "fdr_wpStoreIconPosData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 72,
+"name": "wpQueryIconPosition",
+"desc": "::WPFolder::wpQueryIconPosition",
+"proc": "fdr_wpQueryIconPosition",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 92,
+"name": "wpSetFldrSort",
+"desc": "::WPFolder::wpSetFldrSort",
+"proc": "fdr_wpSetFldrSort",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 96,
+"name": "wpQueryFldrSort",
+"desc": "::WPFolder::wpQueryFldrSort",
+"proc": "fdr_wpQueryFldrSort",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 100,
+"name": "wpRestoreFldrRunObjs",
+"desc": "::WPFolder::wpRestoreFldrRunObjs",
+"proc": "fdr_wpRestoreFldrRunObjs",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 104,
+"name": "wpStoreFldrRunObjs",
+"desc": "::WPFolder::wpStoreFldrRunObjs",
+"proc": "fdr_wpStoreFldrRunObjs",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 212,
+"name": "wpHideFldrRunObjs",
+"desc": "::WPFolder::wpHideFldrRunObjs",
+"proc": "fdr_wpHideFldrRunObjs",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 116,
+"name": "wpDeleteContents",
+"desc": "::WPFolder::wpDeleteContents",
+"proc": "fdr_wpDeleteContents",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 132,
+"name": "wpSetFldrDetailsClass",
+"desc": "::WPFolder::wpSetFldrDetailsClass",
+"proc": "fdr_wpSetFldrDetailsClass",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 136,
+"name": "wpQueryFldrDetailsClass",
+"desc": "::WPFolder::wpQueryFldrDetailsClass",
+"proc": "fdr_wpQueryFldrDetailsClass",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 128,
+"name": "wpSearchFolder",
+"desc": "::WPFolder::wpSearchFolder",
+"proc": "fdr_wpSearchFolder",
+"redisp": 4294967295,
+"apply": 334971448,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 188,
+"name": "wpContainsFolders",
+"desc": "::WPFolder::wpContainsFolders",
+"proc": "fdr_wpContainsFolders",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 120,
+"name": "wpQueryOpenFolders",
+"desc": "::WPFolder::wpQueryOpenFolders",
+"proc": "fdr_wpQueryOpenFolders",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 276,
+"name": "wpModifyFldrFlags",
+"desc": "::WPFolder::wpModifyFldrFlags",
+"proc": "fdr_wpModifyFldrFlags",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpAddToContent",
+"desc": "::WPFolder::wpAddToContent",
+"proc": "fdr_wpAddToContent",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 80,
+"name": "wpDeleteFromContent",
+"desc": "::WPFolder::wpDeleteFromContent",
+"proc": "fdr_wpDeleteFromContent",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 144,
+"name": "wpSetDetailsColumnVisibility",
+"desc": "::WPFolder::wpSetDetailsColumnVisibility",
+"proc": "fdr_wpSetDetailsColumnVisibility",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 148,
+"name": "wpIsDetailsColumnVisible",
+"desc": "::WPFolder::wpIsDetailsColumnVisible",
+"proc": "fdr_wpIsDetailsColumnVisible",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 168,
+"name": "wpSetFldrSortClass",
+"desc": "::WPFolder::wpSetFldrSortClass",
+"proc": "fdr_wpSetFldrSortClass",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 172,
+"name": "wpQueryFldrSortClass",
+"desc": "::WPFolder::wpQueryFldrSortClass",
+"proc": "fdr_wpQueryFldrSortClass",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 176,
+"name": "wpSetSortAttribAvailable",
+"desc": "::WPFolder::wpSetSortAttribAvailable",
+"proc": "fdr_wpSetSortAttribAvailable",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 180,
+"name": "wpIsSortAttribAvailable",
+"desc": "::WPFolder::wpIsSortAttribAvailable",
+"proc": "fdr_wpIsSortAttribAvailable",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 196,
+"name": "wpQueryIconViewPos",
+"desc": "::WPFolder::wpQueryIconViewPos",
+"proc": "fdr_wpQueryIconViewPos",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 204,
+"name": "wpAddFirstChild",
+"desc": "::WPFolder::wpAddFirstChild",
+"proc": "fdr_wpAddFirstChild",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 408,
+"name": "wpFlushNotifications",
+"desc": "::WPFolder::wpFlushNotifications",
+"proc": "fdr_wpFlushNotifications",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 388,
+"name": "wpSetMenuBarVisibility",
+"desc": "::WPFolder::wpSetMenuBarVisibility",
+"proc": "fdr_wpSetMenuBarVisibility",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 392,
+"name": "wpQueryMenuBarVisibility",
+"desc": "::WPFolder::wpQueryMenuBarVisibility",
+"proc": "fdr_wpQueryMenuBarVisibility",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 300,
+"name": "wpQueryIconTextBackgroundColor",
+"desc": "::WPFolder::wpQueryIconTextBackgroundColor",
+"proc": "fdr_wpQueryIconTextBackgroundColor",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 304,
+"name": "wpSetIconTextBackgroundColor",
+"desc": "::WPFolder::wpSetIconTextBackgroundColor",
+"proc": "fdr_wpSetIconTextBackgroundColor",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 320,
+"name": "wpQueryIconTextColor",
+"desc": "::WPFolder::wpQueryIconTextColor",
+"proc": "fdr_wpQueryIconTextColor",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 324,
+"name": "wpSetIconTextColor",
+"desc": "::WPFolder::wpSetIconTextColor",
+"proc": "fdr_wpSetIconTextColor",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 416,
+"name": "wpQueryShadowTextColor",
+"desc": "::WPFolder::wpQueryShadowTextColor",
+"proc": "fdr_wpQueryShadowTextColor",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 412,
+"name": "wpSetShadowTextColor",
+"desc": "::WPFolder::wpSetShadowTextColor",
+"proc": "fdr_wpSetShadowTextColor",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 328,
+"name": "wpQueryIconTextVisibility",
+"desc": "::WPFolder::wpQueryIconTextVisibility",
+"proc": "fdr_wpQueryIconTextVisibility",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 332,
+"name": "wpSetIconTextVisibility",
+"desc": "::WPFolder::wpSetIconTextVisibility",
+"proc": "fdr_wpSetIconTextVisibility",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 424,
+"name": "wpQueryFldrBackground",
+"desc": "::WPFolder::wpQueryFldrBackground",
+"proc": "fdr_wpQueryFldrBackground",
+"redisp": 4294967295,
+"apply": 334971872,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 420,
+"name": "wpSetFldrBackground",
+"desc": "::WPFolder::wpSetFldrBackground",
+"proc": "fdr_wpSetFldrBackground",
+"redisp": 4294967295,
+"apply": 334971912,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 368,
+"name": "wpSetFolderSelfClosePageID",
+"desc": "::WPFolder::wpSetFolderSelfClosePageID",
+"proc": "fdr_wpSetFolderSelfClosePageID",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 372,
+"name": "wpQueryFolderSelfClosePageID",
+"desc": "::WPFolder::wpQueryFolderSelfClosePageID",
+"proc": "fdr_wpQueryFolderSelfClosePageID",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 380,
+"name": "wpApplyIconPosData",
+"desc": "::WPFolder::wpApplyIconPosData",
+"proc": "fdr_wpApplyIconPosData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 352,
+"name": "wpIsOwnView",
+"desc": "::WPFolder::wpIsOwnView",
+"proc": "fdr_wpIsOwnView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 344,
+"name": "wpQueryFldrSelfClose",
+"desc": "::WPFolder::wpQueryFldrSelfClose",
+"proc": "fdr_wpQueryFldrSelfClose",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 340,
+"name": "wpSetFldrSelfClose",
+"desc": "::WPFolder::wpSetFldrSelfClose",
+"proc": "fdr_wpSetFldrSelfClose",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 184,
+"name": "wpQueryFldrFilter",
+"desc": "::WPFolder::wpQueryFldrFilter",
+"proc": "fdr_wpQueryFldrFilter",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 156,
+"name": "wpSetSortArray",
+"desc": "::WPFolder::wpSetSortArray",
+"proc": "fdr_wpSetSortArray",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 152,
+"name": "wpQuerySortArray",
+"desc": "::WPFolder::wpQuerySortArray",
+"proc": "fdr_wpQuerySortArray",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 164,
+"name": "wpSetSortInfo",
+"desc": "::WPFolder::wpSetSortInfo",
+"proc": "fdr_wpSetSortInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 396,
+"name": "wpSetSortInfo2",
+"desc": "::WPFolder::wpSetSortInfo2",
+"proc": "fdr_wpSetSortInfo2",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 160,
+"name": "wpQuerySortInfo",
+"desc": "::WPFolder::wpQuerySortInfo",
+"proc": "fdr_wpQuerySortInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 108,
+"name": "withdrawn30",
+"desc": "::WPFolder::withdrawn30",
+"proc": "fdr_withdrawn30",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 112,
+"name": "withdrawn31",
+"desc": "::WPFolder::withdrawn31",
+"proc": "fdr_withdrawn31",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 124,
+"name": "wpSetNextOpenFldr",
+"desc": "::WPFolder::wpSetNextOpenFldr",
+"proc": "fdr_wpSetNextOpenFldr",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 256,
+"name": "wpQueryNextOpenFldr",
+"desc": "::WPFolder::wpQueryNextOpenFldr",
+"proc": "fdr_wpQueryNextOpenFldr",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 192,
+"name": "wpQueryBkgnd",
+"desc": "::WPFolder::wpQueryBkgnd",
+"proc": "fdr_wpQueryBkgnd",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 216,
+"name": "wpFSNotifyFolder",
+"desc": "::WPFolder::wpFSNotifyFolder",
+"proc": "fdr_wpFSNotifyFolder",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 220,
+"name": "wpAddNotification",
+"desc": "::WPFolder::wpAddNotification",
+"proc": "fdr_wpAddNotification",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 224,
+"name": "wpDeleteNotification",
+"desc": "::WPFolder::wpDeleteNotification",
+"proc": "fdr_wpDeleteNotification",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 228,
+"name": "wpProcessNotification",
+"desc": "::WPFolder::wpProcessNotification",
+"proc": "fdr_wpProcessNotification",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 232,
+"name": "wpModifySneakyCount",
+"desc": "::WPFolder::wpModifySneakyCount",
+"proc": "fdr_wpModifySneakyCount",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 236,
+"name": "wpSneakySupported",
+"desc": "::WPFolder::wpSneakySupported",
+"proc": "fdr_wpSneakySupported",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 240,
+"name": "wpAssertFolderMutexSem",
+"desc": "::WPFolder::wpAssertFolderMutexSem",
+"proc": "fdr_wpAssertFolderMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 244,
+"name": "wpReleaseFolderMutexSem",
+"desc": "::WPFolder::wpReleaseFolderMutexSem",
+"proc": "fdr_wpReleaseFolderMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 248,
+"name": "wpRequestFolderMutexSem",
+"desc": "::WPFolder::wpRequestFolderMutexSem",
+"proc": "fdr_wpRequestFolderMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 252,
+"name": "wpQueryContentHashTable",
+"desc": "::WPFolder::wpQueryContentHashTable",
+"proc": "fdr_wpQueryContentHashTable",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 268,
+"name": "wpReleaseFindMutexSem",
+"desc": "::WPFolder::wpReleaseFindMutexSem",
+"proc": "fdr_wpReleaseFindMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 264,
+"name": "wpRequestFindMutexSem",
+"desc": "::WPFolder::wpRequestFindMutexSem",
+"proc": "fdr_wpRequestFindMutexSem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 296,
+"name": "wpQueryRWMonitorObject",
+"desc": "::WPFolder::wpQueryRWMonitorObject",
+"proc": "fdr_wpQueryRWMonitorObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 308,
+"name": "wpRedrawFolderBackground",
+"desc": "::WPFolder::wpRedrawFolderBackground",
+"proc": "fdr_wpRedrawFolderBackground",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 312,
+"name": "wpMakeInstanceBackground",
+"desc": "::WPFolder::wpMakeInstanceBackground",
+"proc": "fdr_wpMakeInstanceBackground",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 316,
+"name": "wpUseDefaultBackground",
+"desc": "::WPFolder::wpUseDefaultBackground",
+"proc": "fdr_wpUseDefaultBackground",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 356,
+"name": "wpSetIconDataN",
+"desc": "::WPFolder::wpSetIconDataN",
+"proc": "fdr_wpSetIconDataN",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 376,
+"name": "wpQueryIconDataN",
+"desc": "::WPFolder::wpQueryIconDataN",
+"proc": "fdr_wpQueryIconDataN",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 360,
+"name": "wpSetIconN",
+"desc": "::WPFolder::wpSetIconN",
+"proc": "fdr_wpSetIconN",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 364,
+"name": "wpQueryIconN",
+"desc": "::WPFolder::wpQueryIconN",
+"proc": "fdr_wpQueryIconN",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 428,
+"name": "wpSetFldrGrid",
+"desc": "::WPFolder::wpSetFldrGrid",
+"proc": "fdr_wpSetFldrGrid",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 432,
+"name": "wpQueryFldrGrid",
+"desc": "::WPFolder::wpQueryFldrGrid",
+"proc": "fdr_wpQueryFldrGrid",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 404,
+"name": "wpFilterTreeView",
+"desc": "::WPFolder::wpFilterTreeView",
+"proc": "fdr_wpFilterTreeView",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 208,
+"name": "_get_FirstObj",
+"desc": "::WPFolder::_get_FirstObj",
+"proc": "fdr__get_FirstObj",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 400,
+"name": "_get_LastObj",
+"desc": "::WPFolder::_get_LastObj",
+"proc": "fdr__get_LastObj",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 260,
+"name": "_get_hmtxOneFindAtATime",
+"desc": "::WPFolder::_get_hmtxOneFindAtATime",
+"proc": "fdr__get_hmtxOneFindAtATime",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 348,
+"name": "_get_retaddrFindSemOwner",
+"desc": "::WPFolder::_get_retaddrFindSemOwner",
+"proc": "fdr__get_retaddrFindSemOwner",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 272,
+"name": "_get_hevFillFolder",
+"desc": "::WPFolder::_get_hevFillFolder",
+"proc": "fdr__get_hevFillFolder",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "WPObject::wpInitData",
+"proc": "fdr_wpInitData"
+},
+{
+"name": "WPObject::wpUnInitData",
+"proc": "fdr_wpUnInitData"
+},
+{
+"name": "WPObject::wpFree",
+"proc": "fdr_wpFree"
+},
+{
+"name": "WPObject::wpDelete",
+"proc": "fdr_wpDelete"
+},
+{
+"name": "WPObject::wpConfirmDelete",
+"proc": "fdr_wpConfirmDelete"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "fdr_wpSaveState"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "fdr_wpRestoreState"
+},
+{
+"name": "WPObject::wpMenuItemSelected",
+"proc": "fdr_wpMenuItemSelected"
+},
+{
+"name": "WPObject::wpAddSettingsPages",
+"proc": "fdr_wpAddSettingsPages"
+},
+{
+"name": "WPObject::wpOpen",
+"proc": "fdr_wpOpen"
+},
+{
+"name": "WPObject::wpSetup",
+"proc": "fdr_wpSetup"
+},
+{
+"name": "WPObject::wpMoveObject",
+"proc": "fdr_wpMoveObject"
+},
+{
+"name": "WPObject::wpDrop",
+"proc": "fdr_wpDrop"
+},
+{
+"name": "WPObject::wpDragOver",
+"proc": "fdr_wpDragOver"
+},
+{
+"name": "WPObject::wpMenuItemHelpSelected",
+"proc": "fdr_wpMenuItemHelpSelected"
+},
+{
+"name": "WPFileSystem::wpAddFile3Page",
+"proc": "fdr_wpAddFile3Page"
+},
+{
+"name": "WPFileSystem::wpAddFile2Page",
+"proc": "fdr_wpAddFile2Page"
+},
+{
+"name": "WPObject::wpFormatDragItem",
+"proc": "fdr_wpFormatDragItem"
+},
+{
+"name": "WPObject::wpRender",
+"proc": "fdr_wpRender"
+},
+{
+"name": "WPFileSystem::wpRefresh",
+"proc": "fdr_wpRefresh"
+},
+{
+"name": "WPObject::wpQueryDefaultView",
+"proc": "fdr_wpQueryDefaultView"
+},
+{
+"name": "WPObject::wpRenderComplete",
+"proc": "fdr_wpRenderComplete"
+},
+{
+"name": "WPFileSystem::wpAddFileMenuPage",
+"proc": "fdr_wpAddFileMenuPage"
+},
+{
+"name": "WPFileSystem::wpRemoveFileAttrs",
+"proc": "fdr_wpRemoveFileAttrs"
+},
+{
+"name": "WPObject::wpQueryDefaultHelp",
+"proc": "fdr_wpQueryDefaultHelp"
+},
+{
+"name": "WPObject::wpObjectReady",
+"proc": "fdr_wpObjectReady"
+},
+{
+"name": "WPObject::wpAddObjectWindowPage",
+"proc": "fdr_wpAddObjectWindowPage"
+},
+{
+"name": "WPObject::wpModifyMenu",
+"proc": "fdr_wpModifyMenu"
+},
+{
+"name": "WPObject::wpFilterMenu",
+"proc": "fdr_wpFilterMenu"
+},
+{
+"name": "WPObject::wpDisplayMenu",
+"proc": "fdr_wpDisplayMenu"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "fdr_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "fdr_somDestruct"
+},
+{
+"name": "WPObject::wpSetIconData",
+"proc": "fdr_wpSetIconData"
+},
+{
+"name": "WPObject::wpMakeObject",
+"proc": "fdr_wpMakeObject"
+}
+],
+"pmt": [
+{
+"off": 280,
+"proc": "fdr_wpQueryTrueFldrFont"
+},
+{
+"off": 284,
+"proc": "fdr_wpRemoveFldrFont"
+},
+{
+"off": 288,
+"proc": "fdr_wpRemoveAllFldrInstanceFonts"
+},
+{
+"off": 292,
+"proc": "fdr_wpRefreshNotebookPage"
+}
+]
+},
+"M_WPFolder": {
+"name": "M_WPFolder",
+"sci": "0x13f753f8",
+"cds": "0x13f75298",
+"ccds": "0x13f752b4",
+"calls": [
+"M_WPFileSystemNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 6,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPFileSystem"
+],
+"numClassDataEntries": 6,
+"cif": 0,
+"smt": [
+{
+"off": 20,
+"name": "wpclsQueryIconDataN",
+"desc": "::M_WPFolder::wpclsQueryIconDataN",
+"proc": "fdrM_wpclsQueryIconDataN",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpclsQueryIconN",
+"desc": "::M_WPFolder::wpclsQueryIconN",
+"proc": "fdrM_wpclsQueryIconN",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpclsQueryOpenFolders",
+"desc": "::M_WPFolder::wpclsQueryOpenFolders",
+"proc": "fdrM_wpclsQueryOpenFolders",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpclsGetNotifySem",
+"desc": "::M_WPFolder::wpclsGetNotifySem",
+"proc": "fdrM_wpclsGetNotifySem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpclsReleaseNotifySem",
+"desc": "::M_WPFolder::wpclsReleaseNotifySem",
+"proc": "fdrM_wpclsReleaseNotifySem",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpclsQueryContainerFont",
+"desc": "::M_WPFolder::wpclsQueryContainerFont",
+"proc": "fdrM_wpclsQueryContainerFont",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "M_WPObject::wpclsInitData",
+"proc": "fdrM_wpclsInitData"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultView",
+"proc": "fdrM_wpclsQueryDefaultView"
+},
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "fdrM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryIconData",
+"proc": "fdrM_wpclsQueryIconData"
+},
+{
+"name": "M_WPObject::wpclsQueryStyle",
+"proc": "fdrM_wpclsQueryStyle"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultHelp",
+"proc": "fdrM_wpclsQueryDefaultHelp"
+},
+{
+"name": "M_WPObject::wpclsQuerySettingsPageSize",
+"proc": "fdrM_wpclsQuerySettingsPageSize"
+},
+{
+"name": "M_WPObject::wpclsQueryMaxAnimationIcons",
+"proc": "fdrM_wpclsQueryMaxAnimationIcons"
+}
+],
+"pmt": []
+},
+"WPDataFile": {
+"name": "WPDataFile",
+"sci": "0x13f71be0",
+"cds": "0x13f715f0",
+"ccds": "0x13f71668",
+"calls": [
+"WPFileSystemNewClass",
+"M_WPDataFileNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 20,
+"maxMethods": 29,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPDataFile",
+"parents": [
+"WPFileSystem"
+],
+"numClassDataEntries": 30,
+"cif": 0,
+"smt": [
+{
+"off": 60,
+"name": "RepParent_wpOpen",
+"desc": "::WPDataFile::RepParent_wpOpen",
+"proc": "df_RepParent_wpOpen",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 52,
+"name": "wpAddBecomePage",
+"desc": "::WPDataFile::wpAddBecomePage",
+"proc": "df_wpAddBecomePage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpAddFileTypePage",
+"desc": "::WPDataFile::wpAddFileTypePage",
+"proc": "df_wpAddFileTypePage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpPrintMetaFile",
+"desc": "::WPDataFile::wpPrintMetaFile",
+"proc": "df_wpPrintMetaFile",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpPrintPifFile",
+"desc": "::WPDataFile::wpPrintPifFile",
+"proc": "df_wpPrintPifFile",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpPrintPrinterSpecificFile",
+"desc": "::WPDataFile::wpPrintPrinterSpecificFile",
+"proc": "df_wpPrintPrinterSpecificFile",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpPrintUnknownFile",
+"desc": "::WPDataFile::wpPrintUnknownFile",
+"proc": "df_wpPrintUnknownFile",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpQueryAssociatedProgram",
+"desc": "::WPDataFile::wpQueryAssociatedProgram",
+"proc": "df_wpQueryAssociatedProgram",
+"redisp": 4294967295,
+"apply": 334960380,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 28,
+"name": "wpSetAssociatedFileIcon",
+"desc": "::WPDataFile::wpSetAssociatedFileIcon",
+"proc": "df_wpSetAssociatedFileIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpQueryAssociatedFileIcon",
+"desc": "::WPDataFile::wpQueryAssociatedFileIcon",
+"proc": "df_wpQueryAssociatedFileIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpSetContentsFromPointer",
+"desc": "::WPDataFile::wpSetContentsFromPointer",
+"proc": "df_wpSetContentsFromPointer",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpQueryPointerFromContents",
+"desc": "::WPDataFile::wpQueryPointerFromContents",
+"proc": "df_wpQueryPointerFromContents",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpSetContentsFromHandle",
+"desc": "::WPDataFile::wpSetContentsFromHandle",
+"proc": "df_wpSetContentsFromHandle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 48,
+"name": "wpQueryHandleFromContents",
+"desc": "::WPDataFile::wpQueryHandleFromContents",
+"proc": "df_wpQueryHandleFromContents",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 56,
+"name": "wpRenderFromClipboard",
+"desc": "::WPDataFile::wpRenderFromClipboard",
+"proc": "df_wpRenderFromClipboard",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 72,
+"name": "SetUpdateIndicator",
+"desc": "::WPDataFile::SetUpdateIndicator",
+"proc": "df_SetUpdateIndicator",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 76,
+"name": "QueryUpdateIndicator",
+"desc": "::WPDataFile::QueryUpdateIndicator",
+"proc": "df_QueryUpdateIndicator",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 88,
+"name": "SetNeedSave",
+"desc": "::WPDataFile::SetNeedSave",
+"proc": "df_SetNeedSave",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 92,
+"name": "QueryNeedSave",
+"desc": "::WPDataFile::QueryNeedSave",
+"proc": "df_QueryNeedSave",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 64,
+"name": "wpSetDefaultBidiSettings",
+"desc": "::WPDataFile::wpSetDefaultBidiSettings",
+"proc": "df_wpSetDefaultBidiSettings",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 68,
+"name": "wpQueryDefaultBidiSettings",
+"desc": "::WPDataFile::wpQueryDefaultBidiSettings",
+"proc": "df_wpQueryDefaultBidiSettings",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 80,
+"name": "wpSetBidiValues",
+"desc": "::WPDataFile::wpSetBidiValues",
+"proc": "df_wpSetBidiValues",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 84,
+"name": "wpQueryBidiValues",
+"desc": "::WPDataFile::wpQueryBidiValues",
+"proc": "df_wpQueryBidiValues",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 96,
+"name": "wpInsertBidiPage",
+"desc": "::WPDataFile::wpInsertBidiPage",
+"proc": "df_wpInsertBidiPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 100,
+"name": "wpSaveBidiState",
+"desc": "::WPDataFile::wpSaveBidiState",
+"proc": "df_wpSaveBidiState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 104,
+"name": "wpRestoreBidiState",
+"desc": "::WPDataFile::wpRestoreBidiState",
+"proc": "df_wpRestoreBidiState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 112,
+"name": "wpInitBidiData",
+"desc": "::WPDataFile::wpInitBidiData",
+"proc": "df_wpInitBidiData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 108,
+"name": "wpBidiSetup",
+"desc": "::WPDataFile::wpBidiSetup",
+"proc": "df_wpBidiSetup",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 116,
+"name": "wpSettingsNotebook",
+"desc": "::WPDataFile::wpSettingsNotebook",
+"proc": "df_wpSettingsNotebook",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "WPObject::wpDragOver",
+"proc": "df_wpDragOver"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "df_wpRestoreState"
+},
+{
+"name": "WPObject::wpSetDefaultView",
+"proc": "df_wpSetDefaultView"
+},
+{
+"name": "WPFileSystem::wpSetRealName",
+"proc": "df_wpSetRealName"
+},
+{
+"name": "WPFileSystem::wpSetType",
+"proc": "df_wpSetType"
+},
+{
+"name": "WPObject::wpAddSettingsPages",
+"proc": "df_wpAddSettingsPages"
+},
+{
+"name": "WPObject::wpAddObjectWindowPage",
+"proc": "df_wpAddObjectWindowPage"
+},
+{
+"name": "WPObject::wpOpen",
+"proc": "df_wpOpen"
+},
+{
+"name": "WPObject::wpPrintObject",
+"proc": "df_wpPrintObject"
+},
+{
+"name": "WPObject::wpModifyMenu",
+"proc": "df_wpModifyMenu"
+},
+{
+"name": "WPObject::wpMenuItemSelected",
+"proc": "df_wpMenuItemSelected"
+},
+{
+"name": "WPObject::wpMenuItemHelpSelected",
+"proc": "df_wpMenuItemHelpSelected"
+},
+{
+"name": "WPObject::wpQueryDefaultHelp",
+"proc": "df_wpQueryDefaultHelp"
+},
+{
+"name": "WPObject::wpFormatDragItem",
+"proc": "df_wpFormatDragItem"
+},
+{
+"name": "WPFileSystem::wpConfirmRenameFileWithExt",
+"proc": "df_wpConfirmRenameFileWithExt"
+},
+{
+"name": "WPObject::wpQueryIcon",
+"proc": "df_wpQueryIcon"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "df_wpSaveState"
+},
+{
+"name": "WPObject::wpInitData",
+"proc": "df_wpInitData"
+},
+{
+"name": "WPObject::wpSetup",
+"proc": "df_wpSetup"
+},
+{
+"name": "WPObject::wpRender",
+"proc": "df_wpRender"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "df_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "df_somDestruct"
+},
+{
+"name": "WPObject::wpMakeObject",
+"proc": "df_wpMakeObject"
+},
+{
+"name": "WPFileSystem::wpConfirmKeepAssoc",
+"proc": "df_wpConfirmKeepAssoc"
+}
+],
+"pmt": []
+},
+"M_WPDataFile": {
+"name": "M_WPDataFile",
+"sci": "0x13f71d74",
+"cds": "0x13f71cc4",
+"ccds": "0x13f71cd0",
+"calls": [
+"M_WPFileSystemNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 2,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPFileSystem"
+],
+"numClassDataEntries": 2,
+"cif": 0,
+"smt": [
+{
+"off": 4,
+"name": "wpclsAddClipboardAssoc",
+"desc": "::M_WPDataFile::wpclsAddClipboardAssoc",
+"proc": "dfM_wpclsAddClipboardAssoc",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpclsEnumClipboardClasses",
+"desc": "::M_WPDataFile::wpclsEnumClipboardClasses",
+"proc": "dfM_wpclsEnumClipboardClasses",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "dfM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryIconData",
+"proc": "dfM_wpclsQueryIconData"
+},
+{
+"name": "M_WPObject::wpclsQueryStyle",
+"proc": "dfM_wpclsQueryStyle"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultView",
+"proc": "dfM_wpclsQueryDefaultView"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultHelp",
+"proc": "dfM_wpclsQueryDefaultHelp"
+},
+{
+"name": "M_WPObject::wpclsInitData",
+"proc": "dfM_wpclsInitData"
+},
+{
+"name": "M_WPObject::wpclsUnInitData",
+"proc": "dfM_wpclsUnInitData"
+},
+{
+"name": "M_WPObject::wpclsQuerySettingsPageSize",
+"proc": "dfM_wpclsQuerySettingsPageSize"
+}
+],
+"pmt": []
+},
+"WPTransient": {
+"name": "WPTransient",
+"sci": "0x13f7dec0",
+"cds": "0x13f7de5c",
+"ccds": "0x13f7de60",
+"calls": [
+"WPObjectNewClass",
+"M_WPTransientNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 16,
+"maxMethods": 0,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPTransient",
+"parents": [
+"WPObject"
+],
+"numClassDataEntries": 0,
+"cif": 0,
+"smt": [],
+"omt": [
+{
+"name": "WPObject::wpQueryHandle",
+"proc": "trn_wpQueryHandle"
+},
+{
+"name": "WPObject::wpCopyObject",
+"proc": "trn_wpCopyObject"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "trn_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "trn_somDestruct"
+},
+{
+"name": "WPObject::wpQueryIcon",
+"proc": "trn_wpQueryIcon"
+},
+{
+"name": "WPObject::wpSaveImmediate",
+"proc": "trn_wpSaveImmediate"
+},
+{
+"name": "WPObject::wpIdentify",
+"proc": "trn_wpIdentify"
+},
+{
+"name": "WPObject::wpMakeObject",
+"proc": "trn_wpMakeObject"
+},
+{
+"name": "WPObject::wpDestroyObject",
+"proc": "trn_wpDestroyObject"
+}
+],
+"pmt": []
+},
+"M_WPTransient": {
+"name": "M_WPTransient",
+"sci": "0x13f7dfd4",
+"cds": "0x13f7df84",
+"ccds": "0x13f7df90",
+"calls": [
+"M_WPObjectNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 4,
+"maxMethods": 2,
+"align": 4,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPObject"
+],
+"numClassDataEntries": 2,
+"cif": 0,
+"smt": [],
+"omt": [
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "trnM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryStyle",
+"proc": "trnM_wpclsQueryStyle"
+},
+{
+"name": "M_WPObject::wpclsFindObjects",
+"proc": "trnM_wpclsFindObjects"
+},
+{
+"name": "M_WPObject::wpclsObjectFromHandle",
+"proc": "trnM_wpclsObjectFromHandle"
+}
+],
+"pmt": [
+{
+"off": 4,
+"proc": "trnM_wpclsLockTransientList"
+},
+{
+"off": 8,
+"proc": "trnM_wpclsUnlockTransientList"
+}
+]
+},
+"WPDesktop": {
+"name": "WPDesktop",
+"sci": "0x13f72310",
+"cds": "0x13f71efc",
+"ccds": "0x13f71f50",
+"calls": [
+"WPFolderNewClass",
+"M_WPDesktopNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 12,
+"maxMethods": 20,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPDesktop",
+"parents": [
+"WPFolder"
+],
+"numClassDataEntries": 20,
+"cif": 0,
+"smt": [
+{
+"off": 4,
+"name": "wpIsCurrentDesktop",
+"desc": "::WPDesktop::wpIsCurrentDesktop",
+"proc": "desk_wpIsCurrentDesktop",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpAddDesktopLockup1Page",
+"desc": "::WPDesktop::wpAddDesktopLockup1Page",
+"proc": "desk_wpAddDesktopLockup1Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpAddDesktopLockup2Page",
+"desc": "::WPDesktop::wpAddDesktopLockup2Page",
+"proc": "desk_wpAddDesktopLockup2Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpAddDesktopLockup3Page",
+"desc": "::WPDesktop::wpAddDesktopLockup3Page",
+"proc": "desk_wpAddDesktopLockup3Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpAddDesktopArcRest1Page",
+"desc": "::WPDesktop::wpAddDesktopArcRest1Page",
+"proc": "desk_wpAddDesktopArcRest1Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpAddDesktopDefDT1Page",
+"desc": "::WPDesktop::wpAddDesktopDefDT1Page",
+"proc": "desk_wpAddDesktopDefDT1Page",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 28,
+"name": "wpQueryDefaultDropOp",
+"desc": "::WPDesktop::wpQueryDefaultDropOp",
+"proc": "desk_wpQueryDefaultDropOp",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpSetDefaultDropOp",
+"desc": "::WPDesktop::wpSetDefaultDropOp",
+"proc": "desk_wpSetDefaultDropOp",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpQueryAutoLockup",
+"desc": "::WPDesktop::wpQueryAutoLockup",
+"proc": "desk_wpQueryAutoLockup",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpSetAutoLockup",
+"desc": "::WPDesktop::wpSetAutoLockup",
+"proc": "desk_wpSetAutoLockup",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpQueryLockupTimeout",
+"desc": "::WPDesktop::wpQueryLockupTimeout",
+"proc": "desk_wpQueryLockupTimeout",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 48,
+"name": "wpSetLockupTimeout",
+"desc": "::WPDesktop::wpSetLockupTimeout",
+"proc": "desk_wpSetLockupTimeout",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 52,
+"name": "wpQueryLockupOnStartup",
+"desc": "::WPDesktop::wpQueryLockupOnStartup",
+"proc": "desk_wpQueryLockupOnStartup",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 56,
+"name": "wpSetLockupOnStartup",
+"desc": "::WPDesktop::wpSetLockupOnStartup",
+"proc": "desk_wpSetLockupOnStartup",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 60,
+"name": "wpQueryLockupFullScreen",
+"desc": "::WPDesktop::wpQueryLockupFullScreen",
+"proc": "desk_wpQueryLockupFullScreen",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 64,
+"name": "wpSetLockupFullScreen",
+"desc": "::WPDesktop::wpSetLockupFullScreen",
+"proc": "desk_wpSetLockupFullScreen",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 68,
+"name": "wpQueryLockupAutoDim",
+"desc": "::WPDesktop::wpQueryLockupAutoDim",
+"proc": "desk_wpQueryLockupAutoDim",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 72,
+"name": "wpSetLockupAutoDim",
+"desc": "::WPDesktop::wpSetLockupAutoDim",
+"proc": "desk_wpSetLockupAutoDim",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 76,
+"name": "wpQueryLockupBackground",
+"desc": "::WPDesktop::wpQueryLockupBackground",
+"proc": "desk_wpQueryLockupBackground",
+"redisp": 4294967295,
+"apply": 334962836,
+"applyType": 0,
+"applyList": 24
+},
+{
+"off": 80,
+"name": "wpSetLockupBackground",
+"desc": "::WPDesktop::wpSetLockupBackground",
+"proc": "desk_wpSetLockupBackground",
+"redisp": 4294967295,
+"apply": 334962876,
+"applyType": 0,
+"applyList": 24
+}
+],
+"omt": [
+{
+"name": "WPObject::wpInitData",
+"proc": "desk_wpInitData"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "desk_wpSaveState"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "desk_wpRestoreState"
+},
+{
+"name": "WPObject::wpMenuItemSelected",
+"proc": "desk_wpMenuItemSelected"
+},
+{
+"name": "WPObject::wpAddSettingsPages",
+"proc": "desk_wpAddSettingsPages"
+},
+{
+"name": "WPObject::wpFilterMenu",
+"proc": "desk_wpFilterMenu"
+},
+{
+"name": "WPObject::wpModifyMenu",
+"proc": "desk_wpModifyMenu"
+},
+{
+"name": "WPObject::wpSetup",
+"proc": "desk_wpSetup"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "desk_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "desk_somDestruct"
+},
+{
+"name": "WPFolder::wpPopulate",
+"proc": "desk_wpPopulate"
+}
+],
+"pmt": []
+},
+"M_WPDesktop": {
+"name": "M_WPDesktop",
+"sci": "0x13f724c0",
+"cds": "0x13f723ec",
+"ccds": "0x13f723fc",
+"calls": [
+"M_WPFolderNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 3,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPFolder"
+],
+"numClassDataEntries": 3,
+"cif": 0,
+"smt": [
+{
+"off": 4,
+"name": "wpclsQueryObjectFromFrame",
+"desc": "::M_WPDesktop::wpclsQueryObjectFromFrame",
+"proc": "deskM_wpclsQueryObjectFromFrame",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpclsQueryActiveDesktopHWND",
+"desc": "::M_WPDesktop::wpclsQueryActiveDesktopHWND",
+"proc": "deskM_wpclsQueryActiveDesktopHWND",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpclsQueryActiveDesktop",
+"desc": "::M_WPDesktop::wpclsQueryActiveDesktop",
+"proc": "deskM_wpclsQueryActiveDesktop",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "M_WPObject::wpclsQueryDefaultView",
+"proc": "deskM_wpclsQueryDefaultView"
+},
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "deskM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryIconData",
+"proc": "deskM_wpclsQueryIconData"
+},
+{
+"name": "M_WPFolder::wpclsQueryIconDataN",
+"proc": "deskM_wpclsQueryIconDataN"
+},
+{
+"name": "M_WPObject::wpclsQueryStyle",
+"proc": "deskM_wpclsQueryStyle"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultHelp",
+"proc": "deskM_wpclsQueryDefaultHelp"
+},
+{
+"name": "M_WPObject::wpclsQuerySettingsPageSize",
+"proc": "deskM_wpclsQuerySettingsPageSize"
+}
+],
+"pmt": []
+},
+"WPClassManager": {
+"name": "WPClassManager",
+"sci": "0x13f709c0",
+"cds": "0x13f708b0",
+"ccds": "0x13f708c4",
+"calls": [
+"som#20",
+"WPClassManagerNewClass+0xa"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 4,
+"maxMethods": 4,
+"align": 4,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"SOMClassMgr"
+],
+"numClassDataEntries": 4,
+"cif": 0,
+"smt": [
+{
+"off": 12,
+"name": "wpReplacementIsInEffect",
+"desc": "::WPClassManager::wpReplacementIsInEffect",
+"proc": "wpcm_wpReplacementIsInEffect",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpModuleForClass",
+"desc": "::WPClassManager::wpModuleForClass",
+"proc": "wpcm_wpModuleForClass",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpGetTrueClassName",
+"desc": "::WPClassManager::wpGetTrueClassName",
+"proc": "wpcm_wpGetTrueClassName",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpQueryClassReplaceList",
+"desc": "::WPClassManager::wpQueryClassReplaceList",
+"proc": "wpcm_wpQueryClassReplaceList",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "SOMObject::somInit",
+"proc": "wpcm_somInit"
+},
+{
+"name": "SOMClassMgr::somFindClass",
+"proc": "wpcm_somFindClass"
+},
+{
+"name": "SOMClassMgr::somFindClsInFile",
+"proc": "wpcm_somFindClsInFile"
+},
+{
+"name": "SOMClassMgr::somLocateClassFile",
+"proc": "wpcm_somLocateClassFile"
+},
+{
+"name": "SOMClassMgr::somMergeInto",
+"proc": "wpcm_somMergeInto"
+},
+{
+"name": "SOMClassMgr::somRegisterClass",
+"proc": "wpcm_somRegisterClass"
+},
+{
+"name": "SOMClassMgr::somUnregisterClass",
+"proc": "wpcm_somUnregisterClass"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "wpcm_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "wpcm_somDestruct"
+}
+],
+"pmt": []
+},
+"WPDisk": {
+"name": "WPDisk",
+"sci": "0x13f729b4",
+"cds": "0x13f72714",
+"ccds": "0x13f72744",
+"calls": [
+"WPAbstractNewClass",
+"M_WPDiskNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 8,
+"maxMethods": 11,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPDisk",
+"parents": [
+"WPAbstract"
+],
+"numClassDataEntries": 11,
+"cif": 0,
+"smt": [
+{
+"off": 4,
+"name": "wpAddDiskDetailsPage",
+"desc": "::WPDisk::wpAddDiskDetailsPage",
+"proc": "dsk_wpAddDiskDetailsPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpQueryDriveLockStatus",
+"desc": "::WPDisk::wpQueryDriveLockStatus",
+"proc": "dsk_wpQueryDriveLockStatus",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpEjectDisk",
+"desc": "::WPDisk::wpEjectDisk",
+"proc": "dsk_wpEjectDisk",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpLockDrive",
+"desc": "::WPDisk::wpLockDrive",
+"proc": "dsk_wpLockDrive",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpQueryLogicalDrive",
+"desc": "::WPDisk::wpQueryLogicalDrive",
+"proc": "dsk_wpQueryLogicalDrive",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpQueryRootFolder",
+"desc": "::WPDisk::wpQueryRootFolder",
+"proc": "dsk_wpQueryRootFolder",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpSetCorrectDiskIcon",
+"desc": "::WPDisk::wpSetCorrectDiskIcon",
+"proc": "dsk_wpSetCorrectDiskIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpSetLogicalDrive",
+"desc": "::WPDisk::wpSetLogicalDrive",
+"proc": "dsk_wpSetLogicalDrive",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpSetDiskInfo",
+"desc": "::WPDisk::wpSetDiskInfo",
+"proc": "dsk_wpSetDiskInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 28,
+"name": "wpTouchDisk",
+"desc": "::WPDisk::wpTouchDisk",
+"proc": "dsk_wpTouchDisk",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpQueryDiskInfo",
+"desc": "::WPDisk::wpQueryDiskInfo",
+"proc": "dsk_wpQueryDiskInfo",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "WPObject::wpSetup",
+"proc": "dsk_wpSetup"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "dsk_wpSaveState"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "dsk_wpRestoreState"
+},
+{
+"name": "WPObject::wpAddSettingsPages",
+"proc": "dsk_wpAddSettingsPages"
+},
+{
+"name": "WPObject::wpMenuItemHelpSelected",
+"proc": "dsk_wpMenuItemHelpSelected"
+},
+{
+"name": "WPObject::wpMenuItemSelected",
+"proc": "dsk_wpMenuItemSelected"
+},
+{
+"name": "WPObject::wpSetTitle",
+"proc": "dsk_wpSetTitle"
+},
+{
+"name": "WPObject::wpOpen",
+"proc": "dsk_wpOpen"
+},
+{
+"name": "WPObject::wpQueryDefaultHelp",
+"proc": "dsk_wpQueryDefaultHelp"
+},
+{
+"name": "WPObject::wpDragOver",
+"proc": "dsk_wpDragOver"
+},
+{
+"name": "WPObject::wpDrop",
+"proc": "dsk_wpDrop"
+},
+{
+"name": "WPObject::wpQueryIconData",
+"proc": "dsk_wpQueryIconData"
+},
+{
+"name": "WPObject::wpSetIconData",
+"proc": "dsk_wpSetIconData"
+},
+{
+"name": "WPObject::wpViewObject",
+"proc": "dsk_wpViewObject"
+},
+{
+"name": "WPObject::wpUnInitData",
+"proc": "dsk_wpUnInitData"
+},
+{
+"name": "WPObject::wpFilterMenu",
+"proc": "dsk_wpFilterMenu"
+},
+{
+"name": "WPObject::wpModifyMenu",
+"proc": "dsk_wpModifyMenu"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "dsk_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "dsk_somDestruct"
+},
+{
+"name": "WPObject::wpAddObjectWindowPage",
+"proc": "dsk_wpAddObjectWindowPage"
+}
+],
+"pmt": []
+},
+"M_WPDisk": {
+"name": "M_WPDisk",
+"sci": "0x13f72ad0",
+"cds": "0x13f72a88",
+"ccds": "0x13f72a8c",
+"calls": [
+"M_WPAbstractNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 0,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPAbstract"
+],
+"numClassDataEntries": 0,
+"cif": 0,
+"smt": [],
+"omt": [
+{
+"name": "M_WPObject::wpclsQueryDefaultHelp",
+"proc": "dskM_wpclsQueryDefaultHelp"
+},
+{
+"name": "M_WPObject::wpclsQueryIconData",
+"proc": "dskM_wpclsQueryIconData"
+},
+{
+"name": "M_WPObject::wpclsQueryStyle",
+"proc": "dskM_wpclsQueryStyle"
+},
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "dskM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultView",
+"proc": "dskM_wpclsQueryDefaultView"
+},
+{
+"name": "M_WPObject::wpclsQuerySettingsPageSize",
+"proc": "dskM_wpclsQuerySettingsPageSize"
+}
+],
+"pmt": []
+},
+"WPProgram": {
+"name": "WPProgram",
+"sci": "0x13f7b580",
+"cds": "0x13f7ae48",
+"ccds": "0x13f7aef0",
+"calls": [
+"WPAbstractNewClass",
+"M_WPProgramNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 658,
+"maxMethods": 39,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPProgram",
+"parents": [
+"WPAbstract"
+],
+"numClassDataEntries": 41,
+"cif": 0,
+"smt": [
+{
+"off": 28,
+"name": "wpAddProgramAssociationPage",
+"desc": "::WPProgram::wpAddProgramAssociationPage",
+"proc": "ref_wpAddProgramAssociationPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpQueryProgDetails",
+"desc": "::WPProgram::wpQueryProgDetails",
+"proc": "ref_wpQueryProgDetails",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 16,
+"name": "wpSetProgDetails",
+"desc": "::WPProgram::wpSetProgDetails",
+"proc": "ref_wpSetProgDetails",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpAddProgramPage",
+"desc": "::WPProgram::wpAddProgramPage",
+"proc": "ref_wpAddProgramPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "wpAddProgramSessionPage",
+"desc": "::WPProgram::wpAddProgramSessionPage",
+"proc": "ref_wpAddProgramSessionPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 36,
+"name": "wpQueryAssociationFilter",
+"desc": "::WPProgram::wpQueryAssociationFilter",
+"proc": "ref_wpQueryAssociationFilter",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 40,
+"name": "wpQueryAssociationType",
+"desc": "::WPProgram::wpQueryAssociationType",
+"proc": "ref_wpQueryAssociationType",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 44,
+"name": "wpSetAssociationFilter",
+"desc": "::WPProgram::wpSetAssociationFilter",
+"proc": "ref_wpSetAssociationFilter",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 48,
+"name": "wpSetAssociationType",
+"desc": "::WPProgram::wpSetAssociationType",
+"proc": "ref_wpSetAssociationType",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 52,
+"name": "wpQueryProgramAssociations",
+"desc": "::WPProgram::wpQueryProgramAssociations",
+"proc": "ref_wpQueryProgramAssociations",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 56,
+"name": "wpSetProgramAssociations",
+"desc": "::WPProgram::wpSetProgramAssociations",
+"proc": "ref_wpSetProgramAssociations",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 60,
+"name": "wpQueryWarnBeforeStart",
+"desc": "::WPProgram::wpQueryWarnBeforeStart",
+"proc": "ref_wpQueryWarnBeforeStart",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 64,
+"name": "wpSetWarnBeforeStart",
+"desc": "::WPProgram::wpSetWarnBeforeStart",
+"proc": "ref_wpSetWarnBeforeStart",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 32,
+"name": "wpSetProgIcon",
+"desc": "::WPProgram::wpSetProgIcon",
+"proc": "ref_wpSetProgIcon",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 72,
+"name": "wpSetDefaultBidiSettings",
+"desc": "::WPProgram::wpSetDefaultBidiSettings",
+"proc": "ref_wpSetDefaultBidiSettings",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 140,
+"name": "wpSetDefaultCpSettings",
+"desc": "::WPProgram::wpSetDefaultCpSettings",
+"proc": "ref_wpSetDefaultCpSettings",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 76,
+"name": "wpQueryDefaultBidiSettings",
+"desc": "::WPProgram::wpQueryDefaultBidiSettings",
+"proc": "ref_wpQueryDefaultBidiSettings",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 88,
+"name": "wpSetBidiValues",
+"desc": "::WPProgram::wpSetBidiValues",
+"proc": "ref_wpSetBidiValues",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 144,
+"name": "wpSetCpValues",
+"desc": "::WPProgram::wpSetCpValues",
+"proc": "ref_wpSetCpValues",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 92,
+"name": "wpQueryBidiValues",
+"desc": "::WPProgram::wpQueryBidiValues",
+"proc": "ref_wpQueryBidiValues",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 148,
+"name": "wpQueryCpValues",
+"desc": "::WPProgram::wpQueryCpValues",
+"proc": "ref_wpQueryCpValues",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 108,
+"name": "wpInsertBidiPage",
+"desc": "::WPProgram::wpInsertBidiPage",
+"proc": "ref_wpInsertBidiPage",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 112,
+"name": "wpSaveBidiState",
+"desc": "::WPProgram::wpSaveBidiState",
+"proc": "ref_wpSaveBidiState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 152,
+"name": "wpSaveCpState",
+"desc": "::WPProgram::wpSaveCpState",
+"proc": "ref_wpSaveCpState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 116,
+"name": "wpRestoreBidiState",
+"desc": "::WPProgram::wpRestoreBidiState",
+"proc": "ref_wpRestoreBidiState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 156,
+"name": "wpRestoreCpState",
+"desc": "::WPProgram::wpRestoreCpState",
+"proc": "ref_wpRestoreCpState",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 164,
+"name": "wpUndoCpSettings",
+"desc": "::WPProgram::wpUndoCpSettings",
+"proc": "ref_wpUndoCpSettings",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 124,
+"name": "wpInitBidiData",
+"desc": "::WPProgram::wpInitBidiData",
+"proc": "ref_wpInitBidiData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 160,
+"name": "wpInitCpData",
+"desc": "::WPProgram::wpInitCpData",
+"proc": "ref_wpInitCpData",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 120,
+"name": "wpBidiSetup",
+"desc": "::WPProgram::wpBidiSetup",
+"proc": "ref_wpBidiSetup",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 136,
+"name": "wpSettingsNotebook",
+"desc": "::WPProgram::wpSettingsNotebook",
+"proc": "ref_wpSettingsNotebook",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 80,
+"name": "SetUpdateIndicator",
+"desc": "::WPProgram::SetUpdateIndicator",
+"proc": "ref_SetUpdateIndicator",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 84,
+"name": "QueryUpdateIndicator",
+"desc": "::WPProgram::QueryUpdateIndicator",
+"proc": "ref_QueryUpdateIndicator",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 96,
+"name": "SetNeedSave",
+"desc": "::WPProgram::SetNeedSave",
+"proc": "ref_SetNeedSave",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 100,
+"name": "QueryNeedSave",
+"desc": "::WPProgram::QueryNeedSave",
+"proc": "ref_QueryNeedSave",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 24,
+"name": "wpQueryHPROGRAM",
+"desc": "::WPProgram::wpQueryHPROGRAM",
+"proc": "ref_wpQueryHPROGRAM",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 20,
+"name": "wpSetHPROGRAM",
+"desc": "::WPProgram::wpSetHPROGRAM",
+"proc": "ref_wpSetHPROGRAM",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 68,
+"name": "RepParent_wpOpen",
+"desc": "::WPProgram::RepParent_wpOpen",
+"proc": "ref_RepParent_wpOpen",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 104,
+"name": "RepParent_wpDrop",
+"desc": "::WPProgram::RepParent_wpDrop",
+"proc": "ref_RepParent_wpDrop",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "WPObject::wpQueryDefaultHelp",
+"proc": "ref_wpQueryDefaultHelp"
+},
+{
+"name": "WPObject::wpInitData",
+"proc": "ref_wpInitData"
+},
+{
+"name": "WPObject::wpSetup",
+"proc": "ref_wpSetup"
+},
+{
+"name": "WPObject::wpUnInitData",
+"proc": "ref_wpUnInitData"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "ref_wpSaveState"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "ref_wpRestoreState"
+},
+{
+"name": "WPObject::wpAddSettingsPages",
+"proc": "ref_wpAddSettingsPages"
+},
+{
+"name": "WPObject::wpOpen",
+"proc": "ref_wpOpen"
+},
+{
+"name": "WPObject::wpMenuItemSelected",
+"proc": "ref_wpMenuItemSelected"
+},
+{
+"name": "WPObject::wpMenuItemHelpSelected",
+"proc": "ref_wpMenuItemHelpSelected"
+},
+{
+"name": "WPObject::wpCreateFromTemplate",
+"proc": "ref_wpCreateFromTemplate"
+},
+{
+"name": "WPObject::wpCreateAnother",
+"proc": "ref_wpCreateAnother"
+},
+{
+"name": "WPObject::wpQueryIconData",
+"proc": "ref_wpQueryIconData"
+},
+{
+"name": "WPObject::wpSetIconData",
+"proc": "ref_wpSetIconData"
+},
+{
+"name": "WPObject::wpQueryIcon",
+"proc": "ref_wpQueryIcon"
+},
+{
+"name": "WPObject::wpMoveObject",
+"proc": "ref_wpMoveObject"
+},
+{
+"name": "WPObject::wpCopyObject",
+"proc": "ref_wpCopyObject"
+},
+{
+"name": "WPObject::wpDragOver",
+"proc": "ref_wpDragOver"
+},
+{
+"name": "WPObject::wpDrop",
+"proc": "ref_wpDrop"
+},
+{
+"name": "WPObject::wpCnrInsertObject",
+"proc": "ref_wpCnrInsertObject"
+},
+{
+"name": "WPObject::wpSetTitle",
+"proc": "ref_wpSetTitle"
+},
+{
+"name": "WPObject::wpModifyMenu",
+"proc": "ref_wpModifyMenu"
+},
+{
+"name": "WPObject::wpFilterMenu",
+"proc": "ref_wpFilterMenu"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "ref_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "ref_somDestruct"
+},
+{
+"name": "WPObject::wpDestroyObject",
+"proc": "ref_wpDestroyObject"
+}
+],
+"pmt": []
+},
+"M_WPProgram": {
+"name": "M_WPProgram",
+"sci": "0x13f7b6cc",
+"cds": "0x13f7b66c",
+"ccds": "0x13f7b670",
+"calls": [
+"M_WPAbstractNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 0,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPAbstract"
+],
+"numClassDataEntries": 0,
+"cif": 0,
+"smt": [],
+"omt": [
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "refM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryIconData",
+"proc": "refM_wpclsQueryIconData"
+},
+{
+"name": "M_WPObject::wpclsQueryStyle",
+"proc": "refM_wpclsQueryStyle"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultHelp",
+"proc": "refM_wpclsQueryDefaultHelp"
+},
+{
+"name": "M_WPObject::wpclsQueryDefaultView",
+"proc": "refM_wpclsQueryDefaultView"
+},
+{
+"name": "M_WPObject::wpclsCreateDefaultTemplates",
+"proc": "refM_wpclsCreateDefaultTemplates"
+},
+{
+"name": "M_WPObject::wpclsQuerySettingsPageSize",
+"proc": "refM_wpclsQuerySettingsPageSize"
+},
+{
+"name": "M_WPObject::wpclsInitData",
+"proc": "refM_wpclsInitData"
+},
+{
+"name": "M_WPObject::wpclsUnInitData",
+"proc": "refM_wpclsUnInitData"
+}
+],
+"pmt": []
+},
+"WPShadow": {
+"name": "WPShadow",
+"sci": "0x13f7d2f0",
+"cds": "0x13f7d124",
+"ccds": "0x13f7d138",
+"calls": [
+"WPAbstractNewClass",
+"M_WPShadowNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 24,
+"maxMethods": 4,
+"align": 4,
+"implicitMeta": 0,
+"meta": "M_WPShadow",
+"parents": [
+"WPAbstract"
+],
+"numClassDataEntries": 4,
+"cif": 0,
+"smt": [
+{
+"off": 16,
+"name": "wpQueryShadowedObject",
+"desc": "::WPShadow::wpQueryShadowedObject",
+"proc": "shd_wpQueryShadowedObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 12,
+"name": "wpSetShadowTitle",
+"desc": "::WPShadow::wpSetShadowTitle",
+"proc": "shd_wpSetShadowTitle",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 4,
+"name": "wpSetLinkToObject",
+"desc": "::WPShadow::wpSetLinkToObject",
+"proc": "shd_wpSetLinkToObject",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+},
+{
+"off": 8,
+"name": "withdrawn",
+"desc": "::WPShadow::withdrawn",
+"proc": "shd_withdrawn",
+"redisp": 4294967295,
+"apply": 0,
+"applyType": 0,
+"applyList": 0
+}
+],
+"omt": [
+{
+"name": "WPObject::wpQueryTitle",
+"proc": "shd_wpQueryTitle"
+},
+{
+"name": "WPObject::wpSetup",
+"proc": "shd_wpSetup"
+},
+{
+"name": "WPObject::wpSaveState",
+"proc": "shd_wpSaveState"
+},
+{
+"name": "WPObject::wpRestoreState",
+"proc": "shd_wpRestoreState"
+},
+{
+"name": "WPObject::wpQueryStyle",
+"proc": "shd_wpQueryStyle"
+},
+{
+"name": "WPObject::wpInitData",
+"proc": "shd_wpInitData"
+},
+{
+"name": "WPObject::wpUnInitData",
+"proc": "shd_wpUnInitData"
+},
+{
+"name": "WPObject::wpSetTitle",
+"proc": "shd_wpSetTitle"
+},
+{
+"name": "WPObject::wpFilterPopupMenu",
+"proc": "shd_wpFilterPopupMenu"
+},
+{
+"name": "WPObject::wpModifyPopupMenu",
+"proc": "shd_wpModifyPopupMenu"
+},
+{
+"name": "WPObject::wpMenuItemSelected",
+"proc": "shd_wpMenuItemSelected"
+},
+{
+"name": "WPObject::wpViewObject",
+"proc": "shd_wpViewObject"
+},
+{
+"name": "WPObject::wpMenuItemHelpSelected",
+"proc": "shd_wpMenuItemHelpSelected"
+},
+{
+"name": "WPObject::wpCreateFromTemplate",
+"proc": "shd_wpCreateFromTemplate"
+},
+{
+"name": "WPObject::wpOpen",
+"proc": "shd_wpOpen"
+},
+{
+"name": "WPObject::wpInsertPopupMenuItems",
+"proc": "shd_wpInsertPopupMenuItems"
+},
+{
+"name": "WPObject::wpInsertMenuItems",
+"proc": "shd_wpInsertMenuItems"
+},
+{
+"name": "WPObject::wpCreateShadowObject",
+"proc": "shd_wpCreateShadowObject"
+},
+{
+"name": "WPObject::wpDragOver",
+"proc": "shd_wpDragOver"
+},
+{
+"name": "WPObject::wpDrop",
+"proc": "shd_wpDrop"
+},
+{
+"name": "WPObject::wpQueryDefaultHelp",
+"proc": "shd_wpQueryDefaultHelp"
+},
+{
+"name": "WPObject::wpConfirmDelete",
+"proc": "shd_wpConfirmDelete"
+},
+{
+"name": "WPObject::wpConfirmObjectTitle",
+"proc": "shd_wpConfirmObjectTitle"
+},
+{
+"name": "WPObject::wpPrintObject",
+"proc": "shd_wpPrintObject"
+},
+{
+"name": "WPObject::wpFormatDragItem",
+"proc": "shd_wpFormatDragItem"
+},
+{
+"name": "WPObject::wpDraggedOverObject",
+"proc": "shd_wpDraggedOverObject"
+},
+{
+"name": "WPObject::wpDroppedOnObject",
+"proc": "shd_wpDroppedOnObject"
+},
+{
+"name": "WPObject::wpQueryNameClashOptions",
+"proc": "shd_wpQueryNameClashOptions"
+},
+{
+"name": "WPObject::wpFilterMenu",
+"proc": "shd_wpFilterMenu"
+},
+{
+"name": "WPObject::wpModifyMenu",
+"proc": "shd_wpModifyMenu"
+},
+{
+"name": "SOMObject::somDefaultInit",
+"proc": "shd_somDefaultInit"
+},
+{
+"name": "SOMObject::somDestruct",
+"proc": "shd_somDestruct"
+}
+],
+"pmt": []
+},
+"M_WPShadow": {
+"name": "M_WPShadow",
+"sci": "0x13f7d3dc",
+"cds": "0x13f7d3ac",
+"ccds": "0x13f7d3b0",
+"calls": [
+"M_WPAbstractNewClass"
+],
+"layout": 4,
+"major": 1,
+"minor": 2,
+"instanceSize": 0,
+"maxMethods": 0,
+"align": 0,
+"implicitMeta": 1,
+"meta": null,
+"parents": [
+"M_WPAbstract"
+],
+"numClassDataEntries": 0,
+"cif": 0,
+"smt": [],
+"omt": [
+{
+"name": "M_WPObject::wpclsQueryTitle",
+"proc": "shdM_wpclsQueryTitle"
+},
+{
+"name": "M_WPObject::wpclsQueryStyle",
+"proc": "shdM_wpclsQueryStyle"
+},
+{
+"name": "M_WPObject::wpclsQueryIconData",
+"proc": "shdM_wpclsQueryIconData"
+}
+],
+"pmt": []
+}
+}

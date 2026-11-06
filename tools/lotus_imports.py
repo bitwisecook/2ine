@@ -599,7 +599,7 @@ def render_csv(report: dict) -> str:
         "sourceMarkers",
         "fixupCount",
     ]
-    writer = csv.DictWriter(output, columns)
+    writer = csv.DictWriter(output, columns, lineterminator="\n")
     writer.writeheader()
     for row in report["imports"]:
         item = {key: row.get(key, "") for key in columns}
@@ -663,6 +663,34 @@ def render_markdown(report: dict) -> str:
     return "\n".join(lines)
 
 
+def missing_native_report(report: dict) -> dict:
+    """Exclude original providers and retain optional feature candidates."""
+    return {
+        **report,
+        "imports": [
+            item
+            for item in report["imports"]
+            if item["policyProvided"] and not item["exportPresent"]
+        ],
+    }
+
+
+def portable_policy_report(report: dict) -> dict:
+    """Keep source exports without any recorded portable guest ABI policy."""
+    rows = []
+    for item in report["imports"]:
+        exported = item.get("export") or {}
+        if (
+            item["policyProvided"]
+            and item["exportPresent"]
+            and not exported.get("runtimeSpecial")
+            and not exported.get("abi32Policy")
+            and not exported.get("abi16Policy")
+        ):
+            rows.append(item)
+    return {**report, "imports": rows}
+
+
 def write_report(report: dict, output: Path, inline_references=False) -> dict:
     """Write a small index plus every exact reference in streaming gzip JSONL.
 
@@ -717,6 +745,24 @@ def write_report(report: dict, output: Path, inline_references=False) -> dict:
     )
     (output / "imports.csv").write_text(render_csv(saved), encoding="utf-8", newline="")
     (output / "imports.md").write_text(render_markdown(saved), encoding="utf-8", newline="\n")
+    (output / "missing-native.csv").write_text(
+        render_csv(missing_native_report(saved)), encoding="utf-8", newline=""
+    )
+    (output / "portable-policy-gaps.csv").write_text(
+        render_csv(portable_policy_report(saved)), encoding="utf-8", newline=""
+    )
+    (output / "missing-libraries.json").write_text(
+        json.dumps(
+            {
+                "scope": "Conservative installed Lotus/plugin closure; not all are needed by a launch.",
+                "modules": saved["optionalUnresolvedModules"],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     return saved
 
 

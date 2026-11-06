@@ -3,6 +3,7 @@
 #ifndef TWOINE_PMCTLS_H
 #define TWOINE_PMCTLS_H
 #include "os2libs/pmwin.h"
+#include "os2libs/pmgpi_fonts.h"
 #pragma pack(push, 4)
 typedef struct
 {
@@ -16,6 +17,24 @@ typedef struct
     SHORT x, y, sEAType;
 } LXFILEDLG;
 #pragma pack(pop)
+#pragma pack(push, 2)
+typedef struct LXFONTDLG {
+    ULONG cbSize,hpsScreen,hpsPrinter,pszTitle,pszPreview,pszPtSizeList,pfnDlgProc,pszFamilyname;
+    LONG fxPointSize;
+    ULONG fl,flFlags,flType,flTypeMask,flStyle,flStyleMask;
+    LONG clrFore,clrBack;
+    ULONG ulUser;
+    LONG lReturn,lSRC,lEmHeight,lXHeight,lExternalLeading;
+    ULONG hMod;
+    FATTRS fAttrs;
+    SHORT sNominalPointSize;
+    USHORT usWeight,usWidth;
+    SHORT x,y;
+    USHORT usDlgId,usFamilyBufLen,usReserved;
+} LXFONTDLG;
+#pragma pack(pop)
+OS2EXPORT HWND OS2API WinFontDlg(HWND parent,HWND owner,PVOID data) OS2APIINFO(2);
+OS2EXPORT MRESULT OS2API WinDefFontDlgProc(HWND window,ULONG message,MPARAM first,MPARAM second) OS2APIINFO(3);
 OS2EXPORT HWND OS2API WinFileDlg(HWND parent, HWND owner, PVOID data) OS2APIINFO(4);
 OS2EXPORT MRESULT OS2API WinDefFileDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
     OS2APIINFO(5);

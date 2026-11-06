@@ -1099,3 +1099,613 @@ static uint32 bridge32_GpiSetBitmapBits(uint8 *a)
     free(info);
     return result;
 }
+
+static uint32 bridge32_GpiBeginArea(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiBeginArea((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiBeginPath(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiBeginPath((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiCloseFigure(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiCloseFigure((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiCopyMetaFile(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiCopyMetaFile((ULONG)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiEndArea(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiEndArea((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiEndPath(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiEndPath((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiFillPath(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiFillPath((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_GpiFullArc(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiFullArc((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_GpiPaintRegion(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiPaintRegion((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiPointArc(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiPointArc((HPS)gpi_word(a, 0), (PPOINTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiPtInRegion(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=8;
+    uint32 result=0;
+    if (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 2),(size_t)n2,LX_GUEST_READ,&p2))) goto done;
+    result=(uint32)(uintptr_t)GpiPtInRegion((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1), (PPOINTL)p2.host);
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryDefaultViewMatrix(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=(uint64_t)gpi_word(a, 1)*4;
+    uint32 result=0;
+    if (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 2),(size_t)n2,LX_GUEST_WRITE,&p2))) goto done;
+    /* A zero count still needs a non-NULL buffer, though nothing is stored in it. */
+    result=(uint32)(uintptr_t)GpiQueryDefaultViewMatrix((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), n2 ? (PVOID)p2.host : gpi_word(a, 2) ? (PVOID)a : NULL);
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryGraphicsField(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryGraphicsField((HPS)gpi_word(a, 0), (PRECTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryLineEnd(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiQueryLineEnd((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiQueryLineJoin(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiQueryLineJoin((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiQueryLineWidthGeom(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiQueryLineWidthGeom((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiQueryMetaFileBits(uint8 *a)
+{
+    LxGuestBorrow p3={0};
+    uint64_t n3=(uint64_t)gpi_word(a, 2);
+    uint32 result=0;
+    if (n3>64*1024*1024 || (n3 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 3),(size_t)n3,LX_GUEST_WRITE,&p3))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryMetaFileBits((ULONG)gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2), (PBYTE)p3.host);
+done:
+    lx_execution_release(&p3);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryMetaFileLength(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiQueryMetaFileLength((ULONG)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiQueryModelTransformMatrix(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=(uint64_t)gpi_word(a, 1)*4;
+    uint32 result=0;
+    if (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 2),(size_t)n2,LX_GUEST_WRITE,&p2))) goto done;
+    /* A zero count still needs a non-NULL buffer, though nothing is stored in it. */
+    result=(uint32)(uintptr_t)GpiQueryModelTransformMatrix((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), n2 ? (PVOID)p2.host : gpi_word(a, 2) ? (PVOID)a : NULL);
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryNearestColor(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiQueryNearestColor((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1), (LONG)gpi_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_GpiQueryPS(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryPS((HPS)gpi_word(a, 0), (PSIZEL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryPel(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryPel((HPS)gpi_word(a, 0), (PPOINTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryPickAperturePosition(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryPickAperturePosition((HPS)gpi_word(a, 0), (PPOINTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryPickApertureSize(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryPickApertureSize((HPS)gpi_word(a, 0), (PSIZEL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryRealColors(uint8 *a)
+{
+    LxGuestBorrow p4={0};
+    uint64_t n4=(uint64_t)gpi_word(a, 3)*4;
+    uint32 result=0;
+    if (n4>64*1024*1024 || (n4 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 4),(size_t)n4,LX_GUEST_WRITE,&p4))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryRealColors((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1), (LONG)gpi_word(a, 2), (LONG)gpi_word(a, 3), (PLONG)p4.host);
+done:
+    lx_execution_release(&p4);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryViewingLimits(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryViewingLimits((HPS)gpi_word(a, 0), (PRECTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiRectInRegion(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=16;
+    uint32 result=0;
+    if (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 2),(size_t)n2,LX_GUEST_READ,&p2))) goto done;
+    result=(uint32)(uintptr_t)GpiRectInRegion((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1), (PRECTL)p2.host);
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_GpiResetBoundaryData(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiResetBoundaryData((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiResetPS(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiResetPS((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiSaveMetaFile(uint8 *a)
+{
+    char *s1=lx_execution_copy_string(GLoaderState.execution,gpi_word(a, 1),65536);
+    uint32 result=0;
+    if (!s1) goto done;
+    result=(uint32)(uintptr_t)GpiSaveMetaFile((ULONG)gpi_word(a, 0), s1);
+done:
+    free(s1);
+    return result;
+}
+
+static uint32 bridge32_GpiSetArcParams(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiSetArcParams((HPS)gpi_word(a, 0), (PLONG)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiSetGraphicsField(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiSetGraphicsField((HPS)gpi_word(a, 0), (PRECTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiSetLineEnd(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiSetLineEnd((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiSetLineJoin(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiSetLineJoin((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiSetLineWidthGeom(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiSetLineWidthGeom((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiSetModelTransformMatrix(uint8 *a)
+{
+    LxGuestBorrow p2={0};
+    uint64_t n2=(uint64_t)gpi_word(a, 1)*4;
+    uint32 result=0;
+    if (n2>64*1024*1024 || (n2 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 2),(size_t)n2,LX_GUEST_READ,&p2))) goto done;
+    result=(uint32)(uintptr_t)GpiSetModelTransformMatrix((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), (PVOID)p2.host, (LONG)gpi_word(a, 3));
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_GpiSetPS(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiSetPS((HPS)gpi_word(a, 0), (PSIZEL)p1.host, (ULONG)gpi_word(a, 2));
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiSetPickAperturePosition(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiSetPickAperturePosition((HPS)gpi_word(a, 0), (PPOINTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiSetStopDraw(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiSetStopDraw((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiSetViewingLimits(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiSetViewingLimits((HPS)gpi_word(a, 0), (PRECTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiStrokePath(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiStrokePath((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), (ULONG)gpi_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_GpiPathToRegion(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiPathToRegion((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), (LONG)gpi_word(a, 2));
+    return result;
+}
+
+static uint32 bridge32_GpiTranslate(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=36;
+    LxGuestBorrow p3={0};
+    uint64_t n3=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ|LX_GUEST_WRITE,&p1)) ||
+        n3>64*1024*1024 || (n3 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 3),(size_t)n3,LX_GUEST_READ,&p3))) goto done;
+    result=(uint32)(uintptr_t)GpiTranslate((HPS)gpi_word(a, 0), (PVOID)p1.host, (LONG)gpi_word(a, 2), (PPOINTL)p3.host);
+done:
+    lx_execution_release(&p1);
+    lx_execution_release(&p3);
+    return result;
+}
+
+static uint32 bridge32_GpiScale(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=36;
+    LxGuestBorrow p3={0};
+    uint64_t n3=8;
+    LxGuestBorrow p4={0};
+    uint64_t n4=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ|LX_GUEST_WRITE,&p1)) ||
+        n3>64*1024*1024 || (n3 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 3),(size_t)n3,LX_GUEST_READ,&p3)) ||
+        n4>64*1024*1024 || (n4 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 4),(size_t)n4,LX_GUEST_READ,&p4))) goto done;
+    result=(uint32)(uintptr_t)GpiScale((HPS)gpi_word(a, 0), (PVOID)p1.host, (LONG)gpi_word(a, 2), (PLONG)p3.host, (PPOINTL)p4.host);
+done:
+    lx_execution_release(&p1);
+    lx_execution_release(&p3);
+    lx_execution_release(&p4);
+    return result;
+}
+
+static uint32 bridge32_GpiRotate(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=36;
+    LxGuestBorrow p4={0};
+    uint64_t n4=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ|LX_GUEST_WRITE,&p1)) ||
+        n4>64*1024*1024 || (n4 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 4),(size_t)n4,LX_GUEST_READ,&p4))) goto done;
+    result=(uint32)(uintptr_t)GpiRotate((HPS)gpi_word(a, 0), (PVOID)p1.host, (LONG)gpi_word(a, 2), (LONG)gpi_word(a, 3), (PPOINTL)p4.host);
+done:
+    lx_execution_release(&p1);
+    lx_execution_release(&p4);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryDefViewingLimits(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_WRITE,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryDefViewingLimits((HPS)gpi_word(a, 0), (PRECTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiSetDefViewingLimits(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=16;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiSetDefViewingLimits((HPS)gpi_word(a, 0), (PRECTL)p1.host);
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiDeletePalette(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiDeletePalette((ULONG)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiSelectPalette(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiSelectPalette((HPS)gpi_word(a, 0), (ULONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiQueryPalette(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiQueryPalette((HPS)gpi_word(a, 0));
+    return result;
+}
+
+static uint32 bridge32_GpiQueryAttrs(uint8 *a)
+{
+    LxGuestBorrow p3={0};
+    /* LINEBUNDLE 28, CHARBUNDLE 52, MARKERBUNDLE and AREABUNDLE 24, IMAGEBUNDLE 12. */
+    static const uint8 bundle[6]={0,28,52,24,24,12};
+    uint32 primitive=gpi_word(a, 1);
+    uint64_t n3=gpi_word(a, 2) && gpi_word(a, 3) && primitive<6?bundle[primitive]:0;
+    uint32 result=UINT32_MAX;
+    if (n3 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 3),(size_t)n3,LX_GUEST_READ|LX_GUEST_WRITE,&p3)) goto done;
+    result=(uint32)(uintptr_t)GpiQueryAttrs((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), (ULONG)gpi_word(a, 2), (PVOID)p3.host);
+done:
+    lx_execution_release(&p3);
+    return result;
+}
+
+static uint32 bridge32_GpiSetPickApertureSize(uint8 *a)
+{
+    /* PICKAP_DEFAULT ignores the size pointer, which may be NULL. */
+    LxGuestBorrow p2={0};
+    uint64_t n2=gpi_word(a, 1)==2?8:0;
+    uint32 result=0;
+    if (n2 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 2),(size_t)n2,LX_GUEST_READ,&p2)) goto done;
+    result=(uint32)(uintptr_t)GpiSetPickApertureSize((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1), (PSIZEL)p2.host);
+done:
+    lx_execution_release(&p2);
+    return result;
+}
+
+static uint32 bridge32_GpiCreatePalette(uint8 *a)
+{
+    LxGuestBorrow p4={0};
+    uint64_t n4=(uint64_t)gpi_word(a, 3)*4;
+    uint32 result=0;
+    if (n4>64*1024*1024 || (n4 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 4),(size_t)n4,LX_GUEST_READ,&p4))) goto done;
+    result=(uint32)(uintptr_t)GpiCreatePalette((HAB)gpi_word(a, 0), (ULONG)gpi_word(a, 1), (ULONG)gpi_word(a, 2), (ULONG)gpi_word(a, 3), (PULONG)p4.host);
+done:
+    lx_execution_release(&p4);
+    return result;
+}
+
+static uint32 bridge32_GpiQueryPaletteInfo(uint8 *a)
+{
+    LxGuestBorrow p5={0};
+    uint64_t n5=(uint64_t)gpi_word(a, 4)*4;
+    uint32 result=0;
+    if (n5>64*1024*1024 || (n5 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 5),(size_t)n5,LX_GUEST_WRITE,&p5))) goto done;
+    result=(uint32)(uintptr_t)GpiQueryPaletteInfo((ULONG)gpi_word(a, 0), (HPS)gpi_word(a, 1), (ULONG)gpi_word(a, 2), (ULONG)gpi_word(a, 3), (ULONG)gpi_word(a, 4), (PULONG)p5.host);
+done:
+    lx_execution_release(&p5);
+    return result;
+}
+
+static uint32 bridge32_GpiPartialArc(uint8 *a)
+{
+    LxGuestBorrow p1={0};
+    uint64_t n1=8;
+    uint32 result=0;
+    if (n1>64*1024*1024 || (n1 && !lx_execution_borrow(GLoaderState.execution,gpi_word(a, 1),(size_t)n1,LX_GUEST_READ,&p1))) goto done;
+    result=(uint32)(uintptr_t)GpiPartialArc((HPS)gpi_word(a, 0), (PPOINTL)p1.host, (LONG)gpi_word(a, 2), (LONG)gpi_word(a, 3), (LONG)gpi_word(a, 4));
+done:
+    lx_execution_release(&p1);
+    return result;
+}
+
+static uint32 bridge32_GpiSetCharExtra(uint8 *a)
+{
+
+    uint32 result=0;
+    result=(uint32)(uintptr_t)GpiSetCharExtra((HPS)gpi_word(a, 0), (LONG)gpi_word(a, 1));
+    return result;
+}
+
+static uint32 bridge32_GpiPolygons(uint8 *a)
+{
+    ULONG count=gpi_word(a,1);if(count>65536||!gpi_word(a,2))return 0;
+    LXPOLYGON *polygons=calloc(count?count:1,sizeof*polygons);
+    LxGuestBorrow *borrows=calloc(count?count:1,sizeof*borrows);
+    if(!polygons||!borrows){free(polygons);free(borrows);return 0;}
+    uint32 result=0;size_t total=0;
+    for(ULONG i=0;i<count;i++){
+        uint8 wire[8];uint64_t address=(uint64_t)gpi_word(a,2)+i*8;
+        if(address>UINT32_MAX||!lx_execution_read(GLoaderState.execution,(uint32)address,wire,8))goto done;
+        ULONG points=lx_guest_load_u32(wire),data=lx_guest_load_u32(wire+4);
+        if(points>65536||total+points>65536)goto done;total+=points;
+        if(points&&!lx_execution_borrow(GLoaderState.execution,data,(size_t)points*8,LX_GUEST_READ,&borrows[i]))goto done;
+        polygons[i].count=points;polygons[i].points=borrows[i].host;
+    }
+    result=(uint32)GpiPolygons(gpi_word(a,0),count,polygons,gpi_word(a,3),gpi_word(a,4));
+ done:
+    for(ULONG i=0;i<count;i++)lx_execution_release(&borrows[i]);
+    free(borrows);free(polygons);return result;
+}

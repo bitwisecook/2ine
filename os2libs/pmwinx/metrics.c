@@ -6,6 +6,28 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
+#include "guest/abi.h"
+LONG GetMenuCheckMarkDimensions(void)
+{
+    TRACE_NATIVE("GetMenuCheckMarkDimensions()");
+    if (!open32Presentation())
+        return 0;
+    enum
+    {
+        menu_check_bitmap = 6
+    }; /* SBMP_MENUCHECK */
+    ULONG bitmap = WinGetSysBitmap(HWND_DESKTOP, menu_check_bitmap);
+    if (!bitmap)
+        return 0;
+    uint8 header[12] = {0};
+    BOOL found = GpiQueryBitmapParameters(bitmap, header);
+    GpiDeleteBitmap(bitmap);
+    if (!found)
+        return 0;
+    return (LONG)((ULONG)lx_guest_load_u16(header + 4) | (ULONG)lx_guest_load_u16(header + 6)
+                                                             << 16);
+}
+
 LONG GetSystemMetrics(LONG index)
 {
     TRACE_NATIVE("GetSystemMetrics(%d)", index);

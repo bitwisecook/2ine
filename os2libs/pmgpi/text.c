@@ -31,6 +31,9 @@ LONG GpiCharStringPosAt(HPS handle, PPOINTL start, PRECTL rect, ULONG flags, LON
         }
         LONG step =
             (flags & 2) ? advances[i] : lx_host_font_advance(font, lx_pm_codepoint((uint8)text[i]));
+        /* Character extra adds to font spacing and to an explicit increment vector. */
+        if (ps->gpi.initialized)
+            step += (LONG)((ps->gpi.char_extra + (ps->gpi.char_extra < 0 ? -32768LL : 32768LL)) / 65536);
         if (step < 0)
             step = 0;
         int64_t next = (int64_t)point.x + step;

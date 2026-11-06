@@ -2,6 +2,7 @@
 /* Legacy Open32 HFILE operations share DOSCALLS' file table and path semantics. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/doscalls.h"
 #include "hal/host_fs.h"
 LONG OpenFile(PSZ name, PVOID record, ULONG flags)
@@ -192,6 +193,10 @@ BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overl
 }
 BOOL CloseHandle(ULONG handle)
 {
-    return open32CloseSemaphore(handle) || open32CloseThread(handle) || open32CloseFile(handle) ||
-           _lclose(handle) == 0;
+    static BOOL (*const closers[])(ULONG) = {open32CloseSemaphore, open32CloseSync,
+                                             open32CloseThread, open32CloseFile};
+    for (size_t i = 0; i < sizeof closers / sizeof *closers; i++)
+        if (closers[i](handle))
+            return TRUE;
+    return _lclose(handle) == 0;
 }

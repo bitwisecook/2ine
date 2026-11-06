@@ -2,9 +2,11 @@
 /* Open32 menus retain PM menu windows and their normal message behavior. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/menus.h"
+#include "guest/abi.h"
 typedef struct MenuText
 {
     char *text;
@@ -14,6 +16,7 @@ typedef struct Open32Menu
 {
     HWND handle;
     BOOL popup, system;
+    ULONG context_help;
     MenuText *texts;
     struct Open32Menu *next;
 } Open32Menu;
@@ -30,10 +33,33 @@ static void free_texts(Open32Menu *menu)
 }
 static Open32Menu *find_menu(ULONG handle)
 {
-    for (Open32Menu *menu = menus; menu; menu = menu->next)
-        if (menu->handle == handle)
-            return menu;
+    for (Open32Menu **slot = &menus; *slot; slot = &(*slot)->next)
+        if ((*slot)->handle == handle)
+        {
+            Open32Menu *menu = *slot;
+            if (lx_pm_menu_window(handle))
+                return menu;
+            *slot = menu->next;
+            free_texts(menu);
+            free(menu);
+            break;
+        }
     return NULL;
+}
+static void prune_menus(void)
+{
+    for (Open32Menu **slot = &menus; *slot;)
+    {
+        Open32Menu *menu = *slot;
+        if (lx_pm_menu_window(menu->handle))
+            slot = &menu->next;
+        else
+        {
+            *slot = menu->next;
+            free_texts(menu);
+            free(menu);
+        }
+    }
 }
 static ULONG create_menu(BOOL popup)
 {
@@ -42,6 +68,7 @@ static ULONG create_menu(BOOL popup)
         open32SetError(8);
         return 0;
     }
+    prune_menus();
     Open32Menu *menu = calloc(1, sizeof *menu);
     if (!menu)
     {
@@ -86,6 +113,7 @@ BOOL DestroyMenu(ULONG handle)
     *link = menu->next;
     free_texts(menu);
     free(menu);
+    prune_menus();
     return TRUE;
 }
 void open32MenusCleanup(void)
@@ -345,6 +373,8 @@ static BOOL remove_menu_item(ULONG handle, ULONG identity, ULONG flags, BOOL des
     }
     if (sub && !destroy)
         sub->owner = NULL;
+    if (destroy)
+        prune_menus();
     return TRUE;
 }
 BOOL RemoveMenu(ULONG handle, ULONG identity, ULONG flags)
@@ -402,7 +432,8 @@ BOOL SetMenu(ULONG handle, ULONG menu)
         return FALSE;
     }
     Window *next = menu ? menu_window(menu) : NULL;
-    if (menu && (!next || (next->parent->hwnd != HWND_DESKTOP && next->parent->hwnd != handle)))
+    if (menu && (!next || (next->parent->hwnd != HWND_DESKTOP &&
+                          next->parent->hwnd != HWND_OBJECT && next->parent->hwnd != handle)))
     {
         open32SetError(1401);
         return FALSE;
@@ -503,4 +534,272 @@ ULONG GetSystemMenu(ULONG handle, BOOL revert)
     }
     window->system_menu = menu;
     return menu;
+}
+
+static BOOL resource_name_equal(const char *first, const char *second)
+{
+    while (*first && *second)
+    {
+        unsigned a = (unsigned char)*first++, b = (unsigned char)*second++;
+        if (a >= 'a' && a <= 'z')
+            a -= 'a' - 'A';
+        if (b >= 'a' && b <= 'z')
+            b -= 'a' - 'A';
+        if (a != b)
+            return FALSE;
+    }
+    return *first == *second;
+}
+static ULONG menu_resource_id(ULONG module, PSZ name)
+{
+    uintptr_t id = (uintptr_t)name;
+    if (id <= UINT16_MAX)
+        return (ULONG)id;
+    if (*name == '#')
+    {
+        char *end;
+        unsigned long value = strtoul(name + 1, &end, 10);
+        return end == name + 1 || *end || value > UINT16_MAX ? 0 : (ULONG)value;
+    }
+    enum
+    {
+        resource_names = 255,
+        menu_type = 3,
+        maximum_name_table = 1048576
+    };
+    ULONG size = 0, result = 0;
+    void *data = NULL;
+    if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
+        GLoaderState.queryResourceSize(module, resource_names, menu_type, &size) || size < 4 ||
+        size > maximum_name_table ||
+        GLoaderState.getResource(module, resource_names, menu_type, &data) || !data)
+        return 0;
+    const uint8 *bytes = data;
+    ULONG count = lx_guest_load_u32(bytes);
+    BOOL valid = count <= (size - 4) / 4;
+    size_t offset = valid ? 4 + (size_t)count * 4 : size;
+    for (ULONG i = 0; valid && i < count; i++)
+    {
+        const uint8 *end = memchr(bytes + offset, 0, size - offset);
+        if (!end)
+        {
+            valid = FALSE;
+            break;
+        }
+        if (!result && resource_name_equal(name, (const char *)bytes + offset))
+        {
+            /* RT_RESNAMES uses DWORD identities; RF_ORDINALID marks an ordinal. */
+            ULONG value = lx_guest_load_u32(bytes + 4 + (size_t)i * 4) & ~UINT32_C(0x80000000);
+            if (value > UINT16_MAX)
+                valid = FALSE;
+            else
+                result = value;
+        }
+        offset = (size_t)(end - bytes) + 1;
+    }
+    if (GLoaderState.freeResource)
+        GLoaderState.freeResource(data);
+    if (!valid)
+    {
+        open32SetError(13);
+        return 0;
+    }
+    return result;
+}
+static char *loaded_menu_text(const char *source, ULONG codepage)
+{
+    size_t length = strlen(source);
+    if (length > (SIZE_MAX - 1) / 2)
+        return NULL;
+    char *text = malloc(length * 2 + 1);
+    if (!text)
+        return NULL;
+    size_t used = 0;
+    for (size_t i = 0; i < length; i++)
+    {
+        UCHAR c = (UCHAR)source[i];
+        if (c == '~')
+        {
+            if (source[i + 1] == '~')
+                i++;
+            else
+                c = '&';
+        }
+        else if (c == '&')
+            text[used++] = '&';
+        else if (c == 8 || c == '\t')
+            c = '\t';
+        else
+            c = WinCpTranslateChar(0, codepage, c, 1004);
+        text[used++] = (char)c;
+    }
+    text[used] = 0;
+    return text;
+}
+static BOOL adopt_loaded_menu(HWND handle, Open32Menu **pending, unsigned depth, size_t *nodes)
+{
+    Window *window = lx_pm_menu_window(handle);
+    if (!window || depth > 16 || ++*nodes > 65536)
+        return FALSE;
+    Open32Menu *menu = calloc(1, sizeof *menu);
+    if (!menu)
+        return FALSE;
+    menu->handle = handle;
+    menu->popup = depth != 0;
+    menu->next = *pending;
+    *pending = menu;
+    ULONG codepage = window->menu->codepage ? window->menu->codepage : 437;
+    ULONG display_codepage = GLoaderState.process_codepage ? GLoaderState.process_codepage : 437;
+    MenuText **link = &menu->texts;
+    for (size_t i = 0; i < window->menu->count; i++)
+    {
+        PmMenuItem *item = &window->menu->items[i];
+        MenuText *label = calloc(1, sizeof *label);
+        if (!label)
+            return FALSE;
+        *link = label;
+        link = &label->next;
+        label->text = loaded_menu_text(item->text ? item->text : "", codepage);
+        if (!label->text)
+            return FALSE;
+        /* Normalize resource shortcuts to the same native representation as InsertMenu. */
+        for (size_t n = 0; item->text && item->text[n]; n++)
+        {
+            UCHAR c = (UCHAR)item->text[n];
+            item->text[n] =
+                c == '\t' ? 8 : (char)WinCpTranslateChar(0, codepage, c, display_codepage);
+        }
+        item->item.hItem = (item->item.afStyle & 4 ? 0x800u : 0) |
+                           (item->item.afAttribute & 0x2000 ? 8u : 0) |
+                           (item->item.afAttribute & 0x4000 ? 1u : 0) |
+                           (item->item.afAttribute & 0x8000 ? 0x80u : 0);
+        if (item->item.hwndSubMenu &&
+            !adopt_loaded_menu(item->item.hwndSubMenu, pending, depth + 1, nodes))
+            return FALSE;
+    }
+    return TRUE;
+}
+ULONG LoadMenu(ULONG module, PSZ resource)
+{
+    if (!resource)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    if (!open32Presentation())
+    {
+        open32SetError(8);
+        return 0;
+    }
+    prune_menus();
+    if ((!module || module == UINT32_MAX) && GLoaderState.main_module)
+        module = GLoaderState.main_module->handle;
+    ULONG identity = menu_resource_id(module, resource);
+    if (!identity)
+    {
+        open32SetError(1814);
+        return 0;
+    }
+    ULONG handle = WinLoadMenu(HWND_OBJECT, module, identity);
+    if (!handle)
+    {
+        open32SetError(1814);
+        return 0;
+    }
+    Open32Menu *pending = NULL;
+    size_t nodes = 0;
+    if (!adopt_loaded_menu(handle, &pending, 0, &nodes))
+    {
+        WinDestroyWindow(handle);
+        while (pending)
+        {
+            Open32Menu *menu = pending;
+            pending = menu->next;
+            free_texts(menu);
+            free(menu);
+        }
+        open32SetError(8);
+        return 0;
+    }
+    Open32Menu **tail = &pending;
+    while (*tail)
+        tail = &(*tail)->next;
+    *tail = menus;
+    menus = pending;
+    return handle;
+}
+BOOL ModifyMenu(ULONG handle, ULONG identity, ULONG flags, ULONG identifier, PSZ text)
+{
+    Window *window = menu_window(handle);
+    PmMenuItem *item = menu_item(&window, identity, flags, 0);
+    if (!item)
+    {
+        open32SetError(1456);
+        return FALSE;
+    }
+    ULONG position = item->item.iPosition, target = window->hwnd;
+    /* Insert first so allocation failure retains the original item. */
+    if (!InsertMenu(target, position, flags | 0x400, identifier, text))
+        return FALSE;
+    return RemoveMenu(target, position + 1, 0x400);
+}
+BOOL TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved, ULONG owner,
+                    PVOID exclude)
+{
+    (void)reserved;
+    (void)exclude;
+    Window *popup = menu_window(handle);
+    if (!owner || !popup || !IsWindow(owner))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    LONG width = WinQuerySysValue(HWND_DESKTOP, 20), height = WinQuerySysValue(HWND_DESKTOP, 21);
+    if (flags & 4) /* TPM_CENTERALIGN */
+        x -= popup->w / 2;
+    else
+    {
+        if ((flags & 8) && popup->w < x) /* TPM_RIGHTALIGN */
+            x -= popup->w - 1;
+        else if (width <= popup->w + x)
+            x -= popup->w - 1;
+    }
+    find_menu(handle)->popup = TRUE;
+    /* PU_HCONSTRAIN, PU_VCONSTRAIN, every mouse button and the keyboard. */
+    if (!WinPopupMenu(HWND_DESKTOP, owner, handle, x, height - (y + 15), 0, 0x3C6))
+        return FALSE;
+    /* Windows returns after the menu closes, with its command already queued. */
+    while (WinIsWindowVisible(handle))
+    {
+        uint8 message[28];
+        if (!GetMessage(message, 0, 0, 0))
+        {
+            PostQuitMessage((LONG)lx_guest_load_u32(message + 8));
+            break;
+        }
+        TranslateMessage(message);
+        DispatchMessage(message);
+    }
+    return TRUE;
+}
+ULONG GetMenuContextHelpId(ULONG handle)
+{
+    Open32Menu *menu = find_menu(handle);
+    if (!menu)
+    {
+        open32SetError(1401);
+        return 0;
+    }
+    return menu->context_help;
+}
+BOOL SetMenuContextHelpId(ULONG handle, ULONG help)
+{
+    Open32Menu *menu = find_menu(handle);
+    if (!menu)
+    {
+        open32SetError(1401);
+        return FALSE;
+    }
+    menu->context_help = help;
+    return TRUE;
 }

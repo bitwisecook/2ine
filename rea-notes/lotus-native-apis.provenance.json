@@ -1,17 +1,14 @@
 {
-  "censusSha256": "ad2f7ee051d4fe7938dfcbd2371ba75345e59ab48eab84ebd8ddeabac81b9331",
-  "entries": 1280,
-  "fullEvidence": "/Users/jimd/src/os2/.cache/os2-reports/2026-11-05/build-lotus-import-inventory/imports.json",
-  "inventorySha256": "d38408dbedf6d56bf3f18669488f00f2ece96b18559ed7d8717601b001f34fde",
   "schema": 1,
-  "scope": "All imported interfaces in module families built by 2ine; selected original guest providers remain distinct. Export presence does not prove semantic completeness.",
-  "sourceRevision": "c3e92d1101e3af1b91789447ac6ea01f11d8b29f",
+  "sourceRevision": "99f59582b7a83e9ea9792010f5654c4dad2a9c43",
+  "sourceState": "working-tree snapshot; see generated source hashes in full evidence",
+  "entries": 1280,
   "summary": {
     "binaries": 411,
     "exportMetadataErrors": 1,
     "importParseErrors": 0,
-    "missingSelectedNativeExports": 412,
-    "missingTwoineExports": 464,
+    "missingSelectedNativeExports": 393,
+    "missingTwoineExports": 445,
     "optionalClosureBinaries": 353,
     "parseErrors": 1,
     "staticClosureBinaries": 49,
@@ -22,5 +19,21 @@
       "unsupported": 1
     },
     "verifiedDynamicOnlyBinaries": 9
-  }
+  },
+  "scope": "Conservative installed Lotus corpus; selected native providers kept distinct from original providers; export presence is not semantic completeness.",
+  "fullEvidence": "/Users/jimd/src/os2/.cache/os2-reports/2026-11-05/lotus-api-audit-1d3e188ab579/imports.json",
+  "inventorySha256": "1d3e188ab57905df2abbdc44cce334c124447f4f51cfd610ef056c1cb6990214",
+  "censusSha256": "1fffe22114f44ed377debf25b8027a5f5c31c960e1f3ee0e5cfbed30d37c0971",
+  "portablePolicyGaps": 1,
+  "moduleCatalogueSha256": "2874e89b6c0daf3e01c7d757eb147829efd9863087db329e0cbd16c10bd9d445",
+  "moduleToolScanIdentityMatchesCensus": true,
+  "moduleToolScanImportsMatchCensus": true,
+  "referenceData": {
+    "format": "gzip-json-lines",
+    "path": "references.jsonl.gz",
+    "records": 130557,
+    "sha256": "4fd03f4ac88afe2478e48072054c80c9fc4439deb86c2eab8f38ec190e28ed81"
+  },
+  "tests": ".......................\n----------------------------------------------------------------------\nRan 23 tests in 0.501s\n\nOK\n",
+  "compactCsvLineEndings": "LF"
 }

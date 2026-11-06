@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "qualification": "seven controlled SDL cases and parent-reported actual Cocoa no-window case",
+  "sources": [
+    {
+      "path": "os2libs/pmwin/module.c",
+      "sha256": "ca0d6b86cb4e34ce71bd9a3f1ff5afd2fd2ab9f9bb31f3b950bd4452fdf3ece2"
+    },
+    {
+      "path": "tests/hal/test_pm_display_startup.c",
+      "sha256": "db29f2f14df385490dd43ac67cb7c97260e5bc5fe572b6c09c4ac3bc8c8518de"
+    },
+    {
+      "path": "loader/load_lx.c",
+      "sha256": "b7e050f063f57b7e2bc944e4bc49178cd0c55be0868f70961dda6dc9220bc1e5"
+    },
+    {
+      "path": "loader/modules.c",
+      "sha256": "c391da9e96aed9fc2f4df876c7c5bf40f560dd3b4af49d0f68e3bd1eb0b2b411"
+    },
+    {
+      "path": "hal/sdl/video.c",
+      "sha256": "1d035bb05500a61435cc7d1cfc191ad7fd3977451bfa9ff8ec2b98c4715e32ca"
+    },
+    {
+      "path": "build/runtime/_deps/sdl3-src/include/SDL3/SDL_init.h",
+      "sha256": "4b13bf96c7f2c2efd1bdf9d935ab0d436cd238d626f5f09bd7f27adeff27b0c7"
+    },
+    {
+      "path": "/Users/jimd/src/os2/sdk/os2tk45-master/h/exe386.h",
+      "sha256": "f51de3e675d15f3b5832ec9df28689b379aaabfbd41918a9dd5c783dd20bcf0b"
+    }
+  ],
+  "commands": [
+    "ctest --test-dir build/runtime --output-on-failure -R '^pm_display_startup_' --parallel 4",
+    "env SDL_VIDEO_DRIVER=cocoa SDL_RENDER_DRIVER=software SDL_AUDIO_DRIVER=dummy build/runtime/tests/twoine_pm_display_startup_tests build/runtime/libpmwin.so gui"
+  ],
+  "scratch": "No separate scratch build created. Parent owns integrated build/runtime.",
+  "userBallModified": false
+}

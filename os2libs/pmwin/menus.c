@@ -413,6 +413,7 @@ static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size,
     if (!window)
         return 0;
     PmMenu *menu = window->menu;
+    menu->codepage = cp ? cp : GLoaderState.process_codepage;
     menu->items = calloc(count ? count : 1, sizeof *menu->items);
     if (!menu->items)
         goto fail;
@@ -762,7 +763,8 @@ BOOL lx_pm_menu_attach(HWND handle, HWND parent_handle)
     Window *window = lx_pm_menu_window(handle);
     Window *parent = anchor ? getWindowFromHWND(anchor, parent_handle) : NULL;
     if (!window || !parent || parent == &desktop_window || window == parent ||
-        (window->parent != &desktop_window && window->parent != parent))
+        (window->parent != &desktop_window && window->parent != &anchor->object_window &&
+         window->parent != parent))
         return FALSE;
     for (Window *ancestor = parent; ancestor; ancestor = ancestor->parent)
         if (ancestor == window)

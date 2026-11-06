@@ -57,6 +57,7 @@ typedef struct Window
     struct PmControl *control;
     struct PmMenu *menu;
     struct PmFileDialog *standard_file;
+    struct PmFontDialog *standard_font;
     BOOL destroying;
     HWND last_focus;
     LxHandleBorrow accelerator;
@@ -67,6 +68,8 @@ typedef struct Window
     ULONG style;
     ULONG frame_flags;
     BOOL formatting_frame;
+    BOOL flash;
+    ULONG flash_phase;
     BOOL frame_chrome_hidden;
     BOOL frame_chrome_visible;
     ULONG frame_tracking;
@@ -78,12 +81,19 @@ typedef struct Window
     LONG w;
     LONG h;
     RECTL invalid;
+    RECTL *damage_rects;
+    size_t damage_count;
     BOOL paint_pending;
     BOOL paint_offered;
     uint64_t last_present;
     BOOL enabled;
     BOOL visible_region_notify;
 } Window;
+LX_PRIVATE void cleanupErrorInfo(void);
+/* FC_NOSETFOCUS, FC_NOLOSEFOCUS and FC_NOSETACTIVE suppress their notifications. */
+LX_PRIVATE BOOL changeFocus(HWND desktop, HWND handle, ULONG flags);
+/* Decodes a 16-entry string or message bundle resource. */
+LX_PRIVATE LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR output);
 LX_PRIVATE BOOL prepareFrameState(Window *window, SWP *position);
 LX_PRIVATE BOOL isFrameWindow(const Window *window);
 LX_PRIVATE BOOL frameGuestChrome(const Window *window);
@@ -111,14 +121,40 @@ typedef struct MessageQueueItem
 typedef struct
 {
     HMQ hmq;
+    ULONG codepage;
+    BOOL cancel_shutdown;
+    POINTL last_position;
     MessageQueueItem *head;
     MessageQueueItem *tail;
     MessageQueueItem *free_pool;
 } MessageQueue;
 
+/* Wire matrices use six 16.16 coefficients, two integral translations and a
+   final integral homogeneous coefficient. */
+typedef struct PmGpiState {
+    BOOL initialized;
+    BOOL display_enabled,boundary_enabled;
+    LONG model[9], view[9];
+    LONG arc[4], line_end, line_join, line_width, char_extra, stop_draw;
+    RECTL graphics_field, viewing_limits, default_limits, boundary;
+    BOOL graphics_set, viewing_set, default_set, boundary_set;
+    BOOL viewing_custom, correlate, pick_hit;
+    POINTL pick_position; SIZEL pick_size;
+    ULONG palette;
+} PmGpiState;
+typedef struct PmPathPoint { POINTL point; BOOL move; } PmPathPoint;
+typedef struct PmPath {
+    struct PmPath *next;
+    LONG id; PmPathPoint *points; size_t count, capacity;
+} PmPath;
 typedef struct PresentationSpace
 {
     HPS hps;
+    PmGpiState gpi;
+    PmPath *paths, *record_path;
+    ULONG area_options;
+    BOOL area_recording;
+    LxHandleBorrow palette_lease;
     Window *window;
     POINTL position;
     LONG color;
@@ -131,7 +167,7 @@ typedef struct PresentationSpace
     BOOL viewport_set;
     RECTL paint_clip;
     BOOL paint_clip_set;
-    ULONG page_units;
+    ULONG page_units,ps_options;
     SIZEL page_size;
     struct PmSavedSpace *saved;
     LONG save_id;
@@ -162,6 +198,8 @@ typedef struct PmSavedSpace
 {
     struct PmSavedSpace *next;
     LONG id;
+    PmGpiState gpi;
+    LxHandleBorrow palette_lease;
     POINTL position;
     LONG color, back_color, mix, back_mix, line_type;
     LONG pattern_set, pattern;
@@ -288,6 +326,7 @@ LX_PRIVATE PFNWP callableWindowProcedure(AnchorBlock *anchor, PFNWP procedure);
 LX_PRIVATE MRESULT OS2API menuProcedure(HWND window, ULONG message, MPARAM first, MPARAM second);
 LX_PRIVATE void destroyMenu(Window *window);
 LX_PRIVATE void destroyStandardFile(Window *window);
+LX_PRIVATE void destroyStandardFont(Window *window);
 LX_PRIVATE MRESULT sendOwnerItem(Window *owner, ULONG id, OWNERITEM *item);
 LX_PRIVATE void validateWindowPaint(AnchorBlock *anchor, Window *window);
 LX_PRIVATE void destroyDeviceContexts(AnchorBlock *anchor);

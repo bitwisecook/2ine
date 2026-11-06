@@ -2,6 +2,7 @@
 /* Damage persists until validated; the message loop synthesizes paint requests. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/paint.h"
+#include "os2libs/pmwin/graphics.h"
 static void remove_paint(AnchorBlock *anchor, HWND handle)
 {
     MessageQueueItem *previous = NULL, *item = anchor->message_queue.head;
@@ -26,6 +27,9 @@ static void remove_paint(AnchorBlock *anchor, HWND handle)
 }
 void validateWindowPaint(AnchorBlock *anchor, Window *window)
 {
+    free(window->damage_rects);
+    window->damage_rects=NULL;
+    window->damage_count=0;
     window->invalid = (RECTL){0, 0, 0, 0};
     window->paint_pending = FALSE;
     window->paint_offered = FALSE;
@@ -80,6 +84,11 @@ BOOL WinInvalidateRect(HWND handle, PRECTL rectangle, BOOL children)
     RECTL bounds = {0, 0, window->w, window->h}, damaged;
     if (!WinIntersectRect(0, &damaged, &bounds, rectangle ? rectangle : &bounds))
         return TRUE;
+    PmRegion prior={.rects=window->damage_rects,.count=window->damage_count};
+    if(!prior.count && !WinIsRectEmpty(0,&window->invalid)){prior.rects=&window->invalid;prior.count=1;}
+    PmRegion input={.rects=&damaged,.count=1},combined={0};
+    if(!regionBoolean(&combined,&prior,&input,1))return FALSE;
+    free(window->damage_rects);window->damage_rects=combined.rects;window->damage_count=combined.count;
     BOOL expanded = WinIsRectEmpty(0, &window->invalid) || damaged.xLeft < window->invalid.xLeft ||
                     damaged.yBottom < window->invalid.yBottom ||
                     damaged.xRight > window->invalid.xRight || damaged.yTop > window->invalid.yTop;
@@ -161,3 +170,37 @@ BOOL lx_pm_validate_rect(HWND handle, const RECTL *rectangle, BOOL internal_only
         validateWindowPaint(anchor, window);
     return TRUE;
 }
+
+static BOOL validate_region_window(HWND handle,const PmRegion *region,BOOL children)
+{
+    AnchorBlock*a=getAnchorBlockNoHAB();Window*w=a?getWindowFromHWND(a,handle):NULL;
+    if(!w)return FALSE;
+    PmRegion before={.rects=w->damage_rects,.count=w->damage_count},after={0};
+    if(!before.count&&!WinIsRectEmpty(0,&w->invalid)){before.rects=&w->invalid;before.count=1;}
+    if(!region){validateWindowPaint(a,w);}else{
+        if(!regionBoolean(&after,&before,region,7))return FALSE;
+        free(w->damage_rects);w->damage_rects=after.rects;w->damage_count=after.count;
+        w->invalid=(RECTL){0,0,0,0};
+        for(size_t i=0;i<after.count;i++)WinUnionRect(0,&w->invalid,&w->invalid,&after.rects[i]);
+        if(!after.count)validateWindowPaint(a,w);
+    }
+    if(children)for(Window*c=w->children;c;c=c->sibling){
+        PmRegion local={0};if(region&&region->count){local.rects=malloc(region->count*sizeof*local.rects);if(!local.rects)return FALSE;local.count=region->count;for(size_t i=0;i<local.count;i++){local.rects[i]=region->rects[i];WinOffsetRect(0,&local.rects[i],-c->x,-c->y);}}
+        BOOL ok=validate_region_window(c->hwnd,region?&local:NULL,TRUE);free(local.rects);if(!ok)return FALSE;
+    }
+    return TRUE;
+}
+BOOL WinValidateRect(HWND handle,PRECTL rectangle,BOOL children){PmRegion r={.rects=rectangle,.count=rectangle?1:0};return validate_region_window(handle,rectangle?&r:NULL,children);}
+BOOL WinValidateRegion(HWND handle,ULONG region,BOOL children){if(!region)return validate_region_window(handle,NULL,children);LxHandleBorrow b={0};if(!lx_handle_borrow(region,LX_HANDLE_PM_REGION,&b))return FALSE;PmRegion*r=b.resource;BOOL ok=r->anchor==getAnchorBlockNoHAB()&&validate_region_window(handle,r,children);lx_handle_release(&b);return ok;}
+BOOL WinInvalidateRegion(HWND handle,ULONG region,BOOL children){if(!region)return WinInvalidateRect(handle,NULL,children);LxHandleBorrow b={0};if(!lx_handle_borrow(region,LX_HANDLE_PM_REGION,&b))return FALSE;PmRegion*r=b.resource;BOOL ok=r->anchor==getAnchorBlockNoHAB();for(size_t i=0;ok&&i<r->count;i++)ok=WinInvalidateRect(handle,&r->rects[i],children);lx_handle_release(&b);return ok;}
+BOOL lx_pm_window_damage(HWND window,RECTL**rectangles,size_t*count,LONG*height){
+    AnchorBlock*a=getAnchorBlockNoHAB();Window*w=a?getWindowFromHWND(a,window):NULL;
+    if(!w)return FALSE;
+    const RECTL*damage=w->damage_rects;size_t n=w->damage_count;
+    if(!n&&!WinIsRectEmpty(0,&w->invalid)){damage=&w->invalid;n=1;}
+    RECTL*copy=n?malloc(n*sizeof*copy):NULL;
+    if(copy)memcpy(copy,damage,n*sizeof*copy);
+    *rectangles=copy;*count=n;*height=w->h;
+    return TRUE;
+}
+LONG WinQueryUpdateRegion(HWND handle,ULONG region){AnchorBlock*a=getAnchorBlockNoHAB();Window*w=a?getWindowFromHWND(a,handle):NULL;LxHandleBorrow b={0};if(!w||!lx_handle_borrow(region,LX_HANDLE_PM_REGION,&b))return 0;PmRegion*r=b.resource;PmRegion before={.rects=w->damage_rects,.count=w->damage_count},out={0};if(!before.count&&!WinIsRectEmpty(0,&w->invalid)){before.rects=&w->invalid;before.count=1;}BOOL ok=r->anchor==a&&regionBoolean(&out,&before,NULL,2);if(ok){free(r->rects);r->rects=out.rects;r->count=out.count;}LONG n=ok?(r->count>1?3:r->count?2:1):0;lx_handle_release(&b);return n;}

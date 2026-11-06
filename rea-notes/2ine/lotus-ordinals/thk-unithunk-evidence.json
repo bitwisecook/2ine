@@ -1,0 +1,325 @@
+{
+  "schema": 1,
+  "target": {
+    "path": "/Users/jimd/src/os2/extracted/install-media/os2image/disk_2/DOSCALL1.DLL",
+    "sha256": "c1e39d8220b38de30f3f83ac33044e116cbe2ed384edf64160e8b1b8dd8cda16",
+    "residentModule": "DOSCALL1",
+    "importAlias": "DOSCALLS",
+    "ordinal": 547,
+    "encodedExportName": null,
+    "symbolName": "THK32_UNITHUNK",
+    "symbolAuthority": "exact-SHA SYM and original exported object/offset",
+    "object": 2,
+    "objectOffset": "0x760c",
+    "preferredAddress": "0x1c02760c",
+    "objectBitness": 32
+  },
+  "cacheLookup": {
+    "exact": true,
+    "matches": [],
+    "interpretation": "No shared exact-hash metadata/analysis record was available; reused separately SHA-qualified workspace product instead of name matching."
+  },
+  "inputs": [
+    {
+      "path": "/Users/jimd/src/os2/extracted/install-media/os2image/disk_2/DOSCALL1.DLL",
+      "sha256": "c1e39d8220b38de30f3f83ac33044e116cbe2ed384edf64160e8b1b8dd8cda16",
+      "size": 137445
+    },
+    {
+      "path": "/Users/jimd/src/os2/extracted/install-media/os2image/debug/UNI/doscall1.sym",
+      "sha256": "fb23a193f1b0b3e89999ac90a379ddc822a162cc62998a4db4acf89ac67b76d1",
+      "size": 43476
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/manifest.json",
+      "sha256": "3e5f387d23cc21386e921dc1272187896ea51484871dcb65090af8d6d169ed36",
+      "size": 6476
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/validation.json",
+      "sha256": "ab1ca2153aad3910d03f3ef1e1ddfd12e384fd27a7b5b9b8d44b7514bcc79492",
+      "size": 1885
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/functions.tsv",
+      "sha256": "3112de4570490e2d61d7a284eb8fe7275d774e793b7cf64ec7bb96a369fcd739",
+      "size": 115258
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/object-map.tsv",
+      "sha256": "aa07fcec9ab500125a427077e13f4e57ac6bd3a69c21d08cf6815199c4625868",
+      "size": 1599
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/objects/02-CODE/listing.asm",
+      "sha256": "0f60a2997811341bc8d42e5ce89c472263a42f129c5b30f0a4b456a16ef935f7",
+      "size": 1190056
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/objects/03-CODE/listing.asm",
+      "sha256": "f3a97ee238baf721586d22528278273c5cdf65e18e48c688bec00503c4396b8b",
+      "size": 1388336
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/objects/02-CODE/symbols.tsv",
+      "sha256": "0b84b2a4eeb6853a81ca1acf55e469530257eaf7996c6c6ad72bffbcd04da6de",
+      "size": 88144
+    },
+    {
+      "path": "/Users/jimd/src/os2/analysis/decompiled/DOSCALL1/retail/objects/02-CODE/decompiled.c",
+      "sha256": "e8f0d9ac805b607889e1625b4ec791c5e03895d5d872111fd4c3604fa438850c",
+      "size": 1282215
+    },
+    {
+      "path": "/Users/jimd/src/os2/ddk/components-2004/combase/DDK/base/h/bsedos16.h",
+      "sha256": "1cbfd0e6a484305a56c8c2ddedf16203b28bed45895d84bfb70cef2d61042239",
+      "size": 80007
+    },
+    {
+      "path": "/Users/jimd/src/os2/scripts/unpack-lx.py",
+      "sha256": "6d64debdc8d03c2b415f79b83710d7eec75ae80f930b9426a22a565ab191e252",
+      "size": 5436
+    }
+  ],
+  "importers": [
+    {
+      "importer": "/Users/jimd/Documents/Lotus.2ineball/drive_c/OS2/DLL/LIBUNI.DLL",
+      "importerSHA256": "9a2fb16958c637eca1214415b3f0583df9e912fbbbe7d835acc19bd7577a21ec",
+      "stubPreferredAddress": "0x1caf8",
+      "stubRawBytes": "b800000000bad10500002bc9e900000000",
+      "thunk547RelocationSource": "0x1cb05",
+      "EAX": "16:16 target address split into OFFSET16 and SELECTOR16 imports",
+      "targetFixups": [
+        {
+          "module": "DOSCALLS",
+          "ordinal": 162,
+          "sourceType": 5,
+          "address": "0x1caf9",
+          "recordOffset": 1601
+        },
+        {
+          "module": "DOSCALLS",
+          "ordinal": 162,
+          "sourceType": 2,
+          "address": "0x1cafb",
+          "recordOffset": 1613
+        }
+      ],
+      "EDX": "0x5d1",
+      "ECX": 0,
+      "initialParameterCount": 1,
+      "parameterDescriptors": [
+        {
+          "sourceSlotBytes": 4,
+          "kind": "pointer-descriptor",
+          "encoding": 29
+        }
+      ],
+      "remainingResultDescriptor": "0x2",
+      "observedReturnConversion": "zero-extend AX for remaining descriptor2",
+      "sourceAddressesAreRuntimeAddresses": false
+    },
+    {
+      "importer": "/Users/jimd/Documents/Lotus.2ineball/drive_c/OS2/DLL/LIBUNI.DLL",
+      "importerSHA256": "9a2fb16958c637eca1214415b3f0583df9e912fbbbe7d835acc19bd7577a21ec",
+      "stubPreferredAddress": "0x1cb0c",
+      "stubRawBytes": "b800000000bad21100002bc9e900000000",
+      "thunk547RelocationSource": "0x1cb19",
+      "EAX": "16:16 target address split into OFFSET16 and SELECTOR16 imports",
+      "targetFixups": [
+        {
+          "module": "DOSCALLS",
+          "ordinal": 161,
+          "sourceType": 5,
+          "address": "0x1cb0d",
+          "recordOffset": 1595
+        },
+        {
+          "module": "DOSCALLS",
+          "ordinal": 161,
+          "sourceType": 2,
+          "address": "0x1cb0f",
+          "recordOffset": 1607
+        }
+      ],
+      "EDX": "0x11d2",
+      "ECX": 0,
+      "initialParameterCount": 2,
+      "parameterDescriptors": [
+        {
+          "sourceSlotBytes": 4,
+          "kind": "pointer-descriptor",
+          "encoding": 29
+        },
+        {
+          "sourceSlotBytes": 4,
+          "kind": "copy-32"
+        }
+      ],
+      "remainingResultDescriptor": "0x2",
+      "observedReturnConversion": "zero-extend AX for remaining descriptor2",
+      "sourceAddressesAreRuntimeAddresses": false
+    },
+    {
+      "importer": "/Users/jimd/Documents/Lotus.2ineball/drive_c/OS2/DLL/UCONV.DLL",
+      "importerSHA256": "e81c8bdfee0cf3fa0352d42094b34e1cf454fe631f0f895ef84406f35d1ace80",
+      "stubPreferredAddress": "0x14054",
+      "stubRawBytes": "b800000000bad10500002bc9e900000000",
+      "thunk547RelocationSource": "0x14061",
+      "EAX": "16:16 target address split into OFFSET16 and SELECTOR16 imports",
+      "targetFixups": [
+        {
+          "module": "DOSCALLS",
+          "ordinal": 162,
+          "sourceType": 5,
+          "address": "0x14055",
+          "recordOffset": 1251
+        },
+        {
+          "module": "DOSCALLS",
+          "ordinal": 162,
+          "sourceType": 2,
+          "address": "0x14057",
+          "recordOffset": 1263
+        }
+      ],
+      "EDX": "0x5d1",
+      "ECX": 0,
+      "initialParameterCount": 1,
+      "parameterDescriptors": [
+        {
+          "sourceSlotBytes": 4,
+          "kind": "pointer-descriptor",
+          "encoding": 29
+        }
+      ],
+      "remainingResultDescriptor": "0x2",
+      "observedReturnConversion": "zero-extend AX for remaining descriptor2",
+      "sourceAddressesAreRuntimeAddresses": false
+    },
+    {
+      "importer": "/Users/jimd/Documents/Lotus.2ineball/drive_c/OS2/DLL/UCONV.DLL",
+      "importerSHA256": "e81c8bdfee0cf3fa0352d42094b34e1cf454fe631f0f895ef84406f35d1ace80",
+      "stubPreferredAddress": "0x14068",
+      "stubRawBytes": "b800000000bad21100002bc9e900000000",
+      "thunk547RelocationSource": "0x14075",
+      "EAX": "16:16 target address split into OFFSET16 and SELECTOR16 imports",
+      "targetFixups": [
+        {
+          "module": "DOSCALLS",
+          "ordinal": 161,
+          "sourceType": 5,
+          "address": "0x14069",
+          "recordOffset": 1245
+        },
+        {
+          "module": "DOSCALLS",
+          "ordinal": 161,
+          "sourceType": 2,
+          "address": "0x1406b",
+          "recordOffset": 1257
+        }
+      ],
+      "EDX": "0x11d2",
+      "ECX": 0,
+      "initialParameterCount": 2,
+      "parameterDescriptors": [
+        {
+          "sourceSlotBytes": 4,
+          "kind": "pointer-descriptor",
+          "encoding": 29
+        },
+        {
+          "sourceSlotBytes": 4,
+          "kind": "copy-32"
+        }
+      ],
+      "remainingResultDescriptor": "0x2",
+      "observedReturnConversion": "zero-extend AX for remaining descriptor2",
+      "sourceAddressesAreRuntimeAddresses": false
+    }
+  ],
+  "entryStorage": {
+    "EAX": "16:16 target procedure",
+    "EDX": "low descriptor word",
+    "ECX": "high descriptor word",
+    "stack": "caller return address followed by32-bit argument slots",
+    "preservedObserved": [
+      "EBP",
+      "EBX",
+      "ESI",
+      "EDI"
+    ],
+    "volatileOrUnqualified": [
+      "ECX",
+      "EDX",
+      "flags"
+    ],
+    "return": "near RET with no immediate; converted result in EAX",
+    "prototypeApplicationAllowed": false
+  },
+  "mechanisms": [
+    "descriptor-directed 32-bit slot to16/32-bit target arguments",
+    "linear pointer to16:16 conversion via DOS32FLATTOSEL",
+    "64KiB crossing copy/restore paths",
+    "thunk stack switching via UT_SwapStack",
+    "SS alias formation plus16-bit target far CALL",
+    "far transfer back to32-bit return code",
+    "DX:AX result assembly and descriptor-directed conversion",
+    "conditional FS exception-registration/cleanup paths"
+  ],
+  "limitations": [
+    "No target code was executed.",
+    "The legacy decompile warns about bad instruction data and its __regparm3 prototype is not authentic.",
+    "Synthetic mapped listings contain relocated addresses; original unrelocated page bytes and relocation records are separate evidence.",
+    "Descriptor-wide complete grammar, allocation failure semantics, exceptions/reentrancy and every selector case are not fully reconstructed.",
+    "The two import stubs cover only FSRamSemClear/Request descriptors; they do not define a general C signature.",
+    "Original privileged/kernel DOSCALL1 cannot be substituted casually as an ordinary userspace DLL."
+  ],
+  "targetSha256": "c1e39d8220b38de30f3f83ac33044e116cbe2ed384edf64160e8b1b8dd8cda16",
+  "source": "exact-export/SYM/import-fixup/original-page static analysis",
+  "tool": "os2-re-module api scan + hash-qualified workspace listing + ndisasm",
+  "prototypeApplicationAllowed": false,
+  "permanentCache": {
+    "root": "/Users/jimd/.cache/os2-re-module",
+    "analysis": {
+      "analysisID": "b60ee19e629a240e3bf816925a54b7ce8e128878d04e8c20a17cfe63866496cc",
+      "coverage": {
+        "completeABI": false,
+        "descriptorVariantsReviewed": 2,
+        "importerStubCount": 4,
+        "privateTypesComplete": false,
+        "publicOrdinalsReviewed": [
+          547
+        ],
+        "status": "partial-targeted-ordinal",
+        "targetExecuted": false
+      },
+      "targetSha256": "c1e39d8220b38de30f3f83ac33044e116cbe2ed384edf64160e8b1b8dd8cda16"
+    },
+    "document": {
+      "sourceSha256": "731c058b561db2219d9a70681dbf3392137de9d20d8a718191519a8ffd65a40c",
+      "documents": [
+        {
+          "documentID": "d6b90c62721bbb863161a69b9dd28fe47c9c549a82c50af79b0ed6c2bd14872e",
+          "associationID": "352e8e3fc3585f084149170cbc4ab767a817692cd9bfbc09e4134b7ca43cff06",
+          "reusedRendering": false,
+          "markdownSha256": "731c058b561db2219d9a70681dbf3392137de9d20d8a718191519a8ffd65a40c",
+          "representation": "tool-derived"
+        }
+      ],
+      "requestedProfile": {
+        "name": "portable-markdown-v1",
+        "sourceSuffix": ".md",
+        "page": null,
+        "section": null,
+        "allPages": false,
+        "representation": "tool-derived"
+      }
+    },
+    "verifiedQueries": [
+      "interfaces c1e39d8220b38de30f3f83ac33044e116cbe2ed384edf64160e8b1b8dd8cda16 --name #547",
+      "abi c1e39d8220b38de30f3f83ac33044e116cbe2ed384edf64160e8b1b8dd8cda16 THK32_UNITHUNK"
+    ]
+  }
+}

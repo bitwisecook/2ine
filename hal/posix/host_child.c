@@ -77,6 +77,61 @@ static LxHostChild *spawn_child(const char *path, char *const *argv, char *const
     }
     return child;
 }
+/* posix_spawn has no portable stopped start. Only async-signal-safe calls run
+   between fork and exec, which keeps this valid in a threaded process. */
+LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, char *const *env)
+{
+    LxHostChild *child = calloc(1, sizeof *child);
+    if (!child)
+        return NULL;
+    if (pthread_mutex_init(&child->mutex, NULL))
+    {
+        free(child);
+        return NULL;
+    }
+    int inherited[2], copies[2] = {-1, -1};
+    int scoped = lx_host_operation_channels(env, &inherited[0], &inherited[1]);
+    int failed = scoped < 0;
+    for (unsigned i = 0; scoped > 0 && i < 2 && !failed; i++)
+        failed = (copies[i] = fcntl(inherited[i], F_DUPFD_CLOEXEC, 3)) < 0;
+    pid_t id = failed ? -1 : fork();
+    if (!id)
+    {
+        for (unsigned i = 0; scoped > 0 && i < 2; i++)
+            if (dup2(copies[i], inherited[i]) < 0)
+                _exit(127);
+        raise(SIGSTOP);
+        execve(path, argv, env);
+        _exit(127);
+    }
+    for (unsigned i = 0; i < 2; i++)
+        if (copies[i] >= 0)
+            close(copies[i]);
+    int status = 0;
+    if (id > 0)
+    {
+        /* A continue sent before the stop would be lost and strand the child. */
+        pid_t waited;
+        do
+        {
+            waited = waitpid(id, &status, WUNTRACED);
+        } while (waited < 0 && errno == EINTR);
+        if (waited != id || !WIFSTOPPED(status))
+        {
+            if (waited < 0)
+                kill(id, SIGKILL);
+            id = -1;
+        }
+    }
+    if (id < 0)
+    {
+        pthread_mutex_destroy(&child->mutex);
+        free(child);
+        return NULL;
+    }
+    child->id = id;
+    return child;
+}
 LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, 0);
@@ -150,7 +205,7 @@ int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status
         lx_host_sleep_ms(1);
     }
 }
-int lx_host_child_terminate(LxHostChild *child)
+static int signal_child(LxHostChild *child, int signal_number)
 {
     int cancellation;
     pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancellation);
@@ -158,10 +213,22 @@ int lx_host_child_terminate(LxHostChild *child)
     LxHostChildStatus status;
     /* Reaping and signalling share a lock, so an exited child's PID cannot be reused here. */
     int polled = poll_child(child, &status);
-    int result = polled == 1 ? 1 : polled < 0 ? -1 : kill(child->id, SIGKILL) ? -1 : 0;
+    int result = polled == 1 ? 1 : polled < 0 ? -1 : kill(child->id, signal_number) ? -1 : 0;
     pthread_mutex_unlock(&child->mutex);
     pthread_setcancelstate(cancellation, NULL);
     return result;
+}
+int lx_host_child_terminate(LxHostChild *child)
+{
+    return signal_child(child, SIGKILL);
+}
+int lx_host_child_suspend(LxHostChild *child)
+{
+    return signal_child(child, SIGSTOP);
+}
+int lx_host_child_resume(LxHostChild *child)
+{
+    return signal_child(child, SIGCONT);
 }
 static void *reap(void *arg)
 {

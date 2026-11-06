@@ -594,7 +594,15 @@ class EvidenceOutputTests(unittest.TestCase):
             first = inventory.write_report(report, base / "first")
             second = inventory.write_report(report, base / "second")
             self.assertEqual(first, second)
-            for name in ("imports.json", "imports.csv", "imports.md", "references.jsonl.gz"):
+            for name in (
+                "imports.json",
+                "imports.csv",
+                "imports.md",
+                "references.jsonl.gz",
+                "missing-native.csv",
+                "missing-libraries.json",
+                "portable-policy-gaps.csv",
+            ):
                 self.assertEqual(
                     (base / "first" / name).read_bytes(), (base / "second" / name).read_bytes()
                 )
@@ -604,6 +612,46 @@ class EvidenceOutputTests(unittest.TestCase):
             self.assertEqual(reference["count"], 1)
             self.assertEqual(json.loads(lines[0])["ordinal"], 282)
             self.assertEqual(first["referenceData"]["records"], len(lines))
+
+    def test_missing_native_backlog_keeps_optional_candidates_but_excludes_original_providers(self):
+        rows = [
+            {
+                "module": "PMWINX",
+                "ordinal": 9999,
+                "policyProvided": True,
+                "exportPresent": False,
+                "applications": [],
+            },
+            {
+                "module": "PMWINX",
+                "ordinal": 630,
+                "policyProvided": True,
+                "exportPresent": True,
+                "applications": ["123"],
+            },
+            {
+                "module": "SOM",
+                "ordinal": 1,
+                "policyProvided": False,
+                "exportPresent": False,
+                "applications": ["123"],
+            },
+        ]
+        result = inventory.missing_native_report({"imports": rows, "sourceRevision": "fixture"})
+        self.assertEqual(result["sourceRevision"], "fixture")
+        self.assertEqual(result["imports"], [rows[0]])
+
+    def test_portable_policy_gap_is_separate_from_missing_exports_and_runtime_data(self):
+        base = {"policyProvided": True, "exportPresent": True}
+        rows = [
+            {**base, "export": {"abi32Policy": False, "abi16Policy": False}},
+            {**base, "export": {"abi32Policy": True}},
+            {**base, "export": {"abi16Policy": True}},
+            {**base, "export": {"runtimeSpecial": "absolute-flat-data-selector"}},
+            {**base, "exportPresent": False},
+            {**base, "policyProvided": False},
+        ]
+        self.assertEqual(inventory.portable_policy_report({"imports": rows})["imports"], [rows[0]])
 
 
 if __name__ == "__main__":

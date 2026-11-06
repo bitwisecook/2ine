@@ -1,0 +1,42 @@
+{
+  "goal": "Open, edit and save a new document in Freelance and Approach from the Lotus ball",
+  "release": "0.6",
+  "releaseCommit": "99f59582b7a83e9ea9792010f5654c4dad2a9c43",
+  "status": "in-progress; see integration-2026-11-06.md",
+  "verification": "Real GUI editor visible, responsive input and saved/reopened non-empty documents, followed by the original Lotus ball on installed 2ine runtime",
+  "userBall": "/Users/jimd/Documents/Lotus.2ineball",
+  "diagnosticBall": "build/lotus/approach-startup/Approach.2ineball and build/lotus/freelance-startup/Freelance.2ineball",
+  "knownBlockers": {
+    "Approach": "Predefined classes missing from GetClassInfo/RegisterClassAlias; first init virtual call at 0x85bf0 returns 0",
+    "Freelance": "Past 462 and running headless; real GUI not yet tested"
+  },
+  "workers": {
+    "original_help": "stopped; atomic native gate passes, integrated LX pending",
+    "lotus_visuals": "stopped; LoadMenu source/tests written, registration and coherent runtime gates pending",
+    "video": "completed; ordinal and thunk evidence cached, owned scratch removed"
+  },
+  "sourceConcurrency": "Broad batch compatibility additions in shared dirty checkout require fresh integration/source review; preserve all work and immutable0.6 tag",
+  "ordinalAudit": {
+    "sourceSnapshotMissingExports": 393,
+    "fiveAppClosures": 301,
+    "allNamesResolved": true,
+    "declarationEvidence": 387,
+    "unqualifiedPrivateContracts": 6,
+    "durableReport": "rea-notes/2ine/lotus-ordinals/summary.md",
+    "archive": "/Users/jimd/src/os2/.cache/os2-reports/2026-11-05/lotus-ordinal-audit"
+  },
+  "handoff": "rea-notes/2ine/handoff-2026-11-06.md",
+  "cleanup": {
+    "removed": [
+      "build/lotus/baseline",
+      "build/lotus/ordinal-audit"
+    ],
+    "retainedForUnfinishedIntegration": [
+      "build/runtime",
+      "build/lotus/approach-startup",
+      "build/lotus/freelance-startup",
+      "build/lotus/freelance-menu"
+    ]
+  },
+  "integration": "rea-notes/2ine/integration-2026-11-06.md"
+}

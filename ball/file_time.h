@@ -40,6 +40,23 @@ static inline int64_t tb_dos_time(unsigned date, unsigned clock)
         return INT64_MIN;
     return tb_local_file_time(date, clock, &parts);
 }
+/* Date in the high word and clock in the low word, clamped to the DOS date range. */
+static inline uint32_t tb_dos_stamp(int64_t seconds)
+{
+    time_t value = (time_t)seconds;
+    struct tm date;
+#ifdef _WIN32
+    localtime_s(&date, &value);
+#else
+    localtime_r(&value, &date);
+#endif
+    unsigned year = date.tm_year + 1900 < 1980   ? 1980
+                    : date.tm_year + 1900 > 2107 ? 2107
+                                                 : (unsigned)date.tm_year + 1900;
+    return (uint32_t)(year - 1980) << 25 | (uint32_t)(date.tm_mon + 1) << 21 |
+           (uint32_t)date.tm_mday << 16 | (uint32_t)date.tm_hour << 11 |
+           (uint32_t)date.tm_min << 5 | (uint32_t)date.tm_sec / 2;
+}
 static inline int64_t tb_iso_time(const unsigned char *date)
 {
     struct tm parts = {0};
