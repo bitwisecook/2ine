@@ -47,8 +47,7 @@ modules are not necessarily needed by the selected application. The complete
 `imports.json` and compressed reference data retain hashes and exact import
 locations. Runtime-computed loads and semantic completeness remain unassessed.
 The shared `os2-re-module` catalogue/cache can resolve original ordinal names,
-declaration variants and documentation before implementing each API family; see
-[the current Lotus gap report](../rea-notes/lotus-api-gaps.md).
+declaration variants and documentation before implementing each API family.
 
 ```sh
 uvx ruff check .

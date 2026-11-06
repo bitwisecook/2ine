@@ -6,6 +6,9 @@ cmake-*
 build/
 build-*/
 
+# Reverse-engineering notes stay in the local workspace.
+rea-notes/
+
 __pycache__/
 *.pyc
 
