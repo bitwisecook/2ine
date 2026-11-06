@@ -2346,6 +2346,13 @@ class BallWindow(Adw.ApplicationWindow):
         process.wait_finish(result)
         code = process.get_exit_status() if process.get_if_exited() else -process.get_term_sig()
         session.code, session.state = code, "finishing"
+        message = gnome_sessions.abnormal_exit_message(
+            session.name, code, session.stop_sent, session.log
+        )
+        if message:
+            dialog = Adw.AlertDialog(heading=f"{session.name} stopped unexpectedly", body=message)
+            dialog.add_response("close", "Close")
+            dialog.present(self)
         gnome_sessions.STARTUP_POOL.release(session.leases, session.id, self.stop_owned_service)
         path, plan, log = Path(session.ball), session.plan, session.log
         self.refresh_session_selector()

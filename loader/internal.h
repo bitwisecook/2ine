@@ -8,6 +8,7 @@
 #ifndef TWOINE_LOADER_INTERNAL_H
 #define TWOINE_LOADER_INTERNAL_H
 #define _GNU_SOURCE 1
+#include "hal/host_fatal.h"
 #include "runtime/runtime.h"
 #include "formats/decompress.h"
 #include "hal/host_fs.h"
@@ -75,6 +76,8 @@ LX_PRIVATE LxModule *loadModule(const char *fname, uint8 *exe, uint32 exelen,
                                 int dependency_tree_depth);
 LX_PRIVATE LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_depth);
 LX_PRIVATE LxModule *loadModuleByPath(const char *fname);
+LX_PRIVATE void lxWriteFatalModules(void);
+LX_PRIVATE void lxDescribeModuleFailure(const char *program, char *buffer, size_t size);
 LX_PRIVATE void registerLxModule(LxModule *module);
 LX_PRIVATE void unloadAllModules(void);
 LX_PRIVATE LxModule *loadNativeModule(const char *fname, const char *modname);

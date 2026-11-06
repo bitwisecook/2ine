@@ -9,6 +9,16 @@ func canonicalLaunchBall(_ path: String) -> String {
     return URL(filePath: path).standardizedFileURL.resolvingSymlinksInPath().path
 }
 
+/// Explains a death the worker could not report itself; nil for a normal or requested end.
+public func abnormalExitMessage(program: String, code: Int32, signalled: Bool, stopRequested: Bool,
+                                log: URL?) -> String? {
+    guard signalled, !stopRequested else { return nil }
+    let cause = code == SIGKILL ? "The system or another program killed it, for example because memory ran out or a code signature check failed."
+                                : "2ine could not record what happened."
+    let location = log.map { "\n\nThe session log is at \($0.path)." } ?? ""
+    return "\(program) was terminated by signal \(code). \(cause)\(location)"
+}
+
 func validLaunchSessionID(_ value: String) -> Bool {
     !value.isEmpty && value.utf8.count <= 64 && value.utf8.allSatisfy {
         (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95

@@ -18,6 +18,11 @@ remain unsupported and return errors.
 data imports, mixed entry bundles, procedure queries and circular DLL dependencies.
 It also verifies rejection of malformed targets and cyclic forwarder chains.
 
+`fatal_report` ends processes through every fatal route, on the main thread and a
+worker thread, and requires status 1, a complete report and one dialog. It also
+covers stack overflow, a fault inside the reporter, competing failures, the silent
+exit phase and the unattended defaults. A signal death fails the test.
+
 `open32_semaphores` covers count consumption, overflow, timed waits, access rights,
 stale handles, worker wakeups and named semaphores shared between processes.
 The Unicorn profile also checks cleanup when a blocked waiter is killed.

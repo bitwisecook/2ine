@@ -278,3 +278,13 @@ func installerIsExclusiveButAnotherBallCanRun(installFirst: Bool) async throws {
         }
     }
 }
+
+@Test func onlyAnUnrequestedSignalDeathNeedsAMessage() {
+    let log = URL(filePath: "/ball/logs/session.log")
+    #expect(abnormalExitMessage(program: "App", code: 1, signalled: false, stopRequested: false, log: log) == nil)
+    #expect(abnormalExitMessage(program: "App", code: 15, signalled: true, stopRequested: true, log: log) == nil)
+    let killed = abnormalExitMessage(program: "App", code: SIGKILL, signalled: true, stopRequested: false, log: log)
+    #expect(killed?.contains("signal 9") == true && killed?.contains("/ball/logs/session.log") == true)
+    let other = abnormalExitMessage(program: "App", code: SIGSEGV, signalled: true, stopRequested: false, log: nil)
+    #expect(other?.contains("could not record") == true)
+}

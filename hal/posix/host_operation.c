@@ -202,7 +202,10 @@ int lx_host_operation_supervise(const char *executable, char *const *arguments,
             normal.sa_handler = SIG_DFL;
             sigemptyset(&normal.sa_mask);
             sigaction(signal, &normal, NULL);
-            kill(getpid(), signal);
+            /* A core-dumping signal would attribute the worker's crash to this
+               healthy supervisor and produce a second, misleading crash dump. */
+            if (signal == SIGTERM || signal == SIGINT || signal == SIGKILL)
+                kill(getpid(), signal);
             result = 128 + signal;
         }
     }

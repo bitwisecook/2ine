@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "runtime/core/internal.h"
+#include "hal/host_fatal.h"
 
 LxLoaderState GLoaderState;
 
@@ -14,6 +15,10 @@ LX_PRIVATE LX_HOST_THREAD_LOCAL LxHostThreadState host_thread_state;
 
 LX_NATIVE_CONSTRUCTOR(lib2ine)
 {
+    /* The failure-dialog helper needs none of the OS/2 process state below. */
+    if (lx_host_fatal_is_dialog())
+        return;
+    lx_host_fatal_install();
     memset(&GLoaderState, '\0', sizeof(GLoaderState));
     GLoaderState.dosExit = dosExit_lib2ine;
     GLoaderState.initOs2Tib = initOs2Tib_lib2ine;

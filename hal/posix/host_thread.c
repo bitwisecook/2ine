@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Native thread creation and cancellation cleanup are confined to the host. */
 #include "hal/host_thread.h"
+#include "hal/host_fatal.h"
 #include <stdlib.h>
 #include <pthread.h>
 struct LxHostThread
@@ -42,17 +43,20 @@ typedef struct Start
     void *(*entry)(void *);
     void *argument;
     void (*cleanup)(void *);
+    void *signal_stack;
 } Start;
 static void cleanupStart(void *argument)
 {
     Start *start = argument;
     if (start->cleanup)
         start->cleanup(start->argument);
+    lx_host_fatal_thread_end(start->signal_stack);
 }
 static void *enter(void *argument)
 {
     Start start = *(Start *)argument;
     free(argument);
+    start.signal_stack = lx_host_fatal_thread_begin();
     void *result;
     pthread_cleanup_push(cleanupStart, &start);
     result = start.entry(start.argument);

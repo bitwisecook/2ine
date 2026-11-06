@@ -6,10 +6,13 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+#include "hal/host_fatal.h"
 #include "hal/host_operation.h"
 #include "network_config.h"
 int main(int argc, char **argv, char **envp)
 {
+    if (argc > 1 && !strcmp(argv[1], LX_FATAL_DIALOG_ARGUMENT))
+        lx_host_process_exit((uint32_t)lx_host_fatal_dialog(argc - 2, argv + 2));
 #if !defined(_WIN32)
     if (!lx_host_operation_join())
     {
@@ -45,10 +48,8 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.execution =
         lx_execution_create(getenv("TWOINE_BACKEND"), &services, error, sizeof error);
     if (!GLoaderState.execution)
-    {
-        fprintf(stderr, "2ine: %s\n", error);
-        return 1;
-    }
+        lx_host_fatal(LX_FATAL_LOAD_FAILURE, error, NULL);
+    lx_host_fatal_add_context(lxWriteFatalModules);
 
     /* Keep the command and environment in one 64-KiB guest segment. */
     const size_t command_offset =
@@ -56,10 +57,7 @@ int main(int argc, char **argv, char **envp)
     LxGuestMapping *parameters =
         lx_execution_map(GLoaderState.execution, 0x07000000, 0x10000, 3, 1);
     if (!parameters)
-    {
-        fprintf(stderr, "Cannot allocate guest process parameters\n");
-        return 1;
-    }
+        lx_host_fatal(LX_FATAL_LOAD_FAILURE, "Cannot allocate guest process parameters", NULL);
     char *environment = lx_execution_mapping_host(parameters);
     memcpy(environment, GLoaderState.pib.pib_pchenv, 0x10000);
     free(GLoaderState.pib.pib_pchenv);
@@ -67,10 +65,7 @@ int main(int argc, char **argv, char **envp)
     GLoaderState.pib.pib_pchcmd = environment + command_offset;
     GLoaderState.guest_pib = lx_execution_map(GLoaderState.execution, 0x07010000, 0x1000, 3, 1);
     if (!GLoaderState.guest_pib)
-    {
-        fprintf(stderr, "Cannot allocate guest PIB\n");
-        return 1;
-    }
+        lx_host_fatal(LX_FATAL_LOAD_FAILURE, "Cannot allocate guest PIB", NULL);
     LxGuestPib *pib = lx_execution_mapping_host(GLoaderState.guest_pib);
     lx_guest_store_u32(&pib->process_id, GLoaderState.pib.pib_ulpid);
     lx_guest_store_u32(&pib->parent_id, GLoaderState.pib.pib_ulppid);
@@ -108,10 +103,8 @@ int main(int argc, char **argv, char **envp)
     }
 
     if (!lxRegisterProcessPeer())
-    {
-        fprintf(stderr, "Cannot register this OS/2 process in its ball IPC scope\n");
-        return 1;
-    }
+        lx_host_fatal(LX_FATAL_LOAD_FAILURE,
+                      "Cannot register this OS/2 process in its ball IPC scope", NULL);
 
     if (!strcmp(argv[1], "--rexx-service"))
         return runRexxService();
@@ -124,16 +117,21 @@ int main(int argc, char **argv, char **envp)
         mapped = lxMakeUnixPath(modulename, &path_error);
         if (!mapped)
         {
-            fprintf(stderr, "Cannot resolve guest program '%s' (OS/2 error %u)\n", modulename,
-                    path_error);
-            return 1;
+            char summary[512];
+            snprintf(summary, sizeof summary, "Cannot resolve guest program '%s' (OS/2 error %u)",
+                     modulename, path_error);
+            lx_host_fatal(LX_FATAL_LOAD_FAILURE, summary, NULL);
         }
         modulename = mapped;
     }
     LxModule *lxmod = loadModuleByPath(modulename);
-    free(mapped);
     if (lxmod != NULL)
+    {
+        free(mapped);
         runModule(lxmod);
-
-    return 1;
+        return 1;
+    }
+    char summary[768];
+    lxDescribeModuleFailure(modulename, summary, sizeof summary);
+    lx_host_fatal(LX_FATAL_LOAD_FAILURE, summary, NULL);
 }

@@ -122,7 +122,7 @@ static void fixupInternalChain(uint8 *page, sint16 offset, uint32 target)
             occupied[current + 3])
         {
             fprintf(stderr, "Invalid LX internal fixup chain at page offset 0x%X\n", current);
-            lx_host_process_exit(1);
+            lx_host_fatal(LX_FATAL_LOAD_FAILURE, "A module contains invalid LX fixup data", NULL);
         }
         memset(occupied + current, 1, 4);
         uint32 link;
@@ -170,7 +170,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
             (((srctype & 0x1F) != 0x07) || ((fixupflags & 3) != 0 && (fixupflags & 3) != 3)))
         {
             fprintf(stderr, "Invalid LX internal fixup chain type\n");
-            lx_host_process_exit(1);
+            lx_host_fatal(LX_FATAL_LOAD_FAILURE, "A module contains invalid LX fixup data", NULL);
         }
         uint8 srclist_count = 0;
         sint16 srcoffset = 0;
@@ -260,7 +260,8 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 {
                     fprintf(stderr, "Module '%s': invalid internal fixup object #%u\n", lxmod->name,
                             (unsigned)objectid);
-                    lx_host_process_exit(1);
+                    lx_host_fatal(LX_FATAL_LOAD_FAILURE, "A module contains invalid LX fixup data",
+                                  NULL);
                 }
                 const LxObjectTableEntry *objects =
                     (const LxObjectTableEntry *)(exe + lx->object_table_offset);
@@ -301,7 +302,8 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                                        1),
                             (unsigned)pagenum, (int)srcoffset, (unsigned)srctype,
                             (unsigned)objectid, (unsigned)targetoffset);
-                        lx_host_process_exit(1);
+                        lx_host_fatal(LX_FATAL_LOAD_FAILURE,
+                                      "A module contains invalid LX fixup data", NULL);
                     }
                     else
                     {
@@ -498,7 +500,8 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
             { // Internal entry table fixup record
                 FIXME("FIXUP 0x3 WRITE ME");
                 assert(!"write me");
-                lx_host_process_exit(1);
+                lx_host_fatal(LX_FATAL_LOAD_FAILURE, "A module contains invalid LX fixup data",
+                              NULL);
                 break;
             }
         }

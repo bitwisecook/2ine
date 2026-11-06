@@ -53,6 +53,8 @@ if(TARGET twoine_runtime)
     add_test(NAME floppy_drives COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/floppy_drives.py" --program $<TARGET_FILE:twoine_image_fs_tests> --work "${PROJECT_BINARY_DIR}/floppy-drive-tests")
     set_tests_properties(floppy_drives PROPERTIES TIMEOUT 30 ENVIRONMENT "TWOINE_BALL_LIBRARY=$<TARGET_FILE:twoine_ball>")
     set_tests_properties(image_drives PROPERTIES TIMEOUT 30 ENVIRONMENT "TWOINE_BALL_LIBRARY=$<TARGET_FILE:twoine_ball>")
+    add_executable(twoine_fatal_tests hal/test_fatal.c)
+    target_link_libraries(twoine_fatal_tests PRIVATE twoine_runtime)
     add_executable(twoine_host_platform_tests hal/test_host_platform.c)
     target_link_libraries(twoine_host_platform_tests PRIVATE twoine_runtime)
     get_target_property(_twoine_host_platform twoine_portable_hal TWOINE_HOST_PLATFORM)
@@ -346,6 +348,10 @@ if(TARGET lx_loader)
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/open32.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
     set_tests_properties(open32_apis PROPERTIES TIMEOUT 40)
+    add_test(NAME fatal_report COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/fatal_report.py"
+        --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")
+    set_tests_properties(fatal_report PROPERTIES TIMEOUT 120)
     add_test(NAME missing_import_exit COMMAND "${Python3_EXECUTABLE}"
         "${CMAKE_CURRENT_SOURCE_DIR}/integration/missing_import.py"
         --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}")

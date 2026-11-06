@@ -5,10 +5,20 @@ import subprocess
 import sys
 import unittest
 
-from tools.gnome_sessions import Sessions, StartupPool
+from tools.gnome_sessions import Sessions, StartupPool, abnormal_exit_message
 
 
 class SessionTests(unittest.TestCase):
+    def test_only_an_unrequested_signal_death_needs_a_dialog(self):
+        self.assertIsNone(abnormal_exit_message("App", 0, False, "log"))
+        self.assertIsNone(abnormal_exit_message("App", 1, False, "log"))
+        self.assertIsNone(abnormal_exit_message("App", -15, True, "log"))
+        killed = abnormal_exit_message("App", -9, False, "/ball/logs/session.log")
+        self.assertIn("signal 9", killed)
+        self.assertIn("memory", killed)
+        self.assertIn("/ball/logs/session.log", killed)
+        self.assertIn("could not record", abnormal_exit_message("App", -11, False, "log"))
+
     def test_apps_share_a_ball_while_installers_are_exclusive_per_ball(self):
         sessions = Sessions()
         first = sessions.reserve("/tmp/a", False, "First")

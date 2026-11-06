@@ -856,6 +856,44 @@ int executableAt(void *unused, uint32 address)
     return -1;
 }
 
+/* Runs in the fatal reporter, possibly from a signal handler: no locks or allocation. */
+void lxWriteFatalModules(void)
+{
+    lx_host_fatal_write("\n-- OS/2 modules --\n");
+    for (const LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+    {
+        lx_host_fatal_write(module->name);
+        lx_host_fatal_write(module->is_lx ? " LX " : " NE ");
+        lx_host_fatal_write(module->os2path ? module->os2path : "(no OS/2 path)");
+        for (uint32 i = 0; i < module->num_mmaps; i++)
+        {
+            lx_host_fatal_write(" obj");
+            lx_host_fatal_write_decimal(i + 1);
+            lx_host_fatal_write("=");
+            lx_host_fatal_write_hex(module->mmaps[i].guest_base, 8);
+            lx_host_fatal_write("+");
+            lx_host_fatal_write_hex(module->mmaps[i].size, 8);
+        }
+        lx_host_fatal_write("\n");
+    }
+}
+
+void lxDescribeModuleFailure(const char *program, char *buffer, size_t size)
+{
+    const uint32 code = LastModuleFailure.code;
+    const char *reason = code == 2 || code == 3       ? "the file was not found"
+                         : code == 5                  ? "access was denied"
+                         : code == 11                 ? "it is not a valid OS/2 module"
+                         : code == 126                ? "a required module was not found"
+                         : code == 127 || code == 182 ? "a required function was not found"
+                                                      : "it could not be loaded";
+    if (*LastModuleFailure.module && strcmp(LastModuleFailure.module, program))
+        snprintf(buffer, size, "Cannot load %s: %s (%s, OS/2 error %u)", program, reason,
+                 LastModuleFailure.module, (uint)code);
+    else
+        snprintf(buffer, size, "Cannot load %s: %s (OS/2 error %u)", program, reason, (uint)code);
+}
+
 int describeExecutionAddress(void *unused, uint32 address, char *buffer, size_t size)
 {
     (void)unused;

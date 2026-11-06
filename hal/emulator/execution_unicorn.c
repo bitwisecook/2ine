@@ -3,10 +3,12 @@
 #include "execution_internal.h"
 #include "cpu.h"
 #include "guest/abi.h"
+#include "hal/host_fatal.h"
 #include "hal/host_sync.h"
 #include "hal/host_thread.h"
 #include "hal/host.h"
 #include <setjmp.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,17 +78,7 @@ static unsigned bindingBucket(uint32_t address)
 
 static __attribute__((noreturn)) void failure(const char *message)
 {
-    fprintf(stderr, "2ine execution: %s\n", message);
-    abort();
-}
-static __attribute__((noreturn)) void stopGuest(const char *message)
-{
-    fprintf(stderr, "2ine execution: %s\n", message);
-    /* Each worker owns one OS/2 process. Do not reenter guest exit handlers
-       after an execution fault; they may hit the same unsupported API or
-       damaged state. The launcher observes a normal nonzero worker exit. */
-    fflush(stderr);
-    lx_host_process_exit(1);
+    lx_host_fatal(LX_FATAL_INTERNAL, message, NULL);
 }
 /* Other guest threads remain parked until host process exit. In particular, do
    not run their PM destructors while the primary thread is executing exit handlers. */
@@ -135,6 +127,7 @@ static void terminateProcess(LxExecution *e, void (*cleanup)(uint32_t), uint32_t
 {
     EmulatedState *s = e->backend;
     lx_host_mutex_lock(s->mutex, UINT32_MAX);
+    lx_host_fatal_mark_exiting();
     int recursive = s->termination == 2 && lx_host_thread_id() == s->primary_thread;
     if (!s->termination)
     {
@@ -444,6 +437,133 @@ static void bindThreadWindow(EmulatedState *s)
         failure(lx_cpu_error(s->cpu));
     s->tls_backing = ThreadTib;
 }
+static void appendText(char *buffer, size_t size, const char *format, ...)
+    __attribute__((format(printf, 3, 4)));
+static void appendText(char *buffer, size_t size, const char *format, ...)
+{
+    size_t used = strlen(buffer);
+    if (used + 1 >= size)
+        return;
+    va_list arguments;
+    va_start(arguments, format);
+    vsnprintf(buffer + used, size - used, format, arguments);
+    va_end(arguments);
+}
+static void appendBytes(char *buffer, size_t size, const char *label, const uint8_t *bytes,
+                        unsigned count)
+{
+    if (!bytes)
+        return;
+    appendText(buffer, size, "%s:", label);
+    for (unsigned i = 0; i < count; i++)
+        appendText(buffer, size, " %02x", bytes[i]);
+    appendText(buffer, size, "\n");
+}
+static void appendAddress(EmulatedState *s, char *buffer, size_t size, const char *label,
+                          uint32_t address)
+{
+    char place[192] = "";
+    if (s->execution->services.describe_address)
+        s->execution->services.describe_address(s->execution->services.userdata, address, place,
+                                                sizeof place);
+    appendText(buffer, size, "%s: %08x%s%s\n", label, address, *place ? " " : "", place);
+}
+static uint32_t guestLinear(EmulatedState *s, uint16_t selector, uint32_t offset)
+{
+    return (selector & 4) ? s->selectors[selector >> 3].base + (offset & 0xffff) : offset;
+}
+static void appendGuestState(EmulatedState *s, const LxCpuRegisters *r, char *buffer, size_t size)
+{
+    appendText(buffer, size,
+               "guest registers: cs:eip=%04x:%08x ss:esp=%04x:%08x eax=%08x ebx=%08x ecx=%08x "
+               "edx=%08x esi=%08x edi=%08x ebp=%08x ds=%04x es=%04x fs=%04x gs=%04x\n",
+               r->cs, r->eip, r->ss, r->esp, r->eax, r->ebx, r->ecx, r->edx, r->esi, r->edi, r->ebp,
+               r->ds, r->es, r->fs, r->gs);
+    appendAddress(s, buffer, size, "guest code", guestLinear(s, r->cs, r->eip));
+    lx_host_mutex_lock(s->mutex, UINT32_MAX);
+    appendBytes(buffer, size, "guest instruction",
+                lx_cpu_translate_far(s->cpu, r->cs, r->eip, 16, LX_MEM_READ), 16);
+    uint32_t stack_offset = r->esp;
+    if ((r->ss & 4) && s->selectors[r->ss >> 3].bits == 16)
+        stack_offset &= 0xffff;
+    /* A shallow stack can end inside the window; the return address still matters. */
+    unsigned stack_bytes = 64;
+    const uint8_t *stack = NULL;
+    for (; stack_bytes >= 4 && !stack; stack_bytes /= 2)
+        stack = lx_cpu_translate_far(s->cpu, r->ss, stack_offset, stack_bytes, LX_MEM_READ);
+    appendBytes(buffer, size, "guest stack", stack, stack_bytes * 2);
+    if (stack)
+        appendAddress(s, buffer, size, "guest return",
+                      (uint32_t)stack[0] | (uint32_t)stack[1] << 8 | (uint32_t)stack[2] << 16 |
+                          (uint32_t)stack[3] << 24);
+    appendBytes(buffer, size, "guest eax-16",
+                r->eax >= 16 ? lx_cpu_translate(s->cpu, r->eax - 16, 48, LX_MEM_READ) : NULL, 48);
+    lx_host_mutex_unlock(s->mutex);
+}
+static __attribute__((noreturn)) void missingImport(EmulatedState *s, const LxCpuRegisters *r,
+                                                    const Binding *b)
+{
+    char summary[320], detail[4096] = "";
+    snprintf(summary, sizeof summary, "Missing import %s:%s", b->missing_module, b->missing_entry);
+    appendGuestState(s, r, detail, sizeof detail);
+    /* There is no valid API result with which to resume this OS/2 process, and
+       its exit handlers may call the same import. */
+    lx_host_fatal(LX_FATAL_MISSING_IMPORT, summary, detail);
+}
+/* Each worker owns one OS/2 process. Guest exit handlers are not reentered after
+   an execution fault: they may hit the same unsupported API or damaged state. */
+static __attribute__((noreturn)) void stopGuest(EmulatedState *s, const LxCpuRegisters *r,
+                                                const LxCpuEvent *event)
+{
+    static const char *const accesses[] = {"access", "read", "write", "access", "execute"};
+    char summary[192], detail[4096] = "";
+    const uint32_t code = guestLinear(s, r->cs, r->eip);
+    if (event->reason == LX_CPU_FAULT && event->memory_access >= 0 && event->memory_access <= 4)
+        snprintf(summary, sizeof summary, "Invalid memory %s at %08x by the instruction at %08x",
+                 accesses[event->memory_access], event->address, code);
+    else
+        snprintf(summary, sizeof summary, "CPU exception %u at %08x", event->vector, code);
+    appendText(detail, sizeof detail, "CPU stop %d vector %u memory=%08x access=%d: %s\n",
+               event->reason, event->vector, event->address, event->memory_access,
+               lx_cpu_error(s->cpu));
+    appendGuestState(s, r, detail, sizeof detail);
+    lx_host_fatal(LX_FATAL_GUEST_FAULT, summary, detail);
+}
+/* Runs in the fatal reporter, possibly from a signal handler on this thread. */
+static void writeFatalContext(void)
+{
+    const EmulatedState *s = Emulated;
+    lx_host_fatal_write("\n-- Guest execution --\nbackend: unicorn\n");
+    if (!s)
+        return;
+    unsigned depth = 0;
+    for (const Invocation *frame = Active; frame && depth < 32; frame = frame->outer, depth++)
+    {
+        const LxCpuRegisters *r = frame->api_registers;
+        lx_host_fatal_write("invocation ");
+        lx_host_fatal_write_decimal(depth);
+        if (!r)
+        {
+            lx_host_fatal_write(": in guest code or a bridge\n");
+            continue;
+        }
+        lx_host_fatal_write(": in host API; cs:eip=");
+        lx_host_fatal_write_hex(r->cs, 4);
+        lx_host_fatal_write(":");
+        lx_host_fatal_write_hex(r->eip, 8);
+        lx_host_fatal_write(" ss:esp=");
+        lx_host_fatal_write_hex(r->ss, 4);
+        lx_host_fatal_write(":");
+        lx_host_fatal_write_hex(r->esp, 8);
+        lx_host_fatal_write(" eax=");
+        lx_host_fatal_write_hex(r->eax, 8);
+        lx_host_fatal_write(" arguments=");
+        lx_host_fatal_write_hex(frame->api_arguments, 8);
+        lx_host_fatal_write("\n");
+    }
+    if (!depth)
+        lx_host_fatal_write("this thread is not executing guest code\n");
+}
 static uint32_t invoke(LxCpuRegisters registers, int preserve)
 {
     EmulatedState *s = Emulated;
@@ -486,49 +606,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             break;
         if (event.reason != LX_CPU_TRAP || event.vector != API_VECTOR)
         {
-            char error[512];
-            snprintf(error, sizeof error,
-                     "CPU stop %d vector %u at %04x:%08x "
-                     "eax=%08x ebx=%08x ecx=%08x edx=%08x esi=%08x edi=%08x ebp=%08x "
-                     "memory=%08x access=%d "
-                     "ss:esp=%04x:%08x ds=%04x es=%04x fs=%04x gs=%04x: %s",
-                     event.reason, event.vector, registers.cs, registers.eip, registers.eax,
-                     registers.ebx, registers.ecx, registers.edx, registers.esi, registers.edi,
-                     registers.ebp, event.address, event.memory_access, registers.ss, registers.esp,
-                     registers.ds, registers.es, registers.fs, registers.gs, lx_cpu_error(s->cpu));
-            lx_host_mutex_lock(s->mutex, UINT32_MAX);
-            uint8_t *bytes =
-                lx_cpu_translate_far(s->cpu, registers.cs, registers.eip, 16, LX_MEM_READ);
-            if (bytes)
-            {
-                fprintf(stderr, "guest instruction:");
-                for (unsigned i = 0; i < 16; i++)
-                    fprintf(stderr, " %02x", bytes[i]);
-                fprintf(stderr, "\n");
-            }
-            uint32_t stack_offset = registers.esp;
-            if ((registers.ss & 4) && s->selectors[registers.ss >> 3].bits == 16)
-                stack_offset &= 0xffff;
-            bytes = lx_cpu_translate_far(s->cpu, registers.ss, stack_offset, 64, LX_MEM_READ);
-            if (bytes)
-            {
-                fprintf(stderr, "guest stack:");
-                for (unsigned i = 0; i < 64; i++)
-                    fprintf(stderr, " %02x", bytes[i]);
-                fprintf(stderr, "\n");
-            }
-            bytes = registers.eax >= 16
-                        ? lx_cpu_translate(s->cpu, registers.eax - 16, 48, LX_MEM_READ)
-                        : NULL;
-            if (bytes)
-            {
-                fprintf(stderr, "guest eax-16:");
-                for (unsigned i = 0; i < 48; i++)
-                    fprintf(stderr, " %02x", bytes[i]);
-                fprintf(stderr, "\n");
-            }
-            lx_host_mutex_unlock(s->mutex);
-            stopGuest(error);
+            stopGuest(s, &registers, &event);
         }
         uint32_t linear = registers.eip - 2;
         if (registers.cs & 4)
@@ -542,10 +620,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
             failure("Unregistered guest API trap");
         if (!b->callback)
         {
-            char message[320];
-            snprintf(message, sizeof message, "Missing import %s:%s", b->missing_module,
-                     b->missing_entry);
-            stopGuest(message);
+            missingImport(s, &registers, b);
         }
         const unsigned ss_index = registers.ss >> 3;
         const uint32_t sp = (registers.ss & 4) ? (registers.esp & 0xffff) : registers.esp;
@@ -925,6 +1000,7 @@ static int initialize(LxExecution *e)
         return 0;
     }
     Emulated = s;
+    lx_host_fatal_add_context(writeFatalContext);
     LxSegment code = {FLAT_CODE, 0, UINT32_MAX, 32, 1};
     LxSegment data = {FLAT_DATA, 0, UINT32_MAX, 32, 0};
     if (!lx_cpu_set_segment(s->cpu, &code) || !lx_cpu_set_segment(s->cpu, &data))

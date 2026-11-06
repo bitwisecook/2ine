@@ -1116,6 +1116,10 @@ final class AppModel {
                 self.installCompletion = InstallCompletion(ball: selected, letter: media, code: result.code, signalled: result.signalled)
             }
             session.status = result.signalled ? "Terminated by signal \(result.code)" : "Exited \(result.code)"
+            if let message = abnormalExitMessage(program: session.title, code: result.code, signalled: result.signalled,
+                                                 stopRequested: session.stopRequested, log: result.log) {
+                self.error = message
+            }
             if let error = result.receiptError { session.output += "\nThe installer receipt could not be saved: " + error }
             if self.selected == selected, let audit = result.dependencyAudit, audit.scope == "launch", audit.needsMediaSelection {
                 _ = self.requestDependencyComponents(audit, ball: selected)

@@ -2,6 +2,7 @@
 """Application sessions and exact-plan leases for manager-owned startup children."""
 
 import json
+import signal
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +30,18 @@ class Session:
     @property
     def active(self):
         return self.state in ("preparing", "running", "stopping", "cancelling", "finishing")
+
+
+def abnormal_exit_message(name, code, stop_sent, log):
+    """Explain a death the worker could not report itself, or None for a normal end."""
+    if code is None or code >= 0 or stop_sent:
+        return None
+    cause = (
+        "The system or another program killed it, for example because memory ran out."
+        if code == -signal.SIGKILL
+        else "2ine could not record what happened."
+    )
+    return f"{name} was terminated by signal {-code}. {cause}\n\nThe session log is at {log}."
 
 
 class Sessions:
