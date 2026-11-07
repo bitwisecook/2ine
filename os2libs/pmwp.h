@@ -57,4 +57,6 @@ LX_GUEST_DATA_EXPORT(WPDiskClassData, 35, 48);
 LX_GUEST_DATA_EXPORT(WPProgramClassData, 47, 168);
 LX_GUEST_DATA_EXPORT(M_WPFileSystemClassData, 311, 28);
 LX_GUEST_DATA_EXPORT(M_WPObjectClassData, 323, 184);
+/* Starts the first program object whose ASSOCFILTER matches the file name. */
+BOOL lx_pmwp_open_associated(PSZ path);
 #endif

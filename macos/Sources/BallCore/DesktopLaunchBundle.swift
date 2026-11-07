@@ -1,4 +1,6 @@
 import Foundation
+import CoreGraphics
+import ImageIO
 
 struct DesktopIdentity: Decodable, Sendable {
     let name: String
@@ -12,8 +14,57 @@ struct DesktopLaunchBundle: Sendable {
     let name: String
     let icon: URL?
 
+    /// Renders one application icon pixel image as a PNG bundle resource.
+    private static func pngImage(rgba: Data, width: Int, height: Int) -> Data? {
+        guard let provider = CGDataProvider(data: rgba as CFData),
+              let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        guard let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+                                  bytesPerRow: width * 4, space: space,
+                                  bitmapInfo: CGImageAlphaInfo.last.rawValue, provider: provider,
+                                  decode: nil, shouldInterpolate: true, intent: .defaultIntent) else {
+            return nil
+        }
+        return pngData(image)
+    }
+
+    /// Re-encodes one imported icon image as a PNG bundle resource.
+    private static func pngImage(image bytes: Data) -> Data? {
+        guard let source = CGImageSourceCreateWithData(bytes as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        return pngData(image)
+    }
+
+    private static func pngData(_ image: CGImage) -> Data? {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil) else {
+            return nil
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        return CGImageDestinationFinalize(destination) && data.length > 0 ? data as Data : nil
+    }
+
+    /// Writes the icon the Dock and App Switcher present: the application's own icon, or
+    /// this app's own bundled icon as the fallback. An AppKit applicationIconImage override
+    /// never changes what LaunchServices presents for a running process.
+    private static func writeIcon(_ icon: ExecutableIcon?, fallback: URL?, resources: URL) throws -> String? {
+        var png: Data?
+        if let bytes = icon?.rgba, let width = icon?.width, let height = icon?.height,
+           width > 0, height > 0, width <= 1024, height <= 1024, bytes.count == width * height * 4 {
+            png = pngImage(rgba: bytes, width: width, height: height)
+        } else if let bytes = icon?.image, bytes.count <= 16 * 1024 * 1024 {
+            png = pngImage(image: bytes)
+        }
+        if let png {
+            try png.write(to: resources.appending(path: "ApplicationIcon.png"), options: .atomic)
+            return "ApplicationIcon.png"
+        }
+        guard let fallback, let bytes = try? Data(contentsOf: fallback), !bytes.isEmpty else { return nil }
+        try bytes.write(to: resources.appending(path: fallback.lastPathComponent), options: .atomic)
+        return fallback.lastPathComponent
+    }
+
     static func create(ball: String, sessionID: String, loader: URL,
-                       identity: DesktopIdentity?) async throws -> DesktopLaunchBundle {
+                       identity: DesktopIdentity?, fallbackIcon: URL?) async throws -> DesktopLaunchBundle {
         guard validLaunchSessionID(sessionID) else { throw BallError("Invalid desktop session ID.") }
         let files = FileManager.default, root = URL(filePath: canonicalLaunchBall(ball))
         let components = ["cache", "desktop-sessions", sessionID]
@@ -63,11 +114,14 @@ struct DesktopLaunchBundle: Sendable {
                     try bytes.write(to: output, options: .atomic); iconURL = output
                 }
             }
+            let iconName = try writeIcon(identity?.icon, fallback: fallbackIcon, resources: resources)
+            if let iconName { iconURL = iconURL ?? resources.appending(path: iconName) }
             let token = sessionID.utf8.map { String(format: "%02x", $0) }.joined()
-            let info: [String: Any] = ["CFBundleExecutable": "lx_loader", "CFBundleName": name,
+            var info: [String: Any] = ["CFBundleExecutable": "lx_loader", "CFBundleName": name,
                                       "CFBundleDisplayName": name, "CFBundleIdentifier": "io.github.bitwisecook.2ine.session." + token,
                                       "CFBundlePackageType": "APPL", "CFBundleVersion": "1", "LSUIElement": true,
                                       "NSHighResolutionCapable": true]
+            if let iconName { info["CFBundleIconFile"] = iconName }
             try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
                 .write(to: bundle.appending(path: "Contents/Info.plist"), options: .atomic)
             // The copied loader's standalone signature does not seal this new bundle's plist/resources.

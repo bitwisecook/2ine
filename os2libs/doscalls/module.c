@@ -115,6 +115,19 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     FIXME("ginfo's time fields update in a timer interrupt!  :O");
     ginfo = (GINFOSEG *)GLoaderState.allocSegment(&ginfosel, 0);
     linfo = (LINFOSEG *)GLoaderState.allocSegment(&linfosel, 0);
+    /* Host-side users of PM libraries load this module with no guest to read info segments. */
+    if ((!ginfo || !linfo) && !GLoaderState.execution)
+    {
+        if (ginfo)
+            GLoaderState.freeSelector(ginfosel);
+        if (linfo)
+            GLoaderState.freeSelector(linfosel);
+        ginfo = NULL;
+        linfo = NULL;
+        ginfosel = linfosel = 0;
+        GLoaderState.freeSharedMemory = DosFreeMem;
+        return;
+    }
     if ((!ginfo) || (!linfo))
     {
         lx_host_mutex_destroy(GMutexDosCalls);
@@ -190,8 +203,10 @@ LX_NATIVE_DESTRUCTOR(doscalls)
     HFiles = NULL;
     MaxHFiles = 0;
 
-    GLoaderState.freeSelector(ginfosel);
-    GLoaderState.freeSelector(linfosel);
+    if (ginfo)
+        GLoaderState.freeSelector(ginfosel);
+    if (linfo)
+        GLoaderState.freeSelector(linfosel);
     lx_host_mutex_destroy(GMutexDosCalls);
     lx_host_mutex_destroy(GMutexDosBeep);
     lx_host_mutex_destroy(GMutexDir16);

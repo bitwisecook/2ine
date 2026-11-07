@@ -210,7 +210,7 @@ def open32_program(queue="2INEPDF"):
         value = queue[4:].encode() + b"\0" if offset == 4 else bytes(4)
         g.code.extend(b"\xc7\x40" + bytes([offset]) + value)
     g.load(mode)
-    g.code.extend(b"\x66\xc7\x40\x2c\x02\x00")  # Unsupported landscape.
+    g.code.extend(b"\x66\xc7\x40\x2c\x03\x00")  # Neither portrait nor landscape.
     g.call(2, 64, name, name, 0, (mode,))
     g.result(0, 65)
     g.call(2, 300)

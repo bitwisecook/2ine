@@ -41,6 +41,7 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     /* Use a low amplitude to match the PC speaker mix. */
     GLoaderState.beep_volume = 0.05f;
     GLoaderState.display_dpi = 96;
+    GLoaderState.display_depth = 24;
 
     cfgLoadFiles();
     const char *display_dpi = getenv("TWOINE_DISPLAY_DPI");
@@ -50,6 +51,14 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
         unsigned long dpi = strtoul(display_dpi, &end, 10);
         if (end != display_dpi && !*end && dpi >= 72 && dpi <= 384)
             GLoaderState.display_dpi = (unsigned)dpi;
+    }
+    const char *display_depth = getenv("TWOINE_DISPLAY_DEPTH");
+    if (display_depth)
+    {
+        char *end = NULL;
+        unsigned long depth = strtoul(display_depth, &end, 10);
+        if (end != display_depth && !*end && (depth == 4 || depth == 8 || depth == 16 || depth == 24))
+            GLoaderState.display_depth = (unsigned)depth;
     }
     prepOs2Drives();
 

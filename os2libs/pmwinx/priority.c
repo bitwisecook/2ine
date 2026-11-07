@@ -1,7 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Open32 process classes retain their public value after a host scheduling change. */
+/* Open32 process classes retain their public value after a host scheduling change.
+   A child's class is applied to the child and kept on its process object. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/process.h"
 #include "hal/host_process.h"
 #include "hal/host_sync.h"
 
@@ -17,6 +19,7 @@ enum
     OPEN32_ERROR_GEN_FAILURE = 31,
     OPEN32_ERROR_NOT_SUPPORTED = 50,
     OPEN32_ERROR_INVALID_PARAMETER = 87,
+    OPEN32_ERROR_INVALID_PROCID = 303,
     OPEN32_ERROR_INVALID_PRIORITY = 307
 };
 static LxHostOnce priority_once = LX_HOST_ONCE_INIT;
@@ -41,7 +44,7 @@ static ULONG priority_error(int error)
         case ENOMEM:
             return OPEN32_ERROR_NOT_ENOUGH_MEMORY;
         case ESRCH:
-            return OPEN32_ERROR_INVALID_HANDLE;
+            return OPEN32_ERROR_INVALID_PROCID;
         case EINVAL:
             return OPEN32_ERROR_INVALID_PARAMETER;
         default:
@@ -51,12 +54,6 @@ static ULONG priority_error(int error)
 
 BOOL SetPriorityClass(ULONG process, ULONG priority)
 {
-    /* GetCurrentProcess is currently the only process-handle producer. */
-    if (process != UINT32_MAX)
-    {
-        open32SetError(OPEN32_ERROR_INVALID_HANDLE);
-        return FALSE;
-    }
     LxHostProcessPriority selected;
     switch (priority)
     {
@@ -74,6 +71,20 @@ BOOL SetPriorityClass(ULONG process, ULONG priority)
         default:
             open32SetError(OPEN32_ERROR_INVALID_PRIORITY);
             return FALSE;
+    }
+    /* The class is validated before the handle, matching the original's order. */
+    int child_error = 0;
+    int target = open32ChildSetPriority(process, selected, priority, &child_error);
+    if (target < 0)
+    {
+        open32SetError(OPEN32_ERROR_INVALID_HANDLE);
+        return FALSE;
+    }
+    if (target)
+    {
+        if (child_error)
+            open32SetError(priority_error(child_error));
+        return !child_error;
     }
     lx_host_once(&priority_once, initialize_priority);
     if (!priority_monitor)
@@ -94,10 +105,12 @@ BOOL SetPriorityClass(ULONG process, ULONG priority)
 
 ULONG GetPriorityClass(ULONG process)
 {
-    if (process != UINT32_MAX)
+    ULONG child_class = 0;
+    int target = open32ChildPriorityClass(process, &child_class);
+    if (target < 0)
     {
         open32SetError(OPEN32_ERROR_INVALID_HANDLE);
         return 0;
     }
-    return __atomic_load_n(&process_priority, __ATOMIC_ACQUIRE);
+    return target ? child_class : __atomic_load_n(&process_priority, __ATOMIC_ACQUIRE);
 }

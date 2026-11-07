@@ -66,9 +66,18 @@ BOOL GpiQueryDeviceBitmapFormats(HPS ps, LONG count, PLONG output)
 {
     if (!lx_pm_valid_ps(ps) || count < 0 || (count && !output))
         return FALSE;
-    const LONG formats[] = {1, 24, 1, 8, 1, 4, 1, 1};
+    /* Plane and depth pairs, preferred format first; a display offers nothing above its depth. */
+    const unsigned depth = GLoaderState.display_depth ? GLoaderState.display_depth : 24;
+    LONG formats[10] = {1, (LONG)depth};
+    LONG available = 2;
+    for (unsigned i = 0, others[] = {8, 4, 1}; i < 3; i++)
+        if (others[i] < depth)
+        {
+            formats[available++] = 1;
+            formats[available++] = (LONG)others[i];
+        }
     for (LONG i = 0; i < count; i++)
-        output[i] = i < 8 ? formats[i] : 0;
+        output[i] = i < available ? formats[i] : 0;
     return TRUE;
 }
 static uint32 rop_pixel(uint32 p, uint32 s, uint32 d, unsigned rop)
@@ -82,8 +91,11 @@ static uint32 rop_pixel(uint32 p, uint32 s, uint32 d, unsigned rop)
 static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count, PPOINTL points,
                        LONG rop, ULONG options)
 {
-    if (!lx_pm_valid_ps(destination) || (!bitmap && !lx_pm_valid_ps(source)) ||
-        (count != 3 && count != 4) || !points || rop < 0 || rop > 255 || options > 2)
+    /* Each bit pair differing only in the source term matches when a ROP ignores the source. */
+    const BOOL uses_source = ((rop ^ (rop >> 2)) & 0x33) != 0;
+    if (!lx_pm_valid_ps(destination) || (uses_source && !bitmap && !lx_pm_valid_ps(source)) ||
+        ((count != 3 && count != 4) && (uses_source || count != 2)) || !points || rop < 0 ||
+        rop > 255 || options > 2)
         return 0;
     int64_t w = (int64_t)points[1].x - points[0].x, h = (int64_t)points[1].y - points[0].y;
     int64_t sw = count == 4 ? (int64_t)points[3].x - points[2].x : w,
@@ -91,7 +103,7 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
     if (w <= 0 || h <= 0 || sw <= 0 || sh <= 0 || w > 16384 || h > 16384 || sw > 16384 ||
         sh > 16384 || w * h > 16777216 || sw * sh > 16777216)
         return 0;
-    uint32 *src = malloc((size_t)sw * sh * 4), *dst = calloc((size_t)w * h, 4);
+    uint32 *src = calloc((size_t)sw * sh, 4), *dst = calloc((size_t)w * h, 4);
     if (!src || !dst)
     {
         free(src);
@@ -99,7 +111,9 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
         return 0;
     }
     BOOL ok = TRUE;
-    if (bitmap)
+    if (!uses_source)
+        ok = TRUE;
+    else if (bitmap)
     {
         if (points[2].x < 0 || points[2].y < 0 || (uint64)points[2].x + sw > bitmap->width ||
             (uint64)points[2].y + sh > bitmap->height)
@@ -145,8 +159,9 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
             {
                 size_t index = (size_t)y * w + x;
                 uint32 source_pixel = src[(size_t)(y * sh / h) * sw + x * sw / w];
-                if ((ps->back_mix == 18 && source_pixel == (uint32)background) ||
-                    (ps->back_mix == 19 && dst[index] != (uint32)background))
+                if (uses_source &&
+                    ((ps->back_mix == 18 && source_pixel == (uint32)background) ||
+                     (ps->back_mix == 19 && dst[index] != (uint32)background)))
                     continue;
                 uint32 pattern = 0;
                 BOOL foreground;
@@ -169,11 +184,16 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
 }
 LONG GpiBitBlt(HPS destination, HPS source, LONG count, PPOINTL points, LONG rop, ULONG options)
 {
+    TRACE_NATIVE("GpiBitBlt(%u, %u, %d, %d,%d - %d,%d)", (uint)destination, (uint)source, (int)count,
+                 points ? (int)points[0].x : 0, points ? (int)points[0].y : 0,
+                 points ? (int)points[1].x : 0, points ? (int)points[1].y : 0);
     return bitmap_blt(destination, source, NULL, count, points, rop, options);
 }
 LONG GpiWCBitBlt(HPS destination, ULONG handle, LONG count, PPOINTL points, LONG rop, ULONG options)
 {
     PresentationSpace *ps = lx_pm_font_space(destination);
+    TRACE_NATIVE("GpiWCBitBlt(%u, %u, %d, %p, %X, %u)", (uint)destination, (uint)handle, (int)count,
+                 points, (uint)rop, (uint)options);
     if (!ps || !points || (count != 3 && count != 4))
         return 0;
     POINTL device[4];
@@ -181,9 +201,14 @@ LONG GpiWCBitBlt(HPS destination, ULONG handle, LONG count, PPOINTL points, LONG
     if (!lx_pm_transform_point(ps, &device[0], TRUE) ||
         !lx_pm_transform_point(ps, &device[1], TRUE))
         return 0;
+    /* Unlike GpiBitBlt, the target rectangle's upper-right corner is inclusive here. */
+    device[1].x++;
+    device[1].y++;
     LxHandleBorrow borrow = {0};
-    PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
-    LONG result = bitmap ? bitmap_blt(destination, 0, bitmap, count, device, rop, options) : 0;
+    PmBitmap *bitmap = handle ? lx_pm_bitmap(handle, &borrow) : NULL;
+    /* A pattern-only ROP passes no bitmap; bitmap_blt rejects any other ROP without a source. */
+    LONG result = bitmap || !handle ? bitmap_blt(destination, 0, bitmap, count, device, rop, options)
+                                    : 0;
     lx_handle_release(&borrow);
     return result;
 }

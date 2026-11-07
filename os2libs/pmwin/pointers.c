@@ -14,6 +14,7 @@ typedef struct PmPointer
     PmPointerImage *image;
     unsigned hot_x, hot_y;
     ULONG info_mask,info_color;
+    PmPointerImage *shape; /* Queryable image of a pointer the host draws itself. */
 } PmPointer;
 static HPOINTER current_pointer;
 static LONG pointer_level;
@@ -46,6 +47,7 @@ static void release_pointer(void *resource)
     if(pointer->info_color)lx_pm_bitmap_delete(pointer->info_color);
     lx_host_pointer_destroy(pointer->host);
     pmPointerImageFree(pointer->image);
+    pmPointerImageFree(pointer->shape);
     free(pointer);
 }
 void destroyPointers(AnchorBlock *anchor)
@@ -293,6 +295,16 @@ void lx_pm_set_pointer_clip(const RECTL *bounds)
     }
     __atomic_store_n(&pointer_clipped, bounds != NULL, __ATOMIC_RELEASE);
 }
+BOOL queryPointerClip(RECTL *bounds)
+{
+    if (!__atomic_load_n(&pointer_clipped, __ATOMIC_ACQUIRE))
+        return FALSE;
+    *bounds = (RECTL){__atomic_load_n(&pointer_clip[0], __ATOMIC_RELAXED),
+                      __atomic_load_n(&pointer_clip[1], __ATOMIC_RELAXED),
+                      __atomic_load_n(&pointer_clip[2], __ATOMIC_RELAXED),
+                      __atomic_load_n(&pointer_clip[3], __ATOMIC_RELAXED)};
+    return TRUE;
+}
 BOOL lx_pm_clip_pointer(LONG *x, LONG *y)
 {
     if (!__atomic_load_n(&pointer_clipped, __ATOMIC_ACQUIRE))
@@ -412,11 +424,86 @@ HPOINTER WinCreatePointerIndirect(HWND desktop,LXPOINTERINFO*info)
     lx_handle_release(&cb);lx_handle_release(&mb);p->anchor=a;p->image=image;p->hot_x=info->xHotspot;p->hot_y=height-1-info->yHotspot;p->copy=TRUE;p->handle=lx_handle_create(LX_HANDLE_PM_POINTER,p,release_pointer);
     if(!p->handle){pmPointerImageFree(image);free(p);return 0;}p->next=a->pointers;a->pointers=p;return p->handle;
 }
+/* Host cursors expose no bitmap, so their shapes are described here. 'X' is black, '.' is
+   white and a space is transparent; each entry gives its hot spot from the top left. */
+static const struct { LONG id; unsigned hot_x, hot_y; const char *rows[16]; } pointer_shapes[] = {
+    {1, 0, 0, {"X               ","XX              ","X.X             ","X..X            ",
+               "X...X           ","X....X          ","X.....X         ","X......X        ",
+               "X.......X       ","X....XXXXX      ","X..X..X         ","X.X X..X        ",
+               "XX  X..X        ","X    X..X       ","     X..X       ","      XX        "}},
+    {2, 4, 8, {" XXX XXX        ","    X           ","    X           ","    X           ",
+               "    X           ","    X           ","    X           ","    X           ",
+               "    X           ","    X           ","    X           ","    X           ",
+               "    X           ","    X           ","    X           "," XXX XXX        "}},
+    {3, 7, 7, {" XXXXXXXXXXXXX  "," X...........X  ","  X.........X   ","   X.......X    ",
+               "    X.....X     ","     X...X      ","      X.X       ","       X        ",
+               "      X.X       ","     X...X      ","    X.....X     ","   X.......X    ",
+               "  X.........X   "," X...........X  "," XXXXXXXXXXXXX  ","                "}},
+    {4, 7, 7, {"       X        ","      X.X       ","     X...X      ","    XX.XX       ",
+               "      X         ","  X   X   X     "," X.X  X  X.X    ","X...XXXXX...X   ",
+               " X.X  X  X.X    ","  X   X   X     ","      X         ","    XX.XX       ",
+               "     X...X      ","      X.X       ","       X        ","                "}},
+    {5, 7, 7, {"       X        ","      X.X       ","     X...X      ","      X.X       ",
+               "      X.X       ","  X   X.X   X   "," XX XXX.XXX XX  ","X.............X ",
+               " XX XXX.XXX XX  ","  X   X.X   X   ","      X.X       ","      X.X       ",
+               "     X...X      ","      X.X       ","       X        ","                "}},
+    {6, 7, 7, {"XXXXX           ","X..X            ","X.X             ","X..X            ",
+               "XX X.X          ","    X.X         ","     X.X        ","      X.X       ",
+               "       X.X      ","        X.X XX  ","         X..X   ","          X.X   ",
+               "         X..X   ","        XXXXX   ","                ","                "}},
+    {7, 7, 7, {"        XXXXX   ","         X..X   ","          X.X   ","         X..X   ",
+               "       X.X XX   ","      X.X       ","     X.X        ","    X.X         ",
+               "   X.X          ","XX X.X          "," X..X           "," X.X            ",
+               " X..X           ","XXXXX           ","                ","                "}},
+    {8, 7, 7, {"                ","                ","                ","                ",
+               "   X       X    ","  XX       XX   "," X.XXXXXXXXX.X  ","X.............X ",
+               " X.XXXXXXXXX.X  ","  XX       XX   ","   X       X    ","                ",
+               "                ","                ","                ","                "}},
+    {18, 7, 7, {"     XXXXX      ","   XX.....XX    ","  X..XXXXX.X    "," X.X    X.X.X   ",
+                " X.X   X.X.X    ","X.X   X.X X.X   ","X.X  X.X  X.X   ","X.X X.X   X.X   ",
+                "X.XX.X    X.X   "," X.X.X   X.X    "," X.X.X  X.X     ","  X.XXXX..X     ",
+                "   XX.....XX    ","     XXXXX      ","                ","                "}},
+    {9, 7, 7, {"       X        ","      X.X       ","     X...X      ","    XX.XX       ",
+               "      X.X       ","      X.X       ","      X.X       ","      X.X       ",
+               "      X.X       ","      X.X       ","      X.X       ","    XX.XX       ",
+               "     X...X      ","      X.X       ","       X        ","                "}},
+};
+static PmPointerImage *pointer_shape(PmPointer *p)
+{
+    if (p->shape)
+        return p->shape;
+    for (unsigned s = 0; s < sizeof pointer_shapes / sizeof *pointer_shapes; s++)
+    {
+        if (pointer_shapes[s].id != p->id)
+            continue;
+        PmPointerImage *image = calloc(1, sizeof *image);
+        if (image)
+        {
+            image->width = image->height = 16;
+            image->pixels = calloc(256, sizeof *image->pixels);
+            image->mask = malloc(256);
+        }
+        if (!image || !image->pixels || !image->mask)
+        {
+            pmPointerImageFree(image);
+            return NULL;
+        }
+        for (unsigned i = 0; i < 256; i++)
+        {
+            char c = pointer_shapes[s].rows[i / 16][i % 16];
+            image->mask[i] = c == ' ';
+            image->pixels[i] = c == '.' ? 0xffffff : 0;
+        }
+        p->hot_x = pointer_shapes[s].hot_x;
+        p->hot_y = pointer_shapes[s].hot_y;
+        return p->shape = image;
+    }
+    return NULL;
+}
 BOOL WinQueryPointerInfo(HPOINTER handle,LXPOINTERINFO*out)
 {
     LxHandleBorrow b={0};if(!out||!lx_handle_borrow(handle,LX_HANDLE_PM_POINTER,&b))return FALSE;
-    PmPointer*p=b.resource;PmPointerImage*image=p->image;
-    /* Host-only system cursors have no bitmap owned by PM; do not fabricate one. */
+    PmPointer*p=b.resource;PmPointerImage*image=p->image?p->image:pointer_shape(p);
     BOOL ok=image!=NULL;
     if(ok&&!p->info_mask){p->info_mask=lx_pm_bitmap_create(image->width,image->height*2,1,1);p->info_color=lx_pm_bitmap_create(image->width,image->height,1,24);LxHandleBorrow mb={0},cb={0};PmBitmap*m=lx_pm_bitmap(p->info_mask,&mb),*c=lx_pm_bitmap(p->info_color,&cb);ok=m&&c;
         for(unsigned y=0;ok&&y<image->height;y++)for(unsigned x=0;x<image->width;x++){size_t src=(size_t)(image->height-1-y)*image->width+x,dest=(size_t)y*image->width+x;m->pixels[dest]=image->mask[src]?0xffffff:0;m->pixels[dest+(size_t)image->height*image->width]=0;c->pixels[dest]=image->pixels[src];}

@@ -20,7 +20,7 @@ def bitmap_metafile_program():
         return struct.pack("<IH", (6 + len(parameters)) // 2, function) + parameters
 
     records = [
-        record(0x107, struct.pack("<H", 8)),
+        record(0x107, struct.pack("<H", 3)),
         record(0x20B, struct.pack("<hh", 0, 0)),
         record(0x20C, struct.pack("<hh", 2, 2)),
         record(

@@ -44,7 +44,11 @@ LONG GpiOffsetClipRegion(HPS ps, PPOINTL point)
 }
 LONG GpiRectVisible(HPS ps, PRECTL rect)
 {
-    return lx_pm_rect_visible(ps, rect);
+    LONG result = lx_pm_rect_visible(ps, rect);
+    TRACE_NATIVE("GpiRectVisible(%u, %d,%d,%d,%d) -> %d", (uint)ps, rect ? (int)rect->xLeft : 0,
+                 rect ? (int)rect->yBottom : 0, rect ? (int)rect->xRight : 0,
+                 rect ? (int)rect->yTop : 0, (int)result);
+    return result;
 }
 LONG GpiQueryClipBox(HPS handle, PRECTL rect)
 {

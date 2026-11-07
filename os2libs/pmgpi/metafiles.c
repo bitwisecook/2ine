@@ -35,6 +35,10 @@ static ULONG create_meta(const void *data, size_t length)
         destroy_meta(m);
     return h;
 }
+ULONG lx_pm_metafile_create(const void *data, size_t length)
+{
+    return create_meta(data, length);
+}
 BOOL GpiDeleteMetaFile(ULONG h)
 {
     return lx_handle_close(h, LX_HANDLE_PM_METAFILE);

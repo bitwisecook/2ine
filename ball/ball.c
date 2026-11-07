@@ -734,6 +734,11 @@ static int validate_system(Context *c)
             if (end == v || *end || number < 72 || number > 384)
                 return fail(c, "display_dpi must be a whole number between 72 and 384");
         }
+        else if (!strcmp(entry->string, "display_depth"))
+        {
+            if (strcmp(v, "4") && strcmp(v, "8") && strcmp(v, "16") && strcmp(v, "24"))
+                return fail(c, "display_depth must be 4, 8, 16 or 24");
+        }
         else if (!strcmp(entry->string, "opengl"))
         {
             if (strcmp(v, "mesa") && strcmp(v, "original") && strcmp(v, "off"))
@@ -889,6 +894,9 @@ static const char *unset_keys[] = {"IS_2INE",
                                    "TWOINE_DESKTOP_SESSION",
                                    "TWOINE_DESKTOP_NAME",
                                    "TWOINE_DESKTOP_ICON",
+                                   "TWOINE_DESKTOP_BUNDLE",
+                                   "TWOINE_DESKTOP_CACHE",
+                                   "TWOINE_DESKTOP_STANDALONE",
                                    "TWOINE_CHILD_ARGUMENTS",
                                    "TWOINE_OPERATION_LEASE_FD",
                                    "TWOINE_OPERATION_OWNER_FD",
@@ -900,6 +908,7 @@ static const char *unset_keys[] = {"IS_2INE",
                                    "TWOINE_REGISTRY",
                                    "TWOINE_OBJECTS",
                                    "TWOINE_DISPLAY_DPI",
+                                   "TWOINE_DISPLAY_DEPTH",
                                    "TWOINE_IPC_DIR",
                                    "DYLD_LIBRARY_PATH",
                                    NULL};
@@ -1097,6 +1106,9 @@ static int reserved_env(const char *key)
                               "TWOINE_DESKTOP_SESSION",
                               "TWOINE_DESKTOP_NAME",
                               "TWOINE_DESKTOP_ICON",
+                              "TWOINE_DESKTOP_BUNDLE",
+                              "TWOINE_DESKTOP_CACHE",
+                              "TWOINE_DESKTOP_STANDALONE",
                               "PATH",
                               "IS_2INE",
                               "TWOINE_CHILD_ARGUMENTS",
@@ -1357,6 +1369,7 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
                           "TWOINE_LIBPATH",
                           "TWOINE_RUNTIME_ID",
                           "TWOINE_DISPLAY_DPI",
+                          "TWOINE_DISPLAY_DEPTH",
                           NULL};
     const char *values[] = {join(c, c->ball, "ipc"),
                             c->ball,
@@ -1369,7 +1382,10 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
                             identity,
                             get(get(c->manifest, "system"), "display_dpi")
                                 ? setting_text(c, get(get(c->manifest, "system"), "display_dpi"))
-                                : "96"};
+                                : "96",
+                            get(get(c->manifest, "system"), "display_depth")
+                                ? setting_text(c, get(get(c->manifest, "system"), "display_depth"))
+                                : "24"};
     if (c->error)
         goto failed;
     for (int i = 0; keys[i]; i++)

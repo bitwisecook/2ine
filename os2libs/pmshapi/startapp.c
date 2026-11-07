@@ -127,6 +127,10 @@ ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, UL
     data.PgmName = details->pszExecutable;
     data.InheritOpt = 1;
     data.PgmControl = session_control(details, options);
+    data.InitXPos = (USHORT)details->swpInitial.x;
+    data.InitYPos = (USHORT)details->swpInitial.y;
+    data.InitXSize = (USHORT)details->swpInitial.cx;
+    data.InitYSize = (USHORT)details->swpInitial.cy;
     if (details->pszEnvironment && *details->pszEnvironment)
         data.Environment = (PBYTE)details->pszEnvironment;
     PSZ inputs = parameters;
@@ -176,18 +180,21 @@ ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, UL
     }
     /* The wait thread may close the handle as soon as the session starts. */
     ULONG handle = app->handle;
-    PSZ directory = details->pszStartupDir && *details->pszStartupDir ? details->pszStartupDir
-                                                                      : NULL;
+    PSZ directory =
+        details->pszStartupDir && *details->pszStartupDir ? details->pszStartupDir : NULL;
     LxSessionStart start = {
         .data = &data, .directory = directory, .ended = app_ended, .context = app};
     ULONG session;
     PID pid;
     APIRET result = lx_session_start(&start, &session, &pid);
+    /* Only the program-type check yields an invalid application; WINOS2.COM failing
+       to start is a session failure. */
+    BOOL windows_session = windows_inputs != NULL;
     free(windows_inputs);
     if (result)
     {
         lx_handle_close(handle, LX_HANDLE_PM_APP);
-        *error = dos_error(result);
+        *error = windows_session ? PMERR_DOS_ERROR_ID : dos_error(result);
         return 0;
     }
     return handle;

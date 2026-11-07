@@ -49,23 +49,34 @@ LxHostFsError lx_host_file_metadata_get(LxHostFile *file, void *data, size_t cap
     *size = (size_t)count;
     return LX_HOST_FS_OK;
 }
-LxHostFsError lx_host_file_created(LxHostFile *file, int64_t *seconds)
+void lx_host_native_extras(int fd, const char *path, LxHostFileInfo *info)
 {
-    *seconds = 0;
+    uint32_t attributes;
+    ssize_t count = fd >= 0 ? fgetxattr(fd, "com.twoine.attributes", &attributes,
+                                        sizeof attributes, 0, 0)
+                            : getxattr(path, "com.twoine.attributes", &attributes,
+                                       sizeof attributes, 0, 0);
+    if (count == sizeof attributes)
+        info->attributes = attributes;
     struct stat native;
-    if (!file->image && !fstat(file->fd, &native))
-        *seconds = native.st_birthtimespec.tv_sec;
-    return LX_HOST_FS_OK;
+    if (!(fd >= 0 ? fstat(fd, &native) : stat(path, &native)))
+        info->created = native.st_birthtimespec.tv_sec;
 }
-LxHostFsError lx_host_file_set_created(LxHostFile *file, int64_t seconds)
+LxHostFsError lx_host_native_set_created(int fd, const char *path, int64_t seconds)
 {
-    if (file->image)
-        return LX_HOST_FS_INVALID;
     struct attrlist attributes;
     memset(&attributes, 0, sizeof attributes);
     attributes.bitmapcount = ATTR_BIT_MAP_COUNT;
     attributes.commonattr = ATTR_CMN_CRTIME;
     struct timespec created = {.tv_sec = (time_t)seconds};
-    return fsetattrlist(file->fd, &attributes, &created, sizeof created, 0) == 0 ? LX_HOST_FS_OK
-                                                                                 : metadata_error();
+    int failed = fd >= 0 ? fsetattrlist(fd, &attributes, &created, sizeof created, 0)
+                         : setattrlist(path, &attributes, &created, sizeof created, 0);
+    return failed ? metadata_error() : LX_HOST_FS_OK;
+}
+LxHostFsError lx_host_native_set_attributes(int fd, const char *path, unsigned attributes)
+{
+    uint32_t value = attributes;
+    int failed = fd >= 0 ? fsetxattr(fd, "com.twoine.attributes", &value, sizeof value, 0, 0)
+                         : setxattr(path, "com.twoine.attributes", &value, sizeof value, 0, 0);
+    return failed ? metadata_error() : LX_HOST_FS_OK;
 }

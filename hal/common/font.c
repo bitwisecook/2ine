@@ -3,6 +3,7 @@
 #include "hal/font.h"
 #include "hal/host.h"
 #include "hal/host_fs.h"
+#include "hal/host_sync.h"
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_TRUETYPE_TABLES_H
@@ -27,9 +28,35 @@ static const char *warp_files[] = {"HELV.PFB", "HELVB.PFB", "HELVI.PFB", "HELVBI
                                    "TNR.PFB",  "TNRB.PFB",  "TNRI.PFB",  "TNRBI.PFB",
                                    "COUR.PFB", "COURB.PFB", "COURI.PFB", "COURBI.PFB"};
 
+typedef struct LoadedFont
+{
+    char *path;
+    unsigned references;
+} LoadedFont;
+enum
+{
+    BUNDLED_FONTS = sizeof files / sizeof files[0]
+};
+static LxHostOnce loaded_once = LX_HOST_ONCE_INIT;
+static LxHostMutex *loaded_mutex;
+static LoadedFont *loaded;
+static unsigned loaded_count;
+
+static void loaded_initialize(void)
+{
+    loaded_mutex = lx_host_mutex_create(0, 0);
+}
+static void loaded_lock(void)
+{
+    lx_host_once(&loaded_once, loaded_initialize);
+    lx_host_mutex_lock(loaded_mutex, UINT32_MAX);
+}
 unsigned lx_host_font_count(void)
 {
-    return sizeof files / sizeof files[0];
+    loaded_lock();
+    unsigned count = BUNDLED_FONTS + loaded_count;
+    lx_host_mutex_unlock(loaded_mutex);
+    return count;
 }
 static char *font_directory(void)
 {
@@ -63,10 +90,38 @@ static char *font_directory(void)
     }
     return strdup(TWOINE_FONT_DIRECTORY);
 }
+static LxHostFont *open_path(const char *path, unsigned pixels)
+{
+    LxHostFont *font = calloc(1, sizeof *font);
+    if (!font)
+        return NULL;
+    int failed = FT_Init_FreeType(&font->library) ||
+                 FT_New_Face(font->library, path, 0, &font->face) ||
+                 FT_Select_Charmap(font->face, FT_ENCODING_UNICODE) ||
+                 FT_Set_Pixel_Sizes(font->face, 0, pixels);
+    if (failed)
+    {
+        lx_host_font_close(font);
+        return NULL;
+    }
+    font->pixels = pixels;
+    return font;
+}
+static LxHostFont *open_loaded(unsigned slot, unsigned pixels)
+{
+    loaded_lock();
+    char *path = slot < loaded_count && loaded[slot].path ? strdup(loaded[slot].path) : NULL;
+    lx_host_mutex_unlock(loaded_mutex);
+    LxHostFont *font = path ? open_path(path, pixels) : NULL;
+    free(path);
+    return font;
+}
 LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
 {
-    if (index >= lx_host_font_count() || !pixels || pixels > 512)
+    if (!pixels || pixels > 512)
         return NULL;
+    if (index >= BUNDLED_FONTS)
+        return open_loaded(index - BUNDLED_FONTS, pixels);
     const char *warp_directory = getenv("TWOINE_WARP_FONT_DIRECTORY");
     const int warp = warp_directory && *warp_directory;
     const char *file = warp ? warp_files[index] : files[index];
@@ -75,28 +130,65 @@ LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
         return NULL;
     size_t length = strlen(directory) + strlen(file) + 2;
     char *path = malloc(length);
-    LxHostFont *font = calloc(1, sizeof *font);
-    if (!path || !font)
+    if (!path)
     {
-        free(path);
-        free(font);
         free(directory);
         return NULL;
     }
     snprintf(path, length, "%s/%s", directory, file);
     free(directory);
-    int failed = FT_Init_FreeType(&font->library) ||
-                 FT_New_Face(font->library, path, 0, &font->face) ||
-                 FT_Select_Charmap(font->face, FT_ENCODING_UNICODE) ||
-                 FT_Set_Pixel_Sizes(font->face, 0, pixels);
+    LxHostFont *font = open_path(path, pixels);
     free(path);
-    if (failed)
-    {
-        lx_host_font_close(font);
-        return NULL;
-    }
-    font->pixels = pixels;
     return font;
+}
+int lx_host_font_add_file(const char *path)
+{
+    LxHostFont *probe = path ? open_path(path, 16) : NULL;
+    if (!probe)
+        return 0;
+    lx_host_font_close(probe);
+    int added = 0;
+    loaded_lock();
+    for (unsigned i = 0; i < loaded_count && !added; i++)
+        if (loaded[i].path && !strcmp(loaded[i].path, path))
+        {
+            loaded[i].references++;
+            added = 1;
+        }
+    if (!added)
+    {
+        char *copy = strdup(path);
+        LoadedFont *grown = copy ? realloc(loaded, (loaded_count + 1) * sizeof *loaded) : NULL;
+        if (grown)
+        {
+            loaded = grown;
+            loaded[loaded_count].path = copy;
+            loaded[loaded_count].references = 1;
+            loaded_count++;
+            added = 1;
+        }
+        else
+            free(copy);
+    }
+    lx_host_mutex_unlock(loaded_mutex);
+    return added;
+}
+int lx_host_font_remove_file(const char *path)
+{
+    int removed = 0;
+    loaded_lock();
+    for (unsigned i = 0; path && i < loaded_count && !removed; i++)
+        if (loaded[i].path && !strcmp(loaded[i].path, path))
+        {
+            removed = 1;
+            if (!--loaded[i].references)
+            {
+                free(loaded[i].path);
+                loaded[i].path = NULL;
+            }
+        }
+    lx_host_mutex_unlock(loaded_mutex);
+    return removed;
 }
 void lx_host_font_close(LxHostFont *font)
 {
@@ -156,6 +248,15 @@ int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
         metrics->average_width = scaled(font, os2->xAvgCharWidth);
         metrics->strikeout_size = scaled(font, os2->yStrikeoutSize);
         metrics->strikeout_position = scaled(font, os2->yStrikeoutPosition);
+        metrics->subscript_x_size = scaled(font, os2->ySubscriptXSize);
+        metrics->subscript_y_size = scaled(font, os2->ySubscriptYSize);
+        metrics->subscript_x_offset = scaled(font, os2->ySubscriptXOffset);
+        metrics->subscript_y_offset = scaled(font, os2->ySubscriptYOffset);
+        metrics->superscript_x_size = scaled(font, os2->ySuperscriptXSize);
+        metrics->superscript_y_size = scaled(font, os2->ySuperscriptYSize);
+        metrics->superscript_x_offset = scaled(font, os2->ySuperscriptXOffset);
+        metrics->superscript_y_offset = scaled(font, os2->ySuperscriptYOffset);
+        memcpy(metrics->panose, os2->panose, sizeof metrics->panose);
         if (os2->version >= 2 && os2->version != 0xffff)
             metrics->x_height = scaled(font, os2->sxHeight);
     }
@@ -207,6 +308,18 @@ int lx_host_font_glyph(LxHostFont *font, uint32_t codepoint, LxHostGlyph *glyph)
                    bitmap->buffer + (ptrdiff_t)y * bitmap->pitch, glyph->width);
     }
     return 1;
+}
+int lx_host_font_glyph_matrix(LxHostFont *font, uint32_t codepoint, const double matrix[4],
+                              LxHostGlyph *glyph)
+{
+    if (!font || !matrix)
+        return 0;
+    FT_Matrix transform = {(FT_Fixed)(matrix[0] * 65536), (FT_Fixed)(matrix[1] * 65536),
+                           (FT_Fixed)(matrix[2] * 65536), (FT_Fixed)(matrix[3] * 65536)};
+    FT_Set_Transform(font->face, &transform, NULL);
+    int result = lx_host_font_glyph(font, codepoint, glyph);
+    FT_Set_Transform(font->face, NULL, NULL);
+    return result;
 }
 void lx_host_glyph_free(LxHostGlyph *glyph)
 {

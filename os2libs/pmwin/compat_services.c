@@ -75,13 +75,17 @@ BOOL WinDeleteLibrary(HAB hab, ULONG handle)
     lx_handle_release(&b);
     return TRUE;
 }
+static LONG clamp_long(LONG x, LONG low, LONG high)
+{
+    return x < low ? low : x > high ? high : x;
+}
 BOOL WinFlashWindow(HWND handle, BOOL flash)
 {
     return (BOOL)(uintptr_t)WinSendMsg(handle, WM_FLASHWINDOW, (MPARAM)(uintptr_t)(flash != 0), 0);
 }
 BOOL WinFocusChange(HWND desktop, HWND focus, ULONG flags)
 {
-    return changeFocus(desktop, focus, flags);
+    return changeFocus(desktop, focus, (flags & 0xffff) | FOCUS_NOTIFY);
 }
 BOOL WinGetMaxPosition(HWND handle, PSWP out)
 {
@@ -99,15 +103,15 @@ BOOL WinGetMaxPosition(HWND handle, PSWP out)
     out->fl |= SWP_SIZE | SWP_MOVE;
     return TRUE;
 }
-static BOOL minimized_at(const Window *parent, const Window *self, LONG x, LONG y, LONG cx, LONG cy)
+static BOOL slot_taken(const Window *parent, const Window *self, const RECTL *slot, LONG cx, LONG cy)
 {
     for (Window *s = parent->children; s; s = s->sibling)
     {
         if (s == self || !(s->style & WS_MINIMIZED) || s->data_len < 0x18)
             continue;
-        LONG sx = (SHORT)WinQueryWindowUShort(s->hwnd, 0x14),
-             sy = (SHORT)WinQueryWindowUShort(s->hwnd, 0x16);
-        if (sx >= x && sx < x + cx && sy >= y && sy < y + cy)
+        LONG x = (SHORT)WinQueryWindowUShort(s->hwnd, 0x14),
+             y = (SHORT)WinQueryWindowUShort(s->hwnd, 0x16);
+        if (x < slot->xRight && slot->xLeft < x + cx && y < slot->yTop && slot->yBottom < y + cy)
             return TRUE;
     }
     return FALSE;
@@ -119,51 +123,59 @@ BOOL WinGetMinPosition(HWND handle, PSWP out, PPOINTL preferred)
     if (!w || !out || !w->parent)
         return FALSE;
     POINTL border = isFrameWindow(w) ? frameBorderSize(w) : (POINTL){0, 0};
-    LONG cx = WinQuerySysValue(HWND_DESKTOP, 38) + border.x * 2,
-         cy = WinQuerySysValue(HWND_DESKTOP, 39) + border.y * 2;
-    if (cx <= 0 || cy <= 0)
+    LONG width = w->parent->w, height = w->parent->h;
+    LONG icon_x = WinQuerySysValue(HWND_DESKTOP, 38), icon_y = WinQuerySysValue(HWND_DESKTOP, 39);
+    LONG text_x = WinQuerySysValue(HWND_DESKTOP, 68), text_y = WinQuerySysValue(HWND_DESKTOP, 30);
+    LONG pad_x = WinQuerySysValue(HWND_DESKTOP, 26), pad_y = WinQuerySysValue(HWND_DESKTOP, 27);
+    /* Icon cells leave room for the text beneath, and widen to fill each row evenly. */
+    LONG cell_x = (text_x > icon_x + border.x * 2 ? text_x : icon_x + border.x * 2) + pad_x * 4;
+    LONG cell_y = icon_y + border.y * 2 + text_y;
+    if (cell_x <= 0 || cell_y <= 0)
         return FALSE;
-    LONG columns = w->parent->w / cx, rows = w->parent->h / cy;
-    if (columns < 1)
-        columns = 1;
-    if (rows < 1)
-        rows = 1;
-    /* Icon slots fill from the bottom left; a preference selects the nearest free slot. */
-    LONG best_x = 0, best_y = 0;
+    if (cell_x <= width && width / (width / cell_x) > cell_x)
+        cell_x = width / (width / cell_x);
+    LONG columns = width / cell_x > 0 ? width / cell_x : 1;
+    LONG rows = height / cell_y > 0 ? height / cell_y : 1;
+    LONG slot_width = cell_x + (width - text_x * columns) / columns;
+    LONG want_column = 0, want_row = 0;
+    if (preferred)
+    {
+        want_column = clamp_long(width ? (LONG)((int64_t)preferred->x * columns / width) : 0, 0, columns - 1);
+        want_row = clamp_long(height ? (LONG)((int64_t)preferred->y * rows / height) : 0, 0, rows - 1);
+    }
+    LONG best_column = want_column, best_row = want_row, bottom = 0;
     int64_t best = -1;
     for (LONG row = 0; row < rows; row++)
         for (LONG column = 0; column < columns; column++)
         {
-            LONG x = column * cx, y = row * cy;
-            if (minimized_at(w->parent, w, x, y, cx, cy))
+            RECTL slot = {(LONG)(((int64_t)column * width + columns / 2) / columns),
+                          (LONG)(((int64_t)row * height + rows / 2) / rows),
+                          (LONG)(((int64_t)(column + 1) * width + columns / 2) / columns),
+                          (LONG)(((int64_t)(row + 1) * height + rows / 2) / rows)};
+            if (slot_taken(w->parent, w, &slot, icon_x, icon_y))
                 continue;
-            int64_t distance = 0;
-            if (preferred)
-            {
-                int64_t dx = (int64_t)x - preferred->x, dy = (int64_t)y - preferred->y;
-                distance = dx * dx + dy * dy;
-            }
+            int64_t dx = column - want_column, dy = row - want_row, distance = dx * dx + dy * dy;
             if (best < 0 || distance < best)
             {
                 best = distance;
-                best_x = x;
-                best_y = y;
+                best_column = column;
+                best_row = row;
+                bottom = slot.yBottom;
             }
-            if (!preferred)
-                goto found;
         }
-found:
-    out->hwnd = handle;
-    out->x = best_x;
-    out->y = best_y;
-    out->cx = cx;
-    out->cy = cy;
-    out->fl |= SWP_SIZE | SWP_MOVE;
+    LONG x = best_column * cell_x + (slot_width - icon_x) / 2, y = text_y + pad_y * 2 + bottom;
+    w->style |= WS_MINIMIZED;
     if (w->data_len >= 0x18)
     {
-        WinSetWindowUShort(handle, 0x14, (USHORT)best_x);
-        WinSetWindowUShort(handle, 0x16, (USHORT)best_y);
+        WinSetWindowUShort(handle, 0x14, (USHORT)x);
+        WinSetWindowUShort(handle, 0x16, (USHORT)y);
     }
+    out->hwnd = handle;
+    out->x = x - border.x;
+    out->y = y - border.y;
+    out->cx = icon_x + border.x * 2;
+    out->cy = icon_y + border.y * 2;
+    out->fl |= SWP_SIZE | SWP_MOVE;
     return TRUE;
 }
 BOOL WinIsWindowShowing(HWND handle)
@@ -189,7 +201,7 @@ BOOL WinIsWindowShowing(HWND handle)
 LONG WinLoadMessage(HAB hab, HMODULE module, ULONG id, LONG capacity, PSZ output)
 {
     (void)hab;
-    return loadStringTable(module == (HMODULE)-1 ? 0 : module, 10, id, capacity, output);
+    return loadStringTable(module, 10, id, capacity, output);
 }
 PSZ WinNextChar(HAB hab, ULONG cp, ULONG country, PSZ text)
 {
@@ -332,32 +344,60 @@ BOOL WinSetWindowBits(HWND handle, LONG index, ULONG data, ULONG mask)
     ULONG old = WinQueryWindowULong(handle, index);
     return WinSetWindowULong(handle, index, (old & ~mask) | (data & mask));
 }
+/* Sending can destroy windows, so targets are gathered before any delivery. */
+static BOOL collect_targets(const Window *parent, ULONG flags, HWND **list, size_t *count,
+                            size_t *capacity)
+{
+    for (Window *child = parent->children; child; child = child->sibling)
+    {
+        if (!(flags & 8) || isFrameWindow(child)) /* BMSG_FRAMEONLY */
+        {
+            if (*count == *capacity)
+            {
+                size_t grown = *capacity ? *capacity * 2 : 32;
+                HWND *larger = realloc(*list, grown * sizeof *larger);
+                if (!larger)
+                    return FALSE;
+                *list = larger;
+                *capacity = grown;
+            }
+            (*list)[(*count)++] = child->hwnd;
+        }
+        if ((flags & 4) && !collect_targets(child, flags, list, count, capacity)) /* DESCENDANTS */
+            return FALSE;
+    }
+    return TRUE;
+}
 BOOL WinBroadcastMsg(HWND parent, ULONG message, MPARAM first, MPARAM second, ULONG flags)
 {
-    if (flags & ~15u)
-        return FALSE;
-    HENUM e = WinBeginEnumWindows(parent);
-    if (!e)
-        return FALSE;
-    BOOL ok = TRUE;
-    HWND h;
-    while ((h = WinGetNextWindow(e)))
+    if (flags & ~0x1fu)
     {
-        AnchorBlock *a = getAnchorBlockNoHAB();
-        Window *w = a ? getWindowFromHWND(a, h) : NULL;
-        if (!w)
-            continue;
-        if (!(flags & 8) || isFrameWindow(w))
-        {
-            if (flags & 1)
-                WinSendMsg(h, message, first, second);
-            else
-                ok = WinPostMsg(h, message, first, second) && ok;
-        }
-        if (flags & 4)
-            ok = WinBroadcastMsg(h, message, first, second, flags) && ok;
+        WinSetErrorInfo(PMERR_INVALID_FLAG, 0);
+        return FALSE;
     }
-    WinEndEnumWindows(e);
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    Window *w = !a ? NULL : parent == HWND_DESKTOP ? &desktop_window : getWindowFromHWND(a, parent);
+    if (!w)
+        return FALSE;
+    /* BMSG_POSTQUEUE and 0x10 address message queues rather than windows. */
+    if (flags & 0x12)
+        return broadcastQueues(a, message, first, second, !(flags & 2));
+    if (!w->children)
+        return FALSE;
+    HWND *targets = NULL;
+    size_t count = 0, capacity = 0;
+    BOOL ok = collect_targets(w, flags, &targets, &count, &capacity);
+    for (size_t i = 0; i < count; i++)
+    {
+        if (flags & 1) /* BMSG_SEND */
+        {
+            if (!WinSendMsg(targets[i], message, first, second))
+                ok = FALSE;
+        }
+        else if (!WinPostMsg(targets[i], message, first, second))
+            ok = FALSE;
+    }
+    free(targets);
     return ok;
 }
 BOOL WinSetKeyboardStateTable(HWND desktop, PBYTE table, BOOL set)
@@ -410,12 +450,26 @@ PVOID WinGetErrorInfo(HAB hab)
         return NULL;
     }
     uint8 *out = lx_execution_mapping_host(p->mapping);
-    /* ERRINFO, an empty message offset array at 24 and no binary data at 20. */
+    /* ERRINFO, one message offset at 24, no binary data at 20, and the message at 40. The
+       severity is the id's high word; PM sites that record a bare code are errors. */
     memset(out, 0, 40);
+    ULONG error = WinGetLastError(hab), code = error & 0xffff;
+    ULONG severity = error >> 16 ? error >> 16 : 8; /* SEVERITY_ERROR */
+    char prefix[16], letters[32], text[256] = {0};
+    if (!loadStringTable((HMODULE)-1, 5, 0, sizeof prefix, prefix))
+        snprintf(prefix, sizeof prefix, "PMWIN");
+    size_t known = (size_t)loadStringTable((HMODULE)-1, 5, 0x1021, sizeof letters, letters);
+    char letter = known ? letters[severity < known ? severity : known - 1]
+                  : severity == 4 ? 'W' : severity == 12 ? 'S' : severity == 16 ? 'U' : 'E';
+    if (!loadStringTable((HMODULE)-1, 10, code, sizeof text, text))
+        loadStringTable((HMODULE)-1, 5, code, sizeof text, text);
     lx_guest_store_u32(out, 20);
-    lx_guest_store_u32(out + 4, WinGetLastError(hab));
+    lx_guest_store_u32(out + 4, severity << 16 | code);
+    lx_guest_store_u32(out + 8, 1);
     lx_guest_store_u32(out + 12, 24);
     lx_guest_store_u32(out + 16, 20);
+    lx_guest_store_u32(out + 24, 40);
+    snprintf((char *)out + 40, 4096 - 40, "%s%06X%c %s\r\n", prefix, (unsigned)code, letter, text);
     p->next = error_allocations;
     error_allocations = p;
     return (PVOID)(uintptr_t)lx_execution_mapping_address(p->mapping);
@@ -438,10 +492,6 @@ void cleanupErrorInfo(void)
     while (error_allocations)
         WinFreeErrorInfo(
             (PVOID)(uintptr_t)lx_execution_mapping_address(error_allocations->mapping));
-}
-static LONG clamp_long(LONG x, LONG low, LONG high)
-{
-    return x < low ? low : x > high ? high : x;
 }
 /* Applies the size limits and boundary to a tracked rectangle. */
 static RECTL constrain_track(const LXTRACKINFO *info, RECTL r)
@@ -529,8 +579,14 @@ BOOL WinTrackRect(HWND handle, HPS ps, LXTRACKINFO *info)
     POINTL start;
     if (info->fs & 0x10) /* TF_SETPOINTERPOS */
     {
-        POINTL corner = {(original.xLeft + original.xRight) / 2,
-                         (original.yBottom + original.yTop) / 2};
+        /* A single sized edge takes the pointer; otherwise it centres in the rectangle. */
+        ULONG sides = info->fs & 15;
+        POINTL corner = {sides == 1   ? original.xLeft
+                         : sides == 4 ? original.xRight
+                                      : (original.xLeft + original.xRight) / 2,
+                         sides == 2   ? original.yTop
+                         : sides == 8 ? original.yBottom
+                                      : (original.yBottom + original.yTop) / 2};
         WinMapWindowPoints(handle, HWND_DESKTOP, &corner, 1);
         WinSetPointerPos(HWND_DESKTOP, corner.x, corner.y);
     }
@@ -542,6 +598,34 @@ BOOL WinTrackRect(HWND handle, HPS ps, LXTRACKINFO *info)
     tracking = TRUE;
     HWND capture = WinQueryCapture(HWND_DESKTOP);
     WinSetCapture(HWND_DESKTOP, handle);
+    /* Boundary tracking confines the pointer; a moved rectangle keeps its grip offset. */
+    RECTL clip_before;
+    BOOL was_clipped = queryPointerClip(&clip_before), confined = FALSE;
+    if (info->fs & 0x280) /* TF_ALLINBOUNDARY, TF_PARTINBOUNDARY */
+    {
+        POINTL low = {info->rclBoundary.xLeft, info->rclBoundary.yBottom},
+               high = {info->rclBoundary.xRight - 1, info->rclBoundary.yTop - 1},
+               track[2] = {{original.xLeft, original.yBottom}, {original.xRight, original.yTop}};
+        WinMapWindowPoints(handle, HWND_DESKTOP, &low, 1);
+        WinMapWindowPoints(handle, HWND_DESKTOP, &high, 1);
+        WinMapWindowPoints(handle, HWND_DESKTOP, track, 2);
+        RECTL bounds = {low.x, low.y, high.x, high.y};
+        if ((info->fs & 0x80) && (info->fs & 15) == 15)
+            bounds = (RECTL){low.x + start.x - track[0].x, low.y + start.y - track[0].y,
+                             high.x - (track[1].x - start.x), high.y - (track[1].y - start.y)};
+        if (bounds.xLeft <= bounds.xRight && bounds.yBottom <= bounds.yTop)
+        {
+            lx_pm_set_pointer_clip(&bounds);
+            confined = TRUE;
+        }
+    }
+    /* Keyboard tracking, with no button held, shows the move pointer. */
+    HPOINTER pointer = 0;
+    if (!(WinGetKeyState(HWND_DESKTOP, 1) & 0x8000) && !(WinGetKeyState(HWND_DESKTOP, 2) & 0x8000))
+    {
+        pointer = WinQueryPointer(HWND_DESKTOP);
+        WinSetPointer(HWND_DESKTOP, WinQuerySysPointer(HWND_DESKTOP, 5, FALSE));
+    }
     invert_track(space, info, &info->rclTrack);
     BOOL accepted = FALSE;
     LONG key_x = 0, key_y = 0;
@@ -594,6 +678,10 @@ BOOL WinTrackRect(HWND handle, HPS ps, LXTRACKINFO *info)
         }
     }
     invert_track(space, info, &info->rclTrack);
+    if (pointer)
+        WinSetPointer(HWND_DESKTOP, pointer);
+    if (confined)
+        lx_pm_set_pointer_clip(was_clipped ? &clip_before : NULL);
     WinSetCapture(HWND_DESKTOP, capture);
     if (!ps)
         WinReleasePS(space);

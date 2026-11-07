@@ -74,8 +74,11 @@ LONG GetDeviceCaps(ULONG handle, LONG index)
         return 0;
     }
     unsigned printer = lx_pm_printer_kind(GpiQueryDevice(handle));
-    LONG width = printer ? 2480 : WinQuerySysValue(HWND_DESKTOP, 20),
-         height = printer ? 3508 : WinQuerySysValue(HWND_DESKTOP, 21);
+    unsigned page_width = 2480, page_height = 3508;
+    if (printer)
+        lx_pm_printer_size(GpiQueryDevice(handle), &page_width, &page_height);
+    LONG width = printer ? (LONG)page_width : WinQuerySysValue(HWND_DESKTOP, 20),
+         height = printer ? (LONG)page_height : WinQuerySysValue(HWND_DESKTOP, 21);
     switch (index)
     {
         case 0:
@@ -83,15 +86,19 @@ LONG GetDeviceCaps(ULONG handle, LONG index)
         case 2:
             return printer ? 2 : 1; /* DT_RASPRINTER or DT_RASDISPLAY */
         case 4:
-            return printer ? 210 : (LONG)((int64_t)width * 254 / (lx_pm_dc_dpi(0) * 10));
+            return printer ? width * 254 / 3000
+                           : (LONG)((int64_t)width * 254 / (lx_pm_dc_dpi(0) * 10));
         case 6:
-            return printer ? 297 : (LONG)((int64_t)height * 254 / (lx_pm_dc_dpi(0) * 10));
+            return printer ? height * 254 / 3000
+                           : (LONG)((int64_t)height * 254 / (lx_pm_dc_dpi(0) * 10));
         case 8:
             return width; /* HORZRES */
         case 10:
             return height; /* VERTRES */
-        case 12:
-            return printer == 2 ? 1 : 24;
+        case 12: /* BITSPIXEL */
+            return printer == 2 ? 1
+                   : printer || !GLoaderState.display_depth ? 24
+                                                            : (LONG)GLoaderState.display_depth;
         case 14:
             return 1; /* PLANES */
         case 16:

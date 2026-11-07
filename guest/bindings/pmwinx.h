@@ -3960,3 +3960,4 @@ static uint32 bridge32_TranslateAccelerator(uint8 *a)
 }
 #include "guest/bindings/pmwinx_batch_graphics.h"
 #include "guest/bindings/pmwinx_batch_services.h"
+#include "guest/bindings/pmwinx_process.h"

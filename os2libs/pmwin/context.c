@@ -128,6 +128,7 @@ static void cleanupThreadPM(void)
     {
         destroyWindow(anchor, anchor->windows[i]);
     }
+    retireAnchorMessages(anchor);
     for (size_t i = 0; i < anchor->pres_spaces_array_len; i++)
         destroyPresentationSpace(anchor, &anchor->pres_spaces[i]);
     cleanupErrorInfo();

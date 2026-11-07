@@ -192,14 +192,16 @@ BOOL ReleaseSemaphore(ULONG handle, LONG count, PLONG previous)
 {
     TRACE_NATIVE("ReleaseSemaphore(%u, %d, %p)", handle, count, previous);
     LxHandleBorrow borrow = {0};
-    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_SEMAPHORE, &borrow))
+    uint32_t rights = 0;
+    if (!lx_handle_access(handle, LX_HANDLE_OPEN32_SEMAPHORE, &rights) ||
+        !lx_handle_borrow(handle, LX_HANDLE_OPEN32_SEMAPHORE, &borrow))
     {
         open32SetError(6);
         return FALSE;
     }
     Open32Semaphore *sem = borrow.resource;
     ULONG error = 0;
-    if (!(sem->access & SEMAPHORE_MODIFY_STATE))
+    if (!(sem->access & rights & SEMAPHORE_MODIFY_STATE))
         error = 5;
     else if (count <= 0)
         error = 87;

@@ -317,6 +317,15 @@ int tb_fat_info(const char *path, TbImageInfo *info)
         info->directory = !!(file.fattrib & AM_DIR);
         info->size = file.fsize;
         info->modified = tb_dos_time(file.fdate, file.ftime);
+        info->attributes = file.fattrib & (AM_HID | AM_SYS | AM_ARC);
+        int64_t created = tb_dos_time(file.crdate, file.crtime);
+        info->created = created == INT64_MIN ? 0 : created;
+        WORD access = 0;
+        if (f_accessdate(name, &access, 0) == FR_OK && access)
+        {
+            int64_t accessed = tb_dos_time(access, 0);
+            info->accessed = accessed == INT64_MIN ? 0 : accessed;
+        }
         info->fat = 1;
         info->readonly = tb_image_protected(path) || !!(file.fattrib & AM_RDO);
         info->sector_bytes = media.sector;
@@ -509,13 +518,27 @@ int tb_fat_modify(const char *path, const char *expected, int action, uint64_t o
             ok = result(f_rename(name, other));
         else if (action == TB_FS_READONLY || action == TB_FS_WRITABLE)
             ok = result(f_chmod(name, action == TB_FS_READONLY ? AM_RDO : 0, AM_RDO));
+        else if (action == TB_FS_ATTRIBUTES)
+            ok = result(f_chmod(name, (BYTE)offset, AM_HID | AM_SYS | AM_ARC));
         else if (action == TB_FS_TOUCH)
         {
-            uint32_t stamp = tb_dos_stamp((int64_t)offset);
+            const TbImageStamps *stamps = data;
             FILINFO info = {0};
-            info.fdate = (WORD)(stamp >> 16);
-            info.ftime = (WORD)stamp;
+            if (stamps->modified != INT64_MIN)
+            {
+                uint32_t stamp = tb_dos_stamp(stamps->modified);
+                info.fdate = (WORD)(stamp >> 16);
+                info.ftime = (WORD)stamp;
+            }
+            if (stamps->created != INT64_MIN)
+            {
+                uint32_t stamp = tb_dos_stamp(stamps->created);
+                info.crdate = (WORD)(stamp >> 16);
+                info.crtime = (WORD)stamp;
+            }
             ok = result(f_utime(name, &info));
+            if (ok && stamps->accessed != INT64_MIN)
+                ok = result(f_accessdate(name, NULL, (WORD)(tb_dos_stamp(stamps->accessed) >> 16)));
         }
         else if (action == TB_FS_DELETE || action == TB_FS_RMDIR)
         {

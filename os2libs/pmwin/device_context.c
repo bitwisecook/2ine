@@ -64,6 +64,63 @@ HDC lx_pm_open_printer_dc(HAB hab, LONG type, unsigned kind)
     }
     return handle;
 }
+BOOL lx_pm_printer_size(HDC handle, unsigned *width, unsigned *height)
+{
+    LxHandleBorrow borrow = {0}, bitmap = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_PM_DC, &borrow))
+        return FALSE;
+    PmDeviceContext *dc = borrow.resource;
+    PmBitmap *page = dc->printer_kind ? lx_pm_bitmap(dc->printer_bitmap, &bitmap) : NULL;
+    if (page)
+    {
+        *width = page->width;
+        *height = page->height;
+    }
+    lx_handle_release(&bitmap);
+    lx_handle_release(&borrow);
+    return page != NULL;
+}
+BOOL lx_pm_printer_options(HDC handle, unsigned copies, unsigned duplex, BOOL draft)
+{
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_PM_DC, &borrow))
+        return FALSE;
+    PmDeviceContext *dc = borrow.resource;
+    BOOL printer = dc->printer_kind != 0;
+    if (printer)
+    {
+        dc->print_copies = copies;
+        dc->print_duplex = duplex;
+        dc->print_draft = draft;
+        lx_print_options(dc->print_job, copies, duplex, draft);
+    }
+    lx_handle_release(&borrow);
+    return printer;
+}
+/* A page size change replaces the blank page in place, so bound presentation spaces keep their
+   lease. It is refused during a job's page output. */
+BOOL lx_pm_printer_page(HDC handle, unsigned width, unsigned height)
+{
+    LxHandleBorrow borrow = {0}, bitmap = {0};
+    if (!width || !height || (uint64_t)width * height > 16777216 ||
+        !lx_handle_borrow(handle, LX_HANDLE_PM_DC, &borrow))
+        return FALSE;
+    PmDeviceContext *dc = borrow.resource;
+    PmBitmap *page = dc->printer_kind ? lx_pm_bitmap(dc->printer_bitmap, &bitmap) : NULL;
+    uint32_t *pixels = page ? malloc((size_t)width * height * sizeof *pixels) : NULL;
+    if (pixels)
+    {
+        for (size_t i = 0; i < (size_t)width * height; i++)
+            pixels[i] = 0xffffff;
+        free(page->pixels);
+        page->pixels = pixels;
+        page->width = width;
+        page->height = height;
+    }
+    lx_handle_release(&bitmap);
+    lx_handle_release(&borrow);
+    return pixels != NULL;
+}
 unsigned lx_pm_printer_kind(HDC handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -193,7 +250,7 @@ LONG lx_pm_print_escape(HDC handle, LONG code, LONG input_count, const void *inp
         {
             LONG escape = (LONG)lx_guest_load_u32(input);
             result = escape == 0 || escape == 1 || escape == 8150 || escape == 8151 ||
-                             escape == 8153 || escape == 16300 || escape == 16302
+                             escape == 8153 || escape == 16300 || escape == 16302 || escape == 16303
                          ? 1
                          : 0;
         }
@@ -222,6 +279,7 @@ LONG lx_pm_print_escape(HDC handle, LONG code, LONG input_count, const void *inp
             free(title);
             if (dc->print_job)
             {
+                lx_print_options(dc->print_job, dc->print_copies, dc->print_duplex, dc->print_draft);
                 dc->print_pages = 0;
                 for (size_t i = 0; i < (size_t)page->width * page->height; i++)
                     page->pixels[i] = 0xffffff;
@@ -268,6 +326,8 @@ LONG lx_pm_print_escape(HDC handle, LONG code, LONG input_count, const void *inp
     }
     else if (code == 16302)
         result = dc->print_job ? 1 : -1;
+    else if (code == 16303)
+        result = lx_print_raw(dc->print_job, input, (size_t)input_count) ? 1 : -1;
     else
         result = 0;
 done:

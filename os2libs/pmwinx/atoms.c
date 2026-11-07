@@ -3,21 +3,63 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin.h"
+#include "hal/host.h"
+#include "hal/host_shared.h"
 #include "hal/host_sync.h"
 #include <stdio.h>
-typedef struct Atom
+/* Global atoms are shared by every process of a ball, as named semaphores are. The word
+   lock is taken only for table scans, and a lock left by a dead process is taken over. */
+typedef struct SharedAtom
 {
-    char *name;
-    ULONG references;
-} Atom;
-static Atom atoms[0x4000];
+    uint32 references;
+    char name[256];
+} SharedAtom;
+typedef struct AtomTable
+{
+    uint32 lock;
+    SharedAtom atoms[0x4000];
+} AtomTable;
+static AtomTable *table;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
-static LxHostMonitor *monitor;
 static void initialize(void)
 {
-    monitor = lx_host_monitor_create();
-    if (!monitor)
-        abort();
+    uint64 hash = 1469598103934665603ULL;
+    const char *scope = getenv("TWOINE_BALL");
+    if (!scope)
+        scope = getenv("TWOINE_IPC_DIR");
+    for (const char *p = scope; p && *p; p++)
+        hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
+    char name[40];
+    snprintf(name, sizeof name, "/2ine-gatom1-%016llx", (unsigned long long)hash);
+    LxHostShared *shared = NULL;
+    LxHostSharedResult opened = lx_host_shared_open(name, sizeof *table, &shared);
+    if (opened == LX_HOST_SHARED_EXISTS)
+        opened = lx_host_shared_open(name, 0, &shared);
+    if (opened == LX_HOST_SHARED_OK && lx_host_shared_size(shared) == sizeof *table)
+        table = lx_host_shared_map(shared, NULL, 0);
+}
+static BOOL lock_atoms(void)
+{
+    lx_host_once(&once, initialize);
+    if (!table)
+        return FALSE;
+    for (unsigned attempt = 0;; attempt++)
+    {
+        uint32 expected = 0;
+        if (__atomic_compare_exchange_n(&table->lock, &expected, 1, 0, __ATOMIC_ACQUIRE,
+                                        __ATOMIC_RELAXED))
+            return TRUE;
+        if (attempt == 2000)
+        {
+            __atomic_store_n(&table->lock, 1, __ATOMIC_ACQUIRE);
+            return TRUE;
+        }
+        lx_host_sleep_ms(1);
+    }
+}
+static void unlock_atoms(void)
+{
+    __atomic_store_n(&table->lock, 0, __ATOMIC_RELEASE);
 }
 static ULONG integer_atom(PSZ name)
 {
@@ -39,38 +81,40 @@ static ULONG find_atom(PSZ name, BOOL add)
         open32SetError(87);
         return 0;
     }
-    lx_host_once(&once, initialize);
-    lx_host_monitor_lock(monitor);
+    if (!lock_atoms())
+    {
+        open32SetError(8);
+        return 0;
+    }
     ULONG result = 0, vacant = 0x4000;
     for (ULONG i = 0; i < 0x4000; i++)
     {
-        if (!atoms[i].name)
+        SharedAtom *atom = table->atoms + i;
+        if (!atom->references)
         {
             if (vacant == 0x4000)
                 vacant = i;
         }
-        else if (!strcasecmp(atoms[i].name, name))
+        else if (!strcasecmp(atom->name, name))
         {
             vacant = 0x4000;
-            if (!add || atoms[i].references != UINT32_MAX)
+            if (!add || atom->references != UINT32_MAX)
             {
                 result = 0xC000 + i;
                 if (add)
-                    atoms[i].references++;
+                    atom->references++;
             }
             break;
         }
     }
     if (!result && add && vacant < 0x4000)
     {
-        atoms[vacant].name = strdup(name);
-        if (atoms[vacant].name)
-        {
-            atoms[vacant].references = 1;
-            result = 0xC000 + vacant;
-        }
+        SharedAtom *atom = table->atoms + vacant;
+        memcpy(atom->name, name, strlen(name) + 1);
+        atom->references = 1;
+        result = 0xC000 + vacant;
     }
-    lx_host_monitor_unlock(monitor);
+    unlock_atoms();
     if (!result)
         open32SetError(add ? 8 : 2);
     return result;
@@ -87,15 +131,15 @@ ULONG GlobalDeleteAtom(ULONG atom)
 {
     if (atom && atom < 0xC000)
         return 0;
-    lx_host_once(&once, initialize);
-    lx_host_monitor_lock(monitor);
-    BOOL valid = atom >= 0xC000 && atom <= 0xFFFF && atoms[atom - 0xC000].name;
-    if (valid && !--atoms[atom - 0xC000].references)
+    if (!lock_atoms())
     {
-        free(atoms[atom - 0xC000].name);
-        atoms[atom - 0xC000].name = NULL;
+        open32SetError(6);
+        return atom;
     }
-    lx_host_monitor_unlock(monitor);
+    BOOL valid = atom >= 0xC000 && atom <= 0xFFFF && table->atoms[atom - 0xC000].references;
+    if (valid)
+        table->atoms[atom - 0xC000].references--;
+    unlock_atoms();
     if (!valid)
         open32SetError(6);
     return valid ? 0 : atom;
@@ -108,16 +152,15 @@ ULONG GlobalGetAtomName(ULONG atom, PSZ output, LONG capacity)
         return 0;
     }
     char integer[8];
-    lx_host_once(&once, initialize);
-    lx_host_monitor_lock(monitor);
-    const char *name;
+    const char *name = NULL;
+    BOOL locked = FALSE;
     if (atom < 0xC000)
     {
         snprintf(integer, sizeof integer, "#%u", atom);
         name = integer;
     }
-    else
-        name = atoms[atom - 0xC000].name;
+    else if ((locked = lock_atoms()) && table->atoms[atom - 0xC000].references)
+        name = table->atoms[atom - 0xC000].name;
     size_t copied = 0;
     if (name)
     {
@@ -127,7 +170,8 @@ ULONG GlobalGetAtomName(ULONG atom, PSZ output, LONG capacity)
         memcpy(output, name, copied);
     }
     output[copied] = 0;
-    lx_host_monitor_unlock(monitor);
+    if (locked)
+        unlock_atoms();
     if (!name)
         open32SetError(6);
     return (ULONG)copied;

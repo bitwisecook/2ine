@@ -115,7 +115,9 @@ BOOL RestoreDC(ULONG handle, LONG level)
     Open32SavedDC *end = saved->next, *top = dc->saved;
     Open32DC *next = dc->next;
     BOOL print_active = dc->print_active, print_page = dc->print_page;
-    ULONG abort_proc = dc->abort_proc;
+    ULONG abort_proc = dc->abort_proc, print_copies = dc->print_copies,
+          print_duplex = dc->print_duplex;
+    BOOL print_draft = dc->print_draft;
     struct Open32Path *path = dc->path;
     ULONG lock_region = dc->lock_region;
     *dc = saved->state;
@@ -125,6 +127,9 @@ BOOL RestoreDC(ULONG handle, LONG level)
     dc->print_active = print_active;
     dc->print_page = print_page;
     dc->abort_proc = abort_proc;
+    dc->print_copies = print_copies;
+    dc->print_duplex = print_duplex;
+    dc->print_draft = print_draft;
     dc->saved = end;
     saved->state.font = (LxHandleBorrow){0};
     saved->state.brush = (LxHandleBorrow){0};

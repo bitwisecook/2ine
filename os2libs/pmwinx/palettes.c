@@ -2,6 +2,7 @@
 /* Logical palettes retain RGB entries; the display itself is true color. */
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmgpi.h"
 typedef struct Open32Palette
 {
     ULONG count;
@@ -82,6 +83,7 @@ ULONG SelectPalette(ULONG handle, ULONG palette, BOOL background)
     lx_handle_release(&dc->palette);
     dc->palette = next;
     dc->palette_handle = palette;
+    open32MetafilePalette(handle, palette);
     return previous;
 }
 ULONG RealizePalette(ULONG handle)
@@ -91,6 +93,7 @@ ULONG RealizePalette(ULONG handle)
         open32SetError(6);
         return UINT32_MAX;
     }
+    open32MetafileRealize(handle);
     /* A true-color drawable has no hardware palette entries to remap. */
     return 0;
 }
@@ -180,11 +183,10 @@ ULONG SetPaletteEntries(ULONG handle, ULONG first, ULONG count, PVOID input)
     ULONG copied = first < palette->count ? palette->count - first : 0;
     if (copied > count)
         copied = count;
-    if (palette->stock)
-        copied = 0;
     if (copied)
         memcpy(palette->entries + first * 4, input, copied * 4);
     lx_handle_release(&borrow);
+    open32MetafilePaletteChange(handle, 0x37, first, copied, input);
     return copied;
 }
 BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
@@ -203,14 +205,17 @@ BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
         return FALSE;
     }
     Open32Palette *palette = borrow.resource;
-    BOOL valid = !palette->stock && first <= palette->count && count <= palette->count - first;
-    if (valid)
-        for (ULONG i = 0; i < count; i++)
-            if (palette->entries[(first + i) * 4 + 3] & 1)
-                memcpy(palette->entries + (first + i) * 4, (uint8 *)input + i * 4, 3);
+    /* A range past the end is clipped; a start past the end is invalid. */
+    BOOL valid = first <= palette->count;
+    if (valid && count > palette->count - first)
+        count = palette->count - first;
+    if (valid && count)
+        memcpy(palette->entries + first * 4, input, (size_t)count * 4);
     lx_handle_release(&borrow);
     if (!valid)
         open32SetError(87);
+    else
+        open32MetafilePaletteChange(handle, 0x436, first, count, input);
     return valid;
 }
 BOOL ResizePalette(ULONG handle, ULONG count)
@@ -243,8 +248,11 @@ BOOL ResizePalette(ULONG handle, ULONG count)
     lx_handle_release(&borrow);
     if (!valid)
         open32SetError(87);
+    else
+        open32MetafilePaletteChange(handle, 0x139, count, 0, NULL);
     return valid;
 }
+/* The device's real color table comes from GPI, in PALETTEENTRY byte order. */
 ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
 {
     if (!open32FindDC(dc))
@@ -252,7 +260,25 @@ ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
         open32SetError(6);
         return 0;
     }
-    return GetPaletteEntries(open32StockPalette(), first, count, output);
+    LONG colors[256];
+    if (first > 255)
+        return 0;
+    LONG available = GpiQueryRealColors(dc, 0, (LONG)first, 256, colors);
+    if (available < 0)
+        return 0;
+    if (!output)
+        return (ULONG)available + first;
+    ULONG copied = count < (ULONG)available ? count : (ULONG)available;
+    for (ULONG i = 0; i < copied; i++)
+    {
+        uint8 *entry = (uint8 *)output + i * 4;
+        ULONG rgb = (ULONG)colors[i];
+        entry[0] = (uint8)(rgb >> 16);
+        entry[1] = (uint8)(rgb >> 8);
+        entry[2] = (uint8)rgb;
+        entry[3] = 0;
+    }
+    return copied;
 }
 BOOL UnrealizeObject(ULONG object)
 {

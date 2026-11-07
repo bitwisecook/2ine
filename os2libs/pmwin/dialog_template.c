@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "guest/abi.h"
 #include "os2libs/pmwin/controls.h"
+#include "os2libs/pmwin/graphics.h"
 
 enum
 {
@@ -99,6 +100,12 @@ static BOOL apply_parameters(HWND window, const DialogTemplate *t, unsigned offs
     }
     return TRUE;
 }
+static LxPmDialogClassFactory dialog_class_factory;
+/* A class outside PM's table can still be provided by the application's API layer. */
+void lx_pm_set_dialog_class_factory(LxPmDialogClassFactory factory)
+{
+    dialog_class_factory = factory;
+}
 static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
 {
     size_t index = t->next++;
@@ -136,9 +143,16 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
                                 LX_GUEST_EXECUTE))
             control_data = (PVOID)(uintptr_t)(t->guest + control);
     }
-    HWND handle = WinCreateWindow(parent, class_name, text, lx_guest_load_u32(item + 12),
-                                  position[0].x, position[0].y, position[1].x, position[1].y, owner,
-                                  HWND_BOTTOM, word(item, 24), index ? control_data : &frame, NULL);
+    HWND handle = 0;
+    if (index && dialog_class_factory &&
+        !findRegisteredClass(getAnchorBlockNoHAB(), class_name))
+        handle = dialog_class_factory(parent, class_name, text, lx_guest_load_u32(item + 12),
+                                      position[0].x, position[0].y, position[1].x, position[1].y,
+                                      word(item, 24));
+    else
+        handle = WinCreateWindow(parent, class_name, text, lx_guest_load_u32(item + 12),
+                                 position[0].x, position[0].y, position[1].x, position[1].y, owner,
+                                 HWND_BOTTOM, word(item, 24), index ? control_data : &frame, NULL);
     if (!handle)
         return 0;
     t->windows[index] = handle;

@@ -69,7 +69,7 @@ typedef struct Window
     ULONG frame_flags;
     BOOL formatting_frame;
     BOOL flash;
-    ULONG flash_phase;
+    ULONG flash_phase, flash_count;
     BOOL frame_chrome_hidden;
     BOOL frame_chrome_visible;
     ULONG frame_tracking;
@@ -92,6 +92,9 @@ typedef struct Window
 LX_PRIVATE void cleanupErrorInfo(void);
 /* FC_NOSETFOCUS, FC_NOLOSEFOCUS and FC_NOSETACTIVE suppress their notifications. */
 LX_PRIVATE BOOL changeFocus(HWND desktop, HWND handle, ULONG flags);
+LX_PRIVATE BOOL queryPointerClip(RECTL *bounds);
+/* FOCUS_NOTIFY adds WM_FOCUSCHANGE and WM_SETSELECTION for WinFocusChange callers. */
+#define FOCUS_NOTIFY 0x10000u
 /* Decodes a 16-entry string or message bundle resource. */
 LX_PRIVATE LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR output);
 LX_PRIVATE BOOL prepareFrameState(Window *window, SWP *position);
@@ -142,7 +145,8 @@ typedef struct PmGpiState {
     POINTL pick_position; SIZEL pick_size;
     ULONG palette;
 } PmGpiState;
-typedef struct PmPathPoint { POINTL point; BOOL move; } PmPathPoint;
+/* Paths bind to device space when defined; point is refreshed in world space for stroking. */
+typedef struct PmPathPoint { POINTL point; BOOL move; POINTL device; } PmPathPoint;
 typedef struct PmPath {
     struct PmPath *next;
     LONG id; PmPathPoint *points; size_t count, capacity;
@@ -173,6 +177,7 @@ typedef struct PresentationSpace
     LONG save_id;
     LxHandleBorrow bitmap_lease, clip_lease;
     int persistent;
+    ULONG clip_flags; /* PSF_CLIPSIBLINGS and PSF_CLIPCHILDREN requested for this PS. */
     LxHostFont *font;
     unsigned font_index, font_pixels;
     struct
@@ -226,7 +231,8 @@ typedef struct PmDeviceContext
     unsigned printer_kind;
     ULONG printer_bitmap;
     struct LxPrintJob *print_job;
-    unsigned print_pages;
+    unsigned print_pages, print_copies, print_duplex;
+    BOOL print_draft;
     struct PmDeviceContext *next;
 } PmDeviceContext;
 
@@ -250,7 +256,12 @@ typedef struct
     struct PmHook *hooks;
     struct PmFileDialog *pending_file;
     LxGuestMapping *control_bridge, *menu_bridge, *frame_control_bridge;
-    HWND focus, active, capture;
+    HWND focus, active, capture, click_window;
+    ULONG click_ticks, click_button;
+    LONG click_x, click_y;
+    ULONG press_ticks[3];
+    LONG press_x[3], press_y[3];
+    BOOL press_down[3], press_moving[3];
     ULONG modifiers, text_modifiers, text_scancode, text_repeat;
     uint8 key_down[256], key_toggled[256], physical_keys[256];
     uint8 physical_buttons[3];
@@ -265,6 +276,11 @@ typedef struct
     PresentationSpace *pres_spaces;
     size_t pres_spaces_array_len;
 } AnchorBlock;
+/* Delivers to every queue in this process; wait blocks until each foreign queue took it. */
+LX_PRIVATE BOOL broadcastQueues(AnchorBlock *self, ULONG message, MPARAM first, MPARAM second,
+                                BOOL wait);
+/* Posts the semantic message whose SV_*KB value names this virtual key and shift state. */
+LX_PRIVATE BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULONG shift, ULONG ticks);
 extern LX_PRIVATE uint32 GHABCounter;
 extern LX_PRIVATE uint32 GHMQCounter;
 extern LX_PRIVATE Window desktop_window;
@@ -289,8 +305,14 @@ LX_PRIVATE BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MP
                                    MPARAM mp2, ULONG ticks);
 LX_PRIVATE BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks);
 LX_PRIVATE void presentWindow(AnchorBlock *anchor, Window *window);
+LX_PRIVATE extern BOOL lxPmHostFocusReport;
 LX_PRIVATE HWND registerWindowMessages(AnchorBlock *anchor);
 LX_PRIVATE void unregisterWindowMessages(HWND window);
+LX_PRIVATE void bindWindowTarget(Window *window);
+LX_PRIVATE HWND foreignWindowQuery(HWND window, LONG code);
+LX_PRIVATE BOOL windowOwnerThread(HWND window, ULONG *thread);
+LX_PRIVATE void registerMessageQueue(AnchorBlock *anchor);
+LX_PRIVATE void retireAnchorMessages(AnchorBlock *anchor);
 LX_PRIVATE BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second);
 LX_PRIVATE BOOL windowMessageTargetExists(HWND window);
 LX_PRIVATE void drainForeignMessages(AnchorBlock *anchor);
@@ -304,6 +326,7 @@ LX_PRIVATE void calcHeavyweightRect(const Window *win, LxHostRect *rect);
 LX_PRIVATE int pumpTimers(AnchorBlock *anchor);
 LX_PRIVATE MRESULT sendCreateMessage(Window *window, const CREATESTRUCT *creation);
 LX_PRIVATE MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position);
+LX_PRIVATE BOOL sendEraseBackground(Window *client, HPS space, const RECTL *rectangle);
 LX_PRIVATE void destroyDialog(Window *window);
 LX_PRIVATE BOOL initializeDialog(Window *window);
 LX_PRIVATE BOOL initializeDialogProcedure(HWND window, HWND focus, PVOID parameters);

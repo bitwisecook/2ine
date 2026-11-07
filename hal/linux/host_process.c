@@ -144,3 +144,19 @@ int lx_host_process_set_priority(LxHostProcessPriority priority)
     }
     return setpriority(PRIO_PROCESS, 0, wanted);
 }
+
+int lx_host_process_set_level(int id, int value)
+{
+    char path[40];
+    snprintf(path, sizeof path, "/proc/%d/task", id);
+    DIR *tasks = opendir(path);
+    if (!tasks)
+        return setpriority(PRIO_PROCESS, (id_t)id, value);
+    int result = 0;
+    for (struct dirent *task; (task = readdir(tasks));)
+        if (task->d_name[0] != '.' &&
+            setpriority(PRIO_PROCESS, (id_t)strtol(task->d_name, NULL, 10), value))
+            result = -1;
+    closedir(tasks);
+    return result;
+}

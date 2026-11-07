@@ -248,6 +248,10 @@ static uint32 bridge32_WinStartApp(uint8 *a)
                            .pszStartupDir = strings[3],
                            .pszEnvironment = environment.host};
     details.swpInitial.fl = lx_guest_load_u32(wire + 36);
+    details.swpInitial.cy = (LONG)lx_guest_load_u32(wire + 40);
+    details.swpInitial.cx = (LONG)lx_guest_load_u32(wire + 44);
+    details.swpInitial.y = (LONG)lx_guest_load_u32(wire + 48);
+    details.swpInitial.x = (LONG)lx_guest_load_u32(wire + 52);
     result = WinStartApp(lx_guest_load_u32(a), &details, inputs,
                          (PVOID)(uintptr_t)lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
 done:

@@ -17,6 +17,23 @@
 /* Registration is shared with the complete module; this fixture can link the new unit alone. */
 BOOL SetPriorityClass(ULONG process, ULONG priority);
 ULONG GetPriorityClass(ULONG process);
+/* This fixture has no child processes: only the current-process handle is valid. */
+int open32ChildSetPriority(ULONG handle, LxHostProcessPriority priority, ULONG priority_class,
+                           int *error);
+int open32ChildPriorityClass(ULONG handle, PULONG priority_class);
+int open32ChildSetPriority(ULONG handle, LxHostProcessPriority priority, ULONG priority_class,
+                           int *error)
+{
+    (void)priority;
+    (void)priority_class;
+    (void)error;
+    return handle == UINT32_MAX ? 0 : -1;
+}
+int open32ChildPriorityClass(ULONG handle, PULONG priority_class)
+{
+    (void)priority_class;
+    return handle == UINT32_MAX ? 0 : -1;
+}
 static _Thread_local ULONG last_error;
 void open32SetError(ULONG error)
 {
@@ -72,7 +89,7 @@ int main(void)
         CHECK(!SetPriorityClass(invalid[i], 0x20) && last_error == 6);
         CHECK(!GetPriorityClass(invalid[i]) && last_error == 6);
     }
-    CHECK(!SetPriorityClass(0, 0) && last_error == 6);
+    CHECK(!SetPriorityClass(0, 0) && last_error == 307); /* the class is validated first */
     CHECK(calls == 0);
     ULONG bad_classes[] = {0, 1, 0x60, 0x8000, UINT32_MAX};
     for (unsigned i = 0; i < sizeof bad_classes / sizeof bad_classes[0]; i++)
@@ -94,7 +111,7 @@ int main(void)
         int native;
         ULONG open32;
     } errors[] = {{EACCES, 5}, {EPERM, 5}, {ENOTSUP, 50}, {ENOSYS, 50},
-                  {ENOMEM, 8}, {ESRCH, 6}, {EINVAL, 87},  {EIO, 31}};
+                  {ENOMEM, 8}, {ESRCH, 303}, {EINVAL, 87}, {EIO, 31}};
     for (unsigned i = 0; i < sizeof errors / sizeof errors[0]; i++)
     {
         forced_error = errors[i].native;

@@ -3,10 +3,12 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/input.h"
+#include "os2libs/pmwinx/drawing.h"
 typedef struct NativeControl
 {
     Open32Window window;
-    ULONG original, result, dialog_user;
+    ULONG original, result, dialog_user, font;
+    char class_name[64];
     BOOL subclassed;
     struct NativeControl *next;
 } NativeControl;
@@ -91,6 +93,145 @@ static char *ansi_text(ULONG address)
         for (char *p = text; *p; p++)
             *p = (char)WinCpTranslateChar(0, 1004, (UCHAR)*p, 437);
     return text;
+}
+/* An application subclass sees message parameters as 32-bit guest values, so text
+   exchanged with a control must live at a guest address for the whole call. */
+static LxGuestMapping *guest_text(size_t size, ULONG *address, char **host)
+{
+    LxGuestMapping *mapping =
+        lx_execution_map(GLoaderState.execution, 0, (size + 4095) & ~(size_t)4095, 3, 0);
+    if (mapping)
+    {
+        *address = lx_execution_mapping_address(mapping);
+        *host = lx_execution_mapping_host(mapping);
+    }
+    return mapping;
+}
+static LONG send_text(ULONG handle, ULONG message, ULONG first, const char *text)
+{
+    ULONG address;
+    char *host;
+    size_t size = strlen(text) + 1;
+    LxGuestMapping *mapping = guest_text(size, &address, &host);
+    if (!mapping)
+    {
+        open32SetError(8);
+        return -1;
+    }
+    memcpy(host, text, size);
+    LONG result = (LONG)(intptr_t)WinSendMsg(handle, message, (MPARAM)(uintptr_t)first,
+                                             (MPARAM)(uintptr_t)address);
+    lx_execution_unmap(GLoaderState.execution, mapping);
+    return result;
+}
+/* Adds the files matching a pattern. Read-write files are listed unless DDL_EXCLUSIVE
+   asks for only the requested attributes; directories appear as [name]. */
+static LONG list_directory(ULONG handle, ULONG attributes, ULONG pattern)
+{
+    enum
+    {
+        readonly = 1,
+        hidden = 2,
+        system_file = 4,
+        directory = 0x10,
+        archive = 0x20,
+        exclusive = 0x8000,
+        name_offset = 44
+    };
+    char *name = lx_execution_copy_string(GLoaderState.execution, pattern, 260);
+    if (!name)
+    {
+        open32SetError(87);
+        return -1;
+    }
+    uint8 found[320];
+    ULONG search = FindFirstFile(name, found);
+    free(name);
+    if (search == UINT32_MAX)
+        return -1;
+    LONG last = -1;
+    do
+    {
+        ULONG mode = lx_guest_load_u32(found);
+        const char *file = (const char *)found + name_offset;
+        BOOL is_directory = (mode & directory) != 0;
+        BOOL plain = !(mode & (readonly | hidden | system_file | directory));
+        BOOL wanted = (mode & attributes & (readonly | hidden | system_file | archive)) ||
+                      (is_directory && (attributes & directory)) ||
+                      (plain && !(attributes & exclusive));
+        if (!wanted || !strcmp(file, ".") || (is_directory && !(attributes & directory)))
+            continue;
+        char label[272];
+        snprintf(label, sizeof label, is_directory ? "[%s]" : "%s", file);
+        LONG index = send_text(handle, 0x161, (ULONG)-1, label);
+        if (index >= 0)
+            last = index;
+    } while (FindNextFile(search, found));
+    FindClose(search);
+    return last;
+}
+/* A control's font is a PM "points.face" parameter, inherited from its dialog. */
+static ULONG control_font(ULONG handle)
+{
+    NativeControl *control = find_control(handle, TRUE);
+    if (control && control->font)
+        return control->font;
+    char name[64] = {0};
+    if (!WinQueryPresParam(handle, 15, 0, NULL, sizeof name - 1, name, 0))
+        return 0;
+    char *face = strchr(name, '.');
+    LONG points = (LONG)strtol(name, NULL, 10);
+    if (!face || points <= 0)
+        return 0;
+    ULONG font = CreateFont(-(points * 96 / 72), 0, 0, 0, 400, 0, 0, 0, 0, 0, 0, 0, 0, face + 1);
+    if (control)
+        control->font = font;
+    return font;
+}
+static void set_control_font(ULONG handle, ULONG font, BOOL redraw)
+{
+    NativeControl *control = find_control(handle, TRUE);
+    uint8 record[60];
+    if (control)
+        control->font = font;
+    if (!font || open32FontObject(font, sizeof record, record) <= 0)
+        return;
+    LONG height = (LONG)lx_guest_load_u32(record);
+    LONG points = (height < 0 ? -height : height) * 72 / 96;
+    char name[64];
+    int length = snprintf(name, sizeof name, "%d.%s", (int)(points ? points : 8),
+                          (const char *)record + 28);
+    if (length > 0 && (size_t)length < sizeof name)
+        WinSetPresParam(handle, 15, (ULONG)length + 1, name);
+    if (redraw)
+        WinInvalidateRect(handle, NULL, TRUE);
+}
+/* Copies one item into the caller's buffer, which Windows sizes from the text length. */
+static LONG list_text(ULONG handle, ULONG index, ULONG address, BOOL original)
+{
+    LONG length = pm_message(handle, 0x167, index, 0, original);
+    if (length < 0 || length >= 0xFFFF)
+        return -1;
+    if (!lx_execution_memory(GLoaderState.execution, address, (size_t)length + 1, LX_GUEST_WRITE))
+    {
+        open32SetError(87);
+        return -1;
+    }
+    ULONG buffer;
+    char *text;
+    LxGuestMapping *mapping = guest_text((size_t)length + 1, &buffer, &text);
+    if (!mapping)
+    {
+        open32SetError(8);
+        return -1;
+    }
+    ULONG request = (index & 0xFFFF) | (ULONG)(length + 1) << 16;
+    WinSendMsg(handle, 0x168, (MPARAM)(uintptr_t)request, (MPARAM)(uintptr_t)buffer);
+    for (char *p = text; *p; p++)
+        *p = (char)WinCpTranslateChar(0, 437, (UCHAR)*p, 1004);
+    lx_execution_write(GLoaderState.execution, address, text, (size_t)length + 1);
+    lx_execution_unmap(GLoaderState.execution, mapping);
+    return length;
 }
 LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG second,
                                 BOOL original)
@@ -229,22 +370,22 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
         if (!text)
             return -1;
         ULONG index = message == 0x143 || message == 0x180 ? (ULONG)-1 : first;
-        /* Native controls copy strings synchronously; these are host buffers. */
-        LONG result = (LONG)(intptr_t)WinSendMsg(handle, 0x161, (MPARAM)(intptr_t)index, text);
+        LONG result = send_text(handle, 0x161, index, text);
         free(text);
         return result;
     }
-    else if (kind == 2 && (message == 0x14c || message == 0x158 || message == 0x14d))
+    else if ((kind == 2 && (message == 0x14c || message == 0x158 || message == 0x14d)) ||
+             (kind == 7 && (message == 0x18f || message == 0x1a2 || message == 0x18c)))
     {
         char *text = ansi_text(second);
         if (!text)
             return -1;
-        ULONG search = (message == 0x158 ? 4 : 6) | (ULONG)(USHORT)first << 16;
-        LONG result = (LONG)(intptr_t)WinSendMsg(handle, 0x16b, (MPARAM)(uintptr_t)search, text);
+        ULONG search = (message == 0x158 || message == 0x1a2 ? 4 : 6) | (ULONG)(USHORT)first << 16;
+        LONG result = send_text(handle, 0x16b, search, text);
         free(text);
         if (result < 0)
             return -1;
-        if (message == 0x14d)
+        if (message == 0x14d || message == 0x18c)
             pm_message(handle, 0x164, (ULONG)result, TRUE, original);
         return result;
     }
@@ -267,6 +408,52 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
         return pm_message(handle, 0x16a, first, 0, original);
     else if ((kind == 2 && message == 0x151) || (kind == 7 && message == 0x19a))
         return pm_message(handle, 0x169, first, second, original) ? 0 : -1;
+    else if ((kind == 2 && message == 0x148) || (kind == 7 && message == 0x189))
+        return list_text(handle, first, second, original); /* CB_GETLBTEXT, LB_GETTEXT */
+    else if ((kind == 2 && message == 0x149) || (kind == 7 && message == 0x18a))
+    {
+        LONG length = pm_message(handle, 0x167, first, 0, original);
+        return length < 0 ? -1 : length; /* CB_GETLBTEXTLEN, LB_GETTEXTLEN */
+    }
+    else if ((kind == 2 && message == 0x144) || (kind == 7 && message == 0x182))
+    {
+        LONG count = pm_message(handle, 0x163, first, 0, original);
+        return count < 0 ? -1 : count; /* CB_DELETESTRING, LB_DELETESTRING */
+    }
+    else if ((kind == 2 && message == 0x145) || (kind == 7 && message == 0x18d))
+        return list_directory(handle, first, second); /* CB_DIR, LB_DIR */
+    else if (kind == 7 && message == 0x18e)
+        return pm_message(handle, 0x16d, 0, 0, original); /* LB_GETTOPINDEX */
+    else if (kind == 7 && message == 0x197)
+        return pm_message(handle, 0x162, first, 0, original) ? 0 : -1; /* LB_SETTOPINDEX */
+    else if (kind == 7 && message == 0x194)
+        return 0; /* LB_SETHORIZONTALEXTENT: PM list boxes size their own extent. */
+    else if ((kind == 6 || kind == 10) && message == 0xba)
+        return kind == 10 ? pm_message(handle, 0x1bc, 0, 0, original) : 1; /* EM_GETLINECOUNT */
+    else if ((kind == 6 || kind == 10) && message == 0xcb)
+        return 1; /* EM_SETTABSTOPS: PM controls keep their uniform tab stops. */
+    else if (message == 0x81 || message == 1)
+        return message == 0x81; /* WM_NCCREATE and WM_CREATE: the PM control already exists. */
+    else if (message == 0x31)
+        return (LONG)control_font(handle); /* WM_GETFONT */
+    else if (message == 0x30)
+    {
+        set_control_font(handle, first, second != 0); /* WM_SETFONT */
+        return 0;
+    }
+    else if (kind == 2 && message == 0x141)
+    {
+        /* CB_LIMITTEXT: the limit belongs to the combo box's entry field. */
+        WinSendMsg(WinWindowFromID(handle, 0x29b), 0x143, (MPARAM)(uintptr_t)first, 0);
+        return 1;
+    }
+    else if (message == 0xb)
+    {
+        /* WM_SETREDRAW: PM controls repaint each change as it happens. */
+        if (first)
+            WinInvalidateRect(handle, NULL, TRUE);
+        return 0;
+    }
     else if (message >= 0x400)
         native = message - 0x400 + WM_USER;
     if (!native)
@@ -440,11 +627,48 @@ static unsigned control_kind(const char *name, ULONG style)
         return 3;
     if (!strcasecmp(name, "EDIT"))
         return style & 4 ? 10 : 6;
+    if (!strcasecmp(name, "MLE"))
+        return 10;
     if (!strcasecmp(name, "STATIC"))
         return 5;
     if (!strcasecmp(name, "LISTBOX"))
         return 7;
     return !strcasecmp(name, "COMBOBOX") ? 2 : 0;
+}
+/* A superclass keeps its own name; otherwise the PM class gives the standard name. */
+void open32SetNativeClassName(ULONG handle, const char *name)
+{
+    NativeControl *control = find_control(handle, TRUE);
+    if (control)
+        snprintf(control->class_name, sizeof control->class_name, "%s", name);
+}
+const char *open32NativeClassName(ULONG handle)
+{
+    NativeControl *control = find_control(handle, TRUE);
+    if (control && control->class_name[0])
+        return control->class_name;
+    char name[16];
+    if (!WinQueryClassName(handle, sizeof name, name) || name[0] != '#')
+        return NULL;
+    switch (strtoul(name + 1, NULL, 10))
+    {
+        case 2:
+            return "COMBOBOX";
+        case 3:
+            return "BUTTON";
+        case 5:
+            return "STATIC";
+        case 6:
+            return "EDIT";
+        case 7:
+            return "LISTBOX";
+        case 8:
+            return "SCROLLBAR";
+        case 10:
+            return "MLE";
+        default:
+            return NULL;
+    }
 }
 BOOL open32NativeControlOwned(ULONG handle)
 {

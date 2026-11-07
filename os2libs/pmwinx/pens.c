@@ -9,6 +9,9 @@ typedef struct Open32Pen
     LONG style, width;
     ULONG color;
     BOOL stock;
+    /* Windows PS_ENDCAP and PS_JOIN selectors: 0 round; caps 1 square, 2 flat; joins 1 bevel,
+       2 miter. */
+    ULONG cap, join;
     ULONG brush_handle;
     LxHandleBorrow brush;
 } Open32Pen;
@@ -23,7 +26,7 @@ static void free_pen(void *resource)
 ULONG CreatePen(LONG style, LONG width, ULONG color)
 {
     TRACE_NATIVE("CreatePen(%d, %d, %08X)", (int)style, (int)width, (uint)color);
-    if (style < 0 || style > 6 || width < 0 || width > 512 ||
+    if (style < 0 || style > 6 || width < 0 || width > 32767 ||
         ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
     {
         open32SetError(87);
@@ -167,6 +170,172 @@ static BOOL dash_pixel(const Open32Pen *pen, uint64_t step)
     }
     return TRUE;
 }
+/* Wide strokes with explicit ends or joins, and very wide strokes, are built from filled convex
+   polygons in the coverage plane, in device coordinates with y increasing downward. */
+typedef struct StrokePlane
+{
+    uint8 *coverage;
+    int64_t left, top, right, bottom;
+    size_t width;
+} StrokePlane;
+static BOOL stroke_polygonal(const Open32Pen *pen)
+{
+    LONG diameter = pen->width ? pen->width : 1;
+    return diameter > 1 && (pen->cap || pen->join || diameter > 32);
+}
+static void fill_convex(StrokePlane *plane, const double *points, unsigned count, uint8 value)
+{
+    double minimum = points[1], maximum = points[1];
+    for (unsigned i = 1; i < count; i++)
+    {
+        minimum = fmin(minimum, points[i * 2 + 1]);
+        maximum = fmax(maximum, points[i * 2 + 1]);
+    }
+    int64_t first = (int64_t)ceil(minimum - 0.5), last = (int64_t)ceil(maximum - 0.5);
+    if (first < plane->top)
+        first = plane->top;
+    if (last > plane->bottom)
+        last = plane->bottom;
+    for (int64_t y = first; y < last; y++)
+    {
+        double scan = y + 0.5, low = INFINITY, high = -INFINITY;
+        for (unsigned i = 0; i < count; i++)
+        {
+            const double *a = points + i * 2, *b = points + ((i + 1) % count) * 2;
+            if ((a[1] <= scan && b[1] > scan) || (b[1] <= scan && a[1] > scan))
+            {
+                double x = a[0] + (scan - a[1]) * (b[0] - a[0]) / (b[1] - a[1]);
+                low = fmin(low, x);
+                high = fmax(high, x);
+            }
+        }
+        if (low > high)
+            continue;
+        int64_t begin = (int64_t)ceil(low - 0.5), end = (int64_t)ceil(high - 0.5);
+        if (begin < plane->left)
+            begin = plane->left;
+        if (end > plane->right)
+            end = plane->right;
+        for (int64_t x = begin; x < end; x++)
+            plane->coverage[(size_t)(plane->bottom - 1 - y) * plane->width +
+                            (size_t)(x - plane->left)] = value;
+    }
+}
+static void fill_disc(StrokePlane *plane, double x, double y, double radius, uint8 value)
+{
+    double points[64];
+    for (unsigned i = 0; i < 32; i++)
+    {
+        double angle = i * 3.14159265358979323846 / 16;
+        points[i * 2] = x + radius * cos(angle);
+        points[i * 2 + 1] = y + radius * sin(angle);
+    }
+    fill_convex(plane, points, 32, value);
+}
+/* One span of a segment, with its end treatment. */
+static void stroke_span(StrokePlane *plane, double ax, double ay, double bx, double by, double ux,
+                        double uy, double half, LONG start_cap, LONG end_cap, uint8 value)
+{
+    if (start_cap == 1)
+    {
+        ax -= ux * half;
+        ay -= uy * half;
+    }
+    if (end_cap == 1)
+    {
+        bx += ux * half;
+        by += uy * half;
+    }
+    double nx = -uy * half, ny = ux * half;
+    double quad[8] = {ax + nx, ay + ny, bx + nx, by + ny, bx - nx, by - ny, ax - nx, ay - ny};
+    fill_convex(plane, quad, 4, value);
+    if (start_cap == 0)
+        fill_disc(plane, ax, ay, half, value);
+    if (end_cap == 0)
+        fill_disc(plane, bx, by, half, value);
+}
+static void stroke_join_at(StrokePlane *plane, double x, double y, double ux, double uy, double vx,
+                           double vy, double half, LONG join, double limit, uint8 value)
+{
+    double cross = ux * vy - uy * vx, dot = ux * vx + uy * vy;
+    if (join == 0)
+    {
+        fill_disc(plane, x, y, half, value);
+        return;
+    }
+    if (fabs(cross) < 1e-9 && dot > 0)
+        return;
+    /* The outer side of the turn is opposite the direction of the bend. */
+    double side = cross > 0 ? -1 : 1;
+    double ax = x - uy * half * side, ay = y + ux * half * side;
+    double bx = x - vy * half * side, by = y + vx * half * side;
+    double wedge[8] = {x, y, ax, ay, bx, by, 0, 0};
+    unsigned count = 3;
+    /* The miter ratio is 1 / sin(theta / 2), with theta the interior angle. */
+    double ratio = sqrt(2 / fmax(1 + dot, 1e-12));
+    if (join == 2 && ratio <= limit)
+    {
+        double mx = ax + bx - 2 * x, my = ay + by - 2 * y, length = hypot(mx, my);
+        if (length > 0)
+        {
+            wedge[4] = x + mx / length * half * ratio;
+            wedge[5] = y + my / length * half * ratio;
+            wedge[6] = bx;
+            wedge[7] = by;
+            count = 4;
+        }
+    }
+    fill_convex(plane, wedge, count, value);
+}
+/* Dash runs follow the same per-pel pattern as thin lines, measured along each segment. */
+static void stroke_polyline(StrokePlane *plane, Open32DC *dc, const Open32Pen *pen,
+                            const POINTL *points, LONG count, BOOL closed, uint8 ink, uint8 gap)
+{
+    double half = (pen->width ? pen->width : 1) / 2.0;
+    LONG cap = (LONG)pen->cap, join = (LONG)pen->join;
+    double limit = dc->miter_limit > 0 ? dc->miter_limit : 10;
+    BOOL dashed = pen->style >= 1 && pen->style != 5 && pen->style != 6 && pen->style <= 8;
+    LONG segments = closed ? count : count - 1;
+    uint64 step = 0;
+    for (LONG i = 0; i < segments; i++)
+    {
+        POINTL a = points[i], b = points[(i + 1) % count];
+        double dx = (double)b.x - a.x, dy = (double)b.y - a.y, length = hypot(dx, dy);
+        if (!length)
+            continue;
+        double ux = dx / length, uy = dy / length;
+        BOOL first = !closed && i == 0, last = !closed && i == segments - 1;
+        if (!dashed)
+            stroke_span(plane, a.x, a.y, b.x, b.y, ux, uy, half, first ? cap : 2, last ? cap : 2,
+                        ink);
+        else
+            for (double at = 0; at < length;)
+            {
+                BOOL on = dash_pixel(pen, step);
+                double end = at;
+                while (end < length && dash_pixel(pen, step) == on)
+                {
+                    end += 1;
+                    step++;
+                }
+                if (end > length)
+                    end = length;
+                uint8 value = on ? ink : gap;
+                if (value)
+                    stroke_span(plane, a.x + ux * at, a.y + uy * at, a.x + ux * end, a.y + uy * end,
+                                ux, uy, half, on ? cap : 2, on ? cap : 2, value);
+                at = end;
+            }
+        if (i + 1 < segments || closed)
+        {
+            POINTL c = points[(i + 2) % count];
+            double ex = (double)c.x - b.x, ey = (double)c.y - b.y, next = hypot(ex, ey);
+            if (next)
+                stroke_join_at(plane, b.x, b.y, ux, uy, ex / next, ey / next, half, join, limit,
+                               ink);
+        }
+    }
+}
 static BOOL pen_pixel(Open32DC *dc, Open32Pen *pen, LONG x, LONG y, uint32 *rgb)
 {
     if (pen->brush.resource)
@@ -238,7 +407,8 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     }
     uint64_t pixel_count = (uint64_t)(right - left) * (uint64_t)(bottom - top);
     uint64_t work = (uint64_t)((dx > dy ? dx : dy) + 1) * diameter * diameter;
-    if (pixel_count > 16777216 || work > 67108864)
+    BOOL polygonal = stroke_polygonal(pen);
+    if (pixel_count > 16777216 || (!polygonal && work > 67108864))
     {
         open32SetError(8);
         return FALSE;
@@ -257,6 +427,14 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     int64_t error = dx - dy;
     LONG sx = x < target_x ? 1 : -1, sy = y < target_y ? 1 : -1;
     uint64_t step = 0;
+    if (polygonal)
+    {
+        StrokePlane plane = {coverage, left, top, right, bottom, width};
+        POINTL ends[2] = {{x, y}, {target_x, target_y}};
+        stroke_polyline(&plane, dc, pen, ends, 2, FALSE, 1, dc->background_mode == 2 ? 2 : 0);
+        x = target_x;
+        y = target_y;
+    }
     /* The final point is excluded, matching Windows LineTo and joined segments. */
     while (x != target_x || y != target_y)
     {
@@ -336,7 +514,7 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
         open32SetError(6);
         return FALSE;
     }
-    if (!open32IdentityMapping(dc))
+    if (!open32IdentityMapping(dc) || stroke_polygonal(dc->pen.resource))
     {
         uint8 points[32];
         LONG xy[8] = {left, top, right, top, right, bottom, left, bottom};
@@ -494,6 +672,12 @@ static int compare_crossings(const void *a, const void *b)
 static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL filled)
 {
     TRACE_NATIVE("GDI path(%u, %p, %d, %u, %u)", handle, input, count, closed, filled);
+    if (GLoaderState.trace_native && input && count > 0)
+        for (LONG i = 0; i < count && i < 8; i++)
+            TRACE_NATIVE("  point %d: %d,%d of height %d", (int)i,
+                         (int)lx_guest_load_u32((const uint8 *)input + i * 8),
+                         (int)lx_guest_load_u32((const uint8 *)input + i * 8 + 4),
+                         (int)open32DCHeight(handle));
     Open32DC *dc = open32FindDC(handle);
     Open32Pen *pen = dc ? dc->pen.resource : NULL;
     if (!dc || !pen || !open32CanDraw(handle) || !input || count < 2 || count > 65536)
@@ -536,9 +720,10 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     }
     LONG diameter = pen->width ? pen->width : 1, before = (diameter - 1) / 2, after = diameter / 2;
     BOOL valid = right - left <= 65536 && bottom - top <= 65536;
+    BOOL polygonal = stroke_polygonal(pen);
     uint64 work = 0;
     LONG segments = closed ? count : count - 1;
-    for (LONG i = 0; valid && i < segments && pen->style != 5; i++)
+    for (LONG i = 0; valid && !polygonal && i < segments && pen->style != 5; i++)
     {
         POINTL a = points[i], b = points[(i + 1) % count];
         uint64 dx = (uint64)llabs((int64_t)a.x - b.x), dy = (uint64)llabs((int64_t)a.y - b.y);
@@ -613,7 +798,13 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
         }
     }
     uint64 step = 0;
-    for (LONG i = 0; i < segments && pen->style != 5; i++)
+    if (polygonal && pen->style != 5)
+    {
+        StrokePlane plane = {coverage, left, top, right, bottom, width};
+        stroke_polyline(&plane, dc, pen, points, count, closed, 2,
+                        dc->background_mode == 2 ? 3 : 0);
+    }
+    for (LONG i = 0; !polygonal && i < segments && pen->style != 5; i++)
     {
         POINTL a = points[i], b = points[(i + 1) % count];
         int64_t x = a.x, y = a.y, dx = llabs((int64_t)b.x - a.x), dy = llabs((int64_t)b.y - a.y),
@@ -728,6 +919,11 @@ ULONG ExtCreatePen(ULONG style, ULONG width, PVOID brush, ULONG count, PVOID ent
     Open32Pen *pen = borrow.resource;
     BOOL valid = TRUE;
     pen->style = (LONG)basic;
+    if (style & 0x10000)
+    {
+        pen->cap = (style >> 8) & 15;
+        pen->join = (style >> 12) & 15;
+    }
     if (brush_style == 1)
         pen->style = 5;
     if (brush_style >= 2)

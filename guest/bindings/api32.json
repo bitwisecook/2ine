@@ -624,6 +624,37 @@
       "argument_bytes": 4,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "DosSetFSInfo": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosAsyncTimer": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosStartTimer": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosStopTimer": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosQueryMutexSem": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "THK_UNITHUNK": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32",
+      "native_bridge": true
     }
   },
   "nls": {
@@ -2443,6 +2474,21 @@
     },
     "GpiPolygons": {
       "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiLoadPublicFonts": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiUnloadPublicFonts": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GpiQueryStopDraw": {
+      "argument_bytes": 4,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }
@@ -5602,6 +5648,76 @@
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "AddFontResource": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "CreateProcess": {
+      "argument_bytes": 40,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DuplicateHandle": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ExitProcess": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ExitWindows": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "FatalAppExit": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "FatalExit": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "OpenProcess": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SuspendThread": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "TerminateThread": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinExec": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "GetExitCodeProcess": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "ShellExecute": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WaitForInputIdle": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmdrag": {
@@ -5825,6 +5941,11 @@
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "WinStartApp": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmctls": {
@@ -5969,6 +6090,56 @@
       "argument_bytes": 0,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
+    },
+    "WPFilesystemNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WPFolderNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WPDataFileNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WPObjectNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WPAbstractNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WPTransientNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WPDesktopNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WPClassManagerNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "M_WPFolderNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "M_WPDataFileNewClass": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
     }
   },
   "pmgre": {
@@ -6028,6 +6199,11 @@
     },
     "mmioGetHeader": {
       "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "mmioInstallIOProc": {
+      "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

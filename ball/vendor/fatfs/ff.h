@@ -338,6 +338,7 @@ FRESULT f_rename (const TCHAR* path_old, const TCHAR* path_new);	/* Rename/Move 
 FRESULT f_stat (const TCHAR* path, FILINFO* fno);					/* Get file status */
 FRESULT f_chmod (const TCHAR* path, BYTE attr, BYTE mask);			/* Change attribute of a file/dir */
 FRESULT f_utime (const TCHAR* path, const FILINFO* fno);			/* Change timestamp of a file/dir */
+FRESULT f_accessdate (const TCHAR* path, WORD* date, WORD value);	/* Read and/or change the last-access date */
 FRESULT f_chdir (const TCHAR* path);								/* Change current directory */
 FRESULT f_chdrive (const TCHAR* path);								/* Change current drive */
 FRESULT f_getcwd (TCHAR* buff, UINT len);							/* Get current directory */

@@ -75,6 +75,26 @@ ULONG ChildWindowFromPoint(ULONG parent, LONG x, LONG y)
     ULONG child = WinWindowFromPoint(native, &point, TRUE);
     return !child ? 0 : child == native ? parent : open32PublicWindow(child);
 }
+typedef struct WindowNames
+{
+    ULONG window, atom;
+    char name[256], text[100];
+} WindowNames;
+/* Runs on the window's own thread, where its Open32 record and PM window can be read. */
+static uintptr_t read_window_names(void *context)
+{
+    WindowNames *names = context;
+    Open32Window *w = open32FindWindow(names->window);
+    if (w)
+    {
+        names->atom = w->class->atom;
+        GetClassName(names->window, names->name, sizeof names->name);
+    }
+    else
+        WinQueryClassName(names->window, sizeof names->name, names->name);
+    WinQueryWindowText(names->window, sizeof names->text, names->text);
+    return 1;
+}
 ULONG FindWindow(PSZ class_name, PSZ title)
 {
     if (!class_name)
@@ -84,27 +104,15 @@ ULONG FindWindow(PSZ class_name, PSZ title)
     }
     for (ULONG window = WinQueryWindow(HWND_DESKTOP, 2); window; window = WinQueryWindow(window, 0))
     {
-        Open32Window *w = open32FindWindow(window);
-        if (!w && !open32NativeDialogWindow(window))
+        WindowNames names = {.window = window};
+        uintptr_t ignored;
+        if (!lx_pm_window_call(window, read_window_names, &names, sizeof names, &ignored))
+            read_window_names(&names);
+        if ((uintptr_t)class_name <= 0xFFFF ? names.atom != (ULONG)(uintptr_t)class_name
+                                            : strcasecmp(names.name, class_name) != 0)
             continue;
-        char name[256], text[100];
-        if ((uintptr_t)class_name <= 0xFFFF)
-        {
-            if (!w || w->class->atom != (ULONG)(uintptr_t)class_name)
-                continue;
-        }
-        else
-        {
-            GetClassName(window, name, sizeof name);
-            if (strcasecmp(name, class_name))
-                continue;
-        }
-        if (title)
-        {
-            GetWindowText(window, text, sizeof text);
-            if (strcmp(text, title))
-                continue;
-        }
+        if (title && strcmp(names.text, title))
+            continue;
         return open32PublicWindow(window);
     }
     return 0;
@@ -118,12 +126,20 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
     }
     ULONG *snapshot = NULL;
     size_t count = 0, capacity = 0;
-    for (ULONG window = WinQueryWindow(HWND_DESKTOP, 2); window; window = WinQueryWindow(window, 0))
+    /* EnumWindows walks the desktop's children and then the object windows of every thread. */
+    size_t objects = thread ? 0 : lx_pm_object_windows(NULL, 0);
+    HWND *object_list = objects ? calloc(objects, sizeof *object_list) : NULL;
+    objects = object_list ? lx_pm_object_windows(object_list, objects) : 0;
+    ULONG window = WinQueryWindow(HWND_DESKTOP, 2);
+    for (size_t next_object = 0; window || next_object < objects;)
     {
-        if (!open32FindWindow(window) && !open32NativeDialogWindow(window))
+        BOOL from_object = !window;
+        ULONG current = from_object ? object_list[next_object++] : window;
+        window = from_object ? 0 : WinQueryWindow(window, 0);
+        if (open32ThreadQueueWindow(current))
             continue;
         ULONG pid = 0, tid = 0;
-        if (thread && (!WinQueryWindowProcess(window, &pid, &tid) || tid != thread))
+        if (thread && (!WinQueryWindowProcess(current, &pid, &tid) || tid != thread))
             continue;
         if (count == capacity)
         {
@@ -132,17 +148,19 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
             if (!grown)
             {
                 free(snapshot);
+                free(object_list);
                 open32SetError(8);
                 return FALSE;
             }
             snapshot = grown;
             capacity = next;
         }
-        snapshot[count++] = open32PublicWindow(window);
+        snapshot[count++] = open32PublicWindow(current);
     }
+    free(object_list);
     BOOL result = TRUE;
     for (size_t i = 0; i < count; i++)
-        if (IsWindow(snapshot[i]) && !lx_execution_callback32_4(GLoaderState.execution, procedure,
+        if (WinIsWindow(0, snapshot[i]) && !lx_execution_callback32_4(GLoaderState.execution, procedure,
                                                                 snapshot[i], parameter, 0, 0))
         {
             result = FALSE;
@@ -226,7 +244,9 @@ ULONG GetDlgItemInt(ULONG dialog, LONG id, PVOID translated, BOOL sign)
     char text[64], *end = text;
     ULONG result = 0;
     BOOL success = FALSE;
-    if (GetDlgItemText(dialog, id, text, sizeof text))
+    /* The buffer is host memory, which GetDlgItemText's guest message cannot address. */
+    ULONG item = GetDlgItem(dialog, id);
+    if (item && WinQueryWindowText(item, sizeof text, text))
     {
         if (sign)
         {
@@ -313,8 +333,11 @@ LONG MessageBox(ULONG owner, PSZ text, PSZ caption, ULONG flags)
     ULONG native = 0x4000 | (group < 6 ? buttons[group] : 0) | (icon < 5 ? icons[icon] : 0) |
                    (button == 1 || button == 2 ? button << 8 : 0) |
                    ((flags & 0x3000) == 0x1000 ? 0x1000 : 0);
-    ULONG result = WinMessageBox(HWND_DESKTOP, owner ? owner : HWND_DESKTOP, text ? text : "",
-                                 caption ? caption : "", 0, native);
+    /* Open32 removes the close action from Yes/No boxes, leaving only their answers. */
+    PSZ body = text ? text : "", title = caption ? caption : "";
+    HWND parent = owner ? owner : HWND_DESKTOP;
+    ULONG result = native & 4 ? lx_pm_message_box_no_close(parent, body, title, native)
+                              : WinMessageBox(HWND_DESKTOP, parent, body, title, 0, native);
     static const ULONG answers[] = {0, 1, 2, 3, 4, 5, 6, 7};
     return result < sizeof answers / sizeof *answers ? answers[result] : 0;
 }

@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+#include "guest/launch_record.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/video_frames.h"
 #include "os2libs/pmwin/graphics.h"
@@ -373,6 +374,8 @@ HWND WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle, 
     win->parent = parent;
     win->children = NULL;
     win->hwnd = registerWindowMessages(anchor);
+    if (win->hwnd)
+        bindWindowTarget(win);
     if (!win->hwnd)
     {
         if (parent == &desktop_window)
@@ -512,6 +515,10 @@ HWND WinCreateStdWindow(HWND hwndParent, ULONG flStyle, PULONG pflCreateFlags, P
         }
     }
 
+    /* A frame created visible never passes through a show request of its own. */
+    if ((flStyle & WS_VISIBLE) && lx_launch_presentation_pending())
+        WinSetWindowPos(retval, HWND_TOP, 0, 0, 0, 0, SWP_SHOW);
+
     return retval;
 }
 
@@ -564,6 +571,7 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
     {
         case WM_FLASHWINDOW:
             win->flash = (USHORT)(uintptr_t)mp1 != 0;
+            win->flash_count = 0;
             WinInvalidateRect(hwnd, NULL, TRUE);
             return (MRESULT)(uintptr_t)TRUE;
         case WM_ACTIVATE:
@@ -709,6 +717,16 @@ MRESULT WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
                     paintFrameBorder(win, space);
                     WinEndPaint(space);
                 }
+                /* WM_ERASEBACKGROUND: TRUE asks the frame to fill its client. */
+                Window *client = getWindowFromHWND(anchor, WinWindowFromID(hwnd, 0x8008));
+                HPS client_space = client ? WinGetPS(client->hwnd) : 0;
+                if (client_space)
+                {
+                    RECTL area = {0, 0, client->w, client->h};
+                    if (sendEraseBackground(client, client_space, &area))
+                        WinFillRect(client_space, &area, -20); /* SYSCLR_WINDOW */
+                    WinReleasePS(client_space);
+                }
                 return 0;
             }
             validateWindowPaint(anchor, win);
@@ -828,6 +846,8 @@ BOOL WinIsWindowVisible(HWND hwnd)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HWND, FALSE);
     }
 
+    if (win == &desktop_window)
+        return TRUE;
     return ((win->style & WS_VISIBLE) == WS_VISIBLE) ? TRUE : FALSE;
 }
 
@@ -863,12 +883,46 @@ static BOOL set_window_order(AnchorBlock *anchor, Window *window, HWND behind)
     return TRUE;
 }
 
+/* A launcher's show state and placement apply to the first frame shown. */
+static void applyLaunchPresentation(const Window *win, LONG *x, LONG *y, LONG *cx, LONG *cy,
+                                    ULONG *flags)
+{
+    LxLaunchPresentation launch;
+    if (!(*flags & SWP_SHOW) || win->parent != &desktop_window || !isFrameWindow(win) ||
+        !lx_launch_take_presentation(&launch))
+        return;
+    if (launch.control & LX_LAUNCH_INVISIBLE)
+    {
+        *flags = (*flags & ~(ULONG)(SWP_SHOW | SWP_ACTIVATE)) | SWP_HIDE;
+        return;
+    }
+    if (launch.control & LX_LAUNCH_SET_POSITION)
+    {
+        *x = launch.x;
+        *y = launch.y;
+        *flags |= SWP_MOVE;
+    }
+    if ((launch.control & LX_LAUNCH_SET_SIZE) && launch.cx > 0 && launch.cy > 0)
+    {
+        *cx = launch.cx;
+        *cy = launch.cy;
+        *flags |= SWP_SIZE;
+    }
+    if (launch.control & LX_LAUNCH_MINIMIZE)
+        *flags |= SWP_MINIMIZE;
+    else if (launch.control & LX_LAUNCH_MAXIMIZE)
+        *flags |= SWP_MAXIMIZE;
+    if (launch.control & LX_LAUNCH_BACKGROUND)
+        *flags &= ~(ULONG)SWP_ACTIVATE;
+}
 BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, ULONG flags)
 {
     TRACE_NATIVE("WinSetWindowPos(%u, %u, %d, %d, %d, %d, %u)", (uint)hwnd, (uint)behind, (int)x,
                  (int)y, (int)cx, (int)cy, (uint)flags);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *win = anchor ? getWindowFromHWND(anchor, hwnd) : NULL;
+    if (win)
+        applyLaunchPresentation(win, &x, &y, &cx, &cy, &flags);
     if (!win || ((flags & SWP_SIZE) && (cx <= 0 || cy <= 0)))
         return FALSE;
     SWP swp = {flags,
@@ -923,8 +977,12 @@ BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, U
     if (win->parent == &desktop_window)
     {
         updateWindowCyclePolicy(win);
-        if (!lx_host_window_position(win->heavy.window, win->x, desktop_window.h - win->y - win->h,
-                                     win->w, win->h))
+        /* The host refuses positions above the usable display area, for instance a placement
+           saved on a taller screen. PM must record where the window actually lands. */
+        int host_y = desktop_window.h - win->y - win->h;
+        lx_host_window_constrain(win->heavy.window, win->x, &host_y, win->w, win->h);
+        win->y = desktop_window.h - host_y - win->h;
+        if (!lx_host_window_position(win->heavy.window, win->x, host_y, win->w, win->h))
             return FALSE;
         if ((win->style & WS_VISIBLE) && !(win->style & WS_MINIMIZED))
             lx_host_window_show(win->heavy.window);
@@ -1104,6 +1162,7 @@ BOOL WinSetParent(HWND handle, HWND parent_handle, BOOL redraw)
 
 BOOL WinEnableWindow(HWND window, BOOL enable)
 {
+    TRACE_NATIVE("WinEnableWindow(%u, %u)", (uint)window, (uint)enable);
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
     if (!w)

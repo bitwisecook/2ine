@@ -79,10 +79,6 @@ int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
     const ULONG musthave = (attr & 0xFF00) >> 8;
     const ULONG mayhave = (attr & 0x00FF);
 
-    // these attributes mean nothing on Unix, so if they are Must Haves, return nothing.
-    if (musthave & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED))
-        return 0;
-
     const char *pattern = dirf->pattern, *name;
     LxHostFileInfo statbuf;
     LxHostFsError error = LX_HOST_FS_OK;
@@ -125,6 +121,12 @@ int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
                 continue;
         }
 
+        /* Hidden and system entries need permission; the archive bit never excludes one. */
+        const uint32 special = statbuf.attributes & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
+        if ((special & (FILE_HIDDEN | FILE_SYSTEM) & ~mayhave) ||
+            (musthave & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED) & ~special))
+            continue;
+
         const int legacy = dirf->level == (ULONG)-1 || dirf->level == (ULONG)-2;
         const int large = dirf->level == FIL_STANDARDL || dirf->level == FIL_QUERYEASIZEL;
         const int eas = dirf->level == (ULONG)-2 || dirf->level == FIL_QUERYEASIZE ||
@@ -145,7 +147,10 @@ int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
         uint8 *fields = out + (legacy ? 0 : 4);
         FDATE date;
         FTIME time;
-        initFileCreationDateTime(&date, &time);
+        if (statbuf.created)
+            unixTimeToOs2(statbuf.created, &date, &time);
+        else
+            initFileCreationDateTime(&date, &time);
         lx_guest_store_u16(fields, date.day | date.month << 5 | date.year << 9);
         lx_guest_store_u16(fields + 2, time.twosecs | time.minutes << 5 | time.hours << 11);
         unixTimeToOs2(statbuf.accessed, &date, &time);
@@ -163,7 +168,8 @@ int findNextOne(DirFinder *dirf, PVOID *ppfindbuf, PULONG pcbBuf, int *err)
         }
         else
             lx_guest_store_u32(fields + 16, (uint32)statbuf.allocated);
-        const uint32 attributes = (isdir ? FILE_DIRECTORY : 0) | (readonly ? FILE_READONLY : 0);
+        const uint32 attributes =
+            (isdir ? FILE_DIRECTORY : 0) | (readonly ? FILE_READONLY : 0) | special;
         if (legacy)
             lx_guest_store_u16(fields + 20, attributes);
         else

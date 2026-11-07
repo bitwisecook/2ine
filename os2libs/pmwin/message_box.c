@@ -3,10 +3,17 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/controls.h"
 #include "guest/abi.h"
-ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, ULONG style)
+/* A box without a close action dismisses only through one of its buttons. */
+static MRESULT OS2API no_close_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
-    TRACE_NATIVE("WinMessageBox(%u, %u, '%s', '%s', %u, %u)", (uint)parent, (uint)owner, text,
-                 caption, (uint)id, (uint)style);
+    if (message == WM_CLOSE ||
+        (message == WM_COMMAND && (USHORT)(uintptr_t)first == 2 && !WinWindowFromID(window, 2)))
+        return 0;
+    return WinDefDlgProc(window, message, first, second);
+}
+static ULONG message_box(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, ULONG style,
+                         BOOL closable)
+{
     static const unsigned buttons[][3] = {{1, 0, 0}, {1, 2, 0}, {4, 2, 0}, {3, 4, 5},
                                           {6, 7, 0}, {6, 7, 2}, {2, 0, 0}, {9, 0, 0}};
     static const char *labels[] = {"",       "OK",  "Cancel", "Abort", "Retry",
@@ -113,7 +120,8 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
         offset += item->cchText + 1;
     }
     t->cbTemplate = offset;
-    HWND window = WinCreateDlg(parent ? parent : HWND_DESKTOP, owner, WinDefDlgProc, t, NULL);
+    HWND window = WinCreateDlg(parent ? parent : HWND_DESKTOP, owner,
+                               closable ? WinDefDlgProc : no_close_procedure, t, NULL);
     free(bytes);
     if (!window)
         return 0xffff;
@@ -127,9 +135,24 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
     return result;
 }
 
+ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, ULONG style)
+{
+    TRACE_NATIVE("WinMessageBox(%u, %u, '%s', '%s', %u, %u)", (uint)parent, (uint)owner, text,
+                 caption, (uint)id, (uint)style);
+    return message_box(parent, owner, text, caption, id, style, TRUE);
+}
+ULONG lx_pm_message_box_no_close(HWND owner, PSZ text, PSZ caption, ULONG style)
+{
+    return message_box(HWND_DESKTOP, owner, text, caption, 0, style, FALSE);
+}
+
 BOOL WinAlarm(HWND desktop, ULONG type)
 {
     TRACE_NATIVE("WinAlarm(%u, %u)", (uint)desktop, (uint)type);
+    /* SV_ALARM silences the sound without failing the call. */
+    if (desktop == HWND_DESKTOP && type <= 2 && !WinQuerySysValue(desktop, 6))
+        return TRUE;
     return desktop == HWND_DESKTOP && type <= 2 && GLoaderState.beep &&
-           GLoaderState.beep(type == 2 ? 220 : 440, 80) == NO_ERROR;
+           GLoaderState.beep(WinQuerySysValue(desktop, 13 + (LONG)type),
+                             WinQuerySysValue(desktop, 16 + (LONG)type)) == NO_ERROR;
 }

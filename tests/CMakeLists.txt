@@ -215,6 +215,11 @@ if(TARGET pmwin)
         set_tests_properties(display_dpi_${dpi} PROPERTIES TIMEOUT 20
             ENVIRONMENT "TWOINE_DISPLAY_DPI=${dpi};SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
     endforeach()
+    foreach(depth 4 8 16)
+        add_test(NAME display_depth_${depth} COMMAND twoine_display_dpi_tests 96)
+        set_tests_properties(display_depth_${depth} PROPERTIES TIMEOUT 20
+            ENVIRONMENT "TWOINE_DISPLAY_DPI=96;TWOINE_DISPLAY_DEPTH=${depth};SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software")
+    endforeach()
     add_executable(twoine_menu_chrome_tests os2libs/test_menu_chrome.c)
     twoine_application_target(twoine_menu_chrome_tests)
     target_link_libraries(twoine_menu_chrome_tests PRIVATE pmwin 2ine)

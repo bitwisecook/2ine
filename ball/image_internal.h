@@ -35,6 +35,7 @@ enum
     TB_FS_RENAME,
     TB_FS_READONLY,
     TB_FS_WRITABLE,
-    TB_FS_TOUCH
+    TB_FS_TOUCH,
+    TB_FS_ATTRIBUTES
 };
 #endif

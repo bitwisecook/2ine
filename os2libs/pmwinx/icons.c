@@ -109,24 +109,35 @@ BOOL DestroyIcon(ULONG handle)
         open32SetError(6);
     return ok;
 }
+/* PMWINX hands both masks to GpiCreateBitmap unchanged, so rows are DWORD aligned and the first
+   row is the bottom of the image, in PM order. Colors above 8 bits per pel make no color bitmap. */
 ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG depth, PVOID and_bits,
                  PVOID xor_bits)
 {
     (void)module;
-    size_t mask_bytes, pixel_bytes;
-    if (!xor_bits)
+    size_t mask_bytes;
+    if (!xor_bits || planes * depth >= 16)
+    {
         planes = depth = 1;
-    if (!and_bits || !open32BitmapBytes(width, height, 1, 1, &mask_bytes) ||
-        !open32BitmapBytes(width, height, planes, depth, &pixel_bytes))
+        xor_bits = NULL;
+    }
+    if (!and_bits || !open32BitmapBytes(width, height, 1, 1, &mask_bytes))
         return 0;
-    ULONG bitmap = CreateBitmap(width, height, planes, depth, xor_bits);
-    LxHandleBorrow borrow = {0};
-    PmBitmap *source = bitmap ? lx_pm_bitmap(bitmap, &borrow) : NULL;
-    Open32Icon *icon = source ? calloc(1, sizeof *icon) : NULL;
+    ULONG bits = planes * depth;
+    if (bits != 1 && bits != 2 && bits != 4 && bits != 8)
+    {
+        open32SetError(50);
+        return 0;
+    }
+    size_t mask_stride = ((size_t)width + 31) / 32 * 4,
+           color_stride = ((size_t)width * bits + 31) / 32 * 4;
+    uint32 colors[256];
+    open32BitmapPalette(bits, colors);
+    Open32Icon *icon = calloc(1, sizeof *icon);
     PmPointerImage *image = icon ? calloc(1, sizeof *image) : NULL;
     if (image)
     {
-        image->pixels = malloc((size_t)width * height * 4);
+        image->pixels = calloc((size_t)width * height, 4);
         image->mask = malloc((size_t)width * height);
     }
     BOOL ok = image && image->pixels && image->mask;
@@ -134,20 +145,24 @@ ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG dept
     {
         image->width = (unsigned)width;
         image->height = (unsigned)height;
-        memcpy(image->pixels, source->pixels, (size_t)width * height * 4);
-        size_t stride = mask_bytes / (size_t)height;
         for (LONG y = 0; y < height; y++)
             for (LONG x = 0; x < width; x++)
-                image->mask[(size_t)y * width + x] =
-                    (((uint8 *)and_bits)[y * stride + x / 8] >> (7 - x % 8)) & 1;
+            {
+                size_t at = (size_t)y * width + x;
+                image->mask[at] = (((uint8 *)and_bits)[y * mask_stride + x / 8] >> (7 - x % 8)) & 1;
+                if (xor_bits)
+                {
+                    const uint8 *row = (uint8 *)xor_bits + y * color_stride;
+                    unsigned bit = (unsigned)x * bits;
+                    image->pixels[at] =
+                        colors[(row[bit / 8] >> (8 - bits - bit % 8)) & ((1u << bits) - 1)];
+                }
+            }
         icon->image = image;
         icon->owned = TRUE;
         icon->handle = lx_handle_create(LX_HANDLE_OPEN32_ICON, icon, destroy_icon);
         ok = icon->handle != 0;
     }
-    lx_handle_release(&borrow);
-    if (bitmap)
-        DeleteObject(bitmap);
     if (!ok)
     {
         if (icon && icon->image)
@@ -248,7 +263,7 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     if (!path || !*path)
     {
         open32SetError(87);
-        return 0;
+        return 1; /* The value Open32 gives a caller with no file. */
     }
     uint32 error = 0;
     char *host = GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(path, &error) : NULL;

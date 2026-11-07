@@ -80,6 +80,8 @@ extern const PmwpBody pmwpViewBodies[];
 extern const size_t pmwpViewBodyCount;
 extern const PmwpBody pmwpClassBodies[];
 extern const size_t pmwpClassBodyCount;
+extern const PmwpBody pmwpExtendedBodies[];
+extern const size_t pmwpExtendedBodyCount;
 
 /* WPObject instance data. The use list, default view, style and concurrent view
    occupy their PMWP.DLL offsets; the remaining words are private to this provider. */
@@ -90,11 +92,34 @@ enum
     PMWP_OBJ_HANDLE = 0x0c,
     PMWP_OBJ_IDENTIFIER = 0x10,
     PMWP_OBJ_LOCKS = 0x14,
+    PMWP_OBJ_HELP_PANEL = 0x18,
+    PMWP_OBJ_HELP_LIBRARY = 0x1c,
+    PMWP_OBJ_ERROR = 0x20,
+    PMWP_OBJ_ICON = 0x24,
+    PMWP_OBJ_ICON_X = 0x2c,
+    PMWP_OBJ_ICON_Y = 0x30,
+    PMWP_OBJ_MUTEX_OWNER = 0x34,
+    PMWP_OBJ_MUTEX_DEPTH = 0x38,
+    PMWP_OBJ_NEXT = 0x3c,
+    PMWP_OBJ_ICON_FORMAT = 0x40,
+    PMWP_OBJ_ICON_MODULE = 0x44,
+    PMWP_OBJ_ICON_RESOURCE = 0x48,
+    PMWP_OBJ_ICON_FILE = 0x4c,
+    PMWP_OBJ_INSERT_STATE = 0x50,
+    PMWP_OBJ_CONTAINER_FLAGS = 0x54,
+    PMWP_OBJ_RESTORING = 0x58,
+    PMWP_OBJ_STATE = 0x64,
+    PMWP_OBJ_RECORD = 0x04,
     PMWP_OBJ_USE_LIST = 0x28,
     PMWP_OBJ_DEFAULT_VIEW = 0x5c,
     PMWP_OBJ_STYLE = 0x68,
     PMWP_OBJ_CONCURRENT_VIEW = 0x70,
-    /* M_WPObject instance data, at PMWP.DLL offsets. */
+    PMWP_OBJ_BUTTON = 0x74,
+    PMWP_OBJ_MIN_WINDOW = 0x78,
+    PMWP_OBJ_TASKS = 0x7c,
+    PMWP_OBJ_WINDOW_KEYS = 0x84,
+    /* M_WPObject instance data. Usage, page size and error use PMWP.DLL offsets. */
+    PMWP_CLS_ICON = 0x00,
     PMWP_CLS_USAGE = 0x04,
     PMWP_CLS_PAGE_WIDTH = 0x08,
     PMWP_CLS_PAGE_HEIGHT = 0x0c,
@@ -111,7 +136,10 @@ enum
     PMWP_SOMClass_somDescendedFrom = 0x1c,
     PMWP_SOMClass_somGetInstanceSize = 0x34,
     PMWP_SOMClass_somDeallocate = 0xc0,
+    PMWP_SOMObject_somFree = 0x0c,
     PMWP_SOMObject_somGetClass = 0x18,
+    PMWP_SOMClassMgr_somFindClsInFile = 0x04,
+    PMWP_SOMClassMgr_somFindClass = 0x08,
     PMWP_SOMObject_somIsA = 0x1c
 };
 
@@ -122,6 +150,7 @@ enum
     PMWP_USAGE_LAST = 0x16,
     PMWP_OPEN_DEFAULT = 0,
     PMWP_OPEN_SETTINGS = 2,
+    PMWP_OPEN_RUNNING = 4,
     PMWP_CCVIEW_ON = 1,
     PMWP_CCVIEW_OFF = 2,
     PMWP_OR_NEW = 1,
@@ -139,7 +168,9 @@ enum
     PMWP_OBJSTYLE_NORENAME = 0x800,
     PMWP_OBJSTYLE_NODROP = 0x1000,
     PMWP_OBJSTYLE_NODROPON = 0x2000,
-    PMWP_OBJSTYLE_LOCKEDINPLACE = 0x20000
+    PMWP_OBJSTYLE_LOCKEDINPLACE = 0x20000,
+    /* Reported through wpQueryError/wpclsQueryError by a method with no provider. */
+    PMWP_ERROR_NO_PROVIDER = 50
 };
 
 /* Guest SOM runtime. Every call below may run guest code, so callers hold no
@@ -149,6 +180,15 @@ uint32 pmwpClassNew(PmwpClassId id, uint32 major, uint32 minor);
 uint32 pmwpClassObject(PmwpClassId id);
 uint32 pmwpClassToken(PmwpClassId id, uint32 offset);
 uint32 pmwpGuestCall(uint32 entry, uint32 a, uint32 b, uint32 c, uint32 d);
+uint32 pmwpGuestCallMany(uint32 entry, const uint32 *words, uint32 count);
+uint32 pmwpClassManagerParent(uint32 token_offset);
+uint32 pmwpParentMethod(PmwpClassId id, uint32 token);
+void pmwpGeneratedInit(PmwpClassId id, uint32 self, uint32 control);
+void pmwpGeneratedDestruct(PmwpClassId id, uint32 self, BOOL release, uint32 control);
+uint32 pmwpSomIdFromString(uint32 text);
+uint32 pmwpSomStringFromId(uint32 id);
+/* The return value that reports failure for a method with no provider. */
+uint32 pmwpMethodFailure(const char *method);
 /* Dispatches through the method token, so the most derived override runs. */
 uint32 pmwpInvoke(PmwpClassId id, uint32 offset, uint32 self, uint32 a, uint32 b, uint32 c);
 uint32 pmwpInvokeClass(uint32 offset, uint32 self, uint32 a, uint32 b, uint32 c);
@@ -177,6 +217,16 @@ void pmwpRememberObject(ULONG handle, uint32 object);
 void pmwpForgetObject(ULONG handle);
 uint32 pmwpClassForName(const char *name);
 uint32 pmwpFolderForLocation(const char *location);
+uint32 pmwpObjectForPath(const char *path);
+uint32 pmwpAllocateObject(uint32 class_object);
+BOOL pmwpObjectSetTitle(uint32 self, uint32 address);
+uint32 pmwpObjectDelete(uint32 self, uint32 confirmations);
+BOOL pmwpObjectFilePath(uint32 self, char *path, size_t capacity);
+uint32 pmwpAddInfoPage(HWND book, const char *name, const char *text);
+BOOL pmwpViewStored(ULONG handle, ULONG view);
+uint32 pmwpOpenSettings(uint32 self);
+void pmwpRememberView(uint32 self, uint32 view, HWND frame);
+uint32 pmwpFormatDragItem(uint32 self, uint32 item);
 ULONG pmwpCreateRegistered(const char *class_name, const char *module, const char *title,
                            const char *setup, const char *location, ULONG flags);
 
@@ -191,6 +241,7 @@ void pmwpStoreRelease(PmwpRecord *record);
 ULONG pmwpStoreCreate(const char *class_name, const char *title, const char *location,
                       const char *setup);
 BOOL pmwpStoreSetTitle(ULONG handle, const char *title);
+BOOL pmwpStoreSetClass(ULONG handle, const char *class_name);
 BOOL pmwpStoreSetLocation(ULONG handle, const char *location);
 BOOL pmwpStoreAppendSetup(ULONG handle, const char *setup);
 BOOL pmwpStoreDelete(ULONG handle);
@@ -203,6 +254,13 @@ BOOL pmwpStoreSetValue(ULONG handle, const char *class_name, ULONG key, const vo
 BOOL pmwpStoreGetValue(ULONG handle, const char *class_name, ULONG key, void *data, ULONG *size);
 BOOL pmwpStoreOpen(ULONG handle, ULONG view, BOOL activate, HWND *frame);
 BOOL pmwpSetupValue(const char *setup, const char *key, char *value, size_t capacity);
+BOOL pmwpStoreClassModule(const char *class_name, char *module, size_t capacity);
+BOOL pmwpStoreReplacement(const char *class_name, char *replacement, size_t capacity);
+/* Starts a WPProgram record; parameters replace its own when not null. */
+BOOL pmwpStoreStartProgram(ULONG handle, const char *parameters);
+/* 0: absent, 1: file, 2: directory. */
+int pmwpPathKind(const char *path);
+char *pmwpHostPath(const char *path);
 
 /* Guest address of an exported class data structure, or zero when it is private. */
 uint32 pmwpExportedClassData(PmwpClassId id);

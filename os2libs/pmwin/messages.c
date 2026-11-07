@@ -11,6 +11,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/menus.h"
 #include "os2libs/pmwin/open32_post.h"
+#include "guest/launch_record.h"
 const char *messageName(const ULONG msg)
 {
     switch (msg)
@@ -211,6 +212,7 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
 
 BOOL destroyMessageQueue(AnchorBlock *anchor)
 {
+    retireAnchorMessages(anchor);
     MessageQueueItem *next = NULL;
     for (MessageQueueItem *i = anchor->message_queue.head; i; i = next)
     {
@@ -254,6 +256,7 @@ HMQ WinCreateMsgQueue(HAB hab, LONG cmsg)
 
     const HMQ hmq = (HMQ)ihmq;
     anchor->message_queue.hmq = hmq;
+    registerMessageQueue(anchor);
     TRACE_EVENT("HMQ %u created", (uint)hmq);
     return hmq;
 }
@@ -354,6 +357,79 @@ BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
     return retval;
 }
 
+/* SV_BEGINDRAG through SV_ENDSELECT name the raw event behind each semantic message. */
+static BOOL post_semantic(AnchorBlock *anchor, Window *win, ULONG raw, MPARAM point, ULONG ticks)
+{
+    BOOL posted = FALSE;
+    ULONG shift = anchor->modifiers & 0x38; /* KC_SHIFT, KC_CTRL, KC_ALT */
+    for (LONG i = 0; i < 9; i++)
+    {
+        ULONG value = (ULONG)WinQuerySysValue(HWND_DESKTOP, 75 + i);
+        if ((value & 0xffff) == raw && value >> 16 == shift)
+            posted |= postTimestampedMsg(anchor, win->hwnd, WM_BEGINDRAG + i, point,
+                                         (MPARAM)(uintptr_t)TRUE, ticks);
+    }
+    return posted;
+}
+BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULONG shift, ULONG ticks)
+{
+    BOOL posted = FALSE;
+    for (LONG i = 0; i < 9; i++)
+    {
+        ULONG value = (ULONG)WinQuerySysValue(HWND_DESKTOP, 84 + i);
+        if (value && (value & 0xffff) == key && value >> 16 == (shift & 0x38))
+            posted |= postTimestampedMsg(anchor, window, WM_BEGINDRAG + i, 0, 0, ticks);
+    }
+    return posted;
+}
+/* Motion thresholds and chords derive further messages from the raw pointer stream. */
+static BOOL post_derived(AnchorBlock *anchor, Window *win, const LxHostEvent *event, ULONG button,
+                         LONG x, LONG y, MPARAM point, ULONG ticks)
+{
+    BOOL posted = FALSE;
+    if (event->type == LX_HOST_EVENT_MOTION)
+    {
+        for (unsigned b = 0; b < 3; b++)
+            if (anchor->press_down[b] && !anchor->press_moving[b] &&
+                (labs(x - anchor->press_x[b]) > WinQuerySysValue(HWND_DESKTOP, 73) ||
+                 labs(y - anchor->press_y[b]) > WinQuerySysValue(HWND_DESKTOP, 74)))
+            {
+                ULONG start = WM_BUTTON1MOTIONSTART + b * 3;
+                anchor->press_moving[b] = TRUE;
+                posted |= postTimestampedMsg(anchor, win->hwnd, start, point, 0, ticks);
+                posted |= post_semantic(anchor, win, start, point, ticks);
+            }
+        return posted;
+    }
+    if (!button || button > 3)
+        return FALSE;
+    unsigned b = button - 1;
+    if (event->type == LX_HOST_EVENT_BUTTON_DOWN)
+    {
+        anchor->press_down[b] = TRUE;
+        anchor->press_moving[b] = FALSE;
+        anchor->press_ticks[b] = ticks;
+        anchor->press_x[b] = x;
+        anchor->press_y[b] = y;
+        unsigned other = b ^ 1; /* A chord pairs the first two buttons. */
+        if (b < 2 && anchor->press_down[other] &&
+            ticks - anchor->press_ticks[other] <= (ULONG)WinQuerySysValue(HWND_DESKTOP, 70) &&
+            labs(x - anchor->press_x[other]) <= WinQuerySysValue(HWND_DESKTOP, 71) &&
+            labs(y - anchor->press_y[other]) <= WinQuerySysValue(HWND_DESKTOP, 72))
+            posted |= postTimestampedMsg(anchor, win->hwnd, WM_CHORD, point, 0, ticks);
+    }
+    else if (event->type == LX_HOST_EVENT_BUTTON_UP)
+    {
+        if (anchor->press_moving[b])
+        {
+            ULONG end = WM_BUTTON1MOTIONEND + b * 3;
+            posted |= postTimestampedMsg(anchor, win->hwnd, end, point, 0, ticks);
+            posted |= post_semantic(anchor, win, end, point, ticks);
+        }
+        anchor->press_down[b] = anchor->press_moving[b] = FALSE;
+    }
+    return posted;
+}
 BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
 {
     ULONG ticks = (ULONG)event->timestamp;
@@ -388,9 +464,14 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return processKeyboardEvent(anchor, event);
     if (event->type == LX_HOST_EVENT_FOCUS_GAINED)
     {
+        /* The host already focused this window. Requesting that again would
+           answer each focus event with another, which never settles while two
+           windows have raises in flight. */
+        lxPmHostFocusReport = TRUE;
         WinSetActiveWindow(HWND_DESKTOP, win->hwnd);
         if (!WinQueryFocus(HWND_DESKTOP))
             WinSetFocus(HWND_DESKTOP, win->last_focus ? win->last_focus : win->hwnd);
+        lxPmHostFocusReport = FALSE;
         return FALSE;
     }
     if (event->type == LX_HOST_EVENT_FOCUS_LOST)
@@ -489,21 +570,44 @@ BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
         return FALSE;
     if (event->type == LX_HOST_EVENT_BUTTON_DOWN)
         dismissMenusForClick(anchor, win);
-    ULONG message = WM_MOUSEMOVE;
+    ULONG message = WM_MOUSEMOVE, button = 0;
     if (event->type != LX_HOST_EVENT_MOTION)
     {
         if (!event->button)
             return FALSE;
-        message =
-            WM_BUTTON1DOWN + (event->button - 1) * 3 + (event->type == LX_HOST_EVENT_BUTTON_UP);
-        if (event->type == LX_HOST_EVENT_BUTTON_DOWN && event->clicks && !(event->clicks & 1))
-            message = WM_BUTTON1DBLCLK + (event->button - 1) * 3;
+        /* SV_SWAPBUTTON exchanges the primary and secondary buttons. */
+        button = event->button;
+        if (button <= 2 && WinQuerySysValue(HWND_DESKTOP, 0))
+            button = 3 - button;
+        message = WM_BUTTON1DOWN + (button - 1) * 3 + (event->type == LX_HOST_EVENT_BUTTON_UP);
+        if (event->type == LX_HOST_EVENT_BUTTON_DOWN)
+        {
+            /* SV_DBLCLKTIME and the SV_CXDBLCLK rectangle define a double click. */
+            LONG dx = x - anchor->click_x, dy = y - anchor->click_y;
+            BOOL second = anchor->click_window == win->hwnd && anchor->click_button == button &&
+                          ticks - anchor->click_ticks <= (ULONG)WinQuerySysValue(HWND_DESKTOP, 1) &&
+                          labs(dx) <= WinQuerySysValue(HWND_DESKTOP, 2) &&
+                          labs(dy) <= WinQuerySysValue(HWND_DESKTOP, 3);
+            if (second)
+                message = WM_BUTTON1DBLCLK + (button - 1) * 3;
+            anchor->click_window = second ? 0 : win->hwnd;
+            anchor->click_button = button;
+            anchor->click_ticks = ticks;
+            anchor->click_x = x;
+            anchor->click_y = y;
+        }
     }
     MPARAM point = (MPARAM)(uintptr_t)(((uint32)(uint16)y << 16) | (uint16)x);
     BOOL result = postTimestampedMsg(anchor, win->hwnd, message, point, 0, ticks);
+    if (event->type != LX_HOST_EVENT_MOTION)
+        result |= post_semantic(anchor, win, message, point, ticks);
     if (event->type == LX_HOST_EVENT_BUTTON_UP)
-        result |= postTimestampedMsg(anchor, win->hwnd, WM_BUTTON1CLICK + (event->button - 1) * 3,
-                                     point, 0, ticks);
+    {
+        ULONG click = WM_BUTTON1CLICK + (button - 1) * 3;
+        result |= postTimestampedMsg(anchor, win->hwnd, click, point, 0, ticks);
+        result |= post_semantic(anchor, win, click, point, ticks);
+    }
+    result |= post_derived(anchor, win, event, button, x, y, point, ticks);
     return result;
 }
 
@@ -720,6 +824,8 @@ static BOOL getMessage(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFir
             return (pqmsg->msg != WM_QUIT) ? TRUE : FALSE;
         }
 
+        /* An empty queue is the idle state a launcher waits for. */
+        lx_launch_mark_input_idle();
         pumpFilteredEvents(anchor, paint_filter, context); // may block.
     }
 
@@ -766,6 +872,19 @@ BOOL WinDestroyMsgQueue(HMQ hmq)
     return destroyMessageQueue(anchor);
 }
 
+typedef struct QueuedSend
+{
+    HWND window;
+    ULONG message;
+    MPARAM first, second;
+} QueuedSend;
+static uintptr_t deliverQueuedSend(void *context)
+{
+    const QueuedSend *send = context;
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    Window *win = anchor ? getWindowFromHWND(anchor, send->window) : NULL;
+    return win ? (uintptr_t)sendMessage(win, send->message, send->first, send->second) : 0;
+}
 MRESULT WinSendMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
 
@@ -779,7 +898,10 @@ MRESULT WinSendMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
             return sendMessage(win, msg, mp1, mp2);
         }
     }
-    return (MRESULT)0;
+    QueuedSend send = {hwnd, msg, mp1, mp2};
+    uintptr_t result = 0;
+    lx_pm_window_call(hwnd, deliverQueuedSend, &send, sizeof send, &result);
+    return (MRESULT)result;
 }
 
 BOOL WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
@@ -841,6 +963,22 @@ MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position)
     return result;
 }
 
+/* A window procedure may be guest code, so the rectangle travels in guest memory. */
+BOOL sendEraseBackground(Window *client, HPS space, const RECTL *rectangle)
+{
+    if (!TWOINE_PORTABLE_LOADER || !GLoaderState.execution)
+        return sendMessage(client, WM_ERASEBACKGROUND, (MPARAM)(uintptr_t)space,
+                           (MPARAM)rectangle) != 0;
+    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    if (!mapping)
+        return FALSE;
+    memcpy(lx_execution_mapping_host(mapping), rectangle, sizeof *rectangle);
+    BOOL result = sendMessage(client, WM_ERASEBACKGROUND, (MPARAM)(uintptr_t)space,
+                              (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping)) != 0;
+    lx_execution_unmap(GLoaderState.execution, mapping);
+    return result;
+}
+
 static BOOL peekMessage(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULONG flags,
                          LxPmPaintFilter paint_filter, void *context)
 {
@@ -862,7 +1000,10 @@ retry:;
         filteredPaintMessage(anchor, output, filter, first, last, paint_filter, context))
         return TRUE;
     if (!item)
+    {
+        lx_launch_mark_input_idle();
         return FALSE;
+    }
     *output = item->qmsg;
     anchor->message_queue.last_position = output->ptl;
     QMSG original = item->qmsg;

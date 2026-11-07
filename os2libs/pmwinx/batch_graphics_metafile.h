@@ -11,6 +11,12 @@ void open32MetafileColor(ULONG dc, USHORT function, ULONG color);
 void open32MetafileWords(ULONG dc, USHORT function, size_t count, const LONG *words);
 void open32MetafilePoints(ULONG dc, USHORT function, PVOID points, LONG count);
 void open32MetafileObject(ULONG dc, ULONG object);
-void open32MetafileText(ULONG dc, LONG x, LONG y, PCHAR text, ULONG count);
+void open32MetafileExtText(ULONG dc, LONG x, LONG y, ULONG flags, PVOID rectangle, PCHAR text,
+                           ULONG count, PLONG advances);
+void open32MetafileClip(ULONG dc, ULONG region);
+void open32MetafilePalette(ULONG dc, ULONG palette);
+void open32MetafileRealize(ULONG dc);
+void open32MetafilePaletteRecord(ULONG dc, USHORT function, ULONG first, ULONG count,
+                                 PVOID entries);
 void open32MetafileDCCleanup(ULONG dc);
 #endif

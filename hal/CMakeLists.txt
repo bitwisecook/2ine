@@ -85,13 +85,17 @@ function(twoine_add_media target)
     target_link_libraries(${target} PRIVATE SDL3::SDL3 twoine_freetype)
     if(APPLE)
         target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/macos/fatal_dialog.m" "${TWOINE_HAL_SOURCE_DIR}/macos/window_chrome.m" "${TWOINE_HAL_SOURCE_DIR}/macos/print_dialog.m"
-            "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_session.m" "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_lease.c"
+            "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_session.m" "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_bundle.m"
+            "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_lease.c"
             "${TWOINE_HAL_SOURCE_DIR}/common/desktop_group.c"
-            "${TWOINE_HAL_SOURCE_DIR}/common/desktop_cycle.c" "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_cycle.c")
+            "${TWOINE_HAL_SOURCE_DIR}/common/desktop_cycle.c" "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_cycle.c"
+            "${PROJECT_SOURCE_DIR}/ball/icon_bitmap.c" "${PROJECT_SOURCE_DIR}/ball/icon_executable.c"
+            "${PROJECT_SOURCE_DIR}/formats/decompress.c")
+        target_include_directories(${target} PRIVATE "${PROJECT_BINARY_DIR}/generated")
         target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:OBJC>:-fobjc-arc>")
         target_link_libraries(${target} PRIVATE "-framework AppKit" "-framework UniformTypeIdentifiers" "-framework ImageIO")
     else()
-        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/sdl/fatal_dialog.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/window_chrome_none.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_session_none.c")
+        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/sdl/fatal_dialog.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/window_chrome_none.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_session_none.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_bundle_none.c")
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/linux/print_dialog.c")
         elseif(WIN32)
@@ -126,3 +130,18 @@ function(twoine_add_opengl target)
     endif()
     target_link_libraries(${target} PRIVATE ${TWOINE_EGL_LIBRARY})
 endfunction()
+
+# The fallback dock icon for command-line guests: the 2ine ball of twine,
+# embedded at configure time so a loader copied anywhere can present it.
+if(APPLE AND NOT TWOINE_RUNTIME_ONLY)
+    file(READ "${PROJECT_SOURCE_DIR}/macos/Twoine.iconset/icon_256x256.png" _twoine_ball_icon_hex HEX)
+    string(LENGTH "${_twoine_ball_icon_hex}" _twoine_ball_icon_length)
+    math(EXPR _twoine_ball_icon_size "${_twoine_ball_icon_length} / 2")
+    file(WRITE "${PROJECT_BINARY_DIR}/generated/twoine_ball_icon_png.h"
+        "/* Generated from macos/Twoine.iconset/icon_256x256.png. Do not edit. */\n"
+        "#define TWOINE_BALL_ICON_PNG_SIZE ${_twoine_ball_icon_size}\n"
+        "#define TWOINE_BALL_ICON_PNG_HEX \"${_twoine_ball_icon_hex}\"\n")
+    unset(_twoine_ball_icon_hex)
+    unset(_twoine_ball_icon_length)
+    unset(_twoine_ball_icon_size)
+endif()

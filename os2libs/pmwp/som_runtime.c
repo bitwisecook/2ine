@@ -6,6 +6,7 @@
 #include "os2libs/doscalls.h"
 #include "guest/abi.h"
 #include "hal/host_sync.h"
+#include <stdio.h>
 
 enum
 {
@@ -14,7 +15,12 @@ enum
     SCI_BYTES = 164,
     SCI_LAYOUT = 4,
     CCDS_BYTES = 16,
-    SOM_REDISPATCH_DEFAULT = 0xffffffffu
+    SOM_REDISPATCH_DEFAULT = 0xffffffffu,
+    STUB_BYTES = 16,
+    CONTROL_BYTES = 16,
+    CONTROL_INIT_OFFSET = 0x1c,
+    CONTROL_DESTRUCT_OFFSET = 0x2c,
+    STUB_PROCEDURE_FLAG = 0x8000
 };
 
 /* Ordinals of the original SOM.DLL. */
@@ -22,12 +28,15 @@ enum
 {
     SOM_CALLOC = 1,
     SOM_CLASS_DATA = 3,
+    SOM_CLASS_MGR_DATA = 6,
     SOM_FREE = 10,
     SOM_MALLOC = 12,
     SOM_OBJECT_DATA = 14,
     SOM_CLASS_MGR_NEW = 20,
     SOM_CLASS_NEW = 21,
     SOM_OBJECT_NEW = 22,
+    SOM_ID_FROM_STRING = 31,
+    SOM_STRING_FROM_ID = 40,
     SOM_BUILD_CLASS = 49,
     SOM_PARENT_NUM_RESOLVE = 50
 };
@@ -47,9 +56,13 @@ static struct
     uint32 arena_base;
     size_t arena_used;
     uint32 calloc_cell, free_cell, malloc_cell;
-    uint32 class_data, object_data;
+    uint32 class_data, object_data, class_mgr_data;
+    uint32 id_from_string, string_from_id, call_many;
     uint32 class_mgr_new, class_new, object_new, build_class, parent_resolve;
-    uint32 default_proc;
+    uint32 unavailable_bridge;
+    uint8 *code;
+    uint32 code_base;
+    size_t code_used;
     uint32 sci[PMWP_CLASS_COUNT], cds[PMWP_CLASS_COUNT], ccds[PMWP_CLASS_COUNT];
     const PmwpBody **bodies;
     uint32 *body_procs;
@@ -168,12 +181,82 @@ uint32 pmwpConstantString(const char *text)
     return address;
 }
 
-static uint32 default_method(uint8 *arguments)
+/* Each method without a provider has a stub that pushes its table position and calls
+   this bridge, so a reached method is named. It reports failure as zero. */
+static uint32 unavailable_method(uint8 *arguments)
 {
-    (void)arguments;
-    return 0;
+    /* The frame holds the stub's position word, the caller's return address, then somSelf. */
+    uint32 position = lx_guest_load_u32(arguments), self = lx_guest_load_u32(arguments + 8);
+    uint32 class_index = position >> 16 < PMWP_CLASS_COUNT ? position >> 16 : 0;
+    const PmwpClassRow *row = &pmwpClassRows[class_index];
+    uint32 index = position & 0xffff;
+    if (index & STUB_PROCEDURE_FLAG)
+    {
+        fprintf(stderr, "2ine: PMWP %s class data procedure %u has no provider\n", row->name,
+                index & ~(uint32)STUB_PROCEDURE_FLAG);
+        return 0;
+    }
+    const char *name = index < row->method_count ? row->methods[index].name : "?";
+    fprintf(stderr, "2ine: PMWP method %s::%s has no provider\n", row->name, name);
+    if (class_index != PMWP_WPCLASSMANAGER)
+    {
+        if (row->name[0] == 'M')
+            pmwpSetClassField(self, PMWP_CLS_ERROR, PMWP_ERROR_NO_PROVIDER);
+        else
+            pmwpSetObjectField(self, PMWP_OBJ_ERROR, PMWP_ERROR_NO_PROVIDER);
+    }
+    return pmwpMethodFailure(name);
+}
+/* Guest helper (entry, words, count): pushes count words last-first and calls entry,
+   giving native code calls with more than four stack words. */
+static const uint8 call_many_code[] = {
+    0x55,                   /* push ebp */
+    0x89, 0xe5,             /* mov ebp, esp */
+    0x56,                   /* push esi */
+    0x8b, 0x75, 0x0c,       /* mov esi, [ebp+12] */
+    0x8b, 0x4d, 0x10,       /* mov ecx, [ebp+16] */
+    0x85, 0xc9,             /* next: test ecx, ecx */
+    0x74, 0x07,             /* jz call */
+    0xff, 0x74, 0x8e, 0xfc, /* push dword [esi+ecx*4-4] */
+    0x49,                   /* dec ecx */
+    0xeb, 0xf5,             /* jmp next */
+    0xff, 0x55, 0x08,       /* call: call [ebp+8] */
+    0x8d, 0x65, 0xfc,       /* lea esp, [ebp-4] */
+    0x5e,                   /* pop esi */
+    0x5d,                   /* pop ebp */
+    0xc3                    /* ret */
+};
+uint32 pmwpGuestCallMany(uint32 entry, const uint32 *words, uint32 count)
+{
+    uint32 block = pmwpMalloc(count * 4), result = 0;
+    if (!block)
+        return 0;
+    for (uint32 i = 0; i < count; i++)
+        pmwpStore32(block + i * 4, words[i]);
+    result = pmwpGuestCall(S.call_many, entry, block, count, 0);
+    pmwpFree(block);
+    return result;
+}
+/* push position; call bridge; add esp, 4; ret. The caller's arguments stay in place. */
+static uint32 emit_unavailable_stub(uint32 position)
+{
+    if (S.code_used + STUB_BYTES > CODE_BYTES)
+        return 0;
+    uint8 *stub = S.code + S.code_used;
+    uint32 address = S.code_base + (uint32)S.code_used;
+    stub[0] = 0x68;
+    lx_guest_store_u32(stub + 1, position);
+    stub[5] = 0xe8;
+    lx_guest_store_u32(stub + 6, S.unavailable_bridge - (address + 10));
+    stub[10] = 0x83;
+    stub[11] = 0xc4;
+    stub[12] = 0x04;
+    stub[13] = 0xc3;
+    S.code_used += STUB_BYTES;
+    return address;
 }
 
+static uint32 body_proc(const char *class_name, const char *method);
 static BOOL emit_bridges(void)
 {
     const struct
@@ -182,24 +265,25 @@ static BOOL emit_bridges(void)
         size_t count;
     } tables[] = {{pmwpObjectBodies, pmwpObjectBodyCount},
                   {pmwpViewBodies, pmwpViewBodyCount},
-                  {pmwpClassBodies, pmwpClassBodyCount}};
+                  {pmwpClassBodies, pmwpClassBodyCount},
+                  {pmwpExtendedBodies, pmwpExtendedBodyCount}};
     size_t total = 0;
     for (size_t i = 0; i < sizeof tables / sizeof *tables; i++)
         total += tables[i].count;
     S.bodies = calloc(total, sizeof *S.bodies);
     S.body_procs = calloc(total, sizeof *S.body_procs);
-    S.code_mapping = lx_execution_map(GLoaderState.execution, 0, CODE_BYTES,
-                                      LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    S.code_mapping =
+        lx_execution_map(GLoaderState.execution, 0, CODE_BYTES, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!S.bodies || !S.body_procs || !S.code_mapping)
         return FALSE;
     uint8 *code = lx_execution_mapping_host(S.code_mapping);
     uint32 base = lx_execution_mapping_address(S.code_mapping);
     size_t used = 0;
-    const LxExecutionApi32 shared = {default_method, 0, 0, LX_ABI_STACK32};
+    const LxExecutionApi32 shared = {unavailable_method, 12, 0, LX_ABI_STACK32};
     size_t size = lx_execution_emit_bridge32(GLoaderState.execution, code, CODE_BYTES, &shared);
     if (!size)
         return FALSE;
-    S.default_proc = base;
+    S.unavailable_bridge = base;
     used = size;
     for (size_t i = 0; i < sizeof tables / sizeof *tables; i++)
         for (size_t j = 0; j < tables[i].count; j++)
@@ -214,8 +298,15 @@ static BOOL emit_bridges(void)
             S.body_procs[S.body_count++] = base + (uint32)used;
             used += size;
         }
-    return lx_execution_protect(GLoaderState.execution, S.code_mapping,
-                                LX_GUEST_READ | LX_GUEST_EXECUTE);
+    if (used + sizeof call_many_code > CODE_BYTES)
+        return FALSE;
+    memcpy(code + used, call_many_code, sizeof call_many_code);
+    S.call_many = base + (uint32)used;
+    used += (sizeof call_many_code + 15) & ~(size_t)15;
+    S.code = code;
+    S.code_base = base;
+    S.code_used = used;
+    return TRUE;
 }
 
 static uint32 body_proc(const char *class_name, const char *method)
@@ -240,9 +331,9 @@ static BOOL build_static_info(PmwpClassId id)
     uint32 smt = row->method_count ? arena_alloc((size_t)row->method_count * 24) : 0;
     uint32 omt = row->override_count ? arena_alloc((size_t)row->override_count * 8) : 0;
     uint32 pmt = row->procedure_count ? arena_alloc((size_t)row->procedure_count * 8) : 0;
-    if (!cds || !ccds || !sci || !class_id || !parent_id || !parents ||
-        (row->meta && !meta_id) || (row->method_count && !smt) ||
-        (row->override_count && !omt) || (row->procedure_count && !pmt))
+    if (!cds || !ccds || !sci || !class_id || !parent_id || !parents || (row->meta && !meta_id) ||
+        (row->method_count && !smt) || (row->override_count && !omt) ||
+        (row->procedure_count && !pmt))
         return FALSE;
     memset(S.arena + (ccds - S.arena_base), 0, CCDS_BYTES);
     memset(S.arena + (sci - S.arena_base), 0, SCI_BYTES);
@@ -254,7 +345,9 @@ static BOOL build_static_info(PmwpClassId id)
         snprintf(descriptor, sizeof descriptor, "::%s::%s", row->name, method->name);
         uint32 name = arena_id_reference(method->name), full = arena_id_reference(descriptor);
         uint32 proc = body_proc(row->name, method->name), apply = 0;
-        if (!name || !full)
+        if (!proc)
+            proc = emit_unavailable_stub((uint32)id << 16 | i);
+        if (!name || !full || !proc)
             return FALSE;
         if (method->list_size)
         {
@@ -273,7 +366,7 @@ static BOOL build_static_info(PmwpClassId id)
         arena_put(entry, cds + method->offset);
         arena_put(entry + 4, name);
         arena_put(entry + 8, full);
-        arena_put(entry + 12, proc ? proc : S.default_proc);
+        arena_put(entry + 12, proc);
         arena_put(entry + 16, SOM_REDISPATCH_DEFAULT);
         arena_put(entry + 20, apply);
     }
@@ -293,8 +386,11 @@ static BOOL build_static_info(PmwpClassId id)
     }
     for (uint32 i = 0; i < row->procedure_count; i++)
     {
+        uint32 proc = emit_unavailable_stub((uint32)id << 16 | STUB_PROCEDURE_FLAG | i);
+        if (!proc)
+            return FALSE;
         arena_put(pmt + i * 8, cds + row->procedures[i]);
-        arena_put(pmt + i * 8 + 4, S.default_proc);
+        arena_put(pmt + i * 8 + 4, proc);
     }
     arena_put(sci + 0, SCI_LAYOUT);
     arena_put(sci + 4, row->method_count);
@@ -348,6 +444,9 @@ static BOOL bind_som(void)
         import_data(module, SOM_MALLOC, &S.malloc_cell) &&
         import_data(module, SOM_CLASS_DATA, &S.class_data) &&
         import_data(module, SOM_OBJECT_DATA, &S.object_data) &&
+        import_data(module, SOM_CLASS_MGR_DATA, &S.class_mgr_data) &&
+        import_entry(module, SOM_ID_FROM_STRING, &S.id_from_string) &&
+        import_entry(module, SOM_STRING_FROM_ID, &S.string_from_id) &&
         import_entry(module, SOM_CLASS_MGR_NEW, &S.class_mgr_new) &&
         import_entry(module, SOM_CLASS_NEW, &S.class_new) &&
         import_entry(module, SOM_OBJECT_NEW, &S.object_new) &&
@@ -364,8 +463,8 @@ static void initialize_runtime(void)
     if (!constant_lock || !bind_som() || !emit_bridges())
         return;
     /* Class identifiers stay writable for SOM. */
-    S.arena_mapping = lx_execution_map(GLoaderState.execution, 0, ARENA_BYTES,
-                                       LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    S.arena_mapping =
+        lx_execution_map(GLoaderState.execution, 0, ARENA_BYTES, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!S.arena_mapping)
         return;
     S.arena = lx_execution_mapping_host(S.arena_mapping);
@@ -373,7 +472,9 @@ static void initialize_runtime(void)
     for (int id = 0; id < PMWP_CLASS_COUNT; id++)
         if (!build_static_info((PmwpClassId)id))
             return;
-    S.ready = TRUE;
+    if (lx_execution_protect(GLoaderState.execution, S.code_mapping,
+                             LX_GUEST_READ | LX_GUEST_EXECUTE))
+        S.ready = TRUE;
 }
 
 BOOL pmwpRuntimeReady(void)
@@ -451,6 +552,65 @@ uint32 pmwpParentProc(PmwpClassId id, uint32 root_token_offset)
 {
     return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id]), 1,
                          pmwpLoad32(S.class_data + root_token_offset), 0);
+}
+/* The implementation of a method inherited from the first parent of `id`. */
+uint32 pmwpParentMethod(PmwpClassId id, uint32 token)
+{
+    return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id]), 1, token, 0);
+}
+/* Generated initializers and destructors share this step. A null control selects the
+   class's own control block from its parent method table structure. It advances the
+   cursor and reports the parent procedure to run, or zero. */
+static uint32 control_step(PmwpClassId id, uint32 *control, uint32 *owned, uint32 table_offset)
+{
+    *owned = 0;
+    if (!*control)
+    {
+        uint32 table = pmwpLoad32(S.ccds[id]) + table_offset;
+        *owned = pmwpMalloc(CONTROL_BYTES);
+        if (!*owned)
+            return 0;
+        for (uint32 i = 0; i < CONTROL_BYTES; i += 4)
+            pmwpStore32(*owned + i, pmwpLoad32(table + i));
+        *control = *owned;
+    }
+    uint32 mask = pmwpLoad32(*control), info = pmwpLoad32(*control + 4);
+    info += pmwpLoad32(*control + 8);
+    pmwpStore32(*control, mask + 1);
+    pmwpStore32(*control + 4, info);
+    uint8 flags = 0;
+    lx_execution_read(GLoaderState.execution, mask, &flags, 1);
+    return flags & 1 ? pmwpLoad32(info + 4) : 0;
+}
+void pmwpGeneratedInit(PmwpClassId id, uint32 self, uint32 control)
+{
+    uint32 owned, parent = control_step(id, &control, &owned, CONTROL_INIT_OFFSET);
+    if (parent)
+        pmwpGuestCall(parent, self, control, 0, 0);
+    pmwpFree(owned);
+}
+void pmwpGeneratedDestruct(PmwpClassId id, uint32 self, BOOL release, uint32 control)
+{
+    uint32 owned, parent = control_step(id, &control, &owned, CONTROL_DESTRUCT_OFFSET);
+    if (parent)
+        pmwpGuestCall(parent, self, 0, control, 0);
+    pmwpFree(owned);
+    if (release)
+        pmwpInvokeClass(PMWP_SOMClass_somDeallocate, pmwpClassObject(id), self, 0, 0);
+}
+/* The class manager parent's implementation of a SOMClassMgr method. */
+uint32 pmwpClassManagerParent(uint32 token_offset)
+{
+    return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[PMWP_WPCLASSMANAGER]), 1,
+                         pmwpLoad32(S.class_mgr_data + token_offset), 0);
+}
+uint32 pmwpSomIdFromString(uint32 text)
+{
+    return pmwpGuestCall(S.id_from_string, text, 0, 0, 0);
+}
+uint32 pmwpSomStringFromId(uint32 id)
+{
+    return pmwpGuestCall(S.string_from_id, id, 0, 0, 0);
 }
 uint32 pmwpObjectField(uint32 self, uint32 offset)
 {

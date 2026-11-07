@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwin/input.h"
 #include "os2libs/pmwinx/internal.h"
+#include "hal/video.h"
 #include "os2libs/pmwinx/batch_services.h"
 #include <stdio.h>
 static _Thread_local unsigned char down[256], toggled[256];
@@ -135,60 +136,55 @@ BOOL GetKeyboardState(PVOID output)
     return TRUE;
 }
 
+/* The active host layout decides what each physical key types, and so which letter key
+   it is. Keys without a character keep the position's virtual key. */
+static ULONG layout_key(ULONG scan)
+{
+    ULONG character = scan < sizeof scan_keys ? lx_host_key_character(scan, 0) : 0;
+    if (character >= 'a' && character <= 'z')
+        return character - 'a' + 'A';
+    return scan < sizeof scan_keys ? scan_keys[scan] : 0;
+}
 ULONG MapVirtualKey(ULONG code, ULONG kind)
 {
     if (kind == 0)
     {
         for (ULONG scan = 1; scan < sizeof scan_keys; scan++)
-            if (scan_keys[scan] == code)
+            if (layout_key(scan) == code)
                 return scan;
         return 0;
     }
     if (kind == 1 || kind == 3)
-        return code < sizeof scan_keys ? scan_keys[code] : 0;
+        return layout_key(code);
     if (kind == 2)
     {
         if ((code >= 'A' && code <= 'Z') || (code >= '0' && code <= '9') || code == 32)
             return code;
-        static const ULONG keys[] = {0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
-                                     0xC0, 0xDB, 0xDC, 0xDD, 0xDE};
-        const char values[] = ";=,-./`[\\]'";
-        for (unsigned i = 0; i < sizeof keys / sizeof *keys; i++)
-            if (keys[i] == code)
-                return (uint8)values[i];
+        for (ULONG scan = 1; scan < sizeof scan_keys; scan++)
+            if (layout_key(scan) == code)
+            {
+                ULONG character = lx_host_key_character(scan, 0);
+                return character < 0x80 ? character : 0;
+            }
     }
     return 0;
 }
 SHORT VkKeyScan(ULONG character)
 {
-    if (character >= 'a' && character <= 'z')
-        return character - 'a' + 'A';
-    if (character >= 'A' && character <= 'Z')
-        return 0x100 | character;
-    if ((character >= '0' && character <= '9') || character == ' ')
-        return character;
-    const char unshift[] = ";=,-./`[\\]'", shifted[] = ":+<_>?~{|}\"";
-    static const unsigned char keys[] = {0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
-                                         0xC0, 0xDB, 0xDC, 0xDD, 0xDE};
-    for (unsigned i = 0; i < sizeof keys; i++)
-    {
-        if (character == (uint8)unshift[i])
-            return keys[i];
-        if (character == (uint8)shifted[i])
-            return 0x100 | keys[i];
-    }
-    const char digits[] = ")!@#$%^&*(";
-    for (unsigned i = 0; i < 10; i++)
-        if (character == (uint8)digits[i])
-            return 0x100 | ('0' + i);
+    for (ULONG scan = 1; scan < sizeof scan_keys; scan++)
+        for (int shifted = 0; shifted < 2; shifted++)
+            if (lx_host_key_character(scan, shifted) == character && layout_key(scan))
+                return (SHORT)((shifted ? 0x100 : 0) | layout_key(scan));
     if (character == '\t' || character == '\r' || character == '\b' || character == 27)
         return character;
     return -1;
 }
 ULONG GetKeyboardLayout(ULONG thread)
 {
+    /* The original forms the layout from the locale's LOCALE_ILANGUAGE, in both halves. */
     (void)thread;
-    return 0x04090409; /* Current keyboard provider is the US scan map above. */
+    ULONG language = GetUserDefaultLCID() & 0xFFFF;
+    return language << 16 | language;
 }
 LONG GetKeyNameText(ULONG parameter, PSZ output, LONG capacity)
 {

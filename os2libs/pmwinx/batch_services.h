@@ -141,6 +141,8 @@ BOOL open32CloseSync(ULONG handle);
 int open32WaitSync(ULONG handle, ULONG timeout, ULONG *result);
 void open32RegisterThreadQueue(void);
 void open32UnregisterThreadQueue(void);
+BOOL open32ThreadQueueWindow(ULONG window);
 void open32ClipCursorPoint(LONG *x, LONG *y);
 BOOL open32WindowUpdateLocked(ULONG window);
+ULONG open32DragMessage(ULONG window, BOOL accept, ULONG message, ULONG first, ULONG second);
 #endif

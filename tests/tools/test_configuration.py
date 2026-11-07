@@ -172,6 +172,23 @@ class ConfigurationTests(unittest.TestCase):
                 self.request("command", arguments=["config", "system.display_dpi", bad])
         self.assertEqual(self.request("snapshot")["manifest"]["system"]["display_dpi"], "144")
 
+    def test_display_depth_defaults_to_true_colour_and_validates(self):
+        build = self.root / "build"
+        build.mkdir()
+        (build / "lx_loader").write_bytes(b"fixture")
+        program = self.ball / "drive_c/program.exe"
+        program.write_bytes(b"fixture")
+        arguments = ["run", "C:\\program.exe"]
+        plan = self.request("prepare-launch", build=str(build), arguments=arguments)
+        self.assertEqual(plan["environment"]["TWOINE_DISPLAY_DEPTH"], "24")
+        self.request("command", arguments=["config", "system.display_depth", "8"])
+        plan = self.request("prepare-launch", build=str(build), arguments=arguments)
+        self.assertEqual(plan["environment"]["TWOINE_DISPLAY_DEPTH"], "8")
+        for bad in ["0", "1", "32", "8x"]:
+            with self.assertRaisesRegex(ValueError, "display_depth"):
+                self.request("command", arguments=["config", "system.display_depth", bad])
+        self.assertEqual(self.request("snapshot")["manifest"]["system"]["display_depth"], "8")
+
 
 if __name__ == "__main__":
     unittest.main()

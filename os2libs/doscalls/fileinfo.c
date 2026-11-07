@@ -54,7 +54,10 @@ APIRET queryFileInfoStandardFromStat(const LxHostFileInfo *statbuf, PVOID pInfoB
     FILESTATUS3 *st = &value;
     memset(st, '\0', sizeof(*st));
 
-    initFileCreationDateTime(&st->fdateCreation, &st->ftimeCreation);
+    if (statbuf->created)
+        unixTimeToOs2(statbuf->created, &st->fdateCreation, &st->ftimeCreation);
+    else
+        initFileCreationDateTime(&st->fdateCreation, &st->ftimeCreation);
     unixTimeToOs2(statbuf->accessed, &st->fdateLastAccess, &st->ftimeLastAccess);
     unixTimeToOs2(statbuf->modified, &st->fdateLastWrite, &st->ftimeLastWrite);
 
@@ -65,6 +68,7 @@ APIRET queryFileInfoStandardFromStat(const LxHostFileInfo *statbuf, PVOID pInfoB
         st->attrFile |= FILE_DIRECTORY;
     if (statbuf->readonly)
         st->attrFile |= FILE_READONLY;
+    st->attrFile |= statbuf->attributes & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
     /* Older 32-bit C runtimes request the 22-byte FILESTATUS prefix. */
     memcpy(pInfoBuf, st, cbInfoBuf < sizeof *st ? cbInfoBuf : sizeof *st);
@@ -239,15 +243,12 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
     LxHostFileInfo statbuf;
     LxHostFsError error = lx_host_file_info(file.resource, &statbuf);
     size_t ea_size = 0;
-    int64_t created = 0;
     if (!error && ulInfoLevel == FIL_QUERYEASIZE)
     {
         error = lx_host_file_metadata_get(file.resource, NULL, 0, &ea_size);
         if (error == LX_HOST_FS_INVALID)
             error = LX_HOST_FS_OK;
     }
-    if (!error)
-        lx_host_file_created(file.resource, &created);
     lx_handle_release(&file);
     if (error)
         return fileError(error);
@@ -257,9 +258,6 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
     {
         case FIL_STANDARD:
             rc = queryFileInfoStandard(&statbuf, pInfo, cbInfoBuf);
-            if (!rc && created)
-                unixTimeToOs2(created, &((FILESTATUS3 *)pInfo)->fdateCreation,
-                              &((FILESTATUS3 *)pInfo)->ftimeCreation);
             break;
         case FIL_QUERYEASIZE:
             rc = queryFileInfoEaSize(&statbuf, pInfo, cbInfoBuf);
@@ -279,6 +277,41 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
     return rc;
 }
 
+/* Applies a FILESTATUS3 to an open file, or to a path when file is NULL. Values that
+   already match are skipped, so a query/set round trip needs no extended attributes. */
+static APIRET applyStatus(LxHostFile *file, const char *path, const FILESTATUS3 *info)
+{
+    LxHostFileInfo current;
+    LxHostFsError error = file ? lx_host_file_info(file, &current) : lx_host_path_info(path, &current);
+    if (error)
+        return fileError(error);
+    FDATE date;
+    FTIME time;
+    if (current.created)
+        unixTimeToOs2(current.created, &date, &time);
+    else
+        initFileCreationDateTime(&date, &time);
+    int64_t created = os2DateSeconds(info->fdateCreation, info->ftimeCreation);
+    if (!memcmp(&date, &info->fdateCreation, sizeof date) &&
+        !memcmp(&time, &info->ftimeCreation, sizeof time))
+        created = INT64_MIN;
+    int64_t accessed = os2DateSeconds(info->fdateLastAccess, info->ftimeLastAccess);
+    int64_t modified = os2DateSeconds(info->fdateLastWrite, info->ftimeLastWrite);
+    const unsigned attributes = info->attrFile & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
+    if (created != INT64_MIN || accessed != INT64_MIN || modified != INT64_MIN)
+        error = file ? lx_host_file_stamps(file, created, accessed, modified)
+                     : lx_host_path_stamps(path, created, accessed, modified);
+    if (!error && attributes != current.attributes)
+        error = file ? lx_host_file_attributes(file, attributes)
+                     : lx_host_path_attributes(path, attributes);
+    if (!error)
+    {
+        const int readonly = (info->attrFile & FILE_READONLY) != 0;
+        error = file ? lx_host_file_readonly(file, readonly) : lx_host_path_readonly(path, readonly);
+    }
+    return error == LX_HOST_FS_INVALID ? ERROR_NOT_SUPPORTED : fileError(error);
+}
+
 APIRET DosSetPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULONG cbInfoBuf,
                       ULONG flOptions)
 {
@@ -292,8 +325,7 @@ APIRET DosSetPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULONG 
     char *path = makeUnixPath(pszPathName, &error);
     if (!path)
         return error;
-    error = fileError(
-        lx_host_path_readonly(path, (((FILESTATUS3 *)pInfoBuf)->attrFile & FILE_READONLY) != 0));
+    error = applyStatus(NULL, path, pInfoBuf);
     free(path);
     return error;
 }
@@ -378,19 +410,7 @@ APIRET DosSetFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBuf)
     LxHandleBorrow file;
     if (!borrowFile(hf, &file))
         return ERROR_INVALID_HANDLE;
-    const FILESTATUS3 *info = pInfo;
-    int64_t created = os2DateSeconds(info->fdateCreation, info->ftimeCreation);
-    int64_t accessed = os2DateSeconds(info->fdateLastAccess, info->ftimeLastAccess);
-    int64_t modified = os2DateSeconds(info->fdateLastWrite, info->ftimeLastWrite);
-    LxHostFsError error = LX_HOST_FS_OK;
-    if (accessed != INT64_MIN || modified != INT64_MIN)
-        error = lx_host_file_times(file.resource, accessed, modified);
-    /* A filesystem that keeps no creation date leaves the remaining fields valid. */
-    if (!error && created != INT64_MIN &&
-        lx_host_file_set_created(file.resource, created) == LX_HOST_FS_INVALID)
-        error = LX_HOST_FS_OK;
-    if (!error)
-        error = lx_host_file_readonly(file.resource, (info->attrFile & FILE_READONLY) != 0);
+    const APIRET error = applyStatus(file.resource, NULL, pInfo);
     lx_handle_release(&file);
-    return fileError(error);
+    return error;
 }

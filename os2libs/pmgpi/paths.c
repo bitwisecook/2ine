@@ -138,11 +138,7 @@ static LONG raster_path(HPS h, PmPath *path, LONG options, BOOL region, unsigned
     for (size_t i = 0; i < path->count; i++)
     {
         v[i] = path->points[i];
-        if (!lx_pm_transform_point(p, &v[i].point, TRUE))
-        {
-            ok = FALSE;
-            break;
-        }
+        v[i].point = path->points[i].device;
         if (v[i].point.y < bottom)
             bottom = v[i].point.y;
         if (v[i].point.y > top)
@@ -221,9 +217,23 @@ ULONG GpiPathToRegion(HPS h, LONG id, LONG options)
         delete_path(p, id);
     return result;
 }
-/* Traces figures with the current cosmetic line, closing them when requested. */
-static LONG trace_path(HPS h, PresentationSpace *p, const PmPath *path, BOOL close)
+/* Later transforms do not move a path, so its device points are mapped back through them. */
+static BOOL path_to_world(PresentationSpace *p, PmPath *path)
 {
+    for (size_t i = 0; i < path->count; i++)
+    {
+        POINTL world = path->points[i].device;
+        if (!lx_pm_transform_point(p, &world, FALSE))
+            return FALSE;
+        path->points[i].point = world;
+    }
+    return TRUE;
+}
+/* Traces figures with the current cosmetic line, closing them when requested. */
+static LONG trace_path(HPS h, PresentationSpace *p, PmPath *path, BOOL close)
+{
+    if (!path_to_world(p, path))
+        return 0;
     POINTL saved = p->position, first = {0, 0};
     LONG result = 1;
     BOOL open = FALSE;
@@ -322,6 +332,8 @@ LONG GpiStrokePath(HPS h, LONG id, ULONG options)
             delete_path(p, id);
         return result;
     }
+    if (!path_to_world(p, path))
+        return 0;
     PmPath outline = {0};
     p->record_path = &outline;
     BOOL ok = TRUE;

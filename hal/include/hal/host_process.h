@@ -36,13 +36,18 @@ LxHostChild *lx_host_child_spawn_group(const char *path, char *const *arguments,
 LxHostChild *lx_host_child_spawn_service(const char *path, char *const *arguments,
                                          char *const *environment);
 /* The child stops before its first instruction, so lx_host_child_resume starts it.
-   POSIX reports a failed image as exit status 127 after resume instead of here. */
+   An image that cannot be executed fails here, before the child exists. */
 LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *arguments,
                                            char *const *environment);
 /* Hold or continue this retained child: 0 applied, 1 already finished, -1 failure.
    POSIX holds the whole process; Windows holds its primary thread. */
 int lx_host_child_suspend(LxHostChild *child);
 int lx_host_child_resume(LxHostChild *child);
+/* Applies to this retained child only. Zero when set; -1 sets errno. A child held
+   since spawn takes the level before it runs and passes it to all its threads. */
+/* Applies a nice value to every task of a running process. */
+int lx_host_process_set_level(int id, int value);
+int lx_host_child_set_priority(LxHostChild *child, LxHostProcessPriority priority);
 uint32_t lx_host_child_id(const LxHostChild *child);
 /* 1 observed completion, 0 still running, -1 failure. */
 int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status);

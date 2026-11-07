@@ -218,8 +218,7 @@ static uint32 thunkOperation(void *argument)
             const int64_t size = pointerSize(call, d, extended, index, value);
             if (size == THUNK_SIZE_FAULT)
                 return thunkFault(call, "cannot size pointer argument", value);
-            if (size != THUNK_SIZE_UNCHECKED &&
-                (uint32)(uint16)size + (uint16)value >= THUNK_TILE)
+            if (size != THUNK_SIZE_UNCHECKED && (uint32)(uint16)size + (uint16)value >= THUNK_TILE)
             {
                 APIRET error = copyAcrossTile(call, &value, (uint32)size, (d & 2) != 0);
                 if (error)
@@ -261,10 +260,9 @@ static uint32 thunkOperation(void *argument)
     for (unsigned i = 0; i < call->copy_count; i++)
     {
         const ThunkCopy *copy = &call->copies[i];
-        if (copy->copy_back &&
-            !lx_execution_write(GLoaderState.execution, copy->original,
-                                lx_execution_mapping_host(copy->mapping),
-                                copy->size & THUNK_COPY_SIZE_MASK))
+        if (copy->copy_back && !lx_execution_write(GLoaderState.execution, copy->original,
+                                                   lx_execution_mapping_host(copy->mapping),
+                                                   copy->size & THUNK_COPY_SIZE_MASK))
             return thunkFault(call, "cannot copy back argument", copy->original);
     }
     switch (d & 3)

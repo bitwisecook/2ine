@@ -271,6 +271,8 @@ before editing binary profiles or the registry. CONFIG.SYS polls external change
 while the owned guest runs, retaining unsaved drafts and showing conflicts.
 Display DPI is per ball and applies next launch; presets are 96/120/144/192, with
 custom whole-number values 72–384 accepted by `system.display_dpi`.
+Colour depth is per ball through `system.display_depth` (4, 8, 16 or 24, default
+24). It sets the depth reported to OS/2 applications; 2ine still draws in true colour.
 Title Bars selects Native, OS/2 or Both for top-level standard frames. Both is
 the default; document windows retain their OS/2 controls in every mode. This
 per-ball preference also applies next launch.

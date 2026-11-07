@@ -96,6 +96,15 @@ unsigned lx_pm_printer_kind(HDC dc)
     CHECK(0);
     return 0;
 }
+BOOL lx_pm_printer_size(HDC dc, unsigned *width, unsigned *height);
+BOOL lx_pm_printer_size(HDC dc, unsigned *width, unsigned *height)
+{
+    (void)dc;
+    (void)width;
+    (void)height;
+    CHECK(0);
+    return FALSE;
+}
 unsigned lx_pm_dc_dpi(HDC dc)
 {
     (void)dc;

@@ -5,6 +5,7 @@
 #include "hal/host_mailbox.h"
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <signal.h>
@@ -80,6 +81,20 @@ static int commit(LxHostMailbox *mailbox, void *data, size_t size)
     return pwrite(mailbox->fd, data, size, 0) == (ssize_t)size && !ftruncate(mailbox->fd, size)
                ? 0
                : -1;
+}
+int lx_host_mailbox_each(const char *directory, const char *prefix,
+                         void (*visit)(const char *name, void *context), void *context)
+{
+    DIR *entries = opendir(directory);
+    if (!entries)
+        return errno == ENOENT ? 0 : -1;
+    size_t length = strlen(prefix);
+    for (struct dirent *entry; (entry = readdir(entries));)
+        /* Each mailbox has a companion ".lock" file that is not itself a mailbox. */
+        if (!strncmp(entry->d_name, prefix, length) && !strchr(entry->d_name, '.'))
+            visit(entry->d_name, context);
+    closedir(entries);
+    return 0;
 }
 int lx_host_mailbox_open(const char *directory, const char *name, int create, unsigned order,
                          LxHostMailbox **output, uint32_t *owner)

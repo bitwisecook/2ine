@@ -135,12 +135,8 @@ static BOOL page_point(PresentationSpace *ps,POINTL *point,BOOL to_device)
     ps->gpi.initialized=enabled;
     return ok;
 }
-/* Graphics fields and viewing limits include their top and right edges. */
-static BOOL inside_inclusive(const RECTL *rect,const POINTL *point)
-{
-    return point->x>=rect->xLeft&&point->x<=rect->xRight&&point->y>=rect->yBottom&&point->y<=rect->yTop;
-}
-/* Bounding device box of a page or model rectangle, in exclusive RECTL form. */
+/* Bounding device box of a page or model rectangle. The limits include their top and
+   right edges, so the result is widened to exclusive RECTL form. */
 static BOOL device_box(PresentationSpace *ps,const RECTL *r,BOOL page,RECTL *output)
 {
     POINTL corners[4]={{r->xLeft,r->yBottom},{r->xRight,r->yBottom},{r->xRight,r->yTop},{r->xLeft,r->yTop}};
@@ -164,17 +160,10 @@ BOOL lx_pm_graphics_clip(PresentationSpace *ps,LONG x,LONG y)
 {
     if(!ps||!ps->gpi.initialized)return TRUE;
     if(!ps->gpi.display_enabled)return FALSE;
-    if(ps->gpi.graphics_set)
-    {
-        POINTL page={x,y};
-        if(!page_point(ps,&page,FALSE)||!inside_inclusive(&ps->gpi.graphics_field,&page))return FALSE;
-    }
-    if(ps->gpi.viewing_set)
-    {
-        POINTL model={x,y};
-        if(!lx_pm_transform_point(ps,&model,FALSE)||!inside_inclusive(&ps->gpi.viewing_limits,&model))return FALSE;
-    }
-    return TRUE;
+    /* Both limits become device rectangles; any rotation or shear of them is ignored. */
+    RECTL limit={INT32_MIN,INT32_MIN,INT32_MAX,INT32_MAX};
+    lx_pm_graphics_limits(ps,&limit);
+    return x>=limit.xLeft&&x<limit.xRight&&y>=limit.yBottom&&y<limit.yTop;
 }
 void lx_pm_graphics_limits(PresentationSpace *ps,RECTL *rect)
 {
@@ -192,6 +181,37 @@ void lx_pm_graphics_limits(PresentationSpace *ps,RECTL *rect)
         else *rect=(RECTL){0,0,0,0};
     }
 }
+/* The aperture is centred on its position in page coordinates. */
+static BOOL pick_box(PresentationSpace *ps,RECTL *box)
+{
+    if(!ps->gpi.correlate)return FALSE;
+    POINTL low={ps->gpi.pick_position.x-ps->gpi.pick_size.cx/2,ps->gpi.pick_position.y-ps->gpi.pick_size.cy/2};
+    POINTL high={low.x+ps->gpi.pick_size.cx,low.y+ps->gpi.pick_size.cy};
+    if(!page_point(ps,&low,TRUE)||!page_point(ps,&high,TRUE))return FALSE;
+    *box=(RECTL){low.x<high.x?low.x:high.x,low.y<high.y?low.y:high.y,low.x<high.x?high.x:low.x,low.y<high.y?high.y:low.y};
+    return TRUE;
+}
+/* Clips the segment to the aperture, so a diagonal near its corner is not a hit. */
+void lx_pm_pick_line(PresentationSpace *ps,const POINTL *from,const POINTL *to)
+{
+    RECTL box;
+    if(!ps||!pick_box(ps,&box))return;
+    double dx=(double)to->x-from->x,dy=(double)to->y-from->y,enter=0,leave=1;
+    double p[4]={-dx,dx,-dy,dy};
+    double q[4]={(double)from->x-box.xLeft,(double)box.xRight-from->x,(double)from->y-box.yBottom,(double)box.yTop-from->y};
+    for(unsigned i=0;i<4;i++)
+    {
+        if(p[i]==0)
+        {
+            if(q[i]<0)return;
+            continue;
+        }
+        double t=q[i]/p[i];
+        if(p[i]<0&&t>enter)enter=t;
+        if(p[i]>0&&t<leave)leave=t;
+    }
+    if(enter<=leave)ps->gpi.pick_hit=TRUE;
+}
 LONG lx_pm_hits(PresentationSpace *ps)
 {
     if(!ps||!ps->gpi.pick_hit)return 1;
@@ -202,14 +222,9 @@ void lx_pm_boundary(PresentationSpace *ps,LONG x,LONG y,LONG width,LONG height)
 {
     if(!ps||!ps->gpi.initialized||width<=0||height<=0)return;
     RECTL r={x,y,x+width,y+height};
-    if(ps->gpi.correlate)
-    {
-        /* The aperture is centred on its position in page coordinates. */
-        POINTL low={ps->gpi.pick_position.x-ps->gpi.pick_size.cx/2,ps->gpi.pick_position.y-ps->gpi.pick_size.cy/2};
-        POINTL high={low.x+ps->gpi.pick_size.cx,low.y+ps->gpi.pick_size.cy};
-        if(page_point(ps,&low,TRUE)&&page_point(ps,&high,TRUE)&&r.xLeft<=high.x&&r.xRight>low.x&&r.yBottom<=high.y&&r.yTop>low.y)
-            ps->gpi.pick_hit=TRUE;
-    }
+    RECTL aperture;
+    if(pick_box(ps,&aperture)&&r.xLeft<=aperture.xRight&&r.xRight>aperture.xLeft&&r.yBottom<=aperture.yTop&&r.yTop>aperture.yBottom)
+        ps->gpi.pick_hit=TRUE;
     if(!ps->gpi.boundary_enabled)return;
     if(!ps->gpi.boundary_set)ps->gpi.boundary=r;
     else WinUnionRect(0,&ps->gpi.boundary,&ps->gpi.boundary,&r);

@@ -202,6 +202,7 @@ LONG SelectClipRgn(ULONG handle, ULONG region_handle)
     dc->clip_region = selected;
     if (previous)
         GpiDestroyRegion(handle, previous);
+    open32MetafileClip(handle, region_handle);
     return result;
 }
 BOOL open32DeleteRegion(ULONG handle)

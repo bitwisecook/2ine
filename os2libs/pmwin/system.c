@@ -34,14 +34,14 @@ LONG WinQuerySysColor(HWND desktop, LONG index, LONG reserved)
         0xffffff, /* SYSCLR_HILITEFOREGROUND */
         0x000080, /* SYSCLR_HILITEBACKGROUND */
         0xc0c0c0, /* SYSCLR_INACTIVETITLETEXTBGND */
-        0x408080, /* SYSCLR_ACTIVETITLETEXTBGND */
+        0x2b00aa, /* SYSCLR_ACTIVETITLETEXTBGND */
         0x000000, /* SYSCLR_INACTIVETITLETEXT */
         0xffffff, /* SYSCLR_ACTIVETITLETEXT */
         0x000000, /* SYSCLR_OUTPUTTEXT */
         0x000080, /* SYSCLR_WINDOWSTATICTEXT */
         0xc0c0c0, /* SYSCLR_SCROLLBAR */
         0x008080, /* SYSCLR_BACKGROUND */
-        0x408080, /* SYSCLR_ACTIVETITLE */
+        0x2b00aa, /* SYSCLR_ACTIVETITLE */
         0xc0c0c0, /* SYSCLR_INACTIVETITLE */
         0xcccccc, /* SYSCLR_MENU */
         0xffffff, /* SYSCLR_WINDOW */
@@ -87,6 +87,8 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         case 4:
         case 5:
             return display_metric(4); /* sizing borders */
+        case 6:
+            return 1; /* SV_ALARM */
         case 9:
             return 500; /* cursor blink */
         case 10:
@@ -141,6 +143,69 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         case 49:
         case 50:
             return 1;
+        case 12:
+        case 57:
+        case 58:
+        case 64:
+        case 65:
+        case 66:
+        case 67:
+        case 80: /* SV_CONTEXTHELP has no default mouse event. */
+        case 84:
+        case 85:
+        case 86:
+        case 87:
+        case 88:
+        case 89:
+        case 90:
+        case 91:
+        case 92:
+        case 93:
+        case 94:
+        case 95:
+        case 96:
+        case 97:
+        case 98:
+            return 0;
+        case 13:
+        case 14:
+            return 440; /* warning and note alarm frequency */
+        case 15:
+            return 220; /* error alarm frequency */
+        case 16:
+        case 17:
+        case 18:
+            return 80; /* alarm durations */
+        case 59:
+            return 1; /* SV_INSERTMODE */
+        case 68:
+            return display_metric(32) * 2; /* SV_CXICONTEXTWIDTH */
+        case 69:
+            return 2; /* SV_CICONTEXTLINES */
+        case 70:
+            return 200; /* SV_CHORDTIME */
+        case 71:
+        case 72:
+            return display_metric(4); /* chord rectangle */
+        case 73:
+        case 74:
+            return display_metric(4); /* motion start distance */
+        case 75:
+            return WM_BUTTON2MOTIONSTART; /* SV_BEGINDRAG */
+        case 76:
+            return WM_BUTTON2UP; /* SV_ENDDRAG */
+        case 77:
+            return WM_BUTTON1CLICK; /* SV_SINGLESELECT */
+        case 78:
+            return WM_BUTTON1DBLCLK; /* SV_OPEN */
+        case 79:
+            return WM_BUTTON2CLICK; /* SV_CONTEXTMENU */
+        case 81:
+            return WM_BUTTON1CLICK | 0x20 << 16; /* SV_TEXTEDIT, with KC_ALT */
+        case 82:
+            return WM_BUTTON1MOTIONSTART; /* SV_BEGINSELECT */
+        case 83:
+            return WM_BUTTON1UP; /* SV_ENDSELECT */
         default:
             SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
     }

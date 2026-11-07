@@ -13,11 +13,21 @@ static const char *styles[] = {"", " Bold", " Italic", " Bold Italic"};
 static int font_metrics(unsigned index, LxHostFont *font, unsigned dpi, FONTMETRICS *output)
 {
     LxHostFontMetrics m;
-    if (index >= 12 || !lx_host_font_metrics(font, &m))
+    if (!lx_host_font_metrics(font, &m))
         return 0;
+    const unsigned bold = index < 12 ? index & 1 : m.bold != 0;
+    const unsigned italic = index < 12 ? (index & 2) != 0 : m.italic != 0;
     memset(output, 0, sizeof *output);
-    snprintf(output->szFamilyname, FACESIZE, "%s", families[index / 4]);
-    snprintf(output->szFacename, FACESIZE, "%s%s", families[index / 4], styles[index % 4]);
+    if (index < 12)
+    {
+        snprintf(output->szFamilyname, FACESIZE, "%s", families[index / 4]);
+        snprintf(output->szFacename, FACESIZE, "%s%s", families[index / 4], styles[index % 4]);
+    }
+    else
+    {
+        snprintf(output->szFamilyname, FACESIZE, "%s", m.family);
+        snprintf(output->szFacename, FACESIZE, "%s", m.face);
+    }
     output->usCodePage = 437;
     output->lEmHeight = m.em;
     output->lXHeight = m.x_height;
@@ -31,7 +41,7 @@ static int font_metrics(unsigned index, LxHostFont *font, unsigned dpi, FONTMETR
     output->lMaxCharInc = m.maximum_width;
     output->lEmInc = m.em;
     output->lMaxBaselineExt = m.ascent + m.descent;
-    output->usWeightClass = (index & 1) ? 7 : 5;
+    output->usWeightClass = bold ? 7 : 5;
     output->usWidthClass = 5;
     output->sXDeviceRes = output->sYDeviceRes = (SHORT)dpi;
     output->sLastChar = 255;
@@ -42,11 +52,19 @@ static int font_metrics(unsigned index, LxHostFont *font, unsigned dpi, FONTMETR
     output->sMaximumPointSize = 3840;
     output->fsType = m.fixed ? 1 : 0; /* FM_TYPE_FIXED */
     output->fsDefn = 1;               /* FM_DEFN_OUTLINE */
-    output->fsSelection = ((index & 1) ? 0x20 : 0) | ((index & 2) ? 1 : 0);
+    output->fsSelection = (bold ? 0x20 : 0) | (italic ? 1 : 0);
     output->lUnderscoreSize = m.underline_size;
     output->lUnderscorePosition = m.underline_position;
     output->lStrikeoutSize = m.strikeout_size;
     output->lStrikeoutPosition = m.strikeout_position;
+    output->lSubscriptXSize = m.subscript_x_size;
+    output->lSubscriptYSize = m.subscript_y_size;
+    output->lSubscriptXOffset = m.subscript_x_offset;
+    output->lSubscriptYOffset = m.subscript_y_offset;
+    output->lSuperscriptXSize = m.superscript_x_size;
+    output->lSuperscriptYSize = m.superscript_y_size;
+    output->lSuperscriptXOffset = m.superscript_x_offset;
+    output->lSuperscriptYOffset = m.superscript_y_offset;
     output->lMatch = (LONG)index + 1;
     return 1;
 }
@@ -131,6 +149,15 @@ BOOL GpiQueryTextBox(HPS hps, LONG count, PCH text, LONG points, PPOINTL output)
     return TRUE;
 }
 
+static BOOL loaded_face_matches(unsigned index, const char *name)
+{
+    LxHostFont *font = lx_host_font_open(index, 16);
+    LxHostFontMetrics metrics;
+    BOOL same = font && lx_host_font_metrics(font, &metrics) &&
+                (!strcasecmp(name, metrics.face) || !strcasecmp(name, metrics.family));
+    lx_host_font_close(font);
+    return same;
+}
 LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
 {
     TRACE_NATIVE("GpiCreateLogFont(%u, %p, %d, %p)", (uint)handle, name, (int)id, attrs);
@@ -162,7 +189,20 @@ LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
             break;
         }
     }
+    const unsigned font_count = lx_host_font_count();
+    for (unsigned i = 12; i < font_count && !matched; i++)
+        if (loaded_face_matches(i, attrs->szFacename))
+        {
+            index = i;
+            matched = TRUE;
+        }
     BOOL forced_match = FALSE;
+    if (attrs->lMatch > 12 && (ULONG)attrs->lMatch <= font_count &&
+        loaded_face_matches((unsigned)attrs->lMatch - 1, attrs->szFacename))
+    {
+        index = (unsigned)attrs->lMatch - 1;
+        forced_match = TRUE;
+    }
     if (attrs->lMatch > 0 && attrs->lMatch <= 12)
     {
         unsigned candidate = (unsigned)attrs->lMatch - 1;
@@ -177,8 +217,9 @@ LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
     /* A valid lMatch fixes the physical face. Requested style can be simulated
        without changing the match number/design attributes returned by queries. */
     unsigned physical_index = index;
-    index = (index & ~3u) | (index % 4) | ((attrs->fsSelection & 0x20) ? 1 : 0) |
-            ((attrs->fsSelection & 1) ? 2 : 0);
+    if (index < 12)
+        index = (index & ~3u) | (index % 4) | ((attrs->fsSelection & 0x20) ? 1 : 0) |
+                ((attrs->fsSelection & 1) ? 2 : 0);
     unsigned pixels =
         !(attrs->fsFontUse & 2) && attrs->lMaxBaselineExt > 0 && attrs->lMaxBaselineExt <= 512
             ? (unsigned)attrs->lMaxBaselineExt

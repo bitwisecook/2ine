@@ -11,6 +11,7 @@
 #include "sesmgr_start.h"
 #include "doscalls.h"
 #include "os2libs/doscalls/launch.h"
+#include "guest/launch_record.h"
 #include "quecalls.h"
 #include "hal/host_thread.h"
 #include "hal/host_sync.h"
@@ -31,12 +32,16 @@ typedef struct SessionWait
     BOOL selectable, bonded;
     LxSessionEnded ended;
     void *context;
+    LxHostShared *shared;
+    LxLaunchRecord *record;
 } SessionWait;
 static SessionWait *sessions;
 static LxHostMutex *session_mutex;
 static LxHostOnce session_once = LX_HOST_ONCE_INIT;
+static char session_title[64];
 static void destroy_session(SessionWait *session)
 {
+    lx_launch_record_close(session->shared, session->record);
     if (session->queue)
         DosCloseQueue(session->queue);
     if (session->identity)
@@ -146,7 +151,11 @@ static void *session_wait(void *value)
         lx_queue_write_copy(session->queue, 0, sizeof message, message, 0);
     }
     if (session->ended)
-        session->ended(session->context, result.codeResult);
+    {
+        LxLaunchRecord *record = session->record;
+        BOOL recorded = __atomic_load_n(&record->exit_recorded, __ATOMIC_ACQUIRE);
+        session->ended(session->context, recorded ? record->exit_code : result.codeResult);
+    }
     remove_session(session);
     destroy_session(session);
     return NULL;
@@ -188,6 +197,29 @@ APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid
             return result;
         }
     }
+    char record_name[40];
+    session->record = lx_launch_record_create('s', &session->shared, record_name,
+                                              sizeof record_name);
+    if (!session->record)
+    {
+        destroy_session(session);
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+    LxLaunchPresentation presentation = {
+        .control = data->PgmControl & (LX_LAUNCH_INVISIBLE | LX_LAUNCH_MAXIMIZE |
+                                       LX_LAUNCH_MINIMIZE | LX_LAUNCH_NO_AUTOCLOSE |
+                                       LX_LAUNCH_SET_POSITION),
+        .x = (SHORT)data->InitXPos,
+        .y = (SHORT)data->InitYPos,
+        .cx = (SHORT)data->InitXSize,
+        .cy = (SHORT)data->InitYSize};
+    if (presentation.control & LX_LAUNCH_SET_POSITION)
+        presentation.control |= LX_LAUNCH_SET_SIZE;
+    if (data->FgBg)
+        presentation.control |= LX_LAUNCH_BACKGROUND;
+    if (data->PgmTitle)
+        snprintf(presentation.title, sizeof presentation.title, "%s", data->PgmTitle);
+    lx_launch_record_present(session->record, &presentation);
     const char *inputs = data->PgmInputs ? (const char *)data->PgmInputs : "";
     size_t name_size = strlen(data->PgmName) + 1;
     char *command = malloc(name_size + strlen(inputs) + 2);
@@ -205,6 +237,7 @@ APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid
                           .arguments = command,
                           .environment = (PSZ)data->Environment,
                           .directory = start->directory,
+                          .record = record_name,
                           .flags = start->directory ? LX_DOS_LAUNCH_SEARCH_DIRECTORY : 0};
     PID child = 0;
     APIRET error = lx_doscalls_launch_tracked(&launch, &child);
@@ -248,7 +281,24 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
 APIRET16 Dos16SMSetTitle(PCHAR title)
 {
     TRACE_NATIVE("Dos16SMSetTitle(%p)", title);
+    if (!title)
+        return ERROR_INVALID_PARAMETER;
+    lx_host_once(&session_once, initialize_sessions);
+    lx_host_mutex_lock(session_mutex, UINT32_MAX);
+    snprintf(session_title, sizeof session_title, "%s", title);
+    lx_host_mutex_unlock(session_mutex);
     return NO_ERROR;
+}
+
+void lx_session_title(char *output, size_t capacity)
+{
+    lx_host_once(&session_once, initialize_sessions);
+    lx_host_mutex_lock(session_mutex, UINT32_MAX);
+    snprintf(output, capacity, "%s", session_title);
+    lx_host_mutex_unlock(session_mutex);
+    LxLaunchRecord *record = lx_launch_record();
+    if (!*output && record)
+        snprintf(output, capacity, "%s", record->presentation.title);
 }
 
 APIRET DosStopSession(ULONG scope, ULONG session)

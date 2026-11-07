@@ -1481,6 +1481,11 @@ done:
     return result;
 }
 
+static uint32 bridge32_GpiQueryStopDraw(uint8 *a)
+{
+    return (uint32)GpiQueryStopDraw((HPS)gpi_word(a, 0));
+}
+
 static uint32 bridge32_GpiSetStopDraw(uint8 *a)
 {
 
@@ -1708,4 +1713,18 @@ static uint32 bridge32_GpiPolygons(uint8 *a)
  done:
     for(ULONG i=0;i<count;i++)lx_execution_release(&borrows[i]);
     free(borrows);free(polygons);return result;
+}
+static uint32 bridge32_GpiLoadPublicFonts(uint8 *a)
+{
+    char *name = lx_execution_copy_string(GLoaderState.execution, gpi_word(a, 1), 261);
+    BOOL result = name && GpiLoadPublicFonts((HAB)gpi_word(a, 0), name);
+    free(name);
+    return result;
+}
+static uint32 bridge32_GpiUnloadPublicFonts(uint8 *a)
+{
+    char *name = lx_execution_copy_string(GLoaderState.execution, gpi_word(a, 1), 261);
+    BOOL result = name && GpiUnloadPublicFonts((HAB)gpi_word(a, 0), name);
+    free(name);
+    return result;
 }

@@ -915,6 +915,10 @@ int tb_hpfs_info(const char *path, TbImageInfo *info)
             info->directory = !!(list.entries[index].record[3] & 16);
             info->size = h32(list.entries[index].record + 12);
             info->readonly = !!(list.entries[index].record[3] & 1);
+            info->attributes = list.entries[index].record[3] & 0x26;
+            info->modified = h32(list.entries[index].record + 8);
+            info->accessed = h32(list.entries[index].record + 16);
+            info->created = h32(list.entries[index].record + 20);
         }
     }
     else
@@ -1609,7 +1613,7 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
         if (action == TB_FS_EXCLUSIVE || action == TB_FS_MKDIR)
             ok = herr(EEXIST);
         else if (entry->record[3] & 1 && action != TB_FS_READONLY && action != TB_FS_WRITABLE &&
-                 action != TB_FS_CREATE)
+                 action != TB_FS_CREATE && action != TB_FS_ATTRIBUTES && action != TB_FS_TOUCH)
             ok = herr(EACCES);
         else if (action == TB_FS_CREATE && entry->record[3] & 16)
             ok = herr(EISDIR);
@@ -1621,7 +1625,18 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
         }
         else if (action == TB_FS_TOUCH)
         {
-            p32(entry->record + 8, (uint32_t)offset);
+            const TbImageStamps *stamps = data;
+            if (stamps->modified != INT64_MIN)
+                p32(entry->record + 8, (uint32_t)stamps->modified);
+            if (stamps->accessed != INT64_MIN)
+                p32(entry->record + 16, (uint32_t)stamps->accessed);
+            if (stamps->created != INT64_MIN)
+                p32(entry->record + 20, (uint32_t)stamps->created);
+            ok = directory_save(&disk, parent_sector, &parent);
+        }
+        else if (action == TB_FS_ATTRIBUTES)
+        {
+            entry->record[3] = (unsigned char)((entry->record[3] & ~0x26u) | (offset & 0x26));
             ok = directory_save(&disk, parent_sector, &parent);
         }
         else if (action == TB_FS_DELETE || action == TB_FS_RMDIR)
@@ -1638,8 +1653,11 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
             }
         }
         else if (action == TB_FS_WRITE || action == TB_FS_RESIZE)
+        {
+            entry->record[3] |= 0x20;
             ok = write_file(&disk, entry, action, offset, data, size) &&
                  directory_save(&disk, parent_sector, &parent);
+        }
         else if (action == TB_FS_RENAME)
         {
             ok = target && locate(&disk, target, &destination, &to, 1);

@@ -2,6 +2,7 @@
 /* Switch entries belong to this worker; no host desktop task list is modified. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmshapi.h"
+#include "os2libs/sesmgr_start.h"
 #include "guest/handles.h"
 #include "hal/host_sync.h"
 #include "hal/host.h"
@@ -52,6 +53,9 @@ ULONG WinAddSwitchEntry(PSWCNTRL value)
     if (!entry)
         return 0;
     entry->value = *value;
+    /* An untitled entry takes the title its session was started with. */
+    if (!*entry->value.szSwtitle)
+        lx_session_title(entry->value.szSwtitle, sizeof entry->value.szSwtitle);
     if (!entry->value.idProcess)
     {
         uint32 parent;
@@ -103,6 +107,13 @@ ULONG WinQuerySwitchEntry(ULONG handle, PSWCNTRL value)
     *value = ((SwitchEntry *)borrow.resource)->value;
     lx_host_monitor_unlock(mutex);
     lx_handle_release(&borrow);
+    /* A title set after the entry was added still names this process's session. */
+    char session_name[sizeof value->szSwtitle];
+    uint32 process, parent;
+    lx_host_process_ids(&process, &parent);
+    lx_session_title(session_name, sizeof session_name);
+    if (*session_name && value->idProcess == process)
+        memcpy(value->szSwtitle, session_name, sizeof session_name);
     return NO_ERROR;
 }
 ULONG WinQuerySwitchHandle(ULONG window, ULONG process)
@@ -154,6 +165,14 @@ ULONG WinCreateSwitchEntry(HAB hab, PSWCNTRL value)
 ULONG WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
 {
     if (!title || !capacity) return ERROR_INVALID_PARAMETER;
+    char session_name[64] = {0};
+    if (!session)
+        lx_session_title(session_name, sizeof session_name);
+    if (*session_name)
+    {
+        snprintf(title, capacity, "%s", session_name);
+        return NO_ERROR;
+    }
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(mutex);
     ULONG result = ERROR_SMG_SESSION_NOT_FOUND;
@@ -172,5 +191,18 @@ ULONG WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
             break;
         }
     lx_host_monitor_unlock(mutex);
+    /* Before a Window List entry exists the caller's title is its program name. */
+    const char *program = GLoaderState.pib.pib_pchcmd;
+    if (result != NO_ERROR && !session && program && *program)
+    {
+        const char *name = program;
+        for (const char *p = program; *p; p++)
+            if (*p == '\\' || *p == '/')
+                name = p + 1;
+        size_t length = strlen(name), copied = length < capacity ? length : capacity - 1;
+        memcpy(title, name, copied);
+        title[copied] = 0;
+        result = NO_ERROR;
+    }
     return result;
 }

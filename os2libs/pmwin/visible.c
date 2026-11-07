@@ -15,13 +15,26 @@ static BOOL exclude_window(PmRegion *visible, Window *window, const LxHostRect *
     cut.count = 1;
     return regionBoolean(visible, visible, &cut, 7);
 }
+static HWND update_lock;
+void lx_pm_set_update_lock(HWND window)
+{
+    __atomic_store_n(&update_lock, window, __ATOMIC_RELEASE);
+}
+static BOOL update_locked(const Window *window)
+{
+    HWND locked = __atomic_load_n(&update_lock, __ATOMIC_ACQUIRE);
+    for (; locked && window && window != &desktop_window; window = window->parent)
+        if (window->hwnd == locked)
+            return TRUE;
+    return FALSE;
+}
 BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     Window *window = ps ? ps->window : NULL;
     if (!window)
         return FALSE;
-    if (!windowAcceptsUpdates(window))
+    if (!windowAcceptsUpdates(window) || update_locked(window))
         return TRUE;
     RECTL rect = {0, 0, window->w, window->h};
     if (ps->paint_clip_set)
@@ -48,11 +61,11 @@ BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
     if (!regionBoolean(visible, &initial, ps->clip_lease.resource, ps->clip_lease.resource ? 6 : 2))
         return FALSE;
     for (Window *w = window; w->parent && w->parent != &desktop_window; w = w->parent)
-        if ((w->style | w->class_style) & WS_CLIPSIBLINGS)
+        if (((w->style | w->class_style) & WS_CLIPSIBLINGS) || (ps->clip_flags & 8))
             for (Window *above = w->parent->children; above && above != w; above = above->sibling)
                 if (!exclude_window(visible, above, &origin))
                     goto fail;
-    if ((window->style | window->class_style) & WS_CLIPCHILDREN)
+    if (((window->style | window->class_style) & WS_CLIPCHILDREN) || (ps->clip_flags & 0x10))
         for (Window *child = window->children; child; child = child->sibling)
             if (!exclude_window(visible, child, &origin))
                 goto fail;

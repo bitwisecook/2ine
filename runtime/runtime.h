@@ -44,6 +44,7 @@ typedef struct LxLoaderState
     uint32 diskmap;        // 1<<0==drive A mounted, 1<<1==drive B mounted, etc.
     float beep_volume;
     unsigned display_dpi;
+    unsigned display_depth;
     uint16 main_tib_selector;
     uint32 mainstacksize;
     char *libpath;

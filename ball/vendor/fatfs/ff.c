@@ -5497,6 +5497,55 @@ FRESULT f_utime (
 	LEAVE_FF(fs, res);
 }
 
+/*-----------------------------------------------------------------------*/
+/* Read and/or Change Last-Access Date                                   */
+/*-----------------------------------------------------------------------*/
+
+FRESULT f_accessdate (
+	const TCHAR* path,	/* Pointer to the file/directory name */
+	WORD* date,			/* Receives the stored date when not NULL */
+	WORD value			/* New date when not zero */
+)
+{
+	FRESULT res;
+	FATFS *fs;
+	DIR dj;
+	DEF_NAMEBUFF
+
+
+	res = mount_volume(&path, &fs, value ? FA_WRITE : 0);
+	if (res == FR_OK) {
+		dj.obj.fs = fs;
+		INIT_NAMEBUFF(fs);
+		res = follow_path(&dj, path);
+		if (res == FR_OK && (dj.fn[NSFLAG] & (NS_DOT | NS_NONAME))) res = FR_INVALID_NAME;
+		if (res == FR_OK) {
+#if FF_FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {
+				if (date) *date = (WORD)(ld_32(fs->dirbuf + XDIR_AccTime) >> 16);
+				if (value) {
+					st_32(fs->dirbuf + XDIR_AccTime, (DWORD)value << 16);
+					res = store_xdir(&dj);
+				}
+			} else
+#endif
+			{
+				if (date) *date = ld_16(dj.dir + DIR_LstAccDate);
+				if (value) {
+					st_16(dj.dir + DIR_LstAccDate, value);
+					fs->wflag = 1;
+				}
+			}
+			if (res == FR_OK && value) {
+				res = sync_fs(fs);
+			}
+		}
+		FREE_NAMEBUFF();
+	}
+
+	LEAVE_FF(fs, res);
+}
+
 #endif	/* FF_USE_CHMOD && !FF_FS_READONLY */
 
 

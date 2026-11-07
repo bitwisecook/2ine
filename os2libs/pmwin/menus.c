@@ -569,7 +569,13 @@ MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM se
         for (size_t i = 0; i < menu->count; i++)
             if (WinPtInRect(0, &menu->items[i].rect, &point))
             {
-                menu_activate(window, (int)i);
+                /* Clicking the title of an open menu closes it and returns focus. */
+                if ((window->style & 1) && menu->selected == (int)i &&
+                    menu->items[i].item.hwndSubMenu &&
+                    WinIsWindowVisible(menu->items[i].item.hwndSubMenu))
+                    menu_finish(window);
+                else
+                    menu_activate(window, (int)i);
                 break;
             }
         return 0;

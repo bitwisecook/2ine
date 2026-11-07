@@ -3,6 +3,7 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
 #include "hal/host_sync.h"
+#include "os2libs/pmwin/graphics.h"
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static Open32Class *classes;
@@ -24,22 +25,30 @@ static Open32Class *find_class(ULONG instance, PSZ name)
 }
 static uint32 builtin_procedure(uint8 *arguments)
 {
-    return open32BuiltinWindowProc(lx_guest_load_u32(arguments), lx_guest_load_u32(arguments + 4),
-                                   lx_guest_load_u32(arguments + 8),
-                                   lx_guest_load_u32(arguments + 12));
+    ULONG handle = lx_guest_load_u32(arguments), message = lx_guest_load_u32(arguments + 4);
+    ULONG first = lx_guest_load_u32(arguments + 8), second = lx_guest_load_u32(arguments + 12);
+    /* A superclass chains here for the default behaviour of its PM control. */
+    if (!open32FindWindow(handle) && open32NativeDialogWindow(handle))
+        return (uint32)open32NativeControlMessage(handle, message, first, second, TRUE);
+    return open32BuiltinWindowProc(handle, message, first, second);
 }
 static Open32Class *builtin_class(const char *name)
 {
+    static const char *const controls[] = {"BUTTON", "COMBOBOX", "EDIT", "LISTBOX", "MLE", "STATIC"};
+    const char *canonical = NULL;
+    for (size_t i = 0; i < sizeof controls / sizeof *controls; i++)
+        if (!strcasecmp(name, controls[i]))
+            canonical = controls[i];
     BOOL scroll = !strcasecmp(name, "SCROLLBAR");
-    if (!scroll && strcasecmp(name, "MDICLIENT"))
+    if (!canonical && !scroll && strcasecmp(name, "MDICLIENT"))
         return NULL;
     Open32Class *c = calloc(1, sizeof *c);
     if (!c)
         return NULL;
-    c->name = strdup(scroll ? "SCROLLBAR" : "MDICLIENT");
+    c->name = strdup(canonical ? canonical : scroll ? "SCROLLBAR" : "MDICLIENT");
     c->style = 0x4008;
-    c->builtin = scroll ? 2 : 1;
-    c->brush = scroll ? 1 : 13;
+    c->builtin = canonical ? OPEN32_BUILTIN_CONTROL : scroll ? 2 : 1;
+    c->brush = canonical ? 0 : scroll ? 1 : 13;
     c->names = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
     c->procedure_mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
     const LxExecutionApi32 bridge = {builtin_procedure, 16, 0, LX_ABI_STACK32};
@@ -100,6 +109,20 @@ static void destroy_class(Open32Class *c)
     free(c->menu);
     free(c->name);
     free(c);
+}
+/* A dialog template names a class the application registered through this API.
+   PM coordinates and styles become their Windows forms for CreateWindowEx. */
+static HWND dialog_control(HWND parent, const char *name, const char *text, ULONG style, LONG x,
+                           LONG y, LONG width, LONG height, ULONG id)
+{
+    RECTL area;
+    if (!WinQueryWindowRect(parent, &area))
+        return 0;
+    ULONG windows_style = 0x40000000u | (style & WS_VISIBLE ? 0x10000000u : 0) |
+                          (style & WS_DISABLED ? 0x08000000u : 0) | (style & 0xFFFF);
+    return CreateWindowEx(0, (PSZ)name, (PSZ)text, windows_style, x,
+                          area.yTop - area.yBottom - y - height, width, height, parent, id,
+                          UINT32_MAX, 0);
 }
 ULONG RegisterClass(PVOID record)
 {
@@ -170,6 +193,7 @@ ULONG RegisterClass(PVOID record)
     c->next = classes;
     classes = c;
     lx_host_monitor_unlock(monitor);
+    lx_pm_set_dialog_class_factory(dialog_control);
     TRACE_NATIVE("RegisterClass('%s', instance=%u, proc=%X) -> %u", c->name, c->instance,
                  c->procedure, c->atom);
     return c->atom;
@@ -182,6 +206,9 @@ BOOL RegisterClassAlias(PSZ name, PSZ alias)
         return FALSE;
     }
     TRACE_NATIVE("RegisterClassAlias('%s', '%s')", name, alias);
+    Open32Class *predefined = open32ClassAcquire(UINT32_MAX, alias);
+    if (predefined)
+        open32ClassRelease(predefined);
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(monitor);
     Open32Class *source = NULL, *target = NULL;
@@ -223,6 +250,7 @@ BOOL UnregisterClass(PSZ name, ULONG instance)
 }
 BOOL GetClassInfo(ULONG instance, PSZ name, PVOID output)
 {
+    TRACE_NATIVE("GetClassInfo(%u, %p)", instance, name);
     if (!output)
     {
         open32SetError(87);
@@ -395,15 +423,18 @@ ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
 LONG GetClassName(ULONG handle, PCHAR output, LONG capacity)
 {
     Open32Window *window = open32FindWindow(handle);
-    if (!window || !output || capacity <= 0)
+    const char *name = window ? window->class->name
+                       : open32NativeDialogWindow(handle) ? open32NativeClassName(handle)
+                                                          : NULL;
+    if (!name || !output || capacity <= 0)
     {
-        open32SetError(window ? 87 : 1400);
+        open32SetError(name ? 87 : 1400);
         return 0;
     }
-    size_t length = strlen(window->class->name);
+    size_t length = strlen(name);
     if (length >= (size_t)capacity)
         length = (size_t)capacity - 1;
-    memcpy(output, window->class->name, length);
+    memcpy(output, name, length);
     output[length] = 0;
     return (LONG)length;
 }

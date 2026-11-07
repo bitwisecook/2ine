@@ -219,7 +219,7 @@ ULONG CreateCompatibleDC(ULONG source)
 BOOL DeleteDC(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!dc || (dc->kind != 1 && dc->kind != 4 && dc->kind != 5 && dc->kind != 6))
+    if (!dc || (dc->kind != 1 && dc->kind != 4 && dc->kind != 5 && dc->kind != 6 && dc->kind != 8))
     {
         open32SetError(6);
         return FALSE;
@@ -397,6 +397,14 @@ ULONG SetBkColor(ULONG handle, ULONG color)
     return previous;
 }
 
+/* Palette edits reach every recording DC that has the palette selected. */
+void open32MetafilePaletteChange(ULONG palette, USHORT function, ULONG first, ULONG count,
+                                 PVOID entries)
+{
+    for (Open32DC *dc = contexts; dc; dc = dc->next)
+        if (dc->palette_handle == palette)
+            open32MetafilePaletteRecord(dc->ps, function, first, count, entries);
+}
 void open32DrawingCleanup(void)
 {
     while (contexts)
@@ -437,9 +445,17 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
     if (printer < 0)
         printer = lx_printer_index(driver);
     if (printer >= 0)
-        return open32PrinterDefaults((unsigned)printer + 1, output, mode)
-                   ? open32CreatePrinterContext((unsigned)printer + 1, TRUE)
-                   : 0;
+    {
+        ULONG context = open32PrinterDefaults((unsigned)printer + 1, output, mode)
+                            ? open32CreatePrinterContext((unsigned)printer + 1, TRUE)
+                            : 0;
+        if (context && !open32PrinterApply(context, mode))
+        {
+            DeleteDC(context);
+            context = 0;
+        }
+        return context;
+    }
     BOOL display = (driver && !strcasecmp(driver, "DISPLAY")) ||
                    (!driver && device && !strcasecmp(device, "DISPLAY"));
     if (!display)
@@ -497,9 +513,40 @@ ULONG CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
     if (printer < 0)
         printer = lx_printer_index(driver);
     if (printer >= 0)
-        return open32PrinterDefaults((unsigned)printer + 1, output, mode)
-                   ? open32CreatePrinterContext((unsigned)printer + 1, FALSE)
-                   : 0;
+    {
+        ULONG context = open32PrinterDefaults((unsigned)printer + 1, output, mode)
+                            ? open32CreatePrinterContext((unsigned)printer + 1, FALSE)
+                            : 0;
+        if (context && !open32PrinterApply(context, mode))
+        {
+            DeleteDC(context);
+            context = 0;
+        }
+        return context;
+    }
+    if ((driver && !strcasecmp(driver, "DISPLAY")) ||
+        (!driver && device && !strcasecmp(device, "DISPLAY")))
+    {
+        if (mode || (output && *output))
+        {
+            open32SetError(50);
+            return 0;
+        }
+        if (!open32Presentation())
+        {
+            open32SetError(8);
+            return 0;
+        }
+        HPS ps = WinGetPS(HWND_DESKTOP);
+        if (!ps || !register_context(ps, 0, 8))
+        {
+            if (ps)
+                WinReleasePS(ps);
+            open32SetError(8);
+            return 0;
+        }
+        return ps;
+    }
     open32SetError(1801);
     return 0;
 }
@@ -549,6 +596,17 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
         {
             open32SetError(87);
             return 0;
+        }
+        /* The PS page maps onto the target rectangle, so a smaller rectangle scales. */
+        LONG page_width = open32DCWidth(ps), page_height = open32DCHeight(ps);
+        if (r > l && b > t && page_width > 0 && page_height > 0)
+        {
+            dc->map_mode = 8;
+            dc->window_x = dc->window_y = 0;
+            dc->window_width = page_width;
+            dc->window_height = page_height;
+            dc->viewport_width = r - l;
+            dc->viewport_height = b - t;
         }
         dc->viewport_x = l;
         dc->viewport_y = t;

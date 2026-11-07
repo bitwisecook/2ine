@@ -402,6 +402,16 @@ LxHostFsError lx_host_file_write(LxHostFile *file, const void *data, size_t size
         result = write(file->fd, data, size);
     } while (result < 0 && errno == EINTR);
     *actual = result < 0 ? 0 : (size_t)result;
+    if (result > 0 && !file->image && !file->archive_checked)
+    {
+        /* Writing restores an archive bit that a backup program cleared. */
+        LxHostFileInfo extras = {.attributes = LX_HOST_ATTRIBUTE_ARCHIVED};
+        file->archive_checked = 1;
+        lx_host_native_extras(file->fd, NULL, &extras);
+        if (!(extras.attributes & LX_HOST_ATTRIBUTE_ARCHIVED))
+            lx_host_native_set_attributes(file->fd, NULL,
+                                          extras.attributes | LX_HOST_ATTRIBUTE_ARCHIVED);
+    }
     return image_done(file, result < 0 ? fs_error(errno) : LX_HOST_FS_OK);
 }
 LxHostFsError lx_host_file_seek(LxHostFile *file, int64_t distance, unsigned origin,
@@ -428,10 +438,21 @@ static void describe(const struct stat *native, LxHostFileInfo *info)
     info->accessed = native->st_atime;
     info->modified = native->st_mtime;
     info->readonly = !(native->st_mode & S_IWUSR);
+    info->created = 0;
+    info->attributes = S_ISREG(native->st_mode) ? LX_HOST_ATTRIBUTE_ARCHIVED : 0;
     info->kind = S_ISREG(native->st_mode)                               ? LX_HOST_FILE_REGULAR
                  : S_ISDIR(native->st_mode)                             ? LX_HOST_FILE_DIRECTORY
                  : S_ISCHR(native->st_mode) || S_ISBLK(native->st_mode) ? LX_HOST_FILE_DEVICE
                                                                         : LX_HOST_FILE_PIPE;
+}
+static void describe_image(const TbImageInfo *image, LxHostFileInfo *info)
+{
+    if (image->modified != INT64_MIN)
+        info->modified = image->modified;
+    if (image->accessed)
+        info->accessed = image->accessed;
+    info->created = image->created;
+    info->attributes = image->attributes;
 }
 LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info)
 {
@@ -446,34 +467,89 @@ LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info)
     if (file->image)
     {
         TbImageInfo image;
-        info->readonly =
-            tb_image_info(file->image_path, &image) ? image.readonly : file->image_readonly;
+        info->readonly = file->image_readonly;
+        if (tb_image_info(file->image_path, &image))
+        {
+            info->readonly = image.readonly;
+            describe_image(&image, info);
+        }
     }
+    else
+        lx_host_native_extras(file->fd, NULL, info);
     return image_done(file, LX_HOST_FS_OK);
 }
-LxHostFsError lx_host_file_times(LxHostFile *file, int64_t accessed, int64_t modified)
+static LxHostFsError native_stamps(int fd, const char *path, int64_t created, int64_t accessed,
+                                   int64_t modified)
 {
-    if (!file) return LX_HOST_FS_INVALID;
+    struct timespec times[2];
+    int64_t values[2] = {accessed, modified};
+    for (unsigned i = 0; i < 2; i++)
+    {
+        times[i].tv_sec = values[i] == INT64_MIN ? 0 : (time_t)values[i];
+        times[i].tv_nsec = values[i] == INT64_MIN ? UTIME_OMIT : 0;
+        if (values[i] != INT64_MIN && (int64_t)times[i].tv_sec != values[i])
+            return LX_HOST_FS_INVALID;
+    }
+    if (created != INT64_MIN)
+    {
+        LxHostFsError result = lx_host_native_set_created(fd, path, created);
+        if (result)
+            return result;
+    }
+    if (accessed == INT64_MIN && modified == INT64_MIN)
+        return LX_HOST_FS_OK;
+    int failed = fd >= 0 ? futimens(fd, times) : utimensat(AT_FDCWD, path, times, 0);
+    return failed ? fs_error(errno) : LX_HOST_FS_OK;
+}
+LxHostFsError lx_host_file_stamps(LxHostFile *file, int64_t created, int64_t accessed,
+                                  int64_t modified)
+{
+    if (!file)
+        return LX_HOST_FS_INVALID;
     image_lock(file);
     if (file->image)
     {
         if (!file->image_writable)
             return image_done(file,
                               file->image_readonly ? LX_HOST_FS_READ_ONLY : LX_HOST_FS_DENIED);
-        /* Volume entries retain the write date; the cache file mirrors the request below. */
-        if (modified != INT64_MIN &&
-            !tb_image_modified(file->image_path, file->image_source, modified))
+        TbImageStamps stamps = {created, accessed, modified};
+        if (!tb_image_stamps(file->image_path, file->image_source, &stamps))
             return image_done(file, fs_error(errno));
+        created = INT64_MIN; /* The volume entry holds it; the cache file mirrors the rest. */
     }
-    struct timespec times[2];
-    int64_t values[2] = {accessed, modified};
-    for (unsigned i = 0; i < 2; i++) {
-        times[i].tv_sec = values[i] == INT64_MIN ? 0 : (time_t)values[i];
-        times[i].tv_nsec = values[i] == INT64_MIN ? UTIME_OMIT : 0;
-        if (values[i] != INT64_MIN && (int64_t)times[i].tv_sec != values[i])
-            return image_done(file, LX_HOST_FS_INVALID);
+    return image_done(file, native_stamps(file->fd, NULL, created, accessed, modified));
+}
+LxHostFsError lx_host_file_times(LxHostFile *file, int64_t accessed, int64_t modified)
+{
+    return lx_host_file_stamps(file, INT64_MIN, accessed, modified);
+}
+LxHostFsError lx_host_path_stamps(const char *path, int64_t created, int64_t accessed,
+                                  int64_t modified)
+{
+    if (tb_image_path(path))
+    {
+        TbImageStamps stamps = {created, accessed, modified};
+        return tb_image_stamps(path, NULL, &stamps) ? LX_HOST_FS_OK : fs_error(errno);
     }
-    return image_done(file, futimens(file->fd, times) ? fs_error(errno) : LX_HOST_FS_OK);
+    return native_stamps(-1, path, created, accessed, modified);
+}
+LxHostFsError lx_host_file_attributes(LxHostFile *file, unsigned attributes)
+{
+    if (!file)
+        return LX_HOST_FS_INVALID;
+    image_lock(file);
+    if (file->image)
+        return image_done(file, tb_image_attributes(file->image_path, file->image_source,
+                                                    attributes)
+                                    ? LX_HOST_FS_OK
+                                    : fs_error(errno));
+    return image_done(file, lx_host_native_set_attributes(file->fd, NULL, attributes));
+}
+LxHostFsError lx_host_path_attributes(const char *path, unsigned attributes)
+{
+    if (tb_image_path(path))
+        return tb_image_attributes(path, NULL, attributes) ? LX_HOST_FS_OK : fs_error(errno);
+    return lx_host_native_set_attributes(-1, path, attributes);
 }
 LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size)
 {
@@ -549,12 +625,14 @@ LxHostFsError lx_host_path_info(const char *path, LxHostFileInfo *info)
         info->allocated = image.size;
         info->readonly = image.readonly;
         info->kind = image.directory ? LX_HOST_FILE_DIRECTORY : LX_HOST_FILE_REGULAR;
+        describe_image(&image, info);
         return LX_HOST_FS_OK;
     }
     struct stat native;
     if (stat(path, &native))
         return fs_error(errno);
     describe(&native, info);
+    lx_host_native_extras(-1, path, info);
     return LX_HOST_FS_OK;
 }
 LxHostFsError lx_host_path_remove(const char *path, int directory)
@@ -650,6 +728,7 @@ LxHostDirectory *lx_host_directory_open(const char *path, LxHostFsError *error)
         return NULL;
     }
     directory->object = object;
+    directory->path = strdup(path);
     if (error)
         *error = LX_HOST_FS_OK;
     return directory;
@@ -707,6 +786,14 @@ int lx_host_directory_read(LxHostDirectory *directory, const char **name, LxHost
             if (fstatat(dirfd(directory->object), entry->d_name, &native, 0))
                 continue;
             describe(&native, info);
+            size_t length = directory->path ? strlen(directory->path) + strlen(entry->d_name) + 2 : 0;
+            char *member = length ? malloc(length) : NULL;
+            if (member)
+            {
+                snprintf(member, length, "%s/%s", directory->path, entry->d_name);
+                lx_host_native_extras(-1, member, info);
+                free(member);
+            }
         }
         *name = entry->d_name;
         if (error)
@@ -738,10 +825,10 @@ void lx_host_directory_close(LxHostDirectory *directory)
             for (size_t i = 0; i < directory->count; i++)
                 free(directory->names[i]);
             free(directory->names);
-            free(directory->path);
         }
         else
             closedir(directory->object);
+        free(directory->path);
         free(directory);
     }
 }

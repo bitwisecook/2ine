@@ -201,12 +201,16 @@ int main(void)
         CHECK(WinIsWindowVisible(title) && WinIsWindowVisible(sys) && WinIsWindowVisible(minmax));
         WinSendMsg(top, WM_SYSCOMMAND, (MPARAM)(uintptr_t)0x8002, 0);
         CHECK(WinQueryWindowULong(top, -2) & WS_MINIMIZED);
+        /* SV_DBLCLKTIME and the double-click rectangle decide the second press. */
         LxHostEvent double_click = {.type = LX_HOST_EVENT_BUTTON_DOWN,
                                     .window_data = test_window(parent),
                                     .x = test_window(top)->x + 2,
                                     .y = test_window(parent)->h - test_window(top)->y - 3,
                                     .button = 1,
-                                    .clicks = 2};
+                                    .clicks = 1};
+        CHECK(processHostEvent(test_anchor(), &double_click));
+        dispatch_pending(anchor);
+        double_click.clicks = 2;
         CHECK(processHostEvent(test_anchor(), &double_click));
         dispatch_pending(anchor);
         CHECK(!(WinQueryWindowULong(top, -2) & WS_MINIMIZED) && WinIsWindowVisible(title));

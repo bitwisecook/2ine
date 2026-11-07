@@ -15,6 +15,10 @@ int lx_host_mailbox_send(LxHostMailbox *mailbox, const void *data, size_t size, 
 int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity, size_t *size,
                             unsigned *priority, uint32_t *token, int peek);
 int lx_host_mailbox_count(LxHostMailbox *mailbox, uint32_t *count, int purge);
+/* Visits each mailbox name with this prefix, including stale ones that a later
+   open reports as missing. Zero when the directory was read, -1 on failure. */
+int lx_host_mailbox_each(const char *directory, const char *prefix,
+                         void (*visit)(const char *name, void *context), void *context);
 /* Revision changes on every successful send, including when readers consume data. */
 int lx_host_mailbox_revision(LxHostMailbox *mailbox, uint32_t *revision);
 #endif

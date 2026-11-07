@@ -46,6 +46,27 @@ ULONG SizeofResource(HMODULE module, ULONG resource)
     return size;
 }
 
+/* Applications read a bitmap resource as a DIB, so its file headers are skipped:
+   an optional 14-byte array header, then the 14-byte header of the image itself. */
+static uint32 bitmap_header(const uint8 *data, uint32 address)
+{
+    if (lx_guest_load_u16(data) == 0x4142) /* BA */
+    {
+        data += 14;
+        address += 14;
+    }
+    switch (lx_guest_load_u16(data))
+    {
+        case 0x4D42: /* BM */
+        case 0x4349: /* IC */
+        case 0x4943: /* CI */
+        case 0x5043: /* CP */
+        case 0x5450: /* PT */
+            return address + 14;
+        default:
+            return address;
+    }
+}
 ULONG LoadResource(HMODULE module, ULONG resource)
 {
     void *data;
@@ -58,7 +79,7 @@ ULONG LoadResource(HMODULE module, ULONG resource)
         open32SetError(1814);
         return 0;
     }
-    return address;
+    return resource >> 16 == 2 ? bitmap_header(data, address) : address;
 }
 
 ULONG LockResource(ULONG resource)

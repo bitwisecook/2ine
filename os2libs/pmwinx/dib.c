@@ -20,9 +20,13 @@ BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
         return TRUE;
     LONG width = (LONG)lx_guest_load_u32(info + 4), height = (LONG)lx_guest_load_u32(info + 8);
     uint64_t rows = height < 0 ? -(int64_t)height : height;
+    ULONG compression = lx_guest_load_u32(info + 16);
+    BOOL compressed = compression == 1 || compression == 2;
     if (width < 1 || width > 16384 || !rows || rows > 16384 || start > rows ||
-        lx_guest_load_u16(info + 12) != 1 || lx_guest_load_u32(info + 16) ||
-        (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
+        lx_guest_load_u16(info + 12) != 1 ||
+        (depth != 1 && depth != 4 && depth != 8 && depth != 16 && depth != 24 && depth != 32) ||
+        compression > 3 || (compression == 1 && depth != 8) || (compression == 2 && depth != 4) ||
+        (compression == 3 && depth != 16 && depth != 32) || (compressed && height < 0))
     {
         open32SetError(87);
         return FALSE;
@@ -38,16 +42,84 @@ BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
         /* DIB_RGB_COLORS tables hold RGBQUADs; DIB_PAL_COLORS tables hold palette indices. */
         *information_bytes += (colors ? colors : 1u << depth) * (usage ? 2 : 4);
     }
-    else if (colors)
-    {
-        open32SetError(50);
-        return FALSE;
-    }
+    else
+        /* Bitfield masks precede any optional palette, which true-color pels do not use. */
+        *information_bytes += (compression == 3 ? 12 : 0) + (size_t)colors * 4;
     uint64_t stride = (((uint64_t)width * depth + 31) / 32) * 4;
     if (count > rows - start)
         count = (ULONG)(rows - start);
-    *pixel_bytes = (size_t)(stride * count);
+    *pixel_bytes = compressed ? lx_guest_load_u32(info + 20) : (size_t)(stride * count);
     return TRUE;
+}
+/* Expands BI_RLE8 or BI_RLE4 into DWORD-aligned bottom-up index rows. */
+static BOOL rle_expand(const uint8 *input, size_t size, unsigned width, unsigned rows,
+                       unsigned depth, uint8 *output, size_t stride)
+{
+    size_t at = 0;
+    unsigned x = 0, y = 0;
+#define RLE_PUT(value)                                                                             \
+    do                                                                                             \
+    {                                                                                              \
+        if (x < width && y < rows)                                                                 \
+        {                                                                                          \
+            uint8 *row = output + (size_t)y * stride;                                              \
+            if (depth == 8)                                                                        \
+                row[x] = (uint8)(value);                                                           \
+            else                                                                                   \
+                row[x / 2] |= (uint8)(((value) & 15) << (x & 1 ? 0 : 4));                          \
+        }                                                                                          \
+        x++;                                                                                       \
+    } while (0)
+    while (at + 1 < size)
+    {
+        unsigned first = input[at++], second = input[at++];
+        if (first)
+        {
+            for (unsigned i = 0; i < first; i++)
+                RLE_PUT(depth == 8 ? second : i & 1 ? second & 15 : second >> 4);
+            continue;
+        }
+        if (second == 0)
+        {
+            x = 0;
+            y++;
+        }
+        else if (second == 1)
+            return TRUE;
+        else if (second == 2)
+        {
+            if (at + 2 > size)
+                return FALSE;
+            x += input[at++];
+            y += input[at++];
+        }
+        else
+        {
+            size_t bytes = depth == 8 ? second : (second + 1) / 2;
+            if (bytes > size - at)
+                return FALSE;
+            for (unsigned i = 0; i < second; i++)
+                RLE_PUT(depth == 8 ? input[at + i]
+                        : i & 1    ? input[at + i / 2] & 15
+                                   : input[at + i / 2] >> 4);
+            at += (bytes + 1) & ~(size_t)1;
+        }
+    }
+#undef RLE_PUT
+    return TRUE;
+}
+static unsigned mask_channel(ULONG value, ULONG mask)
+{
+    if (!mask)
+        return 0;
+    unsigned shift = 0, bits = 0;
+    while (!((mask >> shift) & 1))
+        shift++;
+    while (shift + bits < 32 && ((mask >> (shift + bits)) & 1))
+        bits++;
+    ULONG channel = (value & mask) >> shift;
+    return bits >= 8 ? (unsigned)(channel >> (bits - 8))
+                     : (unsigned)(channel * 255 / ((1u << bits) - 1));
 }
 static uint32 palette_color(ULONG dc, ULONG index)
 {
@@ -87,34 +159,51 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         open32SetError(6);
         return 0;
     }
+    if (!bits && information)
+    {
+        /* Without pixels the caller is asking about the bitmap, so its header need not
+           be complete. A depth of 1-15 asks for the colour table of that format. */
+        uint8 *query = information;
+        unsigned requested = lx_guest_load_u16(query + 14);
+        LxHandleBorrow source = {0};
+        PmBitmap *described = lx_pm_bitmap(handle, &source);
+        if (!described)
+        {
+            lx_handle_release(&source);
+            open32SetError(6);
+            return 0;
+        }
+        if (lx_guest_load_u32(query) != 40 && (!requested || requested >= 16))
+        {
+            lx_handle_release(&source);
+            open32SetError(87);
+            return 0;
+        }
+        unsigned depth = requested ? requested : described->depth;
+        lx_guest_store_u32(query + 4, described->width);
+        lx_guest_store_u32(query + 8, described->height);
+        lx_guest_store_u16(query + 12, 1);
+        lx_guest_store_u16(query + 14, depth);
+        if (!lx_guest_load_u32(query + 20))
+            lx_guest_store_u32(query + 20,
+                               ((described->width * depth + 31) / 32) * 4 * described->height);
+        lx_handle_release(&source);
+        if (!requested || requested >= 16)
+            return 1;
+        count = 0;
+    }
     if (!open32DibBuffers(information, start, count, usage, &info_bytes, &pixel_bytes))
         return 0;
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
-    if (!bitmap || bitmap->selected)
+    if (!bitmap)
     {
         lx_handle_release(&borrow);
-        open32SetError(bitmap ? 87 : 6);
+        open32SetError(6);
         return 0;
     }
     uint8 *info = information;
     unsigned depth = lx_guest_load_u16(info + 14);
-    if (!depth)
-    {
-        memset(info, 0, 40);
-        lx_guest_store_u32(info, 40);
-        lx_guest_store_u32(info + 4, bitmap->width);
-        lx_guest_store_u32(info + 8, bitmap->height);
-        lx_guest_store_u16(info + 12, 1);
-        lx_guest_store_u16(info + 14, bitmap->depth);
-        lx_guest_store_u32(info + 20,
-                           ((bitmap->width * bitmap->depth + 31) / 32) * 4 * bitmap->height);
-        if (bitmap->depth <= 8)
-            lx_guest_store_u32(info + 32, 1u << bitmap->depth);
-        LONG result = (LONG)bitmap->height;
-        lx_handle_release(&borrow);
-        return result;
-    }
     LONG height = (LONG)lx_guest_load_u32(info + 8);
     if (lx_guest_load_u32(info + 4) != bitmap->width ||
         (uint64_t)(height < 0 ? -(int64_t)height : height) != bitmap->height)
@@ -124,7 +213,13 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         return 0;
     }
     uint32 colors[256] = {0};
-    unsigned color_count = (unsigned)((info_bytes - 40) / (usage ? 2 : 4));
+    if (lx_guest_load_u32(info + 16) == 1 || lx_guest_load_u32(info + 16) == 2)
+    {
+        lx_handle_release(&borrow);
+        open32SetError(50);
+        return 0;
+    }
+    unsigned color_count = depth <= 8 ? (unsigned)((info_bytes - 40) / (usage ? 2 : 4)) : 0;
     open32BitmapPalette(depth, colors);
     for (unsigned i = 0; i < color_count; i++)
     {
@@ -158,6 +253,10 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
                     unsigned index = nearest(colors, color_count, rgb), bit = x * depth;
                     output[bit / 8] |= (uint8)(index << (8 - depth - bit % 8));
                 }
+                else if (depth == 16)
+                    lx_guest_store_u16(
+                        output + x * 2,
+                        (uint16)((rgb >> 9 & 0x7c00) | (rgb >> 6 & 0x3e0) | (rgb >> 3 & 0x1f)));
                 else
                 {
                     uint8 *pixel = output + x * (depth / 8);
@@ -195,10 +294,10 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     }
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
-    if (!bitmap || bitmap->selected)
+    if (!bitmap)
     {
         lx_handle_release(&borrow);
-        open32SetError(bitmap ? 87 : 6);
+        open32SetError(6);
         return 0;
     }
     LONG height = (LONG)lx_guest_load_u32(info + 8);
@@ -217,7 +316,16 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         return 0;
     }
     uint32 palette[256] = {0}, destination_colors[256];
-    unsigned colors = (unsigned)((info_bytes - 40) / (usage ? 2 : 4));
+    unsigned colors = depth <= 8 ? (unsigned)((info_bytes - 40) / (usage ? 2 : 4)) : 0;
+    ULONG compression = lx_guest_load_u32(info + 16);
+    ULONG red_mask = depth == 32 ? 0xFF0000 : 0x7C00, green_mask = depth == 32 ? 0xFF00 : 0x3E0,
+          blue_mask = depth == 32 ? 0xFF : 0x1F;
+    if (compression == 3)
+    {
+        red_mask = lx_guest_load_u32(info + 40);
+        green_mask = lx_guest_load_u32(info + 44);
+        blue_mask = lx_guest_load_u32(info + 48);
+    }
     for (unsigned i = 0; i < colors; i++)
         palette[i] = usage ? palette_color(dc, lx_guest_load_u16(info + 40 + i * 2))
                            : lx_guest_load_u32(info + 40 + i * 4) & 0xFFFFFF;
@@ -235,9 +343,24 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     }
     BOOL valid = TRUE;
     unsigned stride = ((bitmap->width * depth + 31) / 32) * 4;
+    uint8 *expanded = NULL;
+    if (compression == 1 || compression == 2)
+    {
+        expanded = calloc((size_t)stride * bitmap->height, 1);
+        if (!expanded)
+        {
+            free(decoded);
+            lx_handle_release(&borrow);
+            open32SetError(8);
+            return 0;
+        }
+        valid =
+            rle_expand(bits, pixel_bytes, bitmap->width, bitmap->height, depth, expanded, stride);
+    }
     for (unsigned row = 0; row < count && valid; row++)
     {
-        const uint8 *source = (const uint8 *)bits + (size_t)row * stride;
+        const uint8 *source = expanded ? expanded + (size_t)(start + row) * stride
+                                       : (const uint8 *)bits + (size_t)row * stride;
         for (unsigned x = 0; x < bitmap->width; x++)
         {
             uint32 rgb;
@@ -251,6 +374,13 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
                     break;
                 }
                 rgb = palette[index];
+            }
+            else if (depth == 16 || compression == 3)
+            {
+                ULONG value = depth == 16 ? lx_guest_load_u16(source + x * 2)
+                                          : lx_guest_load_u32(source + x * 4);
+                rgb = (uint32)mask_channel(value, red_mask) << 16 |
+                      (uint32)mask_channel(value, green_mask) << 8 | mask_channel(value, blue_mask);
             }
             else
             {
@@ -277,6 +407,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         }
     }
     free(decoded);
+    free(expanded);
     lx_handle_release(&borrow);
     if (!valid)
     {
@@ -333,6 +464,79 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
     return TRUE;
 }
 
+/* Under a rotating transform the target is a parallelogram: every device pel inside it maps back
+   through the transform to one source pel, which then goes through the raster operation. */
+static BOOL rotated_blit(ULONG handle, Open32DC *dc, const PmBitmap *bitmap, LONG image_height,
+                         LONG x, LONG y, LONG width, LONG height, LONG source_x, LONG source_y,
+                         LONG source_width, LONG source_height, ULONG operation)
+{
+    LONG ax = x, ay = y, bx = x + width, by = y, cx = x, cy = y + height;
+    LONG dx = x + width, dy = y + height;
+    if (!open32MapPoint(dc, &ax, &ay, TRUE) || !open32MapPoint(dc, &bx, &by, TRUE) ||
+        !open32MapPoint(dc, &cx, &cy, TRUE) || !open32MapPoint(dc, &dx, &dy, TRUE))
+        return FALSE;
+    double ex = (double)bx - ax, ey = (double)by - ay, fx = (double)cx - ax, fy = (double)cy - ay;
+    double determinant = ex * fy - ey * fx;
+    if (determinant == 0)
+        return TRUE;
+    LONG left = ax, right = ax, top = ay, bottom = ay;
+    const LONG xs[3] = {bx, cx, dx}, ys[3] = {by, cy, dy};
+    for (unsigned i = 0; i < 3; i++)
+    {
+        left = xs[i] < left ? xs[i] : left;
+        right = xs[i] > right ? xs[i] : right;
+        top = ys[i] < top ? ys[i] : top;
+        bottom = ys[i] > bottom ? ys[i] : bottom;
+    }
+    LONG canvas_width = open32DCWidth(handle), canvas_height = open32DCHeight(handle);
+    left = left < 0 ? 0 : left;
+    top = top < 0 ? 0 : top;
+    right = right > canvas_width ? canvas_width : right;
+    bottom = bottom > canvas_height ? canvas_height : bottom;
+    if (left >= right || top >= bottom)
+        return TRUE;
+    size_t area = (size_t)(right - left) * (size_t)(bottom - top);
+    uint32 *pixels = area <= 16777216 ? malloc(area * 4) : NULL;
+    if (!pixels || !lx_pm_raster_read(handle, left, canvas_height - bottom, right - left,
+                                      bottom - top, pixels))
+    {
+        free(pixels);
+        return FALSE;
+    }
+    unsigned rop = (operation >> 16) & 255;
+    BOOL pattern = (rop & 15) != (rop >> 4);
+    LONG rows = (LONG)bitmap->height, span_x = source_width < 0 ? -source_width : source_width,
+         span_y = source_height < 0 ? -source_height : source_height;
+    for (LONG py = top; py < bottom; py++)
+        for (LONG px = left; px < right; px++)
+        {
+            double rx = px + 0.5 - ax, ry = py + 0.5 - ay;
+            double u = (rx * fy - ry * fx) / determinant, v = (ry * ex - rx * ey) / determinant;
+            if (u < 0 || u >= 1 || v < 0 || v >= 1)
+                continue;
+            LONG su = (LONG)(u * span_x), sv = (LONG)(v * span_y);
+            LONG sx = source_width > 0 ? source_x + su : source_x - 1 - su;
+            LONG sy = image_height > 0
+                          ? (source_height > 0 ? source_y + source_height - 1 - sv
+                                               : source_y + source_height + sv)
+                          : rows - 1 - (source_height > 0 ? source_y + sv : source_y - 1 - sv);
+            if (sx < 0 || sy < 0 || (ULONG)sx >= bitmap->width || (ULONG)sy >= bitmap->height)
+                continue;
+            size_t index = (size_t)(bottom - 1 - py) * (size_t)(right - left) + (size_t)(px - left);
+            uint32 p = 0, s = bitmap->pixels[(size_t)sy * bitmap->width + sx], d = pixels[index],
+                   result = 0;
+            if (pattern && !open32BrushPixel(dc, px, py, &p))
+                continue;
+            for (unsigned bit = 0; bit < 8; bit++)
+                if (rop & (1u << bit))
+                    result |= (bit & 4 ? p : ~p) & (bit & 2 ? s : ~s) & (bit & 1 ? d : ~d);
+            pixels[index] = result & 0xFFFFFF;
+        }
+    BOOL ok = lx_pm_raster_write(handle, left, canvas_height - bottom, right - left, bottom - top,
+                                 pixels);
+    free(pixels);
+    return ok;
+}
 LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG source_x,
                    LONG source_y, LONG source_width, LONG source_height, PVOID bits,
                    PVOID information, ULONG usage, ULONG operation)
@@ -365,6 +569,26 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
     {
         open32SetError(87);
         return 0;
+    }
+    if (open32Rotated(dc))
+    {
+        ULONG temporary = CreateBitmap(image_width, rows, 1, 24, NULL);
+        LxHandleBorrow lease = {0};
+        PmBitmap *decoded = temporary ? lx_pm_bitmap(temporary, &lease) : NULL;
+        BOOL drawn =
+            decoded &&
+            SetDIBits(handle, temporary, 0, (ULONG)rows, bits, information, usage) == rows &&
+            rotated_blit(handle, dc, decoded, image_height, x, y, width, height, source_x, source_y,
+                         source_width, source_height, operation);
+        lx_handle_release(&lease);
+        if (temporary)
+            DeleteObject(temporary);
+        if (!drawn)
+        {
+            open32SetError(87);
+            return 0;
+        }
+        return source_height < 0 ? -source_height : source_height;
     }
     LONG x2 = (LONG)x_end, y2 = (LONG)y_end;
     if (!open32MapPoint(dc, &x, &y, TRUE) || !open32MapPoint(dc, &x2, &y2, TRUE))

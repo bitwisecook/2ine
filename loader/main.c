@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+#include "hal/host_desktop_bundle.h"
 #include "hal/host_fatal.h"
 #include "hal/host_operation.h"
 #include "network_config.h"
@@ -124,6 +125,9 @@ int main(int argc, char **argv, char **envp)
         }
         modulename = mapped;
     }
+    /* The loader presents the program itself, not the loader, on the host desktop. */
+    lx_desktop_bundle_exec(modulename, argv);
+
     LxModule *lxmod = loadModuleByPath(modulename);
     if (lxmod != NULL)
     {

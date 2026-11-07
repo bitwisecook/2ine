@@ -166,6 +166,44 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
             self.assertFalse(lxapigen.generate(root, check=True))
             self.assertFalse((root / "os2libs/sample-lx.h").exists())
 
+    def test_generator_maps_guest_data_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "guest/bindings").mkdir(parents=True)
+            (root / "os2libs").mkdir()
+            (root / "guest/bindings/api16.json").write_text("{}")
+            (root / "guest/bindings/api32.json").write_text(
+                '{"sample": {"Call": {"argument_bytes": 0, "callee_pop": 0, '
+                '"convention": "LX_ABI_STACK32"}}}'
+            )
+            (root / "os2libs/sample.h").write_text(
+                "#define LX_GUEST_DATA_EXPORT(name, ordinal, bytes) enum { name##_o = ordinal }\n"
+                "OS2EXPORT APIRET OS2API Call(VOID) OS2APIINFO(7);\n"
+                "LX_GUEST_DATA_EXPORT(First, 3, 20);\n"
+                "LX_GUEST_DATA_EXPORT(Second, 9, 8);\n"
+            )
+            self.assertTrue(lxapigen.generate(root))
+            output = (root / "os2libs/generated/sample-lx.h").read_text()
+            self.assertIn("LX_NATIVE_MODULE_INIT_DATA_SUPPORT(48)", output)
+            self.assertIn("LX_NATIVE_INIT_DATA(Second, 32)", output)
+            self.assertIn("if (!initdata_sample()) return 0;", output)
+            self.assertIn("LX_NATIVE_MODULE_DEINIT_DATA_SUPPORT();", output)
+            self.assertLess(
+                output.index("LX_NATIVE_EXPORT_DATA(First, 3)"), output.index("Call, 7")
+            )
+            self.assertLess(
+                output.index("Call, 7"), output.index("LX_NATIVE_EXPORT_DATA(Second, 9)")
+            )
+
+    def test_data_exports_reject_ordinal_collisions(self) -> None:
+        text = "LX_GUEST_DATA_EXPORT(First, 3, 4);\nLX_GUEST_DATA_EXPORT(Second, 3, 4);\n"
+        with self.assertRaisesRegex(ValueError, "duplicate data ordinal"):
+            lxapigen.parse_data_exports(text)
+        data = (lxapigen.DataExport("First", 7, 4),)
+        functions = lxapigen.parse_functions("OS2EXPORT APIRET OS2API Call(VOID) OS2APIINFO(7);\n")
+        with self.assertRaisesRegex(ValueError, "collide"):
+            lxapigen.render("sample", functions, {}, {}, data)
+
     def test_rejects_duplicate_ordinals(self) -> None:
         with self.assertRaisesRegex(ValueError, "duplicate ordinal"):
             lxapigen.parse_functions(

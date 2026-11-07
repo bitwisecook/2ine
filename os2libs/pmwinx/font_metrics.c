@@ -81,18 +81,29 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
         open32SetError(87);
         return 0;
     }
-    FONTMETRICS fonts[12];
-    LONG count = 12;
-    if (GpiQueryFonts(handle, 1, family && *family ? family : NULL, &count, sizeof fonts[0],
-                      fonts) < 0)
+    PSZ wanted = family && *family ? family : NULL;
+    LONG count = 0;
+    LONG total = GpiQueryFonts(handle, 1, wanted, &count, sizeof(FONTMETRICS), NULL);
+    if (total < 0)
     {
         open32SetError(87);
         return 0;
     }
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    FONTMETRICS *fonts = calloc(total ? (size_t)total : 1, sizeof *fonts);
+    LxGuestMapping *mapping =
+        fonts ? lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0) : NULL;
     if (!mapping)
     {
+        free(fonts);
         open32SetError(8);
+        return 0;
+    }
+    count = total;
+    if (count && GpiQueryFonts(handle, 1, wanted, &count, sizeof *fonts, fonts) < 0)
+    {
+        lx_execution_unmap(GLoaderState.execution, mapping);
+        free(fonts);
+        open32SetError(87);
         return 0;
     }
     uint8 *record = lx_execution_mapping_host(mapping);
@@ -126,6 +137,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
             break;
     }
     lx_execution_unmap(GLoaderState.execution, mapping);
+    free(fonts);
     return result;
 }
 LONG EnumFontFamilies(ULONG handle, PSZ family, ULONG procedure, ULONG parameter)
@@ -243,20 +255,24 @@ ULONG GetOutlineTextMetrics(ULONG h, ULONG capacity, PVOID output)
         open32SetError(87);
         return 0;
     }
-    const char *style = metrics.bold ? (metrics.italic ? "Bold Italic" : "Bold")
-                                     : (metrics.italic ? "Italic" : "Regular");
-    const char *names[] = {metrics.family, metrics.face, style, metrics.face};
-    ULONG needed = 212;
-    for (unsigned i = 0; i < 4; i++)
-        needed += (ULONG)strlen(names[i]) + 1;
+    /* PMWINX stores family and face, then an empty style and full name, in a fixed 0x116 record. */
+    const char *names[] = {metrics.family, metrics.face, "", ""};
+    ULONG needed = 0x116;
     if (!output)
         return needed;
     uint8 record[512] = {0};
     lx_guest_store_u32(record, needed);
     memcpy(record + 4, tm, 56);
-    record[61] = 2;
-    record[63] = metrics.bold ? 8 : 5;
-    record[64] = metrics.fixed ? 9 : 3;
+    static const uint8 no_panose[10];
+    if (memcmp(metrics.panose, no_panose, sizeof no_panose))
+        memcpy(record + 61, metrics.panose, sizeof metrics.panose);
+    else
+    {
+        /* Fonts without an OS/2 table are classified from their measured style. */
+        record[61] = 2;
+        record[63] = metrics.bold ? 8 : 5;
+        record[64] = metrics.fixed ? 9 : 3;
+    }
     lx_guest_store_u32(record + 72, (metrics.italic ? 1 : 0) | (metrics.bold ? 0x20 : 0) |
                                         (!metrics.bold && !metrics.italic ? 0x40 : 0));
     lx_guest_store_u32(record + 80, 1);
@@ -274,6 +290,12 @@ ULONG GetOutlineTextMetrics(ULONG h, ULONG capacity, PVOID output)
     lx_guest_store_u32(record + 136, (ULONG)-metrics.descent);
     lx_guest_store_u32(record + 140, (ULONG)metrics.leading);
     lx_guest_store_u32(record + 144, 1);
+    const LONG scripts[] = {metrics.subscript_x_size,     metrics.subscript_y_size,
+                            metrics.subscript_x_offset,   metrics.subscript_y_offset,
+                            metrics.superscript_x_size,   metrics.superscript_y_size,
+                            metrics.superscript_x_offset, metrics.superscript_y_offset};
+    for (unsigned i = 0; i < 8; i++)
+        lx_guest_store_u32(record + 148 + i * 4, (ULONG)scripts[i]);
     lx_guest_store_u32(record + 180, (ULONG)metrics.strikeout_size);
     lx_guest_store_u32(record + 184, (ULONG)metrics.strikeout_position);
     lx_guest_store_u32(record + 188, (ULONG)metrics.underline_size);

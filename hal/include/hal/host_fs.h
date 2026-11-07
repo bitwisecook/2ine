@@ -37,9 +37,18 @@ typedef struct LxHostFileInfo
 {
     uint64_t size, allocated;
     int64_t accessed, modified;
+    int64_t created; /* Zero when the file has no recorded creation time. */
+    unsigned attributes; /* LX_HOST_ATTRIBUTE_* */
     LxHostFileKind kind;
     int readonly;
 } LxHostFileInfo;
+/* A file without a stored record reads as archived, as a newly written OS/2 file does. */
+enum
+{
+    LX_HOST_ATTRIBUTE_HIDDEN = 2,
+    LX_HOST_ATTRIBUTE_SYSTEM = 4,
+    LX_HOST_ATTRIBUTE_ARCHIVED = 0x20
+};
 /* Identity of one host-file version; unavailable for virtual/image paths. */
 typedef struct LxHostFileIdentity
 {
@@ -86,10 +95,15 @@ LxHostFsError lx_host_file_seek(LxHostFile *file, int64_t distance, unsigned ori
 LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info);
 /* Seconds since Unix epoch; INT64_MIN preserves an existing timestamp. */
 LxHostFsError lx_host_file_times(LxHostFile *file, int64_t accessed, int64_t modified);
-/* Seconds since Unix epoch. Zero reports a file without a recorded creation time. */
-LxHostFsError lx_host_file_created(LxHostFile *file, int64_t *seconds);
-/* LX_HOST_FS_INVALID reports a file or filesystem that cannot retain a creation time. */
-LxHostFsError lx_host_file_set_created(LxHostFile *file, int64_t seconds);
+/* Seconds since Unix epoch; INT64_MIN preserves a field. LX_HOST_FS_INVALID reports a
+   filesystem with nowhere to retain the creation time, and changes nothing. */
+LxHostFsError lx_host_file_stamps(LxHostFile *file, int64_t created, int64_t accessed,
+                                  int64_t modified);
+LxHostFsError lx_host_path_stamps(const char *path, int64_t created, int64_t accessed,
+                                  int64_t modified);
+/* Replaces the LX_HOST_ATTRIBUTE_* bits. LX_HOST_FS_INVALID means they cannot be retained. */
+LxHostFsError lx_host_file_attributes(LxHostFile *file, unsigned attributes);
+LxHostFsError lx_host_path_attributes(const char *path, unsigned attributes);
 LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size);
 LxHostFsError lx_host_file_flush(LxHostFile *file);
 /* Blocking advisory whole-file lock, released on descriptor close or process exit. */

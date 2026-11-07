@@ -3,18 +3,24 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
+#include "os2libs/pmwinx/process.h"
 #include "os2libs/doscalls.h"
 #include "hal/host_sync.h"
+#include "hal/host_thread.h"
 #include "hal/host.h"
 typedef struct Open32Thread
 {
     LxHostMonitor *monitor;
     LxGuestMapping *arguments;
-    ULONG public_handle, worker_handle, id, result, suspended;
-    BOOL finished;
+    LxHandleBorrow entry; /* The worker's own borrow, for a killer to retire. */
+    ULONG public_handle, worker_handle, id, result, suspended, adopted_result;
+    BOOL finished, started, adopted;
 } Open32Thread;
+#define CURRENT_THREAD_HANDLE (UINT32_MAX - 1)
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxGuestMapping *entry_code;
+static LxHostOnce adoption_once = LX_HOST_ONCE_INIT;
+static LxHostTlsKey *adopted_key;
 static _Thread_local LxHandleBorrow current_thread;
 static void destroy_thread(void *resource)
 {
@@ -31,8 +37,10 @@ static uint32 start_thread(uint8 *a)
         abort();
     Open32Thread *thread = current_thread.resource;
     lx_host_monitor_lock(thread->monitor);
+    thread->entry = current_thread;
     while (thread->suspended)
         lx_host_monitor_wait(thread->monitor, UINT32_MAX);
+    thread->started = TRUE;
     lx_host_monitor_unlock(thread->monitor);
     return 0;
 }
@@ -46,8 +54,12 @@ static uint32 complete_thread(uint8 *a)
     thread->finished = TRUE;
     lx_host_monitor_wake_all(thread->monitor);
     lx_host_monitor_unlock(thread->monitor);
-    lx_handle_close(thread->worker_handle, LX_HANDLE_OPEN32_THREAD);
-    lx_handle_release(&current_thread);
+    /* An adopted thread's borrow ends with the host thread, in adopted_thread_ended. */
+    if (!thread->adopted)
+    {
+        lx_handle_close(thread->worker_handle, LX_HANDLE_OPEN32_THREAD);
+        lx_handle_release(&current_thread);
+    }
     return 0;
 }
 static void initialize(void)
@@ -141,6 +153,8 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
 }
 BOOL GetExitCodeThread(ULONG handle, PULONG result)
 {
+    if (result && open32ChildThreadExitCode(handle, result))
+        return TRUE;
     LxHandleBorrow borrow = {0};
     if (!result || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {
@@ -154,8 +168,19 @@ BOOL GetExitCodeThread(ULONG handle, PULONG result)
     lx_handle_release(&borrow);
     return TRUE;
 }
+static ULONG dos_thread_call(const char *name, ULONG id)
+{
+    typedef APIRET(OS2API * Fn)(ULONG);
+    Fn call = (Fn)open32DosService(name);
+    return call ? call(id) : 120;
+}
 ULONG ResumeThread(ULONG handle)
 {
+    ULONG child_previous;
+    if (open32ChildThreadResume(handle, &child_previous))
+        return child_previous;
+    if (handle == CURRENT_THREAD_HANDLE)
+        return 0; /* A caller that is running holds no suspension. */
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {
@@ -165,6 +190,19 @@ ULONG ResumeThread(ULONG handle)
     Open32Thread *thread = borrow.resource;
     lx_host_monitor_lock(thread->monitor);
     ULONG previous = thread->suspended;
+    /* Before its start gate a thread needs only the count. An adopted thread may
+       have suspended itself through the pseudo-handle, which keeps no count. */
+    if (thread->started && (previous == 1 || (thread->adopted && !previous)))
+    {
+        ULONG error = dos_thread_call("DosResumeThread", thread->id);
+        if (error)
+        {
+            lx_host_monitor_unlock(thread->monitor);
+            lx_handle_release(&borrow);
+            open32SetError(error);
+            return UINT32_MAX;
+        }
+    }
     if (thread->suspended)
         thread->suspended--;
     if (!thread->suspended)
@@ -175,7 +213,8 @@ ULONG ResumeThread(ULONG handle)
 }
 ULONG WaitForSingleObject(ULONG handle, ULONG timeout)
 {
-    static int (*const waiters[])(ULONG, ULONG, ULONG *) = {open32WaitSemaphore, open32WaitSync};
+    static int (*const waiters[])(ULONG, ULONG, ULONG *) = {open32WaitSemaphore, open32WaitSync,
+                                                            open32WaitProcess};
     ULONG object_result;
     for (size_t i = 0; i < sizeof waiters / sizeof *waiters; i++)
         if (waiters[i](handle, timeout, &object_result))
@@ -211,7 +250,8 @@ VOID ExitThread(ULONG result)
 {
     uint8 arguments[4];
     lx_guest_store_u32(arguments, result);
-    complete_thread(arguments);
+    if (current_thread.resource)
+        complete_thread(arguments);
     GLoaderState.dosExit(0, result);
     abort();
 }
@@ -229,4 +269,174 @@ BOOL SetThreadPriority(ULONG handle, LONG priority)
     /* The host thread provider exposes no scheduling-priority operation. */
     open32SetError(50);
     return FALSE;
+}
+static ULONG suspend_thread(Open32Thread *thread)
+{
+    lx_host_monitor_lock(thread->monitor);
+    if (thread->finished)
+    {
+        lx_host_monitor_unlock(thread->monitor);
+        open32SetError(309);
+        return UINT32_MAX;
+    }
+    ULONG previous = thread->suspended;
+    if (previous || !thread->started)
+    {
+        thread->suspended++;
+        lx_host_monitor_unlock(thread->monitor);
+        return previous;
+    }
+    thread->suspended = 1;
+    lx_host_monitor_unlock(thread->monitor);
+    /* A thread suspending itself parks here, so the monitor must already be free. */
+    ULONG error = dos_thread_call("DosSuspendThread", thread->id);
+    if (!error)
+        return 0;
+    lx_host_monitor_lock(thread->monitor);
+    thread->suspended = 0;
+    lx_host_monitor_unlock(thread->monitor);
+    open32SetError(error);
+    return UINT32_MAX;
+}
+ULONG SuspendThread(ULONG handle)
+{
+    ULONG child_previous;
+    if (open32ChildThreadSuspend(handle, &child_previous))
+        return child_previous;
+    if (handle == CURRENT_THREAD_HANDLE)
+    {
+        if (current_thread.resource)
+            return suspend_thread(current_thread.resource);
+        ULONG error = dos_thread_call("DosSuspendThread", GetCurrentThreadId());
+        if (error)
+            open32SetError(error);
+        return error ? UINT32_MAX : 0;
+    }
+    LxHandleBorrow borrow = {0};
+    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
+    {
+        open32SetError(6);
+        return UINT32_MAX;
+    }
+    ULONG previous = suspend_thread(borrow.resource);
+    lx_handle_release(&borrow);
+    return previous;
+}
+BOOL TerminateThread(ULONG handle, ULONG code)
+{
+    BOOL child_result;
+    if (open32ChildThreadTerminate(handle, code, &child_result))
+        return child_result;
+    Open32Thread *self = current_thread.resource, *thread = self;
+    LxHandleBorrow borrow = {0};
+    if (handle != CURRENT_THREAD_HANDLE)
+    {
+        if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
+        {
+            open32SetError(6);
+            return FALSE;
+        }
+        thread = borrow.resource;
+    }
+    if (thread && thread == self)
+    {
+        lx_handle_release(&borrow);
+        ExitThread(code);
+    }
+    ULONG error = dos_thread_call("DosKillThread", thread ? thread->id : GetCurrentThreadId());
+    if (error)
+    {
+        lx_handle_release(&borrow);
+        open32SetError(error);
+        return FALSE;
+    }
+    if (thread)
+    {
+        /* A killed worker never reaches complete_thread; its handle must still signal. */
+        lx_host_monitor_lock(thread->monitor);
+        BOOL orphaned = !thread->finished && !thread->adopted;
+        /* An adopted thread's own end may run first, so this code always stands. */
+        if (orphaned || thread->adopted)
+        {
+            thread->result = code;
+            thread->finished = TRUE;
+            lx_host_monitor_wake_all(thread->monitor);
+        }
+        lx_host_monitor_unlock(thread->monitor);
+        if (orphaned)
+        {
+            lx_handle_close(thread->worker_handle, LX_HANDLE_OPEN32_THREAD);
+            lx_handle_release(&thread->entry);
+        }
+    }
+    lx_handle_release(&borrow);
+    return TRUE;
+}
+/* Host thread teardown covers every way out: return, DosExit and cancellation. */
+static void adopted_thread_ended(void *value)
+{
+    Open32Thread *thread = value;
+    lx_host_monitor_lock(thread->monitor);
+    if (!thread->finished)
+    {
+        thread->result = thread->adopted_result;
+        thread->finished = TRUE;
+        lx_host_monitor_wake_all(thread->monitor);
+    }
+    lx_host_monitor_unlock(thread->monitor);
+    lx_handle_release(&thread->entry);
+}
+static void note_thread_exit(ULONG code)
+{
+    Open32Thread *thread = current_thread.resource;
+    if (thread && thread->adopted)
+        thread->adopted_result = code;
+}
+static void initialize_adoption(void)
+{
+    typedef void(OS2API * ObserveFn)(void (*)(ULONG));
+    ObserveFn observe = (ObserveFn)open32DosService("lx_doscalls_observe_thread_exit");
+    adopted_key = lx_host_tls_create(adopted_thread_ended);
+    if (observe)
+        observe(note_thread_exit);
+}
+/* A thread not started by CreateThread gains a record that signals when it ends. */
+ULONG open32DuplicateCurrentThread(void)
+{
+    Open32Thread *thread = current_thread.resource;
+    if (thread)
+        return lx_handle_create(LX_HANDLE_OPEN32_THREAD, thread, destroy_thread);
+    lx_host_once(&adoption_once, initialize_adoption);
+    if (!adopted_key)
+        return 0;
+    thread = calloc(1, sizeof *thread);
+    if (thread)
+        thread->monitor = lx_host_monitor_create();
+    if (!thread || !thread->monitor)
+    {
+        free(thread);
+        return 0;
+    }
+    thread->id = GetCurrentThreadId();
+    thread->result = 259;
+    thread->started = thread->adopted = TRUE;
+    ULONG handle = lx_handle_create(LX_HANDLE_OPEN32_THREAD, thread, destroy_thread);
+    if (!handle)
+    {
+        destroy_thread(thread);
+        return 0;
+    }
+    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &current_thread))
+    {
+        lx_handle_close(handle, LX_HANDLE_OPEN32_THREAD);
+        return 0;
+    }
+    thread->entry = current_thread;
+    if (!lx_host_tls_set(adopted_key, thread))
+    {
+        lx_handle_release(&current_thread);
+        lx_handle_close(handle, LX_HANDLE_OPEN32_THREAD);
+        return 0;
+    }
+    return handle;
 }

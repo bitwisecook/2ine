@@ -35,10 +35,13 @@ BOOL GpiDestroyPS(HPS hps)
 }
 LONG GpiLine(HPS hps, PPOINTL point)
 {
+    TRACE_NATIVE("GpiLine(%u, %d,%d)", (uint)hps, point ? (int)point->x : 0, point ? (int)point->y : 0);
     return lx_pm_line(hps, point, 0);
 }
 LONG GpiPolyLine(HPS hps, LONG count, PPOINTL points)
 {
+    TRACE_NATIVE("GpiPolyLine(%u, %d, %d,%d)", (uint)hps, (int)count, points ? (int)points[0].x : 0,
+                 points ? (int)points[0].y : 0);
     TRACE_NATIVE("GpiPolyLine(%u, %d, %p)", (unsigned)hps, (int)count, points);
     if (!lx_pm_valid_ps(hps) || count < 0 || count > 65536 || (count && !points))
         return 0;
@@ -55,6 +58,7 @@ LONG GpiPolyLine(HPS hps, LONG count, PPOINTL points)
 }
 BOOL GpiMove(HPS hps, PPOINTL point)
 {
+    TRACE_NATIVE("GpiMove(%u, %d,%d)", (uint)hps, point ? (int)point->x : 0, point ? (int)point->y : 0);
     return lx_pm_move(hps, point);
 }
 BOOL GpiSetColor(HPS hps, LONG color)
@@ -103,6 +107,7 @@ LONG GpiSetPel(HPS hps, PPOINTL point)
 
 BOOL GpiErase(HPS hps)
 {
+    TRACE_NATIVE("GpiErase(%u)", (uint)hps);
     return lx_pm_erase(hps);
 }
 

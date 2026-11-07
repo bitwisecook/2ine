@@ -34,6 +34,21 @@ HWND WinQueryActiveWindow(HWND desktop)
                ? anchor->active
                : 0;
 }
+/* FC_NOLOSEACTIVE keeps WM_ACTIVATE from the window being deactivated. */
+static void changeActive(AnchorBlock *anchor, HWND handle, ULONG flags)
+{
+    if (!(flags & 8))
+    {
+        WinSetActiveWindow(HWND_DESKTOP, handle);
+        return;
+    }
+    Window *window = getWindowFromHWND(anchor, handle);
+    if (!window)
+        return;
+    anchor->active = handle;
+    sendMessage(window, WM_ACTIVATE, (MPARAM)(uintptr_t)TRUE, (MPARAM)(uintptr_t)handle);
+}
+BOOL lxPmHostFocusReport;
 BOOL WinSetFocus(HWND desktop, HWND handle)
 {
     TRACE_NATIVE("WinSetFocus(%u, %u)", (uint)desktop, (uint)handle);
@@ -56,6 +71,13 @@ BOOL changeFocus(HWND desktop, HWND handle, ULONG flags)
         return TRUE;
     anchor->focus = handle;
     Window *old = getWindowFromHWND(anchor, previous);
+    if (old && (flags & FOCUS_NOTIFY))
+    {
+        sendMessage(old, WM_FOCUSCHANGE, (MPARAM)(uintptr_t)handle,
+                    (MPARAM)(uintptr_t)((flags & 0xffff) << 16));
+        if (!(flags & 0x20)) /* FC_NOLOSESELECTION */
+            sendMessage(old, WM_SETSELECTION, (MPARAM)(uintptr_t)FALSE, 0);
+    }
     if (old && !(flags & 2)) /* FC_NOLOSEFOCUS */
         sendMessage(old, WM_SETFOCUS, (MPARAM)(uintptr_t)handle, 0);
     if (anchor->focus != handle)
@@ -67,13 +89,22 @@ BOOL changeFocus(HWND desktop, HWND handle, ULONG flags)
         Window *root = getWindowFromHWND(anchor, top);
         if (root)
             root->last_focus = handle;
+        if (flags & FOCUS_NOTIFY)
+        {
+            sendMessage(window, WM_FOCUSCHANGE, (MPARAM)(uintptr_t)previous,
+                        (MPARAM)(uintptr_t)(TRUE | (flags & 0xffff) << 16));
+            if (!(flags & 0x10)) /* FC_NOSETSELECTION */
+                sendMessage(window, WM_SETSELECTION, (MPARAM)(uintptr_t)TRUE, 0);
+        }
         if (!(flags & 1)) /* FC_NOSETFOCUS */
             sendMessage(window, WM_SETFOCUS, (MPARAM)(uintptr_t)previous, (MPARAM)(uintptr_t)TRUE);
         if (root && anchor->focus == handle)
         {
             if (anchor->active != top && !(flags & 4)) /* FC_NOSETACTIVE */
-                WinSetActiveWindow(HWND_DESKTOP, top);
-            lx_host_window_focus(root->heavy.window);
+                changeActive(anchor, top, flags);
+            if (!(flags & 3)) /* FC_NOBRINGTOTOP, FC_NOBRINGTOPFIRSTWINDOW */
+                if (!lxPmHostFocusReport)
+                lx_host_window_focus(root->heavy.window);
         }
     }
     return TRUE;
@@ -235,6 +266,16 @@ static unsigned cp437(uint32 point)
             return i;
     return '?';
 }
+/* WM_CHAR carries the queue's code page, chosen with WinSetCp. */
+static unsigned queue_character(AnchorBlock *anchor, uint32 point)
+{
+    unsigned character = cp437(point);
+    ULONG codepage = anchor->message_queue.codepage;
+    if (character < 128 || !codepage || codepage == 437)
+        return character;
+    UCHAR translated = WinCpTranslateChar(anchor->hab, 437, (UCHAR)character, codepage);
+    return translated ? translated : character;
+}
 BOOL releaseInputState(AnchorBlock *anchor, ULONG timestamp)
 {
     Window *window = getWindowFromHWND(anchor, anchor->focus);
@@ -318,7 +359,7 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
                                    (MPARAM)(uintptr_t)(flags | 1 | (anchor->text_scancode ? 4 : 0) |
                                                        (anchor->text_repeat ? 0x80 : 0) | 1u << 16 |
                                                        anchor->text_scancode << 24),
-                                   (MPARAM)(uintptr_t)cp437(point), (ULONG)event->timestamp);
+                                   (MPARAM)(uintptr_t)queue_character(anchor, point), (ULONG)event->timestamp);
         }
         return posted;
     }
@@ -354,10 +395,13 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
     if (navigation)
         parameter |=
             ((flags & 16 ? navigation->control_character : navigation->character) << 8) | 0xe0;
-    return postTimestampedMsg(
+    BOOL posted = postTimestampedMsg(
         anchor, window->hwnd, WM_CHAR,
         (MPARAM)(uintptr_t)(flags | (key ? 2 : 1) | (scan ? 4 : 0) | 1u << 16 | scan << 24),
         (MPARAM)(uintptr_t)parameter, (ULONG)event->timestamp);
+    if (key && event->type != LX_HOST_EVENT_KEY_UP)
+        posted |= postSemanticKey(anchor, window->hwnd, key, flags, (ULONG)event->timestamp);
+    return posted;
 }
 
 ULONG WinGetCurrentTime(HAB hab)

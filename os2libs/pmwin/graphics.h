@@ -26,6 +26,9 @@ BOOL lx_pm_region_query_rects(HPS ps, ULONG region, PRECTL bounds, struct RGNREC
                               PRECTL rects);
 BOOL lx_pm_window_clip(HPS ps, const RECTL *bounds, PmRegion *visible);
 LONG lx_pm_visible_box(HPS ps, RECTL *rectangle);
+typedef HWND (*LxPmDialogClassFactory)(HWND parent, const char *name, const char *text, ULONG style,
+                                       LONG x, LONG y, LONG width, LONG height, ULONG id);
+void lx_pm_set_dialog_class_factory(LxPmDialogClassFactory factory);
 ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles);
 BOOL lx_pm_region_destroy(HPS ps, ULONG region);
 LONG lx_pm_region_set(HPS ps, ULONG region, LONG count, const RECTL *rectangles);
@@ -39,13 +42,14 @@ BOOL lx_pm_mask(HPS ps, LONG x, LONG y, int width, int height, const uint8_t *co
                 const RECTL *bounds);
 void lx_pm_region_cleanup(void *anchor);
 struct PresentationSpace;
-typedef struct PmPalette { ULONG count, colors[256]; } PmPalette;
+typedef struct PmPalette { ULONG count, colors[]; } PmPalette;
 BOOL lx_pm_graphics_clip(struct PresentationSpace *ps, LONG x, LONG y);
 void lx_pm_boundary(struct PresentationSpace *ps, LONG x, LONG y, LONG width, LONG height);
 /* Intersects a device rectangle with the graphics field and viewing limits. */
 void lx_pm_graphics_limits(struct PresentationSpace *ps, RECTL *rect);
 /* Returns GPI_HITS once for primitives that crossed the pick aperture, else GPI_OK. */
 LONG lx_pm_hits(struct PresentationSpace *ps);
+void lx_pm_pick_line(struct PresentationSpace *ps, const POINTL *from, const POINTL *to);
 /* Character-extra spacing converted from world units to device pels. */
 LONG lx_pm_char_extra(struct PresentationSpace *ps);
 typedef struct PmBitmap
@@ -98,6 +102,10 @@ BOOL lx_pm_fill_span(HPS ps, LONG x, LONG y, LONG count, unsigned primitive);
 LONG lx_pm_rgb(LONG index);
 LONG lx_pm_text(HPS ps, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *clip);
+/* Reports the lines lx_pm_draw_text would draw, in PM coordinates, without drawing them. */
+typedef void (*LxPmTextLine)(void *context, LONG x, LONG baseline, const char *text, LONG length);
+LONG lx_pm_draw_text_lines(HPS ps, LONG count, PCH text, PRECTL rect, ULONG flags,
+                           LxPmTextLine sink, void *context);
 LONG lx_pm_draw_text(HPS ps, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
                      ULONG flags, BOOL clip, BOOL opaque_runs);
 BOOL lx_pm_valid_ps(HPS hps);
@@ -106,6 +114,10 @@ HDC lx_pm_open_printer_dc(HAB anchor, LONG type, unsigned kind);
 unsigned lx_pm_dc_dpi(HDC dc);
 LONG lx_pm_display_scale(LONG pixels);
 unsigned lx_pm_printer_kind(HDC dc);
+BOOL lx_pm_printer_size(HDC dc, unsigned *width, unsigned *height);
+BOOL lx_pm_printer_page(HDC dc, unsigned width, unsigned height);
+/* Job properties; they apply to the running job and to jobs started later. */
+BOOL lx_pm_printer_options(HDC dc, unsigned copies, unsigned duplex, BOOL draft);
 LONG lx_pm_print_escape(HDC dc, LONG code, LONG input_count, const void *input, PLONG output_count,
                         void *output);
 LONG lx_pm_close_dc(HDC dc);

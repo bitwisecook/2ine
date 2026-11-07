@@ -3,7 +3,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/windows.h"
-#include "hal/host_library.h"
+#include "os2libs/pmgpi.h"
 static _Thread_local LONG cursor_count;
 static ULONG locked_window; /* WinLockWindowUpdate state is shared by the desktop. */
 LONG ShowCursor(BOOL show)
@@ -68,33 +68,29 @@ BOOL LockWindowUpdate(ULONG window)
     if (window)
     {
         ULONG expected = 0;
-        return __atomic_compare_exchange_n(&locked_window, &expected, window, 0, __ATOMIC_ACQ_REL,
-                                           __ATOMIC_ACQUIRE);
+        if (!__atomic_compare_exchange_n(&locked_window, &expected, window, 0, __ATOMIC_ACQ_REL,
+                                         __ATOMIC_ACQUIRE))
+            return FALSE;
+        lx_pm_set_update_lock(window);
+        return TRUE;
     }
     ULONG previous = __atomic_exchange_n(&locked_window, 0, __ATOMIC_ACQ_REL);
+    lx_pm_set_update_lock(0);
     if (previous && IsWindow(previous))
         InvalidateRect(previous, NULL, TRUE);
     return TRUE;
 }
+BOOL AddFontResource(PSZ path)
+{
+    if (GpiLoadPublicFonts(0, path))
+        return TRUE;
+    open32SetError(3);
+    return FALSE;
+}
 BOOL RemoveFontResource(PSZ path)
 {
-    if (!path || !*path)
-    {
-        open32SetError(87);
-        return FALSE;
-    }
-    /* Font registration belongs to the native GPI provider; resource unloads
-       must affect its catalogue rather than fabricate a successful removal. */
-    typedef BOOL(OS2API * Unload)(ULONG, PSZ);
-    Unload unload = NULL;
-    for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
-        if (module->nativelib && !strcasecmp(module->name, "PMGPI"))
-        {
-            unload = (Unload)lx_host_library_symbol(module->nativelib, "GpiUnloadFonts");
-            break;
-        }
-    BOOL result = unload && unload(open32Presentation(), path);
-    if (!result)
-        open32SetError(unload ? 2 : 50);
-    return result;
+    if (GpiUnloadPublicFonts(0, path))
+        return TRUE;
+    open32SetError(3);
+    return FALSE;
 }

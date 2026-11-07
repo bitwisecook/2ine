@@ -344,6 +344,16 @@ static void selection_contracts(HWND parent)
 static void scrollbar_contracts(HAB hab, HWND parent)
 {
     uint8_t data[14] = {14, 0, 0, 0, 1, 0, 51, 0, 25, 0, 50, 0, 100, 0};
+    /* Dialogs size themselves from these: a long line counts and paints as wrapped lines. */
+    PSZ long_text = "several words that cannot possibly fit on one short line of this control";
+    HWND wrapped = WinCreateWindow(parent, (PSZ)WC_MLE, long_text, 1, 0, 0, 80, 80, parent,
+                                   HWND_TOP, 904, NULL, NULL);
+    HWND unwrapped = WinCreateWindow(parent, (PSZ)WC_MLE, long_text, 0, 0, 0, 80, 80, parent,
+                                     HWND_TOP, 905, NULL, NULL);
+    CHECK(wrapped && unwrapped);
+    CHECK((intptr_t)WinSendMsg(wrapped, 0x1bc, 0, 0) > 1);
+    CHECK((intptr_t)WinSendMsg(unwrapped, 0x1bc, 0, 0) == 1);
+    CHECK(WinDestroyWindow(wrapped) && WinDestroyWindow(unwrapped));
     HWND scroll = WinCreateWindow(parent, (PSZ)WC_SCROLLBAR, "", WS_VISIBLE | 3, 0, 0, 20, 200,
                                   parent, HWND_TOP, 903, data, NULL);
     CHECK(scroll);
@@ -617,7 +627,10 @@ static void menu_tracking_contracts(HWND parent)
     CHECK(!WinQueryUpdateRect(parent, &damage));
     CHECK(bar_window->menu->items[bar_window->menu->selected].item.id == 42);
     WinSendMsg(bar, WM_BUTTON1DOWN, menu_point(bar_window, 42), 0);
-    CHECK(menu_initializations == 1);
+    CHECK(menu_initializations == 1 && !WinIsWindowVisible(file));
+    CHECK(bar_window->menu->selected == -1); /* A second click closes the open menu. */
+    WinSendMsg(bar, WM_BUTTON1DOWN, menu_point(bar_window, 42), 0);
+    CHECK(menu_initializations == 2 && WinIsWindowVisible(file));
     WinSendMsg(file, WM_MOUSEMOVE, menu_point(file_window, 101), 0);
     CHECK(WinIsWindowVisible(nested));
     WinSendMsg(file, WM_MOUSEMOVE, menu_point(file_window, 102), 0);
@@ -627,7 +640,7 @@ static void menu_tracking_contracts(HWND parent)
     WinSendMsg(file, WM_CHAR, (MPARAM)(uintptr_t)2, (MPARAM)(uintptr_t)(0x18u << 16));
     CHECK(file_window->menu->selected == 1);
     WinSendMsg(bar, WM_MOUSEMOVE, menu_point(bar_window, 43), 0);
-    CHECK(menu_initializations == 3 && !WinIsWindowVisible(file) && WinIsWindowVisible(edit));
+    CHECK(menu_initializations == 4 && !WinIsWindowVisible(file) && WinIsWindowVisible(edit));
     changing_menu = 0;
     LxHostEvent click = {.type = LX_HOST_EVENT_BUTTON_DOWN,
                          .window_data = test_window(parent),
@@ -782,6 +795,12 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(GpiMove(ps, &strip_from) && GpiBox(ps, 1, &strip_to, 0, 0));
     CHECK(lx_pm_raster_read(ps, 3, 4, 1, 1, &pixel) && pixel == 0x408080);
     CHECK(GpiRestorePS(ps, rgb_state) && WinFillRect(ps, &fill, CLR_RED));
+    /* Pattern ROPs take no source, and GpiWCBitBlt target corners are inclusive. */
+    POINTL pattern_blit[4] = {{2, 2}, {5, 5}, {0, 0}, {4, 4}};
+    CHECK(GpiSetColor(ps, CLR_BLUE) && GpiWCBitBlt(ps, 0, 4, pattern_blit, 0xF0, 0) == 1);
+    CHECK(lx_pm_raster_read(ps, 5, 5, 1, 1, &pixel) && pixel != 0xff0000);
+    CHECK(lx_pm_raster_read(ps, 6, 6, 1, 1, &pixel) && pixel == 0xff0000);
+    CHECK(WinFillRect(ps, &fill, CLR_RED));
     RECTL outer = {0, 0, 16, 16}, hole = {4, 4, 12, 12};
     ULONG a = GpiCreateRegion(ps, 1, &outer), b = GpiCreateRegion(ps, 1, &hole),
           clipped = GpiCreateRegion(ps, 0, NULL);

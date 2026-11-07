@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "hal/host_process.h"
 #include "hal/host_operation.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #define WIN32_LEAN_AND_MEAN
@@ -30,6 +31,30 @@ int lx_host_child_resume(LxHostChild *child)
     if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
         return 1;
     return ResumeThread(child->thread) == (DWORD)-1 ? -1 : 0;
+}
+int lx_host_child_set_priority(LxHostChild *child, LxHostProcessPriority priority)
+{
+    DWORD selected;
+    switch (priority)
+    {
+        case LX_HOST_PROCESS_PRIORITY_NORMAL:
+            selected = NORMAL_PRIORITY_CLASS;
+            break;
+        case LX_HOST_PROCESS_PRIORITY_IDLE:
+            selected = IDLE_PRIORITY_CLASS;
+            break;
+        case LX_HOST_PROCESS_PRIORITY_REALTIME:
+            errno = ENOTSUP;
+            return -1;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+    if (SetPriorityClass(child->handle, selected))
+        return 0;
+    DWORD error = GetLastError();
+    errno = error == ERROR_ACCESS_DENIED || error == ERROR_PRIVILEGE_NOT_HELD ? EACCES : EIO;
+    return -1;
 }
 static wchar_t *wide(const char *s)
 {
@@ -126,6 +151,7 @@ LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *cons
 {
     return spawn_child(path, argv, env, 0);
 }
+/* CreateProcessW validates the image before the suspended child exists. */
 LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, CREATE_SUSPENDED);

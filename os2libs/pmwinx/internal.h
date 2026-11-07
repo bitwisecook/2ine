@@ -8,6 +8,8 @@ void open32CommonDialogError(ULONG error);
 ULONG open32ScrollWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);
 BOOL open32NativeDialogWindow(ULONG handle);
 BOOL open32NativeControlOwned(ULONG handle);
+void open32SetNativeClassName(ULONG handle, const char *name);
+const char *open32NativeClassName(ULONG handle);
 BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style, LONG x, LONG y,
                                LONG width, LONG height, ULONG parent, ULONG id, ULONG *handle);
 BOOL open32FileDialogWindow(ULONG handle);
@@ -17,6 +19,10 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
 LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set);
 void open32NativeControlsPrune(void);
 ULONG open32ControlNotification(ULONG handle, ULONG packed);
+/* A numeric, #n or RT_RESNAMES-named resource; zero when the name is not found. */
+ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type);
+/* Converts a guest DLGTEMPLATE or DLGTEMPLATEEX to a caller-freed PM template. */
+PVOID open32ConvertDialog(ULONG address);
 /* Maps Win32 control styles to PM; a BS_GROUPBOX button changes *kind to the static class. */
 ULONG open32ControlStyle(ULONG style, unsigned *kind);
 int open32FileIO(ULONG handle, PVOID data, ULONG size, PULONG actual, BOOL writing);
@@ -36,6 +42,11 @@ ULONG open32Presentation(void);
 void open32ContextCleanup(void);
 void open32DdeCleanup(void);
 void open32DdeSetError(ULONG id, ULONG error);
+/* Runs DDE work queued for the calling thread. A thread packet carrying
+   OPEN32_DDE_PACKET asks its target to do so. */
+#define OPEN32_DDE_PACKET 0x7FFDu
+void open32DdeDeliver(void);
+BOOL open32PostThreadPacket(ULONG thread, ULONG message);
 LONG open32FormatGuest(PSZ format, ULONG arguments, PSZ output);
 void open32MenusCleanup(void);
 void open32AcceleratorsCleanup(void);

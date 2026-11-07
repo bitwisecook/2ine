@@ -265,11 +265,14 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
         open32SetError(1801); /* ERROR_INVALID_PRINTER_NAME */
         return FALSE;
     }
-    ULONG fields = lx_guest_load_u32(settings + 40);
-    if ((fields & ~0x2d03u) || ((fields & 1) && lx_guest_load_u16(settings + 44) != 1) ||
-        ((fields & 2) && lx_guest_load_u16(settings + 46) != 9) ||
-        ((fields & 0x100) && lx_guest_load_u16(settings + 54) != 1) ||
-        ((fields & 0x400) && lx_guest_load_u16(settings + 58) != 300) ||
+    ULONG fields = lx_guest_load_u32(settings + 40), paper = lx_guest_load_u16(settings + 46),
+          orientation = lx_guest_load_u16(settings + 44);
+    SHORT quality = (SHORT)lx_guest_load_u16(settings + 58);
+    if ((fields & ~0x3d03u) || ((fields & 1) && orientation != 1 && orientation != 2) ||
+        ((fields & 2) && paper != 1 && paper != 5 && paper != 9) ||
+        ((fields & 0x100) && !lx_guest_load_u16(settings + 54)) ||
+        ((fields & 0x400) && quality != 300 && (quality < -4 || quality > -1)) ||
+        ((fields & 0x1000) && lx_guest_load_u16(settings + 62) > 3) ||
         ((fields & 0x800) && lx_guest_load_u16(settings + 60) != (kind == 1 ? 2 : 1)) ||
         ((fields & 0x2000) && lx_guest_load_u16(settings + 64) != 300))
     {
@@ -277,4 +280,38 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
         return FALSE;
     }
     return TRUE;
+}
+/* The virtual queues print Letter, Legal and A4 at 300 dpi in either orientation. */
+BOOL open32PrinterApply(ULONG handle, PVOID mode)
+{
+    uint8 settings[70];
+    if (!mode)
+        return TRUE;
+    if (!lx_execution_read(GLoaderState.execution, (uint32)(uintptr_t)mode, settings,
+                           sizeof settings))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    ULONG fields = lx_guest_load_u32(settings + 40);
+    ULONG paper = fields & 2 ? lx_guest_load_u16(settings + 46) : 9;
+    unsigned width = paper == 9 ? 2480 : 2550, height = paper == 9   ? 3508
+                                                        : paper == 5 ? 4200
+                                                                     : 3300;
+    BOOL landscape = (fields & 1) && lx_guest_load_u16(settings + 44) == 2;
+    Open32DC *dc = open32FindDC(handle);
+    if (!dc || !lx_pm_printer_page(GpiQueryDevice(handle), landscape ? height : width,
+                                   landscape ? width : height))
+    {
+        open32SetError(8);
+        return FALSE;
+    }
+    if (fields & 0x100)
+        dc->print_copies = lx_guest_load_u16(settings + 54);
+    if (fields & 0x400)
+        dc->print_draft = (SHORT)lx_guest_load_u16(settings + 58) == -1;
+    if (fields & 0x1000)
+        dc->print_duplex = lx_guest_load_u16(settings + 62);
+    return lx_pm_printer_options(GpiQueryDevice(handle), dc->print_copies, dc->print_duplex,
+                                 dc->print_draft);
 }

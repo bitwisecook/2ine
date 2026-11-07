@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Multiline edit storage uses byte offsets and CR/LF line endings. */
 #include "os2libs/pmwin/controls.h"
+#include "os2libs/pmwin/graphics.h"
 
 static BOOL replace(Window *window, size_t position, size_t removed, const char *data, size_t size)
 {
@@ -24,6 +25,26 @@ static BOOL replace(Window *window, size_t position, size_t removed, const char 
     controlRepaint(window);
     controlNotify(window, 7); /* MLN_CHANGE */
     return TRUE;
+}
+static void count_line(void *context, LONG x, LONG baseline, const char *text, LONG length)
+{
+    (void)x;
+    (void)baseline;
+    (void)text;
+    (void)length;
+    ++*(LONG *)context;
+}
+/* Word wrap counts the lines the control paints, using the same break rules. */
+static LONG wrapped_lines(Window *window, const char *text)
+{
+    HPS space = WinGetPS(window->hwnd);
+    if (!space)
+        return 0;
+    RECTL area = {2, 0, window->w - 2, INT32_MAX / 2};
+    LONG lines = 0;
+    lx_pm_draw_text_lines(space, -1, (PCH)text, &area, 0x4000, count_line, &lines);
+    WinReleasePS(space);
+    return lines;
 }
 MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
@@ -75,7 +96,10 @@ MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
         }
         case 0x1bc:
         {
-            LONG count = 1;
+            LONG count = (window->style & 1) ? wrapped_lines(window, text) : 0;
+            if (count)
+                return controlReply(count);
+            count = 1;
             for (const char *p = text; *p; p++)
                 if (*p == '\n')
                     count++;

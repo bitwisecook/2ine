@@ -10,7 +10,7 @@
 #include <string.h>
 #include <unistd.h>
 static LxDesktopGroup *group;
-static int enabled, initialized, auxiliary;
+static int enabled, initialized, auxiliary, standalone;
 int lx_desktop_native_main_thread(void) { return NSThread.isMainThread; }
 static LxDesktopCycle *cycle;
 static id cycle_monitor, cycle_focus_observer;
@@ -150,6 +150,16 @@ static int apply_policy(void *context, int regular)
         regular ? NSApplicationActivationPolicyRegular : NSApplicationActivationPolicyAccessory;
     return NSApp.activationPolicy == policy || [NSApp setActivationPolicy:policy];
 }
+/* A standalone session carries its native identity in its own launch bundle,
+   so a lost lease or window cycle only costs task switching, never windows. */
+static int degrade(void)
+{
+    if (NSApp.activationPolicy != NSApplicationActivationPolicyRegular &&
+        ![NSApp setActivationPolicy:NSApplicationActivationPolicyRegular])
+        return 0;
+    initialized = 1;
+    return 1;
+}
 static NSImage *read_icon(const char *path)
 {
     if (!path)
@@ -236,11 +246,17 @@ int lx_desktop_initialized(void)
         return 1;
     if (!SDL_IsMainThread())
         return SDL_SetError("Desktop session activation requires the SDL main thread");
+    const char *alone = getenv("TWOINE_DESKTOP_STANDALONE");
+    standalone = alone && *alone && strcmp(alone, "0");
     group = lx_desktop_group_open(getenv("TWOINE_IPC_DIR"), getenv("TWOINE_DESKTOP_SESSION"),
                                   auxiliary, apply_policy, NULL);
     if (!group)
+    {
+        if (standalone && degrade())
+            return 1;
         return SDL_SetError(
             "Cannot initialize desktop session activation policy or leadership lease");
+    }
     NSImage *icon = read_icon(getenv("TWOINE_DESKTOP_ICON"));
     if (icon)
         NSApp.applicationIconImage = icon;
@@ -251,6 +267,8 @@ int lx_desktop_initialized(void)
         {
             lx_desktop_group_close(group);
             group = NULL;
+            if (standalone && degrade())
+                return 1;
             return SDL_SetError("Cannot initialize desktop window cycling");
         }
         last_count = -1;
@@ -280,6 +298,8 @@ int lx_desktop_initialized(void)
             cycle = NULL;
             lx_desktop_group_close(group);
             group = NULL;
+            if (standalone && degrade())
+                return 1;
             return SDL_SetError("Cannot register desktop window cycling events");
         }
     }

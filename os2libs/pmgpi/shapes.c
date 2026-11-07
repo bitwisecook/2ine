@@ -6,6 +6,8 @@
 #include "os2libs/pmwin/graphics.h"
 LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG vertical)
 {
+    TRACE_NATIVE("GpiBox(%u, %d, %d,%d)", (uint)handle, (int)control, point ? (int)point->x : 0,
+                 point ? (int)point->y : 0);
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || !point || horizontal < 0 || vertical < 0 || (control & ~0x10000003) ||
         !(control & 3))

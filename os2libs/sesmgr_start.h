@@ -13,4 +13,6 @@ typedef struct LxSessionStart
     void *context;
 } LxSessionStart;
 APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid);
+/* This session's title: from Dos16SMSetTitle, else from its launcher, else empty. */
+void lx_session_title(char *output, size_t capacity);
 #endif

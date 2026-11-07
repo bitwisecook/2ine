@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
+#include "os2libs/pmwinx/process.h"
 #include "os2libs/doscalls.h"
 #include "hal/host_fs.h"
 LONG OpenFile(PSZ name, PVOID record, ULONG flags)
@@ -54,8 +55,8 @@ LONG OpenFile(PSZ name, PVOID record, ULONG flags)
     }
     if (!error && (flags & 0x100))
         return 0;
-    /* Verify/prompt UI and restrictive sharing require a matching provider. */
-    if (!error && ((flags & (0x400 | 0x2000)) || ((flags & 0x70) && (flags & 0x70) != 0x40)))
+    /* Verify and prompt need user interface this call does not provide. */
+    if (!error && (flags & (0x400 | 0x2000)))
         error = 50;
     if (!error && (flags & 0x200))
     {
@@ -72,7 +73,7 @@ LONG OpenFile(PSZ name, PVOID record, ULONG flags)
         OpenFn open = (OpenFn)open32DosService("DosOpen");
         ULONG action;
         error = open ? open(path, &handle, &action, 0, 0, flags & 0x1000 ? 0x12 : 1,
-                            (flags & 3) | 0x40, NULL)
+                            (flags & 3) | ((flags & 0x70) ? flags & 0x70 : 0x40), NULL)
                      : 120;
         if (!error)
         {
@@ -194,7 +195,8 @@ BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overl
 BOOL CloseHandle(ULONG handle)
 {
     static BOOL (*const closers[])(ULONG) = {open32CloseSemaphore, open32CloseSync,
-                                             open32CloseThread, open32CloseFile};
+                                             open32CloseThread,    open32CloseProcess,
+                                             open32CloseFile};
     for (size_t i = 0; i < sizeof closers / sizeof *closers; i++)
         if (closers[i](handle))
             return TRUE;

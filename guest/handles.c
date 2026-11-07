@@ -18,6 +18,7 @@ typedef struct Resource
 typedef struct Slot
 {
     Resource *resource;
+    uint32_t access;
     uint16_t generation;
 } Slot;
 /* Index zero and the 16-bit special-handle range are never returned. */
@@ -89,6 +90,7 @@ uint32_t lx_handle_create(LxHandleKind kind, void *value, void (*destroy)(void *
     r->handles++;
     slot->generation++;
     slot->resource = r;
+    slot->access = UINT32_MAX;
     NextSlot = index + 1;
     if (NextSlot == SLOT_COUNT)
         NextSlot = 1;
@@ -173,14 +175,30 @@ int lx_handle_close(uint32_t handle, LxHandleKind kind)
 {
     return lx_handle_close_guarded(handle, kind, SIZE_MAX, NULL) == 1;
 }
-uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind)
+int lx_handle_access(uint32_t handle, LxHandleKind kind, uint32_t *access)
 {
+    lock();
+    Resource *r = resolve(handle, kind);
+    if (r)
+        *access = Slots[handle & UINT16_MAX].access;
+    lx_host_mutex_unlock(Mutex);
+    return r != NULL;
+}
+uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind, const uint32_t *access)
+{
+    uint32_t source;
     LxHandleBorrow borrow;
-    if (!lx_handle_borrow(handle, kind, &borrow))
+    if (!lx_handle_access(handle, kind, &source) || !lx_handle_borrow(handle, kind, &borrow))
         return 0;
     /* The borrow pins the record, whose value and destructor never change. */
     const Resource *r = borrow.lease;
     uint32_t copy = lx_handle_create(kind, r->value, r->destroy);
+    if (copy)
+    {
+        lock();
+        Slots[copy & UINT16_MAX].access = access ? *access : source;
+        lx_host_mutex_unlock(Mutex);
+    }
     lx_handle_release(&borrow);
     return copy;
 }

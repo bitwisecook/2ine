@@ -184,9 +184,9 @@ int main(int argc, char **argv)
     date.year = 2023;
     CHECK(call_Dos16SetDateTime(&date) == ERROR_TS_DATETIME);
     date.year = 2024;
-    date.timezone = -721;
+    date.timezone = -781;
     CHECK(call_Dos16SetDateTime(&date) == ERROR_TS_DATETIME);
-    date.timezone = 721;
+    date.timezone = 781;
     CHECK(call_Dos16SetDateTime(&date) == ERROR_TS_DATETIME);
     USHORT selector;
     CHECK(!call_Dos16AllocSeg(17, &selector, 0));

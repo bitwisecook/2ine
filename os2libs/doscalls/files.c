@@ -266,6 +266,17 @@ APIRET doDosOpen(PSZ name, PHFILE output, PULONG action, LONGLONG size, ULONG at
         existing != OPEN_ACTION_FAIL_IF_EXISTS)
         file = lx_host_file_open(path, flags & ~LX_HOST_FILE_EXCLUSIVE,
                                  (attributes & FILE_READONLY) != 0, &error);
+    if (created && (attributes & (FILE_HIDDEN | FILE_SYSTEM)))
+    {
+        error = lx_host_file_attributes(
+            file, attributes & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED));
+        if (error)
+        {
+            lx_host_file_close(file);
+            file = NULL;
+            lx_host_path_remove(path, 0);
+        }
+    }
     free(path);
     if (file)
     {
@@ -511,7 +522,8 @@ APIRET16 Dos16QFileMode(PCHAR filepath, PUSHORT attr, ULONG res)
         return fileError(error);
     if (attr)
         *attr = (info.kind == LX_HOST_FILE_DIRECTORY ? FILE_DIRECTORY : 0) |
-                (info.readonly ? FILE_READONLY : 0);
+                (info.readonly ? FILE_READONLY : 0) |
+                (info.attributes & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED));
     return NO_ERROR;
 }
 
@@ -1003,7 +1015,14 @@ APIRET16 Dos16SetFileMode(PCHAR filepath, USHORT attr, ULONG reserved)
     char *path = makeUnixPath(filepath, &error);
     if (!path)
         return error;
-    error = fileError(lx_host_path_readonly(path, (attr & FILE_READONLY) != 0));
+    LxHostFileInfo info;
+    const unsigned attributes = attr & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
+    LxHostFsError result = lx_host_path_info(path, &info);
+    if (!result && attributes != info.attributes)
+        result = lx_host_path_attributes(path, attributes);
+    if (!result)
+        result = lx_host_path_readonly(path, (attr & FILE_READONLY) != 0);
+    error = result == LX_HOST_FS_INVALID ? ERROR_NOT_SUPPORTED : fileError(result);
     free(path);
     return error;
 }

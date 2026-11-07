@@ -210,7 +210,8 @@ ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsi
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor || !width || !height || width > 16384 || height > 16384 ||
         (uint64_t)width * height > 16777216 || planes != 1 ||
-        (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
+        (depth != 1 && depth != 2 && depth != 4 && depth != 8 && depth != 16 && depth != 24 &&
+         depth != 32))
         return 0;
     PmBitmap *bitmap = calloc(1, sizeof *bitmap);
     if (!bitmap)

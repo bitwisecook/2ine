@@ -8,4 +8,5 @@
 
 #include "os2native.h"
 #include "pmshapi.h"
+#include "guest/arguments.h"
 #include "os2libs/generated/pmshapi-lx.h"

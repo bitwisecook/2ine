@@ -1061,6 +1061,24 @@
         "kind": "copy",
         "nullable": false
       }
+    ],
+    "Dos16FSRamSemRequest": [
+      {
+        "name": "sem",
+        "size": "14",
+        "permissions": 3,
+        "kind": "live",
+        "nullable": false
+      }
+    ],
+    "Dos16FSRamSemClear": [
+      {
+        "name": "sem",
+        "size": "14",
+        "permissions": 3,
+        "kind": "live",
+        "nullable": false
+      }
     ]
   },
   "msg": {

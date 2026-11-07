@@ -431,6 +431,19 @@ void *lx_host_window_data(LxHostWindow *window)
 {
     return window ? window->data : NULL;
 }
+void lx_host_window_constrain(LxHostWindow *window, int x, int *y, int width, int height)
+{
+    const SDL_Rect area = {x, *y, width, height};
+    SDL_Rect usable;
+    SDL_DisplayID display = SDL_GetDisplayForRect(&area);
+    if (!window || window->fullscreen || !display || !SDL_GetDisplayUsableBounds(display, &usable))
+        return;
+    int title = 0;
+    if (!SDL_GetWindowBordersSize(window->window, &title, NULL, NULL, NULL))
+        title = 0;
+    if (*y < usable.y + title)
+        *y = usable.y + title;
+}
 int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height)
 {
     prepareRenderer();
@@ -1055,6 +1068,17 @@ int lx_host_video_push(const LxHostEvent *event)
     SDL_Event output = {0};
     output.type = event->type == LX_HOST_EVENT_QUIT ? SDL_EVENT_QUIT : WakeEvent;
     return SDL_PushEvent(&output);
+}
+uint32_t lx_host_key_character(uint32_t scancode, int shifted)
+{
+    for (int key = 0; key < SDL_SCANCODE_COUNT; key++)
+        if (physical_key((SDL_Scancode)key) == scancode)
+        {
+            SDL_Keycode code = SDL_GetKeyFromScancode((SDL_Scancode)key,
+                                                      shifted ? SDL_KMOD_SHIFT : SDL_KMOD_NONE, 0);
+            return code & SDLK_SCANCODE_MASK ? 0 : (uint32_t)code;
+        }
+    return 0;
 }
 void lx_host_mouse_position(int *x, int *y)
 {

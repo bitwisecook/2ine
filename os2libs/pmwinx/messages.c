@@ -203,6 +203,11 @@ static BOOL accept_native(const QMSG *native)
         WinDispatchMsg(open32Presentation(), (PQMSG)native);
         return TRUE;
     }
+    if (thread_packet && message == OPEN32_DDE_PACKET)
+    {
+        open32DdeDeliver();
+        return TRUE;
+    }
     if (message == 15)
         for (QueuedMessage *node = pending; node; node = node->next)
             if (lx_guest_load_u32(node->wire) == open32PublicWindow(native->hwnd) &&
@@ -308,7 +313,8 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
                     open32RunKeyboardHooks(remove ? 0 : 3, node->key.key, node->key.parameter) != 0;
             }
             ULONG window = lx_guest_load_u32(node->wire);
-            if (consumed || (window && !open32FindWindow(window)))
+            if (consumed ||
+                (window && !open32FindWindow(window) && !open32NativeDialogWindow(window)))
             {
                 free(node);
                 continue;
@@ -431,7 +437,9 @@ LONG DispatchMessage(PVOID input)
     if ((!handle && !timer_callback) || message == 18)
         return 0;
     Open32Window *window = open32FindWindow(handle);
-    if (handle && !window)
+    if (handle && !window && message == 0x113 && open32NativeDialogWindow(handle) && !second)
+        return (LONG)(intptr_t)WinSendMsg(handle, WM_TIMER, (MPARAM)(uintptr_t)first, 0);
+    if (handle && !window && !(timer_callback && open32NativeDialogWindow(handle)))
     {
         open32SetError(1400);
         return 0;
@@ -621,6 +629,33 @@ void open32UnregisterThreadQueue(void)
     thread_receiver = 0;
     free(queue);
 }
+BOOL open32PostThreadPacket(ULONG thread, ULONG message)
+{
+    if (!thread_queue_lock)
+        return FALSE;
+    lx_host_monitor_lock(thread_queue_lock);
+    ULONG receiver = 0;
+    for (Open32ThreadQueue *queue = thread_queues; queue; queue = queue->next)
+        if (queue->thread == thread)
+        {
+            receiver = queue->window;
+            break;
+        }
+    BOOL result = receiver && lx_pm_post_open32_message(receiver, message, 0, 0);
+    lx_host_monitor_unlock(thread_queue_lock);
+    return result;
+}
+BOOL open32ThreadQueueWindow(ULONG window)
+{
+    if (!thread_queue_lock)
+        return FALSE;
+    BOOL found = FALSE;
+    lx_host_monitor_lock(thread_queue_lock);
+    for (Open32ThreadQueue *queue = thread_queues; queue && !found; queue = queue->next)
+        found = queue->window == window;
+    lx_host_monitor_unlock(thread_queue_lock);
+    return found;
+}
 BOOL PostThreadMessage(ULONG thread, ULONG message, ULONG first, ULONG second)
 {
     if (thread == GetCurrentThreadId())
@@ -643,10 +678,7 @@ BOOL PostThreadMessage(ULONG thread, ULONG message, ULONG first, ULONG second)
 }
 BOOL ReplyMessage(LONG result)
 {
-    (void)result;
-    /* PMWIN currently dispatches SendMessage synchronously on the calling
-       thread. Windows specifies FALSE outside an interthread SendMessage. */
-    return FALSE;
+    return lx_pm_reply_message((uintptr_t)(ULONG)result);
 }
 BOOL WinXTranslateMsg(ULONG anchor, PVOID input, PVOID output)
 {
@@ -678,6 +710,11 @@ BOOL WinXTranslateMsg(ULONG anchor, PVOID input, PVOID output)
     }
     else if (!open32PmMessage(&message, &kind, &first, &second))
         return FALSE;
+    if (message.hwnd == thread_receiver && kind == OPEN32_DDE_PACKET)
+    {
+        open32DdeDeliver();
+        return FALSE;
+    }
     QueuedMessage *node =
         new_message(message.hwnd == thread_receiver ? 0 : open32PublicWindow(message.hwnd), kind,
                     first, second);

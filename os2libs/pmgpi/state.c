@@ -194,6 +194,10 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
         return FALSE;
     uint8 zero[52] = {0};
     const uint8 *p = attrs ? attrs : zero;
+    TRACE_NATIVE("GpiSetAttrs color=%X back=%X mix=%u back_mix=%u set=%u symbol=%u",
+                 (uint)lx_guest_load_u32(p), (uint)lx_guest_load_u32(p + 4),
+                 (uint)lx_guest_load_u16(p + 8), (uint)lx_guest_load_u16(p + 10),
+                 (uint)lx_guest_load_u16(p + 12), (uint)lx_guest_load_u16(p + 14));
     ULONG supported = primitive == 2 ? 0x1fff : primitive == 1 ? 0x1ff : primitive == 4 ? 0x7f : 15;
     if (mask & ~supported)
         return FALSE;

@@ -63,6 +63,8 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetAttrs(HPS ps, LONG primitive, ULONG mask, ULONG defaults,
                                       PVOID attrs) OS2APIINFO(588);
     OS2EXPORT BOOL OS2API GpiDeleteMetaFile(ULONG handle) OS2APIINFO(375);
+    /* A native metafile object holding a copy of the given bytes. */
+    OS2EXPORT ULONG lx_pm_metafile_create(const void *data, size_t length);
     OS2EXPORT ULONG OS2API GpiLoadMetaFile(HAB hab, PSZ filename) OS2APIINFO(401);
     OS2EXPORT LONG OS2API GpiPlayMetaFile(HPS ps, ULONG handle, LONG count, PLONG options,
                                           PLONG segments, LONG descriptionLength, PSZ description)
@@ -197,6 +199,8 @@ extern "C"
     OS2EXPORT LONG OS2API GpiPointArc(HPS a0, PPOINTL a1) OS2APIINFO(412);
     OS2EXPORT LONG OS2API GpiPtInRegion(HPS a0, ULONG a1, PPOINTL a2) OS2APIINFO(419);
     OS2EXPORT BOOL OS2API GpiQueryDefaultViewMatrix(HPS a0, LONG a1, PVOID a2) OS2APIINFO(443);
+    OS2EXPORT BOOL OS2API GpiLoadPublicFonts(HAB a0, PSZ a1) OS2APIINFO(622);
+    OS2EXPORT BOOL OS2API GpiUnloadPublicFonts(HAB a0, PSZ a1) OS2APIINFO(623);
     OS2EXPORT BOOL OS2API GpiQueryGraphicsField(HPS a0, PRECTL a1) OS2APIINFO(454);
     OS2EXPORT LONG OS2API GpiQueryLineEnd(HPS a0) OS2APIINFO(457);
     OS2EXPORT LONG OS2API GpiQueryLineJoin(HPS a0) OS2APIINFO(458);
@@ -224,6 +228,7 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetPS(HPS a0, PSIZEL a1, ULONG a2) OS2APIINFO(539);
     OS2EXPORT BOOL OS2API GpiSetPickAperturePosition(HPS a0, PPOINTL a1) OS2APIINFO(545);
     OS2EXPORT BOOL OS2API GpiSetStopDraw(HPS a0, LONG a1) OS2APIINFO(550);
+    OS2EXPORT LONG OS2API GpiQueryStopDraw(HPS a0) OS2APIINFO(487);
     OS2EXPORT BOOL OS2API GpiSetViewingLimits(HPS a0, PRECTL a1) OS2APIINFO(552);
     OS2EXPORT LONG OS2API GpiStrokePath(HPS a0, LONG a1, ULONG a2) OS2APIINFO(554);
     OS2EXPORT ULONG OS2API GpiPathToRegion(HPS a0, LONG a1, LONG a2) OS2APIINFO(559);

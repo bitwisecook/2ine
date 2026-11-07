@@ -70,8 +70,11 @@ int lx_handle_borrow(uint32_t handle, LxHandleKind kind, LxHandleBorrow *borrow)
 void lx_handle_release(LxHandleBorrow *borrow);
 int lx_handle_close(uint32_t handle, LxHandleKind kind);
 /* A second handle shares the same resource and destructor. Each handle closes
-   independently; the resource ends with its last handle and borrow. Zero on failure. */
-uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind);
+   independently; the resource ends with its last handle and borrow. Zero on failure.
+   Rights belong to the handle: NULL copies the source's, otherwise *access applies. */
+uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind, const uint32_t *access);
+/* Reads a handle's rights word, which is all ones unless duplication narrowed it. */
+int lx_handle_access(uint32_t handle, LxHandleKind kind, uint32_t *access);
 size_t lx_handle_count(LxHandleKind kind, const void *resource);
 /* Guard runs under the registry lock and must not call registry functions.
    Returns 1 on close, 0 for an invalid handle, -1 when busy. */

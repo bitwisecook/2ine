@@ -97,6 +97,26 @@ LONG ScrollWindowEx(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip, UL
     LONG result = 0;
     if (ok)
     {
+        /* Pending update rectangles travel with the pixels they describe. */
+        LONG height = open32DCHeight(dc), l = 0, t = 0, r = open32DCWidth(dc), b = height;
+        PVOID inputs[] = {scroll, clip};
+        for (unsigned i = 0; i < 2; i++)
+            if (inputs[i])
+            {
+                const uint8 *p = inputs[i];
+                LONG a = (LONG)lx_guest_load_u32(p), c = (LONG)lx_guest_load_u32(p + 4),
+                     d = (LONG)lx_guest_load_u32(p + 8), e = (LONG)lx_guest_load_u32(p + 12);
+                l = a > l ? a : l;
+                t = c > t ? c : t;
+                r = d < r ? d : r;
+                b = e < b ? e : b;
+            }
+        RECTL area = {l, height - b, r, height - t};
+        ok = l >= r || t >= b ||
+             lx_pm_window_scroll_damage(open32ClientWindow(window), &area, dx, -dy);
+    }
+    if (ok)
+    {
         uint8 bounds[16];
         result = GetRgnBox(region, bounds);
         if (flags & 2)

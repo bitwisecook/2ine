@@ -7,6 +7,7 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pm_text.h"
 #include "hal/font.h"
+#include <math.h>
 static LONG text_step(Open32DC *dc, LxHostFont *font, uint8 character, ULONG space_index)
 {
     int64_t result = lx_host_font_advance(font, lx_pm_codepoint(character));
@@ -74,6 +75,28 @@ static char *text_copy(const char *text, LONG count, BOOL format, ULONG flags, L
     *length = used;
     return copy;
 }
+/* A metafile holds formatted text as one positioned, clipped record per line of the same layout
+   the display uses, with the characters returned to the guest's code page. */
+typedef struct TextRecording
+{
+    ULONG handle;
+    LONG height, ascent;
+    const uint8 *clip;
+    ULONG options;
+} TextRecording;
+static void record_line(void *context, LONG x, LONG baseline, const char *line, LONG length)
+{
+    TextRecording *recording = context;
+    char *ansi = malloc(length ? (size_t)length : 1);
+    if (!ansi)
+        return;
+    for (LONG i = 0; i < length; i++)
+        ansi[i] = (char)WinCpTranslateChar(0, 437, (uint8)line[i], 1004);
+    open32MetafileExtText(recording->handle, x, recording->height - baseline - recording->ascent,
+                          recording->options, recording->options ? (PVOID)recording->clip : NULL,
+                          ansi, (ULONG)length, NULL);
+    free(ansi);
+}
 LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
 {
     TRACE_NATIVE("DrawText(%u, '%.*s', %d, %p, %X)", handle, count >= 0 ? count : 80, text, count,
@@ -109,6 +132,18 @@ LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
                      (flags & 8 ? 0x800 : 0) | ((flags & 0x10) && !(flags & 0x20) ? 0x4000 : 0) |
                      (flags & 0x200 ? 0x80 : 0);
     RECTL rect = {left, (LONG)y_bottom, right, (LONG)y_top}, measured = rect;
+    LxHostFontMetrics line_metrics;
+    if (!(flags & 0x400) && open32IsMetafile(handle) && length &&
+        lx_host_font_metrics(lx_pm_font(handle), &line_metrics))
+    {
+        TextRecording recording = {handle, open32DCHeight(handle), line_metrics.ascent, wire,
+                                   flags & 0x100 ? 0 : 4};
+        const LONG none = 0, restored = (LONG)dc->text_alignment;
+        RECTL layout = rect;
+        open32MetafileWords(handle, 0x12e, 1, &none);
+        lx_pm_draw_text_lines(handle, length, copy, &layout, pm_flags, record_line, &recording);
+        open32MetafileWords(handle, 0x12e, 1, &restored);
+    }
     LONG foreground = rgb_color(dc->text_color), background = rgb_color(dc->background_color);
     LONG result = 0;
     if (length && lx_pm_draw_text(handle, length, copy, &measured, foreground, background,
@@ -325,7 +360,7 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
     }
     LONG reference_x = dc->text_alignment & 1 ? dc->position_x : x;
     LONG reference_y = dc->text_alignment & 1 ? dc->position_y : y;
-    LONG logical_x = x, device_x = reference_x, device_y = reference_y;
+    LONG device_x = reference_x, device_y = reference_y;
     if (!open32MapPoint(dc, &device_x, &device_y, TRUE))
     {
         free(copy);
@@ -382,7 +417,6 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
         if (!(flags & 4) || WinIntersectRect(0, &background, &background, &area))
             result = WinFillRect(handle, &background, rgb_color(dc->background_color));
     }
-    open32MetafileText(handle, logical_x, y, text, count);
     spaces = 0;
     POINTL point = {x, (LONG)baseline};
     for (LONG i = 0; result && i < length; i++)
@@ -407,27 +441,220 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
     free(copy);
     return result;
 }
-/* Glyphs keep their device size under a mapping mode; origins and explicit advances scale. */
+/* Logical font heights scale with the mapping, so text is drawn with a font realized at the
+   device size and explicit advances scale by the same horizontal factor. */
+/* Under rotation or shear each glyph renders through the transform's direction, along a baseline
+   that runs the same way. The font is already realized at the mapped size. */
+static BOOL rotated_text(ULONG handle, Open32DC *dc, LONG x, LONG y, ULONG flags, PVOID rectangle,
+                         PCHAR text, ULONG count, const uint8 *advances)
+{
+    LONG reference_x = dc->text_alignment & 1 ? dc->position_x : x;
+    LONG reference_y = dc->text_alignment & 1 ? dc->position_y : y;
+    LONG ox = 0, oy = 0, rx = 1024, ry = 0, ux = 0, uy = 1024, px = reference_x, py = reference_y;
+    LxHostFont *font = lx_pm_font(handle);
+    LxHostFontMetrics metrics;
+    if (!open32MapPoint(dc, &ox, &oy, TRUE) || !open32MapPoint(dc, &rx, &ry, TRUE) ||
+        !open32MapPoint(dc, &ux, &uy, TRUE) || !open32MapPoint(dc, &px, &py, TRUE) ||
+        !lx_host_font_metrics(font, &metrics))
+        return FALSE;
+    double ax = (double)rx - ox, ay = (double)ry - oy, bx = (double)ux - ox, by = (double)uy - oy;
+    double across = hypot(ax, ay), down = hypot(bx, by);
+    if (!across || !down)
+        return TRUE;
+    ax /= across;
+    ay /= across;
+    bx /= down;
+    by /= down;
+    /* y-up glyph space into y-up device space: x along the baseline, y against logical down. */
+    const double matrix[4] = {ax, -bx, -ay, by};
+    LONG length = 0;
+    char *copy = count ? text_copy(text, (LONG)count, FALSE, 0, &length) : NULL;
+    if (count && !copy)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    double total = 0;
+    ULONG spaces = 0;
+    for (LONG i = 0; i < length; i++)
+    {
+        total += advances ? (LONG)lx_guest_load_u32(advances + i * 4)
+                          : text_step(dc, font, (uint8)copy[i], spaces);
+        if (copy[i] == ' ')
+            spaces++;
+    }
+    ULONG horizontal = dc->text_alignment & 6, vertical = dc->text_alignment & 24;
+    double along = horizontal == 2 ? -total : horizontal == 6 ? -total / 2 : 0;
+    double rise = vertical == 24 ? 0 : vertical == 8 ? -metrics.descent : metrics.ascent;
+    double pen_x = px + ax * along + bx * rise, pen_y = py + ay * along + by * rise;
+    LONG height = open32DCHeight(handle);
+    if ((flags & 2) || dc->background_mode == 2)
+    {
+        ULONG brush = CreateSolidBrush(dc->background_color & 0xFFFFFF);
+        BOOL filled = brush != 0;
+        if (brush && (flags & 2))
+        {
+            const uint8 *wire = rectangle;
+            filled = open32RotatedFill(
+                handle, (LONG)lx_guest_load_u32(wire), (LONG)lx_guest_load_u32(wire + 4),
+                (LONG)lx_guest_load_u32(wire + 8), (LONG)lx_guest_load_u32(wire + 12), brush);
+        }
+        else if (brush && length)
+        {
+            /* The cell's four corners, carried back into logical space for the fill. */
+            uint8 cell[32];
+            const double corners[4][2] = {
+                {pen_x - bx * metrics.ascent, pen_y - by * metrics.ascent},
+                {pen_x + ax * total - bx * metrics.ascent,
+                 pen_y + ay * total - by * metrics.ascent},
+                {pen_x + ax * total + bx * metrics.descent,
+                 pen_y + ay * total + by * metrics.descent},
+                {pen_x + bx * metrics.descent, pen_y + by * metrics.descent}};
+            for (unsigned i = 0; i < 4 && filled; i++)
+            {
+                LONG lx = (LONG)lround(corners[i][0]), ly = (LONG)lround(corners[i][1]);
+                filled = open32MapPoint(dc, &lx, &ly, FALSE);
+                lx_guest_store_u32(cell + i * 8, (ULONG)lx);
+                lx_guest_store_u32(cell + i * 8 + 4, (ULONG)ly);
+            }
+            ULONG old_brush = open32SelectBrush(dc, brush),
+                  old_pen = open32SelectPen(dc, GetStockObject(8));
+            filled = filled && Polygon(handle, cell, 4);
+            open32SelectPen(dc, old_pen);
+            open32SelectBrush(dc, old_brush);
+        }
+        if (brush)
+            DeleteObject(brush);
+        if (!filled)
+        {
+            free(copy);
+            return FALSE;
+        }
+    }
+    LONG saved = 0;
+    if (flags & 4)
+    {
+        /* The clip rectangle turns with the text, so it selects as a polygon in device space. */
+        const uint8 *wire = rectangle;
+        uint8 corners[32];
+        const LONG logical[8] = {
+            (LONG)lx_guest_load_u32(wire),     (LONG)lx_guest_load_u32(wire + 4),
+            (LONG)lx_guest_load_u32(wire + 8), (LONG)lx_guest_load_u32(wire + 4),
+            (LONG)lx_guest_load_u32(wire + 8), (LONG)lx_guest_load_u32(wire + 12),
+            (LONG)lx_guest_load_u32(wire),     (LONG)lx_guest_load_u32(wire + 12)};
+        BOOL mapped = TRUE;
+        for (unsigned i = 0; i < 4; i++)
+        {
+            LONG cx = logical[i * 2], cy = logical[i * 2 + 1];
+            mapped = mapped && open32MapPoint(dc, &cx, &cy, TRUE);
+            lx_guest_store_u32(corners + i * 8, (ULONG)cx);
+            lx_guest_store_u32(corners + i * 8 + 4, (ULONG)cy);
+        }
+        ULONG region = mapped ? CreatePolygonRgn(corners, 4, 1) : 0;
+        saved = region ? SaveDC(handle) : 0;
+        if (saved)
+            ExtSelectClipRgn(handle, region, 1);
+        if (region)
+            DeleteObject(region);
+        if (!saved)
+        {
+            free(copy);
+            return FALSE;
+        }
+    }
+    BOOL result = TRUE;
+    spaces = 0;
+    for (LONG i = 0; result && i < length; i++)
+    {
+        LxHostGlyph glyph;
+        LONG step = advances ? (LONG)lx_guest_load_u32(advances + i * 4)
+                             : text_step(dc, font, (uint8)copy[i], spaces);
+        if (copy[i] == ' ')
+            spaces++;
+        result = lx_host_font_glyph_matrix(font, lx_pm_codepoint((uint8)copy[i]), matrix, &glyph);
+        if (result)
+        {
+            LONG gx = (LONG)lround(pen_x), gy = height - (LONG)lround(pen_y);
+            result = lx_pm_mask(handle, gx + glyph.left, gy + glyph.top - glyph.height, glyph.width,
+                                glyph.height, glyph.coverage, rgb_color(dc->text_color), NULL);
+            lx_host_glyph_free(&glyph);
+        }
+        pen_x += ax * step;
+        pen_y += ay * step;
+    }
+    free(copy);
+    if (saved)
+        RestoreDC(handle, saved);
+    if (result && (dc->text_alignment & 1))
+    {
+        LONG next_x = (LONG)lround(px + ax * total), next_y = (LONG)lround(py + ay * total);
+        if (open32MapPoint(dc, &next_x, &next_y, FALSE))
+        {
+            dc->position_x = next_x;
+            dc->position_y = next_y;
+        }
+    }
+    return result;
+}
+static double axis_scale(Open32DC *dc, LONG dx, LONG dy)
+{
+    LONG ax = 0, ay = 0, bx = dx, by = dy;
+    if (!open32MapPoint(dc, &ax, &ay, TRUE) || !open32MapPoint(dc, &bx, &by, TRUE))
+        return 1;
+    return hypot((double)bx - ax, (double)by - ay) / 1024;
+}
 BOOL ExtTextOut(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle, PCHAR text, ULONG count,
                 PLONG advances)
 {
     Open32DC *dc = open32FindDC(handle);
-    if (!advances || !dc || !count || count > 65536 || open32IdentityMapping(dc))
-        return text_out(handle, x, y, flags, rectangle, text, count, advances);
-    uint8 *scaled = malloc((size_t)count * 4);
-    if (!scaled)
+    BOOL result;
+    if (!dc || count > 65536 || open32IdentityMapping(dc))
+        result = text_out(handle, x, y, flags, rectangle, text, count, advances);
+    else
     {
-        open32SetError(8);
-        return FALSE;
+        double scale_x = axis_scale(dc, 1024, 0), scale_y = axis_scale(dc, 0, 1024);
+        uint8 *scaled = advances && count ? malloc((size_t)count * 4) : NULL;
+        if (advances && count && !scaled)
+        {
+            open32SetError(8);
+            return FALSE;
+        }
+        for (ULONG i = 0; scaled && i < count; i++)
+            lx_guest_store_u32(
+                scaled + i * 4,
+                (ULONG)(LONG)lround((LONG)lx_guest_load_u32((const uint8 *)advances + i * 4) *
+                                    scale_x));
+        uint8 logfont[60];
+        LxHostFontMetrics metrics;
+        ULONG previous = dc->font_handle, realized = 0;
+        if (open32FontObject(previous, sizeof logfont, logfont) == 60 &&
+            lx_host_font_metrics(lx_pm_font(handle), &metrics))
+        {
+            LONG height = (LONG)lx_guest_load_u32(logfont),
+                 width = (LONG)lx_guest_load_u32(logfont + 4);
+            lx_guest_store_u32(logfont,
+                               (ULONG)(LONG)lround((height ? height : -metrics.em) * scale_y));
+            lx_guest_store_u32(logfont + 4, (ULONG)(LONG)lround(width * scale_x));
+            realized = CreateFontIndirect(logfont);
+            if (realized && !open32SelectFont(dc, realized))
+            {
+                DeleteObject(realized);
+                realized = 0;
+            }
+        }
+        const uint8 *widths = scaled ? scaled : (const uint8 *)advances;
+        result = open32Rotated(dc)
+                     ? rotated_text(handle, dc, x, y, flags, rectangle, text, count, widths)
+                     : text_out(handle, x, y, flags, rectangle, text, count, (PLONG)widths);
+        if (realized)
+        {
+            open32SelectFont(dc, previous);
+            DeleteObject(realized);
+        }
+        free(scaled);
     }
-    int64_t numerator = llabs((int64_t)dc->viewport_width),
-            denominator = llabs((int64_t)dc->window_width);
-    for (ULONG i = 0; i < count; i++)
-        lx_guest_store_u32(scaled + i * 4,
-                           (ULONG)(LONG)((LONG)lx_guest_load_u32((const uint8 *)advances + i * 4) *
-                                         numerator / denominator));
-    BOOL result = text_out(handle, x, y, flags, rectangle, text, count, (PLONG)scaled);
-    free(scaled);
+    if (result)
+        open32MetafileExtText(handle, x, y, flags, rectangle, text, count, advances);
     return result;
 }
 

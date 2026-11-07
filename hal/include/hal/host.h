@@ -24,6 +24,8 @@ typedef struct LxHostCalendar
 uint64_t lx_host_realtime_us(void);
 int lx_host_calendar_seconds(const LxHostCalendar *calendar, int utc, int64_t *seconds);
 int lx_host_calendar(int64_t seconds, int utc, LxHostCalendar *result);
+/* Abbreviated names of the host zone's standard and daylight time. */
+void lx_host_zone_names(char standard[32], char daylight[32]);
 void lx_host_process_ids(uint32_t *process, uint32_t *parent);
 size_t lx_host_stack_limit(void);
 #if defined(_MSC_VER)

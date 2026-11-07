@@ -62,3 +62,8 @@ int lx_host_process_set_priority(LxHostProcessPriority priority)
             return -1;
     }
 }
+
+int lx_host_process_set_level(int id, int value)
+{
+    return setpriority(PRIO_PROCESS, (id_t)id, value);
+}

@@ -330,3 +330,8 @@ Display DPI is stored per ball and applies at next launch. Choose 96, 120, 144 o
 numbers 72–384 through Settings. Fonts, dialog units, physical drawing units and
 control metrics share the setting; printer DPI stays at 300. Applications with
 custom pixel layouts must still honor the OS/2 DPI APIs.
+
+Colour depth is also per ball and applies at next launch. `system.display_depth`
+accepts 4, 8, 16 or 24 and defaults to 24. It sets the depth OS/2 applications
+are told about, so they choose palettes and dithering as on that display; 2ine
+still draws in true colour.

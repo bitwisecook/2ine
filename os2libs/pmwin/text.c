@@ -98,8 +98,9 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
     ps->position = end;
     return lx_pm_hits(ps);
 }
-LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
-                     LONG background, ULONG flags, BOOL clip, BOOL opaque_runs)
+static LONG draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
+                      LONG background, ULONG flags, BOOL clip, BOOL opaque_runs, LxPmTextLine sink,
+                      void *context)
 {
     TRACE_NATIVE("WinDrawText(%u, %d, %p, %p, %d, %d, %u)", (uint)handle, (int)count, text, rect,
                  (int)foreground, (int)background, (uint)flags);
@@ -139,6 +140,7 @@ LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregro
     }
     copy[used] = 0;
     LONG lines = 0, start = 0, width = 0, last_space = -1, space_width = 0;
+    LONG extra = lx_pm_char_extra(ps);
     starts[0] = 0;
     LONG available = rect->xRight - rect->xLeft;
     for (LONG i = 0; i < used; i++)
@@ -146,6 +148,7 @@ LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregro
         int advance = lx_host_font_advance(font, lx_pm_codepoint((uint8)copy[i]));
         if (advance < 0)
             advance = 0;
+        advance += extra;
         if (copy[i] == ' ')
         {
             last_space = i;
@@ -190,7 +193,7 @@ LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregro
     }
     else
     {
-        if ((flags & 0x8000) && !WinFillRect(handle, rect, background))
+        if (!sink && (flags & 0x8000) && !WinFillRect(handle, rect, background))
             result = 0;
         for (LONG line = 0; result && line < lines; line++)
         {
@@ -199,6 +202,12 @@ LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregro
                 x += (available - widths[line]) / 2;
             else if (flags & 0x200)
                 x += available - widths[line];
+            if (sink)
+            {
+                sink(context, x, top - line * height - metrics.ascent, copy + starts[line],
+                     lengths[line]);
+                continue;
+            }
             if (opaque_runs && widths[line])
             {
                 RECTL run = {x, top - (line + 1) * height, x + widths[line], top - line * height};
@@ -220,6 +229,17 @@ LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregro
     return result;
 }
 
+LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
+                     LONG background, ULONG flags, BOOL clip, BOOL opaque_runs)
+{
+    return draw_text(handle, count, text, rect, foreground, background, flags, clip, opaque_runs,
+                     NULL, NULL);
+}
+LONG lx_pm_draw_text_lines(HPS handle, LONG count, PCH text, PRECTL rect, ULONG flags,
+                           LxPmTextLine sink, void *context)
+{
+    return draw_text(handle, count, text, rect, 0, 0, flags & ~2u, FALSE, FALSE, sink, context);
+}
 LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
                  ULONG flags)
 {

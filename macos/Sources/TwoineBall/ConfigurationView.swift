@@ -26,6 +26,7 @@ struct DisplayConfigurationView: View {
     @State private var beep = 0.05
     @State private var editingBeep = false
     private var dpi: Int { Int(Double(model.snapshot?.manifest.system["display_dpi"]?.text ?? "96") ?? 96) }
+    private var depth: Int { Int(Double(model.snapshot?.manifest.system["display_depth"]?.text ?? "24") ?? 24) }
     var body: some View {
         ScrollViewReader { proxy in
             Form {
@@ -43,6 +44,9 @@ struct DisplayConfigurationView: View {
                         ForEach([96, 120, 144, 192], id: \.self) { value in Text("\(value) DPI (\(value * 100 / 96)%)").tag(value) }
                         if ![96, 120, 144, 192].contains(dpi) { Text("\(dpi) DPI (Custom)").tag(dpi) }
                     }.accessibilityIdentifier("displayDPI")
+                    Picker("Colour Depth", selection: Binding(get: { depth }, set: { model.command(["config", "system.display_depth", String($0)]) })) {
+                        ForEach([24, 16, 8, 4], id: \.self) { value in Text("\(value)-bit").tag(value) }
+                    }.accessibilityIdentifier("displayDepth")
                     Text("Applies when an application next starts. OS/2 fonts, dialog units and control metrics scale together. Printer resolution remains 300 DPI.")
                         .foregroundStyle(.secondary)
                 }

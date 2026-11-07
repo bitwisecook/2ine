@@ -5,9 +5,12 @@
 #include "hal/host_process.h"
 #include "hal/host_operation.h"
 #include "hal/host.h"
+#include <dirent.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <spawn.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #include <signal.h>
 #include <errno.h>
@@ -81,6 +84,9 @@ static LxHostChild *spawn_child(const char *path, char *const *argv, char *const
    between fork and exec, which keeps this valid in a threaded process. */
 LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, char *const *env)
 {
+    /* exec runs only after resume, too late to report a failure to this caller. */
+    if (access(path, X_OK))
+        return NULL;
     LxHostChild *child = calloc(1, sizeof *child);
     if (!child)
         return NULL;
@@ -229,6 +235,36 @@ int lx_host_child_suspend(LxHostChild *child)
 int lx_host_child_resume(LxHostChild *child)
 {
     return signal_child(child, SIGCONT);
+}
+int lx_host_child_set_priority(LxHostChild *child, LxHostProcessPriority priority)
+{
+    int value;
+    switch (priority)
+    {
+        case LX_HOST_PROCESS_PRIORITY_NORMAL:
+            value = 0;
+            break;
+        case LX_HOST_PROCESS_PRIORITY_IDLE:
+            value = 19;
+            break;
+        case LX_HOST_PROCESS_PRIORITY_REALTIME:
+            errno = ENOTSUP;
+            return -1;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+    int cancellation;
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cancellation);
+    pthread_mutex_lock(&child->mutex);
+    LxHostChildStatus status;
+    int polled = poll_child(child, &status);
+    int result = polled ? -1 : lx_host_process_set_level((int)child->id, value);
+    if (polled == 1)
+        errno = ESRCH;
+    pthread_mutex_unlock(&child->mutex);
+    pthread_setcancelstate(cancellation, NULL);
+    return result;
 }
 static void *reap(void *arg)
 {

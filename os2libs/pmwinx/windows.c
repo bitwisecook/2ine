@@ -1,9 +1,11 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 custom windows translate their lifecycle callbacks through PM. */
+#include "guest/launch_record.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwin/open32_post.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwinx/internal.h"
+#include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwin/internal.h"
 #include <stdio.h>
 static _Thread_local Open32Window *windows, *creating;
@@ -49,6 +51,18 @@ ULONG open32PublicWindow(ULONG handle)
     Open32Window *window = open32FindWindow(handle);
     return window ? window->handle : handle;
 }
+/* WM_SETCURSOR runs before each uncaptured mouse move. An unhandled message selects the
+   class cursor; a class without one leaves the current cursor in place. */
+static void update_cursor(Open32Window *w, HWND handle)
+{
+    if (WinQueryCapture(HWND_DESKTOP))
+        return;
+    const ULONG client_hit = 1, mouse_move = 0x200;
+    if (!open32WindowCallback(w, 0x20, open32PublicWindow(handle),
+                              client_hit | mouse_move << 16) &&
+        w->class && w->class->cursor)
+        SetCursor(w->class->cursor);
+}
 ULONG open32WindowCallback(Open32Window *w, ULONG message, ULONG first, ULONG second)
 {
     return lx_execution_callback32_4(GLoaderState.execution, w->procedure, w->handle, message,
@@ -69,6 +83,8 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
     ULONG queued_result;
     if (open32QueuedCallback(handle, message, &queued_result))
         return (MRESULT)(uintptr_t)queued_result;
+    if (message == WM_MOUSEMOVE)
+        update_cursor(w, handle);
     switch (message)
     {
         case WM_RENDERFMT:
@@ -104,6 +120,11 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
             open32QueueWindowDestroyed(w->handle);
             return NULL;
         case WM_SIZE:
+            /* A resized host surface starts blank, so everything on it is erased again. */
+            w->erase_pending = TRUE;
+            for (Open32Window *child = windows; child; child = child->next)
+                if (WinIsChild(child->client ? child->client : child->handle, handle))
+                    child->erase_pending = TRUE;
             resize_children(w, (LONG)((uintptr_t)second >> 16 & 0xFFFF) -
                                    (LONG)((uintptr_t)first >> 16 & 0xFFFF));
             return (MRESULT)(uintptr_t)open32WindowCallback(w, 5, 0, (ULONG)(uintptr_t)second);
@@ -155,6 +176,11 @@ static MRESULT OS2API window_procedure(HWND handle, ULONG message, MPARAM first,
                 return (MRESULT)(uintptr_t)open32WindowCallback(w, translated, a, b);
             return 0;
         }
+        case 0x32e: /* DM_DRAGOVER */
+        case 0x32f: /* DM_DROP */
+            return (MRESULT)(uintptr_t)open32DragMessage(
+                handle, (w->extended_style & 0x10) != 0, message, (ULONG)(uintptr_t)first,
+                (ULONG)(uintptr_t)second);
         default:
             if (message >= WM_USER)
                 return (MRESULT)(uintptr_t)open32WindowCallback(w, message - WM_USER + 0x400,
@@ -220,6 +246,31 @@ static void discard_window(Open32Window *w)
     free(w->title);
     free(w);
 }
+/* A superclass runs its own procedure over a PM control, and sees creation first. */
+static void superclass_control(ULONG control, Open32Class *class, PSZ title, ULONG style, LONG x,
+                               LONG y, LONG width, LONG height, ULONG parent, ULONG menu,
+                               ULONG instance, ULONG parameter, ULONG extended_style)
+{
+    open32SetNativeClassName(control, class->name);
+    open32NativeWindowLong(control, -4, (LONG)class->procedure, TRUE);
+    size_t title_bytes = strlen(title ? title : "") + 1;
+    LxGuestMapping *creation = lx_execution_map(GLoaderState.execution, 0,
+                                                (title_bytes + 48 + 4095) & ~(size_t)4095, 3, 0);
+    if (!creation)
+        return;
+    uint32 address = lx_execution_mapping_address(creation);
+    uint8 *record = lx_execution_mapping_host(creation);
+    uint32 fields[] = {parameter,      instance,      menu,  parent,
+                       (uint32)height, (uint32)width, (uint32)y, (uint32)x,
+                       style,          address + 48,  lx_execution_mapping_address(class->names),
+                       extended_style};
+    for (unsigned i = 0; i < 12; i++)
+        lx_guest_store_u32(record + 4 * i, fields[i]);
+    memcpy(record + 48, title ? title : "", title_bytes);
+    SendMessage(control, 0x81, 0, address);
+    SendMessage(control, 1, 0, address);
+    lx_execution_unmap(GLoaderState.execution, creation);
+}
 ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG style, LONG x, LONG y,
                      LONG width, LONG height, ULONG parent, ULONG menu, ULONG instance,
                      ULONG parameter)
@@ -229,12 +280,23 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     Open32Class *class = open32ClassAcquire(instance, class_name);
     if (!class)
     {
-        ULONG control = 0;
-        if (open32Presentation() && open32CreateNativeControl(class_name, title, style, x, y, width,
-                                                              height, parent, menu, &control))
-            return control;
         open32SetError(1407);
         return 0;
+    }
+    Open32Class *control_class = class->builtin == OPEN32_BUILTIN_CONTROL ? class : class->alias;
+    if (control_class && control_class->builtin == OPEN32_BUILTIN_CONTROL)
+    {
+        ULONG control = 0;
+        BOOL created = open32Presentation() &&
+                       open32CreateNativeControl(control_class->name, title, style, x, y, width,
+                                                 height, parent, menu, &control);
+        if (created && control && control_class != class)
+            superclass_control(control, class, title, style, x, y, width, height, parent, menu,
+                               instance, parameter, extended_style);
+        open32ClassRelease(class);
+        if (!created)
+            open32SetError(1407);
+        return control;
     }
     HAB hab = open32Presentation();
     if (!hab)
@@ -391,6 +453,9 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
     w->client = handle;
     w->next = windows;
     windows = w;
+    /* A frame created visible never passes through a show request of its own. */
+    if (framed && WinIsWindowVisible(w->handle) && lx_launch_presentation_pending())
+        WinSetWindowPos(w->handle, HWND_TOP, 0, 0, 0, 0, SWP_SHOW);
     ULONG result = w->handle;
     if (framed)
         WinSendMsg(result, WM_UPDATEFRAME, 0, 0);
@@ -405,7 +470,14 @@ BOOL open32EraseBackground(ULONG handle, ULONG dc)
 {
     Open32Window *w = open32FindWindow(handle);
     if (!w)
-        return FALSE;
+    {
+        /* A dialog procedure that paints for itself still expects an erased background. */
+        RECTL area;
+        if (!open32NativeDialogWindow(handle) || WinQueryWindow(handle, 5) != HWND_DESKTOP ||
+            !WinQueryWindowRect(handle, &area))
+            return FALSE;
+        return WinFillRect(dc, &area, -34); /* SYSCLR_DIALOGBACKGROUND */
+    }
     if (!w->erase_pending)
         return TRUE;
     w->erase_pending = FALSE;
@@ -415,6 +487,20 @@ LONG DefWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
     if (message == 0x81 || message == 0x86)
         return 1;
+    if (message == 0x14) /* WM_ERASEBKGND: paint the class background. */
+    {
+        Open32Window *window = open32FindWindow(handle);
+        LONG client[4];
+        ULONG brush = window && window->class ? window->class->brush : 0;
+        if (!brush || !GetClientRect(handle, client))
+            return 0;
+        return FillRect(first, client, brush) != 0;
+    }
+    if (message == 0x20) /* WM_SETCURSOR: the parent may choose for its children. */
+    {
+        ULONG parent = GetParent(handle);
+        return parent ? SendMessage(parent, message, first, second) : 0;
+    }
     if (message == 1 || message == 0x82)
         return 0;
     if (message == 16)
@@ -521,6 +607,11 @@ BOOL DestroyWindow(ULONG handle)
     Open32Window **link = &windows;
     while (*link && (*link)->handle != handle)
         link = &(*link)->next;
+    if (!*link && open32NativeDialogWindow(handle))
+    {
+        open32TimersWindowDestroyed(handle);
+        return WinDestroyWindow(handle);
+    }
     if (!*link || (*link)->destroyed)
     {
         open32SetError(1400);
@@ -560,6 +651,27 @@ static ULONG *window_long(Open32Window *w, LONG index)
             return NULL;
     }
 }
+/* Records live on their owning thread, so guest procedures run there. Any other thread
+   reaches a window through PM's process-wide window registry and a queued call. */
+typedef struct ForeignSend
+{
+    ULONG handle, message, first, second;
+} ForeignSend;
+static uintptr_t foreign_send(void *context)
+{
+    const ForeignSend *send = context;
+    return (ULONG)SendMessage(send->handle, send->message, send->first, send->second);
+}
+typedef struct ForeignLong
+{
+    ULONG handle;
+    LONG index;
+} ForeignLong;
+static uintptr_t foreign_long(void *context)
+{
+    const ForeignLong *query = context;
+    return (ULONG)GetWindowLong(query->handle, query->index);
+}
 LONG GetWindowLong(ULONG handle, LONG index)
 {
     TRACE_NATIVE("GetWindowLong(%u, %d)", (uint)handle, (int)index);
@@ -568,6 +680,10 @@ LONG GetWindowLong(ULONG handle, LONG index)
     {
         if (open32NativeDialogWindow(handle))
             return open32NativeWindowLong(handle, index, 0, FALSE);
+        ForeignLong query = {handle, index};
+        uintptr_t value = 0;
+        if (lx_pm_window_call(handle, foreign_long, &query, sizeof query, &value))
+            return (LONG)(ULONG)value;
         open32SetError(1400);
         return 0;
     }
@@ -762,6 +878,10 @@ LONG SendMessage(ULONG handle, ULONG message, ULONG first, ULONG second)
     {
         if (open32NativeDialogWindow(handle))
             return open32NativeControlMessage(handle, message, first, second, FALSE);
+        ForeignSend send = {handle, message, first, second};
+        uintptr_t result = 0;
+        if (lx_pm_window_call(handle, foreign_send, &send, sizeof send, &result))
+            return (LONG)(ULONG)result;
         open32SetError(1400);
         return 0;
     }
@@ -813,8 +933,7 @@ LONG GetWindowTextLength(ULONG handle)
     {
         if (open32NativeDialogWindow(handle))
             return open32NativeControlMessage(handle, 14, 0, 0, FALSE);
-        open32SetError(1400);
-        return 0;
+        return SendMessage(handle, 14, 0, 0);
     }
     return (LONG)open32WindowCallback(window, 14, 0, 0);
 }
@@ -822,6 +941,18 @@ LONG GetWindowText(ULONG handle, PCHAR output, LONG capacity)
 {
     Open32Window *window = open32FindWindow(handle);
     BOOL native = !window && open32NativeDialogWindow(handle);
+    if (!window && !native && output && capacity > 0)
+    {
+        uint32 foreign;
+        if (lx_execution_address(GLoaderState.execution, output, (uint32)capacity, LX_GUEST_WRITE,
+                                 &foreign))
+        {
+            ForeignSend send = {handle, 13, (ULONG)capacity, foreign};
+            uintptr_t length = 0;
+            if (lx_pm_window_call(handle, foreign_send, &send, sizeof send, &length))
+                return (LONG)(ULONG)length;
+        }
+    }
     if ((!window && !native) || !output || capacity <= 0)
     {
         open32SetError(window || native ? 87 : 1400);

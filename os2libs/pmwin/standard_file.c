@@ -60,22 +60,23 @@ static BOOL absolute_name(const char *name, char *full, size_t capacity)
             *p = '\\';
     return TRUE;
 }
-static BOOL wildcard(const char *pattern, const char *name)
+static BOOL wildcard_one(const char *pattern, const char *end, const char *name)
 {
-    if (!strcmp(pattern, "*.*"))
+    if (end - pattern == 3 && !memcmp(pattern, "*.*", 3))
         return TRUE;
     const char *star = NULL, *retry = NULL;
     while (*name)
     {
-        if (*pattern == '?' || toupper((unsigned char)*pattern) == toupper((unsigned char)*name))
-        {
-            pattern++;
-            name++;
-        }
-        else if (*pattern == '*')
+        if (pattern < end && *pattern == '*')
         {
             star = pattern++;
             retry = name;
+        }
+        else if (pattern < end && (*pattern == '?' || toupper((unsigned char)*pattern) ==
+                                                          toupper((unsigned char)*name)))
+        {
+            pattern++;
+            name++;
         }
         else if (star)
         {
@@ -85,9 +86,22 @@ static BOOL wildcard(const char *pattern, const char *name)
         else
             return FALSE;
     }
-    while (*pattern == '*')
+    while (pattern < end && *pattern == '*')
         pattern++;
-    return !*pattern;
+    return pattern == end;
+}
+/* A filter is one pattern or a semicolon-separated list of them. */
+static BOOL wildcard(const char *pattern, const char *name)
+{
+    for (;;)
+    {
+        const char *end = strchr(pattern, ';');
+        if (wildcard_one(pattern, end ? end : pattern + strlen(pattern), name))
+            return TRUE;
+        if (!end)
+            return FALSE;
+        pattern = end + 1;
+    }
 }
 static void file_error(PmFileDialog *dialog, const char *message)
 {
@@ -134,6 +148,7 @@ static void populate_files(PmFileDialog *dialog)
     WinSendDlgItemMsg(window, 264, 0x16e, 0, 0);
     WinSendDlgItemMsg(window, 266, 0x16e, 0, 0);
     WinSetDlgItemText(window, 270, dialog->directory);
+    TRACE_NATIVE("populate_files('%s', '%s')", dialog->directory, dialog->filter);
     if (!GLoaderState.makeUnixPath)
         return;
     uint32 error = 0;

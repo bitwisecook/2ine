@@ -114,6 +114,13 @@ MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
     unsigned character = (USHORT)(uintptr_t)second, key = (USHORT)((uintptr_t)second >> 16);
     if (flags & 0x40)
         return 0; /* KC_KEYUP */
+    if ((flags & 2) && key == 0x1a) /* VK_INSERT toggles the shared SV_INSERTMODE */
+    {
+        BOOL insert = !WinQuerySysValue(HWND_DESKTOP, 59);
+        WinSetSysValue(HWND_DESKTOP, 59, insert);
+        c->insert = insert;
+        return (MRESULT)(uintptr_t)TRUE;
+    }
     if ((flags & 0x10) && (character == 'a' || character == 'A'))
     {
         c->first = 0;

@@ -2,13 +2,24 @@
 static uint32 bridge32_mmioOpen(uint8 *a)
 {
     LxGuestBorrow info = {0};
-    if (lx_guest_load_u32(a) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 80,
+    uint32 name_address = lx_guest_load_u32(a), info_address = lx_guest_load_u32(a + 4);
+    /* A file name makes MMIOINFO optional; a memory file requires it. */
+    /* MMIOINFO is 80 bytes; the IOProc's view is copied back before this returns. */
+    if ((info_address || !name_address) &&
+        !lx_execution_borrow(GLoaderState.execution, info_address, 80,
                              LX_GUEST_READ | LX_GUEST_WRITE, &info))
         return 0;
-    uint32 result = mmioOpen(NULL, info.host, lx_guest_load_u32(a + 8));
+    char *name = name_address ? lx_execution_copy_string(GLoaderState.execution, name_address, 512)
+                              : NULL;
+    uint32 result = !name_address || name ? mmioOpen(name, info.host, lx_guest_load_u32(a + 8)) : 0;
+    free(name);
     lx_execution_release(&info);
     return result;
+}
+static uint32 bridge32_mmioInstallIOProc(uint8 *a)
+{
+    return mmioInstallIOProc(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
+                             lx_guest_load_u32(a + 8));
 }
 static uint32 bridge32_mmioClose(uint8 *a)
 {

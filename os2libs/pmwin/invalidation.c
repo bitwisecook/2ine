@@ -203,4 +203,22 @@ BOOL lx_pm_window_damage(HWND window,RECTL**rectangles,size_t*count,LONG*height)
     *rectangles=copy;*count=n;*height=w->h;
     return TRUE;
 }
-LONG WinQueryUpdateRegion(HWND handle,ULONG region){AnchorBlock*a=getAnchorBlockNoHAB();Window*w=a?getWindowFromHWND(a,handle):NULL;LxHandleBorrow b={0};if(!w||!lx_handle_borrow(region,LX_HANDLE_PM_REGION,&b))return 0;PmRegion*r=b.resource;PmRegion before={.rects=w->damage_rects,.count=w->damage_count},out={0};if(!before.count&&!WinIsRectEmpty(0,&w->invalid)){before.rects=&w->invalid;before.count=1;}BOOL ok=r->anchor==a&&regionBoolean(&out,&before,NULL,2);if(ok){free(r->rects);r->rects=out.rects;r->count=out.count;}LONG n=ok?(r->count>1?3:r->count?2:1):0;lx_handle_release(&b);return n;}
+BOOL lx_pm_window_scroll_damage(HWND window,const RECTL*area,LONG dx,LONG dy){
+    AnchorBlock*a=getAnchorBlockNoHAB();Window*w=a?getWindowFromHWND(a,window):NULL;
+    if(!w)return FALSE;
+    PmRegion before={.rects=w->damage_rects,.count=w->damage_count};
+    if(!before.count&&!WinIsRectEmpty(0,&w->invalid)){before.rects=&w->invalid;before.count=1;}
+    if(!before.count)return TRUE;
+    RECTL box=*area;
+    PmRegion clip={.rects=&box,.count=1},inside={0},outside={0},kept={0},moved={0};
+    BOOL ok=regionBoolean(&inside,&before,&clip,6)&&regionBoolean(&outside,&before,&clip,7);
+    for(size_t i=0;ok&&i<inside.count;i++)WinOffsetRect(0,&inside.rects[i],dx,dy);
+    ok=ok&&regionBoolean(&kept,&inside,&clip,6)&&regionBoolean(&moved,&outside,&kept,1);
+    free(inside.rects);free(outside.rects);free(kept.rects);
+    if(!ok){free(moved.rects);return FALSE;}
+    free(w->damage_rects);w->damage_rects=moved.rects;w->damage_count=moved.count;
+    w->invalid=(RECTL){0};
+    for(size_t i=0;i<moved.count;i++)WinUnionRect(0,&w->invalid,&w->invalid,&moved.rects[i]);
+    return TRUE;
+}
+LONG WinQueryUpdateRegion(HWND handle,ULONG region){AnchorBlock*a=getAnchorBlockNoHAB();Window*w=a?getWindowFromHWND(a,handle):NULL;LxHandleBorrow b={0};if(!w||!lx_handle_borrow(region,LX_HANDLE_PM_REGION,&b))return 0;PmRegion*r=b.resource;PmRegion before={.rects=w->damage_rects,.count=w->damage_count},out={0};if(!before.count&&!WinIsRectEmpty(0,&w->invalid)){before.rects=&w->invalid;before.count=1;}BOOL ok=r->anchor==a&&!r->selected&&regionBoolean(&out,&before,NULL,2);if(ok){free(r->rects);r->rects=out.rects;r->count=out.count;}LONG n=ok?(r->count>1?3:r->count?2:1):0;lx_handle_release(&b);return n;}

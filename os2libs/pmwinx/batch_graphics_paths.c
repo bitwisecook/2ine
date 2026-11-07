@@ -3,6 +3,7 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_graphics_paths.h"
+#include "os2libs/pmwin/graphics.h"
 #include <math.h>
 typedef struct Open32PathPoint
 {
@@ -13,7 +14,7 @@ struct Open32Path
 {
     Open32PathPoint *points;
     size_t count, capacity;
-    BOOL recording, ready;
+    BOOL recording, ready, widened;
 };
 void open32PathCleanup(Open32DC *dc)
 {
@@ -145,26 +146,21 @@ BOOL open32PathClose(Open32DC *dc)
         start--;
     return path_point(p, p->points[start].x, p->points[start].y, FALSE);
 }
-/* Subpaths fill together under the DC's polygon fill mode, then the path is consumed. */
-BOOL open32PathFill(ULONG h, BOOL stroke)
+/* The path's subpaths as one region, in logical or device coordinates. A widened path is a set of
+   overlapping pieces that must fill as a union. */
+static ULONG path_region(Open32DC *dc, BOOL device)
 {
-    Open32DC *dc = open32FindDC(h);
-    if (!dc || !dc->path || !dc->path->ready)
-    {
-        open32SetError(dc ? 1003 : 6);
-        return FALSE;
-    }
     struct Open32Path *p = dc->path;
     if (p->count > 65536)
     {
         open32SetError(8);
-        return FALSE;
+        return 0;
     }
     uint8 *points = malloc((p->count ? p->count : 1) * 8),
           *counts = malloc((p->count ? p->count : 1) * 4);
     BOOL ok = points && counts;
     LONG polygons = 0;
-    ULONG used = 0;
+    ULONG used = 0, region = 0;
     for (size_t i = 0; ok && i < p->count; i++)
     {
         if (p->points[i].move || !polygons)
@@ -174,26 +170,222 @@ BOOL open32PathFill(ULONG h, BOOL stroke)
             polygons++;
             used = 0;
         }
-        lx_guest_store_u32(points + i * 8, (ULONG)p->points[i].x);
-        lx_guest_store_u32(points + i * 8 + 4, (ULONG)p->points[i].y);
+        LONG x = p->points[i].x, y = p->points[i].y;
+        ok = !device || open32MapPoint(dc, &x, &y, TRUE);
+        lx_guest_store_u32(points + i * 8, (ULONG)x);
+        lx_guest_store_u32(points + i * 8 + 4, (ULONG)y);
         used++;
     }
     if (ok && polygons)
     {
         lx_guest_store_u32(counts + (polygons - 1) * 4, used);
-        ULONG region = CreatePolyPolygonRgn(points, counts, polygons, dc->poly_fill_mode);
-        ok = region && PaintRgn(h, region);
-        if (region)
-            DeleteObject(region);
+        region =
+            CreatePolyPolygonRgn(points, counts, polygons, p->widened ? 2 : dc->poly_fill_mode);
     }
-    else if (!ok)
+    else if (ok)
+        region = CreateRectRgn(0, 0, 0, 0);
+    else
         open32SetError(8);
     free(points);
     free(counts);
+    return region;
+}
+/* Subpaths fill together under the DC's polygon fill mode, then the path is consumed. */
+BOOL open32PathFill(ULONG h, BOOL stroke)
+{
+    Open32DC *dc = open32FindDC(h);
+    if (!dc || !dc->path || !dc->path->ready)
+    {
+        open32SetError(dc ? 1003 : 6);
+        return FALSE;
+    }
+    ULONG region = path_region(dc, FALSE);
+    BOOL ok = region && PaintRgn(h, region);
+    if (region)
+        DeleteObject(region);
     if (ok && stroke)
         return StrokePath(h);
     open32PathCleanup(dc);
     return ok;
+}
+BOOL open32PathClip(ULONG h, LONG mode)
+{
+    Open32DC *dc = open32FindDC(h);
+    if (!dc || !dc->path || !dc->path->ready)
+    {
+        open32SetError(dc ? 1003 : 6);
+        return FALSE;
+    }
+    ULONG region = path_region(dc, TRUE);
+    BOOL ok = region && ExtSelectClipRgn(h, region, mode) != 0;
+    if (region)
+        DeleteObject(region);
+    open32PathCleanup(dc);
+    return ok;
+}
+/* Each segment becomes a pen-wide quadrilateral and each vertex an octagon, all with one winding. */
+BOOL open32PathWiden(Open32DC *dc)
+{
+    uint8 pen[16];
+    if (!dc || !dc->path || !dc->path->ready)
+    {
+        open32SetError(dc ? 1003 : 6);
+        return FALSE;
+    }
+    if (open32PenObject(dc->pen_handle, sizeof pen, pen) != 16)
+        return FALSE;
+    double half = fmax((LONG)lx_guest_load_u32(pen + 4), 1) / 2.0;
+    struct Open32Path *source = dc->path, *wide = calloc(1, sizeof *wide);
+    if (!wide)
+    {
+        open32SetError(8);
+        return FALSE;
+    }
+    BOOL ok = TRUE;
+    for (size_t i = 0; ok && i < source->count; i++)
+    {
+        const Open32PathPoint *b = &source->points[i];
+        for (unsigned k = 0; ok && k < 8; k++)
+        {
+            double angle = k * 3.14159265358979323846 / 4;
+            ok = path_point(wide, (LONG)lround(b->x + half * cos(angle)),
+                            (LONG)lround(b->y + half * sin(angle)), k == 0);
+        }
+        if (!ok || !i || b->move)
+            continue;
+        const Open32PathPoint *a = &source->points[i - 1];
+        double dx = (double)b->x - a->x, dy = (double)b->y - a->y, length = hypot(dx, dy);
+        if (!length)
+            continue;
+        double nx = -dy / length * half, ny = dx / length * half;
+        const double corners[4][2] = {{a->x - nx, a->y - ny},
+                                      {b->x - nx, b->y - ny},
+                                      {b->x + nx, b->y + ny},
+                                      {a->x + nx, a->y + ny}};
+        for (unsigned k = 0; ok && k < 4; k++)
+            ok = path_point(wide, (LONG)lround(corners[k][0]), (LONG)lround(corners[k][1]), k == 0);
+    }
+    if (!ok)
+    {
+        free(wide->points);
+        free(wide);
+        return FALSE;
+    }
+    wide->ready = wide->widened = TRUE;
+    open32PathCleanup(dc);
+    dc->path = wide;
+    return TRUE;
+}
+BOOL open32AngleArc(ULONG h, LONG x, LONG y, ULONG radius, float start, float sweep)
+{
+    double first = start * 3.14159265358979323846 / 180,
+           range = sweep * 3.14159265358979323846 / 180;
+    unsigned steps = (unsigned)ceil(fabs(range) * sqrt((double)radius + 1) * 2);
+    steps = steps < 12 ? 12 : steps > 4096 ? 4096 : steps;
+    BOOL ok = TRUE;
+    for (unsigned i = 0; ok && i <= steps; i++)
+    {
+        double a = first + range * i / steps;
+        ok = LineTo(h, (LONG)lround(x + radius * cos(a)), (LONG)lround(y - radius * sin(a)));
+    }
+    return ok;
+}
+/* A seed fill over the whole drawable, painted with the current brush. Mode 0 stops at the given
+   border color; mode 1 replaces the surface color. */
+BOOL open32FloodFill(ULONG h, LONG x, LONG y, ULONG color, ULONG mode)
+{
+    Open32DC *dc = open32FindDC(h);
+    if (!dc || !open32CanDraw(h) || !open32MapPoint(dc, &x, &y, TRUE))
+    {
+        open32SetError(6);
+        return FALSE;
+    }
+    LONG width = open32DCWidth(h), height = open32DCHeight(h);
+    if (x < 0 || y < 0 || x >= width || y >= height || (uint64)width * height > 16777216)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    size_t area = (size_t)width * height;
+    uint32 *pixels = malloc(area * 4), *stack = malloc(area * 4);
+    uint8 *seen = calloc(area, 1);
+    BOOL ok = pixels && stack && seen &&
+              lx_pm_raster_read(h, 0, 0, (unsigned)width, (unsigned)height, pixels);
+    uint32 rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
+    size_t top = 0, seed = (size_t)(height - 1 - y) * width + x;
+    BOOL start = ok && (mode ? pixels[seed] == rgb : pixels[seed] != rgb);
+    if (start)
+    {
+        stack[top++] = (uint32)seed;
+        seen[seed] = 1;
+    }
+    while (top)
+    {
+        size_t at = stack[--top];
+        LONG px = (LONG)(at % width), row = (LONG)(at / width);
+        const LONG neighbours[4][2] = {{px - 1, row}, {px + 1, row}, {px, row - 1}, {px, row + 1}};
+        for (unsigned i = 0; i < 4; i++)
+        {
+            LONG nx = neighbours[i][0], ny = neighbours[i][1];
+            if (nx < 0 || ny < 0 || nx >= width || ny >= height)
+                continue;
+            size_t next = (size_t)ny * width + nx;
+            if (!seen[next] && (mode ? pixels[next] == rgb : pixels[next] != rgb))
+            {
+                seen[next] = 1;
+                stack[top++] = (uint32)next;
+            }
+        }
+    }
+    if (start)
+    {
+        for (size_t i = 0; i < area; i++)
+            if (seen[i])
+            {
+                uint32 fill;
+                if (open32BrushPixel(dc, (LONG)(i % width), height - 1 - (LONG)(i / width), &fill))
+                    pixels[i] = fill;
+            }
+        ok = lx_pm_raster_write(h, 0, 0, (unsigned)width, (unsigned)height, pixels);
+    }
+    free(pixels);
+    free(stack);
+    free(seen);
+    return ok && start;
+}
+/* Mode 0 replaces the transform; MWT_IDENTITY 1 clears it; MWT_LEFTMULTIPLY 2 and
+   MWT_RIGHTMULTIPLY 3 compose with the current one. */
+BOOL open32WorldTransform(ULONG h, const double m[6], ULONG mode)
+{
+    Open32DC *dc = open32FindDC(h);
+    if (!dc || mode > 3)
+    {
+        open32SetError(dc ? 87 : 6);
+        return FALSE;
+    }
+    if (mode == 1)
+    {
+        dc->world_active = FALSE;
+        return TRUE;
+    }
+    double current[6] = {1, 0, 0, 1, 0, 0}, out[6];
+    if (dc->world_active)
+        memcpy(current, dc->world, sizeof current);
+    const double *a = mode == 3 ? current : m, *b = mode == 3 ? m : current;
+    if (mode)
+    {
+        out[0] = a[0] * b[0] + a[1] * b[2];
+        out[1] = a[0] * b[1] + a[1] * b[3];
+        out[2] = a[2] * b[0] + a[3] * b[2];
+        out[3] = a[2] * b[1] + a[3] * b[3];
+        out[4] = a[4] * b[0] + a[5] * b[2] + b[4];
+        out[5] = a[4] * b[1] + a[5] * b[3] + b[5];
+    }
+    else
+        memcpy(out, m, sizeof out);
+    memcpy(dc->world, out, sizeof out);
+    dc->world_active = TRUE;
+    return TRUE;
 }
 static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey,
                   unsigned kind)
@@ -224,15 +416,21 @@ static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LON
         return FALSE;
     }
     double start = 0, sweep = 2 * 3.14159265358979323846;
+    Open32DC *mapping = open32FindDC(h);
     if (kind != 0)
     {
         start = atan2((cy - sy) / (ry ? ry : 1), (sx - cx) / (rx ? rx : 1));
         double end = atan2((cy - ey) / (ry ? ry : 1), (ex - cx) / (rx ? rx : 1));
         sweep = end - start;
-        if (sweep <= 0)
+        if (mapping->arc_clockwise)
+        {
+            if (sweep >= 0)
+                sweep -= 2 * 3.14159265358979323846;
+        }
+        else if (sweep <= 0)
             sweep += 2 * 3.14159265358979323846;
     }
-    unsigned steps = (unsigned)ceil(sweep * sqrt(fmax(rx, ry) + 1) * 2);
+    unsigned steps = (unsigned)ceil(fabs(sweep) * sqrt(fmax(rx, ry) + 1) * 2);
     if (steps < 12)
         steps = 12;
     if (steps > 4096)
@@ -255,7 +453,13 @@ static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LON
         lx_guest_store_u32(points + (n - 1) * 8, (ULONG)(LONG)lround(cx));
         lx_guest_store_u32(points + (n - 1) * 8 + 4, (ULONG)(LONG)lround(cy));
     }
-    BOOL ok = kind == 1 ? Polyline(h, points, (LONG)n) : Polygon(h, points, (LONG)n);
+    BOOL ok = TRUE;
+    if (kind == 4)
+        for (ULONG i = 0; ok && i < n; i++)
+            ok = LineTo(h, (LONG)lx_guest_load_u32(points + i * 8),
+                        (LONG)lx_guest_load_u32(points + i * 8 + 4));
+    else
+        ok = kind == 1 ? Polyline(h, points, (LONG)n) : Polygon(h, points, (LONG)n);
     free(points);
     return ok;
 }
@@ -270,6 +474,10 @@ BOOL Arc(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LON
 BOOL Pie(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey)
 {
     return curve(h, l, t, r, b, sx, sy, ex, ey, 2);
+}
+BOOL open32ArcTo(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey)
+{
+    return curve(h, l, t, r, b, sx, sy, ex, ey, 4);
 }
 BOOL open32Chord(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey)
 {

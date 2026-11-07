@@ -7,6 +7,20 @@
 #include "guest/abi.h"
 #include <math.h>
 static const LONG identity[9] = {65536, 0, 0, 0, 65536, 0, 0, 0, 1};
+/* The default aperture is square, with sides of the default character cell height. */
+static void lx_gpi_default_pick(HPS h)
+{
+    PresentationSpace *p = lx_pm_font_space(h);
+    LxHostFontMetrics metrics;
+    LONG side = 16;
+    LxHostFont *font = lx_pm_font(h);
+    if (font && lx_host_font_metrics(font, &metrics) && metrics.ascent + metrics.descent > 0)
+        side = metrics.ascent + metrics.descent;
+    POINTL corners[2] = {{0, 0}, {side, side}};
+    if (!lx_pm_convert_points(h, 5, 4, 2, corners)) /* CVTC_DEVICE to CVTC_PAGE */
+        corners[1] = (POINTL){side, side};
+    p->gpi.pick_size = (SIZEL){corners[1].x - corners[0].x, corners[1].y - corners[0].y};
+}
 static PresentationSpace *space(HPS h)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -18,8 +32,8 @@ static PresentationSpace *space(HPS h)
         p->gpi.arc[0] = p->gpi.arc[1] = 1;
         p->gpi.line_width = 1;
         p->gpi.line_end = p->gpi.line_join = 1;
-        p->gpi.pick_size = (SIZEL){1, 1};
         p->gpi.initialized = TRUE;
+        lx_gpi_default_pick(h);
     }
     return p;
 }
@@ -178,6 +192,11 @@ BOOL GpiSetCharExtra(HPS h, LONG v)
     p->gpi.char_extra = v;
     return TRUE;
 }
+LONG GpiQueryStopDraw(HPS h)
+{
+    PresentationSpace *p = space(h);
+    return p ? p->gpi.stop_draw : -1;
+}
 BOOL GpiSetStopDraw(HPS h, LONG v)
 {
     PresentationSpace *p = space(h);
@@ -278,7 +297,7 @@ BOOL GpiSetPickApertureSize(HPS h, LONG options, PSIZEL v)
         return FALSE;
     if (!options)
     {
-        p->gpi.pick_size = (SIZEL){1, 1};
+        lx_gpi_default_pick(h);
         return TRUE;
     }
     if (!v || v->cx < 0 || v->cy < 0)
@@ -395,7 +414,7 @@ BOOL GpiResetPS(HPS h, ULONG options)
         p->rgb_colors = FALSE;
         p->color_format = 0;
         p->gpi.pick_position = (POINTL){0, 0};
-        p->gpi.pick_size = (SIZEL){1, 1};
+        lx_gpi_default_pick(h);
     }
     return TRUE;
 }
@@ -546,9 +565,9 @@ ULONG GpiCreatePalette(HAB hab, ULONG options, ULONG format, ULONG count, PULONG
 {
     /* Only LCOL_PURECOLOR and LCOL_OVERRIDE_DEFAULT_COLORS are defined, with LCOLF_CONSECRGB. */
     if (!lxHostThreadState()->anchor_block || (options & ~0xcu) || format != 2 || !count ||
-        count > 256 || !colors)
+        count > 16 * 1024 * 1024 || !colors)
         return 0;
-    PmPalette *p = calloc(1, sizeof *p);
+    PmPalette *p = calloc(1, sizeof *p + (size_t)count * sizeof *p->colors);
     if (!p)
         return 0;
     p->count = count;

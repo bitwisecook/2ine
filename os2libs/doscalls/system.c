@@ -132,7 +132,7 @@ static int64_t guest_clock_offset;
 APIRET16 Dos16SetDateTime(PDATETIME datetime)
 {
     if (!datetime || datetime->year < 1980 || datetime->year > 2079 || datetime->hundredths > 99 ||
-        datetime->timezone < -720 || datetime->timezone > 720)
+        datetime->timezone < -780 || datetime->timezone > 780)
         return ERROR_TS_DATETIME;
     LxHostCalendar value = {0};
     value.year = datetime->year;

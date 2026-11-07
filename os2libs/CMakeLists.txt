@@ -1,13 +1,13 @@
 # Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
 foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pmwin pmshapi pmwp pmgpi tcpip32 pmwinx pmctls helpmgr mdm mmio pmspl pmdrag dive pmgre so32dll tcp32dll ssleay32)
     if(module STREQUAL "doscalls")
-        set(sources doscalls/module.c doscalls/legacy.c doscalls/files.c doscalls/fileinfo.c doscalls/eas.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/suballocation.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/modules.c doscalls/system.c doscalls/audio.c doscalls/mux_wait.c)
+        set(sources doscalls/module.c doscalls/legacy.c doscalls/files.c doscalls/fileinfo.c doscalls/eas.c doscalls/directories.c doscalls/paths.c doscalls/resources.c doscalls/module_resources.c doscalls/exceptions.c doscalls/memory.c doscalls/suballocation.c doscalls/threads.c doscalls/process.c doscalls/semaphores.c doscalls/modules.c doscalls/system.c doscalls/audio.c doscalls/mux_wait.c doscalls/unithunk.c doscalls/timers.c)
     elseif(module STREQUAL "mdm")
         set(sources mdm.c mdm_video.c video_decode.c midi_synth.c midi_config.c midi_mt32.c)
     elseif(module STREQUAL "pmwin")
         set(sources pmwin/help_compat.c pmwin/module.c pmwin/context.c pmwin/codepages.c pmwin/windows.c pmwin/frame_state.c pmwin/messages.c pmwin/paint.c pmwin/timers.c pmwin/graphics.c pmwin/raster.c pmwin/coordinates.c pmwin/device_context.c pmwin/print_job.c pmwin/resources.c pmwin/window_data.c pmwin/system.c pmwin/window_queries.c pmwin/presentation.c pmwin/create_message.c pmwin/dialogs.c pmwin/dialog_template.c pmwin/message_box.c pmwin/controls.c pmwin/buttons.c pmwin/bitmap.c pmwin/text.c pmwin/rectangles.c pmwin/entry.c pmwin/spin.c pmwin/scrollbar.c pmwin/combo.c pmwin/mle.c pmwin/standard_file.c pmwin/menus.c pmwin/regions.c pmwin/invalidation.c pmwin/accelerators.c pmwin/pointers.c pmwin/hooks.c pmwin/visible.c pmwin/dive.c pmwin/video_frames.c pmwin/thread_messages.c pmwin/input.c pmwin/window_text.c pmwin/clipboard.c pmwin/semaphore_waits.c pmwin/pointer_image.c pmwin/compat_services.c pmwin/standard_font.c ../ball/icon_bitmap.c ../ball/icon_executable.c ../formats/decompress.c)
     elseif(module STREQUAL "pmgpi")
-        set(sources pmgpi.c pmgpi/help.c pmgpi/fonts.c pmgpi/device.c pmgpi/state.c pmgpi/bitmap.c pmgpi/regions.c pmgpi/text.c pmgpi/shapes.c pmgpi/extensions.c pmgpi/paths.c pmgpi/metafiles.c)
+        set(sources pmgpi.c pmgpi/help.c pmgpi/fonts.c pmgpi/device.c pmgpi/state.c pmgpi/bitmap.c pmgpi/regions.c pmgpi/text.c pmgpi/shapes.c pmgpi/extensions.c pmgpi/paths.c pmgpi/metafiles.c pmgpi/public_fonts.c)
     elseif(module STREQUAL "pmctls")
         set(sources pmctls/module.c)
     elseif(module STREQUAL "pmwinx")
@@ -89,9 +89,12 @@ foreach(module doscalls msg nls quecalls viocalls kbdcalls sesmgr som pmmerge pm
             pmwinx/batch_services_presentation.c
             pmwinx/batch_services_sync.c
             pmwinx/batch_services_windows.c
+            pmwinx/process.c
         )
     elseif(module STREQUAL "pmshapi")
-        set(sources pmshapi.c pmshapi/profiles.c pmshapi/switches.c)
+        set(sources pmshapi.c pmshapi/profiles.c pmshapi/switches.c pmshapi/startapp.c)
+    elseif(module STREQUAL "pmwp")
+        set(sources pmwp.c pmwp/som_runtime.c pmwp/som_tables.c pmwp/som_object.c pmwp/som_views.c pmwp/som_classes.c pmwp/som_extended.c)
     else()
         set(sources "${module}.c")
     endif()
@@ -130,9 +133,9 @@ else()
     target_link_libraries(pmwin PRIVATE ZLIB::ZLIB)
 endif()
 target_link_libraries(pmgpi PRIVATE pmwin)
-target_link_libraries(pmwinx PRIVATE pmshapi pmwin pmgpi)
-target_link_libraries(pmwp PRIVATE pmshapi pmwin sesmgr)
-target_link_libraries(pmshapi PRIVATE pmwin nls)
+target_link_libraries(pmwinx PRIVATE pmshapi pmwin pmgpi pmdrag pmwp)
+target_link_libraries(pmwp PRIVATE doscalls pmdrag pmgpi pmshapi pmwin sesmgr)
+target_link_libraries(pmshapi PRIVATE pmwin nls sesmgr)
 target_link_libraries(pmspl PRIVATE pmshapi)
 target_link_libraries(pmdrag PRIVATE pmwin)
 

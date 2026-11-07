@@ -28,7 +28,7 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
                  (uint)callback);
     if (!open32Presentation())
         return 0;
-    if (window && !open32FindWindow(window))
+    if (window && !open32FindWindow(window) && !open32NativeDialogWindow(window))
     {
         open32SetError(1400);
         return 0;

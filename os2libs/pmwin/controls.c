@@ -372,6 +372,81 @@ static void draw_text(Window *window, HPS space, const char *text, int baseline,
     }
     free(visible.rects);
 }
+/* Group boxes and frames leave the controls inside them visible. */
+static BOOL static_is_frame(const Window *window)
+{
+    ULONG type = window->style & 0x3f;
+    return type == 2 || (type >= 8 && type <= 10);
+}
+/* SS_FGNDRECT through SS_BKGNDFRAME: foreground, halftone or background, as a filled
+   rectangle or a one-pixel outline. Halftone is the midpoint of the other two. */
+static void paint_static_shape(Window *window, HPS space)
+{
+    ULONG type = window->style & 0x3f;
+    ULONG foreground = (ULONG)windowPresentationColor(window, TRUE, 0);
+    ULONG background = (ULONG)windowPresentationColor(window, FALSE,
+                                                      WinQuerySysColor(HWND_DESKTOP, -34, 0));
+    ULONG tone = type == 5 || type == 8 ? 0 : type == 6 || type == 9 ? 1 : 2;
+    LONG color = (LONG)(tone == 0 ? foreground : tone == 2 ? background
+                        : ((foreground >> 1) & 0x7f7f7f) + ((background >> 1) & 0x7f7f7f));
+    if (!lx_pm_color_table(space, 0, 2, 254, 1, &color))
+        return;
+    if (type <= 7)
+    {
+        RECTL area = {0, 0, window->w, window->h};
+        WinFillRect(space, &area, 254);
+        return;
+    }
+    RECTL edges[] = {{0, 0, window->w, 1},
+                     {0, window->h - 1, window->w, window->h},
+                     {0, 0, 1, window->h},
+                     {window->w - 1, 0, window->w, window->h}};
+    for (size_t i = 0; i < sizeof edges / sizeof *edges; i++)
+        WinFillRect(space, &edges[i], 254);
+}
+/* SS_GROUPBOX: an etched frame whose top edge runs through the middle of the caption line,
+   broken where the caption is drawn. */
+static void paint_group_box(Window *window, HPS space, const LxHostFontMetrics *metrics)
+{
+    LONG w = window->w, top = window->h - (metrics->ascent + metrics->descent) / 2;
+    if (w < 3 || top < 3)
+        return;
+    LONG gap_left = w, gap_right = w;
+    LxHostFont *font = lx_pm_font(space);
+    if (font && window->text && *window->text)
+    {
+        LONG width = 0;
+        for (const uint8 *p = (const uint8 *)window->text; *p; p++)
+        {
+            if (*p == '~' && p[1])
+                p++;
+            int advance = lx_host_font_advance(font, lx_pm_codepoint(*p));
+            if (advance > 0)
+                width += advance;
+        }
+        gap_left = 1;
+        gap_right = 3 + width + 2 < w ? 3 + width + 2 : w;
+    }
+    const struct
+    {
+        RECTL rect;
+        LONG color;
+    } edges[] = {
+        {{0, 1, 1, top}, CLR_DARKGRAY},
+        {{0, 1, w - 1, 2}, CLR_DARKGRAY},
+        {{w - 2, 1, w - 1, top}, CLR_DARKGRAY},
+        {{0, top - 1, gap_left, top}, CLR_DARKGRAY},
+        {{gap_right, top - 1, w - 1, top}, CLR_DARKGRAY},
+        {{1, 2, 2, top - 1}, CLR_WHITE},
+        {{1, 0, w, 1}, CLR_WHITE},
+        {{w - 1, 0, w, top}, CLR_WHITE},
+        {{1, top - 2, gap_left, top - 1}, CLR_WHITE},
+        {{gap_right, top - 2, w - 2, top - 1}, CLR_WHITE},
+    };
+    for (size_t i = 0; i < sizeof edges / sizeof *edges; i++)
+        if (edges[i].rect.xLeft < edges[i].rect.xRight)
+            WinFillRect(space, (PRECTL)&edges[i].rect, edges[i].color);
+}
 static void paint(Window *window)
 {
     RECTL rect;
@@ -385,8 +460,7 @@ static void paint(Window *window)
         WinEndPaint(space);
         return;
     }
-    /* Group boxes and frames leave the controls inside them visible. */
-    BOOL frame = c->kind == 5 && ((window->style & 0x3f) == 2 || (window->style & 0x3f) == 8);
+    BOOL frame = c->kind == 5 && static_is_frame(window);
     if (!frame)
     {
         LONG color = windowPresentationColor(
@@ -418,6 +492,12 @@ static void paint(Window *window)
         WinEndPaint(space);
         return;
     }
+    if (c->kind == 5 && (window->style & 0x3f) >= 5 && (window->style & 0x3f) <= 10)
+    {
+        paint_static_shape(window, space);
+        WinEndPaint(space);
+        return;
+    }
     if (c->kind == 5 && ((window->style & 0x3f) == 3 || (window->style & 0x3f) == 11))
     {
         LONG width, height;
@@ -438,8 +518,10 @@ static void paint(Window *window)
         WinEndPaint(space);
         return;
     }
-    if ((c->kind == 3 && !(window->style & 15)) || c->kind == 2 || c->kind == 6 || c->kind == 32 ||
-        (c->kind == 5 && (window->style & 0x3f) != 1))
+    if (c->kind == 5 && (window->style & 0x3f) == 2)
+        paint_group_box(window, space, &metrics);
+    else if ((c->kind == 3 && !(window->style & 15)) || c->kind == 2 || c->kind == 6 ||
+             c->kind == 32 || (c->kind == 5 && (window->style & 0x3f) != 1))
     {
         RECTL edge = {0, 0, window->w, 1};
         WinFillRect(space, &edge, CLR_DARKGRAY);
@@ -572,6 +654,16 @@ static void paint(Window *window)
                       c->items[i].selected, 3);
         }
     }
+    else if (c->kind == 5 && (window->style & 0x3f) == 1 && (window->style & 0x4000))
+    {
+        /* DT_WORDBREAK with the alignment and mnemonic DT_ flags held in the static style. */
+        RECTL bounds = {0, 0, window->w, window->h};
+        /* WinDrawText colours are indices, so an RGB value needs a table slot. */
+        LONG color = windowPresentationColor(window, TRUE, window->enabled ? 0 : 0x6e6e6e);
+        if (lx_pm_color_table(space, 0, 2, 254, 1, &color))
+            WinDrawText(space, -1, window->text ? window->text : "", &bounds, 254, 0,
+                        window->style & 0x6f00);
+    }
     else if (!(c->kind == 5 && ((window->style & 0x3f) == 3 || (window->style & 0x3f) == 4)))
         draw_text(window, space, window->text,
                   c->kind == 3 ? (window->h + metrics.ascent - metrics.descent) / 2
@@ -591,9 +683,7 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         unsigned kind = (unsigned)strtoul(window->window_class_name + 1, NULL, 10);
         /* These static and button styles require a different control representation. */
         if ((kind == 3 && (window->style & 15) > 7) ||
-            (kind == 5 && (window->style & 0x3f) != 1 && (window->style & 0x3f) != 2 &&
-             (window->style & 0x3f) != 3 && (window->style & 0x3f) != 4 &&
-             (window->style & 0x3f) != 8 && (window->style & 0x3f) != 11))
+            (kind == 5 && ((window->style & 0x3f) < 1 || (window->style & 0x3f) > 11)))
             return controlReply(TRUE);
         window->control = calloc(1, sizeof *window->control);
         if (!window->control)
@@ -601,7 +691,7 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         window->control->kind = kind;
         window->control->selected = -1;
         window->control->limit = 32767;
-        window->control->insert = TRUE;
+        window->control->insert = WinQuerySysValue(HWND_DESKTOP, 59) != 0; /* SV_INSERTMODE */
         window->control->upper = 100;
         window->control->first = window->control->last =
             window->text ? (unsigned)strlen(window->text) : 0;
@@ -665,10 +755,7 @@ MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second
         }
     }
     if (message == WM_HITTEST && c)
-        return controlReply(c->kind == 5 &&
-                                    ((window->style & 0x3f) == 2 || (window->style & 0x3f) == 8)
-                                ? HT_TRANSPARENT
-                                : HT_NORMAL);
+        return controlReply(c->kind == 5 && static_is_frame(window) ? HT_TRANSPARENT : HT_NORMAL);
     if (!c)
         return 0;
     if (c->kind == 8)

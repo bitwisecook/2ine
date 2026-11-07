@@ -528,15 +528,12 @@ BOOL GetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
     }
     Open32File *file = borrow.resource;
     LxHostFileInfo info;
-    int64_t created = 0;
     LxHostFsError error = lx_host_file_info(file->file, &info);
-    if (!error && creation)
-        error = lx_host_file_created(file->file, &created);
     if (!error)
     {
         /* A zero FILETIME marks a host without a recorded creation time. */
-        if (creation && created)
-            filetime_store(creation, created);
+        if (creation && info.created)
+            filetime_store(creation, info.created);
         else if (creation)
             memset(creation, 0, 8);
         filetime_store(access, info.accessed);
@@ -580,13 +577,11 @@ BOOL SetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
     }
     Open32File *file = borrow.resource;
     ULONG error = !(file->access & 2u) ? 5 : 0;
-    if (!error && btime != INT64_MIN)
+    if (!error)
     {
-        LxHostFsError result = lx_host_file_set_created(file->file, btime);
+        LxHostFsError result = lx_host_file_stamps(file->file, btime, atime, mtime);
         error = result == LX_HOST_FS_INVALID ? 50 : file_error(result);
     }
-    if (!error)
-        error = file_error(lx_host_file_times(file->file, atime, mtime));
     lx_handle_release(&borrow);
     if (error)
         open32SetError(error);

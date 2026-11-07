@@ -126,7 +126,7 @@ HWND WinQueryWindow(HWND window, LONG code)
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *w = anchor ? getWindowFromHWND(anchor, window) : NULL;
     if (!w)
-        return 0;
+        return foreignWindowQuery(window, code);
     Window *result = NULL;
     switch (code)
     {

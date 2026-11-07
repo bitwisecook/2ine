@@ -1611,6 +1611,18 @@ static uint32 bridge32_RemoveDirectory(uint8 *a)
     return result;
 }
 
+static uint32 bridge32_AddFontResource(uint8 *a)
+{
+    ULONG result = 0;
+    PSZ s0 = NULL;
+    if (o32_service_string(lx_guest_load_u32(a + 0), FALSE, &s0))
+        result = (ULONG)AddFontResource(s0);
+    else
+        open32SetError(87);
+    o32_service_free_string(s0);
+    return result;
+}
+
 static uint32 bridge32_RemoveFontResource(uint8 *a)
 {
     ULONG result = 0;

@@ -16,7 +16,8 @@ struct LxPrintJob
     FILE *spool;
     LxHostPrintDestination destination;
     char *title;
-    unsigned kind, pages;
+    unsigned kind, pages, copies, duplex;
+    int draft;
     long offsets[3 * PRINT_PAGE_LIMIT + 3];
     int failed;
 };
@@ -58,6 +59,7 @@ LxPrintJob *lx_print_begin(unsigned kind, const char *title, int *cancelled)
     job->destination = destination;
     job->title = strdup(title && *title ? title : "2ine Print Job");
     job->kind = kind;
+    job->copies = job->duplex = 1;
     job->spool = tmpfile();
     if (!job->spool || !job->title)
     {
@@ -126,6 +128,11 @@ static int pdf_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
             content);
     return ok && !ferror(job->spool);
 }
+static unsigned pcl_paper(unsigned width, unsigned height)
+{
+    unsigned length = width > height ? width : height;
+    return length == 3300 ? 2 : length == 4200 ? 3 : 26;
+}
 static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsigned height,
                     unsigned dpi)
 {
@@ -135,7 +142,10 @@ static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
     if (!row)
         return 0;
     fprintf(job->spool,
-            "\033&l26A\033&l0O\033&l0E\033*p0x0Y\033*t%uR\033*r%uS\033*r%uT\033*b0M\033*r1A", dpi,
+            "\033&l%uA\033&l%uO\033&l%uX\033&l%uS\033*o%dM\033&l0E\033*p0x0Y\033*t%uR\033*r%uS\033*r%uT"
+            "\033*b0M\033*r1A",
+            pcl_paper(width, height), width > height ? 1u : 0u,
+            job->destination.printer ? 1u : job->copies, job->duplex - 1, job->draft ? -1 : 0, dpi,
             width, height);
     for (unsigned y = 0; y < height; y++)
     {
@@ -165,15 +175,66 @@ int lx_print_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsig
     if (!job || job->failed || !pixels || !width || !height || width > 10000 || height > 10000 ||
         (uint64_t)width * height > 16000000 || !dpi || dpi > 2400 || job->pages >= PRINT_PAGE_LIMIT)
         return 0;
-    int ok = job->kind == LX_PRINT_PDF ? pdf_page(job, pixels, width, height, dpi)
-                                       : pcl_page(job, pixels, width, height, dpi);
-    long size = ftell(job->spool);
-    if (!ok || size < 0 || (uint64_t)size > PRINT_BYTE_LIMIT)
+    if (job->kind != LX_PRINT_PDF)
     {
-        job->failed = 1;
-        return 0;
+        int ok = pcl_page(job, pixels, width, height, dpi);
+        long size = ftell(job->spool);
+        if (!ok || size < 0 || (uint64_t)size > PRINT_BYTE_LIMIT)
+        {
+            job->failed = 1;
+            return 0;
+        }
+        job->pages++;
+        return 1;
     }
-    job->pages++;
+    /* PDF has no copy count, so copies are repeated pages; draft pages carry half resolution. */
+    uint32_t *reduced = NULL;
+    if (job->draft && width > 1 && height > 1)
+    {
+        unsigned half_width = width / 2, half_height = height / 2;
+        reduced = malloc((size_t)half_width * half_height * sizeof *reduced);
+        if (reduced)
+        {
+            for (unsigned y = 0; y < half_height; y++)
+                for (unsigned x = 0; x < half_width; x++)
+                    reduced[(size_t)y * half_width + x] = pixels[(size_t)y * 2 * width + x * 2];
+            pixels = reduced;
+            width = half_width;
+            height = half_height;
+            dpi /= 2;
+        }
+    }
+    int ok = 1;
+    for (unsigned copy = 0; ok && copy < job->copies; copy++)
+    {
+        ok = job->pages < PRINT_PAGE_LIMIT && pdf_page(job, pixels, width, height, dpi);
+        long size = ftell(job->spool);
+        if (!ok || size < 0 || (uint64_t)size > PRINT_BYTE_LIMIT)
+        {
+            job->failed = 1;
+            ok = 0;
+        }
+        else
+            job->pages++;
+    }
+    free(reduced);
+    return ok;
+}
+void lx_print_options(LxPrintJob *job, unsigned copies, unsigned duplex, int draft)
+{
+    if (!job)
+        return;
+    job->copies = copies ? copies : 1;
+    job->duplex = duplex >= 1 && duplex <= 3 ? duplex : 1;
+    job->draft = draft;
+    if (job->destination.printer)
+        job->destination.copies = job->copies;
+}
+int lx_print_raw(LxPrintJob *job, const void *data, size_t size)
+{
+    if (!job || job->failed || job->kind != LX_PRINT_PCL || !data ||
+        fwrite(data, 1, size, job->spool) != size)
+        return 0;
     return 1;
 }
 static int commit_output(LxPrintJob *job)
@@ -225,7 +286,10 @@ int lx_print_finish(LxPrintJob *job)
     if (ok && job->kind == LX_PRINT_PDF)
     {
         pdf_object(job, 1);
-        fputs("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n", job->spool);
+        fprintf(job->spool, "<< /Type /Catalog /Pages 2 0 R%s >>\nendobj\n",
+                job->duplex == 2   ? " /ViewerPreferences << /Duplex /DuplexFlipLongEdge >>"
+                : job->duplex == 3 ? " /ViewerPreferences << /Duplex /DuplexFlipShortEdge >>"
+                                   : "");
         pdf_object(job, 2);
         fprintf(job->spool, "<< /Type /Pages /Count %u /Kids [", job->pages);
         for (unsigned page = 0; page < job->pages; page++)

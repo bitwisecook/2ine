@@ -84,11 +84,18 @@ static void finishProcessExit(uint32 exitcode)
     processExitCode = exitcode;
     processingExitList = 1;
     /* LINFOSEG rfProcStatus bit 0 marks exit-list processing for 16-bit services. */
-    linfo->rfProcStatus |= 1;
+    if (linfo)
+        linfo->rfProcStatus |= 1;
     releaseThreadSuspension();
     lx_launch_record_exit(exitcode);
     runDosExitList(TC_EXIT);
     GLoaderState.terminate(exitcode);
+}
+
+static void (*threadExitObserver)(ULONG code);
+void lx_doscalls_observe_thread_exit(void (*observer)(ULONG code))
+{
+    __atomic_store_n(&threadExitObserver, observer, __ATOMIC_RELEASE);
 }
 
 VOID DosExit_implementation(ULONG action, ULONG exitcode)
@@ -96,7 +103,9 @@ VOID DosExit_implementation(ULONG action, ULONG exitcode)
 
     if (action == EXIT_THREAD)
     {
-
+        void (*observer)(ULONG) = __atomic_load_n(&threadExitObserver, __ATOMIC_ACQUIRE);
+        if (observer)
+            observer(exitcode);
         FIXME("if last thread, treat as DosExit(1)");
         lx_execution_end_thread(GLoaderState.execution);
         lx_host_thread_exit(NULL);
@@ -289,6 +298,22 @@ static APIRET resolveStartDirectory(const char *directory, LaunchStart *start)
     return NO_ERROR;
 }
 
+/* The loader runs OS/2 programs only: no VDM or Win-OS/2 exists to take the others. */
+static APIRET launchableImage(const char *host, PSZ program)
+{
+    if (!lx_host_path_exists(host))
+        return ERROR_FILE_NOT_FOUND;
+    ULONG type = 0;
+    APIRET result = DosQueryAppType(program, &type);
+    if (result)
+        return result;
+    if (type & (FAPPTYP_DOS | FAPPTYP_WINDOWSREAL | FAPPTYP_WINDOWSPROT | FAPPTYP_WINDOWSPROT31))
+        return ERROR_INVALID_EXE_SIGNATURE;
+    if (type & (FAPPTYP_DLL | FAPPTYP_PHYSDRV | FAPPTYP_VIRTDRV | FAPPTYP_PROTDLL))
+        return ERROR_BAD_EXE_FORMAT;
+    return NO_ERROR;
+}
+
 static APIRET prepareLaunch(LaunchPlan *plan, PSZ pArg, PSZ pEnv, PSZ pName,
                             const LaunchStart *start, ULONG flags)
 {
@@ -322,14 +347,18 @@ static APIRET prepareLaunch(LaunchPlan *plan, PSZ pArg, PSZ pEnv, PSZ pName,
         program = searched;
     }
     plan->host_program = makeUnixPath(program, &err);
-    free(candidate);
     if (!plan->host_program)
+    {
+        free(candidate);
         return err;
-    /* A launch reports a missing image now rather than as a failed child later. */
-    if (start && !lx_host_path_exists(plan->host_program))
+    }
+    /* A launch reports a bad image now rather than as a failed child later. */
+    err = start ? launchableImage(plan->host_program, (PSZ)program) : NO_ERROR;
+    free(candidate);
+    if (err)
     {
         freeLaunchPlan(plan);
-        return ERROR_FILE_NOT_FOUND;
+        return err;
     }
     if (!(plan->loader = findExePath(pName, &err)) || !(plan->argv = calcArgv(pArg, pName, &err)))
     {

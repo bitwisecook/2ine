@@ -10,6 +10,7 @@
 #include "viocalls.h"
 
 #include "hal/terminal.h"
+#include "guest/launch_record.h"
 #include "os2libs/generated/viocalls-lx.h"
 
 static uint16 *vio_buffer = NULL;
@@ -58,6 +59,12 @@ static void deinitNcurses(void)
     if (!vio_buffer)
         return;
 
+    if (lx_launch_no_autoclose())
+    {
+        lx_host_terminal_refresh();
+        lx_host_terminal_flush_input();
+        lx_host_terminal_read_input(1);
+    }
     lx_host_terminal_close();
     free(vio_buffer);
     vio_buffer = NULL;

@@ -9,6 +9,10 @@
 #include "hal/host_sync.h"
 #include "hal/host_shared.h"
 #include <stdio.h>
+enum
+{
+    EVENT_MODIFY_STATE_RIGHT = 2
+};
 typedef struct SyncMetadata
 {
     ULONG ready, event, manual;
@@ -78,7 +82,8 @@ static ULONG native_create(PSZ name, BOOL event, BOOL initial, ULONG *handle, BO
 }
 static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PSZ name)
 {
-    (void)security; /* Only the inherit word is meaningful, and 2ine handles are not inherited. */
+    /* The inherit word only marks the handle, and no child process ever receives one. */
+    (void)security;
     if (name && (!*name || strlen(name) > 240))
     {
         open32SetError(123);
@@ -203,9 +208,18 @@ BOOL open32CloseSync(ULONG handle)
 static BOOL event_operation(ULONG handle, BOOL set)
 {
     LxHandleBorrow borrow = {0};
-    if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_EVENT, &borrow))
+    uint32_t access = 0;
+    if (!lx_handle_access(handle, LX_HANDLE_OPEN32_EVENT, &access) ||
+        !lx_handle_borrow(handle, LX_HANDLE_OPEN32_EVENT, &borrow))
     {
         open32SetError(6);
+        return FALSE;
+    }
+    if (!(access & EVENT_MODIFY_STATE_RIGHT))
+    {
+        lx_handle_release(&borrow);
+        /* The original reports a refused SetEvent as a bad handle, ResetEvent as denied. */
+        open32SetError(set ? 6 : 5);
         return FALSE;
     }
     Open32Sync *sync = borrow.resource;

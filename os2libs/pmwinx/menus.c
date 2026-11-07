@@ -550,7 +550,7 @@ static BOOL resource_name_equal(const char *first, const char *second)
     }
     return *first == *second;
 }
-static ULONG menu_resource_id(ULONG module, PSZ name)
+ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
 {
     uintptr_t id = (uintptr_t)name;
     if (id <= UINT16_MAX)
@@ -564,15 +564,14 @@ static ULONG menu_resource_id(ULONG module, PSZ name)
     enum
     {
         resource_names = 255,
-        menu_type = 3,
         maximum_name_table = 1048576
     };
     ULONG size = 0, result = 0;
     void *data = NULL;
     if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
-        GLoaderState.queryResourceSize(module, resource_names, menu_type, &size) || size < 4 ||
+        GLoaderState.queryResourceSize(module, resource_names, type, &size) || size < 4 ||
         size > maximum_name_table ||
-        GLoaderState.getResource(module, resource_names, menu_type, &data) || !data)
+        GLoaderState.getResource(module, resource_names, type, &data) || !data)
         return 0;
     const uint8 *bytes = data;
     ULONG count = lx_guest_load_u32(bytes);
@@ -605,6 +604,10 @@ static ULONG menu_resource_id(ULONG module, PSZ name)
         return 0;
     }
     return result;
+}
+static ULONG menu_resource_id(ULONG module, PSZ name)
+{
+    return open32ResourceIdentity(module, name, 3); /* RT_MENU */
 }
 static char *loaded_menu_text(const char *source, ULONG codepage)
 {

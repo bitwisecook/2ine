@@ -47,25 +47,41 @@ LxHostFsError lx_host_file_metadata_get(LxHostFile *file, void *data, size_t cap
     *size = (size_t)count;
     return LX_HOST_FS_OK;
 }
-/* Linux cannot rewrite a birth time, so a guest-set value is retained beside the file. */
-LxHostFsError lx_host_file_created(LxHostFile *file, int64_t *seconds)
+static ssize_t extra_read(int fd, const char *path, const char *name, void *data, size_t size)
 {
-    *seconds = 0;
-    if (file->image)
-        return LX_HOST_FS_OK;
-    if (fgetxattr(file->fd, "user.2ine.created", seconds, sizeof *seconds) == sizeof *seconds)
-        return LX_HOST_FS_OK;
-    struct statx native;
-    if (!statx(file->fd, "", AT_EMPTY_PATH, STATX_BTIME, &native) &&
-        (native.stx_mask & STATX_BTIME))
-        *seconds = native.stx_btime.tv_sec;
-    return LX_HOST_FS_OK;
+    return fd >= 0 ? fgetxattr(fd, name, data, size) : getxattr(path, name, data, size);
 }
-LxHostFsError lx_host_file_set_created(LxHostFile *file, int64_t seconds)
+static LxHostFsError extra_write(int fd, const char *path, const char *name, const void *data,
+                                 size_t size)
 {
-    if (file->image)
-        return LX_HOST_FS_INVALID;
-    return fsetxattr(file->fd, "user.2ine.created", &seconds, sizeof seconds, 0) == 0
-               ? LX_HOST_FS_OK
-               : metadata_error();
+    int failed = fd >= 0 ? fsetxattr(fd, name, data, size, 0) : setxattr(path, name, data, size, 0);
+    return failed ? metadata_error() : LX_HOST_FS_OK;
+}
+/* Linux cannot rewrite a birth time, so a guest-set value is retained beside the file. */
+void lx_host_native_extras(int fd, const char *path, LxHostFileInfo *info)
+{
+    uint32_t attributes;
+    int64_t created;
+    if (extra_read(fd, path, "user.2ine.attributes", &attributes, sizeof attributes) ==
+        sizeof attributes)
+        info->attributes = attributes;
+    if (extra_read(fd, path, "user.2ine.created", &created, sizeof created) == sizeof created)
+    {
+        info->created = created;
+        return;
+    }
+    struct statx native;
+    if (!statx(fd >= 0 ? fd : AT_FDCWD, fd >= 0 ? "" : path, fd >= 0 ? AT_EMPTY_PATH : 0,
+               STATX_BTIME, &native) &&
+        (native.stx_mask & STATX_BTIME))
+        info->created = native.stx_btime.tv_sec;
+}
+LxHostFsError lx_host_native_set_created(int fd, const char *path, int64_t seconds)
+{
+    return extra_write(fd, path, "user.2ine.created", &seconds, sizeof seconds);
+}
+LxHostFsError lx_host_native_set_attributes(int fd, const char *path, unsigned attributes)
+{
+    uint32_t value = attributes;
+    return extra_write(fd, path, "user.2ine.attributes", &value, sizeof value);
 }

@@ -155,7 +155,10 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
     if (!lx_pm_transform_point(ps, &from, TRUE) || !lx_pm_transform_point(ps, &end, TRUE))
         return 0;
     point = &end;
+    BOOL hit = ps->gpi.pick_hit;
     lx_pm_boundary(ps,from.x<end.x?from.x:end.x,from.y<end.y?from.y:end.y,(LONG)llabs((int64_t)end.x-from.x)+1,(LONG)llabs((int64_t)end.y-from.y)+1);
+    ps->gpi.pick_hit = hit; /* The segment itself, not its bounding box, decides a hit. */
+    lx_pm_pick_line(ps, &from, &end);
     if(ps->gpi.initialized&&!ps->gpi.display_enabled)return lx_pm_hits(ps);
     if (ps->line_type == 8 || ps->primitive_mix[0] == 5)
         return lx_pm_hits(ps);

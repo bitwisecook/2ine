@@ -1084,6 +1084,7 @@ extern "C"
         OS2APIINFO(ord = 554, name = REGSETVALUE);
     OS2EXPORT BOOL OS2API ReleaseMutex(ULONG handle) OS2APIINFO(ord = 561, name = RELEASEMUTEX);
     OS2EXPORT BOOL OS2API RemoveDirectory(PSZ path) OS2APIINFO(ord = 563, name = REMOVEDIRECTORY);
+    OS2EXPORT BOOL OS2API AddFontResource(PSZ path) OS2APIINFO(ord = 4, name = ADDFONTRESOURCE);
     OS2EXPORT BOOL OS2API RemoveFontResource(PSZ path)
         OS2APIINFO(ord = 564, name = REMOVEFONTRESOURCE);
     OS2EXPORT BOOL OS2API ReplyMessage(LONG result) OS2APIINFO(ord = 568, name = REPLYMESSAGE);
@@ -1135,6 +1136,32 @@ extern "C"
         OS2APIINFO(ord = 5005, name = _DIALOGBOXINDIRECTPARAM);
     OS2EXPORT BOOL OS2API WinXTranslateMsg(ULONG anchor, PVOID input, PVOID output)
         OS2APIINFO(ord = 6011, name = WINXTRANSLATEMSG);
+    OS2EXPORT BOOL OS2API CreateProcess(PSZ application, PSZ command, PVOID process_security,
+                                        PVOID thread_security, BOOL inherit, ULONG flags,
+                                        PVOID environment, PSZ directory, PVOID startup,
+                                        PVOID information) OS2APIINFO(ord = 92, name = CREATEPROCESS);
+    OS2EXPORT BOOL OS2API DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process,
+                                          PULONG output, ULONG access, BOOL inherit, ULONG options)
+        OS2APIINFO(ord = 163, name = DUPLICATEHANDLE);
+    OS2EXPORT VOID OS2API ExitProcess(ULONG code) OS2APIINFO(ord = 192, name = EXITPROCESS);
+    OS2EXPORT BOOL OS2API ExitWindows(ULONG reserved, ULONG code)
+        OS2APIINFO(ord = 194, name = EXITWINDOWS);
+    OS2EXPORT VOID OS2API FatalAppExit(ULONG action, PSZ message)
+        OS2APIINFO(ord = 201, name = FATALAPPEXIT);
+    OS2EXPORT VOID OS2API FatalExit(ULONG code) OS2APIINFO(ord = 202, name = FATALEXIT);
+    OS2EXPORT ULONG OS2API OpenProcess(ULONG access, BOOL inherit, ULONG id)
+        OS2APIINFO(ord = 506, name = OPENPROCESS);
+    OS2EXPORT ULONG OS2API SuspendThread(ULONG handle) OS2APIINFO(ord = 681, name = SUSPENDTHREAD);
+    OS2EXPORT BOOL OS2API TerminateThread(ULONG handle, ULONG code)
+        OS2APIINFO(ord = 688, name = TERMINATETHREAD);
+    OS2EXPORT ULONG OS2API WinExec(PSZ command, ULONG show) OS2APIINFO(ord = 714, name = WINEXEC);
+    OS2EXPORT BOOL OS2API GetExitCodeProcess(ULONG handle, PULONG code)
+        OS2APIINFO(ord = 1005, name = GETEXITCODEPROCESS);
+    OS2EXPORT ULONG OS2API ShellExecute(ULONG window, PSZ operation, PSZ file, PSZ parameters,
+                                        PSZ directory, LONG show)
+        OS2APIINFO(ord = 1024, name = SHELLEXECUTE);
+    OS2EXPORT ULONG OS2API WaitForInputIdle(ULONG handle, ULONG timeout)
+        OS2APIINFO(ord = 1028, name = WAITFORINPUTIDLE);
 #ifdef __cplusplus
 }
 #endif

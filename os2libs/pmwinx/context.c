@@ -76,8 +76,9 @@ LONG SetMapMode(ULONG dc, LONG mode)
 
 BOOL open32IdentityMapping(Open32DC *dc)
 {
-    return dc && dc->window_x == dc->viewport_x && dc->window_y == dc->viewport_y &&
-           dc->window_width == dc->viewport_width && dc->window_height == dc->viewport_height;
+    return dc && !dc->world_active && !dc->fit_active && dc->window_x == dc->viewport_x &&
+           dc->window_y == dc->viewport_y && dc->window_width == dc->viewport_width &&
+           dc->window_height == dc->viewport_height;
 }
 static BOOL map_axis(LONG *value, LONG from, LONG to, LONG numerator, LONG denominator)
 {
@@ -88,8 +89,64 @@ static BOOL map_axis(LONG *value, LONG from, LONG to, LONG numerator, LONG denom
     *value = (LONG)result;
     return TRUE;
 }
+/* Scale and translation keep rectangles axis aligned; other world transforms do not. */
+BOOL open32Rotated(const Open32DC *dc)
+{
+    return dc->world_active && (dc->world[1] != 0 || dc->world[2] != 0);
+}
+static void apply_matrix(const double m[6], double *x, double *y)
+{
+    double a = *x, b = *y;
+    *x = a * m[0] + b * m[2] + m[4];
+    *y = a * m[1] + b * m[3] + m[5];
+}
+static BOOL invert_matrix(const double m[6], double *x, double *y)
+{
+    double determinant = m[0] * m[3] - m[1] * m[2], a = *x - m[4], b = *y - m[5];
+    if (determinant == 0)
+        return FALSE;
+    *x = (a * m[3] - b * m[2]) / determinant;
+    *y = (b * m[0] - a * m[1]) / determinant;
+    return TRUE;
+}
+static BOOL map_transformed(Open32DC *dc, LONG *x, LONG *y, BOOL device)
+{
+    double a = *x, b = *y;
+    double sx = (double)dc->viewport_width / dc->window_width,
+           sy = (double)dc->viewport_height / dc->window_height;
+    if (device)
+    {
+        if (dc->world_active)
+            apply_matrix(dc->world, &a, &b);
+        a = (a - dc->window_x) * sx + dc->viewport_x;
+        b = (b - dc->window_y) * sy + dc->viewport_y;
+        if (dc->fit_active)
+            apply_matrix(dc->fit, &a, &b);
+    }
+    else
+    {
+        if (dc->fit_active && !invert_matrix(dc->fit, &a, &b))
+            return FALSE;
+        a = (a - dc->viewport_x) / sx + dc->window_x;
+        b = (b - dc->viewport_y) / sy + dc->window_y;
+        if (dc->world_active && !invert_matrix(dc->world, &a, &b))
+            return FALSE;
+    }
+    if (fabs(a) > INT32_MAX || fabs(b) > INT32_MAX)
+        return FALSE;
+    *x = (LONG)lround(a);
+    *y = (LONG)lround(b);
+    return TRUE;
+}
 BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device)
 {
+    if (dc->world_active || dc->fit_active)
+    {
+        if (map_transformed(dc, x, y, device))
+            return TRUE;
+        open32SetError(87);
+        return FALSE;
+    }
     LONG a = *x, b = *y;
     BOOL valid =
         device

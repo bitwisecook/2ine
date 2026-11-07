@@ -12,6 +12,7 @@
 #include "os2libs/pmshapi/profiles.h"
 #include "hal/host_fs.h"
 #include "hal/host_sync.h"
+#include <ctype.h>
 #include <strings.h>
 
 typedef PmwpRecord Object;
@@ -1094,8 +1095,20 @@ static BOOL open_object(ULONG handle, ULONG view, BOOL activate, unsigned depth,
         end(profile, lock);
         return target && open_object(target, view, activate, depth + 1, opened);
     }
+    /* A view opened by a class method carries `opened`; its subclass record opens as
+       the base class it extends. Any other class opens through its SOM methods. */
+    char executable[4096], parameters[32768];
+    BOOL has_program = property(object.setup, "EXENAME", executable, sizeof executable);
+    BOOL folder = !strcmp(object.class_name, "WPFolder") || (opened && !has_program);
+    BOOL program = !strcmp(object.class_name, "WPProgram") || (opened && has_program);
+    if (!folder && !program)
+    {
+        free(object.data);
+        end(profile, lock);
+        return pmwpViewStored(handle, view);
+    }
     BOOL result = FALSE;
-    if (!strcmp(object.class_name, "WPFolder"))
+    if (folder)
     {
         char folder_id[1024];
         if (!ensure_identifier(profile, handle, folder_id, sizeof folder_id))
@@ -1172,10 +1185,9 @@ static BOOL open_object(ULONG handle, ULONG view, BOOL activate, unsigned depth,
         free(title);
         return result;
     }
-    if (!strcmp(object.class_name, "WPProgram"))
+    if (program)
     {
-        char executable[4096], parameters[32768];
-        if (property(object.setup, "EXENAME", executable, sizeof executable))
+        if (has_program)
         {
             parameters[0] = 0;
             property(object.setup, "PARAMETERS", parameters, sizeof parameters);
@@ -1324,6 +1336,21 @@ static BOOL update_field(ULONG handle, const char *title, const char *location)
     end(profile, lock);
     return result;
 }
+BOOL pmwpStoreSetClass(ULONG handle, const char *class_name)
+{
+    LxHostFile *lock;
+    HINI profile = begin(&lock);
+    Object object = {0};
+    BOOL result = FALSE;
+    if (profile && load(profile, handle, &object))
+    {
+        object.class_name = (char *)class_name;
+        result = save(profile, handle, &object);
+    }
+    free(object.data);
+    end(profile, lock);
+    return result;
+}
 BOOL pmwpStoreSetTitle(ULONG handle, const char *title)
 {
     return update_field(handle, title, NULL);
@@ -1439,4 +1466,140 @@ BOOL pmwpStoreOpen(ULONG handle, ULONG view, BOOL activate, HWND *frame)
 BOOL pmwpSetupValue(const char *setup, const char *key, char *value, size_t capacity)
 {
     return property(setup, key, value, capacity);
+}
+BOOL pmwpStoreClassModule(const char *class_name, char *module, size_t capacity)
+{
+    LxHostFile *lock;
+    HINI profile = begin(&lock);
+    BOOL result = profile && PrfQueryProfileString(profile, "classes", (PSZ)class_name, NULL,
+                                                   module, (ULONG)capacity) != 0;
+    end(profile, lock);
+    return result;
+}
+BOOL pmwpStoreReplacement(const char *class_name, char *replacement, size_t capacity)
+{
+    LxHostFile *lock;
+    HINI profile = begin(&lock);
+    BOOL result = profile && PrfQueryProfileString(profile, "replacements", (PSZ)class_name, NULL,
+                                                   replacement, (ULONG)capacity) != 0;
+    end(profile, lock);
+    return result;
+}
+BOOL pmwpStoreStartProgram(ULONG handle, const char *parameters)
+{
+    Object object = {0};
+    if (!pmwpStoreLoad(handle, &object))
+        return FALSE;
+    char executable[4096], own[32768];
+    BOOL result = FALSE;
+    if (property(object.setup, "EXENAME", executable, sizeof executable))
+    {
+        own[0] = 0;
+        if (parameters)
+            snprintf(own, sizeof own, "%s", parameters);
+        else
+            property(object.setup, "PARAMETERS", own, sizeof own);
+        STARTDATA start = {0};
+        start.Length = sizeof start;
+        start.PgmName = executable;
+        start.PgmTitle = object.title;
+        start.PgmInputs = (PBYTE)own;
+        ULONG session;
+        PID pid;
+        result = DosStartSession(&start, &session, &pid) == 0;
+    }
+    free(object.data);
+    return result;
+}
+char *pmwpHostPath(const char *guest_path)
+{
+    uint32 error;
+    return GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(guest_path, &error) : NULL;
+}
+int pmwpPathKind(const char *guest_path)
+{
+    char *host = pmwpHostPath(guest_path);
+    LxHostFileInfo info;
+    int result = 0;
+    if (host && lx_host_path_info(host, &info) == LX_HOST_FS_OK)
+        result = info.kind == LX_HOST_FILE_DIRECTORY ? 2 : 1;
+    free(host);
+    return result;
+}
+/* '*' and '?' are the only wildcards in an association filter. */
+static BOOL filter_matches(const char *filter, const char *name)
+{
+    for (; *filter; filter++, name++)
+    {
+        if (*filter == '*')
+        {
+            while (*filter == '*')
+                filter++;
+            if (!*filter)
+                return TRUE;
+            for (; *name; name++)
+                if (filter_matches(filter, name))
+                    return TRUE;
+            return FALSE;
+        }
+        if (!*name ||
+            (*filter != '?' && toupper((unsigned char)*filter) != toupper((unsigned char)*name)))
+            return FALSE;
+    }
+    return !*name;
+}
+static BOOL filter_list_matches(char *filters, const char *name)
+{
+    char *state = NULL;
+    for (char *item = strtok_r(filters, ",", &state); item; item = strtok_r(NULL, ",", &state))
+        if (filter_matches(item, name))
+            return TRUE;
+    return FALSE;
+}
+BOOL lx_pmwp_open_associated(PSZ path)
+{
+    const char *name = path;
+    for (const char *p = path; *p; p++)
+        if (*p == '\\' || *p == '/' || *p == ':')
+            name = p + 1;
+    char executable[4096], parameters[32768], filters[1024];
+    BOOL found = FALSE;
+    LxHostFile *lock;
+    HINI profile = begin(&lock);
+    ULONG size = 0;
+    char *list = profile ? keys(profile, &size) : NULL;
+    for (char *key = list; key && key < list + size && *key && !found; key += strlen(key) + 1)
+    {
+        Object object = {0};
+        if (!load(profile, (ULONG)strtoul(key, NULL, 16), &object))
+            continue;
+        if (!strcmp(object.class_name, "WPProgram") &&
+            property(object.setup, "ASSOCFILTER", filters, sizeof filters) &&
+            property(object.setup, "EXENAME", executable, sizeof executable) &&
+            filter_list_matches(filters, name))
+        {
+            parameters[0] = 0;
+            property(object.setup, "PARAMETERS", parameters, sizeof parameters);
+            found = TRUE;
+        }
+        free(object.data);
+    }
+    free(list);
+    end(profile, lock);
+    if (!found)
+        return FALSE;
+    size_t bytes = strlen(parameters) + strlen(path) + 4;
+    char *inputs = malloc(bytes);
+    if (!inputs)
+        return FALSE;
+    snprintf(inputs, bytes, "%s%s\"%s\"", parameters, *parameters ? " " : "", path);
+    STARTDATA start = {0};
+    start.Length = sizeof start;
+    start.PgmName = executable;
+    start.PgmInputs = (PBYTE)inputs;
+    ULONG session;
+    PID pid;
+    BOOL result = DosStartSession(&start, &session, &pid) == 0;
+    free(inputs);
+    return result;
 }

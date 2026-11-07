@@ -30,12 +30,13 @@ HWND WinQueryDesktopWindow(HAB hab, HDC dc)
 BOOL WinQueryWindowProcess(HWND handle, PULONG process, PULONG thread)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    if (!anchor || !getWindowFromHWND(anchor, handle))
+    ULONG owner = LX_GETTIB2()->tib2_ultid;
+    if ((!anchor || !getWindowFromHWND(anchor, handle)) && !windowOwnerThread(handle, &owner))
         return FALSE;
     if (process)
         *process = GLoaderState.pib.pib_ulpid;
     if (thread)
-        *thread = LX_GETTIB2()->tib2_ultid;
+        *thread = owner;
     return TRUE;
 }
 static RECTL intersect(RECTL a, RECTL b)

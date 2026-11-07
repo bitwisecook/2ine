@@ -30,11 +30,16 @@ int main(int argc, char **argv)
     LONG caps[42];
     CHECK(DevQueryCaps(dc, 0, 42, caps));
     CHECK(caps[37] == (LONG)dpi && caps[38] == (LONG)dpi);
+    const char *depth_text = getenv("TWOINE_DISPLAY_DEPTH");
+    const LONG depth = depth_text ? strtol(depth_text, NULL, 10) : 24;
+    CHECK(caps[16] == depth && caps[14] == 1L << depth && caps[33] == 1L << depth);
     CHECK(WinQuerySysValue(HWND_DESKTOP, 30) == (LONG)((20 * dpi + 48) / 96));
     CHECK(WinQuerySysValue(HWND_DESKTOP, 22) == (LONG)((16 * dpi + 48) / 96));
     SIZEL size = {0, 0};
     HPS space = GpiCreatePS(anchor, dc, &size, 0x0c | GPIA_ASSOC);
     CHECK(space);
+    LONG formats[2];
+    CHECK(GpiQueryDeviceBitmapFormats(space, 2, formats) && formats[0] == 1 && formats[1] == depth);
     POINTL inch = {254, 254};
     CHECK(GpiConvert(space, 1, 5, 1, &inch));
     CHECK(inch.x == (LONG)dpi && inch.y == (LONG)dpi);

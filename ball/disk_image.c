@@ -30,7 +30,7 @@
 typedef struct Node
 {
     uint64_t offset, size;
-    int64_t modified;
+    int64_t modified, accessed, created;
     uint32_t cluster;
     int directory;
     uint64_t record;
@@ -747,6 +747,10 @@ static int read_entries(Disk *d, Node directory, EntryCallback callback, void *c
             node.record = directory_offset(d, directory, at - 32);
             node.attributes = r[11];
             node.modified = tb_dos_time(le16(r + 24), le16(r + 22));
+            node.accessed = tb_dos_time(le16(r + 18), 0);
+            node.created = tb_dos_time(le16(r + 16), le16(r + 14));
+            node.accessed = node.accessed == INT64_MIN ? 0 : node.accessed;
+            node.created = node.created == INT64_MIN ? 0 : node.created;
             node.cluster = le16(r + 26);
             node.size = le32(r + 28);
             node.directory = !!(r[11] & 16);
@@ -896,7 +900,10 @@ int tb_image_info(const char *path, TbImageInfo *info)
     int ok = lookup(&disk, member, &node);
     if (ok)
     {
-        *info = (TbImageInfo){.modified = node.modified};
+        *info = (TbImageInfo){.modified = node.modified,
+                              .accessed = node.accessed,
+                              .created = node.created,
+                              .attributes = node.attributes & 0x26};
         info->size = node.size;
         info->readonly = disk.readonly || !!(node.attributes & 1);
         if (disk.fat_bits && !disk.readonly)
@@ -2015,12 +2022,19 @@ int tb_image_readonly(const char *path, int readonly)
     close_disk(&disk);
     return ok;
 }
-int tb_image_modified(const char *path, const char *expected, int64_t seconds)
+static void store_stamp(unsigned char *field, uint32_t stamp)
+{
+    field[0] = (unsigned char)stamp;
+    field[1] = (unsigned char)(stamp >> 8);
+    field[2] = (unsigned char)(stamp >> 16);
+    field[3] = (unsigned char)(stamp >> 24);
+}
+int tb_image_stamps(const char *path, const char *expected, const TbImageStamps *stamps)
 {
     if (tb_hpfs_volume(path))
-        return tb_hpfs_modify(path, expected, TB_FS_TOUCH, (uint64_t)seconds, NULL, 0, NULL);
+        return tb_hpfs_modify(path, expected, TB_FS_TOUCH, 0, stamps, 0, NULL);
     if (tb_fat_volume(path))
-        return tb_fat_modify(path, expected, TB_FS_TOUCH, (uint64_t)seconds, NULL, 0, NULL);
+        return tb_fat_modify(path, expected, TB_FS_TOUCH, 0, stamps, 0, NULL);
     Disk disk;
     const char *member;
     if (!stage_disk(path, expected, &disk, &member))
@@ -2032,11 +2046,40 @@ int tb_image_modified(const char *path, const char *expected, int64_t seconds)
     if (ok)
     {
         unsigned char *record = disk.memory + node.record;
-        uint32_t stamp = tb_dos_stamp(seconds);
-        record[22] = (unsigned char)stamp;
-        record[23] = (unsigned char)(stamp >> 8);
-        record[24] = (unsigned char)(stamp >> 16);
-        record[25] = (unsigned char)(stamp >> 24);
+        if (stamps->created != INT64_MIN)
+            store_stamp(record + 14, tb_dos_stamp(stamps->created));
+        if (stamps->accessed != INT64_MIN)
+        {
+            uint32_t stamp = tb_dos_stamp(stamps->accessed);
+            record[18] = (unsigned char)(stamp >> 16);
+            record[19] = (unsigned char)(stamp >> 24);
+        }
+        if (stamps->modified != INT64_MIN)
+            store_stamp(record + 22, tb_dos_stamp(stamps->modified));
+        ok = commit_disk(&disk);
+    }
+    close_disk(&disk);
+    return ok;
+}
+int tb_image_attributes(const char *path, const char *expected, unsigned attributes)
+{
+    attributes &= 0x26;
+    if (tb_hpfs_volume(path))
+        return tb_hpfs_modify(path, expected, TB_FS_ATTRIBUTES, attributes, NULL, 0, NULL);
+    if (tb_fat_volume(path))
+        return tb_fat_modify(path, expected, TB_FS_ATTRIBUTES, attributes, NULL, 0, NULL);
+    Disk disk;
+    const char *member;
+    if (!stage_disk(path, expected, &disk, &member))
+        return 0;
+    Node node;
+    int ok = lookup(&disk, member, &node);
+    if (ok && !node.record)
+        ok = failure(EACCES);
+    if (ok)
+    {
+        unsigned char *record = disk.memory + node.record;
+        record[11] = (unsigned char)((record[11] & ~0x26u) | attributes);
         ok = commit_disk(&disk);
     }
     close_disk(&disk);

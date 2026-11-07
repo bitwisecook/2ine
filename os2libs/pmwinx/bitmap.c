@@ -9,7 +9,32 @@
 /* Windows mask transfers convert between monochrome bits and DC colors before
    applying the raster operation. PM's RGB raster backing has no implicit GDI
    conversion: copying colored pixels into a one-bit mask retains color noise. */
-BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
+/* A source rectangle reaching past its bitmap transfers only the part inside it, and the
+   destination shrinks in proportion. FALSE means nothing of the source remains. */
+static BOOL clip_source(const POINTL *points, const PmBitmap *bitmap, POINTL *clipped)
+{
+    memcpy(clipped, points, 4 * sizeof *clipped);
+    int64_t source_width = points[3].x - points[2].x, source_height = points[3].y - points[2].y;
+    int64_t target_width = points[1].x - points[0].x, target_height = points[1].y - points[0].y;
+    if (source_width <= 0 || source_height <= 0)
+        return TRUE;
+    int64_t left = points[2].x < 0 ? -(int64_t)points[2].x : 0;
+    int64_t bottom = points[2].y < 0 ? -(int64_t)points[2].y : 0;
+    int64_t right = points[3].x > (LONG)bitmap->width ? points[3].x - (int64_t)bitmap->width : 0;
+    int64_t top = points[3].y > (LONG)bitmap->height ? points[3].y - (int64_t)bitmap->height : 0;
+    if (left + right >= source_width || bottom + top >= source_height)
+        return FALSE;
+    clipped[0].x += (LONG)(left * target_width / source_width);
+    clipped[1].x -= (LONG)(right * target_width / source_width);
+    clipped[0].y += (LONG)(bottom * target_height / source_height);
+    clipped[1].y -= (LONG)(top * target_height / source_height);
+    clipped[2].x += (LONG)left;
+    clipped[3].x -= (LONG)right;
+    clipped[2].y += (LONG)bottom;
+    clipped[3].y -= (LONG)top;
+    return TRUE;
+}
+static BOOL bitmap_blt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
 {
     PresentationSpace *source_ps = lx_pm_font_space(source);
     PresentationSpace *destination_ps = lx_pm_font_space(destination);
@@ -21,6 +46,13 @@ BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
     BOOL source_mono = source_bitmap && source_bitmap->planes * source_bitmap->depth == 1;
     BOOL destination_mono =
         destination_bitmap && destination_bitmap->planes * destination_bitmap->depth == 1;
+    POINTL clipped[4];
+    if (source_bitmap)
+    {
+        if (!clip_source(points, source_bitmap, clipped))
+            return TRUE;
+        points = clipped;
+    }
     if (source_mono == destination_mono)
         return GpiBitBlt(destination, source, 4, points, rop, 0) == 1;
     LONG width = points[3].x - points[2].x, height = points[3].y - points[2].y;
@@ -66,6 +98,30 @@ BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
     if (!ok)
         open32SetError(87);
     return ok;
+}
+/* A raster operation that reads the pattern takes the selected brush, which PM holds
+   as area attributes of the presentation space for the duration of the transfer. */
+BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
+{
+    PresentationSpace *space = lx_pm_font_space(destination);
+    Open32DC *dc = open32FindDC(destination);
+    uint32 rgb = 0;
+    if (!space || !dc || !((rop ^ (rop >> 4)) & 15) ||
+        !open32BrushPixel(dc, points[0].x, points[0].y, &rgb))
+        return bitmap_blt(destination, source, points, rop);
+    LONG saved_color = space->primitive_color[3];
+    LONG saved_pattern = space->pattern, saved_set = space->pattern_set;
+    BOOL saved_mode = space->rgb_colors;
+    space->rgb_colors = TRUE;
+    space->primitive_color[3] = (LONG)(rgb & 0xFFFFFF);
+    space->pattern = 16;
+    space->pattern_set = 0;
+    BOOL result = bitmap_blt(destination, source, points, rop);
+    space->rgb_colors = saved_mode;
+    space->primitive_color[3] = saved_color;
+    space->pattern = saved_pattern;
+    space->pattern_set = saved_set;
+    return result;
 }
 ULONG LoadBitmap(HMODULE module, PSZ name)
 {
@@ -221,12 +277,16 @@ BOOL open32BitmapBytes(LONG width, LONG height, ULONG planes, ULONG depth, size_
         open32SetError(87);
         return FALSE;
     }
-    if (planes != 1 || (depth != 1 && depth != 4 && depth != 8 && depth != 24 && depth != 32))
+    /* Plane count multiplies the depth of the chunky raster that backs every bitmap. */
+    ULONG bits = planes * depth;
+    if (!planes || planes > 32 || depth > 32 ||
+        (bits != 1 && bits != 2 && bits != 4 && bits != 8 && bits != 16 && bits != 24 &&
+         bits != 32))
     {
         open32SetError(50);
         return FALSE;
     }
-    *bytes = ((size_t)width * depth + 15) / 16 * 2 * (size_t)height;
+    *bytes = ((size_t)width * bits + 15) / 16 * 2 * (size_t)height;
     return TRUE;
 }
 void open32BitmapPalette(ULONG depth, uint32 colors[256])
@@ -238,6 +298,7 @@ void open32BitmapPalette(ULONG depth, uint32 colors[256])
     unsigned count = depth <= 8 ? 1u << depth : 0;
     for (unsigned i = 0; i < count; i++)
         colors[i] = depth == 1   ? (i ? 0xFFFFFF : 0)
+                    : depth == 2 ? i * 0x555555
                     : depth == 4 ? vga[i]
                                  : ((i >> 5) * 255 / 7) << 16 | (((i >> 2) & 7) * 255 / 7) << 8 |
                                        (i & 3) * 85;
@@ -248,6 +309,8 @@ ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bit
     size_t bytes;
     if (!open32BitmapBytes(width, height, planes, depth, &bytes) || !open32Presentation())
         return 0;
+    depth *= planes;
+    planes = 1;
     ULONG handle = lx_pm_bitmap_create((unsigned)width, (unsigned)height, planes, depth);
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = handle ? lx_pm_bitmap(handle, &borrow) : NULL;
@@ -276,12 +339,17 @@ ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bit
                              index = (row[bit / 8] >> (8 - depth - bit % 8)) & ((1u << depth) - 1);
                     rgb = bitmap->palette[index];
                 }
+                else if (depth == 16)
+                {
+                    ULONG value = lx_guest_load_u16(row + x * 2);
+                    rgb = (value & 0x7c00) << 9 | (value & 0x3e0) << 6 | (value & 0x1f) << 3;
+                }
                 else
                 {
                     const uint8 *pixel = row + x * (depth / 8);
                     rgb = (uint32)pixel[2] << 16 | (uint32)pixel[1] << 8 | pixel[0];
                 }
-                bitmap->pixels[(size_t)y * width + x] = rgb;
+                bitmap->pixels[(size_t)((unsigned)height - 1 - y) * width + x] = rgb;
             }
         }
     }
@@ -308,7 +376,8 @@ static unsigned bitmap_nearest(const uint32 *palette, unsigned count, uint32 rgb
     }
     return best;
 }
-/* DDB scanlines are WORD aligned (unlike DWORD-aligned DIB scanlines). */
+/* DDB scanlines are WORD aligned, unlike DWORD-aligned DIB scanlines, and run from the top row;
+   PM bitmap rows run from the bottom. */
 static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
 {
     LxHandleBorrow borrow = {0};
@@ -345,7 +414,7 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
     for (unsigned y = 0; y < bitmap->height; y++)
         for (unsigned x = 0; x < bitmap->width; x++)
         {
-            uint32 rgb = bitmap->pixels[(size_t)y * bitmap->width + x];
+            uint32 rgb = bitmap->pixels[(size_t)(bitmap->height - 1 - y) * bitmap->width + x];
             uint8 *row = encoded + y * stride;
             if (bitmap->depth <= 8)
             {
@@ -353,6 +422,9 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
                          index = bitmap_nearest(palette, 1u << bitmap->depth, rgb);
                 row[bit / 8] |= (uint8)(index << (8 - bitmap->depth - bit % 8));
             }
+            else if (bitmap->depth == 16)
+                lx_guest_store_u16(row + x * 2, (uint16)((rgb >> 9 & 0x7c00) | (rgb >> 6 & 0x3e0) |
+                                                         (rgb >> 3 & 0x1f)));
             else
             {
                 uint8 *p = row + x * (bitmap->depth / 8);
@@ -376,12 +448,17 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
                                      ((1u << bitmap->depth) - 1);
                     rgb = palette[index];
                 }
+                else if (bitmap->depth == 16)
+                {
+                    ULONG value = lx_guest_load_u16(row + x * 2);
+                    rgb = (value & 0x7c00) << 9 | (value & 0x3e0) << 6 | (value & 0x1f) << 3;
+                }
                 else
                 {
                     uint8 *p = row + x * (bitmap->depth / 8);
                     rgb = (uint32)p[2] << 16 | (uint32)p[1] << 8 | p[0];
                 }
-                bitmap->pixels[(size_t)y * bitmap->width + x] = rgb;
+                bitmap->pixels[(size_t)(bitmap->height - 1 - y) * bitmap->width + x] = rgb;
             }
     }
     else

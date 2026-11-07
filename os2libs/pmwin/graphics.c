@@ -50,7 +50,7 @@ LONG lx_pm_color(HPS hps, LONG color)
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
     if (!ps || (ps->rgb_colors ? color < CLR_FALSE || color > 0xffffff
                                : color < CLR_FALSE || (color > CLR_PALEGRAY &&
-                                                       (color >= 256 || (!ps->color_valid[color] && (!ps->palette_lease.resource || (ULONG)color>=((PmPalette*)ps->palette_lease.resource)->count))))))
+                                                       !((ps->palette_lease.resource && (ULONG)color<((PmPalette*)ps->palette_lease.resource)->count) || (color < 256 && ps->color_valid[color])))))
         return -255;
     LONG previous = ps->color;
     ps->color = color;
@@ -69,7 +69,9 @@ BOOL lx_pm_record_point(PresentationSpace *ps, const POINTL *point, BOOL move)
         if (!points) return FALSE;
         path->points = points; path->capacity = capacity;
     }
-    path->points[path->count++] = (PmPathPoint){*point, move};
+    POINTL device = *point;
+    if (!lx_pm_transform_point(ps, &device, TRUE)) return FALSE;
+    path->points[path->count++] = (PmPathPoint){*point, move, device};
     return TRUE;
 }
 BOOL lx_pm_move(HPS hps, const POINTL *point)
@@ -98,6 +100,14 @@ BOOL lx_pm_erase(HPS hps)
 HPS WinGetPS(HWND window)
 {
     return acquirePresentationSpace(window, 0, NULL, FALSE);
+}
+HPS lx_pm_get_clip_ps(HWND window, ULONG flags)
+{
+    HPS handle = WinGetPS(window);
+    PresentationSpace *ps = handle ? lx_pm_font_space(handle) : NULL;
+    if (ps)
+        ps->clip_flags = flags;
+    return handle;
 }
 HPS WinGetScreenPS(HWND desktop)
 {

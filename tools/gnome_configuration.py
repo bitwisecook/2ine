@@ -1032,6 +1032,18 @@ class GraphicsMediaPage(Adw.PreferencesPage):
             lambda row, _prop: self.save("display_dpi", str(values[row.get_selected()])),
         )
         display.add(row)
+        depth_values = [24, 16, 8, 4]
+        depth = int(float(self.settings.get("display_depth", 24)))
+        depth_row = Adw.ComboRow(
+            title="Colour Depth",
+            model=Gtk.StringList.new([f"{value}-bit" for value in depth_values]),
+        )
+        depth_row.set_selected(depth_values.index(depth) if depth in depth_values else 0)
+        depth_row.connect(
+            "notify::selected",
+            lambda row, _prop: self.save("display_depth", str(depth_values[row.get_selected()])),
+        )
+        display.add(depth_row)
         chrome_values = ["native", "os2", "both"]
         chrome = Adw.ComboRow(
             title="Title Bars",

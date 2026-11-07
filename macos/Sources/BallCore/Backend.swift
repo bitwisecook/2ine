@@ -162,7 +162,8 @@ public actor BallBackend {
             environment.merge(plan.environment) { _, value in value }
             if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
             let desktop = try await DesktopLaunchBundle.create(ball: canonicalBall, sessionID: sessionID,
-                                                          loader: URL(filePath: executable), identity: plan.desktopIdentity)
+                                                          loader: URL(filePath: executable), identity: plan.desktopIdentity,
+                                                           fallbackIcon: Bundle.main.url(forResource: "Twoine", withExtension: "icns"))
             environment["TWOINE_DESKTOP_SESSION"] = sessionID
             environment["TWOINE_DESKTOP_NAME"] = desktop.name
             if let icon = desktop.icon { environment["TWOINE_DESKTOP_ICON"] = icon.path }

@@ -1317,18 +1317,26 @@ static uint32 bridge32_CreateIcon(uint8 *a)
 {
     LONG width = (LONG)lx_guest_load_u32(a + 4), height = (LONG)lx_guest_load_u32(a + 8);
     ULONG planes = lx_guest_load_u32(a + 12) & 255, depth = lx_guest_load_u32(a + 16) & 255;
-    /* Without XOR bits the icon is a monochrome AND mask. */
-    if (!lx_guest_load_u32(a + 24))
-        planes = depth = 1;
-    size_t mask_size = 0, pixel_size = 0;
+    ULONG color_address = lx_guest_load_u32(a + 24);
+    size_t mask_size = 0;
     O32GraphicsBuffer mask = {0}, pixels = {0};
     ULONG result = 0;
-    if (open32BitmapBytes(width, height, 1, 1, &mask_size) &&
-        open32BitmapBytes(width, height, planes, depth, &pixel_size) &&
-        o32_graphics_buffer(lx_guest_load_u32(a + 20), mask_size, LX_GUEST_READ, FALSE, &mask) &&
-        o32_graphics_buffer(lx_guest_load_u32(a + 24), pixel_size, LX_GUEST_READ, TRUE, &pixels))
-        result =
-            CreateIcon(lx_guest_load_u32(a), width, height, planes, depth, mask.host, pixels.host);
+    /* Both planes use DWORD-aligned rows; color data is read only below 16 bits per pel. */
+    if (!color_address || planes * depth >= 16)
+    {
+        planes = depth = 1;
+        color_address = 0;
+    }
+    if (open32BitmapBytes(width, height, 1, 1, &mask_size))
+    {
+        uint64 mask_bytes = ((uint64)width + 31) / 32 * 4 * (uint64)height;
+        uint64 color_bytes = ((uint64)width * planes * depth + 31) / 32 * 4 * (uint64)height;
+        if (o32_graphics_buffer(lx_guest_load_u32(a + 20), mask_bytes, LX_GUEST_READ, FALSE,
+                                &mask) &&
+            o32_graphics_buffer(color_address, color_bytes, LX_GUEST_READ, TRUE, &pixels))
+            result = CreateIcon(lx_guest_load_u32(a), width, height, planes, depth, mask.host,
+                                pixels.host);
+    }
     o32_graphics_release(&pixels);
     o32_graphics_release(&mask);
     return result;
@@ -1411,17 +1419,34 @@ static uint32 bridge32_Escape(uint8 *a)
     LONG code = (LONG)lx_guest_load_u32(a + 4), count = (LONG)lx_guest_load_u32(a + 8);
     O32GraphicsBuffer input = {0}, output = {0};
     ULONG result = 0;
-    size_t output_bytes = code == 12 || code == 13 || code == 14 ? 8 : 0;
     /* SETABORTPROC passes the procedure itself in the input pointer. */
     if (code == 9)
-        result = (ULONG)SetAbortProc(lx_guest_load_u32(a), lx_guest_load_u32(a + 12));
-    else if (count < 0 || count > 65536)
+        return (ULONG)SetAbortProc(lx_guest_load_u32(a), lx_guest_load_u32(a + 12));
+    if (count < 0 || count > 65536)
         open32SetError(87);
     else if (o32_graphics_buffer(lx_guest_load_u32(a + 12), (ULONG)count, LX_GUEST_READ, count == 0,
-                                 &input) &&
-             o32_graphics_buffer(lx_guest_load_u32(a + 16), output_bytes, LX_GUEST_WRITE, TRUE,
-                                 &output))
-        result = (ULONG)Escape(lx_guest_load_u32(a), code, count, input.host, output.host);
+                                 &input))
+    {
+        size_t output_bytes = code == 12 || code == 13 || code == 14 ? 8
+                              : code == 17 || code == 23             ? (size_t)(count == 2 ? 2 : 4)
+                              : code == 20                           ? 15
+                              : code == 29                           ? 4
+                                                                     : 0;
+        if (code == 31 && (count == 2 || count == 4))
+        {
+            LONG bins = count == 4 ? (LONG)lx_guest_load_u32(input.host)
+                                   : (SHORT)lx_guest_load_u16(input.host);
+            output_bytes = bins > 0 && bins <= 256 ? (size_t)bins * 26 : 0;
+        }
+        if (code == 0x101 && count == 2)
+        {
+            const uint8 *range = input.host;
+            output_bytes = range[1] >= range[0] ? ((size_t)range[1] - range[0] + 1) * 2 : 0;
+        }
+        if (o32_graphics_buffer(lx_guest_load_u32(a + 16), output_bytes, LX_GUEST_WRITE, TRUE,
+                                &output))
+            result = (ULONG)Escape(lx_guest_load_u32(a), code, count, input.host, output.host);
+    }
     o32_graphics_release(&output);
     o32_graphics_release(&input);
     return result;
@@ -1435,11 +1460,13 @@ static uint32 bridge32_DeviceCapabilities(uint8 *a)
          *port_name = port ? lx_execution_copy_string(GLoaderState.execution, port, 4096) : NULL;
     O32GraphicsBuffer output = {0};
     ULONG result = UINT32_MAX;
-    size_t size = capability == 2 || capability == 6    ? 2
-                  : capability == 3 || capability == 13 ? 8
-                  : capability == 12                    ? 24
-                  : capability == 16                    ? 64
-                                                        : 0;
+    size_t size = capability == 2    ? 6
+                  : capability == 6  ? 2
+                  : capability == 3  ? 24
+                  : capability == 13 ? 8
+                  : capability == 12 ? 24
+                  : capability == 16 ? 192
+                                     : 0;
     if ((!device || device_name) && (!port || port_name) &&
         o32_graphics_buffer(lx_guest_load_u32(a + 12), size, LX_GUEST_WRITE, TRUE, &output))
         result = DeviceCapabilities(device_name, port_name, capability, output.host,

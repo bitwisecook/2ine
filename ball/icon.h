@@ -11,6 +11,9 @@ typedef struct TbIconImage
 } TbIconImage;
 TbIconImage *tb_icon_bitmap(const uint8_t *bytes, size_t size);
 TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size);
+/* Returns an owned copy of one LX resource, or NULL. */
+uint8_t *tb_executable_resource(const uint8_t *bytes, size_t size, unsigned type, unsigned id,
+                                size_t *length);
 TbIconImage *tb_icon_executable_resource(const uint8_t *bytes, size_t size, unsigned id);
 /* First ordinal-zero nonresident name: the LX/NE module description. */
 char *tb_executable_description(const uint8_t *bytes, size_t size);

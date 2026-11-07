@@ -7,6 +7,13 @@ int open32PathLine(struct Open32DC *dc, LONG x, LONG y, BOOL move);
 void open32PathCleanup(struct Open32DC *dc);
 BOOL open32PathClose(struct Open32DC *dc);
 BOOL open32PathFill(ULONG handle, BOOL stroke);
+BOOL open32PathWiden(struct Open32DC *dc);
+BOOL open32PathClip(ULONG handle, LONG mode);
+BOOL open32AngleArc(ULONG handle, LONG x, LONG y, ULONG radius, float start, float sweep);
+BOOL open32ArcTo(ULONG handle, LONG left, LONG top, LONG right, LONG bottom, LONG start_x,
+                 LONG start_y, LONG end_x, LONG end_y);
+BOOL open32FloodFill(ULONG handle, LONG x, LONG y, ULONG color, ULONG mode);
+BOOL open32WorldTransform(ULONG handle, const double matrix[6], ULONG mode);
 BOOL open32Chord(ULONG handle, LONG left, LONG top, LONG right, LONG bottom, LONG start_x,
                  LONG start_y, LONG end_x, LONG end_y);
 #endif

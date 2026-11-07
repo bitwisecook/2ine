@@ -1056,7 +1056,7 @@ APIRET16 Dos16FSRamSemRequest(PDOSFSRSEM semaphore, LONG timeout)
     uint8 *sem = semaphore;
     const uint32 pid = fsRamSemPid();
     /* An exit list runs as TID 0xffff so it can recover its own threads' semaphores. */
-    const uint32 tid = (linfo->rfProcStatus & 1) ? 0xffff : (uint16)current_tid();
+    const uint32 tid = linfo && (linfo->rfProcStatus & 1) ? 0xffff : (uint16)current_tid();
     const uint32 owner = pid | (tid << 16);
     const uint64 deadline =
         timeout < 0 ? UINT64_MAX : lx_host_monotonic_us() + (uint64)timeout * 1000;

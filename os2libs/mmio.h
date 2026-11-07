@@ -5,6 +5,7 @@
 #include <stddef.h>
 OS2EXPORT ULONG OS2API mmioOpen(PSZ name, PVOID info, ULONG flags) OS2APIINFO(ord = 27);
 OS2EXPORT USHORT OS2API mmioClose(ULONG handle, USHORT flags) OS2APIINFO(ord = 32);
+OS2EXPORT ULONG OS2API mmioInstallIOProc(ULONG fourcc, ULONG procedure, ULONG flags) OS2APIINFO(26);
 OS2EXPORT LONG OS2API mmioRead(ULONG handle, PCHAR buffer, LONG bytes) OS2APIINFO(28);
 OS2EXPORT LONG OS2API mmioWrite(ULONG handle, PCHAR buffer, LONG bytes) OS2APIINFO(29);
 OS2EXPORT LONG OS2API mmioSeek(ULONG handle, LONG offset, LONG origin) OS2APIINFO(30);

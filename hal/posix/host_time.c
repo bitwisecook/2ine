@@ -2,6 +2,7 @@
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #include "hal/host.h"
+#include <stdio.h>
 #include <time.h>
 uint64_t lx_host_realtime_us(void)
 {
@@ -49,4 +50,10 @@ int lx_host_calendar_seconds(const LxHostCalendar *calendar, int utc, int64_t *s
         return 0;
     *seconds = (int64_t)result;
     return 1;
+}
+void lx_host_zone_names(char standard[32], char daylight[32])
+{
+    tzset();
+    snprintf(standard, 32, "%s", tzname[0]);
+    snprintf(daylight, 32, "%s", tzname[1]);
 }

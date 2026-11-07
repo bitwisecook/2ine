@@ -35,9 +35,9 @@ def program(checked):
             g.word(output + written, 0xCCCCCCCC, failure + 3)
             if size >= 22:
                 g.word(output + 12, 5, failure + 4)
-                # Attributes occupy a two-byte prefix even with a 22-byte caller.
+                # Attributes occupy a two-byte prefix even with a 22-byte caller; written files read archived.
                 g.require(
-                    b"\x0f\xb7\x05" + struct.pack("<I", output + 20) + b"\x3d\0\0\0\0",
+                    b"\x0f\xb7\x05" + struct.pack("<I", output + 20) + b"\x3d\x20\0\0\0",
                     failure + 5,
                 )
             else:
@@ -51,7 +51,7 @@ def program(checked):
         g.result(0, failure)
         g.word(boundary + 12, 5, failure + 1)
         g.require(
-            b"\x0f\xb7\x05" + struct.pack("<I", boundary + 20) + b"\x3d\0\0\0\0",
+            b"\x0f\xb7\x05" + struct.pack("<I", boundary + 20) + b"\x3d\x20\0\0\0",
             failure + 2,
         )
         failure += 3
