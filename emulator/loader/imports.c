@@ -140,11 +140,11 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
        owning native module. */
     if (want16bit && module->nativelib && !strcasecmp(module->name, "DOSCALLS"))
     {
-        if (ordinal == 576 || ordinal == 424)
+        if (ordinal == LX_ORDINAL_THK16_UNITHUNK || ordinal == LX_ORDINAL_DOS16SELTOFLAT)
         {
             static LxMmaps objects[2];
             static LxExport exports[2];
-            unsigned index = ordinal == 424;
+            unsigned index = ordinal == LX_ORDINAL_DOS16SELTOFLAT;
             LxMmaps *object = &objects[index];
             LxExport *exported = &exports[index];
             if (!object->addr)
@@ -157,9 +157,10 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
                 object->size = bridge.size;
                 object->alias = bridge.selector_index;
                 object->guest_base = bridge.segment_base;
-                *exported =
-                    (LxExport){ordinal, ordinal == 424 ? "Dos16SelToFlat" : "THK16_UNITHUNK",
-                               bridge.host, object, 0};
+                *exported = (LxExport){ordinal,
+                                       ordinal == LX_ORDINAL_DOS16SELTOFLAT ? "Dos16SelToFlat"
+                                                                            : "THK16_UNITHUNK",
+                                       bridge.host, object, 0};
             }
             if (_lxexp)
                 *_lxexp = exported;

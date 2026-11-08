@@ -4,6 +4,7 @@
 #include "emulator/execution.h"
 #include "emulator/abi.h"
 #include "emulator/arguments.h"
+#include "emulator/execution/core/x86/unithunk_bytes.h"
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -514,6 +515,32 @@ static void generations_contract(void)
     puts("Six generations of host-thread TIB attachment preserve parent TLS");
 }
 
+/* The tiled thunk carries the backend's flat data selector; the native backend's
+   is the host process's own DS. */
+static void universal_thunk_contract(void)
+{
+    LxExecutionBridge unithunk, sel_to_flat;
+    CHECK(!lx_execution_universal_thunk(Execution, 1, &unithunk));
+    CHECK(lx_execution_universal_thunk(Execution, LX_ORDINAL_THK16_UNITHUNK, &unithunk));
+    CHECK(lx_execution_universal_thunk(Execution, LX_ORDINAL_DOS16SELTOFLAT, &sel_to_flat));
+    CHECK(unithunk.size && unithunk.address == unithunk.segment_base);
+    CHECK(sel_to_flat.address > sel_to_flat.segment_base);
+    uint16_t flat_data = lx_execution_flat_data_selector(Execution);
+    CHECK(flat_data);
+#if defined(__i386__)
+    if (!strcmp(lx_execution_backend(Execution), "native"))
+    {
+        uint16_t ds;
+        __asm__ __volatile__("movw %%ds,%0" : "=r"(ds));
+        CHECK(flat_data == ds);
+    }
+#endif
+    const uint8_t *code =
+        lx_execution_memory(Execution, unithunk.segment_base, unithunk.size, LX_GUEST_READ);
+    CHECK(code && unithunk.size == sizeof UniversalThunk);
+    CHECK(lx_guest_load_u16(code + UNITHUNK_DATA) == flat_data);
+}
+
 int main(int argc, char **argv)
 {
     const char *backend = argc > 1 ? argv[1] : "unicorn";
@@ -554,6 +581,7 @@ int main(int argc, char **argv)
     invoke32();
     invoke16();
     invoke_thread32();
+    universal_thunk_contract();
     lx_execution_detach_tib(Execution, tib_token);
     CHECK(lx_execution_unmap(Execution, tib));
     lx_execution_destroy(Execution);

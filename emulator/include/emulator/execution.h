@@ -124,6 +124,10 @@ typedef struct LxExecutionBridge
     uint16_t selector_index;
 } LxExecutionBridge;
 
+/* The DOSCALLS USE16 ordinals lx_execution_universal_thunk serves. */
+#define LX_ORDINAL_DOS16SELTOFLAT 424
+#define LX_ORDINAL_THK16_UNITHUNK 576
+
 int lx_execution_universal_thunk(LxExecution *execution, uint32_t ordinal,
                                  LxExecutionBridge *bridge);
 
