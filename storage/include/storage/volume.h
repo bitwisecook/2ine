@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
+#include "storage/image_path.h"
 #include "storage/read_stream.h"
 
 /* Internal paths name an image plus a member; they never name a host mount. */
@@ -25,17 +26,8 @@ typedef struct TbImageInfo
     char filesystem[8];
 } TbImageInfo;
 
-int tb_image_path(const char *path);
-int tb_image_device(const char *path);
-int tb_image_device_kind(const char *path);
-char *tb_image_volume_root(const char *path);
-char *tb_image_device_root(const char *control);
-/* root/source/canonical return owned strings; member borrows the input path. */
-char *tb_image_root(const char *source);
-char *tb_image_source(const char *path);
-const char *tb_image_member(const char *path);
+/* Returns an owned absolute path when the member exists. */
 char *tb_image_canonical(const char *path);
-char *tb_image_absolute(const char *path);
 int tb_image_info(const char *path, TbImageInfo *info);
 char **tb_image_names(const char *path, size_t *count);
 /* Returns an anonymous, private snapshot of one member, positioned at zero. */
