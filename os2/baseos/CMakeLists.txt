@@ -15,7 +15,11 @@ twoine_os2_dll(
     doscalls/filesys/finfo.c
     doscalls/filesys/extattr.c
     doscalls/filesys/dossrch.c
-    doscalls/paths.c
+    doscalls/filesys/path.c
+    doscalls/filesys/metachar.c
+    doscalls/filesys/fsinfo.c
+    doscalls/filesys/fsctl.c
+    doscalls/doscall1/searchpath.c
     doscalls/guarded.c
     doscalls/loader/ldrrsrc.c
     doscalls/task/except.c
