@@ -34,7 +34,7 @@ LX_PRIVATE int findSelector_lib2ine(const uint32 addr, uint16 *outselector, uint
 LX_PRIVATE void freeSelector_lib2ine(const uint16 selector);
 LX_PRIVATE void *convert1616to32_lib2ine(const uint32 addr1616);
 LX_PRIVATE uint32 convert32to1616_lib2ine(void *addr32);
-LX_PRIVATE LxModule *loadModule_lib2ine(const char *modname);
+LX_PRIVATE struct LxModule *loadModule_lib2ine(const char *modname);
 LX_PRIVATE char *makeUnixPath_lib2ine(const char *os2path, uint32 *err);
 LX_PRIVATE void *allocSegment_lib2ine(uint16 *selector, const int iscode);
 LX_PRIVATE void freeSegment_lib2ine(const uint16 selector);

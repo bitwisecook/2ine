@@ -27,6 +27,7 @@
 #include "os2libs/os2types.h"
 #include "os2libs/os2errors.h"
 #include "emulator/runtime.h"
+#include "emulator/module.h"
 
 #if 1
 #define TRACE_NATIVE(...)                                                                          \

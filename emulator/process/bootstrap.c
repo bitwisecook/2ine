@@ -109,7 +109,7 @@ uint32 convert32to1616_lib2ine(void *addr32)
     return 0; // always fail. This is for 16-bit support.
 }
 
-LxModule *loadModule_lib2ine(const char *modname)
+struct LxModule *loadModule_lib2ine(const char *modname)
 {
     return NULL;
 }

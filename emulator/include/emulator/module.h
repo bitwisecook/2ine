@@ -44,7 +44,6 @@ enum
     LX_EXPORT_FORWARDER = 3
 };
 
-struct LxModule;
 typedef struct LxModule LxModule;
 
 typedef struct LxForwarder

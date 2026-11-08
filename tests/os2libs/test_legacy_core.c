@@ -7,6 +7,7 @@
 #include "os2libs/doscalls.h"
 #include "os2libs/os2errors.h"
 #include "emulator/runtime.h"
+#include "emulator/module.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>

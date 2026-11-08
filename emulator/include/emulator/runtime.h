@@ -15,11 +15,15 @@
 #include "formats/executable/types.h"
 #include "emulator/diagnostics.h"
 #include "emulator/process.h"
-#include "emulator/module.h"
 #include "emulator/abi.h"
 #include "emulator/handles.h"
 #include "emulator/audio_mixer.h"
 #include "emulator/paths.h"
+
+/* Module records belong to the loader (emulator/module.h); the process state
+   holds them by pointer only. */
+struct LxModule;
+struct LxExport;
 
 #define LXTIBSIZE (sizeof(LxTIB) + sizeof(LxTIB2) + sizeof(LxPostTIB))
 
@@ -29,8 +33,8 @@ typedef struct LxProcessState
 {
     LxExecution *execution;
     uint32 ne_threads_started;
-    LxModule *loaded_modules;
-    LxModule *main_module;
+    struct LxModule *loaded_modules;
+    struct LxModule *main_module;
     uint8 main_tibspace[LXTIBSIZE];
     LxPIB pib;
     LxGuestMapping *guest_pib;
@@ -52,7 +56,7 @@ typedef struct LxProcessState
     uint32 libpathlen;
     char begin_libpath[1024], end_libpath[1024];
     int libpath_strict;
-    const LxExport *(*findModuleOrdinal)(const LxModule *module, uint32 ordinal);
+    const struct LxExport *(*findModuleOrdinal)(const struct LxModule *module, uint32 ordinal);
     uint16 process_codepage;
     uint32 *tlspage;
     uint32 tlsmask; // one bit for each TLS slot in use.
@@ -74,20 +78,20 @@ typedef struct LxProcessState
     void (*freeSelector)(const uint16 selector);
     void *(*convert1616to32)(const uint32 addr1616);
     uint32 (*convert32to1616)(void *addr32);
-    LxModule *(*loadModule)(const char *modname);
-    void (*freeModule)(LxModule *lxmod);
+    struct LxModule *(*loadModule)(const char *modname);
+    void (*freeModule)(struct LxModule *lxmod);
     char *(*makeUnixPath)(const char *os2path, uint32 *err);
     void __attribute__((noreturn)) (*terminate)(const uint32 exitcode);
     int (*registerAudioGenerator)(LxAudioGeneratorFn fn, void *data, const int singleton);
     void (*lib2ine_shutdown)(void);
     uint32 (*beep)(uint32 frequency, uint32 duration);
     int (*registerStereoAudioGenerator)(LxAudioGeneratorFn fn, void *data, const int singleton);
-    LxModule *(*loadModuleWithError)(const char *modname, uint32 *error, char *module,
-                                     size_t capacity);
+    struct LxModule *(*loadModuleWithError)(const char *modname, uint32 *error, char *module,
+                                            size_t capacity);
     uint32 (*freeSharedMemory)(void *memory);
 } LxProcessState;
 
-typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);
+typedef const struct LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);
 typedef void (*LxNativeModuleDeinitEntryPoint)(void);
 
 extern __attribute__((visibility("default"))) LxProcessState GProcessState;

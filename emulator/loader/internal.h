@@ -10,6 +10,7 @@
 #define _GNU_SOURCE 1
 #include "host/fatal.h"
 #include "emulator/runtime.h"
+#include "emulator/module.h"
 #include "formats/executable/lx_exepack.h"
 #include "host/fs.h"
 #include "host/memory.h"
