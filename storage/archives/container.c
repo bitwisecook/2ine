@@ -4,6 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "storage/container.h"
 #include "storage/archives/container_internal.h"
+#include "storage/paths/hex_path.h"
 #include "storage/common/host.h"
 #include "storage/common/host_stdio.h"
 #include "storage/volume.h"
@@ -144,7 +145,7 @@ static TbReadStream *open_parent(const char *path, char **member)
     const char *p = path + strlen(TB_MEDIA_PREFIX), *end = strchr(p, '!');
     if (!end)
         return NULL;
-    char *host = tb_media_decode_part(p, (size_t)(end - p));
+    char *host = tb_hex_path_decode(p, (size_t)(end - p));
     if (!host)
         return NULL;
     tb_media_cache_select(host);
@@ -163,7 +164,7 @@ static TbReadStream *open_parent(const char *path, char **member)
     p = end + 1;
     while ((end = strchr(p, '!')))
     {
-        char *name = tb_media_decode_part(p, (size_t)(end - p));
+        char *name = tb_hex_path_decode(p, (size_t)(end - p));
         if (!name)
         {
             tb_stream_close(file);
@@ -182,7 +183,7 @@ static TbReadStream *open_parent(const char *path, char **member)
         file = inner;
         p = end + 1;
     }
-    *member = tb_media_decode_part(p, strlen(p));
+    *member = tb_hex_path_decode(p, strlen(p));
     if (!*member)
     {
         tb_stream_close(file);

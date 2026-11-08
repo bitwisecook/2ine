@@ -3,6 +3,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "storage/container.h"
 #include "storage/archives/container_internal.h"
+#include "storage/paths/hex_path.h"
 #include "storage/common/host.h"
 #include "storage/common/host_stdio.h"
 #include "storage/volume.h"
@@ -21,54 +22,6 @@ int tb_media_path(const char *path)
     return path && !strncmp(path, TB_MEDIA_PREFIX, strlen(TB_MEDIA_PREFIX));
 }
 
-static char *encode(const char *p)
-{
-    static const char digits[] = "0123456789abcdef";
-    size_t n = strlen(p);
-    if (n > (SIZE_MAX - 1) / 2)
-        return NULL;
-    char *out = malloc(n * 2 + 1);
-    if (!out)
-        return NULL;
-    for (size_t i = 0; i < n; i++)
-    {
-        out[2 * i] = digits[(unsigned char)p[i] >> 4];
-        out[2 * i + 1] = digits[(unsigned char)p[i] & 15];
-    }
-    out[n * 2] = 0;
-    return out;
-}
-
-static int hex(char c)
-{
-    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
-}
-
-char *tb_media_decode_part(const char *p, size_t n)
-{
-    if (n % 2)
-    {
-        tb_archive_fail(EINVAL);
-        return NULL;
-    }
-    char *out = malloc(n / 2 + 1);
-    if (!out)
-        return NULL;
-    for (size_t i = 0; i < n; i += 2)
-    {
-        int a = hex(p[i]), b = hex(p[i + 1]);
-        if (a < 0 || b < 0 || !(a | b))
-        {
-            free(out);
-            tb_archive_fail(EINVAL);
-            return NULL;
-        }
-        out[i / 2] = (char)((a << 4) | b);
-    }
-    out[n / 2] = 0;
-    return out;
-}
-
 static char *append(const char *a, const char *b, const char *suffix)
 {
     size_t n = strlen(a) + strlen(b) + strlen(suffix) + 1;
@@ -85,7 +38,7 @@ char *tb_media_root(const char *source)
     char *absolute = source_canonical(source);
     if (!absolute)
         return NULL;
-    char *encoded = encode(absolute);
+    char *encoded = tb_hex_path_encode("", absolute);
     free(absolute);
     if (!encoded)
         return NULL;
@@ -140,7 +93,7 @@ char *tb_media_sanitise_member(const char *name, int strip_root)
 static char *last_member(const char *path)
 {
     const char *last = strrchr(path, '!');
-    return last ? tb_media_decode_part(last + 1, strlen(last + 1)) : NULL;
+    return last ? tb_hex_path_decode(last + 1, strlen(last + 1)) : NULL;
 }
 
 char *tb_media_member_name(const char *path)
@@ -158,7 +111,7 @@ char *tb_media_host_source(const char *path)
     const char *begin = path + strlen(TB_MEDIA_PREFIX), *end = strchr(begin, '!');
     if (!end)
         return NULL;
-    char *decoded = tb_media_decode_part(begin, (size_t)(end - begin));
+    char *decoded = tb_hex_path_decode(begin, (size_t)(end - begin));
     if (!decoded)
         return NULL;
     char *canonical = source_canonical(decoded);
@@ -184,7 +137,7 @@ char *tb_media_child(const char *directory, const char *name)
     free(member);
     if (!full)
         return NULL;
-    char *encoded = encode(full);
+    char *encoded = tb_hex_path_encode("", full);
     free(full);
     if (!encoded)
         return NULL;
@@ -217,7 +170,7 @@ char *tb_media_parent(const char *path)
             *slash = 0;
         else
             *member = 0;
-        char *encoded = encode(member);
+        char *encoded = tb_hex_path_encode("", member);
         if (encoded)
         {
             size_t n = (size_t)(last - path) + 1;
@@ -257,7 +210,7 @@ char *tb_media_label(const char *path)
     {
         const char *end = strchr(p, '!');
         size_t n = end ? (size_t)(end - p) : strlen(p);
-        char *part = tb_media_decode_part(p, n);
+        char *part = tb_hex_path_decode(p, n);
         if (!part)
         {
             free(out);

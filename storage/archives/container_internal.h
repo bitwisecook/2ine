@@ -51,8 +51,7 @@ static inline int tb_archive_fail(int error)
     return 0;
 }
 
-/* container_path.c: decodes one hex-encoded path component; empty input yields "". */
-char *tb_media_decode_part(const char *text, size_t length);
+/* container_path.c */
 /* Returns an owned relative member name with "/" separators and no "." components,
    or NULL for "..", drive or stream syntax, or (unless strip_root) an absolute name. */
 char *tb_media_sanitise_member(const char *name, int strip_root);

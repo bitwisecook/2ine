@@ -5,6 +5,7 @@
 #define _FILE_OFFSET_BITS 64
 #include "storage/image_path.h"
 #include "storage/volume/volume_internal.h"
+#include "storage/paths/hex_path.h"
 #include "storage/common/host.h"
 #include "storage/common/host_stdio.h"
 #include "formats/endian.h"
@@ -46,41 +47,14 @@ static size_t prefix_size(const char *path)
     return strlen(tb_image_device(path) ? DEVICE_PREFIX : IMAGE_PREFIX);
 }
 
-static char *encoded_root(const char *source, const char *kind)
-{
-    static const char hex[] = "0123456789abcdef";
-    size_t n = strlen(source), prefix = strlen(kind);
-    if (n > (SIZE_MAX - prefix - 1) / 2)
-    {
-        errno = ENAMETOOLONG;
-        return NULL;
-    }
-    char *result = malloc(prefix + n * 2 + 1);
-    if (!result)
-        return NULL;
-    memcpy(result, kind, prefix);
-    for (size_t i = 0; i < n; i++)
-    {
-        result[prefix + i * 2] = hex[(unsigned char)source[i] >> 4];
-        result[prefix + i * 2 + 1] = hex[(unsigned char)source[i] & 15];
-    }
-    result[prefix + n * 2] = 0;
-    return result;
-}
-
 char *tb_image_root(const char *source)
 {
-    return encoded_root(source, IMAGE_PREFIX);
+    return tb_hex_path_encode(IMAGE_PREFIX, source);
 }
 
 char *tb_image_device_root(const char *control)
 {
-    return encoded_root(control, DEVICE_PREFIX);
-}
-
-static int digit(char c)
-{
-    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
+    return tb_hex_path_encode(DEVICE_PREFIX, control);
 }
 
 FILE *tb_image_open_source(const char *path, int write)
@@ -115,27 +89,12 @@ static char *decoded_source(const char *path)
     }
     const char *hex = path + prefix_size(path), *end = strchr(hex, '/');
     size_t n = end ? (size_t)(end - hex) : strlen(hex);
-    if (!n || n % 2 || n > ENCODED_SOURCE_LIMIT)
+    if (!n || n > ENCODED_SOURCE_LIMIT)
     {
         errno = EINVAL;
         return NULL;
     }
-    char *source = malloc(n / 2 + 1);
-    if (!source)
-        return NULL;
-    for (size_t i = 0; i < n; i += 2)
-    {
-        int a = digit(hex[i]), b = digit(hex[i + 1]);
-        if (a < 0 || b < 0 || !(a | b))
-        {
-            free(source);
-            errno = EINVAL;
-            return NULL;
-        }
-        source[i / 2] = (char)(a * 16 + b);
-    }
-    source[n / 2] = 0;
-    return source;
+    return tb_hex_path_decode(hex, n);
 }
 
 /* A stable device resolves its current medium for every new operation. */

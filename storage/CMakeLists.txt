@@ -33,6 +33,7 @@ function(twoine_add_storage target)
         "${_storage}/common/host_sync.c"
         "${_storage}/common/host_time.c"
         "${_storage}/common/read_stream.c"
+        "${_storage}/paths/hex_path.c"
         "${_storage}/paths/image_path.c"
         "${_storage}/volume/volume.c"
         "${_storage}/volume/volume_disk.c"
