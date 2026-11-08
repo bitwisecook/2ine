@@ -1,15 +1,15 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Frame/client lifetime, queue filtering, retained drawing and timer contracts. */
-#include "os2/ps/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/pmerr.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmdev.h"
 #include "emulator/handles.h"
 #include "emulator/abi.h"
-#include "os2/ps/pmwin/graphics.h"
-#include "os2/ps/pmwin/controls.h"
-#include "os2/ps/pmwin/menus.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/controls.h"
+#include "os2/ps/pmmerge/pmwin/menus.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>

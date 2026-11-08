@@ -3,7 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/drawing.h"
-#include "os2/ps/pmwin/pointer_image.h"
+#include "os2/ps/pmmerge/pmwin/pointer_image.h"
 #include "host/fs.h"
 #include "os2/ps/awe/batch_services.h"
 

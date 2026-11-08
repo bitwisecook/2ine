@@ -10,6 +10,6 @@ if(TWOINE_OPENGL)
         opengl/arrays.c
         opengl/copy.c
     )
-    target_link_libraries(opengl PRIVATE pmwin pmgpi)
+    target_link_libraries(opengl PRIVATE pmmerge pmgpi)
     twoine_add_host_opengl(opengl)
 endif()

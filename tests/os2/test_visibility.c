@@ -2,8 +2,8 @@
 /* Region enumeration ordering, pages and child visible-region notification. */
 #include "os2/include/pmwin.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmwin/graphics.h"
-#include "os2/ps/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

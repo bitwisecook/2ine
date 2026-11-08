@@ -2,8 +2,8 @@
 /* Retained paths share the ordinary PM drawing stream; raster filling uses
    scanline edge intersections, including disjoint contours and holes. */
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include <math.h>
 
 static PmPath *find_path(PresentationSpace *p, LONG id)

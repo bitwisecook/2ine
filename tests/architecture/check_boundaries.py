@@ -64,6 +64,7 @@ OS2_FORWARDER_DLLS = {
     "os2/baseos/kbdcalls": "DOSCALLS",
     "os2/ps/pmgre": "PMMERGE",
     "os2/ps/pmshapi": "PMMERGE",
+    "os2/ps/pmwin": "PMMERGE",
 }
 OS2_FORWARDER_FILES = {"module.c", "README.md"}
 # Static helper code shared by several DLLs of one group, outside any DLL.
@@ -72,14 +73,14 @@ OS2_SHARED = ("os2/ps/common/", "os2/mm/midi/", "os2/mm/video/decode/", "os2/mpt
 # number of such includes. A count change fails, so new coupling goes through
 # os2/include/private/ instead.
 OS2_CROSS_DLL_ALLOWANCES = {
-    ("os2/mm/mci/mdm", "os2/ps/pmwin"): 1,
-    ("os2/mm/video/dive", "os2/ps/pmwin"): 1,
-    ("os2/opengl/opengl", "os2/ps/pmwin"): 1,
-    ("os2/ps/awe", "os2/ps/pmwin"): 41,
-    ("os2/ps/controls/drag", "os2/ps/pmwin"): 1,
-    ("os2/ps/controls/pmctls", "os2/ps/pmwin"): 1,
-    ("os2/ps/pmgpi", "os2/ps/pmwin"): 22,
-    ("os2/wpsh/pmwp", "os2/ps/pmwin"): 1,
+    ("os2/mm/mci/mdm", "os2/ps/pmmerge"): 1,
+    ("os2/mm/video/dive", "os2/ps/pmmerge"): 1,
+    ("os2/opengl/opengl", "os2/ps/pmmerge"): 1,
+    ("os2/ps/awe", "os2/ps/pmmerge"): 41,
+    ("os2/ps/controls/drag", "os2/ps/pmmerge"): 1,
+    ("os2/ps/controls/pmctls", "os2/ps/pmmerge"): 1,
+    ("os2/ps/pmgpi", "os2/ps/pmmerge"): 22,
+    ("os2/wpsh/pmwp", "os2/ps/pmmerge"): 1,
 }
 
 # Layers inside emulator/, lowest first. The execution core and backends and

@@ -735,973 +735,6 @@
       "convention": "LX_ABI_STACK32"
     }
   },
-  "pmwin": {
-    "WinInitialize": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinTerminate": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetLastError": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateMsgQueue": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDestroyMsgQueue": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDestroyWindow": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinOpenWindowDC": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetWindowPos": {
-      "argument_bytes": 28,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinStartTimer": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinStopTimer": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinRegisterClass": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateStdWindow": {
-      "argument_bytes": 36,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetMsg": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDispatchMsg": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDefWindowProc": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSendMsg": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinPostMsg": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinBeginPaint": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEndPaint": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinFillRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowPos": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryPointerPos": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowRect": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQuerySysPointer": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinLoadString": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinWindowFromPoint": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinWindowFromID": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowULong": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetWindowULong": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowPtr": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetWindowPtr": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQuerySysColor": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQuerySysValue": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSubclassWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetPS": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetScreenPS": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinReleasePS": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinBeginEnumWindows": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEndEnumWindows": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetNextWindow": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryAnchorBlock": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryClassName": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinIsWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinIsWindowEnabled": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinIsWindowVisible": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetPresParam": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryPresParam": {
-      "argument_bytes": 28,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinRemovePresParam": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinShowWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEnableWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateWindow": {
-      "argument_bytes": 52,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateDlg": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinLoadDlg": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDlgBox": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinProcessDlg": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDismissDlg": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDefDlgProc": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSendDlgItemMsg": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinMapDlgPoints": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetWindowText": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowText": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowTextLength": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetDlgItemText": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryDlgItemText": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowUShort": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetWindowUShort": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinPostQueueMsg": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinIsChild": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetFocus": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryFocus": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetActiveWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryActiveWindow": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetCapture": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryCapture": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetKeyState": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetPhysKeyState": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowDC": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinIntersectRect": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinUnionRect": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCopyRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetRect": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetRectEmpty": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinIsRectEmpty": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEqualRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinOffsetRect": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinInflateRect": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinPtInRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinMapWindowPoints": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDrawText": {
-      "argument_bytes": 28,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDrawBitmap": {
-      "argument_bytes": 28,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateAccelTable": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinLoadAccelTable": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCopyAccelTable": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDestroyAccelTable": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetAccelTable": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryAccelTable": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinTranslateAccel": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinPeekMsg": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinInvalidateRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryUpdateRect": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinUpdateWindow": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinWindowFromDC": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryClassInfo": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetCurrentTime": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinLoadMenu": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateMenu": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinPopupMenu": {
-      "argument_bytes": 28,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCalcFrameRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetPointer": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDestroyPointer": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetHook": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinReleaseHook": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinInvertRect": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryCp": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCpTranslateChar": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinLoadPointer": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetPointerPos": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinShowPointer": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinShowCursor": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryVisibleRegion": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetVisibleRegionNotify": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinOpenClipbrd": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCloseClipbrd": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEmptyClipbrd": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryClipbrdOwner": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetClipbrdOwner": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEnumClipbrdFmts": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryClipbrdFmtInfo": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryClipbrdData": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetClipbrdData": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQuerySystemAtomTable": {
-      "argument_bytes": 0,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinAddAtom": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinFindAtom": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDeleteAtom": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetOwner": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetErrorInfo": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinWaitEventSem": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinRequestMutexSem": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinWaitMuxWaitSem": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinMessageBox": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinAlarm": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryDlgItemTextLength": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetSysBitmap": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEnableWindowUpdate": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDrawPointer": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDrawBorder": {
-      "argument_bytes": 28,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetParent": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinUpper": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinUpperChar": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinEnumDlgItem": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateFrameControls": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCompareStrings": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateAtomTable": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDestroyAtomTable": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryDesktopWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryPointer": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryWindowProcess": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinScrollWindow": {
-      "argument_bytes": 32,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCancelShutdown": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCpTranslateString": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDeleteLibrary": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinFlashWindow": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinFocusChange": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinFreeErrorInfo": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetErrorInfo": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetMaxPosition": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinGetMinPosition": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinInvalidateRegion": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinIsWindowShowing": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinLoadLibrary": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinLoadMessage": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinNextChar": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryAtomName": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryDlgItemShort": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryMsgPos": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryObjectWindow": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryPointerInfo": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryQueueInfo": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryUpdateRegion": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetCp": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetDlgItemShort": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetMultWindowPos": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetSysColors": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetSysValue": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetWindowBits": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinTrackRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinValidateRect": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinValidateRegion": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinBroadcastMsg": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinSetKeyboardStateTable": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinRealizePalette": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreatePointerIndirect": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    }
-  },
   "pmgpi": {
     "GpiCreatePS": {
       "argument_bytes": 16,
@@ -6509,6 +5542,971 @@
     },
     "WinStartApp": {
       "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinInitialize": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinTerminate": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetLastError": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateMsgQueue": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDestroyMsgQueue": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDestroyWindow": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinOpenWindowDC": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetWindowPos": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinStartTimer": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinStopTimer": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRegisterClass": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateStdWindow": {
+      "argument_bytes": 36,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetMsg": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDispatchMsg": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDefWindowProc": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSendMsg": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinPostMsg": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinBeginPaint": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEndPaint": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFillRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowPos": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryPointerPos": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowRect": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQuerySysPointer": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadString": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinWindowFromPoint": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinWindowFromID": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowULong": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetWindowULong": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowPtr": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetWindowPtr": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQuerySysColor": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQuerySysValue": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSubclassWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetPS": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetScreenPS": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinReleasePS": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinBeginEnumWindows": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEndEnumWindows": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetNextWindow": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryAnchorBlock": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClassName": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsWindowEnabled": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsWindowVisible": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetPresParam": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryPresParam": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRemovePresParam": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinShowWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEnableWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateWindow": {
+      "argument_bytes": 52,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateDlg": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadDlg": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDlgBox": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinProcessDlg": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDismissDlg": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDefDlgProc": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSendDlgItemMsg": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinMapDlgPoints": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetWindowText": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowText": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowTextLength": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetDlgItemText": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryDlgItemText": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowUShort": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetWindowUShort": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinPostQueueMsg": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsChild": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetFocus": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryFocus": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetActiveWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryActiveWindow": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetCapture": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryCapture": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetKeyState": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetPhysKeyState": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowDC": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIntersectRect": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinUnionRect": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCopyRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetRect": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetRectEmpty": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsRectEmpty": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEqualRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinOffsetRect": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinInflateRect": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinPtInRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinMapWindowPoints": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDrawText": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDrawBitmap": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateAccelTable": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadAccelTable": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCopyAccelTable": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDestroyAccelTable": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetAccelTable": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryAccelTable": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinTranslateAccel": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinPeekMsg": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinInvalidateRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryUpdateRect": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinUpdateWindow": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinWindowFromDC": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClassInfo": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetCurrentTime": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadMenu": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateMenu": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinPopupMenu": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCalcFrameRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetPointer": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDestroyPointer": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetHook": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinReleaseHook": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinInvertRect": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryCp": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCpTranslateChar": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadPointer": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetPointerPos": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinShowPointer": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinShowCursor": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryVisibleRegion": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetVisibleRegionNotify": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinOpenClipbrd": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCloseClipbrd": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEmptyClipbrd": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClipbrdOwner": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetClipbrdOwner": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEnumClipbrdFmts": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClipbrdFmtInfo": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryClipbrdData": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetClipbrdData": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQuerySystemAtomTable": {
+      "argument_bytes": 0,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinAddAtom": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFindAtom": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDeleteAtom": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetOwner": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetErrorInfo": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinWaitEventSem": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRequestMutexSem": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinWaitMuxWaitSem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinMessageBox": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinAlarm": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryDlgItemTextLength": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetSysBitmap": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEnableWindowUpdate": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDrawPointer": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDrawBorder": {
+      "argument_bytes": 28,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetParent": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinUpper": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinUpperChar": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinEnumDlgItem": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateFrameControls": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCompareStrings": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateAtomTable": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDestroyAtomTable": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryDesktopWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryPointer": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryWindowProcess": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinScrollWindow": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCancelShutdown": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCpTranslateString": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDeleteLibrary": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFlashWindow": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFocusChange": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFreeErrorInfo": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetErrorInfo": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetMaxPosition": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinGetMinPosition": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinInvalidateRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinIsWindowShowing": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadLibrary": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinLoadMessage": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinNextChar": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryAtomName": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryDlgItemShort": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryMsgPos": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryObjectWindow": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryPointerInfo": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryQueueInfo": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryUpdateRegion": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetCp": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetDlgItemShort": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetMultWindowPos": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetSysColors": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetSysValue": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetWindowBits": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinTrackRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinValidateRect": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinValidateRegion": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinBroadcastMsg": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinSetKeyboardStateTable": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRealizePalette": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreatePointerIndirect": {
+      "argument_bytes": 8,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

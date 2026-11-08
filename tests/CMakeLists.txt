@@ -68,7 +68,7 @@ if(TARGET opengl)
     endif()
     add_executable(twoine_opengl_pm_tests os2/test_opengl.c)
     twoine_application_target(twoine_opengl_pm_tests)
-    target_link_libraries(twoine_opengl_pm_tests PRIVATE opengl pmwin pmgpi 2ine)
+    target_link_libraries(twoine_opengl_pm_tests PRIVATE opengl pmmerge pmgpi 2ine)
     add_test(NAME opengl_pm COMMAND twoine_opengl_pm_tests)
     set_tests_properties(
         opengl_pm
@@ -272,7 +272,7 @@ if(TARGET doscalls)
     set_tests_properties(legacy_sessions PROPERTIES TIMEOUT 20)
 endif()
 
-if(TARGET pmwin)
+if(TARGET pmmerge)
     if(APPLE AND TARGET pmwinx)
         add_library(twoine_cursor_backend SHARED host/macos/cursor_backend.c)
         target_include_directories(twoine_cursor_backend PRIVATE "${PROJECT_SOURCE_DIR}")
@@ -285,7 +285,7 @@ if(TARGET pmwin)
         )
         add_test(
             NAME cursor_resource_lifecycle
-            COMMAND twoine_cursor_resource_tests $<TARGET_FILE:pmwinx> $<TARGET_FILE:pmwin>
+            COMMAND twoine_cursor_resource_tests $<TARGET_FILE:pmwinx> $<TARGET_FILE:pmmerge>
         )
         set_tests_properties(
             cursor_resource_lifecycle
@@ -298,7 +298,7 @@ if(TARGET pmwin)
     add_executable(twoine_pm_tests os2/test_pm.c)
     add_executable(twoine_clipboard_pm_tests os2/test_clipboard.c)
     twoine_application_target(twoine_clipboard_pm_tests)
-    target_link_libraries(twoine_clipboard_pm_tests PRIVATE pmwin 2ine SDL3::SDL3)
+    target_link_libraries(twoine_clipboard_pm_tests PRIVATE pmmerge 2ine SDL3::SDL3)
     add_test(NAME clipboard_pm COMMAND twoine_clipboard_pm_tests)
     set_tests_properties(
         clipboard_pm
@@ -313,7 +313,7 @@ if(TARGET pmwin)
     )
     set_tests_properties(clipboard_memory_hook PROPERTIES TIMEOUT 10)
     twoine_application_target(twoine_pm_tests)
-    target_link_libraries(twoine_pm_tests PRIVATE pmgpi pmwin 2ine)
+    target_link_libraries(twoine_pm_tests PRIVATE pmgpi pmmerge 2ine)
     add_test(NAME presentation_manager COMMAND twoine_pm_tests)
     set_tests_properties(
         presentation_manager
@@ -321,7 +321,7 @@ if(TARGET pmwin)
     )
     add_executable(twoine_help_font_tests os2/test_help_fonts.c)
     twoine_application_target(twoine_help_font_tests)
-    target_link_libraries(twoine_help_font_tests PRIVATE pmgpi pmwin 2ine)
+    target_link_libraries(twoine_help_font_tests PRIVATE pmgpi pmmerge 2ine)
     add_test(NAME help_font_transitions COMMAND twoine_help_font_tests)
     set_tests_properties(
         help_font_transitions
@@ -331,7 +331,7 @@ if(TARGET pmwin)
     )
     add_executable(twoine_frame_format_tests os2/test_frame_format.c)
     twoine_application_target(twoine_frame_format_tests)
-    target_link_libraries(twoine_frame_format_tests PRIVATE pmwin 2ine)
+    target_link_libraries(twoine_frame_format_tests PRIVATE pmmerge 2ine)
     add_test(NAME frame_format_protocol COMMAND twoine_frame_format_tests)
     set_tests_properties(
         frame_format_protocol
@@ -339,7 +339,7 @@ if(TARGET pmwin)
     )
     add_executable(twoine_display_dpi_tests os2/test_display_dpi.c)
     twoine_application_target(twoine_display_dpi_tests)
-    target_link_libraries(twoine_display_dpi_tests PRIVATE pmgpi pmwin 2ine)
+    target_link_libraries(twoine_display_dpi_tests PRIVATE pmgpi pmmerge 2ine)
     foreach(dpi 96 120 144 192)
         add_test(NAME display_dpi_${dpi} COMMAND twoine_display_dpi_tests ${dpi})
         set_tests_properties(
@@ -362,7 +362,7 @@ if(TARGET pmwin)
     endforeach()
     add_executable(twoine_menu_chrome_tests os2/test_menu_chrome.c)
     twoine_application_target(twoine_menu_chrome_tests)
-    target_link_libraries(twoine_menu_chrome_tests PRIVATE pmwin 2ine)
+    target_link_libraries(twoine_menu_chrome_tests PRIVATE pmmerge 2ine)
     add_test(NAME pm_menu_chrome COMMAND twoine_menu_chrome_tests)
     set_tests_properties(
         pm_menu_chrome
@@ -370,10 +370,7 @@ if(TARGET pmwin)
     )
     add_executable(twoine_printing_tests os2/test_printing.c)
     twoine_application_target(twoine_printing_tests)
-    target_link_libraries(
-        twoine_printing_tests
-        PRIVATE pmgpi pmwin pmmerge pmspl 2ine
-    )
+    target_link_libraries(twoine_printing_tests PRIVATE pmgpi pmmerge pmspl 2ine)
     add_test(
         NAME printer_output
         COMMAND
@@ -387,7 +384,7 @@ if(TARGET pmwin)
     )
     add_executable(twoine_dialog_tests os2/test_dialogs.c)
     twoine_application_target(twoine_dialog_tests)
-    target_link_libraries(twoine_dialog_tests PRIVATE pmwin 2ine)
+    target_link_libraries(twoine_dialog_tests PRIVATE pmmerge 2ine)
     add_test(NAME pm_dialogs COMMAND twoine_dialog_tests)
     set_tests_properties(
         pm_dialogs
@@ -642,7 +639,7 @@ if(TARGET lx_loader)
     )
     set_tests_properties(pm_window_apis PROPERTIES TIMEOUT 40)
 endif()
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmmerge)
     if(TWOINE_PORTABLE_LOADER)
         set(_twoine_gui_backend unicorn)
     else()
@@ -673,10 +670,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
     endforeach()
 endif()
 
-if(TARGET pmwin AND TARGET pmgpi)
+if(TARGET pmmerge AND TARGET pmgpi)
     add_executable(twoine_pm_display_startup_tests host/test_pm_display_startup.c)
     twoine_application_target(twoine_pm_display_startup_tests)
-    target_link_libraries(twoine_pm_display_startup_tests PRIVATE pmgpi pmwin 2ine SDL3::SDL3)
+    target_link_libraries(twoine_pm_display_startup_tests PRIVATE pmgpi pmmerge 2ine SDL3::SDL3)
     foreach(
         _display_case
         gui
@@ -689,7 +686,7 @@ if(TARGET pmwin AND TARGET pmgpi)
     )
         add_test(
             NAME pm_display_startup_${_display_case}
-            COMMAND twoine_pm_display_startup_tests $<TARGET_FILE:pmwin> ${_display_case}
+            COMMAND twoine_pm_display_startup_tests $<TARGET_FILE:pmmerge> ${_display_case}
         )
         if(_display_case STREQUAL "invalid")
             set(_display_driver "not-a-video-driver")
@@ -730,7 +727,7 @@ if(TARGET pmwinx)
     twoine_application_target(twoine_open32_load_menu_tests)
     target_link_libraries(
         twoine_open32_load_menu_tests
-        PRIVATE pmwinx pmwin pmgpi 2ine SDL3::SDL3
+        PRIVATE pmwinx pmmerge pmgpi 2ine SDL3::SDL3
     )
     add_test(NAME open32_load_menu_ownership COMMAND twoine_open32_load_menu_tests)
     add_test(
@@ -745,7 +742,7 @@ if(TARGET pmwinx)
     twoine_application_target(twoine_settings_tests)
     target_link_libraries(
         twoine_settings_tests
-        PRIVATE pmwin pmwinx pmmerge pmwp helpmgr 2ine
+        PRIVATE pmmerge pmwinx pmwp helpmgr 2ine
     )
     add_test(
         NAME application_settings
@@ -776,7 +773,7 @@ if(TARGET dive)
     target_link_libraries(twoine_dive_format_tests PRIVATE dive)
     add_test(NAME dive_formats COMMAND twoine_dive_format_tests)
     twoine_application_target(twoine_dive_tests)
-    target_link_libraries(twoine_dive_tests PRIVATE dive pmwin 2ine)
+    target_link_libraries(twoine_dive_tests PRIVATE dive pmmerge 2ine)
     add_test(NAME dive_video COMMAND twoine_dive_tests)
     set_tests_properties(
         dive_video
@@ -837,7 +834,7 @@ endif()
 if(TARGET dive)
     add_executable(twoine_visibility_tests os2/test_visibility.c)
     twoine_application_target(twoine_visibility_tests)
-    target_link_libraries(twoine_visibility_tests PRIVATE pmgpi pmwin 2ine)
+    target_link_libraries(twoine_visibility_tests PRIVATE pmgpi pmmerge 2ine)
     add_test(NAME pm_visible_regions COMMAND twoine_visibility_tests)
     set_tests_properties(
         pm_visible_regions
@@ -853,10 +850,10 @@ if(TARGET dive)
     )
 endif()
 
-if(TARGET pmwin)
+if(TARGET pmmerge)
     add_executable(twoine_pm_thread_tests os2/test_pm_threads.c)
     twoine_application_target(twoine_pm_thread_tests)
-    target_link_libraries(twoine_pm_thread_tests PRIVATE pmwin 2ine)
+    target_link_libraries(twoine_pm_thread_tests PRIVATE pmmerge 2ine)
     add_test(NAME pm_thread_posts COMMAND twoine_pm_thread_tests)
     set_tests_properties(
         pm_thread_posts
@@ -1138,7 +1135,7 @@ endif()
 if(TARGET pmmerge AND TARGET pmgpi)
     add_executable(twoine_help_api_tests os2/test_help_apis.c)
     twoine_application_target(twoine_help_api_tests)
-    target_link_libraries(twoine_help_api_tests PRIVATE pmwin pmgpi pmmerge 2ine)
+    target_link_libraries(twoine_help_api_tests PRIVATE pmmerge pmgpi 2ine)
     add_test(NAME help_prerequisite_apis COMMAND twoine_help_api_tests)
     set_tests_properties(
         help_prerequisite_apis
@@ -1149,7 +1146,7 @@ endif()
 if(TARGET mdm AND TWOINE_VIDEO)
     add_executable(twoine_video_tests os2/test_video.c)
     twoine_application_target(twoine_video_tests)
-    target_link_libraries(twoine_video_tests PRIVATE mdm pmwin 2ine)
+    target_link_libraries(twoine_video_tests PRIVATE mdm pmmerge 2ine)
     add_test(
         NAME digital_video
         COMMAND
@@ -1197,10 +1194,10 @@ if(TARGET lx_loader AND TARGET twoine_ball_cli)
     endif()
 endif()
 
-if(TARGET pmgpi AND TARGET pmwin)
+if(TARGET pmgpi AND TARGET pmmerge)
     add_executable(twoine_bitmap_bits_tests os2/test_bitmap_bits.c)
     twoine_application_target(twoine_bitmap_bits_tests)
-    target_link_libraries(twoine_bitmap_bits_tests PRIVATE pmgpi pmwin 2ine)
+    target_link_libraries(twoine_bitmap_bits_tests PRIVATE pmgpi pmmerge 2ine)
     add_test(NAME bitmap_bits COMMAND twoine_bitmap_bits_tests)
     set_tests_properties(
         bitmap_bits

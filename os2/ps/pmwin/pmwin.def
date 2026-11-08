@@ -1,199 +1,199 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of PMWIN.DLL: exported name [= C entry] @ordinal.
+; Exports of PMWIN.DLL: exported name = PMMERGE.ordinal @ordinal.
 
 LIBRARY PMWIN
 
 EXPORTS
-    WinAddAtom                @700
-    WinAlarm                  @701
-    WinBeginEnumWindows       @702
-    WinBeginPaint             @703
-    WinCalcFrameRect          @704
-    WinCancelShutdown         @705
-    WinCloseClipbrd           @707
-    WinCompareStrings         @708
-    WinCopyAccelTable         @709
-    WinCopyRect               @710
-    WinCpTranslateChar        @711
-    WinCpTranslateString      @712
-    WinCreateAccelTable       @713
-    WinCreateAtomTable        @714
-    WinCreateMsgQueue         @716
-    WinDeleteAtom             @721
-    WinDeleteLibrary          @722
-    WinDestroyAccelTable      @723
-    WinDestroyAtomTable       @724
-    WinDestroyMsgQueue        @726
-    WinDestroyPointer         @727
-    WinDestroyWindow          @728
-    WinDismissDlg             @729
-    WinDrawBitmap             @730
-    WinDrawBorder             @731
-    WinDrawPointer            @732
-    WinEmptyClipbrd           @733
-    WinEnableWindow           @735
-    WinEnableWindowUpdate     @736
-    WinEndEnumWindows         @737
-    WinEndPaint               @738
-    WinEnumClipbrdFmts        @739
-    WinEnumDlgItem            @740
-    WinEqualRect              @741
-    WinFillRect               @743
-    WinFindAtom               @744
-    WinFlashWindow            @745
-    WinFocusChange            @746
-    WinFreeErrorInfo          @748
-    WinGetCurrentTime         @750
-    WinGetErrorInfo           @751
-    WinGetKeyState            @752
-    WinGetLastError           @753
-    WinGetMaxPosition         @754
-    WinGetMinPosition         @755
-    WinGetNextWindow          @756
-    WinGetPS                  @757
-    WinGetPhysKeyState        @758
-    WinGetScreenPS            @759
-    WinGetSysBitmap           @760
-    WinInflateRect            @762
-    WinInitialize             @763
-    WinIntersectRect          @764
-    WinInvalidateRect         @765
-    WinInvalidateRegion       @766
-    WinInvertRect             @767
-    WinIsChild                @768
-    WinIsRectEmpty            @770
-    WinIsWindow               @772
-    WinIsWindowEnabled        @773
-    WinIsWindowShowing        @774
-    WinIsWindowVisible        @775
-    WinLoadAccelTable         @776
-    WinLoadLibrary            @777
-    WinLoadMenu               @778
-    WinLoadMessage            @779
-    WinLoadPointer            @780
-    WinLoadString             @781
-    WinMapDlgPoints           @787
-    WinMapWindowPoints        @788
-    WinMessageBox             @789
-    WinNextChar               @791
-    WinOffsetRect             @792
-    WinOpenClipbrd            @793
-    WinOpenWindowDC           @794
-    WinProcessDlg             @796
-    WinPtInRect               @797
-    WinQueryAccelTable        @798
-    WinQueryActiveWindow      @799
-    WinQueryAnchorBlock       @800
-    WinQueryAtomName          @802
-    WinQueryCapture           @804
-    WinQueryClassName         @805
-    WinQueryClipbrdData       @806
-    WinQueryClipbrdFmtInfo    @807
-    WinQueryClipbrdOwner      @808
-    WinQueryCp                @810
-    WinQueryDesktopWindow     @813
-    WinQueryDlgItemShort      @814
-    WinQueryDlgItemText       @815
-    WinQueryDlgItemTextLength @816
-    WinQueryFocus             @817
-    WinQueryMsgPos            @818
-    WinQueryObjectWindow      @820
-    WinQueryPointer           @821
-    WinQueryPointerInfo       @822
-    WinQueryPointerPos        @823
-    WinQueryQueueInfo         @824
-    WinQuerySysColor          @826
-    WinQuerySysPointer        @828
-    WinQuerySysValue          @829
-    WinQuerySystemAtomTable   @830
-    WinQueryUpdateRect        @831
-    WinQueryUpdateRegion      @832
-    WinQueryWindow            @834
-    WinQueryWindowDC          @835
-    WinQueryWindowPos         @837
-    WinQueryWindowProcess     @838
-    WinQueryWindowPtr         @839
-    WinQueryWindowRect        @840
-    WinQueryWindowText        @841
-    WinQueryWindowTextLength  @842
-    WinQueryWindowULong       @843
-    WinQueryWindowUShort      @844
-    WinReleasePS              @848
-    WinScrollWindow           @849
-    WinSetAccelTable          @850
-    WinSetActiveWindow        @851
-    WinSetCapture             @852
-    WinSetClipbrdData         @854
-    WinSetClipbrdOwner        @855
-    WinSetCp                  @857
-    WinSetDlgItemShort        @858
-    WinSetDlgItemText         @859
-    WinSetFocus               @860
-    WinSetMultWindowPos       @863
-    WinSetOwner               @864
-    WinSetParent              @865
-    WinSetPointer             @866
-    WinSetPointerPos          @867
-    WinSetRect                @868
-    WinSetRectEmpty           @869
-    WinSetSysColors           @871
-    WinSetSysValue            @873
-    WinSetWindowBits          @874
-    WinSetWindowPos           @875
-    WinSetWindowPtr           @876
-    WinSetWindowText          @877
-    WinSetWindowULong         @878
-    WinSetWindowUShort        @879
-    WinShowCursor             @880
-    WinShowPointer            @881
-    WinShowWindow             @883
-    WinStartTimer             @884
-    WinStopTimer              @885
-    WinTerminate              @888
-    WinTrackRect              @890
-    WinUnionRect              @891
-    WinUpdateWindow           @892
-    WinUpper                  @893
-    WinUpperChar              @894
-    WinValidateRect           @895
-    WinValidateRegion         @896
-    WinWindowFromDC           @898
-    WinWindowFromID           @899
-    WinWindowFromPoint        @900
-    WinBroadcastMsg           @901
-    WinPostQueueMsg           @902
-    WinSendDlgItemMsg         @903
-    WinTranslateAccel         @904
-    WinCreateFrameControls    @906
-    WinCreateMenu             @907
-    WinCreateStdWindow        @908
-    WinCreateWindow           @909
-    WinDefDlgProc             @910
-    WinDefWindowProc          @911
-    WinDispatchMsg            @912
-    WinDrawText               @913
-    WinGetMsg                 @915
-    WinPeekMsg                @918
-    WinPostMsg                @919
-    WinSendMsg                @920
-    WinSetKeyboardStateTable  @921
-    WinCreateDlg              @922
-    WinDlgBox                 @923
-    WinLoadDlg                @924
-    WinQueryClassInfo         @925
-    WinRegisterClass          @926
-    WinReleaseHook            @927
-    WinSetHook                @928
-    WinSubclassWindow         @929
-    WinPopupMenu              @937
-    WinSetPresParam           @938
-    WinQueryPresParam         @939
-    WinRemovePresParam        @940
-    WinRealizePalette         @941
-    WinCreatePointerIndirect  @942
-    WinSetErrorInfo           @977
-    WinWaitEventSem           @978
-    WinRequestMutexSem        @979
-    WinWaitMuxWaitSem         @980
-    WinQueryVisibleRegion     @1000
-    WinSetVisibleRegionNotify @1001
+    WinAddAtom = PMMERGE.5111                @700
+    WinAlarm = PMMERGE.5113                  @701
+    WinBeginEnumWindows = PMMERGE.5114       @702
+    WinBeginPaint = PMMERGE.5115             @703
+    WinCalcFrameRect = PMMERGE.5118          @704
+    WinCancelShutdown = PMMERGE.5121         @705
+    WinCloseClipbrd = PMMERGE.5124           @707
+    WinCompareStrings = PMMERGE.5125         @708
+    WinCopyAccelTable = PMMERGE.5126         @709
+    WinCopyRect = PMMERGE.5127               @710
+    WinCpTranslateChar = PMMERGE.5128        @711
+    WinCpTranslateString = PMMERGE.5129      @712
+    WinCreateAccelTable = PMMERGE.5130       @713
+    WinCreateAtomTable = PMMERGE.5131        @714
+    WinCreateMsgQueue = PMMERGE.5136         @716
+    WinDeleteAtom = PMMERGE.5148             @721
+    WinDeleteLibrary = PMMERGE.5149          @722
+    WinDestroyAccelTable = PMMERGE.5151      @723
+    WinDestroyAtomTable = PMMERGE.5152       @724
+    WinDestroyMsgQueue = PMMERGE.5154        @726
+    WinDestroyPointer = PMMERGE.5155         @727
+    WinDestroyWindow = PMMERGE.5156          @728
+    WinDismissDlg = PMMERGE.5157             @729
+    WinDrawBitmap = PMMERGE.5160             @730
+    WinDrawBorder = PMMERGE.5161             @731
+    WinDrawPointer = PMMERGE.5162            @732
+    WinEmptyClipbrd = PMMERGE.5164           @733
+    WinEnableWindow = PMMERGE.5166           @735
+    WinEnableWindowUpdate = PMMERGE.5167     @736
+    WinEndEnumWindows = PMMERGE.5168         @737
+    WinEndPaint = PMMERGE.5169               @738
+    WinEnumClipbrdFmts = PMMERGE.5171        @739
+    WinEnumDlgItem = PMMERGE.5172            @740
+    WinEqualRect = PMMERGE.5173              @741
+    WinFillRect = PMMERGE.5176               @743
+    WinFindAtom = PMMERGE.5177               @744
+    WinFlashWindow = PMMERGE.5178            @745
+    WinFocusChange = PMMERGE.5179            @746
+    WinFreeErrorInfo = PMMERGE.5180          @748
+    WinGetCurrentTime = PMMERGE.5182         @750
+    WinGetErrorInfo = PMMERGE.5185           @751
+    WinGetKeyState = PMMERGE.5188            @752
+    WinGetLastError = PMMERGE.5189           @753
+    WinGetMaxPosition = PMMERGE.5190         @754
+    WinGetMinPosition = PMMERGE.5191         @755
+    WinGetNextWindow = PMMERGE.5193          @756
+    WinGetPS = PMMERGE.5195                  @757
+    WinGetPhysKeyState = PMMERGE.5194        @758
+    WinGetScreenPS = PMMERGE.5196            @759
+    WinGetSysBitmap = PMMERGE.5197           @760
+    WinInflateRect = PMMERGE.5200            @762
+    WinInitialize = PMMERGE.5201             @763
+    WinIntersectRect = PMMERGE.5203          @764
+    WinInvalidateRect = PMMERGE.5204         @765
+    WinInvalidateRegion = PMMERGE.5205       @766
+    WinInvertRect = PMMERGE.5206             @767
+    WinIsChild = PMMERGE.5207                @768
+    WinIsRectEmpty = PMMERGE.5209            @770
+    WinIsWindow = PMMERGE.5211               @772
+    WinIsWindowEnabled = PMMERGE.5212        @773
+    WinIsWindowShowing = PMMERGE.5213        @774
+    WinIsWindowVisible = PMMERGE.5214        @775
+    WinLoadAccelTable = PMMERGE.5216         @776
+    WinLoadLibrary = PMMERGE.5219            @777
+    WinLoadMenu = PMMERGE.5220               @778
+    WinLoadMessage = PMMERGE.5221            @779
+    WinLoadPointer = PMMERGE.5222            @780
+    WinLoadString = PMMERGE.5224             @781
+    WinMapDlgPoints = PMMERGE.5231           @787
+    WinMapWindowPoints = PMMERGE.5232        @788
+    WinMessageBox = PMMERGE.5233             @789
+    WinNextChar = PMMERGE.5238               @791
+    WinOffsetRect = PMMERGE.5239             @792
+    WinOpenClipbrd = PMMERGE.5240            @793
+    WinOpenWindowDC = PMMERGE.5241           @794
+    WinProcessDlg = PMMERGE.5247             @796
+    WinPtInRect = PMMERGE.5248               @797
+    WinQueryAccelTable = PMMERGE.5249        @798
+    WinQueryActiveWindow = PMMERGE.5251      @799
+    WinQueryAnchorBlock = PMMERGE.5252       @800
+    WinQueryAtomName = PMMERGE.5254          @802
+    WinQueryCapture = PMMERGE.5256           @804
+    WinQueryClassName = PMMERGE.5258         @805
+    WinQueryClipbrdData = PMMERGE.5260       @806
+    WinQueryClipbrdFmtInfo = PMMERGE.5261    @807
+    WinQueryClipbrdOwner = PMMERGE.5262      @808
+    WinQueryCp = PMMERGE.5264                @810
+    WinQueryDesktopWindow = PMMERGE.5268     @813
+    WinQueryDlgItemShort = PMMERGE.5269      @814
+    WinQueryDlgItemText = PMMERGE.5270       @815
+    WinQueryDlgItemTextLength = PMMERGE.5271 @816
+    WinQueryFocus = PMMERGE.5272             @817
+    WinQueryMsgPos = PMMERGE.5273            @818
+    WinQueryObjectWindow = PMMERGE.5275      @820
+    WinQueryPointer = PMMERGE.5277           @821
+    WinQueryPointerInfo = PMMERGE.5278       @822
+    WinQueryPointerPos = PMMERGE.5279        @823
+    WinQueryQueueInfo = PMMERGE.5282         @824
+    WinQuerySysColor = PMMERGE.5289          @826
+    WinQuerySysPointer = PMMERGE.5291        @828
+    WinQuerySysValue = PMMERGE.5294          @829
+    WinQuerySystemAtomTable = PMMERGE.5293   @830
+    WinQueryUpdateRect = PMMERGE.5297        @831
+    WinQueryUpdateRegion = PMMERGE.5298      @832
+    WinQueryWindow = PMMERGE.5301            @834
+    WinQueryWindowDC = PMMERGE.5302          @835
+    WinQueryWindowPos = PMMERGE.5304         @837
+    WinQueryWindowProcess = PMMERGE.5305     @838
+    WinQueryWindowPtr = PMMERGE.5306         @839
+    WinQueryWindowRect = PMMERGE.5307        @840
+    WinQueryWindowText = PMMERGE.5308        @841
+    WinQueryWindowTextLength = PMMERGE.5309  @842
+    WinQueryWindowULong = PMMERGE.5311       @843
+    WinQueryWindowUShort = PMMERGE.5312      @844
+    WinReleasePS = PMMERGE.5322              @848
+    WinScrollWindow = PMMERGE.5328           @849
+    WinSetAccelTable = PMMERGE.5335          @850
+    WinSetActiveWindow = PMMERGE.5337        @851
+    WinSetCapture = PMMERGE.5338             @852
+    WinSetClipbrdData = PMMERGE.5342         @854
+    WinSetClipbrdOwner = PMMERGE.5343        @855
+    WinSetCp = PMMERGE.5345                  @857
+    WinSetDlgItemShort = PMMERGE.5347        @858
+    WinSetDlgItemText = PMMERGE.5348         @859
+    WinSetFocus = PMMERGE.5350               @860
+    WinSetMultWindowPos = PMMERGE.5356       @863
+    WinSetOwner = PMMERGE.5357               @864
+    WinSetParent = PMMERGE.5359              @865
+    WinSetPointer = PMMERGE.5360             @866
+    WinSetPointerPos = PMMERGE.5362          @867
+    WinSetRect = PMMERGE.5364                @868
+    WinSetRectEmpty = PMMERGE.5365           @869
+    WinSetSysColors = PMMERGE.5368           @871
+    WinSetSysValue = PMMERGE.5372            @873
+    WinSetWindowBits = PMMERGE.5374          @874
+    WinSetWindowPos = PMMERGE.5375           @875
+    WinSetWindowPtr = PMMERGE.5376           @876
+    WinSetWindowText = PMMERGE.5377          @877
+    WinSetWindowULong = PMMERGE.5379         @878
+    WinSetWindowUShort = PMMERGE.5380        @879
+    WinShowCursor = PMMERGE.5381             @880
+    WinShowPointer = PMMERGE.5382            @881
+    WinShowWindow = PMMERGE.5384             @883
+    WinStartTimer = PMMERGE.5386             @884
+    WinStopTimer = PMMERGE.5387              @885
+    WinTerminate = PMMERGE.5396              @888
+    WinTrackRect = PMMERGE.5399              @890
+    WinUnionRect = PMMERGE.5402              @891
+    WinUpdateWindow = PMMERGE.5403           @892
+    WinUpper = PMMERGE.5404                  @893
+    WinUpperChar = PMMERGE.5405              @894
+    WinValidateRect = PMMERGE.5406           @895
+    WinValidateRegion = PMMERGE.5407         @896
+    WinWindowFromDC = PMMERGE.5413           @898
+    WinWindowFromID = PMMERGE.5414           @899
+    WinWindowFromPoint = PMMERGE.5415        @900
+    WinBroadcastMsg = PMMERGE.5116           @901
+    WinPostQueueMsg = PMMERGE.5245           @902
+    WinSendDlgItemMsg = PMMERGE.5333         @903
+    WinTranslateAccel = PMMERGE.5401         @904
+    WinCreateFrameControls = PMMERGE.5134    @906
+    WinCreateMenu = PMMERGE.5135             @907
+    WinCreateStdWindow = PMMERGE.5139        @908
+    WinCreateWindow = PMMERGE.5141           @909
+    WinDefDlgProc = PMMERGE.5146             @910
+    WinDefWindowProc = PMMERGE.5147          @911
+    WinDispatchMsg = PMMERGE.5158            @912
+    WinDrawText = PMMERGE.5163               @913
+    WinGetMsg = PMMERGE.5192                 @915
+    WinPeekMsg = PMMERGE.5242                @918
+    WinPostMsg = PMMERGE.5244                @919
+    WinSendMsg = PMMERGE.5334                @920
+    WinSetKeyboardStateTable = PMMERGE.5353  @921
+    WinCreateDlg = PMMERGE.5133              @922
+    WinDlgBox = PMMERGE.5159                 @923
+    WinLoadDlg = PMMERGE.5218                @924
+    WinQueryClassInfo = PMMERGE.5257         @925
+    WinRegisterClass = PMMERGE.5315          @926
+    WinReleaseHook = PMMERGE.5321            @927
+    WinSetHook = PMMERGE.5352                @928
+    WinSubclassWindow = PMMERGE.5389         @929
+    WinPopupMenu = PMMERGE.5243              @937
+    WinSetPresParam = PMMERGE.5363           @938
+    WinQueryPresParam = PMMERGE.5280         @939
+    WinRemovePresParam = PMMERGE.5323        @940
+    WinRealizePalette = PMMERGE.5314         @941
+    WinCreatePointerIndirect = PMMERGE.5138  @942
+    WinSetErrorInfo = PMMERGE.5349           @977
+    WinWaitEventSem = PMMERGE.5409           @978
+    WinRequestMutexSem = PMMERGE.5326        @979
+    WinWaitMuxWaitSem = PMMERGE.5411         @980
+    WinQueryVisibleRegion = PMMERGE.5300     @1000
+    WinSetVisibleRegionNotify = PMMERGE.5373 @1001

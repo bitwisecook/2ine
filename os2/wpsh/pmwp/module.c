@@ -9,7 +9,7 @@
 #include "os2/include/private/pmp.h"
 #include "os2/wpsh/pmwp/internal.h"
 #include "os2/include/bsedos.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "emulator/abi.h"
 #include "host/fs.h"
 #include "host/sync.h"

@@ -3,7 +3,7 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "host/font.h"
 #include "os2/ps/common/pm_text.h"
 

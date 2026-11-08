@@ -4,7 +4,7 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/input.h"
-#include "os2/ps/pmwin/menus.h"
+#include "os2/ps/pmmerge/pmwin/menus.h"
 #include "os2/include/pmgpi.h"
 #include <stdio.h>
 

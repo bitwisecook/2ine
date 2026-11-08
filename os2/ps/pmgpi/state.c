@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* GPI attributes and saved-state stack belong to each presentation space. */
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "emulator/abi.h"
 
 BOOL GpiSetMix(HPS handle, LONG mode)

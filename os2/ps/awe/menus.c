@@ -4,8 +4,8 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/windows.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/menus.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/menus.h"
 #include "emulator/abi.h"
 
 typedef struct MenuText

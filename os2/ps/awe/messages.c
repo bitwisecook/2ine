@@ -5,7 +5,7 @@
 #include "os2/ps/awe/batch_services.h"
 #include "host/sync.h"
 #include "os2/ps/awe/input.h"
-#include "os2/ps/pmwin/open32_post.h"
+#include "os2/ps/pmmerge/pmwin/open32_post.h"
 #include "os2/include/private/pmp.h"
 
 typedef struct QueuedMessage

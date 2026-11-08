@@ -2,8 +2,8 @@
 /* Repaint requests use the same retained PM update rectangles as BeginPaint. */
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmwin/paint.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 
 enum
 {

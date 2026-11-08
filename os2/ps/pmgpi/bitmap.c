@@ -4,8 +4,8 @@
 #include "os2/include/pmerr.h"
 #include "os2/include/pmsei.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "emulator/abi.h"
 
 ULONG GpiCreateBitmap(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info)

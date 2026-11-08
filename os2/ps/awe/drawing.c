@@ -2,8 +2,8 @@
 /* Windows DC coordinates have their origin at the top left of the PM drawable. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmdev.h"
 #include "os2/ps/awe/drawing.h"

@@ -2,8 +2,8 @@
 /* Boxes preserve current position and include their boundary unless DRO_EXCLUSIVE is set. */
 #include "os2/include/private/export.h"
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 
 LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG vertical)
 {

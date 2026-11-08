@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* GPI region entrypoints share normalized geometry with PM invalidation and drawing. */
 #include "os2/include/pmgpi.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 
 ULONG GpiCreateRegion(HPS ps, LONG count, PRECTL rects)
 {

@@ -87,7 +87,8 @@ the checker, so a new component is covered by these rules.
 | `os2/<group>/<dll>/` | One DLL: its `<dll>.def` exports, `module.c` entry, sources, guest bindings (`bindings.h`) and generated export table (`generated/<dll>-lx.h`) |
 | `os2/baseos/doscalls/` | DOSCALLS, in IBM's kernel unit layout (`filesys/`, `memory/`, `sem/`, `task/`, `loader/`, `dev/`, `perf/`) plus DOSCALL1's ring-3 areas (`doscall1/`: queues, sessions, NLS, messages, Vio, Kbd, suballocation, thunks); see its README |
 | `os2/baseos/{quecalls,sesmgr,nls,msg,viocalls,kbdcalls}/` | Forwarder-only DLLs: each export forwards to the DOSCALLS ordinal that implements it, as in Warp 4.52 |
-| `os2/ps/pmwin/` | Anchor context, windows, messages and painting |
+| `os2/ps/pmmerge/` | PMMERGE, the merged PM library, in IBM's source layout: `pmwin/` (windows, messages, input, painting, dialogs), `pmgre/` (graphics engine entries), `ishapi/` (profiles, switch list, WinStartApp); see its README |
+| `os2/ps/{pmwin,pmshapi,pmgre}/` | Forwarder-only DLLs: each export forwards to the PMMERGE ordinal that implements it, as in Warp 4.52 |
 | `tools/` | Generators, import analysis, assembly conversion and `lx_dump` |
 | `tools/data/` | Ordinal catalogue |
 | `tests/` | Host, emulator, OS/2 library, tools, architecture and integration tests; guest programs/fixtures |
@@ -95,7 +96,7 @@ the checker, so a new component is covered by these rules.
 
 Component CMake files own their targets. Generated tables are included only by
 their module's entry unit; private split-unit headers do not extend the public
-OS/2 API. `mdm` and `pmmerge` are existing unbuilt placeholders, not provided DLLs.
+OS/2 API.
 
 PM child windows share their top-level host render target. Clipping honors both
 class and window styles; frame statics preserve their interiors and pass pointer

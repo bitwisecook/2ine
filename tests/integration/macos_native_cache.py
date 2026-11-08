@@ -122,7 +122,8 @@ def main():
     request("command", arguments=["init"])
     g = FlatGuest()
     g.exit(0)
-    # PMWINX's Mach-O dependencies load before PMWIN's explicit native lookup.
+    # PMWINX's Mach-O dependencies (PMMERGE among them) load before the loader
+    # resolves PMWIN's forwarders to PMMERGE.
     guest = ball / "drive_c/STATE.EXE"
     guest.write_bytes(
         linear_image(
@@ -148,7 +149,14 @@ def main():
     (work / "native-loads.log").write_bytes(p.stdout + p.stderr)
     assert p.returncode == 0, (p.returncode, p.stderr.decode(errors="replace")[-2000:])
     paths = collections.defaultdict(list)
-    wanted = {"lib2ine.dylib", "libpmwin.so", "libpmgpi.so", "libpmwinx.so", "libviocalls.so"}
+    wanted = {
+        "lib2ine.dylib",
+        "libpmwin.so",
+        "libpmmerge.so",
+        "libpmgpi.so",
+        "libpmwinx.so",
+        "libviocalls.so",
+    }
     for line in p.stderr.decode(errors="replace").splitlines():
         m = re.match(r"^dyld\[\d+\]:.*?\s(/.*)$", line)
         if m and Path(m[1]).name in wanted:
@@ -157,7 +165,7 @@ def main():
         assert len(paths[name]) == 1 and Path(paths[name][0]).parent == cache, (name, paths[name])
     (work / "native-inventory.json").write_text(json.dumps(dict(paths), indent=2) + "\n")
     print(
-        "Source-style RPATH control: five native modules loaded exactly once, all from the ball cache"
+        "Source-style RPATH control: six native modules loaded exactly once, all from the ball cache"
     )
 
 

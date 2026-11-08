@@ -2,7 +2,7 @@
 /* LUT8 software conversion, cross-thread presentation and buffer ownership. */
 #include "os2/include/dive.h"
 #include "os2/mm/video/dive/dive_pixels.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "emulator/runtime.h"
 #include "emulator/features.h"
 #include "host/thread.h"

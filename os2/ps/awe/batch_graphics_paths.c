@@ -3,7 +3,7 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/batch_graphics_paths.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include <math.h>
 
 typedef struct Open32PathPoint

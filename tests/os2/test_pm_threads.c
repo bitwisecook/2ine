@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Window posts cross thread ownership without touching a foreign queue directly. */
 #include "os2/include/pmwin.h"
-#include "os2/ps/pmwin/internal.h"
-#include "os2/ps/pmwin/graphics.h"
-#include "os2/ps/pmwin/input.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/input.h"
 #include "host/thread.h"
 #include "host/sync.h"
 #include <stdint.h>

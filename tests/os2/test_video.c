@@ -5,7 +5,7 @@
 #include "os2/mm/video/decode/video_decode.h"
 #include "os2/mm/mci/mdm/mdm_video.h"
 #include "os2/include/pmwin.h"
-#include "os2/ps/pmwin/video_frames.h"
+#include "os2/ps/pmmerge/pmwin/video_frames.h"
 #include "host/clock.h"
 #include "host/video_frame.h"
 #include "host/sync.h"

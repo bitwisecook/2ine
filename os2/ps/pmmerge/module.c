@@ -1,62 +1,83 @@
-/* Public domain. No rights reserved. Wholly AI-authored. */
-/* PMMERGE bidirectional code-page classification delegates queue ownership to PMWIN. */
-#include "os2/include/private/export.h"
+/**
+ * 2ine; an OS/2 emulator for Linux.
+ *
+ * Please see the file LICENSE.txt in the source's root directory.
+ *
+ *  This file written by Ryan C. Gordon.
+ */
+#include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/include/private/pmp.h"
 #include "os2/include/pmshl.h"
 #include "emulator/arguments.h"
+
+static int ProcessDisplayReference;
+
+static int initializeProcessDisplay(void)
+{
+    const LxModule *program = GProcessState.main_module;
+    /* GUI imports load before guest DLL initialization can create PM threads. */
+    if (ProcessDisplayReference || !program || !program->is_lx ||
+        (program->header.lx.module_flags & 0x0300) != 0x0300)
+        return 1;
+    if (!lx_host_video_initialize(&desktop_window.w, &desktop_window.h))
+    {
+        fprintf(stderr, "PM process display initialization failed: %s\n", lx_host_video_error());
+        return 0;
+    }
+    desktop_window.hwnd = HWND_DESKTOP;
+    ProcessDisplayReference = 1;
+    TRACE_NATIVE("PM process display prepared('%s')", program->name);
+    return 1;
+}
+
+#undef LX_NATIVE_MODULE_INIT
+#define LX_NATIVE_MODULE_INIT(initcode)                                                            \
+    const LxExport *lxNativeModuleInit(uint32 *lx_num_exports)                                     \
+    {                                                                                              \
+        initcode;                                                                                  \
+        if (!initializeProcessDisplay())                                                           \
+        {                                                                                          \
+            lxNativeModuleDeinit();                                                                \
+            return NULL;                                                                           \
+        }                                                                                          \
+        static const LxExport lx_native_exports[] = {
+#undef LX_NATIVE_MODULE_DEINIT
+#define LX_NATIVE_MODULE_DEINIT(code)                                                              \
+    void lxNativeModuleDeinit(void)                                                                \
+    {                                                                                              \
+        destroySharedPointers();                                                                   \
+        code;                                                                                      \
+        if (ProcessDisplayReference)                                                               \
+        {                                                                                          \
+            ProcessDisplayReference = 0;                                                           \
+            lx_host_video_quit();                                                                  \
+        }                                                                                          \
+    }
 #include "os2/ps/pmmerge/generated/pmmerge-lx.h"
 
-ULONG WinQueryCpType(HMQ queue)
+LX_PRIVATE uint32 GHABCounter;
+LX_PRIVATE uint32 GHMQCounter;
+
+LX_PRIVATE Window desktop_window;
+
+PFNWP defaultGuestWindowProc(void)
 {
-    ULONG codepage = queue ? WinQueryCp(queue) : GProcessState.process_codepage;
-    if (!codepage && queue)
-        return 0;
-    switch (codepage)
-    {
-        case 864:
-        case 1046:
-            return 2;
-        case 775:
-        case 921:
-            return 3;
-        case 855:
-        case 866:
-        case 915:
-            return 4;
-        case 737:
-        case 869:
-        case 813:
-            return 5;
-        case 856:
-        case 862:
-        case 916:
-            return 6;
-        case 932:
-        case 942:
-        case 943:
-            return 7;
-        case 949:
-        case 970:
-            return 8;
-        case 852:
-        case 912:
-            return 9;
-        case 936:
-        case 1381:
-        case 1386:
-            return 10;
-        case 950:
-        case 964:
-            return 11;
-        case 874:
-            return 12;
-        case 857:
-        case 920:
-            return 13;
-        case 1200:
-        case 1208:
-            return 14;
-        default:
-            return 1;
-    }
+#if TWOINE_PORTABLE_LOADER && LX_LEGACY
+    if (GProcessState.execution && obj32.mapping && bridge_address_WinDefWindowProc)
+        return (PFNWP)(uintptr_t)(obj32.guest_base +
+                                  (uint32)((uint8 *)bridge_address_WinDefWindowProc -
+                                           (uint8 *)obj32.addr));
+#endif
+    return WinDefWindowProc;
+}
+
+PFNWP defaultGuestDialogProc(void)
+{
+#if TWOINE_PORTABLE_LOADER && LX_LEGACY
+    if (GProcessState.execution && obj32.mapping && bridge_address_WinDefDlgProc)
+        return (PFNWP)(uintptr_t)(obj32.guest_base +
+                                  (uint32)((uint8 *)bridge_address_WinDefDlgProc -
+                                           (uint8 *)obj32.addr));
+#endif
+    return WinDefDlgProc;
 }

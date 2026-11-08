@@ -88,12 +88,12 @@ static void remove_session(SessionWait *session)
     lx_host_mutex_unlock(session_mutex);
 }
 
-/* The desktop is PMWIN's: DOSCALLS does not link it, and finds it only when
-   the process has loaded it. */
+/* The desktop belongs to PMMERGE, which implements PMWIN: DOSCALLS does not
+   link it, and finds it only when the process has loaded it. */
 static void *desktop_entry(const char *name)
 {
     for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
-        if (module->nativelib && !strcasecmp(module->name, "PMWIN"))
+        if (module->nativelib && !strcasecmp(module->name, "PMMERGE"))
             return lx_host_library_symbol(module->nativelib, name);
     return NULL;
 }

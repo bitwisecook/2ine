@@ -2,7 +2,7 @@
 /* PGL visual records live in read-only guest memory. Current bindings hold a
    typed handle lease and exclusive host-thread ownership until release. */
 #include "os2/opengl/opengl/internal.h"
-#include "os2/ps/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "os2/include/pmgpi.h"
 #include "os2/ps/common/pm_text.h"
 

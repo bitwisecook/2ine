@@ -1,60 +1,6 @@
 # Derived from original 2ine; zlib-style license. See ../../LICENSE.txt.
 # Presentation Manager (IBM w45ps\src\ps).
 twoine_os2_dll(
-    pmwin
-    pmwin/help_compat.c
-    pmwin/module.c
-    pmwin/context.c
-    pmwin/codepages.c
-    pmwin/windows.c
-    pmwin/frame_state.c
-    pmwin/messages.c
-    pmwin/paint.c
-    pmwin/timers.c
-    pmwin/graphics.c
-    pmwin/raster.c
-    pmwin/coordinates.c
-    pmwin/device_context.c
-    pmwin/print_job.c
-    pmwin/resources.c
-    pmwin/window_data.c
-    pmwin/system.c
-    pmwin/window_queries.c
-    pmwin/presentation.c
-    pmwin/create_message.c
-    pmwin/dialogs.c
-    pmwin/dialog_template.c
-    pmwin/message_box.c
-    pmwin/controls.c
-    pmwin/buttons.c
-    pmwin/bitmap.c
-    pmwin/text.c
-    pmwin/rectangles.c
-    pmwin/entry.c
-    pmwin/spin.c
-    pmwin/scrollbar.c
-    pmwin/combo.c
-    pmwin/mle.c
-    pmwin/standard_file.c
-    pmwin/menus.c
-    pmwin/regions.c
-    pmwin/invalidation.c
-    pmwin/accelerators.c
-    pmwin/pointers.c
-    pmwin/hooks.c
-    pmwin/visible.c
-    pmwin/dive.c
-    pmwin/video_frames.c
-    pmwin/thread_messages.c
-    pmwin/input.c
-    pmwin/window_text.c
-    pmwin/clipboard.c
-    pmwin/semaphore_waits.c
-    pmwin/pointer_image.c
-    pmwin/compat_services.c
-    pmwin/standard_font.c
-)
-twoine_os2_dll(
     pmgpi
     pmgpi/module.c
     pmgpi/help.c
@@ -77,7 +23,59 @@ twoine_os2_dll(
     pmmerge/ishapi/profiles.c
     pmmerge/ishapi/switches.c
     pmmerge/ishapi/startapp.c
+    pmmerge/pmwin/cptype.c
+    pmmerge/pmwin/help_compat.c
+    pmmerge/pmwin/context.c
+    pmmerge/pmwin/codepages.c
+    pmmerge/pmwin/windows.c
+    pmmerge/pmwin/frame_state.c
+    pmmerge/pmwin/messages.c
+    pmmerge/pmwin/paint.c
+    pmmerge/pmwin/timers.c
+    pmmerge/pmwin/graphics.c
+    pmmerge/pmwin/raster.c
+    pmmerge/pmwin/coordinates.c
+    pmmerge/pmwin/device_context.c
+    pmmerge/pmwin/print_job.c
+    pmmerge/pmwin/resources.c
+    pmmerge/pmwin/window_data.c
+    pmmerge/pmwin/system.c
+    pmmerge/pmwin/window_queries.c
+    pmmerge/pmwin/presentation.c
+    pmmerge/pmwin/create_message.c
+    pmmerge/pmwin/dialogs.c
+    pmmerge/pmwin/dialog_template.c
+    pmmerge/pmwin/message_box.c
+    pmmerge/pmwin/controls.c
+    pmmerge/pmwin/buttons.c
+    pmmerge/pmwin/bitmap.c
+    pmmerge/pmwin/text.c
+    pmmerge/pmwin/rectangles.c
+    pmmerge/pmwin/entry.c
+    pmmerge/pmwin/spin.c
+    pmmerge/pmwin/scrollbar.c
+    pmmerge/pmwin/combo.c
+    pmmerge/pmwin/mle.c
+    pmmerge/pmwin/standard_file.c
+    pmmerge/pmwin/menus.c
+    pmmerge/pmwin/regions.c
+    pmmerge/pmwin/invalidation.c
+    pmmerge/pmwin/accelerators.c
+    pmmerge/pmwin/pointers.c
+    pmmerge/pmwin/hooks.c
+    pmmerge/pmwin/visible.c
+    pmmerge/pmwin/dive.c
+    pmmerge/pmwin/video_frames.c
+    pmmerge/pmwin/thread_messages.c
+    pmmerge/pmwin/input.c
+    pmmerge/pmwin/window_text.c
+    pmmerge/pmwin/clipboard.c
+    pmmerge/pmwin/semaphore_waits.c
+    pmmerge/pmwin/pointer_image.c
+    pmmerge/pmwin/compat_services.c
+    pmmerge/pmwin/standard_font.c
 )
+twoine_os2_dll(pmwin pmwin/module.c)
 twoine_os2_dll(pmgre pmgre/module.c)
 twoine_os2_dll(pmshapi pmshapi/module.c)
 twoine_os2_dll(pmctls controls/pmctls/module.c)
@@ -164,7 +162,7 @@ twoine_os2_dll(
     awe/batch_services_windows.c
     awe/process.c
 )
-target_link_libraries(pmwin PRIVATE twoine_formats doscalls)
+target_link_libraries(pmmerge PRIVATE twoine_formats doscalls)
 find_package(ZLIB REQUIRED)
 if(TWOINE_NATIVE_LOADER)
     # This target uses -m32 while CMake's configure process runs on the host ABI.
@@ -178,16 +176,12 @@ if(TWOINE_NATIVE_LOADER)
     if(NOT IS_ABSOLUTE "${_twoine_native_zlib}" OR NOT EXISTS "${_twoine_native_zlib}")
         message(FATAL_ERROR "Install the i386 zlib development library for the native worker")
     endif()
-    target_include_directories(pmwin PRIVATE ${ZLIB_INCLUDE_DIRS})
-    target_link_libraries(pmwin PRIVATE "${_twoine_native_zlib}")
+    target_include_directories(pmmerge PRIVATE ${ZLIB_INCLUDE_DIRS})
+    target_link_libraries(pmmerge PRIVATE "${_twoine_native_zlib}")
 else()
-    target_link_libraries(pmwin PRIVATE ZLIB::ZLIB)
+    target_link_libraries(pmmerge PRIVATE ZLIB::ZLIB)
 endif()
-target_link_libraries(pmgpi PRIVATE pmwin)
-target_link_libraries(
-    pmwinx
-    PRIVATE pmmerge pmwin pmgpi pmdrag pmwp
-)
-target_link_libraries(pmdrag PRIVATE pmwin)
-target_link_libraries(pmctls PRIVATE pmwin)
-target_link_libraries(pmmerge PRIVATE doscalls pmwin)
+target_link_libraries(pmgpi PRIVATE pmmerge)
+target_link_libraries(pmwinx PRIVATE pmmerge pmgpi pmdrag pmwp)
+target_link_libraries(pmdrag PRIVATE pmmerge)
+target_link_libraries(pmctls PRIVATE pmmerge)
