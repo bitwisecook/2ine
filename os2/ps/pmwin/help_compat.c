@@ -2,7 +2,7 @@
 /* Locale comparisons, window identity and scrolling used by the help manager. */
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/graphics.h"
-#include "os2/include/nls.h"
+#include "os2/include/bsedos.h"
 
 ULONG WinCompareStrings(HAB hab, ULONG codepage, ULONG country, PSZ first, PSZ second,
                         ULONG reserved)

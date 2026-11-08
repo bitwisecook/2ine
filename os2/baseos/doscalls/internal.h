@@ -27,7 +27,9 @@
 #define DCPY_EXISTING 0x0001U // copy even if the target exists.
 #define DCPY_APPEND 0x0002U   // append instead of replacing.
 #include "os2/include/private/export16.h"
-#include "os2/include/doscalls.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
+#include "os2/include/private/bsep.h"
 #include "host/memory.h"
 #include "host/clock.h"
 #include "host/fs.h"

@@ -2,7 +2,7 @@
 /* Open32 paths use the same current drive and directories as DOSCALLS. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/include/doscalls.h"
+#include "os2/include/bsedos.h"
 
 ULONG GetWindowsDirectory(PSZ output, ULONG capacity)
 {

@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#ifndef _INCL_OS2ERRORS_H_
-#define _INCL_OS2ERRORS_H_
+#ifndef _INCL_BSEERR_H_
+#define _INCL_BSEERR_H_
 
 enum
 {

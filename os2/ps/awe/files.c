@@ -4,7 +4,7 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/process.h"
-#include "os2/include/doscalls.h"
+#include "os2/include/bsedos.h"
 #include "host/fs.h"
 
 LONG OpenFile(PSZ name, PVOID record, ULONG flags)

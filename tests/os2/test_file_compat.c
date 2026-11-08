@@ -4,8 +4,9 @@
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
-#include "os2/include/doscalls.h"
-#include "os2/include/os2errors.h"
+#include "os2/include/bseerr.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
 #include "emulator/runtime.h"
 #include "emulator/module.h"
 #include <stdio.h>

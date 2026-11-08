@@ -24,8 +24,8 @@
 #include "host/thread.h"
 #include <errno.h>
 
-#include "os2/include/os2types.h"
-#include "os2/include/os2errors.h"
+#include "os2/include/os2def.h"
+#include "os2/include/bseerr.h"
 #include "emulator/runtime.h"
 #include "emulator/module.h"
 

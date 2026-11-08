@@ -2,7 +2,7 @@
 /* The PDF and PCL file queues use native host save dialogs. */
 #ifndef TWOINE_OS2LIBS_PMSPL_H
 #define TWOINE_OS2LIBS_PMSPL_H
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capacity, uint32 base,
                        PULONG returned, PULONG total, PULONG needed);
 ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity, uint32 base,

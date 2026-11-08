@@ -7,7 +7,7 @@
  */
 
 #include "os2/include/private/export16.h"
-#include "os2/include/kbdcalls.h"
+#include "os2/include/bsesub.h"
 #include "host/terminal.h"
 #include "host/clock.h"
 

@@ -7,7 +7,7 @@
  */
 
 #include "os2/include/private/export16.h"
-#include "os2/include/viocalls.h"
+#include "os2/include/bsesub.h"
 
 #include "host/terminal.h"
 #include "emulator/launch_record.h"

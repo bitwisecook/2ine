@@ -7,7 +7,8 @@
  */
 
 #include "os2/include/private/export16.h"
-#include "os2/include/nls.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
 
 #include "os2/baseos/nls/generated/nls-lx.h"
 

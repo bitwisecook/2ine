@@ -3,7 +3,7 @@
    Static class information lives in guest memory, method bodies are generated
    32-bit bridges, and somBuildClass itself fills every class data token. */
 #include "os2/wpsh/pmwp/internal.h"
-#include "os2/include/doscalls.h"
+#include "os2/include/bsedos.h"
 #include "emulator/abi.h"
 #include "host/sync.h"
 #include <stdio.h>

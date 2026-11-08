@@ -7,7 +7,8 @@
  */
 
 #include "os2/include/private/export16.h"
-#include "os2/include/msg.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
 
 #include "host/fs.h"
 #include <stdio.h>

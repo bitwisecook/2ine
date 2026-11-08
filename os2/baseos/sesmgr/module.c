@@ -7,12 +7,10 @@
  */
 
 #include "os2/include/private/export16.h"
-#include "os2/include/sesmgr.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
 #include "os2/include/private/bsep.h"
-#include "os2/include/doscalls.h"
-#include "os2/baseos/doscalls/launch.h"
 #include "emulator/launch_record.h"
-#include "os2/include/quecalls.h"
 #include "host/thread.h"
 #include "host/sync.h"
 #include "host/mailbox.h"

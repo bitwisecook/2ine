@@ -4,10 +4,10 @@
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
-#include "os2/include/doscalls.h"
-#include "os2/include/quecalls.h"
-#include "os2/include/sesmgr.h"
-#include "os2/include/os2errors.h"
+#include "os2/include/bseerr.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
+#include "os2/include/private/bsep.h"
 #include "emulator/runtime.h"
 #include <dlfcn.h>
 #include <dirent.h>

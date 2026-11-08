@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "os2/include/doscalls.h"
+#include "os2/include/bsedos.h"
 #include "os2/ps/awe/bindings_unicode.h"
 
 static uint32 open32_interlocked_bridge(uint8 *a, unsigned operation)

@@ -9,7 +9,7 @@
 #ifndef _INCL_PMGPI_H_
 #define _INCL_PMGPI_H_
 
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/private/pmgpip.h"
 

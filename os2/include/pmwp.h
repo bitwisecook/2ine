@@ -2,7 +2,7 @@
 /* Persistent ball-local Workplace Shell folder and program objects. */
 #ifndef TWOINE_PMWP_H
 #define TWOINE_PMWP_H
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 #include "os2/include/pmwin.h"
 OS2EXPORT BOOL OS2API WinRegisterObjectClass(PSZ name, PSZ module);
 OS2EXPORT BOOL OS2API WinDeregisterObjectClass(PSZ name);

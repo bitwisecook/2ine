@@ -9,7 +9,7 @@
 #ifndef _INCL_SOM_H_
 #define _INCL_SOM_H_
 
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 
 #ifdef __cplusplus
 extern "C"

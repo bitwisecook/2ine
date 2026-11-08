@@ -3,7 +3,7 @@
    icons, appearance, object semaphores, file attributes, association and class
    manager queries. */
 #include "os2/wpsh/pmwp/internal.h"
-#include "os2/include/doscalls.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/pmdrag.h"
 #include "os2/include/pmshapi.h"
 #include "os2/include/pmwin.h"

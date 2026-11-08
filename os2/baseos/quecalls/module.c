@@ -7,11 +7,12 @@
  */
 
 #include "os2/include/private/export16.h"
-#include "os2/include/quecalls.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
+#include "os2/include/private/bsep.h"
 
 #include "emulator/handles.h"
 #include "emulator/abi.h"
-#include "os2/include/doscalls.h"
 #include "host/clock.h"
 #include "host/mailbox.h"
 #include "host/thread.h"

@@ -3,7 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/include/pmshapi.h"
 #include "os2/ps/pmshapi/profiles.h"
-#include "os2/include/nls.h"
+#include "os2/include/bsedos.h"
 #include "emulator/handles.h"
 #include "emulator/abi.h"
 #include "emulator/process.h"

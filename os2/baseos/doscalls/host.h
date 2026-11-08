@@ -2,6 +2,6 @@
 /* Host-library clients may release a DOS worker's join ownership. */
 #ifndef TWOINE_DOSCALLS_HOST_H
 #define TWOINE_DOSCALLS_HOST_H
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 OS2EXPORT APIRET OS2API lx_doscalls_detach_thread(TID id);
 #endif

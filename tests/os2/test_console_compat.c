@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "os2/include/kbdcalls.h"
-#include "os2/include/viocalls.h"
-#include "os2/include/nls.h"
-#include "os2/include/os2errors.h"
+#include "os2/include/bseerr.h"
+#include "os2/include/bsedos.h"
+#include "os2/include/bsedos16.h"
+#include "os2/include/bsesub.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>

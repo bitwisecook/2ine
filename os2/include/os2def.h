@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#ifndef _INCL_OS2TYPES_H_
-#define _INCL_OS2TYPES_H_
+#ifndef _INCL_OS2DEF_H_
+#define _INCL_OS2DEF_H_
 
 #include <stdint.h>
 #include "host/abi.h"
@@ -81,6 +81,7 @@ extern "C"
     typedef int(APIENTRY *PFN)(void);
 
     typedef ULONG ERRORID;
+    typedef HANDLE HSEM;
 
 #define NULLHANDLE 0
 #define TRUE 1

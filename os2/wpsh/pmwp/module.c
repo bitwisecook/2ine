@@ -6,7 +6,7 @@
 #include "os2/include/pmwp.h"
 #include "os2/wpsh/pmwp/internal.h"
 #include "os2/include/pmwin.h"
-#include "os2/include/sesmgr.h"
+#include "os2/include/bsedos.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "emulator/abi.h"
 #include "os2/ps/pmshapi/profiles.h"

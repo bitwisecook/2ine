@@ -2,7 +2,7 @@
 /* TCP/IP 4.0 sockets use a 16-bit family field and the original SO32DLL ordinals. */
 #ifndef TWOINE_SO32DLL_H
 #define TWOINE_SO32DLL_H
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 OS2EXPORT uint32_t OS2API Os2LegacyGetHostId(void);
 
 typedef struct Os2LegacyAddress

@@ -2,7 +2,7 @@
 /* M_WPObject class services and the file system, folder, disk, program and data file
    classes, plus creation of objects of classes registered from a guest module. */
 #include "os2/wpsh/pmwp/internal.h"
-#include "os2/include/doscalls.h"
+#include "os2/include/bsedos.h"
 #include "os2/include/pmdrag.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmwin.h"

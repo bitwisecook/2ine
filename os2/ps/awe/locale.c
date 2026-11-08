@@ -2,7 +2,7 @@
 /* The current NLS provider supplies the US English ANSI locale. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/include/nls.h"
+#include "os2/include/bsedos.h"
 
 static const struct
 {

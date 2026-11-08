@@ -58,11 +58,9 @@ OS2_SHARED = ("os2/ps/common/", "os2/mm/midi/", "os2/mm/video/decode/", "os2/mpt
 # number of such includes. A count change fails, so new coupling goes through
 # os2/include/private/ instead.
 OS2_CROSS_DLL_ALLOWANCES = {
-    ("os2/baseos/sesmgr", "os2/baseos/doscalls"): 1,
     ("os2/mm/mci/mdm", "os2/ps/pmwin"): 1,
     ("os2/mm/video/dive", "os2/ps/pmwin"): 1,
     ("os2/opengl/opengl", "os2/ps/pmwin"): 1,
-    ("os2/ps/awe", "os2/baseos/doscalls"): 1,
     ("os2/ps/awe", "os2/ps/pmshapi"): 1,
     ("os2/ps/awe", "os2/ps/pmwin"): 41,
     ("os2/ps/controls/drag", "os2/ps/pmwin"): 1,

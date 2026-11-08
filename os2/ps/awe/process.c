@@ -5,7 +5,7 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/process.h"
-#include "os2/baseos/doscalls/launch.h"
+#include "os2/include/private/bsep.h"
 #include "os2/include/pmshapi.h"
 #include "os2/include/pmwin.h"
 #include "os2/ps/pmwin/open32_post.h"

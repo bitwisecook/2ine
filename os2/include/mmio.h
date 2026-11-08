@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_MMIO_H
 #define TWOINE_MMIO_H
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 #include <stddef.h>
 OS2EXPORT ULONG OS2API mmioOpen(PSZ name, PVOID info, ULONG flags);
 OS2EXPORT USHORT OS2API mmioClose(ULONG handle, USHORT flags);

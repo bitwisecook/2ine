@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_OS2LIBS_PMDRAG_H
 #define TWOINE_OS2LIBS_PMDRAG_H
-#include "os2/include/os2types.h"
+#include "os2/include/os2def.h"
 #include "os2/include/pmwin.h"
 OS2EXPORT ULONG OS2API DrgAddStrHandle(PSZ name);
 OS2EXPORT BOOL OS2API DrgDeleteStrHandle(ULONG string);
