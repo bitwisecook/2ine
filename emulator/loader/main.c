@@ -29,7 +29,6 @@ int main(int argc, char **argv, char **envp)
     if (!strcmp(argv[1], "--operation"))
         return lx_host_operation_supervise(argv[0], argv + 2, envp);
 
-    GProcessState.using_lx_loader = 1;
     GProcessState.running = 0;
     GProcessState.deinitOs2Tib(GProcessState.main_tib_selector);
     GProcessState.main_tib_selector = 0;
@@ -68,21 +67,13 @@ int main(int argc, char **argv, char **envp)
     lx_guest_store_u32(&pib->status, GProcessState.pib.pib_flstatus);
     lx_guest_store_u32(&pib->type, GProcessState.pib.pib_ultype);
 
-    GProcessState.setOs2Tib = lxSetOs2Tib;
-    GProcessState.getOs2Tib = lxGetOs2Tib;
-    GProcessState.deinitOs2Tib = lxDeinitOs2Tib;
+    /* From here TIBs, 16-bit selectors and OS/2 paths go through the execution
+       instance and the drive table. */
+    GProcessState.execution_bound = 1;
     GProcessState.findModuleOrdinal = findModuleOrdinal;
-    GProcessState.allocSegment = lxAllocSegment;
-    GProcessState.freeSegment = lxFreeSegment;
-    GProcessState.createCodeAlias = lxCreateCodeAlias;
-    GProcessState.findSelector = lxFindSelector;
-    GProcessState.freeSelector = lxFreeSelector;
-    GProcessState.convert1616to32 = lxConvert1616to32;
-    GProcessState.convert32to1616 = lxConvert32to1616;
     GProcessState.loadModule = loadModuleByPathOrModuleName;
     GProcessState.loadModuleWithError = loadModuleWithError;
     GProcessState.freeModule = freeLxModule;
-    GProcessState.makeUnixPath = lxMakeUnixPath;
     GProcessState.terminate = lxTerminate;
     lxPrepareNetworkConfiguration();
 

@@ -196,3 +196,14 @@ char *lxMakeUnixPath(const char *os2path, uint32 *err)
 
     return retval;
 }
+
+char *lxProcessMakeUnixPath(const char *os2path, uint32 *err)
+{
+    if (GProcessState.execution_bound)
+        return lxMakeUnixPath(os2path, err);
+    /* A host program without the loader passes host paths through unchanged. */
+    char *retval = strdup(os2path);
+    if (!retval)
+        *err = ERROR_NOT_ENOUGH_MEMORY;
+    return retval;
+}

@@ -24,20 +24,21 @@ extern LX_PRIVATE LX_HOST_THREAD_LOCAL LxHostThreadState host_thread_state;
 LxHostThreadState *lxHostThreadState(void);
 LX_PRIVATE void initPib(void);
 LX_PRIVATE void dosExit_lib2ine(uint32 action, uint32 result);
-LX_PRIVATE void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t stacklen,
-                                   const uint32 tid);
-LX_PRIVATE uint16 setOs2Tib_lib2ine(uint8 *tibspace);
-LX_PRIVATE LxTIB *getOs2Tib_lib2ine(void);
-LX_PRIVATE void deinitOs2Tib_lib2ine(const uint16 selector);
-LX_PRIVATE int findSelector_lib2ine(const uint32 addr, uint16 *outselector, uint16 *outoffset,
-                                    int iscode);
-LX_PRIVATE void freeSelector_lib2ine(const uint16 selector);
-LX_PRIVATE void *convert1616to32_lib2ine(const uint32 addr1616);
-LX_PRIVATE uint32 convert32to1616_lib2ine(void *addr32);
+LX_PRIVATE void lxInitOs2Tib(uint8 *tibspace, void *_topOfStack, const size_t stacklen,
+                             const uint32 tid);
+LX_PRIVATE uint16 lxSetOs2Tib(uint8 *tibspace);
+LX_PRIVATE LxTIB *lxGetOs2Tib(void);
+LX_PRIVATE void lxDeinitOs2Tib(const uint16 selector);
+LX_PRIVATE void *lxAllocSegment(uint16 *selector, const int iscode);
+LX_PRIVATE void lxFreeSegment(const uint16 selector);
+LX_PRIVATE int lxCreateCodeAlias(const uint16 selDS, uint16 *outselector);
+LX_PRIVATE int lxFindSelector(const uint32 addr, uint16 *outselector, uint16 *outoffset,
+                              int iscode);
+LX_PRIVATE void lxFreeSelector(const uint16 selector);
+LX_PRIVATE void *lxConvert1616to32(const uint32 addr1616);
+LX_PRIVATE uint32 lxConvert32to1616(void *addr32);
 LX_PRIVATE struct LxModule *loadModule_lib2ine(const char *modname);
-LX_PRIVATE char *makeUnixPath_lib2ine(const char *os2path, uint32 *err);
-LX_PRIVATE void *allocSegment_lib2ine(uint16 *selector, const int iscode);
-LX_PRIVATE void freeSegment_lib2ine(const uint16 selector);
+LX_PRIVATE char *lxProcessMakeUnixPath(const char *os2path, uint32 *err);
 LX_PRIVATE void __attribute__((noreturn)) terminate_lib2ine(const uint32 exitcode);
 LX_PRIVATE void cfgWarn(const char *fname, const int lineno, const char *fmt, ...);
 LX_PRIVATE int cfgIsSpace(const int ch);

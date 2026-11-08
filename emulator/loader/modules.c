@@ -137,88 +137,6 @@ uint16 lxSelectorToSegment(uint16 index)
     return (index << 3) | 7;
 }
 
-uint16 lxSetOs2Tib(uint8 *source)
-{
-    LxHostThreadState *state = lxHostThreadState();
-    if (state->tib_mapping)
-    {
-        fprintf(stderr, "TIB is already attached\n");
-        abort();
-    }
-    state->tib_mapping = lx_execution_map(GProcessState.execution, 0, 0x20000, 3, 0);
-    if (!state->tib_mapping)
-    {
-        fprintf(stderr, "Cannot allocate guest TIB\n");
-        abort();
-    }
-    uint32 base = lx_execution_mapping_address(state->tib_mapping);
-    uint32 address = (base + 0xffff) & ~0xffffu;
-    uint8 *tib = (uint8 *)lx_execution_mapping_host(state->tib_mapping) + (address - base);
-    memcpy(tib, source, LXTIBSIZE);
-    lx_guest_store_u32(tib + offsetof(LxTIB, tib_ptib2), address + sizeof(LxTIB));
-    return lx_execution_attach_tib(GProcessState.execution, tib);
-}
-
-LxTIB *lxGetOs2Tib(void)
-{
-    return lx_execution_current_tib(GProcessState.execution);
-}
-
-void lxDeinitOs2Tib(uint16 token)
-{
-    lxHostThreadCleanup();
-    lx_execution_detach_tib(GProcessState.execution, token);
-    LxHostThreadState *state = lxHostThreadState();
-    if (state->tib_mapping)
-        lx_execution_unmap(GProcessState.execution, state->tib_mapping);
-    state->tib_mapping = NULL;
-}
-
-void *lxAllocSegment(uint16 *s, int x)
-{
-    return lx_execution_alloc_segment(GProcessState.execution, s, x);
-}
-
-void lxFreeSegment(uint16 s)
-{
-    lx_execution_free_segment(GProcessState.execution, s);
-}
-
-int lxCreateCodeAlias(uint16 s, uint16 *out)
-{
-    return lx_execution_code_alias(GProcessState.execution, s, out);
-}
-
-int lxFindSelector(uint32 a, uint16 *s, uint16 *o, int x)
-{
-    return lx_execution_find_selector(GProcessState.execution, a, s, o, x);
-}
-
-void lxFreeSelector(uint16 s)
-{
-    lx_execution_free_selector(GProcessState.execution, s);
-}
-
-void *lxConvert1616to32(uint32 p)
-{
-    return lx_execution_far_to_host(GProcessState.execution, p);
-}
-
-uint32 lxConvert32to1616(void *p)
-{
-    return lx_execution_host_to_far(GProcessState.execution, p);
-}
-
-void initOs2StackSegments(uint32 a, uint32 n, int release)
-{
-    lx_execution_stack_segments(GProcessState.execution, a, n, release);
-}
-
-void fixupLinearCodeSegmentReferences(uint8 *p, size_t n)
-{
-    lx_execution_prepare_code(GProcessState.execution, p, n);
-}
-
 static void terminateModule(LxModule *lxmod)
 {
     if ((lxmod->initialized) && (lxmod != GProcessState.main_module))
@@ -416,14 +334,14 @@ void destroyLxModule(void *resource)
         LxMmaps *lxmmap = lxmod->is_lx ? &lxmod->mmaps[lxmod->header.lx.esp_object - 1]
                                        : &lxmod->mmaps[lxmod->header.ne.reg_ss - 1];
         const uint32 stackbase = lxmmap->guest_base;
-        initOs2StackSegments(stackbase, lxmmap->size, 1);
+        lx_execution_stack_segments(GProcessState.execution, stackbase, lxmmap->size, 1);
         lxmmap->mapped = NULL; /* The current thread may still be using this stack. */
     }
 
     for (uint32 i = 0; i < lxmod->num_mmaps; i++)
     {
         if (lxmod->mmaps[i].alias != 0xFFFF)
-            lxFreeSelector(lxmod->mmaps[i].alias);
+            lx_execution_free_selector(GProcessState.execution, lxmod->mmaps[i].alias);
         if (lxmod->mmaps[i].mapped)
         {
             if (lxmod->mmaps[i].mapping)

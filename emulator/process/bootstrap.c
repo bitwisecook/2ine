@@ -21,18 +21,19 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     lx_host_fatal_install();
     memset(&GProcessState, '\0', sizeof(GProcessState));
     GProcessState.dosExit = dosExit_lib2ine;
-    GProcessState.initOs2Tib = initOs2Tib_lib2ine;
-    GProcessState.setOs2Tib = setOs2Tib_lib2ine;
-    GProcessState.getOs2Tib = getOs2Tib_lib2ine;
-    GProcessState.deinitOs2Tib = deinitOs2Tib_lib2ine;
-    GProcessState.allocSegment = allocSegment_lib2ine;
-    GProcessState.freeSegment = freeSegment_lib2ine;
-    GProcessState.findSelector = findSelector_lib2ine;
-    GProcessState.freeSelector = freeSelector_lib2ine;
-    GProcessState.convert1616to32 = convert1616to32_lib2ine;
-    GProcessState.convert32to1616 = convert32to1616_lib2ine;
+    GProcessState.initOs2Tib = lxInitOs2Tib;
+    GProcessState.setOs2Tib = lxSetOs2Tib;
+    GProcessState.getOs2Tib = lxGetOs2Tib;
+    GProcessState.deinitOs2Tib = lxDeinitOs2Tib;
+    GProcessState.allocSegment = lxAllocSegment;
+    GProcessState.freeSegment = lxFreeSegment;
+    GProcessState.createCodeAlias = lxCreateCodeAlias;
+    GProcessState.findSelector = lxFindSelector;
+    GProcessState.freeSelector = lxFreeSelector;
+    GProcessState.convert1616to32 = lxConvert1616to32;
+    GProcessState.convert32to1616 = lxConvert32to1616;
     GProcessState.loadModule = loadModule_lib2ine;
-    GProcessState.makeUnixPath = makeUnixPath_lib2ine;
+    GProcessState.makeUnixPath = lxProcessMakeUnixPath;
     GProcessState.terminate = terminate_lib2ine;
     GProcessState.registerAudioGenerator = lxRegisterAudioGenerator;
     GProcessState.registerStereoAudioGenerator = lxRegisterStereoAudioGenerator;
@@ -89,50 +90,10 @@ LX_NATIVE_DESTRUCTOR(lib2ine)
 
 void dosExit_lib2ine(uint32 action, uint32 result) {}
 
-int findSelector_lib2ine(const uint32 addr, uint16 *outselector, uint16 *outoffset, int iscode)
-{
-    return 0; // always fail. This is for 16-bit support.
-}
-
-void freeSelector_lib2ine(const uint16 selector)
-{
-    // no-op. This is for 16-bit support.
-}
-
-void *convert1616to32_lib2ine(const uint32 addr1616)
-{
-    return NULL; // always fail. This is for 16-bit support.
-}
-
-uint32 convert32to1616_lib2ine(void *addr32)
-{
-    return 0; // always fail. This is for 16-bit support.
-}
-
 struct LxModule *loadModule_lib2ine(const char *modname)
 {
     return NULL;
 }
-
-char *makeUnixPath_lib2ine(const char *os2path, uint32 *err)
-{
-    // this doesn't convert any OS/2 paths. For native apps, use native paths.
-    char *retval = strdup(os2path);
-    if (!retval)
-    {
-        *err = 8;
-    }
-    return retval;
-}
-
-void *allocSegment_lib2ine(uint16 *selector, const int iscode)
-{
-    if (selector)
-        *selector = 0xFFFF;
-    return NULL;
-}
-
-void freeSegment_lib2ine(const uint16 selector) {}
 
 void __attribute__((noreturn)) terminate_lib2ine(const uint32 exitcode)
 {

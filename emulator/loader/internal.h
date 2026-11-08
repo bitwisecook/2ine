@@ -37,18 +37,6 @@ LX_PRIVATE int sanityCheckNeModule(const uint8 *exe, const uint32 exelen);
 LX_PRIVATE int sanityCheckModule(uint8 **_exe, uint32 *_exelen, int *_is_lx);
 
 LX_PRIVATE uint16 lxSelectorToSegment(uint16 index);
-LX_PRIVATE uint16 lxSetOs2Tib(uint8 *source);
-LX_PRIVATE LxTIB *lxGetOs2Tib(void);
-LX_PRIVATE void lxDeinitOs2Tib(uint16 token);
-LX_PRIVATE void *lxAllocSegment(uint16 *s, int x);
-LX_PRIVATE void lxFreeSegment(uint16 s);
-LX_PRIVATE int lxCreateCodeAlias(uint16 s, uint16 *out);
-LX_PRIVATE int lxFindSelector(uint32 a, uint16 *s, uint16 *o, int x);
-LX_PRIVATE void lxFreeSelector(uint16 s);
-LX_PRIVATE void *lxConvert1616to32(uint32 p);
-LX_PRIVATE uint32 lxConvert32to1616(void *p);
-LX_PRIVATE void initOs2StackSegments(uint32 a, uint32 n, int release);
-LX_PRIVATE void fixupLinearCodeSegmentReferences(uint8 *p, size_t n);
 LX_PRIVATE void *generateMissingTrampoline(const char *m, const char *n);
 LX_PRIVATE void *generateMissingTrampoline16(const char *m, const char *n, const LxExport **out);
 LX_PRIVATE uint32 guestEntryAddress(void *host);

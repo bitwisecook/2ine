@@ -988,7 +988,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         GProcessState.initOs2Tib(GProcessState.main_tibspace, (uint8 *)lxmmap->addr + lx->esp,
                                  stacksize, 1);
         GProcessState.main_tib_selector = GProcessState.setOs2Tib(GProcessState.main_tibspace);
-        initOs2StackSegments(stackbase, stacksize, 0);
+        lx_execution_stack_segments(GProcessState.execution, stackbase, stacksize, 0);
     }
 
     /* Install stack tiles before object aliases so startup selector numbers stay stable. */
@@ -1001,8 +1001,8 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                 continue;
             uint16 offset = 0;
             const int iscode = (obj->object_flags & 0x4) ? 1 : 0;
-            if (!lxFindSelector(retval->mmaps[i].guest_base, &retval->mmaps[i].alias, &offset,
-                                iscode))
+            if (!lx_execution_find_selector(GProcessState.execution, retval->mmaps[i].guest_base,
+                                            &retval->mmaps[i].alias, &offset, iscode))
             {
                 fprintf(stderr,
                         "Ran out of LDT entries getting a 16:16 alias for '%s' object #%u!\n",
@@ -1013,8 +1013,9 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
             if (obj->object_flags & 0x4)
             { // 16:16 segment with code.
-                fixupLinearCodeSegmentReferences((uint8 *)(size_t)retval->mmaps[i].mapped,
-                                                 retval->mmaps[i].size);
+                lx_execution_prepare_code(GProcessState.execution,
+                                          (uint8 *)(size_t)retval->mmaps[i].mapped,
+                                          retval->mmaps[i].size);
             }
         }
     }

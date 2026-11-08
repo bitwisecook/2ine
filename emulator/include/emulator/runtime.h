@@ -38,7 +38,11 @@ typedef struct LxProcessState
     uint8 main_tibspace[LXTIBSIZE];
     LxPIB pib;
     LxGuestMapping *guest_pib;
-    int using_lx_loader;
+    /* Set by lx_loader once guest code can run: TIBs and 16-bit selectors then
+       live in the execution instance and OS/2 paths map through the drive table.
+       A host program using lib2ine without the loader keeps its TIB in host
+       memory, has no selectors and uses host paths. */
+    int execution_bound;
     int subprocess;
     int running;
     int trace_native;

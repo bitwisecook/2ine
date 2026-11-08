@@ -68,7 +68,7 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
                     void *addr = getModuleProcAddrByOrdinal(lxmod, offset, &lxexp, 1, 0);
                     if (addr)
                     {
-                        target = lxConvert32to1616(addr);
+                        target = lx_execution_host_to_far(GProcessState.execution, addr);
                     }
                 }
                 else
@@ -87,7 +87,7 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
                                                         &lxexp, 1, 1);
                 if (addr)
                 {
-                    target = lxConvert32to1616(addr);
+                    target = lx_execution_host_to_far(GProcessState.execution, addr);
                 }
             }
             break;
@@ -107,7 +107,7 @@ int fixupNeSegment(const NeSegmentTableEntry *seg, LxModule *lxmod, uint8 *dst,
                     getModuleProcAddrByName(lxmod->dependencies[module - 1], name, &lxexp, 1);
                 if (addr)
                 {
-                    target = lxConvert32to1616(addr);
+                    target = lx_execution_host_to_far(GProcessState.execution, addr);
                 }
             }
             break;
@@ -300,11 +300,11 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         const int iscode = ((seg->segment_flags & 0x7) == 0) ? 1 : 0;
         const int isiterated = (seg->segment_flags & 0x8) ? 1 : 0;
         uint16 selector = 0xFFFF;
-        void *mmapaddr = lxAllocSegment(&selector, iscode);
+        void *mmapaddr = lx_execution_alloc_segment(GProcessState.execution, &selector, iscode);
 
         if (mmapaddr == NULL)
         {
-            fprintf(stderr, "lxAllocSegment(%d) failed\n", iscode);
+            fprintf(stderr, "lx_execution_alloc_segment(%d) failed\n", iscode);
             goto loadne_failed;
         }
         else if (selector == 0xFFFF)

@@ -22,7 +22,7 @@ void lxHostThreadCleanup(void)
     }
 }
 
-void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid)
+void lxInitOs2Tib(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid)
 {
     uint8 *topOfStack = (uint8 *)_topOfStack;
 
@@ -52,19 +52,57 @@ void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t stackle
     tib2->tib2_fMCForceFlag = 0;
 }
 
-uint16 setOs2Tib_lib2ine(uint8 *tibspace)
+/* Bound to an execution instance, each thread's TIB is copied into its own
+   guest mapping: a 64-KiB aligned block inside two tiles, so the TIB starts a
+   16-bit segment. */
+#define TIB_MAPPING_SIZE 0x20000u
+#define TIB_ALIGNMENT 0x10000u
+
+uint16 lxSetOs2Tib(uint8 *tibspace)
 {
-    DefaultTib = (LxTIB *)tibspace;
-    return 1;
+    if (!GProcessState.execution_bound)
+    {
+        DefaultTib = (LxTIB *)tibspace;
+        return 1;
+    }
+    LxHostThreadState *state = lxHostThreadState();
+    if (state->tib_mapping)
+    {
+        fprintf(stderr, "TIB is already attached\n");
+        abort();
+    }
+    state->tib_mapping = lx_execution_map(GProcessState.execution, 0, TIB_MAPPING_SIZE,
+                                          LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    if (!state->tib_mapping)
+    {
+        fprintf(stderr, "Cannot allocate guest TIB\n");
+        abort();
+    }
+    uint32 base = lx_execution_mapping_address(state->tib_mapping);
+    uint32 address = (base + TIB_ALIGNMENT - 1) & ~(TIB_ALIGNMENT - 1);
+    uint8 *tib = (uint8 *)lx_execution_mapping_host(state->tib_mapping) + (address - base);
+    memcpy(tib, tibspace, LXTIBSIZE);
+    lx_guest_store_u32(tib + offsetof(LxTIB, tib_ptib2), address + sizeof(LxTIB));
+    return lx_execution_attach_tib(GProcessState.execution, tib);
 }
 
-LxTIB *getOs2Tib_lib2ine(void)
+LxTIB *lxGetOs2Tib(void)
 {
-    return DefaultTib;
+    return GProcessState.execution_bound ? lx_execution_current_tib(GProcessState.execution)
+                                         : DefaultTib;
 }
 
-void deinitOs2Tib_lib2ine(const uint16 selector)
+void lxDeinitOs2Tib(const uint16 selector)
 {
     lxHostThreadCleanup();
-    DefaultTib = NULL;
+    if (!GProcessState.execution_bound)
+    {
+        DefaultTib = NULL;
+        return;
+    }
+    lx_execution_detach_tib(GProcessState.execution, selector);
+    LxHostThreadState *state = lxHostThreadState();
+    if (state->tib_mapping)
+        lx_execution_unmap(GProcessState.execution, state->tib_mapping);
+    state->tib_mapping = NULL;
 }

@@ -7,6 +7,7 @@ add_library(
     pib.c
     peers.c
     threads.c
+    segments.c
     config.c
     features.c
     drives.c
