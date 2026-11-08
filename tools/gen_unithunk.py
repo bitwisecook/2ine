@@ -19,7 +19,8 @@ def main():
         obj = work / "thunk.o"
         data = work / "thunk.bin"
         subprocess.run(
-            ["as", "--32", str(ROOT / "runtime/x86/unithunk.s"), "-o", str(obj)], check=True
+            ["as", "--32", str(ROOT / "emulator/execution/core/x86/unithunk.s"), "-o", str(obj)],
+            check=True,
         )
         subprocess.run(
             ["objcopy", "-O", "binary", "-j", ".rodata", str(obj), str(data)], check=True
@@ -45,7 +46,7 @@ def main():
         lines.append(f"#define UNITHUNK_{name.upper()} {labels['twoine_unithunk_' + name]}")
     lines.append("/* clang-format on */")
     result = "\n".join(lines) + "\n"
-    output = ROOT / "runtime/x86/unithunk_bytes.h"
+    output = ROOT / "emulator/execution/core/x86/unithunk_bytes.h"
     if args.check:
         if output.read_text() != result:
             raise SystemExit("unithunk_bytes.h is out of date")

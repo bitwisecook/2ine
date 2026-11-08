@@ -7,7 +7,7 @@ mode. Code lives in `emulator/execution/unicorn/`; the common loader and OS/2 AP
 
 ```mermaid
 flowchart LR
-    Exec["runtime/execution.h"] --> Process["unicorn/execution.c"]
+    Exec["emulator/execution.h"] --> Process["unicorn/execution.c"]
     Process --> CPU["cpu.h · maps, segments, contexts, runs"]
     CPU --> Adapter["cpu_unicorn.c"] --> Unicorn["Unicorn · QEMU-derived CPU"]
     Process --> Trap["API trap"] --> OS2["OS/2 API implementation"]

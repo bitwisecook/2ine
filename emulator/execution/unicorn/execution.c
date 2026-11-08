@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Portable process entry and API dispatch over the CPU execution interface. */
-#include "runtime/execution_internal.h"
+#include "emulator/execution/core/backend.h"
 #include "emulator/execution/unicorn/cpu.h"
 #include "guest/abi.h"
 #include "host/fatal.h"

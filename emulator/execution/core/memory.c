@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest mapping ownership, independent of the host address chosen for backing. */
-#include "runtime/execution_internal.h"
+#include "emulator/execution/core/backend.h"
 #include "host/memory.h"
 #include <stdlib.h>
 #include <stdint.h>

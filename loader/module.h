@@ -11,7 +11,7 @@
 #include <stddef.h>
 #include "formats/executable/lx.h"
 #include "formats/executable/ne.h"
-#include "runtime/execution.h"
+#include "emulator/execution.h"
 #include "host/library.h"
 
 typedef struct LxMmaps

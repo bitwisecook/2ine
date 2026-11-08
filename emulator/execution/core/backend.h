@@ -1,7 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_EXECUTION_INTERNAL_H
-#define TWOINE_EXECUTION_INTERNAL_H
-#include "runtime/execution.h"
+/* The backend operations table: each execution backend fills one, and the
+   dispatcher forwards the public lx_execution_* calls through it. */
+#ifndef TWOINE_EXECUTION_BACKEND_H
+#define TWOINE_EXECUTION_BACKEND_H
+#include "emulator/execution.h"
 #include "host/sync.h"
 
 typedef struct LxExecutionOperations

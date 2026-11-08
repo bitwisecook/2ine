@@ -3,7 +3,7 @@
    has hidden visibility: it is private to the module that links the backend. */
 #ifndef TWOINE_EMULATOR_EXECUTION_NATIVE_I386_INTERNAL_H
 #define TWOINE_EMULATOR_EXECUTION_NATIVE_I386_INTERNAL_H
-#include "runtime/execution_internal.h"
+#include "emulator/execution/core/backend.h"
 #include "host/memory.h"
 #include <stdio.h>
 #include <stdlib.h>

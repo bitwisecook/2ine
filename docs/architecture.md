@@ -11,7 +11,7 @@ flowchart TD
     Image["NE / LX executable + DLLs"] --> Loader["loader/ · load, relocate, resolve"]
     Loader --> Guest["guest/ · wire ABI, arguments, handles"]
     Guest --> APIs["os2libs/ · OS/2 DLL implementations"]
-    Loader --> Execution["runtime/execution.h"]
+    Loader --> Execution["emulator/execution.h"]
     APIs --> Execution
     Execution --> Native["emulator/execution/native_i386/execution.c"]
     Execution --> Emulator["emulator/execution/unicorn/execution.c"]

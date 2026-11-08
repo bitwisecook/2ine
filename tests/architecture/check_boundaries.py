@@ -93,7 +93,7 @@ PUBLIC_HOST_HEADERS = (
 # Headers generated into the build tree rather than the source tree.
 GENERATED_INCLUDES = {"twoine_ball_icon_png.h"}
 
-INCLUDE_ROOTS = (root, root / "host/include", root / "storage/include")
+INCLUDE_ROOTS = (root, root / "host/include", root / "storage/include", root / "emulator/include")
 
 
 def excluded_top_level(name):
@@ -156,6 +156,9 @@ def check_include_style(path):
             continue
         if name.startswith("host/include/"):
             failures.append(f'{where}: public host headers are included as "host/<name>.h"')
+            continue
+        if name.startswith("emulator/include/"):
+            failures.append(f'{where}: public emulator headers are included as "emulator/<name>.h"')
             continue
         if name.startswith("storage/include/"):
             failures.append(f'{where}: public storage headers are included as "storage/<name>.h"')

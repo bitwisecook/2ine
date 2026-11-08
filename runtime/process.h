@@ -9,7 +9,7 @@
 #ifndef TWOINE_PROCESS_H
 #define TWOINE_PROCESS_H
 #include "formats/executable/types.h"
-#include "runtime/execution.h"
+#include "emulator/execution.h"
 #pragma pack(push, 1)
 
 typedef struct LxTIB2

@@ -41,7 +41,10 @@ endif()
 function(twoine_application_target target)
     target_include_directories(
         ${target}
-        PUBLIC "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/host/include"
+        PUBLIC
+            "${PROJECT_SOURCE_DIR}"
+            "${PROJECT_SOURCE_DIR}/host/include"
+            "${PROJECT_SOURCE_DIR}/emulator/include"
     )
     target_compile_features(${target} PRIVATE c_std_99)
     target_compile_options(${target} PRIVATE -Wall -g)
@@ -80,6 +83,7 @@ if(NOT TWOINE_RUNTIME_ONLY)
     endif()
     find_package(Curses REQUIRED)
 endif()
+add_subdirectory(emulator)
 add_subdirectory(runtime)
 if(NOT TWOINE_RUNTIME_ONLY)
     add_subdirectory(os2libs)

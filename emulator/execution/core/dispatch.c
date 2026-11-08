@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Selection and dispatch for the process execution boundary. */
-#include "runtime/execution_internal.h"
+#include "emulator/execution/core/backend.h"
 #include "host/thread.h"
 #include <stdlib.h>
 #include <stdio.h>

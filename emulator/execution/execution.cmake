@@ -5,6 +5,7 @@
 set(TWOINE_EXECUTION_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 function(twoine_add_execution_backend target backend)
+    target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/emulator/include")
     if(backend STREQUAL "unicorn")
         include("${TWOINE_EXECUTION_SOURCE_DIR}/unicorn/unicorn.cmake")
         target_sources(
@@ -40,6 +41,14 @@ function(twoine_add_execution_backend target backend)
     else()
         message(FATAL_ERROR "Unknown 2ine execution backend: ${backend}")
     endif()
+endfunction()
+
+# Execution dispatch, guest memory and the universal thunk, shared by every backend.
+function(twoine_add_execution_core target)
+    foreach(source dispatch memory universal_thunk)
+        target_sources(${target} PRIVATE "${TWOINE_EXECUTION_SOURCE_DIR}/core/${source}.c")
+    endforeach()
+    target_include_directories(${target} PUBLIC "${PROJECT_SOURCE_DIR}/emulator/include")
 endfunction()
 
 # These bridges must be linked in their API module, where their C entries live.
