@@ -13,7 +13,7 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 
 # Every top-level directory that holds sources has a role, so a new component is
 # placed under the rules below before it can pass.
-PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "runtime", "loader", "guest", "os2libs"}
+PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "guest", "os2libs"}
 HOST_COMPONENTS = {"host", "ball"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
@@ -36,17 +36,43 @@ PORTABLE_HOST_ADAPTERS = ("storage/common/host",) + EXECUTION_BACKENDS
 PORTABLE_OS_ADAPTERS = ("storage/common/host", "emulator/execution/native_i386/")
 
 # Includes each component may not use: formats/ is self-contained, storage/
-# builds on formats/ only, and nothing outside ball/ depends on ball/.
+# builds on formats/ only, the emulator knows nothing of the OS/2 libraries or
+# their bindings, and nothing outside ball/ depends on ball/.
 FORBIDDEN_INCLUDES = {
-    "formats": ("storage/", "ball/", "host/", "runtime/", "loader/", "guest/", "os2libs/"),
-    "storage": ("ball/", "host/", "runtime/", "loader/", "guest/", "os2libs/"),
-    "emulator": ("ball/",),
-    "host": ("ball/", "emulator/"),
-    "runtime": ("ball/",),
-    "loader": ("ball/",),
+    "formats": ("storage/", "ball/", "host/", "emulator/", "guest/", "os2libs/"),
+    "storage": ("ball/", "host/", "emulator/", "guest/", "os2libs/"),
+    "emulator": ("ball/", "os2libs/", "guest/"),
+    "host": ("ball/", "emulator/", "guest/", "os2libs/"),
     "guest": ("ball/",),
     "os2libs": ("ball/",),
 }
+
+# Layers inside emulator/, lowest first. The execution core and backends and
+# the guest ABI helpers know no process state; the process runtime (lib2ine)
+# knows no loader internals or module records; the loader uses the process
+# runtime only through its public headers.
+PROCESS_HEADERS = (
+    r"emulator/(?:runtime|process|paths|features|audio_mixer|launch_record|resolver_files)\.h"
+)
+EMULATOR_LAYERS = {
+    "emulator/execution/": (
+        r"emulator/(?:process|loader|abi)/",
+        PROCESS_HEADERS,
+        r"emulator/module\.h",
+    ),
+    "emulator/abi/": (r"emulator/(?:process|loader)/", PROCESS_HEADERS, r"emulator/module\.h"),
+    "emulator/include/emulator/abi.h": (r"emulator/",),
+    "emulator/include/emulator/arguments.h": (r"emulator/(?!execution\.h)",),
+    "emulator/include/emulator/handles.h": (r"emulator/",),
+    "emulator/include/emulator/execution.h": (r"emulator/",),
+    "emulator/process/": (r"emulator/loader/", r"emulator/module\.h"),
+    "emulator/include/emulator/runtime.h": (r"emulator/loader/", r"emulator/module\.h"),
+    "emulator/include/emulator/process.h": (r"emulator/loader/", r"emulator/module\.h"),
+    "emulator/loader/": (r"emulator/process/",),
+}
+
+# Inline assembly belongs to the native i386 backend alone.
+ASSEMBLY = r"\b(?:__asm__|__asm|asm)\b\s*(?:__volatile__|volatile)?\s*\("
 
 # Host adapters, one directory each below host/, mirroring host/core/ by
 # function. Only the OS adapters may branch on the host operating system.
@@ -266,13 +292,16 @@ for path in sources():
         ],
     )
 for path in list(sources("host")) + list(sources("emulator/execution")):
-    check(
-        path,
-        [
-            r"\b(?:GProcessState|LxModule|LxMmaps)\b",
-            r"#\s*include\s*<[^>]*(?:os2libs/|loader/|emulator/(?:runtime|process)\.h)",
-        ],
-    )
+    check(path, [r"\b(?:GProcessState|LxModule|LxMmaps)\b"])
+for path in sources("emulator"):
+    name = relative(path)
+    for prefix, banned in EMULATOR_LAYERS.items():
+        if name == prefix or (prefix.endswith("/") and name.startswith(prefix)):
+            check(path, [rf"#\s*include\s*<{pattern}[^>]*>" for pattern in banned])
+for directory in sorted(PORTABLE_COMPONENTS):
+    for path in sources(directory, {".c", ".h"}):
+        if not relative(path).startswith("emulator/execution/native_i386/"):
+            check(path, [ASSEMBLY])
 os_branches = [
     r"#\s*(?:if|ifdef|ifndef|elif)\b[^\n]*(?:_WIN32|__APPLE__|__linux__)",
     r"#\s*include\s*<(?:windows\.h|mach/|mach-o/|sys/sysinfo\.h)",
