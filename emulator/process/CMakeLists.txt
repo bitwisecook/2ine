@@ -4,7 +4,8 @@ add_library(
     2ine
     SHARED
     bootstrap.c
-    process.c
+    pib.c
+    peers.c
     threads.c
     config.c
     features.c

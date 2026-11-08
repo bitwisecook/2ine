@@ -5,8 +5,8 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* The OS/2 process information block: identifiers, command line and environment. */
 #include "emulator/process/internal.h"
-#include "host/shared_memory.h"
 
 void initPib(void)
 {
@@ -243,46 +243,4 @@ void initPib(void)
     free(path);
     free(cmdlinebuf);
     free(argv);
-}
-
-static LxHostShared *ProcessPeerLease;
-
-static void processPeerName(uint32 pid, char name[64])
-{
-    uint64 hash = UINT64_C(1469598103934665603);
-    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"), GProcessState.disks[2]};
-    for (size_t i = 0; i < sizeof scope / sizeof scope[0]; i++)
-    {
-        for (const char *p = scope[i]; p && *p; p++)
-            hash = (hash ^ (unsigned char)*p) * UINT64_C(1099511628211);
-        hash = (hash ^ 0xff) * UINT64_C(1099511628211);
-    }
-    snprintf(name, 64, "/2ine-peer-%016llx-%08x", (unsigned long long)hash, (unsigned)pid);
-}
-
-int lxRegisterProcessPeer(void)
-{
-    if (ProcessPeerLease)
-        return 1;
-    char name[64];
-    processPeerName(GProcessState.pib.pib_ulpid, name);
-    return lx_host_shared_open(name, 1, &ProcessPeerLease) == LX_HOST_SHARED_OK;
-}
-
-int lxIsProcessPeer(uint32 pid)
-{
-    if (!pid)
-        return 0;
-    char name[64];
-    processPeerName(pid, name);
-    return lx_host_shared_live(name) == 1;
-}
-
-void lxUnregisterProcessPeer(void)
-{
-    if (ProcessPeerLease)
-    {
-        lx_host_shared_close(ProcessPeerLease);
-        ProcessPeerLease = NULL;
-    }
 }
