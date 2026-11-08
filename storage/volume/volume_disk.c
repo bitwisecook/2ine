@@ -8,6 +8,7 @@
 #include "storage/volume/volume_internal.h"
 #include "storage/filesystems/fat/fat12_16.h"
 #include "storage/filesystems/iso9660/iso9660.h"
+#include "storage/volume/probe.h"
 #include "storage/common/host_stdio.h"
 #include <ctype.h>
 #include <errno.h>
@@ -47,9 +48,18 @@ void volume_close(VolumeDisk *d)
     errno = error;
 }
 
+static int probe_read(void *context, uint64_t offset, void *data, size_t n)
+{
+    return volume_read_at(context, offset, data, n);
+}
+
 int volume_identify(VolumeDisk *d)
 {
-    return iso_present(d) ? iso_identify(d) : fat_identify(d);
+    TbVolumeProbe probe;
+    tb_volume_probe(probe_read, d, d->bytes, &probe);
+    /* ISO 9660 needs the whole first descriptor; anything else is tried as FAT12/16. */
+    return probe.iso_standard_id && probe.iso_bytes == ISO_SECTOR_BYTES ? iso_identify(d)
+                                                                        : fat_identify(d, &probe);
 }
 
 int volume_open(const char *path, VolumeDisk *d, const char **member, int write)

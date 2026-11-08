@@ -7,6 +7,11 @@ add_executable(twoine_storage_path_tests storage/test_virtual_paths.c)
 target_link_libraries(twoine_storage_path_tests PRIVATE twoine_storage)
 add_test(NAME storage_virtual_paths COMMAND twoine_storage_path_tests)
 set_tests_properties(storage_virtual_paths PROPERTIES TIMEOUT 20)
+add_executable(twoine_storage_probe_tests storage/test_volume_probe.c)
+target_link_libraries(twoine_storage_probe_tests PRIVATE twoine_storage)
+target_include_directories(twoine_storage_probe_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+add_test(NAME storage_volume_probe COMMAND twoine_storage_probe_tests)
+set_tests_properties(storage_volume_probe PROPERTIES TIMEOUT 20)
 if(UNIX)
     add_executable(
         twoine_desktop_group_tests

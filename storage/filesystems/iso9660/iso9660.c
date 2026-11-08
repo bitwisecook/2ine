@@ -9,17 +9,13 @@
 #include <errno.h>
 #include <string.h>
 
-/* The volume descriptor set starts after the 16-sector system area. */
-#define ISO_DESCRIPTOR_SECTOR 16u
 /* Descriptors examined before the set is treated as unterminated. */
 #define ISO_DESCRIPTOR_LIMIT 144u
-#define ISO_STANDARD_ID "CD001"
 
 /* Volume descriptor fields (ECMA-119 8). */
 enum
 {
     ISO_VD_TYPE = 0,
-    ISO_VD_STANDARD_ID = 1,
     ISO_VD_VERSION = 6,
     ISO_VD_VOLUME_ID = 40,
     ISO_VD_VOLUME_SPACE = 80, /* both-endian; the little-endian half comes first */
@@ -72,14 +68,6 @@ static int iso_node(VolumeDisk *d, const unsigned char *r, size_t length, Volume
     return 1;
 }
 
-int iso_present(VolumeDisk *d)
-{
-    unsigned char b[ISO_SECTOR_BYTES];
-    return d->bytes >= (ISO_DESCRIPTOR_SECTOR + 1) * ISO_SECTOR_BYTES &&
-           volume_read_at(d, ISO_DESCRIPTOR_SECTOR * ISO_SECTOR_BYTES, b, sizeof b) &&
-           !memcmp(b + ISO_VD_STANDARD_ID, ISO_STANDARD_ID, 5);
-}
-
 int iso_identify(VolumeDisk *d)
 {
     unsigned char b[ISO_SECTOR_BYTES];
@@ -89,7 +77,8 @@ int iso_identify(VolumeDisk *d)
     {
         if (!volume_read_at(d, (uint64_t)i * ISO_SECTOR_BYTES, b, sizeof b))
             return 0;
-        if (memcmp(b + ISO_VD_STANDARD_ID, ISO_STANDARD_ID, 5) || b[ISO_VD_VERSION] != 1)
+        if (memcmp(b + ISO_STANDARD_ID_OFFSET, ISO_STANDARD_ID, ISO_STANDARD_ID_BYTES) ||
+            b[ISO_VD_VERSION] != 1)
             return volume_failure(EINVAL);
         unsigned type = b[ISO_VD_TYPE];
         if (type == ISO_VD_TERMINATOR)

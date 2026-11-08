@@ -13,12 +13,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* One filesystem implementation. Volumes are probed in table order; the first whose probe
-   accepts the path handles the operation. */
+/* One filesystem implementation. The source is probed once and offered to each entry in
+   table order; the first that accepts it handles the operation. */
 typedef struct TbVolumeOps
 {
-    /* NULL accepts every path, so the entry with it comes last. */
-    int (*probe)(const char *path);
+    /* NULL accepts every source, so the entry with it comes last. */
+    int (*accepts)(const TbVolumeProbe *probe, FILE *source);
     int (*info)(const char *path, TbImageInfo *info);
     char **(*names)(const char *path, size_t *count);
     FILE *(*open_member)(const char *path);
@@ -43,8 +43,14 @@ static int hpfs_format(const char *path, const char *filesystem, uint64_t bytes)
 static const char *const hpfs_formats[] = {"hpfs", NULL};
 static const char *const fatfs_formats[] = {"fat32", "exfat", NULL};
 
+static int fatfs_accepts(const TbVolumeProbe *probe, FILE *source)
+{
+    (void)source;
+    return tb_fat_volume(probe);
+}
+
 static const TbVolumeOps hpfs_volume = {
-    .probe = tb_hpfs_volume,
+    .accepts = tb_hpfs_volume,
     .info = tb_hpfs_info,
     .names = tb_hpfs_names,
     .open_member = tb_hpfs_fopen,
@@ -57,7 +63,7 @@ static const TbVolumeOps hpfs_volume = {
 
 /* FAT32, exFAT and MBR-partitioned FAT. */
 static const TbVolumeOps fatfs_volume = {
-    .probe = tb_fat_volume,
+    .accepts = fatfs_accepts,
     .info = tb_fat_info,
     .names = tb_fat_names,
     .open_member = tb_fat_fopen,
@@ -76,18 +82,44 @@ static const TbVolumeOps builtin_volume = {
 
 static const TbVolumeOps *const volumes[] = {&hpfs_volume, &fatfs_volume, &builtin_volume};
 
+/* Opens the image source read-only and probes it. Returns NULL when the path has no
+   readable source, which no probing implementation accepts. */
+static FILE *probe_source(const char *path, TbVolumeProbe *probe)
+{
+    char *source = tb_image_source(path);
+    if (!source)
+        return NULL;
+    FILE *file = tb_image_open_source(source, 0);
+    free(source);
+    if (!file)
+        return NULL;
+    int64_t bytes = fseeko(file, 0, SEEK_END) ? -1 : ftello(file);
+    if (bytes < 0)
+    {
+        fclose(file);
+        return NULL;
+    }
+    tb_volume_probe_file(file, (uint64_t)bytes, probe);
+    return file;
+}
+
 /* Only implementations with extended attributes are probed for metadata requests. */
 static const TbVolumeOps *volume_for(const char *path, int metadata)
 {
-    for (size_t i = 0; i < sizeof volumes / sizeof volumes[0]; i++)
+    TbVolumeProbe probe;
+    FILE *source = probe_source(path, &probe);
+    const TbVolumeOps *found = NULL;
+    for (size_t i = 0; !found && i < sizeof volumes / sizeof volumes[0]; i++)
     {
         const TbVolumeOps *ops = volumes[i];
         if (metadata && !ops->metadata_get)
             continue;
-        if (!ops->probe || ops->probe(path))
-            return ops;
+        if (!ops->accepts || (source && ops->accepts(&probe, source)))
+            found = ops;
     }
-    return NULL;
+    if (source)
+        fclose(source);
+    return found;
 }
 
 static int modify(const char *path, const char *expected, int action, uint64_t offset,

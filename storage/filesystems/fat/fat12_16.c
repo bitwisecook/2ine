@@ -46,11 +46,11 @@ static void trim_label(char label[12])
         label[i] = 0;
 }
 
-int fat_identify(VolumeDisk *d)
+int fat_identify(VolumeDisk *d, const TbVolumeProbe *probe)
 {
-    unsigned char b[FAT_BOOT_SECTOR_BYTES];
-    if (!volume_read_at(d, 0, b, sizeof b))
-        return 0;
+    if (probe->boot_bytes != FAT_BOOT_SECTOR_BYTES)
+        return volume_failure(probe->boot_error ? probe->boot_error : EIO);
+    const unsigned char *b = probe->boot;
     if (tb_le16(b + FAT_BOOT_SIGNATURE_OFFSET) != FAT_BOOT_SIGNATURE)
         return volume_failure(EINVAL);
     unsigned sector = tb_le16(b + FAT_BPB_SECTOR_BYTES), spc = b[FAT_BPB_SECTORS_PER_CLUSTER],

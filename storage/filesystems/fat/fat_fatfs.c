@@ -121,44 +121,22 @@ DRESULT disk_ioctl(BYTE drive, BYTE command, void *data)
     return RES_OK;
 }
 
-static unsigned le16v(const unsigned char *p)
+/* Accepts exFAT (2), FAT32 (1) or an MBR with a FAT32 or type 07 primary partition (3).
+   A partitioned image is probed internally by FatFs, never attached to macOS. */
+int tb_fat_volume(const TbVolumeProbe *probe)
 {
-    return p[0] | (unsigned)p[1] << 8;
-}
-
-static int source_kind(FILE *file)
-{
-    unsigned char boot[512];
-    if (fseeko(file, 0, SEEK_SET) || fread(boot, 1, 512, file) != 512)
-        return 0;
-    if (!memcmp(boot + 3, "EXFAT   ", 8))
+    if (probe->exfat)
         return 2;
-    if (boot[510] == 0x55 && boot[511] == 0xaa && !le16v(boot + 17) && !le16v(boot + 22) &&
-        le16v(boot + 11) >= 512)
+    if (probe->fat32)
         return 1;
-    /* A partitioned image is probed internally by FatFs, never attached to macOS. */
-    if (boot[510] == 0x55 && boot[511] == 0xaa)
-        for (unsigned i = 0; i < 4; i++)
+    if (probe->mbr)
+        for (unsigned i = 0; i < MBR_PARTITIONS; i++)
         {
-            unsigned type = boot[446 + i * 16 + 4];
-            if (type == 0xb || type == 0xc || type == 0x7)
+            unsigned type = probe->partitions[i].type;
+            if (type == MBR_TYPE_FAT32 || type == MBR_TYPE_FAT32_LBA || type == MBR_TYPE_IFS)
                 return 3;
         }
     return 0;
-}
-
-int tb_fat_volume(const char *path)
-{
-    char *source = tb_image_source(path);
-    if (!source)
-        return 0;
-    FILE *file = tb_image_open_source(source, 0);
-    free(source);
-    if (!file)
-        return 0;
-    int kind = source_kind(file);
-    fclose(file);
-    return kind;
 }
 
 static int begin_source(const char *source, int writable, int mount)
@@ -178,14 +156,15 @@ static int begin_source(const char *source, int writable, int mount)
     media.bytes = size;
     media.sector = 512;
     media.writable = writable;
-    unsigned char boot[512];
-    if (fseeko(media.file, 0, SEEK_SET) || fread(boot, 1, 512, media.file) != 512)
+    TbVolumeProbe probe;
+    tb_volume_probe_file(media.file, media.bytes, &probe);
+    if (probe.boot_bytes != PROBE_SECTOR_BYTES)
+    {
+        errno = probe.boot_error ? probe.boot_error : EIO;
         goto fail;
-    unsigned sector = !memcmp(boot + 3, "EXFAT   ", 8) && boot[108] >= 9 && boot[108] <= 12
-                          ? 1u << boot[108]
-                          : le16v(boot + 11);
-    if (sector == 512 || sector == 1024 || sector == 2048 || sector == 4096)
-        media.sector = sector;
+    }
+    if (probe.sector_bytes)
+        media.sector = probe.sector_bytes;
     if (mount && !result(f_mount(&media.fs, "0:", 1)))
         goto fail;
     return 1;

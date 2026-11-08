@@ -3,6 +3,7 @@
 #ifndef TB_STORAGE_FAT12_16_H
 #define TB_STORAGE_FAT12_16_H
 #include "storage/volume/volume_disk.h"
+#include "storage/volume/probe.h"
 
 /* Boot sector: BIOS parameter block (BPB) and extended BPB field offsets. */
 enum
@@ -101,8 +102,8 @@ static inline int fat_data_cluster(const VolumeDisk *d, uint32_t cluster)
            cluster < fat_reserved_cluster(d);
 }
 
-/* Parses the boot sector BPB, loads the first FAT and reads the volume label. */
-int fat_identify(VolumeDisk *d);
+/* Parses the probed boot sector's BPB, loads the first FAT and reads the volume label. */
+int fat_identify(VolumeDisk *d, const TbVolumeProbe *probe);
 /* Returns 0 at the end of a chain and UINT32_MAX with errno for a broken chain. */
 uint32_t fat_next_cluster(VolumeDisk *d, uint32_t cluster);
 /* Image offset of a byte within a directory, or UINT64_MAX past the end of its chain. */

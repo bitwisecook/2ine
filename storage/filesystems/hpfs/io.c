@@ -4,6 +4,7 @@
 #define _FILE_OFFSET_BITS 64
 #include "storage/filesystems/hpfs/hpfs_internal.h"
 #include "storage/volume/volume_internal.h"
+#include "storage/volume/probe.h"
 #include "storage/common/host_stdio.h"
 #include "storage/vendor/fatfs/ff.h"
 #include "formats/endian.h"
@@ -104,47 +105,41 @@ void hpfs_close(HpfsVolume *d)
     errno = saved;
 }
 
-static int find_superblock(FILE *file, uint64_t bytes, uint32_t *base, unsigned char *super)
+/* Accepts an unpartitioned volume, or the first type 07 primary partition that holds one. */
+static int find_superblock(FILE *file, const TbVolumeProbe *probe, uint32_t *base,
+                           unsigned char *super)
 {
-    unsigned char boot[512];
     *base = 0;
-    if (bytes >= 18 * 512 && read_bytes(file, 16 * 512, super, 512) &&
-        tb_le32(super) == HPFS_SUPERBLOCK_SIGNATURE)
-        return 1;
-    if (!read_bytes(file, 0, boot, 512) || boot[510] != 0x55 || boot[511] != 0xaa)
-        return hpfs_fail(EINVAL);
-    for (unsigned i = 0; i < 4; i++)
+    if (probe->hpfs)
     {
-        const unsigned char *p = boot + 446 + i * 16;
-        uint32_t start = tb_le32(p + 8), count = tb_le32(p + 12);
-        if (p[4] != 7 || count < 18 || ((uint64_t)start + count) * 512 > bytes)
+        memcpy(super, probe->hpfs_super, HPFS_SECTOR_BYTES);
+        return 1;
+    }
+    if (!probe->mbr)
+        return hpfs_fail(EINVAL);
+    for (unsigned i = 0; i < MBR_PARTITIONS; i++)
+    {
+        const TbMbrPartition *p = probe->partitions + i;
+        if (p->type != MBR_TYPE_IFS || p->sectors < HPFS_FIRST_DATA_SECTOR ||
+            ((uint64_t)p->first_sector + p->sectors) * HPFS_SECTOR_BYTES > probe->bytes)
             continue;
-        if (read_bytes(file, ((uint64_t)start + 16) * 512, super, 512) &&
+        if (read_bytes(file,
+                       ((uint64_t)p->first_sector + HPFS_SUPERBLOCK_SECTOR) * HPFS_SECTOR_BYTES,
+                       super, HPFS_SECTOR_BYTES) &&
             tb_le32(super) == HPFS_SUPERBLOCK_SIGNATURE)
         {
-            *base = start;
+            *base = p->first_sector;
             return 1;
         }
     }
     return hpfs_fail(EINVAL);
 }
 
-int tb_hpfs_volume(const char *path)
+int tb_hpfs_volume(const TbVolumeProbe *probe, FILE *source)
 {
-    char *source = tb_image_source(path);
-    if (!source)
-        return 0;
-    FILE *file = tb_image_open_source(source, 0);
-    free(source);
-    if (!file)
-        return 0;
     unsigned char super[HPFS_SECTOR_BYTES];
     uint32_t base;
-    int ok = !fseeko(file, 0, SEEK_END);
-    int64_t bytes = ok ? ftello(file) : -1;
-    ok = bytes >= 0 && find_superblock(file, (uint64_t)bytes, &base, super);
-    fclose(file);
-    return ok;
+    return find_superblock(source, probe, &base, super);
 }
 
 int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
@@ -170,7 +165,11 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
     if (!tb_image_lock_source(d->file, write) || fseeko(d->file, 0, SEEK_END))
         goto fail;
     int64_t bytes = ftello(d->file);
-    if (bytes < 0 || !find_superblock(d->file, (uint64_t)bytes, &d->base, d->super))
+    if (bytes < 0)
+        goto fail;
+    TbVolumeProbe probe;
+    tb_volume_probe_file(d->file, (uint64_t)bytes, &probe);
+    if (!find_superblock(d->file, &probe, &d->base, d->super))
         goto fail;
     d->bytes = bytes;
     d->sectors = tb_le32(d->super + HPFS_SUPER_SECTORS);

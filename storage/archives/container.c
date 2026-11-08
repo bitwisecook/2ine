@@ -9,22 +9,15 @@
 #include "storage/common/host_stdio.h"
 #include "storage/volume.h"
 #include "storage/read_stream.h"
+#include "storage/volume/probe.h"
+#include "storage/filesystems/iso9660/iso9660.h"
 #include "formats/endian.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define ISO_STANDARD_ID "CD001"
-
 enum
 {
-    ISO_DESCRIPTOR_OFFSET = 16 * 2048, /* first volume descriptor */
-    ISO_STANDARD_ID_AT = 1,
-    ISO_STANDARD_ID_BYTES = 5,
-    BOOT_SECTOR_BYTES = 512,
-    BOOT_SIGNATURE_AT = 510, /* 55 AA */
-    X86_JMP_SHORT = 0xeb,
-    X86_JMP_NEAR = 0xe9,
     MZ_SIGNATURE_BYTES = 2
 };
 
@@ -48,23 +41,28 @@ static int disk_visit(void *opaque, const char *name, uint64_t size, int directo
                     modified);
 }
 
-/* An ISO 9660 volume descriptor, or a boot sector that starts with an x86 jump. */
-static int disk_image_magic(const unsigned char *boot, const unsigned char *iso)
+static int stream_read(void *context, uint64_t offset, void *data, size_t size)
 {
-    return !memcmp(iso + ISO_STANDARD_ID_AT, ISO_STANDARD_ID, ISO_STANDARD_ID_BYTES) ||
-           (boot[BOOT_SIGNATURE_AT] == 0x55 && boot[BOOT_SIGNATURE_AT + 1] == 0xaa &&
-            (boot[0] == X86_JMP_SHORT || boot[0] == X86_JMP_NEAR));
+    return tb_stream_read_at(context, offset, data, size);
+}
+
+static void sniff(TbReadStream *file, TbVolumeProbe *probe)
+{
+    tb_volume_probe(stream_read, file, tb_stream_size(file), probe);
+}
+
+/* An ISO 9660 descriptor header, or a signed boot sector that starts with an x86 jump. */
+static int disk_image(const TbVolumeProbe *probe)
+{
+    return (probe->iso_standard_id && probe->iso_bytes >= ISO_DESCRIPTOR_HEADER_BYTES) ||
+           (probe->boot_signature && probe->x86_jump);
 }
 
 static int image_reader(TbReadStream *file)
 {
-    unsigned char magic[BOOT_SECTOR_BYTES] = {0}, iso[7] = {0};
-    tb_stream_read_at(file, 0, magic,
-                      tb_stream_size(file) < sizeof magic ? (size_t)tb_stream_size(file)
-                                                          : sizeof magic);
-    if (tb_stream_size(file) >= ISO_DESCRIPTOR_OFFSET + sizeof iso)
-        tb_stream_read_at(file, ISO_DESCRIPTOR_OFFSET, iso, sizeof iso);
-    return disk_image_magic(magic, iso);
+    TbVolumeProbe probe;
+    sniff(file, &probe);
+    return disk_image(&probe);
 }
 
 static void image_stats(TbReadStream *file, uint64_t before_builds, uint64_t before_hits)
@@ -77,15 +75,11 @@ static void image_stats(TbReadStream *file, uint64_t before_builds, uint64_t bef
 
 static int archive_walk(TbReadStream *file, TbArchiveVisit visit, void *context)
 {
-    unsigned char magic[BOOT_SECTOR_BYTES] = {0};
+    TbVolumeProbe probe;
+    sniff(file, &probe);
     tb_stream_seek(file, 0, SEEK_SET);
-    tb_stream_read(magic, 1, sizeof magic, file);
-    tb_stream_seek(file, 0, SEEK_SET);
-    unsigned char iso[7] = {0};
-    if (!tb_stream_seek(file, ISO_DESCRIPTOR_OFFSET, SEEK_SET))
-        tb_stream_read(iso, 1, sizeof iso, file);
-    tb_stream_seek(file, 0, SEEK_SET);
-    if (disk_image_magic(magic, iso))
+    const unsigned char *magic = probe.boot;
+    if (disk_image(&probe))
     {
         DiskVisit d = {visit, context, file};
         return tb_image_reader_walk(file, disk_visit, &d);

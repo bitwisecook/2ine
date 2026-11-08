@@ -2,6 +2,7 @@
 #ifndef TB_IMAGE_INTERNAL_H
 #define TB_IMAGE_INTERNAL_H
 #include "storage/volume.h"
+#include "storage/volume/probe.h"
 /* Internal filesystem implementations share source access and device policy. */
 FILE *tb_image_open_source(const char *source, int write);
 int tb_image_lock_source(FILE *file, int write);
@@ -18,7 +19,8 @@ enum
     TB_DEVICE_DISK = 3
 };
 
-int tb_hpfs_volume(const char *path);
+/* Volume probes: each reports whether its filesystem accepts the probed source. */
+int tb_hpfs_volume(const TbVolumeProbe *probe, FILE *source);
 int tb_hpfs_info(const char *path, TbImageInfo *info);
 char **tb_hpfs_names(const char *path, size_t *count);
 FILE *tb_hpfs_fopen(const char *path);
@@ -28,7 +30,7 @@ int tb_hpfs_metadata_get(const char *path, const char *expected, void *data, siz
                          size_t *size);
 int tb_hpfs_metadata_set(const char *path, const char *expected, const void *data, size_t size);
 int tb_hpfs_format(const char *path, uint64_t bytes);
-int tb_fat_volume(const char *path);
+int tb_fat_volume(const TbVolumeProbe *probe);
 int tb_fat_info(const char *path, TbImageInfo *info);
 char **tb_fat_names(const char *path, size_t *count);
 FILE *tb_fat_fopen(const char *path);
