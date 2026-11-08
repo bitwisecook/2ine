@@ -126,8 +126,6 @@ function(twoine_add_media target)
                 "${TWOINE_HAL_SOURCE_DIR}/common/desktop_group.c"
                 "${TWOINE_HAL_SOURCE_DIR}/common/desktop_cycle.c"
                 "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_cycle.c"
-                "${PROJECT_SOURCE_DIR}/ball/icon_bitmap.c"
-                "${PROJECT_SOURCE_DIR}/ball/icon_executable.c"
         )
         target_link_libraries(${target} PRIVATE twoine_formats)
         target_include_directories(${target} PRIVATE "${PROJECT_BINARY_DIR}/generated")

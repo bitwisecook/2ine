@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* OS/2 icon files retain an AND mask and a monochrome or color XOR image. */
-#include "ball/icon.h"
+#include "formats/resources/icon.h"
 #include <stdlib.h>
 #include <string.h>
 

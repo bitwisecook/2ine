@@ -4,11 +4,21 @@
 function(twoine_add_formats target)
     set(_formats "${CMAKE_CURRENT_FUNCTION_LIST_DIR}")
     cmake_parse_arguments(PARSE_ARGV 1 FORMATS "I386" "" "")
-    add_library(${target} STATIC "${_formats}/executable/lx_exepack.c")
+    add_library(
+        ${target}
+        STATIC
+        "${_formats}/executable/lx_exepack.c"
+        "${_formats}/resources/icon_bitmap.c"
+        "${_formats}/resources/icon_executable.c"
+    )
     get_filename_component(_root "${_formats}" DIRECTORY)
     target_include_directories(${target} PUBLIC "${_root}")
     target_compile_features(${target} PRIVATE c_std_99)
-    set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    # Linked into shared libraries that must not re-export these helpers.
+    set_target_properties(
+        ${target}
+        PROPERTIES POSITION_INDEPENDENT_CODE ON C_VISIBILITY_PRESET hidden
+    )
     if(FORMATS_I386)
         target_compile_options(${target} PRIVATE -m32)
     endif()

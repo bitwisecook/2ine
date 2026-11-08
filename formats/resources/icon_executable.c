@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read resources without loading or running guest code. All offsets and
    decompressed extents are bounded before use. See formats/executable/lx.h and ne.h. */
-#include "ball/icon.h"
+#include "formats/resources/icon.h"
 #include "formats/executable/lx_exepack.h"
 #include <stdlib.h>
 #include <string.h>

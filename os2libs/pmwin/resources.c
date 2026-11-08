@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* OS/2 string bundles contain a codepage word and sixteen counted ASCIIZ strings. */
 #include "os2libs/pmwin/internal.h"
-#include "ball/icon.h"
+#include "formats/resources/icon.h"
 #include "hal/host_fs.h"
 #include "hal/host_sync.h"
 

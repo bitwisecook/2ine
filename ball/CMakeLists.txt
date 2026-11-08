@@ -58,8 +58,6 @@ set(TWOINE_BALL_SOURCES
     pack.c
     ball.c
     platform.c
-    icon_bitmap.c
-    icon_executable.c
     vendor/cjson/cJSON.c
     vendor/sha256/sha256.c
     vendor/hwzip/implode.c

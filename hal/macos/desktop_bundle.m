@@ -9,7 +9,7 @@
    which this code leaves untouched. Set TWOINE_DESKTOP_BUNDLE=0 to skip. */
 #define _DARWIN_C_SOURCE 1
 #include "hal/host_desktop_bundle.h"
-#include "ball/icon.h"
+#include "formats/resources/icon.h"
 #include "twoine_ball_icon_png.h"
 #import <CoreFoundation/CoreFoundation.h>
 #import <CoreGraphics/CoreGraphics.h>

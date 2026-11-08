@@ -114,8 +114,6 @@ foreach(
             pmwin/pointer_image.c
             pmwin/compat_services.c
             pmwin/standard_font.c
-            ../ball/icon_bitmap.c
-            ../ball/icon_executable.c
         )
     elseif(module STREQUAL "pmgpi")
         set(sources
