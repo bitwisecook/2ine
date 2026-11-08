@@ -4,4 +4,6 @@
 LIBRARY PMMERGE
 
 EXPORTS
+    Gre32Entry3    @5050
+    Gre32Entry5    @5052
     WinQueryCpType @5480

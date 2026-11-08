@@ -6198,18 +6198,6 @@
       "convention": "LX_ABI_STACK32"
     }
   },
-  "pmgre": {
-    "Gre32Entry3": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "Gre32Entry5": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    }
-  },
   "mdm": {
     "mciSendCommand": {
       "argument_bytes": 20,
@@ -6513,6 +6501,16 @@
   "pmmerge": {
     "WinQueryCpType": {
       "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Gre32Entry3": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "Gre32Entry5": {
+      "argument_bytes": 20,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

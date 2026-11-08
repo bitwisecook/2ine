@@ -70,7 +70,7 @@ twoine_os2_dll(
     pmgpi/metafiles.c
     pmgpi/public_fonts.c
 )
-twoine_os2_dll(pmmerge pmmerge/module.c)
+twoine_os2_dll(pmmerge pmmerge/module.c pmmerge/pmgre/dispatch.c)
 twoine_os2_dll(pmgre pmgre/module.c)
 twoine_os2_dll(pmshapi pmshapi/module.c pmshapi/profiles.c pmshapi/switches.c pmshapi/startapp.c)
 twoine_os2_dll(pmctls controls/pmctls/module.c)
