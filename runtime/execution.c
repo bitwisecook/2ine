@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Selection and dispatch for the process execution boundary. */
-#include "execution_internal.h"
+#include "runtime/execution_internal.h"
 #include "hal/host_thread.h"
 #include <stdlib.h>
 #include <stdio.h>

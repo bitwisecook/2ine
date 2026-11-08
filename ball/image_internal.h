@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TB_IMAGE_INTERNAL_H
 #define TB_IMAGE_INTERNAL_H
-#include "disk_image.h"
+#include "ball/disk_image.h"
 /* Internal filesystem implementations share source access and device policy. */
 FILE *tb_image_open_source(const char *source, int write);
 int tb_image_lock_source(FILE *file, int write);

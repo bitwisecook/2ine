@@ -9,7 +9,7 @@
 #ifndef _INCL_PMWIN_H_
 #define _INCL_PMWIN_H_
 
-#include "os2types.h"
+#include "os2libs/os2types.h"
 #include <stddef.h>
 #ifdef __cplusplus
 extern "C"

@@ -160,8 +160,8 @@ static TbReadStream *stored_zip_member(TbReadStream *parent, struct archive *arc
     return stream;
 }
 
-#include "zip_legacy.h"
-#include "zip_seek.h"
+#include "ball/zip_legacy.h"
+#include "ball/zip_seek.h"
 
 typedef struct ExtractStream
 {

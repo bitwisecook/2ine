@@ -3,8 +3,8 @@
 #include "hal/video.h"
 #include "hal/video_frame.h"
 #include "hal/host_sync.h"
-#include "window_chrome.h"
-#include "desktop_session.h"
+#include "hal/sdl/window_chrome.h"
+#include "hal/sdl/desktop_session.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 static void (*GraphicsRelease)(void);

@@ -2,7 +2,7 @@
 #define _DARWIN_C_SOURCE 1
 #include "hal/host.h"
 #include "hal/host_process.h"
-#include "../common/process.h"
+#include "hal/common/process.h"
 #include <errno.h>
 #include <crt_externs.h>
 #include <mach-o/dyld.h>

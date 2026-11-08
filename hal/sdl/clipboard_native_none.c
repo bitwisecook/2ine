@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* SDL's MIME provider is sufficient on Cocoa, X11 and Wayland. */
-#include "clipboard_native.h"
+#include "hal/sdl/clipboard_native.h"
 
 int lx_clipboard_native_format(const char *mime)
 {

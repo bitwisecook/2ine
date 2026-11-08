@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PMMERGE bidirectional code-page classification delegates queue ownership to PMWIN. */
-#include "os2native.h"
-#include "pmmerge.h"
+#include "os2libs/os2native.h"
+#include "os2libs/pmmerge.h"
 #include "os2libs/generated/pmmerge-lx.h"
 
 ULONG WinQueryCpType(HMQ queue)

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Both CPU workers enter the same wire callbacks. Float/double arguments and
    pointers are decoded independently of the host ABI, including native i386. */
-#include "internal.h"
+#include "os2libs/opengl/internal.h"
 #include "guest/bindings/opengl.h"
 #include "runtime/runtime_features.h"
 

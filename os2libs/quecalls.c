@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native16.h"
-#include "quecalls.h"
+#include "os2libs/os2native16.h"
+#include "os2libs/quecalls.h"
 
 #include "guest/handles.h"
 #include "guest/abi.h"

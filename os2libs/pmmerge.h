@@ -9,7 +9,7 @@
 #ifndef _INCL_PMMERGE_H_
 #define _INCL_PMMERGE_H_
 
-#include "pmwin.h"
+#include "os2libs/pmwin.h"
 
 #ifdef __cplusplus
 extern "C"

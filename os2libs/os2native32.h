@@ -2,7 +2,7 @@
 /* Flat guest API entries backed by explicit wire marshalling functions. */
 #ifndef TWOINE_OS2NATIVE32_H
 #define TWOINE_OS2NATIVE32_H
-#include "os2native.h"
+#include "os2libs/os2native.h"
 #ifndef LX_NATIVE_MODULE_SHUTDOWN
 #define LX_NATIVE_MODULE_SHUTDOWN()
 #endif

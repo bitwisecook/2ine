@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "window_chrome.h"
+#include "hal/sdl/window_chrome.h"
 #include <stddef.h>
 
 LxWindowChrome *lx_window_chrome_create(void *window, void (*toggle)(void *), void *userdata)

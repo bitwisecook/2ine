@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_DIVE_H
 #define TWOINE_DIVE_H
-#include "os2types.h"
-#include "pmwin.h"
+#include "os2libs/os2types.h"
+#include "os2libs/pmwin.h"
 #define DIVE_SUCCESS 0
 #define DIVE_ERR_INVALID_INSTANCE 0x1000
 #define DIVE_ERR_SOURCE_FORMAT 0x1001

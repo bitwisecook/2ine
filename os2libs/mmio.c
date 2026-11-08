@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* MMIO elements are named DOS files or memory files. Memory files use the caller's
    buffer, keeping a copy made at open for reads after that buffer is gone. */
-#include "os2native.h"
-#include "mmio.h"
+#include "os2libs/os2native.h"
+#include "os2libs/mmio.h"
 #include "guest/abi.h"
 #include "hal/host_sync.h"
 #include "hal/host_fs.h"

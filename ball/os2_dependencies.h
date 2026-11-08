@@ -1185,8 +1185,8 @@ static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON
     cJSON_Delete(wanted);
 }
 
-#include "dependency_database.h"
-#include "dependency_freshness.h"
+#include "ball/dependency_database.h"
+#include "ball/dependency_freshness.h"
 
 static cJSON *dependency_compact(const cJSON *report)
 {

@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Indexed DIVE image buffers with checked access and software screen conversion. */
-#include "os2native.h"
-#include "dive.h"
-#include "dive_pixels.h"
-#include "dive_palette.h"
+#include "os2libs/os2native.h"
+#include "os2libs/dive.h"
+#include "os2libs/dive_pixels.h"
+#include "os2libs/dive_palette.h"
 #include "os2libs/pmwin/graphics.h"
 #include "hal/video.h"
 #include "hal/host_sync.h"

@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "os2native.h"
-#include "helpmgr.h"
+#include "os2libs/os2native.h"
+#include "os2libs/helpmgr.h"
 #include "guest/abi.h"
 #include "os2libs/generated/helpmgr-lx.h"
 

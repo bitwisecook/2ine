@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest mapping ownership, independent of the host address chosen for backing. */
-#include "execution_internal.h"
+#include "runtime/execution_internal.h"
 #include "hal/host.h"
 #include <stdlib.h>
 #include <stdint.h>

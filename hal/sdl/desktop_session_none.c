@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "desktop_session.h"
+#include "hal/sdl/desktop_session.h"
 
 void lx_desktop_prepare(void) {}
 

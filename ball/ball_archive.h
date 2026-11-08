@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Internal ZIP operations; included after the ball context and manifest helpers. */
-#include "vendor/libarchive/archive.h"
-#include "vendor/libarchive/archive_entry.h"
+#include "ball/vendor/libarchive/archive.h"
+#include "ball/vendor/libarchive/archive_entry.h"
 #ifndef TB_SOURCE_VERSION
 #define TB_SOURCE_VERSION "unversioned"
 #endif

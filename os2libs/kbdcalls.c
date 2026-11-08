@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native16.h"
-#include "kbdcalls.h"
+#include "os2libs/os2native16.h"
+#include "os2libs/kbdcalls.h"
 #include "hal/terminal.h"
 #include "hal/host.h"
 

@@ -9,7 +9,7 @@
 #include "hal/host_desktop_bundle.h"
 #include "hal/host_fatal.h"
 #include "hal/host_operation.h"
-#include "network_config.h"
+#include "loader/network_config.h"
 
 int main(int argc, char **argv, char **envp)
 {

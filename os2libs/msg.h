@@ -9,7 +9,7 @@
 #ifndef _INCL_MSG_H_
 #define _INCL_MSG_H_
 
-#include "os2types.h"
+#include "os2libs/os2types.h"
 
 #ifdef __cplusplus
 extern "C"

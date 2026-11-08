@@ -24,8 +24,8 @@
 #include "hal/host_thread.h"
 #include <errno.h>
 
-#include "os2types.h"
-#include "os2errors.h"
+#include "os2libs/os2types.h"
+#include "os2libs/os2errors.h"
 #include "runtime/runtime.h"
 
 #if 1

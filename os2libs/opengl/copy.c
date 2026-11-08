@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PGL copies server attributes, retaining independent client state and matrices. */
-#include "internal.h"
+#include "os2libs/opengl/internal.h"
 
 typedef struct GlCopy
 {

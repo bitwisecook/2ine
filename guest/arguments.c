@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest pointer ownership is kept out of host API implementations. */
-#include "arguments.h"
+#include "guest/arguments.h"
 #include <stdlib.h>
 #include <string.h>
 

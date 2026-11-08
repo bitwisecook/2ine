@@ -2,7 +2,7 @@
 /* The OS/2 FONTMETRICS record is 228 bytes, independent of host pointer width. */
 #ifndef TWOINE_PMGPI_FONTS_H
 #define TWOINE_PMGPI_FONTS_H
-#include "os2types.h"
+#include "os2libs/os2types.h"
 #define FACESIZE 32
 #pragma pack(push, 2)
 

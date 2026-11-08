@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Visible-window ownership elects one regular app; demotion precedes lease release. */
-#include "desktop_group.h"
-#include "desktop_lease.h"
+#include "hal/common/desktop_group.h"
+#include "hal/common/desktop_lease.h"
 #include <stdlib.h>
 
 typedef struct DesktopWindow

@@ -9,7 +9,7 @@
 #ifndef _INCL_OS2NATIVE16_H_
 #define _INCL_OS2NATIVE16_H_
 
-#include "os2native.h"
+#include "os2libs/os2native.h"
 #include "guest/abi.h"
 #include "guest/arguments.h"
 

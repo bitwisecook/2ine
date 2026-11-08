@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* OpenGL pointer extents include pixel-store offsets and evaluator strides.
    Temporary aligned snapshots keep host pointers out of retained guest state. */
-#include "internal.h"
+#include "os2libs/opengl/internal.h"
 
 uint32_t gl_word(const uint8_t *a, unsigned offset)
 {

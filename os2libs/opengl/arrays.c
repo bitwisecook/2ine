@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Client array definitions retain guest addresses. A draw takes checked,
    bounded snapshots and removes host pointers before releasing their storage. */
-#include "internal.h"
+#include "os2libs/opengl/internal.h"
 
 static int array_index(uint32_t array)
 {

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
-#include "read_stream.h"
+#include "ball/read_stream.h"
 
 /* Internal paths name an image plus a member; they never name a host mount. */
 typedef struct TbImageInfo

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* macOS condition waits use relative durations. Mutexes are not robust. */
 #define _DARWIN_C_SOURCE 1
-#include "../posix/sync_platform.h"
+#include "hal/posix/sync_platform.h"
 
 void lx_posix_mutex_attributes(pthread_mutexattr_t *attributes)
 {

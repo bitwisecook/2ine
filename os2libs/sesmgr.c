@@ -6,13 +6,13 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native16.h"
-#include "sesmgr.h"
-#include "sesmgr_start.h"
-#include "doscalls.h"
+#include "os2libs/os2native16.h"
+#include "os2libs/sesmgr.h"
+#include "os2libs/sesmgr_start.h"
+#include "os2libs/doscalls.h"
 #include "os2libs/doscalls/launch.h"
 #include "guest/launch_record.h"
-#include "quecalls.h"
+#include "os2libs/quecalls.h"
 #include "hal/host_thread.h"
 #include "hal/host_sync.h"
 #include "hal/host_mailbox.h"

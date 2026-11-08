@@ -9,9 +9,9 @@
 #ifndef _INCL_PMGPI_H_
 #define _INCL_PMGPI_H_
 
-#include "os2types.h"
-#include "pmwin.h"
-#include "pmgpi_fonts.h"
+#include "os2libs/os2types.h"
+#include "os2libs/pmwin.h"
+#include "os2libs/pmgpi_fonts.h"
 
 #ifdef __cplusplus
 extern "C"

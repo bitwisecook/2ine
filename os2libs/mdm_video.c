@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Digital-video MCI wire parameters follow the OS/2 Toolkit mcios2.h.
    Decoder workers transfer retained frames to the PM owner; they never render. */
-#include "os2native.h"
+#include "os2libs/os2native.h"
 #include "os2libs/mdm_video.h"
 #include "os2libs/video_decode.h"
 #include "os2libs/pmwin/video_frames.h"

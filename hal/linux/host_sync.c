@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Robust mutex recovery and absolute monotonic condition deadlines. */
 #define _GNU_SOURCE 1
-#include "../posix/sync_platform.h"
+#include "hal/posix/sync_platform.h"
 #include <errno.h>
 
 void lx_posix_mutex_attributes(pthread_mutexattr_t *attributes)

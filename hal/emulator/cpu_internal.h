@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_CPU_INTERNAL_H
 #define TWOINE_CPU_INTERNAL_H
-#include "cpu.h"
+#include "hal/emulator/cpu.h"
 
 typedef struct LxCpuOperations
 {

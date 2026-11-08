@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "decompress.h"
+#include "formats/decompress.h"
 #include <string.h>
 #include <assert.h>
 

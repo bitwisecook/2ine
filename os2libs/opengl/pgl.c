@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PGL visual records live in read-only guest memory. Current bindings hold a
    typed handle lease and exclusive host-thread ownership until release. */
-#include "internal.h"
+#include "os2libs/opengl/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pm_text.h"

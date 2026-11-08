@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native.h"
-#include "pmgpi.h"
+#include "os2libs/os2native.h"
+#include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/internal.h"
 

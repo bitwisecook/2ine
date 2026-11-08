@@ -5,7 +5,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "hal/host_sync.h"
 #include "hal/host_shared.h"
-#include "sync_platform.h"
+#include "hal/posix/sync_platform.h"
 #include "hal/host.h"
 #include <stdlib.h>
 #include <pthread.h>

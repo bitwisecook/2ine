@@ -2,7 +2,7 @@
 /* OpenSSL 1.0 client ABI subset; upstream util/ssleay.num ordinals. */
 #ifndef TWOINE_SSLEAY32_H
 #define TWOINE_SSLEAY32_H
-#include "os2types.h"
+#include "os2libs/os2types.h"
 OS2EXPORT int OS2API Os2SslInit(void) OS2APIINFO(ord = 183, name = SSL_library_init);
 OS2EXPORT void OS2API Os2SslErrors(void) OS2APIINFO(ord = 74, name = SSL_load_error_strings);
 OS2EXPORT uint32_t OS2API Os2SslClientMethod(void)

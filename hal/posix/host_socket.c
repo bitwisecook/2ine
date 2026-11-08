@@ -2,7 +2,7 @@
 /* BSD sockets and resolver storage behind platform-neutral host contracts. */
 #define _DEFAULT_SOURCE 1
 #include "hal/socket.h"
-#include "diagnostic_socket.h"
+#include "hal/posix/diagnostic_socket.h"
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/time.h>

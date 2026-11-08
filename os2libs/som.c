@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native.h"
-#include "som.h"
+#include "os2libs/os2native.h"
+#include "os2libs/som.h"
 
 LX_NATIVE_MODULE_INIT()
 LX_NATIVE_MODULE_INIT_END()

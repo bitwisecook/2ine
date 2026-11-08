@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Bootstrap queries, argv serialization, memory and calendar host contracts. */
 #include "hal/host.h"
-#include "../../hal/common/process.h"
+#include "hal/common/process.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

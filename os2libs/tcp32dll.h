@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_TCP32DLL_H
 #define TWOINE_TCP32DLL_H
-#include "os2types.h"
+#include "os2libs/os2types.h"
 
 typedef struct Os2LegacyHost
 {

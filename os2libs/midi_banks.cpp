@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Ordered MIDI routing to FluidSynth banks and LiquidSFZ instruments. */
-#include "midi_banks.h"
+#include "os2libs/midi_banks.h"
 extern "C"
 {
-#include "midi_config.h"
+#include "os2libs/midi_config.h"
 }
 #include <fluidsynth.h>
 #include <liquidsfz.hh>

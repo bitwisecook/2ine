@@ -18,7 +18,13 @@ func sourceIdentity(_ arguments: [String], fallback: String) -> String {
     return process.terminationStatus == 0 && !value.isEmpty ? value : fallback
 }
 
+// BallEngine sources include project headers by their path from the repository
+// root ("ball/...", "formats/..."); that root lies outside the package directory.
+let projectRoot = URL(filePath: #filePath).deletingLastPathComponent()
+    .deletingLastPathComponent().path(percentEncoded: false)
+
 let ballBuildSettings: [CSetting] = [
+    .unsafeFlags(["-I", projectRoot]),
     .define("TB_MEDIA_TIME_CACHE"),
     .define("CJSON_HIDE_SYMBOLS"),
     .define(

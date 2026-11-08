@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _POSIX_C_SOURCE 200809L
-#include "include/twoine_ball.h"
-#include "vendor/cjson/cJSON.h"
+#include "ball/include/twoine_ball.h"
+#include "ball/vendor/cjson/cJSON.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

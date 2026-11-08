@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Private, portable bank installation and per-ball MIDI preferences. */
-#include "media.h"
+#include "ball/media.h"
 static int plan_copy(Context *, cJSON *, const char *, const char *, unsigned);
 static const char *audio_profiles[][2] = {{"gm", "General MIDI"},
                                           {"gm2", "General MIDI 2"},

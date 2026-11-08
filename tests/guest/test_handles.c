@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Resource lifetime across duplicate names, stale handles and active API calls. */
-#include "handles.h"
+#include "guest/handles.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>

@@ -9,16 +9,16 @@
 #ifndef _INCL_OS2_H_
 #define _INCL_OS2_H_
 
-#include "os2types.h"
-#include "os2errors.h"
-#include "doscalls.h"
-#include "kbdcalls.h"
-#include "viocalls.h"
-#include "quecalls.h"
-#include "msg.h"
-#include "nls.h"
-#include "sesmgr.h"
-#include "pmgpi.h"
-#include "tcpip32.h"
+#include "os2libs/os2types.h"
+#include "os2libs/os2errors.h"
+#include "os2libs/doscalls.h"
+#include "os2libs/kbdcalls.h"
+#include "os2libs/viocalls.h"
+#include "os2libs/quecalls.h"
+#include "os2libs/msg.h"
+#include "os2libs/nls.h"
+#include "os2libs/sesmgr.h"
+#include "os2libs/pmgpi.h"
+#include "os2libs/tcpip32.h"
 
 #endif

@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Driver strings and retained render-mode buffers have explicit guest storage. */
-#include "internal.h"
+#include "os2libs/opengl/internal.h"
 
 uint32_t call_glGetError(uint8_t *a)
 {

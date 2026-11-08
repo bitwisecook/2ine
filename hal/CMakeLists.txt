@@ -13,7 +13,7 @@ function(twoine_add_hal target backend)
     target_include_directories(
         ${target}
         PUBLIC "${TWOINE_HAL_SOURCE_DIR}/include"
-        PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/runtime"
+        PRIVATE "${PROJECT_SOURCE_DIR}"
     )
     target_compile_features(${target} PUBLIC c_std_99)
     target_link_libraries(${target} PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
@@ -65,7 +65,6 @@ function(twoine_add_hal target backend)
                 "${TWOINE_HAL_SOURCE_DIR}/emulator/cpu_unicorn.c"
                 "${TWOINE_HAL_SOURCE_DIR}/emulator/execution_unicorn.c"
         )
-        target_include_directories(${target} PUBLIC "${TWOINE_HAL_SOURCE_DIR}/emulator")
         target_compile_definitions(${target} PUBLIC TWOINE_WITH_UNICORN=1)
         target_link_libraries(${target} PUBLIC ${TWOINE_UNICORN_TARGET})
         if(MSVC)

@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Category-based OS/2 media planning and staged extraction into a ball. */
-#include "system_modules.h"
-#include "os2_groups.h"
-#include "os2_som.h"
+#include "ball/system_modules.h"
+#include "ball/os2_groups.h"
+#include "ball/os2_som.h"
 
 static int extract_extension(const char *name, const char *extension)
 {
@@ -50,7 +50,7 @@ static int extract_host_driver(const char *path)
     return network_driver && extract_extension(base, ".OS2");
 }
 
-#include "os2_tree.h"
+#include "ball/os2_tree.h"
 
 static char *extract_child(Context *c, const char *directory, const char *name)
 {

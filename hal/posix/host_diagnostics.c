@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _DEFAULT_SOURCE 1
-#include "diagnostic_socket.h"
+#include "hal/posix/diagnostic_socket.h"
 #include "hal/host_thread.h"
 #include <sys/socket.h>
 #include <netinet/in.h>

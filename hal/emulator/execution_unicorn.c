@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Portable process entry and API dispatch over the CPU execution interface. */
-#include "execution_internal.h"
-#include "cpu.h"
+#include "runtime/execution_internal.h"
+#include "hal/emulator/cpu.h"
 #include "guest/abi.h"
 #include "hal/host_fatal.h"
 #include "hal/host_sync.h"

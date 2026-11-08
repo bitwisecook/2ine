@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read resources without loading or running guest code. All offsets and
    decompressed extents are bounded before use. See formats/lx.h and ne.h. */
-#include "icon.h"
-#include "../formats/decompress.h"
+#include "ball/icon.h"
+#include "formats/decompress.h"
 #include <stdlib.h>
 #include <string.h>
 

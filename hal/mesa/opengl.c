@@ -127,7 +127,7 @@ static int load_api(LxHostGlContext *c)
             return fail("Mesa is missing " #name);                                                 \
         memcpy(&c->api.name, &proc, sizeof c->api.name);                                           \
     } while (0)
-#include "gl_load.h"
+#include "hal/mesa/gl_load.h"
 #undef LOAD_GL
 #define LOAD_PRIVATE(member, name)                                                                 \
     do                                                                                             \

@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "desktop_cycle.h"
+#include "hal/common/desktop_cycle.h"
 
 static int before(const LxDesktopCycleWindow *a, const LxDesktopCycleWindow *b)
 {

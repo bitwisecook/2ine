@@ -1,14 +1,14 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* DART queues retain PCM until playback completion. Callbacks run off the SDL thread. */
-#include "os2native.h"
-#include "mdm.h"
+#include "os2libs/os2native.h"
+#include "os2libs/mdm.h"
 #include "os2libs/mdm_video.h"
 #include "runtime/audio.h"
-#include "mmio.h"
+#include "os2libs/mmio.h"
 #include "os2libs/midi_synth.h"
 #include "runtime/runtime_features.h"
 #include "os2libs/midi_sequence.h"
-#include "pmwin.h"
+#include "os2libs/pmwin.h"
 #include "hal/host_sync.h"
 #include "hal/host.h"
 #include <math.h>

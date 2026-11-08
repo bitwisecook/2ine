@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.24)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     project(TwoineBall C)
 endif()
+# Sources include project headers by their path from the project root, which is
+# also the parent directory when this file is configured on its own.
+cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH TWOINE_BALL_PROJECT_ROOT)
 # macOS provides libarchive without public SDK headers; use the pinned API headers.
 set(LibArchive_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/libarchive")
 find_package(LibArchive REQUIRED)
@@ -66,7 +69,7 @@ set(TWOINE_BALL_SOURCES
 )
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})
 target_link_libraries(twoine_ball PRIVATE LibArchive::LibArchive ZLIB::ZLIB)
-target_include_directories(twoine_ball PUBLIC include)
+target_include_directories(twoine_ball PUBLIC include PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
 target_compile_features(twoine_ball PRIVATE c_std_11)
 target_compile_definitions(twoine_ball PRIVATE TWOINE_BALL_BUILD CJSON_HIDE_SYMBOLS)
 set_target_properties(
@@ -86,7 +89,7 @@ if(APPLE)
     target_link_libraries(twoine_ball PRIVATE "-framework CoreFoundation")
     target_link_libraries(twoine_ball_static PUBLIC "-framework CoreFoundation")
 endif()
-target_include_directories(twoine_ball_static PUBLIC include)
+target_include_directories(twoine_ball_static PUBLIC include PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
 target_compile_features(twoine_ball_static PRIVATE c_std_11)
 target_compile_definitions(twoine_ball_static PRIVATE CJSON_HIDE_SYMBOLS)
 foreach(target twoine_ball twoine_ball_static)
@@ -107,6 +110,7 @@ set_target_properties(
 )
 add_executable(twoine_ball_cli cli.c vendor/cjson/cJSON.c)
 target_link_libraries(twoine_ball_cli PRIVATE twoine_ball)
+target_include_directories(twoine_ball_cli PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
 target_compile_features(twoine_ball_cli PRIVATE c_std_11)
 target_compile_definitions(twoine_ball_cli PRIVATE CJSON_HIDE_SYMBOLS)
 set_target_properties(

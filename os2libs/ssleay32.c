@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "os2native.h"
-#include "ssleay32.h"
+#include "os2libs/os2native.h"
+#include "os2libs/ssleay32.h"
 #include "guest/handles.h"
 #include "hal/tls.h"
 #include "hal/host_sync.h"

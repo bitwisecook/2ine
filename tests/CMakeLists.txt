@@ -132,7 +132,6 @@ if(TARGET twoine_runtime)
         set_tests_properties(host_operation_lifecycle PROPERTIES TIMEOUT 45)
     endif()
     add_executable(twoine_handle_tests guest/test_handles.c ${PROJECT_SOURCE_DIR}/guest/handles.c)
-    target_include_directories(twoine_handle_tests PRIVATE ${PROJECT_SOURCE_DIR}/guest)
     target_link_libraries(twoine_handle_tests PRIVATE twoine_runtime)
     add_test(NAME guest_handles COMMAND twoine_handle_tests)
     set_tests_properties(guest_handles PROPERTIES TIMEOUT 20)
@@ -151,10 +150,6 @@ if(TWOINE_NATIVE_LOADER)
     add_test(NAME native_guest_abi COMMAND twoine_guest_abi_tests)
     add_executable(twoine_native_execution_tests runtime/test_execution.c)
     twoine_application_target(twoine_native_execution_tests)
-    target_include_directories(
-        twoine_native_execution_tests
-        PRIVATE "${PROJECT_SOURCE_DIR}/runtime"
-    )
     target_link_libraries(twoine_native_execution_tests PRIVATE 2ine)
     add_test(NAME native_execution COMMAND twoine_native_execution_tests native)
     set_tests_properties(native_execution PROPERTIES TIMEOUT 20)

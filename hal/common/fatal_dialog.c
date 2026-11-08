@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Entry point of the helper process, which starts with clean window-system state. */
 #include "hal/host_fatal.h"
-#include "fatal_dialog.h"
+#include "hal/common/fatal_dialog.h"
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>

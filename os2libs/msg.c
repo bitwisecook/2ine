@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native16.h"
-#include "msg.h"
+#include "os2libs/os2native16.h"
+#include "os2libs/msg.h"
 
 #include "hal/host_fs.h"
 #include <stdio.h>

@@ -6,7 +6,7 @@
 #define _GNU_SOURCE 1
 #include "hal/host_fatal.h"
 #include "hal/host.h"
-#include "host_fatal_platform.h"
+#include "hal/posix/host_fatal_platform.h"
 #include <errno.h>
 #include <execinfo.h>
 #include <fcntl.h>

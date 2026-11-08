@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native16.h"
-#include "viocalls.h"
+#include "os2libs/os2native16.h"
+#include "os2libs/viocalls.h"
 
 #include "hal/terminal.h"
 #include "guest/launch_record.h"

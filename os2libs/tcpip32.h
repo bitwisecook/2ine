@@ -9,7 +9,7 @@
 #ifndef _INCL_TCPIP32_H_
 #define _INCL_TCPIP32_H_
 
-#include "os2types.h"
+#include "os2libs/os2types.h"
 #include <stdio.h>
 
 #ifdef __cplusplus

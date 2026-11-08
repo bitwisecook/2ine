@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Legacy resolver results borrow per-thread host resolver snapshots. */
-#include "os2native.h"
-#include "tcp32dll.h"
+#include "os2libs/os2native.h"
+#include "os2libs/tcp32dll.h"
 #include "hal/socket.h"
 #include "os2libs/generated/tcp32dll-lx.h"
 static LX_HOST_THREAD_LOCAL int ResolverError;

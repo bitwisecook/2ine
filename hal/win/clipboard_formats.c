@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Native registered formats omitted by SDL's Windows text/image adapter. */
-#include "../sdl/clipboard_native.h"
+#include "hal/sdl/clipboard_native.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
 #include <string.h>

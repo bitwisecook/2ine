@@ -6,12 +6,12 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native.h"
-#include "tcpip32.h"
+#include "os2libs/os2native.h"
+#include "os2libs/tcpip32.h"
 
 #include "hal/socket.h"
 #include "hal/host_thread.h"
-#include "network.h"
+#include "os2libs/network.h"
 
 #include "hal/network.h"
 #include "hal/host_sync.h"

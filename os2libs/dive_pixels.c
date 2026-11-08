@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* FOURCC memory layouts use little-endian packed words and Y/Cr/Cb planes. */
-#include "dive.h"
-#include "dive_pixels.h"
+#include "os2libs/dive.h"
+#include "os2libs/dive_pixels.h"
 #include <string.h>
 
 const uint32_t DiveOutputFormats[] = {DIVE_FOURCC_LUT8, DIVE_FOURCC_BGR4, DIVE_FOURCC_R565,

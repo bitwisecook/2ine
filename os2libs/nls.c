@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#include "os2native16.h"
-#include "nls.h"
+#include "os2libs/os2native16.h"
+#include "os2libs/nls.h"
 
 #include "os2libs/generated/nls-lx.h"
 

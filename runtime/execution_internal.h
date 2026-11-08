@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_EXECUTION_INTERNAL_H
 #define TWOINE_EXECUTION_INTERNAL_H
-#include "execution.h"
+#include "runtime/execution.h"
 #include "hal/host_sync.h"
 
 typedef struct LxExecutionOperations

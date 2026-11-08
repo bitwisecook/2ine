@@ -2,7 +2,7 @@
 /* Help-manager creation reports unavailable rendering through HELPINIT. */
 #ifndef TWOINE_OS2LIBS_HELPMGR_H
 #define TWOINE_OS2LIBS_HELPMGR_H
-#include "pmwin.h"
+#include "os2libs/pmwin.h"
 #ifdef __cplusplus
 extern "C"
 {

@@ -103,7 +103,7 @@ static const void *read_offer(void *context, const char *mime, size_t *size)
     return NULL;
 }
 
-#include "clipboard_native.h"
+#include "hal/sdl/clipboard_native.h"
 
 typedef struct ClipboardCall
 {

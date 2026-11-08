@@ -1,12 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _POSIX_C_SOURCE 200809L
-#include "include/twoine_ball.h"
-#include "platform.h"
-#include "disk_image.h"
-#include "icon.h"
-#include "vendor/cjson/cJSON.h"
-#include "project_sources.h"
-#include "vendor/sha256/sha256.h"
+#include "ball/include/twoine_ball.h"
+#include "ball/platform.h"
+#include "ball/disk_image.h"
+#include "ball/icon.h"
+#include "ball/vendor/cjson/cJSON.h"
+#include "ball/project_sources.h"
+#include "ball/vendor/sha256/sha256.h"
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
@@ -1025,7 +1025,7 @@ static char *hex(Context *c, const unsigned char hash[32])
     return keep(c, out);
 }
 
-#include "audio.h"
+#include "ball/audio.h"
 
 static int runtime_name(const char *s)
 {
@@ -1522,17 +1522,17 @@ static char *command_interpreter(Context *c)
     return host;
 }
 
-#include "os2_component_store.h"
-#include "os2_support.h"
-#include "os2_extract.h"
-#include "os2_dependencies.h"
-#include "configuration.h"
-#include "wps_applications.h"
-#include "runtime_selection.h"
-#include "runtime_features.h"
-#include "os2_component_operations.h"
-#include "launch_prerequisites.h"
-#include "launch_dependencies.h"
+#include "ball/os2_component_store.h"
+#include "ball/os2_support.h"
+#include "ball/os2_extract.h"
+#include "ball/os2_dependencies.h"
+#include "ball/configuration.h"
+#include "ball/wps_applications.h"
+#include "ball/runtime_selection.h"
+#include "ball/runtime_features.h"
+#include "ball/os2_component_operations.h"
+#include "ball/launch_prerequisites.h"
+#include "ball/launch_dependencies.h"
 
 static cJSON *launch_desktop_identity(Context *c, const char *program, const char *name);
 
@@ -2645,8 +2645,8 @@ static cJSON *launch_desktop_identity(Context *parent, const char *program, cons
     return result;
 }
 
-#include "ball_archive.h"
-#include "ball_rename.h"
+#include "ball/ball_archive.h"
+#include "ball/ball_rename.h"
 
 static void dependency_refresh_mutation(Context *c, const cJSON *request)
 {

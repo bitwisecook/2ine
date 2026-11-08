@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _DEFAULT_SOURCE 1
-#include "../posix/network_internal.h"
+#include "hal/posix/network_internal.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>

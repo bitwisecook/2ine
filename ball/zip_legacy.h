@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored adapter. */
 /* The unchanged HWZIP codec retains its own public-domain dedication. */
-#include "vendor/hwzip/implode.h"
-#include "vendor/hwzip/shrink.h"
-#include "vendor/hwzip/reduce.h"
+#include "ball/vendor/hwzip/implode.h"
+#include "ball/vendor/hwzip/shrink.h"
+#include "ball/vendor/hwzip/reduce.h"
 #include <zlib.h>
 #define LEGACY_ZIP_LIMIT (16u * 1024u * 1024u)
 

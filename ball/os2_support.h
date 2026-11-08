@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared installation-media browser and original OS/2 support-file import. */
-#include "media.h"
-#include "os2_paths.h"
+#include "ball/media.h"
+#include "ball/os2_paths.h"
 
 enum
 {

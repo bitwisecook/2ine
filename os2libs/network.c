@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Layouts checked against OS/2 Toolkit 4.5 net/if.h, net/route.h and sys/ioctlos2.h. */
-#include "network.h"
+#include "os2libs/network.h"
 #include "hal/network.h"
 #include <errno.h>
 #include <string.h>

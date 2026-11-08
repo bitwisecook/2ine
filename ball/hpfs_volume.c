@@ -2,8 +2,8 @@
 /* HPFS v2 image access. All sector numbers are relative to the selected volume. */
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
-#include "image_internal.h"
-#include "vendor/fatfs/ff.h"
+#include "ball/image_internal.h"
+#include "ball/vendor/fatfs/ff.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
