@@ -57,16 +57,7 @@ void ff_memfree(void *p)
 
 DWORD get_fattime(void)
 {
-    time_t now = time(NULL);
-    struct tm date;
-    tb_host_localtime((int64_t)now, &date);
-    unsigned year = date.tm_year + 1900;
-    if (year < 1980)
-        year = 1980;
-    if (year > 2107)
-        year = 2107;
-    return (year - 1980) << 25 | (date.tm_mon + 1) << 21 | date.tm_mday << 16 | date.tm_hour << 11 |
-           date.tm_min << 5 | date.tm_sec / 2;
+    return tb_dos_stamp((int64_t)time(NULL));
 }
 
 DSTATUS disk_initialize(BYTE drive)

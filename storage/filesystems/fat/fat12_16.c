@@ -403,17 +403,7 @@ static int parent_node(VolumeDisk *d, const char *member, VolumeNode *parent, ch
 
 static void record_time(unsigned char *entry)
 {
-    struct tm value;
-    tb_host_localtime((int64_t)time(NULL), &value);
-    unsigned year = value.tm_year + 1900;
-    if (year < 1980)
-        year = 1980;
-    if (year > 2107)
-        year = 2107;
-    tb_put_le16(entry + FAT_ENTRY_MODIFIED_TIME,
-                value.tm_hour << 11 | value.tm_min << 5 | value.tm_sec / 2);
-    tb_put_le16(entry + FAT_ENTRY_MODIFIED_DATE,
-                (year - 1980) << 9 | (value.tm_mon + 1) << 5 | value.tm_mday);
+    tb_put_le32(entry + FAT_ENTRY_MODIFIED_TIME, tb_dos_stamp((int64_t)time(NULL)));
 }
 
 static int short_exists(VolumeDisk *d, VolumeNode parent, const unsigned char name[FAT_NAME_BYTES])
