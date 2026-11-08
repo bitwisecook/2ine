@@ -2,6 +2,10 @@
 /* Modal state survives reentrant destruction until its message loop returns. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmp.h"
+#include "emulator/abi.h"
+#include <ctype.h>
 
 enum
 {
@@ -468,4 +472,55 @@ BOOL WinMapDlgPoints(HWND window, PPOINTL points, ULONG count, BOOL to_pixels)
                             &points[i].y);
     }
     return TRUE;
+}
+
+BOOL WinQueryDlgItemShort(HWND parent, ULONG id, PSHORT output, BOOL signed_value)
+{
+    if (output)
+        *output = 0;
+    if (!WinWindowFromID(parent, id))
+        return FALSE;
+    char text[32] = {0};
+    WinQueryDlgItemText(parent, id, sizeof text, text);
+    size_t end = strlen(text);
+    while (end && text[end - 1] == ' ')
+        end--;
+    text[end] = 0;
+    const char *p = text;
+    while (*p == ' ')
+        p++;
+    BOOL negative = *p == '-';
+    if (negative)
+    {
+        if (!signed_value)
+            return FALSE;
+        p++;
+    }
+    if (*p < '0' || *p > '9')
+        return FALSE;
+    ULONG value = 0;
+    for (; *p >= '0' && *p <= '9'; p++)
+    {
+        ULONG digit = (ULONG)(*p - '0');
+        if (value > 6553 || (value == 6553 && digit > 5))
+            return FALSE;
+        value = value * 10 + digit;
+        if (signed_value && value > 32767)
+            return FALSE;
+    }
+    if (*p)
+        return FALSE;
+    if (output)
+        *output = (SHORT)(negative ? -(LONG)value : (LONG)value);
+    return TRUE;
+}
+
+BOOL WinSetDlgItemShort(HWND parent, ULONG id, USHORT value, BOOL signed_value)
+{
+    char text[24];
+    if (signed_value)
+        snprintf(text, sizeof text, "%d", (int)(SHORT)value);
+    else
+        snprintf(text, sizeof text, "%u", (unsigned)value);
+    return WinSetDlgItemText(parent, id, text);
 }

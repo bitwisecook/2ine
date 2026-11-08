@@ -2,6 +2,10 @@
 /* Class extra bytes contain guest words; pointer values remain opaque guest addresses. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "emulator/abi.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmp.h"
+#include <ctype.h>
 
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
 static uint32 control_callback(uint8 *args)
@@ -261,4 +265,16 @@ BOOL WinQueryClassInfo(HAB hab, PSZ name, PCLASSINFO info)
     info->pfnWindowProc = procedure;
     info->cbWindowData = window_class->data_len;
     return TRUE;
+}
+
+BOOL WinSetWindowBits(HWND handle, LONG index, ULONG data, ULONG mask)
+{
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    Window *w = a ? getWindowFromHWND(a, handle) : NULL;
+    if (!w)
+        return FALSE;
+    if (index >= 0 && ((size_t)index + 4 > w->data_len))
+        return FALSE;
+    ULONG old = WinQueryWindowULong(handle, index);
+    return WinSetWindowULong(handle, index, (old & ~mask) | (data & mask));
 }

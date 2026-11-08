@@ -4,6 +4,11 @@
 #include "formats/resources/icon.h"
 #include "host/fs.h"
 #include "host/sync.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmp.h"
+#include "emulator/abi.h"
+#include <ctype.h>
 
 LONG WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity, PCHAR output)
 {
@@ -81,4 +86,29 @@ LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR 
     else
         GProcessState.freeResource(data);
     return result;
+}
+
+ULONG WinLoadLibrary(HAB hab, PSZ name)
+{
+    if (!getAnchorBlock(hab) || !name || !GProcessState.loadModule)
+        return 0;
+    LxModule *m = GProcessState.loadModule(name);
+    return m ? m->handle : 0;
+}
+
+BOOL WinDeleteLibrary(HAB hab, ULONG handle)
+{
+    LxHandleBorrow b = {0};
+    if (!getAnchorBlock(hab) || !GProcessState.freeModule ||
+        !lx_handle_borrow(handle, LX_HANDLE_MODULE, &b))
+        return FALSE;
+    GProcessState.freeModule(b.resource);
+    lx_handle_release(&b);
+    return TRUE;
+}
+
+LONG WinLoadMessage(HAB hab, HMODULE module, ULONG id, LONG capacity, PSZ output)
+{
+    (void)hab;
+    return loadStringTable(module, 10, id, capacity, output);
 }

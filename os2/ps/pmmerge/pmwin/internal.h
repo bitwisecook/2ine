@@ -97,6 +97,11 @@ typedef struct Window
     BOOL visible_region_notify;
 } Window;
 
+static inline LONG clamp_long(LONG x, LONG low, LONG high)
+{
+    return x < low ? low : x > high ? high : x;
+}
+
 LX_PRIVATE void cleanupErrorInfo(void);
 /* FC_NOSETFOCUS, FC_NOLOSEFOCUS and FC_NOSETACTIVE suppress their notifications. */
 LX_PRIVATE BOOL changeFocus(HWND desktop, HWND handle, ULONG flags);

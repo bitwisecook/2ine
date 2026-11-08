@@ -3,6 +3,9 @@
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "os2/include/private/pmp.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "emulator/abi.h"
+#include <ctype.h>
 
 HDC WinOpenWindowDC(HWND hwnd)
 {
@@ -319,4 +322,15 @@ PresentationSpace *lx_pm_font_space(HPS handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     return anchor ? getPresentationSpaceFromHPS(anchor, handle) : NULL;
+}
+
+LONG WinRealizePalette(HWND handle, HPS ps, PULONG changed)
+{
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    if (!a || !getWindowFromHWND(a, handle) || !lx_pm_valid_ps(ps))
+        return -1;
+    if (changed)
+        *changed =
+            0; /* True-color surfaces realize palette RGB values without changing display entries. */
+    return 0;
 }

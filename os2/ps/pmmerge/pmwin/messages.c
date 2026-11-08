@@ -13,6 +13,9 @@
 #include "os2/ps/pmmerge/pmwin/open32_post.h"
 #include "os2/include/private/pmp.h"
 #include "emulator/launch_record.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "emulator/abi.h"
+#include <ctype.h>
 
 const char *messageName(const ULONG msg)
 {
@@ -1089,4 +1092,100 @@ LONG lx_pm_mouse_state(unsigned button)
     unsigned state = anchor->physical_buttons[button - 1];
     anchor->physical_buttons[button - 1] &= ~1u;
     return (SHORT)((state & 2 ? 0x8000 : 0) | (state & 1));
+}
+
+BOOL WinQueryMsgPos(HAB hab, PPOINTL out)
+{
+    AnchorBlock *a = getAnchorBlock(hab);
+    if (!a || !out)
+        return FALSE;
+    *out = a->message_queue.last_position;
+    return TRUE;
+}
+
+BOOL WinQueryQueueInfo(HMQ queue, PVOID out, ULONG bytes)
+{
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    if (!a || (a->message_queue.hmq != queue && queue != 1)) /* HMQ_CURRENT */
+        return FALSE;
+    /* Whole fields are copied, and a missing or short buffer is not an error. */
+    bytes &= ~3u;
+    if (!out || !bytes)
+        return TRUE;
+    uint8 data[20] = {0};
+    ULONG count = 0;
+    for (MessageQueueItem *i = a->message_queue.head; i; i = i->next)
+        count++;
+    LxGuestTib *t = GProcessState.getOs2Tib ? GProcessState.getOs2Tib() : NULL;
+    ULONG tid = 0;
+    if (t)
+    {
+        uint8 b[4];
+        if (lx_execution_read(GProcessState.execution, lx_guest_load_u32(&t->tib2), b, 4))
+            tid = lx_guest_load_u32(b);
+    }
+    lx_guest_store_u32(data, 20);
+    lx_guest_store_u32(data + 4, GProcessState.pib.process_id);
+    lx_guest_store_u32(data + 8, tid);
+    lx_guest_store_u32(data + 12, count);
+    memcpy(out, data, bytes < 20 ? bytes : 20);
+    return TRUE;
+}
+
+/* Sending can destroy windows, so targets are gathered before any delivery. */
+static BOOL collect_targets(const Window *parent, ULONG flags, HWND **list, size_t *count,
+                            size_t *capacity)
+{
+    for (Window *child = parent->children; child; child = child->sibling)
+    {
+        if (!(flags & 8) || isFrameWindow(child)) /* BMSG_FRAMEONLY */
+        {
+            if (*count == *capacity)
+            {
+                size_t grown = *capacity ? *capacity * 2 : 32;
+                HWND *larger = realloc(*list, grown * sizeof *larger);
+                if (!larger)
+                    return FALSE;
+                *list = larger;
+                *capacity = grown;
+            }
+            (*list)[(*count)++] = child->hwnd;
+        }
+        if ((flags & 4) && !collect_targets(child, flags, list, count, capacity)) /* DESCENDANTS */
+            return FALSE;
+    }
+    return TRUE;
+}
+
+BOOL WinBroadcastMsg(HWND parent, ULONG message, MPARAM first, MPARAM second, ULONG flags)
+{
+    if (flags & ~0x1fu)
+    {
+        WinSetErrorInfo(PMERR_INVALID_FLAG, 0);
+        return FALSE;
+    }
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    Window *w = !a ? NULL : parent == HWND_DESKTOP ? &desktop_window : getWindowFromHWND(a, parent);
+    if (!w)
+        return FALSE;
+    /* BMSG_POSTQUEUE and 0x10 address message queues rather than windows. */
+    if (flags & 0x12)
+        return broadcastQueues(a, message, first, second, !(flags & 2));
+    if (!w->children)
+        return FALSE;
+    HWND *targets = NULL;
+    size_t count = 0, capacity = 0;
+    BOOL ok = collect_targets(w, flags, &targets, &count, &capacity);
+    for (size_t i = 0; i < count; i++)
+    {
+        if (flags & 1) /* BMSG_SEND */
+        {
+            if (!WinSendMsg(targets[i], message, first, second))
+                ok = FALSE;
+        }
+        else if (!WinPostMsg(targets[i], message, first, second))
+            ok = FALSE;
+    }
+    free(targets);
+    return ok;
 }

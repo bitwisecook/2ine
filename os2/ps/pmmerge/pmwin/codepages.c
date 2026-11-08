@@ -1,6 +1,11 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Single-byte PM conversions use 0xFF for an unrepresentable character. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmp.h"
+#include "emulator/abi.h"
+#include <ctype.h>
 static const ULONG codepages[] = {437, 850, 1004};
 static const UCHAR translations[6][256] = {
     {
@@ -146,4 +151,49 @@ UCHAR WinCpTranslateChar(HAB hab, ULONG source, UCHAR character, ULONG destinati
         return character;
     int table = from * 2 + (to > from ? to - 1 : to);
     return translations[table][character];
+}
+
+BOOL WinCpTranslateString(HAB hab, ULONG from, PSZ input, ULONG to, ULONG capacity, PSZ output)
+{
+    if (!getAnchorBlock(hab) || !input || !output)
+        return FALSE;
+    /* An invalid code page leaves its own error from the character translator. */
+    if (from != to && !WinCpTranslateChar(hab, from, ' ', to))
+        return FALSE;
+    for (ULONG i = 0; i < capacity; i++)
+    {
+        UCHAR c = (UCHAR)input[i];
+        if (!c)
+        {
+            output[i] = 0;
+            return TRUE;
+        }
+        output[i] = from == to ? c : WinCpTranslateChar(hab, from, c, to);
+        if (!output[i])
+            return FALSE;
+    }
+    if (capacity)
+        output[capacity - 1] = 0;
+    WinSetErrorInfo(PMERR_PARAMETER_OUT_OF_RANGE, 0);
+    return FALSE;
+}
+
+PSZ WinNextChar(HAB hab, ULONG cp, ULONG country, PSZ text)
+{
+    /* Single-byte code pages only; an unknown page falls back to the queue page. */
+    (void)hab;
+    (void)cp;
+    (void)country;
+    return text ? text + (*text != 0) : NULL;
+}
+
+BOOL WinSetCp(HMQ queue, ULONG cp)
+{
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    if (!cp)
+        cp = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
+    if (!a || a->message_queue.hmq != queue || (cp != 437 && cp != 850 && cp != 1004))
+        return FALSE;
+    a->message_queue.codepage = cp;
+    return TRUE;
 }

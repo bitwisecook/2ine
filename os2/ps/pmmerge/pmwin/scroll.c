@@ -1,46 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Locale comparisons, window identity and scrolling used by the help manager. */
+/* WinScrollWindow moves window contents and invalidates the uncovered area. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "os2/include/bsedos.h"
-
-ULONG WinCompareStrings(HAB hab, ULONG codepage, ULONG country, PSZ first, PSZ second,
-                        ULONG reserved)
-{
-    if (!getAnchorBlock(hab) || !first || !second || reserved)
-        return 0;
-    COUNTRYCODE code = {country, codepage};
-    char weights[256];
-    ULONG length;
-    if (DosQueryCollate(sizeof weights, &code, weights, &length))
-        return 0;
-    const unsigned char *a = (const unsigned char *)first, *b = (const unsigned char *)second;
-    while (*a && *b && weights[*a] == weights[*b])
-    {
-        a++;
-        b++;
-    }
-    unsigned left = (unsigned char)weights[*a], right = (unsigned char)weights[*b];
-    return left == right ? 1 : left < right ? 2 : 3;
-}
-
-HWND WinQueryDesktopWindow(HAB hab, HDC dc)
-{
-    return getAnchorBlock(hab) && (!dc || lx_pm_dc_valid(dc)) ? HWND_DESKTOP : 0;
-}
-
-BOOL WinQueryWindowProcess(HWND handle, PULONG process, PULONG thread)
-{
-    AnchorBlock *anchor = getAnchorBlockNoHAB();
-    ULONG owner = lx_guest_load_u32(&LX_GETTIB2()->thread_id);
-    if ((!anchor || !getWindowFromHWND(anchor, handle)) && !windowOwnerThread(handle, &owner))
-        return FALSE;
-    if (process)
-        *process = GProcessState.pib.process_id;
-    if (thread)
-        *thread = owner;
-    return TRUE;
-}
 
 static RECTL intersect(RECTL a, RECTL b)
 {

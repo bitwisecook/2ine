@@ -10,6 +10,9 @@
 #include "os2/ps/pmmerge/pmwin/graphics.h"
 #include "os2/include/private/pmp.h"
 #include "host/clipboard.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "emulator/abi.h"
+#include <ctype.h>
 static void cleanupThreadPM(void);
 static void (*open32_thread_exit)(void);
 
@@ -212,4 +215,77 @@ ULONG WinQueryCp(HMQ queue)
     if (!queue || anchor->message_queue.hmq != queue)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_HMQ, 0);
     return anchor->message_queue.codepage ? anchor->message_queue.codepage : 437;
+}
+
+typedef struct ErrorAllocation
+{
+    LxGuestMapping *mapping;
+    struct ErrorAllocation *next;
+} ErrorAllocation;
+
+static _Thread_local ErrorAllocation *error_allocations;
+
+PVOID WinGetErrorInfo(HAB hab)
+{
+    AnchorBlock *a = getAnchorBlock(hab);
+    if (!a || !lxHostThreadState()->pm_error)
+        return NULL;
+    ErrorAllocation *p = calloc(1, sizeof *p);
+    if (!p)
+        return NULL;
+    p->mapping =
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    if (!p->mapping)
+    {
+        free(p);
+        return NULL;
+    }
+    uint8 *out = lx_execution_mapping_host(p->mapping);
+    /* ERRINFO, one message offset at 24, no binary data at 20, and the message at 40. The
+       severity is the id's high word; PM sites that record a bare code are errors. */
+    memset(out, 0, 40);
+    ULONG error = WinGetLastError(hab), code = error & 0xffff;
+    ULONG severity = error >> 16 ? error >> 16 : 8; /* SEVERITY_ERROR */
+    char prefix[16], letters[32], text[256] = {0};
+    if (!loadStringTable((HMODULE)-1, 5, 0, sizeof prefix, prefix))
+        snprintf(prefix, sizeof prefix, "PMWIN");
+    size_t known = (size_t)loadStringTable((HMODULE)-1, 5, 0x1021, sizeof letters, letters);
+    char letter = known            ? letters[severity < known ? severity : known - 1]
+                  : severity == 4  ? 'W'
+                  : severity == 12 ? 'S'
+                  : severity == 16 ? 'U'
+                                   : 'E';
+    if (!loadStringTable((HMODULE)-1, 10, code, sizeof text, text))
+        loadStringTable((HMODULE)-1, 5, code, sizeof text, text);
+    lx_guest_store_u32(out, 20);
+    lx_guest_store_u32(out + 4, severity << 16 | code);
+    lx_guest_store_u32(out + 8, 1);
+    lx_guest_store_u32(out + 12, 24);
+    lx_guest_store_u32(out + 16, 20);
+    lx_guest_store_u32(out + 24, 40);
+    snprintf((char *)out + 40, 4096 - 40, "%s%06X%c %s\r\n", prefix, (unsigned)code, letter, text);
+    p->next = error_allocations;
+    error_allocations = p;
+    return (PVOID)(uintptr_t)lx_execution_mapping_address(p->mapping);
+}
+
+BOOL WinFreeErrorInfo(PVOID address)
+{
+    ErrorAllocation **link = &error_allocations;
+    while (*link && (uintptr_t)address != lx_execution_mapping_address((*link)->mapping))
+        link = &(*link)->next;
+    if (!*link)
+        return FALSE;
+    ErrorAllocation *p = *link;
+    *link = p->next;
+    lx_execution_unmap(GProcessState.execution, p->mapping);
+    free(p);
+    return TRUE;
+}
+
+void cleanupErrorInfo(void)
+{
+    while (error_allocations)
+        WinFreeErrorInfo(
+            (PVOID)(uintptr_t)lx_execution_mapping_address(error_allocations->mapping));
 }

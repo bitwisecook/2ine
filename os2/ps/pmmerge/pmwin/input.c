@@ -2,6 +2,11 @@
 /* Focus and host input are translated into the calling PM thread's WM_CHAR stream. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "os2/ps/common/pm_text.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmp.h"
+#include "emulator/abi.h"
+#include <ctype.h>
 
 BOOL WinIsChild(HWND child, HWND parent)
 {
@@ -428,4 +433,27 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
 ULONG WinGetCurrentTime(HAB hab)
 {
     return getAnchorBlock(hab) ? currentSystemTicks() : 0;
+}
+
+BOOL WinFocusChange(HWND desktop, HWND focus, ULONG flags)
+{
+    return changeFocus(desktop, focus, (flags & 0xffff) | FOCUS_NOTIFY);
+}
+
+BOOL WinSetKeyboardStateTable(HWND desktop, PBYTE table, BOOL set)
+{
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    if (!a || desktop != HWND_DESKTOP || !table)
+        return FALSE;
+    for (unsigned i = 0; i < 256; i++)
+    {
+        if (set)
+        {
+            a->key_down[i] = (table[i] & 0x80) != 0;
+            a->key_toggled[i] = (table[i] & 1) != 0;
+        }
+        else
+            table[i] = (a->key_down[i] ? 0x80 : 0) | (a->key_toggled[i] ? 1 : 0);
+    }
+    return TRUE;
 }

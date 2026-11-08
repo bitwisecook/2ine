@@ -24,7 +24,8 @@ twoine_os2_dll(
     pmmerge/ishapi/switches.c
     pmmerge/ishapi/startapp.c
     pmmerge/pmwin/cptype.c
-    pmmerge/pmwin/help_compat.c
+    pmmerge/pmwin/strings.c
+    pmmerge/pmwin/scroll.c
     pmmerge/pmwin/context.c
     pmmerge/pmwin/codepages.c
     pmmerge/pmwin/windows.c
@@ -71,7 +72,9 @@ twoine_os2_dll(
     pmmerge/pmwin/clipboard.c
     pmmerge/pmwin/semaphore_waits.c
     pmmerge/pmwin/pointer_image.c
-    pmmerge/pmwin/compat_services.c
+    pmmerge/pmwin/winshut.c
+    pmmerge/pmwin/winpos.c
+    pmmerge/pmwin/tracking.c
 )
 twoine_os2_dll(pmwin pmwin/module.c)
 twoine_os2_dll(pmgre pmgre/module.c)

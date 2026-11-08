@@ -2,6 +2,12 @@
 /* Enumerations retain a snapshot of immediate child handles in snapshotted z order. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "emulator/handles.h"
+#include "os2/ps/pmmerge/pmwin/graphics.h"
+#include "os2/ps/pmmerge/pmwin/paint.h"
+#include "os2/include/private/pmp.h"
+#include "emulator/abi.h"
+#include <ctype.h>
+#include "os2/include/bsedos.h"
 
 typedef struct PmWindowEnumeration
 {
@@ -211,4 +217,27 @@ HWND WinWindowFromPoint(HWND parent, PPOINTL point, BOOL children)
         window = child;
     } while (children);
     return window->hwnd;
+}
+
+HWND WinQueryObjectWindow(HWND desktop)
+{
+    return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() ? HWND_OBJECT : 0;
+}
+
+HWND WinQueryDesktopWindow(HAB hab, HDC dc)
+{
+    return getAnchorBlock(hab) && (!dc || lx_pm_dc_valid(dc)) ? HWND_DESKTOP : 0;
+}
+
+BOOL WinQueryWindowProcess(HWND handle, PULONG process, PULONG thread)
+{
+    AnchorBlock *anchor = getAnchorBlockNoHAB();
+    ULONG owner = lx_guest_load_u32(&LX_GETTIB2()->thread_id);
+    if ((!anchor || !getWindowFromHWND(anchor, handle)) && !windowOwnerThread(handle, &owner))
+        return FALSE;
+    if (process)
+        *process = GProcessState.pib.process_id;
+    if (thread)
+        *thread = owner;
+    return TRUE;
 }
