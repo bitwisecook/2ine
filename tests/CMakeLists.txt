@@ -264,13 +264,15 @@ if(TARGET viocalls)
     set_tests_properties(host_terminal PROPERTIES TIMEOUT 20)
 endif()
 
-if(TARGET sesmgr AND TARGET quecalls)
+if(TARGET sesmgr AND TARGET quecalls AND TARGET doscalls)
     add_executable(twoine_legacy_session_tests os2/test_legacy_sessions.c)
     twoine_application_target(twoine_legacy_session_tests)
     target_link_libraries(twoine_legacy_session_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
     add_test(
         NAME legacy_sessions
-        COMMAND twoine_legacy_session_tests $<TARGET_FILE:quecalls> $<TARGET_FILE:sesmgr>
+        COMMAND
+            twoine_legacy_session_tests $<TARGET_FILE:quecalls> $<TARGET_FILE:sesmgr>
+            $<TARGET_FILE:doscalls>
     )
     set_tests_properties(legacy_sessions PROPERTIES TIMEOUT 20)
 endif()

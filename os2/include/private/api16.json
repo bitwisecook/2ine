@@ -739,7 +739,7 @@
     "Dos16SMSetTitle": [
       {
         "name": "title",
-        "size": "260",
+        "size": "65536",
         "permissions": 1,
         "kind": "string",
         "nullable": false
@@ -1435,15 +1435,6 @@
     ]
   },
   "sesmgr": {
-    "Dos16SMSetTitle": [
-      {
-        "name": "title",
-        "size": "65536",
-        "permissions": 1,
-        "kind": "string",
-        "nullable": false
-      }
-    ],
     "Dos16StartSession": [
       {
         "name": "session",

@@ -56,7 +56,7 @@ static ULONG host_to_far(void *pointer)
 
 int main(int argc, char **argv)
 {
-    CHECK(argc == 3);
+    CHECK(argc == 4);
     char ipc[] = "/tmp/twoine-legacy-queue-XXXXXX";
     CHECK(mkdtemp(ipc));
     CHECK(!setenv("TWOINE_IPC_DIR", ipc, 1));
@@ -67,6 +67,8 @@ int main(int argc, char **argv)
     CHECK(queue_library);
     void *session_library = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     CHECK(session_library);
+    void *doscalls_library = dlopen(argv[3], RTLD_NOW | RTLD_LOCAL);
+    CHECK(doscalls_library);
 #define LOAD(library, function)                                                                    \
     __typeof__(function) *call_##function = dlsym(library, #function);                             \
     CHECK(call_##function)
@@ -79,6 +81,8 @@ int main(int argc, char **argv)
     LOAD(session_library, Dos16StopSession);
     LOAD(session_library, Dos16SetSession);
     LOAD(session_library, DosStartSession);
+    LOAD(doscalls_library, Dos16SMSetTitle);
+    LOAD(doscalls_library, lx_session_title);
 
     struct
     {
@@ -130,6 +134,20 @@ int main(int argc, char **argv)
     ULONG sid;
     PID pid;
     CHECK(call_DosStartSession(&start, &sid, &pid) == ERROR_SMG_INVALID_RELATED_OPT);
+    /* DOSSMSETTITLE sets the title the switch list shows for this session,
+       truncated to the switch-list title size. */
+    char title[80];
+    CHECK(call_Dos16SMSetTitle(NULL) == ERROR_INVALID_PARAMETER);
+    CHECK(!call_Dos16SMSetTitle("Legacy fixture"));
+    call_lx_session_title(title, sizeof title);
+    CHECK(!strcmp(title, "Legacy fixture"));
+    char long_title[100];
+    memset(long_title, 'T', sizeof long_title - 1);
+    long_title[sizeof long_title - 1] = 0;
+    CHECK(!call_Dos16SMSetTitle(long_title));
+    call_lx_session_title(title, sizeof title);
+    CHECK(strlen(title) == 63 && title[0] == 'T');
+    CHECK(!dlclose(doscalls_library));
     CHECK(!dlclose(session_library));
     CHECK(!dlclose(queue_library));
     for (unsigned i = 1; i < 16; i++)

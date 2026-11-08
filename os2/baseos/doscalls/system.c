@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2/baseos/doscalls/internal.h"
+#include "emulator/launch_record.h"
 
 APIRET DosGetInfoBlocks(PTIB *pptib, PPIB *pppib)
 {
@@ -261,11 +262,42 @@ APIRET16 Dos16SMPMPresent(PUSHORT present)
     return NO_ERROR;
 }
 
+/* The title the switch list shows for this session: SWCNTRL.szSwtitle holds
+   MAXNAMEL (60) + 4 bytes. */
+#define SESSION_TITLE_SIZE 64
+
+static char session_title[SESSION_TITLE_SIZE];
+static LxHostMutex *session_title_mutex;
+static LxHostOnce session_title_once = LX_HOST_ONCE_INIT;
+
+static void initialize_session_title(void)
+{
+    session_title_mutex = lx_host_mutex_create(0, 0);
+    if (!session_title_mutex)
+        abort();
+}
+
 APIRET16 Dos16SMSetTitle(PSZ title)
 {
-    TRACE_NATIVE("Dos16SMSetTitle('%s')", title);
-    /* A console worker does not own a session-manager switch-list entry. */
-    return ERROR_NOT_SUPPORTED;
+    TRACE_NATIVE("Dos16SMSetTitle(%p)", title);
+    if (!title)
+        return ERROR_INVALID_PARAMETER;
+    lx_host_once(&session_title_once, initialize_session_title);
+    lx_host_mutex_lock(session_title_mutex, UINT32_MAX);
+    snprintf(session_title, sizeof session_title, "%s", title);
+    lx_host_mutex_unlock(session_title_mutex);
+    return NO_ERROR;
+}
+
+void lx_session_title(char *output, size_t capacity)
+{
+    lx_host_once(&session_title_once, initialize_session_title);
+    lx_host_mutex_lock(session_title_mutex, UINT32_MAX);
+    snprintf(output, capacity, "%s", session_title);
+    lx_host_mutex_unlock(session_title_mutex);
+    LxLaunchRecord *record = lx_launch_record();
+    if (!*output && record)
+        snprintf(output, capacity, "%s", record->presentation.title);
 }
 
 APIRET16 Dos16GetDateTime(PDATETIME pdt)

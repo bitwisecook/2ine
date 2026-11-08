@@ -37,7 +37,6 @@ typedef struct SessionWait
 static SessionWait *sessions;
 static LxHostMutex *session_mutex;
 static LxHostOnce session_once = LX_HOST_ONCE_INIT;
-static char session_title[64];
 
 static void destroy_session(SessionWait *session)
 {
@@ -283,29 +282,6 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     TRACE_NATIVE("DosStartSession(%p, %p, %p)", data, session_id, pid);
     LxSessionStart start = {.data = data};
     return lx_session_start(&start, session_id, pid);
-}
-
-APIRET16 Dos16SMSetTitle(PSZ title)
-{
-    TRACE_NATIVE("Dos16SMSetTitle(%p)", title);
-    if (!title)
-        return ERROR_INVALID_PARAMETER;
-    lx_host_once(&session_once, initialize_sessions);
-    lx_host_mutex_lock(session_mutex, UINT32_MAX);
-    snprintf(session_title, sizeof session_title, "%s", title);
-    lx_host_mutex_unlock(session_mutex);
-    return NO_ERROR;
-}
-
-void lx_session_title(char *output, size_t capacity)
-{
-    lx_host_once(&session_once, initialize_sessions);
-    lx_host_mutex_lock(session_mutex, UINT32_MAX);
-    snprintf(output, capacity, "%s", session_title);
-    lx_host_mutex_unlock(session_mutex);
-    LxLaunchRecord *record = lx_launch_record();
-    if (!*output && record)
-        snprintf(output, capacity, "%s", record->presentation.title);
 }
 
 APIRET DosStopSession(ULONG scope, ULONG session)

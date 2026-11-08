@@ -13,20 +13,6 @@ LX_NATIVE_MODULE_32BIT_API(DosStartSession)
 LX_NATIVE_MODULE_32BIT_API(DosStopSession)
 #endif
 
-static uint32 bridge16to32_Dos16SMSetTitle(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, title);
-    LxGuestArgument __abi_args[1] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_strings(GProcessState.execution, title_guest, 1, 65536, 0, &__abi_args[0])) goto __abi_done;
-    title = (PSZ) __abi_args[0].host;
-    __abi_result = Dos16SMSetTitle(title);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    return __abi_result;
-}
-
 static uint32 bridge16to32_Dos16StopSession(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, reserved);
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, session);
@@ -69,7 +55,6 @@ __abi_done:
 }
 
 LX_NATIVE_MODULE_16BIT_SUPPORT()
-    LX_NATIVE_MODULE_16BIT_API(Dos16SMSetTitle)
     LX_NATIVE_MODULE_16BIT_API(Dos16StopSession)
     LX_NATIVE_MODULE_16BIT_API(Dos16SetSession)
     LX_NATIVE_MODULE_16BIT_API(Dos16StartSession)
@@ -82,7 +67,6 @@ LX_NATIVE_MODULE_DEINIT({
 
 static int init16_sesmgr(void) {
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SMSetTitle, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16StopSession, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetSession, 6)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16StartSession, 12)
@@ -101,11 +85,12 @@ static int init32_sesmgr(void) {
     return 1;
 }
 #endif
+LX_NATIVE_FORWARDER(lx_forward_5, "DOSCALLS", 690, "");
 LX_NATIVE_MODULE_INIT({
     if (!init16_sesmgr()) return 0;
     LX_NATIVE_INIT_32BIT_MODULE(sesmgr)
 })
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16SMSetTitle, "DOSSMSETTITLE", 5),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_5, "DOSSMSETTITLE", 5),
     LX_NATIVE_EXPORT16(Dos16StopSession, 8),
     LX_NATIVE_EXPORT16(Dos16SetSession, 14),
     LX_NATIVE_EXPORT16(Dos16StartSession, 17),
