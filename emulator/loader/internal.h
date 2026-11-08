@@ -19,6 +19,18 @@
 #include <errno.h>
 #include <assert.h>
 
+/* OS/2 error codes (bseerr.h) the loader reports for module load failures. */
+enum
+{
+    ERROR_FILE_NOT_FOUND = 2,
+    ERROR_PATH_NOT_FOUND = 3,
+    ERROR_ACCESS_DENIED = 5,
+    ERROR_BAD_FORMAT = 11,
+    ERROR_MOD_NOT_FOUND = 126,
+    ERROR_PROC_NOT_FOUND = 127,
+    ERROR_INVALID_ORDINAL = 182
+};
+
 LX_PRIVATE int sanityCheckLxModule(const uint8 *exe, const uint32 exelen);
 LX_PRIVATE int sanityCheckNeModule(const uint8 *exe, const uint32 exelen);
 LX_PRIVATE int sanityCheckModule(uint8 **_exe, uint32 *_exelen, int *_is_lx);
@@ -76,6 +88,8 @@ LX_PRIVATE LxModule *loadModuleByPathInternal(const char *fname, const int depen
 LX_PRIVATE LxModule *loadModuleByPath(const char *fname);
 LX_PRIVATE void lxWriteFatalModules(void);
 LX_PRIVATE void lxDescribeModuleFailure(const char *program, char *buffer, size_t size);
+/* The calling thread's last load failure: its OS/2 error and the module it names. */
+LX_PRIVATE const char *lxLastModuleFailure(uint32 *code);
 LX_PRIVATE void registerLxModule(LxModule *module);
 LX_PRIVATE void unloadAllModules(void);
 LX_PRIVATE LxModule *loadNativeModule(const char *fname, const char *modname);

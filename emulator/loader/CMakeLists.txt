@@ -4,6 +4,7 @@ if(LX_LEGACY)
         lx_loader
         main.c
         modules.c
+        diagnostics.c
         entry.c
         imports.c
         load_ne.c

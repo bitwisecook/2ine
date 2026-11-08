@@ -511,7 +511,7 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
     {
         fprintf(stderr, "2ine: original %s is excluded by this ball's Graphics & Media settings\n",
                 base);
-        moduleLoadError(126, base);
+        moduleLoadError(ERROR_MOD_NOT_FOUND, base);
         return NULL;
     }
     char *os2path = lxHostPathToGuest(fname);
@@ -531,7 +531,8 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
     uint8 *module = lx_host_file_snapshot(fname, UINT32_MAX, &size, &error);
     if (!module)
     {
-        moduleLoadError(error == LX_HOST_FS_MISSING ? 2 : 5, fname);
+        moduleLoadError(error == LX_HOST_FS_MISSING ? ERROR_FILE_NOT_FOUND : ERROR_ACCESS_DENIED,
+                        fname);
         if (GProcessState.trace_native)
             fprintf(stderr, "Cannot read module '%s' (host filesystem result %u)\n", fname,
                     (unsigned)error);
@@ -540,7 +541,7 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
     LxModule *result = loadModule(fname, module, (uint32)size, dependency_tree_depth);
     free(module);
     if (!result)
-        moduleLoadError(11, fname);
+        moduleLoadError(ERROR_BAD_FORMAT, fname);
     return result;
 }
 
@@ -551,7 +552,7 @@ LxModule *loadModuleByPath(const char *fname)
     LxModule *module = loadModuleByPathInternal(fname, 0);
     if (!initializeModuleGraph(module))
     {
-        moduleLoadError(11, fname);
+        moduleLoadError(ERROR_BAD_FORMAT, fname);
         module = NULL;
     }
     ActiveModuleFailure = previous;
@@ -647,7 +648,7 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
         (!strcasecmp(modname, "DIVE") && !lxRuntimeFeatureEnabled(LX_FEATURE_DIVE)))
     {
         fprintf(stderr, "2ine: %s is disabled in this ball's Graphics & Media settings\n", modname);
-        moduleLoadError(126, modname);
+        moduleLoadError(ERROR_MOD_NOT_FOUND, modname);
         return NULL;
     }
     for (LxModule *i = GProcessState.loaded_modules; i != NULL; i = i->next)
@@ -758,7 +759,7 @@ native_provider:
                     ? "choose a runtime with Mesa OpenGL support"
                     : "extract original OS/2 OPENGL.DLL and its dependencies");
     if (!retval)
-        moduleLoadError(126, modname);
+        moduleLoadError(ERROR_MOD_NOT_FOUND, modname);
     return retval;
 }
 
@@ -769,7 +770,7 @@ LxModule *loadModuleByModuleName(const char *modname)
     LxModule *module = loadModuleByModuleNameInternal(modname, 0);
     if (!initializeModuleGraph(module))
     {
-        moduleLoadError(11, modname);
+        moduleLoadError(ERROR_BAD_FORMAT, modname);
         module = NULL;
     }
     ActiveModuleFailure = previous;
@@ -811,7 +812,7 @@ LxModule *loadModuleByPathOrModuleName(const char *modname)
         if (!path)
         {
             memset(&LastModuleFailure, 0, sizeof LastModuleFailure);
-            LastModuleFailure.code = err ? err : 2;
+            LastModuleFailure.code = err ? err : ERROR_FILE_NOT_FOUND;
             snprintf(LastModuleFailure.module, sizeof LastModuleFailure.module, "%s", modname);
             return NULL;
         }
@@ -819,30 +820,6 @@ LxModule *loadModuleByPathOrModuleName(const char *modname)
         free(path);
     }
     return retval;
-}
-
-int describeModuleAddress(const void *ptr, char *buf, const size_t buflen)
-{
-    const uint32 addr = (uint32)(size_t)ptr;
-
-    for (LxModule *lxmod = GProcessState.loaded_modules; lxmod; lxmod = lxmod->next)
-    {
-        for (uint32 i = 0; i < lxmod->num_mmaps; i++)
-        {
-            const LxMmaps *mmap = &lxmod->mmaps[i];
-            const uint32 base = mmap->guest_base;
-            const uint32 end = base + (uint32)mmap->size;
-            if ((addr >= base) && (addr < end))
-            {
-                snprintf(buf, buflen, "%s object #%u +0x%X [base=%08X size=%X]", lxmod->name,
-                         (uint)i + 1, (uint)(addr - base), base, (uint)mmap->size);
-                return 1;
-            }
-        }
-    }
-
-    *buf = '\0';
-    return 0;
 }
 
 int executableAt(void *unused, uint32 address)
@@ -859,46 +836,8 @@ int executableAt(void *unused, uint32 address)
     return -1;
 }
 
-/* Runs in the fatal reporter, possibly from a signal handler: no locks or allocation. */
-void lxWriteFatalModules(void)
+const char *lxLastModuleFailure(uint32 *code)
 {
-    lx_host_fatal_write("\n-- OS/2 modules --\n");
-    for (const LxModule *module = GProcessState.loaded_modules; module; module = module->next)
-    {
-        lx_host_fatal_write(module->name);
-        lx_host_fatal_write(module->is_lx ? " LX " : " NE ");
-        lx_host_fatal_write(module->os2path ? module->os2path : "(no OS/2 path)");
-        for (uint32 i = 0; i < module->num_mmaps; i++)
-        {
-            lx_host_fatal_write(" obj");
-            lx_host_fatal_write_decimal(i + 1);
-            lx_host_fatal_write("=");
-            lx_host_fatal_write_hex(module->mmaps[i].guest_base, 8);
-            lx_host_fatal_write("+");
-            lx_host_fatal_write_hex(module->mmaps[i].size, 8);
-        }
-        lx_host_fatal_write("\n");
-    }
-}
-
-void lxDescribeModuleFailure(const char *program, char *buffer, size_t size)
-{
-    const uint32 code = LastModuleFailure.code;
-    const char *reason = code == 2 || code == 3       ? "the file was not found"
-                         : code == 5                  ? "access was denied"
-                         : code == 11                 ? "it is not a valid OS/2 module"
-                         : code == 126                ? "a required module was not found"
-                         : code == 127 || code == 182 ? "a required function was not found"
-                                                      : "it could not be loaded";
-    if (*LastModuleFailure.module && strcmp(LastModuleFailure.module, program))
-        snprintf(buffer, size, "Cannot load %s: %s (%s, OS/2 error %u)", program, reason,
-                 LastModuleFailure.module, (uint)code);
-    else
-        snprintf(buffer, size, "Cannot load %s: %s (OS/2 error %u)", program, reason, (uint)code);
-}
-
-int describeExecutionAddress(void *unused, uint32 address, char *buffer, size_t size)
-{
-    (void)unused;
-    return describeModuleAddress((void *)(uintptr_t)address, buffer, size);
+    *code = LastModuleFailure.code;
+    return LastModuleFailure.module;
 }
