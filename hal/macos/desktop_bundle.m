@@ -69,8 +69,7 @@ static int inside_bundle(const char *path)
 {
     size_t length = strlen(path);
     static const char suffix[] = ".app/Contents/MacOS/";
-    return length >= sizeof suffix - 1 &&
-           !strcmp(path + length - (sizeof suffix - 1), suffix);
+    return length >= sizeof suffix - 1 && !strcmp(path + length - (sizeof suffix - 1), suffix);
 }
 
 static int ensure_directory(const char *path)
@@ -178,12 +177,11 @@ static int write_png(const char *path, const TbIconImage *image)
     CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
     CGImageRef rendered =
         provider && space
-            ? CGImageCreate(image->width, image->height, 8, 32,
-                            (size_t)image->width * 4, space, kCGImageAlphaLast, provider,
-                            NULL, false, kCGRenderingIntentDefault)
+            ? CGImageCreate(image->width, image->height, 8, 32, (size_t)image->width * 4, space,
+                            kCGImageAlphaLast, provider, NULL, false, kCGRenderingIntentDefault)
             : NULL;
-    CFURLRef url = rendered ? CFURLCreateFromFileSystemRepresentation(
-                                  NULL, (const UInt8 *)path, strlen(path), false)
+    CFURLRef url = rendered ? CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)path,
+                                                                      strlen(path), false)
                             : NULL;
     CGImageDestinationRef destination =
         url ? CGImageDestinationCreateWithURL(url, CFSTR("public.png"), 1, NULL) : NULL;
@@ -255,12 +253,28 @@ static char *escaped_name(const char *name)
     {
         switch (name[i])
         {
-            case '&': memcpy(escaped + out, "&amp;", 5); out += 5; break;
-            case '<': memcpy(escaped + out, "&lt;", 4); out += 4; break;
-            case '>': memcpy(escaped + out, "&gt;", 4); out += 4; break;
-            case '\"': memcpy(escaped + out, "&quot;", 6); out += 6; break;
-            case '\'': memcpy(escaped + out, "&apos;", 6); out += 6; break;
-            default: escaped[out++] = name[i];
+            case '&':
+                memcpy(escaped + out, "&amp;", 5);
+                out += 5;
+                break;
+            case '<':
+                memcpy(escaped + out, "&lt;", 4);
+                out += 4;
+                break;
+            case '>':
+                memcpy(escaped + out, "&gt;", 4);
+                out += 4;
+                break;
+            case '\"':
+                memcpy(escaped + out, "&quot;", 6);
+                out += 6;
+                break;
+            case '\'':
+                memcpy(escaped + out, "&apos;", 6);
+                out += 6;
+                break;
+            default:
+                escaped[out++] = name[i];
         }
     }
     escaped[out] = 0;
@@ -418,8 +432,9 @@ static void sign_bundle(const char *path)
         return;
     if (!child)
     {
-        const char *argv[] = {"codesign", "--force", "--sign", "-",
-                              "--preserve-metadata=entitlements", "--", path, NULL};
+        const char *argv[] = {
+            "codesign", "--force", "--sign", "-", "--preserve-metadata=entitlements",
+            "--",       path,      NULL};
         execvp(argv[0], (char *const *)argv);
         _exit(127);
     }
@@ -440,14 +455,12 @@ static uint64_t fnv1a(uint64_t hash, const void *data, size_t size)
     return hash;
 }
 
-static void bundle_key(char *key, size_t size, const char *program,
-                        const struct stat *program_info, const char *loader,
-                        const struct stat *loader_info)
+static void bundle_key(char *key, size_t size, const char *program, const struct stat *program_info,
+                       const char *loader, const struct stat *loader_info)
 {
-    uint32_t words[4] = {(uint32_t)program_info->st_size,
-                         (uint32_t)program_info->st_mtimespec.tv_sec,
-                         (uint32_t)loader_info->st_size,
-                         (uint32_t)loader_info->st_mtimespec.tv_sec};
+    uint32_t words[4] = {
+        (uint32_t)program_info->st_size, (uint32_t)program_info->st_mtimespec.tv_sec,
+        (uint32_t)loader_info->st_size, (uint32_t)loader_info->st_mtimespec.tv_sec};
     uint64_t hash = fnv1a(0xcbf29ce484222325ULL, program, strlen(program) + 1);
     hash = fnv1a(hash, words, sizeof words);
     hash = fnv1a(hash, loader, strlen(loader) + 1);

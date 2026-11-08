@@ -11,12 +11,20 @@ find_package(Git QUIET)
 set(TWOINE_SOURCE_VERSION "unversioned")
 set(TWOINE_SOURCE_REVISION "unknown")
 if(GIT_FOUND)
-    execute_process(COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" OUTPUT_VARIABLE TWOINE_SOURCE_VERSION
-        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" OUTPUT_VARIABLE TWOINE_SOURCE_REVISION
-        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE TWOINE_SOURCE_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE TWOINE_SOURCE_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
 endif()
 if(NOT TWOINE_SOURCE_VERSION)
     set(TWOINE_SOURCE_VERSION "unversioned")
@@ -28,15 +36,46 @@ set(TWOINE_BUILD_INFO_DIRECTORY "${PROJECT_BINARY_DIR}")
 if(CMAKE_CONFIGURATION_TYPES)
     string(APPEND TWOINE_BUILD_INFO_DIRECTORY "/$<CONFIG>")
 endif()
-file(GENERATE OUTPUT "${TWOINE_BUILD_INFO_DIRECTORY}/2ine-build.json" CONTENT
-"{\n  \"sourceVersion\": \"${TWOINE_SOURCE_VERSION}\",\n  \"sourceRevision\": \"${TWOINE_SOURCE_REVISION}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"system\": \"${CMAKE_SYSTEM_NAME}\",\n  \"architecture\": \"${CMAKE_SYSTEM_PROCESSOR}\",\n  \"compiler\": \"${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}\"\n}\n")
-set(TWOINE_BALL_SOURCES hpfs_volume.c fat_volume.c vendor/fatfs/ff.c vendor/fatfs/ffunicode.c disk_image.c read_stream.c media.c pack.c ball.c platform.c icon_bitmap.c icon_executable.c format_decompress.c vendor/cjson/cJSON.c vendor/sha256/sha256.c vendor/hwzip/implode.c vendor/hwzip/huffman.c vendor/hwzip/lz77.c vendor/hwzip/tables.c vendor/hwzip/shrink.c vendor/hwzip/reduce.c)
+file(
+    GENERATE OUTPUT "${TWOINE_BUILD_INFO_DIRECTORY}/2ine-build.json"
+    CONTENT
+        "{\n  \"sourceVersion\": \"${TWOINE_SOURCE_VERSION}\",\n  \"sourceRevision\": \"${TWOINE_SOURCE_REVISION}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"system\": \"${CMAKE_SYSTEM_NAME}\",\n  \"architecture\": \"${CMAKE_SYSTEM_PROCESSOR}\",\n  \"compiler\": \"${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}\"\n}\n"
+)
+set(TWOINE_BALL_SOURCES
+    hpfs_volume.c
+    fat_volume.c
+    vendor/fatfs/ff.c
+    vendor/fatfs/ffunicode.c
+    disk_image.c
+    read_stream.c
+    media.c
+    pack.c
+    ball.c
+    platform.c
+    icon_bitmap.c
+    icon_executable.c
+    format_decompress.c
+    vendor/cjson/cJSON.c
+    vendor/sha256/sha256.c
+    vendor/hwzip/implode.c
+    vendor/hwzip/huffman.c
+    vendor/hwzip/lz77.c
+    vendor/hwzip/tables.c
+    vendor/hwzip/shrink.c
+    vendor/hwzip/reduce.c
+)
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})
 target_link_libraries(twoine_ball PRIVATE LibArchive::LibArchive ZLIB::ZLIB)
 target_include_directories(twoine_ball PUBLIC include)
 target_compile_features(twoine_ball PRIVATE c_std_11)
 target_compile_definitions(twoine_ball PRIVATE TWOINE_BALL_BUILD CJSON_HIDE_SYMBOLS)
-set_target_properties(twoine_ball PROPERTIES C_VISIBILITY_PRESET hidden LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}" RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+set_target_properties(
+    twoine_ball
+    PROPERTIES
+        C_VISIBILITY_PRESET hidden
+        LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+)
 if(NOT WIN32)
     find_package(Threads REQUIRED)
     target_link_libraries(twoine_ball PRIVATE m Threads::Threads)
@@ -51,12 +90,26 @@ target_include_directories(twoine_ball_static PUBLIC include)
 target_compile_features(twoine_ball_static PRIVATE c_std_11)
 target_compile_definitions(twoine_ball_static PRIVATE CJSON_HIDE_SYMBOLS)
 foreach(target twoine_ball twoine_ball_static)
-    target_compile_definitions(${target} PRIVATE
-        TB_MEDIA_TIME_CACHE TB_SOURCE_VERSION="${TWOINE_SOURCE_VERSION}" TB_SOURCE_REVISION="${TWOINE_SOURCE_REVISION}")
+    target_compile_definitions(
+        ${target}
+        PRIVATE
+            TB_MEDIA_TIME_CACHE
+            TB_SOURCE_VERSION="${TWOINE_SOURCE_VERSION}"
+            TB_SOURCE_REVISION="${TWOINE_SOURCE_REVISION}"
+    )
 endforeach()
-set_target_properties(twoine_ball_static PROPERTIES OUTPUT_NAME twoine_ball_core POSITION_INDEPENDENT_CODE ON ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+set_target_properties(
+    twoine_ball_static
+    PROPERTIES
+        OUTPUT_NAME twoine_ball_core
+        POSITION_INDEPENDENT_CODE ON
+        ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+)
 add_executable(twoine_ball_cli cli.c vendor/cjson/cJSON.c)
 target_link_libraries(twoine_ball_cli PRIVATE twoine_ball)
 target_compile_features(twoine_ball_cli PRIVATE c_std_11)
 target_compile_definitions(twoine_ball_cli PRIVATE CJSON_HIDE_SYMBOLS)
-set_target_properties(twoine_ball_cli PROPERTIES OUTPUT_NAME "2ine-ball" RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
+set_target_properties(
+    twoine_ball_cli
+    PROPERTIES OUTPUT_NAME "2ine-ball" RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}"
+)

@@ -52,7 +52,9 @@ def program():
     guest.result(0x80, 15)
     guest.require(b"\x3b\x25" + struct.pack("<I", stack), 16)
     guest.exit(0)
-    return linear_image(guest.code, guest.fixups, ["DOSCALLS", "PMWINX"], "PRIORITY", data=guest.data)
+    return linear_image(
+        guest.code, guest.fixups, ["DOSCALLS", "PMWINX"], "PRIORITY", data=guest.data
+    )
 
 
 def main():

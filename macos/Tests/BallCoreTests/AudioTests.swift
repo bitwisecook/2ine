@@ -1,18 +1,22 @@
+import Foundation
+import Testing
+
 // Public domain. No rights reserved. Wholly AI-authored.
 #if canImport(BallCore)
 import BallCore
 #else
 @testable import TwoineBall
 #endif
-import Foundation
-import Testing
 
 @Test func audioSchemaRoundTripAndSharedPresets() throws {
-    let root = FileManager.default.temporaryDirectory.appending(path: "2ine-audio-" + UUID().uuidString)
+    let root = FileManager.default.temporaryDirectory.appending(
+        path: "2ine-audio-" + UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: root) }
     let ball = root.appending(path: "Audio.2ineball").path
-    _ = try NativeBallCore.request(DesktopRequest("command", ball: ball, arguments: ["init"]), as: BallSnapshot.self)
-    let snapshot = try NativeBallCore.request(DesktopRequest("audio-snapshot", ball: ball), as: AudioSnapshot.self)
+    _ = try NativeBallCore.request(
+        DesktopRequest("command", ball: ball, arguments: ["init"]), as: BallSnapshot.self)
+    let snapshot = try NativeBallCore.request(
+        DesktopRequest("audio-snapshot", ball: ball), as: AudioSnapshot.self)
     #expect(snapshot.settings.channels.count == 16)
     #expect(snapshot.banks.first?.id == "default")
     let mt32 = try #require(snapshot.profiles.first(where: { $0.id == "mt32" }))
@@ -30,13 +34,18 @@ import Testing
 }
 
 @Test func aboutCatalogueCreditsOriginalAuthorAndProvidesAllLinks() throws {
-    let catalogue = try NativeBallCore.request(DesktopRequest("project-sources"), as: ProjectCatalogue.self)
+    let catalogue = try NativeBallCore.request(
+        DesktopRequest("project-sources"), as: ProjectCatalogue.self)
     #expect(catalogue.originCredit.contains("Ryan C. Gordon"))
     #expect(catalogue.projects.count > 50)
     for project in catalogue.projects {
         #expect(!project.version.isEmpty)
         #expect(!project.authors.isEmpty)
-        #expect(URL(string: project.source)?.scheme == "https" || URL(string: project.source)?.scheme == "http")
-        #expect(URL(string: project.download)?.scheme == "https" || URL(string: project.download)?.scheme == "http")
+        #expect(
+            URL(string: project.source)?.scheme == "https"
+                || URL(string: project.source)?.scheme == "http")
+        #expect(
+            URL(string: project.download)?.scheme == "https"
+                || URL(string: project.download)?.scheme == "http")
     }
 }

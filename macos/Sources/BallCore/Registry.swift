@@ -1,9 +1,18 @@
 import Foundation
 
 public enum RegistryType: UInt32, CaseIterable, Sendable, Identifiable {
-    case none = 0, string = 1, expandableString = 2, binary = 3, dword = 4
-    case bigEndianDword = 5, link = 6, multiString = 7, resourceList = 8
-    case fullResourceDescriptor = 9, resourceRequirementsList = 10, qword = 11
+    case none = 0
+    case string = 1
+    case expandableString = 2
+    case binary = 3
+    case dword = 4
+    case bigEndianDword = 5
+    case link = 6
+    case multiString = 7
+    case resourceList = 8
+    case fullResourceDescriptor = 9
+    case resourceRequirementsList = 10
+    case qword = 11
     public var id: UInt32 { rawValue }
     public var name: String {
         switch self {
@@ -22,7 +31,11 @@ public enum RegistryType: UInt32, CaseIterable, Sendable, Identifiable {
         }
     }
     public var integerBytes: Int? {
-        switch self { case .dword, .bigEndianDword: 4; case .qword: 8; default: nil }
+        switch self {
+        case .dword, .bigEndianDword: 4
+        case .qword: 8
+        default: nil
+        }
     }
 }
 
@@ -30,9 +43,11 @@ public enum RegistryCodec {
     public static let maximumPayload = 16 * 1024 * 1024
     public static let roots = ["hkcr", "hkcu", "hklm", "hku"]
     public static func foldASCII(_ value: String) -> String {
-        String(String.UnicodeScalarView(value.unicodeScalars.map {
-            (65...90).contains($0.value) ? UnicodeScalar($0.value + 32)! : $0
-        }))
+        String(
+            String.UnicodeScalarView(
+                value.unicodeScalars.map {
+                    (65...90).contains($0.value) ? UnicodeScalar($0.value + 32)! : $0
+                }))
     }
     public static func rootTitle(_ value: String) -> String {
         switch value {
@@ -46,17 +61,32 @@ public enum RegistryCodec {
     public static func path(_ value: String) throws -> String {
         let components = value.split(separator: "\\", omittingEmptySubsequences: false)
         guard let first = components.first else { throw BallError("Choose a registry hive.") }
-        let root = roots.first { foldASCII(String(first)) == $0 || String(first).uppercased() == rootTitle($0) }
-        guard let root else { throw BallError("Open32 supports HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE and HKEY_USERS.") }
-        let result = foldASCII(([root] + components.dropFirst().map(String.init)).joined(separator: "\\"))
-        guard !components.contains(where: \.isEmpty), !result.contains("\0"), result.utf8.count <= 32767, !result.unicodeScalars.contains(where: { $0.value > 255 }) else {
-            throw BallError("A registry path must use Latin-1 characters, have nonempty components, no NUL characters and at most 32,767 bytes.")
+        let root = roots.first {
+            foldASCII(String(first)) == $0 || String(first).uppercased() == rootTitle($0)
+        }
+        guard let root else {
+            throw BallError(
+                "Open32 supports HKEY_CLASSES_ROOT, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE and HKEY_USERS."
+            )
+        }
+        let result = foldASCII(
+            ([root] + components.dropFirst().map(String.init)).joined(separator: "\\"))
+        guard !components.contains(where: \.isEmpty), !result.contains("\0"),
+            result.utf8.count <= 32767, !result.unicodeScalars.contains(where: { $0.value > 255 })
+        else {
+            throw BallError(
+                "A registry path must use Latin-1 characters, have nonempty components, no NUL characters and at most 32,767 bytes."
+            )
         }
         return result
     }
     public static func valueName(_ value: String) throws -> String {
-        guard !value.contains("\0"), value.utf8.count <= 32765, !value.unicodeScalars.contains(where: { $0.value > 255 }) else {
-            throw BallError("A value name must use Latin-1 characters, have no NUL characters and at most 32,765 bytes. Leave it empty for the default value.")
+        guard !value.contains("\0"), value.utf8.count <= 32765,
+            !value.unicodeScalars.contains(where: { $0.value > 255 })
+        else {
+            throw BallError(
+                "A value name must use Latin-1 characters, have no NUL characters and at most 32,765 bytes. Leave it empty for the default value."
+            )
         }
         return foldASCII(value)
     }
@@ -65,19 +95,35 @@ public enum RegistryCodec {
         return RegistryType(rawValue: type)?.name ?? "Unknown type \(type)"
     }
     public static func wire(type: UInt32, payload: [UInt8]) throws -> [UInt8] {
-        guard payload.count <= maximumPayload else { throw BallError("Open32 values support at most 16 MiB of data.") }
-        if type == RegistryType.dword.rawValue && payload.count != 4 { throw BallError("REG_DWORD requires exactly four bytes.") }
+        guard payload.count <= maximumPayload else {
+            throw BallError("Open32 values support at most 16 MiB of data.")
+        }
+        if type == RegistryType.dword.rawValue && payload.count != 4 {
+            throw BallError("REG_DWORD requires exactly four bytes.")
+        }
         return (0..<4).map { UInt8(truncatingIfNeeded: type >> ($0 * 8)) } + payload
     }
     public static func validateWire(_ bytes: [UInt8]) throws {
-        guard bytes.count >= 4 else { throw BallError("The raw record needs a four-byte little-endian type header. Repair it explicitly before saving.") }
-        let type = bytes.prefix(4).enumerated().reduce(UInt32(0)) { $0 | UInt32($1.element) << ($1.offset * 8) }
-        guard bytes.count - 4 <= maximumPayload else { throw BallError("Open32 values support at most 16 MiB of data.") }
-        if type == RegistryType.dword.rawValue && bytes.count != 8 { throw BallError("REG_DWORD requires exactly four bytes.") }
+        guard bytes.count >= 4 else {
+            throw BallError(
+                "The raw record needs a four-byte little-endian type header. Repair it explicitly before saving."
+            )
+        }
+        let type = bytes.prefix(4).enumerated().reduce(UInt32(0)) {
+            $0 | UInt32($1.element) << ($1.offset * 8)
+        }
+        guard bytes.count - 4 <= maximumPayload else {
+            throw BallError("Open32 values support at most 16 MiB of data.")
+        }
+        if type == RegistryType.dword.rawValue && bytes.count != 8 {
+            throw BallError("REG_DWORD requires exactly four bytes.")
+        }
     }
     public static func string(_ payload: [UInt8]) throws -> String {
         guard payload.last == 0, !payload.dropLast().contains(0) else {
-            throw BallError("A string requires one terminating NUL and no embedded NUL bytes. Use raw hexadecimal to preserve malformed data.")
+            throw BallError(
+                "A string requires one terminating NUL and no embedded NUL bytes. Use raw hexadecimal to preserve malformed data."
+            )
         }
         return ConfigurationValue.latin1(Array(payload.dropLast()))
     }
@@ -88,23 +134,36 @@ public enum RegistryCodec {
         let body = payload.dropLast(2)
         if body.isEmpty { return [] }
         let rows = body.split(separator: 0, omittingEmptySubsequences: false)
-        guard !rows.contains(where: \.isEmpty) else { throw BallError("REG_MULTI_SZ cannot contain an empty entry before its terminator.") }
+        guard !rows.contains(where: \.isEmpty) else {
+            throw BallError("REG_MULTI_SZ cannot contain an empty entry before its terminator.")
+        }
         return rows.map { ConfigurationValue.latin1(Array($0)) }
     }
     public static func encodeMultiString(_ rows: [String]) throws -> [UInt8] {
-        guard !rows.contains(where: \.isEmpty) else { throw BallError("Multi-string entries cannot be empty.") }
-        return try rows.flatMap { try ConfigurationValue.encodeText($0, terminated: true) } + (rows.isEmpty ? [0, 0] : [0])
+        guard !rows.contains(where: \.isEmpty) else {
+            throw BallError("Multi-string entries cannot be empty.")
+        }
+        return try rows.flatMap { try ConfigurationValue.encodeText($0, terminated: true) }
+            + (rows.isEmpty ? [0, 0] : [0])
     }
     public static func integer(_ payload: [UInt8], type: RegistryType) throws -> UInt64 {
-        guard let count = type.integerBytes, payload.count == count else { throw BallError("\(type.name) requires exactly \(type.integerBytes ?? 0) bytes.") }
+        guard let count = type.integerBytes, payload.count == count else {
+            throw BallError("\(type.name) requires exactly \(type.integerBytes ?? 0) bytes.")
+        }
         let bytes = type == .bigEndianDword ? Array(payload.reversed()) : payload
         return bytes.enumerated().reduce(UInt64(0)) { $0 | UInt64($1.element) << ($1.offset * 8) }
     }
     public static func encodeInteger(_ text: String, type: RegistryType) throws -> [UInt8] {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let hexadecimal = text.hasPrefix("0x") || text.hasPrefix("0X")
-        guard let count = type.integerBytes, let value = UInt64(hexadecimal ? String(text.dropFirst(2)) : text, radix: hexadecimal ? 16 : 10), count == 8 || value <= UInt64(UInt32.max) else {
-            throw BallError("Enter an unsigned \(type == .qword ? "64" : "32")-bit decimal number or hexadecimal number starting with 0x.")
+        guard let count = type.integerBytes,
+            let value = UInt64(
+                hexadecimal ? String(text.dropFirst(2)) : text, radix: hexadecimal ? 16 : 10),
+            count == 8 || value <= UInt64(UInt32.max)
+        else {
+            throw BallError(
+                "Enter an unsigned \(type == .qword ? "64" : "32")-bit decimal number or hexadecimal number starting with 0x."
+            )
         }
         let bytes = (0..<count).map { UInt8(truncatingIfNeeded: value >> ($0 * 8)) }
         return type == .bigEndianDword ? Array(bytes.reversed()) : bytes
@@ -121,7 +180,9 @@ public struct RegistryValueRecord: Identifiable, Hashable, Sendable {
     public var typeName: String { RegistryCodec.typeName(type) }
     public var payload: [UInt8] { Array(entry.bytes.dropFirst(4)) }
     public var editable: Bool {
-        entry.key.hasPrefix("v:") && (try? RegistryCodec.path(entry.application)) == entry.application && RegistryCodec.foldASCII(entry.key) == entry.key
+        entry.key.hasPrefix("v:")
+            && (try? RegistryCodec.path(entry.application)) == entry.application
+            && RegistryCodec.foldASCII(entry.key) == entry.key
     }
     public var warning: String? {
         guard let type else { return "Missing or truncated type header. Raw bytes are preserved." }
@@ -129,7 +190,8 @@ public struct RegistryValueRecord: Identifiable, Hashable, Sendable {
             switch RegistryType(rawValue: type) {
             case .string, .expandableString: _ = try RegistryCodec.string(payload)
             case .multiString: _ = try RegistryCodec.multiString(payload)
-            case .dword, .bigEndianDword, .qword: _ = try RegistryCodec.integer(payload, type: RegistryType(rawValue: type)!)
+            case .dword, .bigEndianDword, .qword:
+                _ = try RegistryCodec.integer(payload, type: RegistryType(rawValue: type)!)
             default: break
             }
             return nil
@@ -139,16 +201,23 @@ public struct RegistryValueRecord: Identifiable, Hashable, Sendable {
         if warning == nil, let kind = type.flatMap(RegistryType.init(rawValue:)) {
             switch kind {
             case .string, .expandableString:
-                if let text = try? RegistryCodec.string(payload) { return text.replacingOccurrences(of: "\n", with: " ↵ ") }
+                if let text = try? RegistryCodec.string(payload) {
+                    return text.replacingOccurrences(of: "\n", with: " ↵ ")
+                }
             case .multiString:
-                if let rows = try? RegistryCodec.multiString(payload) { return rows.joined(separator: " · ") }
+                if let rows = try? RegistryCodec.multiString(payload) {
+                    return rows.joined(separator: " · ")
+                }
             case .dword, .bigEndianDword, .qword:
-                if let value = try? RegistryCodec.integer(payload, type: kind) { return "\(value) (0x\(String(value, radix: 16).uppercased()))" }
+                if let value = try? RegistryCodec.integer(payload, type: kind) {
+                    return "\(value) (0x\(String(value, radix: 16).uppercased()))"
+                }
             default: break
             }
         }
         let bytes = type == nil ? entry.bytes : payload
-        return "\(bytes.count) bytes: " + ConfigurationValue.hex(Array(bytes.prefix(24))) + (bytes.count > 24 ? "…" : "")
+        return "\(bytes.count) bytes: " + ConfigurationValue.hex(Array(bytes.prefix(24)))
+            + (bytes.count > 24 ? "…" : "")
     }
 }
 
@@ -166,24 +235,34 @@ public struct RegistryTree: Sendable {
         values = snapshot.entries.filter { $0.key.hasPrefix("v:") }.map(RegistryValueRecord.init)
         var paths = Set(RegistryCodec.roots)
         for entry in snapshot.entries {
-            let components = entry.application.split(separator: "\\", omittingEmptySubsequences: false)
+            let components = entry.application.split(
+                separator: "\\", omittingEmptySubsequences: false)
             for count in 1...max(1, components.count) {
                 paths.insert(components.prefix(count).joined(separator: "\\"))
             }
         }
         var children: [String: [String]] = [:]
         for path in paths {
-            if let separator = path.lastIndex(of: "\\") { children[String(path[..<separator]), default: []].append(path) }
+            if let separator = path.lastIndex(of: "\\") {
+                children[String(path[..<separator]), default: []].append(path)
+            }
         }
         var nodes: [String: RegistryKeyNode] = [:]
         for path in paths.sorted(by: { $0.count > $1.count }) {
             let nested = (children[path] ?? []).sorted().compactMap { nodes[$0] }
-            nodes[path] = RegistryKeyNode(path: path, title: path.contains("\\") ? String(path.split(separator: "\\", omittingEmptySubsequences: false).last ?? "") : RegistryCodec.rootTitle(path), children: nested.isEmpty ? nil : nested)
+            nodes[path] = RegistryKeyNode(
+                path: path,
+                title: path.contains("\\")
+                    ? String(
+                        path.split(separator: "\\", omittingEmptySubsequences: false).last ?? "")
+                    : RegistryCodec.rootTitle(path), children: nested.isEmpty ? nil : nested)
         }
         roots = paths.filter { !$0.contains("\\") }.sorted().compactMap { nodes[$0] }
     }
     public func values(at path: String) -> [RegistryValueRecord] {
-        values.filter { $0.entry.application == path }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        values.filter { $0.entry.application == path }.sorted {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
     }
 }
 
@@ -224,11 +303,16 @@ public struct RegistryValueDraft: Sendable {
     public var type: UInt32? {
         if representation == .rawRecord {
             let header = String(text.lazy.filter { !$0.isWhitespace }.prefix(8))
-            guard let bytes = try? ConfigurationValue.decodeHex(header), bytes.count == 4 else { return nil }
-            return bytes.enumerated().reduce(UInt32(0)) { $0 | UInt32($1.element) << ($1.offset * 8) }
+            guard let bytes = try? ConfigurationValue.decodeHex(header), bytes.count == 4 else {
+                return nil
+            }
+            return bytes.enumerated().reduce(UInt32(0)) {
+                $0 | UInt32($1.element) << ($1.offset * 8)
+            }
         }
         let value = typeText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.hasPrefix("0x") || value.hasPrefix("0X") ? UInt32(value.dropFirst(2), radix: 16) : UInt32(value)
+        return value.hasPrefix("0x") || value.hasPrefix("0X")
+            ? UInt32(value.dropFirst(2), radix: 16) : UInt32(value)
     }
     public var typedRepresentation: RegistryRepresentation? {
         switch type.flatMap(RegistryType.init(rawValue:)) {
@@ -250,17 +334,26 @@ public struct RegistryValueDraft: Sendable {
         if representation == .rawRecord {
             result = try ConfigurationValue.decodeHex(text)
         } else {
-            guard let type else { throw BallError("Enter a registry type between 0 and 4,294,967,295.") }
+            guard let type else {
+                throw BallError("Enter a registry type between 0 and 4,294,967,295.")
+            }
             let payload: [UInt8]
             switch representation {
             case .string:
-                guard type == 1 || type == 2 else { throw BallError("Choose a string type before using the text editor.") }
+                guard type == 1 || type == 2 else {
+                    throw BallError("Choose a string type before using the text editor.")
+                }
                 payload = try ConfigurationValue.encodeText(text, terminated: true)
             case .multiString:
-                guard type == 7 else { throw BallError("Choose REG_MULTI_SZ before using the string list editor.") }
-                payload = try RegistryCodec.encodeMultiString(text.isEmpty ? [] : text.components(separatedBy: "\n"))
+                guard type == 7 else {
+                    throw BallError("Choose REG_MULTI_SZ before using the string list editor.")
+                }
+                payload = try RegistryCodec.encodeMultiString(
+                    text.isEmpty ? [] : text.components(separatedBy: "\n"))
             case .integer:
-                guard let kind = RegistryType(rawValue: type), kind.integerBytes != nil else { throw BallError("Choose DWORD or QWORD before using the integer editor.") }
+                guard let kind = RegistryType(rawValue: type), kind.integerBytes != nil else {
+                    throw BallError("Choose DWORD or QWORD before using the integer editor.")
+                }
                 payload = try RegistryCodec.encodeInteger(text, type: kind)
             case .hex: payload = try ConfigurationValue.decodeHex(text)
             case .rawRecord: payload = []
@@ -273,21 +366,31 @@ public struct RegistryValueDraft: Sendable {
     public mutating func selectRepresentation(_ next: RegistryRepresentation) throws {
         guard next != representation else { return }
         let wire = try bytes(validate: false)
-        let header = wire.count >= 4 ? wire.prefix(4).enumerated().reduce(UInt32(0)) { $0 | UInt32($1.element) << ($1.offset * 8) } : nil
+        let header =
+            wire.count >= 4
+            ? wire.prefix(4).enumerated().reduce(UInt32(0)) {
+                $0 | UInt32($1.element) << ($1.offset * 8)
+            } : nil
         let payload = Array(wire.dropFirst(4))
         let value: String
         switch next {
         case .rawRecord: value = ConfigurationValue.hex(wire)
         case .hex:
-            guard header != nil else { throw BallError("Repair the type header in the complete raw record first.") }
+            guard header != nil else {
+                throw BallError("Repair the type header in the complete raw record first.")
+            }
             value = ConfigurationValue.hex(payload)
         case .string: value = try RegistryCodec.string(payload)
         case .multiString:
             let rows = try RegistryCodec.multiString(payload)
-            guard !rows.contains(where: { $0.contains("\n") || $0.contains("\r") }) else { throw BallError("An entry contains a newline; use hexadecimal to preserve its exact bytes.") }
+            guard !rows.contains(where: { $0.contains("\n") || $0.contains("\r") }) else {
+                throw BallError(
+                    "An entry contains a newline; use hexadecimal to preserve its exact bytes.")
+            }
             value = rows.joined(separator: "\n")
         case .integer:
-            guard let header, let kind = RegistryType(rawValue: header), kind.integerBytes != nil else { throw BallError("The record does not contain a supported integer type.") }
+            guard let header, let kind = RegistryType(rawValue: header), kind.integerBytes != nil
+            else { throw BallError("The record does not contain a supported integer type.") }
             value = String(try RegistryCodec.integer(payload, type: kind))
         }
         representation = next

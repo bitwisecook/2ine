@@ -28,13 +28,19 @@ if(TWOINE_MT32_SOURCE_DIR)
             message(FATAL_ERROR "Offline Munt source must provide libmt32emu 2.8.3")
         endif()
     endforeach()
-    add_subdirectory("${TWOINE_MT32_SOURCE_DIR}/mt32emu" "${PROJECT_BINARY_DIR}/_deps/mt32emu-build" EXCLUDE_FROM_ALL)
+    add_subdirectory(
+        "${TWOINE_MT32_SOURCE_DIR}/mt32emu"
+        "${PROJECT_BINARY_DIR}/_deps/mt32emu-build"
+        EXCLUDE_FROM_ALL
+    )
 else()
     include(FetchContent)
-    FetchContent_Declare(twoine_munt
+    FetchContent_Declare(
+        twoine_munt
         URL "https://codeload.github.com/munt/munt/tar.gz/refs/tags/libmt32emu_2_8_3"
         URL_HASH SHA256=81f8c462f46bc8901618762ae34cf9de93894ff81f41db73c79472fa3baef875
-        SOURCE_SUBDIR mt32emu)
+        SOURCE_SUBDIR mt32emu
+    )
     FetchContent_MakeAvailable(twoine_munt)
 endif()
 set_target_properties(mt32emu PROPERTIES POSITION_INDEPENDENT_CODE ON)

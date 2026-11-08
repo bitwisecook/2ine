@@ -584,7 +584,7 @@ int loadLxNameTable(LxModule *lxmod, const uint8 *name_table)
 
         LxExport *export = (LxExport *)lxmod->exports;
         const uint32 num_exports = lxmod->num_exports;
-        for (uint32 i = 0; i < num_exports; i++, export ++)
+        for (uint32 i = 0; i < num_exports; i++, export++)
         {
             if (export->ordinal == ordinal)
             {

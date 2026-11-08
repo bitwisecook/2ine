@@ -1,6 +1,7 @@
 import BallCore
 import Foundation
 import Testing
+
 @testable import TwoineBall
 
 @Test @MainActor func importingArchiveSelectsNewBallAndPreservesSelectionOnFailure() async throws {
@@ -11,8 +12,10 @@ import Testing
     let source = root.appending(path: "Source.2ineball")
     let archive = root.appending(path: "Source.zip")
     let destination = root.appending(path: "Imported.2ineball")
-    _ = try NativeBallCore.request(DesktopRequest("command", ball: source.path, arguments: ["init"]), as: BallSnapshot.self)
-    var request = DesktopRequest("export-ball", ball: source.path); request.path = archive.path
+    _ = try NativeBallCore.request(
+        DesktopRequest("command", ball: source.path, arguments: ["init"]), as: BallSnapshot.self)
+    var request = DesktopRequest("export-ball", ball: source.path)
+    request.path = archive.path
     _ = try NativeBallCore.request(request, as: String.self)
     let model = AppModel(preferencesURL: root.appending(path: "preferences.json"))
     model.importBall(archive, to: destination)
@@ -51,9 +54,13 @@ import Testing
     let newFolder = root.appending(path: "New Folder")
     try files.createDirectory(at: oldFolder, withIntermediateDirectories: true)
     try files.createDirectory(at: newFolder, withIntermediateDirectories: true)
-    _ = try NativeBallCore.request(DesktopRequest("command", ball: source.path, arguments: ["init"]), as: BallSnapshot.self)
-    _ = try NativeBallCore.request(DesktopRequest("command", ball: source.path, arguments: ["map", "E", oldFolder.path]), as: BallSnapshot.self)
-    var request = DesktopRequest("export-ball", ball: source.path); request.path = archive.path
+    _ = try NativeBallCore.request(
+        DesktopRequest("command", ball: source.path, arguments: ["init"]), as: BallSnapshot.self)
+    _ = try NativeBallCore.request(
+        DesktopRequest("command", ball: source.path, arguments: ["map", "E", oldFolder.path]),
+        as: BallSnapshot.self)
+    var request = DesktopRequest("export-ball", ball: source.path)
+    request.path = archive.path
     _ = try NativeBallCore.request(request, as: String.self)
     try files.removeItem(at: oldFolder)
     let model = AppModel(preferencesURL: root.appending(path: "preferences.json"))

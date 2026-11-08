@@ -6,13 +6,25 @@ struct ConfigurationView: View {
     var body: some View {
         TabView(selection: $model.settingsSection) {
             Tab("General", systemImage: "gearshape", value: SettingsSection.general) {
-                if let snapshot = model.snapshot { BallSettingsView(model: model, snapshot: snapshot, draft: model.settingsDraft) }
+                if let snapshot = model.snapshot {
+                    BallSettingsView(model: model, snapshot: snapshot, draft: model.settingsDraft)
+                }
             }
-            Tab("Graphics & Sound", systemImage: "display", value: SettingsSection.graphics) { DisplayConfigurationView(model: model) }
-            Tab("Environment", systemImage: "terminal", value: SettingsSection.environment) { EnvironmentSettingsView(model: model) }
-            Tab("Printing", systemImage: "printer", value: SettingsSection.printing) { PrintingSettingsView(model: model) }
-            Tab("Config Files", systemImage: "doc.text", value: SettingsSection.files) { OS2FilesSettingsView(model: model) }
-            Tab("Registry", systemImage: "list.bullet.indent", value: SettingsSection.registry) { RegistrySettingsView(model: model) }
+            Tab("Graphics & Sound", systemImage: "display", value: SettingsSection.graphics) {
+                DisplayConfigurationView(model: model)
+            }
+            Tab("Environment", systemImage: "terminal", value: SettingsSection.environment) {
+                EnvironmentSettingsView(model: model)
+            }
+            Tab("Printing", systemImage: "printer", value: SettingsSection.printing) {
+                PrintingSettingsView(model: model)
+            }
+            Tab("Config Files", systemImage: "doc.text", value: SettingsSection.files) {
+                OS2FilesSettingsView(model: model)
+            }
+            Tab("Registry", systemImage: "list.bullet.indent", value: SettingsSection.registry) {
+                RegistrySettingsView(model: model)
+            }
         }
         .padding(12)
     }
@@ -25,37 +37,74 @@ struct DisplayConfigurationView: View {
     @State private var error: String?
     @State private var beep = 0.05
     @State private var editingBeep = false
-    private var dpi: Int { Int(Double(model.snapshot?.manifest.system["display_dpi"]?.text ?? "96") ?? 96) }
-    private var depth: Int { Int(Double(model.snapshot?.manifest.system["display_depth"]?.text ?? "24") ?? 24) }
+    private var dpi: Int {
+        Int(Double(model.snapshot?.manifest.system["display_dpi"]?.text ?? "96") ?? 96)
+    }
+    private var depth: Int {
+        Int(Double(model.snapshot?.manifest.system["display_depth"]?.text ?? "24") ?? 24)
+    }
     var body: some View {
         ScrollViewReader { proxy in
             Form {
                 Section("OS/2 Display") {
-                    Picker("Title Bars", selection: Binding(get: { model.snapshot?.manifest.system["window_chrome"]?.text ?? "both" }, set: {
-                        model.command(["config", "system.window_chrome", $0])
-                    })) {
+                    Picker(
+                        "Title Bars",
+                        selection: Binding(
+                            get: {
+                                model.snapshot?.manifest.system["window_chrome"]?.text ?? "both"
+                            },
+                            set: {
+                                model.command(["config", "system.window_chrome", $0])
+                            })
+                    ) {
                         Text("Native").tag("native")
                         Text("OS/2").tag("os2")
                         Text("Both").tag("both")
                     }.accessibilityIdentifier("windowChrome")
-                    Text("Controls the title bars of top-level application windows. Embedded OS/2 document windows keep their own controls.")
-                        .foregroundStyle(.secondary)
-                    Picker("Resolution", selection: Binding(get: { dpi }, set: { model.command(["config", "system.display_dpi", String($0)]) })) {
-                        ForEach([96, 120, 144, 192], id: \.self) { value in Text("\(value) DPI (\(value * 100 / 96)%)").tag(value) }
-                        if ![96, 120, 144, 192].contains(dpi) { Text("\(dpi) DPI (Custom)").tag(dpi) }
+                    Text(
+                        "Controls the title bars of top-level application windows. Embedded OS/2 document windows keep their own controls."
+                    )
+                    .foregroundStyle(.secondary)
+                    Picker(
+                        "Resolution",
+                        selection: Binding(
+                            get: { dpi },
+                            set: { model.command(["config", "system.display_dpi", String($0)]) })
+                    ) {
+                        ForEach([96, 120, 144, 192], id: \.self) { value in
+                            Text("\(value) DPI (\(value * 100 / 96)%)").tag(value)
+                        }
+                        if ![96, 120, 144, 192].contains(dpi) {
+                            Text("\(dpi) DPI (Custom)").tag(dpi)
+                        }
                     }.accessibilityIdentifier("displayDPI")
-                    Picker("Colour Depth", selection: Binding(get: { depth }, set: { model.command(["config", "system.display_depth", String($0)]) })) {
-                        ForEach([24, 16, 8, 4], id: \.self) { value in Text("\(value)-bit").tag(value) }
+                    Picker(
+                        "Colour Depth",
+                        selection: Binding(
+                            get: { depth },
+                            set: { model.command(["config", "system.display_depth", String($0)]) })
+                    ) {
+                        ForEach([24, 16, 8, 4], id: \.self) { value in
+                            Text("\(value)-bit").tag(value)
+                        }
                     }.accessibilityIdentifier("displayDepth")
-                    Text("Applies when an application next starts. OS/2 fonts, dialog units and control metrics scale together. Printer resolution remains 300 DPI.")
-                        .foregroundStyle(.secondary)
+                    Text(
+                        "Applies when an application next starts. OS/2 fonts, dialog units and control metrics scale together. Printer resolution remains 300 DPI."
+                    )
+                    .foregroundStyle(.secondary)
                 }
                 if let features {
                     Section("Graphics") {
-                        Picker("OpenGL", selection: Binding(get: { features.opengl.requested ?? "automatic" }, set: {
-                            model.setOpenGLProvider($0)
-                        })) {
-                            Text("Runtime Default (\(providerName(features.opengl.default)))").tag("automatic")
+                        Picker(
+                            "OpenGL",
+                            selection: Binding(
+                                get: { features.opengl.requested ?? "automatic" },
+                                set: {
+                                    model.setOpenGLProvider($0)
+                                })
+                        ) {
+                            Text("Runtime Default (\(providerName(features.opengl.default)))").tag(
+                                "automatic")
                             Text("Mesa").tag("mesa")
                             Text("Original OS/2 Software Renderer").tag("original")
                             Text("Off").tag("off")
@@ -66,76 +115,123 @@ struct DisplayConfigurationView: View {
                             Text(features.opengl.reason).foregroundStyle(.secondary)
                         }
                         if showMediaLinks {
-                            Button("Install OS/2 System Component") { model.installOriginalOpenGL() }
+                            Button("Install OS/2 System Component") {
+                                model.installOriginalOpenGL()
+                            }
                         }
-                        featureToggle("DIVE", key: "dive", feature: features.dive,
-                                      detail: "Direct video buffer access used by games such as OS/2 Doom.")
+                        featureToggle(
+                            "DIVE", key: "dive", feature: features.dive,
+                            detail: "Direct video buffer access used by games such as OS/2 Doom.")
                     }
                     Section("Multimedia") {
                         featureToggle("Video Playback", key: "video", feature: features.video)
                         featureToggle("PCM Sound", key: "pcm", feature: features.pcm)
                         featureToggle("MIDI Music", key: "midi", feature: features.midi)
                         if showMediaLinks {
-                            Button("Install OS/2 System Component") { model.openOS2ComponentGroup(.multimedia) }
-                            Text("2ine provides video decoding, PCM and MIDI. An original OS/2 playback engine cannot currently be selected.")
-                                .font(.callout).foregroundStyle(.secondary)
+                            Button("Install OS/2 System Component") {
+                                model.openOS2ComponentGroup(.multimedia)
+                            }
+                            Text(
+                                "2ine provides video decoding, PCM and MIDI. An original OS/2 playback engine cannot currently be selected."
+                            )
+                            .font(.callout).foregroundStyle(.secondary)
                         }
                     }
                     Section {
-                        Text("Changes apply when an application next starts. Settings travel with the ball. An unavailable feature can be selected for use with another runtime or after extracting OS/2 files; applications require that feature to be available before starting.")
-                            .foregroundStyle(.secondary)
+                        Text(
+                            "Changes apply when an application next starts. Settings travel with the ball. An unavailable feature can be selected for use with another runtime or after extracting OS/2 files; applications require that feature to be available before starting."
+                        )
+                        .foregroundStyle(.secondary)
                     }
                 } else if let error {
                     Text(error).foregroundStyle(.red).textSelection(.enabled)
-                } else { ProgressView("Checking runtime capabilities…") }
-                Section("Sound") {
-                    Slider(value: $beep, in: 0...1, onEditingChanged: { editing in
-                        editingBeep = editing
-                        if !editing { model.command(["config", "system.beep_volume", String(beep)]) }
-                    }) { Text("PC Speaker Volume") }
-                    LabeledContent("Volume", value: "\(Int(beep * 100))%")
-                    Button("Use Default PC Speaker Volume") { model.command(["unset", "system.beep_volume"]) }
-                        .disabled(model.snapshot?.manifest.system["beep_volume"] == nil)
-                    Button("Sound Banks & Channel Mapping…") { model.audioEditor = true }.accessibilityIdentifier("soundBanks")
-                    Text("Import SF2, SF3, SFZ and DLS instruments and configure each MIDI channel.").foregroundStyle(.secondary)
+                } else {
+                    ProgressView("Checking runtime capabilities…")
                 }
-            }.formStyle(.grouped).disabled(model.busy || model.mediaBusy || model.componentOperationRunning)
+                Section("Sound") {
+                    Slider(
+                        value: $beep, in: 0...1,
+                        onEditingChanged: { editing in
+                            editingBeep = editing
+                            if !editing {
+                                model.command(["config", "system.beep_volume", String(beep)])
+                            }
+                        }
+                    ) { Text("PC Speaker Volume") }
+                    LabeledContent("Volume", value: "\(Int(beep * 100))%")
+                    Button("Use Default PC Speaker Volume") {
+                        model.command(["unset", "system.beep_volume"])
+                    }
+                    .disabled(model.snapshot?.manifest.system["beep_volume"] == nil)
+                    Button("Sound Banks & Channel Mapping…") { model.audioEditor = true }
+                        .accessibilityIdentifier("soundBanks")
+                    Text(
+                        "Import SF2, SF3, SFZ and DLS instruments and configure each MIDI channel."
+                    ).foregroundStyle(.secondary)
+                }
+            }.formStyle(.grouped).disabled(
+                model.busy || model.mediaBusy || model.componentOperationRunning
+            )
             .task(id: "\(model.selected ?? "")|\(model.build)|\(model.revision)") { await load() }
             .onChange(of: features != nil, initial: true) { _, ready in
-                if ready, let target = model.highlightedSetting { proxy.scrollTo(target, anchor: .center) }
+                if ready, let target = model.highlightedSetting {
+                    proxy.scrollTo(target, anchor: .center)
+                }
             }
             .onChange(of: model.highlightedSetting) { _, target in
                 if let target { proxy.scrollTo(target, anchor: .center) }
             }
         }
     }
-    @ViewBuilder private func featureToggle(_ title: String, key: String, feature: RuntimeFeature, detail: String? = nil) -> some View {
-        Toggle(title, isOn: Binding(get: { feature.requested ?? feature.default }, set: {
-            model.command(["config", "system." + key, $0 ? "true" : "false"])
-        })).accessibilityIdentifier("runtimeFeature." + key)
+    @ViewBuilder private func featureToggle(
+        _ title: String, key: String, feature: RuntimeFeature, detail: String? = nil
+    ) -> some View {
+        Toggle(
+            title,
+            isOn: Binding(
+                get: { feature.requested ?? feature.default },
+                set: {
+                    model.command(["config", "system." + key, $0 ? "true" : "false"])
+                })
+        ).accessibilityIdentifier("runtimeFeature." + key)
             .settingHighlight(key == "video" && model.highlightedSetting == "graphics")
             .id(key == "video" ? "graphics" : "runtimeFeature." + key)
         if let detail { Text(detail).font(.callout).foregroundStyle(.secondary) }
-        if !feature.reason.isEmpty { Text(feature.reason).font(.callout).foregroundStyle(.secondary) }
+        if !feature.reason.isEmpty {
+            Text(feature.reason).font(.callout).foregroundStyle(.secondary)
+        }
         if feature.requested != nil {
-            Button("Use Runtime Default (\(feature.default ? "On" : "Off"))") { model.command(["unset", "system." + key]) }
-                .font(.callout)
+            Button("Use Runtime Default (\(feature.default ? "On" : "Off"))") {
+                model.command(["unset", "system." + key])
+            }
+            .font(.callout)
         }
     }
     private func providerName(_ value: String) -> String {
-        switch value { case "mesa": "Mesa"; case "original": "Original OS/2"; default: "Off" }
+        switch value {
+        case "mesa": "Mesa"
+        case "original": "Original OS/2"
+        default: "Off"
+        }
     }
     private func load() async {
-        guard let ball = model.selected else { features = nil; return }
-        if !editingBeep { beep = Double(model.snapshot?.manifest.system["beep_volume"]?.text ?? "0.05") ?? 0.05 }
+        guard let ball = model.selected else {
+            features = nil
+            return
+        }
+        if !editingBeep {
+            beep = Double(model.snapshot?.manifest.system["beep_volume"]?.text ?? "0.05") ?? 0.05
+        }
         let build = model.build
         do {
             let result = try await model.runtimeFeatures(ball: ball)
             guard !Task.isCancelled, ball == model.selected, build == model.build else { return }
-            features = result; error = nil
+            features = result
+            error = nil
         } catch {
             guard !Task.isCancelled, ball == model.selected else { return }
-            features = nil; self.error = error.localizedDescription
+            features = nil
+            self.error = error.localizedDescription
         }
     }
 }
@@ -143,8 +239,15 @@ struct DisplayConfigurationView: View {
 extension View {
     func settingHighlight(_ highlighted: Bool) -> some View {
         padding(highlighted ? 8 : 0)
-            .background(highlighted ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-            .overlay { if highlighted { RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor, lineWidth: 2) } }
+            .background(
+                highlighted ? Color.accentColor.opacity(0.12) : .clear,
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay {
+                if highlighted {
+                    RoundedRectangle(cornerRadius: 8).stroke(Color.accentColor, lineWidth: 2)
+                }
+            }
     }
 }
 
@@ -162,72 +265,119 @@ struct ProfileConfigurationView: View {
     @State private var editor: ProfileEditRequest?
     private var entries: [ConfigurationEntry] {
         (value?.entries ?? []).filter {
-            (area != "registry" || $0.key.hasPrefix("v:")) &&
-            FileSearch.matches($0.application + " " + $0.key, query: search)
+            (area != "registry" || $0.key.hasPrefix("v:"))
+                && FileSearch.matches($0.application + " " + $0.key, query: search)
         }.sorted { ($0.application, $0.key) < ($1.application, $1.key) }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                BrowserSearchField(text: $search, focused: $searchFocused,
-                                   placeholder: "Search Applications and Keys", identifier: "profileSearch")
-                    .frame(height: 28)
+                BrowserSearchField(
+                    text: $search, focused: $searchFocused,
+                    placeholder: "Search Applications and Keys", identifier: "profileSearch"
+                )
+                .frame(height: 28)
                 Button("Reload") { Task { await load() } }.disabled(loading)
-                Button("Add Value…") { editor = ProfileEditRequest(entry: nil) }.disabled(value == nil || model.busy || model.mediaBusy)
+                Button("Add Value…") { editor = ProfileEditRequest(entry: nil) }.disabled(
+                    value == nil || model.busy || model.mediaBusy)
             }
-            if let value { Text(DisplayPath.homeAbbreviated(value.path)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-            if model.processRunning { Label("Stop the guest before editing profiles or the registry.", systemImage: "info.circle").foregroundStyle(.secondary) }
+            if let value {
+                Text(DisplayPath.homeAbbreviated(value.path)).font(.caption).foregroundStyle(
+                    .secondary
+                ).textSelection(.enabled)
+            }
+            if model.processRunning {
+                Label(
+                    "Stop the guest before editing profiles or the registry.",
+                    systemImage: "info.circle"
+                ).foregroundStyle(.secondary)
+            }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            NativeOutlineBrowser(nodes: BrowserRows.profile(entries, summary: summary), columns: [
-                OutlineBrowserColumn(id: "name", title: "Application and Key", width: 270, minimum: 150, sortable: true),
-                OutlineBrowserColumn(id: "data", title: "Data", width: 380, minimum: 180, sortable: true)
-            ], selection: $selection, query: $search, searchFocused: $searchFocused, sort: $profileSort,
-            identifier: "profileEntries", accessibilityLabel: "INI applications and keys",
-            onAction: { id, _ in
-                if let entry = entries.first(where: { $0.id == id }), !model.busy, !model.mediaBusy, !model.processRunning {
-                    editor = ProfileEditRequest(entry: entry)
-                }
-            }, onActivate: { id in
-                if let entry = entries.first(where: { $0.id == id }), !model.busy, !model.mediaBusy, !model.processRunning {
-                    editor = ProfileEditRequest(entry: entry)
-                }
-            }, contextActions: { id in
-                entries.contains(where: { $0.id == id }) ? [OutlineMenuAction(id: "edit", title: "Edit Value…", enabled: !model.busy && !model.mediaBusy && !model.processRunning)] : []
-            })
+            NativeOutlineBrowser(
+                nodes: BrowserRows.profile(entries, summary: summary),
+                columns: [
+                    OutlineBrowserColumn(
+                        id: "name", title: "Application and Key", width: 270, minimum: 150,
+                        sortable: true),
+                    OutlineBrowserColumn(
+                        id: "data", title: "Data", width: 380, minimum: 180, sortable: true),
+                ], selection: $selection, query: $search, searchFocused: $searchFocused,
+                sort: $profileSort,
+                identifier: "profileEntries", accessibilityLabel: "INI applications and keys",
+                onAction: { id, _ in
+                    if let entry = entries.first(where: { $0.id == id }), !model.busy,
+                        !model.mediaBusy, !model.processRunning
+                    {
+                        editor = ProfileEditRequest(entry: entry)
+                    }
+                },
+                onActivate: { id in
+                    if let entry = entries.first(where: { $0.id == id }), !model.busy,
+                        !model.mediaBusy, !model.processRunning
+                    {
+                        editor = ProfileEditRequest(entry: entry)
+                    }
+                },
+                contextActions: { id in
+                    entries.contains(where: { $0.id == id })
+                        ? [
+                            OutlineMenuAction(
+                                id: "edit", title: "Edit Value…",
+                                enabled: !model.busy && !model.mediaBusy && !model.processRunning)
+                        ] : []
+                })
             HStack {
-                Text(entries.count == 1 ? "1 value" : "\(entries.count) values").foregroundStyle(.secondary)
+                Text(entries.count == 1 ? "1 value" : "\(entries.count) values").foregroundStyle(
+                    .secondary)
                 Spacer()
                 Button("Edit Value…") {
-                    if let entry = entries.first(where: { $0.id == selection }) { editor = ProfileEditRequest(entry: entry) }
-                }.disabled(!entries.contains(where: { $0.id == selection }) || model.busy || model.mediaBusy)
+                    if let entry = entries.first(where: { $0.id == selection }) {
+                        editor = ProfileEditRequest(entry: entry)
+                    }
+                }.disabled(
+                    !entries.contains(where: { $0.id == selection }) || model.busy
+                        || model.mediaBusy)
             }
         }.padding(16)
-        .task(id: "\(model.selected ?? "")|\(filePath ?? area)") { await load() }
-        .sheet(item: $editor) { request in
-            if let value, let ball = model.selected {
-                ProfileValueSheet(model: model, ball: ball, snapshot: value, entry: request.entry, filePath: filePath) { saved in self.value = saved }
+            .task(id: "\(model.selected ?? "")|\(filePath ?? area)") { await load() }
+            .sheet(item: $editor) { request in
+                if let value, let ball = model.selected {
+                    ProfileValueSheet(
+                        model: model, ball: ball, snapshot: value, entry: request.entry,
+                        filePath: filePath
+                    ) { saved in self.value = saved }
+                }
             }
-        }
     }
     private func summary(_ entry: ConfigurationEntry) -> String {
         let bytes = area == "registry" ? Array(entry.bytes.dropFirst(4)) : entry.bytes
         if area == "registry", entry.registryType == 4, bytes.count == 4 {
-            return "DWORD: " + String(bytes.enumerated().reduce(UInt32(0)) { $0 | UInt32($1.element) << ($1.offset * 8) })
+            return "DWORD: "
+                + String(
+                    bytes.enumerated().reduce(UInt32(0)) {
+                        $0 | UInt32($1.element) << ($1.offset * 8)
+                    })
         }
         if bytes.last == 0, !bytes.dropLast().contains(0) {
-            return ConfigurationValue.latin1(Array(bytes.dropLast())).replacingOccurrences(of: "\n", with: " ↵ ")
+            return ConfigurationValue.latin1(Array(bytes.dropLast())).replacingOccurrences(
+                of: "\n", with: " ↵ ")
         }
         return "\(bytes.count) bytes: " + ConfigurationValue.hex(Array(bytes.prefix(32)))
     }
     private func load() async {
         guard let ball = model.selected else { return }
-        loading = true; defer { loading = false }
+        loading = true
+        defer { loading = false }
         do {
-            let result = if let filePath { try await model.configurationFile(filePath, ball: ball).profile }
-                         else { try await model.configuration(area, ball: ball) }
-            if ball == model.selected, !Task.isCancelled { value = result; error = nil }
-        }
-        catch { self.error = error.localizedDescription }
+            let result =
+                if let filePath {
+                    try await model.configurationFile(filePath, ball: ball).profile
+                } else { try await model.configuration(area, ball: ball) }
+            if ball == model.selected, !Task.isCancelled {
+                value = result
+                error = nil
+            }
+        } catch { self.error = error.localizedDescription }
     }
 }
 
@@ -261,43 +411,56 @@ private struct ProfileValueSheet: View {
                 TextField("e.g. hkcu\\Software\\Lotus", text: $application).disabled(entry != nil)
             }
             LabeledContent(registry ? "Value name" : "Key") {
-                TextField(registry ? "Empty for default" : "Key name", text: $key).disabled(entry != nil)
+                TextField(registry ? "Empty for default" : "Key name", text: $key).disabled(
+                    entry != nil)
             }
             if registry {
                 LabeledContent("Registry type") { TextField("Type number", text: $registryType) }
-                Text("1: String   2: Expandable string   3: Binary   4: DWORD   7: Multi-string").font(.caption).foregroundStyle(.secondary)
+                Text("1: String   2: Expandable string   3: Binary   4: DWORD   7: Multi-string")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Picker("Edit as", selection: Binding(get: { mode }, set: { convert(to: $0) })) {
-                Text("Hexadecimal").tag("hex"); Text("Latin-1 Text").tag("text"); Text("DWORD (Little Endian)").tag("integer")
+                Text("Hexadecimal").tag("hex")
+                Text("Latin-1 Text").tag("text")
+                Text("DWORD (Little Endian)").tag("integer")
             }
-            TextEditor(text: $text).font(.system(.body, design: .monospaced)).border(.separator).frame(minHeight: 160)
+            TextEditor(text: $text).font(.system(.body, design: .monospaced)).border(.separator)
+                .frame(minHeight: 160)
             if mode == "text" { Toggle("Include terminating NUL byte", isOn: $terminated) }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            Text("Saving checks the file revision. Unedited values retain their exact bytes. Changes take effect when the guest next starts.")
-                .font(.callout).foregroundStyle(.secondary)
+            Text(
+                "Saving checks the file revision. Unedited values retain their exact bytes. Changes take effect when the guest next starts."
+            )
+            .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                if entry != nil { Button("Delete Value…", role: .destructive) { confirmDelete = true } }
+                if entry != nil {
+                    Button("Delete Value…", role: .destructive) { confirmDelete = true }
+                }
                 Spacer()
                 if saving { ProgressView().controlSize(.small) }
                 Button("Save") { save() }.keyboardShortcut(.defaultAction)
             }.disabled(saving)
         }.padding(24).frame(width: 650)
-        .task {
-            application = entry?.application ?? (registry ? "hkcu\\Software\\" : "")
-            key = entry.map { registry ? String($0.key.dropFirst(2)) : $0.key } ?? ""
-            registryType = String(entry?.registryType ?? 3)
-            let bytes = entry.map { registry ? Array($0.bytes.dropFirst(4)) : $0.bytes } ?? []
-            text = ConfigurationValue.hex(bytes)
-        }
-        .confirmationDialog("Delete this value?", isPresented: $confirmDelete) { Button("Delete Value", role: .destructive) { save(remove: true) } }
-        .interactiveDismissDisabled(saving)
+            .task {
+                application = entry?.application ?? (registry ? "hkcu\\Software\\" : "")
+                key = entry.map { registry ? String($0.key.dropFirst(2)) : $0.key } ?? ""
+                registryType = String(entry?.registryType ?? 3)
+                let bytes = entry.map { registry ? Array($0.bytes.dropFirst(4)) : $0.bytes } ?? []
+                text = ConfigurationValue.hex(bytes)
+            }
+            .confirmationDialog("Delete this value?", isPresented: $confirmDelete) {
+                Button("Delete Value", role: .destructive) { save(remove: true) }
+            }
+            .interactiveDismissDisabled(saving)
     }
     private func bytes(_ mode: String) throws -> [UInt8] {
         switch mode {
         case "text": return try ConfigurationValue.encodeText(text, terminated: terminated)
         case "integer":
-            guard let value = UInt32(text.trimmingCharacters(in: .whitespacesAndNewlines)) else { throw BallError("Enter an unsigned 32-bit decimal integer.") }
+            guard let value = UInt32(text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                throw BallError("Enter an unsigned 32-bit decimal integer.")
+            }
             return (0..<4).map { UInt8(truncatingIfNeeded: value >> ($0 * 8)) }
         default: return try ConfigurationValue.decodeHex(text)
         }
@@ -306,25 +469,39 @@ private struct ProfileValueSheet: View {
         guard new != mode else { return }
         do {
             let data = try bytes(mode)
-            if new == "hex" { text = ConfigurationValue.hex(data) }
-            else if new == "text" {
+            if new == "hex" {
+                text = ConfigurationValue.hex(data)
+            } else if new == "text" {
                 terminated = data.last == 0
                 let content = terminated ? Array(data.dropLast()) : data
-                guard !content.contains(0) else { throw BallError("This value contains embedded NUL bytes. Edit it as hexadecimal.") }
+                guard !content.contains(0) else {
+                    throw BallError(
+                        "This value contains embedded NUL bytes. Edit it as hexadecimal.")
+                }
                 text = ConfigurationValue.latin1(content)
             } else {
-                guard data.count == 4 else { throw BallError("A 32-bit integer must contain exactly four bytes.") }
-                text = String(data.enumerated().reduce(UInt32(0)) { $0 | UInt32($1.element) << ($1.offset * 8) })
+                guard data.count == 4 else {
+                    throw BallError("A 32-bit integer must contain exactly four bytes.")
+                }
+                text = String(
+                    data.enumerated().reduce(UInt32(0)) {
+                        $0 | UInt32($1.element) << ($1.offset * 8)
+                    })
             }
-            mode = new; error = nil
+            mode = new
+            error = nil
         } catch { self.error = error.localizedDescription }
     }
     private func save(remove: Bool = false) {
         do {
             var data = remove ? [] : try bytes(mode)
             if registry {
-                guard let type = UInt32(registryType) else { throw BallError("Enter a registry type number.") }
-                if type == 4 && data.count != 4 && !remove { throw BallError("REG_DWORD requires exactly four bytes.") }
+                guard let type = UInt32(registryType) else {
+                    throw BallError("Enter a registry type number.")
+                }
+                if type == 4 && data.count != 4 && !remove {
+                    throw BallError("REG_DWORD requires exactly four bytes.")
+                }
                 data = (0..<4).map { UInt8(truncatingIfNeeded: type >> ($0 * 8)) } + data
             }
             let wire = ConfigurationValue.hex(data)
@@ -332,12 +509,21 @@ private struct ProfileValueSheet: View {
             Task {
                 defer { saving = false }
                 do {
-                    let result = if let filePath {
-                        try await model.saveConfigurationFile(filePath, ball: ball, revision: snapshot.revision, text: wire, application: application, key: key, remove: remove).profile
-                    } else {
-                        try await model.saveConfiguration(snapshot.area, ball: ball, revision: snapshot.revision, application: registry ? application.lowercased() : application, key: registry ? "v:" + key.lowercased() : key, data: wire, remove: remove)
-                    }
-                    saved(result); dismiss()
+                    let result =
+                        if let filePath {
+                            try await model.saveConfigurationFile(
+                                filePath, ball: ball, revision: snapshot.revision, text: wire,
+                                application: application, key: key, remove: remove
+                            ).profile
+                        } else {
+                            try await model.saveConfiguration(
+                                snapshot.area, ball: ball, revision: snapshot.revision,
+                                application: registry ? application.lowercased() : application,
+                                key: registry ? "v:" + key.lowercased() : key, data: wire,
+                                remove: remove)
+                        }
+                    saved(result)
+                    dismiss()
                 } catch { self.error = error.localizedDescription }
             }
         } catch { self.error = error.localizedDescription }
@@ -354,24 +540,47 @@ struct OS2FilesSettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading) {
-                BrowserSearchField(text: $query, focused: $searchFocused, placeholder: "Search Config Files", identifier: "configFilesSearch")
-                    .frame(height: 28).padding(.horizontal, 8)
-                NativeOutlineBrowser(nodes: BrowserRows.configurationFiles(files?.files ?? []), columns: [
-                    OutlineBrowserColumn(id: "name", title: "Config Files", width: 210, minimum: 130)
-                ], selection: $selection, query: $query, searchFocused: $searchFocused,
-                identifier: "configurationFiles", accessibilityLabel: "OS/2 Configuration Files")
+                BrowserSearchField(
+                    text: $query, focused: $searchFocused, placeholder: "Search Config Files",
+                    identifier: "configFilesSearch"
+                )
+                .frame(height: 28).padding(.horizontal, 8)
+                NativeOutlineBrowser(
+                    nodes: BrowserRows.configurationFiles(files?.files ?? []),
+                    columns: [
+                        OutlineBrowserColumn(
+                            id: "name", title: "Config Files", width: 210, minimum: 130)
+                    ], selection: $selection, query: $query, searchFocused: $searchFocused,
+                    identifier: "configurationFiles", accessibilityLabel: "OS/2 Configuration Files"
+                )
                 Button("Reload File List") { Task { await load() } }.padding(8)
-                if files?.truncated == true { Text("The file scan reached its limit. Some INI files are not listed.").font(.caption).padding(8) }
+                if files?.truncated == true {
+                    Text("The file scan reached its limit. Some INI files are not listed.").font(
+                        .caption
+                    ).padding(8)
+                }
             }.frame(minWidth: 160, idealWidth: 210, maxWidth: 260)
             Divider()
             Group {
                 if let file = files?.files.first(where: { $0.path == selection }) {
-                    if file.role == "config" { ConfigSysView(model: model).padding(16) }
-                    else if ["user", "system", "registry"].contains(file.role) { ProfileConfigurationView(model: model, area: file.role).id(file.path) }
-                    else if file.kind == "profile" { ProfileConfigurationView(model: model, area: "file", filePath: file.path).id(file.path) }
-                    else { ConfigurationFileView(model: model, path: file.path).id(file.path) }
-                } else if let error { Text(error).foregroundStyle(.red).textSelection(.enabled).padding() }
-                else { ContentUnavailableView("Config Files", systemImage: "doc.text", description: Text("Choose CONFIG.SYS or an INI file to inspect its contents.")) }
+                    if file.role == "config" {
+                        ConfigSysView(model: model).padding(16)
+                    } else if ["user", "system", "registry"].contains(file.role) {
+                        ProfileConfigurationView(model: model, area: file.role).id(file.path)
+                    } else if file.kind == "profile" {
+                        ProfileConfigurationView(model: model, area: "file", filePath: file.path)
+                            .id(file.path)
+                    } else {
+                        ConfigurationFileView(model: model, path: file.path).id(file.path)
+                    }
+                } else if let error {
+                    Text(error).foregroundStyle(.red).textSelection(.enabled).padding()
+                } else {
+                    ContentUnavailableView(
+                        "Config Files", systemImage: "doc.text",
+                        description: Text(
+                            "Choose CONFIG.SYS or an INI file to inspect its contents."))
+                }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }.task(id: model.selected) { await load() }
     }
@@ -380,8 +589,11 @@ struct OS2FilesSettingsView: View {
         do {
             let result = try await model.configurationFiles(ball: ball)
             guard ball == model.selected, !Task.isCancelled else { return }
-            files = result; error = nil
-            if !result.files.contains(where: { $0.path == selection }) { selection = result.files.first?.path }
+            files = result
+            error = nil
+            if !result.files.contains(where: { $0.path == selection }) {
+                selection = result.files.first?.path
+            }
         } catch { self.error = error.localizedDescription }
     }
 }
@@ -398,19 +610,29 @@ private struct ConfigurationFileView: View {
             if let value {
                 Text(value.format).foregroundStyle(.secondary)
                 if !value.reason.isEmpty { Text(value.reason).foregroundStyle(.secondary) }
-                ScrollView { Text(value.text ?? value.data ?? "").font(.system(.body, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                Button("Edit File…") { editing = true }.disabled(!value.editable || model.processRunning || model.busy || model.mediaBusy)
+                ScrollView {
+                    Text(value.text ?? value.data ?? "").font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Button("Edit File…") { editing = true }.disabled(
+                    !value.editable || model.processRunning || model.busy || model.mediaBusy)
             }
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
         }.padding(16)
-        .task(id: "\(model.selected ?? "")|\(path)") {
-            guard let ball = model.selected else { return }
-            do { let result = try await model.configurationFile(path, ball: ball); if ball == model.selected, !Task.isCancelled { value = result } }
-            catch { self.error = error.localizedDescription }
-        }
-        .sheet(isPresented: $editing) {
-            if let value, let ball = model.selected { ConfigurationTextSheet(model: model, ball: ball, snapshot: value) { self.value = $0 } }
-        }
+            .task(id: "\(model.selected ?? "")|\(path)") {
+                guard let ball = model.selected else { return }
+                do {
+                    let result = try await model.configurationFile(path, ball: ball)
+                    if ball == model.selected, !Task.isCancelled { value = result }
+                } catch { self.error = error.localizedDescription }
+            }
+            .sheet(isPresented: $editing) {
+                if let value, let ball = model.selected {
+                    ConfigurationTextSheet(model: model, ball: ball, snapshot: value) {
+                        self.value = $0
+                    }
+                }
+            }
     }
 }
 
@@ -428,7 +650,8 @@ private struct ConfigurationTextSheet: View {
             Text(snapshot.path).font(.headline)
             TextEditor(text: $text).font(.system(.body, design: .monospaced)).border(.separator)
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            Text("Latin-1 text. Saving checks for changes made by installers or other tools.").foregroundStyle(.secondary)
+            Text("Latin-1 text. Saving checks for changes made by installers or other tools.")
+                .foregroundStyle(.secondary)
             HStack {
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
@@ -436,13 +659,17 @@ private struct ConfigurationTextSheet: View {
                     saving = true
                     Task {
                         defer { saving = false }
-                        do { let result = try await model.saveConfigurationFile(snapshot.path, ball: ball, revision: snapshot.revision, text: text); saved(result); dismiss() }
-                        catch { self.error = error.localizedDescription }
+                        do {
+                            let result = try await model.saveConfigurationFile(
+                                snapshot.path, ball: ball, revision: snapshot.revision, text: text)
+                            saved(result)
+                            dismiss()
+                        } catch { self.error = error.localizedDescription }
                     }
                 }.keyboardShortcut(.defaultAction)
             }.disabled(saving)
         }.padding(24).frame(width: 680, height: 520)
-        .task { text = snapshot.text ?? "" }
-        .interactiveDismissDisabled(saving || text != snapshot.text)
+            .task { text = snapshot.text ?? "" }
+            .interactiveDismissDisabled(saving || text != snapshot.text)
     }
 }

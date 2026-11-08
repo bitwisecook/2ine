@@ -4,6 +4,7 @@
    Space when a full-screen application is active, where nobody would see it. */
 #import <AppKit/AppKit.h>
 #include "hal/common/fatal_dialog.h"
+
 int lx_host_fatal_present(const char *title, const char *message, const char *report)
 {
     @autoreleasepool

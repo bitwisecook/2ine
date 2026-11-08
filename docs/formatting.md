@@ -1,36 +1,45 @@
 <!-- Public domain. No rights reserved. Wholly AI-authored. -->
 
-# C and header formatting
+# Source formatting
 
-Use clang-format 21.1.8, pinned in `tools/clang-format-version`. The same version
-runs locally and in CI. Install it in your development Python environment:
+Every maintained source language has one pinned formatter and one configuration
+file. `tools/format.py` runs them all:
 
 ```sh
-python3 -m pip install clang-format==21.1.8
-python3 tools/format-c.py --write
-python3 tools/format-c.py --check
+python3 tools/format.py --write          # format everything
+python3 tools/format.py --check          # verify, as CI does
+python3 tools/format.py --check c swift  # selected languages only
 ```
 
-Both modes also accept individual C/H filenames. `CLANG_FORMAT` selects an
-executable explicitly; its version must match the pin. Without an override,
-the wrapper searches for `clang-format-21`, then `clang-format`.
+| Language | Formatter | Configuration | Pin |
+|---|---|---|---|
+| C, C++, Objective-C | clang-format | `.clang-format`, `.clang-format-ignore` | `tools/clang-format-version` |
+| Python | ruff format + ruff check | `pyproject.toml` | `RUFF` in `tools/format.py` |
+| Swift | swift-format | `.swift-format` | Swift toolchain 6.4 |
+| CMake | gersemi | `.gersemirc` | `GERSEMI` in `tools/format.py` |
 
-The default file list includes tracked and untracked C/H sources recognized by
-Git. `.clang-format-ignore` excludes generated export headers, reference
-experiments, third-party sources and build directories. Generated export glue
-retains its generator's layout; validate it with `python3 tools/lxapigen.py --check`.
+Ruff and gersemi run through `uvx`, so only `uv` needs installing. Install the
+pinned clang-format with `python3 -m pip install clang-format==21.1.8`, or set
+`CLANG_FORMAT` to a matching executable. `tools/format-c.py` remains the C entry
+point and accepts individual filenames.
 
-`.clang-format` specifies four spaces, Allman braces, a 100-column target and
-pointer stars beside variable names. Include order, comment text and string
-literals are preserved. The formatter does not insert/remove braces or reorder
-qualifiers. Long string literals and protected macros may exceed the column
-target. Preprocessor directives and assembly strings remain part of the source
-contract.
+## Layout rules
 
-Editors can use `.clang-format` directly with the pinned executable; observe
-`.clang-format-ignore` when formatting generated or third-party files.
+All languages use four-space indentation and a 100-column target. Top-level
+definitions (functions, types, tables) are separated by a blank line.
+
+C and Objective-C use Allman braces with pointer stars beside variable names.
+Include order, comment text and string literals are preserved. The formatter
+does not insert or remove braces or reorder qualifiers. Long string literals
+and protected macros may exceed the column target.
+
+## Exclusions
+
+Third-party sources (`ball/vendor/`), reference experiments (`research/`) and
+build output retain their own layout. Generated export glue retains its
+generator's layout; validate it with `python3 tools/lxapigen.py --check` and
+`python3 tools/gen_opengl.py --check`. Generators emit a blank line between
+generated definitions.
+
 CI checks formatting without modifying sources. Build and runtime checks remain
 separate from formatting checks.
-
-[LLVM clang-format documentation](https://clang.llvm.org/docs/ClangFormat.html)
-describes editor integration and ignore-file behavior.

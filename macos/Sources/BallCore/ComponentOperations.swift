@@ -3,7 +3,10 @@ import Foundation
 public struct OS2ComponentSelection: Encodable, Sendable {
     public let source: String
     public let path: String
-    public init(source: String, path: String) { self.source = source; self.path = path }
+    public init(source: String, path: String) {
+        self.source = source
+        self.path = path
+    }
 }
 
 public struct OS2ComponentProgress: Decodable, Sendable, Equatable {

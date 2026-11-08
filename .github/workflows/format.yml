@@ -1,5 +1,5 @@
 # Public domain. No rights reserved. Wholly AI-authored.
-name: C and header formatting
+name: Source formatting
 on: [push, pull_request, workflow_dispatch]
 jobs:
   formatting:
@@ -9,7 +9,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install pinned clang-format
-        run: python -m pip install "clang-format==$(cat tools/clang-format-version)"
-      - name: Check C and headers
-        run: python tools/format-c.py --check
+      - name: Install pinned clang-format and uv
+        run: python -m pip install "clang-format==$(cat tools/clang-format-version)" uv
+      - name: Check C, Objective-C, Python and CMake
+        run: python tools/format.py --check c python cmake
+  swift-formatting:
+    runs-on: ubuntu-24.04
+    container: swift:6.4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Swift
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          python3 tools/format.py --check swift

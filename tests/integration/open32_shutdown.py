@@ -60,8 +60,9 @@ def system_command_program():
         call(g, "GetMessageTime")
         g.code.extend(b"\x2b\x05" + struct.pack("<I", before))
         # Unsigned subtraction also accepts a tick-count wrap in this interval.
-        g.require(b"\x3b\x05" + struct.pack("<I", elapsed) +
-                  b"\x0f\x96\xc0\x0f\xb6\xc0\x3d\x01\0\0\0", 24)
+        g.require(
+            b"\x3b\x05" + struct.pack("<I", elapsed) + b"\x0f\x96\xc0\x0f\xb6\xc0\x3d\x01\0\0\0", 24
+        )
         call(g, "DispatchMessage", message)
     g.word(close_count, 4, 23)
     # Mixed native/Windows loops can also consume same-thread Open32 posts,
@@ -91,11 +92,13 @@ def system_command_program():
     store(g, command)
     g.call(2, 131, (window,), 0x112, (command,), 0)
     g.code.extend(b"\xc3")
-    g.code[other:other + 4] = struct.pack("<i", len(g.code) - other - 4)
+    g.code[other : other + 4] = struct.pack("<i", len(g.code) - other - 4)
     g.code.extend(b"\x83\x7c\x24\x08\x10\x75\x06\xff\x05" + struct.pack("<I", close_count))
     g.code.extend(b"\xb8\x01\0\0\0\xc3")
     g.data = g.data.replace(struct.pack("<I", 0x88776655), struct.pack("<I", callback))
-    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX", "PMWIN"], "SYSTEMCOMMAND", data=g.data)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "PMWINX", "PMWIN"], "SYSTEMCOMMAND", data=g.data
+    )
 
 
 def paint_filter_program():
@@ -153,4 +156,6 @@ def paint_filter_program():
     g.code.extend(b"\x83\x7c\x24\x08\x0f\x75\x06\xff\x05" + struct.pack("<I", painted))
     g.code.extend(b"\xb8\x01\0\0\0\xc3")
     g.data = g.data.replace(struct.pack("<I", 0x88776655), struct.pack("<I", callback))
-    return linear_image(g.code, g.fixups, ["DOSCALLS", "PMWINX", "PMWIN"], "FILTEREDPAINT", data=g.data)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "PMWINX", "PMWIN"], "FILTEREDPAINT", data=g.data
+    )

@@ -1,24 +1,54 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 if(TWOINE_RUNTIME_ONLY OR TWOINE_BUILD_RUNTIME OR TWOINE_PORTABLE_LOADER OR NOT LX_LEGACY)
     twoine_add_hal(twoine_portable_hal unicorn)
-    add_library(twoine_runtime_objects OBJECT execution.c execution_memory.c universal_thunk.c ../guest/arguments.c)
+    add_library(
+        twoine_runtime_objects
+        OBJECT
+        execution.c
+        execution_memory.c
+        universal_thunk.c
+        ../guest/arguments.c
+    )
     set_target_properties(twoine_runtime_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_include_directories(twoine_runtime_objects PUBLIC "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_include_directories(
+        twoine_runtime_objects
+        PUBLIC "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
     target_compile_features(twoine_runtime_objects PUBLIC c_std_99)
     target_link_libraries(twoine_runtime_objects PUBLIC twoine_portable_hal)
     target_compile_options(twoine_runtime_objects PRIVATE -Wall -Wextra -Werror)
     add_library(twoine_runtime STATIC $<TARGET_OBJECTS:twoine_runtime_objects>)
-    target_include_directories(twoine_runtime PUBLIC "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_include_directories(
+        twoine_runtime
+        PUBLIC "${PROJECT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
     target_compile_features(twoine_runtime PUBLIC c_std_99)
     target_link_libraries(twoine_runtime PUBLIC twoine_portable_hal)
 endif()
 if(NOT TWOINE_RUNTIME_ONLY)
-    add_library(2ine SHARED core/bootstrap.c core/process.c core/threads.c core/config.c core/features.c core/drives.c audio.c ../guest/handles.c)
+    add_library(
+        2ine
+        SHARED
+        core/bootstrap.c
+        core/process.c
+        core/threads.c
+        core/config.c
+        core/features.c
+        core/drives.c
+        audio.c
+        ../guest/handles.c
+    )
     twoine_application_target(2ine)
-    target_compile_definitions(2ine PRIVATE TWOINE_VIDEO=$<BOOL:${TWOINE_VIDEO}> TWOINE_OPENGL=$<BOOL:${TWOINE_OPENGL}>)
+    target_compile_definitions(
+        2ine
+        PRIVATE TWOINE_VIDEO=$<BOOL:${TWOINE_VIDEO}> TWOINE_OPENGL=$<BOOL:${TWOINE_OPENGL}>
+    )
     if(TWOINE_NATIVE_LOADER)
         twoine_add_hal(twoine_native_hal native)
-        target_sources(2ine PRIVATE execution.c execution_memory.c universal_thunk.c ../guest/arguments.c)
+        target_sources(
+            2ine
+            PRIVATE execution.c execution_memory.c universal_thunk.c ../guest/arguments.c
+        )
         target_link_libraries(2ine PRIVATE twoine_native_hal)
     else()
         target_link_libraries(2ine PRIVATE twoine_runtime_objects twoine_portable_hal)

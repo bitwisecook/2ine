@@ -34,17 +34,25 @@ struct ComponentChangeResult {
     @ObservationIgnored private var initialized = false
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let read: @MainActor () async throws -> OS2ComponentState
-    @ObservationIgnored private let apply: @MainActor (ComponentChange) async throws -> ComponentChangeResult
+    @ObservationIgnored private let apply:
+        @MainActor (ComponentChange) async throws -> ComponentChangeResult
     @ObservationIgnored private let settled: @MainActor () async -> Void
 
-    init(ball: String, plan: OS2ExtractionPlan, sources: [String], selection: Set<String>, explicitIntent: Bool = false,
-         read: @escaping @MainActor () async throws -> OS2ComponentState,
-         apply: @escaping @MainActor (ComponentChange) async throws -> ComponentChangeResult,
-         settled: @escaping @MainActor () async -> Void = {}) {
-        self.ball = ball; self.plan = plan; self.sources = sources
+    init(
+        ball: String, plan: OS2ExtractionPlan, sources: [String], selection: Set<String>,
+        explicitIntent: Bool = false,
+        read: @escaping @MainActor () async throws -> OS2ComponentState,
+        apply: @escaping @MainActor (ComponentChange) async throws -> ComponentChangeResult,
+        settled: @escaping @MainActor () async -> Void = {}
+    ) {
+        self.ball = ball
+        self.plan = plan
+        self.sources = sources
         desired = selection.intersection(Self.eligible(plan))
         sequence = explicitIntent ? 1 : 0
-        self.read = read; self.apply = apply; self.settled = settled
+        self.read = read
+        self.apply = apply
+        self.settled = settled
     }
     private static func eligible(_ plan: OS2ExtractionPlan) -> Set<String> {
         plan.tree?.eligibleSources ?? Set(plan.files.filter { !$0.provided }.map(\.source))
@@ -52,35 +60,51 @@ struct ComponentChangeResult {
     var isSettled: Bool { !reconciling && pendingSources.isEmpty }
     var pendingSources: Set<String> { desired.symmetricDifference(actual).union(activeSources) }
     var fileStates: [String: OS2ComponentState.File] {
-        Dictionary((state?.files ?? []).compactMap { item in item.selectedSource.map { ($0, item) } },
-                   uniquingKeysWith: { a, b in
-                       let rank = ["missing": 0, "managed": 1, "unowned": 2, "modified": 3, "protected": 4]
-                       return (rank[b.status] ?? 5) > (rank[a.status] ?? 5) ? b : a
-                   })
+        Dictionary(
+            (state?.files ?? []).compactMap { item in item.selectedSource.map { ($0, item) } },
+            uniquingKeysWith: { a, b in
+                let rank = [
+                    "missing": 0, "managed": 1, "unowned": 2, "modified": 3, "protected": 4,
+                ]
+                return (rank[b.status] ?? 5) > (rank[a.status] ?? 5) ? b : a
+            })
     }
     private var immutablePresent: Set<String> {
-        Set(fileStates.compactMap { source, file in
-            file.present && (!file.managed || file.status != "managed") ? source : nil
-        })
+        Set(
+            fileStates.compactMap { source, file in
+                file.present && (!file.managed || file.status != "managed") ? source : nil
+            })
     }
     private func constrain() {
         let keep = immutablePresent
-        let absentProtected = Set(fileStates.compactMap { source, file in
-            file.status == "protected" && !file.present ? source : nil
-        })
+        let absentProtected = Set(
+            fileStates.compactMap { source, file in
+                file.status == "protected" && !file.present ? source : nil
+            })
         if !keep.isSubset(of: desired) {
-            notice = "Existing, modified or protected files are kept. Only unchanged files installed by this component manager can be removed."
+            notice =
+                "Existing, modified or protected files are kept. Only unchanged files installed by this component manager can be removed."
         }
         desired.formUnion(keep)
         desired.subtract(absentProtected)
         desired.formIntersection(Self.eligible(plan))
     }
-    func update(plan: OS2ExtractionPlan, sources: [String], selection: Set<String>, explicitIntent: Bool = false) {
+    func update(
+        plan: OS2ExtractionPlan, sources: [String], selection: Set<String>,
+        explicitIntent: Bool = false
+    ) {
         if self.sources != sources && !reconciling {
-            initialized = false; actual = []; state = nil; revisions = [:]
-            desired = selection; sequence = explicitIntent ? 1 : 0; error = nil; notice = nil
+            initialized = false
+            actual = []
+            state = nil
+            revisions = [:]
+            desired = selection
+            sequence = explicitIntent ? 1 : 0
+            error = nil
+            notice = nil
         }
-        self.plan = plan; self.sources = sources
+        self.plan = plan
+        self.sources = sources
         observationRevision &+= 1
         desired.formIntersection(Self.eligible(plan))
         actual.formIntersection(Self.eligible(plan))
@@ -92,13 +116,17 @@ struct ComponentChangeResult {
         let previous = actual
         let protectedIntent = pendingSources.union(revisions.keys)
         state = value
-        actual = Set(value.files.filter(\.present).compactMap(\.selectedSource)).intersection(Self.eligible(plan))
+        actual = Set(value.files.filter(\.present).compactMap(\.selectedSource)).intersection(
+            Self.eligible(plan))
         if initialized {
             desired.formUnion(actual.subtracting(protectedIntent))
             desired.subtract(previous.subtracting(actual).subtracting(protectedIntent))
         } else {
-            if value.progress != nil && sequence == 0 { desired = actual }
-            else { desired.formUnion(actual) }
+            if value.progress != nil && sequence == 0 {
+                desired = actual
+            } else {
+                desired.formUnion(actual)
+            }
             initialized = true
         }
         constrain()
@@ -108,7 +136,8 @@ struct ComponentChangeResult {
         let next = selection.intersection(Self.eligible(plan))
         for source in next.symmetricDifference(desired) { revisions[source] = sequence }
         desired = next
-        error = nil; notice = nil
+        error = nil
+        notice = nil
         constrain()
         start()
     }
@@ -144,20 +173,31 @@ struct ComponentChangeResult {
                 let version = revisions
                 let selected = kind == "install" ? desired : changed
                 let files = plan.files.filter { selected.contains($0.source) && !$0.provided }
-                let change = ComponentChange(kind: kind, sources: sources, files: files, changed: changed,
-                                             configure: kind == "install" ? plan.configuredComponents(for: desired) : [])
+                let change = ComponentChange(
+                    kind: kind, sources: sources, files: files, changed: changed,
+                    configure: kind == "install" ? plan.configuredComponents(for: desired) : [])
                 activeSources = changed
                 observationRevision &+= 1
                 do {
                     let result = try await apply(change)
                     observationRevision &+= 1
                     observe(result.state)
-                    let unfinished = kind == "install" ? changed.subtracting(actual) : changed.intersection(actual)
+                    let unfinished =
+                        kind == "install"
+                        ? changed.subtracting(actual) : changed.intersection(actual)
                     if result.interrupted || result.error != nil || !unfinished.isEmpty {
                         for source in changed where revisions[source] == version[source] {
-                            if actual.contains(source) { desired.insert(source) } else { desired.remove(source) }
+                            if actual.contains(source) {
+                                desired.insert(source)
+                            } else {
+                                desired.remove(source)
+                            }
                         }
-                        error = result.error ?? (result.interrupted ? "Component update was cancelled. Completed changes were kept." : "Some component changes could not be applied. Existing files were kept.")
+                        error =
+                            result.error
+                            ?? (result.interrupted
+                                ? "Component update was cancelled. Completed changes were kept."
+                                : "Some component changes could not be applied. Existing files were kept.")
                     }
                 } catch {
                     // A worker failure still needs authoritative state before changing ticks.
@@ -165,7 +205,11 @@ struct ComponentChangeResult {
                     observationRevision &+= 1
                     observe(value)
                     for source in changed where revisions[source] == version[source] {
-                        if actual.contains(source) { desired.insert(source) } else { desired.remove(source) }
+                        if actual.contains(source) {
+                            desired.insert(source)
+                        } else {
+                            desired.remove(source)
+                        }
                     }
                     self.error = error.localizedDescription
                 }

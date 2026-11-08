@@ -10,8 +10,11 @@ function(twoine_add_hal target backend)
     add_library(${target} OBJECT)
     set_property(TARGET ${target} PROPERTY TWOINE_HOST_PLATFORM "${TWOINE_HOST_PLATFORM}")
     set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_include_directories(${target} PUBLIC "${TWOINE_HAL_SOURCE_DIR}/include"
-        PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/runtime")
+    target_include_directories(
+        ${target}
+        PUBLIC "${TWOINE_HAL_SOURCE_DIR}/include"
+        PRIVATE "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/runtime"
+    )
     target_compile_features(${target} PUBLIC c_std_99)
     target_link_libraries(${target} PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
     find_package(OpenSSL 4.1 REQUIRED COMPONENTS SSL Crypto)
@@ -20,11 +23,20 @@ function(twoine_add_hal target backend)
         # FindOpenSSL runs under the host ABI; the native worker uses i386.
         target_include_directories(${target} PRIVATE ${OPENSSL_INCLUDE_DIR})
         foreach(library ssl crypto)
-            execute_process(COMMAND "${CMAKE_C_COMPILER}" -m32 -print-file-name=lib${library}.so
-                OUTPUT_VARIABLE _twoine_tls_${library} OUTPUT_STRIP_TRAILING_WHITESPACE
-                COMMAND_ERROR_IS_FATAL ANY)
-            if(NOT IS_ABSOLUTE "${_twoine_tls_${library}}" OR NOT EXISTS "${_twoine_tls_${library}}")
-                message(FATAL_ERROR "Install the i386 OpenSSL 4.1 development libraries for the native worker")
+            execute_process(
+                COMMAND "${CMAKE_C_COMPILER}" -m32 -print-file-name=lib${library}.so
+                OUTPUT_VARIABLE _twoine_tls_${library}
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                COMMAND_ERROR_IS_FATAL ANY
+            )
+            if(
+                NOT IS_ABSOLUTE "${_twoine_tls_${library}}"
+                OR NOT EXISTS "${_twoine_tls_${library}}"
+            )
+                message(
+                    FATAL_ERROR
+                    "Install the i386 OpenSSL 4.1 development libraries for the native worker"
+                )
             endif()
             target_link_libraries(${target} PUBLIC "${_twoine_tls_${library}}")
         endforeach()
@@ -32,18 +44,27 @@ function(twoine_add_hal target backend)
         target_link_libraries(${target} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
     endif()
     if(APPLE)
-        target_link_libraries(${target} PUBLIC "-framework SystemConfiguration" "-framework CoreFoundation")
+        target_link_libraries(
+            ${target}
+            PUBLIC "-framework SystemConfiguration" "-framework CoreFoundation"
+        )
     endif()
     target_sources(${target} PRIVATE ${TWOINE_HOST_SOURCES})
     file(STRINGS "${PROJECT_SOURCE_DIR}/VERSION" _twoine_version LIMIT_COUNT 1)
-    set_property(SOURCE "${TWOINE_HAL_SOURCE_DIR}/posix/host_fatal.c" TARGET_DIRECTORY ${target}
-        APPEND PROPERTY COMPILE_DEFINITIONS TWOINE_VERSION_TEXT="${_twoine_version}")
+    set_property(
+        SOURCE "${TWOINE_HAL_SOURCE_DIR}/posix/host_fatal.c" TARGET_DIRECTORY ${target}
+        APPEND
+        PROPERTY COMPILE_DEFINITIONS TWOINE_VERSION_TEXT="${_twoine_version}"
+    )
     if(backend STREQUAL "unicorn")
         include("${TWOINE_HAL_SOURCE_DIR}/emulator/unicorn.cmake")
-        target_sources(${target} PRIVATE
-            "${TWOINE_HAL_SOURCE_DIR}/emulator/cpu.c"
-            "${TWOINE_HAL_SOURCE_DIR}/emulator/cpu_unicorn.c"
-            "${TWOINE_HAL_SOURCE_DIR}/emulator/execution_unicorn.c")
+        target_sources(
+            ${target}
+            PRIVATE
+                "${TWOINE_HAL_SOURCE_DIR}/emulator/cpu.c"
+                "${TWOINE_HAL_SOURCE_DIR}/emulator/cpu_unicorn.c"
+                "${TWOINE_HAL_SOURCE_DIR}/emulator/execution_unicorn.c"
+        )
         target_include_directories(${target} PUBLIC "${TWOINE_HAL_SOURCE_DIR}/emulator")
         target_compile_definitions(${target} PUBLIC TWOINE_WITH_UNICORN=1)
         target_link_libraries(${target} PUBLIC ${TWOINE_UNICORN_TARGET})
@@ -53,8 +74,10 @@ function(twoine_add_hal target backend)
             target_compile_options(${target} PRIVATE -Wall -Wextra -Werror)
         endif()
     elseif(backend STREQUAL "native")
-        if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR
-           NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$")
+        if(
+            NOT CMAKE_SYSTEM_NAME STREQUAL "Linux"
+            OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$"
+        )
             message(FATAL_ERROR "The native HAL requires Linux x86.")
         endif()
         target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/linux/i386/execution.c")
@@ -74,7 +97,15 @@ function(twoine_add_media target)
     if(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/posix/print_spool.c")
     endif()
-    target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/common/fatal_dialog.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/audio.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/video.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/clipboard.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/clipboard_codec.c")
+    target_sources(
+        ${target}
+        PRIVATE
+            "${TWOINE_HAL_SOURCE_DIR}/common/fatal_dialog.c"
+            "${TWOINE_HAL_SOURCE_DIR}/sdl/audio.c"
+            "${TWOINE_HAL_SOURCE_DIR}/sdl/video.c"
+            "${TWOINE_HAL_SOURCE_DIR}/sdl/clipboard.c"
+            "${TWOINE_HAL_SOURCE_DIR}/sdl/clipboard_codec.c"
+    )
     if(WIN32)
         target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/win/clipboard_formats.c")
     else()
@@ -84,18 +115,37 @@ function(twoine_add_media target)
     target_compile_definitions(${target} PRIVATE TWOINE_FONT_DIRECTORY="${TWOINE_RUNTIME_FONT_DIR}")
     target_link_libraries(${target} PRIVATE SDL3::SDL3 twoine_freetype)
     if(APPLE)
-        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/macos/fatal_dialog.m" "${TWOINE_HAL_SOURCE_DIR}/macos/window_chrome.m" "${TWOINE_HAL_SOURCE_DIR}/macos/print_dialog.m"
-            "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_session.m" "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_bundle.m"
-            "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_lease.c"
-            "${TWOINE_HAL_SOURCE_DIR}/common/desktop_group.c"
-            "${TWOINE_HAL_SOURCE_DIR}/common/desktop_cycle.c" "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_cycle.c"
-            "${PROJECT_SOURCE_DIR}/ball/icon_bitmap.c" "${PROJECT_SOURCE_DIR}/ball/icon_executable.c"
-            "${PROJECT_SOURCE_DIR}/formats/decompress.c")
+        target_sources(
+            ${target}
+            PRIVATE
+                "${TWOINE_HAL_SOURCE_DIR}/macos/fatal_dialog.m"
+                "${TWOINE_HAL_SOURCE_DIR}/macos/window_chrome.m"
+                "${TWOINE_HAL_SOURCE_DIR}/macos/print_dialog.m"
+                "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_session.m"
+                "${TWOINE_HAL_SOURCE_DIR}/macos/desktop_bundle.m"
+                "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_lease.c"
+                "${TWOINE_HAL_SOURCE_DIR}/common/desktop_group.c"
+                "${TWOINE_HAL_SOURCE_DIR}/common/desktop_cycle.c"
+                "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_cycle.c"
+                "${PROJECT_SOURCE_DIR}/ball/icon_bitmap.c"
+                "${PROJECT_SOURCE_DIR}/ball/icon_executable.c"
+                "${PROJECT_SOURCE_DIR}/formats/decompress.c"
+        )
         target_include_directories(${target} PRIVATE "${PROJECT_BINARY_DIR}/generated")
         target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:OBJC>:-fobjc-arc>")
-        target_link_libraries(${target} PRIVATE "-framework AppKit" "-framework UniformTypeIdentifiers" "-framework ImageIO")
+        target_link_libraries(
+            ${target}
+            PRIVATE "-framework AppKit" "-framework UniformTypeIdentifiers" "-framework ImageIO"
+        )
     else()
-        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/sdl/fatal_dialog.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/window_chrome_none.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_session_none.c" "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_bundle_none.c")
+        target_sources(
+            ${target}
+            PRIVATE
+                "${TWOINE_HAL_SOURCE_DIR}/sdl/fatal_dialog.c"
+                "${TWOINE_HAL_SOURCE_DIR}/sdl/window_chrome_none.c"
+                "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_session_none.c"
+                "${TWOINE_HAL_SOURCE_DIR}/sdl/desktop_bundle_none.c"
+        )
         if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/linux/print_dialog.c")
         elseif(WIN32)
@@ -120,7 +170,10 @@ function(twoine_add_opengl target)
     target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/mesa/opengl.c")
     if(APPLE)
         target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/macos/gl_policy.c")
-        target_compile_definitions(${target} PRIVATE TWOINE_KOSMICKRISP_ICD="${TWOINE_KOSMICKRISP_ICD}")
+        target_compile_definitions(
+            ${target}
+            PRIVATE TWOINE_KOSMICKRISP_ICD="${TWOINE_KOSMICKRISP_ICD}"
+        )
     else()
         target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/linux/gl_policy.c")
     endif()
@@ -134,13 +187,19 @@ endfunction()
 # The fallback dock icon for command-line guests: the 2ine ball of twine,
 # embedded at configure time so a loader copied anywhere can present it.
 if(APPLE AND NOT TWOINE_RUNTIME_ONLY)
-    file(READ "${PROJECT_SOURCE_DIR}/macos/Twoine.iconset/icon_256x256.png" _twoine_ball_icon_hex HEX)
+    file(
+        READ "${PROJECT_SOURCE_DIR}/macos/Twoine.iconset/icon_256x256.png"
+        _twoine_ball_icon_hex
+        HEX
+    )
     string(LENGTH "${_twoine_ball_icon_hex}" _twoine_ball_icon_length)
     math(EXPR _twoine_ball_icon_size "${_twoine_ball_icon_length} / 2")
-    file(WRITE "${PROJECT_BINARY_DIR}/generated/twoine_ball_icon_png.h"
+    file(
+        WRITE "${PROJECT_BINARY_DIR}/generated/twoine_ball_icon_png.h"
         "/* Generated from macos/Twoine.iconset/icon_256x256.png. Do not edit. */\n"
         "#define TWOINE_BALL_ICON_PNG_SIZE ${_twoine_ball_icon_size}\n"
-        "#define TWOINE_BALL_ICON_PNG_HEX \"${_twoine_ball_icon_hex}\"\n")
+        "#define TWOINE_BALL_ICON_PNG_HEX \"${_twoine_ball_icon_hex}\"\n"
+    )
     unset(_twoine_ball_icon_hex)
     unset(_twoine_ball_icon_length)
     unset(_twoine_ball_icon_size)

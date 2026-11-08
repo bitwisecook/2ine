@@ -8,10 +8,17 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 set(TWOINE_PORTABLE_DEFAULT ON)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$")
+if(
+    CMAKE_SYSTEM_NAME STREQUAL "Linux"
+    AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$"
+)
     set(TWOINE_PORTABLE_DEFAULT OFF)
 endif()
-option(TWOINE_PORTABLE_LOADER "Use portable CPU execution for applications" ${TWOINE_PORTABLE_DEFAULT})
+option(
+    TWOINE_PORTABLE_LOADER
+    "Use portable CPU execution for applications"
+    ${TWOINE_PORTABLE_DEFAULT}
+)
 option(TWOINE_PORTABLE_NE "Alias for TWOINE_PORTABLE_LOADER" OFF)
 option(TWOINE_RUNTIME_ONLY "Build execution contracts without application dependencies" OFF)
 option(TWOINE_BUILD_RUNTIME "Build the portable execution library" ${TWOINE_RUNTIME_ONLY})
@@ -22,17 +29,31 @@ endif()
 set(TWOINE_NATIVE_LOADER OFF)
 if(LX_LEGACY AND NOT TWOINE_PORTABLE_LOADER AND NOT TWOINE_RUNTIME_ONLY)
     set(TWOINE_NATIVE_LOADER ON)
-    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$")
-        message(FATAL_ERROR "Native execution requires Linux x86; use TWOINE_PORTABLE_LOADER=ON elsewhere.")
+    if(
+        NOT CMAKE_SYSTEM_NAME STREQUAL "Linux"
+        OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$"
+    )
+        message(
+            FATAL_ERROR
+            "Native execution requires Linux x86; use TWOINE_PORTABLE_LOADER=ON elsewhere."
+        )
     endif()
 endif()
 function(twoine_application_target target)
-    target_include_directories(${target} PUBLIC "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/hal/include")
+    target_include_directories(
+        ${target}
+        PUBLIC "${PROJECT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/hal/include"
+    )
     target_compile_features(${target} PRIVATE c_std_99)
     target_compile_options(${target} PRIVATE -Wall -g)
-    target_compile_definitions(${target} PRIVATE _FILE_OFFSET_BITS=64
-        TWOINE_PORTABLE_LOADER=$<BOOL:${TWOINE_PORTABLE_LOADER}> LX_LEGACY=$<BOOL:${LX_LEGACY}>
-        $<$<CONFIG:Debug>:DEBUG>)
+    target_compile_definitions(
+        ${target}
+        PRIVATE
+            _FILE_OFFSET_BITS=64
+            TWOINE_PORTABLE_LOADER=$<BOOL:${TWOINE_PORTABLE_LOADER}>
+            LX_LEGACY=$<BOOL:${LX_LEGACY}>
+            $<$<CONFIG:Debug>:DEBUG>
+    )
     if(TWOINE_NATIVE_LOADER)
         target_compile_options(${target} PRIVATE -m32)
         target_link_options(${target} PRIVATE -m32)

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
 """Real LX calls exercise nested ioctl pointers, TLS handles and provider policy."""
+
 import argparse
 import os
 import socket
@@ -10,6 +11,7 @@ import subprocess
 import tempfile
 import threading
 from pathlib import Path
+
 from images import FlatGuest, linear_image
 
 
@@ -45,13 +47,17 @@ def interfaces_program():
     g.call_handle(2, 17, fd)
     g.result(0, 18)
     g.exit(0)
-    return linear_image(g.code, g.fixups, ["DOSCALLS", "SO32DLL", "TCPIP32"], "NETGUEST", data=g.data)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "SO32DLL", "TCPIP32"], "NETGUEST", data=g.data
+    )
 
 
 def tls_program(port):
     g = FlatGuest()
     fd, method, context, session = (g.field(bytes(4)) for _ in range(4))
-    address = g.field(struct.pack("<H", 2) + struct.pack("!H", port) + socket.inet_aton("127.0.0.1") + bytes(8))
+    address = g.field(
+        struct.pack("<H", 2) + struct.pack("!H", port) + socket.inet_aton("127.0.0.1") + bytes(8)
+    )
     peer = g.field(b"localhost\0")
     message = b"guest TLS over host TCP"
     data, output = g.field(message), g.field(bytes(len(message)))
@@ -88,7 +94,9 @@ def tls_program(port):
     g.call_handle(3, 48, session)
     g.call_handle(2, 17, fd)
     g.exit(0)
-    return linear_image(g.code, g.fixups, ["DOSCALLS", "SO32DLL", "SSLEAY32"], "TLSGUEST", data=g.data)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "SO32DLL", "SSLEAY32"], "TLSGUEST", data=g.data
+    )
 
 
 def provider_program(expected):
@@ -108,21 +116,63 @@ def main():
     with tempfile.TemporaryDirectory(prefix="twoine-network-guest-") as directory:
         work = Path(directory).resolve()
         cert, key = work / "cert.pem", work / "key.pem"
-        subprocess.run([args.openssl, "req", "-x509", "-newkey", "rsa:2048", "-noenc", "-days", "1",
-                        "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost",
-                        "-keyout", str(key), "-out", str(cert)], check=True, capture_output=True, timeout=15)
+        subprocess.run(
+            [
+                args.openssl,
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-noenc",
+                "-days",
+                "1",
+                "-subj",
+                "/CN=localhost",
+                "-addext",
+                "subjectAltName=DNS:localhost",
+                "-keyout",
+                str(key),
+                "-out",
+                str(cert),
+            ],
+            check=True,
+            capture_output=True,
+            timeout=15,
+        )
         config = work / "2ine.cfg"
-        env = {k: v for k, v in os.environ.items() if not k.startswith(("TWOINE_", "TRACE_", "DYLD_", "LD_"))}
-        env.update(TWOINE_BACKEND="unicorn", TWOINE_DRIVE_C=str(work), TWOINE_CONFIG=str(config),
-                   TWOINE_LIBPATH=str(build), SDL_VIDEO_DRIVER="dummy", SDL_AUDIO_DRIVER="dummy",
-                   SSL_CERT_FILE=str(cert), SSL_CERT_DIR=str(work / "empty-cas"))
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("TWOINE_", "TRACE_", "DYLD_", "LD_"))
+        }
+        env.update(
+            TWOINE_BACKEND="unicorn",
+            TWOINE_DRIVE_C=str(work),
+            TWOINE_CONFIG=str(config),
+            TWOINE_LIBPATH=str(build),
+            SDL_VIDEO_DRIVER="dummy",
+            SDL_AUDIO_DRIVER="dummy",
+            SSL_CERT_FILE=str(cert),
+            SSL_CERT_DIR=str(work / "empty-cas"),
+        )
 
         def run(name, program, settings=""):
             (work / name).write_bytes(program)
             config.write_text(f"mountpoint.C={work}\n{settings}")
-            p = subprocess.run([str(build / "lx_loader"), str(work / name)], cwd=work, env=env,
-                               capture_output=True, timeout=15)
-            assert p.returncode == 0, (name, settings, p.returncode, p.stdout.decode(errors="replace"), p.stderr.decode(errors="replace"))
+            p = subprocess.run(
+                [str(build / "lx_loader"), str(work / name)],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                timeout=15,
+            )
+            assert p.returncode == 0, (
+                name,
+                settings,
+                p.returncode,
+                p.stdout.decode(errors="replace"),
+                p.stderr.decode(errors="replace"),
+            )
 
         run("NETGUEST.EXE", interfaces_program())
         listener = socket.socket()
@@ -154,7 +204,9 @@ def main():
         assert not thread.is_alive() and not failures, failures
         # A real guest DLL wins when upgrades are off; default/on selects the host shim.
         table = bytes([182, 0, 1, 3]) + struct.pack("<H", 1) + b"\x01" + struct.pack("<I", 0)
-        (work / "SSLEAY32.DLL").write_bytes(linear_image(b"\xb8\x2a\0\0\0\xc3", [], [], "SSLEAY32", library=True, entry_table=table))
+        (work / "SSLEAY32.DLL").write_bytes(
+            linear_image(b"\xb8\x2a\0\0\0\xc3", [], [], "SSLEAY32", library=True, entry_table=table)
+        )
         run("TLSCHOICE.EXE", provider_program(42), "system.tls_upgrade=false\n")
         run("TLSCHOICE.EXE", provider_program(1))
         run("TLSCHOICE.EXE", provider_program(1), "system.tls_upgrade=true\n")

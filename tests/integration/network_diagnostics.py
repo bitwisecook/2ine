@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
 """Guest resolver ABI, managed configuration and optional unchanged IBM network tools."""
+
 import argparse
 import hashlib
 import json
@@ -13,6 +14,7 @@ import subprocess
 import tempfile
 import threading
 from pathlib import Path
+
 from images import FlatGuest, linear_image
 
 
@@ -50,7 +52,10 @@ def resolver_program():
     g.fixups.append(struct.pack("<BBhBH", 7, 1, len(g.code) - 4, 2, 143))
     g.require(b"\x81\x38" + struct.pack("<I", 5), 11)
     g.require(b"\x81\x78\x08" + struct.pack("<I", 0x2C1), 12)
-    for module, forward, reverse, proto, service, error in [(2, 111, 112, 121, 124, 151), (3, 11, 12, 21, 24, 51)]:
+    for module, forward, reverse, proto, service, error in [
+        (2, 111, 112, 121, 124, 151),
+        (3, 11, 12, 21, 24, 51),
+    ]:
         g.call(module, forward, localhost)
         nonzero(g, 20)
         g.require(b"\x83\x78\x08\x02", 21)
@@ -78,13 +83,17 @@ def resolver_program():
         nonzero(g, 29)
         g.require(b"\x81\x78\x08" + struct.pack("<I", socket.htons(53)), 30)
     g.exit(0)
-    return linear_image(g.code, g.fixups, ["DOSCALLS", "TCPIP32", "TCP32DLL"], "RESOLVER", data=g.data)
+    return linear_image(
+        g.code, g.fixups, ["DOSCALLS", "TCPIP32", "TCP32DLL"], "RESOLVER", data=g.data
+    )
 
 
 def socket_program(port):
     g = FlatGuest()
     receiver, idle = g.field(bytes(4)), g.field(bytes(4))
-    target = g.field(b"\x10\x02" + struct.pack("!H", port) + socket.inet_aton("127.0.0.1") + bytes(8))
+    target = g.field(
+        b"\x10\x02" + struct.pack("!H", port) + socket.inet_aton("127.0.0.1") + bytes(8)
+    )
     buffer = g.field(bytes(256))
     message = g.field(b"guest datagram")
     descriptors = g.field(struct.pack("<HH", 2, 0) + bytes(64 * 4))
@@ -150,7 +159,10 @@ class DNSFixture:
         self.tcp.bind(("127.0.0.1", self.port))
         self.tcp.listen(4)
         self.tcp.settimeout(0.1)
-        self.threads = [threading.Thread(target=self.serve_udp), threading.Thread(target=self.serve_tcp)]
+        self.threads = [
+            threading.Thread(target=self.serve_udp),
+            threading.Thread(target=self.serve_tcp),
+        ]
         for thread in self.threads:
             thread.start()
 
@@ -158,7 +170,7 @@ class DNSFixture:
         p, parts = 12, []
         while data[p]:
             n = data[p]
-            parts.append(data[p + 1:p + 1 + n].decode("ascii"))
+            parts.append(data[p + 1 : p + 1 + n].decode("ascii"))
             p += n + 1
         p += 1
         kind, cls = struct.unpack_from("!HH", data, p)
@@ -173,12 +185,18 @@ class DNSFixture:
         elif name == "timeout.fixture.test":
             return None
         elif kind == 12:
-            payload = dns_name("resolver.fixture.test" if name == "1.0.0.127.in-addr.arpa" else "fixture.test")
+            payload = dns_name(
+                "resolver.fixture.test" if name == "1.0.0.127.in-addr.arpa" else "fixture.test"
+            )
         elif kind == 1:
             payload = socket.inet_aton("192.0.2.42")
         elif kind == 15:
             payload = struct.pack("!H", 10) + dns_name("mail.fixture.test")
-        body = b"\xc0\x0c" + struct.pack("!HHIH", kind, cls, 30, len(payload)) + payload if payload else b""
+        body = (
+            b"\xc0\x0c" + struct.pack("!HHIH", kind, cls, 30, len(payload)) + payload
+            if payload
+            else b""
+        )
         return data[:2] + struct.pack("!HHHHH", flags, 1, bool(payload), 0, 0) + data[12:p] + body
 
     def serve_udp(self):
@@ -189,7 +207,7 @@ class DNSFixture:
                     response = self.answer(data, "udp")
                     if response is not None:
                         self.udp.sendto(response, peer)
-                except socket.timeout:
+                except TimeoutError:
                     pass
         except BaseException as error:
             self.failures.append(error)
@@ -209,7 +227,7 @@ class DNSFixture:
             while not self.stop.is_set():
                 try:
                     stream, _ = self.tcp.accept()
-                except socket.timeout:
+                except TimeoutError:
                     continue
                 with stream:
                     stream.settimeout(2)
@@ -234,7 +252,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--backend", default="unicorn", choices=["unicorn", "native"])
-    parser.add_argument("--os2-tools", type=Path, help="Private MPTN directory containing bin and dll")
+    parser.add_argument(
+        "--os2-tools", type=Path, help="Private MPTN directory containing bin and dll"
+    )
     args = parser.parse_args()
     build = args.build.resolve()
     results = []
@@ -242,13 +262,30 @@ def main():
         work = Path(directory).resolve()
         config = work / "2ine.cfg"
         config.write_text(f"mountpoint.C={work}\n")
-        env = {k: v for k, v in os.environ.items() if not k.startswith(("TWOINE_", "TRACE_", "DYLD_", "LD_")) and k not in ("ETC", "LIBPATH")}
-        env.update(TWOINE_BACKEND=args.backend, TWOINE_CONFIG=str(config), TWOINE_LIBPATH=str(build),
-                   LIBPATH="C:\\MPTN\\DLL", LANG="en_US", SDL_VIDEO_DRIVER="dummy", SDL_AUDIO_DRIVER="dummy")
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith(("TWOINE_", "TRACE_", "DYLD_", "LD_"))
+            and k not in ("ETC", "LIBPATH")
+        }
+        env.update(
+            TWOINE_BACKEND=args.backend,
+            TWOINE_CONFIG=str(config),
+            TWOINE_LIBPATH=str(build),
+            LIBPATH="C:\\MPTN\\DLL",
+            LANG="en_US",
+            SDL_VIDEO_DRIVER="dummy",
+            SDL_AUDIO_DRIVER="dummy",
+        )
 
         def run(path, *arguments, success=True):
-            result = subprocess.run([str(build / "lx_loader"), str(path), *arguments], cwd=work,
-                                    env=env, capture_output=True, timeout=15)
+            result = subprocess.run(
+                [str(build / "lx_loader"), str(path), *arguments],
+                cwd=work,
+                env=env,
+                capture_output=True,
+                timeout=15,
+            )
             text = result.stdout.decode("latin1") + result.stderr.decode("latin1")
             assert b"Missing import" not in result.stderr, text
             if success:
@@ -300,13 +337,26 @@ def main():
             binaries.mkdir()
             libraries = work / "MPTN" / "DLL"
             libraries.mkdir()
-            for name in ["ping.exe", "tracerte.exe", "host.exe", "nslookup.exe", "netstat.exe", "ifconfig.exe"]:
+            for name in [
+                "ping.exe",
+                "tracerte.exe",
+                "host.exe",
+                "nslookup.exe",
+                "netstat.exe",
+                "ifconfig.exe",
+            ]:
                 original = source / "bin" / name
                 shutil.copy2(original, binaries / name)
-                results.append({"fixture": name, "sha256": hashlib.sha256(original.read_bytes()).hexdigest()})
+                results.append(
+                    {"fixture": name, "sha256": hashlib.sha256(original.read_bytes()).hexdigest()}
+                )
             shutil.copy2(source / "dll" / "ddnsres.dll", libraries / "ddnsres.dll")
-            assert re.search(r"(?<!\d)0% packet loss", run(binaries / "ping.exe", "localhost", "32", "2"))
-            assert "127.0.0.1" in run(binaries / "tracerte.exe", "-n", "-m", "2", "-q", "1", "-w", "2", "127.0.0.1")
+            assert re.search(
+                r"(?<!\d)0% packet loss", run(binaries / "ping.exe", "localhost", "32", "2")
+            )
+            assert "127.0.0.1" in run(
+                binaries / "tracerte.exe", "-n", "-m", "2", "-q", "1", "-w", "2", "127.0.0.1"
+            )
             assert "127.0.0.1" in run(binaries / "host.exe", "localhost")
             assert "localhost" in run(binaries / "host.exe", "127.0.0.1").lower()
             assert "127.0.0.1" in run(binaries / "netstat.exe", "-rn")
@@ -324,7 +374,14 @@ def main():
                     ("missing.fixture.test.", [], "non-existent"),
                     ("timeout.fixture.test.", [], "timed-out"),
                 ]:
-                    text = run(binaries / "nslookup.exe", *options, *extra, name, "127.0.0.1", success=False)
+                    text = run(
+                        binaries / "nslookup.exe",
+                        *options,
+                        *extra,
+                        name,
+                        "127.0.0.1",
+                        success=False,
+                    )
                     assert expected in text.lower(), (name, text)
                 assert ("udp", "truncated.fixture.test", 1) in dns.events
                 assert ("tcp", "truncated.fixture.test", 1) in dns.events

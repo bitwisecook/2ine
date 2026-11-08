@@ -9,7 +9,12 @@ public struct MIDIChannel: Codable, Sendable, Equatable {
     public var percussion: Int
     public var muted: Bool
     public init(channel: Int) {
-        target = channel; bank = ""; program = -1; bankNumber = -1; percussion = -1; muted = false
+        target = channel
+        bank = ""
+        program = -1
+        bankNumber = -1
+        percussion = -1
+        muted = false
     }
 }
 
@@ -18,7 +23,8 @@ public struct AudioSettings: Codable, Sendable, Equatable {
     public var bank: String
     public var channels: [MIDIChannel]
     public mutating func applyDefaults(_ preset: MIDIProfile) {
-        profile = preset.id; channels = preset.channels
+        profile = preset.id
+        channels = preset.channels
     }
 }
 

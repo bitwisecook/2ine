@@ -98,7 +98,9 @@ def main():
                     timeout=10,
                 )
                 assert result.returncode == 37, (result.returncode, result.stderr)
-    print("Missing imports and emulated guest faults exit 1; nested callbacks and next sessions pass")
+    print(
+        "Missing imports and emulated guest faults exit 1; nested callbacks and next sessions pass"
+    )
 
 
 if __name__ == "__main__":

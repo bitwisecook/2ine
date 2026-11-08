@@ -263,7 +263,7 @@ static void superclass_control(ULONG control, Open32Class *class, PSZ title, ULO
                                ULONG instance, ULONG parameter, ULONG extended_style)
 {
     open32SetNativeClassName(control, class->name);
-    open32NativeWindowLong(control, -4, (LONG) class->procedure, TRUE);
+    open32NativeWindowLong(control, -4, (LONG)class->procedure, TRUE);
     size_t title_bytes = strlen(title ? title : "") + 1;
     LxGuestMapping *creation = lx_execution_map(GLoaderState.execution, 0,
                                                 (title_bytes + 48 + 4095) & ~(size_t)4095, 3, 0);

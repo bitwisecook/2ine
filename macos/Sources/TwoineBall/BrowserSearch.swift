@@ -1,8 +1,9 @@
+import AppKit
+import SwiftUI
+
 #if canImport(BallCore)
 import BallCore
 #endif
-import SwiftUI
-import AppKit
 
 struct BrowserSearchField: NSViewRepresentable {
     @Binding var text: String
@@ -24,7 +25,8 @@ struct BrowserSearchField: NSViewRepresentable {
         field.placeholderString = placeholder
         if field.stringValue != text { field.stringValue = text }
         if focused, field.currentEditor() == nil, field.window?.makeFirstResponder(field) == true {
-            field.currentEditor()?.selectedRange = NSRange(location: field.stringValue.utf16.count, length: 0)
+            field.currentEditor()?.selectedRange = NSRange(
+                location: field.stringValue.utf16.count, length: 0)
         }
     }
     final class GlassSearchView: NSGlassEffectView {
@@ -50,7 +52,7 @@ struct BrowserSearchField: NSViewRepresentable {
                 field.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 10),
                 field.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
                 field.centerYAnchor.constraint(equalTo: content.centerYAnchor),
-                field.heightAnchor.constraint(equalToConstant: 22)
+                field.heightAnchor.constraint(equalToConstant: 22),
             ])
         }
         required init?(coder: NSCoder) { fatalError("Use init()") }
@@ -81,9 +83,12 @@ struct BrowserTypeToSearch: ViewModifier {
                 return .handled
             }
             guard press.modifiers.intersection([.command, .control, .option]).isEmpty,
-                  !press.characters.isEmpty,
-                  press.characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
-                  !press.characters.trimmingCharacters(in: .whitespaces).isEmpty else { return .ignored }
+                !press.characters.isEmpty,
+                press.characters.unicodeScalars.allSatisfy({
+                    !CharacterSet.controlCharacters.contains($0)
+                }),
+                !press.characters.trimmingCharacters(in: .whitespaces).isEmpty
+            else { return .ignored }
             query += press.characters
             focused = true
             return .handled
@@ -106,6 +111,7 @@ func browserSize(_ size: UInt64?, directory: Bool) -> String {
 }
 
 func browserDate(_ modified: Double?) -> String {
-    guard let modified, modified.isFinite, (-62135596800...253402300799).contains(modified) else { return "—" }
+    guard let modified, modified.isFinite, (-62_135_596_800...253_402_300_799).contains(modified)
+    else { return "—" }
     return Date(timeIntervalSince1970: modified).formatted(date: .abbreviated, time: .shortened)
 }

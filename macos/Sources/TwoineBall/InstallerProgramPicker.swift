@@ -7,8 +7,10 @@ struct InstallerProgramPicker: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeNSView(context: Context) -> NSComboBox {
         let field = NSComboBox()
-        field.isEditable = true; field.completes = true
-        field.hasVerticalScroller = true; field.numberOfVisibleItems = 12
+        field.isEditable = true
+        field.completes = true
+        field.hasVerticalScroller = true
+        field.numberOfVisibleItems = 12
         field.placeholderString = "Choose or enter an installer"
         field.font = .systemFont(ofSize: NSFont.systemFontSize)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -25,7 +27,8 @@ struct InstallerProgramPicker: NSViewRepresentable {
     private func update(_ field: NSComboBox, coordinator: Coordinator) {
         if coordinator.options != suggestions {
             coordinator.options = suggestions
-            field.removeAllItems(); field.addItems(withObjectValues: suggestions)
+            field.removeAllItems()
+            field.addItems(withObjectValues: suggestions)
         }
         if field.stringValue != program { field.stringValue = program }
     }
@@ -39,7 +42,8 @@ struct InstallerProgramPicker: NSViewRepresentable {
         }
         func comboBoxSelectionDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSComboBox,
-                  options.indices.contains(field.indexOfSelectedItem) else { return }
+                options.indices.contains(field.indexOfSelectedItem)
+            else { return }
             parent.program = options[field.indexOfSelectedItem]
         }
     }

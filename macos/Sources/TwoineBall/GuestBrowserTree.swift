@@ -20,7 +20,9 @@ import Observation
     }
 
     @discardableResult
-    func expand(_ path: String, using browse: @escaping @MainActor (String) async throws -> GuestDirectory) -> Task<Void, Never>? {
+    func expand(
+        _ path: String, using browse: @escaping @MainActor (String) async throws -> GuestDirectory
+    ) -> Task<Void, Never>? {
         guard directories[path] == nil, !loading.contains(path) else { return nil }
         let requestedGeneration = generation
         loading.insert(path)
@@ -54,16 +56,20 @@ import Observation
         return nil
     }
 
-    func nodes(_ entries: [GuestEntry], directoriesOnly: Bool = false, programsOnly: Bool = false,
-               relevantOnly: Bool = true) -> [OutlineBrowserNode] {
-        let filtered = BrowserRows.filteredGuestEntries(entries, directoriesOnly: directoriesOnly,
-                                                        programsOnly: programsOnly, relevantOnly: relevantOnly)
+    func nodes(
+        _ entries: [GuestEntry], directoriesOnly: Bool = false, programsOnly: Bool = false,
+        relevantOnly: Bool = true
+    ) -> [OutlineBrowserNode] {
+        let filtered = BrowserRows.filteredGuestEntries(
+            entries, directoriesOnly: directoriesOnly,
+            programsOnly: programsOnly, relevantOnly: relevantOnly)
         return zip(filtered, BrowserRows.guest(filtered)).map { entry, original in
             var node = original
             if entry.directory {
                 node.canExpand = directories[entry.path] == nil
-                node.children = nodes(directories[entry.path] ?? [], directoriesOnly: directoriesOnly,
-                                      programsOnly: programsOnly, relevantOnly: relevantOnly)
+                node.children = nodes(
+                    directories[entry.path] ?? [], directoriesOnly: directoriesOnly,
+                    programsOnly: programsOnly, relevantOnly: relevantOnly)
                 node.busy = loading.contains(entry.path)
                 if let error = errors[entry.path] {
                     node.tooltip = entry.path + "\n" + error

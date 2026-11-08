@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
+
 LxHostSaveResult lx_host_print_save_path(const char *title, const char *extension, char **path)
 {
     if (!path || !extension)

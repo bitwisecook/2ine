@@ -1,20 +1,25 @@
 import AppKit
 import BallCore
-import Foundation
 import Darwin
+import Foundation
 import Testing
+
 @testable import TwoineBall
 
 @MainActor
 private func fixture() throws -> (AppModel, URL) {
-    var root = FileManager.default.temporaryDirectory.appending(path: "2ine-model-" + UUID().uuidString)
+    var root = FileManager.default.temporaryDirectory.appending(
+        path: "2ine-model-" + UUID().uuidString)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     let canonical = try #require(realpath(root.path, nil))
-    root = URL(filePath: String(cString: canonical)); free(canonical)
+    root = URL(filePath: String(cString: canonical))
+    free(canonical)
     let ball = root.appending(path: "Test.2ineball").path
-    let snapshot = try NativeBallCore.request(DesktopRequest("command", ball: ball, arguments: ["init"]), as: BallSnapshot.self)
+    let snapshot = try NativeBallCore.request(
+        DesktopRequest("command", ball: ball, arguments: ["init"]), as: BallSnapshot.self)
     let model = AppModel(preferencesURL: root.appending(path: "prefs.json"))
-    model.selected = ball; model.snapshot = snapshot
+    model.selected = ball
+    model.snapshot = snapshot
     model.undoManager.groupsByEvent = false
     return (model, root)
 }
@@ -28,13 +33,18 @@ private func waitForOperation(_ model: AppModel) async throws {
     }
 }
 
-@Test @MainActor func mappingFailurePreservesHistoryAndSuccessfulRemappingSupportsUndoRedo() async throws {
+@Test @MainActor func mappingFailurePreservesHistoryAndSuccessfulRemappingSupportsUndoRedo()
+    async throws
+{
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
-    let first = root.appending(path: "First"); let second = root.appending(path: "Second")
+    let first = root.appending(path: "First")
+    let second = root.appending(path: "Second")
     try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
-    await #expect(throws: BallError.self) { try await model.mapDrive("D", directory: root.appending(path: "missing").path) }
+    await #expect(throws: BallError.self) {
+        try await model.mapDrive("D", directory: root.appending(path: "missing").path)
+    }
     #expect(!model.undoManager.canUndo)
     try await model.mapDrive("D", directory: first.path)
     try await model.mapDrive("D", directory: second.path)
@@ -44,10 +54,13 @@ private func waitForOperation(_ model: AppModel) async throws {
     try await waitForOperation(model)
     #expect(model.snapshot?.roots["D"] == first.path)
     #expect(model.undoManager.canRedo)
-    model.undoManager.redo(); try await waitForOperation(model)
+    model.undoManager.redo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.roots["D"] == second.path)
-    model.undoManager.undo(); try await waitForOperation(model)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.roots["D"] == nil)
     #expect(model.error == nil)
 }
@@ -55,19 +68,22 @@ private func waitForOperation(_ model: AppModel) async throws {
 @Test @MainActor func undoToUnavailableFolderKeepsDriveEjectedAndCanBeRedone() async throws {
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
-    let first = root.appending(path: "First"); let second = root.appending(path: "Second")
+    let first = root.appending(path: "First")
+    let second = root.appending(path: "Second")
     try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
     try await model.mapDrive("D", directory: first.path)
     try await model.mapDrive("D", directory: second.path)
     try FileManager.default.removeItem(at: first)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.error == nil)
     #expect(model.undoManager.canRedo)
     #expect(model.undoManager.canUndo)
     #expect(model.snapshot?.roots["D"] == nil)
     #expect(model.snapshot?.unavailableDrives?["D"] == first.path)
-    model.undoManager.redo(); try await waitForOperation(model)
+    model.undoManager.redo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.roots["D"] == second.path)
 }
 
@@ -76,7 +92,8 @@ private func waitForOperation(_ model: AppModel) async throws {
     defer { try? FileManager.default.removeItem(at: root) }
     let ball = try #require(model.selected)
     let draft = model.settingsDraft
-    draft.envName = "PENDING"; draft.envValue = "unfinished"
+    draft.envName = "PENDING"
+    draft.envValue = "unfinished"
     model.command(["config", "system.beep_volume", "0.5"])
     try await waitForOperation(model)
     #expect(model.settingsDraft === draft)
@@ -85,7 +102,8 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(model.settingsDraft.envName.isEmpty)
     model.selected = ball
     #expect(model.settingsDraft.envName == "PENDING")
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.system["beep_volume"] == nil)
     #expect(draft.envValue == "unfinished")
 }
@@ -106,11 +124,14 @@ private func waitForOperation(_ model: AppModel) async throws {
     let ball = try #require(model.selected)
     try await model.setRuntime(external.path, ball: ball)
     #expect(model.snapshot?.manifest.runtime["build"] == external.path)
-    model.useBundledRuntime(); try await waitForOperation(model)
+    model.useBundledRuntime()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.runtime["build"] == nil)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.runtime["build"] == external.path)
-    model.undoManager.redo(); try await waitForOperation(model)
+    model.undoManager.redo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.runtime["build"] == nil)
     #expect(model.error == nil)
 }
@@ -119,7 +140,9 @@ private func waitForOperation(_ model: AppModel) async throws {
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     var iso = Data(count: 24 * 2048)
-    func bytes(_ offset: Int, _ values: [UInt8]) { iso.replaceSubrange(offset..<(offset + values.count), with: values) }
+    func bytes(_ offset: Int, _ values: [UInt8]) {
+        iso.replaceSubrange(offset..<(offset + values.count), with: values)
+    }
     let descriptor = 16 * 2048
     bytes(descriptor, [1, 67, 68, 48, 48, 49, 1])
     bytes(descriptor + 80, [24, 0, 0, 0, 0, 0, 0, 24])
@@ -136,13 +159,17 @@ private func waitForOperation(_ model: AppModel) async throws {
     try await model.mapDrive("D", directory: image.path, image: true)
     #expect(model.snapshot?.manifest.drives["D"]?.image == image.path)
     #expect(model.snapshot?.roots["D"]?.hasPrefix("/@2ine-device/") == true)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.drives["D"]?.image == nil)
     #expect(model.snapshot?.roots["D"] == root.path)
-    model.undoManager.redo(); try await waitForOperation(model)
+    model.undoManager.redo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.drives["D"]?.image == image.path)
-    model.command(["unmap", "D"]); try await waitForOperation(model)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.command(["unmap", "D"])
+    try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.drives["D"]?.image == image.path)
     #expect(model.error == nil)
 }
@@ -157,9 +184,11 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(model.availableMediaLetter(.cdrom) == "E")
     try await model.changeMedia(["eject", "D"])
     #expect(model.snapshot?.roots["D"] == deviceRoot)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.drives["D"]?.device == .cdrom)
-    model.busy = true; model.processRunning = true
+    model.busy = true
+    model.processRunning = true
     #expect(model.canChangeMedia)
     try await model.changeMedia(["eject", "D"])
     #expect(model.busy && model.undoManager.blocked)
@@ -168,11 +197,14 @@ private func waitForOperation(_ model: AppModel) async throws {
     model.busy = false
 }
 
-@Test @MainActor func installerSuggestionsIncludeCommandFilesWithoutRestrictingBrowsing() async throws {
+@Test @MainActor func installerSuggestionsIncludeCommandFilesWithoutRestrictingBrowsing()
+    async throws
+{
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     let media = root.appending(path: "Media")
-    try FileManager.default.createDirectory(at: media.appending(path: "ENGLISH"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+        at: media.appending(path: "ENGLISH"), withIntermediateDirectories: true)
     for name in ["setup.cmd", "ENGLISH/install.exe", "unusual-tool.cmd", "notes.txt"] {
         try Data("file".utf8).write(to: media.appending(path: name))
     }
@@ -197,9 +229,11 @@ private func waitForOperation(_ model: AppModel) async throws {
     try await model.changeMedia(["device-lock", "A", "on"])
     await #expect(throws: BallError.self) { try await model.changeMedia(["eject", "A"]) }
     #expect(model.snapshot?.manifest.drives["A"]?.image == image.path)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.drives["A"]?.isLocked == false)
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.snapshot?.manifest.drives["A"]?.isReadOnly == false)
     try await model.changeMedia(["eject", "A"])
     #expect(model.snapshot?.manifest.drives["A"]?.image == nil)
@@ -218,12 +252,14 @@ private func waitForOperation(_ model: AppModel) async throws {
         #expect(model.imageSource("F") == image.path)
         try await model.changeMedia(["media-readonly", "F", "on"])
         #expect(model.snapshot?.manifest.drives["F"]?.isReadOnly == true)
-        model.undoManager.undo(); try await waitForOperation(model)
+        model.undoManager.undo()
+        try await waitForOperation(model)
         #expect(model.snapshot?.manifest.drives["F"]?.isReadOnly == false)
     }
 }
 
-@Test @MainActor func supportImportUpdatesTheSelectedBallAndPreservesApplicationMedia() async throws {
+@Test @MainActor func supportImportUpdatesTheSelectedBallAndPreservesApplicationMedia() async throws
+{
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     let media = root.appending(path: "OS2 Media")
@@ -246,16 +282,23 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(model.busy == false)
 }
 
-@Test @MainActor func os2ImportReviewDefaultsToCommandSupportAndPreservesOptionalFiles() async throws {
+@Test @MainActor func os2ImportReviewDefaultsToCommandSupportAndPreservesOptionalFiles()
+    async throws
+{
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     let ball = try #require(model.selected)
     let media = root.appending(path: "Media")
-    try FileManager.default.createDirectory(at: media.appending(path: "OS2"), withIntermediateDirectories: true)
-    try FileManager.default.createDirectory(at: media.appending(path: "PSFONTS"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+        at: media.appending(path: "OS2"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+        at: media.appending(path: "PSFONTS"), withIntermediateDirectories: true)
     var executable = Data(repeating: 0, count: 100)
-    executable[0] = 77; executable[1] = 90; executable[60] = 64
-    executable[64] = 76; executable[65] = 88
+    executable[0] = 77
+    executable[1] = 90
+    executable[60] = 64
+    executable[64] = 76
+    executable[65] = 88
     try executable.write(to: media.appending(path: "OS2/CMD.EXE"))
     try Data("font".utf8).write(to: media.appending(path: "PSFONTS/TEST.PFB"))
     let source = try await model.openOS2Source([media.path], ball: ball)
@@ -276,14 +319,19 @@ private func waitForOperation(_ model: AppModel) async throws {
 
 @Test @MainActor func liveConfigUpdatesFollowDiskAndPreserveConflictingDraft() async throws {
     let (model, root) = try fixture()
-    defer { model.processRunning = false; try? FileManager.default.removeItem(at: root) }
+    defer {
+        model.processRunning = false
+        try? FileManager.default.removeItem(at: root)
+    }
     let ball = try #require(model.selected)
     let path = URL(filePath: ball).appending(path: "drive_c/CONFIG.SYS")
     let original = model.configText
     try Data((original + "REM café\r\n").unicodeScalars.map { UInt8($0.value) }).write(to: path)
     model.processRunning = true
     let deadline = ContinuousClock.now + .seconds(4)
-    while !model.configText.contains("café") && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(30)) }
+    while !model.configText.contains("café") && ContinuousClock.now < deadline {
+        try await Task.sleep(for: .milliseconds(30))
+    }
     #expect(model.configText == original + "REM café\r\n")
     model.configText += "SET DRAFT=kept\r\n"
     let draft = model.configText
@@ -303,7 +351,9 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(!model.configConflict)
 }
 
-@Test @MainActor func cleanConfigDraftFollowsExternalEditsAndProfileEditingRequiresStoppedGuest() async throws {
+@Test @MainActor func cleanConfigDraftFollowsExternalEditsAndProfileEditingRequiresStoppedGuest()
+    async throws
+{
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     let ball = try #require(model.selected)
@@ -318,10 +368,14 @@ private func waitForOperation(_ model: AppModel) async throws {
     let profile = try await model.configuration("registry", ball: ball)
     model.processRunning = true
     await #expect(throws: BallError.self) {
-        try await model.saveConfiguration("registry", ball: ball, revision: profile.revision, application: "hkcu\\software\\fixture", key: "v:test", data: "0400000001000000")
+        try await model.saveConfiguration(
+            "registry", ball: ball, revision: profile.revision,
+            application: "hkcu\\software\\fixture", key: "v:test", data: "0400000001000000")
     }
     model.processRunning = false
-    let saved = try await model.saveConfiguration("registry", ball: ball, revision: profile.revision, application: "hkcu\\software\\fixture", key: "v:test", data: "0400000001000000")
+    let saved = try await model.saveConfiguration(
+        "registry", ball: ball, revision: profile.revision, application: "hkcu\\software\\fixture",
+        key: "v:test", data: "0400000001000000")
     #expect(saved.entries.contains { $0.key == "v:test" && $0.registryType == 4 })
 }
 
@@ -330,7 +384,8 @@ private func waitForOperation(_ model: AppModel) async throws {
     defer { try? FileManager.default.removeItem(at: root) }
     let ball = try #require(model.selected)
     let media = root.appending(path: "Original OS2")
-    try FileManager.default.createDirectory(at: media.appending(path: "OS2/HELP"), withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+        at: media.appending(path: "OS2/HELP"), withIntermediateDirectories: true)
     try Data("original Help".utf8).write(to: media.appending(path: "OS2/HELP/BOOK.HLP"))
     try await model.rememberOS2Media([media.path], ball: ball)
     let status = try await model.os2Support()
@@ -347,7 +402,9 @@ private func waitForOperation(_ model: AppModel) async throws {
     let installed = try await model.planOS2Extraction(sources, ball: ball)
     #expect(installed.installedCategories == [.help])
     #expect(installed.selectedFiles([.help]).isEmpty)
-    #expect(try Data(contentsOf: URL(filePath: ball).appending(path: "drive_c/OS2/HELP/BOOK.HLP")) == Data("original Help".utf8))
+    #expect(
+        try Data(contentsOf: URL(filePath: ball).appending(path: "drive_c/OS2/HELP/BOOK.HLP"))
+            == Data("original Help".utf8))
 }
 
 @Test @MainActor func verifiedOS2MediaIsSuggestedAcrossBallsAndAppRestarts() async throws {
@@ -367,24 +424,30 @@ private func waitForOperation(_ model: AppModel) async throws {
     var saved = try await store.load()
     #expect(!saved.lastOS2MediaSources.isEmpty)
     #expect(saved.lastOS2MediaFiles == [media.deletingLastPathComponent().path])
-    saved.ballPaths = [ball]; saved.selected = ball
+    saved.ballPaths = [ball]
+    saved.selected = ball
     try await store.save(saved)
     let fresh = AppModel(preferencesURL: root.appending(path: "prefs.json"))
-    fresh.start(); try await waitForOperation(fresh)
+    fresh.start()
+    try await waitForOperation(fresh)
     let second = root.appending(path: "New.2ineball")
     fresh.selected = second.path
-    fresh.snapshot = try NativeBallCore.request(DesktopRequest("command", ball: second.path, arguments: ["init"]), as: BallSnapshot.self)
+    fresh.snapshot = try NativeBallCore.request(
+        DesktopRequest("command", ball: second.path, arguments: ["init"]), as: BallSnapshot.self)
     #expect(fresh.suggestedOS2MediaSources([]) == saved.lastOS2MediaSources)
     #expect(!FileManager.default.fileExists(atPath: second.appending(path: "os2-media.json").path))
     let applicationMedia = root.appending(path: "Application CD")
     try FileManager.default.createDirectory(at: applicationMedia, withIntermediateDirectories: true)
-    try Data("application installer".utf8).write(to: applicationMedia.appending(path: "INSTALL.EXE"))
+    try Data("application installer".utf8).write(
+        to: applicationMedia.appending(path: "INSTALL.EXE"))
     try await fresh.rememberOS2Media([applicationMedia.path], ball: second.path)
     #expect(fresh.lastOS2MediaSources == saved.lastOS2MediaSources)
     #expect(fresh.suggestedOS2MediaSources([applicationMedia.path]) == [applicationMedia.path])
 }
 
-@Test @MainActor func componentAndProviderNavigationSelectTheMatchingTabsAndPreserveUndo() async throws {
+@Test @MainActor func componentAndProviderNavigationSelectTheMatchingTabsAndPreserveUndo()
+    async throws
+{
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     model.beginProgram(.install)
@@ -395,29 +458,38 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(model.settingsSection == .graphics)
     #expect(model.highlightedSetting == "graphics.opengl")
     let cachedBall = try #require(model.selected)
-    let cached = try JSONDecoder().decode(OS2ExtractionPlan.self, from: Data(#"{"files":[],"unmapped":[]}"#.utf8))
+    let cached = try JSONDecoder().decode(
+        OS2ExtractionPlan.self, from: Data(#"{"files":[],"unmapped":[]}"#.utf8))
     model.componentPlans[cachedBall] = cached
-    model.installOriginalOpenGL(); try await waitForOperation(model)
+    model.installOriginalOpenGL()
+    try await waitForOperation(model)
     #expect(model.componentPlans[cachedBall] == nil)
     #expect(model.snapshot?.manifest.system["opengl"]?.text == "original")
     #expect(model.page == .systemComponents)
     #expect(model.componentNavigation?.category == .opengl)
-    let plan = try JSONDecoder().decode(OS2ExtractionPlan.self, from: Data(#"""
-    {"files":[],"unmapped":[],"tree":{"id":"all","title":"All","kind":"group","category":"full","children":[
-     {"id":"opengl","title":"OpenGL","kind":"group","category":"opengl","children":[
-      {"id":"gl-source","source":"gl-source","kind":"file","title":"OPENGL.DLL","category":"opengl"}]}]}}
-    """#.utf8))
+    let plan = try JSONDecoder().decode(
+        OS2ExtractionPlan.self,
+        from: Data(
+            #"""
+            {"files":[],"unmapped":[],"tree":{"id":"all","title":"All","kind":"group","category":"full","children":[
+             {"id":"opengl","title":"OpenGL","kind":"group","category":"opengl","children":[
+              {"id":"gl-source","source":"gl-source","kind":"file","title":"OPENGL.DLL","category":"opengl"}]}]}}
+            """#.utf8))
     let ball = try #require(model.selected)
-    let empty = try JSONDecoder().decode(OS2ExtractionPlan.self, from: Data(#"""
-    {"files":[],"unmapped":[],"tree":{"id":"all","title":"All","kind":"group","category":"full","children":[
-     {"id":"opengl","title":"OpenGL","kind":"group","category":"opengl","children":[]}]}}
-    """#.utf8))
+    let empty = try JSONDecoder().decode(
+        OS2ExtractionPlan.self,
+        from: Data(
+            #"""
+            {"files":[],"unmapped":[],"tree":{"id":"all","title":"All","kind":"group","category":"full","children":[
+             {"id":"opengl","title":"OpenGL","kind":"group","category":"opengl","children":[]}]}}
+            """#.utf8))
     #expect(model.componentSelection(in: empty, preserving: [], ball: ball).isEmpty)
     #expect(model.componentSelection(in: plan, preserving: [], ball: ball) == ["gl-source"])
     #expect(model.componentSelection(in: plan, preserving: [], ball: ball).isEmpty)
     #expect(model.undoManager.canUndo)
     model.componentPlans[ball] = plan
-    model.undoManager.undo(); try await waitForOperation(model)
+    model.undoManager.undo()
+    try await waitForOperation(model)
     #expect(model.componentPlans[ball] == nil)
     #expect(model.snapshot?.manifest.system["opengl"] == nil)
     model.openComponentSetting("printing")
@@ -431,15 +503,18 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(model.componentNavigation?.category == .opengl)
     #expect(model.componentNavigation?.selectsComponent == false)
     #expect(model.componentSelection(in: plan, preserving: [], ball: ball).isEmpty)
-    #expect(model.componentSelection(in: plan, preserving: ["existing"], ball: ball) == ["existing"])
+    #expect(
+        model.componentSelection(in: plan, preserving: ["existing"], ball: ball) == ["existing"])
 }
 
-@Test @MainActor func componentJobsLeaveNavigationFreeAndRemoveOnlyTheirRecordedFiles() async throws {
+@Test @MainActor func componentJobsLeaveNavigationFreeAndRemoveOnlyTheirRecordedFiles() async throws
+{
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     let ball = try #require(model.selected)
     let second = root.appending(path: "Second.2ineball").path
-    _ = try NativeBallCore.request(DesktopRequest("command", ball: second, arguments: ["init"]), as: BallSnapshot.self)
+    _ = try NativeBallCore.request(
+        DesktopRequest("command", ball: second, arguments: ["init"]), as: BallSnapshot.self)
     model.paths = [ball, second]
     let media = root.appending(path: "Media/OS2/HELP")
     try FileManager.default.createDirectory(at: media, withIntermediateDirectories: true)
@@ -455,18 +530,23 @@ private func waitForOperation(_ model: AppModel) async throws {
     model.select(second)
     let deadline = ContinuousClock.now + .seconds(15)
     while job.running || model.busy {
-        guard ContinuousClock.now < deadline else { throw BallError("Background component job did not finish") }
+        guard ContinuousClock.now < deadline else {
+            throw BallError("Background component job did not finish")
+        }
         try await Task.sleep(for: .milliseconds(5))
     }
     #expect(model.selected == second)
     #expect(job.error == nil)
     let state = try await model.componentState(ball: ball, paths: [file.path])
     #expect(state.managedPaths == [file.path])
-    model.select(ball); try await waitForOperation(model)
+    model.select(ball)
+    try await waitForOperation(model)
     model.startComponentOperation(ball: ball, kind: "remove", sources: [], files: [file])
     let removal = try #require(model.componentJobs[ball])
     while removal.running || model.busy {
-        guard ContinuousClock.now < deadline else { throw BallError("Background removal did not finish") }
+        guard ContinuousClock.now < deadline else {
+            throw BallError("Background removal did not finish")
+        }
         try await Task.sleep(for: .milliseconds(5))
     }
     #expect(removal.error == nil)

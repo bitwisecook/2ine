@@ -1,5 +1,6 @@
-import Foundation
 import Darwin
+import Foundation
+
 #if canImport(BallEngine)
 import BallEngine
 #endif
@@ -29,27 +30,46 @@ public actor ProcessRunner {
 
     public func stop(force: Bool = false) {
         guard let process, process.isRunning else { return }
-        if force { kill(process.processIdentifier, operationSupervised ? SIGUSR2 : SIGKILL) }
-        else { process.terminate() }
+        if force {
+            kill(process.processIdentifier, operationSupervised ? SIGUSR2 : SIGKILL)
+        } else {
+            process.terminate()
+        }
     }
 
-    public func run(executable: URL, arguments: [String],
-                    environment: [String: String]? = nil, cwd: URL? = nil,
-                    log: URL, operationSupervised: Bool = false,
-                    update: @Sendable (String) async -> Void = { _ in }) async throws -> ProcessResult {
+    public func run(
+        executable: URL, arguments: [String],
+        environment: [String: String]? = nil, cwd: URL? = nil,
+        log: URL, operationSupervised: Bool = false,
+        update: @Sendable (String) async -> Void = { _ in }
+    ) async throws -> ProcessResult {
         guard process == nil else { throw BallError("Wait for the current operation to finish.") }
-        guard !pendingStop else { pendingStop = false; throw CancellationError() }
+        guard !pendingStop else {
+            pendingStop = false
+            throw CancellationError()
+        }
         let files = FileManager.default
-        try files.createDirectory(at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
-        guard files.createFile(atPath: log.path, contents: nil) else { throw BallError("Cannot create process log at \(log.path).") }
+        try files.createDirectory(
+            at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard files.createFile(atPath: log.path, contents: nil) else {
+            throw BallError("Cannot create process log at \(log.path).")
+        }
         let output = try FileHandle(forWritingTo: log)
         let reader = try FileHandle(forReadingFrom: log)
-        defer { process = nil; self.operationSupervised = false; pendingStop = false; try? output.close(); try? reader.close() }
+        defer {
+            process = nil
+            self.operationSupervised = false
+            pendingStop = false
+            try? output.close()
+            try? reader.close()
+        }
         let child = Process()
-        child.executableURL = executable; child.arguments = arguments
+        child.executableURL = executable
+        child.arguments = arguments
         child.environment = environment ?? ProcessInfo.processInfo.environment
         child.currentDirectoryURL = cwd
-        child.standardOutput = output; child.standardError = output
+        child.standardOutput = output
+        child.standardError = output
         child.standardInput = FileHandle.nullDevice
         try child.run()
         process = child
@@ -62,10 +82,13 @@ public actor ProcessRunner {
             if size != lastSize || ended {
                 try reader.seek(toOffset: size > 65536 ? size - 65536 : 0)
                 tail = String(decoding: try reader.read(upToCount: 65536) ?? Data(), as: UTF8.self)
-                await update(tail); lastSize = size
+                await update(tail)
+                lastSize = size
             }
             if ended {
-                return ProcessResult(code: child.terminationStatus, signalled: child.terminationReason == .uncaughtSignal, output: tail, log: log)
+                return ProcessResult(
+                    code: child.terminationStatus,
+                    signalled: child.terminationReason == .uncaughtSignal, output: tail, log: log)
             }
             // The manager owns this operation until actual exit; view/task
             // cancellation never abandons a still-running guest process.
@@ -104,7 +127,9 @@ public actor BallBackend {
 
     private func retire(_ id: String) {
         sessions.removeValue(forKey: id)
-        if completedSessions.count >= 256, let oldest = completedSessions.first { completedSessions.remove(oldest) }
+        if completedSessions.count >= 256, let oldest = completedSessions.first {
+            completedSessions.remove(oldest)
+        }
         completedSessions.insert(id)
     }
 
@@ -117,7 +142,9 @@ public actor BallBackend {
     public func stop(sessionID: String, force: Bool = false) async {
         guard let session = sessions[sessionID] else {
             if validLaunchSessionID(sessionID), !completedSessions.contains(sessionID) {
-                if pendingStops.count >= 256, let oldest = pendingStops.first { pendingStops.remove(oldest) }
+                if pendingStops.count >= 256, let oldest = pendingStops.first {
+                    pendingStops.remove(oldest)
+                }
                 pendingStops.insert(sessionID)
             }
             return
@@ -129,18 +156,29 @@ public actor BallBackend {
         await LaunchCoordinator.shared.activeSessionIDs(ball: ball)
     }
 
-    public func request<T: Decodable & Sendable>(_ message: DesktopRequest, as type: T.Type) throws -> T {
+    public func request<T: Decodable & Sendable>(
+        _ message: DesktopRequest, as type: T.Type
+    ) throws -> T {
         try NativeBallCore.request(message, as: type)
     }
 
-    public func execute(ball: String, build: String, arguments: [String],
-                        workingDirectories: [String: String]? = nil, environment overrides: [String: String]? = nil,
-                        sessionID: String = UUID().uuidString,
-                        update: @Sendable (String) async -> Void) async throws -> ProcessResult {
-        guard validLaunchSessionID(sessionID), sessions[sessionID] == nil, !completedSessions.contains(sessionID) else {
-            throw BallError("Choose a unique application session ID containing letters, digits, hyphens or underscores.")
+    public func execute(
+        ball: String, build: String, arguments: [String],
+        workingDirectories: [String: String]? = nil, environment overrides: [String: String]? = nil,
+        sessionID: String = UUID().uuidString,
+        update: @Sendable (String) async -> Void
+    ) async throws -> ProcessResult {
+        guard validLaunchSessionID(sessionID), sessions[sessionID] == nil,
+            !completedSessions.contains(sessionID)
+        else {
+            throw BallError(
+                "Choose a unique application session ID containing letters, digits, hyphens or underscores."
+            )
         }
-        if pendingStops.remove(sessionID) != nil { retire(sessionID); throw CancellationError() }
+        if pendingStops.remove(sessionID) != nil {
+            retire(sessionID)
+            throw CancellationError()
+        }
         let canonicalBall = canonicalLaunchBall(ball)
         let runner = ProcessRunner()
         sessions[sessionID] = Session(runner: runner, ball: canonicalBall)
@@ -148,37 +186,48 @@ public actor BallBackend {
         var reserved = false
         var lease: StartupLease?
         do {
-            var message = DesktopRequest("prepare-launch", ball: canonicalBall, build: build, arguments: arguments)
-            message.workingDirectories = workingDirectories; message.environment = overrides
-            let plan = try await coordinator.prepare(sessionID: sessionID, ball: canonicalBall,
-                                                     installer: arguments.first == "install", message: message)
+            var message = DesktopRequest(
+                "prepare-launch", ball: canonicalBall, build: build, arguments: arguments)
+            message.workingDirectories = workingDirectories
+            message.environment = overrides
+            let plan = try await coordinator.prepare(
+                sessionID: sessionID, ball: canonicalBall,
+                installer: arguments.first == "install", message: message)
             reserved = true
-            guard let executable = plan.command.first else { throw BallError("The runtime launch command is empty.") }
+            guard let executable = plan.command.first else {
+                throw BallError("The runtime launch command is empty.")
+            }
             let log = URL(filePath: canonicalBall).appending(path: "logs/macos-\(sessionID).log")
-            lease = try await coordinator.acquireStartup(sessionID: sessionID, ball: canonicalBall,
-                                                         plans: plan.startup ?? [], log: log)
+            lease = try await coordinator.acquireStartup(
+                sessionID: sessionID, ball: canonicalBall,
+                plans: plan.startup ?? [], log: log)
             var environment = ProcessInfo.processInfo.environment
             for key in plan.unsetEnvironment { environment.removeValue(forKey: key) }
             environment.merge(plan.environment) { _, value in value }
             if environment["TERM"] == nil { environment["TERM"] = "xterm-256color" }
-            let desktop = try await DesktopLaunchBundle.create(ball: canonicalBall, sessionID: sessionID,
-                                                          loader: URL(filePath: executable), identity: plan.desktopIdentity,
-                                                           fallbackIcon: Bundle.main.url(forResource: "Twoine", withExtension: "icns"))
+            let desktop = try await DesktopLaunchBundle.create(
+                ball: canonicalBall, sessionID: sessionID,
+                loader: URL(filePath: executable), identity: plan.desktopIdentity,
+                fallbackIcon: Bundle.main.url(forResource: "Twoine", withExtension: "icns"))
             environment["TWOINE_DESKTOP_SESSION"] = sessionID
             environment["TWOINE_DESKTOP_NAME"] = desktop.name
             if let icon = desktop.icon { environment["TWOINE_DESKTOP_ICON"] = icon.path }
-            var result = try await runner.run(executable: desktop.executable,
-                                              arguments: Array(plan.command.dropFirst()), environment: environment,
-                                              cwd: URL(filePath: plan.cwd), log: log,
-                                              operationSupervised: plan.operationSupervised == true, update: update)
+            var result = try await runner.run(
+                executable: desktop.executable,
+                arguments: Array(plan.command.dropFirst()), environment: environment,
+                cwd: URL(filePath: plan.cwd), log: log,
+                operationSupervised: plan.operationSupervised == true, update: update)
             result.sessionID = sessionID
             result.startupLogs = lease?.logs ?? []
             result.dependencyAudit = plan.dependencyAudit
             if plan.installer {
                 do {
-                    let installed = try request(DesktopRequest("record-install", ball: canonicalBall, build: build,
-                                                               receipt: plan.receipt, programHost: plan.programHost,
-                                                               exitCode: result.signalled ? -result.code : result.code), as: BallSnapshot.self)
+                    let installed = try request(
+                        DesktopRequest(
+                            "record-install", ball: canonicalBall, build: build,
+                            receipt: plan.receipt, programHost: plan.programHost,
+                            exitCode: result.signalled ? -result.code : result.code),
+                        as: BallSnapshot.self)
                     result.dependencyAudit = installed.dependencyAudit
                 } catch { result.receiptError = error.localizedDescription }
             }
@@ -196,12 +245,17 @@ public actor BallBackend {
 }
 
 public enum NativeBallCore {
-    public static func request<T: Decodable & Sendable>(_ message: DesktopRequest, as type: T.Type) throws -> T {
+    public static func request<T: Decodable & Sendable>(
+        _ message: DesktopRequest, as type: T.Type
+    ) throws -> T {
         let text = String(decoding: try JSONEncoder().encode(message), as: UTF8.self)
         var result: UnsafeMutablePointer<CChar>?
         var diagnostic: UnsafeMutablePointer<CChar>?
         let status = text.withCString { tb_request($0, &result, &diagnostic) }
-        defer { if let result { tb_free(result) }; if let diagnostic { tb_free(diagnostic) } }
+        defer {
+            if let result { tb_free(result) }
+            if let diagnostic { tb_free(diagnostic) }
+        }
         guard status == 0, let result else {
             throw BallError(diagnostic.map { String(cString: $0) } ?? "Ball operation failed.")
         }

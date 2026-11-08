@@ -11,11 +11,17 @@
 #include <unistd.h>
 static LxDesktopGroup *group;
 static int enabled, initialized, auxiliary, standalone;
-int lx_desktop_native_main_thread(void) { return NSThread.isMainThread; }
+
+int lx_desktop_native_main_thread(void)
+{
+    return NSThread.isMainThread;
+}
+
 static LxDesktopCycle *cycle;
 static id cycle_monitor, cycle_focus_observer;
 static uint32_t last_windows[256], last_focus;
 static int last_count = -1, last_blocked, observed_blocked, key_consumed;
+
 static NSWindow *native_window(SDL_Window *window)
 {
     return (__bridge NSWindow *)SDL_GetPointerProperty(SDL_GetWindowProperties(window),
@@ -316,7 +322,11 @@ int lx_desktop_initialized(void)
     return 1;
 }
 
-int lx_desktop_grouped(void) { return initialized; }
+int lx_desktop_grouped(void)
+{
+    return initialized;
+}
+
 void lx_desktop_poll(void)
 {
     if (initialized && SDL_IsMainThread())
@@ -335,4 +345,7 @@ void lx_desktop_visible(void *window, int visible)
     }
 }
 
-void lx_desktop_forget(void *window) { lx_desktop_visible(window, 0); }
+void lx_desktop_forget(void *window)
+{
+    lx_desktop_visible(window, 0);
+}

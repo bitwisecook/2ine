@@ -20,29 +20,82 @@ public struct SavedApplication: Decodable, Sendable {
 /// retaining unknown fields and installer-owned state.
 public enum MediaDeviceKind: String, Codable, Sendable, CaseIterable {
     case cdrom, floppy, disk
-    public var title: String { switch self { case .cdrom: "CD"; case .floppy: "Floppy"; case .disk: "Disk" } }
-    public var symbol: String { switch self { case .cdrom: "opticaldisc"; case .floppy: "floppy"; case .disk: "externaldrive" } }
+    public var title: String {
+        switch self {
+        case .cdrom: "CD"
+        case .floppy: "Floppy"
+        case .disk: "Disk"
+        }
+    }
+    public var symbol: String {
+        switch self {
+        case .cdrom: "opticaldisc"
+        case .floppy: "floppy"
+        case .disk: "externaldrive"
+        }
+    }
 }
 
 public enum DriveMapping: Decodable, Sendable {
-    case directory(String), image(String), removable(MediaDeviceKind, String?, Bool, Bool)
+    case directory(String)
+    case image(String)
+    case removable(MediaDeviceKind, String?, Bool, Bool)
     public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if let path = try? container.decode(String.self) { self = .directory(path) }
-        else {
-            struct ImageSource: Decodable { let image: String?; let device: MediaDeviceKind?; let readonly: Bool?; let locked: Bool? }
+        if let path = try? container.decode(String.self) {
+            self = .directory(path)
+        } else {
+            struct ImageSource: Decodable {
+                let image: String?
+                let device: MediaDeviceKind?
+                let readonly: Bool?
+                let locked: Bool?
+            }
             let value = try container.decode(ImageSource.self)
-            if let device = value.device { self = .removable(device, value.image, device == .cdrom || value.readonly == true, value.locked == true) }
-            else if let image = value.image { self = .image(image) }
-            else { throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid drive mapping") }
+            if let device = value.device {
+                self = .removable(
+                    device, value.image, device == .cdrom || value.readonly == true,
+                    value.locked == true)
+            } else if let image = value.image {
+                self = .image(image)
+            } else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "Invalid drive mapping")
+            }
         }
     }
-    public var source: String { switch self { case .directory(let path), .image(let path): path; case .removable(_, let path, _, _): path ?? "Ejected" } }
-    public var image: String? { switch self { case .image(let path): path; case .removable(_, let path, _, _): path; default: nil } }
-    public var device: MediaDeviceKind? { switch self { case .image: .cdrom; case .removable(let kind, _, _, _): kind; default: nil } }
+    public var source: String {
+        switch self {
+        case .directory(let path), .image(let path): path
+        case .removable(_, let path, _, _): path ?? "Ejected"
+        }
+    }
+    public var image: String? {
+        switch self {
+        case .image(let path): path
+        case .removable(_, let path, _, _): path
+        default: nil
+        }
+    }
+    public var device: MediaDeviceKind? {
+        switch self {
+        case .image: .cdrom
+        case .removable(let kind, _, _, _): kind
+        default: nil
+        }
+    }
     public var isRemovable: Bool { device != nil }
-    public var isReadOnly: Bool { switch self { case .image: true; case .removable(_, _, let readonly, _): readonly; default: false } }
-    public var isLocked: Bool { if case .removable(_, _, _, let locked) = self { return locked }; return false }
+    public var isReadOnly: Bool {
+        switch self {
+        case .image: true
+        case .removable(_, _, let readonly, _): readonly
+        default: false
+        }
+    }
+    public var isLocked: Bool {
+        if case .removable(_, _, _, let locked) = self { return locked }
+        return false
+    }
 }
 
 public struct BallManifest: Decodable, Sendable {
@@ -55,12 +108,18 @@ public struct BallManifest: Decodable, Sendable {
 }
 
 public enum SettingValue: Decodable, Sendable {
-    case text(String), boolean(Bool), number(Double)
+    case text(String)
+    case boolean(Bool)
+    case number(Double)
     public init(from decoder: any Decoder) throws {
         let value = try decoder.singleValueContainer()
-        if let string = try? value.decode(String.self) { self = .text(string) }
-        else if let flag = try? value.decode(Bool.self) { self = .boolean(flag) }
-        else { self = .number(try value.decode(Double.self)) }
+        if let string = try? value.decode(String.self) {
+            self = .text(string)
+        } else if let flag = try? value.decode(Bool.self) {
+            self = .boolean(flag)
+        } else {
+            self = .number(try value.decode(Double.self))
+        }
     }
     public var text: String {
         switch self {
@@ -123,25 +182,45 @@ public struct DesktopRequest: Encodable, Sendable {
     public var receipt: JSONValue?
     public var programHost: String?
     public var exitCode: Int32?
-    public init(_ action: String, ball: String? = nil, build: String? = nil,
-                arguments: [String]? = nil, expected: String? = nil, text: String? = nil,
-                receipt: JSONValue? = nil, programHost: String? = nil, exitCode: Int32? = nil) {
-        self.action = action; self.ball = ball; self.build = build
-        self.arguments = arguments; self.expected = expected; self.text = text
-        self.receipt = receipt; self.programHost = programHost; self.exitCode = exitCode
+    public init(
+        _ action: String, ball: String? = nil, build: String? = nil,
+        arguments: [String]? = nil, expected: String? = nil, text: String? = nil,
+        receipt: JSONValue? = nil, programHost: String? = nil, exitCode: Int32? = nil
+    ) {
+        self.action = action
+        self.ball = ball
+        self.build = build
+        self.arguments = arguments
+        self.expected = expected
+        self.text = text
+        self.receipt = receipt
+        self.programHost = programHost
+        self.exitCode = exitCode
     }
 }
 
 public enum JSONValue: Codable, Sendable {
-    case string(String), number(Double), boolean(Bool), array([JSONValue]), object([String: JSONValue]), null
+    case string(String)
+    case number(Double)
+    case boolean(Bool)
+    case array([JSONValue])
+    case object([String: JSONValue])
+    case null
     public init(from decoder: any Decoder) throws {
         let c = try decoder.singleValueContainer()
-        if c.decodeNil() { self = .null }
-        else if let value = try? c.decode(String.self) { self = .string(value) }
-        else if let value = try? c.decode(Bool.self) { self = .boolean(value) }
-        else if let value = try? c.decode(Double.self) { self = .number(value) }
-        else if let value = try? c.decode([JSONValue].self) { self = .array(value) }
-        else { self = .object(try c.decode([String: JSONValue].self)) }
+        if c.decodeNil() {
+            self = .null
+        } else if let value = try? c.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? c.decode(Bool.self) {
+            self = .boolean(value)
+        } else if let value = try? c.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? c.decode([JSONValue].self) {
+            self = .array(value)
+        } else {
+            self = .object(try c.decode([String: JSONValue].self))
+        }
     }
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.singleValueContainer()
@@ -168,7 +247,8 @@ public enum Arguments {
         try NativeBallCore.request(DesktopRequest("parse-arguments", text: text), as: [String].self)
     }
     public static func format(_ arguments: [String]) throws -> String {
-        try NativeBallCore.request(DesktopRequest("format-arguments", arguments: arguments), as: String.self)
+        try NativeBallCore.request(
+            DesktopRequest("format-arguments", arguments: arguments), as: String.self)
     }
 }
 
@@ -236,18 +316,20 @@ public struct DependencyAudit: Decodable, Sendable {
         summary + (missing.isEmpty ? "" : "\nMissing libraries: " + missing.joined(separator: ", "))
     }
     public var ungroupedMissingLibraries: [String] {
-        let grouped = Set((componentGroups ?? []).flatMap { $0.modules ?? [] }.map { $0.uppercased() })
+        let grouped = Set(
+            (componentGroups ?? []).flatMap { $0.modules ?? [] }.map { $0.uppercased() })
         return missing.filter { !grouped.contains($0.uppercased()) }
     }
     public var hasComponentAdvice: Bool {
-        stale == true || !missing.isEmpty || !(componentGroups ?? []).isEmpty ||
-            (componentFiles ?? []).contains { $0.status == "missing" }
+        stale == true || !missing.isEmpty || !(componentGroups ?? []).isEmpty
+            || (componentFiles ?? []).contains { $0.status == "missing" }
     }
     public var needsMediaSelection: Bool {
-        !(componentGroups ?? []).isEmpty &&
-        (!missing.isEmpty || (componentFiles ?? []).contains { $0.status == "missing" }) && !(media ?? []).contains {
-            $0.status == "verified-os2-media" || $0.status == "verified-os2-set"
-        }
+        !(componentGroups ?? []).isEmpty
+            && (!missing.isEmpty || (componentFiles ?? []).contains { $0.status == "missing" })
+            && !(media ?? []).contains {
+                $0.status == "verified-os2-media" || $0.status == "verified-os2-set"
+            }
     }
 }
 
@@ -276,7 +358,9 @@ public struct OS2SupportStatus: Decodable, Sendable {
     public let imported: [Imported]?
     public let mediaSources: [String]?
     public let skippedFiles: [SkippedFile]?
-    public var missing: String { files.filter { !$0.present && $0.required != false }.map(\.name).joined(separator: ", ") }
+    public var missing: String {
+        files.filter { !$0.present && $0.required != false }.map(\.name).joined(separator: ", ")
+    }
 }
 
 public struct MediaDirectory: Decodable, Sendable {
@@ -335,21 +419,27 @@ public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Iden
     }
     public var detail: String {
         switch self {
-        case .cmd: "CMD.EXE, installer messages, system version, and the original REXX interpreter and utilities."
+        case .cmd:
+            "CMD.EXE, installer messages, system version, and the original REXX interpreter and utilities."
         case .fonts: "Original bitmap, TrueType, and PostScript fonts."
         case .assets: "Desktop backgrounds, icons, sounds, MIDI files, and videos."
         case .printers: "Original printer drivers and their support files."
         case .help: "Original help manager, viewer, and help books."
-        case .som: "Object libraries, DSOM services, repositories and configuration. Includes supporting language libraries."
+        case .som:
+            "Object libraries, DSOM services, repositories and configuration. Includes supporting language libraries."
         case .runtime: "Original Unicode conversion and shared C runtime libraries."
-        case .multimedia: "Original multimedia tools and support files. Components supplied by 2ine are excluded."
-        case .network: "Original network tools and configuration files. Components supplied by 2ine are excluded."
+        case .multimedia:
+            "Original multimedia tools and support files. Components supplied by 2ine are excluded."
+        case .network:
+            "Original network tools and configuration files. Components supplied by 2ine are excluded."
         case .utilities: "Original command-line and desktop utilities."
         case .languages: "Language resources, keyboard layouts and input support."
         case .diagnostics: "Original diagnostic and troubleshooting tools."
         case .legacy: "Original DOS and Windows compatibility files."
-        case .opengl: "Original OpenGL files. Copying these files does not change the selected graphics provider."
-        case .full: "Includes all options above and remaining OS/2 files. Components supplied by 2ine are excluded."
+        case .opengl:
+            "Original OpenGL files. Copying these files does not change the selected graphics provider."
+        case .full:
+            "Includes all options above and remaining OS/2 files. Components supplied by 2ine are excluded."
         }
     }
     public static let defaults: Set<Self> = [.cmd]
@@ -422,15 +512,19 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
             return nil
         }
         public func filtered(query: String) -> Node? {
-            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return self }
+            guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return self
+            }
             if FileSearch.matches(title + " " + (path ?? ""), query: query) { return self }
             let matches = (children ?? []).compactMap { $0.filtered(query: query) }
             guard !matches.isEmpty else { return nil }
-            return Node(id: id, title: title, kind: kind, detail: detail, category: category, source: source,
-                        path: path, size: size, provided: provided, present: present,
-                        disabled: disabled, priority: priority, preferred: preferred,
-                        provider: provider, setting: setting,
-                        selection: selection, group: group, children: matches)
+            return Node(
+                id: id, title: title, kind: kind, detail: detail, category: category,
+                source: source,
+                path: path, size: size, provided: provided, present: present,
+                disabled: disabled, priority: priority, preferred: preferred,
+                provider: provider, setting: setting,
+                selection: selection, group: group, children: matches)
         }
     }
     public struct Group: Decodable, Sendable, Identifiable {
@@ -461,28 +555,39 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
     public func updatingPresence(_ paths: Set<String>) -> Self {
         let installed = Set(paths.map { $0.uppercased() })
         var copy = self
-        copy.files = files.map { file in var updated = file; updated.present = installed.contains(file.path.uppercased()); return updated }
+        copy.files = files.map { file in
+            var updated = file
+            updated.present = installed.contains(file.path.uppercased())
+            return updated
+        }
         copy.tree = tree?.updatingPresence(installed)
         return copy
     }
     public func updatingSourcePresence(_ sources: Set<String>) -> Self {
         var copy = self
-        copy.files = files.map { file in var updated = file; updated.present = sources.contains(file.source); return updated }
+        copy.files = files.map { file in
+            var updated = file
+            updated.present = sources.contains(file.source)
+            return updated
+        }
         copy.tree = tree?.updatingSourcePresence(sources)
         return copy
     }
     public func sourceSelection(_ categories: Set<OS2ExtractionCategory>) -> Set<String> {
         let expanded = expanded(categories)
-        return Set((tree?.files ?? []).filter {
-            !$0.eligibleSources.isEmpty && (expanded.contains(.full) || $0.category.map(expanded.contains) == true)
-        }.compactMap(\.source))
+        return Set(
+            (tree?.files ?? []).filter {
+                !$0.eligibleSources.isEmpty
+                    && (expanded.contains(.full) || $0.category.map(expanded.contains) == true)
+            }.compactMap(\.source))
     }
     public func selecting(_ node: Node, in selected: Set<String>, enabled: Bool) -> Set<String> {
         guard node.disabled != true else { return selected }
         if !enabled { return selected.subtracting(node.eligibleSources) }
         var result = selected.union(node.eligibleSources)
         if node.kind == "group", let category = node.category,
-           node.id == category.rawValue || category == .full {
+            node.id == category.rawValue || category == .full
+        {
             result.formUnion(sourceSelection(expanded([category])))
         }
         return result
@@ -499,13 +604,19 @@ public struct OS2ExtractionPlan: Decodable, Sendable {
         return result
     }
     public var installedCategories: Set<OS2ExtractionCategory> {
-        let present = Set(files.filter { !$0.provided && $0.present && $0.category != .full }.map(\.category))
+        let present = Set(
+            files.filter { !$0.provided && $0.present && $0.category != .full }.map(\.category))
         return Set(present.filter { selectedFiles([$0]).isEmpty })
     }
     public func selectedFiles(_ categories: Set<OS2ExtractionCategory>) -> [File] {
         let eligible = files.filter { $0.selected(by: expanded(categories)) }
-        let priorities = Dictionary(grouping: eligible, by: { $0.path.uppercased() }).mapValues { $0.map { $0.priority ?? 1 }.max() ?? 1 }
+        let priorities = Dictionary(grouping: eligible, by: { $0.path.uppercased() }).mapValues {
+            $0.map { $0.priority ?? 1 }.max() ?? 1
+        }
         var paths: Set<String> = []
-        return eligible.filter { ($0.priority ?? 1) == priorities[$0.path.uppercased()] && paths.insert($0.path.uppercased()).inserted }
+        return eligible.filter {
+            ($0.priority ?? 1) == priorities[$0.path.uppercased()]
+                && paths.insert($0.path.uppercased()).inserted
+        }
     }
 }

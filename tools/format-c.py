@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Format maintained C/C++ sources using the repository's pinned clang-format."""
+"""Format maintained C, C++ and Objective-C sources using the repository's pinned clang-format."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def sources(paths: list[Path]) -> list[str]:
             path.relative_to(ROOT)
             if path.is_dir():
                 raise ValueError(f"expected a C/C++ file: {path}")
-            if path.suffix not in (".c", ".h", ".cpp"):
+            if path.suffix not in (".c", ".h", ".cpp", ".m"):
                 raise ValueError(f"expected a C/C++ file: {path}")
             files.append(str(path))
         return sorted(set(files))
@@ -61,6 +61,7 @@ def sources(paths: list[Path]) -> list[str]:
             "*.c",
             "*.h",
             "*.cpp",
+            "*.m",
         ],
         cwd=ROOT,
         capture_output=True,

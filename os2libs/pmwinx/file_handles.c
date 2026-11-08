@@ -149,7 +149,7 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
                  ULONG attributes, ULONG template)
 {
     TRACE_NATIVE("CreateFile('%s', %x, %x, %p, %u, %x, %u)", name ? name : "", (uint)access,
-                 (uint)share, security, (uint)disposition, (uint)attributes, (uint) template);
+                 (uint)share, security, (uint)disposition, (uint)attributes, (uint)template);
     const ULONG supported = 0x80 | 0x27 | 0x100 | 0x80000000u | 0x10000000 | 0x08000000;
     if (!name || !*name || disposition < 1 || disposition > 5 || (share & ~7u) ||
         (access & ~0xc0000000u))

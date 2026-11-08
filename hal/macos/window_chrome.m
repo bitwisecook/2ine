@@ -15,6 +15,7 @@
 @end
 
 @implementation TwoineCaptureControl
+
 - (void)toggleCapture:(id)sender
 {
     (void)sender;
@@ -43,13 +44,14 @@ LxWindowChrome *lx_window_chrome_create(void *opaque, void (*toggle)(void *), vo
     control.toggle = toggle;
     control.userdata = userdata;
     control.button = [NSButton buttonWithTitle:@"Capture Mouse ⌃⌥"
-                                        target:control action:@selector(toggleCapture:)];
+                                        target:control
+                                        action:@selector(toggleCapture:)];
     control.button.bezelStyle = NSBezelStyleRounded;
     control.button.controlSize = NSControlSizeSmall;
     control.button.refusesFirstResponder = YES;
     control.button.frame = NSMakeRect(0, 3, 180, 24);
     control.button.image = [NSImage imageWithSystemSymbolName:@"cursorarrow"
-                                   accessibilityDescription:@"Mouse capture"];
+                                     accessibilityDescription:@"Mouse capture"];
     control.button.imagePosition = NSImageLeft;
     control.accessory = [NSTitlebarAccessoryViewController new];
     control.accessory.layoutAttribute = NSLayoutAttributeRight;
@@ -68,8 +70,8 @@ void lx_window_chrome_capture(LxWindowChrome *chrome, int captured)
     TwoineCaptureControl *control = (__bridge TwoineCaptureControl *)chrome->control;
     control.button.title = captured ? @"Release Mouse ⌃⌥" : @"Capture Mouse ⌃⌥";
     control.button.accessibilityLabel = captured ? @"Release Mouse" : @"Capture Mouse";
-    control.button.toolTip = captured ? @"Release the mouse (Control–Option)"
-                                     : @"Capture the mouse (Control–Option)";
+    control.button.toolTip =
+        captured ? @"Release the mouse (Control–Option)" : @"Capture the mouse (Control–Option)";
 }
 
 void lx_window_chrome_destroy(LxWindowChrome *chrome)

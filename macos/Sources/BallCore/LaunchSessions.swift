@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 func canonicalLaunchBall(_ path: String) -> String {
     if let canonical = realpath(path, nil) {
@@ -10,19 +10,25 @@ func canonicalLaunchBall(_ path: String) -> String {
 }
 
 /// Explains a death the worker could not report itself; nil for a normal or requested end.
-public func abnormalExitMessage(program: String, code: Int32, signalled: Bool, stopRequested: Bool,
-                                log: URL?) -> String? {
+public func abnormalExitMessage(
+    program: String, code: Int32, signalled: Bool, stopRequested: Bool,
+    log: URL?
+) -> String? {
     guard signalled, !stopRequested else { return nil }
-    let cause = code == SIGKILL ? "The system or another program killed it, for example because memory ran out or a code signature check failed."
-                                : "2ine could not record what happened."
+    let cause =
+        code == SIGKILL
+        ? "The system or another program killed it, for example because memory ran out or a code signature check failed."
+        : "2ine could not record what happened."
     let location = log.map { "\n\nThe session log is at \($0.path)." } ?? ""
     return "\(program) was terminated by signal \(code). \(cause)\(location)"
 }
 
 func validLaunchSessionID(_ value: String) -> Bool {
-    !value.isEmpty && value.utf8.count <= 64 && value.utf8.allSatisfy {
-        (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45 || $0 == 95
-    }
+    !value.isEmpty && value.utf8.count <= 64
+        && value.utf8.allSatisfy {
+            (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) || $0 == 45
+                || $0 == 95
+        }
 }
 
 /// A view's cancellation does not abandon a child. Avoid a cancelled task's sleep spinning.
@@ -59,8 +65,11 @@ actor LaunchCoordinator {
         let unsetEnvironment: [String]
         let owner: String?
         init(_ plan: LaunchPlan) {
-            command = plan.command; cwd = plan.cwd; environment = plan.environment
-            unsetEnvironment = plan.unsetEnvironment.sorted(); owner = plan.owner
+            command = plan.command
+            cwd = plan.cwd
+            environment = plan.environment
+            unsetEnvironment = plan.unsetEnvironment.sorted()
+            owner = plan.owner
         }
     }
     private final class Service {
@@ -71,18 +80,27 @@ actor LaunchCoordinator {
         var holders: Set<String>
         var stopping = false
         init(process: Process, plan: LaunchPlan, log: URL, sessionID: String) {
-            self.process = process; configuration = Configuration(plan)
-            supervised = plan.operationSupervised == true; self.log = log; holders = [sessionID]
+            self.process = process
+            configuration = Configuration(plan)
+            supervised = plan.operationSupervised == true
+            self.log = log
+            holders = [sessionID]
         }
     }
     private var reservations: [String: Reservation] = [:]
     private var services: [StartupServiceKey: Service] = [:]
 
-    func prepare(sessionID: String, ball: String, installer: Bool, message: DesktopRequest) throws -> LaunchPlan {
-        guard reservations[sessionID] == nil else { throw BallError("This application session ID is already in use.") }
+    func prepare(
+        sessionID: String, ball: String, installer: Bool, message: DesktopRequest
+    ) throws -> LaunchPlan {
+        guard reservations[sessionID] == nil else {
+            throw BallError("This application session ID is already in use.")
+        }
         let peers = reservations.values.filter { $0.ball == ball }
         guard !peers.contains(where: \.installer) && (!installer || peers.isEmpty) else {
-            throw BallError("Close the applications running in this ball before installing software, and wait for its installer to finish before launching another application.")
+            throw BallError(
+                "Close the applications running in this ball before installing software, and wait for its installer to finish before launching another application."
+            )
         }
         reservations[sessionID] = Reservation(ball: ball, installer: installer)
         do {
@@ -100,46 +118,71 @@ actor LaunchCoordinator {
 
     func activeSessionIDs(ball: String?) -> Set<String> {
         let canonical = ball.map(canonicalLaunchBall)
-        return Set(reservations.compactMap { id, value in canonical == nil || value.ball == canonical ? id : nil })
+        return Set(
+            reservations.compactMap { id, value in
+                canonical == nil || value.ball == canonical ? id : nil
+            })
     }
 
-    func acquireStartup(sessionID: String, ball: String, plans: [LaunchPlan], log: URL) async throws -> StartupLease {
-        var keys: [StartupServiceKey] = [], logs: [URL] = []
+    func acquireStartup(
+        sessionID: String, ball: String, plans: [LaunchPlan], log: URL
+    ) async throws -> StartupLease {
+        var keys: [StartupServiceKey] = []
+        var logs: [URL] = []
         do {
             for (index, plan) in plans.enumerated() {
-                let program = (plan.program ?? plan.programHost).replacingOccurrences(of: "/", with: "\\").uppercased()
+                let program = (plan.program ?? plan.programHost).replacingOccurrences(
+                    of: "/", with: "\\"
+                ).uppercased()
                 let key = StartupServiceKey(ball: ball, program: program)
-                while services[key]?.stopping == true { await processPollingPause(.milliseconds(20)) }
+                while services[key]?.stopping == true {
+                    await processPollingPause(.milliseconds(20))
+                }
                 if let service = services[key] {
                     guard service.configuration == Configuration(plan) else {
-                        throw BallError("Startup program settings changed while another application is using it. Close applications in this ball before using different startup settings.")
+                        throw BallError(
+                            "Startup program settings changed while another application is using it. Close applications in this ball before using different startup settings."
+                        )
                     }
                     guard service.process.isRunning else {
-                        throw BallError("A shared startup program exited while applications were using it. Close those applications before restarting it. Its log is at \(service.log.path).")
+                        throw BallError(
+                            "A shared startup program exited while applications were using it. Close those applications before restarting it. Its log is at \(service.log.path)."
+                        )
                     }
                     service.holders.insert(sessionID)
-                    keys.append(key); logs.append(service.log)
+                    keys.append(key)
+                    logs.append(service.log)
                     continue
                 }
-                guard let executable = plan.command.first else { throw BallError("A startup program has an empty command.") }
+                guard let executable = plan.command.first else {
+                    throw BallError("A startup program has an empty command.")
+                }
                 let service = Process()
-                service.executableURL = URL(filePath: executable); service.arguments = Array(plan.command.dropFirst())
+                service.executableURL = URL(filePath: executable)
+                service.arguments = Array(plan.command.dropFirst())
                 var environment = ProcessInfo.processInfo.environment
                 for name in plan.unsetEnvironment { environment.removeValue(forKey: name) }
                 environment.merge(plan.environment) { _, value in value }
                 environment["TWOINE_DESKTOP_AUXILIARY"] = "1"
-                service.environment = environment; service.currentDirectoryURL = URL(filePath: plan.cwd)
-                let serviceLog = log.deletingPathExtension().appendingPathExtension("startup-\(index).log")
-                try FileManager.default.createDirectory(at: serviceLog.deletingLastPathComponent(), withIntermediateDirectories: true)
+                service.environment = environment
+                service.currentDirectoryURL = URL(filePath: plan.cwd)
+                let serviceLog = log.deletingPathExtension().appendingPathExtension(
+                    "startup-\(index).log")
+                try FileManager.default.createDirectory(
+                    at: serviceLog.deletingLastPathComponent(), withIntermediateDirectories: true)
                 guard FileManager.default.createFile(atPath: serviceLog.path, contents: nil) else {
                     throw BallError("Cannot create startup program log at \(serviceLog.path).")
                 }
                 let output = try FileHandle(forWritingTo: serviceLog)
                 defer { try? output.close() }
-                service.standardOutput = output; service.standardError = output; service.standardInput = FileHandle.nullDevice
+                service.standardOutput = output
+                service.standardError = output
+                service.standardInput = FileHandle.nullDevice
                 try service.run()
-                services[key] = Service(process: service, plan: plan, log: serviceLog, sessionID: sessionID)
-                keys.append(key); logs.append(serviceLog)
+                services[key] = Service(
+                    process: service, plan: plan, log: serviceLog, sessionID: sessionID)
+                keys.append(key)
+                logs.append(serviceLog)
             }
             return StartupLease(sessionID: sessionID, keys: keys, logs: logs)
         } catch {
@@ -150,7 +193,9 @@ actor LaunchCoordinator {
 
     func releaseStartup(_ lease: StartupLease) async {
         for key in lease.keys {
-            guard let service = services[key], service.holders.remove(lease.sessionID) != nil else { continue }
+            guard let service = services[key], service.holders.remove(lease.sessionID) != nil else {
+                continue
+            }
             guard service.holders.isEmpty else { continue }
             service.stopping = true
             if service.process.isRunning { service.process.terminate() }

@@ -12,8 +12,12 @@ import Testing
 
 @Test func homeAbbreviationRespectsDirectoryBoundaries() {
     #expect(DisplayPath.homeAbbreviated("/Users/test", home: "/Users/test") == "~")
-    #expect(DisplayPath.homeAbbreviated("/Users/test/Media/OS2.iso ▸ OS2IMAGE", home: "/Users/test") == "~/Media/OS2.iso ▸ OS2IMAGE")
-    #expect(DisplayPath.homeAbbreviated("/Users/test-other/Media", home: "/Users/test") == "/Users/test-other/Media")
+    #expect(
+        DisplayPath.homeAbbreviated("/Users/test/Media/OS2.iso ▸ OS2IMAGE", home: "/Users/test")
+            == "~/Media/OS2.iso ▸ OS2IMAGE")
+    #expect(
+        DisplayPath.homeAbbreviated("/Users/test-other/Media", home: "/Users/test")
+            == "/Users/test-other/Media")
     #expect(DisplayPath.homeAbbreviated("C:\\OS2", home: "/Users/test") == "C:\\OS2")
     #expect(FileSearch.isProgram("WORDPRO.EXE"))
     #expect(!FileSearch.isProgram("WORDPRO.DLL"))

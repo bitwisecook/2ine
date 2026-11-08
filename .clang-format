@@ -1,6 +1,5 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 BasedOnStyle: LLVM
-Language: Cpp
 IndentWidth: 4
 ContinuationIndentWidth: 4
 TabWidth: 4
