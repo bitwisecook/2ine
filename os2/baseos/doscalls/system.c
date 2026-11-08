@@ -312,55 +312,6 @@ APIRET16 Dos16GetInfoSeg(PSEL globalseg, PSEL localseg)
     return NO_ERROR;
 }
 
-/* The country file knows the United States (country 1) and code pages 437
-   and 850; 0 selects the system country or the process code page. */
-APIRET lx_nls_country_codepage(ULONG country, ULONG codepage, ULONG *resolved)
-{
-    if (country != 0 && country != 1)
-        return ERROR_NLS_NO_CTRY_CODE;
-    if (codepage != 0 && codepage != 437 && codepage != 850)
-        return ERROR_CODE_PAGE_NOT_FOUND;
-    *resolved = codepage ? codepage
-                         : (GProcessState.process_codepage ? GProcessState.process_codepage : 437);
-    return NO_ERROR;
-}
-
-/* Neither supported code page is a DBCS code page, so the vector holds no
-   lead-byte ranges: only its zero terminator. */
-APIRET16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf)
-{
-
-    TRACE_NATIVE("Dos16GetDBCSEv(%u, %p, %p)", (uint)buflen, pcc, buf);
-    if (!pcc)
-        return ERROR_INVALID_PARAMETER;
-    ULONG codepage;
-    APIRET result = lx_nls_country_codepage(pcc->country, pcc->codepage, &codepage);
-    if (result)
-        return result;
-    if (!buf && buflen)
-        return ERROR_INVALID_PARAMETER;
-    if (buflen)
-        memset(buf, '\0', buflen);
-    return NO_ERROR;
-}
-
-APIRET DosQueryDBCSEnv(ULONG buflen, PCOUNTRYCODE pcc, PCHAR buf)
-{
-
-    TRACE_NATIVE("DosQueryDBCSEnv(%u, %p, %p)", (uint)buflen, pcc, buf);
-    if (!pcc)
-        return ERROR_INVALID_PARAMETER;
-    ULONG codepage;
-    APIRET result = lx_nls_country_codepage(pcc->country, pcc->codepage, &codepage);
-    if (result)
-        return result;
-    if (!buf && buflen)
-        return ERROR_INVALID_PARAMETER;
-    if (buflen)
-        memset(buf, '\0', buflen);
-    return NO_ERROR;
-}
-
 APIRET DosTmrQueryFreq(PULONG frequency)
 {
     if (!frequency)

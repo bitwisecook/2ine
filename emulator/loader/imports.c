@@ -180,11 +180,6 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
             target = "VIOCALLS";
             number = ordinal - (ordinal < 808 ? 769 : 768);
         }
-        else if (ordinal >= 391 && ordinal <= 394)
-        {
-            target = "NLS";
-            number = ordinal - 390;
-        }
         else if (ordinal == 383 || ordinal == 384)
         {
             target = "MSG";

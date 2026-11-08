@@ -157,7 +157,7 @@ twoine_os2_dll(
     awe/batch_services_windows.c
     awe/process.c
 )
-target_link_libraries(pmwin PRIVATE twoine_formats nls)
+target_link_libraries(pmwin PRIVATE twoine_formats doscalls)
 find_package(ZLIB REQUIRED)
 if(TWOINE_NATIVE_LOADER)
     # This target uses -m32 while CMake's configure process runs on the host ABI.
@@ -181,7 +181,7 @@ target_link_libraries(
     pmwinx
     PRIVATE pmshapi pmwin pmgpi pmdrag pmwp
 )
-target_link_libraries(pmshapi PRIVATE doscalls pmwin nls)
+target_link_libraries(pmshapi PRIVATE doscalls pmwin)
 target_link_libraries(pmdrag PRIVATE pmwin)
 target_link_libraries(pmctls PRIVATE pmwin)
 target_link_libraries(pmmerge PRIVATE pmwin)

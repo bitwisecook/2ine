@@ -265,21 +265,19 @@ static void dbcs(void *module)
 
 int main(int argc, char **argv)
 {
-    CHECK(argc == 5);
+    CHECK(argc == 4);
     /* Referencing the process state links lib2ine at startup: its TLS must be
        in the static block before the DLLs that use it are opened. */
     GProcessState.process_codepage = 0;
     void *kbd = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
     void *vio = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
-    void *national = dlopen(argv[3], RTLD_NOW | RTLD_LOCAL);
-    void *doscalls = dlopen(argv[4], RTLD_NOW | RTLD_LOCAL);
-    CHECK(kbd && vio && national && doscalls);
+    void *doscalls = dlopen(argv[3], RTLD_NOW | RTLD_LOCAL);
+    CHECK(kbd && vio && doscalls);
     keyboard(kbd);
     video(vio);
-    nls(national);
+    nls(doscalls);
     dbcs(doscalls);
     dlclose(doscalls);
-    dlclose(national);
     dlclose(vio);
     dlclose(kbd);
     return 0;

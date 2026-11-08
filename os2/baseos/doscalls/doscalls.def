@@ -213,8 +213,14 @@ EXPORTS
     DosEnterMustComplete          @380
     DosExitMustComplete           @381
     DosSetRelMaxFH                @382
+    Dos16CaseMap                  @391
+    Dos16GetCollate               @392
+    Dos16GetCtryInfo              @393
     Dos16GetDBCSEv                @394
+    DosQueryCtryInfo              @395
     DosQueryDBCSEnv               @396
+    DosMapCase                    @397
+    DosQueryCollate               @398
     DosShutdown                   @415
     DosAcknowledgeSignalException @418
     DosFlatToSel                  @425

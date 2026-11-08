@@ -1152,7 +1152,69 @@
         "nullable": false
       }
     ],
-    "Dos16StopSession": []
+    "Dos16StopSession": [],
+    "Dos16CaseMap": [
+      {
+        "name": "pcc",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pch",
+        "size": "len",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "Dos16GetCtryInfo": [
+      {
+        "name": "pcc",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pch",
+        "size": "len",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "dlen",
+        "size": "2",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": true
+      }
+    ],
+    "Dos16GetCollate": [
+      {
+        "name": "pcc",
+        "size": "4",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pch",
+        "size": "len",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "dlen",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ]
   },
   "msg": {
     "Dos16PutMessage": [
@@ -1438,70 +1500,6 @@
         "name": "cell",
         "size": "2",
         "permissions": 1,
-        "kind": "copy",
-        "nullable": false
-      }
-    ]
-  },
-  "nls": {
-    "Dos16CaseMap": [
-      {
-        "name": "pcc",
-        "size": "4",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "pch",
-        "size": "len",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": false
-      }
-    ],
-    "Dos16GetCtryInfo": [
-      {
-        "name": "pcc",
-        "size": "4",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "pch",
-        "size": "len",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "dlen",
-        "size": "2",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": true
-      }
-    ],
-    "Dos16GetCollate": [
-      {
-        "name": "pcc",
-        "size": "4",
-        "permissions": 1,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "pch",
-        "size": "len",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "dlen",
-        "size": "2",
-        "permissions": 2,
         "kind": "copy",
         "nullable": false
       }

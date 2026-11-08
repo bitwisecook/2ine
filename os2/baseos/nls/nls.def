@@ -4,11 +4,11 @@
 LIBRARY NLS
 
 EXPORTS
-    DOSCASEMAP = Dos16CaseMap         @1
-    DOSGETCOLLATE = Dos16GetCollate   @2
-    DOSGETCTRYINFO = Dos16GetCtryInfo @3
-    DOSGETDBCSEV = DOSCALLS.394       @4
-    DosQueryCtryInfo                  @5
-    DosQueryDBCSEnv = DOSCALLS.396    @6
-    DosMapCase                        @7
-    DosQueryCollate                   @8
+    DOSCASEMAP = DOSCALLS.391       @1
+    DOSGETCOLLATE = DOSCALLS.392    @2
+    DOSGETCTRYINFO = DOSCALLS.393   @3
+    DOSGETDBCSEV = DOSCALLS.394     @4
+    DosQueryCtryInfo = DOSCALLS.395 @5
+    DosQueryDBCSEnv = DOSCALLS.396  @6
+    DosMapCase = DOSCALLS.397       @7
+    DosQueryCollate = DOSCALLS.398  @8

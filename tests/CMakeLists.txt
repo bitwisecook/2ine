@@ -977,7 +977,7 @@ if(TARGET 2ine)
     set_tests_properties(shared_lifetime PROPERTIES TIMEOUT 20)
 endif()
 
-if(TARGET kbdcalls AND TARGET viocalls AND TARGET nls AND TARGET doscalls)
+if(TARGET kbdcalls AND TARGET viocalls AND TARGET doscalls)
     add_executable(twoine_console_compat_tests os2/test_console_compat.c)
     twoine_application_target(twoine_console_compat_tests)
     target_link_libraries(twoine_console_compat_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
@@ -985,7 +985,7 @@ if(TARGET kbdcalls AND TARGET viocalls AND TARGET nls AND TARGET doscalls)
         NAME console_compat
         COMMAND
             twoine_console_compat_tests $<TARGET_FILE:kbdcalls> $<TARGET_FILE:viocalls>
-            $<TARGET_FILE:nls> $<TARGET_FILE:doscalls>
+            $<TARGET_FILE:doscalls>
     )
     set_tests_properties(console_compat PROPERTIES TIMEOUT 20)
 endif()

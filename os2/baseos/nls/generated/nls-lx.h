@@ -3,124 +3,24 @@
 
 #if LX_LEGACY
 
-#include "os2/include/private/export32.h"
-#if TWOINE_PORTABLE_LOADER
-#include "os2/baseos/nls/bindings.h"
-LX_NATIVE_MODULE_32BIT_SUPPORT()
-LX_NATIVE_MODULE_32BIT_API(DosMapCase)
-LX_NATIVE_MODULE_32BIT_API(DosQueryCollate)
-LX_NATIVE_MODULE_32BIT_API(DosQueryCtryInfo)
-#endif
-
-static uint32 bridge16to32_Dos16CaseMap(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, pch);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYCODE16, pcc);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, len);
-    LxGuestArgument __abi_args[2] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GProcessState.execution, pcc_guest, 4, 3, 0, 0, &__abi_args[0])) goto __abi_done;
-    pcc = (PCOUNTRYCODE16) __abi_args[0].host;
-    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, len, 3, 0, 0, &__abi_args[1])) goto __abi_done;
-    pch = (PCHAR) __abi_args[1].host;
-    __abi_result = Dos16CaseMap(len, pcc, pch);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
-    return __abi_result;
-}
-
-static uint32 bridge16to32_Dos16GetCollate(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, dlen);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, pch);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYCODE16, pcc);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, len);
-    LxGuestArgument __abi_args[3] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GProcessState.execution, pcc_guest, 4, 1, 0, 0, &__abi_args[0])) goto __abi_done;
-    pcc = (PCOUNTRYCODE16) __abi_args[0].host;
-    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, len, 2, 0, 0, &__abi_args[1])) goto __abi_done;
-    pch = (PCHAR) __abi_args[1].host;
-    if (!lx_guest_argument_far(GProcessState.execution, dlen_guest, 2, 2, 0, 0, &__abi_args[2])) goto __abi_done;
-    dlen = (PUSHORT) __abi_args[2].host;
-    __abi_result = Dos16GetCollate(len, pcc, pch, dlen);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[2], __abi_copy);
-    return __abi_result;
-}
-
-static uint32 bridge16to32_Dos16GetCtryInfo(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, dlen);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYINFO16, pch);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYCODE16, pcc);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, len);
-    LxGuestArgument __abi_args[3] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GProcessState.execution, pcc_guest, 4, 3, 0, 0, &__abi_args[0])) goto __abi_done;
-    pcc = (PCOUNTRYCODE16) __abi_args[0].host;
-    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, len, 3, 0, 0, &__abi_args[1])) goto __abi_done;
-    pch = (PCOUNTRYINFO16) __abi_args[1].host;
-    if (!lx_guest_argument_far(GProcessState.execution, dlen_guest, 2, 3, 0, 1, &__abi_args[2])) goto __abi_done;
-    dlen = (PUSHORT) __abi_args[2].host;
-    __abi_result = Dos16GetCtryInfo(len, pcc, pch, dlen);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[2], __abi_copy);
-    return __abi_result;
-}
-
-LX_NATIVE_MODULE_16BIT_SUPPORT()
-    LX_NATIVE_MODULE_16BIT_API(Dos16CaseMap)
-    LX_NATIVE_MODULE_16BIT_API(Dos16GetCollate)
-    LX_NATIVE_MODULE_16BIT_API(Dos16GetCtryInfo)
-LX_NATIVE_MODULE_16BIT_SUPPORT_END()
-
-LX_NATIVE_MODULE_DEINIT({
-    LX_NATIVE_MODULE_DEINIT_16BIT_SUPPORT();
-    LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT();
-})
-
-static int init16_nls(void) {
-    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CaseMap, 10)
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetCollate, 14)
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetCtryInfo, 14)
-    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
-    return 1;
-}
-
-#if TWOINE_PORTABLE_LOADER
-static int init32_nls(void) {
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosMapCase, 12, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosQueryCollate, 16, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosQueryCtryInfo, 16, 0, LX_ABI_STACK32)
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
-    return 1;
-}
-#endif
+LX_NATIVE_FORWARDER(lx_forward_1, "DOSCALLS", 391, "");
+LX_NATIVE_FORWARDER(lx_forward_2, "DOSCALLS", 392, "");
+LX_NATIVE_FORWARDER(lx_forward_3, "DOSCALLS", 393, "");
 LX_NATIVE_FORWARDER(lx_forward_4, "DOSCALLS", 394, "");
+LX_NATIVE_FORWARDER(lx_forward_5, "DOSCALLS", 395, "");
 LX_NATIVE_FORWARDER(lx_forward_6, "DOSCALLS", 396, "");
+LX_NATIVE_FORWARDER(lx_forward_7, "DOSCALLS", 397, "");
+LX_NATIVE_FORWARDER(lx_forward_8, "DOSCALLS", 398, "");
 LX_NATIVE_MODULE_INIT({
-    if (!init16_nls()) return 0;
-    LX_NATIVE_INIT_32BIT_MODULE(nls)
 })
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16CaseMap, "DOSCASEMAP", 1),
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16GetCollate, "DOSGETCOLLATE", 2),
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16GetCtryInfo, "DOSGETCTRYINFO", 3),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_1, "DOSCASEMAP", 1),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_2, "DOSGETCOLLATE", 2),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_3, "DOSGETCTRYINFO", 3),
     LX_NATIVE_EXPORT_FORWARDER(lx_forward_4, "DOSGETDBCSEV", 4),
-    LX_NATIVE_EXPORT32(DosQueryCtryInfo, 5),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_5, "DosQueryCtryInfo", 5),
     LX_NATIVE_EXPORT_FORWARDER(lx_forward_6, "DosQueryDBCSEnv", 6),
-    LX_NATIVE_EXPORT32(DosMapCase, 7),
-    LX_NATIVE_EXPORT32(DosQueryCollate, 8),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_7, "DosMapCase", 7),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_8, "DosQueryCollate", 8),
 
 LX_NATIVE_MODULE_INIT_END()
 
