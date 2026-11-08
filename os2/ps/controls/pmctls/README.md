@@ -19,4 +19,5 @@ Standard controls and dialogs: file and font dialogs, notebook, value set, slide
 | `module.c` | `pmctls\` (entry) | DLL entry and export table |
 | `dialogs/filedlgm.c` | `dialogs\filedlgm.c` (inferred: the only known file-dialog unit) | WinFileDlg, WinDefFileDlgProc, WinFreeFileDlgList |
 | `dialogs/fontdlg.c` | unknown (descriptive) | WinFontDlg, WinDefFontDlgProc |
-| `drag/drgutil.c` | `drag\drgutil.c` | Drg* string handles, DRAGINFO/DRAGTRANSFER, RMF, transfer messages, DrgGetPS, DrgDrag |
+| `drag/drgutil.c` | `drag\drgutil.c` | Drg* string handles, DRAGINFO/DRAGTRANSFER, RMF, transfer messages, DrgGetPS |
+| `drag/drag_loop.c` | unknown (descriptive) | DrgDrag and its drag-image pointer |

@@ -106,6 +106,17 @@ extern "C"
         SWP_NOAUTOCLOSE = 0x8000
     };
 
+    /* WinGetClipPS() flags */
+    enum
+    {
+        PSF_LOCKWINDOWUPDATE = 0x0001,
+        PSF_CLIPUPWARDS = 0x0002,
+        PSF_CLIPDOWNWARDS = 0x0004,
+        PSF_CLIPSIBLINGS = 0x0008,
+        PSF_CLIPCHILDREN = 0x0010,
+        PSF_PARENTCLIP = 0x0020
+    };
+
     typedef struct
     {
         ULONG fl;

@@ -82,6 +82,7 @@ twoine_os2_dll(
     controls/pmctls/dialogs/filedlgm.c
     controls/pmctls/dialogs/fontdlg.c
     controls/pmctls/drag/drgutil.c
+    controls/pmctls/drag/drag_loop.c
 )
 twoine_os2_dll(pmdrag controls/drag/module.c)
 twoine_os2_dll(helpmgr helpmgr/module.c)
