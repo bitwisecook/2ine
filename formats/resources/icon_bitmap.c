@@ -2,18 +2,9 @@
 /* OS/2 icon files retain an AND mask and a monochrome or color XOR image. */
 #include "formats/resources/icon.h"
 #include "formats/encoding/base64.h"
+#include "formats/endian.h"
 #include <stdlib.h>
 #include <string.h>
-
-static unsigned read16(const uint8_t *p)
-{
-    return (unsigned)p[0] | (unsigned)p[1] << 8;
-}
-
-static uint32_t read32(const uint8_t *p)
-{
-    return (uint32_t)read16(p) | (uint32_t)read16(p + 2) << 16;
-}
 
 typedef struct IconBitmap
 {
@@ -26,28 +17,28 @@ static int bitmap(const uint8_t *bytes, size_t size, size_t offset, IconBitmap *
     if (offset > size || size - offset < 26)
         return 0;
     const uint8_t *p = bytes + offset + 14;
-    unsigned header = read32(p);
+    unsigned header = tb_le32(p);
     if ((header != 12 && header != 40 && header != 64) || header > size - offset - 14)
         return 0;
     unsigned planes;
     if (header == 12)
     {
-        out->width = read16(p + 4);
-        out->height = read16(p + 6);
-        planes = read16(p + 8);
-        out->depth = read16(p + 10);
+        out->width = tb_le16(p + 4);
+        out->height = tb_le16(p + 6);
+        planes = tb_le16(p + 8);
+        out->depth = tb_le16(p + 10);
         out->palette_bytes = 3;
         out->colors = out->depth <= 8 ? 1u << out->depth : 0;
     }
     else
     {
-        out->width = read32(p + 4);
-        out->height = read32(p + 8);
-        planes = read16(p + 12);
-        out->depth = read16(p + 14);
+        out->width = tb_le32(p + 4);
+        out->height = tb_le32(p + 8);
+        planes = tb_le16(p + 12);
+        out->depth = tb_le16(p + 14);
         out->palette_bytes = 4;
-        out->colors = read32(p + 32);
-        if (read32(p + 16))
+        out->colors = tb_le32(p + 32);
+        if (tb_le32(p + 16))
             return 0;
         if (out->depth <= 8 && !out->colors)
             out->colors = 1u << out->depth;
@@ -61,7 +52,7 @@ static int bitmap(const uint8_t *bytes, size_t size, size_t offset, IconBitmap *
     size_t palette = (size_t)out->colors * out->palette_bytes;
     if (palette > size - out->header)
         return 0;
-    out->bits = read32(bytes + offset + 10);
+    out->bits = tb_le32(bytes + offset + 10);
     out->stride = ((size_t)out->width * out->depth + 31) / 32 * 4;
     return out->bits >= out->header + palette && out->bits <= size &&
            out->stride * out->height <= size - out->bits;
@@ -104,7 +95,7 @@ static TbIconImage *decode_one(const uint8_t *bytes, size_t size, size_t offset)
         return NULL;
     if (offset > size || size - offset < 26)
         return NULL;
-    unsigned type = read16(bytes + offset);
+    unsigned type = tb_le16(bytes + offset);
     IconBitmap mask = {0}, color = {0};
     int colored = type == 0x4943 || type == 0x5043;
     if ((!colored && type != 0x4349 && type != 0x5450) || !bitmap(bytes, size, offset, &mask) ||
@@ -157,27 +148,27 @@ static TbIconImage *decode_one(const uint8_t *bytes, size_t size, size_t offset)
 
 static TbIconImage *windows_icon(const uint8_t *bytes, size_t size)
 {
-    unsigned count = size >= 6 ? read16(bytes + 4) : 0;
+    unsigned count = size >= 6 ? tb_le16(bytes + 4) : 0;
     if (!count || count > 256 || (size_t)count * 16 > size - 6)
         return NULL;
     TbIconImage *best = NULL;
     for (unsigned i = 0; i < count; i++)
     {
         const uint8_t *entry = bytes + 6 + i * 16;
-        size_t offset = read32(entry + 12), length = read32(entry + 8);
+        size_t offset = tb_le32(entry + 12), length = tb_le32(entry + 8);
         if (offset > size || length > size - offset || length < 40)
             continue;
         const uint8_t *dib = bytes + offset;
         IconBitmap color = {0};
-        color.width = read32(dib + 4);
-        unsigned height = read32(dib + 8), planes = read16(dib + 12);
-        color.depth = read16(dib + 14);
-        if (read32(dib) != 40 || !color.width || color.width > 1024 || !height || height > 2048 ||
-            height % 2 || planes != 1 || read32(dib + 16) ||
+        color.width = tb_le32(dib + 4);
+        unsigned height = tb_le32(dib + 8), planes = tb_le16(dib + 12);
+        color.depth = tb_le16(dib + 14);
+        if (tb_le32(dib) != 40 || !color.width || color.width > 1024 || !height || height > 2048 ||
+            height % 2 || planes != 1 || tb_le32(dib + 16) ||
             (color.depth != 1 && color.depth != 4 && color.depth != 8 && color.depth != 24))
             continue;
         color.height = height / 2;
-        color.colors = read32(dib + 32);
+        color.colors = tb_le32(dib + 32);
         color.palette_bytes = 4;
         if (!color.colors && color.depth <= 8)
             color.colors = 1u << color.depth;
@@ -236,15 +227,15 @@ TbIconImage *tb_icon_bitmap(const uint8_t *bytes, size_t size)
 {
     if (!bytes || size < 2)
         return NULL;
-    if (size >= 6 && !read16(bytes) && read16(bytes + 2) == 1)
+    if (size >= 6 && !tb_le16(bytes) && tb_le16(bytes + 2) == 1)
         return windows_icon(bytes, size);
-    if (read16(bytes) != 0x4142)
+    if (tb_le16(bytes) != 0x4142)
         return decode_one(bytes, size, 0);
     TbIconImage *best = NULL;
     size_t at = 0;
     for (unsigned i = 0; i < 128; i++)
     {
-        if (at > size || size - at < 40 || read16(bytes + at) != 0x4142)
+        if (at > size || size - at < 40 || tb_le16(bytes + at) != 0x4142)
             break;
         TbIconImage *image = decode_one(bytes, size, at + 14);
         if (image && (!best || image->width * image->height > best->width * best->height))
@@ -254,7 +245,7 @@ TbIconImage *tb_icon_bitmap(const uint8_t *bytes, size_t size)
         }
         else
             tb_icon_free(image);
-        uint32_t next = read32(bytes + at + 6);
+        uint32_t next = tb_le32(bytes + at + 6);
         if (!next || next <= at)
             break;
         at = next;

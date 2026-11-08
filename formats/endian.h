@@ -22,6 +22,12 @@ static inline uint64_t tb_le64(const void *at)
     return (uint64_t)tb_le32(p) | (uint64_t)tb_le32(p + 4) << 32;
 }
 
+static inline uint16_t tb_be16(const void *at)
+{
+    const unsigned char *p = (const unsigned char *)at;
+    return (uint16_t)((unsigned)p[0] << 8 | p[1]);
+}
+
 static inline uint32_t tb_be32(const void *at)
 {
     const unsigned char *p = (const unsigned char *)at;

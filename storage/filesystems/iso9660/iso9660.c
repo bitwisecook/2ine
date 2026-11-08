@@ -153,7 +153,7 @@ int iso_read_entries(VolumeDisk *d, const unsigned char *data, size_t size,
             /* Joliet names are big-endian UCS-2. */
             uint16_t units[128];
             for (unsigned i = 0; i < n / 2; i++)
-                units[i] = (uint16_t)(raw[i * 2] << 8 | raw[i * 2 + 1]);
+                units[i] = tb_be16(raw + i * 2);
             if (!volume_utf16_name(units, n / 2, name, sizeof name))
             {
                 ok = 0;
