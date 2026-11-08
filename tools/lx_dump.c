@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#include "formats/lx.h"
-#include "formats/ne.h"
+#include "formats/executable/lx.h"
+#include "formats/executable/ne.h"
 #include "runtime/diagnostics.h"
 
 static int sanityCheckLxExe(const uint8 *exe, const uint32 exelen)

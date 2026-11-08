@@ -18,8 +18,8 @@ func sourceIdentity(_ arguments: [String], fallback: String) -> String {
     return process.terminationStatus == 0 && !value.isEmpty ? value : fallback
 }
 
-// BallEngine sources include project headers by their path from the repository
-// root ("ball/...", "formats/..."); that root lies outside the package directory.
+// C sources include project headers by their path from the repository root
+// ("ball/...", "formats/..."); that root lies outside the package directory.
 let projectRoot = URL(filePath: #filePath).deletingLastPathComponent()
     .deletingLastPathComponent().path(percentEncoded: false)
 
@@ -43,7 +43,10 @@ let package = Package(
     products: [.executable(name: "TwoineBall", targets: ["TwoineBall"])],
     targets: [
         .target(
-            name: "BallEngine", path: "Sources/BallEngine",
+            name: "TwoineFormats", path: "Sources/TwoineFormats", exclude: ["CMakeLists.txt"],
+            cSettings: [.unsafeFlags(["-I", projectRoot])]),
+        .target(
+            name: "BallEngine", dependencies: ["TwoineFormats"], path: "Sources/BallEngine",
             exclude: [
                 "CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md",
                 "vendor/libarchive/COPYING", "vendor/fatfs/README.md", "vendor/fatfs/LICENSE.txt",

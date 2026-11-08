@@ -57,7 +57,7 @@ rules.
 
 | Directory | Contents |
 |---|---|
-| `formats/` | Packed NE/LX definitions and decompression, without process state |
+| `formats/executable/` | Packed NE/LX definitions and LX EXEPACK decompression, without process state; built as `twoine_formats` (OS/2 application ABI) and `twoine_formats_host` (host ABI) |
 | `loader/` | Entry, imports/relocations, NE/LX loading, module lifetime and paths |
 | `runtime/core/` | Bootstrap, process environment, threads, configuration and drives |
 | `runtime/` | Execution dispatch/mappings and audio generator policy |

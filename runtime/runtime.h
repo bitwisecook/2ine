@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "formats/types.h"
+#include "formats/executable/types.h"
 #include "runtime/diagnostics.h"
 #include "runtime/process.h"
 #include "loader/module.h"

@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Read resources without loading or running guest code. All offsets and
-   decompressed extents are bounded before use. See formats/lx.h and ne.h. */
+   decompressed extents are bounded before use. See formats/executable/lx.h and ne.h. */
 #include "ball/icon.h"
-#include "formats/decompress.h"
+#include "formats/executable/lx_exepack.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -67,8 +67,8 @@ static uint8_t *lx_resource(const uint8_t *bytes, size_t size, size_t h, const u
             const uint8_t *src = bytes + (size_t)origin;
             if (flags == 0)
                 memcpy(page, src, stored);
-            else if (!(flags == 1 ? decompressIterated(page, page_size, src, stored)
-                                  : decompressExePack2(page, page_size, src, stored)))
+            else if (!(flags == 1 ? lx_exepack_iterated_decompress(page, page_size, src, stored)
+                                  : lx_exepack2_decompress(page, page_size, src, stored)))
             {
                 valid = 0;
                 break;
@@ -147,7 +147,8 @@ static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h, int res
         if (u16(segment + 4) & 8)
         {
             uint8_t *decoded = calloc(1, 65536);
-            if (decoded && decompressIterated(decoded, 65536, bytes + (size_t)origin, stored))
+            if (decoded &&
+                lx_exepack_iterated_decompress(decoded, 65536, bytes + (size_t)origin, stored))
                 image = tb_icon_bitmap(decoded, 65536);
             free(decoded);
         }

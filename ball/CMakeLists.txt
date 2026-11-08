@@ -44,6 +44,9 @@ file(
     CONTENT
         "{\n  \"sourceVersion\": \"${TWOINE_SOURCE_VERSION}\",\n  \"sourceRevision\": \"${TWOINE_SOURCE_REVISION}\",\n  \"configuration\": \"$<CONFIG>\",\n  \"system\": \"${CMAKE_SYSTEM_NAME}\",\n  \"architecture\": \"${CMAKE_SYSTEM_PROCESSOR}\",\n  \"compiler\": \"${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}\"\n}\n"
 )
+if(NOT TARGET twoine_formats_host)
+    add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/formats" formats)
+endif()
 set(TWOINE_BALL_SOURCES
     hpfs_volume.c
     fat_volume.c
@@ -57,7 +60,6 @@ set(TWOINE_BALL_SOURCES
     platform.c
     icon_bitmap.c
     icon_executable.c
-    format_decompress.c
     vendor/cjson/cJSON.c
     vendor/sha256/sha256.c
     vendor/hwzip/implode.c
@@ -68,7 +70,7 @@ set(TWOINE_BALL_SOURCES
     vendor/hwzip/reduce.c
 )
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})
-target_link_libraries(twoine_ball PRIVATE LibArchive::LibArchive ZLIB::ZLIB)
+target_link_libraries(twoine_ball PRIVATE twoine_formats_host LibArchive::LibArchive ZLIB::ZLIB)
 target_include_directories(twoine_ball PUBLIC include PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
 target_compile_features(twoine_ball PRIVATE c_std_11)
 target_compile_definitions(twoine_ball PRIVATE TWOINE_BALL_BUILD CJSON_HIDE_SYMBOLS)
@@ -83,7 +85,9 @@ if(NOT WIN32)
     find_package(Threads REQUIRED)
     target_link_libraries(twoine_ball PRIVATE m Threads::Threads)
 endif()
-add_library(twoine_ball_static STATIC ${TWOINE_BALL_SOURCES})
+# The Xcode app links this archive on its own, so it carries the shared
+# format objects rather than depending on a second archive.
+add_library(twoine_ball_static STATIC ${TWOINE_BALL_SOURCES} $<TARGET_OBJECTS:twoine_formats_host>)
 target_link_libraries(twoine_ball_static PUBLIC LibArchive::LibArchive ZLIB::ZLIB)
 if(APPLE)
     target_link_libraries(twoine_ball PRIVATE "-framework CoreFoundation")

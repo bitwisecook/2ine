@@ -8,7 +8,7 @@
 
 #ifndef TWOINE_PROCESS_H
 #define TWOINE_PROCESS_H
-#include "formats/types.h"
+#include "formats/executable/types.h"
 #include "runtime/execution.h"
 #pragma pack(push, 1)
 

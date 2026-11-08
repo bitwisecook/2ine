@@ -10,7 +10,7 @@
 #define _GNU_SOURCE 1
 #include "hal/host_fatal.h"
 #include "runtime/runtime.h"
-#include "formats/decompress.h"
+#include "formats/executable/lx_exepack.h"
 #include "hal/host_fs.h"
 #include "hal/host.h"
 #include <stddef.h>

@@ -8,7 +8,7 @@
 
 #ifndef TWOINE_FORMAT_NE_H
 #define TWOINE_FORMAT_NE_H
-#include "formats/types.h"
+#include "formats/executable/types.h"
 #pragma pack(push, 1)
 
 typedef struct NeHeader

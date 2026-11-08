@@ -116,7 +116,6 @@ foreach(
             pmwin/standard_font.c
             ../ball/icon_bitmap.c
             ../ball/icon_executable.c
-            ../formats/decompress.c
         )
     elseif(module STREQUAL "pmgpi")
         set(sources
@@ -240,6 +239,7 @@ foreach(
         set_target_properties(${module} PROPERTIES SUFFIX ".so")
     endif()
 endforeach()
+target_link_libraries(pmwin PRIVATE twoine_formats)
 target_sources(so32dll PRIVATE network.c)
 target_sources(tcpip32 PRIVATE network.c)
 if(TWOINE_NATIVE_LOADER)

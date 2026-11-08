@@ -128,8 +128,8 @@ function(twoine_add_media target)
                 "${TWOINE_HAL_SOURCE_DIR}/posix/desktop_cycle.c"
                 "${PROJECT_SOURCE_DIR}/ball/icon_bitmap.c"
                 "${PROJECT_SOURCE_DIR}/ball/icon_executable.c"
-                "${PROJECT_SOURCE_DIR}/formats/decompress.c"
         )
+        target_link_libraries(${target} PRIVATE twoine_formats)
         target_include_directories(${target} PRIVATE "${PROJECT_BINARY_DIR}/generated")
         target_compile_options(${target} PRIVATE "$<$<COMPILE_LANGUAGE:OBJC>:-fobjc-arc>")
         target_link_libraries(

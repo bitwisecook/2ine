@@ -2,7 +2,7 @@
 /* CP437 character mapping shared by PM controls and GPI text measurements. */
 #ifndef TWOINE_PM_TEXT_H
 #define TWOINE_PM_TEXT_H
-#include "formats/types.h"
+#include "formats/executable/types.h"
 
 static inline uint32 lx_pm_codepoint(uint8 character)
 {

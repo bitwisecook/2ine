@@ -340,7 +340,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
         if (isiterated)
         {
-            if (!decompressIterated(dst, vsize, src, segfiledatalen))
+            if (!lx_exepack_iterated_decompress(dst, vsize, src, segfiledatalen))
             {
                 fprintf(stderr, "Failed to decompress iterated segment (corrupt file or bug).\n");
                 goto loadne_failed;

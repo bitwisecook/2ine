@@ -509,8 +509,8 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
                 "tools/lx_dump.c",
                 "loader/load_lx.c",
                 "loader/load_ne.c",
-                "formats/lx.h",
-                "formats/ne.h",
+                "formats/executable/lx.h",
+                "formats/executable/ne.h",
                 "ball/system_modules.h",
             )
         },
@@ -518,8 +518,8 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
             "tools/lx_dump.c",
             "loader/load_lx.c",
             "loader/load_ne.c",
-            "formats/lx.h",
-            "formats/ne.h",
+            "formats/executable/lx.h",
+            "formats/executable/ne.h",
         ],
         "limits": [
             "Counted static module tables, relocations and forwarded-export targets plus separately provenance-tagged previously observed startup DLL roots. Other computed DosLoadModule/DosQueryProcAddr choices and execution frequency are not inferred.",

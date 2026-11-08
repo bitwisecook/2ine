@@ -8,7 +8,7 @@
 
 #ifndef TWOINE_FORMAT_LX_H
 #define TWOINE_FORMAT_LX_H
-#include "formats/types.h"
+#include "formats/executable/types.h"
 #pragma pack(push, 1)
 
 typedef struct LxHeader

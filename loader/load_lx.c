@@ -915,7 +915,8 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                 case 0x01: /* OS/2 iterated LX pages use data_pages_offset as their data origin. */
                     src = origexe + lx->data_pages_offset +
                           (objpage->page_data_offset << lx->page_offset_shift);
-                    if (!decompressIterated(dst, lx->page_size, src, objpage->data_size))
+                    if (!lx_exepack_iterated_decompress(dst, lx->page_size, src,
+                                                        objpage->data_size))
                     {
                         fprintf(
                             stderr,
@@ -932,7 +933,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                 case 0x05:
                     src = origexe + lx->data_pages_offset +
                           (objpage->page_data_offset << lx->page_offset_shift);
-                    if (!decompressExePack2(dst, lx->page_size, src, objpage->data_size))
+                    if (!lx_exepack2_decompress(dst, lx->page_size, src, objpage->data_size))
                     {
                         fprintf(stderr,
                                 "Failed to decompress object page (corrupt file or bug).\n");

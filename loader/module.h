@@ -9,8 +9,8 @@
 #ifndef TWOINE_LOADER_MODULE_H
 #define TWOINE_LOADER_MODULE_H
 #include <stddef.h>
-#include "formats/lx.h"
-#include "formats/ne.h"
+#include "formats/executable/lx.h"
+#include "formats/executable/ne.h"
 #include "runtime/execution.h"
 #include "hal/host_library.h"
 

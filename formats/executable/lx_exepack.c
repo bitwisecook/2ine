@@ -5,11 +5,11 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "formats/decompress.h"
+#include "formats/executable/lx_exepack.h"
 #include <string.h>
 #include <assert.h>
 
-void linearmove(uint8 *dst, const uint8 *src, uint8 len)
+static void linearmove(uint8 *dst, const uint8 *src, uint8 len)
 {
     while (len--)
     {
@@ -19,7 +19,7 @@ void linearmove(uint8 *dst, const uint8 *src, uint8 len)
     }
 }
 
-int decompressExePack2(uint8 *dst, const uint32 dstlen, const uint8 *src, const uint32 srclen)
+int lx_exepack2_decompress(uint8 *dst, const uint32 dstlen, const uint8 *src, const uint32 srclen)
 {
     sint32 sOf = 0;
     sint32 dOf = 0;
@@ -145,7 +145,7 @@ int decompressExePack2(uint8 *dst, const uint32 dstlen, const uint8 *src, const 
     return 1;
 }
 
-int decompressIterated(uint8 *dst, uint32 dstlen, const uint8 *src, uint32 srclen)
+int lx_exepack_iterated_decompress(uint8 *dst, uint32 dstlen, const uint8 *src, uint32 srclen)
 {
     while (srclen)
     {
