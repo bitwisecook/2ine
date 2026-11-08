@@ -63,6 +63,7 @@ OS2_FORWARDER_DLLS = {
     "os2/baseos/viocalls": "DOSCALLS",
     "os2/baseos/kbdcalls": "DOSCALLS",
     "os2/ps/pmgre": "PMMERGE",
+    "os2/ps/pmshapi": "PMMERGE",
 }
 OS2_FORWARDER_FILES = {"module.c", "README.md"}
 # Static helper code shared by several DLLs of one group, outside any DLL.
@@ -74,12 +75,10 @@ OS2_CROSS_DLL_ALLOWANCES = {
     ("os2/mm/mci/mdm", "os2/ps/pmwin"): 1,
     ("os2/mm/video/dive", "os2/ps/pmwin"): 1,
     ("os2/opengl/opengl", "os2/ps/pmwin"): 1,
-    ("os2/ps/awe", "os2/ps/pmshapi"): 1,
     ("os2/ps/awe", "os2/ps/pmwin"): 41,
     ("os2/ps/controls/drag", "os2/ps/pmwin"): 1,
     ("os2/ps/controls/pmctls", "os2/ps/pmwin"): 1,
     ("os2/ps/pmgpi", "os2/ps/pmwin"): 22,
-    ("os2/wpsh/pmwp", "os2/ps/pmshapi"): 1,
     ("os2/wpsh/pmwp", "os2/ps/pmwin"): 1,
 }
 

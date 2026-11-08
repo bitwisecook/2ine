@@ -1,24 +1,24 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of PMSHAPI.DLL: exported name [= C entry] @ordinal.
+; Exports of PMSHAPI.DLL: exported name = PMMERGE.ordinal @ordinal.
 
 LIBRARY PMSHAPI
 
 EXPORTS
-    PrfQueryProfileSize   @101
-    PrfOpenProfile        @102
-    PrfCloseProfile       @103
-    PrfQueryProfile       @107
-    PrfQueryProfileInt    @114
-    PrfQueryProfileString @115
-    PrfWriteProfileString @116
-    PrfQueryProfileData   @117
-    PrfWriteProfileData   @118
-    WinStartApp           @119
-    WinAddSwitchEntry     @120
-    WinCreateSwitchEntry  @121
-    WinChangeSwitchEntry  @123
-    WinQuerySwitchEntry   @124
-    WinQuerySwitchHandle  @125
-    WinQueryTaskSizePos   @127
-    WinQueryTaskTitle     @128
-    WinRemoveSwitchEntry  @129
+    PrfQueryProfileSize = PMMERGE.5085   @101
+    PrfOpenProfile = PMMERGE.5080        @102
+    PrfCloseProfile = PMMERGE.5077       @103
+    PrfQueryProfile = PMMERGE.5082       @107
+    PrfQueryProfileInt = PMMERGE.5084    @114
+    PrfQueryProfileString = PMMERGE.5086 @115
+    PrfWriteProfileString = PMMERGE.5093 @116
+    PrfQueryProfileData = PMMERGE.5083   @117
+    PrfWriteProfileData = PMMERGE.5092   @118
+    WinStartApp = PMMERGE.5385           @119
+    WinAddSwitchEntry = PMMERGE.5112     @120
+    WinCreateSwitchEntry = PMMERGE.5140  @121
+    WinChangeSwitchEntry = PMMERGE.5122  @123
+    WinQuerySwitchEntry = PMMERGE.5286   @124
+    WinQuerySwitchHandle = PMMERGE.5287  @125
+    WinQueryTaskSizePos = PMMERGE.5295   @127
+    WinQueryTaskTitle = PMMERGE.5296     @128
+    WinRemoveSwitchEntry = PMMERGE.5324  @129

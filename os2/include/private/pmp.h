@@ -86,6 +86,11 @@ extern "C"
 
     /* PMSHAPI */
 
+    /* Opens a profile database by host path for native callers (the Open32
+       registry, the Workplace Shell object store); guest names go through
+       PrfOpenProfile. */
+    HINI lx_profile_open_host(const char *name);
+
     /* WinStartApp for callers that need the PM error without a PM anchor block.
        Returns the HAPP, or zero with the PMERR_ value in *error. */
     ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, ULONG options,

@@ -13,6 +13,6 @@ twoine_os2_dll(
 twoine_os2_dll(pmspl pmspl/module.c)
 target_link_libraries(
     pmwp
-    PRIVATE doscalls pmdrag pmgpi pmshapi pmwin
+    PRIVATE doscalls pmdrag pmgpi pmmerge pmwin
 )
-target_link_libraries(pmspl PRIVATE pmshapi)
+target_link_libraries(pmspl PRIVATE pmmerge)

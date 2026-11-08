@@ -3,7 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/include/os2win.h"
 #include "os2/include/pmshl.h"
-#include "os2/ps/pmshapi/profiles.h"
+#include "os2/include/private/pmp.h"
 #include "emulator/handles.h"
 #include "emulator/abi.h"
 #include "host/sync.h"

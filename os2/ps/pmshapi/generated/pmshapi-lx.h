@@ -3,77 +3,44 @@
 
 #if LX_LEGACY
 
-#include "os2/include/private/export32.h"
-#if TWOINE_PORTABLE_LOADER
-#include "os2/ps/pmshapi/bindings.h"
-LX_NATIVE_MODULE_32BIT_SUPPORT()
-LX_NATIVE_MODULE_32BIT_API(PrfCloseProfile)
-LX_NATIVE_MODULE_32BIT_API(PrfOpenProfile)
-LX_NATIVE_MODULE_32BIT_API(PrfQueryProfile)
-LX_NATIVE_MODULE_32BIT_API(PrfQueryProfileData)
-LX_NATIVE_MODULE_32BIT_API(PrfQueryProfileInt)
-LX_NATIVE_MODULE_32BIT_API(PrfQueryProfileSize)
-LX_NATIVE_MODULE_32BIT_API(PrfQueryProfileString)
-LX_NATIVE_MODULE_32BIT_API(PrfWriteProfileData)
-LX_NATIVE_MODULE_32BIT_API(PrfWriteProfileString)
-LX_NATIVE_MODULE_32BIT_API(WinAddSwitchEntry)
-LX_NATIVE_MODULE_32BIT_API(WinChangeSwitchEntry)
-LX_NATIVE_MODULE_32BIT_API(WinCreateSwitchEntry)
-LX_NATIVE_MODULE_32BIT_API(WinQuerySwitchEntry)
-LX_NATIVE_MODULE_32BIT_API(WinQuerySwitchHandle)
-LX_NATIVE_MODULE_32BIT_API(WinQueryTaskSizePos)
-LX_NATIVE_MODULE_32BIT_API(WinQueryTaskTitle)
-LX_NATIVE_MODULE_32BIT_API(WinRemoveSwitchEntry)
-LX_NATIVE_MODULE_32BIT_API(WinStartApp)
-#endif
-
-LX_NATIVE_MODULE_DEINIT({ LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT(); })
-#if TWOINE_PORTABLE_LOADER
-static int init32_pmshapi(void) {
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfCloseProfile, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfOpenProfile, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfQueryProfile, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfQueryProfileData, 20, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfQueryProfileInt, 16, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfQueryProfileSize, 16, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfQueryProfileString, 24, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfWriteProfileData, 20, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(PrfWriteProfileString, 16, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinAddSwitchEntry, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinChangeSwitchEntry, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinCreateSwitchEntry, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinQuerySwitchEntry, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinQuerySwitchHandle, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinQueryTaskSizePos, 12, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinQueryTaskTitle, 12, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinRemoveSwitchEntry, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(WinStartApp, 20, 0, LX_ABI_STACK32)
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
-    return 1;
-}
-#endif
+LX_NATIVE_FORWARDER(lx_forward_101, "PMMERGE", 5085, "");
+LX_NATIVE_FORWARDER(lx_forward_102, "PMMERGE", 5080, "");
+LX_NATIVE_FORWARDER(lx_forward_103, "PMMERGE", 5077, "");
+LX_NATIVE_FORWARDER(lx_forward_107, "PMMERGE", 5082, "");
+LX_NATIVE_FORWARDER(lx_forward_114, "PMMERGE", 5084, "");
+LX_NATIVE_FORWARDER(lx_forward_115, "PMMERGE", 5086, "");
+LX_NATIVE_FORWARDER(lx_forward_116, "PMMERGE", 5093, "");
+LX_NATIVE_FORWARDER(lx_forward_117, "PMMERGE", 5083, "");
+LX_NATIVE_FORWARDER(lx_forward_118, "PMMERGE", 5092, "");
+LX_NATIVE_FORWARDER(lx_forward_119, "PMMERGE", 5385, "");
+LX_NATIVE_FORWARDER(lx_forward_120, "PMMERGE", 5112, "");
+LX_NATIVE_FORWARDER(lx_forward_121, "PMMERGE", 5140, "");
+LX_NATIVE_FORWARDER(lx_forward_123, "PMMERGE", 5122, "");
+LX_NATIVE_FORWARDER(lx_forward_124, "PMMERGE", 5286, "");
+LX_NATIVE_FORWARDER(lx_forward_125, "PMMERGE", 5287, "");
+LX_NATIVE_FORWARDER(lx_forward_127, "PMMERGE", 5295, "");
+LX_NATIVE_FORWARDER(lx_forward_128, "PMMERGE", 5296, "");
+LX_NATIVE_FORWARDER(lx_forward_129, "PMMERGE", 5324, "");
 LX_NATIVE_MODULE_INIT({
-    LX_NATIVE_INIT_32BIT_MODULE(pmshapi)
 })
-    LX_NATIVE_EXPORT32(PrfQueryProfileSize, 101),
-    LX_NATIVE_EXPORT32(PrfOpenProfile, 102),
-    LX_NATIVE_EXPORT32(PrfCloseProfile, 103),
-    LX_NATIVE_EXPORT32(PrfQueryProfile, 107),
-    LX_NATIVE_EXPORT32(PrfQueryProfileInt, 114),
-    LX_NATIVE_EXPORT32(PrfQueryProfileString, 115),
-    LX_NATIVE_EXPORT32(PrfWriteProfileString, 116),
-    LX_NATIVE_EXPORT32(PrfQueryProfileData, 117),
-    LX_NATIVE_EXPORT32(PrfWriteProfileData, 118),
-    LX_NATIVE_EXPORT32(WinStartApp, 119),
-    LX_NATIVE_EXPORT32(WinAddSwitchEntry, 120),
-    LX_NATIVE_EXPORT32(WinCreateSwitchEntry, 121),
-    LX_NATIVE_EXPORT32(WinChangeSwitchEntry, 123),
-    LX_NATIVE_EXPORT32(WinQuerySwitchEntry, 124),
-    LX_NATIVE_EXPORT32(WinQuerySwitchHandle, 125),
-    LX_NATIVE_EXPORT32(WinQueryTaskSizePos, 127),
-    LX_NATIVE_EXPORT32(WinQueryTaskTitle, 128),
-    LX_NATIVE_EXPORT32(WinRemoveSwitchEntry, 129),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_101, "PrfQueryProfileSize", 101),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_102, "PrfOpenProfile", 102),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_103, "PrfCloseProfile", 103),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_107, "PrfQueryProfile", 107),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_114, "PrfQueryProfileInt", 114),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_115, "PrfQueryProfileString", 115),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_116, "PrfWriteProfileString", 116),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_117, "PrfQueryProfileData", 117),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_118, "PrfWriteProfileData", 118),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_119, "WinStartApp", 119),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_120, "WinAddSwitchEntry", 120),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_121, "WinCreateSwitchEntry", 121),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_123, "WinChangeSwitchEntry", 123),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_124, "WinQuerySwitchEntry", 124),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_125, "WinQuerySwitchHandle", 125),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_127, "WinQueryTaskSizePos", 127),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_128, "WinQueryTaskTitle", 128),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_129, "WinRemoveSwitchEntry", 129),
 
 LX_NATIVE_MODULE_INIT_END()
 

@@ -372,7 +372,7 @@ if(TARGET pmwin)
     twoine_application_target(twoine_printing_tests)
     target_link_libraries(
         twoine_printing_tests
-        PRIVATE pmgpi pmwin pmshapi pmspl 2ine
+        PRIVATE pmgpi pmwin pmmerge pmspl 2ine
     )
     add_test(
         NAME printer_output
@@ -745,7 +745,7 @@ if(TARGET pmwinx)
     twoine_application_target(twoine_settings_tests)
     target_link_libraries(
         twoine_settings_tests
-        PRIVATE pmwin pmwinx pmshapi pmwp helpmgr 2ine
+        PRIVATE pmwin pmwinx pmmerge pmwp helpmgr 2ine
     )
     add_test(
         NAME application_settings
@@ -756,10 +756,10 @@ if(TARGET pmwinx)
     set_tests_properties(application_settings PROPERTIES TIMEOUT 40)
 endif()
 
-if(TARGET pmshapi AND UNIX)
+if(TARGET pmmerge AND UNIX)
     add_executable(twoine_profile_worker os2/profile_worker.c)
     twoine_application_target(twoine_profile_worker)
-    target_link_libraries(twoine_profile_worker PRIVATE pmshapi 2ine)
+    target_link_libraries(twoine_profile_worker PRIVATE pmmerge 2ine)
     add_test(
         NAME profile_concurrency
         COMMAND

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Pipe-driven independent processes exercising public profile operations. */
 #include "os2/include/pmshl.h"
-#include "os2/ps/pmshapi/profiles.h"
+#include "os2/include/private/pmp.h"
 #include "host/fs.h"
 #include <stdio.h>
 #include <stdlib.h>

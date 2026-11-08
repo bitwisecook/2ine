@@ -11,7 +11,6 @@
 #include "os2/include/bsedos.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "emulator/abi.h"
-#include "os2/ps/pmshapi/profiles.h"
 #include "host/fs.h"
 #include "host/sync.h"
 #include <ctype.h>

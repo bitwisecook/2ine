@@ -5912,98 +5912,6 @@
       "convention": "LX_ABI_STACK32"
     }
   },
-  "pmshapi": {
-    "PrfOpenProfile": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfCloseProfile": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfQueryProfileInt": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfQueryProfileString": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfWriteProfileString": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfQueryProfileData": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfWriteProfileData": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfQueryProfileSize": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinAddSwitchEntry": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinRemoveSwitchEntry": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinChangeSwitchEntry": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQuerySwitchEntry": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQuerySwitchHandle": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "PrfQueryProfile": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryTaskSizePos": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinCreateSwitchEntry": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinQueryTaskTitle": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinStartApp": {
-      "argument_bytes": 20,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    }
-  },
   "pmctls": {
     "WinFileDlg": {
       "argument_bytes": 12,
@@ -6510,6 +6418,96 @@
       "convention": "LX_ABI_STACK32"
     },
     "Gre32Entry5": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfOpenProfile": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfCloseProfile": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfQueryProfileInt": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfQueryProfileString": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfWriteProfileString": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfQueryProfileData": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfWriteProfileData": {
+      "argument_bytes": 20,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfQueryProfileSize": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinAddSwitchEntry": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinRemoveSwitchEntry": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinChangeSwitchEntry": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQuerySwitchEntry": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQuerySwitchHandle": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "PrfQueryProfile": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryTaskSizePos": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinCreateSwitchEntry": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinQueryTaskTitle": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinStartApp": {
       "argument_bytes": 20,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"

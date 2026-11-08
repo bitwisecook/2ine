@@ -70,9 +70,16 @@ twoine_os2_dll(
     pmgpi/metafiles.c
     pmgpi/public_fonts.c
 )
-twoine_os2_dll(pmmerge pmmerge/module.c pmmerge/pmgre/dispatch.c)
+twoine_os2_dll(
+    pmmerge
+    pmmerge/module.c
+    pmmerge/pmgre/dispatch.c
+    pmmerge/ishapi/profiles.c
+    pmmerge/ishapi/switches.c
+    pmmerge/ishapi/startapp.c
+)
 twoine_os2_dll(pmgre pmgre/module.c)
-twoine_os2_dll(pmshapi pmshapi/module.c pmshapi/profiles.c pmshapi/switches.c pmshapi/startapp.c)
+twoine_os2_dll(pmshapi pmshapi/module.c)
 twoine_os2_dll(pmctls controls/pmctls/module.c)
 twoine_os2_dll(pmdrag controls/drag/module.c)
 twoine_os2_dll(helpmgr helpmgr/module.c)
@@ -179,9 +186,8 @@ endif()
 target_link_libraries(pmgpi PRIVATE pmwin)
 target_link_libraries(
     pmwinx
-    PRIVATE pmshapi pmwin pmgpi pmdrag pmwp
+    PRIVATE pmmerge pmwin pmgpi pmdrag pmwp
 )
-target_link_libraries(pmshapi PRIVATE doscalls pmwin)
 target_link_libraries(pmdrag PRIVATE pmwin)
 target_link_libraries(pmctls PRIVATE pmwin)
-target_link_libraries(pmmerge PRIVATE pmwin)
+target_link_libraries(pmmerge PRIVATE doscalls pmwin)
