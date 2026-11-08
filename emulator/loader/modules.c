@@ -514,7 +514,7 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
         moduleLoadError(126, base);
         return NULL;
     }
-    char *os2path = makeOS2Path(fname);
+    char *os2path = lxHostPathToGuest(fname);
     if (os2path)
     {
         for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
@@ -572,7 +572,7 @@ LxModule *loadNativeModule(const char *fname, const char *modname)
     LxNativeModuleInitEntryPoint fn = NULL;
     const LxExport *exports = NULL;
     uint32 num_exports = 0;
-    char *os2path = makeOS2Path(fname);
+    char *os2path = lxHostPathToGuest(fname);
     /* Native API modules can live outside every guest drive. */
     if (!os2path && modname)
         os2path = strdup(modname);
@@ -663,7 +663,7 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
 
     char fname[1024];
     snprintf(fname, sizeof(fname), "%s.dll", modname);
-    locatePathCaseInsensitive(fname);
+    lxLocatePathCaseInsensitive(fname);
 
     LxModule *retval = NULL;
     /* A selected provider is exclusive: guest DLLs cannot silently replace Mesa. */
@@ -693,7 +693,7 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
                 char dllpath[1024];
                 snprintf(dllpath, sizeof(dllpath), "%.*s%s%s.dll", (int)len, ptr,
                          (len == 0) ? "./" : "/", modname);
-                locatePathCaseInsensitive(dllpath);
+                lxLocatePathCaseInsensitive(dllpath);
                 if (lx_host_path_exists(dllpath))
                     retval = loadModuleByPathInternal(dllpath, dependency_tree_depth);
                 if (!retval && moduleLoadFailed())

@@ -10,6 +10,7 @@ add_library(
     config.c
     features.c
     drives.c
+    paths.c
     audio_mixer.c
 )
 twoine_add_abi_handles(2ine)

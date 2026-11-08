@@ -1062,7 +1062,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     }
 
     /* Publish exports before traversing dependencies, including circular imports. */
-    retval->os2path = makeOS2Path(fname);
+    retval->os2path = lxHostPathToGuest(fname);
     if (!retval->os2path)
         goto loadlx_failed;
     retval->loading = 1;

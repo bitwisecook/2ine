@@ -5,14 +5,15 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "emulator/loader/internal.h"
+/* OS/2 to host path conversion over the drive table. The inverse, host to
+   OS/2, is lxHostPathToGuest in drives.c. */
+#include "emulator/process/internal.h"
 
-char *makeOS2Path(const char *fname)
-{
-    return lxHostPathToGuest(fname);
-}
+/* OS/2 error codes (bseerr.h). */
+#define ERROR_NOT_ENOUGH_MEMORY 8
+#define ERROR_NOT_DOS_DISK 26
 
-int locateOneElement(char *buf)
+static int locateOneElement(char *buf)
 {
     if (lx_host_path_exists(buf))
         return 1;
@@ -51,7 +52,7 @@ int locateOneElement(char *buf)
     return 0;
 }
 
-int locatePathCaseInsensitive(char *buf)
+int lxLocatePathCaseInsensitive(char *buf)
 {
     int rc;
     char *ptr = buf;
@@ -107,7 +108,7 @@ char *lxMakeUnixPath(const char *os2path, uint32 *err)
         mountpoint = GProcessState.disks[driveidx];
         if (!mountpoint)
         {
-            *err = 26;
+            *err = ERROR_NOT_DOS_DISK;
             return NULL;
         }
 
@@ -127,7 +128,7 @@ char *lxMakeUnixPath(const char *os2path, uint32 *err)
     char *retval = (char *)malloc(len);
     if (!retval)
     {
-        *err = 8;
+        *err = ERROR_NOT_ENOUGH_MEMORY;
         return NULL;
     }
 
@@ -156,7 +157,7 @@ char *lxMakeUnixPath(const char *os2path, uint32 *err)
                 leaf[--n] = 0;
         }
     }
-    locatePathCaseInsensitive(retval);
+    lxLocatePathCaseInsensitive(retval);
 
     /* Microsoft linker response files may use a root-relative name for a cwd file.
    Prefer the drive-root path, then try the current directory. */
@@ -181,7 +182,7 @@ char *lxMakeUnixPath(const char *os2path, uint32 *err)
             char *pp = alt;
             while ((pp = strstr(pp, "//")) != NULL)
                 memmove(pp, pp + 1, strlen(pp));
-            locatePathCaseInsensitive(alt);
+            lxLocatePathCaseInsensitive(alt);
             if (lx_host_path_exists(alt))
             {
                 free(retval);

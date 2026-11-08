@@ -22,10 +22,6 @@
 LX_PRIVATE int sanityCheckLxModule(const uint8 *exe, const uint32 exelen);
 LX_PRIVATE int sanityCheckNeModule(const uint8 *exe, const uint32 exelen);
 LX_PRIVATE int sanityCheckModule(uint8 **_exe, uint32 *_exelen, int *_is_lx);
-LX_PRIVATE char *makeOS2Path(const char *fname);
-LX_PRIVATE int locateOneElement(char *buf);
-LX_PRIVATE int locatePathCaseInsensitive(char *buf);
-LX_PRIVATE char *lxMakeUnixPath(const char *os2path, uint32 *err);
 
 LX_PRIVATE uint16 lxSelectorToSegment(uint16 index);
 LX_PRIVATE uint16 lxSetOs2Tib(uint8 *source);

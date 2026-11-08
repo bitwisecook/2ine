@@ -19,6 +19,7 @@
 #include "emulator/abi.h"
 #include "emulator/handles.h"
 #include "emulator/audio_mixer.h"
+#include "emulator/paths.h"
 
 #define LXTIBSIZE (sizeof(LxTIB) + sizeof(LxTIB2) + sizeof(LxPostTIB))
 
@@ -90,7 +91,6 @@ typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);
 typedef void (*LxNativeModuleDeinitEntryPoint)(void);
 
 extern __attribute__((visibility("default"))) LxProcessState GProcessState;
-char *lxHostPathToGuest(const char *name);
 
 #define LX_NATIVE_CONSTRUCTOR(modname)                                                             \
     void __attribute__((constructor)) lxNativeConstructor_##modname(void)

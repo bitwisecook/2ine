@@ -8,7 +8,6 @@ if(LX_LEGACY)
         imports.c
         load_ne.c
         load_lx.c
-        paths.c
         rexx_service.c
     )
     target_sources(lx_loader PRIVATE network_config.c)
