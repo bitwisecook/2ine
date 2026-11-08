@@ -62,7 +62,7 @@
 //    is at most a shared IBM lineage of ideas, not derivation.
 
 #define DE_NOT_IN_MODULE
-#include "../../pack_compat.h"
+#include "storage/archives/ibm_pack/deark_shim.h"
 
 #define FTC_DESCRIPTORTABLE_LEN  433
 #define FTC_LEAF_LIMIT_WO  (FTC_DESCRIPTORTABLE_LEN*4) // 1732

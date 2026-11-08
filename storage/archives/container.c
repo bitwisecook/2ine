@@ -1,13 +1,13 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _POSIX_C_SOURCE 200809L
-#include "ball/media.h"
-#include "ball/file_time.h"
+#include "storage/container.h"
+#include "storage/common/file_time.h"
 #include "ball/platform.h"
-#include "ball/disk_image.h"
-#include "ball/pack.h"
-#include "ball/read_stream.h"
-#include "ball/vendor/libarchive/archive.h"
-#include "ball/vendor/libarchive/archive_entry.h"
+#include "storage/volume.h"
+#include "storage/archives/ibm_pack/decode.h"
+#include "storage/read_stream.h"
+#include "storage/vendor/libarchive/archive.h"
+#include "storage/vendor/libarchive/archive_entry.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -20,7 +20,7 @@
 #define MEDIA_PREFIX "/@2ine-media/"
 #define MEDIA_MEMBER_LIMIT (UINT64_C(2) * 1024 * 1024 * 1024)
 #define MEDIA_ENTRY_LIMIT 100000u
-#include "ball/media_cache.h"
+#include "storage/archives/container_cache.h"
 
 static unsigned u16(const unsigned char *p)
 {
@@ -503,8 +503,8 @@ static la_int64_t archive_input_skip(struct archive *a, void *opaque, la_int64_t
     return archive_input_seek(a, opaque, (la_int64_t)n, SEEK_CUR) < 0 ? 0 : (la_int64_t)n;
 }
 
-#include "ball/legacy_archives.h"
-#include "ball/zoo_archive.h"
+#include "storage/archives/legacy_archives.h"
+#include "storage/archives/zoo/zoo.h"
 
 typedef struct DiskVisit
 {
@@ -633,7 +633,7 @@ static int archive_walk(TbReadStream *file, Visit visit, void *context)
     return ok;
 }
 
-#include "ball/media_stream.h"
+#include "storage/archives/member_stream.h"
 
 /* Resolve container boundaries iteratively: nesting consumes no C call stack. */
 static TbReadStream *open_parent(const char *path, char **member)

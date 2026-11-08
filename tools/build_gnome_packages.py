@@ -109,9 +109,9 @@ def stage(build, destination):
     copy(ROOT / "ball/vendor/sha256/README.md", licenses / "SHA256-public-domain.md")
     shutil.copytree(ROOT / "docs/licenses", licenses / "licenses")
     copy(ROOT / "ball/vendor/cjson/LICENSE", licenses / "licenses/cJSON-MIT.txt")
-    copy(ROOT / "ball/vendor/fatfs/LICENSE.txt", licenses / "licenses/FatFs-license.txt")
-    copy(ROOT / "ball/vendor/libarchive/COPYING", licenses / "licenses/libarchive-BSD.txt")
-    copy(ROOT / "ball/vendor/hwzip/LICENSE", licenses / "licenses/HWZIP-Unlicense.txt")
+    copy(ROOT / "storage/vendor/fatfs/LICENSE.txt", licenses / "licenses/FatFs-license.txt")
+    copy(ROOT / "storage/vendor/libarchive/COPYING", licenses / "licenses/libarchive-BSD.txt")
+    copy(ROOT / "storage/vendor/hwzip/LICENSE", licenses / "licenses/HWZIP-Unlicense.txt")
     if (build / "2ine-build.json").is_file():
         copy(build / "2ine-build.json", runtime / "2ine-build.json")
     if (build / "ffmpeg-build.json").is_file():

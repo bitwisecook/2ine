@@ -59,7 +59,8 @@ with explicit CRT-compatible argument quoting. Native frontends can handle
 process presentation themselves while reusing the C launch plan.
 
 `platform.c` provides POSIX and Win32 file adapters. Windows paths use wide
-filesystem APIs. Library/CLI builds are covered by the Linux/macOS/Windows CI
+filesystem APIs. Disk images, filesystems and archive containers come from the
+shared `storage/` component, and executable, icon and profile formats from `formats/`. Library/CLI builds are covered by the Linux/macOS/Windows CI
 matrix; the full OS/2 runtime's supported hosts remain separately documented.
 
 Vendored dependencies:
@@ -72,7 +73,7 @@ Vendored dependencies:
   installer receipts, verified against Python hashlib in the engine tests.
 - FatFs R0.16 with upstream patches 1 and 2, July 10, 2026, under its permissive
   license. Used for FAT32/exFAT, with in-process image-file disk callbacks. See
-  [configuration and local changes](vendor/fatfs/README.md).
+  [configuration and local changes](../storage/vendor/fatfs/README.md).
 
 ## Per-drive and per-application state
 
@@ -233,7 +234,7 @@ Stop guests before archiving; the managers serialize these operations.
 
 ZIP support links against libarchive (system library on macOS, `libarchive-dev`
 on Debian/Ubuntu, `libarchive` via vcpkg on Windows). The BSD-licensed API headers
-and license in `vendor/libarchive/` are pinned to
+and license in `storage/vendor/libarchive/` are pinned to
 [libarchive v3.7.4](https://github.com/libarchive/libarchive/tree/v3.7.4), allowing
 macOS SDKs that omit the headers to use the system library.
 

@@ -6,8 +6,8 @@ dskdcmps author released that component into the public domain.
 Sources: https://github.com/jsummers/deark (`src/fmtutil-ftcomp.c`,
 `foreign/ftcompdata.h`, `foreign/dskdcmps.h`). The retained source came from
 the workspace's Deark checkout. `ftcomp.inc` changes only the include paths to use
-the bounded, per-request adapter in `ball/pack_compat.h`. The decoder is
-included by `ball/pack.c`, rather than compiled as a standalone source.
+the bounded, per-request adapter in `storage/archives/ibm_pack/deark_shim.h`. The decoder is
+included by `storage/archives/ibm_pack/decode.c`, rather than compiled as a standalone source.
 
 `COPYING` retains Deark's MIT-style license. `readme-dskdcmps.txt` retains
 the original component notice. The packaged application includes Deark's

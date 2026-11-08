@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Persistent opaque file metadata in a private extended-attribute namespace. */
 #include "hal/posix/fs_internal.h"
-#include "ball/disk_image.h"
+#include "storage/volume.h"
 #include <sys/attr.h>
 #include <sys/stat.h>
 #include <sys/xattr.h>

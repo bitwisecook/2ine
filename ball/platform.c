@@ -4,7 +4,7 @@
 #define _DARWIN_C_SOURCE 1
 #define _XOPEN_SOURCE 700
 #include "ball/platform.h"
-#include "ball/disk_image.h"
+#include "storage/volume.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>

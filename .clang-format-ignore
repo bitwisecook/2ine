@@ -10,6 +10,7 @@ hal/include/hal/gl_constants.h
 research/**
 third_party/**
 ball/vendor/**
+storage/vendor/**
 _deps/**
 build/**
 build-*/**

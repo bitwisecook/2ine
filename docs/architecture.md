@@ -35,9 +35,10 @@ know no `LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or imple
 DOSCALLS.
 `tests/architecture/check_boundaries.py` checks that source separation.
 
-The include roots are the project root and `hal/include`. Project headers are
-included by their path from the project root (`"os2libs/pmwin.h"`,
-`"ball/disk_image.h"`), and public HAL headers as `"hal/<name>.h"`; same-directory
+The include roots are the project root, `hal/include` and `storage/include`.
+Project headers are included by their path from the project root
+(`"os2libs/pmwin.h"`, `"storage/common/file_time.h"`), public HAL headers as
+`"hal/<name>.h"` and public storage headers as `"storage/<name>.h"`; same-directory
 names and `../` paths are rejected. Host-OS preprocessor branches (`_WIN32`,
 `__APPLE__`, `__linux__`) appear only in `hal/linux/`, `hal/macos/` and `hal/win/`,
 apart from the named temporary allowances in the checker. Every top-level source
@@ -59,6 +60,7 @@ rules.
 |---|---|
 | `formats/executable/` | Packed NE/LX definitions and LX EXEPACK decompression, without process state; built as `twoine_formats` (OS/2 application ABI) and `twoine_formats_host` (host ABI) |
 | `formats/resources/` | OS/2 and Windows icon bitmaps and NE/LX resource extraction |
+| `storage/` | Disk images, filesystems (ISO 9660, FAT, HPFS) and archive containers shared by the HAL and ball; public interface in `storage/include/storage/`; built per ABI by `twoine_add_storage` |
 | `loader/` | Entry, imports/relocations, NE/LX loading, module lifetime and paths |
 | `runtime/core/` | Bootstrap, process environment, threads, configuration and drives |
 | `runtime/` | Execution dispatch/mappings and audio generator policy |

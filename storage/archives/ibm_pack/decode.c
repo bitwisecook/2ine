@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "ball/pack.h"
-#include "ball/pack_compat.h"
-#include "ball/vendor/deark/ftcomp.inc"
-#include "ball/vendor/deark/dskdcmps.h"
+#include "storage/archives/ibm_pack/decode.h"
+#include "storage/archives/ibm_pack/deark_shim.h"
+#include "storage/vendor/deark/ftcomp.inc"
+#include "storage/vendor/deark/dskdcmps.h"
 
 int tb_pack_decode(const void *input, size_t size, size_t expected, int kind,
                    unsigned char **output)

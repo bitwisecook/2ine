@@ -7,7 +7,7 @@ endif()
 # also the parent directory when this file is configured on its own.
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH TWOINE_BALL_PROJECT_ROOT)
 # macOS provides libarchive without public SDK headers; use the pinned API headers.
-set(LibArchive_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/libarchive")
+set(LibArchive_INCLUDE_DIR "${TWOINE_BALL_PROJECT_ROOT}/storage/vendor/libarchive")
 find_package(LibArchive REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Git QUIET)
@@ -47,28 +47,15 @@ file(
 if(NOT TARGET twoine_formats_host)
     add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/formats" formats)
 endif()
-set(TWOINE_BALL_SOURCES
-    hpfs_volume.c
-    fat_volume.c
-    vendor/fatfs/ff.c
-    vendor/fatfs/ffunicode.c
-    disk_image.c
-    read_stream.c
-    media.c
-    pack.c
-    ball.c
-    platform.c
-    vendor/cjson/cJSON.c
-    vendor/sha256/sha256.c
-    vendor/hwzip/implode.c
-    vendor/hwzip/huffman.c
-    vendor/hwzip/lz77.c
-    vendor/hwzip/tables.c
-    vendor/hwzip/shrink.c
-    vendor/hwzip/reduce.c
-)
+if(NOT TARGET twoine_storage)
+    add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/storage" storage)
+endif()
+set(TWOINE_BALL_SOURCES ball.c platform.c vendor/cjson/cJSON.c vendor/sha256/sha256.c)
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})
-target_link_libraries(twoine_ball PRIVATE twoine_formats_host LibArchive::LibArchive ZLIB::ZLIB)
+target_link_libraries(
+    twoine_ball
+    PRIVATE twoine_formats_host twoine_storage LibArchive::LibArchive ZLIB::ZLIB
+)
 target_include_directories(twoine_ball PUBLIC include PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
 target_compile_features(twoine_ball PRIVATE c_std_11)
 target_compile_definitions(twoine_ball PRIVATE TWOINE_BALL_BUILD CJSON_HIDE_SYMBOLS)
@@ -84,14 +71,24 @@ if(NOT WIN32)
     target_link_libraries(twoine_ball PRIVATE m Threads::Threads)
 endif()
 # The Xcode app links this archive on its own, so it carries the shared
-# format objects rather than depending on a second archive.
-add_library(twoine_ball_static STATIC ${TWOINE_BALL_SOURCES} $<TARGET_OBJECTS:twoine_formats_host>)
+# format and storage objects rather than depending on more archives.
+add_library(
+    twoine_ball_static
+    STATIC
+    ${TWOINE_BALL_SOURCES}
+    $<TARGET_OBJECTS:twoine_formats_host>
+    $<TARGET_OBJECTS:twoine_storage>
+)
 target_link_libraries(twoine_ball_static PUBLIC LibArchive::LibArchive ZLIB::ZLIB)
 if(APPLE)
     target_link_libraries(twoine_ball PRIVATE "-framework CoreFoundation")
     target_link_libraries(twoine_ball_static PUBLIC "-framework CoreFoundation")
 endif()
-target_include_directories(twoine_ball_static PUBLIC include PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
+target_include_directories(
+    twoine_ball_static
+    PUBLIC include
+    PRIVATE "${TWOINE_BALL_PROJECT_ROOT}" "${TWOINE_BALL_PROJECT_ROOT}/storage/include"
+)
 target_compile_features(twoine_ball_static PRIVATE c_std_11)
 target_compile_definitions(twoine_ball_static PRIVATE CJSON_HIDE_SYMBOLS)
 foreach(target twoine_ball twoine_ball_static)

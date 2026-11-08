@@ -46,12 +46,22 @@ let package = Package(
             name: "TwoineFormats", path: "Sources/TwoineFormats", exclude: ["CMakeLists.txt"],
             cSettings: [.unsafeFlags(["-I", projectRoot])]),
         .target(
-            name: "BallEngine", dependencies: ["TwoineFormats"], path: "Sources/BallEngine",
+            name: "TwoineStorage", path: "Sources/TwoineStorage",
+            exclude: [
+                "CMakeLists.txt", "vendor/libarchive/COPYING", "vendor/fatfs/README.md",
+                "vendor/fatfs/LICENSE.txt", "vendor/hwzip/LICENSE", "vendor/hwzip/README.md",
+                "vendor/deark/COPYING", "vendor/deark/README.md",
+                "vendor/deark/readme-dskdcmps.txt",
+            ], publicHeadersPath: "include",
+            cSettings: [.unsafeFlags(["-I", projectRoot]), .define("TB_MEDIA_TIME_CACHE")],
+            linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
+        .target(
+            name: "BallEngine", dependencies: ["TwoineFormats", "TwoineStorage"],
+            path: "Sources/BallEngine",
             exclude: [
                 "CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md",
-                "vendor/libarchive/COPYING", "vendor/fatfs/README.md", "vendor/fatfs/LICENSE.txt",
-                "vendor/hwzip/LICENSE", "vendor/hwzip/README.md",
-            ], publicHeadersPath: "include", cSettings: ballBuildSettings,
+            ],
+            publicHeadersPath: "include", cSettings: ballBuildSettings,
             linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
         .target(
             name: "BallCore", dependencies: ["BallEngine"],

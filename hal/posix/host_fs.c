@@ -4,7 +4,7 @@
 #define _DARWIN_C_SOURCE 1
 #define _FILE_OFFSET_BITS 64
 #include "hal/posix/fs_internal.h"
-#include "ball/disk_image.h"
+#include "storage/volume.h"
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>

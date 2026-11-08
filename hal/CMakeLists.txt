@@ -50,6 +50,15 @@ function(twoine_add_hal target backend)
         )
     endif()
     target_sources(${target} PRIVATE ${TWOINE_HOST_SOURCES})
+    # Mapped disk-image drives; each backend builds storage for its own ABI.
+    set(_storage_options VOLUMES_ONLY)
+    if(backend STREQUAL "native")
+        list(APPEND _storage_options I386)
+    elseif(backend STREQUAL "unicorn")
+        list(APPEND _storage_options STRICT)
+    endif()
+    twoine_add_storage(${target}_storage ${_storage_options})
+    target_link_libraries(${target} PUBLIC ${target}_storage)
     file(STRINGS "${PROJECT_SOURCE_DIR}/VERSION" _twoine_version LIMIT_COUNT 1)
     set_property(
         SOURCE "${TWOINE_HAL_SOURCE_DIR}/posix/host_fatal.c" TARGET_DIRECTORY ${target}

@@ -14,14 +14,14 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 # Every top-level directory that holds sources has a role, so a new component is
 # placed under the rules below before it can pass.
 PORTABLE_COMPONENTS = {"formats", "runtime", "loader", "guest", "os2libs"}
-HOST_COMPONENTS = {"hal", "ball"}
+HOST_COMPONENTS = {"hal", "ball", "storage"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
 FOREIGN_DIRECTORIES = {"ports", "research"}
 
 # Paths whose sources follow another project's or toolchain's conventions:
 # vendored libraries and OS/2 guest programs built with OS/2 compilers.
-FOREIGN_SOURCE_PATHS = ("ball/vendor/", "tests/programs/")
+FOREIGN_SOURCE_PATHS = ("ball/vendor/", "storage/vendor/", "tests/programs/")
 
 # HAL directories that may branch on the host operating system.
 HAL_PLATFORM_DIRECTORIES = ("hal/linux/", "hal/macos/", "hal/win/")
@@ -39,7 +39,7 @@ TEMPORARY_OS_BRANCH_ALLOWANCES = {
 # Headers generated into the build tree rather than the source tree.
 GENERATED_INCLUDES = {"twoine_ball_icon_png.h"}
 
-INCLUDE_ROOTS = (root, root / "hal/include")
+INCLUDE_ROOTS = (root, root / "hal/include", root / "storage/include")
 
 
 def excluded_top_level(name):

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
-#include "ball/read_stream.h"
+#include "storage/read_stream.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>

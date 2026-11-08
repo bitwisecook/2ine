@@ -2,7 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "ball/include/twoine_ball.h"
 #include "ball/platform.h"
-#include "ball/disk_image.h"
+#include "storage/volume.h"
 #include "formats/encoding/base64.h"
 #include "formats/endian.h"
 #include "formats/executable/lx.h"

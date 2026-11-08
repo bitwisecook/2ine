@@ -3,9 +3,9 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DARWIN_C_SOURCE 1
 #define _FILE_OFFSET_BITS 64
-#include "ball/disk_image.h"
-#include "ball/image_internal.h"
-#include "ball/file_time.h"
+#include "storage/volume.h"
+#include "storage/volume/volume_internal.h"
+#include "storage/common/file_time.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
@@ -808,7 +808,7 @@ static int read_entries(Disk *d, Node directory, EntryCallback callback, void *c
     return ok;
 }
 
-#include "ball/image_index.h"
+#include "storage/volume/directory_index.h"
 
 typedef struct Find
 {
