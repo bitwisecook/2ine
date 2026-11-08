@@ -42,7 +42,12 @@ twoine_os2_dll(
     doscalls/loader/ldrrun.c
     doscalls/loader/ldrsubr.c
     doscalls/doscall1/libpath.c
-    doscalls/system.c
+    doscalls/doscall1/info_blocks.c
+    doscalls/task/tkinit.c
+    doscalls/task/timserv.c
+    doscalls/perf/qstatec.c
+    doscalls/task/procstat.c
+    doscalls/dev/tmr.c
     doscalls/dev/beep.c
     doscalls/sem/semmux.c
     doscalls/doscall1/thunk.c

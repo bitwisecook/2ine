@@ -6,8 +6,6 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2/baseos/doscalls/internal.h"
-#include "os2/include/bsedos16.h"
-#include "os2/include/private/bsep.h"
 #include "emulator/launch_record.h"
 #include <ctype.h>
 
