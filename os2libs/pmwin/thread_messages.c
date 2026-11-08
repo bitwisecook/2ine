@@ -2,10 +2,10 @@
 /* Foreign posts are staged under a lock and consumed by the owning PM thread. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include "os2libs/pmwin/open32_post.h"
-#include "hal/host_mailbox.h"
-#include "hal/host_shared.h"
+#include "host/mailbox.h"
+#include "host/shared_memory.h"
 #include "guest/abi.h"
 
 typedef struct Target

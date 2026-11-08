@@ -28,11 +28,11 @@
 #define DCPY_APPEND 0x0002U   // append instead of replacing.
 #include "os2libs/os2native16.h"
 #include "os2libs/doscalls.h"
-#include "hal/host.h"
-#include "hal/host_fs.h"
-#include "hal/host_process.h"
-#include "hal/host_sync.h"
-#include "hal/host_shared.h"
+#include "host/system.h"
+#include "host/fs.h"
+#include "host/process.h"
+#include "host/sync.h"
+#include "host/shared_memory.h"
 #include <limits.h>
 
 void cleanupSuballocation(void);

@@ -3,10 +3,10 @@
 #include "runtime/execution_internal.h"
 #include "emulator/execution/unicorn/cpu.h"
 #include "guest/abi.h"
-#include "hal/host_fatal.h"
-#include "hal/host_sync.h"
-#include "hal/host_thread.h"
-#include "hal/host.h"
+#include "host/fatal.h"
+#include "host/sync.h"
+#include "host/thread.h"
+#include "host/system.h"
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>

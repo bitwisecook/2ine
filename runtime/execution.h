@@ -4,7 +4,7 @@
 #define TWOINE_EXECUTION_H
 #include <stddef.h>
 #include <stdint.h>
-#include "hal/host_shared.h"
+#include "host/shared_memory.h"
 
 typedef struct LxExecution LxExecution;
 typedef struct LxGuestMapping LxGuestMapping;

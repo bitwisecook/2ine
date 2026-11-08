@@ -3,9 +3,9 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin.h"
-#include "hal/host.h"
-#include "hal/host_shared.h"
-#include "hal/host_sync.h"
+#include "host/system.h"
+#include "host/shared_memory.h"
+#include "host/sync.h"
 #include <stdio.h>
 
 /* Global atoms are shared by every process of a ball, as named semaphores are. The word

@@ -6,9 +6,9 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
-#include "hal/host_desktop_bundle.h"
-#include "hal/host_fatal.h"
-#include "hal/host_operation.h"
+#include "host/desktop.h"
+#include "host/fatal.h"
+#include "host/process_supervisor.h"
 #include "loader/network_config.h"
 
 int main(int argc, char **argv, char **envp)

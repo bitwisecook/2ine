@@ -1,7 +1,7 @@
 # Public domain. No rights reserved. Wholly AI-authored.
-# Disk images, filesystems and archive containers, shared by the HAL and ball.
+# Disk images, filesystems and archive containers, shared by the host services and ball.
 # Volume access needs only the vendored FatFs; archive containers add
-# libarchive and zlib. The native i386 HAL and host-ABI ball cannot share
+# libarchive and zlib. The native i386 host objects and host-ABI ball cannot share
 # objects, so each caller builds the static library for its ABI and options.
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH _twoine_storage_root)
 # macOS provides libarchive without public SDK headers; use the pinned API headers.

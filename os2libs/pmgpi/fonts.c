@@ -3,7 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
-#include "hal/font.h"
+#include "host/font.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pm_text.h"
 

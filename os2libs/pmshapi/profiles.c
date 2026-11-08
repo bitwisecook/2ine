@@ -7,8 +7,8 @@
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "runtime/process.h"
-#include "hal/host_fs.h"
-#include "hal/host_sync.h"
+#include "host/fs.h"
+#include "host/sync.h"
 #include <limits.h>
 
 typedef struct ProfileEntry

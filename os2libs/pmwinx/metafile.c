@@ -3,7 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "guest/handles.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pm_text.h"
 #include "os2libs/pmwin/graphics.h"

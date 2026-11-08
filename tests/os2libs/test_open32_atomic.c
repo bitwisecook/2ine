@@ -2,7 +2,7 @@
 /* Real guest backing, original return signs, unaligned words and host contenders. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx.h"
-#include "hal/host_thread.h"
+#include "host/thread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

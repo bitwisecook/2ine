@@ -34,7 +34,7 @@ class OpenGLGeneratorTests(unittest.TestCase):
             gen_opengl.pointer_size("glUnknownPointer", "data")
 
     def test_no_host_sized_longs_in_dispatch_and_generated_outputs_match(self):
-        self.assertNotIn("long", self.output["hal/include/hal/gl_dispatch.h"])
+        self.assertNotIn("long", self.output["host/include/host/gl/dispatch.h"])
         for relative, generated in self.output.items():
             self.assertEqual((ROOT / relative).read_text(), generated, relative)
 

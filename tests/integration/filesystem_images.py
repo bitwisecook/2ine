@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Exercise FAT32, exFAT and HPFS images through the shared engine and guest HAL."""
+"""Exercise FAT32, exFAT and HPFS images through the shared engine and guest host services."""
 
 import argparse
 import hashlib

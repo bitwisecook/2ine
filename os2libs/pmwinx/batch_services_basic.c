@@ -7,7 +7,7 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/case_tables.h"
 #include "os2libs/pmshapi.h"
-#include "hal/host.h"
+#include "host/system.h"
 #include <stdio.h>
 
 BOOL AdjustWindowRect(PVOID rectangle, ULONG style, BOOL menu)

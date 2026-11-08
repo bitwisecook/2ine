@@ -2,8 +2,8 @@
 /* Process-owned Open32 TLS indices hold opaque 32-bit values on each host thread. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host_sync.h"
-#include "hal/host_thread.h"
+#include "host/sync.h"
+#include "host/thread.h"
 #define OPEN32_TLS_SLOTS 64
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;

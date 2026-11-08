@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Typed resource ownership and generation-checked OS/2 handles. */
 #include "guest/handles.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stddef.h>

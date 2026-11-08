@@ -50,8 +50,8 @@ ULONG DrgQueryStrNameLen(ULONG string)
 /* Drag structures are wire objects. Their public pointers always name mapped
    guest memory, and never expose the host allocation that tracks ownership. */
 #include "guest/abi.h"
-#include "hal/host_sync.h"
-#include "hal/host.h"
+#include "host/sync.h"
+#include "host/system.h"
 #include "os2libs/pmwin.h"
 #include "os2libs/pmwin/graphics.h"
 

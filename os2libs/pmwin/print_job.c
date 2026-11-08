@@ -2,9 +2,9 @@
 /* Print pages retain actual GPI pixels. PDF stores color image XObjects;
    PCL 5 uses monochrome ordered-dither raster rows at the advertised dpi. */
 #include "os2libs/pmwin/print_job.h"
-#include "hal/print.h"
-#include "hal/host.h"
-#include "hal/host_fs.h"
+#include "host/print.h"
+#include "host/system.h"
+#include "host/fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

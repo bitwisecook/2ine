@@ -4,7 +4,7 @@
 #ifndef TWOINE_PMWINX_PROCESS_H
 #define TWOINE_PMWINX_PROCESS_H
 #include "os2libs/pmwinx.h"
-#include "hal/host_process.h"
+#include "host/process.h"
 BOOL open32CloseProcess(ULONG handle);
 int open32WaitProcess(ULONG handle, ULONG timeout, ULONG *result);
 /* A child's primary thread handle: the operations act on the child itself. */

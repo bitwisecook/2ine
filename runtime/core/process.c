@@ -6,7 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "runtime/core/internal.h"
-#include "hal/host_shared.h"
+#include "host/shared_memory.h"
 
 void initPib(void)
 {

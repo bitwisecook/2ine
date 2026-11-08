@@ -2,8 +2,8 @@
 
 # Shared runtime
 
-**Shared contracts above the HAL.** `runtime/` owns execution dispatch and checked
-guest mappings. `hal/` implements execution and host services; neither backend
+**Shared contracts above the host services.** `runtime/` owns execution dispatch and checked
+guest mappings. `emulator/execution/` implements execution and `host/` host services; neither backend
 owns the loader or OS/2 behavior.
 
 ```mermaid
@@ -12,17 +12,17 @@ flowchart TD
     Exec --> Memory["execution_memory.c · checked guest mappings"]
     Exec --> Native["emulator/execution/native_i386/execution.c"]
     Exec --> Emu["emulator/execution/unicorn/execution.c"]
-    Loader --> Host["host*.h · opaque host objects"]
-    Host --> HAL["hal/posix/"] --> Platforms["hal/linux/ + hal/macos/"]
+    Loader --> Host["host/*.h · opaque host objects"]
+    Host --> Adapters["host/core/ + host/posix/"] --> Platforms["host/linux/ + host/macos/"]
 ```
 
 `execution.h` covers program/DLL/thread entry, callbacks, bridges and selectors.
-`host*.h` covers files, libraries, threads, processes, synchronization and VM.
+`host/*.h` covers files, libraries, threads, processes, synchronization and VM.
 Guest addresses, host pointers and host handles are distinct.
 
-`hal/CMakeLists.txt` creates separate native and portable HAL object targets.
-`twoine_runtime` combines the common runtime and portable HAL in a static library;
-the application links the HAL for its selected execution profile. Native ABI
+`host/CMakeLists.txt` creates separate native and portable host object targets.
+`twoine_runtime` combines the common runtime and portable host objects in a static
+library; the application links the host objects for its selected execution profile. Native ABI
 bridges are compiled into their OS/2 API modules. Existing build options and
 runtime target names select the same execution profiles.
 
@@ -35,7 +35,7 @@ only for verified upstream sources; unknown revisions and system libraries retai
 the original code. Configure with `-DTWOINE_UNICORN_OPTIMIZATIONS=OFF` to compare
 against the unmodified backend.
 
-[Full diagrams](architecture.md) · [Platform adapters](hal.md) · [Guest ABI](guest-abi.md) ·
+[Full diagrams](architecture.md) · [Platform adapters](host.md) · [Guest ABI](guest-abi.md) ·
 [Licensing](licensing.md).
 
 ## Fatal failures

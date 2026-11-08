@@ -2,7 +2,7 @@
 /* Window DC capabilities describe the PM renderer and its configured logical display DPI. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmgpi.h"
-#include "hal/font.h"
+#include "host/font.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/printer_catalogue.h"
 

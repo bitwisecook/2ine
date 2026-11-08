@@ -2,7 +2,7 @@
 /* Pipe-driven independent processes exercising public profile operations. */
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmshapi/profiles.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

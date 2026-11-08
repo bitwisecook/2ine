@@ -3,7 +3,7 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/timers.h"
-#include "hal/video.h"
+#include "host/window.h"
 
 typedef struct Open32Timer
 {

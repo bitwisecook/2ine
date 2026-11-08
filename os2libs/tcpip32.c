@@ -9,12 +9,12 @@
 #include "os2libs/os2native.h"
 #include "os2libs/tcpip32.h"
 
-#include "hal/socket.h"
-#include "hal/host_thread.h"
+#include "host/socket.h"
+#include "host/thread.h"
 #include "os2libs/network.h"
 
-#include "hal/network.h"
-#include "hal/host_sync.h"
+#include "host/network.h"
+#include "host/sync.h"
 #include <ctype.h>
 static LX_HOST_THREAD_LOCAL int SocketError, ResolverError;
 

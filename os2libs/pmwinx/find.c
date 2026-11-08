@@ -2,8 +2,8 @@
 /* Win32 find handles own their directory cursor independently of file handles. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host_fs.h"
-#include "hal/host_sync.h"
+#include "host/fs.h"
+#include "host/sync.h"
 
 typedef struct FileSearch
 {

@@ -6,7 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "runtime/core/internal.h"
-#include "hal/host_fatal.h"
+#include "host/fatal.h"
 
 LxLoaderState GLoaderState;
 

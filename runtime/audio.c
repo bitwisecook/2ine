@@ -1,8 +1,8 @@
 /* Derived from original 2ine; zlib-style license. See ../LICENSE.txt. */
-/* OS/2 audio generators share a stream. The HAL owns device conversion/lifetime. */
+/* OS/2 audio generators share a stream. The host audio adapter owns device conversion/lifetime. */
 #include "runtime/audio.h"
-#include "hal/audio.h"
-#include "hal/host_sync.h"
+#include "host/audio.h"
+#include "host/sync.h"
 #include <stdlib.h>
 
 typedef struct Generator

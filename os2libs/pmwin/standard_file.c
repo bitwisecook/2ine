@@ -4,7 +4,7 @@
 #include "os2libs/pmwin/controls.h"
 #include "os2libs/pmwin/standard_dialogs.h"
 #include "os2libs/pmctls.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 #include <ctype.h>
 
 typedef struct PmFileDialog

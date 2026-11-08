@@ -5,8 +5,8 @@
 #include "os2libs/dive_pixels.h"
 #include "os2libs/dive_palette.h"
 #include "os2libs/pmwin/graphics.h"
-#include "hal/video.h"
-#include "hal/host_sync.h"
+#include "host/window.h"
+#include "host/sync.h"
 #include "runtime/runtime_features.h"
 #define DIVE_MAX_BUFFERS 256
 #define DIVE_FIRST_BUFFER 16

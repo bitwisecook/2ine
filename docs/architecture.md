@@ -16,35 +16,38 @@ flowchart TD
     Execution --> Native["emulator/execution/native_i386/execution.c"]
     Execution --> Emulator["emulator/execution/unicorn/execution.c"]
     Emulator --> CPU["emulator/execution/unicorn/cpu.h + cpu_unicorn.c"] --> Unicorn["Unicorn"]
-    APIs --> Host["hal/include/hal/ · opaque host services"]
-    Host --> HAL["hal/posix/ + platform adapters"]
-    HAL --> Linux["Linux"]
-    HAL --> Mac["macOS"]
-    HAL -. incomplete port .-> Windows["Windows"]
+    APIs --> Host["host/include/host/ · opaque host services"]
+    Host --> Adapters["host/core/ + host/posix/ + platform and library adapters"]
+    Adapters --> Linux["Linux"]
+    Adapters --> Mac["macOS"]
+    Adapters -. incomplete port .-> Windows["Windows"]
 ```
 
 `os2libs/` contains the OS/2 API implementations shared by both execution paths.
 `runtime/` owns execution dispatch, checked guest mappings and platform-neutral
-process and audio policy. `hal/include/hal/` declares host-service contracts,
-and `hal/` implements them: `emulator/execution/native_i386/` owns
-Linux i386 execution and ABI bridges, `emulator/execution/unicorn/` owns CPU emulation, and
-`hal/posix/` shares host services between `hal/linux/` and `hal/macos/`.
-`hal/win/` contains partial Windows adapters. [HAL source selection](hal.md)
-chooses the implementation and dependencies for each worker. Execution adapters
+process and audio policy. `host/include/host/` declares host-service contracts,
+and `host/` implements them as a platform-free core (`host/core/<function>/`)
+plus adapters that mirror it (`host/<adapter>/<function>/`): `host/posix/`
+shares host services between `host/linux/` and `host/macos/`, and `host/win/`
+contains partial Windows adapters. `emulator/execution/native_i386/` owns
+Linux i386 execution and ABI bridges and `emulator/execution/unicorn/` owns CPU
+emulation. [Host adapter selection](host.md) chooses the implementation and
+dependencies for each worker. Execution adapters
 know no `LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or implement
 DOSCALLS.
 `tests/architecture/check_boundaries.py` checks that source separation.
 
-The include roots are the project root, `hal/include` and `storage/include`.
+The include roots are the project root, `host/include` and `storage/include`.
 Project headers are included by their path from the project root
-(`"os2libs/pmwin.h"`, `"storage/common/file_time.h"`), public HAL headers as
-`"hal/<name>.h"` and public storage headers as `"storage/<name>.h"`; same-directory
+(`"os2libs/pmwin.h"`, `"storage/common/file_time.h"`), public host headers as
+`"host/<name>.h"` and public storage headers as `"storage/<name>.h"`; same-directory
 names and `../` paths are rejected. Host-OS preprocessor branches (`_WIN32`,
-`__APPLE__`, `__linux__`) appear only in `hal/linux/`, `hal/macos/` and `hal/win/`,
-and in the storage host adapters `storage/common/host*` (file open/lock/sync,
+`__APPLE__`, `__linux__`) appear only in `host/linux/`, `host/macos/`, `host/win/`
+and `emulator/execution/native_i386/`, and in the storage host adapters `storage/common/host*` (file open/lock/sync,
 identity, local time and locks), apart from the named temporary allowances in the
 checker. `formats/` includes no other component, `storage/` only `formats/`, and
-only `ball/` includes `ball/`. Every top-level source directory is classified in
+only `ball/` includes `ball/`. Outside `host/`, code includes only the public
+host contracts; `host/core/` and `host/include/` use no host APIs. Every top-level source directory is classified in
 the checker, so a new component is covered by these rules.
 
 | Boundary | Owns |
@@ -53,8 +56,9 @@ the checker, so a new component is covered by these rules.
 | `guest/` | Fixed-width layouts, checked arguments and private resource IDs |
 | `runtime/execution.h` | Entries, callbacks, threads, selectors and guest mappings |
 | `emulator/execution/unicorn/cpu.h` | CPU registers, contexts/x87, segments, bounded runs and faults |
-| `hal/include/hal/host*.h` | VM, files, paths, libraries, clocks, threads, synchronization and child processes |
-| `hal/` | Execution backends, native ABI bridges and host-service implementations |
+| `host/include/host/*.h` | VM, files, paths, libraries, clocks, threads, synchronization, child processes, windows, input, audio and other host services |
+| `host/` | Host-service core and adapters |
+| `emulator/execution/` | Execution backends and native ABI bridges |
 
 ## Source ownership
 
@@ -62,7 +66,7 @@ the checker, so a new component is covered by these rules.
 |---|---|
 | `formats/executable/` | Packed NE/LX definitions and LX EXEPACK decompression, without process state; built as `twoine_formats` (OS/2 application ABI) and `twoine_formats_host` (host ABI) |
 | `formats/resources/` | OS/2 and Windows icon bitmaps and NE/LX resource extraction |
-| `storage/` | Disk images, filesystems (ISO 9660, FAT, HPFS) and archive containers shared by the HAL and ball; public interface in `storage/include/storage/`; built per ABI by `twoine_add_storage` |
+| `storage/` | Disk images, filesystems (ISO 9660, FAT, HPFS) and archive containers shared by the host services and ball; public interface in `storage/include/storage/`; built per ABI by `twoine_add_storage` |
 | `loader/` | Entry, imports/relocations, NE/LX loading, module lifetime and paths |
 | `runtime/core/` | Bootstrap, process environment, threads, configuration and drives |
 | `runtime/` | Execution dispatch/mappings and audio generator policy |
@@ -72,7 +76,7 @@ the checker, so a new component is covered by these rules.
 | `os2libs/generated/` | Generated export tables; public API declarations remain in `os2libs/*.h` |
 | `tools/` | Generators, import analysis, assembly conversion and `lx_dump` |
 | `tools/data/` | Ordinal catalogue |
-| `tests/` | HAL, runtime, guest, tools, architecture and integration tests; guest programs/fixtures |
+| `tests/` | Host, runtime, guest, tools, architecture and integration tests; guest programs/fixtures |
 | `research/` | Format specifications and isolated experiments |
 
 Component CMake files own their targets. Generated tables are included only by

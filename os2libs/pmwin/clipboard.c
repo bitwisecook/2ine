@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest clipboard metadata and system atoms are shared by PM threads. */
 #include "os2libs/pmwin/internal.h"
-#include "hal/host_sync.h"
-#include "hal/clipboard.h"
+#include "host/sync.h"
+#include "host/clipboard.h"
 #include "os2libs/pmwin/graphics.h"
 #include <strings.h>
 #include <ctype.h>

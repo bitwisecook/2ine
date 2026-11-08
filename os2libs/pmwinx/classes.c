@@ -2,7 +2,7 @@
 /* Registered Open32 classes own callback metadata, extra bytes and copied names. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include "os2libs/pmwin/graphics.h"
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;

@@ -10,7 +10,7 @@
 #define _INCL_OS2TYPES_H_
 
 #include <stdint.h>
-#include "hal/abi.h"
+#include "host/abi.h"
 
 #ifdef __cplusplus
 extern "C"

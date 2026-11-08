@@ -9,7 +9,7 @@
 #include "os2libs/os2native16.h"
 #include "os2libs/msg.h"
 
-#include "hal/host_fs.h"
+#include "host/fs.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

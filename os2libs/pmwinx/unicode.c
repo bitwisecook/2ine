@@ -2,7 +2,7 @@
 /* Counted Open32 conversion uses UTF-16 wire units, never host wchar_t. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host_codepages.h"
+#include "host/codepage_tables.h"
 #include <limits.h>
 
 enum

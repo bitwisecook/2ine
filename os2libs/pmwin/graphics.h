@@ -3,8 +3,8 @@
 #ifndef TWOINE_PM_GRAPHICS_H
 #define TWOINE_PM_GRAPHICS_H
 #include "os2libs/pmwin.h"
-#include "hal/font.h"
-#include "hal/video.h"
+#include "host/font.h"
+#include "host/window.h"
 #include "guest/handles.h"
 HPOINTER lx_pm_pointer_file(const char *filename);
 BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);

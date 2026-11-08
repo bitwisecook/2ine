@@ -34,7 +34,7 @@ For this abomination
 Raise an issue on GH or find a way to contact me.
 --[bitwisecook]
 
-[Build](docs/build.md) · [Architecture](docs/architecture.md) · [HAL](docs/hal.md) ·
+[Build](docs/build.md) · [Architecture](docs/architecture.md) · [Host](docs/host.md) ·
 [Tools](docs/tools.md) · [Tests](docs/testing.md) · [GUI applications](docs/gui.md) ·
 [OS/2 Doom](docs/doom.md) · [Sound](docs/sound.md) · [C/H formatting](docs/formatting.md) · [Licensing](docs/licensing.md)
 

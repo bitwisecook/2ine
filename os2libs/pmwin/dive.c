@@ -2,7 +2,7 @@
 /* DIVE workers submit copies. The PM owner alone draws host window surfaces. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 
 typedef struct PmDiveTarget
 {

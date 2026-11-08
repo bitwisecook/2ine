@@ -8,11 +8,11 @@
 #ifndef TWOINE_LOADER_INTERNAL_H
 #define TWOINE_LOADER_INTERNAL_H
 #define _GNU_SOURCE 1
-#include "hal/host_fatal.h"
+#include "host/fatal.h"
 #include "runtime/runtime.h"
 #include "formats/executable/lx_exepack.h"
-#include "hal/host_fs.h"
-#include "hal/host.h"
+#include "host/fs.h"
+#include "host/system.h"
 #include <stddef.h>
 #include <errno.h>
 #include <assert.h>

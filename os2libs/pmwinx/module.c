@@ -4,8 +4,8 @@
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/input.h"
-#include "hal/host.h"
-#include "hal/video.h"
+#include "host/system.h"
+#include "host/window.h"
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmwin/open32_post.h"
 static void open32Shutdown(void);

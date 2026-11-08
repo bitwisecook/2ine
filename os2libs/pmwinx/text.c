@@ -6,7 +6,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pm_text.h"
-#include "hal/font.h"
+#include "host/font.h"
 #include <math.h>
 
 static LONG text_step(Open32DC *dc, LxHostFont *font, uint8 character, ULONG space_index)

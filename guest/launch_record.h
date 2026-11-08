@@ -6,8 +6,8 @@
    variable has no record. */
 #ifndef TWOINE_GUEST_LAUNCH_RECORD_H
 #define TWOINE_GUEST_LAUNCH_RECORD_H
-#include "hal/host.h"
-#include "hal/host_shared.h"
+#include "host/system.h"
+#include "host/shared_memory.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

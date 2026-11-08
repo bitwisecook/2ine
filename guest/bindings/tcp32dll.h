@@ -31,7 +31,7 @@ static uint32 bridge32_Os2LegacyGetHostName(uint8 *a)
     return result;
 }
 
-#include "hal/socket.h"
+#include "host/socket.h"
 #include "guest/bindings/socket_resolver.h"
 
 static uint32 legacy_guest_host(Os2LegacyHost *h)

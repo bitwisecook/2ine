@@ -4,7 +4,7 @@
 #ifndef TWOINE_OS2LIBS_DOSCALLS_LAUNCH_H
 #define TWOINE_OS2LIBS_DOSCALLS_LAUNCH_H
 #include "os2libs/os2types.h"
-#include "hal/host_process.h"
+#include "host/process.h"
 
 enum
 {

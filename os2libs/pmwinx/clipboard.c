@@ -3,8 +3,8 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin.h"
-#include "hal/host_sync.h"
-#include "hal/clipboard.h"
+#include "host/sync.h"
+#include "host/clipboard.h"
 
 typedef struct ClipboardMemory
 {

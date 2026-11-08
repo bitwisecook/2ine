@@ -12,7 +12,7 @@
 #include "formats/executable/lx.h"
 #include "formats/executable/ne.h"
 #include "runtime/execution.h"
-#include "hal/host_library.h"
+#include "host/library.h"
 
 typedef struct LxMmaps
 {

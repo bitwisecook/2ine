@@ -5,7 +5,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "runtime/runtime.h"
 #include "runtime/runtime_features.h"
-#include "hal/host_thread.h"
+#include "host/thread.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

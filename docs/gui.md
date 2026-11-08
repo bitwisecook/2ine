@@ -163,7 +163,7 @@ codepage conversion of string resources are unavailable. HELPMGR explicitly
 reports unavailable help rendering through `HELPINIT`; it creates no help
 instance.
 
-The font HAL measures and rasterizes twelve pinned Liberation faces through
+The font host adapter measures and rasterizes twelve pinned Liberation faces through
 FreeType. GPI supports logical font sets, selection, character boxes, CP437
 text output and extents. Extents use character advances without kerning.
 Complex-script shaping and a complete font/graphics API remain unavailable.

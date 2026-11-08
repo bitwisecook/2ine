@@ -9,13 +9,13 @@ LDT selectors, FS/TIB setup, native entry and mixed-mode bridges.
 flowchart LR
     Shared["runtime/execution.h"] --> Entry["Native entry"] --> CPU["x86 CPU"]
     CPU --> Bridge["16/32-bit API bridge"] --> APIs["os2libs/doscalls/ · msg.c · nls.c"]
-    APIs --> Host["hal/include/hal/host_*.h"]
+    APIs --> Host["host/include/host/*.h"]
     Bridge --> Callback["Nested guest callback"] --> CPU
 ```
 
 `emulator/execution/native_i386/` also supplies the i386 ABI bridges compiled into the API modules.
 `os2libs/` contains OS/2 DLL implementations shared by native and emulated
-execution. Host services use shared POSIX and [platform adapters](hal.md).
+execution. Host services use shared POSIX and [platform adapters](host.md).
 `*-lx.h` files are generated; edit their headers/binding policies, then run
 `python3 tools/lxapigen.py`.
 

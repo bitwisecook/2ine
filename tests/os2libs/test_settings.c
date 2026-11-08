@@ -6,7 +6,7 @@
 #include "os2libs/pmwp.h"
 #include "os2libs/pmwin.h"
 #include "runtime/runtime.h"
-#include "hal/host_thread.h"
+#include "host/thread.h"
 #include <limits.h>
 #define CHECK(x)                                                                                   \
     do                                                                                             \

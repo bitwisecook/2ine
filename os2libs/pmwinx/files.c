@@ -5,7 +5,7 @@
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/process.h"
 #include "os2libs/doscalls.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 
 LONG OpenFile(PSZ name, PVOID record, ULONG flags)
 {

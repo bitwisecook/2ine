@@ -2,7 +2,7 @@
 /* Legacy sockaddr layout, UDP round-trip, nonblocking errors and resolver exports. */
 #include "os2libs/so32dll.h"
 #include "os2libs/tcp32dll.h"
-#include "hal/socket.h"
+#include "host/socket.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -5,9 +5,9 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
 #include "guest/handles.h"
-#include "hal/host.h"
-#include "hal/host_sync.h"
-#include "hal/host_shared.h"
+#include "host/system.h"
+#include "host/sync.h"
+#include "host/shared_memory.h"
 #include <stdio.h>
 
 enum

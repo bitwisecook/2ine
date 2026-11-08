@@ -4,8 +4,8 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/input.h"
-#include "hal/host_thread.h"
-#include "hal/host_sync.h"
+#include "host/thread.h"
+#include "host/sync.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

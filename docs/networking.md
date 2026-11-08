@@ -6,7 +6,7 @@ second machine identity, DHCP lease or private NAT subnet. Existing host port
 bindings apply to guest listeners too. `TWOINE_SOCKET_BIND_ADDRESS` can restrict
 wildcard binds and unbound TCP/UDP senders to a particular host IPv4 address.
 
-`hal/network.h` provides fresh, owned snapshots of IPv4 interfaces and routes,
+`host/network.h` provides fresh, owned snapshots of IPv4 interfaces and routes,
 interface MAC addresses, masks, MTUs, broadcast/point-to-point addresses, DNS
 server addresses and search domains. macOS reads interfaces with `getifaddrs`,
 routes with routing `sysctl`, and global DNS with SystemConfiguration. Linux
@@ -116,7 +116,7 @@ OpenSSL 4.1.0. CMake discovers the installed library, allowing subsequent patch
 releases without changing the shim. Set `OPENSSL_ROOT_DIR` when multiple versions
 are installed. A native i386 worker needs matching i386 development libraries.
 
-The HAL supports client/server contexts, TLS 1.2/1.3, PEM trust/certificates,
+The host TLS adapter supports client/server contexts, TLS 1.2/1.3, PEM trust/certificates,
 verified DNS/IP identities, SNI, encrypted reads/writes, pending bytes, clean
 shutdown and nonblocking WANT_READ/WANT_WRITE results. Sockets remain owned by
 the caller; sessions retain their contexts. Its socket BIO prevents SIGPIPE

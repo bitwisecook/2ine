@@ -12,11 +12,11 @@
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "os2libs/doscalls.h"
-#include "hal/host.h"
-#include "hal/host_mailbox.h"
-#include "hal/host_thread.h"
-#include "hal/host_sync.h"
-#include "hal/host_shared.h"
+#include "host/system.h"
+#include "host/mailbox.h"
+#include "host/thread.h"
+#include "host/sync.h"
+#include "host/shared_memory.h"
 
 typedef struct Queue
 {

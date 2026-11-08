@@ -4,7 +4,7 @@
 #include "runtime/runtime.h"
 #include "guest/abi.h"
 #include "guest/handles.h"
-#include "hal/host_thread.h"
+#include "host/thread.h"
 #include <SDL3/SDL.h>
 #include <dlfcn.h>
 #include <stdio.h>

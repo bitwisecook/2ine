@@ -2,7 +2,7 @@
 /* Windows critical sections own recursive host mutexes; the guest record stays 24 bytes. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 
 typedef struct CriticalSection
 {

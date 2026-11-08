@@ -4,8 +4,8 @@
 #include "os2libs/pmshapi.h"
 #include "os2libs/sesmgr_start.h"
 #include "guest/handles.h"
-#include "hal/host_sync.h"
-#include "hal/host.h"
+#include "host/sync.h"
+#include "host/system.h"
 
 typedef struct SwitchEntry
 {

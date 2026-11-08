@@ -22,9 +22,9 @@ endif()
 if(UNIX)
     add_executable(
         twoine_desktop_group_tests
-        hal/test_desktop_group.c
-        ../hal/common/desktop_group.c
-        ../hal/posix/desktop_lease.c
+        host/test_desktop_group.c
+        ../host/core/desktop/group.c
+        ../host/posix/desktop/lease.c
     )
     target_include_directories(twoine_desktop_group_tests PRIVATE "${PROJECT_SOURCE_DIR}")
     target_compile_features(twoine_desktop_group_tests PRIVATE c_std_99)
@@ -32,10 +32,10 @@ if(UNIX)
     set_tests_properties(desktop_group PROPERTIES TIMEOUT 15)
     add_executable(
         twoine_desktop_cycle_tests
-        hal/test_desktop_cycle.c
-        ../hal/common/desktop_cycle.c
-        ../hal/posix/desktop_cycle.c
-        ../hal/posix/desktop_lease.c
+        host/test_desktop_cycle.c
+        ../host/core/desktop/cycle_order.c
+        ../host/posix/desktop/cycle_registry.c
+        ../host/posix/desktop/lease.c
     )
     target_include_directories(twoine_desktop_cycle_tests PRIVATE "${PROJECT_SOURCE_DIR}")
     target_compile_features(twoine_desktop_cycle_tests PRIVATE c_std_99)
@@ -43,14 +43,18 @@ if(UNIX)
     set_tests_properties(desktop_cycle PROPERTIES TIMEOUT 15)
 endif()
 if(TARGET opengl)
-    add_executable(twoine_opengl_tests hal/test_opengl.c)
+    add_executable(twoine_opengl_tests host/test_opengl.c)
     twoine_application_target(twoine_opengl_tests)
     target_link_libraries(twoine_opengl_tests PRIVATE opengl)
     add_test(NAME opengl_mesa COMMAND twoine_opengl_tests)
     set_tests_properties(opengl_mesa PROPERTIES TIMEOUT 60)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         set_tests_properties(opengl_mesa PROPERTIES ENVIRONMENT "LIBGL_ALWAYS_SOFTWARE=1")
-        add_executable(twoine_gl_policy_tests hal/test_gl_policy.c ../hal/macos/gl_policy.c)
+        add_executable(
+            twoine_gl_policy_tests
+            host/test_gl_policy.c
+            ../host/macos/opengl/driver_policy.c
+        )
         twoine_application_target(twoine_gl_policy_tests)
         target_compile_definitions(
             twoine_gl_policy_tests
@@ -71,14 +75,14 @@ if(TARGET opengl)
     endif()
 endif()
 if(TARGET 2ine)
-    add_executable(twoine_clipboard_hal_tests hal/test_clipboard.c)
-    twoine_application_target(twoine_clipboard_hal_tests)
-    target_link_libraries(twoine_clipboard_hal_tests PRIVATE 2ine SDL3::SDL3)
-    add_test(NAME clipboard_hal COMMAND twoine_clipboard_hal_tests)
-    set_tests_properties(clipboard_hal PROPERTIES TIMEOUT 15 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy")
+    add_executable(twoine_clipboard_host_tests host/test_clipboard.c)
+    twoine_application_target(twoine_clipboard_host_tests)
+    target_link_libraries(twoine_clipboard_host_tests PRIVATE 2ine SDL3::SDL3)
+    add_test(NAME clipboard_host COMMAND twoine_clipboard_host_tests)
+    set_tests_properties(clipboard_host PROPERTIES TIMEOUT 15 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy")
 endif()
 if(TARGET twoine_runtime)
-    add_executable(twoine_image_fs_tests hal/test_image_fs.c)
+    add_executable(twoine_image_fs_tests host/test_image_fs.c)
     target_link_libraries(twoine_image_fs_tests PRIVATE twoine_runtime)
     add_dependencies(twoine_image_fs_tests twoine_ball)
     add_test(
@@ -114,11 +118,11 @@ if(TARGET twoine_runtime)
         image_drives
         PROPERTIES TIMEOUT 30 ENVIRONMENT "TWOINE_BALL_LIBRARY=$<TARGET_FILE:twoine_ball>"
     )
-    add_executable(twoine_fatal_tests hal/test_fatal.c)
+    add_executable(twoine_fatal_tests host/test_fatal.c)
     target_link_libraries(twoine_fatal_tests PRIVATE twoine_runtime)
-    add_executable(twoine_host_platform_tests hal/test_host_platform.c)
+    add_executable(twoine_host_platform_tests host/test_host_platform.c)
     target_link_libraries(twoine_host_platform_tests PRIVATE twoine_runtime)
-    get_target_property(_twoine_host_platform twoine_portable_hal TWOINE_HOST_PLATFORM)
+    get_target_property(_twoine_host_platform twoine_portable_host TWOINE_HOST_PLATFORM)
     target_compile_definitions(
         twoine_host_platform_tests
         PRIVATE TWOINE_TEST_HOST_OS="${_twoine_host_platform}"
@@ -126,17 +130,17 @@ if(TARGET twoine_runtime)
     add_test(NAME host_platform COMMAND twoine_host_platform_tests "space argument" "" "a\\b")
     set_tests_properties(host_platform PROPERTIES TIMEOUT 20)
     if(_twoine_host_platform STREQUAL "linux")
-        add_executable(twoine_host_owner_tests hal/linux/test_mutex_owner.c)
+        add_executable(twoine_host_owner_tests host/linux/test_mutex_owner.c)
         target_link_libraries(twoine_host_owner_tests PRIVATE twoine_runtime)
         add_test(NAME host_mutex_owner COMMAND twoine_host_owner_tests)
         set_tests_properties(host_mutex_owner PROPERTIES TIMEOUT 20)
     endif()
-    add_executable(twoine_host_sync_tests hal/test_host_sync.c)
+    add_executable(twoine_host_sync_tests host/test_host_sync.c)
     target_link_libraries(twoine_host_sync_tests PRIVATE twoine_runtime Threads::Threads)
     add_test(NAME host_sync COMMAND twoine_host_sync_tests)
     set_tests_properties(host_sync PROPERTIES TIMEOUT 20)
     if(UNIX)
-        add_executable(twoine_operation_fixture hal/operation_fixture.c)
+        add_executable(twoine_operation_fixture host/operation_fixture.c)
         target_link_libraries(twoine_operation_fixture PRIVATE twoine_runtime)
         add_test(
             NAME host_operation_lifecycle
@@ -155,13 +159,13 @@ if(TARGET twoine_runtime)
     target_link_libraries(twoine_execution_tests PRIVATE twoine_runtime)
     add_test(NAME runtime_execution COMMAND twoine_execution_tests unicorn)
     set_tests_properties(runtime_execution PROPERTIES TIMEOUT 20)
-    add_executable(twoine_runtime_tests hal/test_cpu.c)
+    add_executable(twoine_runtime_tests host/test_cpu.c)
     target_link_libraries(twoine_runtime_tests PRIVATE twoine_runtime)
     add_test(NAME runtime_cpu COMMAND twoine_runtime_tests)
     set_tests_properties(runtime_cpu PROPERTIES TIMEOUT 20)
 endif()
 if(TWOINE_NATIVE_LOADER)
-    add_executable(twoine_guest_abi_tests hal/linux/test_guest_abi.c)
+    add_executable(twoine_guest_abi_tests host/linux/test_guest_abi.c)
     twoine_application_target(twoine_guest_abi_tests)
     add_test(NAME native_guest_abi COMMAND twoine_guest_abi_tests)
     add_executable(twoine_native_execution_tests runtime/test_execution.c)
@@ -171,20 +175,20 @@ if(TWOINE_NATIVE_LOADER)
     set_tests_properties(native_execution PROPERTIES TIMEOUT 20)
 endif()
 if(TARGET twoine_runtime)
-    add_executable(twoine_socket_tests hal/test_socket.c)
+    add_executable(twoine_socket_tests host/test_socket.c)
     target_link_libraries(twoine_socket_tests PRIVATE twoine_runtime)
     add_test(NAME host_socket COMMAND twoine_socket_tests)
     set_tests_properties(host_socket PROPERTIES TIMEOUT 20)
-    add_executable(twoine_diagnostic_tests hal/test_diagnostics.c)
+    add_executable(twoine_diagnostic_tests host/test_diagnostics.c)
     target_link_libraries(twoine_diagnostic_tests PRIVATE twoine_runtime)
     add_test(NAME host_diagnostics COMMAND twoine_diagnostic_tests)
     set_tests_properties(host_diagnostics PROPERTIES TIMEOUT 20)
-    add_executable(twoine_network_tests hal/test_network.c ${PROJECT_SOURCE_DIR}/os2libs/network.c)
+    add_executable(twoine_network_tests host/test_network.c ${PROJECT_SOURCE_DIR}/os2libs/network.c)
     target_link_libraries(twoine_network_tests PRIVATE twoine_runtime)
     add_test(NAME host_network COMMAND twoine_network_tests)
     set_tests_properties(host_network PROPERTIES TIMEOUT 20)
     find_program(TWOINE_OPENSSL_TOOL NAMES openssl HINTS "${OPENSSL_INCLUDE_DIR}/../bin" REQUIRED)
-    add_executable(twoine_tls_tests hal/test_tls.c)
+    add_executable(twoine_tls_tests host/test_tls.c)
     target_link_libraries(twoine_tls_tests PRIVATE twoine_runtime Threads::Threads)
     add_test(
         NAME host_tls
@@ -195,7 +199,7 @@ if(TARGET twoine_runtime)
     set_tests_properties(host_tls PROPERTIES TIMEOUT 40)
 endif()
 if(TARGET 2ine)
-    add_executable(twoine_ssl_shim_tests hal/test_tls.c)
+    add_executable(twoine_ssl_shim_tests host/test_tls.c)
     twoine_application_target(twoine_ssl_shim_tests)
     target_compile_definitions(twoine_ssl_shim_tests PRIVATE TWOINE_TLS_TEST_SHIM=1)
     target_link_libraries(twoine_ssl_shim_tests PRIVATE ssleay32 2ine Threads::Threads)
@@ -207,7 +211,7 @@ if(TARGET 2ine)
             "$<TARGET_FILE:twoine_ssl_shim_tests>" "${TWOINE_OPENSSL_TOOL}"
     )
     set_tests_properties(os2_tls_shim PROPERTIES TIMEOUT 40)
-    add_executable(twoine_capture_tests hal/test_capture.c)
+    add_executable(twoine_capture_tests host/test_capture.c)
     twoine_application_target(twoine_capture_tests)
     target_link_libraries(twoine_capture_tests PRIVATE 2ine SDL3::SDL3)
     add_test(NAME host_mouse_capture COMMAND twoine_capture_tests)
@@ -217,7 +221,7 @@ if(TARGET 2ine)
             TIMEOUT 20
             ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;TWOINE_MOUSE_CAPTURE=1"
     )
-    add_executable(twoine_media_tests hal/test_media.c)
+    add_executable(twoine_media_tests host/test_media.c)
     twoine_application_target(twoine_media_tests)
     target_link_libraries(twoine_media_tests PRIVATE 2ine)
     add_test(NAME host_media COMMAND twoine_media_tests)
@@ -227,7 +231,7 @@ if(TARGET 2ine)
             TIMEOUT 20
             ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_AUDIO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
     )
-    add_executable(twoine_fullscreen_tests hal/test_fullscreen.c)
+    add_executable(twoine_fullscreen_tests host/test_fullscreen.c)
     twoine_application_target(twoine_fullscreen_tests)
     target_link_libraries(twoine_fullscreen_tests PRIVATE 2ine)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -243,13 +247,13 @@ if(TARGET 2ine)
 endif()
 
 if(TARGET viocalls)
-    add_executable(twoine_terminal_tests hal/test_terminal.c)
+    add_executable(twoine_terminal_tests host/test_terminal.c)
     twoine_application_target(twoine_terminal_tests)
     target_link_libraries(twoine_terminal_tests PRIVATE viocalls)
     add_test(
         NAME host_terminal
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/hal/terminal_pty.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/host/terminal_pty.py"
             $<TARGET_FILE:twoine_terminal_tests>
     )
     set_tests_properties(host_terminal PROPERTIES TIMEOUT 20)
@@ -268,10 +272,10 @@ endif()
 
 if(TARGET pmwin)
     if(APPLE AND TARGET pmwinx)
-        add_library(twoine_cursor_backend SHARED hal/macos/cursor_backend.c)
+        add_library(twoine_cursor_backend SHARED host/macos/cursor_backend.c)
         target_include_directories(twoine_cursor_backend PRIVATE "${PROJECT_SOURCE_DIR}")
         target_link_libraries(twoine_cursor_backend PRIVATE SDL3::SDL3)
-        add_executable(twoine_cursor_resource_tests hal/macos/test_cursor_resources.c)
+        add_executable(twoine_cursor_resource_tests host/macos/test_cursor_resources.c)
         twoine_application_target(twoine_cursor_resource_tests)
         target_link_libraries(
             twoine_cursor_resource_tests
@@ -650,7 +654,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET pmwin)
 endif()
 
 if(TARGET pmwin AND TARGET pmgpi)
-    add_executable(twoine_pm_display_startup_tests hal/test_pm_display_startup.c)
+    add_executable(twoine_pm_display_startup_tests host/test_pm_display_startup.c)
     twoine_application_target(twoine_pm_display_startup_tests)
     target_link_libraries(twoine_pm_display_startup_tests PRIVATE pmgpi pmwin 2ine SDL3::SDL3)
     foreach(
@@ -961,7 +965,7 @@ if(TARGET quecalls)
     set_tests_properties(installer_apis PROPERTIES TIMEOUT 60)
 endif()
 if(TARGET 2ine)
-    add_executable(twoine_shared_lifetime_tests hal/test_shared_lifetime.c)
+    add_executable(twoine_shared_lifetime_tests host/test_shared_lifetime.c)
     twoine_application_target(twoine_shared_lifetime_tests)
     target_link_libraries(twoine_shared_lifetime_tests PRIVATE 2ine)
     add_test(NAME shared_lifetime COMMAND twoine_shared_lifetime_tests)
@@ -1061,8 +1065,8 @@ if(TARGET pmwinx)
     if(UNIX)
         add_executable(
             twoine_process_priority_linux_tests
-            hal/test_process_priority_linux.c
-            ../hal/linux/host_process.c
+            host/test_process_priority_linux.c
+            ../host/linux/process/self.c
         )
         twoine_application_target(twoine_process_priority_linux_tests)
         target_compile_definitions(

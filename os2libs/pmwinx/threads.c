@@ -5,9 +5,9 @@
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/process.h"
 #include "os2libs/doscalls.h"
-#include "hal/host_sync.h"
-#include "hal/host_thread.h"
-#include "hal/host.h"
+#include "host/sync.h"
+#include "host/thread.h"
+#include "host/system.h"
 
 typedef struct Open32Thread
 {

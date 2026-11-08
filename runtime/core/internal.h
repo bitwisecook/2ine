@@ -12,9 +12,9 @@
 #define _DEFAULT_SOURCE
 #define _GNU_SOURCE
 #include "runtime/runtime.h"
-#include "hal/host.h"
-#include "hal/host_thread.h"
-#include "hal/host_fs.h"
+#include "host/system.h"
+#include "host/thread.h"
+#include "host/fs.h"
 #include <errno.h>
 #include <stdarg.h>
 #include <assert.h>

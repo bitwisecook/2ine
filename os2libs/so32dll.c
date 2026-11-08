@@ -2,8 +2,8 @@
 /* Legacy OS/2 datagram sockets; addresses carry network-order port and address. */
 #include "os2libs/os2native.h"
 #include "os2libs/so32dll.h"
-#include "hal/socket.h"
-#include "hal/network.h"
+#include "host/socket.h"
+#include "host/network.h"
 #include "os2libs/network.h"
 static int socket_result(int result);
 #include "os2libs/generated/so32dll-lx.h"

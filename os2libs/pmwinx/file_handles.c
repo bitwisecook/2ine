@@ -3,9 +3,9 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
-#include "hal/host_fs.h"
-#include "hal/host_sync.h"
-#include "hal/host_thread.h"
+#include "host/fs.h"
+#include "host/sync.h"
+#include "host/thread.h"
 
 typedef struct FileRange
 {

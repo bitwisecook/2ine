@@ -6,9 +6,9 @@
 #include "os2libs/mdm_video.h"
 #include "os2libs/pmwin.h"
 #include "os2libs/pmwin/video_frames.h"
-#include "hal/host.h"
-#include "hal/video_frame.h"
-#include "hal/host_sync.h"
+#include "host/system.h"
+#include "host/video_frame.h"
+#include "host/sync.h"
 #include "runtime/audio.h"
 #include "runtime/runtime_features.h"
 #include <stdio.h>

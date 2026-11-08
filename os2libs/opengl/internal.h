@@ -6,9 +6,9 @@
 #include "os2libs/pmwin.h"
 #include "guest/abi.h"
 #include "guest/handles.h"
-#include "hal/opengl.h"
-#include "hal/host_sync.h"
-#include "hal/gl_constants.h"
+#include "host/opengl.h"
+#include "host/sync.h"
+#include "host/gl/constants.h"
 
 #define GL_MAX_TRANSFER (64u * 1024u * 1024u)
 

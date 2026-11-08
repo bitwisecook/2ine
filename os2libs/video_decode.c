@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* FFmpeg reads through host files, never media URLs. Frames retain their planes. */
 #include "os2libs/video_decode.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>

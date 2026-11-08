@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Process priority mapping and host failures must not publish a false class. */
 #include "os2libs/pmwinx.h"
-#include "hal/host_process.h"
-#include "hal/host.h"
-#include "hal/host_thread.h"
+#include "host/process.h"
+#include "host/system.h"
+#include "host/thread.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>

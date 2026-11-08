@@ -2,10 +2,10 @@
 /* Counting semaphores retain typed handles; named counts are shared within a ball. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host.h"
-#include "hal/host_shared.h"
-#include "hal/host_sync.h"
-#include "hal/host_thread.h"
+#include "host/system.h"
+#include "host/shared_memory.h"
+#include "host/sync.h"
+#include "host/thread.h"
 
 enum
 {

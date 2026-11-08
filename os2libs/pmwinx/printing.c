@@ -6,7 +6,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/printer_profile.h"
-#include "hal/print.h"
+#include "host/print.h"
 
 enum
 {

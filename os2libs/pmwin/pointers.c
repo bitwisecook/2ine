@@ -2,7 +2,7 @@
 /* System cursor handles retain the host cursor and distinguish shared resources from copies. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/pointer_image.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 
 typedef struct PmPointer
 {

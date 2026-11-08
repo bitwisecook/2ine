@@ -3,7 +3,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
 #include "guest/abi.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include <stdio.h>
 static LxHostOnce env_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *env_monitor;

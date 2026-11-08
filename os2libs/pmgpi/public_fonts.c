@@ -3,7 +3,7 @@
    file are counted, so each must be matched by an unload. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmgpi.h"
-#include "hal/font.h"
+#include "host/font.h"
 #include <stdlib.h>
 
 static BOOL with_host_path(PSZ name, int (*action)(const char *))

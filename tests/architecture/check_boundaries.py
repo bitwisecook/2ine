@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Public domain. No rights reserved. Wholly AI-authored.
-"""Validate component ownership, include style, public HAL contracts and a source-free root."""
+"""Validate component ownership, include style, public host contracts and a source-free root."""
 
 import os
 import re
@@ -14,7 +14,7 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 # Every top-level directory that holds sources has a role, so a new component is
 # placed under the rules below before it can pass.
 PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "runtime", "loader", "guest", "os2libs"}
-HOST_COMPONENTS = {"hal", "ball"}
+HOST_COMPONENTS = {"host", "ball"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
 FOREIGN_DIRECTORIES = {"ports", "research"}
@@ -38,33 +38,64 @@ PORTABLE_OS_ADAPTERS = ("storage/common/host", "emulator/execution/native_i386/"
 # Includes each component may not use: formats/ is self-contained, storage/
 # builds on formats/ only, and nothing outside ball/ depends on ball/.
 FORBIDDEN_INCLUDES = {
-    "formats": ("storage/", "ball/", "hal/", "runtime/", "loader/", "guest/", "os2libs/"),
-    "storage": ("ball/", "hal/", "runtime/", "loader/", "guest/", "os2libs/"),
+    "formats": ("storage/", "ball/", "host/", "runtime/", "loader/", "guest/", "os2libs/"),
+    "storage": ("ball/", "host/", "runtime/", "loader/", "guest/", "os2libs/"),
     "emulator": ("ball/",),
-    "hal": ("ball/",),
+    "host": ("ball/", "emulator/"),
     "runtime": ("ball/",),
     "loader": ("ball/",),
     "guest": ("ball/",),
     "os2libs": ("ball/",),
 }
 
-# HAL directories that may branch on the host operating system.
-HAL_PLATFORM_DIRECTORIES = ("hal/linux/", "hal/macos/", "hal/win/")
+# Host adapters, one directory each below host/, mirroring host/core/ by
+# function. Only the OS adapters may branch on the host operating system.
+HOST_OS_ADAPTERS = {"linux", "macos", "win"}
+HOST_ADAPTERS = HOST_OS_ADAPTERS | {"posix", "sdl", "openssl", "freetype", "curses", "mesa", "none"}
+HOST_FUNCTIONS = {
+    "system",
+    "process",
+    "thread",
+    "ipc",
+    "fs",
+    "net",
+    "fatal",
+    "window",
+    "input",
+    "desktop",
+    "audio",
+    "clipboard",
+    "print",
+    "terminal",
+    "font",
+    "opengl",
+}
+
+# An adapter may include public headers, host/core/ and itself. The Linux and
+# macOS adapters also build on the shared POSIX adapter.
+HOST_ADAPTER_INCLUDES = {"linux": {"posix"}, "macos": {"posix"}}
 
 # Host-OS branches that remain outside the platform directories, with the
 # number of branch directives each one holds. A count change fails, so an entry
 # is removed together with its branches.
 TEMPORARY_OS_BRANCH_ALLOWANCES = {
-    # Operation supervision is unavailable on Windows; replaced by HAL stubs.
+    # Operation supervision is unavailable on Windows.
     "loader/main.c": 2,
     # strncasecmp spelling for Windows C runtimes.
     "os2libs/printer_catalogue.h": 1,
 }
 
+# Public host contracts, the only host headers portable components include.
+PUBLIC_HOST_HEADERS = (
+    r"(?:abi|audio|clipboard|clock|codepage_tables|desktop|fatal|font|fs|input|library|mailbox"
+    r"|memory|network|opengl|print|process|process_supervisor|shared_memory|socket|sync"
+    r"|system|terminal|thread|tls|video_frame|window|gl/(?:dispatch|constants))\.h"
+)
+
 # Headers generated into the build tree rather than the source tree.
 GENERATED_INCLUDES = {"twoine_ball_icon_png.h"}
 
-INCLUDE_ROOTS = (root, root / "hal/include", root / "storage/include")
+INCLUDE_ROOTS = (root, root / "host/include", root / "storage/include")
 
 
 def excluded_top_level(name):
@@ -113,7 +144,7 @@ def check(path, patterns, cmake=False):
 
 
 def check_include_style(path):
-    """Project includes name their path from the project root or hal/include."""
+    """Project includes name their path from the project root or host/include."""
     text = path.read_text(errors="replace")
     pattern = r'^[ \t]*#[ \t]*(?:include|import)[ \t]*(?:"([^"]+)"|<([^>]+)>)'
     for match in re.finditer(pattern, text, flags=re.M):
@@ -125,8 +156,8 @@ def check_include_style(path):
             continue
         if match.group(2) is not None:
             continue
-        if name.startswith("hal/include/"):
-            failures.append(f'{where}: public HAL headers are included as "hal/<name>.h"')
+        if name.startswith("host/include/"):
+            failures.append(f'{where}: public host headers are included as "host/<name>.h"')
             continue
         if name.startswith("storage/include/"):
             failures.append(f'{where}: public storage headers are included as "storage/<name>.h"')
@@ -156,7 +187,9 @@ def os_branch_scope(path):
     top = name.split("/", 1)[0]
     if top in PORTABLE_COMPONENTS:
         return True
-    return top == "hal" and not name.startswith(HAL_PLATFORM_DIRECTORIES)
+    if top != "host":
+        return False
+    return name.split("/")[1] not in HOST_OS_ADAPTERS
 
 
 for path in sorted(root.iterdir()):
@@ -187,10 +220,7 @@ for directory in sorted(PORTABLE_COMPONENTS):
             continue
         check(
             path,
-            hardware
-            + [
-                r"#\s*include\s*<[^>]*hal/(?!abi\.h|audio\.h|clipboard\.h|video\.h|video_frame\.h|print\.h|font\.h|opengl\.h|gl_(?:dispatch|constants)\.h|socket\.h|network\.h|tls\.h|terminal\.h|host(?:_\w+)?\.h)[^>]+>"
-            ],
+            hardware + [r"#\s*include\s*<host/(?!" + PUBLIC_HOST_HEADERS + r")[^>]+>"],
         )
 for directory, prefixes in sorted(FORBIDDEN_INCLUDES.items()):
     for path in sources(directory):
@@ -199,9 +229,42 @@ for directory, prefixes in sorted(FORBIDDEN_INCLUDES.items()):
         check(
             path, [rf"#\s*(?:include|import)\s*<{re.escape(prefix)}[^>]*>" for prefix in prefixes]
         )
-for path in sources("hal/include", {".h"}):
+for path in sources("host/include", {".h"}):
     check(path, platform + [r"\bHANDLE\b"])
-for path in list(sources("hal")) + list(sources("emulator/execution")):
+# The core holds the platform-free half of each function: no host APIs.
+for path in sources("host/core"):
+    check(path, hardware)
+for path in sources("host"):
+    name = relative(path)
+    parts = name.split("/")
+    if parts[1] == "include" or len(parts) < 4:
+        continue
+    if parts[1] != "core" and parts[1] not in HOST_ADAPTERS:
+        failures.append(f"{name}: unknown host adapter {parts[1]!r}; add it to check_boundaries.py")
+    elif parts[2] not in HOST_FUNCTIONS:
+        failures.append(
+            f"{name}: unknown host function {parts[2]!r}; add it to check_boundaries.py"
+        )
+    allowed = {"core", parts[1]} | HOST_ADAPTER_INCLUDES.get(parts[1], set())
+    text = path.read_text(errors="replace")
+    for match in re.finditer(r'^[ \t]*#[ \t]*(?:include|import)[ \t]*"host/(\w+)/', text, re.M):
+        if match.group(1) not in allowed and (root / "host" / match.group(1)).is_dir():
+            line = text[: match.start()].count("\n") + 1
+            failures.append(f"{name}:{line}: {parts[1]} may not include host/{match.group(1)}/")
+# Outside host/, only the public contracts are visible.
+for path in sources():
+    name = relative(path)
+    if name.startswith(("host/", "tests/")) or foreign(name):
+        continue
+    check(
+        path,
+        [
+            r"#\s*(?:include|import)\s*<host/(?:core|"
+            + "|".join(sorted(HOST_ADAPTERS))
+            + r")/[^>]*>"
+        ],
+    )
+for path in list(sources("host")) + list(sources("emulator/execution")):
     check(
         path,
         [
@@ -236,8 +299,10 @@ for directory in sorted(PORTABLE_COMPONENTS):
         check(
             path,
             [
-                r'(?<!tests/)\bhal/(?:common|posix|linux|macos|win|emulator|sdl)/[^\s"\)]*\.[ch]\b',
-                r"\bTWOINE_HOST_SOURCES\b",
+                r"(?<!tests/)\bhost/(?:core|"
+                + "|".join(sorted(HOST_ADAPTERS))
+                + r')/[^\s"\)]*\.[chm]\b',
+                r"\btwoine_host_(?:function|requires)\b",
             ],
             cmake=True,
         )
@@ -248,4 +313,6 @@ for path in (root / "os2libs").glob("*-lx.h"):
     failures.append(f"{relative(path)}: generated exports belong in os2libs/generated/")
 if failures:
     raise SystemExit("\n".join(failures))
-print("Source ownership, include style, host-OS branches, public HAL and root layout passed")
+print(
+    "Source ownership, include style, host-OS branches, public host contracts and root layout passed"
+)

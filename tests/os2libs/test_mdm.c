@@ -4,7 +4,7 @@
 #include "os2libs/mdm.h"
 #include "os2libs/mmio.h"
 #include "os2libs/midi_sequence.h"
-#include "hal/host.h"
+#include "host/system.h"
 #include <math.h>
 #include <errno.h>
 #define CHECK(x)                                                                                   \

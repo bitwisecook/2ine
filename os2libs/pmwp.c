@@ -10,8 +10,8 @@
 #include "os2libs/pmwin/graphics.h"
 #include "guest/abi.h"
 #include "os2libs/pmshapi/profiles.h"
-#include "hal/host_fs.h"
-#include "hal/host_sync.h"
+#include "host/fs.h"
+#include "host/sync.h"
 #include <ctype.h>
 #include <strings.h>
 

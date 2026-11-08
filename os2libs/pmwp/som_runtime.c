@@ -5,7 +5,7 @@
 #include "os2libs/pmwp/internal.h"
 #include "os2libs/doscalls.h"
 #include "guest/abi.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include <stdio.h>
 
 enum

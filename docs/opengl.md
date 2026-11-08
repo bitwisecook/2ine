@@ -15,7 +15,7 @@ Mesa support is an optional build dependency. Ordinary application/runtime build
 do not acquire Mesa. An unset per-ball OpenGL preference selects Mesa; runtimes
 without it report the provider as unavailable rather than selecting an original
 renderer automatically.
-The public interface in `hal/opengl.h` separates context creation, dispatch,
+The public interface in `host/opengl.h` separates context creation, dispatch,
 buffer exchange and readback from OS/2 handles, PGL visuals and PM windows.
 Other graphics adapters can implement that contract. Vulkan and DirectX adapters
 for other platforms are not implemented; requesting an unsupported backend fails
@@ -102,7 +102,7 @@ GL rendering uses private framebuffer targets. Front-buffer pixels are copied
 through PM's retained raster path, respecting client placement and clipping.
 Single-buffer `glFlush`/`glFinish` and double-buffer `pglSwapBuffers` present them.
 This readback/presentation step carries a performance cost even with GPU rendering.
-The graphics HAL releases SDL's GL binding before Mesa commands and releases
+The graphics host adapter releases SDL's GL binding before Mesa commands and releases
 Mesa before SDL rendering. Keep `glBegin`/`glEnd` sequences free of PM drawing.
 
 `pglWaitGL` presents the front buffer and returns a PM presentation space.

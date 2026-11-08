@@ -4,8 +4,8 @@
 #include "os2libs/os2native.h"
 #include "os2libs/mmio.h"
 #include "guest/abi.h"
-#include "hal/host_sync.h"
-#include "hal/host_fs.h"
+#include "host/sync.h"
+#include "host/fs.h"
 #include <stdio.h>
 
 static struct

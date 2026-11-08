@@ -3,7 +3,7 @@
    handle or range never dereferences an application supplied resource value. */
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/internal.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 
 typedef struct PmMetaFile
 {

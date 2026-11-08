@@ -3,7 +3,7 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmgpi.h"
-#include "hal/font.h"
+#include "host/font.h"
 
 typedef struct Open32Font
 {

@@ -6,8 +6,8 @@
 #include "os2libs/pmshapi/profiles.h"
 #include "guest/handles.h"
 #include "guest/abi.h"
-#include "hal/host_sync.h"
-#include "hal/host.h"
+#include "host/sync.h"
+#include "host/system.h"
 
 typedef struct RegistryKey
 {

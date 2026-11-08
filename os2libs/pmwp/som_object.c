@@ -4,7 +4,7 @@
    that survives the object is kept in the persistent store under its handle. */
 #include "os2libs/pmwp/internal.h"
 #include "guest/abi.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include <stdio.h>
 #include <strings.h>
 

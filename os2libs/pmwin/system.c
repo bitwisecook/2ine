@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* PM owns its palette and control metrics; screen dimensions come from the HAL display. */
+/* PM owns its palette and control metrics; screen dimensions come from the host display. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 

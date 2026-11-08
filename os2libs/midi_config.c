@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Environment-selected configuration precedes the XDG per-user audio file. */
 #include "os2libs/midi_config.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>

@@ -16,9 +16,9 @@
     }
 #include "os2libs/os2native.h"
 #include "os2libs/pmwin.h"
-#include "hal/video.h"
-#include "hal/font.h"
-#include "hal/host.h"
+#include "host/window.h"
+#include "host/font.h"
+#include "host/system.h"
 #include "guest/handles.h"
 
 typedef struct WindowClass

@@ -4,7 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/graphics.h"
-#include "hal/font.h"
+#include "host/font.h"
 #include "os2libs/pm_text.h"
 
 LONG GetDialogBaseUnits(void)

@@ -4,7 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwin/pointer_image.h"
-#include "hal/host_fs.h"
+#include "host/fs.h"
 #include "os2libs/pmwinx/batch_services.h"
 
 typedef struct Open32Icon

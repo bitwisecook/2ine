@@ -2,7 +2,7 @@
 /* Open32 UTC calendar records and 100-nanosecond intervals since 1601. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host.h"
+#include "host/system.h"
 
 static void get_time(PVOID output, int utc)
 {

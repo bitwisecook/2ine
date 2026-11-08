@@ -6,7 +6,7 @@
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmshapi/profiles.h"
 #include "os2libs/pmwin/graphics.h"
-#include "hal/print.h"
+#include "host/print.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

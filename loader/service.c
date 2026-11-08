@@ -2,8 +2,8 @@
 /* Original OS/2 REXX system initialization runs in a separate service worker. */
 #include "loader/internal.h"
 #include "guest/abi.h"
-#include "hal/host_process.h"
-#include "hal/host_shared.h"
+#include "host/process.h"
+#include "host/shared_memory.h"
 
 static LxHostShared *RexxClientLease;
 static int RexxServiceWorker;

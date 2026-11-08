@@ -72,7 +72,7 @@ libavformat ≥60, libavcodec ≥60, libavutil ≥58, libswscale ≥7 and
 libswresample ≥4. `-DTWOINE_VIDEO=OFF` omits decoding. The pinned source build
 currently uses Unix configure/make tools; a future Windows runtime can use
 matching system libraries, but Windows playback has not been built or tested.
-The SDL/HAL and decoder interfaces contain no platform-specific window types.
+The SDL host adapter and decoder interfaces contain no platform-specific window types.
 
 Each video build produces `ffmpeg-build.json` from the **linked libraries**,
 including their version, license and configure arguments. Packaging retains

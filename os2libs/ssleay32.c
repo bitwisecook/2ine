@@ -2,8 +2,8 @@
 #include "os2libs/os2native.h"
 #include "os2libs/ssleay32.h"
 #include "guest/handles.h"
-#include "hal/tls.h"
-#include "hal/host_sync.h"
+#include "host/tls.h"
+#include "host/sync.h"
 #include "runtime/runtime_features.h"
 
 typedef struct SslContext

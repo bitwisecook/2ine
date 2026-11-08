@@ -9,7 +9,7 @@
 #include "os2libs/os2native16.h"
 #include "os2libs/viocalls.h"
 
-#include "hal/terminal.h"
+#include "host/terminal.h"
 #include "guest/launch_record.h"
 #include "os2libs/generated/viocalls-lx.h"
 

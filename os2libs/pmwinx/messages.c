@@ -3,7 +3,7 @@
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwin/open32_post.h"
 

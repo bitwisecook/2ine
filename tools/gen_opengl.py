@@ -259,13 +259,13 @@ def render(schema):
             f'    {{"{name}", {implementation}, {size}, {schema["ordinals"]["warp"][name]}, {schema["ordinals"]["gold11"][name]}}},\n'
         )
     return {
-        "hal/include/hal/gl_dispatch.h": "".join(dispatch),
-        "hal/mesa/gl_load.h": "".join(loads),
+        "host/include/host/gl/dispatch.h": "".join(dispatch),
+        "host/mesa/opengl/gl_load.h": "".join(loads),
         "guest/bindings/opengl.h": "".join(wire),
         "os2libs/generated/opengl-entries.h": "".join(entries),
         "os2libs/generated/opengl-custom.h": "".join(custom),
         "os2libs/generated/pgl-entries.h": "".join(pgl),
-        "hal/include/hal/gl_constants.h": "".join(constants),
+        "host/include/host/gl/constants.h": "".join(constants),
     }
 
 

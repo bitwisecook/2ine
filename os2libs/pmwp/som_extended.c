@@ -8,9 +8,9 @@
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmwin.h"
 #include "guest/abi.h"
-#include "hal/host_fs.h"
-#include "hal/host_sync.h"
-#include "hal/host_thread.h"
+#include "host/fs.h"
+#include "host/sync.h"
+#include "host/thread.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <strings.h>

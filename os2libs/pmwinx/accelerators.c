@@ -4,7 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/windows.h"
 #include "guest/handles.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 #include <ctype.h>
 
 typedef struct AcceleratorEntry

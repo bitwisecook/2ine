@@ -2,7 +2,7 @@
 /* Local memory handles retain their mappings and movable-block lock counts. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "hal/host_sync.h"
+#include "host/sync.h"
 
 typedef struct LocalMemory
 {

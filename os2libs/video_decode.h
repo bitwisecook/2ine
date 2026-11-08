@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_VIDEO_DECODE_H
 #define TWOINE_VIDEO_DECODE_H
-#include "hal/video_frame.h"
+#include "host/video_frame.h"
 #include <stdint.h>
 typedef struct LxVideoDecoder LxVideoDecoder;
 

@@ -8,8 +8,8 @@
 
 #include "os2libs/os2native16.h"
 #include "os2libs/kbdcalls.h"
-#include "hal/terminal.h"
-#include "hal/host.h"
+#include "host/terminal.h"
+#include "host/system.h"
 
 #include "os2libs/generated/kbdcalls-lx.h"
 

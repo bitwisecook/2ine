@@ -4,8 +4,8 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/process.h"
-#include "hal/host_process.h"
-#include "hal/host_sync.h"
+#include "host/process.h"
+#include "host/sync.h"
 
 enum
 {

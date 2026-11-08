@@ -2,8 +2,8 @@
 /* OS/2 string bundles contain a codepage word and sixteen counted ASCIIZ strings. */
 #include "os2libs/pmwin/internal.h"
 #include "formats/resources/icon.h"
-#include "hal/host_fs.h"
-#include "hal/host_sync.h"
+#include "host/fs.h"
+#include "host/sync.h"
 
 LONG WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity, PCHAR output)
 {
