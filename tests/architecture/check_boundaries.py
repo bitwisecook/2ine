@@ -79,8 +79,6 @@ HOST_ADAPTER_INCLUDES = {"linux": {"posix"}, "macos": {"posix"}}
 # number of branch directives each one holds. A count change fails, so an entry
 # is removed together with its branches.
 TEMPORARY_OS_BRANCH_ALLOWANCES = {
-    # Operation supervision is unavailable on Windows.
-    "loader/main.c": 2,
     # strncasecmp spelling for Windows C runtimes.
     "os2libs/printer_catalogue.h": 1,
 }

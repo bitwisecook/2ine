@@ -15,13 +15,11 @@ int main(int argc, char **argv, char **envp)
 {
     if (argc > 1 && !strcmp(argv[1], LX_FATAL_DIALOG_ARGUMENT))
         lx_host_process_exit((uint32_t)lx_host_fatal_dialog(argc - 2, argv + 2));
-#if !defined(_WIN32)
     if (!lx_host_operation_join())
     {
         fprintf(stderr, "Invalid installer operation channels\n");
         return 1;
     }
-#endif
     if (argc < 2 || (argc == 2 && !strcmp(argv[1], "--operation")))
     {
         fprintf(stderr, "USAGE: %s [--operation] <program.exe> [...programargs...]\n",
@@ -29,14 +27,7 @@ int main(int argc, char **argv, char **envp)
         return 1;
     }
     if (!strcmp(argv[1], "--operation"))
-    {
-#if defined(_WIN32)
-        fprintf(stderr, "Installer operation supervision is unavailable on this host\n");
-        return 1;
-#else
         return lx_host_operation_supervise(argv[0], argv + 2, envp);
-#endif
-    }
 
     GLoaderState.using_lx_loader = 1;
     GLoaderState.running = 0;

@@ -32,6 +32,18 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(TWOINE_HOST_SELECT_window sdl macos)
     set(TWOINE_HOST_SELECT_fatal_dialog core macos)
 elseif(WIN32)
+    # The Windows adapters by function. fs, net and fatal have none, so the
+    # configuration stops.
+    set(TWOINE_HOST_PLATFORM win)
+    set(TWOINE_HOST_SELECT_system core win)
+    set(TWOINE_HOST_SELECT_process win none)
+    set(TWOINE_HOST_SELECT_thread core win)
+    set(TWOINE_HOST_SELECT_ipc win)
+    set(TWOINE_HOST_SELECT_desktop none)
+    set(TWOINE_HOST_SELECT_window sdl none)
+    set(TWOINE_HOST_SELECT_fatal_dialog core sdl)
+    set(TWOINE_HOST_SELECT_clipboard core sdl win)
+    set(TWOINE_HOST_SELECT_print core win)
     message(
         FATAL_ERROR
         "host/win contains partial Win32 adapters; there is no Windows filesystem, network or fatal-report adapter and no full Windows application integration."
