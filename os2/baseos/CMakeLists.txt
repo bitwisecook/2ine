@@ -4,7 +4,14 @@ twoine_os2_dll(
     doscalls
     doscalls/module.c
     doscalls/legacy.c
-    doscalls/files.c
+    doscalls/filesys/file.c
+    doscalls/filesys/fhandle.c
+    doscalls/filesys/lock.c
+    doscalls/filesys/devioctl.c
+    doscalls/filesys/pipe.c
+    doscalls/filesys/nampipe.c
+    doscalls/filesys/getset2.c
+    doscalls/filesys/shutdown.c
     doscalls/filesys/finfo.c
     doscalls/filesys/extattr.c
     doscalls/filesys/dossrch.c
