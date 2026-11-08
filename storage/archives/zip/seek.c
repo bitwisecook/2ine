@@ -1,6 +1,15 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* A copied zlib state owns its dictionary and bit buffer. Pending input is
+/* Seekable raw-deflate ZIP members, restarted from zlib checkpoints.
+   A copied zlib state owns its dictionary and bit buffer. Pending input is
    re-read by compressed offset, so snapshots never reference a reused buffer. */
+#include "storage/archives/container_internal.h"
+#include "storage/archives/zip/zip_internal.h"
+#include "storage/vendor/libarchive/archive.h"
+#include "formats/endian.h"
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include <zlib.h>
 #define ZIP_CHECKPOINT_SPAN (4u * 1024u * 1024u)
 
 typedef struct ZipCheckpoint
@@ -46,7 +55,7 @@ static voidpf zip_allocate(voidpf opaque, uInt count, uInt width)
         return NULL;
     }
     allocation->bytes = bytes;
-    media_cache_peak();
+    tb_media_cache_peak();
     return allocation + 1;
 }
 
@@ -77,7 +86,7 @@ static int zip_restart(ZipSeek *zip, uint64_t offset)
         zip->input = best->input;
         zip->decoded = best->output;
         zip->crc = best->crc;
-        media_session.stats.inflate_restores++;
+        tb_media_session_stats()->inflate_restores++;
     }
     else
     {
@@ -91,7 +100,7 @@ static int zip_restart(ZipSeek *zip, uint64_t offset)
     zip->used = 0;
     zip->ended = 0;
     zip->initialized = result == Z_OK;
-    return zip->initialized || bad(result == Z_MEM_ERROR ? ENOMEM : EILSEQ);
+    return zip->initialized || tb_archive_fail(result == Z_MEM_ERROR ? ENOMEM : EILSEQ);
 }
 
 static void zip_checkpoint(ZipSeek *zip)
@@ -116,13 +125,13 @@ static void zip_checkpoint(ZipSeek *zip)
     point->state.avail_out = 0;
     point->next = zip->points;
     zip->points = point;
-    media_session.stats.inflate_checkpoints++;
+    tb_media_session_stats()->inflate_checkpoints++;
 }
 
 static int zip_append(ZipSeek *zip)
 {
     if (zip->ended)
-        return bad(EIO);
+        return tb_archive_fail(EIO);
     zip->state.next_out = zip->output;
     zip->state.avail_out = sizeof zip->output;
     while (zip->state.avail_out)
@@ -147,17 +156,17 @@ static int zip_append(ZipSeek *zip)
         }
         if (result != Z_OK ||
             (before_in == zip->state.avail_in && before_out == zip->state.avail_out))
-            return bad(result == Z_MEM_ERROR ? ENOMEM : EILSEQ);
+            return tb_archive_fail(result == Z_MEM_ERROR ? ENOMEM : EILSEQ);
     }
     zip->used = sizeof zip->output - zip->state.avail_out;
     if ((!zip->used && !zip->ended) || zip->used > zip->expected - zip->decoded)
-        return bad(EILSEQ);
+        return tb_archive_fail(EILSEQ);
     zip->crc = crc32(zip->crc, zip->output, (uInt)zip->used);
     zip->decoded += zip->used;
-    media_session.stats.decompressed_bytes += zip->used;
+    tb_media_session_stats()->decompressed_bytes += zip->used;
     if (zip->ended && (zip->decoded != zip->expected || zip->crc != zip->expected_crc ||
                        zip->input - zip->state.avail_in != zip->packed))
-        return bad(EILSEQ);
+        return tb_archive_fail(EILSEQ);
     zip_checkpoint(zip);
     return 1;
 }
@@ -166,7 +175,7 @@ static int zip_seek_read(void *opaque, uint64_t offset, void *data, size_t size)
 {
     ZipSeek *zip = opaque;
     if (zip->failed)
-        return bad(EILSEQ);
+        return tb_archive_fail(EILSEQ);
     for (ZipCheckpoint *point = zip->points; point; point = point->next)
         if (point->output > zip->decoded && point->output <= offset)
         {
@@ -217,32 +226,33 @@ static void zip_seek_close(void *opaque)
     free(zip);
 }
 
-static TbReadStream *indexed_zip_member(TbReadStream *parent, struct archive *archive,
-                                        const char *name, uint64_t size, int *handled)
+TbReadStream *tb_zip_indexed_member(TbReadStream *parent, struct archive *archive, const char *name,
+                                    uint64_t size, int *handled)
 {
     *handled = 0;
     if ((archive_format(archive) & ARCHIVE_FORMAT_BASE_MASK) != ARCHIVE_FORMAT_ZIP)
         return NULL;
-    LegacyZipMetadata metadata;
-    if (!legacy_zip_metadata(parent, name, &metadata) || metadata.method != 8)
+    TbZipMetadata metadata;
+    if (!tb_zip_metadata(parent, name, &metadata) || metadata.method != 8)
         return NULL; /* Other codecs/ZIP64 retain the library reader. */
     *handled = 1;
     unsigned char header[30];
     if (size != metadata.size || (metadata.flags & 0x41) ||
         !tb_stream_read_at(parent, metadata.position, header, sizeof header) ||
-        memcmp(header, "PK\3\4", 4) || u16(header + 8) != 8 ||
-        ((u16(header + 6) ^ metadata.flags) & 0x4f) ||
+        memcmp(header, "PK\3\4", 4) || tb_le16(header + 8) != 8 ||
+        ((tb_le16(header + 6) ^ metadata.flags) & 0x4f) ||
         (!(metadata.flags & 8) &&
-         (u32(header + 18) != metadata.packed || u32(header + 22) != metadata.size ||
-          u32(header + 14) != metadata.crc)))
+         (tb_le32(header + 18) != metadata.packed || tb_le32(header + 22) != metadata.size ||
+          tb_le32(header + 14) != metadata.crc)))
     {
-        bad(EILSEQ);
+        tb_archive_fail(EILSEQ);
         return NULL;
     }
-    uint64_t start = metadata.position + sizeof header + u16(header + 26) + u16(header + 28);
+    uint64_t start =
+        metadata.position + sizeof header + tb_le16(header + 26) + tb_le16(header + 28);
     if (start > tb_stream_size(parent) || metadata.packed > tb_stream_size(parent) - start)
     {
-        bad(EILSEQ);
+        tb_archive_fail(EILSEQ);
         return NULL;
     }
     ZipSeek *zip = calloc(1, sizeof *zip);

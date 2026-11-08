@@ -1,6 +1,16 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Bounded process cache. A source is leased exclusively for one request; a
-   concurrent reader gets its own state instead of sharing file/decoder cursors. */
+/* Bounded process cache of container sources and opened parent containers, and the
+   per-thread request session with its read statistics. A source is leased exclusively
+   for one request; a concurrent reader gets its own state instead of sharing
+   file/decoder cursors. */
+#define _POSIX_C_SOURCE 200809L
+#include "storage/archives/container_internal.h"
+#include "storage/common/file_time.h"
+#include "storage/common/host.h"
+#include "storage/common/host_stdio.h"
+#include "storage/volume.h"
+#include <stdlib.h>
+#include <string.h>
 #define CACHE_LOCK() tb_storage_lock(TB_STORAGE_LOCK_CONTAINER_CACHE)
 #define CACHE_UNLOCK() tb_storage_unlock(TB_STORAGE_LOCK_CONTAINER_CACHE)
 #define MEDIA_CACHED_SOURCES 4
@@ -27,6 +37,12 @@ typedef struct MediaSourceCache
 static MediaSourceCache *media_sources[MEDIA_CACHED_SOURCES];
 static uint64_t media_cache_clock;
 
+/* Image volumes are mutable, so their files are never cached as sources. */
+static int source_identity(const char *path, TbFileIdentity *identity)
+{
+    return !tb_image_path(path) && tb_host_identity(path, identity);
+}
+
 static _Thread_local struct
 {
     MediaSourceCache *sources[MEDIA_CACHED_SOURCES], *current;
@@ -46,7 +62,7 @@ static void destroy_media_cache(MediaSourceCache *source)
     free(source);
 }
 
-static void media_cache_peak(void)
+void tb_media_cache_peak(void)
 {
     uint64_t bytes = 0;
     for (size_t i = 0; i < media_session.count; i++)
@@ -71,13 +87,23 @@ void tb_media_session_begin(void)
     media_session.active = 1;
 }
 
+TbMediaReadStats *tb_media_session_stats(void)
+{
+    return &media_session.stats;
+}
+
+TbReadBudget *tb_media_cache_budget(void)
+{
+    return media_session.current ? &media_session.current->budget : NULL;
+}
+
 TbMediaReadStats tb_media_read_stats(void)
 {
-    media_cache_peak();
+    tb_media_cache_peak();
     return media_session.stats;
 }
 
-static void select_media_cache(const char *host)
+void tb_media_cache_select(const char *host)
 {
     media_session.current = NULL;
     if (!media_session.active)
@@ -143,10 +169,10 @@ static void select_media_cache(const char *host)
         media_session.current = source;
     }
     CACHE_UNLOCK();
-    media_cache_peak();
+    tb_media_cache_peak();
 }
 
-static TbReadStream *cached_parent(const char *path, size_t length)
+TbReadStream *tb_media_cache_lookup(const char *path, size_t length)
 {
     MediaSourceCache *source = media_session.current;
     if (!source)
@@ -164,7 +190,7 @@ static TbReadStream *cached_parent(const char *path, size_t length)
     return NULL;
 }
 
-static void cache_parent(const char *path, size_t length, TbReadStream *stream)
+void tb_media_cache_store(const char *path, size_t length, TbReadStream *stream)
 {
     MediaSourceCache *source = media_session.current;
     if (!source || !stream)
@@ -192,6 +218,3 @@ static void cache_parent(const char *path, size_t length, TbReadStream *stream)
     tb_stream_close(entry->stream);
     *entry = (MediaCacheEntry){name, stream, ++source->clock};
 }
-
-#undef CACHE_LOCK
-#undef CACHE_UNLOCK

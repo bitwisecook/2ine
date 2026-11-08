@@ -4,7 +4,7 @@
 #include "storage/vendor/deark/ftcomp.inc"
 #include "storage/vendor/deark/dskdcmps.h"
 
-int tb_pack_decode(const void *input, size_t size, size_t expected, int kind,
+int tb_pack_decode(const void *input, size_t size, size_t expected, int ftcomp,
                    unsigned char **output)
 {
     *output = NULL;
@@ -21,7 +21,7 @@ int tb_pack_decode(const void *input, size_t size, size_t expected, int kind,
         struct de_dfilter_in_params params = {.f = &in, .len = (i64)size};
         struct de_dfilter_out_params result = {.f = out, .expected_len = (i64)expected};
         struct de_dfilter_results status = {0};
-        if (kind == 2)
+        if (ftcomp)
             fmtutil_ftcomp_codectype1(c, &params, &result, &status, NULL);
         else
             dskdcmps_run(c, &params, &result, &status);
