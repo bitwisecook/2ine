@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Execution contracts shared by portable CPU backend implementations. */
-#include "hal/emulator/cpu.h"
+#include "emulator/execution/unicorn/cpu.h"
 #include "hal/host.h"
 #include <stdio.h>
 #include <stdlib.h>

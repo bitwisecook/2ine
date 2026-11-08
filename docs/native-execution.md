@@ -2,7 +2,7 @@
 
 # Native execution and OS/2 APIs
 
-**Linux i386 runs guest instructions directly.** `hal/linux/i386/execution.c` owns
+**Linux i386 runs guest instructions directly.** `emulator/execution/native_i386/execution.c` owns
 LDT selectors, FS/TIB setup, native entry and mixed-mode bridges.
 
 ```mermaid
@@ -13,7 +13,7 @@ flowchart LR
     Bridge --> Callback["Nested guest callback"] --> CPU
 ```
 
-`hal/linux/i386/` also supplies the i386 ABI bridges compiled into the API modules.
+`emulator/execution/native_i386/` also supplies the i386 ABI bridges compiled into the API modules.
 `os2libs/` contains OS/2 DLL implementations shared by native and emulated
 execution. Host services use shared POSIX and [platform adapters](hal.md).
 `*-lx.h` files are generated; edit their headers/binding policies, then run

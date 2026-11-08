@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Unicorn adapter. Public runtime interfaces contain no Unicorn types. */
-#include "hal/emulator/cpu_internal.h"
+#include "emulator/execution/unicorn/cpu_internal.h"
 #include <unicorn/unicorn.h>
 #include <unicorn/x86.h>
 #include <stdlib.h>

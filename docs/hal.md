@@ -38,7 +38,7 @@ application support.
 
 Platform dependency discovery is colocated with its implementation:
 `macos/dependencies.cmake` locates SDK curses, and
-`linux/i386/dependencies.cmake` selects i386 ncurses; `cmake/SDL3.cmake` selects the SDL provider.
+`emulator/execution/native_i386/dependencies.cmake` selects i386 ncurses; `cmake/SDL3.cmake` selects the SDL provider.
 
 Add an OS-specific operation to its platform directory. Reuse POSIX code when
 the semantics match on Linux and macOS; use a private platform hook when they

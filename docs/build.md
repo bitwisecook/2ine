@@ -39,7 +39,7 @@ ctest --test-dir build-native --output-on-failure
 TWOINE_BACKEND=native TWOINE_LIBPATH="$PWD/build-native" build-native/lx_loader program.exe
 ```
 
-`hal/linux/i386/dependencies.cmake` discovers matching ncurses libraries.
+`emulator/execution/native_i386/dependencies.cmake` discovers matching ncurses libraries.
 `-DTWOINE_BUILD_RUNTIME=ON` additionally builds the portable runtime and its
 contracts with the host ABI; this does not change the i386 application worker.
 

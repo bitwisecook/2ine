@@ -13,7 +13,7 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 
 # Every top-level directory that holds sources has a role, so a new component is
 # placed under the rules below before it can pass.
-PORTABLE_COMPONENTS = {"formats", "storage", "runtime", "loader", "guest", "os2libs"}
+PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "runtime", "loader", "guest", "os2libs"}
 HOST_COMPONENTS = {"hal", "ball"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
@@ -23,15 +23,24 @@ FOREIGN_DIRECTORIES = {"ports", "research"}
 # vendored libraries and OS/2 guest programs built with OS/2 compilers.
 FOREIGN_SOURCE_PATHS = ("ball/vendor/", "storage/vendor/", "tests/programs/")
 
+# Execution backends run guest code on the host CPU or an emulator, so they
+# use host APIs, CPU-specific assembly and emulator headers.
+EXECUTION_BACKENDS = ("emulator/execution/native_i386/", "emulator/execution/unicorn/")
+
 # Files inside portable components that adapt them to the host: the only
-# place such a component may use host APIs or branch on the host OS.
-PORTABLE_HOST_ADAPTERS = ("storage/common/host",)
+# place such a component may use host APIs.
+PORTABLE_HOST_ADAPTERS = ("storage/common/host",) + EXECUTION_BACKENDS
+
+# Portable-component paths that may also branch on the host OS. The native
+# backend is Linux-only; the Unicorn backend runs on every host.
+PORTABLE_OS_ADAPTERS = ("storage/common/host", "emulator/execution/native_i386/")
 
 # Includes each component may not use: formats/ is self-contained, storage/
 # builds on formats/ only, and nothing outside ball/ depends on ball/.
 FORBIDDEN_INCLUDES = {
     "formats": ("storage/", "ball/", "hal/", "runtime/", "loader/", "guest/", "os2libs/"),
     "storage": ("ball/", "hal/", "runtime/", "loader/", "guest/", "os2libs/"),
+    "emulator": ("ball/",),
     "hal": ("ball/",),
     "runtime": ("ball/",),
     "loader": ("ball/",),
@@ -142,7 +151,7 @@ def portable_source(path):
 
 def os_branch_scope(path):
     name = relative(path)
-    if foreign(name) or name.startswith(PORTABLE_HOST_ADAPTERS):
+    if foreign(name) or name.startswith(PORTABLE_OS_ADAPTERS):
         return False
     top = name.split("/", 1)[0]
     if top in PORTABLE_COMPONENTS:
@@ -192,7 +201,7 @@ for directory, prefixes in sorted(FORBIDDEN_INCLUDES.items()):
         )
 for path in sources("hal/include", {".h"}):
     check(path, platform + [r"\bHANDLE\b"])
-for path in sources("hal"):
+for path in list(sources("hal")) + list(sources("emulator/execution")):
     check(
         path,
         [

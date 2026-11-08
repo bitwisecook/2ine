@@ -35,7 +35,7 @@ set(_twoine_ft_options
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 )
 if(TWOINE_NATIVE_LOADER)
-    include("${PROJECT_SOURCE_DIR}/hal/linux/i386/dependencies.cmake")
+    include("${PROJECT_SOURCE_DIR}/emulator/execution/native_i386/dependencies.cmake")
     twoine_add_native_freetype()
 
 else()

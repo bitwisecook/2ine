@@ -10,8 +10,8 @@ owns the loader or OS/2 behavior.
 flowchart TD
     Loader["Common loader + OS/2 APIs"] --> Exec["execution.h"]
     Exec --> Memory["execution_memory.c · checked guest mappings"]
-    Exec --> Native["hal/linux/i386/execution.c"]
-    Exec --> Emu["hal/emulator/execution_unicorn.c"]
+    Exec --> Native["emulator/execution/native_i386/execution.c"]
+    Exec --> Emu["emulator/execution/unicorn/execution.c"]
     Loader --> Host["host*.h · opaque host objects"]
     Host --> HAL["hal/posix/"] --> Platforms["hal/linux/ + hal/macos/"]
 ```

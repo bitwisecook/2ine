@@ -13,9 +13,9 @@ flowchart TD
     Guest --> APIs["os2libs/ · OS/2 DLL implementations"]
     Loader --> Execution["runtime/execution.h"]
     APIs --> Execution
-    Execution --> Native["hal/linux/i386/execution.c"]
-    Execution --> Emulator["hal/emulator/execution_unicorn.c"]
-    Emulator --> CPU["hal/emulator/cpu.h + cpu_unicorn.c"] --> Unicorn["Unicorn"]
+    Execution --> Native["emulator/execution/native_i386/execution.c"]
+    Execution --> Emulator["emulator/execution/unicorn/execution.c"]
+    Emulator --> CPU["emulator/execution/unicorn/cpu.h + cpu_unicorn.c"] --> Unicorn["Unicorn"]
     APIs --> Host["hal/include/hal/ · opaque host services"]
     Host --> HAL["hal/posix/ + platform adapters"]
     HAL --> Linux["Linux"]
@@ -26,8 +26,8 @@ flowchart TD
 `os2libs/` contains the OS/2 API implementations shared by both execution paths.
 `runtime/` owns execution dispatch, checked guest mappings and platform-neutral
 process and audio policy. `hal/include/hal/` declares host-service contracts,
-and `hal/` implements them: `hal/linux/i386/` owns
-Linux i386 execution and ABI bridges, `hal/emulator/` owns CPU emulation, and
+and `hal/` implements them: `emulator/execution/native_i386/` owns
+Linux i386 execution and ABI bridges, `emulator/execution/unicorn/` owns CPU emulation, and
 `hal/posix/` shares host services between `hal/linux/` and `hal/macos/`.
 `hal/win/` contains partial Windows adapters. [HAL source selection](hal.md)
 chooses the implementation and dependencies for each worker. Execution adapters
@@ -52,7 +52,7 @@ the checker, so a new component is covered by these rules.
 | Common loader | Formats, relocations, imports, modules and OS/2 identity |
 | `guest/` | Fixed-width layouts, checked arguments and private resource IDs |
 | `runtime/execution.h` | Entries, callbacks, threads, selectors and guest mappings |
-| `hal/emulator/cpu.h` | CPU registers, contexts/x87, segments, bounded runs and faults |
+| `emulator/execution/unicorn/cpu.h` | CPU registers, contexts/x87, segments, bounded runs and faults |
 | `hal/include/hal/host*.h` | VM, files, paths, libraries, clocks, threads, synchronization and child processes |
 | `hal/` | Execution backends, native ABI bridges and host-service implementations |
 
@@ -147,7 +147,7 @@ backend each. Neither Rosetta nor a Linux VM is part of macOS execution.
 ```mermaid
 sequenceDiagram
     participant Loader as Common loader (ARM64 host)
-    participant Exec as hal/emulator/execution_unicorn.c
+    participant Exec as emulator/execution/unicorn/execution.c
     participant CPU as Unicorn x86 CPU
     participant API as Common OS/2 API
     participant Host as macOS host adapter
@@ -176,7 +176,7 @@ including x87 state.
 ```mermaid
 sequenceDiagram
     participant Loader as Common loader (i386 worker)
-    participant Exec as hal/linux/i386/execution.c
+    participant Exec as emulator/execution/native_i386/execution.c
     participant CPU as x86 hardware
     participant Bridge as Native ABI bridge
     participant API as Common OS/2 API

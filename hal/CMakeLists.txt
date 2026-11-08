@@ -65,40 +65,16 @@ function(twoine_add_hal target backend)
         APPEND
         PROPERTY COMPILE_DEFINITIONS TWOINE_VERSION_TEXT="${_twoine_version}"
     )
+    twoine_add_execution_backend(${target} ${backend})
     if(backend STREQUAL "unicorn")
-        include("${TWOINE_HAL_SOURCE_DIR}/emulator/unicorn.cmake")
-        target_sources(
-            ${target}
-            PRIVATE
-                "${TWOINE_HAL_SOURCE_DIR}/emulator/cpu.c"
-                "${TWOINE_HAL_SOURCE_DIR}/emulator/cpu_unicorn.c"
-                "${TWOINE_HAL_SOURCE_DIR}/emulator/execution_unicorn.c"
-        )
-        target_compile_definitions(${target} PUBLIC TWOINE_WITH_UNICORN=1)
-        target_link_libraries(${target} PUBLIC ${TWOINE_UNICORN_TARGET})
         if(MSVC)
             target_compile_options(${target} PRIVATE /W4)
         else()
             target_compile_options(${target} PRIVATE -Wall -Wextra -Werror)
         endif()
     elseif(backend STREQUAL "native")
-        if(
-            NOT CMAKE_SYSTEM_NAME STREQUAL "Linux"
-            OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(i[3-6]86|x86|x86_64|amd64|AMD64)$"
-        )
-            message(FATAL_ERROR "The native HAL requires Linux x86.")
-        endif()
-        target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/linux/i386/execution.c")
-        target_compile_definitions(${target} PUBLIC TWOINE_NATIVE_LINUX_I386=1)
         target_compile_options(${target} PRIVATE -m32)
-    else()
-        message(FATAL_ERROR "Unknown 2ine HAL backend: ${backend}")
     endif()
-endfunction()
-
-# These bridges must be linked in their API module, where their C entries live.
-function(twoine_hal_add_native_abi target api)
-    target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/linux/i386/abi_${api}.c")
 endfunction()
 
 function(twoine_add_media target)
@@ -165,7 +141,7 @@ function(twoine_add_terminal target)
     target_sources(${target} PRIVATE "${TWOINE_HAL_SOURCE_DIR}/posix/terminal_curses.c")
     target_include_directories(${target} PRIVATE ${CURSES_INCLUDE_DIRS})
     if(TWOINE_NATIVE_LOADER)
-        include("${TWOINE_HAL_SOURCE_DIR}/linux/i386/dependencies.cmake")
+        include("${TWOINE_EXECUTION_SOURCE_DIR}/native_i386/dependencies.cmake")
         twoine_link_native_terminal(${target})
     else()
         target_link_libraries(${target} PRIVATE ${CURSES_LIBRARIES})

@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest-address ownership and execution-backend dispatch. */
-#include "hal/emulator/cpu_internal.h"
+#include "emulator/execution/unicorn/cpu_internal.h"
 #include "hal/host.h"
 #include <stdlib.h>
 #include <stdio.h>
