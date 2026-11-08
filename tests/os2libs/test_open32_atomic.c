@@ -76,9 +76,9 @@ typedef struct GuestContender
 static void *guest_contend(void *argument)
 {
     GuestContender *work = argument;
-    CHECK(!lx_execution_callback32_4(GLoaderState.execution, work->entry, work->word,
+    CHECK(!lx_execution_callback32_4(GProcessState.execution, work->entry, work->word,
                                      work->iterations, 0, 0));
-    lx_execution_cleanup_thread32(GLoaderState.execution);
+    lx_execution_cleanup_thread32(GProcessState.execution);
     return NULL;
 }
 
@@ -97,7 +97,7 @@ static void contention(uint8 *host, uint32 code)
     for (unsigned phase = 0; phase < 2; phase++)
     {
         GuestContender cpu = {code + phase * 32, 0, GUEST_ITERATIONS};
-        CHECK(lx_execution_address(GLoaderState.execution, host, 4, 3, &cpu.word));
+        CHECK(lx_execution_address(GProcessState.execution, host, 4, 3, &cpu.word));
         LxHostThread *guest_thread = lx_host_thread_create(guest_contend, &cpu, NULL);
         CHECK(guest_thread);
         for (unsigned i = 0; i < THREADS; i++)
@@ -116,10 +116,10 @@ static void contention(uint8 *host, uint32 code)
 int main(void)
 {
     char message[256];
-    GLoaderState.execution = lx_execution_create(TWOINE_PORTABLE_LOADER ? "unicorn" : "native",
-                                                 NULL, message, sizeof message);
-    CHECK(GLoaderState.execution);
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0x05000000, 8192, 3, 1);
+    GProcessState.execution = lx_execution_create(TWOINE_PORTABLE_LOADER ? "unicorn" : "native",
+                                                  NULL, message, sizeof message);
+    CHECK(GProcessState.execution);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0x05000000, 8192, 3, 1);
     CHECK(mapping);
     uint8 *host = lx_execution_mapping_host(mapping);
     memset(host, 0xa5, 8192);
@@ -129,14 +129,14 @@ int main(void)
         word_cases(host + offset);
         CHECK(host[offset + 4] == 0xa5);
     }
-    LxGuestMapping *code = lx_execution_map(GLoaderState.execution, 0x05100000, 4096, 7, 1);
+    LxGuestMapping *code = lx_execution_map(GProcessState.execution, 0x05100000, 4096, 7, 1);
     CHECK(code);
     /* MOV EDX,[ESP+4]; MOV ECX,[ESP+8]; LOCK INC/DEC[EDX]; DEC ECX; JNZ; XOR EAX,EAX; RET. */
     uint8 loop[] = {0x8b, 0x54, 0x24, 4,    0x8b, 0x4c, 0x24, 8,   0xf0,
                     0xff, 2,    0x49, 0x75, 0xfa, 0x31, 0xc0, 0xc3};
-    CHECK(lx_execution_write(GLoaderState.execution, 0x05100000, loop, sizeof loop));
+    CHECK(lx_execution_write(GProcessState.execution, 0x05100000, loop, sizeof loop));
     loop[10] = 0x0a;
-    CHECK(lx_execution_write(GLoaderState.execution, 0x05100020, loop, sizeof loop));
+    CHECK(lx_execution_write(GProcessState.execution, 0x05100020, loop, sizeof loop));
     contention(host + 7, 0x05100000);    /* Host/API and x86 CPU share one unaligned word. */
     contention(host + 4095, 0x05100000); /* DWORD spanning two mapped guest pages. */
     LONG local = 777;
@@ -144,14 +144,14 @@ int main(void)
     CHECK(!InterlockedDecrement(NULL) && error == 87);
     CHECK(!InterlockedExchange((PLONG)(uintptr_t)0xdeadbeef, 1) && error == 87);
     CHECK(!InterlockedIncrement((PLONG)(void *)(host + 8191)) && host[8191] == 0xa5);
-    CHECK(lx_execution_protect(GLoaderState.execution, mapping, LX_GUEST_READ));
+    CHECK(lx_execution_protect(GProcessState.execution, mapping, LX_GUEST_READ));
     uint32 old = lx_guest_load_u32(host + 4095);
     CHECK(!InterlockedExchange((PLONG)(void *)(host + 4095), 123) && error == 87);
     CHECK(lx_guest_load_u32(host + 4095) == old);
-    CHECK(lx_execution_unmap(GLoaderState.execution, mapping));
+    CHECK(lx_execution_unmap(GProcessState.execution, mapping));
     CHECK(!InterlockedIncrement((PLONG)(void *)host) && error == 87);
-    lx_execution_destroy(GLoaderState.execution);
-    GLoaderState.execution = NULL;
+    lx_execution_destroy(GProcessState.execution);
+    GProcessState.execution = NULL;
     puts("Open32 interlocked signs, backing, cross-page/unaligned guards and contention passed");
     return 0;
 }

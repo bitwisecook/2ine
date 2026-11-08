@@ -6,7 +6,7 @@
 
 ULONG WinQueryCpType(HMQ queue)
 {
-    ULONG codepage = queue ? WinQueryCp(queue) : GLoaderState.process_codepage;
+    ULONG codepage = queue ? WinQueryCp(queue) : GProcessState.process_codepage;
     if (!codepage && queue)
         return 0;
     switch (codepage)

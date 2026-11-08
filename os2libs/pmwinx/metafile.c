@@ -555,7 +555,7 @@ BOOL PlayMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
 BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
 {
     TRACE_NATIVE("EnumMetaFile(%u, %u, %X, %X)", dc, handle, procedure, parameter);
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     LxHandleBorrow borrow = {0};
     if ((dc && !open32FindDC(dc)) || !open32ValidProcedure(procedure) ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_METAFILE, &borrow))
@@ -2165,7 +2165,7 @@ BOOL PlayEnhMetaFile(ULONG dc, ULONG handle, PVOID bounds)
 BOOL EnumEnhMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter, PVOID bounds)
 {
     LxHandleBorrow borrow = {0};
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     if ((dc && (!open32FindDC(dc) || !bounds)) || !open32ValidProcedure(procedure) ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_ENHMETAFILE, &borrow))
     {

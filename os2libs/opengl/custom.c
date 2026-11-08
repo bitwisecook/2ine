@@ -39,7 +39,7 @@ uint32_t call_glGetString(uint8_t *a)
     if (!c->strings)
     {
         c->strings =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
         if (!c->strings)
         {
             gl_error(GL_OUT_OF_MEMORY);
@@ -53,9 +53,9 @@ uint32_t call_glGetString(uint8_t *a)
                                         : (const char *)c->api->glGetString(GL_VENDOR + i);
             snprintf(p + i * 1024, 1024, "%s", text ? text : "");
         }
-        if (!lx_execution_protect(GLoaderState.execution, c->strings, LX_GUEST_READ))
+        if (!lx_execution_protect(GProcessState.execution, c->strings, LX_GUEST_READ))
         {
-            lx_execution_unmap(GLoaderState.execution, c->strings);
+            lx_execution_unmap(GProcessState.execution, c->strings);
             c->strings = NULL;
             gl_error(GL_OUT_OF_MEMORY);
             return 0;
@@ -219,7 +219,7 @@ uint32_t call_glRenderMode(uint8_t *a)
     uint32_t address = previous == GL_SELECT ? c->selection_address : c->feedback_address;
     size_t bytes = previous == GL_SELECT ? c->selection_bytes : c->feedback_bytes;
     if (previous != GL_RENDER && bytes &&
-        !lx_execution_write(GLoaderState.execution, address, buffer, bytes))
+        !lx_execution_write(GProcessState.execution, address, buffer, bytes))
         gl_error(GL_INVALID_OPERATION);
     return result;
 }

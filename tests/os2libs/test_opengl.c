@@ -36,9 +36,9 @@ static uint32_t pgl(const char *name, uint32_t a, uint32_t b, uint32_t c, uint32
 int main(void)
 {
     char error[256];
-    GLoaderState.execution = lx_execution_create(TWOINE_PORTABLE_LOADER ? "unicorn" : "native",
-                                                 NULL, error, sizeof error);
-    CHECK(GLoaderState.execution);
+    GProcessState.execution = lx_execution_create(TWOINE_PORTABLE_LOADER ? "unicorn" : "native",
+                                                  NULL, error, sizeof error);
+    CHECK(GProcessState.execution);
     CHECK(gl_pgl_initialize());
     HAB hab = WinInitialize(0);
     CHECK(hab && WinCreateMsgQueue(hab, 0));
@@ -51,7 +51,7 @@ int main(void)
     HWND child = WinCreateWindow(parent, "#1", "", 0x80000000, 8, 8, 16, 16, parent, HWND_TOP, 2,
                                  NULL, NULL);
     CHECK(child);
-    LxGuestMapping *data = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *data = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     CHECK(data);
     uint32_t address = lx_execution_mapping_address(data);
     uint8_t *host = lx_execution_mapping_host(data);
@@ -164,9 +164,9 @@ int main(void)
     CHECK(pgl("pglDestroyContext", hab, context, 0, 0));
     CHECK(WinDestroyWindow(child) && WinDestroyWindow(parent) && WinTerminate(hab));
     gl_pgl_shutdown();
-    CHECK(lx_execution_unmap(GLoaderState.execution, data));
-    lx_execution_destroy(GLoaderState.execution);
-    GLoaderState.execution = NULL;
+    CHECK(lx_execution_unmap(GProcessState.execution, data));
+    lx_execution_destroy(GProcessState.execution);
+    GProcessState.execution = NULL;
     puts("PGL context lifecycle, client placement, retained PM presentation and resize passed");
     return 0;
 }

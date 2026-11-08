@@ -63,17 +63,17 @@ static void store(uint8 *pool, uint32 offset, uint32 value)
 static APIRET open_pool(void *base, LxGuestBorrow *borrow, BOOL attached)
 {
     uint32 address;
-    if (!lx_execution_address(GLoaderState.execution, base, POOL_HEADER,
+    if (!lx_execution_address(GProcessState.execution, base, POOL_HEADER,
                               LX_GUEST_READ | LX_GUEST_WRITE, &address) ||
         (address & 7))
         return ERROR_INVALID_PARAMETER;
     uint8 header[POOL_HEADER];
-    if (!lx_execution_read(GLoaderState.execution, address, header, sizeof header) ||
+    if (!lx_execution_read(GProcessState.execution, address, header, sizeof header) ||
         word(header, 0) != POOL_MAGIC)
         return ERROR_DOSSUB_CORRUPTED;
     uint32 size = word(header, POOL_SIZE);
     if (size < POOL_HEADER + 8 || (size & 7) ||
-        !lx_execution_borrow(GLoaderState.execution, address, size, LX_GUEST_READ | LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, address, size, LX_GUEST_READ | LX_GUEST_WRITE,
                              borrow))
         return ERROR_DOSSUB_CORRUPTED;
     uint32 *lock = (uint32 *)((uint8 *)borrow->host + POOL_LOCK);
@@ -156,7 +156,7 @@ static APIRET set_pool(PVOID base, ULONG flags, ULONG size)
     TRACE_NATIVE("DosSubSetMem(%p, %u, %u)", base, (uint)flags, (uint)size);
     uint32 address;
     if ((flags & ~15u) || (flags & 3) == 3 ||
-        !lx_execution_address(GLoaderState.execution, base, POOL_HEADER,
+        !lx_execution_address(GProcessState.execution, base, POOL_HEADER,
                               LX_GUEST_READ | LX_GUEST_WRITE, &address) ||
         (address & 7))
         return ERROR_INVALID_PARAMETER;
@@ -173,7 +173,7 @@ static APIRET set_pool(PVOID base, ULONG flags, ULONG size)
     if (flags & 1)
     {
         LxGuestBorrow pool;
-        if (!lx_execution_borrow(GLoaderState.execution, address, size,
+        if (!lx_execution_borrow(GProcessState.execution, address, size,
                                  LX_GUEST_READ | LX_GUEST_WRITE, &pool))
             return ERROR_INVALID_PARAMETER;
         memset(pool.host, 0, POOL_HEADER);
@@ -203,7 +203,7 @@ static APIRET set_pool(PVOID base, ULONG flags, ULONG size)
         else if (size > old_size)
         {
             LxGuestBorrow expanded;
-            if (!lx_execution_borrow(GLoaderState.execution, address, size,
+            if (!lx_execution_borrow(GProcessState.execution, address, size,
                                      LX_GUEST_READ | LX_GUEST_WRITE, &expanded))
                 result = ERROR_INVALID_PARAMETER;
             else
@@ -299,7 +299,7 @@ APIRET DosSubUnsetMem(PVOID base)
     if (!result)
     {
         uint32 address;
-        if (!lx_execution_address(GLoaderState.execution, base, POOL_HEADER, 0, &address))
+        if (!lx_execution_address(GProcessState.execution, base, POOL_HEADER, 0, &address))
             result = ERROR_INVALID_PARAMETER;
         else
         {

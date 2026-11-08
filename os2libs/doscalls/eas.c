@@ -5,12 +5,12 @@
 APIRET queryAllEas16(HFILE handle, void *operation)
 {
     uint32 address;
-    if (!lx_execution_address(GLoaderState.execution, operation, 12, LX_GUEST_READ, &address))
+    if (!lx_execution_address(GProcessState.execution, operation, 12, LX_GUEST_READ, &address))
         return ERROR_INVALID_PARAMETER;
     uint32 pointer = lx_guest_load_u32((uint8 *)operation + 4);
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow_far(GLoaderState.execution, pointer, 4, LX_GUEST_READ | LX_GUEST_WRITE,
-                                 &output))
+    if (!lx_execution_borrow_far(GProcessState.execution, pointer, 4,
+                                 LX_GUEST_READ | LX_GUEST_WRITE, &output))
         return ERROR_INVALID_PARAMETER;
     uint32 capacity = lx_guest_load_u32(output.host);
     lx_execution_release(&output);
@@ -31,7 +31,7 @@ APIRET queryAllEas16(HFILE handle, void *operation)
     uint32 required = size ? size : 4;
     APIRET result = fileError(error);
     if (!result &&
-        !lx_execution_borrow_far(GLoaderState.execution, pointer,
+        !lx_execution_borrow_far(GProcessState.execution, pointer,
                                  capacity < required ? 4 : required, LX_GUEST_WRITE, &output))
         result = ERROR_INVALID_PARAMETER;
     if (!result)
@@ -55,13 +55,13 @@ APIRET applyEas16(HFILE handle, const void *operation)
     if (!pointer)
         return NO_ERROR;
     LxGuestBorrow list = {0};
-    if (!lx_execution_borrow_far(GLoaderState.execution, pointer, 4, LX_GUEST_READ, &list))
+    if (!lx_execution_borrow_far(GProcessState.execution, pointer, 4, LX_GUEST_READ, &list))
         return ERROR_INVALID_PARAMETER;
     uint32 size = lx_guest_load_u32(list.host);
     lx_execution_release(&list);
     if (size < 4 || size > 65535)
         return ERROR_EA_LIST_INCONSISTENT;
-    if (!lx_execution_borrow_far(GLoaderState.execution, pointer, size, LX_GUEST_READ, &list))
+    if (!lx_execution_borrow_far(GProcessState.execution, pointer, size, LX_GUEST_READ, &list))
         return ERROR_INVALID_PARAMETER;
     const uint8 *bytes = list.host;
     APIRET result = NO_ERROR;

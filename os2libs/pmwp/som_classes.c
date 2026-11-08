@@ -180,7 +180,7 @@ static uint32 load_class(const char *class_name, const char *module_name)
     if (DosLoadModule(NULL, 0, (PSZ)module_name, &module) != NO_ERROR)
         return 0;
     if (DosQueryProcAddr(module, 0, entry_name, &entry) != NO_ERROR || !entry ||
-        !lx_execution_entry_address(GLoaderState.execution, (void *)entry, &address))
+        !lx_execution_entry_address(GProcessState.execution, (void *)entry, &address))
     {
         DosFreeModule(module);
         return 0;
@@ -333,7 +333,7 @@ static uint32 report_help(uint8 *a, uint32 panel)
 {
     static const char library[] = "";
     return pmwpStore32(ARG(a, 1), panel) &&
-           lx_execution_write(GLoaderState.execution, ARG(a, 2), library, sizeof library);
+           lx_execution_write(GProcessState.execution, ARG(a, 2), library, sizeof library);
 }
 
 #define CLASS_HELP(name, panel)                                                                    \
@@ -384,7 +384,7 @@ static uint32 wpclsQueryDefaultHelp(uint8 *a)
 {
     static const char library[] = "WPHELP.HLP";
     return pmwpStore32(ARG(a, 1), 0) &&
-           lx_execution_write(GLoaderState.execution, ARG(a, 2), library, sizeof library);
+           lx_execution_write(GProcessState.execution, ARG(a, 2), library, sizeof library);
 }
 
 /* Five columns, of which the last three read the 12 bytes from wpQueryDetailsData. The
@@ -482,7 +482,7 @@ static uint32 wpclsNew(uint8 *a)
 
 static uint32 wpclsQueryFolder(uint8 *a)
 {
-    char *location = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), PATH_LIMIT);
+    char *location = lx_execution_copy_string(GProcessState.execution, ARG(a, 1), PATH_LIMIT);
     uint32 folder = location ? pmwpFolderForLocation(location) : 0;
     free(location);
     if (folder && ARG(a, 2))
@@ -616,8 +616,9 @@ static uint32 wpclsFindObjectFirst(uint8 *a)
             break;
         state->classes[state->class_count++] = entry;
     }
-    char *title =
-        ARG(a, 3) ? lx_execution_copy_string(GLoaderState.execution, ARG(a, 3), TITLE_LIMIT) : NULL;
+    char *title = ARG(a, 3)
+                      ? lx_execution_copy_string(GProcessState.execution, ARG(a, 3), TITLE_LIMIT)
+                      : NULL;
     char identifier[PATH_LIMIT] = "";
     ULONG parent = folder ? handle_of(folder) : 0;
     BOOL scoped = parent && pmwpStoreIdentifier(parent, identifier, sizeof identifier);
@@ -670,7 +671,7 @@ static uint32 file_empty_string(uint8 *a)
 
 static uint32 wpclsQueryObjectFromPath(uint8 *a)
 {
-    char *path = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), PATH_LIMIT);
+    char *path = lx_execution_copy_string(GProcessState.execution, ARG(a, 1), PATH_LIMIT);
     uint32 object = path ? pmwpObjectForPath(path) : 0;
     free(path);
     return object;
@@ -701,7 +702,7 @@ static uint32 wpQueryRealName(uint8 *a)
         return FALSE;
     uint32 copied = length + 1 < capacity ? length + 1 : capacity;
     path[copied - 1] = 0;
-    return lx_execution_write(GLoaderState.execution, output, path, copied) &&
+    return lx_execution_write(GProcessState.execution, output, path, copied) &&
            pmwpStore32(size_address, copied - 1);
 }
 
@@ -710,7 +711,7 @@ static uint32 wpQueryFilename(uint8 *a)
     uint32 output = ARG(a, 1);
     char path[PATH_LIMIT];
     return output && object_file_name(ARG(a, 0), path, sizeof path, ARG(a, 2)) &&
-                   lx_execution_write(GLoaderState.execution, output, path, strlen(path) + 1)
+                   lx_execution_write(GProcessState.execution, output, path, strlen(path) + 1)
                ? output
                : 0;
 }
@@ -765,7 +766,7 @@ static uint32 wpSetType(uint8 *a)
     uint32 self = ARG(a, 0);
     ULONG handle = handle_of(self);
     char path[PATH_LIMIT];
-    char *types = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), TITLE_LIMIT);
+    char *types = lx_execution_copy_string(GProcessState.execution, ARG(a, 1), TITLE_LIMIT);
     BOOL result =
         handle && types && object_file_name(self, path, sizeof path, TRUE) &&
         write_type_attribute(path, types) &&
@@ -884,7 +885,7 @@ static uint32 wpQueryType(uint8 *a)
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpFreeMem, self, previous, 0, 0);
     uint32 text = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpAllocMem, self, size, 0, 0);
     if (text)
-        lx_execution_write(GLoaderState.execution, text, types, size);
+        lx_execution_write(GProcessState.execution, text, types, size);
     pmwpStore32(data + FILE_TYPE_TEXT, text);
     return text;
 }
@@ -1030,11 +1031,11 @@ static uint32 df_wpPrintObject(uint8 *a)
     for (LONG i = 0; i < count; i++)
     {
         uint32 field = pmwpLoad32(data + (uint32)i * 4);
-        fields[i] = field ? lx_execution_copy_string(GLoaderState.execution, field, 256) : NULL;
+        fields[i] = field ? lx_execution_copy_string(GProcessState.execution, field, 256) : NULL;
     }
     uint32 token_address = pmwpLoad32(destination + PRINT_DEST_TOKEN);
     char *token = token_address
-                      ? lx_execution_copy_string(GLoaderState.execution, token_address, 64)
+                      ? lx_execution_copy_string(GProcessState.execution, token_address, 64)
                       : strdup("*");
     char *host = pmwpHostPath(path);
     FILE *file = host ? fopen(host, "rb") : NULL;
@@ -1242,8 +1243,9 @@ static uint32 folder_view_from_name(const char *name)
 static uint32 fdr_wpSetup(uint8 *a)
 {
     uint32 self = ARG(a, 0);
-    char *setup =
-        ARG(a, 1) ? lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), SETUP_LIMIT) : NULL;
+    char *setup = ARG(a, 1)
+                      ? lx_execution_copy_string(GProcessState.execution, ARG(a, 1), SETUP_LIMIT)
+                      : NULL;
     BOOL result = parent_method(PMWP_WPFOLDER, PMWP_WPObject_wpSetup, self, ARG(a, 1));
     char value[32];
     if (result && setup && pmwpSetupValue(setup, "DEFAULTVIEW", value, sizeof value) &&
@@ -1283,8 +1285,9 @@ static uint32 dsk_wpRestoreState(uint8 *a)
 static uint32 dsk_wpSetup(uint8 *a)
 {
     uint32 self = ARG(a, 0);
-    char *setup =
-        ARG(a, 1) ? lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), SETUP_LIMIT) : NULL;
+    char *setup = ARG(a, 1)
+                      ? lx_execution_copy_string(GProcessState.execution, ARG(a, 1), SETUP_LIMIT)
+                      : NULL;
     char value[16];
     if (setup && pmwpSetupValue(setup, "DRIVENUM", value, sizeof value))
         pmwpInvoke(PMWP_WPDISK, PMWP_WPDisk_wpSetLogicalDrive, self,
@@ -1320,7 +1323,7 @@ static uint32 fdr_wpDrop(uint8 *a)
     uint32 self = ARG(a, 0), info = ARG(a, 2), item = ARG(a, 3);
     uint32 source = pmwpAwakeObject(pmwpLoad32(item + 4));
     uint8 bytes[2] = {0};
-    lx_execution_read(GLoaderState.execution, info + 6, bytes, sizeof bytes);
+    lx_execution_read(GProcessState.execution, info + 6, bytes, sizeof bytes);
     uint32 operation = lx_guest_load_u16(bytes), done = 0;
     if (source && operation == DRAG_MOVE)
         done = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpMoveObject, source, self, 0, 0);
@@ -1431,7 +1434,7 @@ static uint32 wpQueryProgDetails(uint8 *a)
                     strcpy((char *)wire + at, values[i]);
                     at += strlen(values[i]) + 1;
                 }
-            result = lx_execution_write(GLoaderState.execution, output, wire, needed);
+            result = lx_execution_write(GProcessState.execution, output, wire, needed);
             free(wire);
         }
     }

@@ -275,7 +275,7 @@ BOOL IsBadStringPtr(ULONG address, ULONG maximum)
     {
         uint8 byte;
         if (address > UINT32_MAX - i ||
-            !lx_execution_read(GLoaderState.execution, address + i, &byte, 1))
+            !lx_execution_read(GProcessState.execution, address + i, &byte, 1))
         {
             open32SetError(5);
             return TRUE;

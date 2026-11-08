@@ -105,7 +105,7 @@ static void advance_control(uint32 control)
     uint32 info = pmwpLoad32(control + INIT_CONTROL_INFO);
     uint32 size = pmwpLoad32(control + INIT_CONTROL_SIZE);
     uint8 flags = 0;
-    lx_execution_read(GLoaderState.execution, mask, &flags, 1);
+    lx_execution_read(GProcessState.execution, mask, &flags, 1);
     info += size;
     if (flags & 1)
         info += size;
@@ -200,7 +200,7 @@ static uint32 wpUnInitData(uint8 *a)
 
 BOOL pmwpObjectSetTitle(uint32 self, uint32 address)
 {
-    char *title = lx_execution_copy_string(GLoaderState.execution, address, TITLE_LIMIT);
+    char *title = lx_execution_copy_string(GProcessState.execution, address, TITLE_LIMIT);
     if (!title)
         return FALSE;
     replace_string(self, PMWP_OBJ_TITLE, title);
@@ -273,7 +273,7 @@ static BOOL assign_identifier(uint32 self, const char *identifier)
 
 static uint32 wpSetObjectID(uint8 *a)
 {
-    char *identifier = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), 1024);
+    char *identifier = lx_execution_copy_string(GProcessState.execution, ARG(a, 1), 1024);
     BOOL result = identifier && assign_identifier(ARG(a, 0), identifier);
     if (result)
     {
@@ -312,7 +312,7 @@ static uint32 wpIsLocked(uint8 *a)
 static BOOL save_value(uint32 self, uint32 class_name, ULONG key, const void *data, ULONG size)
 {
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
-    char *name = lx_execution_copy_string(GLoaderState.execution, class_name, CLASS_LIMIT);
+    char *name = lx_execution_copy_string(GProcessState.execution, class_name, CLASS_LIMIT);
     BOOL result = handle && name && pmwpStoreSetValue(handle, name, key, data, size);
     free(name);
     return result;
@@ -321,7 +321,7 @@ static BOOL save_value(uint32 self, uint32 class_name, ULONG key, const void *da
 static BOOL restore_value(uint32 self, uint32 class_name, ULONG key, void *data, ULONG *size)
 {
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
-    char *name = lx_execution_copy_string(GLoaderState.execution, class_name, CLASS_LIMIT);
+    char *name = lx_execution_copy_string(GProcessState.execution, class_name, CLASS_LIMIT);
     BOOL result = handle && name && pmwpStoreGetValue(handle, name, key, data, size);
     free(name);
     return result;
@@ -338,7 +338,7 @@ static uint32 wpSaveString(uint8 *a)
 {
     if (!ARG(a, 3))
         return FALSE;
-    char *value = lx_execution_copy_string(GLoaderState.execution, ARG(a, 3), VALUE_LIMIT);
+    char *value = lx_execution_copy_string(GProcessState.execution, ARG(a, 3), VALUE_LIMIT);
     BOOL result =
         value && save_value(ARG(a, 0), ARG(a, 1), ARG(a, 2), value, (ULONG)strlen(value) + 1);
     free(value);
@@ -352,7 +352,7 @@ static uint32 wpSaveData(uint8 *a)
         return FALSE;
     uint8 *value = malloc(size ? size : 1);
     BOOL result = value &&
-                  (!size || lx_execution_read(GLoaderState.execution, ARG(a, 3), value, size)) &&
+                  (!size || lx_execution_read(GProcessState.execution, ARG(a, 3), value, size)) &&
                   save_value(ARG(a, 0), ARG(a, 1), ARG(a, 2), value, size);
     free(value);
     return result;
@@ -383,7 +383,7 @@ static uint32 restore_bytes(uint8 *a)
         size = VALUE_LIMIT;
     uint8 *value = malloc(size ? size : 1);
     BOOL result = value && restore_value(ARG(a, 0), ARG(a, 1), ARG(a, 2), value, &size) &&
-                  lx_execution_write(GLoaderState.execution, output, value, size) &&
+                  lx_execution_write(GProcessState.execution, output, value, size) &&
                   pmwpStore32(size_address, size);
     free(value);
     return result;
@@ -429,7 +429,7 @@ static uint32 wpSaveState(uint8 *a)
     {
         uint32 address = pmwpObjectField(self, saved_strings[i].field);
         char *text = address
-                         ? lx_execution_copy_string(GLoaderState.execution, address, VALUE_LIMIT)
+                         ? lx_execution_copy_string(GProcessState.execution, address, VALUE_LIMIT)
                          : strdup("");
         result &= text && pmwpStoreSetValue(handle, "WPObject", saved_strings[i].key, text,
                                             (ULONG)strlen(text) + 1);
@@ -447,7 +447,7 @@ static void restore_icon(uint32 self)
                                  pmwpObjectField(self, PMWP_OBJ_ICON_RESOURCE));
     else if (format == 1)
     {
-        char *name = lx_execution_copy_string(GLoaderState.execution,
+        char *name = lx_execution_copy_string(GProcessState.execution,
                                               pmwpObjectField(self, PMWP_OBJ_ICON_FILE), 1024);
         pointer = name ? WinLoadFileIcon(name, FALSE) : 0;
         free(name);
@@ -584,8 +584,8 @@ static uint32 wpFreeMem(uint8 *a)
 static uint32 wpScanSetupString(uint8 *a)
 {
     uint32 output = ARG(a, 3), size_address = ARG(a, 4);
-    char *setup = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), SETUP_LIMIT);
-    char *key = lx_execution_copy_string(GLoaderState.execution, ARG(a, 2), CLASS_LIMIT);
+    char *setup = lx_execution_copy_string(GProcessState.execution, ARG(a, 1), SETUP_LIMIT);
+    char *key = lx_execution_copy_string(GProcessState.execution, ARG(a, 2), CLASS_LIMIT);
     char *value = malloc(SETUP_LIMIT);
     BOOL result = FALSE;
     if (setup && key && value && *setup && size_address &&
@@ -596,7 +596,7 @@ static uint32 wpScanSetupString(uint8 *a)
         if (!output)
             result = TRUE;
         else if (needed <= capacity)
-            result = lx_execution_write(GLoaderState.execution, output, value, needed);
+            result = lx_execution_write(GProcessState.execution, output, value, needed);
         pmwpStore32(size_address, needed);
     }
     free(setup);
@@ -655,7 +655,7 @@ static uint32 wpSetup(uint8 *a)
     uint32 self = ARG(a, 0);
     if (!ARG(a, 1))
         return TRUE;
-    char *setup = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), SETUP_LIMIT);
+    char *setup = lx_execution_copy_string(GProcessState.execution, ARG(a, 1), SETUP_LIMIT);
     if (!setup)
         return FALSE;
     BOOL result = TRUE;
@@ -759,8 +759,8 @@ static void persist_new_object(uint32 object, uint32 class_object, uint32 folder
     if (transient && pmwpInvokeClass(PMWP_SOMClass_somDescendedFrom, class_object, transient, 0, 0))
         return;
     uint32 name = pmwpInvokeClass(PMWP_SOMClass_somGetName, class_object, 0, 0, 0);
-    char *class_name = lx_execution_copy_string(GLoaderState.execution, name, CLASS_LIMIT);
-    char *title = lx_execution_copy_string(GLoaderState.execution,
+    char *class_name = lx_execution_copy_string(GProcessState.execution, name, CLASS_LIMIT);
+    char *title = lx_execution_copy_string(GProcessState.execution,
                                            pmwpObjectField(object, PMWP_OBJ_TITLE), TITLE_LIMIT);
     char location[1024] = "<WP_DESKTOP>";
     ULONG parent = folder ? pmwpObjectField(folder, PMWP_OBJ_HANDLE) : 0;
@@ -786,7 +786,7 @@ uint32 pmwpNewObject(uint32 class_object, uint32 title, uint32 setup, uint32 fol
         return 0;
     uint8 first = 0;
     if (title)
-        lx_execution_read(GLoaderState.execution, title, &first, 1);
+        lx_execution_read(GProcessState.execution, title, &first, 1);
     if (!first)
         title = pmwpInvoke(PMWP_M_WPOBJECT, PMWP_M_WPObject_wpclsQueryTitle, class_object, 0, 0, 0);
     pmwpInvoke(PMWP_M_WPOBJECT, PMWP_M_WPObject_wpclsIncUsage, class_object, 0, 0, 0);

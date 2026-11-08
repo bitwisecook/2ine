@@ -146,11 +146,11 @@ static void cleanupThreadPM(void)
     free(anchor->pres_spaces);
     free(anchor->windows);
     if (anchor->menu_bridge)
-        lx_execution_unmap(GLoaderState.execution, anchor->menu_bridge);
+        lx_execution_unmap(GProcessState.execution, anchor->menu_bridge);
     if (anchor->control_bridge)
-        lx_execution_unmap(GLoaderState.execution, anchor->control_bridge);
+        lx_execution_unmap(GProcessState.execution, anchor->control_bridge);
     if (anchor->frame_control_bridge)
-        lx_execution_unmap(GLoaderState.execution, anchor->frame_control_bridge);
+        lx_execution_unmap(GProcessState.execution, anchor->frame_control_bridge);
 
     WindowClass *winclassnext = NULL;
     for (WindowClass *i = anchor->registered_classes; i; i = winclassnext)

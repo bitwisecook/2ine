@@ -445,7 +445,7 @@ static void startup_presentation(const uint8 *startup, LxLaunchPresentation *pre
         presentation->cy = (int32_t)lx_guest_load_u32(startup + 28);
     }
     ULONG title = lx_guest_load_u32(startup + 12);
-    char *text = title ? lx_execution_copy_string(GLoaderState.execution, title, 65536) : NULL;
+    char *text = title ? lx_execution_copy_string(GProcessState.execution, title, 65536) : NULL;
     if (text)
         snprintf(presentation->title, sizeof presentation->title, "%s", text);
     free(text);
@@ -791,12 +791,12 @@ VOID ExitProcess(ULONG code)
     lx_host_monitor_lock(current.monitor);
     current.exit_code = code;
     lx_host_monitor_unlock(current.monitor);
-    GLoaderState.dosExit(1, code);
+    GProcessState.dosExit(1, code);
 }
 
 VOID FatalExit(ULONG code)
 {
-    GLoaderState.dosExit(1, code);
+    GProcessState.dosExit(1, code);
 }
 
 VOID FatalAppExit(ULONG action, PSZ message)
@@ -808,7 +808,7 @@ VOID FatalAppExit(ULONG action, PSZ message)
     /* A thread without a message queue cannot display the box. */
     if (!answer || answer == MESSAGE_BOX_ERROR)
         fprintf(stderr, "FATAL EXIT: %s\n", message ? message : "");
-    GLoaderState.dosExit(1, action);
+    GProcessState.dosExit(1, action);
 }
 
 /* The session is the ball: this worker, the children it started, and every other

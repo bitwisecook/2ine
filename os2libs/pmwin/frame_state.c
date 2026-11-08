@@ -299,9 +299,10 @@ void formatFrame(Window *window)
     LxGuestMapping *mapping = NULL;
     unsigned char *storage;
     uintptr_t address;
-    if (TWOINE_PORTABLE_LOADER && GLoaderState.execution)
+    if (TWOINE_PORTABLE_LOADER && GProcessState.execution)
     {
-        mapping = lx_execution_map(GLoaderState.execution, 0, (bytes + 4095) & ~(size_t)4095, 3, 0);
+        mapping =
+            lx_execution_map(GProcessState.execution, 0, (bytes + 4095) & ~(size_t)4095, 3, 0);
         storage = mapping ? lx_execution_mapping_host(mapping) : NULL;
         address = mapping ? lx_execution_mapping_address(mapping) : 0;
     }
@@ -329,7 +330,7 @@ void formatFrame(Window *window)
             }
     }
     if (mapping)
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
     else
         free(storage);
     if (getWindowFromHWND(anchor, handle) == window)
@@ -532,17 +533,17 @@ BOOL WinCreateFrameControls(HWND handle, PFRAMECDATA data, PSZ title)
     {
         /* FRAMECDATA is shared with USE16 resources and carries only a USHORT.
            Expand that alias before querying this process's module registry. */
-        for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+        for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
             if (!module->load_failed && (USHORT)module->handle == resources &&
                 lx_handle_borrow(module->handle, LX_HANDLE_MODULE, &resource_lease))
             {
                 resources = module->handle;
                 break;
             }
-        if (!resource_lease.resource && GLoaderState.main_module &&
-            (USHORT)GLoaderState.main_module->handle == resources &&
-            lx_handle_borrow(GLoaderState.main_module->handle, LX_HANDLE_MODULE, &resource_lease))
-            resources = GLoaderState.main_module->handle;
+        if (!resource_lease.resource && GProcessState.main_module &&
+            (USHORT)GProcessState.main_module->handle == resources &&
+            lx_handle_borrow(GProcessState.main_module->handle, LX_HANDLE_MODULE, &resource_lease))
+            resources = GProcessState.main_module->handle;
     }
     if ((data->flCreateFlags & FRAME_MENU) && !WinWindowFromID(handle, FID_MENU) &&
         !WinLoadMenu(handle, resources, data->idResources))

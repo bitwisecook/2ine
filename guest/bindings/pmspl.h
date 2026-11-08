@@ -11,8 +11,8 @@ static uint32 spl_queue_bridge(uint8 *a, BOOL query)
                           lx_guest_load_u32(a + (query ? 20 : 24))};
     if (capacity > 16 * 1024 * 1024 || (!query && lx_guest_load_u32(a + 28)))
         return 87;
-    char *host = computer ? lx_execution_copy_string(GLoaderState.execution, computer, 256) : NULL,
-         *name = queue ? lx_execution_copy_string(GLoaderState.execution, queue, 256) : NULL;
+    char *host = computer ? lx_execution_copy_string(GProcessState.execution, computer, 256) : NULL,
+         *name = queue ? lx_execution_copy_string(GProcessState.execution, queue, 256) : NULL;
     if ((computer && !host) || (query && (!name || !*name)) || (host && *host))
     {
         free(host);
@@ -21,11 +21,11 @@ static uint32 spl_queue_bridge(uint8 *a, BOOL query)
     }
     LxGuestBorrow buffer = {0}, counts[3] = {{0}};
     ULONG result = 87, returned = 0, total = 0, needed = 0;
-    BOOL valid = !capacity || lx_execution_borrow(GLoaderState.execution, address, capacity,
+    BOOL valid = !capacity || lx_execution_borrow(GProcessState.execution, address, capacity,
                                                   LX_GUEST_WRITE, &buffer);
     for (unsigned i = query ? 2 : 0; valid && i < 3; i++)
-        valid =
-            lx_execution_borrow(GLoaderState.execution, counters[i], 4, LX_GUEST_WRITE, &counts[i]);
+        valid = lx_execution_borrow(GProcessState.execution, counters[i], 4, LX_GUEST_WRITE,
+                                    &counts[i]);
     if (valid)
     {
         result = lx_spl_catalogue(name, level, buffer.host, capacity, address, &returned, &total,
@@ -64,14 +64,14 @@ static uint32 bridge32_SplQueryDevice(uint8 *a)
            capacity = lx_guest_load_u32(a + 16), address = lx_guest_load_u32(a + 12);
     if (capacity > 16 * 1024 * 1024)
         return 87;
-    char *host = computer ? lx_execution_copy_string(GLoaderState.execution, computer, 256) : NULL,
-         *name = device ? lx_execution_copy_string(GLoaderState.execution, device, 256) : NULL;
+    char *host = computer ? lx_execution_copy_string(GProcessState.execution, computer, 256) : NULL,
+         *name = device ? lx_execution_copy_string(GProcessState.execution, device, 256) : NULL;
     LxGuestBorrow buffer = {0}, count = {0};
     ULONG result = 87, needed = 0;
     if ((!computer || (host && !*host)) && name && *name &&
-        (!capacity ||
-         lx_execution_borrow(GLoaderState.execution, address, capacity, LX_GUEST_WRITE, &buffer)) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20), 4, LX_GUEST_WRITE,
+        (!capacity || lx_execution_borrow(GProcessState.execution, address, capacity,
+                                          LX_GUEST_WRITE, &buffer)) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 20), 4, LX_GUEST_WRITE,
                             &count))
     {
         result =
@@ -92,14 +92,14 @@ static uint32 bridge32_SplEnumPrinter(uint8 *a)
           capacity = lx_guest_load_u32(a + 16);
     if (capacity > 16 * 1024 * 1024 || lx_guest_load_u32(a + 32))
         return 87;
-    char *name = computer ? lx_execution_copy_string(GLoaderState.execution, computer, 256) : NULL;
+    char *name = computer ? lx_execution_copy_string(GProcessState.execution, computer, 256) : NULL;
     LxGuestBorrow buffer = {0}, counts[3] = {{0}};
     ULONG result = 87, returned = 0, total = 0, needed = 0;
     BOOL valid = (!computer || (name && !*name)) &&
-                 (!capacity || lx_execution_borrow(GLoaderState.execution, address, capacity,
+                 (!capacity || lx_execution_borrow(GProcessState.execution, address, capacity,
                                                    LX_GUEST_WRITE, &buffer));
     for (unsigned i = 0; valid && i < 3; i++)
-        valid = lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20 + i * 4), 4,
+        valid = lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 20 + i * 4), 4,
                                     LX_GUEST_WRITE, &counts[i]);
     if (valid)
     {

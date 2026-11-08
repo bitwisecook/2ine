@@ -17,7 +17,7 @@
         }                                                                                          \
     } while (0)
 extern LONG OS2API GetMenuCheckMarkDimensions(void);
-LxLoaderState GLoaderState;
+LxProcessState GProcessState;
 static ULONG presentation = 1, current;
 static unsigned made, deleted;
 static BOOL load_result = TRUE, query_result = TRUE;

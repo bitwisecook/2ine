@@ -106,10 +106,10 @@ static uint32 bridge32_Os2SslVerifyResult(uint8 *a)
 static uint32 bridge32_Os2SslContextTrust(uint8 *a)
 {
     char *file = ssl_word(a, 1)
-                     ? lx_execution_copy_string(GLoaderState.execution, ssl_word(a, 1), 4096)
+                     ? lx_execution_copy_string(GProcessState.execution, ssl_word(a, 1), 4096)
                      : NULL;
     char *path = ssl_word(a, 2)
-                     ? lx_execution_copy_string(GLoaderState.execution, ssl_word(a, 2), 4096)
+                     ? lx_execution_copy_string(GProcessState.execution, ssl_word(a, 2), 4096)
                      : NULL;
     uint32 result = ((!ssl_word(a, 1) || file) && (!ssl_word(a, 2) || path))
                         ? Os2SslContextTrust(ssl_word(a, 0), file, path)
@@ -121,7 +121,7 @@ static uint32 bridge32_Os2SslContextTrust(uint8 *a)
 
 static uint32 bridge32_Os2SslContextCiphers(uint8 *a)
 {
-    char *text = lx_execution_copy_string(GLoaderState.execution, ssl_word(a, 1), 4096);
+    char *text = lx_execution_copy_string(GProcessState.execution, ssl_word(a, 1), 4096);
     uint32 result = text ? Os2SslContextCiphers(ssl_word(a, 0), text) : 0;
     free(text);
     return result;
@@ -132,7 +132,7 @@ static uint32 bridge32_Os2SslCtrl(uint8 *a)
     /* Only the hostname control accepts guest memory; other controls fail closed. */
     if (ssl_word(a, 1) != 55 || ssl_word(a, 2) != 0)
         return 0;
-    char *text = lx_execution_copy_string(GLoaderState.execution, ssl_word(a, 3), 256);
+    char *text = lx_execution_copy_string(GProcessState.execution, ssl_word(a, 3), 256);
     uint32 result = text ? Os2SslCtrl(ssl_word(a, 0), 55, 0, text) : 0;
     free(text);
     return result;
@@ -143,7 +143,7 @@ static uint32 ssl_transfer(uint8 *a, int writing)
     uint32 length = ssl_word(a, 2), result = (uint32)-1;
     LxGuestBorrow buffer = {0};
     if (length <= INT32_MAX &&
-        lx_execution_borrow(GLoaderState.execution, ssl_word(a, 1), length,
+        lx_execution_borrow(GProcessState.execution, ssl_word(a, 1), length,
                             writing ? LX_GUEST_READ : LX_GUEST_WRITE, &buffer))
         result = writing ? Os2SslWrite(ssl_word(a, 0), buffer.host, length)
                          : Os2SslRead(ssl_word(a, 0), buffer.host, length);
@@ -169,7 +169,7 @@ static uint32 bridge32_Os2SslVersion(uint8 *a)
         return 0;
     if (!storage)
         storage =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!storage)
         return 0;
     memcpy(lx_execution_mapping_host(storage), text, strlen(text) + 1);

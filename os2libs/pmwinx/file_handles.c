@@ -173,7 +173,7 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
         return UINT32_MAX;
     }
     uint32 error = 0;
-    char *path = GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(name, &error) : NULL;
+    char *path = GProcessState.makeUnixPath ? GProcessState.makeUnixPath(name, &error) : NULL;
     if (!path)
     {
         open32SetError(error ? error : 3);

@@ -6,8 +6,8 @@
 
 static HMODULE resource_module(HMODULE module)
 {
-    return (!module || module == UINT32_MAX) && GLoaderState.main_module
-               ? GLoaderState.main_module->handle
+    return (!module || module == UINT32_MAX) && GProcessState.main_module
+               ? GProcessState.main_module->handle
                : module;
 }
 
@@ -24,8 +24,8 @@ ULONG FindResource(HMODULE module, PSZ name, PSZ type)
     if (kind <= 255)
         kind = kind < sizeof types / sizeof *types ? types[kind] : 0;
     ULONG size;
-    if (!kind || !GLoaderState.queryResourceSize ||
-        GLoaderState.queryResourceSize(resource_module(module), kind, identity, &size))
+    if (!kind || !GProcessState.queryResourceSize ||
+        GProcessState.queryResourceSize(resource_module(module), kind, identity, &size))
     {
         open32SetError(1814);
         return 0;
@@ -36,9 +36,9 @@ ULONG FindResource(HMODULE module, PSZ name, PSZ type)
 ULONG SizeofResource(HMODULE module, ULONG resource)
 {
     ULONG size;
-    if (!resource || !GLoaderState.queryResourceSize ||
-        GLoaderState.queryResourceSize(resource_module(module), resource >> 16, resource & 0xFFFF,
-                                       &size))
+    if (!resource || !GProcessState.queryResourceSize ||
+        GProcessState.queryResourceSize(resource_module(module), resource >> 16, resource & 0xFFFF,
+                                        &size))
     {
         open32SetError(1814);
         return 0;
@@ -72,10 +72,10 @@ ULONG LoadResource(HMODULE module, ULONG resource)
 {
     void *data;
     uint32 address;
-    if (!resource || !GLoaderState.getResource ||
-        GLoaderState.getResource(resource_module(module), resource >> 16, resource & 0xFFFF,
-                                 &data) ||
-        !lx_execution_address(GLoaderState.execution, data, 1, LX_GUEST_READ, &address))
+    if (!resource || !GProcessState.getResource ||
+        GProcessState.getResource(resource_module(module), resource >> 16, resource & 0xFFFF,
+                                  &data) ||
+        !lx_execution_address(GProcessState.execution, data, 1, LX_GUEST_READ, &address))
     {
         open32SetError(1814);
         return 0;
@@ -85,7 +85,7 @@ ULONG LoadResource(HMODULE module, ULONG resource)
 
 ULONG LockResource(ULONG resource)
 {
-    if (!lx_execution_memory(GLoaderState.execution, resource, 1, LX_GUEST_READ))
+    if (!lx_execution_memory(GProcessState.execution, resource, 1, LX_GUEST_READ))
     {
         open32SetError(6);
         return 0;

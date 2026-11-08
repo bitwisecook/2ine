@@ -9,7 +9,7 @@ static uint32 bridge16to32_VioGetAnsi(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, enabled_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, enabled_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
     enabled = (PUSHORT) __abi_args[0].host;
     __abi_result = VioGetAnsi(enabled, hvio);
     __abi_copy = 1;
@@ -29,7 +29,7 @@ static uint32 bridge16to32_VioScrollUp(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pCell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pCell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     pCell = (PBYTE) __abi_args[0].host;
     __abi_result = VioScrollUp(usTopRow, usLeftCol, usBotRow, usRightCol, cbLines, pCell, hvio);
     __abi_copy = 1;
@@ -45,9 +45,9 @@ static uint32 bridge16to32_VioGetCurPos(uint8 *args) {
     LxGuestArgument __abi_args[2] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pusRow_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pusRow_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
     pusRow = (PUSHORT) __abi_args[0].host;
-    if (!lx_guest_argument_far(GLoaderState.execution, pusColumn_guest, 2, 3, 0, 0, &__abi_args[1])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pusColumn_guest, 2, 3, 0, 0, &__abi_args[1])) goto __abi_done;
     pusColumn = (PUSHORT) __abi_args[1].host;
     __abi_result = VioGetCurPos(pusRow, pusColumn, hvio);
     __abi_copy = 1;
@@ -66,7 +66,7 @@ static uint32 bridge16to32_VioWrtCellStr(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pchCellStr_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pchCellStr_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     pchCellStr = (PCH) __abi_args[0].host;
     __abi_result = VioWrtCellStr(pchCellStr, cb, usRow, usColumn, hvio);
     __abi_copy = 1;
@@ -89,7 +89,7 @@ static uint32 bridge16to32_VioWrtTty(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pch_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     pch = (PCH) __abi_args[0].host;
     __abi_result = VioWrtTty(pch, cb, hvio);
     __abi_copy = 1;
@@ -106,12 +106,12 @@ static uint32 bridge16to32_VioGetMode(uint8 *args) {
     int __abi_copy = 0;
     {
         LxGuestArgument __abi_prefix = {0};
-        if (!lx_guest_argument_far(GLoaderState.execution, pvioModeInfo_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
         size_t __abi_size = lx_guest_load_u16(__abi_prefix.host);
         lx_guest_argument_finish(&__abi_prefix, 0);
         if (__abi_size < 2) __abi_size = 2;
         if (__abi_size > (34)) __abi_size = (34);
-        if (!lx_guest_argument_far(GLoaderState.execution, pvioModeInfo_guest, __abi_size, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, __abi_size, 3, 0, 0, &__abi_args[0])) goto __abi_done;
     }
     pvioModeInfo = (PVIOMODEINFO) __abi_args[0].host;
     __abi_result = VioGetMode(pvioModeInfo, hvio);
@@ -129,12 +129,12 @@ static uint32 bridge16to32_VioSetMode(uint8 *args) {
     int __abi_copy = 0;
     {
         LxGuestArgument __abi_prefix = {0};
-        if (!lx_guest_argument_far(GLoaderState.execution, pvioModeInfo_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
         size_t __abi_size = lx_guest_load_u16(__abi_prefix.host);
         lx_guest_argument_finish(&__abi_prefix, 0);
         if (__abi_size < 2) __abi_size = 2;
         if (__abi_size > (12)) __abi_size = (12);
-        if (!lx_guest_argument_far(GLoaderState.execution, pvioModeInfo_guest, __abi_size, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, __abi_size, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     }
     pvioModeInfo = (PVIOMODEINFO) __abi_args[0].host;
     __abi_result = VioSetMode(pvioModeInfo, hvio);
@@ -153,9 +153,9 @@ static uint32 bridge16to32_VioReadCellStr(uint8 *args) {
     LxGuestArgument __abi_args[2] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pcb_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pcb_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
     pcb = (PUSHORT) __abi_args[0].host;
-    if (!lx_guest_argument_far(GLoaderState.execution, pchCellStr_guest, pcb ? lx_guest_load_u16(pcb) : 0, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pchCellStr_guest, pcb ? lx_guest_load_u16(pcb) : 0, 2, 0, 0, &__abi_args[1])) goto __abi_done;
     pchCellStr = (PCH) __abi_args[1].host;
     __abi_result = VioReadCellStr(pchCellStr, pcb, usRow, usColumn, hvio);
     __abi_copy = 1;
@@ -171,7 +171,7 @@ static uint32 bridge16to32_VioGetCurType(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pvioCursorInfo_guest, 8, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pvioCursorInfo_guest, 8, 2, 0, 0, &__abi_args[0])) goto __abi_done;
     pvioCursorInfo = (PVIOCURSORINFO) __abi_args[0].host;
     __abi_result = VioGetCurType(pvioCursorInfo, hvio);
     __abi_copy = 1;
@@ -189,9 +189,9 @@ static uint32 bridge16to32_VioReadCharStr(uint8 *args) {
     LxGuestArgument __abi_args[2] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pcb_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pcb_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
     pcb = (PUSHORT) __abi_args[0].host;
-    if (!lx_guest_argument_far(GLoaderState.execution, pch_guest, lx_guest_load_u16(pcb), 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, lx_guest_load_u16(pcb), 2, 0, 0, &__abi_args[1])) goto __abi_done;
     pch = (PCH) __abi_args[1].host;
     __abi_result = VioReadCharStr(pch, pcb, row, column, hvio);
     __abi_copy = 1;
@@ -216,7 +216,7 @@ static uint32 bridge16to32_VioSetCurType(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pvioCursorInfo_guest, 8, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pvioCursorInfo_guest, 8, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     pvioCursorInfo = (PVIOCURSORINFO) __abi_args[0].host;
     __abi_result = VioSetCurType(pvioCursorInfo, hvio);
     __abi_copy = 1;
@@ -232,7 +232,7 @@ static uint32 bridge16to32_VioGetCp(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
     codepage = (PUSHORT) __abi_args[0].host;
     __abi_result = VioGetCp(reserved, codepage, hvio);
     __abi_copy = 1;
@@ -257,12 +257,12 @@ static uint32 bridge16to32_VioGetConfig(uint8 *args) {
     int __abi_copy = 0;
     {
         LxGuestArgument __abi_prefix = {0};
-        if (!lx_guest_argument_far(GLoaderState.execution, info_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
+        if (!lx_guest_argument_far(GProcessState.execution, info_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
         size_t __abi_size = lx_guest_load_u16(__abi_prefix.host);
         lx_guest_argument_finish(&__abi_prefix, 0);
         if (__abi_size < 2) __abi_size = 2;
         if (__abi_size > (32)) __abi_size = (32);
-        if (!lx_guest_argument_far(GLoaderState.execution, info_guest, __abi_size, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+        if (!lx_guest_argument_far(GProcessState.execution, info_guest, __abi_size, 3, 0, 0, &__abi_args[0])) goto __abi_done;
     }
     info = (PVIOCONFIGINFO) __abi_args[0].host;
     __abi_result = VioGetConfig(config, info, hvio);
@@ -283,7 +283,7 @@ static uint32 bridge16to32_VioScrollDn(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, cell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, cell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     cell = (PBYTE) __abi_args[0].host;
     __abi_result = VioScrollDn(top, left, bottom, right, lines, cell, hvio);
     __abi_copy = 1;
@@ -302,9 +302,9 @@ static uint32 bridge16to32_VioWrtCharStrAtt(uint8 *args) {
     LxGuestArgument __abi_args[2] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pch_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     pch = (PCH) __abi_args[0].host;
-    if (!lx_guest_argument_far(GLoaderState.execution, pAttr_guest, 1, 1, 0, 0, &__abi_args[1])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pAttr_guest, 1, 1, 0, 0, &__abi_args[1])) goto __abi_done;
     pAttr = (PBYTE) __abi_args[1].host;
     __abi_result = VioWrtCharStrAtt(pch, cb, usRow, usColumn, pAttr, hvio);
     __abi_copy = 1;
@@ -323,7 +323,7 @@ static uint32 bridge16to32_VioWrtNCell(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pCell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pCell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     pCell = (PBYTE) __abi_args[0].host;
     __abi_result = VioWrtNCell(pCell, cb, usRow, usColumn, hvio);
     __abi_copy = 1;

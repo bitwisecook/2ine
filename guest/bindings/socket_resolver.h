@@ -4,7 +4,7 @@ static uint32 socket_guest_error(int value)
     static LX_HOST_THREAD_LOCAL LxGuestMapping *storage;
     if (!storage)
         storage =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!storage)
         return 0;
     lx_guest_store_u32(lx_execution_mapping_host(storage), value);
@@ -23,7 +23,7 @@ static uint32 socket_guest_host(const LxHostSocketHost *host)
     if (!host || host->length != 4 || host->family != 2)
         return 0;
     if (!storage)
-        storage = lx_execution_map(GLoaderState.execution, 0, RESOLVER_STORAGE_SIZE,
+        storage = lx_execution_map(GProcessState.execution, 0, RESOLVER_STORAGE_SIZE,
                                    LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!storage)
         return 0;
@@ -74,7 +74,7 @@ static uint32 socket_guest_text(const char *text)
         return 0;
     if (!storage)
         storage =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!storage)
         return 0;
     memcpy(lx_execution_mapping_host(storage), text, strlen(text) + 1);
@@ -99,7 +99,7 @@ static uint32 socket_guest_database(const char *name, char **aliases, int number
         return 0;
     if (!storage)
         storage =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!storage)
         return 0;
     uint8 *out = lx_execution_mapping_host(storage);

@@ -5,7 +5,7 @@
 
 static void *semaphore_service(const char *name)
 {
-    for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+    for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
         if (module->nativelib && !strcasecmp(module->name, "DOSCALLS"))
             return lx_host_library_symbol(module->nativelib, name);
     return NULL;

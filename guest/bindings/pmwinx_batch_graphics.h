@@ -30,7 +30,7 @@ static BOOL o32_graphics_buffer(ULONG address, uint64 size, unsigned mode, BOOL 
         out->host = out->copy;
         return out->host != NULL;
     }
-    if (!lx_execution_borrow(GLoaderState.execution, address, (size_t)size, mode, &out->lease))
+    if (!lx_execution_borrow(GProcessState.execution, address, (size_t)size, mode, &out->lease))
     {
         open32SetError(87);
         return FALSE;
@@ -117,7 +117,7 @@ static uint32 bridge32_CopyMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
     ULONG a1 = lx_guest_load_u32(a + 4);
-    char *s1 = a1 ? lx_execution_copy_string(GLoaderState.execution, a1, 4096) : NULL;
+    char *s1 = a1 ? lx_execution_copy_string(GProcessState.execution, a1, 4096) : NULL;
     uint32 result = 0;
     BOOL valid = TRUE;
     if (a1 && !s1)
@@ -186,7 +186,7 @@ static uint32 bridge32_CreateHatchBrush(uint8 *a)
 static uint32 bridge32_CreateMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
-    char *s0 = a0 ? lx_execution_copy_string(GLoaderState.execution, a0, 4096) : NULL;
+    char *s0 = a0 ? lx_execution_copy_string(GProcessState.execution, a0, 4096) : NULL;
     uint32 result = 0;
     BOOL valid = TRUE;
     if (a0 && !s0)
@@ -320,7 +320,7 @@ static uint32 bridge32_EnumFonts(uint8 *a)
     ULONG a1 = lx_guest_load_u32(a + 4);
     ULONG a2 = lx_guest_load_u32(a + 8);
     ULONG a3 = lx_guest_load_u32(a + 12);
-    char *s1 = a1 ? lx_execution_copy_string(GLoaderState.execution, a1, 4096) : NULL;
+    char *s1 = a1 ? lx_execution_copy_string(GProcessState.execution, a1, 4096) : NULL;
     uint32 result = 0;
     BOOL valid = TRUE;
     if (a1 && !s1)
@@ -509,7 +509,7 @@ static uint32 bridge32_GetCurrentPositionEx(uint8 *a)
 static uint32 bridge32_GetEnhMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
-    char *s0 = a0 ? lx_execution_copy_string(GLoaderState.execution, a0, 4096) : NULL;
+    char *s0 = a0 ? lx_execution_copy_string(GProcessState.execution, a0, 4096) : NULL;
     uint32 result = 0;
     BOOL valid = TRUE;
     if (a0 && !s0)
@@ -574,7 +574,7 @@ static uint32 bridge32_GetKerningPairs(uint8 *a)
 static uint32 bridge32_GetMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
-    char *s0 = a0 ? lx_execution_copy_string(GLoaderState.execution, a0, 4096) : NULL;
+    char *s0 = a0 ? lx_execution_copy_string(GProcessState.execution, a0, 4096) : NULL;
     uint32 result = 0;
     BOOL valid = TRUE;
     if (a0 && !s0)
@@ -1208,7 +1208,7 @@ static uint32 bridge32_TabbedTextOut(uint8 *a)
     if (count == UINT32_MAX)
     {
         char *copy =
-            address ? lx_execution_copy_string(GLoaderState.execution, address, 65537) : NULL;
+            address ? lx_execution_copy_string(GProcessState.execution, address, 65537) : NULL;
         count = copy ? (ULONG)strlen(copy) : UINT32_MAX;
         free(copy);
     }
@@ -1252,7 +1252,7 @@ static uint32 bridge32_HPSToHDC(uint8 *a)
     ULONG a1 = lx_guest_load_u32(a + 4);
     ULONG a2 = lx_guest_load_u32(a + 8);
     ULONG a3 = lx_guest_load_u32(a + 12);
-    char *s2 = a2 ? lx_execution_copy_string(GLoaderState.execution, a2, 4096) : NULL;
+    char *s2 = a2 ? lx_execution_copy_string(GProcessState.execution, a2, 4096) : NULL;
     O32GraphicsBuffer p3 = {0};
     uint32 result = 0;
     BOOL valid = TRUE;
@@ -1344,7 +1344,7 @@ static BOOL o32_graphics_dib(ULONG address, ULONG start, ULONG count, ULONG usag
 {
     uint8 header[40];
     size_t info_bytes = 0, expected_pixels = 0;
-    if (!lx_execution_read(GLoaderState.execution, address, header, sizeof header))
+    if (!lx_execution_read(GProcessState.execution, address, header, sizeof header))
     {
         open32SetError(87);
         return FALSE;
@@ -1496,7 +1496,7 @@ static uint32 bridge32_PlayEnhMetaFileRecord(uint8 *a)
     ULONG address = lx_guest_load_u32(a + 8), count = lx_guest_load_u32(a + 12), size = 0,
           result = 0;
     O32GraphicsBuffer record = {0}, table = {0};
-    if (lx_execution_read(GLoaderState.execution, address, header, sizeof header))
+    if (lx_execution_read(GProcessState.execution, address, header, sizeof header))
         size = lx_guest_load_u32(header + 4);
     if (size < 8 || (size & 3) || count > 65535)
         open32SetError(87);
@@ -1553,8 +1553,8 @@ static uint32 bridge32_DeviceCapabilities(uint8 *a)
     ULONG device = lx_guest_load_u32(a), port = lx_guest_load_u32(a + 4),
           capability = lx_guest_load_u32(a + 8) & 65535;
     char *device_name =
-             device ? lx_execution_copy_string(GLoaderState.execution, device, 4096) : NULL,
-         *port_name = port ? lx_execution_copy_string(GLoaderState.execution, port, 4096) : NULL;
+             device ? lx_execution_copy_string(GProcessState.execution, device, 4096) : NULL,
+         *port_name = port ? lx_execution_copy_string(GProcessState.execution, port, 4096) : NULL;
     O32GraphicsBuffer output = {0};
     ULONG result = UINT32_MAX;
     size_t size = capability == 2    ? 6

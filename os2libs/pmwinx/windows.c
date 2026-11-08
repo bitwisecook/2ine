@@ -70,7 +70,7 @@ static void update_cursor(Open32Window *w, HWND handle)
 
 ULONG open32WindowCallback(Open32Window *w, ULONG message, ULONG first, ULONG second)
 {
-    return lx_execution_callback32_4(GLoaderState.execution, w->procedure, w->handle, message,
+    return lx_execution_callback32_4(GProcessState.execution, w->procedure, w->handle, message,
                                      first, second);
 }
 
@@ -226,17 +226,17 @@ static PFNWP pm_window_procedure(BOOL frame)
     LxGuestMapping **slot = frame ? &pm_frame_mapping : &pm_procedure_mapping;
     if (!*slot)
     {
-        LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+        LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
         const LxExecutionApi32 api = {frame ? pm_frame_bridge : pm_window_bridge, 16, 0,
                                       LX_ABI_STACK32};
         if (!mapping)
             return NULL;
-        if (!lx_execution_emit_bridge32(GLoaderState.execution, lx_execution_mapping_host(mapping),
+        if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
                                         4096, &api) ||
-            !lx_execution_protect(GLoaderState.execution, mapping,
+            !lx_execution_protect(GProcessState.execution, mapping,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
-            lx_execution_unmap(GLoaderState.execution, mapping);
+            lx_execution_unmap(GProcessState.execution, mapping);
             return NULL;
         }
         *slot = mapping;
@@ -250,7 +250,7 @@ static void discard_window(Open32Window *w)
     open32TimersWindowDestroyed(w->handle);
     open32ClipboardWindowDestroyed(w->handle);
     if (w->creation)
-        lx_execution_unmap(GLoaderState.execution, w->creation);
+        lx_execution_unmap(GProcessState.execution, w->creation);
     open32ClassRelease(w->class);
     free(w->extra);
     free(w->title);
@@ -265,7 +265,7 @@ static void superclass_control(ULONG control, Open32Class *class, PSZ title, ULO
     open32SetNativeClassName(control, class->name);
     open32NativeWindowLong(control, -4, (LONG)class->procedure, TRUE);
     size_t title_bytes = strlen(title ? title : "") + 1;
-    LxGuestMapping *creation = lx_execution_map(GLoaderState.execution, 0,
+    LxGuestMapping *creation = lx_execution_map(GProcessState.execution, 0,
                                                 (title_bytes + 48 + 4095) & ~(size_t)4095, 3, 0);
     if (!creation)
         return;
@@ -288,7 +288,7 @@ static void superclass_control(ULONG control, Open32Class *class, PSZ title, ULO
     memcpy(record + 48, title ? title : "", title_bytes);
     SendMessage(control, 0x81, 0, address);
     SendMessage(control, 1, 0, address);
-    lx_execution_unmap(GLoaderState.execution, creation);
+    lx_execution_unmap(GProcessState.execution, creation);
 }
 
 ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG style, LONG x, LONG y,
@@ -369,7 +369,7 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
         open32SetError(87);
         return 0;
     }
-    w->creation = lx_execution_map(GLoaderState.execution, 0,
+    w->creation = lx_execution_map(GProcessState.execution, 0,
                                    (title_bytes + 48 + 4095) & ~(size_t)4095, 3, 0);
     if (!w->title || !w->creation || (class->window_extra && !w->extra))
     {
@@ -458,7 +458,7 @@ ULONG CreateWindowEx(ULONG extended_style, PSZ class_name, PSZ title, ULONG styl
                         NULL, NULL);
     creating = previous;
     w->creating_previous = NULL;
-    lx_execution_unmap(GLoaderState.execution, w->creation);
+    lx_execution_unmap(GProcessState.execution, w->creation);
     w->creation = NULL;
     if (!handle)
     {
@@ -550,7 +550,7 @@ LONG DefWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
     {
         Open32Window *w = open32FindWindow(handle);
         char *text =
-            second ? lx_execution_copy_string(GLoaderState.execution, second, 65536) : strdup("");
+            second ? lx_execution_copy_string(GProcessState.execution, second, 65536) : strdup("");
         if (!w || !text)
         {
             free(text);
@@ -582,7 +582,7 @@ LONG DefWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
         if (length >= first)
             length = first - 1;
         LxGuestBorrow output = {0};
-        if (!lx_execution_borrow(GLoaderState.execution, second, length + 1, LX_GUEST_WRITE,
+        if (!lx_execution_borrow(GProcessState.execution, second, length + 1, LX_GUEST_WRITE,
                                  &output))
         {
             open32SetError(87);
@@ -898,12 +898,12 @@ void open32WindowsCleanup(void)
     }
     if (pm_frame_mapping)
     {
-        lx_execution_unmap(GLoaderState.execution, pm_frame_mapping);
+        lx_execution_unmap(GProcessState.execution, pm_frame_mapping);
         pm_frame_mapping = NULL;
     }
     if (pm_procedure_mapping)
     {
-        lx_execution_unmap(GLoaderState.execution, pm_procedure_mapping);
+        lx_execution_unmap(GProcessState.execution, pm_procedure_mapping);
         pm_procedure_mapping = NULL;
     }
 }
@@ -934,7 +934,7 @@ LONG CallWindowProc(ULONG procedure, ULONG handle, ULONG message, ULONG first, U
         open32SetError(87);
         return 0;
     }
-    return (LONG)lx_execution_callback32_4(GLoaderState.execution, procedure, handle, message,
+    return (LONG)lx_execution_callback32_4(GProcessState.execution, procedure, handle, message,
                                            first, second);
 }
 
@@ -953,7 +953,7 @@ BOOL SetWindowText(ULONG handle, PSZ text)
         return FALSE;
     }
     LxGuestMapping *mapping =
-        lx_execution_map(GLoaderState.execution, 0, (size + 4095) & ~(size_t)4095, 3, 0);
+        lx_execution_map(GProcessState.execution, 0, (size + 4095) & ~(size_t)4095, 3, 0);
     if (!mapping)
     {
         open32SetError(8);
@@ -963,7 +963,7 @@ BOOL SetWindowText(ULONG handle, PSZ text)
     ULONG address = lx_execution_mapping_address(mapping);
     BOOL result = window ? open32WindowCallback(window, 12, 0, address) != 0
                          : open32NativeControlMessage(handle, 12, 0, address, FALSE) != 0;
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
     return result;
 }
 
@@ -986,7 +986,7 @@ LONG GetWindowText(ULONG handle, PCHAR output, LONG capacity)
     if (!window && !native && output && capacity > 0)
     {
         uint32 foreign;
-        if (lx_execution_address(GLoaderState.execution, output, (uint32)capacity, LX_GUEST_WRITE,
+        if (lx_execution_address(GProcessState.execution, output, (uint32)capacity, LX_GUEST_WRITE,
                                  &foreign))
         {
             ForeignSend send = {handle, 13, (ULONG)capacity, foreign};
@@ -1001,7 +1001,7 @@ LONG GetWindowText(ULONG handle, PCHAR output, LONG capacity)
         return 0;
     }
     uint32 address;
-    if (!lx_execution_address(GLoaderState.execution, output, (uint32)capacity, LX_GUEST_WRITE,
+    if (!lx_execution_address(GProcessState.execution, output, (uint32)capacity, LX_GUEST_WRITE,
                               &address))
     {
         open32SetError(87);

@@ -38,10 +38,10 @@ static void profile_names(void)
     char *saved[26];
     for (unsigned i = 0; i < 26; i++)
     {
-        saved[i] = GLoaderState.disks[i];
-        GLoaderState.disks[i] = NULL;
+        saved[i] = GProcessState.disks[i];
+        GProcessState.disks[i] = NULL;
     }
-    GLoaderState.disks[2] = "/";
+    GProcessState.disks[2] = "/";
     CHECK(!PrfQueryProfile(0, NULL));
     PRFPROFILE query = {0};
     CHECK(!PrfQueryProfile(0, &query));
@@ -61,7 +61,7 @@ static void profile_names(void)
     CHECK(!strncmp(user, "C:\\", 3) && !strncmp(system, "C:\\", 3));
     CHECK((unsigned char)user[user_size] == 0xa5 && (unsigned char)system[system_size] == 0xa5);
     for (unsigned i = 0; i < 26; i++)
-        GLoaderState.disks[i] = saved[i];
+        GProcessState.disks[i] = saved[i];
 }
 
 static void national_defaults(void)
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
     CHECK(argc == 3);
     HAB anchor = WinInitialize(0);
     CHECK(anchor);
-    GLoaderState.makeUnixPath = host_path;
+    GProcessState.makeUnixPath = host_path;
     national_defaults();
     int writing = !strcmp(argv[1], "write");
     ULONG desktop = WinQueryObject("<WP_DESKTOP>");
@@ -354,10 +354,10 @@ int main(int argc, char **argv)
     LxHostThread *thread = lx_host_thread_create(error_thread, NULL, NULL);
     CHECK(thread && lx_host_thread_join(thread, NULL) == 0);
     CHECK(GetLastError() == 99);
-    char *command = GLoaderState.pib.pib_pchcmd;
-    GLoaderState.pib.pib_pchcmd = "program.exe\0alpha beta\0";
+    char *command = GProcessState.pib.pib_pchcmd;
+    GProcessState.pib.pib_pchcmd = "program.exe\0alpha beta\0";
     CHECK(WinCallWinMain(9, NULL, winmain, 7) == 123);
-    GLoaderState.pib.pib_pchcmd = command;
+    GProcessState.pib.pib_pchcmd = command;
     CHECK(GetProfileInt("test", "missing", 42) == 42);
     CHECK(PrfWriteProfileString(HINI_USERPROFILE, "WINI_test", "number", "-12"));
     CHECK(GetProfileInt("test", "number", 42) == (ULONG)-12);

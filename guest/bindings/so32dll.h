@@ -36,7 +36,7 @@ static uint32 bridge32_Os2LegacySocketInit(uint8 *a)
 static uint32 bridge32_Os2LegacyBind(uint8 *a)
 {
     Os2LegacyAddress address;
-    if (!lx_execution_read(GLoaderState.execution, socket_word(a, 1), &address, sizeof address))
+    if (!lx_execution_read(GProcessState.execution, socket_word(a, 1), &address, sizeof address))
         return (uint32)-1;
     return Os2LegacyBind(socket_word(a, 0), &address, socket_word(a, 2));
 }
@@ -44,7 +44,7 @@ static uint32 bridge32_Os2LegacyBind(uint8 *a)
 static uint32 bridge32_Os2LegacyConnect(uint8 *a)
 {
     Os2LegacyAddress address;
-    if (!lx_execution_read(GLoaderState.execution, socket_word(a, 1), &address, sizeof address))
+    if (!lx_execution_read(GProcessState.execution, socket_word(a, 1), &address, sizeof address))
         return (uint32)-1;
     return Os2LegacyConnect(socket_word(a, 0), &address, socket_word(a, 2));
 }
@@ -65,13 +65,13 @@ static uint32 bridge32_Os2LegacyAccept(uint8 *a)
     uint32 result = (uint32)-1;
     if (!socket_word(a, 1))
         return Os2LegacyAccept(socket_word(a, 0), NULL, NULL);
-    if (lx_execution_borrow(GLoaderState.execution, socket_word(a, 2), 4,
+    if (lx_execution_borrow(GProcessState.execution, socket_word(a, 2), 4,
                             LX_GUEST_READ | LX_GUEST_WRITE, &count))
     {
         int length = lx_guest_load_u32(count.host);
         Os2LegacyAddress address;
         if (length >= (int)sizeof address &&
-            lx_execution_borrow(GLoaderState.execution, socket_word(a, 1), sizeof address,
+            lx_execution_borrow(GProcessState.execution, socket_word(a, 1), sizeof address,
                                 LX_GUEST_WRITE, &output))
         {
             result = Os2LegacyAccept(socket_word(a, 0), &address, &length);
@@ -92,7 +92,7 @@ static uint32 socket_transfer(uint8 *a, int writing)
     LxGuestBorrow data = {0};
     uint32 length = socket_word(a, 2), result = (uint32)-1;
     if (length <= INT32_MAX &&
-        lx_execution_borrow(GLoaderState.execution, socket_word(a, 1), length,
+        lx_execution_borrow(GProcessState.execution, socket_word(a, 1), length,
                             writing ? LX_GUEST_READ : LX_GUEST_WRITE, &data))
         result = writing ? Os2LegacySend(socket_word(a, 0), data.host, length, socket_word(a, 3))
                          : Os2LegacyRecv(socket_word(a, 0), data.host, length, socket_word(a, 3));
@@ -117,7 +117,7 @@ static uint32 bridge32_Os2LegacyIoctl(uint8 *a)
     uint32 length = socket_word(a, 3), command = socket_word(a, 1);
     if (length > INT32_MAX)
         return result;
-    if (lx_execution_borrow(GLoaderState.execution, socket_word(a, 2), length,
+    if (lx_execution_borrow(GProcessState.execution, socket_word(a, 2), length,
                             LX_GUEST_READ | LX_GUEST_WRITE, &value))
     {
         if ((command & 0xffff) == 0x6914 && length >= 8)
@@ -126,7 +126,7 @@ static uint32 bridge32_Os2LegacyIoctl(uint8 *a)
             uint32 capacity = lx_guest_load_u32(value.host);
             size_t used;
             if (capacity <= INT32_MAX &&
-                lx_execution_borrow(GLoaderState.execution,
+                lx_execution_borrow(GProcessState.execution,
                                     lx_guest_load_u32((uint8 *)value.host + 4), capacity,
                                     LX_GUEST_WRITE, &entries))
             {
@@ -150,8 +150,8 @@ static uint32 bridge32_Os2LegacySendTo(uint8 *a)
     uint32 result = (uint32)-1;
     uint32 length = socket_word(a, 2);
     if (length <= INT32_MAX &&
-        lx_execution_read(GLoaderState.execution, socket_word(a, 4), &address, sizeof address) &&
-        lx_execution_borrow(GLoaderState.execution, socket_word(a, 1), length, LX_GUEST_READ,
+        lx_execution_read(GProcessState.execution, socket_word(a, 4), &address, sizeof address) &&
+        lx_execution_borrow(GProcessState.execution, socket_word(a, 1), length, LX_GUEST_READ,
                             &data))
         result = Os2LegacySendTo(socket_word(a, 0), data.host, length, socket_word(a, 3), &address,
                                  socket_word(a, 5));
@@ -166,17 +166,17 @@ static uint32 bridge32_Os2LegacyRecvFrom(uint8 *a)
     int address_length = sizeof address;
     uint32 result = (uint32)-1;
     uint32 length = socket_word(a, 2), address_pointer = socket_word(a, 4);
-    if (length > INT32_MAX || !lx_execution_borrow(GLoaderState.execution, socket_word(a, 1),
+    if (length > INT32_MAX || !lx_execution_borrow(GProcessState.execution, socket_word(a, 1),
                                                    length, LX_GUEST_WRITE, &data))
         goto done;
     if (address_pointer)
     {
-        if (!lx_execution_borrow(GLoaderState.execution, socket_word(a, 5), 4,
+        if (!lx_execution_borrow(GProcessState.execution, socket_word(a, 5), 4,
                                  LX_GUEST_READ | LX_GUEST_WRITE, &count))
             goto done;
         memcpy(&address_length, count.host, 4);
         if (address_length < (int)sizeof address ||
-            !lx_execution_borrow(GLoaderState.execution, address_pointer, sizeof address,
+            !lx_execution_borrow(GProcessState.execution, address_pointer, sizeof address,
                                  LX_GUEST_WRITE, &output))
             goto done;
     }
@@ -198,13 +198,13 @@ static uint32 bridge32_Os2LegacyGetSocketName(uint8 *a)
 {
     LxGuestBorrow output = {0}, count = {0};
     uint32 result = (uint32)-1;
-    if (lx_execution_borrow(GLoaderState.execution, socket_word(a, 2), 4,
+    if (lx_execution_borrow(GProcessState.execution, socket_word(a, 2), 4,
                             LX_GUEST_READ | LX_GUEST_WRITE, &count))
     {
         int length = lx_guest_load_u32(count.host);
         Os2LegacyAddress address;
         if (length >= (int)sizeof address &&
-            lx_execution_borrow(GLoaderState.execution, socket_word(a, 1), sizeof address,
+            lx_execution_borrow(GProcessState.execution, socket_word(a, 1), sizeof address,
                                 LX_GUEST_WRITE, &output))
         {
             result = Os2LegacyGetSocketName(socket_word(a, 0), &address, &length);
@@ -225,7 +225,7 @@ static uint32 bridge32_Os2LegacySocketOption(uint8 *a)
     LxGuestBorrow value = {0};
     uint32 result = (uint32)-1;
     uint32 length = socket_word(a, 4);
-    if (length <= INT32_MAX && lx_execution_borrow(GLoaderState.execution, socket_word(a, 3),
+    if (length <= INT32_MAX && lx_execution_borrow(GProcessState.execution, socket_word(a, 3),
                                                    length, LX_GUEST_READ, &value))
         result = Os2LegacySocketOption(socket_word(a, 0), socket_word(a, 1), socket_word(a, 2),
                                        value.host, length);

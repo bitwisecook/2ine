@@ -70,7 +70,7 @@ BOOL filterInputMessage(AnchorBlock *anchor, QMSG *message, ULONG flags)
     BOOL consumed = FALSE;
     for (i = 0; i < count && !consumed; i++)
     {
-        LxExecution *execution = GLoaderState.execution;
+        LxExecution *execution = GProcessState.execution;
         uint32 address = (uint32)(uintptr_t)hooks[i].procedure;
         if (execution && (uintptr_t)hooks[i].procedure <= UINT32_MAX &&
             lx_execution_memory(execution, address, 1, LX_GUEST_EXECUTE))

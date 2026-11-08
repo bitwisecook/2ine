@@ -99,9 +99,9 @@ LONG GetDeviceCaps(ULONG handle, LONG index)
         case 10:
             return height; /* VERTRES */
         case 12:           /* BITSPIXEL */
-            return printer == 2                             ? 1
-                   : printer || !GLoaderState.display_depth ? 24
-                                                            : (LONG)GLoaderState.display_depth;
+            return printer == 2                              ? 1
+                   : printer || !GProcessState.display_depth ? 24
+                                                             : (LONG)GProcessState.display_depth;
         case 14:
             return 1; /* PLANES */
         case 16:

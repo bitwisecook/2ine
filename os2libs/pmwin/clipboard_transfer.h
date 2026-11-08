@@ -52,11 +52,11 @@ static void drain_clipboard_free(void)
     while (pending)
     {
         ClipboardFree *next = pending->next;
-        void *host = GLoaderState.execution
-                         ? lx_execution_memory(GLoaderState.execution, pending->address, 1, 0)
+        void *host = GProcessState.execution
+                         ? lx_execution_memory(GProcessState.execution, pending->address, 1, 0)
                          : NULL;
-        if (host && GLoaderState.freeSharedMemory)
-            GLoaderState.freeSharedMemory(host);
+        if (host && GProcessState.freeSharedMemory)
+            GProcessState.freeSharedMemory(host);
         free(pending);
         pending = next;
     }
@@ -65,12 +65,12 @@ static void drain_clipboard_free(void)
 static void discard_format(ClipFormat *item)
 {
     if (item->mapping)
-        lx_execution_unmap(GLoaderState.execution, item->mapping);
+        lx_execution_unmap(GProcessState.execution, item->mapping);
     else if (item->data && !(item->flags & 1))
     {
         if (item->format == 2)
             lx_pm_bitmap_delete(item->data);
-        else if ((item->flags & 0x400) && GLoaderState.execution)
+        else if ((item->flags & 0x400) && GProcessState.execution)
         {
             ClipboardFree *pending = malloc(sizeof *pending);
             if (pending)
@@ -155,9 +155,9 @@ static size_t rtf_length(const unsigned char *bytes, size_t size)
 
 static void *copy_pointer(ClipFormat *item, size_t *size)
 {
-    if (!GLoaderState.execution || !item->data)
+    if (!GProcessState.execution || !item->data)
         return NULL;
-    LxGuestMapping *mapping = lx_execution_mapping_at(GLoaderState.execution, item->data);
+    LxGuestMapping *mapping = lx_execution_mapping_at(GProcessState.execution, item->data);
     if (!mapping)
         return NULL;
     size_t offset = (size_t)item->data - lx_execution_mapping_address(mapping);
@@ -168,7 +168,7 @@ static void *copy_pointer(ClipFormat *item, size_t *size)
         capacity = item->length + 1;
     LxGuestBorrow borrow = {0};
     if (!capacity ||
-        !lx_execution_borrow(GLoaderState.execution, item->data, capacity, LX_GUEST_READ, &borrow))
+        !lx_execution_borrow(GProcessState.execution, item->data, capacity, LX_GUEST_READ, &borrow))
         return NULL;
     const unsigned char *source = borrow.host;
     size_t length = 0;
@@ -479,7 +479,7 @@ static void import_host_formats(void)
                 item->serial = ++clipboard_serial;
                 item->flags = format == 2 ? 0x200 : 0x400;
                 item->codepage =
-                    GLoaderState.process_codepage ? GLoaderState.process_codepage : 437;
+                    GProcessState.process_codepage ? GProcessState.process_codepage : 437;
                 item->imported = 1;
                 const char *name = format_name(format);
                 item->name = name ? strdup(name) : NULL;
@@ -505,7 +505,7 @@ static void import_requested_format(ULONG format)
             item->format = format;
             item->serial = ++clipboard_serial;
             item->flags = format == 2 ? 0x200 : 0x400;
-            item->codepage = GLoaderState.process_codepage ? GLoaderState.process_codepage : 437;
+            item->codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
             item->imported = 1;
             const char *name = format_name(format);
             item->name = name ? strdup(name) : NULL;
@@ -545,11 +545,11 @@ ULONG WinEnumClipbrdFmts(HAB hab, ULONG format)
 
 static BOOL install_bytes(ClipFormat *item, const void *bytes, size_t size)
 {
-    if (!GLoaderState.execution || size > 64 * 1024 * 1024)
+    if (!GProcessState.execution || size > 64 * 1024 * 1024)
         return FALSE;
     size_t capacity = (size + 4096) & ~(size_t)4095;
     LxGuestMapping *mapping =
-        lx_execution_map(GLoaderState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
         return FALSE;
     memcpy(lx_execution_mapping_host(mapping), bytes, size);
@@ -606,7 +606,7 @@ ULONG WinQueryClipbrdData(HAB hab, ULONG format)
         if (bytes && format == 1)
         {
             void *converted = lx_host_clipboard_text_os2(
-                GLoaderState.process_codepage ? GLoaderState.process_codepage : 437, bytes, size,
+                GProcessState.process_codepage ? GProcessState.process_codepage : 437, bytes, size,
                 &size);
             free(bytes);
             bytes = converted;
@@ -682,7 +682,7 @@ BOOL WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
             item->format = format;
             item->data = data;
             item->flags = flags;
-            item->codepage = GLoaderState.process_codepage ? GLoaderState.process_codepage : 437;
+            item->codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
             const char *name = format_name(format);
             item->name = name ? strdup(name) : NULL;
             if (*slot)
@@ -736,7 +736,7 @@ BOOL lx_pm_clipboard_set_bytes(HAB hab, ULONG format, const void *bytes, size_t 
         return FALSE;
     if (!WinSetClipbrdData(hab, staged.data, format, 0x400))
     {
-        lx_execution_unmap(GLoaderState.execution, staged.mapping);
+        lx_execution_unmap(GProcessState.execution, staged.mapping);
         return FALSE;
     }
     if (!lock_clipboard())

@@ -328,7 +328,7 @@ static uint32 finish_call(AnchorBlock *self, QueuedCall *call)
     {
         if (self)
             drainForeignMessages(self);
-        lx_execution_poll_termination(GLoaderState.execution);
+        lx_execution_poll_termination(GProcessState.execution);
         lx_host_sleep_ms(1);
     }
     return state;

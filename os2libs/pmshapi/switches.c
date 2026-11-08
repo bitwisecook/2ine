@@ -206,7 +206,7 @@ ULONG WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
         }
     lx_host_monitor_unlock(mutex);
     /* Before a Window List entry exists the caller's title is its program name. */
-    const char *program = GLoaderState.pib.pib_pchcmd;
+    const char *program = GProcessState.pib.pib_pchcmd;
     if (result != NO_ERROR && !session && program && *program)
     {
         const char *name = program;

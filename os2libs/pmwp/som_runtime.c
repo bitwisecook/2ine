@@ -76,13 +76,13 @@ static int family_started;
 
 uint32 pmwpGuestCall(uint32 entry, uint32 a, uint32 b, uint32 c, uint32 d)
 {
-    return entry ? lx_execution_callback32_4(GLoaderState.execution, entry, a, b, c, d) : 0;
+    return entry ? lx_execution_callback32_4(GProcessState.execution, entry, a, b, c, d) : 0;
 }
 
 uint32 pmwpLoad32(uint32 address)
 {
     uint8 bytes[4];
-    return address && lx_execution_read(GLoaderState.execution, address, bytes, sizeof bytes)
+    return address && lx_execution_read(GProcessState.execution, address, bytes, sizeof bytes)
                ? lx_guest_load_u32(bytes)
                : 0;
 }
@@ -91,7 +91,7 @@ BOOL pmwpStore32(uint32 address, uint32 value)
 {
     uint8 bytes[4];
     lx_guest_store_u32(bytes, value);
-    return address && lx_execution_write(GLoaderState.execution, address, bytes, sizeof bytes);
+    return address && lx_execution_write(GProcessState.execution, address, bytes, sizeof bytes);
 }
 
 /* A guest allocation hook may be replaced by the application, so each cell is
@@ -116,7 +116,7 @@ uint32 pmwpGuestString(const char *text)
 {
     size_t size = strlen(text) + 1;
     uint32 address = pmwpMalloc((uint32)size);
-    if (address && !lx_execution_write(GLoaderState.execution, address, text, size))
+    if (address && !lx_execution_write(GProcessState.execution, address, text, size))
     {
         pmwpFree(address);
         address = 0;
@@ -288,14 +288,14 @@ static BOOL emit_bridges(void)
     S.bodies = calloc(total, sizeof *S.bodies);
     S.body_procs = calloc(total, sizeof *S.body_procs);
     S.code_mapping =
-        lx_execution_map(GLoaderState.execution, 0, CODE_BYTES, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, CODE_BYTES, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!S.bodies || !S.body_procs || !S.code_mapping)
         return FALSE;
     uint8 *code = lx_execution_mapping_host(S.code_mapping);
     uint32 base = lx_execution_mapping_address(S.code_mapping);
     size_t used = 0;
     const LxExecutionApi32 shared = {unavailable_method, 12, 0, LX_ABI_STACK32};
-    size_t size = lx_execution_emit_bridge32(GLoaderState.execution, code, CODE_BYTES, &shared);
+    size_t size = lx_execution_emit_bridge32(GProcessState.execution, code, CODE_BYTES, &shared);
     if (!size)
         return FALSE;
     S.unavailable_bridge = base;
@@ -305,7 +305,7 @@ static BOOL emit_bridges(void)
         {
             const PmwpBody *body = &tables[i].rows[j];
             const LxExecutionApi32 api = {body->callback, body->argument_bytes, 0, LX_ABI_STACK32};
-            size = lx_execution_emit_bridge32(GLoaderState.execution, code + used,
+            size = lx_execution_emit_bridge32(GProcessState.execution, code + used,
                                               CODE_BYTES - used, &api);
             if (!size)
                 return FALSE;
@@ -438,14 +438,14 @@ static BOOL import_entry(HMODULE module, ULONG ordinal, uint32 *address)
 {
     PFN entry = NULL;
     return DosQueryProcAddr(module, ordinal, NULL, &entry) == NO_ERROR && entry &&
-           lx_execution_entry_address(GLoaderState.execution, (void *)entry, address);
+           lx_execution_entry_address(GProcessState.execution, (void *)entry, address);
 }
 
 static BOOL import_data(HMODULE module, ULONG ordinal, uint32 *address)
 {
     PFN entry = NULL;
     return DosQueryProcAddr(module, ordinal, NULL, &entry) == NO_ERROR && entry &&
-           lx_execution_address(GLoaderState.execution, (void *)entry, 1, LX_GUEST_READ, address);
+           lx_execution_address(GProcessState.execution, (void *)entry, 1, LX_GUEST_READ, address);
 }
 
 /* The native som module exports nothing, so only the original SOM.DLL satisfies these
@@ -479,8 +479,8 @@ static void initialize_runtime(void)
     if (!constant_lock || !bind_som() || !emit_bridges())
         return;
     /* Class identifiers stay writable for SOM. */
-    S.arena_mapping =
-        lx_execution_map(GLoaderState.execution, 0, ARENA_BYTES, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    S.arena_mapping = lx_execution_map(GProcessState.execution, 0, ARENA_BYTES,
+                                       LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!S.arena_mapping)
         return;
     S.arena = lx_execution_mapping_host(S.arena_mapping);
@@ -488,7 +488,7 @@ static void initialize_runtime(void)
     for (int id = 0; id < PMWP_CLASS_COUNT; id++)
         if (!build_static_info((PmwpClassId)id))
             return;
-    if (lx_execution_protect(GLoaderState.execution, S.code_mapping,
+    if (lx_execution_protect(GProcessState.execution, S.code_mapping,
                              LX_GUEST_READ | LX_GUEST_EXECUTE))
         S.ready = TRUE;
 }
@@ -603,7 +603,7 @@ static uint32 control_step(PmwpClassId id, uint32 *control, uint32 *owned, uint3
     pmwpStore32(*control, mask + 1);
     pmwpStore32(*control + 4, info);
     uint8 flags = 0;
-    lx_execution_read(GLoaderState.execution, mask, &flags, 1);
+    lx_execution_read(GProcessState.execution, mask, &flags, 1);
     return flags & 1 ? pmwpLoad32(info + 4) : 0;
 }
 

@@ -247,7 +247,7 @@ ULONG SplEnumPrinter(PSZ computer, ULONG level, ULONG types, PVOID buffer, ULONG
         return 87;
     uint32 base = 0;
     if (capacity &&
-        !lx_execution_address(GLoaderState.execution, buffer, capacity, LX_GUEST_WRITE, &base))
+        !lx_execution_address(GProcessState.execution, buffer, capacity, LX_GUEST_WRITE, &base))
         return 87;
     return lx_spl_printers(level, types, buffer, capacity, base, returned, total, needed);
 }

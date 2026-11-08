@@ -60,8 +60,8 @@ BOOL controlRead(MPARAM address, void *output, size_t size)
 {
     if (!address)
         return FALSE;
-    if (TWOINE_PORTABLE_LOADER && GLoaderState.execution && (uintptr_t)address <= UINT32_MAX)
-        return lx_execution_read(GLoaderState.execution, (uint32)(uintptr_t)address, output, size);
+    if (TWOINE_PORTABLE_LOADER && GProcessState.execution && (uintptr_t)address <= UINT32_MAX)
+        return lx_execution_read(GProcessState.execution, (uint32)(uintptr_t)address, output, size);
     memcpy(output, address, size);
     return TRUE;
 }
@@ -70,8 +70,8 @@ BOOL controlWrite(MPARAM address, const void *input, size_t size)
 {
     if (!address)
         return FALSE;
-    if (TWOINE_PORTABLE_LOADER && GLoaderState.execution && (uintptr_t)address <= UINT32_MAX)
-        return lx_execution_write(GLoaderState.execution, (uint32)(uintptr_t)address, input, size);
+    if (TWOINE_PORTABLE_LOADER && GProcessState.execution && (uintptr_t)address <= UINT32_MAX)
+        return lx_execution_write(GProcessState.execution, (uint32)(uintptr_t)address, input, size);
     memcpy(address, input, size);
     return TRUE;
 }
@@ -99,8 +99,8 @@ char *controlCopyText(MPARAM value)
 {
     if (!value)
         return NULL;
-    if (TWOINE_PORTABLE_LOADER && GLoaderState.execution && (uintptr_t)value <= UINT32_MAX)
-        return lx_execution_copy_string(GLoaderState.execution, (uint32)(uintptr_t)value, 65536);
+    if (TWOINE_PORTABLE_LOADER && GProcessState.execution && (uintptr_t)value <= UINT32_MAX)
+        return lx_execution_copy_string(GProcessState.execution, (uint32)(uintptr_t)value, 65536);
     return strdup(value);
 }
 
@@ -111,9 +111,9 @@ BOOL controlTextOutput(MPARAM value, const char *text, size_t capacity)
         return FALSE;
     if (count >= capacity)
         count = capacity - 1;
-    if (TWOINE_PORTABLE_LOADER && GLoaderState.execution && (uintptr_t)value <= UINT32_MAX)
-        return lx_execution_write(GLoaderState.execution, (uint32)(uintptr_t)value, text, count) &&
-               lx_execution_write(GLoaderState.execution, (uint32)(uintptr_t)value + (uint32)count,
+    if (TWOINE_PORTABLE_LOADER && GProcessState.execution && (uintptr_t)value <= UINT32_MAX)
+        return lx_execution_write(GProcessState.execution, (uint32)(uintptr_t)value, text, count) &&
+               lx_execution_write(GProcessState.execution, (uint32)(uintptr_t)value + (uint32)count,
                                   "", 1);
     memcpy(value, text, count);
     ((char *)value)[count] = 0;

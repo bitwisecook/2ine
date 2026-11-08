@@ -63,7 +63,7 @@ APIRET DosEditName(ULONG level, PSZ source, PSZ edit, PBYTE target, ULONG capaci
     if (used + 1 > capacity)
         return ERROR_INVALID_NAME;
     uint32 address;
-    if (!lx_execution_address(GLoaderState.execution, target, used + 1, LX_GUEST_WRITE, &address))
+    if (!lx_execution_address(GProcessState.execution, target, used + 1, LX_GUEST_WRITE, &address))
         return ERROR_INVALID_PARAMETER;
     memcpy(target, result, used + 1);
     return NO_ERROR;
@@ -96,7 +96,7 @@ APIRET DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal, ULONG ulFSAInfoLevel
     {
         unsigned ordinal = 0;
         for (unsigned i = 0; i < 26; i++)
-            if (GLoaderState.disks[i] && ++ordinal == ulOrdinal)
+            if (GProcessState.disks[i] && ++ordinal == ulOrdinal)
             {
                 drive = i;
                 break;
@@ -104,10 +104,10 @@ APIRET DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal, ULONG ulFSAInfoLevel
     }
     else
         return ERROR_INVALID_LEVEL;
-    if (drive >= 26 || !GLoaderState.disks[drive])
+    if (drive >= 26 || !GProcessState.disks[drive])
         return ERROR_INVALID_DRIVE;
     LxHostVolumeInfo volume;
-    LxHostFsError volume_error = lx_host_path_volume(GLoaderState.disks[drive], &volume);
+    LxHostFsError volume_error = lx_host_path_volume(GProcessState.disks[drive], &volume);
     if (volume_error)
         return fileError(volume_error);
     const char *filesystem = volume.filesystem;
@@ -133,11 +133,11 @@ APIRET16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf, USHORT inf
 {
     TRACE_NATIVE("Dos16QFsInfo(%d, %d, %p, %d)", drivenum, fslevel, infobuf, infobufsize);
     if (!drivenum)
-        drivenum = (USHORT)GLoaderState.current_disk;
-    if (!drivenum || drivenum > 26 || !GLoaderState.disks[drivenum - 1])
+        drivenum = (USHORT)GProcessState.current_disk;
+    if (!drivenum || drivenum > 26 || !GProcessState.disks[drivenum - 1])
         return ERROR_INVALID_DRIVE;
     LxHostVolumeInfo volume;
-    LxHostFsError error = lx_host_path_volume(GLoaderState.disks[drivenum - 1], &volume);
+    LxHostFsError error = lx_host_path_volume(GProcessState.disks[drivenum - 1], &volume);
     if (error)
         return fileError(error);
     applyVolumeLabel(drivenum - 1, &volume);
@@ -154,7 +154,7 @@ APIRET16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf, USHORT inf
 
 char *makeUnixPath(const char *os2path, APIRET *err)
 {
-    return GLoaderState.makeUnixPath(os2path, (uint32 *)err);
+    return GProcessState.makeUnixPath(os2path, (uint32 *)err);
 }
 
 char *findExePath(const char *exe, APIRET *err)
@@ -169,13 +169,13 @@ char *findExePath(const char *exe, APIRET *err)
 
 APIRET DosQueryCurrentDir_implementation(ULONG disknum, PBYTE pBuf, PULONG pcbBuf)
 {
-    if (disknum > (sizeof(GLoaderState.disks) / sizeof(GLoaderState.disks[0])))
+    if (disknum > (sizeof(GProcessState.disks) / sizeof(GProcessState.disks[0])))
     {
         return ERROR_INVALID_DRIVE;
     }
 
     const char *cdir =
-        GLoaderState.current_dir[disknum ? (disknum - 1) : (GLoaderState.current_disk - 1)];
+        GProcessState.current_dir[disknum ? (disknum - 1) : (GProcessState.current_disk - 1)];
     if (cdir == NULL)
     {
         FIXME("should this return ERROR_INVALID_DRIVE?");
@@ -202,8 +202,8 @@ APIRET DosQueryCurrentDir(ULONG disknum, PBYTE pBuf, PULONG pcbBuf)
 
 APIRET DosQueryCurrentDisk_implementation(PULONG pdisknum, PULONG pdiskmap)
 {
-    *pdisknum = GLoaderState.current_disk;
-    *pdiskmap = GLoaderState.diskmap;
+    *pdisknum = GProcessState.current_disk;
+    *pdiskmap = GProcessState.diskmap;
     return NO_ERROR;
 }
 
@@ -258,11 +258,11 @@ APIRET DosSetCurrentDir_implementation(PSZ pszName)
         }
         else
         {
-            drive = (GLoaderState.current_disk - 1) + 'A';
+            drive = (GProcessState.current_disk - 1) + 'A';
         }
 
         const int driveidx = drive - 'A';
-        char *oldpath = (*pszName == '\\') ? "" : GLoaderState.current_dir[driveidx];
+        char *oldpath = (*pszName == '\\') ? "" : GProcessState.current_dir[driveidx];
         const size_t buflen = strlen(pszName) + strlen(oldpath) + 2;
         char *newpath = (char *)malloc(buflen);
         if (!newpath)
@@ -358,8 +358,8 @@ APIRET DosSetCurrentDir_implementation(PSZ pszName)
             newpath = ptr;
         }
 
-        free(GLoaderState.current_dir[driveidx]);
-        GLoaderState.current_dir[driveidx] = newpath;
+        free(GProcessState.current_dir[driveidx]);
+        GProcessState.current_dir[driveidx] = newpath;
     }
 
     return retval;
@@ -451,10 +451,10 @@ APIRET DosSetDefaultDisk(ULONG disknum)
 {
     TRACE_NATIVE("DosSetDefaultDisk(%u)", (uint)disknum);
 
-    if ((disknum < 1) || (disknum > 26) || (!GLoaderState.disks[disknum - 1]))
+    if ((disknum < 1) || (disknum > 26) || (!GProcessState.disks[disknum - 1]))
         return ERROR_INVALID_DRIVE;
 
-    GLoaderState.current_disk = disknum;
+    GProcessState.current_disk = disknum;
     return NO_ERROR;
 }
 
@@ -684,8 +684,8 @@ APIRET DosSetFSInfo(ULONG drive, ULONG level, PVOID data, ULONG size)
     TRACE_NATIVE("DosSetFSInfo(%u, %u, %p, %u)", (uint)drive, (uint)level, data, (uint)size);
     ULONG disk = (USHORT)drive;
     if (!disk)
-        disk = GLoaderState.current_disk;
-    if (disk > 26 || !disk || !GLoaderState.disks[disk - 1])
+        disk = GProcessState.current_disk;
+    if (disk > 26 || !disk || !GProcessState.disks[disk - 1])
         return ERROR_INVALID_DRIVE;
     if ((USHORT)level != 2)
         return ERROR_INVALID_LEVEL;
@@ -711,7 +711,7 @@ APIRET DosSetFSInfo(ULONG drive, ULONG level, PVOID data, ULONG size)
         label[i] = c;
     }
     LxHostVolumeInfo volume;
-    LxHostFsError error = lx_host_path_volume(GLoaderState.disks[disk - 1], &volume);
+    LxHostFsError error = lx_host_path_volume(GProcessState.disks[disk - 1], &volume);
     if (error)
         return fileError(error);
     if (volume.readonly)
@@ -723,8 +723,8 @@ APIRET DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
 {
     TRACE_NATIVE("DosQueryFSInfo(%u, %u, %p, %u)", (uint)drive, (uint)level, data, (uint)capacity);
     if (!drive)
-        drive = GLoaderState.current_disk;
-    if (drive > 26 || !drive || !GLoaderState.disks[drive - 1])
+        drive = GProcessState.current_disk;
+    if (drive > 26 || !drive || !GProcessState.disks[drive - 1])
         return ERROR_INVALID_DRIVE;
     uint8 *output = data;
     if (!output)
@@ -734,11 +734,12 @@ APIRET DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
         if (capacity < 18)
             return ERROR_BUFFER_OVERFLOW;
         uint64_t total, available;
-        LxHostFsError error = lx_host_path_space(GLoaderState.disks[drive - 1], &total, &available);
+        LxHostFsError error =
+            lx_host_path_space(GProcessState.disks[drive - 1], &total, &available);
         if (error)
             return fileError(error);
         LxHostVolumeInfo volume;
-        error = lx_host_path_volume(GLoaderState.disks[drive - 1], &volume);
+        error = lx_host_path_volume(GProcessState.disks[drive - 1], &volume);
         if (error)
             return fileError(error);
         uint64_t units = total / volume.cluster_bytes,
@@ -756,7 +757,7 @@ APIRET DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
             return ERROR_BUFFER_OVERFLOW;
         memset(output, 0, 17);
         LxHostVolumeInfo volume;
-        LxHostFsError error = lx_host_path_volume(GLoaderState.disks[drive - 1], &volume);
+        LxHostFsError error = lx_host_path_volume(GProcessState.disks[drive - 1], &volume);
         if (error)
             return fileError(error);
         applyVolumeLabel(drive - 1, &volume);

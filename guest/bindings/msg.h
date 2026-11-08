@@ -6,7 +6,8 @@ static uint32 bridge32_DosPutMessage(uint8 *arguments)
     const uint32 size = lx_guest_load_u32(arguments + 4);
     const uint32 pointer = lx_guest_load_u32(arguments + 8);
     LxGuestBorrow buffer = {0};
-    if (size && !lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_READ, &buffer))
+    if (size &&
+        !lx_execution_borrow(GProcessState.execution, pointer, size, LX_GUEST_READ, &buffer))
         return ERROR_INVALID_PARAMETER;
     const uint32 result = DosPutMessage(handle, size, buffer.host);
     lx_execution_release(&buffer);
@@ -20,17 +21,17 @@ static uint32 bridge32_DosTrueGetMessage(uint8 *a)
     const uint32 count = lx_guest_load_u32(a + 8), size = lx_guest_load_u32(a + 16);
     if (count > 9 || !size)
         return ERROR_INVALID_PARAMETER;
-    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 24), 260);
+    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 24), 260);
     if (!name)
         return ERROR_INVALID_PARAMETER;
     LxGuestBorrow table = {0}, data = {0}, length = {0};
     char *substitutions[9] = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if ((count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), count * 4,
+    if ((count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), count * 4,
                                        LX_GUEST_READ, &table)) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), size,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), size,
                              LX_GUEST_WRITE, &data) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 28), 4, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 28), 4, LX_GUEST_WRITE,
                              &length))
         goto done;
     for (uint32 i = 0; i < count; i++)
@@ -38,7 +39,7 @@ static uint32 bridge32_DosTrueGetMessage(uint8 *a)
         uint32 pointer = lx_guest_load_u32((uint8 *)table.host + i * 4);
         if (pointer)
         {
-            substitutions[i] = lx_execution_copy_string(GLoaderState.execution, pointer, 65536);
+            substitutions[i] = lx_execution_copy_string(GProcessState.execution, pointer, 65536);
             if (!substitutions[i])
                 goto done;
         }
@@ -67,18 +68,18 @@ static uint32 bridge32_DosInsertMessage(uint8 *a)
     LxGuestBorrow table = {0}, message = {0}, output = {0}, actual = {0};
     char *values[9] = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if ((count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), count * 4,
+    if ((count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), count * 4,
                                        LX_GUEST_READ, &table)) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), message_size,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), message_size,
                              LX_GUEST_READ, &message) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16), capacity,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), capacity,
                              LX_GUEST_WRITE, &output) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 24), 4, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 24), 4, LX_GUEST_WRITE,
                              &actual))
         goto done;
     for (unsigned i = 0; i < count; i++)
     {
-        values[i] = lx_execution_copy_string(GLoaderState.execution,
+        values[i] = lx_execution_copy_string(GProcessState.execution,
                                              lx_guest_load_u32((uint8 *)table.host + i * 4), 65536);
         if (!values[i])
             goto done;

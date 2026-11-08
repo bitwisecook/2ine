@@ -725,7 +725,7 @@ static int initializeResolverData(void)
     if (ResolverObject.mapping)
         return 1;
     ResolverObject.mapping =
-        lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!ResolverObject.mapping)
         return 0;
     ResolverObject.addr = ResolverObject.mapped = lx_execution_mapping_host(ResolverObject.mapping);
@@ -736,7 +736,7 @@ static int initializeResolverData(void)
     ResolverMutex = lx_host_mutex_create(0, 0);
     if (!ResolverMutex)
     {
-        lx_execution_unmap(GLoaderState.execution, ResolverObject.mapping);
+        lx_execution_unmap(GProcessState.execution, ResolverObject.mapping);
         memset(&ResolverObject, 0, sizeof ResolverObject);
     }
     return ResolverMutex != NULL;
@@ -792,7 +792,7 @@ int OS2_res_init(void)
 OS2EXPORT void lxNativeModuleDeinit(void)
 {
     if (ResolverObject.mapping)
-        lx_execution_unmap(GLoaderState.execution, ResolverObject.mapping);
+        lx_execution_unmap(GProcessState.execution, ResolverObject.mapping);
     memset(&ResolverObject, 0, sizeof ResolverObject);
     if (ResolverMutex)
         lx_host_mutex_destroy(ResolverMutex);

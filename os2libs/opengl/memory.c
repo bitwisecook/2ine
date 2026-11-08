@@ -40,7 +40,7 @@ int gl_memory(uint32_t address, size_t count, size_t unit, int output, int nulla
     size_t bytes = count * unit;
     if (!bytes || (!address && nullable))
         return 1;
-    if (!address || !lx_execution_borrow(GLoaderState.execution, address, bytes,
+    if (!address || !lx_execution_borrow(GProcessState.execution, address, bytes,
                                          output ? LX_GUEST_WRITE : LX_GUEST_READ, &m->borrow))
     {
         gl_error(GL_INVALID_OPERATION);

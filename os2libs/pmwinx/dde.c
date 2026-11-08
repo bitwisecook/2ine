@@ -404,29 +404,29 @@ static ULONG dde_callback(DdeInstance *instance, ULONG type, ULONG format, ULONG
                                      0x18, 0xFF, 0x70, 0x14, 0xFF, 0x70, 0x10, 0xFF, 0x70,
                                      0x0C, 0xFF, 0x70, 0x08, 0xFF, 0x70, 0x04, 0xFF, 0x30,
                                      0xFF, 0x50, 0x20, 0x83, 0xC4, 0x20, 0xC3};
-        dde_callback_code = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+        dde_callback_code = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
         if (!dde_callback_code)
             return 0;
         memcpy(lx_execution_mapping_host(dde_callback_code), code, sizeof code);
-        if (!lx_execution_protect(GLoaderState.execution, dde_callback_code,
+        if (!lx_execution_protect(GProcessState.execution, dde_callback_code,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
-            lx_execution_unmap(GLoaderState.execution, dde_callback_code);
+            lx_execution_unmap(GProcessState.execution, dde_callback_code);
             dde_callback_code = NULL;
             return 0;
         }
     }
-    LxGuestMapping *arguments = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *arguments = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     if (!arguments)
         return 0;
     ULONG values[] = {type, format, conversation,      first, second, data,
                       one,  two,    instance->callback};
     for (unsigned i = 0; i < 9; i++)
         lx_guest_store_u32((uint8 *)lx_execution_mapping_host(arguments) + i * 4, values[i]);
-    ULONG result = lx_execution_callback32_4(GLoaderState.execution,
+    ULONG result = lx_execution_callback32_4(GProcessState.execution,
                                              lx_execution_mapping_address(dde_callback_code),
                                              lx_execution_mapping_address(arguments), 0, 0, 0);
-    lx_execution_unmap(GLoaderState.execution, arguments);
+    lx_execution_unmap(GProcessState.execution, arguments);
     return result;
 }
 
@@ -654,7 +654,7 @@ static void destroy_dde_data(void *resource)
         *link = data->next;
     lx_host_monitor_unlock(lock);
     if (data->mapping)
-        lx_execution_unmap(GLoaderState.execution, data->mapping);
+        lx_execution_unmap(GProcessState.execution, data->mapping);
     free(data);
 }
 
@@ -673,7 +673,7 @@ ULONG DdeCreateDataHandle(ULONG id, PVOID input, ULONG count, ULONG offset, ULON
     }
     data = calloc(1, sizeof *data);
     if (data)
-        data->mapping = lx_execution_map(GLoaderState.execution, 0,
+        data->mapping = lx_execution_map(GProcessState.execution, 0,
                                          (((size_t)offset + count + 4095) & ~(size_t)4095)
                                              ? (((size_t)offset + count + 4095) & ~(size_t)4095)
                                              : 4096,
@@ -695,7 +695,7 @@ ULONG DdeCreateDataHandle(ULONG id, PVOID input, ULONG count, ULONG offset, ULON
     handle = lx_handle_create(LX_HANDLE_OPEN32_DDE_DATA, data, destroy_dde_data);
     if (!handle)
     {
-        lx_execution_unmap(GLoaderState.execution, data->mapping);
+        lx_execution_unmap(GProcessState.execution, data->mapping);
         free(data);
         ((DdeInstance *)instance.resource)->error = 0x4007;
         goto data_done;
@@ -768,7 +768,7 @@ ULONG DdeAddData(ULONG handle, PVOID input, ULONG count, ULONG offset)
     ULONG required = count + offset;
     if (required > lx_execution_mapping_size(data->mapping))
     {
-        LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0,
+        LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0,
                                                    ((size_t)required + 4095) & ~(size_t)4095, 3, 0);
         if (!mapping)
         {
@@ -777,7 +777,7 @@ ULONG DdeAddData(ULONG handle, PVOID input, ULONG count, ULONG offset)
         }
         memcpy(lx_execution_mapping_host(mapping), lx_execution_mapping_host(data->mapping),
                data->size);
-        lx_execution_unmap(GLoaderState.execution, data->mapping);
+        lx_execution_unmap(GProcessState.execution, data->mapping);
         data->mapping = mapping;
     }
     if (count)
@@ -1629,7 +1629,7 @@ ULONG DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item, 
     else if (size)
     {
         LxGuestBorrow input = {0};
-        if (!lx_execution_borrow(GLoaderState.execution, address, size, LX_GUEST_READ, &input))
+        if (!lx_execution_borrow(GProcessState.execution, address, size, LX_GUEST_READ, &input))
         {
             ((DdeInstance *)client.resource)->error = 0x4006;
             goto transaction_done;

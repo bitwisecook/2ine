@@ -13,7 +13,7 @@ void initPib(void)
     /* Guest resolver libraries locate RESOLV2/HOSTS through ETC. */
     if (!getenv("ETC"))
         setenv("ETC", "C:\\MPTN\\ETC", 0);
-    LxPIB *pib = &GLoaderState.pib;
+    LxPIB *pib = &GProcessState.pib;
     memset(pib, '\0', sizeof(*pib));
 
     size_t cmdlinebuflen = 0;
@@ -80,7 +80,7 @@ void initPib(void)
     /* The loader can be launched by Finder before a guest program is selected. */
     const char *program_name = argc && argv[0] ? argv[0] : "";
     const char *original_arguments =
-        GLoaderState.subprocess ? getenv("TWOINE_CHILD_ARGUMENTS") : NULL;
+        GProcessState.subprocess ? getenv("TWOINE_CHILD_ARGUMENTS") : NULL;
 
     size_t len = 1;
     for (int i = 0; i < argc; i++)
@@ -123,7 +123,7 @@ void initPib(void)
         const char *str = envp[i];
         if (strncmp(str, "PATH=", 5) == 0)
         {
-            if (!GLoaderState.subprocess)
+            if (!GProcessState.subprocess)
                 str = path;
         }
         else if (strncmp(str, "IS_2INE=", 8) == 0 || !strncmp(str, "TWOINE_CHILD_ARGUMENTS=", 23))
@@ -155,7 +155,7 @@ void initPib(void)
         const char *str = envp[i];
         if (strncmp(str, "PATH=", 5) == 0)
         {
-            if (!GLoaderState.subprocess)
+            if (!GProcessState.subprocess)
                 str = path;
         }
         else if (strncmp(str, "LIBPATH=", 8) == 0)
@@ -175,15 +175,15 @@ void initPib(void)
     if (libpath == NULL)
         libpath = "";
 
-    GLoaderState.libpath = strdup(libpath);
-    GLoaderState.libpathlen = strlen(libpath) + 1;
+    GProcessState.libpath = strdup(libpath);
+    GProcessState.libpathlen = strlen(libpath) + 1;
 
     const char *begin = getenv("TWOINE_EXT_LIBPATH_BEGIN"), *end = getenv("TWOINE_EXT_LIBPATH_END");
-    snprintf(GLoaderState.begin_libpath, sizeof GLoaderState.begin_libpath, "%s",
+    snprintf(GProcessState.begin_libpath, sizeof GProcessState.begin_libpath, "%s",
              begin ? begin : "");
-    snprintf(GLoaderState.end_libpath, sizeof GLoaderState.end_libpath, "%s", end ? end : "");
+    snprintf(GProcessState.end_libpath, sizeof GProcessState.end_libpath, "%s", end ? end : "");
     const char *strict = getenv("TWOINE_EXT_LIBPATH_STRICT");
-    GLoaderState.libpath_strict = strict && !strcasecmp(strict, "T");
+    GProcessState.libpath_strict = strict && !strcasecmp(strict, "T");
 
     strcpy(ptr, program_name);
     ptr += strlen(program_name) + 1;
@@ -250,7 +250,7 @@ static LxHostShared *ProcessPeerLease;
 static void processPeerName(uint32 pid, char name[64])
 {
     uint64 hash = UINT64_C(1469598103934665603);
-    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"), GLoaderState.disks[2]};
+    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"), GProcessState.disks[2]};
     for (size_t i = 0; i < sizeof scope / sizeof scope[0]; i++)
     {
         for (const char *p = scope[i]; p && *p; p++)
@@ -265,7 +265,7 @@ int lxRegisterProcessPeer(void)
     if (ProcessPeerLease)
         return 1;
     char name[64];
-    processPeerName(GLoaderState.pib.pib_ulpid, name);
+    processPeerName(GProcessState.pib.pib_ulpid, name);
     return lx_host_shared_open(name, 1, &ProcessPeerLease) == LX_HOST_SHARED_OK;
 }
 

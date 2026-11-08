@@ -32,7 +32,7 @@
 #define TRACE_NATIVE(...)                                                                          \
     do                                                                                             \
     {                                                                                              \
-        if (GLoaderState.trace_native)                                                             \
+        if (GProcessState.trace_native)                                                            \
         {                                                                                          \
             fprintf(stderr, "2INE TRACE [%lu]: ", (unsigned long)lx_host_thread_id());             \
             fprintf(stderr, __VA_ARGS__);                                                          \
@@ -50,7 +50,7 @@
 #define TRACE_EVENT(...)                                                                           \
     do                                                                                             \
     {                                                                                              \
-        if (GLoaderState.trace_events)                                                             \
+        if (GProcessState.trace_events)                                                            \
         {                                                                                          \
             fprintf(stderr, "2INE TRACE [%lu]: ", (unsigned long)lx_host_thread_id());             \
             fprintf(stderr, __VA_ARGS__);                                                          \
@@ -90,7 +90,7 @@ OS2EXPORT void lxNativeModuleDeinit(void);
     }
 
 /* TIB2 follows TIB contiguously in guest memory. */
-#define LX_GETTIB() ((LxTIB *)GLoaderState.getOs2Tib())
+#define LX_GETTIB() ((LxTIB *)GProcessState.getOs2Tib())
 #define LX_GETTIB2() ((LxTIB2 *)(LX_GETTIB() + 1))
 #define LX_GETPOSTTIB() ((LxPostTIB *)(LX_GETTIB2() + 1))
 

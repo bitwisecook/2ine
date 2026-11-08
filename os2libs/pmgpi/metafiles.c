@@ -51,10 +51,10 @@ BOOL GpiDeleteMetaFile(ULONG h)
 
 ULONG GpiLoadMetaFile(HAB hab, PSZ name)
 {
-    if (!lxHostThreadState()->anchor_block || !name || !GLoaderState.makeUnixPath)
+    if (!lxHostThreadState()->anchor_block || !name || !GProcessState.makeUnixPath)
         return 0;
     uint32 error = 0;
-    char *path = GLoaderState.makeUnixPath(name, &error);
+    char *path = GProcessState.makeUnixPath(name, &error);
     if (!path)
         return 0;
     size_t length = 0;
@@ -118,10 +118,10 @@ BOOL GpiSetMetaFileBits(ULONG h, LONG offset, LONG length, PVOID data)
 BOOL GpiSaveMetaFile(ULONG h, PSZ name)
 {
     LxHandleBorrow b = {0};
-    if (!name || !GLoaderState.makeUnixPath || !lx_handle_borrow(h, LX_HANDLE_PM_METAFILE, &b))
+    if (!name || !GProcessState.makeUnixPath || !lx_handle_borrow(h, LX_HANDLE_PM_METAFILE, &b))
         return FALSE;
     uint32 error = 0;
-    char *path = GLoaderState.makeUnixPath(name, &error);
+    char *path = GProcessState.makeUnixPath(name, &error);
     LxHostFsError status;
     /* An existing file is an error, so the create must be exclusive. */
     LxHostFile *f =

@@ -27,9 +27,9 @@ static uint32 release_memory(void *host)
     ULONG flags = 123;
     CHECK(!WinQueryClipbrdFmtInfo(anchor, 0xbfff, &flags));
     uint32 address;
-    CHECK(lx_execution_address(GLoaderState.execution, host, 1, 0, &address));
-    LxGuestMapping *mapping = lx_execution_mapping_at(GLoaderState.execution, address);
-    CHECK(mapping && lx_execution_unmap(GLoaderState.execution, mapping));
+    CHECK(lx_execution_address(GProcessState.execution, host, 1, 0, &address));
+    LxGuestMapping *mapping = lx_execution_mapping_at(GProcessState.execution, address);
+    CHECK(mapping && lx_execution_unmap(GProcessState.execution, mapping));
     released++;
     return 0;
 }
@@ -65,9 +65,9 @@ int main(void)
 {
     CHECK(SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HINT_OVERRIDE));
     char error[256];
-    GLoaderState.execution = lx_execution_create(TWOINE_PORTABLE_LOADER ? "unicorn" : "native",
-                                                 NULL, error, sizeof error);
-    CHECK(GLoaderState.execution);
+    GProcessState.execution = lx_execution_create(TWOINE_PORTABLE_LOADER ? "unicorn" : "native",
+                                                  NULL, error, sizeof error);
+    CHECK(GProcessState.execution);
     anchor = WinInitialize(0);
     CHECK(anchor && WinCreateMsgQueue(anchor, 0));
     CHECK(!strcmp(SDL_GetCurrentVideoDriver(), "dummy"));
@@ -75,15 +75,15 @@ int main(void)
     HWND window = WinCreateWindow(HWND_DESKTOP, "ClipboardFixture", "fixture", 0, 0, 0, 32, 32,
                                   HWND_DESKTOP, HWND_TOP, 1, NULL, NULL);
     CHECK(window);
-    GLoaderState.process_codepage = 850;
-    GLoaderState.freeSharedMemory = release_memory;
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    GProcessState.process_codepage = 850;
+    GProcessState.freeSharedMemory = release_memory;
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     CHECK(mapping);
     void *allocation = lx_execution_mapping_host(mapping);
     const unsigned char text[] = {'c', 'a', 'f', 0x82, '\r', '\n', 0};
     memcpy(allocation, text, sizeof text);
     uint32_t address;
-    CHECK(lx_execution_address(GLoaderState.execution, allocation, sizeof text, LX_GUEST_READ,
+    CHECK(lx_execution_address(GProcessState.execution, allocation, sizeof text, LX_GUEST_READ,
                                &address));
     CHECK(WinOpenClipbrd(anchor) && WinEmptyClipbrd(anchor));
     ULONG emptied_flags = 123;
@@ -96,7 +96,8 @@ int main(void)
     CHECK(copy && size == 6 && !memcmp(copy, "caf\xc3\xa9\n", size));
     free(copy);
     CHECK(WinOpenClipbrd(anchor) && WinEmptyClipbrd(anchor));
-    CHECK(released == 1 && !lx_execution_memory(GLoaderState.execution, address, 1, LX_GUEST_READ));
+    CHECK(released == 1 &&
+          !lx_execution_memory(GProcessState.execution, address, 1, LX_GUEST_READ));
     rich_format = WinAddAtom(1, "Rich Text Format");
     CHECK(rich_format && lx_pm_clipboard_set_bytes(anchor, rich_format, rich, sizeof rich - 1));
     CHECK(WinCloseClipbrd(anchor));
@@ -140,15 +141,15 @@ int main(void)
     free(copy);
     free(packet_rgba);
     CHECK(WinOpenClipbrd(anchor) && WinEmptyClipbrd(anchor));
-    LxGuestMapping *owner_memory = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *owner_memory = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     CHECK(owner_memory);
     memcpy(lx_execution_mapping_host(owner_memory), "owner", 6);
     ULONG owner_address = lx_execution_mapping_address(owner_memory);
     CHECK(WinSetClipbrdData(anchor, owner_address, 1, 0x401));
     CHECK(WinEmptyClipbrd(anchor));
     CHECK(released == 1 &&
-          lx_execution_memory(GLoaderState.execution, owner_address, 1, LX_GUEST_READ));
-    CHECK(lx_execution_unmap(GLoaderState.execution, owner_memory));
+          lx_execution_memory(GProcessState.execution, owner_address, 1, LX_GUEST_READ));
+    CHECK(lx_execution_unmap(GProcessState.execution, owner_memory));
     CHECK(WinCloseClipbrd(anchor));
     const unsigned char rgba[] = {255, 0, 0, 255, 0, 255, 0, 127, 0, 0, 255, 0, 16, 32, 48, 255};
     void *png = lx_host_clipboard_encode_image("image/png", rgba, 2, 2, &size);

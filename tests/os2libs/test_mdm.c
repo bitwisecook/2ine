@@ -194,17 +194,17 @@ int main(void)
     services.tib2_offset = sizeof(LxTIB);
     services.tls_offset = sizeof(LxTIB) + sizeof(LxTIB2);
 #if TWOINE_PORTABLE_LOADER
-    GLoaderState.execution = lx_execution_create("unicorn", &services, error, sizeof error);
+    GProcessState.execution = lx_execution_create("unicorn", &services, error, sizeof error);
 #else
-    GLoaderState.execution = lx_execution_create("native", &services, error, sizeof error);
+    GProcessState.execution = lx_execution_create("native", &services, error, sizeof error);
 #endif
-    CHECK(GLoaderState.execution);
-    GLoaderState.initOs2Tib = init_tib;
-    GLoaderState.setOs2Tib = attach_tib;
-    GLoaderState.deinitOs2Tib = detach_tib;
-    GLoaderState.registerAudioGenerator = lxRegisterAudioGenerator;
-    GLoaderState.registerStereoAudioGenerator = lxRegisterStereoAudioGenerator;
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 0x10000, 3, 0);
+    CHECK(GProcessState.execution);
+    GProcessState.initOs2Tib = init_tib;
+    GProcessState.setOs2Tib = attach_tib;
+    GProcessState.deinitOs2Tib = detach_tib;
+    GProcessState.registerAudioGenerator = lxRegisterAudioGenerator;
+    GProcessState.registerStereoAudioGenerator = lxRegisterStereoAudioGenerator;
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 0x10000, 3, 0);
     CHECK(mapping);
     unsigned char *p = lx_execution_mapping_host(mapping);
     ULONG base = lx_execution_mapping_address(mapping);
@@ -223,7 +223,7 @@ int main(void)
     unsigned char body[] = {0xba, 0, 0, 0, 0, 0xff, 0x02, 0xb8, 1, 0, 0, 0, 0xc3};
     lx_guest_store_u32(body + 1, base + 0x3000);
     memcpy(p + 0x2000, body, sizeof body);
-    CHECK(lx_execution_protect(GLoaderState.execution, mapping, 7));
+    CHECK(lx_execution_protect(GProcessState.execution, mapping, 7));
     lx_guest_store_u32(p + 40, base + 0x2000);
 #else
     lx_guest_store_u32(p + 40, (ULONG)(uintptr_t)completed);
@@ -243,7 +243,7 @@ int main(void)
     for (unsigned b = 0; b < 2; b++)
     {
         ULONG address = lx_guest_load_u32(p + 128 + b * 32 + 4);
-        int16_t *samples = lx_execution_memory(GLoaderState.execution, address, 4096, 3);
+        int16_t *samples = lx_execution_memory(GProcessState.execution, address, 4096, 3);
         CHECK(samples);
         for (unsigned n = 0; n < 1024; n++)
         {
@@ -253,7 +253,7 @@ int main(void)
     }
 #if TWOINE_PORTABLE_LOADER
     CHECK(
-        !lx_execution_callback32_4(GLoaderState.execution, write_entry, device, base + 128, 2, 0));
+        !lx_execution_callback32_4(GProcessState.execution, write_entry, device, base + 128, 2, 0));
     unsigned *completion_count = (unsigned *)(p + 0x3000);
 #else
     ULONG (*write_pcm)(ULONG, PVOID, ULONG) = (void *)(uintptr_t)write_entry;
@@ -317,8 +317,8 @@ finished:
     lxAudioShutdown();
     if (capture)
         check_stereo_capture(capture);
-    CHECK(lx_execution_unmap(GLoaderState.execution, mapping));
-    lx_execution_destroy(GLoaderState.execution);
+    CHECK(lx_execution_unmap(GProcessState.execution, mapping));
+    lx_execution_destroy(GProcessState.execution);
     puts("MMPM PCM delivery and memory MIDI contracts passed");
     return 0;
 }

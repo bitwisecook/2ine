@@ -5,9 +5,9 @@ static uint32 bridge32_DosQueryDBCSEnv(uint8 *arguments)
     const uint32 size = lx_guest_load_u32(arguments), cc_pointer = lx_guest_load_u32(arguments + 4);
     const uint32 pointer = lx_guest_load_u32(arguments + 8);
     LxGuestBorrow codepage = {0}, buffer = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
+    if (!lx_execution_borrow(GProcessState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
         (size &&
-         !lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_WRITE, &buffer)))
+         !lx_execution_borrow(GProcessState.execution, pointer, size, LX_GUEST_WRITE, &buffer)))
     {
         lx_execution_release(&codepage);
         return ERROR_INVALID_PARAMETER;
@@ -25,8 +25,8 @@ static uint32 bridge32_DosMapCase(uint8 *arguments)
     const uint32 size = lx_guest_load_u32(arguments), cc_pointer = lx_guest_load_u32(arguments + 4);
     const uint32 pointer = lx_guest_load_u32(arguments + 8);
     LxGuestBorrow codepage = {0}, buffer = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
-        (size && !lx_execution_borrow(GLoaderState.execution, pointer, size, 3, &buffer)))
+    if (!lx_execution_borrow(GProcessState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
+        (size && !lx_execution_borrow(GProcessState.execution, pointer, size, 3, &buffer)))
     {
         lx_execution_release(&codepage);
         return ERROR_INVALID_PARAMETER;
@@ -45,11 +45,11 @@ static uint32 bridge32_DosQueryCtryInfo(uint8 *arguments)
     const uint32 pointer = lx_guest_load_u32(arguments + 8),
                  actual_pointer = lx_guest_load_u32(arguments + 12);
     LxGuestBorrow codepage = {0}, buffer = {0}, actual = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
+    if (!lx_execution_borrow(GProcessState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
         (size &&
-         !lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_WRITE, &buffer)) ||
+         !lx_execution_borrow(GProcessState.execution, pointer, size, LX_GUEST_WRITE, &buffer)) ||
         (actual_pointer &&
-         !lx_execution_borrow(GLoaderState.execution, actual_pointer, 4, LX_GUEST_WRITE, &actual)))
+         !lx_execution_borrow(GProcessState.execution, actual_pointer, 4, LX_GUEST_WRITE, &actual)))
     {
         lx_execution_release(&buffer);
         lx_execution_release(&codepage);
@@ -98,10 +98,10 @@ static uint32 bridge32_DosQueryCollate(uint8 *arguments)
     const uint32 pointer = lx_guest_load_u32(arguments + 8);
     const uint32 actual_pointer = lx_guest_load_u32(arguments + 12);
     LxGuestBorrow codepage = {0}, buffer = {0}, actual = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
+    if (!lx_execution_borrow(GProcessState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
         (size &&
-         !lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_WRITE, &buffer)) ||
-        !lx_execution_borrow(GLoaderState.execution, actual_pointer, 4, LX_GUEST_WRITE, &actual))
+         !lx_execution_borrow(GProcessState.execution, pointer, size, LX_GUEST_WRITE, &buffer)) ||
+        !lx_execution_borrow(GProcessState.execution, actual_pointer, 4, LX_GUEST_WRITE, &actual))
     {
         lx_execution_release(&actual);
         lx_execution_release(&buffer);

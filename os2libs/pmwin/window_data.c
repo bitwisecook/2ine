@@ -16,16 +16,16 @@ static PFNWP previous_control_procedure(AnchorBlock *anchor)
     if (!anchor->control_bridge)
     {
         LxGuestMapping *mapping =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
         const LxExecutionApi32 api = {control_callback, 16, 0, LX_ABI_STACK32};
         if (!mapping)
             return NULL;
-        if (!lx_execution_emit_bridge32(GLoaderState.execution, lx_execution_mapping_host(mapping),
+        if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
                                         4096, &api) ||
-            !lx_execution_protect(GLoaderState.execution, mapping,
+            !lx_execution_protect(GProcessState.execution, mapping,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
-            lx_execution_unmap(GLoaderState.execution, mapping);
+            lx_execution_unmap(GProcessState.execution, mapping);
             return NULL;
         }
         anchor->control_bridge = mapping;
@@ -46,16 +46,16 @@ static PFNWP previous_frame_control_procedure(AnchorBlock *anchor)
     if (!anchor->frame_control_bridge)
     {
         LxGuestMapping *mapping =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
         const LxExecutionApi32 api = {frame_control_callback, 16, 0, LX_ABI_STACK32};
         if (!mapping)
             return NULL;
-        if (!lx_execution_emit_bridge32(GLoaderState.execution, lx_execution_mapping_host(mapping),
+        if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
                                         4096, &api) ||
-            !lx_execution_protect(GLoaderState.execution, mapping,
+            !lx_execution_protect(GProcessState.execution, mapping,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
-            lx_execution_unmap(GLoaderState.execution, mapping);
+            lx_execution_unmap(GProcessState.execution, mapping);
             return NULL;
         }
         anchor->frame_control_bridge = mapping;
@@ -75,16 +75,16 @@ static PFNWP previous_menu_procedure(AnchorBlock *anchor)
     if (!anchor->menu_bridge)
     {
         LxGuestMapping *mapping =
-            lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
         const LxExecutionApi32 api = {menu_callback, 16, 0, LX_ABI_STACK32};
         if (!mapping)
             return NULL;
-        if (!lx_execution_emit_bridge32(GLoaderState.execution, lx_execution_mapping_host(mapping),
+        if (!lx_execution_emit_bridge32(GProcessState.execution, lx_execution_mapping_host(mapping),
                                         4096, &api) ||
-            !lx_execution_protect(GLoaderState.execution, mapping,
+            !lx_execution_protect(GProcessState.execution, mapping,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
-            lx_execution_unmap(GLoaderState.execution, mapping);
+            lx_execution_unmap(GProcessState.execution, mapping);
             return NULL;
         }
         anchor->menu_bridge = mapping;
@@ -236,11 +236,11 @@ PFNWP callableWindowProcedure(AnchorBlock *anchor, PFNWP previous)
     else if (previous == WinDefDlgProc)
         callable = defaultGuestDialogProc();
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
-    else if (previous == menuProcedure && GLoaderState.execution)
+    else if (previous == menuProcedure && GProcessState.execution)
         callable = previous_menu_procedure(anchor);
-    else if (previous == controlProcedure && GLoaderState.execution)
+    else if (previous == controlProcedure && GProcessState.execution)
         callable = previous_control_procedure(anchor);
-    else if (previous == frameControlProcedure && GLoaderState.execution)
+    else if (previous == frameControlProcedure && GProcessState.execution)
         callable = previous_frame_control_procedure(anchor);
 #endif
     return callable;

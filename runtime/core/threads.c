@@ -31,11 +31,11 @@ void initOs2Tib_lib2ine(uint8 *tibspace, void *_topOfStack, const size_t stackle
     FIXME("This is probably 50% wrong");
     uint32 top = (uint32)(uintptr_t)topOfStack;
     uint32 tib_address = 0;
-    if (GLoaderState.execution)
+    if (GProcessState.execution)
     {
-        lx_execution_address(GLoaderState.execution, tibspace, LXTIBSIZE, 0, &tib_address);
+        lx_execution_address(GProcessState.execution, tibspace, LXTIBSIZE, 0, &tib_address);
         uint32 guest_top;
-        if (lx_execution_address(GLoaderState.execution, topOfStack, 0, 0, &guest_top))
+        if (lx_execution_address(GProcessState.execution, topOfStack, 0, 0, &guest_top))
             top = guest_top;
     }
     tib->tib_pexchain = UINT32_MAX;

@@ -62,9 +62,9 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 2);
     CHECK(SDL_WasInit(SDL_INIT_VIDEO) == 0);
-    GLoaderState.queryResourceSize = query;
-    GLoaderState.getResource = get;
-    GLoaderState.freeResource = release;
+    GProcessState.queryResourceSize = query;
+    GProcessState.getResource = get;
+    GProcessState.freeResource = release;
     shared_table = LoadAccelerators(123, (PSZ)(uintptr_t)91);
     CHECK(shared_table && released == 1);
     CHECK(CopyAcceleratorTable(shared_table, NULL, 0) == 2);

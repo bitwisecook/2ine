@@ -81,7 +81,7 @@ static ULONG drag_allocate(ULONG count, ULONG item_size, ULONG header, ULONG kin
     if (!allocation)
         return 0;
     allocation->mapping =
-        lx_execution_map(GLoaderState.execution, 0, (size + 4095u) & ~4095u, 3, 0);
+        lx_execution_map(GProcessState.execution, 0, (size + 4095u) & ~4095u, 3, 0);
     if (!allocation->mapping)
     {
         free(allocation);
@@ -94,7 +94,7 @@ static ULONG drag_allocate(ULONG count, ULONG item_size, ULONG header, ULONG kin
     allocation->references = kind == 2 ? count : 1;
     if (kind == 2 && !(allocation->shared = calloc(count, 1)))
     {
-        lx_execution_unmap(GLoaderState.execution, allocation->mapping);
+        lx_execution_unmap(GProcessState.execution, allocation->mapping);
         free(allocation);
         return 0;
     }
@@ -129,12 +129,12 @@ ULONG DrgAllocDragtransfer(ULONG count)
 
 static BOOL drag_info(ULONG address, uint8 wire[20])
 {
-    if (!address || !lx_execution_read(GLoaderState.execution, address, wire, 20))
+    if (!address || !lx_execution_read(GProcessState.execution, address, wire, 20))
         return FALSE;
     ULONG size = lx_guest_load_u32(wire), item = lx_guest_load_u16(wire + 4);
     ULONG count = lx_guest_load_u16(wire + 16);
     return item >= 36 && size >= 20 && count <= (size - 20) / item &&
-           lx_execution_memory(GLoaderState.execution, address, size, LX_GUEST_READ) != NULL;
+           lx_execution_memory(GProcessState.execution, address, size, LX_GUEST_READ) != NULL;
 }
 
 BOOL DrgAccessDraginfo(ULONG address)
@@ -176,7 +176,7 @@ static BOOL drag_free(ULONG address, ULONG kind)
     lx_host_mutex_unlock(drag_mutex);
     if (allocation)
     {
-        lx_execution_unmap(GLoaderState.execution, allocation->mapping);
+        lx_execution_unmap(GProcessState.execution, allocation->mapping);
         free(allocation->shared);
         free(allocation);
     }
@@ -213,8 +213,8 @@ BOOL DrgSetDragitem(ULONG address, ULONG item, ULONG bytes, ULONG index)
     ULONG target = DrgQueryDragitemPtr(address, index), copied = bytes < 36 ? bytes : 36;
     if (!target)
         return FALSE;
-    return !copied || (lx_execution_read(GLoaderState.execution, item, wire, copied) &&
-                       lx_execution_write(GLoaderState.execution, target, wire, copied));
+    return !copied || (lx_execution_read(GProcessState.execution, item, wire, copied) &&
+                       lx_execution_write(GProcessState.execution, target, wire, copied));
 }
 
 BOOL DrgDeleteDraginfoStrHandles(ULONG address)
@@ -232,8 +232,8 @@ BOOL DrgDeleteDraginfoStrHandles(ULONG address)
     BOOL result = TRUE;
     for (ULONG i = 0; i < count && result; i++)
     {
-        result =
-            lx_execution_read(GLoaderState.execution, address + 20 + i * stride, item, sizeof item);
+        result = lx_execution_read(GProcessState.execution, address + 20 + i * stride, item,
+                                   sizeof item);
         for (unsigned offset = 8; result && offset <= 24; offset += 4)
         {
             ULONG string = lx_guest_load_u32(item + offset), known = 0;
@@ -273,7 +273,7 @@ static BOOL rmf_token(const char *begin, const char *end, const char *wanted)
 BOOL DrgVerifyRMF(ULONG item_address, PSZ mechanism, PSZ format)
 {
     uint8 item[36];
-    if (!lx_execution_read(GLoaderState.execution, item_address, item, sizeof item))
+    if (!lx_execution_read(GProcessState.execution, item_address, item, sizeof item))
         return FALSE;
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(lx_guest_load_u32(item + 12), LX_HANDLE_PM_DRAG_STRING, &borrow))
@@ -335,7 +335,7 @@ BOOL DrgReleasePS(HPS space)
 static void drag_transfer_sent(ULONG transfer, ULONG message)
 {
     uint8 reply[2] = {0, 0};
-    lx_execution_write(GLoaderState.execution, transfer + 26, reply, sizeof reply);
+    lx_execution_write(GProcessState.execution, transfer + 26, reply, sizeof reply);
     if (message != 0x329 && message != 0x327) /* DM_RENDER, DM_RENDERPREPARE */
         return;
     lx_host_once(&drag_once, drag_initialize);
@@ -366,7 +366,7 @@ BOOL DrgPostTransferMsg(HWND window, ULONG message, ULONG transfer, ULONG flags,
 {
     (void)reserved;
     uint8 wire[28];
-    if (!lx_execution_read(GLoaderState.execution, transfer, wire, sizeof wire) ||
+    if (!lx_execution_read(GProcessState.execution, transfer, wire, sizeof wire) ||
         lx_guest_load_u32(wire) < sizeof wire)
         return FALSE;
     drag_transfer_sent(transfer, message);
@@ -376,7 +376,7 @@ BOOL DrgPostTransferMsg(HWND window, ULONG message, ULONG transfer, ULONG flags,
             return TRUE;
         if (!retry || !WinIsWindow(WinQueryAnchorBlock(window), window))
             return FALSE;
-        lx_execution_poll_termination(GLoaderState.execution);
+        lx_execution_poll_termination(GProcessState.execution);
         lx_host_sleep_ms(1);
     } while (retry);
     return FALSE;
@@ -528,7 +528,7 @@ static void drag_paint(DragCanvas *c, const DragImage *image)
 static ULONG drag_points(const DragImage *image, POINTL *points)
 {
     ULONG count = image->points > DRAG_POINT_LIMIT ? DRAG_POINT_LIMIT : image->points;
-    if (!count || !lx_execution_read(GLoaderState.execution, image->handle, points,
+    if (!count || !lx_execution_read(GProcessState.execution, image->handle, points,
                                      (size_t)count * sizeof *points))
         return 0;
     for (ULONG i = 0; i < count; i++)
@@ -553,7 +553,7 @@ static HPOINTER drag_pointer(ULONG address, ULONG count)
     for (ULONG i = 0; i < count; i++)
     {
         uint8 wire[24];
-        if (!lx_execution_read(GLoaderState.execution, address, wire, sizeof wire))
+        if (!lx_execution_read(GProcessState.execution, address, wire, sizeof wire))
             break;
         ULONG size = lx_guest_load_u16(wire);
         address += size >= sizeof wire ? size : sizeof wire;
@@ -641,7 +641,7 @@ HWND DrgDrag(HWND source, ULONG info, ULONG images, ULONG count, LONG terminate,
     uint8 header[20];
     HAB hab = WinQueryAnchorBlock(source);
     if (!hab || reserved || !drag_info(info, header) || count > 65535 ||
-        (count && !lx_execution_memory(GLoaderState.execution, images, count * 24, LX_GUEST_READ)))
+        (count && !lx_execution_memory(GProcessState.execution, images, count * 24, LX_GUEST_READ)))
         return 0;
     lx_guest_store_u32(header + 8, source);
     HWND previous = 0, result = 0;
@@ -663,7 +663,7 @@ HWND DrgDrag(HWND source, ULONG info, ULONG images, ULONG count, LONG terminate,
             break;
         lx_guest_store_u16(header + 12, point.x);
         lx_guest_store_u16(header + 14, point.y);
-        if (!lx_execution_write(GLoaderState.execution, info, header, sizeof header))
+        if (!lx_execution_write(GProcessState.execution, info, header, sizeof header))
             break;
         HWND target = WinWindowFromPoint(HWND_DESKTOP, &point, TRUE);
         if (target != previous)
@@ -695,7 +695,7 @@ HWND DrgDrag(HWND source, ULONG info, ULONG images, ULONG count, LONG terminate,
         {
             if (accepted && target)
             {
-                lx_execution_write(GLoaderState.execution, info, header, sizeof header);
+                lx_execution_write(GProcessState.execution, info, header, sizeof header);
                 WinSendMsg(target, 0x32f, (MPARAM)(uintptr_t)info, 0);
                 result = target;
             }
@@ -704,7 +704,7 @@ HWND DrgDrag(HWND source, ULONG info, ULONG images, ULONG count, LONG terminate,
         QMSG message;
         while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
             WinDispatchMsg(hab, &message);
-        lx_execution_poll_termination(GLoaderState.execution);
+        lx_execution_poll_termination(GProcessState.execution);
         lx_host_sleep_ms(5);
     }
     if (previous && !result)

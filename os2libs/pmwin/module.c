@@ -11,7 +11,7 @@ static int ProcessDisplayReference;
 
 static int initializeProcessDisplay(void)
 {
-    const LxModule *program = GLoaderState.main_module;
+    const LxModule *program = GProcessState.main_module;
     /* GUI imports load before guest DLL initialization can create PM threads. */
     if (ProcessDisplayReference || !program || !program->is_lx ||
         (program->header.lx.module_flags & 0x0300) != 0x0300)
@@ -60,7 +60,7 @@ LX_PRIVATE Window desktop_window;
 PFNWP defaultGuestWindowProc(void)
 {
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
-    if (GLoaderState.execution && obj32.mapping && bridge_address_WinDefWindowProc)
+    if (GProcessState.execution && obj32.mapping && bridge_address_WinDefWindowProc)
         return (PFNWP)(uintptr_t)(obj32.guest_base +
                                   (uint32)((uint8 *)bridge_address_WinDefWindowProc -
                                            (uint8 *)obj32.addr));
@@ -71,7 +71,7 @@ PFNWP defaultGuestWindowProc(void)
 PFNWP defaultGuestDialogProc(void)
 {
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
-    if (GLoaderState.execution && obj32.mapping && bridge_address_WinDefDlgProc)
+    if (GProcessState.execution && obj32.mapping && bridge_address_WinDefDlgProc)
         return (PFNWP)(uintptr_t)(obj32.guest_base +
                                   (uint32)((uint8 *)bridge_address_WinDefDlgProc -
                                            (uint8 *)obj32.addr));

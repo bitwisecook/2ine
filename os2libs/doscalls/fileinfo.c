@@ -374,7 +374,7 @@ APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
     if (capacity < size)
         return ERROR_BUFFER_OVERFLOW;
     uint32 address;
-    if (!lx_execution_address(GLoaderState.execution, buffer, size, LX_GUEST_WRITE, &address))
+    if (!lx_execution_address(GProcessState.execution, buffer, size, LX_GUEST_WRITE, &address))
         return ERROR_INVALID_PARAMETER;
     FILESTATUS4 value = {0};
     const APIRET result = DosQueryFileInfo(hf, level, &value, sizeof value);
@@ -392,7 +392,7 @@ APIRET16 Dos16SetFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity
     if (capacity < 22)
         return ERROR_BUFFER_OVERFLOW;
     uint32 address;
-    if (!lx_execution_address(GLoaderState.execution, buffer, 22, LX_GUEST_READ, &address))
+    if (!lx_execution_address(GProcessState.execution, buffer, 22, LX_GUEST_READ, &address))
         return ERROR_INVALID_PARAMETER;
     FILESTATUS3 value = {0};
     /* The current file-info setter applies the permission attribute. */

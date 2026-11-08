@@ -287,7 +287,7 @@ ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG 
         {
             uint32 error;
             char *host =
-                GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(target, &error) : NULL;
+                GProcessState.makeUnixPath ? GProcessState.makeUnixPath(target, &error) : NULL;
             BOOL exists = host && lx_host_path_exists(host);
             free(host);
             if (!exists)
@@ -608,8 +608,8 @@ BOOL WinEnumObjectClasses(PVOID guest_output, PULONG capacity)
                     at = next;
                 }
                 if (ok)
-                    ok = lx_execution_write(GLoaderState.execution, (uint32)(uintptr_t)guest_output,
-                                            wire, total);
+                    ok = lx_execution_write(GProcessState.execution,
+                                            (uint32)(uintptr_t)guest_output, wire, total);
                 free(wire);
             }
         }
@@ -1311,8 +1311,8 @@ ULONG M_WPDataFileNewClass(ULONG major, ULONG minor)
 static uint32 exported_data(void *host)
 {
     uint32 address = 0;
-    return lx_execution_address(GLoaderState.execution, host, 1, LX_GUEST_READ, &address) ? address
-                                                                                          : 0;
+    return lx_execution_address(GProcessState.execution, host, 1, LX_GUEST_READ, &address) ? address
+                                                                                           : 0;
 }
 
 uint32 pmwpExportedClassData(PmwpClassId id)
@@ -1589,7 +1589,7 @@ BOOL pmwpStoreStartProgram(ULONG handle, const char *parameters)
 char *pmwpHostPath(const char *guest_path)
 {
     uint32 error;
-    return GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(guest_path, &error) : NULL;
+    return GProcessState.makeUnixPath ? GProcessState.makeUnixPath(guest_path, &error) : NULL;
 }
 
 int pmwpPathKind(const char *guest_path)

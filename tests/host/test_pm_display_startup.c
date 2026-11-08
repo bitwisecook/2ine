@@ -73,12 +73,12 @@ int main(int argc, char **argv)
                                      : !strcmp(argv[2], "compatible") ? 0x0200
                                                                       : 0;
     strcpy(program.name, "PMSTARTUP");
-    GLoaderState.main_module = !strcmp(argv[2], "none") ? NULL : &program;
+    GProcessState.main_module = !strcmp(argv[2], "none") ? NULL : &program;
     char error[512];
-    GLoaderState.execution = lx_execution_create("unicorn", NULL, error, sizeof error);
-    if (!GLoaderState.execution)
+    GProcessState.execution = lx_execution_create("unicorn", NULL, error, sizeof error);
+    if (!GProcessState.execution)
         fprintf(stderr, "Execution initialization failed: %s\n", error);
-    CHECK(GLoaderState.execution);
+    CHECK(GProcessState.execution);
     LxHostLibrary *module = lx_host_library_open(argv[1], error, sizeof error);
     CHECK(module);
     LxNativeModuleInitEntryPoint initialize =
@@ -118,10 +118,10 @@ int main(int argc, char **argv)
             CHECK(!SDL_WasInit(SDL_INIT_VIDEO));
         }
     }
-    GLoaderState.main_module = NULL;
+    GProcessState.main_module = NULL;
     lx_host_library_close(module);
-    lx_execution_destroy(GLoaderState.execution);
-    GLoaderState.execution = NULL;
+    lx_execution_destroy(GProcessState.execution);
+    GProcessState.execution = NULL;
     printf("PM display startup %s: reference balance, no eager HAB or host windows passed\n",
            argv[2]);
     return 0;

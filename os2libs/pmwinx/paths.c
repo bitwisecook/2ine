@@ -31,8 +31,8 @@ ULONG GetWindowsDirectory(PSZ output, ULONG capacity)
 
 ULONG GetCurrentDirectory(ULONG capacity, PSZ output)
 {
-    ULONG drive = GLoaderState.current_disk;
-    const char *directory = drive >= 1 && drive <= 26 ? GLoaderState.current_dir[drive - 1] : NULL;
+    ULONG drive = GProcessState.current_disk;
+    const char *directory = drive >= 1 && drive <= 26 ? GProcessState.current_dir[drive - 1] : NULL;
     if (!directory)
     {
         open32SetError(15);
@@ -85,7 +85,7 @@ BOOL SetCurrentDirectory(PSZ name)
         if (drive >= 'a' && drive <= 'z')
             drive -= 'a' - 'A';
         if (drive >= 'A' && drive <= 'Z')
-            GLoaderState.current_disk = drive - 'A' + 1;
+            GProcessState.current_disk = drive - 'A' + 1;
     }
     free(copy);
     if (error)
@@ -152,7 +152,7 @@ ULONG GetFullPathName(PSZ name, ULONG capacity, PSZ output, PSZ *filepart)
 ULONG GetDriveType(PSZ root)
 {
     TRACE_NATIVE("GetDriveType('%s')", root ? root : "");
-    ULONG drive = GLoaderState.current_disk;
+    ULONG drive = GProcessState.current_disk;
     if (root)
     {
         unsigned char letter = (unsigned char)root[0];
@@ -163,7 +163,7 @@ ULONG GetDriveType(PSZ root)
             return 1; /* DRIVE_NO_ROOT_DIR */
         drive = letter - 'A' + 1;
     }
-    if (!drive || drive > 26 || !(GLoaderState.diskmap & (1u << (drive - 1))))
+    if (!drive || drive > 26 || !(GProcessState.diskmap & (1u << (drive - 1))))
         return 1;
     /* Configured drives are fixed, directory-backed virtual volumes. */
     return 3;
@@ -171,7 +171,7 @@ ULONG GetDriveType(PSZ root)
 
 ULONG GetLogicalDrives(void)
 {
-    return GLoaderState.diskmap & 0x03ffffffu;
+    return GProcessState.diskmap & 0x03ffffffu;
 }
 
 ULONG GetLogicalDriveStrings(ULONG capacity, PSZ output)
@@ -212,7 +212,7 @@ BOOL GetVolumeInformation(PSZ root, PSZ label, ULONG label_capacity, PULONG seri
     }
     ULONG drive =
         root ? (ULONG)((root[0] >= 'a' && root[0] <= 'z' ? root[0] - 'a' : root[0] - 'A') + 1)
-             : GLoaderState.current_disk;
+             : GProcessState.current_disk;
     typedef APIRET(OS2API * VolumeFn)(ULONG, ULONG, PVOID, ULONG);
     typedef APIRET(OS2API * AttachFn)(PSZ, ULONG, ULONG, PFSQBUFFER2, PULONG);
     VolumeFn volume = (VolumeFn)open32DosService("DosQueryFSInfo");

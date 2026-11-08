@@ -121,14 +121,14 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
             uint8 minimum[4], maximum[4];
             lx_guest_store_u32(minimum, (ULONG)state->minimum);
             lx_guest_store_u32(maximum, (ULONG)state->maximum);
-            if (!lx_execution_memory(GLoaderState.execution, first, 4, LX_GUEST_WRITE) ||
-                !lx_execution_memory(GLoaderState.execution, second, 4, LX_GUEST_WRITE))
+            if (!lx_execution_memory(GProcessState.execution, first, 4, LX_GUEST_WRITE) ||
+                !lx_execution_memory(GProcessState.execution, second, 4, LX_GUEST_WRITE))
             {
                 open32SetError(87);
                 return 0;
             }
-            lx_execution_write(GLoaderState.execution, first, minimum, 4);
-            lx_execution_write(GLoaderState.execution, second, maximum, 4);
+            lx_execution_write(GProcessState.execution, first, minimum, 4);
+            lx_execution_write(GProcessState.execution, second, maximum, 4);
             return 0;
         }
         case 0x87:

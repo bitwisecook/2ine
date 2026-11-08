@@ -594,10 +594,10 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
 
     ULONG size = 0, result = 0;
     void *data = NULL;
-    if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
-        GLoaderState.queryResourceSize(module, resource_names, type, &size) || size < 4 ||
+    if (!GProcessState.queryResourceSize || !GProcessState.getResource ||
+        GProcessState.queryResourceSize(module, resource_names, type, &size) || size < 4 ||
         size > maximum_name_table ||
-        GLoaderState.getResource(module, resource_names, type, &data) || !data)
+        GProcessState.getResource(module, resource_names, type, &data) || !data)
         return 0;
     const uint8 *bytes = data;
     ULONG count = lx_guest_load_u32(bytes);
@@ -622,8 +622,8 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
         }
         offset = (size_t)(end - bytes) + 1;
     }
-    if (GLoaderState.freeResource)
-        GLoaderState.freeResource(data);
+    if (GProcessState.freeResource)
+        GProcessState.freeResource(data);
     if (!valid)
     {
         open32SetError(13);
@@ -681,7 +681,7 @@ static BOOL adopt_loaded_menu(HWND handle, Open32Menu **pending, unsigned depth,
     menu->next = *pending;
     *pending = menu;
     ULONG codepage = window->menu->codepage ? window->menu->codepage : 437;
-    ULONG display_codepage = GLoaderState.process_codepage ? GLoaderState.process_codepage : 437;
+    ULONG display_codepage = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
     MenuText **link = &menu->texts;
     for (size_t i = 0; i < window->menu->count; i++)
     {
@@ -725,8 +725,8 @@ ULONG LoadMenu(ULONG module, PSZ resource)
         return 0;
     }
     prune_menus();
-    if ((!module || module == UINT32_MAX) && GLoaderState.main_module)
-        module = GLoaderState.main_module->handle;
+    if ((!module || module == UINT32_MAX) && GProcessState.main_module)
+        module = GProcessState.main_module->handle;
     ULONG identity = menu_resource_id(module, resource);
     if (!identity)
     {

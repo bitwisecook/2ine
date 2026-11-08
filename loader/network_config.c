@@ -176,7 +176,7 @@ void lxPrepareNetworkConfiguration(void)
         }
         free(hosts);
     }
-    if (!ok && GLoaderState.trace_native)
+    if (!ok && GProcessState.trace_native)
         fprintf(stderr, "2ine: could not refresh managed resolver files in %s\n", etc);
     lx_host_network_destroy(&network);
     free(directory);

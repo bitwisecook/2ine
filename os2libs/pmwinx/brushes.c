@@ -626,10 +626,10 @@ static ULONG packed_pattern_brush(ULONG address, ULONG usage)
     uint8 header[40];
     size_t info_bytes = 0, pixel_bytes = 0, checked_info = 0, checked_pixels = 0;
     LxGuestBorrow dib = {0};
-    if (!address || !lx_execution_read(GLoaderState.execution, address, header, sizeof header) ||
+    if (!address || !lx_execution_read(GProcessState.execution, address, header, sizeof header) ||
         !open32DibBuffers(header, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
         !pixel_bytes ||
-        !lx_execution_borrow(GLoaderState.execution, address, info_bytes + pixel_bytes,
+        !lx_execution_borrow(GProcessState.execution, address, info_bytes + pixel_bytes,
                              LX_GUEST_READ, &dib))
     {
         open32SetError(87);

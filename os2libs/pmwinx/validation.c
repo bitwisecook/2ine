@@ -9,7 +9,7 @@ static BOOL bad_span(PVOID pointer, ULONG bytes, unsigned protection)
         return FALSE;
     uintptr_t address = (uintptr_t)pointer;
     return address > UINT32_MAX ||
-           !lx_execution_memory(GLoaderState.execution, (uint32)address, bytes, protection);
+           !lx_execution_memory(GProcessState.execution, (uint32)address, bytes, protection);
 }
 
 BOOL IsBadReadPtr(PVOID pointer, ULONG bytes)

@@ -100,18 +100,18 @@ char *lxMakeUnixPath(const char *os2path, uint32 *err)
         }
         else
         {
-            drive = (GLoaderState.current_disk - 1) + 'A';
+            drive = (GProcessState.current_disk - 1) + 'A';
         }
 
         driveidx = drive - 'A';
-        mountpoint = GLoaderState.disks[driveidx];
+        mountpoint = GProcessState.disks[driveidx];
         if (!mountpoint)
         {
             *err = 26;
             return NULL;
         }
 
-        fallback_cwd = GLoaderState.current_dir[driveidx];
+        fallback_cwd = GProcessState.current_dir[driveidx];
         if ((*os2path != '\\') && (*os2path != '/'))
         {
             cwd = fallback_cwd;

@@ -6,11 +6,11 @@ static uint32 bridge32_mmioOpen(uint8 *a)
     /* A file name makes MMIOINFO optional; a memory file requires it. */
     /* MMIOINFO is 80 bytes; the IOProc's view is copied back before this returns. */
     if ((info_address || !name_address) &&
-        !lx_execution_borrow(GLoaderState.execution, info_address, 80,
+        !lx_execution_borrow(GProcessState.execution, info_address, 80,
                              LX_GUEST_READ | LX_GUEST_WRITE, &info))
         return 0;
     char *name =
-        name_address ? lx_execution_copy_string(GLoaderState.execution, name_address, 512) : NULL;
+        name_address ? lx_execution_copy_string(GProcessState.execution, name_address, 512) : NULL;
     uint32 result = !name_address || name ? mmioOpen(name, info.host, lx_guest_load_u32(a + 8)) : 0;
     free(name);
     lx_execution_release(&info);
@@ -36,7 +36,7 @@ static uint32 mmio_transfer_bridge(uint8 *a, int writing)
     if (!count && lx_guest_load_u32(a + 4))
         return 0;
     if (count >= 0 &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), (size_t)count,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), (size_t)count,
                             writing ? LX_GUEST_READ : LX_GUEST_WRITE, &data))
         result = writing ? mmioWrite(lx_guest_load_u32(a), data.host, count)
                          : mmioRead(lx_guest_load_u32(a), data.host, count);
@@ -66,9 +66,9 @@ static uint32 bridge32_mmioGetHeader(uint8 *a)
     int32_t capacity = (int32_t)lx_guest_load_u32(a + 8);
     uint32 result = 0x1969;
     if (capacity > 0 &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), (size_t)capacity,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), (size_t)capacity,
                             LX_GUEST_WRITE, &data) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
                             &count))
     {
         LONG bytes = 0;

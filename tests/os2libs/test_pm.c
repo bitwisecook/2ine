@@ -79,12 +79,12 @@ static void pointer_contracts(HPS ps)
     icon_resource[72] = 0x40; /* Bottom-right AND mask keeps the destination. */
     icon_resource[80] = 0;    /* Transparent pixels have a zero XOR image. */
     icon_resource[84] = 0x80;
-    uint32 (*old_query)(uint32, uint32, uint32, uint32 *) = GLoaderState.queryResourceSize;
-    uint32 (*old_get)(uint32, uint32, uint32, void **) = GLoaderState.getResource;
-    uint32 (*old_free)(void *) = GLoaderState.freeResource;
-    GLoaderState.queryResourceSize = icon_query;
-    GLoaderState.getResource = icon_get;
-    GLoaderState.freeResource = icon_release;
+    uint32 (*old_query)(uint32, uint32, uint32, uint32 *) = GProcessState.queryResourceSize;
+    uint32 (*old_get)(uint32, uint32, uint32, void **) = GProcessState.getResource;
+    uint32 (*old_free)(void *) = GProcessState.freeResource;
+    GProcessState.queryResourceSize = icon_query;
+    GProcessState.getResource = icon_get;
+    GProcessState.freeResource = icon_release;
     HPOINTER pointer = WinLoadPointer(HWND_DESKTOP, 0, 1);
     CHECK(pointer && icon_releases == 1);
     RECTL background = {0, 0, 5, 5};
@@ -99,9 +99,9 @@ static void pointer_contracts(HPS ps)
     icon_size = 30;
     CHECK(!WinLoadPointer(HWND_DESKTOP, 0, 1) && icon_releases == 2);
     CHECK(!WinLoadPointer(HWND_DESKTOP, 0, 2));
-    GLoaderState.queryResourceSize = old_query;
-    GLoaderState.getResource = old_get;
-    GLoaderState.freeResource = old_free;
+    GProcessState.queryResourceSize = old_query;
+    GProcessState.getResource = old_get;
+    GProcessState.freeResource = old_free;
     for (LONG id = 10; id <= 14; id++)
     {
         HPOINTER shared = WinQuerySysPointer(HWND_DESKTOP, id, FALSE);

@@ -44,15 +44,15 @@ static BOOL write_file(PmFileDialog *dialog)
 
 static BOOL absolute_name(const char *name, char *full, size_t capacity)
 {
-    unsigned drive = GLoaderState.current_disk >= 1 && GLoaderState.current_disk <= 26
-                         ? (unsigned)GLoaderState.current_disk - 1
+    unsigned drive = GProcessState.current_disk >= 1 && GProcessState.current_disk <= 26
+                         ? (unsigned)GProcessState.current_disk - 1
                          : 2;
     if (name[0] && name[1] == ':' && isalpha((unsigned char)name[0]))
     {
         drive = (unsigned)(toupper((unsigned char)name[0]) - 'A');
         name += 2;
     }
-    const char *cwd = GLoaderState.current_dir[drive] ? GLoaderState.current_dir[drive] : "";
+    const char *cwd = GProcessState.current_dir[drive] ? GProcessState.current_dir[drive] : "";
     BOOL rooted = *name == '\\' || *name == '/';
     if (rooted)
         cwd = "";
@@ -160,10 +160,10 @@ static void populate_files(PmFileDialog *dialog)
     WinSendDlgItemMsg(window, 266, 0x16e, 0, 0);
     WinSetDlgItemText(window, 270, dialog->directory);
     TRACE_NATIVE("populate_files('%s', '%s')", dialog->directory, dialog->filter);
-    if (!GLoaderState.makeUnixPath)
+    if (!GProcessState.makeUnixPath)
         return;
     uint32 error = 0;
-    char *host = GLoaderState.makeUnixPath(dialog->directory, &error);
+    char *host = GProcessState.makeUnixPath(dialog->directory, &error);
     if (!host)
         return;
     LxHostFsError status;
@@ -222,7 +222,7 @@ static void initialize_file(PmFileDialog *dialog)
     }
     else
         snprintf(dialog->directory, sizeof dialog->directory, "%c:\\",
-                 'A' + GLoaderState.current_disk - 1);
+                 'A' + GProcessState.current_disk - 1);
     snprintf(dialog->filter, sizeof dialog->filter, "%s",
              strpbrk(filename, "*?") ? filename : "*.*");
     if (strpbrk(filename, "*?"))
@@ -250,10 +250,10 @@ static void initialize_file(PmFileDialog *dialog)
         WinSendDlgItemMsg(dialog->window, 260, 0x16e, 0, 0);
         unsigned selected = 0, count = 0;
         for (unsigned i = 0; i < 26; i++)
-            if (GLoaderState.disks[i])
+            if (GProcessState.disks[i])
             {
                 char drive[3] = {(char)('A' + i), ':', 0};
-                if (i + 1 == (unsigned)GLoaderState.current_disk)
+                if (i + 1 == (unsigned)GProcessState.current_disk)
                     selected = count;
                 WinSendDlgItemMsg(dialog->window, 260, 0x161, (MPARAM)(intptr_t)-1, drive);
                 count++;
@@ -304,7 +304,7 @@ static BOOL select_file(PmFileDialog *dialog)
         return FALSE;
     }
     uint32 error = 0;
-    char *host = GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(full, &error) : NULL;
+    char *host = GProcessState.makeUnixPath ? GProcessState.makeUnixPath(full, &error) : NULL;
     if (!host)
     {
         file_error(dialog, "Invalid file path");
@@ -337,7 +337,7 @@ static BOOL select_file(PmFileDialog *dialog)
     Window *window = getWindowFromHWND(getAnchorBlockNoHAB(), dialog->window);
     if (!window)
         return FALSE;
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     BOOL guest =
         execution && (uintptr_t)window->window_proc <= UINT32_MAX &&
         lx_execution_memory(execution, (uint32)(uintptr_t)window->window_proc, 1, LX_GUEST_EXECUTE);

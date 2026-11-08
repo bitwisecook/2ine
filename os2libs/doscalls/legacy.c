@@ -68,15 +68,15 @@ static LxModule *borrowLegacyModule(USHORT id, LxHandleBorrow *borrow)
 {
     LxModule *found = NULL;
     grabLock(&GMutexDosCalls);
-    for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+    for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
         if ((USHORT)module->handle == id &&
             lx_handle_borrow(module->handle, LX_HANDLE_MODULE, borrow))
         {
             found = borrow->resource;
             break;
         }
-    if (!found && GLoaderState.main_module && (USHORT)GLoaderState.main_module->handle == id &&
-        lx_handle_borrow(GLoaderState.main_module->handle, LX_HANDLE_MODULE, borrow))
+    if (!found && GProcessState.main_module && (USHORT)GProcessState.main_module->handle == id &&
+        lx_handle_borrow(GProcessState.main_module->handle, LX_HANDLE_MODULE, borrow))
         found = borrow->resource;
     ungrabLock(&GMutexDosCalls);
     return found;
@@ -116,11 +116,11 @@ APIRET16 Dos16GetProcAddr(USHORT id, ULONG encoded, PULONG address)
     LxGuestArgument name = {0};
     APIRET result = ERROR_INVALID_NAME;
     if (encoded <= UINT16_MAX ||
-        lx_guest_argument_strings(GLoaderState.execution, encoded, 1, 256, 0, &name))
+        lx_guest_argument_strings(GProcessState.execution, encoded, 1, 256, 0, &name))
     {
         const LxExport *entry = NULL;
-        if (encoded <= UINT16_MAX && GLoaderState.findModuleOrdinal)
-            entry = GLoaderState.findModuleOrdinal(module, encoded);
+        if (encoded <= UINT16_MAX && GProcessState.findModuleOrdinal)
+            entry = GProcessState.findModuleOrdinal(module, encoded);
         else
             for (ULONG i = 0; i < module->num_exports; i++)
             {
@@ -136,7 +136,7 @@ APIRET16 Dos16GetProcAddr(USHORT id, ULONG encoded, PULONG address)
         {
             void *host =
                 entry->indirect == LX_EXPORT_INDIRECT ? *(void **)entry->addr : entry->addr;
-            ULONG far_address = GLoaderState.convert32to1616(host);
+            ULONG far_address = GProcessState.convert32to1616(host);
             if (!far_address && entry->object && entry->object->alias != UINT16_MAX)
             {
                 uintptr_t offset = (uintptr_t)host - (uintptr_t)entry->object->addr;

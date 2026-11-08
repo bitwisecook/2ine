@@ -193,11 +193,11 @@ MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
         ActivePaint = &scope;
     }
     MRESULT result;
-    if (GLoaderState.execution && (uintptr_t)winproc <= UINT32_MAX &&
-        lx_execution_memory(GLoaderState.execution, (uint32_t)(uintptr_t)winproc, 1,
+    if (GProcessState.execution && (uintptr_t)winproc <= UINT32_MAX &&
+        lx_execution_memory(GProcessState.execution, (uint32_t)(uintptr_t)winproc, 1,
                             LX_GUEST_EXECUTE))
         result = (MRESULT)(uintptr_t)lx_execution_callback32_4(
-            GLoaderState.execution, (uint32_t)(uintptr_t)winproc, win->hwnd, msg,
+            GProcessState.execution, (uint32_t)(uintptr_t)winproc, win->hwnd, msg,
             (uint32_t)(uintptr_t)mp1, (uint32_t)(uintptr_t)mp2);
     else
         result = winproc(win->hwnd, msg, mp1, mp2);
@@ -722,7 +722,7 @@ static void pumpFilteredEvents(AnchorBlock *anchor, LxPmPaintFilter paint_filter
     LxHostEvent event;
     while (!anchor->message_queue.head)
     {
-        lx_execution_poll_termination(GLoaderState.execution);
+        lx_execution_poll_termination(GProcessState.execution);
         drainForeignMessages(anchor);
         lx_pm_dive_pump(anchor);
         lx_pm_video_pump(anchor);
@@ -965,32 +965,32 @@ BOOL WinPostQueueMsg(HMQ hmq, ULONG msg, MPARAM mp1, MPARAM mp2)
 
 MRESULT sendWindowPos(Window *win, ULONG msg, SWP *position)
 {
-    if (!TWOINE_PORTABLE_LOADER || !GLoaderState.execution)
+    if (!TWOINE_PORTABLE_LOADER || !GProcessState.execution)
         return sendMessage(win, msg, position, 0);
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     if (!mapping)
         return 0;
     memcpy(lx_execution_mapping_host(mapping), position, sizeof *position);
     MRESULT result =
         sendMessage(win, msg, (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping), 0);
     memcpy(position, lx_execution_mapping_host(mapping), sizeof *position);
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
     return result;
 }
 
 /* A window procedure may be guest code, so the rectangle travels in guest memory. */
 BOOL sendEraseBackground(Window *client, HPS space, const RECTL *rectangle)
 {
-    if (!TWOINE_PORTABLE_LOADER || !GLoaderState.execution)
+    if (!TWOINE_PORTABLE_LOADER || !GProcessState.execution)
         return sendMessage(client, WM_ERASEBACKGROUND, (MPARAM)(uintptr_t)space,
                            (MPARAM)rectangle) != 0;
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     if (!mapping)
         return FALSE;
     memcpy(lx_execution_mapping_host(mapping), rectangle, sizeof *rectangle);
     BOOL result = sendMessage(client, WM_ERASEBACKGROUND, (MPARAM)(uintptr_t)space,
                               (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping)) != 0;
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
     return result;
 }
 

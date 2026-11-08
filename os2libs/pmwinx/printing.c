@@ -18,7 +18,7 @@ static ULONG printer_block(const void *data, size_t size)
 {
     ULONG block = GlobalAlloc(0x42, (ULONG)size);
     ULONG address = block ? GlobalLock(block) : 0;
-    if (!address || !lx_execution_write(GLoaderState.execution, address, data, size))
+    if (!address || !lx_execution_write(GProcessState.execution, address, data, size))
     {
         if (address)
             GlobalUnlock(block);
@@ -36,8 +36,8 @@ BOOL PrintDlg(PVOID pointer)
     uint32 address = (uint32)(uintptr_t)pointer;
     uint8 record[PRINT_DIALOG_BYTES];
     if ((uintptr_t)pointer > UINT32_MAX ||
-        !lx_execution_read(GLoaderState.execution, address, record, sizeof record) ||
-        !lx_execution_memory(GLoaderState.execution, address, sizeof record, LX_GUEST_WRITE) ||
+        !lx_execution_read(GProcessState.execution, address, record, sizeof record) ||
+        !lx_execution_memory(GProcessState.execution, address, sizeof record, LX_GUEST_WRITE) ||
         lx_guest_load_u32(record) != sizeof record)
     {
         open32CommonDialogError(1); /* CDERR_STRUCTSIZE */
@@ -117,7 +117,7 @@ BOOL PrintDlg(PVOID pointer)
     lx_guest_store_u32(record + 12, new_names);
     lx_guest_store_u32(record + 16, dc);
     lx_guest_store_u16(record + 32, 1);
-    if (!lx_execution_write(GLoaderState.execution, address, record, sizeof record))
+    if (!lx_execution_write(GProcessState.execution, address, record, sizeof record))
     {
         GlobalFree(new_mode);
         GlobalFree(new_names);
@@ -166,10 +166,10 @@ LONG StartDoc(ULONG handle, PVOID info)
     }
     uint32 name = lx_guest_load_u32((uint8 *)info + 4),
            output = lx_guest_load_u32((uint8 *)info + 8);
-    char *title = name ? lx_execution_copy_string(GLoaderState.execution, name, 4096)
+    char *title = name ? lx_execution_copy_string(GProcessState.execution, name, 4096)
                        : strdup("Print Job"),
          *destination =
-             output ? lx_execution_copy_string(GLoaderState.execution, output, 4096) : NULL;
+             output ? lx_execution_copy_string(GProcessState.execution, output, 4096) : NULL;
     if (!title || (output && !destination) ||
         (destination && *destination && strcasecmp(destination, "FILE:")))
     {
@@ -263,7 +263,7 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
         return TRUE;
     uint8 settings[70];
     if ((uintptr_t)mode > UINT32_MAX ||
-        !lx_execution_read(GLoaderState.execution, (uint32)(uintptr_t)mode, settings,
+        !lx_execution_read(GProcessState.execution, (uint32)(uintptr_t)mode, settings,
                            sizeof settings) ||
         lx_guest_load_u16(settings + 36) < sizeof settings || !memchr(settings, 0, 32))
     {
@@ -298,7 +298,7 @@ BOOL open32PrinterApply(ULONG handle, PVOID mode)
     uint8 settings[70];
     if (!mode)
         return TRUE;
-    if (!lx_execution_read(GLoaderState.execution, (uint32)(uintptr_t)mode, settings,
+    if (!lx_execution_read(GProcessState.execution, (uint32)(uintptr_t)mode, settings,
                            sizeof settings))
     {
         open32SetError(87);

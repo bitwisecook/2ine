@@ -2,7 +2,7 @@
 static uint32 bridge32_WinAddSwitchEntry(uint8 *a)
 {
     SWCNTRL value;
-    return lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a), &value, sizeof value)
+    return lx_execution_read(GProcessState.execution, lx_guest_load_u32(a), &value, sizeof value)
                ? WinAddSwitchEntry(&value)
                : 0;
 }
@@ -15,7 +15,8 @@ static uint32 bridge32_WinRemoveSwitchEntry(uint8 *a)
 static uint32 bridge32_WinChangeSwitchEntry(uint8 *a)
 {
     SWCNTRL value;
-    return lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 4), &value, sizeof value)
+    return lx_execution_read(GProcessState.execution, lx_guest_load_u32(a + 4), &value,
+                             sizeof value)
                ? WinChangeSwitchEntry(lx_guest_load_u32(a), &value)
                : ERROR_INVALID_PARAMETER;
 }
@@ -24,7 +25,7 @@ static uint32 bridge32_WinQuerySwitchEntry(uint8 *a)
 {
     SWCNTRL value;
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), sizeof value,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), sizeof value,
                              LX_GUEST_WRITE, &output))
         return ERROR_INVALID_PARAMETER;
     uint32 result = WinQuerySwitchEntry(lx_guest_load_u32(a), &value);
@@ -45,7 +46,7 @@ static int profile_strings(uint8 *arguments, char **strings, unsigned count)
     {
         uint32 pointer = lx_guest_load_u32(arguments + 4 + i * 4);
         strings[i] =
-            pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 65536) : NULL;
+            pointer ? lx_execution_copy_string(GProcessState.execution, pointer, 65536) : NULL;
         if (pointer && !strings[i])
         {
             for (unsigned j = 0; j < i; j++)
@@ -81,16 +82,16 @@ static uint32 bridge32_PrfQueryProfile(uint8 *a)
 {
     LxGuestBorrow record = {0}, user = {0}, system = {0};
     uint32 result = FALSE;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16,
                              LX_GUEST_READ | LX_GUEST_WRITE, &record))
         return FALSE;
     uint8 *wire = record.host;
     ULONG user_capacity = lx_guest_load_u32(wire), system_capacity = lx_guest_load_u32(wire + 8);
     uint32 user_pointer = lx_guest_load_u32(wire + 4),
            system_pointer = lx_guest_load_u32(wire + 12);
-    if ((user_capacity && !lx_execution_borrow(GLoaderState.execution, user_pointer, user_capacity,
+    if ((user_capacity && !lx_execution_borrow(GProcessState.execution, user_pointer, user_capacity,
                                                LX_GUEST_WRITE, &user)) ||
-        (system_capacity && !lx_execution_borrow(GLoaderState.execution, system_pointer,
+        (system_capacity && !lx_execution_borrow(GProcessState.execution, system_pointer,
                                                  system_capacity, LX_GUEST_WRITE, &system)))
         goto done;
     PRFPROFILE profile = {user_capacity, user.host, system_capacity, system.host};
@@ -123,7 +124,7 @@ static uint32 bridge32_PrfQueryProfileString(uint8 *a)
     const uint32 size = lx_guest_load_u32(a + 20);
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!size || lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16), size,
+    if (!size || lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), size,
                                      LX_GUEST_WRITE, &output))
         result = PrfQueryProfileString(lx_guest_load_u32(a), s[0], s[1], s[2], output.host, size);
     lx_execution_release(&output);
@@ -148,7 +149,7 @@ static uint32 bridge32_PrfQueryProfileSize(uint8 *a)
         return 0;
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
                             &output))
     {
         ULONG size = 0;
@@ -167,10 +168,10 @@ static uint32 bridge32_PrfQueryProfileData(uint8 *a)
         return 0;
     uint32 result = 0;
     LxGuestBorrow output = {0}, size = {0};
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16), 4, 3, &size))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), 4, 3, &size))
     {
         ULONG capacity = lx_guest_load_u32(size.host);
-        if (!capacity || lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12),
+        if (!capacity || lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12),
                                              capacity, LX_GUEST_WRITE, &output))
         {
             result = PrfQueryProfileData(lx_guest_load_u32(a), s[0], s[1], output.host, &capacity);
@@ -193,7 +194,7 @@ static uint32 bridge32_PrfWriteProfileData(uint8 *a)
     uint32 result = 0;
     uint8 empty = 0;
     if (!pointer || !size ||
-        lx_execution_borrow(GLoaderState.execution, pointer, size, LX_GUEST_READ, &data))
+        lx_execution_borrow(GProcessState.execution, pointer, size, LX_GUEST_READ, &data))
         result = PrfWriteProfileData(lx_guest_load_u32(a), s[0], s[1],
                                      pointer ? (size ? data.host : &empty) : NULL, size);
     lx_execution_release(&data);
@@ -205,7 +206,7 @@ static uint32 bridge32_WinQueryTaskSizePos(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 36, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 36, LX_GUEST_WRITE,
                             &output))
     {
         SWP position;
@@ -220,7 +221,8 @@ static uint32 bridge32_WinQueryTaskSizePos(uint8 *a)
 static uint32 bridge32_WinCreateSwitchEntry(uint8 *a)
 {
     SWCNTRL value;
-    return lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 4), &value, sizeof value)
+    return lx_execution_read(GProcessState.execution, lx_guest_load_u32(a + 4), &value,
+                             sizeof value)
                ? WinCreateSwitchEntry(lx_guest_load_u32(a), &value)
                : 0;
 }
@@ -229,7 +231,7 @@ static uint32 bridge32_WinQueryTaskTitle(uint8 *a)
 {
     LxGuestBorrow title = {0};
     ULONG capacity = lx_guest_load_u32(a + 8), result = ERROR_INVALID_PARAMETER;
-    if (capacity && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), capacity,
+    if (capacity && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), capacity,
                                         LX_GUEST_WRITE, &title))
         result = WinQueryTaskTitle(lx_guest_load_u32(a), title.host, capacity);
     lx_execution_release(&title);
@@ -244,19 +246,19 @@ static uint32 bridge32_WinStartApp(uint8 *a)
     char *strings[4] = {NULL}, *inputs = NULL;
     LxGuestArgument environment = {0};
     uint32 result = 0;
-    if (!address || !lx_execution_read(GLoaderState.execution, address, wire, sizeof wire))
+    if (!address || !lx_execution_read(GProcessState.execution, address, wire, sizeof wire))
         goto done;
     for (unsigned i = 0; i < 4; i++)
     {
         uint32 pointer = lx_guest_load_u32(wire + 12 + i * 4);
         if (pointer &&
-            !(strings[i] = lx_execution_copy_string(GLoaderState.execution, pointer, 65536)))
+            !(strings[i] = lx_execution_copy_string(GProcessState.execution, pointer, 65536)))
             goto done;
     }
     if (parameters &&
-        !(inputs = lx_execution_copy_string(GLoaderState.execution, parameters, 65536)))
+        !(inputs = lx_execution_copy_string(GProcessState.execution, parameters, 65536)))
         goto done;
-    if (!lx_guest_argument_strings(GLoaderState.execution, lx_guest_load_u32(wire + 32), 0, 65536,
+    if (!lx_guest_argument_strings(GProcessState.execution, lx_guest_load_u32(wire + 32), 0, 65536,
                                    1, &environment))
         goto done;
     PROGDETAILS details = {.Length = lx_guest_load_u32(wire),

@@ -9,7 +9,7 @@
 
 int DosBeepGenerator(void *userdata, float *stream, int samples, int freq)
 {
-    const float beep_volume = GLoaderState.beep_volume;
+    const float beep_volume = GProcessState.beep_volume;
     DosBeepGeneratorInfo *info = &dos_beep_info;
     assert(userdata == &dos_beep_info);
 
@@ -101,7 +101,7 @@ APIRET DosBeep_implementation(ULONG freq, ULONG duration)
         lx_host_sleep_ms(duration - 55);
     }
 
-    const int rc = GLoaderState.registerAudioGenerator(DosBeepGenerator, &dos_beep_info, 1);
+    const int rc = GProcessState.registerAudioGenerator(DosBeepGenerator, &dos_beep_info, 1);
     if (!rc)
     {
         memset(&dos_beep_info, '\0', sizeof(dos_beep_info));

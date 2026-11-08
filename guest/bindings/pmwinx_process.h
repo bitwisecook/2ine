@@ -13,7 +13,7 @@ enum
 static int process_string(uint32 address, char **output)
 {
     *output = address
-                  ? lx_execution_copy_string(GLoaderState.execution, address, PROCESS_STRING_LIMIT)
+                  ? lx_execution_copy_string(GProcessState.execution, address, PROCESS_STRING_LIMIT)
                   : NULL;
     return !address || *output;
 }
@@ -28,11 +28,11 @@ static uint32 bridge32_CreateProcess(uint8 *a)
     if (process_string(lx_guest_load_u32(a), &application) &&
         process_string(lx_guest_load_u32(a + 4), &command) &&
         process_string(lx_guest_load_u32(a + 28), &directory) &&
-        lx_guest_argument_strings(GLoaderState.execution, lx_guest_load_u32(a + 24), 0,
+        lx_guest_argument_strings(GProcessState.execution, lx_guest_load_u32(a + 24), 0,
                                   PROCESS_STRING_LIMIT, 1, &environment) &&
-        (!startup_address || lx_execution_borrow(GLoaderState.execution, startup_address,
+        (!startup_address || lx_execution_borrow(GProcessState.execution, startup_address,
                                                  PROCESS_STARTUP_BYTES, LX_GUEST_READ, &startup)) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 36),
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 36),
                             PROCESS_INFORMATION_BYTES, LX_GUEST_WRITE, &information))
         result = CreateProcess(application, command, (PVOID)(uintptr_t)lx_guest_load_u32(a + 8),
                                (PVOID)(uintptr_t)lx_guest_load_u32(a + 12),
@@ -52,7 +52,7 @@ static uint32 bridge32_CreateProcess(uint8 *a)
 static uint32 bridge32_DuplicateHandle(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
                              &output))
     {
         open32SetError(87);
@@ -123,7 +123,7 @@ static uint32 bridge32_WinExec(uint8 *a)
 static uint32 bridge32_GetExitCodeProcess(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
                              &output))
     {
         open32SetError(87);

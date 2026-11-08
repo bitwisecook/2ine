@@ -76,17 +76,17 @@ ULONG WinCreateAccelTable(HAB hab, PVOID data)
 
 ULONG WinLoadAccelTable(HAB hab, HMODULE module, ULONG id)
 {
-    if (!getAnchorBlock(hab) || !GLoaderState.getResource || !GLoaderState.queryResourceSize)
+    if (!getAnchorBlock(hab) || !GProcessState.getResource || !GProcessState.queryResourceSize)
         return 0;
     uint32 size = 0;
     void *resource = NULL;
-    if (GLoaderState.queryResourceSize(module, 8, id, &size) || size < 4 ||
-        GLoaderState.getResource(module, 8, id, &resource))
+    if (GProcessState.queryResourceSize(module, 8, id, &size) || size < 4 ||
+        GProcessState.getResource(module, 8, id, &resource))
         return 0;
     unsigned count = lx_guest_load_u16(resource);
     ULONG result = (size_t)count * 6 <= size - 4 ? WinCreateAccelTable(hab, resource) : 0;
-    if (GLoaderState.freeResource)
-        GLoaderState.freeResource(resource);
+    if (GProcessState.freeResource)
+        GProcessState.freeResource(resource);
     return result;
 }
 

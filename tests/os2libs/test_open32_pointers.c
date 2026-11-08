@@ -28,7 +28,7 @@ void open32ClipCursorPoint(LONG *x, LONG *y)
 
 extern BOOL OS2API GetCursorPos(PVOID output);
 extern BOOL OS2API SetCursorPos(LONG x, LONG y);
-LxLoaderState GLoaderState;
+LxProcessState GProcessState;
 static ULONG error;
 static ULONG presentation = 1;
 static unsigned presentation_calls, query_calls, set_calls;

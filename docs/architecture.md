@@ -33,7 +33,7 @@ contains partial Windows adapters. `emulator/execution/native_i386/` owns
 Linux i386 execution and ABI bridges and `emulator/execution/unicorn/` owns CPU
 emulation. [Host adapter selection](host.md) chooses the implementation and
 dependencies for each worker. Execution adapters
-know no `LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or implement
+know no `LxModule`, `LxMmaps` or `GProcessState`; they do not load files or implement
 DOSCALLS.
 `tests/architecture/check_boundaries.py` checks that source separation.
 

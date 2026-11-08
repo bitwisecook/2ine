@@ -106,21 +106,21 @@ LONG WinCallWinMain(LONG argc, PSZ *argv, PFNWINMAIN entry, LONG show)
     (void)argv;
     if (!entry)
         return -1;
-    char *command = GLoaderState.pib.pib_pchcmd;
+    char *command = GProcessState.pib.pib_pchcmd;
     if (command)
         command += strlen(command) + 1;
     else
         command = "";
-    if (GLoaderState.execution)
+    if (GProcessState.execution)
     {
         uint32 address;
         if ((uintptr_t)entry > UINT32_MAX ||
-            !lx_execution_memory(GLoaderState.execution, (uint32)(uintptr_t)entry, 1,
+            !lx_execution_memory(GProcessState.execution, (uint32)(uintptr_t)entry, 1,
                                  LX_GUEST_EXECUTE) ||
-            !lx_execution_address(GLoaderState.execution, command, strlen(command) + 1,
+            !lx_execution_address(GProcessState.execution, command, strlen(command) + 1,
                                   LX_GUEST_READ, &address))
             return -1;
-        return (LONG)lx_execution_callback32_4(GLoaderState.execution, (uint32)(uintptr_t)entry,
+        return (LONG)lx_execution_callback32_4(GProcessState.execution, (uint32)(uintptr_t)entry,
                                                UINT32_MAX, 0, address, (uint32)show);
     }
     return entry(UINT32_MAX, 0, command, show);
@@ -194,7 +194,7 @@ ULONG GetCommandLine(void)
     ULONG result = __atomic_load_n(&command_line, __ATOMIC_ACQUIRE);
     if (result)
         return result;
-    const char *program = GLoaderState.pib.pib_pchcmd;
+    const char *program = GProcessState.pib.pib_pchcmd;
     const char *tail = program ? program + strlen(program) + 1 : "";
     if (!program)
         program = "";
@@ -204,7 +204,7 @@ ULONG GetCommandLine(void)
     ULONG address = LocalAlloc(0, (ULONG)length);
     if (!address)
         return 0;
-    char *text = lx_execution_memory(GLoaderState.execution, address, length,
+    char *text = lx_execution_memory(GProcessState.execution, address, length,
                                      LX_GUEST_READ | LX_GUEST_WRITE);
     if (!text)
     {

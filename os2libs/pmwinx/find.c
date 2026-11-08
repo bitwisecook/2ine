@@ -144,7 +144,7 @@ ULONG FindFirstFile(PSZ name, PVOID output)
         return UINT32_MAX;
     }
     ULONG error = 0;
-    search->path = GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(name, &error) : NULL;
+    search->path = GProcessState.makeUnixPath ? GProcessState.makeUnixPath(name, &error) : NULL;
     if (!search->path)
     {
         search_destroy(search);

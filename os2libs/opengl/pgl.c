@@ -118,7 +118,7 @@ static void destroy_context(void *argument)
     release_bitmap(c);
     lx_host_gl_destroy(c->host);
     if (c->strings)
-        lx_execution_unmap(GLoaderState.execution, c->strings);
+        lx_execution_unmap(GProcessState.execution, c->strings);
     free(c->selection);
     free(c->feedback);
     free(c);
@@ -128,7 +128,7 @@ int gl_pgl_initialize(void)
 {
     GlLock = lx_host_monitor_create();
     ThreadKey = lx_host_thread_local_create(destroy_thread);
-    Visuals = lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    Visuals = lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!GlLock || !ThreadKey || !Visuals)
         return 0;
     uint32_t base = lx_execution_mapping_address(Visuals);
@@ -141,7 +141,7 @@ int gl_pgl_initialize(void)
             lx_guest_store_u32(memory + i * VISUAL_BYTES + n * 4, words[n]);
         lx_guest_store_u32(memory + VISUAL_LIST_OFFSET + i * 4, base + i * VISUAL_BYTES);
     }
-    return lx_execution_protect(GLoaderState.execution, Visuals, LX_GUEST_READ);
+    return lx_execution_protect(GProcessState.execution, Visuals, LX_GUEST_READ);
 }
 
 void gl_pgl_shutdown(void)
@@ -163,7 +163,7 @@ void gl_pgl_shutdown(void)
     }
     lx_host_gl_shutdown();
     if (Visuals)
-        lx_execution_unmap(GLoaderState.execution, Visuals);
+        lx_execution_unmap(GProcessState.execution, Visuals);
     Visuals = NULL;
     lx_host_thread_local_destroy(ThreadKey);
     ThreadKey = NULL;
@@ -183,7 +183,7 @@ static uint32_t choose(uint8_t *a)
         uint8_t value_bytes[4];
         uint64_t address = (uint64_t)list + 4 * i;
         if (!list || address > UINT32_MAX ||
-            !lx_execution_read(GLoaderState.execution, (uint32_t)address, value_bytes, 4))
+            !lx_execution_read(GProcessState.execution, (uint32_t)address, value_bytes, 4))
             return 0;
         uint32_t token = lx_guest_load_u32(value_bytes);
         if (!token)
@@ -211,7 +211,7 @@ static uint32_t choose(uint8_t *a)
         if (token == 6)
             return 0; /* Stereo visuals are unavailable. */
         if (++i == 128 || address > UINT32_MAX - 4 ||
-            !lx_execution_read(GLoaderState.execution, (uint32_t)address + 4, value_bytes, 4))
+            !lx_execution_read(GProcessState.execution, (uint32_t)address + 4, value_bytes, 4))
             return 0;
         int32_t value = (int32_t)lx_guest_load_u32(value_bytes);
         if (value < 0)

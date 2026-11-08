@@ -44,19 +44,19 @@ static uint32 foreign(void *memory)
 
 int main(int argc, char **argv)
 {
-    CHECK(argc == 2 && !GLoaderState.freeSharedMemory);
-    GLoaderState.allocSegment = segment;
-    GLoaderState.freeSelector = release;
+    CHECK(argc == 2 && !GProcessState.freeSharedMemory);
+    GProcessState.allocSegment = segment;
+    GProcessState.freeSelector = release;
     char error[256];
     LxHostLibrary *library = lx_host_library_open(argv[1], error, sizeof error);
-    CHECK(library && GLoaderState.freeSharedMemory);
+    CHECK(library && GProcessState.freeSharedMemory);
     lx_host_library_close(library);
-    CHECK(!GLoaderState.freeSharedMemory && !segments[0] && !segments[1]);
+    CHECK(!GProcessState.freeSharedMemory && !segments[0] && !segments[1]);
     library = lx_host_library_open(argv[1], error, sizeof error);
-    CHECK(library && GLoaderState.freeSharedMemory);
-    GLoaderState.freeSharedMemory = foreign;
+    CHECK(library && GProcessState.freeSharedMemory);
+    GProcessState.freeSharedMemory = foreign;
     lx_host_library_close(library);
-    CHECK(GLoaderState.freeSharedMemory == foreign && !segments[0] && !segments[1]);
-    GLoaderState.freeSharedMemory = NULL;
+    CHECK(GProcessState.freeSharedMemory == foreign && !segments[0] && !segments[1]);
+    GProcessState.freeSharedMemory = NULL;
     return 0;
 }

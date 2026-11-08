@@ -201,12 +201,12 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
     const int isDLL = (module_type == 0x8000);
 
-    if (isDLL && !GLoaderState.main_module)
+    if (isDLL && !GProcessState.main_module)
     {
         fprintf(stderr, "uhoh, need to load an .exe before a .dll!\n");
         goto loadne_failed;
     }
-    else if (!isDLL && GLoaderState.main_module)
+    else if (!isDLL && GProcessState.main_module)
     {
         fprintf(stderr, "uhoh, loading an .exe after already loading one!\n");
         goto loadne_failed;
@@ -260,11 +260,11 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
     if (!isDLL)
     {
-        GLoaderState.main_module = retval;
-        GLoaderState.pib.pib_hmte = retval->handle;
-        if (GLoaderState.guest_pib)
+        GProcessState.main_module = retval;
+        GProcessState.pib.pib_hmte = retval->handle;
+        if (GProcessState.guest_pib)
         {
-            LxGuestPib *pib = lx_execution_mapping_host(GLoaderState.guest_pib);
+            LxGuestPib *pib = lx_execution_mapping_host(GProcessState.guest_pib);
             lx_guest_store_u32(&pib->module, retval->handle);
         }
     }
@@ -319,12 +319,12 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
             fprintf(stderr, "2INE NESEG %s #%u addr=%p selector=%04X iscode=%d\n", retval->name,
                     (uint)i + 1, mmapaddr, (uint)selector, iscode);
         uint32 guest_address;
-        if (!lx_execution_address(GLoaderState.execution, mmapaddr, vsize, 0, &guest_address))
+        if (!lx_execution_address(GProcessState.execution, mmapaddr, vsize, 0, &guest_address))
         {
             fprintf(stderr, "NE segment is outside guest memory\n");
             goto loadne_failed;
         }
-        retval->mmaps[i].mapping = lx_execution_mapping_at(GLoaderState.execution, guest_address);
+        retval->mmaps[i].mapping = lx_execution_mapping_at(GProcessState.execution, guest_address);
         retval->mmaps[i].bits = 16;
         retval->mmaps[i].guest_base = guest_address;
         retval->mmaps[i].mapped = mmapaddr;
@@ -366,11 +366,11 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     if (!isDLL && ne->auto_data_segment && (ne->auto_data_segment <= ne->num_segment_table_entries))
     {
         uint32 data_address;
-        if (!lx_execution_address(GLoaderState.execution,
+        if (!lx_execution_address(GProcessState.execution,
                                   retval->mmaps[ne->auto_data_segment - 1].addr, 1, 0,
                                   &data_address))
             abort();
-        lx_execution_near_base(GLoaderState.execution, data_address);
+        lx_execution_near_base(GProcessState.execution, data_address);
     }
 
     retval->eip = (lxSelectorToSegment(retval->mmaps[ne->reg_cs - 1].alias) << 16) | ne->reg_ip;
@@ -408,12 +408,12 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
                 stacksize -= autodataseg->size;
             }
         }
-        GLoaderState.mainstacksize = stacksize;
+        GProcessState.mainstacksize = stacksize;
 
         /* Library initialization requires the process stack to be installed. */
         void *topofstack = (void *)(((size_t)retval->mmaps[ne->reg_ss - 1].addr) + sp);
-        GLoaderState.initOs2Tib(GLoaderState.main_tibspace, topofstack, stacksize, 1);
-        GLoaderState.main_tib_selector = GLoaderState.setOs2Tib(GLoaderState.main_tibspace);
+        GProcessState.initOs2Tib(GProcessState.main_tibspace, topofstack, stacksize, 1);
+        GProcessState.main_tib_selector = GProcessState.setOs2Tib(GProcessState.main_tibspace);
     }
 
     if (ne->entry_table_size > 0)
@@ -546,7 +546,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         retval->mmaps[i].prot = prot;
 
         if (!(retval->mmaps[i].mapping
-                  ? lx_execution_protect(GLoaderState.execution, retval->mmaps[i].mapping,
+                  ? lx_execution_protect(GProcessState.execution, retval->mmaps[i].mapping,
                                          (unsigned)prot)
                   : lx_host_vm_protect(retval->mmaps[i].mapped, retval->mmaps[i].size,
                                        (unsigned)prot)))

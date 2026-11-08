@@ -432,7 +432,7 @@ static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size,
     if (!window)
         return 0;
     PmMenu *menu = window->menu;
-    menu->codepage = cp ? cp : GLoaderState.process_codepage;
+    menu->codepage = cp ? cp : GProcessState.process_codepage;
     menu->items = calloc(count ? count : 1, sizeof *menu->items);
     if (!menu->items)
         goto fail;
@@ -513,17 +513,17 @@ HWND WinCreateMenu(HWND parent, PVOID data)
 HWND WinLoadMenu(HWND frame, HMODULE module, ULONG id)
 {
     TRACE_NATIVE("WinLoadMenu(%u, %u, %u)", (uint)frame, (uint)module, (uint)id);
-    if (!GLoaderState.queryResourceSize || !GLoaderState.getResource)
+    if (!GProcessState.queryResourceSize || !GProcessState.getResource)
         return 0;
     uint32 size = 0;
     void *data = NULL;
-    if (GLoaderState.queryResourceSize(module, 3, id, &size) || size < 10 || size > 1048576 ||
-        GLoaderState.getResource(module, 3, id, &data))
+    if (GProcessState.queryResourceSize(module, 3, id, &size) || size < 10 || size > 1048576 ||
+        GProcessState.getResource(module, 3, id, &data))
         return 0;
     size_t consumed = 0;
     HWND result = parse_menu(frame, frame, data, size, 0, &consumed);
-    if (GLoaderState.freeResource)
-        GLoaderState.freeResource(data);
+    if (GProcessState.freeResource)
+        GProcessState.freeResource(data);
     return result;
 }
 

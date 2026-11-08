@@ -1042,7 +1042,7 @@ APIRET DosDevIOCtl(HFILE device, ULONG category, ULONG function, PVOID parameter
             return ERROR_INVALID_PARAMETER;
         const uint8 *input = parameters;
         TRACE_NATIVE("DSK_GETDEVICEPARAMS command=%u drive=%u", input[0], input[1]);
-        if (input[0] > 1 || input[1] >= 26 || !GLoaderState.disks[input[1]])
+        if (input[0] > 1 || input[1] >= 26 || !GProcessState.disks[input[1]])
             return ERROR_INVALID_DRIVE;
         if (data_max < 36)
         {
@@ -1050,11 +1050,11 @@ APIRET DosDevIOCtl(HFILE device, ULONG category, ULONG function, PVOID parameter
             return ERROR_BUFFER_OVERFLOW;
         }
         uint64_t total, available;
-        LxHostFsError error = lx_host_path_space(GLoaderState.disks[input[1]], &total, &available);
+        LxHostFsError error = lx_host_path_space(GProcessState.disks[input[1]], &total, &available);
         if (error)
             return fileError(error);
         LxHostVolumeInfo volume;
-        error = lx_host_path_volume(GLoaderState.disks[input[1]], &volume);
+        error = lx_host_path_volume(GProcessState.disks[input[1]], &volume);
         if (error)
             return fileError(error);
         int floppy = volume.removable && !strcmp(volume.filesystem, "FAT");

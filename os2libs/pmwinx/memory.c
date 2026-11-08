@@ -41,7 +41,8 @@ static LxGuestMapping *allocate(ULONG size)
     if (size > UINT32_MAX - 4095)
         return NULL;
     size_t capacity = ((size_t)(size ? size : 1) + 4095) & ~(size_t)4095;
-    return lx_execution_map(GLoaderState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    return lx_execution_map(GProcessState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE,
+                            0);
 }
 
 ULONG LocalAlloc(ULONG flags, ULONG size)
@@ -75,7 +76,7 @@ ULONG LocalAlloc(ULONG flags, ULONG size)
     if (!block->handle)
     {
         if (block->mapping)
-            lx_execution_unmap(GLoaderState.execution, block->mapping);
+            lx_execution_unmap(GProcessState.execution, block->mapping);
         free(block);
         open32SetError(8);
         return 0;
@@ -101,7 +102,7 @@ ULONG LocalFree(ULONG handle)
         open32SetError(6);
     else if (block->locks)
         open32SetError(212); /* ERROR_LOCKED */
-    else if (block->mapping && !lx_execution_unmap(GLoaderState.execution, block->mapping))
+    else if (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping))
         open32SetError(212);
     else
     {
@@ -216,7 +217,7 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
     else if (!size && (block->flags & 2))
     {
         if (block->locks ||
-            (block->mapping && !lx_execution_unmap(GLoaderState.execution, block->mapping)))
+            (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping)))
             open32SetError(212);
         else
         {
@@ -246,9 +247,9 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
                 memcpy(lx_execution_mapping_host(replacement),
                        lx_execution_mapping_host(block->mapping),
                        block->size < size ? block->size : size);
-            if (block->mapping && !lx_execution_unmap(GLoaderState.execution, block->mapping))
+            if (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping))
             {
-                lx_execution_unmap(GLoaderState.execution, replacement);
+                lx_execution_unmap(GProcessState.execution, replacement);
                 open32SetError(212);
             }
             else
@@ -273,7 +274,7 @@ void open32MemoryCleanup(void)
         LocalMemory *block = blocks;
         blocks = block->next;
         if (block->mapping)
-            lx_execution_unmap(GLoaderState.execution, block->mapping);
+            lx_execution_unmap(GProcessState.execution, block->mapping);
         if (block->flags & 2)
             lx_handle_close(block->handle, LX_HANDLE_OPEN32_MEMORY);
         free(block);

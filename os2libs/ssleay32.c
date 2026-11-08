@@ -158,8 +158,8 @@ int Os2SslContextTrust(uint32_t h, const char *file, const char *path)
     lock(c->mutex);
     /* Guest paths are resolved by the same drive mapping as OS/2 file calls. */
     uint32 error = 0;
-    char *f = file && GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(file, &error) : NULL;
-    char *p = path && GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(path, &error) : NULL;
+    char *f = file && GProcessState.makeUnixPath ? GProcessState.makeUnixPath(file, &error) : NULL;
+    char *p = path && GProcessState.makeUnixPath ? GProcessState.makeUnixPath(path, &error) : NULL;
     int result = (!file || f) && (!path || p) ? lx_host_tls_context_trust(c->host, f, p) : 0;
     free(f);
     free(p);

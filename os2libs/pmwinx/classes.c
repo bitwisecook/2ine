@@ -54,25 +54,25 @@ static Open32Class *builtin_class(const char *name)
     c->style = 0x4008;
     c->builtin = canonical ? OPEN32_BUILTIN_CONTROL : scroll ? 2 : 1;
     c->brush = canonical ? 0 : scroll ? 1 : 13;
-    c->names = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
-    c->procedure_mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    c->names = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
+    c->procedure_mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     const LxExecutionApi32 bridge = {builtin_procedure, 16, 0, LX_ABI_STACK32};
     if (!c->name || !c->names || !c->procedure_mapping ||
-        !lx_execution_emit_bridge32(GLoaderState.execution,
+        !lx_execution_emit_bridge32(GProcessState.execution,
                                     lx_execution_mapping_host(c->procedure_mapping), 4096, &bridge))
         goto fail;
     strcpy(lx_execution_mapping_host(c->names), c->name);
-    if (!lx_execution_protect(GLoaderState.execution, c->names, LX_GUEST_READ) ||
-        !lx_execution_protect(GLoaderState.execution, c->procedure_mapping,
+    if (!lx_execution_protect(GProcessState.execution, c->names, LX_GUEST_READ) ||
+        !lx_execution_protect(GProcessState.execution, c->procedure_mapping,
                               LX_GUEST_READ | LX_GUEST_EXECUTE))
         goto fail;
     c->procedure = lx_execution_mapping_address(c->procedure_mapping);
     return c;
 fail:
     if (c->names)
-        lx_execution_unmap(GLoaderState.execution, c->names);
+        lx_execution_unmap(GProcessState.execution, c->names);
     if (c->procedure_mapping)
-        lx_execution_unmap(GLoaderState.execution, c->procedure_mapping);
+        lx_execution_unmap(GProcessState.execution, c->procedure_mapping);
     free(c->name);
     free(c);
     return NULL;
@@ -110,9 +110,9 @@ void open32ClassRelease(Open32Class *c)
 static void destroy_class(Open32Class *c)
 {
     if (c->names)
-        lx_execution_unmap(GLoaderState.execution, c->names);
+        lx_execution_unmap(GProcessState.execution, c->names);
     if (c->procedure_mapping)
-        lx_execution_unmap(GLoaderState.execution, c->procedure_mapping);
+        lx_execution_unmap(GProcessState.execution, c->procedure_mapping);
     free(c->class_data);
     free(c->menu);
     free(c->name);
@@ -136,7 +136,7 @@ static HWND dialog_control(HWND parent, const char *name, const char *text, ULON
 
 ULONG RegisterClass(PVOID record)
 {
-    if (!record || !GLoaderState.execution)
+    if (!record || !GProcessState.execution)
     {
         open32SetError(87);
         return 0;
@@ -157,9 +157,9 @@ ULONG RegisterClass(PVOID record)
     c->cursor = lx_guest_load_u32(bytes + 24);
     c->brush = lx_guest_load_u32(bytes + 28);
     c->menu_id = lx_guest_load_u32(bytes + 32);
-    c->name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(bytes + 36), 256);
+    c->name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(bytes + 36), 256);
     if (c->menu_id > UINT16_MAX)
-        c->menu = lx_execution_copy_string(GLoaderState.execution, c->menu_id, 256);
+        c->menu = lx_execution_copy_string(GProcessState.execution, c->menu_id, 256);
     if (!c->name || !*c->name || c->class_extra > 4096 || c->window_extra > 4096 ||
         (c->menu_id > UINT16_MAX && !c->menu) || !open32ValidProcedure(c->procedure))
     {
@@ -173,7 +173,7 @@ ULONG RegisterClass(PVOID record)
         open32SetError(8);
         return 0;
     }
-    c->names = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    c->names = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     if (!c->names)
     {
         destroy_class(c);
@@ -184,7 +184,7 @@ ULONG RegisterClass(PVOID record)
     strcpy(names, c->name);
     if (c->menu)
         strcpy(names + 256, c->menu);
-    if (!lx_execution_protect(GLoaderState.execution, c->names, LX_GUEST_READ))
+    if (!lx_execution_protect(GProcessState.execution, c->names, LX_GUEST_READ))
     {
         destroy_class(c);
         open32SetError(8);
@@ -364,7 +364,7 @@ ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
     }
     if (index == -8 && value > UINT16_MAX)
     {
-        char *name = lx_execution_copy_string(GLoaderState.execution, value, 256);
+        char *name = lx_execution_copy_string(GProcessState.execution, value, 256);
         if (!name)
         {
             open32SetError(87);

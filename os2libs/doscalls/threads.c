@@ -59,13 +59,13 @@ APIRET DosExitMustComplete(PULONG pulNesting)
 void destroyThreadResource(void *value)
 {
     Thread *thread = value;
-    lx_execution_destroy_thread32(GLoaderState.execution, thread->invocation);
+    lx_execution_destroy_thread32(GProcessState.execution, thread->invocation);
     if (thread->stack)
     {
-        lx_execution_stack_segments(GLoaderState.execution,
+        lx_execution_stack_segments(GProcessState.execution,
                                     lx_execution_mapping_address(thread->stack),
                                     lx_execution_mapping_size(thread->stack), 1);
-        lx_execution_unmap(GLoaderState.execution, thread->stack);
+        lx_execution_unmap(GProcessState.execution, thread->stack);
     }
     free(thread);
 }
@@ -75,11 +75,11 @@ void os2ThreadCleanup(void *arg)
     Thread *thread = arg;
     releaseThreadCriticalSection();
     abandonThreadMutexes(thread->id);
-    lx_execution_set_park_flag(GLoaderState.execution, NULL);
+    lx_execution_set_park_flag(GProcessState.execution, NULL);
     removeThreadControl(thread->control);
     thread->control = NULL;
-    lx_execution_cleanup_thread32(GLoaderState.execution);
-    GLoaderState.deinitOs2Tib(thread->selector);
+    lx_execution_cleanup_thread32(GProcessState.execution);
+    GProcessState.deinitOs2Tib(thread->selector);
     grabLock(&GMutexDosCalls);
     thread->finished = 1;
     int detached = thread->detached;
@@ -141,12 +141,12 @@ void *os2ThreadEntry(void *arg)
     Thread *thread = arg;
     uint8 tibspace[LXTIBSIZE] = {0};
     const size_t size = lx_execution_mapping_size(thread->stack);
-    GLoaderState.initOs2Tib(tibspace, (uint8 *)lx_execution_mapping_host(thread->stack) + size,
-                            size, thread->id);
-    thread->selector = GLoaderState.setOs2Tib(tibspace);
+    GProcessState.initOs2Tib(tibspace, (uint8 *)lx_execution_mapping_host(thread->stack) + size,
+                             size, thread->id);
+    thread->selector = GProcessState.setOs2Tib(tibspace);
     bindThreadControl(thread->control);
-    lx_execution_checkpoint(GLoaderState.execution);
-    lx_execution_thread32(GLoaderState.execution, thread->invocation);
+    lx_execution_checkpoint(GProcessState.execution);
+    lx_execution_thread32(GProcessState.execution, thread->invocation);
     return NULL;
 }
 
@@ -171,7 +171,7 @@ APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, 
     {
         uint32 base = GNextThreadStack;
         GNextThreadStack += size + 0x10000;
-        thread->stack = lx_execution_map(GLoaderState.execution, base, size, 3, 1);
+        thread->stack = lx_execution_map(GProcessState.execution, base, size, 3, 1);
         if (thread->stack)
             break;
     }
@@ -181,10 +181,10 @@ APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, 
         free(thread);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
-    lx_execution_stack_segments(GLoaderState.execution, lx_execution_mapping_address(thread->stack),
-                                size, 0);
+    lx_execution_stack_segments(GProcessState.execution,
+                                lx_execution_mapping_address(thread->stack), size, 0);
     thread->invocation = lx_execution_prepare_thread32(
-        GLoaderState.execution, (uint32)(uintptr_t)entry,
+        GProcessState.execution, (uint32)(uintptr_t)entry,
         lx_execution_mapping_address(thread->stack) + size - 16, argument);
     thread->id = GNextThreadId++;
     thread->control = createThreadControl(thread->id, (flags & CREATE_SUSPENDED) != 0);
@@ -209,7 +209,7 @@ APIRET DosCreateThread(PTID ptid, PFNTHREAD entry, ULONG argument, ULONG flags, 
     GThreads = thread;
     *ptid = thread->id;
     /* Process exit must not unload code beneath any guest thread. */
-    __atomic_store_n(&GLoaderState.ne_threads_started, 1, __ATOMIC_RELEASE);
+    __atomic_store_n(&GProcessState.ne_threads_started, 1, __ATOMIC_RELEASE);
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
@@ -329,10 +329,10 @@ APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
 
     grabLock(&GMutexDosCalls);
 
-    if (GLoaderState.tlspage == NULL)
+    if (GProcessState.tlspage == NULL)
     {
-        if ((GLoaderState.tlspage =
-                 (uint32 *)(uintptr_t)lx_execution_tls_window(GLoaderState.execution)) == NULL)
+        if ((GProcessState.tlspage =
+                 (uint32 *)(uintptr_t)lx_execution_tls_window(GProcessState.execution)) == NULL)
         {
             ungrabLock(&GMutexDosCalls);
             return ERROR_NOT_ENOUGH_MEMORY;
@@ -342,7 +342,7 @@ APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
     int i;
     for (i = 0; i <= 32 - (int)cb; i++, mask <<= 1)
     {
-        if (((GLoaderState.tlsmask ^ mask) & mask) == mask)
+        if (((GProcessState.tlsmask ^ mask) & mask) == mask)
             break;
     }
 
@@ -351,10 +351,10 @@ APIRET DosAllocThreadLocalMemory(ULONG cb, PULONG *p)
             ERROR_NOT_ENOUGH_MEMORY; // there are only 32 slots, couldn't find anything contiguous.
     else
     {
-        assert(GLoaderState.tlsallocs[i] == 0);
-        GLoaderState.tlsallocs[i] = (uint8)cb;
-        GLoaderState.tlsmask |= mask;
-        *p = GLoaderState.tlspage + i;
+        assert(GProcessState.tlsallocs[i] == 0);
+        GProcessState.tlsallocs[i] = (uint8)cb;
+        GProcessState.tlsmask |= mask;
+        *p = GProcessState.tlspage + i;
     }
 
     ungrabLock(&GMutexDosCalls);
@@ -370,19 +370,19 @@ APIRET DosFreeThreadLocalMemory(ULONG *p)
 
     grabLock(&GMutexDosCalls);
 
-    if (GLoaderState.tlspage)
+    if (GProcessState.tlspage)
     {
-        const uintptr_t distance = (uintptr_t)p - (uintptr_t)GLoaderState.tlspage;
+        const uintptr_t distance = (uintptr_t)p - (uintptr_t)GProcessState.tlspage;
         const uint32 slot = distance < 128 && !(distance & 3) ? (uint32)distance / 4 : 32;
         if (slot < 32)
         {
-            const uint8 slots = GLoaderState.tlsallocs[slot];
+            const uint8 slots = GProcessState.tlsallocs[slot];
             if (slots > 0)
             {
                 const uint32 mask = ((uint32)(0xFF >> (8 - slots))) << slot;
-                assert((GLoaderState.tlsmask & mask) == mask);
-                GLoaderState.tlsmask &= ~mask;
-                GLoaderState.tlsallocs[slot] = 0;
+                assert((GProcessState.tlsmask & mask) == mask);
+                GProcessState.tlsmask &= ~mask;
+                GProcessState.tlsallocs[slot] = 0;
                 retval = NO_ERROR;
             }
         }
@@ -458,10 +458,10 @@ void neThreadCleanup(void *argument)
     NeThreadStart *start = argument;
     releaseThreadCriticalSection();
     abandonThreadMutexes(start->tid);
-    lx_execution_set_park_flag(GLoaderState.execution, NULL);
+    lx_execution_set_park_flag(GProcessState.execution, NULL);
     removeThreadControl(start->control);
-    GLoaderState.deinitOs2Tib(start->tib_selector);
-    lx_execution_destroy_thread16(GLoaderState.execution, start->invocation);
+    GProcessState.deinitOs2Tib(start->tib_selector);
+    lx_execution_destroy_thread16(GProcessState.execution, start->invocation);
     free(start);
 }
 
@@ -469,12 +469,12 @@ void *neThreadEntry(void *argument)
 {
     NeThreadStart *start = argument;
     uint8 tibspace[LXTIBSIZE] = {0};
-    GLoaderState.initOs2Tib(tibspace, GLoaderState.convert1616to32(start->stack), 65536,
-                            start->tid);
-    start->tib_selector = GLoaderState.setOs2Tib(tibspace);
+    GProcessState.initOs2Tib(tibspace, GProcessState.convert1616to32(start->stack), 65536,
+                             start->tid);
+    start->tib_selector = GProcessState.setOs2Tib(tibspace);
     bindThreadControl(start->control);
-    lx_execution_checkpoint(GLoaderState.execution);
-    lx_execution_thread16(GLoaderState.execution, start->invocation);
+    lx_execution_checkpoint(GProcessState.execution);
+    lx_execution_thread16(GProcessState.execution, start->invocation);
     return NULL;
 }
 
@@ -495,26 +495,26 @@ APIRET16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
         return ERROR_MAX_THRDS_REACHED;
     }
     start->tid = (uint16)tid;
-    start->entry = GLoaderState.convert32to1616(pfnFun);
-    start->stack = GLoaderState.convert32to1616(pbStack);
+    start->entry = GProcessState.convert32to1616(pfnFun);
+    start->stack = GProcessState.convert32to1616(pbStack);
     if (start->entry && start->stack)
         start->invocation =
-            lx_execution_prepare_thread16(GLoaderState.execution, start->entry, start->stack);
+            lx_execution_prepare_thread16(GProcessState.execution, start->entry, start->stack);
     if (start->invocation)
         start->control = createThreadControl(tid, FALSE);
     if (!start->control)
     {
-        lx_execution_destroy_thread16(GLoaderState.execution, start->invocation);
+        lx_execution_destroy_thread16(GProcessState.execution, start->invocation);
         free(start);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
     LxHostThread *thread;
-    __atomic_store_n(&GLoaderState.ne_threads_started, 1, __ATOMIC_RELEASE);
+    __atomic_store_n(&GProcessState.ne_threads_started, 1, __ATOMIC_RELEASE);
     thread = lx_host_thread_create(neThreadEntry, start, neThreadCleanup);
     if (!thread)
     {
         removeThreadControl(start->control);
-        lx_execution_destroy_thread16(GLoaderState.execution, start->invocation);
+        lx_execution_destroy_thread16(GProcessState.execution, start->invocation);
         free(start);
         return ERROR_MAX_THRDS_REACHED;
     }
@@ -529,12 +529,12 @@ APIRET DosSleep(ULONG msec)
 
     do
     {
-        lx_execution_poll_termination(GLoaderState.execution);
+        lx_execution_poll_termination(GProcessState.execution);
         ULONG slice = msec > 10 ? 10 : msec;
         lx_host_sleep_ms(slice);
         msec -= slice;
     } while (msec);
-    lx_execution_poll_termination(GLoaderState.execution);
+    lx_execution_poll_termination(GProcessState.execution);
     return NO_ERROR;
 }
 
@@ -613,7 +613,7 @@ static ThreadControl *createThreadControl(uint32 id, BOOL suspended)
 
 static void bindThreadControl(ThreadControl *control)
 {
-    lx_execution_set_park_flag(GLoaderState.execution, &control->suspended);
+    lx_execution_set_park_flag(GProcessState.execution, &control->suspended);
 }
 
 static void removeThreadControl(ThreadControl *control)
@@ -647,7 +647,7 @@ static void suspensionCheckpoint(void *unused)
     {
         lx_host_monitor_wait(suspend_monitor, SUSPEND_POLL_MS);
         lx_host_monitor_unlock(suspend_monitor);
-        lx_execution_poll_exit(GLoaderState.execution);
+        lx_execution_poll_exit(GProcessState.execution);
         lx_host_monitor_lock(suspend_monitor);
     }
     lx_host_monitor_unlock(suspend_monitor);
@@ -660,7 +660,7 @@ void initializeThreadSuspension(void)
         abort();
     thread_controls = &primary_control;
     bindThreadControl(&primary_control);
-    lx_execution_set_checkpoint(GLoaderState.execution, suspensionCheckpoint, NULL);
+    lx_execution_set_checkpoint(GProcessState.execution, suspensionCheckpoint, NULL);
 }
 
 /* Exit processing runs guest code on thread one, so suspension ends here. Other
@@ -676,10 +676,10 @@ void releaseThreadSuspension(void)
 
 void cleanupThreadSuspension(void)
 {
-    lx_execution_set_park_flag(GLoaderState.execution, NULL);
-    lx_execution_set_checkpoint(GLoaderState.execution, NULL, NULL);
+    lx_execution_set_park_flag(GProcessState.execution, NULL);
+    lx_execution_set_checkpoint(GProcessState.execution, NULL, NULL);
     /* Guest threads held for process exit can still be inside the monitor. */
-    if (__atomic_load_n(&GLoaderState.ne_threads_started, __ATOMIC_ACQUIRE))
+    if (__atomic_load_n(&GProcessState.ne_threads_started, __ATOMIC_ACQUIRE))
         return;
     lx_host_monitor_destroy(suspend_monitor);
     suspend_monitor = NULL;
@@ -691,7 +691,7 @@ APIRET DosSuspendThread(TID id)
 {
     TRACE_NATIVE("DosSuspendThread(%u)", (uint)id);
     /* Direct execution has no boundary at which to stop running guest code. */
-    if (!strcmp(lx_execution_backend(GLoaderState.execution), "native"))
+    if (!strcmp(lx_execution_backend(GProcessState.execution), "native"))
         return ERROR_NOT_SUPPORTED;
     lx_host_monitor_lock(suspend_monitor);
     ThreadControl *control = findThreadControl(id);
@@ -703,7 +703,7 @@ APIRET DosSuspendThread(TID id)
     setControlSuspended(control, 1);
     lx_host_monitor_unlock(suspend_monitor);
     /* After this the target runs no guest instruction until it is resumed. */
-    lx_execution_quiesce(GLoaderState.execution);
+    lx_execution_quiesce(GProcessState.execution);
     if (LX_GETTIB() && ((PTIB2)LX_GETTIB2())->tib2_ultid == id)
         suspensionCheckpoint(NULL);
     return NO_ERROR;

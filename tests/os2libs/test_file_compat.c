@@ -105,7 +105,7 @@ static void file_status(char *path, HFILE handle)
 
 static void priority(void)
 {
-    LxTIB *thread = GLoaderState.getOs2Tib();
+    LxTIB *thread = GProcessState.getOs2Tib();
     LxTIB2 *details = (LxTIB2 *)(thread + 1);
     uint32 saved_id = details->tib2_ultid, saved_priority = details->tib2_ulpri;
     details->tib2_ultid = 7;
@@ -133,9 +133,9 @@ static void module16(void)
     module.os2path = "C:\\OS2\\DLL\\LEGACYMOD.DLL";
     module.handle = lx_handle_create(LX_HANDLE_MODULE, &module, NULL);
     CHECK(module.handle > UINT16_MAX);
-    LxModule *saved = GLoaderState.loaded_modules;
+    LxModule *saved = GProcessState.loaded_modules;
     module.next = saved;
-    GLoaderState.loaded_modules = &module;
+    GProcessState.loaded_modules = &module;
 
     struct
     {
@@ -152,16 +152,16 @@ static void module16(void)
     CHECK(call_module16("NOT_LOADED", &output.handle) == ERROR_MOD_NOT_FOUND);
     CHECK(call_module16(NULL, &output.handle) == ERROR_INVALID_PARAMETER);
     CHECK(call_module16("LEGACYMOD", NULL) == ERROR_INVALID_PARAMETER);
-    GLoaderState.loaded_modules = saved;
+    GProcessState.loaded_modules = saved;
     CHECK(lx_handle_close(module.handle, LX_HANDLE_MODULE));
 }
 
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
-    GLoaderState.makeUnixPath = host_path;
-    GLoaderState.allocSegment = segment_alloc;
-    GLoaderState.freeSelector = segment_free;
+    GProcessState.makeUnixPath = host_path;
+    GProcessState.allocSegment = segment_alloc;
+    GProcessState.freeSelector = segment_free;
     void *library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
     if (!library)
         fprintf(stderr, "%s\n", dlerror());

@@ -619,7 +619,7 @@ BOOL PolyPolygon(ULONG h, PVOID points, PVOID counts, LONG polygons)
 
 BOOL LineDDA(LONG x, LONG y, LONG end_x, LONG end_y, ULONG procedure, ULONG parameter)
 {
-    if (!lx_execution_memory(GLoaderState.execution, procedure, 1, LX_GUEST_EXECUTE))
+    if (!lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
     {
         open32SetError(87);
         return FALSE;
@@ -634,7 +634,7 @@ BOOL LineDDA(LONG x, LONG y, LONG end_x, LONG end_y, ULONG procedure, ULONG para
     int64_t error = dx - dy;
     while (x != end_x || y != end_y)
     {
-        lx_execution_callback32_4(GLoaderState.execution, procedure, (ULONG)x, (ULONG)y, parameter,
+        lx_execution_callback32_4(GProcessState.execution, procedure, (ULONG)x, (ULONG)y, parameter,
                                   0);
         int64_t twice = error * 2;
         if (twice > -dy)

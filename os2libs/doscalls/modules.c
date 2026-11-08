@@ -57,16 +57,16 @@ APIRET DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod)
             return ERROR_INVALID_NAME;
     grabLock(&GMutexDosCalls);
     LxModule *lxmod;
-    for (lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next)
+    for (lxmod = GProcessState.loaded_modules; lxmod; lxmod = lxmod->next)
     {
         if (moduleNameMatches(lxmod, pszModname))
             break;
     }
     ungrabLock(&GMutexDosCalls);
 
-    if (!lxmod && GLoaderState.main_module &&
-        moduleNameMatches(GLoaderState.main_module, pszModname))
-        lxmod = GLoaderState.main_module;
+    if (!lxmod && GProcessState.main_module &&
+        moduleNameMatches(GProcessState.main_module, pszModname))
+        lxmod = GProcessState.main_module;
     if (phmod)
         *phmod = lxmod ? lxmod->handle : 0;
 
@@ -154,9 +154,9 @@ APIRET DosLoadModule(PSZ pszName, ULONG cbName, PSZ pszModname, PHMODULE phmod)
     FIXME("there's no mutex on this global state at the moment!");
     *phmod = 0;
     uint32 error = ERROR_BAD_FORMAT;
-    LxModule *lxmod = GLoaderState.loadModuleWithError
-                          ? GLoaderState.loadModuleWithError(pszModname, &error, pszName, cbName)
-                          : GLoaderState.loadModule(pszModname);
+    LxModule *lxmod = GProcessState.loadModuleWithError
+                          ? GProcessState.loadModuleWithError(pszModname, &error, pszName, cbName)
+                          : GProcessState.loadModule(pszModname);
     if (!lxmod)
         return error ? error : ERROR_BAD_FORMAT;
 
@@ -168,14 +168,14 @@ APIRET DosFreeModuleObject(HMODULE hmod, LxModule *lxmod)
 {
     TRACE_NATIVE("DosFreeModule(%u)", (uint)hmod);
 
-    if ((!hmod) || (!GLoaderState.freeModule))
+    if ((!hmod) || (!GProcessState.freeModule))
         return ERROR_INVALID_HANDLE;
 
     LxModule *loaded;
 
     /* Validate the opaque handle before passing it back to the loader. */
     grabLock(&GMutexDosCalls);
-    for (loaded = GLoaderState.loaded_modules; loaded; loaded = loaded->next)
+    for (loaded = GProcessState.loaded_modules; loaded; loaded = loaded->next)
     {
         if (loaded == lxmod)
             break;
@@ -185,7 +185,7 @@ APIRET DosFreeModuleObject(HMODULE hmod, LxModule *lxmod)
     if (!loaded)
         return ERROR_INVALID_HANDLE;
 
-    GLoaderState.freeModule(lxmod);
+    GProcessState.freeModule(lxmod);
     return NO_ERROR;
 }
 
@@ -205,7 +205,7 @@ APIRET DosQueryModFromEIP(PHMODULE phmod, PULONG pulObject, ULONG cbModName, PCH
     TRACE_NATIVE("DosQueryModFromEIP(%p, %p, %u, %p, %p, %08X)", phmod, pulObject, (uint)cbModName,
                  pszModName, pulOffset, (uint)ulEIP);
 
-    for (LxModule *lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next)
+    for (LxModule *lxmod = GProcessState.loaded_modules; lxmod; lxmod = lxmod->next)
     {
         for (uint32 i = 0; i < lxmod->num_mmaps; i++)
         {
@@ -347,13 +347,13 @@ APIRET DosQueryHeaderInfo(HMODULE hmod, ULONG ulIndex, PVOID pvBuffer, ULONG cbB
         case QHINF_LIBPATHLENGTH:
             if (cbBuffer < sizeof(ULONG))
                 return ERROR_BUFFER_OVERFLOW;
-            *((ULONG *)pvBuffer) = GLoaderState.libpathlen;
+            *((ULONG *)pvBuffer) = GProcessState.libpathlen;
             return NO_ERROR;
 
         case QHINF_LIBPATH:
-            if (cbBuffer < GLoaderState.libpathlen)
+            if (cbBuffer < GProcessState.libpathlen)
                 return ERROR_BUFFER_OVERFLOW;
-            strcpy((char *)pvBuffer, GLoaderState.libpath);
+            strcpy((char *)pvBuffer, GProcessState.libpath);
             return NO_ERROR;
 
             //case QHINF_FIXENTRY:
@@ -374,10 +374,10 @@ APIRET DosQueryExtLIBPATH(PSZ path, ULONG flags)
         return ERROR_INVALID_PARAMETER;
     grabLock(&GMutexDosCalls);
     if (flags == LIBPATHSTRICT)
-        strcpy(path, GLoaderState.libpath_strict ? "T" : "F");
+        strcpy(path, GProcessState.libpath_strict ? "T" : "F");
     else
         strcpy(path,
-               flags == BEGIN_LIBPATH ? GLoaderState.begin_libpath : GLoaderState.end_libpath);
+               flags == BEGIN_LIBPATH ? GProcessState.begin_libpath : GProcessState.end_libpath);
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
@@ -390,9 +390,9 @@ APIRET DosSetExtLIBPATH(PSZ path, ULONG flags)
         return ERROR_INVALID_PARAMETER;
     grabLock(&GMutexDosCalls);
     if (flags == LIBPATHSTRICT)
-        GLoaderState.libpath_strict = path && !strcasecmp(path, "T");
+        GProcessState.libpath_strict = path && !strcasecmp(path, "T");
     else
-        strcpy(flags == BEGIN_LIBPATH ? GLoaderState.begin_libpath : GLoaderState.end_libpath,
+        strcpy(flags == BEGIN_LIBPATH ? GProcessState.begin_libpath : GProcessState.end_libpath,
                path ? path : "");
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;

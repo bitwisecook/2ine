@@ -90,7 +90,7 @@ enum
 static uint32 load16(uint32 address)
 {
     uint8 bytes[2] = {0};
-    lx_execution_read(GLoaderState.execution, address, bytes, sizeof bytes);
+    lx_execution_read(GProcessState.execution, address, bytes, sizeof bytes);
     return lx_guest_load_u16(bytes);
 }
 
@@ -98,7 +98,7 @@ static void store16(uint32 address, uint32 value)
 {
     uint8 bytes[2];
     lx_guest_store_u16(bytes, (uint16)value);
-    lx_execution_write(GLoaderState.execution, address, bytes, sizeof bytes);
+    lx_execution_write(GProcessState.execution, address, bytes, sizeof bytes);
 }
 
 static uint32 query_style(uint32 self)
@@ -211,7 +211,7 @@ uint32 pmwpFormatDragItem(uint32 self, uint32 item)
     if (!pmwpLoad32(item + ITEM_CONTAINER) && parent && pmwpStorePath(parent, path, sizeof path))
         pmwpStore32(item + ITEM_CONTAINER, DrgAddStrHandle(path));
     char *title = lx_execution_copy_string(
-        GLoaderState.execution,
+        GProcessState.execution,
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryTitle, self, 0, 0, 0), TITLE_LIMIT);
     if (title)
     {
@@ -412,7 +412,7 @@ static uint32 wpInsertSettingsPage(uint8 *a)
         return 0;
     uint32 name_address = pmwpLoad32(info + PAGE_NAME);
     char *name = name_address
-                     ? lx_execution_copy_string(GLoaderState.execution, name_address, TITLE_LIMIT)
+                     ? lx_execution_copy_string(GProcessState.execution, name_address, TITLE_LIMIT)
                      : strdup("");
     uint32 result = name ? add_page(book, page, name) : 0;
     free(name);
@@ -451,7 +451,7 @@ static uint32 wpAddObjectGeneralPage(uint8 *a)
     if (!page)
         return 0;
     char *title = lx_execution_copy_string(
-        GLoaderState.execution,
+        GProcessState.execution,
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryTitle, self, 0, 0, 0), TITLE_LIMIT);
     WinCreateWindow(page, (PSZ)(uintptr_t)WC_STATIC, "Title:", WS_VISIBLE, 16, 300, 80, 20, page,
                     HWND_TOP, 0, NULL, NULL);
@@ -615,7 +615,7 @@ static uint32 wpRegisterView(uint8 *a)
         return FALSE;
     if (!title_address)
         title_address = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryTitle, self, 0, 0, 0);
-    char *title = lx_execution_copy_string(GLoaderState.execution, title_address, TITLE_LIMIT);
+    char *title = lx_execution_copy_string(GProcessState.execution, title_address, TITLE_LIMIT);
     if (!title)
         return FALSE;
     WinSetWindowText(frame, title);
@@ -653,7 +653,7 @@ static BOOL start_help_viewer(const char *library)
 static uint32 wpDisplayHelp(uint8 *a)
 {
     char *library =
-        ARG(a, 2) ? lx_execution_copy_string(GLoaderState.execution, ARG(a, 2), HELP_LIBRARY_LIMIT)
+        ARG(a, 2) ? lx_execution_copy_string(GProcessState.execution, ARG(a, 2), HELP_LIBRARY_LIMIT)
                   : strdup("");
     BOOL result = library && start_help_viewer(*library ? library : "WPHELP.HLP");
     free(library);
@@ -664,7 +664,7 @@ static uint32 wpSetDefaultHelp(uint8 *a)
 {
     uint32 self = ARG(a, 0);
     char *library =
-        ARG(a, 2) ? lx_execution_copy_string(GLoaderState.execution, ARG(a, 2), HELP_LIBRARY_LIMIT)
+        ARG(a, 2) ? lx_execution_copy_string(GProcessState.execution, ARG(a, 2), HELP_LIBRARY_LIMIT)
                   : NULL;
     if (ARG(a, 2) && !library)
         return FALSE;
@@ -685,10 +685,10 @@ static uint32 wpQueryDefaultHelp(uint8 *a)
         return pmwpInvoke(PMWP_M_WPOBJECT, PMWP_M_WPObject_wpclsQueryDefaultHelp,
                           pmwpInvokeObject(PMWP_SOMObject_somGetClass, self, 0, 0, 0), panel,
                           library, 0);
-    char *text = own ? lx_execution_copy_string(GLoaderState.execution, own, HELP_LIBRARY_LIMIT)
+    char *text = own ? lx_execution_copy_string(GProcessState.execution, own, HELP_LIBRARY_LIMIT)
                      : strdup("");
     BOOL result = text && pmwpStore32(panel, own_panel) &&
-                  lx_execution_write(GLoaderState.execution, library, text, strlen(text) + 1);
+                  lx_execution_write(GProcessState.execution, library, text, strlen(text) + 1);
     free(text);
     return result;
 }
@@ -738,7 +738,7 @@ static uint32 shadow_with_class(uint32 self, uint32 folder, BOOL lock, uint32 sh
     if (shadow && shadow_class)
     {
         char *name = lx_execution_copy_string(
-            GLoaderState.execution,
+            GProcessState.execution,
             pmwpInvokeClass(PMWP_SOMClass_somGetName, shadow_class, 0, 0, 0), 256);
         BOOL named = name && pmwpStoreSetClass(shadow, name);
         free(name);

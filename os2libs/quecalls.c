@@ -83,7 +83,7 @@ static int notify_revision(Queue *queue)
     if (!failed && queue->semaphore16 && revision != queue->revision)
     {
         LxGuestArgument sem = {0};
-        if (!lx_guest_argument_far(GLoaderState.execution, queue->semaphore16, 4,
+        if (!lx_guest_argument_far(GProcessState.execution, queue->semaphore16, 4,
                                    LX_GUEST_READ | LX_GUEST_WRITE, 1, 0, &sem))
             failed = 1;
         else
@@ -309,7 +309,7 @@ static uint32 queue_receive_operation(void *argument)
     BOOL32 nowait = call->nowait;
     HEV event = call->event;
     int peek = call->peek;
-    if (queue->owner != GLoaderState.pib.pib_ulpid)
+    if (queue->owner != GProcessState.pib.pib_ulpid)
     {
         return ERROR_QUE_PROC_NOT_OWNED;
     }
@@ -355,8 +355,8 @@ static uint32 queue_receive_operation(void *argument)
             else
             {
                 void *memory = (void *)(uintptr_t)packet.address;
-                if (size == sizeof packet && packet.address && GLoaderState.execution &&
-                    !lx_execution_memory(GLoaderState.execution, packet.address,
+                if (size == sizeof packet && packet.address && GProcessState.execution &&
+                    !lx_execution_memory(GProcessState.execution, packet.address,
                                          packet.length ? packet.length : 1, 0))
                 {
                     LxHostShared *shared = NULL;
@@ -377,7 +377,7 @@ static uint32 queue_receive_operation(void *argument)
                         USHORT selector = 0;
                         result = Dos16AllocSeg((USHORT)packet.length, &selector, 0);
                         if (!result)
-                            memory = GLoaderState.convert1616to32((ULONG)selector << 16);
+                            memory = GProcessState.convert1616to32((ULONG)selector << 16);
                         if (!result && !memory)
                         {
                             Dos16FreeSeg(selector);
@@ -437,7 +437,7 @@ APIRET DosPurgeQueue(HQUEUE handle)
         return ERROR_QUE_INVALID_HANDLE;
     Queue *queue = borrow.resource;
     uint32 count;
-    APIRET result = queue->owner != GLoaderState.pib.pib_ulpid         ? ERROR_QUE_PROC_NOT_OWNED
+    APIRET result = queue->owner != GProcessState.pib.pib_ulpid        ? ERROR_QUE_PROC_NOT_OWNED
                     : lx_host_mailbox_count(queue->mailbox, &count, 1) ? ERROR_QUE_MEMORY_ERROR
                                                                        : NO_ERROR;
     lx_handle_release(&borrow);
@@ -478,34 +478,34 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
     if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
         return ERROR_QUE_INVALID_HANDLE;
     Queue *queue = borrow.resource;
-    BOOL copied = copy || queue->owner != GLoaderState.pib.pib_ulpid;
+    BOOL copied = copy || queue->owner != GProcessState.pib.pib_ulpid;
     APIRET result = NO_ERROR;
     uint32 address = (uint32)(uintptr_t)data;
     PVOID source = data;
     if (priority > 15)
         priority = 15;
-    if (queue->owner == GLoaderState.pib.pib_ulpid && (queue->flags & 3) != QUE_PRIORITY)
+    if (queue->owner == GProcessState.pib.pib_ulpid && (queue->flags & 3) != QUE_PRIORITY)
         priority = 0;
     if (__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
         result = ERROR_QUE_INVALID_HANDLE;
     else if (copied && length && !data)
         result = ERROR_INVALID_PARAMETER;
-    if (!result && GLoaderState.execution)
+    if (!result && GProcessState.execution)
     {
-        if (!lx_execution_address(GLoaderState.execution, data, 0, 0, &address))
+        if (!lx_execution_address(GProcessState.execution, data, 0, 0, &address))
         {
             if (copy)
                 address = 0;
             else if (copied && length)
             {
-                source = lx_execution_memory(GLoaderState.execution, (uint32)(uintptr_t)data,
+                source = lx_execution_memory(GProcessState.execution, (uint32)(uintptr_t)data,
                                              length, LX_GUEST_READ);
                 if (!source)
                     result = ERROR_INVALID_PARAMETER;
             }
         }
         else if (copied && length &&
-                 !lx_execution_address(GLoaderState.execution, data, length, LX_GUEST_READ,
+                 !lx_execution_address(GProcessState.execution, data, length, LX_GUEST_READ,
                                        &address))
             result = ERROR_INVALID_PARAMETER;
     }
@@ -520,7 +520,7 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
         result = ERROR_QUE_NO_MEMORY;
     if (!result)
     {
-        Packet header = {GLoaderState.pib.pib_ulpid, request, length, address};
+        Packet header = {GProcessState.pib.pib_ulpid, request, length, address};
         memcpy(packet, &header, sizeof header);
         if (copied && length)
             memcpy(packet + sizeof header, source, length);
@@ -588,8 +588,8 @@ static APIRET queue_notification16(Queue *queue, ULONG semaphore)
     if (!semaphore)
         return NO_ERROR;
     LxGuestArgument argument = {0};
-    if (!lx_guest_argument_far(GLoaderState.execution, semaphore, 4, LX_GUEST_READ | LX_GUEST_WRITE,
-                               1, 0, &argument))
+    if (!lx_guest_argument_far(GProcessState.execution, semaphore, 4,
+                               LX_GUEST_READ | LX_GUEST_WRITE, 1, 0, &argument))
         return ERROR_INVALID_PARAMETER;
     lx_guest_argument_finish(&argument, 0);
     lx_host_mutex_lock(queue->mutex, UINT32_MAX);
@@ -636,14 +636,14 @@ APIRET16 Dos16ReadQueue(USHORT id, PULONG request, PUSHORT length, PULONG buffer
     if (!result)
     {
         void *host = output;
-        if (output && GLoaderState.execution)
+        if (output && GProcessState.execution)
         {
             uint32 address;
-            if (!lx_execution_address(GLoaderState.execution, output, 0, 0, &address))
-                host = lx_execution_memory(GLoaderState.execution, (ULONG)(uintptr_t)output,
+            if (!lx_execution_address(GProcessState.execution, output, 0, 0, &address))
+                host = lx_execution_memory(GProcessState.execution, (ULONG)(uintptr_t)output,
                                            bytes ? bytes : 1, LX_GUEST_READ);
         }
-        ULONG pointer = host ? GLoaderState.convert32to1616(host) : 0;
+        ULONG pointer = host ? GProcessState.convert32to1616(host) : 0;
         if (bytes > QUEUE_PAYLOAD_LIMIT ||
             (output && (!pointer || bytes > 65536u - (pointer & 0xffff))))
             result = ERROR_QUE_MEMORY_ERROR;

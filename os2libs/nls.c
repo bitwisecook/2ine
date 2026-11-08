@@ -62,8 +62,8 @@ static APIRET country_codepage(ULONG country, ULONG codepage, ULONG *resolved)
         return ERROR_NLS_NO_CTRY_CODE;
     if (codepage != 0 && codepage != 437 && codepage != 850)
         return ERROR_CODE_PAGE_NOT_FOUND;
-    *resolved =
-        codepage ? codepage : (GLoaderState.process_codepage ? GLoaderState.process_codepage : 437);
+    *resolved = codepage ? codepage
+                         : (GProcessState.process_codepage ? GProcessState.process_codepage : 437);
     return NO_ERROR;
 }
 

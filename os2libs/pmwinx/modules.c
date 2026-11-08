@@ -5,8 +5,8 @@
 
 static HMODULE module_handle(HMODULE module)
 {
-    return (!module || module == UINT32_MAX) && GLoaderState.main_module
-               ? GLoaderState.main_module->handle
+    return (!module || module == UINT32_MAX) && GProcessState.main_module
+               ? GProcessState.main_module->handle
                : module;
 }
 
@@ -29,7 +29,7 @@ HMODULE GetModuleHandle(PSZ name)
     char *extension = strrchr(module, '.');
     if (extension)
         *extension = 0;
-    for (LxModule *loaded = GLoaderState.loaded_modules; loaded; loaded = loaded->next)
+    for (LxModule *loaded = GProcessState.loaded_modules; loaded; loaded = loaded->next)
         if (!loaded->load_failed && !strcasecmp(module, loaded->name))
             return loaded->handle;
     open32SetError(126);
@@ -66,7 +66,7 @@ ULONG GetModuleFileName(HMODULE module, PSZ output, ULONG capacity)
 HMODULE LoadLibrary(PSZ name)
 {
     TRACE_NATIVE("LoadLibrary('%s')", name);
-    LxModule *module = name && GLoaderState.loadModule ? GLoaderState.loadModule(name) : NULL;
+    LxModule *module = name && GProcessState.loadModule ? GProcessState.loadModule(name) : NULL;
     if (!module)
         open32SetError(name ? 126 : 87);
     return module ? module->handle : 0;
@@ -75,12 +75,12 @@ HMODULE LoadLibrary(PSZ name)
 BOOL FreeLibrary(HMODULE module)
 {
     LxHandleBorrow borrow = {0};
-    if (!GLoaderState.freeModule || !lx_handle_borrow(module, LX_HANDLE_MODULE, &borrow))
+    if (!GProcessState.freeModule || !lx_handle_borrow(module, LX_HANDLE_MODULE, &borrow))
     {
         open32SetError(6);
         return FALSE;
     }
-    GLoaderState.freeModule(borrow.resource);
+    GProcessState.freeModule(borrow.resource);
     lx_handle_release(&borrow);
     return TRUE;
 }
@@ -119,7 +119,7 @@ PFN GetProcAddress(HMODULE module, PSZ name)
 
 void *open32DosService(const char *name)
 {
-    for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+    for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
         if (m->nativelib && !strcasecmp(m->name, "DOSCALLS"))
             return lx_host_library_symbol(m->nativelib, name);
     return NULL;
@@ -130,7 +130,7 @@ BOOL open32ValidProcedure(ULONG address)
     if (!address)
         return FALSE;
     /* Native imported APIs are executable host entries outside guest mappings. */
-    for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+    for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
         if (module->nativelib)
             for (ULONG i = 0; i < module->num_exports; i++)
             {
@@ -141,5 +141,5 @@ BOOL open32ValidProcedure(ULONG address)
                     (!entry->object || (entry->object->prot & LX_GUEST_EXECUTE)))
                     return TRUE;
             }
-    return lx_execution_memory(GLoaderState.execution, address, 1, LX_GUEST_EXECUTE) != NULL;
+    return lx_execution_memory(GProcessState.execution, address, 1, LX_GUEST_EXECUTE) != NULL;
 }

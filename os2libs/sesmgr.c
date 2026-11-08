@@ -369,13 +369,13 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
         return ERROR_INVALID_PARAMETER;
     LxGuestArgument header = {0}, input = {0}, text[5] = {{0}}, environment = {0}, object = {0};
     APIRET result = ERROR_INVALID_PARAMETER;
-    if (!lx_guest_argument_far(GLoaderState.execution, pointer, 2, LX_GUEST_READ, 0, 0, &header))
+    if (!lx_guest_argument_far(GProcessState.execution, pointer, 2, LX_GUEST_READ, 0, 0, &header))
         return result;
     USHORT length = lx_guest_load_u16(header.host);
     lx_guest_argument_finish(&header, 0);
     if (length < 24 || length > 60)
         return ERROR_SMG_INVALID_DATA_LENGTH;
-    if (!lx_guest_argument_far(GLoaderState.execution, pointer, length, LX_GUEST_READ, 0, 0,
+    if (!lx_guest_argument_far(GProcessState.execution, pointer, length, LX_GUEST_READ, 0, 0,
                                &input))
         return result;
     const uint8 *wire = input.host;
@@ -388,7 +388,7 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
     for (unsigned i = 0; i < 5; i++)
     {
         ULONG address = offsets[i] + 4 <= length ? lx_guest_load_u32(wire + offsets[i]) : 0;
-        if (!lx_guest_argument_strings(GLoaderState.execution, address, 1, 65536, 1, &text[i]))
+        if (!lx_guest_argument_strings(GProcessState.execution, address, 1, 65536, 1, &text[i]))
             goto done;
     }
     data.PgmTitle = text[0].host;
@@ -397,7 +397,7 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
     data.TermQ = text[3].host;
     data.IconFile = text[4].host;
     if (length >= 28 &&
-        !lx_guest_argument_strings(GLoaderState.execution, lx_guest_load_u32(wire + 24), 0, 65536,
+        !lx_guest_argument_strings(GProcessState.execution, lx_guest_load_u32(wire + 24), 0, 65536,
                                    1, &environment))
         goto done;
     data.Environment = environment.host;
@@ -422,7 +422,7 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
     if (length >= 60)
     {
         data.ObjectBuffLen = lx_guest_load_u32(wire + 56);
-        if (!lx_guest_argument_far(GLoaderState.execution, lx_guest_load_u32(wire + 52),
+        if (!lx_guest_argument_far(GProcessState.execution, lx_guest_load_u32(wire + 52),
                                    data.ObjectBuffLen, LX_GUEST_WRITE, 0, 1, &object))
             goto done;
         data.ObjectBuffer = object.host;

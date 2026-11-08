@@ -18,8 +18,8 @@ static void env_initialize(void)
 ULONG GetEnvironmentStrings(void)
 {
     ULONG address = 0;
-    if (!lx_execution_address(GLoaderState.execution, GLoaderState.pib.pib_pchenv, 1, LX_GUEST_READ,
-                              &address))
+    if (!lx_execution_address(GProcessState.execution, GProcessState.pib.pib_pchenv, 1,
+                              LX_GUEST_READ, &address))
         open32SetError(8);
     return address;
 }
@@ -35,7 +35,7 @@ ULONG GetEnvironmentVariable(PSZ name, PSZ output, ULONG capacity)
     lx_host_monitor_lock(env_monitor);
     size_t length = strlen(name);
     const char *value = NULL;
-    for (const char *entry = GLoaderState.pib.pib_pchenv; entry && *entry;
+    for (const char *entry = GProcessState.pib.pib_pchenv; entry && *entry;
          entry += strlen(entry) + 1)
         if (!strncasecmp(entry, name, length) && entry[length] == '=')
         {
@@ -66,7 +66,7 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     }
     lx_host_once(&env_once, env_initialize);
     lx_host_monitor_lock(env_monitor);
-    const char *old = GLoaderState.pib.pib_pchenv;
+    const char *old = GProcessState.pib.pib_pchenv;
     size_t name_size = strlen(name), size = 1;
     for (const char *p = old; p && *p; p += strlen(p) + 1)
         if (strncasecmp(p, name, name_size) || p[name_size] != '=')
@@ -75,7 +75,7 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
         size += name_size + strlen(value) + 2;
     if (size == 1)
         size = 2;
-    LxGuestMapping *mapping = size <= 65536 ? lx_execution_map(GLoaderState.execution, 0,
+    LxGuestMapping *mapping = size <= 65536 ? lx_execution_map(GProcessState.execution, 0,
                                                                (size + 4095) & ~(size_t)4095, 3, 0)
                                             : NULL;
     if (!mapping)
@@ -104,10 +104,10 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     *out = 0;
     if (out == begin)
         out[1] = 0;
-    GLoaderState.pib.pib_pchenv = begin;
-    if (GLoaderState.guest_pib)
+    GProcessState.pib.pib_pchenv = begin;
+    if (GProcessState.guest_pib)
     {
-        LxGuestPib *pib = lx_execution_mapping_host(GLoaderState.guest_pib);
+        LxGuestPib *pib = lx_execution_mapping_host(GProcessState.guest_pib);
         lx_guest_store_u32(&pib->environment, lx_execution_mapping_address(mapping));
     }
     /* Old blocks remain readable to guest code holding an earlier environment
@@ -319,7 +319,7 @@ ULONG SearchPath(PSZ path, PSZ file, PSZ extension, ULONG capacity, PSZ output, 
         ULONG address = 0;
         const char *last = strrchr(found, '\\');
         size_t offset = last ? (size_t)(last - found + 1) : 0;
-        if (!lx_execution_address(GLoaderState.execution, output + offset, 1, LX_GUEST_READ,
+        if (!lx_execution_address(GProcessState.execution, output + offset, 1, LX_GUEST_READ,
                                   &address))
             address = 0;
         lx_guest_store_u32(part, address);

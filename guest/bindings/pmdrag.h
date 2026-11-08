@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 static uint32 bridge32_DrgAddStrHandle(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 65536);
+    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 65536);
     if (!name)
         return 0;
     ULONG result = DrgAddStrHandle(name);
@@ -23,7 +23,7 @@ static uint32 bridge32_DrgQueryStrName(uint8 *a)
 {
     ULONG capacity = lx_guest_load_u32(a + 4);
     LxGuestBorrow span = {0};
-    if (!capacity || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+    if (!capacity || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
                                           capacity, LX_GUEST_WRITE, &span))
         return 0;
     ULONG result = DrgQueryStrName(lx_guest_load_u32(a), capacity, span.host);
@@ -112,8 +112,9 @@ static uint32 bridge32_DrgSetDragitem(uint8 *a)
 static uint32 bridge32_DrgVerifyRMF(uint8 *a)
 {
     ULONG mechanism = lx_guest_load_u32(a + 4), format = lx_guest_load_u32(a + 8);
-    char *m = mechanism ? lx_execution_copy_string(GLoaderState.execution, mechanism, 65536) : NULL;
-    char *f = format ? lx_execution_copy_string(GLoaderState.execution, format, 65536) : NULL;
+    char *m =
+        mechanism ? lx_execution_copy_string(GProcessState.execution, mechanism, 65536) : NULL;
+    char *f = format ? lx_execution_copy_string(GProcessState.execution, format, 65536) : NULL;
     BOOL result = (!mechanism || m) && (!format || f) && DrgVerifyRMF(lx_guest_load_u32(a), m, f);
     free(m);
     free(f);

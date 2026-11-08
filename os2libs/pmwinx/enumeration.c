@@ -66,7 +66,7 @@ BOOL EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
             ancestor = WinQueryWindow(ancestor, 5);
         if (!ancestor)
             continue;
-        if (!lx_execution_callback32_4(GLoaderState.execution, procedure, child, parameter, 0, 0))
+        if (!lx_execution_callback32_4(GProcessState.execution, procedure, child, parameter, 0, 0))
         {
             result = FALSE;
             break;

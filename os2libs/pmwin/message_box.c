@@ -155,7 +155,7 @@ BOOL WinAlarm(HWND desktop, ULONG type)
     /* SV_ALARM silences the sound without failing the call. */
     if (desktop == HWND_DESKTOP && type <= 2 && !WinQuerySysValue(desktop, 6))
         return TRUE;
-    return desktop == HWND_DESKTOP && type <= 2 && GLoaderState.beep &&
-           GLoaderState.beep(WinQuerySysValue(desktop, 13 + (LONG)type),
-                             WinQuerySysValue(desktop, 16 + (LONG)type)) == NO_ERROR;
+    return desktop == HWND_DESKTOP && type <= 2 && GProcessState.beep &&
+           GProcessState.beep(WinQuerySysValue(desktop, 13 + (LONG)type),
+                              WinQuerySysValue(desktop, 16 + (LONG)type)) == NO_ERROR;
 }

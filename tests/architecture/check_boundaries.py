@@ -266,7 +266,7 @@ for path in list(sources("host")) + list(sources("emulator/execution")):
     check(
         path,
         [
-            r"\b(?:GLoaderState|LxModule|LxMmaps)\b",
+            r"\b(?:GProcessState|LxModule|LxMmaps)\b",
             r"#\s*include\s*<[^>]*(?:os2libs/|loader/|runtime/(?:runtime|process)\.h)",
         ],
     )

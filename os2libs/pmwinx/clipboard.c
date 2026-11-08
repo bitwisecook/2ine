@@ -249,7 +249,8 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
     }
     ULONG size = GlobalSize(handle), address = GlobalLock(handle);
     void *bytes = size && size <= 16 * 1024 * 1024 ? malloc(size) : NULL;
-    int valid = address && bytes && lx_execution_read(GLoaderState.execution, address, bytes, size);
+    int valid =
+        address && bytes && lx_execution_read(GProcessState.execution, address, bytes, size);
     if (address)
         GlobalUnlock(handle);
     if (!valid)
@@ -267,7 +268,7 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
                          : NULL;
         free(bytes);
         bytes = utf8 ? lx_host_clipboard_text_os2(
-                           GLoaderState.process_codepage ? GLoaderState.process_codepage : 437,
+                           GProcessState.process_codepage ? GProcessState.process_codepage : 437,
                            utf8, length, &length)
                      : NULL;
         free(utf8);
@@ -307,7 +308,7 @@ ULONG GetClipboardData(ULONG format)
     if (bytes && format == 1)
     {
         void *utf8 = lx_host_clipboard_text_utf8(
-            GLoaderState.process_codepage ? GLoaderState.process_codepage : 437, bytes, size,
+            GProcessState.process_codepage ? GProcessState.process_codepage : 437, bytes, size,
             &size);
         free(bytes);
         bytes = utf8 ? lx_host_clipboard_text_os2(1004, utf8, size, &size) : NULL;
@@ -320,7 +321,7 @@ ULONG GetClipboardData(ULONG format)
         return 0;
     }
     ULONG handle = GlobalAlloc(0x42, (ULONG)size + 1), address = handle ? GlobalLock(handle) : 0;
-    BOOL copied = address && lx_execution_write(GLoaderState.execution, address, bytes, size + 1);
+    BOOL copied = address && lx_execution_write(GProcessState.execution, address, bytes, size + 1);
     if (address)
         GlobalUnlock(handle);
     free(bytes);

@@ -31,7 +31,7 @@ BOOL MessageBeep(ULONG type)
     }
     typedef APIRET(OS2API * BeepFn)(ULONG, ULONG);
     BeepFn beep = (BeepFn)open32DosService("DosBeep");
-    ULONG error = beep && GLoaderState.registerAudioGenerator ? beep(frequency, 120) : 50;
+    ULONG error = beep && GProcessState.registerAudioGenerator ? beep(frequency, 120) : 50;
     if (error)
         open32SetError(error);
     return error == 0;

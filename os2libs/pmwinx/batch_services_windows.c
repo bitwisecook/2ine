@@ -172,8 +172,8 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
     BOOL result = TRUE;
     for (size_t i = 0; i < count; i++)
         if (WinIsWindow(0, snapshot[i]) &&
-            !lx_execution_callback32_4(GLoaderState.execution, procedure, snapshot[i], parameter, 0,
-                                       0))
+            !lx_execution_callback32_4(GProcessState.execution, procedure, snapshot[i], parameter,
+                                       0, 0))
         {
             result = FALSE;
             break;
@@ -598,7 +598,7 @@ BOOL DlgDirSelectEx(ULONG dialog, PSZ output, LONG capacity, LONG id)
         return FALSE;
     }
     LxGuestMapping *mapping =
-        lx_execution_map(GLoaderState.execution, 0, ((size_t)length + 4096) & ~(size_t)4095, 3, 0);
+        lx_execution_map(GProcessState.execution, 0, ((size_t)length + 4096) & ~(size_t)4095, 3, 0);
     if (!mapping)
     {
         open32SetError(8);
@@ -628,7 +628,7 @@ BOOL DlgDirSelectEx(ULONG dialog, PSZ output, LONG capacity, LONG id)
         count = capacity - 1;
     memcpy(output, text, count);
     output[count] = 0;
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
     return directory;
 }
 

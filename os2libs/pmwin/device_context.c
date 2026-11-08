@@ -145,7 +145,7 @@ unsigned lx_pm_printer_kind(HDC handle)
 
 unsigned lx_pm_dc_dpi(HDC handle)
 {
-    unsigned dpi = GLoaderState.display_dpi;
+    unsigned dpi = GProcessState.display_dpi;
     return lx_pm_printer_kind(handle) ? 300 : dpi >= 72 && dpi <= 384 ? dpi : 96;
 }
 

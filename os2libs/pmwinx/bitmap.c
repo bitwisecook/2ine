@@ -133,8 +133,8 @@ ULONG LoadBitmap(HMODULE module, PSZ name)
     ULONG resource = FindResource(module, name, (PSZ)(uintptr_t)2);
     if (!resource)
         return 0;
-    if ((!module || module == UINT32_MAX) && GLoaderState.main_module)
-        module = GLoaderState.main_module->handle;
+    if ((!module || module == UINT32_MAX) && GProcessState.main_module)
+        module = GProcessState.main_module->handle;
     if (!open32Presentation())
     {
         open32SetError(8);
@@ -537,7 +537,7 @@ ULONG _CreateBitmapIndirect(PVOID input)
     size_t exact = bytes / (size_t)h, pitch = (size_t)(ULONG)stride;
     LxGuestBorrow bits = {0};
     if (pitch < exact || pitch * (size_t)h > 64u * 1024 * 1024 ||
-        !lx_execution_borrow(GLoaderState.execution, address, pitch * (size_t)h, LX_GUEST_READ,
+        !lx_execution_borrow(GProcessState.execution, address, pitch * (size_t)h, LX_GUEST_READ,
                              &bits))
     {
         open32SetError(87);

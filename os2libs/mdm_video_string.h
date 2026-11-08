@@ -97,7 +97,7 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
         return 0;
     }
     *handled = 1;
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 0x3000, 3, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 0x3000, 3, 0);
     if (!mapping)
     {
         free(text);
@@ -308,7 +308,7 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
             result = V_ERR_BUFFER;
     }
 done:
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
     free(text);
     return result;
 }

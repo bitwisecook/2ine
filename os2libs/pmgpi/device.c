@@ -59,7 +59,7 @@ BOOL DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
     caps[11] = caps[13] = caps[36] = m.ascent + m.descent;
     /* Device colors are independent of a PS's initial 16 indexed entries.
        The retained canvas supports all 24-bit RGB values simultaneously. */
-    const unsigned depth = GLoaderState.display_depth ? GLoaderState.display_depth : 24;
+    const unsigned depth = GProcessState.display_depth ? GProcessState.display_depth : 24;
     caps[14] = 1L << depth;
     caps[15] = 1;           /* planes */
     caps[16] = (LONG)depth; /* preferred bitmap bits per pel */

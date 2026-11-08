@@ -8,7 +8,7 @@
 #include "runtime/core/internal.h"
 #include "host/fatal.h"
 
-LxLoaderState GLoaderState;
+LxProcessState GProcessState;
 
 LX_PRIVATE LX_HOST_THREAD_LOCAL LxTIB *DefaultTib;
 LX_PRIVATE LX_HOST_THREAD_LOCAL LxHostThreadState host_thread_state;
@@ -19,29 +19,29 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     if (lx_host_fatal_is_dialog())
         return;
     lx_host_fatal_install();
-    memset(&GLoaderState, '\0', sizeof(GLoaderState));
-    GLoaderState.dosExit = dosExit_lib2ine;
-    GLoaderState.initOs2Tib = initOs2Tib_lib2ine;
-    GLoaderState.setOs2Tib = setOs2Tib_lib2ine;
-    GLoaderState.getOs2Tib = getOs2Tib_lib2ine;
-    GLoaderState.deinitOs2Tib = deinitOs2Tib_lib2ine;
-    GLoaderState.allocSegment = allocSegment_lib2ine;
-    GLoaderState.freeSegment = freeSegment_lib2ine;
-    GLoaderState.findSelector = findSelector_lib2ine;
-    GLoaderState.freeSelector = freeSelector_lib2ine;
-    GLoaderState.convert1616to32 = convert1616to32_lib2ine;
-    GLoaderState.convert32to1616 = convert32to1616_lib2ine;
-    GLoaderState.loadModule = loadModule_lib2ine;
-    GLoaderState.makeUnixPath = makeUnixPath_lib2ine;
-    GLoaderState.terminate = terminate_lib2ine;
-    GLoaderState.registerAudioGenerator = lxRegisterAudioGenerator;
-    GLoaderState.registerStereoAudioGenerator = lxRegisterStereoAudioGenerator;
-    GLoaderState.lib2ine_shutdown = lib2ine_shutdown;
+    memset(&GProcessState, '\0', sizeof(GProcessState));
+    GProcessState.dosExit = dosExit_lib2ine;
+    GProcessState.initOs2Tib = initOs2Tib_lib2ine;
+    GProcessState.setOs2Tib = setOs2Tib_lib2ine;
+    GProcessState.getOs2Tib = getOs2Tib_lib2ine;
+    GProcessState.deinitOs2Tib = deinitOs2Tib_lib2ine;
+    GProcessState.allocSegment = allocSegment_lib2ine;
+    GProcessState.freeSegment = freeSegment_lib2ine;
+    GProcessState.findSelector = findSelector_lib2ine;
+    GProcessState.freeSelector = freeSelector_lib2ine;
+    GProcessState.convert1616to32 = convert1616to32_lib2ine;
+    GProcessState.convert32to1616 = convert32to1616_lib2ine;
+    GProcessState.loadModule = loadModule_lib2ine;
+    GProcessState.makeUnixPath = makeUnixPath_lib2ine;
+    GProcessState.terminate = terminate_lib2ine;
+    GProcessState.registerAudioGenerator = lxRegisterAudioGenerator;
+    GProcessState.registerStereoAudioGenerator = lxRegisterStereoAudioGenerator;
+    GProcessState.lib2ine_shutdown = lib2ine_shutdown;
 
     /* Use a low amplitude to match the PC speaker mix. */
-    GLoaderState.beep_volume = 0.05f;
-    GLoaderState.display_dpi = 96;
-    GLoaderState.display_depth = 24;
+    GProcessState.beep_volume = 0.05f;
+    GProcessState.display_dpi = 96;
+    GProcessState.display_depth = 24;
 
     cfgLoadFiles();
     const char *display_dpi = getenv("TWOINE_DISPLAY_DPI");
@@ -50,7 +50,7 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
         char *end = NULL;
         unsigned long dpi = strtoul(display_dpi, &end, 10);
         if (end != display_dpi && !*end && dpi >= 72 && dpi <= 384)
-            GLoaderState.display_dpi = (unsigned)dpi;
+            GProcessState.display_dpi = (unsigned)dpi;
     }
     const char *display_depth = getenv("TWOINE_DISPLAY_DEPTH");
     if (display_depth)
@@ -59,25 +59,25 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
         unsigned long depth = strtoul(display_depth, &end, 10);
         if (end != display_depth && !*end &&
             (depth == 4 || depth == 8 || depth == 16 || depth == 24))
-            GLoaderState.display_depth = (unsigned)depth;
+            GProcessState.display_depth = (unsigned)depth;
     }
     prepOs2Drives();
 
     const size_t stack_limit = lx_host_stack_limit();
-    GLoaderState.initOs2Tib(GLoaderState.main_tibspace, (void *)&stack_limit, stack_limit, 0);
-    GLoaderState.main_tib_selector = GLoaderState.setOs2Tib(GLoaderState.main_tibspace);
+    GProcessState.initOs2Tib(GProcessState.main_tibspace, (void *)&stack_limit, stack_limit, 0);
+    GProcessState.main_tib_selector = GProcessState.setOs2Tib(GProcessState.main_tibspace);
 
     if (getenv("TRACE_NATIVE"))
     {
-        GLoaderState.trace_native = 1;
+        GProcessState.trace_native = 1;
     }
 
     if (getenv("TRACE_EVENTS"))
     {
-        GLoaderState.trace_events = 1;
+        GProcessState.trace_events = 1;
     }
 
-    GLoaderState.subprocess = (getenv("IS_2INE") != NULL);
+    GProcessState.subprocess = (getenv("IS_2INE") != NULL);
 
     initPib();
 }
@@ -144,15 +144,15 @@ void lib2ine_shutdown(void)
     lxAudioShutdown();
     lxUnregisterProcessPeer();
 
-    for (int i = 0; i < (sizeof(GLoaderState.disks) / sizeof(GLoaderState.disks[0])); i++)
+    for (int i = 0; i < (sizeof(GProcessState.disks) / sizeof(GProcessState.disks[0])); i++)
     {
-        free(GLoaderState.disks[i]);
-        GLoaderState.disks[i] = NULL;
+        free(GProcessState.disks[i]);
+        GProcessState.disks[i] = NULL;
     }
 
-    if (!GLoaderState.execution)
-        free(GLoaderState.pib.pib_pchenv);
-    GLoaderState.pib.pib_pchenv = NULL;
+    if (!GProcessState.execution)
+        free(GProcessState.pib.pib_pchenv);
+    GProcessState.pib.pib_pchenv = NULL;
 
     DefaultTib = NULL;
 }

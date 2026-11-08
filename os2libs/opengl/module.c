@@ -17,7 +17,7 @@ void lxNativeModuleDeinit(void)
 {
     gl_pgl_shutdown();
     if (Bridges.mapping)
-        lx_execution_unmap(GLoaderState.execution, Bridges.mapping);
+        lx_execution_unmap(GProcessState.execution, Bridges.mapping);
     memset(&Bridges, 0, sizeof Bridges);
     free(Exports);
     free(EntryAddresses);
@@ -47,7 +47,7 @@ const LxExport *lxNativeModuleInit(uint32 *count)
         goto failed;
     Bridges.alias = 0xffff;
     Bridges.mapping =
-        lx_execution_map(GLoaderState.execution, 0, 65536, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, 65536, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!Bridges.mapping)
         goto failed;
     Bridges.addr = Bridges.mapped = lx_execution_mapping_host(Bridges.mapping);
@@ -59,7 +59,7 @@ const LxExport *lxNativeModuleInit(uint32 *count)
         const GlEntry *entry = i < core_count ? &GlEntries[i] : &GlPglEntries[i - core_count];
         const LxExecutionApi32 binding = {entry->call, entry->argument_bytes, 0, LX_ABI_STACK32};
         size_t size = lx_execution_emit_bridge32(
-            GLoaderState.execution, p, 65536 - (size_t)(p - (uint8_t *)Bridges.addr), &binding);
+            GProcessState.execution, p, 65536 - (size_t)(p - (uint8_t *)Bridges.addr), &binding);
         if (!size)
             goto failed;
         EntryAddresses[i] = p;
@@ -68,7 +68,7 @@ const LxExport *lxNativeModuleInit(uint32 *count)
                                 &EntryAddresses[i], &Bridges, 1};
         p += size;
     }
-    if (!lx_execution_protect(GLoaderState.execution, Bridges.mapping,
+    if (!lx_execution_protect(GProcessState.execution, Bridges.mapping,
                               LX_GUEST_READ | LX_GUEST_EXECUTE))
         goto failed;
     *count = (uint32)total;

@@ -33,7 +33,7 @@ LONG OpenFile(PSZ name, PVOID record, ULONG flags)
     wire[0] = 136;
     wire[1] = 1;
     uint32 error = 0;
-    char *host_path = GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(path, &error) : NULL;
+    char *host_path = GProcessState.makeUnixPath ? GProcessState.makeUnixPath(path, &error) : NULL;
     if (!host_path)
         error = error ? error : 87;
     else

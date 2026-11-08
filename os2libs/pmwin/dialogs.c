@@ -348,12 +348,12 @@ HWND WinLoadDlg(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG 
     void *data;
     if (!anchor)
         return 0;
-    if (!GLoaderState.getResource || !GLoaderState.queryResourceSize ||
-        !GLoaderState.freeResource || GLoaderState.queryResourceSize(module, 4, id, &size) ||
-        GLoaderState.getResource(module, 4, id, &data))
+    if (!GProcessState.getResource || !GProcessState.queryResourceSize ||
+        !GProcessState.freeResource || GProcessState.queryResourceSize(module, 4, id, &size) ||
+        GProcessState.getResource(module, 4, id, &data))
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
     HWND result = createDialog(parent, owner, procedure, data, size, parameters, module);
-    GLoaderState.freeResource(data);
+    GProcessState.freeResource(data);
     return result;
 }
 

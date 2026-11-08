@@ -60,7 +60,7 @@ static ULONG hook_message(ULONG hook, ULONG window, ULONG message, ULONG first, 
         if (!open32PmMessage(&native, &kind, &a, &b))
             return 0;
     }
-    return lx_execution_callback32_4(GLoaderState.execution, hook, window, kind, a, b);
+    return lx_execution_callback32_4(GProcessState.execution, hook, window, kind, a, b);
 }
 
 /* The template name is a resource number or a guest string. */
@@ -68,7 +68,7 @@ static ULONG template_identity(ULONG module, ULONG name)
 {
     if (name <= 0xFFFF)
         return name;
-    char *text = lx_execution_copy_string(GLoaderState.execution, name, 1024);
+    char *text = lx_execution_copy_string(GProcessState.execution, name, 1024);
     ULONG identity = text ? open32ResourceIdentity(module, text, 4) : 0; /* RT_DIALOG */
     free(text);
     return identity;
@@ -76,15 +76,15 @@ static ULONG template_identity(ULONG module, ULONG name)
 
 static ULONG template_module(ULONG module)
 {
-    return (!module || module == UINT32_MAX) && GLoaderState.main_module
-               ? GLoaderState.main_module->handle
+    return (!module || module == UINT32_MAX) && GProcessState.main_module
+               ? GProcessState.main_module->handle
                : module;
 }
 
 static ULONG record_address(PVOID record, ULONG size)
 {
     ULONG address = 0;
-    return lx_execution_address(GLoaderState.execution, record, size, LX_GUEST_READ, &address)
+    return lx_execution_address(GProcessState.execution, record, size, LX_GUEST_READ, &address)
                ? address
                : 0;
 }
@@ -105,7 +105,7 @@ static uint32 font_dispatch(uint8 *a)
     if (dialog && message == WM_INITDLG)
     {
         lx_pm_font_procedure(window, message, (MPARAM)(uintptr_t)first, (MPARAM)(uintptr_t)second);
-        lx_execution_callback32_4(GLoaderState.execution, dialog->hook, window, WIN_INITDIALOG,
+        lx_execution_callback32_4(GProcessState.execution, dialog->hook, window, WIN_INITDIALOG,
                                   first, dialog->address);
         return 0;
     }
@@ -131,14 +131,14 @@ BOOL ChooseFont(PVOID record)
         return FALSE;
     }
     LxGuestBorrow logfont = {0};
-    if (!address || !lx_execution_borrow(GLoaderState.execution, address, 60, 3, &logfont))
+    if (!address || !lx_execution_borrow(GProcessState.execution, address, 60, 3, &logfont))
     {
         open32CommonDialogError(CDERR_INITIALIZATION);
         return FALSE;
     }
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     LxGuestMapping *procedure =
-        hook ? lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0) : NULL;
+        hook ? lx_execution_map(GProcessState.execution, 0, 4096, 3, 0) : NULL;
     PVOID custom = NULL;
     BOOL result = FALSE, opened = FALSE;
     ULONG failure = 0;
@@ -160,8 +160,9 @@ BOOL ChooseFont(PVOID record)
         LONG height = (LONG)lx_guest_load_u32(logfont.host);
         if (height < 0)
             height = -height;
-        points = height ? height * 720 / (GLoaderState.display_dpi ? GLoaderState.display_dpi : 96)
-                        : 100;
+        points = height
+                     ? height * 720 / (GProcessState.display_dpi ? GProcessState.display_dpi : 96)
+                     : 100;
     }
     dialog->fxPointSize = points * 65536 / 10;
     dialog->fl = 1;
@@ -198,9 +199,9 @@ BOOL ChooseFont(PVOID record)
     if (hook)
     {
         const LxExecutionApi32 api = {font_dispatch, 16, 0, LX_ABI_STACK32};
-        if (!lx_execution_emit_bridge32(GLoaderState.execution,
+        if (!lx_execution_emit_bridge32(GProcessState.execution,
                                         lx_execution_mapping_host(procedure), 4096, &api) ||
-            !lx_execution_protect(GLoaderState.execution, procedure,
+            !lx_execution_protect(GProcessState.execution, procedure,
                                   LX_GUEST_READ | LX_GUEST_EXECUTE))
         {
             failure = CDERR_MEMALLOCFAILURE;
@@ -229,8 +230,9 @@ BOOL ChooseFont(PVOID record)
             uint8 *font = logfont.host;
             lx_guest_store_u32(
                 font,
-                (ULONG) - (points *
-                           (LONG)(GLoaderState.display_dpi ? GLoaderState.display_dpi : 96) / 720));
+                (ULONG) -
+                    (points * (LONG)(GProcessState.display_dpi ? GProcessState.display_dpi : 96) /
+                     720));
             lx_guest_store_u32(font + 16, dialog->usWeight >= 7 ? 700 : 400);
             font[20] = (dialog->fAttrs.fsSelection & 1) != 0;
             font[21] = (dialog->fAttrs.fsSelection & 2) != 0;
@@ -247,9 +249,9 @@ font_done:
     open32CommonDialogError(failure);
     free(custom);
     if (procedure)
-        lx_execution_unmap(GLoaderState.execution, procedure);
+        lx_execution_unmap(GProcessState.execution, procedure);
     if (mapping)
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
     lx_execution_release(&logfont);
     return result;
 }
@@ -467,7 +469,7 @@ static void store_custom_colors(ColorDialog *dialog)
     uint8 wire[64];
     for (unsigned i = 0; i < 16; i++)
         lx_guest_store_u32(wire + i * 4, dialog->custom[i]);
-    lx_execution_write(GLoaderState.execution, dialog->custom_address, wire, sizeof wire);
+    lx_execution_write(GProcessState.execution, dialog->custom_address, wire, sizeof wire);
 }
 
 static void initialize_color(ColorDialog *dialog, ULONG window)
@@ -507,7 +509,7 @@ static MRESULT OS2API color_procedure(HWND window, ULONG message, MPARAM first, 
     {
         initialize_color(dialog, window);
         if (dialog->hook)
-            lx_execution_callback32_4(GLoaderState.execution, dialog->hook, window, WIN_INITDIALOG,
+            lx_execution_callback32_4(GProcessState.execution, dialog->hook, window, WIN_INITDIALOG,
                                       a, dialog->address);
         return 0;
     }
@@ -546,9 +548,9 @@ static MRESULT OS2API color_procedure(HWND window, ULONG message, MPARAM first, 
             /* The hook sees the record with the proposed colour and may refuse it. */
             uint8 proposed[4];
             lx_guest_store_u32(proposed, dialog->color);
-            lx_execution_write(GLoaderState.execution, dialog->address + 12, proposed, 4);
+            lx_execution_write(GProcessState.execution, dialog->address + 12, proposed, 4);
             if (dialog->hook &&
-                lx_execution_callback32_4(GLoaderState.execution, dialog->hook, window,
+                lx_execution_callback32_4(GProcessState.execution, dialog->hook, window,
                                           dialog->ok_message, 0, dialog->address))
                 return 0;
             dialog->accepted = TRUE;
@@ -676,7 +678,7 @@ BOOL ChooseColor(PVOID record)
     if (dialog.custom_address)
     {
         uint8 custom[64];
-        if (!lx_execution_read(GLoaderState.execution, dialog.custom_address, custom,
+        if (!lx_execution_read(GProcessState.execution, dialog.custom_address, custom,
                                sizeof custom))
         {
             open32CommonDialogError(CDERR_INITIALIZATION);

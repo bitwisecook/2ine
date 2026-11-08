@@ -20,8 +20,8 @@ APIRET DosPutMessage(HFILE handle, ULONG size, PCHAR message)
 {
     TRACE_NATIVE("DosPutMessage(%u, %u, %p)", (uint)handle, (uint)size, message);
     uint32 actual;
-    if (GLoaderState.writeFile)
-        return GLoaderState.writeFile(handle, message, size, &actual);
+    if (GProcessState.writeFile)
+        return GProcessState.writeFile(handle, message, size, &actual);
     /* Programs importing MSG alone have only the initial standard handles. */
     LxHostFile *file = lx_host_file_standard(handle);
     if (!file)
@@ -80,7 +80,7 @@ static uint32 readLE32(const uint8 *ptr)
 static uint8 *loadMessageFile(const char *filename, size_t *outlen)
 {
     uint32 err = 0;
-    char *unixpath = GLoaderState.makeUnixPath(filename, &err);
+    char *unixpath = GProcessState.makeUnixPath(filename, &err);
     if (!unixpath)
         return NULL;
 
@@ -90,7 +90,7 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
     if (!data && !strpbrk(filename, ":/\\"))
     {
         const char *directories = NULL;
-        for (const char *env = GLoaderState.pib.pib_pchenv; env && *env; env += strlen(env) + 1)
+        for (const char *env = GProcessState.pib.pib_pchenv; env && *env; env += strlen(env) + 1)
             if (!strncmp(env, "DPATH=", 6))
             {
                 directories = env + 6;
@@ -105,7 +105,7 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
             if (!guest)
                 return NULL;
             snprintf(guest, size, "%.*s%s%s", (int)count, at, count ? "\\" : "", filename);
-            unixpath = GLoaderState.makeUnixPath(guest, &err);
+            unixpath = GProcessState.makeUnixPath(guest, &err);
             free(guest);
             if (unixpath)
             {
@@ -260,7 +260,7 @@ APIRET lx_message_get(PVOID msgseg, PVOID pTable, ULONG cTable, PCHAR pData, ULO
 
     size_t msglen = 0;
     const uint8 *msg = findMessage(data, datalen, msgnum, &msglen);
-    if (GLoaderState.trace_native)
+    if (GProcessState.trace_native)
         fprintf(stderr, "2INE TRACE: message file %s len=%u msgnum=%u found=%d\n", pFilename,
                 (uint)datalen, (uint)msgnum, msg != NULL);
     if (!msg)
@@ -303,7 +303,7 @@ APIRET16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData, USHORT cb
     for (uint16 i = 0; i < ntable; i++)
     {
         uint32 pointer = lx_guest_load_u32((uint8 *)pTable + i * 4);
-        if (!lx_guest_argument_strings(GLoaderState.execution, pointer, 1, 65536, 1,
+        if (!lx_guest_argument_strings(GProcessState.execution, pointer, 1, 65536, 1,
                                        &substitutions[i]))
         {
             for (uint16 j = 0; j < i; j++)

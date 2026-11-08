@@ -11,7 +11,7 @@ static int RexxServiceWorker;
 static void rexxLeaseName(char name[32])
 {
     uint64 hash = UINT64_C(1469598103934665603);
-    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"), GLoaderState.disks[2]};
+    const char *scope[] = {getenv("TWOINE_BALL"), getenv("TWOINE_IPC_DIR"), GProcessState.disks[2]};
     for (size_t i = 0; i < sizeof scope / sizeof scope[0]; i++)
     {
         for (const char *p = scope[i]; p && *p; p++)
@@ -24,7 +24,7 @@ static void rexxLeaseName(char name[32])
 static int rexxQueueOwner(uint32 *owner)
 {
     LxModule *queues = NULL;
-    for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+    for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
         if (module->nativelib && !strcasecmp(module->name, "QUECALLS"))
         {
             queues = module;
@@ -161,7 +161,7 @@ static LxModule *serviceStack(void)
         (LxObjectPageTableEntry *)(image + 64 + header->object_page_table_offset);
     page->data_size = 3;
     memcpy(image + 512, "\x31\xc0\xc3", 3);
-    const char *mount = GLoaderState.disks[2];
+    const char *mount = GProcessState.disks[2];
     char path[2048];
     if (!mount || snprintf(path, sizeof path, "%s/REXXSERVICE.EXE", mount) >= (int)sizeof path)
         return NULL;

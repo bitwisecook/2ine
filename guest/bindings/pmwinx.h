@@ -6,7 +6,7 @@ static uint32 open32_interlocked_bridge(uint8 *a, unsigned operation)
 {
     LxGuestBorrow value = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 4,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 4,
                              LX_GUEST_READ | LX_GUEST_WRITE, &value))
         open32SetError(87);
     else if (operation == 0)
@@ -38,7 +38,7 @@ static uint32 bridge32_AdjustWindowRectEx(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16,
                              LX_GUEST_READ | LX_GUEST_WRITE, &rectangle))
         open32SetError(87);
     else
@@ -55,7 +55,7 @@ static uint32 bridge32_LoadMenu(uint8 *a)
     ULONG resource = lx_guest_load_u32(a + 4);
     PSZ name = (PSZ)(uintptr_t)resource;
     if (resource > 0xFFFF &&
-        !(name = lx_execution_copy_string(GLoaderState.execution, resource, 1024u * 1024u)))
+        !(name = lx_execution_copy_string(GProcessState.execution, resource, 1024u * 1024u)))
     {
         open32SetError(87);
         return 0;
@@ -75,7 +75,7 @@ static uint32 bridge32_GetCursorPos(uint8 *a)
 {
     LxGuestBorrow output = {0};
     ULONG result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
                              &output))
         open32SetError(87);
     else
@@ -101,9 +101,9 @@ static uint32 bridge32_GetTabbedTextExtent(uint8 *a)
     LxGuestBorrow text = {0}, tabs = {0};
     ULONG result = 0;
     if (count < 0 || count > 65536 || tab_count < 0 || tab_count > 65536 ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (size_t)count, LX_GUEST_READ, &text)) ||
-        (tab_count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16),
+        (tab_count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16),
                                            (size_t)tab_count * 4, LX_GUEST_READ, &tabs)))
         open32SetError(87);
     else
@@ -130,7 +130,7 @@ static uint32 o32_set_mapping(uint8 *a, unsigned kind)
     LxGuestBorrow previous = {0};
     ULONG result = 0;
     if (address &&
-        !lx_execution_borrow(GLoaderState.execution, address, 8, LX_GUEST_WRITE, &previous))
+        !lx_execution_borrow(GProcessState.execution, address, 8, LX_GUEST_WRITE, &previous))
         open32SetError(87);
     else if (kind == 0)
         result = SetViewportOrgEx(handle, x, y, previous.host);
@@ -181,12 +181,12 @@ static uint32 bridge32_PlayMetaFileRecord(uint8 *a)
     uint8 header[6];
     LxGuestBorrow record = {0}, table = {0};
     ULONG result = 0, words = 0;
-    if (lx_execution_read(GLoaderState.execution, address, header, sizeof header))
+    if (lx_execution_read(GProcessState.execution, address, header, sizeof header))
         words = lx_guest_load_u32(header);
     if (words < 3 || words > 32u * 1024 * 1024 || count > 65535 ||
-        !lx_execution_borrow(GLoaderState.execution, address, (size_t)words * 2, LX_GUEST_READ,
+        !lx_execution_borrow(GProcessState.execution, address, (size_t)words * 2, LX_GUEST_READ,
                              &record) ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (size_t)count * 4, LX_GUEST_READ | LX_GUEST_WRITE, &table)))
         open32SetError(87);
     else
@@ -217,12 +217,12 @@ static uint32 bridge32_StretchDIBits(uint8 *a)
     size_t info_bytes, pixel_bytes;
     LxGuestBorrow info = {0}, bits = {0};
     ULONG result = 0;
-    if (!lx_execution_read(GLoaderState.execution, info_address, header, sizeof header) ||
+    if (!lx_execution_read(GProcessState.execution, info_address, header, sizeof header) ||
         !open32DibBuffers(header, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
         !pixel_bytes || pixel_bytes > 64u * 1024 * 1024 ||
-        !lx_execution_borrow(GLoaderState.execution, info_address, info_bytes, LX_GUEST_READ,
+        !lx_execution_borrow(GProcessState.execution, info_address, info_bytes, LX_GUEST_READ,
                              &info) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 36), pixel_bytes,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 36), pixel_bytes,
                              LX_GUEST_READ, &bits))
         open32SetError(87);
     else
@@ -259,14 +259,14 @@ static uint32 bridge32_GetTextExtentExPoint(uint8 *a)
     LxGuestBorrow text = {0}, fit = {0}, advances = {0}, size = {0};
     ULONG result = 0;
     if (count < 0 || count > 65536 ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (size_t)count, LX_GUEST_READ, &text)) ||
         (fit_address &&
-         !lx_execution_borrow(GLoaderState.execution, fit_address, 4, LX_GUEST_WRITE, &fit)) ||
+         !lx_execution_borrow(GProcessState.execution, fit_address, 4, LX_GUEST_WRITE, &fit)) ||
         (advances_address && count &&
-         !lx_execution_borrow(GLoaderState.execution, advances_address, (size_t)count * 4,
+         !lx_execution_borrow(GProcessState.execution, advances_address, (size_t)count * 4,
                               LX_GUEST_WRITE, &advances)) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 24), 8, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 24), 8, LX_GUEST_WRITE,
                              &size))
         open32SetError(87);
     else
@@ -286,7 +286,7 @@ static uint32 bridge32_SetMetaFileBitsEx(uint8 *a)
     LxGuestBorrow input = {0};
     ULONG result = 0;
     if (size < 24 || size > 64u * 1024 * 1024 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), size, LX_GUEST_READ,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), size, LX_GUEST_READ,
                              &input))
         open32SetError(87);
     else
@@ -308,7 +308,7 @@ static uint32 bridge32_GetMetaFileBitsEx(uint8 *a)
         return 0;
     LxGuestBorrow output = {0};
     ULONG result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, address, size, LX_GUEST_WRITE, &output))
+    if (!lx_execution_borrow(GProcessState.execution, address, size, LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
         result = GetMetaFileBitsEx(handle, size, output.host);
@@ -325,7 +325,7 @@ static uint32 bridge32_SetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow input = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 44, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 44, LX_GUEST_READ,
                              &input))
         open32SetError(87);
     else
@@ -338,7 +338,7 @@ static uint32 bridge32_GetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 44,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 44,
                              LX_GUEST_READ | LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
@@ -366,11 +366,11 @@ static uint32 bridge32_lstrcmp(uint8 *a)
 
 static uint32 bridge32_CreateFile(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 32768);
+    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 32768);
     uint32 security = lx_guest_load_u32(a + 12);
     uint8 attributes[12];
     uint32 result = UINT32_MAX;
-    if (!name || (security && !lx_execution_read(GLoaderState.execution, security, attributes,
+    if (!name || (security && !lx_execution_read(GProcessState.execution, security, attributes,
                                                  sizeof attributes)))
         open32SetError(87);
     else
@@ -385,7 +385,7 @@ static uint32 bridge32_SetFilePointer(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a + 8), result = UINT32_MAX;
     LxGuestBorrow high = {0};
-    if (address && !lx_execution_borrow(GLoaderState.execution, address, 4,
+    if (address && !lx_execution_borrow(GProcessState.execution, address, 4,
                                         LX_GUEST_READ | LX_GUEST_WRITE, &high))
         open32SetError(87);
     else
@@ -404,7 +404,7 @@ static uint32 bridge32_GetFileSize(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a + 4), result = UINT32_MAX;
     LxGuestBorrow high = {0};
-    if (address && !lx_execution_borrow(GLoaderState.execution, address, 4, LX_GUEST_WRITE, &high))
+    if (address && !lx_execution_borrow(GProcessState.execution, address, 4, LX_GUEST_WRITE, &high))
         open32SetError(87);
     else
     {
@@ -492,16 +492,16 @@ static uint32 bridge32_CommDlgExtendedError(uint8 *a)
 static uint32 bridge32_GetProfileString(uint8 *a)
 {
     uint32 key_pointer = lx_guest_load_u32(a + 4), fallback_pointer = lx_guest_load_u32(a + 8);
-    char *section = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 32768);
+    char *section = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 32768);
     char *key =
-        key_pointer ? lx_execution_copy_string(GLoaderState.execution, key_pointer, 32768) : NULL;
-    char *fallback = fallback_pointer
-                         ? lx_execution_copy_string(GLoaderState.execution, fallback_pointer, 32768)
-                         : NULL;
+        key_pointer ? lx_execution_copy_string(GProcessState.execution, key_pointer, 32768) : NULL;
+    char *fallback = fallback_pointer ? lx_execution_copy_string(GProcessState.execution,
+                                                                 fallback_pointer, 32768)
+                                      : NULL;
     uint32 capacity = lx_guest_load_u32(a + 16), result = 0;
     LxGuestBorrow output = {0};
     if (!section || (key_pointer && !key) || (fallback_pointer && !fallback) || !capacity ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), capacity,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), capacity,
                              LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
@@ -555,7 +555,7 @@ static uint32 bridge32_MulDiv(uint8 *arguments)
 
 static char *o32_string(uint32 pointer)
 {
-    return pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 32768) : NULL;
+    return pointer ? lx_execution_copy_string(GProcessState.execution, pointer, 32768) : NULL;
 }
 
 static uint32 bridge32_RegCloseKey(uint8 *a)
@@ -569,7 +569,7 @@ static uint32 bridge32_RegOpenKey(uint8 *a)
     char *name = o32_string(pointer);
     LxGuestBorrow output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if ((!pointer || name) && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+    if ((!pointer || name) && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
                                                   4, LX_GUEST_WRITE, &output))
     {
         ULONG handle = 0;
@@ -588,7 +588,7 @@ static uint32 bridge32_RegCreateKey(uint8 *a)
     char *name = o32_string(pointer);
     LxGuestBorrow output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if ((!pointer || name) && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+    if ((!pointer || name) && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
                                                   4, LX_GUEST_WRITE, &output))
     {
         ULONG handle = 0;
@@ -607,8 +607,9 @@ static uint32 bridge32_RegOpenKeyEx(uint8 *a)
     char *name = o32_string(pointer);
     LxGuestBorrow output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if ((!pointer || name) && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 16),
-                                                  4, LX_GUEST_WRITE, &output))
+    if ((!pointer || name) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 16), 4, LX_GUEST_WRITE,
+                            &output))
     {
         ULONG handle = 0;
         result = (uint32)RegOpenKeyEx(lx_guest_load_u32(a), name, lx_guest_load_u32(a + 8),
@@ -629,9 +630,9 @@ static uint32 bridge32_RegCreateKeyEx(uint8 *a)
     LxGuestBorrow output = {0}, disposition = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if ((!np || name) && (!cp || class_name) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 28), 4, LX_GUEST_WRITE,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 28), 4, LX_GUEST_WRITE,
                             &output) &&
-        (!dp || lx_execution_borrow(GLoaderState.execution, dp, 4, LX_GUEST_WRITE, &disposition)))
+        (!dp || lx_execution_borrow(GProcessState.execution, dp, 4, LX_GUEST_WRITE, &disposition)))
     {
         ULONG handle = 0, created = 0;
         result = (uint32)RegCreateKeyEx(
@@ -680,7 +681,7 @@ static uint32 bridge32_RegSetValueEx(uint8 *a)
     LxGuestBorrow data = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if ((!np || name) &&
-        (!size || lx_execution_borrow(GLoaderState.execution, dp, size, LX_GUEST_READ, &data)))
+        (!size || lx_execution_borrow(GProcessState.execution, dp, size, LX_GUEST_READ, &data)))
         result = (uint32)RegSetValueEx(lx_guest_load_u32(a), name, lx_guest_load_u32(a + 8),
                                        lx_guest_load_u32(a + 12), data.host, size);
     lx_execution_release(&data);
@@ -697,14 +698,14 @@ static uint32 bridge32_RegQueryValueEx(uint8 *a)
     LxGuestBorrow type = {0}, size = {0}, data = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if ((!np || name) && !rp &&
-        (!tp || lx_execution_borrow(GLoaderState.execution, tp, 4, LX_GUEST_WRITE, &type)) &&
-        (!sp || lx_execution_borrow(GLoaderState.execution, sp, 4, 3, &size)))
+        (!tp || lx_execution_borrow(GProcessState.execution, tp, 4, LX_GUEST_WRITE, &type)) &&
+        (!sp || lx_execution_borrow(GProcessState.execution, sp, 4, 3, &size)))
     {
         ULONG count = sp ? lx_guest_load_u32(size.host) : 0, kind = 0;
         uint8 empty = 0;
         if ((!dp || sp) &&
             (!dp || !count ||
-             lx_execution_borrow(GLoaderState.execution, dp, count, LX_GUEST_WRITE, &data)))
+             lx_execution_borrow(GProcessState.execution, dp, count, LX_GUEST_WRITE, &data)))
         {
             result = (uint32)RegQueryValueEx(lx_guest_load_u32(a), name, NULL, tp ? &kind : NULL,
                                              dp ? (count ? data.host : &empty) : NULL,
@@ -729,7 +730,7 @@ static uint32 bridge32_WinXProcessMsg(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a);
     LxGuestBorrow message = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, address, 32, LX_GUEST_READ, &message))
+    if (!lx_execution_borrow(GProcessState.execution, address, 32, LX_GUEST_READ, &message))
         return 0;
     uint32 result = WinXProcessMsg(message.host);
     lx_execution_release(&message);
@@ -744,9 +745,9 @@ static uint32 bridge32_RegEnumValue(uint8 *a)
     LxGuestBorrow name = {0}, length = {0}, type = {0}, data = {0}, size = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
     if (!np || lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GLoaderState.execution, sp, 4, 3, &length) ||
-        (tp && !lx_execution_borrow(GLoaderState.execution, tp, 4, LX_GUEST_WRITE, &type)) ||
-        (cp && !lx_execution_borrow(GLoaderState.execution, cp, 4, 3, &size)))
+        !lx_execution_borrow(GProcessState.execution, sp, 4, 3, &length) ||
+        (tp && !lx_execution_borrow(GProcessState.execution, tp, 4, LX_GUEST_WRITE, &type)) ||
+        (cp && !lx_execution_borrow(GProcessState.execution, cp, 4, 3, &size)))
         goto done;
     ULONG characters = lx_guest_load_u32(length.host),
           count = cp ? lx_guest_load_u32(size.host) : 0, kind = 0;
@@ -756,8 +757,8 @@ static uint32 bridge32_RegEnumValue(uint8 *a)
         goto done;
     }
     if ((characters &&
-         !lx_execution_borrow(GLoaderState.execution, np, characters, LX_GUEST_WRITE, &name)) ||
-        (dp && (!cp || (count && !lx_execution_borrow(GLoaderState.execution, dp, count,
+         !lx_execution_borrow(GProcessState.execution, np, characters, LX_GUEST_WRITE, &name)) ||
+        (dp && (!cp || (count && !lx_execution_borrow(GProcessState.execution, dp, count,
                                                       LX_GUEST_WRITE, &data)))))
         goto done;
     char empty = 0;
@@ -818,7 +819,7 @@ static uint32 bridge32_GetModuleHandle(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a);
     if (!pointer)
         return GetModuleHandle(NULL);
-    char *name = lx_execution_copy_string(GLoaderState.execution, pointer, 32768);
+    char *name = lx_execution_copy_string(GProcessState.execution, pointer, 32768);
     if (!name)
     {
         open32SetError(87);
@@ -833,7 +834,7 @@ static uint32 bridge32_GetModuleFileName(uint8 *a)
 {
     ULONG capacity = lx_guest_load_u32(a + 8);
     LxGuestBorrow span = {0};
-    if (!capacity || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+    if (!capacity || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                           capacity, LX_GUEST_WRITE, &span))
     {
         SetLastError(87);
@@ -873,7 +874,7 @@ static uint32 bridge32_GetProcAddress(uint8 *a)
     }
     PFN function = GetProcAddress(lx_guest_load_u32(a), name);
     uint32 result = 0;
-    if (function && !lx_execution_entry_address(GLoaderState.execution, (void *)function, &result))
+    if (function && !lx_execution_entry_address(GProcessState.execution, (void *)function, &result))
     {
         open32SetError(127);
         result = 0;
@@ -891,8 +892,8 @@ static uint32 bridge32_GetUserDefaultLCID(uint8 *a)
 
 static uint32 bridge32_GetProfileInt(uint8 *a)
 {
-    char *section = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 32768);
-    char *key = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 32768);
+    char *section = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 32768);
+    char *key = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 32768);
     ULONG fallback = lx_guest_load_u32(a + 8);
     if (!section || !key)
         open32SetError(87);
@@ -908,7 +909,7 @@ static uint32 open32_atom_string(uint8 *a, int add)
     if (pointer <= 0xFFFF)
         return add ? GlobalAddAtom((PSZ)(uintptr_t)pointer)
                    : GlobalFindAtom((PSZ)(uintptr_t)pointer);
-    char *name = lx_execution_copy_string(GLoaderState.execution, pointer, 256);
+    char *name = lx_execution_copy_string(GProcessState.execution, pointer, 256);
     if (!name)
     {
         open32SetError(87);
@@ -938,7 +939,7 @@ static uint32 bridge32_GlobalGetAtomName(uint8 *a)
 {
     LONG capacity = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow output = {0};
-    if (capacity <= 0 || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+    if (capacity <= 0 || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                               (ULONG)capacity, LX_GUEST_WRITE, &output))
     {
         open32SetError(87);
@@ -952,7 +953,7 @@ static uint32 bridge32_GlobalGetAtomName(uint8 *a)
 static uint32 bridge32_RegisterClass(uint8 *a)
 {
     LxGuestBorrow record = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 40, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 40, LX_GUEST_READ,
                              &record))
     {
         open32SetError(87);
@@ -1001,7 +1002,7 @@ static uint32 bridge32_GetClassInfo(uint8 *a)
     char *name = pointer <= UINT16_MAX ? (char *)(uintptr_t)pointer : o32_string(pointer);
     LxGuestBorrow output = {0};
     if ((pointer > UINT16_MAX && !name) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 40, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 40, LX_GUEST_WRITE,
                              &output))
     {
         if (pointer > UINT16_MAX)
@@ -1121,7 +1122,7 @@ static uint32 bridge32_GetObject(uint8 *a)
     if (!needed)
         return 0;
     LxGuestBorrow output = {0};
-    if (capacity < needed || !lx_execution_borrow(GLoaderState.execution, pointer, (ULONG)needed,
+    if (capacity < needed || !lx_execution_borrow(GProcessState.execution, pointer, (ULONG)needed,
                                                   LX_GUEST_WRITE, &output))
     {
         open32SetError(87);
@@ -1210,7 +1211,7 @@ static uint32 bridge32_BitBlt(uint8 *a)
 static uint32 bridge32_BeginPaint(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 64, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 64, LX_GUEST_WRITE,
                              &output))
     {
         open32SetError(87);
@@ -1224,7 +1225,7 @@ static uint32 bridge32_BeginPaint(uint8 *a)
 static uint32 bridge32_EndPaint(uint8 *a)
 {
     LxGuestBorrow input = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 64, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 64, LX_GUEST_READ,
                              &input))
     {
         open32SetError(87);
@@ -1253,7 +1254,7 @@ static uint32 bridge32_SetBkColor(uint8 *a)
 static uint32 bridge32_CreateFontIndirect(uint8 *a)
 {
     LxGuestBorrow input = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 60, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 60, LX_GUEST_READ,
                              &input))
     {
         open32SetError(87);
@@ -1275,11 +1276,11 @@ static uint32 bridge32_DrawText(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 4);
     char *text = NULL;
     if (count == -1)
-        text = lx_execution_copy_string(GLoaderState.execution, pointer, 65537);
+        text = lx_execution_copy_string(GProcessState.execution, pointer, 65537);
     else if (count >= 0 && count <= 65536)
     {
         text = malloc((size_t)count + 1);
-        if (text && !lx_execution_read(GLoaderState.execution, pointer, text, (ULONG)count))
+        if (text && !lx_execution_read(GProcessState.execution, pointer, text, (ULONG)count))
         {
             free(text);
             text = NULL;
@@ -1289,7 +1290,7 @@ static uint32 bridge32_DrawText(uint8 *a)
     }
     LxGuestBorrow rectangle = {0};
     if (!text ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 16, 3, &rectangle))
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 16, 3, &rectangle))
     {
         free(text);
         open32SetError(87);
@@ -1312,7 +1313,7 @@ static uint32 bridge32_TextOut(uint8 *a)
     }
     char *text = malloc((size_t)count + 1);
     if (!text ||
-        !lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 12), text, (ULONG)count))
+        !lx_execution_read(GProcessState.execution, lx_guest_load_u32(a + 12), text, (ULONG)count))
     {
         free(text);
         open32SetError(87);
@@ -1343,7 +1344,7 @@ static uint32 bridge32_OpenFile(uint8 *a)
     char *name = flags & 0x8000 ? NULL : o32_string(lx_guest_load_u32(a));
     LxGuestBorrow record = {0};
     if ((!name && !(flags & 0x8000)) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 136, 3, &record))
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 136, 3, &record))
     {
         free(name);
         open32SetError(87);
@@ -1370,7 +1371,7 @@ static uint32 open32_legacy_io(uint8 *a, int writing)
 {
     ULONG size = lx_guest_load_u32(a + 8);
     LxGuestBorrow data = {0};
-    if (size && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), size,
+    if (size && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), size,
                                      writing ? LX_GUEST_READ : LX_GUEST_WRITE, &data))
     {
         open32SetError(87);
@@ -1398,13 +1399,13 @@ static uint32 open32_file_io(uint8 *a, int writing)
     LxGuestBorrow data = {0}, actual = {0};
     ULONG result = 0;
     if (lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_WRITE, &actual))
+        !lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &actual))
     {
         open32SetError(87);
         return FALSE;
     }
     lx_guest_store_u32(actual.host, 0);
-    if (size && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), size,
+    if (size && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), size,
                                      writing ? LX_GUEST_READ : LX_GUEST_WRITE, &data))
         open32SetError(87);
     else
@@ -1445,7 +1446,7 @@ static uint32 open32_format(uint8 *a, uint32 arguments)
     char output[1024];
     LONG count = open32FormatGuest(format, arguments, output);
     free(format);
-    if (count >= 0 && !lx_execution_write(GLoaderState.execution, lx_guest_load_u32(a), output,
+    if (count >= 0 && !lx_execution_write(GProcessState.execution, lx_guest_load_u32(a), output,
                                           (size_t)count + 1))
     {
         open32SetError(87);
@@ -1456,7 +1457,7 @@ static uint32 open32_format(uint8 *a, uint32 arguments)
 
 static uint32 bridge32_wsprintf(uint8 *a)
 {
-    uint32 address = lx_execution_api_arguments(GLoaderState.execution);
+    uint32 address = lx_execution_api_arguments(GProcessState.execution);
     if (!address || address > UINT32_MAX - 8)
     {
         open32SetError(87);
@@ -1517,7 +1518,7 @@ static uint32 bridge32_GetDeviceCaps(uint8 *a)
 static uint32 bridge32_GetTextMetrics(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 56, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 56, LX_GUEST_WRITE,
                              &output))
     {
         open32SetError(87);
@@ -1598,7 +1599,7 @@ static uint32 bridge32_CreateThread(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 20);
     LxGuestBorrow output = {0};
     if (pointer &&
-        !lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_WRITE, &output))
+        !lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &output))
     {
         open32SetError(87);
         return 0;
@@ -1616,7 +1617,7 @@ static uint32 bridge32_CreateThread(uint8 *a)
 static uint32 bridge32_GetExitCodeThread(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
                              &output))
     {
         open32SetError(87);
@@ -1647,7 +1648,7 @@ static uint32 bridge32_CreateSemaphore(uint8 *a)
     char *name = name_pointer ? o32_string(name_pointer) : NULL;
     uint32 result = 0;
     if ((name_pointer && !name) ||
-        (security_pointer && !lx_execution_borrow(GLoaderState.execution, security_pointer, 12,
+        (security_pointer && !lx_execution_borrow(GProcessState.execution, security_pointer, 12,
                                                   LX_GUEST_READ, &security)))
         open32SetError(87);
     else
@@ -1676,7 +1677,7 @@ static uint32 bridge32_ReleaseSemaphore(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 8);
     LxGuestBorrow previous = {0};
     if (pointer &&
-        !lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_WRITE, &previous))
+        !lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &previous))
     {
         open32SetError(87);
         return FALSE;
@@ -1714,7 +1715,7 @@ static uint32 bridge32_CreateSolidBrush(uint8 *a)
 static uint32 bridge32_FillRect(uint8 *a)
 {
     LxGuestBorrow rect = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                              &rect))
     {
         open32SetError(87);
@@ -1728,7 +1729,7 @@ static uint32 bridge32_FillRect(uint8 *a)
 static uint32 bridge32_GetSystemTime(uint8 *arguments)
 {
     LxGuestBorrow output = {0};
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(arguments), 16,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(arguments), 16,
                             LX_GUEST_WRITE, &output))
         GetSystemTime(output.host);
     else
@@ -1741,9 +1742,9 @@ static uint32 bridge32_SystemTimeToFileTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
                             &input) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
                             &output))
         result = SystemTimeToFileTime(input.host, output.host);
     else
@@ -1763,7 +1764,7 @@ static uint32 bridge32_GetLocaleInfo(uint8 *a)
     }
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!capacity || lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+    if (!capacity || lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
                                          (ULONG)capacity, LX_GUEST_WRITE, &output))
         result = (uint32)GetLocaleInfo(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), output.host,
                                        capacity);
@@ -1786,7 +1787,7 @@ static uint32 bridge32_GetWindowsDirectory(uint8 *a)
         return required;
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), required, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), required, LX_GUEST_WRITE,
                             &output))
         result = GetWindowsDirectory(output.host, capacity);
     else
@@ -1803,7 +1804,7 @@ static uint32 bridge32_GetCurrentDirectory(uint8 *a)
         return required;
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), capacity,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), capacity,
                             LX_GUEST_WRITE, &output))
         result = GetCurrentDirectory(capacity, output.host);
     else
@@ -1834,7 +1835,7 @@ static uint32 bridge32_GetUserDefaultLangID(uint8 *a)
 static uint32 bridge32_GetLocalTime(uint8 *a)
 {
     LxGuestBorrow output = {0};
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
                             &output))
         GetLocalTime(output.host);
     else
@@ -1849,9 +1850,9 @@ static uint32 bridge32_CreatePalette(uint8 *a)
     LxGuestBorrow input = {0};
     uint8 header[4];
     uint32 result = 0;
-    if (lx_execution_read(GLoaderState.execution, pointer, header, sizeof header) &&
-        lx_execution_borrow(GLoaderState.execution, pointer, 4 + 4u * lx_guest_load_u16(header + 2),
-                            LX_GUEST_READ, &input))
+    if (lx_execution_read(GProcessState.execution, pointer, header, sizeof header) &&
+        lx_execution_borrow(GProcessState.execution, pointer,
+                            4 + 4u * lx_guest_load_u16(header + 2), LX_GUEST_READ, &input))
         result = CreatePalette(input.host);
     else
         open32SetError(87);
@@ -1889,7 +1890,7 @@ static uint32 bridge32_GetPaletteEntries(uint8 *a)
         return 0;
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, pointer, count * 4, LX_GUEST_WRITE, &output))
+    if (lx_execution_borrow(GProcessState.execution, pointer, count * 4, LX_GUEST_WRITE, &output))
         result = GetPaletteEntries(handle, start, count, output.host);
     else
         open32SetError(87);
@@ -2029,7 +2030,7 @@ static uint32 bridge32_GetClientRect(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
                             &output))
         result = GetClientRect(lx_guest_load_u32(a), output.host);
     else
@@ -2042,7 +2043,7 @@ static uint32 bridge32_GetWindowRect(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
                             &output))
         result = GetWindowRect(lx_guest_load_u32(a), output.host);
     else
@@ -2055,7 +2056,7 @@ static uint32 bridge32_ClientToScreen(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8,
                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
         result = ClientToScreen(lx_guest_load_u32(a), output.host);
     else
@@ -2068,7 +2069,7 @@ static uint32 bridge32_ScreenToClient(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8,
                             LX_GUEST_READ | LX_GUEST_WRITE, &output))
         result = ScreenToClient(lx_guest_load_u32(a), output.host);
     else
@@ -2100,7 +2101,7 @@ static uint32 bridge32_SetRect(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
                             &output))
         result =
             SetRect(output.host, (LONG)lx_guest_load_u32(a + 4), (LONG)lx_guest_load_u32(a + 8),
@@ -2204,7 +2205,7 @@ static uint32 bridge32_GetRgnBox(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
                             &output))
         result = (uint32)GetRgnBox(lx_guest_load_u32(a), output.host);
     else
@@ -2217,7 +2218,7 @@ static uint32 bridge32_CreateRectRgnIndirect(uint8 *a)
 {
     LxGuestBorrow input = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
                             &input))
         result = CreateRectRgnIndirect(input.host);
     else
@@ -2314,7 +2315,7 @@ static uint32 bridge32_RedrawWindow(uint8 *a)
 {
     LxGuestBorrow rect = {0};
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
-    if (!pointer || lx_execution_borrow(GLoaderState.execution, pointer, 16, LX_GUEST_READ, &rect))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_READ, &rect))
         result = RedrawWindow(lx_guest_load_u32(a), rect.host, lx_guest_load_u32(a + 8),
                               lx_guest_load_u32(a + 12));
     else
@@ -2329,7 +2330,7 @@ static uint32 bridge32_GetMenuString(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 8), result = 0;
     LxGuestBorrow output = {0};
     if (size < 0 || (pointer && size &&
-                     !lx_execution_borrow(GLoaderState.execution, pointer, (uint32)size,
+                     !lx_execution_borrow(GProcessState.execution, pointer, (uint32)size,
                                           LX_GUEST_WRITE, &output)))
         open32SetError(87);
     else
@@ -2374,7 +2375,7 @@ static uint32 bridge32_FindFirstFile(uint8 *a)
     char *name = o32_string(lx_guest_load_u32(a));
     LxGuestBorrow output = {0};
     uint32 result = UINT32_MAX;
-    if (name && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 320,
+    if (name && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 320,
                                     LX_GUEST_WRITE, &output))
         result = FindFirstFile(name, output.host);
     else
@@ -2388,7 +2389,7 @@ static uint32 bridge32_FindNextFile(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 320, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 320, LX_GUEST_WRITE,
                             &output))
         result = FindNextFile(lx_guest_load_u32(a), output.host);
     else
@@ -2440,7 +2441,7 @@ static uint32 bridge32_GetWindowText(uint8 *a)
     LONG capacity = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (capacity <= 0 || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+    if (capacity <= 0 || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                               (uint32)capacity, LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
@@ -2542,14 +2543,14 @@ static uint32 bridge32_GetDIBits(uint8 *a)
     LxGuestBorrow header = {0}, info = {0}, bits = {0};
     size_t info_bytes, pixel_bytes;
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, pointer, 40, LX_GUEST_READ, &header))
+    if (!lx_execution_borrow(GProcessState.execution, pointer, 40, LX_GUEST_READ, &header))
         open32SetError(87);
     else if (open32DibBuffers(header.host, start, count, usage, &info_bytes, &pixel_bytes))
     {
-        if (!lx_execution_borrow(GLoaderState.execution, pointer, info_bytes,
+        if (!lx_execution_borrow(GProcessState.execution, pointer, info_bytes,
                                  LX_GUEST_READ | LX_GUEST_WRITE, &info) ||
             (pixels && pixel_bytes &&
-             !lx_execution_borrow(GLoaderState.execution, pixels, pixel_bytes, LX_GUEST_WRITE,
+             !lx_execution_borrow(GProcessState.execution, pixels, pixel_bytes, LX_GUEST_WRITE,
                                   &bits)))
             open32SetError(87);
         else
@@ -2567,7 +2568,7 @@ static uint32 bridge32_LoadString(uint8 *a)
     LONG capacity = (LONG)lx_guest_load_u32(a + 12);
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (capacity <= 0 || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+    if (capacity <= 0 || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
                                               (uint32)capacity, LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
@@ -2622,9 +2623,9 @@ static uint32 bridge32_GetTextExtentPoint32(uint8 *a)
     LxGuestBorrow text = {0}, output = {0};
     uint32 result = 0;
     if (count < 0 || count > 65536 ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (uint32)count, LX_GUEST_READ, &text)) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 8, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 8, LX_GUEST_WRITE,
                              &output))
         open32SetError(87);
     else
@@ -2658,7 +2659,7 @@ static uint32 bridge32_InvalidateRect(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow rect = {0};
-    if (!pointer || lx_execution_borrow(GLoaderState.execution, pointer, 16, LX_GUEST_READ, &rect))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_READ, &rect))
         result = InvalidateRect(lx_guest_load_u32(a), rect.host, lx_guest_load_u32(a + 8));
     else
         open32SetError(87);
@@ -2670,7 +2671,7 @@ static uint32 bridge32_ValidateRect(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow rect = {0};
-    if (!pointer || lx_execution_borrow(GLoaderState.execution, pointer, 16, LX_GUEST_READ, &rect))
+    if (!pointer || lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_READ, &rect))
         result = ValidateRect(lx_guest_load_u32(a), rect.host);
     else
         open32SetError(87);
@@ -2692,7 +2693,8 @@ static uint32 bridge32_GetUpdateRect(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow rect = {0};
-    if (!pointer || lx_execution_borrow(GLoaderState.execution, pointer, 16, LX_GUEST_WRITE, &rect))
+    if (!pointer ||
+        lx_execution_borrow(GProcessState.execution, pointer, 16, LX_GUEST_WRITE, &rect))
         result = GetUpdateRect(lx_guest_load_u32(a), rect.host, lx_guest_load_u32(a + 8));
     else
         open32SetError(87);
@@ -2728,9 +2730,9 @@ static uint32 bridge32_GetScrollRange(uint8 *a)
 {
     LxGuestBorrow low = {0}, high = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
                             &low) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
                             &high))
         result = GetScrollRange(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4), low.host,
                                 high.host);
@@ -2751,7 +2753,7 @@ static uint32 bridge32_GetClassName(uint8 *a)
     LONG capacity = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (capacity > 0 && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+    if (capacity > 0 && lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                             (uint32)capacity, LX_GUEST_WRITE, &output))
         result = (uint32)GetClassName(lx_guest_load_u32(a), output.host, capacity);
     else
@@ -2807,7 +2809,7 @@ static uint32 bridge32_GetCaretPos(uint8 *a)
 {
     LxGuestBorrow point = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_WRITE,
                             &point))
         result = GetCaretPos(point.host);
     else
@@ -2842,7 +2844,7 @@ static uint32 bridge32_CreatePenIndirect(uint8 *a)
 {
     LxGuestBorrow record = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
                             &record))
         result = CreatePenIndirect(record.host);
     else
@@ -2856,7 +2858,7 @@ static uint32 bridge32_MoveToEx(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 12), result = 0;
     LxGuestBorrow previous = {0};
     if (!pointer ||
-        lx_execution_borrow(GLoaderState.execution, pointer, 8, LX_GUEST_WRITE, &previous))
+        lx_execution_borrow(GProcessState.execution, pointer, 8, LX_GUEST_WRITE, &previous))
         result = MoveToEx(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
                           (LONG)lx_guest_load_u32(a + 8), previous.host);
     else
@@ -2881,7 +2883,7 @@ static uint32 bridge32_PeekMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 28, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_WRITE,
                             &message))
         result =
             (uint32)PeekMessage(message.host, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
@@ -2896,7 +2898,7 @@ static uint32 bridge32_GetMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = UINT32_MAX;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 28, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_WRITE,
                             &message))
         result = (uint32)GetMessage(message.host, lx_guest_load_u32(a + 4),
                                     lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
@@ -2910,7 +2912,7 @@ static uint32 bridge32_TranslateMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 28, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_READ,
                             &message))
         result = (uint32)TranslateMessage(message.host);
     else
@@ -2923,7 +2925,7 @@ static uint32 bridge32_DispatchMessage(uint8 *a)
 {
     LxGuestBorrow message = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 28, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 28, LX_GUEST_READ,
                             &message))
         result = (uint32)DispatchMessage(message.host);
     else
@@ -2966,7 +2968,7 @@ static uint32 bridge32_GetWindowThreadProcessId(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 4), result = 0;
     LxGuestBorrow process = {0};
     if (!pointer ||
-        lx_execution_borrow(GLoaderState.execution, pointer, 4, LX_GUEST_WRITE, &process))
+        lx_execution_borrow(GProcessState.execution, pointer, 4, LX_GUEST_WRITE, &process))
         result = GetWindowThreadProcessId(lx_guest_load_u32(a), process.host);
     else
         open32SetError(87);
@@ -2989,7 +2991,7 @@ static uint32 bridge32_SetRectEmpty(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE, &p0))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE, &p0))
         result = SetRectEmpty(p0.host);
     else
         open32SetError(87);
@@ -3001,9 +3003,9 @@ static uint32 bridge32_CopyRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
                             &p0) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                             &p1))
         result = CopyRect(p0.host, p1.host);
     else
@@ -3017,7 +3019,7 @@ static uint32 bridge32_IsRectEmpty(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ, &p0))
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ, &p0))
         result = IsRectEmpty(p0.host);
     else
         open32SetError(87);
@@ -3029,8 +3031,9 @@ static uint32 bridge32_EqualRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ, &p0) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
+                            &p0) &&
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                             &p1))
         result = EqualRect(p0.host, p1.host);
     else
@@ -3044,11 +3047,11 @@ static uint32 bridge32_UnionRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0}, p2 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
                             &p0) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                             &p1) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
                             &p2))
         result = UnionRect(p0.host, p1.host, p2.host);
     else
@@ -3063,11 +3066,11 @@ static uint32 bridge32_IntersectRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0}, p2 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
                             &p0) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                             &p1) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
                             &p2))
         result = IntersectRect(p0.host, p1.host, p2.host);
     else
@@ -3082,11 +3085,11 @@ static uint32 bridge32_SubtractRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0}, p1 = {0}, p2 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_WRITE,
                             &p0) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                             &p1) &&
-        lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
+        lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 16, LX_GUEST_READ,
                             &p2))
         result = SubtractRect(p0.host, p1.host, p2.host);
     else
@@ -3101,7 +3104,7 @@ static uint32 bridge32_OffsetRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16,
                             LX_GUEST_READ | LX_GUEST_WRITE, &p0))
         result =
             OffsetRect(p0.host, (LONG)lx_guest_load_u32(a + 4), (LONG)lx_guest_load_u32(a + 8));
@@ -3115,7 +3118,7 @@ static uint32 bridge32_InflateRect(uint8 *a)
 {
     LxGuestBorrow p0 = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16,
                             LX_GUEST_READ | LX_GUEST_WRITE, &p0))
         result =
             InflateRect(p0.host, (LONG)lx_guest_load_u32(a + 4), (LONG)lx_guest_load_u32(a + 8));
@@ -3129,7 +3132,7 @@ static uint32 bridge32_PtInRect(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 16, LX_GUEST_READ,
                             &rectangle))
         result = PtInRect(rectangle.host, (LONG)lx_guest_load_u32(a + 4),
                           (LONG)lx_guest_load_u32(a + 8));
@@ -3143,7 +3146,7 @@ static uint32 bridge32_GetClipBox(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
                             &rectangle))
         result = (uint32)GetClipBox(lx_guest_load_u32(a), rectangle.host);
     else
@@ -3156,7 +3159,7 @@ static uint32 bridge32_FrameRect(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                             &rectangle))
         result = (uint32)FrameRect(lx_guest_load_u32(a), rectangle.host, lx_guest_load_u32(a + 8));
     else
@@ -3169,7 +3172,7 @@ static uint32 bridge32_InvertRect(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
     uint32 result = 0;
-    if (lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
+    if (lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_READ,
                             &rectangle))
         result = InvertRect(lx_guest_load_u32(a), rectangle.host);
     else
@@ -3189,7 +3192,7 @@ static uint32 bridge32_CreateBitmap(uint8 *a)
     if (open32BitmapBytes(width, height, planes, depth, &bytes))
     {
         if (!pointer ||
-            lx_execution_borrow(GLoaderState.execution, pointer, bytes, LX_GUEST_READ, &bits))
+            lx_execution_borrow(GProcessState.execution, pointer, bytes, LX_GUEST_READ, &bits))
             result = CreateBitmap(width, height, planes, depth, bits.host);
         else
             open32SetError(87);
@@ -3206,13 +3209,13 @@ static uint32 bridge32_SetDIBits(uint8 *a)
     LxGuestBorrow header = {0}, info = {0}, bits = {0};
     size_t info_bytes, pixel_bytes;
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, pointer, 40, LX_GUEST_READ, &header))
+    if (!lx_execution_borrow(GProcessState.execution, pointer, 40, LX_GUEST_READ, &header))
         open32SetError(87);
     else if (open32DibBuffers(header.host, start, count, usage, &info_bytes, &pixel_bytes))
     {
-        if (!lx_execution_borrow(GLoaderState.execution, pointer, info_bytes, LX_GUEST_READ,
+        if (!lx_execution_borrow(GProcessState.execution, pointer, info_bytes, LX_GUEST_READ,
                                  &info) ||
-            (pixel_bytes && (!pixels || !lx_execution_borrow(GLoaderState.execution, pixels,
+            (pixel_bytes && (!pixels || !lx_execution_borrow(GProcessState.execution, pixels,
                                                              pixel_bytes, LX_GUEST_READ, &bits))))
             open32SetError(87);
         else
@@ -3241,12 +3244,12 @@ static uint32 bridge32_ExtTextOut(uint8 *a)
     LxGuestBorrow rectangle = {0}, text = {0}, advances = {0};
     uint32 result = 0, rect = lx_guest_load_u32(a + 16), dx = lx_guest_load_u32(a + 28);
     if (count > 65536 ||
-        ((flags & 6) && (!rect || !lx_execution_borrow(GLoaderState.execution, rect, 16,
+        ((flags & 6) && (!rect || !lx_execution_borrow(GProcessState.execution, rect, 16,
                                                        LX_GUEST_READ, &rectangle))) ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20), count,
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 20), count,
                                        LX_GUEST_READ, &text)) ||
         (count && dx &&
-         !lx_execution_borrow(GLoaderState.execution, dx, count * 4, LX_GUEST_READ, &advances)))
+         !lx_execution_borrow(GProcessState.execution, dx, count * 4, LX_GUEST_READ, &advances)))
         open32SetError(87);
     else
         result = ExtTextOut(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
@@ -3288,7 +3291,7 @@ static uint32 bridge32_GetTextFace(uint8 *a)
     uint32 result = 0;
     if (capacity < 0 || capacity > 65536 ||
         (pointer && capacity &&
-         !lx_execution_borrow(GLoaderState.execution, pointer, capacity, LX_GUEST_WRITE, &output)))
+         !lx_execution_borrow(GProcessState.execution, pointer, capacity, LX_GUEST_WRITE, &output)))
         open32SetError(87);
     else
         result = GetTextFace(lx_guest_load_u32(a), capacity, pointer ? output.host : NULL);
@@ -3308,7 +3311,7 @@ static uint32 bridge32_WinTranslateDevicePoints(uint8 *a)
     LxGuestBorrow points = {0};
     uint32 result = 0;
     if (count < 0 || count > 65536 ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8),
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
                                        (uint32)count * 8, LX_GUEST_READ | LX_GUEST_WRITE, &points)))
         open32SetError(87);
     else
@@ -3357,7 +3360,7 @@ static uint32 bridge32_GetDlgItemText(uint8 *a)
     LxGuestBorrow output = {0};
     uint32 result = 0;
     if (capacity <= 0 || capacity > 65536 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), capacity,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), capacity,
                              LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
@@ -3392,7 +3395,7 @@ static uint32 bridge32_DPtoLP(uint8 *a)
     LxGuestBorrow points = {0};
     uint32 result = 0;
     if (count < 0 || count > 65536 ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (ULONG)count * 8, LX_GUEST_READ | LX_GUEST_WRITE, &points)))
         open32SetError(87);
     else
@@ -3407,7 +3410,7 @@ static uint32 bridge32_LPtoDP(uint8 *a)
     LxGuestBorrow points = {0};
     uint32 result = 0;
     if (count < 0 || count > 65536 ||
-        (count && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+        (count && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                        (ULONG)count * 8, LX_GUEST_READ | LX_GUEST_WRITE, &points)))
         open32SetError(87);
     else
@@ -3420,7 +3423,7 @@ static uint32 bridge32_GetKeyboardState(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 256, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 256, LX_GUEST_WRITE,
                              &output))
         open32SetError(87);
     else
@@ -3435,7 +3438,7 @@ static uint32 bridge32_Polygon(uint8 *a)
     LxGuestBorrow points = {0};
     uint32 result = 0;
     if (count < 2 || count > 65536 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), (ULONG)count * 8,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), (ULONG)count * 8,
                              LX_GUEST_READ, &points))
         open32SetError(87);
     else
@@ -3450,7 +3453,7 @@ static uint32 bridge32_Polyline(uint8 *a)
     LxGuestBorrow points = {0};
     uint32 result = 0;
     if (count < 2 || count > 65536 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), (ULONG)count * 8,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), (ULONG)count * 8,
                              LX_GUEST_READ, &points))
         open32SetError(87);
     else
@@ -3475,7 +3478,7 @@ static uint32 bridge32_SetBrushOrgEx(uint8 *a)
     LxGuestBorrow output = {0};
     uint32 result = 0;
     if (pointer &&
-        !lx_execution_borrow(GLoaderState.execution, pointer, 8, LX_GUEST_WRITE, &output))
+        !lx_execution_borrow(GProcessState.execution, pointer, 8, LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
         result = SetBrushOrgEx(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
@@ -3488,7 +3491,7 @@ static uint32 bridge32_GetBrushOrgEx(uint8 *a)
 {
     LxGuestBorrow output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
                              &output))
         open32SetError(87);
     else
@@ -3568,7 +3571,7 @@ static uint32 bridge32_GetFileAttributes(uint8 *a)
 static uint32 bridge32_DdeInitialize(uint8 *a)
 {
     LxGuestBorrow output;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 4,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 4,
                              LX_GUEST_READ | LX_GUEST_WRITE, &output))
         return 0x4006;
     ULONG id = lx_guest_load_u32(output.host);
@@ -3592,7 +3595,7 @@ static uint32 bridge32_DdeUninitialize(uint8 *a)
 
 static uint32 bridge32_DdeCreateStringHandle(uint8 *a)
 {
-    char *text = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 256);
+    char *text = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 256);
     uint32 result =
         DdeCreateStringHandle(lx_guest_load_u32(a), text, (LONG)lx_guest_load_u32(a + 8));
     free(text);
@@ -3619,7 +3622,7 @@ static uint32 bridge32_DdeQueryString(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a + 8), capacity = lx_guest_load_u32(a + 12);
     LxGuestBorrow output = {0};
     if (pointer && capacity &&
-        !lx_execution_borrow(GLoaderState.execution, pointer, capacity < 256 ? capacity : 256,
+        !lx_execution_borrow(GProcessState.execution, pointer, capacity < 256 ? capacity : 256,
                              LX_GUEST_WRITE, &output))
     {
         open32DdeSetError(lx_guest_load_u32(a), 0x4006);
@@ -3650,10 +3653,10 @@ static uint32 bridge32_GetFullPathName(uint8 *a)
         return length + 1;
     LxGuestBorrow output = {0}, part = {0};
     uint32 result = 0, part_pointer = lx_guest_load_u32(a + 12);
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), length + 1,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), length + 1,
                              LX_GUEST_WRITE, &output) ||
         (part_pointer &&
-         !lx_execution_borrow(GLoaderState.execution, part_pointer, 4, LX_GUEST_WRITE, &part)))
+         !lx_execution_borrow(GProcessState.execution, part_pointer, 4, LX_GUEST_WRITE, &part)))
         open32SetError(87);
     else
     {
@@ -3703,9 +3706,9 @@ static uint32 bridge32_RegEnumKeyEx(uint8 *a)
     uint32 tp = lx_guest_load_u32(a + 28), result = ERROR_INVALID_PARAMETER;
     LxGuestBorrow name = {0}, size = {0}, class_name = {0}, class_size = {0}, timestamp = {0};
     if (!np || lx_guest_load_u32(a + 16) ||
-        !lx_execution_borrow(GLoaderState.execution, sp, 4, 3, &size) || (cp && !cs) ||
-        (cs && !lx_execution_borrow(GLoaderState.execution, cs, 4, 3, &class_size)) ||
-        (tp && !lx_execution_borrow(GLoaderState.execution, tp, 8, LX_GUEST_WRITE, &timestamp)))
+        !lx_execution_borrow(GProcessState.execution, sp, 4, 3, &size) || (cp && !cs) ||
+        (cs && !lx_execution_borrow(GProcessState.execution, cs, 4, 3, &class_size)) ||
+        (tp && !lx_execution_borrow(GProcessState.execution, tp, 8, LX_GUEST_WRITE, &timestamp)))
         goto done;
     ULONG length = lx_guest_load_u32(size.host);
     ULONG class_length = cs ? lx_guest_load_u32(class_size.host) : 0;
@@ -3715,9 +3718,9 @@ static uint32 bridge32_RegEnumKeyEx(uint8 *a)
         goto done;
     }
     if ((length &&
-         !lx_execution_borrow(GLoaderState.execution, np, length, LX_GUEST_WRITE, &name)) ||
+         !lx_execution_borrow(GProcessState.execution, np, length, LX_GUEST_WRITE, &name)) ||
         (cp && class_length &&
-         !lx_execution_borrow(GLoaderState.execution, cp, class_length, LX_GUEST_WRITE,
+         !lx_execution_borrow(GProcessState.execution, cp, class_length, LX_GUEST_WRITE,
                               &class_name)))
         goto done;
     char empty = 0;
@@ -3748,8 +3751,8 @@ static uint32 bridge32_RegEnumKey(uint8 *a)
         return ERROR_INVALID_PARAMETER;
     if (capacity > 32768)
         return ERROR_MORE_DATA;
-    if (capacity && !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), capacity,
-                                         LX_GUEST_WRITE, &output))
+    if (capacity && !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8),
+                                         capacity, LX_GUEST_WRITE, &output))
         return ERROR_INVALID_PARAMETER;
     char empty = 0;
     uint32 result = (uint32)RegEnumKey(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
@@ -3797,7 +3800,7 @@ static uint32 bridge32_GetLogicalDriveStrings(uint8 *a)
     if (capacity <= length)
         return length + 1;
     LxGuestBorrow output;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), length + 1,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), length + 1,
                              LX_GUEST_WRITE, &output))
     {
         open32SetError(87);
@@ -3820,7 +3823,7 @@ static uint32 bridge32_GetVolumeInformation(uint8 *a)
     {
         uint32 pointer = lx_guest_load_u32(a + slots[i]);
         if (pointer && sizes[i])
-            valid = lx_execution_borrow(GLoaderState.execution, pointer, sizes[i], LX_GUEST_WRITE,
+            valid = lx_execution_borrow(GProcessState.execution, pointer, sizes[i], LX_GUEST_WRITE,
                                         &buffers[i]);
     }
     uint32 result = 0;
@@ -3854,9 +3857,9 @@ static uint32 bridge32_FileTimeToLocalFileTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
                              &input) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
                              &output))
         open32SetError(87);
     else
@@ -3870,9 +3873,9 @@ static uint32 bridge32_LocalFileTimeToFileTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
                              &input) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 8, LX_GUEST_WRITE,
                              &output))
         open32SetError(87);
     else
@@ -3886,9 +3889,9 @@ static uint32 bridge32_FileTimeToSystemTime(uint8 *a)
 {
     LxGuestBorrow input = {0}, output = {0};
     uint32 result = 0;
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), 8, LX_GUEST_READ,
                              &input) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 16, LX_GUEST_WRITE,
                              &output))
         open32SetError(87);
     else
@@ -3908,7 +3911,7 @@ static uint32 bridge32_GetPrivateProfileString(uint8 *a)
     LxGuestBorrow output = {0};
     if ((section_pointer && !section) || (key_pointer && !key) || !fallback || !filename ||
         !capacity ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 12), capacity,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), capacity,
                              LX_GUEST_WRITE, &output))
         open32SetError(87);
     else
@@ -3966,9 +3969,9 @@ static uint32 bridge32_StartDoc(uint8 *a)
     LxGuestBorrow info = {0};
     uint32 result = (uint32)-1;
     uint32 size = 0, address = lx_guest_load_u32(a + 4);
-    if (lx_execution_read(GLoaderState.execution, address, &size, 4) &&
+    if (lx_execution_read(GProcessState.execution, address, &size, 4) &&
         (size == 12 || size == 16 || size == 20) &&
-        lx_execution_borrow(GLoaderState.execution, address, size, LX_GUEST_READ, &info))
+        lx_execution_borrow(GProcessState.execution, address, size, LX_GUEST_READ, &info))
         result = (uint32)StartDoc(lx_guest_load_u32(a), info.host);
     lx_execution_release(&info);
     return result;
@@ -4019,7 +4022,7 @@ static uint32 bridge32_GetClipboardFormatName(uint8 *a)
 {
     LONG capacity = (LONG)lx_guest_load_u32(a + 8);
     LxGuestBorrow output = {0};
-    if (capacity <= 0 || !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+    if (capacity <= 0 || !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                                               (ULONG)capacity, LX_GUEST_WRITE, &output))
     {
         open32SetError(87);
@@ -4069,7 +4072,7 @@ static uint32 bridge32_CreateAcceleratorTable(uint8 *a)
     LONG count = (LONG)lx_guest_load_u32(a + 4);
     LxGuestBorrow data = {0};
     if (count <= 0 || count > 32767 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a), (size_t)count * 6,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a), (size_t)count * 6,
                              LX_GUEST_READ, &data))
     {
         open32SetError(87);
@@ -4094,7 +4097,7 @@ static uint32 bridge32_CopyAcceleratorTable(uint8 *a)
     if (!count)
         return 0;
     LxGuestBorrow data = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, address, (size_t)count * 6, LX_GUEST_WRITE,
+    if (!lx_execution_borrow(GProcessState.execution, address, (size_t)count * 6, LX_GUEST_WRITE,
                              &data))
     {
         open32SetError(87);
@@ -4113,7 +4116,7 @@ static uint32 bridge32_DestroyAcceleratorTable(uint8 *a)
 static uint32 bridge32_TranslateAccelerator(uint8 *a)
 {
     uint8 message[28];
-    if (!lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 8), message,
+    if (!lx_execution_read(GProcessState.execution, lx_guest_load_u32(a + 8), message,
                            sizeof message))
     {
         open32SetError(87);

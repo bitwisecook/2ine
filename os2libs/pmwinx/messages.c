@@ -474,7 +474,7 @@ LONG DispatchMessage(PVOID input)
             open32SetError(87);
             return 0;
         }
-        lx_execution_callback32_4(GLoaderState.execution, second, handle, message, first,
+        lx_execution_callback32_4(GProcessState.execution, second, handle, message, first,
                                   lx_guest_load_u32(wire + 16));
         result = 0;
     }

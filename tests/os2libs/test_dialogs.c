@@ -264,9 +264,9 @@ int main(void)
     CHECK(anchor);
     HMQ queue = WinCreateMsgQueue(anchor, 0);
     CHECK(queue);
-    GLoaderState.getResource = get;
-    GLoaderState.queryResourceSize = query;
-    GLoaderState.freeResource = release_resource;
+    GProcessState.getResource = get;
+    GProcessState.queryResourceSize = query;
+    GProcessState.freeResource = release_resource;
     make_template();
     for (mode = 0; mode <= 5; mode++)
     {
@@ -345,7 +345,7 @@ int main(void)
     items[3].cy = 8;
     for (unsigned dpi = 96; dpi <= 192; dpi *= 2)
     {
-        GLoaderState.display_dpi = dpi;
+        GProcessState.display_dpi = dpi;
         dialog = WinCreateDlg(1, 0, pointer_procedure, (void *)bytes, NULL);
         CHECK(dialog);
         RECTL content;
@@ -386,7 +386,7 @@ int main(void)
         CHECK(pointer_commands == previous + 1);
         CHECK(WinDestroyWindow(dialog));
     }
-    GLoaderState.display_dpi = 96;
+    GProcessState.display_dpi = 96;
     make_template();
     CHECK(WinRegisterClass(anchor, "PaintModalOwner", paint_owner_procedure, 0, 0));
     owner = WinCreateWindow(HWND_DESKTOP, "PaintModalOwner", "Paint owner", WS_VISIBLE, 0, 0, 100,

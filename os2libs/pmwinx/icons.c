@@ -29,8 +29,8 @@ static void destroy_icon(void *resource)
 ULONG LoadIcon(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadIcon(%u, %p)", module, name);
-    if ((!module || module == UINT32_MAX) && GLoaderState.main_module)
-        module = GLoaderState.main_module->handle;
+    if ((!module || module == UINT32_MAX) && GProcessState.main_module)
+        module = GProcessState.main_module->handle;
     ULONG resource = FindResource(module, name, (PSZ)(uintptr_t)3);
     if (!resource)
         return 0;
@@ -39,9 +39,9 @@ ULONG LoadIcon(HMODULE module, PSZ name)
             return icon->handle;
     ULONG size = 0;
     void *data = NULL;
-    if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
-        GLoaderState.queryResourceSize(module, 1, resource & 0xFFFF, &size) || size < 26 ||
-        size > 1048576 || GLoaderState.getResource(module, 1, resource & 0xFFFF, &data))
+    if (!GProcessState.queryResourceSize || !GProcessState.getResource ||
+        GProcessState.queryResourceSize(module, 1, resource & 0xFFFF, &size) || size < 26 ||
+        size > 1048576 || GProcessState.getResource(module, 1, resource & 0xFFFF, &data))
     {
         open32SetError(1814);
         return 0;
@@ -68,8 +68,8 @@ ULONG LoadIcon(HMODULE module, PSZ name)
                 memcpy(icon->bytes, bytes, size);
         }
     }
-    if (GLoaderState.freeResource)
-        GLoaderState.freeResource(data);
+    if (GProcessState.freeResource)
+        GProcessState.freeResource(data);
     if (!icon)
     {
         open32SetError(1814);
@@ -274,7 +274,7 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
         return 1; /* The value Open32 gives a caller with no file. */
     }
     uint32 error = 0;
-    char *host = GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(path, &error) : NULL;
+    char *host = GProcessState.makeUnixPath ? GProcessState.makeUnixPath(path, &error) : NULL;
     size_t size = 0;
     LxHostFsError status;
     uint8 *bytes = host ? lx_host_file_snapshot(host, 16u * 1024u * 1024u, &size, &status) : NULL;
@@ -330,8 +330,8 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     for (ULONG id = 1; id <= 65535; id++)
     {
         ULONG resource_size;
-        if (GLoaderState.queryResourceSize &&
-            !GLoaderState.queryResourceSize(module, 1, id, &resource_size) && resource_size)
+        if (GProcessState.queryResourceSize &&
+            !GProcessState.queryResourceSize(module, 1, id, &resource_size) && resource_size)
         {
             if (found == index)
                 resource = id;
@@ -345,8 +345,8 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
     {
         void *data = NULL;
         ULONG length;
-        if (!GLoaderState.queryResourceSize(module, 1, resource, &length) &&
-            !GLoaderState.getResource(module, 1, resource, &data))
+        if (!GProcessState.queryResourceSize(module, 1, resource, &length) &&
+            !GProcessState.getResource(module, 1, resource, &data))
         {
             Open32Icon *icon = calloc(1, sizeof *icon);
             if (icon)
@@ -360,8 +360,8 @@ ULONG ExtractIcon(ULONG instance, PSZ path, ULONG index)
                     icon->handle = lx_handle_create(LX_HANDLE_OPEN32_ICON, icon, destroy_icon);
                 }
             }
-            if (GLoaderState.freeResource)
-                GLoaderState.freeResource(data);
+            if (GProcessState.freeResource)
+                GProcessState.freeResource(data);
             if (icon && icon->handle)
             {
                 icon->next = icons;

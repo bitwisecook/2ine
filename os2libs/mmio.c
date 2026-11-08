@@ -103,10 +103,10 @@ static ULONG open_file(PSZ name, const unsigned char *info, ULONG flags)
     if (info && (lx_guest_load_u32(info + 8) ||
                  (lx_guest_load_u32(info + 4) && lx_guest_load_u32(info + 4) != 0x20534f44)))
         return 0;
-    if (!GLoaderState.makeUnixPath)
+    if (!GProcessState.makeUnixPath)
         return 0;
     uint32 error = 0;
-    char *path = GLoaderState.makeUnixPath(name, &error);
+    char *path = GProcessState.makeUnixPath(name, &error);
     if (!path)
         return 0;
     unsigned mode = flags & 8      ? LX_HOST_FILE_WRITE
@@ -148,7 +148,7 @@ static uint32_t custom_procedure(const unsigned char *info)
 static ULONG open_custom(PSZ name, unsigned char *info, ULONG flags, uint32_t procedure)
 {
     LxGuestMapping *mapping =
-        lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
         return 0;
     unsigned char *guest = lx_execution_mapping_host(mapping);
@@ -158,20 +158,20 @@ static ULONG open_custom(PSZ name, unsigned char *info, ULONG flags, uint32_t pr
     lx_guest_store_u32(guest + 8, procedure);
     if (name)
         snprintf((char *)guest + 256, 4096 - 256, "%s", name);
-    uint32_t result = lx_execution_callback32_4(GLoaderState.execution, procedure, address,
+    uint32_t result = lx_execution_callback32_4(GProcessState.execution, procedure, address,
                                                 MMIOM_OPEN, name ? address + 256 : 0, 0);
     memcpy(info, guest, 80);
     if (result)
     {
         lx_guest_store_u32(info + 12, result); /* ulErrorRet */
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
         return 0;
     }
     ULONG handle = add_element(NULL, 0, 0, NULL, flags);
     if (!handle)
     {
-        lx_execution_callback32_4(GLoaderState.execution, procedure, address, MMIOM_CLOSE, 0, 0);
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_callback32_4(GProcessState.execution, procedure, address, MMIOM_CLOSE, 0, 0);
+        lx_execution_unmap(GProcessState.execution, mapping);
         return 0;
     }
     lx_host_mutex_lock(mutex, UINT32_MAX);
@@ -226,7 +226,7 @@ ULONG mmioOpen(PSZ name, PVOID info, ULONG flags)
         (lx_guest_load_u32(p + 4) != 0x204d454d && lx_guest_load_u32(p + 68) != 0x204d454d))
         return 0;
     unsigned char *copy = malloc(size);
-    if (!copy || !lx_execution_read(GLoaderState.execution, address, copy, size))
+    if (!copy || !lx_execution_read(GProcessState.execution, address, copy, size))
     {
         free(copy);
         return 0;
@@ -243,7 +243,7 @@ USHORT mmioClose(ULONG handle, USHORT flags)
     ULONG mode = 0;
     uint32_t closed = 0;
     if (custom_element(handle, &procedure, &address, &mode))
-        closed = lx_execution_callback32_4(GLoaderState.execution, procedure, address, MMIOM_CLOSE,
+        closed = lx_execution_callback32_4(GProcessState.execution, procedure, address, MMIOM_CLOSE,
                                            flags, 0);
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
@@ -254,7 +254,7 @@ USHORT mmioClose(ULONG handle, USHORT flags)
             if (elements[i].file)
                 lx_host_file_close(elements[i].file);
             if (elements[i].info)
-                lx_execution_unmap(GLoaderState.execution, elements[i].info);
+                lx_execution_unmap(GProcessState.execution, elements[i].info);
             free(elements[i].bytes);
             memset(&elements[i], 0, sizeof elements[i]);
             result = closed ? (USHORT)closed : 0;
@@ -273,10 +273,10 @@ static LONG transfer(ULONG handle, void *buffer, LONG count, int writing)
     if (custom_element(handle, &procedure, &address, &mode))
     {
         if ((writing && (mode & 4)) || (!writing && (mode & 8)) ||
-            !lx_execution_address(GLoaderState.execution, buffer, (size_t)count,
+            !lx_execution_address(GProcessState.execution, buffer, (size_t)count,
                                   writing ? LX_GUEST_READ : LX_GUEST_WRITE, &guest))
             return -1;
-        return (LONG)lx_execution_callback32_4(GLoaderState.execution, procedure, address,
+        return (LONG)lx_execution_callback32_4(GProcessState.execution, procedure, address,
                                                writing ? MMIOM_WRITE : MMIOM_READ, guest,
                                                (uint32_t)count);
     }
@@ -304,14 +304,14 @@ static LONG transfer(ULONG handle, void *buffer, LONG count, int writing)
             if (writing)
             {
                 if (bytes &&
-                    !lx_execution_write(GLoaderState.execution,
+                    !lx_execution_write(GProcessState.execution,
                                         elements[i].address + (uint32_t)elements[i].position,
                                         buffer, bytes))
                     break;
                 memcpy(elements[i].bytes + elements[i].position, buffer, bytes);
             }
             else if (!bytes ||
-                     !lx_execution_read(GLoaderState.execution,
+                     !lx_execution_read(GProcessState.execution,
                                         elements[i].address + (uint32_t)elements[i].position,
                                         buffer, bytes))
                 memcpy(buffer, elements[i].bytes + elements[i].position, bytes);
@@ -338,7 +338,7 @@ LONG mmioSeek(ULONG handle, LONG offset, LONG origin)
     uint32_t procedure = 0, address = 0;
     ULONG mode = 0;
     if (custom_element(handle, &procedure, &address, &mode))
-        return (LONG)lx_execution_callback32_4(GLoaderState.execution, procedure, address,
+        return (LONG)lx_execution_callback32_4(GProcessState.execution, procedure, address,
                                                MMIOM_SEEK, (uint32_t)offset, (uint32_t)origin);
     lx_host_once(&once, initialize);
     lx_host_mutex_lock(mutex, UINT32_MAX);
@@ -379,10 +379,10 @@ ULONG mmioGetHeader(ULONG handle, PVOID header, LONG capacity, PLONG bytes, ULON
     ULONG mode = 0;
     if (custom_element(handle, &procedure, &address, &mode))
     {
-        if (!lx_execution_address(GLoaderState.execution, header, (size_t)capacity, LX_GUEST_WRITE,
+        if (!lx_execution_address(GProcessState.execution, header, (size_t)capacity, LX_GUEST_WRITE,
                                   &guest))
             return 0x1969;
-        LONG read = (LONG)lx_execution_callback32_4(GLoaderState.execution, procedure, address,
+        LONG read = (LONG)lx_execution_callback32_4(GProcessState.execution, procedure, address,
                                                     MMIOM_GETHEADER, guest, (uint32_t)capacity);
         *bytes = read == -2 ? 0 : read;
         return *bytes > 0 ? 0 : UINT32_MAX;

@@ -6,10 +6,10 @@
 static int interlocked_word(PLONG value, int operation, uint32 delta, uint32 *previous)
 {
     uint32 address;
-    if (!GLoaderState.execution || !value ||
-        !lx_execution_address(GLoaderState.execution, value, sizeof *value,
+    if (!GProcessState.execution || !value ||
+        !lx_execution_address(GProcessState.execution, value, sizeof *value,
                               LX_GUEST_READ | LX_GUEST_WRITE, &address) ||
-        !lx_execution_atomic_u32(GLoaderState.execution, address, operation, delta, previous))
+        !lx_execution_atomic_u32(GProcessState.execution, address, operation, delta, previous))
     {
         open32SetError(87);
         return 0;

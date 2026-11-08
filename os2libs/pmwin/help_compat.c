@@ -36,7 +36,7 @@ BOOL WinQueryWindowProcess(HWND handle, PULONG process, PULONG thread)
     if ((!anchor || !getWindowFromHWND(anchor, handle)) && !windowOwnerThread(handle, &owner))
         return FALSE;
     if (process)
-        *process = GLoaderState.pib.pib_ulpid;
+        *process = GProcessState.pib.pib_ulpid;
     if (thread)
         *thread = owner;
     return TRUE;

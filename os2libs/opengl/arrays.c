@@ -273,7 +273,7 @@ uint32_t call_glGetPointerv(uint8_t *a)
                                      ? (token == GL_FEEDBACK_BUFFER_POINTER ? c->feedback_address
                                                                             : c->selection_address)
                                      : c->arrays[index].address);
-        if (!lx_execution_write(GLoaderState.execution, gl_word(a, 4), word, sizeof word))
+        if (!lx_execution_write(GProcessState.execution, gl_word(a, 4), word, sizeof word))
             gl_error(GL_INVALID_OPERATION);
     }
     return 0;
@@ -535,7 +535,7 @@ uint32_t call_glArrayElement(uint8_t *a)
         } data;
 
         if (address > UINT32_MAX || !bytes || bytes > sizeof data.bytes ||
-            !lx_execution_read(GLoaderState.execution, (uint32_t)address, data.bytes, bytes))
+            !lx_execution_read(GProcessState.execution, (uint32_t)address, data.bytes, bytes))
         {
             gl_error(GL_INVALID_OPERATION);
             return 0;

@@ -74,7 +74,7 @@ BOOL GpiQueryDeviceBitmapFormats(HPS ps, LONG count, PLONG output)
     if (!lx_pm_valid_ps(ps) || count < 0 || (count && !output))
         return FALSE;
     /* Plane and depth pairs, preferred format first; a display offers nothing above its depth. */
-    const unsigned depth = GLoaderState.display_depth ? GLoaderState.display_depth : 24;
+    const unsigned depth = GProcessState.display_depth ? GProcessState.display_depth : 24;
     LONG formats[10] = {1, (LONG)depth};
     LONG available = 2;
     for (unsigned i = 0, others[] = {8, 4, 1}; i < 3; i++)

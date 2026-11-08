@@ -127,7 +127,7 @@ static void end_owner_update(uint32 *owner)
 
 static BOOL owned_by_caller(const uint32 *owner)
 {
-    return owner[MUTEX_COUNT] && owner[MUTEX_PID] == GLoaderState.pib.pib_ulpid &&
+    return owner[MUTEX_COUNT] && owner[MUTEX_PID] == GProcessState.pib.pib_ulpid &&
            owner[MUTEX_TID] == current_tid();
 }
 
@@ -208,7 +208,7 @@ static BOOL mutex_acquired(void *resource, BOOL owner_died)
         owner[MUTEX_COUNT]++;
     else
     {
-        owner[MUTEX_PID] = GLoaderState.pib.pib_ulpid;
+        owner[MUTEX_PID] = GProcessState.pib.pib_ulpid;
         owner[MUTEX_TID] = current_tid();
         owner[MUTEX_COUNT] = 1;
         owner[MUTEX_DIED] = 0;
@@ -242,7 +242,8 @@ void abandonThreadMutexes(uint32 tid)
         {
             uint32 *owner = state->owner;
             const uint32 count = owner[MUTEX_COUNT];
-            if (!count || owner[MUTEX_TID] != tid || owner[MUTEX_PID] != GLoaderState.pib.pib_ulpid)
+            if (!count || owner[MUTEX_TID] != tid ||
+                owner[MUTEX_PID] != GProcessState.pib.pib_ulpid)
                 continue;
             begin_owner_update(owner);
             owner[MUTEX_DIED] = 1;
@@ -767,7 +768,7 @@ APIRET DosQueryMutexSem(HMTX hmtx, PPID ppid, PTID ptid, PULONG pulCount)
         return ERROR_INVALID_PARAMETER;
     *ppid = snapshot[MUTEX_PID];
     *ptid = snapshot[MUTEX_TID];
-    const BOOL foreign = snapshot[MUTEX_PID] != GLoaderState.pib.pib_ulpid;
+    const BOOL foreign = snapshot[MUTEX_PID] != GProcessState.pib.pib_ulpid;
     return snapshot[MUTEX_DIED] || (foreign && !lxIsProcessPeer(snapshot[MUTEX_PID]))
                ? ERROR_SEM_OWNER_DIED
                : NO_ERROR;
@@ -984,11 +985,11 @@ int semaphoreWord(PHSEM16 sem, int exchange, uint32 value, uint32 *previous)
 {
     if (!sem)
         return 0;
-    if (GLoaderState.execution)
+    if (GProcessState.execution)
     {
         uint32 address;
-        return lx_execution_address(GLoaderState.execution, sem, 4, 3, &address) &&
-               lx_execution_atomic_u32(GLoaderState.execution, address, exchange, value, previous);
+        return lx_execution_address(GProcessState.execution, sem, 4, 3, &address) &&
+               lx_execution_atomic_u32(GProcessState.execution, address, exchange, value, previous);
     }
     grabLock(&GMutexDosCalls);
     *previous = lx_guest_load_u32(sem);
@@ -1077,7 +1078,7 @@ static void unlockFSRamSem(uint8 *sem, uint32 word)
 static uint32 fsRamSemPid(void)
 {
     /* A zero pid field means free, so a host pid folding to zero needs another value. */
-    const uint16 pid = (uint16)GLoaderState.pib.pib_ulpid;
+    const uint16 pid = (uint16)GProcessState.pib.pib_ulpid;
     return pid ? pid : 1;
 }
 
@@ -1120,7 +1121,7 @@ APIRET16 Dos16FSRamSemRequest(PDOSFSRSEM semaphore, LONG timeout)
         unlockFSRamSem(sem, word | FSRS_WAITERS);
         if (!timeout || lx_host_monotonic_us() >= deadline)
             return ERROR_SEM_TIMEOUT;
-        lx_execution_poll_termination(GLoaderState.execution);
+        lx_execution_poll_termination(GProcessState.execution);
         lx_host_sleep_ms(1);
     }
 }

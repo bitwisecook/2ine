@@ -234,8 +234,8 @@ static int start_audio(VideoDevice *d, int64_t from, int64_t to)
     memset(d->sound.tags, 0xff, VIDEO_AUDIO_FRAMES * sizeof(uint64_t));
     if (!audio_registered)
     {
-        if (!GLoaderState.registerStereoAudioGenerator ||
-            !GLoaderState.registerStereoAudioGenerator(fill_audio, NULL, 1))
+        if (!GProcessState.registerStereoAudioGenerator ||
+            !GProcessState.registerStereoAudioGenerator(fill_audio, NULL, 1))
         {
             free(d->sound.samples);
             free(d->sound.tags);
@@ -466,11 +466,11 @@ static int create_window(VideoDevice *d)
 
 static ULONG load_element(ULONG address, LxVideoDecoder **decoder, LxVideoInfo *info)
 {
-    char *name = lx_execution_copy_string(GLoaderState.execution, address, 4096);
+    char *name = lx_execution_copy_string(GProcessState.execution, address, 4096);
     if (!name)
         return V_ERR_BUFFER;
     uint32_t error = 0;
-    char *path = GLoaderState.makeUnixPath(name, &error);
+    char *path = GProcessState.makeUnixPath(name, &error);
     free(name);
     if (!path)
         return V_ERR_FILE;
@@ -519,7 +519,7 @@ static ULONG open_device(ULONG flags, unsigned char *p)
     if (flags & 0x200)
     {
         char *alias =
-            lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(p + 16), 128);
+            lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(p + 16), 128);
         if (!alias || !*alias)
         {
             free(alias);
@@ -547,7 +547,7 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         char *text = NULL;
         if (!(flags & V_OPEN_TYPE_ID) && type)
         {
-            text = lx_execution_copy_string(GLoaderState.execution, type, 128);
+            text = lx_execution_copy_string(GProcessState.execution, type, 128);
             is_video =
                 text && (!strcasecmp(text, "digitalvideo") || !strcasecmp(text, "digitalvideo01"));
             free(text);
@@ -555,7 +555,7 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         if (!type && (flags & V_OPEN_ELEMENT))
         {
             text =
-                lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(p + 12), 4096);
+                lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(p + 12), 4096);
             is_video = video_name(text);
             free(text);
         }

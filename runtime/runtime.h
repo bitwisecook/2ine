@@ -24,7 +24,7 @@
 
 #define LX_MAX_LDT_SLOTS 8192
 
-typedef struct LxLoaderState
+typedef struct LxProcessState
 {
     LxExecution *execution;
     uint32 ne_threads_started;
@@ -84,12 +84,12 @@ typedef struct LxLoaderState
     LxModule *(*loadModuleWithError)(const char *modname, uint32 *error, char *module,
                                      size_t capacity);
     uint32 (*freeSharedMemory)(void *memory);
-} LxLoaderState;
+} LxProcessState;
 
 typedef const LxExport *(*LxNativeModuleInitEntryPoint)(uint32 *lx_num_exports);
 typedef void (*LxNativeModuleDeinitEntryPoint)(void);
 
-extern __attribute__((visibility("default"))) LxLoaderState GLoaderState;
+extern __attribute__((visibility("default"))) LxProcessState GProcessState;
 char *lxHostPathToGuest(const char *name);
 
 #define LX_NATIVE_CONSTRUCTOR(modname)                                                             \

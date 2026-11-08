@@ -72,12 +72,12 @@ static BOOL fail(ULONG error)
 
 static BOOL read_record(FileDialog *dialog, uint8 record[OPENFILENAME_SIZE])
 {
-    return lx_execution_read(GLoaderState.execution, dialog->address, record, OPENFILENAME_SIZE);
+    return lx_execution_read(GProcessState.execution, dialog->address, record, OPENFILENAME_SIZE);
 }
 
 static char *copy_text(ULONG address, size_t capacity)
 {
-    return address ? lx_execution_copy_string(GLoaderState.execution, address, capacity) : NULL;
+    return address ? lx_execution_copy_string(GProcessState.execution, address, capacity) : NULL;
 }
 
 static ULONG add_text(FileDialog *dialog, size_t *offset, const char *text)
@@ -93,7 +93,7 @@ static ULONG add_text(FileDialog *dialog, size_t *offset, const char *text)
 
 static ULONG hook(FileDialog *dialog, ULONG message, ULONG first, ULONG second)
 {
-    return dialog->hook ? lx_execution_callback32_4(GLoaderState.execution, dialog->hook,
+    return dialog->hook ? lx_execution_callback32_4(GProcessState.execution, dialog->hook,
                                                     dialog->window, message, first, second)
                         : 0;
 }
@@ -107,7 +107,7 @@ static void select_type(FileDialog *dialog)
     dialog->selected = (ULONG)index;
     uint8 value[4];
     lx_guest_store_u32(value, dialog->selected + 1);
-    lx_execution_write(GLoaderState.execution, dialog->address + 24, value, sizeof value);
+    lx_execution_write(GProcessState.execution, dialog->address + 24, value, sizeof value);
     lx_pm_file_set_filter(dialog->window, dialog->patterns[index]);
 }
 
@@ -142,7 +142,7 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
         uint8 size[2];
         lx_guest_store_u16(size, (uint16)(length + 1));
         if (capacity >= 2)
-            lx_execution_write(GLoaderState.execution, pointer, size, sizeof size);
+            lx_execution_write(GProcessState.execution, pointer, size, sizeof size);
         common_error = 0x3003;
         WinDismissDlg(dialog->window, 0);
         return FALSE;
@@ -179,7 +179,7 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
     if (question && WinMessageBox(HWND_DESKTOP, dialog->window, (PSZ)question,
                                   dialog->save ? "Save As" : "Open", 0, 0x14) != 6)
         return FALSE;
-    if (!lx_execution_write(GLoaderState.execution, pointer, full, length + 1))
+    if (!lx_execution_write(GProcessState.execution, pointer, full, length + 1))
         return fail(0xffff);
     ULONG title = lx_guest_load_u32(record + 36), title_capacity = lx_guest_load_u32(record + 40);
     if (title && title_capacity)
@@ -187,16 +187,16 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
         size_t count = strlen(base);
         if (count >= title_capacity)
             count = title_capacity - 1;
-        if (!lx_execution_write(GLoaderState.execution, title, base, count) ||
-            !lx_execution_write(GLoaderState.execution, title + (ULONG)count, "", 1))
+        if (!lx_execution_write(GProcessState.execution, title, base, count) ||
+            !lx_execution_write(GProcessState.execution, title + (ULONG)count, "", 1))
             return fail(0xffff);
     }
     lx_guest_store_u32(record + 24, dialog->count ? dialog->selected + 1 : 0);
     lx_guest_store_u32(record + 52, flags);
     lx_guest_store_u16(record + 56, (uint16)(base - full));
     lx_guest_store_u16(record + 58, extension ? (uint16)(extension + 1 - full) : 0);
-    if (!lx_execution_write(GLoaderState.execution, dialog->address + 24, record + 24, 4) ||
-        !lx_execution_write(GLoaderState.execution, dialog->address + 52, record + 52, 8))
+    if (!lx_execution_write(GProcessState.execution, dialog->address + 24, record + 24, 4) ||
+        !lx_execution_write(GProcessState.execution, dialog->address + 52, record + 52, 8))
         return fail(0xffff);
     if (hook(dialog, dialog->file_ok, 0, dialog->address))
         return FALSE;
@@ -207,7 +207,7 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
 static ULONG draw_button(FileDialog *dialog, ULONG id, ULONG pointer)
 {
     uint8 button[16], item[48] = {0};
-    if (!lx_execution_read(GLoaderState.execution, pointer, button, sizeof button))
+    if (!lx_execution_read(GProcessState.execution, pointer, button, sizeof button))
         return 0;
     ULONG window = lx_guest_load_u32(button), state = lx_guest_load_u32(button + 8);
     RECTL rect;
@@ -215,7 +215,7 @@ static ULONG draw_button(FileDialog *dialog, ULONG id, ULONG pointer)
         return 0;
     ULONG dc = GetDC(window);
     LxGuestMapping *mapping =
-        lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     ULONG result = 0;
     if (dc && mapping)
     {
@@ -233,7 +233,7 @@ static ULONG draw_button(FileDialog *dialog, ULONG id, ULONG pointer)
         result = hook(dialog, 0x2b, id, lx_execution_mapping_address(mapping));
     }
     if (mapping)
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
     if (dc)
         ReleaseDC(window, dc);
     return result;
@@ -266,10 +266,10 @@ static uint32 file_dispatch(uint8 *arguments)
     if (message == WM_USER + 41)
     {
         char full[260];
-        if (!lx_execution_read(GLoaderState.execution, first, full, sizeof full) ||
+        if (!lx_execution_read(GProcessState.execution, first, full, sizeof full) ||
             !memchr(full, 0, sizeof full) || !publish_name(dialog, full))
             return FALSE;
-        return lx_execution_write(GLoaderState.execution, first, full, strlen(full) + 1);
+        return lx_execution_write(GProcessState.execution, first, full, strlen(full) + 1);
     }
     if (message == WM_COMMAND || message == WM_CONTROL)
     {
@@ -313,14 +313,14 @@ static BOOL common_dialog(PVOID address, BOOL save)
     uintptr_t pointer = (uintptr_t)address;
     uint8 record[OPENFILENAME_SIZE];
     if (pointer > UINT32_MAX ||
-        !lx_execution_read(GLoaderState.execution, (ULONG)pointer, record, sizeof record))
+        !lx_execution_read(GProcessState.execution, (ULONG)pointer, record, sizeof record))
         return fail(1);
     ULONG size = lx_guest_load_u32(record), flags = lx_guest_load_u32(record + 52);
     TRACE_NATIVE("Open32 file dialog size=%u flags=%08x custom=%08x", (uint)size, (uint)flags,
                  (uint)lx_guest_load_u32(record + 16));
     if (size != OPENFILENAME_SIZE)
         return fail(1);
-    if (!lx_execution_memory(GLoaderState.execution, (ULONG)pointer, size, LX_GUEST_WRITE))
+    if (!lx_execution_memory(GProcessState.execution, (ULONG)pointer, size, LX_GUEST_WRITE))
         return fail(0xffff);
     /* The picker offers one file. ALLOWMULTISELECT callers receive the ordinary
        full-path result required for a single selection. */
@@ -340,10 +340,10 @@ static BOOL common_dialog(PVOID address, BOOL save)
     ULONG file = lx_guest_load_u32(record + 28), capacity = lx_guest_load_u32(record + 32);
     ULONG title = lx_guest_load_u32(record + 36), title_capacity = lx_guest_load_u32(record + 40);
     if (!capacity || capacity > 1048576 ||
-        !lx_execution_memory(GLoaderState.execution, file, capacity,
+        !lx_execution_memory(GProcessState.execution, file, capacity,
                              LX_GUEST_READ | LX_GUEST_WRITE) ||
         (title && title_capacity &&
-         !lx_execution_memory(GLoaderState.execution, title, title_capacity, LX_GUEST_WRITE)))
+         !lx_execution_memory(GProcessState.execution, title, title_capacity, LX_GUEST_WRITE)))
         return fail(0x3002);
     char *filename = copy_text(file, capacity),
          *directory = copy_text(lx_guest_load_u32(record + 44), 260);
@@ -361,10 +361,10 @@ static BOOL common_dialog(PVOID address, BOOL save)
                          .flags = flags,
                          .save = save,
                          .previous = file_dialogs};
-    dialog.mapping = lx_execution_map(GLoaderState.execution, 0, DIALOG_BYTES,
+    dialog.mapping = lx_execution_map(GProcessState.execution, 0, DIALOG_BYTES,
                                       LX_GUEST_READ | LX_GUEST_WRITE, 0);
     dialog.procedure =
-        lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     BOOL result = FALSE;
     if (!dialog.mapping || !dialog.procedure)
     {
@@ -442,14 +442,15 @@ static BOOL common_dialog(PVOID address, BOOL save)
         }
         dialog.native->fl |= 2;
         dialog.native->hMod = lx_guest_load_u32(record + 8);
-        if ((!dialog.native->hMod || dialog.native->hMod == UINT32_MAX) && GLoaderState.main_module)
-            dialog.native->hMod = GLoaderState.main_module->handle;
+        if ((!dialog.native->hMod || dialog.native->hMod == UINT32_MAX) &&
+            GProcessState.main_module)
+            dialog.native->hMod = GProcessState.main_module->handle;
         dialog.native->usDlgId = (USHORT)resource;
     }
     const LxExecutionApi32 api = {file_dispatch, 16, 0, LX_ABI_STACK32};
-    if (!lx_execution_emit_bridge32(GLoaderState.execution,
+    if (!lx_execution_emit_bridge32(GProcessState.execution,
                                     lx_execution_mapping_host(dialog.procedure), 4096, &api) ||
-        !lx_execution_protect(GLoaderState.execution, dialog.procedure,
+        !lx_execution_protect(GProcessState.execution, dialog.procedure,
                               LX_GUEST_READ | LX_GUEST_EXECUTE))
     {
         common_error = 9;
@@ -476,9 +477,9 @@ cleanup:
     for (ULONG i = 0; i < dialog.count; i++)
         free(dialog.patterns[i]);
     if (dialog.procedure)
-        lx_execution_unmap(GLoaderState.execution, dialog.procedure);
+        lx_execution_unmap(GProcessState.execution, dialog.procedure);
     if (dialog.mapping)
-        lx_execution_unmap(GLoaderState.execution, dialog.mapping);
+        lx_execution_unmap(GProcessState.execution, dialog.mapping);
     free(filename);
     free(directory);
     free(caption);

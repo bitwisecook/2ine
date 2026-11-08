@@ -93,12 +93,12 @@ void destroyStandardFont(Window *w)
 
 static BOOL write_font(PmFontDialog *d)
 {
-    return lx_execution_write(GLoaderState.execution, d->address, &d->data, sizeof d->data);
+    return lx_execution_write(GProcessState.execution, d->address, &d->data, sizeof d->data);
 }
 
 static char *font_string(ULONG address)
 {
-    return address ? lx_execution_copy_string(GLoaderState.execution, address, 65536) : NULL;
+    return address ? lx_execution_copy_string(GProcessState.execution, address, 65536) : NULL;
 }
 
 static LONG selected_item(HWND window, ULONG id)
@@ -139,7 +139,7 @@ static BOOL commit_font(PmFontDialog *d)
     if (d->current >= d->count || !points)
         return FALSE;
     unsigned pixels =
-        (unsigned)(points * (GLoaderState.display_dpi ? GLoaderState.display_dpi : 96) / 72.0 +
+        (unsigned)(points * (GProcessState.display_dpi ? GProcessState.display_dpi : 96) / 72.0 +
                    0.5);
     if (!pixels)
         pixels = 1;
@@ -157,7 +157,7 @@ static BOOL commit_font(PmFontDialog *d)
         char family[32];
         memcpy(family, m.family, n);
         family[n] = 0;
-        if (!lx_execution_write(GLoaderState.execution, d->data.pszFamilyname, family, n + 1))
+        if (!lx_execution_write(GProcessState.execution, d->data.pszFamilyname, family, n + 1))
             return FALSE;
     }
     FATTRS *f = &d->data.fAttrs;
@@ -187,7 +187,7 @@ static BOOL commit_font(PmFontDialog *d)
 /* Dialog procedures may be guest code, so strings and records travel in a guest mapping. */
 static LxGuestMapping *font_mapping(void)
 {
-    return lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    return lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
 }
 
 static MRESULT font_notify(PmFontDialog *d, LxGuestMapping *mapping, ULONG message,
@@ -312,7 +312,7 @@ static void send_style_change(PmFontDialog *d, const FontEntry *old, ULONG old_s
     d->data.flStyle = style;
     WinSendMsg(d->window, FNTM_STYLECHANGED,
                (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping), 0);
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
 }
 
 static void select_color(PmFontDialog *d, ULONG list, LONG color)
@@ -367,7 +367,7 @@ static void populate_font(PmFontDialog *d)
         snprintf(e->face, sizeof e->face, "%s", m.face);
     }
     if (mapping)
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
     size_t wanted = 0;
     for (size_t i = 0; i < d->count; i++)
     {
@@ -464,7 +464,7 @@ static void font_control(PmFontDialog *d, USHORT id, USHORT code)
         if (mapping)
         {
             font_notify(d, mapping, FNTM_FACENAMECHANGED, chosen->family, 0);
-            lx_execution_unmap(GLoaderState.execution, mapping);
+            lx_execution_unmap(GProcessState.execution, mapping);
         }
         send_style_change(d, &old, d->data.flStyle);
     }
@@ -486,7 +486,7 @@ static void font_control(PmFontDialog *d, USHORT id, USHORT code)
         {
             font_notify(d, mapping, FNTM_POINTSIZECHANGED, text,
                         (MPARAM)(uintptr_t)(LONG)(points * 65536 + 0.5));
-            lx_execution_unmap(GLoaderState.execution, mapping);
+            lx_execution_unmap(GProcessState.execution, mapping);
         }
     }
     else if ((id == FOREGROUND_LIST || id == BACKGROUND_LIST) && code == 1)
@@ -692,7 +692,7 @@ HWND lx_pm_font_dialog(HWND parent, HWND owner, PVOID address)
         return 0;
     d->references = 1;
     d->address = (uint32)(uintptr_t)address;
-    if (!lx_execution_read(GLoaderState.execution, d->address, &d->data, sizeof d->data) ||
+    if (!lx_execution_read(GProcessState.execution, d->address, &d->data, sizeof d->data) ||
         d->data.cbSize != sizeof d->data)
     {
         release_font(d);

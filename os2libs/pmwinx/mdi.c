@@ -58,17 +58,17 @@ BOOL open32ShowMdiChild(Open32Window *window, LONG command)
 static ULONG mdi_create(Open32Window *client, ULONG definition)
 {
     uint8 bytes[36];
-    if (!lx_execution_read(GLoaderState.execution, definition, bytes, sizeof bytes))
+    if (!lx_execution_read(GProcessState.execution, definition, bytes, sizeof bytes))
     {
         open32SetError(87);
         return 0;
     }
     ULONG class_pointer = lx_guest_load_u32(bytes), title_pointer = lx_guest_load_u32(bytes + 4);
     char *class_copy = class_pointer > UINT16_MAX
-                           ? lx_execution_copy_string(GLoaderState.execution, class_pointer, 256)
+                           ? lx_execution_copy_string(GProcessState.execution, class_pointer, 256)
                            : NULL;
     char *title = title_pointer
-                      ? lx_execution_copy_string(GLoaderState.execution, title_pointer, 65536)
+                      ? lx_execution_copy_string(GProcessState.execution, title_pointer, 65536)
                       : NULL;
     if ((class_pointer > UINT16_MAX && !class_copy) || (title_pointer && !title))
     {
@@ -116,13 +116,13 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
     if (message == 0x81)
     {
         uint8 creation[48], client[8];
-        if (!lx_execution_read(GLoaderState.execution, second, creation, sizeof creation))
+        if (!lx_execution_read(GProcessState.execution, second, creation, sizeof creation))
             return 0;
         ULONG parameter = lx_guest_load_u32(creation);
         window->mdi_next_id = 0xFF00;
         if (parameter)
         {
-            if (!lx_execution_read(GLoaderState.execution, parameter, client, sizeof client))
+            if (!lx_execution_read(GProcessState.execution, parameter, client, sizeof client))
                 return 0;
             window->mdi_menu = lx_guest_load_u32(client);
             window->mdi_next_id = lx_guest_load_u32(client + 4);
@@ -174,7 +174,7 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
             Open32Window *child = open32FindWindow(window->mdi_active);
             uint8 result[4];
             lx_guest_store_u32(result, child && (child->style & 0x01000000));
-            if (!lx_execution_write(GLoaderState.execution, second, result, 4))
+            if (!lx_execution_write(GProcessState.execution, second, result, 4))
                 open32SetError(87);
         }
         return window->mdi_active;

@@ -31,7 +31,7 @@ void paintUserButton(Window *window, HPS space)
     window->control->button_draw_state = state;
     Window *owner = window->owner;
     ULONG packed = (USHORT)window->id | 3u << 16; /* BN_PAINT */
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     BOOL guest =
         execution && (uintptr_t)owner->window_proc <= UINT32_MAX &&
         lx_execution_memory(execution, (uint32)(uintptr_t)owner->window_proc, 1, LX_GUEST_EXECUTE);

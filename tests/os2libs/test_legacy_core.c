@@ -78,11 +78,11 @@ static void free_module(LxModule *value)
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
-    GLoaderState.makeUnixPath = host_path;
-    GLoaderState.allocSegment = segment_alloc;
-    GLoaderState.freeSegment = segment_free;
-    GLoaderState.freeSelector = segment_free;
-    GLoaderState.convert32to1616 = host_to_far;
+    GProcessState.makeUnixPath = host_path;
+    GProcessState.allocSegment = segment_alloc;
+    GProcessState.freeSegment = segment_free;
+    GProcessState.freeSelector = segment_free;
+    GProcessState.convert32to1616 = host_to_far;
     void *library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
     CHECK(library);
 #define LOAD(function)                                                                             \
@@ -228,9 +228,9 @@ int main(int argc, char **argv)
     module.num_exports = 1;
     module.handle = lx_handle_create(LX_HANDLE_MODULE, &module, NULL);
     CHECK(module.handle);
-    GLoaderState.loaded_modules = &module;
-    GLoaderState.loadModule = load_module;
-    GLoaderState.freeModule = free_module;
+    GProcessState.loaded_modules = &module;
+    GProcessState.loadModule = load_module;
+    GProcessState.freeModule = free_module;
     char failure[32], name[64];
     CHECK(!call_Dos16LoadModule(failure, sizeof failure, "LegacyFixture", &word.value));
     CHECK(word.value == (USHORT)module.handle && !failure[0]);
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
     CHECK(call_Dos16GetProcAddr(word.value, 999, &procedure) == ERROR_INVALID_ORDINAL);
     CHECK(!call_Dos16FreeModule(word.value));
     CHECK(call_Dos16GetModName(word.value, sizeof name, name) == ERROR_INVALID_HANDLE);
-    GLoaderState.loaded_modules = NULL;
+    GProcessState.loaded_modules = NULL;
     segment_free(slot);
     CHECK(!dlclose(library));
     for (unsigned i = 1; i < 32; i++)

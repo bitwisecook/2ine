@@ -38,7 +38,7 @@ BOOL open32NativeDialogWindow(ULONG handle)
 static ULONG dialog_callback(Open32Dialog *dialog, ULONG handle, ULONG message, ULONG first,
                              ULONG second)
 {
-    return lx_execution_callback32_4(GLoaderState.execution,
+    return lx_execution_callback32_4(GProcessState.execution,
                                      dialog->class_procedure ? dialog->class_procedure
                                                              : dialog->procedure,
                                      handle, message, first, second);
@@ -150,8 +150,8 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
         open32SetError(1400);
         return -1;
     }
-    if ((!module || module == UINT32_MAX) && GLoaderState.main_module)
-        module = GLoaderState.main_module->handle;
+    if ((!module || module == UINT32_MAX) && GProcessState.main_module)
+        module = GProcessState.main_module->handle;
     ULONG identity = open32ResourceIdentity(module, resource, 4); /* RT_DIALOG */
     if (!identity)
     {
@@ -270,8 +270,8 @@ ULONG CreateDialogParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure
         open32SetError(87);
         return 0;
     }
-    if ((!module || module == UINT32_MAX) && GLoaderState.main_module)
-        module = GLoaderState.main_module->handle;
+    if ((!module || module == UINT32_MAX) && GProcessState.main_module)
+        module = GProcessState.main_module->handle;
     ULONG identity = open32ResourceIdentity(module, resource, 4); /* RT_DIALOG */
     if (!identity)
     {
@@ -312,7 +312,7 @@ LONG DefDlgProc(ULONG window, ULONG message, ULONG first, ULONG second)
 {
     Open32Dialog *classed = classed_dialog(window);
     if (classed) /* dialog_procedure supplies the default once this call returns. */
-        return (LONG)lx_execution_callback32_4(GLoaderState.execution, classed->procedure, window,
+        return (LONG)lx_execution_callback32_4(GProcessState.execution, classed->procedure, window,
                                                message, first, second);
     if (message == 0x111 || message == 16)
         return (LONG)(uintptr_t)WinDefDlgProc(window, message == 16 ? WM_CLOSE : WM_COMMAND,
@@ -334,7 +334,7 @@ static USHORT dialog_word(DialogReader *reader)
     uint8 wire[2];
     if (!reader->valid || reader->offset > 1024u * 1024u - 2 ||
         reader->address > UINT32_MAX - reader->offset - 2 ||
-        !lx_execution_read(GLoaderState.execution, reader->address + reader->offset, wire, 2))
+        !lx_execution_read(GProcessState.execution, reader->address + reader->offset, wire, 2))
     {
         reader->valid = FALSE;
         return 0;
@@ -395,7 +395,7 @@ static BOOL template_font_units(const char *face, USHORT points, LONG *width, LO
     attributes.usRecordLength = sizeof attributes;
     snprintf(attributes.szFacename, sizeof attributes.szFacename, "%s", face);
     attributes.lMaxBaselineExt =
-        (LONG)points * (LONG)(GLoaderState.display_dpi ? GLoaderState.display_dpi : 96) / 72;
+        (LONG)points * (LONG)(GProcessState.display_dpi ? GProcessState.display_dpi : 96) / 72;
     FONTMETRICS metrics;
     BOOL found = GpiCreateLogFont(space, NULL, 1, &attributes) > 0 && GpiSetCharSet(space, 1) &&
                  GpiQueryFontMetrics(space, sizeof metrics, &metrics) &&
@@ -422,13 +422,13 @@ static ULONG dialog_dword(DialogReader *reader)
 static PDLGTEMPLATE native_template(ULONG address)
 {
     uint8 header[14];
-    if (!lx_execution_read(GLoaderState.execution, address, header, sizeof header))
+    if (!lx_execution_read(GProcessState.execution, address, header, sizeof header))
         return NULL;
     ULONG size = lx_guest_load_u16(header);
     if (size < 44 || lx_guest_load_u16(header + 2) || lx_guest_load_u16(header + 6) != 14)
         return NULL;
     uint8 *bytes = calloc(65536, 1);
-    if (bytes && !lx_execution_read(GLoaderState.execution, address, bytes, size))
+    if (bytes && !lx_execution_read(GProcessState.execution, address, bytes, size))
     {
         free(bytes);
         return NULL;

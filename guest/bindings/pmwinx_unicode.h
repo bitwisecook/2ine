@@ -24,7 +24,7 @@ static void *open32_unicode_snapshot(uint32 address, LONG count, unsigned unit, 
     if (count > 0)
     {
         if ((uint64_t)address + capacity > (UINT64_C(1) << 32) ||
-            !lx_execution_read(GLoaderState.execution, address, copy, capacity))
+            !lx_execution_read(GProcessState.execution, address, copy, capacity))
             goto invalid;
         *bytes = capacity;
         return copy;
@@ -44,7 +44,7 @@ static void *open32_unicode_snapshot(uint32 address, LONG count, unsigned unit, 
             capacity *= 2;
         }
         if ((uint64_t)address + size + unit > (UINT64_C(1) << 32) ||
-            !lx_execution_read(GLoaderState.execution, address + (uint32)size, copy + size, unit))
+            !lx_execution_read(GProcessState.execution, address + (uint32)size, copy + size, unit))
             goto invalid;
         if (unit == 1 ? !copy[size] : !lx_guest_load_u16(copy + size))
         {
@@ -80,7 +80,7 @@ static uint32 bridge32_MultiByteToWideChar(uint8 *a)
         if (open32_unicode_overlap(source, bytes, output, (size_t)capacity * 2))
             open32SetError(87);
         else if (capacity &&
-                 !lx_execution_borrow(GLoaderState.execution, output, (size_t)capacity * 2,
+                 !lx_execution_borrow(GProcessState.execution, output, (size_t)capacity * 2,
                                       LX_GUEST_WRITE, &destination))
             open32SetError(87);
         else
@@ -126,7 +126,7 @@ static uint32 bridge32_WideCharToMultiByte(uint8 *a)
         for (i = 0; i < sizeof default_text; i++)
         {
             if ((uint64_t)default_address + i >= (UINT64_C(1) << 32) ||
-                !lx_execution_read(GLoaderState.execution, default_address + (uint32)i,
+                !lx_execution_read(GProcessState.execution, default_address + (uint32)i,
                                    default_text + i, 1))
             {
                 open32SetError(87);
@@ -141,10 +141,10 @@ static uint32 bridge32_WideCharToMultiByte(uint8 *a)
             goto done;
         }
     }
-    if ((capacity && !lx_execution_borrow(GLoaderState.execution, output, (size_t)capacity,
+    if ((capacity && !lx_execution_borrow(GProcessState.execution, output, (size_t)capacity,
                                           LX_GUEST_WRITE, &destination)) ||
         (used_address &&
-         !lx_execution_borrow(GLoaderState.execution, used_address, 4, LX_GUEST_WRITE, &used)))
+         !lx_execution_borrow(GProcessState.execution, used_address, 4, LX_GUEST_WRITE, &used)))
         open32SetError(87);
     else
         result = (uint32)WideCharToMultiByte(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), input,

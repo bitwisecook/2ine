@@ -21,12 +21,12 @@ static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG f
         open32SetError(8);
         return FALSE;
     }
-    BOOL result = lx_execution_read(GLoaderState.execution, source, copy, count);
+    BOOL result = lx_execution_read(GProcessState.execution, source, copy, count);
     if (result)
     {
         for (ULONG i = 0; i < count; i++)
             copy[i] = WinCpTranslateChar(0, from, copy[i], to);
-        result = lx_execution_write(GLoaderState.execution, destination, copy, count);
+        result = lx_execution_write(GProcessState.execution, destination, copy, count);
     }
     free(copy);
     if (!result)
@@ -36,7 +36,7 @@ static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG f
 
 static BOOL convert_string(ULONG source, ULONG destination, ULONG from, ULONG to)
 {
-    char *text = lx_execution_copy_string(GLoaderState.execution, source, STRING_LIMIT);
+    char *text = lx_execution_copy_string(GProcessState.execution, source, STRING_LIMIT);
     if (!text)
     {
         open32SetError(87);
@@ -69,9 +69,10 @@ BOOL CharToOemBuff(ULONG source, ULONG destination, ULONG count)
 
 static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
 {
-    char *input = lx_execution_copy_string(GLoaderState.execution, source, STRING_LIMIT);
+    char *input = lx_execution_copy_string(GProcessState.execution, source, STRING_LIMIT);
     char *prefix =
-        append ? lx_execution_copy_string(GLoaderState.execution, destination, STRING_LIMIT) : NULL;
+        append ? lx_execution_copy_string(GProcessState.execution, destination, STRING_LIMIT)
+               : NULL;
     if (!input || (append && !prefix))
     {
         free(input);
@@ -88,7 +89,7 @@ static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
         return 0;
     }
     LxGuestBorrow output = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, destination + (ULONG)before, length + 1,
+    if (!lx_execution_borrow(GProcessState.execution, destination + (ULONG)before, length + 1,
                              LX_GUEST_WRITE, &output))
     {
         free(input);
@@ -118,7 +119,7 @@ LONG lstrlen(ULONG source)
 {
     if (!source)
         return 0;
-    char *text = lx_execution_copy_string(GLoaderState.execution, source, STRING_LIMIT);
+    char *text = lx_execution_copy_string(GProcessState.execution, source, STRING_LIMIT);
     if (!text)
     {
         open32SetError(87);
@@ -134,7 +135,7 @@ static ULONG case_buffer(ULONG pointer, ULONG count, const uint8 table[256])
     if (!count)
         return 0;
     LxGuestBorrow text = {0};
-    if (count > STRING_LIMIT || !lx_execution_borrow(GLoaderState.execution, pointer, count,
+    if (count > STRING_LIMIT || !lx_execution_borrow(GProcessState.execution, pointer, count,
                                                      LX_GUEST_READ | LX_GUEST_WRITE, &text))
     {
         open32SetError(87);
@@ -151,7 +152,7 @@ static ULONG case_string(ULONG value, const uint8 table[256])
 {
     if (value <= UINT16_MAX)
         return (value & 0xff00) | table[value & 255];
-    char *copy = lx_execution_copy_string(GLoaderState.execution, value, STRING_LIMIT);
+    char *copy = lx_execution_copy_string(GProcessState.execution, value, STRING_LIMIT);
     if (!copy)
     {
         open32SetError(87);
@@ -185,7 +186,7 @@ ULONG CharLowerBuff(ULONG pointer, ULONG count)
 ULONG CharNext(ULONG pointer)
 {
     uint8 value;
-    if (!lx_execution_read(GLoaderState.execution, pointer, &value, 1))
+    if (!lx_execution_read(GProcessState.execution, pointer, &value, 1))
     {
         open32SetError(87);
         return 0;
@@ -197,7 +198,7 @@ ULONG CharPrev(ULONG start, ULONG current)
 {
     if (current <= start)
         return current;
-    if (!lx_execution_memory(GLoaderState.execution, current - 1, 1, LX_GUEST_READ))
+    if (!lx_execution_memory(GProcessState.execution, current - 1, 1, LX_GUEST_READ))
     {
         open32SetError(87);
         return 0;
@@ -208,8 +209,8 @@ ULONG CharPrev(ULONG start, ULONG current)
 
 LONG lstrcmpi(ULONG first, ULONG second)
 {
-    char *a = lx_execution_copy_string(GLoaderState.execution, first, STRING_LIMIT);
-    char *b = lx_execution_copy_string(GLoaderState.execution, second, STRING_LIMIT);
+    char *a = lx_execution_copy_string(GProcessState.execution, first, STRING_LIMIT);
+    char *b = lx_execution_copy_string(GProcessState.execution, second, STRING_LIMIT);
     LONG result = 0;
     if (!a || !b)
         open32SetError(87);
@@ -235,8 +236,8 @@ LONG lstrcmpi(ULONG first, ULONG second)
 
 LONG lstrcmp(ULONG first, ULONG second)
 {
-    char *a = lx_execution_copy_string(GLoaderState.execution, first, STRING_LIMIT);
-    char *b = lx_execution_copy_string(GLoaderState.execution, second, STRING_LIMIT);
+    char *a = lx_execution_copy_string(GProcessState.execution, first, STRING_LIMIT);
+    char *b = lx_execution_copy_string(GProcessState.execution, second, STRING_LIMIT);
     LONG result = 0;
     if (!a || !b)
         open32SetError(87);

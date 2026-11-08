@@ -300,16 +300,16 @@ static void mci_contracts(const char *path)
     mailbox_contracts(window, path);
     LxExecutionServices services = {0};
     char error[256];
-    GLoaderState.execution = lx_execution_create(
+    GProcessState.execution = lx_execution_create(
 #if TWOINE_PORTABLE_LOADER
         "unicorn",
 #else
         "native",
 #endif
         &services, error, sizeof error);
-    CHECK(GLoaderState.execution);
-    GLoaderState.makeUnixPath = identity;
-    LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 0x2000, 3, 0);
+    CHECK(GProcessState.execution);
+    GProcessState.makeUnixPath = identity;
+    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 0x2000, 3, 0);
     CHECK(mapping);
     unsigned char *p = lx_execution_mapping_host(mapping);
     ULONG base = lx_execution_mapping_address(mapping);
@@ -447,9 +447,9 @@ static void mci_contracts(const char *path)
         lx_host_sleep_ms(2);
     CHECK(status(device, p, 3) == 4);
     CHECK(!mciSendCommand(device, 2, 0, p, 0));
-    lx_execution_unmap(GLoaderState.execution, mapping);
-    lx_execution_destroy(GLoaderState.execution);
-    GLoaderState.execution = NULL;
+    lx_execution_unmap(GProcessState.execution, mapping);
+    lx_execution_destroy(GProcessState.execution);
+    GProcessState.execution = NULL;
     CHECK(WinDestroyWindow(window));
     CHECK(WinDestroyMsgQueue(queue));
     CHECK(WinTerminate(hab));

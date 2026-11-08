@@ -2,7 +2,7 @@
 /* Object setup strings are copied from bounded guest ranges. */
 static uint32 bridge32_WinQueryObject(uint8 *a)
 {
-    char *id = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 4097);
+    char *id = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 4097);
     ULONG result = id ? WinQueryObject(id) : 0;
     free(id);
     return result;
@@ -15,7 +15,7 @@ static uint32 bridge32_WinCreateObject(uint8 *a)
     ULONG result = 0;
     for (unsigned i = 0; i < 4; i++)
     {
-        s[i] = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + i * 4),
+        s[i] = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + i * 4),
                                         limits[i]);
         if (!s[i])
             goto done;
@@ -29,7 +29,8 @@ done:
 
 static uint32 bridge32_WinSetObjectData(uint8 *a)
 {
-    char *setup = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 32768);
+    char *setup =
+        lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 32768);
     BOOL result = setup && WinSetObjectData(lx_guest_load_u32(a), setup);
     free(setup);
     return result;
@@ -42,8 +43,8 @@ static uint32 bridge32_WinDestroyObject(uint8 *a)
 
 static uint32 bridge32_WinRegisterObjectClass(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 256);
-    char *module = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 260);
+    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 256);
+    char *module = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 260);
     BOOL result = name && module && WinRegisterObjectClass(name, module);
     free(name);
     free(module);
@@ -52,7 +53,7 @@ static uint32 bridge32_WinRegisterObjectClass(uint8 *a)
 
 static uint32 bridge32_WinDeregisterObjectClass(uint8 *a)
 {
-    char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 256);
+    char *name = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a), 256);
     BOOL result = name && WinDeregisterObjectClass(name);
     free(name);
     return result;
@@ -71,8 +72,8 @@ static uint32 bridge32_WinRestartSomDD(uint8 *a)
 
 static uint32 bridge32_WinStoreWindowPos(uint8 *a)
 {
-    char *s0 = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 0), 65536);
-    char *s1 = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 65536);
+    char *s0 = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 0), 65536);
+    char *s1 = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 65536);
     uint32 result = 0;
     if (!s0 || !s1)
         goto done;
@@ -85,8 +86,8 @@ done:
 
 static uint32 bridge32_WinRestoreWindowPos(uint8 *a)
 {
-    char *s0 = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 0), 65536);
-    char *s1 = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 65536);
+    char *s0 = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 0), 65536);
+    char *s1 = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 65536);
     uint32 result = 0;
     if (!s0 || !s1)
         goto done;
@@ -99,7 +100,7 @@ done:
 
 static uint32 bridge32_WinLoadFileIcon(uint8 *a)
 {
-    char *s0 = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 0), 65536);
+    char *s0 = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 0), 65536);
     uint32 result = 0;
     if (!s0)
         goto done;
@@ -118,8 +119,8 @@ static uint32 bridge32_WinFreeFileIcon(uint8 *a)
 
 static uint32 bridge32_WinReplaceObjectClass(uint8 *a)
 {
-    char *s0 = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 0), 65536);
-    char *s1 = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 65536);
+    char *s0 = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 0), 65536);
+    char *s1 = lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(a + 4), 65536);
     uint32 result = 0;
     if (!s0 || !s1)
         goto done;
@@ -135,7 +136,7 @@ static uint32 bridge32_WinQueryActiveDesktopPathname(uint8 *a)
     LxGuestBorrow output = {0};
     uint32 result = 0;
     if (lx_guest_load_u32(a + 4) > 65536 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 0),
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 0),
                              lx_guest_load_u32(a + 4), LX_GUEST_WRITE, &output))
         goto done;
     result = (uint32)WinQueryActiveDesktopPathname(output.host, (ULONG)lx_guest_load_u32(a + 4));
@@ -149,7 +150,7 @@ static uint32 bridge32_WinQueryObjectPath(uint8 *a)
     LxGuestBorrow output = {0};
     uint32 result = 0;
     if (lx_guest_load_u32(a + 8) > 65536 ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4),
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4),
                              lx_guest_load_u32(a + 8), LX_GUEST_WRITE, &output))
         goto done;
     result = (uint32)WinQueryObjectPath((ULONG)lx_guest_load_u32(a + 0), output.host,
@@ -217,10 +218,10 @@ static uint32 bridge32_WinEnumObjectClasses(uint8 *a)
 {
     ULONG size;
     uint32 capacity = lx_guest_load_u32(a + 4);
-    if (!lx_execution_read(GLoaderState.execution, capacity, &size, 4))
+    if (!lx_execution_read(GProcessState.execution, capacity, &size, 4))
         return 0;
     BOOL result = WinEnumObjectClasses((PVOID)(uintptr_t)lx_guest_load_u32(a), &size);
-    return lx_execution_write(GLoaderState.execution, capacity, &size, 4) && result;
+    return lx_execution_write(GProcessState.execution, capacity, &size, 4) && result;
 }
 
 static uint32 bridge32_WPFilesystemNewClass(uint8 *a)

@@ -66,7 +66,7 @@ static NativeControl *find_control(ULONG handle, BOOL create)
         return NULL;
     }
     control->window.handle = handle;
-    control->window.instance = GLoaderState.main_module ? GLoaderState.main_module->handle : 0;
+    control->window.instance = GProcessState.main_module ? GProcessState.main_module->handle : 0;
     control->original = WinQueryWindowULong(handle, -3);
     control->next = controls;
     controls = control;
@@ -82,7 +82,7 @@ Open32Window *open32PropertyWindow(ULONG handle)
 
 static ULONG original_message(NativeControl *control, ULONG message, ULONG first, ULONG second)
 {
-    return lx_execution_callback32_4(GLoaderState.execution, control->original,
+    return lx_execution_callback32_4(GProcessState.execution, control->original,
                                      control->window.handle, message, first, second);
 }
 
@@ -97,7 +97,7 @@ static LONG pm_message(ULONG handle, ULONG message, ULONG first, ULONG second, B
 
 static char *ansi_text(ULONG address)
 {
-    char *text = lx_execution_copy_string(GLoaderState.execution, address, 65536);
+    char *text = lx_execution_copy_string(GProcessState.execution, address, 65536);
     if (text)
         for (char *p = text; *p; p++)
             *p = (char)WinCpTranslateChar(0, 1004, (UCHAR)*p, 437);
@@ -109,7 +109,7 @@ static char *ansi_text(ULONG address)
 static LxGuestMapping *guest_text(size_t size, ULONG *address, char **host)
 {
     LxGuestMapping *mapping =
-        lx_execution_map(GLoaderState.execution, 0, (size + 4095) & ~(size_t)4095, 3, 0);
+        lx_execution_map(GProcessState.execution, 0, (size + 4095) & ~(size_t)4095, 3, 0);
     if (mapping)
     {
         *address = lx_execution_mapping_address(mapping);
@@ -132,7 +132,7 @@ static LONG send_text(ULONG handle, ULONG message, ULONG first, const char *text
     memcpy(host, text, size);
     LONG result = (LONG)(intptr_t)WinSendMsg(handle, message, (MPARAM)(uintptr_t)first,
                                              (MPARAM)(uintptr_t)address);
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
     return result;
 }
 
@@ -151,7 +151,7 @@ static LONG list_directory(ULONG handle, ULONG attributes, ULONG pattern)
         name_offset = 44
     };
 
-    char *name = lx_execution_copy_string(GLoaderState.execution, pattern, 260);
+    char *name = lx_execution_copy_string(GProcessState.execution, pattern, 260);
     if (!name)
     {
         open32SetError(87);
@@ -228,7 +228,7 @@ static LONG list_text(ULONG handle, ULONG index, ULONG address, BOOL original)
     LONG length = pm_message(handle, 0x167, index, 0, original);
     if (length < 0 || length >= 0xFFFF)
         return -1;
-    if (!lx_execution_memory(GLoaderState.execution, address, (size_t)length + 1, LX_GUEST_WRITE))
+    if (!lx_execution_memory(GProcessState.execution, address, (size_t)length + 1, LX_GUEST_WRITE))
     {
         open32SetError(87);
         return -1;
@@ -245,8 +245,8 @@ static LONG list_text(ULONG handle, ULONG index, ULONG address, BOOL original)
     WinSendMsg(handle, 0x168, (MPARAM)(uintptr_t)request, (MPARAM)(uintptr_t)buffer);
     for (char *p = text; *p; p++)
         *p = (char)WinCpTranslateChar(0, 437, (UCHAR)*p, 1004);
-    lx_execution_write(GLoaderState.execution, address, text, (size_t)length + 1);
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_write(GProcessState.execution, address, text, (size_t)length + 1);
+    lx_execution_unmap(GProcessState.execution, mapping);
     return length;
 }
 
@@ -273,7 +273,7 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
                                               packet->native_second);
             }
     if (!original && control && control->subclassed)
-        return (LONG)lx_execution_callback32_4(GLoaderState.execution, control->window.procedure,
+        return (LONG)lx_execution_callback32_4(GProcessState.execution, control->window.procedure,
                                                handle, message, first, second);
     char name[16];
     if (!WinQueryClassName(handle, sizeof name, name))
@@ -297,7 +297,7 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
         LONG result = WinQueryWindowText(handle, (LONG)first, text);
         for (LONG i = 0; i < result; i++)
             text[i] = (char)WinCpTranslateChar(0, 437, (UCHAR)text[i], 1004);
-        if (!lx_execution_write(GLoaderState.execution, second, text, (size_t)result + 1))
+        if (!lx_execution_write(GProcessState.execution, second, text, (size_t)result + 1))
         {
             open32SetError(87);
             result = 0;
@@ -524,14 +524,14 @@ static uint32 native_dispatch(uint8 *arguments)
     }
     dispatch = &packet;
     ULONG result =
-        lx_execution_callback32_4(GLoaderState.execution, control->window.procedure, packet.handle,
+        lx_execution_callback32_4(GProcessState.execution, control->window.procedure, packet.handle,
                                   packet.message, packet.first, packet.second);
     if (key.text && WinIsWindow(0, packet.handle))
     {
         packet.message = key.message == 0x104 ? 0x106 : 0x102;
         packet.first = key.character;
         result =
-            lx_execution_callback32_4(GLoaderState.execution, control->window.procedure,
+            lx_execution_callback32_4(GProcessState.execution, control->window.procedure,
                                       packet.handle, packet.message, packet.first, packet.second);
     }
     dispatch = packet.previous;
@@ -543,17 +543,17 @@ static BOOL prepare_bridges(void)
     if (bridges)
         return TRUE;
     LxGuestMapping *mapping =
-        lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     const LxExecutionApi32 defaults = {windows_default, 16, 0, LX_ABI_STACK32};
     const LxExecutionApi32 subclass = {native_dispatch, 16, 0, LX_ABI_STACK32};
     if (!mapping)
         return FALSE;
     uint8 *bytes = lx_execution_mapping_host(mapping);
-    if (!lx_execution_emit_bridge32(GLoaderState.execution, bytes, 256, &defaults) ||
-        !lx_execution_emit_bridge32(GLoaderState.execution, bytes + 256, 256, &subclass) ||
-        !lx_execution_protect(GLoaderState.execution, mapping, LX_GUEST_READ | LX_GUEST_EXECUTE))
+    if (!lx_execution_emit_bridge32(GProcessState.execution, bytes, 256, &defaults) ||
+        !lx_execution_emit_bridge32(GProcessState.execution, bytes + 256, 256, &subclass) ||
+        !lx_execution_protect(GProcessState.execution, mapping, LX_GUEST_READ | LX_GUEST_EXECUTE))
     {
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
         return FALSE;
     }
     bridges = mapping;
@@ -745,7 +745,7 @@ BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style,
         return TRUE;
     }
     control->window.handle = created;
-    control->window.instance = GLoaderState.main_module ? GLoaderState.main_module->handle : 0;
+    control->window.instance = GProcessState.main_module ? GProcessState.main_module->handle : 0;
     control->original = WinQueryWindowULong(created, -3);
     control->next = controls;
     controls = control;
@@ -830,7 +830,7 @@ void open32NativeControlsPrune(void)
     }
     if (!controls && bridges && !dispatch)
     {
-        lx_execution_unmap(GLoaderState.execution, bridges);
+        lx_execution_unmap(GProcessState.execution, bridges);
         bridges = NULL;
     }
 }

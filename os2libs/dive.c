@@ -80,7 +80,7 @@ static void dive_free_buffer(DiveBuffer *buffer)
 {
     lx_execution_release(&buffer->borrow);
     if (buffer->mapping)
-        lx_execution_unmap(GLoaderState.execution, buffer->mapping);
+        lx_execution_unmap(GProcessState.execution, buffer->mapping);
     else if (!buffer->associated)
         free(buffer->pixels);
     memset(buffer, 0, sizeof *buffer);
@@ -186,9 +186,9 @@ static ULONG impl_DiveOpen(PULONG handle, ULONG non_screen, PVOID framebuffer)
                 fb->width = width;
                 fb->height = height;
                 fb->stride = fb->image.stride;
-                if (GLoaderState.execution)
+                if (GProcessState.execution)
                 {
-                    fb->mapping = lx_execution_map(GLoaderState.execution, 0,
+                    fb->mapping = lx_execution_map(GProcessState.execution, 0,
                                                    (fb->image.bytes + 4095) & ~(size_t)4095,
                                                    LX_GUEST_READ | LX_GUEST_WRITE, 0);
                     fb->pixels = fb->mapping ? lx_execution_mapping_host(fb->mapping) : NULL;
@@ -348,9 +348,9 @@ static ULONG impl_DiveAllocImageBuffer(ULONG handle, PULONG number, ULONG format
         return DIVE_ERR_TOO_MANY_BUFFERS;
     BOOL associated = pixels != NULL;
     LxGuestMapping *mapping = NULL;
-    if (!pixels && GLoaderState.execution)
+    if (!pixels && GProcessState.execution)
     {
-        mapping = lx_execution_map(GLoaderState.execution, 0, (image.bytes + 4095) & ~(size_t)4095,
+        mapping = lx_execution_map(GProcessState.execution, 0, (image.bytes + 4095) & ~(size_t)4095,
                                    LX_GUEST_READ | LX_GUEST_WRITE, 0);
         pixels = mapping ? lx_execution_mapping_host(mapping) : NULL;
     }

@@ -148,7 +148,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                const uint32 pagenum, uint8 *page)
 {
     uint32 guest_page;
-    if (!lx_execution_address(GLoaderState.execution, page, 1, LX_GUEST_READ, &guest_page))
+    if (!lx_execution_address(GProcessState.execution, page, 1, LX_GUEST_READ, &guest_page))
         abort();
 
     assert(lxmod->is_lx);
@@ -202,7 +202,7 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                 finalsize = 4;
                 break;
             case 0x6: // 16:32 pointer fixup
-                finalval2 = lx_execution_flat_code_selector(GLoaderState.execution);
+                finalval2 = lx_execution_flat_code_selector(GProcessState.execution);
                 finalsize = 6;
                 allow_fixup_to_alias = 1;
                 break;
@@ -280,8 +280,8 @@ void fixupPage(const uint8 *exe, LxModule *lxmod, const LxObjectTableEntry *obj,
                     finalval = base + targetoffset;
                     const uint16 flat_selector =
                         (target_flags & 0x4)
-                            ? lx_execution_flat_code_selector(GLoaderState.execution)
-                            : lx_execution_flat_data_selector(GLoaderState.execution);
+                            ? lx_execution_flat_code_selector(GProcessState.execution)
+                            : lx_execution_flat_data_selector(GProcessState.execution);
                     if ((srctype & 0xF) == 2)
                         finalval = (target_flags & 0x2000)
                                        ? flat_selector
@@ -754,12 +754,12 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         goto loadlx_failed;
     }
 
-    if (isDLL && !GLoaderState.main_module)
+    if (isDLL && !GProcessState.main_module)
     {
         fprintf(stderr, "uhoh, need to load an .exe before a .dll!\n");
         goto loadlx_failed;
     }
-    else if (!isDLL && GLoaderState.main_module)
+    else if (!isDLL && GProcessState.main_module)
     {
         fprintf(stderr, "uhoh, loading an .exe after already loading one!\n");
         goto loadlx_failed;
@@ -811,11 +811,11 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
     if (!isDLL)
     {
-        GLoaderState.main_module = retval;
-        GLoaderState.pib.pib_hmte = retval->handle;
-        if (GLoaderState.guest_pib)
+        GProcessState.main_module = retval;
+        GProcessState.pib.pib_hmte = retval->handle;
+        if (GProcessState.guest_pib)
         {
-            LxGuestPib *pib = lx_execution_mapping_host(GLoaderState.guest_pib);
+            LxGuestPib *pib = lx_execution_mapping_host(GProcessState.guest_pib);
             lx_guest_store_u32(&pib->module, retval->handle);
         }
     }
@@ -861,7 +861,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
 
         void *base = relocatable ? NULL : (void *)((size_t)obj->reloc_base_addr);
         LxGuestMapping *mapping =
-            lx_execution_map(GLoaderState.execution, (uint32)(uintptr_t)base, vsize,
+            lx_execution_map(GProcessState.execution, (uint32)(uintptr_t)base, vsize,
                              LX_GUEST_READ | LX_GUEST_WRITE | LX_GUEST_EXECUTE, !relocatable);
         void *mmapaddr = mapping ? lx_execution_mapping_host(mapping) : NULL;
 
@@ -982,12 +982,12 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         const uint32 stackbase = lxmmap->guest_base;
         const uint32 stacksize = (uint32)lxmmap->size;
         retval->esp = lx->esp + stackbase;
-        GLoaderState.mainstacksize = stacksize;
+        GProcessState.mainstacksize = stacksize;
 
         /* Library initialization requires the process stack to be installed. */
-        GLoaderState.initOs2Tib(GLoaderState.main_tibspace, (uint8 *)lxmmap->addr + lx->esp,
-                                stacksize, 1);
-        GLoaderState.main_tib_selector = GLoaderState.setOs2Tib(GLoaderState.main_tibspace);
+        GProcessState.initOs2Tib(GProcessState.main_tibspace, (uint8 *)lxmmap->addr + lx->esp,
+                                 stacksize, 1);
+        GProcessState.main_tib_selector = GProcessState.setOs2Tib(GProcessState.main_tibspace);
         initOs2StackSegments(stackbase, stacksize, 0);
     }
 
@@ -1129,7 +1129,7 @@ LxModule *loadLxModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
         retval->mmaps[i].prot = prot;
 
         if (!(retval->mmaps[i].mapping
-                  ? lx_execution_protect(GLoaderState.execution, retval->mmaps[i].mapping,
+                  ? lx_execution_protect(GProcessState.execution, retval->mmaps[i].mapping,
                                          (unsigned)prot)
                   : lx_host_vm_protect(retval->mmaps[i].mapped, retval->mmaps[i].size,
                                        (unsigned)prot)))

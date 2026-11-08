@@ -9,9 +9,9 @@
 static BOOL with_host_path(PSZ name, int (*action)(const char *))
 {
     uint32 error = 0;
-    if (!name || !*name || !GLoaderState.makeUnixPath)
+    if (!name || !*name || !GProcessState.makeUnixPath)
         return FALSE;
-    char *path = GLoaderState.makeUnixPath(name, &error);
+    char *path = GProcessState.makeUnixPath(name, &error);
     BOOL result = path && !error && action(path);
     free(path);
     return result;

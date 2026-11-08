@@ -10,7 +10,7 @@
 void prepOs2Drives(void)
 {
     const int drive_c = 'C' - 'A';
-    const int total = (sizeof(GLoaderState.disks) / sizeof(GLoaderState.disks[0]));
+    const int total = (sizeof(GProcessState.disks) / sizeof(GProcessState.disks[0]));
     uint32 diskmap = 0;
     int lowestmounted = 0;
     int lowestcwd = 0;
@@ -30,18 +30,18 @@ void prepOs2Drives(void)
 
     for (i = 0; i < total; i++)
     {
-        if (GLoaderState.disks[i] == NULL)
+        if (GProcessState.disks[i] == NULL)
         {
             continue;
         }
 
-        rp = lx_host_path_canonical(GLoaderState.disks[i]);
+        rp = lx_host_path_canonical(GProcessState.disks[i]);
         if (rp == NULL)
         {
             fprintf(stderr, "Can't realpath \"%s\" (%s), not mounting %c:\\\n",
-                    GLoaderState.disks[i], strerror(errno), i + 'A');
-            free(GLoaderState.disks[i]);
-            GLoaderState.disks[i] = NULL;
+                    GProcessState.disks[i], strerror(errno), i + 'A');
+            free(GProcessState.disks[i]);
+            GProcessState.disks[i] = NULL;
             continue;
         }
 
@@ -59,8 +59,8 @@ void prepOs2Drives(void)
         {
 
             const char *d = cwd + rplen;
-            GLoaderState.current_dir[i] = strdup((*d == '/') ? d + 1 : d);
-            char *ptr = GLoaderState.current_dir[i];
+            GProcessState.current_dir[i] = strdup((*d == '/') ? d + 1 : d);
+            char *ptr = GProcessState.current_dir[i];
             while (*ptr)
             {
                 if (*ptr == '/')
@@ -78,7 +78,7 @@ void prepOs2Drives(void)
         else
         {
 
-            GLoaderState.current_dir[i] = strdup("");
+            GProcessState.current_dir[i] = strdup("");
         }
         free(rp);
     }
@@ -92,9 +92,9 @@ void prepOs2Drives(void)
         }
         diskmap |= 1u << drive_c;
 
-        GLoaderState.disks[drive_c] = strdup("/");
+        GProcessState.disks[drive_c] = strdup("/");
         char *ptr = strdup(cwd + 1);
-        GLoaderState.current_dir[drive_c] = ptr;
+        GProcessState.current_dir[drive_c] = ptr;
         while (*ptr)
         {
             if (*ptr == '/')
@@ -103,16 +103,16 @@ void prepOs2Drives(void)
             }
             ptr++;
         }
-        GLoaderState.current_disk = drive_c + 1;
+        GProcessState.current_disk = drive_c + 1;
     }
     else if (!lowestcwd)
     {
         /* Use the first mapped drive when cwd is outside all mounts; prefer C: over A:/B:. */
-        GLoaderState.current_disk = lowestmounted;
+        GProcessState.current_disk = lowestmounted;
     }
     else
     {
-        GLoaderState.current_disk = lowestcwd;
+        GProcessState.current_disk = lowestcwd;
     }
 
     free(cwd);
@@ -121,22 +121,22 @@ void prepOs2Drives(void)
        Canonicalize before accepting it so a forged environment cannot escape a mount. */
     for (i = 0; i < 26; i++)
     {
-        if (!GLoaderState.disks[i])
+        if (!GProcessState.disks[i])
             continue;
         char key[32];
         snprintf(key, sizeof(key), "TWOINE_DRIVE_CWD_%c", 'A' + i);
         const char *relative = getenv(key);
         if (!relative)
             continue;
-        char *candidate = malloc(strlen(GLoaderState.disks[i]) + strlen(relative) + 2);
+        char *candidate = malloc(strlen(GProcessState.disks[i]) + strlen(relative) + 2);
         if (!candidate)
             continue;
-        sprintf(candidate, "%s/%s", GLoaderState.disks[i], relative);
+        sprintf(candidate, "%s/%s", GProcessState.disks[i], relative);
         for (char *p = candidate; *p; p++)
             if (*p == '\\')
                 *p = '/';
         char *full = lx_host_path_canonical(candidate),
-             *root = lx_host_path_canonical(GLoaderState.disks[i]);
+             *root = lx_host_path_canonical(GProcessState.disks[i]);
         free(candidate);
         if (full && root)
         {
@@ -153,8 +153,8 @@ void prepOs2Drives(void)
                     for (char *p = directory; *p; p++)
                         if (*p == '/')
                             *p = '\\';
-                    free(GLoaderState.current_dir[i]);
-                    GLoaderState.current_dir[i] = directory;
+                    free(GProcessState.current_dir[i]);
+                    GProcessState.current_dir[i] = directory;
                 }
             }
         }
@@ -163,15 +163,15 @@ void prepOs2Drives(void)
     }
     const char *current = getenv("TWOINE_CURRENT_DRIVE");
     if (current && strlen(current) == 1 && current[0] >= 'A' && current[0] <= 'Z' &&
-        GLoaderState.disks[current[0] - 'A'])
-        GLoaderState.current_disk = current[0] - 'A' + 1;
-    GLoaderState.diskmap = diskmap;
+        GProcessState.disks[current[0] - 'A'])
+        GProcessState.current_disk = current[0] - 'A' + 1;
+    GProcessState.diskmap = diskmap;
 
 #if 0
     fprintf(stderr, "OS/2 disks:\n");
     for (i = 0; i < total; i++) {
-        if (GLoaderState.disks[i] == NULL) continue;
-        fprintf(stderr, "  %c: -> mountpoint='%s' cwd='%s' current=%d\n", 'A' + i, GLoaderState.disks[i], GLoaderState.current_dir[i], GLoaderState.current_disk == (i+1));
+        if (GProcessState.disks[i] == NULL) continue;
+        fprintf(stderr, "  %c: -> mountpoint='%s' cwd='%s' current=%d\n", 'A' + i, GProcessState.disks[i], GProcessState.current_dir[i], GProcessState.current_disk == (i+1));
     }
     fprintf(stderr, "\n");
 #endif
@@ -189,7 +189,7 @@ char *lxHostPathToGuest(const char *name)
     size_t prefix = 0;
     for (int i = 0; i < 26; i++)
     {
-        const char *mount = GLoaderState.disks[i];
+        const char *mount = GProcessState.disks[i];
         if (!mount)
             continue;
         size_t n = strlen(mount);

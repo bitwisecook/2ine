@@ -150,7 +150,7 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
         AnchorBlock *anchor = getAnchorBlockNoHAB();
         WindowClass *class = findRegisteredClass(anchor, class_name);
         if (control_data && t->guest && class && (uintptr_t)class->window_proc <= UINT32_MAX &&
-            lx_execution_memory(GLoaderState.execution, (uint32)(uintptr_t)class->window_proc, 1,
+            lx_execution_memory(GProcessState.execution, (uint32)(uintptr_t)class->window_proc, 1,
                                 LX_GUEST_EXECUTE))
             control_data = (PVOID)(uintptr_t)(t->guest + control);
     }
@@ -228,9 +228,9 @@ HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data, s
         return 0;
     /* A callback's control pointer must address guest memory, never a host copy. */
     LxGuestMapping *mapping = NULL;
-    if (GLoaderState.execution)
+    if (GProcessState.execution)
     {
-        mapping = lx_execution_map(GLoaderState.execution, 0, (t.size + 4095) & ~(size_t)4095,
+        mapping = lx_execution_map(GProcessState.execution, 0, (t.size + 4095) & ~(size_t)4095,
                                    LX_GUEST_READ | LX_GUEST_WRITE, 0);
         if (!mapping)
         {
@@ -268,7 +268,7 @@ HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data, s
         }
     }
     if (mapping)
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
     free(t.windows);
     return result;
 }

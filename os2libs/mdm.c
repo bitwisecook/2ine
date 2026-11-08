@@ -494,8 +494,8 @@ static void *delivery(void *argument)
     Device *d = argument;
     uint8 tibspace[LXTIBSIZE] = {0};
     unsigned char stack_marker;
-    GLoaderState.initOs2Tib(tibspace, &stack_marker, 65536, 0xff00u + d->id);
-    uint16 selector = GLoaderState.setOs2Tib(tibspace);
+    GProcessState.initOs2Tib(tibspace, &stack_marker, 65536, 0xff00u + d->id);
+    uint16 selector = GProcessState.setOs2Tib(tibspace);
     lx_host_monitor_lock(monitor);
     while (!d->stopped)
     {
@@ -510,7 +510,7 @@ static void *delivery(void *argument)
             ULONG callback = d->callback;
             lx_host_monitor_unlock(monitor);
             if (callback)
-                lx_execution_callback32_4(GLoaderState.execution, callback, 0, p->record,
+                lx_execution_callback32_4(GProcessState.execution, callback, 0, p->record,
                                           MIX_WRITE_COMPLETE, 0);
             free(p->samples);
             free(p);
@@ -531,7 +531,7 @@ static void *delivery(void *argument)
             lx_host_monitor_wait(monitor, 100);
     }
     lx_host_monitor_unlock(monitor);
-    GLoaderState.deinitOs2Tib(selector);
+    GProcessState.deinitOs2Tib(selector);
     return NULL;
 }
 
@@ -539,7 +539,7 @@ static ULONG start_audio(Device *d)
 {
     if (!audio_registered)
     {
-        if (!GLoaderState.registerStereoAudioGenerator(generate, NULL, 1))
+        if (!GProcessState.registerStereoAudioGenerator(generate, NULL, 1))
             return MCIERR_DEVICE_NOT_READY;
         audio_registered = 1;
     }
@@ -551,7 +551,7 @@ static ULONG start_audio(Device *d)
         d->thread = lx_host_thread_create(delivery, d, NULL);
         if (!d->thread)
             return MCIERR_OUT_OF_MEMORY;
-        __atomic_store_n(&GLoaderState.ne_threads_started, 1, __ATOMIC_RELEASE);
+        __atomic_store_n(&GProcessState.ne_threads_started, 1, __ATOMIC_RELEASE);
     }
     return 0;
 }
@@ -577,7 +577,7 @@ static LONG queue_buffers(ULONG handle, ULONG address, ULONG count)
     for (ULONG i = 0; i < count; i++)
     {
         unsigned char record[32];
-        if (!lx_execution_read(GLoaderState.execution, address + i * 32, record, 32))
+        if (!lx_execution_read(GProcessState.execution, address + i * 32, record, 32))
             goto fail;
         ULONG length = lx_guest_load_u32(record + 8), data = lx_guest_load_u32(record + 4);
         if (length > 4 * 1024 * 1024)
@@ -599,7 +599,7 @@ static LONG queue_buffers(ULONG handle, ULONG address, ULONG count)
         p->samples = malloc(frames * 2 * sizeof(float));
         p->count = frames;
         p->record = address + i * 32;
-        if (!p->samples || !lx_execution_read(GLoaderState.execution, data, pcm, length))
+        if (!p->samples || !lx_execution_read(GProcessState.execution, data, pcm, length))
         {
             free(p->samples);
             free(p);
@@ -802,11 +802,11 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
             for (ULONG i = 0; i < count; i++)
             {
                 d->buffers[i] =
-                    lx_execution_map(GLoaderState.execution, 0, (size + 4095) & ~4095u, 3, 0);
+                    lx_execution_map(GProcessState.execution, 0, (size + 4095) & ~4095u, 3, 0);
                 if (!d->buffers[i])
                 {
                     for (ULONG j = 0; j < i; j++)
-                        lx_execution_unmap(GLoaderState.execution, d->buffers[j]);
+                        lx_execution_unmap(GProcessState.execution, d->buffers[j]);
                     memset(d->buffers, 0, sizeof d->buffers);
                     return MCIERR_OUT_OF_MEMORY;
                 }
@@ -815,10 +815,10 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
                                    lx_execution_mapping_address(d->buffers[i]));
                 lx_guest_store_u32(records + i * 32 + 8, size);
             }
-            if (!lx_execution_write(GLoaderState.execution, list, records, count * 32))
+            if (!lx_execution_write(GProcessState.execution, list, records, count * 32))
             {
                 for (ULONG i = 0; i < count; i++)
-                    lx_execution_unmap(GLoaderState.execution, d->buffers[i]);
+                    lx_execution_unmap(GProcessState.execution, d->buffers[i]);
                 memset(d->buffers, 0, sizeof d->buffers);
                 return MCIERR_INVALID_BUFFER;
             }
@@ -830,7 +830,7 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
             /* Retire the stream before releasing caller-visible buffers. */
             mciSendCommand(id, MCI_STOP, 0, p, 0);
             for (unsigned i = 0; i < d->buffer_count; i++)
-                lx_execution_unmap(GLoaderState.execution, d->buffers[i]);
+                lx_execution_unmap(GProcessState.execution, d->buffers[i]);
             memset(d->buffers, 0, sizeof d->buffers);
             d->buffer_count = 0;
             return 0;
@@ -895,7 +895,7 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
         if (message == MCI_CLOSE)
         {
             for (unsigned i = 0; i < d->buffer_count; i++)
-                lx_execution_unmap(GLoaderState.execution, d->buffers[i]);
+                lx_execution_unmap(GProcessState.execution, d->buffers[i]);
             lx_midi_sequence_clear(&d->sequence);
             lx_midi_synth_destroy(d->synth);
             memset(d, 0, sizeof *d);

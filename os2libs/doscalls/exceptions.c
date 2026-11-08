@@ -25,13 +25,13 @@ enum
 
 static LxGuestTib *exception_tib(void)
 {
-    return lx_execution_current_tib(GLoaderState.execution);
+    return lx_execution_current_tib(GProcessState.execution);
 }
 
 static BOOL exception_record(uint32 address, uint32 *previous, uint32 *procedure)
 {
     uint8 bytes[8];
-    if ((address & 3) || !lx_execution_read(GLoaderState.execution, address, bytes, sizeof bytes))
+    if ((address & 3) || !lx_execution_read(GProcessState.execution, address, bytes, sizeof bytes))
         return FALSE;
     *previous = lx_guest_load_u32(bytes);
     *procedure = lx_guest_load_u32(bytes + 4);
@@ -44,10 +44,10 @@ APIRET DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
     LxGuestTib *tib = exception_tib();
     uint32 address, previous, procedure;
     if (!tib ||
-        !lx_execution_address(GLoaderState.execution, rec, 8, LX_GUEST_READ | LX_GUEST_WRITE,
+        !lx_execution_address(GProcessState.execution, rec, 8, LX_GUEST_READ | LX_GUEST_WRITE,
                               &address) ||
         !exception_record(address, &previous, &procedure) ||
-        !lx_execution_memory(GLoaderState.execution, procedure, 1, LX_GUEST_EXECUTE))
+        !lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
         return ERROR_INVALID_PARAMETER;
     uint32 head = lx_guest_load_u32(&tib->exception_chain);
     unsigned count = 0;
@@ -69,7 +69,7 @@ APIRET DosUnsetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
     LxGuestTib *tib = exception_tib();
     uint32 address, previous, procedure;
     if (!tib ||
-        !lx_execution_address(GLoaderState.execution, rec, 8, LX_GUEST_READ | LX_GUEST_WRITE,
+        !lx_execution_address(GProcessState.execution, rec, 8, LX_GUEST_READ | LX_GUEST_WRITE,
                               &address) ||
         lx_guest_load_u32(&tib->exception_chain) != address ||
         !exception_record(address, &previous, &procedure))
@@ -84,22 +84,22 @@ APIRET DosSetSignalExceptionFocus(BOOL32 flag, PULONG pulTimes)
 
     if (flag == 0)
     {
-        if (GLoaderState.main_module->signal_exception_focus_count == 0)
+        if (GProcessState.main_module->signal_exception_focus_count == 0)
             return ERROR_ALREADY_RESET;
-        GLoaderState.main_module->signal_exception_focus_count--;
+        GProcessState.main_module->signal_exception_focus_count--;
     }
     else if (flag == 1)
     {
-        if (GLoaderState.main_module->signal_exception_focus_count == 0xFFFFFFFF)
+        if (GProcessState.main_module->signal_exception_focus_count == 0xFFFFFFFF)
             return ERROR_NESTING_TOO_DEEP;
-        GLoaderState.main_module->signal_exception_focus_count++;
+        GProcessState.main_module->signal_exception_focus_count++;
     }
     else
     {
     }
 
     if (pulTimes)
-        *pulTimes = GLoaderState.main_module->signal_exception_focus_count;
+        *pulTimes = GProcessState.main_module->signal_exception_focus_count;
 
     return NO_ERROR;
 }
@@ -155,7 +155,7 @@ APIRET DosAcknowledgeSignalException(ULONG ulSignalNum)
 APIRET DosRaiseException(PEXCEPTIONREPORTRECORD pexcept)
 {
     TRACE_NATIVE("DosRaiseException(%p)", pexcept);
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     LxGuestTib *tib = exception_tib();
     LxHostThreadState *thread = lxHostThreadState();
     LxExecutionRegisters32 registers;
@@ -322,7 +322,7 @@ APIRET DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler, PVOID pTargetIP
                           PEXCEPTIONREPORTRECORD pERepRec)
 {
     TRACE_NATIVE("DosUnwindException(%p, %p, %p)", phandler, pTargetIP, pERepRec);
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     LxGuestTib *tib = exception_tib();
     uint32 target = (uint32)(uintptr_t)phandler, ip = (uint32)(uintptr_t)pTargetIP;
     uint32 input = (uint32)(uintptr_t)pERepRec;

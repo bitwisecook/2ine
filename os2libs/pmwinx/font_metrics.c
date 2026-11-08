@@ -79,7 +79,7 @@ BOOL GetTextMetrics(ULONG handle, PVOID output)
 static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG parameter, LONG result)
 {
     if (!open32FindDC(handle) ||
-        !lx_execution_memory(GLoaderState.execution, procedure, 1, LX_GUEST_EXECUTE))
+        !lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
     {
         open32SetError(87);
         return 0;
@@ -94,7 +94,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
     }
     FONTMETRICS *fonts = calloc(total ? (size_t)total : 1, sizeof *fonts);
     LxGuestMapping *mapping =
-        fonts ? lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0) : NULL;
+        fonts ? lx_execution_map(GProcessState.execution, 0, 4096, 3, 0) : NULL;
     if (!mapping)
     {
         free(fonts);
@@ -104,7 +104,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
     count = total;
     if (count && GpiQueryFonts(handle, 1, wanted, &count, sizeof *fonts, fonts) < 0)
     {
-        lx_execution_unmap(GLoaderState.execution, mapping);
+        lx_execution_unmap(GProcessState.execution, mapping);
         free(fonts);
         open32SetError(87);
         return 0;
@@ -134,12 +134,12 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
                                          : (metrics.italic ? "Italic" : "Regular");
         strcpy((char *)record + 124, style);
         encode_metrics(fm, &metrics, record, record + 256);
-        result = (LONG)lx_execution_callback32_4(GLoaderState.execution, procedure, address,
+        result = (LONG)lx_execution_callback32_4(GProcessState.execution, procedure, address,
                                                  address + 256, metrics.sfnt ? 4 : 2, parameter);
         if (!result)
             break;
     }
-    lx_execution_unmap(GLoaderState.execution, mapping);
+    lx_execution_unmap(GProcessState.execution, mapping);
     free(fonts);
     return result;
 }

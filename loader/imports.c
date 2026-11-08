@@ -9,13 +9,13 @@
 
 void *generateMissingTrampoline(const char *m, const char *n)
 {
-    return lx_execution_missing_entry(GLoaderState.execution, m, n, 32, NULL);
+    return lx_execution_missing_entry(GProcessState.execution, m, n, 32, NULL);
 }
 
 void *generateMissingTrampoline16(const char *m, const char *n, const LxExport **out)
 {
     LxExecutionBridge bridge;
-    void *address = lx_execution_missing_entry(GLoaderState.execution, m, n, 16, &bridge);
+    void *address = lx_execution_missing_entry(GProcessState.execution, m, n, 16, &bridge);
     static LxMmaps object;
     static LxExport exported;
     object.mapped = object.addr = bridge.host;
@@ -53,7 +53,7 @@ static const LxExport *resolveExport(const LxExport *entry)
         const LxModule *target = forward->owner->dependencies[forward->module_ordinal - 1];
         /* Circular DLL imports publish exports before filling every dependency slot. */
         if (!target)
-            for (target = GLoaderState.loaded_modules; target; target = target->next)
+            for (target = GProcessState.loaded_modules; target; target = target->next)
                 if (!target->load_failed && !strcasecmp(target->name, forward->module_name))
                     break;
         if (!target)
@@ -108,7 +108,7 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
         static LxExport exported;
         exported =
             (LxExport){295, "Thk32R3DS",
-                       (void *)(uintptr_t)lx_execution_flat_data_selector(GLoaderState.execution),
+                       (void *)(uintptr_t)lx_execution_flat_data_selector(GProcessState.execution),
                        NULL, LX_EXPORT_ABSOLUTE};
         if (_lxexp)
             *_lxexp = &exported;
@@ -150,10 +150,10 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
             if (!object->addr)
             {
                 LxExecutionBridge bridge;
-                if (!lx_execution_universal_thunk(GLoaderState.execution, ordinal, &bridge))
+                if (!lx_execution_universal_thunk(GProcessState.execution, ordinal, &bridge))
                     return generateMissingTrampoline16(module->name, "THK16_UNITHUNK", _lxexp);
                 object->mapped = object->addr = lx_execution_memory(
-                    GLoaderState.execution, bridge.segment_base, bridge.size, LX_GUEST_READ);
+                    GProcessState.execution, bridge.segment_base, bridge.size, LX_GUEST_READ);
                 object->size = bridge.size;
                 object->alias = bridge.selector_index;
                 object->guest_base = bridge.segment_base;
@@ -199,7 +199,7 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
         }
         if (target)
         {
-            LxModule *forward = GLoaderState.loadModule(target);
+            LxModule *forward = GProcessState.loadModule(target);
             if (forward)
                 return resolveModuleOrdinal(forward, number, _lxexp, want16bit, native, missing);
         }

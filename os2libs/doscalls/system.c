@@ -15,8 +15,8 @@ APIRET DosGetInfoBlocks(PTIB *pptib, PPIB *pppib)
         *pptib = (PTIB)LX_GETTIB();
 
     if (pppib != NULL)
-        *pppib = GLoaderState.guest_pib ? lx_execution_mapping_host(GLoaderState.guest_pib)
-                                        : (PPIB)&GLoaderState.pib;
+        *pppib = GProcessState.guest_pib ? lx_execution_mapping_host(GProcessState.guest_pib)
+                                         : (PPIB)&GProcessState.pib;
 
     return 0;
 }
@@ -186,8 +186,8 @@ APIRET DosQueryCp(ULONG cb, PULONG arCP, PULONG pcCP)
 
     if (cb && !arCP)
         return ERROR_INVALID_PARAMETER;
-    const ULONG pages[] = {GLoaderState.process_codepage ? GLoaderState.process_codepage : 437, 437,
-                           850};
+    const ULONG pages[] = {GProcessState.process_codepage ? GProcessState.process_codepage : 437,
+                           437, 850};
     ULONG count = cb / sizeof(ULONG);
     if (count > 3)
         count = 3;
@@ -311,7 +311,7 @@ APIRET16 Dos16GetCp(USHORT cb, PUSHORT arCP, PUSHORT pcCP)
 
     if (cb && !arCP)
         return ERROR_INVALID_PARAMETER;
-    const USHORT pages[] = {GLoaderState.process_codepage ? GLoaderState.process_codepage : 437,
+    const USHORT pages[] = {GProcessState.process_codepage ? GProcessState.process_codepage : 437,
                             437, 850};
     USHORT count = cb / sizeof(USHORT);
     if (count > 3)

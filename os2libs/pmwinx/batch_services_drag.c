@@ -38,7 +38,7 @@ VOID DragFinish(ULONG drop)
 static ULONG drop_address(ULONG drop, uint8 header[20])
 {
     ULONG address = GlobalLock(drop);
-    if (!address || !lx_execution_read(GLoaderState.execution, address, header, 20))
+    if (!address || !lx_execution_read(GProcessState.execution, address, header, 20))
     {
         open32SetError(6);
         return 0;
@@ -70,7 +70,7 @@ ULONG DragQueryFile(ULONG drop, ULONG index, PSZ output, ULONG capacity)
             uint8 wire[2];
             ULONG step = wide ? 2 : 1;
             if (address > UINT32_MAX - step ||
-                !lx_execution_read(GLoaderState.execution, address, wire, step))
+                !lx_execution_read(GProcessState.execution, address, wire, step))
                 goto drop_done;
             c = wide ? lx_guest_load_u16(wire) : wire[0];
             address += step;
@@ -118,7 +118,7 @@ BOOL DragQueryPoint(ULONG drop, PVOID output)
 
 static BOOL item_names(ULONG item, uint8 wire[DRAGITEM_NAMES])
 {
-    return item && lx_execution_read(GLoaderState.execution, item, wire, DRAGITEM_NAMES);
+    return item && lx_execution_read(GProcessState.execution, item, wire, DRAGITEM_NAMES);
 }
 
 /* DOR_NEVERDROP unless every item is a file named by container and source. */
@@ -128,7 +128,7 @@ static ULONG drag_over_response(ULONG info)
     if (info && DrgAccessDraginfo(info))
     {
         uint8 header[8], names[DRAGITEM_NAMES];
-        BOOL default_operation = lx_execution_read(GLoaderState.execution, info, header, 8) &&
+        BOOL default_operation = lx_execution_read(GProcessState.execution, info, header, 8) &&
                                  lx_guest_load_u16(header + 6) == DO_DEFAULT;
         response = default_operation ? DOR_DROP : DOR_NODROPOP;
         ULONG count = DrgQueryDragitemCount(info);
@@ -159,7 +159,7 @@ static BOOL item_path(ULONG item, char path[DROP_PATH])
 static ULONG build_drop(HWND window, ULONG info)
 {
     uint8 header[16];
-    if (!lx_execution_read(GLoaderState.execution, info, header, sizeof header))
+    if (!lx_execution_read(GProcessState.execution, info, header, sizeof header))
         return 0;
     ULONG count = DrgQueryDragitemCount(info), drop = 0;
     char *paths = calloc(count ? count : 1, DROP_PATH);
@@ -195,7 +195,7 @@ static ULONG build_drop(HWND window, ULONG info)
             }
         }
         ULONG address = GlobalLock(drop);
-        BOOL written = address && lx_execution_write(GLoaderState.execution, address, wire, size);
+        BOOL written = address && lx_execution_write(GProcessState.execution, address, wire, size);
         GlobalUnlock(drop);
         if (!written)
         {

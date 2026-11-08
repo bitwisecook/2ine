@@ -86,8 +86,8 @@ void cfgProcessMountPoint(const char *fname, const int lineno, const char *var, 
     }
 
     const int idx = (int)(letter - 'A');
-    free(GLoaderState.disks[idx]);
-    GLoaderState.disks[idx] = NULL;
+    free(GProcessState.disks[idx]);
+    GProcessState.disks[idx] = NULL;
 
     if (*val != '\0')
     { // val=="" means don't mount
@@ -102,13 +102,13 @@ void cfgProcessMountPoint(const char *fname, const int lineno, const char *var, 
         {
             cfgWarn(fname, lineno, "Path \"%s\" for drive %c:\\ isn't a directory", val, letter);
         }
-        else if ((GLoaderState.disks[idx] = (char *)malloc(vallen + 2)) == NULL)
+        else if ((GProcessState.disks[idx] = (char *)malloc(vallen + 2)) == NULL)
         {
             cfgWarn(fname, lineno, "Out of memory!");
         }
         else
         {
-            char *ptr = GLoaderState.disks[idx];
+            char *ptr = GProcessState.disks[idx];
             strcpy(ptr, val);
             if (ptr[vallen - 1] != '/')
             {
@@ -130,24 +130,24 @@ void cfgProcessSystem(const char *fname, const int lineno, const char *var, cons
     }
     if (strcmp(var, "trace_native") == 0)
     {
-        cfgProcessBoolString(fname, lineno, &GLoaderState.trace_native, val);
+        cfgProcessBoolString(fname, lineno, &GProcessState.trace_native, val);
     }
     else if (strcmp(var, "trace_events") == 0)
     {
-        cfgProcessBoolString(fname, lineno, &GLoaderState.trace_events, val);
+        cfgProcessBoolString(fname, lineno, &GProcessState.trace_events, val);
     }
     else if (strcmp(var, "display_dpi") == 0)
     {
         char *end = NULL;
         unsigned long dpi = strtoul(val, &end, 10);
         if (end != val && !*end && dpi >= 72 && dpi <= 384)
-            GLoaderState.display_dpi = (unsigned)dpi;
+            GProcessState.display_dpi = (unsigned)dpi;
         else
             cfgWarn(fname, lineno, "Display DPI must be a whole number between 72 and 384");
     }
     else if (strcmp(var, "beep_volume") == 0)
     {
-        cfgProcessFloatString(fname, lineno, &GLoaderState.beep_volume, val);
+        cfgProcessFloatString(fname, lineno, &GProcessState.beep_volume, val);
     }
     else
     {

@@ -86,7 +86,7 @@ static int initializeModuleGraph(LxModule *module)
             goto failed;
     if (rexx_api && !ensureRexxService())
         goto failed;
-    if (module != GLoaderState.main_module)
+    if (module != GProcessState.main_module)
     {
         if (module->is_lx)
             runLxLibraryInit(module);
@@ -145,7 +145,7 @@ uint16 lxSetOs2Tib(uint8 *source)
         fprintf(stderr, "TIB is already attached\n");
         abort();
     }
-    state->tib_mapping = lx_execution_map(GLoaderState.execution, 0, 0x20000, 3, 0);
+    state->tib_mapping = lx_execution_map(GProcessState.execution, 0, 0x20000, 3, 0);
     if (!state->tib_mapping)
     {
         fprintf(stderr, "Cannot allocate guest TIB\n");
@@ -156,72 +156,72 @@ uint16 lxSetOs2Tib(uint8 *source)
     uint8 *tib = (uint8 *)lx_execution_mapping_host(state->tib_mapping) + (address - base);
     memcpy(tib, source, LXTIBSIZE);
     lx_guest_store_u32(tib + offsetof(LxTIB, tib_ptib2), address + sizeof(LxTIB));
-    return lx_execution_attach_tib(GLoaderState.execution, tib);
+    return lx_execution_attach_tib(GProcessState.execution, tib);
 }
 
 LxTIB *lxGetOs2Tib(void)
 {
-    return lx_execution_current_tib(GLoaderState.execution);
+    return lx_execution_current_tib(GProcessState.execution);
 }
 
 void lxDeinitOs2Tib(uint16 token)
 {
     lxHostThreadCleanup();
-    lx_execution_detach_tib(GLoaderState.execution, token);
+    lx_execution_detach_tib(GProcessState.execution, token);
     LxHostThreadState *state = lxHostThreadState();
     if (state->tib_mapping)
-        lx_execution_unmap(GLoaderState.execution, state->tib_mapping);
+        lx_execution_unmap(GProcessState.execution, state->tib_mapping);
     state->tib_mapping = NULL;
 }
 
 void *lxAllocSegment(uint16 *s, int x)
 {
-    return lx_execution_alloc_segment(GLoaderState.execution, s, x);
+    return lx_execution_alloc_segment(GProcessState.execution, s, x);
 }
 
 void lxFreeSegment(uint16 s)
 {
-    lx_execution_free_segment(GLoaderState.execution, s);
+    lx_execution_free_segment(GProcessState.execution, s);
 }
 
 int lxCreateCodeAlias(uint16 s, uint16 *out)
 {
-    return lx_execution_code_alias(GLoaderState.execution, s, out);
+    return lx_execution_code_alias(GProcessState.execution, s, out);
 }
 
 int lxFindSelector(uint32 a, uint16 *s, uint16 *o, int x)
 {
-    return lx_execution_find_selector(GLoaderState.execution, a, s, o, x);
+    return lx_execution_find_selector(GProcessState.execution, a, s, o, x);
 }
 
 void lxFreeSelector(uint16 s)
 {
-    lx_execution_free_selector(GLoaderState.execution, s);
+    lx_execution_free_selector(GProcessState.execution, s);
 }
 
 void *lxConvert1616to32(uint32 p)
 {
-    return lx_execution_far_to_host(GLoaderState.execution, p);
+    return lx_execution_far_to_host(GProcessState.execution, p);
 }
 
 uint32 lxConvert32to1616(void *p)
 {
-    return lx_execution_host_to_far(GLoaderState.execution, p);
+    return lx_execution_host_to_far(GProcessState.execution, p);
 }
 
 void initOs2StackSegments(uint32 a, uint32 n, int release)
 {
-    lx_execution_stack_segments(GLoaderState.execution, a, n, release);
+    lx_execution_stack_segments(GProcessState.execution, a, n, release);
 }
 
 void fixupLinearCodeSegmentReferences(uint8 *p, size_t n)
 {
-    lx_execution_prepare_code(GLoaderState.execution, p, n);
+    lx_execution_prepare_code(GProcessState.execution, p, n);
 }
 
 static void terminateModule(LxModule *lxmod)
 {
-    if ((lxmod->initialized) && (lxmod != GLoaderState.main_module))
+    if ((lxmod->initialized) && (lxmod != GProcessState.main_module))
     {
         if (!lxmod->nativelib)
         {
@@ -242,10 +242,10 @@ static void terminateModule(LxModule *lxmod)
 
 void registerLxModule(LxModule *module)
 {
-    module->next = GLoaderState.loaded_modules;
+    module->next = GProcessState.loaded_modules;
     if (module->next)
         module->next->prev = module;
-    GLoaderState.loaded_modules = module;
+    GProcessState.loaded_modules = module;
     module->listed = 1;
 }
 
@@ -257,8 +257,8 @@ static void unregisterModule(LxModule *module)
         module->next->prev = module->prev;
     if (module->prev)
         module->prev->next = module->next;
-    if (GLoaderState.loaded_modules == module)
-        GLoaderState.loaded_modules = module->next;
+    if (GProcessState.loaded_modules == module)
+        GProcessState.loaded_modules = module->next;
     module->next = module->prev = NULL;
     module->listed = 0;
 }
@@ -273,23 +273,23 @@ static void collectModules(void)
     do
     {
         removed = 0;
-        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
         {
             m->incoming_references = 0;
             m->reachable = m->loading;
         }
-        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
             for (uint32 i = 0; i < m->num_dependencies; i++)
                 if (m->dependencies[i])
                     m->dependencies[i]->incoming_references++;
-        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
             if (m->refcount > m->incoming_references)
                 m->reachable = 1;
         int changed;
         do
         {
             changed = 0;
-            for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+            for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
                 if (m->reachable)
                     for (uint32 i = 0; i < m->num_dependencies; i++)
                     {
@@ -307,7 +307,7 @@ static void collectModules(void)
         for (;;)
         {
             LxModule *selected = NULL, *cycle = NULL;
-            for (LxModule *candidate = GLoaderState.loaded_modules; candidate;
+            for (LxModule *candidate = GProcessState.loaded_modules; candidate;
                  candidate = candidate->next)
             {
                 if (candidate->reachable || !candidate->initialized)
@@ -317,7 +317,7 @@ static void collectModules(void)
                                 candidate->initialization_order > cycle->initialization_order)))
                     cycle = candidate;
                 int dependent = 0;
-                for (LxModule *m = GLoaderState.loaded_modules; m && !dependent; m = m->next)
+                for (LxModule *m = GProcessState.loaded_modules; m && !dependent; m = m->next)
                     if (m != candidate && !m->reachable && m->initialized)
                         for (uint32 i = 0; i < m->num_dependencies; i++)
                             if (m->dependencies[i] == candidate)
@@ -339,7 +339,7 @@ static void collectModules(void)
                 break;
             terminateModule(selected);
         }
-        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
             if (!m->reachable)
             {
                 for (uint32 i = 0; i < m->num_dependencies; i++)
@@ -348,7 +348,7 @@ static void collectModules(void)
                 m->num_dependencies = 0;
             }
         LxModule *next;
-        for (LxModule *m = GLoaderState.loaded_modules; m; m = next)
+        for (LxModule *m = GProcessState.loaded_modules; m; m = next)
         {
             next = m->next;
             if (!m->reachable)
@@ -364,14 +364,14 @@ static void collectModules(void)
 
 void unloadAllModules(void)
 {
-    while (GLoaderState.loaded_modules)
+    while (GProcessState.loaded_modules)
     {
-        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
         {
             m->loading = 0;
             m->refcount = 0;
         }
-        for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+        for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
             for (uint32 i = 0; i < m->num_dependencies; i++)
                 if (m->dependencies[i])
                     m->dependencies[i]->refcount++;
@@ -410,9 +410,9 @@ void destroyLxModule(void *resource)
     }
     free(lxmod->dependencies);
 
-    if (GLoaderState.main_module == lxmod)
+    if (GProcessState.main_module == lxmod)
     {
-        GLoaderState.main_module = NULL;
+        GProcessState.main_module = NULL;
         LxMmaps *lxmmap = lxmod->is_lx ? &lxmod->mmaps[lxmod->header.lx.esp_object - 1]
                                        : &lxmod->mmaps[lxmod->header.ne.reg_ss - 1];
         const uint32 stackbase = lxmmap->guest_base;
@@ -427,7 +427,7 @@ void destroyLxModule(void *resource)
         if (lxmod->mmaps[i].mapped)
         {
             if (lxmod->mmaps[i].mapping)
-                lx_execution_unmap(GLoaderState.execution, lxmod->mmaps[i].mapping);
+                lx_execution_unmap(GProcessState.execution, lxmod->mmaps[i].mapping);
             else
                 lx_host_memory_free(lxmod->mmaps[i].mapped, lxmod->mmaps[i].size);
         }
@@ -517,7 +517,7 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
     char *os2path = makeOS2Path(fname);
     if (os2path)
     {
-        for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+        for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
             if (!module->load_failed && !strcasecmp(module->os2path, os2path))
             {
                 __atomic_add_fetch(&module->refcount, 1, __ATOMIC_ACQ_REL);
@@ -532,7 +532,7 @@ LxModule *loadModuleByPathInternal(const char *fname, const int dependency_tree_
     if (!module)
     {
         moduleLoadError(error == LX_HOST_FS_MISSING ? 2 : 5, fname);
-        if (GLoaderState.trace_native)
+        if (GProcessState.trace_native)
             fprintf(stderr, "Cannot read module '%s' (host filesystem result %u)\n", fname,
                     (unsigned)error);
         return NULL;
@@ -650,9 +650,9 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
         moduleLoadError(126, modname);
         return NULL;
     }
-    for (LxModule *i = GLoaderState.loaded_modules; i != NULL; i = i->next)
+    for (LxModule *i = GProcessState.loaded_modules; i != NULL; i = i->next)
     {
-        if (!i->load_failed && (!GLoaderState.libpath_strict || i->nativelib) &&
+        if (!i->load_failed && (!GProcessState.libpath_strict || i->nativelib) &&
             strcasecmp(i->name, modname) == 0)
         {
             i->refcount++;
@@ -672,7 +672,7 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
     /* An opted-in upgrade must replace the guest TLS DLL as a whole. */
     if (!strcasecmp(modname, "SSLEAY32") && lxRuntimeTlsUpgrade())
         goto native_provider;
-    retval = loadGuestLibraryPath(GLoaderState.begin_libpath, modname, dependency_tree_depth);
+    retval = loadGuestLibraryPath(GProcessState.begin_libpath, modname, dependency_tree_depth);
     if (!retval && moduleLoadFailed())
         return NULL;
     if (!retval && lx_host_path_exists(fname))
@@ -704,9 +704,9 @@ LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependen
     }
 
     if (!retval)
-        retval = loadGuestLibraryPath(GLoaderState.libpath, modname, dependency_tree_depth);
+        retval = loadGuestLibraryPath(GProcessState.libpath, modname, dependency_tree_depth);
     if (!retval)
-        retval = loadGuestLibraryPath(GLoaderState.end_libpath, modname, dependency_tree_depth);
+        retval = loadGuestLibraryPath(GProcessState.end_libpath, modname, dependency_tree_depth);
 
     if (!retval && moduleLoadFailed())
         return NULL;
@@ -825,7 +825,7 @@ int describeModuleAddress(const void *ptr, char *buf, const size_t buflen)
 {
     const uint32 addr = (uint32)(size_t)ptr;
 
-    for (LxModule *lxmod = GLoaderState.loaded_modules; lxmod; lxmod = lxmod->next)
+    for (LxModule *lxmod = GProcessState.loaded_modules; lxmod; lxmod = lxmod->next)
     {
         for (uint32 i = 0; i < lxmod->num_mmaps; i++)
         {
@@ -848,7 +848,7 @@ int describeModuleAddress(const void *ptr, char *buf, const size_t buflen)
 int executableAt(void *unused, uint32 address)
 {
     (void)unused;
-    for (LxModule *m = GLoaderState.loaded_modules; m; m = m->next)
+    for (LxModule *m = GProcessState.loaded_modules; m; m = m->next)
         for (uint32 i = 0; i < m->num_mmaps; i++)
         {
             const LxMmaps *p = &m->mmaps[i];
@@ -863,7 +863,7 @@ int executableAt(void *unused, uint32 address)
 void lxWriteFatalModules(void)
 {
     lx_host_fatal_write("\n-- OS/2 modules --\n");
-    for (const LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+    for (const LxModule *module = GProcessState.loaded_modules; module; module = module->next)
     {
         lx_host_fatal_write(module->name);
         lx_host_fatal_write(module->is_lx ? " LX " : " NE ");

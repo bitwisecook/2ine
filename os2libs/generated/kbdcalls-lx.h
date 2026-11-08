@@ -10,7 +10,7 @@ static uint32 bridge16to32_KbdGetCp(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
     codepage = (PUSHORT) __abi_args[0].host;
     __abi_result = KbdGetCp(reserved, codepage, hkbd);
     __abi_copy = 1;
@@ -26,7 +26,7 @@ static uint32 bridge16to32_KbdCharIn(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
     pkbci = (PKBDKEYINFO) __abi_args[0].host;
     __abi_result = KbdCharIn(pkbci, fWait, hkbd);
     __abi_copy = 1;
@@ -50,9 +50,9 @@ static uint32 bridge16to32_KbdStringIn(uint8 *args) {
     LxGuestArgument __abi_args[2] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pchin_guest, 4, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pchin_guest, 4, 3, 0, 0, &__abi_args[0])) goto __abi_done;
     pchin = (PSTRINGINBUF) __abi_args[0].host;
-    if (!lx_guest_argument_far(GLoaderState.execution, pch_guest, lx_guest_load_u16(pchin), 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, lx_guest_load_u16(pchin), 2, 0, 0, &__abi_args[1])) goto __abi_done;
     pch = (PCHAR) __abi_args[1].host;
     __abi_result = KbdStringIn(pch, pchin, flag, hkbd);
     __abi_copy = 1;
@@ -68,7 +68,7 @@ static uint32 bridge16to32_KbdGetStatus(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 3, 0, 0, &__abi_args[0])) goto __abi_done;
     pkbci = (PKBDINFO) __abi_args[0].host;
     __abi_result = KbdGetStatus(pkbci, hkbd);
     __abi_copy = 1;
@@ -83,7 +83,7 @@ static uint32 bridge16to32_KbdSetStatus(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     pkbci = (PKBDINFO) __abi_args[0].host;
     __abi_result = KbdSetStatus(pkbci, hkbd);
     __abi_copy = 1;
@@ -103,7 +103,7 @@ static uint32 bridge16to32_KbdPeek(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
     pkbci = (PKBDKEYINFO) __abi_args[0].host;
     __abi_result = KbdPeek(pkbci, hkbd);
     __abi_copy = 1;

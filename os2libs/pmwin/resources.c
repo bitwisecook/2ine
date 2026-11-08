@@ -21,8 +21,8 @@ static size_t pm_resources_size;
 static void load_pm_resources(void)
 {
     uint32 error = 0;
-    char *path = GLoaderState.makeUnixPath
-                     ? GLoaderState.makeUnixPath("C:\\OS2\\DLL\\PMMRGRES.DLL", &error)
+    char *path = GProcessState.makeUnixPath
+                     ? GProcessState.makeUnixPath("C:\\OS2\\DLL\\PMMRGRES.DLL", &error)
                      : NULL;
     LxHostFsError status;
     if (path)
@@ -51,10 +51,10 @@ LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR 
             return 0;
         }
     }
-    else if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
-             !GLoaderState.freeResource ||
-             GLoaderState.queryResourceSize(module, type, bundle, &size) || size < 2 ||
-             GLoaderState.getResource(module, type, bundle, &data))
+    else if (!GProcessState.queryResourceSize || !GProcessState.getResource ||
+             !GProcessState.freeResource ||
+             GProcessState.queryResourceSize(module, type, bundle, &size) || size < 2 ||
+             GProcessState.getResource(module, type, bundle, &data))
         return 0;
     const uint8 *bytes = data;
     size_t at = 2;
@@ -79,6 +79,6 @@ LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR 
     if (system)
         free(data);
     else
-        GLoaderState.freeResource(data);
+        GProcessState.freeResource(data);
     return result;
 }

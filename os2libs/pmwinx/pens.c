@@ -694,7 +694,7 @@ static int compare_crossings(const void *a, const void *b)
 static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL filled)
 {
     TRACE_NATIVE("GDI path(%u, %p, %d, %u, %u)", handle, input, count, closed, filled);
-    if (GLoaderState.trace_native && input && count > 0)
+    if (GProcessState.trace_native && input && count > 0)
         for (LONG i = 0; i < count && i < 8; i++)
             TRACE_NATIVE("  point %d: %d,%d of height %d", (int)i,
                          (int)lx_guest_load_u32((const uint8 *)input + i * 8),

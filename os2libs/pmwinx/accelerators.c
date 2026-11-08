@@ -131,17 +131,17 @@ ULONG LoadAccelerators(HMODULE module, PSZ name)
         unsigned long number = strtoul(name + 1, &end, 10);
         id = *end || number > UINT16_MAX ? 0 : number;
     }
-    if (!id || id > UINT16_MAX || !GLoaderState.queryResourceSize || !GLoaderState.getResource)
+    if (!id || id > UINT16_MAX || !GProcessState.queryResourceSize || !GProcessState.getResource)
     {
         open32SetError(1814);
         return 0;
     }
-    if ((!module || module == UINT32_MAX) && GLoaderState.main_module)
-        module = GLoaderState.main_module->handle;
+    if ((!module || module == UINT32_MAX) && GProcessState.main_module)
+        module = GProcessState.main_module->handle;
     ULONG size = 0;
     void *resource = NULL;
-    if (GLoaderState.queryResourceSize(module, 8, (ULONG)id, &size) || size < 4 ||
-        GLoaderState.getResource(module, 8, (ULONG)id, &resource))
+    if (GProcessState.queryResourceSize(module, 8, (ULONG)id, &size) || size < 4 ||
+        GProcessState.getResource(module, 8, (ULONG)id, &resource))
     {
         open32SetError(1814);
         return 0;
@@ -154,8 +154,8 @@ ULONG LoadAccelerators(HMODULE module, PSZ name)
         table = allocate_table(count);
         if (!table)
         {
-            if (GLoaderState.freeResource)
-                GLoaderState.freeResource(resource);
+            if (GProcessState.freeResource)
+                GProcessState.freeResource(resource);
             return 0;
         }
     }
@@ -184,8 +184,8 @@ ULONG LoadAccelerators(HMODULE module, PSZ name)
                                                    win_flags, (USHORT)converted};
         }
     }
-    if (GLoaderState.freeResource)
-        GLoaderState.freeResource(resource);
+    if (GProcessState.freeResource)
+        GProcessState.freeResource(resource);
     if (!table)
     {
         open32SetError(13);

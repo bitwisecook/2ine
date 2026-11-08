@@ -8,7 +8,7 @@ static BOOL o32_service_span(ULONG address, uint64_t size, unsigned access, BOOL
         return TRUE;
     return size <= 16u * 1024u * 1024u && size <= UINT32_MAX &&
            (uint64_t)address + size <= (UINT64_C(1) << 32) &&
-           lx_execution_borrow(GLoaderState.execution, address, (size_t)size, access, borrow);
+           lx_execution_borrow(GProcessState.execution, address, (size_t)size, access, borrow);
 }
 
 static BOOL o32_service_string(ULONG address, BOOL identity, PSZ *output)
@@ -18,7 +18,7 @@ static BOOL o32_service_string(ULONG address, BOOL identity, PSZ *output)
         *output = (PSZ)(uintptr_t)address;
         return TRUE;
     }
-    *output = lx_execution_copy_string(GLoaderState.execution, address, 1024u * 1024u);
+    *output = lx_execution_copy_string(GProcessState.execution, address, 1024u * 1024u);
     return *output != NULL;
 }
 
@@ -1901,7 +1901,7 @@ static uint32 bridge32_ZeroMemory(uint8 *a)
     ULONG v0 = lx_guest_load_u32(a + 0);
     ULONG v1 = lx_guest_load_u32(a + 4);
     LxGuestBorrow b0 = {0};
-    valid = !v1 || lx_execution_borrow(GLoaderState.execution, v0, v1, 2, &b0);
+    valid = !v1 || lx_execution_borrow(GProcessState.execution, v0, v1, 2, &b0);
     if (valid)
     {
         ZeroMemory(b0.host, (ULONG)v1);
@@ -2051,7 +2051,7 @@ static uint32 bridge32_GetStringTypeEx(uint8 *a)
     else if (effective_count > 0 && effective_count <= 1024 * 1024)
     {
         s2 = malloc((size_t)effective_count);
-        valid = s2 && lx_execution_read(GLoaderState.execution, v2, s2, effective_count) && valid;
+        valid = s2 && lx_execution_read(GProcessState.execution, v2, s2, effective_count) && valid;
     }
     else
         valid = FALSE;

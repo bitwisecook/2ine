@@ -70,19 +70,19 @@ HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     if (!anchor)
         return 0;
-    if (desktop != HWND_DESKTOP || !GLoaderState.queryResourceSize || !GLoaderState.getResource)
+    if (desktop != HWND_DESKTOP || !GProcessState.queryResourceSize || !GProcessState.getResource)
         return 0;
     void *bytes = NULL;
     ULONG size;
-    if (GLoaderState.queryResourceSize(module, 1, id, &size) || size > 16 * 1024 * 1024 ||
-        GLoaderState.getResource(module, 1, id, &bytes))
+    if (GProcessState.queryResourceSize(module, 1, id, &size) || size > 16 * 1024 * 1024 ||
+        GProcessState.getResource(module, 1, id, &bytes))
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_RESOURCE_NOT_FOUND, 0);
     PmPointerImage *image = pmPointerImage(bytes, size);
     size_t header = size >= 14 && lx_guest_load_u16(bytes) == 0x4142 ? 14 : 0;
     unsigned hot_x = image ? lx_guest_load_u16((uint8 *)bytes + header + 6) : 0;
     unsigned hot_y = image ? lx_guest_load_u16((uint8 *)bytes + header + 8) : 0;
-    if (GLoaderState.freeResource)
-        GLoaderState.freeResource(bytes);
+    if (GProcessState.freeResource)
+        GProcessState.freeResource(bytes);
     if (!image)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_INVALID_RESOURCE_FORMAT, 0);
     PmPointer *pointer = calloc(1, sizeof *pointer);
@@ -665,10 +665,10 @@ BOOL WinQueryPointerInfo(HPOINTER handle, LXPOINTERINFO *out)
 HPOINTER lx_pm_pointer_file(const char *filename)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
-    if (!a || !filename || !GLoaderState.makeUnixPath)
+    if (!a || !filename || !GProcessState.makeUnixPath)
         return 0;
     uint32 error = 0;
-    char *path = GLoaderState.makeUnixPath(filename, &error);
+    char *path = GProcessState.makeUnixPath(filename, &error);
     if (!path)
         return 0;
     LxHostFsError status;

@@ -30,8 +30,8 @@ ULONG GetCurrentThread(void)
 
 ULONG GetCurrentThreadId(void)
 {
-    LxTIB *tib = GLoaderState.getOs2Tib ? GLoaderState.getOs2Tib() : NULL;
-    const uint8 *tib2 = tib ? lx_execution_memory(GLoaderState.execution, tib->tib_ptib2,
+    LxTIB *tib = GProcessState.getOs2Tib ? GProcessState.getOs2Tib() : NULL;
+    const uint8 *tib2 = tib ? lx_execution_memory(GProcessState.execution, tib->tib_ptib2,
                                                   sizeof(LxTIB2), LX_GUEST_READ)
                             : NULL;
     return tib2 ? lx_guest_load_u32(tib2) : 0;
@@ -51,14 +51,14 @@ static void store_section(CriticalSection *cs)
     lx_guest_store_u32(record + 4, cs->recursion + cs->waiting - 1);
     lx_guest_store_u32(record + 8, cs->recursion);
     lx_guest_store_u32(record + 12, cs->owner);
-    lx_execution_write(GLoaderState.execution, cs->address, record, sizeof record);
+    lx_execution_write(GProcessState.execution, cs->address, record, sizeof record);
 }
 
 VOID InitializeCriticalSection(PVOID address)
 {
     uint32 pointer = (uint32)(uintptr_t)address;
     if ((uintptr_t)address > UINT32_MAX ||
-        !lx_execution_memory(GLoaderState.execution, pointer, 24, 3))
+        !lx_execution_memory(GProcessState.execution, pointer, 24, 3))
     {
         open32SetError(87);
         return;
@@ -93,7 +93,7 @@ VOID EnterCriticalSection(PVOID address)
     LxGuestBorrow record = {0};
     ULONG pointer = (ULONG)(uintptr_t)address;
     if ((uintptr_t)address > UINT32_MAX ||
-        !lx_execution_borrow(GLoaderState.execution, pointer, 24, 3, &record))
+        !lx_execution_borrow(GProcessState.execution, pointer, 24, 3, &record))
     {
         open32SetError(87);
         return;
@@ -131,7 +131,7 @@ VOID LeaveCriticalSection(PVOID address)
 {
     ULONG pointer = (ULONG)(uintptr_t)address;
     if ((uintptr_t)address > UINT32_MAX ||
-        !lx_execution_memory(GLoaderState.execution, pointer, 24, 3))
+        !lx_execution_memory(GProcessState.execution, pointer, 24, 3))
     {
         open32SetError(87);
         return;

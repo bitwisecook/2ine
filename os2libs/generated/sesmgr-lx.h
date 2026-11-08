@@ -18,7 +18,7 @@ static uint32 bridge16to32_Dos16SMSetTitle(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_strings(GLoaderState.execution, title_guest, 1, 65536, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_strings(GProcessState.execution, title_guest, 1, 65536, 0, &__abi_args[0])) goto __abi_done;
     title = (PCHAR) __abi_args[0].host;
     __abi_result = Dos16SMSetTitle(title);
     __abi_copy = 1;
@@ -40,7 +40,7 @@ static uint32 bridge16to32_Dos16SetSession(uint8 *args) {
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, status_guest, 6, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, status_guest, 6, 1, 0, 0, &__abi_args[0])) goto __abi_done;
     status = (PSTATUSDATA) __abi_args[0].host;
     __abi_result = Dos16SetSession(session, status);
     __abi_copy = 1;
@@ -56,9 +56,9 @@ static uint32 bridge16to32_Dos16StartSession(uint8 *args) {
     LxGuestArgument __abi_args[2] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
-    if (!lx_guest_argument_far(GLoaderState.execution, session_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, session_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
     session = (PUSHORT) __abi_args[0].host;
-    if (!lx_guest_argument_far(GLoaderState.execution, pid_guest, 2, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    if (!lx_guest_argument_far(GProcessState.execution, pid_guest, 2, 2, 0, 0, &__abi_args[1])) goto __abi_done;
     pid = (PUSHORT) __abi_args[1].host;
     __abi_result = Dos16StartSession(data, session, pid);
     __abi_copy = 1;

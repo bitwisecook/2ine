@@ -424,10 +424,10 @@ static void profile_destroy(void *value)
 HINI PrfOpenProfile(HANDLE hab, PSZ name)
 {
     TRACE_NATIVE("PrfOpenProfile(%u, '%s')", (uint)hab, name);
-    if (!name || !*name || !GLoaderState.makeUnixPath)
+    if (!name || !*name || !GProcessState.makeUnixPath)
         return 0;
     uint32 error = 0;
-    char *path = GLoaderState.makeUnixPath(name, &error);
+    char *path = GProcessState.makeUnixPath(name, &error);
     HINI result = path ? lx_profile_open_host(path) : 0;
     free(path);
     return result;

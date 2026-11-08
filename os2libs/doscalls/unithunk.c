@@ -53,7 +53,7 @@ static uint32 flatToFar(uint32 address)
     if (address >= THUNK_TILED_LIMIT)
         return 0;
     uint16 selector, offset;
-    if (!lx_execution_find_selector(GLoaderState.execution, address, &selector, &offset, -1))
+    if (!lx_execution_find_selector(GProcessState.execution, address, &selector, &offset, -1))
         return 0;
     return ((uint32)((selector << 3) | 7) << 16) | offset;
 }
@@ -62,16 +62,16 @@ static uint32 farToFlat(uint32 pointer)
 {
     if (pointer < THUNK_TILE)
         return pointer;
-    void *memory = lx_execution_far_to_host(GLoaderState.execution, pointer);
+    void *memory = lx_execution_far_to_host(GProcessState.execution, pointer);
     uint32 address = 0;
-    return memory && lx_execution_address(GLoaderState.execution, memory, 1, 0, &address) ? address
-                                                                                          : 0;
+    return memory && lx_execution_address(GProcessState.execution, memory, 1, 0, &address) ? address
+                                                                                           : 0;
 }
 
 static int readGuestU32(uint32 address, uint32 *value)
 {
     uint8 bytes[4];
-    if (!lx_execution_read(GLoaderState.execution, address, bytes, sizeof bytes))
+    if (!lx_execution_read(GProcessState.execution, address, bytes, sizeof bytes))
         return 0;
     *value = lx_guest_load_u32(bytes);
     return 1;
@@ -103,7 +103,7 @@ static int64_t pointerSize(const ThunkCall *call, uint64 d, BOOL extended, unsig
         if (code == 4)
         {
             uint8 bytes[2];
-            if (!lx_execution_read(GLoaderState.execution, pointer, bytes, sizeof bytes))
+            if (!lx_execution_read(GProcessState.execution, pointer, bytes, sizeof bytes))
                 return THUNK_SIZE_FAULT;
             return lx_guest_load_u16(bytes);
         }
@@ -118,14 +118,14 @@ static int64_t pointerSize(const ThunkCall *call, uint64 d, BOOL extended, unsig
             {
                 /* A USHORT result delivered into ULONG storage. */
                 const uint8 zero[2] = {0, 0};
-                return lx_execution_write(GLoaderState.execution, pointer + 2, zero, sizeof zero)
+                return lx_execution_write(GProcessState.execution, pointer + 2, zero, sizeof zero)
                            ? 2
                            : THUNK_SIZE_FAULT;
             }
             else
             {
-                char *text =
-                    lx_execution_copy_string(GLoaderState.execution, pointer, THUNK_MAXIMUM_STRING);
+                char *text = lx_execution_copy_string(GProcessState.execution, pointer,
+                                                      THUNK_MAXIMUM_STRING);
                 if (!text)
                     return THUNK_SIZE_FAULT;
                 const int64_t size = (int64_t)strlen(text) + 1;
@@ -151,7 +151,7 @@ static APIRET copyAcrossTile(ThunkCall *call, uint32 *pointer, uint32 size, BOOL
 {
     ThunkCopy *copy = &call->copies[call->copy_count];
     const size_t bytes = ((size_t)size + 0xfff) & ~(size_t)0xfff;
-    copy->mapping = lx_execution_map_aligned(GLoaderState.execution, 0, bytes,
+    copy->mapping = lx_execution_map_aligned(GProcessState.execution, 0, bytes,
                                              LX_GUEST_READ | LX_GUEST_WRITE, THUNK_TILE);
     if (!copy->mapping)
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -159,12 +159,12 @@ static APIRET copyAcrossTile(ThunkCall *call, uint32 *pointer, uint32 size, BOOL
     copy->original = *pointer;
     copy->size = size;
     copy->copy_back = copy_back;
-    if (!lx_execution_read(GLoaderState.execution, *pointer,
+    if (!lx_execution_read(GProcessState.execution, *pointer,
                            lx_execution_mapping_host(copy->mapping), size))
         return thunkFault(call, "cannot read argument", *pointer);
     *pointer = lx_execution_mapping_address(copy->mapping);
     uint16 offset;
-    if (!lx_execution_find_selector(GLoaderState.execution, *pointer, &copy->selector, &offset, 0))
+    if (!lx_execution_find_selector(GProcessState.execution, *pointer, &copy->selector, &offset, 0))
         return ERROR_NOT_ENOUGH_MEMORY;
     return NO_ERROR;
 }
@@ -251,7 +251,7 @@ static uint32 thunkOperation(void *argument)
         return ERROR_INVALID_PARAMETER;
     }
     uint32 result;
-    if (!lx_execution_call16(GLoaderState.execution, call->target, frame + cursor,
+    if (!lx_execution_call16(GProcessState.execution, call->target, frame + cursor,
                              (uint32)(sizeof frame - cursor), &result))
     {
         fprintf(stderr, "2ine: THK_UNITHUNK cannot call target %08x\n", (unsigned)call->target);
@@ -260,7 +260,7 @@ static uint32 thunkOperation(void *argument)
     for (unsigned i = 0; i < call->copy_count; i++)
     {
         const ThunkCopy *copy = &call->copies[i];
-        if (copy->copy_back && !lx_execution_write(GLoaderState.execution, copy->original,
+        if (copy->copy_back && !lx_execution_write(GProcessState.execution, copy->original,
                                                    lx_execution_mapping_host(copy->mapping),
                                                    copy->size & THUNK_COPY_SIZE_MASK))
             return thunkFault(call, "cannot copy back argument", copy->original);
@@ -285,15 +285,15 @@ static void thunkCleanup(void *argument)
     {
         ThunkCopy *copy = &call->copies[i];
         if (copy->selector)
-            lx_execution_free_selector(GLoaderState.execution, copy->selector);
-        lx_execution_unmap(GLoaderState.execution, copy->mapping);
+            lx_execution_free_selector(GProcessState.execution, copy->selector);
+        lx_execution_unmap(GProcessState.execution, copy->mapping);
     }
 }
 
 APIRET THK_UNITHUNK(VOID)
 {
     LxExecutionRegisters32 caller;
-    if (!lx_execution_api_registers32(GLoaderState.execution, &caller))
+    if (!lx_execution_api_registers32(GProcessState.execution, &caller))
     {
         fprintf(stderr, "2ine: THK_UNITHUNK has no suspended 32-bit caller\n");
         return ERROR_INVALID_FUNCTION;

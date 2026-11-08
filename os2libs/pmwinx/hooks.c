@@ -42,8 +42,8 @@ static void destroy_hook(void *data)
     Hook *hook = data;
     if (hook->module.resource)
     {
-        if (GLoaderState.freeModule)
-            GLoaderState.freeModule(hook->module.resource);
+        if (GProcessState.freeModule)
+            GProcessState.freeModule(hook->module.resource);
         lx_handle_release(&hook->module);
     }
     free(hook);
@@ -124,7 +124,7 @@ static LONG invoke_hook(HookSnapshot *snapshot, size_t index, LONG code, ULONG k
     Hook *hook = snapshot->entries[index].resource;
     HookCall call = {snapshot, index + 1, current};
     current = &call;
-    LONG result = (LONG)lx_execution_callback32_4(GLoaderState.execution, hook->procedure,
+    LONG result = (LONG)lx_execution_callback32_4(GProcessState.execution, hook->procedure,
                                                   (ULONG)code, key, parameter, 0);
     current = call.previous;
     return result;

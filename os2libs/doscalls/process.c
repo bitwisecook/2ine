@@ -31,7 +31,7 @@ APIRET DosScanEnv(PSZ name, PSZ *outval)
 {
     TRACE_NATIVE("DosScanEnv('%s', %p)", name, outval);
 
-    char *env = GLoaderState.pib.pib_pchenv;
+    char *env = GProcessState.pib.pib_pchenv;
     const size_t len = strlen(name);
     while (*env)
     {
@@ -54,7 +54,7 @@ APIRET16 Dos16ScanEnv(PSZ name, PULONG value)
     APIRET rc = DosScanEnv(name, &text);
     if (rc)
         return (APIRET16)rc;
-    ULONG pointer = GLoaderState.convert32to1616(text);
+    ULONG pointer = GProcessState.convert32to1616(text);
     if (!pointer)
         return ERROR_INVALID_ADDRESS;
     lx_guest_store_u32(value, pointer);
@@ -72,12 +72,12 @@ void runDosExitList(const uint32 why)
         GExitList = item->next;
         free(item);
 
-        if (GLoaderState.execution)
-            lx_execution_callback32(GLoaderState.execution, guest_entry, why);
+        if (GProcessState.execution)
+            lx_execution_callback32(GProcessState.execution, guest_entry, why);
         else
             host_entry(why);
         if (module)
-            GLoaderState.freeModule(module);
+            GProcessState.freeModule(module);
     }
 }
 
@@ -94,7 +94,7 @@ static void finishProcessExit(uint32 exitcode)
     releaseThreadSuspension();
     lx_launch_record_exit(exitcode);
     runDosExitList(TC_EXIT);
-    GLoaderState.terminate(exitcode);
+    GProcessState.terminate(exitcode);
 }
 
 static void (*threadExitObserver)(ULONG code);
@@ -113,11 +113,11 @@ VOID DosExit_implementation(ULONG action, ULONG exitcode)
         if (observer)
             observer(exitcode);
         FIXME("if last thread, treat as DosExit(1)");
-        lx_execution_end_thread(GLoaderState.execution);
+        lx_execution_end_thread(GProcessState.execution);
         lx_host_thread_exit(NULL);
     }
 
-    lx_execution_terminate(GLoaderState.execution, finishProcessExit, exitcode);
+    lx_execution_terminate(GProcessState.execution, finishProcessExit, exitcode);
 }
 
 VOID DosExit(ULONG action, ULONG exitcode)
@@ -147,14 +147,14 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
             ExitListItem *newitem = (ExitListItem *)malloc(sizeof(ExitListItem));
             if (!newitem)
                 return ERROR_NOT_ENOUGH_MEMORY;
-            newitem->host_entry = GLoaderState.execution ? NULL : fn;
-            newitem->guest_entry = GLoaderState.execution ? (uint32)(uintptr_t)fn : 0;
+            newitem->host_entry = GProcessState.execution ? NULL : fn;
+            newitem->guest_entry = GProcessState.execution ? (uint32)(uintptr_t)fn : 0;
             newitem->priority = arg;
             newitem->module = NULL;
-            if (GLoaderState.execution)
-                for (LxModule *module = GLoaderState.loaded_modules; module; module = module->next)
+            if (GProcessState.execution)
+                for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
                 {
-                    if (module == GLoaderState.main_module || module->nativelib)
+                    if (module == GProcessState.main_module || module->nativelib)
                         continue;
                     for (uint32 i = 0; i < module->num_mmaps; i++)
                     {
@@ -193,8 +193,8 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
         {
             for (item = GExitList; item; item = item->next)
             {
-                if (GLoaderState.execution ? item->guest_entry == (uint32)(uintptr_t)fn
-                                           : item->host_entry == fn)
+                if (GProcessState.execution ? item->guest_entry == (uint32)(uintptr_t)fn
+                                            : item->host_entry == fn)
                 {
                     if (prev)
                         prev->next = item->next;
@@ -203,7 +203,7 @@ APIRET DosExitList(ULONG ordercode, PFNEXITLIST fn)
                     LxModule *module = item->module;
                     free(item);
                     if (module)
-                        GLoaderState.freeModule(module);
+                        GProcessState.freeModule(module);
                     return NO_ERROR;
                 }
                 prev = item;
@@ -262,15 +262,15 @@ static char *driveDirectoryPath(int drive, const char *directory, const char *na
 static APIRET resolveStartDirectory(const char *directory, LaunchStart *start)
 {
     const char *path = directory;
-    int drive = GLoaderState.current_disk - 1;
+    int drive = GProcessState.current_disk - 1;
     if (isalpha((unsigned char)path[0]) && path[1] == ':')
     {
         drive = toupper((unsigned char)path[0]) - 'A';
         path += 2;
     }
-    if (drive < 0 || drive >= 26 || !GLoaderState.disks[drive])
+    if (drive < 0 || drive >= 26 || !GProcessState.disks[drive])
         return ERROR_INVALID_DRIVE;
-    const char *base = *path == '\\' || *path == '/' ? "" : GLoaderState.current_dir[drive];
+    const char *base = *path == '\\' || *path == '/' ? "" : GProcessState.current_dir[drive];
     if (!base)
         base = "";
     while (*path == '\\' || *path == '/')
@@ -511,7 +511,7 @@ APIRET DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg, PSZ 
 {
     TRACE_NATIVE("DosExecPgm('%s', %u, %u, '%s', '%s', %p, '%s')", pObjname, (uint)cbObjname,
                  (uint)execFlag, pArg, pEnv, pRes, pName);
-    if (GLoaderState.trace_native && pArg)
+    if (GProcessState.trace_native && pArg)
     {
         fprintf(stderr, "2INE TRACE: DosExecPgm arg block:");
         for (const char *p = pArg; p < (pArg + 1024); p++)
@@ -652,7 +652,7 @@ APIRET DosSetProcessCp(ULONG cp)
         FIXME("non-US codepages unsupported at the moment");
         return ERROR_INVALID_CODE_PAGE;
     }
-    GLoaderState.process_codepage = (USHORT)cp;
+    GProcessState.process_codepage = (USHORT)cp;
     return NO_ERROR;
 }
 
@@ -667,9 +667,9 @@ APIRET16 Dos16GetPID(PPIDINFO16 ppidinfo)
     PTIB2 tib2 = (PTIB2)LX_GETTIB2();
 
     // This interface has 16-bit fields even when host IDs are wider.
-    ppidinfo->pid = (USHORT)GLoaderState.pib.pib_ulpid;
+    ppidinfo->pid = (USHORT)GProcessState.pib.pib_ulpid;
     ppidinfo->tid = (USHORT)tib2->tib2_ultid;
-    ppidinfo->pidParent = (USHORT)GLoaderState.pib.pib_ulppid;
+    ppidinfo->pidParent = (USHORT)GProcessState.pib.pib_ulppid;
     return NO_ERROR;
 }
 
@@ -713,7 +713,7 @@ static int inheritedHostVariable(const char *entry)
 static char **calcEnvp(const char *os2env, const char *exe, const char *arguments,
                        const LaunchStart *start, APIRET *err)
 {
-    const char *guest = os2env ? os2env : GLoaderState.pib.pib_pchenv;
+    const char *guest = os2env ? os2env : GProcessState.pib.pib_pchenv;
     if (!guest)
     {
         *err = ERROR_INVALID_PARAMETER;
@@ -747,8 +747,8 @@ static char **calcEnvp(const char *os2env, const char *exe, const char *argument
             if (!result[at++])
                 goto failed;
         }
-    const char *extended[] = {GLoaderState.begin_libpath, GLoaderState.end_libpath,
-                              GLoaderState.libpath_strict ? "T" : "F"};
+    const char *extended[] = {GProcessState.begin_libpath, GProcessState.end_libpath,
+                              GProcessState.libpath_strict ? "T" : "F"};
     const char *extended_names[] = {"BEGIN", "END", "STRICT"};
     for (unsigned i = 0; i < 3; i++)
     {
@@ -762,7 +762,7 @@ static char **calcEnvp(const char *os2env, const char *exe, const char *argument
     for (int drive = 0; drive < 26; drive++)
     {
         const char *directory =
-            drive == start_drive ? start->directory : GLoaderState.current_dir[drive];
+            drive == start_drive ? start->directory : GProcessState.current_dir[drive];
         if (directory)
         {
             size_t length = strlen(directory) + 32;
@@ -776,7 +776,7 @@ static char **calcEnvp(const char *os2env, const char *exe, const char *argument
     if (!result[at])
         goto failed;
     snprintf(result[at++], 32, "TWOINE_CURRENT_DRIVE=%c",
-             'A' + (start_drive >= 0 ? start_drive : GLoaderState.current_disk - 1));
+             'A' + (start_drive >= 0 ? start_drive : GProcessState.current_disk - 1));
     if (start && start->record)
     {
         size_t length = strlen(start->record) + sizeof LX_LAUNCH_RECORD_VARIABLE + 1;
@@ -878,7 +878,7 @@ char **calcArgv(const char *os2args, const char *progpath, APIRET *err)
 APIRET16 Dos16GetEnv(PUSHORT psel, PUSHORT pcmdoffset)
 {
     TRACE_NATIVE("Dos16GetEnv(%p, %p)", psel, pcmdoffset);
-    const uint32 cmd1616 = GLoaderState.convert32to1616(GLoaderState.pib.pib_pchcmd);
+    const uint32 cmd1616 = GProcessState.convert32to1616(GProcessState.pib.pib_pchcmd);
     if (pcmdoffset)
         *pcmdoffset = (USHORT)(cmd1616 & 0xFFFF);
     if (psel)

@@ -122,13 +122,13 @@ ULONG lx_pm_bitmap_create_data(HPS ps, PVOID header, ULONG options, PVOID bits, 
 
 ULONG lx_pm_bitmap_load(HPS ps, HMODULE module, ULONG id, LONG width, LONG height)
 {
-    if (!lx_pm_valid_ps(ps) || width < 0 || height < 0 || !GLoaderState.queryResourceSize ||
-        !GLoaderState.getResource)
+    if (!lx_pm_valid_ps(ps) || width < 0 || height < 0 || !GProcessState.queryResourceSize ||
+        !GProcessState.getResource)
         return 0;
     uint32 size = 0;
     void *resource = NULL;
-    if (GLoaderState.queryResourceSize(module, 2, id, &size) || size < 26 ||
-        GLoaderState.getResource(module, 2, id, &resource))
+    if (GProcessState.queryResourceSize(module, 2, id, &size) || size < 26 ||
+        GProcessState.getResource(module, 2, id, &resource))
         return 0;
     const uint8 *p = resource;
     size_t offset = lx_guest_load_u16(p) == 0x4142 ? 14 : 0;
@@ -181,8 +181,8 @@ ULONG lx_pm_bitmap_load(HPS ps, HMODULE module, ULONG id, LONG width, LONG heigh
         result = scaled;
     }
 done:
-    if (GLoaderState.freeResource)
-        GLoaderState.freeResource(resource);
+    if (GProcessState.freeResource)
+        GProcessState.freeResource(resource);
     return result;
 }
 

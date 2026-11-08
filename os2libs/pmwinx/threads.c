@@ -29,7 +29,7 @@ static void destroy_thread(void *resource)
 {
     Open32Thread *thread = resource;
     if (thread->arguments)
-        lx_execution_unmap(GLoaderState.execution, thread->arguments);
+        lx_execution_unmap(GProcessState.execution, thread->arguments);
     lx_host_monitor_destroy(thread->monitor);
     free(thread);
 }
@@ -70,24 +70,25 @@ static uint32 complete_thread(uint8 *a)
 
 static void initialize(void)
 {
-    entry_code = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    entry_code = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     if (!entry_code)
         return;
     uint8 *code = lx_execution_mapping_host(entry_code);
     uint32 base = lx_execution_mapping_address(entry_code);
     LxExecutionApi32 start = {start_thread, 4, 0, LX_ABI_STACK32};
     LxExecutionApi32 complete = {complete_thread, 4, 0, LX_ABI_STACK32};
-    BOOL ready = lx_execution_emit_bridge32(GLoaderState.execution, code + 0x100, 0x100, &start) &&
-                 lx_execution_emit_bridge32(GLoaderState.execution, code + 0x200, 0x100, &complete);
+    BOOL ready =
+        lx_execution_emit_bridge32(GProcessState.execution, code + 0x100, 0x100, &start) &&
+        lx_execution_emit_bridge32(GProcessState.execution, code + 0x200, 0x100, &complete);
     uint8 body[] = {0x56, 0x8b, 0x74, 0x24, 0x08, 0xff, 0x76, 0x08, 0xb8, 0,    0,    0,    0,
                     0xff, 0xd0, 0x83, 0xc4, 0x04, 0xff, 0x76, 0x04, 0xff, 0x16, 0x83, 0xc4, 0x04,
                     0x50, 0xb8, 0,    0,    0,    0,    0xff, 0xd0, 0x83, 0xc4, 0x04, 0x5e, 0xc3};
     lx_guest_store_u32(body + 9, base + 0x100);
     lx_guest_store_u32(body + 28, base + 0x200);
     memcpy(code, body, sizeof body);
-    if (!ready || !lx_execution_protect(GLoaderState.execution, entry_code, 5))
+    if (!ready || !lx_execution_protect(GProcessState.execution, entry_code, 5))
     {
-        lx_execution_unmap(GLoaderState.execution, entry_code);
+        lx_execution_unmap(GProcessState.execution, entry_code);
         entry_code = NULL;
     }
 }
@@ -98,7 +99,7 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
     TRACE_NATIVE("CreateThread(%p, %u, %X, %X, %X, %p)", security, stack_bytes, procedure,
                  parameter, flags, id);
     if (security || (flags & ~4u) || stack_bytes > 0x1000000 ||
-        !lx_execution_memory(GLoaderState.execution, procedure, 1, LX_GUEST_EXECUTE))
+        !lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
     {
         open32SetError(87);
         return 0;
@@ -122,7 +123,7 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
         open32SetError(8);
         return 0;
     }
-    thread->arguments = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
+    thread->arguments = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
     thread->result = 259;
     thread->suspended = (flags & 4) != 0;
     if (thread->arguments)
@@ -265,7 +266,7 @@ VOID ExitThread(ULONG result)
     lx_guest_store_u32(arguments, result);
     if (current_thread.resource)
         complete_thread(arguments);
-    GLoaderState.dosExit(0, result);
+    GProcessState.dosExit(0, result);
     abort();
 }
 

@@ -62,12 +62,12 @@ LX_PRIVATE LxHostMutex *GCritSec;
 
 LX_NATIVE_CONSTRUCTOR(doscalls)
 {
-    GLoaderState.beep = DosBeep;
-    GLoaderState.dosExit = DosExit;
-    GLoaderState.writeFile = DosWrite;
-    GLoaderState.getResource = DosGetResource;
-    GLoaderState.queryResourceSize = DosQueryResourceSize;
-    GLoaderState.freeResource = DosFreeResource;
+    GProcessState.beep = DosBeep;
+    GProcessState.dosExit = DosExit;
+    GProcessState.writeFile = DosWrite;
+    GProcessState.getResource = DosGetResource;
+    GProcessState.queryResourceSize = DosQueryResourceSize;
+    GProcessState.freeResource = DosFreeResource;
 
     if (!(GMutexDosCalls = lx_host_mutex_create(0, 0)))
     {
@@ -113,19 +113,19 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
 
     FIXME("Maybe set this up in lx_loader and make it NULL in lib2ine");
     FIXME("ginfo's time fields update in a timer interrupt!  :O");
-    ginfo = (GINFOSEG *)GLoaderState.allocSegment(&ginfosel, 0);
-    linfo = (LINFOSEG *)GLoaderState.allocSegment(&linfosel, 0);
+    ginfo = (GINFOSEG *)GProcessState.allocSegment(&ginfosel, 0);
+    linfo = (LINFOSEG *)GProcessState.allocSegment(&linfosel, 0);
     /* Host-side users of PM libraries load this module with no guest to read info segments. */
-    if ((!ginfo || !linfo) && !GLoaderState.execution)
+    if ((!ginfo || !linfo) && !GProcessState.execution)
     {
         if (ginfo)
-            GLoaderState.freeSelector(ginfosel);
+            GProcessState.freeSelector(ginfosel);
         if (linfo)
-            GLoaderState.freeSelector(linfosel);
+            GProcessState.freeSelector(linfosel);
         ginfo = NULL;
         linfo = NULL;
         ginfosel = linfosel = 0;
-        GLoaderState.freeSharedMemory = DosFreeMem;
+        GProcessState.freeSharedMemory = DosFreeMem;
         return;
     }
     if ((!ginfo) || (!linfo))
@@ -159,30 +159,30 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     ginfo->sgMax = 99;
     ginfo->cHugeShift = 0;
     ginfo->fProtectModeOnly = 1;
-    ginfo->pidForeground = GLoaderState.pib.pib_ulpid;
+    ginfo->pidForeground = GProcessState.pib.pib_ulpid;
     ginfo->csecMaxWait = 1;
     ginfo->cmsecMinSlice = 1;
     ginfo->cmsecMaxSlice = 10;
     ginfo->bootdrive = 3;
     ginfo->csgWindowableVioMax = 99;
     ginfo->csgPMMax = 99;
-    linfo->pidCurrent = GLoaderState.pib.pib_ulpid;
-    linfo->pidParent = GLoaderState.pib.pib_ulppid;
-    GLoaderState.freeSharedMemory = DosFreeMem;
+    linfo->pidCurrent = GProcessState.pib.pib_ulpid;
+    linfo->pidParent = GProcessState.pib.pib_ulppid;
+    GProcessState.freeSharedMemory = DosFreeMem;
 }
 
 LX_NATIVE_DESTRUCTOR(doscalls)
 {
-    if (GLoaderState.freeSharedMemory == DosFreeMem)
-        GLoaderState.freeSharedMemory = NULL;
+    if (GProcessState.freeSharedMemory == DosFreeMem)
+        GProcessState.freeSharedMemory = NULL;
     cleanupTimers();
     cleanupSuballocation();
     cleanupThreadSuspension();
-    GLoaderState.dosExit = NULL;
-    GLoaderState.writeFile = NULL;
-    GLoaderState.getResource = NULL;
-    GLoaderState.queryResourceSize = NULL;
-    GLoaderState.freeResource = NULL;
+    GProcessState.dosExit = NULL;
+    GProcessState.writeFile = NULL;
+    GProcessState.getResource = NULL;
+    GProcessState.queryResourceSize = NULL;
+    GProcessState.freeResource = NULL;
     destroyModuleResources();
 
     ExitListItem *next = GExitList;
@@ -204,9 +204,9 @@ LX_NATIVE_DESTRUCTOR(doscalls)
     MaxHFiles = 0;
 
     if (ginfo)
-        GLoaderState.freeSelector(ginfosel);
+        GProcessState.freeSelector(ginfosel);
     if (linfo)
-        GLoaderState.freeSelector(linfosel);
+        GProcessState.freeSelector(linfosel);
     lx_host_mutex_destroy(GMutexDosCalls);
     lx_host_mutex_destroy(GMutexDosBeep);
     lx_host_mutex_destroy(GMutexDir16);

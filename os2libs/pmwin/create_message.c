@@ -5,7 +5,7 @@
 
 MRESULT sendCreateMessage(Window *window, const CREATESTRUCT *creation)
 {
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     if (!execution || !window->window_proc || (uintptr_t)window->window_proc > UINT32_MAX ||
         !lx_execution_memory(execution, (uint32)(uintptr_t)window->window_proc, 1,
                              LX_GUEST_EXECUTE))
@@ -51,7 +51,7 @@ MRESULT sendCreateMessage(Window *window, const CREATESTRUCT *creation)
 
 MRESULT sendOwnerItem(Window *owner, ULONG id, OWNERITEM *item)
 {
-    LxExecution *execution = GLoaderState.execution;
+    LxExecution *execution = GProcessState.execution;
     if (!execution || (uintptr_t)owner->window_proc > UINT32_MAX ||
         !lx_execution_memory(execution, (uint32)(uintptr_t)owner->window_proc, 1, LX_GUEST_EXECUTE))
         return sendMessage(owner, WM_DRAWITEM, (MPARAM)(uintptr_t)id, item);

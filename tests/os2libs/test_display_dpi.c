@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 {
     CHECK(argc == 2);
     unsigned dpi = (unsigned)strtoul(argv[1], NULL, 10);
-    CHECK(GLoaderState.display_dpi == dpi);
+    CHECK(GProcessState.display_dpi == dpi);
     HAB anchor = WinInitialize(0);
     CHECK(anchor);
     HMQ queue = WinCreateMsgQueue(anchor, 0);
@@ -132,13 +132,13 @@ int main(int argc, char **argv)
     CHECK(!WinMapDlgPoints(0x7fffffffu, &dialog, 1, TRUE));
     CHECK(WinMapDlgPoints(HWND_DESKTOP, NULL, 0, TRUE));
     CHECK(!WinMapDlgPoints(HWND_DESKTOP, NULL, 1, TRUE));
-    GLoaderState.display_dpi = 96;
+    GProcessState.display_dpi = 96;
     POINTL cached = {4, 8};
     CHECK(WinMapDlgPoints(HWND_DESKTOP, &cached, 1, TRUE) && cached.x == 6 && cached.y == 16);
-    GLoaderState.display_dpi = 120;
+    GProcessState.display_dpi = 120;
     cached = (POINTL){4, 8};
     CHECK(WinMapDlgPoints(HWND_DESKTOP, &cached, 1, TRUE) && cached.x == 8 && cached.y == 20);
-    GLoaderState.display_dpi = dpi;
+    GProcessState.display_dpi = dpi;
     cached = (POINTL){4, 8};
     CHECK(WinMapDlgPoints(HWND_DESKTOP, &cached, 1, TRUE) && cached.x == cases[selected].cell.x &&
           cached.y == cases[selected].cell.y);

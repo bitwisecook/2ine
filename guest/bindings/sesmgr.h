@@ -3,7 +3,7 @@
 static uint32 bridge32_DosSetSession(uint8 *a)
 {
     LxGuestBorrow input = {0};
-    if (!lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 6, LX_GUEST_READ,
+    if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 6, LX_GUEST_READ,
                              &input))
         return ERROR_INVALID_PARAMETER;
     STATUSDATA status = {lx_guest_load_u16(input.host), lx_guest_load_u16(input.host + 2),
@@ -29,15 +29,15 @@ static uint32 bridge32_DosStartSession(uint8 *a)
     uint32 pointer = lx_guest_load_u32(a), result = ERROR_INVALID_PARAMETER;
     char *strings[5] = {0};
     char *environment = NULL;
-    if (!lx_execution_borrow(GLoaderState.execution, pointer, 2, LX_GUEST_READ, &input))
+    if (!lx_execution_borrow(GProcessState.execution, pointer, 2, LX_GUEST_READ, &input))
         return result;
     unsigned length = lx_guest_load_u16(input.host);
     lx_execution_release(&input);
     if (length < 24 || length > 60 ||
-        !lx_execution_borrow(GLoaderState.execution, pointer, length, LX_GUEST_READ, &input) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, pointer, length, LX_GUEST_READ, &input) ||
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
                              &sid) ||
-        !lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
+        !lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), 4, LX_GUEST_WRITE,
                              &pid))
         goto done;
     const uint8 *p = input.host;
@@ -53,7 +53,7 @@ static uint32 bridge32_DosStartSession(uint8 *a)
         if (address)
         {
             strings[i] =
-                lx_execution_copy_string(GLoaderState.execution, address, i == 2 ? 4096 : 1024);
+                lx_execution_copy_string(GProcessState.execution, address, i == 2 ? 4096 : 1024);
             if (!strings[i])
                 goto done;
         }
@@ -66,7 +66,7 @@ static uint32 bridge32_DosStartSession(uint8 *a)
     if (length >= 28 && lx_guest_load_u32(p + 24))
     {
         environment =
-            lx_execution_copy_strings(GLoaderState.execution, lx_guest_load_u32(p + 24), 65536, 0);
+            lx_execution_copy_strings(GProcessState.execution, lx_guest_load_u32(p + 24), 65536, 0);
         if (!environment)
             goto done;
         data.Environment = (PBYTE)environment;
@@ -93,7 +93,7 @@ static uint32 bridge32_DosStartSession(uint8 *a)
     {
         data.ObjectBuffLen = lx_guest_load_u32(p + 56);
         uint32 address = lx_guest_load_u32(p + 52);
-        if (address && !lx_execution_borrow(GLoaderState.execution, address, data.ObjectBuffLen,
+        if (address && !lx_execution_borrow(GProcessState.execution, address, data.ObjectBuffLen,
                                             LX_GUEST_WRITE, &object))
             goto done;
         if (!address && data.ObjectBuffLen)

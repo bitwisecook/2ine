@@ -26,7 +26,7 @@ BOOL open32AbortCheck(ULONG h)
         return FALSE;
     if (!dc->abort_proc)
         return TRUE;
-    return lx_execution_callback32_4(GLoaderState.execution, dc->abort_proc, h, 0, 0, 0) != 0;
+    return lx_execution_callback32_4(GProcessState.execution, dc->abort_proc, h, 0, 0, 0) != 0;
 }
 
 BOOL ResetDC(ULONG h, PVOID mode)
@@ -265,13 +265,13 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
             return 0;
         const uint8 *record = input;
         ULONG text = lx_guest_load_u32(record + 4), advances = lx_guest_load_u32(record + 8);
-        char *string = text ? lx_execution_copy_string(GLoaderState.execution, text, 65536) : NULL;
+        char *string = text ? lx_execution_copy_string(GProcessState.execution, text, 65536) : NULL;
         if (!string)
             return 0;
         ULONG length = (ULONG)strlen(string);
         LxGuestBorrow widths = {0};
         BOOL ready = !advances || !length ||
-                     lx_execution_borrow(GLoaderState.execution, advances, (size_t)length * 4,
+                     lx_execution_borrow(GProcessState.execution, advances, (size_t)length * 4,
                                          LX_GUEST_READ, &widths);
         LONG result =
             ready && ExtTextOut(h, lx_guest_load_u16(record), lx_guest_load_u16(record + 2), 0,
@@ -321,7 +321,7 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
             return 0;
         ULONG address = 0;
         LxGuestMapping *title =
-            lx_execution_map(GLoaderState.execution, 0, (size_t)count + 1, 3, 0);
+            lx_execution_map(GProcessState.execution, 0, (size_t)count + 1, 3, 0);
         if (!title)
         {
             open32SetError(8);
@@ -334,7 +334,7 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
         lx_guest_store_u32(info, 12);
         lx_guest_store_u32(info + 4, address);
         LONG result = StartDoc(h, info);
-        lx_execution_unmap(GLoaderState.execution, title);
+        lx_execution_unmap(GProcessState.execution, title);
         if (result > 0)
             StartPage(h);
         return result;

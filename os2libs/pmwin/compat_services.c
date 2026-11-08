@@ -63,19 +63,19 @@ BOOL WinCpTranslateString(HAB hab, ULONG from, PSZ input, ULONG to, ULONG capaci
 
 ULONG WinLoadLibrary(HAB hab, PSZ name)
 {
-    if (!getAnchorBlock(hab) || !name || !GLoaderState.loadModule)
+    if (!getAnchorBlock(hab) || !name || !GProcessState.loadModule)
         return 0;
-    LxModule *m = GLoaderState.loadModule(name);
+    LxModule *m = GProcessState.loadModule(name);
     return m ? m->handle : 0;
 }
 
 BOOL WinDeleteLibrary(HAB hab, ULONG handle)
 {
     LxHandleBorrow b = {0};
-    if (!getAnchorBlock(hab) || !GLoaderState.freeModule ||
+    if (!getAnchorBlock(hab) || !GProcessState.freeModule ||
         !lx_handle_borrow(handle, LX_HANDLE_MODULE, &b))
         return FALSE;
-    GLoaderState.freeModule(b.resource);
+    GProcessState.freeModule(b.resource);
     lx_handle_release(&b);
     return TRUE;
 }
@@ -306,16 +306,16 @@ BOOL WinQueryQueueInfo(HMQ queue, PVOID out, ULONG bytes)
     ULONG count = 0;
     for (MessageQueueItem *i = a->message_queue.head; i; i = i->next)
         count++;
-    LxTIB *t = GLoaderState.getOs2Tib ? GLoaderState.getOs2Tib() : NULL;
+    LxTIB *t = GProcessState.getOs2Tib ? GProcessState.getOs2Tib() : NULL;
     ULONG tid = 0;
     if (t)
     {
         uint8 b[4];
-        if (lx_execution_read(GLoaderState.execution, t->tib_ptib2, b, 4))
+        if (lx_execution_read(GProcessState.execution, t->tib_ptib2, b, 4))
             tid = lx_guest_load_u32(b);
     }
     lx_guest_store_u32(data, 20);
-    lx_guest_store_u32(data + 4, GLoaderState.pib.pib_ulpid);
+    lx_guest_store_u32(data + 4, GProcessState.pib.pib_ulpid);
     lx_guest_store_u32(data + 8, tid);
     lx_guest_store_u32(data + 12, count);
     memcpy(out, data, bytes < 20 ? bytes : 20);
@@ -326,7 +326,7 @@ BOOL WinSetCp(HMQ queue, ULONG cp)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
     if (!cp)
-        cp = GLoaderState.process_codepage ? GLoaderState.process_codepage : 437;
+        cp = GProcessState.process_codepage ? GProcessState.process_codepage : 437;
     if (!a || a->message_queue.hmq != queue || (cp != 437 && cp != 850 && cp != 1004))
         return FALSE;
     a->message_queue.codepage = cp;
@@ -473,7 +473,7 @@ PVOID WinGetErrorInfo(HAB hab)
     if (!p)
         return NULL;
     p->mapping =
-        lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(GProcessState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!p->mapping)
     {
         free(p);
@@ -517,7 +517,7 @@ BOOL WinFreeErrorInfo(PVOID address)
         return FALSE;
     ErrorAllocation *p = *link;
     *link = p->next;
-    lx_execution_unmap(GLoaderState.execution, p->mapping);
+    lx_execution_unmap(GProcessState.execution, p->mapping);
     free(p);
     return TRUE;
 }

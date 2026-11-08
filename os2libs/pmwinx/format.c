@@ -15,7 +15,7 @@ static BOOL guest_argument(void *state, ULONG *value)
 {
     GuestArguments *args = state;
     if (!args->address || args->address > UINT32_MAX - 4 ||
-        !lx_execution_read(GLoaderState.execution, args->address, value, 4))
+        !lx_execution_read(GProcessState.execution, args->address, value, 4))
         return FALSE;
     args->address += 4;
     return TRUE;
@@ -41,7 +41,7 @@ static char *argument_string(ULONG address, LONG precision)
     for (unsigned i = 0; i < limit; i++)
     {
         if ((uint64)address + i > UINT32_MAX ||
-            !lx_execution_read(GLoaderState.execution, address + i, text + i, 1))
+            !lx_execution_read(GProcessState.execution, address + i, text + i, 1))
         {
             free(text);
             return NULL;
@@ -193,10 +193,10 @@ LONG open32FormatGuest(PSZ format, ULONG arguments, PSZ output)
 static char *format_snapshot(PSZ format)
 {
     uint32 address;
-    if (!format || !GLoaderState.execution ||
-        !lx_execution_address(GLoaderState.execution, format, 1, LX_GUEST_READ, &address))
+    if (!format || !GProcessState.execution ||
+        !lx_execution_address(GProcessState.execution, format, 1, LX_GUEST_READ, &address))
         return NULL;
-    return lx_execution_copy_string(GLoaderState.execution, address, 4096);
+    return lx_execution_copy_string(GProcessState.execution, address, 4096);
 }
 
 static LONG write_output(PSZ output, const char *formatted, LONG count)
@@ -204,9 +204,9 @@ static LONG write_output(PSZ output, const char *formatted, LONG count)
     uint32 address;
     if (count >= 0 &&
         (!output ||
-         !lx_execution_address(GLoaderState.execution, output, (size_t)count + 1, LX_GUEST_WRITE,
+         !lx_execution_address(GProcessState.execution, output, (size_t)count + 1, LX_GUEST_WRITE,
                                &address) ||
-         !lx_execution_write(GLoaderState.execution, address, formatted, (size_t)count + 1)))
+         !lx_execution_write(GProcessState.execution, address, formatted, (size_t)count + 1)))
     {
         open32SetError(87);
         return -1;
