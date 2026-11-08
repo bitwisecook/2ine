@@ -36,7 +36,6 @@ enum
     HOTFIX_ENTRIES = 8,
     SPARE_DNODES = 4,
     USER_TABLE_SECTORS = 8,
-    DEFAULT_CODEPAGE = 437,
     CODEPAGE_TABLE = 26, /* offset of table 0 in the code-page data sector */
     ROOT_ENTRY_BYTES = 36
 
@@ -71,7 +70,7 @@ int tb_hpfs_format(const char *path, uint64_t bytes)
     disk.sectors = (uint32_t)(bytes / HPFS_SECTOR_BYTES);
     disk.bands = (disk.sectors + HPFS_BAND_SECTORS - 1) / HPFS_BAND_SECTORS;
     disk.writable = 1;
-    disk.codepage = DEFAULT_CODEPAGE;
+    disk.codepage = HPFS_DEFAULT_CODEPAGE;
     int ok = tb_image_lock_source(disk.file, 1);
     disk.bitmaps = malloc((size_t)disk.bands * HPFS_BITMAP_BYTES);
     disk.bitmap_locations = calloc(disk.bands, sizeof *disk.bitmap_locations);
@@ -137,8 +136,8 @@ int tb_hpfs_format(const char *path, uint64_t bytes)
         disk.boot[BOOT_SIGNATURE + 1] = 0xaa;
         tb_put_le32(disk.super, HPFS_SUPERBLOCK_SIGNATURE);
         tb_put_le32(disk.super + HPFS_SUPER_SIGNATURE2, HPFS_SUPERBLOCK_SIGNATURE2);
-        disk.super[HPFS_SUPER_VERSION] = 2;
-        disk.super[HPFS_SUPER_FUNCTIONAL_VERSION] = 2;
+        disk.super[HPFS_SUPER_VERSION] = HPFS_VERSION;
+        disk.super[HPFS_SUPER_FUNCTIONAL_VERSION] = HPFS_FUNCTIONAL_VERSION;
         tb_put_le32(disk.super + HPFS_SUPER_SECTORS, disk.sectors);
         tb_put_le32(disk.super + HPFS_SUPER_BITMAP_LIST, disk.bitmap_list);
         tb_put_le32(disk.super + HPFS_SUPER_BAD_LIST, bad);
@@ -168,20 +167,20 @@ int tb_hpfs_format(const char *path, uint64_t bytes)
         tb_put_le32(info, HPFS_CODEPAGE_INFO_SIGNATURE);
         tb_put_le32(info + HPFS_CPINFO_COUNT, 1);
         tb_put_le16(entry + HPFS_CPINFO_COUNTRY, 1);
-        tb_put_le16(entry + HPFS_CPINFO_CODEPAGE, DEFAULT_CODEPAGE);
+        tb_put_le16(entry + HPFS_CPINFO_CODEPAGE, HPFS_DEFAULT_CODEPAGE);
         tb_put_le32(entry + HPFS_CPINFO_DATA, cpdata);
         tb_put_le32(data, HPFS_CODEPAGE_DATA_SIGNATURE);
         tb_put_le16(data + HPFS_CPDATA_COUNT, 1);
         tb_put_le16(data + HPFS_CPDATA_OFFSETS, CODEPAGE_TABLE);
         tb_put_le16(table0 + HPFS_CPTABLE_COUNTRY, 1);
-        tb_put_le16(table0 + HPFS_CPTABLE_CODEPAGE, DEFAULT_CODEPAGE);
+        tb_put_le16(table0 + HPFS_CPTABLE_CODEPAGE, HPFS_DEFAULT_CODEPAGE);
         for (unsigned i = 0; i < 256; i++)
             disk.case_map[i] = i < 128 ? toupper(i) : i;
         unsigned char *case_map = table0 + HPFS_CPTABLE_CASE_MAP;
         for (unsigned i = 0; i < 128; i++)
         {
-            unsigned value =
-                ff_uni2oem(ff_wtoupper(ff_oem2uni(i + 128, DEFAULT_CODEPAGE)), DEFAULT_CODEPAGE);
+            unsigned value = ff_uni2oem(ff_wtoupper(ff_oem2uni(i + 128, HPFS_DEFAULT_CODEPAGE)),
+                                        HPFS_DEFAULT_CODEPAGE);
             case_map[i] = value && value <= 255 ? value : i + 128;
             disk.case_map[i + 128] = case_map[i];
         }

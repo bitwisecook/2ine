@@ -20,6 +20,19 @@
 #define FATFS_DRIVE "0:"
 #define FATFS_ROOT FATFS_DRIVE "/"
 
+enum
+{
+    /* Bytes copied per f_read or f_write call. */
+    TRANSFER_BYTES = 65536,
+    /* FAT entries 0 and 1 are reserved, so n_fatent counts two more than the clusters. */
+    FAT_RESERVED_ENTRIES = 2,
+    /* An exFAT label holds 11 UTF-16 units, up to 3 UTF-8 bytes each, plus the terminator. */
+    LABEL_BUFFER_BYTES = 48,
+    FORMAT_MIN_BYTES = 1024 * 1024,
+    FORMAT_FAT_COPIES = 2,
+    FORMAT_WORK_BYTES = 65536
+};
+
 static struct
 {
     FILE *file;
@@ -143,13 +156,13 @@ static int begin_source(const char *source, int writable, int mount)
     if (!tb_image_lock_source(media.file, writable) || fseeko(media.file, 0, SEEK_END))
         goto fail;
     int64_t size = ftello(media.file);
-    if (size < 512)
+    if (size < FF_MIN_SS)
     {
         errno = EINVAL;
         goto fail;
     }
     media.bytes = size;
-    media.sector = 512;
+    media.sector = FF_MIN_SS;
     media.writable = writable;
     TbVolumeProbe probe;
     tb_volume_probe_file(media.file, media.bytes, &probe);
@@ -255,17 +268,17 @@ int tb_fat_info(const char *path, TbImageInfo *info)
         info->readonly = tb_image_protected(path) || !!(file.fattrib & AM_RDO);
         info->sector_bytes = media.sector;
         info->cluster_bytes = media.fs.csize * media.sector;
-        info->capacity = (uint64_t)(media.fs.n_fatent - 2) * info->cluster_bytes;
+        info->capacity = (uint64_t)(media.fs.n_fatent - FAT_RESERVED_ENTRIES) * info->cluster_bytes;
         strcpy(info->filesystem, media.fs.fs_type == FS_EXFAT   ? "EXFAT"
                                  : media.fs.fs_type == FS_FAT32 ? "FAT32"
                                                                 : "FAT");
-        char label[48];
+        char label[LABEL_BUFFER_BYTES];
         DWORD serial = 0;
         if (f_getlabel(FATFS_DRIVE, label, &serial) == FR_OK)
         {
             size_t n = strlen(label);
-            if (n > 11)
-                n = 11;
+            if (n > sizeof info->label - 1)
+                n = sizeof info->label - 1;
             memcpy(info->label, label, n);
         }
         info->serial = serial;
@@ -356,18 +369,13 @@ FILE *tb_fat_fopen(const char *path)
         ok = snapshot != NULL;
     }
 
-    enum
-    {
-        BUFFER_SIZE = 65536
-    };
-
-    unsigned char *data = ok ? malloc(BUFFER_SIZE) : NULL;
+    unsigned char *data = ok ? malloc(TRANSFER_BYTES) : NULL;
     if (ok && !data)
         ok = 0;
     UINT n;
     while (ok)
     {
-        ok = result(f_read(&file, data, BUFFER_SIZE, &n));
+        ok = result(f_read(&file, data, TRANSFER_BYTES, &n));
         if (!ok || !n)
             break;
         if (fwrite(data, 1, n, snapshot) != n)
@@ -513,7 +521,8 @@ int tb_fat_modify(const char *path, const char *expected, int action, uint64_t o
             if (ok && action == TB_FS_WRITE)
                 for (size_t at = 0; at < size;)
                 {
-                    UINT n = size - at > 65536 ? 65536 : (UINT)(size - at), actual;
+                    UINT n = size - at > TRANSFER_BYTES ? TRANSFER_BYTES : (UINT)(size - at),
+                         actual;
                     if (!result(f_write(&file, (const unsigned char *)data + at, n, &actual)))
                     {
                         ok = 0;
@@ -540,7 +549,7 @@ int tb_fat_modify(const char *path, const char *expected, int action, uint64_t o
 
 int tb_fat_format(const char *path, const char *filesystem, uint64_t bytes)
 {
-    if (bytes < 1024 * 1024 || bytes > INT64_MAX || bytes % 512)
+    if (bytes < FORMAT_MIN_BYTES || bytes > INT64_MAX || bytes % FF_MIN_SS)
     {
         errno = EINVAL;
         return 0;
@@ -564,8 +573,8 @@ int tb_fat_format(const char *path, const char *filesystem, uint64_t bytes)
     {
         MKFS_PARM options = {0};
         options.fmt = (!strcmp(filesystem, "exfat") ? FM_EXFAT : FM_FAT32) | FM_SFD;
-        options.n_fat = 2;
-        unsigned char work[65536];
+        options.n_fat = FORMAT_FAT_COPIES;
+        unsigned char work[FORMAT_WORK_BYTES];
         ok = result(f_mkfs(FATFS_DRIVE, &options, work, sizeof work));
     }
     end();

@@ -44,6 +44,15 @@ enum
 
 };
 
+/* Superblock versions read and written: version 2, functional version 2 (volumes up to
+   4 GB); later functional versions are read only. */
+#define HPFS_VERSION 2
+#define HPFS_FUNCTIONAL_VERSION 2
+/* Smallest volume accepted, in sectors (1 MB). */
+#define HPFS_MIN_SECTORS 2048u
+/* Code page of a volume without code-page tables, and of new volumes. */
+#define HPFS_DEFAULT_CODEPAGE 437
+
 /* Superblock (sector 16) fields. */
 enum
 {

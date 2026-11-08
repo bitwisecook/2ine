@@ -175,7 +175,7 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
     d->sectors = tb_le32(d->super + HPFS_SUPER_SECTORS);
     d->root = tb_le32(d->super + HPFS_SUPER_ROOT);
     if (tb_le32(d->super + HPFS_SUPER_SIGNATURE2) != HPFS_SUPERBLOCK_SIGNATURE2 ||
-        d->super[HPFS_SUPER_VERSION] != 2 || d->sectors < 2048 ||
+        d->super[HPFS_SUPER_VERSION] != HPFS_VERSION || d->sectors < HPFS_MIN_SECTORS ||
         ((uint64_t)d->base + d->sectors) * HPFS_SECTOR_BYTES > d->bytes)
     {
         errno = EINVAL;
@@ -193,7 +193,7 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
     }
     /* Hotfix remapping and HPFS386 allocation/ACL variants require their own backend. */
     if (tb_le32(d->spare + HPFS_SPARE_HOTFIX_USED) ||
-        (write && (d->super[HPFS_SUPER_FUNCTIONAL_VERSION] > 2 ||
+        (write && (d->super[HPFS_SUPER_FUNCTIONAL_VERSION] > HPFS_FUNCTIONAL_VERSION ||
                    d->spare[HPFS_SPARE_FLAGS] & HPFS_SPARE_NEEDS_CHECK)))
     {
         errno = ENOTSUP;
@@ -220,7 +220,7 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
         errno = EINVAL;
         goto fail;
     }
-    d->codepage = 437;
+    d->codepage = HPFS_DEFAULT_CODEPAGE;
     for (unsigned i = 0; i < 256; i++)
         d->case_map[i] = i < 128 ? toupper(i) : i;
     uint32_t cpinfo = tb_le32(d->spare + HPFS_SPARE_CODEPAGE_INFO);
