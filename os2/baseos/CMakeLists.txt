@@ -23,7 +23,9 @@ twoine_os2_dll(
     doscalls/guarded.c
     doscalls/loader/ldrrsrc.c
     doscalls/task/except.c
-    doscalls/memory.c
+    doscalls/memory/vmapi.c
+    doscalls/memory/selwrk.c
+    doscalls/doscall1/suballoc16.c
     doscalls/doscall1/suballoc.c
     doscalls/threads.c
     doscalls/process.c
