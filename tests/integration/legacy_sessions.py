@@ -72,7 +72,7 @@ def parent():
     g.call(1, 39)
     g.zero(12)
     g.code.extend(b"\xff\x36" + struct.pack("<H", queue))
-    g.call(1, 675)
+    g.call(1, 676)
     g.zero(13)
     g.exit(0)
     return g.image(False)
