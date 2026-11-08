@@ -3,7 +3,7 @@
 twoine_host_function(system system/system.c system/maps.c)
 twoine_host_function(process process/self.c)
 twoine_host_function(thread thread/sync_hooks.c)
-twoine_host_function(fs fs/ranges.c fs/identity.c fs/metadata.c)
+twoine_host_function(fs fs/ranges.c fs/metadata.c)
 twoine_host_function(net net/icmp.c net/interfaces.c)
 twoine_host_function(fatal fatal/report_hooks.c)
 twoine_host_function(print print/zenity_dialog.c)

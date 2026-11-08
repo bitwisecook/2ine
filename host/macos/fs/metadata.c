@@ -1,5 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Persistent opaque file metadata in a private extended-attribute namespace. */
+/* Persistent opaque file metadata in a private extended-attribute namespace,
+   and the native version identity used by persistent profile caches. */
+#define _DARWIN_C_SOURCE 1
 #include "host/posix/fs/file_internal.h"
 #include "storage/volume.h"
 #include <sys/attr.h>
@@ -84,4 +86,19 @@ LxHostFsError lx_host_native_set_attributes(int fd, const char *path, unsigned a
     int failed = fd >= 0 ? fsetxattr(fd, "com.twoine.attributes", &value, sizeof value, 0, 0)
                          : setxattr(path, "com.twoine.attributes", &value, sizeof value, 0, 0);
     return failed ? metadata_error() : LX_HOST_FS_OK;
+}
+
+int lx_host_path_native_identity(const char *path, LxHostFileIdentity *identity)
+{
+    struct stat native;
+    if (stat(path, &native))
+        return -1;
+    *identity = (LxHostFileIdentity){.device = (uint64_t)native.st_dev,
+                                     .file = (uint64_t)native.st_ino,
+                                     .size = native.st_size < 0 ? 0 : (uint64_t)native.st_size,
+                                     .modified = native.st_mtime,
+                                     .changed = native.st_ctime,
+                                     .modified_nanoseconds = (uint32_t)native.st_mtimespec.tv_nsec,
+                                     .changed_nanoseconds = (uint32_t)native.st_ctimespec.tv_nsec};
+    return 0;
 }
