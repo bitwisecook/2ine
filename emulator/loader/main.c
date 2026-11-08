@@ -9,7 +9,7 @@
 #include "host/desktop.h"
 #include "host/fatal.h"
 #include "host/process_supervisor.h"
-#include "emulator/loader/network_config.h"
+#include "emulator/resolver_files.h"
 
 int main(int argc, char **argv, char **envp)
 {

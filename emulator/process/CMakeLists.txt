@@ -11,6 +11,7 @@ add_library(
     features.c
     drives.c
     paths.c
+    resolver_files.c
     audio_mixer.c
 )
 twoine_add_abi_handles(2ine)

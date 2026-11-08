@@ -10,7 +10,6 @@ if(LX_LEGACY)
         load_lx.c
         rexx_service.c
     )
-    target_sources(lx_loader PRIVATE network_config.c)
     twoine_application_target(lx_loader)
     target_link_libraries(lx_loader PRIVATE 2ine twoine_formats ${CMAKE_DL_LIBS})
     set_target_properties(lx_loader PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}")
