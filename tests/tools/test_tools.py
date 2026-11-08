@@ -227,6 +227,38 @@ OS2EXPORT PVOID *OS2API Pointer(VOID);
         with self.assertRaisesRegex(ValueError, "collide"):
             lxapigen.render("sample", functions, {}, {}, data)
 
+    def test_forwarders_by_ordinal_and_name(self) -> None:
+        definition = lxapigen.parse_definition(
+            "LIBRARY SAMPLE\nEXPORTS\n"
+            "    Call @2\n    ANSWER = BASE.7 @1\n    Named = BASE.Answer @3\n"
+        )
+        functions, data, forwarders = lxapigen.bind_exports(
+            definition, lxapigen.parse_prototypes("OS2EXPORT APIRET OS2API Call(VOID);"), {}
+        )
+        self.assertEqual(
+            forwarders,
+            [
+                lxapigen.Forwarder("ANSWER", 1, "BASE", 7, ""),
+                lxapigen.Forwarder("Named", 3, "BASE", 0, "Answer"),
+            ],
+        )
+        output = lxapigen.render("sample", functions, {}, {}, tuple(data), tuple(forwarders))
+        self.assertIn('LX_NATIVE_FORWARDER(lx_forward_1, "BASE", 7, "");', output)
+        self.assertIn('LX_NATIVE_FORWARDER(lx_forward_3, "BASE", 0, "Answer");', output)
+        first = output.index('LX_NATIVE_EXPORT_FORWARDER(lx_forward_1, "ANSWER", 1)')
+        self.assertLess(first, output.index("LX_NATIVE_EXPORT(Call, 2)"))
+        self.assertLess(
+            output.index("LX_NATIVE_EXPORT(Call, 2)"),
+            output.index('LX_NATIVE_EXPORT_FORWARDER(lx_forward_3, "Named", 3)'),
+        )
+        self.assertLess(
+            output.index("LX_NATIVE_FORWARDER("), output.index("LX_NATIVE_MODULE_INIT(")
+        )
+        with self.assertRaisesRegex(ValueError, "forwarder ordinal"):
+            lxapigen.bind_exports(
+                lxapigen.parse_definition("LIBRARY SAMPLE\nEXPORTS\n    A = BASE.0 @1\n"), {}, {}
+            )
+
     def test_rejects_duplicate_ordinals(self) -> None:
         with self.assertRaisesRegex(ValueError, "duplicate ordinal"):
             lxapigen.parse_definition("LIBRARY SAMPLE\nEXPORTS\n    First @1\n    Second @1\n")

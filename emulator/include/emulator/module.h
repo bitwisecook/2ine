@@ -81,6 +81,9 @@ struct LxModule
     const LxExport *exports;
     uint32 num_exports;
     LxHostLibrary *nativelib;
+    /* A native module with forwarder exports uses this heap copy of its table,
+       with the forwarders resolved; otherwise NULL. */
+    LxExport *native_exports;
     uint32 eip;
     uint32 esp;
     uint16 autodatasize; // only used for NE binaries.

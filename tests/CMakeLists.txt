@@ -518,6 +518,24 @@ if(TARGET lx_loader)
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(lx_forwarded_exports PROPERTIES TIMEOUT 30)
+    # Kept out of the build directory, whose lib*.so files form the runtime.
+    add_library(natfwd SHARED emulator/loader/natfwd/module.c)
+    twoine_application_target(natfwd)
+    set_target_properties(
+        natfwd
+        PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/native-modules"
+    )
+    if(APPLE)
+        set_target_properties(natfwd PROPERTIES SUFFIX ".so")
+    endif()
+    add_test(
+        NAME native_forwarded_exports
+        COMMAND
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/integration/native_forwarders.py"
+            --build "${PROJECT_BINARY_DIR}" --modules "$<TARGET_FILE_DIR:natfwd>" --backend
+            "${_twoine_legacy_backend}"
+    )
+    set_tests_properties(native_forwarded_exports PROPERTIES TIMEOUT 30)
     add_test(
         NAME desktop_apis
         COMMAND

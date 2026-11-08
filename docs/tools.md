@@ -65,7 +65,9 @@ The generator reads each DLL's LINK386-style module definition
 `name [= C entry] @ordinal`), the C prototypes and `LX_GUEST_DATA_EXPORT`
 sizes in the public `os2/include/` headers (and `os2/thirdparty/*/*.h`), and the
 `os2/include/private/api16.json`/`api32.json` policies. It writes
-`generated/<dll>-lx.h` beside each definition. Service implementation files can be split without changing
+`generated/<dll>-lx.h` beside each definition. An entry `name = MODULE.ordinal`
+or `name = MODULE.entry` is a forwarder: the loader loads `MODULE` with the DLL
+and resolves the export to that module's entry, as for an LX forwarder. Service implementation files can be split without changing
 generation inputs. Ordinals, calling conventions and explicit guest marshalling
 policies remain defined by those inputs. `--check` reports
 stale output without creating or modifying directories.

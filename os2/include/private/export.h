@@ -83,6 +83,14 @@ OS2EXPORT void lxNativeModuleDeinit(void);
 #define LX_NATIVE_EXPORT(fn, ord) {ord, #fn, fn, NULL}
 #define LX_NATIVE_EXPORT_DIFFERENT_NAME(fn, fnname, ord) {ord, fnname, fn, NULL}
 
+/* A forwarder export resolves to another module's entry when it is imported,
+   as an LX forwarder does. A zero target ordinal selects the entry by name.
+   The loader loads every target module with the forwarding module. */
+#define LX_NATIVE_FORWARDER(id, module, target_ordinal, target_name)                               \
+    static const LxForwarder id = {NULL, 0, target_ordinal, module, target_name}
+#define LX_NATIVE_EXPORT_FORWARDER(id, name, ord)                                                  \
+    {ord, name, (void *)&id, NULL, LX_EXPORT_FORWARDER}
+
 #define LX_NATIVE_MODULE_INIT_END()                                                                \
     }                                                                                              \
     ;                                                                                              \

@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import cast
 
 # Module definitions (LINK386 .def files) name each DLL's exports and ordinals.
-DEFINITION_GLOBS = ("os2/**/*.def",)
+# The test module exercises native forwarder exports.
+DEFINITION_GLOBS = ("os2/**/*.def", "tests/emulator/loader/natfwd/*.def")
 # Headers that declare the exported C prototypes and guest data exports: the
 # Toolkit-shaped public headers and the headers of non-IBM DLLs.
 HEADER_GLOBS = ("os2/include/**/*.h", "os2/thirdparty/*/*.h")

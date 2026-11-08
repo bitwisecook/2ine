@@ -355,7 +355,13 @@ void destroyLxModule(void *resource)
     free(lxmod->os2path);
 
     if (lxmod->nativelib)
+    {
+        for (uint32 i = 0; lxmod->native_exports && i < lxmod->num_exports; i++)
+            if (lxmod->native_exports[i].indirect == LX_EXPORT_FORWARDER)
+                free(lxmod->native_exports[i].addr);
+        free(lxmod->native_exports);
         lx_host_library_close(lxmod->nativelib);
+    }
     else
     {
         for (uint32 i = 0; i < lxmod->num_exports; i++)
@@ -547,6 +553,55 @@ loadnative_failed:
     return NULL;
 }
 
+/* A native module's forwarder exports name their target modules. Load those as
+   its dependencies, as an LX module's import module table does. */
+static int loadNativeForwarderTargets(LxModule *module, const int dependency_tree_depth)
+{
+    uint32 count = 0;
+    for (uint32 i = 0; i < module->num_exports; i++)
+        count += module->exports[i].indirect == LX_EXPORT_FORWARDER;
+    if (!count)
+        return 1;
+    module->dependencies = calloc(count, sizeof *module->dependencies);
+    if (!module->dependencies)
+        return 0;
+    for (uint32 i = 0; i < module->num_exports; i++)
+    {
+        const LxExport *entry = &module->exports[i];
+        if (entry->indirect != LX_EXPORT_FORWARDER)
+            continue;
+        const LxForwarder *forward = entry->addr;
+        int loaded = 0;
+        for (uint32 j = 0; j < module->num_dependencies && !loaded; j++)
+            loaded = !strcasecmp(module->dependencies[j]->name, forward->module_name);
+        if (loaded)
+            continue;
+        LxModule *target =
+            loadModuleByModuleNameInternal(forward->module_name, dependency_tree_depth + 1);
+        if (!target)
+            return 0;
+        module->dependencies[module->num_dependencies++] = target;
+    }
+    /* Resolve the forwarders once, as for an LX module, in a private copy of the
+       library's constant table. */
+    LxExport *exports = calloc(module->num_exports, sizeof *exports);
+    if (!exports)
+        return 0;
+    memcpy(exports, module->exports, module->num_exports * sizeof *exports);
+    module->exports = module->native_exports = exports;
+    for (uint32 i = 0; i < module->num_exports; i++)
+    {
+        if (exports[i].indirect != LX_EXPORT_FORWARDER)
+            continue;
+        LxForwarder *forward = malloc(sizeof *forward);
+        if (!forward)
+            return 0;
+        *forward = *(const LxForwarder *)exports[i].addr;
+        exports[i].addr = forward;
+    }
+    return resolveLxForwarders(module);
+}
+
 LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependency_tree_depth)
 {
     /* LX import module names may include the DLL filename suffix. */
@@ -668,6 +723,11 @@ native_provider:
         if (retval != NULL)
         {
             registerLxModule(retval);
+            if (!loadNativeForwarderTargets(retval, dependency_tree_depth))
+            {
+                freeLxModule(retval);
+                retval = NULL;
+            }
         }
     }
     if (!retval && gl_module)

@@ -50,7 +50,9 @@ static const LxExport *resolveExport(const LxExport *entry)
             }
         visited[count++] = entry;
         const LxForwarder *forward = entry->addr;
-        const LxModule *target = forward->owner->dependencies[forward->module_ordinal - 1];
+        /* Native forwarders name only their target module. */
+        const LxModule *target =
+            forward->owner ? forward->owner->dependencies[forward->module_ordinal - 1] : NULL;
         /* Circular DLL imports publish exports before filling every dependency slot. */
         if (!target)
             for (target = GProcessState.loaded_modules; target; target = target->next)

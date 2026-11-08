@@ -1,0 +1,8 @@
+; Public domain. No rights reserved. Wholly AI-authored.
+; A native module whose exports all forward to DOSCALLS, by ordinal and by name.
+
+LIBRARY NATFWD
+
+EXPORTS
+    QUERYMODULEHANDLE = DOSCALLS.319             @1
+    QueryProcAddr     = DOSCALLS.DosQueryProcAddr @2
