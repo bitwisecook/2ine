@@ -1,13 +1,19 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Windows common save dialog adapter; linked with comdlg32 by a Windows host. */
+/* Windows save, print and destination dialogs; linked with comdlg32 and comctl32. */
 #include "host/print.h"
+#include "host/win/print/internal.h"
 #include <windows.h>
 #include <commdlg.h>
 #include <commctrl.h>
-#include <winspool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+
+/* The longest Windows path, in UTF-16 units, and the default extension buffer. */
+#define PATH_CHARS 32768
+#define SUFFIX_CHARS 16
+#define DEVICE_BUTTON_PDF 100
+#define DEVICE_BUTTON_PCL 101
 
 LxHostSaveResult lx_host_print_save_path(const char *title, const char *extension, char **path)
 {
@@ -22,10 +28,10 @@ LxHostSaveResult lx_host_print_save_path(const char *title, const char *extensio
         *path = _strdup(override);
         return *path ? LX_HOST_SAVE_OK : LX_HOST_SAVE_ERROR;
     }
-    WCHAR filename[32768] = {0}, suffix[16] = {0};
+    WCHAR filename[PATH_CHARS] = {0}, suffix[SUFFIX_CHARS] = {0};
     if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, title && *title ? title : "Print Job",
-                             -1, filename, 32768) ||
-        !MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, extension, -1, suffix, 16))
+                             -1, filename, PATH_CHARS) ||
+        !MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, extension, -1, suffix, SUFFIX_CHARS))
         return LX_HOST_SAVE_ERROR;
     for (WCHAR *p = filename; *p; p++)
         if (*p < 32 || wcschr(L"<>:\"/\\|?*", *p))
@@ -33,7 +39,7 @@ LxHostSaveResult lx_host_print_save_path(const char *title, const char *extensio
     OPENFILENAMEW dialog = {0};
     dialog.lStructSize = sizeof dialog;
     dialog.lpstrFile = filename;
-    dialog.nMaxFile = 32768;
+    dialog.nMaxFile = PATH_CHARS;
     dialog.lpstrDefExt = suffix;
     dialog.lpstrTitle = L"Save Print Output";
     dialog.lpstrFilter = !strcmp(extension, "pdf") ? L"PDF documents\0*.pdf\0All files\0*.*\0\0"
@@ -52,58 +58,6 @@ LxHostSaveResult lx_host_print_save_path(const char *title, const char *extensio
         return LX_HOST_SAVE_ERROR;
     }
     return LX_HOST_SAVE_OK;
-}
-
-void lx_host_print_destination_clear(LxHostPrintDestination *destination)
-{
-    if (destination)
-    {
-        free(destination->path);
-        free(destination->printer);
-        memset(destination, 0, sizeof *destination);
-    }
-}
-
-static char *printer_utf8(const WCHAR *name)
-{
-    int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, name, -1, NULL, 0, NULL, NULL);
-    char *result = bytes > 0 ? malloc((size_t)bytes) : NULL;
-    if (result &&
-        !WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, name, -1, result, bytes, NULL, NULL))
-    {
-        free(result);
-        result = NULL;
-    }
-    return result;
-}
-
-char **lx_host_print_printers(size_t *count)
-{
-    if (!count)
-        return NULL;
-    *count = 0;
-    DWORD bytes = 0, returned = 0;
-    EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, NULL, 4, NULL, 0, &bytes,
-                  &returned);
-    if (!bytes)
-        return NULL;
-    BYTE *data = malloc(bytes);
-    if (!data || !EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, NULL, 4, data, bytes,
-                                &bytes, &returned))
-    {
-        free(data);
-        return NULL;
-    }
-    char **printers = calloc(returned ? returned : 1, sizeof *printers);
-    if (printers)
-        for (DWORD i = 0; i < returned; i++)
-        {
-            char *name = printer_utf8(((PRINTER_INFO_4W *)data)[i].pPrinterName);
-            if (name)
-                printers[(*count)++] = name;
-        }
-    free(data);
-    return printers;
 }
 
 LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestination *destination)
@@ -142,7 +96,7 @@ LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestinat
         DEVNAMES *names = GlobalLock(dialog.hDevNames);
         if (names)
         {
-            destination->printer = printer_utf8((WCHAR *)names + names->wDeviceOffset);
+            destination->printer = lx_win_print_utf8((WCHAR *)names + names->wDeviceOffset);
             GlobalUnlock(dialog.hDevNames);
             result = destination->printer ? LX_HOST_SAVE_OK : LX_HOST_SAVE_ERROR;
         }
@@ -150,7 +104,8 @@ LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestinat
     if (dialog.hDevMode)
     {
         DEVMODEW *mode = GlobalLock(dialog.hDevMode);
-        if (mode && (mode->dmFields & DM_COPIES) && mode->dmCopies > 0 && mode->dmCopies <= 999)
+        if (mode && (mode->dmFields & DM_COPIES) && mode->dmCopies > 0 &&
+            mode->dmCopies <= LX_WIN_PRINT_MAX_COPIES)
             destination->copies = (unsigned)mode->dmCopies;
         if (mode)
             GlobalUnlock(dialog.hDevMode);
@@ -159,48 +114,6 @@ LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestinat
     if (dialog.hDevNames)
         GlobalFree(dialog.hDevNames);
     return result;
-}
-
-int lx_host_print_submit_pcl(const char *printer, const char *title, unsigned copies, FILE *source)
-{
-    if (!printer || !*printer || !source || !copies || copies > 999)
-        return 0;
-    int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, printer, -1, NULL, 0);
-    WCHAR *name = count > 0 ? malloc((size_t)count * sizeof *name) : NULL;
-    if (!name || !MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, printer, -1, name, count))
-    {
-        free(name);
-        return 0;
-    }
-    HANDLE handle = NULL;
-    int ok = OpenPrinterW(name, &handle, NULL) != 0;
-    free(name);
-    if (!ok)
-        return 0;
-    WCHAR document[4096] = L"2ine Print Job";
-    if (title && *title)
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, title, -1, document, 4096);
-    DOC_INFO_1W info = {document, NULL, L"RAW"};
-    for (unsigned copy = 0; ok && copy < copies; copy++)
-    {
-        ok = !fflush(source) && !fseek(source, 0, SEEK_SET) &&
-             StartDocPrinterW(handle, 1, (LPBYTE)&info) != 0;
-        int started = ok;
-        if (ok)
-            ok = StartPagePrinter(handle) != 0;
-        unsigned char buffer[65536];
-        size_t bytes;
-        while (ok && (bytes = fread(buffer, 1, sizeof buffer, source)))
-        {
-            DWORD written = 0;
-            ok = WritePrinter(handle, buffer, (DWORD)bytes, &written) && written == bytes;
-        }
-        ok = ok && !ferror(source) && EndPagePrinter(handle) && EndDocPrinter(handle);
-        if (!ok && started)
-            AbortPrinter(handle);
-    }
-    ClosePrinter(handle);
-    return ok;
 }
 
 LxHostSaveResult lx_host_print_choose_device(unsigned *kind)
@@ -219,7 +132,8 @@ LxHostSaveResult lx_host_print_choose_device(unsigned *kind)
                                                  : 1;
         return LX_HOST_SAVE_OK;
     }
-    TASKDIALOG_BUTTON buttons[] = {{100, L"PDF"}, {101, L"PCL Printer"}};
+    TASKDIALOG_BUTTON buttons[] = {{DEVICE_BUTTON_PDF, L"PDF"},
+                                   {DEVICE_BUTTON_PCL, L"PCL Printer"}};
     TASKDIALOGCONFIG dialog = {0};
     dialog.cbSize = sizeof dialog;
     dialog.dwCommonButtons = TDCBF_CANCEL_BUTTON;
@@ -232,19 +146,8 @@ LxHostSaveResult lx_host_print_choose_device(unsigned *kind)
     int selected = 0;
     if (FAILED(TaskDialogIndirect(&dialog, &selected, NULL, NULL)))
         return LX_HOST_SAVE_ERROR;
-    if (selected != 100 && selected != 101)
+    if (selected != DEVICE_BUTTON_PDF && selected != DEVICE_BUTTON_PCL)
         return LX_HOST_SAVE_CANCEL;
-    *kind = selected == 100 ? 1 : 2;
+    *kind = selected == DEVICE_BUTTON_PDF ? 1 : 2;
     return LX_HOST_SAVE_OK;
-}
-
-int lx_host_print_submit_helper(const char *program, const char *printer, const char *title,
-                                unsigned copies, FILE *source)
-{
-    (void)program;
-    (void)printer;
-    (void)title;
-    (void)copies;
-    (void)source;
-    return 0; /* Windows submits through the spool API, not an external helper. */
 }
