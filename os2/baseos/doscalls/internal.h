@@ -107,6 +107,12 @@ typedef struct ThreadControl
 void initializeThreadSuspension(void);
 void cleanupThreadSuspension(void);
 LX_PRIVATE void releaseThreadSuspension(void);
+/* Suspension state of each thread (task/tkforce.c), created with the thread. */
+LX_PRIVATE ThreadControl *createThreadControl(uint32 id, BOOL suspended);
+LX_PRIVATE void bindThreadControl(ThreadControl *control);
+LX_PRIVATE void removeThreadControl(ThreadControl *control);
+/* Leaves the critical section a dying thread still holds (task/schedapi.c). */
+LX_PRIVATE void releaseThreadCriticalSection(void);
 LX_PRIVATE void cleanupTimers(void);
 LX_PRIVATE void mutexReleasing(void *resource);
 LX_PRIVATE void abandonThreadMutexes(uint32 tid);

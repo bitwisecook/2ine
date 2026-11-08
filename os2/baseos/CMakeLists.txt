@@ -27,7 +27,12 @@ twoine_os2_dll(
     doscalls/memory/selwrk.c
     doscalls/doscall1/suballoc16.c
     doscalls/doscall1/suballoc.c
-    doscalls/threads.c
+    doscalls/task/tkthrd.c
+    doscalls/task/tkforce.c
+    doscalls/task/schedapi.c
+    doscalls/task/tksleep.c
+    doscalls/doscall1/must_complete.c
+    doscalls/doscall1/thread_memory.c
     doscalls/process.c
     doscalls/semaphores.c
     doscalls/modules.c
