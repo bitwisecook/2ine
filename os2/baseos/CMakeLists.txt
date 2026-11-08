@@ -5,24 +5,24 @@ twoine_os2_dll(
     doscalls/module.c
     doscalls/legacy.c
     doscalls/files.c
-    doscalls/fileinfo.c
-    doscalls/eas.c
-    doscalls/directories.c
+    doscalls/filesys/finfo.c
+    doscalls/filesys/extattr.c
+    doscalls/filesys/dossrch.c
     doscalls/paths.c
-    doscalls/resources.c
-    doscalls/module_resources.c
-    doscalls/exceptions.c
+    doscalls/guarded.c
+    doscalls/loader/ldrrsrc.c
+    doscalls/task/except.c
     doscalls/memory.c
-    doscalls/suballocation.c
+    doscalls/doscall1/suballoc.c
     doscalls/threads.c
     doscalls/process.c
     doscalls/semaphores.c
     doscalls/modules.c
     doscalls/system.c
-    doscalls/audio.c
-    doscalls/mux_wait.c
-    doscalls/unithunk.c
-    doscalls/timers.c
+    doscalls/dev/beep.c
+    doscalls/sem/semmux.c
+    doscalls/doscall1/thunk.c
+    doscalls/task/timapi.c
     doscalls/doscall1/queue.c
     doscalls/doscall1/session.c
     doscalls/doscall1/nls.c

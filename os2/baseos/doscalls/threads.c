@@ -6,7 +6,6 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2/baseos/doscalls/internal.h"
-#include "os2/baseos/doscalls/host.h"
 static void releaseThreadCriticalSection(void);
 static ThreadControl *createThreadControl(uint32 id, BOOL suspended);
 static void bindThreadControl(ThreadControl *control);

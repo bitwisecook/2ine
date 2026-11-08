@@ -50,7 +50,7 @@ extern "C"
 
     OS2EXPORT ULONG OS2API DosSelToFlat(VOID);
 
-    /* Register-driven entry; see os2/baseos/doscalls/unithunk.c. */
+    /* Register-driven entry; see os2/baseos/doscalls/doscall1/thunk.c. */
     OS2EXPORT APIRET OS2API THK_UNITHUNK(VOID);
 
     OS2EXPORT APIRET OS2API lx_queue_open_private(PPID owner, PHQUEUE output, const char *name);
@@ -79,6 +79,9 @@ extern "C"
 
     /* The observer runs on a thread leaving through DosExit, before it ends. */
     void lx_doscalls_observe_thread_exit(void (*observer)(ULONG code));
+    /* Releases a DOS worker thread's join ownership; Open32 reaches it by name. */
+    OS2EXPORT APIRET OS2API lx_doscalls_detach_thread(TID id);
+
     /* The caller owns the returned child, which DosWaitChild does not see. */
     APIRET lx_doscalls_launch(const LxDosLaunch *launch, LxHostChild **child);
     /* The child joins the DosWaitChild and DosKillProcess set; only its PID returns. */
