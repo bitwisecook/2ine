@@ -7,7 +7,7 @@
  */
 #include "os2libs/doscalls/internal.h"
 #include "os2libs/doscalls/launch.h"
-#include "guest/launch_record.h"
+#include "emulator/launch_record.h"
 #include <ctype.h>
 
 /* Per-launch state reaches the child only through its environment. */

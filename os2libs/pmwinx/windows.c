@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 custom windows translate their lifecycle callbacks through PM. */
-#include "guest/launch_record.h"
+#include "emulator/launch_record.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwin/open32_post.h"
 #include "os2libs/pmwinx/input.h"

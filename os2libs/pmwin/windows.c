@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "guest/launch_record.h"
+#include "emulator/launch_record.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/video_frames.h"
 #include "os2libs/pmwin/graphics.h"

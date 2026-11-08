@@ -13,6 +13,7 @@ add_library(
     paths.c
     resolver_files.c
     audio_mixer.c
+    launch_record.c
 )
 twoine_add_abi_handles(2ine)
 twoine_application_target(2ine)

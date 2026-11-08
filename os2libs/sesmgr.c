@@ -11,7 +11,7 @@
 #include "os2libs/sesmgr_start.h"
 #include "os2libs/doscalls.h"
 #include "os2libs/doscalls/launch.h"
-#include "guest/launch_record.h"
+#include "emulator/launch_record.h"
 #include "os2libs/quecalls.h"
 #include "host/thread.h"
 #include "host/sync.h"

@@ -10,7 +10,7 @@
 #include "os2libs/viocalls.h"
 
 #include "host/terminal.h"
-#include "guest/launch_record.h"
+#include "emulator/launch_record.h"
 #include "os2libs/generated/viocalls-lx.h"
 
 static uint16 *vio_buffer = NULL;
