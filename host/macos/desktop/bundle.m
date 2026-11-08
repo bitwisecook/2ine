@@ -10,10 +10,8 @@
 #define _DARWIN_C_SOURCE 1
 #include "host/desktop.h"
 #include "formats/resources/icon.h"
-#include "twoine_ball_icon_png.h"
+#include "host/macos/desktop/internal.h"
 #import <CoreFoundation/CoreFoundation.h>
-#import <CoreGraphics/CoreGraphics.h>
-#import <ImageIO/ImageIO.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -154,88 +152,11 @@ static int copy_bytes(const char *from, const char *to, size_t limit, mode_t mod
     return ok;
 }
 
-/* Mirrors tb_icon_rgba_base64: top-down rows, and the AND mask decides the
-   alpha of pixels the icon itself leaves transparent. */
-static int write_png(const char *path, const TbIconImage *image)
-{
-    size_t pixels = (size_t)image->width * image->height;
-    unsigned char *rgba = malloc(pixels * 4);
-    if (!rgba)
-        return 0;
-    for (unsigned y = 0; y < image->height; y++)
-        for (unsigned x = 0; x < image->width; x++)
-        {
-            size_t source = (size_t)(image->height - 1 - y) * image->width + x,
-                   target = ((size_t)y * image->width + x) * 4;
-            uint32_t rgb = image->pixels[source];
-            rgba[target] = (unsigned char)(rgb >> 16);
-            rgba[target + 1] = (unsigned char)(rgb >> 8);
-            rgba[target + 2] = (unsigned char)rgb;
-            rgba[target + 3] = image->mask[source] ? (rgb ? 128 : 0) : 255;
-        }
-    CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, rgba, pixels * 4, NULL);
-    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
-    CGImageRef rendered =
-        provider && space
-            ? CGImageCreate(image->width, image->height, 8, 32, (size_t)image->width * 4, space,
-                            kCGImageAlphaLast, provider, NULL, false, kCGRenderingIntentDefault)
-            : NULL;
-    CFURLRef url = rendered ? CFURLCreateFromFileSystemRepresentation(NULL, (const UInt8 *)path,
-                                                                      strlen(path), false)
-                            : NULL;
-    CGImageDestinationRef destination =
-        url ? CGImageDestinationCreateWithURL(url, CFSTR("public.png"), 1, NULL) : NULL;
-    int ok = 0;
-    if (destination)
-    {
-        CGImageDestinationAddImage(destination, rendered, NULL);
-        ok = CGImageDestinationFinalize(destination);
-    }
-    if (destination)
-        CFRelease(destination);
-    if (url)
-        CFRelease(url);
-    if (rendered)
-        CGImageRelease(rendered);
-    if (space)
-        CGColorSpaceRelease(space);
-    if (provider)
-        CGDataProviderRelease(provider);
-    free(rgba);
-    return ok;
-}
-
-static int hex_value(char value)
-{
-    if (value >= '0' && value <= '9')
-        return value - '0';
-    if (value >= 'a' && value <= 'f')
-        return value - 'a' + 10;
-    if (value >= 'A' && value <= 'F')
-        return value - 'A' + 10;
-    return -1;
-}
-
 static int write_fallback_png(const char *path)
 {
-    const char *hex = TWOINE_BALL_ICON_PNG_HEX;
-    size_t length = strlen(hex);
-    if (length % 2 || length / 2 != TWOINE_BALL_ICON_PNG_SIZE)
-        return 0;
-    unsigned char *bytes = malloc(TWOINE_BALL_ICON_PNG_SIZE);
-    if (!bytes)
-        return 0;
-    for (size_t i = 0; i < TWOINE_BALL_ICON_PNG_SIZE; i++)
-    {
-        int high = hex_value(hex[2 * i]), low = hex_value(hex[2 * i + 1]);
-        if (high < 0 || low < 0)
-        {
-            free(bytes);
-            return 0;
-        }
-        bytes[i] = (unsigned char)(high << 4 | low);
-    }
-    int ok = write_bytes(path, bytes, TWOINE_BALL_ICON_PNG_SIZE, 0644);
+    size_t size = 0;
+    unsigned char *bytes = lx_macos_bundle_ball_icon_png(&size);
+    int ok = bytes && write_bytes(path, bytes, size, 0644);
     free(bytes);
     return ok;
 }
@@ -391,7 +312,7 @@ static int session_bundle_name(const char *name)
     if (length < LX_BUNDLE_KEY_LENGTH + 4)
         return 0;
     for (size_t i = 0; i < LX_BUNDLE_KEY_LENGTH; i++)
-        if (hex_value(name[i]) < 0)
+        if (lx_macos_hex_value(name[i]) < 0)
             return 0;
     if (length == LX_BUNDLE_KEY_LENGTH + 4)
         return !strcmp(name + LX_BUNDLE_KEY_LENGTH, ".app");
@@ -518,7 +439,7 @@ static int ensure_bundle(const char *bundle, const char *sessions, const char *k
         snprintf(identifier, sizeof identifier, "io.github.bitwisecook.2ine.session.%s", key);
         if (name && executable && icon_path && info_path &&
             copy_bytes(loader, executable, LX_BUNDLE_LOADER_LIMIT, 0755) &&
-            (icon ? write_png(icon_path, icon) : write_fallback_png(icon_path)) &&
+            (icon ? lx_macos_bundle_icon_write(icon_path, icon) : write_fallback_png(icon_path)) &&
             write_info(info_path, name, identifier))
         {
             sign_bundle(staging);

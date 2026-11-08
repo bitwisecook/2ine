@@ -14,7 +14,14 @@ twoine_host_requires(fatal_dialog LINK "-framework AppKit")
 twoine_host_function(window window/chrome.m)
 twoine_host_requires(window OPTION "${_twoine_objc_arc}")
 twoine_host_requires(window LINK "-framework AppKit")
-twoine_host_function(desktop desktop/session.m desktop/bundle.m)
+twoine_host_function(
+    desktop
+    desktop/session.m
+    desktop/window_cycle.m
+    desktop/app_icon.m
+    desktop/bundle.m
+    desktop/bundle_icon.m
+)
 twoine_host_requires(desktop OPTION "${_twoine_objc_arc}")
 twoine_host_requires(desktop LINK twoine_formats "-framework AppKit" "-framework ImageIO")
 twoine_host_requires(desktop INCLUDE "${PROJECT_BINARY_DIR}/generated")
