@@ -136,8 +136,7 @@ unsigned char *volume_directory_data(VolumeDisk *d, VolumeNode node, size_t *siz
         uint32_t cluster = node.cluster;
         for (size_t at = 0; at < length; at += d->cluster_bytes)
         {
-            if (!volume_read_at(d, d->data_offset + (uint64_t)(cluster - 2) * d->cluster_bytes,
-                                data + at, d->cluster_bytes))
+            if (!volume_read_at(d, fat_cluster_offset(d, cluster), data + at, d->cluster_bytes))
             {
                 free(data);
                 return NULL;
@@ -157,6 +156,7 @@ unsigned char *volume_directory_data(VolumeDisk *d, VolumeNode node, size_t *siz
 int volume_utf16_name(const uint16_t *text, size_t n, char *out, size_t capacity)
 {
     size_t at = 0;
+    /* Stops at a terminator or at FAT long-name padding. */
     for (size_t i = 0; i < n && text[i] && text[i] != 0xffff; i++)
     {
         unsigned v = text[i];
@@ -318,9 +318,12 @@ int volume_disk_info(const char *path, TbImageInfo *info)
                 return 0;
             *info = (TbImageInfo){.modified = INT64_MIN};
             info->directory = 1;
-            info->fat = kind == 2;
-            strcpy(info->filesystem, kind == 2 ? "FAT" : kind == 1 ? "CDFS" : "UNKNOWN");
-            info->sector_bytes = info->cluster_bytes = kind == 2 ? 512 : ISO_SECTOR_BYTES;
+            info->fat = kind == TB_DEVICE_FLOPPY;
+            strcpy(info->filesystem, kind == TB_DEVICE_FLOPPY ? "FAT"
+                                     : kind == TB_DEVICE_CD   ? "CDFS"
+                                                              : "UNKNOWN");
+            info->sector_bytes = info->cluster_bytes =
+                kind == TB_DEVICE_FLOPPY ? FAT_BOOT_SECTOR_BYTES : ISO_SECTOR_BYTES;
             return 1;
         }
         return 0;
@@ -332,9 +335,9 @@ int volume_disk_info(const char *path, TbImageInfo *info)
         *info = (TbImageInfo){.modified = node.modified,
                               .accessed = node.accessed,
                               .created = node.created,
-                              .attributes = node.attributes & 0x26};
+                              .attributes = node.attributes & FAT_ATTRIBUTES_SETTABLE};
         info->size = node.size;
-        info->readonly = disk.readonly || !!(node.attributes & 1);
+        info->readonly = disk.readonly || !!(node.attributes & FAT_ATTRIBUTE_READONLY);
         if (disk.fat_bits && !disk.readonly)
             info->available = fat_available_bytes(&disk);
         info->capacity = disk.bytes;
@@ -438,8 +441,7 @@ FILE *volume_snapshot(VolumeDisk *disk, const char *member)
         size_t chunk = remaining > BUFFER_SIZE ? BUFFER_SIZE : (size_t)remaining;
         if (disk->fat_bits)
         {
-            if (cluster < 2 || cluster >= disk->clusters + 2 ||
-                cluster >= (disk->fat_bits == 12 ? 0xff0u : 0xfff0u) || steps >= disk->clusters)
+            if (!fat_data_cluster(disk, cluster) || steps >= disk->clusters)
             {
                 errno = EIO;
                 goto failed;
@@ -453,7 +455,7 @@ FILE *volume_snapshot(VolumeDisk *disk, const char *member)
                 }
                 visited[cluster / 8] |= (unsigned char)(1u << (cluster % 8));
             }
-            offset = disk->data_offset + (uint64_t)(cluster - 2) * disk->cluster_bytes + within;
+            offset = fat_cluster_offset(disk, cluster) + within;
             if (chunk > disk->cluster_bytes - within)
                 chunk = disk->cluster_bytes - within;
         }

@@ -181,8 +181,10 @@ static int cluster_read(void *context, uint64_t offset, void *data, size_t size)
         size_t amount = stream->cluster_bytes - within;
         if (amount > size)
             amount = size;
-        uint64_t source = stream->data_offset +
-                          (uint64_t)(stream->clusters[index] - 2) * stream->cluster_bytes + within;
+        uint64_t source =
+            stream->data_offset +
+            (uint64_t)(stream->clusters[index] - FAT_FIRST_CLUSTER) * stream->cluster_bytes +
+            within;
         if (!tb_stream_read_at(stream->parent, source, output, amount))
             return 0;
         offset += amount;
@@ -231,9 +233,7 @@ TbReadStream *tb_image_reader_member(TbReadStream *stream, const char *member)
     uint32_t cluster = node.cluster;
     for (size_t i = 0; valid && i < count; i++)
     {
-        if (cluster < 2 || cluster >= disk.clusters + 2 ||
-            cluster >= (disk.fat_bits == 12 ? 0xff0u : 0xfff0u) ||
-            (visited[cluster / 8] & (1u << (cluster % 8))))
+        if (!fat_data_cluster(&disk, cluster) || (visited[cluster / 8] & (1u << (cluster % 8))))
         {
             valid = volume_failure(EIO);
             break;

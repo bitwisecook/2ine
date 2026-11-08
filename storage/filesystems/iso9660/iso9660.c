@@ -9,17 +9,64 @@
 #include <errno.h>
 #include <string.h>
 
+/* The volume descriptor set starts after the 16-sector system area. */
+#define ISO_DESCRIPTOR_SECTOR 16u
+/* Descriptors examined before the set is treated as unterminated. */
+#define ISO_DESCRIPTOR_LIMIT 144u
+#define ISO_STANDARD_ID "CD001"
+
+/* Volume descriptor fields (ECMA-119 8). */
+enum
+{
+    ISO_VD_TYPE = 0,
+    ISO_VD_STANDARD_ID = 1,
+    ISO_VD_VERSION = 6,
+    ISO_VD_VOLUME_ID = 40,
+    ISO_VD_VOLUME_SPACE = 80, /* both-endian; the little-endian half comes first */
+    ISO_VD_ESCAPES = 88,      /* Joliet: "%/@", "%/C" or "%/E" for UCS-2 levels 1-3 */
+    ISO_VD_BLOCK_BYTES = 128,
+    ISO_VD_ROOT_RECORD = 156,
+    ISO_VD_PRIMARY = 1,
+    ISO_VD_SUPPLEMENTARY = 2,
+    ISO_VD_TERMINATOR = 255,
+    ISO_LABEL_BYTES = 11 /* the part of the 32-byte volume identifier kept as a label */
+};
+
+/* Directory record fields (ECMA-119 9.1). */
+enum
+{
+    ISO_RECORD_LENGTH = 0,
+    ISO_RECORD_EXTENDED_LENGTH = 1,
+    ISO_RECORD_EXTENT = 2,
+    ISO_RECORD_DATA_LENGTH = 10,
+    ISO_RECORD_DATE = 18,
+    ISO_RECORD_FLAGS = 25,
+    ISO_RECORD_UNIT_SIZE = 26,
+    ISO_RECORD_INTERLEAVE = 27,
+    ISO_RECORD_NAME_LENGTH = 32,
+    ISO_RECORD_NAME = 33,
+    ISO_RECORD_MINIMUM = 34, /* fixed fields and a one-byte name */
+    ISO_FLAG_DIRECTORY = 0x02,
+    ISO_FLAG_MULTI_EXTENT = 0x80
+};
+
 static int iso_node(VolumeDisk *d, const unsigned char *r, size_t length, VolumeNode *node)
 {
-    if (length < 34 || r[0] < 34 || r[0] > length || r[32] > r[0] - 33)
+    unsigned record = r[ISO_RECORD_LENGTH];
+    if (length < ISO_RECORD_MINIMUM || record < ISO_RECORD_MINIMUM || record > length ||
+        r[ISO_RECORD_NAME_LENGTH] > record - ISO_RECORD_NAME)
         return volume_failure(EINVAL);
-    if (r[26] || r[27] || (r[25] & 0x80))
+    /* Interleaved and multi-extent files are not contiguous. */
+    if (r[ISO_RECORD_UNIT_SIZE] || r[ISO_RECORD_INTERLEAVE] ||
+        (r[ISO_RECORD_FLAGS] & ISO_FLAG_MULTI_EXTENT))
         return volume_failure(ENOTSUP);
-    node->offset = ((uint64_t)tb_le32(r + 2) + r[1]) * ISO_SECTOR_BYTES;
-    node->size = tb_le32(r + 10);
-    node->directory = !!(r[25] & 2);
+    /* An extended attribute record, if any, fills the first sectors of the extent. */
+    node->offset = ((uint64_t)tb_le32(r + ISO_RECORD_EXTENT) + r[ISO_RECORD_EXTENDED_LENGTH]) *
+                   ISO_SECTOR_BYTES;
+    node->size = tb_le32(r + ISO_RECORD_DATA_LENGTH);
+    node->directory = !!(r[ISO_RECORD_FLAGS] & ISO_FLAG_DIRECTORY);
     node->cluster = 0;
-    node->modified = tb_iso_time(r + 18);
+    node->modified = tb_iso_time(r + ISO_RECORD_DATE);
     if (node->offset > d->bytes || node->size > d->bytes - node->offset)
         return volume_failure(EIO);
     return 1;
@@ -28,42 +75,50 @@ static int iso_node(VolumeDisk *d, const unsigned char *r, size_t length, Volume
 int iso_present(VolumeDisk *d)
 {
     unsigned char b[ISO_SECTOR_BYTES];
-    return d->bytes >= 17 * ISO_SECTOR_BYTES &&
-           volume_read_at(d, 16 * ISO_SECTOR_BYTES, b, sizeof b) && !memcmp(b + 1, "CD001", 5);
+    return d->bytes >= (ISO_DESCRIPTOR_SECTOR + 1) * ISO_SECTOR_BYTES &&
+           volume_read_at(d, ISO_DESCRIPTOR_SECTOR * ISO_SECTOR_BYTES, b, sizeof b) &&
+           !memcmp(b + ISO_VD_STANDARD_ID, ISO_STANDARD_ID, 5);
 }
 
 int iso_identify(VolumeDisk *d)
 {
     unsigned char b[ISO_SECTOR_BYTES];
     int primary = 0;
-    for (unsigned i = 16; i < 144 && (uint64_t)(i + 1) * ISO_SECTOR_BYTES <= d->bytes; i++)
+    for (unsigned i = ISO_DESCRIPTOR_SECTOR;
+         i < ISO_DESCRIPTOR_LIMIT && (uint64_t)(i + 1) * ISO_SECTOR_BYTES <= d->bytes; i++)
     {
         if (!volume_read_at(d, (uint64_t)i * ISO_SECTOR_BYTES, b, sizeof b))
             return 0;
-        if (memcmp(b + 1, "CD001", 5) || b[6] != 1)
+        if (memcmp(b + ISO_VD_STANDARD_ID, ISO_STANDARD_ID, 5) || b[ISO_VD_VERSION] != 1)
             return volume_failure(EINVAL);
-        if (b[0] == 255)
+        unsigned type = b[ISO_VD_TYPE];
+        if (type == ISO_VD_TERMINATOR)
             break;
-        int joliet = b[0] == 2 && b[88] == '%' && b[89] == '/' &&
-                     (b[90] == '@' || b[90] == 'C' || b[90] == 'E');
-        if (b[0] != 1 && !joliet)
+        const unsigned char *escapes = b + ISO_VD_ESCAPES;
+        int joliet = type == ISO_VD_SUPPLEMENTARY && escapes[0] == '%' && escapes[1] == '/' &&
+                     (escapes[2] == '@' || escapes[2] == 'C' || escapes[2] == 'E');
+        if (type != ISO_VD_PRIMARY && !joliet)
             continue;
-        uint64_t volume_bytes = (uint64_t)tb_le32(b + 80) * ISO_SECTOR_BYTES;
-        if (tb_le16(b + 128) != ISO_SECTOR_BYTES || !volume_bytes || volume_bytes > d->bytes)
+        uint64_t volume_bytes = (uint64_t)tb_le32(b + ISO_VD_VOLUME_SPACE) * ISO_SECTOR_BYTES;
+        if (tb_le16(b + ISO_VD_BLOCK_BYTES) != ISO_SECTOR_BYTES || !volume_bytes ||
+            volume_bytes > d->bytes)
             return volume_failure(EINVAL);
         d->bytes = volume_bytes;
-        if ((b[0] == 1 && !d->joliet) || joliet)
+        /* A Joliet root replaces the primary one, for its Unicode long names. */
+        if ((type == ISO_VD_PRIMARY && !d->joliet) || joliet)
         {
-            if (!iso_node(d, b + 156, ISO_SECTOR_BYTES - 156, &d->root) || !d->root.directory)
+            if (!iso_node(d, b + ISO_VD_ROOT_RECORD, ISO_SECTOR_BYTES - ISO_VD_ROOT_RECORD,
+                          &d->root) ||
+                !d->root.directory)
                 return volume_failure(EINVAL);
             d->joliet = joliet;
         }
-        if (b[0] == 1)
+        if (type == ISO_VD_PRIMARY)
         {
             primary = 1;
-            memcpy(d->label, b + 40, 11);
-            d->label[11] = 0;
-            for (int j = 10; j >= 0 && d->label[j] == ' '; j--)
+            memcpy(d->label, b + ISO_VD_VOLUME_ID, ISO_LABEL_BYTES);
+            d->label[ISO_LABEL_BYTES] = 0;
+            for (int j = ISO_LABEL_BYTES - 1; j >= 0 && d->label[j] == ' '; j--)
                 d->label[j] = 0;
         }
     }
@@ -78,7 +133,8 @@ int iso_read_entries(VolumeDisk *d, const unsigned char *data, size_t size,
     {
         char name[1024];
         VolumeNode node = {0};
-        unsigned length = data[at];
+        unsigned length = data[at + ISO_RECORD_LENGTH];
+        /* Records never span sectors; zero padding fills the rest of one. */
         if (!length)
         {
             at += ISO_SECTOR_BYTES - at % ISO_SECTOR_BYTES;
@@ -90,8 +146,9 @@ int iso_read_entries(VolumeDisk *d, const unsigned char *data, size_t size,
             ok = volume_failure(EINVAL);
             break;
         }
-        unsigned n = data[at + 32];
-        const unsigned char *raw = data + at + 33;
+        unsigned n = data[at + ISO_RECORD_NAME_LENGTH];
+        const unsigned char *raw = data + at + ISO_RECORD_NAME;
+        /* Single-byte names 0 and 1 are the "." and ".." entries. */
         if (n == 1 && raw[0] < 2)
         {
             at += length;
@@ -104,6 +161,7 @@ int iso_read_entries(VolumeDisk *d, const unsigned char *data, size_t size,
                 ok = volume_failure(EINVAL);
                 break;
             }
+            /* Joliet names are big-endian UCS-2. */
             uint16_t units[128];
             for (unsigned i = 0; i < n / 2; i++)
                 units[i] = (uint16_t)(raw[i * 2] << 8 | raw[i * 2 + 1]);
@@ -118,6 +176,7 @@ int iso_read_entries(VolumeDisk *d, const unsigned char *data, size_t size,
             memcpy(name, raw, n);
             name[n] = 0;
         }
+        /* Drop the ";1" version suffix and the dot of an extensionless name. */
         char *version = strrchr(name, ';');
         if (version)
             *version = 0;

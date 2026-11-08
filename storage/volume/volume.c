@@ -155,7 +155,7 @@ int tb_image_stamps(const char *path, const char *expected, const TbImageStamps 
 
 int tb_image_attributes(const char *path, const char *expected, unsigned attributes)
 {
-    attributes &= 0x26;
+    attributes &= FAT_ATTRIBUTES_SETTABLE;
     return modify(path, expected, TB_FS_ATTRIBUTES, attributes, NULL, 0, NULL);
 }
 

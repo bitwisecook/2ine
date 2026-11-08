@@ -4,6 +4,7 @@
 #define _DARWIN_C_SOURCE 1
 #define _FILE_OFFSET_BITS 64
 #include "storage/volume.h"
+#include "storage/filesystems/fat/fat12_16.h"
 #include "storage/common/host.h"
 #include "formats/endian.h"
 #include <errno.h>
@@ -11,53 +12,75 @@
 #include <string.h>
 #include <time.h>
 
+/* Media descriptor bytes of the PC floppy formats. */
+enum
+{
+    MEDIA_360K = 0xfd,
+    MEDIA_720K_1200K = 0xf9,
+    MEDIA_1440K_2880K = 0xf0
+};
+
+/* Every PC floppy format has 512-byte sectors, one reserved sector, two FATs and two heads. */
+enum
+{
+    FLOPPY_SECTOR_BYTES = 512,
+    FLOPPY_RESERVED_SECTORS = 1,
+    FLOPPY_FAT_COUNT = 2,
+    FLOPPY_HEADS = 2
+};
+
+typedef struct FloppyGeometry
+{
+    unsigned kib, sectors, sectors_per_cluster, fat_sectors, root_entries, sectors_per_track, media;
+} FloppyGeometry;
+
+static const FloppyGeometry geometries[] = {
+    {360, 720, 2, 2, 112, 9, MEDIA_360K},           {720, 1440, 2, 3, 112, 9, MEDIA_720K_1200K},
+    {1200, 2400, 1, 7, 224, 15, MEDIA_720K_1200K},  {1440, 2880, 1, 9, 224, 18, MEDIA_1440K_2880K},
+    {2880, 5760, 2, 9, 240, 36, MEDIA_1440K_2880K},
+};
+
 int tb_image_create_floppy(const char *path, unsigned kib)
 {
-    const struct Geometry
-    {
-        unsigned kib, sectors, cluster, fat, roots, track, media;
-    } formats[] = {{360, 720, 2, 2, 112, 9, 0xfd},
-                   {720, 1440, 2, 3, 112, 9, 0xf9},
-                   {1200, 2400, 1, 7, 224, 15, 0xf9},
-                   {1440, 2880, 1, 9, 224, 18, 0xf0},
-                   {2880, 5760, 2, 9, 240, 36, 0xf0}};
-    const struct Geometry *g = NULL;
-    for (size_t i = 0; i < sizeof formats / sizeof formats[0]; i++)
-        if (formats[i].kib == kib)
-            g = &formats[i];
+    const FloppyGeometry *g = NULL;
+    for (size_t i = 0; i < sizeof geometries / sizeof geometries[0]; i++)
+        if (geometries[i].kib == kib)
+            g = &geometries[i];
     if (!g)
     {
         errno = EINVAL;
         return 0;
     }
-    size_t size = (size_t)g->sectors * 512;
+    size_t size = (size_t)g->sectors * FLOPPY_SECTOR_BYTES;
     unsigned char *bytes = calloc(size, 1);
     if (!bytes)
         return 0;
+    /* A short jump over the BPB to the boot code, then the OEM name. */
     memcpy(bytes,
            "\xeb\x3c\x90"
            "2INEFAT ",
-           11);
-    tb_put_le16(bytes + 11, 512);
-    bytes[13] = g->cluster;
-    tb_put_le16(bytes + 14, 1);
-    bytes[16] = 2;
-    tb_put_le16(bytes + 17, g->roots);
-    tb_put_le16(bytes + 19, g->sectors);
-    bytes[21] = g->media;
-    tb_put_le16(bytes + 22, g->fat);
-    tb_put_le16(bytes + 24, g->track);
-    tb_put_le16(bytes + 26, 2);
-    bytes[38] = 0x29;
-    tb_put_le32(bytes + 39, (uint32_t)time(NULL));
-    memcpy(bytes + 43, "NO NAME    FAT12   ", 19);
+           FAT_BPB_SECTOR_BYTES);
+    tb_put_le16(bytes + FAT_BPB_SECTOR_BYTES, FLOPPY_SECTOR_BYTES);
+    bytes[FAT_BPB_SECTORS_PER_CLUSTER] = g->sectors_per_cluster;
+    tb_put_le16(bytes + FAT_BPB_RESERVED_SECTORS, FLOPPY_RESERVED_SECTORS);
+    bytes[FAT_BPB_FAT_COUNT] = FLOPPY_FAT_COUNT;
+    tb_put_le16(bytes + FAT_BPB_ROOT_ENTRIES, g->root_entries);
+    tb_put_le16(bytes + FAT_BPB_TOTAL_SECTORS_16, g->sectors);
+    bytes[FAT_BPB_MEDIA] = g->media;
+    tb_put_le16(bytes + FAT_BPB_FAT_SECTORS, g->fat_sectors);
+    tb_put_le16(bytes + FAT_BPB_SECTORS_PER_TRACK, g->sectors_per_track);
+    tb_put_le16(bytes + FAT_BPB_HEADS, FLOPPY_HEADS);
+    bytes[FAT_BPB_EXTENDED_SIGNATURE] = FAT_EXTENDED_BOOT_SIGNATURE;
+    tb_put_le32(bytes + FAT_BPB_SERIAL, (uint32_t)time(NULL));
+    /* Volume label and filesystem type, space padded. */
+    memcpy(bytes + FAT_BPB_LABEL, "NO NAME    FAT12   ", 19);
     /* A formatted data disk; its boot sector stops instead of executing zeros. */
-    memcpy(bytes + 62, "\xfa\xf4\xeb\xfd", 4);
-    bytes[510] = 0x55;
-    bytes[511] = 0xaa;
-    for (unsigned i = 0; i < 2; i++)
+    memcpy(bytes + FAT_BOOT_CODE, "\xfa\xf4\xeb\xfd", 4);
+    tb_put_le16(bytes + FAT_BOOT_SIGNATURE_OFFSET, FAT_BOOT_SIGNATURE);
+    /* FAT entries 0 and 1 hold the media byte and an end-of-chain mark. */
+    for (unsigned i = 0; i < FLOPPY_FAT_COUNT; i++)
     {
-        size_t at = (1 + i * g->fat) * 512;
+        size_t at = (FLOPPY_RESERVED_SECTORS + i * g->fat_sectors) * FLOPPY_SECTOR_BYTES;
         bytes[at] = g->media;
         bytes[at + 1] = bytes[at + 2] = 0xff;
     }

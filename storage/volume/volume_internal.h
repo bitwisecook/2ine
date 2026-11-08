@@ -7,8 +7,17 @@ FILE *tb_image_open_source(const char *source, int write);
 int tb_image_lock_source(FILE *file, int write);
 int tb_image_protected(const char *path);
 /* Decodes an image path, or reads a device's control file for its current medium and kind
-   (1 CD, 2 floppy, 3 disk) and read-only flag; readonly may be NULL. Returns an owned path. */
+   (TB_DEVICE_*) and read-only flag; readonly may be NULL. Returns an owned path. */
 char *tb_image_resolve_source(const char *path, int *kind, int *readonly);
+
+/* Device kinds in a 2INEMED1 control file. */
+enum
+{
+    TB_DEVICE_CD = 1,
+    TB_DEVICE_FLOPPY = 2,
+    TB_DEVICE_DISK = 3
+};
+
 int tb_hpfs_volume(const char *path);
 int tb_hpfs_info(const char *path, TbImageInfo *info);
 char **tb_hpfs_names(const char *path, size_t *count);

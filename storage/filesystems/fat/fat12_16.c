@@ -15,45 +15,79 @@
 #include <string.h>
 #include <time.h>
 
+/* FAT entry values at or above this end a chain. */
+static unsigned fat_chain_end(const VolumeDisk *d)
+{
+    return d->fat_bits == 12 ? 0xff8u : 0xfff8u;
+}
+
+/* The end-of-chain value written for the last cluster of a file. */
+static unsigned fat_chain_end_mark(const VolumeDisk *d)
+{
+    return d->fat_bits == 12 ? 0xfffu : 0xffffu;
+}
+
+/* FAT12 packs two 12-bit entries into three bytes; FAT16 entries are 16-bit words. */
+static size_t fat_entry_offset(const VolumeDisk *d, uint32_t cluster)
+{
+    return d->fat_bits == 12 ? cluster + cluster / 2 : cluster * 2;
+}
+
+static unsigned fat_value(VolumeDisk *d, uint32_t cluster)
+{
+    unsigned value = tb_le16(d->fat + fat_entry_offset(d, cluster));
+    return d->fat_bits == 12 ? (cluster & 1 ? value >> 4 : value & 0xfff) : value;
+}
+
+static void trim_label(char label[12])
+{
+    label[11] = 0;
+    for (int i = 10; i >= 0 && label[i] == ' '; i--)
+        label[i] = 0;
+}
+
 int fat_identify(VolumeDisk *d)
 {
-    unsigned char b[512];
-    if (!volume_read_at(d, 0, b, 512))
+    unsigned char b[FAT_BOOT_SECTOR_BYTES];
+    if (!volume_read_at(d, 0, b, sizeof b))
         return 0;
-    if (b[510] != 0x55 || b[511] != 0xaa)
+    if (tb_le16(b + FAT_BOOT_SIGNATURE_OFFSET) != FAT_BOOT_SIGNATURE)
         return volume_failure(EINVAL);
-    unsigned sector = tb_le16(b + 11), spc = b[13], reserved = tb_le16(b + 14), fats = b[16],
-             entries = tb_le16(b + 17), fat_sectors = tb_le16(b + 22);
-    uint32_t total = tb_le16(b + 19);
+    unsigned sector = tb_le16(b + FAT_BPB_SECTOR_BYTES), spc = b[FAT_BPB_SECTORS_PER_CLUSTER],
+             reserved = tb_le16(b + FAT_BPB_RESERVED_SECTORS), fats = b[FAT_BPB_FAT_COUNT],
+             entries = tb_le16(b + FAT_BPB_ROOT_ENTRIES),
+             fat_sectors = tb_le16(b + FAT_BPB_FAT_SECTORS);
+    uint32_t total = tb_le16(b + FAT_BPB_TOTAL_SECTORS_16);
     if (!total)
-        total = tb_le32(b + 32);
+        total = tb_le32(b + FAT_BPB_TOTAL_SECTORS_32);
+    /* A zero root-entry or FAT size means FAT32, which FatFs handles. */
     if ((sector != 512 && sector != 1024 && sector != 2048 && sector != 4096) || !spc ||
         (spc & (spc - 1)) || spc > 128 || !reserved || !fats || fats > 2 || !entries ||
         !fat_sectors)
         return volume_failure(ENOTSUP);
-    uint64_t root_sectors = ((uint64_t)entries * 32 + sector - 1) / sector;
+    uint64_t root_sectors = ((uint64_t)entries * FAT_ENTRY_BYTES + sector - 1) / sector;
     uint64_t data_sector = reserved + (uint64_t)fats * fat_sectors + root_sectors;
     if (data_sector >= total || (uint64_t)total * sector > d->bytes)
         return volume_failure(EINVAL);
     uint64_t clusters = (total - data_sector) / spc;
-    if (!clusters || clusters >= 65525)
+    if (!clusters || clusters >= FAT16_CLUSTER_LIMIT)
         return volume_failure(ENOTSUP);
     d->reserved_sectors = reserved;
     d->fat_count = fats;
     d->root_entries = entries;
     d->fat_sectors = fat_sectors;
-    d->sectors_per_track = tb_le16(b + 24);
-    d->heads = tb_le16(b + 26);
-    d->hidden_sectors = tb_le32(b + 28);
-    d->media = b[21];
+    d->sectors_per_track = tb_le16(b + FAT_BPB_SECTORS_PER_TRACK);
+    d->heads = tb_le16(b + FAT_BPB_HEADS);
+    d->hidden_sectors = tb_le32(b + FAT_BPB_HIDDEN_SECTORS);
+    d->media = b[FAT_BPB_MEDIA];
     d->bytes = (uint64_t)total * sector;
-    d->fat_bits = clusters < 4085 ? 12 : 16;
+    d->fat_bits = clusters < FAT12_CLUSTER_LIMIT ? 12 : 16;
     d->clusters = (uint32_t)clusters;
     d->sector_bytes = sector;
     d->cluster_bytes = sector * spc;
     d->data_offset = data_sector * sector;
     d->fat_size = (size_t)fat_sectors * sector;
-    if (((clusters + 2) * d->fat_bits + 7) / 8 > d->fat_size)
+    if (((clusters + FAT_FIRST_CLUSTER) * d->fat_bits + 7) / 8 > d->fat_size)
         return volume_failure(EINVAL);
     d->fat = malloc(d->fat_size);
     if (!d->fat)
@@ -61,49 +95,43 @@ int fat_identify(VolumeDisk *d)
     if (!volume_read_at(d, (uint64_t)reserved * sector, d->fat, d->fat_size))
         return 0;
     d->root = (VolumeNode){.offset = ((uint64_t)reserved + (uint64_t)fats * fat_sectors) * sector,
-                           .size = (uint64_t)entries * 32,
+                           .size = (uint64_t)entries * FAT_ENTRY_BYTES,
                            .modified = INT64_MIN,
                            .directory = 1};
-    if (b[38] == 0x29)
+    if (b[FAT_BPB_EXTENDED_SIGNATURE] == FAT_EXTENDED_BOOT_SIGNATURE)
     {
-        d->serial = tb_le32(b + 39);
-        memcpy(d->label, b + 43, 11);
+        d->serial = tb_le32(b + FAT_BPB_SERIAL);
+        memcpy(d->label, b + FAT_BPB_LABEL, FAT_NAME_BYTES);
     }
-    unsigned char record[32];
+    /* A volume-label entry in the root directory overrides the boot sector label. */
+    unsigned char record[FAT_ENTRY_BYTES];
     for (unsigned i = 0; i < entries; i++)
     {
-        if (!volume_read_at(d, d->root.offset + i * 32u, record, sizeof record))
+        if (!volume_read_at(d, d->root.offset + i * FAT_ENTRY_BYTES, record, sizeof record))
             return 0;
         if (!record[0])
             break;
-        if (record[0] != 0xe5 && record[11] == 8)
+        if (record[0] != FAT_ENTRY_FREE && record[FAT_ENTRY_ATTRIBUTES] == FAT_ATTRIBUTE_VOLUME)
         {
-            memcpy(d->label, record, 11);
+            memcpy(d->label, record, FAT_NAME_BYTES);
             break;
         }
     }
-    d->label[11] = 0;
-    for (int i = 10; i >= 0 && d->label[i] == ' '; i--)
-        d->label[i] = 0;
-
+    trim_label(d->label);
     return 1;
 }
 
 uint32_t fat_next_cluster(VolumeDisk *d, uint32_t cluster)
 {
-    if (cluster < 2 || cluster >= d->clusters + 2 ||
-        cluster >= (d->fat_bits == 12 ? 0xff0u : 0xfff0u))
+    if (!fat_data_cluster(d, cluster))
     {
         errno = EIO;
         return UINT32_MAX;
     }
-    size_t at = d->fat_bits == 12 ? cluster + cluster / 2 : cluster * 2;
-    uint32_t next = tb_le16(d->fat + at);
-    if (d->fat_bits == 12)
-        next = cluster & 1 ? next >> 4 : next & 0xfff;
-    if (next >= (d->fat_bits == 12 ? 0xff8u : 0xfff8u))
+    uint32_t next = fat_value(d, cluster);
+    if (next >= fat_chain_end(d))
         return 0;
-    if (next < 2 || next >= d->clusters + 2 || next >= (d->fat_bits == 12 ? 0xff0u : 0xfff0u))
+    if (!fat_data_cluster(d, next))
     {
         errno = EIO;
         return UINT32_MAX;
@@ -122,68 +150,80 @@ uint64_t fat_directory_offset(VolumeDisk *d, VolumeNode directory, size_t at)
         if (!cluster || cluster == UINT32_MAX || i >= d->clusters)
             return UINT64_MAX;
     }
-    return d->data_offset + (uint64_t)(cluster - 2) * d->cluster_bytes + at % d->cluster_bytes;
+    return fat_cluster_offset(d, cluster) + at % d->cluster_bytes;
 }
+
+/* The checksum of an 8.3 name that its long-name slots carry. */
+static unsigned short_name_checksum(const unsigned char *name)
+{
+    unsigned sum = 0;
+    for (unsigned i = 0; i < FAT_NAME_BYTES; i++)
+        sum = ((((sum & 1) << 7) | sum >> 1) + name[i]) & 255;
+    return sum;
+}
+
+/* Byte offsets of the 13 UTF-16 name units within a long-name slot. */
+static const unsigned lfn_offsets[FAT_LFN_UNITS] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
 
 int fat_read_entries(VolumeDisk *d, VolumeNode directory, const unsigned char *data, size_t size,
                      VolumeEntryCallback callback, void *context)
 {
     int ok = 1;
-    uint16_t lfn[260];
+    uint16_t lfn[FAT_LFN_BUFFER_UNITS];
     unsigned expected = 0, checksum = 0, has_lfn = 0;
     memset(lfn, 0xff, sizeof lfn);
     for (size_t at = 0; at < size;)
     {
         char name[1024];
         VolumeNode node = {0};
-        if (size - at < 32)
+        if (size - at < FAT_ENTRY_BYTES)
         {
             ok = volume_failure(EINVAL);
             break;
         }
         const unsigned char *r = data + at;
-        at += 32;
+        at += FAT_ENTRY_BYTES;
         if (!r[0])
             break;
-        if (r[0] == 0xe5)
+        if (r[0] == FAT_ENTRY_FREE)
         {
             expected = 0;
             has_lfn = 0;
             continue;
         }
-        if (r[11] == 0x0f)
+        unsigned attributes = r[FAT_ENTRY_ATTRIBUTES];
+        if (attributes == FAT_ATTRIBUTE_LONG_NAME)
         {
-            unsigned ordinal = r[0] & 31;
-            if ((r[0] & 0x40) && ordinal && ordinal <= 20)
+            /* Slots precede their 8.3 entry in descending order, the last part first. */
+            unsigned ordinal = r[0] & FAT_LFN_ORDINAL;
+            if ((r[0] & FAT_LFN_LAST) && ordinal && ordinal <= FAT_LFN_SLOTS)
             {
                 memset(lfn, 0xff, sizeof lfn);
                 expected = ordinal;
-                checksum = r[13];
+                checksum = r[FAT_LFN_CHECKSUM];
                 has_lfn = 1;
             }
-            if (!expected || ordinal != expected || r[13] != checksum || tb_le16(r + 26))
+            if (!expected || ordinal != expected || r[FAT_LFN_CHECKSUM] != checksum ||
+                tb_le16(r + FAT_LFN_CLUSTER))
             {
                 expected = 0;
                 has_lfn = 0;
                 continue;
             }
-            static const unsigned offsets[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
-            for (unsigned i = 0; i < 13; i++)
-                lfn[(ordinal - 1) * 13 + i] = (uint16_t)tb_le16(r + offsets[i]);
+            for (unsigned i = 0; i < FAT_LFN_UNITS; i++)
+                lfn[(ordinal - 1) * FAT_LFN_UNITS + i] = (uint16_t)tb_le16(r + lfn_offsets[i]);
             expected--;
             continue;
         }
-        if (r[11] & 8)
+        if (attributes & FAT_ATTRIBUTE_VOLUME)
         {
             expected = 0;
             has_lfn = 0;
             continue;
         }
-        unsigned sum = 0;
-        for (unsigned i = 0; i < 11; i++)
-            sum = (((sum & 1) << 7) | (sum >> 1)) + r[i], sum &= 255;
-        int long_name = has_lfn && !expected && sum == checksum && lfn[0] != 0xffff;
-        if (long_name && !volume_utf16_name(lfn, 260, name, sizeof name))
+        int long_name =
+            has_lfn && !expected && short_name_checksum(r) == checksum && lfn[0] != FAT_LFN_PADDING;
+        if (long_name && !volume_utf16_name(lfn, FAT_LFN_BUFFER_UNITS, name, sizeof name))
         {
             ok = 0;
             break;
@@ -196,7 +236,7 @@ int fat_read_entries(VolumeDisk *d, VolumeNode directory, const unsigned char *d
             if (r[8] != ' ')
             {
                 name[n++] = '.';
-                for (unsigned i = 8; i < 11 && r[i] != ' '; i++)
+                for (unsigned i = 8; i < FAT_NAME_BYTES && r[i] != ' '; i++)
                     name[n++] = (char)r[i];
             }
             name[n] = 0;
@@ -204,17 +244,20 @@ int fat_read_entries(VolumeDisk *d, VolumeNode directory, const unsigned char *d
         expected = 0;
         has_lfn = 0;
         memset(lfn, 0xff, sizeof lfn);
-        node.record = fat_directory_offset(d, directory, at - 32);
-        node.attributes = r[11];
-        node.modified = tb_dos_time(tb_le16(r + 24), tb_le16(r + 22));
-        node.accessed = tb_dos_time(tb_le16(r + 18), 0);
-        node.created = tb_dos_time(tb_le16(r + 16), tb_le16(r + 14));
+        node.record = fat_directory_offset(d, directory, at - FAT_ENTRY_BYTES);
+        node.attributes = attributes;
+        node.modified =
+            tb_dos_time(tb_le16(r + FAT_ENTRY_MODIFIED_DATE), tb_le16(r + FAT_ENTRY_MODIFIED_TIME));
+        node.accessed = tb_dos_time(tb_le16(r + FAT_ENTRY_ACCESSED_DATE), 0);
+        node.created =
+            tb_dos_time(tb_le16(r + FAT_ENTRY_CREATED_DATE), tb_le16(r + FAT_ENTRY_CREATED_TIME));
         node.accessed = node.accessed == INT64_MIN ? 0 : node.accessed;
         node.created = node.created == INT64_MIN ? 0 : node.created;
-        node.cluster = tb_le16(r + 26);
-        node.size = tb_le32(r + 28);
-        node.directory = !!(r[11] & 16);
-        if (node.directory && node.cluster < 2 && strcmp(name, ".") && strcmp(name, ".."))
+        node.cluster = tb_le16(r + FAT_ENTRY_CLUSTER);
+        node.size = tb_le32(r + FAT_ENTRY_SIZE);
+        node.directory = !!(attributes & FAT_ATTRIBUTE_DIRECTORY);
+        if (node.directory && node.cluster < FAT_FIRST_CLUSTER && strcmp(name, ".") &&
+            strcmp(name, ".."))
         {
             ok = volume_failure(EIO);
             break;
@@ -234,30 +277,17 @@ int fat_read_entries(VolumeDisk *d, VolumeNode directory, const unsigned char *d
 uint64_t fat_available_bytes(VolumeDisk *d)
 {
     uint64_t available = 0;
-    for (uint32_t i = 2; i < d->clusters + 2; i++)
-    {
-        size_t at = d->fat_bits == 12 ? i + i / 2 : i * 2;
-        unsigned value = tb_le16(d->fat + at);
-        if (d->fat_bits == 12)
-            value = i & 1 ? value >> 4 : value & 0xfff;
-        if (!value)
+    for (uint32_t i = FAT_FIRST_CLUSTER; i < d->clusters + FAT_FIRST_CLUSTER; i++)
+        if (!fat_value(d, i))
             available += d->cluster_bytes;
-    }
     return available;
 }
 
 /* FAT updates stage a complete filesystem in memory before touching the source.
    The source is exclusively locked through validation and commit. */
-static unsigned fat_value(VolumeDisk *d, uint32_t cluster)
-{
-    size_t at = d->fat_bits == 12 ? cluster + cluster / 2 : cluster * 2;
-    unsigned value = tb_le16(d->fat + at);
-    return d->fat_bits == 12 ? (cluster & 1 ? value >> 4 : value & 0xfff) : value;
-}
-
 static void fat_set(VolumeDisk *d, uint32_t cluster, unsigned value)
 {
-    size_t at = d->fat_bits == 12 ? cluster + cluster / 2 : cluster * 2;
+    size_t at = fat_entry_offset(d, cluster);
     if (d->fat_bits == 12)
     {
         unsigned old = tb_le16(d->fat + at);
@@ -266,18 +296,13 @@ static void fat_set(VolumeDisk *d, uint32_t cluster, unsigned value)
     tb_put_le16(d->fat + at, value);
 }
 
-static uint64_t cluster_offset(VolumeDisk *d, uint32_t cluster)
-{
-    return d->data_offset + (uint64_t)(cluster - 2) * d->cluster_bytes;
-}
-
 static uint32_t allocate_cluster(VolumeDisk *d)
 {
-    for (uint32_t i = 2; i < d->clusters + 2; i++)
+    for (uint32_t i = FAT_FIRST_CLUSTER; i < d->clusters + FAT_FIRST_CLUSTER; i++)
         if (!fat_value(d, i))
         {
-            fat_set(d, i, d->fat_bits == 12 ? 0xfff : 0xffff);
-            memset(d->memory + cluster_offset(d, i), 0, d->cluster_bytes);
+            fat_set(d, i, fat_chain_end_mark(d));
+            memset(d->memory + fat_cluster_offset(d, i), 0, d->cluster_bytes);
             return i;
         }
     errno = ENOSPC;
@@ -385,19 +410,23 @@ static void record_time(unsigned char *entry)
         year = 1980;
     if (year > 2107)
         year = 2107;
-    tb_put_le16(entry + 22, value.tm_hour << 11 | value.tm_min << 5 | value.tm_sec / 2);
-    tb_put_le16(entry + 24, (year - 1980) << 9 | (value.tm_mon + 1) << 5 | value.tm_mday);
+    tb_put_le16(entry + FAT_ENTRY_MODIFIED_TIME,
+                value.tm_hour << 11 | value.tm_min << 5 | value.tm_sec / 2);
+    tb_put_le16(entry + FAT_ENTRY_MODIFIED_DATE,
+                (year - 1980) << 9 | (value.tm_mon + 1) << 5 | value.tm_mday);
 }
 
-static int short_exists(VolumeDisk *d, VolumeNode parent, const unsigned char name[11])
+static int short_exists(VolumeDisk *d, VolumeNode parent, const unsigned char name[FAT_NAME_BYTES])
 {
     size_t size;
     unsigned char *data = volume_directory_data(d, parent, &size);
     if (!data)
         return -1;
     int found = 0;
-    for (size_t i = 0; i + 32 <= size && data[i]; i += 32)
-        if (data[i] != 0xe5 && data[i + 11] != 15 && !memcmp(data + i, name, 11))
+    for (size_t i = 0; i + FAT_ENTRY_BYTES <= size && data[i]; i += FAT_ENTRY_BYTES)
+        if (data[i] != FAT_ENTRY_FREE &&
+            data[i + FAT_ENTRY_ATTRIBUTES] != FAT_ATTRIBUTE_LONG_NAME &&
+            !memcmp(data + i, name, FAT_NAME_BYTES))
         {
             found = 1;
             break;
@@ -406,7 +435,7 @@ static int short_exists(VolumeDisk *d, VolumeNode parent, const unsigned char na
     return found;
 }
 
-static int name_units(const char *name, uint16_t units[260], size_t *length)
+static int name_units(const char *name, uint16_t units[FAT_LFN_BUFFER_UNITS], size_t *length)
 {
     size_t n = 0;
     const unsigned char *p = (const unsigned char *)name;
@@ -430,15 +459,15 @@ static int name_units(const char *name, uint16_t units[260], size_t *length)
             if ((more == 2 && value < 0x800) || (value >= 0xd800 && value <= 0xdfff))
                 return volume_failure(EINVAL);
         }
-        if (value < 32 || n == 255)
+        if (value < 32 || n == FAT_LFN_NAME_UNITS)
             return volume_failure(ENAMETOOLONG);
         units[n++] = value;
     }
     if (!n || units[n - 1] == ' ' || units[n - 1] == '.')
         return volume_failure(EINVAL);
     *length = n;
-    while (n < 260)
-        units[n++] = 0xffff;
+    while (n < FAT_LFN_BUFFER_UNITS)
+        units[n++] = FAT_LFN_PADDING;
     return 1;
 }
 
@@ -447,12 +476,12 @@ static int short_character(unsigned char c)
     return c < 128 && (isalnum(c) || strchr("!#$%&'()-@^_`{}~", c));
 }
 
-static int make_short(VolumeDisk *d, VolumeNode parent, const char *name, unsigned char alias[11],
-                      int *lfn)
+static int make_short(VolumeDisk *d, VolumeNode parent, const char *name,
+                      unsigned char alias[FAT_NAME_BYTES], int *lfn)
 {
     const char *dot = strrchr(name, '.');
     size_t base = dot ? (size_t)(dot - name) : strlen(name), ext = dot ? strlen(dot + 1) : 0;
-    memset(alias, ' ', 11);
+    memset(alias, ' ', FAT_NAME_BYTES);
     *lfn = base > 8 || ext > 3 || !base;
     for (size_t i = 0; i < base; i++)
     {
@@ -505,14 +534,14 @@ static int directory_slots(VolumeDisk *d, VolumeNode parent, size_t required, si
             return 0;
         size_t run = 0;
         int end = 0;
-        for (size_t at = 0; at + 32 <= size; at += 32)
+        for (size_t at = 0; at + FAT_ENTRY_BYTES <= size; at += FAT_ENTRY_BYTES)
         {
             if (!data[at])
                 end = 1;
-            run = end || data[at] == 0xe5 ? run + 1 : 0;
+            run = end || data[at] == FAT_ENTRY_FREE ? run + 1 : 0;
             if (run == required)
             {
-                *slot = at / 32 + 1 - required;
+                *slot = at / FAT_ENTRY_BYTES + 1 - required;
                 free(data);
                 return 1;
             }
@@ -542,54 +571,51 @@ static int directory_slots(VolumeDisk *d, VolumeNode parent, size_t required, si
 static int new_record(VolumeDisk *d, VolumeNode parent, const char *name,
                       const unsigned char *previous, VolumeNode *result)
 {
-    unsigned char alias[11];
+    unsigned char alias[FAT_NAME_BYTES];
     int lfn;
-    uint16_t units[260];
+    uint16_t units[FAT_LFN_BUFFER_UNITS];
     size_t n;
     if (!name_units(name, units, &n) || !make_short(d, parent, name, alias, &lfn))
         return 0;
-    size_t count = lfn ? (n + 12) / 13 : 0, slot;
+    size_t count = lfn ? (n + FAT_LFN_UNITS - 1) / FAT_LFN_UNITS : 0, slot;
     if (!directory_slots(d, parent, count + 1, &slot))
         return 0;
-    unsigned checksum = 0;
-    for (unsigned i = 0; i < 11; i++)
-        checksum = ((((checksum & 1) << 7) | checksum >> 1) + alias[i]) & 255;
-    if (n < 260)
+    unsigned checksum = short_name_checksum(alias);
+    if (n < FAT_LFN_BUFFER_UNITS)
         units[n] = 0;
-    static const unsigned offsets[13] = {1, 3, 5, 7, 9, 14, 16, 18, 20, 22, 24, 28, 30};
     for (size_t i = 0; i < count; i++)
     {
-        uint64_t offset = fat_directory_offset(d, parent, (slot + i) * 32);
+        uint64_t offset = fat_directory_offset(d, parent, (slot + i) * FAT_ENTRY_BYTES);
         if (offset == UINT64_MAX)
             return volume_failure(EIO);
         unsigned char *entry = d->memory + offset;
-        memset(entry, 0, 32);
+        memset(entry, 0, FAT_ENTRY_BYTES);
         unsigned ordinal = (unsigned)(count - i);
-        entry[0] = ordinal | (!i ? 0x40 : 0);
-        entry[11] = 15;
-        entry[13] = checksum;
-        for (unsigned j = 0; j < 13; j++)
-            tb_put_le16(entry + offsets[j], units[(ordinal - 1) * 13 + j]);
+        entry[0] = ordinal | (!i ? FAT_LFN_LAST : 0);
+        entry[FAT_ENTRY_ATTRIBUTES] = FAT_ATTRIBUTE_LONG_NAME;
+        entry[FAT_LFN_CHECKSUM] = checksum;
+        for (unsigned j = 0; j < FAT_LFN_UNITS; j++)
+            tb_put_le16(entry + lfn_offsets[j], units[(ordinal - 1) * FAT_LFN_UNITS + j]);
     }
-    uint64_t offset = fat_directory_offset(d, parent, (slot + count) * 32);
+    uint64_t offset = fat_directory_offset(d, parent, (slot + count) * FAT_ENTRY_BYTES);
     if (offset == UINT64_MAX)
         return volume_failure(EIO);
     unsigned char *entry = d->memory + offset;
     if (previous)
-        memcpy(entry, previous, 32);
+        memcpy(entry, previous, FAT_ENTRY_BYTES);
     else
     {
-        memset(entry, 0, 32);
-        entry[11] = 32;
+        memset(entry, 0, FAT_ENTRY_BYTES);
+        entry[FAT_ENTRY_ATTRIBUTES] = FAT_ATTRIBUTE_ARCHIVE;
         record_time(entry);
     }
-    memcpy(entry, alias, 11);
+    memcpy(entry, alias, FAT_NAME_BYTES);
     *result = (VolumeNode){0};
     result->record = offset;
-    result->cluster = tb_le16(entry + 26);
-    result->size = tb_le32(entry + 28);
-    result->attributes = entry[11];
-    result->directory = !!(entry[11] & 16);
+    result->cluster = tb_le16(entry + FAT_ENTRY_CLUSTER);
+    result->size = tb_le32(entry + FAT_ENTRY_SIZE);
+    result->attributes = entry[FAT_ENTRY_ATTRIBUTES];
+    result->directory = !!(entry[FAT_ENTRY_ATTRIBUTES] & FAT_ATTRIBUTE_DIRECTORY);
     return 1;
 }
 
@@ -600,7 +626,7 @@ static int erase_record(VolumeDisk *d, VolumeNode parent, VolumeNode node)
     if (!data)
         return 0;
     size_t slot = SIZE_MAX;
-    for (size_t at = 0; at + 32 <= size; at += 32)
+    for (size_t at = 0; at + FAT_ENTRY_BYTES <= size; at += FAT_ENTRY_BYTES)
         if (fat_directory_offset(d, parent, at) == node.record)
         {
             slot = at;
@@ -611,17 +637,20 @@ static int erase_record(VolumeDisk *d, VolumeNode parent, VolumeNode node)
         free(data);
         return volume_failure(EIO);
     }
-    d->memory[node.record] = 0xe5;
-    while (slot >= 32 && data[slot - 32 + 11] == 15 && data[slot - 32] != 0xe5)
+    d->memory[node.record] = FAT_ENTRY_FREE;
+    /* Also free the long-name slots stored just before the entry. */
+    while (slot >= FAT_ENTRY_BYTES &&
+           data[slot - FAT_ENTRY_BYTES + FAT_ENTRY_ATTRIBUTES] == FAT_ATTRIBUTE_LONG_NAME &&
+           data[slot - FAT_ENTRY_BYTES] != FAT_ENTRY_FREE)
     {
-        slot -= 32;
+        slot -= FAT_ENTRY_BYTES;
         uint64_t offset = fat_directory_offset(d, parent, slot);
         if (offset == UINT64_MAX)
         {
             free(data);
             return volume_failure(EIO);
         }
-        d->memory[offset] = 0xe5;
+        d->memory[offset] = FAT_ENTRY_FREE;
     }
     free(data);
     return 1;
@@ -635,9 +664,9 @@ static int file_contents(VolumeDisk *d, VolumeNode node, unsigned char *out, siz
         if (!cluster || cluster == UINT32_MAX || steps >= d->clusters)
             return volume_failure(EIO);
         size_t n = size - at < d->cluster_bytes ? size - at : d->cluster_bytes;
-        if (cluster < 2 || cluster >= d->clusters + 2)
+        if (cluster < FAT_FIRST_CLUSTER || cluster >= d->clusters + FAT_FIRST_CLUSTER)
             return volume_failure(EIO);
-        memcpy(out + at, d->memory + cluster_offset(d, cluster), n);
+        memcpy(out + at, d->memory + fat_cluster_offset(d, cluster), n);
         at += n;
         cluster = fat_next_cluster(d, cluster);
     }
@@ -648,7 +677,7 @@ static int replace_contents(VolumeDisk *d, VolumeNode node, const void *contents
 {
     if (node.directory)
         return volume_failure(EISDIR);
-    if (node.attributes & 1)
+    if (node.attributes & FAT_ATTRIBUTE_READONLY)
         return volume_failure(EACCES);
     if (size > UINT32_MAX || size > d->bytes)
         return volume_failure(ENOSPC);
@@ -666,12 +695,12 @@ static int replace_contents(VolumeDisk *d, VolumeNode node, const void *contents
             fat_set(d, last, cluster);
         last = cluster;
         size_t n = size - at < d->cluster_bytes ? (size_t)(size - at) : d->cluster_bytes;
-        memcpy(d->memory + cluster_offset(d, cluster), (const unsigned char *)contents + at, n);
+        memcpy(d->memory + fat_cluster_offset(d, cluster), (const unsigned char *)contents + at, n);
     }
     unsigned char *entry = d->memory + node.record;
-    tb_put_le16(entry + 26, first);
-    tb_put_le32(entry + 28, (uint32_t)size);
-    entry[11] |= 32;
+    tb_put_le16(entry + FAT_ENTRY_CLUSTER, first);
+    tb_put_le32(entry + FAT_ENTRY_SIZE, (uint32_t)size);
+    entry[FAT_ENTRY_ATTRIBUTES] |= FAT_ATTRIBUTE_ARCHIVE;
     record_time(entry);
     return 1;
 }
@@ -747,7 +776,7 @@ static int remove_entry(const char *path, int directory)
     int ok = volume_lookup(&disk, member, &node) && parent_node(&disk, member, &parent, &name);
     if (ok && node.directory != !!directory)
         ok = volume_failure(node.directory ? EISDIR : ENOTDIR);
-    if (ok && node.attributes & 1)
+    if (ok && node.attributes & FAT_ATTRIBUTE_READONLY)
         ok = volume_failure(EACCES);
     if (ok && directory)
         ok = volume_entries(&disk, node, count_entry, &children) &&
@@ -781,17 +810,19 @@ static int make_directory(const char *path)
         if (ok)
         {
             unsigned char *record = disk.memory + node.record;
-            record[11] = 16;
-            tb_put_le16(record + 26, cluster);
-            unsigned char *dot = disk.memory + cluster_offset(&disk, cluster);
-            memset(dot, ' ', 11);
+            record[FAT_ENTRY_ATTRIBUTES] = FAT_ATTRIBUTE_DIRECTORY;
+            tb_put_le16(record + FAT_ENTRY_CLUSTER, cluster);
+            /* A new directory starts with "." for itself and ".." for its parent. */
+            unsigned char *dot = disk.memory + fat_cluster_offset(&disk, cluster);
+            unsigned char *dotdot = dot + FAT_ENTRY_BYTES;
+            memset(dot, ' ', FAT_NAME_BYTES);
             dot[0] = '.';
-            dot[11] = 16;
-            tb_put_le16(dot + 26, cluster);
+            dot[FAT_ENTRY_ATTRIBUTES] = FAT_ATTRIBUTE_DIRECTORY;
+            tb_put_le16(dot + FAT_ENTRY_CLUSTER, cluster);
             record_time(dot);
-            memcpy(dot + 32, dot, 32);
-            dot[33] = '.';
-            tb_put_le16(dot + 32 + 26, parent.cluster);
+            memcpy(dotdot, dot, FAT_ENTRY_BYTES);
+            dotdot[1] = '.';
+            tb_put_le16(dotdot + FAT_ENTRY_CLUSTER, parent.cluster);
             ok = commit_disk(&disk);
         }
     }
@@ -813,7 +844,9 @@ static int set_readonly(const char *path, int readonly)
     if (ok)
     {
         unsigned char *record = disk.memory + node.record;
-        record[11] = readonly ? record[11] | 1 : record[11] & ~1u;
+        record[FAT_ENTRY_ATTRIBUTES] = readonly
+                                           ? record[FAT_ENTRY_ATTRIBUTES] | FAT_ATTRIBUTE_READONLY
+                                           : record[FAT_ENTRY_ATTRIBUTES] & ~FAT_ATTRIBUTE_READONLY;
         ok = commit_disk(&disk);
     }
     volume_close(&disk);
@@ -832,17 +865,15 @@ static int set_stamps(const char *path, const char *expected, const TbImageStamp
         ok = volume_failure(EACCES);
     if (ok)
     {
+        /* A DOS stamp holds the date in its high word; entries store the time word first. */
         unsigned char *record = disk.memory + node.record;
         if (stamps->created != INT64_MIN)
-            tb_put_le32(record + 14, tb_dos_stamp(stamps->created));
+            tb_put_le32(record + FAT_ENTRY_CREATED_TIME, tb_dos_stamp(stamps->created));
         if (stamps->accessed != INT64_MIN)
-        {
-            uint32_t stamp = tb_dos_stamp(stamps->accessed);
-            record[18] = (unsigned char)(stamp >> 16);
-            record[19] = (unsigned char)(stamp >> 24);
-        }
+            tb_put_le16(record + FAT_ENTRY_ACCESSED_DATE,
+                        (uint16_t)(tb_dos_stamp(stamps->accessed) >> 16));
         if (stamps->modified != INT64_MIN)
-            tb_put_le32(record + 22, tb_dos_stamp(stamps->modified));
+            tb_put_le32(record + FAT_ENTRY_MODIFIED_TIME, tb_dos_stamp(stamps->modified));
         ok = commit_disk(&disk);
     }
     volume_close(&disk);
@@ -862,7 +893,9 @@ static int set_attributes(const char *path, const char *expected, unsigned attri
     if (ok)
     {
         unsigned char *record = disk.memory + node.record;
-        record[11] = (unsigned char)((record[11] & ~0x26u) | attributes);
+        record[FAT_ENTRY_ATTRIBUTES] =
+            (unsigned char)((record[FAT_ENTRY_ATTRIBUTES] & ~(unsigned)FAT_ATTRIBUTES_SETTABLE) |
+                            attributes);
         ok = commit_disk(&disk);
     }
     volume_close(&disk);
@@ -889,7 +922,7 @@ static int move_entry(const char *source, const char *target)
              parent_node(&disk, tail, &destination, &newname);
     if (ok && volume_lookup(&disk, tail, &found))
         ok = volume_failure(EEXIST);
-    if (ok && node.attributes & 1)
+    if (ok && node.attributes & FAT_ATTRIBUTE_READONLY)
         ok = volume_failure(EACCES);
     if (ok && node.directory)
     {
@@ -901,26 +934,28 @@ static int move_entry(const char *source, const char *target)
                 ok = volume_failure(EINVAL);
                 break;
             }
-            if (steps >= disk.clusters || ancestor.cluster < 2 ||
-                ancestor.cluster >= disk.clusters + 2)
+            if (steps >= disk.clusters || ancestor.cluster < FAT_FIRST_CLUSTER ||
+                ancestor.cluster >= disk.clusters + FAT_FIRST_CLUSTER)
             {
                 ok = volume_failure(EIO);
                 break;
             }
-            uint64_t offset = cluster_offset(&disk, ancestor.cluster);
-            uint32_t upper = tb_le16(disk.memory + offset + 32 + 26);
+            /* The ".." entry, second in each directory, names the parent's cluster. */
+            uint64_t offset = fat_cluster_offset(&disk, ancestor.cluster) + FAT_ENTRY_BYTES;
+            uint32_t upper = tb_le16(disk.memory + offset + FAT_ENTRY_CLUSTER);
             ancestor.cluster = upper;
         }
     }
-    unsigned char original[32];
+    unsigned char original[FAT_ENTRY_BYTES];
     if (ok)
     {
-        memcpy(original, disk.memory + node.record, 32);
+        memcpy(original, disk.memory + node.record, FAT_ENTRY_BYTES);
         ok = new_record(&disk, destination, newname, original, &created) &&
              erase_record(&disk, parent, node);
     }
     if (ok && node.directory)
-        tb_put_le16(disk.memory + cluster_offset(&disk, node.cluster) + 32 + 26,
+        tb_put_le16(disk.memory + fat_cluster_offset(&disk, node.cluster) + FAT_ENTRY_BYTES +
+                        FAT_ENTRY_CLUSTER,
                     destination.cluster);
     if (ok)
         ok = commit_disk(&disk);

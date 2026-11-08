@@ -14,6 +14,21 @@
 #include <string.h>
 #define IMAGE_PREFIX "/@2ine-image/"
 #define DEVICE_PREFIX "/@2ine-device/"
+/* Hex-encoded sources longer than this are rejected. */
+#define ENCODED_SOURCE_LIMIT 65536u
+
+/* Device control file: a fixed header followed by the current medium's path. */
+#define CONTROL_MAGIC "2INEMED1"
+
+enum
+{
+    CONTROL_MAGIC_BYTES = 8,
+    CONTROL_KIND = 8,
+    CONTROL_READONLY = 9,
+    CONTROL_SOURCE_BYTES = 12, /* little-endian; zero when no medium is inserted */
+    CONTROL_HEADER_BYTES = 16,
+    CONTROL_SOURCE_LIMIT = 32768
+};
 
 int tb_image_path(const char *path)
 {
@@ -100,7 +115,7 @@ static char *decoded_source(const char *path)
     }
     const char *hex = path + prefix_size(path), *end = strchr(hex, '/');
     size_t n = end ? (size_t)(end - hex) : strlen(hex);
-    if (!n || n % 2 || n > 65536)
+    if (!n || n % 2 || n > ENCODED_SOURCE_LIMIT)
     {
         errno = EINVAL;
         return NULL;
@@ -133,19 +148,21 @@ static char *device_source(const char *path, int *kind, int *readonly)
     free(control);
     if (!file)
         return NULL;
-    unsigned char header[16];
-    if (fread(header, 1, sizeof header, file) != sizeof header || memcmp(header, "2INEMED1", 8) ||
-        (header[8] < 1 || header[8] > 3))
+    unsigned char header[CONTROL_HEADER_BYTES];
+    if (fread(header, 1, sizeof header, file) != sizeof header ||
+        memcmp(header, CONTROL_MAGIC, CONTROL_MAGIC_BYTES) ||
+        (header[CONTROL_KIND] < TB_DEVICE_CD || header[CONTROL_KIND] > TB_DEVICE_DISK))
     {
         fclose(file);
         errno = EINVAL;
         return NULL;
     }
-    *kind = header[8];
+    *kind = header[CONTROL_KIND];
+    /* CD media are always read-only. */
     if (readonly)
-        *readonly = header[8] == 1 || !!header[9];
-    uint32_t n = tb_le32(header + 12);
-    if (n > 32768)
+        *readonly = header[CONTROL_KIND] == TB_DEVICE_CD || !!header[CONTROL_READONLY];
+    uint32_t n = tb_le32(header + CONTROL_SOURCE_BYTES);
+    if (n > CONTROL_SOURCE_LIMIT)
     {
         fclose(file);
         errno = EINVAL;
