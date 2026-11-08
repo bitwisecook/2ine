@@ -112,6 +112,36 @@ class ImportParserTests(unittest.TestCase):
         self.assertTrue(exported["PMWINX"][715]["sourceLocations"])
         self.assertEqual(exported["PMWINX"][715]["name"], "WINHELP")
 
+    def test_forwarder_exports_take_their_target_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            private = root / "os2/include/private"
+            private.mkdir(parents=True)
+            (private / "api16.json").write_text("{}")
+            (private / "api32.json").write_text("{}")
+            (root / "emulator/loader").mkdir(parents=True)
+            (root / "emulator/loader/imports.c").write_text("")
+            doscalls = root / "os2/baseos/doscalls"
+            (doscalls / "generated").mkdir(parents=True)
+            (doscalls / "queue.c").write_text("APIRET DosReadQueue(void)\n{\n    return 0;\n}\n")
+            (doscalls / "generated/doscalls-lx.h").write_text(
+                "    LX_NATIVE_EXPORT32(DosReadQueue, 661),\n"
+            )
+            quecalls = root / "os2/baseos/quecalls/generated"
+            quecalls.mkdir(parents=True)
+            (quecalls / "quecalls-lx.h").write_text(
+                'LX_NATIVE_FORWARDER(lx_forward_9, "DOSCALLS", 661, "");\n'
+                'LX_NATIVE_FORWARDER(lx_forward_2, "DOSCALLS", 675, "");\n'
+                '    LX_NATIVE_EXPORT_FORWARDER(lx_forward_2, "DOSPURGEQUEUE", 2),\n'
+                '    LX_NATIVE_EXPORT_FORWARDER(lx_forward_9, "DosReadQueue", 9),\n'
+            )
+            exported = inventory.export_inventory(root)
+        self.assertEqual(sorted(exported["QUECALLS"]), [9])
+        entry = exported["QUECALLS"][9]
+        self.assertEqual(entry["forwarder"], {"module": "DOSCALLS", "ordinal": 661})
+        self.assertEqual(entry["symbol"], "DosReadQueue")
+        self.assertEqual(entry["sourceLocations"][0]["path"], "os2/baseos/doscalls/queue.c")
+
     def test_optional_modules_do_not_enter_application_closure_and_output_is_stable(self):
         source = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as directory:

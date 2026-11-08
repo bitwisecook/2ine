@@ -83,6 +83,26 @@ Import ordinal: 5
                 ["DosClose (DOSCALLS@257)\n"],
             )
 
+    def test_counts_renamed_bridged_and_forwarded_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            (path / "doscalls-lx.h").write_text(
+                '    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16ReadQueue, "DOSREADQUEUE", 674),\n'
+                "    LX_NATIVE_EXPORT32_BRIDGED(DosReadQueue, 661),\n"
+            )
+            (path / "quecalls-lx.h").write_text(
+                'LX_NATIVE_FORWARDER(lx_forward_1, "DOSCALLS", 674, "");\n'
+                'LX_NATIVE_FORWARDER(lx_forward_9, "DOSCALLS", 0, "DosReadQueue");\n'
+                'LX_NATIVE_FORWARDER(lx_forward_2, "DOSCALLS", 675, "");\n'
+                '    LX_NATIVE_EXPORT_FORWARDER(lx_forward_1, "DOSREADQUEUE", 1),\n'
+                '    LX_NATIVE_EXPORT_FORWARDER(lx_forward_2, "DOSPURGEQUEUE", 2),\n'
+                '    LX_NATIVE_EXPORT_FORWARDER(lx_forward_9, "DosReadQueue", 9),\n'
+            )
+            self.assertEqual(
+                unimplemented.implemented(path),
+                {"DOSCALLS@674", "DOSCALLS@661", "QUECALLS@1", "QUECALLS@9"},
+            )
+
 
 class WarpFontTests(unittest.TestCase):
     def test_selects_only_native_fonts_and_rejects_incomplete_or_ambiguous_media(self):

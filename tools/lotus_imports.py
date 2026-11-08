@@ -188,6 +188,7 @@ def source_functions(root: Path) -> dict:
 
 def export_inventory(root: Path) -> dict:
     inventories = {}
+    forwarders = []
     functions = source_functions(root)
     api32 = json.loads((root / "os2/include/private/api32.json").read_text())
     api16 = json.loads((root / "os2/include/private/api16.json").read_text())
@@ -218,6 +219,40 @@ def export_inventory(root: Path) -> dict:
                 ),
             }
         inventories[module] = entries
+        for match in re.finditer(
+            r'LX_NATIVE_EXPORT_FORWARDER\((?P<label>\w+),\s*"(?P<name>[^"]+)",\s*(?P<ordinal>\d+)\)',
+            text,
+        ):
+            target = re.search(
+                rf'LX_NATIVE_FORWARDER\({match["label"]},\s*"(?P<module>\w+)",\s*(?P<ordinal>\d+),\s*"(?P<entry>\w*)"\)',
+                text,
+            )
+            if target:
+                forwarders.append(
+                    (
+                        module,
+                        int(match["ordinal"]),
+                        match["name"],
+                        module_name(target["module"]),
+                        int(target["ordinal"]),
+                        target["entry"],
+                    )
+                )
+    # A forwarder export is present when its target entry is: by ordinal, or by C symbol.
+    for module, ordinal, name, target, target_ordinal, entry in forwarders:
+        candidates = inventories.get(target, {})
+        found = (
+            candidates.get(target_ordinal)
+            if target_ordinal
+            else next((item for item in candidates.values() if item["symbol"] == entry), None)
+        )
+        if found:
+            inventories.setdefault(module, {})[ordinal] = {
+                **found,
+                "ordinal": ordinal,
+                "name": name,
+                "forwarder": {"module": target, "ordinal": found["ordinal"]},
+            }
     # Empty native SOM is built, while genuine OS/2 SOM is supplied by user media.
     inventories.setdefault("SOM", {})
     runtime_path = root / "emulator/loader/imports.c"

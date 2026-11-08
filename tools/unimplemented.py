@@ -9,15 +9,41 @@ import sys
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
+EXPORT = re.compile(
+    r"\s*LX_NATIVE_EXPORT(?:16|32)?(?:_BRIDGED)?(?:_DIFFERENT_NAME)?\((\w+),\s*(?:\"[^\"]+\",\s*)?(\d+)\)"
+)
+DATA = re.compile(r"\s*LX_NATIVE_EXPORT_DATA\(\w+,\s*(\d+)\)")
+FORWARDER = re.compile(r'\s*LX_NATIVE_FORWARDER\((\w+),\s*"(\w+)",\s*(\d+),\s*"(\w*)"\)')
+FORWARDER_EXPORT = re.compile(r'\s*LX_NATIVE_EXPORT_FORWARDER\((\w+),\s*"[^"]+",\s*(\d+)\)')
+
 
 def implemented(directory: Path) -> set[str]:
+    """Return MODULE@ordinal for every export with a native implementation.
+
+    A forwarder export counts when its target module implements the target
+    entry, named by ordinal or by C symbol.
+    """
     exports: set[str] = set()
+    symbols: set[str] = set()
+    forwarders: list[tuple[str, str, int, str]] = []
     for header in sorted(directory.rglob("*-lx.h")):
         module = header.name.removesuffix("-lx.h").upper()
+        targets: dict[str, tuple[str, int, str]] = {}
         for line in header.read_text().splitlines():
-            match = re.match(r"\s*LX_NATIVE_EXPORT\d*\(.*?, (\d+)\)", line)
-            if match:
+            if match := EXPORT.match(line):
+                exports.add(f"{module}@{match[2]}")
+                symbols.add(f"{module}.{match[1]}")
+            elif match := DATA.match(line):
                 exports.add(f"{module}@{match[1]}")
+            elif match := FORWARDER.match(line):
+                targets[match[1]] = (match[2].upper(), int(match[3]), match[4])
+            elif (match := FORWARDER_EXPORT.match(line)) and match[1] in targets:
+                forwarders.append((f"{module}@{match[2]}", *targets[match[1]]))
+    for export, target, ordinal, name in forwarders:
+        if (ordinal and f"{target}@{ordinal}" in exports) or (
+            not ordinal and f"{target}.{name}" in symbols
+        ):
+            exports.add(export)
     return exports
 
 
