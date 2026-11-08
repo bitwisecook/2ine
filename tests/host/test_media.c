@@ -2,6 +2,7 @@
 /* Real SDL3 dummy audio consumption, software rendering and event translation. */
 #include "host/audio.h"
 #include "host/window.h"
+#include "host/input.h"
 #include "host/font.h"
 #include "host/clock.h"
 #include "runtime/audio.h"

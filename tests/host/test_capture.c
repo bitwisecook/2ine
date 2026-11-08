@@ -2,6 +2,7 @@
 /* Dummy-driver host events exercise capture without manipulating the desktop. */
 #define _POSIX_C_SOURCE 200809L
 #include "host/window.h"
+#include "host/input.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>

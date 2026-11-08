@@ -5,6 +5,8 @@
 #include "os2libs/pmwin.h"
 #include "host/font.h"
 #include "host/window.h"
+#include "host/input.h"
+#include "host/desktop.h"
 #include "guest/handles.h"
 HPOINTER lx_pm_pointer_file(const char *filename);
 BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);

@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* X11-driven fullscreen presentation and logical pointer-coordinate contract. */
 #include "host/window.h"
+#include "host/input.h"
 #include <stdio.h>
 #include <stdlib.h>
 

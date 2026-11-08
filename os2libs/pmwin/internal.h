@@ -17,6 +17,8 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwin.h"
 #include "host/window.h"
+#include "host/input.h"
+#include "host/desktop.h"
 #include "host/font.h"
 #include "host/clock.h"
 #include "host/process.h"

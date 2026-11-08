@@ -4,7 +4,7 @@
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwin/input.h"
 #include "os2libs/pmwinx/internal.h"
-#include "host/window.h"
+#include "host/input.h"
 #include "os2libs/pmwinx/batch_services.h"
 #include <stdio.h>
 static _Thread_local unsigned char down[256], toggled[256];
