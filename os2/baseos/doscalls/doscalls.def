@@ -230,6 +230,17 @@ EXPORTS
     DosQueryResourceSize          @573
     DosQueryHeaderInfo            @582
     DosQueryProcType              @586
+    DosReadQueue                  @661
+    DosPurgeQueue                 @662
+    DosCloseQueue                 @663
+    DosQueryQueue                 @664
+    DosPeekQueue                  @665
+    DosWriteQueue                 @666
+    DosOpenQueue                  @667
+    DosCreateQueue                @668
+    Dos16ReadQueue                @674
+    Dos16CloseQueue               @676
+    Dos16CreateQueue              @681
     Dos16SMSetTitle               @690
     Dos16SMPMPresent              @712
     DosSetExtLIBPATH              @873

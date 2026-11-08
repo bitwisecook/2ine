@@ -23,9 +23,10 @@ static void rexxLeaseName(char name[32])
 
 static int rexxQueueOwner(uint32 *owner)
 {
+    /* QUECALLS forwards its queue entries to DOSCALLS, which implements them. */
     LxModule *queues = NULL;
     for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
-        if (module->nativelib && !strcasecmp(module->name, "QUECALLS"))
+        if (module->nativelib && !strcasecmp(module->name, "DOSCALLS"))
         {
             queues = module;
             break;

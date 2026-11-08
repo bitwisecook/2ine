@@ -43,6 +43,9 @@ LX_NATIVE_MODULE_32BIT_API(DosCloseMutexSem)
 LX_NATIVE_MODULE_32BIT_API(DosCloseMuxWaitSem)
 #endif
 #if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosCloseQueue)
+#endif
+#if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosCopy)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -56,6 +59,9 @@ LX_NATIVE_MODULE_32BIT_API(DosCreateMutexSem)
 #endif
 #if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosCreateMuxWaitSem)
+#endif
+#if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosCreateQueue)
 #endif
 #if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosCreateThread)
@@ -178,7 +184,16 @@ LX_NATIVE_MODULE_32BIT_API(DosOpenMutexSem)
 LX_NATIVE_MODULE_32BIT_API(DosOpenMuxWaitSem)
 #endif
 #if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosOpenQueue)
+#endif
+#if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosPeekQueue)
+#endif
+#if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosPostEventSem)
+#endif
+#if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosPurgeQueue)
 #endif
 #if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosQueryAppType)
@@ -244,6 +259,9 @@ LX_NATIVE_MODULE_32BIT_API(DosQueryProcAddr)
 LX_NATIVE_MODULE_32BIT_API(DosQueryProcType)
 #endif
 #if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosQueryQueue)
+#endif
+#if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosQueryResourceSize)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -252,6 +270,9 @@ LX_NATIVE_MODULE_32BIT_API(DosQuerySysInfo)
 LX_NATIVE_MODULE_32BIT_API(DosRaiseException)
 #if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosRead)
+#endif
+#if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosReadQueue)
 #endif
 #if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosReleaseMutexSem)
@@ -382,6 +403,9 @@ LX_NATIVE_MODULE_32BIT_API(DosWaitThread)
 #endif
 #if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosWrite)
+#endif
+#if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosWriteQueue)
 #endif
 LX_NATIVE_MODULE_32BIT_API(THK_UNITHUNK)
 
@@ -1843,6 +1867,60 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_Dos16ReadQueue(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, semaphore);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, priority);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, nowait);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, element);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PULONG, buffer);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, length);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PULONG, request);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, queue);
+    LxGuestArgument __abi_args[4] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, request_guest, 4, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    request = (PULONG) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, length_guest, 2, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    length = (PUSHORT) __abi_args[1].host;
+    if (!lx_guest_argument_far(GProcessState.execution, buffer_guest, 4, 2, 0, 0, &__abi_args[2])) goto __abi_done;
+    buffer = (PULONG) __abi_args[2].host;
+    if (!lx_guest_argument_far(GProcessState.execution, priority_guest, 1, 2, 0, 0, &__abi_args[3])) goto __abi_done;
+    priority = (PBYTE) __abi_args[3].host;
+    __abi_result = Dos16ReadQueue(queue, request, length, buffer, element, nowait, priority, semaphore);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[2], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[3], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_Dos16CloseQueue(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, queue);
+    return Dos16CloseQueue(queue);
+}
+
+static uint32 bridge16to32_Dos16CreateQueue(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, name);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, order);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, queue);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, queue_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    queue = (PUSHORT) __abi_args[0].host;
+    if (!lx_guest_argument_strings(GProcessState.execution, name_guest, 1, 256, 0, &__abi_args[1])) goto __abi_done;
+    name = (PSZ) __abi_args[1].host;
+    __abi_result = Dos16CreateQueue(queue, order, name);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
 static uint32 bridge16to32_Dos16SMSetTitle(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, title);
     LxGuestArgument __abi_args[1] = {0};
@@ -1999,6 +2077,9 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(Dos16GetDBCSEv)
     LX_NATIVE_MODULE_16BIT_API(Dos16OpenL)
     LX_NATIVE_MODULE_16BIT_API(Dos16SetFilePtrL)
+    LX_NATIVE_MODULE_16BIT_API(Dos16ReadQueue)
+    LX_NATIVE_MODULE_16BIT_API(Dos16CloseQueue)
+    LX_NATIVE_MODULE_16BIT_API(Dos16CreateQueue)
     LX_NATIVE_MODULE_16BIT_API(Dos16SMSetTitle)
     LX_NATIVE_MODULE_16BIT_API(Dos16SMPMPresent)
     LX_NATIVE_MODULE_16BIT_API(Dos16SetExtLIBPATH)
@@ -2109,6 +2190,9 @@ static int init16_doscalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16GetDBCSEv, 10)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16OpenL, 36)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetFilePtrL, 18)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16ReadQueue, 26)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CloseQueue, 2)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CreateQueue, 10)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SMSetTitle, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SMPMPresent, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetExtLIBPATH, 8)
@@ -2156,6 +2240,9 @@ static int init32_doscalls(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(DosCloseMuxWaitSem, 4, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosCloseQueue, 4, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosCopy, 12, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -2169,6 +2256,9 @@ static int init32_doscalls(void) {
 #endif
 #if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosCreateMuxWaitSem, 20, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosCreateQueue, 12, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosCreateThread, 20, 0, LX_ABI_STACK32)
@@ -2291,7 +2381,16 @@ static int init32_doscalls(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(DosOpenMuxWaitSem, 8, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosOpenQueue, 12, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosPeekQueue, 32, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosPostEventSem, 4, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosPurgeQueue, 4, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosQueryAppType, 8, 0, LX_ABI_STACK32)
@@ -2357,6 +2456,9 @@ static int init32_doscalls(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(DosQueryProcType, 16, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosQueryQueue, 8, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosQueryResourceSize, 16, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -2365,6 +2467,9 @@ static int init32_doscalls(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(DosRaiseException, 4, 0, LX_ABI_STACK32)
 #if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosRead, 16, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosReadQueue, 32, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosReleaseMutexSem, 4, 0, LX_ABI_STACK32)
@@ -2495,6 +2600,9 @@ static int init32_doscalls(void) {
 #endif
 #if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosWrite, 16, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosWriteQueue, 20, 0, LX_ABI_STACK32)
 #endif
     LX_NATIVE_INIT_32BIT_BRIDGE(THK_UNITHUNK, 0, 0, LX_ABI_STACK32)
     LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
@@ -2736,6 +2844,17 @@ LX_NATIVE_MODULE_INIT({
     LX_NATIVE_EXPORT(DosQueryHeaderInfo, 582),
 #endif
     LX_NATIVE_EXPORT32(DosQueryProcType, 586),
+    LX_NATIVE_EXPORT32(DosReadQueue, 661),
+    LX_NATIVE_EXPORT32(DosPurgeQueue, 662),
+    LX_NATIVE_EXPORT32(DosCloseQueue, 663),
+    LX_NATIVE_EXPORT32(DosQueryQueue, 664),
+    LX_NATIVE_EXPORT32(DosPeekQueue, 665),
+    LX_NATIVE_EXPORT32(DosWriteQueue, 666),
+    LX_NATIVE_EXPORT32(DosOpenQueue, 667),
+    LX_NATIVE_EXPORT32(DosCreateQueue, 668),
+    LX_NATIVE_EXPORT16(Dos16ReadQueue, 674),
+    LX_NATIVE_EXPORT16(Dos16CloseQueue, 676),
+    LX_NATIVE_EXPORT16(Dos16CreateQueue, 681),
     LX_NATIVE_EXPORT16(Dos16SMSetTitle, 690),
     LX_NATIVE_EXPORT16(Dos16SMPMPresent, 712),
     LX_NATIVE_EXPORT32(DosSetExtLIBPATH, 873),

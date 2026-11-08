@@ -1,17 +1,17 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of QUECALLS.DLL: exported name [= C entry] @ordinal.
+; Exports of QUECALLS.DLL: exported name = DOSCALLS.ordinal @ordinal.
 
 LIBRARY QUECALLS
 
 EXPORTS
-    Dos16ReadQueue   @1
-    Dos16CloseQueue  @2
-    Dos16CreateQueue @8
-    DosReadQueue     @9
-    DosPurgeQueue    @10
-    DosCloseQueue    @11
-    DosQueryQueue    @12
-    DosPeekQueue     @13
-    DosWriteQueue    @14
-    DosOpenQueue     @15
-    DosCreateQueue   @16
+    Dos16ReadQueue = DOSCALLS.674   @1
+    Dos16CloseQueue = DOSCALLS.676  @3
+    Dos16CreateQueue = DOSCALLS.681 @8
+    DosReadQueue = DOSCALLS.661     @9
+    DosPurgeQueue = DOSCALLS.662    @10
+    DosCloseQueue = DOSCALLS.663    @11
+    DosQueryQueue = DOSCALLS.664    @12
+    DosPeekQueue = DOSCALLS.665     @13
+    DosWriteQueue = DOSCALLS.666    @14
+    DosOpenQueue = DOSCALLS.667     @15
+    DosCreateQueue = DOSCALLS.668   @16

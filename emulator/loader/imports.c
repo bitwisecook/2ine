@@ -170,12 +170,7 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
         }
         const char *target = NULL;
         uint32 number = 0;
-        if (ordinal == 674 || ordinal == 675 || ordinal == 681)
-        {
-            target = "QUECALLS";
-            number = ordinal - 673;
-        }
-        else if (ordinal == 693 || ordinal == 699 || ordinal == 702)
+        if (ordinal == 693 || ordinal == 699 || ordinal == 702)
         {
             target = "SESMGR";
             number = ordinal - 685;

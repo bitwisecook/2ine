@@ -271,7 +271,7 @@ if(TARGET sesmgr AND TARGET quecalls AND TARGET doscalls)
     add_test(
         NAME legacy_sessions
         COMMAND
-            twoine_legacy_session_tests $<TARGET_FILE:quecalls> $<TARGET_FILE:sesmgr>
+            twoine_legacy_session_tests $<TARGET_FILE:doscalls> $<TARGET_FILE:sesmgr>
             $<TARGET_FILE:doscalls>
     )
     set_tests_properties(legacy_sessions PROPERTIES TIMEOUT 20)

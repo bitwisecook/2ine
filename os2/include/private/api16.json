@@ -1079,6 +1079,53 @@
         "kind": "live",
         "nullable": false
       }
+    ],
+    "Dos16CreateQueue": [
+      {
+        "name": "queue",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "size": "256",
+        "permissions": 1,
+        "kind": "string",
+        "nullable": false
+      }
+    ],
+    "Dos16CloseQueue": [],
+    "Dos16ReadQueue": [
+      {
+        "name": "request",
+        "size": "4",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "length",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "buffer",
+        "size": "4",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "priority",
+        "size": "1",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
     ]
   },
   "msg": {
@@ -1461,54 +1508,5 @@
       }
     ],
     "Dos16StopSession": []
-  },
-  "quecalls": {
-    "Dos16CreateQueue": [
-      {
-        "name": "queue",
-        "size": "2",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "name",
-        "size": "256",
-        "permissions": 1,
-        "kind": "string",
-        "nullable": false
-      }
-    ],
-    "Dos16CloseQueue": [],
-    "Dos16ReadQueue": [
-      {
-        "name": "request",
-        "size": "4",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "length",
-        "size": "2",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "buffer",
-        "size": "4",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "priority",
-        "size": "1",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      }
-    ]
   }
 }
