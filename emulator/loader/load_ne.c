@@ -261,7 +261,7 @@ LxModule *loadNeModule(const char *fname, const uint8 *origexe, uint8 *exe, uint
     if (!isDLL)
     {
         GProcessState.main_module = retval;
-        GProcessState.pib.pib_hmte = retval->handle;
+        GProcessState.pib.module = retval->handle;
         if (GProcessState.guest_pib)
         {
             LxGuestPib *pib = lx_execution_mapping_host(GProcessState.guest_pib);

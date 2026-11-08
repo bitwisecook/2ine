@@ -22,12 +22,20 @@ void lxHostThreadCleanup(void)
     }
 }
 
+/* The exception-chain terminator (END_OF_CHAIN in bsexcpt.h). */
+#define END_OF_CHAIN UINT32_MAX
+/* The TIB version and ordinal reported to every guest thread. */
+#define TIB_VERSION 20
+#define TIB_ORDINAL 79
+/* New threads run in the regular priority class at level 0 (bsedos.h). */
+#define PRTYC_REGULAR 2
+
 void lxInitOs2Tib(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid)
 {
     uint8 *topOfStack = (uint8 *)_topOfStack;
 
-    LxTIB *tib = (LxTIB *)tibspace;
-    LxTIB2 *tib2 = (LxTIB2 *)(tib + 1);
+    LxGuestTib *tib = (LxGuestTib *)tibspace;
+    LxGuestTib2 *tib2 = (LxGuestTib2 *)(tib + 1);
     FIXME("This is probably 50% wrong");
     uint32 top = (uint32)(uintptr_t)topOfStack;
     uint32 tib_address = 0;
@@ -38,18 +46,18 @@ void lxInitOs2Tib(uint8 *tibspace, void *_topOfStack, const size_t stacklen, con
         if (lx_execution_address(GProcessState.execution, topOfStack, 0, 0, &guest_top))
             top = guest_top;
     }
-    tib->tib_pexchain = UINT32_MAX;
-    tib->tib_pstack = top - stacklen;
-    tib->tib_pstacklimit = top;
-    tib->tib_ptib2 = tib_address ? tib_address + sizeof(LxTIB) : 0;
-    tib->tib_version = 20;
-    tib->tib_ordinal = 79;
+    lx_guest_store_u32(&tib->exception_chain, END_OF_CHAIN);
+    lx_guest_store_u32(&tib->stack_base, top - (uint32)stacklen);
+    lx_guest_store_u32(&tib->stack_limit, top);
+    lx_guest_store_u32(&tib->tib2, tib_address ? tib_address + (uint32)sizeof(LxGuestTib) : 0);
+    lx_guest_store_u32(&tib->version, TIB_VERSION);
+    lx_guest_store_u32(&tib->ordinal, TIB_ORDINAL);
 
-    tib2->tib2_ultid = tid;
-    tib2->tib2_ulpri = 512;
-    tib2->tib2_version = 20;
-    tib2->tib2_usMCCount = 0;
-    tib2->tib2_fMCForceFlag = 0;
+    lx_guest_store_u32(&tib2->thread_id, tid);
+    lx_guest_store_u32(&tib2->priority, PRTYC_REGULAR << 8);
+    lx_guest_store_u32(&tib2->version, TIB_VERSION);
+    lx_guest_store_u16(&tib2->must_complete, 0);
+    lx_guest_store_u16(&tib2->force_flag, 0);
 }
 
 /* Bound to an execution instance, each thread's TIB is copied into its own
@@ -62,7 +70,7 @@ uint16 lxSetOs2Tib(uint8 *tibspace)
 {
     if (!GProcessState.execution_bound)
     {
-        DefaultTib = (LxTIB *)tibspace;
+        DefaultTib = (LxGuestTib *)tibspace;
         return 1;
     }
     LxHostThreadState *state = lxHostThreadState();
@@ -82,11 +90,11 @@ uint16 lxSetOs2Tib(uint8 *tibspace)
     uint32 address = (base + TIB_ALIGNMENT - 1) & ~(TIB_ALIGNMENT - 1);
     uint8 *tib = (uint8 *)lx_execution_mapping_host(state->tib_mapping) + (address - base);
     memcpy(tib, tibspace, LXTIBSIZE);
-    lx_guest_store_u32(tib + offsetof(LxTIB, tib_ptib2), address + sizeof(LxTIB));
+    lx_guest_store_u32(tib + offsetof(LxGuestTib, tib2), address + (uint32)sizeof(LxGuestTib));
     return lx_execution_attach_tib(GProcessState.execution, tib);
 }
 
-LxTIB *lxGetOs2Tib(void)
+LxGuestTib *lxGetOs2Tib(void)
 {
     return GProcessState.execution_bound ? lx_execution_current_tib(GProcessState.execution)
                                          : DefaultTib;

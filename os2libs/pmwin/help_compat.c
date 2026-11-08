@@ -32,11 +32,11 @@ HWND WinQueryDesktopWindow(HAB hab, HDC dc)
 BOOL WinQueryWindowProcess(HWND handle, PULONG process, PULONG thread)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
-    ULONG owner = LX_GETTIB2()->tib2_ultid;
+    ULONG owner = lx_guest_load_u32(&LX_GETTIB2()->thread_id);
     if ((!anchor || !getWindowFromHWND(anchor, handle)) && !windowOwnerThread(handle, &owner))
         return FALSE;
     if (process)
-        *process = GProcessState.pib.pib_ulpid;
+        *process = GProcessState.pib.process_id;
     if (thread)
         *thread = owner;
     return TRUE;

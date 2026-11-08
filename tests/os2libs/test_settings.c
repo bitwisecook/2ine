@@ -354,10 +354,10 @@ int main(int argc, char **argv)
     LxHostThread *thread = lx_host_thread_create(error_thread, NULL, NULL);
     CHECK(thread && lx_host_thread_join(thread, NULL) == 0);
     CHECK(GetLastError() == 99);
-    char *command = GProcessState.pib.pib_pchcmd;
-    GProcessState.pib.pib_pchcmd = "program.exe\0alpha beta\0";
+    char *command = GProcessState.pib.command;
+    GProcessState.pib.command = "program.exe\0alpha beta\0";
     CHECK(WinCallWinMain(9, NULL, winmain, 7) == 123);
-    GProcessState.pib.pib_pchcmd = command;
+    GProcessState.pib.command = command;
     CHECK(GetProfileInt("test", "missing", 42) == 42);
     CHECK(PrfWriteProfileString(HINI_USERPROFILE, "WINI_test", "number", "-12"));
     CHECK(GetProfileInt("test", "number", 42) == (ULONG)-12);

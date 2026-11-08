@@ -35,6 +35,14 @@ typedef struct LxGuestPib
     uint32_t type;
 } LxGuestPib;
 
+/* The guest TLS words that follow each TIB/TIB2 pair. */
+#define LX_GUEST_TLS_SLOTS 32
+
+typedef struct LxGuestTls
+{
+    uint32_t slot[LX_GUEST_TLS_SLOTS];
+} LxGuestTls;
+
 /* The numeric C fields describe positions. Encode/decode little-endian values
    explicitly, including on a host whose integer byte order differs from x86. */
 static inline uint32_t lx_guest_load_u32(const void *data)
@@ -67,6 +75,7 @@ static inline void lx_guest_store_u16(void *data, uint16_t value)
 
 typedef char LxGuestTibSizeCheck[sizeof(LxGuestTib) == 24 ? 1 : -1];
 typedef char LxGuestTib2SizeCheck[sizeof(LxGuestTib2) == 16 ? 1 : -1];
+typedef char LxGuestTlsSizeCheck[sizeof(LxGuestTls) == 128 ? 1 : -1];
 typedef char LxGuestPibSizeCheck[sizeof(LxGuestPib) == 28 ? 1 : -1];
 typedef char LxGuestTibLinkCheck[offsetof(LxGuestTib, tib2) == 12 ? 1 : -1];
 #endif

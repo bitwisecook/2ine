@@ -13,7 +13,7 @@ void initPib(void)
     /* Guest resolver libraries locate RESOLV2/HOSTS through ETC. */
     if (!getenv("ETC"))
         setenv("ETC", "C:\\MPTN\\ETC", 0);
-    LxPIB *pib = &GProcessState.pib;
+    LxProcessInfo *pib = &GProcessState.pib;
     memset(pib, '\0', sizeof(*pib));
 
     size_t cmdlinebuflen = 0;
@@ -231,9 +231,9 @@ void initPib(void)
 
     *(ptr++) = '\0';
 
-    lx_host_process_ids(&pib->pib_ulpid, &pib->pib_ulppid);
-    pib->pib_pchcmd = cmd;
-    pib->pib_pchenv = env;
+    lx_host_process_ids(&pib->process_id, &pib->parent_id);
+    pib->command = cmd;
+    pib->environment = env;
 
     if (is_lx_loader)
     {

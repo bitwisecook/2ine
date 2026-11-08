@@ -90,7 +90,7 @@ static uint8 *loadMessageFile(const char *filename, size_t *outlen)
     if (!data && !strpbrk(filename, ":/\\"))
     {
         const char *directories = NULL;
-        for (const char *env = GProcessState.pib.pib_pchenv; env && *env; env += strlen(env) + 1)
+        for (const char *env = GProcessState.pib.environment; env && *env; env += strlen(env) + 1)
             if (!strncmp(env, "DPATH=", 6))
             {
                 directories = env + 6;

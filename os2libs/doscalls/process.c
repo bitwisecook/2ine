@@ -31,7 +31,7 @@ APIRET DosScanEnv(PSZ name, PSZ *outval)
 {
     TRACE_NATIVE("DosScanEnv('%s', %p)", name, outval);
 
-    char *env = GProcessState.pib.pib_pchenv;
+    char *env = GProcessState.pib.environment;
     const size_t len = strlen(name);
     while (*env)
     {
@@ -667,9 +667,9 @@ APIRET16 Dos16GetPID(PPIDINFO16 ppidinfo)
     PTIB2 tib2 = (PTIB2)LX_GETTIB2();
 
     // This interface has 16-bit fields even when host IDs are wider.
-    ppidinfo->pid = (USHORT)GProcessState.pib.pib_ulpid;
+    ppidinfo->pid = (USHORT)GProcessState.pib.process_id;
     ppidinfo->tid = (USHORT)tib2->tib2_ultid;
-    ppidinfo->pidParent = (USHORT)GProcessState.pib.pib_ulppid;
+    ppidinfo->pidParent = (USHORT)GProcessState.pib.parent_id;
     return NO_ERROR;
 }
 
@@ -713,7 +713,7 @@ static int inheritedHostVariable(const char *entry)
 static char **calcEnvp(const char *os2env, const char *exe, const char *arguments,
                        const LaunchStart *start, APIRET *err)
 {
-    const char *guest = os2env ? os2env : GProcessState.pib.pib_pchenv;
+    const char *guest = os2env ? os2env : GProcessState.pib.environment;
     if (!guest)
     {
         *err = ERROR_INVALID_PARAMETER;
@@ -878,7 +878,7 @@ char **calcArgv(const char *os2args, const char *progpath, APIRET *err)
 APIRET16 Dos16GetEnv(PUSHORT psel, PUSHORT pcmdoffset)
 {
     TRACE_NATIVE("Dos16GetEnv(%p, %p)", psel, pcmdoffset);
-    const uint32 cmd1616 = GProcessState.convert32to1616(GProcessState.pib.pib_pchcmd);
+    const uint32 cmd1616 = GProcessState.convert32to1616(GProcessState.pib.command);
     if (pcmdoffset)
         *pcmdoffset = (USHORT)(cmd1616 & 0xFFFF);
     if (psel)

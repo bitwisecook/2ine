@@ -33,9 +33,13 @@ int main(int argc, char **argv, char **envp)
     GProcessState.deinitOs2Tib(GProcessState.main_tib_selector);
     GProcessState.main_tib_selector = 0;
 
-    const LxExecutionServices services = {
-        NULL,      executableAt,  describeExecutionAddress,      executionReturned,
-        LXTIBSIZE, sizeof(LxTIB), sizeof(LxTIB) + sizeof(LxTIB2)};
+    const LxExecutionServices services = {NULL,
+                                          executableAt,
+                                          describeExecutionAddress,
+                                          executionReturned,
+                                          LXTIBSIZE,
+                                          sizeof(LxGuestTib),
+                                          sizeof(LxGuestTib) + sizeof(LxGuestTib2)};
     char error[256];
     GProcessState.execution =
         lx_execution_create(getenv("TWOINE_BACKEND"), &services, error, sizeof error);
@@ -45,27 +49,27 @@ int main(int argc, char **argv, char **envp)
 
     /* Keep the command and environment in one 64-KiB guest segment. */
     const size_t command_offset =
-        (size_t)(GProcessState.pib.pib_pchcmd - GProcessState.pib.pib_pchenv);
+        (size_t)(GProcessState.pib.command - GProcessState.pib.environment);
     LxGuestMapping *parameters =
         lx_execution_map(GProcessState.execution, 0x07000000, 0x10000, 3, 1);
     if (!parameters)
         lx_host_fatal(LX_FATAL_LOAD_FAILURE, "Cannot allocate guest process parameters", NULL);
     char *environment = lx_execution_mapping_host(parameters);
-    memcpy(environment, GProcessState.pib.pib_pchenv, 0x10000);
-    free(GProcessState.pib.pib_pchenv);
-    GProcessState.pib.pib_pchenv = environment;
-    GProcessState.pib.pib_pchcmd = environment + command_offset;
+    memcpy(environment, GProcessState.pib.environment, 0x10000);
+    free(GProcessState.pib.environment);
+    GProcessState.pib.environment = environment;
+    GProcessState.pib.command = environment + command_offset;
     GProcessState.guest_pib = lx_execution_map(GProcessState.execution, 0x07010000, 0x1000, 3, 1);
     if (!GProcessState.guest_pib)
         lx_host_fatal(LX_FATAL_LOAD_FAILURE, "Cannot allocate guest PIB", NULL);
     LxGuestPib *pib = lx_execution_mapping_host(GProcessState.guest_pib);
-    lx_guest_store_u32(&pib->process_id, GProcessState.pib.pib_ulpid);
-    lx_guest_store_u32(&pib->parent_id, GProcessState.pib.pib_ulppid);
+    lx_guest_store_u32(&pib->process_id, GProcessState.pib.process_id);
+    lx_guest_store_u32(&pib->parent_id, GProcessState.pib.parent_id);
     lx_guest_store_u32(&pib->command,
                        lx_execution_mapping_address(parameters) + (uint32)command_offset);
     lx_guest_store_u32(&pib->environment, lx_execution_mapping_address(parameters));
-    lx_guest_store_u32(&pib->status, GProcessState.pib.pib_flstatus);
-    lx_guest_store_u32(&pib->type, GProcessState.pib.pib_ultype);
+    lx_guest_store_u32(&pib->status, GProcessState.pib.status);
+    lx_guest_store_u32(&pib->type, GProcessState.pib.type);
 
     /* From here TIBs, 16-bit selectors and OS/2 paths go through the execution
        instance and the drive table. */
@@ -83,7 +87,7 @@ int main(int argc, char **argv, char **envp)
         for (int i = 0; i < argc; i++)
             fprintf(stderr, " [%d]='%s'", i, argv[i]);
         fprintf(stderr, "\n2INE CMD='%s'\n",
-                GProcessState.pib.pib_pchcmd ? GProcessState.pib.pib_pchcmd : "(null)");
+                GProcessState.pib.command ? GProcessState.pib.command : "(null)");
     }
 
     if (!lxRegisterProcessPeer())

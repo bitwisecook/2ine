@@ -191,8 +191,8 @@ int main(void)
     LxExecutionServices services = {0};
     char error[256];
     services.tib_size = LXTIBSIZE;
-    services.tib2_offset = sizeof(LxTIB);
-    services.tls_offset = sizeof(LxTIB) + sizeof(LxTIB2);
+    services.tib2_offset = sizeof(LxGuestTib);
+    services.tls_offset = sizeof(LxGuestTib) + sizeof(LxGuestTib2);
 #if TWOINE_PORTABLE_LOADER
     GProcessState.execution = lx_execution_create("unicorn", &services, error, sizeof error);
 #else

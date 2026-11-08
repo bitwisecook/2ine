@@ -519,7 +519,7 @@ int main(int argc, char **argv)
     const char *backend = argc > 1 ? argv[1] : "unicorn";
     LxExecutionServices services = {0};
     services.program_returned = returned;
-    services.tib_size = sizeof(LxGuestTib) + sizeof(LxGuestTib2) + 128;
+    services.tib_size = sizeof(LxGuestTib) + sizeof(LxGuestTib2) + sizeof(LxGuestTls);
     services.tib2_offset = sizeof(LxGuestTib);
     services.tls_offset = sizeof(LxGuestTib) + sizeof(LxGuestTib2);
     char error[256];

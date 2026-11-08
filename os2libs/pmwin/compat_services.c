@@ -306,16 +306,16 @@ BOOL WinQueryQueueInfo(HMQ queue, PVOID out, ULONG bytes)
     ULONG count = 0;
     for (MessageQueueItem *i = a->message_queue.head; i; i = i->next)
         count++;
-    LxTIB *t = GProcessState.getOs2Tib ? GProcessState.getOs2Tib() : NULL;
+    LxGuestTib *t = GProcessState.getOs2Tib ? GProcessState.getOs2Tib() : NULL;
     ULONG tid = 0;
     if (t)
     {
         uint8 b[4];
-        if (lx_execution_read(GProcessState.execution, t->tib_ptib2, b, 4))
+        if (lx_execution_read(GProcessState.execution, lx_guest_load_u32(&t->tib2), b, 4))
             tid = lx_guest_load_u32(b);
     }
     lx_guest_store_u32(data, 20);
-    lx_guest_store_u32(data + 4, GProcessState.pib.pib_ulpid);
+    lx_guest_store_u32(data + 4, GProcessState.pib.process_id);
     lx_guest_store_u32(data + 8, tid);
     lx_guest_store_u32(data + 12, count);
     memcpy(out, data, bytes < 20 ? bytes : 20);

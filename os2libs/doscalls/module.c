@@ -159,15 +159,15 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
     ginfo->sgMax = 99;
     ginfo->cHugeShift = 0;
     ginfo->fProtectModeOnly = 1;
-    ginfo->pidForeground = GProcessState.pib.pib_ulpid;
+    ginfo->pidForeground = GProcessState.pib.process_id;
     ginfo->csecMaxWait = 1;
     ginfo->cmsecMinSlice = 1;
     ginfo->cmsecMaxSlice = 10;
     ginfo->bootdrive = 3;
     ginfo->csgWindowableVioMax = 99;
     ginfo->csgPMMax = 99;
-    linfo->pidCurrent = GProcessState.pib.pib_ulpid;
-    linfo->pidParent = GProcessState.pib.pib_ulppid;
+    linfo->pidCurrent = GProcessState.pib.process_id;
+    linfo->pidParent = GProcessState.pib.parent_id;
     GProcessState.freeSharedMemory = DosFreeMem;
 }
 

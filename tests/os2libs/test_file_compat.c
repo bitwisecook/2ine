@@ -106,25 +106,25 @@ static void file_status(char *path, HFILE handle)
 
 static void priority(void)
 {
-    LxTIB *thread = GProcessState.getOs2Tib();
-    LxTIB2 *details = (LxTIB2 *)(thread + 1);
-    uint32 saved_id = details->tib2_ultid, saved_priority = details->tib2_ulpri;
-    details->tib2_ultid = 7;
-    details->tib2_ulpri = 0x205;
+    LxGuestTib *thread = GProcessState.getOs2Tib();
+    LxGuestTib2 *details = (LxGuestTib2 *)(thread + 1);
+    uint32 saved_id = details->thread_id, saved_priority = details->priority;
+    details->thread_id = 7;
+    details->priority = 0x205;
     CHECK(DosSetPriority(3, 2, 0, 0) == ERROR_INVALID_SCOPE);
     CHECK(DosSetPriority(2, 5, 0, 0) == ERROR_INVALID_PCLASS);
     CHECK(DosSetPriority(2, 2, -32, 0) == ERROR_INVALID_PDELTA);
     CHECK(DosSetPriority(2, 2, 32, 0) == ERROR_INVALID_PDELTA);
     CHECK(DosSetPriority(2, 2, 0, 8) == ERROR_INVALID_PROCID);
-    CHECK(details->tib2_ulpri == 0x205);
-    CHECK(!DosSetPriority(2, 0, 3, 0) && details->tib2_ulpri == 0x208);
-    CHECK(!DosSetPriority(2, 0, -2, 7) && details->tib2_ulpri == 0x206);
-    CHECK(!DosSetPriority(2, 0, 31, 0) && details->tib2_ulpri == 0x21f);
-    CHECK(!DosSetPriority(2, 0, -31, 0) && details->tib2_ulpri == 0x200);
-    CHECK(!DosSetPriority(2, 0, -31, 0) && details->tib2_ulpri == 0x200);
-    CHECK(!DosSetPriority(2, 3, 0, 7) && details->tib2_ulpri == 0x300);
-    details->tib2_ultid = saved_id;
-    details->tib2_ulpri = saved_priority;
+    CHECK(details->priority == 0x205);
+    CHECK(!DosSetPriority(2, 0, 3, 0) && details->priority == 0x208);
+    CHECK(!DosSetPriority(2, 0, -2, 7) && details->priority == 0x206);
+    CHECK(!DosSetPriority(2, 0, 31, 0) && details->priority == 0x21f);
+    CHECK(!DosSetPriority(2, 0, -31, 0) && details->priority == 0x200);
+    CHECK(!DosSetPriority(2, 0, -31, 0) && details->priority == 0x200);
+    CHECK(!DosSetPriority(2, 3, 0, 7) && details->priority == 0x300);
+    details->thread_id = saved_id;
+    details->priority = saved_priority;
 }
 
 static void module16(void)

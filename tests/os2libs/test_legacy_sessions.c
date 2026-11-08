@@ -107,7 +107,7 @@ int main(int argc, char **argv)
     CHECK(
         !call_Dos16ReadQueue(output.handle, &request, &length.bytes, &pointer, 0, 0, &priority, 0));
     CHECK(length.bytes == sizeof terminated && length.before == 0xabcd && length.after == 0xdcba);
-    CHECK((request >> 16) == 0x1234 && (USHORT)request == (USHORT)GProcessState.pib.pib_ulpid);
+    CHECK((request >> 16) == 0x1234 && (USHORT)request == (USHORT)GProcessState.pib.process_id);
     CHECK(priority == 0 && pointer && !(pointer & 0xffff));
     CHECK(!memcmp(far_to_host(pointer), terminated, sizeof terminated));
     CHECK(call_Dos16ReadQueue(output.handle, &request, &length.bytes, &pointer, 0, 1, &priority,

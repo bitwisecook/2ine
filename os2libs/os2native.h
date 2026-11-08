@@ -91,8 +91,7 @@ OS2EXPORT void lxNativeModuleDeinit(void);
     }
 
 /* TIB2 follows TIB contiguously in guest memory. */
-#define LX_GETTIB() ((LxTIB *)GProcessState.getOs2Tib())
-#define LX_GETTIB2() ((LxTIB2 *)(LX_GETTIB() + 1))
-#define LX_GETPOSTTIB() ((LxPostTIB *)(LX_GETTIB2() + 1))
+#define LX_GETTIB() (GProcessState.getOs2Tib())
+#define LX_GETTIB2() ((LxGuestTib2 *)(LX_GETTIB() + 1))
 
 #endif

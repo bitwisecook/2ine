@@ -19,7 +19,7 @@
 #include <stdarg.h>
 #include <assert.h>
 
-extern LX_PRIVATE LX_HOST_THREAD_LOCAL LxTIB *DefaultTib;
+extern LX_PRIVATE LX_HOST_THREAD_LOCAL LxGuestTib *DefaultTib;
 extern LX_PRIVATE LX_HOST_THREAD_LOCAL LxHostThreadState host_thread_state;
 LxHostThreadState *lxHostThreadState(void);
 LX_PRIVATE void initPib(void);
@@ -27,7 +27,7 @@ LX_PRIVATE void dosExit_lib2ine(uint32 action, uint32 result);
 LX_PRIVATE void lxInitOs2Tib(uint8 *tibspace, void *_topOfStack, const size_t stacklen,
                              const uint32 tid);
 LX_PRIVATE uint16 lxSetOs2Tib(uint8 *tibspace);
-LX_PRIVATE LxTIB *lxGetOs2Tib(void);
+LX_PRIVATE LxGuestTib *lxGetOs2Tib(void);
 LX_PRIVATE void lxDeinitOs2Tib(const uint16 selector);
 LX_PRIVATE void *lxAllocSegment(uint16 *selector, const int iscode);
 LX_PRIVATE void lxFreeSegment(const uint16 selector);

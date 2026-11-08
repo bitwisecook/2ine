@@ -25,7 +25,8 @@
 struct LxModule;
 struct LxExport;
 
-#define LXTIBSIZE (sizeof(LxTIB) + sizeof(LxTIB2) + sizeof(LxPostTIB))
+/* Each thread's TIB, TIB2 and TLS words, contiguous as the guest sees them. */
+#define LXTIBSIZE (sizeof(LxGuestTib) + sizeof(LxGuestTib2) + sizeof(LxGuestTls))
 
 #define LX_MAX_LDT_SLOTS 8192
 
@@ -36,7 +37,7 @@ typedef struct LxProcessState
     struct LxModule *loaded_modules;
     struct LxModule *main_module;
     uint8 main_tibspace[LXTIBSIZE];
-    LxPIB pib;
+    LxProcessInfo pib;
     LxGuestMapping *guest_pib;
     /* Set by lx_loader once guest code can run: TIBs and 16-bit selectors then
        live in the execution instance and OS/2 paths map through the drive table.
@@ -73,7 +74,7 @@ typedef struct LxProcessState
     uint32 (*freeResource)(void *resource);
     void (*initOs2Tib)(uint8 *tibspace, void *_topOfStack, const size_t stacklen, const uint32 tid);
     uint16 (*setOs2Tib)(uint8 *tibspace);
-    LxTIB *(*getOs2Tib)(void);
+    LxGuestTib *(*getOs2Tib)(void);
     void (*deinitOs2Tib)(const uint16 selector);
     void *(*allocSegment)(uint16 *selector, const int iscode);
     void (*freeSegment)(const uint16 selector);

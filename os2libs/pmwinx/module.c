@@ -106,7 +106,7 @@ LONG WinCallWinMain(LONG argc, PSZ *argv, PFNWINMAIN entry, LONG show)
     (void)argv;
     if (!entry)
         return -1;
-    char *command = GProcessState.pib.pib_pchcmd;
+    char *command = GProcessState.pib.command;
     if (command)
         command += strlen(command) + 1;
     else
@@ -194,7 +194,7 @@ ULONG GetCommandLine(void)
     ULONG result = __atomic_load_n(&command_line, __ATOMIC_ACQUIRE);
     if (result)
         return result;
-    const char *program = GProcessState.pib.pib_pchcmd;
+    const char *program = GProcessState.pib.command;
     const char *tail = program ? program + strlen(program) + 1 : "";
     if (!program)
         program = "";

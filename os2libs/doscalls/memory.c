@@ -175,7 +175,7 @@ static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG
                : opened == LX_HOST_SHARED_EXISTS ? ERROR_ALREADY_EXISTS
                                                  : ERROR_NOT_ENOUGH_MEMORY;
     ULONG attributes = flags | (anonymous ? 0 : OBJ_GETTABLE);
-    if (size && !lx_host_shared_publish(object, GProcessState.pib.pib_ulpid, attributes))
+    if (size && !lx_host_shared_publish(object, GProcessState.pib.process_id, attributes))
     {
         lx_host_shared_close(object);
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -183,7 +183,7 @@ static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG
     if (!size)
     {
         ULONG owner, permissions;
-        if (!lx_host_shared_query_access(object, GProcessState.pib.pib_ulpid, &owner, &attributes,
+        if (!lx_host_shared_query_access(object, GProcessState.pib.process_id, &owner, &attributes,
                                          &permissions) ||
             ((flags & 7u) & ~(attributes & 7u)))
         {
@@ -272,7 +272,7 @@ APIRET DosAllocSharedMem(PPVOID output, PSZ name, ULONG size, ULONG flags)
         ungrabLock(&GMutexDosCalls);
         char generated[96];
         snprintf(generated, sizeof generated, "\\SHAREMEM\\2INE-ANON-%08x-%08x",
-                 (unsigned)GProcessState.pib.pib_ulpid, (unsigned)identity);
+                 (unsigned)GProcessState.pib.process_id, (unsigned)identity);
         return mapSharedMemory(output, generated, (size + 4095) & ~4095u, flags, TRUE);
     }
     return mapNamedSharedMemory(output, name, (size + 4095) & ~4095u, flags);
@@ -293,7 +293,7 @@ APIRET DosGiveSharedMem(PVOID pb, PID pid, ULONG flag)
     APIRET result = ERROR_INVALID_ADDRESS;
     char name[128] = {0};
     grabLock(&GMutexDosCalls);
-    BOOL known = pid == GProcessState.pib.pib_ulpid || pid == GProcessState.pib.pib_ulppid;
+    BOOL known = pid == GProcessState.pib.process_id || pid == GProcessState.pib.parent_id;
     for (ChildProcess *child = GChildren; child && !known; child = child->next)
         known = lx_host_child_id(child->host) == pid;
     if (!known)
@@ -341,10 +341,10 @@ APIRET DosGetSharedMemAddress(ULONG address, ULONG flags)
         return found == LX_HOST_SHARED_DENIED ? ERROR_ACCESS_DENIED : ERROR_INVALID_ADDRESS;
     ULONG owner, attributes, permission;
     APIRET result = ERROR_ACCESS_DENIED;
-    if (!lx_host_shared_query_access(object, GProcessState.pib.pib_ulpid, &owner, &attributes,
+    if (!lx_host_shared_query_access(object, GProcessState.pib.process_id, &owner, &attributes,
                                      &permission))
         goto done;
-    if (owner == GProcessState.pib.pib_ulpid || (attributes & OBJ_GETTABLE))
+    if (owner == GProcessState.pib.process_id || (attributes & OBJ_GETTABLE))
         permission = attributes & 7u;
     else if (!permission)
         goto done;

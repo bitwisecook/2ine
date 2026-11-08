@@ -10,7 +10,7 @@
 
 LxProcessState GProcessState;
 
-LX_PRIVATE LX_HOST_THREAD_LOCAL LxTIB *DefaultTib;
+LX_PRIVATE LX_HOST_THREAD_LOCAL LxGuestTib *DefaultTib;
 LX_PRIVATE LX_HOST_THREAD_LOCAL LxHostThreadState host_thread_state;
 
 LX_NATIVE_CONSTRUCTOR(lib2ine)
@@ -112,8 +112,8 @@ void lib2ine_shutdown(void)
     }
 
     if (!GProcessState.execution)
-        free(GProcessState.pib.pib_pchenv);
-    GProcessState.pib.pib_pchenv = NULL;
+        free(GProcessState.pib.environment);
+    GProcessState.pib.environment = NULL;
 
     DefaultTib = NULL;
 }

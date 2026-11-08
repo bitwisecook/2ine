@@ -139,7 +139,7 @@ HWND registerWindowMessages(AnchorBlock *anchor)
     }
     target->window = (window_prefix << 16) | index;
     target->anchor = anchor;
-    target->thread = LX_GETTIB() ? LX_GETTIB2()->tib2_ultid : 0;
+    target->thread = LX_GETTIB() ? lx_guest_load_u32(&LX_GETTIB2()->thread_id) : 0;
     lx_host_mutex_lock(lock, UINT32_MAX);
     target->next = targets;
     targets = target;

@@ -24,9 +24,9 @@ LxExecutionEntry executionEntry(const LxModule *module)
     e.entry = module->eip;
     e.stack = module->esp;
     e.module = module->handle;
-    if (!lx_execution_address(GProcessState.execution, GProcessState.pib.pib_pchcmd, 1,
-                              LX_GUEST_READ, &e.command) ||
-        !lx_execution_address(GProcessState.execution, GProcessState.pib.pib_pchenv, 1,
+    if (!lx_execution_address(GProcessState.execution, GProcessState.pib.command, 1, LX_GUEST_READ,
+                              &e.command) ||
+        !lx_execution_address(GProcessState.execution, GProcessState.pib.environment, 1,
                               LX_GUEST_READ, &e.environment))
     {
         fprintf(stderr, "Process parameters are outside guest memory\n");

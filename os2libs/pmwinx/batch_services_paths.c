@@ -18,7 +18,7 @@ static void env_initialize(void)
 ULONG GetEnvironmentStrings(void)
 {
     ULONG address = 0;
-    if (!lx_execution_address(GProcessState.execution, GProcessState.pib.pib_pchenv, 1,
+    if (!lx_execution_address(GProcessState.execution, GProcessState.pib.environment, 1,
                               LX_GUEST_READ, &address))
         open32SetError(8);
     return address;
@@ -35,7 +35,7 @@ ULONG GetEnvironmentVariable(PSZ name, PSZ output, ULONG capacity)
     lx_host_monitor_lock(env_monitor);
     size_t length = strlen(name);
     const char *value = NULL;
-    for (const char *entry = GProcessState.pib.pib_pchenv; entry && *entry;
+    for (const char *entry = GProcessState.pib.environment; entry && *entry;
          entry += strlen(entry) + 1)
         if (!strncasecmp(entry, name, length) && entry[length] == '=')
         {
@@ -66,7 +66,7 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     }
     lx_host_once(&env_once, env_initialize);
     lx_host_monitor_lock(env_monitor);
-    const char *old = GProcessState.pib.pib_pchenv;
+    const char *old = GProcessState.pib.environment;
     size_t name_size = strlen(name), size = 1;
     for (const char *p = old; p && *p; p += strlen(p) + 1)
         if (strncasecmp(p, name, name_size) || p[name_size] != '=')
@@ -104,7 +104,7 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     *out = 0;
     if (out == begin)
         out[1] = 0;
-    GProcessState.pib.pib_pchenv = begin;
+    GProcessState.pib.environment = begin;
     if (GProcessState.guest_pib)
     {
         LxGuestPib *pib = lx_execution_mapping_host(GProcessState.guest_pib);

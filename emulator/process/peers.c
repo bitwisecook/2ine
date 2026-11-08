@@ -37,7 +37,7 @@ int lxRegisterProcessPeer(void)
     if (ProcessPeerLease)
         return 1;
     char name[64];
-    processPeerName(GProcessState.pib.pib_ulpid, name);
+    processPeerName(GProcessState.pib.process_id, name);
     return lx_host_shared_open(name, 1, &ProcessPeerLease) == LX_HOST_SHARED_OK;
 }
 

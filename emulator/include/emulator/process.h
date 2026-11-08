@@ -10,46 +10,21 @@
 #define TWOINE_EMULATOR_PROCESS_H
 #include "formats/executable/types.h"
 #include "emulator/execution.h"
-#pragma pack(push, 1)
+#include "emulator/abi.h"
 
-typedef struct LxTIB2
+/* The process information block as the host sees it: the fields of the guest
+   PIB (LxGuestPib in emulator/abi.h) with the command line and environment as
+   host pointers. lx_loader publishes the guest copy. */
+typedef struct LxProcessInfo
 {
-    uint32 tib2_ultid;
-    uint32 tib2_ulpri;
-    uint32 tib2_version;
-    uint16 tib2_usMCCount;
-    uint16 tib2_fMCForceFlag;
-} LxTIB2;
-
-typedef struct LxTIB
-{
-    uint32 tib_pexchain;
-    uint32 tib_pstack;
-    uint32 tib_pstacklimit;
-    uint32 tib_ptib2;
-    uint32 tib_version;
-    uint32 tib_ordinal;
-} LxTIB;
-
-typedef struct LxPIB
-{
-    uint32 pib_ulpid;
-    uint32 pib_ulppid;
-    uint32 pib_hmte;
-    char *pib_pchcmd;
-    char *pib_pchenv;
-    uint32 pib_flstatus;
-    uint32 pib_ultype;
-} LxPIB;
-
-#pragma pack(pop)
-
-/* Each TIB/TIB2 pair is followed by 32 guest TLS words. */
-typedef struct LxPostTIB
-{
-    uint32 tls[32];
-
-} LxPostTIB;
+    uint32 process_id;
+    uint32 parent_id;
+    uint32 module;
+    char *command;
+    char *environment;
+    uint32 status;
+    uint32 type;
+} LxProcessInfo;
 
 /* Host-only thread metadata. Never serialized into an OS/2 TIB or TLS area. */
 typedef struct LxHostThreadState

@@ -30,10 +30,11 @@ ULONG GetCurrentThread(void)
 
 ULONG GetCurrentThreadId(void)
 {
-    LxTIB *tib = GProcessState.getOs2Tib ? GProcessState.getOs2Tib() : NULL;
-    const uint8 *tib2 = tib ? lx_execution_memory(GProcessState.execution, tib->tib_ptib2,
-                                                  sizeof(LxTIB2), LX_GUEST_READ)
-                            : NULL;
+    LxGuestTib *tib = GProcessState.getOs2Tib ? GProcessState.getOs2Tib() : NULL;
+    const uint8 *tib2 =
+        tib ? lx_execution_memory(GProcessState.execution, lx_guest_load_u32(&tib->tib2),
+                                  sizeof(LxGuestTib2), LX_GUEST_READ)
+            : NULL;
     return tib2 ? lx_guest_load_u32(tib2) : 0;
 }
 

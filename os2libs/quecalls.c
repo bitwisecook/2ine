@@ -309,7 +309,7 @@ static uint32 queue_receive_operation(void *argument)
     BOOL32 nowait = call->nowait;
     HEV event = call->event;
     int peek = call->peek;
-    if (queue->owner != GProcessState.pib.pib_ulpid)
+    if (queue->owner != GProcessState.pib.process_id)
     {
         return ERROR_QUE_PROC_NOT_OWNED;
     }
@@ -437,7 +437,7 @@ APIRET DosPurgeQueue(HQUEUE handle)
         return ERROR_QUE_INVALID_HANDLE;
     Queue *queue = borrow.resource;
     uint32 count;
-    APIRET result = queue->owner != GProcessState.pib.pib_ulpid        ? ERROR_QUE_PROC_NOT_OWNED
+    APIRET result = queue->owner != GProcessState.pib.process_id       ? ERROR_QUE_PROC_NOT_OWNED
                     : lx_host_mailbox_count(queue->mailbox, &count, 1) ? ERROR_QUE_MEMORY_ERROR
                                                                        : NO_ERROR;
     lx_handle_release(&borrow);
@@ -478,13 +478,13 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
     if (!lx_handle_borrow(handle, LX_HANDLE_QUEUE, &borrow))
         return ERROR_QUE_INVALID_HANDLE;
     Queue *queue = borrow.resource;
-    BOOL copied = copy || queue->owner != GProcessState.pib.pib_ulpid;
+    BOOL copied = copy || queue->owner != GProcessState.pib.process_id;
     APIRET result = NO_ERROR;
     uint32 address = (uint32)(uintptr_t)data;
     PVOID source = data;
     if (priority > 15)
         priority = 15;
-    if (queue->owner == GProcessState.pib.pib_ulpid && (queue->flags & 3) != QUE_PRIORITY)
+    if (queue->owner == GProcessState.pib.process_id && (queue->flags & 3) != QUE_PRIORITY)
         priority = 0;
     if (__atomic_load_n(&queue->stopped, __ATOMIC_ACQUIRE))
         result = ERROR_QUE_INVALID_HANDLE;
@@ -520,7 +520,7 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
         result = ERROR_QUE_NO_MEMORY;
     if (!result)
     {
-        Packet header = {GProcessState.pib.pib_ulpid, request, length, address};
+        Packet header = {GProcessState.pib.process_id, request, length, address};
         memcpy(packet, &header, sizeof header);
         if (copied && length)
             memcpy(packet + sizeof header, source, length);

@@ -114,7 +114,7 @@ BOOL BringWindowToTop(ULONG window)
 
 ULONG GetCurrentProcessId(void)
 {
-    return GProcessState.pib.pib_ulpid;
+    return GProcessState.pib.process_id;
 }
 
 ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
