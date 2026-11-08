@@ -113,6 +113,12 @@ LX_PRIVATE void bindThreadControl(ThreadControl *control);
 LX_PRIVATE void removeThreadControl(ThreadControl *control);
 /* Leaves the critical section a dying thread still holds (task/schedapi.c). */
 LX_PRIVATE void releaseThreadCriticalSection(void);
+/* Semaphores (sem/): which resources are shared, the per-process event and
+   mutex namespace, and the caller's thread ID. */
+LX_PRIVATE BOOL set_sharing(void *resource, BOOL shared);
+LX_PRIVATE void remove_sharing(void *resource);
+LX_PRIVATE uint64 eventScope(void);
+LX_PRIVATE uint32 current_tid(void);
 LX_PRIVATE void cleanupTimers(void);
 LX_PRIVATE void mutexReleasing(void *resource);
 LX_PRIVATE void abandonThreadMutexes(uint32 tid);

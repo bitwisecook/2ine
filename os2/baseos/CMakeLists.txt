@@ -37,7 +37,10 @@ twoine_os2_dll(
     doscalls/task/tkextlst.c
     doscalls/task/tkv1api.c
     doscalls/filesys/codepg.c
-    doscalls/semaphores.c
+    doscalls/sem/semevent.c
+    doscalls/sem/semmtx.c
+    doscalls/sem/semtools.c
+    doscalls/sem/sem.c
     doscalls/loader/ldrrun.c
     doscalls/loader/ldrsubr.c
     doscalls/doscall1/libpath.c
