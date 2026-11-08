@@ -23,15 +23,7 @@
     } while (0)
 #endif
 
-#if 0
-#ifndef STUBBED
-#define STUBBED(x) _STUBBED(x, "STUBBED")
-#endif
-#ifndef FIXME
-#define FIXME(x) _STUBBED(x, "FIXME")
-#endif
-#endif
-
+/* STUBBED and FIXME mark known gaps in the source and compile to nothing. */
 #ifndef STUBBED
 #define STUBBED(x)                                                                                 \
     do                                                                                             \
