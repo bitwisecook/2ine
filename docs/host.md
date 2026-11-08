@@ -29,6 +29,14 @@ host/
 | `mesa/` | EGL rendering contexts for OpenGL |
 | `none/` | Stubs for functions a port does not integrate natively |
 
+Public contracts: `memory.h`, `clock.h`, `system.h`, `process.h`,
+`process_supervisor.h`, `library.h`, `thread.h` (threads and
+`lx_host_thread_local_*` values), `sync.h`, `shared_memory.h`, `mailbox.h`,
+`fs.h`, `socket.h`, `network.h`, `tls.h` (the `lx_host_tls_*` transport),
+`fatal.h`, `window.h`, `input.h`, `desktop.h`, `video_frame.h`, `audio.h`,
+`clipboard.h`, `print.h`, `terminal.h`, `font.h`, `opengl.h`, `gl/dispatch.h`,
+`gl/constants.h`, `codepage_tables.h` (data) and `abi.h`.
+
 Functions: `system` (memory, clocks, OS and CPU names), `process`, `thread`
 (threads, thread-local values, synchronization), `ipc` (shared memory,
 mailboxes), `fs`, `net` (sockets, resolver, interfaces, raw ICMP/UDP, TLS),
@@ -43,6 +51,11 @@ POSIX adapters share, because they use POSIX types, live in `posix/` beside the
 shared code that calls them: `posix/thread/sync_hooks.h` (robust mutexes and
 condition clocks), `posix/fatal/report_hooks.h` (registers, loaded images and
 dialog spawn) and `posix/net/interfaces_hooks.h` (MAC addresses, routes, DNS).
+
+Linux reads `/proc/self/maps` in one place (`linux/system/maps.c`) for fatal
+reports and `lx_host_memory_mapping`. The SDL window sources share
+`sdl/window/internal.h`; the macOS desktop sources share
+`macos/desktop/internal.h`.
 
 Linux mutexes retain robust owner-death recovery; macOS retains non-robust
 mutexes and relative condition-variable deadlines. The shared POSIX

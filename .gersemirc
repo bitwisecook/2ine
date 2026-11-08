@@ -2,4 +2,4 @@
 indent: 4
 line_length: 100
 list_expansion: favour-inlining
-definitions: [cmake, host, emulator, os2libs, tests, runtime, loader, ball, CMakeLists.txt]
+definitions: [cmake, formats, storage, host, emulator, os2libs, tests, runtime, loader, ball, CMakeLists.txt]
