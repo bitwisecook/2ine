@@ -5,7 +5,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
 #include "guest/handles.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "host/mailbox.h"
 #include "host/process.h"
 #include "host/shared_memory.h"

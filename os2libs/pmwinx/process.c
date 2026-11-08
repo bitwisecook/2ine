@@ -12,7 +12,7 @@
 #include "os2libs/pmwp.h"
 #include "guest/handles.h"
 #include "guest/launch_record.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "host/process.h"
 #include "host/shared_memory.h"
 #include "host/sync.h"

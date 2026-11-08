@@ -4,7 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "host/process.h"
 #include "host/process_supervisor.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>

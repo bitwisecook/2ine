@@ -2,7 +2,7 @@
 /* Process priority mapping and host failures must not publish a false class. */
 #include "os2libs/pmwinx.h"
 #include "host/process.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "host/thread.h"
 #include <errno.h>
 #include <stdio.h>

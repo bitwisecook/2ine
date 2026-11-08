@@ -18,7 +18,9 @@
 #include "os2libs/pmwin.h"
 #include "host/window.h"
 #include "host/font.h"
-#include "host/system.h"
+#include "host/clock.h"
+#include "host/process.h"
+#include "host/sync.h"
 #include "guest/handles.h"
 
 typedef struct WindowClass

@@ -3,7 +3,7 @@
 #include "host/audio.h"
 #include "host/window.h"
 #include "host/font.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "runtime/audio.h"
 #include <stdio.h>
 #include <stdlib.h>

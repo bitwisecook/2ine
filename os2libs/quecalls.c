@@ -12,7 +12,7 @@
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "os2libs/doscalls.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "host/mailbox.h"
 #include "host/thread.h"
 #include "host/sync.h"

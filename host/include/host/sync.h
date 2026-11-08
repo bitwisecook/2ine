@@ -3,6 +3,10 @@
 #ifndef TWOINE_HOST_SYNC_H
 #define TWOINE_HOST_SYNC_H
 #include <stdint.h>
+
+/* Sequentially consistent; returns the incremented value. */
+uint32_t lx_host_atomic_increment(uint32_t *value);
+
 typedef struct LxHostMutex LxHostMutex;
 
 typedef struct LxHostOnce

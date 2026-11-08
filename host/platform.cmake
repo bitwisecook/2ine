@@ -45,7 +45,7 @@ endif()
 # Functions whose adapter choice is the same on Linux and macOS.
 set(TWOINE_HOST_SELECT_system core posix ${TWOINE_HOST_PLATFORM})
 set(TWOINE_HOST_SELECT_process posix ${TWOINE_HOST_PLATFORM})
-set(TWOINE_HOST_SELECT_thread posix ${TWOINE_HOST_PLATFORM})
+set(TWOINE_HOST_SELECT_thread core posix ${TWOINE_HOST_PLATFORM})
 set(TWOINE_HOST_SELECT_ipc posix)
 set(TWOINE_HOST_SELECT_fs posix ${TWOINE_HOST_PLATFORM})
 set(TWOINE_HOST_SELECT_net posix ${TWOINE_HOST_PLATFORM} openssl)

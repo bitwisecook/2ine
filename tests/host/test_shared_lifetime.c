@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Shared views retain their object; a new object never inherits retired bytes. */
 #include "host/shared_memory.h"
-#include "host/system.h"
+#include "host/process.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

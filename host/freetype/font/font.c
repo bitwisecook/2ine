@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* FreeType faces are private to one caller; callers serialize access to a font object. */
 #include "host/font.h"
-#include "host/system.h"
+#include "host/process.h"
 #include "host/fs.h"
 #include "host/sync.h"
 #include <ft2build.h>

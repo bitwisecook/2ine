@@ -7,7 +7,7 @@
 #include "guest/handles.h"
 #include "guest/abi.h"
 #include "host/sync.h"
-#include "host/system.h"
+#include "host/clock.h"
 
 typedef struct RegistryKey
 {

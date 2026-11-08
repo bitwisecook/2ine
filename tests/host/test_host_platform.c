@@ -1,6 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Bootstrap queries, argv serialization, memory and calendar host contracts. */
+#include "host/memory.h"
+#include "host/clock.h"
 #include "host/system.h"
+#include "host/process.h"
 #include "host/core/process/argv.h"
 #include <stdio.h>
 #include <stdlib.h>

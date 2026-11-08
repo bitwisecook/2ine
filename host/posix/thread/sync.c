@@ -6,7 +6,8 @@
 #include "host/sync.h"
 #include "host/shared_memory.h"
 #include "host/posix/thread/sync_hooks.h"
-#include "host/system.h"
+#include "host/clock.h"
+#include "host/process.h"
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>

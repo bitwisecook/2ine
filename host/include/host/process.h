@@ -1,8 +1,24 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Host child processes. Guest command syntax and result codes belong above. */
+/* The host process and its children. Guest command syntax and result codes
+   belong above. */
 #ifndef TWOINE_HOST_PROCESS_H
 #define TWOINE_HOST_PROCESS_H
+#include <stddef.h>
 #include <stdint.h>
+
+/* Bootstrap argv is returned as consecutive NUL-terminated strings. */
+char *lx_host_command_line(size_t *size);
+char *lx_host_executable_path(void);
+char *const *lx_host_environment(void);
+void lx_host_process_ids(uint32_t *process, uint32_t *parent);
+size_t lx_host_stack_limit(void);
+#if defined(_MSC_VER)
+__declspec(noreturn)
+#else
+__attribute__((noreturn))
+#endif
+void lx_host_process_exit(uint32_t status);
+
 typedef struct LxHostChild LxHostChild;
 
 typedef enum LxHostProcessPriority

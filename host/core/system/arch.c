@@ -13,8 +13,3 @@ const char *lx_host_arch(void)
     return "other";
 #endif
 }
-
-uint32_t lx_host_atomic_increment(uint32_t *value)
-{
-    return __atomic_add_fetch(value, 1, __ATOMIC_SEQ_CST);
-}

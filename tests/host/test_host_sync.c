@@ -3,7 +3,7 @@
 #define _POSIX_C_SOURCE 200809L
 #include "host/sync.h"
 #include "host/thread.h"
-#include "host/system.h"
+#include "host/process.h"
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>

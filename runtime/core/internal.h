@@ -12,7 +12,7 @@
 #define _DEFAULT_SOURCE
 #define _GNU_SOURCE
 #include "runtime/runtime.h"
-#include "host/system.h"
+#include "host/process.h"
 #include "host/thread.h"
 #include "host/fs.h"
 #include <errno.h>

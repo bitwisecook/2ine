@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
+#include "host/memory.h"
 #include "host/system.h"
 #include <sys/sysinfo.h>
 

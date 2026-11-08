@@ -7,7 +7,7 @@
 #include "os2libs/doscalls.h"
 #include "host/sync.h"
 #include "host/thread.h"
-#include "host/system.h"
+#include "host/clock.h"
 
 typedef struct Open32Thread
 {

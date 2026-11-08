@@ -6,6 +6,7 @@
 #define _GNU_SOURCE 1
 #include "host/fatal.h"
 #include "host/system.h"
+#include "host/process.h"
 #include "host/posix/fatal/report_hooks.h"
 #include <errno.h>
 #include <execinfo.h>

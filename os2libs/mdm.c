@@ -10,7 +10,6 @@
 #include "os2libs/midi_sequence.h"
 #include "os2libs/pmwin.h"
 #include "host/sync.h"
-#include "host/system.h"
 #include <math.h>
 #define DEVICE_COUNT 32
 #define MCIERR_INVALID_DEVICE_ID 5001

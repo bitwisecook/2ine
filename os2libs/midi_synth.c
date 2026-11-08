@@ -6,7 +6,7 @@
 #if TWOINE_MIDI_EXTENDED
 #include "os2libs/midi_banks.h"
 #endif
-#include "host/system.h"
+#include "host/process.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

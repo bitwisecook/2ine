@@ -4,7 +4,7 @@
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/input.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "host/window.h"
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmwin/open32_post.h"

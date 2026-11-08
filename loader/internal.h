@@ -12,7 +12,9 @@
 #include "runtime/runtime.h"
 #include "formats/executable/lx_exepack.h"
 #include "host/fs.h"
-#include "host/system.h"
+#include "host/memory.h"
+#include "host/clock.h"
+#include "host/process.h"
 #include <stddef.h>
 #include <errno.h>
 #include <assert.h>

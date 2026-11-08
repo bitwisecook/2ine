@@ -5,7 +5,7 @@
 #include "os2libs/sesmgr_start.h"
 #include "guest/handles.h"
 #include "host/sync.h"
-#include "host/system.h"
+#include "host/process.h"
 
 typedef struct SwitchEntry
 {

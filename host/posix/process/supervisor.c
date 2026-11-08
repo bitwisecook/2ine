@@ -3,7 +3,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "host/process_supervisor.h"
 #include "host/process.h"
-#include "host/system.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>

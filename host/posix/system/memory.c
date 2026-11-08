@@ -1,14 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Host memory and clock services; no guest CPU state lives in this file. */
+/* Host virtual memory; no guest CPU state lives in this file. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE 1
-#include "host/system.h"
+#include "host/memory.h"
 #include <errno.h>
 #include <sys/mman.h>
-#include <time.h>
-#include <sched.h>
 #include <unistd.h>
 
 static int posix_protection(unsigned p)
@@ -61,25 +59,4 @@ void *lx_host_memory_alloc(size_t size)
 void lx_host_memory_free(void *memory, size_t size)
 {
     munmap(memory, size);
-}
-
-uint64_t lx_host_monotonic_us(void)
-{
-    struct timespec now;
-    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
-        return 0;
-    return (uint64_t)now.tv_sec * 1000000u + (uint64_t)now.tv_nsec / 1000u;
-}
-
-void lx_host_sleep_ms(uint32_t milliseconds)
-{
-    if (!milliseconds)
-    {
-        sched_yield();
-        return;
-    }
-    struct timespec remaining = {milliseconds / 1000, (long)(milliseconds % 1000) * 1000000};
-    while (nanosleep(&remaining, &remaining) && errno == EINTR)
-    {
-    }
 }

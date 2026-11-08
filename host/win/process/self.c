@@ -2,7 +2,6 @@
 /* Process bootstrap queries. Returned strings/buffers belong to the caller. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
-#include "host/system.h"
 #include "host/process.h"
 #include "host/core/process/argv.h"
 #include <stdlib.h>

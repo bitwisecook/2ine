@@ -3,7 +3,8 @@
    PCL 5 uses monochrome ordered-dither raster rows at the advertised dpi. */
 #include "os2libs/pmwin/print_job.h"
 #include "host/print.h"
-#include "host/system.h"
+#include "host/clock.h"
+#include "host/process.h"
 #include "host/fs.h"
 #include <stdio.h>
 #include <stdlib.h>

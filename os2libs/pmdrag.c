@@ -51,7 +51,7 @@ ULONG DrgQueryStrNameLen(ULONG string)
    guest memory, and never expose the host allocation that tracks ownership. */
 #include "guest/abi.h"
 #include "host/sync.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "os2libs/pmwin.h"
 #include "os2libs/pmwin/graphics.h"
 

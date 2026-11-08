@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest-address ownership and execution-backend dispatch. */
 #include "emulator/execution/unicorn/cpu_internal.h"
-#include "host/system.h"
+#include "host/memory.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

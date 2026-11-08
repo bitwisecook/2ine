@@ -9,7 +9,7 @@
 #include "os2libs/os2native16.h"
 #include "os2libs/kbdcalls.h"
 #include "host/terminal.h"
-#include "host/system.h"
+#include "host/clock.h"
 
 #include "os2libs/generated/kbdcalls-lx.h"
 

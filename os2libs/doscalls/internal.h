@@ -28,7 +28,8 @@
 #define DCPY_APPEND 0x0002U   // append instead of replacing.
 #include "os2libs/os2native16.h"
 #include "os2libs/doscalls.h"
-#include "host/system.h"
+#include "host/memory.h"
+#include "host/clock.h"
 #include "host/fs.h"
 #include "host/process.h"
 #include "host/sync.h"

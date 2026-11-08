@@ -3,7 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include "host/shared_memory.h"
 #include "host/sync.h"
 #include <stdio.h>

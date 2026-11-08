@@ -6,7 +6,7 @@
 #include "host/fatal.h"
 #include "host/sync.h"
 #include "host/thread.h"
-#include "host/system.h"
+#include "host/clock.h"
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stdio.h>

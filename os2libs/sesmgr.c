@@ -16,7 +16,7 @@
 #include "host/thread.h"
 #include "host/sync.h"
 #include "host/mailbox.h"
-#include "host/system.h"
+#include "host/process.h"
 #include "os2libs/pmwin.h"
 
 #include "os2libs/generated/sesmgr-lx.h"

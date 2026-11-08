@@ -1,10 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Host memory and clock services; no guest CPU state lives in this file. */
+/* Host virtual memory; no guest CPU state lives in this file. */
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 #define _DEFAULT_SOURCE 1
-#include "host/system.h"
+#include "host/memory.h"
 #include <errno.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -61,18 +61,4 @@ void lx_host_memory_free(void *memory, size_t size)
 {
     (void)size;
     VirtualFree(memory, 0, MEM_RELEASE);
-}
-
-uint64_t lx_host_monotonic_us(void)
-{
-    LARGE_INTEGER now, frequency;
-    QueryPerformanceCounter(&now);
-    QueryPerformanceFrequency(&frequency);
-    return (uint64_t)(now.QuadPart / frequency.QuadPart) * 1000000u +
-           (uint64_t)(now.QuadPart % frequency.QuadPart) * 1000000u / (uint64_t)frequency.QuadPart;
-}
-
-void lx_host_sleep_ms(uint32_t milliseconds)
-{
-    Sleep(milliseconds);
 }

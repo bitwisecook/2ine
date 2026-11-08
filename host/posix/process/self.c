@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #define _GNU_SOURCE 1
-#include "host/system.h"
+#include "host/process.h"
 #include <unistd.h>
 #include <sys/resource.h>
 
