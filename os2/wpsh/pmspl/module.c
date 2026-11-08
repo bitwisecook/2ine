@@ -45,7 +45,7 @@ ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capac
     if (!queue_record_size(level))
         return 124; /* ERROR_INVALID_LEVEL */
     int index = queue ? lx_printer_index(queue) : -1;
-    if (queue && (index < 0 || strcasecmp(queue, lx_printer_queues[index])))
+    if (queue && (index < 0 || !lx_printer_queue_is(queue, (unsigned)index)))
     {
         *returned = *total = *needed = 0;
         return 2150; /* NERR_QNotFound */
@@ -143,7 +143,7 @@ ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity,
     if (level > 3)
         return 124;
     int index = lx_printer_index(name);
-    if (index < 0 || strcasecmp(name, lx_printer_queues[index]))
+    if (index < 0 || !lx_printer_queue_is(name, (unsigned)index))
     {
         *needed = 0;
         return 2152; /* NERR_DestNotFound */

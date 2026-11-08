@@ -15,8 +15,8 @@ static inline int lx_printer_default_queue(void)
     char *separator = strchr(name, ';');
     if (separator)
         *separator = 0;
-    for (unsigned i = 0; i < 2; i++)
-        if (!strcasecmp(name, lx_printer_queues[i]))
+    for (unsigned i = 0; i < LX_PRINTER_COUNT; i++)
+        if (lx_printer_queue_is(name, i))
             return (int)i;
     return -1;
 }

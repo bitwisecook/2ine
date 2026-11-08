@@ -127,10 +127,7 @@ HOST_ADAPTER_INCLUDES = {"linux": {"posix"}, "macos": {"posix"}}
 # Host-OS branches that remain outside the platform directories, with the
 # number of branch directives each one holds. A count change fails, so an entry
 # is removed together with its branches.
-TEMPORARY_OS_BRANCH_ALLOWANCES = {
-    # strncasecmp spelling for Windows C runtimes.
-    "os2/include/private/pmdevp.h": 1,
-}
+TEMPORARY_OS_BRANCH_ALLOWANCES = {}
 
 # Public host contracts, the only host headers portable components include.
 PUBLIC_HOST_HEADERS = (
