@@ -37,3 +37,42 @@ any artifact. In Warp 4.52, QUECALLS, SESMGR, NLS, MSG, VIOCALLS and KBDCALLS
 forward to DOSCALL1; PMWIN, PMSHAPI and PMGRE forward to PMMERGE; PMDRAG
 forwards to PMCTLS; MDM and MMIO forward to MMPM. 2ine builds each of these
 with its own implementation.
+
+## Headers
+
+`include/` follows the Toolkit's `h/` directory: each declaration is in the
+header, and the INCL_* section, where the Toolkit puts it. 2ine declares every
+group unconditionally, so includers need not define INCL_* macros. Includes name
+the path from the project root (`"os2/include/bsedos.h"`), which keeps the BSD
+socket headers apart from the host's.
+
+| Header | Declares (exporting DLLs) |
+|---|---|
+| `os2.h` | `os2def.h`, `bse.h`, `bsedos16.h`, `pm.h` |
+| `os2def.h` | Base types, handles, POINTL/RECTL, `OS2EXPORT`/`OS2API` and `LX_GUEST_DATA_EXPORT` |
+| `bse.h` | `bsedos.h`, `bsesub.h`, `bseerr.h` |
+| `bsedos.h` (+ `bsetib.h`, `bsememf.h`, `bsexcpt.h`) | 32-bit Dos* API by INCL_DOS* group (DOSCALLS, QUECALLS, SESMGR, NLS, MSG) |
+| `bsedos16.h` | USE16 Dos16*/DosSem* entries, as in the DDK (DOSCALLS, QUECALLS, SESMGR, NLS, MSG) |
+| `bsesub.h` | Kbd* and Vio* (KBDCALLS, VIOCALLS) |
+| `bseerr.h` | Base OS error codes |
+| `pm.h` | The PM headers below |
+| `pmwin.h` (+ `pmerr.h`, `pmsei.h`) | Win* by INCL_WIN* group (PMWIN) |
+| `pmshl.h` | Prf*, switch list, WinStartApp (PMSHAPI) |
+| `pmhelp.h` | Help manager (HELPMGR) |
+| `pmgpi.h`, `pmdev.h`, `pmfont.h` | Gpi* by INCL_GPI* group, Dev*, font records (PMGPI) |
+| `pmstddlg.h` | File and font dialogs, Drg* (PMCTLS, PMDRAG) |
+| `pmspl.h` | Spl* (PMSPL) |
+| `pmwp.h` | Workplace Shell API and SOM class constructors and data (PMWP) |
+| `os2win.h` | Open32 (PMWINX) |
+| `os2me.h`, `mmioos2.h` | mci* (MDM), mmio* (MMIO) |
+| `dive.h` | Dive* (DIVE) |
+| `som/som.h` | SOM |
+| `sys/*.h`, `netinet/in.h`, `arpa/inet.h`, `netdb.h`, `resolv.h`, `unistd.h` | 32-bit sockets (TCPIP32) |
+| `stack16/sys/socket.h`, `stack16/netdb.h` | 16-bit-stack socket and database sets (SO32DLL, TCP32DLL) |
+
+`include/private/` holds the DDK-style private companions: `bsep.h` (DOSCALLS
+entries absent from the Toolkit, launch and session services, queue and
+shared-memory helpers), `pmp.h` (PMWIN services for other DLLs, PMGRE and
+PMMERGE entries), `pmgpip.h`, `pmdevp.h` and `pmsplp.h` (printer catalogue and
+default queue), `os2mep.h` (multimedia), the export framework `export*.h`, and
+the guest binding policies `api16.json`/`api32.json` read by `tools/lxapigen.py`.

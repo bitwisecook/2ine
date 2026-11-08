@@ -53,7 +53,11 @@ and `emulator/execution/native_i386/`, and in the storage host adapters `storage
 identity, local time and locks), apart from the named temporary allowances in the
 checker. `formats/` includes no other component, `storage/` only `formats/`, and
 only `ball/` includes `ball/`; `emulator/` does not include `os2/`, and its layers (execution, ABI, process, loader) include
-only downwards. Inline assembly appears only in `emulator/execution/native_i386/`. Outside `host/`, code includes only the public
+only downwards. Inside `os2/`, sources use only the known IBM groups; each DLL directory has
+one module definition, and its generated table is included only by its
+`module.c`. A DLL reaches another DLL's internals through
+`os2/include/private/`; the remaining direct includes of another DLL's
+headers are counted in the checker. Inline assembly appears only in `emulator/execution/native_i386/`. Outside `host/`, code includes only the public
 host contracts; `host/core/` and `host/include/` use no host APIs. Every top-level source directory is classified in
 the checker, so a new component is covered by these rules.
 
