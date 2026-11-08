@@ -574,10 +574,10 @@ static int new_record(VolumeDisk *d, VolumeNode parent, const char *name,
     unsigned char alias[FAT_NAME_BYTES];
     int lfn;
     uint16_t units[FAT_LFN_BUFFER_UNITS];
-    size_t n;
+    size_t n = 0;
     if (!name_units(name, units, &n) || !make_short(d, parent, name, alias, &lfn))
         return 0;
-    size_t count = lfn ? (n + FAT_LFN_UNITS - 1) / FAT_LFN_UNITS : 0, slot;
+    size_t count = lfn ? (n + FAT_LFN_UNITS - 1) / FAT_LFN_UNITS : 0, slot = 0;
     if (!directory_slots(d, parent, count + 1, &slot))
         return 0;
     unsigned checksum = short_name_checksum(alias);
