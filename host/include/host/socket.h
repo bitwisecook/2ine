@@ -114,5 +114,4 @@ int lx_host_socket_select(int limit, LxHostSocketSet *read, LxHostSocketSet *wri
                           LxHostSocketSet *error, int64_t seconds, int32_t microseconds, int timed);
 int lx_host_socket_poll(const int *sockets, int reads, int writes, int errors, int timeout_ms);
 int lx_host_socket_option(int socket, LxHostSocketOption option, const void *value, int size);
-int lx_host_wall_time(int64_t *seconds, int32_t *microseconds, int32_t *minutes_west, int32_t *dst);
 #endif

@@ -17,4 +17,7 @@ int lx_host_calendar_seconds(const LxHostCalendar *calendar, int utc, int64_t *s
 int lx_host_calendar(int64_t seconds, int utc, LxHostCalendar *result);
 /* Abbreviated names of the host zone's standard and daylight time. */
 void lx_host_zone_names(char standard[32], char daylight[32]);
+/* BSD gettimeofday: seconds and microseconds since the epoch, the host zone's
+   offset west of UTC in minutes and its daylight-saving flag. */
+int lx_host_wall_time(int64_t *seconds, int32_t *microseconds, int32_t *minutes_west, int32_t *dst);
 #endif

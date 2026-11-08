@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <sched.h>
 #include <stdio.h>
+#include <sys/time.h>
 #include <time.h>
 
 #define MILLISECONDS_PER_SECOND 1000
@@ -93,4 +94,16 @@ void lx_host_zone_names(char standard[32], char daylight[32])
     tzset();
     snprintf(standard, 32, "%s", tzname[0]);
     snprintf(daylight, 32, "%s", tzname[1]);
+}
+
+int lx_host_wall_time(int64_t *seconds, int32_t *micros, int32_t *west, int32_t *dst)
+{
+    struct timeval t;
+    struct timezone zone;
+    int r = gettimeofday(&t, &zone);
+    *seconds = t.tv_sec;
+    *micros = (int32_t)t.tv_usec;
+    *west = zone.tz_minuteswest;
+    *dst = zone.tz_dsttime;
+    return r;
 }

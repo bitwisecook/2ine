@@ -15,6 +15,7 @@
 
 #include "host/network.h"
 #include "host/sync.h"
+#include "host/clock.h"
 #include <ctype.h>
 static LX_HOST_THREAD_LOCAL int SocketError, ResolverError;
 
