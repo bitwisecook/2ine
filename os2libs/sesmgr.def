@@ -1,0 +1,14 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of SESMGR.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY SESMGR
+
+EXPORTS
+    DOSSMSETTITLE = Dos16SMSetTitle @5
+    Dos16StopSession                @8
+    Dos16SetSession                 @14
+    Dos16StartSession               @17
+    DosStartSession                 @37
+    DosSelectSession                @38
+    DosSetSession                   @39
+    DosStopSession                  @40

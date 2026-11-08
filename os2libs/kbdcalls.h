@@ -45,22 +45,14 @@ extern "C"
 
 #pragma pack(pop)
 
-    OS2EXPORT APIRET16 OS2API16 KbdCharIn(PKBDKEYINFO pkbci, USHORT fWait, HKBD hkbd)
-        OS2APIINFO(ord = 4, name = KBDCHARIN);
-    OS2EXPORT APIRET16 OS2API16 KbdStringIn(PCHAR pch, PSTRINGINBUF pchin, USHORT flag, HKBD hkbd)
-        OS2APIINFO(ord = 9, name = KBDSTRINGIN);
-    OS2EXPORT APIRET16 OS2API16 KbdSetCp(USHORT reserved, USHORT codepage, HKBD hkbd)
-        OS2APIINFO(ord = 5, name = KBDSETCP);
-    OS2EXPORT APIRET16 OS2API16 KbdGetCp(ULONG reserved, PUSHORT codepage, HKBD hkbd)
-        OS2APIINFO(ord = 3, name = KBDGETCP);
-    OS2EXPORT APIRET16 OS2API16 KbdFlushBuffer(HKBD hkbd)
-        OS2APIINFO(ord = 13, name = KBDFLUSHBUFFER);
-    OS2EXPORT APIRET16 OS2API16 KbdPeek(PKBDKEYINFO pkbci, HKBD hkbd)
-        OS2APIINFO(ord = 22, name = KBDPEEK);
-    OS2EXPORT APIRET16 OS2API16 KbdGetStatus(PKBDINFO pkbci, HKBD hkbd)
-        OS2APIINFO(ord = 10, name = KBDGETSTATUS);
-    OS2EXPORT APIRET16 OS2API16 KbdSetStatus(PKBDINFO pkbci, HKBD hkbd)
-        OS2APIINFO(ord = 11, name = KBDSETSTATUS);
+    OS2EXPORT APIRET16 OS2API16 KbdCharIn(PKBDKEYINFO pkbci, USHORT fWait, HKBD hkbd);
+    OS2EXPORT APIRET16 OS2API16 KbdStringIn(PCHAR pch, PSTRINGINBUF pchin, USHORT flag, HKBD hkbd);
+    OS2EXPORT APIRET16 OS2API16 KbdSetCp(USHORT reserved, USHORT codepage, HKBD hkbd);
+    OS2EXPORT APIRET16 OS2API16 KbdGetCp(ULONG reserved, PUSHORT codepage, HKBD hkbd);
+    OS2EXPORT APIRET16 OS2API16 KbdFlushBuffer(HKBD hkbd);
+    OS2EXPORT APIRET16 OS2API16 KbdPeek(PKBDKEYINFO pkbci, HKBD hkbd);
+    OS2EXPORT APIRET16 OS2API16 KbdGetStatus(PKBDINFO pkbci, HKBD hkbd);
+    OS2EXPORT APIRET16 OS2API16 KbdSetStatus(PKBDINFO pkbci, HKBD hkbd);
 
 #ifdef __cplusplus
 }

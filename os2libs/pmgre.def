@@ -1,0 +1,8 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of PMGRE.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY PMGRE
+
+EXPORTS
+    Gre32Entry3 @63
+    Gre32Entry5 @65

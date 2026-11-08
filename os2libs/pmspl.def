@@ -1,0 +1,10 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of PMSPL.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY PMSPL
+
+EXPORTS
+    SplQueryDevice @381
+    SplQueryQueue  @397
+    SplEnumQueue   @399
+    SplEnumPrinter @441

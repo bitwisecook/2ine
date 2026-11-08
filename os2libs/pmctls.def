@@ -1,0 +1,11 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of PMCTLS.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY PMCTLS
+
+EXPORTS
+    WinFontDlg         @2
+    WinDefFontDlgProc  @3
+    WinFileDlg         @4
+    WinDefFileDlgProc  @5
+    WinFreeFileDlgList @6

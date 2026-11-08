@@ -1,0 +1,25 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of VIOCALLS.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY VIOCALLS
+
+EXPORTS
+    VIOGETANSI = VioGetAnsi             @3
+    VIOSCROLLUP = VioScrollUp           @7
+    VIOGETCURPOS = VioGetCurPos         @9
+    VIOWRTCELLSTR = VioWrtCellStr       @10
+    VIOSETCURPOS = VioSetCurPos         @15
+    VIOWRTTTY = VioWrtTty               @19
+    VIOGETMODE = VioGetMode             @21
+    VIOSETMODE = VioSetMode             @22
+    VIOREADCELLSTR = VioReadCellStr     @24
+    VIOGETCURTYPE = VioGetCurType       @27
+    VIOREADCHARSTR = VioReadCharStr     @30
+    VIOGETBUF = VioGetBuf               @31
+    VIOSETCURTYPE = VioSetCurType       @32
+    VIOGETCP = VioGetCp                 @40
+    VIOSETCP = VioSetCp                 @42
+    VIOGETCONFIG = VioGetConfig         @46
+    VIOSCROLLDN = VioScrollDn           @47
+    VIOWRTCHARSTRATT = VioWrtCharStrAtt @48
+    VIOWRTNCELL = VioWrtNCell           @52

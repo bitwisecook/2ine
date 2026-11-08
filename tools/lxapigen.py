@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # 2ine-derived; zlib-style license. See LICENSE.txt.
-"""Generate native OS/2 export glue from headers and explicit guest ABI policies."""
+"""Generate native OS/2 export glue from module definitions, headers and guest ABI policies."""
 
 from __future__ import annotations
 
@@ -11,6 +11,16 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
+
+# Module definitions (LINK386 .def files) name each DLL's exports and ordinals.
+DEFINITION_GLOBS = ("os2libs/*.def",)
+# Headers that declare the exported C prototypes and guest data exports.
+HEADER_GLOBS = ("os2libs/*.h",)
+# The export framework itself declares no OS/2 exports.
+FRAMEWORK_HEADERS = {"os2native.h", "os2native16.h", "os2native32.h"}
+FRAMEWORK32_INCLUDE = "os2libs/os2native32.h"
+POLICIES16 = "guest/bindings/api16.json"
+POLICIES32 = "guest/bindings/api32.json"
 
 TYPE_SIZES = {"LONG": 4, "ULONG": 4, "SHORT": 2, "USHORT": 2, "HVIO": 2, "HKBD": 2}
 
@@ -147,75 +157,190 @@ def read_policies32(path: Path) -> Policies32:
     return result
 
 
-def parse_functions(text: str) -> list[Function]:
-    functions: dict[int, Function] = {}
+@dataclass(frozen=True)
+class Prototype:
+    result: str
+    name: str
+    arguments: tuple[Argument, ...]
+    use16: bool
+    variadic: bool
+
+
+@dataclass(frozen=True)
+class Forwarder:
+    """An export that resolves to another module's ordinal or entry name."""
+
+    name: str
+    ordinal: int
+    module: str
+    target_ordinal: int
+    target_name: str
+
+
+@dataclass(frozen=True)
+class DefExport:
+    name: str
+    internal: str
+    ordinal: int
+
+
+@dataclass(frozen=True)
+class Definition:
+    library: str
+    exports: tuple[DefExport, ...]
+
+    @property
+    def module(self) -> str:
+        return self.library.lower()
+
+
+def strip_comments(text: str) -> str:
+    return re.sub(r"/\*.*?\*/|//[^\n]*", " ", text, flags=re.S)
+
+
+def strip_preprocessor(text: str) -> str:
+    """Remove directives, including backslash-continued macro bodies."""
+    return re.sub(r"^[ \t]*#(?:[^\n]*\\\n)*[^\n]*", " ", text, flags=re.M)
+
+
+def parse_prototype(line: str) -> Prototype:
+    match = re.fullmatch(r"OS2EXPORT\s+(.+?)\s*\b(OS2API|OS2API16)\s+(\w+)\s*\((.*?)\)\s*;", line)
+    if match is None:
+        raise ValueError(f"could not parse export: {line}")
+    result, api, name, parameters = (value.strip() for value in match.groups())
+    arguments: list[Argument] = []
+    variadic = False
+    if parameters not in {"void", "VOID"}:
+        parts = parameters.split(",")
+        for index, parameter in enumerate(parts):
+            if parameter.strip() == "...":
+                if index != len(parts) - 1 or not index or api == "OS2API16":
+                    raise ValueError(f"{name}: invalid variadic parameter list")
+                variadic = True
+                continue
+            type_name, argument_name = parameter.strip().rsplit(None, 1)
+            arguments.append(Argument(type_name, argument_name))
+    return Prototype(result, name, tuple(arguments), api == "OS2API16", variadic)
+
+
+def parse_prototypes(text: str) -> dict[str, str]:
+    """Map each OS2EXPORT function name to its normalised declaration."""
     # Export prototypes may wrap across lines and contain parameter comments.
-    text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", text, flags=re.S)
+    text = strip_preprocessor(strip_comments(text))
+    declarations: dict[str, str] = {}
     for declaration in re.split(r"(?<=;)", text):
         line = " ".join(declaration.split())
-        if "OS2APIINFO" not in line:
-            continue
         start = line.find("OS2EXPORT")
-        if start >= 0:
-            line = line[start:]
-        match = re.fullmatch(
-            r"OS2EXPORT\s+(.+?)\s*(OS2API|OS2API16)\s+(.*?)\s*\((.*?)\)\s+OS2APIINFO\((.*?)\);",
-            line,
-        )
-        if match is None:
-            raise ValueError(f"could not parse export: {line}")
-        result, api, name, parameters, info = (value.strip() for value in match.groups())
-        options: dict[str, str] = {}
-        if info.isdecimal():
-            options["ord"] = info
-        else:
-            for option in info.split(","):
-                key, value = option.split("=", 1)
-                key, value = key.strip(), value.strip()
-                if key not in {"ord", "name"}:
-                    raise ValueError(f"{name}: unknown OS2APIINFO key {key!r}")
-                options[key] = value
-        ordinal = int(options["ord"])
-        arguments: list[Argument] = []
-        variadic = False
-        if parameters not in {"void", "VOID"}:
-            parts = parameters.split(",")
-            for index, parameter in enumerate(parts):
-                if parameter.strip() == "...":
-                    if index != len(parts) - 1 or not index or api == "OS2API16":
-                        raise ValueError(f"{name}: invalid variadic parameter list")
-                    variadic = True
-                    continue
-                type_name, argument_name = parameter.strip().rsplit(None, 1)
-                arguments.append(Argument(type_name, argument_name))
-        if ordinal in functions:
-            raise ValueError(f"duplicate ordinal #{ordinal}: {name} and {functions[ordinal].name}")
-        functions[ordinal] = Function(
-            result,
-            name,
-            tuple(arguments),
-            ordinal,
-            options.get("name"),
-            api == "OS2API16",
-            variadic,
-        )
-    return [functions[key] for key in sorted(functions)]
+        if start < 0:
+            continue
+        line = line[start:]
+        match = re.search(r"\b(?:OS2API|OS2API16)\s+(\w+)\s*\(", line)
+        if match is None or not line.endswith(";"):
+            continue
+        name = match.group(1)
+        if declarations.get(name, line) != line:
+            raise ValueError(f"{name}: conflicting export prototypes")
+        declarations[name] = line
+    return declarations
 
 
-def parse_data_exports(text: str) -> list[DataExport]:
-    """Read LX_GUEST_DATA_EXPORT(name, ordinal, bytes) declarations."""
-    text = re.sub(r"/\*.*?\*/|//[^\n]*", " ", text, flags=re.S)
-    exports: dict[int, DataExport] = {}
-    for name, ordinal, size in re.findall(
-        r"\bLX_GUEST_DATA_EXPORT\(\s*(\w+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)\s*;", text
+def parse_data_exports(text: str) -> dict[str, int]:
+    """Read LX_GUEST_DATA_EXPORT(name, bytes) declarations."""
+    exports: dict[str, int] = {}
+    for name, size in re.findall(
+        r"\bLX_GUEST_DATA_EXPORT\(\s*(\w+)\s*,\s*(\d+)\s*\)\s*;", strip_comments(text)
     ):
-        entry = DataExport(name, int(ordinal), int(size))
-        if entry.ordinal in exports:
-            raise ValueError(f"duplicate data ordinal #{ordinal}: {name}")
-        if not entry.size:
+        if not int(size):
             raise ValueError(f"{name}: data export requires a nonzero size")
-        exports[entry.ordinal] = entry
-    return [exports[key] for key in sorted(exports)]
+        exports[name] = int(size)
+    return exports
+
+
+def parse_definition(text: str, location: str = "<def>") -> Definition:
+    """Read a LINK386 module definition: LIBRARY and EXPORTS with ordinals.
+
+    An EXPORTS entry is `name [= internal] @ordinal`. An internal name of the
+    form MODULE.ordinal or MODULE.entry declares a forwarder.
+    """
+    library = ""
+    exports: list[DefExport] = []
+    in_exports = False
+    for number, raw in enumerate(text.splitlines(), 1):
+        line = raw.split(";", 1)[0].strip()
+        if not line:
+            continue
+        where = f"{location}:{number}"
+        keyword = line.split(None, 1)[0].upper()
+        if keyword == "LIBRARY":
+            words = line.split()
+            if len(words) < 2 or library:
+                raise ValueError(f"{where}: expected one LIBRARY name")
+            library = words[1]
+            in_exports = False
+            continue
+        if keyword == "DESCRIPTION":
+            in_exports = False
+            continue
+        if keyword == "EXPORTS":
+            in_exports = True
+            line = line[len("EXPORTS") :].strip()
+            if not line:
+                continue
+        if not in_exports:
+            raise ValueError(f"{where}: unsupported statement {keyword!r}")
+        match = re.fullmatch(r"([\w$]+)(?:\s*=\s*([\w$]+(?:\.[\w$]+)?))?\s+@\s*(\d+)", line)
+        if match is None:
+            raise ValueError(f"{where}: could not parse export {line!r}")
+        name, internal, ordinal = match.groups()
+        exports.append(DefExport(name, internal or name, int(ordinal)))
+    if not library:
+        raise ValueError(f"{location}: missing LIBRARY statement")
+    seen: dict[int, str] = {}
+    for export in exports:
+        if not 0 < export.ordinal < 65536:
+            raise ValueError(f"{location}: {export.name}: ordinal out of range")
+        if export.ordinal in seen:
+            raise ValueError(
+                f"duplicate ordinal #{export.ordinal}: {export.name} and {seen[export.ordinal]}"
+            )
+        seen[export.ordinal] = export.name
+    return Definition(library, tuple(sorted(exports, key=lambda item: item.ordinal)))
+
+
+def bind_exports(
+    definition: Definition, prototypes: dict[str, str], data_sizes: dict[str, int]
+) -> tuple[list[Function], list[DataExport], list[Forwarder]]:
+    """Resolve each EXPORTS entry to a C prototype, a data export or a forwarder."""
+    functions: list[Function] = []
+    data: list[DataExport] = []
+    forwarders: list[Forwarder] = []
+    for export in definition.exports:
+        if "." in export.internal:
+            module, target = export.internal.split(".", 1)
+            if target.isdecimal():
+                if not 0 < int(target) < 65536:
+                    raise ValueError(f"{export.name}: forwarder ordinal out of range")
+                forwarders.append(Forwarder(export.name, export.ordinal, module, int(target), ""))
+            else:
+                forwarders.append(Forwarder(export.name, export.ordinal, module, 0, target))
+        elif export.internal in data_sizes:
+            data.append(DataExport(export.internal, export.ordinal, data_sizes[export.internal]))
+        elif export.internal in prototypes:
+            prototype = parse_prototype(prototypes[export.internal])
+            functions.append(
+                Function(
+                    prototype.result,
+                    prototype.name,
+                    prototype.arguments,
+                    export.ordinal,
+                    export.name if export.name != export.internal else None,
+                    prototype.use16,
+                    prototype.variadic,
+                )
+            )
+        else:
+            raise ValueError(f"{definition.library}: no prototype for {export.internal}")
+    return functions, data, forwarders
 
 
 def bridge16(function: Function, policy: tuple[PointerPolicy, ...] | None) -> str:
@@ -285,16 +410,30 @@ def bridge16(function: Function, policy: tuple[PointerPolicy, ...] | None) -> st
     return "".join(lines) + "\n"
 
 
+@dataclass(frozen=True)
+class Layout:
+    """Include paths written into a generated table."""
+
+    framework32: str = FRAMEWORK32_INCLUDE
+    bindings: str = "bindings.h"
+
+
 def render(
     module: str,
     functions: list[Function],
     api16: dict[str, tuple[PointerPolicy, ...]],
     api32: dict[str, Abi32],
     data: tuple[DataExport, ...] = (),
+    forwarders: tuple[Forwarder, ...] = (),
+    layout: Layout | None = None,
 ) -> str:
-    collisions = {item.ordinal for item in data} & {function.ordinal for function in functions}
+    layout = layout or Layout()
+    ordinals = [item.ordinal for item in data]
+    ordinals += [function.ordinal for function in functions]
+    ordinals += [item.ordinal for item in forwarders]
+    collisions = {ordinal for ordinal in ordinals if ordinals.count(ordinal) > 1}
     if collisions:
-        raise ValueError(f"{module}: data and function ordinals collide: {sorted(collisions)}")
+        raise ValueError(f"{module}: export ordinals collide: {sorted(collisions)}")
     lines = [
         "/* 2ine. Zlib-style license; see LICENSE.txt. */\n"
         "/* Generated by lxapigen.py. */\n\n#if LX_LEGACY\n\n"
@@ -308,8 +447,8 @@ def render(
         else "LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT"
     )
     if api32:
-        lines.append('#include "os2libs/os2native32.h"\n' + support_guard)
-        lines.append(f'#include "guest/bindings/{module}.h"\nLX_NATIVE_MODULE_32BIT_SUPPORT()\n')
+        lines.append(f'#include "{layout.framework32}"\n' + support_guard)
+        lines.append(f'#include "{layout.bindings}"\nLX_NATIVE_MODULE_32BIT_SUPPORT()\n')
         for name in sorted(api32):
             if forced and not api32[name].native_bridge:
                 lines.append("#if TWOINE_PORTABLE_LOADER\n")
@@ -319,7 +458,7 @@ def render(
         lines.append(support_end + "\n")
     if data:
         if not api32:
-            lines.append('#include "os2libs/os2native32.h"\n')
+            lines.append(f'#include "{layout.framework32}"\n')
         lines.append("LX_NATIVE_MODULE_DATA_SUPPORT()\n")
         for item in data:
             lines.append(f"LX_NATIVE_MODULE_DATA({item.name})\n")
@@ -385,6 +524,11 @@ def render(
             lines.append(f"    LX_NATIVE_INIT_DATA({item.name}, {offset})\n")
             offset += (item.size + 15) & ~15
         lines.append("    return 1;\n}\n")
+    for item in forwarders:
+        lines.append(
+            f'LX_NATIVE_FORWARDER(lx_forward_{item.ordinal}, "{item.module}", '
+            f'{item.target_ordinal}, "{item.target_name}");\n'
+        )
     lines.append("LX_NATIVE_MODULE_INIT({\n")
     if data:
         lines.append(f"    if (!initdata_{module}()) return 0;\n")
@@ -396,11 +540,22 @@ def render(
         else:
             lines.append(f"    LX_NATIVE_INIT_32BIT_MODULE({module})\n")
     lines.append("})\n")
-    pending = list(data)
+    pending: list[tuple[int, str]] = [
+        (item.ordinal, f"    LX_NATIVE_EXPORT_DATA({item.name}, {item.ordinal}),\n")
+        for item in data
+    ]
+    pending += [
+        (
+            item.ordinal,
+            f'    LX_NATIVE_EXPORT_FORWARDER(lx_forward_{item.ordinal}, "{item.name}", '
+            f"{item.ordinal}),\n",
+        )
+        for item in forwarders
+    ]
+    pending.sort()
     for function in functions:
-        while pending and pending[0].ordinal < function.ordinal:
-            item = pending.pop(0)
-            lines.append(f"    LX_NATIVE_EXPORT_DATA({item.name}, {item.ordinal}),\n")
+        while pending and pending[0][0] < function.ordinal:
+            lines.append(pending.pop(0)[1])
         name = function.name
         suffix = "16" if function.use16 else "32" if name in api32 else ""
         hidden = name not in (api16 if function.use16 else api32)
@@ -416,35 +571,56 @@ def render(
         lines.append(f"    {macro}({arguments}),\n")
         if hidden:
             lines.append("#endif\n")
-    for item in pending:
-        lines.append(f"    LX_NATIVE_EXPORT_DATA({item.name}, {item.ordinal}),\n")
+    for _, line in pending:
+        lines.append(line)
     lines.append(
         f"\nLX_NATIVE_MODULE_INIT_END()\n\n#endif /* LX_LEGACY */\n\n/* end of {module}-lx.h ... */\n\n"
     )
     return "".join(lines).rstrip() + "\n"
 
 
+def bindings_include(root: Path, definition: Path, module: str) -> str:
+    del root, definition
+    return f"guest/bindings/{module}.h"
+
+
+def read_headers(root: Path) -> tuple[dict[str, str], dict[str, int]]:
+    """Collect export prototypes and data-export sizes from the API headers."""
+    prototypes: dict[str, str] = {}
+    data: dict[str, int] = {}
+    for pattern in HEADER_GLOBS:
+        for header in sorted(root.glob(pattern)):
+            if header.name in FRAMEWORK_HEADERS or "generated" in header.parts:
+                continue
+            text = header.read_text()
+            for name, declaration in parse_prototypes(text).items():
+                if prototypes.get(name, declaration) != declaration:
+                    raise ValueError(f"{name}: conflicting export prototypes ({header.name})")
+                prototypes[name] = declaration
+            data.update(parse_data_exports(text))
+    return prototypes, data
+
+
 def generate(root: Path, *, check: bool = False) -> bool:
-    policies16 = read_policies16(root / "guest/bindings/api16.json")
-    policies32 = read_policies32(root / "guest/bindings/api32.json")
+    policies16 = read_policies16(root / POLICIES16)
+    policies32 = read_policies32(root / POLICIES32)
+    prototypes, data_sizes = read_headers(root)
     outputs: dict[Path, str] = {}
-    for header in sorted((root / "os2libs").glob("*.h")):
-        if header.name.startswith("os2") or header.name.endswith("-lx.h"):
-            continue
-        text = header.read_text()
-        functions = parse_functions(text)
-        data = tuple(parse_data_exports(text))
-        if functions or data:
-            module = header.stem
-            outputs[root / "os2libs/generated" / f"{module}-lx.h"] = render(
+    for pattern in DEFINITION_GLOBS:
+        for path in sorted(root.glob(pattern)):
+            definition = parse_definition(path.read_text(), path.name)
+            module = definition.module
+            functions, data, forwarders = bind_exports(definition, prototypes, data_sizes)
+            layout = Layout(bindings=bindings_include(root, path, module))
+            outputs[path.parent / "generated" / f"{module}-lx.h"] = render(
                 module,
                 functions,
                 policies16.get(module, {}),
                 policies32.get(module, {}),
-                data,
+                tuple(data),
+                tuple(forwarders),
+                layout,
             )
-    if not check:
-        (root / "os2libs/generated").mkdir(parents=True, exist_ok=True)
     changed = False
     for path, text in outputs.items():
         if path.exists() and path.read_text() == text:
@@ -452,6 +628,7 @@ def generate(root: Path, *, check: bool = False) -> bool:
         changed = True
         print(f"{path.name}: {'out of date' if check else 'updated'}")
         if not check:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text)
     return changed
 

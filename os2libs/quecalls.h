@@ -34,25 +34,24 @@ extern "C"
     OS2EXPORT APIRET OS2API lx_queue_open_private(PPID owner, PHQUEUE output, const char *name);
     OS2EXPORT APIRET OS2API lx_queue_write_copy(HQUEUE handle, ULONG request, ULONG length,
                                                 PVOID data, ULONG priority);
-    OS2EXPORT APIRET OS2API DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ pszName) OS2APIINFO(16);
-    OS2EXPORT APIRET OS2API DosCloseQueue(HQUEUE hq) OS2APIINFO(11);
-    OS2EXPORT APIRET OS2API DosOpenQueue(PPID ppid, PHQUEUE phq, PSZ pszName) OS2APIINFO(15);
+    OS2EXPORT APIRET OS2API DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ pszName);
+    OS2EXPORT APIRET OS2API DosCloseQueue(HQUEUE hq);
+    OS2EXPORT APIRET OS2API DosOpenQueue(PPID ppid, PHQUEUE phq, PSZ pszName);
     OS2EXPORT APIRET OS2API DosPeekQueue(HQUEUE hq, PREQUESTDATA pRequest, PULONG pcbData,
                                          PPVOID ppbuf, PULONG element, BOOL32 nowait,
-                                         PBYTE ppriority, HEV hsem) OS2APIINFO(13);
-    OS2EXPORT APIRET OS2API DosPurgeQueue(HQUEUE hq) OS2APIINFO(10);
-    OS2EXPORT APIRET OS2API DosQueryQueue(HQUEUE hq, PULONG pcbEntries) OS2APIINFO(12);
+                                         PBYTE ppriority, HEV hsem);
+    OS2EXPORT APIRET OS2API DosPurgeQueue(HQUEUE hq);
+    OS2EXPORT APIRET OS2API DosQueryQueue(HQUEUE hq, PULONG pcbEntries);
     OS2EXPORT APIRET OS2API DosReadQueue(HQUEUE hq, PREQUESTDATA pRequest, PULONG pcbData,
                                          PPVOID ppbuf, ULONG element, BOOL32 wait, PBYTE ppriority,
-                                         HEV hsem) OS2APIINFO(9);
+                                         HEV hsem);
     OS2EXPORT APIRET OS2API DosWriteQueue(HQUEUE hq, ULONG request, ULONG cbData, PVOID pbData,
-                                          ULONG priority) OS2APIINFO(14);
+                                          ULONG priority);
     OS2EXPORT APIRET16 OS2API16 Dos16ReadQueue(USHORT queue, PULONG request, PUSHORT length,
                                                PULONG buffer, USHORT element, USHORT nowait,
-                                               PBYTE priority, ULONG semaphore) OS2APIINFO(1);
-    OS2EXPORT APIRET16 OS2API16 Dos16CloseQueue(USHORT queue) OS2APIINFO(2);
-    OS2EXPORT APIRET16 OS2API16 Dos16CreateQueue(PUSHORT queue, USHORT order, PSZ name)
-        OS2APIINFO(8);
+                                               PBYTE priority, ULONG semaphore);
+    OS2EXPORT APIRET16 OS2API16 Dos16CloseQueue(USHORT queue);
+    OS2EXPORT APIRET16 OS2API16 Dos16CreateQueue(PUSHORT queue, USHORT order, PSZ name);
 
 #ifdef __cplusplus
 }

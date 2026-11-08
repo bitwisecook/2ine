@@ -10,7 +10,7 @@ Python 3.11+. No runtime dependencies outside the standard library.
 
 | Tool | Input → output |
 |---|---|
-| `tools/lxapigen.py` | API headers + binding policies → `os2libs/generated/*-lx.h` |
+| `tools/lxapigen.py` | Module definitions + API headers + binding policies → `os2libs/generated/*-lx.h` |
 | `tools/cvtasm.py` | ndisasm text → C byte emissions |
 | `tools/os2imports.py` | lx_dump text → named NE/LX imports |
 | `tools/unimplemented.py` | Named imports → services absent from export tables |
@@ -60,8 +60,11 @@ Ruff and ty cover the four tools and their tests. Their scope is in
 `pyproject.toml`. The tools and ordinal catalogue derive from 2ine and retain
 its [license](../LICENSE.txt).
 
-The generator reads public `os2libs/*.h` API declarations and
-`guest/bindings/*.json` policies. Service implementation files can be split
-without changing generation inputs. Ordinals, calling conventions and explicit
-guest marshalling policies remain defined by those inputs. `--check` reports
+The generator reads each DLL's LINK386-style module definition
+(`os2libs/<dll>.def`: `LIBRARY` name and `EXPORTS` entries
+`name [= C entry] @ordinal`), the C prototypes and `LX_GUEST_DATA_EXPORT`
+sizes in the public `os2libs/*.h` API headers, and the `guest/bindings/*.json`
+policies. Service implementation files can be split without changing
+generation inputs. Ordinals, calling conventions and explicit guest marshalling
+policies remain defined by those inputs. `--check` reports
 stale output without creating or modifying directories.

@@ -79,31 +79,30 @@ typedef struct
 } SETUP_BLITTER;
 
 typedef SETUP_BLITTER *PSETUP_BLITTER;
-OS2EXPORT ULONG OS2API DiveQueryCaps(PDIVE_CAPS caps, ULONG plane) OS2APIINFO(1);
-OS2EXPORT ULONG OS2API DiveOpen(PULONG instance, ULONG non_screen, PVOID framebuffer) OS2APIINFO(2);
-OS2EXPORT ULONG OS2API DiveClose(ULONG instance) OS2APIINFO(3);
-OS2EXPORT ULONG OS2API DiveSetupBlitter(ULONG instance, PSETUP_BLITTER setup) OS2APIINFO(4);
-OS2EXPORT ULONG OS2API DiveBlitImage(ULONG instance, ULONG source, ULONG destination) OS2APIINFO(5);
-OS2EXPORT ULONG OS2API DiveAcquireFrameBuffer(ULONG instance, PRECTL rect) OS2APIINFO(6);
-OS2EXPORT ULONG OS2API DiveSwitchBank(ULONG instance, ULONG bank) OS2APIINFO(7);
-OS2EXPORT ULONG OS2API DiveDeacquireFrameBuffer(ULONG instance) OS2APIINFO(8);
+OS2EXPORT ULONG OS2API DiveQueryCaps(PDIVE_CAPS caps, ULONG plane);
+OS2EXPORT ULONG OS2API DiveOpen(PULONG instance, ULONG non_screen, PVOID framebuffer);
+OS2EXPORT ULONG OS2API DiveClose(ULONG instance);
+OS2EXPORT ULONG OS2API DiveSetupBlitter(ULONG instance, PSETUP_BLITTER setup);
+OS2EXPORT ULONG OS2API DiveBlitImage(ULONG instance, ULONG source, ULONG destination);
+OS2EXPORT ULONG OS2API DiveAcquireFrameBuffer(ULONG instance, PRECTL rect);
+OS2EXPORT ULONG OS2API DiveSwitchBank(ULONG instance, ULONG bank);
+OS2EXPORT ULONG OS2API DiveDeacquireFrameBuffer(ULONG instance);
 OS2EXPORT ULONG OS2API DiveSetDestinationPalette(ULONG instance, ULONG start, ULONG count,
-                                                 PBYTE entries) OS2APIINFO(9);
-OS2EXPORT ULONG OS2API DiveSetSourcePalette(ULONG instance, ULONG start, ULONG count, PBYTE entries)
-    OS2APIINFO(10);
+                                                 PBYTE entries);
+OS2EXPORT ULONG OS2API DiveSetSourcePalette(ULONG instance, ULONG start, ULONG count,
+                                            PBYTE entries);
 OS2EXPORT ULONG OS2API DiveCalcFrameBufferAddress(ULONG instance, PRECTL rect, PVOID address,
-                                                  PULONG bank, PULONG lines) OS2APIINFO(11);
+                                                  PULONG bank, PULONG lines);
 OS2EXPORT ULONG OS2API DiveAllocImageBuffer(ULONG instance, PULONG number, ULONG format,
-                                            ULONG width, ULONG height, ULONG stride, PBYTE pixels)
-    OS2APIINFO(12);
-OS2EXPORT ULONG OS2API DiveFreeImageBuffer(ULONG instance, ULONG number) OS2APIINFO(13);
+                                            ULONG width, ULONG height, ULONG stride, PBYTE pixels);
+OS2EXPORT ULONG OS2API DiveFreeImageBuffer(ULONG instance, ULONG number);
 OS2EXPORT ULONG OS2API DiveBeginImageBufferAccess(ULONG instance, ULONG number, PVOID pointer,
-                                                  PULONG stride, PULONG lines) OS2APIINFO(14);
-OS2EXPORT ULONG OS2API DiveEndImageBufferAccess(ULONG instance, ULONG number) OS2APIINFO(15);
-OS2EXPORT VOID OS2API DiveFullScreenInit(PVOID aperture, PVOID framebuffer_info) OS2APIINFO(16);
-OS2EXPORT VOID OS2API DiveFullScreenTerm(void) OS2APIINFO(17);
+                                                  PULONG stride, PULONG lines);
+OS2EXPORT ULONG OS2API DiveEndImageBufferAccess(ULONG instance, ULONG number);
+OS2EXPORT VOID OS2API DiveFullScreenInit(PVOID aperture, PVOID framebuffer_info);
+OS2EXPORT VOID OS2API DiveFullScreenTerm(void);
 OS2EXPORT ULONG OS2API DiveSetTransparentBlitMode(ULONG instance, ULONG mode, ULONG first,
-                                                  ULONG last) OS2APIINFO(18);
+                                                  ULONG last);
 OS2EXPORT ULONG OS2API DiveBlitImageLines(ULONG instance, ULONG source, ULONG destination,
-                                          PBYTE lines) OS2APIINFO(19);
+                                          PBYTE lines);
 #endif

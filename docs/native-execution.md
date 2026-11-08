@@ -19,7 +19,7 @@ flowchart LR
 `emulator/execution/native_i386/` also supplies the i386 ABI bridges compiled into the API modules.
 `os2libs/` contains OS/2 DLL implementations shared by native and emulated
 execution. Host services use shared POSIX and [platform adapters](host.md).
-`*-lx.h` files are generated; edit their headers/binding policies, then run
+`*-lx.h` files are generated; edit their module definitions, headers or binding policies, then run
 `python3 tools/lxapigen.py`.
 
 Native entry needs Linux, a 32-bit x86 worker and `CONFIG_X86_16BIT=y` with LDT

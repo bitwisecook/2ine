@@ -1,0 +1,46 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of PMWP.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY PMWP
+
+EXPORTS
+    WPFilesystemClassData         @11
+    WPFilesystemNewClass          @12
+    WPFolderClassData             @14
+    WPFolderNewClass              @15
+    WPDataFileNewClass            @18
+    WPObjectClassData             @23
+    WPObjectNewClass              @24
+    WPAbstractNewClass            @27
+    WPDiskClassData               @35
+    WPTransientNewClass           @42
+    WPProgramClassData            @47
+    WPDesktopNewClass             @57
+    WPClassManagerNewClass        @90
+    WinRegisterObjectClass        @200
+    WinDeregisterObjectClass      @201
+    WinEnumObjectClasses          @205
+    WinStoreWindowPos             @207
+    WinRestoreWindowPos           @208
+    WinLoadFileIcon               @209
+    WinFreeFileIcon               @216
+    WinReplaceObjectClass         @219
+    WinSetObjectData              @250
+    WinDestroyObject              @251
+    WinQueryObject                @252
+    WinQueryActiveDesktopPathname @262
+    WinQueryObjectPath            @263
+    WinCreateObject               @281
+    WinSaveObject                 @285
+    WinOpenObject                 @286
+    WinMoveObject                 @287
+    WinCopyObject                 @288
+    WinCreateShadow               @289
+    M_WPFileSystemClassData       @311
+    M_WPFolderNewClass            @315
+    M_WPDataFileNewClass          @318
+    M_WPObjectClassData           @323
+    WinRestartWPDServer           @463
+    WinRestartSomDD               @464
+    WinIsWPDServerReady           @465
+    WinIsSomDDReady               @480

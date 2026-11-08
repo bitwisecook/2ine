@@ -35,17 +35,15 @@ extern "C"
         ULONG bProgType;
     } SWCNTRL, *PSWCNTRL;
 
-    OS2EXPORT ULONG OS2API WinCreateSwitchEntry(HAB hab, PSWCNTRL entry) OS2APIINFO(121);
-    OS2EXPORT ULONG OS2API WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
-        OS2APIINFO(128);
-    OS2EXPORT ULONG OS2API WinAddSwitchEntry(PSWCNTRL entry) OS2APIINFO(120);
-    OS2EXPORT ULONG OS2API WinRemoveSwitchEntry(ULONG handle) OS2APIINFO(129);
-    OS2EXPORT ULONG OS2API WinChangeSwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(123);
-    OS2EXPORT ULONG OS2API WinQuerySwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(124);
-    OS2EXPORT ULONG OS2API WinQuerySwitchHandle(ULONG window, ULONG process) OS2APIINFO(125);
+    OS2EXPORT ULONG OS2API WinCreateSwitchEntry(HAB hab, PSWCNTRL entry);
+    OS2EXPORT ULONG OS2API WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity);
+    OS2EXPORT ULONG OS2API WinAddSwitchEntry(PSWCNTRL entry);
+    OS2EXPORT ULONG OS2API WinRemoveSwitchEntry(ULONG handle);
+    OS2EXPORT ULONG OS2API WinChangeSwitchEntry(ULONG handle, PSWCNTRL entry);
+    OS2EXPORT ULONG OS2API WinQuerySwitchEntry(ULONG handle, PSWCNTRL entry);
+    OS2EXPORT ULONG OS2API WinQuerySwitchHandle(ULONG window, ULONG process);
 
-    OS2EXPORT ULONG OS2API WinQueryTaskSizePos(HANDLE hab, ULONG session, PSWP position)
-        OS2APIINFO(127);
+    OS2EXPORT ULONG OS2API WinQueryTaskSizePos(HANDLE hab, ULONG session, PSWP position);
 
     /* Host form of PROGDETAILS; bindings decode the 72-byte guest record into it. */
     typedef struct
@@ -57,27 +55,24 @@ extern "C"
     } PROGDETAILS, *PPROGDETAILS;
 
     OS2EXPORT ULONG OS2API WinStartApp(HWND notify, PPROGDETAILS details, PSZ parameters,
-                                       PVOID reserved, ULONG options) OS2APIINFO(119);
+                                       PVOID reserved, ULONG options);
     /* WinStartApp for callers that need the PM error without a PM anchor block.
        Returns the HAPP, or zero with the PMERR_ value in *error. */
     ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, ULONG options,
                                ULONG *error);
 
-    OS2EXPORT HINI OS2API PrfOpenProfile(HANDLE hab, PSZ name) OS2APIINFO(102);
-    OS2EXPORT BOOL OS2API PrfCloseProfile(HINI profile) OS2APIINFO(103);
-    OS2EXPORT BOOL OS2API PrfQueryProfile(HANDLE hab, PPRFPROFILE profile) OS2APIINFO(107);
-    OS2EXPORT LONG OS2API PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback)
-        OS2APIINFO(114);
+    OS2EXPORT HINI OS2API PrfOpenProfile(HANDLE hab, PSZ name);
+    OS2EXPORT BOOL OS2API PrfCloseProfile(HINI profile);
+    OS2EXPORT BOOL OS2API PrfQueryProfile(HANDLE hab, PPRFPROFILE profile);
+    OS2EXPORT LONG OS2API PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback);
     OS2EXPORT ULONG OS2API PrfQueryProfileString(HINI profile, PSZ app, PSZ key, PSZ fallback,
-                                                 PVOID data, ULONG capacity) OS2APIINFO(115);
-    OS2EXPORT BOOL OS2API PrfWriteProfileString(HINI profile, PSZ app, PSZ key, PSZ data)
-        OS2APIINFO(116);
+                                                 PVOID data, ULONG capacity);
+    OS2EXPORT BOOL OS2API PrfWriteProfileString(HINI profile, PSZ app, PSZ key, PSZ data);
     OS2EXPORT BOOL OS2API PrfQueryProfileData(HINI profile, PSZ app, PSZ key, PVOID data,
-                                              PULONG size) OS2APIINFO(117);
+                                              PULONG size);
     OS2EXPORT BOOL OS2API PrfWriteProfileData(HINI profile, PSZ app, PSZ key, PVOID data,
-                                              ULONG size) OS2APIINFO(118);
-    OS2EXPORT BOOL OS2API PrfQueryProfileSize(HINI profile, PSZ app, PSZ key, PULONG size)
-        OS2APIINFO(101);
+                                              ULONG size);
+    OS2EXPORT BOOL OS2API PrfQueryProfileSize(HINI profile, PSZ app, PSZ key, PULONG size);
 
 #ifdef __cplusplus
 }

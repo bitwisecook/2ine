@@ -1,0 +1,7 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of PMMERGE.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY PMMERGE
+
+EXPORTS
+    WinQueryCpType @5480

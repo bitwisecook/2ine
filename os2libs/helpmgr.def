@@ -1,0 +1,9 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of HELPMGR.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY HELPMGR
+
+EXPORTS
+    WinCreateHelpInstance    @51
+    WinDestroyHelpInstance   @52
+    WinAssociateHelpInstance @54

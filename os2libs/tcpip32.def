@@ -1,0 +1,57 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of TCPIP32.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY TCPIP32
+
+EXPORTS
+    accept = OS2_accept                     @1
+    bind = OS2_bind                         @2
+    connect = OS2_connect                   @3
+    gethostid = OS2_gethostid               @4
+    getpeername = OS2_getpeername           @5
+    getsockname = OS2_getsockname           @6
+    getsockopt = OS2_getsockopt             @7
+    ioctl = OS2_ioctl                       @8
+    recv = OS2_recv                         @10
+    recvfrom = OS2_recvfrom                 @11
+    os2_select = OS2_os2_select             @12
+    send = OS2_send                         @13
+    sendto = OS2_sendto                     @14
+    setsockopt = OS2_setsockopt             @15
+    socket = OS2_socket                     @16
+    soclose = OS2_soclose                   @17
+    sock_errno = OS2_sock_errno             @20
+    writev = OS2_writev                     @24
+    shutdown = OS2_shutdown                 @25
+    sock_init = OS2_sock_init               @26
+    psock_errno = OS2_psock_errno           @30
+    select = OS2_select                     @32
+    gettimeofday = OS2_gettimeofday         @102
+    inet_addr = OS2_inet_addr               @105
+    inet_network = OS2_inet_network         @109
+    inet_ntoa = OS2_inet_ntoa               @110
+    gethostbyname = OS2_gethostbyname       @111
+    gethostbyaddr = OS2_gethostbyaddr       @112
+    setprotoent = OS2_setprotoent           @118
+    endprotoent = OS2_endprotoent           @119
+    getprotobyname = OS2_getprotobyname     @121
+    getprotobynumber = OS2_getprotobynumber @122
+    getservbyport = OS2_getservbyport       @123
+    getservbyname = OS2_getservbyname       @124
+    setservent = OS2_setservent             @125
+    endservent = OS2_endservent             @126
+    __res_init = OS2_res_init               @139
+    gethostname = OS2_gethostname           @144
+    tcp_h_errno1 = OS2_tcp_h_errno1         @151
+    Raccept = OS2_Raccept                   @156
+    Rbind = OS2_Rbind                       @157
+    Rconnect = OS2_Rconnect                 @158
+    Rgetsockname = OS2_Rgetsockname         @159
+    Rlisten = OS2_Rlisten                   @160
+    Rgethostbyname = OS2_Rgethostbyname     @161
+    os2_ioctl = OS2_os2_ioctl               @200
+    htonl = OS2_htonl                       @203
+    ntohl = OS2_ntohl                       @204
+    htons = OS2_htons                       @205
+    ntohs = OS2_ntohs                       @206
+    sysctl = OS2_sysctl                     @207

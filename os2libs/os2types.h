@@ -17,9 +17,6 @@ extern "C"
 {
 #endif
 
-/* lxapigen.py reads OS2APIINFO; the C compiler ignores it. */
-#define OS2APIINFO(...)
-
 #ifndef APIENTRY
 #define APIENTRY LX_HOST_API_ENTRY
 #endif

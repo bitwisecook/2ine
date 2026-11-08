@@ -1,0 +1,11 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of MSG.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY MSG
+
+EXPORTS
+    DOSPUTMESSAGE = Dos16PutMessage         @1
+    DOSTRUEGETMESSAGE = Dos16TrueGetMessage @2
+    DosInsertMessage                        @4
+    DosPutMessage                           @5
+    DosTrueGetMessage                       @6

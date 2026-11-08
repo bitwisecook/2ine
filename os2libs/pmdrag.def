@@ -1,0 +1,25 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of PMDRAG.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY PMDRAG
+
+EXPORTS
+    DrgAccessDraginfo           @32
+    DrgAddStrHandle             @33
+    DrgAllocDraginfo            @34
+    DrgAllocDragtransfer        @35
+    DrgDeleteDraginfoStrHandles @36
+    DrgDeleteStrHandle          @37
+    DrgDrag                     @38
+    DrgFreeDraginfo             @39
+    DrgFreeDragtransfer         @40
+    DrgGetPS                    @41
+    DrgPostTransferMsg          @42
+    DrgQueryDragitemCount       @45
+    DrgQueryDragitemPtr         @46
+    DrgQueryStrName             @49
+    DrgQueryStrNameLen          @50
+    DrgReleasePS                @53
+    DrgSendTransferMsg          @54
+    DrgSetDragitem              @57
+    DrgVerifyRMF                @59

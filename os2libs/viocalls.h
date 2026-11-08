@@ -73,50 +73,33 @@ extern "C"
         USHORT attr;
     } VIOCURSORINFO, *PVIOCURSORINFO;
 
-    OS2EXPORT APIRET16 OS2API16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
-        OS2APIINFO(ord = 21, name = VIOGETMODE);
-    OS2EXPORT APIRET16 OS2API16 VioSetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
-        OS2APIINFO(ord = 22, name = VIOSETMODE);
-    OS2EXPORT APIRET16 OS2API16 VioGetAnsi(PUSHORT enabled, HVIO hvio)
-        OS2APIINFO(ord = 3, name = VIOGETANSI);
-    OS2EXPORT APIRET16 OS2API16 VioGetConfig(USHORT config, PVIOCONFIGINFO info, HVIO hvio)
-        OS2APIINFO(ord = 46, name = VIOGETCONFIG);
-    OS2EXPORT APIRET16 OS2API16 VioWrtTty(PCH pch, USHORT cb, HVIO hvio)
-        OS2APIINFO(ord = 19, name = VIOWRTTTY);
-    OS2EXPORT APIRET16 OS2API16 VioSetCp(USHORT reserved, USHORT codepage, HVIO hvio)
-        OS2APIINFO(ord = 42, name = VIOSETCP);
-    OS2EXPORT APIRET16 OS2API16 VioGetCp(USHORT reserved, PUSHORT codepage, HVIO hvio)
-        OS2APIINFO(ord = 40, name = VIOGETCP);
-    OS2EXPORT APIRET16 OS2API16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio)
-        OS2APIINFO(ord = 9, name = VIOGETCURPOS);
-    OS2EXPORT APIRET16 OS2API16 VioGetBuf(PULONG pLVB, PUSHORT pcbLVB, HVIO hvio)
-        OS2APIINFO(ord = 31, name = VIOGETBUF);
-    OS2EXPORT APIRET16 OS2API16 VioGetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
-        OS2APIINFO(ord = 27, name = VIOGETCURTYPE);
+    OS2EXPORT APIRET16 OS2API16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioSetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioGetAnsi(PUSHORT enabled, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioGetConfig(USHORT config, PVIOCONFIGINFO info, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioWrtTty(PCH pch, USHORT cb, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioSetCp(USHORT reserved, USHORT codepage, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioGetCp(USHORT reserved, PUSHORT codepage, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioGetCurPos(PUSHORT pusRow, PUSHORT pusColumn, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioGetBuf(PULONG pLVB, PUSHORT pcbLVB, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioGetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio);
     OS2EXPORT APIRET16 OS2API16 VioScrollUp(USHORT usTopRow, USHORT usLeftCol, USHORT usBotRow,
                                             USHORT usRightCol, USHORT cbLines, PBYTE pCell,
-                                            HVIO hvio) OS2APIINFO(ord = 7, name = VIOSCROLLUP);
-    OS2EXPORT APIRET16 OS2API16 VioSetCurPos(USHORT usRow, USHORT usColumn, HVIO hvio)
-        OS2APIINFO(ord = 15, name = VIOSETCURPOS);
-    OS2EXPORT APIRET16 OS2API16 VioSetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio)
-        OS2APIINFO(ord = 32, name = VIOSETCURTYPE);
+                                            HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioSetCurPos(USHORT usRow, USHORT usColumn, HVIO hvio);
+    OS2EXPORT APIRET16 OS2API16 VioSetCurType(PVIOCURSORINFO pvioCursorInfo, HVIO hvio);
     OS2EXPORT APIRET16 OS2API16 VioReadCellStr(PCH pchCellStr, PUSHORT pcb, USHORT usRow,
-                                               USHORT usColumn, HVIO hvio)
-        OS2APIINFO(ord = 24, name = VIOREADCELLSTR);
+                                               USHORT usColumn, HVIO hvio);
     OS2EXPORT APIRET16 OS2API16 VioReadCharStr(PCH pch, PUSHORT pcb, USHORT row, USHORT column,
-                                               HVIO hvio)
-        OS2APIINFO(ord = 30, name = VIOREADCHARSTR);
+                                               HVIO hvio);
     OS2EXPORT APIRET16 OS2API16 VioScrollDn(USHORT top, USHORT left, USHORT bottom, USHORT right,
-                                            USHORT lines, PBYTE cell, HVIO hvio)
-        OS2APIINFO(ord = 47, name = VIOSCROLLDN);
+                                            USHORT lines, PBYTE cell, HVIO hvio);
     OS2EXPORT APIRET16 OS2API16 VioWrtCellStr(PCH pchCellStr, USHORT cb, USHORT usRow,
-                                              USHORT usColumn, HVIO hvio)
-        OS2APIINFO(ord = 10, name = VIOWRTCELLSTR);
+                                              USHORT usColumn, HVIO hvio);
     OS2EXPORT APIRET16 OS2API16 VioWrtCharStrAtt(PCH pch, USHORT cb, USHORT usRow, USHORT usColumn,
-                                                 PBYTE pAttr, HVIO hvio)
-        OS2APIINFO(ord = 48, name = VIOWRTCHARSTRATT);
+                                                 PBYTE pAttr, HVIO hvio);
     OS2EXPORT APIRET16 OS2API16 VioWrtNCell(PBYTE pCell, USHORT cb, USHORT usRow, USHORT usColumn,
-                                            HVIO hvio) OS2APIINFO(ord = 52, name = VIOWRTNCELL);
+                                            HVIO hvio);
 
 #ifdef __cplusplus
 }

@@ -16,7 +16,7 @@ extern "C"
 {
 #endif
 
-    OS2EXPORT ULONG OS2API WinQueryCpType(HMQ queue) OS2APIINFO(5480);
+    OS2EXPORT ULONG OS2API WinQueryCpType(HMQ queue);
 
 #ifdef __cplusplus
 }

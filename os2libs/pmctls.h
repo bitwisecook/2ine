@@ -39,11 +39,9 @@ typedef struct LXFONTDLG
 } LXFONTDLG;
 
 #pragma pack(pop)
-OS2EXPORT HWND OS2API WinFontDlg(HWND parent, HWND owner, PVOID data) OS2APIINFO(2);
-OS2EXPORT MRESULT OS2API WinDefFontDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
-    OS2APIINFO(3);
-OS2EXPORT HWND OS2API WinFileDlg(HWND parent, HWND owner, PVOID data) OS2APIINFO(4);
-OS2EXPORT MRESULT OS2API WinDefFileDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
-    OS2APIINFO(5);
-OS2EXPORT BOOL OS2API WinFreeFileDlgList(PVOID list) OS2APIINFO(6);
+OS2EXPORT HWND OS2API WinFontDlg(HWND parent, HWND owner, PVOID data);
+OS2EXPORT MRESULT OS2API WinDefFontDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second);
+OS2EXPORT HWND OS2API WinFileDlg(HWND parent, HWND owner, PVOID data);
+OS2EXPORT MRESULT OS2API WinDefFileDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second);
+OS2EXPORT BOOL OS2API WinFreeFileDlgList(PVOID list);
 #endif

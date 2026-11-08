@@ -914,16 +914,16 @@ extern "C"
         ULONG hbmPointer, hbmColor, hbmMiniPointer, hbmMiniColor;
     } LXPOINTERINFO;
 
-    OS2EXPORT BOOL OS2API WinIsChild(HWND child, HWND parent) OS2APIINFO(768);
-    OS2EXPORT BOOL OS2API WinSetFocus(HWND desktop, HWND window) OS2APIINFO(860);
-    OS2EXPORT HWND OS2API WinQueryFocus(HWND desktop) OS2APIINFO(817);
-    OS2EXPORT BOOL OS2API WinSetActiveWindow(HWND desktop, HWND window) OS2APIINFO(851);
-    OS2EXPORT HWND OS2API WinQueryActiveWindow(HWND desktop) OS2APIINFO(799);
-    OS2EXPORT BOOL OS2API WinSetCapture(HWND desktop, HWND window) OS2APIINFO(852);
-    OS2EXPORT HWND OS2API WinQueryCapture(HWND desktop) OS2APIINFO(804);
-    OS2EXPORT LONG OS2API WinGetKeyState(HWND desktop, LONG key) OS2APIINFO(752);
-    OS2EXPORT ULONG OS2API WinGetCurrentTime(HAB hab) OS2APIINFO(750);
-    OS2EXPORT LONG OS2API WinGetPhysKeyState(HWND desktop, LONG scan) OS2APIINFO(758);
+    OS2EXPORT BOOL OS2API WinIsChild(HWND child, HWND parent);
+    OS2EXPORT BOOL OS2API WinSetFocus(HWND desktop, HWND window);
+    OS2EXPORT HWND OS2API WinQueryFocus(HWND desktop);
+    OS2EXPORT BOOL OS2API WinSetActiveWindow(HWND desktop, HWND window);
+    OS2EXPORT HWND OS2API WinQueryActiveWindow(HWND desktop);
+    OS2EXPORT BOOL OS2API WinSetCapture(HWND desktop, HWND window);
+    OS2EXPORT HWND OS2API WinQueryCapture(HWND desktop);
+    OS2EXPORT LONG OS2API WinGetKeyState(HWND desktop, LONG key);
+    OS2EXPORT ULONG OS2API WinGetCurrentTime(HAB hab);
+    OS2EXPORT LONG OS2API WinGetPhysKeyState(HWND desktop, LONG scan);
 
 #pragma pack(push, 2)
 
@@ -943,71 +943,63 @@ extern "C"
 
 #pragma pack(pop)
     OS2EXPORT HWND OS2API WinCreateDlg(HWND parent, HWND owner, PFNWP procedure, PDLGTEMPLATE data,
-                                       PVOID parameters) OS2APIINFO(922);
+                                       PVOID parameters);
     OS2EXPORT HWND OS2API WinLoadDlg(HWND parent, HWND owner, PFNWP procedure, HMODULE module,
-                                     ULONG id, PVOID parameters) OS2APIINFO(924);
+                                     ULONG id, PVOID parameters);
     OS2EXPORT ULONG OS2API WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module,
-                                     ULONG id, PVOID parameters) OS2APIINFO(923);
-    OS2EXPORT ULONG OS2API WinProcessDlg(HWND dialog) OS2APIINFO(796);
-    OS2EXPORT HWND OS2API WinEnumDlgItem(HWND dialog, HWND item, ULONG code) OS2APIINFO(740);
-    OS2EXPORT BOOL OS2API WinDismissDlg(HWND dialog, ULONG result) OS2APIINFO(729);
-    OS2EXPORT MRESULT OS2API WinDefDlgProc(HWND dialog, ULONG message, MPARAM first, MPARAM second)
-        OS2APIINFO(910);
+                                     ULONG id, PVOID parameters);
+    OS2EXPORT ULONG OS2API WinProcessDlg(HWND dialog);
+    OS2EXPORT HWND OS2API WinEnumDlgItem(HWND dialog, HWND item, ULONG code);
+    OS2EXPORT BOOL OS2API WinDismissDlg(HWND dialog, ULONG result);
+    OS2EXPORT MRESULT OS2API WinDefDlgProc(HWND dialog, ULONG message, MPARAM first, MPARAM second);
     OS2EXPORT MRESULT OS2API WinSendDlgItemMsg(HWND dialog, ULONG id, ULONG message, MPARAM first,
-                                               MPARAM second) OS2APIINFO(903);
-    OS2EXPORT BOOL OS2API WinMapDlgPoints(HWND dialog, PPOINTL points, ULONG count, BOOL to_pixels)
-        OS2APIINFO(787);
-    OS2EXPORT BOOL OS2API WinSetWindowText(HWND window, PSZ text) OS2APIINFO(877);
-    OS2EXPORT LONG OS2API WinQueryWindowText(HWND window, LONG capacity, PCHAR output)
-        OS2APIINFO(841);
-    OS2EXPORT LONG OS2API WinQueryWindowTextLength(HWND window) OS2APIINFO(842);
-    OS2EXPORT LONG OS2API WinQueryDlgItemTextLength(HWND window, ULONG id) OS2APIINFO(816);
-    OS2EXPORT BOOL OS2API WinSetDlgItemText(HWND window, ULONG id, PSZ text) OS2APIINFO(859);
-    OS2EXPORT ULONG OS2API WinQueryDlgItemText(HWND window, ULONG id, LONG capacity, PCHAR output)
-        OS2APIINFO(815);
+                                               MPARAM second);
+    OS2EXPORT BOOL OS2API WinMapDlgPoints(HWND dialog, PPOINTL points, ULONG count, BOOL to_pixels);
+    OS2EXPORT BOOL OS2API WinSetWindowText(HWND window, PSZ text);
+    OS2EXPORT LONG OS2API WinQueryWindowText(HWND window, LONG capacity, PCHAR output);
+    OS2EXPORT LONG OS2API WinQueryWindowTextLength(HWND window);
+    OS2EXPORT LONG OS2API WinQueryDlgItemTextLength(HWND window, ULONG id);
+    OS2EXPORT BOOL OS2API WinSetDlgItemText(HWND window, ULONG id, PSZ text);
+    OS2EXPORT ULONG OS2API WinQueryDlgItemText(HWND window, ULONG id, LONG capacity, PCHAR output);
 
-    OS2EXPORT BOOL OS2API WinSetPointerPos(HWND desktop, LONG x, LONG y) OS2APIINFO(867);
-    OS2EXPORT BOOL OS2API WinShowPointer(HWND desktop, BOOL show) OS2APIINFO(881);
-    OS2EXPORT BOOL OS2API WinShowCursor(HWND window, BOOL show) OS2APIINFO(880);
-    OS2EXPORT ULONG OS2API WinQueryVisibleRegion(HWND window, ULONG region) OS2APIINFO(1000);
-    OS2EXPORT BOOL OS2API WinSetVisibleRegionNotify(HWND window, BOOL enable) OS2APIINFO(1001);
-    OS2EXPORT BOOL OS2API WinQueryPointerPos(HWND hwnd, PPOINTL point) OS2APIINFO(823);
-    OS2EXPORT BOOL OS2API WinQueryWindowPos(HWND hwnd, PSWP position) OS2APIINFO(837);
-    OS2EXPORT BOOL OS2API WinIntersectRect(HAB hab, PRECTL dst, PRECTL a, PRECTL b) OS2APIINFO(764);
-    OS2EXPORT BOOL OS2API WinUnionRect(HAB hab, PRECTL dst, PRECTL a, PRECTL b) OS2APIINFO(891);
-    OS2EXPORT BOOL OS2API WinCopyRect(HAB hab, PRECTL dst, PRECTL src) OS2APIINFO(710);
+    OS2EXPORT BOOL OS2API WinSetPointerPos(HWND desktop, LONG x, LONG y);
+    OS2EXPORT BOOL OS2API WinShowPointer(HWND desktop, BOOL show);
+    OS2EXPORT BOOL OS2API WinShowCursor(HWND window, BOOL show);
+    OS2EXPORT ULONG OS2API WinQueryVisibleRegion(HWND window, ULONG region);
+    OS2EXPORT BOOL OS2API WinSetVisibleRegionNotify(HWND window, BOOL enable);
+    OS2EXPORT BOOL OS2API WinQueryPointerPos(HWND hwnd, PPOINTL point);
+    OS2EXPORT BOOL OS2API WinQueryWindowPos(HWND hwnd, PSWP position);
+    OS2EXPORT BOOL OS2API WinIntersectRect(HAB hab, PRECTL dst, PRECTL a, PRECTL b);
+    OS2EXPORT BOOL OS2API WinUnionRect(HAB hab, PRECTL dst, PRECTL a, PRECTL b);
+    OS2EXPORT BOOL OS2API WinCopyRect(HAB hab, PRECTL dst, PRECTL src);
     OS2EXPORT BOOL OS2API WinSetRect(HAB hab, PRECTL dst, LONG left, LONG bottom, LONG right,
-                                     LONG top) OS2APIINFO(868);
-    OS2EXPORT BOOL OS2API WinSetRectEmpty(HAB hab, PRECTL dst) OS2APIINFO(869);
-    OS2EXPORT BOOL OS2API WinIsRectEmpty(HAB hab, PRECTL rect) OS2APIINFO(770);
-    OS2EXPORT BOOL OS2API WinEqualRect(HAB hab, PRECTL a, PRECTL b) OS2APIINFO(741);
-    OS2EXPORT BOOL OS2API WinOffsetRect(HAB hab, PRECTL rect, LONG dx, LONG dy) OS2APIINFO(792);
-    OS2EXPORT BOOL OS2API WinInflateRect(HAB hab, PRECTL rect, LONG dx, LONG dy) OS2APIINFO(762);
-    OS2EXPORT BOOL OS2API WinPtInRect(HAB hab, PRECTL rect, PPOINTL point) OS2APIINFO(797);
-    OS2EXPORT BOOL OS2API WinMapWindowPoints(HWND from, HWND to, PPOINTL points, LONG count)
-        OS2APIINFO(788);
+                                     LONG top);
+    OS2EXPORT BOOL OS2API WinSetRectEmpty(HAB hab, PRECTL dst);
+    OS2EXPORT BOOL OS2API WinIsRectEmpty(HAB hab, PRECTL rect);
+    OS2EXPORT BOOL OS2API WinEqualRect(HAB hab, PRECTL a, PRECTL b);
+    OS2EXPORT BOOL OS2API WinOffsetRect(HAB hab, PRECTL rect, LONG dx, LONG dy);
+    OS2EXPORT BOOL OS2API WinInflateRect(HAB hab, PRECTL rect, LONG dx, LONG dy);
+    OS2EXPORT BOOL OS2API WinPtInRect(HAB hab, PRECTL rect, PPOINTL point);
+    OS2EXPORT BOOL OS2API WinMapWindowPoints(HWND from, HWND to, PPOINTL points, LONG count);
     OS2EXPORT BOOL OS2API WinDrawBitmap(HPS destination, ULONG bitmap, PRECTL source, PPOINTL point,
-                                        LONG foreground, LONG background, ULONG flags)
-        OS2APIINFO(730);
-    OS2EXPORT ULONG OS2API WinGetSysBitmap(HWND desktop, ULONG id) OS2APIINFO(760);
+                                        LONG foreground, LONG background, ULONG flags);
+    OS2EXPORT ULONG OS2API WinGetSysBitmap(HWND desktop, ULONG id);
     OS2EXPORT BOOL OS2API WinDrawBorder(HPS ps, PRECTL rect, LONG cx, LONG cy, LONG foreground,
-                                        LONG background, ULONG flags) OS2APIINFO(731);
-    OS2EXPORT BOOL OS2API WinEnableWindowUpdate(HWND window, BOOL enable) OS2APIINFO(736);
-    OS2EXPORT ULONG OS2API WinCreateAccelTable(HAB hab, PVOID data) OS2APIINFO(713);
-    OS2EXPORT ULONG OS2API WinLoadAccelTable(HAB hab, HMODULE module, ULONG id) OS2APIINFO(776);
-    OS2EXPORT ULONG OS2API WinCopyAccelTable(ULONG table, PVOID data, ULONG size) OS2APIINFO(709);
-    OS2EXPORT BOOL OS2API WinDestroyAccelTable(ULONG table) OS2APIINFO(723);
-    OS2EXPORT BOOL OS2API WinSetAccelTable(HAB hab, ULONG table, HWND frame) OS2APIINFO(850);
-    OS2EXPORT ULONG OS2API WinQueryAccelTable(HAB hab, HWND frame) OS2APIINFO(798);
-    OS2EXPORT BOOL OS2API WinTranslateAccel(HAB hab, HWND frame, ULONG table, PQMSG message)
-        OS2APIINFO(904);
+                                        LONG background, ULONG flags);
+    OS2EXPORT BOOL OS2API WinEnableWindowUpdate(HWND window, BOOL enable);
+    OS2EXPORT ULONG OS2API WinCreateAccelTable(HAB hab, PVOID data);
+    OS2EXPORT ULONG OS2API WinLoadAccelTable(HAB hab, HMODULE module, ULONG id);
+    OS2EXPORT ULONG OS2API WinCopyAccelTable(ULONG table, PVOID data, ULONG size);
+    OS2EXPORT BOOL OS2API WinDestroyAccelTable(ULONG table);
+    OS2EXPORT BOOL OS2API WinSetAccelTable(HAB hab, ULONG table, HWND frame);
+    OS2EXPORT ULONG OS2API WinQueryAccelTable(HAB hab, HWND frame);
+    OS2EXPORT BOOL OS2API WinTranslateAccel(HAB hab, HWND frame, ULONG table, PQMSG message);
     OS2EXPORT BOOL OS2API WinPeekMsg(HAB hab, PQMSG message, HWND filter, ULONG first, ULONG last,
-                                     ULONG flags) OS2APIINFO(918);
-    OS2EXPORT BOOL OS2API WinInvalidateRect(HWND window, PRECTL rectangle, BOOL children)
-        OS2APIINFO(765);
-    OS2EXPORT BOOL OS2API WinQueryUpdateRect(HWND window, PRECTL rectangle) OS2APIINFO(831);
-    OS2EXPORT BOOL OS2API WinUpdateWindow(HWND window) OS2APIINFO(892);
-    OS2EXPORT HWND OS2API WinWindowFromDC(HDC dc) OS2APIINFO(898);
+                                     ULONG flags);
+    OS2EXPORT BOOL OS2API WinInvalidateRect(HWND window, PRECTL rectangle, BOOL children);
+    OS2EXPORT BOOL OS2API WinQueryUpdateRect(HWND window, PRECTL rectangle);
+    OS2EXPORT BOOL OS2API WinUpdateWindow(HWND window);
+    OS2EXPORT HWND OS2API WinWindowFromDC(HDC dc);
 
     typedef struct
     {
@@ -1017,7 +1009,7 @@ extern "C"
     } CLASSINFO;
 
     typedef CLASSINFO *PCLASSINFO;
-    OS2EXPORT BOOL OS2API WinQueryClassInfo(HAB hab, PSZ name, PCLASSINFO info) OS2APIINFO(925);
+    OS2EXPORT BOOL OS2API WinQueryClassInfo(HAB hab, PSZ name, PCLASSINFO info);
 #pragma pack(push, 2)
 
     typedef struct
@@ -1040,114 +1032,98 @@ extern "C"
         ULONG hItem;
     } OWNERITEM;
 
-    OS2EXPORT BOOL OS2API WinCreateFrameControls(HWND frame, PFRAMECDATA data, PSZ title)
-        OS2APIINFO(906);
-    OS2EXPORT BOOL OS2API WinCalcFrameRect(HWND frame, PRECTL rect, BOOL client) OS2APIINFO(704);
-    OS2EXPORT HWND OS2API WinLoadMenu(HWND frame, HMODULE module, ULONG id) OS2APIINFO(778);
-    OS2EXPORT HWND OS2API WinCreateMenu(HWND parent, PVOID data) OS2APIINFO(907);
+    OS2EXPORT BOOL OS2API WinCreateFrameControls(HWND frame, PFRAMECDATA data, PSZ title);
+    OS2EXPORT BOOL OS2API WinCalcFrameRect(HWND frame, PRECTL rect, BOOL client);
+    OS2EXPORT HWND OS2API WinLoadMenu(HWND frame, HMODULE module, ULONG id);
+    OS2EXPORT HWND OS2API WinCreateMenu(HWND parent, PVOID data);
     OS2EXPORT BOOL OS2API WinPopupMenu(HWND parent, HWND owner, HWND menu, LONG x, LONG y, LONG id,
-                                       ULONG flags) OS2APIINFO(937);
+                                       ULONG flags);
     OS2EXPORT LONG OS2API WinDrawText(HPS ps, LONG count, PCH text, PRECTL rect, LONG foreground,
-                                      LONG background, ULONG flags) OS2APIINFO(913);
-    OS2EXPORT BOOL OS2API WinQueryWindowRect(HWND hwnd, PRECTL rect) OS2APIINFO(840);
-    OS2EXPORT HWND OS2API WinWindowFromPoint(HWND parent, PPOINTL point, BOOL children)
-        OS2APIINFO(900);
-    OS2EXPORT BOOL OS2API WinEnableWindow(HWND window, BOOL enable) OS2APIINFO(735);
-    OS2EXPORT BOOL OS2API WinShowWindow(HWND window, BOOL show) OS2APIINFO(883);
-    OS2EXPORT BOOL OS2API WinSetPresParam(HWND window, ULONG id, ULONG size, PVOID data)
-        OS2APIINFO(938);
+                                      LONG background, ULONG flags);
+    OS2EXPORT BOOL OS2API WinQueryWindowRect(HWND hwnd, PRECTL rect);
+    OS2EXPORT HWND OS2API WinWindowFromPoint(HWND parent, PPOINTL point, BOOL children);
+    OS2EXPORT BOOL OS2API WinEnableWindow(HWND window, BOOL enable);
+    OS2EXPORT BOOL OS2API WinShowWindow(HWND window, BOOL show);
+    OS2EXPORT BOOL OS2API WinSetPresParam(HWND window, ULONG id, ULONG size, PVOID data);
     OS2EXPORT ULONG OS2API WinQueryPresParam(HWND window, ULONG first, ULONG second, PULONG found,
-                                             ULONG capacity, PVOID output, ULONG flags)
-        OS2APIINFO(939);
-    OS2EXPORT BOOL OS2API WinRemovePresParam(HWND window, ULONG id) OS2APIINFO(940);
-    OS2EXPORT HENUM OS2API WinBeginEnumWindows(HWND parent) OS2APIINFO(702);
-    OS2EXPORT HWND OS2API WinGetNextWindow(HENUM enumeration) OS2APIINFO(756);
-    OS2EXPORT BOOL OS2API WinEndEnumWindows(HENUM enumeration) OS2APIINFO(737);
-    OS2EXPORT HAB OS2API WinQueryAnchorBlock(HWND window) OS2APIINFO(800);
-    OS2EXPORT BOOL OS2API WinSetOwner(HWND window, HWND owner) OS2APIINFO(864);
-    OS2EXPORT HWND OS2API WinQueryWindow(HWND window, LONG code) OS2APIINFO(834);
-    OS2EXPORT BOOL OS2API WinSetParent(HWND window, HWND parent, BOOL redraw) OS2APIINFO(865);
-    OS2EXPORT ULONG OS2API WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text)
-        OS2APIINFO(893);
-    OS2EXPORT ULONG OS2API WinUpperChar(HAB hab, ULONG codepage, ULONG country, ULONG character)
-        OS2APIINFO(894);
-    OS2EXPORT LONG OS2API WinQueryClassName(HWND window, LONG capacity, PCHAR output)
-        OS2APIINFO(805);
+                                             ULONG capacity, PVOID output, ULONG flags);
+    OS2EXPORT BOOL OS2API WinRemovePresParam(HWND window, ULONG id);
+    OS2EXPORT HENUM OS2API WinBeginEnumWindows(HWND parent);
+    OS2EXPORT HWND OS2API WinGetNextWindow(HENUM enumeration);
+    OS2EXPORT BOOL OS2API WinEndEnumWindows(HENUM enumeration);
+    OS2EXPORT HAB OS2API WinQueryAnchorBlock(HWND window);
+    OS2EXPORT BOOL OS2API WinSetOwner(HWND window, HWND owner);
+    OS2EXPORT HWND OS2API WinQueryWindow(HWND window, LONG code);
+    OS2EXPORT BOOL OS2API WinSetParent(HWND window, HWND parent, BOOL redraw);
+    OS2EXPORT ULONG OS2API WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text);
+    OS2EXPORT ULONG OS2API WinUpperChar(HAB hab, ULONG codepage, ULONG country, ULONG character);
+    OS2EXPORT LONG OS2API WinQueryClassName(HWND window, LONG capacity, PCHAR output);
     OS2EXPORT LONG OS2API WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity,
-                                        PCHAR output) OS2APIINFO(781);
-    OS2EXPORT HWND OS2API WinWindowFromID(HWND window, ULONG id) OS2APIINFO(899);
-    OS2EXPORT ULONG OS2API WinQueryWindowULong(HWND window, LONG index) OS2APIINFO(843);
-    OS2EXPORT USHORT OS2API WinQueryWindowUShort(HWND window, LONG index) OS2APIINFO(844);
-    OS2EXPORT BOOL OS2API WinSetWindowUShort(HWND window, LONG index, USHORT value) OS2APIINFO(879);
-    OS2EXPORT BOOL OS2API WinSetWindowULong(HWND window, LONG index, ULONG value) OS2APIINFO(878);
-    OS2EXPORT PVOID OS2API WinQueryWindowPtr(HWND window, LONG index) OS2APIINFO(839);
-    OS2EXPORT BOOL OS2API WinSetWindowPtr(HWND window, LONG index, PVOID value) OS2APIINFO(876);
+                                        PCHAR output);
+    OS2EXPORT HWND OS2API WinWindowFromID(HWND window, ULONG id);
+    OS2EXPORT ULONG OS2API WinQueryWindowULong(HWND window, LONG index);
+    OS2EXPORT USHORT OS2API WinQueryWindowUShort(HWND window, LONG index);
+    OS2EXPORT BOOL OS2API WinSetWindowUShort(HWND window, LONG index, USHORT value);
+    OS2EXPORT BOOL OS2API WinSetWindowULong(HWND window, LONG index, ULONG value);
+    OS2EXPORT PVOID OS2API WinQueryWindowPtr(HWND window, LONG index);
+    OS2EXPORT BOOL OS2API WinSetWindowPtr(HWND window, LONG index, PVOID value);
 
-    OS2EXPORT LONG OS2API WinQuerySysColor(HWND desktop, LONG index, LONG reserved) OS2APIINFO(826);
-    OS2EXPORT LONG OS2API WinQuerySysValue(HWND desktop, LONG index) OS2APIINFO(829);
-    OS2EXPORT HPS OS2API WinGetPS(HWND window) OS2APIINFO(757);
-    OS2EXPORT HPS OS2API WinGetScreenPS(HWND desktop) OS2APIINFO(759);
-    OS2EXPORT BOOL OS2API WinReleasePS(HPS space) OS2APIINFO(848);
-    OS2EXPORT PFNWP OS2API WinSubclassWindow(HWND window, PFNWP procedure) OS2APIINFO(929);
-    OS2EXPORT HPOINTER OS2API WinQuerySysPointer(HWND hwnd, LONG id, BOOL copy) OS2APIINFO(828);
-    OS2EXPORT HPOINTER OS2API WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
-        OS2APIINFO(780);
-    OS2EXPORT BOOL OS2API WinDrawPointer(HPS ps, LONG x, LONG y, HPOINTER pointer, ULONG flags)
-        OS2APIINFO(732);
-    OS2EXPORT BOOL OS2API WinSetPointer(HWND desktop, HPOINTER pointer) OS2APIINFO(866);
-    OS2EXPORT BOOL OS2API WinInvertRect(HPS ps, PRECTL rect) OS2APIINFO(767);
-    OS2EXPORT BOOL OS2API WinDestroyPointer(HPOINTER pointer) OS2APIINFO(727);
-    OS2EXPORT BOOL OS2API WinSetHook(HAB hab, HMQ queue, LONG type, PFN procedure, HMODULE module)
-        OS2APIINFO(928);
+    OS2EXPORT LONG OS2API WinQuerySysColor(HWND desktop, LONG index, LONG reserved);
+    OS2EXPORT LONG OS2API WinQuerySysValue(HWND desktop, LONG index);
+    OS2EXPORT HPS OS2API WinGetPS(HWND window);
+    OS2EXPORT HPS OS2API WinGetScreenPS(HWND desktop);
+    OS2EXPORT BOOL OS2API WinReleasePS(HPS space);
+    OS2EXPORT PFNWP OS2API WinSubclassWindow(HWND window, PFNWP procedure);
+    OS2EXPORT HPOINTER OS2API WinQuerySysPointer(HWND hwnd, LONG id, BOOL copy);
+    OS2EXPORT HPOINTER OS2API WinLoadPointer(HWND desktop, HMODULE module, ULONG id);
+    OS2EXPORT BOOL OS2API WinDrawPointer(HPS ps, LONG x, LONG y, HPOINTER pointer, ULONG flags);
+    OS2EXPORT BOOL OS2API WinSetPointer(HWND desktop, HPOINTER pointer);
+    OS2EXPORT BOOL OS2API WinInvertRect(HPS ps, PRECTL rect);
+    OS2EXPORT BOOL OS2API WinDestroyPointer(HPOINTER pointer);
+    OS2EXPORT BOOL OS2API WinSetHook(HAB hab, HMQ queue, LONG type, PFN procedure, HMODULE module);
     OS2EXPORT BOOL OS2API WinReleaseHook(HAB hab, HMQ queue, LONG type, PFN procedure,
-                                         HMODULE module) OS2APIINFO(927);
-    OS2EXPORT HDC OS2API WinQueryWindowDC(HWND hwnd) OS2APIINFO(835);
-    OS2EXPORT HDC OS2API WinOpenWindowDC(HWND hwnd) OS2APIINFO(794);
+                                         HMODULE module);
+    OS2EXPORT HDC OS2API WinQueryWindowDC(HWND hwnd);
+    OS2EXPORT HDC OS2API WinOpenWindowDC(HWND hwnd);
     OS2EXPORT BOOL OS2API WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy,
-                                          ULONG flags) OS2APIINFO(875);
-    OS2EXPORT ULONG OS2API WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
-        OS2APIINFO(884);
-    OS2EXPORT BOOL OS2API WinStopTimer(HAB hab, HWND hwnd, ULONG id) OS2APIINFO(885);
-    OS2EXPORT HAB OS2API WinInitialize(ULONG flOptions) OS2APIINFO(763);
-    OS2EXPORT BOOL OS2API WinTerminate(HAB hab) OS2APIINFO(888);
-    OS2EXPORT APIRET OS2API WinWaitEventSem(HEV handle, ULONG timeout) OS2APIINFO(978);
-    OS2EXPORT APIRET OS2API WinRequestMutexSem(HMTX handle, ULONG timeout) OS2APIINFO(979);
-    OS2EXPORT APIRET OS2API WinWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
-        OS2APIINFO(980);
-    OS2EXPORT BOOL OS2API WinAlarm(HWND desktop, ULONG type) OS2APIINFO(701);
+                                          ULONG flags);
+    OS2EXPORT ULONG OS2API WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds);
+    OS2EXPORT BOOL OS2API WinStopTimer(HAB hab, HWND hwnd, ULONG id);
+    OS2EXPORT HAB OS2API WinInitialize(ULONG flOptions);
+    OS2EXPORT BOOL OS2API WinTerminate(HAB hab);
+    OS2EXPORT APIRET OS2API WinWaitEventSem(HEV handle, ULONG timeout);
+    OS2EXPORT APIRET OS2API WinRequestMutexSem(HMTX handle, ULONG timeout);
+    OS2EXPORT APIRET OS2API WinWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user);
+    OS2EXPORT BOOL OS2API WinAlarm(HWND desktop, ULONG type);
     OS2EXPORT ULONG OS2API WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id,
-                                         ULONG style) OS2APIINFO(789);
-    OS2EXPORT ERRORID OS2API WinGetLastError(HAB hab) OS2APIINFO(753);
-    OS2EXPORT ERRORID OS2API WinSetErrorInfo(ERRORID error, ULONG flags, ...) OS2APIINFO(977);
+                                         ULONG style);
+    OS2EXPORT ERRORID OS2API WinGetLastError(HAB hab);
+    OS2EXPORT ERRORID OS2API WinSetErrorInfo(ERRORID error, ULONG flags, ...);
     OS2EXPORT UCHAR OS2API WinCpTranslateChar(HAB hab, ULONG source, UCHAR character,
-                                              ULONG destination) OS2APIINFO(711);
-    OS2EXPORT ULONG OS2API WinQueryCp(HMQ queue) OS2APIINFO(810);
-    OS2EXPORT HMQ OS2API WinCreateMsgQueue(HAB hab, LONG cmsg) OS2APIINFO(716);
+                                              ULONG destination);
+    OS2EXPORT ULONG OS2API WinQueryCp(HMQ queue);
+    OS2EXPORT HMQ OS2API WinCreateMsgQueue(HAB hab, LONG cmsg);
     OS2EXPORT BOOL OS2API WinGetMsg(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst,
-                                    ULONG msgFilterLast) OS2APIINFO(915);
-    OS2EXPORT MRESULT OS2API WinDispatchMsg(HAB hab, PQMSG pqmsg) OS2APIINFO(912);
-    OS2EXPORT BOOL OS2API WinDestroyMsgQueue(HMQ hmq) OS2APIINFO(726);
+                                    ULONG msgFilterLast);
+    OS2EXPORT MRESULT OS2API WinDispatchMsg(HAB hab, PQMSG pqmsg);
+    OS2EXPORT BOOL OS2API WinDestroyMsgQueue(HMQ hmq);
     OS2EXPORT HWND OS2API WinCreateStdWindow(HWND hwndParent, ULONG flStyle, PULONG pflCreateFlags,
                                              PSZ pszClientClass, PSZ pszTitle, ULONG styleClient,
-                                             HMODULE hmod, ULONG idResources, PHWND phwndClient)
-        OS2APIINFO(908);
+                                             HMODULE hmod, ULONG idResources, PHWND phwndClient);
     OS2EXPORT HWND OS2API WinCreateWindow(HWND hwndParent, PSZ pszClass, PSZ pszName, ULONG flStyle,
                                           LONG x, LONG y, LONG cx, LONG cy, HWND hwndOwner,
                                           HWND hwndInsertBehind, ULONG id, PVOID pCtlData,
-                                          PVOID pPresParams) OS2APIINFO(909);
-    OS2EXPORT BOOL OS2API WinDestroyWindow(HWND hwnd) OS2APIINFO(728);
+                                          PVOID pPresParams);
+    OS2EXPORT BOOL OS2API WinDestroyWindow(HWND hwnd);
     OS2EXPORT BOOL OS2API WinRegisterClass(HAB hab, PSZ pszClassName, PFNWP pfnWndProc,
-                                           ULONG flStyle, ULONG cbWindowData) OS2APIINFO(926);
-    OS2EXPORT MRESULT OS2API WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
-        OS2APIINFO(911);
-    OS2EXPORT MRESULT OS2API WinSendMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
-        OS2APIINFO(920);
-    OS2EXPORT BOOL OS2API WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2) OS2APIINFO(919);
-    OS2EXPORT BOOL OS2API WinPostQueueMsg(HMQ hmq, ULONG msg, MPARAM mp1, MPARAM mp2)
-        OS2APIINFO(902);
-    OS2EXPORT HPS OS2API WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint) OS2APIINFO(703);
-    OS2EXPORT BOOL OS2API WinEndPaint(HPS hps) OS2APIINFO(738);
-    OS2EXPORT BOOL OS2API WinFillRect(HPS hps, PRECTL prcl, LONG lColor) OS2APIINFO(743);
+                                           ULONG flStyle, ULONG cbWindowData);
+    OS2EXPORT MRESULT OS2API WinDefWindowProc(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2);
+    OS2EXPORT MRESULT OS2API WinSendMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2);
+    OS2EXPORT BOOL OS2API WinPostMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2);
+    OS2EXPORT BOOL OS2API WinPostQueueMsg(HMQ hmq, ULONG msg, MPARAM mp1, MPARAM mp2);
+    OS2EXPORT HPS OS2API WinBeginPaint(HWND hwnd, HPS hps, PRECTL prclPaint);
+    OS2EXPORT BOOL OS2API WinEndPaint(HPS hps);
+    OS2EXPORT BOOL OS2API WinFillRect(HPS hps, PRECTL prcl, LONG lColor);
     OS2EXPORT ULONG lx_pm_clipboard_count(void);
     /* A NULL rectangle releases the desktop pointer. Bounds are inclusive PM desktop pixels. */
     OS2EXPORT void lx_pm_set_pointer_clip(const RECTL *bounds);
@@ -1188,74 +1164,67 @@ extern "C"
     OS2EXPORT BOOL lx_pm_clipboard_set_bytes(HAB hab, ULONG format, const void *bytes, size_t size);
     OS2EXPORT void *lx_pm_clipboard_copy_bytes(HAB hab, ULONG format, size_t *size);
     OS2EXPORT void lx_pm_clipboard_window_destroyed(HWND window);
-    OS2EXPORT BOOL OS2API WinOpenClipbrd(HAB hab) OS2APIINFO(793);
-    OS2EXPORT BOOL OS2API WinCloseClipbrd(HAB hab) OS2APIINFO(707);
-    OS2EXPORT BOOL OS2API WinEmptyClipbrd(HAB hab) OS2APIINFO(733);
-    OS2EXPORT HWND OS2API WinQueryClipbrdOwner(HAB hab) OS2APIINFO(808);
-    OS2EXPORT BOOL OS2API WinSetClipbrdOwner(HAB hab, HWND owner) OS2APIINFO(855);
-    OS2EXPORT ULONG OS2API WinEnumClipbrdFmts(HAB hab, ULONG format) OS2APIINFO(739);
-    OS2EXPORT BOOL OS2API WinQueryClipbrdFmtInfo(HAB hab, ULONG format, PULONG flags)
-        OS2APIINFO(807);
-    OS2EXPORT ULONG OS2API WinQueryClipbrdData(HAB hab, ULONG format) OS2APIINFO(806);
-    OS2EXPORT BOOL OS2API WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
-        OS2APIINFO(854);
+    OS2EXPORT BOOL OS2API WinOpenClipbrd(HAB hab);
+    OS2EXPORT BOOL OS2API WinCloseClipbrd(HAB hab);
+    OS2EXPORT BOOL OS2API WinEmptyClipbrd(HAB hab);
+    OS2EXPORT HWND OS2API WinQueryClipbrdOwner(HAB hab);
+    OS2EXPORT BOOL OS2API WinSetClipbrdOwner(HAB hab, HWND owner);
+    OS2EXPORT ULONG OS2API WinEnumClipbrdFmts(HAB hab, ULONG format);
+    OS2EXPORT BOOL OS2API WinQueryClipbrdFmtInfo(HAB hab, ULONG format, PULONG flags);
+    OS2EXPORT ULONG OS2API WinQueryClipbrdData(HAB hab, ULONG format);
+    OS2EXPORT BOOL OS2API WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags);
     OS2EXPORT ULONG OS2API WinCompareStrings(HAB hab, ULONG codepage, ULONG country, PSZ first,
-                                             PSZ second, ULONG reserved) OS2APIINFO(708);
-    OS2EXPORT ULONG OS2API WinCreateAtomTable(ULONG initial, ULONG buckets) OS2APIINFO(714);
-    OS2EXPORT ULONG OS2API WinDestroyAtomTable(ULONG table) OS2APIINFO(724);
-    OS2EXPORT HWND OS2API WinQueryDesktopWindow(HAB hab, HDC dc) OS2APIINFO(813);
-    OS2EXPORT HPOINTER OS2API WinQueryPointer(HWND desktop) OS2APIINFO(821);
-    OS2EXPORT BOOL OS2API WinQueryWindowProcess(HWND window, PULONG process, PULONG thread)
-        OS2APIINFO(838);
+                                             PSZ second, ULONG reserved);
+    OS2EXPORT ULONG OS2API WinCreateAtomTable(ULONG initial, ULONG buckets);
+    OS2EXPORT ULONG OS2API WinDestroyAtomTable(ULONG table);
+    OS2EXPORT HWND OS2API WinQueryDesktopWindow(HAB hab, HDC dc);
+    OS2EXPORT HPOINTER OS2API WinQueryPointer(HWND desktop);
+    OS2EXPORT BOOL OS2API WinQueryWindowProcess(HWND window, PULONG process, PULONG thread);
     OS2EXPORT LONG OS2API WinScrollWindow(HWND window, LONG dx, LONG dy, PRECTL scroll, PRECTL clip,
-                                          ULONG region, PRECTL update, ULONG flags) OS2APIINFO(849);
-    OS2EXPORT ULONG OS2API WinQuerySystemAtomTable(VOID) OS2APIINFO(830);
-    OS2EXPORT ULONG OS2API WinAddAtom(ULONG table, PSZ name) OS2APIINFO(700);
-    OS2EXPORT ULONG OS2API WinFindAtom(ULONG table, PSZ name) OS2APIINFO(744);
-    OS2EXPORT ULONG OS2API WinDeleteAtom(ULONG table, ULONG atom) OS2APIINFO(721);
-    OS2EXPORT BOOL OS2API WinIsWindow(HAB hab, HWND hwnd) OS2APIINFO(772);
-    OS2EXPORT BOOL OS2API WinIsWindowEnabled(HWND hwnd) OS2APIINFO(773);
-    OS2EXPORT BOOL OS2API WinIsWindowVisible(HWND hwnd) OS2APIINFO(775);
+                                          ULONG region, PRECTL update, ULONG flags);
+    OS2EXPORT ULONG OS2API WinQuerySystemAtomTable(VOID);
+    OS2EXPORT ULONG OS2API WinAddAtom(ULONG table, PSZ name);
+    OS2EXPORT ULONG OS2API WinFindAtom(ULONG table, PSZ name);
+    OS2EXPORT ULONG OS2API WinDeleteAtom(ULONG table, ULONG atom);
+    OS2EXPORT BOOL OS2API WinIsWindow(HAB hab, HWND hwnd);
+    OS2EXPORT BOOL OS2API WinIsWindowEnabled(HWND hwnd);
+    OS2EXPORT BOOL OS2API WinIsWindowVisible(HWND hwnd);
 
-    OS2EXPORT BOOL OS2API WinCancelShutdown(HMQ a0, BOOL a1) OS2APIINFO(705);
-    OS2EXPORT BOOL OS2API WinCpTranslateString(HAB a0, ULONG a1, PSZ a2, ULONG a3, ULONG a4, PSZ a5)
-        OS2APIINFO(712);
-    OS2EXPORT BOOL OS2API WinDeleteLibrary(HAB a0, ULONG a1) OS2APIINFO(722);
-    OS2EXPORT BOOL OS2API WinFlashWindow(HWND a0, BOOL a1) OS2APIINFO(745);
-    OS2EXPORT BOOL OS2API WinFocusChange(HWND a0, HWND a1, ULONG a2) OS2APIINFO(746);
-    OS2EXPORT BOOL OS2API WinFreeErrorInfo(PVOID a0) OS2APIINFO(748);
-    OS2EXPORT PVOID OS2API WinGetErrorInfo(HAB a0) OS2APIINFO(751);
-    OS2EXPORT BOOL OS2API WinGetMaxPosition(HWND a0, PSWP a1) OS2APIINFO(754);
-    OS2EXPORT BOOL OS2API WinGetMinPosition(HWND a0, PSWP a1, PPOINTL a2) OS2APIINFO(755);
-    OS2EXPORT BOOL OS2API WinInvalidateRegion(HWND a0, ULONG a1, BOOL a2) OS2APIINFO(766);
-    OS2EXPORT BOOL OS2API WinIsWindowShowing(HWND a0) OS2APIINFO(774);
-    OS2EXPORT ULONG OS2API WinLoadLibrary(HAB a0, PSZ a1) OS2APIINFO(777);
-    OS2EXPORT LONG OS2API WinLoadMessage(HAB a0, HMODULE a1, ULONG a2, LONG a3, PSZ a4)
-        OS2APIINFO(779);
-    OS2EXPORT PSZ OS2API WinNextChar(HAB a0, ULONG a1, ULONG a2, PSZ a3) OS2APIINFO(791);
-    OS2EXPORT ULONG OS2API WinQueryAtomName(ULONG a0, ULONG a1, PSZ a2, ULONG a3) OS2APIINFO(802);
-    OS2EXPORT BOOL OS2API WinQueryDlgItemShort(HWND a0, ULONG a1, PSHORT a2, BOOL a3)
-        OS2APIINFO(814);
-    OS2EXPORT BOOL OS2API WinQueryMsgPos(HAB a0, PPOINTL a1) OS2APIINFO(818);
-    OS2EXPORT HWND OS2API WinQueryObjectWindow(HWND a0) OS2APIINFO(820);
-    OS2EXPORT BOOL OS2API WinQueryPointerInfo(HPOINTER a0, LXPOINTERINFO *a1) OS2APIINFO(822);
-    OS2EXPORT BOOL OS2API WinQueryQueueInfo(HMQ a0, PVOID a1, ULONG a2) OS2APIINFO(824);
-    OS2EXPORT LONG OS2API WinQueryUpdateRegion(HWND a0, ULONG a1) OS2APIINFO(832);
-    OS2EXPORT BOOL OS2API WinSetCp(HMQ a0, ULONG a1) OS2APIINFO(857);
-    OS2EXPORT BOOL OS2API WinSetDlgItemShort(HWND a0, ULONG a1, USHORT a2, BOOL a3) OS2APIINFO(858);
-    OS2EXPORT BOOL OS2API WinSetMultWindowPos(HAB a0, PSWP a1, ULONG a2) OS2APIINFO(863);
-    OS2EXPORT BOOL OS2API WinSetSysColors(HWND a0, ULONG a1, ULONG a2, LONG a3, ULONG a4, PLONG a5)
-        OS2APIINFO(871);
-    OS2EXPORT BOOL OS2API WinSetSysValue(HWND a0, LONG a1, LONG a2) OS2APIINFO(873);
-    OS2EXPORT BOOL OS2API WinSetWindowBits(HWND a0, LONG a1, ULONG a2, ULONG a3) OS2APIINFO(874);
-    OS2EXPORT BOOL OS2API WinTrackRect(HWND a0, HPS a1, LXTRACKINFO *a2) OS2APIINFO(890);
-    OS2EXPORT BOOL OS2API WinValidateRect(HWND a0, PRECTL a1, BOOL a2) OS2APIINFO(895);
-    OS2EXPORT BOOL OS2API WinValidateRegion(HWND a0, ULONG a1, BOOL a2) OS2APIINFO(896);
-    OS2EXPORT BOOL OS2API WinBroadcastMsg(HWND a0, ULONG a1, MPARAM a2, MPARAM a3, ULONG a4)
-        OS2APIINFO(901);
-    OS2EXPORT BOOL OS2API WinSetKeyboardStateTable(HWND a0, PBYTE a1, BOOL a2) OS2APIINFO(921);
-    OS2EXPORT LONG OS2API WinRealizePalette(HWND a0, HPS a1, PULONG a2) OS2APIINFO(941);
-    OS2EXPORT HPOINTER OS2API WinCreatePointerIndirect(HWND a0, LXPOINTERINFO *a1) OS2APIINFO(942);
+    OS2EXPORT BOOL OS2API WinCancelShutdown(HMQ a0, BOOL a1);
+    OS2EXPORT BOOL OS2API WinCpTranslateString(HAB a0, ULONG a1, PSZ a2, ULONG a3, ULONG a4,
+                                               PSZ a5);
+    OS2EXPORT BOOL OS2API WinDeleteLibrary(HAB a0, ULONG a1);
+    OS2EXPORT BOOL OS2API WinFlashWindow(HWND a0, BOOL a1);
+    OS2EXPORT BOOL OS2API WinFocusChange(HWND a0, HWND a1, ULONG a2);
+    OS2EXPORT BOOL OS2API WinFreeErrorInfo(PVOID a0);
+    OS2EXPORT PVOID OS2API WinGetErrorInfo(HAB a0);
+    OS2EXPORT BOOL OS2API WinGetMaxPosition(HWND a0, PSWP a1);
+    OS2EXPORT BOOL OS2API WinGetMinPosition(HWND a0, PSWP a1, PPOINTL a2);
+    OS2EXPORT BOOL OS2API WinInvalidateRegion(HWND a0, ULONG a1, BOOL a2);
+    OS2EXPORT BOOL OS2API WinIsWindowShowing(HWND a0);
+    OS2EXPORT ULONG OS2API WinLoadLibrary(HAB a0, PSZ a1);
+    OS2EXPORT LONG OS2API WinLoadMessage(HAB a0, HMODULE a1, ULONG a2, LONG a3, PSZ a4);
+    OS2EXPORT PSZ OS2API WinNextChar(HAB a0, ULONG a1, ULONG a2, PSZ a3);
+    OS2EXPORT ULONG OS2API WinQueryAtomName(ULONG a0, ULONG a1, PSZ a2, ULONG a3);
+    OS2EXPORT BOOL OS2API WinQueryDlgItemShort(HWND a0, ULONG a1, PSHORT a2, BOOL a3);
+    OS2EXPORT BOOL OS2API WinQueryMsgPos(HAB a0, PPOINTL a1);
+    OS2EXPORT HWND OS2API WinQueryObjectWindow(HWND a0);
+    OS2EXPORT BOOL OS2API WinQueryPointerInfo(HPOINTER a0, LXPOINTERINFO *a1);
+    OS2EXPORT BOOL OS2API WinQueryQueueInfo(HMQ a0, PVOID a1, ULONG a2);
+    OS2EXPORT LONG OS2API WinQueryUpdateRegion(HWND a0, ULONG a1);
+    OS2EXPORT BOOL OS2API WinSetCp(HMQ a0, ULONG a1);
+    OS2EXPORT BOOL OS2API WinSetDlgItemShort(HWND a0, ULONG a1, USHORT a2, BOOL a3);
+    OS2EXPORT BOOL OS2API WinSetMultWindowPos(HAB a0, PSWP a1, ULONG a2);
+    OS2EXPORT BOOL OS2API WinSetSysColors(HWND a0, ULONG a1, ULONG a2, LONG a3, ULONG a4, PLONG a5);
+    OS2EXPORT BOOL OS2API WinSetSysValue(HWND a0, LONG a1, LONG a2);
+    OS2EXPORT BOOL OS2API WinSetWindowBits(HWND a0, LONG a1, ULONG a2, ULONG a3);
+    OS2EXPORT BOOL OS2API WinTrackRect(HWND a0, HPS a1, LXTRACKINFO *a2);
+    OS2EXPORT BOOL OS2API WinValidateRect(HWND a0, PRECTL a1, BOOL a2);
+    OS2EXPORT BOOL OS2API WinValidateRegion(HWND a0, ULONG a1, BOOL a2);
+    OS2EXPORT BOOL OS2API WinBroadcastMsg(HWND a0, ULONG a1, MPARAM a2, MPARAM a3, ULONG a4);
+    OS2EXPORT BOOL OS2API WinSetKeyboardStateTable(HWND a0, PBYTE a1, BOOL a2);
+    OS2EXPORT LONG OS2API WinRealizePalette(HWND a0, HPS a1, PULONG a2);
+    OS2EXPORT HPOINTER OS2API WinCreatePointerIndirect(HWND a0, LXPOINTERINFO *a1);
 #ifdef __cplusplus
 }
 #endif

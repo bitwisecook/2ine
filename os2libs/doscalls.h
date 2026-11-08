@@ -526,119 +526,105 @@ extern "C"
     };
 
     OS2EXPORT APIRET OS2API DosSetPriority(ULONG scope, ULONG priority_class, LONG delta,
-                                           ULONG target) OS2APIINFO(236);
+                                           ULONG target);
     OS2EXPORT APIRET OS2API DosQueryHeaderInfo(HMODULE hmod, ULONG ulIndex, PVOID pvBuffer,
-                                               ULONG cbBuffer, ULONG ulSubFunction) OS2APIINFO(582);
+                                               ULONG cbBuffer, ULONG ulSubFunction);
 
     /* Undocumented DOSCALLS entry used by Java runtimes. */
     OS2EXPORT APIRET OS2API DosQuerySysState(ULONG func, ULONG arg1, ULONG pid, ULONG _res_,
-                                             PVOID buf, ULONG bufsz) OS2APIINFO(368);
+                                             PVOID buf, ULONG bufsz);
 
     /* Undocumented DOSCALLS entry used by Java runtimes. */
-    OS2EXPORT APIRET OS2API DosR3ExitAddr(void) OS2APIINFO(553);
+    OS2EXPORT APIRET OS2API DosR3ExitAddr(void);
 
     /* Legacy USE16 DOSCALLS entries absent from the 4.5 Toolkit headers. */
     typedef int HSEM16, *PHSEM16;
-    OS2EXPORT APIRET16 OS2API16 DosSemRequest(PHSEM16 sem, LONG ms) OS2APIINFO(140);
-    OS2EXPORT APIRET16 OS2API16 DosSemClear(PHSEM16 sem) OS2APIINFO(141);
-    OS2EXPORT APIRET16 OS2API16 DosSemWait(PHSEM16 sem, LONG ms) OS2APIINFO(142);
-    OS2EXPORT APIRET16 OS2API16 DosSemSet(PHSEM16 sem) OS2APIINFO(143);
+    OS2EXPORT APIRET16 OS2API16 DosSemRequest(PHSEM16 sem, LONG ms);
+    OS2EXPORT APIRET16 OS2API16 DosSemClear(PHSEM16 sem);
+    OS2EXPORT APIRET16 OS2API16 DosSemWait(PHSEM16 sem, LONG ms);
+    OS2EXPORT APIRET16 OS2API16 DosSemSet(PHSEM16 sem);
     /* DOSFSRSEM: USHORT cb, PID pid, TID tid, USHORT cUsage, USHORT client, ULONG sem. */
     typedef PVOID PDOSFSRSEM;
-    OS2EXPORT APIRET16 OS2API16 Dos16FSRamSemRequest(PDOSFSRSEM sem, LONG timeout) OS2APIINFO(161);
-    OS2EXPORT APIRET16 OS2API16 Dos16FSRamSemClear(PDOSFSRSEM sem) OS2APIINFO(162);
+    OS2EXPORT APIRET16 OS2API16 Dos16FSRamSemRequest(PDOSFSRSEM sem, LONG timeout);
+    OS2EXPORT APIRET16 OS2API16 Dos16FSRamSemClear(PDOSFSRSEM sem);
 
     /* USE16-only exports. */
-    OS2EXPORT APIRET16 OS2API16 Dos16EnterCritSec(VOID) OS2APIINFO(3);
-    OS2EXPORT APIRET16 OS2API16 Dos16ExitCritSec(VOID) OS2APIINFO(6);
-    OS2EXPORT APIRET OS2API DosEnterCritSec(VOID) OS2APIINFO(232);
-    OS2EXPORT APIRET OS2API DosExitCritSec(VOID) OS2APIINFO(233);
+    OS2EXPORT APIRET16 OS2API16 Dos16EnterCritSec(VOID);
+    OS2EXPORT APIRET16 OS2API16 Dos16ExitCritSec(VOID);
+    OS2EXPORT APIRET OS2API DosEnterCritSec(VOID);
+    OS2EXPORT APIRET OS2API DosExitCritSec(VOID);
     OS2EXPORT APIRET16 OS2API16 Dos16SetPrty(USHORT scope, USHORT prtyclass, SHORT delta,
-                                             USHORT pid) OS2APIINFO(11);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetDateTime(PDATETIME pdt) OS2APIINFO(33);
-    OS2EXPORT APIRET16 OS2API16 Dos16Error(USHORT error) OS2APIINFO(120);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetSeg(USHORT sel) OS2APIINFO(121);
-    OS2EXPORT APIRET16 OS2API16 Dos16LockSeg(USHORT sel) OS2APIINFO(122);
-    OS2EXPORT APIRET16 OS2API16 Dos16UnlockSeg(USHORT sel) OS2APIINFO(123);
-    OS2EXPORT APIRET16 OS2API16 Dos16HugeShift(PUSHORT pshift) OS2APIINFO(135);
-    OS2EXPORT APIRET16 OS2API16 Dos16HugeIncr(USHORT sel, PULONG psize) OS2APIINFO(136);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf)
-        OS2APIINFO(394);
-    OS2EXPORT APIRET16 OS2API16 Dos16DevConfig(PVOID pdevinfo, USHORT item, USHORT reserved)
-        OS2APIINFO(52);
+                                             USHORT pid);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetDateTime(PDATETIME pdt);
+    OS2EXPORT APIRET16 OS2API16 Dos16Error(USHORT error);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetSeg(USHORT sel);
+    OS2EXPORT APIRET16 OS2API16 Dos16LockSeg(USHORT sel);
+    OS2EXPORT APIRET16 OS2API16 Dos16UnlockSeg(USHORT sel);
+    OS2EXPORT APIRET16 OS2API16 Dos16HugeShift(PUSHORT pshift);
+    OS2EXPORT APIRET16 OS2API16 Dos16HugeIncr(USHORT sel, PULONG psize);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf);
+    OS2EXPORT APIRET16 OS2API16 Dos16DevConfig(PVOID pdevinfo, USHORT item, USHORT reserved);
     OS2EXPORT APIRET16 OS2API16 Dos16DevIOCtl(PVOID pdata, PVOID pparms, USHORT fun,
-                                              USHORT category, USHORT hdev) OS2APIINFO(53);
-    OS2EXPORT APIRET16 OS2API16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buf, USHORT cb)
-        OS2APIINFO(74);
+                                              USHORT category, USHORT hdev);
+    OS2EXPORT APIRET16 OS2API16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buf, USHORT cb);
     OS2EXPORT APIRET16 OS2API16 Dos16QPathInfo(PSZ path, USHORT level, PVOID buf, USHORT cb,
-                                               ULONG reserved) OS2APIINFO(98);
-    OS2EXPORT APIRET16 OS2API16 Dos16BufReset(USHORT file) OS2APIINFO(56);
-    OS2EXPORT APIRET16 OS2API16 Dos16QFHandState(USHORT file, PUSHORT state) OS2APIINFO(73);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetFHandState(USHORT file, USHORT state) OS2APIINFO(82);
+                                               ULONG reserved);
+    OS2EXPORT APIRET16 OS2API16 Dos16BufReset(USHORT file);
+    OS2EXPORT APIRET16 OS2API16 Dos16QFHandState(USHORT file, PUSHORT state);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetFHandState(USHORT file, USHORT state);
     OS2EXPORT APIRET16 OS2API16 Dos16SetFilePtrL(USHORT file, ULONG high, ULONG low, ULONG method,
-                                                 PVOID position) OS2APIINFO(568);
-    OS2EXPORT APIRET16 OS2API16 Dos16SelectDisk(USHORT drive) OS2APIINFO(81);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetFileInfo(USHORT hf, USHORT level, PVOID buf, USHORT cb)
-        OS2APIINFO(83);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetMaxFH(USHORT cfh) OS2APIINFO(85);
-    OS2EXPORT APIRET16 OS2API16 Dos16NewSize(USHORT hf, ULONG size) OS2APIINFO(68);
-    OS2EXPORT APIRET16 OS2API16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS) OS2APIINFO(43);
-    OS2EXPORT APIRET16 OS2API16 Dos16KillProcess(USHORT scope, USHORT pid) OS2APIINFO(10);
-    OS2EXPORT APIRET16 OS2API16 Dos16MakePipe(PUSHORT reader, PUSHORT writer, USHORT size)
-        OS2APIINFO(16);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetDateTime(PDATETIME datetime) OS2APIINFO(28);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetShrSeg(PSZ name, PUSHORT selector) OS2APIINFO(36);
+                                                 PVOID position);
+    OS2EXPORT APIRET16 OS2API16 Dos16SelectDisk(USHORT drive);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetFileInfo(USHORT hf, USHORT level, PVOID buf, USHORT cb);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetMaxFH(USHORT cfh);
+    OS2EXPORT APIRET16 OS2API16 Dos16NewSize(USHORT hf, ULONG size);
+    OS2EXPORT APIRET16 OS2API16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS);
+    OS2EXPORT APIRET16 OS2API16 Dos16KillProcess(USHORT scope, USHORT pid);
+    OS2EXPORT APIRET16 OS2API16 Dos16MakePipe(PUSHORT reader, PUSHORT writer, USHORT size);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetDateTime(PDATETIME datetime);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetShrSeg(PSZ name, PUSHORT selector);
     OS2EXPORT APIRET16 OS2API16 Dos16LoadModule(PCHAR failure, USHORT capacity, PSZ name,
-                                                PUSHORT module) OS2APIINFO(44);
+                                                PUSHORT module);
     /* The encoded name accepts either a 16:16 string or a selector-zero ordinal. */
-    OS2EXPORT APIRET16 OS2API16 Dos16GetProcAddr(USHORT module, ULONG name, PULONG address)
-        OS2APIINFO(45);
-    OS2EXPORT APIRET16 OS2API16 Dos16FreeModule(USHORT module) OS2APIINFO(46);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetModName(USHORT module, USHORT capacity, PCHAR name)
-        OS2APIINFO(48);
-    OS2EXPORT APIRET16 OS2API16 Dos16QVerify(PUSHORT enabled) OS2APIINFO(78);
-    OS2EXPORT APIRET16 OS2API16 Dos16RmDir(PSZ path, ULONG reserved) OS2APIINFO(80);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetVerify(USHORT enabled) OS2APIINFO(86);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetProcAddr(USHORT module, ULONG name, PULONG address);
+    OS2EXPORT APIRET16 OS2API16 Dos16FreeModule(USHORT module);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetModName(USHORT module, USHORT capacity, PCHAR name);
+    OS2EXPORT APIRET16 OS2API16 Dos16QVerify(PUSHORT enabled);
+    OS2EXPORT APIRET16 OS2API16 Dos16RmDir(PSZ path, ULONG reserved);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetVerify(USHORT enabled);
     OS2EXPORT APIRET16 OS2API16 Dos16DevIOCtl2(PVOID data, USHORT data_size, PVOID parameters,
                                                USHORT parameter_size, USHORT function,
-                                               USHORT category, USHORT device) OS2APIINFO(99);
-    OS2EXPORT APIRET16 OS2API16 Dos16SizeSeg(USHORT selector, PULONG size) OS2APIINFO(126);
+                                               USHORT category, USHORT device);
+    OS2EXPORT APIRET16 OS2API16 Dos16SizeSeg(USHORT selector, PULONG size);
     OS2EXPORT APIRET16 OS2API16 Dos16SearchPath(USHORT flags, PSZ path, PSZ name, PBYTE result,
-                                                USHORT capacity) OS2APIINFO(151);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetCp(USHORT codepage, USHORT reserved) OS2APIINFO(153);
-    OS2EXPORT APIRET16 OS2API16 Dos16QAppType(PSZ name, PUSHORT flags) OS2APIINFO(163);
+                                                USHORT capacity);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetCp(USHORT codepage, USHORT reserved);
+    OS2EXPORT APIRET16 OS2API16 Dos16QAppType(PSZ name, PUSHORT flags);
     OS2EXPORT APIRET16 OS2API16 Dos16QFSAttach(PSZ device, USHORT ordinal, USHORT level,
-                                               PVOID buffer, PUSHORT size, ULONG reserved)
-        OS2APIINFO(182);
-    OS2EXPORT APIRET16 OS2API16 Dos16ForceDelete(PSZ path, ULONG reserved) OS2APIINFO(203);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetExtLIBPATH(PSZ path, ULONG flags) OS2APIINFO(998);
-    OS2EXPORT APIRET16 OS2API16 Dos16QueryExtLIBPATH(PCHAR path, ULONG flags) OS2APIINFO(999);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetModHandle(PSZ name, PUSHORT module) OS2APIINFO(47);
-    OS2EXPORT APIRET16 OS2API16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack)
-        OS2APIINFO(145);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetVersion(PUSHORT pver) OS2APIINFO(92);
-    OS2EXPORT APIRET16 OS2API16 Dos16QProcStatus(PVOID buffer, USHORT size) OS2APIINFO(154);
-    OS2EXPORT APIRET16 OS2API16 Dos16SMPMPresent(PUSHORT present) OS2APIINFO(712);
-    OS2EXPORT APIRET16 OS2API16 Dos16ScanEnv(PSZ name, PULONG value) OS2APIINFO(152);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetProcCp(USHORT codepage, USHORT reserved) OS2APIINFO(164);
-    OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PSZ title) OS2APIINFO(690);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetMachineMode(PBYTE pmode) OS2APIINFO(49);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetHugeShift(PUSHORT pcount) OS2APIINFO(41);
-    OS2EXPORT VOID OS2API16 Dos16Exit(USHORT action, USHORT result) OS2APIINFO(5);
-    OS2EXPORT APIRET16 OS2API16 Dos16QHandType(USHORT handle, PUSHORT ptype, PUSHORT pflags)
-        OS2APIINFO(77);
-    OS2EXPORT APIRET16 OS2API16 Dos16AllocSeg(USHORT size, PUSHORT psel, USHORT flags)
-        OS2APIINFO(34);
-    OS2EXPORT APIRET16 OS2API16 Dos16ReallocSeg(USHORT size, USHORT sel) OS2APIINFO(38);
+                                               PVOID buffer, PUSHORT size, ULONG reserved);
+    OS2EXPORT APIRET16 OS2API16 Dos16ForceDelete(PSZ path, ULONG reserved);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetExtLIBPATH(PSZ path, ULONG flags);
+    OS2EXPORT APIRET16 OS2API16 Dos16QueryExtLIBPATH(PCHAR path, ULONG flags);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetModHandle(PSZ name, PUSHORT module);
+    OS2EXPORT APIRET16 OS2API16 Dos16CreateThread(PVOID pfnFun, PVOID pTid, PVOID pbStack);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetVersion(PUSHORT pver);
+    OS2EXPORT APIRET16 OS2API16 Dos16QProcStatus(PVOID buffer, USHORT size);
+    OS2EXPORT APIRET16 OS2API16 Dos16SMPMPresent(PUSHORT present);
+    OS2EXPORT APIRET16 OS2API16 Dos16ScanEnv(PSZ name, PULONG value);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetProcCp(USHORT codepage, USHORT reserved);
+    OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PSZ title);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetMachineMode(PBYTE pmode);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetHugeShift(PUSHORT pcount);
+    OS2EXPORT VOID OS2API16 Dos16Exit(USHORT action, USHORT result);
+    OS2EXPORT APIRET16 OS2API16 Dos16QHandType(USHORT handle, PUSHORT ptype, PUSHORT pflags);
+    OS2EXPORT APIRET16 OS2API16 Dos16AllocSeg(USHORT size, PUSHORT psel, USHORT flags);
+    OS2EXPORT APIRET16 OS2API16 Dos16ReallocSeg(USHORT size, USHORT sel);
     OS2EXPORT APIRET16 OS2API16 Dos16EditName(USHORT level, PSZ source, PSZ edit, PBYTE target,
-                                              USHORT capacity) OS2APIINFO(191);
-    OS2EXPORT APIRET16 OS2API16 Dos16SubSet(USHORT selector, USHORT flags, USHORT size)
-        OS2APIINFO(146);
-    OS2EXPORT APIRET16 OS2API16 Dos16SubAlloc(USHORT selector, PUSHORT offset, USHORT size)
-        OS2APIINFO(147);
-    OS2EXPORT APIRET16 OS2API16 Dos16SubFree(USHORT selector, USHORT offset, USHORT size)
-        OS2APIINFO(148);
-    OS2EXPORT APIRET16 OS2API16 Dos16FreeSeg(USHORT sel) OS2APIINFO(39);
+                                              USHORT capacity);
+    OS2EXPORT APIRET16 OS2API16 Dos16SubSet(USHORT selector, USHORT flags, USHORT size);
+    OS2EXPORT APIRET16 OS2API16 Dos16SubAlloc(USHORT selector, PUSHORT offset, USHORT size);
+    OS2EXPORT APIRET16 OS2API16 Dos16SubFree(USHORT selector, USHORT offset, USHORT size);
+    OS2EXPORT APIRET16 OS2API16 Dos16FreeSeg(USHORT sel);
 
     typedef struct
     {
@@ -647,77 +633,67 @@ extern "C"
         USHORT pidParent;
     } PIDINFO16, *PPIDINFO16;
 
-    OS2EXPORT APIRET16 OS2API16 Dos16GetPID(PPIDINFO16 ppidinfo) OS2APIINFO(94);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetCp(USHORT cb, PUSHORT arCP, PUSHORT pcCP) OS2APIINFO(130);
-    OS2EXPORT APIRET16 OS2API16 Dos16GetEnv(PUSHORT psel, PUSHORT pcmdoffset) OS2APIINFO(91);
-    OS2EXPORT APIRET16 OS2API16 Dos16Write(USHORT h, PVOID buf, USHORT buflen, PUSHORT actual)
-        OS2APIINFO(138);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetVec(USHORT vecnum, PFN routine, PVOID prevaddress)
-        OS2APIINFO(89); /* prevaddress is a PFN * */
-    OS2EXPORT APIRET16 OS2API16 Dos16SetSigHandler(PFN routine, PVOID prevaddress,
-                                                   PUSHORT prevaction, USHORT action,
-                                                   USHORT signumber)
-        OS2APIINFO(14); /* prevaddress is a PFNSIGHANDLER * routine is a PFNSIGHANDLER */
-    OS2EXPORT APIRET16 OS2API16 Dos16GetInfoSeg(PSEL globalseg, PSEL localseg) OS2APIINFO(8);
-    OS2EXPORT APIRET16 OS2API16 Dos16QCurDisk(PUSHORT drivenum, PULONG drivemap) OS2APIINFO(72);
-    OS2EXPORT APIRET16 OS2API16 Dos16QCurDir(USHORT drivenum, PBYTE dirpath, PUSHORT dirpathlen)
-        OS2APIINFO(71);
-    OS2EXPORT APIRET16 OS2API16 Dos16HoldSignal(USHORT action) OS2APIINFO(13);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetPID(PPIDINFO16 ppidinfo);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetCp(USHORT cb, PUSHORT arCP, PUSHORT pcCP);
+    OS2EXPORT APIRET16 OS2API16 Dos16GetEnv(PUSHORT psel, PUSHORT pcmdoffset);
+    OS2EXPORT APIRET16 OS2API16 Dos16Write(USHORT h, PVOID buf, USHORT buflen, PUSHORT actual);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetVec(USHORT vecnum, PFN routine,
+                                            PVOID prevaddress); /* prevaddress is a PFN * */
+    OS2EXPORT APIRET16 OS2API16 Dos16SetSigHandler(
+        PFN routine, PVOID prevaddress, PUSHORT prevaction, USHORT action,
+        USHORT signumber); /* prevaddress is a PFNSIGHANDLER * routine is a PFNSIGHANDLER */
+    OS2EXPORT APIRET16 OS2API16 Dos16GetInfoSeg(PSEL globalseg, PSEL localseg);
+    OS2EXPORT APIRET16 OS2API16 Dos16QCurDisk(PUSHORT drivenum, PULONG drivemap);
+    OS2EXPORT APIRET16 OS2API16 Dos16QCurDir(USHORT drivenum, PBYTE dirpath, PUSHORT dirpathlen);
+    OS2EXPORT APIRET16 OS2API16 Dos16HoldSignal(USHORT action);
     OS2EXPORT APIRET16 OS2API16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf,
-                                             USHORT infobufsize) OS2APIINFO(76);
-    OS2EXPORT APIRET16 OS2API16 Dos16SetFileMode(PCHAR filepath, USHORT attr, ULONG reserved)
-        OS2APIINFO(84);
-    OS2EXPORT APIRET16 OS2API16 Dos16QFileMode(PCHAR filepath, PUSHORT attr, ULONG res)
-        OS2APIINFO(75);
+                                             USHORT infobufsize);
+    OS2EXPORT APIRET16 OS2API16 Dos16SetFileMode(PCHAR filepath, USHORT attr, ULONG reserved);
+    OS2EXPORT APIRET16 OS2API16 Dos16QFileMode(PCHAR filepath, PUSHORT attr, ULONG res);
     OS2EXPORT APIRET16 OS2API16 Dos16Open(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction,
                                           ULONG cbFile, USHORT ulAttribute, USHORT fsOpenFlags,
-                                          USHORT fsOpenMode, ULONG ulReserved) OS2APIINFO(70);
+                                          USHORT fsOpenMode, ULONG ulReserved);
     OS2EXPORT APIRET16 OS2API16 Dos16Open2(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction,
                                            ULONG cbFile, USHORT ulAttribute, USHORT fsOpenFlags,
-                                           ULONG fsOpenMode, PVOID ea, ULONG reserved)
-        OS2APIINFO(95);
+                                           ULONG fsOpenMode, PVOID ea, ULONG reserved);
     OS2EXPORT APIRET16 OS2API16 Dos16OpenL(PSZ name, PUSHORT file, PUSHORT action, ULONG high,
                                            ULONG low, USHORT attributes, USHORT flags, ULONG mode,
-                                           PVOID ea, ULONG reserved) OS2APIINFO(567);
+                                           PVOID ea, ULONG reserved);
     OS2EXPORT APIRET16 OS2API16 Dos16FindFirst(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute,
                                                PVOID pfindbuf, USHORT cbBuf, PUSHORT pcFileNames,
-                                               ULONG res) OS2APIINFO(64);
+                                               ULONG res);
     OS2EXPORT APIRET16 OS2API16 Dos16FindFirst2(PSZ pszFileSpec, PSHORT phdir, USHORT flAttribute,
                                                 PVOID pfindbuf, USHORT cbBuf, PUSHORT pcFileNames,
-                                                USHORT level, ULONG res) OS2APIINFO(184);
-    OS2EXPORT APIRET16 OS2API16 Dos16ChDir(PSZ pszDir, ULONG res) OS2APIINFO(57);
-    OS2EXPORT APIRET16 OS2API16 Dos16Close(USHORT hFile) OS2APIINFO(59);
+                                                USHORT level, ULONG res);
+    OS2EXPORT APIRET16 OS2API16 Dos16ChDir(PSZ pszDir, ULONG res);
+    OS2EXPORT APIRET16 OS2API16 Dos16Close(USHORT hFile);
     OS2EXPORT APIRET16 OS2API16 Dos16FindNext(USHORT hDir, PVOID pfindbuf, USHORT cbfindbuf,
-                                              PUSHORT pcFilenames) OS2APIINFO(65);
-    OS2EXPORT APIRET16 OS2API16 Dos16FindClose(USHORT hDir) OS2APIINFO(63);
-    OS2EXPORT APIRET16 OS2API16 Dos16Delete(PSZ pszFile, ULONG res) OS2APIINFO(60);
-    OS2EXPORT APIRET16 OS2API16 Dos16DupHandle(USHORT hFile, PUSHORT pHfile) OS2APIINFO(61);
+                                              PUSHORT pcFilenames);
+    OS2EXPORT APIRET16 OS2API16 Dos16FindClose(USHORT hDir);
+    OS2EXPORT APIRET16 OS2API16 Dos16Delete(PSZ pszFile, ULONG res);
+    OS2EXPORT APIRET16 OS2API16 Dos16DupHandle(USHORT hFile, PUSHORT pHfile);
     OS2EXPORT APIRET16 OS2API16 Dos16Read(USHORT hFile, PVOID pBuffer, USHORT cbRead,
-                                          PUSHORT pcbActual) OS2APIINFO(137);
+                                          PUSHORT pcbActual);
     OS2EXPORT APIRET16 OS2API16 Dos16ExecPgm(PCHAR pObjname, SHORT cbObjname, USHORT execFlag,
-                                             PSZ pArg, PSZ pEnv, PRESULTCODES16 pRes, PSZ pName)
-        OS2APIINFO(144);
+                                             PSZ pArg, PSZ pEnv, PRESULTCODES16 pRes, PSZ pName);
     OS2EXPORT APIRET16 OS2API16 Dos16CWait(USHORT action, USHORT option, PRESULTCODES16 pres,
-                                           PUSHORT ppid, USHORT pid) OS2APIINFO(2);
+                                           PUSHORT ppid, USHORT pid);
     OS2EXPORT APIRET16 OS2API16 Dos16ChgFilePtr(USHORT handle, LONG distance, USHORT whence,
-                                                PULONG newoffset) OS2APIINFO(58);
-    OS2EXPORT APIRET16 OS2API16 Dos16Beep(USHORT freq, USHORT dur) OS2APIINFO(50);
-    OS2EXPORT APIRET16 OS2API16 Dos16MkDir(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(66);
-    OS2EXPORT APIRET16 OS2API16 Dos16MkDir2(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(185);
+                                                PULONG newoffset);
+    OS2EXPORT APIRET16 OS2API16 Dos16Beep(USHORT freq, USHORT dur);
+    OS2EXPORT APIRET16 OS2API16 Dos16MkDir(PSZ pszDirName, PEAOP2 peaop2);
+    OS2EXPORT APIRET16 OS2API16 Dos16MkDir2(PSZ pszDirName, PEAOP2 peaop2);
 
-    OS2EXPORT APIRET OS2API DosDupHandle(HFILE hFile, PHFILE pHfile) OS2APIINFO(260);
-    OS2EXPORT APIRET OS2API DosGetInfoBlocks(PTIB *pptib, PPIB *pppib) OS2APIINFO(312);
-    OS2EXPORT APIRET OS2API DosQuerySysInfo(ULONG iStart, ULONG iLast, PVOID pBuf, ULONG cbBuf)
-        OS2APIINFO(348);
-    OS2EXPORT APIRET OS2API DosQueryModuleName(HMODULE hmod, ULONG cbName, PCHAR pch)
-        OS2APIINFO(320);
-    OS2EXPORT APIRET OS2API DosScanEnv(PSZ pszName, PSZ *ppszValue) OS2APIINFO(227);
+    OS2EXPORT APIRET OS2API DosDupHandle(HFILE hFile, PHFILE pHfile);
+    OS2EXPORT APIRET OS2API DosGetInfoBlocks(PTIB *pptib, PPIB *pppib);
+    OS2EXPORT APIRET OS2API DosQuerySysInfo(ULONG iStart, ULONG iLast, PVOID pBuf, ULONG cbBuf);
+    OS2EXPORT APIRET OS2API DosQueryModuleName(HMODULE hmod, ULONG cbName, PCHAR pch);
+    OS2EXPORT APIRET OS2API DosScanEnv(PSZ pszName, PSZ *ppszValue);
     OS2EXPORT APIRET OS2API DosSearchPath(ULONG flag, PSZ pszPathOrName, PSZ pszFilename,
-                                          PBYTE pBuf, ULONG cbBuf) OS2APIINFO(228);
-    OS2EXPORT APIRET OS2API DosWrite(HFILE hFile, PVOID pBuffer, ULONG cbWrite, PULONG pcbActual)
-        OS2APIINFO(282);
-    OS2EXPORT VOID OS2API DosExit(ULONG action, ULONG result) OS2APIINFO(234);
-    OS2EXPORT APIRET OS2API DosExitList(ULONG ordercode, PFNEXITLIST pfn) OS2APIINFO(296);
+                                          PBYTE pBuf, ULONG cbBuf);
+    OS2EXPORT APIRET OS2API DosWrite(HFILE hFile, PVOID pBuffer, ULONG cbWrite, PULONG pcbActual);
+    OS2EXPORT VOID OS2API DosExit(ULONG action, ULONG result);
+    OS2EXPORT APIRET OS2API DosExitList(ULONG ordercode, PFNEXITLIST pfn);
 
     typedef struct
     {
@@ -726,179 +702,160 @@ extern "C"
     } SEMRECORD, *PSEMRECORD;
 
     OS2EXPORT APIRET OS2API DosCreateMuxWaitSem(PSZ name, PHMUX output, ULONG count,
-                                                PSEMRECORD records, ULONG flags) OS2APIINFO(337);
-    OS2EXPORT APIRET OS2API DosOpenMuxWaitSem(PSZ name, PHMUX output) OS2APIINFO(338);
-    OS2EXPORT APIRET OS2API DosCloseMuxWaitSem(HMUX handle) OS2APIINFO(339);
-    OS2EXPORT APIRET OS2API DosWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
-        OS2APIINFO(340);
-    OS2EXPORT APIRET OS2API DosAddMuxWaitSem(HMUX handle, PSEMRECORD record) OS2APIINFO(341);
-    OS2EXPORT APIRET OS2API DosDeleteMuxWaitSem(HMUX handle, ULONG semaphore) OS2APIINFO(342);
+                                                PSEMRECORD records, ULONG flags);
+    OS2EXPORT APIRET OS2API DosOpenMuxWaitSem(PSZ name, PHMUX output);
+    OS2EXPORT APIRET OS2API DosCloseMuxWaitSem(HMUX handle);
+    OS2EXPORT APIRET OS2API DosWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user);
+    OS2EXPORT APIRET OS2API DosAddMuxWaitSem(HMUX handle, PSEMRECORD record);
+    OS2EXPORT APIRET OS2API DosDeleteMuxWaitSem(HMUX handle, ULONG semaphore);
     OS2EXPORT APIRET OS2API DosQueryMuxWaitSem(HMUX handle, PULONG count, PSEMRECORD records,
-                                               PULONG flags) OS2APIINFO(343);
-    OS2EXPORT APIRET OS2API DosCreateEventSem(PSZ pszName, PHEV phev, ULONG flAttr, BOOL32 fState)
-        OS2APIINFO(324);
-    OS2EXPORT APIRET OS2API DosCreateMutexSem(PSZ pszName, PHMTX phmtx, ULONG flAttr, BOOL32 fState)
-        OS2APIINFO(331);
-    OS2EXPORT APIRET OS2API DosOpenMutexSem(PSZ pszName, PHMTX phmtx) OS2APIINFO(332);
-    OS2EXPORT APIRET OS2API DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD pERegRec)
-        OS2APIINFO(354);
-    OS2EXPORT APIRET OS2API DosUnsetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD pERegRec)
-        OS2APIINFO(355);
-    OS2EXPORT ULONG OS2API DosFlatToSel(VOID) OS2APIINFO(425);
-    OS2EXPORT APIRET OS2API DosSetSignalExceptionFocus(BOOL32 flag, PULONG pulTimes)
-        OS2APIINFO(378);
-    OS2EXPORT APIRET OS2API DosSetRelMaxFH(PLONG pcbReqCount, PULONG pcbCurMaxFH) OS2APIINFO(382);
-    OS2EXPORT APIRET OS2API DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag) OS2APIINFO(299);
-    OS2EXPORT APIRET OS2API DosGetNamedSharedMem(PPVOID ppb, PSZ pszName, ULONG flag)
-        OS2APIINFO(301);
+                                               PULONG flags);
+    OS2EXPORT APIRET OS2API DosCreateEventSem(PSZ pszName, PHEV phev, ULONG flAttr, BOOL32 fState);
+    OS2EXPORT APIRET OS2API DosCreateMutexSem(PSZ pszName, PHMTX phmtx, ULONG flAttr,
+                                              BOOL32 fState);
+    OS2EXPORT APIRET OS2API DosOpenMutexSem(PSZ pszName, PHMTX phmtx);
+    OS2EXPORT APIRET OS2API DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD pERegRec);
+    OS2EXPORT APIRET OS2API DosUnsetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD pERegRec);
+    OS2EXPORT ULONG OS2API DosFlatToSel(VOID);
+    OS2EXPORT APIRET OS2API DosSetSignalExceptionFocus(BOOL32 flag, PULONG pulTimes);
+    OS2EXPORT APIRET OS2API DosSetRelMaxFH(PLONG pcbReqCount, PULONG pcbCurMaxFH);
+    OS2EXPORT APIRET OS2API DosAllocMem(PPVOID ppb, ULONG cb, ULONG flag);
+    OS2EXPORT APIRET OS2API DosGetNamedSharedMem(PPVOID ppb, PSZ pszName, ULONG flag);
     OS2EXPORT BOOL lx_dos_shared_address(ULONG address, ULONG size);
     OS2EXPORT APIRET DosGetSharedMemAddress(ULONG address, ULONG flags);
-    OS2EXPORT APIRET OS2API DosAllocSharedMem(PPVOID ppb, PSZ pszName, ULONG cb, ULONG flag)
-        OS2APIINFO(300);
-    OS2EXPORT APIRET OS2API DosGiveSharedMem(PVOID pb, PID pid, ULONG flag) OS2APIINFO(303);
-    OS2EXPORT APIRET OS2API DosSubUnsetMem(PVOID pbBase) OS2APIINFO(347);
-    OS2EXPORT APIRET OS2API DosSubSetMem(PVOID pbBase, ULONG flag, ULONG cb) OS2APIINFO(344);
-    OS2EXPORT APIRET OS2API DosSubAllocMem(PVOID pbBase, PPVOID ppb, ULONG cb) OS2APIINFO(345);
-    OS2EXPORT APIRET OS2API DosQueryHType(HFILE hFile, PULONG pType, PULONG pAttr) OS2APIINFO(224);
-    OS2EXPORT APIRET OS2API DosSetMem(PVOID pb, ULONG cb, ULONG flag) OS2APIINFO(305);
-    OS2EXPORT APIRET OS2API DosSuspendThread(TID id) OS2APIINFO(238);
-    OS2EXPORT APIRET OS2API DosResumeThread(TID id) OS2APIINFO(237);
-    OS2EXPORT APIRET OS2API DosGetDateTime(PDATETIME pdt) OS2APIINFO(230);
-    OS2EXPORT APIRET OS2API DosSetDateTime(PDATETIME pdt) OS2APIINFO(292);
+    OS2EXPORT APIRET OS2API DosAllocSharedMem(PPVOID ppb, PSZ pszName, ULONG cb, ULONG flag);
+    OS2EXPORT APIRET OS2API DosGiveSharedMem(PVOID pb, PID pid, ULONG flag);
+    OS2EXPORT APIRET OS2API DosSubUnsetMem(PVOID pbBase);
+    OS2EXPORT APIRET OS2API DosSubSetMem(PVOID pbBase, ULONG flag, ULONG cb);
+    OS2EXPORT APIRET OS2API DosSubAllocMem(PVOID pbBase, PPVOID ppb, ULONG cb);
+    OS2EXPORT APIRET OS2API DosQueryHType(HFILE hFile, PULONG pType, PULONG pAttr);
+    OS2EXPORT APIRET OS2API DosSetMem(PVOID pb, ULONG cb, ULONG flag);
+    OS2EXPORT APIRET OS2API DosSuspendThread(TID id);
+    OS2EXPORT APIRET OS2API DosResumeThread(TID id);
+    OS2EXPORT APIRET OS2API DosGetDateTime(PDATETIME pdt);
+    OS2EXPORT APIRET OS2API DosSetDateTime(PDATETIME pdt);
     OS2EXPORT APIRET OS2API DosOpen(PSZ pszFileName, PHFILE pHf, PULONG pulAction, ULONG cbFile,
                                     ULONG ulAttribute, ULONG fsOpenFlags, ULONG fsOpenMode,
-                                    PEAOP2 peaop2) OS2APIINFO(273);
-    OS2EXPORT APIRET OS2API DosRequestMutexSem(HMTX hmtx, ULONG ulTimeout) OS2APIINFO(334);
-    OS2EXPORT APIRET OS2API DosReleaseMutexSem(HMTX hmtx) OS2APIINFO(335);
-    OS2EXPORT APIRET OS2API DosSetFilePtr(HFILE hFile, LONG ib, ULONG method, PULONG ibActual)
-        OS2APIINFO(256);
-    OS2EXPORT APIRET OS2API DosRead(HFILE hFile, PVOID pBuffer, ULONG cbRead, PULONG pcbActual)
-        OS2APIINFO(281);
-    OS2EXPORT APIRET OS2API DosClose(HFILE hFile) OS2APIINFO(257);
-    OS2EXPORT APIRET OS2API DosEnterMustComplete(PULONG pulNesting) OS2APIINFO(380);
-    OS2EXPORT APIRET OS2API DosExitMustComplete(PULONG pulNesting) OS2APIINFO(381);
+                                    PEAOP2 peaop2);
+    OS2EXPORT APIRET OS2API DosRequestMutexSem(HMTX hmtx, ULONG ulTimeout);
+    OS2EXPORT APIRET OS2API DosReleaseMutexSem(HMTX hmtx);
+    OS2EXPORT APIRET OS2API DosSetFilePtr(HFILE hFile, LONG ib, ULONG method, PULONG ibActual);
+    OS2EXPORT APIRET OS2API DosRead(HFILE hFile, PVOID pBuffer, ULONG cbRead, PULONG pcbActual);
+    OS2EXPORT APIRET OS2API DosClose(HFILE hFile);
+    OS2EXPORT APIRET OS2API DosEnterMustComplete(PULONG pulNesting);
+    OS2EXPORT APIRET OS2API DosExitMustComplete(PULONG pulNesting);
     OS2EXPORT APIRET OS2API DosQueryPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf,
-                                             ULONG cbInfoBuf) OS2APIINFO(223);
+                                             ULONG cbInfoBuf);
     OS2EXPORT APIRET OS2API DosSetFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfoBuf,
-                                           ULONG cbInfoBuf) OS2APIINFO(218);
-    OS2EXPORT APIRET OS2API DosSetDefaultDisk(ULONG disknum) OS2APIINFO(220);
-    OS2EXPORT APIRET OS2API DosQueryDBCSEnv(ULONG cb, PCOUNTRYCODE pcc, PCHAR pBuf) OS2APIINFO(396);
-    OS2EXPORT APIRET OS2API DosDeleteDir(PSZ pszDir) OS2APIINFO(226);
-    OS2EXPORT APIRET OS2API DosCopy(PSZ pszOld, PSZ pszNew, ULONG option) OS2APIINFO(258);
-    OS2EXPORT APIRET OS2API DosMove(PSZ pszOld, PSZ pszNew) OS2APIINFO(271);
-    OS2EXPORT APIRET16 OS2API16 Dos16Move(PSZ pszOld, PSZ pszNew, ULONG reserved) OS2APIINFO(67);
-    OS2EXPORT APIRET OS2API DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag) OS2APIINFO(306);
-    OS2EXPORT APIRET OS2API DosError(ULONG error) OS2APIINFO(212);
+                                           ULONG cbInfoBuf);
+    OS2EXPORT APIRET OS2API DosSetDefaultDisk(ULONG disknum);
+    OS2EXPORT APIRET OS2API DosQueryDBCSEnv(ULONG cb, PCOUNTRYCODE pcc, PCHAR pBuf);
+    OS2EXPORT APIRET OS2API DosDeleteDir(PSZ pszDir);
+    OS2EXPORT APIRET OS2API DosCopy(PSZ pszOld, PSZ pszNew, ULONG option);
+    OS2EXPORT APIRET OS2API DosMove(PSZ pszOld, PSZ pszNew);
+    OS2EXPORT APIRET16 OS2API16 Dos16Move(PSZ pszOld, PSZ pszNew, ULONG reserved);
+    OS2EXPORT APIRET OS2API DosQueryMem(PVOID pb, PULONG pcb, PULONG pflag);
+    OS2EXPORT APIRET OS2API DosError(ULONG error);
     OS2EXPORT APIRET OS2API DosQueryModFromEIP(PHMODULE phmod, PULONG pulObject, ULONG cbModName,
-                                               PCHAR pszModName, PULONG pulOffset, ULONG ulEIP)
-        OS2APIINFO(360);
-    OS2EXPORT APIRET OS2API DosAcknowledgeSignalException(ULONG ulSignalNum) OS2APIINFO(418);
-    OS2EXPORT APIRET OS2API DosRaiseException(PEXCEPTIONREPORTRECORD pexcept) OS2APIINFO(356);
+                                               PCHAR pszModName, PULONG pulOffset, ULONG ulEIP);
+    OS2EXPORT APIRET OS2API DosAcknowledgeSignalException(ULONG ulSignalNum);
+    OS2EXPORT APIRET OS2API DosRaiseException(PEXCEPTIONREPORTRECORD pexcept);
     OS2EXPORT APIRET OS2API DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler,
-                                               PVOID pTargetIP, PEXCEPTIONREPORTRECORD pERepRec)
-        OS2APIINFO(357);
+                                               PVOID pTargetIP, PEXCEPTIONREPORTRECORD pERepRec);
     OS2EXPORT APIRET OS2API DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo,
-                                             ULONG cbInfoBuf) OS2APIINFO(279);
+                                             ULONG cbInfoBuf);
     OS2EXPORT APIRET OS2API DosCreateThread(PTID ptid, PFNTHREAD pfn, ULONG param, ULONG flag,
-                                            ULONG cbStack) OS2APIINFO(311);
+                                            ULONG cbStack);
     OS2EXPORT APIRET OS2API DosExecPgm(PCHAR pObjname, LONG cbObjname, ULONG execFlag, PSZ pArg,
-                                       PSZ pEnv, PRESULTCODES pRes, PSZ pName) OS2APIINFO(283);
-    OS2EXPORT APIRET OS2API DosResetEventSem(HEV hev, PULONG pulPostCt) OS2APIINFO(327);
-    OS2EXPORT APIRET OS2API DosPostEventSem(HEV hev) OS2APIINFO(328);
-    OS2EXPORT APIRET OS2API DosCloseEventSem(HEV hev) OS2APIINFO(326);
-    OS2EXPORT APIRET OS2API DosWaitEventSem(HEV hev, ULONG ulTimeout) OS2APIINFO(329);
-    OS2EXPORT APIRET OS2API DosKillProcess(ULONG action, PID process) OS2APIINFO(235);
-    OS2EXPORT APIRET OS2API DosOpenEventSem(PSZ pszName, PHEV phev) OS2APIINFO(325);
-    OS2EXPORT APIRET OS2API DosWaitNPipe(PSZ pszName, ULONG ulTimeOut) OS2APIINFO(253);
-    OS2EXPORT APIRET OS2API DosQueryEventSem(HEV hev, PULONG pulPostCt) OS2APIINFO(330);
-    OS2EXPORT APIRET OS2API DosFreeMem(PVOID pb) OS2APIINFO(304);
+                                       PSZ pEnv, PRESULTCODES pRes, PSZ pName);
+    OS2EXPORT APIRET OS2API DosResetEventSem(HEV hev, PULONG pulPostCt);
+    OS2EXPORT APIRET OS2API DosPostEventSem(HEV hev);
+    OS2EXPORT APIRET OS2API DosCloseEventSem(HEV hev);
+    OS2EXPORT APIRET OS2API DosWaitEventSem(HEV hev, ULONG ulTimeout);
+    OS2EXPORT APIRET OS2API DosKillProcess(ULONG action, PID process);
+    OS2EXPORT APIRET OS2API DosOpenEventSem(PSZ pszName, PHEV phev);
+    OS2EXPORT APIRET OS2API DosWaitNPipe(PSZ pszName, ULONG ulTimeOut);
+    OS2EXPORT APIRET OS2API DosQueryEventSem(HEV hev, PULONG pulPostCt);
+    OS2EXPORT APIRET OS2API DosFreeMem(PVOID pb);
     OS2EXPORT APIRET OS2API DosWaitChild(ULONG action, ULONG option, PRESULTCODES pres, PPID ppid,
-                                         PID pid) OS2APIINFO(280);
-    OS2EXPORT APIRET OS2API DosKillThread(TID id) OS2APIINFO(111);
-    OS2EXPORT APIRET OS2API DosWaitThread(PTID ptid, ULONG option) OS2APIINFO(349);
-    OS2EXPORT APIRET OS2API DosSleep(ULONG msec) OS2APIINFO(229);
-    OS2EXPORT APIRET OS2API DosSubFreeMem(PVOID pbBase, PVOID pb, ULONG cb) OS2APIINFO(346);
-    OS2EXPORT APIRET OS2API DosDelete(PSZ pszFile) OS2APIINFO(259);
-    OS2EXPORT APIRET OS2API DosForceDelete(PSZ pszFile) OS2APIINFO(110);
-    OS2EXPORT APIRET OS2API DosQueryCurrentDir(ULONG disknum, PBYTE pBuf, PULONG pcbBuf)
-        OS2APIINFO(274);
+                                         PID pid);
+    OS2EXPORT APIRET OS2API DosKillThread(TID id);
+    OS2EXPORT APIRET OS2API DosWaitThread(PTID ptid, ULONG option);
+    OS2EXPORT APIRET OS2API DosSleep(ULONG msec);
+    OS2EXPORT APIRET OS2API DosSubFreeMem(PVOID pbBase, PVOID pb, ULONG cb);
+    OS2EXPORT APIRET OS2API DosDelete(PSZ pszFile);
+    OS2EXPORT APIRET OS2API DosForceDelete(PSZ pszFile);
+    OS2EXPORT APIRET OS2API DosQueryCurrentDir(ULONG disknum, PBYTE pBuf, PULONG pcbBuf);
     OS2EXPORT APIRET OS2API DosSetPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf,
-                                           ULONG cbInfoBuf, ULONG flOptions) OS2APIINFO(219);
-    OS2EXPORT APIRET OS2API DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod) OS2APIINFO(319);
-    OS2EXPORT APIRET OS2API DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output)
-        OS2APIINFO(352);
-    OS2EXPORT APIRET OS2API DosFreeResource(PVOID resource) OS2APIINFO(353);
+                                           ULONG cbInfoBuf, ULONG flOptions);
+    OS2EXPORT APIRET OS2API DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod);
+    OS2EXPORT APIRET OS2API DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output);
+    OS2EXPORT APIRET OS2API DosFreeResource(PVOID resource);
     OS2EXPORT APIRET OS2API DosQueryResourceSize(HMODULE module, ULONG type, ULONG name,
-                                                 PULONG size) OS2APIINFO(573);
+                                                 PULONG size);
     OS2EXPORT APIRET OS2API Dos32QueryResourceSize(HMODULE module, ULONG type, ULONG name,
-                                                   PULONG size) OS2APIINFO(572);
-    OS2EXPORT APIRET OS2API DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppfn)
-        OS2APIINFO(321);
-    OS2EXPORT APIRET OS2API DosQueryCp(ULONG cb, PULONG arCP, PULONG pcCP) OS2APIINFO(291);
+                                                   PULONG size);
+    OS2EXPORT APIRET OS2API DosQueryProcAddr(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppfn);
+    OS2EXPORT APIRET OS2API DosQueryCp(ULONG cb, PULONG arCP, PULONG pcCP);
     OS2EXPORT APIRET OS2API DosOpenL(PSZ pszFileName, PHFILE pHf, PULONG pulAction, LONGLONG cbFile,
                                      ULONG ulAttribute, ULONG fsOpenFlags, ULONG fsOpenMode,
-                                     PEAOP2 peaop2) OS2APIINFO(981);
+                                     PEAOP2 peaop2);
     OS2EXPORT APIRET OS2API DosFindFirst(PSZ pszFileSpec, PHDIR phdir, ULONG flAttribute,
                                          PVOID pfindbuf, ULONG cbBuf, PULONG pcFileNames,
-                                         ULONG ulInfoLevel) OS2APIINFO(264);
+                                         ULONG ulInfoLevel);
     OS2EXPORT APIRET OS2API DosFindNext(HDIR hDir, PVOID pfindbuf, ULONG cbfindbuf,
-                                        PULONG pcFilenames) OS2APIINFO(265);
-    OS2EXPORT APIRET OS2API DosFindClose(HDIR hDir) OS2APIINFO(263);
-    OS2EXPORT APIRET OS2API DosQueryCurrentDisk(PULONG pdisknum, PULONG plogical) OS2APIINFO(275);
-    OS2EXPORT APIRET OS2API DosDevConfig(PVOID pdevinfo, ULONG item) OS2APIINFO(231);
-    OS2EXPORT APIRET OS2API DosLoadModule(PSZ pszName, ULONG cbName, PSZ pszModname, PHMODULE phmod)
-        OS2APIINFO(318);
-    OS2EXPORT APIRET OS2API DosFreeModule(HMODULE hmod) OS2APIINFO(322);
-    OS2EXPORT APIRET OS2API DosResetBuffer(HFILE hFile) OS2APIINFO(254);
-    OS2EXPORT APIRET OS2API DosQueryProcType(HMODULE module, ULONG ordinal, PSZ name, PULONG type)
-        OS2APIINFO(586);
+                                        PULONG pcFilenames);
+    OS2EXPORT APIRET OS2API DosFindClose(HDIR hDir);
+    OS2EXPORT APIRET OS2API DosQueryCurrentDisk(PULONG pdisknum, PULONG plogical);
+    OS2EXPORT APIRET OS2API DosDevConfig(PVOID pdevinfo, ULONG item);
+    OS2EXPORT APIRET OS2API DosLoadModule(PSZ pszName, ULONG cbName, PSZ pszModname,
+                                          PHMODULE phmod);
+    OS2EXPORT APIRET OS2API DosFreeModule(HMODULE hmod);
+    OS2EXPORT APIRET OS2API DosResetBuffer(HFILE hFile);
+    OS2EXPORT APIRET OS2API DosQueryProcType(HMODULE module, ULONG ordinal, PSZ name, PULONG type);
     OS2EXPORT APIRET OS2API DosEditName(ULONG level, PSZ source, PSZ edit, PBYTE target,
-                                        ULONG capacity) OS2APIINFO(261);
-    OS2EXPORT APIRET OS2API DosTmrQueryFreq(PULONG frequency) OS2APIINFO(362);
-    OS2EXPORT APIRET OS2API DosTmrQueryTime(PVOID ticks) OS2APIINFO(363);
+                                        ULONG capacity);
+    OS2EXPORT APIRET OS2API DosTmrQueryFreq(PULONG frequency);
+    OS2EXPORT APIRET OS2API DosTmrQueryTime(PVOID ticks);
     OS2EXPORT APIRET OS2API DosEnumAttribute(ULONG reference_type, PVOID reference, ULONG first,
                                              PVOID buffer, ULONG capacity, PULONG count,
-                                             ULONG level) OS2APIINFO(372);
-    OS2EXPORT APIRET OS2API DosShutdown(ULONG reserved) OS2APIINFO(415);
-    OS2EXPORT APIRET OS2API DosGetSharedMem(PVOID address, ULONG flags) OS2APIINFO(302);
-    OS2EXPORT APIRET OS2API DosQueryAppType(PSZ pszName, PULONG pFlags) OS2APIINFO(323);
-    OS2EXPORT APIRET OS2API DosAllocThreadLocalMemory(ULONG cb, PULONG *p) OS2APIINFO(454);
-    OS2EXPORT APIRET OS2API DosFreeThreadLocalMemory(ULONG *p) OS2APIINFO(455);
-    OS2EXPORT APIRET OS2API DosQueryFHState(HFILE hFile, PULONG pMode) OS2APIINFO(276);
-    OS2EXPORT APIRET OS2API DosSetExtLIBPATH(PSZ path, ULONG flags) OS2APIINFO(873);
-    OS2EXPORT APIRET OS2API DosQueryExtLIBPATH(PSZ pszExtLIBPATH, ULONG flags) OS2APIINFO(874);
-    OS2EXPORT APIRET OS2API DosSetMaxFH(ULONG cFH) OS2APIINFO(209);
-    OS2EXPORT APIRET OS2API DosQueryThreadContext(TID tid, ULONG level, PCONTEXTRECORD pcxt)
-        OS2APIINFO(877);
-    OS2EXPORT ULONG OS2API DosSelToFlat(VOID) OS2APIINFO(426);
-    OS2EXPORT APIRET OS2API DosCloseMutexSem(HMTX hmtx) OS2APIINFO(333);
-    OS2EXPORT APIRET OS2API DosSetProcessCp(ULONG cp) OS2APIINFO(289);
+                                             ULONG level);
+    OS2EXPORT APIRET OS2API DosShutdown(ULONG reserved);
+    OS2EXPORT APIRET OS2API DosGetSharedMem(PVOID address, ULONG flags);
+    OS2EXPORT APIRET OS2API DosQueryAppType(PSZ pszName, PULONG pFlags);
+    OS2EXPORT APIRET OS2API DosAllocThreadLocalMemory(ULONG cb, PULONG *p);
+    OS2EXPORT APIRET OS2API DosFreeThreadLocalMemory(ULONG *p);
+    OS2EXPORT APIRET OS2API DosQueryFHState(HFILE hFile, PULONG pMode);
+    OS2EXPORT APIRET OS2API DosSetExtLIBPATH(PSZ path, ULONG flags);
+    OS2EXPORT APIRET OS2API DosQueryExtLIBPATH(PSZ pszExtLIBPATH, ULONG flags);
+    OS2EXPORT APIRET OS2API DosSetMaxFH(ULONG cFH);
+    OS2EXPORT APIRET OS2API DosQueryThreadContext(TID tid, ULONG level, PCONTEXTRECORD pcxt);
+    OS2EXPORT ULONG OS2API DosSelToFlat(VOID);
+    OS2EXPORT APIRET OS2API DosCloseMutexSem(HMTX hmtx);
+    OS2EXPORT APIRET OS2API DosSetProcessCp(ULONG cp);
     OS2EXPORT APIRET OS2API DosDevIOCtl(HFILE device, ULONG category, ULONG function,
                                         PVOID parameters, ULONG parameter_max,
                                         PULONG parameter_size, PVOID data, ULONG data_max,
-                                        PULONG data_size) OS2APIINFO(284);
-    OS2EXPORT APIRET OS2API DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
-        OS2APIINFO(278);
-    OS2EXPORT APIRET OS2API DosSetFSInfo(ULONG drive, ULONG level, PVOID data, ULONG size)
-        OS2APIINFO(222);
+                                        PULONG data_size);
+    OS2EXPORT APIRET OS2API DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity);
+    OS2EXPORT APIRET OS2API DosSetFSInfo(ULONG drive, ULONG level, PVOID data, ULONG size);
     OS2EXPORT APIRET OS2API DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal,
                                              ULONG ulFSAInfoLevel, PFSQBUFFER2 pfsqb,
-                                             PULONG pcbBuffLength) OS2APIINFO(277);
-    OS2EXPORT APIRET OS2API DosSetFileSize(HFILE hFile, ULONG cbSize) OS2APIINFO(272);
+                                             PULONG pcbBuffLength);
+    OS2EXPORT APIRET OS2API DosSetFileSize(HFILE hFile, ULONG cbSize);
     OS2EXPORT APIRET OS2API DosSetFileLocks(HFILE hFile, PFILELOCK unlock, PFILELOCK lock,
-                                            ULONG timeout, ULONG flags) OS2APIINFO(428);
-    OS2EXPORT APIRET OS2API DosSetCurrentDir(PSZ pszName) OS2APIINFO(255);
-    OS2EXPORT APIRET OS2API DosBeep(ULONG freq, ULONG dur) OS2APIINFO(286);
-    OS2EXPORT APIRET OS2API DosCreateDir(PSZ pszDirName, PEAOP2 peaop2) OS2APIINFO(270);
+                                            ULONG timeout, ULONG flags);
+    OS2EXPORT APIRET OS2API DosSetCurrentDir(PSZ pszName);
+    OS2EXPORT APIRET OS2API DosBeep(ULONG freq, ULONG dur);
+    OS2EXPORT APIRET OS2API DosCreateDir(PSZ pszDirName, PEAOP2 peaop2);
     typedef HANDLE HSEM;
     typedef HANDLE HTIMER, *PHTIMER;
-    OS2EXPORT APIRET OS2API DosAsyncTimer(ULONG msec, HSEM hsem, PHTIMER phtimer) OS2APIINFO(350);
-    OS2EXPORT APIRET OS2API DosStartTimer(ULONG msec, HSEM hsem, PHTIMER phtimer) OS2APIINFO(351);
-    OS2EXPORT APIRET OS2API DosStopTimer(HTIMER htimer) OS2APIINFO(290);
-    OS2EXPORT APIRET OS2API DosQueryMutexSem(HMTX hmtx, PPID ppid, PTID ptid, PULONG pulCount)
-        OS2APIINFO(336);
+    OS2EXPORT APIRET OS2API DosAsyncTimer(ULONG msec, HSEM hsem, PHTIMER phtimer);
+    OS2EXPORT APIRET OS2API DosStartTimer(ULONG msec, HSEM hsem, PHTIMER phtimer);
+    OS2EXPORT APIRET OS2API DosStopTimer(HTIMER htimer);
+    OS2EXPORT APIRET OS2API DosQueryMutexSem(HMTX hmtx, PPID ppid, PTID ptid, PULONG pulCount);
     /* Register-driven entry; see os2libs/doscalls/unithunk.c. */
-    OS2EXPORT APIRET OS2API THK_UNITHUNK(VOID) OS2APIINFO(547);
+    OS2EXPORT APIRET OS2API THK_UNITHUNK(VOID);
 
 #ifdef __cplusplus
 }

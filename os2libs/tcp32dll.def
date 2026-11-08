@@ -1,0 +1,18 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of TCP32DLL.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY TCP32DLL
+
+EXPORTS
+    lswap = Os2LegacyLongSwap                       @3
+    bswap = Os2LegacyShortSwap                      @4
+    inet_addr = Os2LegacyInetAddr                   @5
+    inet_ntoa = Os2LegacyInetText                   @10
+    gethostbyname = Os2LegacyGetHostByName          @11
+    gethostbyaddr = Os2LegacyGetHostByAddress       @12
+    getprotobyname = Os2LegacyGetProtocolByName     @21
+    getprotobynumber = Os2LegacyGetProtocolByNumber @22
+    getservbyport = Os2LegacyGetServiceByPort       @23
+    getservbyname = Os2LegacyGetServiceByName       @24
+    gethostname = Os2LegacyGetHostName              @44
+    tcp_h_errno = Os2LegacyResolverError            @51

@@ -1,0 +1,23 @@
+; 2ine. Zlib-style license; see LICENSE.txt.
+; Exports of SO32DLL.DLL: exported name [= C entry] @ordinal.
+
+LIBRARY SO32DLL
+
+EXPORTS
+    accept = Os2LegacyAccept             @1
+    bind = Os2LegacyBind                 @2
+    connect = Os2LegacyConnect           @3
+    gethostid = Os2LegacyGetHostId       @4
+    getsockname = Os2LegacyGetSocketName @6
+    ioctl = Os2LegacyIoctl               @8
+    listen = Os2LegacyListen             @9
+    recv = Os2LegacyRecv                 @10
+    recvfrom = Os2LegacyRecvFrom         @11
+    send = Os2LegacySend                 @13
+    sendto = Os2LegacySendTo             @14
+    setsockopt = Os2LegacySocketOption   @15
+    socket = Os2LegacySocket             @16
+    soclose = Os2LegacySocketClose       @17
+    sock_errno = Os2LegacySocketError    @20
+    shutdown = Os2LegacyShutdown         @25
+    sock_init = Os2LegacySocketInit      @26

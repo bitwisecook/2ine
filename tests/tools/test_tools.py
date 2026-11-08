@@ -104,22 +104,31 @@ class WarpFontTests(unittest.TestCase):
                 extract_warp_fonts.extract(Path("absent.iso"), Path(directory), "absent", "absent")
 
 
+def exported(header: str, exports: str) -> list[lxapigen.Function]:
+    """Bind a sample header's prototypes through a SAMPLE module definition."""
+    definition = lxapigen.parse_definition(f"LIBRARY SAMPLE\nEXPORTS\n{exports}")
+    functions, _, _ = lxapigen.bind_exports(
+        definition, lxapigen.parse_prototypes(header), lxapigen.parse_data_exports(header)
+    )
+    return functions
+
+
 class GeneratorTests(unittest.TestCase):
     def test_wrapped_exports_preserve_argument_and_ordinal_metadata(self) -> None:
         text = """#ifndef SAMPLE_H
 OS2EXPORT APIRET OS2API
 Read(USHORT count, /* requested bytes */
-     PVOID buffer)
-    OS2APIINFO(ord = 17, name = READ);
+     PVOID buffer);
 OS2EXPORT VOID OS2API16 Exit(
-    VOID) OS2APIINFO(18);
-OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
+    VOID);
+OS2EXPORT PVOID *OS2API Pointer(VOID);
 #endif
 """
-        functions = lxapigen.parse_functions(text)
+        functions = exported(text, "    READ = Read @17\n    Exit @18 ; comment\n    Pointer @19\n")
         self.assertEqual([f.ordinal for f in functions], [17, 18, 19])
         self.assertEqual(functions[0].name, "Read")
         self.assertEqual(functions[0].exported_name, "READ")
+        self.assertIsNone(functions[1].exported_name)
         self.assertEqual(
             functions[0].arguments,
             (lxapigen.Argument("USHORT", "count"), lxapigen.Argument("PVOID", "buffer")),
@@ -128,13 +137,27 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
         self.assertEqual(functions[1].arguments, ())
         self.assertEqual(functions[2].result, "PVOID *")
 
-    def test_rejects_unterminated_export(self) -> None:
-        with self.assertRaisesRegex(ValueError, "could not parse export"):
-            lxapigen.parse_functions("OS2EXPORT VOID OS2API16 Exit(VOID) OS2APIINFO(5)")
+    def test_rejects_unterminated_or_missing_prototype(self) -> None:
+        with self.assertRaisesRegex(ValueError, "no prototype for Exit"):
+            exported("OS2EXPORT VOID OS2API16 Exit(VOID)", "    Exit @5\n")
+
+    def test_rejects_conflicting_prototypes_and_bad_definitions(self) -> None:
+        with self.assertRaisesRegex(ValueError, "conflicting"):
+            lxapigen.parse_prototypes(
+                "OS2EXPORT APIRET OS2API Call(PVOID a);\nOS2EXPORT APIRET OS2API Call(PSZ a);"
+            )
+        for text, error in (
+            ("EXPORTS\n    Call @1\n", "missing LIBRARY"),
+            ("LIBRARY SAMPLE\nEXPORTS\n    Call\n", "could not parse export"),
+            ("LIBRARY SAMPLE\nSTACKSIZE 4096\n", "unsupported statement"),
+            ("LIBRARY SAMPLE\nEXPORTS\n    Call @0\n", "out of range"),
+        ):
+            with self.subTest(text=text), self.assertRaisesRegex(ValueError, error):
+                lxapigen.parse_definition(text)
 
     def test_variadic_export_retains_its_fixed_prefix(self) -> None:
-        function = lxapigen.parse_functions(
-            "OS2EXPORT LONG OS2API Format(PSZ output, PSZ format, ...) OS2APIINFO(7);"
+        function = exported(
+            "OS2EXPORT LONG OS2API Format(PSZ output, PSZ format, ...);", "    Format @7\n"
         )[0]
         self.assertTrue(function.variadic)
         self.assertEqual([argument.name for argument in function.arguments], ["output", "format"])
@@ -144,9 +167,7 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
             ("PSZ format, ...", "OS2API16"),
         ):
             with self.assertRaisesRegex(ValueError, "invalid variadic"):
-                lxapigen.parse_functions(
-                    f"OS2EXPORT LONG {api} Format({parameters}) OS2APIINFO(7);"
-                )
+                exported(f"OS2EXPORT LONG {api} Format({parameters});", "    Format @7\n")
 
     def test_generator_uses_owned_output_directory_and_read_only_check(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -155,9 +176,8 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
             (root / "os2libs").mkdir()
             for name in ("api16.json", "api32.json"):
                 (root / "guest/bindings" / name).write_text("{}")
-            (root / "os2libs/sample.h").write_text(
-                "OS2EXPORT APIRET OS2API Call(VOID) OS2APIINFO(7);\n"
-            )
+            (root / "os2libs/sample.h").write_text("OS2EXPORT APIRET OS2API Call(VOID);\n")
+            (root / "os2libs/sample.def").write_text("LIBRARY SAMPLE\nEXPORTS\n    Call @7\n")
             self.assertTrue(lxapigen.generate(root, check=True))
             self.assertFalse((root / "os2libs/generated").exists())
             self.assertTrue(lxapigen.generate(root))
@@ -177,10 +197,13 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
                 '"convention": "LX_ABI_STACK32"}}}'
             )
             (root / "os2libs/sample.h").write_text(
-                "#define LX_GUEST_DATA_EXPORT(name, ordinal, bytes) enum { name##_o = ordinal }\n"
-                "OS2EXPORT APIRET OS2API Call(VOID) OS2APIINFO(7);\n"
-                "LX_GUEST_DATA_EXPORT(First, 3, 20);\n"
-                "LX_GUEST_DATA_EXPORT(Second, 9, 8);\n"
+                "#define LX_GUEST_DATA_EXPORT(name, bytes) enum { name##_bytes = bytes }\n"
+                "OS2EXPORT APIRET OS2API Call(VOID);\n"
+                "LX_GUEST_DATA_EXPORT(First, 20);\n"
+                "LX_GUEST_DATA_EXPORT(Second, 8);\n"
+            )
+            (root / "os2libs/sample.def").write_text(
+                "LIBRARY SAMPLE\nEXPORTS\n    First @3\n    Call @7\n    Second @9\n"
             )
             self.assertTrue(lxapigen.generate(root))
             output = (root / "os2libs/generated/sample-lx.h").read_text()
@@ -196,23 +219,21 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
             )
 
     def test_data_exports_reject_ordinal_collisions(self) -> None:
-        text = "LX_GUEST_DATA_EXPORT(First, 3, 4);\nLX_GUEST_DATA_EXPORT(Second, 3, 4);\n"
-        with self.assertRaisesRegex(ValueError, "duplicate data ordinal"):
-            lxapigen.parse_data_exports(text)
+        with self.assertRaisesRegex(ValueError, "nonzero size"):
+            lxapigen.parse_data_exports("LX_GUEST_DATA_EXPORT(First, 0);\n")
         data = (lxapigen.DataExport("First", 7, 4),)
-        functions = lxapigen.parse_functions("OS2EXPORT APIRET OS2API Call(VOID) OS2APIINFO(7);\n")
+        functions = exported("OS2EXPORT APIRET OS2API Call(VOID);\n", "    Call @7\n")
         with self.assertRaisesRegex(ValueError, "collide"):
             lxapigen.render("sample", functions, {}, {}, data)
 
     def test_rejects_duplicate_ordinals(self) -> None:
         with self.assertRaisesRegex(ValueError, "duplicate ordinal"):
-            lxapigen.parse_functions(
-                "OS2EXPORT APIRET OS2API First(VOID) OS2APIINFO(1);\nOS2EXPORT APIRET OS2API Second(VOID) OS2APIINFO(1);"
-            )
+            lxapigen.parse_definition("LIBRARY SAMPLE\nEXPORTS\n    First @1\n    Second @1\n")
 
     def test_use16_stack_order_and_full_pointer_policy(self) -> None:
-        functions = lxapigen.parse_functions(
-            "OS2EXPORT APIRET16 OS2API16 Read(USHORT count, PVOID buf) OS2APIINFO(1); /* output */"
+        functions = exported(
+            "OS2EXPORT APIRET16 OS2API16 Read(USHORT count, PVOID buf); /* output */",
+            "    Read @1\n",
         )
         function = functions[0]
         with self.assertRaisesRegex(ValueError, "pointer policy"):
@@ -226,15 +247,13 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
         self.assertIn("lx_guest_argument_finish(&__abi_args[0], __abi_copy)", output)
 
     def test_void_and_native_only_bridges(self) -> None:
-        function = lxapigen.parse_functions("OS2EXPORT VOID OS2API16 Exit(VOID) OS2APIINFO(5);")[0]
+        function = exported("OS2EXPORT VOID OS2API16 Exit(VOID);", "    Exit @5\n")[0]
         output = lxapigen.bridge16(function, None)
         self.assertTrue(output.startswith("#if !TWOINE_PORTABLE_LOADER"))
         self.assertIn("Exit();\n    return 0;", output)
 
     def test_use16_length_prefixed_structure(self) -> None:
-        function = lxapigen.parse_functions(
-            "OS2EXPORT APIRET16 OS2API16 Info(PVOID info) OS2APIINFO(1);"
-        )[0]
+        function = exported("OS2EXPORT APIRET16 OS2API16 Info(PVOID info);", "    Info @1\n")[0]
         policy = lxapigen.PointerPolicy("info", "32", 3, "struct16", False)
         output = lxapigen.bridge16(function, (policy,))
         prefix = "info_guest, 2, 1, 0, 0, &__abi_prefix"
@@ -246,9 +265,9 @@ OS2EXPORT PVOID *OS2API Pointer(VOID) OS2APIINFO(19);
         self.assertIn("if (__abi_size > (32)) __abi_size = (32)", output)
 
     def test_native_bridge_keeps_the_wire_entry_on_both_workers(self) -> None:
-        functions = lxapigen.parse_functions(
-            "OS2EXPORT APIRET OS2API Jump(ULONG target) OS2APIINFO(7);\n"
-            "OS2EXPORT APIRET OS2API Read(VOID) OS2APIINFO(8);"
+        functions = exported(
+            "OS2EXPORT APIRET OS2API Jump(ULONG target);\nOS2EXPORT APIRET OS2API Read(VOID);",
+            "    Jump @7\n    Read @8\n",
         )
         output = lxapigen.render(
             "sample",
