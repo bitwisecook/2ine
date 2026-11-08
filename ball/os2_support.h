@@ -244,15 +244,12 @@ static int support_read(Context *c, const char *source, int index, SupportFile *
         free(data);
         return fail(c, "Cannot read %s", support_names[index]);
     }
-    size_t executable = size >= 64 ? (size_t)data[60] | (size_t)data[61] << 8 |
-                                         (size_t)data[62] << 16 | (size_t)data[63] << 24
-                                   : 0;
-    int valid =
-        index == 0 || (index >= 3 && index <= 6) || index >= 9
-            ? size >= 64 && data[0] == 'M' && data[1] == 'Z' && executable <= (size_t)size - 2 &&
-                  (!memcmp(data + executable, "NE", 2) || !memcmp(data + executable, "LX", 2))
-        : index == 1 ? size >= 10 && !memcmp(data, "\xff\xffSYSLEVEL", 10)
-                     : size >= 8 && !memcmp(data, "\xffMKMSGF", 7);
+    TbExecutable exe;
+    int valid = index == 0 || (index >= 3 && index <= 6) || index >= 9
+                    ? tb_executable_open_memory(&exe, data, (size_t)size) && exe.dos_stub &&
+                          (exe.format == TB_EXECUTABLE_NE || exe.format == TB_EXECUTABLE_LX)
+                : index == 1 ? size >= 10 && !memcmp(data, "\xff\xffSYSLEVEL", 10)
+                             : size >= 8 && !memcmp(data, "\xffMKMSGF", 7);
     if (!valid)
     {
         free(data);

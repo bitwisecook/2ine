@@ -153,26 +153,25 @@ static void launch_discard_error(Context *c)
     c->error = NULL;
 }
 
+/* An OS/2 or DOS-stubbed NE/LX/LE program, not a library. */
 static int navigation_program_format(const char *host)
 {
     FILE *file = tb_fopen(host, "rb");
     if (!file)
         return 0;
-    unsigned char header[64], signature[2];
-    int valid = fread(header, 1, sizeof header, file) == sizeof header && header[0] == 'M' &&
-                header[1] == 'Z';
-    uint32_t at = valid ? (uint32_t)header[60] | (uint32_t)header[61] << 8 |
-                              (uint32_t)header[62] << 16 | (uint32_t)header[63] << 24
-                        : 0;
-    valid = valid && !fseek(file, at, SEEK_SET) && fread(signature, 1, 2, file) == 2 &&
-            ((!memcmp(signature, "LX", 2)) || !memcmp(signature, "NE", 2) ||
-             !memcmp(signature, "LE", 2));
+    int64_t size = 0;
+    int mode = 0;
+    TbExecutable exe;
+    int valid = tb_file_info(file, &size, &mode) && size >= 0 &&
+                tb_executable_open_file(&exe, file, (uint64_t)size) && exe.dos_stub &&
+                (exe.format == TB_EXECUTABLE_NE || exe.format == TB_EXECUTABLE_LX ||
+                 exe.format == TB_EXECUTABLE_LE);
     if (valid)
     {
-        unsigned offset = signature[0] == 'N' ? 12 : 16;
-        unsigned char flags[2];
-        valid = at <= UINT32_MAX - offset && !fseek(file, at + offset, SEEK_SET) &&
-                fread(flags, 1, sizeof flags, file) == sizeof flags && !(flags[1] & 0x80);
+        size_t flags = exe.format == TB_EXECUTABLE_NE ? offsetof(NeHeader, module_flags)
+                                                      : offsetof(LxHeader, module_flags);
+        valid = exe.header_size >= flags + 2 &&
+                !(tb_executable_module_flags(&exe) & TB_EXECUTABLE_LIBRARY);
     }
     fclose(file);
     return valid;

@@ -11,16 +11,6 @@
 #define DEPENDENCY_BINARY_LIMIT 30000u
 #define DEPENDENCY_ROUND_LIMIT 16u
 
-static uint16_t dependency_u16(const unsigned char *p)
-{
-    return (uint16_t)(p[0] | (unsigned)p[1] << 8);
-}
-
-static uint32_t dependency_u32(const unsigned char *p)
-{
-    return dependency_u16(p) | (uint32_t)dependency_u16(p + 2) << 16;
-}
-
 static int dependency_read_at(FILE *file, uint64_t length, uint64_t offset, void *output,
                               size_t count)
 {
@@ -71,8 +61,47 @@ static void dependency_take_error(Context *c, cJSON *errors, const char *path)
     }
 }
 
-/* Offsets are relative to the executable header. Only the counted import
-   tables are read; no object pages, relocations or guest code are executed. */
+typedef struct DependencyImports
+{
+    Context *context;
+    cJSON *modules;
+} DependencyImports;
+
+static int dependency_import(void *opaque, const char *name)
+{
+    DependencyImports *imports = opaque;
+    char *module = dependency_module(imports->context, name);
+    if (module)
+        cJSON_AddItemToArray(imports->modules, cJSON_CreateString(module));
+    return module != NULL;
+}
+
+static const char *dependency_import_error(TbExecutableFormat format, TbExecutableStatus status)
+{
+    int linear = format != TB_EXECUTABLE_NE;
+    switch (status)
+    {
+        case TB_EXECUTABLE_OK:
+            return NULL;
+        case TB_EXECUTABLE_TRUNCATED_HEADER:
+            return linear ? "Truncated or unsupported-endian linear executable header"
+                          : "Truncated segmented executable header";
+        case TB_EXECUTABLE_IMPORTS_OUTSIDE:
+            return linear ? "Linear executable import table is outside the file"
+                          : "Segmented executable import table is outside the file";
+        case TB_EXECUTABLE_TRUNCATED_REFERENCE:
+            return "Truncated segmented module reference";
+        case TB_EXECUTABLE_TRUNCATED_IMPORT:
+            return linear ? "Truncated linear executable import name"
+                          : "Truncated segmented executable import name";
+        case TB_EXECUTABLE_STOPPED:
+            return "Unsupported module name in executable import table";
+    }
+    return "Dependency audit failed";
+}
+
+/* Only the counted import tables are read; no object pages, relocations or
+   guest code are executed. */
 static cJSON *dependency_read_binary(Context *c, const char *host, const char *guest, cJSON *errors)
 {
     FILE *file = tb_media_path(host) ? tb_media_fopen(host) : tb_fopen(host, "rb");
@@ -85,116 +114,41 @@ static cJSON *dependency_read_binary(Context *c, const char *host, const char *g
         dependency_error(errors, guest, "Cannot read executable metadata");
         return NULL;
     }
-    unsigned char prefix[64] = {0}, header[196] = {0};
     cJSON *binary = cJSON_CreateObject(), *imports = cJSON_AddArrayToObject(binary, "modules");
     cJSON_AddStringToObject(binary, "path", guest);
     cJSON_AddStringToObject(binary, "hostPath", host);
     const char *format = "unsupported", *error = NULL;
-    uint64_t start = 0;
-    size_t initial = length < 64 ? (size_t)length : 64;
-    if (!dependency_read_at(file, (uint64_t)length, 0, prefix, initial))
+    TbExecutable exe;
+    if (!tb_executable_open_file(&exe, file, (uint64_t)length))
         error = "Cannot read executable header";
-    else if (initial >= 2 && !memcmp(prefix, "MZ", 2))
-    {
-        if (initial < 64 || !dependency_u32(prefix + 60))
-            format = "DOS";
-        else
-            start = dependency_u32(prefix + 60);
-    }
-    size_t available = start <= (uint64_t)length ? (size_t)((uint64_t)length - start) : 0;
-    size_t wanted = available < sizeof header ? available : sizeof header;
-    if (!error && strcmp(format, "DOS") &&
-        (wanted < 2 || !dependency_read_at(file, (uint64_t)length, start, header, wanted)))
+    else if (exe.format == TB_EXECUTABLE_DOS)
+        format = "DOS";
+    else if (!exe.header_size)
         error = "Executable header offset is outside the file";
-    if (!error && strcmp(format, "DOS"))
+    else if (exe.format == TB_EXECUTABLE_LX || exe.format == TB_EXECUTABLE_LE)
     {
-        if (!memcmp(header, "LX", 2) || !memcmp(header, "LE", 2))
-        {
-            format = header[1] == 'X' ? "LX" : "LE";
-            if (wanted < sizeof header || header[2] || header[3])
-                error = "Truncated or unsupported-endian linear executable header";
-            else if (dependency_u16(header + 10) != 1)
-                format = header[1] == 'X' ? "LX-other" : "LE-other";
-            else
-            {
-                uint64_t at = start + dependency_u32(header + 112);
-                uint32_t count = dependency_u32(header + 116);
-                uint64_t end = dependency_u32(header + 120) ? start + dependency_u32(header + 120)
-                                                            : (uint64_t)length;
-                if (count > 65535 || at < start || at > (uint64_t)length ||
-                    (count && (end < at || end > (uint64_t)length)))
-                    error = "Linear executable import table is outside the file";
-                else
-                    for (uint32_t i = 0; i < count && !error; i++)
-                    {
-                        unsigned char size = 0;
-                        char name[256];
-                        if (at >= end ||
-                            !dependency_read_at(file, (uint64_t)length, at++, &size, 1) || !size ||
-                            size > end - at ||
-                            !dependency_read_at(file, (uint64_t)length, at, name, size) ||
-                            memchr(name, 0, size))
-                        {
-                            error = "Truncated linear executable import name";
-                            break;
-                        }
-                        name[size] = 0;
-                        at += size;
-                        char *module = dependency_module(c, name);
-                        if (!module)
-                            error = "Unsupported module name in executable import table";
-                        else
-                            cJSON_AddItemToArray(imports, cJSON_CreateString(module));
-                    }
-            }
-        }
-        else if (!memcmp(header, "NE", 2))
-        {
-            format = "NE";
-            if (wanted < 64)
-                error = "Truncated segmented executable header";
-            else if (header[54] > 1)
-                format = header[54] == 2 ? "NE-Windows" : "NE-other";
-            else
-            {
-                uint32_t count = dependency_u16(header + 30);
-                uint64_t references = start + dependency_u16(header + 40);
-                uint64_t names = start + dependency_u16(header + 42);
-                if (references < start || references > (uint64_t)length ||
-                    (uint64_t)count * 2 > (uint64_t)length - references || names < start ||
-                    names > (uint64_t)length)
-                    error = "Segmented executable import table is outside the file";
-                else
-                    for (uint32_t i = 0; i < count && !error; i++)
-                    {
-                        unsigned char reference[2], size = 0;
-                        char name[256];
-                        if (!dependency_read_at(file, (uint64_t)length, references + i * 2,
-                                                reference, sizeof reference))
-                        {
-                            error = "Truncated segmented module reference";
-                            break;
-                        }
-                        uint64_t at = names + dependency_u16(reference);
-                        if (!dependency_read_at(file, (uint64_t)length, at, &size, 1) || !size ||
-                            !dependency_read_at(file, (uint64_t)length, at + 1, name, size) ||
-                            memchr(name, 0, size))
-                        {
-                            error = "Truncated segmented executable import name";
-                            break;
-                        }
-                        name[size] = 0;
-                        char *module = dependency_module(c, name);
-                        if (!module)
-                            error = "Unsupported module name in executable import table";
-                        else
-                            cJSON_AddItemToArray(imports, cJSON_CreateString(module));
-                    }
-            }
-        }
-        else if (wanted >= 4 && !memcmp(header, "PE\0\0", 4))
-            format = "PE";
+        int lx = exe.format == TB_EXECUTABLE_LX;
+        format = lx ? "LX" : "LE";
+        if (tb_executable_linear_header(&exe) && tb_executable_target_os(&exe) != TB_LX_OS_OS2)
+            format = lx ? "LX-other" : "LE-other";
+        else
+            error = dependency_import_error(
+                exe.format,
+                tb_executable_imports(&exe, dependency_import, &(DependencyImports){c, imports}));
     }
+    else if (exe.format == TB_EXECUTABLE_NE)
+    {
+        format = "NE";
+        unsigned target = tb_executable_target_os(&exe);
+        if (exe.header_size >= TB_NE_HEADER_SIZE && target > TB_NE_TARGET_OS2)
+            format = target == 2 ? "NE-Windows" : "NE-other";
+        else
+            error = dependency_import_error(
+                exe.format,
+                tb_executable_imports(&exe, dependency_import, &(DependencyImports){c, imports}));
+    }
+    else if (exe.format == TB_EXECUTABLE_PE)
+        format = "PE";
     fclose(file);
     cJSON_AddStringToObject(binary, "format", format);
     cJSON_AddBoolToObject(binary, "valid", error == NULL);
