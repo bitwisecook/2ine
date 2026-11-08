@@ -10,16 +10,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-void lx_host_print_destination_clear(LxHostPrintDestination *destination)
-{
-    if (destination)
-    {
-        free(destination->path);
-        free(destination->printer);
-        memset(destination, 0, sizeof *destination);
-    }
-}
-
 static int printer_name(const char *name)
 {
     if (!name || !*name || *name == '-' || strlen(name) > 1024)

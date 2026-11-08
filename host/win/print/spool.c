@@ -12,16 +12,6 @@
 /* EnumPrinters level 4: PRINTER_INFO_4W names only, without querying each printer. */
 #define PRINTER_INFO_NAMES 4
 
-void lx_host_print_destination_clear(LxHostPrintDestination *destination)
-{
-    if (destination)
-    {
-        free(destination->path);
-        free(destination->printer);
-        memset(destination, 0, sizeof *destination);
-    }
-}
-
 char *lx_win_print_utf8(const WCHAR *name)
 {
     int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, name, -1, NULL, 0, NULL, NULL);
