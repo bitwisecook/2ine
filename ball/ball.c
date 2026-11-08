@@ -3,6 +3,7 @@
 #include "ball/include/twoine_ball.h"
 #include "ball/platform.h"
 #include "ball/disk_image.h"
+#include "formats/encoding/base64.h"
 #include "formats/resources/icon.h"
 #include "ball/vendor/cjson/cJSON.h"
 #include "ball/project_sources.h"

@@ -21,5 +21,4 @@ TbIconImage *tb_icon_executable_resource(const uint8_t *bytes, size_t size, unsi
 char *tb_executable_description(const uint8_t *bytes, size_t size);
 void tb_icon_free(TbIconImage *image);
 char *tb_icon_rgba_base64(const TbIconImage *image);
-char *tb_base64(const uint8_t *bytes, size_t size);
 #endif
