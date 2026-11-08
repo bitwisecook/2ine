@@ -23,6 +23,7 @@ public enum MediaDeviceKind: String, Codable, Sendable, CaseIterable {
     public var title: String { switch self { case .cdrom: "CD"; case .floppy: "Floppy"; case .disk: "Disk" } }
     public var symbol: String { switch self { case .cdrom: "opticaldisc"; case .floppy: "floppy"; case .disk: "externaldrive" } }
 }
+
 public enum DriveMapping: Decodable, Sendable {
     case directory(String), image(String), removable(MediaDeviceKind, String?, Bool, Bool)
     public init(from decoder: any Decoder) throws {
@@ -180,12 +181,14 @@ public struct GuestEntry: Decodable, Sendable, Identifiable {
     public let modified: Double?
     public var id: String { path }
 }
+
 public struct GuestDirectory: Decodable, Sendable {
     public let parent: String?
     public let path: String
     public let hostPath: String
     public let entries: [GuestEntry]
 }
+
 public struct ExecutableIcon: Decodable, Sendable {
     public let source: String
     public let displayName: String?
@@ -275,6 +278,7 @@ public struct OS2SupportStatus: Decodable, Sendable {
     public let skippedFiles: [SkippedFile]?
     public var missing: String { files.filter { !$0.present && $0.required != false }.map(\.name).joined(separator: ", ") }
 }
+
 public struct MediaDirectory: Decodable, Sendable {
     public struct Entry: Decodable, Sendable, Identifiable {
         public let name: String
@@ -305,6 +309,7 @@ public struct OS2MediaSource: Decodable, Sendable {
         (skippedSources ?? []).map { "Skipped \($0.path): \($0.reason)" }.joined(separator: "\n")
     }
 }
+
 public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Identifiable {
     case cmd, fonts, assets, printers, help, som, runtime, multimedia, network
     case utilities, languages, diagnostics, legacy, opengl, full
@@ -353,6 +358,7 @@ public enum OS2ExtractionCategory: String, Codable, CaseIterable, Sendable, Iden
         categories.union(categories.flatMap(\.requires))
     }
 }
+
 public struct OS2ExtractionPlan: Decodable, Sendable {
     public struct Provider: Decodable, Sendable, Equatable {
         public let title: String

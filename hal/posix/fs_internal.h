@@ -4,6 +4,7 @@
 #define TWOINE_POSIX_FS_INTERNAL_H
 #include "hal/host_fs.h"
 struct LxImageLock;
+
 struct LxHostFile
 {
     int fd;
@@ -14,6 +15,7 @@ struct LxHostFile
     struct LxImageLock *image_lock;
     int archive_checked;
 };
+
 /* Platform stat layouts stay inside the selected macOS/Linux adapter. */
 int lx_host_path_native_identity(const char *path, LxHostFileIdentity *identity);
 void lx_host_file_dispose(LxHostFile *file);

@@ -15,6 +15,7 @@ enum
     LX_OBJECT_ALIAS16 = 0x1000,
     LX_OBJECT_BIG = 0x2000
 };
+
 int sanityCheckLxModule(const uint8 *exe, const uint32 exelen)
 {
     if (sizeof(LxHeader) >= exelen)

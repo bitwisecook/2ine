@@ -3,6 +3,7 @@
 #include "os2libs/os2types.h"
 #include <stdint.h>
 #include <stdio.h>
+
 static __attribute__((noinline)) uint32_t OS2API entry(void)
 {
     uint8_t buffer[16] __attribute__((aligned(16)));
@@ -10,6 +11,7 @@ static __attribute__((noinline)) uint32_t OS2API entry(void)
     __asm__ __volatile__("leal %1,%0" : "=r"(address) : "m"(buffer));
     return address & 15;
 }
+
 int main(void)
 {
     for (unsigned offset = 0; offset < 16; offset += 4)

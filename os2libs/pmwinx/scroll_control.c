@@ -2,11 +2,13 @@
 /* Standard scrollbar controls paint their range and notify the owning window. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
+
 typedef struct ScrollLayout
 {
     BOOL vertical;
     LONG extent, across, button, track, thumb, position;
 } ScrollLayout;
+
 static ScrollLayout layout(Open32Window *window)
 {
     Open32Scroll *state = &window->scroll[2];
@@ -21,6 +23,7 @@ static ScrollLayout layout(Open32Window *window)
     LONG pixel = range ? (LONG)((int64_t)(track - thumb) * (position - state->minimum) / range) : 0;
     return (ScrollLayout){vertical, extent, across, button, track, thumb, button + pixel};
 }
+
 static void fill(ULONG dc, const ScrollLayout *s, LONG a, LONG b, LONG c, LONG d, ULONG brush)
 {
     uint8 rect[16];
@@ -30,6 +33,7 @@ static void fill(ULONG dc, const ScrollLayout *s, LONG a, LONG b, LONG c, LONG d
         lx_guest_store_u32(rect + i * 4, (ULONG)fields[i]);
     FillRect(dc, rect, brush);
 }
+
 static void button(ULONG dc, const ScrollLayout *s, LONG first, LONG last, BOOL arrow, BOOL end,
                    BOOL enabled)
 {
@@ -49,6 +53,7 @@ static void button(ULONG dc, const ScrollLayout *s, LONG first, LONG last, BOOL 
         }
     }
 }
+
 static void paint(Open32Window *window)
 {
     uint8 record[64];
@@ -68,6 +73,7 @@ static void paint(Open32Window *window)
         button(dc, &s, s.position, s.position + s.thumb, FALSE, FALSE, TRUE);
     EndPaint(window->handle, record);
 }
+
 static void notify(ULONG handle, ULONG request, LONG position)
 {
     Open32Window *window = open32FindWindow(handle);
@@ -77,6 +83,7 @@ static void notify(ULONG handle, ULONG request, LONG position)
     if (parent)
         SendMessage(parent, message, request | ((ULONG)(USHORT)position << 16), handle);
 }
+
 static LONG dragged(Open32Window *window, const ScrollLayout *s, LONG coordinate)
 {
     LONG travel = s->track - s->thumb;
@@ -90,6 +97,7 @@ static LONG dragged(Open32Window *window, const ScrollLayout *s, LONG coordinate
                                offset * ((int64_t)state->maximum - state->minimum) / travel)
                       : state->minimum;
 }
+
 ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
     Open32Window *window = open32FindWindow(handle);

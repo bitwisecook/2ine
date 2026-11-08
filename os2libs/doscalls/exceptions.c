@@ -22,10 +22,12 @@ enum
     EXCEPTION_NONCONTINUABLE_NUMBER = 0xC0000024u,
     EXCEPTION_INVALID_DISPOSITION_NUMBER = 0xC0000025u
 };
+
 static LxGuestTib *exception_tib(void)
 {
     return lx_execution_current_tib(GLoaderState.execution);
 }
+
 static BOOL exception_record(uint32 address, uint32 *previous, uint32 *procedure)
 {
     uint8 bytes[8];
@@ -35,6 +37,7 @@ static BOOL exception_record(uint32 address, uint32 *previous, uint32 *procedure
     *procedure = lx_guest_load_u32(bytes + 4);
     return TRUE;
 }
+
 APIRET DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
 {
     TRACE_NATIVE("DosSetExceptionHandler(%p)", rec);
@@ -59,6 +62,7 @@ APIRET DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
     lx_guest_store_u32(&tib->exception_chain, address);
     return NO_ERROR;
 }
+
 APIRET DosUnsetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
 {
     TRACE_NATIVE("DosUnsetExceptionHandler(%p)", rec);
@@ -329,10 +333,12 @@ APIRET DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler, PVOID pTargetIP
     if (!ip || !lx_execution_memory(execution, ip, 1, LX_GUEST_EXECUTE) || arguments < 4 ||
         !lx_execution_memory(execution, arguments - 4, 4, LX_GUEST_WRITE))
         return ERROR_INVALID_ADDRESS;
+
     typedef struct
     {
         uint32 address, previous, procedure;
     } UnwindEntry;
+
     UnwindEntry *entries = calloc(EXCEPTION_CHAIN_LIMIT, sizeof *entries);
     if (!entries)
         return ERROR_NOT_ENOUGH_MEMORY;

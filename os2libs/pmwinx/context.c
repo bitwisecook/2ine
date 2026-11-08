@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/internal.h"
 #include <math.h>
 static _Thread_local BOOL owns_context;
+
 ULONG open32Presentation(void)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
@@ -21,6 +22,7 @@ ULONG open32Presentation(void)
     open32RegisterThreadQueue();
     return anchor->hab;
 }
+
 void open32ContextCleanup(void)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
@@ -44,6 +46,7 @@ LONG GetMapMode(ULONG dc)
     }
     return context->map_mode;
 }
+
 LONG SetMapMode(ULONG dc, LONG mode)
 {
     Open32DC *context = open32FindDC(dc);
@@ -80,6 +83,7 @@ BOOL open32IdentityMapping(Open32DC *dc)
            dc->window_y == dc->viewport_y && dc->window_width == dc->viewport_width &&
            dc->window_height == dc->viewport_height;
 }
+
 static BOOL map_axis(LONG *value, LONG from, LONG to, LONG numerator, LONG denominator)
 {
     int64_t product = ((int64_t)*value - from) * numerator;
@@ -89,17 +93,20 @@ static BOOL map_axis(LONG *value, LONG from, LONG to, LONG numerator, LONG denom
     *value = (LONG)result;
     return TRUE;
 }
+
 /* Scale and translation keep rectangles axis aligned; other world transforms do not. */
 BOOL open32Rotated(const Open32DC *dc)
 {
     return dc->world_active && (dc->world[1] != 0 || dc->world[2] != 0);
 }
+
 static void apply_matrix(const double m[6], double *x, double *y)
 {
     double a = *x, b = *y;
     *x = a * m[0] + b * m[2] + m[4];
     *y = a * m[1] + b * m[3] + m[5];
 }
+
 static BOOL invert_matrix(const double m[6], double *x, double *y)
 {
     double determinant = m[0] * m[3] - m[1] * m[2], a = *x - m[4], b = *y - m[5];
@@ -109,6 +116,7 @@ static BOOL invert_matrix(const double m[6], double *x, double *y)
     *y = (b * m[0] - a * m[1]) / determinant;
     return TRUE;
 }
+
 static BOOL map_transformed(Open32DC *dc, LONG *x, LONG *y, BOOL device)
 {
     double a = *x, b = *y;
@@ -138,6 +146,7 @@ static BOOL map_transformed(Open32DC *dc, LONG *x, LONG *y, BOOL device)
     *y = (LONG)lround(b);
     return TRUE;
 }
+
 BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device)
 {
     if (dc->world_active || dc->fit_active)
@@ -164,6 +173,7 @@ BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device)
     *y = b;
     return TRUE;
 }
+
 static BOOL map_points(ULONG handle, PVOID points, LONG count, BOOL device)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -183,14 +193,17 @@ static BOOL map_points(ULONG handle, PVOID points, LONG count, BOOL device)
     }
     return TRUE;
 }
+
 BOOL DPtoLP(ULONG handle, PVOID points, LONG count)
 {
     return map_points(handle, points, count, FALSE);
 }
+
 BOOL LPtoDP(ULONG handle, PVOID points, LONG count)
 {
     return map_points(handle, points, count, TRUE);
 }
+
 /* MM_ISOTROPIC shrinks one viewport extent so both axes share the window's aspect ratio. */
 static void isotropic_viewport(Open32DC *dc)
 {
@@ -207,6 +220,7 @@ static void isotropic_viewport(Open32DC *dc)
     if (!dc->viewport_height)
         dc->viewport_height = 1;
 }
+
 static BOOL set_mapping(ULONG handle, LONG x, LONG y, PVOID previous, unsigned kind)
 {
     TRACE_NATIVE("SetMapping(%u, %d, %d, %p, %u)", handle, x, y, previous, kind);
@@ -250,18 +264,22 @@ static BOOL set_mapping(ULONG handle, LONG x, LONG y, PVOID previous, unsigned k
                         2, values);
     return TRUE;
 }
+
 BOOL SetViewportOrgEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
     return set_mapping(dc, x, y, previous, 0);
 }
+
 BOOL SetWindowOrgEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
     return set_mapping(dc, x, y, previous, 1);
 }
+
 BOOL SetViewportExtEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
     return set_mapping(dc, x, y, previous, 2);
 }
+
 BOOL SetWindowExtEx(ULONG dc, LONG x, LONG y, PVOID previous)
 {
     return set_mapping(dc, x, y, previous, 3);

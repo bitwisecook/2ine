@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Byte-oriented entry selection and editing in the presentation space's codepage. */
 #include "os2libs/pmwin/controls.h"
+
 enum
 {
     EM_QUERYCHANGED = 0x140,
@@ -14,6 +15,7 @@ enum
     EM_SETREADONLY = 0x14b,
     EM_SETINSERT = 0x14c
 };
+
 void controlReplaceSelection(Window *window, const char *text, size_t bytes)
 {
     PmControl *c = window->control;
@@ -49,6 +51,7 @@ void controlReplaceSelection(Window *window, const char *text, size_t bytes)
     controlRepaint(window);
     controlNotify(window, 4); /* EN_CHANGE */
 }
+
 MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;
@@ -113,7 +116,7 @@ MRESULT entryMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
     ULONG flags = (USHORT)(uintptr_t)first;
     unsigned character = (USHORT)(uintptr_t)second, key = (USHORT)((uintptr_t)second >> 16);
     if (flags & 0x40)
-        return 0; /* KC_KEYUP */
+        return 0;                   /* KC_KEYUP */
     if ((flags & 2) && key == 0x1a) /* VK_INSERT toggles the shared SV_INSERTMODE */
     {
         BOOL insert = !WinQuerySysValue(HWND_DESKTOP, 59);

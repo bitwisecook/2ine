@@ -14,6 +14,7 @@
             return 1;                                                                              \
         }                                                                                          \
     } while (0)
+
 static int set_medium(const char *control, const char *source)
 {
     unsigned char header[16] = "2INEMED1";
@@ -33,6 +34,7 @@ static int set_medium(const char *control, const char *source)
     free(temporary);
     return 0;
 }
+
 static int swap_test(const char *path, const char *control, const char *next)
 {
     LxHostFsError error;
@@ -66,6 +68,7 @@ static int swap_test(const char *path, const char *control, const char *next)
     free(root);
     return 0;
 }
+
 static int writable_test(const char *root, const char *control)
 {
     char directory[4096], path[4096], moved[4096];
@@ -122,12 +125,14 @@ static int writable_test(const char *root, const char *control)
     lx_host_file_close(file);
     return 0;
 }
+
 typedef struct ThreadWrite
 {
     LxHostFile *file;
     unsigned char byte;
     int failed;
 } ThreadWrite;
+
 static void *thread_write(void *value)
 {
     ThreadWrite *write = value;
@@ -142,6 +147,7 @@ static void *thread_write(void *value)
     }
     return NULL;
 }
+
 static int fragmentation_test(const char *root)
 {
     char path[4096], other[4096], names[4096];
@@ -219,6 +225,7 @@ static int fragmentation_test(const char *root)
     lx_host_file_close(b);
     return 0;
 }
+
 static int metadata_test(const char *root)
 {
     char path[4096], renamed[4096];
@@ -267,6 +274,7 @@ static int metadata_test(const char *root)
     lx_host_file_close(file);
     return 0;
 }
+
 int main(int argc, char **argv)
 {
     if (argc == 3 && !strcmp(argv[1], "--metadata"))

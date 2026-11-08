@@ -10,6 +10,7 @@
 #define TWOINE_FORMAT_NE_H
 #include "formats/types.h"
 #pragma pack(push, 1)
+
 typedef struct NeHeader
 {
     uint8 magic_n;

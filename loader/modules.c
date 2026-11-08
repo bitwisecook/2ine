@@ -13,6 +13,7 @@ typedef struct ModuleFailure
     uint32 code;
     char module[256];
 } ModuleFailure;
+
 static _Thread_local ModuleFailure LastModuleFailure;
 static _Thread_local ModuleFailure *ActiveModuleFailure;
 
@@ -25,6 +26,7 @@ static void moduleLoadError(uint32 code, const char *name)
         snprintf(failure->module, sizeof failure->module, "%s", name);
     }
 }
+
 static int moduleLoadFailed(void)
 {
     return ActiveModuleFailure && ActiveModuleFailure->code;
@@ -64,6 +66,7 @@ static LxModule *loadGuestLibraryPath(const char *paths, const char *name, int d
     }
     return NULL;
 }
+
 LxModule *loadModuleByModuleNameInternal(const char *modname, const int dependency_tree_depth);
 
 static uint64 ModuleInitializationOrder;

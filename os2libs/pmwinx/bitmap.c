@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwinx/drawing.h"
+
 /* Windows mask transfers convert between monochrome bits and DC colors before
    applying the raster operation. PM's RGB raster backing has no implicit GDI
    conversion: copying colored pixels into a one-bit mask retains color noise. */
@@ -34,6 +35,7 @@ static BOOL clip_source(const POINTL *points, const PmBitmap *bitmap, POINTL *cl
     clipped[3].y -= (LONG)top;
     return TRUE;
 }
+
 static BOOL bitmap_blt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
 {
     PresentationSpace *source_ps = lx_pm_font_space(source);
@@ -99,6 +101,7 @@ static BOOL bitmap_blt(ULONG destination, ULONG source, PPOINTL points, LONG rop
         open32SetError(87);
     return ok;
 }
+
 /* A raster operation that reads the pattern takes the selected brush, which PM holds
    as area attributes of the presentation space for the duration of the transfer. */
 BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
@@ -123,6 +126,7 @@ BOOL open32BitmapBlt(ULONG destination, ULONG source, PPOINTL points, LONG rop)
     space->pattern_set = saved_set;
     return result;
 }
+
 ULONG LoadBitmap(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadBitmap(%u, %p)", module, name);
@@ -144,6 +148,7 @@ ULONG LoadBitmap(HMODULE module, PSZ name)
         open32SetError(1814);
     return bitmap;
 }
+
 LONG GetObject(ULONG handle, LONG capacity, PVOID output)
 {
     if (capacity < 0)
@@ -185,6 +190,7 @@ LONG GetObject(ULONG handle, LONG capacity, PVOID output)
     lx_handle_release(&borrow);
     return 24;
 }
+
 BOOL DeleteObject(ULONG handle)
 {
     if (lx_pm_bitmap_delete(handle) || open32DeleteFont(handle) || open32DeleteBrush(handle) ||
@@ -193,11 +199,13 @@ BOOL DeleteObject(ULONG handle)
     open32SetError(6);
     return FALSE;
 }
+
 ULONG GetObjectType(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
     if (dc)
         return dc->kind == 1 ? 10 : 3;
+
     static const struct
     {
         LxHandleKind kind;
@@ -206,6 +214,7 @@ ULONG GetObjectType(ULONG handle)
                  {LX_HANDLE_OPEN32_METAFILE, 9}, {LX_HANDLE_OPEN32_ENHMETAFILE, 13},
                  {LX_HANDLE_OPEN32_PALETTE, 5},  {LX_HANDLE_OPEN32_FONT, 6},
                  {LX_HANDLE_PM_BITMAP, 7},       {LX_HANDLE_OPEN32_REGION, 8}};
+
     for (unsigned i = 0; i < sizeof types / sizeof types[0]; i++)
     {
         LxHandleBorrow borrow = {0};
@@ -269,6 +278,7 @@ ULONG GetNearestColor(ULONG handle, ULONG color)
     }
     return (best & 255) << 16 | (best & 0xFF00) | (best >> 16 & 255);
 }
+
 BOOL open32BitmapBytes(LONG width, LONG height, ULONG planes, ULONG depth, size_t *bytes)
 {
     if (width < 1 || height < 1 || width > 16384 || height > 16384 ||
@@ -289,6 +299,7 @@ BOOL open32BitmapBytes(LONG width, LONG height, ULONG planes, ULONG depth, size_
     *bytes = ((size_t)width * bits + 15) / 16 * 2 * (size_t)height;
     return TRUE;
 }
+
 void open32BitmapPalette(ULONG depth, uint32 colors[256])
 {
     static const uint32 vga[16] = {0,        0x800000, 0x008000, 0x808000, 0x000080, 0x800080,
@@ -303,6 +314,7 @@ void open32BitmapPalette(ULONG depth, uint32 colors[256])
                                  : ((i >> 5) * 255 / 7) << 16 | (((i >> 2) & 7) * 255 / 7) << 8 |
                                        (i & 3) * 85;
 }
+
 ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bits)
 {
     TRACE_NATIVE("CreateBitmap(%d, %d, %u, %u, %p)", width, height, planes, depth, bits);
@@ -376,6 +388,7 @@ static unsigned bitmap_nearest(const uint32 *palette, unsigned count, uint32 rgb
     }
     return best;
 }
+
 /* DDB scanlines are WORD aligned, unlike DWORD-aligned DIB scanlines, and run from the top row;
    PM bitmap rows run from the bottom. */
 static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
@@ -467,6 +480,7 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
     lx_handle_release(&borrow);
     return (LONG)count;
 }
+
 LONG GetBitmapBits(ULONG h, LONG count, PVOID output)
 {
     if (count < 0)
@@ -477,6 +491,7 @@ LONG GetBitmapBits(ULONG h, LONG count, PVOID output)
     /* A zero capacity is a size query, as is a NULL buffer. */
     return bitmap_bits(h, (ULONG)count, count ? output : NULL, FALSE);
 }
+
 LONG SetBitmapBits(ULONG h, ULONG count, PVOID input)
 {
     if (!count || !input)
@@ -486,6 +501,7 @@ LONG SetBitmapBits(ULONG h, ULONG count, PVOID input)
     }
     return bitmap_bits(h, count, input, TRUE);
 }
+
 ULONG _CreateBitmapIndirect(PVOID input)
 {
     if (!input)
@@ -542,6 +558,7 @@ ULONG _CreateBitmapIndirect(PVOID input)
     free(packed);
     return result;
 }
+
 ULONG CreateDIBitmap(ULONG dc, PVOID header, ULONG options, PVOID bits, PVOID info, ULONG usage)
 {
     if (!open32FindDC(dc))
@@ -577,6 +594,7 @@ ULONG CreateDIBitmap(ULONG dc, PVOID header, ULONG options, PVOID bits, PVOID in
     }
     return result;
 }
+
 BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source, LONG sx, LONG sy,
                 LONG sw, LONG sh, ULONG rop)
 {

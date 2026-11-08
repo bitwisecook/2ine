@@ -68,6 +68,7 @@ static int font_metrics(unsigned index, LxHostFont *font, unsigned dpi, FONTMETR
     output->lMatch = (LONG)index + 1;
     return 1;
 }
+
 LONG GpiQueryFonts(HPS hps, ULONG options, PSZ face, PLONG requested, LONG record_size,
                    PFONTMETRICS output)
 {
@@ -105,6 +106,7 @@ LONG GpiQueryFonts(HPS hps, ULONG options, PSZ face, PLONG requested, LONG recor
     *requested = copied;
     return found - copied;
 }
+
 BOOL GpiQueryFontMetrics(HPS hps, LONG record_size, PFONTMETRICS output)
 {
     if (record_size < 0 || (record_size && !output))
@@ -158,6 +160,7 @@ static BOOL loaded_face_matches(unsigned index, const char *name)
     lx_host_font_close(font);
     return same;
 }
+
 LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
 {
     TRACE_NATIVE("GpiCreateLogFont(%u, %p, %d, %p)", (uint)handle, name, (int)id, attrs);
@@ -230,6 +233,7 @@ LONG GpiCreateLogFont(HPS handle, PVOID name, LONG id, PFATTRS attrs)
     ps->logical_fonts[id].defined = TRUE;
     return matched ? 2 : 1;
 }
+
 BOOL GpiSetCharSet(HPS handle, LONG id)
 {
     TRACE_NATIVE("GpiSetCharSet(%u, %d)", (uint)handle, (int)id);
@@ -239,11 +243,13 @@ BOOL GpiSetCharSet(HPS handle, LONG id)
     ps->charset = id;
     return TRUE;
 }
+
 LONG GpiQueryCharSet(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->charset : -1;
 }
+
 BOOL GpiDeleteSetId(HPS handle, LONG id)
 {
     TRACE_NATIVE("GpiDeleteSetId(%u, %d)", (uint)handle, (int)id);
@@ -264,6 +270,7 @@ BOOL GpiDeleteSetId(HPS handle, LONG id)
     }
     return TRUE;
 }
+
 BOOL GpiSetCharBox(HPS handle, PSIZEF box)
 {
     TRACE_NATIVE("GpiSetCharBox(%u, %d, %d)", (uint)handle, box ? box->cx : 0, box ? box->cy : 0);
@@ -274,6 +281,7 @@ BOOL GpiSetCharBox(HPS handle, PSIZEF box)
     ps->char_height = box->cy;
     return TRUE;
 }
+
 BOOL GpiQueryCharBox(HPS handle, PSIZEF box)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -296,6 +304,7 @@ LONG GpiQueryNumberSetIds(HPS handle)
             count++;
     return count;
 }
+
 BOOL GpiQuerySetIds(HPS handle, LONG count, PLONG types, PVOID names, PLONG ids)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -317,6 +326,7 @@ BOOL GpiQuerySetIds(HPS handle, LONG count, PLONG types, PVOID names, PLONG ids)
     }
     return TRUE;
 }
+
 BOOL GpiQueryWidthTable(HPS handle, LONG first, LONG count, PLONG output)
 {
     if (first < 0 || first > 255 || count < 0 || count > 256 - first || (count && !output))
@@ -328,12 +338,14 @@ BOOL GpiQueryWidthTable(HPS handle, LONG first, LONG count, PLONG output)
         output[i] = lx_host_font_advance(font, lx_pm_codepoint((uint8)(first + i)));
     return TRUE;
 }
+
 LONG GpiCharStringAt(HPS handle, PPOINTL point, LONG count, PCH text)
 {
     TRACE_NATIVE("GpiCharStringAt(%u, %p, %d, %p)", (uint)handle, point, (int)count, text);
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? lx_pm_text(handle, point, count, text, ps->primitive_color[1], NULL) : 0;
 }
+
 LONG GpiCharString(HPS handle, LONG count, PCH text)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -379,6 +391,7 @@ BOOL GpiSetCharAngle(HPS handle, PPOINTL angle)
     ps->char_angle = *angle;
     return TRUE;
 }
+
 BOOL GpiSetCharShear(HPS handle, PPOINTL shear)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -387,6 +400,7 @@ BOOL GpiSetCharShear(HPS handle, PPOINTL shear)
     ps->char_shear = *shear;
     return TRUE;
 }
+
 BOOL GpiSetCharDirection(HPS handle, LONG direction)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -395,11 +409,13 @@ BOOL GpiSetCharDirection(HPS handle, LONG direction)
     ps->char_direction = direction;
     return TRUE;
 }
+
 LONG GpiQueryCharDirection(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->char_direction : -1;
 }
+
 BOOL GpiSetTextAlignment(HPS handle, LONG horizontal, LONG vertical)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);

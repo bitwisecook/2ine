@@ -16,13 +16,16 @@ typedef struct Open32Metafile
     BOOL enhanced;
     UCHAR data[];
 } Open32Metafile;
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static Open32Metafile *files;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
 }
+
 static void destroy_file(void *resource)
 {
     Open32Metafile *file = resource;
@@ -35,6 +38,7 @@ static void destroy_file(void *resource)
     lx_host_monitor_unlock(monitor);
     free(file);
 }
+
 static BOOL valid_wmf(const UCHAR *data, ULONG size)
 {
     if (!data || size < 24 || size > 64u * 1024 * 1024 || (size & 1))
@@ -59,6 +63,7 @@ static BOOL valid_wmf(const UCHAR *data, ULONG size)
     }
     return FALSE;
 }
+
 ULONG SetMetaFileBitsEx(ULONG size, PVOID data)
 {
     TRACE_NATIVE("SetMetaFileBitsEx(%u, %p)", size, data);
@@ -101,6 +106,7 @@ ULONG SetMetaFileBitsEx(ULONG size, PVOID data)
     }
     return handle;
 }
+
 ULONG GetMetaFileBitsEx(ULONG handle, ULONG size, PVOID data)
 {
     TRACE_NATIVE("GetMetaFileBitsEx(%u, %u, %p)", handle, size, data);
@@ -117,6 +123,7 @@ ULONG GetMetaFileBitsEx(ULONG handle, ULONG size, PVOID data)
     lx_handle_release(&borrow);
     return result;
 }
+
 BOOL DeleteMetaFile(ULONG handle)
 {
     TRACE_NATIVE("DeleteMetaFile(%u)", handle);
@@ -125,10 +132,12 @@ BOOL DeleteMetaFile(ULONG handle)
     open32SetError(6);
     return FALSE;
 }
+
 static LONG signed_word(const UCHAR *bytes)
 {
     return (SHORT)lx_guest_load_u16(bytes);
 }
+
 static BOOL wmf_dib(ULONG dc, const UCHAR *dib, ULONG available, LONG x, LONG y, LONG width,
                     LONG height, LONG source_x, LONG source_y, LONG source_width,
                     LONG source_height, ULONG usage, ULONG operation)
@@ -144,6 +153,7 @@ static BOOL wmf_dib(ULONG dc, const UCHAR *dib, ULONG available, LONG x, LONG y,
     return StretchDIBits(dc, x, y, width, height, source_x, source_y, source_width, source_height,
                          (PVOID)(dib + info_bytes), (PVOID)dib, usage, operation) != 0;
 }
+
 /* META_CREATEREGION: a Region object whose scans each list x pairs for one band. */
 static ULONG wmf_region(const UCHAR *p, ULONG size)
 {
@@ -179,6 +189,7 @@ static ULONG wmf_region(const UCHAR *p, ULONG size)
     }
     return region;
 }
+
 static BOOL wmf_text(ULONG dc, const UCHAR *p, ULONG bytes)
 {
     ULONG n = lx_guest_load_u16(p + 4), options = lx_guest_load_u16(p + 6) & 6;
@@ -208,6 +219,7 @@ static BOOL wmf_text(ULONG dc, const UCHAR *p, ULONG bytes)
     free(advances);
     return result;
 }
+
 static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
 {
     ULONG bytes = lx_guest_load_u32(record) * 2;
@@ -522,6 +534,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
     open32SetError(50);
     return FALSE;
 }
+
 BOOL PlayMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
 {
     (void)table;
@@ -538,6 +551,7 @@ BOOL PlayMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
     }
     return play_record(dc, record, table, count);
 }
+
 BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
 {
     TRACE_NATIVE("EnumMetaFile(%u, %u, %X, %X)", dc, handle, procedure, parameter);
@@ -592,6 +606,7 @@ BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
     lx_handle_release(&borrow);
     return ok;
 }
+
 BOOL PlayMetaFile(ULONG dc, ULONG handle)
 {
     TRACE_NATIVE("PlayMetaFile(%u, %u)", dc, handle);
@@ -640,6 +655,7 @@ BOOL PlayMetaFile(ULONG dc, ULONG handle)
         open32SetError(error ? error : 87);
     return ok;
 }
+
 void open32MetafilesCleanup(void)
 {
     /* A guest may exit inside EnumMetaFile, which keeps its file borrowed and listed. */
@@ -666,7 +682,9 @@ typedef struct Open32Recorder
     BOOL failed;
     struct Open32Recorder *next;
 } Open32Recorder;
+
 static _Thread_local Open32Recorder *recorders;
+
 static Open32Recorder *recorder(ULONG dc)
 {
     for (Open32Recorder *r = recorders; r; r = r->next)
@@ -674,6 +692,7 @@ static Open32Recorder *recorder(ULONG dc)
             return r;
     return NULL;
 }
+
 static BOOL append_record(Open32Recorder *r, USHORT function, const void *data, size_t bytes)
 {
     size_t padded = (bytes + 1) & ~(size_t)1, total = padded + 6;
@@ -708,12 +727,14 @@ static BOOL append_record(Open32Recorder *r, USHORT function, const void *data, 
         r->maximum = (ULONG)(total / 2);
     return TRUE;
 }
+
 static void select_recorded(Open32Recorder *r, USHORT function, ULONG index)
 {
     uint8 word[2];
     lx_guest_store_u16(word, (uint16)index);
     append_record(r, function, word, 2);
 }
+
 void open32MetafileWords(ULONG dc, USHORT function, size_t count, const LONG *words)
 {
     Open32Recorder *r = recorder(dc);
@@ -736,6 +757,7 @@ void open32MetafileWords(ULONG dc, USHORT function, size_t count, const LONG *wo
     }
     append_record(r, function, parameters, count * 2);
 }
+
 void open32MetafilePoints(ULONG dc, USHORT function, PVOID input, LONG count)
 {
     Open32Recorder *r = recorder(dc);
@@ -766,6 +788,7 @@ void open32MetafilePoints(ULONG dc, USHORT function, PVOID input, LONG count)
         append_record(r, function, p, bytes);
     free(p);
 }
+
 void open32MetafileObject(ULONG dc, ULONG object)
 {
     Open32Recorder *r = recorder(dc);
@@ -836,6 +859,7 @@ void open32MetafileObject(ULONG dc, ULONG object)
     lx_guest_store_u16(index, (uint16)r->objects++);
     append_record(r, 0x12d, index, 2);
 }
+
 void open32MetafileExtText(ULONG dc, LONG x, LONG y, ULONG flags, PVOID rectangle, PCHAR text,
                            ULONG count, PLONG advances)
 {
@@ -877,6 +901,7 @@ void open32MetafileExtText(ULONG dc, LONG x, LONG y, ULONG flags, PVOID rectangl
         r->failed = TRUE;
     free(p);
 }
+
 /* Each region is one band per rectangle. A NULL region selects no clipping. */
 void open32MetafileClip(ULONG dc, ULONG region)
 {
@@ -923,6 +948,7 @@ void open32MetafileClip(ULONG dc, ULONG region)
         r->failed = TRUE;
     free(p);
 }
+
 void open32MetafilePalette(ULONG dc, ULONG palette)
 {
     Open32Recorder *r = recorder(dc);
@@ -942,12 +968,14 @@ void open32MetafilePalette(ULONG dc, ULONG palette)
         select_recorded(r, 0x234, r->objects++);
     free(p);
 }
+
 void open32MetafileRealize(ULONG dc)
 {
     Open32Recorder *r = recorder(dc);
     if (r)
         append_record(r, 0x35, NULL, 0);
 }
+
 void open32MetafilePaletteRecord(ULONG dc, USHORT function, ULONG first, ULONG count, PVOID entries)
 {
     Open32Recorder *r = recorder(dc);
@@ -971,6 +999,7 @@ void open32MetafilePaletteRecord(ULONG dc, USHORT function, ULONG first, ULONG c
     append_record(r, function, p, 4 + (size_t)count * 4);
     free(p);
 }
+
 void open32MetafileDCCleanup(ULONG dc)
 {
     Open32Recorder **link = &recorders;
@@ -985,6 +1014,7 @@ void open32MetafileDCCleanup(ULONG dc)
         free(r);
     }
 }
+
 static BOOL save_metafile(PSZ name, const uint8 *bytes, ULONG size)
 {
     uint8 of[136];
@@ -995,6 +1025,7 @@ static BOOL save_metafile(PSZ name, const uint8 *bytes, ULONG size)
     LONG closed = _lclose((ULONG)file);
     return written == size && closed == 0;
 }
+
 static ULONG read_metafile(PSZ name, BOOL enhanced)
 {
     if (!name)
@@ -1026,6 +1057,7 @@ static ULONG read_metafile(PSZ name, BOOL enhanced)
     _lclose((ULONG)file);
     return result;
 }
+
 ULONG CreateMetaFile(PSZ name)
 {
     ULONG dc = CreateCompatibleDC(0);
@@ -1056,6 +1088,7 @@ ULONG CreateMetaFile(PSZ name)
     open32MetafileObject(dc, GetStockObject(13));
     return dc;
 }
+
 ULONG CloseMetaFile(ULONG dc)
 {
     Open32Recorder *r = recorder(dc);
@@ -1083,10 +1116,12 @@ ULONG CloseMetaFile(ULONG dc)
     DeleteDC(dc);
     return result;
 }
+
 ULONG GetMetaFile(PSZ name)
 {
     return read_metafile(name, FALSE);
 }
+
 ULONG CopyMetaFile(ULONG handle, PSZ name)
 {
     LxHandleBorrow borrow = {0};
@@ -1121,6 +1156,7 @@ static BOOL valid_emf(const uint8 *p, ULONG size)
     }
     return FALSE;
 }
+
 ULONG SetEnhMetaFileBits(ULONG size, PVOID data)
 {
     if (!data || size < 108 || size > 64u * 1024 * 1024)
@@ -1160,10 +1196,12 @@ ULONG SetEnhMetaFileBits(ULONG size, PVOID data)
     }
     return result;
 }
+
 ULONG GetEnhMetaFile(PSZ name)
 {
     return read_metafile(name, TRUE);
 }
+
 BOOL DeleteEnhMetaFile(ULONG handle)
 {
     if (lx_handle_close(handle, LX_HANDLE_OPEN32_ENHMETAFILE))
@@ -1171,6 +1209,7 @@ BOOL DeleteEnhMetaFile(ULONG handle)
     open32SetError(6);
     return FALSE;
 }
+
 ULONG GetEnhMetaFileBits(ULONG handle, ULONG capacity, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -1186,6 +1225,7 @@ ULONG GetEnhMetaFileBits(ULONG handle, ULONG capacity, PVOID output)
     lx_handle_release(&borrow);
     return copied;
 }
+
 ULONG GetEnhMetaFileHeader(ULONG handle, ULONG capacity, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -1203,6 +1243,7 @@ ULONG GetEnhMetaFileHeader(ULONG handle, ULONG capacity, PVOID output)
     lx_handle_release(&borrow);
     return copied;
 }
+
 static BOOL emf_object(PVOID table, ULONG count, ULONG index, ULONG object)
 {
     if (!index || index >= count || !object)
@@ -1222,6 +1263,7 @@ static BOOL emf_object(PVOID table, ULONG count, ULONG index, ULONG object)
     lx_guest_store_u32(p, object);
     return TRUE;
 }
+
 /* An RGNDATA block becomes a region of the same logical rectangles. */
 static ULONG emf_region(const uint8 *data, ULONG size)
 {
@@ -1249,6 +1291,7 @@ static ULONG emf_region(const uint8 *data, ULONG size)
     }
     return region;
 }
+
 static BOOL emf_dib(const uint8 *p, ULONG bytes, ULONG info_at, ULONG info_size, ULONG bits_at,
                     ULONG bits_size, ULONG usage)
 {
@@ -1263,6 +1306,7 @@ static BOOL emf_dib(const uint8 *p, ULONG bytes, ULONG info_at, ULONG info_size,
     }
     return TRUE;
 }
+
 /* Handlers in PMWINX's record table that return 0 and draw nothing: types 0, 1 (header),
    23, 28, 69, 79 and 96 to 101. */
 static BOOL emf_inert(ULONG type)
@@ -1270,6 +1314,7 @@ static BOOL emf_inert(ULONG type)
     return type <= 1 || type == 23 || type == 28 || type == 69 || type == 79 ||
            (type >= 96 && type <= 101);
 }
+
 /* Cubic segments flatten to sixteen chords each. */
 static BOOL emf_bezier(ULONG dc, const uint8 *points, ULONG n, BOOL from_current)
 {
@@ -1327,6 +1372,7 @@ static BOOL emf_bezier(ULONG dc, const uint8 *points, ULONG n, BOOL from_current
     free(line);
     return ok;
 }
+
 /* MaskBlt: where the mask bit is set the foreground ROP applies, elsewhere the background ROP.
    Each pass clips to its pels, as device-space row runs of the target rectangle. */
 static BOOL emf_mask_blt(ULONG dc, const uint8 *p, ULONG bytes)
@@ -1409,6 +1455,7 @@ static BOOL emf_mask_blt(ULONG dc, const uint8 *p, ULONG bytes)
     }
     return ok;
 }
+
 /* PT_MOVETO, PT_LINETO and PT_BEZIERTO, with PT_CLOSEFIGURE closing back to the figure's start. */
 static BOOL emf_poly_draw(ULONG dc, const uint8 *points, const uint8 *types, ULONG n, BOOL wide)
 {
@@ -1456,6 +1503,7 @@ static BOOL emf_poly_draw(ULONG dc, const uint8 *points, const uint8 *types, ULO
     }
     return ok;
 }
+
 BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
 {
     if (!open32FindDC(dc) || !record || count > 65535 || (count && !table))
@@ -2002,6 +2050,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
     open32SetError(50);
     return FALSE;
 }
+
 static BOOL enhanced_bounds(ULONG dc, const Open32Metafile *file, PVOID bounds)
 {
     if (!bounds)
@@ -2063,6 +2112,7 @@ static BOOL enhanced_bounds(ULONG dc, const Open32Metafile *file, PVOID bounds)
     context->viewport_width = context->viewport_height = 1;
     return TRUE;
 }
+
 BOOL PlayEnhMetaFile(ULONG dc, ULONG handle, PVOID bounds)
 {
     LxHandleBorrow borrow = {0};
@@ -2111,6 +2161,7 @@ BOOL PlayEnhMetaFile(ULONG dc, ULONG handle, PVOID bounds)
     lx_handle_release(&borrow);
     return ok;
 }
+
 BOOL EnumEnhMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter, PVOID bounds)
 {
     LxHandleBorrow borrow = {0};
@@ -2182,6 +2233,7 @@ BOOL EnumEnhMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter, P
     lx_handle_release(&borrow);
     return ok;
 }
+
 /* WMF records are re-expressed as enhanced records, as PMWINX does by replaying the picture into
    an enhanced recording DC. The original bytes also stay in a GDICOMMENT_WINDOWS_METAFILE. */
 typedef struct EmfBuilder
@@ -2191,6 +2243,7 @@ typedef struct EmfBuilder
     ULONG records;
     BOOL failed;
 } EmfBuilder;
+
 static uint8 *emf_add(EmfBuilder *e, ULONG type, size_t body)
 {
     size_t bytes = (8 + body + 3) & ~(size_t)3;
@@ -2221,12 +2274,14 @@ static uint8 *emf_add(EmfBuilder *e, ULONG type, size_t body)
     e->records++;
     return p;
 }
+
 static void emf_longs(EmfBuilder *e, ULONG type, unsigned count, const LONG *values)
 {
     uint8 *p = emf_add(e, type, (size_t)count * 4);
     for (unsigned i = 0; p && i < count; i++)
         lx_guest_store_u32(p + 8 + i * 4, (ULONG)values[i]);
 }
+
 static void emf_stretch(EmfBuilder *e, const uint8 *dib, size_t limit, ULONG usage, ULONG operation,
                         const LONG geometry[8])
 {
@@ -2249,6 +2304,7 @@ static void emf_stretch(EmfBuilder *e, const uint8 *dib, size_t limit, ULONG usa
     lx_guest_store_u32(p + 68, operation);
     memcpy(p + 80, dib, info_bytes + pixel_bytes);
 }
+
 static void emf_text(EmfBuilder *e, LONG x, LONG y, ULONG options, const uint8 *rectangle,
                      const uint8 *text, ULONG n, const uint8 *advances)
 {
@@ -2274,6 +2330,7 @@ static void emf_text(EmfBuilder *e, LONG x, LONG y, ULONG options, const uint8 *
             lx_guest_store_u32(p + dx_at + i * 4, (ULONG)signed_word(advances + i * 2));
     }
 }
+
 static ULONG emf_slot(uint8 *slots, ULONG count)
 {
     for (ULONG i = 0; i < count; i++)
@@ -2284,6 +2341,7 @@ static ULONG emf_slot(uint8 *slots, ULONG count)
         }
     return 0;
 }
+
 static void emf_record_from_wmf(EmfBuilder *e, const uint8 *q, uint8 *slots, ULONG slot_count,
                                 LONG origin[4])
 {
@@ -2292,12 +2350,14 @@ static void emf_record_from_wmf(EmfBuilder *e, const uint8 *q, uint8 *slots, ULO
     const uint8 *p = q + 6;
     ULONG parameters = bytes - 6;
 #define W(i) signed_word(p + (i) * 2)
+
     static const struct
     {
         USHORT function;
         uint8 type, words;
     } points[] = {{0x20b, 10, 2}, {0x20c, 9, 2},  {0x20d, 12, 2},
                   {0x20e, 11, 2}, {0x214, 27, 2}, {0x213, 54, 2}};
+
     for (unsigned i = 0; i < sizeof points / sizeof points[0]; i++)
         if (points[i].function == function && parameters >= 4)
         {
@@ -2315,12 +2375,14 @@ static void emf_record_from_wmf(EmfBuilder *e, const uint8 *q, uint8 *slots, ULO
             emf_longs(e, points[i].type, 2, xy);
             return;
         }
+
     static const struct
     {
         USHORT function;
         uint8 type;
     } words[] = {{0x103, 17}, {0x102, 18}, {0x104, 20}, {0x106, 19},
                  {0x107, 21}, {0x12e, 22}, {0x127, 34}};
+
     for (unsigned i = 0; i < sizeof words / sizeof words[0]; i++)
         if (words[i].function == function && parameters >= 2)
         {
@@ -2555,6 +2617,7 @@ static void emf_record_from_wmf(EmfBuilder *e, const uint8 *q, uint8 *slots, ULO
     }
 #undef W
 }
+
 ULONG SetWinMetaFileBits(ULONG size, PVOID data, ULONG dc, PVOID picture)
 {
     if ((dc && !open32FindDC(dc)) || !valid_wmf(data, size))
@@ -2657,6 +2720,7 @@ ULONG SetWinMetaFileBits(ULONG size, PVOID data, ULONG dc, PVOID picture)
     free(e.data);
     return result;
 }
+
 ULONG GetWinMetaFileBits(ULONG handle, ULONG capacity, PVOID output, LONG mode, ULONG dc)
 {
     LxHandleBorrow borrow = {0};
@@ -2715,6 +2779,7 @@ BOOL open32IsMetafile(ULONG dc)
 {
     return recorder(dc) != NULL;
 }
+
 void open32MetafileDib(ULONG dc, LONG x, LONG y, LONG w, LONG h, LONG sx, LONG sy, LONG sw, LONG sh,
                        PVOID bits, PVOID information, ULONG usage, ULONG operation)
 {
@@ -2750,6 +2815,7 @@ void open32MetafileDib(ULONG dc, LONG x, LONG y, LONG w, LONG h, LONG sx, LONG s
     append_record(r, 0xf43, p, 22 + ib + pb);
     free(p);
 }
+
 void open32MetafilePatBlt(ULONG dc, LONG x, LONG y, LONG w, LONG h, ULONG operation)
 {
     Open32Recorder *r = recorder(dc);

@@ -217,12 +217,16 @@ void VID_SetPalette(unsigned char *palette)
             palette[3 * i] | (palette[3 * i + 1] << 8) | (palette[3 * i + 2] << 16) | 0xff000000U;
     d_8to24table[255] &= 0x00ffffff;
 }
+
 void VID_ShiftPalette(unsigned char *palette) {}
+
 qboolean VID_Is8bit(void)
 {
     return false;
 }
+
 void D_BeginDirectRect(int x, int y, byte *bitmap, int w, int h) {}
+
 void D_EndDirectRect(int x, int y, int w, int h) {}
 
 void VID_Init(unsigned char *palette)
@@ -327,20 +331,26 @@ void VID_Shutdown(void)
         hab = 0;
     }
 }
+
 void GL_BeginRendering(int *x, int *y, int *w, int *h)
 {
     *x = *y = 0;
     *w = width;
     *h = height;
 }
+
 void GL_EndRendering(void)
 {
     glFlush();
     pglSwapBuffers(hab, window);
 }
+
 void IN_Init(void) {}
+
 void IN_Shutdown(void) {}
+
 void IN_Commands(void) {}
+
 void IN_Move(usercmd_t *cmd)
 {
     float mx = mouse_x * sensitivity.value, my = mouse_y * sensitivity.value;

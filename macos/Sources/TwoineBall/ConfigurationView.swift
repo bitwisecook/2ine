@@ -235,6 +235,7 @@ private struct ProfileEditRequest: Identifiable {
     let id = UUID()
     let entry: ConfigurationEntry?
 }
+
 private struct ProfileValueSheet: View {
     let model: AppModel
     let ball: String

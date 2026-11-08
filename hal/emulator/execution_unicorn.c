@@ -31,6 +31,7 @@ typedef struct Binding
     struct Binding *next;
     struct Binding *hash_next;
 } Binding;
+
 typedef struct Invocation
 {
     LxCpuContext *context;
@@ -41,6 +42,7 @@ typedef struct Invocation
     LxExecutionRegisters32 resume_registers;
     int resume;
 } Invocation;
+
 typedef struct EmulatedState
 {
     LxExecution *execution;
@@ -62,6 +64,7 @@ typedef struct EmulatedState
     void (*exit_cleanup)(uint32_t);
     uint32_t exit_code;
 } EmulatedState;
+
 /* One guest address space per worker. Each host thread has its own CPU context;
    the shared engine is held only during CPU operations, never across an API. */
 static EmulatedState *Emulated;
@@ -80,10 +83,12 @@ static __attribute__((noreturn)) void failure(const char *message)
 {
     lx_host_fatal(LX_FATAL_INTERNAL, message, NULL);
 }
+
 /* Other guest threads remain parked until host process exit. In particular, do
    not run their PM destructors while the primary thread is executing exit handlers. */
 static LxCpuRegisters initialRegisters(void);
 static void replaceContext(Invocation *frame);
+
 static void pollTermination(LxExecution *e)
 {
     EmulatedState *s = e->backend;
@@ -123,6 +128,7 @@ static void pollTermination(LxExecution *e)
     for (;;)
         lx_host_sleep_ms(10);
 }
+
 static void terminateProcess(LxExecution *e, void (*cleanup)(uint32_t), uint32_t code)
 {
     EmulatedState *s = e->backend;
@@ -141,6 +147,7 @@ static void terminateProcess(LxExecution *e, void (*cleanup)(uint32_t), uint32_t
     pollTermination(e);
     failure("Process termination returned");
 }
+
 static int map(LxExecution *e, uint32_t a, size_t n, unsigned p, void *host)
 {
     EmulatedState *s = e->backend;
@@ -151,6 +158,7 @@ static int map(LxExecution *e, uint32_t a, size_t n, unsigned p, void *host)
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+
 static int unmap(LxExecution *e, uint32_t a, size_t n)
 {
     EmulatedState *s = e->backend;
@@ -161,6 +169,7 @@ static int unmap(LxExecution *e, uint32_t a, size_t n)
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+
 static int protect(LxExecution *e, uint32_t a, size_t n, unsigned p)
 {
     EmulatedState *s = e->backend;
@@ -171,6 +180,7 @@ static int protect(LxExecution *e, uint32_t a, size_t n, unsigned p)
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+
 static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, int code)
 {
     EmulatedState *s = Emulated;
@@ -224,6 +234,7 @@ static int findSelector(uint32_t address, uint16_t *selector, uint16_t *offset, 
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+
 static void freeSelector(uint16_t selector)
 {
     lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
@@ -231,6 +242,7 @@ static void freeSelector(uint16_t selector)
         memset(&Emulated->selectors[selector], 0, sizeof(LxSegment));
     lx_host_mutex_unlock(Emulated->mutex);
 }
+
 static void *farToHost(uint32_t pointer)
 {
     if (!pointer)
@@ -248,6 +260,7 @@ static void *farToHost(uint32_t pointer)
     }
     return lx_execution_memory(Emulated->execution, base + (pointer & 0xffff), 1, 0);
 }
+
 static uint32_t hostToFar(void *pointer)
 {
     uint32_t address;
@@ -257,6 +270,7 @@ static uint32_t hostToFar(void *pointer)
         return 0;
     return ((uint32_t)((selector << 3) | 7) << 16) | offset;
 }
+
 static void *allocSegment(uint16_t *selector, int executable)
 {
     EmulatedState *s = Emulated;
@@ -280,6 +294,7 @@ static void *allocSegment(uint16_t *selector, int executable)
     lx_host_mutex_unlock(s->segment_mutex);
     return NULL;
 }
+
 static void freeSegment(uint16_t selector)
 {
     if (selector >= SELECTOR_COUNT)
@@ -293,6 +308,7 @@ static void freeSegment(uint16_t selector)
     }
     lx_host_mutex_unlock(Emulated->segment_mutex);
 }
+
 static int codeAlias(uint16_t data, uint16_t *code)
 {
     unsigned index = data >> 3;
@@ -310,6 +326,7 @@ static int codeAlias(uint16_t data, uint16_t *code)
     *code = (slot << 3) | 7;
     return 1;
 }
+
 static void stackSegments(uint32_t address, uint32_t size, int release)
 {
     uint64_t end = (uint64_t)address + size;
@@ -320,23 +337,28 @@ static void stackSegments(uint32_t address, uint32_t size, int release)
             freeSelector(slot);
     }
 }
+
 static void nearBase(uint32_t a)
 {
     Emulated->near_base = a;
 }
+
 static uint16_t flatCode(void)
 {
     return FLAT_CODE;
 }
+
 static uint16_t flatData(void)
 {
     return FLAT_DATA;
 }
+
 static void prepareCode(uint8_t *code, size_t size)
 {
     (void)code;
     (void)size;
 }
+
 static uint16_t attachTib(uint8_t *tib)
 {
     uint32_t address;
@@ -351,16 +373,19 @@ static uint16_t attachTib(uint8_t *tib)
         failure("Could not allocate the thread-local TIB window");
     return slot;
 }
+
 static void *currentTib(void)
 {
     return ThreadTib;
 }
+
 static void detachTib(uint16_t token)
 {
     freeSelector(token);
     ThreadFs = 0;
     ThreadTib = NULL;
 }
+
 static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *base, uint16_t selector,
                            LxExecutionApi16 callback, uint16_t bytes)
 {
@@ -388,6 +413,7 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *base, uint
     output[4] = bytes >> 8;
     return 5;
 }
+
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *api)
 {
     if (capacity < 5 ||
@@ -404,6 +430,7 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
     output[2] = 0xc3;
     return 3;
 }
+
 static void replaceContext(Invocation *frame)
 {
     if (frame->context)
@@ -418,6 +445,7 @@ static void replaceContext(Invocation *frame)
     lx_cpu_context_free(frame->context);
     frame->context = next;
 }
+
 /* The CPU engine is serialized. Rebind the process-wide TLS alias when the
    host thread changes; no guest CPU operation observes another thread's TIB. */
 static void bindThreadWindow(EmulatedState *s)
@@ -437,8 +465,10 @@ static void bindThreadWindow(EmulatedState *s)
         failure(lx_cpu_error(s->cpu));
     s->tls_backing = ThreadTib;
 }
+
 static void appendText(char *buffer, size_t size, const char *format, ...)
     __attribute__((format(printf, 3, 4)));
+
 static void appendText(char *buffer, size_t size, const char *format, ...)
 {
     size_t used = strlen(buffer);
@@ -449,6 +479,7 @@ static void appendText(char *buffer, size_t size, const char *format, ...)
     vsnprintf(buffer + used, size - used, format, arguments);
     va_end(arguments);
 }
+
 static void appendBytes(char *buffer, size_t size, const char *label, const uint8_t *bytes,
                         unsigned count)
 {
@@ -459,6 +490,7 @@ static void appendBytes(char *buffer, size_t size, const char *label, const uint
         appendText(buffer, size, " %02x", bytes[i]);
     appendText(buffer, size, "\n");
 }
+
 static void appendAddress(EmulatedState *s, char *buffer, size_t size, const char *label,
                           uint32_t address)
 {
@@ -468,10 +500,12 @@ static void appendAddress(EmulatedState *s, char *buffer, size_t size, const cha
                                                 sizeof place);
     appendText(buffer, size, "%s: %08x%s%s\n", label, address, *place ? " " : "", place);
 }
+
 static uint32_t guestLinear(EmulatedState *s, uint16_t selector, uint32_t offset)
 {
     return (selector & 4) ? s->selectors[selector >> 3].base + (offset & 0xffff) : offset;
 }
+
 static void appendGuestState(EmulatedState *s, const LxCpuRegisters *r, char *buffer, size_t size)
 {
     appendText(buffer, size,
@@ -500,6 +534,7 @@ static void appendGuestState(EmulatedState *s, const LxCpuRegisters *r, char *bu
                 r->eax >= 16 ? lx_cpu_translate(s->cpu, r->eax - 16, 48, LX_MEM_READ) : NULL, 48);
     lx_host_mutex_unlock(s->mutex);
 }
+
 static __attribute__((noreturn)) void missingImport(EmulatedState *s, const LxCpuRegisters *r,
                                                     const Binding *b)
 {
@@ -510,6 +545,7 @@ static __attribute__((noreturn)) void missingImport(EmulatedState *s, const LxCp
        its exit handlers may call the same import. */
     lx_host_fatal(LX_FATAL_MISSING_IMPORT, summary, detail);
 }
+
 /* Each worker owns one OS/2 process. Guest exit handlers are not reentered after
    an execution fault: they may hit the same unsupported API or damaged state. */
 static __attribute__((noreturn)) void stopGuest(EmulatedState *s, const LxCpuRegisters *r,
@@ -529,6 +565,7 @@ static __attribute__((noreturn)) void stopGuest(EmulatedState *s, const LxCpuReg
     appendGuestState(s, r, detail, sizeof detail);
     lx_host_fatal(LX_FATAL_GUEST_FAULT, summary, detail);
 }
+
 /* Runs in the fatal reporter, possibly from a signal handler on this thread. */
 static void writeFatalContext(void)
 {
@@ -564,6 +601,7 @@ static void writeFatalContext(void)
     if (!depth)
         lx_host_fatal_write("this thread is not executing guest code\n");
 }
+
 static uint32_t invoke(LxCpuRegisters registers, int preserve)
 {
     EmulatedState *s = Emulated;
@@ -696,6 +734,7 @@ static uint32_t invoke(LxCpuRegisters registers, int preserve)
     ReturnEdx = registers.edx;
     return registers.eax;
 }
+
 static LxCpuRegisters initialRegisters(void)
 {
     LxCpuRegisters r = {0};
@@ -705,6 +744,7 @@ static LxCpuRegisters initialRegisters(void)
     r.eflags = 2;
     return r;
 }
+
 static void push32(LxCpuRegisters *r, uint32_t word)
 {
     r->esp -= 4;
@@ -713,6 +753,7 @@ static void push32(LxCpuRegisters *r, uint32_t word)
         failure("Invalid guest invocation stack");
     lx_guest_store_u32(p, word);
 }
+
 static void program(const LxExecutionEntry *e, unsigned bits)
 {
     if (Active == &Emulated->completed_main)
@@ -758,6 +799,7 @@ static void program(const LxExecutionEntry *e, unsigned bits)
     uint32_t result = invoke(r, 1);
     Emulated->execution->services.program_returned(Emulated->execution->services.userdata, result);
 }
+
 static void library(const LxExecutionEntry *e, int termination)
 {
     LxCpuRegisters r = initialRegisters();
@@ -783,12 +825,15 @@ static void library(const LxExecutionEntry *e, int termination)
     push32(&r, Emulated->return_address);
     invoke(r, 0);
 }
+
 static __thread jmp_buf *ThreadReturn;
 static __thread Invocation *ThreadOuter;
+
 typedef struct ThreadEntry
 {
     uint32_t entry, stack;
 } ThreadEntry;
+
 static void *prepareThread(uint32_t entry, uint32_t stack)
 {
     ThreadEntry *p = malloc(sizeof *p);
@@ -799,6 +844,7 @@ static void *prepareThread(uint32_t entry, uint32_t stack)
     }
     return p;
 }
+
 static void thread16(void *p)
 {
     ThreadEntry *e = p;
@@ -825,6 +871,7 @@ static void thread16(void *p)
     ThreadReturn = outer_return;
     ThreadOuter = outer_frame;
 }
+
 static void callback(uint32_t entry, uint32_t argument)
 {
     if (!Active)
@@ -845,6 +892,7 @@ static void callback(uint32_t entry, uint32_t argument)
     push32(&r, Emulated->return_address);
     invoke(r, 0);
 }
+
 static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
     if (!lx_execution_memory(Emulated->execution, entry, 1, LX_GUEST_EXECUTE))
@@ -888,6 +936,7 @@ typedef struct Thread32Entry
 {
     uint32_t entry, stack, argument;
 } Thread32Entry;
+
 static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
 {
     Thread32Entry *p = malloc(sizeof *p);
@@ -899,6 +948,7 @@ static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
     }
     return p;
 }
+
 static void thread32(void *invocation)
 {
     Thread32Entry *entry = invocation;
@@ -919,6 +969,7 @@ static void thread32(void *invocation)
     ThreadReturn = outer_return;
     ThreadOuter = outer_frame;
 }
+
 static void cleanupThread32(void)
 {
     while (Active != ThreadOuter)
@@ -932,6 +983,7 @@ static void cleanupThread32(void)
         free(frame);
     }
 }
+
 static int endThread(void)
 {
     if (!ThreadReturn)
@@ -965,6 +1017,7 @@ static void *missing(const char *module, const char *entry, unsigned bits, LxExe
     }
     return code;
 }
+
 static int initialize(LxExecution *e)
 {
     if (Emulated)
@@ -1026,6 +1079,7 @@ static int initialize(LxExecution *e)
         failure(lx_cpu_error(s->cpu));
     return 1;
 }
+
 static void destroy(LxExecution *e)
 {
     EmulatedState *s = e->backend;
@@ -1047,6 +1101,7 @@ static void destroy(LxExecution *e)
     free(s);
     Emulated = NULL;
 }
+
 static int atomicU32(LxExecution *e, uint32_t address, void *host, int exchange, uint32_t value,
                      uint32_t *previous)
 {
@@ -1064,6 +1119,7 @@ static int atomicU32(LxExecution *e, uint32_t address, void *host, int exchange,
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+
 static void copyOut(LxExecution *e, const void *host, void *output, size_t size)
 {
     EmulatedState *s = e->backend;
@@ -1071,6 +1127,7 @@ static void copyOut(LxExecution *e, const void *host, void *output, size_t size)
     memcpy(output, host, size);
     lx_host_mutex_unlock(s->mutex);
 }
+
 static int copyIn(LxExecution *e, uint32_t address, void *host, const void *input, size_t size)
 {
     (void)host;
@@ -1081,10 +1138,12 @@ static int copyIn(LxExecution *e, uint32_t address, void *host, const void *inpu
     lx_host_mutex_unlock(s->mutex);
     return ok;
 }
+
 static uint32_t apiArguments(void)
 {
     return Active ? Active->api_arguments : 0;
 }
+
 static int apiRegisters32(LxExecutionRegisters32 *out)
 {
     if (!Active || !Active->api_registers)
@@ -1111,6 +1170,7 @@ static int apiRegisters32(LxExecutionRegisters32 *out)
     out->ss = r->ss;
     return 1;
 }
+
 static int apiResume32(const LxExecutionRegisters32 *registers)
 {
     if (!Active || !Active->api_registers ||
@@ -1122,6 +1182,7 @@ static int apiResume32(const LxExecutionRegisters32 *registers)
     Active->resume = 1;
     return 1;
 }
+
 /* The suspended API caller's stack top, as a linear address. */
 static uint32_t guestStack(void)
 {
@@ -1132,6 +1193,7 @@ static uint32_t guestStack(void)
         return r->esp;
     return Emulated->selectors[r->ss >> 3].base + (r->esp & 0xffff);
 }
+
 static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *arguments, uint32_t bytes,
                   uint32_t *result)
 {
@@ -1154,15 +1216,18 @@ static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *argume
     *result = (ReturnEdx << 16) | (ax & 0xffff);
     return 1;
 }
+
 static void quiesce(void)
 {
     lx_host_mutex_lock(Emulated->mutex, UINT32_MAX);
     lx_host_mutex_unlock(Emulated->mutex);
 }
+
 static void setParkFlag(const int *flag)
 {
     ThreadPark = flag;
 }
+
 const LxExecutionOperations lx_execution_unicorn = {"unicorn",
                                                     initialize,
                                                     destroy,

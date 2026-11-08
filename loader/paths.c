@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+
 char *makeOS2Path(const char *fname)
 {
     return lxHostPathToGuest(fname);

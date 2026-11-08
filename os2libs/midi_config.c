@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
 static char *config_path(void)
 {
     const char *selected = getenv("TWOINE_AUDIO_CONFIG");
@@ -28,6 +29,7 @@ static char *config_path(void)
         snprintf(path, size, "%s%s", base, suffix);
     return path;
 }
+
 char *lx_midi_config_value(const char *key)
 {
     if (!key || !*key || strchr(key, '=') || strchr(key, '\n'))

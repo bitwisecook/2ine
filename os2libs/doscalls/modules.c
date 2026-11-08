@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
+
 APIRET DosQueryModuleNameObject(HMODULE hmod, ULONG buflen, PCHAR buf, const LxModule *lxmod)
 {
     TRACE_NATIVE("DosQueryModuleName(%u, %u, %p)", (uint)hmod, (uint)buflen, buf);
@@ -380,6 +381,7 @@ APIRET DosQueryExtLIBPATH(PSZ path, ULONG flags)
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
+
 APIRET DosSetExtLIBPATH(PSZ path, ULONG flags)
 {
     if (flags < BEGIN_LIBPATH || flags > LIBPATHSTRICT || (path && strlen(path) >= 1024))
@@ -395,10 +397,12 @@ APIRET DosSetExtLIBPATH(PSZ path, ULONG flags)
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
+
 APIRET16 Dos16QueryExtLIBPATH(PCHAR path, ULONG flags)
 {
     return DosQueryExtLIBPATH(path, flags);
 }
+
 APIRET16 Dos16SetExtLIBPATH(PSZ path, ULONG flags)
 {
     return DosSetExtLIBPATH(path, flags);

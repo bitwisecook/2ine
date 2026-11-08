@@ -5,12 +5,14 @@
 #include "hal/tls.h"
 #include "hal/host_sync.h"
 #include "runtime/runtime_features.h"
+
 typedef struct SslContext
 {
     LxHostTlsContext *host;
     LxHostMutex *mutex;
     int unsupported_callback;
 } SslContext;
+
 typedef struct SslSession
 {
     LxHostTls *host;
@@ -19,11 +21,14 @@ typedef struct SslSession
     int socket, last_error, verified;
     char *peer;
 } SslSession;
+
 #include "os2libs/generated/ssleay32-lx.h"
+
 static void lock(LxHostMutex *m)
 {
     lx_host_mutex_lock(m, UINT32_MAX);
 }
+
 static void context_destroy(void *value)
 {
     SslContext *c = value;
@@ -32,6 +37,7 @@ static void context_destroy(void *value)
         lx_host_mutex_destroy(c->mutex);
     free(c);
 }
+
 static void session_destroy(void *value)
 {
     SslSession *s = value;
@@ -42,59 +48,74 @@ static void session_destroy(void *value)
     free(s->peer);
     free(s);
 }
+
 int Os2SslInit(void)
 {
     return 1;
 }
+
 void Os2SslErrors(void) {}
+
 uint32_t Os2SslClientMethod(void)
 {
     return 1;
 }
+
 uint32_t Os2SslMethod(void)
 {
     return 1;
 }
+
 uint32_t Os2SslV2ClientMethod(void)
 {
     return 2;
 }
+
 uint32_t Os2SslV2Method(void)
 {
     return 2;
 }
+
 uint32_t Os2SslV3ClientMethod(void)
 {
     return 0x0300;
 }
+
 uint32_t Os2SslV3Method(void)
 {
     return 0x0300;
 }
+
 uint32_t Os2SslTls1ClientMethod(void)
 {
     return 0x0301;
 }
+
 uint32_t Os2SslTls1Method(void)
 {
     return 0x0301;
 }
+
 uint32_t Os2SslTls11ClientMethod(void)
 {
     return 0x0302;
 }
+
 uint32_t Os2SslTls11Method(void)
 {
     return 0x0302;
 }
+
 uint32_t Os2SslTls12ClientMethod(void)
 {
     return 0x0303;
 }
+
 uint32_t Os2SslTls12Method(void)
 {
     return 0x0303;
 }
+
 uint32_t Os2SslContextNew(uint32_t method)
 {
     if (method != 1 && method != 2 && (method < 0x0300 || method > 0x0303))
@@ -122,10 +143,12 @@ uint32_t Os2SslContextNew(uint32_t method)
         context_destroy(c);
     return handle;
 }
+
 void Os2SslContextFree(uint32_t h)
 {
     lx_handle_close(h, LX_HANDLE_TLS_CONTEXT);
 }
+
 int Os2SslContextTrust(uint32_t h, const char *file, const char *path)
 {
     LxHandleBorrow borrow = {0};
@@ -144,10 +167,12 @@ int Os2SslContextTrust(uint32_t h, const char *file, const char *path)
     lx_handle_release(&borrow);
     return result;
 }
+
 int Os2SslContextDefaultTrust(uint32_t h)
 {
     return Os2SslContextTrust(h, NULL, NULL);
 }
+
 int Os2SslContextCiphers(uint32_t h, const char *ciphers)
 {
     LxHandleBorrow borrow = {0};
@@ -160,6 +185,7 @@ int Os2SslContextCiphers(uint32_t h, const char *ciphers)
     lx_handle_release(&borrow);
     return result;
 }
+
 void Os2SslContextVerify(uint32_t h, int mode, uint32_t callback)
 {
     (void)mode; /* Chain and name validation remain mandatory. */
@@ -172,6 +198,7 @@ void Os2SslContextVerify(uint32_t h, int mode, uint32_t callback)
     lx_host_mutex_unlock(c->mutex);
     lx_handle_release(&borrow);
 }
+
 uint32_t Os2SslNew(uint32_t h)
 {
     SslSession *s = calloc(1, sizeof *s);
@@ -190,10 +217,12 @@ uint32_t Os2SslNew(uint32_t h)
         session_destroy(s);
     return handle;
 }
+
 void Os2SslFree(uint32_t h)
 {
     lx_handle_close(h, LX_HANDLE_TLS_SESSION);
 }
+
 static SslSession *session(uint32_t h, LxHandleBorrow *borrow)
 {
     if (!lx_handle_borrow(h, LX_HANDLE_TLS_SESSION, borrow))
@@ -202,11 +231,13 @@ static SslSession *session(uint32_t h, LxHandleBorrow *borrow)
     lock(s->mutex);
     return s;
 }
+
 static void release(SslSession *s, LxHandleBorrow *borrow)
 {
     lx_host_mutex_unlock(s->mutex);
     lx_handle_release(borrow);
 }
+
 int Os2SslSetFd(uint32_t h, int fd)
 {
     LxHandleBorrow b = {0};
@@ -219,6 +250,7 @@ int Os2SslSetFd(uint32_t h, int fd)
     release(s, &b);
     return result;
 }
+
 int Os2SslGetFd(uint32_t h)
 {
     LxHandleBorrow b = {0};
@@ -229,6 +261,7 @@ int Os2SslGetFd(uint32_t h)
     release(s, &b);
     return result;
 }
+
 int32_t Os2SslCtrl(uint32_t h, int command, int32_t value, const char *pointer)
 {
     LxHandleBorrow b = {0};
@@ -250,6 +283,7 @@ int32_t Os2SslCtrl(uint32_t h, int command, int32_t value, const char *pointer)
     release(s, &b);
     return result;
 }
+
 static int start(SslSession *s)
 {
     if (s->host)
@@ -261,6 +295,7 @@ static int start(SslSession *s)
     lx_host_mutex_unlock(c->mutex);
     return s->host != NULL;
 }
+
 static int converted(SslSession *s, int result, int eof)
 {
     s->last_error = result == LX_TLS_WANT_READ    ? 2
@@ -270,6 +305,7 @@ static int converted(SslSession *s, int result, int eof)
                                                   : 0;
     return result < 0 ? -1 : result;
 }
+
 int Os2SslConnect(uint32_t h)
 {
     LxHandleBorrow b = {0};
@@ -282,10 +318,12 @@ int Os2SslConnect(uint32_t h)
     release(s, &b);
     return result;
 }
+
 int Os2SslHandshake(uint32_t h)
 {
     return Os2SslConnect(h);
 }
+
 static int transfer(uint32_t h, void *buffer, int length, int writing)
 {
     LxHandleBorrow b = {0};
@@ -306,14 +344,17 @@ static int transfer(uint32_t h, void *buffer, int length, int writing)
     release(s, &b);
     return result;
 }
+
 int Os2SslRead(uint32_t h, void *buffer, int length)
 {
     return transfer(h, buffer, length, 0);
 }
+
 int Os2SslWrite(uint32_t h, const void *buffer, int length)
 {
     return transfer(h, (void *)buffer, length, 1);
 }
+
 int Os2SslShutdown(uint32_t h)
 {
     LxHandleBorrow b = {0};
@@ -324,6 +365,7 @@ int Os2SslShutdown(uint32_t h)
     release(s, &b);
     return result;
 }
+
 int Os2SslGetError(uint32_t h, int result)
 {
     LxHandleBorrow b = {0};
@@ -334,6 +376,7 @@ int Os2SslGetError(uint32_t h, int result)
     release(s, &b);
     return error;
 }
+
 int Os2SslPending(uint32_t h)
 {
     LxHandleBorrow b = {0};
@@ -344,6 +387,7 @@ int Os2SslPending(uint32_t h)
     release(s, &b);
     return result;
 }
+
 int32_t Os2SslVerifyResult(uint32_t h)
 {
     LxHandleBorrow b = {0};
@@ -354,6 +398,7 @@ int32_t Os2SslVerifyResult(uint32_t h)
     release(s, &b);
     return result;
 }
+
 const char *Os2SslVersion(uint32_t h)
 {
     static LX_HOST_THREAD_LOCAL char version[32];

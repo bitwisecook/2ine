@@ -2,16 +2,19 @@
 /* RECT arithmetic uses inclusive left/top and exclusive right/bottom edges. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+
 typedef struct Rectangle32
 {
     LONG left, top, right, bottom;
 } Rectangle32;
+
 static Rectangle32 load_rectangle(PVOID input)
 {
     const uint8 *p = input;
     return (Rectangle32){(LONG)lx_guest_load_u32(p), (LONG)lx_guest_load_u32(p + 4),
                          (LONG)lx_guest_load_u32(p + 8), (LONG)lx_guest_load_u32(p + 12)};
 }
+
 static BOOL store_rectangle(PVOID output, Rectangle32 rect)
 {
     if (!output)
@@ -25,10 +28,12 @@ static BOOL store_rectangle(PVOID output, Rectangle32 rect)
     lx_guest_store_u32((uint8 *)output + 12, (ULONG)rect.bottom);
     return TRUE;
 }
+
 static BOOL empty(Rectangle32 rect)
 {
     return rect.left >= rect.right || rect.top >= rect.bottom;
 }
+
 static Rectangle32 intersection(Rectangle32 a, Rectangle32 b)
 {
     Rectangle32 result = {a.left > b.left ? a.left : b.left, a.top > b.top ? a.top : b.top,
@@ -36,14 +41,17 @@ static Rectangle32 intersection(Rectangle32 a, Rectangle32 b)
                           a.bottom < b.bottom ? a.bottom : b.bottom};
     return empty(result) ? (Rectangle32){0} : result;
 }
+
 BOOL SetRect(PVOID output, LONG left, LONG top, LONG right, LONG bottom)
 {
     return store_rectangle(output, (Rectangle32){left, top, right, bottom});
 }
+
 BOOL SetRectEmpty(PVOID output)
 {
     return store_rectangle(output, (Rectangle32){0});
 }
+
 BOOL CopyRect(PVOID output, PVOID input)
 {
     if (!input)
@@ -53,6 +61,7 @@ BOOL CopyRect(PVOID output, PVOID input)
     }
     return store_rectangle(output, load_rectangle(input));
 }
+
 BOOL IsRectEmpty(PVOID input)
 {
     if (!input)
@@ -62,6 +71,7 @@ BOOL IsRectEmpty(PVOID input)
     }
     return empty(load_rectangle(input));
 }
+
 BOOL EqualRect(PVOID first, PVOID second)
 {
     if (!first || !second)
@@ -72,6 +82,7 @@ BOOL EqualRect(PVOID first, PVOID second)
     Rectangle32 a = load_rectangle(first), b = load_rectangle(second);
     return a.left == b.left && a.top == b.top && a.right == b.right && a.bottom == b.bottom;
 }
+
 BOOL UnionRect(PVOID output, PVOID first, PVOID second)
 {
     if (!output || !first || !second)
@@ -91,6 +102,7 @@ BOOL UnionRect(PVOID output, PVOID first, PVOID second)
     store_rectangle(output, result);
     return !empty(result);
 }
+
 BOOL IntersectRect(PVOID output, PVOID first, PVOID second)
 {
     if (!output || !first || !second)
@@ -102,6 +114,7 @@ BOOL IntersectRect(PVOID output, PVOID first, PVOID second)
     store_rectangle(output, result);
     return !empty(result);
 }
+
 BOOL SubtractRect(PVOID output, PVOID first, PVOID second)
 {
     if (!output || !first || !second)
@@ -134,6 +147,7 @@ BOOL SubtractRect(PVOID output, PVOID first, PVOID second)
     store_rectangle(output, result);
     return !empty(result);
 }
+
 BOOL OffsetRect(PVOID input, LONG x, LONG y)
 {
     if (!input)
@@ -148,6 +162,7 @@ BOOL OffsetRect(PVOID input, LONG x, LONG y)
     rect.bottom = (LONG)((ULONG)rect.bottom + (ULONG)y);
     return store_rectangle(input, rect);
 }
+
 BOOL InflateRect(PVOID input, LONG x, LONG y)
 {
     if (!input)
@@ -162,6 +177,7 @@ BOOL InflateRect(PVOID input, LONG x, LONG y)
     rect.bottom = (LONG)((ULONG)rect.bottom + (ULONG)y);
     return store_rectangle(input, rect);
 }
+
 BOOL PtInRect(PVOID input, LONG x, LONG y)
 {
     if (!input)

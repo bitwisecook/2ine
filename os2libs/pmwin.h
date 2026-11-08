@@ -323,6 +323,7 @@ extern "C"
 
 /* Two-byte packing preserves the shared USE16/USE32 PM layout. */
 #pragma pack(push, 2)
+
     typedef struct
     {
         USHORT cb;
@@ -330,6 +331,7 @@ extern "C"
         USHORT hmodResources;
         USHORT idResources;
     } FRAMECDATA, *PFRAMECDATA;
+
 #pragma pack(pop)
 
     typedef struct
@@ -897,8 +899,21 @@ extern "C"
     };
 
     // API entry points...
-    typedef struct LXTRACKINFO { LONG cxBorder,cyBorder,cxGrid,cyGrid,cxKeyboard,cyKeyboard; RECTL rclTrack,rclBoundary; POINTL ptlMinTrackSize,ptlMaxTrackSize; ULONG fs; } LXTRACKINFO;
-    typedef struct LXPOINTERINFO { ULONG fPointer; LONG xHotspot,yHotspot; ULONG hbmPointer,hbmColor,hbmMiniPointer,hbmMiniColor; } LXPOINTERINFO;
+    typedef struct LXTRACKINFO
+    {
+        LONG cxBorder, cyBorder, cxGrid, cyGrid, cxKeyboard, cyKeyboard;
+        RECTL rclTrack, rclBoundary;
+        POINTL ptlMinTrackSize, ptlMaxTrackSize;
+        ULONG fs;
+    } LXTRACKINFO;
+
+    typedef struct LXPOINTERINFO
+    {
+        ULONG fPointer;
+        LONG xHotspot, yHotspot;
+        ULONG hbmPointer, hbmColor, hbmMiniPointer, hbmMiniColor;
+    } LXPOINTERINFO;
+
     OS2EXPORT BOOL OS2API WinIsChild(HWND child, HWND parent) OS2APIINFO(768);
     OS2EXPORT BOOL OS2API WinSetFocus(HWND desktop, HWND window) OS2APIINFO(860);
     OS2EXPORT HWND OS2API WinQueryFocus(HWND desktop) OS2APIINFO(817);
@@ -911,6 +926,7 @@ extern "C"
     OS2EXPORT LONG OS2API WinGetPhysKeyState(HWND desktop, LONG scan) OS2APIINFO(758);
 
 #pragma pack(push, 2)
+
     typedef struct
     {
         USHORT fsItemStatus, cChildren, cchClassName, offClassName, cchText, offText;
@@ -918,11 +934,13 @@ extern "C"
         SHORT x, y, cx, cy;
         USHORT id, offPresParams, offCtlData;
     } DLGTITEM;
+
     typedef struct
     {
         USHORT cbTemplate, type, codepage, offadlgti, fsTemplateStatus, iItemFocus, coffPresParams;
         DLGTITEM adlgti[1];
     } DLGTEMPLATE, *PDLGTEMPLATE;
+
 #pragma pack(pop)
     OS2EXPORT HWND OS2API WinCreateDlg(HWND parent, HWND owner, PFNWP procedure, PDLGTEMPLATE data,
                                        PVOID parameters) OS2APIINFO(922);
@@ -990,15 +1008,18 @@ extern "C"
     OS2EXPORT BOOL OS2API WinQueryUpdateRect(HWND window, PRECTL rectangle) OS2APIINFO(831);
     OS2EXPORT BOOL OS2API WinUpdateWindow(HWND window) OS2APIINFO(892);
     OS2EXPORT HWND OS2API WinWindowFromDC(HDC dc) OS2APIINFO(898);
+
     typedef struct
     {
         ULONG flClassStyle;
         PFNWP pfnWindowProc;
         ULONG cbWindowData;
     } CLASSINFO;
+
     typedef CLASSINFO *PCLASSINFO;
     OS2EXPORT BOOL OS2API WinQueryClassInfo(HAB hab, PSZ name, PCLASSINFO info) OS2APIINFO(925);
 #pragma pack(push, 2)
+
     typedef struct
     {
         SHORT iPosition;
@@ -1006,7 +1027,9 @@ extern "C"
         HWND hwndSubMenu;
         ULONG hItem;
     } MENUITEM;
+
 #pragma pack(pop)
+
     typedef struct
     {
         HWND hwnd;
@@ -1016,6 +1039,7 @@ extern "C"
         LONG idItem;
         ULONG hItem;
     } OWNERITEM;
+
     OS2EXPORT BOOL OS2API WinCreateFrameControls(HWND frame, PFRAMECDATA data, PSZ title)
         OS2APIINFO(906);
     OS2EXPORT BOOL OS2API WinCalcFrameRect(HWND frame, PRECTL rect, BOOL client) OS2APIINFO(704);
@@ -1193,9 +1217,9 @@ extern "C"
     OS2EXPORT BOOL OS2API WinIsWindowEnabled(HWND hwnd) OS2APIINFO(773);
     OS2EXPORT BOOL OS2API WinIsWindowVisible(HWND hwnd) OS2APIINFO(775);
 
-
     OS2EXPORT BOOL OS2API WinCancelShutdown(HMQ a0, BOOL a1) OS2APIINFO(705);
-    OS2EXPORT BOOL OS2API WinCpTranslateString(HAB a0, ULONG a1, PSZ a2, ULONG a3, ULONG a4, PSZ a5) OS2APIINFO(712);
+    OS2EXPORT BOOL OS2API WinCpTranslateString(HAB a0, ULONG a1, PSZ a2, ULONG a3, ULONG a4, PSZ a5)
+        OS2APIINFO(712);
     OS2EXPORT BOOL OS2API WinDeleteLibrary(HAB a0, ULONG a1) OS2APIINFO(722);
     OS2EXPORT BOOL OS2API WinFlashWindow(HWND a0, BOOL a1) OS2APIINFO(745);
     OS2EXPORT BOOL OS2API WinFocusChange(HWND a0, HWND a1, ULONG a2) OS2APIINFO(746);
@@ -1206,28 +1230,32 @@ extern "C"
     OS2EXPORT BOOL OS2API WinInvalidateRegion(HWND a0, ULONG a1, BOOL a2) OS2APIINFO(766);
     OS2EXPORT BOOL OS2API WinIsWindowShowing(HWND a0) OS2APIINFO(774);
     OS2EXPORT ULONG OS2API WinLoadLibrary(HAB a0, PSZ a1) OS2APIINFO(777);
-    OS2EXPORT LONG OS2API WinLoadMessage(HAB a0, HMODULE a1, ULONG a2, LONG a3, PSZ a4) OS2APIINFO(779);
+    OS2EXPORT LONG OS2API WinLoadMessage(HAB a0, HMODULE a1, ULONG a2, LONG a3, PSZ a4)
+        OS2APIINFO(779);
     OS2EXPORT PSZ OS2API WinNextChar(HAB a0, ULONG a1, ULONG a2, PSZ a3) OS2APIINFO(791);
     OS2EXPORT ULONG OS2API WinQueryAtomName(ULONG a0, ULONG a1, PSZ a2, ULONG a3) OS2APIINFO(802);
-    OS2EXPORT BOOL OS2API WinQueryDlgItemShort(HWND a0, ULONG a1, PSHORT a2, BOOL a3) OS2APIINFO(814);
+    OS2EXPORT BOOL OS2API WinQueryDlgItemShort(HWND a0, ULONG a1, PSHORT a2, BOOL a3)
+        OS2APIINFO(814);
     OS2EXPORT BOOL OS2API WinQueryMsgPos(HAB a0, PPOINTL a1) OS2APIINFO(818);
     OS2EXPORT HWND OS2API WinQueryObjectWindow(HWND a0) OS2APIINFO(820);
-    OS2EXPORT BOOL OS2API WinQueryPointerInfo(HPOINTER a0, LXPOINTERINFO * a1) OS2APIINFO(822);
+    OS2EXPORT BOOL OS2API WinQueryPointerInfo(HPOINTER a0, LXPOINTERINFO *a1) OS2APIINFO(822);
     OS2EXPORT BOOL OS2API WinQueryQueueInfo(HMQ a0, PVOID a1, ULONG a2) OS2APIINFO(824);
     OS2EXPORT LONG OS2API WinQueryUpdateRegion(HWND a0, ULONG a1) OS2APIINFO(832);
     OS2EXPORT BOOL OS2API WinSetCp(HMQ a0, ULONG a1) OS2APIINFO(857);
     OS2EXPORT BOOL OS2API WinSetDlgItemShort(HWND a0, ULONG a1, USHORT a2, BOOL a3) OS2APIINFO(858);
     OS2EXPORT BOOL OS2API WinSetMultWindowPos(HAB a0, PSWP a1, ULONG a2) OS2APIINFO(863);
-    OS2EXPORT BOOL OS2API WinSetSysColors(HWND a0, ULONG a1, ULONG a2, LONG a3, ULONG a4, PLONG a5) OS2APIINFO(871);
+    OS2EXPORT BOOL OS2API WinSetSysColors(HWND a0, ULONG a1, ULONG a2, LONG a3, ULONG a4, PLONG a5)
+        OS2APIINFO(871);
     OS2EXPORT BOOL OS2API WinSetSysValue(HWND a0, LONG a1, LONG a2) OS2APIINFO(873);
     OS2EXPORT BOOL OS2API WinSetWindowBits(HWND a0, LONG a1, ULONG a2, ULONG a3) OS2APIINFO(874);
-    OS2EXPORT BOOL OS2API WinTrackRect(HWND a0, HPS a1, LXTRACKINFO * a2) OS2APIINFO(890);
+    OS2EXPORT BOOL OS2API WinTrackRect(HWND a0, HPS a1, LXTRACKINFO *a2) OS2APIINFO(890);
     OS2EXPORT BOOL OS2API WinValidateRect(HWND a0, PRECTL a1, BOOL a2) OS2APIINFO(895);
     OS2EXPORT BOOL OS2API WinValidateRegion(HWND a0, ULONG a1, BOOL a2) OS2APIINFO(896);
-    OS2EXPORT BOOL OS2API WinBroadcastMsg(HWND a0, ULONG a1, MPARAM a2, MPARAM a3, ULONG a4) OS2APIINFO(901);
+    OS2EXPORT BOOL OS2API WinBroadcastMsg(HWND a0, ULONG a1, MPARAM a2, MPARAM a3, ULONG a4)
+        OS2APIINFO(901);
     OS2EXPORT BOOL OS2API WinSetKeyboardStateTable(HWND a0, PBYTE a1, BOOL a2) OS2APIINFO(921);
     OS2EXPORT LONG OS2API WinRealizePalette(HWND a0, HPS a1, PULONG a2) OS2APIINFO(941);
-    OS2EXPORT HPOINTER OS2API WinCreatePointerIndirect(HWND a0, LXPOINTERINFO * a1) OS2APIINFO(942);
+    OS2EXPORT HPOINTER OS2API WinCreatePointerIndirect(HWND a0, LXPOINTERINFO *a1) OS2APIINFO(942);
 #ifdef __cplusplus
 }
 #endif

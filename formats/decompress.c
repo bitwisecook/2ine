@@ -8,6 +8,7 @@
 #include "decompress.h"
 #include <string.h>
 #include <assert.h>
+
 void linearmove(uint8 *dst, const uint8 *src, uint8 len)
 {
     while (len--)

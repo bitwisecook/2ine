@@ -17,6 +17,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <fcntl.h>
+
 struct LxHostChild
 {
     pid_t id;
@@ -24,6 +25,7 @@ struct LxHostChild
     LxHostChildStatus status;
     pthread_mutex_t mutex;
 };
+
 static LxHostChild *spawn_child(const char *path, char *const *argv, char *const *env,
                                 int new_group)
 {
@@ -80,6 +82,7 @@ static LxHostChild *spawn_child(const char *path, char *const *argv, char *const
     }
     return child;
 }
+
 /* posix_spawn has no portable stopped start. Only async-signal-safe calls run
    between fork and exec, which keeps this valid in a threaded process. */
 LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, char *const *env)
@@ -138,14 +141,17 @@ LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, 
     child->id = id;
     return child;
 }
+
 LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, 0);
 }
+
 LxHostChild *lx_host_child_spawn_group(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, 1);
 }
+
 LxHostChild *lx_host_child_spawn_service(const char *path, char *const *argv, char *const *env)
 {
     size_t count = 0;
@@ -163,6 +169,7 @@ LxHostChild *lx_host_child_spawn_service(const char *path, char *const *argv, ch
     free(clean);
     return child;
 }
+
 static int poll_child(LxHostChild *child, LxHostChildStatus *status)
 {
     if (child->waited)
@@ -196,6 +203,7 @@ static int poll_child(LxHostChild *child, LxHostChildStatus *status)
     *status = child->status;
     return 1;
 }
+
 int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status)
 {
     for (;;)
@@ -211,6 +219,7 @@ int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status
         lx_host_sleep_ms(1);
     }
 }
+
 static int signal_child(LxHostChild *child, int signal_number)
 {
     int cancellation;
@@ -224,18 +233,22 @@ static int signal_child(LxHostChild *child, int signal_number)
     pthread_setcancelstate(cancellation, NULL);
     return result;
 }
+
 int lx_host_child_terminate(LxHostChild *child)
 {
     return signal_child(child, SIGKILL);
 }
+
 int lx_host_child_suspend(LxHostChild *child)
 {
     return signal_child(child, SIGSTOP);
 }
+
 int lx_host_child_resume(LxHostChild *child)
 {
     return signal_child(child, SIGCONT);
 }
+
 int lx_host_child_set_priority(LxHostChild *child, LxHostProcessPriority priority)
 {
     int value;
@@ -266,6 +279,7 @@ int lx_host_child_set_priority(LxHostChild *child, LxHostProcessPriority priorit
     pthread_setcancelstate(cancellation, NULL);
     return result;
 }
+
 static void *reap(void *arg)
 {
     LxHostChild *child = arg;
@@ -275,6 +289,7 @@ static void *reap(void *arg)
     free(child);
     return NULL;
 }
+
 void lx_host_child_release(LxHostChild *child)
 {
     if (!child)
@@ -289,6 +304,7 @@ void lx_host_child_release(LxHostChild *child)
     if (!pthread_create(&worker, NULL, reap, child))
         pthread_detach(worker);
 }
+
 uint32_t lx_host_child_id(const LxHostChild *child)
 {
     return (uint32_t)child->id;

@@ -8,6 +8,7 @@
 #include "hal/host_sync.h"
 #include "hal/host_thread.h"
 #include "hal/host.h"
+
 typedef struct Open32Thread
 {
     LxHostMonitor *monitor;
@@ -16,12 +17,14 @@ typedef struct Open32Thread
     ULONG public_handle, worker_handle, id, result, suspended, adopted_result;
     BOOL finished, started, adopted;
 } Open32Thread;
+
 #define CURRENT_THREAD_HANDLE (UINT32_MAX - 1)
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxGuestMapping *entry_code;
 static LxHostOnce adoption_once = LX_HOST_ONCE_INIT;
 static LxHostTlsKey *adopted_key;
 static _Thread_local LxHandleBorrow current_thread;
+
 static void destroy_thread(void *resource)
 {
     Open32Thread *thread = resource;
@@ -30,6 +33,7 @@ static void destroy_thread(void *resource)
     lx_host_monitor_destroy(thread->monitor);
     free(thread);
 }
+
 static uint32 start_thread(uint8 *a)
 {
     if (current_thread.resource ||
@@ -44,6 +48,7 @@ static uint32 start_thread(uint8 *a)
     lx_host_monitor_unlock(thread->monitor);
     return 0;
 }
+
 static uint32 complete_thread(uint8 *a)
 {
     Open32Thread *thread = current_thread.resource;
@@ -62,6 +67,7 @@ static uint32 complete_thread(uint8 *a)
     }
     return 0;
 }
+
 static void initialize(void)
 {
     entry_code = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
@@ -85,6 +91,7 @@ static void initialize(void)
         entry_code = NULL;
     }
 }
+
 ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG parameter, ULONG flags,
                    PULONG id)
 {
@@ -151,6 +158,7 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
         *id = thread->id;
     return thread->public_handle;
 }
+
 BOOL GetExitCodeThread(ULONG handle, PULONG result)
 {
     if (result && open32ChildThreadExitCode(handle, result))
@@ -168,12 +176,14 @@ BOOL GetExitCodeThread(ULONG handle, PULONG result)
     lx_handle_release(&borrow);
     return TRUE;
 }
+
 static ULONG dos_thread_call(const char *name, ULONG id)
 {
     typedef APIRET(OS2API * Fn)(ULONG);
     Fn call = (Fn)open32DosService(name);
     return call ? call(id) : 120;
 }
+
 ULONG ResumeThread(ULONG handle)
 {
     ULONG child_previous;
@@ -211,6 +221,7 @@ ULONG ResumeThread(ULONG handle)
     lx_handle_release(&borrow);
     return previous;
 }
+
 ULONG WaitForSingleObject(ULONG handle, ULONG timeout)
 {
     static int (*const waiters[])(ULONG, ULONG, ULONG *) = {open32WaitSemaphore, open32WaitSync,
@@ -242,10 +253,12 @@ ULONG WaitForSingleObject(ULONG handle, ULONG timeout)
     lx_handle_release(&borrow);
     return result;
 }
+
 BOOL open32CloseThread(ULONG handle)
 {
     return lx_handle_close(handle, LX_HANDLE_OPEN32_THREAD);
 }
+
 VOID ExitThread(ULONG result)
 {
     uint8 arguments[4];
@@ -270,6 +283,7 @@ BOOL SetThreadPriority(ULONG handle, LONG priority)
     open32SetError(50);
     return FALSE;
 }
+
 static ULONG suspend_thread(Open32Thread *thread)
 {
     lx_host_monitor_lock(thread->monitor);
@@ -298,6 +312,7 @@ static ULONG suspend_thread(Open32Thread *thread)
     open32SetError(error);
     return UINT32_MAX;
 }
+
 ULONG SuspendThread(ULONG handle)
 {
     ULONG child_previous;
@@ -322,6 +337,7 @@ ULONG SuspendThread(ULONG handle)
     lx_handle_release(&borrow);
     return previous;
 }
+
 BOOL TerminateThread(ULONG handle, ULONG code)
 {
     BOOL child_result;
@@ -372,6 +388,7 @@ BOOL TerminateThread(ULONG handle, ULONG code)
     lx_handle_release(&borrow);
     return TRUE;
 }
+
 /* Host thread teardown covers every way out: return, DosExit and cancellation. */
 static void adopted_thread_ended(void *value)
 {
@@ -386,12 +403,14 @@ static void adopted_thread_ended(void *value)
     lx_host_monitor_unlock(thread->monitor);
     lx_handle_release(&thread->entry);
 }
+
 static void note_thread_exit(ULONG code)
 {
     Open32Thread *thread = current_thread.resource;
     if (thread && thread->adopted)
         thread->adopted_result = code;
 }
+
 static void initialize_adoption(void)
 {
     typedef void(OS2API * ObserveFn)(void (*)(ULONG));
@@ -400,6 +419,7 @@ static void initialize_adoption(void)
     if (observe)
         observe(note_thread_exit);
 }
+
 /* A thread not started by CreateThread gains a record that signals when it ends. */
 ULONG open32DuplicateCurrentThread(void)
 {

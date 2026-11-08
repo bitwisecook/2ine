@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pm_text.h"
+
 static BOOL case_parameters(HAB hab, ULONG codepage, ULONG country)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -20,6 +21,7 @@ static BOOL case_parameters(HAB hab, ULONG codepage, ULONG country)
     }
     return TRUE;
 }
+
 ULONG WinUpperChar(HAB hab, ULONG codepage, ULONG country, ULONG character)
 {
     if (!case_parameters(hab, codepage, country) || character > 255)
@@ -27,6 +29,7 @@ ULONG WinUpperChar(HAB hab, ULONG codepage, ULONG country, ULONG character)
     /* Preserve non-ASCII bytes, as does the current NLS DosMapCase provider. */
     return character >= 'a' && character <= 'z' ? character - ('a' - 'A') : character;
 }
+
 ULONG WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text)
 {
     TRACE_NATIVE("WinUpper(%u, %u, %u, '%s')", (uint)hab, (uint)codepage, (uint)country, text);
@@ -40,6 +43,7 @@ ULONG WinUpper(HAB hab, ULONG codepage, ULONG country, PSZ text)
             text[i] -= 'a' - 'A';
     return (ULONG)length;
 }
+
 LONG lx_pm_char_extra(PresentationSpace *ps)
 {
     if (!ps || !ps->gpi.initialized || !ps->gpi.char_extra)
@@ -51,6 +55,7 @@ LONG lx_pm_char_extra(PresentationSpace *ps)
     int64_t delta = (int64_t)extra.x - origin.x;
     return (LONG)((delta + (delta < 0 ? -32768 : 32768)) / 65536);
 }
+
 LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, LONG color,
                 const RECTL *bounds)
 {
@@ -98,6 +103,7 @@ LONG lx_pm_text(HPS handle, const POINTL *point, LONG count, const char *text, L
     ps->position = end;
     return lx_pm_hits(ps);
 }
+
 static LONG draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground,
                       LONG background, ULONG flags, BOOL clip, BOOL opaque_runs, LxPmTextLine sink,
                       void *context)
@@ -235,11 +241,13 @@ LONG lx_pm_draw_text(HPS handle, LONG count, PCH text, PRECTL rect, LONG foregro
     return draw_text(handle, count, text, rect, foreground, background, flags, clip, opaque_runs,
                      NULL, NULL);
 }
+
 LONG lx_pm_draw_text_lines(HPS handle, LONG count, PCH text, PRECTL rect, ULONG flags,
                            LxPmTextLine sink, void *context)
 {
     return draw_text(handle, count, text, rect, 0, 0, flags & ~2u, FALSE, FALSE, sink, context);
 }
+
 LONG WinDrawText(HPS handle, LONG count, PCH text, PRECTL rect, LONG foreground, LONG background,
                  ULONG flags)
 {

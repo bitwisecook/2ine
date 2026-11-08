@@ -19,6 +19,7 @@
         }                                                                                          \
     } while (0)
 static unsigned activated;
+
 typedef struct HostDelivery
 {
     LxHostMonitor *monitor;
@@ -26,6 +27,7 @@ typedef struct HostDelivery
     BOOL ready;
     BOOL sent;
 } HostDelivery;
+
 static void *receive_host_event(void *argument)
 {
     HostDelivery *delivery = argument;
@@ -53,12 +55,14 @@ static void *receive_host_event(void *argument)
     CHECK(!lxHostThreadState()->anchor_block);
     return NULL;
 }
+
 static MRESULT OS2API procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_ACTIVATE && (uintptr_t)first)
         activated++;
     return WinDefWindowProc(window, message, first, second);
 }
+
 static void *post(void *argument)
 {
     HWND window = (HWND)(uintptr_t)argument;
@@ -66,11 +70,13 @@ static void *post(void *argument)
         CHECK(WinPostMsg(window, WM_USER + 1, (MPARAM)(uintptr_t)i, 0));
     return NULL;
 }
+
 static void *stale(void *argument)
 {
     CHECK(!WinPostMsg((HWND)(uintptr_t)argument, WM_USER + 1, 0, 0));
     return NULL;
 }
+
 static void *receive_global_quit(void *argument)
 {
     (void)argument;
@@ -78,8 +84,8 @@ static void *receive_global_quit(void *argument)
     HMQ queue = WinCreateMsgQueue(hab, 0);
     HWND first = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "quit worker", 0, 0, 0, 32, 32, 0,
                                  HWND_TOP, 0, NULL, NULL);
-    HWND second = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "second worker window", 0, 0, 0,
-                                  32, 32, 0, HWND_TOP, 0, NULL, NULL);
+    HWND second = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "second worker window", 0, 0, 0, 32,
+                                  32, 0, HWND_TOP, 0, NULL, NULL);
     CHECK(hab && queue && first && second);
     LxHostEvent event = {.type = LX_HOST_EVENT_QUIT};
     CHECK(lx_host_video_push(&event) && lx_pm_poll_input());
@@ -91,6 +97,7 @@ static void *receive_global_quit(void *argument)
     lxHostThreadCleanup();
     return NULL;
 }
+
 int main(void)
 {
     HAB hab = WinInitialize(0);

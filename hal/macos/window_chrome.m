@@ -20,12 +20,14 @@
     (void)sender;
     self.toggle(self.userdata);
 }
+
 @end
 
 struct LxWindowChrome
 {
     void *control;
 };
+
 LxWindowChrome *lx_window_chrome_create(void *opaque, void (*toggle)(void *), void *userdata)
 {
     SDL_Window *sdl = opaque;
@@ -58,6 +60,7 @@ LxWindowChrome *lx_window_chrome_create(void *opaque, void (*toggle)(void *), vo
     lx_window_chrome_capture(chrome, 0);
     return chrome;
 }
+
 void lx_window_chrome_capture(LxWindowChrome *chrome, int captured)
 {
     if (!chrome)
@@ -68,6 +71,7 @@ void lx_window_chrome_capture(LxWindowChrome *chrome, int captured)
     control.button.toolTip = captured ? @"Release the mouse (Control–Option)"
                                      : @"Capture the mouse (Control–Option)";
 }
+
 void lx_window_chrome_destroy(LxWindowChrome *chrome)
 {
     if (!chrome)

@@ -9,11 +9,13 @@ static const cJSON *dependency_cached_binary(Context *c, const cJSON *database, 
                                                                          key)) return binary;
     return NULL;
 }
+
 static char *dependency_cached_join(Context *c, const char *directory, const char *name)
 {
     return component_key(c, format(c, "%s%s%s", directory,
                                    directory[strlen(directory) - 1] == '\\' ? "" : "\\", name));
 }
+
 static char *dependency_cached_program(Context *c, const cJSON *database, const char *program,
                                        const cJSON *env, const char *cwd, int host_program)
 {
@@ -40,6 +42,7 @@ static char *dependency_cached_program(Context *c, const cJSON *database, const 
     cJSON_Delete(paths);
     return path;
 }
+
 static const cJSON *dependency_cached_find(Context *c, const cJSON *database, const char *binary,
                                            const char *module, const cJSON *paths)
 {
@@ -60,6 +63,7 @@ static const cJSON *dependency_cached_find(Context *c, const cJSON *database, co
     }
     return found;
 }
+
 static void dependency_cached_process(Context *c, const cJSON *database, const cJSON *application,
                                       const cJSON *request, const char *program, const char *cwd,
                                       cJSON *report)
@@ -208,6 +212,7 @@ static void dependency_cached_process(Context *c, const cJSON *database, const c
     cJSON_Delete(seen);
     cJSON_Delete(env);
 }
+
 static cJSON *launch_dependencies(Context *parent, const cJSON *request)
 {
     const cJSON *arguments = get(request, "arguments");

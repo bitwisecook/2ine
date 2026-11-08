@@ -141,7 +141,7 @@ def render(schema):
         if name in CUSTOM:
             continue
         wire.append(
-            f"static uint32_t call_{name}(uint8_t *a)\n{{\n    (void)a;\n    GlContext *ctx = gl_current();\n    if (!ctx) return 0;\n"
+            f"\nstatic uint32_t call_{name}(uint8_t *a)\n{{\n    (void)a;\n    GlContext *ctx = gl_current();\n    if (!ctx) return 0;\n"
         )
         if name in {"glViewport", "glClear", "glBegin", "glNewList"}:
             wire.append("    if (!gl_resize_current(ctx)) return 0;\n")

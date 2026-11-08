@@ -29,6 +29,7 @@ static uint32_t FixedTibEntry;
 static int Concurrent, Arrivals;
 static pthread_mutex_t BarrierMutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t BarrierCondition = PTHREAD_COND_INITIALIZER;
+
 static void returned(void *unused, uint32_t result)
 {
     (void)unused;
@@ -37,6 +38,7 @@ static void returned(void *unused, uint32_t result)
         lx_execution_callback32(Execution, ReturnCallback, result);
     longjmp(ProgramReturn, 1);
 }
+
 static uint32_t bridge(uint8_t *args)
 {
     uint32_t api_arguments = lx_execution_api_arguments(Execution);
@@ -73,6 +75,7 @@ static uint32_t bridge(uint8_t *args)
     lx_execution_release(&pinned);
     return 0x4321;
 }
+
 static uint32_t bridge32(uint8_t *arguments)
 {
 #if defined(__i386__)
@@ -80,10 +83,12 @@ static uint32_t bridge32(uint8_t *arguments)
 #endif
     return lx_guest_load_u32(arguments) + 1;
 }
+
 static void put32(uint8_t *p, uint32_t value)
 {
     memcpy(p, &value, 4);
 }
+
 static void mapping_contract(void)
 {
     LxGuestMapping *m = lx_execution_map(Execution, 0x05000000, 0x10000, 3, 1);
@@ -138,6 +143,7 @@ static void mapping_contract(void)
     CHECK(lx_execution_unmap(Execution, m));
     puts("guest mapping ownership, address translation, collision and permission checks passed");
 }
+
 static void argument_contract(void)
 {
     uint16_t selector;
@@ -173,6 +179,7 @@ static void argument_contract(void)
     lx_execution_free_segment(Execution, selector);
     puts("USE16 span bounds, aligned argument copies, output commit and string snapshots passed");
 }
+
 static void invoke32(void)
 {
     LxGuestMapping *code = lx_execution_map(Execution, 0x06000000, 0x10000, 7, 1);
@@ -258,11 +265,13 @@ static void invoke32(void)
     CHECK(lx_execution_unmap(Execution, data));
     puts("USE32 program/DLL entry, caller/callee cleanup and EAX import ABI passed");
 }
+
 typedef struct ThreadTest
 {
     void *invocation;
     uint8_t *tib;
 } ThreadTest;
+
 static void *run_thread(void *userdata)
 {
     ThreadTest *test = userdata;
@@ -271,11 +280,13 @@ static void *run_thread(void *userdata)
     lx_execution_detach_tib(Execution, token);
     return NULL;
 }
+
 static uint32_t leaf16(uint8_t *arguments)
 {
     (void)arguments;
     return 0x5555;
 }
+
 static uint32_t nested16(uint8_t *arguments)
 {
     (void)arguments;
@@ -291,6 +302,7 @@ static uint32_t nested16(uint8_t *arguments)
     lx_execution_free_segment(Execution, selector);
     return 0;
 }
+
 static void *asynchronous_callback(void *tib)
 {
     uint16_t token = lx_execution_attach_tib(Execution, tib);
@@ -298,6 +310,7 @@ static void *asynchronous_callback(void *tib)
     lx_execution_detach_tib(Execution, token);
     return NULL;
 }
+
 static void invoke16(void)
 {
     LxGuestMapping *nested = lx_execution_map(Execution, 0x06400000, 0x10000, 7, 1);
@@ -398,6 +411,7 @@ static void invoke16(void)
     puts(
         "USE16 thread entry, Pascal API bridges, nested callbacks and blocking two-thread rendezvous passed");
 }
+
 static uint32_t end_thread_bridge(uint8_t *arguments)
 {
     CHECK(lx_guest_load_u32(arguments) == 42);
@@ -405,6 +419,7 @@ static uint32_t end_thread_bridge(uint8_t *arguments)
     CHECK(0);
     return 0;
 }
+
 static void *run_thread32(void *userdata)
 {
     ThreadTest *test = userdata;
@@ -413,6 +428,7 @@ static void *run_thread32(void *userdata)
     lx_execution_detach_tib(Execution, token);
     return NULL;
 }
+
 static void invoke_thread32(void)
 {
     LxGuestMapping *code = lx_execution_map(Execution, 0x06800000, 0x10000, 7, 1);
@@ -454,11 +470,13 @@ static void invoke_thread32(void)
     CHECK(lx_execution_unmap(Execution, code));
     puts("USE32 thread argument, per-thread TLS alias and non-returning exit passed");
 }
+
 typedef struct GenerationTest
 {
     uint8_t *tib;
     struct GenerationTest *next;
 } GenerationTest;
+
 static void *generation_thread(void *argument)
 {
     GenerationTest *test = argument;
@@ -474,6 +492,7 @@ static void *generation_thread(void *argument)
     lx_execution_detach_tib(Execution, token);
     return NULL;
 }
+
 static void generations_contract(void)
 {
     LxGuestMapping *mappings[6];
@@ -494,6 +513,7 @@ static void generations_contract(void)
         CHECK(lx_execution_unmap(Execution, mappings[i]));
     puts("Six generations of host-thread TIB attachment preserve parent TLS");
 }
+
 int main(int argc, char **argv)
 {
     const char *backend = argc > 1 ? argv[1] : "unicorn";

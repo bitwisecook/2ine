@@ -3,12 +3,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
 typedef struct Address
 {
     unsigned short family, port;
     unsigned long address;
     unsigned char pad[8];
 } Address;
+
 typedef struct Host
 {
     char *name;
@@ -16,6 +18,7 @@ typedef struct Host
     int family, length;
     char **addresses;
 } Host;
+
 int _System socket(int, int, int);
 int _System bind(int, Address *, int);
 int _System getsockname(int, Address *, int *);
@@ -38,6 +41,7 @@ unsigned long _System DosSleep(unsigned long);
         printf("failure line %d: %s\n", __LINE__, #x);                                             \
         return 1;                                                                                  \
     }
+
 int main(void)
 {
     int receiver, sender, n, len, i, on = 1;

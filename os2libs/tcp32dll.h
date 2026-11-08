@@ -2,6 +2,7 @@
 #ifndef TWOINE_TCP32DLL_H
 #define TWOINE_TCP32DLL_H
 #include "os2types.h"
+
 typedef struct Os2LegacyHost
 {
     char *name;
@@ -9,12 +10,14 @@ typedef struct Os2LegacyHost
     int32_t family, length;
     char **addresses;
 } Os2LegacyHost;
+
 typedef struct Os2LegacyProtocol
 {
     char *name;
     char **aliases;
     int number;
 } Os2LegacyProtocol;
+
 typedef struct Os2LegacyService
 {
     char *name;
@@ -22,6 +25,7 @@ typedef struct Os2LegacyService
     int port;
     char *protocol;
 } Os2LegacyService;
+
 OS2EXPORT Os2LegacyHost *OS2API Os2LegacyGetHostByAddress(const void *address, int length,
                                                           int family)
     OS2APIINFO(ord = 12, name = gethostbyaddr);

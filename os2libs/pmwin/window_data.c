@@ -10,6 +10,7 @@ static uint32 control_callback(uint8 *args)
                                                (MPARAM)(uintptr_t)lx_guest_load_u32(args + 8),
                                                (MPARAM)(uintptr_t)lx_guest_load_u32(args + 12));
 }
+
 static PFNWP previous_control_procedure(AnchorBlock *anchor)
 {
     if (!anchor->control_bridge)
@@ -31,6 +32,7 @@ static PFNWP previous_control_procedure(AnchorBlock *anchor)
     }
     return (PFNWP)(uintptr_t)lx_execution_mapping_address(anchor->control_bridge);
 }
+
 static uint32 frame_control_callback(uint8 *args)
 {
     return (uint32)(uintptr_t)frameControlProcedure(
@@ -38,6 +40,7 @@ static uint32 frame_control_callback(uint8 *args)
         (MPARAM)(uintptr_t)lx_guest_load_u32(args + 8),
         (MPARAM)(uintptr_t)lx_guest_load_u32(args + 12));
 }
+
 static PFNWP previous_frame_control_procedure(AnchorBlock *anchor)
 {
     if (!anchor->frame_control_bridge)
@@ -59,12 +62,14 @@ static PFNWP previous_frame_control_procedure(AnchorBlock *anchor)
     }
     return (PFNWP)(uintptr_t)lx_execution_mapping_address(anchor->frame_control_bridge);
 }
+
 static uint32 menu_callback(uint8 *args)
 {
     return (uint32)(uintptr_t)menuProcedure(lx_guest_load_u32(args), lx_guest_load_u32(args + 4),
                                             (MPARAM)(uintptr_t)lx_guest_load_u32(args + 8),
                                             (MPARAM)(uintptr_t)lx_guest_load_u32(args + 12));
 }
+
 static PFNWP previous_menu_procedure(AnchorBlock *anchor)
 {
     if (!anchor->menu_bridge)
@@ -97,6 +102,7 @@ HWND WinWindowFromID(HWND window, ULONG id)
             return child->hwnd;
     return 0;
 }
+
 USHORT WinQueryWindowUShort(HWND window, LONG index)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -109,6 +115,7 @@ USHORT WinQueryWindowUShort(HWND window, LONG index)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
     return lx_guest_load_u16((uint8 *)w->data + index);
 }
+
 BOOL WinSetWindowUShort(HWND window, LONG index, USHORT value)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -126,6 +133,7 @@ BOOL WinSetWindowUShort(HWND window, LONG index, USHORT value)
     }
     return TRUE;
 }
+
 ULONG WinQueryWindowULong(HWND window, LONG index)
 {
     TRACE_NATIVE("WinQueryWindowULong(%u, %d)", (uint)window, (int)index);
@@ -145,6 +153,7 @@ ULONG WinQueryWindowULong(HWND window, LONG index)
         SET_WIN_ERROR_AND_RETURN(anchor, PMERR_PARAMETER_OUT_OF_RANGE, 0);
     return lx_guest_load_u32((uint8 *)w->data + index);
 }
+
 static void resume_style_damage(Window *window)
 {
     if (windowAcceptsUpdates(window) && !WinIsRectEmpty(0, &window->invalid))
@@ -187,10 +196,12 @@ BOOL WinSetWindowULong(HWND window, LONG index, ULONG value)
     lx_guest_store_u32((uint8 *)w->data + index, value);
     return TRUE;
 }
+
 PVOID WinQueryWindowPtr(HWND window, LONG index)
 {
     return (PVOID)(uintptr_t)WinQueryWindowULong(window, index);
 }
+
 BOOL WinSetWindowPtr(HWND window, LONG index, PVOID value)
 {
     if ((uintptr_t)value > UINT32_MAX)

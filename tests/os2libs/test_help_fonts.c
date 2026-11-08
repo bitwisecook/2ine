@@ -17,6 +17,7 @@
             return 1;                                                                              \
         }                                                                                          \
     } while (0)
+
 static FATTRS attributes(const FONTMETRICS *metrics, USHORT selection)
 {
     FATTRS result = {0};
@@ -30,6 +31,7 @@ static FATTRS attributes(const FONTMETRICS *metrics, USHORT selection)
     result.fsFontUse = 2; /* FATTR_FONTUSE_OUTLINE */
     return result;
 }
+
 static int stable_glyph_masks(void)
 {
     const unsigned sizes[] = {11, 16, 24};
@@ -67,6 +69,7 @@ static int stable_glyph_masks(void)
         }
     return 0;
 }
+
 int main(void)
 {
     CHECK(!stable_glyph_masks());

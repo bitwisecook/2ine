@@ -26,15 +26,18 @@ static void init_tib(uint8 *p, void *stack, size_t size, uint32 id)
     (void)size;
     (void)id;
 }
+
 static uint16 attach_tib(uint8 *p)
 {
     (void)p;
     return 0;
 }
+
 static void detach_tib(uint16 token)
 {
     (void)token;
 }
+
 #if !TWOINE_PORTABLE_LOADER
 static ULONG OS2API completed(ULONG status, PVOID record, ULONG flags)
 {
@@ -50,6 +53,7 @@ static void put_big32(unsigned char *p, uint32_t value)
     p[2] = value >> 8;
     p[3] = value;
 }
+
 static int parse_track(LxMidiSequence *sequence, const unsigned char *track, size_t size)
 {
     CHECK(size <= UINT32_MAX && size <= SIZE_MAX - 22);
@@ -68,6 +72,7 @@ static int parse_track(LxMidiSequence *sequence, const unsigned char *track, siz
     free(file);
     return result;
 }
+
 static void midi_sequence_contracts(void)
 {
     const unsigned char track[] = {
@@ -138,6 +143,7 @@ static void midi_sequence_contracts(void)
     free(huge);
     puts("MIDI SysEx framing, continuation/escape preservation, timing and bounds passed");
 }
+
 static void check_stereo_capture(const char *path)
 {
     FILE *file = fopen(path, "rb");
@@ -169,6 +175,7 @@ static void check_stereo_capture(const char *path)
         "Stereo PCM disk output: %u frames, %u different L/R, energy %.6f/%.6f, peaks %.6f/%.6f\n",
         frames, different, left, right, peak_left, peak_right);
 }
+
 int main(void)
 {
     midi_sequence_contracts();

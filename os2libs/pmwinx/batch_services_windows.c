@@ -12,19 +12,23 @@ ULONG GetForegroundWindow(void)
 {
     return open32PublicWindow(GetActiveWindow());
 }
+
 ULONG GetCursor(void)
 {
     return open32Presentation() ? WinQueryPointer(HWND_DESKTOP) : 0;
 }
+
 ULONG GetDoubleClickTime(void)
 {
     return (ULONG)WinQuerySysValue(HWND_DESKTOP, 1);
 }
+
 ULONG GetTopWindow(ULONG parent)
 {
     return open32PublicWindow(
         WinQueryWindow(parent ? open32ClientWindow(parent) : HWND_DESKTOP, 2));
 }
+
 ULONG GetNextWindow(ULONG window, ULONG direction)
 {
     if (direction != 2 && direction != 3)
@@ -32,6 +36,7 @@ ULONG GetNextWindow(ULONG window, ULONG direction)
     return open32PublicWindow(
         WinQueryWindow(window ? window : HWND_DESKTOP, direction == 2 ? 0 : 1));
 }
+
 BOOL IsChild(ULONG parent, ULONG child)
 {
     if (!parent)
@@ -44,6 +49,7 @@ BOOL IsChild(ULONG parent, ULONG child)
     }
     return FALSE;
 }
+
 ULONG GetLastActivePopup(ULONG window)
 {
     ULONG target = window ? window : HWND_DESKTOP;
@@ -62,6 +68,7 @@ ULONG GetLastActivePopup(ULONG window)
     }
     return window;
 }
+
 ULONG ChildWindowFromPoint(ULONG parent, LONG x, LONG y)
 {
     RECTL bounds;
@@ -75,11 +82,13 @@ ULONG ChildWindowFromPoint(ULONG parent, LONG x, LONG y)
     ULONG child = WinWindowFromPoint(native, &point, TRUE);
     return !child ? 0 : child == native ? parent : open32PublicWindow(child);
 }
+
 typedef struct WindowNames
 {
     ULONG window, atom;
     char name[256], text[100];
 } WindowNames;
+
 /* Runs on the window's own thread, where its Open32 record and PM window can be read. */
 static uintptr_t read_window_names(void *context)
 {
@@ -95,6 +104,7 @@ static uintptr_t read_window_names(void *context)
     WinQueryWindowText(names->window, sizeof names->text, names->text);
     return 1;
 }
+
 ULONG FindWindow(PSZ class_name, PSZ title)
 {
     if (!class_name)
@@ -117,6 +127,7 @@ ULONG FindWindow(PSZ class_name, PSZ title)
     }
     return 0;
 }
+
 static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
 {
     if (!open32ValidProcedure(procedure))
@@ -160,8 +171,9 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
     free(object_list);
     BOOL result = TRUE;
     for (size_t i = 0; i < count; i++)
-        if (WinIsWindow(0, snapshot[i]) && !lx_execution_callback32_4(GLoaderState.execution, procedure,
-                                                                snapshot[i], parameter, 0, 0))
+        if (WinIsWindow(0, snapshot[i]) &&
+            !lx_execution_callback32_4(GLoaderState.execution, procedure, snapshot[i], parameter, 0,
+                                       0))
         {
             result = FALSE;
             break;
@@ -169,14 +181,17 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
     free(snapshot);
     return result;
 }
+
 BOOL EnumWindows(ULONG procedure, ULONG parameter)
 {
     return enum_top(0, procedure, parameter);
 }
+
 BOOL EnumThreadWindows(ULONG thread, ULONG procedure, ULONG parameter)
 {
     return enum_top(thread, procedure, parameter);
 }
+
 LONG MapWindowPoints(ULONG from, ULONG to, PVOID points, ULONG count)
 {
     if (!points || !count || count > 65536)
@@ -198,6 +213,7 @@ LONG MapWindowPoints(ULONG from, ULONG to, PVOID points, ULONG count)
     }
     return (LONG)((ULONG)(USHORT)dx | (ULONG)(USHORT)dy << 16);
 }
+
 USHORT GetWindowWord(ULONG handle, LONG index)
 {
     Open32Window *w = open32FindWindow(handle);
@@ -214,6 +230,7 @@ USHORT GetWindowWord(ULONG handle, LONG index)
     open32SetError(1413);
     return 0;
 }
+
 USHORT SetWindowWord(ULONG handle, LONG index, USHORT value)
 {
     USHORT old = GetWindowWord(handle, index);
@@ -228,10 +245,12 @@ USHORT SetWindowWord(ULONG handle, LONG index, USHORT value)
         open32SetError(1413);
     return old;
 }
+
 LONG GetDlgCtrlID(ULONG window)
 {
     return (LONG)WinQueryWindowUShort(open32ClientWindow(window), -1);
 }
+
 BOOL CheckRadioButton(ULONG dialog, LONG first, LONG last, LONG checked)
 {
     BOOL result = TRUE;
@@ -239,6 +258,7 @@ BOOL CheckRadioButton(ULONG dialog, LONG first, LONG last, LONG checked)
         result = CheckDlgButton(dialog, (LONG)id, id == checked);
     return result;
 }
+
 ULONG GetDlgItemInt(ULONG dialog, LONG id, PVOID translated, BOOL sign)
 {
     char text[64], *end = text;
@@ -265,6 +285,7 @@ ULONG GetDlgItemInt(ULONG dialog, LONG id, PVOID translated, BOOL sign)
         lx_guest_store_u32(translated, success);
     return success ? result : 0;
 }
+
 BOOL SetDlgItemInt(ULONG dialog, LONG id, ULONG value, BOOL sign)
 {
     char text[32];
@@ -274,6 +295,7 @@ BOOL SetDlgItemInt(ULONG dialog, LONG id, ULONG value, BOOL sign)
         snprintf(text, sizeof text, "%u", value);
     return SetDlgItemText(dialog, id, text);
 }
+
 ULONG GetNextDlgTabItem(ULONG dialog, ULONG control, BOOL previous)
 {
     ULONG first = WinQueryWindow(open32ClientWindow(dialog), 2), candidate = 0;
@@ -306,6 +328,7 @@ ULONG GetNextDlgTabItem(ULONG dialog, ULONG control, BOOL previous)
     }
     return control;
 }
+
 BOOL MapDialogRect(ULONG dialog, PVOID rectangle)
 {
     if (!rectangle || !IsWindow(dialog))
@@ -323,6 +346,7 @@ BOOL MapDialogRect(ULONG dialog, PVOID rectangle)
     }
     return TRUE;
 }
+
 LONG MessageBox(ULONG owner, PSZ text, PSZ caption, ULONG flags)
 {
     /* Windows and PM number the button, icon and modality groups differently.
@@ -347,6 +371,7 @@ typedef struct DeferredWindow
     ULONG window, after, flags;
     LONG x, y, w, h;
 } DeferredWindow;
+
 typedef struct DeferredBatch
 {
     size_t count, capacity;
@@ -355,7 +380,9 @@ typedef struct DeferredBatch
     void *owner;
     struct DeferredBatch *next;
 } DeferredBatch;
+
 static _Thread_local DeferredBatch *deferred_batches;
+
 static void destroy_defer(void *resource)
 {
     DeferredBatch *batch = resource;
@@ -367,6 +394,7 @@ static void destroy_defer(void *resource)
     free(batch->items);
     free(batch);
 }
+
 ULONG BeginDeferWindowPos(LONG count)
 {
     if (count < 0 || count > 65536)
@@ -397,6 +425,7 @@ ULONG BeginDeferWindowPos(LONG count)
     }
     return handle;
 }
+
 ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LONG width,
                      LONG height, ULONG flags)
 {
@@ -438,6 +467,7 @@ ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LO
     }
     return handle;
 }
+
 BOOL EndDeferWindowPos(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -489,6 +519,7 @@ LONG GetPriorityClipboardFormat(PVOID formats, LONG count)
     }
     return -1;
 }
+
 BOOL TranslateMDISysAccel(ULONG client, PVOID message)
 {
     if (!message)
@@ -511,6 +542,7 @@ BOOL TranslateMDISysAccel(ULONG client, PVOID message)
         return FALSE;
     return TRUE;
 }
+
 BOOL IsDialogMessage(ULONG dialog, PVOID message)
 {
     if (!message || !IsWindow(dialog))
@@ -545,6 +577,7 @@ BOOL IsDialogMessage(ULONG dialog, PVOID message)
     DispatchMessage(message);
     return TRUE;
 }
+
 BOOL DlgDirSelectEx(ULONG dialog, PSZ output, LONG capacity, LONG id)
 {
     if (!output || capacity <= 0)

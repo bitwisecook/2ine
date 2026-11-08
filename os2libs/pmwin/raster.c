@@ -63,6 +63,7 @@ uint32_t lx_pm_mix_pixel(uint32_t source, uint32_t destination, LONG mix)
     }
     return result & 0xffffff;
 }
+
 static BOOL raster_bounds(PresentationSpace *ps, LONG *width, LONG *height)
 {
     PmBitmap *bitmap = ps->bitmap_lease.resource;
@@ -70,6 +71,7 @@ static BOOL raster_bounds(PresentationSpace *ps, LONG *width, LONG *height)
     *height = bitmap ? (LONG)bitmap->height : ps->window ? ps->window->h : 0;
     return *width > 0 && *height > 0;
 }
+
 BOOL lx_pm_pattern_pixel(HPS handle, LONG x, LONG y, uint32_t *rgb, BOOL *foreground)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -106,6 +108,7 @@ BOOL lx_pm_pattern_pixel(HPS handle, LONG x, LONG y, uint32_t *rgb, BOOL *foregr
     *rgb = (uint32_t)color;
     return TRUE;
 }
+
 BOOL lx_pm_fill_span(HPS handle, LONG x, LONG y, LONG count, unsigned primitive)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -138,13 +141,17 @@ BOOL lx_pm_fill_span(HPS handle, LONG x, LONG y, LONG count, unsigned primitive)
     free(pixels);
     return ok;
 }
+
 LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     LONG width, height;
-    if (ps && point && ps->record_path && !pel) {
-        if (!lx_pm_record_point(ps, point, FALSE)) return 0;
-        ps->position = *point; return 1;
+    if (ps && point && ps->record_path && !pel)
+    {
+        if (!lx_pm_record_point(ps, point, FALSE))
+            return 0;
+        ps->position = *point;
+        return 1;
     }
     if (!ps || !point || !raster_bounds(ps, &width, &height))
         return 0;
@@ -156,10 +163,13 @@ LONG lx_pm_line(HPS handle, const POINTL *point, int pel)
         return 0;
     point = &end;
     BOOL hit = ps->gpi.pick_hit;
-    lx_pm_boundary(ps,from.x<end.x?from.x:end.x,from.y<end.y?from.y:end.y,(LONG)llabs((int64_t)end.x-from.x)+1,(LONG)llabs((int64_t)end.y-from.y)+1);
+    lx_pm_boundary(ps, from.x < end.x ? from.x : end.x, from.y < end.y ? from.y : end.y,
+                   (LONG)llabs((int64_t)end.x - from.x) + 1,
+                   (LONG)llabs((int64_t)end.y - from.y) + 1);
     ps->gpi.pick_hit = hit; /* The segment itself, not its bounding box, decides a hit. */
     lx_pm_pick_line(ps, &from, &end);
-    if(ps->gpi.initialized&&!ps->gpi.display_enabled)return lx_pm_hits(ps);
+    if (ps->gpi.initialized && !ps->gpi.display_enabled)
+        return lx_pm_hits(ps);
     if (ps->line_type == 8 || ps->primitive_mix[0] == 5)
         return lx_pm_hits(ps);
     LONG rgb = lx_pm_resolve_color(handle, ps->primitive_color[0]);

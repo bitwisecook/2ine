@@ -68,6 +68,7 @@ static struct
     uint32 *body_procs;
     size_t body_count;
 } S;
+
 static LxHostOnce runtime_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *constant_lock;
 static ConstantString *constants;
@@ -77,6 +78,7 @@ uint32 pmwpGuestCall(uint32 entry, uint32 a, uint32 b, uint32 c, uint32 d)
 {
     return entry ? lx_execution_callback32_4(GLoaderState.execution, entry, a, b, c, d) : 0;
 }
+
 uint32 pmwpLoad32(uint32 address)
 {
     uint8 bytes[4];
@@ -84,6 +86,7 @@ uint32 pmwpLoad32(uint32 address)
                ? lx_guest_load_u32(bytes)
                : 0;
 }
+
 BOOL pmwpStore32(uint32 address, uint32 value)
 {
     uint8 bytes[4];
@@ -97,15 +100,18 @@ uint32 pmwpMalloc(uint32 bytes)
 {
     return pmwpGuestCall(pmwpLoad32(S.malloc_cell), bytes, 0, 0, 0);
 }
+
 uint32 pmwpCalloc(uint32 bytes)
 {
     return pmwpGuestCall(pmwpLoad32(S.calloc_cell), 1, bytes, 0, 0);
 }
+
 void pmwpFree(uint32 address)
 {
     if (address)
         pmwpGuestCall(pmwpLoad32(S.free_cell), address, 0, 0, 0);
 }
+
 uint32 pmwpGuestString(const char *text)
 {
     size_t size = strlen(text) + 1;
@@ -126,10 +132,12 @@ static uint32 arena_alloc(size_t bytes)
     S.arena_used = start + bytes;
     return S.arena_base + (uint32)start;
 }
+
 static void arena_put(uint32 address, uint32 value)
 {
     lx_guest_store_u32(S.arena + (address - S.arena_base), value);
 }
+
 static uint32 arena_string(const char *text)
 {
     size_t size = strlen(text) + 1;
@@ -138,6 +146,7 @@ static uint32 arena_string(const char *text)
         memcpy(S.arena + (address - S.arena_base), text, size);
     return address;
 }
+
 /* A somId is the address of a cell holding the string pointer. SOM may rewrite the
    cell when it registers the identifier, so cells stay writable. */
 static uint32 arena_id(const char *text)
@@ -148,6 +157,7 @@ static uint32 arena_id(const char *text)
     arena_put(cell, string);
     return cell;
 }
+
 /* Method tables hold somId * values: one more level of indirection. */
 static uint32 arena_id_reference(const char *text)
 {
@@ -207,6 +217,7 @@ static uint32 unavailable_method(uint8 *arguments)
     }
     return pmwpMethodFailure(name);
 }
+
 /* Guest helper (entry, words, count): pushes count words last-first and calls entry,
    giving native code calls with more than four stack words. */
 static const uint8 call_many_code[] = {
@@ -226,6 +237,7 @@ static const uint8 call_many_code[] = {
     0x5d,                   /* pop ebp */
     0xc3                    /* ret */
 };
+
 uint32 pmwpGuestCallMany(uint32 entry, const uint32 *words, uint32 count)
 {
     uint32 block = pmwpMalloc(count * 4), result = 0;
@@ -237,6 +249,7 @@ uint32 pmwpGuestCallMany(uint32 entry, const uint32 *words, uint32 count)
     pmwpFree(block);
     return result;
 }
+
 /* push position; call bridge; add esp, 4; ret. The caller's arguments stay in place. */
 static uint32 emit_unavailable_stub(uint32 position)
 {
@@ -257,6 +270,7 @@ static uint32 emit_unavailable_stub(uint32 position)
 }
 
 static uint32 body_proc(const char *class_name, const char *method);
+
 static BOOL emit_bridges(void)
 {
     const struct
@@ -267,6 +281,7 @@ static BOOL emit_bridges(void)
                   {pmwpViewBodies, pmwpViewBodyCount},
                   {pmwpClassBodies, pmwpClassBodyCount},
                   {pmwpExtendedBodies, pmwpExtendedBodyCount}};
+
     size_t total = 0;
     for (size_t i = 0; i < sizeof tables / sizeof *tables; i++)
         total += tables[i].count;
@@ -425,6 +440,7 @@ static BOOL import_entry(HMODULE module, ULONG ordinal, uint32 *address)
     return DosQueryProcAddr(module, ordinal, NULL, &entry) == NO_ERROR && entry &&
            lx_execution_entry_address(GLoaderState.execution, (void *)entry, address);
 }
+
 static BOOL import_data(HMODULE module, ULONG ordinal, uint32 *address)
 {
     PFN entry = NULL;
@@ -527,37 +543,45 @@ uint32 pmwpClassObject(PmwpClassId id)
 {
     return pmwpRuntimeReady() ? pmwpLoad32(S.cds[id]) : 0;
 }
+
 uint32 pmwpClassToken(PmwpClassId id, uint32 offset)
 {
     return pmwpRuntimeReady() ? pmwpLoad32(S.cds[id] + offset) : 0;
 }
+
 uint32 pmwpInvoke(PmwpClassId id, uint32 offset, uint32 self, uint32 a, uint32 b, uint32 c)
 {
     return pmwpGuestCall(pmwpClassToken(id, offset), self, a, b, c);
 }
+
 uint32 pmwpInvokeClass(uint32 offset, uint32 self, uint32 a, uint32 b, uint32 c)
 {
     return pmwpGuestCall(pmwpLoad32(S.class_data + offset), self, a, b, c);
 }
+
 uint32 pmwpInvokeObject(uint32 offset, uint32 self, uint32 a, uint32 b, uint32 c)
 {
     return pmwpGuestCall(pmwpLoad32(S.object_data + offset), self, a, b, c);
 }
+
 /* The instance data token at somCClassDataStructure +4 is callable like a method token. */
 uint32 pmwpInstanceData(PmwpClassId id, uint32 self)
 {
     return pmwpGuestCall(pmwpLoad32(S.ccds[id] + 4), self, 0, 0, 0);
 }
+
 uint32 pmwpParentProc(PmwpClassId id, uint32 root_token_offset)
 {
     return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id]), 1,
                          pmwpLoad32(S.class_data + root_token_offset), 0);
 }
+
 /* The implementation of a method inherited from the first parent of `id`. */
 uint32 pmwpParentMethod(PmwpClassId id, uint32 token)
 {
     return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[id]), 1, token, 0);
 }
+
 /* Generated initializers and destructors share this step. A null control selects the
    class's own control block from its parent method table structure. It advances the
    cursor and reports the parent procedure to run, or zero. */
@@ -582,6 +606,7 @@ static uint32 control_step(PmwpClassId id, uint32 *control, uint32 *owned, uint3
     lx_execution_read(GLoaderState.execution, mask, &flags, 1);
     return flags & 1 ? pmwpLoad32(info + 4) : 0;
 }
+
 void pmwpGeneratedInit(PmwpClassId id, uint32 self, uint32 control)
 {
     uint32 owned, parent = control_step(id, &control, &owned, CONTROL_INIT_OFFSET);
@@ -589,6 +614,7 @@ void pmwpGeneratedInit(PmwpClassId id, uint32 self, uint32 control)
         pmwpGuestCall(parent, self, control, 0, 0);
     pmwpFree(owned);
 }
+
 void pmwpGeneratedDestruct(PmwpClassId id, uint32 self, BOOL release, uint32 control)
 {
     uint32 owned, parent = control_step(id, &control, &owned, CONTROL_DESTRUCT_OFFSET);
@@ -598,32 +624,39 @@ void pmwpGeneratedDestruct(PmwpClassId id, uint32 self, BOOL release, uint32 con
     if (release)
         pmwpInvokeClass(PMWP_SOMClass_somDeallocate, pmwpClassObject(id), self, 0, 0);
 }
+
 /* The class manager parent's implementation of a SOMClassMgr method. */
 uint32 pmwpClassManagerParent(uint32 token_offset)
 {
     return pmwpGuestCall(S.parent_resolve, pmwpLoad32(S.ccds[PMWP_WPCLASSMANAGER]), 1,
                          pmwpLoad32(S.class_mgr_data + token_offset), 0);
 }
+
 uint32 pmwpSomIdFromString(uint32 text)
 {
     return pmwpGuestCall(S.id_from_string, text, 0, 0, 0);
 }
+
 uint32 pmwpSomStringFromId(uint32 id)
 {
     return pmwpGuestCall(S.string_from_id, id, 0, 0, 0);
 }
+
 uint32 pmwpObjectField(uint32 self, uint32 offset)
 {
     return pmwpLoad32(pmwpInstanceData(PMWP_WPOBJECT, self) + offset);
 }
+
 void pmwpSetObjectField(uint32 self, uint32 offset, uint32 value)
 {
     pmwpStore32(pmwpInstanceData(PMWP_WPOBJECT, self) + offset, value);
 }
+
 uint32 pmwpClassField(uint32 self, uint32 offset)
 {
     return pmwpLoad32(pmwpInstanceData(PMWP_M_WPOBJECT, self) + offset);
 }
+
 void pmwpSetClassField(uint32 self, uint32 offset, uint32 value)
 {
     pmwpStore32(pmwpInstanceData(PMWP_M_WPOBJECT, self) + offset, value);

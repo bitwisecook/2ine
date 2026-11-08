@@ -23,6 +23,7 @@ static void enumeration_destroy(void *value)
     free(e->windows);
     free(e);
 }
+
 HENUM WinBeginEnumWindows(HWND parent)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -58,6 +59,7 @@ HENUM WinBeginEnumWindows(HWND parent)
     anchor->enumerations = e;
     return e->handle;
 }
+
 HWND WinGetNextWindow(HENUM handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -81,6 +83,7 @@ HWND WinGetNextWindow(HENUM handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 BOOL WinEndEnumWindows(HENUM handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -97,16 +100,19 @@ BOOL WinEndEnumWindows(HENUM handle)
         lxHostThreadState()->pm_error = PMERR_INVALID_HENUM;
     return result;
 }
+
 void destroyWindowEnumerations(AnchorBlock *anchor)
 {
     while (anchor->enumerations)
         lx_handle_close(anchor->enumerations->handle, LX_HANDLE_PM_ENUM);
 }
+
 HAB WinQueryAnchorBlock(HWND window)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     return anchor && getWindowFromHWND(anchor, window) ? anchor->hab : 0;
 }
+
 LONG WinQueryClassName(HWND window, LONG capacity, PCHAR output)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -121,6 +127,7 @@ LONG WinQueryClassName(HWND window, LONG capacity, PCHAR output)
     output[count] = 0;
     return (LONG)count;
 }
+
 HWND WinQueryWindow(HWND window, LONG code)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

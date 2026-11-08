@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/doscalls.h"
+
 ULONG GetWindowsDirectory(PSZ output, ULONG capacity)
 {
     TRACE_NATIVE("GetWindowsDirectory(%p, %u)", output, (uint)capacity);
@@ -57,6 +58,7 @@ ULONG GetCurrentDirectory(ULONG capacity, PSZ output)
     memcpy(output + 3, directory, length + 1);
     return required - 1;
 }
+
 BOOL SetCurrentDirectory(PSZ name)
 {
     if (!name || !*name)
@@ -166,10 +168,12 @@ ULONG GetDriveType(PSZ root)
     /* Configured drives are fixed, directory-backed virtual volumes. */
     return 3;
 }
+
 ULONG GetLogicalDrives(void)
 {
     return GLoaderState.diskmap & 0x03ffffffu;
 }
+
 ULONG GetLogicalDriveStrings(ULONG capacity, PSZ output)
 {
     char roots[26 * 4 + 1];
@@ -193,6 +197,7 @@ ULONG GetLogicalDriveStrings(ULONG capacity, PSZ output)
     memcpy(output, roots, size + 1);
     return size;
 }
+
 BOOL GetVolumeInformation(PSZ root, PSZ label, ULONG label_capacity, PULONG serial,
                           PULONG component_length, PULONG flags, PSZ filesystem,
                           ULONG filesystem_capacity)

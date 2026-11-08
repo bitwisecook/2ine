@@ -7,6 +7,7 @@
 #include "guest/abi.h"
 #include "guest/handles.h"
 static _Thread_local ULONG current_cursor;
+
 ULONG LoadCursor(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadCursor(%u, %p)", module, name);
@@ -59,6 +60,7 @@ ULONG LoadCursor(HMODULE module, PSZ name)
         open32SetError(1814);
     return result;
 }
+
 ULONG SetCursor(ULONG cursor)
 {
     LxHandleBorrow borrow = {0};
@@ -93,6 +95,7 @@ static BOOL cursor_y(LONG input, LONG *output)
     {
         screen_height = 21
     }; /* SV_CYSCREEN */
+
     LONG height = WinQuerySysValue(HWND_DESKTOP, screen_height);
     if (height <= 0)
     {

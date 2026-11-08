@@ -14,6 +14,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 int main(void)
 {
     uint32_t palette[4096];

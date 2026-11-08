@@ -22,6 +22,7 @@ static void notify(AnchorBlock *anchor, Window *window, ULONG id)
             }
     }
 }
+
 LONG windowPresentationColor(Window *window, BOOL foreground, LONG fallback)
 {
     ULONG color = 0;
@@ -30,6 +31,7 @@ LONG windowPresentationColor(Window *window, BOOL foreground, LONG fallback)
         return color <= 0xffffff ? (LONG)color : fallback;
     return fallback;
 }
+
 void destroyPresentationParameters(Window *window)
 {
     while (window->parameters)
@@ -39,6 +41,7 @@ void destroyPresentationParameters(Window *window)
         free(p);
     }
 }
+
 BOOL WinSetPresParam(HWND window, ULONG id, ULONG size, PVOID data)
 {
     TRACE_NATIVE("WinSetPresParam(%u, %u, %u, %p)", (uint)window, (uint)id, (uint)size, data);
@@ -62,6 +65,7 @@ BOOL WinSetPresParam(HWND window, ULONG id, ULONG size, PVOID data)
     notify(anchor, w, id);
     return TRUE;
 }
+
 BOOL WinRemovePresParam(HWND window, ULONG id)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -79,6 +83,7 @@ BOOL WinRemovePresParam(HWND window, ULONG id)
     notify(anchor, w, id);
     return TRUE;
 }
+
 ULONG WinQueryPresParam(HWND window, ULONG first, ULONG second, PULONG found, ULONG capacity,
                         PVOID output, ULONG flags)
 {

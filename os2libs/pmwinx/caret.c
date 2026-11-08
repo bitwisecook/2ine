@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/timers.h"
+
 typedef struct Caret
 {
     ULONG owner, bitmap, timer;
@@ -12,8 +13,10 @@ typedef struct Caret
     BOOL drawn, phase;
     LxHandleBorrow image;
 } Caret;
+
 static _Thread_local Caret caret;
 static _Thread_local ULONG blink_time = 530;
+
 static BOOL invert_caret(void)
 {
     RECTL bounds;
@@ -59,11 +62,13 @@ static BOOL invert_caret(void)
     free(pixels);
     return result;
 }
+
 static void display(BOOL draw)
 {
     if (caret.drawn != draw && invert_caret())
         caret.drawn = draw;
 }
+
 static void blink(void)
 {
     if (!caret.owner || caret.visibility < 0 || caret.painting)
@@ -71,6 +76,7 @@ static void blink(void)
     caret.phase = !caret.phase;
     display(caret.phase);
 }
+
 BOOL DestroyCaret(void)
 {
     if (!caret.owner)
@@ -85,6 +91,7 @@ BOOL DestroyCaret(void)
     memset(&caret, 0, sizeof caret);
     return TRUE;
 }
+
 BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
 {
     if (!open32FindWindow(owner))
@@ -133,6 +140,7 @@ BOOL CreateCaret(ULONG owner, ULONG bitmap, LONG width, LONG height)
     }
     return TRUE;
 }
+
 BOOL HideCaret(ULONG owner)
 {
     if (!caret.owner || (owner && caret.owner != owner))
@@ -150,6 +158,7 @@ BOOL HideCaret(ULONG owner)
         display(FALSE);
     return TRUE;
 }
+
 BOOL ShowCaret(ULONG owner)
 {
     if (!caret.owner || (owner && caret.owner != owner))
@@ -170,6 +179,7 @@ BOOL ShowCaret(ULONG owner)
     }
     return TRUE;
 }
+
 BOOL SetCaretPos(LONG x, LONG y)
 {
     if (!caret.owner)
@@ -185,6 +195,7 @@ BOOL SetCaretPos(LONG x, LONG y)
         display(TRUE);
     return TRUE;
 }
+
 BOOL GetCaretPos(PVOID output)
 {
     if (!caret.owner || !output)
@@ -196,10 +207,12 @@ BOOL GetCaretPos(PVOID output)
     lx_guest_store_u32((uint8 *)output + 4, (ULONG)caret.y);
     return TRUE;
 }
+
 ULONG GetCaretBlinkTime(void)
 {
     return blink_time;
 }
+
 BOOL SetCaretBlinkTime(ULONG interval)
 {
     if (!interval)
@@ -224,6 +237,7 @@ BOOL SetCaretBlinkTime(ULONG interval)
         display(TRUE);
     return TRUE;
 }
+
 void open32CaretPaint(ULONG owner, BOOL begin)
 {
     if (caret.owner != owner)
@@ -236,11 +250,13 @@ void open32CaretPaint(ULONG owner, BOOL begin)
     else if (caret.painting && !--caret.painting && caret.visibility >= 0)
         display(caret.phase);
 }
+
 void open32CaretWindowDestroyed(ULONG owner)
 {
     if (caret.owner == owner)
         DestroyCaret();
 }
+
 void open32CaretCleanup(void)
 {
     if (caret.owner)

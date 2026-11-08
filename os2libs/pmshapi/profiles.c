@@ -18,6 +18,7 @@ typedef struct ProfileEntry
     ULONG size;
     struct ProfileEntry *next;
 } ProfileEntry;
+
 typedef struct Profile
 {
     char *path;
@@ -29,12 +30,14 @@ typedef struct Profile
     int identity_known;
     struct Profile *next;
 } Profile;
+
 typedef struct ProfileHandle
 {
     Profile *profile;
     HINI handle;
     struct ProfileHandle *next;
 } ProfileHandle;
+
 static ProfileHandle *profile_handles;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *mutex;
@@ -54,6 +57,7 @@ static void free_entries(ProfileEntry *entry)
         entry = next;
     }
 }
+
 static ProfileEntry *entry_new(const char *app, const char *key, const void *data, ULONG size)
 {
     ProfileEntry *e = calloc(1, sizeof *e);
@@ -72,11 +76,13 @@ static ProfileEntry *entry_new(const char *app, const char *key, const void *dat
     e->size = size;
     return e;
 }
+
 static int native_string(const uint8 *file, size_t size, uint32 offset, uint32 length)
 {
     return length && offset <= size && length <= size - offset && !file[offset + length - 1] &&
            !memchr(file + offset, 0, length - 1);
 }
+
 static int native_mark(uint8 *seen, size_t size, uint32 offset, uint32 extent)
 {
     if (offset < 20 || offset > size || extent > size - offset ||
@@ -85,6 +91,7 @@ static int native_mark(uint8 *seen, size_t size, uint32 offset, uint32 extent)
     seen[offset / 8] |= 1u << (offset % 8);
     return 1;
 }
+
 static int native_load(Profile *profile, const uint8 *file, size_t size)
 {
     if (size < 20 || lx_guest_load_u32(file + 8) > size)
@@ -141,6 +148,7 @@ static int native_load(Profile *profile, const uint8 *file, size_t size)
     free(seen);
     return ok;
 }
+
 /* Resolve an existing file or its existing parent so aliases share one snapshot. */
 static char *profile_path(const char *path)
 {
@@ -163,6 +171,7 @@ static char *profile_path(const char *path)
     free(directory);
     return resolved;
 }
+
 static int same_identity(const LxHostFileIdentity *a, const LxHostFileIdentity *b)
 {
     return a->device == b->device && a->file == b->file && a->size == b->size &&
@@ -170,6 +179,7 @@ static int same_identity(const LxHostFileIdentity *a, const LxHostFileIdentity *
            a->modified_nanoseconds == b->modified_nanoseconds &&
            a->changed_nanoseconds == b->changed_nanoseconds;
 }
+
 /* Associate a snapshot only with an identity stable across its read. */
 static void profile_identity(Profile *p, const LxHostFileIdentity *before, int known)
 {
@@ -179,6 +189,7 @@ static void profile_identity(Profile *p, const LxHostFileIdentity *before, int k
     if (p->identity_known)
         p->identity = after;
 }
+
 static Profile *profile_load(const char *path)
 {
     Profile *p = calloc(1, sizeof *p);
@@ -243,6 +254,7 @@ failed:
     free(p);
     return NULL;
 }
+
 /* Atomic replacement gives readers a complete version without taking a write lock.
    Compare bytes rather than timestamps: two equal-sized commits can share a host
    timestamp. The retained snapshot avoids reparsing unchanged binary profiles. */
@@ -283,6 +295,7 @@ static int profile_refresh(Profile *p, int force)
     free(fresh);
     return 1;
 }
+
 /* Use a stable inode distinct from the atomically replaced INI and WPS's outer
    .lock. Closing this descriptor releases the transaction, including on death. */
 static LxHostFile *profile_lock(Profile *p)
@@ -303,11 +316,13 @@ static LxHostFile *profile_lock(Profile *p)
     }
     return lock;
 }
+
 static int write_all(LxHostFile *file, const void *data, size_t size)
 {
     size_t written = 0;
     return !lx_host_file_write(file, data, size, &written) && written == size;
 }
+
 static int profile_save(Profile *p, ProfileEntry *entries)
 {
     size_t total = 12;
@@ -355,6 +370,7 @@ static int profile_save(Profile *p, ProfileEntry *entries)
     free(temporary);
     return ok;
 }
+
 static void initialize(void)
 {
     mutex = lx_host_monitor_create();
@@ -364,6 +380,7 @@ static void initialize(void)
     user_profile = profile_load(u && *u ? u : ".2ine-user.profile");
     system_profile = profile_load(s && *s ? s : ".2ine-system.profile");
 }
+
 static Profile *profile_get(HINI handle, LxHandleBorrow *borrow)
 {
     lx_host_once(&once, initialize);
@@ -375,6 +392,7 @@ static Profile *profile_get(HINI handle, LxHandleBorrow *borrow)
                ? ((ProfileHandle *)borrow->resource)->profile
                : NULL;
 }
+
 static void profile_destroy(void *value)
 {
     ProfileHandle *handle = value;
@@ -402,6 +420,7 @@ static void profile_destroy(void *value)
     free(p->path);
     free(p);
 }
+
 HINI PrfOpenProfile(HANDLE hab, PSZ name)
 {
     TRACE_NATIVE("PrfOpenProfile(%u, '%s')", (uint)hab, name);
@@ -413,6 +432,7 @@ HINI PrfOpenProfile(HANDLE hab, PSZ name)
     free(path);
     return result;
 }
+
 HINI lx_profile_open_host(const char *name)
 {
     lx_host_once(&once, initialize);
@@ -466,11 +486,13 @@ HINI lx_profile_open_host(const char *name)
     free(path);
     return result;
 }
+
 BOOL PrfCloseProfile(HINI profile)
 {
     return profile && profile != HINI_USERPROFILE && profile != HINI_SYSTEMPROFILE &&
            lx_handle_close(profile, LX_HANDLE_PROFILE);
 }
+
 BOOL PrfQueryProfile(HANDLE hab, PPRFPROFILE output)
 {
     TRACE_NATIVE("PrfQueryProfile(%u, %p)", (uint)hab, output);
@@ -501,6 +523,7 @@ BOOL PrfQueryProfile(HANDLE hab, PPRFPROFILE output)
     free(system);
     return result;
 }
+
 static ProfileEntry *find_entry(Profile *p, const char *app, const char *key)
 {
     for (ProfileEntry *e = p ? p->entries : NULL; e; e = e->next)
@@ -508,10 +531,12 @@ static ProfileEntry *find_entry(Profile *p, const char *app, const char *key)
             return e;
     return NULL;
 }
+
 typedef struct PrinterProfileDefault
 {
     const char *app, *key, *value;
 } PrinterProfileDefault;
+
 static const PrinterProfileDefault printer_profile_defaults[] = {
     {"PM_SPOOLER", "QUEUE", "2INEPDF;"},
     {"PM_SPOOLER", "PRINTER", "2INEPDF;"},
@@ -521,10 +546,12 @@ static const PrinterProfileDefault printer_profile_defaults[] = {
     {"PM_SPOOLER_QUEUE_DESCR", "2INEPCL", "PCL 5 Printer"},
     {"PM_SPOOLER_PRINTER", "2INEPDF", "FILE;2INEPDF.PDF;2INEPDF;"},
     {"PM_SPOOLER_PRINTER", "2INEPCL", "FILE;2INEPCL.PCL;2INEPCL;"}};
+
 enum
 {
     NATIONAL_DEFAULT_COUNT = 11
 };
+
 static BOOL national_profile_defaults(ProfileEntry *entries, char text[NATIONAL_DEFAULT_COUNT][16])
 {
     COUNTRYCODE code = {0};
@@ -554,6 +581,7 @@ static BOOL national_profile_defaults(ProfileEntry *entries, char text[NATIONAL_
                            .next = i + 1 < NATIONAL_DEFAULT_COUNT ? &entries[i + 1] : NULL};
     return TRUE;
 }
+
 /* The caller owns the returned snapshot, including a byte beyond binary data. */
 static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
 {
@@ -664,6 +692,7 @@ static uint8 *query(HINI handle, const char *app, const char *key, ULONG *size)
                                                 : 0x1304; /* PMERR_NOT_IN_IDX */
     return data;
 }
+
 BOOL PrfQueryProfileSize(HINI profile, PSZ app, PSZ key, PULONG size)
 {
     if (!size)
@@ -673,6 +702,7 @@ BOOL PrfQueryProfileSize(HINI profile, PSZ app, PSZ key, PULONG size)
     free(data);
     return ok;
 }
+
 BOOL PrfQueryProfileData(HINI profile, PSZ app, PSZ key, PVOID output, PULONG size)
 {
     if (!size || (!output && *size))
@@ -688,6 +718,7 @@ BOOL PrfQueryProfileData(HINI profile, PSZ app, PSZ key, PVOID output, PULONG si
     free(data);
     return copied == actual;
 }
+
 ULONG PrfQueryProfileString(HINI profile, PSZ app, PSZ key, PSZ fallback, PVOID output,
                             ULONG capacity)
 {
@@ -724,6 +755,7 @@ ULONG PrfQueryProfileString(HINI profile, PSZ app, PSZ key, PSZ fallback, PVOID 
     free(data);
     return count;
 }
+
 LONG PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback)
 {
     TRACE_NATIVE("PrfQueryProfileInt(%u, '%s', '%s', %d)", (uint)profile, app, key, (int)fallback);
@@ -742,6 +774,7 @@ LONG PrfQueryProfileInt(HINI profile, PSZ app, PSZ key, LONG fallback)
     free(data);
     return result;
 }
+
 BOOL PrfWriteProfileData(HINI handle, PSZ app, PSZ key, PVOID data, ULONG size)
 {
     if ((!app && (key || data || size)) || (app && (!*app || strlen(app) >= 65536)) ||
@@ -790,6 +823,7 @@ BOOL PrfWriteProfileData(HINI handle, PSZ app, PSZ key, PVOID data, ULONG size)
     lx_handle_release(&borrow);
     return ok;
 }
+
 BOOL PrfWriteProfileString(HINI profile, PSZ app, PSZ key, PSZ data)
 {
     return PrfWriteProfileData(profile, app, key, data, data ? (ULONG)strlen(data) + 1 : 0);

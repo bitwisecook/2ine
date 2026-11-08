@@ -18,6 +18,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include "hal/host_thread.h"
+
 static struct sockaddr_in address_in(const LxHostSocketAddress *address)
 {
     struct sockaddr_in result;
@@ -27,11 +28,13 @@ static struct sockaddr_in address_in(const LxHostSocketAddress *address)
     result.sin_addr.s_addr = address->address;
     return result;
 }
+
 static void address_out(const struct sockaddr_in *source, LxHostSocketAddress *target)
 {
     target->address = source->sin_addr.s_addr;
     target->port = source->sin_port;
 }
+
 /* Restrict wildcard sockets to a per-process host IPv4 identity when selected. */
 static int local_address(struct in_addr *address)
 {
@@ -43,6 +46,7 @@ static int local_address(struct in_addr *address)
     errno = EINVAL;
     return -1;
 }
+
 static int bind_sender(int fd)
 {
     struct in_addr selected;
@@ -58,6 +62,7 @@ static int bind_sender(int fd)
     current.sin_addr = selected;
     return bind(fd, (struct sockaddr *)&current, sizeof current);
 }
+
 static int message_flags(unsigned flags)
 {
     int result = 0;
@@ -75,10 +80,12 @@ static int message_flags(unsigned flags)
 #undef FLAG
     return result;
 }
+
 int lx_host_socket_open(int type)
 {
     return lx_host_socket_open_protocol(type, 0);
 }
+
 int lx_host_socket_open_protocol(int type, int protocol)
 {
     if (type == LX_SOCKET_RAW)
@@ -90,11 +97,13 @@ int lx_host_socket_open_protocol(int type, int protocol)
     }
     return socket(AF_INET, type == LX_SOCKET_STREAM ? SOCK_STREAM : SOCK_DGRAM, protocol);
 }
+
 int lx_host_socket_close(int fd)
 {
     lx_diagnostic_close(fd);
     return close(fd);
 }
+
 int lx_host_socket_connect(int fd, const LxHostSocketAddress *address)
 {
     int handled;
@@ -106,6 +115,7 @@ int lx_host_socket_connect(int fd, const LxHostSocketAddress *address)
         return -1;
     return connect(fd, (struct sockaddr *)&a, sizeof a);
 }
+
 int lx_host_socket_bind(int fd, const LxHostSocketAddress *address)
 {
     struct sockaddr_in a = address_in(address);
@@ -117,10 +127,12 @@ int lx_host_socket_bind(int fd, const LxHostSocketAddress *address)
         a.sin_addr = selected;
     return bind(fd, (struct sockaddr *)&a, sizeof a);
 }
+
 int lx_host_socket_listen(int fd, int backlog)
 {
     return listen(fd, backlog);
 }
+
 int lx_host_socket_accept(int fd, LxHostSocketAddress *address)
 {
     struct sockaddr_in a = {0};
@@ -130,6 +142,7 @@ int lx_host_socket_accept(int fd, LxHostSocketAddress *address)
         address_out(&a, address);
     return r;
 }
+
 int lx_host_socket_name(int fd, LxHostSocketAddress *address)
 {
     struct sockaddr_in a = {0};
@@ -140,6 +153,7 @@ int lx_host_socket_name(int fd, LxHostSocketAddress *address)
     address_out(&a, address);
     return r;
 }
+
 int lx_host_socket_peer(int fd, LxHostSocketAddress *address)
 {
     int handled;
@@ -153,10 +167,12 @@ int lx_host_socket_peer(int fd, LxHostSocketAddress *address)
         address_out(&a, address);
     return result;
 }
+
 int lx_host_socket_shutdown(int fd, int how)
 {
     return shutdown(fd, how);
 }
+
 int64_t lx_host_socket_send(int fd, const void *buffer, size_t size, unsigned flags)
 {
     if (lx_diagnostic_type(fd))
@@ -174,16 +190,19 @@ int64_t lx_host_socket_send(int fd, const void *buffer, size_t size, unsigned fl
 #endif
     return send(fd, buffer, size, native);
 }
+
 int64_t lx_host_socket_recv(int fd, void *buffer, size_t size, unsigned flags)
 {
     if (lx_diagnostic_type(fd))
         return lx_host_socket_recvfrom(fd, buffer, size, flags, NULL);
     return recv(fd, buffer, size, message_flags(flags));
 }
+
 int lx_host_socket_error(void)
 {
     return errno;
 }
+
 int64_t lx_host_socket_sendto(int fd, const void *buffer, size_t size, unsigned flags,
                               const LxHostSocketAddress *address)
 {
@@ -196,6 +215,7 @@ int64_t lx_host_socket_sendto(int fd, const void *buffer, size_t size, unsigned 
         return -1;
     return sendto(fd, buffer, size, message_flags(flags), (struct sockaddr *)&a, sizeof a);
 }
+
 int64_t lx_host_socket_recvfrom(int fd, void *buffer, size_t size, unsigned flags,
                                 LxHostSocketAddress *address)
 {
@@ -212,10 +232,12 @@ int64_t lx_host_socket_recvfrom(int fd, void *buffer, size_t size, unsigned flag
         address_out(&a, address);
     return result;
 }
+
 int lx_host_socket_nonblocking(int fd, int enabled)
 {
     return ioctl(fd, FIONBIO, &enabled);
 }
+
 int lx_host_socket_available(int fd, int *bytes)
 {
 #ifdef SO_NREAD
@@ -232,10 +254,12 @@ int lx_host_socket_available(int fd, int *bytes)
 #endif
     return ioctl(fd, FIONREAD, bytes);
 }
+
 int lx_host_socket_hostname(char *name, size_t size)
 {
     return gethostname(name, size);
 }
+
 static int bsd_error(int number)
 {
     switch (number)
@@ -286,37 +310,45 @@ static int bsd_error(int number)
             return 100;
     }
 }
+
 int lx_host_socket_bsd_error(void)
 {
     return bsd_error(errno);
 }
+
 uint32_t lx_host_socket_parse_address(const char *name)
 {
     return inet_addr(name);
 }
+
 uint32_t lx_host_socket_parse_network(const char *name)
 {
     return inet_network(name);
 }
+
 char *lx_host_socket_format_address(uint32_t value)
 {
     struct in_addr a;
     a.s_addr = value;
     return inet_ntoa(a);
 }
+
 uint16_t lx_host_socket_network16(uint16_t value)
 {
     return htons(value);
 }
+
 /* libc database functions may share process storage. Copy it while holding the lock. */
 static pthread_mutex_t DatabaseMutex = PTHREAD_MUTEX_INITIALIZER;
 static LX_HOST_THREAD_LOCAL int ResolverError;
+
 typedef struct DatabaseStorage
 {
     char data[65536];
     size_t used;
     char *aliases[257], *addresses[257];
 } DatabaseStorage;
+
 static char *database_copy(DatabaseStorage *storage, const void *data, size_t size)
 {
     if (size > sizeof storage->data - storage->used)
@@ -326,6 +358,7 @@ static char *database_copy(DatabaseStorage *storage, const void *data, size_t si
     storage->used += size;
     return result;
 }
+
 static int database_aliases(DatabaseStorage *storage, char **aliases)
 {
     unsigned count = 0;
@@ -338,6 +371,7 @@ static int database_aliases(DatabaseStorage *storage, char **aliases)
     storage->aliases[count] = NULL;
     return 1;
 }
+
 static int copy_host(struct hostent *host, LxHostSocketHost *result)
 {
     static LX_HOST_THREAD_LOCAL DatabaseStorage storage;
@@ -365,6 +399,7 @@ static int copy_host(struct hostent *host, LxHostSocketHost *result)
     ResolverError = 0;
     return 1;
 }
+
 int lx_host_socket_host(const char *name, LxHostSocketHost *result)
 {
     if (!name || !result)
@@ -378,6 +413,7 @@ int lx_host_socket_host(const char *name, LxHostSocketHost *result)
     pthread_mutex_unlock(&DatabaseMutex);
     return ok;
 }
+
 int lx_host_socket_reverse(uint32_t address, LxHostSocketHost *result)
 {
     if (!result)
@@ -391,10 +427,12 @@ int lx_host_socket_reverse(uint32_t address, LxHostSocketHost *result)
     pthread_mutex_unlock(&DatabaseMutex);
     return ok;
 }
+
 int lx_host_socket_resolver_error(void)
 {
     return ResolverError;
 }
+
 int lx_host_socket_protocol(const char *name, int number, char **official, char ***aliases,
                             int *protocol)
 {
@@ -412,6 +450,7 @@ int lx_host_socket_protocol(const char *name, int number, char **official, char 
     pthread_mutex_unlock(&DatabaseMutex);
     return ok;
 }
+
 static int copy_service(struct servent *service, LxHostSocketService *result)
 {
     static LX_HOST_THREAD_LOCAL DatabaseStorage storage;
@@ -425,6 +464,7 @@ static int copy_service(struct servent *service, LxHostSocketService *result)
     *result = (LxHostSocketService){name, storage.aliases, service->s_port, protocol};
     return 1;
 }
+
 int lx_host_socket_service_port(int port, const char *protocol, LxHostSocketService *result)
 {
     pthread_mutex_lock(&DatabaseMutex);
@@ -432,6 +472,7 @@ int lx_host_socket_service_port(int port, const char *protocol, LxHostSocketServ
     pthread_mutex_unlock(&DatabaseMutex);
     return ok;
 }
+
 int lx_host_socket_service(const char *name, const char *protocol, LxHostSocketService *result)
 {
     pthread_mutex_lock(&DatabaseMutex);
@@ -439,6 +480,7 @@ int lx_host_socket_service(const char *name, const char *protocol, LxHostSocketS
     pthread_mutex_unlock(&DatabaseMutex);
     return ok;
 }
+
 int lx_host_socket_select(int limit, LxHostSocketSet *r, LxHostSocketSet *w, LxHostSocketSet *e,
                           int64_t seconds, int32_t micros, int timed)
 {
@@ -490,6 +532,7 @@ int lx_host_socket_select(int limit, LxHostSocketSet *r, LxHostSocketSet *w, LxH
     }
     return result;
 }
+
 int lx_host_socket_poll(const int *sockets, int reads, int writes, int errors, int timeout)
 {
     int count = reads + writes + errors;
@@ -505,6 +548,7 @@ int lx_host_socket_poll(const int *sockets, int reads, int writes, int errors, i
     free(fds);
     return result;
 }
+
 int lx_host_socket_poll_update(int *sockets, int reads, int writes, int errors, int timeout)
 {
     if (reads < 0 || writes < 0 || errors < 0 || reads > 1024 || writes > 1024 || errors > 1024)
@@ -547,6 +591,7 @@ int lx_host_socket_poll_update(int *sockets, int reads, int writes, int errors, 
     free(p);
     return result;
 }
+
 int lx_host_socket_ip_option(int fd, int option, const void *value, int size)
 {
     int handled;
@@ -594,6 +639,7 @@ int lx_host_socket_ip_option(int fd, int option, const void *value, int size)
     }
     return setsockopt(fd, IPPROTO_IP, host, value, (socklen_t)size);
 }
+
 int lx_host_socket_get_option(int fd, LxHostSocketOption option, void *value, int *size)
 {
     if (!value || !size || *size < 4)
@@ -665,6 +711,7 @@ int lx_host_socket_get_option(int fd, LxHostSocketOption option, void *value, in
     }
     return result;
 }
+
 int lx_host_socket_option(int fd, LxHostSocketOption option, const void *value, int size)
 {
     int name;
@@ -715,6 +762,7 @@ int lx_host_socket_option(int fd, LxHostSocketOption option, const void *value, 
     }
     return setsockopt(fd, SOL_SOCKET, name, value, (socklen_t)size);
 }
+
 int lx_host_wall_time(int64_t *seconds, int32_t *micros, int32_t *west, int32_t *dst)
 {
     struct timeval t;

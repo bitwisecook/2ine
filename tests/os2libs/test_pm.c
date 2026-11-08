@@ -27,6 +27,7 @@ static unsigned selections;
 static LONG expected_selection;
 static uint8_t icon_resource[88];
 static uint32 icon_size = sizeof icon_resource, icon_releases;
+
 static uint32 icon_query(uint32 module, uint32 type, uint32 id, uint32 *size)
 {
     if (module || type != 1 || id != 1)
@@ -34,6 +35,7 @@ static uint32 icon_query(uint32 module, uint32 type, uint32 id, uint32 *size)
     *size = icon_size;
     return 0;
 }
+
 static uint32 icon_get(uint32 module, uint32 type, uint32 id, void **output)
 {
     uint32 size;
@@ -42,12 +44,14 @@ static uint32 icon_get(uint32 module, uint32 type, uint32 id, void **output)
         *output = icon_resource;
     return result;
 }
+
 static uint32 icon_release(void *resource)
 {
     CHECK(resource == icon_resource);
     icon_releases++;
     return 0;
 }
+
 static void pointer_contracts(HPS ps)
 {
     CHECK((uintptr_t)WinDefWindowProc(HWND_DESKTOP, WM_CONTROLPOINTER, (MPARAM)(uintptr_t)123,
@@ -132,8 +136,10 @@ static void pointer_contracts(HPS ps)
     CHECK(lx_pm_raster_read(shown, 1, 1, 1, 1, &pixel) && pixel == 0x654321);
     CHECK(WinReleasePS(shown) && WinDestroyWindow(bitmap_control) && GpiDeleteBitmap(bitmap));
 }
+
 static HWND changing_menu;
 static unsigned menu_initializations;
+
 static BOOL OS2API input_hook(HAB hab, PQMSG message, ULONG flags)
 {
     CHECK(flags == 1);
@@ -151,6 +157,7 @@ static BOOL OS2API input_hook(HAB hab, PQMSG message, ULONG flags)
     }
     return FALSE;
 }
+
 static void hook_contracts(HAB hab, HWND window)
 {
     QMSG message;
@@ -163,6 +170,7 @@ static void hook_contracts(HAB hab, HWND window)
     CHECK(hook_calls == 2 && message.msg == WM_USER + 102 && (uintptr_t)message.mp1 == 1234);
     CHECK(!WinReleaseHook(hab, 1, 1, (PFN)input_hook, 0));
 }
+
 static void busy_queue_host_events(HAB hab, HWND window)
 {
     QMSG message;
@@ -179,6 +187,7 @@ static void busy_queue_host_events(HAB hab, HWND window)
     CHECK(queued); /* Host pumping cannot wait for the guest queue to become empty. */
     CHECK(!WinGetMsg(hab, &message, 0, 0, 0) && message.msg == WM_QUIT);
 }
+
 static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
 {
     if (message == WM_CONTROL && (ULONG)(uintptr_t)a == (902 | 1u << 16))
@@ -210,6 +219,7 @@ static MRESULT OS2API procedure(HWND hwnd, ULONG message, MPARAM a, MPARAM b)
         sizes++;
     return WinDefWindowProc(hwnd, message, a, b);
 }
+
 static void accelerator_contracts(HAB hab, HWND frame, HWND client)
 {
     const uint8_t table[] = {1, 0, 181, 1, 17, 0, 'S', 0, 42, 0};
@@ -230,6 +240,7 @@ static void accelerator_contracts(HAB hab, HWND frame, HWND client)
     CHECK(WinSetAccelTable(hab, 0, frame) && WinDestroyAccelTable(handle));
     CHECK(!WinQueryAccelTable(hab, frame) && !WinDestroyAccelTable(handle));
 }
+
 static void keyboard_contracts(HAB hab, HWND window)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
@@ -276,6 +287,7 @@ static void keyboard_contracts(HAB hab, HWND window)
         CHECK(((uintptr_t)message.mp1 & 0x47) == 0x46);
         CHECK((uintptr_t)message.mp2 == (keypad ? 0x001ee00du : 0x00081c0du));
     }
+
     const struct
     {
         unsigned key, scan, plain, control;
@@ -291,6 +303,7 @@ static void keyboard_contracts(HAB hab, HWND window)
         {LX_HOST_KEY_INSERT, 0x68, 0x001a52e0, 0x001a92e0},
         {LX_HOST_KEY_DELETE, 0x69, 0x001b53e0, 0x001b93e0},
     };
+
     for (unsigned i = 0; i < sizeof navigation / sizeof navigation[0]; i++)
         for (unsigned control = 0; control < 2; control++)
             for (unsigned up = 0; up < 2; up++)
@@ -306,6 +319,7 @@ static void keyboard_contracts(HAB hab, HWND window)
                       (control ? navigation[i].control : navigation[i].plain));
             }
 }
+
 static void selection_contracts(HWND parent)
 {
     HWND list = WinCreateWindow(parent, (PSZ)WC_LISTBOX, "", 0, 0, 0, 120, 80, parent, HWND_TOP,
@@ -341,6 +355,7 @@ static void selection_contracts(HWND parent)
     CHECK((LONG)(intptr_t)WinSendMsg(list, 0x165, (MPARAM)(intptr_t)-1, 0) == -1);
     CHECK(WinDestroyWindow(list));
 }
+
 static void scrollbar_contracts(HAB hab, HWND parent)
 {
     uint8_t data[14] = {14, 0, 0, 0, 1, 0, 51, 0, 25, 0, 50, 0, 100, 0};
@@ -382,6 +397,7 @@ static void scrollbar_contracts(HAB hab, HWND parent)
     CHECK(!WinCreateWindow(parent, (PSZ)WC_SCROLLBAR, "", 3, 0, 0, 20, 200, parent, HWND_TOP, 903,
                            data, NULL));
 }
+
 static void host_focus_contracts(HAB hab, HWND frame, HWND client)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
@@ -419,6 +435,7 @@ static void host_focus_contracts(HAB hab, HWND frame, HWND client)
     CHECK(processHostEvent(anchor, &event));
     CHECK(WinGetMsg(hab, &message, client, WM_CHAR, WM_CHAR));
 }
+
 static void capture_release_contracts(HAB hab, HWND client)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
@@ -448,6 +465,7 @@ static void capture_release_contracts(HAB hab, HWND client)
     CHECK(!WinGetPhysKeyState(HWND_DESKTOP, 0x61));
     CHECK(WinQueryFocus(HWND_DESKTOP) == client);
 }
+
 static void clipboard_contracts(HAB hab, HWND parent)
 {
     ULONG table = WinQuerySystemAtomTable();
@@ -471,6 +489,7 @@ static void clipboard_contracts(HAB hab, HWND parent)
     CHECK(WinCloseClipbrd(hab));
     CHECK(!WinDeleteAtom(table, atom) && !WinFindAtom(table, "WordPro clipboard format"));
 }
+
 static void menu_contracts(HWND parent)
 {
     const uint8_t empty[] = {10, 0, 0, 0, 181, 1, 0, 0, 0, 0};
@@ -495,6 +514,7 @@ static void menu_contracts(HWND parent)
     CHECK(!WinSendMsg(menu, 0x183, 0, &item));
     CHECK(WinDestroyWindow(menu));
 }
+
 static Window *test_window(HWND handle)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
@@ -503,6 +523,7 @@ static Window *test_window(HWND handle)
             return anchor->windows[i];
     return NULL;
 }
+
 static MPARAM menu_point(Window *window, unsigned id)
 {
     for (size_t i = 0; i < window->menu->count; i++)
@@ -515,6 +536,7 @@ static MPARAM menu_point(Window *window, unsigned id)
     CHECK(0);
     return 0;
 }
+
 static void point_lookup_contracts(HAB hab)
 {
     CHECK(WinRegisterClass(hab, "point-test", WinDefWindowProc, 0, 0));
@@ -552,6 +574,7 @@ static void point_lookup_contracts(HAB hab)
     CHECK(!WinIsWindowVisible(menu)); /* Native decorations own the visible system controls. */
     CHECK(WinDestroyWindow(frame));
 }
+
 static void paint_scheduling_contracts(HAB hab)
 {
     QMSG message;
@@ -592,6 +615,7 @@ static void paint_scheduling_contracts(HAB hab)
     CHECK(!WinPeekMsg(hab, &message, parent, WM_PAINT, WM_PAINT, 1));
     CHECK(WinDestroyWindow(parent));
 }
+
 static void menu_tracking_contracts(HWND parent)
 {
     const uint8_t empty[] = {10, 0, 0, 0, 181, 1, 0, 0, 0, 0};
@@ -653,6 +677,7 @@ static void menu_tracking_contracts(HWND parent)
     CHECK(WinDestroyWindow(nested) && WinDestroyWindow(file) && WinDestroyWindow(edit) &&
           WinDestroyWindow(bar));
 }
+
 static void list_contracts(HWND parent)
 {
     HWND combo = WinCreateWindow(parent, (PSZ)WC_COMBOBOX, "", 4, 0, 0, 180, 120, parent, HWND_TOP,
@@ -673,6 +698,7 @@ static void list_contracts(HWND parent)
     CHECK(WinQueryWindowText(combo, sizeof text, text) == 14 && !strcmp(text, "Lotus Word Pro"));
     CHECK(WinDestroyWindow(combo));
 }
+
 static void graphics_contracts(HAB hab, HWND window)
 {
     CHECK(sizeof(FATTRS) == 56);
@@ -877,17 +903,20 @@ static void graphics_contracts(HAB hab, HWND window)
     CHECK(!GpiDeleteBitmap(bitmap) && GpiDestroyPS(ps) && DevCloseDC(memory) == 0);
     CHECK(!DevQueryCaps(memory, 0, 1, widths));
 }
+
 static void frame_border_contracts(void)
 {
     FRAMECDATA data = {sizeof data, 0x100 | 1, 0, 0};
     HWND frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Dialog", WS_VISIBLE, 0, 0, 100, 80,
                                  0, HWND_TOP, 991, &data, NULL);
     CHECK(frame && WinWindowFromID(frame, FID_TITLEBAR));
+
     struct
     {
         POINTL border;
         uint32_t guard;
     } output = {{-1, -1}, 0x12345678};
+
     CHECK(WinSendMsg(frame, WM_QUERYBORDERSIZE, &output.border, 0));
     CHECK(output.border.x == 4 && output.border.y == 4 && output.guard == 0x12345678);
     CHECK(!WinSendMsg(frame, WM_QUERYBORDERSIZE, &output.border, (MPARAM)1));
@@ -918,6 +947,7 @@ static void frame_border_contracts(void)
     CHECK(output.border.x == 1 && output.border.y == 1);
     CHECK(WinDestroyWindow(frame));
 }
+
 static void native_control_paint_contracts(void)
 {
     HWND frame = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "Controls", WS_VISIBLE, 0, 0, 240,
@@ -951,6 +981,7 @@ static void native_control_paint_contracts(void)
     CHECK(lx_pm_raster_read(label_ps, 10, 10, 1, 1, &pixel) && pixel == color);
     CHECK(WinReleasePS(label_ps) && WinReleasePS(ps) && WinDestroyWindow(frame));
 }
+
 static void frame_state_contracts(void)
 {
     HWND parent = WinCreateWindow(HWND_DESKTOP, (PSZ)WC_FRAME, "", 0, 0, 0, 64, 48, 0, HWND_TOP, 0,
@@ -972,6 +1003,7 @@ static void frame_state_contracts(void)
     CHECK(position.x == 13 && position.y == 7 && position.cx == 20 && position.cy == 12);
     CHECK(WinDestroyWindow(parent));
 }
+
 static void dialog_frame_contracts(HWND parent)
 {
     HWND dialog = WinCreateWindow(parent, "test", "", WS_VISIBLE, 0, 0, 80, 60, parent, HWND_BOTTOM,
@@ -1025,6 +1057,7 @@ static void dialog_frame_contracts(HWND parent)
     CHECK(WinReleasePS(ps));
     CHECK(WinDestroyWindow(content) && WinDestroyWindow(group));
 }
+
 static void class_clip_contracts(HAB hab, HWND parent)
 {
     CHECK(WinRegisterClass(hab, "ClassClipParent", WinDefWindowProc, CS_CLIPCHILDREN, 0));
@@ -1043,6 +1076,7 @@ static void class_clip_contracts(HAB hab, HWND parent)
     CHECK(WinReleasePS(content) && WinReleasePS(ps));
     CHECK(WinDestroyWindow(panel));
 }
+
 static void raster_contracts(HAB hab, HWND window)
 {
     HDC dc = DevOpenDC(hab, 8, "*", 0, NULL, 0);
@@ -1135,6 +1169,7 @@ static void raster_contracts(HAB hab, HWND window)
     CHECK(GpiSetBitmap(ps, 0) == bitmap && GpiDeleteBitmap(bitmap));
     CHECK(GpiDestroyPS(ps) && DevCloseDC(dc) == 0);
 }
+
 int main(void)
 {
     CHECK(sizeof(SWP) == 36 && sizeof(POINTL) == 8 && sizeof(RECTL) == 16 && sizeof(SIZEL) == 8);

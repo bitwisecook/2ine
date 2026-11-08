@@ -16,6 +16,7 @@
             return 1;                                                                              \
         }                                                                                          \
     } while (0)
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
@@ -47,6 +48,7 @@ int main(int argc, char **argv)
     CHECK(GpiQueryFontMetrics(space, sizeof metrics, &metrics));
     CHECK(metrics.sXDeviceRes == dpi && metrics.sYDeviceRes == dpi);
     CHECK(metrics.lMaxBaselineExt >= (LONG)(12 * dpi / 96));
+
     const struct
     {
         unsigned dpi;
@@ -55,6 +57,7 @@ int main(int argc, char **argv)
                  {120, {8, 20}, {2, 3}, {6, 8}, {330, 315}, {1, 0}, {2, 1}},
                  {144, {9, 24}, {2, 3}, {7, 9}, {371, 378}, {0, 0}, {1, 1}},
                  {192, {12, 32}, {3, 4}, {9, 12}, {495, 504}, {0, 0}, {1, 1}}};
+
     unsigned selected = 0;
     while (selected < sizeof cases / sizeof cases[0] && cases[selected].dpi != dpi)
         selected++;

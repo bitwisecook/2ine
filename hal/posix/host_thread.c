@@ -4,14 +4,17 @@
 #include "hal/host_fatal.h"
 #include <stdlib.h>
 #include <pthread.h>
+
 struct LxHostThread
 {
     pthread_t object;
 };
+
 struct LxHostTlsKey
 {
     pthread_key_t key;
 };
+
 LxHostTlsKey *lx_host_tls_create(void (*destroy)(void *))
 {
     LxHostTlsKey *key = malloc(sizeof *key);
@@ -22,6 +25,7 @@ LxHostTlsKey *lx_host_tls_create(void (*destroy)(void *))
     }
     return key;
 }
+
 void lx_host_tls_destroy(LxHostTlsKey *key)
 {
     if (key)
@@ -30,14 +34,17 @@ void lx_host_tls_destroy(LxHostTlsKey *key)
         free(key);
     }
 }
+
 void *lx_host_tls_get(LxHostTlsKey *key)
 {
     return key ? pthread_getspecific(key->key) : NULL;
 }
+
 int lx_host_tls_set(LxHostTlsKey *key, void *value)
 {
     return key && !pthread_setspecific(key->key, value);
 }
+
 typedef struct Start
 {
     void *(*entry)(void *);
@@ -45,6 +52,7 @@ typedef struct Start
     void (*cleanup)(void *);
     void *signal_stack;
 } Start;
+
 static void cleanupStart(void *argument)
 {
     Start *start = argument;
@@ -52,6 +60,7 @@ static void cleanupStart(void *argument)
         start->cleanup(start->argument);
     lx_host_fatal_thread_end(start->signal_stack);
 }
+
 static void *enter(void *argument)
 {
     Start start = *(Start *)argument;
@@ -63,6 +72,7 @@ static void *enter(void *argument)
     pthread_cleanup_pop(1);
     return result;
 }
+
 LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument, void (*cleanup)(void *))
 {
     LxHostThread *thread = calloc(1, sizeof *thread);
@@ -84,14 +94,17 @@ LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument, void
     }
     return thread;
 }
+
 LxHostCancelResult lx_host_thread_cancel(LxHostThread *thread)
 {
     return pthread_cancel(thread->object) ? LX_HOST_CANCEL_FAILED : LX_HOST_CANCEL_OK;
 }
+
 void lx_host_thread_test_cancel(void)
 {
     pthread_testcancel();
 }
+
 int lx_host_thread_join(LxHostThread *thread, void **result)
 {
     int error = pthread_join(thread->object, result);
@@ -99,19 +112,23 @@ int lx_host_thread_join(LxHostThread *thread, void **result)
         free(thread);
     return error;
 }
+
 void lx_host_thread_detach(LxHostThread *thread)
 {
     pthread_detach(thread->object);
     free(thread);
 }
+
 void lx_host_thread_exit(void *result)
 {
     pthread_exit(result);
 }
+
 uint64_t lx_host_thread_id(void)
 {
     return (uint64_t)(uintptr_t)pthread_self();
 }
+
 uint32_t lx_host_guarded_call(uint32_t (*operation)(void *), void *argument,
                               void (*cleanup)(void *), void *cleanup_argument)
 {

@@ -15,6 +15,7 @@ static const unsigned char scan_keys[] = {
     'X',  'C',  'V',  'B',  'N',  'M',  0xBC, 0xBE, 0xBF, 16,   0x6A, 18,   32,   20,   0x70,
     0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x90, 0x91, 0x67, 0x68, 0x69, 0x6D,
     0x64, 0x65, 0x66, 0x6B, 0x61, 0x62, 0x63, 0x60, 0x6E, 0,    0,    0xE2, 0x7A, 0x7B};
+
 static unsigned virtual_key(ULONG value)
 {
     static const unsigned char keys[32] = {0,  1,    2,  4,  3,  8,  9,    9,    13, 16, 17,
@@ -22,6 +23,7 @@ static unsigned virtual_key(ULONG value)
                                            38, 39,   40, 44, 45, 46, 0x91, 0x90, 13, 44};
     return value < 32 ? keys[value] : value >= 0x20 && value <= 0x37 ? 0x70 + value - 0x20 : 0;
 }
+
 void open32DecodeKey(ULONG flags, ULONG data, Open32Key *decoded)
 {
     ULONG scan = flags >> 24, key = flags & 2                 ? virtual_key(data >> 16)
@@ -55,6 +57,7 @@ void open32DecodeKey(ULONG flags, ULONG data, Open32Key *decoded)
     *decoded = (Open32Key){
         (flags & 32 ? 0x104 : 0x100) + up, key, parameter, character, flags, !up && (flags & 1)};
 }
+
 void open32UpdateKey(const Open32Key *decoded)
 {
     ULONG key = decoded->key, flags = decoded->flags;
@@ -69,6 +72,7 @@ void open32UpdateKey(const Open32Key *decoded)
         down[key] = !up;
     }
 }
+
 ULONG open32KeyboardMessage(ULONG handle, ULONG flags, ULONG data)
 {
     Open32Window *window = open32FindWindow(handle);
@@ -86,6 +90,7 @@ ULONG open32KeyboardMessage(ULONG handle, ULONG flags, ULONG data)
                                       key.parameter);
     return result;
 }
+
 SHORT GetKeyState(LONG key)
 {
     if (key < 0 || key > 255)
@@ -145,6 +150,7 @@ static ULONG layout_key(ULONG scan)
         return character - 'a' + 'A';
     return scan < sizeof scan_keys ? scan_keys[scan] : 0;
 }
+
 ULONG MapVirtualKey(ULONG code, ULONG kind)
 {
     if (kind == 0)
@@ -169,6 +175,7 @@ ULONG MapVirtualKey(ULONG code, ULONG kind)
     }
     return 0;
 }
+
 SHORT VkKeyScan(ULONG character)
 {
     for (ULONG scan = 1; scan < sizeof scan_keys; scan++)
@@ -179,6 +186,7 @@ SHORT VkKeyScan(ULONG character)
         return character;
     return -1;
 }
+
 ULONG GetKeyboardLayout(ULONG thread)
 {
     /* The original forms the layout from the locale's LOCALE_ILANGUAGE, in both halves. */
@@ -186,6 +194,7 @@ ULONG GetKeyboardLayout(ULONG thread)
     ULONG language = GetUserDefaultLCID() & 0xFFFF;
     return language << 16 | language;
 }
+
 LONG GetKeyNameText(ULONG parameter, PSZ output, LONG capacity)
 {
     if (!output || capacity <= 0)

@@ -6,9 +6,11 @@ struct LaunchReadiness: Decodable, Sendable {
     let reason: String
     let requiredCategories: [String]
 }
+
 private struct BallNavigationState: Decodable, Sendable {
     let page: String
 }
+
 struct PendingApplicationLaunch: Identifiable {
     let id = UUID()
     let ball: String

@@ -13,6 +13,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 int main(void)
 {
     char error[256];

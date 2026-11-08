@@ -29,15 +29,19 @@ HPS GpiCreatePS(HAB hab, HDC dc, PSIZEL size, ULONG flags)
     }
     return handle;
 }
+
 BOOL GpiDestroyPS(HPS hps)
 {
     return lx_pm_destroy_ps(hps);
 }
+
 LONG GpiLine(HPS hps, PPOINTL point)
 {
-    TRACE_NATIVE("GpiLine(%u, %d,%d)", (uint)hps, point ? (int)point->x : 0, point ? (int)point->y : 0);
+    TRACE_NATIVE("GpiLine(%u, %d,%d)", (uint)hps, point ? (int)point->x : 0,
+                 point ? (int)point->y : 0);
     return lx_pm_line(hps, point, 0);
 }
+
 LONG GpiPolyLine(HPS hps, LONG count, PPOINTL points)
 {
     TRACE_NATIVE("GpiPolyLine(%u, %d, %d,%d)", (uint)hps, (int)count, points ? (int)points[0].x : 0,
@@ -56,19 +60,24 @@ LONG GpiPolyLine(HPS hps, LONG count, PPOINTL points)
     }
     return result;
 }
+
 BOOL GpiMove(HPS hps, PPOINTL point)
 {
-    TRACE_NATIVE("GpiMove(%u, %d,%d)", (uint)hps, point ? (int)point->x : 0, point ? (int)point->y : 0);
+    TRACE_NATIVE("GpiMove(%u, %d,%d)", (uint)hps, point ? (int)point->x : 0,
+                 point ? (int)point->y : 0);
     return lx_pm_move(hps, point);
 }
+
 BOOL GpiSetColor(HPS hps, LONG color)
 {
     return lx_pm_color(hps, color) != -255;
 }
+
 HDC GpiQueryDevice(HPS ps)
 {
     return lx_pm_query_dc(ps);
 }
+
 BOOL GpiAssociate(HPS ps, HDC dc)
 {
     if (!lx_pm_associate_dc(ps, dc))
@@ -83,23 +92,28 @@ BOOL GpiAssociate(HPS ps, HDC dc)
     }
     return TRUE;
 }
+
 BOOL GpiSetCp(HPS ps, ULONG cp)
 {
     return lx_pm_set_cp(ps, cp);
 }
+
 ULONG GpiQueryCp(HPS ps)
 {
     return lx_pm_query_cp(ps);
 }
+
 BOOL GpiCreateLogColorTable(HPS ps, ULONG options, LONG format, LONG start, LONG count,
                             PLONG colors)
 {
     return lx_pm_color_table(ps, options, format, start, count, colors);
 }
+
 BOOL GpiSetDrawingMode(HPS hps, LONG mode)
 {
     return mode == DM_DRAW && lx_pm_valid_ps(hps);
 }
+
 LONG GpiSetPel(HPS hps, PPOINTL point)
 {
     return lx_pm_line(hps, point, 1);
@@ -119,6 +133,7 @@ LONG GpiQueryRGBColor(HPS hps, ULONG options, LONG index)
                ? lx_pm_resolve_color(hps, index)
                : -255;
 }
+
 LONG GpiQueryColorIndex(HPS hps, ULONG options, LONG rgb)
 {
     PresentationSpace *ps = lx_pm_font_space(hps);

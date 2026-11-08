@@ -13,6 +13,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <tlhelp32.h>
+
 static char *utf8(const wchar_t *source)
 {
     int size = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, source, -1, NULL, 0, NULL, NULL);
@@ -27,6 +28,7 @@ static char *utf8(const wchar_t *source)
     }
     return text;
 }
+
 char *lx_host_command_line(size_t *size)
 {
     if (!size)
@@ -65,6 +67,7 @@ char *lx_host_command_line(size_t *size)
     free(argv);
     return buffer;
 }
+
 char *lx_host_executable_path(void)
 {
     for (DWORD size = 256; size <= 32768; size *= 2)
@@ -105,10 +108,12 @@ void lx_host_process_ids(uint32_t *process, uint32_t *parent)
         CloseHandle(snapshot);
     }
 }
+
 size_t lx_host_stack_limit(void)
 {
     return 8 * 1024 * 1024;
 }
+
 void lx_host_process_exit(uint32_t status)
 {
     ExitProcess(status);

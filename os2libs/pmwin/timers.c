@@ -2,6 +2,7 @@
 /* PM timers are dispatched on the owning message-queue thread. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/timers.h"
+
 ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -42,6 +43,7 @@ ULONG WinStartTimer(HAB hab, HWND hwnd, ULONG id, ULONG milliseconds)
     timer->due = lx_host_video_ticks_ms() + milliseconds;
     return id;
 }
+
 BOOL WinStopTimer(HAB hab, HWND hwnd, ULONG id)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -59,21 +61,26 @@ BOOL WinStopTimer(HAB hab, HWND hwnd, ULONG id)
     }
     return FALSE;
 }
+
 int pumpTimers(AnchorBlock *anchor)
 {
     uint64_t now = lx_host_video_ticks_ms();
     int wait = -1;
-    for(size_t i=0;i<anchor->windows_array_len;i++){
-        Window*w=anchor->windows[i];if(!w||!w->hwnd||!w->flash)continue;
-        ULONG phase=(ULONG)(now/500);
-        if(w->flash_phase!=phase)
+    for (size_t i = 0; i < anchor->windows_array_len; i++)
+    {
+        Window *w = anchor->windows[i];
+        if (!w || !w->hwnd || !w->flash)
+            continue;
+        ULONG phase = (ULONG)(now / 500);
+        if (w->flash_phase != phase)
         {
             /* The alarm sounds for the first five flashes, one per on/off cycle. */
-            if(w->flash_count<10&&!(w->flash_count++&1))WinAlarm(HWND_DESKTOP,0);
-            w->flash_phase=phase;
-            WinInvalidateRect(w->hwnd,NULL,TRUE);
+            if (w->flash_count < 10 && !(w->flash_count++ & 1))
+                WinAlarm(HWND_DESKTOP, 0);
+            w->flash_phase = phase;
+            WinInvalidateRect(w->hwnd, NULL, TRUE);
         }
-        wait=(int)(500-now%500);
+        wait = (int)(500 - now % 500);
     }
     for (PmTimer *timer = anchor->timers; timer; timer = timer->next)
     {
@@ -120,6 +127,7 @@ ULONG lx_pm_timer_create(HWND owner, ULONG interval, void (*callback)(void))
     anchor->timers = timer;
     return timer->id;
 }
+
 BOOL lx_pm_timer_stop(ULONG id)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

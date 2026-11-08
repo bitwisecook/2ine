@@ -4,6 +4,7 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+
 LONG GpiBox(HPS handle, LONG control, PPOINTL point, LONG horizontal, LONG vertical)
 {
     TRACE_NATIVE("GpiBox(%u, %d, %d,%d)", (uint)handle, (int)control, point ? (int)point->x : 0,

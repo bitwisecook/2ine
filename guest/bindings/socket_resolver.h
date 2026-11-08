@@ -10,6 +10,7 @@ static uint32 socket_guest_error(int value)
     lx_guest_store_u32(lx_execution_mapping_host(storage), value);
     return lx_execution_mapping_address(storage);
 }
+
 static uint32 socket_guest_host(const LxHostSocketHost *host)
 {
     enum
@@ -17,6 +18,7 @@ static uint32 socket_guest_host(const LxHostSocketHost *host)
         RESOLVER_STORAGE_SIZE = 4096,
         RESOLVER_ADDRESS_LIMIT = 32
     };
+
     static LX_HOST_THREAD_LOCAL LxGuestMapping *storage;
     if (!host || host->length != 4 || host->family != 2)
         return 0;
@@ -78,6 +80,7 @@ static uint32 socket_guest_text(const char *text)
     memcpy(lx_execution_mapping_host(storage), text, strlen(text) + 1);
     return lx_execution_mapping_address(storage);
 }
+
 static uint32 socket_guest_database(const char *name, char **aliases, int number,
                                     const char *protocol)
 {

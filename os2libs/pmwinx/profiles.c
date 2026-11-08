@@ -49,6 +49,7 @@ ULONG GetProfileString(PSZ section, PSZ key, PSZ fallback, PSZ output, ULONG cap
     free(app);
     return result;
 }
+
 static char *private_key(const char *key)
 {
     char *copy = key ? strdup(key) : NULL;
@@ -57,6 +58,7 @@ static char *private_key(const char *key)
             *p = upper_case[*p];
     return copy;
 }
+
 ULONG GetPrivateProfileString(PSZ section, PSZ key, PSZ fallback, PSZ output, ULONG capacity,
                               PSZ filename)
 {
@@ -94,6 +96,7 @@ ULONG GetPrivateProfileString(PSZ section, PSZ key, PSZ fallback, PSZ output, UL
     free(normalized);
     return result;
 }
+
 BOOL WritePrivateProfileString(PSZ section, PSZ key, PSZ value, PSZ filename)
 {
     if (!filename || (!section && (key || value)))

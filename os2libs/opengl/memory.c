@@ -7,6 +7,7 @@ uint32_t gl_word(const uint8_t *a, unsigned offset)
 {
     return lx_guest_load_u32(a + offset);
 }
+
 float gl_float(const uint8_t *a, unsigned offset)
 {
     uint32_t bits = gl_word(a, offset);
@@ -14,6 +15,7 @@ float gl_float(const uint8_t *a, unsigned offset)
     memcpy(&value, &bits, sizeof value);
     return value;
 }
+
 double gl_double(const uint8_t *a, unsigned offset)
 {
     uint64_t bits = (uint64_t)gl_word(a, offset) | (uint64_t)gl_word(a, offset + 4) << 32;
@@ -21,10 +23,12 @@ double gl_double(const uint8_t *a, unsigned offset)
     memcpy(&value, &bits, sizeof value);
     return value;
 }
+
 size_t gl_count(int32_t count)
 {
     return count < 0 ? SIZE_MAX : (size_t)count;
 }
+
 int gl_memory(uint32_t address, size_t count, size_t unit, int output, int nullable, GlMemory *m)
 {
     if (count > GL_MAX_TRANSFER || !unit || unit > GL_MAX_TRANSFER ||
@@ -53,6 +57,7 @@ int gl_memory(uint32_t address, size_t count, size_t unit, int output, int nulla
     memcpy(m->host, m->borrow.host, bytes);
     return 1;
 }
+
 void gl_memory_finish(GlMemory *m)
 {
     if (m->commit && m->host)
@@ -61,6 +66,7 @@ void gl_memory_finish(GlMemory *m)
     free(m->host);
     memset(m, 0, sizeof *m);
 }
+
 size_t gl_type_size(uint32_t type)
 {
     switch (type)
@@ -81,6 +87,7 @@ size_t gl_type_size(uint32_t type)
             return 0;
     }
 }
+
 size_t gl_list_bytes(int32_t n, uint32_t type)
 {
     size_t unit = type == GL_2_BYTES   ? 2
@@ -89,6 +96,7 @@ size_t gl_list_bytes(int32_t n, uint32_t type)
                                        : gl_type_size(type);
     return n < 0 || !unit || (uint64_t)n * unit > GL_MAX_TRANSFER ? SIZE_MAX : (size_t)n * unit;
 }
+
 size_t gl_parameter_count(uint32_t p)
 {
     switch (p)
@@ -136,6 +144,7 @@ size_t gl_parameter_count(uint32_t p)
             return SIZE_MAX;
     }
 }
+
 size_t gl_query_count(uint32_t p)
 {
     switch (p)
@@ -176,6 +185,7 @@ size_t gl_query_count(uint32_t p)
                        : SIZE_MAX;
     }
 }
+
 size_t gl_pixel_bytes(GlContext *c, int32_t width, int32_t height, uint32_t format, uint32_t type,
                       int pack)
 {
@@ -237,6 +247,7 @@ size_t gl_pixel_bytes(GlContext *c, int32_t width, int32_t height, uint32_t form
     uint64_t bytes = ((uint64_t)skip_rows + height - 1) * row + last;
     return bytes > GL_MAX_TRANSFER ? SIZE_MAX : (size_t)bytes;
 }
+
 size_t gl_texture_bytes(GlContext *c, uint32_t target, int32_t level, uint32_t format,
                         uint32_t type)
 {
@@ -248,6 +259,7 @@ size_t gl_texture_bytes(GlContext *c, uint32_t target, int32_t level, uint32_t f
         c->api->glGetTexLevelParameteriv(target, level, GL_TEXTURE_HEIGHT, &height);
     return gl_pixel_bytes(c, width, height, format, type, 1);
 }
+
 size_t gl_pixel_map_count(GlContext *c, uint32_t map)
 {
     if (map < GL_PIXEL_MAP_I_TO_I || map > GL_PIXEL_MAP_A_TO_A)
@@ -256,6 +268,7 @@ size_t gl_pixel_map_count(GlContext *c, uint32_t map)
     c->api->glGetIntegerv(map + (GL_PIXEL_MAP_I_TO_I_SIZE - GL_PIXEL_MAP_I_TO_I), &count);
     return gl_count(count);
 }
+
 static unsigned map_components(uint32_t target)
 {
     switch (target)
@@ -286,6 +299,7 @@ static unsigned map_components(uint32_t target)
             return 0;
     }
 }
+
 size_t gl_map_count(uint32_t target, int32_t us, int32_t un, int32_t vs, int32_t vn)
 {
     unsigned components = map_components(target);
@@ -295,6 +309,7 @@ size_t gl_map_count(uint32_t target, int32_t us, int32_t un, int32_t vs, int32_t
     uint64_t count = (uint64_t)(un - 1) * us + (uint64_t)(vn - 1) * vs + components;
     return count > GL_MAX_TRANSFER ? SIZE_MAX : (size_t)count;
 }
+
 size_t gl_map_query_count(GlContext *c, uint32_t target, uint32_t query)
 {
     unsigned components = map_components(target);
@@ -312,6 +327,7 @@ size_t gl_map_query_count(GlContext *c, uint32_t target, uint32_t query)
     uint64_t count = (uint64_t)(uint32_t)order[0] * (uint32_t)order[1] * components;
     return count > GL_MAX_TRANSFER ? SIZE_MAX : (size_t)count;
 }
+
 void gl_fix_query(GlContext *c, uint32_t pname, void *output, size_t unit, int floating)
 {
     if (!output)

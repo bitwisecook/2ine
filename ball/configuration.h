@@ -3,15 +3,18 @@
 #ifndef TB_CONFIGURATION_H
 #define TB_CONFIGURATION_H
 #define TB_PROFILE_LIMIT (32u * 1024u * 1024u)
+
 static uint32_t configuration_u32(const unsigned char *p)
 {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
 }
+
 static void configuration_store(unsigned char *p, uint32_t n)
 {
     for (unsigned i = 0; i < 4; i++)
         p[i] = (unsigned char)(n >> (8 * i));
 }
+
 static char *configuration_hex(Context *c, const unsigned char *p, size_t n)
 {
     char *out = keep(c, malloc(n * 2 + 1));
@@ -23,6 +26,7 @@ static char *configuration_hex(Context *c, const unsigned char *p, size_t n)
     }
     return out;
 }
+
 static int configuration_nibble(char c)
 {
     return c >= '0' && c <= '9'   ? c - '0'
@@ -30,6 +34,7 @@ static int configuration_nibble(char c)
            : c >= 'A' && c <= 'F' ? c - 'A' + 10
                                   : -1;
 }
+
 static unsigned char *configuration_unhex(Context *c, const char *text, size_t *n)
 {
     if (!text || strlen(text) % 2 || strlen(text) > TB_PROFILE_LIMIT * 2)
@@ -53,6 +58,7 @@ static unsigned char *configuration_unhex(Context *c, const char *text, size_t *
     }
     return out;
 }
+
 static int configuration_entry(Context *c, cJSON *entries, const unsigned char *app, size_t a,
                                const unsigned char *key, size_t k, const unsigned char *data,
                                size_t n)
@@ -66,10 +72,12 @@ static int configuration_entry(Context *c, cJSON *entries, const unsigned char *
     cJSON_AddItemToArray(entries, entry);
     return !c->error;
 }
+
 static int configuration_native_string(const unsigned char *p, size_t n, uint32_t at, uint32_t size)
 {
     return size && at <= n && size <= n - at && !p[at + size - 1] && !memchr(p + at, 0, size - 1);
 }
+
 static int configuration_mark(unsigned char *seen, size_t n, uint32_t at, uint32_t bytes)
 {
     if (at < 20 || at > n || bytes > n - at || (seen[at / 8] & (1u << (at % 8))))
@@ -77,6 +85,7 @@ static int configuration_mark(unsigned char *seen, size_t n, uint32_t at, uint32
     seen[at / 8] |= 1u << (at % 8);
     return 1;
 }
+
 static cJSON *configuration_parse(Context *c, const unsigned char *p, size_t n)
 {
     cJSON *entries = cJSON_CreateArray();
@@ -138,10 +147,12 @@ invalid:
     fail(c, "Profile has an invalid or unsupported binary format; it was not modified");
     return NULL;
 }
+
 #define TB_CONFIGURATION_FILES_LIMIT 2048u
 #define TB_CONFIGURATION_SCAN_LIMIT 100000u
 #define TB_CONFIGURATION_DIRECTORY_LIMIT 4096u
 #define TB_CONFIGURATION_GUEST_SEPARATOR 92
+
 static int configuration_part_equal(const char *a, size_t n, const char *b)
 {
     if (strlen(b) != n)
@@ -151,6 +162,7 @@ static int configuration_part_equal(const char *a, size_t n, const char *b)
             return 0;
     return 1;
 }
+
 static int configuration_excluded(const char *guest)
 {
     const char *part = guest + 3;
@@ -167,6 +179,7 @@ static int configuration_excluded(const char *guest)
     }
     return 0;
 }
+
 static int configuration_links(Context *c, const char *root, const char *path)
 {
     if (!inside(path, root))
@@ -188,6 +201,7 @@ static int configuration_links(Context *c, const char *root, const char *path)
         }
     return 1;
 }
+
 static char *configuration_private_root(Context *c)
 {
     char *ball = keep(c, tb_canonical(c->ball));
@@ -201,11 +215,13 @@ static char *configuration_private_root(Context *c)
     }
     return c->roots[2];
 }
+
 static int configuration_suffix(const char *name)
 {
     size_t n = strlen(name);
     return n >= 4 && equal_case(name + n - 4, ".INI");
 }
+
 static char *configuration_private_path(Context *c, const char *guest)
 {
     char *root = configuration_private_root(c);
@@ -286,6 +302,7 @@ static char *configuration_private_path(Context *c, const char *guest)
     }
     return canonical;
 }
+
 static int configuration_is_text(const unsigned char *p, size_t n)
 {
     for (size_t i = 0; i < n; i++)
@@ -293,6 +310,7 @@ static int configuration_is_text(const unsigned char *p, size_t n)
             return 0;
     return 1;
 }
+
 static unsigned char *configuration_file_bytes(Context *c, const char *path, size_t *length)
 {
     uint64_t size = 0;
@@ -304,6 +322,7 @@ static unsigned char *configuration_file_bytes(Context *c, const char *path, siz
     }
     return (unsigned char *)read_file(c, path, length, 0);
 }
+
 static char *configuration_path(Context *c, const char *area)
 {
     if (!area)
@@ -320,6 +339,7 @@ static char *configuration_path(Context *c, const char *area)
     cJSON_Delete(env);
     return path;
 }
+
 static cJSON *configuration_read(Context *c, const cJSON *request)
 {
     const char *area = field(request, "name");
@@ -357,6 +377,7 @@ static cJSON *configuration_read(Context *c, const cJSON *request)
     cJSON_AddItemToObject(out, "entries", entries);
     return out;
 }
+
 static int configuration_serialize(Context *c, const char *path, cJSON *entries)
 {
     size_t total = 12;
@@ -400,6 +421,7 @@ static int configuration_serialize(Context *c, const char *path, cJSON *entries)
     return tb_atomic_write(path, out, total) ? 1
                                              : fail(c, "Cannot save profile: %s", strerror(errno));
 }
+
 static cJSON *configuration_write(Context *c, const cJSON *request)
 {
     cJSON *current = configuration_read(c, request);
@@ -549,6 +571,7 @@ static cJSON *configuration_write(Context *c, const cJSON *request)
     cJSON_Delete(current);
     return ok ? configuration_read(c, request) : NULL;
 }
+
 static char *configuration_guest_file(Context *c, const char *host)
 {
     const char *part = host + strlen(c->roots[2]);
@@ -561,6 +584,7 @@ static char *configuration_guest_file(Context *c, const char *host)
                 *p = TB_CONFIGURATION_GUEST_SEPARATOR;
     return guest;
 }
+
 static cJSON *configuration_aliases(Context *c)
 {
     cJSON *aliases = cJSON_CreateArray(), *env = guest_environment(c, NULL);
@@ -600,6 +624,7 @@ static cJSON *configuration_aliases(Context *c)
     cJSON_Delete(env);
     return aliases;
 }
+
 static cJSON *configuration_roles(const cJSON *aliases, const char *host)
 {
     cJSON *roles = cJSON_CreateArray();
@@ -608,10 +633,12 @@ static cJSON *configuration_roles(const cJSON *aliases, const char *host)
         cJSON_AddItemToArray(roles, cJSON_CreateString(field(alias, "role")));
     return roles;
 }
+
 static int configuration_profile_magic(const unsigned char *p, size_t n)
 {
     return (n >= 8 && !memcmp(p, "2INEPRF1", 8)) || (n >= 4 && configuration_u32(p) == UINT32_MAX);
 }
+
 static cJSON *configuration_file_read(Context *c, const cJSON *request)
 {
     char *path = configuration_private_path(c, field(request, "path"));
@@ -681,6 +708,7 @@ static cJSON *configuration_file_read(Context *c, const cJSON *request)
         cJSON_AddStringToObject(out, "data", configuration_hex(c, bytes, n));
     return out;
 }
+
 static cJSON *configuration_file_write(Context *c, const cJSON *request)
 {
     cJSON *current = configuration_file_read(c, request);
@@ -739,6 +767,7 @@ static cJSON *configuration_file_write(Context *c, const cJSON *request)
     }
     return configuration_file_read(c, request);
 }
+
 static int configuration_same_path(const char *a, const char *b)
 {
     while (*a && *b)
@@ -753,6 +782,7 @@ static int configuration_same_path(const char *a, const char *b)
     }
     return !*a && !*b;
 }
+
 static int configuration_file_catalogue(Context *c, cJSON *files, const cJSON *aliases,
                                         const char *host)
 {
@@ -829,6 +859,7 @@ static int configuration_file_catalogue(Context *c, cJSON *files, const cJSON *a
     cJSON_AddItemToArray(files, out);
     return 1;
 }
+
 static cJSON *configuration_files(Context *c, const cJSON *request)
 {
     char *root = configuration_private_root(c);

@@ -24,13 +24,16 @@ struct LxMidiBanks
     fluid_synth_t *fluid = nullptr;
     unsigned rate = 48000;
     std::string profile;
+
     struct Channel
     {
         int target = 0, program = -1, bank = -1, percussion = -1, muted = 0;
         int font = -1, selectedProgram = 0, msb = 0, lsb = 0;
         std::unique_ptr<LiquidSFZ::Synth> sfz;
     };
+
     std::array<Channel, 16> channels;
+
     ~LxMidiBanks()
     {
         if (fluid)
@@ -39,6 +42,7 @@ struct LxMidiBanks
             delete_fluid_settings(settings);
     }
 };
+
 static std::string configured(const char *key, const char *fallback = "")
 {
     char *value = lx_midi_config_value(key);
@@ -46,6 +50,7 @@ static std::string configured(const char *key, const char *fallback = "")
     free(value);
     return result;
 }
+
 static bool sfz_file(const std::string &path)
 {
     if (path.size() < 4)
@@ -55,6 +60,7 @@ static bool sfz_file(const std::string &path)
         letter = static_cast<char>(std::tolower(static_cast<unsigned char>(letter)));
     return suffix == ".sfz";
 }
+
 static void select_program(LxMidiBanks *s, unsigned input)
 {
     auto &c = s->channels[input];
@@ -85,6 +91,7 @@ static void select_program(LxMidiBanks *s, unsigned input)
             FLUID_OK)
             fluid_synth_program_select(s->fluid, c.target, c.font, drum ? 128 : 0, 0);
 }
+
 extern "C" LxMidiBanks *lx_midi_banks_create(const char *default_bank, unsigned rate)
 {
     try
@@ -189,10 +196,12 @@ extern "C" LxMidiBanks *lx_midi_banks_create(const char *default_bank, unsigned 
         return nullptr;
     }
 }
+
 extern "C" void lx_midi_banks_destroy(LxMidiBanks *banks)
 {
     delete banks;
 }
+
 extern "C" int lx_midi_banks_reset(LxMidiBanks *s)
 {
     if (!s)
@@ -213,6 +222,7 @@ extern "C" int lx_midi_banks_reset(LxMidiBanks *s)
     }
     return 1;
 }
+
 extern "C" void lx_midi_banks_event(LxMidiBanks *s, unsigned status, unsigned key, unsigned value)
 {
     if (!s || status < 0x80 || status >= 0xf0 || key > 127 || value > 127)
@@ -280,6 +290,7 @@ extern "C" void lx_midi_banks_event(LxMidiBanks *s, unsigned status, unsigned ke
             break;
     }
 }
+
 extern "C" void lx_midi_banks_sysex(LxMidiBanks *s, const unsigned char *message, size_t length)
 {
     if (!s || length < 2)
@@ -292,6 +303,7 @@ extern "C" void lx_midi_banks_sysex(LxMidiBanks *s, const unsigned char *message
         (length == 9 && message[1] == 0x43 && message[3] == 0x4c && message[6] == 0x7e))
         lx_midi_banks_reset(s);
 }
+
 extern "C" void lx_midi_banks_render(LxMidiBanks *s, float *samples, unsigned count, unsigned rate,
                                      float volume, int channels)
 {

@@ -6,6 +6,7 @@
 #include "os2libs/pmctls.h"
 #include "guest/abi.h"
 #include <strings.h>
+
 enum
 {
     FNTM_FACENAMECHANGED = 0x1032, /* WM_USER + 50 */
@@ -30,11 +31,13 @@ enum
     BM_QUERYCHECK = 0x124,
     BM_SETCHECK = 0x125
 };
+
 typedef struct FontEntry
 {
     unsigned index, bold, italic;
     char family[32], face[32];
 } FontEntry;
+
 typedef struct PmFontDialog
 {
     unsigned references;
@@ -45,18 +48,31 @@ typedef struct PmFontDialog
     size_t count, current;
     BOOL filling;
 } PmFontDialog;
+
 static const struct
 {
     LONG color;
     const char *name;
-} font_colors[] = {{CLR_BLACK, "Black"},    {CLR_WHITE, "White"},      {CLR_BLUE, "Blue"},
-                   {2, "Red"},              {3, "Pink"},               {4, "Green"},
-                   {5, "Cyan"},             {6, "Yellow"},             {CLR_DARKGRAY, "Dark gray"},
-                   {9, "Dark blue"},        {10, "Dark red"},          {11, "Dark pink"},
-                   {12, "Dark green"},      {13, "Dark cyan"},         {CLR_BROWN, "Brown"},
+} font_colors[] = {{CLR_BLACK, "Black"},
+                   {CLR_WHITE, "White"},
+                   {CLR_BLUE, "Blue"},
+                   {2, "Red"},
+                   {3, "Pink"},
+                   {4, "Green"},
+                   {5, "Cyan"},
+                   {6, "Yellow"},
+                   {CLR_DARKGRAY, "Dark gray"},
+                   {9, "Dark blue"},
+                   {10, "Dark red"},
+                   {11, "Dark pink"},
+                   {12, "Dark green"},
+                   {13, "Dark cyan"},
+                   {CLR_BROWN, "Brown"},
                    {CLR_PALEGRAY, "Pale gray"}};
+
 static const unsigned font_color_count = sizeof font_colors / sizeof *font_colors;
 static _Thread_local PmFontDialog *pending_font;
+
 static void release_font(PmFontDialog *d)
 {
     if (!--d->references)
@@ -65,6 +81,7 @@ static void release_font(PmFontDialog *d)
         free(d);
     }
 }
+
 void destroyStandardFont(Window *w)
 {
     if (w->standard_font)
@@ -73,33 +90,40 @@ void destroyStandardFont(Window *w)
         w->standard_font = NULL;
     }
 }
+
 static BOOL write_font(PmFontDialog *d)
 {
     return lx_execution_write(GLoaderState.execution, d->address, &d->data, sizeof d->data);
 }
+
 static char *font_string(ULONG address)
 {
     return address ? lx_execution_copy_string(GLoaderState.execution, address, 65536) : NULL;
 }
+
 static LONG selected_item(HWND window, ULONG id)
 {
     return (SHORT)(uintptr_t)WinSendDlgItemMsg(window, id, LM_QUERYSELECTION,
                                                (MPARAM)(uintptr_t)0xffff, 0);
 }
+
 static void insert_item(HWND window, ULONG id, const char *text)
 {
     WinSendDlgItemMsg(window, id, LM_INSERTITEM, (MPARAM)(intptr_t)-1, (MPARAM)(uintptr_t)text);
 }
+
 static BOOL checked(PmFontDialog *d, ULONG id)
 {
     return (USHORT)(uintptr_t)WinSendDlgItemMsg(d->window, id, BM_QUERYCHECK, 0, 0) != 0;
 }
+
 /* FATTR_SEL_OUTLINE, FATTR_SEL_UNDERSCORE and FATTR_SEL_STRIKEOUT come from the check boxes. */
 static ULONG emphasis(PmFontDialog *d)
 {
     return (checked(d, OUTLINE_CHECK) ? 8 : 0) | (checked(d, UNDERSCORE_CHECK) ? 2 : 0) |
            (checked(d, STRIKEOUT_CHECK) ? 0x10 : 0);
 }
+
 static double selected_points(PmFontDialog *d)
 {
     char text[32] = {0};
@@ -108,6 +132,7 @@ static double selected_points(PmFontDialog *d)
     double points = strtod(text, &end);
     return *end || points < 1 || points > 32767 ? 0 : points;
 }
+
 static BOOL commit_font(PmFontDialog *d)
 {
     double points = selected_points(d);
@@ -158,25 +183,29 @@ static BOOL commit_font(PmFontDialog *d)
     d->data.lSRC = 0;
     return write_font(d);
 }
+
 /* Dialog procedures may be guest code, so strings and records travel in a guest mapping. */
 static LxGuestMapping *font_mapping(void)
 {
     return lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
 }
+
 static MRESULT font_notify(PmFontDialog *d, LxGuestMapping *mapping, ULONG message,
                            const char *text, MPARAM second)
 {
     char *guest = lx_execution_mapping_host(mapping);
     snprintf(guest, 4096, "%s", text);
-    return WinSendMsg(d->window, message,
-                      (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping), second);
+    return WinSendMsg(d->window, message, (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping),
+                      second);
 }
+
 static void store_color(HWND preview, ULONG parameter, LONG color)
 {
     uint8 wire[4];
     lx_guest_store_u32(wire, (uint32)color);
     WinSetPresParam(preview, parameter, sizeof wire, wire);
 }
+
 /* The preview control shows the selection through presentation parameters. */
 static void update_preview(PmFontDialog *d, HWND preview)
 {
@@ -194,12 +223,14 @@ static void update_preview(PmFontDialog *d, HWND preview)
         WinSetWindowText(preview, text);
     free(text);
 }
+
 static void refresh_preview(PmFontDialog *d)
 {
     if (!d->filling)
         WinSendMsg(d->window, FNTM_UPDATEPREVIEW,
                    (MPARAM)(uintptr_t)WinWindowFromID(d->window, PREVIEW_TEXT), 0);
 }
+
 /* Family list rows follow each family's first appearance in the catalogue. */
 static BOOL first_of_family(const PmFontDialog *d, size_t index)
 {
@@ -208,10 +239,15 @@ static BOOL first_of_family(const PmFontDialog *d, size_t index)
             return FALSE;
     return TRUE;
 }
+
 static const char *style_name(const FontEntry *e)
 {
-    return e->bold && e->italic ? "Bold Italic" : e->bold ? "Bold" : e->italic ? "Italic" : "Normal";
+    return e->bold && e->italic ? "Bold Italic"
+           : e->bold            ? "Bold"
+           : e->italic          ? "Italic"
+                                : "Normal";
 }
+
 /* Selecting a family lists its styles, keeping the nearest match to the wanted style. */
 static void fill_styles(PmFontDialog *d, const char *family, unsigned bold, unsigned italic)
 {
@@ -236,6 +272,7 @@ static void fill_styles(PmFontDialog *d, const char *family, unsigned bold, unsi
     WinSendDlgItemMsg(d->window, STYLE_LIST, LM_SELECTITEM, (MPARAM)(uintptr_t)chosen,
                       (MPARAM)(uintptr_t)TRUE);
 }
+
 /* Row numbers count the entries of the current family in catalogue order. */
 static void select_style(PmFontDialog *d, LONG row)
 {
@@ -249,6 +286,7 @@ static void select_style(PmFontDialog *d, LONG row)
             return;
         }
 }
+
 static void send_style_change(PmFontDialog *d, const FontEntry *old, ULONG old_style)
 {
     if (d->filling || d->current >= d->count)
@@ -276,6 +314,7 @@ static void send_style_change(PmFontDialog *d, const FontEntry *old, ULONG old_s
                (MPARAM)(uintptr_t)lx_execution_mapping_address(mapping), 0);
     lx_execution_unmap(GLoaderState.execution, mapping);
 }
+
 static void select_color(PmFontDialog *d, ULONG list, LONG color)
 {
     for (unsigned i = 0; i < font_color_count; i++)
@@ -283,6 +322,7 @@ static void select_color(PmFontDialog *d, ULONG list, LONG color)
             WinSendDlgItemMsg(d->window, list, LM_SELECTITEM, (MPARAM)(uintptr_t)i,
                               (MPARAM)(uintptr_t)TRUE);
 }
+
 static void populate_font(PmFontDialog *d)
 {
     d->filling = TRUE;
@@ -385,16 +425,19 @@ static void populate_font(PmFontDialog *d)
     }
     select_color(d, FOREGROUND_LIST, d->data.clrFore);
     select_color(d, BACKGROUND_LIST, d->data.clrBack);
+
     static const struct
     {
         ULONG id, bit;
     } checks[] = {{OUTLINE_CHECK, 8}, {UNDERSCORE_CHECK, 2}, {STRIKEOUT_CHECK, 0x10}};
+
     for (unsigned i = 0; i < 3; i++)
         WinSendDlgItemMsg(d->window, checks[i].id, BM_SETCHECK,
                           (MPARAM)(uintptr_t)((d->data.flStyle & checks[i].bit) != 0), 0);
     d->filling = FALSE;
     refresh_preview(d);
 }
+
 /* The guest sees control changes as the FNTM_* messages a custom procedure may subclass. */
 static void font_control(PmFontDialog *d, USHORT id, USHORT code)
 {
@@ -465,6 +508,7 @@ static void font_control(PmFontDialog *d, USHORT id, USHORT code)
         return;
     refresh_preview(d);
 }
+
 MRESULT lx_pm_font_procedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -527,6 +571,7 @@ MRESULT lx_pm_font_procedure(HWND handle, ULONG message, MPARAM first, MPARAM se
     }
     return WinDefDlgProc(handle, message, first, second);
 }
+
 static MRESULT OS2API font_dispatch(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -555,6 +600,7 @@ static MRESULT OS2API font_dispatch(HWND handle, ULONG message, MPARAM first, MP
     }
     return lx_pm_font_procedure(handle, message, first, second);
 }
+
 static PDLGTEMPLATE font_template(uint8 *bytes, size_t capacity)
 {
     typedef struct
@@ -564,6 +610,7 @@ static PDLGTEMPLATE font_template(uint8 *bytes, size_t capacity)
         ULONG style;
         const char *text;
     } Item;
+
     /* Control kinds: 2 combination box, 3 button, 5 static text, 7 list box. */
     static const Item controls[] = {{313, 5, 8, 203, 130, 12, 1, "Name:"},
                                     {FAMILY_LIST, 7, 8, 116, 130, 85, 0x20000, ""},
@@ -624,7 +671,9 @@ static PDLGTEMPLATE font_template(uint8 *bytes, size_t capacity)
     t->cbTemplate = offset;
     return t;
 }
+
 static _Thread_local PDLGTEMPLATE custom_font_template;
+
 HWND lx_pm_font_dialog_template(HWND parent, HWND owner, PVOID address, PVOID data)
 {
     custom_font_template = data;
@@ -632,6 +681,7 @@ HWND lx_pm_font_dialog_template(HWND parent, HWND owner, PVOID address, PVOID da
     custom_font_template = NULL;
     return result;
 }
+
 HWND lx_pm_font_dialog(HWND parent, HWND owner, PVOID address)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();

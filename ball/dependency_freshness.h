@@ -5,10 +5,12 @@ static void dependency_token_text(SHA256_CTX *state, const char *text)
     const char *value = text ? text : "";
     sha256_update(state, (const BYTE *)value, strlen(value) + 1);
 }
+
 static int dependency_token_order(const void *a, const void *b)
 {
     return strcmp(*(const char *const *)a, *(const char *const *)b);
 }
+
 static int dependency_token_file(Context *c, SHA256_CTX *state, const char *path)
 {
     TbFileIdentity identity;
@@ -31,6 +33,7 @@ static int dependency_token_file(Context *c, SHA256_CTX *state, const char *path
     dependency_token_text(state, value);
     return value != NULL;
 }
+
 static int dependency_token_tree(Context *c, SHA256_CTX *state, const char *root, int installed,
                                  int recursive, unsigned *visited, unsigned *binaries)
 {
@@ -86,6 +89,7 @@ static int dependency_token_tree(Context *c, SHA256_CTX *state, const char *root
     cJSON_Delete(queue);
     return ok;
 }
+
 static int dependency_token_contents(Context *c, SHA256_CTX *state, const char *path)
 {
     dependency_token_text(state, path);
@@ -101,6 +105,7 @@ static int dependency_token_contents(Context *c, SHA256_CTX *state, const char *
     dependency_token_text(state, "");
     return 1;
 }
+
 /* A failed/limited metadata pass cannot establish freshness. It is isolated
    from the caller so a stale report does not break snapshot or app launch. */
 static char *dependency_fingerprint(Context *parent, const cJSON *sources, const char *build,
@@ -181,6 +186,7 @@ static char *dependency_fingerprint(Context *parent, const cJSON *sources, const
     free(c->error);
     return result;
 }
+
 static void dependency_mark_freshness(Context *c, cJSON *report)
 {
     const char *recorded = field(report, "fingerprint");

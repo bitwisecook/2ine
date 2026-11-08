@@ -32,6 +32,7 @@ enum
     WIN_DESTROY = 2,
     EN_CHANGE_CODE = 4
 };
+
 /* Translates one PM dialog message for a Windows hook; nonzero means the hook consumed it. */
 static ULONG hook_message(ULONG hook, ULONG window, ULONG message, ULONG first, ULONG second)
 {
@@ -61,6 +62,7 @@ static ULONG hook_message(ULONG hook, ULONG window, ULONG message, ULONG first, 
     }
     return lx_execution_callback32_4(GLoaderState.execution, hook, window, kind, a, b);
 }
+
 /* The template name is a resource number or a guest string. */
 static ULONG template_identity(ULONG module, ULONG name)
 {
@@ -71,12 +73,14 @@ static ULONG template_identity(ULONG module, ULONG name)
     free(text);
     return identity;
 }
+
 static ULONG template_module(ULONG module)
 {
     return (!module || module == UINT32_MAX) && GLoaderState.main_module
                ? GLoaderState.main_module->handle
                : module;
 }
+
 static ULONG record_address(PVOID record, ULONG size)
 {
     ULONG address = 0;
@@ -90,7 +94,9 @@ typedef struct FontDialog
     ULONG address, hook;
     struct FontDialog *previous;
 } FontDialog;
+
 static _Thread_local FontDialog *font_dialogs;
+
 static uint32 font_dispatch(uint8 *a)
 {
     ULONG window = lx_guest_load_u32(a), message = lx_guest_load_u32(a + 4);
@@ -98,8 +104,7 @@ static uint32 font_dispatch(uint8 *a)
     FontDialog *dialog = font_dialogs;
     if (dialog && message == WM_INITDLG)
     {
-        lx_pm_font_procedure(window, message, (MPARAM)(uintptr_t)first,
-                             (MPARAM)(uintptr_t)second);
+        lx_pm_font_procedure(window, message, (MPARAM)(uintptr_t)first, (MPARAM)(uintptr_t)second);
         lx_execution_callback32_4(GLoaderState.execution, dialog->hook, window, WIN_INITDIALOG,
                                   first, dialog->address);
         return 0;
@@ -109,6 +114,7 @@ static uint32 font_dispatch(uint8 *a)
     return (uint32)(uintptr_t)lx_pm_font_procedure(window, message, (MPARAM)(uintptr_t)first,
                                                    (MPARAM)(uintptr_t)second);
 }
+
 BOOL ChooseFont(PVOID record)
 {
     if (!record || lx_guest_load_u32(record) != 60)
@@ -131,7 +137,8 @@ BOOL ChooseFont(PVOID record)
         return FALSE;
     }
     LxGuestMapping *mapping = lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0);
-    LxGuestMapping *procedure = hook ? lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0) : NULL;
+    LxGuestMapping *procedure =
+        hook ? lx_execution_map(GLoaderState.execution, 0, 4096, 3, 0) : NULL;
     PVOID custom = NULL;
     BOOL result = FALSE, opened = FALSE;
     ULONG failure = 0;
@@ -186,9 +193,8 @@ BOOL ChooseFont(PVOID record)
             goto font_done;
         }
     }
-    FontDialog state = {.address = record_address(record, 60),
-                        .hook = hook,
-                        .previous = font_dialogs};
+    FontDialog state = {
+        .address = record_address(record, 60), .hook = hook, .previous = font_dialogs};
     if (hook)
     {
         const LxExecutionApi32 api = {font_dispatch, 16, 0, LX_ABI_STACK32};
@@ -265,6 +271,7 @@ enum
     COLOR_HELP = 1038,
     COLOR_CELLS = 3
 };
+
 static const ULONG basic_colors[48] = {
     0xFF8080, 0xFFFF80, 0x80FF80, 0x00FF80, 0x80FFFF, 0x0080FF, 0xFF80C0, 0xFF80FF,
     0xFF0000, 0xFFFF00, 0x80FF00, 0x00FF40, 0x00FFFF, 0x0080C0, 0x8080C0, 0xFF00FF,
@@ -272,6 +279,7 @@ static const ULONG basic_colors[48] = {
     0x800000, 0xFF8000, 0x008000, 0x008040, 0x0000FF, 0x0000A0, 0x800080, 0x8000FF,
     0x400000, 0x804000, 0x004000, 0x004040, 0x000080, 0x000040, 0x400040, 0x400080,
     0x000000, 0x808000, 0x808040, 0x808080, 0x408080, 0xC0C0C0, 0x400040, 0xFFFFFF};
+
 typedef struct ColorDialog
 {
     ULONG address, hook, flags, owner, custom_address;
@@ -282,12 +290,15 @@ typedef struct ColorDialog
     BOOL accepted, updating;
     struct ColorDialog *previous;
 } ColorDialog;
+
 static _Thread_local ColorDialog *color_dialog;
+
 /* COLORREF is 0x00BBGGRR, PM RGB is 0x00RRGGBB. */
 static ULONG swap_rgb(ULONG color)
 {
     return (color & 0xFF) << 16 | (color & 0xFF00) | ((color >> 16) & 0xFF);
 }
+
 /* The Windows dialog scales hue, saturation and luminosity to 0..240. */
 static void rgb_to_hls(ULONG color, LONG *hue, LONG *luminosity, LONG *saturation)
 {
@@ -302,13 +313,14 @@ static void rgb_to_hls(ULONG color, LONG *hue, LONG *luminosity, LONG *saturatio
         *saturation = 0;
         return;
     }
-    *saturation = sum <= 255 ? (range * 240 + sum / 2) / sum
-                             : (range * 240 + (510 - sum) / 2) / (510 - sum);
+    *saturation =
+        sum <= 255 ? (range * 240 + sum / 2) / sum : (range * 240 + (510 - sum) / 2) / (510 - sum);
     LONG sector = high == r   ? (g - b) * 40 / range
                   : high == g ? 80 + (b - r) * 40 / range
                               : 160 + (r - g) * 40 / range;
     *hue = (sector + 240) % 240;
 }
+
 static LONG hue_channel(LONG low, LONG high, LONG hue)
 {
     hue = (hue + 240) % 240;
@@ -320,6 +332,7 @@ static LONG hue_channel(LONG low, LONG high, LONG hue)
         return low + (high - low) * (160 - hue) / 40;
     return low;
 }
+
 static ULONG hls_to_rgb(LONG hue, LONG luminosity, LONG saturation)
 {
     LONG high = luminosity <= 120 ? luminosity * (240 + saturation) / 240
@@ -329,12 +342,14 @@ static ULONG hls_to_rgb(LONG hue, LONG luminosity, LONG saturation)
     LONG b = hue_channel(low, high, hue - 80);
     return (ULONG)(r * 255 / 240) | (ULONG)(g * 255 / 240) << 8 | (ULONG)(b * 255 / 240) << 16;
 }
+
 static void set_number(ULONG window, ULONG id, LONG value)
 {
     char text[16];
     snprintf(text, sizeof text, "%d", value);
     WinSetDlgItemText(window, id, text);
 }
+
 static LONG get_number(ULONG window, ULONG id, LONG maximum)
 {
     char text[16] = {0};
@@ -342,6 +357,7 @@ static LONG get_number(ULONG window, ULONG id, LONG maximum)
     long value = strtol(text, NULL, 10);
     return value < 0 ? 0 : value > maximum ? maximum : (LONG)value;
 }
+
 static void repaint_colors(ColorDialog *dialog)
 {
     static const ULONG ids[] = {COLOR_BOX1, COLOR_CUSTOM1, COLOR_SOLID};
@@ -352,6 +368,7 @@ static void repaint_colors(ColorDialog *dialog)
             WinInvalidateRect(child, NULL, FALSE);
     }
 }
+
 static void show_color(ColorDialog *dialog, ULONG changed_group)
 {
     LONG hue, luminosity, saturation;
@@ -373,10 +390,12 @@ static void show_color(ColorDialog *dialog, ULONG changed_group)
     dialog->updating = FALSE;
     repaint_colors(dialog);
 }
+
 static unsigned cell_index(ULONG id)
 {
     return id == COLOR_BOX1 ? 0 : id == COLOR_CUSTOM1 ? 1 : 2;
 }
+
 static void paint_cells(ColorDialog *dialog, ULONG window, ULONG id)
 {
     RECTL bounds;
@@ -397,14 +416,14 @@ static void paint_cells(ColorDialog *dialog, ULONG window, ULONG id)
             LONG left = (LONG)(cell % 8) * width;
             LONG top = bounds.yTop - (LONG)(cell / 8) * height;
             RECTL frame = {left + 1, top - height + 1, left + width - 1, top - 1};
-            WinFillRect(space, &frame,
-                        color == swap_rgb(dialog->color) ? 0 : 0x808080);
+            WinFillRect(space, &frame, color == swap_rgb(dialog->color) ? 0 : 0x808080);
             RECTL inner = {frame.xLeft + 2, frame.yBottom + 2, frame.xRight - 2, frame.yTop - 2};
             WinFillRect(space, &inner, (LONG)color);
         }
     }
     WinEndPaint(space);
 }
+
 static MRESULT OS2API color_cells(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     ColorDialog *dialog = color_dialog;
@@ -433,14 +452,14 @@ static MRESULT OS2API color_cells(HWND window, ULONG message, MPARAM first, MPAR
             ULONG cell = row * 8 + column;
             if (id == COLOR_CUSTOM1)
                 dialog->custom_slot = cell;
-            dialog->color =
-                id == COLOR_BOX1 ? swap_rgb(basic_colors[cell]) : dialog->custom[cell];
+            dialog->color = id == COLOR_BOX1 ? swap_rgb(basic_colors[cell]) : dialog->custom[cell];
             show_color(dialog, 0);
         }
         return (MRESULT)(uintptr_t)TRUE;
     }
     return original(window, message, first, second);
 }
+
 static void store_custom_colors(ColorDialog *dialog)
 {
     if (!dialog->custom_address)
@@ -450,6 +469,7 @@ static void store_custom_colors(ColorDialog *dialog)
         lx_guest_store_u32(wire + i * 4, dialog->custom[i]);
     lx_execution_write(GLoaderState.execution, dialog->custom_address, wire, sizeof wire);
 }
+
 static void initialize_color(ColorDialog *dialog, ULONG window)
 {
     static const ULONG ids[] = {COLOR_BOX1, COLOR_CUSTOM1, COLOR_SOLID};
@@ -465,7 +485,7 @@ static void initialize_color(ColorDialog *dialog, ULONG window)
         WinShowWindow(help, FALSE);
     if (dialog->flags & CC_PREVENTFULLOPEN)
     {
-        static const ULONG editors[] = {COLOR_HUE, COLOR_SAT,  COLOR_LUM, COLOR_RED,
+        static const ULONG editors[] = {COLOR_HUE,   COLOR_SAT,  COLOR_LUM, COLOR_RED,
                                         COLOR_GREEN, COLOR_BLUE, COLOR_ADD};
         for (unsigned i = 0; i < sizeof editors / sizeof *editors; i++)
         {
@@ -476,6 +496,7 @@ static void initialize_color(ColorDialog *dialog, ULONG window)
     }
     show_color(dialog, 0);
 }
+
 static MRESULT OS2API color_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     ColorDialog *dialog = color_dialog;
@@ -526,9 +547,9 @@ static MRESULT OS2API color_procedure(HWND window, ULONG message, MPARAM first, 
             uint8 proposed[4];
             lx_guest_store_u32(proposed, dialog->color);
             lx_execution_write(GLoaderState.execution, dialog->address + 12, proposed, 4);
-            if (dialog->hook && lx_execution_callback32_4(GLoaderState.execution, dialog->hook,
-                                                          window, dialog->ok_message, 0,
-                                                          dialog->address))
+            if (dialog->hook &&
+                lx_execution_callback32_4(GLoaderState.execution, dialog->hook, window,
+                                          dialog->ok_message, 0, dialog->address))
                 return 0;
             dialog->accepted = TRUE;
             WinDismissDlg(window, 1);
@@ -551,6 +572,7 @@ static MRESULT OS2API color_procedure(HWND window, ULONG message, MPARAM first, 
     }
     return WinDefDlgProc(window, message, first, second);
 }
+
 typedef struct ColorControl
 {
     USHORT kind, id;
@@ -558,6 +580,7 @@ typedef struct ColorControl
     ULONG style;
     const char *text;
 } ColorControl;
+
 static PDLGTEMPLATE color_template(uint8 *bytes, size_t capacity)
 {
     static const ColorControl controls[] = {
@@ -583,10 +606,12 @@ static PDLGTEMPLATE color_template(uint8 *bytes, size_t capacity)
         {3, 1, 6, 8, 56, 14, WS_VISIBLE | 0x20000 | 0x400, "OK"},
         {3, 2, 68, 8, 56, 14, WS_VISIBLE | 0x20000, "Cancel"},
         {3, COLOR_HELP, 130, 8, 56, 14, WS_VISIBLE | 0x20000, "Help"}};
+
     enum
     {
         count = sizeof controls / sizeof *controls
     };
+
     DLGTEMPLATE *t = (void *)bytes;
     DLGTITEM *items = (void *)(bytes + 14);
     t->codepage = 437;
@@ -621,6 +646,7 @@ static PDLGTEMPLATE color_template(uint8 *bytes, size_t capacity)
     t->cbTemplate = offset + 4;
     return t;
 }
+
 BOOL ChooseColor(PVOID record)
 {
     if (!record || lx_guest_load_u32(record) != 36)

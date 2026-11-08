@@ -57,7 +57,8 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     {
         char *end = NULL;
         unsigned long depth = strtoul(display_depth, &end, 10);
-        if (end != display_depth && !*end && (depth == 4 || depth == 8 || depth == 16 || depth == 24))
+        if (end != display_depth && !*end &&
+            (depth == 4 || depth == 8 || depth == 16 || depth == 24))
             GLoaderState.display_depth = (unsigned)depth;
     }
     prepOs2Drives();

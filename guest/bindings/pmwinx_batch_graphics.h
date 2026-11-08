@@ -2,11 +2,13 @@
 /* Checked graphics ABI: stack32 words, byte snapshots, no host SDK structures. */
 #ifndef TWOINE_GUEST_PMWINX_BATCH_GRAPHICS_H
 #define TWOINE_GUEST_PMWINX_BATCH_GRAPHICS_H
+
 typedef struct O32GraphicsBuffer
 {
     LxGuestBorrow lease;
     void *copy, *host;
 } O32GraphicsBuffer;
+
 static BOOL o32_graphics_buffer(ULONG address, uint64 size, unsigned mode, BOOL optional,
                                 O32GraphicsBuffer *out)
 {
@@ -48,6 +50,7 @@ static BOOL o32_graphics_buffer(ULONG address, uint64 size, unsigned mode, BOOL 
         out->host = out->lease.host;
     return TRUE;
 }
+
 static void o32_graphics_release(O32GraphicsBuffer *buffer)
 {
     free(buffer->copy);
@@ -70,6 +73,7 @@ static uint32 bridge32_AnimatePalette(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_Arc(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -88,6 +92,7 @@ static uint32 bridge32_Arc(uint8 *a)
                              (LONG)a7, (LONG)a8);
     return result;
 }
+
 static uint32 bridge32_BeginPath(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -97,6 +102,7 @@ static uint32 bridge32_BeginPath(uint8 *a)
         result = (uint32)BeginPath((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_CloseMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -106,6 +112,7 @@ static uint32 bridge32_CloseMetaFile(uint8 *a)
         result = (uint32)CloseMetaFile((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_CopyMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -123,6 +130,7 @@ static uint32 bridge32_CopyMetaFile(uint8 *a)
     free(s1);
     return result;
 }
+
 static uint32 bridge32_CreateBrushIndirect(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -136,6 +144,7 @@ static uint32 bridge32_CreateBrushIndirect(uint8 *a)
     o32_graphics_release(&p0);
     return result;
 }
+
 static uint32 bridge32_CreateEllipticRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -148,6 +157,7 @@ static uint32 bridge32_CreateEllipticRgn(uint8 *a)
         result = (uint32)CreateEllipticRgn((LONG)a0, (LONG)a1, (LONG)a2, (LONG)a3);
     return result;
 }
+
 static uint32 bridge32_CreateEllipticRgnIndirect(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -161,6 +171,7 @@ static uint32 bridge32_CreateEllipticRgnIndirect(uint8 *a)
     o32_graphics_release(&p0);
     return result;
 }
+
 static uint32 bridge32_CreateHatchBrush(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -171,6 +182,7 @@ static uint32 bridge32_CreateHatchBrush(uint8 *a)
         result = (uint32)CreateHatchBrush((LONG)a0, (ULONG)a1);
     return result;
 }
+
 static uint32 bridge32_CreateMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -187,6 +199,7 @@ static uint32 bridge32_CreateMetaFile(uint8 *a)
     free(s0);
     return result;
 }
+
 static uint32 bridge32_CreatePolygonRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -203,6 +216,7 @@ static uint32 bridge32_CreatePolygonRgn(uint8 *a)
     o32_graphics_release(&p0);
     return result;
 }
+
 static uint32 bridge32_CreateRoundRectRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -218,6 +232,7 @@ static uint32 bridge32_CreateRoundRectRgn(uint8 *a)
             (uint32)CreateRoundRectRgn((LONG)a0, (LONG)a1, (LONG)a2, (LONG)a3, (LONG)a4, (LONG)a5);
     return result;
 }
+
 static uint32 bridge32_DeleteEnhMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -227,6 +242,7 @@ static uint32 bridge32_DeleteEnhMetaFile(uint8 *a)
         result = (uint32)DeleteEnhMetaFile((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_DrawFocusRect(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -241,6 +257,7 @@ static uint32 bridge32_DrawFocusRect(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_DrawIcon(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -253,6 +270,7 @@ static uint32 bridge32_DrawIcon(uint8 *a)
         result = (uint32)DrawIcon((ULONG)a0, (LONG)a1, (LONG)a2, (ULONG)a3);
     return result;
 }
+
 static uint32 bridge32_Ellipse(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -266,6 +284,7 @@ static uint32 bridge32_Ellipse(uint8 *a)
         result = (uint32)Ellipse((ULONG)a0, (LONG)a1, (LONG)a2, (LONG)a3, (LONG)a4);
     return result;
 }
+
 static uint32 bridge32_EndPath(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -275,6 +294,7 @@ static uint32 bridge32_EndPath(uint8 *a)
         result = (uint32)EndPath((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_EnumEnhMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -293,6 +313,7 @@ static uint32 bridge32_EnumEnhMetaFile(uint8 *a)
     o32_graphics_release(&p4);
     return result;
 }
+
 static uint32 bridge32_EnumFonts(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -312,6 +333,7 @@ static uint32 bridge32_EnumFonts(uint8 *a)
     free(s1);
     return result;
 }
+
 static uint32 bridge32_EqualRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -322,6 +344,7 @@ static uint32 bridge32_EqualRgn(uint8 *a)
         result = (uint32)EqualRgn((ULONG)a0, (ULONG)a1);
     return result;
 }
+
 static uint32 bridge32_ExtCreatePen(uint8 *a)
 {
     O32GraphicsBuffer brush = {0};
@@ -333,6 +356,7 @@ static uint32 bridge32_ExtCreatePen(uint8 *a)
     o32_graphics_release(&brush);
     return result;
 }
+
 static uint32 bridge32_ExtSelectClipRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -344,6 +368,7 @@ static uint32 bridge32_ExtSelectClipRgn(uint8 *a)
         result = (uint32)ExtSelectClipRgn((ULONG)a0, (ULONG)a1, (LONG)a2);
     return result;
 }
+
 static uint32 bridge32_FillRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -355,6 +380,7 @@ static uint32 bridge32_FillRgn(uint8 *a)
         result = (uint32)FillRgn((ULONG)a0, (ULONG)a1, (ULONG)a2);
     return result;
 }
+
 static uint32 bridge32_FrameRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -368,6 +394,7 @@ static uint32 bridge32_FrameRgn(uint8 *a)
         result = (uint32)FrameRgn((ULONG)a0, (ULONG)a1, (ULONG)a2, (LONG)a3, (LONG)a4);
     return result;
 }
+
 static uint32 bridge32_GetBitmapBits(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -383,6 +410,7 @@ static uint32 bridge32_GetBitmapBits(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_GetBkColor(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -392,6 +420,7 @@ static uint32 bridge32_GetBkColor(uint8 *a)
         result = (uint32)GetBkColor((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_GetBkMode(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -401,6 +430,7 @@ static uint32 bridge32_GetBkMode(uint8 *a)
         result = (uint32)GetBkMode((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_GetCharABCWidths(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -419,6 +449,7 @@ static uint32 bridge32_GetCharABCWidths(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_GetCharWidth(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -437,6 +468,7 @@ static uint32 bridge32_GetCharWidth(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_GetClipRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -447,6 +479,7 @@ static uint32 bridge32_GetClipRgn(uint8 *a)
         result = (uint32)GetClipRgn((ULONG)a0, (ULONG)a1);
     return result;
 }
+
 static uint32 bridge32_GetCurrentObject(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -457,6 +490,7 @@ static uint32 bridge32_GetCurrentObject(uint8 *a)
         result = (uint32)GetCurrentObject((ULONG)a0, (ULONG)a1);
     return result;
 }
+
 static uint32 bridge32_GetCurrentPositionEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -471,6 +505,7 @@ static uint32 bridge32_GetCurrentPositionEx(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_GetEnhMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -487,6 +522,7 @@ static uint32 bridge32_GetEnhMetaFile(uint8 *a)
     free(s0);
     return result;
 }
+
 static uint32 bridge32_GetEnhMetaFileBits(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -502,6 +538,7 @@ static uint32 bridge32_GetEnhMetaFileBits(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_GetEnhMetaFileHeader(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -517,6 +554,7 @@ static uint32 bridge32_GetEnhMetaFileHeader(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_GetKerningPairs(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -532,6 +570,7 @@ static uint32 bridge32_GetKerningPairs(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_GetMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -548,6 +587,7 @@ static uint32 bridge32_GetMetaFile(uint8 *a)
     free(s0);
     return result;
 }
+
 static uint32 bridge32_GetOutlineTextMetrics(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -563,6 +603,7 @@ static uint32 bridge32_GetOutlineTextMetrics(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_GetPolyFillMode(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -572,6 +613,7 @@ static uint32 bridge32_GetPolyFillMode(uint8 *a)
         result = (uint32)GetPolyFillMode((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_GetSystemPaletteEntries(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -588,6 +630,7 @@ static uint32 bridge32_GetSystemPaletteEntries(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_GetTextColor(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -597,6 +640,7 @@ static uint32 bridge32_GetTextColor(uint8 *a)
         result = (uint32)GetTextColor((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_GetViewportExtEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -611,6 +655,7 @@ static uint32 bridge32_GetViewportExtEx(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_GetViewportOrgEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -625,6 +670,7 @@ static uint32 bridge32_GetViewportOrgEx(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_GetWinMetaFileBits(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -643,6 +689,7 @@ static uint32 bridge32_GetWinMetaFileBits(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_GetWindowDC(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -652,6 +699,7 @@ static uint32 bridge32_GetWindowDC(uint8 *a)
         result = (uint32)GetWindowDC((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_GetWindowExtEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -666,6 +714,7 @@ static uint32 bridge32_GetWindowExtEx(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_GetWindowOrgEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -680,6 +729,7 @@ static uint32 bridge32_GetWindowOrgEx(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_LineDDA(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -694,6 +744,7 @@ static uint32 bridge32_LineDDA(uint8 *a)
         result = (uint32)LineDDA((LONG)a0, (LONG)a1, (LONG)a2, (LONG)a3, (ULONG)a4, (ULONG)a5);
     return result;
 }
+
 static uint32 bridge32_OffsetRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -705,6 +756,7 @@ static uint32 bridge32_OffsetRgn(uint8 *a)
         result = (uint32)OffsetRgn((ULONG)a0, (LONG)a1, (LONG)a2);
     return result;
 }
+
 static uint32 bridge32_OffsetViewportOrgEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -721,6 +773,7 @@ static uint32 bridge32_OffsetViewportOrgEx(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_OffsetWindowOrgEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -737,6 +790,7 @@ static uint32 bridge32_OffsetWindowOrgEx(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_PaintRgn(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -747,6 +801,7 @@ static uint32 bridge32_PaintRgn(uint8 *a)
         result = (uint32)PaintRgn((ULONG)a0, (ULONG)a1);
     return result;
 }
+
 static uint32 bridge32_Pie(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -765,6 +820,7 @@ static uint32 bridge32_Pie(uint8 *a)
                              (LONG)a7, (LONG)a8);
     return result;
 }
+
 static uint32 bridge32_PlayEnhMetaFile(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -780,6 +836,7 @@ static uint32 bridge32_PlayEnhMetaFile(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_PtInRegion(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -791,6 +848,7 @@ static uint32 bridge32_PtInRegion(uint8 *a)
         result = (uint32)PtInRegion((ULONG)a0, (LONG)a1, (LONG)a2);
     return result;
 }
+
 static uint32 bridge32_RectInRegion(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -805,6 +863,7 @@ static uint32 bridge32_RectInRegion(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_RectVisible(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -819,6 +878,7 @@ static uint32 bridge32_RectVisible(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_ResetDC(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -829,6 +889,7 @@ static uint32 bridge32_ResetDC(uint8 *a)
         result = (uint32)ResetDC((ULONG)a0, (PVOID)(uintptr_t)a1);
     return result;
 }
+
 static uint32 bridge32_ResizePalette(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -839,6 +900,7 @@ static uint32 bridge32_ResizePalette(uint8 *a)
         result = (uint32)ResizePalette((ULONG)a0, (ULONG)a1);
     return result;
 }
+
 static uint32 bridge32_RoundRect(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -855,6 +917,7 @@ static uint32 bridge32_RoundRect(uint8 *a)
                                    (LONG)a6);
     return result;
 }
+
 static uint32 bridge32_ScaleViewportExtEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -874,6 +937,7 @@ static uint32 bridge32_ScaleViewportExtEx(uint8 *a)
     o32_graphics_release(&p5);
     return result;
 }
+
 static uint32 bridge32_ScaleWindowExtEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -893,6 +957,7 @@ static uint32 bridge32_ScaleWindowExtEx(uint8 *a)
     o32_graphics_release(&p5);
     return result;
 }
+
 static uint32 bridge32_ScrollDC(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -921,6 +986,7 @@ static uint32 bridge32_ScrollDC(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_ScrollWindow(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -943,6 +1009,7 @@ static uint32 bridge32_ScrollWindow(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_ScrollWindowEx(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -972,6 +1039,7 @@ static uint32 bridge32_ScrollWindowEx(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_SetBitmapBits(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -987,6 +1055,7 @@ static uint32 bridge32_SetBitmapBits(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_SetEnhMetaFileBits(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1001,6 +1070,7 @@ static uint32 bridge32_SetEnhMetaFileBits(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_SetPaletteEntries(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1017,6 +1087,7 @@ static uint32 bridge32_SetPaletteEntries(uint8 *a)
     o32_graphics_release(&p3);
     return result;
 }
+
 static uint32 bridge32_SetPixel(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1029,6 +1100,7 @@ static uint32 bridge32_SetPixel(uint8 *a)
         result = (uint32)SetPixel((ULONG)a0, (LONG)a1, (LONG)a2, (ULONG)a3);
     return result;
 }
+
 static uint32 bridge32_SetPolyFillMode(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1039,6 +1111,7 @@ static uint32 bridge32_SetPolyFillMode(uint8 *a)
         result = (uint32)SetPolyFillMode((ULONG)a0, (LONG)a1);
     return result;
 }
+
 static uint32 bridge32_SetStretchBltMode(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1049,6 +1122,7 @@ static uint32 bridge32_SetStretchBltMode(uint8 *a)
         result = (uint32)SetStretchBltMode((ULONG)a0, (LONG)a1);
     return result;
 }
+
 static uint32 bridge32_SetTextCharacterExtra(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1059,6 +1133,7 @@ static uint32 bridge32_SetTextCharacterExtra(uint8 *a)
         result = (uint32)SetTextCharacterExtra((ULONG)a0, (LONG)a1);
     return result;
 }
+
 static uint32 bridge32_SetTextJustification(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1070,6 +1145,7 @@ static uint32 bridge32_SetTextJustification(uint8 *a)
         result = (uint32)SetTextJustification((ULONG)a0, (LONG)a1, (LONG)a2);
     return result;
 }
+
 static uint32 bridge32_SetWinMetaFileBits(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1090,6 +1166,7 @@ static uint32 bridge32_SetWinMetaFileBits(uint8 *a)
     o32_graphics_release(&p1);
     return result;
 }
+
 static uint32 bridge32_StretchBlt(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1110,6 +1187,7 @@ static uint32 bridge32_StretchBlt(uint8 *a)
                                     (LONG)a6, (LONG)a7, (LONG)a8, (LONG)a9, (ULONG)a10);
     return result;
 }
+
 static uint32 bridge32_StrokePath(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1119,6 +1197,7 @@ static uint32 bridge32_StrokePath(uint8 *a)
         result = (uint32)StrokePath((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_TabbedTextOut(uint8 *a)
 {
     ULONG address = lx_guest_load_u32(a + 12), count = lx_guest_load_u32(a + 16),
@@ -1146,6 +1225,7 @@ static uint32 bridge32_TabbedTextOut(uint8 *a)
     o32_graphics_release(&text);
     return result;
 }
+
 static uint32 bridge32_UnrealizeObject(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1155,6 +1235,7 @@ static uint32 bridge32_UnrealizeObject(uint8 *a)
         result = (uint32)UnrealizeObject((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_WindowFromDC(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1164,6 +1245,7 @@ static uint32 bridge32_WindowFromDC(uint8 *a)
         result = (uint32)WindowFromDC((ULONG)a0);
     return result;
 }
+
 static uint32 bridge32_HPSToHDC(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1187,6 +1269,7 @@ static uint32 bridge32_HPSToHDC(uint8 *a)
     free(s2);
     return result;
 }
+
 static uint32 bridge32_DeleteHDCObjects(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1198,6 +1281,7 @@ static uint32 bridge32_DeleteHDCObjects(uint8 *a)
     }
     return result;
 }
+
 static uint32 bridge32_SetAbortProc(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1208,6 +1292,7 @@ static uint32 bridge32_SetAbortProc(uint8 *a)
         result = (uint32)SetAbortProc((ULONG)a0, (ULONG)a1);
     return result;
 }
+
 static uint32 bridge32__CreateBitmapIndirect(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1221,6 +1306,7 @@ static uint32 bridge32__CreateBitmapIndirect(uint8 *a)
     o32_graphics_release(&p0);
     return result;
 }
+
 static uint32 bridge32_WinTranslateDeviceRects(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1240,6 +1326,7 @@ static uint32 bridge32_WinTranslateDeviceRects(uint8 *a)
     o32_graphics_release(&p2);
     return result;
 }
+
 static uint32 bridge32_WinTranslateGraphicsObjectHandle(uint8 *a)
 {
     ULONG a0 = lx_guest_load_u32(a + 0);
@@ -1275,6 +1362,7 @@ static BOOL o32_graphics_dib(ULONG address, ULONG start, ULONG count, ULONG usag
     *pixel_bytes = actual_pixels;
     return TRUE;
 }
+
 static uint32 bridge32_CreateDIBitmap(uint8 *a)
 {
     ULONG dc = lx_guest_load_u32(a), options = lx_guest_load_u32(a + 8),
@@ -1296,6 +1384,7 @@ static uint32 bridge32_CreateDIBitmap(uint8 *a)
     o32_graphics_release(&header);
     return result;
 }
+
 static uint32 bridge32_SetDIBitsToDevice(uint8 *a)
 {
     O32GraphicsBuffer info = {0}, bits = {0};
@@ -1313,6 +1402,7 @@ static uint32 bridge32_SetDIBitsToDevice(uint8 *a)
     o32_graphics_release(&info);
     return result;
 }
+
 static uint32 bridge32_CreateIcon(uint8 *a)
 {
     LONG width = (LONG)lx_guest_load_u32(a + 4), height = (LONG)lx_guest_load_u32(a + 8);
@@ -1341,6 +1431,7 @@ static uint32 bridge32_CreateIcon(uint8 *a)
     o32_graphics_release(&mask);
     return result;
 }
+
 static uint32 o32_graphics_polygons(uint8 *a, unsigned kind)
 {
     ULONG counts_address = lx_guest_load_u32(a + (kind == 0 ? 4 : 8)),
@@ -1383,18 +1474,22 @@ static uint32 o32_graphics_polygons(uint8 *a, unsigned kind)
     o32_graphics_release(&counts);
     return result;
 }
+
 static uint32 bridge32_CreatePolyPolygonRgn(uint8 *a)
 {
     return o32_graphics_polygons(a, 0);
 }
+
 static uint32 bridge32_PolyPolygon(uint8 *a)
 {
     return o32_graphics_polygons(a, 1);
 }
+
 static uint32 bridge32_PolyPolyline(uint8 *a)
 {
     return o32_graphics_polygons(a, 2);
 }
+
 static uint32 bridge32_PlayEnhMetaFileRecord(uint8 *a)
 {
     uint8 header[8];
@@ -1414,6 +1509,7 @@ static uint32 bridge32_PlayEnhMetaFileRecord(uint8 *a)
     o32_graphics_release(&record);
     return result;
 }
+
 static uint32 bridge32_Escape(uint8 *a)
 {
     LONG code = (LONG)lx_guest_load_u32(a + 4), count = (LONG)lx_guest_load_u32(a + 8);
@@ -1451,6 +1547,7 @@ static uint32 bridge32_Escape(uint8 *a)
     o32_graphics_release(&input);
     return result;
 }
+
 static uint32 bridge32_DeviceCapabilities(uint8 *a)
 {
     ULONG device = lx_guest_load_u32(a), port = lx_guest_load_u32(a + 4),

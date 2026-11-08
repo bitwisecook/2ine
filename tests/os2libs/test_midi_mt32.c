@@ -16,6 +16,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static int smoke(void)
 {
     LxMidiMt32 *synth = lx_midi_mt32_create(48000);
@@ -41,6 +42,7 @@ static int smoke(void)
     puts("MT-32 real-ROM audio smoke passed");
     return 0;
 }
+
 int main(int argc, char **argv)
 {
     if (argc == 2 && !strcmp(argv[1], "--rom-smoke"))

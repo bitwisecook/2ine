@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 static LxHostSaveResult dialog(char *const arguments[], char **output)
 {
     *output = NULL;
@@ -80,6 +81,7 @@ static LxHostSaveResult dialog(char *const arguments[], char **output)
     free(buffer);
     return *output ? LX_HOST_SAVE_OK : LX_HOST_SAVE_ERROR;
 }
+
 LxHostSaveResult lx_host_print_save_path(const char *title, const char *extension, char **path)
 {
     if (!path || !extension)
@@ -125,6 +127,7 @@ LxHostSaveResult lx_host_print_save_path(const char *title, const char *extensio
     }
     return result;
 }
+
 LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestination *destination)
 {
     if (!destination)

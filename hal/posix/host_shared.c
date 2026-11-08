@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+
 struct LxHostShared
 {
     int fd, lifetime;
@@ -27,6 +28,7 @@ typedef struct SharedView
     int lifetime;
     struct SharedView *next;
 } SharedView;
+
 static SharedView *views;
 static pthread_mutex_t view_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -136,6 +138,7 @@ done:
     }
     return result;
 }
+
 LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShared **output)
 {
     return shared_open(name, size, output, 1);
@@ -169,6 +172,7 @@ void *lx_host_shared_map(LxHostShared *s, void *hint, int exact)
     pthread_mutex_unlock(&view_mutex);
     return view;
 }
+
 void lx_host_shared_unmap(void *view, size_t size)
 {
     munmap(view, size);
@@ -185,6 +189,7 @@ void lx_host_shared_unmap(void *view, size_t size)
     }
     pthread_mutex_unlock(&view_mutex);
 }
+
 void lx_host_shared_close(LxHostShared *s)
 {
     close(s->fd);
@@ -193,6 +198,7 @@ void lx_host_shared_close(LxHostShared *s)
     free(s->name);
     free(s);
 }
+
 size_t lx_host_shared_size(const LxHostShared *s)
 {
     return s->size;
@@ -205,16 +211,19 @@ enum
     SLOT_ROW = 160,
     SLOT_LIMIT = 4096
 };
+
 static uint64_t slot_word(const unsigned char *p)
 {
     uint64_t value;
     memcpy(&value, p, sizeof value);
     return value;
 }
+
 static void store_slot(unsigned char *p, uint64_t value)
 {
     memcpy(p, &value, sizeof value);
 }
+
 int lx_host_shared_slot(LxHostShared *s, uint64_t first, uint64_t limit, uint64_t alignment,
                         uint64_t *slot)
 {
@@ -405,6 +414,7 @@ enum
     ACCESS_ROW = 8,
     ACCESS_PEERS = 4096
 };
+
 static int shared_access(LxHostShared *object, unsigned operation, uint32_t peer, uint32_t *owner,
                          uint32_t *attributes, uint32_t *permissions)
 {
@@ -473,15 +483,18 @@ done:
     close(fd);
     return success;
 }
+
 int lx_host_shared_publish(LxHostShared *object, uint32_t owner, uint32_t attributes)
 {
     return shared_access(object, 1, 0, &owner, &attributes, NULL);
 }
+
 int lx_host_shared_query_access(LxHostShared *object, uint32_t peer, uint32_t *owner,
                                 uint32_t *attributes, uint32_t *permissions)
 {
     return shared_access(object, 0, peer, owner, attributes, permissions);
 }
+
 int lx_host_shared_grant(LxHostShared *object, uint32_t peer, uint32_t permissions)
 {
     return shared_access(object, 2, peer, NULL, NULL, &permissions);

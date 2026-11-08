@@ -22,14 +22,17 @@ static ULONG presentation = 1, current;
 static unsigned made, deleted;
 static BOOL load_result = TRUE, query_result = TRUE;
 static USHORT width, height;
+
 uint64_t lx_host_thread_id(void)
 {
     return 0;
 }
+
 ULONG open32Presentation(void)
 {
     return presentation;
 }
+
 ULONG WinGetSysBitmap(HWND desktop, ULONG id)
 {
     CHECK(desktop == HWND_DESKTOP && id == 6 && current == 0);
@@ -38,6 +41,7 @@ ULONG WinGetSysBitmap(HWND desktop, ULONG id)
     current = ++made;
     return current;
 }
+
 BOOL GpiQueryBitmapParameters(ULONG bitmap, PVOID output)
 {
     CHECK(bitmap && bitmap == current && output);
@@ -50,6 +54,7 @@ BOOL GpiQueryBitmapParameters(ULONG bitmap, PVOID output)
     lx_guest_store_u16((UCHAR *)output + 10, 1);
     return TRUE;
 }
+
 BOOL GpiDeleteBitmap(ULONG bitmap)
 {
     CHECK(bitmap && bitmap == current);
@@ -57,6 +62,7 @@ BOOL GpiDeleteBitmap(ULONG bitmap)
     deleted++;
     return TRUE;
 }
+
 /* Unrelated metrics must not replace the queried system bitmap's dimensions. */
 LONG WinQuerySysValue(HWND desktop, LONG index)
 {
@@ -65,6 +71,7 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
     CHECK(0);
     return 0;
 }
+
 LONG WinQuerySysColor(HWND desktop, LONG index, LONG reserved)
 {
     (void)desktop;
@@ -73,30 +80,36 @@ LONG WinQuerySysColor(HWND desktop, LONG index, LONG reserved)
     CHECK(0);
     return 0;
 }
+
 void open32SetError(ULONG error)
 {
     (void)error;
     CHECK(0);
 }
+
 Open32DC *open32FindDC(ULONG handle)
 {
     (void)handle;
     CHECK(0);
     return NULL;
 }
+
 HDC GpiQueryDevice(HPS ps)
 {
     (void)ps;
     CHECK(0);
     return 0;
 }
+
 unsigned lx_pm_printer_kind(HDC dc)
 {
     (void)dc;
     CHECK(0);
     return 0;
 }
+
 BOOL lx_pm_printer_size(HDC dc, unsigned *width, unsigned *height);
+
 BOOL lx_pm_printer_size(HDC dc, unsigned *width, unsigned *height)
 {
     (void)dc;
@@ -105,12 +118,14 @@ BOOL lx_pm_printer_size(HDC dc, unsigned *width, unsigned *height)
     CHECK(0);
     return FALSE;
 }
+
 unsigned lx_pm_dc_dpi(HDC dc)
 {
     (void)dc;
     CHECK(0);
     return 0;
 }
+
 int main(void)
 {
     presentation = 0;

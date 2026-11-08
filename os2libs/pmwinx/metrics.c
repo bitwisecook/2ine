@@ -7,15 +7,18 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
 #include "guest/abi.h"
+
 LONG GetMenuCheckMarkDimensions(void)
 {
     TRACE_NATIVE("GetMenuCheckMarkDimensions()");
     if (!open32Presentation())
         return 0;
+
     enum
     {
         menu_check_bitmap = 6
     }; /* SBMP_MENUCHECK */
+
     ULONG bitmap = WinGetSysBitmap(HWND_DESKTOP, menu_check_bitmap);
     if (!bitmap)
         return 0;
@@ -95,8 +98,8 @@ LONG GetDeviceCaps(ULONG handle, LONG index)
             return width; /* HORZRES */
         case 10:
             return height; /* VERTRES */
-        case 12: /* BITSPIXEL */
-            return printer == 2 ? 1
+        case 12:           /* BITSPIXEL */
+            return printer == 2                             ? 1
                    : printer || !GLoaderState.display_depth ? 24
                                                             : (LONG)GLoaderState.display_depth;
         case 14:

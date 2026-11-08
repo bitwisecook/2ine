@@ -4,12 +4,15 @@
 #define TWOINE_HOST_SYNC_H
 #include <stdint.h>
 typedef struct LxHostMutex LxHostMutex;
+
 typedef struct LxHostOnce
 {
     uint32_t state;
 } LxHostOnce;
+
 #define LX_HOST_ONCE_INIT {0}
 void lx_host_once(LxHostOnce *once, void (*initialize)(void));
+
 typedef enum LxHostLockResult
 {
     LX_HOST_LOCK_OK,
@@ -19,7 +22,9 @@ typedef enum LxHostLockResult
     LX_HOST_LOCK_NOT_OWNER,
     LX_HOST_LOCK_FAILED
 } LxHostLockResult;
+
 LxHostMutex *lx_host_mutex_create(int recursive, int owned);
+
 typedef enum LxHostNamedMutexResult
 {
     LX_HOST_NAMED_MUTEX_OK,
@@ -28,6 +33,7 @@ typedef enum LxHostNamedMutexResult
     LX_HOST_NAMED_MUTEX_DENIED,
     LX_HOST_NAMED_MUTEX_NOMEM
 } LxHostNamedMutexResult;
+
 /* Named recursive objects remain alive while any process retains an open handle. */
 LxHostNamedMutexResult lx_host_mutex_open_named(const char *name, int create, int owned,
                                                 LxHostMutex **output);

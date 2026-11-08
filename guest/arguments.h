@@ -3,6 +3,7 @@
 #ifndef TWOINE_GUEST_ARGUMENTS_H
 #define TWOINE_GUEST_ARGUMENTS_H
 #include "runtime/execution.h"
+
 typedef struct LxGuestArgument
 {
     LxGuestBorrow borrow;
@@ -11,6 +12,7 @@ typedef struct LxGuestArgument
     size_t size;
     unsigned permissions;
 } LxGuestArgument;
+
 int lx_guest_argument_far(LxExecution *execution, uint32_t pointer, size_t size,
                           unsigned permissions, int live, int nullable, LxGuestArgument *argument);
 /* Count=1 for a C string, two for an OS/2 command block, zero for environment. */

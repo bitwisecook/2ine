@@ -31,6 +31,7 @@ APIRET DosPutMessage(HFILE handle, ULONG size, PCHAR message)
     lx_host_file_close(file);
     return error ? ERROR_WRITE_FAULT : NO_ERROR;
 }
+
 APIRET16 Dos16PutMessage(USHORT handle, USHORT size, PCHAR message)
 {
     return (APIRET16)DosPutMessage(handle, size, message);

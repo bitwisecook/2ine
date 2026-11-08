@@ -63,6 +63,7 @@ private struct ManagerWindowAttachment: NSViewRepresentable {
     }
     func updateNSView(_ view: ManagerWindowView, context: Context) { view.appDelegate = delegate }
 }
+
 private final class ManagerWindowView: NSView {
     weak var appDelegate: AppDelegate?
     override func viewDidMoveToWindow() {

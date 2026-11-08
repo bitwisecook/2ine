@@ -6,15 +6,18 @@ typedef struct ExtractFileSelection
     const char **sources;
     size_t count;
 } ExtractFileSelection;
+
 static int extract_source_order(const void *first, const void *second)
 {
     return strcmp(*(const char *const *)first, *(const char *const *)second);
 }
+
 static int extract_tree_file_source_order(const void *first, const void *second)
 {
     return strcmp(field(*(cJSON *const *)first, "source"),
                   field(*(cJSON *const *)second, "source"));
 }
+
 static int extract_tree_path_order(const char *first, const char *second)
 {
     while (*first && *second)
@@ -25,6 +28,7 @@ static int extract_tree_path_order(const char *first, const char *second)
     }
     return (unsigned char)*first - (unsigned char)*second;
 }
+
 static int extract_tree_file_destination_order(const void *first, const void *second)
 {
     const cJSON *a = *(cJSON *const *)first, *b = *(cJSON *const *)second;
@@ -34,6 +38,7 @@ static int extract_tree_file_destination_order(const void *first, const void *se
     double priority = get(b, "priority")->valuedouble - get(a, "priority")->valuedouble;
     return priority > 0 ? 1 : priority < 0 ? -1 : extract_tree_file_source_order(first, second);
 }
+
 static void extract_tree_prepare(Context *c, cJSON *files)
 {
     int count = cJSON_GetArraySize(files), at = 0, kept = 0;
@@ -60,6 +65,7 @@ static void extract_tree_prepare(Context *c, cJSON *files)
         previous = file;
     }
 }
+
 static int extract_selection(Context *c, const cJSON *request, const cJSON *plan,
                              ExtractFileSelection *selection)
 {
@@ -91,6 +97,7 @@ static int extract_selection(Context *c, const cJSON *request, const cJSON *plan
     qsort(selection->sources, selection->count, sizeof *selection->sources, extract_source_order);
     return 1;
 }
+
 static int extract_file_selected(const ExtractFileSelection *selection, const int *categories,
                                  const cJSON *file)
 {
@@ -103,6 +110,7 @@ static int extract_file_selected(const ExtractFileSelection *selection, const in
     int category = extract_category(field(file, "category"));
     return categories[EXTRACT_FULL] || (category >= 0 && categories[category]);
 }
+
 static cJSON *extract_tree_branch(cJSON *parent, const char *id, const char *title,
                                   const char *category)
 {
@@ -117,6 +125,7 @@ static cJSON *extract_tree_branch(cJSON *parent, const char *id, const char *tit
     cJSON_AddItemToArray(children, branch);
     return branch;
 }
+
 static void extract_tree_provider(cJSON *group, const char *id, const char *title,
                                   const char *selection, const char *setting, int native_selected,
                                   int choice_supported)
@@ -136,6 +145,7 @@ static void extract_tree_provider(cJSON *group, const char *id, const char *titl
     cJSON_AddBoolToObject(link, "disabled", 0);
     cJSON_AddItemToArray(get(group, "children"), link);
 }
+
 static int extract_tree_has_files(const cJSON *node)
 {
     if (equal_case(field(node, "kind"), "file"))
@@ -144,6 +154,7 @@ static int extract_tree_has_files(const cJSON *node)
     cJSON_ArrayForEach(child, get(node, "children")) if (extract_tree_has_files(child)) return 1;
     return 0;
 }
+
 static void extract_tree_disable(cJSON *node, int disabled)
 {
     int setting = equal_case(field(node, "kind"), "setting");
@@ -154,6 +165,7 @@ static void extract_tree_disable(cJSON *node, int disabled)
     cJSON *child;
     cJSON_ArrayForEach(child, get(node, "children")) extract_tree_disable(child, disabled);
 }
+
 static void extract_tree_provider_policy(cJSON *group)
 {
     cJSON *provider = get(group, "provider");
@@ -165,6 +177,7 @@ static void extract_tree_provider_policy(cJSON *group)
         cJSON_AddBoolToObject(child, "originalAvailable", available);
     extract_tree_disable(group, cJSON_IsTrue(get(provider, "nativeSelected")));
 }
+
 static cJSON *extract_tree_directories(Context *c, cJSON *parent, const char *path,
                                        const char *category)
 {
@@ -196,6 +209,7 @@ static cJSON *extract_tree_directories(Context *c, cJSON *parent, const char *pa
     }
     return parent;
 }
+
 static cJSON *extract_tree(Context *c, cJSON *files)
 {
     extract_tree_prepare(c, files);

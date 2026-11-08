@@ -5,13 +5,16 @@
 #include "os2libs/pmwin.h"
 #include "hal/host_sync.h"
 #include "hal/clipboard.h"
+
 typedef struct ClipboardMemory
 {
     ULONG format, handle;
     uint64_t serial;
     struct ClipboardMemory *next;
 } ClipboardMemory;
+
 static ClipboardMemory *clipboard_memory;
+
 static void discard_clipboard_memory(int all)
 {
     ClipboardMemory **slot = &clipboard_memory;
@@ -28,20 +31,24 @@ static void discard_clipboard_memory(int all)
             slot = &item->next;
     }
 }
+
 typedef struct Viewer
 {
     ULONG window;
     struct Viewer *next;
 } Viewer;
+
 static Viewer *viewers;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
     if (!monitor)
         abort();
 }
+
 ULONG SetClipboardViewer(ULONG window)
 {
     if (!open32FindWindow(window))
@@ -73,6 +80,7 @@ ULONG SetClipboardViewer(ULONG window)
     SendMessage(window, 0x308, 0, 0);
     return previous;
 }
+
 ULONG GetClipboardViewer(void)
 {
     lx_host_once(&once, initialize);
@@ -81,6 +89,7 @@ ULONG GetClipboardViewer(void)
     lx_host_monitor_unlock(monitor);
     return window;
 }
+
 BOOL ChangeClipboardChain(ULONG window, ULONG next)
 {
     lx_host_once(&once, initialize);
@@ -102,6 +111,7 @@ BOOL ChangeClipboardChain(ULONG window, ULONG next)
         SendMessage(head, 0x30D, window, next);
     return TRUE;
 }
+
 void open32ClipboardWindowDestroyed(ULONG window)
 {
     lx_host_once(&once, initialize);
@@ -117,6 +127,7 @@ void open32ClipboardWindowDestroyed(ULONG window)
     }
     lx_host_monitor_unlock(monitor);
 }
+
 void open32ClipboardCleanup(void)
 {
     discard_clipboard_memory(1);
@@ -136,6 +147,7 @@ BOOL IsClipboardFormatAvailable(ULONG format)
 }
 
 static _Thread_local ULONG opened_for;
+
 BOOL OpenClipboard(ULONG window)
 {
     if (window && !open32FindWindow(window))
@@ -151,6 +163,7 @@ BOOL OpenClipboard(ULONG window)
     opened_for = window;
     return TRUE;
 }
+
 BOOL CloseClipboard(void)
 {
     if (!WinCloseClipbrd(open32Presentation()))
@@ -161,6 +174,7 @@ BOOL CloseClipboard(void)
     opened_for = 0;
     return TRUE;
 }
+
 BOOL EmptyClipboard(void)
 {
     ULONG hab = open32Presentation();
@@ -180,6 +194,7 @@ ULONG CountClipboardFormats(void)
         return 0;
     return lx_pm_clipboard_count();
 }
+
 ULONG EnumClipboardFormats(ULONG format)
 {
     ULONG hab = open32Presentation(), next = WinEnumClipbrdFmts(hab, format);
@@ -187,6 +202,7 @@ ULONG EnumClipboardFormats(ULONG format)
         next = WinEnumClipbrdFmts(hab, next);
     return next;
 }
+
 ULONG GetClipboardFormatName(ULONG format, PSZ output, LONG capacity)
 {
     if (format < 0xc000 || format > 0xffff || !output || capacity <= 0)
@@ -196,10 +212,12 @@ ULONG GetClipboardFormatName(ULONG format, PSZ output, LONG capacity)
     }
     return lx_pm_clipboard_format_name(format, output, (ULONG)capacity);
 }
+
 ULONG GetClipboardOwner(void)
 {
     return open32PublicWindow(WinQueryClipbrdOwner(open32Presentation()));
 }
+
 static ClipboardMemory *remember_memory(ULONG format, ULONG handle)
 {
     ClipboardMemory *item = calloc(1, sizeof *item);
@@ -213,6 +231,7 @@ static ClipboardMemory *remember_memory(ULONG format, ULONG handle)
     }
     return item;
 }
+
 ULONG SetClipboardData(ULONG format, ULONG handle)
 {
     if (!format || (format != 1 && format != 2 && format < 0xc000) || format > 0xffff)
@@ -268,6 +287,7 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
     }
     return handle;
 }
+
 ULONG GetClipboardData(ULONG format)
 {
     ULONG hab = open32Presentation();

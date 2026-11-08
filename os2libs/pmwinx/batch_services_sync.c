@@ -9,15 +9,18 @@
 #include "hal/host_sync.h"
 #include "hal/host_shared.h"
 #include <stdio.h>
+
 enum
 {
     EVENT_MODIFY_STATE_RIGHT = 2
 };
+
 typedef struct SyncMetadata
 {
     ULONG ready, event, manual;
     char name[241];
 } SyncMetadata;
+
 typedef struct Open32Sync
 {
     ULONG native, gate, handle;
@@ -26,21 +29,25 @@ typedef struct Open32Sync
     SyncMetadata *metadata;
     struct Open32Sync *next;
 } Open32Sync;
+
 static LxHostOnce sync_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *sync_lock;
 static Open32Sync *sync_objects;
+
 static void initialize_sync_objects(void)
 {
     sync_lock = lx_host_monitor_create();
     if (!sync_lock)
         abort();
 }
+
 static ULONG close_native(ULONG handle, BOOL event)
 {
     typedef APIRET(OS2API * Fn)(ULONG);
     Fn call = (Fn)open32DosService(event ? "DosCloseEventSem" : "DosCloseMutexSem");
     return call ? call(handle) : 120;
 }
+
 static void destroy_sync(void *resource)
 {
     Open32Sync *sync = resource;
@@ -64,6 +71,7 @@ static void destroy_sync(void *resource)
         lx_host_shared_close(sync->shared);
     free(sync);
 }
+
 static ULONG native_create(PSZ name, BOOL event, BOOL initial, ULONG *handle, BOOL *existing)
 {
     typedef APIRET(OS2API * Create)(PSZ, PULONG, ULONG, BOOL);
@@ -80,6 +88,7 @@ static ULONG native_create(PSZ name, BOOL event, BOOL initial, ULONG *handle, BO
     }
     return error;
 }
+
 static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PSZ name)
 {
     /* The inherit word only marks the handle, and no child process ever receives one. */
@@ -192,19 +201,23 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
         open32SetError(183);
     return handle;
 }
+
 ULONG CreateEvent(PVOID security, BOOL manual, BOOL initial, PSZ name)
 {
     return make_sync(security, TRUE, !!manual, !!initial, name);
 }
+
 ULONG CreateMutex(PVOID security, BOOL owner, PSZ name)
 {
     return make_sync(security, FALSE, FALSE, !!owner, name);
 }
+
 BOOL open32CloseSync(ULONG handle)
 {
     return lx_handle_close(handle, LX_HANDLE_OPEN32_EVENT) ||
            lx_handle_close(handle, LX_HANDLE_OPEN32_MUTEX);
 }
+
 static BOOL event_operation(ULONG handle, BOOL set)
 {
     LxHandleBorrow borrow = {0};
@@ -246,14 +259,17 @@ static BOOL event_operation(ULONG handle, BOOL set)
         open32SetError(error);
     return !error;
 }
+
 BOOL SetEvent(ULONG handle)
 {
     return event_operation(handle, TRUE);
 }
+
 BOOL ResetEvent(ULONG handle)
 {
     return event_operation(handle, FALSE);
 }
+
 BOOL ReleaseMutex(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -270,21 +286,25 @@ BOOL ReleaseMutex(ULONG handle)
         open32SetError(error);
     return !error;
 }
+
 static ULONG wait_native(ULONG handle, BOOL event, ULONG timeout)
 {
     typedef APIRET(OS2API * Fn)(ULONG, ULONG);
     Fn call = (Fn)open32DosService(event ? "DosWaitEventSem" : "DosRequestMutexSem");
     return call ? call(handle, timeout) : 120;
 }
+
 typedef struct SyncWait
 {
     LxHandleBorrow borrow;
     ULONG timeout;
 } SyncWait;
+
 static void release_sync_wait(void *argument)
 {
     lx_handle_release(&((SyncWait *)argument)->borrow);
 }
+
 static ULONG wait_sync(void *argument)
 {
     SyncWait *wait = argument;
@@ -332,6 +352,7 @@ static ULONG wait_sync(void *argument)
     }
     return 0;
 }
+
 int open32WaitSync(ULONG handle, ULONG timeout, ULONG *result)
 {
     SyncWait wait = {.timeout = timeout};

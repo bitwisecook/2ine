@@ -11,10 +11,12 @@
 #include "hal/clipboard.h"
 static void cleanupThreadPM(void);
 static void (*open32_thread_exit)(void);
+
 void lx_pm_set_open32_thread_exit(void (*callback)(void))
 {
     __atomic_store_n(&open32_thread_exit, callback, __ATOMIC_RELEASE);
 }
+
 /* OS/2 deduces the anchor from the calling thread; HAB arguments are advisory. */
 AnchorBlock *getAnchorBlockNoHAB(void)
 {

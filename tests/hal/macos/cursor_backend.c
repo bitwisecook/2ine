@@ -13,12 +13,15 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 typedef struct FakeCursor
 {
     struct FakeCursor *next;
 } FakeCursor;
+
 static FakeCursor *Cursors;
 unsigned Created, Selected, Destroyed;
+
 static SDL_Cursor *create_cursor(SDL_SystemCursor shape)
 {
     (void)shape;
@@ -30,6 +33,7 @@ static SDL_Cursor *create_cursor(SDL_SystemCursor shape)
     Created++;
     return (SDL_Cursor *)p;
 }
+
 static bool select_cursor(SDL_Cursor *cursor)
 {
     CHECK(pthread_main_np());
@@ -40,6 +44,7 @@ static bool select_cursor(SDL_Cursor *cursor)
     Selected++;
     return true;
 }
+
 static void destroy_cursor(SDL_Cursor *cursor)
 {
     CHECK(pthread_main_np());
@@ -52,6 +57,7 @@ static void destroy_cursor(SDL_Cursor *cursor)
     free(old);
     Destroyed++;
 }
+
 __attribute__((used)) static const struct
 {
     const void *replacement, *original;
@@ -65,6 +71,7 @@ void cursor_test_drop_native_objects(void)
     while (Cursors)
         destroy_cursor((SDL_Cursor *)Cursors);
 }
+
 int cursor_test_objects_empty(void)
 {
     return Cursors == NULL;

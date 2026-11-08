@@ -9,29 +9,34 @@
 #include <string.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 struct LxHostChild
 {
     HANDLE handle, thread;
     DWORD id;
 };
+
 int lx_host_child_terminate(LxHostChild *child)
 {
     if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
         return 1;
     return TerminateProcess(child->handle, 1) ? 0 : -1;
 }
+
 int lx_host_child_suspend(LxHostChild *child)
 {
     if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
         return 1;
     return SuspendThread(child->thread) == (DWORD)-1 ? -1 : 0;
 }
+
 int lx_host_child_resume(LxHostChild *child)
 {
     if (WaitForSingleObject(child->handle, 0) == WAIT_OBJECT_0)
         return 1;
     return ResumeThread(child->thread) == (DWORD)-1 ? -1 : 0;
 }
+
 int lx_host_child_set_priority(LxHostChild *child, LxHostProcessPriority priority)
 {
     DWORD selected;
@@ -56,6 +61,7 @@ int lx_host_child_set_priority(LxHostChild *child, LxHostProcessPriority priorit
     errno = error == ERROR_ACCESS_DENIED || error == ERROR_PRIVILEGE_NOT_HELD ? EACCES : EIO;
     return -1;
 }
+
 static wchar_t *wide(const char *s)
 {
     int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, NULL, 0);
@@ -69,6 +75,7 @@ static wchar_t *wide(const char *s)
     }
     return w;
 }
+
 static LxHostChild *spawn_child(const char *path, char *const *argv, char *const *env,
                                 DWORD creation_flags)
 {
@@ -147,19 +154,23 @@ static LxHostChild *spawn_child(const char *path, char *const *argv, char *const
     child->id = process.dwProcessId;
     return child;
 }
+
 LxHostChild *lx_host_child_spawn(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, 0);
 }
+
 /* CreateProcessW validates the image before the suspended child exists. */
 LxHostChild *lx_host_child_spawn_suspended(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, CREATE_SUSPENDED);
 }
+
 LxHostChild *lx_host_child_spawn_group(const char *path, char *const *argv, char *const *env)
 {
     return spawn_child(path, argv, env, CREATE_NEW_PROCESS_GROUP);
 }
+
 LxHostChild *lx_host_child_spawn_service(const char *path, char *const *argv, char *const *env)
 {
     size_t count = 0, output = 0;
@@ -176,6 +187,7 @@ LxHostChild *lx_host_child_spawn_service(const char *path, char *const *argv, ch
     free(clean);
     return child;
 }
+
 int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status)
 {
     DWORD rc = WaitForSingleObject(child->handle, nohang ? 0 : INFINITE), result;
@@ -188,6 +200,7 @@ int lx_host_child_wait(LxHostChild *child, int nohang, LxHostChildStatus *status
     status->signal = 0;
     return 1;
 }
+
 void lx_host_child_release(LxHostChild *child)
 {
     if (child)
@@ -197,6 +210,7 @@ void lx_host_child_release(LxHostChild *child)
         free(child);
     }
 }
+
 uint32_t lx_host_child_id(const LxHostChild *child)
 {
     return (uint32_t)child->id;

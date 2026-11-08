@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
+
 typedef struct TbMediaEntry
 {
     char *name;
@@ -11,6 +12,7 @@ typedef struct TbMediaEntry
     int directory;
     int64_t modified; /* INT64_MIN when absent. */
 } TbMediaEntry;
+
 int tb_media_path(const char *path);
 /* Opaque paths retain each container boundary without repeated path encoding. */
 char *tb_media_root(const char *source);
@@ -27,11 +29,13 @@ int tb_media_container(const char *path);
 /* A request-scoped reader cache retains seekable parent containers. */
 void tb_media_session_begin(void);
 void tb_media_session_end(void);
+
 typedef struct TbMediaReadStats
 {
     uint64_t decompressed_bytes, peak_cache_bytes, direct_slices, materialized_files;
     uint64_t container_cache_hits, directory_index_builds, directory_index_hits;
     uint64_t inflate_checkpoints, inflate_restores;
 } TbMediaReadStats;
+
 TbMediaReadStats tb_media_read_stats(void);
 #endif

@@ -17,6 +17,7 @@ struct LxHostFont
     FT_Face face;
     unsigned pixels;
 };
+
 static const char *files[] = {"LiberationSans-Regular.ttf",  "LiberationSans-Bold.ttf",
                               "LiberationSans-Italic.ttf",   "LiberationSans-BoldItalic.ttf",
                               "LiberationSerif-Regular.ttf", "LiberationSerif-Bold.ttf",
@@ -33,10 +34,12 @@ typedef struct LoadedFont
     char *path;
     unsigned references;
 } LoadedFont;
+
 enum
 {
     BUNDLED_FONTS = sizeof files / sizeof files[0]
 };
+
 static LxHostOnce loaded_once = LX_HOST_ONCE_INIT;
 static LxHostMutex *loaded_mutex;
 static LoadedFont *loaded;
@@ -46,11 +49,13 @@ static void loaded_initialize(void)
 {
     loaded_mutex = lx_host_mutex_create(0, 0);
 }
+
 static void loaded_lock(void)
 {
     lx_host_once(&loaded_once, loaded_initialize);
     lx_host_mutex_lock(loaded_mutex, UINT32_MAX);
 }
+
 unsigned lx_host_font_count(void)
 {
     loaded_lock();
@@ -58,6 +63,7 @@ unsigned lx_host_font_count(void)
     lx_host_mutex_unlock(loaded_mutex);
     return count;
 }
+
 static char *font_directory(void)
 {
     const char *override = getenv("TWOINE_FONT_DIRECTORY");
@@ -90,6 +96,7 @@ static char *font_directory(void)
     }
     return strdup(TWOINE_FONT_DIRECTORY);
 }
+
 static LxHostFont *open_path(const char *path, unsigned pixels)
 {
     LxHostFont *font = calloc(1, sizeof *font);
@@ -107,6 +114,7 @@ static LxHostFont *open_path(const char *path, unsigned pixels)
     font->pixels = pixels;
     return font;
 }
+
 static LxHostFont *open_loaded(unsigned slot, unsigned pixels)
 {
     loaded_lock();
@@ -116,6 +124,7 @@ static LxHostFont *open_loaded(unsigned slot, unsigned pixels)
     free(path);
     return font;
 }
+
 LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
 {
     if (!pixels || pixels > 512)
@@ -141,6 +150,7 @@ LxHostFont *lx_host_font_open(unsigned index, unsigned pixels)
     free(path);
     return font;
 }
+
 int lx_host_font_add_file(const char *path)
 {
     LxHostFont *probe = path ? open_path(path, 16) : NULL;
@@ -173,6 +183,7 @@ int lx_host_font_add_file(const char *path)
     lx_host_mutex_unlock(loaded_mutex);
     return added;
 }
+
 int lx_host_font_remove_file(const char *path)
 {
     int removed = 0;
@@ -190,6 +201,7 @@ int lx_host_font_remove_file(const char *path)
     lx_host_mutex_unlock(loaded_mutex);
     return removed;
 }
+
 void lx_host_font_close(LxHostFont *font)
 {
     if (!font)
@@ -200,10 +212,12 @@ void lx_host_font_close(LxHostFont *font)
         FT_Done_FreeType(font->library);
     free(font);
 }
+
 static int scaled(LxHostFont *font, FT_Pos value)
 {
     return (int)FT_MulFix(value, font->face->size->metrics.y_scale) / 64;
 }
+
 int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
 {
     if (!font || !metrics)
@@ -266,12 +280,14 @@ int lx_host_font_metrics(LxHostFont *font, LxHostFontMetrics *metrics)
         metrics->x_height = (int)(face->glyph->metrics.height + 63) / 64;
     return 1;
 }
+
 int lx_host_font_advance(LxHostFont *font, uint32_t codepoint)
 {
     if (!font || codepoint > 0x10ffff || FT_Load_Char(font->face, codepoint, FT_LOAD_DEFAULT))
         return -1;
     return (int)(font->face->glyph->advance.x + 32) / 64;
 }
+
 int lx_host_font_kerning(LxHostFont *font, uint32_t left, uint32_t right)
 {
     if (!font || left > 0x10ffff || right > 0x10ffff)
@@ -281,6 +297,7 @@ int lx_host_font_kerning(LxHostFont *font, uint32_t left, uint32_t right)
                    FT_Get_Char_Index(font->face, right), FT_KERNING_DEFAULT, &delta);
     return (int)(delta.x / 64);
 }
+
 int lx_host_font_glyph(LxHostFont *font, uint32_t codepoint, LxHostGlyph *glyph)
 {
     if (!glyph)
@@ -309,6 +326,7 @@ int lx_host_font_glyph(LxHostFont *font, uint32_t codepoint, LxHostGlyph *glyph)
     }
     return 1;
 }
+
 int lx_host_font_glyph_matrix(LxHostFont *font, uint32_t codepoint, const double matrix[4],
                               LxHostGlyph *glyph)
 {
@@ -321,6 +339,7 @@ int lx_host_font_glyph_matrix(LxHostFont *font, uint32_t codepoint, const double
     FT_Set_Transform(font->face, NULL, NULL);
     return result;
 }
+
 void lx_host_glyph_free(LxHostGlyph *glyph)
 {
     if (glyph)

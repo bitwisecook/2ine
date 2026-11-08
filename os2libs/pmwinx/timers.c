@@ -4,14 +4,17 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/timers.h"
 #include "hal/video.h"
+
 typedef struct Open32Timer
 {
     struct Open32Timer *next;
     ULONG window, id, callback, interval;
     uint64 due;
 } Open32Timer;
+
 static _Thread_local Open32Timer *timers;
 static _Thread_local ULONG driver, next_id;
+
 static void tick(void)
 {
     uint64 now = lx_host_video_ticks_ms();
@@ -22,6 +25,7 @@ static void tick(void)
                 timer->due = now + timer->interval;
         }
 }
+
 ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
 {
     TRACE_NATIVE("SetTimer(%u, %u, %u, %x)", (uint)window, (uint)id, (uint)milliseconds,
@@ -81,6 +85,7 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
     timer->due = lx_host_video_ticks_ms() + timer->interval;
     return timer->id;
 }
+
 BOOL KillTimer(ULONG window, ULONG id)
 {
     for (Open32Timer **link = &timers; *link; link = &(*link)->next)
@@ -98,6 +103,7 @@ BOOL KillTimer(ULONG window, ULONG id)
         }
     return FALSE;
 }
+
 void open32TimersWindowDestroyed(ULONG window)
 {
     Open32Timer *timer = timers;
@@ -109,6 +115,7 @@ void open32TimersWindowDestroyed(ULONG window)
         timer = next;
     }
 }
+
 void open32TimersCleanup(void)
 {
     while (timers)

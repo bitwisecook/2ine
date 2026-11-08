@@ -8,6 +8,7 @@
 static int socket_result(int result);
 #include "os2libs/generated/so32dll-lx.h"
 static LX_HOST_THREAD_LOCAL int socket_error;
+
 uint32_t Os2LegacyGetHostId(void)
 {
     LxHostNetwork network;
@@ -24,6 +25,7 @@ uint32_t Os2LegacyGetHostId(void)
     lx_host_network_destroy(&network);
     return address;
 }
+
 enum
 {
     OS2_AF_INET_LEGACY = 2,
@@ -31,15 +33,18 @@ enum
     OS2_FIONBIO_LEGACY = 0x667e,
     OS2_FIONREAD_LEGACY = 0x667f
 };
+
 static int failure(int number)
 {
     socket_error = OS2_SOCKET_ERROR_BASE + number;
     return -1;
 }
+
 static int socket_result(int result)
 {
     return result < 0 ? failure(lx_host_socket_bsd_error()) : result;
 }
+
 static int input_address(const Os2LegacyAddress *address, int length, LxHostSocketAddress *output)
 {
     if (!address || length < (int)sizeof *address)
@@ -50,6 +55,7 @@ static int input_address(const Os2LegacyAddress *address, int length, LxHostSock
     output->port = address->port;
     return 0;
 }
+
 static int input_flags(int flags)
 {
     /* The legacy stack exposes OOB, PEEK, DONTROUTE and FULLREAD. */
@@ -57,6 +63,7 @@ static int input_flags(int flags)
         return -1;
     return (flags & 7) | ((flags & 8) ? LX_MSG_WAITALL : 0);
 }
+
 int Os2LegacySocket(int family, int type, int protocol)
 {
     TRACE_NATIVE("SO32DLL socket(%d,%d,%d)", family, type, protocol);
@@ -68,6 +75,7 @@ int Os2LegacySocket(int family, int type, int protocol)
         return failure(43);
     return socket_result(lx_host_socket_open_protocol(type, protocol));
 }
+
 int Os2LegacyBind(int socket, const Os2LegacyAddress *address, int length)
 {
     LxHostSocketAddress host;
@@ -75,6 +83,7 @@ int Os2LegacyBind(int socket, const Os2LegacyAddress *address, int length)
         return -1;
     return socket_result(lx_host_socket_bind(socket, &host));
 }
+
 int Os2LegacyConnect(int socket, const Os2LegacyAddress *address, int length)
 {
     LxHostSocketAddress host;
@@ -82,10 +91,12 @@ int Os2LegacyConnect(int socket, const Os2LegacyAddress *address, int length)
         return -1;
     return socket_result(lx_host_socket_connect(socket, &host));
 }
+
 int Os2LegacyListen(int socket, int backlog)
 {
     return socket_result(lx_host_socket_listen(socket, backlog));
 }
+
 int Os2LegacyAccept(int socket, Os2LegacyAddress *address, int *length)
 {
     if (address && (!length || *length < (int)sizeof *address))
@@ -102,6 +113,7 @@ int Os2LegacyAccept(int socket, Os2LegacyAddress *address, int *length)
     }
     return result;
 }
+
 int Os2LegacyRecv(int socket, void *buffer, int length, int flags)
 {
     if (length < 0 || (!buffer && length) || input_flags(flags) < 0)
@@ -109,6 +121,7 @@ int Os2LegacyRecv(int socket, void *buffer, int length, int flags)
     return socket_result(
         (int)lx_host_socket_recv(socket, buffer, (size_t)length, input_flags(flags)));
 }
+
 int Os2LegacySend(int socket, const void *buffer, int length, int flags)
 {
     if (length < 0 || (!buffer && length) || input_flags(flags) < 0)
@@ -116,12 +129,14 @@ int Os2LegacySend(int socket, const void *buffer, int length, int flags)
     return socket_result(
         (int)lx_host_socket_send(socket, buffer, (size_t)length, input_flags(flags)));
 }
+
 int Os2LegacyShutdown(int socket, int how)
 {
     if (how < 0 || how > 2)
         return failure(22);
     return socket_result(lx_host_socket_shutdown(socket, how));
 }
+
 int Os2LegacyIoctl(int socket, int command, void *argument, int length)
 {
     if (!argument || length < 4)
@@ -162,6 +177,7 @@ int Os2LegacyIoctl(int socket, int command, void *argument, int length)
     }
     return socket_result(lx_os2_network_ioctl((unsigned)command, argument, (size_t)length, 0));
 }
+
 int Os2LegacySendTo(int socket, const void *buffer, int length, int flags,
                     const Os2LegacyAddress *address, int address_length)
 {
@@ -173,6 +189,7 @@ int Os2LegacySendTo(int socket, const void *buffer, int length, int flags,
     return socket_result((int)lx_host_socket_sendto(socket, buffer, (size_t)length,
                                                     (unsigned)input_flags(flags), &host));
 }
+
 int Os2LegacyRecvFrom(int socket, void *buffer, int length, int flags, Os2LegacyAddress *address,
                       int *address_length)
 {
@@ -193,14 +210,17 @@ int Os2LegacyRecvFrom(int socket, void *buffer, int length, int flags, Os2Legacy
     }
     return result;
 }
+
 int Os2LegacySocketClose(int socket)
 {
     return socket_result(lx_host_socket_close(socket));
 }
+
 int Os2LegacySocketError(void)
 {
     return socket_error;
 }
+
 int Os2LegacySocketInit(void)
 {
     return 0;
@@ -222,6 +242,7 @@ int Os2LegacyGetSocketName(int socket, Os2LegacyAddress *address, int *length)
     }
     return result;
 }
+
 int Os2LegacySocketOption(int socket, int level, int option, const void *value, int length)
 {
     if (level == 0)

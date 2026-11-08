@@ -3,11 +3,13 @@
 #define TWOINE_OPEN32_WINDOWS_H
 #include "os2libs/pmwinx/classes.h"
 #include "os2libs/pmwin.h"
+
 typedef struct Open32Scroll
 {
     LONG minimum, maximum, position;
     BOOL visible;
 } Open32Scroll;
+
 typedef struct Open32Window
 {
     HWND handle, client;
@@ -28,6 +30,7 @@ typedef struct Open32Window
     int destroyed;
     struct Open32Window *next, *creating_previous;
 } Open32Window;
+
 Open32Window *open32FindWindow(ULONG handle);
 ULONG open32ClientWindow(ULONG handle);
 ULONG open32PublicWindow(ULONG handle);

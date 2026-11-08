@@ -92,6 +92,7 @@ typedef struct Thread
     struct ThreadControl *control;
     struct Thread *next;
 } Thread;
+
 /* One per guest thread from creation until it ends, for every kind of thread. */
 typedef struct ThreadControl
 {
@@ -99,6 +100,7 @@ typedef struct ThreadControl
     uint32 id;
     int suspended;
 } ThreadControl;
+
 void initializeThreadSuspension(void);
 void cleanupThreadSuspension(void);
 LX_PRIVATE void releaseThreadSuspension(void);
@@ -191,6 +193,7 @@ typedef struct NeThreadStart
     uint16 tid, tib_selector;
     ThreadControl *control;
 } NeThreadStart;
+
 extern LX_PRIVATE LxHostMutex *GMutexDosCalls;
 extern LX_PRIVATE LxHostMutex *GMutexDosBeep;
 extern LX_PRIVATE LxHostMutex *GMutexDir16;

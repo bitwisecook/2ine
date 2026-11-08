@@ -18,12 +18,14 @@ int lx_host_tls_context_protocol(LxHostTlsContext *context, int minimum, int max
 /* Session retains its context. The caller owns the socket, including on failure. */
 LxHostTls *lx_host_tls_session_create(LxHostTlsContext *context, int socket, const char *peer_name);
 void lx_host_tls_free(LxHostTls *tls);
+
 enum
 {
     LX_TLS_ERROR = -1,
     LX_TLS_WANT_READ = -2,
     LX_TLS_WANT_WRITE = -3
 };
+
 /* Handshake: 1 success; read/write: byte count, 0 clean EOF; negative as above.
    Shutdown: 1 complete, 0 close_notify sent, negative as above. Nonblocking callers
    poll the socket in the indicated direction, then retry the same operation. */

@@ -62,6 +62,7 @@ extern "C"
 #define OS2_SO_OPTIONS 0x1010
 
 #pragma pack(push, 1)
+
     typedef struct OS2_sockaddr
     {
         uint8_t sa_len;
@@ -99,12 +100,14 @@ extern "C"
         int s_port;
         char *s_proto;
     } OS2_servent;
+
     typedef struct OS2_protoent
     {
         char *p_name;
         char **p_aliases;
         int p_proto;
     } OS2_protoent;
+
     typedef struct OS2_iovec
     {
         void *buffer;
@@ -112,6 +115,7 @@ extern "C"
     } OS2_iovec;
 
 #define OS2_FD_SETSIZE 64
+
     typedef struct OS2_fd_set
     {
         uint16_t fd_count;
@@ -130,6 +134,7 @@ extern "C"
         int32_t tz_minuteswest;
         int32_t tz_dsttime;
     } OS2_timezone;
+
 #pragma pack(pop)
 
     OS2EXPORT int OS2API OS2_sock_init(void) OS2APIINFO(ord = 26, name = sock_init);

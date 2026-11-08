@@ -13,6 +13,7 @@
 #include <strings.h>
 
 #define ARG(a, n) lx_guest_load_u32((a) + 4 * (n))
+
 enum
 {
     TITLE_LIMIT = 4097,
@@ -92,12 +93,14 @@ static uint32 load16(uint32 address)
     lx_execution_read(GLoaderState.execution, address, bytes, sizeof bytes);
     return lx_guest_load_u16(bytes);
 }
+
 static void store16(uint32 address, uint32 value)
 {
     uint8 bytes[2];
     lx_guest_store_u16(bytes, (uint16)value);
     lx_execution_write(GLoaderState.execution, address, bytes, sizeof bytes);
 }
+
 static uint32 query_style(uint32 self)
 {
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryStyle, self, 0, 0, 0);
@@ -107,11 +110,13 @@ static uint32 wpFilterPopupMenu(uint8 *a)
 {
     return ARG(a, 1);
 }
+
 static uint32 wpModifyPopupMenu(uint8 *a)
 {
     (void)a;
     return TRUE;
 }
+
 /* These base methods have no behaviour of their own in PMWP.DLL: subclasses override
    them, and an override calling its parent receives this result. */
 static uint32 returns_nothing(uint8 *a)
@@ -134,15 +139,18 @@ static uint32 wpQueryDefaultView(uint8 *a)
     pmwpSetObjectField(self, PMWP_OBJ_DEFAULT_VIEW, view);
     return view;
 }
+
 static uint32 wpSetDefaultView(uint8 *a)
 {
     pmwpSetObjectField(ARG(a, 0), PMWP_OBJ_DEFAULT_VIEW, ARG(a, 1));
     return TRUE;
 }
+
 static uint32 wpQueryConcurrentView(uint8 *a)
 {
     return pmwpObjectField(ARG(a, 0), PMWP_OBJ_CONCURRENT_VIEW);
 }
+
 static uint32 wpSetConcurrentView(uint8 *a)
 {
     pmwpSetObjectField(ARG(a, 0), PMWP_OBJ_CONCURRENT_VIEW, ARG(a, 1));
@@ -220,6 +228,7 @@ static uint32 wpFormatDragItem(uint8 *a)
 {
     return pmwpFormatDragItem(ARG(a, 0), ARG(a, 1));
 }
+
 /* The reply is MRFROM2SHORT(indicator, operation). Styles of each dragged object remove
    the operations it refuses; an object cannot be dropped on itself. */
 static uint32 wpDragOver(uint8 *a)
@@ -343,6 +352,7 @@ static void show_page(HWND client, HWND list)
                         SWP_MOVE | SWP_SIZE | (i == selected ? SWP_SHOW : SWP_HIDE));
     }
 }
+
 static MRESULT OS2API book_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     HWND list = WinWindowFromID(window, BOOK_LIST_ID);
@@ -368,6 +378,7 @@ static MRESULT OS2API book_procedure(HWND window, ULONG message, MPARAM first, M
     }
     return WinDefWindowProc(window, message, first, second);
 }
+
 /* The page identifier is its one-based position in the book. */
 static uint32 add_page(HWND book, HWND page, const char *name)
 {
@@ -384,6 +395,7 @@ static uint32 add_page(HWND book, HWND page, const char *name)
     show_page(book, list);
     return (uint32)at + 1;
 }
+
 static uint32 wpInsertSettingsPage(uint8 *a)
 {
     HWND book = ARG(a, 1);
@@ -406,6 +418,7 @@ static uint32 wpInsertSettingsPage(uint8 *a)
     free(name);
     return result;
 }
+
 /* The General page edits the title. An edit takes effect when the page closes, through
    wpSetTitle so that overrides see it. */
 static MRESULT OS2API general_page_procedure(HWND window, ULONG message, MPARAM first,
@@ -426,6 +439,7 @@ static MRESULT OS2API general_page_procedure(HWND window, ULONG message, MPARAM 
     }
     return WinDefWindowProc(window, message, first, second);
 }
+
 static uint32 wpAddObjectGeneralPage(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -451,11 +465,13 @@ static uint32 wpAddObjectGeneralPage(uint8 *a)
         WinDestroyWindow(page);
     return result;
 }
+
 static uint32 wpAddSettingsPages(uint8 *a)
 {
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpAddObjectGeneralPage, ARG(a, 0), ARG(a, 1), 0,
                       0) != 0;
 }
+
 /* A read-only page of text, for settings that have no editing dialog here. */
 uint32 pmwpAddInfoPage(HWND book, const char *name, const char *text)
 {
@@ -468,6 +484,7 @@ uint32 pmwpAddInfoPage(HWND book, const char *name, const char *text)
         WinDestroyWindow(page);
     return result;
 }
+
 uint32 pmwpOpenSettings(uint32 self)
 {
     if (query_style(self) & PMWP_OBJSTYLE_NOSETTINGS)
@@ -506,6 +523,7 @@ static uint32 wpOpen(uint8 *a)
                ? 0
                : pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpOpen, self, ARG(a, 1), resolved, 0);
 }
+
 void pmwpRememberView(uint32 self, uint32 view, HWND frame)
 {
     uint32 block = pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpAllocMem, self, VIEW_ITEM_BYTES, 0, 0);
@@ -516,6 +534,7 @@ void pmwpRememberView(uint32 self, uint32 view, HWND frame)
     pmwpStore32(block + VIEW_HANDLE, frame);
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpAddToObjUseList, self, block, 0, 0);
 }
+
 /* WPFolder and WPProgram open through the object store. A program has no frame, so a
    successful start returns the nonzero completion value instead. */
 static uint32 open_store_view(uint8 *a)
@@ -532,6 +551,7 @@ static uint32 open_store_view(uint8 *a)
     pmwpRememberView(self, view, frame);
     return frame;
 }
+
 static uint32 wpClose(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -545,6 +565,7 @@ static uint32 wpClose(uint8 *a)
         }
     return TRUE;
 }
+
 static uint32 wpSwitchTo(uint8 *a)
 {
     uint32 self = ARG(a, 0), view = ARG(a, 1);
@@ -561,6 +582,7 @@ static uint32 wpSwitchTo(uint8 *a)
     }
     return 0;
 }
+
 /* An object without a concurrent-view setting follows PM_Workplace CCVIEW. */
 static uint32 wpViewObject(uint8 *a)
 {
@@ -584,6 +606,7 @@ static uint32 wpViewObject(uint8 *a)
     }
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpOpen, self, cnr, view, parameter);
 }
+
 static uint32 wpRegisterView(uint8 *a)
 {
     uint32 self = ARG(a, 0), title_address = ARG(a, 2);
@@ -625,6 +648,7 @@ static BOOL start_help_viewer(const char *library)
     PID process;
     return DosStartSession(&start, &session, &process) == NO_ERROR;
 }
+
 /* An empty library name selects the shell's own help, as class defaults report it. */
 static uint32 wpDisplayHelp(uint8 *a)
 {
@@ -635,6 +659,7 @@ static uint32 wpDisplayHelp(uint8 *a)
     free(library);
     return result;
 }
+
 static uint32 wpSetDefaultHelp(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -649,6 +674,7 @@ static uint32 wpSetDefaultHelp(uint8 *a)
     free(library);
     return TRUE;
 }
+
 /* An object without its own help reports its class default. */
 static uint32 wpQueryDefaultHelp(uint8 *a)
 {
@@ -666,6 +692,7 @@ static uint32 wpQueryDefaultHelp(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 wpMenuItemHelpSelected(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -691,6 +718,7 @@ static uint32 awaken_result(uint32 self, ULONG handle, BOOL lock, uint32 reason)
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpObjectReady, object, reason, self, 0);
     return object;
 }
+
 static uint32 copy_stored_object(uint8 *a)
 {
     uint32 self = ARG(a, 0), folder = ARG(a, 1);
@@ -701,6 +729,7 @@ static uint32 copy_stored_object(uint8 *a)
         return 0;
     return awaken_result(self, WinCopyObject(handle, target, 0), ARG(a, 2), OR_FROMCOPY);
 }
+
 static uint32 shadow_with_class(uint32 self, uint32 folder, BOOL lock, uint32 shadow_class)
 {
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
@@ -718,10 +747,12 @@ static uint32 shadow_with_class(uint32 self, uint32 folder, BOOL lock, uint32 sh
     }
     return awaken_result(self, shadow, lock, OR_SHADOW);
 }
+
 static uint32 shadow_object(uint8 *a)
 {
     return shadow_with_class(ARG(a, 0), ARG(a, 1), ARG(a, 2), 0);
 }
+
 static uint32 wpCreateShadowObjectExt(uint8 *a)
 {
     uint32 shadow = shadow_with_class(ARG(a, 0), ARG(a, 1), ARG(a, 2), ARG(a, 4));
@@ -729,6 +760,7 @@ static uint32 wpCreateShadowObjectExt(uint8 *a)
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetup, shadow, ARG(a, 3), 0, 0);
     return shadow;
 }
+
 static uint32 wpMoveObject(uint8 *a)
 {
     uint32 self = ARG(a, 0), folder = ARG(a, 1);
@@ -778,4 +810,5 @@ const PmwpBody pmwpViewBodies[] = {
     {"WPObject", "wpQueryDefaultHelp", wpQueryDefaultHelp, 12},
     {"WPObject", "wpMenuItemHelpSelected", wpMenuItemHelpSelected, 8},
 };
+
 const size_t pmwpViewBodyCount = sizeof pmwpViewBodies / sizeof *pmwpViewBodies;

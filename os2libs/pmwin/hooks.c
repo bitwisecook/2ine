@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Queue input hooks run newest first and can consume or modify returned messages. */
 #include "os2libs/pmwin/internal.h"
+
 typedef struct PmHook
 {
     struct PmHook *next;
@@ -8,6 +9,7 @@ typedef struct PmHook
     PFN procedure;
     HMODULE module;
 } PmHook;
+
 BOOL WinSetHook(HAB hab, HMQ queue, LONG type, PFN procedure, HMODULE module)
 {
     TRACE_NATIVE("WinSetHook(%u, %u, %d, %p, %u)", (uint)hab, (uint)queue, (int)type, procedure,
@@ -24,6 +26,7 @@ BOOL WinSetHook(HAB hab, HMQ queue, LONG type, PFN procedure, HMODULE module)
     anchor->hooks = hook;
     return TRUE;
 }
+
 BOOL WinReleaseHook(HAB hab, HMQ queue, LONG type, PFN procedure, HMODULE module)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -40,6 +43,7 @@ BOOL WinReleaseHook(HAB hab, HMQ queue, LONG type, PFN procedure, HMODULE module
     free(hook);
     return TRUE;
 }
+
 void destroyHooks(AnchorBlock *anchor)
 {
     while (anchor->hooks)
@@ -49,6 +53,7 @@ void destroyHooks(AnchorBlock *anchor)
         free(hook);
     }
 }
+
 BOOL filterInputMessage(AnchorBlock *anchor, QMSG *message, ULONG flags)
 {
     size_t count = 0;

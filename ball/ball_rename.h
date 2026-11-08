@@ -12,6 +12,7 @@ static int rename_same_bytes(Context *c, const char *path, const char *expected,
     char *current = read_file(c, path, &count, 0);
     return current && count == length && !memcmp(current, expected, count);
 }
+
 static char *rename_leaf(Context *c, const char *name)
 {
     if (!name || !*name || !strcmp(name, ".") || !strcmp(name, ".."))
@@ -50,6 +51,7 @@ static char *rename_leaf(Context *c, const char *name)
     }
     return format(c, "%.*s.2ineball", (int)stem, name);
 }
+
 static int rename_host_field(Context *c, cJSON *entry, const char *key, const char *old,
                              const char *destination, int *changed)
 {
@@ -68,6 +70,7 @@ static int rename_host_field(Context *c, cJSON *entry, const char *key, const ch
     *changed = 1;
     return 1;
 }
+
 static int rename_manifest_paths(Context *c, const char *old, const char *destination, int *changed)
 {
     cJSON *entry;
@@ -102,6 +105,7 @@ static int rename_manifest_paths(Context *c, const char *old, const char *destin
     }
     return 1;
 }
+
 static int rename_profile_environment(Context *c, cJSON *environment, const char *old,
                                       const char *destination, int *changed)
 {
@@ -114,6 +118,7 @@ static int rename_profile_environment(Context *c, cJSON *environment, const char
                                                                   changed)) return 0;
     return 1;
 }
+
 static cJSON *rename_ball(Context *c, const cJSON *request)
 {
     const char *source = field(request, "ball");

@@ -11,6 +11,7 @@ int lx_execution_fail(LxExecution *e, const char *message)
     snprintf(e->error, sizeof e->error, "%s", message);
     return 0;
 }
+
 LxExecution *lx_execution_create(const char *backend, const LxExecutionServices *services,
                                  char *error, size_t size)
 {
@@ -68,6 +69,7 @@ LxExecution *lx_execution_create(const char *backend, const LxExecutionServices 
         error[0] = '\0';
     return e;
 }
+
 void lx_execution_destroy(LxExecution *e)
 {
     if (!e)
@@ -81,100 +83,124 @@ void lx_execution_destroy(LxExecution *e)
     lx_host_mutex_destroy(e->memory_mutex);
     free(e);
 }
+
 const char *lx_execution_backend(const LxExecution *e)
 {
     return e->ops->name;
 }
+
 const char *lx_execution_error(const LxExecution *e)
 {
     return e->error;
 }
+
 void lx_execution_program(LxExecution *e, const LxExecutionEntry *p, unsigned b)
 {
     e->ops->program(p, b);
 }
+
 void lx_execution_library(LxExecution *e, const LxExecutionEntry *p, int term)
 {
     e->ops->library(p, term);
 }
+
 void *lx_execution_prepare_thread16(LxExecution *e, uint32_t p, uint32_t s)
 {
     return e->ops->prepare_thread16(p, s);
 }
+
 void lx_execution_thread16(LxExecution *e, void *p)
 {
     e->ops->thread16(p);
 }
+
 void lx_execution_destroy_thread16(LxExecution *e, void *p)
 {
     if (p)
         e->ops->destroy_thread16(p);
 }
+
 void lx_execution_callback32(LxExecution *e, uint32_t p, uint32_t a)
 {
     e->ops->callback32(p, a);
 }
+
 uint16_t lx_execution_attach_tib(LxExecution *e, uint8_t *p)
 {
     return e->ops->attach_tib(p);
 }
+
 void *lx_execution_current_tib(LxExecution *e)
 {
     return e->ops->current_tib();
 }
+
 void lx_execution_detach_tib(LxExecution *e, uint16_t t)
 {
     e->ops->detach_tib(t);
 }
+
 void *lx_execution_alloc_segment(LxExecution *e, uint16_t *s, int x)
 {
     return e->ops->alloc_segment(s, x);
 }
+
 void lx_execution_free_segment(LxExecution *e, uint16_t s)
 {
     e->ops->free_segment(s);
 }
+
 int lx_execution_code_alias(LxExecution *e, uint16_t s, uint16_t *out)
 {
     return e->ops->code_alias(s, out);
 }
+
 int lx_execution_find_selector(LxExecution *e, uint32_t a, uint16_t *s, uint16_t *o, int x)
 {
     return e->ops->find_selector(a, s, o, x);
 }
+
 void lx_execution_free_selector(LxExecution *e, uint16_t s)
 {
     e->ops->free_selector(s);
 }
+
 void *lx_execution_far_to_host(LxExecution *e, uint32_t p)
 {
     return e->ops->far_to_host(p);
 }
+
 uint32_t lx_execution_host_to_far(LxExecution *e, void *p)
 {
     return e->ops->host_to_far(p);
 }
+
 void lx_execution_stack_segments(LxExecution *e, uint32_t a, uint32_t n, int r)
 {
     e->ops->stack_segments(a, n, r);
 }
+
 void lx_execution_near_base(LxExecution *e, uint32_t a)
 {
     e->ops->near_base(a);
 }
+
 uint16_t lx_execution_flat_code_selector(LxExecution *e)
 {
     return e->ops->flat_code_selector();
 }
+
 void lx_execution_prepare_code(LxExecution *e, uint8_t *p, size_t n)
 {
     e->ops->prepare_code(p, n);
 }
+
 void *lx_execution_missing_entry(LxExecution *e, const char *m, const char *n, unsigned b,
                                  LxExecutionBridge *x)
 {
     return e->ops->missing_entry(m, n, b, x);
 }
+
 size_t lx_execution_emit_bridge16(LxExecution *e, uint8_t *p, size_t n, uint8_t *base, uint16_t s,
                                   LxExecutionApi16 fn, uint16_t args)
 {
@@ -216,20 +242,24 @@ void *lx_execution_prepare_thread32(LxExecution *e, uint32_t entry, uint32_t sta
         return NULL;
     return e->ops->prepare_thread32(entry, stack, argument);
 }
+
 void lx_execution_thread32(LxExecution *e, void *invocation)
 {
     e->ops->thread32(invocation);
 }
+
 void lx_execution_destroy_thread32(LxExecution *e, void *invocation)
 {
     if (invocation)
         e->ops->destroy_thread32(invocation);
 }
+
 void lx_execution_cleanup_thread32(LxExecution *e)
 {
     if (e->ops->cleanup_thread32)
         e->ops->cleanup_thread32();
 }
+
 int lx_execution_end_thread(LxExecution *e)
 {
     return e->ops->end_thread();
@@ -263,29 +293,40 @@ void lx_execution_terminate(LxExecution *e, void (*cleanup)(uint32_t), uint32_t 
     else
         cleanup(code);
 }
+
 void lx_execution_poll_exit(LxExecution *e)
 {
     if (e && e->ops->poll_termination)
         e->ops->poll_termination(e);
 }
+
 void lx_execution_poll_termination(LxExecution *e)
 {
     lx_execution_poll_exit(e);
     lx_execution_checkpoint(e);
 }
+
 void lx_execution_set_checkpoint(LxExecution *e, void (*checkpoint)(void *), void *argument)
 {
-    if (e) { e->checkpoint_argument = argument; e->checkpoint = checkpoint; }
+    if (e)
+    {
+        e->checkpoint_argument = argument;
+        e->checkpoint = checkpoint;
+    }
 }
+
 void lx_execution_checkpoint(LxExecution *e)
 {
-    if (e && e->checkpoint) e->checkpoint(e->checkpoint_argument);
+    if (e && e->checkpoint)
+        e->checkpoint(e->checkpoint_argument);
 }
+
 void lx_execution_set_park_flag(LxExecution *e, const int *flag)
 {
     if (e && e->ops->set_park_flag)
         e->ops->set_park_flag(flag);
 }
+
 int lx_execution_quiesce(LxExecution *e)
 {
     if (!e || !e->ops->quiesce)
@@ -301,6 +342,7 @@ int lx_execution_quiesce(LxExecution *e)
 /* Tiled selectors reach only the first 512 MiB of the guest address space. */
 #define CALL16_TILED_LIMIT 0x20000000u
 #define CALL16_MAXIMUM_ARGUMENTS 0x400u
+
 typedef struct Call16
 {
     LxExecution *execution;
@@ -310,6 +352,7 @@ typedef struct Call16
     LxGuestMapping *stack;
     uint16_t selector;
 } Call16;
+
 static uint32_t call16Operation(void *argument)
 {
     Call16 *call = argument;
@@ -331,6 +374,7 @@ static uint32_t call16Operation(void *argument)
     return (uint32_t)e->ops->call16(call->target, (uint16_t)((selector << 3) | 7), offset,
                                     call->arguments, call->bytes, call->result);
 }
+
 static void call16Cleanup(void *argument)
 {
     Call16 *call = argument;
@@ -339,6 +383,7 @@ static void call16Cleanup(void *argument)
     if (call->stack)
         lx_execution_unmap(call->execution, call->stack);
 }
+
 int lx_execution_call16(LxExecution *e, uint32_t target, const void *arguments, uint32_t bytes,
                         uint32_t *result)
 {

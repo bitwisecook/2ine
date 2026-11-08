@@ -95,13 +95,16 @@ extension GuestEntry {
     var sortSize: UInt64 { size ?? 0 }
     var sortModified: Double { modified ?? -.greatestFiniteMagnitude }
 }
+
 extension MediaDirectory.Entry {
     var sortModified: Double { modified ?? -.greatestFiniteMagnitude }
 }
+
 func browserSize(_ size: UInt64?, directory: Bool) -> String {
     guard !directory, let size else { return "—" }
     return ByteCountFormatter.string(fromByteCount: Int64(clamping: size), countStyle: .file)
 }
+
 func browserDate(_ modified: Double?) -> String {
     guard let modified, modified.isFinite, (-62135596800...253402300799).contains(modified) else { return "—" }
     return Date(timeIntervalSince1970: modified).formatted(date: .abbreviated, time: .shortened)

@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/controls.h"
 #include "guest/abi.h"
+
 /* A box without a close action dismisses only through one of its buttons. */
 static MRESULT OS2API no_close_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
@@ -11,6 +12,7 @@ static MRESULT OS2API no_close_procedure(HWND window, ULONG message, MPARAM firs
         return 0;
     return WinDefDlgProc(window, message, first, second);
 }
+
 static ULONG message_box(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, ULONG style,
                          BOOL closable)
 {
@@ -141,6 +143,7 @@ ULONG WinMessageBox(HWND parent, HWND owner, PSZ text, PSZ caption, ULONG id, UL
                  caption, (uint)id, (uint)style);
     return message_box(parent, owner, text, caption, id, style, TRUE);
 }
+
 ULONG lx_pm_message_box_no_close(HWND owner, PSZ text, PSZ caption, ULONG style)
 {
     return message_box(HWND_DESKTOP, owner, text, caption, 0, style, FALSE);

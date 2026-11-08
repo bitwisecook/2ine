@@ -7,10 +7,12 @@
 #include <stdint.h>
 #include "hal/gl_dispatch.h"
 typedef struct LxHostGlContext LxHostGlContext;
+
 typedef struct LxHostGlConfig
 {
     int double_buffer, red, green, blue, alpha, depth, stencil;
 } LxHostGlConfig;
+
 LxHostGlContext *lx_host_gl_create(const LxHostGlConfig *config, LxHostGlContext *share);
 void lx_host_gl_destroy(LxHostGlContext *context);
 /* Call after all contexts and worker threads have been released. */

@@ -16,6 +16,7 @@
     } while (0)
 #define SAMPLE_COUNT 12000
 static float first[SAMPLE_COUNT], second[SAMPLE_COUNT];
+
 static double render(LxMidiSynth *synth, float *samples, float volume)
 {
     memset(samples, 0, SAMPLE_COUNT * sizeof *samples);
@@ -28,6 +29,7 @@ static double render(LxMidiSynth *synth, float *samples, float volume)
     }
     return energy;
 }
+
 static double note(LxMidiSynth *synth, unsigned channel, unsigned program, unsigned key,
                    float *samples)
 {
@@ -36,6 +38,7 @@ static double note(LxMidiSynth *synth, unsigned channel, unsigned program, unsig
     lx_midi_synth_event(synth, 0x90 | channel, key, 100);
     return render(synth, samples, 1);
 }
+
 static void stereo_contracts(LxMidiSynth *synth)
 {
     float stereo[SAMPLE_COUNT * 2];
@@ -69,6 +72,7 @@ static void stereo_contracts(LxMidiSynth *synth)
         CHECK(stereo[i] == 0);
     puts("Sampled MIDI stereo panning and stereo volume passed");
 }
+
 int main(void)
 {
 #if !TWOINE_MIDI_SYNTH

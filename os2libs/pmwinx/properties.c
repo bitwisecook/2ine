@@ -2,18 +2,21 @@
 /* Per-window properties retain atom keys and opaque application data. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
+
 typedef struct Open32Property
 {
     ULONG atom, data;
     BOOL owns_atom;
     struct Open32Property *next;
 } Open32Property;
+
 static ULONG property_atom(PSZ name, BOOL add)
 {
     if ((uintptr_t)name <= UINT16_MAX)
         return (ULONG)(uintptr_t)name;
     return add ? GlobalAddAtom(name) : GlobalFindAtom(name);
 }
+
 BOOL SetProp(ULONG handle, PSZ name, ULONG data)
 {
     Open32Window *window = open32PropertyWindow(handle);
@@ -54,6 +57,7 @@ BOOL SetProp(ULONG handle, PSZ name, ULONG data)
     window->properties = property;
     return TRUE;
 }
+
 ULONG GetProp(ULONG handle, PSZ name)
 {
     Open32Window *window = open32PropertyWindow(handle);
@@ -68,6 +72,7 @@ ULONG GetProp(ULONG handle, PSZ name)
             return property->data;
     return 0;
 }
+
 ULONG RemoveProp(ULONG handle, PSZ name)
 {
     Open32Window *window = open32PropertyWindow(handle);
@@ -90,6 +95,7 @@ ULONG RemoveProp(ULONG handle, PSZ name)
     free(property);
     return data;
 }
+
 void open32PropertiesCleanup(Open32Window *window)
 {
     while (window->properties)

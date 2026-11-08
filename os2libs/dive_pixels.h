@@ -3,12 +3,14 @@
 #define TWOINE_DIVE_PIXELS_H
 #include <stddef.h>
 #include <stdint.h>
+
 typedef struct DiveImage
 {
     uint32_t format, width, height, stride, chroma_stride, chroma_height;
     size_t bytes, plane[2];
     uint8_t *pixels;
 } DiveImage;
+
 extern const uint32_t DiveInputFormats[];
 extern const size_t DiveInputFormatCount;
 extern const uint32_t DiveOutputFormats[];

@@ -9,6 +9,7 @@ typedef struct MuxMember
     LxHandleBorrow borrow;
     LxHandleKind kind;
 } MuxMember;
+
 typedef struct MuxWait
 {
     struct MuxWait *next;
@@ -18,26 +19,31 @@ typedef struct MuxWait
     BOOL closed;
     MuxMember members[MUX_LIMIT];
 } MuxWait;
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static MuxWait *muxes;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
     if (!monitor)
         abort();
 }
+
 static void lock_muxes(void)
 {
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(monitor);
 }
+
 void notifyMuxWaiters(void)
 {
     lock_muxes();
     lx_host_monitor_wake_all(monitor);
     lx_host_monitor_unlock(monitor);
 }
+
 static void destroy_mux(void *value)
 {
     MuxWait *mux = value;
@@ -46,6 +52,7 @@ static void destroy_mux(void *value)
     free(mux->name);
     free(mux);
 }
+
 static APIRET member_borrow(ULONG handle, MuxMember *member)
 {
     memset(member, 0, sizeof *member);
@@ -57,6 +64,7 @@ static APIRET member_borrow(ULONG handle, MuxMember *member)
         return ERROR_INVALID_HANDLE;
     return NO_ERROR;
 }
+
 static BOOL member_shared(const MuxMember *member)
 {
     return member->kind == LX_HANDLE_EVENT
@@ -64,6 +72,7 @@ static BOOL member_shared(const MuxMember *member)
                      semaphoreResourceShared(member->borrow.resource)
                : semaphoreResourceShared(member->borrow.resource);
 }
+
 static APIRET add_member(MuxWait *mux, const SEMRECORD *record)
 {
     if (mux->count == MUX_LIMIT)
@@ -90,6 +99,7 @@ static APIRET add_member(MuxWait *mux, const SEMRECORD *record)
     }
     return result;
 }
+
 APIRET DosCreateMuxWaitSem(PSZ name, PHMUX output, ULONG count, PSEMRECORD records, ULONG flags)
 {
     TRACE_NATIVE("DosCreateMuxWaitSem('%s', %p, %u, %p, %X)", name, output, count, records, flags);
@@ -132,6 +142,7 @@ APIRET DosCreateMuxWaitSem(PSZ name, PHMUX output, ULONG count, PSEMRECORD recor
         destroy_mux(mux);
     return result;
 }
+
 APIRET DosOpenMuxWaitSem(PSZ name, PHMUX output)
 {
     TRACE_NATIVE("DosOpenMuxWaitSem('%s', %p)", name, output);
@@ -155,6 +166,7 @@ APIRET DosOpenMuxWaitSem(PSZ name, PHMUX output)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 APIRET DosCloseMuxWaitSem(HMUX handle)
 {
     TRACE_NATIVE("DosCloseMuxWaitSem(%u)", handle);
@@ -186,6 +198,7 @@ APIRET DosCloseMuxWaitSem(HMUX handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosAddMuxWaitSem(HMUX handle, PSEMRECORD record)
 {
     TRACE_NATIVE("DosAddMuxWaitSem(%u, %p)", handle, record);
@@ -203,6 +216,7 @@ APIRET DosAddMuxWaitSem(HMUX handle, PSEMRECORD record)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosDeleteMuxWaitSem(HMUX handle, ULONG semaphore)
 {
     TRACE_NATIVE("DosDeleteMuxWaitSem(%u, %u)", handle, semaphore);
@@ -235,6 +249,7 @@ APIRET DosDeleteMuxWaitSem(HMUX handle, ULONG semaphore)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosQueryMuxWaitSem(HMUX handle, PULONG count, PSEMRECORD records, PULONG flags)
 {
     TRACE_NATIVE("DosQueryMuxWaitSem(%u, %p, %p, %p)", handle, count, records, flags);
@@ -265,6 +280,7 @@ APIRET DosQueryMuxWaitSem(HMUX handle, PULONG count, PSEMRECORD records, PULONG 
     lx_handle_release(&borrow);
     return result;
 }
+
 static APIRET try_member(MuxMember *member)
 {
     if (member->kind == LX_HANDLE_MUTEX)
@@ -274,6 +290,7 @@ static APIRET try_member(MuxMember *member)
         DosQueryEventSemResource(member->record.hsemCur, &posts, member->borrow.resource);
     return result ? result : posts ? NO_ERROR : ERROR_TIMEOUT;
 }
+
 static APIRET try_mux(MuxWait *mux, PULONG user)
 {
     APIRET result = ERROR_TIMEOUT;
@@ -322,6 +339,7 @@ typedef struct MuxWaitCall
     PULONG user;
     BOOL registered;
 } MuxWaitCall;
+
 static void wait_cleanup(void *argument)
 {
     MuxWaitCall *call = argument;
@@ -333,6 +351,7 @@ static void wait_cleanup(void *argument)
     }
     lx_handle_release(&call->borrow);
 }
+
 static uint32 wait_operation(void *argument)
 {
     MuxWaitCall *call = argument;
@@ -384,6 +403,7 @@ static uint32 wait_operation(void *argument)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 APIRET DosWaitMuxWaitSem(HMUX handle, ULONG timeout, PULONG user)
 {
     TRACE_NATIVE("DosWaitMuxWaitSem(%u, %u, %p)", handle, timeout, user);

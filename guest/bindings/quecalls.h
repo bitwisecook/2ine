@@ -17,6 +17,7 @@ static uint32 bridge32_DosCreateQueue(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosOpenQueue(uint8 *a)
 {
     LxGuestBorrow pid = {0}, output = {0};
@@ -42,14 +43,17 @@ static uint32 bridge32_DosOpenQueue(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosCloseQueue(uint8 *a)
 {
     return DosCloseQueue(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosPurgeQueue(uint8 *a)
 {
     return DosPurgeQueue(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosQueryQueue(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -63,23 +67,27 @@ static uint32 bridge32_DosQueryQueue(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosWriteQueue(uint8 *a)
 {
     return DosWriteQueue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                          (PVOID)(uintptr_t)lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
 }
+
 typedef struct QueueReceive32
 {
     uint8 *arguments;
     BOOL peek;
     LxGuestBorrow outputs[5];
 } QueueReceive32;
+
 static void queue_receive32_cleanup(void *argument)
 {
     QueueReceive32 *call = argument;
     for (unsigned i = 0; i < 5; i++)
         lx_execution_release(&call->outputs[i]);
 }
+
 static uint32 queue_receive32_operation(void *argument)
 {
     QueueReceive32 *call = argument;
@@ -124,6 +132,7 @@ static uint32 queue_receive32_operation(void *argument)
 done:
     return result;
 }
+
 static uint32 queue_receive32(uint8 *a, BOOL peek)
 {
     QueueReceive32 call = {0};
@@ -131,10 +140,12 @@ static uint32 queue_receive32(uint8 *a, BOOL peek)
     call.peek = peek;
     return lx_host_guarded_call(queue_receive32_operation, &call, queue_receive32_cleanup, &call);
 }
+
 static uint32 bridge32_DosPeekQueue(uint8 *a)
 {
     return queue_receive32(a, TRUE);
 }
+
 static uint32 bridge32_DosReadQueue(uint8 *a)
 {
     return queue_receive32(a, FALSE);

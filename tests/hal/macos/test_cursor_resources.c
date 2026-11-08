@@ -24,6 +24,7 @@ void cursor_test_drop_native_objects(void);
 int cursor_test_objects_empty(void);
 static ULONG (*Load)(HMODULE, PSZ);
 static HPOINTER Cursor;
+
 static void *worker(void *unused)
 {
     (void)unused;
@@ -37,6 +38,7 @@ static void *worker(void *unused)
     CHECK(!SDL_WasInit(SDL_INIT_VIDEO) && !Created);
     return NULL;
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 3);

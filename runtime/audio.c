@@ -4,6 +4,7 @@
 #include "hal/audio.h"
 #include "hal/host_sync.h"
 #include <stdlib.h>
+
 typedef struct Generator
 {
     LxAudioGeneratorFn function;
@@ -11,14 +12,17 @@ typedef struct Generator
     int stereo;
     struct Generator *next;
 } Generator;
+
 static Generator *generators;
 static LxHostAudio *device;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMutex *control;
+
 static void initialize(void)
 {
     control = lx_host_mutex_create(0, 0);
 }
+
 static void mix(void *unused, float *stream, int samples, int frequency)
 {
     (void)unused;
@@ -48,6 +52,7 @@ static void mix(void *unused, float *stream, int samples, int frequency)
         }
     }
 }
+
 static int register_generator(LxAudioGeneratorFn function, void *data, int singleton, int stereo)
 {
     if (!function)
@@ -91,14 +96,17 @@ static int register_generator(LxAudioGeneratorFn function, void *data, int singl
     lx_host_mutex_unlock(control);
     return 1;
 }
+
 int lxRegisterAudioGenerator(LxAudioGeneratorFn function, void *data, int singleton)
 {
     return register_generator(function, data, singleton, 0);
 }
+
 int lxRegisterStereoAudioGenerator(LxAudioGeneratorFn function, void *data, int singleton)
 {
     return register_generator(function, data, singleton, 1);
 }
+
 void lxUnregisterAudioGenerator(LxAudioGeneratorFn function, void *data)
 {
     lx_host_once(&once, initialize);
@@ -121,6 +129,7 @@ void lxUnregisterAudioGenerator(LxAudioGeneratorFn function, void *data)
         lx_host_audio_unlock(device);
     lx_host_mutex_unlock(control);
 }
+
 void lxAudioShutdown(void)
 {
     lx_host_once(&once, initialize);

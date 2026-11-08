@@ -19,12 +19,15 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 typedef struct Server
 {
     int socket, success;
     LxHostTlsContext *context;
 } Server;
+
 static const char Message[] = "encrypted OS/2 round trip";
+
 static void *serve(void *value)
 {
     Server *server = value;
@@ -52,12 +55,14 @@ static void *serve(void *value)
     CHECK(!lx_host_socket_close(fd));
     return NULL;
 }
+
 static void wait_for(int fd, int result)
 {
     CHECK(result == LX_TLS_WANT_READ || result == LX_TLS_WANT_WRITE);
     CHECK(lx_host_socket_poll(&fd, result == LX_TLS_WANT_READ, result == LX_TLS_WANT_WRITE, 0,
                               1000) == 1);
 }
+
 static void run(const char *cert, const char *key, const char *peer, int trusted, int upgrade)
 {
     Server server = {lx_host_socket_open(LX_SOCKET_STREAM), trusted && !strcmp(peer, "localhost"),
@@ -172,6 +177,7 @@ static void run(const char *cert, const char *key, const char *peer, int trusted
     lx_host_tls_context_free(server.context);
     CHECK(!lx_host_socket_close(server.socket));
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 3);

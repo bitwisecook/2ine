@@ -12,6 +12,7 @@ static int runtime_feature_bool(const cJSON *value, int fallback)
     return equal_case(text, "1") || equal_case(text, "yes") || equal_case(text, "y") ||
            equal_case(text, "true") || equal_case(text, "t") || equal_case(text, "on");
 }
+
 static cJSON *runtime_feature_metadata(Context *c, const char *build)
 {
     const char *path = join(c, build, "runtime-capabilities.json");
@@ -35,10 +36,12 @@ static cJSON *runtime_feature_metadata(Context *c, const char *build)
     }
     return metadata;
 }
+
 static int runtime_has_module(Context *c, const char *build, const char *module)
 {
     return tb_is_file(join(c, build, format(c, "lib%s.so", module)));
 }
+
 static void runtime_feature_policy(Context *c, const char *build)
 {
     (void)build;
@@ -46,6 +49,7 @@ static void runtime_feature_policy(Context *c, const char *build)
     if (!c->opengl_policy)
         c->opengl_policy = "mesa";
 }
+
 static cJSON *runtime_features(Context *c, const char *build)
 {
     if (!validate_system(c))
@@ -139,6 +143,7 @@ static cJSON *runtime_features(Context *c, const char *build)
     cJSON_Delete(metadata);
     return result;
 }
+
 static int runtime_features_validate(Context *c, const char *build)
 {
     cJSON *features = runtime_features(c, build), *feature;

@@ -11,6 +11,7 @@ static const char *os2_som_companions[] = {"C:\\OS2\\SOMDD.EXE",
                                            "C:\\OS2\\SYSTEM\\SOMK.MSG",
                                            "C:\\OS2\\SYSTEM\\SOME_OS2.MSG",
                                            NULL};
+
 static int os2_som_companion(const char *path)
 {
     for (int i = 0; os2_som_companions[i]; i++)
@@ -18,11 +19,13 @@ static int os2_som_companion(const char *path)
             return 1;
     return 0;
 }
+
 static int os2_som_present(Context *c, const char *guest)
 {
     char *host = host_path(c, guest, 0);
     return host && tb_is_file(host);
 }
+
 static int os2_som_complete(Context *c)
 {
     if (!os2_som_present(c, "C:\\OS2\\DLL\\SOMD.DLL"))
@@ -32,6 +35,7 @@ static int os2_som_complete(Context *c)
             return 0;
     return 1;
 }
+
 static int os2_som_provision(Context *c, int *changed)
 {
     if (changed)

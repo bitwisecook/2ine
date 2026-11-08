@@ -5,11 +5,12 @@
 #include <stddef.h>
 #include <stdio.h>
 #include "read_stream.h"
+
 /* Internal paths name an image plus a member; they never name a host mount. */
 typedef struct TbImageInfo
 {
     uint64_t size, capacity, available;
-    int64_t modified;         /* INT64_MIN when the media has no timestamp. */
+    int64_t modified;          /* INT64_MIN when the media has no timestamp. */
     int64_t accessed, created; /* Zero when the entry does not record one. */
     unsigned attributes;       /* Hidden, system and archived bits of the entry. */
     int directory;
@@ -23,6 +24,7 @@ typedef struct TbImageInfo
     char label[12];
     char filesystem[8];
 } TbImageInfo;
+
 int tb_image_path(const char *path);
 int tb_image_device(const char *path);
 int tb_image_device_kind(const char *path);
@@ -51,11 +53,13 @@ int tb_image_remove(const char *path, int directory);
 int tb_image_mkdir(const char *path);
 int tb_image_move(const char *source, const char *target);
 int tb_image_readonly(const char *path, int readonly);
+
 /* Sets entry dates in the volume itself. Seconds are since the Unix epoch; INT64_MIN skips. */
 typedef struct TbImageStamps
 {
     int64_t created, accessed, modified;
 } TbImageStamps;
+
 int tb_image_stamps(const char *path, const char *expected, const TbImageStamps *stamps);
 int tb_image_attributes(const char *path, const char *expected, unsigned attributes);
 int tb_image_copy(FILE *source, const char *destination, int exclusive);

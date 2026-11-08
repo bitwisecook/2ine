@@ -2,6 +2,7 @@
 /* Class data byte offsets of the Workplace Shell method tokens. */
 #ifndef TWOINE_PMWP_SOM_TOKENS_H
 #define TWOINE_PMWP_SOM_TOKENS_H
+
 enum
 {
     PMWP_M_WPObject_wpclsCreateDefaultTemplates = 64,

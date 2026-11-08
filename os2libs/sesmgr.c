@@ -35,10 +35,12 @@ typedef struct SessionWait
     LxHostShared *shared;
     LxLaunchRecord *record;
 } SessionWait;
+
 static SessionWait *sessions;
 static LxHostMutex *session_mutex;
 static LxHostOnce session_once = LX_HOST_ONCE_INIT;
 static char session_title[64];
+
 static void destroy_session(SessionWait *session)
 {
     lx_launch_record_close(session->shared, session->record);
@@ -48,6 +50,7 @@ static void destroy_session(SessionWait *session)
         lx_host_mailbox_close(session->identity);
     free(session);
 }
+
 static BOOL reserve_session(SessionWait *session)
 {
     uint32 process, parent;
@@ -69,12 +72,14 @@ static BOOL reserve_session(SessionWait *session)
     }
     return FALSE;
 }
+
 static void initialize_sessions(void)
 {
     session_mutex = lx_host_mutex_create(0, 0);
     if (!session_mutex)
         abort();
 }
+
 static void remove_session(SessionWait *session)
 {
     lx_host_mutex_lock(session_mutex, UINT32_MAX);
@@ -86,6 +91,7 @@ static void remove_session(SessionWait *session)
         }
     lx_host_mutex_unlock(session_mutex);
 }
+
 APIRET DosSelectSession(ULONG session)
 {
     TRACE_NATIVE("DosSelectSession(%u)", (unsigned)session);
@@ -107,6 +113,7 @@ APIRET DosSelectSession(ULONG session)
     lx_host_mutex_unlock(session_mutex);
     return result;
 }
+
 APIRET DosSetSession(ULONG session, PSTATUSDATA status)
 {
     TRACE_NATIVE("DosSetSession(%u, %p)", session, status);
@@ -140,6 +147,7 @@ APIRET DosSetSession(ULONG session, PSTATUSDATA status)
     lx_host_mutex_unlock(session_mutex);
     return result;
 }
+
 static void *session_wait(void *value)
 {
     SessionWait *session = value;
@@ -160,6 +168,7 @@ static void *session_wait(void *value)
     destroy_session(session);
     return NULL;
 }
+
 APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid)
 {
     PSTARTDATA data = start->data;
@@ -198,21 +207,21 @@ APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid
         }
     }
     char record_name[40];
-    session->record = lx_launch_record_create('s', &session->shared, record_name,
-                                              sizeof record_name);
+    session->record =
+        lx_launch_record_create('s', &session->shared, record_name, sizeof record_name);
     if (!session->record)
     {
         destroy_session(session);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
-    LxLaunchPresentation presentation = {
-        .control = data->PgmControl & (LX_LAUNCH_INVISIBLE | LX_LAUNCH_MAXIMIZE |
-                                       LX_LAUNCH_MINIMIZE | LX_LAUNCH_NO_AUTOCLOSE |
-                                       LX_LAUNCH_SET_POSITION),
-        .x = (SHORT)data->InitXPos,
-        .y = (SHORT)data->InitYPos,
-        .cx = (SHORT)data->InitXSize,
-        .cy = (SHORT)data->InitYSize};
+    LxLaunchPresentation presentation = {.control = data->PgmControl &
+                                                    (LX_LAUNCH_INVISIBLE | LX_LAUNCH_MAXIMIZE |
+                                                     LX_LAUNCH_MINIMIZE | LX_LAUNCH_NO_AUTOCLOSE |
+                                                     LX_LAUNCH_SET_POSITION),
+                                         .x = (SHORT)data->InitXPos,
+                                         .y = (SHORT)data->InitYPos,
+                                         .cx = (SHORT)data->InitXSize,
+                                         .cy = (SHORT)data->InitYSize};
     if (presentation.control & LX_LAUNCH_SET_POSITION)
         presentation.control |= LX_LAUNCH_SET_SIZE;
     if (data->FgBg)
@@ -343,14 +352,17 @@ APIRET DosStopSession(ULONG scope, ULONG session)
     free(targets);
     return result;
 }
+
 APIRET16 Dos16StopSession(USHORT scope, USHORT session, ULONG reserved)
 {
     return reserved ? ERROR_SMG_BAD_RESERVE : DosStopSession(scope, session);
 }
+
 APIRET16 Dos16SetSession(USHORT session, PSTATUSDATA status)
 {
     return DosSetSession(session, status);
 }
+
 APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
 {
     if (!session || !pid)

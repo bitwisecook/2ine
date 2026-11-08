@@ -8,6 +8,7 @@
 #include "os2libs/doscalls/internal.h"
 
 static USHORT write_verify;
+
 APIRET fileError(LxHostFsError error)
 {
     switch (error)
@@ -268,8 +269,8 @@ APIRET doDosOpen(PSZ name, PHFILE output, PULONG action, LONGLONG size, ULONG at
                                  (attributes & FILE_READONLY) != 0, &error);
     if (created && (attributes & (FILE_HIDDEN | FILE_SYSTEM)))
     {
-        error = lx_host_file_attributes(
-            file, attributes & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED));
+        error =
+            lx_host_file_attributes(file, attributes & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED));
         if (error)
         {
             lx_host_file_close(file);
@@ -677,6 +678,7 @@ APIRET16 Dos16Move(PSZ pszOld, PSZ pszNew, ULONG reserved)
     TRACE_NATIVE("Dos16Move('%s', '%s', %u)", pszOld, pszNew, reserved);
     return reserved ? ERROR_INVALID_PARAMETER : DosMove(pszOld, pszNew);
 }
+
 APIRET DosSetRelMaxFH(PLONG request, PULONG current)
 {
     grabLock(&GMutexDosCalls);
@@ -1100,6 +1102,7 @@ APIRET16 Dos16QVerify(PUSHORT enabled)
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
+
 APIRET16 Dos16SetVerify(USHORT enabled)
 {
     if (enabled > 1)
@@ -1109,6 +1112,7 @@ APIRET16 Dos16SetVerify(USHORT enabled)
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
+
 APIRET16 Dos16MakePipe(PUSHORT reader, PUSHORT writer, USHORT size)
 {
     (void)size;

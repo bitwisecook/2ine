@@ -28,10 +28,12 @@ int lx_host_network_append(void **items, size_t *count, size_t size, const void 
     ++*count;
     return 0;
 }
+
 static uint32_t ipv4(const struct sockaddr *a)
 {
     return a && a->sa_family == AF_INET ? ((const struct sockaddr_in *)a)->sin_addr.s_addr : 0;
 }
+
 static int interfaces(LxHostNetwork *out)
 {
     struct ifaddrs *list;
@@ -85,6 +87,7 @@ static int interfaces(LxHostNetwork *out)
     errno = saved;
     return result;
 }
+
 int lx_host_network_string_append(char ***list, size_t *count, const char *value)
 {
     for (size_t i = 0; i < *count; i++)
@@ -100,6 +103,7 @@ int lx_host_network_string_append(char ***list, size_t *count, const char *value
     }
     return 0;
 }
+
 void lx_host_network_destroy(LxHostNetwork *s)
 {
     if (!s)
@@ -114,6 +118,7 @@ void lx_host_network_destroy(LxHostNetwork *s)
     free(s->dns.search);
     memset(s, 0, sizeof *s);
 }
+
 int lx_host_network_snapshot(LxHostNetwork *out)
 {
     if (!out)

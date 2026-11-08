@@ -2,6 +2,7 @@
 /* A copied zlib state owns its dictionary and bit buffer. Pending input is
    re-read by compressed offset, so snapshots never reference a reused buffer. */
 #define ZIP_CHECKPOINT_SPAN (4u * 1024u * 1024u)
+
 typedef struct ZipCheckpoint
 {
     struct ZipCheckpoint *next;
@@ -9,6 +10,7 @@ typedef struct ZipCheckpoint
     uint64_t input, output;
     uLong crc;
 } ZipCheckpoint;
+
 typedef struct ZipSeek
 {
     TbReadStream *parent, *self;
@@ -21,11 +23,13 @@ typedef struct ZipSeek
     size_t used;
     unsigned char input_buffer[65536], output[65536];
 } ZipSeek;
+
 typedef union ZipAllocation
 {
     max_align_t alignment;
     size_t bytes;
 } ZipAllocation;
+
 static voidpf zip_allocate(voidpf opaque, uInt count, uInt width)
 {
     ZipSeek *zip = opaque;
@@ -45,6 +49,7 @@ static voidpf zip_allocate(voidpf opaque, uInt count, uInt width)
     media_cache_peak();
     return allocation + 1;
 }
+
 static void zip_release(voidpf opaque, voidpf address)
 {
     if (!address)
@@ -54,6 +59,7 @@ static void zip_release(voidpf opaque, voidpf address)
     tb_stream_cache_resize(zip->self, tb_stream_cache_size(zip->self) - allocation->bytes);
     free(allocation);
 }
+
 static int zip_restart(ZipSeek *zip, uint64_t offset)
 {
     ZipCheckpoint *best = NULL;
@@ -87,6 +93,7 @@ static int zip_restart(ZipSeek *zip, uint64_t offset)
     zip->initialized = result == Z_OK;
     return zip->initialized || bad(result == Z_MEM_ERROR ? ENOMEM : EILSEQ);
 }
+
 static void zip_checkpoint(ZipSeek *zip)
 {
     if (zip->decoded < zip->checkpoint_high + ZIP_CHECKPOINT_SPAN || zip->ended)
@@ -111,6 +118,7 @@ static void zip_checkpoint(ZipSeek *zip)
     zip->points = point;
     media_session.stats.inflate_checkpoints++;
 }
+
 static int zip_append(ZipSeek *zip)
 {
     if (zip->ended)
@@ -153,6 +161,7 @@ static int zip_append(ZipSeek *zip)
     zip_checkpoint(zip);
     return 1;
 }
+
 static int zip_seek_read(void *opaque, uint64_t offset, void *data, size_t size)
 {
     ZipSeek *zip = opaque;
@@ -191,6 +200,7 @@ failed:
     zip->failed = 1;
     return 0;
 }
+
 static void zip_seek_close(void *opaque)
 {
     ZipSeek *zip = opaque;
@@ -206,6 +216,7 @@ static void zip_seek_close(void *opaque)
     tb_stream_close(zip->parent);
     free(zip);
 }
+
 static TbReadStream *indexed_zip_member(TbReadStream *parent, struct archive *archive,
                                         const char *name, uint64_t size, int *handled)
 {

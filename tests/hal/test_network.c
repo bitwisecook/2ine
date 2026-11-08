@@ -17,18 +17,21 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static unsigned short word16(const void *p)
 {
     unsigned short v;
     memcpy(&v, p, 2);
     return v;
 }
+
 static unsigned word32(const void *p)
 {
     unsigned v;
     memcpy(&v, p, 4);
     return v;
 }
+
 int main(void)
 {
     LxHostNetwork snapshot;

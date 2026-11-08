@@ -5,6 +5,7 @@
 #include <zlib.h>
 #include <limits.h>
 #define LEGACY_ARCHIVE_LIMIT (16u * 1024u * 1024u)
+
 static uint16_t legacy_crc16(const unsigned char *data, size_t size)
 {
     uint16_t crc = 0;
@@ -16,6 +17,7 @@ static uint16_t legacy_crc16(const unsigned char *data, size_t size)
     }
     return crc;
 }
+
 static int legacy_arc_walk(TbReadStream *file, Visit visit, void *context)
 {
     uint64_t at = 0, length = tb_stream_size(file);
@@ -49,12 +51,14 @@ static int legacy_arc_walk(TbReadStream *file, Visit visit, void *context)
     }
     return bad(EFBIG);
 }
+
 typedef struct LegacyArjHeader
 {
     unsigned char basic[2600];
     unsigned size;
     uint64_t data;
 } LegacyArjHeader;
+
 static int legacy_arj_header(TbReadStream *file, uint64_t at, LegacyArjHeader *h)
 {
     unsigned char prefix[4], crc[4];
@@ -92,6 +96,7 @@ static int legacy_arj_header(TbReadStream *file, uint64_t at, LegacyArjHeader *h
     }
     return bad(EFBIG);
 }
+
 static int legacy_arj_walk_at(TbReadStream *file, Visit visit, void *context, uint64_t at)
 {
     LegacyArjHeader h;
@@ -127,10 +132,12 @@ static int legacy_arj_walk_at(TbReadStream *file, Visit visit, void *context, ui
     }
     return bad(EFBIG);
 }
+
 static int legacy_arj_walk(TbReadStream *file, Visit visit, void *context)
 {
     return legacy_arj_walk_at(file, visit, context, 0);
 }
+
 static int legacy_arj_sfx(TbReadStream *file, Visit visit, void *context)
 {
     size_t size = tb_stream_size(file) < 2u * 1024u * 1024u ? (size_t)tb_stream_size(file)
@@ -155,6 +162,7 @@ static int legacy_arj_sfx(TbReadStream *file, Visit visit, void *context)
     free(prefix);
     return bad(ENOTSUP);
 }
+
 /* Decode an ARC Unix-compress frame, then verify the original ARC CRC. */
 static int legacy_codec_frame(unsigned char *frame, size_t length, unsigned char *output,
                               size_t capacity, size_t *used)
@@ -199,6 +207,7 @@ static int legacy_codec_frame(unsigned char *frame, size_t length, unsigned char
     tb_stream_close(stream);
     return ok;
 }
+
 static int legacy_rle90(const unsigned char *input, size_t length, unsigned char *output,
                         size_t expected)
 {
@@ -232,12 +241,14 @@ static int legacy_rle90(const unsigned char *input, size_t length, unsigned char
     }
     return used == expected;
 }
+
 typedef struct LegacyBits
 {
     const unsigned char *data;
     size_t size, bit;
     int valid;
 } LegacyBits;
+
 static unsigned legacy_bits(LegacyBits *bits, unsigned count)
 {
     if (!bits->valid || count > 24 || bits->bit > bits->size * 8 ||
@@ -251,6 +262,7 @@ static unsigned legacy_bits(LegacyBits *bits, unsigned count)
         value = (value << 1) | ((bits->data[bits->bit / 8] >> (7 - bits->bit % 8)) & 1);
     return value;
 }
+
 static int legacy_arj4(const unsigned char *input, size_t packed, unsigned char *output,
                        size_t size, int old)
 {
@@ -286,6 +298,7 @@ static int legacy_arj4(const unsigned char *input, size_t packed, unsigned char 
     }
     return bits.valid && at == size;
 }
+
 /* ARJ methods 1–3 use canonical LZH blocks, with a zero block count
    representing 65536 symbols rather than an end marker. */
 typedef struct LegacyHuffman
@@ -293,6 +306,7 @@ typedef struct LegacyHuffman
     unsigned counts[17], symbols[510];
     int single;
 } LegacyHuffman;
+
 static int legacy_huffman(LegacyHuffman *tree, const unsigned char *lengths, unsigned count)
 {
     memset(tree, 0, sizeof *tree);
@@ -319,6 +333,7 @@ static int legacy_huffman(LegacyHuffman *tree, const unsigned char *lengths, uns
             tree->symbols[positions[lengths[i]]++] = i;
     return 1;
 }
+
 static int legacy_symbol(LegacyBits *bits, const LegacyHuffman *tree)
 {
     if (tree->single >= 0)
@@ -337,6 +352,7 @@ static int legacy_symbol(LegacyBits *bits, const LegacyHuffman *tree)
     bits->valid = 0;
     return -1;
 }
+
 static int legacy_pt_tree(LegacyBits *bits, LegacyHuffman *tree, unsigned alphabet, unsigned width,
                           unsigned special)
 {
@@ -368,6 +384,7 @@ static int legacy_pt_tree(LegacyBits *bits, LegacyHuffman *tree, unsigned alphab
     }
     return bits->valid && legacy_huffman(tree, lengths, alphabet);
 }
+
 static int legacy_literal_tree(LegacyBits *bits, LegacyHuffman *tree,
                                const LegacyHuffman *length_tree)
 {
@@ -404,6 +421,7 @@ static int legacy_literal_tree(LegacyBits *bits, LegacyHuffman *tree,
     }
     return bits->valid && legacy_huffman(tree, lengths, 510);
 }
+
 static int legacy_arj_lzh(const unsigned char *input, size_t packed, unsigned char *output,
                           size_t expected, unsigned dictionary_bits)
 {
@@ -447,6 +465,7 @@ static int legacy_arj_lzh(const unsigned char *input, size_t packed, unsigned ch
     }
     return bits.valid && at == expected;
 }
+
 static int legacy_squeeze(const unsigned char *input, size_t packed, unsigned char *output,
                           size_t capacity, size_t *used)
 {
@@ -478,6 +497,7 @@ static int legacy_squeeze(const unsigned char *input, size_t packed, unsigned ch
         output[(*used)++] = (unsigned char)value;
     }
 }
+
 static TbReadStream *legacy_archive_member(TbReadStream *parent, uint64_t offset, uint64_t packed,
                                            uint64_t size, int kind)
 {

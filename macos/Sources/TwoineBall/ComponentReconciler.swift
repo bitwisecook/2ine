@@ -9,6 +9,7 @@ struct ComponentChange {
     let changed: Set<String>
     let configure: [String]
 }
+
 struct ComponentChangeResult {
     let state: OS2ComponentState
     var interrupted = false

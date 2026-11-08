@@ -17,6 +17,7 @@ extern "C"
 #endif
 
 #pragma pack(push, 1)
+
     typedef struct
     {
         USHORT cb;
@@ -34,9 +35,11 @@ extern "C"
         ULONG partial_length;
         ULONG ext_data_addr;
     } VIOMODEINFO, *PVIOMODEINFO;
+
 #pragma pack(pop)
 
 #pragma pack(push, 2)
+
     typedef struct
     {
         USHORT cb;
@@ -52,6 +55,7 @@ extern "C"
         USHORT EMAdaptersOFF;
         USHORT EMDisplaysOFF;
     } VIOCONFIGINFO, *PVIOCONFIGINFO;
+
 #pragma pack(pop)
 
     enum

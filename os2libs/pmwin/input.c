@@ -2,6 +2,7 @@
 /* Focus and host input are translated into the calling PM thread's WM_CHAR stream. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pm_text.h"
+
 BOOL WinIsChild(HWND child, HWND parent)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -11,6 +12,7 @@ BOOL WinIsChild(HWND child, HWND parent)
             return TRUE;
     return FALSE;
 }
+
 HWND topLevelWindow(AnchorBlock *anchor, HWND handle)
 {
     Window *w = getWindowFromHWND(anchor, handle);
@@ -20,6 +22,7 @@ HWND topLevelWindow(AnchorBlock *anchor, HWND handle)
         w = w->parent;
     return w->hwnd;
 }
+
 HWND WinQueryFocus(HWND desktop)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -27,6 +30,7 @@ HWND WinQueryFocus(HWND desktop)
                ? anchor->focus
                : 0;
 }
+
 HWND WinQueryActiveWindow(HWND desktop)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -34,6 +38,7 @@ HWND WinQueryActiveWindow(HWND desktop)
                ? anchor->active
                : 0;
 }
+
 /* FC_NOLOSEACTIVE keeps WM_ACTIVATE from the window being deactivated. */
 static void changeActive(AnchorBlock *anchor, HWND handle, ULONG flags)
 {
@@ -48,12 +53,15 @@ static void changeActive(AnchorBlock *anchor, HWND handle, ULONG flags)
     anchor->active = handle;
     sendMessage(window, WM_ACTIVATE, (MPARAM)(uintptr_t)TRUE, (MPARAM)(uintptr_t)handle);
 }
+
 BOOL lxPmHostFocusReport;
+
 BOOL WinSetFocus(HWND desktop, HWND handle)
 {
     TRACE_NATIVE("WinSetFocus(%u, %u)", (uint)desktop, (uint)handle);
     return changeFocus(desktop, handle, 0);
 }
+
 BOOL changeFocus(HWND desktop, HWND handle, ULONG flags)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -104,11 +112,12 @@ BOOL changeFocus(HWND desktop, HWND handle, ULONG flags)
                 changeActive(anchor, top, flags);
             if (!(flags & 3)) /* FC_NOBRINGTOTOP, FC_NOBRINGTOPFIRSTWINDOW */
                 if (!lxPmHostFocusReport)
-                lx_host_window_focus(root->heavy.window);
+                    lx_host_window_focus(root->heavy.window);
         }
     }
     return TRUE;
 }
+
 BOOL WinSetActiveWindow(HWND desktop, HWND handle)
 {
     TRACE_NATIVE("WinSetActiveWindow(%u, %u)", (uint)desktop, (uint)handle);
@@ -139,6 +148,7 @@ BOOL WinSetActiveWindow(HWND desktop, HWND handle)
         WinSetFocus(desktop, 0);
     return TRUE;
 }
+
 BOOL WinSetCapture(HWND desktop, HWND window)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -147,11 +157,13 @@ BOOL WinSetCapture(HWND desktop, HWND window)
     anchor->capture = window;
     return TRUE;
 }
+
 HWND WinQueryCapture(HWND desktop)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     return anchor && desktop == HWND_DESKTOP ? anchor->capture : 0;
 }
+
 LONG WinGetKeyState(HWND desktop, LONG key)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -163,6 +175,7 @@ LONG WinGetKeyState(HWND desktop, LONG key)
                             : anchor->key_down[key] != 0;
     return (SHORT)((down ? 0x8000 : 0) | anchor->key_toggled[key]);
 }
+
 LONG WinGetPhysKeyState(HWND desktop, LONG scan)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -172,6 +185,7 @@ LONG WinGetPhysKeyState(HWND desktop, LONG scan)
     anchor->physical_keys[scan] &= ~1u;
     return (SHORT)((state & 2 ? 0x8000 : 0) | (state & 1));
 }
+
 void synchronizeInputState(AnchorBlock *anchor, const QMSG *message)
 {
     if (message->msg == WM_CHAR)
@@ -200,6 +214,7 @@ void synchronizeInputState(AnchorBlock *anchor, const QMSG *message)
         }
     }
 }
+
 static unsigned virtual_key(uint32 key)
 {
     switch (key)
@@ -245,10 +260,12 @@ static unsigned virtual_key(uint32 key)
     }
     return key >= LX_HOST_KEY_F1 && key < LX_HOST_KEY_F1 + 24 ? 0x20 + key - LX_HOST_KEY_F1 : 0;
 }
+
 typedef struct NavigationKey
 {
     unsigned key, scan, character, control_character;
 } NavigationKey;
+
 /* Enhanced keys use OS/2 physical positions and BIOS extended translations. */
 static const NavigationKey navigation_keys[] = {
     {LX_HOST_KEY_HOME, 0x60, 0x47, 0x77},   {LX_HOST_KEY_UP, 0x61, 0x48, 0x8d},
@@ -257,6 +274,7 @@ static const NavigationKey navigation_keys[] = {
     {LX_HOST_KEY_DOWN, 0x66, 0x50, 0x91},   {LX_HOST_KEY_PAGEDOWN, 0x67, 0x51, 0x76},
     {LX_HOST_KEY_INSERT, 0x68, 0x52, 0x92}, {LX_HOST_KEY_DELETE, 0x69, 0x53, 0x93},
 };
+
 static unsigned cp437(uint32 point)
 {
     if (point < 128)
@@ -266,6 +284,7 @@ static unsigned cp437(uint32 point)
             return i;
     return '?';
 }
+
 /* WM_CHAR carries the queue's code page, chosen with WinSetCp. */
 static unsigned queue_character(AnchorBlock *anchor, uint32 point)
 {
@@ -276,6 +295,7 @@ static unsigned queue_character(AnchorBlock *anchor, uint32 point)
     UCHAR translated = WinCpTranslateChar(anchor->hab, 437, (UCHAR)character, codepage);
     return translated ? translated : character;
 }
+
 BOOL releaseInputState(AnchorBlock *anchor, ULONG timestamp)
 {
     Window *window = getWindowFromHWND(anchor, anchor->focus);
@@ -311,6 +331,7 @@ BOOL releaseInputState(AnchorBlock *anchor, ULONG timestamp)
     anchor->modifiers = anchor->text_modifiers = anchor->text_scancode = anchor->text_repeat = 0;
     return posted;
 }
+
 BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
 {
     const NavigationKey *navigation = NULL;
@@ -354,12 +375,12 @@ BOOL processKeyboardEvent(AnchorBlock *anchor, const LxHostEvent *event)
             }
             if (extra)
                 continue;
-            posted |=
-                postTimestampedMsg(anchor, window->hwnd, WM_CHAR,
-                                   (MPARAM)(uintptr_t)(flags | 1 | (anchor->text_scancode ? 4 : 0) |
-                                                       (anchor->text_repeat ? 0x80 : 0) | 1u << 16 |
-                                                       anchor->text_scancode << 24),
-                                   (MPARAM)(uintptr_t)queue_character(anchor, point), (ULONG)event->timestamp);
+            posted |= postTimestampedMsg(
+                anchor, window->hwnd, WM_CHAR,
+                (MPARAM)(uintptr_t)(flags | 1 | (anchor->text_scancode ? 4 : 0) |
+                                    (anchor->text_repeat ? 0x80 : 0) | 1u << 16 |
+                                    anchor->text_scancode << 24),
+                (MPARAM)(uintptr_t)queue_character(anchor, point), (ULONG)event->timestamp);
         }
         return posted;
     }

@@ -57,11 +57,13 @@ typedef enum LxHandleKind
     LX_HANDLE_PM_APP,
     LX_HANDLE_KIND_LIMIT
 } LxHandleKind;
+
 typedef struct LxHandleBorrow
 {
     void *resource;
     void *lease;
 } LxHandleBorrow;
+
 /* Repeated inserts of one resource share ownership. The kind and destructor must match.
    A closed handle is rejected immediately; active borrows keep its resource
    alive until release. Slot generations are retired before they can wrap. */

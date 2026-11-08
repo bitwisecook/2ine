@@ -22,6 +22,7 @@
 #endif
 
 typedef struct ComponentOperation ComponentOperation;
+
 typedef struct Context
 {
     char **allocations;
@@ -58,6 +59,7 @@ static int fail(Context *c, const char *format, ...)
     }
     return 0;
 }
+
 static char *keep(Context *c, char *p)
 {
     if (!p)
@@ -76,6 +78,7 @@ static char *keep(Context *c, char *p)
     c->allocations[c->count++] = p;
     return p;
 }
+
 static char *resolve_path(Context *c, const char *path, int existing)
 {
     if (!path)
@@ -118,6 +121,7 @@ static char *resolve_path(Context *c, const char *path, int existing)
     }
     return keep(c, result);
 }
+
 static char *format(Context *c, const char *fmt, ...)
 {
     va_list args;
@@ -132,6 +136,7 @@ static char *format(Context *c, const char *fmt, ...)
     va_end(args);
     return keep(c, p);
 }
+
 static char *join(Context *c, const char *a, const char *b)
 {
     char *path = a && b ? format(c, "%s/%s", a, b) : NULL;
@@ -143,24 +148,29 @@ static char *join(Context *c, const char *a, const char *b)
 #endif
     return path;
 }
+
 static const char *str(const cJSON *j)
 {
     return cJSON_IsString(j) ? j->valuestring : NULL;
 }
+
 static cJSON *get(const cJSON *j, const char *key)
 {
     return cJSON_GetObjectItemCaseSensitive(j, key);
 }
+
 static const char *field(const cJSON *j, const char *key)
 {
     return str(get(j, key));
 }
+
 /* Recognize host paths from either platform without treating DOS paths as relative. */
 static int host_absolute(const char *path)
 {
     return path && (path[0] == '/' || path[0] == '\\' ||
                     (isalpha((unsigned char)path[0]) && path[1] == ':'));
 }
+
 static int native_host_path(const char *path)
 {
 #ifdef _WIN32
@@ -170,6 +180,7 @@ static int native_host_path(const char *path)
            !(isalpha((unsigned char)path[0]) && path[1] == ':');
 #endif
 }
+
 static void put(cJSON *j, const char *key, cJSON *value)
 {
     if (get(j, key))
@@ -177,6 +188,7 @@ static void put(cJSON *j, const char *key, cJSON *value)
     else
         cJSON_AddItemToObject(j, key, value);
 }
+
 static cJSON *object(cJSON *j, const char *key)
 {
     cJSON *v = get(j, key);
@@ -187,10 +199,12 @@ static cJSON *object(cJSON *j, const char *key)
     }
     return cJSON_IsObject(v) ? v : NULL;
 }
+
 static int compare_names(const void *a, const void *b)
 {
     return strcmp(*(const char *const *)a, *(const char *const *)b);
 }
+
 static int equal_case(const char *a, const char *b)
 {
     while (*a && *b)
@@ -200,6 +214,7 @@ static int equal_case(const char *a, const char *b)
     }
     return *a == *b;
 }
+
 static char *read_file(Context *c, const char *path, size_t *length, int optional)
 {
     FILE *f = tb_fopen(path, "rb");
@@ -249,6 +264,7 @@ static char *read_file(Context *c, const char *path, size_t *length, int optiona
         *length = got;
     return keep(c, p);
 }
+
 static int write_json(Context *c, const char *path, cJSON *value)
 {
     char *text = cJSON_Print(value);
@@ -269,10 +285,12 @@ static int write_json(Context *c, const char *path, cJSON *value)
     cJSON_free(text);
     return ok ? 1 : fail(c, "Cannot save %s", path);
 }
+
 static int save_manifest(Context *c)
 {
     return write_json(c, join(c, c->ball, "ball.json"), c->manifest);
 }
+
 static char *latin1_to_utf8(Context *c, const char *bytes, size_t n)
 {
     char *text = malloc(n * 2 + 1);
@@ -296,6 +314,7 @@ static char *latin1_to_utf8(Context *c, const char *bytes, size_t n)
     text[at] = 0;
     return keep(c, text);
 }
+
 static char *utf8_to_latin1(Context *c, const char *text, size_t *length)
 {
     char *bytes = malloc(strlen(text) + 1);
@@ -325,6 +344,7 @@ static char *utf8_to_latin1(Context *c, const char *text, size_t *length)
     *length = at;
     return keep(c, bytes);
 }
+
 static char *case_path(Context *c, const char *path)
 {
     if (tb_image_path(path))
@@ -390,6 +410,7 @@ static char *case_path(Context *c, const char *path)
     return resolve_path(c, result, 0);
 #endif
 }
+
 static char *device_root(Context *c, const char *letter, const char *kind, const char *image,
                          int readonly)
 {
@@ -430,6 +451,7 @@ static char *device_root(Context *c, const char *letter, const char *kind, const
     }
     return keep(c, tb_image_device_root(control));
 }
+
 static int roots(Context *c)
 {
     cJSON *drives = get(c->manifest, "drives");
@@ -527,6 +549,7 @@ static int roots(Context *c)
     }
     return !c->error;
 }
+
 static int load(Context *c, const cJSON *request)
 {
     const char *path = field(request, "ball");
@@ -556,6 +579,7 @@ static int load(Context *c, const cJSON *request)
          !strcmp(action, "os2-component-state") || !strcmp(action, "validate-os2-media"));
     return roots(c);
 }
+
 static int inside(const char *path, const char *root)
 {
     size_t n = strlen(root);
@@ -563,6 +587,7 @@ static int inside(const char *path, const char *root)
         return 0;
     return !path[n] || path[n] == '/' || path[n] == '\\' || (n == 1 && root[0] == '/');
 }
+
 static int current_drive(Context *c)
 {
     const char *letter = field(c->manifest, "currentDrive");
@@ -571,6 +596,7 @@ static int current_drive(Context *c)
                ? letter[0] - 'A'
                : 2;
 }
+
 static const char *drive_directory(Context *c, int drive)
 {
     char key[2] = {(char)('A' + drive), 0};
@@ -579,6 +605,7 @@ static const char *drive_directory(Context *c, int drive)
         path = field(get(c->manifest, "workingDirectories"), key);
     return path ? path : format(c, "%c:\\", 'A' + drive);
 }
+
 static char *host_path(Context *c, const char *name, int explicit_host)
 {
     if (!name || !*name)
@@ -652,6 +679,7 @@ static char *host_path(Context *c, const char *name, int explicit_host)
     fail(c, "Path is outside mapped drives: %s; map its directory first", name);
     return NULL;
 }
+
 static char *guest_path(Context *c, const char *host)
 {
     int best = -1;
@@ -677,6 +705,7 @@ static char *guest_path(Context *c, const char *host)
                 *p = '\\';
     return result;
 }
+
 static char *guest_for_input(Context *c, const char *host, const char *input)
 {
     if (input && isalpha((unsigned char)input[0]) && input[1] == ':')
@@ -697,6 +726,7 @@ static char *guest_for_input(Context *c, const char *host, const char *input)
     }
     return guest_path(c, host);
 }
+
 static const char *setting_text(Context *c, const cJSON *v)
 {
     if (cJSON_IsString(v))
@@ -708,6 +738,7 @@ static const char *setting_text(Context *c, const cJSON *v)
     fail(c, "Invalid setting value");
     return NULL;
 }
+
 static int validate_system(Context *c)
 {
     cJSON *settings = get(c->manifest, "system"), *entry;
@@ -768,6 +799,7 @@ static int validate_system(Context *c)
     }
     return 1;
 }
+
 static int write_config(Context *c)
 {
     if (!roots(c) || !validate_system(c))
@@ -786,11 +818,13 @@ static int write_config(Context *c)
                ? 1
                : fail(c, "Cannot write 2ine.cfg");
 }
+
 static cJSON *guest_environment(Context *c, const cJSON *overrides);
 static cJSON *os2_support(Context *c);
 static cJSON *dependency_audit_latest(Context *c);
 static int wps_sync(Context *c);
 static cJSON *wps_latest(Context *c);
+
 static cJSON *snapshot(Context *c)
 {
     if (!roots(c) || !wps_sync(c))
@@ -878,6 +912,7 @@ static cJSON *snapshot(Context *c)
     cJSON_AddStringToObject(value, "configSys", latin1_to_utf8(c, bytes, size));
     return value;
 }
+
 static const char *default_keys[] = {"LANG", "OS2PATH", "LIBPATH",  "DPATH",      "HELP",
                                      "TEMP", "TMP",     "USER_INI", "SYSTEM_INI", NULL};
 static const char *default_values[] = {"en_US",
@@ -912,6 +947,7 @@ static const char *unset_keys[] = {"IS_2INE",
                                    "TWOINE_IPC_DIR",
                                    "DYLD_LIBRARY_PATH",
                                    NULL};
+
 static int init_ball(Context *c, const char *path)
 {
     if (!path)
@@ -956,6 +992,7 @@ static int init_ball(Context *c, const char *path)
         return fail(c, "Cannot initialize ball");
     return write_config(c);
 }
+
 static int digest_file(Context *c, const char *path, unsigned char hash[32])
 {
     FILE *f = tb_fopen(path, "rb");
@@ -974,6 +1011,7 @@ static int digest_file(Context *c, const char *path, unsigned char hash[32])
     sha256_final(&state, hash);
     return 1;
 }
+
 static char *hex(Context *c, const unsigned char hash[32])
 {
     char *out = malloc(65);
@@ -986,6 +1024,7 @@ static char *hex(Context *c, const unsigned char hash[32])
         sprintf(out + i * 2, "%02x", hash[i]);
     return keep(c, out);
 }
+
 #include "audio.h"
 
 static int runtime_name(const char *s)
@@ -996,6 +1035,7 @@ static int runtime_name(const char *s)
            (!strncmp(s, "lib", 3) &&
             ((n > 3 && !strcmp(s + n - 3, ".so")) || (n > 6 && !strcmp(s + n - 6, ".dylib"))));
 }
+
 static const char *loader_name(Context *c, const char *build)
 {
     if (tb_is_file(join(c, build, "lx_loader")))
@@ -1005,6 +1045,7 @@ static const char *loader_name(Context *c, const char *build)
     fail(c, "Choose a build directory containing lx_loader");
     return NULL;
 }
+
 static char **runtime_names(const char *build, size_t *count)
 {
     size_t n = 0;
@@ -1022,6 +1063,7 @@ static char **runtime_names(const char *build, size_t *count)
     *count = kept;
     return names;
 }
+
 static char *runtime_id(Context *c, const char *build)
 {
     size_t n = 0;
@@ -1045,6 +1087,7 @@ static char *runtime_id(Context *c, const char *build)
     sha256_final(&state, out);
     return ok ? hex(c, out) : NULL;
 }
+
 static int sync_runtime(Context *c, const char *build, const char *directory)
 {
     if (!tb_mkdirs(directory))
@@ -1090,6 +1133,7 @@ static char *trim(char *s)
         s[--n] = 0;
     return s;
 }
+
 static int valid_env_key(const char *key)
 {
     if (!key || (!isalpha((unsigned char)*key) && *key != '_'))
@@ -1099,6 +1143,7 @@ static int valid_env_key(const char *key)
             return 0;
     return 1;
 }
+
 static int reserved_env(const char *key)
 {
     const char *reserved[] = {"HOME",
@@ -1131,6 +1176,7 @@ static int reserved_env(const char *key)
             return 1;
     return 0;
 }
+
 /* Overlay expressions resolve against the complete inherited layer. A
    self-reference appends to the inherited value; other overrides resolve
    recursively so JSON key ordering cannot affect results. */
@@ -1188,6 +1234,7 @@ static char *expand_env(Context *c, const cJSON *base, const cJSON *overlay, con
     }
     return out;
 }
+
 static int overlay_environment(Context *c, cJSON *env, const cJSON *settings)
 {
     if (!settings)
@@ -1236,6 +1283,7 @@ static int overlay_environment(Context *c, cJSON *env, const cJSON *settings)
     cJSON_Delete(normalized);
     return !c->error;
 }
+
 static cJSON *guest_environment(Context *c, const cJSON *overrides)
 {
     cJSON *env = cJSON_CreateObject();
@@ -1305,6 +1353,7 @@ failed:
     cJSON_Delete(env);
     return NULL;
 }
+
 static cJSON *environment(Context *c, const char *build, const char *override, const cJSON *app_env)
 {
     cJSON *env = guest_environment(c, app_env);
@@ -1359,18 +1408,10 @@ static cJSON *environment(Context *c, const char *build, const char *override, c
         }
         part = next;
     }
-    const char *keys[] = {"TWOINE_IPC_DIR",
-                          "TWOINE_BALL",
-                          "TWOINE_CONFIG",
-                          "TWOINE_USER_PROFILE",
-                          "TWOINE_SYSTEM_PROFILE",
-                          "TWOINE_REGISTRY",
-                          "TWOINE_OBJECTS",
-                          "TWOINE_LIBPATH",
-                          "TWOINE_RUNTIME_ID",
-                          "TWOINE_DISPLAY_DPI",
-                          "TWOINE_DISPLAY_DEPTH",
-                          NULL};
+    const char *keys[] = {"TWOINE_IPC_DIR",      "TWOINE_BALL",           "TWOINE_CONFIG",
+                          "TWOINE_USER_PROFILE", "TWOINE_SYSTEM_PROFILE", "TWOINE_REGISTRY",
+                          "TWOINE_OBJECTS",      "TWOINE_LIBPATH",        "TWOINE_RUNTIME_ID",
+                          "TWOINE_DISPLAY_DPI",  "TWOINE_DISPLAY_DEPTH",  NULL};
     const char *values[] = {join(c, c->ball, "ipc"),
                             c->ball,
                             join(c, c->ball, "2ine.cfg"),
@@ -1408,6 +1449,7 @@ failed:
     cJSON_Delete(env);
     return NULL;
 }
+
 static char *now(Context *c)
 {
     time_t value = time(NULL);
@@ -1421,6 +1463,7 @@ static char *now(Context *c)
     strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S+00:00", &parts);
     return keep(c, strdup(date));
 }
+
 static int array_strings(Context *c, const cJSON *array)
 {
     if (!cJSON_IsArray(array))
@@ -1429,7 +1472,9 @@ static int array_strings(Context *c, const cJSON *array)
     cJSON_ArrayForEach(a, array) if (!str(a)) return fail(c, "Arguments must be strings");
     return 1;
 }
+
 static int validate_directories(Context *c, const cJSON *directories);
+
 static char *find_command_interpreter(Context *c)
 {
     cJSON *env = guest_environment(c, get(c->application, "environment"));
@@ -1466,6 +1511,7 @@ static char *find_command_interpreter(Context *c)
     }
     return NULL;
 }
+
 static char *command_interpreter(Context *c)
 {
     char *host = find_command_interpreter(c);
@@ -1475,6 +1521,7 @@ static char *command_interpreter(Context *c)
             "This command file needs the original OS/2 CMD.EXE, which is not installed. Select CMD and REXX Support in OS/2 Components and wait for it to finish installing before retrying this command file.");
     return host;
 }
+
 #include "os2_component_store.h"
 #include "os2_support.h"
 #include "os2_extract.h"
@@ -1488,6 +1535,7 @@ static char *command_interpreter(Context *c)
 #include "launch_dependencies.h"
 
 static cJSON *launch_desktop_identity(Context *c, const char *program, const char *name);
+
 static cJSON *prepare(Context *c, const cJSON *request)
 {
     if (!wps_sync(c))
@@ -1794,6 +1842,7 @@ failed:
     cJSON_Delete(argv);
     return NULL;
 }
+
 static int command(Context *c, const cJSON *request)
 {
     cJSON *args = get(request, "arguments");
@@ -2120,6 +2169,7 @@ static int validate_directories(Context *c, const cJSON *directories)
     }
     return 1;
 }
+
 static cJSON *browse_directory(Context *c, const char *path)
 {
     char *host = host_path(c, path, 0);
@@ -2209,6 +2259,7 @@ static cJSON *browse_directory(Context *c, const char *path)
     tb_names_free(names, count);
     return result;
 }
+
 static int plan_copy(Context *c, cJSON *plan, const char *source, const char *destination,
                      unsigned depth)
 {
@@ -2256,6 +2307,7 @@ static int plan_copy(Context *c, cJSON *plan, const char *source, const char *de
     }
     return 1;
 }
+
 static cJSON *import_files(Context *c, const cJSON *request)
 {
     const char *directory = field(request, "path");
@@ -2325,6 +2377,7 @@ static cJSON *import_files(Context *c, const cJSON *request)
     cJSON_Delete(plan);
     return c->error ? NULL : browse_directory(c, directory);
 }
+
 static int save_application(Context *c, const cJSON *request)
 {
     const char *name = field(request, "name"), *program = field(request, "program"),
@@ -2411,6 +2464,7 @@ failed:
     cJSON_Delete(app);
     return 0;
 }
+
 static cJSON *application_icon(Context *c, const cJSON *request)
 {
     const char *name = field(request, "name"), *program = field(request, "program");
@@ -2550,6 +2604,7 @@ static cJSON *application_icon(Context *c, const cJSON *request)
     cJSON_AddStringToObject(result, "source", "none");
     return result;
 }
+
 /* Presentation metadata is optional and cannot prevent a valid guest launch. */
 static cJSON *launch_desktop_identity(Context *parent, const char *program, const char *name)
 {
@@ -2589,6 +2644,7 @@ static cJSON *launch_desktop_identity(Context *parent, const char *program, cons
     free(c->error);
     return result;
 }
+
 #include "ball_archive.h"
 #include "ball_rename.h"
 
@@ -2597,6 +2653,7 @@ static void dependency_refresh_mutation(Context *c, const cJSON *request)
     cJSON *audit = audit_dependencies(c, request, 0);
     cJSON_Delete(audit);
 }
+
 static cJSON *dispatch(Context *c, const cJSON *request)
 {
     const char *action = field(request, "action");
@@ -3127,14 +3184,17 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     fail(c, "Unsupported ball action: %s", action);
     return NULL;
 }
+
 unsigned tb_abi_version(void)
 {
     return 1;
 }
+
 void tb_free(void *p)
 {
     free(p);
 }
+
 int tb_request(const char *text, char **result, char **error)
 {
     if (!result || !error)

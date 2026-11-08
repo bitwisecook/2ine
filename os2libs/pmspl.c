@@ -6,6 +6,7 @@
 #include "os2libs/printer_profile.h"
 #include "guest/abi.h"
 #include "os2libs/generated/pmspl-lx.h"
+
 static size_t queue_record_size(ULONG level)
 {
     switch (level)
@@ -26,6 +27,7 @@ static size_t queue_record_size(ULONG level)
             return 0;
     }
 }
+
 static void queue_string(uint8 *buffer, uint32 base, size_t *tail, uint8 *slot, const char *text)
 {
     size_t size = strlen(text) + 1;
@@ -33,6 +35,7 @@ static void queue_string(uint8 *buffer, uint32 base, size_t *tail, uint8 *slot, 
     memcpy(buffer + *tail, text, size);
     *tail += size;
 }
+
 ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capacity, uint32 base,
                        PULONG returned, PULONG total, PULONG needed)
 {
@@ -111,6 +114,7 @@ ULONG lx_spl_catalogue(const char *queue, ULONG level, PVOID output, ULONG capac
     *returned = count;
     return 0;
 }
+
 ULONG SplQueryQueue(PSZ computer, PSZ queue, ULONG level, PVOID buffer, ULONG capacity,
                     PULONG needed)
 {
@@ -120,6 +124,7 @@ ULONG SplQueryQueue(PSZ computer, PSZ queue, ULONG level, PVOID buffer, ULONG ca
     return lx_spl_catalogue(queue, level, buffer, capacity, (uint32)(uintptr_t)buffer, &returned,
                             &total, needed);
 }
+
 ULONG SplEnumQueue(PSZ computer, ULONG level, PVOID buffer, ULONG capacity, PULONG returned,
                    PULONG total, PULONG needed, PVOID reserved)
 {
@@ -175,6 +180,7 @@ ULONG lx_spl_device(const char *name, ULONG level, PVOID output, ULONG capacity,
     }
     return 0;
 }
+
 ULONG SplQueryDevice(PSZ computer, PSZ device, ULONG level, PVOID buffer, ULONG capacity,
                      PULONG needed)
 {
@@ -184,24 +190,39 @@ ULONG SplQueryDevice(PSZ computer, PSZ device, ULONG level, PVOID buffer, ULONG 
 }
 
 ULONG lx_spl_printers(ULONG level, ULONG types, PVOID output, ULONG capacity, uint32 base,
-                       PULONG returned, PULONG total, PULONG needed)
+                      PULONG returned, PULONG total, PULONG needed)
 {
-    if (level) return 124;
-    if (!returned || !total || !needed || !(types & 0x107) || (types & ~0x107u)) return 87;
+    if (level)
+        return 124;
+    if (!returned || !total || !needed || !(types & 0x107) || (types & ~0x107u))
+        return 87;
     ULONG selected[4], kinds[4], count = 0;
     for (unsigned i = 0; i < 2; i++)
     {
-        if (types & 1) { selected[count] = i; kinds[count++] = 1; }
-        if (types & 4) { selected[count] = i; kinds[count++] = 4; }
+        if (types & 1)
+        {
+            selected[count] = i;
+            kinds[count++] = 1;
+        }
+        if (types & 4)
+        {
+            selected[count] = i;
+            kinds[count++] = 4;
+        }
     }
     size_t bytes = count * 20;
     for (ULONG i = 0; i < count; i++)
         bytes += 2 + 2 * (strlen(lx_printer_queues[selected[i]]) + 1) +
                  strlen(lx_printer_descriptions[selected[i]]);
-    *returned = 0; *total = count; *needed = bytes;
-    if (capacity < bytes) return 234;
-    if (!count) return 0;
-    if (!output || base > UINT32_MAX - bytes) return 87;
+    *returned = 0;
+    *total = count;
+    *needed = bytes;
+    if (capacity < bytes)
+        return 234;
+    if (!count)
+        return 0;
+    if (!output || base > UINT32_MAX - bytes)
+        return 87;
     uint8 *buffer = output;
     memset(buffer, 0, bytes);
     size_t tail = count * 20;
@@ -218,12 +239,15 @@ ULONG lx_spl_printers(ULONG level, ULONG types, PVOID output, ULONG capacity, ui
     *returned = count;
     return 0;
 }
+
 ULONG SplEnumPrinter(PSZ computer, ULONG level, ULONG types, PVOID buffer, ULONG capacity,
                      PULONG returned, PULONG total, PULONG needed, PVOID reserved)
 {
-    if ((computer && *computer) || reserved) return 87;
+    if ((computer && *computer) || reserved)
+        return 87;
     uint32 base = 0;
-    if (capacity && !lx_execution_address(GLoaderState.execution, buffer, capacity, LX_GUEST_WRITE,
-                                           &base)) return 87;
+    if (capacity &&
+        !lx_execution_address(GLoaderState.execution, buffer, capacity, LX_GUEST_WRITE, &base))
+        return 87;
     return lx_spl_printers(level, types, buffer, capacity, base, returned, total, needed);
 }

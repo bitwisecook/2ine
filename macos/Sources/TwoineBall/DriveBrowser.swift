@@ -183,6 +183,7 @@ private struct DriveRow: Identifiable {
     let working: String
     var id: String { letter }
 }
+
 struct DrivesView: View {
     @Bindable var model: AppModel
     let snapshot: BallSnapshot

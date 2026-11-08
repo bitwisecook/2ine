@@ -7,14 +7,17 @@ APIRET16 Dos16RmDir(PSZ path, ULONG reserved)
 {
     return reserved ? ERROR_INVALID_PARAMETER : DosDeleteDir(path);
 }
+
 APIRET16 Dos16ForceDelete(PSZ path, ULONG reserved)
 {
     return reserved ? ERROR_INVALID_PARAMETER : DosForceDelete(path);
 }
+
 APIRET16 Dos16SearchPath(USHORT flags, PSZ path, PSZ name, PBYTE result, USHORT capacity)
 {
     return DosSearchPath(flags, path, name, result, capacity);
 }
+
 APIRET16 Dos16DevIOCtl2(PVOID data, USHORT data_size, PVOID parameters, USHORT parameter_size,
                         USHORT function, USHORT category, USHORT device)
 {
@@ -22,6 +25,7 @@ APIRET16 Dos16DevIOCtl2(PVOID data, USHORT data_size, PVOID parameters, USHORT p
     return DosDevIOCtl(device == UINT16_MAX ? UINT32_MAX : device, category, function, parameters,
                        ps, &ps, data, ds, &ds);
 }
+
 APIRET16 Dos16QFSAttach(PSZ device, USHORT ordinal, USHORT level, PVOID buffer, PUSHORT size,
                         ULONG reserved)
 {
@@ -32,6 +36,7 @@ APIRET16 Dos16QFSAttach(PSZ device, USHORT ordinal, USHORT level, PVOID buffer, 
     *size = length > UINT16_MAX ? UINT16_MAX : (USHORT)length;
     return result;
 }
+
 APIRET16 Dos16QAppType(PSZ name, PUSHORT flags)
 {
     if (!flags)
@@ -42,10 +47,12 @@ APIRET16 Dos16QAppType(PSZ name, PUSHORT flags)
         *flags = (USHORT)value;
     return result;
 }
+
 APIRET16 Dos16SetCp(USHORT codepage, USHORT reserved)
 {
     return Dos16SetProcCp(codepage, reserved);
 }
+
 APIRET16 Dos16LoadModule(PCHAR failure, USHORT capacity, PSZ name, PUSHORT module)
 {
     if (!module)
@@ -56,6 +63,7 @@ APIRET16 Dos16LoadModule(PCHAR failure, USHORT capacity, PSZ name, PUSHORT modul
         *module = (USHORT)handle;
     return result;
 }
+
 static LxModule *borrowLegacyModule(USHORT id, LxHandleBorrow *borrow)
 {
     LxModule *found = NULL;
@@ -73,6 +81,7 @@ static LxModule *borrowLegacyModule(USHORT id, LxHandleBorrow *borrow)
     ungrabLock(&GMutexDosCalls);
     return found;
 }
+
 APIRET16 Dos16GetModName(USHORT id, USHORT capacity, PCHAR name)
 {
     LxHandleBorrow borrow;
@@ -84,6 +93,7 @@ APIRET16 Dos16GetModName(USHORT id, USHORT capacity, PCHAR name)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET16 Dos16FreeModule(USHORT id)
 {
     LxHandleBorrow borrow;
@@ -94,6 +104,7 @@ APIRET16 Dos16FreeModule(USHORT id)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET16 Dos16GetProcAddr(USHORT id, ULONG encoded, PULONG address)
 {
     if (!address || !encoded)

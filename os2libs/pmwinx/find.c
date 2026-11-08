@@ -4,12 +4,14 @@
 #include "os2libs/pmwinx/internal.h"
 #include "hal/host_fs.h"
 #include "hal/host_sync.h"
+
 typedef struct FileSearch
 {
     LxHostDirectory *directory;
     LxHostMonitor *monitor;
     char *path, *pattern;
 } FileSearch;
+
 static ULONG find_error(LxHostFsError error)
 {
     switch (error)
@@ -30,10 +32,12 @@ static ULONG find_error(LxHostFsError error)
             return 31;
     }
 }
+
 static unsigned folded(unsigned char value)
 {
     return value >= 'a' && value <= 'z' ? value - 'a' + 'A' : value;
 }
+
 static BOOL match_name(const char *name, const char *pattern)
 {
     const char *star = NULL, *retry = NULL;
@@ -64,6 +68,7 @@ static BOOL match_name(const char *name, const char *pattern)
         pattern++;
     return !*pattern;
 }
+
 static void search_destroy(void *data)
 {
     FileSearch *search = data;
@@ -74,6 +79,7 @@ static void search_destroy(void *data)
     free(search->path);
     free(search);
 }
+
 static void find_time(uint8 *output, int64_t seconds)
 {
     /* Unix seconds are UTC; FILETIME counts 100-ns intervals from 1601. */
@@ -83,6 +89,7 @@ static void find_time(uint8 *output, int64_t seconds)
     lx_guest_store_u32(output, (uint32)ticks);
     lx_guest_store_u32(output + 4, (uint32)(ticks >> 32));
 }
+
 static BOOL search_next(FileSearch *search, PVOID output, BOOL first)
 {
     const char *name;
@@ -115,6 +122,7 @@ static BOOL search_next(FileSearch *search, PVOID output, BOOL first)
     open32SetError(status < 0 ? find_error(error) : first ? 2 : 18);
     return FALSE;
 }
+
 ULONG FindFirstFile(PSZ name, PVOID output)
 {
     TRACE_NATIVE("FindFirstFile('%s', %p)", name, output);
@@ -174,6 +182,7 @@ ULONG FindFirstFile(PSZ name, PVOID output)
     }
     return handle;
 }
+
 BOOL FindNextFile(ULONG handle, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -189,6 +198,7 @@ BOOL FindNextFile(ULONG handle, PVOID output)
     lx_handle_release(&borrow);
     return result;
 }
+
 BOOL FindClose(ULONG handle)
 {
     if (lx_handle_close(handle, LX_HANDLE_OPEN32_FIND))

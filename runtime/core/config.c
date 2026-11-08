@@ -7,6 +7,7 @@
  */
 #include "runtime/core/internal.h"
 #include "runtime/runtime_features.h"
+
 void cfgWarn(const char *fname, const int lineno, const char *fmt, ...)
 {
     va_list ap;

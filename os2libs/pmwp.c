@@ -19,11 +19,13 @@ typedef PmwpRecord Object;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *mutex;
 static char *path, *lock_path;
+
 enum
 {
     OBJECT_LIMIT = 65536,
     FIRST_OBJECT = 0x20000
 };
+
 static void initialize(void)
 {
     mutex = lx_host_monitor_create();
@@ -37,6 +39,7 @@ static void initialize(void)
     strcpy(lock_path, path);
     strcat(lock_path, ".lock");
 }
+
 static HINI begin(LxHostFile **lock)
 {
     lx_host_once(&once, initialize);
@@ -50,6 +53,7 @@ static HINI begin(LxHostFile **lock)
         return 0;
     return lx_profile_open_host(path);
 }
+
 static void end(HINI profile, LxHostFile *lock)
 {
     if (profile)
@@ -58,10 +62,12 @@ static void end(HINI profile, LxHostFile *lock)
         lx_host_file_close(lock);
     lx_host_monitor_unlock(mutex);
 }
+
 static void object_key(ULONG handle, char key[9])
 {
     snprintf(key, 9, "%08x", (unsigned)handle);
 }
+
 static BOOL load(HINI profile, ULONG handle, Object *object)
 {
     char key[9];
@@ -92,6 +98,7 @@ fail:
     free(data);
     return FALSE;
 }
+
 static BOOL save(HINI profile, ULONG handle, const Object *object)
 {
     const char *fields[] = {object->class_name, object->title, object->location, object->setup};
@@ -116,6 +123,7 @@ static BOOL save(HINI profile, ULONG handle, const Object *object)
     free(data);
     return result;
 }
+
 /* Caret escapes delimiters; the last occurrence of a property takes effect. */
 static BOOL property(const char *setup, const char *name, char *value, size_t capacity)
 {
@@ -160,6 +168,7 @@ static BOOL property(const char *setup, const char *name, char *value, size_t ca
     }
     return found;
 }
+
 static char *keys(HINI profile, ULONG *size)
 {
     *size = 0;
@@ -173,6 +182,7 @@ static char *keys(HINI profile, ULONG *size)
     }
     return list;
 }
+
 static ULONG find(HINI profile, const char *id, const char *location, const char *title)
 {
     if (id && !strcasecmp(id, "<WP_DESKTOP>"))
@@ -201,6 +211,7 @@ static ULONG find(HINI profile, const char *id, const char *location, const char
     free(list);
     return result;
 }
+
 ULONG WinQueryObject(PSZ id)
 {
     TRACE_NATIVE("WinQueryObject('%s')", id);
@@ -212,6 +223,7 @@ ULONG WinQueryObject(PSZ id)
     end(profile, lock);
     return result;
 }
+
 ULONG WinCreateObject(PSZ class_name, PSZ title, PSZ setup, PSZ location, ULONG flags)
 {
     TRACE_NATIVE("WinCreateObject('%s', '%s', '%s', '%s', %u)", class_name, title, setup, location,
@@ -353,6 +365,7 @@ done:
     end(profile, lock);
     return result;
 }
+
 BOOL WinSetObjectData(ULONG handle, PSZ setup)
 {
     TRACE_NATIVE("WinSetObjectData(%u, '%s')", (unsigned)handle, setup);
@@ -388,6 +401,7 @@ BOOL WinSetObjectData(ULONG handle, PSZ setup)
     end(profile, lock);
     return result;
 }
+
 BOOL WinDestroyObject(ULONG handle)
 {
     TRACE_NATIVE("WinDestroyObject(%u)", (unsigned)handle);
@@ -422,6 +436,7 @@ BOOL WinDestroyObject(ULONG handle)
     end(profile, lock);
     return result;
 }
+
 BOOL WinRegisterObjectClass(PSZ name, PSZ module)
 {
     TRACE_NATIVE("WinRegisterObjectClass('%s', '%s')", name, module);
@@ -436,6 +451,7 @@ BOOL WinRegisterObjectClass(PSZ name, PSZ module)
     end(profile, lock);
     return result;
 }
+
 BOOL WinDeregisterObjectClass(PSZ name)
 {
     TRACE_NATIVE("WinDeregisterObjectClass('%s')", name);
@@ -449,6 +465,7 @@ BOOL WinDeregisterObjectClass(PSZ name)
     end(profile, lock);
     return result;
 }
+
 #include "os2libs/generated/pmwp-lx.h"
 
 BOOL WinIsSomDDReady(void)
@@ -466,6 +483,7 @@ APIRET WinRestartSomDD(BOOL state)
 static const char *workplace_classes[] = {
     "WPObject", "WPAbstract", "WPTransient", "WPFileSystem", "WPFolder",      "WPDataFile",
     "WPDisk",   "WPProgram",  "WPDesktop",   "WPShadow",     "WPClassManager"};
+
 static BOOL builtin_class(const char *name)
 {
     for (size_t i = 0; i < sizeof workplace_classes / sizeof *workplace_classes; i++)
@@ -473,6 +491,7 @@ static BOOL builtin_class(const char *name)
             return TRUE;
     return FALSE;
 }
+
 BOOL WinEnumObjectClasses(PVOID guest_output, PULONG capacity)
 {
     if (!capacity || (uintptr_t)guest_output > UINT32_MAX)
@@ -492,10 +511,12 @@ BOOL WinEnumObjectClasses(PVOID guest_output, PULONG capacity)
         free(list);
         list = NULL;
     }
+
     typedef struct Entry
     {
         char *name, *module;
     } Entry;
+
     Entry *entries = NULL;
     size_t count = 0, total = 0;
     BOOL ok = TRUE;
@@ -603,6 +624,7 @@ BOOL WinEnumObjectClasses(PVOID guest_output, PULONG capacity)
     end(profile, lock);
     return ok;
 }
+
 BOOL WinReplaceObjectClass(PSZ old_name, PSZ new_name, BOOL replace)
 {
     if (!old_name || !*old_name || !new_name || !*new_name || strlen(old_name) > 255 ||
@@ -640,6 +662,7 @@ BOOL WinReplaceObjectClass(PSZ old_name, PSZ new_name, BOOL replace)
     end(profile, lock);
     return ok;
 }
+
 BOOL WinStoreWindowPos(PSZ app, PSZ key, HWND window)
 {
     if (!app || !*app || !key || !*key)
@@ -669,6 +692,7 @@ BOOL WinStoreWindowPos(PSZ app, PSZ key, HWND window)
     lx_guest_store_u32(data + 46, WinQuerySysValue(HWND_DESKTOP, 5));
     return PrfWriteProfileData(HINI_USERPROFILE, app, key, data, sizeof data);
 }
+
 BOOL WinRestoreWindowPos(PSZ app, PSZ key, HWND window)
 {
     if (!app || !*app || !key || !*key)
@@ -708,6 +732,7 @@ BOOL WinRestoreWindowPos(PSZ app, PSZ key, HWND window)
         flags |= SWP_RESTORE;
     return WinSetWindowPos(window, HWND_TOP, x, y, cx, cy, flags);
 }
+
 static BOOL object_path(HINI profile, ULONG handle, char *output, size_t capacity, unsigned depth)
 {
     if (depth > 64 || !capacity)
@@ -750,6 +775,7 @@ static BOOL object_path(HINI profile, ULONG handle, char *output, size_t capacit
     free(object.data);
     return ok;
 }
+
 BOOL WinQueryObjectPath(ULONG handle, PSZ output, ULONG capacity)
 {
     if (!output || !capacity || capacity > 65536)
@@ -770,10 +796,12 @@ BOOL WinQueryObjectPath(ULONG handle, PSZ output, ULONG capacity)
     end(profile, lock);
     return ok;
 }
+
 BOOL WinQueryActiveDesktopPathname(PSZ output, ULONG capacity)
 {
     return WinQueryObjectPath(1, output, capacity);
 }
+
 BOOL WinSaveObject(ULONG handle, BOOL async)
 {
     (void)async;
@@ -785,6 +813,7 @@ BOOL WinSaveObject(ULONG handle, BOOL async)
     end(profile, lock);
     return ok;
 }
+
 static BOOL ensure_identifier(HINI profile, ULONG handle, char *identifier, size_t capacity)
 {
     if (handle == 1)
@@ -812,6 +841,7 @@ static BOOL ensure_identifier(HINI profile, ULONG handle, char *identifier, size
     free(object.data);
     return ok;
 }
+
 static ULONG allocate_object(HINI profile)
 {
     LONG next = PrfQueryProfileInt(profile, "metadata", "next", FIRST_OBJECT);
@@ -821,6 +851,7 @@ static ULONG allocate_object(HINI profile)
     snprintf(counter, sizeof counter, "%u", (unsigned)next + 1);
     return PrfWriteProfileString(profile, "metadata", "next", counter) ? (ULONG)next : 0;
 }
+
 static BOOL destination_folder(HINI profile, ULONG handle)
 {
     if (handle == 1)
@@ -830,6 +861,7 @@ static BOOL destination_folder(HINI profile, ULONG handle)
     free(d.data);
     return ok;
 }
+
 ULONG WinMoveObject(ULONG handle, ULONG destination, ULONG reserved)
 {
     if (reserved || handle == 1 || handle == destination)
@@ -870,6 +902,7 @@ ULONG WinMoveObject(ULONG handle, ULONG destination, ULONG reserved)
     end(profile, lock);
     return result;
 }
+
 static char *remove_identifier(const char *setup)
 {
     size_t length = strlen(setup);
@@ -908,6 +941,7 @@ static char *remove_identifier(const char *setup)
     out[used] = 0;
     return out;
 }
+
 static ULONG copy_object(HINI profile, ULONG handle, ULONG destination, unsigned depth)
 {
     if (depth > 64)
@@ -958,6 +992,7 @@ done:
     free(source.data);
     return result;
 }
+
 static BOOL contains_folder(HINI profile, ULONG object, ULONG destination)
 {
     ULONG at = destination;
@@ -975,6 +1010,7 @@ static BOOL contains_folder(HINI profile, ULONG object, ULONG destination)
     }
     return FALSE;
 }
+
 ULONG WinCopyObject(ULONG handle, ULONG destination, ULONG reserved)
 {
     if (reserved || handle == 1 || handle == destination)
@@ -988,6 +1024,7 @@ ULONG WinCopyObject(ULONG handle, ULONG destination, ULONG reserved)
     end(profile, lock);
     return result;
 }
+
 ULONG WinCreateShadow(ULONG handle, ULONG destination, ULONG reserved)
 {
     if (reserved)
@@ -1014,14 +1051,17 @@ ULONG WinCreateShadow(ULONG handle, ULONG destination, ULONG reserved)
     end(profile, lock);
     return result;
 }
+
 BOOL WinFreeFileIcon(HPOINTER pointer)
 {
     return WinDestroyPointer(pointer);
 }
+
 APIRET WinRestartWPDServer(BOOL state)
 {
     return WinRestartSomDD(state);
 }
+
 BOOL WinIsWPDServerReady(void)
 {
     return WinIsSomDDReady();
@@ -1066,6 +1106,7 @@ static MRESULT OS2API folder_view(HWND window, ULONG message, MPARAM first, MPAR
     }
     return WinDefWindowProc(window, message, first, second);
 }
+
 static BOOL open_object(ULONG handle, ULONG view, BOOL activate, unsigned depth, HWND *opened)
 {
     if (depth > 64)
@@ -1113,11 +1154,13 @@ static BOOL open_object(ULONG handle, ULONG view, BOOL activate, unsigned depth,
         char folder_id[1024];
         if (!ensure_identifier(profile, handle, folder_id, sizeof folder_id))
             goto done;
+
         typedef struct Child
         {
             ULONG handle;
             char *title;
         } Child;
+
         Child *children = NULL;
         size_t count = 0;
         ULONG size;
@@ -1208,6 +1251,7 @@ done:
     end(profile, lock);
     return result;
 }
+
 BOOL WinOpenObject(ULONG handle, ULONG view, BOOL activate)
 {
     return open_object(handle, view, activate, 0, NULL);
@@ -1217,38 +1261,47 @@ ULONG WPFilesystemNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPFILESYSTEM, major, minor);
 }
+
 ULONG WPFolderNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPFOLDER, major, minor);
 }
+
 ULONG WPDataFileNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPDATAFILE, major, minor);
 }
+
 ULONG WPObjectNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPOBJECT, major, minor);
 }
+
 ULONG WPAbstractNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPABSTRACT, major, minor);
 }
+
 ULONG WPTransientNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPTRANSIENT, major, minor);
 }
+
 ULONG WPDesktopNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPDESKTOP, major, minor);
 }
+
 ULONG WPClassManagerNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_WPCLASSMANAGER, major, minor);
 }
+
 ULONG M_WPFolderNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_M_WPFOLDER, major, minor);
 }
+
 ULONG M_WPDataFileNewClass(ULONG major, ULONG minor)
 {
     return pmwpClassNew(PMWP_M_WPDATAFILE, major, minor);
@@ -1261,6 +1314,7 @@ static uint32 exported_data(void *host)
     return lx_execution_address(GLoaderState.execution, host, 1, LX_GUEST_READ, &address) ? address
                                                                                           : 0;
 }
+
 uint32 pmwpExportedClassData(PmwpClassId id)
 {
     switch (id)
@@ -1301,11 +1355,13 @@ BOOL pmwpStoreLoad(ULONG handle, PmwpRecord *record)
     end(profile, lock);
     return result;
 }
+
 void pmwpStoreRelease(PmwpRecord *record)
 {
     free(record->data);
     record->data = NULL;
 }
+
 ULONG pmwpStoreCreate(const char *class_name, const char *title, const char *location,
                       const char *setup)
 {
@@ -1318,6 +1374,7 @@ ULONG pmwpStoreCreate(const char *class_name, const char *title, const char *loc
     end(profile, lock);
     return handle;
 }
+
 static BOOL update_field(ULONG handle, const char *title, const char *location)
 {
     LxHostFile *lock;
@@ -1336,6 +1393,7 @@ static BOOL update_field(ULONG handle, const char *title, const char *location)
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStoreSetClass(ULONG handle, const char *class_name)
 {
     LxHostFile *lock;
@@ -1351,24 +1409,29 @@ BOOL pmwpStoreSetClass(ULONG handle, const char *class_name)
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStoreSetTitle(ULONG handle, const char *title)
 {
     return update_field(handle, title, NULL);
 }
+
 BOOL pmwpStoreSetLocation(ULONG handle, const char *location)
 {
     return update_field(handle, NULL, location);
 }
+
 BOOL pmwpStoreAppendSetup(ULONG handle, const char *setup)
 {
     return WinSetObjectData(handle, (PSZ)setup);
 }
+
 static void value_names(ULONG handle, const char *class_name, ULONG key, char app[16],
                         char name[320])
 {
     snprintf(app, 16, "state.%08x", (unsigned)handle);
     snprintf(name, 320, "%.255s.%u", class_name, (unsigned)key);
 }
+
 BOOL pmwpStoreDelete(ULONG handle)
 {
     LxHostFile *lock;
@@ -1385,6 +1448,7 @@ BOOL pmwpStoreDelete(ULONG handle)
     end(profile, lock);
     return result;
 }
+
 ULONG pmwpStoreFind(const char *identifier)
 {
     LxHostFile *lock;
@@ -1393,6 +1457,7 @@ ULONG pmwpStoreFind(const char *identifier)
     end(profile, lock);
     return result;
 }
+
 ULONG *pmwpStoreList(size_t *count)
 {
     *count = 0;
@@ -1413,6 +1478,7 @@ ULONG *pmwpStoreList(size_t *count)
     free(list);
     return handles;
 }
+
 BOOL pmwpStoreIdentifier(ULONG handle, char *identifier, size_t capacity)
 {
     LxHostFile *lock;
@@ -1421,6 +1487,7 @@ BOOL pmwpStoreIdentifier(ULONG handle, char *identifier, size_t capacity)
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStorePath(ULONG handle, char *output, size_t capacity)
 {
     LxHostFile *lock;
@@ -1429,6 +1496,7 @@ BOOL pmwpStorePath(ULONG handle, char *output, size_t capacity)
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStoreSetValue(ULONG handle, const char *class_name, ULONG key, const void *data,
                        ULONG size)
 {
@@ -1440,6 +1508,7 @@ BOOL pmwpStoreSetValue(ULONG handle, const char *class_name, ULONG key, const vo
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStoreGetValue(ULONG handle, const char *class_name, ULONG key, void *data, ULONG *size)
 {
     char app[16], name[320];
@@ -1459,14 +1528,17 @@ BOOL pmwpStoreGetValue(ULONG handle, const char *class_name, ULONG key, void *da
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStoreOpen(ULONG handle, ULONG view, BOOL activate, HWND *frame)
 {
     return open_object(handle, view, activate, 0, frame);
 }
+
 BOOL pmwpSetupValue(const char *setup, const char *key, char *value, size_t capacity)
 {
     return property(setup, key, value, capacity);
 }
+
 BOOL pmwpStoreClassModule(const char *class_name, char *module, size_t capacity)
 {
     LxHostFile *lock;
@@ -1476,6 +1548,7 @@ BOOL pmwpStoreClassModule(const char *class_name, char *module, size_t capacity)
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStoreReplacement(const char *class_name, char *replacement, size_t capacity)
 {
     LxHostFile *lock;
@@ -1485,6 +1558,7 @@ BOOL pmwpStoreReplacement(const char *class_name, char *replacement, size_t capa
     end(profile, lock);
     return result;
 }
+
 BOOL pmwpStoreStartProgram(ULONG handle, const char *parameters)
 {
     Object object = {0};
@@ -1511,11 +1585,13 @@ BOOL pmwpStoreStartProgram(ULONG handle, const char *parameters)
     free(object.data);
     return result;
 }
+
 char *pmwpHostPath(const char *guest_path)
 {
     uint32 error;
     return GLoaderState.makeUnixPath ? GLoaderState.makeUnixPath(guest_path, &error) : NULL;
 }
+
 int pmwpPathKind(const char *guest_path)
 {
     char *host = pmwpHostPath(guest_path);
@@ -1526,6 +1602,7 @@ int pmwpPathKind(const char *guest_path)
     free(host);
     return result;
 }
+
 /* '*' and '?' are the only wildcards in an association filter. */
 static BOOL filter_matches(const char *filter, const char *name)
 {
@@ -1548,6 +1625,7 @@ static BOOL filter_matches(const char *filter, const char *name)
     }
     return !*name;
 }
+
 static BOOL filter_list_matches(char *filters, const char *name)
 {
     char *state = NULL;
@@ -1556,6 +1634,7 @@ static BOOL filter_list_matches(char *filters, const char *name)
             return TRUE;
     return FALSE;
 }
+
 BOOL lx_pmwp_open_associated(PSZ path)
 {
     const char *name = path;

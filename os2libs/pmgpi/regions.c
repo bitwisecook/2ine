@@ -3,45 +3,55 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+
 ULONG GpiCreateRegion(HPS ps, LONG count, PRECTL rects)
 {
     return lx_pm_region_create(ps, count, rects);
 }
+
 BOOL GpiDestroyRegion(HPS ps, ULONG region)
 {
     return lx_pm_region_destroy(ps, region);
 }
+
 LONG GpiCombineRegion(HPS ps, ULONG destination, ULONG first, ULONG second, LONG mode)
 {
     return lx_pm_region_combine(ps, destination, first, second, mode);
 }
+
 BOOL GpiSetRegion(HPS ps, ULONG region, LONG count, PRECTL rects)
 {
     return lx_pm_region_set(ps, region, count, rects) != 0;
 }
+
 LONG GpiQueryRegionBox(HPS ps, ULONG region, PRECTL rect)
 {
     return lx_pm_region_box(ps, region, rect);
 }
+
 LONG GpiSetClipRegion(HPS ps, ULONG region, PULONG old)
 {
     return lx_pm_set_clip(ps, region, old);
 }
+
 ULONG GpiQueryClipRegion(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     PmRegion *r = ps ? ps->clip_lease.resource : NULL;
     return r ? r->handle : 0;
 }
+
 LONG GpiOffsetRegion(HPS ps, ULONG region, PPOINTL point)
 {
     return lx_pm_region_offset(ps, region, point);
 }
+
 LONG GpiOffsetClipRegion(HPS ps, PPOINTL point)
 {
     ULONG region = GpiQueryClipRegion(ps);
     return region ? lx_pm_region_offset(ps, region, point) : lx_pm_valid_ps(ps) ? 2 : 0;
 }
+
 LONG GpiRectVisible(HPS ps, PRECTL rect)
 {
     LONG result = lx_pm_rect_visible(ps, rect);
@@ -50,6 +60,7 @@ LONG GpiRectVisible(HPS ps, PRECTL rect)
                  rect ? (int)rect->yTop : 0, (int)result);
     return result;
 }
+
 LONG GpiQueryClipBox(HPS handle, PRECTL rect)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -66,6 +77,7 @@ LONG GpiQueryClipBox(HPS handle, PRECTL rect)
     }
     return WinIsRectEmpty(0, rect) ? 1 : 2;
 }
+
 LONG GpiIntersectClipRectangle(HPS handle, PRECTL rectangle)
 {
     if (!rectangle || !lx_pm_valid_ps(handle))
@@ -120,6 +132,7 @@ LONG GpiPtInRegion(HPS ps, ULONG handle, PPOINTL point)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG GpiRectInRegion(HPS ps, ULONG handle, PRECTL rectangle)
 {
     LxHandleBorrow borrow = {0};
@@ -152,6 +165,7 @@ LONG GpiRectInRegion(HPS ps, ULONG handle, PRECTL rectangle)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG GpiPaintRegion(HPS ps, ULONG handle)
 {
     LxHandleBorrow borrow = {0};

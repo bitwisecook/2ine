@@ -50,12 +50,14 @@ static const PmwpMethodRow methods_M_WPObject[] = {
     {172, "wpclsINew", 0, 24},
     {180, "wpclsQueryMaxAnimationIcons", 0, 0},
 };
+
 static const char *const overrides_M_WPObject[] = {
     "SOMObject::somUninit",
     "SOMClass::somClassReady",
     "SOMClass::somNew",
     "SOMClass::somRenew",
 };
+
 static const PmwpMethodRow methods_WPObject[] = {
     {196, "wpAddObjectGeneralPage", 0, 0},
     {596, "wpAddObjectGeneralPage2", 0, 0},
@@ -221,22 +223,26 @@ static const PmwpMethodRow methods_WPObject[] = {
     {544, "wpDeleteWindowPosKeys", 0, 0},
     {532, "_get_pobjNext", 0, 0},
 };
+
 static const char *const overrides_WPObject[] = {
     "SOMObject::somInit",
     "SOMObject::somUninit",
     "SOMObject::somDefaultInit",
     "SOMObject::somDestruct",
 };
+
 static const uint16 procedures_WPObject[] = {436, 568};
 static const PmwpMethodRow methods_M_WPAbstract[] = {
     {16, "wpclsQuerySetting", 0, 0}, {20, "wpclsSetSetting", 0, 0},  {4, "wpclsSaveCache", 0, 0},
     {8, "wpclsLockCache", 0, 0},     {12, "wpclsUnlockCache", 0, 0},
 };
+
 static const char *const overrides_M_WPAbstract[] = {
     "M_WPObject::wpclsQueryTitle",
     "M_WPObject::wpclsObjectFromHandle",
     "M_WPObject::wpclsFindObjects",
 };
+
 static const char *const overrides_WPAbstract[] = {
     "WPObject::wpQueryHandle",
     "WPObject::wpSaveImmediate",
@@ -257,11 +263,13 @@ static const char *const overrides_WPAbstract[] = {
     "WPObject::wpMakeObject",
     "WPObject::wpDestroyObject",
 };
+
 static const PmwpMethodRow methods_M_WPFileSystem[] = {
     {16, "wpclsQueryAwakeObject", 0, 0},    {20, "wpclsFileSysExists", 0, 0},
     {12, "wpclsQueryObjectFromPath", 0, 0}, {4, "wpclsQueryInstanceType", 0, 0},
     {8, "wpclsQueryInstanceFilter", 0, 0},  {24, "wpclsQueryInstanceClass", 0, 0},
 };
+
 static const char *const overrides_M_WPFileSystem[] = {
     "M_WPObject::wpclsInitData",
     "M_WPObject::wpclsQueryTitle",
@@ -273,6 +281,7 @@ static const char *const overrides_M_WPFileSystem[] = {
     "M_WPObject::wpclsQuerySettingsPageSize",
     "M_WPObject::wpclsFindObjects",
 };
+
 static const PmwpMethodRow methods_WPFileSystem[] = {
     {4, "wpSetRealName", 0, 0},
     {12, "wpSetType", 0, 0},
@@ -318,6 +327,7 @@ static const PmwpMethodRow methods_WPFileSystem[] = {
     {168, "wpQueryFileSizeL", 0, 0},
     {172, "wpSetFileSizeL", 0, 0},
 };
+
 static const char *const overrides_WPFileSystem[] = {
     "WPObject::wpUnInitData",         "WPObject::wpQueryHandle",
     "WPObject::wpSaveImmediate",      "WPObject::wpSetTitle",
@@ -338,11 +348,13 @@ static const char *const overrides_WPFileSystem[] = {
     "WPObject::wpIsDeleteable",       "WPObject::wpSetup",
     "WPObject::wpMakeObject",         "WPObject::wpDestroyObject",
 };
+
 static const PmwpMethodRow methods_M_WPFolder[] = {
     {20, "wpclsQueryIconDataN", 0, 0},   {24, "wpclsQueryIconN", 0, 0},
     {12, "wpclsQueryOpenFolders", 0, 0}, {4, "wpclsGetNotifySem", 0, 0},
     {8, "wpclsReleaseNotifySem", 0, 0},  {16, "wpclsQueryContainerFont", 0, 0},
 };
+
 static const char *const overrides_M_WPFolder[] = {
     "M_WPObject::wpclsInitData",
     "M_WPObject::wpclsQueryDefaultView",
@@ -353,6 +365,7 @@ static const char *const overrides_M_WPFolder[] = {
     "M_WPObject::wpclsQuerySettingsPageSize",
     "M_WPObject::wpclsQueryMaxAnimationIcons",
 };
+
 static const PmwpMethodRow methods_WPFolder[] = {
     {4, "wpSetFldrFlags", 0, 0},
     {8, "wpQueryFldrFlags", 0, 0},
@@ -457,6 +470,7 @@ static const PmwpMethodRow methods_WPFolder[] = {
     {348, "_get_retaddrFindSemOwner", 0, 0},
     {272, "_get_hevFillFolder", 0, 0},
 };
+
 static const char *const overrides_WPFolder[] = {
     "WPObject::wpInitData",
     "WPObject::wpUnInitData",
@@ -493,17 +507,20 @@ static const char *const overrides_WPFolder[] = {
     "WPObject::wpSetIconData",
     "WPObject::wpMakeObject",
 };
+
 static const uint16 procedures_WPFolder[] = {280, 284, 288, 292};
 static const PmwpMethodRow methods_M_WPDataFile[] = {
     {4, "wpclsAddClipboardAssoc", 0, 0},
     {8, "wpclsEnumClipboardClasses", 0, 0},
 };
+
 static const char *const overrides_M_WPDataFile[] = {
     "M_WPObject::wpclsQueryTitle",       "M_WPObject::wpclsQueryIconData",
     "M_WPObject::wpclsQueryStyle",       "M_WPObject::wpclsQueryDefaultView",
     "M_WPObject::wpclsQueryDefaultHelp", "M_WPObject::wpclsInitData",
     "M_WPObject::wpclsUnInitData",       "M_WPObject::wpclsQuerySettingsPageSize",
 };
+
 static const PmwpMethodRow methods_WPDataFile[] = {
     {60, "RepParent_wpOpen", 0, 0},
     {52, "wpAddBecomePage", 0, 0},
@@ -535,6 +552,7 @@ static const PmwpMethodRow methods_WPDataFile[] = {
     {108, "wpBidiSetup", 0, 0},
     {116, "wpSettingsNotebook", 0, 0},
 };
+
 static const char *const overrides_WPDataFile[] = {
     "WPObject::wpDragOver",
     "WPObject::wpRestoreState",
@@ -561,23 +579,27 @@ static const char *const overrides_WPDataFile[] = {
     "WPObject::wpMakeObject",
     "WPFileSystem::wpConfirmKeepAssoc",
 };
+
 static const char *const overrides_M_WPTransient[] = {
     "M_WPObject::wpclsQueryTitle",
     "M_WPObject::wpclsQueryStyle",
     "M_WPObject::wpclsFindObjects",
     "M_WPObject::wpclsObjectFromHandle",
 };
+
 static const uint16 procedures_M_WPTransient[] = {4, 8};
 static const char *const overrides_WPTransient[] = {
     "WPObject::wpQueryHandle", "WPObject::wpCopyObject", "SOMObject::somDefaultInit",
     "SOMObject::somDestruct",  "WPObject::wpQueryIcon",  "WPObject::wpSaveImmediate",
     "WPObject::wpIdentify",    "WPObject::wpMakeObject", "WPObject::wpDestroyObject",
 };
+
 static const PmwpMethodRow methods_M_WPDesktop[] = {
     {4, "wpclsQueryObjectFromFrame", 0, 0},
     {12, "wpclsQueryActiveDesktopHWND", 0, 0},
     {8, "wpclsQueryActiveDesktop", 0, 0},
 };
+
 static const char *const overrides_M_WPDesktop[] = {
     "M_WPObject::wpclsQueryDefaultView",
     "M_WPObject::wpclsQueryTitle",
@@ -587,6 +609,7 @@ static const char *const overrides_M_WPDesktop[] = {
     "M_WPObject::wpclsQueryDefaultHelp",
     "M_WPObject::wpclsQuerySettingsPageSize",
 };
+
 static const PmwpMethodRow methods_WPDesktop[] = {
     {4, "wpIsCurrentDesktop", 0, 0},        {8, "wpAddDesktopLockup1Page", 0, 0},
     {12, "wpAddDesktopLockup2Page", 0, 0},  {16, "wpAddDesktopLockup3Page", 0, 0},
@@ -599,6 +622,7 @@ static const PmwpMethodRow methods_WPDesktop[] = {
     {68, "wpQueryLockupAutoDim", 0, 0},     {72, "wpSetLockupAutoDim", 0, 0},
     {76, "wpQueryLockupBackground", 0, 24}, {80, "wpSetLockupBackground", 0, 24},
 };
+
 static const char *const overrides_WPDesktop[] = {
     "WPObject::wpInitData",         "WPObject::wpSaveState",
     "WPObject::wpRestoreState",     "WPObject::wpMenuItemSelected",
@@ -607,11 +631,13 @@ static const char *const overrides_WPDesktop[] = {
     "SOMObject::somDefaultInit",    "SOMObject::somDestruct",
     "WPFolder::wpPopulate",
 };
+
 static const char *const overrides_M_WPDisk[] = {
     "M_WPObject::wpclsQueryDefaultHelp", "M_WPObject::wpclsQueryIconData",
     "M_WPObject::wpclsQueryStyle",       "M_WPObject::wpclsQueryTitle",
     "M_WPObject::wpclsQueryDefaultView", "M_WPObject::wpclsQuerySettingsPageSize",
 };
+
 static const PmwpMethodRow methods_WPDisk[] = {
     {4, "wpAddDiskDetailsPage", 0, 0}, {36, "wpQueryDriveLockStatus", 0, 0},
     {40, "wpEjectDisk", 0, 0},         {44, "wpLockDrive", 0, 0},
@@ -620,6 +646,7 @@ static const PmwpMethodRow methods_WPDisk[] = {
     {24, "wpSetDiskInfo", 0, 0},       {28, "wpTouchDisk", 0, 0},
     {32, "wpQueryDiskInfo", 0, 0},
 };
+
 static const char *const overrides_WPDisk[] = {
     "WPObject::wpSetup",
     "WPObject::wpSaveState",
@@ -642,6 +669,7 @@ static const char *const overrides_WPDisk[] = {
     "SOMObject::somDestruct",
     "WPObject::wpAddObjectWindowPage",
 };
+
 static const char *const overrides_M_WPProgram[] = {
     "M_WPObject::wpclsQueryTitle",
     "M_WPObject::wpclsQueryIconData",
@@ -653,6 +681,7 @@ static const char *const overrides_M_WPProgram[] = {
     "M_WPObject::wpclsInitData",
     "M_WPObject::wpclsUnInitData",
 };
+
 static const PmwpMethodRow methods_WPProgram[] = {
     {28, "wpAddProgramAssociationPage", 0, 0},
     {12, "wpQueryProgDetails", 0, 0},
@@ -694,6 +723,7 @@ static const PmwpMethodRow methods_WPProgram[] = {
     {68, "RepParent_wpOpen", 0, 0},
     {104, "RepParent_wpDrop", 0, 0},
 };
+
 static const char *const overrides_WPProgram[] = {
     "WPObject::wpQueryDefaultHelp",
     "WPObject::wpInitData",
@@ -722,17 +752,20 @@ static const char *const overrides_WPProgram[] = {
     "SOMObject::somDestruct",
     "WPObject::wpDestroyObject",
 };
+
 static const char *const overrides_M_WPShadow[] = {
     "M_WPObject::wpclsQueryTitle",
     "M_WPObject::wpclsQueryStyle",
     "M_WPObject::wpclsQueryIconData",
 };
+
 static const PmwpMethodRow methods_WPShadow[] = {
     {16, "wpQueryShadowedObject", 0, 0},
     {12, "wpSetShadowTitle", 0, 0},
     {4, "wpSetLinkToObject", 0, 0},
     {8, "withdrawn", 0, 0},
 };
+
 static const char *const overrides_WPShadow[] = {
     "WPObject::wpQueryTitle",
     "WPObject::wpSetup",
@@ -767,12 +800,14 @@ static const char *const overrides_WPShadow[] = {
     "SOMObject::somDefaultInit",
     "SOMObject::somDestruct",
 };
+
 static const PmwpMethodRow methods_WPClassManager[] = {
     {12, "wpReplacementIsInEffect", 0, 0},
     {16, "wpModuleForClass", 0, 0},
     {8, "wpGetTrueClassName", 0, 0},
     {4, "wpQueryClassReplaceList", 0, 0},
 };
+
 static const char *const overrides_WPClassManager[] = {
     "SOMObject::somInit",
     "SOMClassMgr::somFindClass",
@@ -784,6 +819,7 @@ static const char *const overrides_WPClassManager[] = {
     "SOMObject::somDefaultInit",
     "SOMObject::somDestruct",
 };
+
 const PmwpClassRow pmwpClassRows[PMWP_CLASS_COUNT] = {
     {"M_WPObject", "SOMClass", NULL, PMWP_NO_CLASS, PMWP_NO_CLASS, PMWP_ROOT_CLASS, 20, 45, 4, 1,
      45, methods_M_WPObject, 45, overrides_M_WPObject, 4, NULL, 0},

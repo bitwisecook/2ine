@@ -6,6 +6,7 @@
 #include "os2libs/pmctls.h"
 #include "hal/host_fs.h"
 #include <ctype.h>
+
 typedef struct PmFileDialog
 {
     unsigned references;
@@ -15,11 +16,13 @@ typedef struct PmFileDialog
     BOOL initialized;
     char directory[260], filter[260];
 } PmFileDialog;
+
 static void release_file(PmFileDialog *dialog)
 {
     if (!--dialog->references)
         free(dialog);
 }
+
 void destroyStandardFile(Window *window)
 {
     if (window->standard_file)
@@ -28,14 +31,17 @@ void destroyStandardFile(Window *window)
         window->standard_file = NULL;
     }
 }
+
 static BOOL read_file(PmFileDialog *dialog)
 {
     return controlRead(dialog->address, &dialog->data, sizeof dialog->data);
 }
+
 static BOOL write_file(PmFileDialog *dialog)
 {
     return controlWrite(dialog->address, &dialog->data, sizeof dialog->data);
 }
+
 static BOOL absolute_name(const char *name, char *full, size_t capacity)
 {
     unsigned drive = GLoaderState.current_disk >= 1 && GLoaderState.current_disk <= 26
@@ -60,6 +66,7 @@ static BOOL absolute_name(const char *name, char *full, size_t capacity)
             *p = '\\';
     return TRUE;
 }
+
 static BOOL wildcard_one(const char *pattern, const char *end, const char *name)
 {
     if (end - pattern == 3 && !memcmp(pattern, "*.*", 3))
@@ -90,6 +97,7 @@ static BOOL wildcard_one(const char *pattern, const char *end, const char *name)
         pattern++;
     return pattern == end;
 }
+
 /* A filter is one pattern or a semicolon-separated list of them. */
 static BOOL wildcard(const char *pattern, const char *name)
 {
@@ -103,12 +111,14 @@ static BOOL wildcard(const char *pattern, const char *name)
         pattern = end + 1;
     }
 }
+
 static void file_error(PmFileDialog *dialog, const char *message)
 {
     dialog->data.lSRC = 6;
     write_file(dialog);
     WinSetDlgItemText(dialog->window, 270, (PSZ)message);
 }
+
 static void populate_types(PmFileDialog *dialog)
 {
     HWND window = dialog->window;
@@ -142,6 +152,7 @@ static void populate_types(PmFileDialog *dialog)
     dialog->data.sEAType = (SHORT)selected;
     free(initial);
 }
+
 static void populate_files(PmFileDialog *dialog)
 {
     HWND window = dialog->window;
@@ -176,6 +187,7 @@ static void populate_files(PmFileDialog *dialog)
     }
     lx_host_directory_close(directory);
 }
+
 BOOL lx_pm_file_set_filter(HWND handle, const char *pattern)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -187,6 +199,7 @@ BOOL lx_pm_file_set_filter(HWND handle, const char *pattern)
     populate_files(dialog);
     return TRUE;
 }
+
 static void initialize_file(PmFileDialog *dialog)
 {
     if (dialog->initialized)
@@ -255,6 +268,7 @@ static void initialize_file(PmFileDialog *dialog)
     WinSendDlgItemMsg(dialog->window, 258, 0x142, (MPARAM)(uintptr_t)0xffff0000, 0);
     WinSetFocus(HWND_DESKTOP, WinWindowFromID(dialog->window, 258));
 }
+
 static BOOL select_file(PmFileDialog *dialog)
 {
     read_file(dialog);
@@ -363,6 +377,7 @@ static BOOL select_file(PmFileDialog *dialog)
     WinDismissDlg(dialog->window, 1);
     return TRUE;
 }
+
 MRESULT lx_pm_file_procedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -435,6 +450,7 @@ MRESULT lx_pm_file_procedure(HWND handle, ULONG message, MPARAM first, MPARAM se
     }
     return WinDefDlgProc(handle, message, first, second);
 }
+
 static MRESULT OS2API file_dispatch(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -461,6 +477,7 @@ static MRESULT OS2API file_dispatch(HWND handle, ULONG message, MPARAM first, MP
     }
     return lx_pm_file_procedure(handle, message, first, second);
 }
+
 static PDLGTEMPLATE file_template(uint8 *bytes, size_t capacity)
 {
     typedef struct
@@ -470,6 +487,7 @@ static PDLGTEMPLATE file_template(uint8 *bytes, size_t capacity)
         ULONG style;
         const char *text;
     } Item;
+
     static const Item controls[] = {{257, 5, 8, 196, 250, 12, 1, "File name:"},
                                     {258, 6, 8, 180, 250, 14, 0x20004, ""},
                                     {1, 3, 270, 182, 80, 14, 0x20400, "Save"},
@@ -524,6 +542,7 @@ static PDLGTEMPLATE file_template(uint8 *bytes, size_t capacity)
     t->cbTemplate = (USHORT)offset;
     return t;
 }
+
 HWND lx_pm_file_dialog(HWND parent, HWND owner, PVOID address)
 {
     TRACE_NATIVE("WinFileDlg(%u, %u, %p)", (uint)parent, (uint)owner, address);

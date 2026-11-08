@@ -5,6 +5,7 @@
 #include "os2libs/pmwinx/case_tables.h"
 #include "os2libs/pmwin.h"
 #define STRING_LIMIT (1024u * 1024u)
+
 static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG from, ULONG to)
 {
     if (!count)
@@ -32,6 +33,7 @@ static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG f
         open32SetError(87);
     return result;
 }
+
 static BOOL convert_string(ULONG source, ULONG destination, ULONG from, ULONG to)
 {
     char *text = lx_execution_copy_string(GLoaderState.execution, source, STRING_LIMIT);
@@ -44,22 +46,27 @@ static BOOL convert_string(ULONG source, ULONG destination, ULONG from, ULONG to
     free(text);
     return convert_buffer(source, destination, count, from, to);
 }
+
 BOOL OemToChar(ULONG source, ULONG destination)
 {
     return convert_string(source, destination, 437, 1004);
 }
+
 BOOL CharToOem(ULONG source, ULONG destination)
 {
     return convert_string(source, destination, 1004, 437);
 }
+
 BOOL OemToCharBuff(ULONG source, ULONG destination, ULONG count)
 {
     return convert_buffer(source, destination, count, 437, 1004);
 }
+
 BOOL CharToOemBuff(ULONG source, ULONG destination, ULONG count)
 {
     return convert_buffer(source, destination, count, 1004, 437);
 }
+
 static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
 {
     char *input = lx_execution_copy_string(GLoaderState.execution, source, STRING_LIMIT);
@@ -96,14 +103,17 @@ static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
     free(prefix);
     return destination;
 }
+
 ULONG lstrcpy(ULONG destination, ULONG source)
 {
     return string_copy(destination, source, FALSE);
 }
+
 ULONG lstrcat(ULONG destination, ULONG source)
 {
     return string_copy(destination, source, TRUE);
 }
+
 LONG lstrlen(ULONG source)
 {
     if (!source)
@@ -136,6 +146,7 @@ static ULONG case_buffer(ULONG pointer, ULONG count, const uint8 table[256])
     lx_execution_release(&text);
     return count;
 }
+
 static ULONG case_string(ULONG value, const uint8 table[256])
 {
     if (value <= UINT16_MAX)
@@ -150,18 +161,22 @@ static ULONG case_string(ULONG value, const uint8 table[256])
     free(copy);
     return case_buffer(value, count, table) ? value : 0;
 }
+
 ULONG CharUpper(ULONG value)
 {
     return case_string(value, upper_case);
 }
+
 ULONG CharLower(ULONG value)
 {
     return case_string(value, lower_case);
 }
+
 ULONG CharUpperBuff(ULONG pointer, ULONG count)
 {
     return case_buffer(pointer, count, upper_case);
 }
+
 ULONG CharLowerBuff(ULONG pointer, ULONG count)
 {
     return case_buffer(pointer, count, lower_case);
@@ -177,6 +192,7 @@ ULONG CharNext(ULONG pointer)
     }
     return value ? pointer + 1 : pointer;
 }
+
 ULONG CharPrev(ULONG start, ULONG current)
 {
     if (current <= start)
@@ -216,6 +232,7 @@ LONG lstrcmpi(ULONG first, ULONG second)
     free(b);
     return result;
 }
+
 LONG lstrcmp(ULONG first, ULONG second)
 {
     char *a = lx_execution_copy_string(GLoaderState.execution, first, STRING_LIMIT);

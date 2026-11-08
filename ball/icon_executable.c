@@ -5,18 +5,22 @@
 #include "../formats/decompress.h"
 #include <stdlib.h>
 #include <string.h>
+
 static unsigned u16(const uint8_t *p)
 {
     return (unsigned)p[0] | (unsigned)p[1] << 8;
 }
+
 static uint32_t u32(const uint8_t *p)
 {
     return (uint32_t)u16(p) | (uint32_t)u16(p + 2) << 16;
 }
+
 static int extent(size_t size, uint64_t offset, uint64_t count)
 {
     return offset <= size && count <= size - offset;
 }
+
 /* Copies one resource out of its object pages, expanding packed pages as needed. */
 static uint8_t *lx_resource(const uint8_t *bytes, size_t size, size_t h, const uint8_t *entry,
                             uint32_t *result)
@@ -90,6 +94,7 @@ static uint8_t *lx_resource(const uint8_t *bytes, size_t size, size_t h, const u
     *result = length;
     return resource;
 }
+
 static TbIconImage *lx_icon(const uint8_t *bytes, size_t size, size_t h, int resource_id)
 {
     const uint8_t *header = bytes + h;
@@ -116,6 +121,7 @@ static TbIconImage *lx_icon(const uint8_t *bytes, size_t size, size_t h, int res
     }
     return NULL;
 }
+
 static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h, int resource_id)
 {
     const uint8_t *header = bytes + h;
@@ -152,6 +158,7 @@ static TbIconImage *ne_icon(const uint8_t *bytes, size_t size, size_t h, int res
     }
     return NULL;
 }
+
 static TbIconImage *executable_icon(const uint8_t *bytes, size_t size, int id)
 {
     if (!bytes || size < 2)
@@ -171,6 +178,7 @@ static TbIconImage *executable_icon(const uint8_t *bytes, size_t size, int id)
         return ne_icon(bytes, size, h, id);
     return NULL;
 }
+
 uint8_t *tb_executable_resource(const uint8_t *bytes, size_t size, unsigned type, unsigned id,
                                 size_t *length)
 {
@@ -200,14 +208,17 @@ uint8_t *tb_executable_resource(const uint8_t *bytes, size_t size, unsigned type
     }
     return NULL;
 }
+
 TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size)
 {
     return executable_icon(bytes, size, -1);
 }
+
 TbIconImage *tb_icon_executable_resource(const uint8_t *bytes, size_t size, unsigned id)
 {
     return id <= 65535 ? executable_icon(bytes, size, (int)id) : NULL;
 }
+
 char *tb_executable_description(const uint8_t *bytes, size_t size)
 {
     if (!bytes || size < 64)

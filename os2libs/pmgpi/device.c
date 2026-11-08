@@ -25,6 +25,7 @@ HDC DevOpenDC(HAB hab, LONG type, PSZ token, LONG count, PVOID data, HDC compati
         return 0;
     return lx_pm_open_dc(hab, type, compatible);
 }
+
 ULONG DevCloseDC(HDC dc)
 {
     return (ULONG)lx_pm_close_dc(dc);
@@ -60,17 +61,17 @@ BOOL DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
        The retained canvas supports all 24-bit RGB values simultaneously. */
     const unsigned depth = GLoaderState.display_depth ? GLoaderState.display_depth : 24;
     caps[14] = 1L << depth;
-    caps[15] = 1;             /* planes */
+    caps[15] = 1;           /* planes */
     caps[16] = (LONG)depth; /* preferred bitmap bits per pel */
-    caps[17] = 1;  /* CAPS_COLTABL_RGB_8: 8 bits for each primary */
-    caps[18] = 3;  /* pointer buttons */
-    caps[19] = 2;  /* CAPS_FM_OVERPAINT */
-    caps[22] = 1;  /* byte alignment */
+    caps[17] = 1;           /* CAPS_COLTABL_RGB_8: 8 bits for each primary */
+    caps[18] = 3;           /* pointer buttons */
+    caps[19] = 2;           /* CAPS_FM_OVERPAINT */
+    caps[22] = 1;           /* byte alignment */
     caps[27] = (LONG)lx_host_font_count();
-    caps[31] = 1;                    /* CAPS_DEV_WINDOWING_SUPPORT */
-    caps[33] = 1L << depth;          /* physical RGB colors */
+    caps[31] = 1;                                   /* CAPS_DEV_WINDOWING_SUPPORT */
+    caps[33] = 1L << depth;                         /* physical RGB colors */
     caps[34] = depth > 8 ? 255 : (1L << depth) - 1; /* highest custom logical-table index */
-    caps[37] = caps[38] = (LONG)dpi; /* logical font dpi */
+    caps[37] = caps[38] = (LONG)dpi;                /* logical font dpi */
     unsigned printer = lx_pm_printer_kind(dc);
     if (printer)
     {
@@ -154,6 +155,7 @@ LONG DevEscape(HDC dc, LONG code, LONG input_count, PVOID input, PLONG output_co
                  output_count, output);
     return lx_pm_print_escape(dc, code, input_count, input, output_count, output);
 }
+
 LONG DevPostDeviceModes(HAB hab, PVOID data, PSZ driver, PSZ device, PSZ name, ULONG options)
 {
     (void)hab;

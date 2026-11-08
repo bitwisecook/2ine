@@ -13,22 +13,27 @@ static Uint32 WakeEvent;
 static unsigned ControlledWindows;
 static LxHostOnce VideoOnce = LX_HOST_ONCE_INIT;
 static LxHostMutex *VideoLock;
+
 static void initializeVideoLock(void)
 {
     VideoLock = lx_host_mutex_create(0, 0);
     if (!VideoLock)
         abort();
 }
+
 static int cursor_visible(int requested);
+
 void lx_host_video_set_graphics_release(void (*release)(void))
 {
     GraphicsRelease = release;
 }
+
 static void prepareRenderer(void)
 {
     if (GraphicsRelease)
         GraphicsRelease();
 }
+
 struct LxHostPointer
 {
     struct LxHostPointer *next;
@@ -37,6 +42,7 @@ struct LxHostPointer
     uint32_t *pixels;
     unsigned width, height, hot_x, hot_y;
 };
+
 static LxHostPointer *Pointers;
 static uint64_t PointerGeneration;
 static const SDL_SystemCursor PointerShapes[] = {
@@ -44,23 +50,27 @@ static const SDL_SystemCursor PointerShapes[] = {
     SDL_SYSTEM_CURSOR_NWSE_RESIZE, SDL_SYSTEM_CURSOR_MOVE,      SDL_SYSTEM_CURSOR_NWSE_RESIZE,
     SDL_SYSTEM_CURSOR_NESW_RESIZE, SDL_SYSTEM_CURSOR_EW_RESIZE, SDL_SYSTEM_CURSOR_NS_RESIZE,
     SDL_SYSTEM_CURSOR_NOT_ALLOWED};
+
 static void lock_pointers(void)
 {
     lx_host_once(&VideoOnce, initializeVideoLock);
     lx_host_mutex_lock(VideoLock, UINT32_MAX);
 }
+
 static int native_pointer_thread(void)
 {
     const char *driver = SDL_WasInit(SDL_INIT_VIDEO) ? SDL_GetCurrentVideoDriver() : NULL;
     return !driver || SDL_strcmp(driver, "cocoa") || lx_desktop_native_main_thread() ||
            SDL_SetError("Native macOS cursor selection requires the main thread");
 }
+
 static void invalidate_native_pointers(void)
 {
     PointerGeneration++;
     for (LxHostPointer *p = Pointers; p; p = p->next)
         p->cursor = NULL; /* SDL_VideoQuit freed the native cursor objects. */
 }
+
 LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape)
 {
     if ((unsigned)shape >= sizeof PointerShapes / sizeof *PointerShapes)
@@ -76,11 +86,13 @@ LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape)
     }
     return pointer;
 }
+
 typedef struct DeferredCursor
 {
     SDL_Cursor *cursor;
     uint64_t generation;
 } DeferredCursor;
+
 static void destroy_deferred_cursor(void *data)
 {
     DeferredCursor *item = data;
@@ -90,6 +102,7 @@ static void destroy_deferred_cursor(void *data)
     lx_host_mutex_unlock(VideoLock);
     free(item);
 }
+
 void lx_host_pointer_destroy(LxHostPointer *pointer)
 {
     if (!pointer)
@@ -119,6 +132,7 @@ void lx_host_pointer_destroy(LxHostPointer *pointer)
     free(pointer->pixels);
     free(pointer);
 }
+
 LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
                                             unsigned hot_x, unsigned hot_y)
 {
@@ -141,6 +155,7 @@ LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned wid
     pointer->hot_y = hot_y;
     return pointer;
 }
+
 int lx_host_pointer_set(LxHostPointer *pointer)
 {
     lock_pointers();
@@ -179,6 +194,7 @@ done:
     lx_host_mutex_unlock(VideoLock);
     return result;
 }
+
 struct LxHostWindow
 {
     SDL_Window *window;
@@ -199,6 +215,7 @@ struct LxHostWindow
         suppress_click; /* 0 legacy, 1 managed, 2 disabled. */
     LxWindowChrome *chrome;
 };
+
 static int activateWindowSurface(LxHostWindow *window)
 {
     const char *renderer = SDL_GetRendererName(window->renderer);
@@ -224,11 +241,13 @@ static int activateWindowSurface(LxHostWindow *window)
         window->dirty = 1;
     return ready && restored;
 }
+
 static LxHostWindow *focused_window(void)
 {
     SDL_Window *sdl = SDL_GetKeyboardFocus();
     return sdl ? SDL_GetPointerProperty(SDL_GetWindowProperties(sdl), "2ine.window", NULL) : NULL;
 }
+
 static int cursor_visible(int requested)
 {
     LxHostWindow *window = focused_window();
@@ -238,10 +257,12 @@ static int cursor_visible(int requested)
         requested = 1;
     return requested ? SDL_ShowCursor() : SDL_HideCursor();
 }
+
 int lx_host_window_is_captured(LxHostWindow *window)
 {
     return window && window->capture_control && window->captured;
 }
+
 int lx_host_window_set_capture(LxHostWindow *window, int captured)
 {
     if (!window || window->capture_control != 1)
@@ -269,11 +290,13 @@ int lx_host_window_set_capture(LxHostWindow *window, int captured)
     SDL_PushEvent(&reset);
     return 1;
 }
+
 static void toggle_capture(void *opaque)
 {
     LxHostWindow *window = opaque;
     lx_host_window_set_capture(window, !window->captured);
 }
+
 void lx_host_window_set_cycle_policy(LxHostWindow *window, int eligible, int modal)
 {
     if (!window || !window->window)
@@ -283,6 +306,7 @@ void lx_host_window_set_cycle_policy(LxHostWindow *window, int eligible, int mod
     SDL_SetBooleanProperty(properties, "2ine.cycle.modal", modal != 0);
     lx_desktop_poll();
 }
+
 void lx_host_window_get_cycle_policy(LxHostWindow *window, int *eligible, int *modal)
 {
     SDL_PropertiesID properties =
@@ -292,6 +316,7 @@ void lx_host_window_get_cycle_policy(LxHostWindow *window, int *eligible, int *m
     if (modal)
         *modal = properties && SDL_GetBooleanProperty(properties, "2ine.cycle.modal", false);
 }
+
 int lx_host_video_initialize(int *width, int *height)
 {
     lx_host_once(&VideoOnce, initializeVideoLock);
@@ -339,6 +364,7 @@ done:
     lx_host_mutex_unlock(VideoLock);
     return result;
 }
+
 void lx_host_video_quit(void)
 {
     lx_host_once(&VideoOnce, initializeVideoLock);
@@ -353,18 +379,22 @@ void lx_host_video_quit(void)
     }
     lx_host_mutex_unlock(VideoLock);
 }
+
 int lx_host_video_release_graphics(void)
 {
     return !SDL_GL_GetCurrentContext() || SDL_GL_MakeCurrent(NULL, NULL);
 }
+
 const char *lx_host_video_error(void)
 {
     return SDL_GetError();
 }
+
 uint64_t lx_host_video_ticks_ms(void)
 {
     return SDL_GetTicks();
 }
+
 LxHostWindow *lx_host_window_create(const char *title, int x, int y, int width, int height,
                                     void *data)
 {
@@ -409,6 +439,7 @@ failed:
     lx_host_window_destroy(window);
     return NULL;
 }
+
 void lx_host_window_destroy(LxHostWindow *window)
 {
     prepareRenderer();
@@ -427,10 +458,12 @@ void lx_host_window_destroy(LxHostWindow *window)
     SDL_DestroyWindow(window->window);
     free(window);
 }
+
 void *lx_host_window_data(LxHostWindow *window)
 {
     return window ? window->data : NULL;
 }
+
 void lx_host_window_constrain(LxHostWindow *window, int x, int *y, int width, int height)
 {
     const SDL_Rect area = {x, *y, width, height};
@@ -444,6 +477,7 @@ void lx_host_window_constrain(LxHostWindow *window, int x, int *y, int width, in
     if (*y < usable.y + title)
         *y = usable.y + title;
 }
+
 int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int height)
 {
     prepareRenderer();
@@ -488,6 +522,7 @@ int lx_host_window_position(LxHostWindow *window, int x, int y, int width, int h
     }
     return 1;
 }
+
 int lx_host_window_fullscreen(LxHostWindow *window, int enabled)
 {
     prepareRenderer();
@@ -515,10 +550,12 @@ int lx_host_window_fullscreen(LxHostWindow *window, int enabled)
         return 0;
     return activateWindowSurface(window);
 }
+
 int lx_host_window_is_fullscreen(LxHostWindow *window)
 {
     return window && window->fullscreen;
 }
+
 void lx_host_window_show(LxHostWindow *window)
 {
     prepareRenderer();
@@ -536,12 +573,14 @@ void lx_host_window_show(LxHostWindow *window)
             lx_host_window_fullscreen(window, 1);
     }
 }
+
 void lx_host_window_hide(LxHostWindow *window)
 {
     prepareRenderer();
     if (SDL_HideWindow(window->window))
         lx_desktop_visible(window->window, 0);
 }
+
 int lx_host_window_minimize(LxHostWindow *window, int minimized)
 {
     prepareRenderer();
@@ -549,11 +588,13 @@ int lx_host_window_minimize(LxHostWindow *window, int minimized)
            (minimized ? SDL_MinimizeWindow(window->window) : SDL_RestoreWindow(window->window)) &&
            SDL_SyncWindow(window->window) && activateWindowSurface(window);
 }
+
 int lx_host_window_title(LxHostWindow *window, const char *title)
 {
     prepareRenderer();
     return window && SDL_SetWindowTitle(window->window, title);
 }
+
 int lx_host_window_border(LxHostWindow *window, int bordered)
 {
     prepareRenderer();
@@ -561,11 +602,13 @@ int lx_host_window_border(LxHostWindow *window, int bordered)
            SDL_SetWindowBordered(window->window, bordered != 0) && SDL_SyncWindow(window->window) &&
            activateWindowSurface(window);
 }
+
 int lx_host_window_focus(LxHostWindow *window)
 {
     prepareRenderer();
     return window && SDL_RaiseWindow(window->window);
 }
+
 int lx_host_window_resizable(LxHostWindow *window, int resizable)
 {
     prepareRenderer();
@@ -573,10 +616,12 @@ int lx_host_window_resizable(LxHostWindow *window, int resizable)
            SDL_SetWindowResizable(window->window, resizable != 0) &&
            SDL_SyncWindow(window->window) && activateWindowSurface(window);
 }
+
 int lx_host_window_is_resizable(LxHostWindow *window)
 {
     return window && (SDL_GetWindowFlags(window->window) & SDL_WINDOW_RESIZABLE) != 0;
 }
+
 int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int y, int width,
                         int height, const uint8_t *coverage, uint8_t red, uint8_t green,
                         uint8_t blue)
@@ -615,6 +660,7 @@ int lx_host_window_mask(LxHostWindow *window, const LxHostRect *clip, int x, int
         window->dirty = 1;
     return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
 }
+
 int lx_host_window_present(LxHostWindow *window)
 {
     prepareRenderer();
@@ -629,6 +675,7 @@ int lx_host_window_present(LxHostWindow *window)
         window->dirty = 0;
     return restored && ok;
 }
+
 int lx_host_window_fill(LxHostWindow *window, const LxHostRect *clip, const LxHostRect *rect,
                         uint8_t red, uint8_t green, uint8_t blue)
 {
@@ -642,6 +689,7 @@ int lx_host_window_fill(LxHostWindow *window, const LxHostRect *clip, const LxHo
         window->dirty = 1;
     return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
 }
+
 int lx_host_window_pixel(LxHostWindow *window, int x, int y, uint8_t *red, uint8_t *green,
                          uint8_t *blue)
 {
@@ -654,6 +702,7 @@ int lx_host_window_pixel(LxHostWindow *window, int x, int y, uint8_t *red, uint8
     SDL_DestroySurface(surface);
     return ok;
 }
+
 static unsigned physical_key(SDL_Scancode key)
 {
     static const uint8_t letters[26] = {0x1e, 0x30, 0x2e, 0x20, 0x12, 0x21, 0x22, 0x23, 0x17,
@@ -740,6 +789,7 @@ static unsigned physical_key(SDL_Scancode key)
             return 0;
     }
 }
+
 static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
 {
     SDL_memset(event, 0, sizeof *event);
@@ -1003,6 +1053,7 @@ static void event_from_sdl(const SDL_Event *input, LxHostEvent *event)
         window->dirty = 1;
     event->window_data = window ? window->data : NULL;
 }
+
 int lx_host_window_line(LxHostWindow *window, const LxHostRect *clip, int x1, int y1, int x2,
                         int y2, uint8_t r, uint8_t g, uint8_t b)
 {
@@ -1015,6 +1066,7 @@ int lx_host_window_line(LxHostWindow *window, const LxHostRect *clip, int x1, in
         window->dirty = 1;
     return SDL_SetRenderClipRect(window->renderer, NULL) && ok;
 }
+
 int lx_host_video_wait_timeout(LxHostEvent *event, int milliseconds)
 {
     SDL_Event input;
@@ -1048,6 +1100,7 @@ int lx_host_video_wait_timeout(LxHostEvent *event, int milliseconds)
             return 0;
     }
 }
+
 int lx_host_video_poll(LxHostEvent *event)
 {
     SDL_Event input;
@@ -1057,10 +1110,12 @@ int lx_host_video_poll(LxHostEvent *event)
     event_from_sdl(&input, event);
     return 1;
 }
+
 int lx_host_video_wait(LxHostEvent *event)
 {
     return lx_host_video_wait_timeout(event, -1);
 }
+
 int lx_host_video_push(const LxHostEvent *event)
 {
     if (event->type != LX_HOST_EVENT_QUIT && event->type != LX_HOST_EVENT_OTHER)
@@ -1069,6 +1124,7 @@ int lx_host_video_push(const LxHostEvent *event)
     output.type = event->type == LX_HOST_EVENT_QUIT ? SDL_EVENT_QUIT : WakeEvent;
     return SDL_PushEvent(&output);
 }
+
 uint32_t lx_host_key_character(uint32_t scancode, int shifted)
 {
     for (int key = 0; key < SDL_SCANCODE_COUNT; key++)
@@ -1080,6 +1136,7 @@ uint32_t lx_host_key_character(uint32_t scancode, int shifted)
         }
     return 0;
 }
+
 void lx_host_mouse_position(int *x, int *y)
 {
     float a, b;
@@ -1126,6 +1183,7 @@ int lx_host_window_read(LxHostWindow *window, const LxHostRect *rect, uint32_t *
     SDL_DestroySurface(surface);
     return ok;
 }
+
 int lx_host_window_image(LxHostWindow *window, const LxHostRect *clip, const LxHostRect *rect,
                          const uint32_t *rgb)
 {
@@ -1181,6 +1239,7 @@ int lx_host_mouse_warp(int x, int y)
     }
     return SDL_WarpMouseGlobal((float)x, (float)y);
 }
+
 int lx_host_pointer_show(int show)
 {
     return cursor_visible(show);
@@ -1193,6 +1252,7 @@ static int video_plane(const LxHostVideoFrame *frame, unsigned plane, size_t wid
            height - 1 <= (SIZE_MAX - width) / frame->strides[plane] &&
            (height - 1) * frame->strides[plane] + width <= frame->lengths[plane];
 }
+
 int lx_host_window_video_frame(LxHostWindow *window, const LxHostVideoFrame *frame,
                                const LxHostRect *destination, const LxHostRect *clips, size_t count)
 {

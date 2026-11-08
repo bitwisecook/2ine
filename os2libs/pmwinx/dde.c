@@ -12,12 +12,14 @@
 #include "hal/host_sync.h"
 #include "hal/host_thread.h"
 #include <stdio.h>
+
 typedef struct DdeString
 {
     struct DdeString *next;
     ULONG atom, references;
     BOOL service;
 } DdeString;
+
 typedef struct DdeInstance
 {
     struct DdeInstance *next;
@@ -26,6 +28,7 @@ typedef struct DdeInstance
     BOOL filter;
     ULONG handle, callback, flags, error, thread;
 } DdeInstance;
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *lock;
 static DdeInstance *instances;
@@ -35,12 +38,14 @@ static void publish_service(ULONG instance, ULONG atom);
 static void withdraw_service(ULONG instance, ULONG atom, BOOL all);
 static void start_listener(void);
 static void stop_listener(void);
+
 static void initialize(void)
 {
     lock = lx_host_monitor_create();
     if (!lock)
         abort();
 }
+
 static void destroy_instance(void *resource)
 {
     DdeInstance *instance = resource;
@@ -66,6 +71,7 @@ static void destroy_instance(void *resource)
     }
     free(instance);
 }
+
 static BOOL borrow_instance(ULONG handle, LxHandleBorrow *borrow)
 {
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_DDE, borrow))
@@ -75,6 +81,7 @@ static BOOL borrow_instance(ULONG handle, LxHandleBorrow *borrow)
     lx_handle_release(borrow);
     return FALSE;
 }
+
 ULONG DdeInitialize(PULONG id, ULONG callback, ULONG flags, ULONG reserved)
 {
     TRACE_NATIVE("DdeInitialize(%p, %x, %x, %u)", id, (uint)callback, (uint)flags, (uint)reserved);
@@ -120,6 +127,7 @@ ULONG DdeInitialize(PULONG id, ULONG callback, ULONG flags, ULONG reserved)
     *id = instance->handle;
     return 0;
 }
+
 ULONG DdeGetLastError(ULONG id)
 {
     LxHandleBorrow borrow;
@@ -131,6 +139,7 @@ ULONG DdeGetLastError(ULONG id)
     lx_handle_release(&borrow);
     return error;
 }
+
 BOOL DdeUninitialize(ULONG id)
 {
     LxHandleBorrow borrow;
@@ -140,6 +149,7 @@ BOOL DdeUninitialize(ULONG id)
     lx_handle_release(&borrow);
     return result;
 }
+
 void open32DdeCleanup(void)
 {
     lx_host_once(&once, initialize);
@@ -164,6 +174,7 @@ static DdeString **find_string(DdeInstance *instance, ULONG atom)
         link = &(*link)->next;
     return link;
 }
+
 ULONG DdeCreateStringHandle(ULONG id, PSZ text, LONG codepage)
 {
     TRACE_NATIVE("DdeCreateStringHandle(%u, '%s', %d)", (uint)id, text ? text : "", (int)codepage);
@@ -201,6 +212,7 @@ ULONG DdeCreateStringHandle(ULONG id, PSZ text, LONG codepage)
     lx_handle_release(&borrow);
     return atom;
 }
+
 BOOL DdeFreeStringHandle(ULONG id, ULONG atom)
 {
     LxHandleBorrow borrow;
@@ -224,6 +236,7 @@ BOOL DdeFreeStringHandle(ULONG id, ULONG atom)
     lx_handle_release(&borrow);
     return result;
 }
+
 BOOL DdeKeepStringHandle(ULONG id, ULONG atom)
 {
     char name[256];
@@ -239,6 +252,7 @@ BOOL DdeKeepStringHandle(ULONG id, ULONG atom)
     }
     return DdeCreateStringHandle(id, name, 1004) == atom;
 }
+
 ULONG DdeQueryString(ULONG id, ULONG atom, PSZ output, ULONG capacity, LONG codepage)
 {
     LxHandleBorrow borrow;
@@ -260,6 +274,7 @@ ULONG DdeQueryString(ULONG id, ULONG atom, PSZ output, ULONG capacity, LONG code
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG DdeCmpStringHandles(ULONG first, ULONG second)
 {
     if (first == second)
@@ -282,6 +297,7 @@ void open32DdeSetError(ULONG id, ULONG error)
         lx_handle_release(&borrow);
     }
 }
+
 ULONG DdeNameService(ULONG id, ULONG atom, ULONG reserved, ULONG command)
 {
     TRACE_NATIVE("DdeNameService(%u, %u, %u, %u)", (uint)id, (uint)atom, (uint)reserved,
@@ -362,6 +378,7 @@ typedef struct DdeData
     ULONG owner, size, item, format, flags, accesses, handle;
     struct DdeData *next;
 } DdeData;
+
 /* A conversation with another process names only its local side, in client or server;
    remote_handle is the peer's conversation in remote_process. */
 typedef struct DdeConversation
@@ -371,9 +388,11 @@ typedef struct DdeConversation
     BOOL advise;
     struct DdeConversation *next;
 } DdeConversation;
+
 static DdeData *dde_data;
 static DdeConversation *dde_conversations;
 static LxGuestMapping *dde_callback_code;
+
 static ULONG dde_callback(DdeInstance *instance, ULONG type, ULONG format, ULONG conversation,
                           ULONG first, ULONG second, ULONG data, ULONG one, ULONG two)
 {
@@ -410,6 +429,7 @@ static ULONG dde_callback(DdeInstance *instance, ULONG type, ULONG format, ULONG
     lx_execution_unmap(GLoaderState.execution, arguments);
     return result;
 }
+
 /* One unit of work for an instance's owning thread. A synchronous sender waits for done;
    an asynchronous one is answered with XTYP_XACT_COMPLETE queued to the client thread. */
 typedef struct DdeRequest
@@ -421,13 +441,16 @@ typedef struct DdeRequest
     uint8 *payload;
     BOOL asynchronous, waiting, done, abandoned, connect, forward;
 } DdeRequest;
+
 static DdeRequest *dde_requests;
 static _Thread_local DdeRequest *dde_active; /* The request whose callback is running here. */
 static ULONG next_transaction;
+
 static BOOL borrow_any(ULONG handle, LxHandleBorrow *borrow)
 {
     return lx_handle_borrow(handle, LX_HANDLE_OPEN32_DDE, borrow);
 }
+
 static void queue_request(DdeRequest *request)
 {
     DdeRequest **link = &dde_requests;
@@ -436,6 +459,7 @@ static void queue_request(DdeRequest *request)
     request->next = NULL;
     *link = request;
 }
+
 static void forget_request(DdeRequest *request)
 {
     for (DdeRequest **link = &dde_requests; *link; link = &(*link)->next)
@@ -445,6 +469,7 @@ static void forget_request(DdeRequest *request)
             break;
         }
 }
+
 static ULONG run_callback(const DdeRequest *request)
 {
     LxHandleBorrow target = {0};
@@ -456,9 +481,11 @@ static ULONG run_callback(const DdeRequest *request)
     lx_handle_release(&target);
     return result;
 }
+
 static void complete_transaction(DdeRequest *request);
 static void serve_remote(DdeRequest *request);
 static ULONG forward_transaction(const DdeRequest *request);
+
 void open32DdeDeliver(void)
 {
     if (!lock)
@@ -511,6 +538,7 @@ void open32DdeDeliver(void)
             free(request);
     }
 }
+
 /* Runs a callback on the instance's thread, waiting up to timeout milliseconds. Requests
    addressed to this thread are served meanwhile, so two threads cannot block each other. */
 static BOOL dde_invoke(ULONG instance, ULONG timeout, ULONG type, ULONG format, ULONG conversation,
@@ -582,7 +610,9 @@ static BOOL dde_invoke(ULONG instance, ULONG timeout, ULONG type, ULONG format, 
     }
     return done;
 }
+
 static void notify_processes(ULONG type, ULONG skip, ULONG atom);
+
 static void dde_notify_peers(DdeInstance *instance, ULONG type, ULONG skip, ULONG atom)
 {
     notify_processes(type, skip, atom);
@@ -612,6 +642,7 @@ static void dde_notify_peers(DdeInstance *instance, ULONG type, ULONG skip, ULON
         open32PostThreadPacket(threads[i], OPEN32_DDE_PACKET);
     free(threads);
 }
+
 static void destroy_dde_data(void *resource)
 {
     DdeData *data = resource;
@@ -626,6 +657,7 @@ static void destroy_dde_data(void *resource)
         lx_execution_unmap(GLoaderState.execution, data->mapping);
     free(data);
 }
+
 ULONG DdeCreateDataHandle(ULONG id, PVOID input, ULONG count, ULONG offset, ULONG item,
                           ULONG format, ULONG flags)
 {
@@ -677,6 +709,7 @@ data_done:
     lx_handle_release(&instance);
     return handle;
 }
+
 ULONG DdeAccessData(ULONG handle, PVOID size)
 {
     LxHandleBorrow borrow = {0};
@@ -690,6 +723,7 @@ ULONG DdeAccessData(ULONG handle, PVOID size)
     lx_handle_release(&borrow);
     return address;
 }
+
 BOOL DdeUnaccessData(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -702,6 +736,7 @@ BOOL DdeUnaccessData(ULONG handle)
     lx_handle_release(&borrow);
     return valid;
 }
+
 BOOL DdeFreeDataHandle(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -716,6 +751,7 @@ BOOL DdeFreeDataHandle(ULONG handle)
     lx_handle_release(&borrow);
     return valid;
 }
+
 ULONG DdeAddData(ULONG handle, PVOID input, ULONG count, ULONG offset)
 {
     LxHandleBorrow borrow = {0};
@@ -753,6 +789,7 @@ add_done:
     lx_handle_release(&borrow);
     return result;
 }
+
 ULONG DdeGetData(ULONG handle, PVOID output, ULONG capacity, ULONG offset)
 {
     LxHandleBorrow borrow = {0};
@@ -770,6 +807,7 @@ ULONG DdeGetData(ULONG handle, PVOID output, ULONG capacity, ULONG offset)
     lx_handle_release(&borrow);
     return count;
 }
+
 static void destroy_conversation(void *resource)
 {
     DdeConversation *conversation = resource;
@@ -782,6 +820,7 @@ static void destroy_conversation(void *resource)
     lx_host_monitor_unlock(lock);
     free(conversation);
 }
+
 /* Other processes of the ball. The directory lists who serves what, each process reads a
    named mailbox on a host thread, and callbacks still run on the instance's owning thread.
    Data travels by value in the record, so data handles stay local to each process. */
@@ -795,26 +834,31 @@ enum
     SERVICE_LIMIT = 256,
     REMOTE_TIMEOUT = 10000
 };
+
 typedef struct RemoteRecord
 {
     uint32 kind, sequence, process, conversation, peer, type, format, first, second, one, two;
     uint32 result, size;
 } RemoteRecord;
+
 typedef struct ServiceEntry
 {
     uint32 process, instance, atom;
 } ServiceEntry;
+
 typedef struct ServiceDirectory
 {
     uint32 lock;
     ServiceEntry entries[SERVICE_LIMIT];
 } ServiceDirectory;
+
 typedef struct RemoteReply
 {
     struct RemoteReply *next;
     RemoteRecord record;
     uint8 *data;
 } RemoteReply;
+
 static LxHostOnce directory_once = LX_HOST_ONCE_INIT;
 static ServiceDirectory *directory;
 static uint32 own_process;
@@ -822,10 +866,12 @@ static LxHostMailbox *remote_inbox;
 static LxHostThread *remote_thread;
 static RemoteReply *remote_replies;
 static uint32 remote_sequence, remote_stop;
+
 static void mailbox_name(char name[32], uint32 process)
 {
     snprintf(name, 32, "dde-%u", (unsigned)process);
 }
+
 static void initialize_directory(void)
 {
     uint32 parent;
@@ -845,6 +891,7 @@ static void initialize_directory(void)
     if (opened == LX_HOST_SHARED_OK && lx_host_shared_size(shared) == sizeof *directory)
         directory = lx_host_shared_map(shared, NULL, 0);
 }
+
 static BOOL lock_directory(void)
 {
     lx_host_once(&directory_once, initialize_directory);
@@ -861,10 +908,12 @@ static BOOL lock_directory(void)
         lx_host_sleep_ms(1);
     }
 }
+
 static void unlock_directory(void)
 {
     __atomic_store_n(&directory->lock, 0, __ATOMIC_RELEASE);
 }
+
 static BOOL process_alive(uint32 process)
 {
     char name[32];
@@ -876,6 +925,7 @@ static BOOL process_alive(uint32 process)
     lx_host_mailbox_close(mailbox);
     return TRUE;
 }
+
 static void publish_service(ULONG instance, ULONG atom)
 {
     if (!lock_directory())
@@ -894,6 +944,7 @@ static void publish_service(ULONG instance, ULONG atom)
         *free_entry = (ServiceEntry){own_process, instance, atom};
     unlock_directory();
 }
+
 static void withdraw_service(ULONG instance, ULONG atom, BOOL all)
 {
     if (!lock_directory())
@@ -907,6 +958,7 @@ static void withdraw_service(ULONG instance, ULONG atom, BOOL all)
     }
     unlock_directory();
 }
+
 static BOOL remote_send(uint32 process, const RemoteRecord *record, const void *data)
 {
     char name[32];
@@ -929,6 +981,7 @@ static BOOL remote_send(uint32 process, const RemoteRecord *record, const void *
     free(wire);
     return sent;
 }
+
 static void notify_processes(ULONG type, ULONG skip, ULONG atom)
 {
     uint32 processes[SERVICE_LIMIT];
@@ -949,6 +1002,7 @@ static void notify_processes(ULONG type, ULONG skip, ULONG atom)
     for (unsigned i = 0; i < count; i++)
         remote_send(processes[i], &record, NULL);
 }
+
 /* Waits for the reply while serving this thread's own queued work. */
 static RemoteReply *remote_wait(uint32 sequence, ULONG timeout)
 {
@@ -974,11 +1028,13 @@ static RemoteReply *remote_wait(uint32 sequence, ULONG timeout)
         lx_host_monitor_unlock(lock);
     }
 }
+
 static void free_reply(RemoteReply *reply)
 {
     free(reply->data);
     free(reply);
 }
+
 static uint8 *copy_data(ULONG handle, uint32 *size)
 {
     LxHandleBorrow borrow = {0};
@@ -995,6 +1051,7 @@ static uint8 *copy_data(ULONG handle, uint32 *size)
     lx_handle_release(&borrow);
     return bytes;
 }
+
 static BOOL remote_call(DdeConversation *conversation, ULONG timeout, ULONG type, ULONG format,
                         ULONG first, ULONG second, ULONG data, ULONG one, ULONG two, ULONG *result)
 {
@@ -1019,12 +1076,13 @@ static BOOL remote_call(DdeConversation *conversation, ULONG timeout, ULONG type
         return FALSE;
     *result = reply->record.result;
     if (reply->record.size)
-        *result = DdeCreateDataHandle(conversation->client ? conversation->client
-                                                           : conversation->server,
-                                      reply->data, reply->record.size, 0, second, format, 0);
+        *result =
+            DdeCreateDataHandle(conversation->client ? conversation->client : conversation->server,
+                                reply->data, reply->record.size, 0, second, format, 0);
     free_reply(reply);
     return TRUE;
 }
+
 /* Calls the far side of a conversation, in this process or another. */
 static BOOL conversation_invoke(DdeConversation *conversation, ULONG peer, ULONG timeout,
                                 ULONG type, ULONG format, ULONG first, ULONG second, ULONG data,
@@ -1036,18 +1094,20 @@ static BOOL conversation_invoke(DdeConversation *conversation, ULONG peer, ULONG
     return dde_invoke(peer, timeout, type, format, conversation->handle, first, second, data, one,
                       two, result);
 }
+
 static ULONG forward_transaction(const DdeRequest *request)
 {
     LxHandleBorrow borrow = {0};
     ULONG result = 0;
     if (lx_handle_borrow(request->conversation, LX_HANDLE_OPEN32_DDE_CONVERSATION, &borrow))
     {
-        remote_call(borrow.resource, REMOTE_TIMEOUT, request->type, request->format,
-                    request->first, request->second, request->data, 0, 0, &result);
+        remote_call(borrow.resource, REMOTE_TIMEOUT, request->type, request->format, request->first,
+                    request->second, request->data, 0, 0, &result);
         lx_handle_release(&borrow);
     }
     return result;
 }
+
 static ULONG make_conversation(ULONG client, ULONG server, ULONG service, ULONG topic,
                                ULONG process, ULONG peer)
 {
@@ -1074,12 +1134,12 @@ static ULONG make_conversation(ULONG client, ULONG server, ULONG service, ULONG 
     lx_host_monitor_unlock(lock);
     return handle;
 }
+
 /* Runs on the owning thread of the local instance named by the request. */
 static void serve_remote(DdeRequest *request)
 {
-    RemoteRecord reply = {.kind = REMOTE_REPLY,
-                          .sequence = request->remote_sequence,
-                          .process = own_process};
+    RemoteRecord reply = {
+        .kind = REMOTE_REPLY, .sequence = request->remote_sequence, .process = own_process};
     uint8 *bytes = NULL;
     if (request->connect)
     {
@@ -1132,6 +1192,7 @@ static void serve_remote(DdeRequest *request)
     remote_send(request->remote_process, &reply, bytes);
     free(bytes);
 }
+
 static void queue_remote(DdeRequest *request)
 {
     lx_host_monitor_lock(lock);
@@ -1139,6 +1200,7 @@ static void queue_remote(DdeRequest *request)
     lx_host_monitor_unlock(lock);
     open32PostThreadPacket(request->thread, OPEN32_DDE_PACKET);
 }
+
 static void receive_call(const RemoteRecord *record, const uint8 *data)
 {
     LxHandleBorrow borrow = {0}, owner = {0};
@@ -1177,6 +1239,7 @@ static void receive_call(const RemoteRecord *record, const uint8 *data)
         free(request);
     lx_handle_release(&borrow);
 }
+
 static void receive_connect(const RemoteRecord *record)
 {
     LxHandleBorrow owner = {0};
@@ -1184,9 +1247,8 @@ static void receive_connect(const RemoteRecord *record)
     if (!request || !borrow_any(record->peer, &owner))
     {
         free(request);
-        RemoteRecord refusal = {.kind = REMOTE_REPLY,
-                                .sequence = record->sequence,
-                                .process = own_process};
+        RemoteRecord refusal = {
+            .kind = REMOTE_REPLY, .sequence = record->sequence, .process = own_process};
         remote_send(record->process, &refusal, NULL);
         return;
     }
@@ -1202,6 +1264,7 @@ static void receive_connect(const RemoteRecord *record)
     lx_handle_release(&owner);
     queue_remote(request);
 }
+
 static void receive_notify(const RemoteRecord *record)
 {
     lx_host_monitor_lock(lock);
@@ -1224,6 +1287,7 @@ static void receive_notify(const RemoteRecord *record)
     for (unsigned i = 0; i < count; i++)
         open32PostThreadPacket(threads[i], OPEN32_DDE_PACKET);
 }
+
 static void *remote_listener(void *argument)
 {
     (void)argument;
@@ -1270,6 +1334,7 @@ static void *remote_listener(void *argument)
     free(wire);
     return NULL;
 }
+
 static void start_listener(void)
 {
     lx_host_once(&directory_once, initialize_directory);
@@ -1289,6 +1354,7 @@ static void start_listener(void)
     __atomic_store_n(&remote_stop, 0, __ATOMIC_RELEASE);
     remote_thread = lx_host_thread_create(remote_listener, NULL, NULL);
 }
+
 static void stop_listener(void)
 {
     if (remote_thread)
@@ -1303,6 +1369,7 @@ static void stop_listener(void)
         remote_inbox = NULL;
     }
 }
+
 /* The first live server in the directory that serves the name takes the conversation. */
 static ULONG remote_connect(ULONG id, ULONG service, ULONG topic)
 {
@@ -1332,9 +1399,8 @@ static ULONG remote_connect(ULONG id, ULONG service, ULONG topic)
                            .peer = found.instance,
                            .first = topic,
                            .second = service};
-    RemoteReply *reply = remote_send(found.process, &record, NULL)
-                             ? remote_wait(sequence, REMOTE_TIMEOUT)
-                             : NULL;
+    RemoteReply *reply =
+        remote_send(found.process, &record, NULL) ? remote_wait(sequence, REMOTE_TIMEOUT) : NULL;
     BOOL accepted = reply && reply->record.result;
     LxHandleBorrow borrow = {0};
     if (accepted && lx_handle_borrow(handle, LX_HANDLE_OPEN32_DDE_CONVERSATION, &borrow))
@@ -1349,6 +1415,7 @@ static ULONG remote_connect(ULONG id, ULONG service, ULONG topic)
     lx_handle_close(handle, LX_HANDLE_OPEN32_DDE_CONVERSATION);
     return 0;
 }
+
 ULONG DdeConnect(ULONG id, ULONG service, ULONG topic, PVOID context)
 {
     LxHandleBorrow client = {0};
@@ -1425,6 +1492,7 @@ connect_done:
     lx_handle_release(&client);
     return handle;
 }
+
 BOOL DdeDisconnect(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -1432,12 +1500,14 @@ BOOL DdeDisconnect(ULONG handle)
         return FALSE;
     DdeConversation *conversation = borrow.resource;
     ULONG ignored;
-    conversation_invoke(conversation, conversation->server ? conversation->server : conversation->client,
+    conversation_invoke(conversation,
+                        conversation->server ? conversation->server : conversation->client,
                         REMOTE_TIMEOUT, 0x80C2, 0, 0, 0, 0, 0, 0, &ignored);
     BOOL result = lx_handle_close(handle, LX_HANDLE_OPEN32_DDE_CONVERSATION);
     lx_handle_release(&borrow);
     return result;
 }
+
 static void note_transaction(DdeConversation *conversation, ULONG type, ULONG result)
 {
     if ((type & ~0xCu) == 0x1030 && result)
@@ -1445,6 +1515,7 @@ static void note_transaction(DdeConversation *conversation, ULONG type, ULONG re
     if (type == 0x8040)
         conversation->advise = FALSE;
 }
+
 /* Poke and execute answer with DDE_FACK or DDE_FBUSY; the others answer with a value. */
 static ULONG transaction_status(ULONG type, ULONG result)
 {
@@ -1452,6 +1523,7 @@ static ULONG transaction_status(ULONG type, ULONG result)
         return result & 0x4000 ? 0x4000 : result & 0x8000 ? 0x8000 : 0;
     return result ? 0x8000 : 0;
 }
+
 static void complete_transaction(DdeRequest *request)
 {
     LxHandleBorrow borrow = {0};
@@ -1489,6 +1561,7 @@ static void complete_transaction(DdeRequest *request)
     lx_host_monitor_unlock(lock);
     open32PostThreadPacket(thread, OPEN32_DDE_PACKET);
 }
+
 static BOOL queue_transaction(DdeConversation *conversation, ULONG type, ULONG format, ULONG item,
                               ULONG data, ULONG temporary, PVOID status)
 {
@@ -1532,6 +1605,7 @@ static BOOL queue_transaction(DdeConversation *conversation, ULONG type, ULONG f
         lx_guest_store_u32(status, transaction);
     return TRUE;
 }
+
 ULONG DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item, ULONG format,
                            ULONG type, ULONG timeout, PVOID status)
 {
@@ -1571,8 +1645,8 @@ ULONG DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item, 
     conversation->type = type;
     if (timeout == UINT32_MAX) /* TIMEOUT_ASYNC */
     {
-        result = queue_transaction(conversation, type, format, item, data, temporary ? data : 0,
-                                   status);
+        result =
+            queue_transaction(conversation, type, format, item, data, temporary ? data : 0, status);
         if (result)
             temporary = FALSE;
         else
@@ -1605,17 +1679,18 @@ transaction_done:
     lx_handle_release(&borrow);
     return result;
 }
+
 /* The asynchronous transaction with this id, pending or now reporting its completion. */
 static DdeRequest *find_transaction(ULONG handle, ULONG transaction)
 {
-    if (dde_active && dde_active->transaction == transaction &&
-        dde_active->conversation == handle)
+    if (dde_active && dde_active->transaction == transaction && dde_active->conversation == handle)
         return dde_active;
     for (DdeRequest *request = dde_requests; request; request = request->next)
         if (request->transaction == transaction && request->conversation == handle)
             return request;
     return NULL;
 }
+
 BOOL DdeSetUserHandle(ULONG handle, ULONG transaction, ULONG user)
 {
     LxHandleBorrow borrow = {0};
@@ -1639,6 +1714,7 @@ BOOL DdeSetUserHandle(ULONG handle, ULONG transaction, ULONG user)
     lx_handle_release(&borrow);
     return valid;
 }
+
 ULONG DdeQueryConvInfo(ULONG handle, ULONG transaction, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -1693,6 +1769,7 @@ ULONG DdeQueryConvInfo(ULONG handle, ULONG transaction, PVOID output)
     lx_handle_release(&borrow);
     return 100;
 }
+
 BOOL DdeAbandonTransaction(ULONG id, ULONG handle, ULONG transaction)
 {
     LxHandleBorrow instance = {0};
@@ -1711,7 +1788,8 @@ BOOL DdeAbandonTransaction(ULONG id, ULONG handle, ULONG transaction)
     /* A zero transaction abandons everything on the conversation, or on the instance. */
     lx_host_monitor_lock(lock);
     for (DdeRequest *request = dde_requests; request; request = request->next)
-        if (request->asynchronous && request->client == id && (!handle || request->conversation == handle) &&
+        if (request->asynchronous && request->client == id &&
+            (!handle || request->conversation == handle) &&
             (!transaction || request->transaction == transaction))
         {
             request->abandoned = TRUE;
@@ -1723,6 +1801,7 @@ BOOL DdeAbandonTransaction(ULONG id, ULONG handle, ULONG transaction)
     lx_handle_release(&instance);
     return valid;
 }
+
 BOOL DdePostAdvise(ULONG id, ULONG topic, ULONG item)
 {
     LxHandleBorrow server = {0};

@@ -25,6 +25,7 @@
     } while (0)
 static void *segments[32];
 static unsigned released;
+
 static void *segment_alloc(uint16 *selector, int executable)
 {
     (void)executable;
@@ -37,6 +38,7 @@ static void *segment_alloc(uint16 *selector, int executable)
     *selector = 0xffff;
     return NULL;
 }
+
 static void segment_free(uint16 selector)
 {
     CHECK(selector < 32);
@@ -44,6 +46,7 @@ static void segment_free(uint16 selector)
     segments[selector] = NULL;
     released++;
 }
+
 static ULONG host_to_far(void *pointer)
 {
     for (unsigned i = 1; i < 32; i++)
@@ -52,21 +55,26 @@ static ULONG host_to_far(void *pointer)
             return ((ULONG)((i << 3) | 7) << 16) | ((uintptr_t)pointer - (uintptr_t)segments[i]);
     return 0;
 }
+
 static char *host_path(const char *path, uint32 *error)
 {
     *error = NO_ERROR;
     return strdup(path);
 }
+
 static LxModule module;
+
 static LxModule *load_module(const char *name)
 {
     return !strcasecmp(name, "LegacyFixture") ? &module : NULL;
 }
+
 static void free_module(LxModule *value)
 {
     CHECK(value == &module);
     CHECK(lx_handle_close(value->handle, LX_HANDLE_MODULE));
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);
@@ -101,10 +109,12 @@ int main(int argc, char **argv)
     LOAD(Dos16GetModName);
     LOAD(Dos16GetProcAddr);
     LOAD(Dos16FreeModule);
+
     struct
     {
         USHORT before, value, after;
     } word = {0xa55a, 0, 0x5aa5};
+
     CHECK(!call_Dos16SetVerify(1));
     CHECK(!call_Dos16QVerify(&word.value) && word.value == 1);
     CHECK(word.before == 0xa55a && word.after == 0x5aa5);
@@ -152,20 +162,24 @@ int main(int argc, char **argv)
         CHECK(!call_DosClose(files[--count]));
     CHECK(!unlink(path));
     CHECK(!call_Dos16SetCp(850, 0));
+
     struct
     {
         USHORT values[3], after;
     } cp16 = {{0, 0xaaaa, 0xbbbb}, 0xcccc};
+
     CHECK(call_Dos16GetCp(3, cp16.values, &word.value) == ERROR_CPLIST_TOO_SMALL);
     CHECK(word.value == 2 && cp16.values[0] == 850 && cp16.values[1] == 0xaaaa);
     CHECK(word.before == 0xa55a && word.after == 0x5aa5);
     CHECK(!call_Dos16GetCp(6, cp16.values, &word.value));
     CHECK(word.value == 6 && cp16.values[1] == 437 && cp16.values[2] == 850 &&
           cp16.after == 0xcccc);
+
     struct
     {
         ULONG values[3], after;
     } cp32 = {{0, 0xaaaaaaaa, 0xbbbbbbbb}, 0xcccccccc};
+
     ULONG actual;
     CHECK(call_DosQueryCp(6, cp32.values, &actual) == ERROR_CPLIST_TOO_SMALL);
     CHECK(actual == 4 && cp32.values[0] == 850 && cp32.values[1] == 0xaaaaaaaa);

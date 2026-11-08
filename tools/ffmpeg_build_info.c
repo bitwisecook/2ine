@@ -5,6 +5,7 @@
 #include <libavutil/avutil.h>
 #include <stdio.h>
 #include <string.h>
+
 static void string(FILE *file, const char *text)
 {
     fputc('"', file);
@@ -19,6 +20,7 @@ static void string(FILE *file, const char *text)
     }
     fputc('"', file);
 }
+
 int main(int argc, char **argv)
 {
     if (argc != 3)

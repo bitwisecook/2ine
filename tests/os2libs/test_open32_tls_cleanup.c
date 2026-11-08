@@ -17,6 +17,7 @@
 #define LOAD(function)                                                                             \
     __typeof__(function) *call_##function = dlsym(module, #function);                              \
     CHECK(call_##function)
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);

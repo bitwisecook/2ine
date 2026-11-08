@@ -1,11 +1,13 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PM rectangles are half-open and window coordinates have an upward y axis. */
 #include "os2libs/pmwin/internal.h"
+
 BOOL WinIsRectEmpty(HAB hab, PRECTL r)
 {
     (void)hab;
     return !r || r->xLeft >= r->xRight || r->yBottom >= r->yTop;
 }
+
 BOOL WinSetRect(HAB hab, PRECTL r, LONG left, LONG bottom, LONG right, LONG top)
 {
     (void)hab;
@@ -14,10 +16,12 @@ BOOL WinSetRect(HAB hab, PRECTL r, LONG left, LONG bottom, LONG right, LONG top)
     *r = (RECTL){left, bottom, right, top};
     return TRUE;
 }
+
 BOOL WinSetRectEmpty(HAB hab, PRECTL r)
 {
     return WinSetRect(hab, r, 0, 0, 0, 0);
 }
+
 BOOL WinCopyRect(HAB hab, PRECTL d, PRECTL s)
 {
     (void)hab;
@@ -26,11 +30,13 @@ BOOL WinCopyRect(HAB hab, PRECTL d, PRECTL s)
     *d = *s;
     return TRUE;
 }
+
 BOOL WinEqualRect(HAB hab, PRECTL a, PRECTL b)
 {
     (void)hab;
     return a && b && !memcmp(a, b, sizeof *a);
 }
+
 BOOL WinIntersectRect(HAB hab, PRECTL d, PRECTL a, PRECTL b)
 {
     if (!d || !a || !b)
@@ -47,6 +53,7 @@ BOOL WinIntersectRect(HAB hab, PRECTL d, PRECTL a, PRECTL b)
     *d = r;
     return TRUE;
 }
+
 BOOL WinUnionRect(HAB hab, PRECTL d, PRECTL a, PRECTL b)
 {
     if (!d || !a || !b)
@@ -67,6 +74,7 @@ BOOL WinUnionRect(HAB hab, PRECTL d, PRECTL a, PRECTL b)
                  a->yTop > b->yTop ? a->yTop : b->yTop};
     return TRUE;
 }
+
 BOOL WinOffsetRect(HAB hab, PRECTL r, LONG dx, LONG dy)
 {
     (void)hab;
@@ -78,6 +86,7 @@ BOOL WinOffsetRect(HAB hab, PRECTL r, LONG dx, LONG dy)
     r->yTop = (LONG)((ULONG)r->yTop + dy);
     return TRUE;
 }
+
 BOOL WinInflateRect(HAB hab, PRECTL r, LONG dx, LONG dy)
 {
     (void)hab;
@@ -89,11 +98,13 @@ BOOL WinInflateRect(HAB hab, PRECTL r, LONG dx, LONG dy)
     r->yTop = (LONG)((ULONG)r->yTop + dy);
     return TRUE;
 }
+
 BOOL WinPtInRect(HAB hab, PRECTL r, PPOINTL p)
 {
     (void)hab;
     return r && p && p->x >= r->xLeft && p->x < r->xRight && p->y >= r->yBottom && p->y < r->yTop;
 }
+
 BOOL WinMapWindowPoints(HWND from, HWND to, PPOINTL points, LONG count)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

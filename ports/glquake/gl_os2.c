@@ -17,12 +17,14 @@ typedef void(APIENTRY *sub_fn)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GL
 static bind_fn native_bind;
 static sub_fn native_sub;
 static HMODULE module;
+
 typedef struct
 {
     int width, height, components, channels;
     GLenum format;
     byte *pixels;
 } mip_t;
+
 typedef struct
 {
     mip_t mip[LEVELS];
@@ -30,6 +32,7 @@ typedef struct
     int dirty;
     GLfloat min, mag, s, t;
 } qgl_texture_t;
+
 static qgl_texture_t *textures[TEXTURES];
 static GLuint current;
 

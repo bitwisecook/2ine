@@ -12,6 +12,7 @@ public struct MIDIChannel: Codable, Sendable, Equatable {
         target = channel; bank = ""; program = -1; bankNumber = -1; percussion = -1; muted = false
     }
 }
+
 public struct AudioSettings: Codable, Sendable, Equatable {
     public var profile: String
     public var bank: String
@@ -20,6 +21,7 @@ public struct AudioSettings: Codable, Sendable, Equatable {
         profile = preset.id; channels = preset.channels
     }
 }
+
 public struct SoundBank: Decodable, Sendable, Identifiable {
     public let id: String
     public let name: String
@@ -27,16 +29,19 @@ public struct SoundBank: Decodable, Sendable, Identifiable {
     public let license: String?
     public let sha256: String?
 }
+
 public struct MIDIProfile: Decodable, Sendable, Identifiable {
     public let id: String
     public let name: String
     public let channels: [MIDIChannel]
 }
+
 public struct AudioSnapshot: Decodable, Sendable {
     public let settings: AudioSettings
     public let banks: [SoundBank]
     public let profiles: [MIDIProfile]
 }
+
 public struct ProjectSource: Decodable, Sendable, Identifiable {
     public let id: String
     public let name: String
@@ -48,6 +53,7 @@ public struct ProjectSource: Decodable, Sendable, Identifiable {
     public let source: String
     public let download: String
 }
+
 public struct ProjectCatalogue: Decodable, Sendable {
     public let catalogue: String
     public let originCredit: String

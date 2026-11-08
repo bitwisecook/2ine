@@ -9,14 +9,17 @@
 #include <string.h>
 #if TWOINE_MT32_SYNTH
 #include <mt32emu/mt32emu.h>
+
 struct LxMidiMt32
 {
     mt32emu_context context;
 };
+
 int lx_midi_mt32_available(void)
 {
     return 1;
 }
+
 void lx_midi_mt32_destroy(LxMidiMt32 *synth)
 {
     if (synth)
@@ -26,6 +29,7 @@ void lx_midi_mt32_destroy(LxMidiMt32 *synth)
         free(synth);
     }
 }
+
 int lx_midi_mt32_reset(LxMidiMt32 *synth)
 {
     if (!synth)
@@ -33,6 +37,7 @@ int lx_midi_mt32_reset(LxMidiMt32 *synth)
     mt32emu_close_synth(synth->context);
     return mt32emu_open_synth(synth->context) == MT32EMU_RC_OK;
 }
+
 static char *rom_path(const char *environment, const char *key)
 {
     const char *selected = getenv(environment);
@@ -44,6 +49,7 @@ static char *rom_path(const char *environment, const char *key)
         memcpy(path, selected, size);
     return path;
 }
+
 LxMidiMt32 *lx_midi_mt32_create(unsigned rate)
 {
     char *control = rom_path("TWOINE_MT32_CONTROL_ROM", "mt32_control_rom");
@@ -99,6 +105,7 @@ LxMidiMt32 *lx_midi_mt32_create(unsigned rate)
     }
     return synth;
 }
+
 int lx_midi_mt32_event(LxMidiMt32 *synth, unsigned status, unsigned key, unsigned value)
 {
     if (!synth || status < 0x80 || status >= 0xf0 || key > 127 || value > 127)
@@ -106,6 +113,7 @@ int lx_midi_mt32_event(LxMidiMt32 *synth, unsigned status, unsigned key, unsigne
     mt32emu_play_msg_now(synth->context, status | key << 8 | value << 16);
     return 1;
 }
+
 int lx_midi_mt32_sysex(LxMidiMt32 *synth, const unsigned char *message, size_t length)
 {
     if (!synth || !message || length < 2 || length > UINT32_MAX || message[0] != 0xf0 ||
@@ -114,6 +122,7 @@ int lx_midi_mt32_sysex(LxMidiMt32 *synth, const unsigned char *message, size_t l
     mt32emu_play_sysex_now(synth->context, message, (mt32emu_bit32u)length);
     return 1;
 }
+
 static void render(LxMidiMt32 *synth, float *samples, unsigned count, float volume, int channels)
 {
     if (!synth || !samples || !isfinite(volume))
@@ -141,21 +150,25 @@ int lx_midi_mt32_available(void)
 {
     return 0;
 }
+
 LxMidiMt32 *lx_midi_mt32_create(unsigned rate)
 {
     (void)rate;
     fprintf(stderr, "2ine: MT-32 synthesis was not enabled in this build (TWOINE_MT32_SYNTH).\n");
     return NULL;
 }
+
 void lx_midi_mt32_destroy(LxMidiMt32 *synth)
 {
     (void)synth;
 }
+
 int lx_midi_mt32_reset(LxMidiMt32 *synth)
 {
     (void)synth;
     return 0;
 }
+
 int lx_midi_mt32_event(LxMidiMt32 *synth, unsigned status, unsigned key, unsigned value)
 {
     (void)synth;
@@ -164,6 +177,7 @@ int lx_midi_mt32_event(LxMidiMt32 *synth, unsigned status, unsigned key, unsigne
     (void)value;
     return 0;
 }
+
 int lx_midi_mt32_sysex(LxMidiMt32 *synth, const unsigned char *message, size_t length)
 {
     (void)synth;
@@ -171,6 +185,7 @@ int lx_midi_mt32_sysex(LxMidiMt32 *synth, const unsigned char *message, size_t l
     (void)length;
     return 0;
 }
+
 static void render(LxMidiMt32 *synth, float *samples, unsigned count, float volume, int channels)
 {
     (void)channels;
@@ -185,6 +200,7 @@ void lx_midi_mt32_render(LxMidiMt32 *synth, float *samples, unsigned count, floa
 {
     render(synth, samples, count, volume, 1);
 }
+
 void lx_midi_mt32_render_stereo(LxMidiMt32 *synth, float *samples, unsigned count, float volume)
 {
     render(synth, samples, count, volume, 2);

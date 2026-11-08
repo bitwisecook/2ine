@@ -3,6 +3,7 @@ static uint32 bridge32_mixWrite(uint8 *a)
 {
     return queue_buffers(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_mciSendCommand(uint8 *a)
 {
     USHORT message = lx_guest_load_u32(a + 4);
@@ -16,6 +17,7 @@ static uint32 bridge32_mciSendCommand(uint8 *a)
     lx_execution_release(&parameters);
     return result;
 }
+
 static uint32 bridge32_mciSendString(uint8 *a)
 {
     char *command = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 65536);
@@ -29,6 +31,7 @@ static uint32 bridge32_mciSendString(uint8 *a)
     free(command);
     return result;
 }
+
 static uint32 bridge32_mciGetErrorString(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -39,6 +42,7 @@ static uint32 bridge32_mciGetErrorString(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 /* DART's write callback is a guest-callable API entry, separate from exported ordinals. */
 static int initialize_write_bridge(void)
 {

@@ -60,6 +60,7 @@ typedef struct LxExecutionOperations
     void (*quiesce)(void);
     void (*set_park_flag)(const int *);
 } LxExecutionOperations;
+
 struct LxExecution
 {
     const LxExecutionOperations *ops;
@@ -74,6 +75,7 @@ struct LxExecution
     void *checkpoint_argument;
     char error[256];
 };
+
 #if defined(TWOINE_NATIVE_LINUX_I386)
 extern const LxExecutionOperations lx_execution_native_linux;
 #endif

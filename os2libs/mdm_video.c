@@ -11,6 +11,7 @@
 #include "runtime/runtime_features.h"
 #include <ctype.h>
 #include <errno.h>
+
 enum
 {
     VIDEO_DEVICES = 16,
@@ -57,10 +58,12 @@ enum
     V_ERR_FLAG = 5054,
     V_ERR_IO = 5125
 };
+
 enum
 {
     VIDEO_AUDIO_FRAMES = 96000
 };
+
 typedef struct VideoAudio
 {
     float *samples;
@@ -70,6 +73,7 @@ typedef struct VideoAudio
     int paused;
     float volume;
 } VideoAudio;
+
 typedef struct VideoDevice
 {
     USHORT id;
@@ -88,21 +92,25 @@ typedef struct VideoDevice
     int64_t position, until;
     uint64_t started, paused_at;
 } VideoDevice;
+
 static VideoDevice devices[VIDEO_DEVICES];
 static USHORT next_id = VIDEO_FIRST_ID;
 static LxHostMonitor *monitor;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static int audio_registered;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
 }
+
 static void reset_device(VideoDevice *device)
 {
     lx_host_monitor_lock(monitor);
     memset(device, 0, sizeof *device);
     lx_host_monitor_unlock(monitor);
 }
+
 static VideoDevice *find(USHORT id)
 {
     for (unsigned i = 0; i < VIDEO_DEVICES; i++)
@@ -110,6 +118,7 @@ static VideoDevice *find(USHORT id)
             return &devices[i];
     return NULL;
 }
+
 static int fill_audio(void *context, float *samples, int count, int frequency)
 {
     (void)context;
@@ -138,6 +147,7 @@ static int fill_audio(void *context, float *samples, int count, int frequency)
     lx_host_monitor_unlock(monitor);
     return 1;
 }
+
 static int enqueue_audio(void *context, const float *samples, unsigned count, int64_t position)
 {
     VideoDevice *d = context;
@@ -194,6 +204,7 @@ static int enqueue_audio(void *context, const float *samples, unsigned count, in
     }
     return 1;
 }
+
 static int64_t media_clock(VideoDevice *d)
 {
     if (d->audio)
@@ -202,6 +213,7 @@ static int64_t media_clock(VideoDevice *d)
     }
     return (int64_t)lx_host_video_ticks_ms() - (int64_t)d->started;
 }
+
 static int start_audio(VideoDevice *d, int64_t from, int64_t to)
 {
     if (!d->info.audio_present)
@@ -238,12 +250,14 @@ static int start_audio(VideoDevice *d, int64_t from, int64_t to)
     lx_video_decoder_audio_sink(d->decoder, enqueue_audio, d);
     return 1;
 }
+
 static void release_frame(void *context)
 {
     LxDecodedVideoFrame *frame = context;
     lx_video_frame_release(frame);
     free(frame);
 }
+
 static void *play_worker(void *context)
 {
     VideoDevice *d = context;
@@ -349,6 +363,7 @@ static void *play_worker(void *context)
                    (MPARAM)(uintptr_t)user);
     return NULL;
 }
+
 static void stop_reason(VideoDevice *d, unsigned reason)
 {
     lx_host_monitor_lock(monitor);
@@ -371,10 +386,12 @@ static void stop_reason(VideoDevice *d, unsigned reason)
     d->mode = d->decoder ? V_MODE_STOP : V_MODE_NOT_READY;
     lx_host_monitor_unlock(monitor);
 }
+
 static void stop(VideoDevice *d)
 {
     stop_reason(d, 2);
 }
+
 static uint32_t position_units(VideoDevice *d, int64_t milliseconds)
 {
     if (milliseconds < 0)
@@ -385,6 +402,7 @@ static uint32_t position_units(VideoDevice *d, int64_t milliseconds)
             : (uint64_t)milliseconds;
     return value > UINT32_MAX ? UINT32_MAX : (uint32_t)value;
 }
+
 static int64_t milliseconds(VideoDevice *d, ULONG value)
 {
     uint64_t result = value;
@@ -397,6 +415,7 @@ static int64_t milliseconds(VideoDevice *d, ULONG value)
     }
     return result > UINT32_MAX ? -1 : (int64_t)result;
 }
+
 static int video_name(const char *name)
 {
     const char *dot = name ? strrchr(name, '.') : NULL;
@@ -407,6 +426,7 @@ static int video_name(const char *name)
             return 1;
     return 0;
 }
+
 static int set_window(VideoDevice *d, HWND window)
 {
     void *target = lx_pm_video_target(window);
@@ -420,6 +440,7 @@ static int set_window(VideoDevice *d, HWND window)
         d->destination = bounds;
     return 1;
 }
+
 static int create_window(VideoDevice *d)
 {
     HAB hab = WinQueryAnchorBlock(HWND_DESKTOP);
@@ -442,6 +463,7 @@ static int create_window(VideoDevice *d)
     d->frame = 0;
     return 0;
 }
+
 static ULONG load_element(ULONG address, LxVideoDecoder **decoder, LxVideoInfo *info)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, address, 4096);
@@ -456,6 +478,7 @@ static ULONG load_element(ULONG address, LxVideoDecoder **decoder, LxVideoInfo *
     free(path);
     return *decoder ? 0 : V_ERR_NOT_READY;
 }
+
 static ULONG open_device(ULONG flags, unsigned char *p)
 {
     if (flags & ~((ULONG)V_NOTIFY | V_WAIT | V_OPEN_ELEMENT | V_OPEN_TYPE_ID | 0x200 | 0x2000 |
@@ -511,6 +534,7 @@ static ULONG open_device(ULONG flags, unsigned char *p)
     lx_guest_store_u16(p + 4, d->id);
     return 0;
 }
+
 static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID parameters, USHORT user,
                            int *handled)
 {
@@ -887,6 +911,7 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
     }
     return V_ERR_UNSUPPORTED;
 }
+
 ULONG lx_mci_video_command(USHORT id, USHORT message, ULONG flags, PVOID parameters, USHORT user,
                            int *handled)
 {
@@ -901,6 +926,7 @@ ULONG lx_mci_video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
     }
     return result;
 }
+
 void lx_mci_video_shutdown(void)
 {
     if (!monitor)

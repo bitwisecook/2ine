@@ -6,12 +6,14 @@
 #include "guest/handles.h"
 #include "hal/host_sync.h"
 #include <ctype.h>
+
 typedef struct AcceleratorEntry
 {
     USHORT flags, key, command;
     UCHAR windows_flags;
     USHORT windows_key;
 } AcceleratorEntry;
+
 typedef struct AcceleratorTable
 {
     struct AcceleratorTable *next;
@@ -19,13 +21,16 @@ typedef struct AcceleratorTable
     BOOL native;
     AcceleratorEntry entries[];
 } AcceleratorTable;
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static AcceleratorTable *tables;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
 }
+
 static BOOL ready(void)
 {
     lx_host_once(&once, initialize);
@@ -34,6 +39,7 @@ static BOOL ready(void)
     open32SetError(8);
     return FALSE;
 }
+
 static void destroy_table(void *resource)
 {
     AcceleratorTable *table = resource;
@@ -46,6 +52,7 @@ static void destroy_table(void *resource)
     lx_host_monitor_unlock(monitor);
     free(table);
 }
+
 static ULONG retain_table(AcceleratorTable *table)
 {
     if (!ready())
@@ -69,6 +76,7 @@ static ULONG retain_table(AcceleratorTable *table)
     }
     return table->handle;
 }
+
 static AcceleratorTable *allocate_table(ULONG count)
 {
     AcceleratorTable *table = calloc(1, sizeof *table + (size_t)count * sizeof *table->entries);
@@ -78,6 +86,7 @@ static AcceleratorTable *allocate_table(ULONG count)
         table->count = count;
     return table;
 }
+
 static ULONG windows_key(USHORT code)
 {
     static const UCHAR keys[32] = {0,  1,    2,  4,  3,  8,  9,    9,    13, 16, 17,
@@ -85,6 +94,7 @@ static ULONG windows_key(USHORT code)
                                    38, 39,   40, 44, 45, 46, 0x91, 0x90, 13, 44};
     return code < 32 ? keys[code] : code <= 0x37 ? 0x70 + code - 0x20 : 0;
 }
+
 ULONG CreateAcceleratorTable(PVOID data, LONG count)
 {
     TRACE_NATIVE("CreateAcceleratorTable(%p, %d)", data, (int)count);
@@ -110,6 +120,7 @@ ULONG CreateAcceleratorTable(PVOID data, LONG count)
     }
     return retain_table(table);
 }
+
 ULONG LoadAccelerators(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadAccelerators(%u, %p)", (uint)module, name);
@@ -182,6 +193,7 @@ ULONG LoadAccelerators(HMODULE module, PSZ name)
     }
     return retain_table(table);
 }
+
 LONG CopyAcceleratorTable(ULONG handle, PVOID data, LONG count)
 {
     LxHandleBorrow borrow = {0};
@@ -204,6 +216,7 @@ LONG CopyAcceleratorTable(ULONG handle, PVOID data, LONG count)
     lx_handle_release(&borrow);
     return (LONG)copied;
 }
+
 BOOL DestroyAcceleratorTable(ULONG handle)
 {
     if (lx_handle_close(handle, LX_HANDLE_OPEN32_ACCEL))
@@ -211,6 +224,7 @@ BOOL DestroyAcceleratorTable(ULONG handle)
     open32SetError(1403);
     return FALSE;
 }
+
 static BOOL matches(const AcceleratorEntry *entry, BOOL native, ULONG message, ULONG key,
                     ULONG parameter, ULONG modifiers)
 {
@@ -232,6 +246,7 @@ static BOOL matches(const AcceleratorEntry *entry, BOOL native, ULONG message, U
     /* PM resources also spell virtual letter accelerators as CHAR|VIRTUALKEY. */
     return down && key < 128 && entry->key < 128 && toupper((int)key) == toupper((int)entry->key);
 }
+
 LONG TranslateAccelerator(ULONG window, ULONG handle, PVOID message)
 {
     TRACE_NATIVE("TranslateAccelerator(%u, %u, %p)", (uint)window, (uint)handle, message);
@@ -280,6 +295,7 @@ LONG TranslateAccelerator(ULONG window, ULONG handle, PVOID message)
     SendMessage(window, match.flags & 0x100 ? 0x112 : 0x111, 0x10000 | match.command, 0);
     return 1;
 }
+
 void open32AcceleratorsCleanup(void)
 {
     /* Native-module shutdown has no active callers or outstanding table leases. */

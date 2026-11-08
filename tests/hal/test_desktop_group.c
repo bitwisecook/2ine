@@ -11,10 +11,12 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 typedef struct Policy
 {
     int regular, refuse_demotion;
 } Policy;
+
 static int policy(void *context, int regular)
 {
     Policy *state = context;
@@ -23,6 +25,7 @@ static int policy(void *context, int regular)
     state->regular = regular;
     return 1;
 }
+
 int main(void)
 {
     char directory[] = "/tmp/2ine-desktop-model-XXXXXX";

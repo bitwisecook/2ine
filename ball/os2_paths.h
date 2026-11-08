@@ -21,6 +21,7 @@ static int os2_path_equal(const char *first, size_t length, const char *second)
     }
     return 1;
 }
+
 static char *os2_path_append(Context *c, const char *value, const char *directory)
 {
     if (!value)
@@ -38,12 +39,14 @@ static char *os2_path_append(Context *c, const char *value, const char *director
     size_t n = strlen(value);
     return format(c, "%s%s%s", value, n && value[n - 1] != ';' ? ";" : "", directory);
 }
+
 static void os2_path_want(Context *c, cJSON *wanted, const char *key, const char *directory)
 {
     char *value = os2_path_append(c, field(wanted, key), directory);
     if (value)
         put(wanted, key, cJSON_CreateString(value));
 }
+
 static int os2_component_directory(const char *directory)
 {
     static const char *normal[] = {"C:\\OS2",
@@ -82,6 +85,7 @@ static int os2_component_directory(const char *directory)
             return 1;
     return 0;
 }
+
 static cJSON *os2_component_paths(Context *c, const cJSON *files)
 {
     cJSON *wanted = cJSON_CreateObject();
@@ -128,6 +132,7 @@ static cJSON *os2_component_paths(Context *c, const cJSON *files)
     }
     return wanted;
 }
+
 /* Preserve every original byte and append only changed effective assignments.
    CONFIG.SYS permits later assignments to replace earlier search lists. */
 static int os2_configure_paths(Context *c, const cJSON *files)

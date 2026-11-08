@@ -1,11 +1,13 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "desktop_cycle.h"
+
 static int before(const LxDesktopCycleWindow *a, const LxDesktopCycleWindow *b)
 {
     return a->order != b->order     ? a->order < b->order
            : a->member != b->member ? a->member < b->member
                                     : a->window < b->window;
 }
+
 int lx_desktop_cycle_next(const LxDesktopCycleWindow *windows, size_t count, uint64_t member,
                           uint32_t window, int reverse, LxDesktopCycleWindow *output)
 {

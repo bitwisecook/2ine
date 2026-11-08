@@ -8,12 +8,14 @@ static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static Open32Class *classes;
 static ULONG next_atom = 0xC000;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
     if (!monitor)
         abort();
 }
+
 static Open32Class *find_class(ULONG instance, PSZ name)
 {
     for (Open32Class *c = classes; c; c = c->next)
@@ -23,6 +25,7 @@ static Open32Class *find_class(ULONG instance, PSZ name)
             return c;
     return NULL;
 }
+
 static uint32 builtin_procedure(uint8 *arguments)
 {
     ULONG handle = lx_guest_load_u32(arguments), message = lx_guest_load_u32(arguments + 4);
@@ -32,9 +35,11 @@ static uint32 builtin_procedure(uint8 *arguments)
         return (uint32)open32NativeControlMessage(handle, message, first, second, TRUE);
     return open32BuiltinWindowProc(handle, message, first, second);
 }
+
 static Open32Class *builtin_class(const char *name)
 {
-    static const char *const controls[] = {"BUTTON", "COMBOBOX", "EDIT", "LISTBOX", "MLE", "STATIC"};
+    static const char *const controls[] = {"BUTTON",  "COMBOBOX", "EDIT",
+                                           "LISTBOX", "MLE",      "STATIC"};
     const char *canonical = NULL;
     for (size_t i = 0; i < sizeof controls / sizeof *controls; i++)
         if (!strcasecmp(name, controls[i]))
@@ -72,6 +77,7 @@ fail:
     free(c);
     return NULL;
 }
+
 Open32Class *open32ClassAcquire(ULONG instance, PSZ name)
 {
     lx_host_once(&once, initialize);
@@ -92,6 +98,7 @@ Open32Class *open32ClassAcquire(ULONG instance, PSZ name)
     lx_host_monitor_unlock(monitor);
     return c;
 }
+
 void open32ClassRelease(Open32Class *c)
 {
     lx_host_monitor_lock(monitor);
@@ -99,6 +106,7 @@ void open32ClassRelease(Open32Class *c)
     c->references--;
     lx_host_monitor_unlock(monitor);
 }
+
 static void destroy_class(Open32Class *c)
 {
     if (c->names)
@@ -110,6 +118,7 @@ static void destroy_class(Open32Class *c)
     free(c->name);
     free(c);
 }
+
 /* A dialog template names a class the application registered through this API.
    PM coordinates and styles become their Windows forms for CreateWindowEx. */
 static HWND dialog_control(HWND parent, const char *name, const char *text, ULONG style, LONG x,
@@ -124,6 +133,7 @@ static HWND dialog_control(HWND parent, const char *name, const char *text, ULON
                           area.yTop - area.yBottom - y - height, width, height, parent, id,
                           UINT32_MAX, 0);
 }
+
 ULONG RegisterClass(PVOID record)
 {
     if (!record || !GLoaderState.execution)
@@ -198,6 +208,7 @@ ULONG RegisterClass(PVOID record)
                  c->procedure, c->atom);
     return c->atom;
 }
+
 BOOL RegisterClassAlias(PSZ name, PSZ alias)
 {
     if ((uintptr_t)name <= UINT16_MAX || (uintptr_t)alias <= UINT16_MAX)
@@ -226,6 +237,7 @@ BOOL RegisterClassAlias(PSZ name, PSZ alias)
         open32SetError(87);
     return source && target;
 }
+
 BOOL UnregisterClass(PSZ name, ULONG instance)
 {
     lx_host_once(&once, initialize);
@@ -248,6 +260,7 @@ BOOL UnregisterClass(PSZ name, ULONG instance)
     destroy_class(c);
     return TRUE;
 }
+
 BOOL GetClassInfo(ULONG instance, PSZ name, PVOID output)
 {
     TRACE_NATIVE("GetClassInfo(%u, %p)", instance, name);
@@ -334,6 +347,7 @@ ULONG GetClassLong(ULONG handle, LONG index)
             return 0;
     }
 }
+
 ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
 {
     TRACE_NATIVE("SetClassLong(%u, %d, %X)", handle, index, value);
@@ -420,10 +434,11 @@ ULONG SetClassLong(ULONG handle, LONG index, ULONG value)
     lx_host_monitor_unlock(monitor);
     return previous;
 }
+
 LONG GetClassName(ULONG handle, PCHAR output, LONG capacity)
 {
     Open32Window *window = open32FindWindow(handle);
-    const char *name = window ? window->class->name
+    const char *name = window                             ? window->class->name
                        : open32NativeDialogWindow(handle) ? open32NativeClassName(handle)
                                                           : NULL;
     if (!name || !output || capacity <= 0)

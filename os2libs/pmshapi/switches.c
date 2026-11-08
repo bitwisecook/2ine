@@ -13,15 +13,18 @@ typedef struct SwitchEntry
     ULONG handle;
     SWCNTRL value;
 } SwitchEntry;
+
 static SwitchEntry *entries;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *mutex;
+
 static void initialize(void)
 {
     mutex = lx_host_monitor_create();
     if (!mutex)
         abort();
 }
+
 static void destroy(void *resource)
 {
     SwitchEntry *entry = resource;
@@ -34,6 +37,7 @@ static void destroy(void *resource)
     lx_host_monitor_unlock(mutex);
     free(entry);
 }
+
 static BOOL valid(const SWCNTRL *entry)
 {
     uint32 process, parent;
@@ -43,6 +47,7 @@ static BOOL valid(const SWCNTRL *entry)
            (entry->fbJump == 1 || entry->fbJump == 2) &&
            memchr(entry->szSwtitle, 0, sizeof entry->szSwtitle);
 }
+
 ULONG WinAddSwitchEntry(PSWCNTRL value)
 {
     TRACE_NATIVE("WinAddSwitchEntry(%p)", value);
@@ -73,11 +78,13 @@ ULONG WinAddSwitchEntry(PSWCNTRL value)
     lx_host_monitor_unlock(mutex);
     return entry->handle;
 }
+
 ULONG WinRemoveSwitchEntry(ULONG handle)
 {
     TRACE_NATIVE("WinRemoveSwitchEntry(%u)", (uint)handle);
     return lx_handle_close(handle, LX_HANDLE_SWITCH) ? NO_ERROR : ERROR_INVALID_HANDLE;
 }
+
 ULONG WinChangeSwitchEntry(ULONG handle, PSWCNTRL value)
 {
     TRACE_NATIVE("WinChangeSwitchEntry(%u, %p)", (uint)handle, value);
@@ -96,6 +103,7 @@ ULONG WinChangeSwitchEntry(ULONG handle, PSWCNTRL value)
     lx_handle_release(&borrow);
     return NO_ERROR;
 }
+
 ULONG WinQuerySwitchEntry(ULONG handle, PSWCNTRL value)
 {
     if (!value)
@@ -116,6 +124,7 @@ ULONG WinQuerySwitchEntry(ULONG handle, PSWCNTRL value)
         memcpy(value->szSwtitle, session_name, sizeof session_name);
     return NO_ERROR;
 }
+
 ULONG WinQuerySwitchHandle(ULONG window, ULONG process)
 {
     TRACE_NATIVE("WinQuerySwitchHandle(%u, %u)", (uint)window, (uint)process);
@@ -156,15 +165,19 @@ ULONG WinQueryTaskSizePos(HANDLE hab, ULONG session, PSWP position)
         return ERROR_SMG_SESSION_NOT_FOUND;
     return WinQueryWindowPos(window, position) ? NO_ERROR : ERROR_SMG_NO_TARGET_WINDOW;
 }
+
 ULONG WinCreateSwitchEntry(HAB hab, PSWCNTRL value)
 {
     /* Process and session identities have a 16-bit form in the switch list. */
-    if (!hab || !value || value->idProcess > 0xffff || value->idSession > 0xffff) return 0;
+    if (!hab || !value || value->idProcess > 0xffff || value->idSession > 0xffff)
+        return 0;
     return WinAddSwitchEntry(value);
 }
+
 ULONG WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
 {
-    if (!title || !capacity) return ERROR_INVALID_PARAMETER;
+    if (!title || !capacity)
+        return ERROR_INVALID_PARAMETER;
     char session_name[64] = {0};
     if (!session)
         lx_session_title(session_name, sizeof session_name);
@@ -186,7 +199,8 @@ ULONG WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
         {
             size_t length = strlen(entry->value.szSwtitle);
             size_t copied = length < capacity ? length : capacity - 1;
-            memcpy(title, entry->value.szSwtitle, copied); title[copied] = 0;
+            memcpy(title, entry->value.szSwtitle, copied);
+            title[copied] = 0;
             result = NO_ERROR;
             break;
         }

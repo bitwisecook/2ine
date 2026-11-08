@@ -4,12 +4,14 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmgpi.h"
 #include "hal/font.h"
+
 typedef struct Open32Font
 {
     uint8 record[60];
     FATTRS attributes;
     BOOL stock;
 } Open32Font;
+
 ULONG CreateFontIndirect(PVOID record)
 {
     if (!record || !memchr((uint8 *)record + 28, 0, 32))
@@ -79,6 +81,7 @@ ULONG CreateFontIndirect(PVOID record)
     }
     return handle;
 }
+
 ULONG open32SelectFont(Open32DC *dc, ULONG handle)
 {
     LxHandleBorrow next = {0};
@@ -98,6 +101,7 @@ ULONG open32SelectFont(Open32DC *dc, ULONG handle)
     dc->font_handle = handle;
     return previous;
 }
+
 BOOL open32DeleteFont(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -109,6 +113,7 @@ BOOL open32DeleteFont(ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG open32FontObject(ULONG handle, LONG capacity, PVOID output)
 {
     LxHandleBorrow borrow = {0};

@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+
 void *generateMissingTrampoline(const char *m, const char *n)
 {
     return lx_execution_missing_entry(GLoaderState.execution, m, n, 32, NULL);
@@ -224,6 +225,7 @@ void *getModuleProcAddrByOrdinal(const LxModule *module, const uint32 ordinal,
 {
     return resolveModuleOrdinal(module, ordinal, exported, want16bit, native, 1);
 }
+
 const LxExport *findModuleOrdinal(const LxModule *module, uint32 ordinal)
 {
     const LxExport *exported = NULL;

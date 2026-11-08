@@ -16,6 +16,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static unsigned notifications(HAB hab, HWND window, ULONG message)
 {
     unsigned count = 0;
@@ -29,6 +30,7 @@ static unsigned notifications(HAB hab, HWND window, ULONG message)
     }
     return count;
 }
+
 static void enumeration(HPS ps)
 {
     RECTL source[4] = {{20, 0, 30, 10}, {0, 20, 10, 30}, {0, 0, 10, 10}, {20, 20, 30, 30}};
@@ -79,6 +81,7 @@ static void enumeration(HPS ps)
     CHECK(!GpiQueryRegionRects(ps, region, NULL, &control, actual));
     CHECK(GpiDestroyRegion(ps, region));
 }
+
 static MRESULT OS2API page_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_ADJUSTWINDOWPOS && WinQueryWindowUShort(window, -1) == 9)
@@ -100,6 +103,7 @@ static MRESULT OS2API page_procedure(HWND window, ULONG message, MPARAM first, M
     }
     return WinDefWindowProc(window, message, first, second);
 }
+
 static void page_exposure(HAB hab)
 {
     CHECK(WinRegisterClass(hab, "PageExposure", page_procedure, 0, 0));
@@ -240,6 +244,7 @@ static void page_exposure(HAB hab)
     CHECK(lx_pm_raster_read(ps, 45, 10, 1, 1, &pixel) && pixel == 0xff0000);
     CHECK(WinReleasePS(ps) && WinDestroyWindow(parent));
 }
+
 int main(void)
 {
     HAB hab = WinInitialize(0);

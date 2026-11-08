@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include <math.h>
+
 typedef struct Open32Pen
 {
     LONG style, width;
@@ -15,6 +16,7 @@ typedef struct Open32Pen
     ULONG brush_handle;
     LxHandleBorrow brush;
 } Open32Pen;
+
 static void free_pen(void *resource)
 {
     Open32Pen *pen = resource;
@@ -23,6 +25,7 @@ static void free_pen(void *resource)
         open32DeleteBrush(pen->brush_handle);
     free(pen);
 }
+
 ULONG CreatePen(LONG style, LONG width, ULONG color)
 {
     TRACE_NATIVE("CreatePen(%d, %d, %08X)", (int)style, (int)width, (uint)color);
@@ -49,6 +52,7 @@ ULONG CreatePen(LONG style, LONG width, ULONG color)
     }
     return handle;
 }
+
 ULONG CreatePenIndirect(PVOID record)
 {
     if (!record)
@@ -59,6 +63,7 @@ ULONG CreatePenIndirect(PVOID record)
     return CreatePen((LONG)lx_guest_load_u32(record), (LONG)lx_guest_load_u32((uint8 *)record + 4),
                      lx_guest_load_u32((uint8 *)record + 12));
 }
+
 ULONG open32StockPen(LONG index)
 {
     static _Thread_local ULONG stocks[3];
@@ -77,6 +82,7 @@ ULONG open32StockPen(LONG index)
     }
     return stocks[slot];
 }
+
 ULONG open32SelectPen(Open32DC *dc, ULONG handle)
 {
     LxHandleBorrow next = {0};
@@ -88,6 +94,7 @@ ULONG open32SelectPen(Open32DC *dc, ULONG handle)
     dc->pen_handle = handle;
     return previous;
 }
+
 BOOL open32DeletePen(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -98,6 +105,7 @@ BOOL open32DeletePen(ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG open32PenObject(ULONG handle, LONG capacity, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -115,6 +123,7 @@ LONG open32PenObject(ULONG handle, LONG capacity, PVOID output)
     lx_handle_release(&borrow);
     return result;
 }
+
 BOOL MoveToEx(ULONG handle, LONG x, LONG y, PVOID previous)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -139,6 +148,7 @@ BOOL MoveToEx(ULONG handle, LONG x, LONG y, PVOID previous)
     dc->position_y = y;
     return TRUE;
 }
+
 LONG SetROP2(ULONG handle, LONG mode)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -152,6 +162,7 @@ LONG SetROP2(ULONG handle, LONG mode)
     open32MetafileWords(handle, 0x104, 1, &mode);
     return previous;
 }
+
 static BOOL dash_pixel(const Open32Pen *pen, uint64_t step)
 {
     LONG style = pen->style;
@@ -170,6 +181,7 @@ static BOOL dash_pixel(const Open32Pen *pen, uint64_t step)
     }
     return TRUE;
 }
+
 /* Wide strokes with explicit ends or joins, and very wide strokes, are built from filled convex
    polygons in the coverage plane, in device coordinates with y increasing downward. */
 typedef struct StrokePlane
@@ -178,11 +190,13 @@ typedef struct StrokePlane
     int64_t left, top, right, bottom;
     size_t width;
 } StrokePlane;
+
 static BOOL stroke_polygonal(const Open32Pen *pen)
 {
     LONG diameter = pen->width ? pen->width : 1;
     return diameter > 1 && (pen->cap || pen->join || diameter > 32);
 }
+
 static void fill_convex(StrokePlane *plane, const double *points, unsigned count, uint8 value)
 {
     double minimum = points[1], maximum = points[1];
@@ -221,6 +235,7 @@ static void fill_convex(StrokePlane *plane, const double *points, unsigned count
                             (size_t)(x - plane->left)] = value;
     }
 }
+
 static void fill_disc(StrokePlane *plane, double x, double y, double radius, uint8 value)
 {
     double points[64];
@@ -232,6 +247,7 @@ static void fill_disc(StrokePlane *plane, double x, double y, double radius, uin
     }
     fill_convex(plane, points, 32, value);
 }
+
 /* One span of a segment, with its end treatment. */
 static void stroke_span(StrokePlane *plane, double ax, double ay, double bx, double by, double ux,
                         double uy, double half, LONG start_cap, LONG end_cap, uint8 value)
@@ -254,6 +270,7 @@ static void stroke_span(StrokePlane *plane, double ax, double ay, double bx, dou
     if (end_cap == 0)
         fill_disc(plane, bx, by, half, value);
 }
+
 static void stroke_join_at(StrokePlane *plane, double x, double y, double ux, double uy, double vx,
                            double vy, double half, LONG join, double limit, uint8 value)
 {
@@ -287,6 +304,7 @@ static void stroke_join_at(StrokePlane *plane, double x, double y, double ux, do
     }
     fill_convex(plane, wedge, count, value);
 }
+
 /* Dash runs follow the same per-pel pattern as thin lines, measured along each segment. */
 static void stroke_polyline(StrokePlane *plane, Open32DC *dc, const Open32Pen *pen,
                             const POINTL *points, LONG count, BOOL closed, uint8 ink, uint8 gap)
@@ -336,6 +354,7 @@ static void stroke_polyline(StrokePlane *plane, Open32DC *dc, const Open32Pen *p
         }
     }
 }
+
 static BOOL pen_pixel(Open32DC *dc, Open32Pen *pen, LONG x, LONG y, uint32 *rgb)
 {
     if (pen->brush.resource)
@@ -348,6 +367,7 @@ static BOOL pen_pixel(Open32DC *dc, Open32Pen *pen, LONG x, LONG y, uint32 *rgb)
     *rgb = (color & 255) << 16 | (color & 0xff00) | (color >> 16 & 255);
     return TRUE;
 }
+
 BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -664,11 +684,13 @@ typedef struct PenCrossing
     double x;
     LONG direction;
 } PenCrossing;
+
 static int compare_crossings(const void *a, const void *b)
 {
     double left = ((const PenCrossing *)a)->x, right = ((const PenCrossing *)b)->x;
     return left < right ? -1 : left > right;
 }
+
 static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL filled)
 {
     TRACE_NATIVE("GDI path(%u, %p, %d, %u, %u)", handle, input, count, closed, filled);
@@ -879,6 +901,7 @@ BOOL Polygon(ULONG handle, PVOID input, LONG count)
 {
     return draw_path(handle, input, count, TRUE, TRUE);
 }
+
 BOOL Polyline(ULONG handle, PVOID input, LONG count)
 {
     return draw_path(handle, input, count, FALSE, FALSE);

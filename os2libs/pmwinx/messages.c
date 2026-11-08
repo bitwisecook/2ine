@@ -6,6 +6,7 @@
 #include "hal/host_sync.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwin/open32_post.h"
+
 typedef struct QueuedMessage
 {
     uint8 wire[28];
@@ -15,12 +16,14 @@ typedef struct QueuedMessage
     uint64 sequence;
     struct QueuedMessage *next;
 } QueuedMessage;
+
 typedef struct DispatchOverride
 {
     ULONG window, native_message, message, first, second;
     BOOL consumed;
     struct DispatchOverride *previous;
 } DispatchOverride;
+
 static _Thread_local ULONG thread_receiver;
 static _Thread_local BOOL thread_receiver_failed;
 static _Thread_local QueuedMessage *pending, *history;
@@ -28,6 +31,7 @@ static _Thread_local unsigned history_count;
 static _Thread_local uint64 next_sequence;
 static _Thread_local DispatchOverride *dispatch;
 static _Thread_local uint8 last_message[28];
+
 static ULONG mouse_flags(void)
 {
     ULONG flags = 0;
@@ -43,6 +47,7 @@ static ULONG mouse_flags(void)
         flags |= 8;
     return flags;
 }
+
 BOOL open32PmMessage(const QMSG *native, ULONG *message, ULONG *first, ULONG *second)
 {
     *first = (ULONG)(uintptr_t)native->mp1;
@@ -136,6 +141,7 @@ BOOL open32PmMessage(const QMSG *native, ULONG *message, ULONG *first, ULONG *se
     *first = mouse_flags();
     return TRUE;
 }
+
 static void insert_message(QueuedMessage *message)
 {
     QueuedMessage **slot = &pending;
@@ -144,6 +150,7 @@ static void insert_message(QueuedMessage *message)
     message->next = *slot;
     *slot = message;
 }
+
 static QueuedMessage *new_message(ULONG window, ULONG message, ULONG first, ULONG second)
 {
     QueuedMessage *node = calloc(1, sizeof *node);
@@ -160,6 +167,7 @@ static QueuedMessage *new_message(ULONG window, ULONG message, ULONG first, ULON
     node->sequence = ++next_sequence;
     return node;
 }
+
 BOOL open32PostTimer(ULONG window, ULONG id, ULONG callback)
 {
     for (QueuedMessage *node = pending; node; node = node->next)
@@ -173,6 +181,7 @@ BOOL open32PostTimer(ULONG window, ULONG id, ULONG callback)
     WinPostMsg(HWND_DESKTOP, 0, 0, 0);
     return TRUE;
 }
+
 static BOOL accept_native(const QMSG *native)
 {
     ULONG message, first, second;
@@ -229,6 +238,7 @@ static BOOL accept_native(const QMSG *native)
     insert_message(node);
     return TRUE;
 }
+
 static BOOL matches(const QueuedMessage *node, ULONG filter, ULONG first, ULONG last)
 {
     ULONG message = lx_guest_load_u32(node->wire + 4), window = lx_guest_load_u32(node->wire);
@@ -245,10 +255,12 @@ static BOOL matches(const QueuedMessage *node, ULONG filter, ULONG first, ULONG 
             return TRUE;
     return FALSE;
 }
+
 typedef struct PaintQuery
 {
     ULONG window, first, last;
 } PaintQuery;
+
 static BOOL offer_native_paint(HWND handle, void *context)
 {
     if (open32WindowUpdateLocked(handle))
@@ -266,6 +278,7 @@ static BOOL offer_native_paint(HWND handle, void *context)
     lx_guest_store_u32(candidate.wire + 4, 15);
     return matches(&candidate, query->window, query->first, query->last);
 }
+
 static void retain_history(QueuedMessage *node)
 {
     node->next = history;
@@ -280,6 +293,7 @@ static void retain_history(QueuedMessage *node)
         history_count--;
     }
 }
+
 static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL remove, BOOL wait)
 {
     HAB hab = open32Presentation();
@@ -349,6 +363,7 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
             return -1;
     }
 }
+
 BOOL WaitMessage(void)
 {
     HAB hab = open32Presentation();
@@ -368,6 +383,7 @@ BOOL WaitMessage(void)
     }
     return TRUE;
 }
+
 BOOL PeekMessage(PVOID output, ULONG filter, ULONG first, ULONG last, ULONG flags)
 {
     if (flags & ~3u)
@@ -377,11 +393,13 @@ BOOL PeekMessage(PVOID output, ULONG filter, ULONG first, ULONG last, ULONG flag
     }
     return retrieve(output, filter, first, last, (flags & 1) != 0, FALSE) > 0;
 }
+
 LONG GetMessage(PVOID output, ULONG filter, ULONG first, ULONG last)
 {
     LONG result = retrieve(output, filter, first, last, TRUE, TRUE);
     return result > 0 && lx_guest_load_u32((uint8 *)output + 4) == 18 ? 0 : result;
 }
+
 static QueuedMessage *find_message(PVOID input)
 {
     for (QueuedMessage *node = history; node; node = node->next)
@@ -392,6 +410,7 @@ static QueuedMessage *find_message(PVOID input)
             return node;
     return NULL;
 }
+
 BOOL TranslateMessage(PVOID input)
 {
     if (!input)
@@ -411,6 +430,7 @@ BOOL TranslateMessage(PVOID input)
     insert_message(node);
     return TRUE;
 }
+
 BOOL open32QueuedCallback(ULONG handle, ULONG native_message, ULONG *result)
 {
     if (!dispatch || dispatch->consumed || dispatch->window != handle ||
@@ -423,6 +443,7 @@ BOOL open32QueuedCallback(ULONG handle, ULONG native_message, ULONG *result)
                : 0;
     return TRUE;
 }
+
 LONG DispatchMessage(PVOID input)
 {
     if (!input)
@@ -483,6 +504,7 @@ LONG DispatchMessage(PVOID input)
     }
     return result;
 }
+
 BOOL PostMessage(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
     TRACE_NATIVE("PostMessage(%u, %x, %x, %x)", (uint)handle, (uint)message, (uint)first,
@@ -507,19 +529,23 @@ BOOL PostMessage(ULONG handle, ULONG message, ULONG first, ULONG second)
     WinPostMsg(HWND_DESKTOP, 0, 0, 0);
     return TRUE;
 }
+
 VOID PostQuitMessage(LONG status)
 {
     PostMessage(0, 18, (ULONG)status, 0);
 }
+
 LONG GetMessageTime(void)
 {
     return (LONG)lx_guest_load_u32(last_message + 16);
 }
+
 ULONG GetMessagePos(void)
 {
     return (ULONG)lx_guest_load_u16(last_message + 20) | (ULONG)lx_guest_load_u16(last_message + 24)
                                                              << 16;
 }
+
 static void remove_messages(QueuedMessage **head, ULONG window, BOOL paint_only, BOOL cached)
 {
     while (*head)
@@ -537,15 +563,18 @@ static void remove_messages(QueuedMessage **head, ULONG window, BOOL paint_only,
             head = &node->next;
     }
 }
+
 void open32ValidateQueuedPaint(ULONG window)
 {
     remove_messages(&pending, window, TRUE, FALSE);
 }
+
 void open32QueueWindowDestroyed(ULONG window)
 {
     remove_messages(&pending, window, FALSE, FALSE);
     remove_messages(&history, window, FALSE, TRUE);
 }
+
 void open32QueueCleanup(void)
 {
     while (pending)
@@ -572,15 +601,18 @@ typedef struct Open32ThreadQueue
     ULONG thread, window;
     struct Open32ThreadQueue *next;
 } Open32ThreadQueue;
+
 static LxHostOnce thread_queue_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *thread_queue_lock;
 static Open32ThreadQueue *thread_queues;
+
 static void initialize_thread_queues(void)
 {
     thread_queue_lock = lx_host_monitor_create();
     if (!thread_queue_lock)
         abort();
 }
+
 static void thread_exit(void)
 {
     open32DialogsCleanup();
@@ -588,14 +620,15 @@ static void thread_exit(void)
     open32UnregisterThreadQueue();
     thread_receiver_failed = TRUE; /* Window destruction must not register this thread again. */
 }
+
 void open32RegisterThreadQueue(void)
 {
     if (thread_receiver || thread_receiver_failed)
         return;
     lx_host_once(&thread_queue_once, initialize_thread_queues);
     lx_pm_set_open32_thread_exit(thread_exit);
-    ULONG receiver = WinCreateWindow(HWND_OBJECT, (PSZ)(uintptr_t)0xffff0005u, "", 0, 0, 0, 0, 0,
-                                     0, HWND_BOTTOM, 0, NULL, NULL);
+    ULONG receiver = WinCreateWindow(HWND_OBJECT, (PSZ)(uintptr_t)0xffff0005u, "", 0, 0, 0, 0, 0, 0,
+                                     HWND_BOTTOM, 0, NULL, NULL);
     Open32ThreadQueue *queue = receiver ? calloc(1, sizeof *queue) : NULL;
     if (!queue || !lx_pm_mark_open32_window(receiver))
     {
@@ -613,6 +646,7 @@ void open32RegisterThreadQueue(void)
     thread_queues = queue;
     lx_host_monitor_unlock(thread_queue_lock);
 }
+
 void open32UnregisterThreadQueue(void)
 {
     if (!thread_receiver)
@@ -629,6 +663,7 @@ void open32UnregisterThreadQueue(void)
     thread_receiver = 0;
     free(queue);
 }
+
 BOOL open32PostThreadPacket(ULONG thread, ULONG message)
 {
     if (!thread_queue_lock)
@@ -645,6 +680,7 @@ BOOL open32PostThreadPacket(ULONG thread, ULONG message)
     lx_host_monitor_unlock(thread_queue_lock);
     return result;
 }
+
 BOOL open32ThreadQueueWindow(ULONG window)
 {
     if (!thread_queue_lock)
@@ -656,6 +692,7 @@ BOOL open32ThreadQueueWindow(ULONG window)
     lx_host_monitor_unlock(thread_queue_lock);
     return found;
 }
+
 BOOL PostThreadMessage(ULONG thread, ULONG message, ULONG first, ULONG second)
 {
     if (thread == GetCurrentThreadId())
@@ -676,10 +713,12 @@ BOOL PostThreadMessage(ULONG thread, ULONG message, ULONG first, ULONG second)
         open32SetError(found ? 0 : 87);
     return result;
 }
+
 BOOL ReplyMessage(LONG result)
 {
     return lx_pm_reply_message((uintptr_t)(ULONG)result);
 }
+
 BOOL WinXTranslateMsg(ULONG anchor, PVOID input, PVOID output)
 {
     (void)anchor;

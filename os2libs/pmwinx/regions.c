@@ -6,16 +6,19 @@
 #include "os2libs/pmgpi.h"
 #include <math.h>
 #include "os2libs/pmwinx/windows.h"
+
 static void free_region(void *data)
 {
     PmRegion *region = data;
     free(region->rects);
     free(region);
 }
+
 static LONG region_type(const PmRegion *region)
 {
     return !region->count ? 1 : region->count == 1 ? 2 : 3;
 }
+
 static BOOL rectangle(PmRegion *region, LONG left, LONG top, LONG right, LONG bottom)
 {
     const LONG minimum = -(1L << 26), maximum = (1L << 26) - 1;
@@ -37,6 +40,7 @@ static BOOL rectangle(PmRegion *region, LONG left, LONG top, LONG right, LONG bo
     }
     return TRUE;
 }
+
 ULONG CreateRectRgn(LONG left, LONG top, LONG right, LONG bottom)
 {
     PmRegion *region = calloc(1, sizeof *region);
@@ -58,6 +62,7 @@ ULONG CreateRectRgn(LONG left, LONG top, LONG right, LONG bottom)
     }
     return handle;
 }
+
 ULONG CreateRectRgnIndirect(PVOID input)
 {
     if (!input)
@@ -69,6 +74,7 @@ ULONG CreateRectRgnIndirect(PVOID input)
         (LONG)lx_guest_load_u32(input), (LONG)lx_guest_load_u32((uint8 *)input + 4),
         (LONG)lx_guest_load_u32((uint8 *)input + 8), (LONG)lx_guest_load_u32((uint8 *)input + 12));
 }
+
 BOOL SetRectRgn(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
 {
     LxHandleBorrow borrow = {0};
@@ -81,6 +87,7 @@ BOOL SetRectRgn(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG CombineRgn(ULONG destination, ULONG first, ULONG second, LONG mode)
 {
     static const LONG modes[] = {0, 6, 1, 4, 7, 2};
@@ -107,6 +114,7 @@ LONG CombineRgn(ULONG destination, ULONG first, ULONG second, LONG mode)
     lx_handle_release(&out);
     return result;
 }
+
 LONG GetRgnBox(ULONG handle, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -142,6 +150,7 @@ LONG GetRgnBox(ULONG handle, PVOID output)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG SelectClipRgn(ULONG handle, ULONG region_handle)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -205,6 +214,7 @@ LONG SelectClipRgn(ULONG handle, ULONG region_handle)
     open32MetafileClip(handle, region_handle);
     return result;
 }
+
 BOOL open32DeleteRegion(ULONG handle)
 {
     return lx_handle_close(handle, LX_HANDLE_OPEN32_REGION);
@@ -269,10 +279,12 @@ static LONG clip_rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG b
         GpiDestroyRegion(handle, previous);
     return result;
 }
+
 LONG IntersectClipRect(ULONG dc, LONG left, LONG top, LONG right, LONG bottom)
 {
     return clip_rectangle(dc, left, top, right, bottom, 6); /* CRGN_AND */
 }
+
 LONG ExcludeClipRect(ULONG dc, LONG left, LONG top, LONG right, LONG bottom)
 {
     return clip_rectangle(dc, left, top, right, bottom, 7); /* CRGN_DIFF */
@@ -317,6 +329,7 @@ static ULONG adopt_region(PmRegion *region)
     }
     return handle;
 }
+
 static ULONG round_region(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
 {
     if (l > r)
@@ -382,10 +395,12 @@ static ULONG round_region(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
     }
     return adopt_region(region);
 }
+
 ULONG CreateRoundRectRgn(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
 {
     return round_region(l, t, r, b, ew, eh);
 }
+
 ULONG CreateEllipticRgn(LONG l, LONG t, LONG r, LONG b)
 {
     int64_t w = llabs((int64_t)r - l), h = llabs((int64_t)b - t);
@@ -396,6 +411,7 @@ ULONG CreateEllipticRgn(LONG l, LONG t, LONG r, LONG b)
     }
     return round_region(l, t, r, b, (LONG)w, (LONG)h);
 }
+
 ULONG CreateEllipticRgnIndirect(PVOID p)
 {
     if (!p)
@@ -407,16 +423,19 @@ ULONG CreateEllipticRgnIndirect(PVOID p)
                              (LONG)lx_guest_load_u32((uint8 *)p + 8),
                              (LONG)lx_guest_load_u32((uint8 *)p + 12));
 }
+
 typedef struct RegionCrossing
 {
     double x;
     LONG winding;
 } RegionCrossing;
+
 static int crossing_order(const void *a, const void *b)
 {
     double x = ((const RegionCrossing *)a)->x, y = ((const RegionCrossing *)b)->x;
     return x < y ? -1 : x > y;
 }
+
 ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
 {
     if (!points || !counts || polygons < 1 || polygons > 65536 || (mode != 1 && mode != 2))
@@ -548,6 +567,7 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
     }
     return adopt_region(region);
 }
+
 ULONG CreatePolygonRgn(PVOID points, LONG count, LONG mode)
 {
     if (count < 2)
@@ -559,6 +579,7 @@ ULONG CreatePolygonRgn(PVOID points, LONG count, LONG mode)
     lx_guest_store_u32(n, (ULONG)count);
     return CreatePolyPolygonRgn(points, n, 1, mode);
 }
+
 BOOL EqualRgn(ULONG first, ULONG second)
 {
     LxHandleBorrow a = {0}, b = {0};
@@ -579,6 +600,7 @@ BOOL EqualRgn(ULONG first, ULONG second)
     lx_handle_release(&a);
     return same;
 }
+
 LONG OffsetRgn(ULONG h, LONG dx, LONG dy)
 {
     LxHandleBorrow borrow = {0};
@@ -614,6 +636,7 @@ LONG OffsetRgn(ULONG h, LONG dx, LONG dy)
         open32SetError(87);
     return result;
 }
+
 BOOL PtInRegion(ULONG h, LONG x, LONG y)
 {
     LxHandleBorrow borrow = {0};
@@ -636,6 +659,7 @@ BOOL PtInRegion(ULONG h, LONG x, LONG y)
     lx_handle_release(&borrow);
     return found;
 }
+
 BOOL RectInRegion(ULONG h, PVOID p)
 {
     LxHandleBorrow borrow = {0};
@@ -660,6 +684,7 @@ BOOL RectInRegion(ULONG h, PVOID p)
     lx_handle_release(&borrow);
     return found;
 }
+
 LONG GetClipRgn(ULONG h, ULONG out)
 {
     if (!out)
@@ -706,6 +731,7 @@ LONG GetClipRgn(ULONG h, ULONG out)
         open32SetError(8);
     return result;
 }
+
 LONG ExtSelectClipRgn(ULONG h, ULONG region, LONG mode)
 {
     if (mode == 5)
@@ -727,6 +753,7 @@ LONG ExtSelectClipRgn(ULONG h, ULONG region, LONG mode)
     open32DeleteRegion(base);
     return result;
 }
+
 BOOL RectVisible(ULONG h, PVOID p)
 {
     Open32DC *dc = open32FindDC(h);
@@ -768,6 +795,7 @@ BOOL RectVisible(ULONG h, PVOID p)
     open32DeleteRegion(clip);
     return result;
 }
+
 BOOL FillRgn(ULONG h, ULONG region, ULONG brush)
 {
     LxHandleBorrow borrow = {0};
@@ -791,6 +819,7 @@ BOOL FillRgn(ULONG h, ULONG region, ULONG brush)
     lx_handle_release(&borrow);
     return ok;
 }
+
 BOOL PaintRgn(ULONG h, ULONG region)
 {
     Open32DC *dc = open32FindDC(h);
@@ -801,6 +830,7 @@ BOOL PaintRgn(ULONG h, ULONG region)
     }
     return FillRgn(h, region, dc->brush_handle);
 }
+
 BOOL FrameRgn(ULONG h, ULONG region, ULONG brush, LONG width, LONG height)
 {
     if (!open32FindDC(h))
@@ -841,6 +871,7 @@ BOOL FrameRgn(ULONG h, ULONG region, ULONG brush, LONG width, LONG height)
         open32DeleteRegion(interior);
     return ok;
 }
+
 LONG GetUpdateRgn(ULONG window, ULONG output, BOOL erase)
 {
     PmRegion raw = {0};

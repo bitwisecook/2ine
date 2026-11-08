@@ -34,6 +34,7 @@ static struct
     int writable;
     FATFS fs;
 } media;
+
 static int result(FRESULT value)
 {
     if (value == FR_OK)
@@ -49,14 +50,17 @@ static int result(FRESULT value)
                                                         : EINVAL;
     return 0;
 }
+
 void *ff_memalloc(UINT n)
 {
     return malloc(n);
 }
+
 void ff_memfree(void *p)
 {
     free(p);
 }
+
 DWORD get_fattime(void)
 {
     time_t now = time(NULL);
@@ -74,14 +78,17 @@ DWORD get_fattime(void)
     return (year - 1980) << 25 | (date.tm_mon + 1) << 21 | date.tm_mday << 16 | date.tm_hour << 11 |
            date.tm_min << 5 | date.tm_sec / 2;
 }
+
 DSTATUS disk_initialize(BYTE drive)
 {
     return drive || !media.file ? STA_NOINIT : media.writable ? 0 : STA_PROTECT;
 }
+
 DSTATUS disk_status(BYTE drive)
 {
     return disk_initialize(drive);
 }
+
 DRESULT disk_read(BYTE drive, BYTE *data, LBA_t sector, UINT count)
 {
     if (drive || !media.file || !count || sector > media.bytes / media.sector ||
@@ -92,6 +99,7 @@ DRESULT disk_read(BYTE drive, BYTE *data, LBA_t sector, UINT count)
         return RES_ERROR;
     return RES_OK;
 }
+
 DRESULT disk_write(BYTE drive, const BYTE *data, LBA_t sector, UINT count)
 {
     if (!media.writable)
@@ -104,6 +112,7 @@ DRESULT disk_write(BYTE drive, const BYTE *data, LBA_t sector, UINT count)
         return RES_ERROR;
     return RES_OK;
 }
+
 DRESULT disk_ioctl(BYTE drive, BYTE command, void *data)
 {
     if (drive || !media.file)
@@ -130,10 +139,12 @@ DRESULT disk_ioctl(BYTE drive, BYTE command, void *data)
         return RES_PARERR;
     return RES_OK;
 }
+
 static unsigned le16v(const unsigned char *p)
 {
     return p[0] | (unsigned)p[1] << 8;
 }
+
 static int source_kind(FILE *file)
 {
     unsigned char boot[512];
@@ -154,6 +165,7 @@ static int source_kind(FILE *file)
         }
     return 0;
 }
+
 int tb_fat_volume(const char *path)
 {
     char *source = tb_image_source(path);
@@ -167,6 +179,7 @@ int tb_fat_volume(const char *path)
     fclose(file);
     return kind;
 }
+
 static int begin_source(const char *source, int writable, int mount)
 {
     memset(&media, 0, sizeof media);
@@ -205,6 +218,7 @@ fail:
     return 0;
 }
 }
+
 static int begin(const char *path, int writable, const char *expected)
 {
     int readonly = tb_image_protected(path);
@@ -228,6 +242,7 @@ static int begin(const char *path, int writable, const char *expected)
     free(source);
     return ok;
 }
+
 static void end(void)
 {
     int saved = errno;
@@ -237,6 +252,7 @@ static void end(void)
     media.file = NULL;
     errno = saved;
 }
+
 static char *member_path(const char *path)
 {
     const char *member = tb_image_member(path);
@@ -299,6 +315,7 @@ static char *member_path(const char *path)
     free(copy);
     return out;
 }
+
 int tb_fat_info(const char *path, TbImageInfo *info)
 {
     char *name = member_path(path);
@@ -358,6 +375,7 @@ int tb_fat_info(const char *path, TbImageInfo *info)
     free(name);
     return ok;
 }
+
 char **tb_fat_names(const char *path, size_t *count)
 {
     *count = (size_t)-1;
@@ -408,6 +426,7 @@ char **tb_fat_names(const char *path, size_t *count)
     *count = n;
     return names;
 }
+
 FILE *tb_fat_fopen(const char *path)
 {
     char *name = member_path(path);
@@ -428,10 +447,12 @@ FILE *tb_fat_fopen(const char *path)
         snapshot = tmpfile();
         ok = snapshot != NULL;
     }
+
     enum
     {
         BUFFER_SIZE = 65536
     };
+
     unsigned char *data = ok ? malloc(BUFFER_SIZE) : NULL;
     if (ok && !data)
         ok = 0;
@@ -461,6 +482,7 @@ FILE *tb_fat_fopen(const char *path)
     }
     return snapshot;
 }
+
 static int zero_until(FIL *file, FSIZE_t offset)
 {
     if (f_size(file) >= offset)
@@ -482,6 +504,7 @@ static int zero_until(FIL *file, FSIZE_t offset)
     }
     return 1;
 }
+
 int tb_fat_modify(const char *path, const char *expected, int action, uint64_t offset,
                   const void *data, size_t size, const char *target)
 {
@@ -606,6 +629,7 @@ int tb_fat_modify(const char *path, const char *expected, int action, uint64_t o
     free(other);
     return ok;
 }
+
 int tb_fat_format(const char *path, const char *filesystem, uint64_t bytes)
 {
     if (bytes < 1024 * 1024 || bytes > INT64_MAX || bytes % 512)

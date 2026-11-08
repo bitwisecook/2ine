@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+
 int lx_diagnostic_icmp_open(int *kind)
 {
     int fd;
@@ -29,6 +30,7 @@ static uint16_t network16(const unsigned char *p)
 {
     return (uint16_t)((p[0] << 8) | p[1]);
 }
+
 int64_t lx_diagnostic_icmp_recv(int fd, int kind, unsigned char *packet, size_t capacity, int flags,
                                 uint16_t echo_id, LxHostSocketAddress *address)
 {

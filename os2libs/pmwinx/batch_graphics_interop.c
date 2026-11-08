@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmgpi.h"
 #include "os2libs/printer_catalogue.h"
+
 LONG SetAbortProc(ULONG h, ULONG procedure)
 {
     Open32DC *dc = open32FindDC(h);
@@ -17,6 +18,7 @@ LONG SetAbortProc(ULONG h, ULONG procedure)
     dc->abort_proc = procedure;
     return 1;
 }
+
 BOOL open32AbortCheck(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -26,6 +28,7 @@ BOOL open32AbortCheck(ULONG h)
         return TRUE;
     return lx_execution_callback32_4(GLoaderState.execution, dc->abort_proc, h, 0, 0, 0) != 0;
 }
+
 BOOL ResetDC(ULONG h, PVOID mode)
 {
     Open32DC *dc = open32FindDC(h);
@@ -40,6 +43,7 @@ BOOL ResetDC(ULONG h, PVOID mode)
     /* The original returns the HDC itself despite the SDK's BOOL declaration. */
     return h;
 }
+
 ULONG DeviceCapabilities(PSZ device, PSZ port, ULONG capability, PVOID output, PVOID mode)
 {
     (void)port;
@@ -128,6 +132,7 @@ ULONG DeviceCapabilities(PSZ device, PSZ port, ULONG capability, PVOID output, P
             return UINT32_MAX;
     }
 }
+
 LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
 {
     Open32DC *dc = open32FindDC(h);
@@ -354,13 +359,16 @@ LONG Escape(ULONG h, LONG code, LONG count, PVOID input, PVOID output)
     }
     return DevEscape(GpiQueryDevice(h), code, count, input, NULL, NULL);
 }
+
 /* Translating one object again yields the same partner while both handles stay valid. */
 typedef struct TranslatedHandle
 {
     ULONG open32, native, type;
     struct TranslatedHandle *next;
 } TranslatedHandle;
+
 static _Thread_local TranslatedHandle *translations;
+
 static BOOL native_handle_valid(ULONG handle, ULONG type)
 {
     LxHandleBorrow borrow = {0};
@@ -372,6 +380,7 @@ static BOOL native_handle_valid(ULONG handle, ULONG type)
     lx_handle_release(&borrow);
     return valid;
 }
+
 static ULONG translated_handle(ULONG object, ULONG direction, ULONG type)
 {
     TranslatedHandle **link = &translations;
@@ -391,6 +400,7 @@ static ULONG translated_handle(ULONG object, ULONG direction, ULONG type)
     }
     return 0;
 }
+
 static ULONG remember_handle(ULONG open32, ULONG native, ULONG type, ULONG result)
 {
     TranslatedHandle *entry = open32 && native ? malloc(sizeof *entry) : NULL;
@@ -401,6 +411,7 @@ static ULONG remember_handle(ULONG open32, ULONG native, ULONG type, ULONG resul
     }
     return result;
 }
+
 BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count, ULONG direction)
 {
     (void)direction;
@@ -446,6 +457,7 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
     }
     return TRUE;
 }
+
 ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type)
 {
     direction &= 255;

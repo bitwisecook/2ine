@@ -22,6 +22,7 @@ static _Thread_local struct
     int64_t value;
     int valid;
 } file_time_cache[4096];
+
 void tb_file_time_cache_reset(void)
 {
     memset(file_time_cache, 0, sizeof file_time_cache);
@@ -31,6 +32,7 @@ void tb_file_time_cache_reset(void)
     file_time_calendar = NULL;
 #endif
 }
+
 int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
 {
     uint64_t key = ((uint64_t)date << 32) | clock;
@@ -79,6 +81,7 @@ int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
     }
     return file_time_cache[slot].value;
 }
+
 #ifdef __linux__
 #include <fcntl.h>
 #include <sys/syscall.h>
@@ -89,6 +92,7 @@ int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
 #include <wchar.h>
 #include <io.h>
 #define strdup _strdup
+
 static void path_errno(DWORD error)
 {
     switch (error)
@@ -124,6 +128,7 @@ static void path_errno(DWORD error)
             break;
     }
 }
+
 static wchar_t *wide(const char *s)
 {
     int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, NULL, 0);
@@ -141,6 +146,7 @@ static wchar_t *wide(const char *s)
     }
     return w;
 }
+
 static char *utf8(const wchar_t *w)
 {
     int n = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, w, -1, NULL, 0, NULL, NULL);
@@ -158,6 +164,7 @@ static char *utf8(const wchar_t *w)
     }
     return s;
 }
+
 char *tb_absolute(const char *path)
 {
     if (tb_image_path(path))
@@ -188,6 +195,7 @@ char *tb_absolute(const char *path)
     free(w);
     return result;
 }
+
 char *tb_canonical(const char *path)
 {
     if (tb_image_path(path))
@@ -243,6 +251,7 @@ char *tb_canonical(const char *path)
     errno = error;
     return result;
 }
+
 static DWORD attributes(const char *path)
 {
     wchar_t *w = wide(path);
@@ -252,6 +261,7 @@ static DWORD attributes(const char *path)
     free(w);
     return a;
 }
+
 int tb_is_dir(const char *p)
 {
     if (tb_image_path(p))
@@ -262,6 +272,7 @@ int tb_is_dir(const char *p)
     DWORD a = attributes(p);
     return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY);
 }
+
 int tb_is_file(const char *p)
 {
     if (tb_image_path(p))
@@ -272,6 +283,7 @@ int tb_is_file(const char *p)
     DWORD a = attributes(p);
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
+
 FILE *tb_fopen(const char *p, const char *mode)
 {
     if (tb_image_path(p))
@@ -289,6 +301,7 @@ FILE *tb_fopen(const char *p, const char *mode)
     free(m);
     return f;
 }
+
 static int mkdir_one(const char *p)
 {
     wchar_t *w = wide(p);
@@ -296,6 +309,7 @@ static int mkdir_one(const char *p)
     free(w);
     return ok;
 }
+
 char **tb_names(const char *dir, size_t *count)
 {
     if (tb_image_path(dir))
@@ -335,10 +349,12 @@ char **tb_names(const char *dir, size_t *count)
     CloseHandle(h);
     return list;
 }
+
 int tb_path_equal(const char *a, const char *b, size_t n)
 {
     return _strnicmp(a, b, n) == 0;
 }
+
 char *tb_home(void)
 {
     const wchar_t *p = _wgetenv(L"USERPROFILE");
@@ -354,12 +370,14 @@ char *tb_home(void)
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/file.h>
+
 char *tb_canonical(const char *p)
 {
     if (tb_image_path(p))
         return tb_image_canonical(p);
     return realpath(p, NULL);
 }
+
 char *tb_absolute(const char *p)
 {
     if (tb_image_path(p))
@@ -416,6 +434,7 @@ char *tb_absolute(const char *p)
     free(copy);
     return result;
 }
+
 int tb_is_dir(const char *p)
 {
     if (tb_image_path(p))
@@ -426,6 +445,7 @@ int tb_is_dir(const char *p)
     struct stat s;
     return !stat(p, &s) && S_ISDIR(s.st_mode);
 }
+
 int tb_is_file(const char *p)
 {
     if (tb_image_path(p))
@@ -436,6 +456,7 @@ int tb_is_file(const char *p)
     struct stat s;
     return !stat(p, &s) && S_ISREG(s.st_mode);
 }
+
 FILE *tb_fopen(const char *p, const char *m)
 {
     if (tb_image_path(p))
@@ -449,10 +470,12 @@ FILE *tb_fopen(const char *p, const char *m)
     }
     return fopen(p, m);
 }
+
 static int mkdir_one(const char *p)
 {
     return !mkdir(p, 0700) || errno == EEXIST;
 }
+
 char **tb_names(const char *dir, size_t *count)
 {
     if (tb_image_path(dir))
@@ -479,10 +502,12 @@ char **tb_names(const char *dir, size_t *count)
     closedir(d);
     return list;
 }
+
 int tb_path_equal(const char *a, const char *b, size_t n)
 {
     return !strncmp(a, b, n);
 }
+
 char *tb_home(void)
 {
     const char *p = getenv("HOME");
@@ -502,6 +527,7 @@ void tb_names_free(char **names, size_t count)
         free(names[i]);
     free(names);
 }
+
 int tb_mkdirs(const char *p)
 {
     if (tb_image_path(p))
@@ -529,6 +555,7 @@ int tb_mkdirs(const char *p)
     free(copy);
     return ok && mkdir_one(p) && tb_is_dir(p);
 }
+
 static int write_atomic(const char *path, const void *data, size_t length, const char *source)
 {
     if (tb_image_path(path))
@@ -627,10 +654,12 @@ static int write_atomic(const char *path, const void *data, size_t length, const
     free(tmp);
     return ok;
 }
+
 int tb_atomic_write(const char *p, const void *d, size_t n)
 {
     return write_atomic(p, d, n, NULL);
 }
+
 int tb_copy(const char *s, const char *d)
 {
     return write_atomic(d, NULL, 0, s);
@@ -787,6 +816,7 @@ int tb_is_link(const char *path)
     return !lstat(path, &s) && S_ISLNK(s.st_mode);
 #endif
 }
+
 int tb_mkdir_new(const char *path)
 {
     if (tb_image_path(path))
@@ -800,6 +830,7 @@ int tb_mkdir_new(const char *path)
     return !mkdir(path, 0700);
 #endif
 }
+
 int tb_copy_new(const char *source, const char *destination)
 {
     if (tb_image_path(destination))
@@ -1248,6 +1279,7 @@ static uint32_t runtime_word(const unsigned char *p, int big)
     return big ? (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3]
                : (uint32_t)p[3] << 24 | (uint32_t)p[2] << 16 | (uint32_t)p[1] << 8 | p[0];
 }
+
 static int runtime_read(FILE *file, uint64_t size, uint64_t at, void *buffer, size_t length)
 {
     if (at > size || length > size - at || at > INT64_MAX)
@@ -1260,6 +1292,7 @@ static int runtime_read(FILE *file, uint64_t size, uint64_t at, void *buffer, si
         return 0;
     return fread(buffer, 1, length, file) == length;
 }
+
 static int runtime_cpu(uint32_t cpu, int format)
 {
 #if defined(__aarch64__) || defined(__arm64__) || defined(_M_ARM64)
@@ -1276,6 +1309,7 @@ static int runtime_cpu(uint32_t cpu, int format)
     return 0;
 #endif
 }
+
 int tb_host_native_execution(void)
 {
 #if defined(__linux__) && (defined(__i386__) || defined(__x86_64__))
@@ -1284,6 +1318,7 @@ int tb_host_native_execution(void)
     return 0;
 #endif
 }
+
 int tb_host_uses_dyld(void)
 {
 #ifdef __APPLE__
@@ -1292,6 +1327,7 @@ int tb_host_uses_dyld(void)
     return 0;
 #endif
 }
+
 int tb_host_executable(const char *path)
 {
     if (!path || tb_image_path(path))

@@ -3,6 +3,7 @@
 #define TWOINE_OPEN32_DRAWING_H
 #include "os2libs/os2native.h"
 #include "os2libs/pmwin.h"
+
 typedef struct Open32DC
 {
     HPS ps;
@@ -35,6 +36,7 @@ typedef struct Open32DC
     struct Open32SavedDC *saved;
     struct Open32DC *next;
 } Open32DC;
+
 void open32SavedDCCleanup(Open32DC *dc);
 BOOL open32BrushPixel(Open32DC *dc, LONG x, LONG y, uint32 *rgb);
 ULONG open32DibPatternBrush(PVOID information, PVOID bits, ULONG usage, BOOL monochrome);

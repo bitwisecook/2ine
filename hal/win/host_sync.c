@@ -8,11 +8,13 @@
 #include <stdlib.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 struct LxHostMutex
 {
     HANDLE object;
     volatile LONG held;
 };
+
 LxHostMutex *lx_host_mutex_create(int recursive, int owned)
 {
     (void)recursive;
@@ -28,6 +30,7 @@ LxHostMutex *lx_host_mutex_create(int recursive, int owned)
     }
     return m;
 }
+
 LxHostNamedMutexResult lx_host_mutex_open_named(const char *name, int create, int owned,
                                                 LxHostMutex **output)
 {
@@ -51,6 +54,7 @@ LxHostNamedMutexResult lx_host_mutex_open_named(const char *name, int create, in
     *output = mutex;
     return LX_HOST_NAMED_MUTEX_OK;
 }
+
 LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
 {
     DWORD result = WaitForSingleObject(m->object, timeout == UINT32_MAX ? INFINITE : timeout);
@@ -65,6 +69,7 @@ LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
     return result == WAIT_TIMEOUT ? (timeout ? LX_HOST_LOCK_TIMEOUT : LX_HOST_LOCK_BUSY)
                                   : LX_HOST_LOCK_FAILED;
 }
+
 LxHostLockResult lx_host_mutex_unlock(LxHostMutex *m)
 {
     if (!ReleaseMutex(m->object))
@@ -72,10 +77,12 @@ LxHostLockResult lx_host_mutex_unlock(LxHostMutex *m)
     InterlockedDecrement(&m->held);
     return LX_HOST_LOCK_OK;
 }
+
 int lx_host_mutex_busy(LxHostMutex *m)
 {
     return InterlockedCompareExchange(&m->held, 0, 0) != 0;
 }
+
 LxHostLockResult lx_host_mutex_destroy(LxHostMutex *m)
 {
     if (m->held)
@@ -85,11 +92,13 @@ LxHostLockResult lx_host_mutex_destroy(LxHostMutex *m)
     free(m);
     return LX_HOST_LOCK_OK;
 }
+
 struct LxHostMonitor
 {
     CRITICAL_SECTION mutex;
     CONDITION_VARIABLE condition;
 };
+
 LxHostMonitor *lx_host_monitor_create(void)
 {
     LxHostMonitor *m = calloc(1, sizeof *m);
@@ -103,25 +112,30 @@ LxHostMonitor *lx_host_monitor_create(void)
     InitializeConditionVariable(&m->condition);
     return m;
 }
+
 void lx_host_monitor_destroy(LxHostMonitor *m)
 {
     DeleteCriticalSection(&m->mutex);
     free(m);
 }
+
 void lx_host_monitor_lock(LxHostMonitor *m)
 {
     EnterCriticalSection(&m->mutex);
 }
+
 void lx_host_monitor_unlock(LxHostMonitor *m)
 {
     LeaveCriticalSection(&m->mutex);
 }
+
 LxHostLockResult lx_host_monitor_wait(LxHostMonitor *m, uint32_t ms)
 {
     if (SleepConditionVariableCS(&m->condition, &m->mutex, ms == UINT32_MAX ? INFINITE : ms))
         return LX_HOST_LOCK_OK;
     return GetLastError() == ERROR_TIMEOUT ? LX_HOST_LOCK_TIMEOUT : LX_HOST_LOCK_FAILED;
 }
+
 void lx_host_monitor_wake_all(LxHostMonitor *m)
 {
     WakeAllConditionVariable(&m->condition);

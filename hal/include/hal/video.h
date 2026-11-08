@@ -7,6 +7,7 @@ typedef struct LxHostWindow LxHostWindow;
 void lx_host_window_set_cycle_policy(LxHostWindow *window, int eligible, int modal);
 void lx_host_window_get_cycle_policy(LxHostWindow *window, int *eligible, int *modal);
 typedef struct LxHostPointer LxHostPointer;
+
 typedef enum
 {
     LX_HOST_POINTER_ARROW,
@@ -20,6 +21,7 @@ typedef enum
     LX_HOST_POINTER_NS,
     LX_HOST_POINTER_ILLEGAL
 } LxHostPointerShape;
+
 LxHostPointer *lx_host_pointer_create(LxHostPointerShape shape);
 /* Pixels are top-down 0xAARRGGBB values. The factory copies their contents. */
 LxHostPointer *lx_host_pointer_create_color(const uint32_t *pixels, unsigned width, unsigned height,
@@ -28,10 +30,12 @@ void lx_host_pointer_destroy(LxHostPointer *pointer);
 /* Selecting a shape preserves visibility; NULL removes the current pointer.
    The caller applies its display-level policy through lx_host_pointer_show. */
 int lx_host_pointer_set(LxHostPointer *pointer);
+
 typedef struct LxHostRect
 {
     int x, y, w, h;
 } LxHostRect;
+
 typedef enum LxHostEventType
 {
     LX_HOST_EVENT_OTHER,
@@ -53,6 +57,7 @@ typedef enum LxHostEventType
     LX_HOST_EVENT_RESTORED,
     LX_HOST_EVENT_MOVED
 } LxHostEventType;
+
 typedef enum
 {
     LX_HOST_KEY_BACKSPACE = 0x100,
@@ -75,12 +80,14 @@ typedef enum
     LX_HOST_KEY_KP_ENTER,
     LX_HOST_KEY_F1 = 0x120
 } LxHostKey;
+
 enum
 {
     LX_HOST_MOD_SHIFT = 1,
     LX_HOST_MOD_CTRL = 2,
     LX_HOST_MOD_ALT = 4
 };
+
 typedef struct LxHostEvent
 {
     LxHostEventType type;
@@ -92,6 +99,7 @@ typedef struct LxHostEvent
     unsigned clicks;
     char text[64];
 } LxHostEvent;
+
 /* Each successful initialization owns one reference, released by video_quit. */
 int lx_host_video_initialize(int *width, int *height);
 /* Release a renderer's GL binding before a separate graphics context is bound. */

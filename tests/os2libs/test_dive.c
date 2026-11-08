@@ -19,12 +19,14 @@
         }                                                                                          \
     } while (0)
 static ULONG instance, image;
+
 static void *blit_worker(void *unused)
 {
     (void)unused;
     CHECK(DiveBlitImage(instance, image, DIVE_BUFFER_SCREEN) == DIVE_SUCCESS);
     return NULL;
 }
+
 int main(void)
 {
     HAB hab = WinInitialize(0);

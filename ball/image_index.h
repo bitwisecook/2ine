@@ -7,6 +7,7 @@ typedef struct IndexedEntry
     char *name;
     Node node;
 } IndexedEntry;
+
 typedef struct IndexedDirectory
 {
     struct IndexedDirectory *next;
@@ -14,6 +15,7 @@ typedef struct IndexedDirectory
     IndexedEntry *entries;
     size_t count, capacity, bytes;
 } IndexedDirectory;
+
 typedef struct ImageIndex
 {
     Disk disk;
@@ -21,6 +23,7 @@ typedef struct ImageIndex
     size_t bytes;
     uint64_t builds, hits;
 } ImageIndex;
+
 static void indexed_directory_free(IndexedDirectory *directory)
 {
     for (size_t i = 0; i < directory->count; i++)
@@ -28,6 +31,7 @@ static void indexed_directory_free(IndexedDirectory *directory)
     free(directory->entries);
     free(directory);
 }
+
 static void image_index_free(void *opaque)
 {
     ImageIndex *index = opaque;
@@ -44,11 +48,13 @@ static void image_index_free(void *opaque)
     free(index->disk.fat);
     free(index);
 }
+
 typedef struct IndexBuild
 {
     ImageIndex *index;
     IndexedDirectory *directory;
 } IndexBuild;
+
 static int indexed_entry(void *opaque, const char *name, const Node *node)
 {
     IndexBuild *build = opaque;
@@ -75,6 +81,7 @@ static int indexed_entry(void *opaque, const char *name, const Node *node)
     directory->entries[directory->count++] = (IndexedEntry){copy, *node};
     return 1;
 }
+
 static int entries(Disk *disk, Node node, EntryCallback callback, void *context)
 {
     if (!node.directory)

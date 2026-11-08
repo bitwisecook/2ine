@@ -16,12 +16,14 @@ static pthread_mutex_t media_cache_lock = PTHREAD_MUTEX_INITIALIZER;
 #define MEDIA_CACHED_SOURCES 4
 #define MEDIA_CACHED_PARENTS 16
 #define MEDIA_SOURCE_CACHE_BYTES (64u * 1024u * 1024u)
+
 typedef struct MediaCacheEntry
 {
     char *path;
     TbReadStream *stream;
     uint64_t used;
 } MediaCacheEntry;
+
 typedef struct MediaSourceCache
 {
     char *host;
@@ -31,8 +33,10 @@ typedef struct MediaSourceCache
     uint64_t clock, used;
     int leased;
 } MediaSourceCache;
+
 static MediaSourceCache *media_sources[MEDIA_CACHED_SOURCES];
 static uint64_t media_cache_clock;
+
 static _Thread_local struct
 {
     MediaSourceCache *sources[MEDIA_CACHED_SOURCES], *current;
@@ -40,6 +44,7 @@ static _Thread_local struct
     int active;
     TbMediaReadStats stats;
 } media_session;
+
 static void destroy_media_cache(MediaSourceCache *source)
 {
     for (size_t i = 0; i < MEDIA_CACHED_PARENTS; i++)
@@ -50,6 +55,7 @@ static void destroy_media_cache(MediaSourceCache *source)
     free(source->host);
     free(source);
 }
+
 static void media_cache_peak(void)
 {
     uint64_t bytes = 0;
@@ -58,6 +64,7 @@ static void media_cache_peak(void)
     if (bytes > media_session.stats.peak_cache_bytes)
         media_session.stats.peak_cache_bytes = bytes;
 }
+
 void tb_media_session_end(void)
 {
     CACHE_LOCK();
@@ -67,16 +74,19 @@ void tb_media_session_end(void)
     memset(&media_session, 0, sizeof media_session);
     tb_file_time_cache_reset();
 }
+
 void tb_media_session_begin(void)
 {
     tb_media_session_end();
     media_session.active = 1;
 }
+
 TbMediaReadStats tb_media_read_stats(void)
 {
     media_cache_peak();
     return media_session.stats;
 }
+
 static void select_media_cache(const char *host)
 {
     media_session.current = NULL;
@@ -145,6 +155,7 @@ static void select_media_cache(const char *host)
     CACHE_UNLOCK();
     media_cache_peak();
 }
+
 static TbReadStream *cached_parent(const char *path, size_t length)
 {
     MediaSourceCache *source = media_session.current;
@@ -162,6 +173,7 @@ static TbReadStream *cached_parent(const char *path, size_t length)
     }
     return NULL;
 }
+
 static void cache_parent(const char *path, size_t length, TbReadStream *stream)
 {
     MediaSourceCache *source = media_session.current;
@@ -190,5 +202,6 @@ static void cache_parent(const char *path, size_t length, TbReadStream *stream)
     tb_stream_close(entry->stream);
     *entry = (MediaCacheEntry){name, stream, ++source->clock};
 }
+
 #undef CACHE_LOCK
 #undef CACHE_UNLOCK

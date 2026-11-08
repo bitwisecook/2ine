@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "guest/abi.h"
 #include <ctype.h>
+
 typedef struct PmAccelerator
 {
     struct PmAccelerator *next;
@@ -12,6 +13,7 @@ typedef struct PmAccelerator
     size_t size;
     uint8 data[];
 } PmAccelerator;
+
 static void destroy_accelerator(void *resource)
 {
     PmAccelerator *table = resource;
@@ -22,6 +24,7 @@ static void destroy_accelerator(void *resource)
         *slot = table->next;
     free(table);
 }
+
 static PmAccelerator *borrow_table(ULONG handle, LxHandleBorrow *borrow)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -35,6 +38,7 @@ static PmAccelerator *borrow_table(ULONG handle, LxHandleBorrow *borrow)
     }
     return table;
 }
+
 ULONG WinCreateAccelTable(HAB hab, PVOID data)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -69,6 +73,7 @@ ULONG WinCreateAccelTable(HAB hab, PVOID data)
     anchor->accelerators = table;
     return table->handle;
 }
+
 ULONG WinLoadAccelTable(HAB hab, HMODULE module, ULONG id)
 {
     if (!getAnchorBlock(hab) || !GLoaderState.getResource || !GLoaderState.queryResourceSize)
@@ -84,6 +89,7 @@ ULONG WinLoadAccelTable(HAB hab, HMODULE module, ULONG id)
         GLoaderState.freeResource(resource);
     return result;
 }
+
 ULONG WinCopyAccelTable(ULONG handle, PVOID data, ULONG size)
 {
     LxHandleBorrow borrow = {0};
@@ -96,10 +102,12 @@ ULONG WinCopyAccelTable(ULONG handle, PVOID data, ULONG size)
     lx_handle_release(&borrow);
     return result;
 }
+
 static int unused_accelerator(void *resource)
 {
     return ((PmAccelerator *)resource)->users == 0;
 }
+
 BOOL WinDestroyAccelTable(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -109,17 +117,20 @@ BOOL WinDestroyAccelTable(ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 void releaseWindowAccelerator(Window *window)
 {
     if (window->accelerator.resource)
         ((PmAccelerator *)window->accelerator.resource)->users--;
     lx_handle_release(&window->accelerator);
 }
+
 void destroyAccelerators(AnchorBlock *anchor)
 {
     while (anchor->accelerators)
         lx_handle_close(anchor->accelerators->handle, LX_HANDLE_PM_ACCEL);
 }
+
 BOOL WinSetAccelTable(HAB hab, ULONG handle, HWND frame)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -138,6 +149,7 @@ BOOL WinSetAccelTable(HAB hab, ULONG handle, HWND frame)
     window->accelerator = borrow;
     return TRUE;
 }
+
 ULONG WinQueryAccelTable(HAB hab, HWND frame)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -145,6 +157,7 @@ ULONG WinQueryAccelTable(HAB hab, HWND frame)
     PmAccelerator *table = window ? window->accelerator.resource : NULL;
     return table ? table->handle : 0;
 }
+
 BOOL WinTranslateAccel(HAB hab, HWND frame, ULONG handle, PQMSG message)
 {
     TRACE_NATIVE("WinTranslateAccel(%u, %u, %u, %p)", (uint)hab, (uint)frame, (uint)handle,

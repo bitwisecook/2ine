@@ -4,6 +4,7 @@
 #include "hal/host.h"
 #include <stdio.h>
 #include <time.h>
+
 uint64_t lx_host_realtime_us(void)
 {
     struct timespec now;
@@ -51,6 +52,7 @@ int lx_host_calendar_seconds(const LxHostCalendar *calendar, int utc, int64_t *s
     *seconds = (int64_t)result;
     return 1;
 }
+
 void lx_host_zone_names(char standard[32], char daylight[32])
 {
     tzset();

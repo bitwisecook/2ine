@@ -4,21 +4,25 @@
 #define TWOINE_HOST_PRINT_H
 #include <stddef.h>
 #include <stdio.h>
+
 typedef enum LxHostSaveResult
 {
     LX_HOST_SAVE_ERROR = -1,
     LX_HOST_SAVE_CANCEL = 0,
     LX_HOST_SAVE_OK = 1
 } LxHostSaveResult;
+
 /* Returns caller-owned UTF-8 storage on success. The explicit host-only
    TWOINE_PRINT_OUTPUT override provides a destination for unattended jobs. */
 LxHostSaveResult lx_host_print_save_path(const char *title, const char *extension, char **path);
+
 typedef struct LxHostPrintDestination
 {
     char *path;
     char *printer;
     unsigned copies;
 } LxHostPrintDestination;
+
 /* The destination contains exactly one owned path or system-printer name. */
 LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestination *destination);
 /* Selects the native PDF (1) or PCL (2) OS/2 device for a common print dialog. */

@@ -6,10 +6,12 @@ static uint32 bridge32_WinAddSwitchEntry(uint8 *a)
                ? WinAddSwitchEntry(&value)
                : 0;
 }
+
 static uint32 bridge32_WinRemoveSwitchEntry(uint8 *a)
 {
     return WinRemoveSwitchEntry(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_WinChangeSwitchEntry(uint8 *a)
 {
     SWCNTRL value;
@@ -17,6 +19,7 @@ static uint32 bridge32_WinChangeSwitchEntry(uint8 *a)
                ? WinChangeSwitchEntry(lx_guest_load_u32(a), &value)
                : ERROR_INVALID_PARAMETER;
 }
+
 static uint32 bridge32_WinQuerySwitchEntry(uint8 *a)
 {
     SWCNTRL value;
@@ -30,10 +33,12 @@ static uint32 bridge32_WinQuerySwitchEntry(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_WinQuerySwitchHandle(uint8 *a)
 {
     return WinQuerySwitchHandle(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static int profile_strings(uint8 *arguments, char **strings, unsigned count)
 {
     for (unsigned i = 0; i < count; i++)
@@ -50,11 +55,13 @@ static int profile_strings(uint8 *arguments, char **strings, unsigned count)
     }
     return 1;
 }
+
 static void profile_strings_free(char **strings, unsigned count)
 {
     for (unsigned i = 0; i < count; i++)
         free(strings[i]);
 }
+
 static uint32 bridge32_PrfOpenProfile(uint8 *a)
 {
     char *name[1];
@@ -64,10 +71,12 @@ static uint32 bridge32_PrfOpenProfile(uint8 *a)
     free(name[0]);
     return result;
 }
+
 static uint32 bridge32_PrfCloseProfile(uint8 *a)
 {
     return PrfCloseProfile(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_PrfQueryProfile(uint8 *a)
 {
     LxGuestBorrow record = {0}, user = {0}, system = {0};
@@ -94,6 +103,7 @@ done:
     lx_execution_release(&record);
     return result;
 }
+
 static uint32 bridge32_PrfQueryProfileInt(uint8 *a)
 {
     char *s[2];
@@ -104,6 +114,7 @@ static uint32 bridge32_PrfQueryProfileInt(uint8 *a)
     profile_strings_free(s, 2);
     return result;
 }
+
 static uint32 bridge32_PrfQueryProfileString(uint8 *a)
 {
     char *s[3];
@@ -119,6 +130,7 @@ static uint32 bridge32_PrfQueryProfileString(uint8 *a)
     profile_strings_free(s, 3);
     return result;
 }
+
 static uint32 bridge32_PrfWriteProfileString(uint8 *a)
 {
     char *s[3];
@@ -128,6 +140,7 @@ static uint32 bridge32_PrfWriteProfileString(uint8 *a)
     profile_strings_free(s, 3);
     return result;
 }
+
 static uint32 bridge32_PrfQueryProfileSize(uint8 *a)
 {
     char *s[2];
@@ -146,6 +159,7 @@ static uint32 bridge32_PrfQueryProfileSize(uint8 *a)
     profile_strings_free(s, 2);
     return result;
 }
+
 static uint32 bridge32_PrfQueryProfileData(uint8 *a)
 {
     char *s[2];
@@ -168,6 +182,7 @@ static uint32 bridge32_PrfQueryProfileData(uint8 *a)
     profile_strings_free(s, 2);
     return result;
 }
+
 static uint32 bridge32_PrfWriteProfileData(uint8 *a)
 {
     char *s[2];
@@ -201,21 +216,26 @@ static uint32 bridge32_WinQueryTaskSizePos(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_WinCreateSwitchEntry(uint8 *a)
 {
     SWCNTRL value;
     return lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a + 4), &value, sizeof value)
-        ? WinCreateSwitchEntry(lx_guest_load_u32(a), &value) : 0;
+               ? WinCreateSwitchEntry(lx_guest_load_u32(a), &value)
+               : 0;
 }
+
 static uint32 bridge32_WinQueryTaskTitle(uint8 *a)
 {
     LxGuestBorrow title = {0};
     ULONG capacity = lx_guest_load_u32(a + 8), result = ERROR_INVALID_PARAMETER;
     if (capacity && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 4), capacity,
-                                         LX_GUEST_WRITE, &title))
+                                        LX_GUEST_WRITE, &title))
         result = WinQueryTaskTitle(lx_guest_load_u32(a), title.host, capacity);
-    lx_execution_release(&title); return result;
+    lx_execution_release(&title);
+    return result;
 }
+
 /* PROGDETAILS guest offsets: 4 progc, 8 fbVisible, 12-32 pointers, 36 SWP, 72 total. */
 static uint32 bridge32_WinStartApp(uint8 *a)
 {

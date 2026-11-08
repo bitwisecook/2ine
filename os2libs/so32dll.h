@@ -4,12 +4,14 @@
 #define TWOINE_SO32DLL_H
 #include "os2types.h"
 OS2EXPORT uint32_t OS2API Os2LegacyGetHostId(void) OS2APIINFO(ord = 4, name = gethostid);
+
 typedef struct Os2LegacyAddress
 {
     uint16_t family, port;
     uint32_t address;
     uint8_t padding[8];
 } Os2LegacyAddress;
+
 OS2EXPORT int OS2API Os2LegacyAccept(int socket, Os2LegacyAddress *address, int *length)
     OS2APIINFO(ord = 1, name = accept);
 OS2EXPORT int OS2API Os2LegacyConnect(int socket, const Os2LegacyAddress *address, int length)

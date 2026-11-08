@@ -13,6 +13,7 @@
 #include "formats/ne.h"
 #include "runtime/execution.h"
 #include "hal/host_library.h"
+
 typedef struct LxMmaps
 {
     LxGuestMapping *mapping;
@@ -33,6 +34,7 @@ typedef struct LxExport
     const LxMmaps *object;
     int indirect;
 } LxExport;
+
 /* Absolute exports carry an immediate value rather than a mapped guest entry. */
 enum
 {
@@ -44,6 +46,7 @@ enum
 
 struct LxModule;
 typedef struct LxModule LxModule;
+
 typedef struct LxForwarder
 {
     LxModule *owner;
@@ -52,12 +55,14 @@ typedef struct LxForwarder
     char module_name[128];
     char name[256];
 } LxForwarder;
+
 struct LxModule
 {
     uint32 refcount;
     uint32 handle;
     int is_lx; // 1 if an LX module, 0 if NE.
     int entry16;
+
     union
     {
         LxHeader lx;

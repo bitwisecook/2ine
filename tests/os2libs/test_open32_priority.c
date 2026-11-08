@@ -21,6 +21,7 @@ ULONG GetPriorityClass(ULONG process);
 int open32ChildSetPriority(ULONG handle, LxHostProcessPriority priority, ULONG priority_class,
                            int *error);
 int open32ChildPriorityClass(ULONG handle, PULONG priority_class);
+
 int open32ChildSetPriority(ULONG handle, LxHostProcessPriority priority, ULONG priority_class,
                            int *error)
 {
@@ -29,16 +30,20 @@ int open32ChildSetPriority(ULONG handle, LxHostProcessPriority priority, ULONG p
     (void)error;
     return handle == UINT32_MAX ? 0 : -1;
 }
+
 int open32ChildPriorityClass(ULONG handle, PULONG priority_class)
 {
     (void)priority_class;
     return handle == UINT32_MAX ? 0 : -1;
 }
+
 static _Thread_local ULONG last_error;
+
 void open32SetError(ULONG error)
 {
     last_error = error;
 }
+
 #define CHECK(x)                                                                                   \
     do                                                                                             \
     {                                                                                              \
@@ -54,6 +59,7 @@ void open32SetError(ULONG error)
 static int forced_error;
 static unsigned calls, active;
 static LxHostProcessPriority selected;
+
 int lx_host_process_set_priority(LxHostProcessPriority priority)
 {
     CHECK(__atomic_add_fetch(&active, 1, __ATOMIC_SEQ_CST) == 1);
@@ -65,6 +71,7 @@ int lx_host_process_set_priority(LxHostProcessPriority priority)
     errno = error;
     return error ? -1 : 0;
 }
+
 static void *worker(void *argument)
 {
     ULONG saved = (ULONG)(uintptr_t)argument;
@@ -79,6 +86,7 @@ static void *worker(void *argument)
     }
     return NULL;
 }
+
 int main(void)
 {
     last_error = 0x555;
@@ -106,12 +114,14 @@ int main(void)
         CHECK(selected == levels[i]);
         CHECK(GetPriorityClass(UINT32_MAX) == classes[i] && last_error == 0x1234);
     }
+
     struct
     {
         int native;
         ULONG open32;
-    } errors[] = {{EACCES, 5}, {EPERM, 5}, {ENOTSUP, 50}, {ENOSYS, 50},
-                  {ENOMEM, 8}, {ESRCH, 303}, {EINVAL, 87}, {EIO, 31}};
+    } errors[] = {{EACCES, 5}, {EPERM, 5},   {ENOTSUP, 50}, {ENOSYS, 50},
+                  {ENOMEM, 8}, {ESRCH, 303}, {EINVAL, 87},  {EIO, 31}};
+
     for (unsigned i = 0; i < sizeof errors / sizeof errors[0]; i++)
     {
         forced_error = errors[i].native;
@@ -158,6 +168,7 @@ static void child(void)
     fflush(stdout);
     _exit(0);
 }
+
 int main(void)
 {
     errno = 0;

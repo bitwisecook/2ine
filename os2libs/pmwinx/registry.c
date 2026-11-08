@@ -15,10 +15,12 @@ typedef struct RegistryKey
     ULONG access, handle;
     struct RegistryKey *next;
 } RegistryKey;
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *mutex;
 static RegistryKey *keys;
 static HINI database;
+
 enum
 {
     KEY_QUERY_VALUE = 1,
@@ -37,6 +39,7 @@ static void initialize(void)
     const char *path = getenv("TWOINE_REGISTRY");
     database = lx_profile_open_host(path && *path ? path : ".2ine-registry.profile");
 }
+
 static const char *root_name(ULONG key)
 {
     switch (key)
@@ -57,6 +60,7 @@ static const char *root_name(ULONG key)
             return NULL;
     }
 }
+
 static char *lower_name(const char *name, const char *prefix)
 {
     size_t n = name ? strlen(name) : 0, p = strlen(prefix);
@@ -74,6 +78,7 @@ static char *lower_name(const char *name, const char *prefix)
     result[p + n] = 0;
     return result;
 }
+
 static char *key_path(ULONG key, const char *name, ULONG *access)
 {
     const char *root = root_name(key);
@@ -107,6 +112,7 @@ static char *key_path(ULONG key, const char *name, ULONG *access)
     }
     return path;
 }
+
 static void key_destroy(void *value)
 {
     RegistryKey *key = value;
@@ -120,6 +126,7 @@ static void key_destroy(void *value)
     free(key->path);
     free(key);
 }
+
 static ULONG key_new(char *path, ULONG access)
 {
     RegistryKey *key = calloc(1, sizeof *key);
@@ -140,11 +147,13 @@ static ULONG key_new(char *path, ULONG access)
     lx_host_monitor_unlock(mutex);
     return key->handle;
 }
+
 static int key_exists(const char *path)
 {
     ULONG size;
     return !strchr(path, '\\') || PrfQueryProfileSize(database, (PSZ)path, "k:", &size);
 }
+
 static BOOL touch_key(const char *path)
 {
     uint64 time = lx_host_realtime_us() * 10 + 116444736000000000ULL;
@@ -153,6 +162,7 @@ static BOOL touch_key(const char *path)
     lx_guest_store_u32(wire + 4, (uint32)(time >> 32));
     return PrfWriteProfileData(database, (PSZ)path, "t:", wire, sizeof wire);
 }
+
 static BOOL create_key_record(char *path, const char *class_name)
 {
     if (!PrfWriteProfileString(database, path, "k:", "") ||
@@ -167,12 +177,14 @@ static BOOL create_key_record(char *path, const char *class_name)
     *parent = '\\';
     return result;
 }
+
 LONG RegCloseKey(ULONG key)
 {
     if (root_name(key))
         return NO_ERROR;
     return lx_handle_close(key, LX_HANDLE_REGISTRY_KEY) ? NO_ERROR : ERROR_INVALID_HANDLE;
 }
+
 LONG RegOpenKeyEx(ULONG key, PSZ name, ULONG options, ULONG access, PULONG output)
 {
     TRACE_NATIVE("RegOpenKeyEx(%08X, '%s', %u, %X, %p)", (uint)key, name, (uint)options,
@@ -197,6 +209,7 @@ LONG RegOpenKeyEx(ULONG key, PSZ name, ULONG options, ULONG access, PULONG outpu
     free(path);
     return result;
 }
+
 LONG RegOpenKey(ULONG key, PSZ name, PULONG output)
 {
     if (!output)
@@ -215,6 +228,7 @@ LONG RegOpenKey(ULONG key, PSZ name, PULONG output)
     const ULONG default_access = KEY_ALL_ACCESS;
     return RegOpenKeyEx(key, name, 0, default_access, output);
 }
+
 LONG RegDeleteKey(ULONG key, PSZ name)
 {
     TRACE_NATIVE("RegDeleteKey(%08X, '%s')", (uint)key, name);
@@ -256,6 +270,7 @@ done:
     free(path);
     return result;
 }
+
 LONG RegCreateKey(ULONG key, PSZ name, PULONG output)
 {
     if ((!name || !*name) && root_name(key))
@@ -264,6 +279,7 @@ LONG RegCreateKey(ULONG key, PSZ name, PULONG output)
         return ERROR_INVALID_PARAMETER;
     return RegCreateKeyEx(key, name, 0, NULL, 0, KEY_ALL_ACCESS, NULL, output, NULL);
 }
+
 LONG RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name, ULONG options,
                     ULONG access, PVOID security, PULONG output, PULONG disposition)
 {
@@ -313,6 +329,7 @@ LONG RegCreateKeyEx(ULONG key, PSZ name, ULONG reserved, PSZ class_name, ULONG o
     free(path);
     return result;
 }
+
 LONG RegSetValueEx(ULONG key, PSZ name, ULONG reserved, ULONG type, PVOID data, ULONG size)
 {
     if (reserved || (size && !data) || size > 16u * 1024u * 1024u)
@@ -345,6 +362,7 @@ LONG RegSetValueEx(ULONG key, PSZ name, ULONG reserved, ULONG type, PVOID data, 
     free(value);
     return result;
 }
+
 LONG RegDeleteValue(ULONG key, PSZ name)
 {
     lx_host_once(&once, initialize);
@@ -368,6 +386,7 @@ LONG RegDeleteValue(ULONG key, PSZ name)
     free(value);
     return result;
 }
+
 LONG RegQueryValueEx(ULONG key, PSZ name, PULONG reserved, PULONG type, PVOID output, PULONG size)
 {
     TRACE_NATIVE("RegQueryValueEx(%08X, '%s', %p, %p, %p, %p)", (uint)key, name, reserved, type,
@@ -414,6 +433,7 @@ LONG RegQueryValueEx(ULONG key, PSZ name, PULONG reserved, PULONG type, PVOID ou
     free(value);
     return result;
 }
+
 LONG RegEnumKeyEx(ULONG key, ULONG index, PSZ name, PULONG name_size, PULONG reserved,
                   PSZ class_name, PULONG class_size, PVOID last_write)
 {
@@ -492,10 +512,12 @@ done:
     free(path);
     return result;
 }
+
 LONG RegEnumKey(ULONG key, ULONG index, PSZ name, ULONG capacity)
 {
     return RegEnumKeyEx(key, index, name, &capacity, NULL, NULL, NULL, NULL);
 }
+
 LONG RegEnumValue(ULONG key, ULONG index, PSZ name, PULONG name_size, PULONG reserved, PULONG type,
                   PVOID data, PULONG data_size)
 {
@@ -553,6 +575,7 @@ LONG RegEnumValue(ULONG key, ULONG index, PSZ name, PULONG name_size, PULONG res
     free(path);
     return result;
 }
+
 LX_NATIVE_DESTRUCTOR(pmwinx_registry)
 {
     /* Closing handles precedes unloading the destructor code they reference. */
@@ -582,6 +605,7 @@ LONG RegQueryValue(ULONG key, PSZ subkey, PSZ output, PULONG size)
         RegCloseKey(opened);
     return error;
 }
+
 LONG RegSetValue(ULONG key, PSZ subkey, ULONG type, PVOID data, ULONG size)
 {
     if (type != 1 || !data || !size || size >= 0x3fed)
@@ -604,6 +628,7 @@ LONG RegSetValue(ULONG key, PSZ subkey, ULONG type, PVOID data, ULONG size)
     free(text);
     return error;
 }
+
 LONG RegQueryInfoKey(ULONG key, PSZ class_name, PULONG class_size, PULONG reserved, PULONG subkeys,
                      PULONG max_subkey, PULONG max_class, PULONG values, PULONG max_value_name,
                      PULONG max_value_data, PULONG security, PVOID last_write)

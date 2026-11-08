@@ -3,19 +3,23 @@
 #include "icon.h"
 #include <stdlib.h>
 #include <string.h>
+
 static unsigned read16(const uint8_t *p)
 {
     return (unsigned)p[0] | (unsigned)p[1] << 8;
 }
+
 static uint32_t read32(const uint8_t *p)
 {
     return (uint32_t)read16(p) | (uint32_t)read16(p + 2) << 16;
 }
+
 typedef struct IconBitmap
 {
     unsigned width, height, depth, colors, palette_bytes;
     size_t header, bits, stride;
 } IconBitmap;
+
 static int bitmap(const uint8_t *bytes, size_t size, size_t offset, IconBitmap *out)
 {
     if (offset > size || size - offset < 26)
@@ -61,6 +65,7 @@ static int bitmap(const uint8_t *bytes, size_t size, size_t offset, IconBitmap *
     return out->bits >= out->header + palette && out->bits <= size &&
            out->stride * out->height <= size - out->bits;
 }
+
 static int pixel(const uint8_t *bytes, const IconBitmap *bitmap, unsigned x, unsigned y,
                  uint32_t *rgb)
 {
@@ -82,6 +87,7 @@ static int pixel(const uint8_t *bytes, const IconBitmap *bitmap, unsigned x, uns
     }
     return 1;
 }
+
 void tb_icon_free(TbIconImage *image)
 {
     if (!image)
@@ -90,6 +96,7 @@ void tb_icon_free(TbIconImage *image)
     free(image->mask);
     free(image);
 }
+
 static TbIconImage *decode_one(const uint8_t *bytes, size_t size, size_t offset)
 {
     if (!bytes || size < 26)
@@ -146,6 +153,7 @@ static TbIconImage *decode_one(const uint8_t *bytes, size_t size, size_t offset)
         }
     return image;
 }
+
 static TbIconImage *windows_icon(const uint8_t *bytes, size_t size)
 {
     unsigned count = size >= 6 ? read16(bytes + 4) : 0;
@@ -252,6 +260,7 @@ TbIconImage *tb_icon_bitmap(const uint8_t *bytes, size_t size)
     }
     return best;
 }
+
 char *tb_base64(const uint8_t *bytes, size_t size)
 {
     if (size > 64 * 1024 * 1024)
@@ -277,6 +286,7 @@ char *tb_base64(const uint8_t *bytes, size_t size)
     out[n] = 0;
     return out;
 }
+
 char *tb_icon_rgba_base64(const TbIconImage *image)
 {
     size_t count = (size_t)image->width * image->height;

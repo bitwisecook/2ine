@@ -12,10 +12,12 @@ typedef struct LxHostNetworkInterface
     uint32_t index, address, netmask, broadcast, destination, flags, mtu;
     uint8_t mac[6], mac_length;
 } LxHostNetworkInterface;
+
 typedef struct LxHostNetworkRoute
 {
     uint32_t destination, netmask, gateway, interface_index, metric, flags;
 } LxHostNetworkRoute;
+
 typedef struct LxHostNetworkDns
 {
     /* Text preserves IPv6 nameservers, including scope identifiers. */
@@ -24,6 +26,7 @@ typedef struct LxHostNetworkDns
     char **search;
     size_t search_count;
 } LxHostNetworkDns;
+
 typedef struct LxHostNetwork
 {
     LxHostNetworkInterface *interfaces;
@@ -32,6 +35,7 @@ typedef struct LxHostNetwork
     size_t route_count;
     LxHostNetworkDns dns;
 } LxHostNetwork;
+
 enum
 {
     LX_IFF_UP = 1,
@@ -42,6 +46,7 @@ enum
     LX_IFF_MULTICAST = 0x800,
     LX_IFF_ETHER = 0x4000
 };
+
 /* Fresh read-only snapshot. On failure output is zeroed; errno describes failure.
    Destroy a successful snapshot before reusing its storage. */
 int lx_host_network_snapshot(LxHostNetwork *output);

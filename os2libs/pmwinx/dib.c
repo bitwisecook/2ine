@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include <math.h>
+
 BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
                       size_t *information_bytes, size_t *pixel_bytes)
 {
@@ -51,6 +52,7 @@ BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
     *pixel_bytes = compressed ? lx_guest_load_u32(info + 20) : (size_t)(stride * count);
     return TRUE;
 }
+
 /* Expands BI_RLE8 or BI_RLE4 into DWORD-aligned bottom-up index rows. */
 static BOOL rle_expand(const uint8 *input, size_t size, unsigned width, unsigned rows,
                        unsigned depth, uint8 *output, size_t stride)
@@ -108,6 +110,7 @@ static BOOL rle_expand(const uint8 *input, size_t size, unsigned width, unsigned
 #undef RLE_PUT
     return TRUE;
 }
+
 static unsigned mask_channel(ULONG value, ULONG mask)
 {
     if (!mask)
@@ -121,6 +124,7 @@ static unsigned mask_channel(ULONG value, ULONG mask)
     return bits >= 8 ? (unsigned)(channel >> (bits - 8))
                      : (unsigned)(channel * 255 / ((1u << bits) - 1));
 }
+
 static uint32 palette_color(ULONG dc, ULONG index)
 {
     Open32DC *context = open32FindDC(dc);
@@ -129,6 +133,7 @@ static uint32 palette_color(ULONG dc, ULONG index)
         GetPaletteEntries(context->palette_handle, index, 1, entry);
     return (uint32)entry[0] << 16 | (uint32)entry[1] << 8 | entry[2];
 }
+
 static unsigned nearest(const uint32 *colors, unsigned count, uint32 rgb)
 {
     unsigned best = 0, distance = UINT32_MAX;
@@ -148,6 +153,7 @@ static unsigned nearest(const uint32 *colors, unsigned count, uint32 rgb)
     }
     return best;
 }
+
 LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVOID information,
                ULONG usage)
 {
@@ -537,6 +543,7 @@ static BOOL rotated_blit(ULONG handle, Open32DC *dc, const PmBitmap *bitmap, LON
     free(pixels);
     return ok;
 }
+
 LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG source_x,
                    LONG source_y, LONG source_width, LONG source_height, PVOID bits,
                    PVOID information, ULONG usage, ULONG operation)

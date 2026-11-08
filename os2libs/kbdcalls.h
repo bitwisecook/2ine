@@ -17,6 +17,7 @@ extern "C"
 #endif
 
 #pragma pack(push, 2)
+
     typedef struct
     {
         UCHAR chChar;
@@ -41,6 +42,7 @@ extern "C"
         USHORT fsInterim;
         USHORT fsState;
     } KBDINFO, *PKBDINFO;
+
 #pragma pack(pop)
 
     OS2EXPORT APIRET16 OS2API16 KbdCharIn(PKBDKEYINFO pkbci, USHORT fWait, HKBD hkbd)

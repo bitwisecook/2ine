@@ -19,6 +19,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static void no_windows(void)
 {
     int count = -1;
@@ -26,6 +27,7 @@ static void no_windows(void)
     CHECK(windows && !count);
     SDL_free(windows);
 }
+
 static void *memory_graphics(void *unused)
 {
     (void)unused;
@@ -54,6 +56,7 @@ static void *memory_graphics(void *unused)
     CHECK(!lxHostThreadState()->anchor_block && SDL_WasInit(SDL_INIT_VIDEO));
     return NULL;
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 3);

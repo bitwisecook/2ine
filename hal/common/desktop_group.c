@@ -3,11 +3,13 @@
 #include "desktop_group.h"
 #include "desktop_lease.h"
 #include <stdlib.h>
+
 typedef struct DesktopWindow
 {
     void *window;
     struct DesktopWindow *next;
 } DesktopWindow;
+
 struct LxDesktopGroup
 {
     LxDesktopLease *lease;
@@ -16,6 +18,7 @@ struct LxDesktopGroup
     void *context;
     int auxiliary, regular;
 };
+
 LxDesktopGroup *lx_desktop_group_open(const char *directory, const char *session, int auxiliary,
                                       LxDesktopPolicy policy, void *context)
 {
@@ -37,6 +40,7 @@ LxDesktopGroup *lx_desktop_group_open(const char *directory, const char *session
     }
     return group;
 }
+
 int lx_desktop_group_poll(LxDesktopGroup *group)
 {
     if (!group)
@@ -65,6 +69,7 @@ int lx_desktop_group_poll(LxDesktopGroup *group)
     }
     return 1;
 }
+
 int lx_desktop_group_visible(LxDesktopGroup *group, void *window, int visible)
 {
     if (!group || !window)
@@ -87,10 +92,12 @@ int lx_desktop_group_visible(LxDesktopGroup *group, void *window, int visible)
     }
     return lx_desktop_group_poll(group);
 }
+
 int lx_desktop_group_regular(const LxDesktopGroup *group)
 {
     return group && group->regular;
 }
+
 int lx_desktop_group_close(LxDesktopGroup *group)
 {
     if (!group)

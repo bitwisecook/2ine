@@ -8,6 +8,7 @@
 #include "os2libs/pm_text.h"
 #include "hal/font.h"
 #include <math.h>
+
 static LONG text_step(Open32DC *dc, LxHostFont *font, uint8 character, ULONG space_index)
 {
     int64_t result = lx_host_font_advance(font, lx_pm_codepoint(character));
@@ -22,10 +23,12 @@ static LONG text_step(Open32DC *dc, LxHostFont *font, uint8 character, ULONG spa
     }
     return result < INT32_MIN ? INT32_MIN : result > INT32_MAX ? INT32_MAX : (LONG)result;
 }
+
 static LONG rgb_color(ULONG color)
 {
     return (LONG)((color & 255) << 16 | (color & 0xFF00) | (color >> 16 & 255));
 }
+
 static char *text_copy(const char *text, LONG count, BOOL format, ULONG flags, LONG *length)
 {
     if (count < -1 || count > 65536 || !text)
@@ -75,6 +78,7 @@ static char *text_copy(const char *text, LONG count, BOOL format, ULONG flags, L
     *length = used;
     return copy;
 }
+
 /* A metafile holds formatted text as one positioned, clipped record per line of the same layout
    the display uses, with the characters returned to the guest's code page. */
 typedef struct TextRecording
@@ -84,6 +88,7 @@ typedef struct TextRecording
     const uint8 *clip;
     ULONG options;
 } TextRecording;
+
 static void record_line(void *context, LONG x, LONG baseline, const char *line, LONG length)
 {
     TextRecording *recording = context;
@@ -97,6 +102,7 @@ static void record_line(void *context, LONG x, LONG baseline, const char *line, 
                           ansi, (ULONG)length, NULL);
     free(ansi);
 }
+
 LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
 {
     TRACE_NATIVE("DrawText(%u, '%.*s', %d, %p, %X)", handle, count >= 0 ? count : 80, text, count,
@@ -162,6 +168,7 @@ LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
     free(copy);
     return result;
 }
+
 BOOL TextOut(ULONG handle, LONG x, LONG y, PSZ text, LONG count)
 {
     if (count < 0)
@@ -220,6 +227,7 @@ BOOL GetTextExtentExPoint(ULONG handle, PCHAR text, LONG count, LONG maximum, PV
     lx_guest_store_u32((uint8 *)output + 4, count ? (ULONG)(metrics.ascent + metrics.descent) : 0);
     return TRUE;
 }
+
 BOOL GetTextExtentPoint32(ULONG handle, PCHAR text, LONG count, PVOID output)
 {
     return GetTextExtentExPoint(handle, text, count, 0, NULL, NULL, output);
@@ -229,6 +237,7 @@ BOOL GetTextExtentPoint(ULONG dc, PCHAR text, LONG count, PVOID size)
 {
     return GetTextExtentPoint32(dc, text, count, size);
 }
+
 ULONG GetTabbedTextExtent(ULONG handle, PCHAR text, LONG count, LONG tab_count, PVOID tabs)
 {
     TRACE_NATIVE("GetTabbedTextExtent(%u, %p, %d, %d, %p)", handle, text, count, tab_count, tabs);
@@ -441,6 +450,7 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
     free(copy);
     return result;
 }
+
 /* Logical font heights scale with the mapping, so text is drawn with a font realized at the
    device size and explicit advances scale by the same horizontal factor. */
 /* Under rotation or shear each glyph renders through the transform's direction, along a baseline
@@ -596,6 +606,7 @@ static BOOL rotated_text(ULONG handle, Open32DC *dc, LONG x, LONG y, ULONG flags
     }
     return result;
 }
+
 static double axis_scale(Open32DC *dc, LONG dx, LONG dy)
 {
     LONG ax = 0, ay = 0, bx = dx, by = dy;
@@ -603,6 +614,7 @@ static double axis_scale(Open32DC *dc, LONG dx, LONG dy)
         return 1;
     return hypot((double)bx - ax, (double)by - ay) / 1024;
 }
+
 BOOL ExtTextOut(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle, PCHAR text, ULONG count,
                 PLONG advances)
 {
@@ -677,6 +689,7 @@ ULONG SetTextAlign(ULONG handle, ULONG alignment)
     open32MetafileWords(handle, 0x12e, 1, &recorded);
     return previous;
 }
+
 ULONG GetTextAlign(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);

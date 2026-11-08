@@ -4,12 +4,14 @@
 #include "hal/video_frame.h"
 #include <stdint.h>
 typedef struct LxVideoDecoder LxVideoDecoder;
+
 typedef struct LxDecodedVideoFrame
 {
     LxHostVideoFrame image;
     int64_t milliseconds, duration_ms;
     void *owner;
 } LxDecodedVideoFrame;
+
 typedef struct LxVideoInfo
 {
     unsigned width, height;
@@ -17,6 +19,7 @@ typedef struct LxVideoInfo
     unsigned rate_numerator, rate_denominator;
     int audio_present;
 } LxVideoInfo;
+
 typedef int (*LxVideoAudioSink)(void *, const float *, unsigned, int64_t);
 void lx_video_decoder_audio_sink(LxVideoDecoder *decoder, LxVideoAudioSink sink, void *context);
 LxVideoDecoder *lx_video_decoder_open(const char *host_path, LxVideoInfo *info);

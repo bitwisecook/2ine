@@ -64,6 +64,7 @@ typedef struct PmwpClassRow
     const uint16 *procedures;
     uint32 procedure_count;
 } PmwpClassRow;
+
 extern const PmwpClassRow pmwpClassRows[PMWP_CLASS_COUNT];
 
 /* A native method body. `method` is a simple name for both introduced methods and
@@ -74,6 +75,7 @@ typedef struct PmwpBody
     LxExecutionApi16 callback;
     uint16 argument_bytes;
 } PmwpBody;
+
 extern const PmwpBody pmwpObjectBodies[];
 extern const size_t pmwpObjectBodyCount;
 extern const PmwpBody pmwpViewBodies[];
@@ -236,6 +238,7 @@ typedef struct PmwpRecord
     char *data;
     char *class_name, *title, *location, *setup;
 } PmwpRecord;
+
 BOOL pmwpStoreLoad(ULONG handle, PmwpRecord *record);
 void pmwpStoreRelease(PmwpRecord *record);
 ULONG pmwpStoreCreate(const char *class_name, const char *title, const char *location,

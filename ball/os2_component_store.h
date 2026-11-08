@@ -7,6 +7,7 @@ struct ComponentOperation
     cJSON *progress, *ledger;
     int cancelled;
 };
+
 static int component_token(const char *token)
 {
     if (!token || !*token || strlen(token) > 64)
@@ -17,6 +18,7 @@ static int component_token(const char *token)
             return 0;
     return 1;
 }
+
 static char *component_key(Context *c, const char *guest)
 {
     char *key = keep(c, strdup(guest));
@@ -24,6 +26,7 @@ static char *component_key(Context *c, const char *guest)
         *at = *at == '/' ? '\\' : (char)toupper((unsigned char)*at);
     return key;
 }
+
 static cJSON *component_read(Context *c, const char *path)
 {
     TbFileIdentity identity;
@@ -42,6 +45,7 @@ static cJSON *component_read(Context *c, const char *path)
         fail(c, "Cannot read component record: %s", path);
     return value;
 }
+
 static int component_storage(Context *c, const char *relative)
 {
     char *path = keep(c, strdup(relative)), *current = c->ball;
@@ -59,6 +63,7 @@ static int component_storage(Context *c, const char *relative)
     }
     return 1;
 }
+
 static cJSON *component_ledger_once(Context *c)
 {
     cJSON *ledger = component_read(c, join(c, c->ball, "os2-components.json"));
@@ -103,6 +108,7 @@ static cJSON *component_ledger_once(Context *c)
     }
     return ledger;
 }
+
 /* Finalizing a job replaces the snapshot and then truncates its journal. Retry
    if that snapshot changed around our read, so polling cannot miss that handoff. */
 static cJSON *component_ledger(Context *c)
@@ -121,6 +127,7 @@ static cJSON *component_ledger(Context *c)
     }
     return ledger;
 }
+
 static cJSON *component_identity(Context *c, const TbFileIdentity *identity)
 {
     cJSON *value = cJSON_CreateObject();
@@ -134,6 +141,7 @@ static cJSON *component_identity(Context *c, const TbFileIdentity *identity)
         cJSON_AddStringToObject(value, names[i], format(c, "%llu", (unsigned long long)fields[i]));
     return value;
 }
+
 static int component_same_identity(Context *c, const cJSON *record, const TbFileIdentity *identity)
 {
     cJSON *current = component_identity(c, identity);
@@ -141,6 +149,7 @@ static int component_same_identity(Context *c, const cJSON *record, const TbFile
     cJSON_Delete(current);
     return same;
 }
+
 static void component_progress(Context *c, const char *phase, const char *source, const char *path)
 {
     ComponentOperation *job = c->component_operation;
@@ -157,6 +166,7 @@ static void component_progress(Context *c, const char *phase, const char *source
     put(job->progress, "updated", cJSON_CreateString(now(c)));
     write_json(c, job->progress_path, job->progress);
 }
+
 static int component_cancelled(Context *c)
 {
     ComponentOperation *job = c->component_operation;
@@ -168,6 +178,7 @@ static int component_cancelled(Context *c)
     }
     return c->error != NULL;
 }
+
 static int component_journal(Context *c, cJSON *entry)
 {
     ComponentOperation *job = c->component_operation;
@@ -198,6 +209,7 @@ static int component_journal(Context *c, cJSON *entry)
     put(job->progress, "completedCount", cJSON_CreateNumber(count + 1));
     return 1;
 }
+
 static int component_record(Context *c, const char *guest, const char *source, const char *category,
                             const char *hash)
 {
@@ -219,6 +231,7 @@ static int component_record(Context *c, const char *guest, const char *source, c
     cJSON_Delete(entry);
     return ok;
 }
+
 static int component_begin(Context *c, const cJSON *request, const char *kind)
 {
     if (!component_storage(c, "cache/component-operations") ||
@@ -292,6 +305,7 @@ static int component_begin(Context *c, const cJSON *request, const char *kind)
         fail(c, "Cannot resume component ownership journal");
     return !c->error;
 }
+
 static void component_finish(Context *c, cJSON *result)
 {
     ComponentOperation *job = c->component_operation;
@@ -346,6 +360,7 @@ static void component_finish(Context *c, cJSON *result)
     tb_mutation_unlock(job->lock);
     c->component_operation = NULL;
 }
+
 /* Resolve a guest destination without following symbolic links, including case aliases.
    Missing regular paths are allowed; mapped/external drives and cache internals are not. */
 static char *component_private_path(Context *c, const char *guest)

@@ -11,10 +11,12 @@ LONG InterlockedIncrement(PLONG);
 LONG InterlockedDecrement(PLONG);
 LONG InterlockedExchange(PLONG, LONG);
 static _Thread_local ULONG error;
+
 void open32SetError(ULONG value)
 {
     error = value;
 }
+
 #define CHECK(x)                                                                                   \
     do                                                                                             \
     {                                                                                              \
@@ -52,6 +54,7 @@ typedef struct Contender
     unsigned iterations;
     int decrement;
 } Contender;
+
 static void *contend(void *argument)
 {
     Contender *work = argument;
@@ -64,10 +67,12 @@ static void *contend(void *argument)
     }
     return NULL;
 }
+
 typedef struct GuestContender
 {
     uint32 entry, word, iterations;
 } GuestContender;
+
 static void *guest_contend(void *argument)
 {
     GuestContender *work = argument;
@@ -76,6 +81,7 @@ static void *guest_contend(void *argument)
     lx_execution_cleanup_thread32(GLoaderState.execution);
     return NULL;
 }
+
 static void contention(uint8 *host, uint32 code)
 {
     enum
@@ -84,6 +90,7 @@ static void contention(uint8 *host, uint32 code)
         ITERATIONS = 2000,
         GUEST_ITERATIONS = 100000
     };
+
     LxHostThread *threads[THREADS];
     Contender work[THREADS];
     lx_guest_store_u32(host, 0);
@@ -105,6 +112,7 @@ static void contention(uint8 *host, uint32 code)
         CHECK(lx_guest_load_u32(host) == (phase ? 0 : THREADS * ITERATIONS + GUEST_ITERATIONS));
     }
 }
+
 int main(void)
 {
     char message[256];

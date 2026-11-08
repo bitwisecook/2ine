@@ -2,16 +2,19 @@
 /* Scrollbar ranges, proportional thumbs and owner scroll notifications. */
 #include "os2libs/pmwin/controls.h"
 #include "guest/abi.h"
+
 static LONG bound(LONG value, LONG low, LONG high)
 {
     return value < low ? low : value > high ? high : value;
 }
+
 static void range(PmControl *c, LONG first, LONG last, LONG position)
 {
     c->lower = first < 0 ? 0 : first;
     c->upper = last < c->lower ? c->lower : last;
     c->value = bound(position, c->lower, c->upper);
 }
+
 BOOL initializeScrollbar(Window *window, MPARAM data)
 {
     PmControl *c = window->control;
@@ -36,6 +39,7 @@ BOOL initializeScrollbar(Window *window, MPARAM data)
     }
     return TRUE;
 }
+
 static void geometry(Window *w, LONG *arrow, LONG *start, LONG *thumb, LONG *travel)
 {
     PmControl *c = w->control;
@@ -53,11 +57,13 @@ static void geometry(Window *w, LONG *arrow, LONG *start, LONG *thumb, LONG *tra
                       ? (LONG)((int64_t)(c->value - c->lower) * *travel / (c->upper - c->lower))
                       : 0);
 }
+
 static RECTL axis(Window *w, LONG first, LONG last)
 {
     return (w->style & 1) ? (RECTL){0, w->h - last, w->w, w->h - first}
                           : (RECTL){first, 0, last, w->h};
 }
+
 static void paint(Window *window)
 {
     HPS ps = WinBeginPaint(window->hwnd, 0, NULL);
@@ -91,6 +97,7 @@ static void paint(Window *window)
         }
     WinEndPaint(ps);
 }
+
 static void notify(Window *w, USHORT command, SHORT position)
 {
     if (w->owner)
@@ -98,6 +105,7 @@ static void notify(Window *w, USHORT command, SHORT position)
                    (MPARAM)(uintptr_t)(USHORT)w->id,
                    (MPARAM)(uintptr_t)((USHORT)position | (ULONG)command << 16));
 }
+
 MRESULT scrollbarMessage(Window *w, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = w->control;

@@ -15,7 +15,7 @@ OS2EXPORT ULONG OS2API SplEnumQueue(PSZ computer, ULONG level, PVOID buffer, ULO
                                     PULONG returned, PULONG total, PULONG needed, PVOID reserved)
     OS2APIINFO(399);
 ULONG lx_spl_printers(ULONG level, ULONG types, PVOID output, ULONG capacity, uint32 base,
-                       PULONG returned, PULONG total, PULONG needed);
+                      PULONG returned, PULONG total, PULONG needed);
 OS2EXPORT ULONG OS2API SplEnumPrinter(PSZ computer, ULONG level, ULONG types, PVOID buffer,
                                       ULONG capacity, PULONG returned, PULONG total, PULONG needed,
                                       PVOID reserved) OS2APIINFO(441);

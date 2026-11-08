@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
 void *lx_host_clipboard_html_wrap(const void *html, size_t size, size_t *length)
 {
     static const char pattern[] =
@@ -28,6 +29,7 @@ void *lx_host_clipboard_html_wrap(const void *html, size_t size, size_t *length)
     *length = total;
     return out;
 }
+
 static int html_offset(const unsigned char *data, size_t size, const char *key, size_t *value)
 {
     size_t key_length = strlen(key), limit = size < 4096 ? size : 4096;
@@ -57,6 +59,7 @@ static int html_offset(const unsigned char *data, size_t size, const char *key, 
     }
     return 0;
 }
+
 void *lx_host_clipboard_html_extract(const void *data, size_t size, size_t *length)
 {
     if (!length || (!data && size) || size > 16 * 1024 * 1024)
@@ -89,6 +92,7 @@ static int page_index(unsigned codepage)
 {
     return codepage == 437 ? 0 : codepage == 850 ? 1 : codepage == 1004 ? 2 : -1;
 }
+
 void *lx_host_clipboard_text_utf8(unsigned codepage, const void *bytes, size_t size, size_t *length)
 {
     int page = page_index(codepage);
@@ -123,6 +127,7 @@ void *lx_host_clipboard_text_utf8(unsigned codepage, const void *bytes, size_t s
     *length = at;
     return output;
 }
+
 void *lx_host_clipboard_text_os2(unsigned codepage, const void *bytes, size_t size, size_t *length)
 {
     int page = page_index(codepage);
@@ -178,6 +183,7 @@ invalid:
     free(output);
     return NULL;
 }
+
 void *lx_host_clipboard_encode_image(const char *mime, const void *rgba, unsigned width,
                                      unsigned height, size_t *size)
 {
@@ -217,14 +223,17 @@ void *lx_host_clipboard_encode_image(const char *mime, const void *rgba, unsigne
         SDL_DestroySurface(surface);
     return result;
 }
+
 static uint32_t little32(const uint8_t *p)
 {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
 }
+
 static uint32_t big32(const uint8_t *p)
 {
     return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
 }
+
 void *lx_host_clipboard_decode_image(const char *mime, const void *bytes, size_t size,
                                      unsigned *width, unsigned *height)
 {

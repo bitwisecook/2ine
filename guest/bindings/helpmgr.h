@@ -9,10 +9,12 @@ static uint32 bridge32_WinCreateHelpInstance(uint8 *arguments)
     lx_execution_release(&init);
     return result;
 }
+
 static uint32 bridge32_WinDestroyHelpInstance(uint8 *arguments)
 {
     return WinDestroyHelpInstance(lx_guest_load_u32(arguments));
 }
+
 static uint32 bridge32_WinAssociateHelpInstance(uint8 *arguments)
 {
     return WinAssociateHelpInstance(lx_guest_load_u32(arguments), lx_guest_load_u32(arguments + 4));

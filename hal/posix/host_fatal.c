@@ -35,6 +35,7 @@ enum
     /* Bounds a report blocked on a lock the failed thread already held. */
     WATCHDOG_SECONDS = 15
 };
+
 #if defined(TWOINE_WITH_UNICORN)
 static const int FaultSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGTRAP, SIGSYS};
 #endif
@@ -66,6 +67,7 @@ static void append(char *buffer, size_t size, const char *text)
         buffer[used++] = *text++;
     buffer[used] = '\0';
 }
+
 static void format_decimal(uint64_t value, char output[24])
 {
     char digits[24];
@@ -79,6 +81,7 @@ static void format_decimal(uint64_t value, char output[24])
         output[used++] = digits[--count];
     output[used] = '\0';
 }
+
 static void format_hex(uint64_t value, unsigned digits, char output[20])
 {
     static const char alphabet[] = "0123456789abcdef";
@@ -88,6 +91,7 @@ static void format_hex(uint64_t value, unsigned digits, char output[20])
         output[i] = alphabet[(value >> (4 * (digits - 1 - i))) & 15];
     output[digits] = '\0';
 }
+
 static void emit(const char *text, size_t length)
 {
     /* A short or failed write cannot be reported anywhere better. */
@@ -106,27 +110,32 @@ static void emit(const char *text, size_t length)
         }
     }
 }
+
 void lx_host_fatal_write_bytes(const char *bytes, size_t size)
 {
     emit(bytes, size);
 }
+
 void lx_host_fatal_write(const char *text)
 {
     if (text)
         emit(text, strlen(text));
 }
+
 void lx_host_fatal_write_hex(uint64_t value, unsigned digits)
 {
     char text[20];
     format_hex(value, digits, text);
     lx_host_fatal_write(text);
 }
+
 void lx_host_fatal_write_decimal(uint64_t value)
 {
     char text[24];
     format_decimal(value, text);
     lx_host_fatal_write(text);
 }
+
 static void write_field(const char *name, const char *value)
 {
     lx_host_fatal_write(name);
@@ -134,12 +143,14 @@ static void write_field(const char *name, const char *value)
     lx_host_fatal_write(value && *value ? value : "(none)");
     lx_host_fatal_write("\n");
 }
+
 static __attribute__((noreturn)) void park(void)
 {
     /* Another thread owns the report and ends this process. */
     for (;;)
         pause();
 }
+
 static void show_dialog(void)
 {
     if (!DialogReady || !DialogEnabled || __atomic_load_n(&Exiting, __ATOMIC_ACQUIRE))
@@ -155,6 +166,7 @@ static void show_dialog(void)
     {
     }
 }
+
 static __attribute__((noreturn)) void finish(void)
 {
     uintptr_t self = (uintptr_t)pthread_self(), owner = 0;
@@ -173,6 +185,7 @@ static __attribute__((noreturn)) void finish(void)
     show_dialog();
     lx_host_process_exit(LX_FATAL_EXIT_STATUS);
 }
+
 static void on_watchdog(int number)
 {
     (void)number;
@@ -180,6 +193,7 @@ static void on_watchdog(int number)
     emit(text, sizeof text - 1);
     finish();
 }
+
 static void enter_report(void)
 {
     uintptr_t self = (uintptr_t)pthread_self(), owner = 0;
@@ -198,6 +212,7 @@ static void enter_report(void)
     sigaction(SIGALRM, &action, NULL);
     alarm(WATCHDOG_SECONDS);
 }
+
 static void civil_time(time_t seconds, int fields[6])
 {
     /* Gregorian calendar from a day count; gmtime is not async-signal-safe. */
@@ -216,6 +231,7 @@ static void civil_time(time_t seconds, int fields[6])
     fields[4] = (int)(remainder / 60 % 60);
     fields[5] = (int)(remainder % 60);
 }
+
 static void append_padded(char *buffer, size_t size, int value, unsigned width)
 {
     char text[24];
@@ -224,6 +240,7 @@ static void append_padded(char *buffer, size_t size, int value, unsigned width)
         append(buffer, size, "0");
     append(buffer, size, text);
 }
+
 static void format_time(char *output, size_t size, const char *date_mark, const char *time_mark)
 {
     int fields[6];
@@ -241,6 +258,7 @@ static void format_time(char *output, size_t size, const char *date_mark, const 
     append(output, size, time_mark);
     append_padded(output, size, fields[5], 2);
 }
+
 static void open_report(void)
 {
     if (!Directory[0])
@@ -260,6 +278,7 @@ static void open_report(void)
     if (ReportDescriptor < 0)
         ReportPath[0] = '\0';
 }
+
 static const char *kind_name(LxFatalKind kind)
 {
     switch (kind)
@@ -276,6 +295,7 @@ static const char *kind_name(LxFatalKind kind)
             return "host-fault";
     }
 }
+
 static const char *kind_explanation(LxFatalKind kind)
 {
     switch (kind)
@@ -295,6 +315,7 @@ static const char *kind_explanation(LxFatalKind kind)
             return "2ine crashed while running this program. This is a bug in 2ine.";
     }
 }
+
 static void compose_dialog(LxFatalKind kind, const char *summary)
 {
     Title[0] = Message[0] = '\0';
@@ -314,6 +335,7 @@ static void compose_dialog(LxFatalKind kind, const char *summary)
     else
         append(Message, sizeof Message, "\n\nThe details are in this session's log.");
 }
+
 static void write_identity(LxFatalKind kind, const char *summary)
 {
     char text[32];
@@ -348,6 +370,7 @@ static void write_identity(LxFatalKind kind, const char *summary)
     if (__atomic_load_n(&Exiting, __ATOMIC_ACQUIRE))
         lx_host_fatal_write("phase: the program had already requested exit\n");
 }
+
 static void write_environment(void)
 {
     lx_host_fatal_write("\n-- Environment --\n");
@@ -359,6 +382,7 @@ static void write_environment(void)
             write_field(ReportedEnvironment[i], value);
     }
 }
+
 #if defined(TWOINE_WITH_UNICORN)
 static const char *signal_name(int number)
 {
@@ -382,6 +406,7 @@ static const char *signal_name(int number)
             return "signal";
     }
 }
+
 static const char *signal_meaning(int number)
 {
     switch (number)
@@ -418,6 +443,7 @@ static void write_backtrace(void)
     if (ReportDescriptor >= 0)
         backtrace_symbols_fd(frames, count, ReportDescriptor);
 }
+
 static void write_report(LxFatalKind kind, const char *summary, const char *detail,
                          const void *context)
 {
@@ -448,12 +474,14 @@ static void write_report(LxFatalKind kind, const char *summary, const char *deta
     lx_host_fatal_write_images();
     lx_host_fatal_write("\n-- End of 2ine fatal report --\n");
 }
+
 void lx_host_fatal(LxFatalKind kind, const char *summary, const char *detail)
 {
     enter_report();
     write_report(kind, summary, detail, NULL);
     finish();
 }
+
 #if defined(TWOINE_WITH_UNICORN)
 static void on_signal(int number, siginfo_t *information, void *context)
 {
@@ -481,10 +509,12 @@ void lx_host_fatal_add_context(void (*writer)(void))
     if (ContextWriterCount < MAX_CONTEXT_WRITERS)
         ContextWriters[ContextWriterCount++] = writer;
 }
+
 void lx_host_fatal_mark_exiting(void)
 {
     __atomic_store_n(&Exiting, 1, __ATOMIC_RELEASE);
 }
+
 static const char *base_name(const char *path)
 {
     const char *name = path;
@@ -493,6 +523,7 @@ static const char *base_name(const char *path)
             name = p + 1;
     return name;
 }
+
 static void choose_program_name(void)
 {
     const char *name = getenv("TWOINE_DESKTOP_NAME");
@@ -508,11 +539,13 @@ static void choose_program_name(void)
     }
     append(ProgramName, sizeof ProgramName, name && *name ? base_name(name) : "OS/2 program");
 }
+
 static int video_is_headless(const char *name)
 {
     const char *driver = getenv(name);
     return driver && (!strcmp(driver, "dummy") || !strcmp(driver, "offscreen"));
 }
+
 static int dialog_wanted(void)
 {
     /* Only ball launches default to a dialog: a direct lx_loader run reports on
@@ -525,6 +558,7 @@ static int dialog_wanted(void)
         return 0;
     return lx_host_fatal_display_available();
 }
+
 static void prepare_dialog(void)
 {
     DialogEnabled = dialog_wanted();
@@ -555,6 +589,7 @@ static void prepare_dialog(void)
     DialogArguments[5] = NULL;
     DialogReady = 1;
 }
+
 static void choose_directory(void)
 {
     const char *directory = getenv("TWOINE_FATAL_DIR");
@@ -566,6 +601,7 @@ static void choose_directory(void)
         append(Directory, sizeof Directory, "/logs");
     }
 }
+
 #if defined(TWOINE_WITH_UNICORN)
 static void install_signal_handlers(void)
 {
@@ -608,6 +644,7 @@ void lx_host_fatal_install(void)
     install_signal_handlers();
 #endif
 }
+
 void *lx_host_fatal_thread_begin(void)
 {
 #if defined(TWOINE_WITH_UNICORN)
@@ -631,6 +668,7 @@ void *lx_host_fatal_thread_begin(void)
     return NULL;
 #endif
 }
+
 void lx_host_fatal_thread_end(void *memory)
 {
     if (!memory)
@@ -641,6 +679,7 @@ void lx_host_fatal_thread_end(void *memory)
     sigaltstack(&stack, NULL);
     munmap(memory, SIGNAL_STACK_BYTES);
 }
+
 int lx_host_fatal_is_dialog(void)
 {
     size_t size = 0;

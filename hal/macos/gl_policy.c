@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
 int lx_host_gl_platform_prepare(char *error, size_t size)
 {
     const char *icd = getenv("TWOINE_KOSMICKRISP_ICD");
@@ -19,11 +20,13 @@ int lx_host_gl_platform_prepare(char *error, size_t size)
     }
     return 1;
 }
+
 int lx_host_gl_platform_renderer(const char *renderer)
 {
     return renderer && strstr(renderer, "zink") &&
            (strstr(renderer, "MESA_KOSMICKRISP") || strstr(renderer, "KosmicKrisp"));
 }
+
 const char *lx_host_gl_backend(void)
 {
     return "mesa-zink-kosmickrisp-metal";

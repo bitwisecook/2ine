@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "runtime/core/internal.h"
+
 LxHostThreadState *lxHostThreadState(void)
 {
     return &host_thread_state;

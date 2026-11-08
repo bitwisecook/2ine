@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/pointer_image.h"
 #include "hal/host_fs.h"
+
 typedef struct PmPointer
 {
     struct PmPointer *next;
@@ -13,22 +14,26 @@ typedef struct PmPointer
     LxHostPointer *host;
     PmPointerImage *image;
     unsigned hot_x, hot_y;
-    ULONG info_mask,info_color;
+    ULONG info_mask, info_color;
     PmPointerImage *shape; /* Queryable image of a pointer the host draws itself. */
 } PmPointer;
+
 static HPOINTER current_pointer;
 static LONG pointer_level;
 static BOOL pointer_selected = TRUE; /* The host starts with its default arrow. */
 static HPOINTER shared_system_pointers[23];
+
 LONG queryPointerLevel(void)
 {
     return __atomic_load_n(&pointer_level, __ATOMIC_ACQUIRE);
 }
+
 static BOOL applyPointerVisibility(void)
 {
     return lx_host_pointer_show(!queryPointerLevel() &&
                                 __atomic_load_n(&pointer_selected, __ATOMIC_ACQUIRE));
 }
+
 static void release_pointer(void *resource)
 {
     PmPointer *pointer = resource;
@@ -43,18 +48,22 @@ static void release_pointer(void *resource)
     HPOINTER expected = pointer->handle;
     __atomic_compare_exchange_n(&current_pointer, &expected, 0, FALSE, __ATOMIC_ACQ_REL,
                                 __ATOMIC_ACQUIRE);
-    if(pointer->info_mask)lx_pm_bitmap_delete(pointer->info_mask);
-    if(pointer->info_color)lx_pm_bitmap_delete(pointer->info_color);
+    if (pointer->info_mask)
+        lx_pm_bitmap_delete(pointer->info_mask);
+    if (pointer->info_color)
+        lx_pm_bitmap_delete(pointer->info_color);
     lx_host_pointer_destroy(pointer->host);
     pmPointerImageFree(pointer->image);
     pmPointerImageFree(pointer->shape);
     free(pointer);
 }
+
 void destroyPointers(AnchorBlock *anchor)
 {
     while (anchor->pointers)
         lx_handle_close(anchor->pointers->handle, LX_HANDLE_PM_POINTER);
 }
+
 HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
 {
     TRACE_NATIVE("WinLoadPointer(%u, %u, %u)", (uint)desktop, (uint)module, (uint)id);
@@ -98,6 +107,7 @@ HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
     anchor->pointers = pointer;
     return pointer->handle;
 }
+
 static PmPointerImage *system_icon(LONG id)
 {
     PmPointerImage *image = calloc(1, sizeof *image);
@@ -145,6 +155,7 @@ static PmPointerImage *system_icon(LONG id)
         }
     return image;
 }
+
 static HPOINTER system_pointer(AnchorBlock *anchor, LONG id, BOOL copy)
 {
     PmPointer *p = calloc(1, sizeof *p);
@@ -175,6 +186,7 @@ static HPOINTER system_pointer(AnchorBlock *anchor, LONG id, BOOL copy)
     }
     return p->handle;
 }
+
 HPOINTER lx_pm_system_pointer(LONG id)
 {
     if (!((id >= 1 && id <= 14) || (id >= 18 && id <= 22)))
@@ -191,6 +203,7 @@ HPOINTER lx_pm_system_pointer(LONG id)
     lx_handle_close(created, LX_HANDLE_PM_POINTER);
     return shared;
 }
+
 HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -198,6 +211,7 @@ HPOINTER WinQuerySysPointer(HWND desktop, LONG id, BOOL copy)
         return 0;
     return copy ? system_pointer(anchor, id, TRUE) : lx_pm_system_pointer(id);
 }
+
 void destroySharedPointers(void)
 {
     for (unsigned id = 0; id < sizeof shared_system_pointers / sizeof *shared_system_pointers; id++)
@@ -207,10 +221,12 @@ void destroySharedPointers(void)
             lx_handle_close(pointer, LX_HANDLE_PM_POINTER);
     }
 }
+
 LX_NATIVE_DESTRUCTOR(pmwin_system_pointers)
 {
     destroySharedPointers();
 }
+
 BOOL WinSetPointer(HWND desktop, HPOINTER handle)
 {
     TRACE_NATIVE("WinSetPointer(%u, %u)", (uint)desktop, (uint)handle);
@@ -271,6 +287,7 @@ BOOL WinSetPointer(HWND desktop, HPOINTER handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 BOOL WinDestroyPointer(HPOINTER handle)
 {
     LxHandleBorrow borrow;
@@ -284,6 +301,7 @@ BOOL WinDestroyPointer(HPOINTER handle)
 
 static LONG pointer_clip[4];
 static BOOL pointer_clipped;
+
 void lx_pm_set_pointer_clip(const RECTL *bounds)
 {
     if (bounds)
@@ -295,6 +313,7 @@ void lx_pm_set_pointer_clip(const RECTL *bounds)
     }
     __atomic_store_n(&pointer_clipped, bounds != NULL, __ATOMIC_RELEASE);
 }
+
 BOOL queryPointerClip(RECTL *bounds)
 {
     if (!__atomic_load_n(&pointer_clipped, __ATOMIC_ACQUIRE))
@@ -305,6 +324,7 @@ BOOL queryPointerClip(RECTL *bounds)
                       __atomic_load_n(&pointer_clip[3], __ATOMIC_RELAXED)};
     return TRUE;
 }
+
 BOOL lx_pm_clip_pointer(LONG *x, LONG *y)
 {
     if (!__atomic_load_n(&pointer_clipped, __ATOMIC_ACQUIRE))
@@ -320,12 +340,14 @@ BOOL lx_pm_clip_pointer(LONG *x, LONG *y)
     *y = b;
     return moved;
 }
+
 BOOL WinSetPointerPos(HWND desktop, LONG x, LONG y)
 {
     lx_pm_clip_pointer(&x, &y);
     return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() &&
            lx_host_mouse_warp(x, desktop_window.h - 1 - y);
 }
+
 BOOL WinShowPointer(HWND desktop, BOOL show)
 {
     TRACE_NATIVE("WinShowPointer(%u, %u)", (uint)desktop, (uint)show);
@@ -341,6 +363,7 @@ BOOL WinShowPointer(HWND desktop, BOOL show)
                                           __ATOMIC_ACQUIRE));
     return applyPointerVisibility();
 }
+
 BOOL WinShowCursor(HWND handle, BOOL show)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -364,6 +387,7 @@ BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height)
     lx_handle_release(&borrow);
     return result;
 }
+
 static BOOL draw_pointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags)
 {
     LxHandleBorrow borrow = {0};
@@ -398,6 +422,7 @@ BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle)
 {
     return draw_pointer(space, x, y, handle, 0);
 }
+
 BOOL WinDrawPointer(HPS space, LONG x, LONG y, HPOINTER handle, ULONG flags)
 {
     return !(flags & ~3u) && draw_pointer(space, x, y, handle, flags);
@@ -410,64 +435,153 @@ HPOINTER WinQueryPointer(HWND desktop)
                : 0;
 }
 
-HPOINTER WinCreatePointerIndirect(HWND desktop,LXPOINTERINFO*info)
+HPOINTER WinCreatePointerIndirect(HWND desktop, LXPOINTERINFO *info)
 {
-    AnchorBlock*a=getAnchorBlockNoHAB();LxHandleBorrow mb={0},cb={0};
-    if(!a||desktop!=HWND_DESKTOP||!info||info->fPointer>1||!info->hbmPointer)return 0;
-    PmBitmap*mask=lx_pm_bitmap(info->hbmPointer,&mb),*color=info->hbmColor?lx_pm_bitmap(info->hbmColor,&cb):NULL;
-    unsigned width=mask?mask->width:0,height=color?color->height:mask?mask->height/2:0;
-    if(!mask||!width||!height||width>1024||height>1024||(color&&color->width!=width)||mask->height<height||(info->hbmColor&&!color)||info->xHotspot<0||info->yHotspot<0||(ULONG)info->xHotspot>=width||(ULONG)info->yHotspot>=height){lx_handle_release(&cb);lx_handle_release(&mb);return 0;}
-    PmPointer*p=calloc(1,sizeof*p);PmPointerImage*image=calloc(1,sizeof*image);
-    if(image){image->width=width;image->height=height;image->pixels=calloc((size_t)width*height,sizeof*image->pixels);image->mask=calloc((size_t)width*height,1);}
-    if(!p||!image||!image->pixels||!image->mask){free(p);pmPointerImageFree(image);lx_handle_release(&cb);lx_handle_release(&mb);return 0;}
-    for(unsigned y=0;y<height;y++)for(unsigned x=0;x<width;x++){size_t dest=(size_t)(height-1-y)*width+x,src=(size_t)y*width+x;image->mask[dest]=(mask->pixels[src]&0xffffff)!=0;image->pixels[dest]=color?color->pixels[src]&0xffffff:(mask->height>=height*2?mask->pixels[src+(size_t)height*width]&0xffffff:0);}
-    lx_handle_release(&cb);lx_handle_release(&mb);p->anchor=a;p->image=image;p->hot_x=info->xHotspot;p->hot_y=height-1-info->yHotspot;p->copy=TRUE;p->handle=lx_handle_create(LX_HANDLE_PM_POINTER,p,release_pointer);
-    if(!p->handle){pmPointerImageFree(image);free(p);return 0;}p->next=a->pointers;a->pointers=p;return p->handle;
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    LxHandleBorrow mb = {0}, cb = {0};
+    if (!a || desktop != HWND_DESKTOP || !info || info->fPointer > 1 || !info->hbmPointer)
+        return 0;
+    PmBitmap *mask = lx_pm_bitmap(info->hbmPointer, &mb),
+             *color = info->hbmColor ? lx_pm_bitmap(info->hbmColor, &cb) : NULL;
+    unsigned width = mask ? mask->width : 0, height = color  ? color->height
+                                                      : mask ? mask->height / 2
+                                                             : 0;
+    if (!mask || !width || !height || width > 1024 || height > 1024 ||
+        (color && color->width != width) || mask->height < height || (info->hbmColor && !color) ||
+        info->xHotspot < 0 || info->yHotspot < 0 || (ULONG)info->xHotspot >= width ||
+        (ULONG)info->yHotspot >= height)
+    {
+        lx_handle_release(&cb);
+        lx_handle_release(&mb);
+        return 0;
+    }
+    PmPointer *p = calloc(1, sizeof *p);
+    PmPointerImage *image = calloc(1, sizeof *image);
+    if (image)
+    {
+        image->width = width;
+        image->height = height;
+        image->pixels = calloc((size_t)width * height, sizeof *image->pixels);
+        image->mask = calloc((size_t)width * height, 1);
+    }
+    if (!p || !image || !image->pixels || !image->mask)
+    {
+        free(p);
+        pmPointerImageFree(image);
+        lx_handle_release(&cb);
+        lx_handle_release(&mb);
+        return 0;
+    }
+    for (unsigned y = 0; y < height; y++)
+        for (unsigned x = 0; x < width; x++)
+        {
+            size_t dest = (size_t)(height - 1 - y) * width + x, src = (size_t)y * width + x;
+            image->mask[dest] = (mask->pixels[src] & 0xffffff) != 0;
+            image->pixels[dest] = color
+                                      ? color->pixels[src] & 0xffffff
+                                      : (mask->height >= height * 2
+                                             ? mask->pixels[src + (size_t)height * width] & 0xffffff
+                                             : 0);
+        }
+    lx_handle_release(&cb);
+    lx_handle_release(&mb);
+    p->anchor = a;
+    p->image = image;
+    p->hot_x = info->xHotspot;
+    p->hot_y = height - 1 - info->yHotspot;
+    p->copy = TRUE;
+    p->handle = lx_handle_create(LX_HANDLE_PM_POINTER, p, release_pointer);
+    if (!p->handle)
+    {
+        pmPointerImageFree(image);
+        free(p);
+        return 0;
+    }
+    p->next = a->pointers;
+    a->pointers = p;
+    return p->handle;
 }
+
 /* Host cursors expose no bitmap, so their shapes are described here. 'X' is black, '.' is
    white and a space is transparent; each entry gives its hot spot from the top left. */
-static const struct { LONG id; unsigned hot_x, hot_y; const char *rows[16]; } pointer_shapes[] = {
-    {1, 0, 0, {"X               ","XX              ","X.X             ","X..X            ",
-               "X...X           ","X....X          ","X.....X         ","X......X        ",
-               "X.......X       ","X....XXXXX      ","X..X..X         ","X.X X..X        ",
-               "XX  X..X        ","X    X..X       ","     X..X       ","      XX        "}},
-    {2, 4, 8, {" XXX XXX        ","    X           ","    X           ","    X           ",
-               "    X           ","    X           ","    X           ","    X           ",
-               "    X           ","    X           ","    X           ","    X           ",
-               "    X           ","    X           ","    X           "," XXX XXX        "}},
-    {3, 7, 7, {" XXXXXXXXXXXXX  "," X...........X  ","  X.........X   ","   X.......X    ",
-               "    X.....X     ","     X...X      ","      X.X       ","       X        ",
-               "      X.X       ","     X...X      ","    X.....X     ","   X.......X    ",
-               "  X.........X   "," X...........X  "," XXXXXXXXXXXXX  ","                "}},
-    {4, 7, 7, {"       X        ","      X.X       ","     X...X      ","    XX.XX       ",
-               "      X         ","  X   X   X     "," X.X  X  X.X    ","X...XXXXX...X   ",
-               " X.X  X  X.X    ","  X   X   X     ","      X         ","    XX.XX       ",
-               "     X...X      ","      X.X       ","       X        ","                "}},
-    {5, 7, 7, {"       X        ","      X.X       ","     X...X      ","      X.X       ",
-               "      X.X       ","  X   X.X   X   "," XX XXX.XXX XX  ","X.............X ",
-               " XX XXX.XXX XX  ","  X   X.X   X   ","      X.X       ","      X.X       ",
-               "     X...X      ","      X.X       ","       X        ","                "}},
-    {6, 7, 7, {"XXXXX           ","X..X            ","X.X             ","X..X            ",
-               "XX X.X          ","    X.X         ","     X.X        ","      X.X       ",
-               "       X.X      ","        X.X XX  ","         X..X   ","          X.X   ",
-               "         X..X   ","        XXXXX   ","                ","                "}},
-    {7, 7, 7, {"        XXXXX   ","         X..X   ","          X.X   ","         X..X   ",
-               "       X.X XX   ","      X.X       ","     X.X        ","    X.X         ",
-               "   X.X          ","XX X.X          "," X..X           "," X.X            ",
-               " X..X           ","XXXXX           ","                ","                "}},
-    {8, 7, 7, {"                ","                ","                ","                ",
-               "   X       X    ","  XX       XX   "," X.XXXXXXXXX.X  ","X.............X ",
-               " X.XXXXXXXXX.X  ","  XX       XX   ","   X       X    ","                ",
-               "                ","                ","                ","                "}},
-    {18, 7, 7, {"     XXXXX      ","   XX.....XX    ","  X..XXXXX.X    "," X.X    X.X.X   ",
-                " X.X   X.X.X    ","X.X   X.X X.X   ","X.X  X.X  X.X   ","X.X X.X   X.X   ",
-                "X.XX.X    X.X   "," X.X.X   X.X    "," X.X.X  X.X     ","  X.XXXX..X     ",
-                "   XX.....XX    ","     XXXXX      ","                ","                "}},
-    {9, 7, 7, {"       X        ","      X.X       ","     X...X      ","    XX.XX       ",
-               "      X.X       ","      X.X       ","      X.X       ","      X.X       ",
-               "      X.X       ","      X.X       ","      X.X       ","    XX.XX       ",
-               "     X...X      ","      X.X       ","       X        ","                "}},
+static const struct
+{
+    LONG id;
+    unsigned hot_x, hot_y;
+    const char *rows[16];
+} pointer_shapes[] = {
+    {1,
+     0,
+     0,
+     {"X               ", "XX              ", "X.X             ", "X..X            ",
+      "X...X           ", "X....X          ", "X.....X         ", "X......X        ",
+      "X.......X       ", "X....XXXXX      ", "X..X..X         ", "X.X X..X        ",
+      "XX  X..X        ", "X    X..X       ", "     X..X       ", "      XX        "}},
+    {2,
+     4,
+     8,
+     {" XXX XXX        ", "    X           ", "    X           ", "    X           ",
+      "    X           ", "    X           ", "    X           ", "    X           ",
+      "    X           ", "    X           ", "    X           ", "    X           ",
+      "    X           ", "    X           ", "    X           ", " XXX XXX        "}},
+    {3,
+     7,
+     7,
+     {" XXXXXXXXXXXXX  ", " X...........X  ", "  X.........X   ", "   X.......X    ",
+      "    X.....X     ", "     X...X      ", "      X.X       ", "       X        ",
+      "      X.X       ", "     X...X      ", "    X.....X     ", "   X.......X    ",
+      "  X.........X   ", " X...........X  ", " XXXXXXXXXXXXX  ", "                "}},
+    {4,
+     7,
+     7,
+     {"       X        ", "      X.X       ", "     X...X      ", "    XX.XX       ",
+      "      X         ", "  X   X   X     ", " X.X  X  X.X    ", "X...XXXXX...X   ",
+      " X.X  X  X.X    ", "  X   X   X     ", "      X         ", "    XX.XX       ",
+      "     X...X      ", "      X.X       ", "       X        ", "                "}},
+    {5,
+     7,
+     7,
+     {"       X        ", "      X.X       ", "     X...X      ", "      X.X       ",
+      "      X.X       ", "  X   X.X   X   ", " XX XXX.XXX XX  ", "X.............X ",
+      " XX XXX.XXX XX  ", "  X   X.X   X   ", "      X.X       ", "      X.X       ",
+      "     X...X      ", "      X.X       ", "       X        ", "                "}},
+    {6,
+     7,
+     7,
+     {"XXXXX           ", "X..X            ", "X.X             ", "X..X            ",
+      "XX X.X          ", "    X.X         ", "     X.X        ", "      X.X       ",
+      "       X.X      ", "        X.X XX  ", "         X..X   ", "          X.X   ",
+      "         X..X   ", "        XXXXX   ", "                ", "                "}},
+    {7,
+     7,
+     7,
+     {"        XXXXX   ", "         X..X   ", "          X.X   ", "         X..X   ",
+      "       X.X XX   ", "      X.X       ", "     X.X        ", "    X.X         ",
+      "   X.X          ", "XX X.X          ", " X..X           ", " X.X            ",
+      " X..X           ", "XXXXX           ", "                ", "                "}},
+    {8,
+     7,
+     7,
+     {"                ", "                ", "                ", "                ",
+      "   X       X    ", "  XX       XX   ", " X.XXXXXXXXX.X  ", "X.............X ",
+      " X.XXXXXXXXX.X  ", "  XX       XX   ", "   X       X    ", "                ",
+      "                ", "                ", "                ", "                "}},
+    {18,
+     7,
+     7,
+     {"     XXXXX      ", "   XX.....XX    ", "  X..XXXXX.X    ", " X.X    X.X.X   ",
+      " X.X   X.X.X    ", "X.X   X.X X.X   ", "X.X  X.X  X.X   ", "X.X X.X   X.X   ",
+      "X.XX.X    X.X   ", " X.X.X   X.X    ", " X.X.X  X.X     ", "  X.XXXX..X     ",
+      "   XX.....XX    ", "     XXXXX      ", "                ", "                "}},
+    {9,
+     7,
+     7,
+     {"       X        ", "      X.X       ", "     X...X      ", "    XX.XX       ",
+      "      X.X       ", "      X.X       ", "      X.X       ", "      X.X       ",
+      "      X.X       ", "      X.X       ", "      X.X       ", "    XX.XX       ",
+      "     X...X      ", "      X.X       ", "       X        ", "                "}},
 };
+
 static PmPointerImage *pointer_shape(PmPointer *p)
 {
     if (p->shape)
@@ -500,25 +614,92 @@ static PmPointerImage *pointer_shape(PmPointer *p)
     }
     return NULL;
 }
-BOOL WinQueryPointerInfo(HPOINTER handle,LXPOINTERINFO*out)
+
+BOOL WinQueryPointerInfo(HPOINTER handle, LXPOINTERINFO *out)
 {
-    LxHandleBorrow b={0};if(!out||!lx_handle_borrow(handle,LX_HANDLE_PM_POINTER,&b))return FALSE;
-    PmPointer*p=b.resource;PmPointerImage*image=p->image?p->image:pointer_shape(p);
-    BOOL ok=image!=NULL;
-    if(ok&&!p->info_mask){p->info_mask=lx_pm_bitmap_create(image->width,image->height*2,1,1);p->info_color=lx_pm_bitmap_create(image->width,image->height,1,24);LxHandleBorrow mb={0},cb={0};PmBitmap*m=lx_pm_bitmap(p->info_mask,&mb),*c=lx_pm_bitmap(p->info_color,&cb);ok=m&&c;
-        for(unsigned y=0;ok&&y<image->height;y++)for(unsigned x=0;x<image->width;x++){size_t src=(size_t)(image->height-1-y)*image->width+x,dest=(size_t)y*image->width+x;m->pixels[dest]=image->mask[src]?0xffffff:0;m->pixels[dest+(size_t)image->height*image->width]=0;c->pixels[dest]=image->pixels[src];}
-        lx_handle_release(&cb);lx_handle_release(&mb);
-        if(!ok){if(p->info_mask)lx_pm_bitmap_delete(p->info_mask);if(p->info_color)lx_pm_bitmap_delete(p->info_color);p->info_mask=p->info_color=0;}
+    LxHandleBorrow b = {0};
+    if (!out || !lx_handle_borrow(handle, LX_HANDLE_PM_POINTER, &b))
+        return FALSE;
+    PmPointer *p = b.resource;
+    PmPointerImage *image = p->image ? p->image : pointer_shape(p);
+    BOOL ok = image != NULL;
+    if (ok && !p->info_mask)
+    {
+        p->info_mask = lx_pm_bitmap_create(image->width, image->height * 2, 1, 1);
+        p->info_color = lx_pm_bitmap_create(image->width, image->height, 1, 24);
+        LxHandleBorrow mb = {0}, cb = {0};
+        PmBitmap *m = lx_pm_bitmap(p->info_mask, &mb), *c = lx_pm_bitmap(p->info_color, &cb);
+        ok = m && c;
+        for (unsigned y = 0; ok && y < image->height; y++)
+            for (unsigned x = 0; x < image->width; x++)
+            {
+                size_t src = (size_t)(image->height - 1 - y) * image->width + x,
+                       dest = (size_t)y * image->width + x;
+                m->pixels[dest] = image->mask[src] ? 0xffffff : 0;
+                m->pixels[dest + (size_t)image->height * image->width] = 0;
+                c->pixels[dest] = image->pixels[src];
+            }
+        lx_handle_release(&cb);
+        lx_handle_release(&mb);
+        if (!ok)
+        {
+            if (p->info_mask)
+                lx_pm_bitmap_delete(p->info_mask);
+            if (p->info_color)
+                lx_pm_bitmap_delete(p->info_color);
+            p->info_mask = p->info_color = 0;
+        }
     }
-    if(ok)*out=(LXPOINTERINFO){1,(LONG)p->hot_x,(LONG)image->height-1-(LONG)p->hot_y,p->info_mask,p->info_color,0,0};
-    lx_handle_release(&b);return ok;
+    if (ok)
+        *out = (LXPOINTERINFO){1,
+                               (LONG)p->hot_x,
+                               (LONG)image->height - 1 - (LONG)p->hot_y,
+                               p->info_mask,
+                               p->info_color,
+                               0,
+                               0};
+    lx_handle_release(&b);
+    return ok;
 }
 
 HPOINTER lx_pm_pointer_file(const char *filename)
 {
-    AnchorBlock*a=getAnchorBlockNoHAB();if(!a||!filename||!GLoaderState.makeUnixPath)return 0;
-    uint32 error=0;char*path=GLoaderState.makeUnixPath(filename,&error);if(!path)return 0;
-    LxHostFsError status;size_t size=0;uint8*bytes=lx_host_file_snapshot(path,64*1024*1024,&size,&status);free(path);if(!bytes)return 0;
-    PmPointerImage*image=pmPointerImage(bytes,size);if(!image)image=tb_icon_executable(bytes,size);free(bytes);if(!image)return 0;
-    PmPointer*p=calloc(1,sizeof*p);if(!p){pmPointerImageFree(image);return 0;}p->anchor=a;p->image=image;p->copy=TRUE;p->handle=lx_handle_create(LX_HANDLE_PM_POINTER,p,release_pointer);if(!p->handle){free(p);pmPointerImageFree(image);return 0;}p->next=a->pointers;a->pointers=p;return p->handle;
+    AnchorBlock *a = getAnchorBlockNoHAB();
+    if (!a || !filename || !GLoaderState.makeUnixPath)
+        return 0;
+    uint32 error = 0;
+    char *path = GLoaderState.makeUnixPath(filename, &error);
+    if (!path)
+        return 0;
+    LxHostFsError status;
+    size_t size = 0;
+    uint8 *bytes = lx_host_file_snapshot(path, 64 * 1024 * 1024, &size, &status);
+    free(path);
+    if (!bytes)
+        return 0;
+    PmPointerImage *image = pmPointerImage(bytes, size);
+    if (!image)
+        image = tb_icon_executable(bytes, size);
+    free(bytes);
+    if (!image)
+        return 0;
+    PmPointer *p = calloc(1, sizeof *p);
+    if (!p)
+    {
+        pmPointerImageFree(image);
+        return 0;
+    }
+    p->anchor = a;
+    p->image = image;
+    p->copy = TRUE;
+    p->handle = lx_handle_create(LX_HANDLE_PM_POINTER, p, release_pointer);
+    if (!p->handle)
+    {
+        free(p);
+        pmPointerImageFree(image);
+        return 0;
+    }
+    p->next = a->pointers;
+    a->pointers = p;
+    return p->handle;
 }

@@ -22,12 +22,14 @@ BOOL WinSetWindowText(HWND handle, PSZ text)
     controlTextChanged(window);
     return TRUE;
 }
+
 LONG WinQueryWindowTextLength(HWND handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     return window && window->text ? (LONG)strlen(window->text) : 0;
 }
+
 LONG WinQueryWindowText(HWND handle, LONG capacity, PCHAR output)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -42,15 +44,18 @@ LONG WinQueryWindowText(HWND handle, LONG capacity, PCHAR output)
     output[size] = 0;
     return (LONG)size;
 }
+
 BOOL WinSetDlgItemText(HWND dialog, ULONG id, PSZ text)
 {
     return WinSetWindowText(WinWindowFromID(dialog, id), text);
 }
+
 LONG WinQueryDlgItemTextLength(HWND dialog, ULONG id)
 {
     HWND child = WinWindowFromID(dialog, id);
     return child ? WinQueryWindowTextLength(child) : 0;
 }
+
 ULONG WinQueryDlgItemText(HWND dialog, ULONG id, LONG capacity, PCHAR output)
 {
     return (ULONG)WinQueryWindowText(WinWindowFromID(dialog, id), capacity, output);

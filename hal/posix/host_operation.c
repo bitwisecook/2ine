@@ -23,6 +23,7 @@ static const char *environment_value(char *const *environment, const char *name)
             return environment[i] + length + 1;
     return NULL;
 }
+
 static int channel(const char *text, int mode)
 {
     if (!text || *text < '0' || *text > '9')
@@ -38,6 +39,7 @@ static int channel(const char *text, int mode)
                ? fd
                : -1;
 }
+
 int lx_host_operation_channels(char *const *environment, int *lease, int *owner)
 {
     const char *write_channel = environment_value(environment, LX_HOST_OPERATION_LEASE);
@@ -53,6 +55,7 @@ int lx_host_operation_channels(char *const *environment, int *lease, int *owner)
     }
     return 1;
 }
+
 static void *watch_owner(void *argument)
 {
     int fd = (int)(intptr_t)argument;
@@ -68,6 +71,7 @@ static void *watch_owner(void *argument)
     _exit(128 + SIGKILL);
     return NULL;
 }
+
 int lx_host_operation_join(void)
 {
     static int joined;
@@ -92,6 +96,7 @@ int lx_host_operation_join(void)
 }
 
 static volatile sig_atomic_t operation_group, cancellation;
+
 static void cancel_operation(int signal)
 {
     int saved = errno;
@@ -101,6 +106,7 @@ static void cancel_operation(int signal)
         kill(-(pid_t)operation_group, cancellation);
     errno = saved;
 }
+
 static int make_channel(int descriptors[2])
 {
     if (pipe(descriptors))
@@ -113,6 +119,7 @@ static int make_channel(int descriptors[2])
     }
     return 1;
 }
+
 int lx_host_operation_supervise(const char *executable, char *const *arguments,
                                 char *const *environment)
 {

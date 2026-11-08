@@ -16,11 +16,13 @@ static BOOL with_host_path(PSZ name, int (*action)(const char *))
     free(path);
     return result;
 }
+
 BOOL GpiLoadPublicFonts(HAB hab, PSZ name)
 {
     TRACE_NATIVE("GpiLoadPublicFonts(%u, '%s')", (uint)hab, name);
     return with_host_path(name, lx_host_font_add_file);
 }
+
 BOOL GpiUnloadPublicFonts(HAB hab, PSZ name)
 {
     TRACE_NATIVE("GpiUnloadPublicFonts(%u, '%s')", (uint)hab, name);

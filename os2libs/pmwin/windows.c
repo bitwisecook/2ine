@@ -11,6 +11,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/controls.h"
 #include "os2libs/pmwin/menus.h"
+
 Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
 {
     if (hwnd >= FIRST_HWND_VALUE)
@@ -915,6 +916,7 @@ static void applyLaunchPresentation(const Window *win, LONG *x, LONG *y, LONG *c
     if (launch.control & LX_LAUNCH_BACKGROUND)
         *flags &= ~(ULONG)SWP_ACTIVATE;
 }
+
 BOOL WinSetWindowPos(HWND hwnd, HWND behind, LONG x, LONG y, LONG cx, LONG cy, ULONG flags)
 {
     TRACE_NATIVE("WinSetWindowPos(%u, %u, %d, %d, %d, %d, %u)", (uint)hwnd, (uint)behind, (int)x,
@@ -1066,6 +1068,7 @@ BOOL WinQueryWindowPos(HWND hwnd, PSWP position)
                       0};
     return TRUE;
 }
+
 BOOL WinQueryWindowRect(HWND hwnd, PRECTL rect)
 {
     SWP position;
@@ -1074,6 +1077,7 @@ BOOL WinQueryWindowRect(HWND hwnd, PRECTL rect)
     *rect = (RECTL){0, 0, position.cx, position.cy};
     return TRUE;
 }
+
 BOOL WinQueryPointerPos(HWND hwnd, PPOINTL point)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -1097,12 +1101,14 @@ BOOL WinShowWindow(HWND window, BOOL show)
 {
     return WinSetWindowPos(window, HWND_TOP, 0, 0, 0, 0, show ? SWP_SHOW : SWP_HIDE);
 }
+
 static void setDrawable(Window *window, LxHostWindow *drawable)
 {
     window->heavy.window = drawable;
     for (Window *child = window->children; child; child = child->sibling)
         setDrawable(child, drawable);
 }
+
 BOOL WinSetParent(HWND handle, HWND parent_handle, BOOL redraw)
 {
     TRACE_NATIVE("WinSetParent(%u, %u, %u)", (uint)handle, (uint)parent_handle, (uint)redraw);

@@ -15,11 +15,13 @@ static int installer_support_required(Context *c, const char *host)
     tb_names_free(names, count == (size_t)-1 ? 0 : count);
     return suite;
 }
+
 static int launch_command_file(const char *program)
 {
     const char *suffix = program ? strrchr(program, '.') : NULL;
     return suffix && (equal_case(suffix, ".CMD") || equal_case(suffix, ".BAT"));
 }
+
 static cJSON *launch_prerequisites(Context *c, const cJSON *request)
 {
     const cJSON *arguments = get(request, "arguments");
@@ -144,11 +146,13 @@ static cJSON *launch_prerequisites(Context *c, const cJSON *request)
     cJSON_Delete(support);
     return result;
 }
+
 static void launch_discard_error(Context *c)
 {
     free(c->error);
     c->error = NULL;
 }
+
 static int navigation_program_format(const char *host)
 {
     FILE *file = tb_fopen(host, "rb");
@@ -173,6 +177,7 @@ static int navigation_program_format(const char *host)
     fclose(file);
     return valid;
 }
+
 static int navigation_payload(const char *name)
 {
     const char *suffix = strrchr(name, '.');
@@ -185,6 +190,7 @@ static int navigation_payload(const char *name)
             return 1;
     return 0;
 }
+
 static cJSON *ball_navigation_state(Context *c)
 {
     cJSON *result = cJSON_CreateObject(),

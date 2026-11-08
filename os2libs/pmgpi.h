@@ -22,11 +22,14 @@ extern "C"
     {
         LONG cx, cy;
     } SIZEF;
+
     typedef SIZEF *PSIZEF;
+
     typedef struct RGNRECT
     {
         ULONG ircStart, crc, crcReturned, ulDirection;
     } RGNRECT;
+
     OS2EXPORT BOOL OS2API GpiQueryRegionRects(HPS ps, ULONG region, PRECTL bounds, RGNRECT *control,
                                               PRECTL rects) OS2APIINFO(587);
     OS2EXPORT LONG OS2API GpiCreateLogFont(HPS ps, PVOID name, LONG id, PFATTRS attrs)
@@ -134,6 +137,7 @@ extern "C"
                                            PLONG advances) OS2APIINFO(580);
     OS2EXPORT LONG OS2API GpiBox(HPS ps, LONG control, PPOINTL point, LONG horizontal,
                                  LONG vertical) OS2APIINFO(356);
+
     enum
     {
         PU_PELS = 8,
@@ -142,6 +146,7 @@ extern "C"
         GPIA_ASSOC = 0x4000,
         DM_DRAW = 1
     };
+
     OS2EXPORT BOOL OS2API DevQueryCaps(HDC dc, LONG start, LONG count, PLONG output)
         OS2APIINFO(606);
     OS2EXPORT LONG OS2API DevEscape(HDC dc, LONG code, LONG input_count, PVOID input,
@@ -186,7 +191,12 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetCharMode(HPS ps, LONG mode) OS2APIINFO(512);
     OS2EXPORT LONG OS2API GpiQueryCharMode(HPS ps) OS2APIINFO(432);
 
-    typedef struct LXPOLYGON { ULONG count; PPOINTL points; } LXPOLYGON;
+    typedef struct LXPOLYGON
+    {
+        ULONG count;
+        PPOINTL points;
+    } LXPOLYGON;
+
     OS2EXPORT BOOL OS2API GpiBeginArea(HPS a0, ULONG a1) OS2APIINFO(352);
     OS2EXPORT BOOL OS2API GpiBeginPath(HPS a0, LONG a1) OS2APIINFO(354);
     OS2EXPORT BOOL OS2API GpiCloseFigure(HPS a0) OS2APIINFO(360);
@@ -205,7 +215,8 @@ extern "C"
     OS2EXPORT LONG OS2API GpiQueryLineEnd(HPS a0) OS2APIINFO(457);
     OS2EXPORT LONG OS2API GpiQueryLineJoin(HPS a0) OS2APIINFO(458);
     OS2EXPORT LONG OS2API GpiQueryLineWidthGeom(HPS a0) OS2APIINFO(461);
-    OS2EXPORT BOOL OS2API GpiQueryMetaFileBits(ULONG a0, LONG a1, LONG a2, PBYTE a3) OS2APIINFO(465);
+    OS2EXPORT BOOL OS2API GpiQueryMetaFileBits(ULONG a0, LONG a1, LONG a2, PBYTE a3)
+        OS2APIINFO(465);
     OS2EXPORT LONG OS2API GpiQueryMetaFileLength(ULONG a0) OS2APIINFO(466);
     OS2EXPORT BOOL OS2API GpiQueryModelTransformMatrix(HPS a0, LONG a1, PVOID a2) OS2APIINFO(468);
     OS2EXPORT LONG OS2API GpiQueryNearestColor(HPS a0, ULONG a1, LONG a2) OS2APIINFO(469);
@@ -213,7 +224,8 @@ extern "C"
     OS2EXPORT LONG OS2API GpiQueryPel(HPS a0, PPOINTL a1) OS2APIINFO(476);
     OS2EXPORT BOOL OS2API GpiQueryPickAperturePosition(HPS a0, PPOINTL a1) OS2APIINFO(477);
     OS2EXPORT BOOL OS2API GpiQueryPickApertureSize(HPS a0, PSIZEL a1) OS2APIINFO(478);
-    OS2EXPORT LONG OS2API GpiQueryRealColors(HPS a0, ULONG a1, LONG a2, LONG a3, PLONG a4) OS2APIINFO(480);
+    OS2EXPORT LONG OS2API GpiQueryRealColors(HPS a0, ULONG a1, LONG a2, LONG a3, PLONG a4)
+        OS2APIINFO(480);
     OS2EXPORT BOOL OS2API GpiQueryViewingLimits(HPS a0, PRECTL a1) OS2APIINFO(490);
     OS2EXPORT LONG OS2API GpiRectInRegion(HPS a0, ULONG a1, PRECTL a2) OS2APIINFO(494);
     OS2EXPORT BOOL OS2API GpiResetBoundaryData(HPS a0) OS2APIINFO(497);
@@ -224,7 +236,8 @@ extern "C"
     OS2EXPORT BOOL OS2API GpiSetLineEnd(HPS a0, LONG a1) OS2APIINFO(528);
     OS2EXPORT BOOL OS2API GpiSetLineJoin(HPS a0, LONG a1) OS2APIINFO(529);
     OS2EXPORT BOOL OS2API GpiSetLineWidthGeom(HPS a0, LONG a1) OS2APIINFO(532);
-    OS2EXPORT BOOL OS2API GpiSetModelTransformMatrix(HPS a0, LONG a1, PVOID a2, LONG a3) OS2APIINFO(538);
+    OS2EXPORT BOOL OS2API GpiSetModelTransformMatrix(HPS a0, LONG a1, PVOID a2, LONG a3)
+        OS2APIINFO(538);
     OS2EXPORT BOOL OS2API GpiSetPS(HPS a0, PSIZEL a1, ULONG a2) OS2APIINFO(539);
     OS2EXPORT BOOL OS2API GpiSetPickAperturePosition(HPS a0, PPOINTL a1) OS2APIINFO(545);
     OS2EXPORT BOOL OS2API GpiSetStopDraw(HPS a0, LONG a1) OS2APIINFO(550);
@@ -242,11 +255,15 @@ extern "C"
     OS2EXPORT ULONG OS2API GpiQueryPalette(HPS a0) OS2APIINFO(579);
     OS2EXPORT LONG OS2API GpiQueryAttrs(HPS a0, LONG a1, ULONG a2, PVOID a3) OS2APIINFO(583);
     OS2EXPORT BOOL OS2API GpiSetPickApertureSize(HPS a0, LONG a1, PSIZEL a2) OS2APIINFO(589);
-    OS2EXPORT ULONG OS2API GpiCreatePalette(HAB a0, ULONG a1, ULONG a2, ULONG a3, PULONG a4) OS2APIINFO(594);
-    OS2EXPORT LONG OS2API GpiQueryPaletteInfo(ULONG a0, HPS a1, ULONG a2, ULONG a3, ULONG a4, PULONG a5) OS2APIINFO(597);
-    OS2EXPORT LONG OS2API GpiPartialArc(HPS a0, PPOINTL a1, LONG a2, LONG a3, LONG a4) OS2APIINFO(612);
+    OS2EXPORT ULONG OS2API GpiCreatePalette(HAB a0, ULONG a1, ULONG a2, ULONG a3, PULONG a4)
+        OS2APIINFO(594);
+    OS2EXPORT LONG OS2API GpiQueryPaletteInfo(ULONG a0, HPS a1, ULONG a2, ULONG a3, ULONG a4,
+                                              PULONG a5) OS2APIINFO(597);
+    OS2EXPORT LONG OS2API GpiPartialArc(HPS a0, PPOINTL a1, LONG a2, LONG a3, LONG a4)
+        OS2APIINFO(612);
     OS2EXPORT BOOL OS2API GpiSetCharExtra(HPS a0, LONG a1) OS2APIINFO(614);
-    OS2EXPORT LONG OS2API GpiPolygons(HPS a0, ULONG a1, LXPOLYGON * a2, ULONG a3, ULONG a4) OS2APIINFO(650);
+    OS2EXPORT LONG OS2API GpiPolygons(HPS a0, ULONG a1, LXPOLYGON *a2, ULONG a3, ULONG a4)
+        OS2APIINFO(650);
 #ifdef __cplusplus
 }
 #endif

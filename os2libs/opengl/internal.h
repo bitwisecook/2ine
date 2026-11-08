@@ -11,6 +11,7 @@
 #include "hal/gl_constants.h"
 
 #define GL_MAX_TRANSFER (64u * 1024u * 1024u)
+
 typedef struct GlMemory
 {
     LxGuestBorrow borrow;
@@ -18,12 +19,14 @@ typedef struct GlMemory
     size_t bytes;
     int commit;
 } GlMemory;
+
 typedef struct GlArray
 {
     uint32_t address, type;
     int32_t size, stride;
     int enabled;
 } GlArray;
+
 enum
 {
     GL_ARRAY_VERTEX,
@@ -34,11 +37,13 @@ enum
     GL_ARRAY_EDGE,
     GL_ARRAY_COUNT
 };
+
 typedef struct GlArrayFrame
 {
     GlArray arrays[GL_ARRAY_COUNT];
     uint32_t mask;
 } GlArrayFrame;
+
 typedef struct GlContext
 {
     struct GlContext *next;
@@ -63,18 +68,21 @@ typedef struct GlContext
     size_t selection_bytes, feedback_bytes;
     uint32_t render_mode;
 } GlContext;
+
 typedef struct GlThread
 {
     GlContext *current;
     LxHandleBorrow lease;
     uint32_t error;
 } GlThread;
+
 typedef struct GlEntry
 {
     const char *name;
     uint32_t (*call)(uint8_t *);
     uint16_t argument_bytes, warp_ordinal, gold_ordinal;
 } GlEntry;
+
 extern GlContext *GlContexts;
 extern LxHostMonitor *GlLock;
 GlThread *gl_thread(void);

@@ -16,6 +16,7 @@ static PFNWP original;
 static HWND extension, client;
 static ULONG formatted, queries;
 static RECTL last_client;
+
 static MRESULT OS2API frame_proc(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_QUERYFRAMECTLCOUNT)
@@ -47,6 +48,7 @@ static MRESULT OS2API frame_proc(HWND window, ULONG message, MPARAM first, MPARA
     }
     return original(window, message, first, second);
 }
+
 int main(void)
 {
     HAB anchor = WinInitialize(0);

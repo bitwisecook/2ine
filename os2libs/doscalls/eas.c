@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Family API packed extended attributes persist as opaque file metadata. */
 #include "os2libs/doscalls/internal.h"
+
 APIRET queryAllEas16(HFILE handle, void *operation)
 {
     uint32 address;
@@ -47,6 +48,7 @@ APIRET queryAllEas16(HFILE handle, void *operation)
     lx_handle_release(&file);
     return result;
 }
+
 APIRET applyEas16(HFILE handle, const void *operation)
 {
     uint32 pointer = lx_guest_load_u32((const uint8 *)operation + 4);

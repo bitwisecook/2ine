@@ -14,6 +14,7 @@ enum OutlineSortValue: Equatable, Sendable {
         }
     }
 }
+
 struct OutlineCell: Equatable, Sendable {
     var text: String
     var secondary = false
@@ -25,6 +26,7 @@ struct OutlineCell: Equatable, Sendable {
     var enabled = true
     var sortValue: OutlineSortValue? = nil
 }
+
 struct OutlineBrowserNode: Equatable, Sendable, Identifiable {
     let id: String
     var title: String
@@ -48,6 +50,7 @@ struct OutlineBrowserNode: Equatable, Sendable, Identifiable {
         return copy
     }
 }
+
 struct OutlineBrowserColumn: Equatable, Sendable {
     let id: String
     let title: String
@@ -57,15 +60,18 @@ struct OutlineBrowserColumn: Equatable, Sendable {
     var sortable = false
     var rightAligned = false
 }
+
 struct OutlineBrowserSort: Equatable, Sendable {
     var column: String
     var ascending = true
 }
+
 struct OutlineMenuAction {
     let id: String
     let title: String
     var enabled = true
 }
+
 struct OutlineFocusRequest: Equatable {
     let id: UUID
     let row: String

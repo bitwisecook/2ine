@@ -11,6 +11,7 @@ BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);
 BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle);
 /* Deliver a host event on its window's PM thread, staging it when called elsewhere. */
 BOOL lx_pm_host_event(const LxHostEvent *event);
+
 typedef struct PmRegion
 {
     void *anchor;
@@ -20,6 +21,7 @@ typedef struct PmRegion
     RECTL *rects;
     size_t count;
 } PmRegion;
+
 BOOL regionBoolean(PmRegion *out, const PmRegion *a, const PmRegion *b, LONG mode);
 struct RGNRECT;
 BOOL lx_pm_region_query_rects(HPS ps, ULONG region, PRECTL bounds, struct RGNRECT *control,
@@ -42,7 +44,12 @@ BOOL lx_pm_mask(HPS ps, LONG x, LONG y, int width, int height, const uint8_t *co
                 const RECTL *bounds);
 void lx_pm_region_cleanup(void *anchor);
 struct PresentationSpace;
-typedef struct PmPalette { ULONG count, colors[]; } PmPalette;
+
+typedef struct PmPalette
+{
+    ULONG count, colors[];
+} PmPalette;
+
 BOOL lx_pm_graphics_clip(struct PresentationSpace *ps, LONG x, LONG y);
 void lx_pm_boundary(struct PresentationSpace *ps, LONG x, LONG y, LONG width, LONG height);
 /* Intersects a device rectangle with the graphics field and viewing limits. */
@@ -52,6 +59,7 @@ LONG lx_pm_hits(struct PresentationSpace *ps);
 void lx_pm_pick_line(struct PresentationSpace *ps, const POINTL *from, const POINTL *to);
 /* Character-extra spacing converted from world units to device pels. */
 LONG lx_pm_char_extra(struct PresentationSpace *ps);
+
 typedef struct PmBitmap
 {
     void *anchor;
@@ -62,6 +70,7 @@ typedef struct PmBitmap
     unsigned palette_count;
     uint32_t palette[256];
 } PmBitmap;
+
 PmBitmap *lx_pm_bitmap(ULONG handle, LxHandleBorrow *borrow);
 ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsigned depth);
 ULONG lx_pm_bitmap_create_data(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info);

@@ -24,6 +24,7 @@ uint32_t call_glGetError(uint8_t *a)
     TRACE_NATIVE("glGetError() = 0x%x", result);
     return result;
 }
+
 uint32_t call_glGetString(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -62,6 +63,7 @@ uint32_t call_glGetString(uint8_t *a)
     }
     return lx_execution_mapping_address(c->strings) + (token - GL_VENDOR) * 1024;
 }
+
 uint32_t call_glDrawBuffer(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -73,6 +75,7 @@ uint32_t call_glDrawBuffer(uint8_t *a)
         gl_error(GL_INVALID_ENUM);
     return 0;
 }
+
 uint32_t call_glReadBuffer(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -84,6 +87,7 @@ uint32_t call_glReadBuffer(uint8_t *a)
         gl_error(GL_INVALID_ENUM);
     return 0;
 }
+
 uint32_t call_glPushAttrib(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -106,6 +110,7 @@ uint32_t call_glPushAttrib(uint8_t *a)
     }
     return 0;
 }
+
 uint32_t call_glPopAttrib(uint8_t *a)
 {
     (void)a;
@@ -127,6 +132,7 @@ uint32_t call_glPopAttrib(uint8_t *a)
     }
     return 0;
 }
+
 static uint32_t retained_buffer(uint8_t *a, int feedback)
 {
     GlContext *c = gl_current();
@@ -172,14 +178,17 @@ static uint32_t retained_buffer(uint8_t *a, int feedback)
     }
     return 0;
 }
+
 uint32_t call_glSelectBuffer(uint8_t *a)
 {
     return retained_buffer(a, 0);
 }
+
 uint32_t call_glFeedbackBuffer(uint8_t *a)
 {
     return retained_buffer(a, 1);
 }
+
 uint32_t call_glRenderMode(uint8_t *a)
 {
     GlContext *c = gl_current();

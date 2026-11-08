@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "runtime/core/internal.h"
+
 void prepOs2Drives(void)
 {
     const int drive_c = 'C' - 'A';

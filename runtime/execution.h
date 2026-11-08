@@ -11,11 +11,13 @@ typedef struct LxGuestMapping LxGuestMapping;
 /* Packed far pointer: [31..16 selector | 15..0 offset].
    The selector resolves through the backend; it is never a host pointer. */
 typedef uint32_t (*LxExecutionApi16)(uint8_t *arguments);
+
 typedef enum LxExecutionAbi32
 {
     LX_ABI_STACK32 = 1,
     LX_ABI_EAX32 = 2
 } LxExecutionAbi32;
+
 typedef struct LxExecutionApi32
 {
     LxExecutionApi16 callback;
@@ -23,13 +25,16 @@ typedef struct LxExecutionApi32
     uint16_t callee_pop;
     LxExecutionAbi32 convention;
 } LxExecutionApi32;
+
 size_t lx_execution_emit_bridge32(LxExecution *execution, uint8_t *output, size_t capacity,
                                   const LxExecutionApi32 *binding);
+
 typedef struct LxExecutionRegisters32
 {
     uint32_t eax, ebx, ecx, edx, esi, edi, ebp, esp, eip, eflags;
     uint16_t cs, ds, es, fs, gs, ss;
 } LxExecutionRegisters32;
+
 /* Snapshot the suspended caller of a generated 32-bit API bridge. */
 int lx_execution_api_registers32(LxExecution *execution, LxExecutionRegisters32 *registers);
 /* Resume the suspended API caller with this context after the host bridge returns.
@@ -37,12 +42,14 @@ int lx_execution_api_registers32(LxExecution *execution, LxExecutionRegisters32 
 int lx_execution_api_resume32(LxExecution *execution, const LxExecutionRegisters32 *registers);
 /* Current generated API argument frame, or zero outside a stack-based API call. */
 uint32_t lx_execution_api_arguments(LxExecution *execution);
+
 typedef struct LxGuestBorrow
 {
     void *host;
     LxExecution *execution;
     LxGuestMapping *mapping;
 } LxGuestBorrow;
+
 /* A borrow pins backing and permissions. Unmap/protect fail while it is live.
    Release every borrow before destroying its execution instance. */
 int lx_execution_borrow(LxExecution *execution, uint32_t address, size_t size, unsigned permissions,
@@ -58,12 +65,14 @@ char *lx_execution_copy_string(LxExecution *execution, uint32_t address, size_t 
    count is zero. The returned allocation always has a trailing extra NUL. */
 char *lx_execution_copy_strings(LxExecution *execution, uint32_t address, size_t maximum,
                                 unsigned count);
+
 enum
 {
     LX_GUEST_READ = 1,
     LX_GUEST_WRITE = 2,
     LX_GUEST_EXECUTE = 4
 };
+
 /* Guest mappings use 4-KiB units and never replace occupied ranges. Host backing
    is owned by the mapping. Borrowed host ranges expire at unmap/destroy. */
 LxGuestMapping *lx_execution_map(LxExecution *execution, uint32_t address, size_t size,
@@ -114,6 +123,7 @@ typedef struct LxExecutionBridge
     uint32_t size;
     uint16_t selector_index;
 } LxExecutionBridge;
+
 int lx_execution_universal_thunk(LxExecution *execution, uint32_t ordinal,
                                  LxExecutionBridge *bridge);
 
@@ -161,7 +171,8 @@ void lx_execution_poll_termination(LxExecution *execution);
 void lx_execution_poll_exit(LxExecution *execution);
 /* Process services may park a guest at an execution boundary. The callback
    runs without the CPU lock; register before guest threads are started. */
-void lx_execution_set_checkpoint(LxExecution *execution, void (*checkpoint)(void *), void *argument);
+void lx_execution_set_checkpoint(LxExecution *execution, void (*checkpoint)(void *),
+                                 void *argument);
 void lx_execution_checkpoint(LxExecution *execution);
 /* Backends with bounded guest slices re-test this word for the calling thread
    immediately before each slice. A nonzero value sends it to the checkpoint. */

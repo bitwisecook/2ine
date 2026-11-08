@@ -6,14 +6,17 @@
 #include <string.h>
 #include <limits.h>
 #include <stdlib.h>
+
 static void word16(void *p, uint16_t value)
 {
     memcpy(p, &value, 2);
 }
+
 static void word32(void *p, uint32_t value)
 {
     memcpy(p, &value, 4);
 }
+
 static void address(void *out, uint32_t ip, int bsd)
 {
     unsigned char *p = out;
@@ -27,6 +30,7 @@ static void address(void *out, uint32_t ip, int bsd)
         word16(p, 2);
     memcpy(p + 4, &ip, 4);
 }
+
 int lx_os2_network_ifconf(void *buffer, size_t capacity, size_t *used, int bsd)
 {
     if (!used || (!buffer && capacity))
@@ -50,6 +54,7 @@ int lx_os2_network_ifconf(void *buffer, size_t capacity, size_t *used, int bsd)
     lx_host_network_destroy(&s);
     return 0;
 }
+
 int lx_os2_network_ioctl(unsigned command, void *argument, size_t length, int bsd)
 {
     unsigned cmd = command & 0xffff;
@@ -205,6 +210,7 @@ static void link_address(unsigned char *p, const LxHostNetworkInterface *interfa
     memcpy(p + 8, interface->name, p[5]);
     memcpy(p + 8 + p[5], interface->mac, interface->mac_length);
 }
+
 /* Toolkit packed route.h/if.h messages; no host kernel pointers or ABI structs. */
 int lx_os2_network_sysctl(const int *name, unsigned count, void *buffer, size_t *length)
 {

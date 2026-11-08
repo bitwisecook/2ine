@@ -3,12 +3,14 @@
 #define TB_ICON_H
 #include <stddef.h>
 #include <stdint.h>
+
 typedef struct TbIconImage
 {
     unsigned width, height;
     uint32_t *pixels;
     uint8_t *mask;
 } TbIconImage;
+
 TbIconImage *tb_icon_bitmap(const uint8_t *bytes, size_t size);
 TbIconImage *tb_icon_executable(const uint8_t *bytes, size_t size);
 /* Returns an owned copy of one LX resource, or NULL. */

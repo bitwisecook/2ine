@@ -2,12 +2,14 @@
 #ifndef TWOINE_PM_CONTROLS_H
 #define TWOINE_PM_CONTROLS_H
 #include "os2libs/pmwin/internal.h"
+
 typedef struct
 {
     char *text;
     ULONG handle;
     BOOL selected;
 } ListItem;
+
 typedef struct PmControl
 {
     unsigned kind;

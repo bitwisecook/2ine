@@ -19,6 +19,7 @@ static uint32 bridge32_DosQueryDBCSEnv(uint8 *arguments)
     lx_execution_release(&codepage);
     return result;
 }
+
 static uint32 bridge32_DosMapCase(uint8 *arguments)
 {
     const uint32 size = lx_guest_load_u32(arguments), cc_pointer = lx_guest_load_u32(arguments + 4);
@@ -37,6 +38,7 @@ static uint32 bridge32_DosMapCase(uint8 *arguments)
     lx_execution_release(&codepage);
     return result;
 }
+
 static uint32 bridge32_DosQueryCtryInfo(uint8 *arguments)
 {
     const uint32 size = lx_guest_load_u32(arguments), cc_pointer = lx_guest_load_u32(arguments + 4);

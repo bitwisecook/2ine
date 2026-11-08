@@ -16,6 +16,7 @@
 #include <sys/file.h>
 #include <fcntl.h>
 #include <unistd.h>
+
 struct LxHostMutex
 {
     pthread_mutex_t object;
@@ -24,20 +25,24 @@ struct LxHostMutex
     uint32_t *state;
     int file;
 };
+
 typedef struct NamedOwner
 {
     LxHostMutex *mutex;
     struct NamedOwner *next;
 } NamedOwner;
+
 enum
 {
     NAMED_MUTEX_BYTES = 8,
     NAMED_MUTEX_OWNER = 0,
     NAMED_MUTEX_READY = 1
 };
+
 static pthread_key_t named_owner_key;
 static pthread_once_t named_owner_once = PTHREAD_ONCE_INIT;
 static int named_owner_ready;
+
 static void abandon_named(void *value)
 {
     NamedOwner *owner = value;
@@ -54,10 +59,12 @@ static void abandon_named(void *value)
         owner = next;
     }
 }
+
 static void initialize_named_owner(void)
 {
     named_owner_ready = !pthread_key_create(&named_owner_key, abandon_named);
 }
+
 static int retain_named_owner(LxHostMutex *mutex)
 {
     pthread_once(&named_owner_once, initialize_named_owner);
@@ -74,6 +81,7 @@ static int retain_named_owner(LxHostMutex *mutex)
     }
     return 1;
 }
+
 static void release_named_owner(LxHostMutex *mutex)
 {
     NamedOwner *first = pthread_getspecific(named_owner_key);
@@ -87,6 +95,7 @@ static void release_named_owner(LxHostMutex *mutex)
         }
     pthread_setspecific(named_owner_key, first);
 }
+
 LxHostMutex *lx_host_mutex_create(int recursive, int owned)
 {
     LxHostMutex *m = calloc(1, sizeof *m);
@@ -113,6 +122,7 @@ LxHostMutex *lx_host_mutex_create(int recursive, int owned)
     m->held = owned ? 1 : 0;
     return m;
 }
+
 static LxHostLockResult result(int rc)
 {
     switch (rc)
@@ -133,11 +143,13 @@ static LxHostLockResult result(int rc)
             return LX_HOST_LOCK_FAILED;
     }
 }
+
 static void stopWaiting(void *p)
 {
     LxHostMutex *m = p;
     __atomic_sub_fetch(&m->waiting, 1, __ATOMIC_SEQ_CST);
 }
+
 static LxHostLockResult lock_named(LxHostMutex *mutex, uint32_t timeout)
 {
     uint64_t deadline =
@@ -203,6 +215,7 @@ static LxHostLockResult lock_named(LxHostMutex *mutex, uint32_t timeout)
     pthread_cleanup_pop(1);
     return result;
 }
+
 LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
 {
     if (m->shared)
@@ -236,6 +249,7 @@ LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
     pthread_cleanup_pop(1);
     return result(rc);
 }
+
 LxHostLockResult lx_host_mutex_unlock(LxHostMutex *m)
 {
     if (m->shared)
@@ -272,11 +286,13 @@ LxHostLockResult lx_host_mutex_unlock(LxHostMutex *m)
         __atomic_sub_fetch(&m->held, 1, __ATOMIC_SEQ_CST);
     return result(rc);
 }
+
 int lx_host_mutex_busy(LxHostMutex *m)
 {
     return __atomic_load_n(&m->held, __ATOMIC_SEQ_CST) ||
            __atomic_load_n(&m->waiting, __ATOMIC_SEQ_CST);
 }
+
 LxHostLockResult lx_host_mutex_destroy(LxHostMutex *m)
 {
     if (lx_host_mutex_busy(m))
@@ -371,6 +387,7 @@ struct LxHostMonitor
     pthread_cond_t condition;
     clockid_t clock;
 };
+
 LxHostMonitor *lx_host_monitor_create(void)
 {
     LxHostMonitor *m = calloc(1, sizeof *m);
@@ -394,24 +411,29 @@ LxHostMonitor *lx_host_monitor_create(void)
     }
     return m;
 }
+
 void lx_host_monitor_destroy(LxHostMonitor *m)
 {
     pthread_cond_destroy(&m->condition);
     pthread_mutex_destroy(&m->mutex);
     free(m);
 }
+
 void lx_host_monitor_lock(LxHostMonitor *m)
 {
     pthread_mutex_lock(&m->mutex);
 }
+
 void lx_host_monitor_unlock(LxHostMonitor *m)
 {
     pthread_mutex_unlock(&m->mutex);
 }
+
 static void unlockMonitor(void *p)
 {
     lx_host_monitor_unlock(p);
 }
+
 LxHostLockResult lx_host_monitor_wait(LxHostMonitor *m, uint32_t ms)
 {
     int rc;
@@ -423,6 +445,7 @@ LxHostLockResult lx_host_monitor_wait(LxHostMonitor *m, uint32_t ms)
     pthread_cleanup_pop(0);
     return result(rc);
 }
+
 void lx_host_monitor_wake_all(LxHostMonitor *m)
 {
     pthread_cond_broadcast(&m->condition);

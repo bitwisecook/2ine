@@ -15,12 +15,14 @@ typedef struct Resource
     LxHandleKind kind;
     struct Resource *next;
 } Resource;
+
 typedef struct Slot
 {
     Resource *resource;
     uint32_t access;
     uint16_t generation;
 } Slot;
+
 /* Index zero and the 16-bit special-handle range are never returned. */
 #define SLOT_COUNT 65535u
 /* The high bit is reserved for process-independent shared semaphore handles. */
@@ -30,12 +32,14 @@ static uint32_t NextSlot = 1;
 static Resource *Resources;
 static LxHostMutex *Mutex;
 static LxHostOnce Once = LX_HOST_ONCE_INIT;
+
 static void initializeMutex(void)
 {
     Mutex = lx_host_mutex_create(0, 0);
     if (!Mutex)
         abort();
 }
+
 static void lock(void)
 {
     lx_host_once(&Once, initializeMutex);
@@ -98,6 +102,7 @@ uint32_t lx_handle_create(LxHandleKind kind, void *value, void (*destroy)(void *
     lx_host_mutex_unlock(Mutex);
     return handle;
 }
+
 static Resource *resolve(uint32_t handle, LxHandleKind kind)
 {
     uint32_t index = handle & UINT16_MAX;
@@ -106,6 +111,7 @@ static Resource *resolve(uint32_t handle, LxHandleKind kind)
     Resource *r = Slots[index].resource;
     return r && r->kind == kind ? r : NULL;
 }
+
 int lx_handle_borrow(uint32_t handle, LxHandleKind kind, LxHandleBorrow *borrow)
 {
     if (!borrow)
@@ -122,6 +128,7 @@ int lx_handle_borrow(uint32_t handle, LxHandleKind kind, LxHandleBorrow *borrow)
     lx_host_mutex_unlock(Mutex);
     return r != NULL;
 }
+
 /* Drop under the table lock, destroy outside it. Destructors may close handles. */
 static Resource *drop(Resource *r)
 {
@@ -133,6 +140,7 @@ static Resource *drop(Resource *r)
     *link = r->next;
     return r;
 }
+
 static void dispose(Resource *r)
 {
     if (r)
@@ -142,6 +150,7 @@ static void dispose(Resource *r)
         free(r);
     }
 }
+
 void lx_handle_release(LxHandleBorrow *borrow)
 {
     if (!borrow || !borrow->lease)
@@ -152,6 +161,7 @@ void lx_handle_release(LxHandleBorrow *borrow)
     lx_host_mutex_unlock(Mutex);
     dispose(last);
 }
+
 int lx_handle_close_guarded(uint32_t handle, LxHandleKind kind, size_t allowed,
                             int (*guard)(void *))
 {
@@ -171,10 +181,12 @@ int lx_handle_close_guarded(uint32_t handle, LxHandleKind kind, size_t allowed,
     dispose(last);
     return success;
 }
+
 int lx_handle_close(uint32_t handle, LxHandleKind kind)
 {
     return lx_handle_close_guarded(handle, kind, SIZE_MAX, NULL) == 1;
 }
+
 int lx_handle_access(uint32_t handle, LxHandleKind kind, uint32_t *access)
 {
     lock();
@@ -184,6 +196,7 @@ int lx_handle_access(uint32_t handle, LxHandleKind kind, uint32_t *access)
     lx_host_mutex_unlock(Mutex);
     return r != NULL;
 }
+
 uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind, const uint32_t *access)
 {
     uint32_t source;
@@ -202,6 +215,7 @@ uint32_t lx_handle_duplicate(uint32_t handle, LxHandleKind kind, const uint32_t 
     lx_handle_release(&borrow);
     return copy;
 }
+
 size_t lx_handle_count(LxHandleKind kind, const void *resource)
 {
     lock();

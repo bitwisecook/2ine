@@ -9,6 +9,7 @@
 #include <strings.h>
 
 #define ARG(a, n) lx_guest_load_u32((a) + 4 * (n))
+
 enum
 {
     TITLE_LIMIT = 4097,
@@ -29,6 +30,7 @@ typedef struct AwakeObject
     ULONG handle;
     uint32 object;
 } AwakeObject;
+
 static LxHostOnce awake_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *awake_lock;
 static AwakeObject *awake;
@@ -40,11 +42,13 @@ static void initialize_awake(void)
     if (!awake_lock)
         abort();
 }
+
 static void lock_awake(void)
 {
     lx_host_once(&awake_once, initialize_awake);
     lx_host_monitor_lock(awake_lock);
 }
+
 uint32 pmwpAwakeObject(ULONG handle)
 {
     uint32 result = 0;
@@ -55,6 +59,7 @@ uint32 pmwpAwakeObject(ULONG handle)
     lx_host_monitor_unlock(awake_lock);
     return result;
 }
+
 void pmwpRememberObject(ULONG handle, uint32 object)
 {
     lock_awake();
@@ -66,6 +71,7 @@ void pmwpRememberObject(ULONG handle, uint32 object)
     }
     lx_host_monitor_unlock(awake_lock);
 }
+
 void pmwpForgetObject(ULONG handle)
 {
     lock_awake();
@@ -82,6 +88,7 @@ static uint32 class_of(uint32 self)
 {
     return pmwpInvokeObject(PMWP_SOMObject_somGetClass, self, 0, 0, 0);
 }
+
 static void replace_string(uint32 self, uint32 field, const char *text)
 {
     pmwpFree(pmwpObjectField(self, field));
@@ -105,6 +112,7 @@ static void advance_control(uint32 control)
     pmwpStore32(control + INIT_CONTROL_MASK, mask + 1);
     pmwpStore32(control + INIT_CONTROL_INFO, info);
 }
+
 static void uninitialize(uint32 self)
 {
     uint32 object_class = class_of(self);
@@ -117,17 +125,20 @@ static uint32 obj_somInit(uint8 *a)
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpInitData, ARG(a, 0), 0, 0, 0);
     return 0;
 }
+
 static uint32 obj_somDefaultInit(uint8 *a)
 {
     advance_control(ARG(a, 1));
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpInitData, ARG(a, 0), 0, 0, 0);
     return 0;
 }
+
 static uint32 obj_somUninit(uint8 *a)
 {
     uninitialize(ARG(a, 0));
     return 0;
 }
+
 static uint32 obj_somDestruct(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -150,6 +161,7 @@ static uint32 wpInitData(uint8 *a)
     pmwpSetObjectField(self, PMWP_OBJ_MIN_WINDOW, 2);
     return 0;
 }
+
 static uint32 wpUnInitData(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -198,23 +210,28 @@ BOOL pmwpObjectSetTitle(uint32 self, uint32 address)
     free(title);
     return pmwpObjectField(self, PMWP_OBJ_TITLE) != 0;
 }
+
 static uint32 wpSetTitle(uint8 *a)
 {
     return pmwpObjectSetTitle(ARG(a, 0), ARG(a, 1));
 }
+
 static uint32 wpQueryTitle(uint8 *a)
 {
     return pmwpObjectField(ARG(a, 0), PMWP_OBJ_TITLE);
 }
+
 static uint32 wpSetStyle(uint8 *a)
 {
     pmwpSetObjectField(ARG(a, 0), PMWP_OBJ_STYLE, ARG(a, 1));
     return TRUE;
 }
+
 static uint32 wpQueryStyle(uint8 *a)
 {
     return pmwpObjectField(ARG(a, 0), PMWP_OBJ_STYLE);
 }
+
 static uint32 wpModifyStyle(uint8 *a)
 {
     uint32 self = ARG(a, 0), mask = ARG(a, 1);
@@ -222,23 +239,28 @@ static uint32 wpModifyStyle(uint8 *a)
     pmwpSetObjectField(self, PMWP_OBJ_STYLE, (style & ~mask) | (ARG(a, 2) & mask));
     return TRUE;
 }
+
 static uint32 wpSetFolder(uint8 *a)
 {
     pmwpSetObjectField(ARG(a, 0), PMWP_OBJ_FOLDER, ARG(a, 1));
     return TRUE;
 }
+
 static uint32 wpQueryFolder(uint8 *a)
 {
     return pmwpObjectField(ARG(a, 0), PMWP_OBJ_FOLDER);
 }
+
 static uint32 wpQueryHandle(uint8 *a)
 {
     return pmwpObjectField(ARG(a, 0), PMWP_OBJ_HANDLE);
 }
+
 static uint32 wpQueryObjectID(uint8 *a)
 {
     return pmwpObjectField(ARG(a, 0), PMWP_OBJ_IDENTIFIER);
 }
+
 static BOOL assign_identifier(uint32 self, const char *identifier)
 {
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
@@ -248,6 +270,7 @@ static BOOL assign_identifier(uint32 self, const char *identifier)
     replace_string(self, PMWP_OBJ_IDENTIFIER, identifier);
     return TRUE;
 }
+
 static uint32 wpSetObjectID(uint8 *a)
 {
     char *identifier = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), 1024);
@@ -263,12 +286,14 @@ static uint32 wpSetObjectID(uint8 *a)
     free(identifier);
     return result;
 }
+
 static uint32 wpLockObject(uint8 *a)
 {
     uint32 self = ARG(a, 0);
     pmwpSetObjectField(self, PMWP_OBJ_LOCKS, pmwpObjectField(self, PMWP_OBJ_LOCKS) + 1);
     return 0;
 }
+
 static uint32 wpUnlockObject(uint8 *a)
 {
     uint32 self = ARG(a, 0), locks = pmwpObjectField(self, PMWP_OBJ_LOCKS);
@@ -276,6 +301,7 @@ static uint32 wpUnlockObject(uint8 *a)
         pmwpSetObjectField(self, PMWP_OBJ_LOCKS, locks - 1);
     return TRUE;
 }
+
 static uint32 wpIsLocked(uint8 *a)
 {
     return pmwpObjectField(ARG(a, 0), PMWP_OBJ_LOCKS) != 0;
@@ -291,6 +317,7 @@ static BOOL save_value(uint32 self, uint32 class_name, ULONG key, const void *da
     free(name);
     return result;
 }
+
 static BOOL restore_value(uint32 self, uint32 class_name, ULONG key, void *data, ULONG *size)
 {
     ULONG handle = pmwpObjectField(self, PMWP_OBJ_HANDLE);
@@ -299,12 +326,14 @@ static BOOL restore_value(uint32 self, uint32 class_name, ULONG key, void *data,
     free(name);
     return result;
 }
+
 static uint32 wpSaveLong(uint8 *a)
 {
     uint8 value[4];
     lx_guest_store_u32(value, ARG(a, 3));
     return save_value(ARG(a, 0), ARG(a, 1), ARG(a, 2), value, sizeof value);
 }
+
 static uint32 wpSaveString(uint8 *a)
 {
     if (!ARG(a, 3))
@@ -315,6 +344,7 @@ static uint32 wpSaveString(uint8 *a)
     free(value);
     return result;
 }
+
 static uint32 wpSaveData(uint8 *a)
 {
     uint32 size = ARG(a, 4);
@@ -327,6 +357,7 @@ static uint32 wpSaveData(uint8 *a)
     free(value);
     return result;
 }
+
 static uint32 wpRestoreLong(uint8 *a)
 {
     uint8 value[4] = {0};
@@ -334,6 +365,7 @@ static uint32 wpRestoreLong(uint8 *a)
     return restore_value(ARG(a, 0), ARG(a, 1), ARG(a, 2), value, &size) && size == sizeof value &&
            pmwpStore32(ARG(a, 3), lx_guest_load_u32(value));
 }
+
 /* A null buffer asks for the stored size; a short buffer receives the leading bytes. */
 static uint32 restore_bytes(uint8 *a)
 {
@@ -356,6 +388,7 @@ static uint32 restore_bytes(uint8 *a)
     free(value);
     return result;
 }
+
 /* Every instance setting a caller can change survives a save and restore. */
 static const struct
 {
@@ -372,11 +405,13 @@ static const struct
                    {10, PMWP_OBJ_ICON_FORMAT},
                    {11, PMWP_OBJ_ICON_MODULE},
                    {12, PMWP_OBJ_ICON_RESOURCE}};
+
 static const struct
 {
     uint32 key, field;
 } saved_strings[] = {
     {13, PMWP_OBJ_HELP_LIBRARY}, {14, PMWP_OBJ_ICON_FILE}, {15, PMWP_OBJ_WINDOW_KEYS}};
+
 static uint32 wpSaveState(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -402,6 +437,7 @@ static uint32 wpSaveState(uint8 *a)
     }
     return result;
 }
+
 /* The icon is rebuilt from its description; a handle does not outlive the process. */
 static void restore_icon(uint32 self)
 {
@@ -419,6 +455,7 @@ static void restore_icon(uint32 self)
     if (pointer)
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetIcon, self, pointer, 0, 0);
 }
+
 static uint32 wpRestoreState(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -453,12 +490,14 @@ static uint32 wpRestoreState(uint8 *a)
     restore_icon(self);
     return TRUE;
 }
+
 /* A deferred save is performed at once: a queued save could not be guaranteed a guest
    call on every process exit path, so nothing is left unsaved. */
 static uint32 wpSaveImmediate(uint8 *a)
 {
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSaveState, ARG(a, 0), 0, 0, 0);
 }
+
 static uint32 wpSaveDeferred(uint8 *a)
 {
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSaveImmediate, ARG(a, 0), 0, 0, 0);
@@ -482,6 +521,7 @@ static uint32 wpAddToObjUseList(uint8 *a)
     }
     return pmwpStore32(link, item);
 }
+
 static uint32 wpDeleteFromObjUseList(uint8 *a)
 {
     uint32 item = ARG(a, 1);
@@ -494,6 +534,7 @@ static uint32 wpDeleteFromObjUseList(uint8 *a)
     }
     return FALSE;
 }
+
 static uint32 wpFindUseItem(uint8 *a)
 {
     uint32 type = ARG(a, 1), current = ARG(a, 2);
@@ -511,6 +552,7 @@ static uint32 wpFindUseItem(uint8 *a)
             return at;
     return 0;
 }
+
 static uint32 wpAllocMem(uint8 *a)
 {
     uint32 self = ARG(a, 0), size = ARG(a, 1), status = ARG(a, 2);
@@ -528,6 +570,7 @@ static uint32 wpAllocMem(uint8 *a)
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpAddToObjUseList, self, item, 0, 0);
     return item + 12;
 }
+
 static uint32 wpFreeMem(uint8 *a)
 {
     uint32 block = ARG(a, 1);
@@ -566,6 +609,7 @@ static BOOL yes_value(const char *value)
 {
     return !strcasecmp(value, "YES");
 }
+
 static void apply_style_key(uint32 self, const char *setup, const char *key, uint32 bit)
 {
     char value[8];
@@ -574,6 +618,7 @@ static void apply_style_key(uint32 self, const char *setup, const char *key, uin
     uint32 style = pmwpObjectField(self, PMWP_OBJ_STYLE);
     pmwpSetObjectField(self, PMWP_OBJ_STYLE, yes_value(value) ? style | bit : style & ~bit);
 }
+
 /* ICONFILE goes through wpSetIconData so that an override sees the new icon. */
 static BOOL apply_icon_file(uint32 self, const char *file)
 {
@@ -590,6 +635,7 @@ static BOOL apply_icon_file(uint32 self, const char *file)
     pmwpFree(name);
     return result;
 }
+
 /* Base setup keys. Classes parse their own keys in their overrides and call this
    implementation through their parent. Updates persist with the object's record. */
 static uint32 wpSetup(uint8 *a)
@@ -605,6 +651,7 @@ static uint32 wpSetup(uint8 *a)
         {"NOTVISIBLE", PMWP_OBJSTYLE_NOTVISIBLE}, {"NOSETTINGS", PMWP_OBJSTYLE_NOSETTINGS},
         {"NORENAME", PMWP_OBJSTYLE_NORENAME},     {"NODROP", PMWP_OBJSTYLE_NODROP},
         {"TEMPLATE", PMWP_OBJSTYLE_TEMPLATE},     {"LOCKPOSITION", PMWP_OBJSTYLE_LOCKEDINPLACE}};
+
     uint32 self = ARG(a, 0);
     if (!ARG(a, 1))
         return TRUE;
@@ -652,6 +699,7 @@ static uint32 wpSetup(uint8 *a)
     free(setup);
     return result;
 }
+
 static uint32 wpSetupOnce(uint8 *a)
 {
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetup, ARG(a, 0), ARG(a, 1), 0, 0);
@@ -668,6 +716,7 @@ static uint32 wpFree(uint8 *a)
     pmwpInvokeObject(PMWP_SOMObject_somFree, self, 0, 0, 0);
     return TRUE;
 }
+
 uint32 pmwpObjectDelete(uint32 self, uint32 confirmations)
 {
     uint32 answer =
@@ -676,10 +725,12 @@ uint32 pmwpObjectDelete(uint32 self, uint32 confirmations)
         return answer;
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpFree, self, 0, 0, 0) ? OK_DELETE : NO_DELETE;
 }
+
 static uint32 wpDelete(uint8 *a)
 {
     return pmwpObjectDelete(ARG(a, 0), ARG(a, 1));
 }
+
 static uint32 wpIsDeleteable(uint8 *a)
 {
     return !(pmwpObjectField(ARG(a, 0), PMWP_OBJ_STYLE) & PMWP_OBJSTYLE_NODELETE);
@@ -699,6 +750,7 @@ uint32 pmwpAllocateObject(uint32 class_object)
         pmwpFree(block);
     return object;
 }
+
 /* The record starts with an empty setup: wpSetup appends the string it accepts. */
 static void persist_new_object(uint32 object, uint32 class_object, uint32 folder)
 {
@@ -726,6 +778,7 @@ static void persist_new_object(uint32 object, uint32 class_object, uint32 folder
     free(class_name);
     free(title);
 }
+
 uint32 pmwpNewObject(uint32 class_object, uint32 title, uint32 setup, uint32 folder, BOOL lock)
 {
     uint32 object = pmwpAllocateObject(class_object);
@@ -828,4 +881,5 @@ const PmwpBody pmwpObjectBodies[] = {
     {"WPObject", "wpDelete", wpDelete, 8},
     {"WPObject", "wpIsDeleteable", wpIsDeleteable, 4},
 };
+
 const size_t pmwpObjectBodyCount = sizeof pmwpObjectBodies / sizeof *pmwpObjectBodies;

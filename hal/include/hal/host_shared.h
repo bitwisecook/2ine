@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 typedef struct LxHostShared LxHostShared;
+
 typedef enum LxHostSharedResult
 {
     LX_HOST_SHARED_OK,
@@ -13,6 +14,7 @@ typedef enum LxHostSharedResult
     LX_HOST_SHARED_DENIED,
     LX_HOST_SHARED_NOMEM
 } LxHostSharedResult;
+
 LxHostSharedResult lx_host_shared_open(const char *name, size_t create_size, LxHostShared **output);
 /* Reserve a process-independent numeric slot while an object has live references. */
 int lx_host_shared_slot(LxHostShared *object, uint64_t first, uint64_t limit, uint64_t alignment,

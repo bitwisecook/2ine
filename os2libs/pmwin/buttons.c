@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Button check state, automatic transitions and owner notifications. */
 #include "os2libs/pmwin/controls.h"
+
 enum
 {
     BS_PUSH = 0,
@@ -19,6 +20,7 @@ enum
     BM_SETCHECK = 0x125,
     BM_SETDEFAULT = 0x126
 };
+
 void paintUserButton(Window *window, HPS space)
 {
     if (!window->owner)
@@ -49,6 +51,7 @@ void paintUserButton(Window *window, HPS space)
     if (mapping)
         lx_execution_unmap(execution, mapping);
 }
+
 static Window *group_start(Window *window)
 {
     Window *first = window->parent ? window->parent->children : window;
@@ -62,6 +65,7 @@ static Window *group_start(Window *window)
     }
     return start;
 }
+
 MRESULT buttonMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;

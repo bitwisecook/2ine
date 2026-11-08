@@ -82,6 +82,7 @@ const char *lx_cpu_backend(const LxCpu *cpu)
 {
     return cpu->ops->name;
 }
+
 const char *lx_cpu_error(const LxCpu *cpu)
 {
     return cpu->error;
@@ -136,6 +137,7 @@ int lx_cpu_map_borrowed(LxCpu *cpu, uint32_t address, size_t size, unsigned perm
         return lx_cpu_fail(cpu, "Borrowed memory must be page aligned");
     return map_memory(cpu, address, size, permissions, backing, 0);
 }
+
 int lx_cpu_map(LxCpu *cpu, uint32_t address, size_t size, unsigned permissions)
 {
     if (!aligned_range(cpu, address, size))
@@ -276,14 +278,17 @@ int lx_cpu_get_registers(LxCpu *cpu, LxCpuRegisters *r)
 {
     return cpu->ops->get_registers(cpu, r);
 }
+
 int lx_cpu_set_registers(LxCpu *cpu, const LxCpuRegisters *r)
 {
     return cpu->ops->set_registers(cpu, r);
 }
+
 LxCpuEvent lx_cpu_run(LxCpu *cpu, uint64_t count, uint64_t us)
 {
     return cpu->ops->run(cpu, count, us);
 }
+
 LxCpuEvent lx_cpu_run_blocks(LxCpu *cpu, uint64_t blocks)
 {
     return cpu->ops->run_blocks(cpu, blocks);
@@ -316,6 +321,7 @@ int lx_cpu_restore(LxCpu *cpu, const LxCpuContext *context)
         return lx_cpu_fail(cpu, "CPU context belongs to a different CPU");
     return cpu->ops->restore(cpu, context->data);
 }
+
 int lx_cpu_update(LxCpu *cpu, LxCpuContext *context)
 {
     if (!context || context->owner != cpu)

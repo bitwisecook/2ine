@@ -15,6 +15,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 int main(void)
 {
     char filename[] = "/tmp/twoine-audio-config-XXXXXX";

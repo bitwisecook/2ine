@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Pool-relative free lists remain valid when another process attaches the same memory. */
 #include "os2libs/doscalls/internal.h"
+
 enum
 {
     POOL_MAGIC = 0x32425553,
@@ -10,6 +11,7 @@ enum
     POOL_OPTIONS = 12,
     POOL_LOCK = 16
 };
+
 typedef struct PoolAttachment
 {
     uint32 address;
@@ -17,7 +19,9 @@ typedef struct PoolAttachment
     BOOL active;
     struct PoolAttachment *next;
 } PoolAttachment;
+
 static PoolAttachment *PoolAttachments;
+
 static PoolAttachment *pool_attachment(uint32 address, void *base, BOOL create)
 {
     for (PoolAttachment *p = PoolAttachments; p; p = p->next)
@@ -35,6 +39,7 @@ static PoolAttachment *pool_attachment(uint32 address, void *base, BOOL create)
     }
     return p;
 }
+
 void cleanupSuballocation(void)
 {
     while (PoolAttachments)
@@ -44,14 +49,17 @@ void cleanupSuballocation(void)
         PoolAttachments = next;
     }
 }
+
 static uint32 word(const uint8 *pool, uint32 offset)
 {
     return lx_guest_load_u32(pool + offset);
 }
+
 static void store(uint8 *pool, uint32 offset, uint32 value)
 {
     lx_guest_store_u32(pool + offset, value);
 }
+
 static APIRET open_pool(void *base, LxGuestBorrow *borrow, BOOL attached)
 {
     uint32 address;
@@ -89,11 +97,13 @@ static APIRET open_pool(void *base, LxGuestBorrow *borrow, BOOL attached)
     lx_execution_release(borrow);
     return ERROR_SEM_TIMEOUT;
 }
+
 static void close_pool(LxGuestBorrow *borrow)
 {
     __atomic_store_n((uint32 *)((uint8 *)borrow->host + POOL_LOCK), 0, __ATOMIC_RELEASE);
     lx_execution_release(borrow);
 }
+
 static BOOL free_list_valid(const uint8 *pool)
 {
     uint32 size = word(pool, POOL_SIZE), end = POOL_HEADER;
@@ -108,6 +118,7 @@ static BOOL free_list_valid(const uint8 *pool)
     }
     return TRUE;
 }
+
 static APIRET release_block(uint8 *pool, uint32 offset, uint32 length)
 {
     uint32 size = word(pool, POOL_SIZE);
@@ -139,6 +150,7 @@ static APIRET release_block(uint8 *pool, uint32 offset, uint32 length)
     }
     return NO_ERROR;
 }
+
 static APIRET set_pool(PVOID base, ULONG flags, ULONG size)
 {
     TRACE_NATIVE("DosSubSetMem(%p, %u, %u)", base, (uint)flags, (uint)size);
@@ -215,6 +227,7 @@ static APIRET set_pool(PVOID base, ULONG flags, ULONG size)
     close_pool(&pool);
     return result;
 }
+
 APIRET DosSubSetMem(PVOID base, ULONG flags, ULONG size)
 {
     APIRET result = set_pool(base, flags, size);
@@ -223,6 +236,7 @@ APIRET DosSubSetMem(PVOID base, ULONG flags, ULONG size)
                 (uint)result);
     return result;
 }
+
 APIRET DosSubAllocMem(PVOID base, PPVOID output, ULONG size)
 {
     TRACE_NATIVE("DosSubAllocMem(%p, %p, %u)", base, output, (uint)size);
@@ -259,6 +273,7 @@ APIRET DosSubAllocMem(PVOID base, PPVOID output, ULONG size)
     close_pool(&pool);
     return result;
 }
+
 APIRET DosSubFreeMem(PVOID base, PVOID memory, ULONG size)
 {
     TRACE_NATIVE("DosSubFreeMem(%p, %p, %u)", base, memory, (uint)size);
@@ -275,6 +290,7 @@ APIRET DosSubFreeMem(PVOID base, PVOID memory, ULONG size)
     close_pool(&pool);
     return result;
 }
+
 APIRET DosSubUnsetMem(PVOID base)
 {
     TRACE_NATIVE("DosSubUnsetMem(%p)", base);

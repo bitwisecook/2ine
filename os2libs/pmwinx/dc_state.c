@@ -5,6 +5,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
+
 typedef struct Open32SavedDC
 {
     Open32DC state;
@@ -13,6 +14,7 @@ typedef struct Open32SavedDC
     LONG level, native_id;
     struct Open32SavedDC *next;
 } Open32SavedDC;
+
 static void release_state(Open32SavedDC *saved)
 {
     lx_handle_release(&saved->state.font);
@@ -24,6 +26,7 @@ static void release_state(Open32SavedDC *saved)
         GpiDestroyRegion(saved->state.ps, saved->state.clip_region);
     free(saved);
 }
+
 LONG SaveDC(ULONG handle)
 {
     TRACE_NATIVE("SaveDC(%u)", (uint)handle);
@@ -78,6 +81,7 @@ memory_error:
     open32SetError(8);
     return 0;
 }
+
 BOOL RestoreDC(ULONG handle, LONG level)
 {
     TRACE_NATIVE("RestoreDC(%u, %d)", (uint)handle, (int)level);
@@ -149,6 +153,7 @@ BOOL RestoreDC(ULONG handle, LONG level)
         open32MetafileWords(handle, 0x127, 1, &level);
     return restored;
 }
+
 void open32SavedDCCleanup(Open32DC *dc)
 {
     Open32SavedDC *oldest = dc->saved;

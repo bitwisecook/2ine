@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/doscalls.h"
 #include "guest/bindings/pmwinx_unicode.h"
+
 static uint32 open32_interlocked_bridge(uint8 *a, unsigned operation)
 {
     LxGuestBorrow value = {0};
@@ -17,18 +18,22 @@ static uint32 open32_interlocked_bridge(uint8 *a, unsigned operation)
     lx_execution_release(&value);
     return result;
 }
+
 static uint32 bridge32_InterlockedIncrement(uint8 *a)
 {
     return open32_interlocked_bridge(a, 0);
 }
+
 static uint32 bridge32_InterlockedDecrement(uint8 *a)
 {
     return open32_interlocked_bridge(a, 1);
 }
+
 static uint32 bridge32_InterlockedExchange(uint8 *a)
 {
     return open32_interlocked_bridge(a, 2);
 }
+
 static uint32 bridge32_AdjustWindowRectEx(uint8 *a)
 {
     LxGuestBorrow rectangle = {0};
@@ -37,12 +42,13 @@ static uint32 bridge32_AdjustWindowRectEx(uint8 *a)
                              LX_GUEST_READ | LX_GUEST_WRITE, &rectangle))
         open32SetError(87);
     else
-        result = (uint32)AdjustWindowRectEx(rectangle.host, lx_guest_load_u32(a + 4),
-                                            (BOOL)lx_guest_load_u32(a + 8),
-                                            lx_guest_load_u32(a + 12));
+        result =
+            (uint32)AdjustWindowRectEx(rectangle.host, lx_guest_load_u32(a + 4),
+                                       (BOOL)lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
     lx_execution_release(&rectangle);
     return result;
 }
+
 static uint32 bridge32_LoadMenu(uint8 *a)
 {
     ULONG module = lx_guest_load_u32(a);
@@ -59,10 +65,12 @@ static uint32 bridge32_LoadMenu(uint8 *a)
         free(name);
     return result;
 }
+
 static uint32 bridge32_WindowFromPoint(uint8 *a)
 {
     return WindowFromPoint((LONG)lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_GetCursorPos(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -75,15 +83,18 @@ static uint32 bridge32_GetCursorPos(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_SetCursorPos(uint8 *a)
 {
     return SetCursorPos((LONG)lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_GetMenuCheckMarkDimensions(uint8 *a)
 {
     (void)a;
     return (uint32)GetMenuCheckMarkDimensions();
 }
+
 static uint32 bridge32_GetTabbedTextExtent(uint8 *a)
 {
     LONG count = (LONG)lx_guest_load_u32(a + 8), tab_count = (LONG)lx_guest_load_u32(a + 12);
@@ -101,14 +112,17 @@ static uint32 bridge32_GetTabbedTextExtent(uint8 *a)
     lx_execution_release(&text);
     return result;
 }
+
 static uint32 bridge32_GetNearestColor(uint8 *a)
 {
     return GetNearestColor(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_GetObjectType(uint8 *a)
 {
     return GetObjectType(lx_guest_load_u32(a));
 }
+
 static uint32 o32_set_mapping(uint8 *a, unsigned kind)
 {
     ULONG handle = lx_guest_load_u32(a), address = lx_guest_load_u32(a + 12);
@@ -129,31 +143,38 @@ static uint32 o32_set_mapping(uint8 *a, unsigned kind)
     lx_execution_release(&previous);
     return result;
 }
+
 static uint32 bridge32_SetViewportOrgEx(uint8 *a)
 {
     return o32_set_mapping(a, 0);
 }
+
 static uint32 bridge32_SetWindowOrgEx(uint8 *a)
 {
     return o32_set_mapping(a, 1);
 }
+
 static uint32 bridge32_SetViewportExtEx(uint8 *a)
 {
     return o32_set_mapping(a, 2);
 }
+
 static uint32 bridge32_SetWindowExtEx(uint8 *a)
 {
     return o32_set_mapping(a, 3);
 }
+
 static uint32 bridge32_PlayMetaFile(uint8 *a)
 {
     return PlayMetaFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_EnumMetaFile(uint8 *a)
 {
     return EnumMetaFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                         lx_guest_load_u32(a + 12));
 }
+
 static uint32 bridge32_PlayMetaFileRecord(uint8 *a)
 {
     ULONG address = lx_guest_load_u32(a + 8), count = lx_guest_load_u32(a + 12);
@@ -188,6 +209,7 @@ static uint32 bridge32_PlayMetaFileRecord(uint8 *a)
     lx_execution_release(&record);
     return result;
 }
+
 static uint32 bridge32_StretchDIBits(uint8 *a)
 {
     ULONG info_address = lx_guest_load_u32(a + 40), usage = lx_guest_load_u32(a + 44);
@@ -229,6 +251,7 @@ static uint32 bridge32_StretchDIBits(uint8 *a)
     lx_execution_release(&info);
     return result;
 }
+
 static uint32 bridge32_GetTextExtentExPoint(uint8 *a)
 {
     LONG count = (LONG)lx_guest_load_u32(a + 8);
@@ -256,6 +279,7 @@ static uint32 bridge32_GetTextExtentExPoint(uint8 *a)
     lx_execution_release(&text);
     return result;
 }
+
 static uint32 bridge32_SetMetaFileBitsEx(uint8 *a)
 {
     ULONG size = lx_guest_load_u32(a);
@@ -270,6 +294,7 @@ static uint32 bridge32_SetMetaFileBitsEx(uint8 *a)
     lx_execution_release(&input);
     return result;
 }
+
 static uint32 bridge32_GetMetaFileBitsEx(uint8 *a)
 {
     ULONG handle = lx_guest_load_u32(a), size = lx_guest_load_u32(a + 4);
@@ -290,10 +315,12 @@ static uint32 bridge32_GetMetaFileBitsEx(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DeleteMetaFile(uint8 *a)
 {
     return DeleteMetaFile(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_SetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow input = {0};
@@ -306,6 +333,7 @@ static uint32 bridge32_SetWindowPlacement(uint8 *a)
     lx_execution_release(&input);
     return result;
 }
+
 static uint32 bridge32_GetWindowPlacement(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -318,20 +346,24 @@ static uint32 bridge32_GetWindowPlacement(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_LockFile(uint8 *a)
 {
     return LockFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                     lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
 }
+
 static uint32 bridge32_UnlockFile(uint8 *a)
 {
     return UnlockFile(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                       lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16));
 }
+
 static uint32 bridge32_lstrcmp(uint8 *a)
 {
     return (uint32)lstrcmp(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_CreateFile(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 32768);
@@ -348,6 +380,7 @@ static uint32 bridge32_CreateFile(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_SetFilePointer(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a + 8), result = UINT32_MAX;
@@ -366,6 +399,7 @@ static uint32 bridge32_SetFilePointer(uint8 *a)
     lx_execution_release(&high);
     return result;
 }
+
 static uint32 bridge32_GetFileSize(uint8 *a)
 {
     uint32 address = lx_guest_load_u32(a + 4), result = UINT32_MAX;
@@ -382,64 +416,79 @@ static uint32 bridge32_GetFileSize(uint8 *a)
     lx_execution_release(&high);
     return result;
 }
+
 static uint32 bridge32_SetEndOfFile(uint8 *a)
 {
     return SetEndOfFile(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_FlushFileBuffers(uint8 *a)
 {
     return FlushFileBuffers(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GetFileType(uint8 *a)
 {
     return GetFileType(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_OemToChar(uint8 *a)
 {
     return OemToChar(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_CharToOem(uint8 *a)
 {
     return CharToOem(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_OemToCharBuff(uint8 *a)
 {
     return OemToCharBuff(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_CharToOemBuff(uint8 *a)
 {
     return CharToOemBuff(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_SaveDC(uint8 *a)
 {
     return (uint32)SaveDC(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_RestoreDC(uint8 *a)
 {
     return RestoreDC(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_IsDlgButtonChecked(uint8 *a)
 {
     return IsDlgButtonChecked(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_CheckDlgButton(uint8 *a)
 {
     return CheckDlgButton(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
                           lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_GetSaveFileName(uint8 *a)
 {
     return GetSaveFileName((PVOID)(uintptr_t)lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GetOpenFileName(uint8 *a)
 {
     return GetOpenFileName((PVOID)(uintptr_t)lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_CommDlgExtendedError(uint8 *a)
 {
     (void)a;
     return CommDlgExtendedError();
 }
+
 static uint32 bridge32_GetProfileString(uint8 *a)
 {
     uint32 key_pointer = lx_guest_load_u32(a + 4), fallback_pointer = lx_guest_load_u32(a + 8);
@@ -463,33 +512,40 @@ static uint32 bridge32_GetProfileString(uint8 *a)
     free(fallback);
     return result;
 }
+
 static uint32 bridge32_FindResource(uint8 *a)
 {
     return FindResource(lx_guest_load_u32(a), (PSZ)(uintptr_t)lx_guest_load_u32(a + 4),
                         (PSZ)(uintptr_t)lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_LoadResource(uint8 *a)
 {
     return LoadResource(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_SizeofResource(uint8 *a)
 {
     return SizeofResource(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_LockResource(uint8 *a)
 {
     return LockResource(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_WinInitializeOpen32(uint8 *arguments)
 {
     WinInitializeOpen32(lx_guest_load_u32(arguments));
     return 0;
 }
+
 static uint32 bridge32_WinTerminateOpen32(uint8 *arguments)
 {
     WinTerminateOpen32(lx_guest_load_u32(arguments));
     return 0;
 }
+
 static uint32 bridge32_MulDiv(uint8 *arguments)
 {
     return (uint32)MulDiv((LONG)lx_guest_load_u32(arguments),
@@ -501,10 +557,12 @@ static char *o32_string(uint32 pointer)
 {
     return pointer ? lx_execution_copy_string(GLoaderState.execution, pointer, 32768) : NULL;
 }
+
 static uint32 bridge32_RegCloseKey(uint8 *a)
 {
     return (uint32)RegCloseKey(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_RegOpenKey(uint8 *a)
 {
     const uint32 pointer = lx_guest_load_u32(a + 4);
@@ -523,6 +581,7 @@ static uint32 bridge32_RegOpenKey(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_RegCreateKey(uint8 *a)
 {
     const uint32 pointer = lx_guest_load_u32(a + 4);
@@ -541,6 +600,7 @@ static uint32 bridge32_RegCreateKey(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_RegOpenKeyEx(uint8 *a)
 {
     const uint32 pointer = lx_guest_load_u32(a + 4);
@@ -560,6 +620,7 @@ static uint32 bridge32_RegOpenKeyEx(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_RegCreateKeyEx(uint8 *a)
 {
     const uint32 np = lx_guest_load_u32(a + 4), cp = lx_guest_load_u32(a + 12),
@@ -590,6 +651,7 @@ static uint32 bridge32_RegCreateKeyEx(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_RegDeleteValue(uint8 *a)
 {
     const uint32 pointer = lx_guest_load_u32(a + 4);
@@ -599,6 +661,7 @@ static uint32 bridge32_RegDeleteValue(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_RegDeleteKey(uint8 *a)
 {
     const uint32 pointer = lx_guest_load_u32(a + 4);
@@ -608,6 +671,7 @@ static uint32 bridge32_RegDeleteKey(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_RegSetValueEx(uint8 *a)
 {
     const uint32 np = lx_guest_load_u32(a + 4), dp = lx_guest_load_u32(a + 16),
@@ -623,6 +687,7 @@ static uint32 bridge32_RegSetValueEx(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_RegQueryValueEx(uint8 *a)
 {
     const uint32 np = lx_guest_load_u32(a + 4), rp = lx_guest_load_u32(a + 8),
@@ -735,16 +800,19 @@ static uint32 bridge32_GetLastError(uint8 *a)
     (void)a;
     return GetLastError();
 }
+
 static uint32 bridge32_SetLastError(uint8 *a)
 {
     SetLastError(lx_guest_load_u32(a));
     return 0;
 }
+
 static uint32 bridge32_Sleep(uint8 *a)
 {
     Sleep(lx_guest_load_u32(a));
     return 0;
 }
+
 static uint32 bridge32_GetModuleHandle(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a);
@@ -775,6 +843,7 @@ static uint32 bridge32_GetModuleFileName(uint8 *a)
     lx_execution_release(&span);
     return result;
 }
+
 static uint32 bridge32_LoadLibrary(uint8 *a)
 {
     char *name = o32_string(lx_guest_load_u32(a));
@@ -787,10 +856,12 @@ static uint32 bridge32_LoadLibrary(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_FreeLibrary(uint8 *a)
 {
     return FreeLibrary(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GetProcAddress(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4);
@@ -847,18 +918,22 @@ static uint32 open32_atom_string(uint8 *a, int add)
     free(name);
     return result;
 }
+
 static uint32 bridge32_GlobalAddAtom(uint8 *a)
 {
     return open32_atom_string(a, 1);
 }
+
 static uint32 bridge32_GlobalFindAtom(uint8 *a)
 {
     return open32_atom_string(a, 0);
 }
+
 static uint32 bridge32_GlobalDeleteAtom(uint8 *a)
 {
     return GlobalDeleteAtom(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GlobalGetAtomName(uint8 *a)
 {
     LONG capacity = (LONG)lx_guest_load_u32(a + 8);
@@ -887,6 +962,7 @@ static uint32 bridge32_RegisterClass(uint8 *a)
     lx_execution_release(&record);
     return result;
 }
+
 static uint32 bridge32_RegisterClassAlias(uint8 *a)
 {
     char *name = o32_string(lx_guest_load_u32(a));
@@ -900,11 +976,13 @@ static uint32 bridge32_RegisterClassAlias(uint8 *a)
     free(alias);
     return result;
 }
+
 static uint32 bridge32_SetClassLong(uint8 *a)
 {
     return SetClassLong(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
                         lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_UnregisterClass(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a);
@@ -916,6 +994,7 @@ static uint32 bridge32_UnregisterClass(uint8 *a)
         free(name);
     return result;
 }
+
 static uint32 bridge32_GetClassInfo(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4);
@@ -961,11 +1040,13 @@ static uint32 bridge32_CreateWindowEx(uint8 *a)
     free(title);
     return result;
 }
+
 static uint32 bridge32_DefWindowProc(uint8 *a)
 {
     return (uint32)DefWindowProc(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
                                  lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
 }
+
 static uint32 bridge32_DestroyWindow(uint8 *a)
 {
     return DestroyWindow(lx_guest_load_u32(a));
@@ -975,6 +1056,7 @@ static uint32 bridge32_GetWindowLong(uint8 *a)
 {
     return (uint32)GetWindowLong(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_SetWindowLong(uint8 *a)
 {
     return (uint32)SetWindowLong(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
@@ -1028,6 +1110,7 @@ static uint32 bridge32_LoadBitmap(uint8 *a)
         free(name);
     return result;
 }
+
 static uint32 bridge32_GetObject(uint8 *a)
 {
     ULONG handle = lx_guest_load_u32(a), pointer = lx_guest_load_u32(a + 8);
@@ -1058,6 +1141,7 @@ static uint32 bridge32_GetSystemMetrics(uint8 *a)
 {
     return (uint32)GetSystemMetrics((LONG)lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_SetWindowPos(uint8 *a)
 {
     return SetWindowPos(lx_guest_load_u32(a), lx_guest_load_u32(a + 4),
@@ -1072,10 +1156,12 @@ static uint32 bridge32_MoveWindow(uint8 *a)
                       (LONG)lx_guest_load_u32(a + 8), (LONG)lx_guest_load_u32(a + 12),
                       (LONG)lx_guest_load_u32(a + 16), lx_guest_load_u32(a + 20));
 }
+
 static uint32 bridge32_ShowWindow(uint8 *a)
 {
     return ShowWindow(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_UpdateWindow(uint8 *a)
 {
     return UpdateWindow(lx_guest_load_u32(a));
@@ -1091,22 +1177,27 @@ static uint32 bridge32_GetDialogBaseUnits(uint8 *a)
     (void)a;
     return (uint32)GetDialogBaseUnits();
 }
+
 static uint32 bridge32_ReleaseDC(uint8 *a)
 {
     return (uint32)ReleaseDC(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_CreateCompatibleDC(uint8 *a)
 {
     return CreateCompatibleDC(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DeleteDC(uint8 *a)
 {
     return DeleteDC(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_SelectObject(uint8 *a)
 {
     return SelectObject(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_BitBlt(uint8 *a)
 {
     return BitBlt(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
@@ -1115,6 +1206,7 @@ static uint32 bridge32_BitBlt(uint8 *a)
                   (LONG)lx_guest_load_u32(a + 24), (LONG)lx_guest_load_u32(a + 28),
                   lx_guest_load_u32(a + 32));
 }
+
 static uint32 bridge32_BeginPaint(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -1128,6 +1220,7 @@ static uint32 bridge32_BeginPaint(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_EndPaint(uint8 *a)
 {
     LxGuestBorrow input = {0};
@@ -1146,10 +1239,12 @@ static uint32 bridge32_SetBkMode(uint8 *a)
 {
     return (uint32)SetBkMode(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_SetTextColor(uint8 *a)
 {
     return SetTextColor(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_SetBkColor(uint8 *a)
 {
     return SetBkColor(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
@@ -1206,6 +1301,7 @@ static uint32 bridge32_DrawText(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 bridge32_TextOut(uint8 *a)
 {
     LONG count = (LONG)lx_guest_load_u32(a + 16);
@@ -1234,6 +1330,7 @@ static uint32 bridge32_CreateCompatibleBitmap(uint8 *a)
     return CreateCompatibleBitmap(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
                                   (LONG)lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_GetPixel(uint8 *a)
 {
     return GetPixel(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
@@ -1257,15 +1354,18 @@ static uint32 bridge32_OpenFile(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32__lclose(uint8 *a)
 {
     return (uint32)_lclose(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32__llseek(uint8 *a)
 {
     return (uint32)_llseek(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4),
                            (LONG)lx_guest_load_u32(a + 8));
 }
+
 static uint32 open32_legacy_io(uint8 *a, int writing)
 {
     ULONG size = lx_guest_load_u32(a + 8);
@@ -1281,10 +1381,12 @@ static uint32 open32_legacy_io(uint8 *a, int writing)
     lx_execution_release(&data);
     return result;
 }
+
 static uint32 bridge32__lread(uint8 *a)
 {
     return open32_legacy_io(a, 0);
 }
+
 static uint32 bridge32__lwrite(uint8 *a)
 {
     return open32_legacy_io(a, 1);
@@ -1316,14 +1418,17 @@ static uint32 open32_file_io(uint8 *a, int writing)
     lx_execution_release(&actual);
     return result;
 }
+
 static uint32 bridge32_ReadFile(uint8 *a)
 {
     return open32_file_io(a, 0);
 }
+
 static uint32 bridge32_WriteFile(uint8 *a)
 {
     return open32_file_io(a, 1);
 }
+
 static uint32 bridge32_CloseHandle(uint8 *a)
 {
     return CloseHandle(lx_guest_load_u32(a));
@@ -1348,6 +1453,7 @@ static uint32 open32_format(uint8 *a, uint32 arguments)
     }
     return (uint32)count;
 }
+
 static uint32 bridge32_wsprintf(uint8 *a)
 {
     uint32 address = lx_execution_api_arguments(GLoaderState.execution);
@@ -1358,6 +1464,7 @@ static uint32 bridge32_wsprintf(uint8 *a)
     }
     return open32_format(a, address + 8);
 }
+
 static uint32 bridge32_wvsprintf(uint8 *a)
 {
     return open32_format(a, lx_guest_load_u32(a + 8));
@@ -1374,6 +1481,7 @@ static uint32 bridge32_LoadCursor(uint8 *a)
         free(name);
     return result;
 }
+
 static uint32 bridge32_SetCursor(uint8 *a)
 {
     return SetCursor(lx_guest_load_u32(a));
@@ -1384,15 +1492,18 @@ static uint32 bridge32_GetActiveWindow(uint8 *a)
     (void)a;
     return GetActiveWindow();
 }
+
 static uint32 bridge32_SetActiveWindow(uint8 *a)
 {
     return SetActiveWindow(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GetFocus(uint8 *a)
 {
     (void)a;
     return GetFocus();
 }
+
 static uint32 bridge32_SetFocus(uint8 *a)
 {
     return SetFocus(lx_guest_load_u32(a));
@@ -1416,6 +1527,7 @@ static uint32 bridge32_GetTextMetrics(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_EnumFontFamilies(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 4);
@@ -1439,6 +1551,7 @@ static uint32 bridge32_LoadIcon(uint8 *a)
         free(name);
     return result;
 }
+
 static uint32 bridge32_DestroyIcon(uint8 *a)
 {
     return DestroyIcon(lx_guest_load_u32(a));
@@ -1473,6 +1586,7 @@ static uint32 bridge32_GetCurrentThreadId(uint8 *a)
     (void)a;
     return GetCurrentThreadId();
 }
+
 static uint32 bridge32_GetCurrentThread(uint8 *a)
 {
     (void)a;
@@ -1498,6 +1612,7 @@ static uint32 bridge32_CreateThread(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_GetExitCodeThread(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -1514,10 +1629,12 @@ static uint32 bridge32_GetExitCodeThread(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_ResumeThread(uint8 *a)
 {
     return ResumeThread(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_WaitForSingleObject(uint8 *a)
 {
     return WaitForSingleObject(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
@@ -1572,6 +1689,7 @@ static uint32 bridge32_ReleaseSemaphore(uint8 *a)
     lx_execution_release(&previous);
     return result;
 }
+
 static uint32 bridge32_ExitThread(uint8 *a)
 {
     ExitThread(lx_guest_load_u32(a));
@@ -1592,6 +1710,7 @@ static uint32 bridge32_CreateSolidBrush(uint8 *a)
 {
     return CreateSolidBrush(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_FillRect(uint8 *a)
 {
     LxGuestBorrow rect = {0};
@@ -1692,6 +1811,7 @@ static uint32 bridge32_GetCurrentDirectory(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_SetCurrentDirectory(uint8 *a)
 {
     char *name = o32_string(lx_guest_load_u32(a));
@@ -1738,18 +1858,22 @@ static uint32 bridge32_CreatePalette(uint8 *a)
     lx_execution_release(&input);
     return result;
 }
+
 static uint32 bridge32_SelectPalette(uint8 *a)
 {
     return SelectPalette(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_RealizePalette(uint8 *a)
 {
     return RealizePalette(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GetNearestPaletteIndex(uint8 *a)
 {
     return GetNearestPaletteIndex(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_GetPaletteEntries(uint8 *a)
 {
     uint32 handle = lx_guest_load_u32(a), start = lx_guest_load_u32(a + 4),
@@ -1791,11 +1915,13 @@ static uint32 bridge32_CreateMenu(uint8 *a)
     (void)a;
     return CreateMenu();
 }
+
 static uint32 bridge32_CreatePopupMenu(uint8 *a)
 {
     (void)a;
     return CreatePopupMenu();
 }
+
 static uint32 bridge32_DestroyMenu(uint8 *a)
 {
     return DestroyMenu(lx_guest_load_u32(a));
@@ -1821,22 +1947,27 @@ static uint32 open32_menu_insert(uint8 *a, BOOL append)
     free(text);
     return result;
 }
+
 static uint32 bridge32_InsertMenu(uint8 *a)
 {
     return open32_menu_insert(a, FALSE);
 }
+
 static uint32 bridge32_AppendMenu(uint8 *a)
 {
     return open32_menu_insert(a, TRUE);
 }
+
 static uint32 bridge32_GetMenuItemCount(uint8 *a)
 {
     return (uint32)GetMenuItemCount(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GetMenuItemID(uint8 *a)
 {
     return GetMenuItemID(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_GetSubMenu(uint8 *a)
 {
     return GetSubMenu(lx_guest_load_u32(a), (LONG)lx_guest_load_u32(a + 4));
@@ -2222,14 +2353,17 @@ static uint32 bridge32_WinHelp(uint8 *a)
     free(filename);
     return result;
 }
+
 static uint32 bridge32_GetMenu(uint8 *a)
 {
     return GetMenu(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_SetMenu(uint8 *a)
 {
     return SetMenu(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DrawMenuBar(uint8 *a)
 {
     return DrawMenuBar(lx_guest_load_u32(a));
@@ -3445,10 +3579,12 @@ static uint32 bridge32_DdeInitialize(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DdeGetLastError(uint8 *a)
 {
     return DdeGetLastError(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DdeUninitialize(uint8 *a)
 {
     return DdeUninitialize(lx_guest_load_u32(a));
@@ -3462,18 +3598,22 @@ static uint32 bridge32_DdeCreateStringHandle(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 bridge32_DdeFreeStringHandle(uint8 *a)
 {
     return DdeFreeStringHandle(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DdeKeepStringHandle(uint8 *a)
 {
     return DdeKeepStringHandle(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DdeCmpStringHandles(uint8 *a)
 {
     return (uint32)DdeCmpStringHandles(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DdeQueryString(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a + 8), capacity = lx_guest_load_u32(a + 12);
@@ -3537,11 +3677,13 @@ static uint32 bridge32_OpenClipboard(uint8 *a)
 {
     return OpenClipboard(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_CloseClipboard(uint8 *a)
 {
     (void)a;
     return CloseClipboard();
 }
+
 static uint32 bridge32_EmptyClipboard(uint8 *a)
 {
     (void)a;
@@ -3597,6 +3739,7 @@ done:
     lx_execution_release(&name);
     return result;
 }
+
 static uint32 bridge32_RegEnumKey(uint8 *a)
 {
     uint32 capacity = lx_guest_load_u32(a + 12);
@@ -3620,6 +3763,7 @@ static uint32 bridge32_SetTimer(uint8 *a)
     return SetTimer(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
                     lx_guest_load_u32(a + 12));
 }
+
 static uint32 bridge32_KillTimer(uint8 *a)
 {
     return KillTimer(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
@@ -3638,11 +3782,13 @@ static uint32 bridge32_GetDriveType(uint8 *a)
     free(root);
     return result;
 }
+
 static uint32 bridge32_GetLogicalDrives(uint8 *a)
 {
     (void)a;
     return GetLogicalDrives();
 }
+
 static uint32 bridge32_GetLogicalDriveStrings(uint8 *a)
 {
     uint32 capacity = lx_guest_load_u32(a);
@@ -3774,6 +3920,7 @@ static uint32 bridge32_GetPrivateProfileString(uint8 *a)
     free(filename);
     return result;
 }
+
 static uint32 bridge32_WritePrivateProfileString(uint8 *a)
 {
     uint32 section_pointer = lx_guest_load_u32(a), key_pointer = lx_guest_load_u32(a + 4);
@@ -3797,6 +3944,7 @@ static uint32 bridge32_PrintDlg(uint8 *a)
 {
     return PrintDlg((PVOID)(uintptr_t)lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_CreateDC(uint8 *a)
 {
     char *strings[3] = {NULL, NULL, NULL};
@@ -3812,6 +3960,7 @@ done:
         free(strings[i]);
     return result;
 }
+
 static uint32 bridge32_StartDoc(uint8 *a)
 {
     LxGuestBorrow info = {0};
@@ -3824,18 +3973,22 @@ static uint32 bridge32_StartDoc(uint8 *a)
     lx_execution_release(&info);
     return result;
 }
+
 static uint32 bridge32_StartPage(uint8 *a)
 {
     return (uint32)StartPage(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_EndPage(uint8 *a)
 {
     return (uint32)EndPage(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_EndDoc(uint8 *a)
 {
     return (uint32)EndDoc(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_AbortDoc(uint8 *a)
 {
     return (uint32)AbortDoc(lx_guest_load_u32(a));
@@ -3845,6 +3998,7 @@ static uint32 bridge32_GetClipboardData(uint8 *a)
 {
     return GetClipboardData(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_SetClipboardData(uint8 *a)
 {
     return SetClipboardData(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
@@ -3854,11 +4008,13 @@ static uint32 bridge32_EnumClipboardFormats(uint8 *a)
 {
     return EnumClipboardFormats(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_GetClipboardOwner(uint8 *a)
 {
     (void)a;
     return GetClipboardOwner();
 }
+
 static uint32 bridge32_GetClipboardFormatName(uint8 *a)
 {
     LONG capacity = (LONG)lx_guest_load_u32(a + 8);
@@ -3880,14 +4036,17 @@ static uint32 bridge32_TlsAlloc(uint8 *a)
     (void)a;
     return TlsAlloc();
 }
+
 static uint32 bridge32_TlsFree(uint8 *a)
 {
     return TlsFree(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_TlsGetValue(uint8 *a)
 {
     return TlsGetValue(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_TlsSetValue(uint8 *a)
 {
     return TlsSetValue(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
@@ -3904,6 +4063,7 @@ static uint32 bridge32_LoadAccelerators(uint8 *a)
         free(name);
     return result;
 }
+
 static uint32 bridge32_CreateAcceleratorTable(uint8 *a)
 {
     LONG count = (LONG)lx_guest_load_u32(a + 4);
@@ -3919,6 +4079,7 @@ static uint32 bridge32_CreateAcceleratorTable(uint8 *a)
     lx_execution_release(&data);
     return result;
 }
+
 static uint32 bridge32_CopyAcceleratorTable(uint8 *a)
 {
     ULONG handle = lx_guest_load_u32(a), address = lx_guest_load_u32(a + 4);
@@ -3943,10 +4104,12 @@ static uint32 bridge32_CopyAcceleratorTable(uint8 *a)
     lx_execution_release(&data);
     return (uint32)result;
 }
+
 static uint32 bridge32_DestroyAcceleratorTable(uint8 *a)
 {
     return DestroyAcceleratorTable(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_TranslateAccelerator(uint8 *a)
 {
     uint8 message[28];
@@ -3958,6 +4121,7 @@ static uint32 bridge32_TranslateAccelerator(uint8 *a)
     }
     return (uint32)TranslateAccelerator(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), message);
 }
+
 #include "guest/bindings/pmwinx_batch_graphics.h"
 #include "guest/bindings/pmwinx_batch_services.h"
 #include "guest/bindings/pmwinx_process.h"

@@ -6,11 +6,13 @@
 #include "hal/host_fs.h"
 #include "hal/host_sync.h"
 #include "hal/host_thread.h"
+
 typedef struct FileRange
 {
     uint64_t offset, length;
     struct FileRange *next;
 } FileRange;
+
 typedef struct Open32File
 {
     LxHostFile *file;
@@ -19,26 +21,31 @@ typedef struct Open32File
     FileRange *ranges;
     struct Open32File *next;
 } Open32File;
+
 static Open32File *files;
 static LxHostMonitor *monitor;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
     if (!monitor)
         abort();
 }
+
 static ULONG file_error(LxHostFsError error)
 {
     static const ULONG errors[] = {0, 2, 3, 80, 5, 8, 4, 112, 5, 206, 32, 19, 17, 87, 1117, 145};
     return (unsigned)error < sizeof errors / sizeof *errors ? errors[error] : 1117;
 }
+
 static BOOL result_error(LxHostFsError error)
 {
     if (error)
         open32SetError(file_error(error));
     return error == LX_HOST_FS_OK;
 }
+
 static void destroy_file(void *data)
 {
     Open32File *file = data;
@@ -59,6 +66,7 @@ static void destroy_file(void *data)
     free(file->path);
     free(file);
 }
+
 typedef struct CreateFileCall
 {
     Open32File *file;
@@ -66,6 +74,7 @@ typedef struct CreateFileCall
     unsigned flags;
     ULONG disposition, attributes;
 } CreateFileCall;
+
 static void create_cleanup(void *data)
 {
     CreateFileCall *call = data;
@@ -79,6 +88,7 @@ static void create_cleanup(void *data)
         free(call->file);
     }
 }
+
 static uint32 create_file(void *data)
 {
     CreateFileCall *call = data;
@@ -134,6 +144,7 @@ static uint32 create_file(void *data)
     open32SetError(!created && (call->disposition == 2 || call->disposition == 4) ? 183 : 0);
     return handle;
 }
+
 ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disposition,
                  ULONG attributes, ULONG template)
 {
@@ -194,6 +205,7 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
         .file = file, .flags = flags, .disposition = disposition, .attributes = attributes};
     return lx_host_guarded_call(create_file, &call, create_cleanup, &call);
 }
+
 typedef struct FileCall
 {
     LxHandleBorrow borrow;
@@ -206,6 +218,7 @@ typedef struct FileCall
     uint64_t length;
     BOOL locked;
 } FileCall;
+
 enum
 {
     FILE_READ,
@@ -217,6 +230,7 @@ enum
     FILE_LOCK,
     FILE_UNLOCK
 };
+
 static void release_file(void *data)
 {
     FileCall *call = data;
@@ -224,10 +238,12 @@ static void release_file(void *data)
         lx_host_monitor_unlock(monitor);
     lx_handle_release(&call->borrow);
 }
+
 static BOOL overlaps(uint64_t offset, uint64_t length, const FileRange *range)
 {
     return length && offset < range->offset + range->length && range->offset < offset + length;
 }
+
 static BOOL range_busy(Open32File *file, uint64_t offset, uint64_t length, BOOL include_self)
 {
     for (Open32File *other = files; other; other = other->next)
@@ -237,6 +253,7 @@ static BOOL range_busy(Open32File *file, uint64_t offset, uint64_t length, BOOL 
                     return TRUE;
     return FALSE;
 }
+
 static uint32 file_operation(void *data)
 {
     FileCall *call = data;
@@ -351,6 +368,7 @@ static uint32 file_operation(void *data)
     }
     return result_error(error);
 }
+
 static BOOL invoke(ULONG handle, FileCall *call)
 {
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_FILE, &call->borrow))
@@ -360,6 +378,7 @@ static BOOL invoke(ULONG handle, FileCall *call)
     }
     return lx_host_guarded_call(file_operation, call, release_file, call);
 }
+
 int open32FileIO(ULONG handle, PVOID data, ULONG size, PULONG actual, BOOL writing)
 {
     FileCall call = {.data = data,
@@ -370,6 +389,7 @@ int open32FileIO(ULONG handle, PVOID data, ULONG size, PULONG actual, BOOL writi
         return -1;
     return (int)lx_host_guarded_call(file_operation, &call, release_file, &call);
 }
+
 BOOL open32CloseFile(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -383,6 +403,7 @@ BOOL open32CloseFile(ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 ULONG SetFilePointer(ULONG handle, LONG distance, PLONG high, ULONG origin)
 {
     if (origin > 2)
@@ -401,6 +422,7 @@ ULONG SetFilePointer(ULONG handle, LONG distance, PLONG high, ULONG origin)
     open32SetError(0);
     return (ULONG)call.position;
 }
+
 ULONG GetFileSize(ULONG handle, PULONG high)
 {
     FileCall call = {.operation = FILE_INFO};
@@ -411,16 +433,19 @@ ULONG GetFileSize(ULONG handle, PULONG high)
     open32SetError(0);
     return (ULONG)call.info.size;
 }
+
 BOOL SetEndOfFile(ULONG handle)
 {
     FileCall call = {.operation = FILE_SIZE};
     return invoke(handle, &call);
 }
+
 BOOL FlushFileBuffers(ULONG handle)
 {
     FileCall call = {.operation = FILE_FLUSH};
     return invoke(handle, &call);
 }
+
 ULONG GetFileType(ULONG handle)
 {
     FileCall call = {.operation = FILE_INFO};
@@ -428,6 +453,7 @@ ULONG GetFileType(ULONG handle)
         return 0;
     return call.info.kind == LX_HOST_FILE_PIPE ? 3 : call.info.kind == LX_HOST_FILE_DEVICE ? 2 : 1;
 }
+
 static BOOL lock_range(ULONG handle, ULONG offset_low, ULONG offset_high, ULONG length_low,
                        ULONG length_high, BOOL acquire)
 {
@@ -442,6 +468,7 @@ static BOOL lock_range(ULONG handle, ULONG offset_low, ULONG offset_high, ULONG 
     }
     return invoke(handle, &call);
 }
+
 BOOL LockFile(ULONG handle, ULONG offset_low, ULONG offset_high, ULONG length_low,
               ULONG length_high)
 {
@@ -449,11 +476,13 @@ BOOL LockFile(ULONG handle, ULONG offset_low, ULONG offset_high, ULONG length_lo
                  (uint)length_low, (uint)length_high);
     return lock_range(handle, offset_low, offset_high, length_low, length_high, TRUE);
 }
+
 BOOL UnlockFile(ULONG handle, ULONG offset_low, ULONG offset_high, ULONG length_low,
                 ULONG length_high)
 {
     return lock_range(handle, offset_low, offset_high, length_low, length_high, FALSE);
 }
+
 void open32FilesCleanup(void)
 {
     if (!monitor)
@@ -481,6 +510,7 @@ static void filetime_store(PVOID output, int64_t seconds)
     lx_guest_store_u32(output, (ULONG)ticks);
     lx_guest_store_u32((uint8 *)output + 4, (ULONG)(ticks >> 32));
 }
+
 static BOOL filetime_seconds(PVOID input, int64_t *seconds)
 {
     if (!input)
@@ -500,6 +530,7 @@ static BOOL filetime_seconds(PVOID input, int64_t *seconds)
     *seconds = (int64_t)(ticks / 10000000ULL) - 11644473600LL;
     return TRUE;
 }
+
 BOOL GetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
 {
     LxHandleBorrow borrow = {0};
@@ -542,6 +573,7 @@ BOOL GetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
     lx_handle_release(&borrow);
     return result_error(error);
 }
+
 BOOL SetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
 {
     int64_t btime, atime, mtime;

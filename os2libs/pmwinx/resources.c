@@ -67,6 +67,7 @@ static uint32 bitmap_header(const uint8 *data, uint32 address)
             return address;
     }
 }
+
 ULONG LoadResource(HMODULE module, ULONG resource)
 {
     void *data;

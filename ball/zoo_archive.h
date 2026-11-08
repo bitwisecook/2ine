@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Zoo directory/codec contracts cross-checked against Zoo 2.10 and Deark. */
 #define ZOO_SIGNATURE UINT32_C(0xfdc4a7dc)
+
 static int zoo_walk(TbReadStream *file, Visit visit, void *context)
 {
     unsigned char global[34];
@@ -99,6 +100,7 @@ static int zoo_walk(TbReadStream *file, Visit visit, void *context)
     free(seen);
     return result ? result : bad(EINVAL);
 }
+
 static unsigned zoo_lsb(LegacyBits *bits, unsigned count)
 {
     if (!bits->valid || count > 13 || bits->bit > bits->size * 8 ||
@@ -112,6 +114,7 @@ static unsigned zoo_lsb(LegacyBits *bits, unsigned count)
         value |= ((bits->data[bits->bit / 8] >> (bits->bit % 8)) & 1u) << i;
     return value;
 }
+
 static int zoo_lzd(const unsigned char *input, size_t packed, unsigned char *output, size_t size)
 {
     uint16_t prefix[8192];
@@ -174,6 +177,7 @@ static int zoo_lzd(const unsigned char *input, size_t packed, unsigned char *out
     }
     return 0;
 }
+
 static TbReadStream *zoo_member(TbReadStream *file, uint64_t offset, uint64_t packed, uint64_t size,
                                 int kind)
 {

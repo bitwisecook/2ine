@@ -17,15 +17,18 @@
 #include "hal/host_sync.h"
 #include <ctype.h>
 static LX_HOST_THREAD_LOCAL int SocketError, ResolverError;
+
 static int socket_failure(int number)
 {
     SocketError = 10000 + number;
     return -1;
 }
+
 static int socket_result(int result)
 {
     return result < 0 ? socket_failure(lx_host_socket_bsd_error()) : result;
 }
+
 static int initializeResolverData(void);
 #define lxNativeModuleInit lxTcpipGeneratedInit
 #define lxNativeModuleDeinit lxTcpipGeneratedDeinit
@@ -88,6 +91,7 @@ int OS2_os2_ioctl(int sock, uint32_t command, void *argument, int length)
     }
     return socket_result(lx_os2_network_ioctl(command, argument, (size_t)length, 1));
 }
+
 int OS2_ioctl(int sock, uint32_t command, void *argument)
 {
     /* The three-argument BSD API carries the extent in the command itself. */
@@ -501,6 +505,7 @@ int OS2_recvfrom(int sock, void *buffer, int length, int flags, OS2_sockaddr *ad
     }
     return socket_result(result);
 }
+
 int OS2_sendto(int sock, const void *buffer, int length, int flags, const OS2_sockaddr *address,
                int address_length)
 {
@@ -519,6 +524,7 @@ int OS2_sendto(int sock, const void *buffer, int length, int flags, const OS2_so
     return socket_result(
         (int)lx_host_socket_sendto(sock, buffer, (size_t)length, mapOS2MsgFlags(flags), &peer));
 }
+
 int OS2_getpeername(int sock, OS2_sockaddr *address, int *length)
 {
     if (!address || !length || *length < 16)
@@ -535,6 +541,7 @@ int OS2_getpeername(int sock, OS2_sockaddr *address, int *length)
     }
     return socket_result(result);
 }
+
 int OS2_getsockopt(int sock, int level, int option, void *value, int *length)
 {
     if (level != OS2_SOL_SOCKET)
@@ -556,10 +563,12 @@ int OS2_getsockopt(int sock, int level, int option, void *value, int *length)
     }
     return result;
 }
+
 void OS2_psock_errno(const char *message)
 {
     fprintf(stderr, "%s: socket error %d\n", message ? message : "socket", OS2_sock_errno());
 }
+
 OS2_hostent *OS2_gethostbyaddr(const void *address, int length, int family)
 {
     static LX_HOST_THREAD_LOCAL OS2_hostent output;
@@ -583,6 +592,7 @@ OS2_hostent *OS2_gethostbyaddr(const void *address, int length, int family)
     output.h_addr_list = host.addresses;
     return &output;
 }
+
 static OS2_protoent *protocol_result(const char *name, int number)
 {
     static LX_HOST_THREAD_LOCAL OS2_protoent output;
@@ -590,14 +600,17 @@ static OS2_protoent *protocol_result(const char *name, int number)
         return NULL;
     return &output;
 }
+
 OS2_protoent *OS2_getprotobyname(const char *name)
 {
     return name ? protocol_result(name, 0) : NULL;
 }
+
 OS2_protoent *OS2_getprotobynumber(int number)
 {
     return protocol_result(NULL, number);
 }
+
 OS2_servent *OS2_getservbyport(int port, const char *protocol)
 {
     static LX_HOST_THREAD_LOCAL OS2_servent output;
@@ -610,16 +623,21 @@ OS2_servent *OS2_getservbyport(int port, const char *protocol)
     output.s_proto = host.protocol;
     return &output;
 }
+
 void OS2_setprotoent(int stayopen)
 {
     (void)stayopen;
 }
+
 void OS2_endprotoent(void) {}
+
 void OS2_setservent(int stayopen)
 {
     (void)stayopen;
 }
+
 void OS2_endservent(void) {}
+
 int OS2_gethostname(char *name, int length)
 {
     if (!name || length <= 0)
@@ -629,6 +647,7 @@ int OS2_gethostname(char *name, int length)
     }
     return lx_host_socket_hostname(name, (size_t)length);
 }
+
 uint32_t OS2_gethostid(void)
 {
     LxHostNetwork network;
@@ -645,6 +664,7 @@ uint32_t OS2_gethostid(void)
     lx_host_network_destroy(&network);
     return result;
 }
+
 uint32_t OS2_htonl(uint32_t value)
 {
     if (lx_host_socket_network16(1) == 1)
@@ -652,14 +672,17 @@ uint32_t OS2_htonl(uint32_t value)
     return ((value & 255u) << 24) | ((value & 65280u) << 8) | ((value >> 8) & 65280u) |
            (value >> 24);
 }
+
 uint32_t OS2_ntohl(uint32_t value)
 {
     return OS2_htonl(value);
 }
+
 uint16_t OS2_ntohs(uint16_t value)
 {
     return OS2_htons(value);
 }
+
 int OS2_writev(int sock, const OS2_iovec *vectors, int count)
 {
     if (count < 0 || count > 1024 || (!vectors && count))
@@ -691,9 +714,11 @@ int OS2_writev(int sock, const OS2_iovec *vectors, int count)
     free(data);
     return socket_result(result);
 }
+
 /* Toolkit resolver state is two packed 512-byte records containing guest pointers. */
 static LxMmaps ResolverObject;
 static LxHostMutex *ResolverMutex;
+
 static int initializeResolverData(void)
 {
     if (ResolverObject.mapping)
@@ -715,6 +740,7 @@ static int initializeResolverData(void)
     }
     return ResolverMutex != NULL;
 }
+
 int OS2_res_init(void)
 {
     if (!initializeResolverData())
@@ -760,6 +786,7 @@ int OS2_res_init(void)
     lx_host_network_destroy(&network);
     return 0;
 }
+
 #if LX_LEGACY
 OS2EXPORT void lxNativeModuleDeinit(void)
 {
@@ -771,6 +798,7 @@ OS2EXPORT void lxNativeModuleDeinit(void)
     ResolverMutex = NULL;
     lxTcpipGeneratedDeinit();
 }
+
 OS2EXPORT const LxExport *lxNativeModuleInit(uint32 *count)
 {
     static LxExport exports[256];
@@ -806,6 +834,7 @@ uint32_t OS2_inet_network(const char *name)
 {
     return name ? lx_host_socket_parse_network(name) : UINT32_MAX;
 }
+
 int *OS2_tcp_h_errno1(void)
 {
     return &ResolverError;

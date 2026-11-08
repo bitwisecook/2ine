@@ -8,6 +8,7 @@
 #include <errno.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 static DWORD windows_protection(unsigned p)
 {
     if (p & LX_HOST_EXECUTE)
@@ -16,6 +17,7 @@ static DWORD windows_protection(unsigned p)
                                   : PAGE_EXECUTE;
     return p & LX_HOST_WRITE ? PAGE_READWRITE : p & LX_HOST_READ ? PAGE_READONLY : PAGE_NOACCESS;
 }
+
 void *lx_host_vm_map(void *hint, size_t size, unsigned permissions, int exact)
 {
     if (!size || (permissions & ~7u) || (exact && !hint))
@@ -31,6 +33,7 @@ void *lx_host_vm_map(void *hint, size_t size, unsigned permissions, int exact)
     }
     return p;
 }
+
 int lx_host_vm_protect(void *memory, size_t size, unsigned permissions)
 {
     if (!memory || !size || (permissions & ~7u))
@@ -41,12 +44,14 @@ int lx_host_vm_protect(void *memory, size_t size, unsigned permissions)
     DWORD previous;
     return VirtualProtect(memory, size, windows_protection(permissions), &previous) != 0;
 }
+
 size_t lx_host_page_size(void)
 {
     SYSTEM_INFO info;
     GetSystemInfo(&info);
     return info.dwPageSize;
 }
+
 void *lx_host_memory_alloc(size_t size)
 {
     return lx_host_vm_map(NULL, size, LX_HOST_READ | LX_HOST_WRITE, 0);

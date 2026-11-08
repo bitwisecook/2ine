@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/paint.h"
 #include "guest/abi.h"
 #include <ctype.h>
+
 BOOL WinCancelShutdown(HMQ queue, BOOL cancel)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -34,6 +35,7 @@ BOOL WinCancelShutdown(HMQ queue, BOOL cancel)
     }
     return TRUE;
 }
+
 BOOL WinCpTranslateString(HAB hab, ULONG from, PSZ input, ULONG to, ULONG capacity, PSZ output)
 {
     if (!getAnchorBlock(hab) || !input || !output)
@@ -58,6 +60,7 @@ BOOL WinCpTranslateString(HAB hab, ULONG from, PSZ input, ULONG to, ULONG capaci
     WinSetErrorInfo(PMERR_PARAMETER_OUT_OF_RANGE, 0);
     return FALSE;
 }
+
 ULONG WinLoadLibrary(HAB hab, PSZ name)
 {
     if (!getAnchorBlock(hab) || !name || !GLoaderState.loadModule)
@@ -65,6 +68,7 @@ ULONG WinLoadLibrary(HAB hab, PSZ name)
     LxModule *m = GLoaderState.loadModule(name);
     return m ? m->handle : 0;
 }
+
 BOOL WinDeleteLibrary(HAB hab, ULONG handle)
 {
     LxHandleBorrow b = {0};
@@ -75,18 +79,22 @@ BOOL WinDeleteLibrary(HAB hab, ULONG handle)
     lx_handle_release(&b);
     return TRUE;
 }
+
 static LONG clamp_long(LONG x, LONG low, LONG high)
 {
     return x < low ? low : x > high ? high : x;
 }
+
 BOOL WinFlashWindow(HWND handle, BOOL flash)
 {
     return (BOOL)(uintptr_t)WinSendMsg(handle, WM_FLASHWINDOW, (MPARAM)(uintptr_t)(flash != 0), 0);
 }
+
 BOOL WinFocusChange(HWND desktop, HWND focus, ULONG flags)
 {
     return changeFocus(desktop, focus, (flags & 0xffff) | FOCUS_NOTIFY);
 }
+
 BOOL WinGetMaxPosition(HWND handle, PSWP out)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -103,7 +111,9 @@ BOOL WinGetMaxPosition(HWND handle, PSWP out)
     out->fl |= SWP_SIZE | SWP_MOVE;
     return TRUE;
 }
-static BOOL slot_taken(const Window *parent, const Window *self, const RECTL *slot, LONG cx, LONG cy)
+
+static BOOL slot_taken(const Window *parent, const Window *self, const RECTL *slot, LONG cx,
+                       LONG cy)
 {
     for (Window *s = parent->children; s; s = s->sibling)
     {
@@ -116,6 +126,7 @@ static BOOL slot_taken(const Window *parent, const Window *self, const RECTL *sl
     }
     return FALSE;
 }
+
 BOOL WinGetMinPosition(HWND handle, PSWP out, PPOINTL preferred)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -140,8 +151,10 @@ BOOL WinGetMinPosition(HWND handle, PSWP out, PPOINTL preferred)
     LONG want_column = 0, want_row = 0;
     if (preferred)
     {
-        want_column = clamp_long(width ? (LONG)((int64_t)preferred->x * columns / width) : 0, 0, columns - 1);
-        want_row = clamp_long(height ? (LONG)((int64_t)preferred->y * rows / height) : 0, 0, rows - 1);
+        want_column =
+            clamp_long(width ? (LONG)((int64_t)preferred->x * columns / width) : 0, 0, columns - 1);
+        want_row =
+            clamp_long(height ? (LONG)((int64_t)preferred->y * rows / height) : 0, 0, rows - 1);
     }
     LONG best_column = want_column, best_row = want_row, bottom = 0;
     int64_t best = -1;
@@ -178,6 +191,7 @@ BOOL WinGetMinPosition(HWND handle, PSWP out, PPOINTL preferred)
     out->fl |= SWP_SIZE | SWP_MOVE;
     return TRUE;
 }
+
 BOOL WinIsWindowShowing(HWND handle)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -198,11 +212,13 @@ BOOL WinIsWindowShowing(HWND handle)
     destroyPresentationSpace(a, ps);
     return showing;
 }
+
 LONG WinLoadMessage(HAB hab, HMODULE module, ULONG id, LONG capacity, PSZ output)
 {
     (void)hab;
     return loadStringTable(module, 10, id, capacity, output);
 }
+
 PSZ WinNextChar(HAB hab, ULONG cp, ULONG country, PSZ text)
 {
     /* Single-byte code pages only; an unknown page falls back to the queue page. */
@@ -211,6 +227,7 @@ PSZ WinNextChar(HAB hab, ULONG cp, ULONG country, PSZ text)
     (void)country;
     return text ? text + (*text != 0) : NULL;
 }
+
 BOOL WinQueryDlgItemShort(HWND parent, ULONG id, PSHORT output, BOOL signed_value)
 {
     if (output)
@@ -251,6 +268,7 @@ BOOL WinQueryDlgItemShort(HWND parent, ULONG id, PSHORT output, BOOL signed_valu
         *output = (SHORT)(negative ? -(LONG)value : (LONG)value);
     return TRUE;
 }
+
 BOOL WinSetDlgItemShort(HWND parent, ULONG id, USHORT value, BOOL signed_value)
 {
     char text[24];
@@ -260,6 +278,7 @@ BOOL WinSetDlgItemShort(HWND parent, ULONG id, USHORT value, BOOL signed_value)
         snprintf(text, sizeof text, "%u", (unsigned)value);
     return WinSetDlgItemText(parent, id, text);
 }
+
 BOOL WinQueryMsgPos(HAB hab, PPOINTL out)
 {
     AnchorBlock *a = getAnchorBlock(hab);
@@ -268,10 +287,12 @@ BOOL WinQueryMsgPos(HAB hab, PPOINTL out)
     *out = a->message_queue.last_position;
     return TRUE;
 }
+
 HWND WinQueryObjectWindow(HWND desktop)
 {
     return desktop == HWND_DESKTOP && getAnchorBlockNoHAB() ? HWND_OBJECT : 0;
 }
+
 BOOL WinQueryQueueInfo(HMQ queue, PVOID out, ULONG bytes)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -300,6 +321,7 @@ BOOL WinQueryQueueInfo(HMQ queue, PVOID out, ULONG bytes)
     memcpy(out, data, bytes < 20 ? bytes : 20);
     return TRUE;
 }
+
 BOOL WinSetCp(HMQ queue, ULONG cp)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -310,6 +332,7 @@ BOOL WinSetCp(HMQ queue, ULONG cp)
     a->message_queue.codepage = cp;
     return TRUE;
 }
+
 BOOL WinSetMultWindowPos(HAB hab, PSWP positions, ULONG count)
 {
     AnchorBlock *a = getAnchorBlock(hab);
@@ -333,6 +356,7 @@ BOOL WinSetMultWindowPos(HAB hab, PSWP positions, ULONG count)
     }
     return TRUE;
 }
+
 BOOL WinSetWindowBits(HWND handle, LONG index, ULONG data, ULONG mask)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -344,6 +368,7 @@ BOOL WinSetWindowBits(HWND handle, LONG index, ULONG data, ULONG mask)
     ULONG old = WinQueryWindowULong(handle, index);
     return WinSetWindowULong(handle, index, (old & ~mask) | (data & mask));
 }
+
 /* Sending can destroy windows, so targets are gathered before any delivery. */
 static BOOL collect_targets(const Window *parent, ULONG flags, HWND **list, size_t *count,
                             size_t *capacity)
@@ -368,6 +393,7 @@ static BOOL collect_targets(const Window *parent, ULONG flags, HWND **list, size
     }
     return TRUE;
 }
+
 BOOL WinBroadcastMsg(HWND parent, ULONG message, MPARAM first, MPARAM second, ULONG flags)
 {
     if (flags & ~0x1fu)
@@ -400,6 +426,7 @@ BOOL WinBroadcastMsg(HWND parent, ULONG message, MPARAM first, MPARAM second, UL
     free(targets);
     return ok;
 }
+
 BOOL WinSetKeyboardStateTable(HWND desktop, PBYTE table, BOOL set)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -417,6 +444,7 @@ BOOL WinSetKeyboardStateTable(HWND desktop, PBYTE table, BOOL set)
     }
     return TRUE;
 }
+
 LONG WinRealizePalette(HWND handle, HPS ps, PULONG changed)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -433,7 +461,9 @@ typedef struct ErrorAllocation
     LxGuestMapping *mapping;
     struct ErrorAllocation *next;
 } ErrorAllocation;
+
 static _Thread_local ErrorAllocation *error_allocations;
+
 PVOID WinGetErrorInfo(HAB hab)
 {
     AnchorBlock *a = getAnchorBlock(hab);
@@ -459,8 +489,11 @@ PVOID WinGetErrorInfo(HAB hab)
     if (!loadStringTable((HMODULE)-1, 5, 0, sizeof prefix, prefix))
         snprintf(prefix, sizeof prefix, "PMWIN");
     size_t known = (size_t)loadStringTable((HMODULE)-1, 5, 0x1021, sizeof letters, letters);
-    char letter = known ? letters[severity < known ? severity : known - 1]
-                  : severity == 4 ? 'W' : severity == 12 ? 'S' : severity == 16 ? 'U' : 'E';
+    char letter = known            ? letters[severity < known ? severity : known - 1]
+                  : severity == 4  ? 'W'
+                  : severity == 12 ? 'S'
+                  : severity == 16 ? 'U'
+                                   : 'E';
     if (!loadStringTable((HMODULE)-1, 10, code, sizeof text, text))
         loadStringTable((HMODULE)-1, 5, code, sizeof text, text);
     lx_guest_store_u32(out, 20);
@@ -474,6 +507,7 @@ PVOID WinGetErrorInfo(HAB hab)
     error_allocations = p;
     return (PVOID)(uintptr_t)lx_execution_mapping_address(p->mapping);
 }
+
 BOOL WinFreeErrorInfo(PVOID address)
 {
     ErrorAllocation **link = &error_allocations;
@@ -487,12 +521,14 @@ BOOL WinFreeErrorInfo(PVOID address)
     free(p);
     return TRUE;
 }
+
 void cleanupErrorInfo(void)
 {
     while (error_allocations)
         WinFreeErrorInfo(
             (PVOID)(uintptr_t)lx_execution_mapping_address(error_allocations->mapping));
 }
+
 /* Applies the size limits and boundary to a tracked rectangle. */
 static RECTL constrain_track(const LXTRACKINFO *info, RECTL r)
 {
@@ -522,6 +558,7 @@ static RECTL constrain_track(const LXTRACKINFO *info, RECTL r)
     }
     return r;
 }
+
 static RECTL tracked_rectangle(const LXTRACKINFO *info, RECTL r, LONG dx, LONG dy)
 {
     if (info->fs & 0x20) /* TF_GRID */
@@ -541,6 +578,7 @@ static RECTL tracked_rectangle(const LXTRACKINFO *info, RECTL r, LONG dx, LONG d
         r.yTop += dy;
     return constrain_track(info, r);
 }
+
 /* Inverting twice restores the screen, so one routine draws and erases. */
 static void invert_track(HPS ps, const LXTRACKINFO *info, const RECTL *r)
 {
@@ -553,7 +591,9 @@ static void invert_track(HPS ps, const LXTRACKINFO *info, const RECTL *r)
         if (edges[i].xRight > edges[i].xLeft && edges[i].yTop > edges[i].yBottom)
             WinInvertRect(ps, &edges[i]);
 }
+
 static _Thread_local BOOL tracking;
+
 BOOL WinTrackRect(HWND handle, HPS ps, LXTRACKINFO *info)
 {
     AnchorBlock *a = getAnchorBlockNoHAB();
@@ -672,8 +712,8 @@ BOOL WinTrackRect(HWND handle, HPS ps, LXTRACKINFO *info)
             if (!WinQueryPointerPos(HWND_DESKTOP, &point))
                 break;
             invert_track(space, info, &info->rclTrack);
-            info->rclTrack =
-                tracked_rectangle(info, original, point.x - start.x + key_x, point.y - start.y + key_y);
+            info->rclTrack = tracked_rectangle(info, original, point.x - start.x + key_x,
+                                               point.y - start.y + key_y);
             invert_track(space, info, &info->rclTrack);
         }
     }

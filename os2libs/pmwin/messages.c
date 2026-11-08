@@ -12,6 +12,7 @@
 #include "os2libs/pmwin/menus.h"
 #include "os2libs/pmwin/open32_post.h"
 #include "guest/launch_record.h"
+
 const char *messageName(const ULONG msg)
 {
     switch (msg)
@@ -171,6 +172,7 @@ typedef struct PaintScope
     HWND window;
     struct PaintScope *previous;
 } PaintScope;
+
 static LX_HOST_THREAD_LOCAL PaintScope *ActivePaint;
 
 MRESULT sendMessage(Window *win, ULONG msg, MPARAM mp1, MPARAM mp2)
@@ -336,6 +338,7 @@ static BOOL postExposedSiblings(AnchorBlock *anchor, Window *win, ULONG ticks)
     BOOL result = postExposedSiblings(anchor, win->sibling, ticks);
     return postExposedMessages(anchor, win, ticks) | result;
 }
+
 BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks)
 {
     BOOL retval = FALSE;
@@ -371,6 +374,7 @@ static BOOL post_semantic(AnchorBlock *anchor, Window *win, ULONG raw, MPARAM po
     }
     return posted;
 }
+
 BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULONG shift, ULONG ticks)
 {
     BOOL posted = FALSE;
@@ -382,6 +386,7 @@ BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULONG shift, U
     }
     return posted;
 }
+
 /* Motion thresholds and chords derive further messages from the raw pointer stream. */
 static BOOL post_derived(AnchorBlock *anchor, Window *win, const LxHostEvent *event, ULONG button,
                          LONG x, LONG y, MPARAM point, ULONG ticks)
@@ -430,6 +435,7 @@ static BOOL post_derived(AnchorBlock *anchor, Window *win, const LxHostEvent *ev
     }
     return posted;
 }
+
 BOOL processHostEvent(AnchorBlock *anchor, const LxHostEvent *event)
 {
     ULONG ticks = (ULONG)event->timestamp;
@@ -641,6 +647,7 @@ void presentWindow(AnchorBlock *anchor, Window *window)
     lx_host_window_present(window->heavy.window);
     root->last_present = now;
 }
+
 static void presentWindows(AnchorBlock *anchor)
 {
     for (size_t i = 0; i < anchor->windows_array_len; i++)
@@ -650,6 +657,7 @@ static void presentWindows(AnchorBlock *anchor)
             presentWindow(anchor, win);
     }
 }
+
 /* Paint parents before children and lower siblings before overlapping upper siblings.
    Retrieving WM_PAINT never validates damage: an application may defer its drawing. */
 static Window *nextPaintSibling(AnchorBlock *anchor, Window *window, HWND filter, ULONG first,
@@ -657,8 +665,8 @@ static Window *nextPaintSibling(AnchorBlock *anchor, Window *window, HWND filter
 {
     if (!window)
         return NULL;
-    Window *found = nextPaintSibling(anchor, window->sibling, filter, first, last,
-                                     paint_filter, context);
+    Window *found =
+        nextPaintSibling(anchor, window->sibling, filter, first, last, paint_filter, context);
     if (found)
         return found;
     if (getWindowFromHWND(anchor, window->hwnd) != window || !(window->style & WS_VISIBLE) ||
@@ -669,14 +677,14 @@ static Window *nextPaintSibling(AnchorBlock *anchor, Window *window, HWND filter
         !skipMessage(&message, filter, first, last) &&
         (!paint_filter || paint_filter(window->hwnd, context)))
         return window;
-    return nextPaintSibling(anchor, window->children, filter, first, last,
-                             paint_filter, context);
+    return nextPaintSibling(anchor, window->children, filter, first, last, paint_filter, context);
 }
+
 static BOOL filteredPaintMessage(AnchorBlock *anchor, PQMSG output, HWND filter, ULONG first,
-                                  ULONG last, LxPmPaintFilter paint_filter, void *context)
+                                 ULONG last, LxPmPaintFilter paint_filter, void *context)
 {
     Window *window = nextPaintSibling(anchor, desktop_window.children, filter, first, last,
-                                       paint_filter, context);
+                                      paint_filter, context);
     if (!window || getWindowFromHWND(anchor, window->hwnd) != window)
         return FALSE;
     /* Do not expose a cleared parent before its children have had a paint
@@ -685,6 +693,7 @@ static BOOL filteredPaintMessage(AnchorBlock *anchor, PQMSG output, HWND filter,
     *output = (QMSG){.hwnd = window->hwnd, .msg = WM_PAINT, .time = currentSystemTicks()};
     return TRUE;
 }
+
 static MessageQueueItem *queuedMessage(AnchorBlock *anchor, MessageQueueItem **previous,
                                        HWND filter, ULONG first, ULONG last)
 {
@@ -707,6 +716,7 @@ static MessageQueueItem *queuedMessage(AnchorBlock *anchor, MessageQueueItem **p
     *previous = timer_previous;
     return timer;
 }
+
 static void pumpFilteredEvents(AnchorBlock *anchor, LxPmPaintFilter paint_filter, void *context)
 {
     LxHostEvent event;
@@ -730,6 +740,7 @@ static void pumpFilteredEvents(AnchorBlock *anchor, LxPmPaintFilter paint_filter
             lx_pm_host_event(&event);
     }
 }
+
 void pumpEvents(AnchorBlock *anchor)
 {
     pumpFilteredEvents(anchor, NULL, NULL);
@@ -759,7 +770,7 @@ BOOL skipMessage(const PQMSG qmsg, HWND hwndFilter, ULONG msgFilterFirst, ULONG 
 }
 
 static BOOL getMessage(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFirst,
-                        ULONG msgFilterLast, LxPmPaintFilter paint_filter, void *context)
+                       ULONG msgFilterLast, LxPmPaintFilter paint_filter, void *context)
 {
     TRACE_NATIVE("WinGetMsg(%u, %p, %u, %u, %u)", (uint)hab, pqmsg, (uint)hwndFilter,
                  (uint)msgFilterFirst, (uint)msgFilterLast);
@@ -789,7 +800,7 @@ static BOOL getMessage(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFir
             queuedMessage(anchor, &prev, hwndFilter, msgFilterFirst, msgFilterLast);
         if ((!i || i->qmsg.msg == WM_TIMER) &&
             filteredPaintMessage(anchor, pqmsg, hwndFilter, msgFilterFirst, msgFilterLast,
-                                   paint_filter, context))
+                                 paint_filter, context))
             return TRUE;
 
         if (i != NULL)
@@ -832,10 +843,12 @@ static BOOL getMessage(HAB hab, PQMSG pqmsg, HWND hwndFilter, ULONG msgFilterFir
     assert(!"shouldn't hit this.");
     return TRUE;
 }
+
 BOOL WinGetMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last)
 {
     return getMessage(hab, output, filter, first, last, NULL, NULL);
 }
+
 BOOL lx_pm_get_open32_message(HAB hab, PQMSG output, LxPmPaintFilter paint_filter, void *context)
 {
     return getMessage(hab, output, 0, 0, 0, paint_filter, context);
@@ -878,6 +891,7 @@ typedef struct QueuedSend
     ULONG message;
     MPARAM first, second;
 } QueuedSend;
+
 static uintptr_t deliverQueuedSend(void *context)
 {
     const QueuedSend *send = context;
@@ -885,6 +899,7 @@ static uintptr_t deliverQueuedSend(void *context)
     Window *win = anchor ? getWindowFromHWND(anchor, send->window) : NULL;
     return win ? (uintptr_t)sendMessage(win, send->message, send->first, send->second) : 0;
 }
+
 MRESULT WinSendMsg(HWND hwnd, ULONG msg, MPARAM mp1, MPARAM mp2)
 {
 
@@ -980,7 +995,7 @@ BOOL sendEraseBackground(Window *client, HPS space, const RECTL *rectangle)
 }
 
 static BOOL peekMessage(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULONG flags,
-                         LxPmPaintFilter paint_filter, void *context)
+                        LxPmPaintFilter paint_filter, void *context)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
     if (!anchor || !output || flags > 1 || (filter && !getWindowFromHWND(anchor, filter)))
@@ -1043,10 +1058,12 @@ retry:;
     }
     return TRUE;
 }
+
 BOOL WinPeekMsg(HAB hab, PQMSG output, HWND filter, ULONG first, ULONG last, ULONG flags)
 {
     return peekMessage(hab, output, filter, first, last, flags, NULL, NULL);
 }
+
 BOOL lx_pm_peek_open32_message(HAB hab, PQMSG output, LxPmPaintFilter paint_filter, void *context)
 {
     return peekMessage(hab, output, 0, 0, 0, 1, paint_filter, context);
@@ -1062,6 +1079,7 @@ BOOL lx_pm_poll_input(void)
         lx_pm_host_event(&event);
     return TRUE;
 }
+
 LONG lx_pm_mouse_state(unsigned button)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

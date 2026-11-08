@@ -1,5 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "hal/host.h"
+
 const char *lx_host_arch(void)
 {
 #if defined(__aarch64__) || defined(_M_ARM64)

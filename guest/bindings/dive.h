@@ -4,6 +4,7 @@ static uint32 dive_word(const uint8 *a, unsigned word)
 {
     return lx_guest_load_u32(a + word * 4);
 }
+
 static uint32 bridge32_DiveQueryCaps(uint8 *a)
 {
     uint8 raw[56];
@@ -27,6 +28,7 @@ static uint32 bridge32_DiveQueryCaps(uint8 *a)
     lx_execution_release(&formats);
     return result;
 }
+
 static uint32 bridge32_DiveOpen(uint8 *a)
 {
     LxGuestBorrow output = {0}, framebuffer = {0};
@@ -61,10 +63,12 @@ static uint32 bridge32_DiveOpen(uint8 *a)
     lx_execution_release(&framebuffer);
     return result;
 }
+
 static uint32 bridge32_DiveClose(uint8 *a)
 {
     return DiveClose(dive_word(a, 0));
 }
+
 static uint32 bridge32_DiveSetupBlitter(uint8 *a)
 {
     if (!dive_word(a, 1))
@@ -94,10 +98,12 @@ static uint32 bridge32_DiveSetupBlitter(uint8 *a)
     lx_execution_release(&rectangles);
     return result;
 }
+
 static uint32 bridge32_DiveBlitImage(uint8 *a)
 {
     return DiveBlitImage(dive_word(a, 0), dive_word(a, 1), dive_word(a, 2));
 }
+
 static uint32 dive_palette_bridge(uint8 *a, int source)
 {
     uint32 address = dive_word(a, 3), count = dive_word(a, 2);
@@ -127,14 +133,17 @@ static uint32 dive_palette_bridge(uint8 *a, int source)
     lx_execution_release(&entries);
     return result;
 }
+
 static uint32 bridge32_DiveSetSourcePalette(uint8 *a)
 {
     return dive_palette_bridge(a, 1);
 }
+
 static uint32 bridge32_DiveSetDestinationPalette(uint8 *a)
 {
     return dive_palette_bridge(a, 0);
 }
+
 static uint32 bridge32_DiveAllocImageBuffer(uint8 *a)
 {
     LxGuestBorrow number = {0}, pixels = {0};
@@ -182,10 +191,12 @@ static uint32 bridge32_DiveAllocImageBuffer(uint8 *a)
     lx_execution_release(&number);
     return result;
 }
+
 static uint32 bridge32_DiveFreeImageBuffer(uint8 *a)
 {
     return DiveFreeImageBuffer(dive_word(a, 0), dive_word(a, 1));
 }
+
 static uint32 bridge32_DiveBeginImageBufferAccess(uint8 *a)
 {
     LxGuestBorrow outputs[3] = {{0}};
@@ -218,6 +229,7 @@ static uint32 bridge32_DiveBeginImageBufferAccess(uint8 *a)
         lx_execution_release(&outputs[i]);
     return result;
 }
+
 static uint32 bridge32_DiveEndImageBufferAccess(uint8 *a)
 {
     return DiveEndImageBufferAccess(dive_word(a, 0), dive_word(a, 1));
@@ -228,6 +240,7 @@ static uint32 bridge32_DiveFullScreenInit(uint8 *a)
     DiveFullScreenInit((PVOID)(uintptr_t)dive_word(a, 0), (PVOID)(uintptr_t)dive_word(a, 1));
     return 0;
 }
+
 static uint32 bridge32_DiveFullScreenTerm(uint8 *a)
 {
     (void)a;
@@ -242,19 +255,23 @@ static uint32 bridge32_DiveAcquireFrameBuffer(uint8 *a)
         return DIVE_ERR_INVALID_DESTINATION_RECTL;
     return DiveAcquireFrameBuffer(dive_word(a, 0), &rect);
 }
+
 static uint32 bridge32_DiveSwitchBank(uint8 *a)
 {
     return DiveSwitchBank(dive_word(a, 0), dive_word(a, 1));
 }
+
 static uint32 bridge32_DiveDeacquireFrameBuffer(uint8 *a)
 {
     return DiveDeacquireFrameBuffer(dive_word(a, 0));
 }
+
 static uint32 bridge32_DiveSetTransparentBlitMode(uint8 *a)
 {
     return DiveSetTransparentBlitMode(dive_word(a, 0), dive_word(a, 1), dive_word(a, 2),
                                       dive_word(a, 3));
 }
+
 static uint32 bridge32_DiveBlitImageLines(uint8 *a)
 {
     if (!dive_lock())
@@ -279,6 +296,7 @@ static uint32 bridge32_DiveBlitImageLines(uint8 *a)
     dive_unlock();
     return result;
 }
+
 static uint32 bridge32_DiveCalcFrameBufferAddress(uint8 *a)
 {
     RECTL rect;

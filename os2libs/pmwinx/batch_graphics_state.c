@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/internal.h"
 #include <math.h>
+
 static BOOL state_pair(ULONG handle, PVOID output, unsigned kind)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -42,26 +43,32 @@ static BOOL state_pair(ULONG handle, PVOID output, unsigned kind)
     lx_guest_store_u32((uint8 *)output + 4, (ULONG)y);
     return TRUE;
 }
+
 BOOL GetCurrentPositionEx(ULONG h, PVOID p)
 {
     return state_pair(h, p, 0);
 }
+
 BOOL GetViewportOrgEx(ULONG h, PVOID p)
 {
     return state_pair(h, p, 1);
 }
+
 BOOL GetWindowOrgEx(ULONG h, PVOID p)
 {
     return state_pair(h, p, 2);
 }
+
 BOOL GetViewportExtEx(ULONG h, PVOID p)
 {
     return state_pair(h, p, 3);
 }
+
 BOOL GetWindowExtEx(ULONG h, PVOID p)
 {
     return state_pair(h, p, 4);
 }
+
 ULONG GetBkColor(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -69,6 +76,7 @@ ULONG GetBkColor(ULONG h)
         open32SetError(6);
     return dc ? dc->background_color & 0xFFFFFF : UINT32_MAX;
 }
+
 ULONG GetTextColor(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -76,6 +84,7 @@ ULONG GetTextColor(ULONG h)
         open32SetError(6);
     return dc ? dc->text_color : UINT32_MAX;
 }
+
 LONG GetBkMode(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -83,6 +92,7 @@ LONG GetBkMode(ULONG h)
         open32SetError(6);
     return dc ? dc->background_mode : 0;
 }
+
 LONG GetPolyFillMode(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -90,6 +100,7 @@ LONG GetPolyFillMode(ULONG h)
         open32SetError(6);
     return dc ? dc->poly_fill_mode : 0;
 }
+
 LONG SetPolyFillMode(ULONG h, LONG value)
 {
     Open32DC *dc = open32FindDC(h);
@@ -103,6 +114,7 @@ LONG SetPolyFillMode(ULONG h, LONG value)
     open32MetafileWords(h, 0x106, 1, &value);
     return old;
 }
+
 LONG SetStretchBltMode(ULONG h, LONG value)
 {
     Open32DC *dc = open32FindDC(h);
@@ -119,6 +131,7 @@ LONG SetStretchBltMode(ULONG h, LONG value)
     open32MetafileWords(h, 0x107, 1, &value);
     return old;
 }
+
 LONG SetTextCharacterExtra(ULONG h, LONG value)
 {
     Open32DC *dc = open32FindDC(h);
@@ -132,6 +145,7 @@ LONG SetTextCharacterExtra(ULONG h, LONG value)
     open32MetafileWords(h, 0x108, 1, &value);
     return old;
 }
+
 BOOL SetTextJustification(ULONG h, LONG extra, LONG breaks)
 {
     Open32DC *dc = open32FindDC(h);
@@ -146,6 +160,7 @@ BOOL SetTextJustification(ULONG h, LONG extra, LONG breaks)
     open32MetafileWords(h, 0x20a, 2, words);
     return TRUE;
 }
+
 ULONG GetCurrentObject(ULONG h, ULONG type)
 {
     Open32DC *dc = open32FindDC(h);
@@ -175,6 +190,7 @@ ULONG GetCurrentObject(ULONG h, ULONG type)
             return 0;
     }
 }
+
 ULONG WindowFromDC(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -182,6 +198,7 @@ ULONG WindowFromDC(ULONG h)
         open32SetError(6);
     return dc && dc->window ? open32PublicWindow(dc->window) : 0;
 }
+
 static BOOL offset_origin(ULONG h, LONG x, LONG y, PVOID old, BOOL viewport)
 {
     Open32DC *dc = open32FindDC(h);
@@ -200,14 +217,17 @@ static BOOL offset_origin(ULONG h, LONG x, LONG y, PVOID old, BOOL viewport)
     return viewport ? SetViewportOrgEx(h, (LONG)a, (LONG)b, old)
                     : SetWindowOrgEx(h, (LONG)a, (LONG)b, old);
 }
+
 BOOL OffsetViewportOrgEx(ULONG h, LONG x, LONG y, PVOID old)
 {
     return offset_origin(h, x, y, old, TRUE);
 }
+
 BOOL OffsetWindowOrgEx(ULONG h, LONG x, LONG y, PVOID old)
 {
     return offset_origin(h, x, y, old, FALSE);
 }
+
 static BOOL scale_extent(ULONG h, LONG xn, LONG xd, LONG yn, LONG yd, PVOID old, BOOL viewport)
 {
     Open32DC *dc = open32FindDC(h);
@@ -234,14 +254,17 @@ static BOOL scale_extent(ULONG h, LONG xn, LONG xd, LONG yn, LONG yd, PVOID old,
     LONG x = (LONG)lround(scaled_x), y = (LONG)lround(scaled_y);
     return viewport ? SetViewportExtEx(h, x, y, old) : SetWindowExtEx(h, x, y, old);
 }
+
 BOOL ScaleViewportExtEx(ULONG h, LONG xn, LONG xd, LONG yn, LONG yd, PVOID old)
 {
     return scale_extent(h, xn, xd, yn, yd, old, TRUE);
 }
+
 BOOL ScaleWindowExtEx(ULONG h, LONG xn, LONG xd, LONG yn, LONG yd, PVOID old)
 {
     return scale_extent(h, xn, xd, yn, yd, old, FALSE);
 }
+
 ULONG SetPixel(ULONG h, LONG x, LONG y, ULONG color)
 {
     Open32DC *dc = open32FindDC(h);

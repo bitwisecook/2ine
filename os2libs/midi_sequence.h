@@ -4,6 +4,7 @@
 #define TWOINE_MIDI_SEQUENCE_H
 #include <stddef.h>
 #include <stdint.h>
+
 typedef struct LxMidiEvent
 {
     uint32_t tick, order;
@@ -13,12 +14,14 @@ typedef struct LxMidiEvent
     unsigned char *sysex;
     size_t sysex_size;
 } LxMidiEvent;
+
 typedef struct LxMidiSequence
 {
     LxMidiEvent *events;
     size_t count;
     double duration;
 } LxMidiSequence;
+
 /* F0/F7 packets are assembled into framed messages and scheduled at completion.
    Standalone escapes may contain complete framed SysEx messages. Other raw
    escapes reject. A message is at most 1 MiB; aggregate payload is at most 32 MiB.

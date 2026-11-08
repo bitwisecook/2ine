@@ -12,14 +12,17 @@ static uint32 bridge32_DosSetSession(uint8 *a)
     lx_execution_release(&input);
     return result;
 }
+
 static uint32 bridge32_DosSelectSession(uint8 *a)
 {
     return DosSelectSession(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosStopSession(uint8 *a)
 {
     return DosStopSession(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DosStartSession(uint8 *a)
 {
     LxGuestBorrow input = {0}, sid = {0}, pid = {0}, object = {0};

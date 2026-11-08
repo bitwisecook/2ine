@@ -3,6 +3,7 @@
 #define TWOINE_PRINTER_PROFILE_H
 #include "os2libs/pmshapi.h"
 #include "os2libs/printer_catalogue.h"
+
 /* HINI_PROFILE supplies the same USER/SYSTEM merge as native spooler clients.
    An explicitly empty or unknown queue is not a request for the PDF fallback. */
 static inline int lx_printer_default_queue(void)

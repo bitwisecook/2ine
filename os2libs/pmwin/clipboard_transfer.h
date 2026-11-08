@@ -7,6 +7,7 @@ static ClipFormat *find_format(ULONG format)
             return item;
     return NULL;
 }
+
 static const char *format_name(ULONG format)
 {
     for (SystemAtom *item = atoms; item; item = item->next)
@@ -14,6 +15,7 @@ static const char *format_name(ULONG format)
             return item->name;
     return NULL;
 }
+
 static const char *format_mime(ULONG format, const char *name)
 {
     if (format == 1)
@@ -31,12 +33,15 @@ static const char *format_mime(ULONG format, const char *name)
         return "image/png";
     return NULL;
 }
+
 typedef struct ClipboardFree
 {
     ULONG address;
     struct ClipboardFree *next;
 } ClipboardFree;
+
 static ClipboardFree *pending_free;
+
 static void drain_clipboard_free(void)
 {
     if (!lock_clipboard())
@@ -56,6 +61,7 @@ static void drain_clipboard_free(void)
         pending = next;
     }
 }
+
 static void discard_format(ClipFormat *item)
 {
     if (item->mapping)
@@ -78,6 +84,7 @@ static void discard_format(ClipFormat *item)
     free(item->name);
     free(item);
 }
+
 static void discard_formats(void)
 {
     while (formats)
@@ -88,6 +95,7 @@ static void discard_formats(void)
     }
     clipboard_serial++;
 }
+
 static void synchronize_clipboard(void)
 {
     LxHostClipboardState state;
@@ -107,6 +115,7 @@ static void synchronize_clipboard(void)
     if (previous)
         WinSendMsg(previous, WM_DESTROYCLIPBOARD, 0, 0);
 }
+
 /* A root RTF group can contain embedded NUL bytes in a \binN payload. */
 static size_t rtf_length(const unsigned char *bytes, size_t size)
 {
@@ -143,6 +152,7 @@ static size_t rtf_length(const unsigned char *bytes, size_t size)
     }
     return 0;
 }
+
 static void *copy_pointer(ClipFormat *item, size_t *size)
 {
     if (!GLoaderState.execution || !item->data)
@@ -204,6 +214,7 @@ static void *copy_pointer(ClipFormat *item, size_t *size)
     lx_execution_release(&borrow);
     return copy;
 }
+
 static void *bitmap_bytes(ULONG handle, const char *mime, size_t *size)
 {
     LxHandleBorrow borrow = {0};
@@ -230,6 +241,7 @@ static void *bitmap_bytes(ULONG handle, const char *mime, size_t *size)
     lx_handle_release(&borrow);
     return bytes;
 }
+
 static void *provide_clipboard(void *context, const char *mime, size_t *size)
 {
     (void)context;
@@ -283,6 +295,7 @@ static void *provide_clipboard(void *context, const char *mime, size_t *size)
     lx_host_mutex_unlock(clipboard_mutex);
     return bytes;
 }
+
 static BOOL publish_clipboard(void)
 {
     if (!lock_clipboard())
@@ -315,6 +328,7 @@ static BOOL publish_clipboard(void)
     }
     return result;
 }
+
 BOOL WinOpenClipbrd(HAB hab)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -329,6 +343,7 @@ BOOL WinOpenClipbrd(HAB hab)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 BOOL WinCloseClipbrd(HAB hab)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -344,6 +359,7 @@ BOOL WinCloseClipbrd(HAB hab)
         publish_clipboard();
     return result;
 }
+
 BOOL WinEmptyClipbrd(HAB hab)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -364,6 +380,7 @@ BOOL WinEmptyClipbrd(HAB hab)
         WinSendMsg(previous, WM_DESTROYCLIPBOARD, 0, 0);
     return result;
 }
+
 HWND WinQueryClipbrdOwner(HAB hab)
 {
     if (!getAnchorBlock(hab))
@@ -375,6 +392,7 @@ HWND WinQueryClipbrdOwner(HAB hab)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 BOOL WinSetClipbrdOwner(HAB hab, HWND owner)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -389,6 +407,7 @@ BOOL WinSetClipbrdOwner(HAB hab, HWND owner)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 static ULONG host_format(ULONG format)
 {
     if (!lock_clipboard())
@@ -415,6 +434,7 @@ static ULONG host_format(ULONG format)
     free((void *)name);
     return available;
 }
+
 BOOL WinQueryClipbrdFmtInfo(HAB hab, ULONG format, PULONG flags)
 {
     if (!getAnchorBlock(hab) || !flags)
@@ -433,6 +453,7 @@ BOOL WinQueryClipbrdFmtInfo(HAB hab, ULONG format, PULONG flags)
     *flags = format == 2 ? 0x200 : 0x400;
     return TRUE;
 }
+
 static void import_host_formats(void)
 {
     static const char *names[] = {"Rich Text Format", "HTML Format", "PNG", NULL};
@@ -471,6 +492,7 @@ static void import_host_formats(void)
         lx_host_mutex_unlock(clipboard_mutex);
     }
 }
+
 static void import_requested_format(ULONG format)
 {
     if (!host_format(format) || !lock_clipboard())
@@ -495,6 +517,7 @@ static void import_requested_format(ULONG format)
     }
     lx_host_mutex_unlock(clipboard_mutex);
 }
+
 ULONG WinEnumClipbrdFmts(HAB hab, ULONG format)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -519,6 +542,7 @@ ULONG WinEnumClipbrdFmts(HAB hab, ULONG format)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 static BOOL install_bytes(ClipFormat *item, const void *bytes, size_t size)
 {
     if (!GLoaderState.execution || size > 64 * 1024 * 1024)
@@ -535,6 +559,7 @@ static BOOL install_bytes(ClipFormat *item, const void *bytes, size_t size)
     item->data = lx_execution_mapping_address(mapping);
     return TRUE;
 }
+
 ULONG WinQueryClipbrdData(HAB hab, ULONG format)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -635,6 +660,7 @@ ULONG WinQueryClipbrdData(HAB hab, ULONG format)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 BOOL WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -681,6 +707,7 @@ BOOL WinSetClipbrdData(HAB hab, ULONG data, ULONG format, ULONG flags)
     drain_clipboard_free();
     return result;
 }
+
 uint64_t lx_pm_clipboard_serial(void)
 {
     synchronize_clipboard();
@@ -690,6 +717,7 @@ uint64_t lx_pm_clipboard_serial(void)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 uint64_t lx_pm_clipboard_format_serial(ULONG format)
 {
     synchronize_clipboard();
@@ -700,6 +728,7 @@ uint64_t lx_pm_clipboard_format_serial(ULONG format)
     lx_host_mutex_unlock(clipboard_mutex);
     return serial;
 }
+
 BOOL lx_pm_clipboard_set_bytes(HAB hab, ULONG format, const void *bytes, size_t size)
 {
     ClipFormat staged = {0};
@@ -718,6 +747,7 @@ BOOL lx_pm_clipboard_set_bytes(HAB hab, ULONG format, const void *bytes, size_t 
     lx_host_mutex_unlock(clipboard_mutex);
     return TRUE;
 }
+
 void *lx_pm_clipboard_copy_bytes(HAB hab, ULONG format, size_t *size)
 {
     if (!size || !WinQueryClipbrdData(hab, format) || !lock_clipboard())
@@ -727,6 +757,7 @@ void *lx_pm_clipboard_copy_bytes(HAB hab, ULONG format, size_t *size)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 void lx_pm_clipboard_window_destroyed(HWND window)
 {
     if (!lock_clipboard())

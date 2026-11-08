@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/pointer_image.h"
 #include "hal/host_fs.h"
 #include "os2libs/pmwinx/batch_services.h"
+
 typedef struct Open32Icon
 {
     ULONG handle, module, identity, size;
@@ -14,7 +15,9 @@ typedef struct Open32Icon
     BOOL owned;
     struct Open32Icon *next;
 } Open32Icon;
+
 static Open32Icon *icons;
+
 static void destroy_icon(void *resource)
 {
     Open32Icon *icon = resource;
@@ -22,6 +25,7 @@ static void destroy_icon(void *resource)
     free(icon->bytes);
     free(icon);
 }
+
 ULONG LoadIcon(HMODULE module, PSZ name)
 {
     TRACE_NATIVE("LoadIcon(%u, %p)", module, name);
@@ -85,6 +89,7 @@ ULONG LoadIcon(HMODULE module, PSZ name)
     icons = icon;
     return icon->handle;
 }
+
 BOOL DestroyIcon(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -109,6 +114,7 @@ BOOL DestroyIcon(ULONG handle)
         open32SetError(6);
     return ok;
 }
+
 /* PMWINX hands both masks to GpiCreateBitmap unchanged, so rows are DWORD aligned and the first
    row is the bottom of the image, in PM order. Colors above 8 bits per pel make no color bitmap. */
 ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG depth, PVOID and_bits,
@@ -179,6 +185,7 @@ ULONG CreateIcon(ULONG module, LONG width, LONG height, ULONG planes, ULONG dept
     icons = icon;
     return icon->handle;
 }
+
 BOOL DrawIcon(ULONG dc, LONG x, LONG y, ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -247,6 +254,7 @@ BOOL DrawIcon(ULONG dc, LONG x, LONG y, ULONG handle)
         open32SetError(13);
     return ok;
 }
+
 void open32IconsCleanup(void)
 {
     while (icons)

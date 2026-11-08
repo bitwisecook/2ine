@@ -3,11 +3,13 @@
 #include "system_modules.h"
 #include "os2_groups.h"
 #include "os2_som.h"
+
 static int extract_extension(const char *name, const char *extension)
 {
     const char *dot = strrchr(name, '.');
     return dot && equal_case(dot, extension);
 }
+
 static int extract_video(const char *name)
 {
     static const char *extensions[] = {".AVI", ".MPG", ".MPEG", ".MOV",  ".FLI",
@@ -17,6 +19,7 @@ static int extract_video(const char *name)
             return 1;
     return 0;
 }
+
 /* The host supplies kernel device/volume roles; guest kernel drivers have no
    load path. Printer resources and code-page/country data remain selectable. */
 static int extract_host_driver(const char *path)
@@ -46,12 +49,15 @@ static int extract_host_driver(const char *path)
         return 1;
     return network_driver && extract_extension(base, ".OS2");
 }
+
 #include "os2_tree.h"
+
 static char *extract_child(Context *c, const char *directory, const char *name)
 {
     return tb_media_path(directory) ? keep(c, tb_media_child(directory, name))
                                     : join(c, directory, name);
 }
+
 static int extract_directory(const char *path)
 {
     if (!tb_media_path(path))
@@ -61,6 +67,7 @@ static int extract_directory(const char *path)
     tb_media_entries_free(entries, count == (size_t)-1 ? 0 : count);
     return count != (size_t)-1;
 }
+
 static void extract_queue(cJSON *queue, const char *source, const char *layout, int directory,
                           double size)
 {
@@ -71,6 +78,7 @@ static void extract_queue(cJSON *queue, const char *source, const char *layout, 
     cJSON_AddNumberToObject(entry, "size", size);
     cJSON_AddItemToArray(queue, entry);
 }
+
 static int extract_children(Context *c, cJSON *queue, const char *source, const char *layout)
 {
     if (!tb_media_path(source) && tb_is_dir(source))
@@ -106,6 +114,7 @@ static int extract_children(Context *c, cJSON *queue, const char *source, const 
     tb_media_entries_free(entries, count);
     return !c->error;
 }
+
 /* Optional sibling component trees are discovered by exact installed-root
    paths inside the same container. Direct folder plans never call this. */
 static char *extract_optional_directory(Context *c, const char *parent, const char *relative)
@@ -138,6 +147,7 @@ static char *extract_optional_directory(Context *c, const char *parent, const ch
     }
     return current;
 }
+
 static int extract_expand_installation_roots(Context *c, cJSON *sources)
 {
     if (cJSON_GetArraySize(sources) != 1)
@@ -159,6 +169,7 @@ static int extract_expand_installation_roots(Context *c, cJSON *sources)
     }
     return 1;
 }
+
 static cJSON *open_os2_source(Context *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");
@@ -283,6 +294,7 @@ static cJSON *open_os2_source(Context *c, const cJSON *request)
     cJSON_AddItemToObject(result, "readStats", extraction_read_stats());
     return result;
 }
+
 static char *extract_extra_path(Context *c, const char *layout, const char *source)
 {
     char *label = keep(c, tb_media_label(source));
@@ -310,6 +322,7 @@ static char *extract_extra_path(Context *c, const char *layout, const char *sour
     }
     return format(c, "OS2/INSTALL/MEDIA/%s", relative);
 }
+
 /* Match the actual installation layout rather than placing an ISO's setup
    tree under C:. PACK/PACK2 members retain their original target directories. */
 static char *extract_destination(Context *c, const char *layout, const char *source, int *category,
@@ -526,6 +539,7 @@ static char *extract_destination(Context *c, const char *layout, const char *sou
         *provided = 1;
     return destination;
 }
+
 static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");
@@ -611,6 +625,7 @@ static cJSON *plan_os2_extraction(Context *c, const cJSON *request)
     cJSON_AddItemToObject(result, "tree", extract_tree(c, files));
     return result;
 }
+
 static int extraction_wants_module(const cJSON *modules, const char *path)
 {
     if (!modules)
@@ -636,6 +651,7 @@ static int extraction_wants_module(const cJSON *modules, const char *path)
     }
     return 0;
 }
+
 static char *extract_destination_key(Context *c, const char *path)
 {
     char *key = keep(c, strdup(path));
@@ -644,6 +660,7 @@ static char *extract_destination_key(Context *c, const char *path)
             *p = (char)toupper((unsigned char)*p);
     return key;
 }
+
 /* A complete distribution contains mutually exclusive language/display
    payloads. Keep every distinct ambiguous version without guessing which
    should become the executable at the shared destination. */
@@ -666,6 +683,7 @@ static int extract_preserve_variant(Context *c, cJSON *staged, cJSON *file)
         cJSON_AddItemToObject(staged, key, file);
     return 1;
 }
+
 static cJSON *extract_os2_categories_impl(Context *c, const cJSON *request)
 {
     const cJSON *categories = get(request, "categories"), *category;

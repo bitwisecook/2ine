@@ -6,6 +6,7 @@
 #include "os2libs/pmgpi.h"
 static _Thread_local LONG cursor_count;
 static ULONG locked_window; /* WinLockWindowUpdate state is shared by the desktop. */
+
 LONG ShowCursor(BOOL show)
 {
     LONG previous = cursor_count;
@@ -20,12 +21,14 @@ LONG ShowCursor(BOOL show)
         WinShowPointer(HWND_DESKTOP, cursor_count >= 0);
     return cursor_count;
 }
+
 void open32ClipCursorPoint(LONG *x, LONG *y)
 {
     LONG height = WinQuerySysValue(HWND_DESKTOP, 21), native = height - 1 - *y;
     lx_pm_clip_pointer(x, &native);
     *y = height - 1 - native;
 }
+
 BOOL ClipCursor(PVOID rectangle)
 {
     if (!open32Presentation())
@@ -52,12 +55,14 @@ BOOL ClipCursor(PVOID rectangle)
         WinSetPointerPos(HWND_DESKTOP, point.x, point.y);
     return TRUE;
 }
+
 BOOL open32WindowUpdateLocked(ULONG window)
 {
     ULONG locked = __atomic_load_n(&locked_window, __ATOMIC_ACQUIRE);
     return locked &&
            (locked == window || open32ClientWindow(locked) == window || IsChild(locked, window));
 }
+
 BOOL LockWindowUpdate(ULONG window)
 {
     if (window && !IsWindow(window))
@@ -80,6 +85,7 @@ BOOL LockWindowUpdate(ULONG window)
         InvalidateRect(previous, NULL, TRUE);
     return TRUE;
 }
+
 BOOL AddFontResource(PSZ path)
 {
     if (GpiLoadPublicFonts(0, path))
@@ -87,6 +93,7 @@ BOOL AddFontResource(PSZ path)
     open32SetError(3);
     return FALSE;
 }
+
 BOOL RemoveFontResource(PSZ path)
 {
     if (GpiUnloadPublicFonts(0, path))

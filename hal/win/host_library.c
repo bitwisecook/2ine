@@ -5,10 +5,12 @@
 #include <stdio.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 struct LxHostLibrary
 {
     HMODULE object;
 };
+
 LxHostLibrary *lx_host_library_open(const char *path, char *error, size_t size)
 {
     int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
@@ -24,10 +26,12 @@ LxHostLibrary *lx_host_library_open(const char *path, char *error, size_t size)
         snprintf(error, size, "Host library load failed (%lu)", (unsigned long)GetLastError());
     return NULL;
 }
+
 void *lx_host_library_symbol(LxHostLibrary *library, const char *name)
 {
     return (void *)GetProcAddress(library->object, name);
 }
+
 void lx_host_library_close(LxHostLibrary *library)
 {
     FreeLibrary(library->object);

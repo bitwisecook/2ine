@@ -11,6 +11,7 @@ enum
     TEMPLATE_ITEM = 30,
     TEMPLATE_DEPTH = 32
 };
+
 typedef struct
 {
     const uint8 *bytes;
@@ -22,21 +23,25 @@ typedef struct
     PVOID parameters;
     POINTL content_origin;
 } DialogTemplate;
+
 static USHORT word(const uint8 *p, size_t offset)
 {
     return lx_guest_load_u16(p + offset);
 }
+
 static BOOL string_valid(const DialogTemplate *t, unsigned length, unsigned offset)
 {
     return !length || (offset < t->size && length < t->size - offset &&
                        t->bytes[offset + length] == 0 && !memchr(t->bytes + offset, 0, length));
 }
+
 static BOOL text_valid(const DialogTemplate *t, unsigned length, unsigned offset)
 {
     if (length == 3 && offset <= t->size && t->size - offset >= 3 && t->bytes[offset] == 0xff)
         return TRUE;
     return string_valid(t, length, offset);
 }
+
 static BOOL parameters_valid(const DialogTemplate *t, unsigned offset)
 {
     if (offset == 0xffff)
@@ -59,6 +64,7 @@ static BOOL parameters_valid(const DialogTemplate *t, unsigned offset)
     }
     return TRUE;
 }
+
 static BOOL image_ordinal(const DialogTemplate *t, const uint8 *item)
 {
     unsigned offset = word(item, 10);
@@ -67,6 +73,7 @@ static BOOL image_ordinal(const DialogTemplate *t, const uint8 *item)
            word(item, 8) == 3 && offset <= t->size && t->size - offset >= 3 &&
            t->bytes[offset] == 0xff;
 }
+
 static BOOL validate_tree(DialogTemplate *t, unsigned depth)
 {
     if (depth >= TEMPLATE_DEPTH || t->next >= t->count)
@@ -86,6 +93,7 @@ static BOOL validate_tree(DialogTemplate *t, unsigned depth)
             return FALSE;
     return TRUE;
 }
+
 static BOOL apply_parameters(HWND window, const DialogTemplate *t, unsigned offset)
 {
     if (offset == 0xffff)
@@ -100,12 +108,15 @@ static BOOL apply_parameters(HWND window, const DialogTemplate *t, unsigned offs
     }
     return TRUE;
 }
+
 static LxPmDialogClassFactory dialog_class_factory;
+
 /* A class outside PM's table can still be provided by the application's API layer. */
 void lx_pm_set_dialog_class_factory(LxPmDialogClassFactory factory)
 {
     dialog_class_factory = factory;
 }
+
 static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
 {
     size_t index = t->next++;
@@ -144,8 +155,7 @@ static HWND create_item(DialogTemplate *t, HWND parent, HWND owner, HWND root)
             control_data = (PVOID)(uintptr_t)(t->guest + control);
     }
     HWND handle = 0;
-    if (index && dialog_class_factory &&
-        !findRegisteredClass(getAnchorBlockNoHAB(), class_name))
+    if (index && dialog_class_factory && !findRegisteredClass(getAnchorBlockNoHAB(), class_name))
         handle = dialog_class_factory(parent, class_name, text, lx_guest_load_u32(item + 12),
                                       position[0].x, position[0].y, position[1].x, position[1].y,
                                       word(item, 24));
@@ -189,6 +199,7 @@ failed:
     WinDestroyWindow(handle);
     return 0;
 }
+
 HWND createDialog(HWND parent, HWND owner, PFNWP procedure, const uint8 *data, size_t size,
                   PVOID parameters, HMODULE module)
 {

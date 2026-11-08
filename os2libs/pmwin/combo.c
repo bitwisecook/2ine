@@ -2,6 +2,7 @@
 /* Combo edit/list children retain ordinary PM identities and a real popup list. */
 #include "os2libs/pmwin/controls.h"
 #include "os2libs/pmwin/graphics.h"
+
 enum
 {
     CBID_LIST = 0x29a,
@@ -11,6 +12,7 @@ enum
     CBM_ISLISTSHOWING = 0x172,
     LM_SELECTITEM = 0x164
 };
+
 BOOL initializeCombo(Window *window)
 {
     PmControl *c = window->control;
@@ -44,6 +46,7 @@ BOOL initializeCombo(Window *window)
     }
     return TRUE;
 }
+
 static void select_item(Window *window, BOOL notify)
 {
     PmControl *c = window->control;
@@ -63,6 +66,7 @@ static void select_item(Window *window, BOOL notify)
             return;
         }
 }
+
 MRESULT comboMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;

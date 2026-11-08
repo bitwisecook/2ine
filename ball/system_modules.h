@@ -13,6 +13,7 @@ static int os2_module_matches(const char *name, const char *module)
             return 0;
     return 1;
 }
+
 static int os2_module_disabled(Context *c, const char *name)
 {
     const cJSON *settings = get(c->manifest, "system");
@@ -30,6 +31,7 @@ static int os2_module_disabled(Context *c, const char *name)
     }
     return 0;
 }
+
 static int os2_module_provided(Context *c, const char *name)
 {
     static const char *modules[] = {"DOSCALLS", "DOSCALL1", "MSG",      "NLS",     "QUECALLS",

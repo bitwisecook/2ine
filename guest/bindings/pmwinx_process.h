@@ -1,12 +1,14 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "guest/arguments.h"
 #include "os2libs/pmwinx/process.h"
+
 enum
 {
     PROCESS_STRING_LIMIT = 65536,
     PROCESS_STARTUP_BYTES = 68,
     PROCESS_INFORMATION_BYTES = 16
 };
+
 /* A null guest pointer stays NULL; zero means the string could not be read. */
 static int process_string(uint32 address, char **output)
 {
@@ -15,6 +17,7 @@ static int process_string(uint32 address, char **output)
                   : NULL;
     return !address || *output;
 }
+
 static uint32 bridge32_CreateProcess(uint8 *a)
 {
     char *application = NULL, *command = NULL, *directory = NULL;
@@ -45,6 +48,7 @@ static uint32 bridge32_CreateProcess(uint8 *a)
     free(application);
     return result;
 }
+
 static uint32 bridge32_DuplicateHandle(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -63,15 +67,18 @@ static uint32 bridge32_DuplicateHandle(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_ExitProcess(uint8 *a)
 {
     ExitProcess(lx_guest_load_u32(a));
     return 0;
 }
+
 static uint32 bridge32_ExitWindows(uint8 *a)
 {
     return ExitWindows(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_FatalAppExit(uint8 *a)
 {
     char *message = NULL;
@@ -81,23 +88,28 @@ static uint32 bridge32_FatalAppExit(uint8 *a)
     free(message);
     return 0;
 }
+
 static uint32 bridge32_FatalExit(uint8 *a)
 {
     FatalExit(lx_guest_load_u32(a));
     return 0;
 }
+
 static uint32 bridge32_OpenProcess(uint8 *a)
 {
     return OpenProcess(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_SuspendThread(uint8 *a)
 {
     return SuspendThread(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_TerminateThread(uint8 *a)
 {
     return TerminateThread(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_WinExec(uint8 *a)
 {
     char *command = NULL;
@@ -107,6 +119,7 @@ static uint32 bridge32_WinExec(uint8 *a)
     free(command);
     return result;
 }
+
 static uint32 bridge32_GetExitCodeProcess(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -123,6 +136,7 @@ static uint32 bridge32_GetExitCodeProcess(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_ShellExecute(uint8 *a)
 {
     char *strings[4] = {NULL};
@@ -137,6 +151,7 @@ static uint32 bridge32_ShellExecute(uint8 *a)
         free(strings[i]);
     return result;
 }
+
 static uint32 bridge32_WaitForInputIdle(uint8 *a)
 {
     return WaitForInputIdle(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));

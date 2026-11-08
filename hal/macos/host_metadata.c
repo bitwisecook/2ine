@@ -9,6 +9,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+
 static LxHostFsError metadata_error(void)
 {
     if (errno == EROFS)
@@ -25,6 +26,7 @@ static LxHostFsError metadata_error(void)
         return LX_HOST_FS_FULL;
     return LX_HOST_FS_IO;
 }
+
 LxHostFsError lx_host_file_metadata_set(LxHostFile *file, const void *data, size_t size)
 {
     if (file->image)
@@ -34,6 +36,7 @@ LxHostFsError lx_host_file_metadata_set(LxHostFile *file, const void *data, size
     return fsetxattr(file->fd, "com.twoine.metadata", data, size, 0, 0) == 0 ? LX_HOST_FS_OK
                                                                              : metadata_error();
 }
+
 LxHostFsError lx_host_file_metadata_get(LxHostFile *file, void *data, size_t capacity, size_t *size)
 {
     if (file->image)
@@ -49,19 +52,20 @@ LxHostFsError lx_host_file_metadata_get(LxHostFile *file, void *data, size_t cap
     *size = (size_t)count;
     return LX_HOST_FS_OK;
 }
+
 void lx_host_native_extras(int fd, const char *path, LxHostFileInfo *info)
 {
     uint32_t attributes;
-    ssize_t count = fd >= 0 ? fgetxattr(fd, "com.twoine.attributes", &attributes,
-                                        sizeof attributes, 0, 0)
-                            : getxattr(path, "com.twoine.attributes", &attributes,
-                                       sizeof attributes, 0, 0);
+    ssize_t count =
+        fd >= 0 ? fgetxattr(fd, "com.twoine.attributes", &attributes, sizeof attributes, 0, 0)
+                : getxattr(path, "com.twoine.attributes", &attributes, sizeof attributes, 0, 0);
     if (count == sizeof attributes)
         info->attributes = attributes;
     struct stat native;
     if (!(fd >= 0 ? fstat(fd, &native) : stat(path, &native)))
         info->created = native.st_birthtimespec.tv_sec;
 }
+
 LxHostFsError lx_host_native_set_created(int fd, const char *path, int64_t seconds)
 {
     struct attrlist attributes;
@@ -73,6 +77,7 @@ LxHostFsError lx_host_native_set_created(int fd, const char *path, int64_t secon
                          : setattrlist(path, &attributes, &created, sizeof created, 0);
     return failed ? metadata_error() : LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_native_set_attributes(int fd, const char *path, unsigned attributes)
 {
     uint32_t value = attributes;

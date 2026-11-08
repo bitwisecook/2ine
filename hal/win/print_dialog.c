@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+
 LxHostSaveResult lx_host_print_save_path(const char *title, const char *extension, char **path)
 {
     if (!path || !extension)
@@ -62,6 +63,7 @@ void lx_host_print_destination_clear(LxHostPrintDestination *destination)
         memset(destination, 0, sizeof *destination);
     }
 }
+
 static char *printer_utf8(const WCHAR *name)
 {
     int bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, name, -1, NULL, 0, NULL, NULL);
@@ -74,6 +76,7 @@ static char *printer_utf8(const WCHAR *name)
     }
     return result;
 }
+
 char **lx_host_print_printers(size_t *count)
 {
     if (!count)
@@ -102,6 +105,7 @@ char **lx_host_print_printers(size_t *count)
     free(data);
     return printers;
 }
+
 LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestination *destination)
 {
     if (!destination)
@@ -156,6 +160,7 @@ LxHostSaveResult lx_host_print_choose_pcl(const char *title, LxHostPrintDestinat
         GlobalFree(dialog.hDevNames);
     return result;
 }
+
 int lx_host_print_submit_pcl(const char *printer, const char *title, unsigned copies, FILE *source)
 {
     if (!printer || !*printer || !source || !copies || copies > 999)

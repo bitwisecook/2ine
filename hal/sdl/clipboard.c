@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #define CLIP_LIMIT (64u * 1024u * 1024u)
+
 typedef struct ClipboardOffer
 {
     LxHostClipboardItem *items;
@@ -12,9 +13,11 @@ typedef struct ClipboardOffer
     LxHostClipboardProvider provider;
     void *context;
 } ClipboardOffer;
+
 static ClipboardOffer *current;
 static SDL_AtomicInt revision, owned;
 static int watching;
+
 static const char *native_mime(const char *mime)
 {
     /* Cocoa's single-UTF8-type fast path assumes SDL_SetClipboardText's
@@ -29,6 +32,7 @@ static const char *native_mime(const char *mime)
     }
     return mime;
 }
+
 static int same_mime(const char *first, const char *second)
 {
     if ((!strcmp(first, "text/rtf") || !strcmp(first, "application/rtf")) &&
@@ -36,6 +40,7 @@ static int same_mime(const char *first, const char *second)
         return 1;
     return !strcmp(native_mime(first), native_mime(second));
 }
+
 static bool watch_clipboard(void *context, SDL_Event *event)
 {
     (void)context;
@@ -47,6 +52,7 @@ static bool watch_clipboard(void *context, SDL_Event *event)
     }
     return true;
 }
+
 static void free_offer(void *context)
 {
     ClipboardOffer *offer = context;
@@ -64,6 +70,7 @@ static void free_offer(void *context)
     free(offer->items);
     free(offer);
 }
+
 static const void *read_offer(void *context, const char *mime, size_t *size)
 {
     ClipboardOffer *offer = context;
@@ -95,7 +102,9 @@ static const void *read_offer(void *context, const char *mime, size_t *size)
     }
     return NULL;
 }
+
 #include "clipboard_native.h"
+
 typedef struct ClipboardCall
 {
     SDL_AtomicInt references, status;
@@ -108,6 +117,7 @@ typedef struct ClipboardCall
     LxHostClipboardState state;
     int result;
 } ClipboardCall;
+
 static void release_call(ClipboardCall *call)
 {
     if (SDL_AddAtomicInt(&call->references, -1) != 1)
@@ -119,6 +129,7 @@ static void release_call(ClipboardCall *call)
     SDL_DestroySemaphore(call->complete);
     free(call);
 }
+
 static void run_call(void *context)
 {
     ClipboardCall *call = context;
@@ -238,6 +249,7 @@ done:
     SDL_SignalSemaphore(call->complete);
     release_call(call);
 }
+
 static ClipboardCall *new_call(unsigned action, const char *mime)
 {
     ClipboardCall *call = calloc(1, sizeof *call);
@@ -254,6 +266,7 @@ static ClipboardCall *new_call(unsigned action, const char *mime)
     }
     return call;
 }
+
 static int execute_call(ClipboardCall *call)
 {
     if (!call)
@@ -273,6 +286,7 @@ static int execute_call(ClipboardCall *call)
     }
     return call->result;
 }
+
 int lx_host_clipboard_state(LxHostClipboardState *state)
 {
     ClipboardCall *call = new_call(0, NULL);
@@ -283,6 +297,7 @@ int lx_host_clipboard_state(LxHostClipboardState *state)
         release_call(call);
     return result;
 }
+
 int lx_host_clipboard_has(const char *mime)
 {
     ClipboardCall *call = mime ? new_call(1, mime) : NULL;
@@ -291,6 +306,7 @@ int lx_host_clipboard_has(const char *mime)
         release_call(call);
     return result;
 }
+
 void *lx_host_clipboard_read(const char *mime, size_t *size)
 {
     if (!size)
@@ -308,6 +324,7 @@ void *lx_host_clipboard_read(const char *mime, size_t *size)
         release_call(call);
     return bytes;
 }
+
 int lx_host_clipboard_offer(const LxHostClipboardItem *items, size_t count,
                             LxHostClipboardProvider provider, void *context,
                             LxHostClipboardState *state)
@@ -355,6 +372,7 @@ failed:
     release_call(call);
     return 0;
 }
+
 int lx_host_clipboard_materialize(void)
 {
     ClipboardCall *call = new_call(4, NULL);

@@ -7,6 +7,7 @@
 #include <crt_externs.h>
 #include <mach-o/dyld.h>
 #include <sys/resource.h>
+
 char *lx_host_command_line(size_t *size)
 {
     if (!size)

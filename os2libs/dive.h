@@ -66,7 +66,9 @@ typedef struct
     ULONG fccColorEncoding, ulApertureSize, ulInputFormats, ulOutputFormats, ulFormatLength;
     PVOID pFormatData;
 } DIVE_CAPS;
+
 typedef DIVE_CAPS *PDIVE_CAPS;
+
 typedef struct
 {
     ULONG ulStructLen, fInvert, fccSrcColorFormat, ulSrcWidth, ulSrcHeight, ulSrcPosX, ulSrcPosY;
@@ -75,6 +77,7 @@ typedef struct
     ULONG ulNumDstRects;
     PRECTL pVisDstRects;
 } SETUP_BLITTER;
+
 typedef SETUP_BLITTER *PSETUP_BLITTER;
 OS2EXPORT ULONG OS2API DiveQueryCaps(PDIVE_CAPS caps, ULONG plane) OS2APIINFO(1);
 OS2EXPORT ULONG OS2API DiveOpen(PULONG instance, ULONG non_screen, PVOID framebuffer) OS2APIINFO(2);

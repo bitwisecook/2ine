@@ -2,6 +2,7 @@
 /* Window styles control sibling and child clipping. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+
 static BOOL exclude_window(PmRegion *visible, Window *window, const LxHostRect *origin)
 {
     if (!(window->style & WS_VISIBLE) || window->w <= 0 || window->h <= 0)
@@ -15,11 +16,14 @@ static BOOL exclude_window(PmRegion *visible, Window *window, const LxHostRect *
     cut.count = 1;
     return regionBoolean(visible, visible, &cut, 7);
 }
+
 static HWND update_lock;
+
 void lx_pm_set_update_lock(HWND window)
 {
     __atomic_store_n(&update_lock, window, __ATOMIC_RELEASE);
 }
+
 static BOOL update_locked(const Window *window)
 {
     HWND locked = __atomic_load_n(&update_lock, __ATOMIC_ACQUIRE);
@@ -28,6 +32,7 @@ static BOOL update_locked(const Window *window)
             return TRUE;
     return FALSE;
 }
+
 BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -41,9 +46,11 @@ BOOL lx_pm_window_clip(HPS handle, const RECTL *bounds, PmRegion *visible)
         WinIntersectRect(0, &rect, &rect, &ps->paint_clip);
     if (bounds)
         WinIntersectRect(0, &rect, &rect, (PRECTL)bounds);
-    if(ps->gpi.initialized) {
-        if(!ps->gpi.display_enabled)return TRUE;
-        lx_pm_graphics_limits(ps,&rect);
+    if (ps->gpi.initialized)
+    {
+        if (!ps->gpi.display_enabled)
+            return TRUE;
+        lx_pm_graphics_limits(ps, &rect);
     }
     LxHostRect origin;
     calcHeavyweightRect(window, &origin);
@@ -120,6 +127,7 @@ void notifyVisibleRegions(AnchorBlock *anchor, Window *window)
     for (Window *child = window->children; child; child = child->sibling)
         notifyVisibleRegions(anchor, child);
 }
+
 BOOL WinSetVisibleRegionNotify(HWND handle, BOOL enable)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -131,6 +139,7 @@ BOOL WinSetVisibleRegionNotify(HWND handle, BOOL enable)
         notifyVisibleRegions(anchor, window);
     return TRUE;
 }
+
 ULONG WinQueryVisibleRegion(HWND handle, ULONG region)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

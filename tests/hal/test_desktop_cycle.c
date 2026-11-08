@@ -16,6 +16,7 @@
 #include <sys/file.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 static void remove_fixture(const char *directory)
 {
     DIR *items = opendir(directory);
@@ -37,6 +38,7 @@ static void remove_fixture(const char *directory)
     closedir(items);
     assert(!rmdir(directory));
 }
+
 int main(void)
 {
     LxDesktopCycleWindow windows[] = {{7, 30, 3}, {9, 10, 1}, {9, 20, 2}}, target;

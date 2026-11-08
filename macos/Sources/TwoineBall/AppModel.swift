@@ -12,6 +12,7 @@ enum Page: String, CaseIterable, Identifiable {
     case settings = "Settings", activity = "Logs"
     var id: String { rawValue }
 }
+
 struct OS2ImportRequest: Identifiable {
     let id = UUID()
     let ball: String
@@ -21,19 +22,23 @@ struct OS2ImportRequest: Identifiable {
         self.ball = ball; self.sources = sources; self.categories = categories
     }
 }
+
 enum SettingsSection: String {
     case general, graphics, environment, printing, files, registry
 }
+
 struct ComponentNavigation: Equatable {
     let id = UUID()
     let ball: String
     let category: OS2ExtractionCategory
     var selectsComponent = true
 }
+
 struct ComponentDraft {
     let sources: [String]
     let selection: Set<String>
 }
+
 struct InstallCompletion: Identifiable {
     let id = UUID()
     let ball: String
@@ -41,15 +46,18 @@ struct InstallCompletion: Identifiable {
     let code: Int32
     let signalled: Bool
 }
+
 struct BallRenameRequest: Identifiable {
     let id = UUID()
     let path: String
     let identity: BallFileIdentity
 }
+
 struct BallFileIdentity: Equatable {
     let device: UInt64
     let inode: UInt64
 }
+
 enum ProgramAction: String, Identifiable {
     case run = "Run Executable", install = "Install Software", save = "Add Application"
     var id: String { rawValue }
@@ -91,6 +99,7 @@ struct BallViewActions {
     var setDefaultFolder: (() -> Void)?
     var changeMountpoint: (() -> Void)?
 }
+
 struct BallViewActionsKey: FocusedValueKey { typealias Value = BallViewActions }
 extension FocusedValues {
     var ballViewActions: BallViewActions? {

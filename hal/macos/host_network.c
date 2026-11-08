@@ -25,10 +25,12 @@ int lx_host_network_platform_mac(const struct sockaddr *address, uint32_t flags,
     memcpy(mac, LLADDR(dl), 6);
     return 1;
 }
+
 static uint32_t ipv4(const struct sockaddr *a)
 {
     return a && a->sa_family == AF_INET ? ((const struct sockaddr_in *)a)->sin_addr.s_addr : 0;
 }
+
 int lx_host_network_platform_routes(LxHostNetwork *out)
 {
     int mib[] = {CTL_NET, PF_ROUTE, 0, AF_INET, NET_RT_DUMP, 0};
@@ -89,6 +91,7 @@ int lx_host_network_platform_routes(LxHostNetwork *out)
     free(buffer);
     return result;
 }
+
 int lx_host_network_platform_dns(LxHostNetworkDns *out)
 {
     CFDictionaryRef config = SCDynamicStoreCopyValue(NULL, CFSTR("State:/Network/Global/DNS"));

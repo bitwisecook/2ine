@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Resource copies retain their own mapping until the last matching release. */
 #include "os2libs/doscalls/internal.h"
+
 typedef struct ModuleResource
 {
     HMODULE module;
@@ -8,6 +9,7 @@ typedef struct ModuleResource
     LxGuestMapping *mapping;
     struct ModuleResource *next;
 } ModuleResource;
+
 static ModuleResource *resources;
 
 static const LxResourceTableEntry *find_resource(HMODULE handle, ULONG type, ULONG name,
@@ -32,6 +34,7 @@ static const LxResourceTableEntry *find_resource(HMODULE handle, ULONG type, ULO
         }
     return NULL;
 }
+
 APIRET DosQueryResourceSize(HMODULE module, ULONG type, ULONG name, PULONG size)
 {
     if (!size)
@@ -44,10 +47,12 @@ APIRET DosQueryResourceSize(HMODULE module, ULONG type, ULONG name, PULONG size)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET Dos32QueryResourceSize(HMODULE module, ULONG type, ULONG name, PULONG size)
 {
     return DosQueryResourceSize(module, type, name, size);
 }
+
 APIRET DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output)
 {
     TRACE_NATIVE("DosGetResource(%u, %u, %u, %p)", (uint)module, (uint)type, (uint)name, output);
@@ -111,6 +116,7 @@ APIRET DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosFreeResource(PVOID pointer)
 {
     grabLock(&GMutexDosCalls);

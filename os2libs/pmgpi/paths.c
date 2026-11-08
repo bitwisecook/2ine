@@ -5,6 +5,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include <math.h>
+
 static PmPath *find_path(PresentationSpace *p, LONG id)
 {
     for (PmPath *x = p->paths; x; x = x->next)
@@ -12,6 +13,7 @@ static PmPath *find_path(PresentationSpace *p, LONG id)
             return x;
     return NULL;
 }
+
 /* Identifiers above the public path 1 name internal area and polygon brackets. */
 enum
 {
@@ -19,6 +21,7 @@ enum
     AREA_PATH = INT32_MAX,
     POLYGON_PATH = INT32_MAX - 1
 };
+
 static void delete_path(PresentationSpace *p, LONG id)
 {
     for (PmPath **link = &p->paths; *link; link = &(*link)->next)
@@ -31,6 +34,7 @@ static void delete_path(PresentationSpace *p, LONG id)
             return;
         }
 }
+
 static BOOL begin_path(PresentationSpace *p, LONG id)
 {
     PmPath *x = find_path(p, id);
@@ -47,6 +51,7 @@ static BOOL begin_path(PresentationSpace *p, LONG id)
     p->record_path = x;
     return lx_pm_record_point(p, &p->position, TRUE);
 }
+
 BOOL GpiBeginPath(HPS h, LONG id)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -54,6 +59,7 @@ BOOL GpiBeginPath(HPS h, LONG id)
         return FALSE;
     return begin_path(p, id);
 }
+
 BOOL GpiEndPath(HPS h)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -62,6 +68,7 @@ BOOL GpiEndPath(HPS h)
     p->record_path = NULL;
     return TRUE;
 }
+
 BOOL GpiCloseFigure(HPS h)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -77,6 +84,7 @@ BOOL GpiCloseFigure(HPS h)
     p->position = first;
     return TRUE;
 }
+
 BOOL GpiBeginArea(HPS h, ULONG options)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -88,16 +96,19 @@ BOOL GpiBeginArea(HPS h, ULONG options)
     p->area_options = options;
     return TRUE;
 }
+
 typedef struct Edge
 {
     double x;
     int winding;
 } Edge;
+
 static int compare_edge(const void *a, const void *b)
 {
     double x = ((const Edge *)a)->x, y = ((const Edge *)b)->x;
     return x < y ? -1 : x > y;
 }
+
 static BOOL add_span(RECTL **rects, size_t *count, size_t *capacity, LONG left, LONG right, LONG y)
 {
     if (left >= right)
@@ -116,6 +127,7 @@ static BOOL add_span(RECTL **rects, size_t *count, size_t *capacity, LONG left, 
     (*rects)[(*count)++] = (RECTL){left, y, right, y + 1};
     return TRUE;
 }
+
 static LONG raster_path(HPS h, PmPath *path, LONG options, BOOL region, unsigned primitive)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -197,6 +209,7 @@ static LONG raster_path(HPS h, PmPath *path, LONG options, BOOL region, unsigned
     free(edges);
     return result;
 }
+
 LONG GpiFillPath(HPS h, LONG id, LONG options)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -207,6 +220,7 @@ LONG GpiFillPath(HPS h, LONG id, LONG options)
         delete_path(p, id);
     return result;
 }
+
 ULONG GpiPathToRegion(HPS h, LONG id, LONG options)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -217,6 +231,7 @@ ULONG GpiPathToRegion(HPS h, LONG id, LONG options)
         delete_path(p, id);
     return result;
 }
+
 /* Later transforms do not move a path, so its device points are mapped back through them. */
 static BOOL path_to_world(PresentationSpace *p, PmPath *path)
 {
@@ -229,6 +244,7 @@ static BOOL path_to_world(PresentationSpace *p, PmPath *path)
     }
     return TRUE;
 }
+
 /* Traces figures with the current cosmetic line, closing them when requested. */
 static LONG trace_path(HPS h, PresentationSpace *p, PmPath *path, BOOL close)
 {
@@ -240,8 +256,7 @@ static LONG trace_path(HPS h, PresentationSpace *p, PmPath *path, BOOL close)
     for (size_t i = 0; i <= path->count && result; i++)
     {
         BOOL ending = i == path->count || path->points[i].move;
-        if (ending && open && close &&
-            (p->position.x != first.x || p->position.y != first.y))
+        if (ending && open && close && (p->position.x != first.x || p->position.y != first.y))
         {
             LONG drawn = lx_pm_line(h, &first, 0);
             result = !drawn ? 0 : drawn == 2 ? 2 : result;
@@ -262,10 +277,12 @@ static LONG trace_path(HPS h, PresentationSpace *p, PmPath *path, BOOL close)
     p->position = saved;
     return result;
 }
+
 typedef struct StrokePoint
 {
     double x, y;
 } StrokePoint;
+
 static BOOL stroke_polygon(PresentationSpace *p, StrokePoint *vertices, unsigned count)
 {
     double area = 0;
@@ -286,6 +303,7 @@ static BOOL stroke_polygon(PresentationSpace *p, StrokePoint *vertices, unsigned
     }
     return TRUE;
 }
+
 static BOOL stroke_disc(PresentationSpace *p, POINTL center, double radius)
 {
     StrokePoint v[64];
@@ -301,6 +319,7 @@ static BOOL stroke_disc(PresentationSpace *p, POINTL center, double radius)
     }
     return stroke_polygon(p, v, count);
 }
+
 LONG GpiStrokePath(HPS h, LONG id, ULONG options)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -415,6 +434,7 @@ LONG GpiStrokePath(HPS h, LONG id, ULONG options)
         delete_path(p, id);
     return result;
 }
+
 LONG GpiEndArea(HPS h)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -433,6 +453,7 @@ LONG GpiEndArea(HPS h)
     delete_path(p, AREA_PATH);
     return result;
 }
+
 static LONG arc(HPS h, POINTL center, LONG multiplier, double begin, double sweep, BOOL move_first)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -470,10 +491,12 @@ static LONG arc(HPS h, POINTL center, LONG multiplier, double begin, double swee
     }
     return result;
 }
+
 LONG GpiPartialArc(HPS h, PPOINTL center, LONG multiplier, LONG start, LONG sweep)
 {
     return center ? arc(h, *center, multiplier, start / 65536.0, sweep / 65536.0, FALSE) : 0;
 }
+
 LONG GpiFullArc(HPS h, LONG control, LONG multiplier)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -502,11 +525,13 @@ LONG GpiFullArc(HPS h, LONG control, LONG multiplier)
     p->position = saved;
     return result;
 }
+
 static void to_unit(const LONG *ap, double det, POINTL v, double *x, double *y)
 {
     *x = (ap[1] * (double)v.x - ap[2] * (double)v.y) / det;
     *y = (ap[0] * (double)v.y - ap[3] * (double)v.x) / det;
 }
+
 LONG GpiPointArc(HPS h, PPOINTL points)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -540,8 +565,8 @@ LONG GpiPointArc(HPS h, PPOINTL points)
         t2 += twopi;
     if (t1 > t2)
         t2 -= twopi;
-    double scale = fmax(fabs((double)ap[0]) + fabs((double)ap[2]),
-                        fabs((double)ap[3]) + fabs((double)ap[1]));
+    double scale =
+        fmax(fabs((double)ap[0]) + fabs((double)ap[2]), fabs((double)ap[3]) + fabs((double)ap[1]));
     double required = ceil(fabs(t2 - t0) * r * scale / 2) + 1;
     unsigned n = required > 65536 ? 65536 : (unsigned)required;
     LONG result = 1;
@@ -560,6 +585,7 @@ LONG GpiPointArc(HPS h, PPOINTL points)
     }
     return result;
 }
+
 LONG GpiPolygons(HPS h, ULONG count, LXPOLYGON *polygons, ULONG options, ULONG model)
 {
     PresentationSpace *p = lx_pm_font_space(h);

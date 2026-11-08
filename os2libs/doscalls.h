@@ -55,6 +55,7 @@ extern "C"
     };
 
 #pragma pack(push, 1)
+
     typedef struct TIB2
     {
         ULONG tib2_ultid;
@@ -73,6 +74,7 @@ extern "C"
         ULONG tib_version;
         ULONG tib_ordinal;
     } TIB, *PTIB;
+
 #pragma pack(pop)
 
     typedef struct
@@ -113,6 +115,7 @@ extern "C"
 
     typedef void *PEXCEPTIONREGISTRATIONRECORD;
     typedef void *PEXCEPTIONREPORTRECORD;
+
     typedef struct
     {
         USHORT country;
@@ -222,6 +225,7 @@ extern "C"
     };
 
 #pragma pack(push, 1)
+
     typedef struct
     {
         USHORT day : 5;
@@ -235,6 +239,7 @@ extern "C"
         USHORT minutes : 6;
         USHORT hours : 5;
     } FTIME, *PFTIME;
+
 #pragma pack(pop)
 
     typedef struct
@@ -706,11 +711,13 @@ extern "C"
         OS2APIINFO(282);
     OS2EXPORT VOID OS2API DosExit(ULONG action, ULONG result) OS2APIINFO(234);
     OS2EXPORT APIRET OS2API DosExitList(ULONG ordercode, PFNEXITLIST pfn) OS2APIINFO(296);
+
     typedef struct
     {
         ULONG hsemCur;
         ULONG ulUser;
     } SEMRECORD, *PSEMRECORD;
+
     OS2EXPORT APIRET OS2API DosCreateMuxWaitSem(PSZ name, PHMUX output, ULONG count,
                                                 PSEMRECORD records, ULONG flags) OS2APIINFO(337);
     OS2EXPORT APIRET OS2API DosOpenMuxWaitSem(PSZ name, PHMUX output) OS2APIINFO(338);

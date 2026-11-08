@@ -15,6 +15,7 @@
         }                                                                                          \
     } while (0)
 static unsigned deferred;
+
 static void *provider(void *context, const char *mime, size_t *size)
 {
     (void)context;
@@ -27,6 +28,7 @@ static void *provider(void *context, const char *mime, size_t *size)
     deferred++;
     return copy;
 }
+
 static int worker(void *context)
 {
     int *success = context;
@@ -34,6 +36,7 @@ static int worker(void *context)
     *success = lx_host_clipboard_offer(&item, 1, NULL, NULL, NULL);
     return 0;
 }
+
 int main(void)
 {
     CHECK(SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HINT_OVERRIDE));

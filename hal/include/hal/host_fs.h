@@ -6,6 +6,7 @@
 #include <stdint.h>
 typedef struct LxHostFile LxHostFile;
 typedef struct LxHostDirectory LxHostDirectory;
+
 typedef enum LxHostFsError
 {
     LX_HOST_FS_OK,
@@ -26,6 +27,7 @@ typedef enum LxHostFsError
     LX_HOST_FS_NOT_EMPTY,
     LX_HOST_FS_NOT_READY
 } LxHostFsError;
+
 typedef enum LxHostFileKind
 {
     LX_HOST_FILE_REGULAR,
@@ -33,15 +35,17 @@ typedef enum LxHostFileKind
     LX_HOST_FILE_DEVICE,
     LX_HOST_FILE_PIPE
 } LxHostFileKind;
+
 typedef struct LxHostFileInfo
 {
     uint64_t size, allocated;
     int64_t accessed, modified;
-    int64_t created; /* Zero when the file has no recorded creation time. */
+    int64_t created;     /* Zero when the file has no recorded creation time. */
     unsigned attributes; /* LX_HOST_ATTRIBUTE_* */
     LxHostFileKind kind;
     int readonly;
 } LxHostFileInfo;
+
 /* A file without a stored record reads as archived, as a newly written OS/2 file does. */
 enum
 {
@@ -49,6 +53,7 @@ enum
     LX_HOST_ATTRIBUTE_SYSTEM = 4,
     LX_HOST_ATTRIBUTE_ARCHIVED = 0x20
 };
+
 /* Identity of one host-file version; unavailable for virtual/image paths. */
 typedef struct LxHostFileIdentity
 {
@@ -56,7 +61,9 @@ typedef struct LxHostFileIdentity
     int64_t modified, changed;
     uint32_t modified_nanoseconds, changed_nanoseconds;
 } LxHostFileIdentity;
+
 LxHostFsError lx_host_path_identity(const char *path, LxHostFileIdentity *identity);
+
 typedef struct LxHostVolumeInfo
 {
     char filesystem[8], label[12];
@@ -68,7 +75,9 @@ typedef struct LxHostVolumeInfo
     int removable;
     int readonly;
 } LxHostVolumeInfo;
+
 LxHostFsError lx_host_path_volume(const char *path, LxHostVolumeInfo *info);
+
 enum
 {
     LX_HOST_FILE_READ = 1,
@@ -79,6 +88,7 @@ enum
     LX_HOST_FILE_SYNC = 32,
     LX_HOST_FILE_NOINHERIT = 64
 };
+
 LxHostFile *lx_host_file_open(const char *path, unsigned flags, int readonly, LxHostFsError *error);
 /* A bounded regular-file snapshot is caller-owned and has an extra NUL byte. */
 void *lx_host_file_snapshot(const char *path, size_t maximum, size_t *size, LxHostFsError *error);

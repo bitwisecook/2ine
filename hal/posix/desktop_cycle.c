@@ -12,18 +12,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 enum
 {
     MEMBER_LIMIT = 64,
     WINDOW_LIMIT = 256,
     MAGIC = 0x32435943
 };
+
 typedef struct Member
 {
     uint64_t token;
     uint64_t request_serial;
     uint32_t request, blocked, pid;
 } Member;
+
 typedef struct Registry
 {
     uint32_t magic, version;
@@ -32,6 +35,7 @@ typedef struct Registry
     Member members[MEMBER_LIMIT];
     LxDesktopCycleWindow windows[WINDOW_LIMIT];
 } Registry;
+
 struct LxDesktopCycle
 {
     int directory, guard;
@@ -39,10 +43,12 @@ struct LxDesktopCycle
     uint64_t token;
     LxDesktopLease *lease;
 };
+
 static void lease_name(char name[32], uint64_t token)
 {
     snprintf(name, 32, "member-%016llx", (unsigned long long)token);
 }
+
 static int live(LxDesktopCycle *cycle, uint64_t token)
 {
     if (token == cycle->token)
@@ -62,6 +68,7 @@ static int live(LxDesktopCycle *cycle, uint64_t token)
     lx_desktop_lease_close(probe);
     return claimed < 0 ? -1 : claimed != 1;
 }
+
 static Registry *snapshot(LxDesktopCycle *cycle)
 {
     if (!cycle || flock(cycle->guard, LOCK_EX | LOCK_NB))
@@ -109,6 +116,7 @@ failed:
     flock(cycle->guard, LOCK_UN);
     return NULL;
 }
+
 static int finish(LxDesktopCycle *cycle, Registry *value, int save)
 {
     int ok = 1;
@@ -131,6 +139,7 @@ static int finish(LxDesktopCycle *cycle, Registry *value, int save)
     flock(cycle->guard, LOCK_UN);
     return ok;
 }
+
 static Member *member(Registry *value, uint64_t token, int create)
 {
     Member *empty = NULL;
@@ -148,6 +157,7 @@ static Member *member(Registry *value, uint64_t token, int create)
     }
     return create ? empty : NULL;
 }
+
 LxDesktopCycle *lx_desktop_cycle_open(const char *directory, const char *session)
 {
     if (!directory || !*directory || !session || !*session || strlen(session) > 64)
@@ -201,6 +211,7 @@ failed:
     lx_desktop_cycle_close(cycle);
     return NULL;
 }
+
 int lx_desktop_cycle_publish(LxDesktopCycle *cycle, const uint32_t *windows, size_t count,
                              int blocked)
 {
@@ -241,6 +252,7 @@ int lx_desktop_cycle_publish(LxDesktopCycle *cycle, const uint32_t *windows, siz
     }
     return finish(cycle, value, ok) && ok;
 }
+
 int lx_desktop_cycle_focus(LxDesktopCycle *cycle, uint32_t window)
 {
     Registry *value = snapshot(cycle);
@@ -250,6 +262,7 @@ int lx_desktop_cycle_focus(LxDesktopCycle *cycle, uint32_t window)
     value->active_window = window;
     return finish(cycle, value, 1);
 }
+
 int lx_desktop_cycle_request(LxDesktopCycle *cycle, uint32_t current, int reverse,
                              uint32_t *target_pid)
 {
@@ -281,6 +294,7 @@ int lx_desktop_cycle_request(LxDesktopCycle *cycle, uint32_t current, int revers
     int ok = finish(cycle, value, 1);
     return ok ? (handled ? 1 : blocked ? 2 : 0) : -1;
 }
+
 int lx_desktop_cycle_keyup(LxDesktopCycle *cycle)
 {
     Registry *value = snapshot(cycle);
@@ -290,6 +304,7 @@ int lx_desktop_cycle_keyup(LxDesktopCycle *cycle)
     value->intercepted = 0;
     return finish(cycle, value, intercepted) && intercepted;
 }
+
 uint32_t lx_desktop_cycle_receive(LxDesktopCycle *cycle)
 {
     Registry *value = snapshot(cycle);
@@ -306,6 +321,7 @@ uint32_t lx_desktop_cycle_receive(LxDesktopCycle *cycle)
         self->request = 0;
     return finish(cycle, value, pending != 0) ? request : 0;
 }
+
 void lx_desktop_cycle_close(LxDesktopCycle *cycle)
 {
     if (!cycle)

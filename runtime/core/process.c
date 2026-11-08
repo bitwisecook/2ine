@@ -7,6 +7,7 @@
  */
 #include "runtime/core/internal.h"
 #include "hal/host_shared.h"
+
 void initPib(void)
 {
     /* Guest resolver libraries locate RESOLV2/HOSTS through ETC. */
@@ -245,6 +246,7 @@ void initPib(void)
 }
 
 static LxHostShared *ProcessPeerLease;
+
 static void processPeerName(uint32 pid, char name[64])
 {
     uint64 hash = UINT64_C(1469598103934665603);
@@ -257,6 +259,7 @@ static void processPeerName(uint32 pid, char name[64])
     }
     snprintf(name, 64, "/2ine-peer-%016llx-%08x", (unsigned long long)hash, (unsigned)pid);
 }
+
 int lxRegisterProcessPeer(void)
 {
     if (ProcessPeerLease)
@@ -265,6 +268,7 @@ int lxRegisterProcessPeer(void)
     processPeerName(GLoaderState.pib.pib_ulpid, name);
     return lx_host_shared_open(name, 1, &ProcessPeerLease) == LX_HOST_SHARED_OK;
 }
+
 int lxIsProcessPeer(uint32 pid)
 {
     if (!pid)
@@ -273,6 +277,7 @@ int lxIsProcessPeer(uint32 pid)
     processPeerName(pid, name);
     return lx_host_shared_live(name) == 1;
 }
+
 void lxUnregisterProcessPeer(void)
 {
     if (ProcessPeerLease)

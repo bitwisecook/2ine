@@ -25,6 +25,7 @@ VOID GetSystemTime(PVOID output)
 {
     get_time(output, 1);
 }
+
 VOID GetLocalTime(PVOID output)
 {
     get_time(output, 0);
@@ -63,10 +64,12 @@ BOOL SystemTimeToFileTime(PVOID input, PVOID output)
     lx_guest_store_u32((uint8 *)output + 4, (uint32)(ticks >> 32));
     return TRUE;
 }
+
 static uint64_t load_filetime(const void *input)
 {
     return lx_guest_load_u32(input) | (uint64_t)lx_guest_load_u32((const uint8 *)input + 4) << 32;
 }
+
 static BOOL local_filetime(PVOID input, PVOID output, BOOL utc)
 {
     if (!input || !output || input == output)
@@ -97,19 +100,23 @@ static BOOL local_filetime(PVOID input, PVOID output, BOOL utc)
     lx_guest_store_u32((uint8 *)output + 4, (uint32)(result >> 32));
     return TRUE;
 }
+
 BOOL FileTimeToLocalFileTime(PVOID input, PVOID output)
 {
     return local_filetime(input, output, FALSE);
 }
+
 BOOL LocalFileTimeToFileTime(PVOID input, PVOID output)
 {
     return local_filetime(input, output, TRUE);
 }
+
 static uint64_t year_days(unsigned year)
 {
     uint64_t previous = year - 1;
     return previous * 365 + previous / 4 - previous / 100 + previous / 400 - 584388;
 }
+
 BOOL FileTimeToSystemTime(PVOID input, PVOID output)
 {
     if (!input || !output || load_filetime(input) > INT64_MAX)

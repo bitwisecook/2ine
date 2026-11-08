@@ -10,6 +10,7 @@
 #include "hal/host_fatal.h"
 #include "hal/host_operation.h"
 #include "network_config.h"
+
 int main(int argc, char **argv, char **envp)
 {
     if (argc > 1 && !strcmp(argv[1], LX_FATAL_DIALOG_ARGUMENT))

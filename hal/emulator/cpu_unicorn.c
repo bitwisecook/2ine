@@ -154,16 +154,19 @@ static int map_memory(LxCpu *cpu, uint32_t at, size_t size, unsigned permissions
     UnicornCpu *u = cpu->backend;
     return checked(cpu, uc_mem_map_ptr(u->engine, at, size, permissions, host));
 }
+
 static int unmap_memory(LxCpu *cpu, uint32_t at, size_t size)
 {
     UnicornCpu *u = cpu->backend;
     return checked(cpu, uc_mem_unmap(u->engine, at, size));
 }
+
 static int protect_memory(LxCpu *cpu, uint32_t at, size_t size, unsigned permissions)
 {
     UnicornCpu *u = cpu->backend;
     return checked(cpu, uc_mem_protect(u->engine, at, size, permissions));
 }
+
 static int invalidate(LxCpu *cpu, uint32_t at, size_t size)
 {
     UnicornCpu *u = cpu->backend;
@@ -231,6 +234,7 @@ static int get_registers(LxCpu *cpu, LxCpuRegisters *r)
 #undef REG_VALUE
     return checked(cpu, uc_reg_read_batch(u->engine, ids, values, sizeof ids / sizeof ids[0]));
 }
+
 static int set_registers(LxCpu *cpu, const LxCpuRegisters *r)
 {
     UnicornCpu *u = cpu->backend;
@@ -295,6 +299,7 @@ static LxCpuEvent run_cpu(LxCpu *cpu, uint64_t instructions, uint64_t timeout_us
 {
     return run_bounded(cpu, instructions, timeout_us, 0);
 }
+
 static LxCpuEvent run_blocks(LxCpu *cpu, uint64_t blocks)
 {
     return run_bounded(cpu, 0, 0, blocks);
@@ -313,16 +318,19 @@ static void *save_context(LxCpu *cpu)
     }
     return context;
 }
+
 static int restore_context(LxCpu *cpu, const void *context)
 {
     UnicornCpu *u = cpu->backend;
     return checked(cpu, uc_context_restore(u->engine, (uc_context *)context));
 }
+
 static int update_context(LxCpu *cpu, void *context)
 {
     UnicornCpu *u = cpu->backend;
     return checked(cpu, uc_context_save(u->engine, context));
 }
+
 static void free_context(void *context)
 {
     uc_context_free(context);

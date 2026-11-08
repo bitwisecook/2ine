@@ -67,6 +67,7 @@ PFNWP defaultGuestWindowProc(void)
 #endif
     return WinDefWindowProc;
 }
+
 PFNWP defaultGuestDialogProc(void)
 {
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY

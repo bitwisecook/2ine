@@ -6,12 +6,14 @@
 #include "os2libs/pm_text.h"
 #include "guest/abi.h"
 #include <ctype.h>
+
 Window *lx_pm_menu_window(HWND handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     Window *window = anchor ? getWindowFromHWND(anchor, handle) : NULL;
     return window && window->menu ? window : NULL;
 }
+
 BOOL createSystemMenu(Window *frame, ULONG flags)
 {
     ULONG style = 3 | ((flags & 1) ? WS_VISIBLE : 0);
@@ -29,6 +31,7 @@ BOOL createSystemMenu(Window *frame, ULONG flags)
     MENUITEM root = {-1, 0x11, 0, 0x8007, popup, 0}; /* MIS_TEXT | MIS_SUBMENU, SC_SYSMENU */
     if ((intptr_t)WinSendMsg(bar, 0x180, &root, "~System") == -1)
         goto fail;
+
     static const struct
     {
         USHORT id;
@@ -36,6 +39,7 @@ BOOL createSystemMenu(Window *frame, ULONG flags)
         const char *text;
     } entries[] = {{0x8008, 0x30, "~Restore"},  {0x8001, 0, "~Move"},        {0x8000, 8, "~Size"},
                    {0x8002, 0x10, "Mi~nimize"}, {0x8003, 0x20, "Ma~ximize"}, {0x8004, 0, "~Close"}};
+
     for (size_t i = 0; i < sizeof entries / sizeof entries[0]; i++)
     {
         if (entries[i].flag && !(flags & entries[i].flag))
@@ -49,6 +53,7 @@ fail:
     WinDestroyWindow(bar);
     return FALSE;
 }
+
 BOOL createMinMaxMenu(Window *frame, ULONG flags)
 {
     HWND bar = WinCreateWindow(frame->hwnd, (PSZ)WC_MENU, NULL, 3 | WS_VISIBLE, 0, 0, 1, 1,
@@ -68,6 +73,7 @@ BOOL createMinMaxMenu(Window *frame, ULONG flags)
         }
     return TRUE;
 }
+
 void destroyMenu(Window *window)
 {
     PmMenu *menu = window->menu;
@@ -79,6 +85,7 @@ void destroyMenu(Window *window)
     free(menu);
     window->menu = NULL;
 }
+
 static Window *menu_root(Window *window)
 {
     for (unsigned depth = 0; depth < 4096; depth++)
@@ -92,6 +99,7 @@ static Window *menu_root(Window *window)
     }
     return window;
 }
+
 static PmMenuItem *menu_find(Window *window, unsigned id, BOOL recursive, Window **found)
 {
     if (!window || !window->menu)
@@ -115,6 +123,7 @@ static PmMenuItem *menu_find(Window *window, unsigned id, BOOL recursive, Window
     }
     return NULL;
 }
+
 static LONG text_width(LxHostFont *font, const char *text)
 {
     LONG width = 0;
@@ -128,6 +137,7 @@ static LONG text_width(LxHostFont *font, const char *text)
     }
     return width;
 }
+
 static BOOL title_menu_item(const Window *window, const PmMenuItem *item)
 {
     if (!(window->style & 1))
@@ -137,6 +147,7 @@ static BOOL title_menu_item(const Window *window, const PmMenuItem *item)
     return (window->style & 2) && window->id == FID_MINMAX && isFrameWindow(window->parent) &&
            (item->item.afStyle & 0x40) && (item->item.id == 0x8002 || item->item.id == 0x8003);
 }
+
 static void menu_layout(Window *window)
 {
     PmMenu *menu = window->menu;
@@ -178,6 +189,7 @@ static void menu_layout(Window *window)
     if (!bar && (window->w != width || window->h != height))
         WinSetWindowPos(window->hwnd, HWND_TOP, 0, 0, width, height, SWP_SIZE | SWP_NOADJUST);
 }
+
 static void menu_close(Window *window)
 {
     PmMenu *menu = window->menu;
@@ -193,6 +205,7 @@ static void menu_close(Window *window)
     menu->active_parent = 0;
     WinInvalidateRect(window->hwnd, NULL, FALSE);
 }
+
 static void menu_finish(Window *window)
 {
     Window *root = menu_root(window);
@@ -205,6 +218,7 @@ static void menu_finish(Window *window)
         WinPostMsg(root->owner->hwnd, WM_MENUEND, (MPARAM)(uintptr_t)root->id,
                    (MPARAM)(uintptr_t)root->hwnd);
 }
+
 void dismissMenusForClick(AnchorBlock *anchor, Window *target)
 {
     Window *target_menu = target;
@@ -220,6 +234,7 @@ void dismissMenusForClick(AnchorBlock *anchor, Window *target)
             menu_finish(window);
     }
 }
+
 static void menu_select(Window *window, int index)
 {
     PmMenu *menu = window->menu;
@@ -234,6 +249,7 @@ static void menu_select(Window *window, int index)
     menu->selected = index;
     WinInvalidateRect(window->hwnd, NULL, FALSE);
 }
+
 static void menu_open(Window *window, PmMenuItem *item)
 {
     Window *root = menu_root(window), *submenu = lx_pm_menu_window(item->item.hwndSubMenu);
@@ -267,6 +283,7 @@ static void menu_open(Window *window, PmMenuItem *item)
                     SWP_MOVE | SWP_SIZE | SWP_SHOW);
     WinSetFocus(HWND_DESKTOP, submenu->hwnd);
 }
+
 static void menu_activate(Window *window, int index)
 {
     PmMenu *menu = window->menu;
@@ -305,6 +322,7 @@ static void menu_activate(Window *window, int index)
     if (owner)
         WinPostMsg(owner, message, (MPARAM)(uintptr_t)id, (MPARAM)(uintptr_t)1); /* CMDSRC_MENU */
 }
+
 static void menu_paint(Window *window)
 {
     menu_layout(window);
@@ -397,6 +415,7 @@ static void menu_paint(Window *window)
     }
     WinEndPaint(ps);
 }
+
 static HWND parse_menu(HWND parent, HWND owner, const uint8 *bytes, size_t size, unsigned depth,
                        size_t *consumed)
 {
@@ -463,6 +482,7 @@ fail:
     WinDestroyWindow(handle);
     return 0;
 }
+
 BOOL lx_pm_menu_remove(HWND handle, size_t index, BOOL destroy_submenu)
 {
     Window *window = lx_pm_menu_window(handle);
@@ -489,6 +509,7 @@ HWND WinCreateMenu(HWND parent, PVOID data)
     size_t consumed = 0;
     return parse_menu(parent, parent, data, size, parent == HWND_DESKTOP ? 1 : 0, &consumed);
 }
+
 HWND WinLoadMenu(HWND frame, HMODULE module, ULONG id)
 {
     TRACE_NATIVE("WinLoadMenu(%u, %u, %u)", (uint)frame, (uint)module, (uint)id);
@@ -505,6 +526,7 @@ HWND WinLoadMenu(HWND frame, HMODULE module, ULONG id)
         GLoaderState.freeResource(data);
     return result;
 }
+
 BOOL WinPopupMenu(HWND parent, HWND owner, HWND handle, LONG x, LONG y, LONG id, ULONG flags)
 {
     (void)flags;
@@ -529,6 +551,7 @@ BOOL WinPopupMenu(HWND parent, HWND owner, HWND handle, LONG x, LONG y, LONG id,
                     SWP_MOVE | SWP_SIZE | SWP_SHOW);
     return WinSetFocus(HWND_DESKTOP, handle);
 }
+
 MRESULT OS2API menuProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

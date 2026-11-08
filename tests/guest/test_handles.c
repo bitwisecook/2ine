@@ -15,16 +15,19 @@
     } while (0)
 static unsigned Destroyed;
 static int Ready;
+
 static int ready(void *p)
 {
     (void)p;
     return Ready;
 }
+
 static void destroy(void *p)
 {
     Destroyed++;
     free(p);
 }
+
 int main(void)
 {
     uint64_t *resource = malloc(sizeof *resource);

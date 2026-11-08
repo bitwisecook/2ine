@@ -2,6 +2,7 @@
 /* The MDI client owns workbook children and their active-window state. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
+
 BOOL open32ShowMdiChild(Open32Window *window, LONG command)
 {
     Open32Window *parent = open32FindWindow(window->parent);
@@ -53,6 +54,7 @@ BOOL open32ShowMdiChild(Open32Window *window, LONG command)
         SendMessage(owner, 0x222, handle, 0);
     return TRUE;
 }
+
 static ULONG mdi_create(Open32Window *client, ULONG definition)
 {
     uint8 bytes[36];
@@ -103,6 +105,7 @@ static ULONG mdi_create(Open32Window *client, ULONG definition)
     }
     return child;
 }
+
 ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG second)
 {
     Open32Window *window = open32FindWindow(handle);
@@ -218,6 +221,7 @@ LONG DefFrameProc(ULONG frame, ULONG client, ULONG message, ULONG first, ULONG s
         SendMessage(mdi->mdi_active, message, first, second);
     return DefWindowProc(frame, message, first, second);
 }
+
 LONG DefMDIChildProc(ULONG child, ULONG message, ULONG first, ULONG second)
 {
     return DefWindowProc(child, message, first, second);

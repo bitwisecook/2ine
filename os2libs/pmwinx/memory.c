@@ -3,21 +3,25 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "hal/host_sync.h"
+
 typedef struct LocalMemory
 {
     ULONG handle, size, flags, locks;
     LxGuestMapping *mapping;
     struct LocalMemory *next;
 } LocalMemory;
+
 static LocalMemory *blocks;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
     if (!monitor)
         abort();
 }
+
 static LocalMemory *find_block(ULONG handle)
 {
     for (LocalMemory *block = blocks; block; block = block->next)
@@ -25,11 +29,13 @@ static LocalMemory *find_block(ULONG handle)
             return block;
     return NULL;
 }
+
 static void lock_heap(void)
 {
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(monitor);
 }
+
 static LxGuestMapping *allocate(ULONG size)
 {
     if (size > UINT32_MAX - 4095)
@@ -37,6 +43,7 @@ static LxGuestMapping *allocate(ULONG size)
     size_t capacity = ((size_t)(size ? size : 1) + 4095) & ~(size_t)4095;
     return lx_execution_map(GLoaderState.execution, 0, capacity, LX_GUEST_READ | LX_GUEST_WRITE, 0);
 }
+
 ULONG LocalAlloc(ULONG flags, ULONG size)
 {
     TRACE_NATIVE("LocalAlloc(%X, %u)", flags, size);
@@ -79,6 +86,7 @@ ULONG LocalAlloc(ULONG flags, ULONG size)
     lx_host_monitor_unlock(monitor);
     return block->handle;
 }
+
 ULONG LocalFree(ULONG handle)
 {
     if (!handle)
@@ -106,6 +114,7 @@ ULONG LocalFree(ULONG handle)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 ULONG LocalLock(ULONG handle)
 {
     lock_heap();
@@ -126,6 +135,7 @@ ULONG LocalLock(ULONG handle)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 BOOL LocalUnlock(ULONG handle)
 {
     lock_heap();
@@ -146,6 +156,7 @@ BOOL LocalUnlock(ULONG handle)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 ULONG LocalSize(ULONG handle)
 {
     lock_heap();
@@ -156,6 +167,7 @@ ULONG LocalSize(ULONG handle)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 ULONG LocalFlags(ULONG handle)
 {
     lock_heap();
@@ -167,6 +179,7 @@ ULONG LocalFlags(ULONG handle)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 ULONG LocalHandle(ULONG pointer)
 {
     lock_heap();
@@ -182,6 +195,7 @@ ULONG LocalHandle(ULONG pointer)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
 {
     if (flags & ~0xFF2u)
@@ -250,6 +264,7 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
     lx_host_monitor_unlock(monitor);
     return result;
 }
+
 void open32MemoryCleanup(void)
 {
     lock_heap();
@@ -276,6 +291,7 @@ ULONG GlobalAlloc(ULONG flags, ULONG size)
     /* Win32 share/bank/notification hints do not change process-heap ownership. */
     return LocalAlloc(flags & 0x172, size);
 }
+
 ULONG GlobalReAlloc(ULONG handle, ULONG size, ULONG flags)
 {
     if (flags & ~0x7FF2u)
@@ -285,26 +301,32 @@ ULONG GlobalReAlloc(ULONG handle, ULONG size, ULONG flags)
     }
     return LocalReAlloc(handle, size, flags & 0x1F2);
 }
+
 ULONG GlobalFree(ULONG handle)
 {
     return LocalFree(handle);
 }
+
 ULONG GlobalLock(ULONG handle)
 {
     return LocalLock(handle);
 }
+
 BOOL GlobalUnlock(ULONG handle)
 {
     return LocalUnlock(handle);
 }
+
 ULONG GlobalSize(ULONG handle)
 {
     return LocalSize(handle);
 }
+
 ULONG GlobalHandle(ULONG pointer)
 {
     return LocalHandle(pointer);
 }
+
 ULONG GlobalFlags(ULONG handle)
 {
     return LocalFlags(handle) & 0xC1FF;

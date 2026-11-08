@@ -7,6 +7,7 @@
 #include "os2libs/pmwin/menus.h"
 #include "os2libs/pmgpi.h"
 #include <stdio.h>
+
 typedef struct Open32Dialog
 {
     ULONG window, procedure, class_procedure, parameter;
@@ -14,7 +15,9 @@ typedef struct Open32Dialog
     BOOL finished;
     struct Open32Dialog *previous;
 } Open32Dialog;
+
 static _Thread_local Open32Dialog *dialogs, *modeless_dialogs;
+
 BOOL open32NativeDialogWindow(ULONG handle)
 {
     if (open32FileDialogWindow(handle) || open32NativeControlOwned(handle))
@@ -29,6 +32,7 @@ BOOL open32NativeDialogWindow(ULONG handle)
                 return TRUE;
     return FALSE;
 }
+
 /* A dialog of a registered class runs that class's procedure, whose DefDlgProc call reaches
    the dialog procedure; any other dialog runs the dialog procedure directly. */
 static ULONG dialog_callback(Open32Dialog *dialog, ULONG handle, ULONG message, ULONG first,
@@ -39,6 +43,7 @@ static ULONG dialog_callback(Open32Dialog *dialog, ULONG handle, ULONG message, 
                                                              : dialog->procedure,
                                      handle, message, first, second);
 }
+
 static Open32Dialog *classed_dialog(ULONG handle)
 {
     for (Open32Dialog *dialog = dialogs; dialog; dialog = dialog->previous)
@@ -49,6 +54,7 @@ static Open32Dialog *classed_dialog(ULONG handle)
             return dialog;
     return NULL;
 }
+
 /* PM child origins follow the bottom edge and Windows ones follow the top edge,
    so a Windows dialog keeps its controls in place when its height changes. */
 static void keep_controls_at_top(HWND dialog, LONG delta)
@@ -63,6 +69,7 @@ static void keep_controls_at_top(HWND dialog, LONG delta)
                             SWP_MOVE | SWP_NOADJUST | SWP_NOREDRAW);
     }
 }
+
 static MRESULT OS2API dialog_procedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     Open32Dialog *dialog = dialogs;
@@ -128,6 +135,7 @@ static MRESULT OS2API dialog_procedure(HWND handle, ULONG message, MPARAM first,
     }
     return native_result;
 }
+
 LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, ULONG parameter)
 {
     TRACE_NATIVE("DialogBoxParam(%u, %p, %u, %X, %X)", module, resource, owner, procedure,
@@ -164,10 +172,12 @@ LONG DialogBoxParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, UL
     }
     return (LONG)result;
 }
+
 LONG DialogBox(ULONG module, PSZ resource, ULONG owner, ULONG procedure)
 {
     return DialogBoxParam(module, resource, owner, procedure, 0);
 }
+
 BOOL EndDialog(ULONG handle, LONG result)
 {
     for (Open32Dialog *dialog = dialogs; dialog; dialog = dialog->previous)
@@ -185,6 +195,7 @@ BOOL EndDialog(ULONG handle, LONG result)
     open32SetError(1400);
     return FALSE;
 }
+
 ULONG GetDlgItem(ULONG handle, LONG identity)
 {
     TRACE_NATIVE("GetDlgItem(%u, %d)", (uint)handle, (int)identity);
@@ -195,6 +206,7 @@ ULONG GetDlgItem(ULONG handle, LONG identity)
     }
     return WinWindowFromID(open32ClientWindow(handle), (ULONG)identity);
 }
+
 BOOL SetDlgItemText(ULONG handle, LONG identity, PSZ text)
 {
     ULONG child = GetDlgItem(handle, identity);
@@ -205,6 +217,7 @@ BOOL SetDlgItemText(ULONG handle, LONG identity, PSZ text)
     }
     return SetWindowText(child, text);
 }
+
 ULONG GetDlgItemText(ULONG handle, LONG identity, PCHAR output, LONG capacity)
 {
     ULONG child = GetDlgItem(handle, identity);
@@ -237,6 +250,7 @@ ULONG IsDlgButtonChecked(ULONG dialog, LONG identity)
 {
     return (ULONG)SendDlgItemMessage(dialog, identity, 0xf0, 0, 0);
 }
+
 BOOL CheckDlgButton(ULONG dialog, LONG identity, ULONG check)
 {
     ULONG child = GetDlgItem(dialog, identity);
@@ -288,10 +302,12 @@ ULONG CreateDialogParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure
     modeless_dialogs = dialog;
     return window;
 }
+
 ULONG CreateDialog(ULONG module, PSZ resource, ULONG owner, ULONG procedure)
 {
     return CreateDialogParam(module, resource, owner, procedure, 0);
 }
+
 LONG DefDlgProc(ULONG window, ULONG message, ULONG first, ULONG second)
 {
     Open32Dialog *classed = classed_dialog(window);
@@ -303,6 +319,7 @@ LONG DefDlgProc(ULONG window, ULONG message, ULONG first, ULONG second)
                                               (MPARAM)(uintptr_t)first, (MPARAM)(uintptr_t)second);
     return DefWindowProc(window, message, first, second);
 }
+
 /* Indirect Windows dialog data contains UTF-16 strings and DWORD-aligned
    control records. Convert its bounded guest stream into PM's packed template. */
 typedef struct DialogReader
@@ -311,6 +328,7 @@ typedef struct DialogReader
     size_t offset;
     BOOL valid;
 } DialogReader;
+
 static USHORT dialog_word(DialogReader *reader)
 {
     uint8 wire[2];
@@ -324,6 +342,7 @@ static USHORT dialog_word(DialogReader *reader)
     reader->offset += 2;
     return lx_guest_load_u16(wire);
 }
+
 static BOOL dialog_string(DialogReader *reader, char text[1024], USHORT *ordinal)
 {
     USHORT c = dialog_word(reader);
@@ -350,6 +369,7 @@ static BOOL dialog_string(DialogReader *reader, char text[1024], USHORT *ordinal
         reader->valid = FALSE;
     return reader->valid;
 }
+
 static ULONG dialog_pm_style(ULONG style, unsigned *kind)
 {
     if (*kind == 2 || *kind == 3 || *kind == 5 || *kind == 6 || *kind == 7 || *kind == 10)
@@ -357,11 +377,13 @@ static ULONG dialog_pm_style(ULONG style, unsigned *kind)
     return (style & 0x10000000 ? WS_VISIBLE : 0) | (style & 0x08000000 ? WS_DISABLED : 0) |
            (style & 0x10000 ? 0x20000 : 0) | (style & 0x20000 ? 0x10000 : 0) | (style & 0xFFFF);
 }
+
 typedef struct DialogMenu
 {
     USHORT ordinal, class_ordinal;
     char name[256], class_name[256];
 } DialogMenu;
+
 /* Dialog units follow the template font: a quarter of its average width and an eighth of
    its height. Returns FALSE when PM's own units already apply. */
 static BOOL template_font_units(const char *face, USHORT points, LONG *width, LONG *height)
@@ -388,11 +410,13 @@ static BOOL template_font_units(const char *face, USHORT points, LONG *width, LO
     WinReleasePS(space);
     return found;
 }
+
 static ULONG dialog_dword(DialogReader *reader)
 {
     ULONG value = dialog_word(reader);
     return value | (ULONG)dialog_word(reader) << 16;
 }
+
 /* OS/2 applications load PM templates from their own resources and may hand them to
    the indirect dialog calls. PM's header has type 0 and items at offset 14. */
 static PDLGTEMPLATE native_template(ULONG address)
@@ -411,6 +435,7 @@ static PDLGTEMPLATE native_template(ULONG address)
     }
     return (PDLGTEMPLATE)bytes;
 }
+
 static PDLGTEMPLATE convert_dialog(ULONG address, DialogMenu *menu)
 {
     PDLGTEMPLATE native = native_template(address);
@@ -609,10 +634,12 @@ convert_bad:
     free(bytes);
     return NULL;
 }
+
 PVOID open32ConvertDialog(ULONG address)
 {
     return convert_dialog(address, NULL);
 }
+
 static ULONG template_class_procedure(ULONG module, const DialogMenu *menu)
 {
     if (!menu->class_ordinal && !menu->class_name[0])
@@ -624,6 +651,7 @@ static ULONG template_class_procedure(ULONG module, const DialogMenu *menu)
         open32ClassRelease(class);
     return procedure;
 }
+
 static void attach_dialog_menu(ULONG module, ULONG window, const DialogMenu *menu)
 {
     if (!menu->ordinal && !menu->name[0])
@@ -633,6 +661,7 @@ static void attach_dialog_menu(ULONG module, ULONG window, const DialogMenu *men
     if (handle)
         lx_pm_menu_attach(handle, window);
 }
+
 ULONG _CreateDialogIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG procedure,
                                  ULONG parameter)
 {
@@ -676,6 +705,7 @@ ULONG _CreateDialogIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG
     attach_dialog_menu(module, window, &menu);
     return window;
 }
+
 LONG _DialogBoxIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG procedure,
                              ULONG parameter)
 {
@@ -709,6 +739,7 @@ LONG _DialogBoxIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG pro
     open32NativeControlsPrune();
     return result;
 }
+
 LONG _DialogBoxIndirect(ULONG module, ULONG address, ULONG owner, ULONG procedure)
 {
     return _DialogBoxIndirectParam(module, address, owner, procedure, 0);

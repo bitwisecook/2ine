@@ -32,6 +32,7 @@ static cJSON *component_current_progress(Context *c, const cJSON *request)
             cJSON_CreateString(format(c, "%s/logs/os2-components/%s.json", c->ball, id)));
     return progress;
 }
+
 static int component_hash_matches(Context *c, const char *host, const cJSON *record,
                                   TbFileIdentity *identity)
 {
@@ -47,6 +48,7 @@ static int component_hash_matches(Context *c, const char *host, const cJSON *rec
         *identity = after;
     return equal_case(hex(c, digest), expected);
 }
+
 /* A read-only polling request may revisit a touched file whose bytes are
    unchanged. Cache only hash-verified verdicts bound to its complete stat identity;
    removal always performs a fresh hash and never uses this bounded thread cache. */
@@ -58,6 +60,7 @@ static int component_poll_hash(Context *c, const char *host, const cJSON *record
         TbFileIdentity identity;
         int matches;
     } ComponentHashVerdict;
+
     static _Thread_local ComponentHashVerdict verdicts[64];
     static _Thread_local unsigned next;
     TbFileIdentity before, after;
@@ -82,6 +85,7 @@ static int component_poll_hash(Context *c, const char *host, const cJSON *record
     }
     return matches;
 }
+
 static cJSON *component_file_state_record(Context *c, const char *guest, const cJSON *record,
                                           int verify)
 {
@@ -143,22 +147,26 @@ static cJSON *component_file_state_record(Context *c, const char *guest, const c
             cJSON_AddStringToObject(file, keys[i], field(record, keys[i]));
     return file;
 }
+
 static cJSON *component_file_state(Context *c, const char *guest, const cJSON *ledger, int verify)
 {
     return component_file_state_record(c, guest, get(ledger, component_key(c, guest)), verify);
 }
+
 /* Source IDs are opaque media identities: lookup never reopens installation media. */
 typedef struct ComponentSourceRecord
 {
     const char *source;
     const cJSON *record;
 } ComponentSourceRecord;
+
 static int component_source_compare(const void *left, const void *right)
 {
     const ComponentSourceRecord *a = left, *b = right;
     int result = strcmp(a->source, b->source);
     return result ? result : strcmp(field(a->record, "path"), field(b->record, "path"));
 }
+
 static void component_state_add(cJSON *result, cJSON *file)
 {
     cJSON_AddItemToArray(get(result, "files"), file);
@@ -173,6 +181,7 @@ static void component_state_add(cJSON *result, cJSON *file)
     if (key)
         cJSON_AddItemToArray(get(result, key), cJSON_CreateString(path));
 }
+
 static cJSON *os2_component_state(Context *c, const cJSON *request)
 {
     const cJSON *paths = get(request, "paths"), *selection = get(request, "selection"), *item;
@@ -303,6 +312,7 @@ static cJSON *os2_component_state(Context *c, const cJSON *request)
     }
     return result;
 }
+
 static cJSON *component_import(Context *c, const cJSON *request)
 {
     cJSON *result = NULL;
@@ -318,6 +328,7 @@ static cJSON *component_import(Context *c, const cJSON *request)
     }
     return result;
 }
+
 static int component_som_essential(const char *path)
 {
     const char *base = strrchr(path, '\\');
@@ -336,6 +347,7 @@ static int component_som_essential(const char *path)
             return 1;
     return 0;
 }
+
 static cJSON *remove_os2_components(Context *c, const cJSON *request)
 {
     cJSON *result = cJSON_CreateObject(), *removed = cJSON_AddArrayToObject(result, "removedPaths"),
@@ -542,6 +554,7 @@ finished:
     }
     return result;
 }
+
 static cJSON *cancel_os2_component_operation(Context *c, const cJSON *request)
 {
     const char *id = field(request, "operationID");

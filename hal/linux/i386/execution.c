@@ -23,6 +23,7 @@ typedef uint64_t uint64;
 typedef unsigned int uint;
 #define LX_MAX_LDT_SLOTS 8192
 #define FIXME(x) ((void)0)
+
 static int nativeLdt(uint16_t index, uint32_t base, uint32_t limit_pages, int code, int bits,
                      int present)
 {
@@ -43,10 +44,12 @@ static int nativeLdt(uint16_t index, uint32_t base, uint32_t limit_pages, int co
     entry.useable = 1;
     return syscall(SYS_modify_ldt, 1, &entry, sizeof entry) == 0 ? 0 : -1;
 }
+
 static int nativeProtect(void *address, size_t size, unsigned protection)
 {
     return lx_host_vm_protect(address, size, protection) ? 0 : -1;
 }
+
 typedef struct NativeState
 {
     uint32 *ldt;
@@ -59,6 +62,7 @@ typedef struct NativeState
     LxExecutionServices services;
     struct sigaction previous_segv;
 } NativeState;
+
 static NativeState *Native;
 static pthread_mutex_t DescriptorMutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP;
 static pthread_mutex_t SegmentMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -68,12 +72,15 @@ static __thread void *NativeHostStack __attribute__((tls_model("initial-exec")))
 static __thread uint8_t *NativeHostAllocation;
 static __thread void *NativeSignalAllocation;
 static __thread stack_t NativePreviousSignalStack;
+
 typedef struct NativeBridgeFrame
 {
     uint32_t guest_stack;
     struct NativeBridgeFrame *outer;
 } NativeBridgeFrame;
+
 static __thread NativeBridgeFrame *NativeBridge;
+
 static uint32_t dispatchApi16(uint8_t *arguments, LxExecutionApi16 callback, uint32_t guest_stack)
 {
     NativeBridgeFrame frame = {guest_stack, NativeBridge};
@@ -82,15 +89,18 @@ static uint32_t dispatchApi16(uint8_t *arguments, LxExecutionApi16 callback, uin
     NativeBridge = frame.outer;
     return result;
 }
+
 static uint32 nativeHostStackOffset(void)
 {
     return (uint32)((uintptr_t)&NativeHostStack - (uintptr_t)__builtin_thread_pointer());
 }
+
 static __attribute__((noreturn, used)) void endLxProcess(uint32 result)
 {
     Native->services.program_returned(Native->services.userdata, result);
     abort();
 }
+
 static inline uint16 lxSelectorToSegment(const uint16 selector)
 {
     return (selector << 3) | 7;
@@ -199,6 +209,7 @@ static int lxFindSelectorUnlocked(const uint32 _addr, uint16 *outselector, uint1
     *outoffset = (uint16)diff;
     return 1;
 }
+
 static int lxFindSelector(const uint32 address, uint16 *selector, uint16 *offset, int code)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -219,6 +230,7 @@ static void lxFreeSelectorUnlocked(const uint16 selector)
 
     Native->ldt[selector] = 0;
 }
+
 static void lxFreeSelector(const uint16 selector)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -294,6 +306,7 @@ static void initOs2StackSegmentsUnlocked(uint32 addr, uint32 stacklen, const int
         addr += 0x10000;
     }
 }
+
 static void initOs2StackSegments(uint32 address, uint32 size, const int release)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -357,6 +370,7 @@ static void *lxGetOs2Tib2(void)
 {
     return NativeTib + Native->services.tib2_offset;
 }
+
 static void *lxGetOs2Tib(void)
 {
     return NativeTib;
@@ -421,6 +435,7 @@ static int lxCreateCodeAliasUnlocked(const uint16 selDS, uint16 *outselector)
     *outselector = (uint16)((slot << 3) | 7);
     return 1;
 }
+
 static int lxCreateCodeAlias(const uint16 selector, uint16 *output)
 {
     pthread_mutex_lock(&DescriptorMutex);
@@ -1019,6 +1034,7 @@ static int handleFlatDataSelector(ucontext_t *context)
     registers[REG_EIP] = code16 ? (uint16_t)(ip + bytes) : ip + bytes;
     return 1;
 }
+
 static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
 {
     ucontext_t *uctx = (ucontext_t *)ctx;
@@ -1267,12 +1283,15 @@ static size_t emitBridge16(uint8_t *output, size_t capacity, uint8_t *segment_ba
     ptr += 2;
     return (size_t)(ptr - output);
 }
+
 static __thread jmp_buf *ThreadReturn;
+
 typedef struct NativeThread16
 {
     uint8 *code;
     uint16 selector;
 } NativeThread16;
+
 static void *prepareThread16(uint32_t entry, uint32_t stack)
 {
     NativeThread16 *thread = calloc(1, sizeof *thread);
@@ -1354,6 +1373,7 @@ static void *prepareThread16(uint32_t entry, uint32_t stack)
     *p++ = 0xc3; /* popad; ret */
     return thread;
 }
+
 static void thread16(void *invocation)
 {
     NativeThread16 *thread = invocation;
@@ -1368,6 +1388,7 @@ static void thread16(void *invocation)
     NativeBridge = outer_bridge;
     NativeHostStack = outer_stack;
 }
+
 static void destroyThread16(void *invocation)
 {
     NativeThread16 *thread = invocation;
@@ -1381,6 +1402,7 @@ static void program(const LxExecutionEntry *entry, unsigned bits)
         runNeModule(entry);
     runLxModule(entry);
 }
+
 static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
     uintptr_t sp;
@@ -1403,6 +1425,7 @@ static uint32_t callback4(uint32_t entry, uint32_t a, uint32_t b, uint32_t c, ui
     NativeHostStack = previous;
     return value;
 }
+
 static void callback32(uint32_t entry, uint32_t argument)
 {
     uintptr_t sp;
@@ -1435,10 +1458,12 @@ static void callback32(uint32_t entry, uint32_t argument)
                          : "memory");
     NativeHostStack = previous;
 }
+
 typedef struct NativeThread32
 {
     LxGuestMapping *mapping;
 } NativeThread32;
+
 static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
 {
     NativeThread32 *thread = calloc(1, sizeof *thread);
@@ -1476,6 +1501,7 @@ static void *prepareThread32(uint32_t entry, uint32_t stack, uint32_t argument)
     *p++ = 0xc3; /* popad; ret to host */
     return thread;
 }
+
 static void thread32(void *invocation)
 {
     NativeThread32 *thread = invocation;
@@ -1490,32 +1516,38 @@ static void thread32(void *invocation)
     NativeBridge = outer_bridge;
     NativeHostStack = outer_stack;
 }
+
 static int endThread(void)
 {
     if (!ThreadReturn)
         return 0;
     longjmp(*ThreadReturn, 1);
 }
+
 static void destroyThread32(void *invocation)
 {
     NativeThread32 *thread = invocation;
     lx_execution_unmap(Native->execution, thread->mapping);
     free(thread);
 }
+
 static void nearBase(uint32_t address)
 {
     Native->near16_base = address;
 }
+
 static uint16_t flatCodeSelector(void)
 {
     return Native->original_cs;
 }
+
 static void *missingEntry(const char *module, const char *entry, unsigned bits,
                           LxExecutionBridge *binding)
 {
     return bits == 16 ? generateMissingTrampoline16(module, entry, binding)
                       : generateMissingTrampoline(module, entry);
 }
+
 static int initialize(LxExecution *execution)
 {
     if (Native)
@@ -1563,6 +1595,7 @@ static int initialize(LxExecution *execution)
     __asm__ __volatile__("movw %%ss, %0" : "=r"(Native->original_ss));
     return 1;
 }
+
 static void destroy(LxExecution *execution)
 {
     NativeState *state = execution->backend;
@@ -1574,6 +1607,7 @@ static void destroy(LxExecution *execution)
     free(state);
     Native = NULL;
 }
+
 static int atomicU32(LxExecution *e, uint32_t address, void *host, int exchange, uint32_t value,
                      uint32_t *previous)
 {
@@ -1600,6 +1634,7 @@ static int atomicU32(LxExecution *e, uint32_t address, void *host, int exchange,
     }
     return 1;
 }
+
 static int nativeEntry(LxExecution *e, void *host, uint32_t *address)
 {
     (void)e;
@@ -1608,6 +1643,7 @@ static int nativeEntry(LxExecution *e, void *host, uint32_t *address)
     *address = (uint32_t)(uintptr_t)host;
     return 1;
 }
+
 typedef struct NativeApiCall
 {
     uint32_t *registers;
@@ -1616,8 +1652,10 @@ typedef struct NativeApiCall
     LxExecutionRegisters32 resume_registers;
     int resume;
 } NativeApiCall;
+
 static _Thread_local NativeApiCall *NativeApi;
 static _Thread_local uint32_t NativeResumeWords[14];
+
 static __attribute__((noreturn)) void resumeApi32(const LxExecutionRegisters32 *r)
 {
     /* POPAD ignores its ESP slot; switch to the target stack before restoring
@@ -1638,6 +1676,7 @@ static __attribute__((noreturn)) void resumeApi32(const LxExecutionRegisters32 *
                          : "memory");
     __builtin_unreachable();
 }
+
 static uint32_t dispatchApi32(LxExecutionApi16 callback, uint8_t *arguments, uint32_t *registers)
 {
     NativeApiCall call = {0};
@@ -1651,10 +1690,12 @@ static uint32_t dispatchApi32(LxExecutionApi16 callback, uint8_t *arguments, uin
         resumeApi32(&call.resume_registers);
     return result;
 }
+
 static uint32_t apiArguments(void)
 {
     return NativeApi ? NativeApi->arguments : 0;
 }
+
 static int apiRegisters32(LxExecutionRegisters32 *out)
 {
     if (!NativeApi)
@@ -1676,6 +1717,7 @@ static int apiRegisters32(LxExecutionRegisters32 *out)
         : "=m"(out->cs), "=m"(out->ds), "=m"(out->es), "=m"(out->fs), "=m"(out->gs), "=m"(out->ss));
     return 1;
 }
+
 static int apiResume32(const LxExecutionRegisters32 *registers)
 {
     uint16_t cs, ss;
@@ -1688,12 +1730,15 @@ static int apiResume32(const LxExecutionRegisters32 *registers)
     NativeApi->resume = 1;
     return 1;
 }
+
 static uint16_t flatDataSelector(void)
 {
     return Native->original_ds;
 }
+
 /* Bytes kept clear of live host frames when the C caller runs on the guest stack. */
 #define CALL16_STACK_MARGIN 1024
+
 static uint32_t guestStack(void)
 {
     uintptr_t sp;
@@ -1703,7 +1748,9 @@ static uint32_t guestStack(void)
         return NativeBridge->guest_stack;
     return (uint32_t)(sp - CALL16_STACK_MARGIN);
 }
+
 static pthread_mutex_t Call16Mutex = PTHREAD_MUTEX_INITIALIZER;
+
 /* The one USE16 instruction every call returns through: a 32-bit far return
    popping the flat continuation stored directly above the target's arguments. */
 static uint16_t call16Return(void)
@@ -1724,6 +1771,7 @@ static uint16_t call16Return(void)
     pthread_mutex_unlock(&Call16Mutex);
     return selector;
 }
+
 static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *arguments, uint32_t bytes,
                   uint32_t *result)
 {
@@ -1773,6 +1821,7 @@ static int call16(uint32_t target, uint16_t ss, uint16_t top, const void *argume
     *result = (dx << 16) | (ax & 0xffff);
     return 1;
 }
+
 static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionApi32 *binding)
 {
     if (capacity < 64)
@@ -1824,11 +1873,13 @@ static size_t emitBridge32(uint8_t *output, size_t capacity, const LxExecutionAp
         *p++ = 0xc3;
     return (size_t)(p - output);
 }
+
 static void copyOut(LxExecution *e, const void *host, void *output, size_t size)
 {
     (void)e;
     memcpy(output, host, size);
 }
+
 static int copyIn(LxExecution *e, uint32_t address, void *host, const void *input, size_t size)
 {
     (void)e;
@@ -1836,6 +1887,7 @@ static int copyIn(LxExecution *e, uint32_t address, void *host, const void *inpu
     memcpy(host, input, size);
     return 1;
 }
+
 const LxExecutionOperations lx_execution_native_linux = {"native",
                                                          initialize,
                                                          destroy,

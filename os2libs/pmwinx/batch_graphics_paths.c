@@ -5,17 +5,20 @@
 #include "os2libs/pmwinx/batch_graphics_paths.h"
 #include "os2libs/pmwin/graphics.h"
 #include <math.h>
+
 typedef struct Open32PathPoint
 {
     LONG x, y;
     BOOL move;
 } Open32PathPoint;
+
 struct Open32Path
 {
     Open32PathPoint *points;
     size_t count, capacity;
     BOOL recording, ready, widened;
 };
+
 void open32PathCleanup(Open32DC *dc)
 {
     if (dc->path)
@@ -25,6 +28,7 @@ void open32PathCleanup(Open32DC *dc)
         dc->path = NULL;
     }
 }
+
 static BOOL path_point(struct Open32Path *p, LONG x, LONG y, BOOL move)
 {
     if (p->count == p->capacity)
@@ -47,6 +51,7 @@ static BOOL path_point(struct Open32Path *p, LONG x, LONG y, BOOL move)
     p->points[p->count++] = (Open32PathPoint){x, y, move};
     return TRUE;
 }
+
 int open32PathLine(Open32DC *dc, LONG x, LONG y, BOOL move)
 {
     if (!dc || !dc->path || !dc->path->recording)
@@ -58,6 +63,7 @@ int open32PathLine(Open32DC *dc, LONG x, LONG y, BOOL move)
             return -1;
     return path_point(p, x, y, move) ? 1 : -1;
 }
+
 int open32PathCapture(Open32DC *dc, PVOID input, LONG count, BOOL close)
 {
     if (!dc || !dc->path || !dc->path->recording)
@@ -80,6 +86,7 @@ int open32PathCapture(Open32DC *dc, PVOID input, LONG count, BOOL close)
     }
     return 1;
 }
+
 BOOL BeginPath(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -98,6 +105,7 @@ BOOL BeginPath(ULONG h)
     dc->path->recording = TRUE;
     return TRUE;
 }
+
 BOOL EndPath(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -110,6 +118,7 @@ BOOL EndPath(ULONG h)
     dc->path->ready = TRUE;
     return TRUE;
 }
+
 BOOL StrokePath(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
@@ -131,6 +140,7 @@ BOOL StrokePath(ULONG h)
     free(p);
     return ok;
 }
+
 BOOL open32PathClose(Open32DC *dc)
 {
     if (!dc || !dc->path || !dc->path->recording)
@@ -146,6 +156,7 @@ BOOL open32PathClose(Open32DC *dc)
         start--;
     return path_point(p, p->points[start].x, p->points[start].y, FALSE);
 }
+
 /* The path's subpaths as one region, in logical or device coordinates. A widened path is a set of
    overlapping pieces that must fill as a union. */
 static ULONG path_region(Open32DC *dc, BOOL device)
@@ -190,6 +201,7 @@ static ULONG path_region(Open32DC *dc, BOOL device)
     free(counts);
     return region;
 }
+
 /* Subpaths fill together under the DC's polygon fill mode, then the path is consumed. */
 BOOL open32PathFill(ULONG h, BOOL stroke)
 {
@@ -208,6 +220,7 @@ BOOL open32PathFill(ULONG h, BOOL stroke)
     open32PathCleanup(dc);
     return ok;
 }
+
 BOOL open32PathClip(ULONG h, LONG mode)
 {
     Open32DC *dc = open32FindDC(h);
@@ -223,6 +236,7 @@ BOOL open32PathClip(ULONG h, LONG mode)
     open32PathCleanup(dc);
     return ok;
 }
+
 /* Each segment becomes a pen-wide quadrilateral and each vertex an octagon, all with one winding. */
 BOOL open32PathWiden(Open32DC *dc)
 {
@@ -276,6 +290,7 @@ BOOL open32PathWiden(Open32DC *dc)
     dc->path = wide;
     return TRUE;
 }
+
 BOOL open32AngleArc(ULONG h, LONG x, LONG y, ULONG radius, float start, float sweep)
 {
     double first = start * 3.14159265358979323846 / 180,
@@ -290,6 +305,7 @@ BOOL open32AngleArc(ULONG h, LONG x, LONG y, ULONG radius, float start, float sw
     }
     return ok;
 }
+
 /* A seed fill over the whole drawable, painted with the current brush. Mode 0 stops at the given
    border color; mode 1 replaces the surface color. */
 BOOL open32FloodFill(ULONG h, LONG x, LONG y, ULONG color, ULONG mode)
@@ -353,6 +369,7 @@ BOOL open32FloodFill(ULONG h, LONG x, LONG y, ULONG color, ULONG mode)
     free(seen);
     return ok && start;
 }
+
 /* Mode 0 replaces the transform; MWT_IDENTITY 1 clears it; MWT_LEFTMULTIPLY 2 and
    MWT_RIGHTMULTIPLY 3 compose with the current one. */
 BOOL open32WorldTransform(ULONG h, const double m[6], ULONG mode)
@@ -387,6 +404,7 @@ BOOL open32WorldTransform(ULONG h, const double m[6], ULONG mode)
     dc->world_active = TRUE;
     return TRUE;
 }
+
 static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey,
                   unsigned kind)
 {
@@ -463,26 +481,32 @@ static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LON
     free(points);
     return ok;
 }
+
 BOOL Ellipse(ULONG h, LONG l, LONG t, LONG r, LONG b)
 {
     return curve(h, l, t, r, b, 0, 0, 0, 0, 0);
 }
+
 BOOL Arc(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey)
 {
     return curve(h, l, t, r, b, sx, sy, ex, ey, 1);
 }
+
 BOOL Pie(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey)
 {
     return curve(h, l, t, r, b, sx, sy, ex, ey, 2);
 }
+
 BOOL open32ArcTo(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey)
 {
     return curve(h, l, t, r, b, sx, sy, ex, ey, 4);
 }
+
 BOOL open32Chord(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LONG ex, LONG ey)
 {
     return curve(h, l, t, r, b, sx, sy, ex, ey, 3);
 }
+
 BOOL RoundRect(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
 {
     if (l > r)
@@ -522,6 +546,7 @@ BOOL RoundRect(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
     }
     return Polygon(h, points, (LONG)used);
 }
+
 BOOL PolyPolyline(ULONG h, PVOID points, PVOID counts, ULONG polygons)
 {
     if (!points || !counts || polygons > 65536)
@@ -544,6 +569,7 @@ BOOL PolyPolyline(ULONG h, PVOID points, PVOID counts, ULONG polygons)
     }
     return TRUE;
 }
+
 BOOL PolyPolygon(ULONG h, PVOID points, PVOID counts, LONG polygons)
 {
     Open32DC *dc = open32FindDC(h);
@@ -590,6 +616,7 @@ BOOL PolyPolygon(ULONG h, PVOID points, PVOID counts, LONG polygons)
     }
     return ok;
 }
+
 BOOL LineDDA(LONG x, LONG y, LONG end_x, LONG end_y, ULONG procedure, ULONG parameter)
 {
     if (!lx_execution_memory(GLoaderState.execution, procedure, 1, LX_GUEST_EXECUTE))
@@ -623,6 +650,7 @@ BOOL LineDDA(LONG x, LONG y, LONG end_x, LONG end_y, ULONG procedure, ULONG para
     }
     return TRUE;
 }
+
 BOOL DrawFocusRect(ULONG h, PVOID input)
 {
     if (!input || !open32FindDC(h))

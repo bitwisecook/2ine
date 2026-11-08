@@ -14,11 +14,13 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static void clear(const LxHostGlApi *gl, float r, float g, float b)
 {
     gl->glClearColor(r, g, b, 1);
     gl->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
+
 int main(void)
 {
     LxHostGlConfig config = {1, 8, 8, 8, 8, 24, 8};

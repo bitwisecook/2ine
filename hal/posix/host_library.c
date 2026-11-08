@@ -4,10 +4,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <dlfcn.h>
+
 struct LxHostLibrary
 {
     void *object;
 };
+
 LxHostLibrary *lx_host_library_open(const char *path, char *error, size_t size)
 {
     LxHostLibrary *library = calloc(1, sizeof *library);
@@ -26,10 +28,12 @@ LxHostLibrary *lx_host_library_open(const char *path, char *error, size_t size)
     free(library);
     return NULL;
 }
+
 void *lx_host_library_symbol(LxHostLibrary *library, const char *name)
 {
     return dlsym(library->object, name);
 }
+
 void lx_host_library_close(LxHostLibrary *library)
 {
     dlclose(library->object);

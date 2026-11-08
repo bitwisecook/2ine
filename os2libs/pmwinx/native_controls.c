@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/input.h"
 #include "os2libs/pmwinx/drawing.h"
+
 typedef struct NativeControl
 {
     Open32Window window;
@@ -12,15 +13,18 @@ typedef struct NativeControl
     BOOL subclassed;
     struct NativeControl *next;
 } NativeControl;
+
 typedef struct NativeDispatch
 {
     ULONG handle, message, first, second;
     ULONG native_message, native_first, native_second;
     struct NativeDispatch *previous;
 } NativeDispatch;
+
 static _Thread_local NativeControl *controls;
 static _Thread_local NativeDispatch *dispatch;
 static _Thread_local LxGuestMapping *bridges;
+
 ULONG open32ControlNotification(ULONG handle, ULONG packed)
 {
     char name[16];
@@ -45,6 +49,7 @@ ULONG open32ControlNotification(ULONG handle, ULONG packed)
         code = code == 2 ? 4 : code == 3 ? 5 : code == 5 ? 2 : code;
     return (packed & 0xffff) | code << 16;
 }
+
 static NativeControl *find_control(ULONG handle, BOOL create)
 {
     if (!WinIsWindow(0, handle))
@@ -67,17 +72,20 @@ static NativeControl *find_control(ULONG handle, BOOL create)
     controls = control;
     return control;
 }
+
 Open32Window *open32PropertyWindow(ULONG handle)
 {
     Open32Window *window = open32FindWindow(handle);
     NativeControl *control = window ? NULL : find_control(handle, TRUE);
     return window ? window : control ? &control->window : NULL;
 }
+
 static ULONG original_message(NativeControl *control, ULONG message, ULONG first, ULONG second)
 {
     return lx_execution_callback32_4(GLoaderState.execution, control->original,
                                      control->window.handle, message, first, second);
 }
+
 static LONG pm_message(ULONG handle, ULONG message, ULONG first, ULONG second, BOOL original)
 {
     NativeControl *control = find_control(handle, FALSE);
@@ -86,6 +94,7 @@ static LONG pm_message(ULONG handle, ULONG message, ULONG first, ULONG second, B
     return (LONG)(intptr_t)WinSendMsg(handle, message, (MPARAM)(uintptr_t)first,
                                       (MPARAM)(uintptr_t)second);
 }
+
 static char *ansi_text(ULONG address)
 {
     char *text = lx_execution_copy_string(GLoaderState.execution, address, 65536);
@@ -94,6 +103,7 @@ static char *ansi_text(ULONG address)
             *p = (char)WinCpTranslateChar(0, 1004, (UCHAR)*p, 437);
     return text;
 }
+
 /* An application subclass sees message parameters as 32-bit guest values, so text
    exchanged with a control must live at a guest address for the whole call. */
 static LxGuestMapping *guest_text(size_t size, ULONG *address, char **host)
@@ -107,6 +117,7 @@ static LxGuestMapping *guest_text(size_t size, ULONG *address, char **host)
     }
     return mapping;
 }
+
 static LONG send_text(ULONG handle, ULONG message, ULONG first, const char *text)
 {
     ULONG address;
@@ -124,6 +135,7 @@ static LONG send_text(ULONG handle, ULONG message, ULONG first, const char *text
     lx_execution_unmap(GLoaderState.execution, mapping);
     return result;
 }
+
 /* Adds the files matching a pattern. Read-write files are listed unless DDL_EXCLUSIVE
    asks for only the requested attributes; directories appear as [name]. */
 static LONG list_directory(ULONG handle, ULONG attributes, ULONG pattern)
@@ -138,6 +150,7 @@ static LONG list_directory(ULONG handle, ULONG attributes, ULONG pattern)
         exclusive = 0x8000,
         name_offset = 44
     };
+
     char *name = lx_execution_copy_string(GLoaderState.execution, pattern, 260);
     if (!name)
     {
@@ -170,6 +183,7 @@ static LONG list_directory(ULONG handle, ULONG attributes, ULONG pattern)
     FindClose(search);
     return last;
 }
+
 /* A control's font is a PM "points.face" parameter, inherited from its dialog. */
 static ULONG control_font(ULONG handle)
 {
@@ -188,6 +202,7 @@ static ULONG control_font(ULONG handle)
         control->font = font;
     return font;
 }
+
 static void set_control_font(ULONG handle, ULONG font, BOOL redraw)
 {
     NativeControl *control = find_control(handle, TRUE);
@@ -199,13 +214,14 @@ static void set_control_font(ULONG handle, ULONG font, BOOL redraw)
     LONG height = (LONG)lx_guest_load_u32(record);
     LONG points = (height < 0 ? -height : height) * 72 / 96;
     char name[64];
-    int length = snprintf(name, sizeof name, "%d.%s", (int)(points ? points : 8),
-                          (const char *)record + 28);
+    int length =
+        snprintf(name, sizeof name, "%d.%s", (int)(points ? points : 8), (const char *)record + 28);
     if (length > 0 && (size_t)length < sizeof name)
         WinSetPresParam(handle, 15, (ULONG)length + 1, name);
     if (redraw)
         WinInvalidateRect(handle, NULL, TRUE);
 }
+
 /* Copies one item into the caller's buffer, which Windows sizes from the text length. */
 static LONG list_text(ULONG handle, ULONG index, ULONG address, BOOL original)
 {
@@ -233,6 +249,7 @@ static LONG list_text(ULONG handle, ULONG index, ULONG address, BOOL original)
     lx_execution_unmap(GLoaderState.execution, mapping);
     return length;
 }
+
 LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG second,
                                 BOOL original)
 {
@@ -464,12 +481,14 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
     LONG result = pm_message(handle, native, a, b, original);
     return kind == 3 && message != 0xf0 && message >= 0xf0 && message <= 0xf5 ? 0 : result;
 }
+
 static uint32 windows_default(uint8 *arguments)
 {
     return (uint32)open32NativeControlMessage(
         lx_guest_load_u32(arguments), lx_guest_load_u32(arguments + 4),
         lx_guest_load_u32(arguments + 8), lx_guest_load_u32(arguments + 12), TRUE);
 }
+
 static uint32 native_dispatch(uint8 *arguments)
 {
     NativeDispatch packet = {.handle = lx_guest_load_u32(arguments),
@@ -518,6 +537,7 @@ static uint32 native_dispatch(uint8 *arguments)
     dispatch = packet.previous;
     return result;
 }
+
 static BOOL prepare_bridges(void)
 {
     if (bridges)
@@ -539,6 +559,7 @@ static BOOL prepare_bridges(void)
     bridges = mapping;
     return TRUE;
 }
+
 enum
 {
     win_style_visible = 0x10000000,
@@ -550,39 +571,39 @@ enum
     win_style_tabstop = 0x00010000,
     win_style_child = 0x40000000
 };
+
 static ULONG button_style(ULONG style, unsigned *kind)
 {
     switch (style & 15)
     {
-    case 1:
-        return 0x400; /* BS_DEFPUSHBUTTON to BS_DEFAULT */
-    case 2:
-        return 1; /* BS_CHECKBOX */
-    case 3:
-        return 2; /* BS_AUTOCHECKBOX */
-    case 4:
-        return 3; /* BS_RADIOBUTTON */
-    case 5:
-        return 5; /* BS_3STATE */
-    case 6:
-        return 6; /* BS_AUTO3STATE */
-    case 7:
-        *kind = 5;
-        return 2; /* BS_GROUPBOX to SS_GROUPBOX */
-    case 8:
-    case 11:
-        return 7; /* user and owner-drawn buttons to BS_USERBUTTON */
-    case 9:
-        return 4; /* BS_AUTORADIOBUTTON */
-    default:
-        return 0;
+        case 1:
+            return 0x400; /* BS_DEFPUSHBUTTON to BS_DEFAULT */
+        case 2:
+            return 1; /* BS_CHECKBOX */
+        case 3:
+            return 2; /* BS_AUTOCHECKBOX */
+        case 4:
+            return 3; /* BS_RADIOBUTTON */
+        case 5:
+            return 5; /* BS_3STATE */
+        case 6:
+            return 6; /* BS_AUTO3STATE */
+        case 7:
+            *kind = 5;
+            return 2; /* BS_GROUPBOX to SS_GROUPBOX */
+        case 8:
+        case 11:
+            return 7; /* user and owner-drawn buttons to BS_USERBUTTON */
+        case 9:
+            return 4; /* BS_AUTORADIOBUTTON */
+        default:
+            return 0;
     }
 }
+
 static ULONG static_style(ULONG style)
 {
-    static const ULONG types[] = {1,     0x101, 0x201, 3,  5,     6,
-                                  7,     8,     9,     10, 1,     1,
-                                  1};
+    static const ULONG types[] = {1, 0x101, 0x201, 3, 5, 6, 7, 8, 9, 10, 1, 1, 1};
     ULONG type = style & 15;
     ULONG value = type < sizeof types / sizeof *types ? types[type] : 1;
     if ((value & 0xff) == 1 && type != 11 && type != 12)
@@ -591,6 +612,7 @@ static ULONG static_style(ULONG style)
         value |= 0x2000; /* DT_MNEMONIC unless SS_NOPREFIX */
     return value;
 }
+
 static ULONG control_style(ULONG style, unsigned *kind)
 {
     ULONG value = (style & win_style_visible ? WS_VISIBLE : 0) |
@@ -606,19 +628,20 @@ static ULONG control_style(ULONG style, unsigned *kind)
                (style & win_style_vscroll ? 4 : 0) | (style & win_style_hscroll ? 8 : 0) |
                (style & 0x800 ? 0x10 : 0);
     if (*kind == 6)
-        return value | (style & 3) | (style & 0x80 ? 4 : 0) |
-               (style & win_style_border ? 8 : 0) | (style & 0x800 ? 0x20 : 0) |
-               (style & 0x20 ? 0x80 : 0);
+        return value | (style & 3) | (style & 0x80 ? 4 : 0) | (style & win_style_border ? 8 : 0) |
+               (style & 0x800 ? 0x20 : 0) | (style & 0x20 ? 0x80 : 0);
     if (*kind == 7)
         return value | (style & 8 ? 1 : 0) | (style & 0x30 ? 2 : 0) | (style & 0x100 ? 4 : 0) |
                (style & win_style_hscroll ? 8 : 0) | (style & 0x800 ? 0x10 : 0);
     ULONG type = style & 3;
     return value | (type == 3 ? 4 : type);
 }
+
 ULONG open32ControlStyle(ULONG style, unsigned *kind)
 {
     return control_style(style, kind);
 }
+
 static unsigned control_kind(const char *name, ULONG style)
 {
     if ((uintptr_t)name <= UINT16_MAX)
@@ -635,6 +658,7 @@ static unsigned control_kind(const char *name, ULONG style)
         return 7;
     return !strcasecmp(name, "COMBOBOX") ? 2 : 0;
 }
+
 /* A superclass keeps its own name; otherwise the PM class gives the standard name. */
 void open32SetNativeClassName(ULONG handle, const char *name)
 {
@@ -642,6 +666,7 @@ void open32SetNativeClassName(ULONG handle, const char *name)
     if (control)
         snprintf(control->class_name, sizeof control->class_name, "%s", name);
 }
+
 const char *open32NativeClassName(ULONG handle)
 {
     NativeControl *control = find_control(handle, TRUE);
@@ -670,6 +695,7 @@ const char *open32NativeClassName(ULONG handle)
             return NULL;
     }
 }
+
 BOOL open32NativeControlOwned(ULONG handle)
 {
     for (NativeControl *control = controls; control; control = control->next)
@@ -677,6 +703,7 @@ BOOL open32NativeControlOwned(ULONG handle)
             return TRUE;
     return FALSE;
 }
+
 /* Creates a predefined Windows control class as its PM control. Returns FALSE
    when the class is not predefined, leaving the caller to report the failure. */
 BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style, LONG x, LONG y,
@@ -707,9 +734,9 @@ BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style,
     ULONG pm_style = control_style(style, &kind);
     char pm_class[8];
     snprintf(pm_class, sizeof pm_class, "#%u", kind);
-    HWND created = WinCreateWindow(owner, pm_class, text, pm_style, x,
-                                   area.yTop - area.yBottom - y - height, width, height, owner,
-                                   HWND_TOP, id, NULL, NULL);
+    HWND created =
+        WinCreateWindow(owner, pm_class, text, pm_style, x, area.yTop - area.yBottom - y - height,
+                        width, height, owner, HWND_TOP, id, NULL, NULL);
     free(text);
     if (!created)
     {
@@ -725,6 +752,7 @@ BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style,
     *handle = created;
     return TRUE;
 }
+
 LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set)
 {
     NativeControl *control = find_control(handle, TRUE);
@@ -781,6 +809,7 @@ LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set)
         *field = (ULONG)value;
     return (LONG)previous;
 }
+
 void open32NativeControlsPrune(void)
 {
     for (NativeControl **link = &controls; *link;)

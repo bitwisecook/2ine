@@ -2,12 +2,14 @@
 /* Open32 library handles share the loader's checked OS/2 module registry. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+
 static HMODULE module_handle(HMODULE module)
 {
     return (!module || module == UINT32_MAX) && GLoaderState.main_module
                ? GLoaderState.main_module->handle
                : module;
 }
+
 HMODULE GetModuleHandle(PSZ name)
 {
     if (!name)
@@ -60,6 +62,7 @@ ULONG GetModuleFileName(HMODULE module, PSZ output, ULONG capacity)
     }
     return (ULONG)length;
 }
+
 HMODULE LoadLibrary(PSZ name)
 {
     TRACE_NATIVE("LoadLibrary('%s')", name);
@@ -68,6 +71,7 @@ HMODULE LoadLibrary(PSZ name)
         open32SetError(name ? 126 : 87);
     return module ? module->handle : 0;
 }
+
 BOOL FreeLibrary(HMODULE module)
 {
     LxHandleBorrow borrow = {0};

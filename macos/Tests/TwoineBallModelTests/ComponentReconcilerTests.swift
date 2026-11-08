@@ -18,6 +18,7 @@ private func reconciliationPlan(_ sources: [String] = ["a", "b", "c", "d"]) thro
         "files": files, "unmapped": [], "tree": ["id": "all", "title": "Components", "kind": "group", "category": "full", "children": leaves]
     ]))
 }
+
 private func reconciliationState(_ present: Set<String>, statuses: [String: String] = [:], history: String? = nil) throws -> OS2ComponentState {
     let files = ["a", "b", "c", "d"].map { source -> [String: Any] in
         let status = statuses[source] ?? (present.contains(source) ? "managed" : "missing")

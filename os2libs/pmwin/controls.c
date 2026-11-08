@@ -22,6 +22,7 @@ enum
     LM_QUERYTOPINDEX = 0x16d,
     LM_DELETEALL = 0x16e,
 };
+
 void destroyControl(Window *window)
 {
     PmControl *control = window->control;
@@ -41,10 +42,12 @@ void destroyControl(Window *window)
     free(control);
     window->control = NULL;
 }
+
 void controlRepaint(Window *window)
 {
     WinInvalidateRect(window->hwnd, NULL, FALSE);
 }
+
 void controlNotify(Window *window, USHORT code)
 {
     if (window->owner)
@@ -52,6 +55,7 @@ void controlNotify(Window *window, USHORT code)
                    (MPARAM)(uintptr_t)((USHORT)window->id | (ULONG)code << 16),
                    (MPARAM)(uintptr_t)window->hwnd);
 }
+
 BOOL controlRead(MPARAM address, void *output, size_t size)
 {
     if (!address)
@@ -61,6 +65,7 @@ BOOL controlRead(MPARAM address, void *output, size_t size)
     memcpy(output, address, size);
     return TRUE;
 }
+
 BOOL controlWrite(MPARAM address, const void *input, size_t size)
 {
     if (!address)
@@ -70,6 +75,7 @@ BOOL controlWrite(MPARAM address, const void *input, size_t size)
     memcpy(address, input, size);
     return TRUE;
 }
+
 void controlTextChanged(Window *window)
 {
     PmControl *c = window->control;
@@ -88,6 +94,7 @@ void controlTextChanged(Window *window)
     else if (c->kind == 32)
         controlNotify(window, 0x20d); /* SPBN_CHANGE */
 }
+
 char *controlCopyText(MPARAM value)
 {
     if (!value)
@@ -96,6 +103,7 @@ char *controlCopyText(MPARAM value)
         return lx_execution_copy_string(GLoaderState.execution, (uint32)(uintptr_t)value, 65536);
     return strdup(value);
 }
+
 BOOL controlTextOutput(MPARAM value, const char *text, size_t capacity)
 {
     size_t count = strlen(text);
@@ -111,10 +119,12 @@ BOOL controlTextOutput(MPARAM value, const char *text, size_t capacity)
     ((char *)value)[count] = 0;
     return TRUE;
 }
+
 MRESULT controlReply(LONG value)
 {
     return (MRESULT)(uintptr_t)(uint32)value;
 }
+
 static MRESULT list_message(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;
@@ -298,6 +308,7 @@ static MRESULT list_message(Window *window, ULONG message, MPARAM first, MPARAM 
     controlRepaint(window);
     return controlReply(TRUE);
 }
+
 static void draw_text(Window *window, HPS space, const char *text, int baseline, BOOL center,
                       BOOL mnemonics, BOOL selected, int inset)
 {
@@ -372,23 +383,27 @@ static void draw_text(Window *window, HPS space, const char *text, int baseline,
     }
     free(visible.rects);
 }
+
 /* Group boxes and frames leave the controls inside them visible. */
 static BOOL static_is_frame(const Window *window)
 {
     ULONG type = window->style & 0x3f;
     return type == 2 || (type >= 8 && type <= 10);
 }
+
 /* SS_FGNDRECT through SS_BKGNDFRAME: foreground, halftone or background, as a filled
    rectangle or a one-pixel outline. Halftone is the midpoint of the other two. */
 static void paint_static_shape(Window *window, HPS space)
 {
     ULONG type = window->style & 0x3f;
     ULONG foreground = (ULONG)windowPresentationColor(window, TRUE, 0);
-    ULONG background = (ULONG)windowPresentationColor(window, FALSE,
-                                                      WinQuerySysColor(HWND_DESKTOP, -34, 0));
+    ULONG background =
+        (ULONG)windowPresentationColor(window, FALSE, WinQuerySysColor(HWND_DESKTOP, -34, 0));
     ULONG tone = type == 5 || type == 8 ? 0 : type == 6 || type == 9 ? 1 : 2;
-    LONG color = (LONG)(tone == 0 ? foreground : tone == 2 ? background
-                        : ((foreground >> 1) & 0x7f7f7f) + ((background >> 1) & 0x7f7f7f));
+    LONG color =
+        (LONG)(tone == 0   ? foreground
+               : tone == 2 ? background
+                           : ((foreground >> 1) & 0x7f7f7f) + ((background >> 1) & 0x7f7f7f));
     if (!lx_pm_color_table(space, 0, 2, 254, 1, &color))
         return;
     if (type <= 7)
@@ -404,6 +419,7 @@ static void paint_static_shape(Window *window, HPS space)
     for (size_t i = 0; i < sizeof edges / sizeof *edges; i++)
         WinFillRect(space, &edges[i], 254);
 }
+
 /* SS_GROUPBOX: an etched frame whose top edge runs through the middle of the caption line,
    broken where the caption is drawn. */
 static void paint_group_box(Window *window, HPS space, const LxHostFontMetrics *metrics)
@@ -427,6 +443,7 @@ static void paint_group_box(Window *window, HPS space, const LxHostFontMetrics *
         gap_left = 1;
         gap_right = 3 + width + 2 < w ? 3 + width + 2 : w;
     }
+
     const struct
     {
         RECTL rect;
@@ -443,10 +460,12 @@ static void paint_group_box(Window *window, HPS space, const LxHostFontMetrics *
         {{1, top - 2, gap_left, top - 1}, CLR_WHITE},
         {{gap_right, top - 2, w - 2, top - 1}, CLR_WHITE},
     };
+
     for (size_t i = 0; i < sizeof edges / sizeof *edges; i++)
         if (edges[i].rect.xLeft < edges[i].rect.xRight)
             WinFillRect(space, (PRECTL)&edges[i].rect, edges[i].color);
 }
+
 static void paint(Window *window)
 {
     RECTL rect;
@@ -672,6 +691,7 @@ static void paint(Window *window)
                   c->kind == 3 && (window->style & 15) ? 20 : 3);
     WinEndPaint(space);
 }
+
 MRESULT controlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

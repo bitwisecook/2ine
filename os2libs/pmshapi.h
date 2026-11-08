@@ -19,6 +19,7 @@ extern "C"
 #define HINI_PROFILE ((HINI)0)
 #define HINI_USERPROFILE ((HINI)0xffffffffu)
 #define HINI_SYSTEMPROFILE ((HINI)0xfffffffeu)
+
     typedef struct
     {
         ULONG cchUserName;
@@ -33,8 +34,10 @@ extern "C"
         CHAR szSwtitle[64];
         ULONG bProgType;
     } SWCNTRL, *PSWCNTRL;
+
     OS2EXPORT ULONG OS2API WinCreateSwitchEntry(HAB hab, PSWCNTRL entry) OS2APIINFO(121);
-    OS2EXPORT ULONG OS2API WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity) OS2APIINFO(128);
+    OS2EXPORT ULONG OS2API WinQueryTaskTitle(ULONG session, PSZ title, ULONG capacity)
+        OS2APIINFO(128);
     OS2EXPORT ULONG OS2API WinAddSwitchEntry(PSWCNTRL entry) OS2APIINFO(120);
     OS2EXPORT ULONG OS2API WinRemoveSwitchEntry(ULONG handle) OS2APIINFO(129);
     OS2EXPORT ULONG OS2API WinChangeSwitchEntry(ULONG handle, PSWCNTRL entry) OS2APIINFO(123);
@@ -52,6 +55,7 @@ extern "C"
         PSZ pszTitle, pszExecutable, pszParameters, pszStartupDir, pszIcon, pszEnvironment;
         SWP swpInitial;
     } PROGDETAILS, *PPROGDETAILS;
+
     OS2EXPORT ULONG OS2API WinStartApp(HWND notify, PPROGDETAILS details, PSZ parameters,
                                        PVOID reserved, ULONG options) OS2APIINFO(119);
     /* WinStartApp for callers that need the PM error without a PM anchor block.

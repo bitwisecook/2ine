@@ -23,6 +23,7 @@ FILE *tb_fat_fopen(const char *path);
 int tb_fat_modify(const char *path, const char *expected, int action, uint64_t offset,
                   const void *data, size_t size, const char *target);
 int tb_fat_format(const char *path, const char *filesystem, uint64_t bytes);
+
 enum
 {
     TB_FS_CREATE,

@@ -4,12 +4,14 @@
 #define TWOINE_PM_MENUS_H
 #include "os2libs/pmwin/internal.h"
 void dismissMenusForClick(AnchorBlock *anchor, Window *target);
+
 typedef struct PmMenuItem
 {
     MENUITEM item;
     char *text;
     RECTL rect;
 } PmMenuItem;
+
 typedef struct PmMenu
 {
     PmMenuItem *items;
@@ -19,6 +21,7 @@ typedef struct PmMenu
     HWND active_parent;
     unsigned codepage;
 } PmMenu;
+
 LX_PRIVATE BOOL createSystemMenu(Window *frame, ULONG flags);
 LX_PRIVATE BOOL createMinMaxMenu(Window *frame, ULONG flags);
 Window *lx_pm_menu_window(HWND handle);

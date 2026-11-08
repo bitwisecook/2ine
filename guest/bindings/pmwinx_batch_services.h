@@ -1,5 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/pmwinx/batch_services.h"
+
 static BOOL o32_service_span(ULONG address, uint64_t size, unsigned access, BOOL optional,
                              LxGuestBorrow *borrow)
 {
@@ -9,6 +10,7 @@ static BOOL o32_service_span(ULONG address, uint64_t size, unsigned access, BOOL
            (uint64_t)address + size <= (UINT64_C(1) << 32) &&
            lx_execution_borrow(GLoaderState.execution, address, (size_t)size, access, borrow);
 }
+
 static BOOL o32_service_string(ULONG address, BOOL identity, PSZ *output)
 {
     if (!address || (identity && address <= 0xFFFF))
@@ -19,6 +21,7 @@ static BOOL o32_service_string(ULONG address, BOOL identity, PSZ *output)
     *output = lx_execution_copy_string(GLoaderState.execution, address, 1024u * 1024u);
     return *output != NULL;
 }
+
 static void o32_service_free_string(PSZ value)
 {
     if ((uintptr_t)value > 0xFFFF)

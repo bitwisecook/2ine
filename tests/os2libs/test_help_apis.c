@@ -17,6 +17,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 int main(void)
 {
     HAB hab = WinInitialize(0);

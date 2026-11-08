@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <limits.h>
 #include <sys/resource.h>
+
 char *lx_host_command_line(size_t *size)
 {
     if (!size)

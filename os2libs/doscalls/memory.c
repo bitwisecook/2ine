@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
+
 ULONG _DosFlatToSel(PVOID ptr)
 {
     TRACE_NATIVE("DosFlatToSel(%p)", ptr);
@@ -225,6 +226,7 @@ static APIRET mapSharedMemory(PPVOID output, const char *name, ULONG size, ULONG
     *output = block->addr;
     return NO_ERROR;
 }
+
 APIRET mapNamedSharedMemory(PPVOID output, const char *name, ULONG size, ULONG flags)
 {
     return mapSharedMemory(output, name, size, flags, FALSE);
@@ -409,6 +411,7 @@ done:
     lx_host_shared_close(object);
     return result;
 }
+
 APIRET DosGetSharedMem(PVOID pointer, ULONG flags)
 {
     ULONG address;
@@ -460,6 +463,7 @@ APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
 static ULONG segment_sizes[LX_MAX_LDT_SLOTS];
 static ULONG segment_capacities[LX_MAX_LDT_SLOTS];
 static unsigned char owned_segments[LX_MAX_LDT_SLOTS];
+
 APIRET16 Dos16SizeSeg(USHORT selector, PULONG size)
 {
     if (!size || !(selector & 4))
@@ -489,6 +493,7 @@ APIRET16 Dos16SizeSeg(USHORT selector, PULONG size)
     *size = length;
     return NO_ERROR;
 }
+
 APIRET16 Dos16GetShrSeg(PSZ name, PUSHORT selector)
 {
     if (!name || !selector)
@@ -512,6 +517,7 @@ APIRET16 Dos16GetShrSeg(PSZ name, PUSHORT selector)
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
+
 APIRET16 Dos16AllocSeg(USHORT size, PUSHORT psel, USHORT flags)
 {
     TRACE_NATIVE("Dos16AllocSeg(%u, %p, %u)", (uint)size, psel, (uint)flags);
@@ -675,7 +681,9 @@ typedef struct SubHeap16
     unsigned char used[65536 / 4];
     struct SubHeap16 *next;
 } SubHeap16;
+
 static SubHeap16 *subheaps16;
+
 static SubHeap16 *subheap16(USHORT selector)
 {
     for (SubHeap16 *heap = subheaps16; heap; heap = heap->next)
@@ -683,6 +691,7 @@ static SubHeap16 *subheap16(USHORT selector)
             return heap;
     return NULL;
 }
+
 APIRET16 Dos16SubSet(USHORT selector, USHORT flags, USHORT size)
 {
     TRACE_NATIVE("Dos16SubSet(%u, %u, %u)", selector, flags, size);
@@ -727,6 +736,7 @@ APIRET16 Dos16SubSet(USHORT selector, USHORT flags, USHORT size)
     ungrabLock(&GMutexDosCalls);
     return result;
 }
+
 APIRET16 Dos16SubAlloc(USHORT selector, PUSHORT offset, USHORT size)
 {
     TRACE_NATIVE("Dos16SubAlloc(%u, %p, %u)", selector, offset, size);
@@ -757,6 +767,7 @@ APIRET16 Dos16SubAlloc(USHORT selector, PUSHORT offset, USHORT size)
     ungrabLock(&GMutexDosCalls);
     return result;
 }
+
 APIRET16 Dos16SubFree(USHORT selector, USHORT offset, USHORT size)
 {
     TRACE_NATIVE("Dos16SubFree(%u, %u, %u)", selector, offset, size);

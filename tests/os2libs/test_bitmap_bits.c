@@ -16,12 +16,14 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static uint32 pixel(HPS ps, LONG x, LONG y)
 {
     uint32 result;
     CHECK(lx_pm_raster_read(ps, x, y, 1, 1, &result));
     return result;
 }
+
 int main(void)
 {
     HAB hab = WinInitialize(0);

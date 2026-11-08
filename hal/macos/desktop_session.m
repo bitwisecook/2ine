@@ -21,11 +21,13 @@ static NSWindow *native_window(SDL_Window *window)
     return (__bridge NSWindow *)SDL_GetPointerProperty(SDL_GetWindowProperties(window),
                                                        SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, NULL);
 }
+
 static int id_order(const void *left, const void *right)
 {
     uint32_t a = *(const uint32_t *)left, b = *(const uint32_t *)right;
     return a < b ? -1 : a != b;
 }
+
 static int refresh_cycle(void)
 {
     if (!cycle)
@@ -77,6 +79,7 @@ static int refresh_cycle(void)
     last_focus = focused;
     return 1;
 }
+
 static void receive_cycle(void)
 {
     if (!refresh_cycle() || observed_blocked)
@@ -97,6 +100,7 @@ static void receive_cycle(void)
         [NSApp activate];
     [native makeKeyAndOrderFront:nil];
 }
+
 static NSEvent *cycle_key(NSEvent *event)
 {
     NSString *characters = event.charactersIgnoringModifiers;
@@ -143,6 +147,7 @@ static NSEvent *cycle_key(NSEvent *event)
         receive_cycle();
     return nil;
 }
+
 static int apply_policy(void *context, int regular)
 {
     (void)context;
@@ -150,6 +155,7 @@ static int apply_policy(void *context, int regular)
         regular ? NSApplicationActivationPolicyRegular : NSApplicationActivationPolicyAccessory;
     return NSApp.activationPolicy == policy || [NSApp setActivationPolicy:policy];
 }
+
 /* A standalone session carries its native identity in its own launch bundle,
    so a lost lease or window cycle only costs task switching, never windows. */
 static int degrade(void)
@@ -160,6 +166,7 @@ static int degrade(void)
     initialized = 1;
     return 1;
 }
+
 static NSImage *read_icon(const char *path)
 {
     if (!path)
@@ -224,6 +231,7 @@ static NSImage *read_icon(const char *path)
         CGImageRelease(thumbnail);
     return image;
 }
+
 void lx_desktop_prepare(void)
 {
     const char *session = getenv("TWOINE_DESKTOP_SESSION");
@@ -237,6 +245,7 @@ void lx_desktop_prepare(void)
     if (name && *name)
         SDL_SetAppMetadata(name, "1", "io.github.bitwisecook.2ine.guest");
 }
+
 int lx_desktop_initialized(void)
 {
     if (!enabled || initialized)
@@ -306,6 +315,7 @@ int lx_desktop_initialized(void)
     initialized = 1;
     return 1;
 }
+
 int lx_desktop_grouped(void) { return initialized; }
 void lx_desktop_poll(void)
 {
@@ -315,6 +325,7 @@ void lx_desktop_poll(void)
         receive_cycle();
     }
 }
+
 void lx_desktop_visible(void *window, int visible)
 {
     if (initialized && window && SDL_IsMainThread())
@@ -323,4 +334,5 @@ void lx_desktop_visible(void *window, int visible)
         refresh_cycle();
     }
 }
+
 void lx_desktop_forget(void *window) { lx_desktop_visible(window, 0); }

@@ -11,6 +11,7 @@
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/printer_catalogue.h"
 static _Thread_local Open32DC *contexts;
+
 Open32DC *open32FindDC(ULONG handle)
 {
     for (Open32DC *dc = contexts; dc; dc = dc->next)
@@ -34,6 +35,7 @@ Open32DC *open32FindDC(ULONG handle)
         }
     return NULL;
 }
+
 LONG open32DCHeight(ULONG handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -42,6 +44,7 @@ LONG open32DCHeight(ULONG handle)
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     return bitmap ? (LONG)bitmap->height : ps->window ? ps->window->h : 0;
 }
+
 LONG open32DCWidth(ULONG handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -50,6 +53,7 @@ LONG open32DCWidth(ULONG handle)
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     return bitmap ? (LONG)bitmap->width : ps->window ? ps->window->w : 0;
 }
+
 static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
 {
     Open32DC *dc = calloc(1, sizeof *dc);
@@ -104,6 +108,7 @@ static Open32DC *register_context(HPS ps, HWND window, ULONG kind)
     }
     return dc;
 }
+
 static BOOL discard_context(Open32DC *dc)
 {
     open32MetafileDCCleanup(dc->ps);
@@ -148,6 +153,7 @@ static BOOL discard_context(Open32DC *dc)
     free(dc);
     return TRUE;
 }
+
 ULONG GetDC(ULONG window)
 {
     if (!open32Presentation())
@@ -175,6 +181,7 @@ ULONG GetDC(ULONG window)
     dc->foreign_window = foreign;
     return ps;
 }
+
 LONG ReleaseDC(ULONG window, ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -185,6 +192,7 @@ LONG ReleaseDC(ULONG window, ULONG handle)
     }
     return discard_context(dc);
 }
+
 ULONG CreateCompatibleDC(ULONG source)
 {
     if (source && !open32FindDC(source))
@@ -216,6 +224,7 @@ ULONG CreateCompatibleDC(ULONG source)
     }
     return ps;
 }
+
 BOOL DeleteDC(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -226,6 +235,7 @@ BOOL DeleteDC(ULONG handle)
     }
     return discard_context(dc);
 }
+
 ULONG SelectObject(ULONG handle, ULONG object)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -261,6 +271,7 @@ ULONG SelectObject(ULONG handle, ULONG object)
     }
     return previous;
 }
+
 BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG source, LONG source_x,
             LONG source_y, ULONG operation)
 {
@@ -296,6 +307,7 @@ BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG so
                         {source_x + width, (LONG)(src_bottom + height)}};
     return open32BitmapBlt(destination, source, points, (LONG)((operation >> 16) & 255));
 }
+
 ULONG BeginPaint(ULONG window, PVOID output)
 {
     if (!output)
@@ -334,6 +346,7 @@ ULONG BeginPaint(ULONG window, PVOID output)
     memcpy(output, bytes, sizeof bytes);
     return ps;
 }
+
 BOOL EndPaint(ULONG window, PVOID input)
 {
     Open32DC *dc = input ? open32FindDC(lx_guest_load_u32(input)) : NULL;
@@ -362,10 +375,12 @@ LONG SetBkMode(ULONG handle, LONG mode)
     open32MetafileWords(handle, 0x102, 1, &mode);
     return previous;
 }
+
 static LONG rgb_color(ULONG color)
 {
     return (LONG)((color & 255) << 16 | (color & 0xFF00) | (color >> 16 & 255));
 }
+
 ULONG SetTextColor(ULONG handle, ULONG color)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -381,6 +396,7 @@ ULONG SetTextColor(ULONG handle, ULONG color)
     open32MetafileColor(handle, 0x209, color);
     return previous;
 }
+
 ULONG SetBkColor(ULONG handle, ULONG color)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -405,11 +421,13 @@ void open32MetafilePaletteChange(ULONG palette, USHORT function, ULONG first, UL
         if (dc->palette_handle == palette)
             open32MetafilePaletteRecord(dc->ps, function, first, count, entries);
 }
+
 void open32DrawingCleanup(void)
 {
     while (contexts)
         discard_context(contexts);
 }
+
 ULONG CreateCompatibleBitmap(ULONG handle, LONG width, LONG height)
 {
     if (!open32FindDC(handle) || width < 0 || height < 0)
@@ -426,6 +444,7 @@ ULONG CreateCompatibleBitmap(ULONG handle, LONG width, LONG height)
         open32SetError(8);
     return result;
 }
+
 ULONG GetPixel(ULONG handle, LONG x, LONG y)
 {
     uint32 pixel;
@@ -483,11 +502,13 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
     }
     return ps;
 }
+
 BOOL open32CanDraw(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
     return dc && dc->kind != 4 && dc->kind != 6 && !dc->foreign_window;
 }
+
 ULONG open32CreatePrinterContext(unsigned kind, BOOL information)
 {
     if (!open32Presentation())
@@ -506,6 +527,7 @@ ULONG open32CreatePrinterContext(unsigned kind, BOOL information)
     }
     return ps;
 }
+
 ULONG CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
 {
     TRACE_NATIVE("CreateDC('%s', '%s', '%s', %p)", driver, device, output, mode);
@@ -570,6 +592,7 @@ ULONG GetWindowDC(ULONG window)
     }
     return ps;
 }
+
 ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
 {
     if (!lx_pm_valid_ps(ps))
@@ -613,6 +636,7 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
     }
     return ps;
 }
+
 VOID DeleteHDCObjects(ULONG ps)
 {
     Open32DC *dc = open32FindDC(ps);

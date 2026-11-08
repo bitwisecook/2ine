@@ -19,6 +19,7 @@
 static unsigned samples_played;
 static unsigned generator_calls, generator_live = 1;
 static unsigned stereo_calls, stereo_live = 1;
+
 static int policy_generator(void *unused, float *output, int count, int frequency)
 {
     (void)unused;
@@ -28,6 +29,7 @@ static int policy_generator(void *unused, float *output, int count, int frequenc
     __atomic_add_fetch(&generator_calls, 1, __ATOMIC_SEQ_CST);
     return __atomic_load_n(&generator_live, __ATOMIC_SEQ_CST);
 }
+
 static int stereo_generator(void *unused, float *output, int count, int frequency)
 {
     (void)unused;
@@ -40,6 +42,7 @@ static int stereo_generator(void *unused, float *output, int count, int frequenc
     __atomic_add_fetch(&stereo_calls, 1, __ATOMIC_SEQ_CST);
     return __atomic_load_n(&stereo_live, __ATOMIC_SEQ_CST);
 }
+
 static void generate(void *unused, float *output, int count, int frequency)
 {
     (void)unused;
@@ -48,6 +51,7 @@ static void generate(void *unused, float *output, int count, int frequency)
         output[i] = 0.125f;
     __atomic_add_fetch(&samples_played, (unsigned)count, __ATOMIC_SEQ_CST);
 }
+
 int main(void)
 {
     CHECK(lx_host_font_count() == 12);

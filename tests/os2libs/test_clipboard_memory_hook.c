@@ -15,6 +15,7 @@
         }                                                                                          \
     } while (0)
 static void *segments[2];
+
 static void *segment(uint16 *selector, int code)
 {
     (void)code;
@@ -26,6 +27,7 @@ static void *segment(uint16 *selector, int code)
         }
     return NULL;
 }
+
 static void release(uint16 selector)
 {
     unsigned slot = (selector - 0x100) / 8;
@@ -33,11 +35,13 @@ static void release(uint16 selector)
     free(segments[slot]);
     segments[slot] = NULL;
 }
+
 static uint32 foreign(void *memory)
 {
     (void)memory;
     return 487;
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2 && !GLoaderState.freeSharedMemory);

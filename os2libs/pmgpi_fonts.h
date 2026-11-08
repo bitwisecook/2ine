@@ -5,6 +5,7 @@
 #include "os2types.h"
 #define FACESIZE 32
 #pragma pack(push, 2)
+
 typedef struct _FATTRS
 {
     USHORT usRecordLength, fsSelection;
@@ -14,12 +15,15 @@ typedef struct _FATTRS
     LONG lMaxBaselineExt, lAveCharWidth;
     USHORT fsType, fsFontUse;
 } FATTRS;
+
 typedef FATTRS *PFATTRS;
+
 typedef struct _PANOSE
 {
     BYTE bFamilyType, bSerifStyle, bWeight, bProportion, bContrast, bStrokeVariation;
     BYTE bArmStyle, bLetterform, bMidline, bXHeight, fbPassedISO, fbFailedISO;
 } PANOSE;
+
 typedef struct _FONTMETRICS
 {
     CHAR szFamilyname[FACESIZE];
@@ -75,6 +79,7 @@ typedef struct _FONTMETRICS
     LONG FaceNameAtom;
     PANOSE panose;
 } FONTMETRICS;
+
 typedef FONTMETRICS *PFONTMETRICS;
 #pragma pack(pop)
 #endif

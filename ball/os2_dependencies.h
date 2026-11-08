@@ -15,16 +15,19 @@ static uint16_t dependency_u16(const unsigned char *p)
 {
     return (uint16_t)(p[0] | (unsigned)p[1] << 8);
 }
+
 static uint32_t dependency_u32(const unsigned char *p)
 {
     return dependency_u16(p) | (uint32_t)dependency_u16(p + 2) << 16;
 }
+
 static int dependency_read_at(FILE *file, uint64_t length, uint64_t offset, void *output,
                               size_t count)
 {
     return offset <= length && count <= length - offset && offset <= LONG_MAX &&
            !fseek(file, (long)offset, SEEK_SET) && fread(output, 1, count, file) == count;
 }
+
 static char *dependency_module(Context *c, const char *name)
 {
     size_t length = strlen(name);
@@ -45,6 +48,7 @@ static char *dependency_module(Context *c, const char *name)
     module[length] = 0;
     return module;
 }
+
 static void dependency_error(cJSON *errors, const char *path, const char *message)
 {
     const cJSON *existing;
@@ -56,6 +60,7 @@ static void dependency_error(cJSON *errors, const char *path, const char *messag
     cJSON_AddStringToObject(error, "message", why);
     cJSON_AddItemToArray(errors, error);
 }
+
 static void dependency_take_error(Context *c, cJSON *errors, const char *path)
 {
     if (c->error)
@@ -65,6 +70,7 @@ static void dependency_take_error(Context *c, cJSON *errors, const char *path)
         c->error = NULL;
     }
 }
+
 /* Offsets are relative to the executable header. Only the counted import
    tables are read; no object pages, relocations or guest code are executed. */
 static cJSON *dependency_read_binary(Context *c, const char *host, const char *guest, cJSON *errors)
@@ -210,6 +216,7 @@ static cJSON *dependency_read_binary(Context *c, const char *host, const char *g
     dependency_take_error(c, errors, guest);
     return binary;
 }
+
 static int dependency_candidate(const char *name)
 {
     return extract_extension(name, ".exe") || extract_extension(name, ".dll") ||
@@ -217,12 +224,14 @@ static int dependency_candidate(const char *name)
            (extract_extension(name, ".sys") && !equal_case(name, "CONFIG.SYS")) ||
            extract_extension(name, ".ocx");
 }
+
 static void dependency_array_unique(cJSON *array, const char *value)
 {
     const cJSON *item;
     cJSON_ArrayForEach(item, array) if (equal_case(str(item), value)) return;
     cJSON_AddItemToArray(array, cJSON_CreateString(value));
 }
+
 static char *dependency_basename(Context *c, const char *path)
 {
     const char *base = strrchr(path, '\\');
@@ -230,6 +239,7 @@ static char *dependency_basename(Context *c, const char *path)
         base = strrchr(path, '/');
     return dependency_module(c, base ? base + 1 : path);
 }
+
 static void dependency_index_binary(Context *c, cJSON *binaries, cJSON *index, cJSON *seen,
                                     cJSON *errors, const char *host, const char *guest)
 {
@@ -254,6 +264,7 @@ static void dependency_index_binary(Context *c, cJSON *binaries, cJSON *index, c
         dependency_array_unique(locations, guest);
     }
 }
+
 static void dependency_index_script(Context *c, cJSON *binaries, cJSON *seen, cJSON *errors,
                                     const char *host, const char *guest)
 {
@@ -277,6 +288,7 @@ static void dependency_index_script(Context *c, cJSON *binaries, cJSON *seen, cJ
     cJSON_AddArrayToObject(entry, "modules");
     cJSON_AddItemToArray(binaries, entry);
 }
+
 static cJSON *dependency_scan(Context *c, cJSON *index, cJSON *seen, cJSON *errors, cJSON *limits)
 {
     cJSON *binaries = cJSON_CreateArray(), *queue = cJSON_CreateArray();
@@ -338,6 +350,7 @@ static cJSON *dependency_scan(Context *c, cJSON *index, cJSON *seen, cJSON *erro
     cJSON_Delete(queue);
     return binaries;
 }
+
 static void dependency_add_path(Context *c, cJSON *paths, const char *path)
 {
     if (!path || !*path || !strcmp(path, "."))
@@ -350,6 +363,7 @@ static void dependency_add_path(Context *c, cJSON *paths, const char *path)
         copy[--length] = 0;
     dependency_array_unique(paths, copy);
 }
+
 static void dependency_split_paths(Context *c, cJSON *paths, const char *value)
 {
     char *copy = value ? keep(c, strdup(value)) : NULL;
@@ -362,6 +376,7 @@ static void dependency_split_paths(Context *c, cJSON *paths, const char *value)
         at = end;
     }
 }
+
 static cJSON *dependency_search_paths(Context *c, cJSON *errors)
 {
     cJSON *paths = cJSON_CreateArray();
@@ -376,6 +391,7 @@ static cJSON *dependency_search_paths(Context *c, cJSON *errors)
     dependency_take_error(c, errors, "CONFIG.SYS");
     return paths;
 }
+
 static char *dependency_find(Context *c, const char *binary, const char *module, cJSON *paths,
                              cJSON *cache, cJSON *errors)
 {
@@ -420,6 +436,7 @@ static char *dependency_find(Context *c, const char *binary, const char *module,
     dependency_take_error(c, errors, binary);
     return found;
 }
+
 static cJSON *dependency_resolve(Context *c, cJSON *binaries, cJSON *index, cJSON *seen,
                                  cJSON *paths, cJSON *errors, cJSON *missing, cJSON *unreachable,
                                  cJSON *unresolved)
@@ -514,6 +531,7 @@ static cJSON *dependency_resolve(Context *c, cJSON *binaries, cJSON *index, cJSO
     cJSON_Delete(cache);
     return imports;
 }
+
 static void dependency_source(cJSON *sources, const char *path, int remembered)
 {
     cJSON *item;
@@ -529,6 +547,7 @@ static void dependency_source(cJSON *sources, const char *path, int remembered)
     cJSON_AddStringToObject(item, "status", "not-inspected");
     cJSON_AddItemToArray(sources, item);
 }
+
 static cJSON *dependency_sources(Context *c, const cJSON *request, cJSON *errors)
 {
     cJSON *sources = cJSON_CreateArray();
@@ -565,6 +584,7 @@ static cJSON *dependency_sources(Context *c, const cJSON *request, cJSON *errors
     dependency_take_error(c, errors, "Mapped installation media");
     return sources;
 }
+
 static int dependency_possible_media(Context *c, const char *source)
 {
     cJSON *listing = browse_media(c, source);
@@ -583,6 +603,7 @@ static int dependency_possible_media(Context *c, const char *source)
     cJSON_Delete(listing);
     return possible;
 }
+
 static int dependency_source_accessible(const char *source)
 {
     if (!tb_media_path(source))
@@ -605,6 +626,7 @@ static int dependency_source_accessible(const char *source)
     free(parent);
     return found;
 }
+
 static char *dependency_installation_root(Context *c, const char *source)
 {
     cJSON *listing = browse_media(c, source);
@@ -626,6 +648,7 @@ static char *dependency_installation_root(Context *c, const char *source)
     cJSON_Delete(listing);
     return result ? result : keep(c, strdup(source));
 }
+
 static void dependency_index_media(Context *c, cJSON *index, const cJSON *plan)
 {
     const cJSON *file;
@@ -649,6 +672,7 @@ static void dependency_index_media(Context *c, cJSON *index, const cJSON *plan)
         cJSON_AddItemToArray(files, entry);
     }
 }
+
 static void dependency_merge_media(cJSON *destination, const cJSON *source)
 {
     const cJSON *module, *file;
@@ -668,6 +692,7 @@ static void dependency_merge_media(cJSON *destination, const cJSON *source)
         }
     }
 }
+
 /* Image indexes are only an optimization. Bind them to the physical media's
    size, timestamp and both end blocks, then check each chosen OS/2 binary
    again before extraction. Folder trees remain request-scoped. */
@@ -727,6 +752,7 @@ static char *dependency_media_fingerprint(Context *c, const char *source)
     return format(c, "%lld:%lld:%ld:%s", (long long)size, (long long)info.st_mtime, nanoseconds,
                   hex(c, digest));
 }
+
 static char *dependency_cache_path(Context *c, const char *source, const char *variant)
 {
     SHA256_CTX state;
@@ -736,6 +762,7 @@ static char *dependency_cache_path(Context *c, const char *source, const char *v
     sha256_final(&state, digest);
     return format(c, "%s/cache/dependency-media-v2-%s-%s.json", c->ball, hex(c, digest), variant);
 }
+
 static cJSON *dependency_cached_media(Context *c, const char *source, const char *variant,
                                       const char *fingerprint, int *command, int *level)
 {
@@ -789,6 +816,7 @@ static cJSON *dependency_cached_media(Context *c, const char *source, const char
     cJSON_Delete(cache);
     return index;
 }
+
 static void dependency_cache_media(Context *c, const char *source, const char *variant,
                                    const char *fingerprint, int command, int level,
                                    const cJSON *index)
@@ -811,6 +839,7 @@ static void dependency_cache_media(Context *c, const char *source, const char *v
         c->error = NULL;
     }
 }
+
 static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *errors,
                                           cJSON *media_index, int cache_media)
 {
@@ -920,6 +949,7 @@ static cJSON *dependency_verified_sources(Context *c, cJSON *sources, cJSON *err
     cJSON_Delete(indexes);
     return eligible;
 }
+
 static cJSON *validate_os2_media(Context *c, const cJSON *request)
 {
     const cJSON *requested = get(request, "sources"), *source;
@@ -1008,6 +1038,7 @@ static cJSON *validate_os2_media(Context *c, const cJSON *request)
     }
     return result;
 }
+
 static int dependency_secondary_sources(Context *c, cJSON *sources, cJSON *media_index,
                                         cJSON *errors)
 {
@@ -1049,6 +1080,7 @@ static int dependency_secondary_sources(Context *c, cJSON *sources, cJSON *media
     }
     return expanded;
 }
+
 static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON *seen,
                                 cJSON *media_index, cJSON *modules, cJSON *imported, cJSON *errors)
 {
@@ -1152,8 +1184,10 @@ static void dependency_recovery(Context *c, cJSON *binaries, cJSON *index, cJSON
     }
     cJSON_Delete(wanted);
 }
+
 #include "dependency_database.h"
 #include "dependency_freshness.h"
+
 static cJSON *dependency_compact(const cJSON *report)
 {
     static const char *fields[] = {"summary",
@@ -1190,6 +1224,7 @@ static cJSON *dependency_compact(const cJSON *report)
     }
     return value;
 }
+
 static cJSON *dependency_audit_latest(Context *c)
 {
     char *path = join(c, c->ball, "logs/dependencies-latest.json");
@@ -1220,6 +1255,7 @@ static cJSON *dependency_audit_latest(Context *c)
         put(summary, "cached", cJSON_CreateTrue());
     return summary;
 }
+
 static int dependency_write_text(const cJSON *report, const char *path)
 {
     FILE *output = tb_fopen(path, "wb");
@@ -1290,6 +1326,7 @@ static int dependency_write_text(const cJSON *report, const char *path)
         ok = 0;
     return ok;
 }
+
 static void dependency_save_report(Context *c, cJSON *report)
 {
     cJSON *errors = get(report, "errors");
@@ -1329,6 +1366,7 @@ static void dependency_save_report(Context *c, cJSON *report)
         dependency_take_error(c, errors, "logs/dependencies-latest.json");
     cJSON_Delete(latest);
 }
+
 static int dependency_som_required(Context *c, const cJSON *report)
 {
     const cJSON *entry;
@@ -1336,6 +1374,7 @@ static int dependency_som_required(Context *c, const cJSON *report)
                                                                              "SOMD")) return 1;
     return os2_som_present(c, "C:\\OS2\\DLL\\SOMD.DLL");
 }
+
 static int dependency_som_files(Context *c, cJSON *report, cJSON *unresolved)
 {
     cJSON *files = cJSON_CreateArray();
@@ -1360,6 +1399,7 @@ static int dependency_som_files(Context *c, cJSON *report, cJSON *unresolved)
     put(report, "componentFiles", files);
     return missing;
 }
+
 static cJSON *dependency_component_groups(const cJSON *report)
 {
     int needed[EXTRACT_COUNT] = {0};
@@ -1410,6 +1450,7 @@ static cJSON *dependency_component_groups(const cJSON *report)
     }
     return groups;
 }
+
 static cJSON *audit_dependencies(Context *parent, const cJSON *request, int automatic_recovery)
 {
     /* Auditing failures belong to the audit, never to the installer's exit
@@ -1618,6 +1659,7 @@ static cJSON *audit_dependencies(Context *parent, const cJSON *request, int auto
     free(c->error);
     return report;
 }
+
 /* Compatibility query only. Explicit audit-dependencies is the rescan action;
    normal preflight must never discover or recover files as a side effect. */
 static cJSON *ensure_dependencies(Context *c, const cJSON *request)

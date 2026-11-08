@@ -3,18 +3,21 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmgpi.h"
+
 typedef struct Open32Palette
 {
     ULONG count;
     BOOL stock;
     uint8 *entries;
 } Open32Palette;
+
 static void free_palette(void *resource)
 {
     Open32Palette *palette = resource;
     free(palette->entries);
     free(palette);
 }
+
 ULONG CreatePalette(PVOID input)
 {
     if (!input || lx_guest_load_u16(input) != 0x300 || !lx_guest_load_u16((uint8 *)input + 2))
@@ -43,6 +46,7 @@ ULONG CreatePalette(PVOID input)
     }
     return handle;
 }
+
 ULONG open32StockPalette(void)
 {
     static _Thread_local ULONG stock;
@@ -69,6 +73,7 @@ ULONG open32StockPalette(void)
     }
     return stock;
 }
+
 ULONG SelectPalette(ULONG handle, ULONG palette, BOOL background)
 {
     (void)background;
@@ -86,6 +91,7 @@ ULONG SelectPalette(ULONG handle, ULONG palette, BOOL background)
     open32MetafilePalette(handle, palette);
     return previous;
 }
+
 ULONG RealizePalette(ULONG handle)
 {
     if (!open32FindDC(handle))
@@ -97,6 +103,7 @@ ULONG RealizePalette(ULONG handle)
     /* A true-color drawable has no hardware palette entries to remap. */
     return 0;
 }
+
 ULONG GetPaletteEntries(ULONG handle, ULONG start, ULONG count, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -115,6 +122,7 @@ ULONG GetPaletteEntries(ULONG handle, ULONG start, ULONG count, PVOID output)
     lx_handle_release(&borrow);
     return copied;
 }
+
 ULONG GetNearestPaletteIndex(ULONG handle, ULONG color)
 {
     LxHandleBorrow borrow = {0};
@@ -140,6 +148,7 @@ ULONG GetNearestPaletteIndex(ULONG handle, ULONG color)
     lx_handle_release(&borrow);
     return nearest;
 }
+
 BOOL open32DeletePalette(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -151,6 +160,7 @@ BOOL open32DeletePalette(ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG open32PaletteObject(ULONG handle, LONG capacity, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -189,6 +199,7 @@ ULONG SetPaletteEntries(ULONG handle, ULONG first, ULONG count, PVOID input)
     open32MetafilePaletteChange(handle, 0x37, first, copied, input);
     return copied;
 }
+
 BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
 {
     LxHandleBorrow borrow = {0};
@@ -218,6 +229,7 @@ BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
         open32MetafilePaletteChange(handle, 0x436, first, count, input);
     return valid;
 }
+
 BOOL ResizePalette(ULONG handle, ULONG count)
 {
     LxHandleBorrow borrow = {0};
@@ -252,6 +264,7 @@ BOOL ResizePalette(ULONG handle, ULONG count)
         open32MetafilePaletteChange(handle, 0x139, count, 0, NULL);
     return valid;
 }
+
 /* The device's real color table comes from GPI, in PALETTEENTRY byte order. */
 ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
 {
@@ -280,6 +293,7 @@ ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
     }
     return copied;
 }
+
 BOOL UnrealizeObject(ULONG object)
 {
     /* Logical objects are applied directly on this true-color backend, so there is no

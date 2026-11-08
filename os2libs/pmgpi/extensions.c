@@ -7,6 +7,7 @@
 #include "guest/abi.h"
 #include <math.h>
 static const LONG identity[9] = {65536, 0, 0, 0, 65536, 0, 0, 0, 1};
+
 /* The default aperture is square, with sides of the default character cell height. */
 static void lx_gpi_default_pick(HPS h)
 {
@@ -21,6 +22,7 @@ static void lx_gpi_default_pick(HPS h)
         corners[1] = (POINTL){side, side};
     p->gpi.pick_size = (SIZEL){corners[1].x - corners[0].x, corners[1].y - corners[0].y};
 }
+
 static PresentationSpace *space(HPS h)
 {
     PresentationSpace *p = lx_pm_font_space(h);
@@ -37,6 +39,7 @@ static PresentationSpace *space(HPS h)
     }
     return p;
 }
+
 static BOOL matrix_set(LONG *out, const LONG *in, LONG options)
 {
     if (!in || options < 0 || options > 2 || in[2] || in[5] || in[8] != 1 ||
@@ -64,6 +67,7 @@ static BOOL matrix_set(LONG *out, const LONG *in, LONG options)
     memcpy(out, result, sizeof result);
     return TRUE;
 }
+
 BOOL GpiQueryDefaultViewMatrix(HPS h, LONG count, PVOID out)
 {
     PresentationSpace *p = space(h);
@@ -73,6 +77,7 @@ BOOL GpiQueryDefaultViewMatrix(HPS h, LONG count, PVOID out)
         memcpy(out, p->gpi.view, count * 4);
     return TRUE;
 }
+
 BOOL GpiQueryModelTransformMatrix(HPS h, LONG count, PVOID out)
 {
     PresentationSpace *p = space(h);
@@ -82,6 +87,7 @@ BOOL GpiQueryModelTransformMatrix(HPS h, LONG count, PVOID out)
         memcpy(out, p->gpi.model, count * 4);
     return TRUE;
 }
+
 BOOL GpiSetModelTransformMatrix(HPS h, LONG count, PVOID in, LONG options)
 {
     PresentationSpace *p = space(h);
@@ -93,6 +99,7 @@ BOOL GpiSetModelTransformMatrix(HPS h, LONG count, PVOID in, LONG options)
         memcpy(m, in, count * 4);
     return matrix_set(p->gpi.model, m, options);
 }
+
 BOOL lx_gpi_default_matrix(HPS h, LONG count, PVOID in, LONG options)
 {
     PresentationSpace *p = space(h);
@@ -104,6 +111,7 @@ BOOL lx_gpi_default_matrix(HPS h, LONG count, PVOID in, LONG options)
         memcpy(m, in, count * 4);
     return matrix_set(p->gpi.view, m, options);
 }
+
 BOOL GpiTranslate(HPS h, PVOID matrix, LONG options, PPOINTL offset)
 {
     /* The matrix helpers accept only TRANSFORM_REPLACE and TRANSFORM_ADD. */
@@ -115,6 +123,7 @@ BOOL GpiTranslate(HPS h, PVOID matrix, LONG options, PPOINTL offset)
     m[7] = offset->y;
     return matrix_set(matrix, m, options);
 }
+
 BOOL GpiScale(HPS h, PVOID matrix, LONG options, PLONG factors, PPOINTL center)
 {
     if (!space(h) || !matrix || !factors || !center || options < 0 || options > 1)
@@ -130,6 +139,7 @@ BOOL GpiScale(HPS h, PVOID matrix, LONG options, PLONG factors, PPOINTL center)
     m[7] = (LONG)llround(y);
     return matrix_set(matrix, m, options);
 }
+
 BOOL GpiRotate(HPS h, PVOID matrix, LONG options, LONG angle, PPOINTL center)
 {
     if (!space(h) || !matrix || !center || options < 0 || options > 1)
@@ -147,6 +157,7 @@ BOOL GpiRotate(HPS h, PVOID matrix, LONG options, LONG angle, PPOINTL center)
     m[7] = (LONG)llround(y);
     return matrix_set(matrix, m, options);
 }
+
 BOOL GpiSetArcParams(HPS h, PLONG arc)
 {
     PresentationSpace *p = space(h);
@@ -155,6 +166,7 @@ BOOL GpiSetArcParams(HPS h, PLONG arc)
     memcpy(p->gpi.arc, arc, 16);
     return TRUE;
 }
+
 #define ATTRIBUTE(Name, field, min, max, def)                                                      \
     BOOL GpiSet##Name(HPS h, LONG v)                                                               \
     {                                                                                              \
@@ -171,6 +183,7 @@ BOOL GpiSetArcParams(HPS h, PLONG arc)
     }
 ATTRIBUTE(LineEnd, line_end, 0, 3, 1)
 ATTRIBUTE(LineJoin, line_join, 0, 3, 1)
+
 BOOL GpiSetLineWidthGeom(HPS h, LONG v)
 {
     PresentationSpace *p = space(h);
@@ -179,11 +192,13 @@ BOOL GpiSetLineWidthGeom(HPS h, LONG v)
     p->gpi.line_width = v;
     return TRUE;
 }
+
 LONG GpiQueryLineWidthGeom(HPS h)
 {
     PresentationSpace *p = space(h);
     return p ? p->gpi.line_width : -1;
 }
+
 BOOL GpiSetCharExtra(HPS h, LONG v)
 {
     PresentationSpace *p = space(h);
@@ -192,11 +207,13 @@ BOOL GpiSetCharExtra(HPS h, LONG v)
     p->gpi.char_extra = v;
     return TRUE;
 }
+
 LONG GpiQueryStopDraw(HPS h)
 {
     PresentationSpace *p = space(h);
     return p ? p->gpi.stop_draw : -1;
 }
+
 BOOL GpiSetStopDraw(HPS h, LONG v)
 {
     PresentationSpace *p = space(h);
@@ -205,12 +222,15 @@ BOOL GpiSetStopDraw(HPS h, LONG v)
     p->gpi.stop_draw = v;
     return TRUE;
 }
+
 static BOOL rect_valid(PRECTL r)
 {
     return r && r->xLeft <= r->xRight && r->yBottom <= r->yTop;
 }
+
 /* GRE resets viewing limits to this rectangle, which clips nothing. */
 static const RECTL no_limits = {(LONG)0xf8000000, (LONG)0xf8000000, 0x7ffffff, 0x7ffffff};
+
 BOOL GpiSetGraphicsField(HPS h, PRECTL r)
 {
     PresentationSpace *p = space(h);
@@ -225,6 +245,7 @@ BOOL GpiSetGraphicsField(HPS h, PRECTL r)
     p->gpi.graphics_set = TRUE;
     return TRUE;
 }
+
 BOOL GpiQueryGraphicsField(HPS h, PRECTL r)
 {
     PresentationSpace *p = space(h);
@@ -233,6 +254,7 @@ BOOL GpiQueryGraphicsField(HPS h, PRECTL r)
     *r = p->gpi.graphics_set ? p->gpi.graphics_field : (RECTL){0, 0, 0, 0};
     return TRUE;
 }
+
 BOOL GpiSetViewingLimits(HPS h, PRECTL r)
 {
     PresentationSpace *p = space(h);
@@ -243,6 +265,7 @@ BOOL GpiSetViewingLimits(HPS h, PRECTL r)
     p->gpi.viewing_custom = TRUE;
     return TRUE;
 }
+
 BOOL GpiQueryViewingLimits(HPS h, PRECTL r)
 {
     PresentationSpace *p = space(h);
@@ -251,6 +274,7 @@ BOOL GpiQueryViewingLimits(HPS h, PRECTL r)
     *r = p->gpi.viewing_set ? p->gpi.viewing_limits : no_limits;
     return TRUE;
 }
+
 BOOL GpiSetDefViewingLimits(HPS h, PRECTL r)
 {
     PresentationSpace *p = space(h);
@@ -266,6 +290,7 @@ BOOL GpiSetDefViewingLimits(HPS h, PRECTL r)
     }
     return TRUE;
 }
+
 BOOL GpiQueryDefViewingLimits(HPS h, PRECTL r)
 {
     PresentationSpace *p = space(h);
@@ -274,6 +299,7 @@ BOOL GpiQueryDefViewingLimits(HPS h, PRECTL r)
     *r = p->gpi.default_set ? p->gpi.default_limits : no_limits;
     return TRUE;
 }
+
 BOOL GpiSetPickAperturePosition(HPS h, PPOINTL v)
 {
     PresentationSpace *p = space(h);
@@ -282,6 +308,7 @@ BOOL GpiSetPickAperturePosition(HPS h, PPOINTL v)
     p->gpi.pick_position = *v;
     return TRUE;
 }
+
 BOOL GpiQueryPickAperturePosition(HPS h, PPOINTL v)
 {
     PresentationSpace *p = space(h);
@@ -290,6 +317,7 @@ BOOL GpiQueryPickAperturePosition(HPS h, PPOINTL v)
     *v = p->gpi.pick_position;
     return TRUE;
 }
+
 BOOL GpiSetPickApertureSize(HPS h, LONG options, PSIZEL v)
 {
     PresentationSpace *p = space(h);
@@ -305,6 +333,7 @@ BOOL GpiSetPickApertureSize(HPS h, LONG options, PSIZEL v)
     p->gpi.pick_size = *v;
     return TRUE;
 }
+
 BOOL GpiQueryPickApertureSize(HPS h, PSIZEL v)
 {
     PresentationSpace *p = space(h);
@@ -313,6 +342,7 @@ BOOL GpiQueryPickApertureSize(HPS h, PSIZEL v)
     *v = p->gpi.pick_size;
     return TRUE;
 }
+
 BOOL GpiResetBoundaryData(HPS h)
 {
     PresentationSpace *p = space(h);
@@ -321,6 +351,7 @@ BOOL GpiResetBoundaryData(HPS h)
     p->gpi.boundary_set = FALSE;
     return TRUE;
 }
+
 ULONG GpiQueryPS(HPS h, PSIZEL size)
 {
     PresentationSpace *p = space(h);
@@ -329,6 +360,7 @@ ULONG GpiQueryPS(HPS h, PSIZEL size)
     *size = lx_pm_page_dimensions(p);
     return p->ps_options ? p->ps_options : p->page_units;
 }
+
 BOOL GpiSetPS(HPS h, PSIZEL size, ULONG options)
 {
     PresentationSpace *p = space(h);
@@ -340,6 +372,7 @@ BOOL GpiSetPS(HPS h, PSIZEL size, ULONG options)
     p->ps_options = (p->ps_options & ~0xffcu) | (options & 0xffc);
     return (options & 0x8000) ? TRUE : GpiResetPS(h, 4);
 }
+
 static void discard_paths(PresentationSpace *p, BOOL all)
 {
     PmPath *open = p->record_path;
@@ -358,6 +391,7 @@ static void discard_paths(PresentationSpace *p, BOOL all)
         free(x);
     }
 }
+
 BOOL GpiResetPS(HPS h, ULONG options)
 {
     PresentationSpace *p = space(h);
@@ -418,6 +452,7 @@ BOOL GpiResetPS(HPS h, ULONG options)
     }
     return TRUE;
 }
+
 LONG GpiQueryPel(HPS h, PPOINTL point)
 {
     PresentationSpace *p = space(h);
@@ -434,10 +469,12 @@ LONG GpiQueryPel(HPS h, PPOINTL point)
     LONG index = GpiQueryColorIndex(h, 0, (LONG)rgb);
     return lx_pm_resolve_color(h, index) == (LONG)rgb ? index : -254; /* CLR_NOINDEX */
 }
+
 LONG GpiQueryNearestColor(HPS h, ULONG options, LONG rgb)
 {
     return space(h) && !(options & ~1u) && rgb >= 0 && rgb <= 0xffffff ? rgb : -1;
 }
+
 LONG GpiQueryRealColors(HPS h, ULONG options, LONG first, LONG count, PLONG colors)
 {
     if (!space(h) || (options & ~3u) || first < 0 || count < 0 || (count && !colors))
@@ -455,6 +492,7 @@ LONG GpiQueryRealColors(HPS h, ULONG options, LONG first, LONG count, PLONG colo
     }
     return n;
 }
+
 LONG GpiQueryAttrs(HPS h, LONG primitive, ULONG mask, PVOID output)
 {
     PresentationSpace *p = space(h);
@@ -578,6 +616,7 @@ ULONG GpiCreatePalette(HAB hab, ULONG options, ULONG format, ULONG count, PULONG
         free(p);
     return h;
 }
+
 BOOL GpiDeletePalette(ULONG h)
 {
     int closed = lx_handle_close_guarded(h, LX_HANDLE_PM_PALETTE, 0, NULL);
@@ -585,6 +624,7 @@ BOOL GpiDeletePalette(ULONG h)
         WinSetErrorInfo(closed < 0 ? 0x210F : 0x2111, 0); /* PALETTE_SELECTED, INV_HPAL */
     return closed == 1;
 }
+
 ULONG GpiSelectPalette(HPS h, ULONG palette)
 {
     PresentationSpace *p = space(h);
@@ -604,11 +644,13 @@ ULONG GpiSelectPalette(HPS h, ULONG palette)
     }
     return old;
 }
+
 ULONG GpiQueryPalette(HPS h)
 {
     PresentationSpace *p = space(h);
     return p ? p->gpi.palette : 0xffffffff;
 }
+
 LONG GpiQueryPaletteInfo(ULONG handle, HPS h, ULONG options, ULONG start, ULONG count,
                          PULONG colors)
 {

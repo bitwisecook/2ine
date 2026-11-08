@@ -6,6 +6,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "hal/font.h"
 #include "os2libs/pm_text.h"
+
 LONG GetDialogBaseUnits(void)
 {
     static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -56,6 +57,7 @@ static void encode_metrics(const FONTMETRICS *fm, const LxHostFontMetrics *host,
     lx_guest_store_u32(output + 64, (ULONG)fields[0]);
     lx_guest_store_u32(output + 68, (ULONG)fm->lAveCharWidth);
 }
+
 BOOL GetTextMetrics(ULONG handle, PVOID output)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -73,6 +75,7 @@ BOOL GetTextMetrics(ULONG handle, PVOID output)
     memcpy(output, record, 56);
     return TRUE;
 }
+
 static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG parameter, LONG result)
 {
     if (!open32FindDC(handle) ||
@@ -140,6 +143,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
     free(fonts);
     return result;
 }
+
 LONG EnumFontFamilies(ULONG handle, PSZ family, ULONG procedure, ULONG parameter)
 {
     return enumerate_fonts(handle, family, procedure, parameter, 0);
@@ -171,10 +175,12 @@ LONG EnumFonts(ULONG h, PSZ face, ULONG procedure, ULONG parameter)
     /* An enumeration that finds no font still reports success. */
     return enumerate_fonts(h, face, procedure, parameter, 1);
 }
+
 static uint32 metric_codepoint(ULONG c)
 {
     return lx_pm_codepoint(WinCpTranslateChar(0, 1004, (uint8)c, 437));
 }
+
 BOOL GetCharWidth(ULONG h, ULONG first, ULONG last, PVOID output)
 {
     if (!open32FindDC(h) || !output || first > last || last > 255)
@@ -192,6 +198,7 @@ BOOL GetCharWidth(ULONG h, ULONG first, ULONG last, PVOID output)
     }
     return TRUE;
 }
+
 BOOL GetCharABCWidths(ULONG h, ULONG first, ULONG last, PVOID output)
 {
     if (!open32FindDC(h) || !output || first > last || last > 255)
@@ -213,6 +220,7 @@ BOOL GetCharABCWidths(ULONG h, ULONG first, ULONG last, PVOID output)
     }
     return TRUE;
 }
+
 ULONG GetKerningPairs(ULONG h, ULONG capacity, PVOID output)
 {
     if (!open32FindDC(h))
@@ -240,6 +248,7 @@ ULONG GetKerningPairs(ULONG h, ULONG capacity, PVOID output)
         }
     return output && count > capacity ? capacity : count;
 }
+
 ULONG GetOutlineTextMetrics(ULONG h, ULONG capacity, PVOID output)
 {
     LxHostFontMetrics metrics;

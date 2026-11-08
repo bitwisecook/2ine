@@ -7,6 +7,7 @@
 #include "hal/host_shared.h"
 #include "hal/host_sync.h"
 #include <stdio.h>
+
 /* Global atoms are shared by every process of a ball, as named semaphores are. The word
    lock is taken only for table scans, and a lock left by a dead process is taken over. */
 typedef struct SharedAtom
@@ -14,13 +15,16 @@ typedef struct SharedAtom
     uint32 references;
     char name[256];
 } SharedAtom;
+
 typedef struct AtomTable
 {
     uint32 lock;
     SharedAtom atoms[0x4000];
 } AtomTable;
+
 static AtomTable *table;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
+
 static void initialize(void)
 {
     uint64 hash = 1469598103934665603ULL;
@@ -38,6 +42,7 @@ static void initialize(void)
     if (opened == LX_HOST_SHARED_OK && lx_host_shared_size(shared) == sizeof *table)
         table = lx_host_shared_map(shared, NULL, 0);
 }
+
 static BOOL lock_atoms(void)
 {
     lx_host_once(&once, initialize);
@@ -57,10 +62,12 @@ static BOOL lock_atoms(void)
         lx_host_sleep_ms(1);
     }
 }
+
 static void unlock_atoms(void)
 {
     __atomic_store_n(&table->lock, 0, __ATOMIC_RELEASE);
 }
+
 static ULONG integer_atom(PSZ name)
 {
     if ((uintptr_t)name <= 0xFFFF)
@@ -71,6 +78,7 @@ static ULONG integer_atom(PSZ name)
     unsigned long value = strtoul(name + 1, &end, 10);
     return end != name + 1 && !*end && value > 0 && value < 0xC000 ? (ULONG)value : 0;
 }
+
 static ULONG find_atom(PSZ name, BOOL add)
 {
     ULONG integer = integer_atom(name);
@@ -119,14 +127,17 @@ static ULONG find_atom(PSZ name, BOOL add)
         open32SetError(add ? 8 : 2);
     return result;
 }
+
 ULONG GlobalAddAtom(PSZ name)
 {
     return find_atom(name, TRUE);
 }
+
 ULONG GlobalFindAtom(PSZ name)
 {
     return find_atom(name, FALSE);
 }
+
 ULONG GlobalDeleteAtom(ULONG atom)
 {
     if (atom && atom < 0xC000)
@@ -144,6 +155,7 @@ ULONG GlobalDeleteAtom(ULONG atom)
         open32SetError(6);
     return valid ? 0 : atom;
 }
+
 ULONG GlobalGetAtomName(ULONG atom, PSZ output, LONG capacity)
 {
     if (!output || capacity <= 0 || !atom || atom > 0xFFFF)
@@ -200,15 +212,18 @@ typedef struct LocalAtom
     char *name;
     ULONG references;
 } LocalAtom;
+
 static LocalAtom local_atoms[0x4000];
 static LxHostOnce local_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *local_monitor;
+
 static void local_initialize(void)
 {
     local_monitor = lx_host_monitor_create();
     if (!local_monitor)
         abort();
 }
+
 static ULONG local_integer_atom(PSZ name)
 {
     if ((uintptr_t)name <= 0xFFFF)
@@ -219,6 +234,7 @@ static ULONG local_integer_atom(PSZ name)
     unsigned long value = strtoul(name + 1, &end, 10);
     return end != name + 1 && !*end && value > 0 && value < 0xC000 ? (ULONG)value : 0;
 }
+
 static ULONG local_find_atom(PSZ name, BOOL add)
 {
     ULONG integer = local_integer_atom(name);
@@ -265,14 +281,17 @@ static ULONG local_find_atom(PSZ name, BOOL add)
         open32SetError(add ? 8 : 2);
     return result;
 }
+
 ULONG AddAtom(PSZ name)
 {
     return local_find_atom(name, TRUE);
 }
+
 ULONG FindAtom(PSZ name)
 {
     return local_find_atom(name, FALSE);
 }
+
 ULONG DeleteAtom(ULONG atom)
 {
     if (atom && atom < 0xC000)

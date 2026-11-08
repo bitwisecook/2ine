@@ -18,6 +18,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static uint16_t checksum(const unsigned char *p, size_t n)
 {
     uint32_t sum = 0;
@@ -27,6 +28,7 @@ static uint16_t checksum(const unsigned char *p, size_t n)
         sum = (sum & 65535) + (sum >> 16);
     return (uint16_t)~sum;
 }
+
 static int receive_icmp(int fd, unsigned type, unsigned char *packet, size_t capacity)
 {
     for (unsigned i = 0; i < 8; i++)
@@ -42,6 +44,7 @@ static int receive_icmp(int fd, unsigned type, unsigned char *packet, size_t cap
     }
     return -1;
 }
+
 int main(void)
 {
     LxHostSocketHost host;

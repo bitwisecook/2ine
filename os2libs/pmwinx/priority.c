@@ -22,6 +22,7 @@ enum
     OPEN32_ERROR_INVALID_PROCID = 303,
     OPEN32_ERROR_INVALID_PRIORITY = 307
 };
+
 static LxHostOnce priority_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *priority_monitor;
 static ULONG process_priority = OPEN32_NORMAL_PRIORITY_CLASS;

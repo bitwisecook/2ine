@@ -282,7 +282,8 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
 static APIRET applyStatus(LxHostFile *file, const char *path, const FILESTATUS3 *info)
 {
     LxHostFileInfo current;
-    LxHostFsError error = file ? lx_host_file_info(file, &current) : lx_host_path_info(path, &current);
+    LxHostFsError error =
+        file ? lx_host_file_info(file, &current) : lx_host_path_info(path, &current);
     if (error)
         return fileError(error);
     FDATE date;
@@ -307,7 +308,8 @@ static APIRET applyStatus(LxHostFile *file, const char *path, const FILESTATUS3 
     if (!error)
     {
         const int readonly = (info->attrFile & FILE_READONLY) != 0;
-        error = file ? lx_host_file_readonly(file, readonly) : lx_host_path_readonly(path, readonly);
+        error =
+            file ? lx_host_file_readonly(file, readonly) : lx_host_path_readonly(path, readonly);
     }
     return error == LX_HOST_FS_INVALID ? ERROR_NOT_SUPPORTED : fileError(error);
 }

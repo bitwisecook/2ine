@@ -10,11 +10,13 @@
 #include <time.h>
 #include <sched.h>
 #include <unistd.h>
+
 static int posix_protection(unsigned p)
 {
     return ((p & LX_HOST_READ) ? PROT_READ : 0) | ((p & LX_HOST_WRITE) ? PROT_WRITE : 0) |
            ((p & LX_HOST_EXECUTE) ? PROT_EXEC : 0);
 }
+
 void *lx_host_vm_map(void *hint, size_t size, unsigned permissions, int exact)
 {
     if (!size || (permissions & ~7u) || (exact && !hint))
@@ -35,6 +37,7 @@ void *lx_host_vm_map(void *hint, size_t size, unsigned permissions, int exact)
     }
     return p;
 }
+
 int lx_host_vm_protect(void *memory, size_t size, unsigned permissions)
 {
     if (!memory || !size || (permissions & ~7u))
@@ -44,10 +47,12 @@ int lx_host_vm_protect(void *memory, size_t size, unsigned permissions)
     }
     return mprotect(memory, size, posix_protection(permissions)) == 0;
 }
+
 size_t lx_host_page_size(void)
 {
     return (size_t)sysconf(_SC_PAGESIZE);
 }
+
 void *lx_host_memory_alloc(size_t size)
 {
     return lx_host_vm_map(NULL, size, LX_HOST_READ | LX_HOST_WRITE, 0);

@@ -2,12 +2,12 @@
 /* DOSCALLS flat 32-bit ABI. Host pointer outputs use private temporary storage. */
 static uint32 bridge32_DosQueryAppType(uint8 *arguments)
 {
-    char *name = lx_execution_copy_string(GLoaderState.execution,
-        lx_guest_load_u32(arguments), 32768);
+    char *name =
+        lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(arguments), 32768);
     LxGuestBorrow output = {0};
     uint32 result = ERROR_INVALID_PARAMETER;
-    if (name && lx_execution_borrow(GLoaderState.execution,
-        lx_guest_load_u32(arguments + 4), 4, LX_GUEST_WRITE, &output))
+    if (name && lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(arguments + 4), 4,
+                                    LX_GUEST_WRITE, &output))
     {
         ULONG flags = 0;
         result = DosQueryAppType(name, &flags);
@@ -18,6 +18,7 @@ static uint32 bridge32_DosQueryAppType(uint8 *arguments)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosAllocMem(uint8 *arguments)
 {
     const uint32 output = lx_guest_load_u32(arguments);
@@ -39,6 +40,7 @@ static uint32 bridge32_DosAllocMem(uint8 *arguments)
     lx_execution_release(&slot);
     return result;
 }
+
 static uint32 bridge32_DosQuerySysInfo(uint8 *arguments)
 {
     const uint32 first = lx_guest_load_u32(arguments), last = lx_guest_load_u32(arguments + 4);
@@ -60,6 +62,7 @@ static uint32 bridge32_DosQuerySysInfo(uint8 *arguments)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosWrite(uint8 *arguments)
 {
     const uint32 handle = lx_guest_load_u32(arguments), pointer = lx_guest_load_u32(arguments + 4);
@@ -80,6 +83,7 @@ static uint32 bridge32_DosWrite(uint8 *arguments)
     lx_execution_release(&data);
     return result;
 }
+
 static uint32 bridge32_DosRead(uint8 *arguments)
 {
     const uint32 handle = lx_guest_load_u32(arguments), pointer = lx_guest_load_u32(arguments + 4);
@@ -100,20 +104,24 @@ static uint32 bridge32_DosRead(uint8 *arguments)
     lx_execution_release(&data);
     return result;
 }
+
 static uint32 bridge32_DosClose(uint8 *arguments)
 {
     return DosClose(lx_guest_load_u32(arguments));
 }
+
 static uint32 bridge32_DosFreeMem(uint8 *arguments)
 {
     void *p = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(arguments), 0, 0);
     return p ? DosFreeMem(p) : ERROR_INVALID_ADDRESS;
 }
+
 static uint32 bridge32_DosExit(uint8 *arguments)
 {
     DosExit(lx_guest_load_u32(arguments), lx_guest_load_u32(arguments + 4));
     return 0;
 }
+
 static uint32 bridge32_DosSetRelMaxFH(uint8 *arguments)
 {
     const uint32 request_pointer = lx_guest_load_u32(arguments),
@@ -139,6 +147,7 @@ static uint32 bridge32_DosSetRelMaxFH(uint8 *arguments)
     lx_execution_release(&current);
     return result;
 }
+
 static uint32 bridge32_DosGetInfoBlocks(uint8 *arguments)
 {
     const uint32 tib_pointer = lx_guest_load_u32(arguments),
@@ -168,6 +177,7 @@ static uint32 bridge32_DosGetInfoBlocks(uint8 *arguments)
     lx_execution_release(&pib);
     return result;
 }
+
 static uint32 bridge32_DosDevConfig(uint8 *arguments)
 {
     LxGuestBorrow output;
@@ -178,6 +188,7 @@ static uint32 bridge32_DosDevConfig(uint8 *arguments)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosQueryHType(uint8 *arguments)
 {
     const uint32 type_pointer = lx_guest_load_u32(arguments + 4),
@@ -204,11 +215,13 @@ static uint32 bridge32_DosQueryHType(uint8 *arguments)
     lx_execution_release(&attr);
     return result;
 }
+
 static uint32 bridge32_DosExitList(uint8 *arguments)
 {
     return DosExitList(lx_guest_load_u32(arguments),
                        (PFNEXITLIST)(uintptr_t)lx_guest_load_u32(arguments + 4));
 }
+
 static uint32 bridge32_DosSetSignalExceptionFocus(uint8 *arguments)
 {
     const uint32 pointer = lx_guest_load_u32(arguments + 4);
@@ -223,6 +236,7 @@ static uint32 bridge32_DosSetSignalExceptionFocus(uint8 *arguments)
     lx_execution_release(&count);
     return result;
 }
+
 static uint32 bridge32_DosSetExceptionHandler(uint8 *arguments)
 {
     LxGuestBorrow record;
@@ -232,6 +246,7 @@ static uint32 bridge32_DosSetExceptionHandler(uint8 *arguments)
     lx_execution_release(&record);
     return result;
 }
+
 static uint32 bridge32_DosUnsetExceptionHandler(uint8 *arguments)
 {
     LxGuestBorrow record;
@@ -241,6 +256,7 @@ static uint32 bridge32_DosUnsetExceptionHandler(uint8 *arguments)
     lx_execution_release(&record);
     return result;
 }
+
 static uint32 bridge32_DosLoadModule(uint8 *arguments)
 {
     const uint32 error_pointer = lx_guest_load_u32(arguments),
@@ -269,6 +285,7 @@ static uint32 bridge32_DosLoadModule(uint8 *arguments)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosSetCurrentDir(uint8 *arguments)
 {
     char *name =
@@ -279,6 +296,7 @@ static uint32 bridge32_DosSetCurrentDir(uint8 *arguments)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosQueryProcAddr(uint8 *arguments)
 {
     const uint32 module = lx_guest_load_u32(arguments), ordinal = lx_guest_load_u32(arguments + 4);
@@ -311,10 +329,12 @@ static uint32 bridge32_DosQueryProcAddr(uint8 *arguments)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosFreeModule(uint8 *arguments)
 {
     return DosFreeModule(lx_guest_load_u32(arguments));
 }
+
 static uint32 wireCreateSemaphore(uint8 *arguments, int mutex)
 {
     const uint32 name_pointer = lx_guest_load_u32(arguments),
@@ -340,14 +360,17 @@ static uint32 wireCreateSemaphore(uint8 *arguments, int mutex)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosCreateMutexSem(uint8 *a)
 {
     return wireCreateSemaphore(a, 1);
 }
+
 static uint32 bridge32_DosCreateEventSem(uint8 *a)
 {
     return wireCreateSemaphore(a, 0);
 }
+
 static uint32 wireOpenSemaphore(uint8 *arguments, int mutex)
 {
     const uint32 name_pointer = lx_guest_load_u32(arguments),
@@ -371,34 +394,42 @@ static uint32 wireOpenSemaphore(uint8 *arguments, int mutex)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosOpenMutexSem(uint8 *a)
 {
     return wireOpenSemaphore(a, 1);
 }
+
 static uint32 bridge32_DosOpenEventSem(uint8 *a)
 {
     return wireOpenSemaphore(a, 0);
 }
+
 static uint32 bridge32_DosRequestMutexSem(uint8 *a)
 {
     return DosRequestMutexSem(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DosReleaseMutexSem(uint8 *a)
 {
     return DosReleaseMutexSem(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosCloseMutexSem(uint8 *a)
 {
     return DosCloseMutexSem(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosPostEventSem(uint8 *a)
 {
     return DosPostEventSem(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosKillProcess(uint8 *a)
 {
     return DosKillProcess(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DosWaitChild(uint8 *a)
 {
     LxGuestBorrow result = {0}, pid = {0};
@@ -425,14 +456,17 @@ static uint32 bridge32_DosWaitChild(uint8 *a)
     lx_execution_release(&pid);
     return rc;
 }
+
 static uint32 bridge32_DosCloseEventSem(uint8 *a)
 {
     return DosCloseEventSem(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosWaitEventSem(uint8 *a)
 {
     return DosWaitEventSem(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 wireQueryEvent(uint8 *arguments, int reset)
 {
     const uint32 pointer = lx_guest_load_u32(arguments + 4);
@@ -448,10 +482,12 @@ static uint32 wireQueryEvent(uint8 *arguments, int reset)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosResetEventSem(uint8 *a)
 {
     return wireQueryEvent(a, 1);
 }
+
 static uint32 bridge32_DosQueryEventSem(uint8 *a)
 {
     return wireQueryEvent(a, 0);
@@ -468,6 +504,7 @@ static uint32 bridge32_DosQueryModuleName(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosQueryModuleHandle(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
@@ -513,19 +550,25 @@ static uint32 bridge32_DosGetDateTime(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosSetDateTime(uint8 *a)
 {
     uint8 p[11];
     if (!lx_execution_read(GLoaderState.execution, lx_guest_load_u32(a), p, sizeof p))
         return ERROR_INVALID_PARAMETER;
     DATETIME value = {0};
-    value.hours = p[0]; value.minutes = p[1]; value.seconds = p[2];
-    value.hundredths = p[3]; value.day = p[4]; value.month = p[5];
+    value.hours = p[0];
+    value.minutes = p[1];
+    value.seconds = p[2];
+    value.hundredths = p[3];
+    value.day = p[4];
+    value.month = p[5];
     value.year = lx_guest_load_u16(p + 6);
     value.timezone = (int16_t)lx_guest_load_u16(p + 8);
     value.weekday = p[10];
     return DosSetDateTime(&value);
 }
+
 static uint32 bridge32_DosOpen(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
@@ -561,6 +604,7 @@ static uint32 bridge32_DosOpen(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosSetFilePtr(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -576,6 +620,7 @@ static uint32 bridge32_DosSetFilePtr(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosDelete(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
@@ -585,11 +630,13 @@ static uint32 bridge32_DosDelete(uint8 *a)
     free(name);
     return result;
 }
+
 static void wireDateTime(uint8 *p, FDATE date, FTIME time)
 {
     lx_guest_store_u16(p, date.day | date.month << 5 | date.year << 9);
     lx_guest_store_u16(p + 2, time.twosecs | time.minutes << 5 | time.hours << 11);
 }
+
 static uint32 wireQueryFileInfo(uint8 *a, int path)
 {
     const uint32 level = lx_guest_load_u32(a + 4), pointer = lx_guest_load_u32(a + 8);
@@ -642,10 +689,12 @@ static uint32 wireQueryFileInfo(uint8 *a, int path)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosQueryFileInfo(uint8 *a)
 {
     return wireQueryFileInfo(a, 0);
 }
+
 static uint32 bridge32_DosQueryPathInfo(uint8 *a)
 {
     return wireQueryFileInfo(a, 1);
@@ -690,14 +739,17 @@ static uint32 wireFind(uint8 *a, int first)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosFindFirst(uint8 *a)
 {
     return wireFind(a, 1);
 }
+
 static uint32 bridge32_DosFindNext(uint8 *a)
 {
     return wireFind(a, 0);
 }
+
 static uint32 bridge32_DosFindClose(uint8 *a)
 {
     return DosFindClose(lx_guest_load_u32(a));
@@ -725,6 +777,7 @@ static uint32 bridge32_DosQueryCurrentDisk(uint8 *a)
     lx_execution_release(&logical);
     return result;
 }
+
 static uint32 bridge32_DosQueryCurrentDir(uint8 *a)
 {
     LxGuestBorrow length = {0}, data = {0};
@@ -743,6 +796,7 @@ static uint32 bridge32_DosQueryCurrentDir(uint8 *a)
     lx_execution_release(&length);
     return result;
 }
+
 static uint32 bridge32_DosQueryCp(uint8 *a)
 {
     const uint32 capacity = lx_guest_load_u32(a);
@@ -765,14 +819,17 @@ static uint32 bridge32_DosQueryCp(uint8 *a)
     lx_execution_release(&length);
     return result;
 }
+
 static uint32 bridge32_DosSetFileSize(uint8 *a)
 {
     return DosSetFileSize(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DosError(uint8 *a)
 {
     return DosError(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosAcknowledgeSignalException(uint8 *a)
 {
     return DosAcknowledgeSignalException(lx_guest_load_u32(a));
@@ -791,6 +848,7 @@ static uint32 bridge32_DosAllocThreadLocalMemory(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosFreeThreadLocalMemory(uint8 *a)
 {
     return DosFreeThreadLocalMemory((ULONG *)(uintptr_t)lx_guest_load_u32(a));
@@ -866,6 +924,7 @@ static uint32 bridge32_DosScanEnv(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosSearchPath(uint8 *a)
 {
     char *path = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 65536);
@@ -887,6 +946,7 @@ static uint32 bridge32_DosSearchPath(uint8 *a)
     free(file);
     return result;
 }
+
 static uint32 bridge32_DosWaitNPipe(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
@@ -896,6 +956,7 @@ static uint32 bridge32_DosWaitNPipe(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosForceDelete(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
@@ -919,14 +980,17 @@ static uint32 bridge32_DosQueryFHState(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosResetBuffer(uint8 *a)
 {
     return DosResetBuffer(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosSleep(uint8 *a)
 {
     return DosSleep(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosSetDefaultDisk(uint8 *a)
 {
     return DosSetDefaultDisk(lx_guest_load_u32(a));
@@ -963,10 +1027,12 @@ static uint32 wireSharedMemory(uint8 *a, int create)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosGetNamedSharedMem(uint8 *a)
 {
     return wireSharedMemory(a, 0);
 }
+
 static uint32 bridge32_DosAllocSharedMem(uint8 *a)
 {
     return wireSharedMemory(a, 1);
@@ -1028,6 +1094,7 @@ static uint32 bridge32_DosCreateThread(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosWaitThread(uint8 *a)
 {
     LxGuestBorrow output;
@@ -1062,10 +1129,12 @@ static uint32 bridge32_DosSetMaxFH(uint8 *a)
 {
     return DosSetMaxFH(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosSetProcessCp(uint8 *a)
 {
     return DosSetProcessCp(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosUnwindException(uint8 *a)
 {
     /* Registration and report addresses remain guest addresses during dispatch. */
@@ -1073,6 +1142,7 @@ static uint32 bridge32_DosUnwindException(uint8 *a)
                               (PVOID)(uintptr_t)lx_guest_load_u32(a + 4),
                               (PVOID)(uintptr_t)lx_guest_load_u32(a + 8));
 }
+
 static uint32 bridge32_DosRaiseException(uint8 *a)
 {
     return DosRaiseException((PVOID)(uintptr_t)lx_guest_load_u32(a));
@@ -1088,6 +1158,7 @@ static void wireLoadDateTime(const uint8 *p, FDATE *date, FTIME *time)
     time->minutes = (t >> 5) & 63;
     time->hours = t >> 11;
 }
+
 static uint32 bridge32_DosSetFileInfo(uint8 *a)
 {
     if (lx_guest_load_u32(a + 4) != FIL_STANDARD)
@@ -1147,12 +1218,14 @@ static uint32 bridge32_DosGetResource(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosFreeResource(uint8 *a)
 {
     void *data =
         lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 1, LX_GUEST_READ);
     return data ? DosFreeResource(data) : ERROR_INVALID_PARAMETER;
 }
+
 static uint32 bridge32_DosQueryResourceSize(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -1316,6 +1389,7 @@ done:
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosOpenMuxWaitSem(uint8 *a)
 {
     uint32 pointer = lx_guest_load_u32(a);
@@ -1334,21 +1408,25 @@ static uint32 bridge32_DosOpenMuxWaitSem(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosCloseMuxWaitSem(uint8 *a)
 {
     return DosCloseMuxWaitSem(lx_guest_load_u32(a));
 }
+
 typedef struct WireMuxWait
 {
     HMUX handle;
     ULONG timeout;
     LxGuestBorrow output;
 } WireMuxWait;
+
 static void wire_mux_cleanup(void *argument)
 {
     WireMuxWait *call = argument;
     lx_execution_release(&call->output);
 }
+
 static uint32 wire_mux_operation(void *argument)
 {
     WireMuxWait *call = argument;
@@ -1358,6 +1436,7 @@ static uint32 wire_mux_operation(void *argument)
         lx_guest_store_u32(call->output.host, user);
     return result;
 }
+
 static uint32 bridge32_DosWaitMuxWaitSem(uint8 *a)
 {
     WireMuxWait call = {0};
@@ -1368,6 +1447,7 @@ static uint32 bridge32_DosWaitMuxWaitSem(uint8 *a)
         return ERROR_INVALID_PARAMETER;
     return lx_host_guarded_call(wire_mux_operation, &call, wire_mux_cleanup, &call);
 }
+
 static uint32 bridge32_DosAddMuxWaitSem(uint8 *a)
 {
     uint8 bytes[8];
@@ -1376,10 +1456,12 @@ static uint32 bridge32_DosAddMuxWaitSem(uint8 *a)
     SEMRECORD record = {lx_guest_load_u32(bytes), lx_guest_load_u32(bytes + 4)};
     return DosAddMuxWaitSem(lx_guest_load_u32(a), &record);
 }
+
 static uint32 bridge32_DosDeleteMuxWaitSem(uint8 *a)
 {
     return DosDeleteMuxWaitSem(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DosQueryMuxWaitSem(uint8 *a)
 {
     LxGuestBorrow count = {0}, records = {0}, flags = {0};
@@ -1419,6 +1501,7 @@ static uint32 bridge32_DosKillThread(uint8 *a)
 {
     return DosKillThread(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosDeleteDir(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), CCHMAXPATH);
@@ -1527,6 +1610,7 @@ static uint32 bridge32_DosFlatToSel(uint8 *a)
     TRACE_RET("DosFlatToSel(%08x) -> %08x", (uint)address, (uint)result);
     return result;
 }
+
 static uint32 bridge32_DosSelToFlat(uint8 *a)
 {
     void *memory = GLoaderState.convert1616to32(lx_guest_load_u32(a));
@@ -1545,6 +1629,7 @@ static uint32 bridge32_DosSubSetMem(uint8 *a)
     return base ? DosSubSetMem(base, lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8))
                 : ERROR_INVALID_PARAMETER;
 }
+
 static uint32 bridge32_DosSubAllocMem(uint8 *a)
 {
     void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
@@ -1565,6 +1650,7 @@ static uint32 bridge32_DosSubAllocMem(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosSubFreeMem(uint8 *a)
 {
     void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
@@ -1573,6 +1659,7 @@ static uint32 bridge32_DosSubFreeMem(uint8 *a)
     return base && memory ? DosSubFreeMem(base, memory, lx_guest_load_u32(a + 8))
                           : ERROR_INVALID_PARAMETER;
 }
+
 static uint32 bridge32_DosSubUnsetMem(uint8 *a)
 {
     void *base = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 64,
@@ -1605,6 +1692,7 @@ static uint32 bridge32_DosQueryProcType(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DosEditName(uint8 *a)
 {
     char *source = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a + 4), 260);
@@ -1620,6 +1708,7 @@ static uint32 bridge32_DosEditName(uint8 *a)
     free(edit);
     return result;
 }
+
 static uint32 bridge32_DosTmrQueryFreq(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -1633,6 +1722,7 @@ static uint32 bridge32_DosTmrQueryFreq(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosTmrQueryTime(uint8 *a)
 {
     LxGuestBorrow output = {0};
@@ -1643,6 +1733,7 @@ static uint32 bridge32_DosTmrQueryTime(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 static uint32 bridge32_DosEnumAttribute(uint8 *a)
 {
     uint32 reference_type = lx_guest_load_u32(a), pointer = lx_guest_load_u32(a + 4);
@@ -1671,14 +1762,17 @@ done:
     free(path);
     return result;
 }
+
 static uint32 bridge32_DosShutdown(uint8 *a)
 {
     return DosShutdown(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DosGetSharedMem(uint8 *a)
 {
     return DosGetSharedMemAddress(lx_guest_load_u32(a), lx_guest_load_u32(a + 4));
 }
+
 static uint32 bridge32_DosGiveSharedMem(uint8 *a)
 {
     void *address = lx_execution_memory(GLoaderState.execution, lx_guest_load_u32(a), 1, 0);
@@ -1734,21 +1828,43 @@ done:
     return result;
 }
 
-static uint32 bridge32_DosSuspendThread(uint8 *a) { return DosSuspendThread(lx_guest_load_u32(a)); }
-static uint32 bridge32_DosResumeThread(uint8 *a) { return DosResumeThread(lx_guest_load_u32(a)); }
+static uint32 bridge32_DosSuspendThread(uint8 *a)
+{
+    return DosSuspendThread(lx_guest_load_u32(a));
+}
+
+static uint32 bridge32_DosResumeThread(uint8 *a)
+{
+    return DosResumeThread(lx_guest_load_u32(a));
+}
+
 static uint32 armTimerBridge(uint8 *a, APIRET (*arm)(ULONG, HSEM, PHTIMER))
 {
     const uint32 address = lx_guest_load_u32(a + 8);
     LxGuestBorrow output = {0};
-    if (address && !lx_execution_borrow(GLoaderState.execution, address, 2, LX_GUEST_WRITE, &output))
+    if (address &&
+        !lx_execution_borrow(GLoaderState.execution, address, 2, LX_GUEST_WRITE, &output))
         return ERROR_INVALID_PARAMETER;
     uint32 result = arm(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), output.host);
     lx_execution_release(&output);
     return result;
 }
-static uint32 bridge32_DosAsyncTimer(uint8 *a) { return armTimerBridge(a, DosAsyncTimer); }
-static uint32 bridge32_DosStartTimer(uint8 *a) { return armTimerBridge(a, DosStartTimer); }
-static uint32 bridge32_DosStopTimer(uint8 *a) { return DosStopTimer(lx_guest_load_u32(a)); }
+
+static uint32 bridge32_DosAsyncTimer(uint8 *a)
+{
+    return armTimerBridge(a, DosAsyncTimer);
+}
+
+static uint32 bridge32_DosStartTimer(uint8 *a)
+{
+    return armTimerBridge(a, DosStartTimer);
+}
+
+static uint32 bridge32_DosStopTimer(uint8 *a)
+{
+    return DosStopTimer(lx_guest_load_u32(a));
+}
+
 static uint32 bridge32_DosQueryMutexSem(uint8 *a)
 {
     PID pid = 0;
@@ -1772,6 +1888,7 @@ static uint32 bridge32_DosQueryMutexSem(uint8 *a)
         return ERROR_INVALID_PARAMETER;
     return result;
 }
+
 /* The drive and level are refused before the label is examined. */
 static uint32 bridge32_DosSetFSInfo(uint8 *a)
 {
@@ -1783,6 +1900,7 @@ static uint32 bridge32_DosSetFSInfo(uint8 *a)
     return DosSetFSInfo(lx_guest_load_u32(a), lx_guest_load_u32(a + 4), readable ? label : NULL,
                         size);
 }
+
 /* No argument frame: the entry reads the caller's registers and stack itself. */
 static uint32 bridge32_THK_UNITHUNK(uint8 *a)
 {

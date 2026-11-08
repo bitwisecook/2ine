@@ -25,6 +25,7 @@ static __typeof__(DosSetPriority) *call_priority;
 #define DosSetPriority call_priority
 static void *segments[2];
 static unsigned segment_count;
+
 static void *segment_alloc(uint16 *selector, int executable)
 {
     (void)executable;
@@ -33,6 +34,7 @@ static void *segment_alloc(uint16 *selector, int executable)
     *selector = (uint16)segment_count;
     return segments[segment_count++] = calloc(1, 65536);
 }
+
 static void segment_free(uint16 selector)
 {
     if (selector < 2)
@@ -41,6 +43,7 @@ static void segment_free(uint16 selector)
         segments[selector] = NULL;
     }
 }
+
 #define CHECK(x)                                                                                   \
     do                                                                                             \
     {                                                                                              \
@@ -50,17 +53,20 @@ static void segment_free(uint16 selector)
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static char *host_path(const char *name, uint32 *error)
 {
     *error = NO_ERROR;
     return strdup(name);
 }
+
 static void canaries(const unsigned char *buffer, size_t written)
 {
     CHECK(buffer[0] == 0xcc);
     for (size_t i = written + 1; i < 32; i++)
         CHECK(buffer[i] == 0xcc);
 }
+
 static void file_status(char *path, HFILE handle)
 {
     unsigned char buffer[32];
@@ -96,6 +102,7 @@ static void file_status(char *path, HFILE handle)
         CHECK(!result && extended.cbFile == 5 && extended.cbList == 4);
     }
 }
+
 static void priority(void)
 {
     LxTIB *thread = GLoaderState.getOs2Tib();
@@ -118,6 +125,7 @@ static void priority(void)
     details->tib2_ultid = saved_id;
     details->tib2_ulpri = saved_priority;
 }
+
 static void module16(void)
 {
     LxModule module = {0};
@@ -128,10 +136,12 @@ static void module16(void)
     LxModule *saved = GLoaderState.loaded_modules;
     module.next = saved;
     GLoaderState.loaded_modules = &module;
+
     struct
     {
         USHORT before, handle, after;
     } output = {0xA55A, 0, 0x5AA5};
+
     const char *names[] = {"LEGACYMOD", "legacymod.dll", "C:\\OS2\\DLL\\LEGACYMOD.DLL"};
     for (unsigned i = 0; i < 3; i++)
     {
@@ -145,6 +155,7 @@ static void module16(void)
     GLoaderState.loaded_modules = saved;
     CHECK(lx_handle_close(module.handle, LX_HANDLE_MODULE));
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);

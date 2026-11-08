@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/nls.h"
+
 static const struct
 {
     ULONG type;
@@ -108,6 +109,7 @@ static const struct
     {0x100F, ""},              /* LOCALE_SABBREVMONTHNAME13 */
     {0x1010, "1"},             /* LOCALE_INEGNUMBER */
 };
+
 LONG GetLocaleInfo(ULONG locale, ULONG type, PSZ output, LONG capacity)
 {
     TRACE_NATIVE("GetLocaleInfo(%X, %X, %p, %d)", locale, type, output, capacity);

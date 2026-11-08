@@ -21,23 +21,28 @@
 #define MEDIA_MEMBER_LIMIT (UINT64_C(2) * 1024 * 1024 * 1024)
 #define MEDIA_ENTRY_LIMIT 100000u
 #include "media_cache.h"
+
 static unsigned u16(const unsigned char *p)
 {
     return p[0] | (unsigned)p[1] << 8;
 }
+
 static uint32_t u32(const unsigned char *p)
 {
     return u16(p) | (uint32_t)u16(p + 2) << 16;
 }
+
 static int bad(int error)
 {
     errno = error;
     return 0;
 }
+
 int tb_media_path(const char *path)
 {
     return path && !strncmp(path, MEDIA_PREFIX, strlen(MEDIA_PREFIX));
 }
+
 static char *encode(const char *p)
 {
     static const char digits[] = "0123456789abcdef";
@@ -55,10 +60,12 @@ static char *encode(const char *p)
     out[n * 2] = 0;
     return out;
 }
+
 static int hex(char c)
 {
     return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
 }
+
 static char *decode(const char *p, size_t n)
 {
     if (n % 2)
@@ -83,6 +90,7 @@ static char *decode(const char *p, size_t n)
     out[n / 2] = 0;
     return out;
 }
+
 static char *append(const char *a, const char *b, const char *suffix)
 {
     size_t n = strlen(a) + strlen(b) + strlen(suffix) + 1;
@@ -91,6 +99,7 @@ static char *append(const char *a, const char *b, const char *suffix)
         snprintf(out, n, "%s%s%s", a, b, suffix);
     return out;
 }
+
 char *tb_media_root(const char *source)
 {
     if (tb_media_path(source))
@@ -106,6 +115,7 @@ char *tb_media_root(const char *source)
     free(encoded);
     return out;
 }
+
 /* Archive member names are relative and never interpreted by the host filesystem. */
 static char *member_name(const char *name, int pack)
 {
@@ -148,11 +158,13 @@ static char *member_name(const char *name, int pack)
     out[used] = 0;
     return out;
 }
+
 static char *last_member(const char *path)
 {
     const char *last = strrchr(path, '!');
     return last ? decode(last + 1, strlen(last + 1)) : NULL;
 }
+
 char *tb_media_member_name(const char *path)
 {
     if (tb_media_path(path))
@@ -160,6 +172,7 @@ char *tb_media_member_name(const char *path)
     const char *base = strrchr(path, '/');
     return strdup(base ? base + 1 : path);
 }
+
 char *tb_media_host_source(const char *path)
 {
     if (!tb_media_path(path))
@@ -174,6 +187,7 @@ char *tb_media_host_source(const char *path)
     free(decoded);
     return canonical;
 }
+
 char *tb_media_child(const char *directory, const char *name)
 {
     if (!tb_media_path(directory) || strpbrk(name, "/\\:") || !strcmp(name, ".") ||
@@ -206,6 +220,7 @@ char *tb_media_child(const char *directory, const char *name)
     free(encoded);
     return out;
 }
+
 char *tb_media_parent(const char *path)
 {
     if (!tb_media_path(path))
@@ -251,6 +266,7 @@ char *tb_media_parent(const char *path)
     free(member);
     return out;
 }
+
 char *tb_media_label(const char *path)
 {
     if (!tb_media_path(path))
@@ -278,7 +294,9 @@ char *tb_media_label(const char *path)
         p = end + 1;
     }
 }
+
 typedef int (*Visit)(void *, const char *, uint64_t, int, void *, uint64_t, uint64_t, int, int64_t);
+
 /* The callback may request one member; extraction never uses archive paths as host paths. */
 static int pack_walk(TbReadStream *file, Visit visit, void *context)
 {
@@ -340,6 +358,7 @@ static int pack_walk(TbReadStream *file, Visit visit, void *context)
     }
     return bad(EFBIG);
 }
+
 /* WarpIN revisions 3/4: WIArcHeader (0x214), WIPackHeader (48), WIFileHeader (285). */
 static int wpi_walk(TbReadStream *file, Visit visit, void *context)
 {
@@ -443,12 +462,14 @@ static int wpi_walk(TbReadStream *file, Visit visit, void *context)
     }
     return 1;
 }
+
 typedef struct ArchiveInput
 {
     TbReadStream *file;
     uint64_t base, length, position;
     unsigned char buffer[65536];
 } ArchiveInput;
+
 static la_ssize_t archive_input_read(struct archive *a, void *opaque, const void **out)
 {
     ArchiveInput *in = opaque;
@@ -461,6 +482,7 @@ static la_ssize_t archive_input_read(struct archive *a, void *opaque, const void
     in->position += want;
     return (la_ssize_t)want;
 }
+
 static la_int64_t archive_input_seek(struct archive *a, void *opaque, la_int64_t offset, int whence)
 {
     ArchiveInput *in = opaque;
@@ -471,6 +493,7 @@ static la_int64_t archive_input_seek(struct archive *a, void *opaque, la_int64_t
     in->position = offset < 0 ? base - distance : base + distance;
     return (la_int64_t)in->position;
 }
+
 static la_int64_t archive_input_skip(struct archive *a, void *opaque, la_int64_t count)
 {
     ArchiveInput *in = opaque;
@@ -479,20 +502,24 @@ static la_int64_t archive_input_skip(struct archive *a, void *opaque, la_int64_t
         n = in->length - in->position;
     return archive_input_seek(a, opaque, (la_int64_t)n, SEEK_CUR) < 0 ? 0 : (la_int64_t)n;
 }
+
 #include "legacy_archives.h"
 #include "zoo_archive.h"
+
 typedef struct DiskVisit
 {
     Visit visit;
     void *context;
     TbReadStream *file;
 } DiskVisit;
+
 static int disk_visit(void *opaque, const char *name, uint64_t size, int directory,
                       int64_t modified)
 {
     DiskVisit *d = opaque;
     return d->visit(d->context, name, size, directory, d->file, 0, 0, 3, modified);
 }
+
 static int image_reader(TbReadStream *file)
 {
     unsigned char magic[512] = {0}, iso[7] = {0};
@@ -504,6 +531,7 @@ static int image_reader(TbReadStream *file)
     return !memcmp(iso + 1, "CD001", 5) ||
            (magic[510] == 0x55 && magic[511] == 0xaa && (magic[0] == 0xeb || magic[0] == 0xe9));
 }
+
 static void image_stats(TbReadStream *file, uint64_t before_builds, uint64_t before_hits)
 {
     uint64_t builds, hits;
@@ -511,6 +539,7 @@ static void image_stats(TbReadStream *file, uint64_t before_builds, uint64_t bef
     media_session.stats.directory_index_builds += builds - before_builds;
     media_session.stats.directory_index_hits += hits - before_hits;
 }
+
 static int archive_walk(TbReadStream *file, Visit visit, void *context)
 {
     unsigned char magic[512] = {0};
@@ -603,7 +632,9 @@ static int archive_walk(TbReadStream *file, Visit visit, void *context)
     archive_read_free(a);
     return ok;
 }
+
 #include "media_stream.h"
+
 /* Resolve container boundaries iteratively: nesting consumes no C call stack. */
 static TbReadStream *open_parent(const char *path, char **member)
 {
@@ -657,6 +688,7 @@ static TbReadStream *open_parent(const char *path, char **member)
     }
     return file;
 }
+
 FILE *tb_media_fopen(const char *path)
 {
     char *member = NULL;
@@ -693,6 +725,7 @@ FILE *tb_media_fopen(const char *path)
     }
     return output;
 }
+
 typedef struct Listing
 {
     char *member;
@@ -700,6 +733,7 @@ typedef struct Listing
     size_t count;
     int found;
 } Listing;
+
 static int list_visit(void *opaque, const char *name, uint64_t size, int directory, void *unused,
                       uint64_t off, uint64_t packed, int kind, int64_t modified)
 {
@@ -738,6 +772,7 @@ static int list_visit(void *opaque, const char *name, uint64_t size, int directo
                                           .modified = slash ? INT64_MIN : modified};
     return 1;
 }
+
 TbMediaEntry *tb_media_entries(const char *path, size_t *count)
 {
     *count = (size_t)-1;
@@ -770,17 +805,20 @@ TbMediaEntry *tb_media_entries(const char *path, size_t *count)
     *count = l.count;
     return l.items;
 }
+
 void tb_media_entries_free(TbMediaEntry *entries, size_t count)
 {
     for (size_t i = 0; i < count; i++)
         free(entries[i].name);
     free(entries);
 }
+
 static int probe_visit(void *opaque, const char *name, uint64_t size, int dir, void *f,
                        uint64_t off, uint64_t packed, int kind, int64_t modified)
 {
     return 2;
 }
+
 int tb_media_container(const char *path)
 {
     TbReadStream *file = NULL;

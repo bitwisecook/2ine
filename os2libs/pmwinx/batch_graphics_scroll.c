@@ -3,6 +3,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwin/graphics.h"
+
 static void wire_rect(uint8 p[16], LONG l, LONG t, LONG r, LONG b)
 {
     lx_guest_store_u32(p, (ULONG)l);
@@ -10,6 +11,7 @@ static void wire_rect(uint8 p[16], LONG l, LONG t, LONG r, LONG b)
     lx_guest_store_u32(p + 8, (ULONG)r);
     lx_guest_store_u32(p + 12, (ULONG)b);
 }
+
 BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update, PVOID box)
 {
     if (!open32FindDC(h))
@@ -86,6 +88,7 @@ BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
         open32SetError(87);
     return ok;
 }
+
 LONG ScrollWindowEx(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
                     PVOID box, ULONG flags)
 {
@@ -150,6 +153,7 @@ LONG ScrollWindowEx(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip, UL
     ReleaseDC(window, dc);
     return ok ? result : 0;
 }
+
 BOOL ScrollWindow(ULONG window, LONG dx, LONG dy, PVOID scroll, PVOID clip)
 {
     /* Child windows move only when the whole client area scrolls. */

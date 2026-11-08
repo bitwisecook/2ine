@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/paint.h"
 #include "os2libs/pmwin/graphics.h"
+
 enum
 {
     RDW_INVALIDATE = 1,
@@ -17,10 +18,12 @@ enum
     RDW_UPDATENOW = 256,
     RDW_ERASENOW = 512
 };
+
 static LONG clamped_coordinate(int64_t value)
 {
     return value < INT32_MIN ? INT32_MIN : value > INT32_MAX ? INT32_MAX : (LONG)value;
 }
+
 static BOOL redraw_rect(ULONG handle, const RECTL *rect, ULONG flags)
 {
     handle = open32ClientWindow(handle);
@@ -60,6 +63,7 @@ static BOOL redraw_rect(ULONG handle, const RECTL *rect, ULONG flags)
         }
     return TRUE;
 }
+
 static BOOL update_tree(ULONG handle, ULONG flags)
 {
     handle = open32ClientWindow(handle);
@@ -86,6 +90,7 @@ static BOOL update_tree(ULONG handle, ULONG flags)
     }
     return !(flags & RDW_UPDATENOW) || WinUpdateWindow(handle);
 }
+
 BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flags)
 {
     TRACE_NATIVE("RedrawWindow(%u, %p, %u, %X)", handle, rectangle, region_handle, flags);
@@ -140,18 +145,22 @@ BOOL InvalidateRect(ULONG window, PVOID rectangle, BOOL erase)
 {
     return RedrawWindow(window, rectangle, 0, 1 | (erase ? 4 : 0) | (window ? 0 : 128));
 }
+
 BOOL ValidateRect(ULONG window, PVOID rectangle)
 {
     return RedrawWindow(window, rectangle, 0, 8 | (window ? 0 : 128));
 }
+
 BOOL InvalidateRgn(ULONG window, ULONG region, BOOL erase)
 {
     return RedrawWindow(window, NULL, region, 1 | (erase ? 4 : 0) | (window ? 0 : 128));
 }
+
 BOOL ValidateRgn(ULONG window, ULONG region)
 {
     return RedrawWindow(window, NULL, region, 8 | (window ? 0 : 128));
 }
+
 BOOL GetUpdateRect(ULONG window, PVOID output, BOOL erase)
 {
     window = open32ClientWindow(window);

@@ -14,6 +14,7 @@ static void open32Shutdown(void);
 
 static uint32 references;
 static ULONG command_line;
+
 static void open32Shutdown(void)
 {
     lx_pm_set_open32_thread_exit(NULL);
@@ -43,6 +44,7 @@ static void open32Shutdown(void)
     command_line = 0;
     references = 0;
 }
+
 BOOL WinXProcessMsg(PVOID message)
 {
     const uint8 *wire = message;
@@ -131,19 +133,23 @@ ULONG GetTickCount(void)
 }
 
 static _Thread_local ULONG last_error;
+
 void open32SetError(ULONG error)
 {
     TRACE_NATIVE("Open32 error %u", error);
     last_error = error;
 }
+
 ULONG GetLastError(void)
 {
     return last_error;
 }
+
 VOID SetLastError(ULONG error)
 {
     last_error = error;
 }
+
 VOID Sleep(ULONG milliseconds)
 {
     lx_host_sleep_ms(milliseconds);

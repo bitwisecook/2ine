@@ -21,6 +21,7 @@ static unsigned rendered, destroyed;
 static const char rich[] = "{\\rtf1\\bin3 a\0b}";
 static ULONG rich_format;
 static unsigned released;
+
 static uint32 release_memory(void *host)
 {
     ULONG flags = 123;
@@ -32,6 +33,7 @@ static uint32 release_memory(void *host)
     released++;
     return 0;
 }
+
 static MRESULT procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_RENDERFMT)
@@ -46,6 +48,7 @@ static MRESULT procedure(HWND window, ULONG message, MPARAM first, MPARAM second
         destroyed++;
     return WinDefWindowProc(window, message, first, second);
 }
+
 static const void *external_image(void *context, const char *mime, size_t *size)
 {
     if (mime && !strcmp(mime, "image/png"))
@@ -57,6 +60,7 @@ static const void *external_image(void *context, const char *mime, size_t *size)
     *size = 0;
     return NULL;
 }
+
 int main(void)
 {
     CHECK(SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "dummy", SDL_HINT_OVERRIDE));

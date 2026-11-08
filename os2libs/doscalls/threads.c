@@ -11,6 +11,7 @@ static void releaseThreadCriticalSection(void);
 static ThreadControl *createThreadControl(uint32 id, BOOL suspended);
 static void bindThreadControl(ThreadControl *control);
 static void removeThreadControl(ThreadControl *control);
+
 APIRET DosEnterMustComplete(PULONG pulNesting)
 {
     TRACE_NATIVE("DosEnterMustComplete(%p)", pulNesting);
@@ -574,6 +575,7 @@ enum
 {
     SUSPEND_POLL_MS = 10
 };
+
 static LxHostMonitor *suspend_monitor;
 static ThreadControl *thread_controls;
 static ThreadControl primary_control = {NULL, 1, 0};

@@ -5,10 +5,12 @@
 #include <stdarg.h>
 #include <stdio.h>
 typedef BOOL (*ReadArgument)(void *, ULONG *);
+
 typedef struct GuestArguments
 {
     uint32 address;
 } GuestArguments;
+
 static BOOL guest_argument(void *state, ULONG *value)
 {
     GuestArguments *args = state;
@@ -18,12 +20,14 @@ static BOOL guest_argument(void *state, ULONG *value)
     args->address += 4;
     return TRUE;
 }
+
 static BOOL native_argument(void *state, ULONG *value)
 {
     va_list *args = state;
     *value = va_arg(*args, ULONG);
     return TRUE;
 }
+
 static char *argument_string(ULONG address, LONG precision)
 {
     if (!address)
@@ -51,6 +55,7 @@ static char *argument_string(ULONG address, LONG precision)
     free(text);
     return NULL;
 }
+
 static LONG format_words(char *output, const char *format, ReadArgument read, void *arguments)
 {
     size_t used = 0;
@@ -178,11 +183,13 @@ too_long:
     open32SetError(122);
     return -1;
 }
+
 LONG open32FormatGuest(PSZ format, ULONG arguments, PSZ output)
 {
     GuestArguments state = {arguments};
     return format_words(output, format, guest_argument, &state);
 }
+
 static char *format_snapshot(PSZ format)
 {
     uint32 address;
@@ -191,6 +198,7 @@ static char *format_snapshot(PSZ format)
         return NULL;
     return lx_execution_copy_string(GLoaderState.execution, address, 4096);
 }
+
 static LONG write_output(PSZ output, const char *formatted, LONG count)
 {
     uint32 address;
@@ -205,6 +213,7 @@ static LONG write_output(PSZ output, const char *formatted, LONG count)
     }
     return count;
 }
+
 LONG wsprintf(PSZ output, PSZ format, ...)
 {
     char *copy = format_snapshot(format), formatted[1024];
@@ -220,6 +229,7 @@ LONG wsprintf(PSZ output, PSZ format, ...)
     free(copy);
     return write_output(output, formatted, count);
 }
+
 LONG wvsprintf(PSZ output, PSZ format, PVOID arguments)
 {
     char *copy = format_snapshot(format), formatted[1024];

@@ -5,10 +5,12 @@
 #include <stdint.h>
 #include <stdio.h>
 typedef struct TbReadStream TbReadStream;
+
 typedef struct TbReadBudget
 {
     size_t used, limit;
 } TbReadBudget;
+
 typedef int (*TbReadAt)(void *, uint64_t, void *, size_t);
 typedef void (*TbReadClose)(void *);
 TbReadStream *tb_stream_create(uint64_t size, void *context, TbReadAt read, TbReadClose close);

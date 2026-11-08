@@ -23,6 +23,7 @@ static char *host_path(const char *name, uint32 *error)
     *error = 0;
     return strdup(name);
 }
+
 static void require_string(HINI profile, char *app, char *key, const char *expected)
 {
     char text[64];
@@ -31,6 +32,7 @@ static void require_string(HINI profile, char *app, char *key, const char *expec
           strlen(expected));
     CHECK(!strcmp(text, expected));
 }
+
 static void profile_names(void)
 {
     char *saved[26];
@@ -61,6 +63,7 @@ static void profile_names(void)
     for (unsigned i = 0; i < 26; i++)
         GLoaderState.disks[i] = saved[i];
 }
+
 static void national_defaults(void)
 {
     char value[16];
@@ -99,6 +102,7 @@ static void national_defaults(void)
     CHECK(alias && !PrfQueryProfileSize(alias, "PM_National", "iCountry", &size));
     CHECK(PrfCloseProfile(alias));
 }
+
 static void *error_thread(void *unused)
 {
     (void)unused;
@@ -107,12 +111,14 @@ static void *error_thread(void *unused)
     CHECK(GetLastError() == 123);
     return NULL;
 }
+
 static LONG OS2API winmain(ULONG instance, ULONG previous, PSZ command, LONG show)
 {
     CHECK(instance == UINT32_MAX && previous == 0);
     CHECK(!strcmp(command, "alpha beta") && show == 7);
     return 123;
 }
+
 int main(int argc, char **argv)
 {
     profile_names();

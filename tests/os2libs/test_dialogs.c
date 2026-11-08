@@ -20,6 +20,7 @@ static uint8_t bytes[256];
 static HWND owner;
 static unsigned mode, initialized, destroyed, released;
 static unsigned pointer_commands;
+
 static MRESULT OS2API pointer_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_COMMAND)
@@ -30,6 +31,7 @@ static MRESULT OS2API pointer_procedure(HWND window, ULONG message, MPARAM first
     }
     return WinDefDlgProc(window, message, first, second);
 }
+
 static Window *native_window(HWND handle)
 {
     AnchorBlock *anchor = lxHostThreadState()->anchor_block;
@@ -38,6 +40,7 @@ static Window *native_window(HWND handle)
             return anchor->windows[i];
     return NULL;
 }
+
 static void check_cycle(HWND window, BOOL wanted_eligible, BOOL wanted_modal)
 {
     int eligible = !wanted_eligible, modal = !wanted_modal;
@@ -46,7 +49,9 @@ static void check_cycle(HWND window, BOOL wanted_eligible, BOOL wanted_modal)
     lx_host_window_get_cycle_policy(native->heavy.window, &eligible, &modal);
     CHECK(eligible == wanted_eligible && modal == wanted_modal);
 }
+
 static HWND cycle_previous, cycle_other;
+
 static MRESULT OS2API cycle_reparent_procedure(HWND window, ULONG message, MPARAM first,
                                                MPARAM second)
 {
@@ -70,6 +75,7 @@ static MRESULT OS2API cycle_reparent_procedure(HWND window, ULONG message, MPARA
     }
     return WinDefDlgProc(window, message, first, second);
 }
+
 static MRESULT OS2API paint_modal_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_INITDLG)
@@ -102,6 +108,7 @@ static MRESULT OS2API paint_modal_procedure(HWND window, ULONG message, MPARAM f
     }
     return WinDefDlgProc(window, message, first, second);
 }
+
 static MRESULT OS2API paint_owner_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_PAINT)
@@ -117,6 +124,7 @@ static MRESULT OS2API paint_owner_procedure(HWND window, ULONG message, MPARAM f
     }
     return WinDefWindowProc(window, message, first, second);
 }
+
 static void make_template(void)
 {
     memset(bytes, 0, sizeof bytes);
@@ -157,6 +165,7 @@ static void make_template(void)
     items[3].id = 30;
     items[3].y = 50;
 }
+
 static MRESULT OS2API procedure(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_INITDLG)
@@ -222,6 +231,7 @@ static MRESULT OS2API procedure(HWND window, ULONG message, MPARAM first, MPARAM
     }
     return WinDefDlgProc(window, message, first, second);
 }
+
 static uint32_t query(uint32_t module, uint32_t type, uint32_t name, uint32_t *size)
 {
     (void)module;
@@ -230,6 +240,7 @@ static uint32_t query(uint32_t module, uint32_t type, uint32_t name, uint32_t *s
     *size = sizeof bytes;
     return 0;
 }
+
 static uint32_t get(uint32_t module, uint32_t type, uint32_t name, void **data)
 {
     uint32_t size;
@@ -238,12 +249,14 @@ static uint32_t get(uint32_t module, uint32_t type, uint32_t name, void **data)
     *data = bytes;
     return 0;
 }
+
 static uint32_t release_resource(void *data)
 {
     CHECK(data == bytes);
     released++;
     return 0;
 }
+
 int main(void)
 {
     CHECK(sizeof(DLGTITEM) == 30 && sizeof(DLGTEMPLATE) == 44);

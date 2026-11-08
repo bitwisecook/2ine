@@ -15,10 +15,12 @@
             return 1;                                                                              \
         }                                                                                          \
     } while (0)
+
 static AnchorBlock *test_anchor(void)
 {
     return lxHostThreadState()->anchor_block;
 }
+
 static Window *test_window(HWND handle)
 {
     AnchorBlock *anchor = test_anchor();
@@ -27,7 +29,9 @@ static Window *test_window(HWND handle)
             return anchor->windows[i];
     return NULL;
 }
+
 static HWND closed_client;
+
 static MRESULT OS2API client_proc(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_CLOSE)
@@ -37,16 +41,19 @@ static MRESULT OS2API client_proc(HWND window, ULONG message, MPARAM first, MPAR
     }
     return WinDefWindowProc(window, message, first, second);
 }
+
 static void dispatch_pending(HAB anchor)
 {
     QMSG message;
     for (unsigned count = 0; count < 1000 && WinPeekMsg(anchor, &message, 0, 0, 0, 1); count++)
         WinDispatchMsg(anchor, &message);
 }
+
 static MPARAM point(LONG x, LONG y)
 {
     return (MPARAM)(uintptr_t)((USHORT)x | (ULONG)(USHORT)y << 16);
 }
+
 int main(void)
 {
     HAB anchor = WinInitialize(0);

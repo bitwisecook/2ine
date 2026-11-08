@@ -2,11 +2,13 @@
 /* Shared installation-media browser and original OS/2 support-file import. */
 #include "media.h"
 #include "os2_paths.h"
+
 enum
 {
     BASE_SUPPORT_COUNT = 3,
     SUPPORT_COUNT = 11
 };
+
 static const char *support_names[] = {"CMD.EXE",     "SYSLEVEL.OS2", "OSO001.MSG",   "REXX.DLL",
                                       "REXXAPI.DLL", "REXXUTIL.DLL", "REXXINIT.DLL", "REX.MSG",
                                       "REXH.MSG",    "RXQUEUE.EXE",  "RXSUBCOM.EXE"};
@@ -15,6 +17,7 @@ static const char *support_paths[] = {
     "C:\\OS2\\DLL\\REXX.DLL",     "C:\\OS2\\DLL\\REXXAPI.DLL", "C:\\OS2\\DLL\\REXXUTIL.DLL",
     "C:\\OS2\\DLL\\REXXINIT.DLL", "C:\\OS2\\SYSTEM\\REX.MSG",  "C:\\OS2\\SYSTEM\\REXH.MSG",
     "C:\\OS2\\RXQUEUE.EXE",       "C:\\OS2\\RXSUBCOM.EXE"};
+
 static cJSON *os2_support(Context *c)
 {
     cJSON *result = cJSON_CreateObject(), *files = cJSON_AddArrayToObject(result, "files");
@@ -56,6 +59,7 @@ static cJSON *os2_support(Context *c)
     cJSON_Delete(media);
     return result;
 }
+
 static void os2_preserve_media_selection(Context *c, cJSON *media)
 {
     size_t length = 0;
@@ -66,6 +70,7 @@ static void os2_preserve_media_selection(Context *c, cJSON *media)
         cJSON_AddItemToObject(media, "selectedCategories", cJSON_Duplicate(selection, 1));
     cJSON_Delete(previous);
 }
+
 static cJSON *remember_os2_media(Context *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");
@@ -79,6 +84,7 @@ static cJSON *remember_os2_media(Context *c, const cJSON *request)
     cJSON_Delete(media);
     return ok ? os2_support(c) : NULL;
 }
+
 static int media_candidate(const char *name)
 {
     const char *extension = strrchr(name, '.');
@@ -95,6 +101,7 @@ static int media_candidate(const char *name)
             return 1;
     return 0;
 }
+
 static cJSON *extraction_read_stats(void)
 {
     TbMediaReadStats stats = tb_media_read_stats();
@@ -110,6 +117,7 @@ static cJSON *extraction_read_stats(void)
     cJSON_AddNumberToObject(result, "inflateRestores", (double)stats.inflate_restores);
     return result;
 }
+
 static cJSON *browse_media(Context *c, const char *input)
 {
     if (!input)
@@ -202,12 +210,14 @@ static cJSON *browse_media(Context *c, const char *input)
     }
     return result;
 }
+
 typedef struct SupportFile
 {
     unsigned char *data;
     size_t size;
     char *source;
 } SupportFile;
+
 static int support_read(Context *c, const char *source, int index, SupportFile *file)
 {
     if (component_cancelled(c))
@@ -263,6 +273,7 @@ static int support_read(Context *c, const char *source, int index, SupportFile *
     file->source = strdup(source);
     return file->source != NULL || fail(c, "Out of memory");
 }
+
 static cJSON *import_os2_support(Context *c, const cJSON *request)
 {
     const cJSON *sources = get(request, "sources");

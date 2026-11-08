@@ -9,6 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <wchar.h>
+
 static wchar_t *wide(const char *s)
 {
     int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, s, -1, NULL, 0);
@@ -20,6 +21,7 @@ static wchar_t *wide(const char *s)
     }
     return p;
 }
+
 static void env_set(const char *key, const char *value)
 {
     wchar_t *k = wide(key), *v = value ? wide(value) : NULL;
@@ -28,6 +30,7 @@ static void env_set(const char *key, const char *value)
     free(k);
     free(v);
 }
+
 static int spawn(char **argv, int count, const char *cwd)
 {
     wchar_t **args = calloc((size_t)count, sizeof(*args));
@@ -110,6 +113,7 @@ static int spawn(char **argv, int count, const char *cwd)
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+
 static void env_set(const char *key, const char *value)
 {
     if (value)
@@ -117,6 +121,7 @@ static void env_set(const char *key, const char *value)
     else
         unsetenv(key);
 }
+
 static int spawn(char **argv, int count, const char *cwd)
 {
     (void)count;
@@ -147,6 +152,7 @@ static int invoke(cJSON *request, char **result)
     tb_free(error);
     return status;
 }
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && !strcmp(argv[1], "--help"))

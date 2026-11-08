@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "hal/host_sync.h"
+
 typedef struct Hook
 {
     ULONG handle, procedure, thread;
@@ -10,27 +11,32 @@ typedef struct Hook
     LxHandleBorrow module;
     struct Hook *next;
 } Hook;
+
 typedef struct HookSnapshot
 {
     LxHandleBorrow *entries;
     size_t count;
 } HookSnapshot;
+
 typedef struct HookCall
 {
     HookSnapshot *snapshot;
     size_t next;
     struct HookCall *previous;
 } HookCall;
+
 static Hook *hooks;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static _Thread_local HookCall *current;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
     if (!monitor)
         abort();
 }
+
 static void destroy_hook(void *data)
 {
     Hook *hook = data;
@@ -42,6 +48,7 @@ static void destroy_hook(void *data)
     }
     free(hook);
 }
+
 ULONG SetWindowsHookEx(LONG type, ULONG procedure, ULONG module, ULONG thread)
 {
     TRACE_NATIVE("SetWindowsHookEx(%d, %X, %u, %u)", type, procedure, module, thread);
@@ -87,6 +94,7 @@ ULONG SetWindowsHookEx(LONG type, ULONG procedure, ULONG module, ULONG thread)
     lx_host_monitor_unlock(monitor);
     return hook->handle;
 }
+
 BOOL UnhookWindowsHookEx(ULONG handle)
 {
     lx_host_once(&once, initialize);
@@ -106,6 +114,7 @@ BOOL UnhookWindowsHookEx(ULONG handle)
     lx_host_monitor_unlock(monitor);
     return lx_handle_close(handle, LX_HANDLE_OPEN32_HOOK);
 }
+
 static LONG invoke_hook(HookSnapshot *snapshot, size_t index, LONG code, ULONG key, ULONG parameter)
 {
     while (index < snapshot->count && ((Hook *)snapshot->entries[index].resource)->removed)
@@ -120,11 +129,13 @@ static LONG invoke_hook(HookSnapshot *snapshot, size_t index, LONG code, ULONG k
     current = call.previous;
     return result;
 }
+
 LONG CallNextHookEx(ULONG hook, LONG code, ULONG key, ULONG parameter)
 {
     (void)hook;
     return current ? invoke_hook(current->snapshot, current->next, code, key, parameter) : 0;
 }
+
 LONG open32RunKeyboardHooks(LONG code, ULONG key, ULONG parameter)
 {
     lx_host_once(&once, initialize);
@@ -152,6 +163,7 @@ LONG open32RunKeyboardHooks(LONG code, ULONG key, ULONG parameter)
     free(snapshot.entries);
     return result;
 }
+
 void open32HooksCleanup(void)
 {
     while (hooks)

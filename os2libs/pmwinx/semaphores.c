@@ -14,11 +14,13 @@ enum
     SEMAPHORE_ALL_ACCESS = 0x1F0003,
     SEMAPHORE_NAME_CAPACITY = 260
 };
+
 typedef struct SemaphoreState
 {
     uint32 count, maximum, ready;
     char name[SEMAPHORE_NAME_CAPACITY];
 } SemaphoreState;
+
 typedef struct Open32Semaphore
 {
     LxHostMonitor *monitor;

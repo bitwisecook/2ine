@@ -7,17 +7,20 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
+
 static LxHostFsError range_error(int error)
 {
     return error == EACCES || error == EBADF       ? LX_HOST_FS_DENIED
            : error == EINVAL || error == EOVERFLOW ? LX_HOST_FS_INVALID
                                                    : LX_HOST_FS_IO;
 }
+
 void lx_host_file_dispose(LxHostFile *file)
 {
     close(file->fd);
     free(file);
 }
+
 LxHostFsError lx_host_file_lock_range(LxHostFile *file, uint64_t offset, uint64_t length,
                                       int acquire)
 {
@@ -41,6 +44,7 @@ LxHostFsError lx_host_file_lock_range(LxHostFile *file, uint64_t offset, uint64_
         return LX_HOST_FS_OK;
     return errno == EACCES || errno == EAGAIN ? LX_HOST_FS_BUSY : range_error(errno);
 }
+
 LxHostFsError lx_host_file_range_conflict(LxHostFile *file, uint64_t offset, uint64_t length,
                                           int *conflict)
 {

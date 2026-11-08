@@ -7,6 +7,7 @@
 #include "hal/host_mailbox.h"
 #include "hal/host_shared.h"
 #include "guest/abi.h"
+
 typedef struct Target
 {
     struct Target *next;
@@ -16,6 +17,7 @@ typedef struct Target
     uint32 thread;
     BOOL open32;
 } Target;
+
 /* A function run on another queue's thread. The sender and the queue each hold a reference,
    so a reply can release the sender while the function is still running. The argument block
    is a private copy for the same reason, and is copied back only when the function finishes. */
@@ -26,6 +28,7 @@ enum
     CALL_FINISHED,
     CALL_CANCELLED
 };
+
 typedef struct QueuedCall
 {
     LxPmWindowCall function;
@@ -34,6 +37,7 @@ typedef struct QueuedCall
     size_t size;
     uint8 data[];
 } QueuedCall;
+
 typedef struct Pending
 {
     struct Pending *next;
@@ -44,16 +48,19 @@ typedef struct Pending
     LxHostEvent event;
     QMSG message;
 } Pending;
+
 static LxHostOnce initialized = LX_HOST_ONCE_INIT;
 static LxHostMutex *lock;
 static Target *targets;
 static Pending *pending, *tail;
+
 /* Every message queue of this process, including those that own no window. */
 typedef struct QueueEntry
 {
     struct QueueEntry *next;
     AnchorBlock *anchor;
 } QueueEntry;
+
 static QueueEntry *queues;
 static uint32 next_window = FIRST_HWND_VALUE - 1;
 static uint32 window_prefix;
@@ -61,20 +68,24 @@ static LxHostMailbox *inbox;
 static LxHostShared *live;
 static uint32 *live_windows;
 static _Thread_local QueuedCall *current_call;
+
 enum
 {
     LIVE_SIZE = 8192,
     MESSAGE_SIZE = 20,
     SESSION_BROADCAST = 0x0009 /* Send to frame windows only. */
 };
+
 static void mailboxName(char name[32], uint32 prefix)
 {
     snprintf(name, 32, "pm-post-%04x", (unsigned)prefix);
 }
+
 static void liveName(char name[64], uint32 owner, uint32 prefix)
 {
     snprintf(name, 64, "/2ine-pm-live-%u-%04x", (unsigned)owner, (unsigned)prefix);
 }
+
 static void initialize(void)
 {
     lock = lx_host_mutex_create(0, 0);
@@ -104,6 +115,7 @@ static void initialize(void)
         break;
     }
 }
+
 /* An anchor with no target left can no longer take its queue messages. */
 static BOOL anchor_listed(const AnchorBlock *anchor)
 {
@@ -112,6 +124,7 @@ static BOOL anchor_listed(const AnchorBlock *anchor)
             return TRUE;
     return FALSE;
 }
+
 HWND registerWindowMessages(AnchorBlock *anchor)
 {
     lx_host_once(&initialized, initialize);
@@ -134,11 +147,13 @@ HWND registerWindowMessages(AnchorBlock *anchor)
     lx_host_mutex_unlock(lock);
     return target->window;
 }
+
 static void release_call(QueuedCall *call)
 {
     if (!__atomic_sub_fetch(&call->references, 1, __ATOMIC_ACQ_REL))
         free(call);
 }
+
 static void cancel_call(QueuedCall *call)
 {
     uint32 expected = CALL_WAITING;
@@ -146,6 +161,7 @@ static void cancel_call(QueuedCall *call)
                                 __ATOMIC_ACQUIRE);
     release_call(call);
 }
+
 static void run_call(QueuedCall *call)
 {
     QueuedCall *outer = current_call;
@@ -157,6 +173,7 @@ static void run_call(QueuedCall *call)
                                 __ATOMIC_ACQUIRE);
     release_call(call);
 }
+
 void bindWindowTarget(Window *window)
 {
     lx_host_mutex_lock(lock, UINT32_MAX);
@@ -168,6 +185,7 @@ void bindWindowTarget(Window *window)
         }
     lx_host_mutex_unlock(lock);
 }
+
 /* Only pointers still registered are followed, so a window being destroyed is never read. */
 static Target *object_target(const Window *window)
 {
@@ -176,6 +194,7 @@ static Target *object_target(const Window *window)
             return target;
     return NULL;
 }
+
 static HWND public_window(const Target *from, const Window *window)
 {
     if (window == &desktop_window)
@@ -185,6 +204,7 @@ static HWND public_window(const Target *from, const Window *window)
     Target *target = window ? object_target(window) : NULL;
     return target ? target->window : 0;
 }
+
 HWND foreignWindowQuery(HWND window, LONG code)
 {
     if (!lock)
@@ -228,6 +248,7 @@ HWND foreignWindowQuery(HWND window, LONG code)
     lx_host_mutex_unlock(lock);
     return result;
 }
+
 BOOL windowOwnerThread(HWND window, ULONG *thread)
 {
     if (!lock)
@@ -243,6 +264,7 @@ BOOL windowOwnerThread(HWND window, ULONG *thread)
     lx_host_mutex_unlock(lock);
     return found;
 }
+
 size_t lx_pm_object_windows(HWND *output, size_t capacity)
 {
     lx_host_once(&initialized, initialize);
@@ -251,8 +273,7 @@ size_t lx_pm_object_windows(HWND *output, size_t capacity)
     size_t count = 0;
     lx_host_mutex_lock(lock, UINT32_MAX);
     for (Target *target = targets; target; target = target->next)
-        if (target->object &&
-            target->object->parent == (Window *)&target->anchor->object_window)
+        if (target->object && target->object->parent == (Window *)&target->anchor->object_window)
         {
             if (count < capacity)
                 output[count] = target->window;
@@ -261,6 +282,7 @@ size_t lx_pm_object_windows(HWND *output, size_t capacity)
     lx_host_mutex_unlock(lock);
     return count;
 }
+
 static void append_pending(Pending *item)
 {
     if (tail)
@@ -269,6 +291,7 @@ static void append_pending(Pending *item)
         pending = item;
     tail = item;
 }
+
 static QueuedCall *new_call(LxPmWindowCall function, const void *context, size_t size)
 {
     QueuedCall *call = calloc(1, sizeof *call + size);
@@ -281,6 +304,7 @@ static QueuedCall *new_call(LxPmWindowCall function, const void *context, size_t
     }
     return call;
 }
+
 /* The one queued-send primitive. Queues a call to a queue, and to a window of it when window
    is not zero; the lock must be held and the queue known to be live. finish_call waits. */
 static BOOL start_call(AnchorBlock *anchor, HWND window, QueuedCall *call)
@@ -294,6 +318,7 @@ static BOOL start_call(AnchorBlock *anchor, HWND window, QueuedCall *call)
     append_pending(item);
     return TRUE;
 }
+
 /* No lock is held here. The waiter keeps draining its own queue, so a thread sending to it
    is served and two threads sending to each other both proceed. */
 static uint32 finish_call(AnchorBlock *self, QueuedCall *call)
@@ -308,6 +333,7 @@ static uint32 finish_call(AnchorBlock *self, QueuedCall *call)
     }
     return state;
 }
+
 BOOL lx_pm_window_call(HWND window, LxPmWindowCall function, void *context, size_t size,
                        uintptr_t *result)
 {
@@ -344,6 +370,7 @@ BOOL lx_pm_window_call(HWND window, LxPmWindowCall function, void *context, size
     release_call(call);
     return state == CALL_FINISHED || state == CALL_REPLIED;
 }
+
 BOOL lx_pm_reply_message(uintptr_t result)
 {
     QueuedCall *call = current_call;
@@ -354,10 +381,12 @@ BOOL lx_pm_reply_message(uintptr_t result)
     return __atomic_compare_exchange_n(&call->state, &expected, CALL_REPLIED, 0, __ATOMIC_ACQ_REL,
                                        __ATOMIC_ACQUIRE);
 }
+
 BOOL lx_pm_in_window_call(void)
 {
     return current_call != NULL;
 }
+
 void registerMessageQueue(AnchorBlock *anchor)
 {
     lx_host_once(&initialized, initialize);
@@ -370,6 +399,7 @@ void registerMessageQueue(AnchorBlock *anchor)
     queues = entry;
     lx_host_mutex_unlock(lock);
 }
+
 /* A destroyed queue or an exiting thread can run nothing more: all its work is cancelled. */
 void retireAnchorMessages(AnchorBlock *anchor)
 {
@@ -402,6 +432,7 @@ void retireAnchorMessages(AnchorBlock *anchor)
     }
     lx_host_mutex_unlock(lock);
 }
+
 void unregisterWindowMessages(HWND window)
 {
     if (!lock)
@@ -456,6 +487,7 @@ void unregisterWindowMessages(HWND window)
     }
     lx_host_mutex_unlock(lock);
 }
+
 static BOOL post_packet(HWND window, ULONG message, MPARAM first, MPARAM second, ULONG reserved,
                         BOOL require_open32)
 {
@@ -566,6 +598,7 @@ BOOL windowMessageTargetExists(HWND window)
     lx_host_mailbox_close(mailbox);
     return found;
 }
+
 BOOL lx_pm_host_event(const LxHostEvent *event)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -649,6 +682,7 @@ BOOL lx_pm_host_event(const LxHostEvent *event)
     }
     return item != NULL;
 }
+
 void drainForeignMessages(AnchorBlock *anchor)
 {
     if (!lock)
@@ -730,6 +764,7 @@ void drainForeignMessages(AnchorBlock *anchor)
         free(item);
     }
 }
+
 /* Runs on the receiving queue's thread, so the wait covers delivery into that queue. */
 static uintptr_t deliver_queue_message(void *context)
 {
@@ -738,6 +773,7 @@ static uintptr_t deliver_queue_message(void *context)
         postMessage(anchor, context);
     return 1;
 }
+
 BOOL broadcastQueues(AnchorBlock *self, ULONG message, MPARAM first, MPARAM second, BOOL wait)
 {
     lx_host_once(&initialized, initialize);
@@ -796,6 +832,7 @@ typedef struct SessionEnd
     char own[32];
     BOOL failed;
 } SessionEnd;
+
 static void deliver_session_end(const char *name, void *context)
 {
     SessionEnd *end = context;
@@ -813,6 +850,7 @@ static void deliver_session_end(const char *name, void *context)
     if (!opened)
         lx_host_mailbox_close(destination);
 }
+
 BOOL lx_pm_end_session(void)
 {
     const char *directory = getenv("TWOINE_IPC_DIR");
@@ -823,10 +861,12 @@ BOOL lx_pm_end_session(void)
     mailboxName(end.own, window_prefix);
     return !lx_host_mailbox_each(directory, "pm-post-", deliver_session_end, &end) && !end.failed;
 }
+
 BOOL postForeignMessage(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     return post_packet(window, message, first, second, 0, FALSE);
 }
+
 BOOL lx_pm_mark_open32_window(HWND window)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -844,6 +884,7 @@ BOOL lx_pm_mark_open32_window(HWND window)
     lx_host_mutex_unlock(lock);
     return found;
 }
+
 BOOL lx_pm_post_open32_message(HWND window, ULONG message, ULONG first, ULONG second)
 {
     return post_packet(window, LX_PM_OPEN32_POST, (MPARAM)(uintptr_t)first,

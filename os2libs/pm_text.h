@@ -3,6 +3,7 @@
 #ifndef TWOINE_PM_TEXT_H
 #define TWOINE_PM_TEXT_H
 #include "formats/types.h"
+
 static inline uint32 lx_pm_codepoint(uint8 character)
 {
     static const uint16 extended[128] = {

@@ -30,6 +30,7 @@ enum
     FILTER_LIMIT = 128,
     DIALOG_BYTES = 65536
 };
+
 typedef struct FileDialog
 {
     struct FileDialog *previous;
@@ -40,6 +41,7 @@ typedef struct FileDialog
     char *patterns[FILTER_LIMIT];
     BOOL save, accepted;
 } FileDialog;
+
 static _Thread_local FileDialog *file_dialogs;
 static _Thread_local ULONG common_error;
 
@@ -47,10 +49,12 @@ ULONG CommDlgExtendedError(void)
 {
     return common_error;
 }
+
 void open32CommonDialogError(ULONG error)
 {
     common_error = error;
 }
+
 BOOL open32FileDialogWindow(ULONG handle)
 {
     for (FileDialog *dialog = file_dialogs; dialog; dialog = dialog->previous)
@@ -59,19 +63,23 @@ BOOL open32FileDialogWindow(ULONG handle)
                 return TRUE;
     return FALSE;
 }
+
 static BOOL fail(ULONG error)
 {
     common_error = error;
     return FALSE;
 }
+
 static BOOL read_record(FileDialog *dialog, uint8 record[OPENFILENAME_SIZE])
 {
     return lx_execution_read(GLoaderState.execution, dialog->address, record, OPENFILENAME_SIZE);
 }
+
 static char *copy_text(ULONG address, size_t capacity)
 {
     return address ? lx_execution_copy_string(GLoaderState.execution, address, capacity) : NULL;
 }
+
 static ULONG add_text(FileDialog *dialog, size_t *offset, const char *text)
 {
     size_t size = strlen(text) + 1;
@@ -82,12 +90,14 @@ static ULONG add_text(FileDialog *dialog, size_t *offset, const char *text)
     *offset += size;
     return address;
 }
+
 static ULONG hook(FileDialog *dialog, ULONG message, ULONG first, ULONG second)
 {
     return dialog->hook ? lx_execution_callback32_4(GLoaderState.execution, dialog->hook,
                                                     dialog->window, message, first, second)
                         : 0;
 }
+
 static void select_type(FileDialog *dialog)
 {
     LONG index =
@@ -100,6 +110,7 @@ static void select_type(FileDialog *dialog)
     lx_execution_write(GLoaderState.execution, dialog->address + 24, value, sizeof value);
     lx_pm_file_set_filter(dialog->window, dialog->patterns[index]);
 }
+
 static BOOL publish_name(FileDialog *dialog, char full[260])
 {
     uint8 record[OPENFILENAME_SIZE];
@@ -192,6 +203,7 @@ static BOOL publish_name(FileDialog *dialog, char full[260])
     dialog->accepted = TRUE;
     return TRUE;
 }
+
 static ULONG draw_button(FileDialog *dialog, ULONG id, ULONG pointer)
 {
     uint8 button[16], item[48] = {0};
@@ -226,6 +238,7 @@ static ULONG draw_button(FileDialog *dialog, ULONG id, ULONG pointer)
         ReleaseDC(window, dc);
     return result;
 }
+
 static uint32 file_dispatch(uint8 *arguments)
 {
     ULONG handle = lx_guest_load_u32(arguments), message = lx_guest_load_u32(arguments + 4);
@@ -293,6 +306,7 @@ static uint32 file_dispatch(uint8 *arguments)
     return (ULONG)(uintptr_t)lx_pm_file_procedure(handle, message, (MPARAM)(uintptr_t)first,
                                                   (MPARAM)(uintptr_t)second);
 }
+
 static BOOL common_dialog(PVOID address, BOOL save)
 {
     common_error = 0;
@@ -470,11 +484,13 @@ cleanup:
     free(caption);
     return result;
 }
+
 BOOL GetSaveFileName(PVOID address)
 {
     TRACE_NATIVE("GetSaveFileName(%p)", address);
     return common_dialog(address, TRUE);
 }
+
 BOOL GetOpenFileName(PVOID address)
 {
     TRACE_NATIVE("GetOpenFileName(%p)", address);

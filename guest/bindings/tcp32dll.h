@@ -4,10 +4,12 @@ static uint32 bridge32_Os2LegacyLongSwap(uint8 *a)
 {
     return Os2LegacyLongSwap(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_Os2LegacyShortSwap(uint8 *a)
 {
     return Os2LegacyShortSwap((uint16_t)lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_Os2LegacyInetAddr(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 1024);
@@ -15,6 +17,7 @@ static uint32 bridge32_Os2LegacyInetAddr(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_Os2LegacyGetHostName(uint8 *a)
 {
     uint32 length = lx_guest_load_u32(a + 4);
@@ -27,8 +30,10 @@ static uint32 bridge32_Os2LegacyGetHostName(uint8 *a)
     lx_execution_release(&output);
     return result;
 }
+
 #include "hal/socket.h"
 #include "guest/bindings/socket_resolver.h"
+
 static uint32 legacy_guest_host(Os2LegacyHost *h)
 {
     socket_guest_error(*Os2LegacyResolverError());
@@ -37,6 +42,7 @@ static uint32 legacy_guest_host(Os2LegacyHost *h)
     LxHostSocketHost host = {h->name, h->aliases, h->family, h->length, h->addresses};
     return socket_guest_host(&host);
 }
+
 static uint32 bridge32_Os2LegacyGetHostByName(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 1024);
@@ -44,6 +50,7 @@ static uint32 bridge32_Os2LegacyGetHostByName(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_Os2LegacyGetHostByAddress(uint8 *a)
 {
     uint32 ip;
@@ -52,14 +59,17 @@ static uint32 bridge32_Os2LegacyGetHostByAddress(uint8 *a)
         return 0;
     return legacy_guest_host(Os2LegacyGetHostByAddress(&ip, 4, lx_guest_load_u32(a + 8)));
 }
+
 static uint32 bridge32_Os2LegacyInetText(uint8 *a)
 {
     return socket_guest_text(Os2LegacyInetText(lx_guest_load_u32(a)));
 }
+
 static uint32 legacy_guest_protocol(Os2LegacyProtocol *p)
 {
     return p ? socket_guest_database(p->name, p->aliases, p->number, NULL) : 0;
 }
+
 static uint32 bridge32_Os2LegacyGetProtocolByName(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 1024);
@@ -67,14 +77,17 @@ static uint32 bridge32_Os2LegacyGetProtocolByName(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_Os2LegacyGetProtocolByNumber(uint8 *a)
 {
     return legacy_guest_protocol(Os2LegacyGetProtocolByNumber(lx_guest_load_u32(a)));
 }
+
 static uint32 legacy_guest_service(Os2LegacyService *p)
 {
     return p ? socket_guest_database(p->name, p->aliases, p->port, p->protocol) : 0;
 }
+
 static uint32 bridge32_Os2LegacyGetServiceByName(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, lx_guest_load_u32(a), 1024);
@@ -87,6 +100,7 @@ static uint32 bridge32_Os2LegacyGetServiceByName(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 bridge32_Os2LegacyGetServiceByPort(uint8 *a)
 {
     uint32 protocol = lx_guest_load_u32(a + 4);
@@ -98,6 +112,7 @@ static uint32 bridge32_Os2LegacyGetServiceByPort(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 bridge32_Os2LegacyResolverError(uint8 *a)
 {
     (void)a;

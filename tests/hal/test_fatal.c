@@ -10,21 +10,25 @@
 #include <string.h>
 #include <unistd.h>
 static const char *Mode;
+
 static void context_writer(void)
 {
     lx_host_fatal_write("test context marker\n");
 }
+
 static void faulting_context(void)
 {
     /* The stage after this must not run, but the dialog must still appear. */
     *(volatile int *)16 = 1;
 }
+
 static int overflow(int depth)
 {
     volatile char block[8192];
     block[0] = (char)depth;
     return overflow(depth + 1) + block[0];
 }
+
 static void fail(void)
 {
     if (!strcmp(Mode, "segv"))
@@ -59,12 +63,14 @@ static void fail(void)
         lx_host_fatal(LX_FATAL_INTERNAL, "Contended failure", NULL);
     }
 }
+
 static void *thread_main(void *argument)
 {
     (void)argument;
     fail();
     return NULL;
 }
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && !strcmp(argv[1], LX_FATAL_DIALOG_ARGUMENT))

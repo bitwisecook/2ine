@@ -32,6 +32,7 @@ struct LxMidiSynth
 #endif
     unsigned rate;
 };
+
 #if TWOINE_MIDI_SYNTH && !TWOINE_MIDI_EXTENDED
 static tsf *open_font(const char *path)
 {
@@ -40,6 +41,7 @@ static tsf *open_font(const char *path)
         fprintf(stderr, "2ine: MIDI GM bank %s\n", path);
     return tsf_load_filename(path);
 }
+
 static tsf *load_font(void)
 {
     const char *override = getenv("TWOINE_SOUNDFONT");
@@ -102,6 +104,7 @@ int lx_midi_synth_reset(LxMidiSynth *synth)
     return 0;
 #endif
 }
+
 LxMidiSynth *lx_midi_synth_create(void)
 {
     const char *mode = getenv("TWOINE_MIDI_BACKEND");
@@ -201,6 +204,7 @@ LxMidiSynth *lx_midi_synth_create(void)
     return NULL;
 #endif
 }
+
 void lx_midi_synth_destroy(LxMidiSynth *synth)
 {
     if (!synth)
@@ -215,6 +219,7 @@ void lx_midi_synth_destroy(LxMidiSynth *synth)
 #endif
     free(synth);
 }
+
 void lx_midi_synth_event(LxMidiSynth *synth, unsigned status, unsigned key, unsigned value)
 {
     if (!synth || status < 0x80 || status >= 0xf0 || key > 127 || value > 127)
@@ -253,6 +258,7 @@ void lx_midi_synth_event(LxMidiSynth *synth, unsigned status, unsigned key, unsi
     }
 #endif
 }
+
 void lx_midi_synth_sysex(LxMidiSynth *synth, const unsigned char *message, size_t length)
 {
     if (!synth || !message || length < 2 || message[0] != 0xf0 || message[length - 1] != 0xf7)
@@ -272,6 +278,7 @@ void lx_midi_synth_sysex(LxMidiSynth *synth, const unsigned char *message, size_
     if (length == 6 && message[1] == 0x7e && message[3] == 9 && message[4] >= 1 && message[4] <= 3)
         lx_midi_synth_reset(synth);
 }
+
 static void render(LxMidiSynth *synth, float *samples, unsigned count, unsigned rate, float volume,
                    int channels)
 {
@@ -329,6 +336,7 @@ void lx_midi_synth_render(LxMidiSynth *synth, float *samples, unsigned count, un
 {
     render(synth, samples, count, rate, volume, 1);
 }
+
 void lx_midi_synth_render_stereo(LxMidiSynth *synth, float *samples, unsigned count, unsigned rate,
                                  float volume)
 {

@@ -10,6 +10,7 @@ BreakBeforeBraces: Allman
 PointerAlignment: Right
 DerivePointerAlignment: false
 AllowShortFunctionsOnASingleLine: Empty
+SeparateDefinitionBlocks: Always
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AllowShortBlocksOnASingleLine: Never

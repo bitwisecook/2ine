@@ -11,10 +11,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
 struct LxDesktopLease
 {
     int file, owned;
 };
+
 LxDesktopLease *lx_desktop_lease_open(const char *directory, const char *session)
 {
     if (!directory || !*directory || !session || !*session || strlen(session) > 64)
@@ -56,6 +58,7 @@ LxDesktopLease *lx_desktop_lease_open(const char *directory, const char *session
     lease->file = file;
     return lease;
 }
+
 int lx_desktop_lease_claim(LxDesktopLease *lease)
 {
     if (!lease)
@@ -72,6 +75,7 @@ int lx_desktop_lease_claim(LxDesktopLease *lease)
     }
     return errno == EAGAIN || errno == EWOULDBLOCK ? 0 : -1;
 }
+
 void lx_desktop_lease_release(LxDesktopLease *lease)
 {
     if (lease && lease->owned)
@@ -80,6 +84,7 @@ void lx_desktop_lease_release(LxDesktopLease *lease)
         lease->owned = 0;
     }
 }
+
 void lx_desktop_lease_close(LxDesktopLease *lease)
 {
     if (lease)

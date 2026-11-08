@@ -22,6 +22,7 @@ enum
     SERVICE_GATE,
     TEST_FDS
 };
+
 static int endpoint(const char *directory, unsigned index, int flags)
 {
     char path[4096];
@@ -31,6 +32,7 @@ static int endpoint(const char *directory, unsigned index, int flags)
         fcntl(fd, F_SETFL, flags);
     return fd;
 }
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && !strcmp(argv[1], "--operation"))

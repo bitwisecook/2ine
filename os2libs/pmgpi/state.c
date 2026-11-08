@@ -4,6 +4,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "guest/abi.h"
+
 BOOL GpiSetMix(HPS handle, LONG mode)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -14,6 +15,7 @@ BOOL GpiSetMix(HPS handle, LONG mode)
         ps->primitive_mix[i] = ps->mix;
     return TRUE;
 }
+
 BOOL GpiSetBackMix(HPS handle, LONG mode)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -24,16 +26,19 @@ BOOL GpiSetBackMix(HPS handle, LONG mode)
         ps->primitive_back_mix[i] = ps->back_mix;
     return TRUE;
 }
+
 LONG GpiQueryMix(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->mix : -1;
 }
+
 LONG GpiQueryBackMix(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->back_mix : -1;
 }
+
 BOOL GpiSetBackColor(HPS handle, LONG color)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -44,11 +49,13 @@ BOOL GpiSetBackColor(HPS handle, LONG color)
         ps->primitive_back[i] = color;
     return TRUE;
 }
+
 LONG GpiQueryBackColor(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->back_color : -255;
 }
+
 BOOL GpiSetLineType(HPS handle, LONG type)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -57,11 +64,13 @@ BOOL GpiSetLineType(HPS handle, LONG type)
     ps->line_type = type ? type : 7;
     return TRUE;
 }
+
 LONG GpiQueryLineType(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->line_type : -1;
 }
+
 LONG GpiSavePS(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -71,7 +80,12 @@ LONG GpiSavePS(HPS handle)
     if (!s)
         return -1;
     s->id = ++ps->save_id;
-    if(ps->gpi.palette&&!lx_handle_borrow(ps->gpi.palette,LX_HANDLE_PM_PALETTE,&s->palette_lease)){free(s);return -1;}
+    if (ps->gpi.palette &&
+        !lx_handle_borrow(ps->gpi.palette, LX_HANDLE_PM_PALETTE, &s->palette_lease))
+    {
+        free(s);
+        return -1;
+    }
     s->gpi = ps->gpi;
     s->position = ps->position;
     s->color = ps->color;
@@ -106,6 +120,7 @@ LONG GpiSavePS(HPS handle)
     ps->saved = s;
     return s->id;
 }
+
 BOOL GpiRestorePS(HPS handle, LONG id)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -117,7 +132,8 @@ BOOL GpiRestorePS(HPS handle, LONG id)
     if (!s)
         return FALSE;
     lx_handle_release(&ps->palette_lease);
-    ps->palette_lease=s->palette_lease;memset(&s->palette_lease,0,sizeof s->palette_lease);
+    ps->palette_lease = s->palette_lease;
+    memset(&s->palette_lease, 0, sizeof s->palette_lease);
     ps->gpi = s->gpi;
     ps->position = s->position;
     ps->color = s->color;
@@ -158,6 +174,7 @@ BOOL GpiRestorePS(HPS handle, LONG id)
     }
     return TRUE;
 }
+
 BOOL GpiSetPageViewport(HPS handle, PRECTL rect)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -169,6 +186,7 @@ BOOL GpiSetPageViewport(HPS handle, PRECTL rect)
     ps->viewport_set = TRUE;
     return TRUE;
 }
+
 BOOL GpiQueryPageViewport(HPS handle, PRECTL rect)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -181,10 +199,12 @@ BOOL GpiQueryPageViewport(HPS handle, PRECTL rect)
     *rect = ps->viewport_set ? ps->viewport : (RECTL){0, 0, corner.x, corner.y};
     return TRUE;
 }
+
 BOOL GpiConvert(HPS handle, LONG source, LONG target, LONG count, PPOINTL points)
 {
     return lx_pm_convert_points(handle, source, target, count, points);
 }
+
 BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID attrs)
 {
     TRACE_NATIVE("GpiSetAttrs(%u, %d, %u, %u, %p)", (uint)handle, (int)primitive, (uint)mask,
@@ -258,8 +278,19 @@ BOOL GpiSetAttrs(HPS handle, LONG primitive, ULONG mask, ULONG defaults, PVOID a
                                                       : (POINTL){(LONG)lx_guest_load_u32(p + 16),
                                                                  (LONG)lx_guest_load_u32(p + 20)};
     }
-    if(primitive==1){if((mask&32)&&!GpiSetLineWidthGeom(handle,defaults&32?1:(LONG)lx_guest_load_u32(p+16)))return FALSE;if((mask&128)&&!GpiSetLineEnd(handle,defaults&128?0:lx_guest_load_u16(p+22)))return FALSE;if((mask&256)&&!GpiSetLineJoin(handle,defaults&256?0:lx_guest_load_u16(p+24)))return FALSE;}
-    if(primitive==2&&(mask&2048)&&!GpiSetCharExtra(handle,defaults&2048?0:(LONG)lx_guest_load_u32(p+44)))return FALSE;
+    if (primitive == 1)
+    {
+        if ((mask & 32) &&
+            !GpiSetLineWidthGeom(handle, defaults & 32 ? 1 : (LONG)lx_guest_load_u32(p + 16)))
+            return FALSE;
+        if ((mask & 128) && !GpiSetLineEnd(handle, defaults & 128 ? 0 : lx_guest_load_u16(p + 22)))
+            return FALSE;
+        if ((mask & 256) && !GpiSetLineJoin(handle, defaults & 256 ? 0 : lx_guest_load_u16(p + 24)))
+            return FALSE;
+    }
+    if (primitive == 2 && (mask & 2048) &&
+        !GpiSetCharExtra(handle, defaults & 2048 ? 0 : (LONG)lx_guest_load_u32(p + 44)))
+        return FALSE;
     unsigned index = (unsigned)primitive - 1;
     LONG color = (defaults & 1) ? CLR_BLACK : (LONG)lx_guest_load_u32(p);
     LONG back = (defaults & 2) ? CLR_WHITE : (LONG)lx_guest_load_u32(p + 4);
@@ -289,6 +320,7 @@ LONG GpiQueryPatternSet(HPS handle)
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->pattern_set : -1;
 }
+
 BOOL GpiSetPatternSet(HPS handle, LONG id)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -297,11 +329,13 @@ BOOL GpiSetPatternSet(HPS handle, LONG id)
     ps->pattern_set = id;
     return TRUE;
 }
+
 LONG GpiQueryPattern(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->pattern : -1;
 }
+
 BOOL GpiSetPattern(HPS handle, LONG symbol)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -310,6 +344,7 @@ BOOL GpiSetPattern(HPS handle, LONG symbol)
     ps->pattern = symbol ? symbol : 16;
     return TRUE;
 }
+
 BOOL GpiQueryCurrentPosition(HPS handle, PPOINTL point)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -318,6 +353,7 @@ BOOL GpiQueryCurrentPosition(HPS handle, PPOINTL point)
     *point = ps->position;
     return TRUE;
 }
+
 BOOL GpiSetCurrentPosition(HPS handle, PPOINTL point)
 {
     return GpiMove(handle, point);
@@ -328,6 +364,7 @@ LONG GpiQueryColor(HPS handle)
     PresentationSpace *ps = lx_pm_font_space(handle);
     return ps ? ps->color : -255;
 }
+
 LONG GpiQueryLogColorTable(HPS handle, ULONG options, LONG start, LONG count, PLONG output)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -355,6 +392,7 @@ LONG GpiQueryLogColorTable(HPS handle, ULONG options, LONG start, LONG count, PL
     }
     return returned;
 }
+
 BOOL GpiQueryColorData(HPS handle, LONG count, PLONG output)
 {
     TRACE_NATIVE("GpiQueryColorData(%u, %d, %p)", (uint)handle, (int)count, output);
@@ -380,6 +418,7 @@ BOOL GpiSetCharMode(HPS handle, LONG mode)
     ps->char_mode = mode ? mode : 1;
     return TRUE;
 }
+
 LONG GpiQueryCharMode(HPS handle)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -394,6 +433,7 @@ BOOL GpiSetPatternRefPoint(HPS handle, PPOINTL point)
     ps->pattern_reference = *point;
     return TRUE;
 }
+
 BOOL GpiQueryPatternRefPoint(HPS handle, PPOINTL point)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);

@@ -12,6 +12,7 @@ static HMQ queue;
 static HWND window;
 static HGC context;
 static int width = 500, height = 500;
+
 static void require(int value)
 {
     if (!value)
@@ -20,10 +21,12 @@ static void require(int value)
         exit(1);
     }
 }
+
 void APIENTRY auxInitDisplayMode(GLenum mode)
 {
     require(mode == 0); /* AUX_SINGLE | AUX_RGB */
 }
+
 void APIENTRY auxInitPosition(int x, int y, int w, int h)
 {
     (void)x;
@@ -31,6 +34,7 @@ void APIENTRY auxInitPosition(int x, int y, int w, int h)
     width = w;
     height = h;
 }
+
 GLenum APIENTRY auxInitWindow(char *title)
 {
     int attributes[] = {PGL_RGBA, PGL_DEPTH_SIZE, 24, 0};
@@ -47,7 +51,9 @@ GLenum APIENTRY auxInitWindow(char *title)
     require(context && pglMakeCurrent(anchor, context, window));
     return GL_TRUE;
 }
+
 extern int sdk_simple_main(int argc, char **argv);
+
 int main(int argc, char **argv)
 {
     unsigned char center[4] = {0}, corner[4] = {0};

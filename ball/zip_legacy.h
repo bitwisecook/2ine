@@ -5,12 +5,14 @@
 #include "vendor/hwzip/reduce.h"
 #include <zlib.h>
 #define LEGACY_ZIP_LIMIT (16u * 1024u * 1024u)
+
 typedef struct LegacyZipMetadata
 {
     uint64_t position;
     uint32_t packed, size, crc;
     unsigned flags, method;
 } LegacyZipMetadata;
+
 static int legacy_zip_metadata(TbReadStream *parent, const char *name, LegacyZipMetadata *result)
 {
     uint64_t length = tb_stream_size(parent);
@@ -95,6 +97,7 @@ static int legacy_zip_metadata(TbReadStream *parent, const char *name, LegacyZip
     }
     return bad(ENOENT);
 }
+
 static TbReadStream *legacy_zip_member(TbReadStream *parent, struct archive *archive,
                                        const char *name, uint64_t size, int *handled)
 {

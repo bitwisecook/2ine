@@ -14,6 +14,7 @@ BOOL AdjustWindowRect(PVOID rectangle, ULONG style, BOOL menu)
 {
     return AdjustWindowRectEx(rectangle, style, menu, 0);
 }
+
 BOOL Beep(ULONG frequency, ULONG duration)
 {
     typedef APIRET(OS2API * Fn)(ULONG, ULONG);
@@ -25,6 +26,7 @@ BOOL Beep(ULONG frequency, ULONG duration)
         open32SetError(error);
     return !error;
 }
+
 LONG CompareFileTime(PVOID first, PVOID second)
 {
     if (!first || !second)
@@ -36,6 +38,7 @@ LONG CompareFileTime(PVOID first, PVOID second)
     ULONG al = lx_guest_load_u32(first), bl = lx_guest_load_u32(second);
     return ah != bh ? (ah > bh ? 1 : -1) : al != bl ? (al > bl ? 1 : -1) : 0;
 }
+
 BOOL DosDateTimeToFileTime(USHORT date, USHORT time, PVOID output)
 {
     uint8 fields[16] = {0};
@@ -47,6 +50,7 @@ BOOL DosDateTimeToFileTime(USHORT date, USHORT time, PVOID output)
     lx_guest_store_u16(fields + 12, (time & 31) * 2);
     return SystemTimeToFileTime(fields, output);
 }
+
 BOOL FileTimeToDosDateTime(PVOID input, PVOID date, PVOID time)
 {
     uint8 fields[16];
@@ -68,6 +72,7 @@ BOOL FileTimeToDosDateTime(PVOID input, PVOID date, PVOID time)
                                  (lx_guest_load_u16(fields + 12) / 2));
     return TRUE;
 }
+
 BOOL CopyFile(PSZ source, PSZ destination, BOOL exclusive)
 {
     typedef APIRET(OS2API * Fn)(PSZ, PSZ, ULONG);
@@ -79,6 +84,7 @@ BOOL CopyFile(PSZ source, PSZ destination, BOOL exclusive)
         open32SetError(error);
     return !error;
 }
+
 static BOOL path_operation(PSZ path, const char *name)
 {
     typedef APIRET(OS2API * Fn)(PSZ);
@@ -88,14 +94,17 @@ static BOOL path_operation(PSZ path, const char *name)
         open32SetError(error);
     return !error;
 }
+
 BOOL DeleteFile(PSZ path)
 {
     return path_operation(path, "DosDelete");
 }
+
 BOOL RemoveDirectory(PSZ path)
 {
     return path_operation(path, "DosDeleteDir");
 }
+
 BOOL MoveFile(PSZ source, PSZ destination)
 {
     typedef APIRET(OS2API * Fn)(PSZ, PSZ);
@@ -105,6 +114,7 @@ BOOL MoveFile(PSZ source, PSZ destination)
         open32SetError(error);
     return !error;
 }
+
 BOOL CreateDirectory(PSZ path, PVOID security)
 {
     (void)security; /* Open32 passes no security information to DosCreateDir. */
@@ -115,6 +125,7 @@ BOOL CreateDirectory(PSZ path, PVOID security)
         open32SetError(error);
     return !error;
 }
+
 BOOL SetFileAttributes(PSZ path, ULONG attributes)
 {
     typedef APIRET(OS2API * Query)(PSZ, ULONG, PVOID, ULONG);
@@ -136,19 +147,21 @@ BOOL SetFileAttributes(PSZ path, ULONG attributes)
         open32SetError(error);
     return !error;
 }
+
 LONG _lopen(PSZ path, LONG flags)
 {
     typedef APIRET(OS2API * Fn)(PSZ, PULONG, PULONG, ULONG, ULONG, ULONG, ULONG, PVOID);
     Fn call = (Fn)open32DosService("DosOpen");
     ULONG handle = 0, action = 0;
     ULONG error = !path || (flags & ~0x73) || (flags & 3) == 3 ? 87
-                  : !call ? 120
+                  : !call                                      ? 120
                           : call(path, &handle, &action, 0, 0, 1,
                                  (flags & 0x73) | ((flags & 0x70) ? 0 : 0x40), NULL);
     if (error)
         open32SetError(error);
     return error ? -1 : (LONG)handle;
 }
+
 LONG _lcreat(PSZ path, LONG attributes)
 {
     typedef APIRET(OS2API * Fn)(PSZ, PULONG, PULONG, ULONG, ULONG, ULONG, ULONG, PVOID);
@@ -156,13 +169,14 @@ LONG _lcreat(PSZ path, LONG attributes)
     ULONG handle = 0, action = 0;
     /* Read-only creation selects read access; others are exclusive read/write. */
     ULONG mode = attributes & 1 ? 0 : 0x12;
-    ULONG error = !path  ? 87
+    ULONG error = !path   ? 87
                   : !call ? 120
                           : call(path, &handle, &action, 0, attributes & 7, 0x12, mode, NULL);
     if (error)
         open32SetError(error);
     return error ? -1 : (LONG)handle;
 }
+
 ULONG SetHandleCount(ULONG count)
 {
     typedef APIRET(OS2API * Fn)(PLONG, PULONG);
@@ -176,6 +190,7 @@ ULONG SetHandleCount(ULONG count)
     call(&delta, &count);
     return count;
 }
+
 SHORT GetFileTitle(PSZ path, PSZ output, USHORT capacity)
 {
     if (!path || !output)
@@ -192,6 +207,7 @@ SHORT GetFileTitle(PSZ path, PSZ output, USHORT capacity)
     memcpy(output, name, length);
     return 0;
 }
+
 ULONG GetSystemDirectory(PSZ output, ULONG capacity)
 {
     char path[260];
@@ -205,6 +221,7 @@ ULONG GetSystemDirectory(PSZ output, ULONG capacity)
     memcpy(output, path, length + 1);
     return length;
 }
+
 ULONG GetPrivateProfileInt(PSZ section, PSZ key, LONG fallback, PSZ filename)
 {
     char text[64], *end;
@@ -218,6 +235,7 @@ ULONG GetPrivateProfileInt(PSZ section, PSZ key, LONG fallback, PSZ filename)
     long value = strtol(text, &end, 0);
     return end == text ? 0 : (ULONG)value;
 }
+
 BOOL WriteProfileString(PSZ section, PSZ key, PSZ value)
 {
     if (!section)
@@ -234,19 +252,23 @@ BOOL WriteProfileString(PSZ section, PSZ key, PSZ value)
     free(app);
     return result;
 }
+
 VOID ZeroMemory(PVOID output, ULONG count)
 {
     if (count)
         memset(output, 0, count);
 }
+
 BOOL IsBadHugeReadPtr(PVOID pointer, ULONG size)
 {
     return IsBadReadPtr(pointer, size);
 }
+
 BOOL IsBadHugeWritePtr(PVOID pointer, ULONG size)
 {
     return IsBadWritePtr(pointer, size);
 }
+
 BOOL IsBadStringPtr(ULONG address, ULONG maximum)
 {
     for (ULONG i = 0; i < maximum; i++)
@@ -263,6 +285,7 @@ BOOL IsBadStringPtr(ULONG address, ULONG maximum)
     }
     return FALSE;
 }
+
 static ULONG character_type(ULONG character)
 {
     if (character > 255)
@@ -271,18 +294,22 @@ static ULONG character_type(ULONG character)
     uint8 flags[2];
     return GetStringTypeEx(0x409, 1, &byte, 1, flags) ? lx_guest_load_u16(flags) : 0;
 }
+
 BOOL IsCharUpper(ULONG character)
 {
     return (character_type(character) & 1) != 0;
 }
+
 BOOL IsCharAlpha(ULONG character)
 {
     return (character_type(character) & 0x100) != 0;
 }
+
 BOOL IsCharAlphaNumeric(ULONG character)
 {
     return (character_type(character) & 0x104) != 0;
 }
+
 LONG lstrcmp2(PSZ first, PSZ second)
 {
     if (!first || !second)
@@ -310,15 +337,18 @@ LONG lstrcmp2(PSZ first, PSZ second)
     free(right);
     return result;
 }
+
 VOID OutputDebugString(PSZ text)
 {
     if (text)
         fprintf(stderr, "Open32: %s", text);
 }
+
 typedef struct ZoneRule
 {
     int month, week, weekday, seconds;
 } ZoneRule;
+
 typedef struct ZoneRules
 {
     char standard[32], daylight[32];
@@ -326,12 +356,14 @@ typedef struct ZoneRules
     ZoneRule start, end;      /* Entering and leaving daylight time. */
     BOOL seasonal;
 } ZoneRules;
+
 static int month_days(int year, int month)
 {
     static const int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     BOOL leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
     return days[month - 1] + (month == 2 && leap);
 }
+
 /* Seconds of the rule's moment in the given year, measured on the zone's local clock. */
 static int64_t rule_moment(int year, const ZoneRule *rule)
 {
@@ -344,6 +376,7 @@ static int64_t rule_moment(int year, const ZoneRule *rule)
         day -= 7;
     return seconds + (int64_t)(day - 1) * 86400 + rule->seconds;
 }
+
 static const char *zone_word(const char *text, char *output)
 {
     size_t n = 0;
@@ -352,6 +385,7 @@ static const char *zone_word(const char *text, char *output)
     output[n] = 0;
     return text;
 }
+
 /* The C library form: NAME[+-]h[:mm[:ss]][DST[,month,week,day,seconds,...,shift]]. */
 static BOOL guest_zone(ZoneRules *zone)
 {
@@ -400,11 +434,13 @@ static BOOL guest_zone(ZoneRules *zone)
     zone->seasonal = TRUE;
     return TRUE;
 }
+
 static int host_offset(int64_t seconds)
 {
     LxHostCalendar date;
     return lx_host_calendar(seconds, 0, &date) ? date.utc_offset_minutes : 0;
 }
+
 /* A rule read back from one observed transition, on the clock in force before it. */
 static ZoneRule host_rule(int64_t moment)
 {
@@ -417,6 +453,7 @@ static ZoneRule host_rule(int64_t moment)
     return (ZoneRule){date.month, week, date.weekday,
                       date.hour * 3600 + date.minute * 60 + date.second};
 }
+
 /* The host has no rule interface, so the year is probed for its offset changes. */
 static BOOL host_zone(ZoneRules *zone, int64_t now)
 {
@@ -461,11 +498,13 @@ static BOOL host_zone(ZoneRules *zone, int64_t now)
     zone->seasonal = TRUE;
     return TRUE;
 }
+
 static void store_zone_name(uint8 *output, const char *name)
 {
     for (size_t i = 0; i < 31 && name[i]; i++)
         lx_guest_store_u16(output + i * 2, (uint8)name[i]);
 }
+
 static void store_zone_rule(uint8 *output, const ZoneRule *rule)
 {
     lx_guest_store_u16(output + 2, (USHORT)rule->month);
@@ -475,6 +514,7 @@ static void store_zone_rule(uint8 *output, const ZoneRule *rule)
     lx_guest_store_u16(output + 10, (USHORT)(rule->seconds / 60 % 60));
     lx_guest_store_u16(output + 12, (USHORT)(rule->seconds % 60));
 }
+
 ULONG GetTimeZoneInformation(PVOID output)
 {
     if (!output)

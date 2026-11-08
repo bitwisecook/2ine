@@ -15,6 +15,7 @@ enum
     LX_MEM_WRITE = 2,
     LX_MEM_EXECUTE = 4
 };
+
 enum
 {
     LX_GUEST_PAGE_SIZE = 4096

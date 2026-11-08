@@ -43,12 +43,14 @@ typedef struct Packet
     ULONG count, record;
     double position;
 } Packet;
+
 typedef struct Voice
 {
     double phase;
     float level;
     unsigned char channel, key;
 } Voice;
+
 typedef struct Device
 {
     USHORT id;
@@ -65,6 +67,7 @@ typedef struct Device
     Voice voices[64];
     LxMidiSynth *synth;
 } Device;
+
 static Device devices[DEVICE_COUNT];
 static USHORT next_id = 1;
 static LxHostMonitor *monitor;
@@ -80,6 +83,7 @@ static void initialize(void)
 {
     monitor = lx_host_monitor_create();
 }
+
 static Device *find_device(ULONG handle)
 {
     for (unsigned i = 0; i < DEVICE_COUNT; i++)
@@ -87,9 +91,11 @@ static Device *find_device(ULONG handle)
             return &devices[i];
     return NULL;
 }
+
 #define MIDI_SYSEX_MESSAGE_MAX (1024u * 1024u)
 #define MIDI_SYSEX_TOTAL_MAX (32u * 1024u * 1024u)
 #define MIDI_EVENT_MAX 262144u
+
 typedef struct MidiParser
 {
     LxMidiSequence *sequence;
@@ -97,6 +103,7 @@ typedef struct MidiParser
     unsigned char *pending;
     size_t pending_size;
 } MidiParser;
+
 void lx_midi_sequence_clear(LxMidiSequence *sequence)
 {
     if (!sequence)
@@ -106,10 +113,12 @@ void lx_midi_sequence_clear(LxMidiSequence *sequence)
     free(sequence->events);
     memset(sequence, 0, sizeof *sequence);
 }
+
 static uint32_t big32(const unsigned char *p)
 {
     return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
 }
+
 static int vlq(const unsigned char **p, const unsigned char *end, uint32_t *v)
 {
     *v = 0;
@@ -122,6 +131,7 @@ static int vlq(const unsigned char **p, const unsigned char *end, uint32_t *v)
     }
     return 0;
 }
+
 static int compare_event(const void *a, const void *b)
 {
     uint32_t x = ((const LxMidiEvent *)a)->tick, y = ((const LxMidiEvent *)b)->tick;
@@ -130,6 +140,7 @@ static int compare_event(const void *a, const void *b)
     uint32_t ax = ((const LxMidiEvent *)a)->order, by = ((const LxMidiEvent *)b)->order;
     return ax < by ? -1 : ax > by;
 }
+
 /* Ownership of event.sysex transfers on success and is released on failure. */
 static int append_event(MidiParser *parser, LxMidiEvent event)
 {
@@ -155,6 +166,7 @@ fail:
     free(event.sysex);
     return 0;
 }
+
 static int append_fragment(MidiParser *parser, const unsigned char *bytes, size_t size)
 {
     if (size > MIDI_SYSEX_MESSAGE_MAX - parser->pending_size)
@@ -168,6 +180,7 @@ static int append_fragment(MidiParser *parser, const unsigned char *bytes, size_
     parser->pending_size += size;
     return 1;
 }
+
 static int complete_sysex(MidiParser *parser, uint32_t tick)
 {
     LxMidiEvent event = {
@@ -176,6 +189,7 @@ static int complete_sysex(MidiParser *parser, uint32_t tick)
     parser->pending_size = 0;
     return append_event(parser, event);
 }
+
 static int sysex_packet(MidiParser *parser, uint32_t tick, unsigned status,
                         const unsigned char *bytes, size_t size)
 {
@@ -215,6 +229,7 @@ static int sysex_packet(MidiParser *parser, uint32_t tick, unsigned status,
     }
     return 1;
 }
+
 static int parse_midi_contents(MidiParser *parser, const unsigned char *bytes, size_t size)
 {
     LxMidiSequence *sequence = parser->sequence;
@@ -328,6 +343,7 @@ static int parse_midi_contents(MidiParser *parser, const unsigned char *bytes, s
     sequence->duration = time + (end_tick - tick) * (double)tempo / (division * 1000000.0) + 0.1;
     return 1;
 }
+
 int lx_midi_sequence_parse(LxMidiSequence *sequence, const unsigned char *bytes, size_t size)
 {
     if (!sequence)
@@ -340,6 +356,7 @@ int lx_midi_sequence_parse(LxMidiSequence *sequence, const unsigned char *bytes,
         lx_midi_sequence_clear(sequence);
     return result;
 }
+
 static void midi_event(Device *d, const LxMidiEvent *e)
 {
 #if TWOINE_MIDI_SYNTH || TWOINE_MT32_SYNTH
@@ -371,6 +388,7 @@ static void midi_event(Device *d, const LxMidiEvent *e)
         d->voices[i] = (Voice){.channel = channel, .key = e->key, .level = e->value / 127.0f};
     }
 }
+
 static void generate_midi(Device *d, float *samples, int count, int frequency)
 {
     if (d->time >= d->sequence.duration)
@@ -417,6 +435,7 @@ static void generate_midi(Device *d, float *samples, int count, int frequency)
         lx_host_monitor_wake_all(monitor);
     }
 }
+
 static int generate(void *unused, float *samples, int count, int frequency)
 {
     (void)unused;
@@ -459,6 +478,7 @@ static int generate(void *unused, float *samples, int count, int frequency)
     lx_host_monitor_unlock(monitor);
     return 1;
 }
+
 static void free_packets(Packet *p)
 {
     while (p)
@@ -469,6 +489,7 @@ static void free_packets(Packet *p)
         p = next;
     }
 }
+
 static void *delivery(void *argument)
 {
     Device *d = argument;
@@ -514,6 +535,7 @@ static void *delivery(void *argument)
     GLoaderState.deinitOs2Tib(selector);
     return NULL;
 }
+
 static ULONG start_audio(Device *d)
 {
     if (!audio_registered)
@@ -534,6 +556,7 @@ static ULONG start_audio(Device *d)
     }
     return 0;
 }
+
 static LONG queue_buffers(ULONG handle, ULONG address, ULONG count)
 {
     if (!count || count > 64)
@@ -618,6 +641,7 @@ fail:
     lx_host_monitor_unlock(monitor);
     return MCIERR_INVALID_BUFFER;
 }
+
 #if !TWOINE_PORTABLE_LOADER
 static LONG OS2API mixWrite(ULONG handle, PVOID records, ULONG count)
 {
@@ -882,6 +906,7 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
     }
     return MCIERR_UNSUPPORTED_FUNCTION;
 }
+
 ULONG mciSendString(PSZ command, PSZ output, USHORT length, ULONG window, USHORT user)
 {
     TRACE_NATIVE("mciSendString(%s)", command ? command : "<null>");
@@ -891,6 +916,7 @@ ULONG mciSendString(PSZ command, PSZ output, USHORT length, ULONG window, USHORT
     ULONG result = lx_mci_video_string(command, output, length, window, user, &video_handled);
     return video_handled ? result : MCIERR_DEVICE_NOT_READY;
 }
+
 ULONG mciGetErrorString(ULONG error, PSZ output, USHORT length)
 {
     if (!output || !length)
@@ -899,6 +925,7 @@ ULONG mciGetErrorString(ULONG error, PSZ output, USHORT length)
              error == MCIERR_DEVICE_NOT_READY ? ": device unavailable" : "");
     return 1;
 }
+
 static void shutdown_mdm(void)
 {
     lx_mci_video_shutdown();
@@ -915,5 +942,6 @@ static void shutdown_mdm(void)
                 mciSendCommand(devices[i].id, MCI_CLOSE, 0, parameters, 0);
             }
 }
+
 #define LX_NATIVE_MODULE_SHUTDOWN() shutdown_mdm()
 #include "os2libs/generated/mdm-lx.h"

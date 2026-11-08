@@ -15,6 +15,7 @@
         }                                                                                          \
     } while (0)
 static unsigned resets, buttons;
+
 static void drain(void)
 {
     LxHostEvent event;
@@ -27,6 +28,7 @@ static void drain(void)
                 event.type == LX_HOST_EVENT_BUTTON_DOWN || event.type == LX_HOST_EVENT_BUTTON_UP;
         }
 }
+
 static void key(SDL_WindowID id, Uint32 type, SDL_Keycode symbol, SDL_Keymod modifiers)
 {
     SDL_Event event = {0};
@@ -36,6 +38,7 @@ static void key(SDL_WindowID id, Uint32 type, SDL_Keycode symbol, SDL_Keymod mod
     event.key.mod = modifiers;
     CHECK(SDL_PushEvent(&event));
 }
+
 int main(void)
 {
     int width, height, count;

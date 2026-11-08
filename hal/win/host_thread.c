@@ -4,16 +4,19 @@
 #include <stdlib.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 struct LxHostThread
 {
     HANDLE object;
 };
+
 typedef struct Start
 {
     void *(*entry)(void *);
     void *argument;
     void (*cleanup)(void *);
 } Start;
+
 static DWORD WINAPI enter(void *argument)
 {
     Start start = *(Start *)argument;
@@ -23,6 +26,7 @@ static DWORD WINAPI enter(void *argument)
         start.cleanup(start.argument);
     return (DWORD)(uintptr_t)result;
 }
+
 LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument, void (*cleanup)(void *))
 {
     LxHostThread *thread = calloc(1, sizeof *thread);
@@ -45,12 +49,15 @@ LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument, void
     }
     return thread;
 }
+
 LxHostCancelResult lx_host_thread_cancel(LxHostThread *thread)
 {
     (void)thread;
     return LX_HOST_CANCEL_UNSUPPORTED;
 }
+
 void lx_host_thread_test_cancel(void) {}
+
 int lx_host_thread_join(LxHostThread *thread, void **result)
 {
     DWORD value;
@@ -63,19 +70,23 @@ int lx_host_thread_join(LxHostThread *thread, void **result)
     free(thread);
     return 0;
 }
+
 void lx_host_thread_detach(LxHostThread *thread)
 {
     CloseHandle(thread->object);
     free(thread);
 }
+
 void lx_host_thread_exit(void *result)
 {
     ExitThread((DWORD)(uintptr_t)result);
 }
+
 uint64_t lx_host_thread_id(void)
 {
     return GetCurrentThreadId();
 }
+
 uint32_t lx_host_guarded_call(uint32_t (*operation)(void *), void *argument,
                               void (*cleanup)(void *), void *cleanup_argument)
 {

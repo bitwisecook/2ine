@@ -124,6 +124,7 @@ static const UCHAR translations[6][256] = {
         0x98,
     },
 };
+
 UCHAR WinCpTranslateChar(HAB hab, ULONG source, UCHAR character, ULONG destination)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);

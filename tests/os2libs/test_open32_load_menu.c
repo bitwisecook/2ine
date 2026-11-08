@@ -21,6 +21,7 @@ static uint8 resource[512], names[64];
 static size_t resource_size, names_size;
 static unsigned acquired, released;
 static BOOL malformed_menu, malformed_names;
+
 static size_t begin_menu(unsigned count)
 {
     size_t offset = resource_size;
@@ -30,10 +31,12 @@ static size_t begin_menu(unsigned count)
     lx_guest_store_u16(resource + offset + 8, count);
     return offset;
 }
+
 static void end_menu(size_t offset)
 {
     lx_guest_store_u32(resource + offset, (uint32)(resource_size - offset));
 }
+
 static void item(unsigned style, unsigned attributes, unsigned id, const char *text)
 {
     lx_guest_store_u16(resource + resource_size, style);
@@ -47,6 +50,7 @@ static void item(unsigned style, unsigned attributes, unsigned id, const char *t
         resource_size += length;
     }
 }
+
 static void make_resource(void)
 {
     resource_size = 0;
@@ -68,6 +72,7 @@ static void make_resource(void)
     memcpy(names + 12, "MainMenu\0Alternative\0", 21);
     names_size = 33;
 }
+
 static uint32 query(uint32 module, uint32 type, uint32 id, uint32 *size)
 {
     if (module != 123)
@@ -84,6 +89,7 @@ static uint32 query(uint32 module, uint32 type, uint32 id, uint32 *size)
     }
     return 2;
 }
+
 static uint32 get(uint32 module, uint32 type, uint32 id, void **output)
 {
     uint32 size;
@@ -98,6 +104,7 @@ static uint32 get(uint32 module, uint32 type, uint32 id, void **output)
     acquired++;
     return 0;
 }
+
 static uint32 release(void *data)
 {
     CHECK(data);
@@ -105,6 +112,7 @@ static uint32 release(void *data)
     free(data);
     return 0;
 }
+
 static size_t windows(void)
 {
     size_t count = 0;
@@ -112,6 +120,7 @@ static size_t windows(void)
         count += WinIsWindow(0, handle) != FALSE;
     return count;
 }
+
 static void inspect(ULONG root)
 {
     CHECK(root && IsMenu(root));
@@ -133,6 +142,7 @@ static void inspect(ULONG root)
     CHECK(!WinIsWindow(0, root) && !WinIsWindow(0, sub) && !WinIsWindow(0, tools));
     CHECK(acquired == released);
 }
+
 int main(void)
 {
     CHECK(SDL_WasInit(SDL_INIT_VIDEO) == 0);

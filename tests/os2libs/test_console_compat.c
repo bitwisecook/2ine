@@ -32,12 +32,14 @@ static void keyboard(void *module)
     LOAD(module, KbdPeek);
     LOAD(module, KbdCharIn);
     LOAD(module, KbdStringIn);
+
     struct
     {
         USHORT before;
         KBDINFO info;
         USHORT after;
     } output = {0xa55a, {10}, 0x5aa5};
+
     CHECK(sizeof(KBDINFO) == 10);
     CHECK(!call_KbdGetStatus(&output.info, 0));
     CHECK(output.before == 0xa55a && output.after == 0x5aa5);
@@ -99,12 +101,14 @@ static void video(void *module)
     LOAD(module, VioReadCharStr);
     LOAD(module, VioScrollDn);
     CHECK(sizeof(VIOCONFIGINFO) == 32);
+
     struct
     {
         USHORT before;
         unsigned char bytes[34];
         USHORT after;
     } output;
+
     memset(&output, 0xcc, sizeof(output));
     VIOMODEINFO *mode = (VIOMODEINFO *)output.bytes;
     mode->cb = 12;
@@ -176,10 +180,12 @@ static void nls(void *module)
     CHECK(weights['a' + 1] == weights['A' + 1]);
     CHECK(weights[0x82 + 1] == 'E' && weights[0x81 + 1] == 'U');
     COUNTRYCODE country32 = {1, 437};
+
     struct
     {
         ULONG before, length, after;
     } actual32 = {0xa55aa55a, 0, 0x5aa55aa5};
+
     unsigned char copy[258];
     memset(copy, 0xcc, sizeof(copy));
     CHECK(!call_DosQueryCollate(256, &country32, (PCHAR)copy + 1, &actual32.length));
@@ -198,12 +204,14 @@ static void nls(void *module)
     CHECK(call_Dos16GetCollate(256, &country, (PCHAR)weights, &length) ==
           ERROR_CODE_PAGE_NOT_FOUND);
     country.codepage = 437;
+
     struct
     {
         unsigned char before;
         unsigned char bytes[38];
         unsigned char after;
     } output;
+
     memset(&output, 0xcc, sizeof(output));
     CHECK(!call_Dos16GetCtryInfo(6, &country, (PCOUNTRYINFO16)output.bytes, &length));
     CHECK(length == 38 && output.before == 0xcc && output.after == 0xcc);

@@ -756,23 +756,23 @@ extern "C"
         OS2APIINFO(ord = 697, name = TRANSLATEACCELERATOR);
     OS2EXPORT BOOL OS2API AnimatePalette(ULONG a0, ULONG a1, ULONG a2, PVOID a3)
         OS2APIINFO(ord = 8, name = ANIMATEPALETTE);
-    OS2EXPORT BOOL OS2API Arc(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, LONG a5, LONG a6, LONG a7, LONG a8)
-        OS2APIINFO(ord = 10, name = ARC);
+    OS2EXPORT BOOL OS2API Arc(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, LONG a5, LONG a6,
+                              LONG a7, LONG a8) OS2APIINFO(ord = 10, name = ARC);
     OS2EXPORT BOOL OS2API BeginPath(ULONG a0) OS2APIINFO(ord = 17, name = BEGINPATH);
     OS2EXPORT ULONG OS2API CloseMetaFile(ULONG a0) OS2APIINFO(ord = 45, name = CLOSEMETAFILE);
     OS2EXPORT ULONG OS2API CopyMetaFile(ULONG a0, PSZ a1) OS2APIINFO(ord = 54, name = COPYMETAFILE);
     OS2EXPORT ULONG OS2API CreateBrushIndirect(PVOID a0)
         OS2APIINFO(ord = 59, name = CREATEBRUSHINDIRECT);
-    OS2EXPORT ULONG OS2API CreateDIBitmap(ULONG a0, PVOID a1, ULONG a2, PVOID a3, PVOID a4, ULONG a5)
-        OS2APIINFO(ord = 66, name = CREATEDIBITMAP);
+    OS2EXPORT ULONG OS2API CreateDIBitmap(ULONG a0, PVOID a1, ULONG a2, PVOID a3, PVOID a4,
+                                          ULONG a5) OS2APIINFO(ord = 66, name = CREATEDIBITMAP);
     OS2EXPORT ULONG OS2API CreateEllipticRgn(LONG a0, LONG a1, LONG a2, LONG a3)
         OS2APIINFO(ord = 70, name = CREATEELLIPTICRGN);
     OS2EXPORT ULONG OS2API CreateEllipticRgnIndirect(PVOID a0)
         OS2APIINFO(ord = 71, name = CREATEELLIPTICRGNINDIRECT);
     OS2EXPORT ULONG OS2API CreateHatchBrush(LONG a0, ULONG a1)
         OS2APIINFO(ord = 77, name = CREATEHATCHBRUSH);
-    OS2EXPORT ULONG OS2API CreateIcon(ULONG a0, LONG a1, LONG a2, ULONG a3, ULONG a4, PVOID a5, PVOID a6)
-        OS2APIINFO(ord = 79, name = CREATEICON);
+    OS2EXPORT ULONG OS2API CreateIcon(ULONG a0, LONG a1, LONG a2, ULONG a3, ULONG a4, PVOID a5,
+                                      PVOID a6) OS2APIINFO(ord = 79, name = CREATEICON);
     OS2EXPORT ULONG OS2API CreateMetaFile(PSZ a0) OS2APIINFO(ord = 83, name = CREATEMETAFILE);
     OS2EXPORT ULONG OS2API CreatePolyPolygonRgn(PVOID a0, PVOID a1, LONG a2, LONG a3)
         OS2APIINFO(ord = 89, name = CREATEPOLYPOLYGONRGN);
@@ -851,8 +851,8 @@ extern "C"
     OS2EXPORT BOOL OS2API OffsetWindowOrgEx(ULONG a0, LONG a1, LONG a2, PVOID a3)
         OS2APIINFO(ord = 501, name = OFFSETWINDOWORGEX);
     OS2EXPORT BOOL OS2API PaintRgn(ULONG a0, ULONG a1) OS2APIINFO(ord = 510, name = PAINTRGN);
-    OS2EXPORT BOOL OS2API Pie(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, LONG a5, LONG a6, LONG a7, LONG a8)
-        OS2APIINFO(ord = 514, name = PIE);
+    OS2EXPORT BOOL OS2API Pie(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, LONG a5, LONG a6,
+                              LONG a7, LONG a8) OS2APIINFO(ord = 514, name = PIE);
     OS2EXPORT BOOL OS2API PlayEnhMetaFile(ULONG a0, ULONG a1, PVOID a2)
         OS2APIINFO(ord = 515, name = PLAYENHMETAFILE);
     OS2EXPORT BOOL OS2API PlayEnhMetaFileRecord(ULONG a0, PVOID a1, PVOID a2, ULONG a3)
@@ -875,15 +875,18 @@ extern "C"
         OS2APIINFO(ord = 577, name = SCALEVIEWPORTEXTEX);
     OS2EXPORT BOOL OS2API ScaleWindowExtEx(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, PVOID a5)
         OS2APIINFO(ord = 578, name = SCALEWINDOWEXTEX);
-    OS2EXPORT BOOL OS2API ScrollDC(ULONG a0, LONG a1, LONG a2, PVOID a3, PVOID a4, ULONG a5, PVOID a6)
-        OS2APIINFO(ord = 580, name = SCROLLDC);
+    OS2EXPORT BOOL OS2API ScrollDC(ULONG a0, LONG a1, LONG a2, PVOID a3, PVOID a4, ULONG a5,
+                                   PVOID a6) OS2APIINFO(ord = 580, name = SCROLLDC);
     OS2EXPORT BOOL OS2API ScrollWindow(ULONG a0, LONG a1, LONG a2, PVOID a3, PVOID a4)
         OS2APIINFO(ord = 581, name = SCROLLWINDOW);
-    OS2EXPORT LONG OS2API ScrollWindowEx(ULONG a0, LONG a1, LONG a2, PVOID a3, PVOID a4, ULONG a5, PVOID a6, ULONG a7)
+    OS2EXPORT LONG OS2API ScrollWindowEx(ULONG a0, LONG a1, LONG a2, PVOID a3, PVOID a4, ULONG a5,
+                                         PVOID a6, ULONG a7)
         OS2APIINFO(ord = 582, name = SCROLLWINDOWEX);
     OS2EXPORT LONG OS2API SetBitmapBits(ULONG a0, ULONG a1, PVOID a2)
         OS2APIINFO(ord = 591, name = SETBITMAPBITS);
-    OS2EXPORT LONG OS2API SetDIBitsToDevice(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, LONG a5, LONG a6, ULONG a7, ULONG a8, PVOID a9, PVOID a10, ULONG a11)
+    OS2EXPORT LONG OS2API SetDIBitsToDevice(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, LONG a5,
+                                            LONG a6, ULONG a7, ULONG a8, PVOID a9, PVOID a10,
+                                            ULONG a11)
         OS2APIINFO(ord = 609, name = SETDIBITSTODEVICE);
     OS2EXPORT ULONG OS2API SetEnhMetaFileBits(ULONG a0, PVOID a1)
         OS2APIINFO(ord = 614, name = SETENHMETAFILEBITS);
@@ -901,10 +904,12 @@ extern "C"
         OS2APIINFO(ord = 650, name = SETTEXTJUSTIFICATION);
     OS2EXPORT ULONG OS2API SetWinMetaFileBits(ULONG a0, PVOID a1, ULONG a2, PVOID a3)
         OS2APIINFO(ord = 657, name = SETWINMETAFILEBITS);
-    OS2EXPORT BOOL OS2API StretchBlt(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, ULONG a5, LONG a6, LONG a7, LONG a8, LONG a9, ULONG a10)
+    OS2EXPORT BOOL OS2API StretchBlt(ULONG a0, LONG a1, LONG a2, LONG a3, LONG a4, ULONG a5,
+                                     LONG a6, LONG a7, LONG a8, LONG a9, ULONG a10)
         OS2APIINFO(ord = 676, name = STRETCHBLT);
     OS2EXPORT BOOL OS2API StrokePath(ULONG a0) OS2APIINFO(ord = 679, name = STROKEPATH);
-    OS2EXPORT LONG OS2API TabbedTextOut(ULONG a0, LONG a1, LONG a2, PCHAR a3, LONG a4, LONG a5, PVOID a6, LONG a7)
+    OS2EXPORT LONG OS2API TabbedTextOut(ULONG a0, LONG a1, LONG a2, PCHAR a3, LONG a4, LONG a5,
+                                        PVOID a6, LONG a7)
         OS2APIINFO(ord = 686, name = TABBEDTEXTOUT);
     OS2EXPORT BOOL OS2API UnrealizeObject(ULONG a0) OS2APIINFO(ord = 704, name = UNREALIZEOBJECT);
     OS2EXPORT ULONG OS2API WindowFromDC(ULONG a0) OS2APIINFO(ord = 1000, name = WINDOWFROMDC);
@@ -941,7 +946,8 @@ extern "C"
         OS2APIINFO(ord = 52, name = COPYFILE);
     OS2EXPORT ULONG OS2API CreateDialog(ULONG module, PSZ resource, ULONG owner, ULONG procedure)
         OS2APIINFO(ord = 67, name = CREATEDIALOG);
-    OS2EXPORT ULONG OS2API CreateDialogParam(ULONG module, PSZ resource, ULONG owner, ULONG procedure, ULONG parameter)
+    OS2EXPORT ULONG OS2API CreateDialogParam(ULONG module, PSZ resource, ULONG owner,
+                                             ULONG procedure, ULONG parameter)
         OS2APIINFO(ord = 68, name = CREATEDIALOGPARAM);
     OS2EXPORT BOOL OS2API CreateDirectory(PSZ path, PVOID security)
         OS2APIINFO(ord = 69, name = CREATEDIRECTORY);
@@ -955,11 +961,14 @@ extern "C"
         OS2APIINFO(ord = 102, name = DDEACCESSDATA);
     OS2EXPORT ULONG OS2API DdeAddData(ULONG handle, PVOID input, ULONG count, ULONG offset)
         OS2APIINFO(ord = 103, name = DDEADDDATA);
-    OS2EXPORT ULONG OS2API DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item, ULONG format, ULONG type, ULONG timeout, PVOID status)
+    OS2EXPORT ULONG OS2API DdeClientTransaction(ULONG address, ULONG size, ULONG handle, ULONG item,
+                                                ULONG format, ULONG type, ULONG timeout,
+                                                PVOID status)
         OS2APIINFO(ord = 104, name = DDECLIENTTRANSACTION);
     OS2EXPORT ULONG OS2API DdeConnect(ULONG id, ULONG service, ULONG topic, PVOID context)
         OS2APIINFO(ord = 106, name = DDECONNECT);
-    OS2EXPORT ULONG OS2API DdeCreateDataHandle(ULONG id, PVOID input, ULONG count, ULONG offset, ULONG item, ULONG format, ULONG flags)
+    OS2EXPORT ULONG OS2API DdeCreateDataHandle(ULONG id, PVOID input, ULONG count, ULONG offset,
+                                               ULONG item, ULONG format, ULONG flags)
         OS2APIINFO(ord = 108, name = DDECREATEDATAHANDLE);
     OS2EXPORT BOOL OS2API DdeDisconnect(ULONG handle) OS2APIINFO(ord = 110, name = DDEDISCONNECT);
     OS2EXPORT BOOL OS2API DdeFreeDataHandle(ULONG handle)
@@ -976,7 +985,8 @@ extern "C"
         OS2APIINFO(ord = 126, name = DDEUNACCESSDATA);
     OS2EXPORT LONG OS2API DefDlgProc(ULONG window, ULONG message, ULONG first, ULONG second)
         OS2APIINFO(ord = 128, name = DEFDLGPROC);
-    OS2EXPORT ULONG OS2API DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LONG width, LONG height, ULONG flags)
+    OS2EXPORT ULONG OS2API DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y,
+                                          LONG width, LONG height, ULONG flags)
         OS2APIINFO(ord = 132, name = DEFERWINDOWPOS);
     OS2EXPORT ULONG OS2API DeleteAtom(ULONG atom) OS2APIINFO(ord = 133, name = DELETEATOM);
     OS2EXPORT BOOL OS2API DeleteFile(PSZ path) OS2APIINFO(ord = 137, name = DELETEFILE);
@@ -1003,7 +1013,8 @@ extern "C"
     OS2EXPORT ULONG OS2API FindWindow(PSZ class_name, PSZ title)
         OS2APIINFO(ord = 215, name = FINDWINDOW);
     OS2EXPORT ULONG OS2API GetCursor(void) OS2APIINFO(ord = 261, name = GETCURSOR);
-    OS2EXPORT BOOL OS2API GetDiskFreeSpace(PSZ root, PVOID sectors, PVOID bytes, PVOID free_clusters, PVOID total_clusters)
+    OS2EXPORT BOOL OS2API GetDiskFreeSpace(PSZ root, PVOID sectors, PVOID bytes,
+                                           PVOID free_clusters, PVOID total_clusters)
         OS2APIINFO(ord = 271, name = GETDISKFREESPACE);
     OS2EXPORT LONG OS2API GetDlgCtrlID(ULONG window) OS2APIINFO(ord = 272, name = GETDLGCTRLID);
     OS2EXPORT ULONG OS2API GetDlgItemInt(ULONG dialog, LONG id, PVOID translated, BOOL sign)
@@ -1068,15 +1079,18 @@ extern "C"
         OS2APIINFO(ord = 484, name = MAPWINDOWPOINTS);
     OS2EXPORT LONG OS2API MessageBox(ULONG owner, PSZ text, PSZ caption, ULONG flags)
         OS2APIINFO(ord = 487, name = MESSAGEBOX);
-    OS2EXPORT BOOL OS2API ModifyMenu(ULONG handle, ULONG identity, ULONG flags, ULONG identifier, PSZ text)
-        OS2APIINFO(ord = 488, name = MODIFYMENU);
+    OS2EXPORT BOOL OS2API ModifyMenu(ULONG handle, ULONG identity, ULONG flags, ULONG identifier,
+                                     PSZ text) OS2APIINFO(ord = 488, name = MODIFYMENU);
     OS2EXPORT BOOL OS2API MoveFile(PSZ source, PSZ destination)
         OS2APIINFO(ord = 490, name = MOVEFILE);
     OS2EXPORT VOID OS2API OutputDebugString(PSZ text)
         OS2APIINFO(ord = 508, name = OUTPUTDEBUGSTRING);
     OS2EXPORT BOOL OS2API PostThreadMessage(ULONG thread, ULONG message, ULONG first, ULONG second)
         OS2APIINFO(ord = 529, name = POSTTHREADMESSAGE);
-    OS2EXPORT LONG OS2API RegQueryInfoKey(ULONG key, PSZ class_name, PULONG class_size, PULONG reserved, PULONG subkeys, PULONG max_subkey, PULONG max_class, PULONG values, PULONG max_value_name, PULONG max_value_data, PULONG security, PVOID last_write)
+    OS2EXPORT LONG OS2API RegQueryInfoKey(ULONG key, PSZ class_name, PULONG class_size,
+                                          PULONG reserved, PULONG subkeys, PULONG max_subkey,
+                                          PULONG max_class, PULONG values, PULONG max_value_name,
+                                          PULONG max_value_data, PULONG security, PVOID last_write)
         OS2APIINFO(ord = 551, name = REGQUERYINFOKEY);
     OS2EXPORT LONG OS2API RegQueryValue(ULONG key, PSZ subkey, PSZ output, PULONG size)
         OS2APIINFO(ord = 552, name = REGQUERYVALUE);
@@ -1089,8 +1103,8 @@ extern "C"
         OS2APIINFO(ord = 564, name = REMOVEFONTRESOURCE);
     OS2EXPORT BOOL OS2API ReplyMessage(LONG result) OS2APIINFO(ord = 568, name = REPLYMESSAGE);
     OS2EXPORT BOOL OS2API ResetEvent(ULONG handle) OS2APIINFO(ord = 570, name = RESETEVENT);
-    OS2EXPORT ULONG OS2API SearchPath(PSZ path, PSZ file, PSZ extension, ULONG capacity, PSZ output, PVOID part)
-        OS2APIINFO(ord = 583, name = SEARCHPATH);
+    OS2EXPORT ULONG OS2API SearchPath(PSZ path, PSZ file, PSZ extension, ULONG capacity, PSZ output,
+                                      PVOID part) OS2APIINFO(ord = 583, name = SEARCHPATH);
     OS2EXPORT BOOL OS2API SetDlgItemInt(ULONG dialog, LONG id, ULONG value, BOOL sign)
         OS2APIINFO(ord = 610, name = SETDLGITEMINT);
     OS2EXPORT BOOL OS2API SetEnvironmentVariable(PSZ name, PSZ value)
@@ -1104,7 +1118,8 @@ extern "C"
     OS2EXPORT USHORT OS2API SetWindowWord(ULONG handle, LONG index, USHORT value)
         OS2APIINFO(ord = 664, name = SETWINDOWWORD);
     OS2EXPORT LONG OS2API ShowCursor(BOOL show) OS2APIINFO(ord = 668, name = SHOWCURSOR);
-    OS2EXPORT BOOL OS2API TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved, ULONG owner, PVOID exclude)
+    OS2EXPORT BOOL OS2API TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved,
+                                         ULONG owner, PVOID exclude)
         OS2APIINFO(ord = 696, name = TRACKPOPUPMENU);
     OS2EXPORT BOOL OS2API TranslateMDISysAccel(ULONG client, PVOID message)
         OS2APIINFO(ord = 698, name = TRANSLATEMDISYSACCEL);
@@ -1126,20 +1141,25 @@ extern "C"
     OS2EXPORT LONG OS2API lstrcmp2(PSZ first, PSZ second) OS2APIINFO(ord = 1033, name = LSTRCMP2);
     OS2EXPORT ULONG OS2API GetKeyboardLayout(ULONG thread)
         OS2APIINFO(ord = 2053, name = GETKEYBOARDLAYOUT);
-    OS2EXPORT BOOL OS2API GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count, PVOID output)
+    OS2EXPORT BOOL OS2API GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count,
+                                          PVOID output)
         OS2APIINFO(ord = 2057, name = GETSTRINGTYPEEX);
-    OS2EXPORT ULONG OS2API _CreateDialogIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG procedure, ULONG parameter)
+    OS2EXPORT ULONG OS2API _CreateDialogIndirectParam(ULONG module, ULONG address, ULONG owner,
+                                                      ULONG procedure, ULONG parameter)
         OS2APIINFO(ord = 5002, name = _CREATEDIALOGINDIRECTPARAM);
-    OS2EXPORT LONG OS2API _DialogBoxIndirect(ULONG module, ULONG address, ULONG owner, ULONG procedure)
+    OS2EXPORT LONG OS2API _DialogBoxIndirect(ULONG module, ULONG address, ULONG owner,
+                                             ULONG procedure)
         OS2APIINFO(ord = 5004, name = _DIALOGBOXINDIRECT);
-    OS2EXPORT LONG OS2API _DialogBoxIndirectParam(ULONG module, ULONG address, ULONG owner, ULONG procedure, ULONG parameter)
+    OS2EXPORT LONG OS2API _DialogBoxIndirectParam(ULONG module, ULONG address, ULONG owner,
+                                                  ULONG procedure, ULONG parameter)
         OS2APIINFO(ord = 5005, name = _DIALOGBOXINDIRECTPARAM);
     OS2EXPORT BOOL OS2API WinXTranslateMsg(ULONG anchor, PVOID input, PVOID output)
         OS2APIINFO(ord = 6011, name = WINXTRANSLATEMSG);
     OS2EXPORT BOOL OS2API CreateProcess(PSZ application, PSZ command, PVOID process_security,
                                         PVOID thread_security, BOOL inherit, ULONG flags,
                                         PVOID environment, PSZ directory, PVOID startup,
-                                        PVOID information) OS2APIINFO(ord = 92, name = CREATEPROCESS);
+                                        PVOID information)
+        OS2APIINFO(ord = 92, name = CREATEPROCESS);
     OS2EXPORT BOOL OS2API DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process,
                                           PULONG output, ULONG access, BOOL inherit, ULONG options)
         OS2APIINFO(ord = 163, name = DUPLICATEHANDLE);

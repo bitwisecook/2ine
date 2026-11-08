@@ -13,6 +13,7 @@ enum
     FRAME_CXRESTORE = 0x10,
     FRAME_CYRESTORE = 0x12
 };
+
 BOOL prepareFrameState(Window *window, SWP *position)
 {
     ULONG state = position->fl & (SWP_MINIMIZE | SWP_MAXIMIZE | SWP_RESTORE);
@@ -97,16 +98,19 @@ enum
     STYLE_THIN = 0x100,
     STYLE_SIZE = 0x800
 };
+
 BOOL isFrameWindow(const Window *window)
 {
     return window && (window->frame_flags ||
                       (window->window_class_name && !strcmp(window->window_class_name, "#1")));
 }
+
 BOOL frameGuestChrome(const Window *window)
 {
     return window &&
            (window->parent != &desktop_window || lxRuntimeWindowChrome() != LX_CHROME_NATIVE);
 }
+
 BOOL frameControlSuppressed(const Window *window)
 {
     return window && isFrameWindow(window->parent) &&
@@ -115,10 +119,12 @@ BOOL frameControlSuppressed(const Window *window)
              (window->id == FID_TITLEBAR || window->id == FID_SYSMENU ||
               window->id == FID_MINMAX)));
 }
+
 BOOL frameResizable(const Window *window)
 {
     return isFrameWindow(window) && (window->style & STYLE_SIZE) != 0;
 }
+
 void applyHostWindowChrome(Window *window)
 {
     if (window && window->parent == &desktop_window)
@@ -135,6 +141,7 @@ void applyHostWindowChrome(Window *window)
         }
     }
 }
+
 POINTL frameBorderSize(const Window *window)
 {
     POINTL border = {0, 0};
@@ -154,6 +161,7 @@ POINTL frameBorderSize(const Window *window)
     }
     return border;
 }
+
 static LONG frame_title_height(Window *window)
 {
     return frameGuestChrome(window) && !(window->style & WS_MINIMIZED) &&
@@ -161,6 +169,7 @@ static LONG frame_title_height(Window *window)
                ? WinQuerySysValue(HWND_DESKTOP, 30)
                : 0;
 }
+
 BOOL frameClientRect(Window *window, PRECTL rect, BOOL client)
 {
     if (!window || !rect)
@@ -186,8 +195,10 @@ BOOL frameClientRect(Window *window, PRECTL rect, BOOL client)
     *rect = (RECTL){(LONG)left, (LONG)low, (LONG)far, (LONG)high};
     return TRUE;
 }
+
 static const ULONG frame_controls[] = {FID_TITLEBAR,   FID_SYSMENU,    FID_MINMAX, FID_MENU,
                                        FID_VERTSCROLL, FID_HORZSCROLL, FID_CLIENT};
+
 ULONG frameControlCount(Window *window)
 {
     ULONG count = 0;
@@ -195,6 +206,7 @@ ULONG frameControlCount(Window *window)
         count += WinWindowFromID(window->hwnd, frame_controls[i]) != 0;
     return count;
 }
+
 static void frame_position(SWP *positions, ULONG *count, HWND child, LONG x, LONG y, LONG width,
                            LONG height)
 {
@@ -218,6 +230,7 @@ static void frame_position(SWP *positions, ULONG *count, HWND child, LONG x, LON
                                       0};
     }
 }
+
 ULONG frameFormatPositions(Window *window, MPARAM output, MPARAM client_rect)
 {
     if (!output || !isFrameWindow(window))
@@ -266,6 +279,7 @@ ULONG frameFormatPositions(Window *window, MPARAM output, MPARAM client_rect)
         return 0;
     return count;
 }
+
 void formatFrame(Window *window)
 {
     if (!window || !isFrameWindow(window) || window->formatting_frame)
@@ -321,6 +335,7 @@ void formatFrame(Window *window)
     if (getWindowFromHWND(anchor, handle) == window)
         window->formatting_frame = FALSE;
 }
+
 void paintFrameBorder(Window *window, HPS space)
 {
     if ((window->style & WS_MINIMIZED) && window->parent != &desktop_window)
@@ -356,6 +371,7 @@ void paintFrameBorder(Window *window, HPS space)
         }
     }
 }
+
 static BOOL startFrameTracking(Window *source, Window *frame, ULONG command, POINTL point)
 {
     if (!isFrameWindow(frame) || !frame->parent || (frame->style & (WS_MAXIMIZED | WS_MINIMIZED)))
@@ -371,6 +387,7 @@ static BOOL startFrameTracking(Window *source, Window *frame, ULONG command, POI
         (RECTL){frame->x, frame->y, frame->x + frame->w, frame->y + frame->h};
     return TRUE;
 }
+
 BOOL frameTrackMessage(Window *window, ULONG message, MPARAM first)
 {
     if (!window->frame_tracking)
@@ -413,6 +430,7 @@ BOOL frameTrackMessage(Window *window, ULONG message, MPARAM first)
     }
     return TRUE;
 }
+
 MRESULT frameSystemCommand(Window *window, USHORT command)
 {
     if (!isFrameWindow(window))
@@ -437,6 +455,7 @@ MRESULT frameSystemCommand(Window *window, USHORT command)
     }
     return 0;
 }
+
 MRESULT OS2API frameControlProcedure(HWND handle, ULONG message, MPARAM first, MPARAM second)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -465,7 +484,8 @@ MRESULT OS2API frameControlProcedure(HWND handle, ULONG message, MPARAM first, M
         if (space)
         {
             BOOL active = anchor->active == topLevelWindow(anchor, handle);
-            if(window->parent && window->parent->flash && ((currentSystemTicks()/500)&1)) active=!active;
+            if (window->parent && window->parent->flash && ((currentSystemTicks() / 500) & 1))
+                active = !active;
             LONG background = active ? -23 : -22; /* SYSCLR_ACTIVE/INACTIVETITLE */
             LONG foreground = active ? -28 : -29; /* SYSCLR_ACTIVE/INACTIVETITLETEXT */
             WinFillRect(space, &rect, background);
@@ -478,6 +498,7 @@ MRESULT OS2API frameControlProcedure(HWND handle, ULONG message, MPARAM first, M
     }
     return WinDefWindowProc(handle, message, first, second);
 }
+
 BOOL WinCreateFrameControls(HWND handle, PFRAMECDATA data, PSZ title)
 {
     TRACE_NATIVE("WinCreateFrameControls(%u, %p, '%s')", handle, data, title);

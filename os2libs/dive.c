@@ -21,6 +21,7 @@ typedef struct DiveBuffer
     LxGuestMapping *mapping;
     LxGuestBorrow borrow;
 } DiveBuffer;
+
 typedef struct DiveInstance
 {
     ULONG handle;
@@ -36,20 +37,24 @@ typedef struct DiveInstance
     void *framebuffer_target;
     DiveBuffer buffers[DIVE_MAX_BUFFERS];
 } DiveInstance;
+
 static DiveInstance *instances[DIVE_MAX_INSTANCES];
 static ULONG next_handle = 1;
 static DiveInstance *framebuffer_owner;
 static LxHostMutex *dive_mutex;
 static LxHostOnce dive_once = LX_HOST_ONCE_INIT;
+
 static void initialize_dive_lock(void)
 {
     dive_mutex = lx_host_mutex_create(1, 0);
 }
+
 static BOOL dive_lock(void)
 {
     lx_host_once(&dive_once, initialize_dive_lock);
     return dive_mutex && lx_host_mutex_lock(dive_mutex, UINT32_MAX) == LX_HOST_LOCK_OK;
 }
+
 static void dive_unlock(void)
 {
     lx_host_mutex_unlock(dive_mutex);
@@ -62,6 +67,7 @@ static DiveInstance *dive_instance(ULONG handle)
             return instances[i];
     return NULL;
 }
+
 static DiveBuffer *dive_buffer(DiveInstance *instance, ULONG number)
 {
     if (number < DIVE_FIRST_BUFFER || number >= DIVE_FIRST_BUFFER + DIVE_MAX_BUFFERS)
@@ -69,6 +75,7 @@ static DiveBuffer *dive_buffer(DiveInstance *instance, ULONG number)
     DiveBuffer *buffer = &instance->buffers[number - DIVE_FIRST_BUFFER];
     return buffer->pixels ? buffer : NULL;
 }
+
 static void dive_free_buffer(DiveBuffer *buffer)
 {
     lx_execution_release(&buffer->borrow);
@@ -78,6 +85,7 @@ static void dive_free_buffer(DiveBuffer *buffer)
         free(buffer->pixels);
     memset(buffer, 0, sizeof *buffer);
 }
+
 static BOOL supports_format(const uint32_t *formats, size_t count, ULONG format)
 {
     for (size_t i = 0; i < count; i++)
@@ -85,6 +93,7 @@ static BOOL supports_format(const uint32_t *formats, size_t count, ULONG format)
             return TRUE;
     return FALSE;
 }
+
 static void default_palette(uint32_t *palette, BOOL physical)
 {
     for (unsigned i = 0; i < 4096; i++)
@@ -105,6 +114,7 @@ static void default_palette(uint32_t *palette, BOOL physical)
         }
     }
 }
+
 static ULONG impl_DiveQueryCaps(PDIVE_CAPS caps, ULONG plane)
 {
     TRACE_NATIVE("DiveQueryCaps(%p, %u)", caps, (uint)plane);
@@ -137,6 +147,7 @@ static ULONG impl_DiveQueryCaps(PDIVE_CAPS caps, ULONG plane)
            DiveOutputFormatCount * 4);
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveOpen(PULONG handle, ULONG non_screen, PVOID framebuffer)
 {
     TRACE_NATIVE("DiveOpen(%p, %u, %p)", handle, (uint)non_screen, framebuffer);
@@ -200,6 +211,7 @@ static ULONG impl_DiveOpen(PULONG handle, ULONG non_screen, PVOID framebuffer)
         }
     return DIVE_ERR_TOO_MANY_INSTANCES;
 }
+
 static ULONG impl_DiveClose(ULONG handle)
 {
     TRACE_NATIVE("DiveClose(%u)", (uint)handle);
@@ -226,6 +238,7 @@ static ULONG impl_DiveClose(ULONG handle)
         }
     return DIVE_ERR_INVALID_INSTANCE;
 }
+
 static ULONG impl_DiveSetupBlitter(ULONG handle, PSETUP_BLITTER setup)
 {
     TRACE_NATIVE("DiveSetupBlitter(%u, %p)", (uint)handle, setup);
@@ -299,6 +312,7 @@ static ULONG impl_DiveSetupBlitter(ULONG handle, PSETUP_BLITTER setup)
     instance->setup = TRUE;
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveAllocImageBuffer(ULONG handle, PULONG number, ULONG format, ULONG width,
                                        ULONG height, ULONG stride, PBYTE pixels)
 {
@@ -358,6 +372,7 @@ static ULONG impl_DiveAllocImageBuffer(ULONG handle, PULONG number, ULONG format
     buffer->image.pixels = pixels;
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveFreeImageBuffer(ULONG handle, ULONG number)
 {
     DiveInstance *instance = dive_instance(handle);
@@ -371,6 +386,7 @@ static ULONG impl_DiveFreeImageBuffer(ULONG handle, ULONG number)
     dive_free_buffer(buffer);
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveBeginImageBufferAccess(ULONG handle, ULONG number, PVOID output,
                                              PULONG stride, PULONG lines)
 {
@@ -388,6 +404,7 @@ static ULONG impl_DiveBeginImageBufferAccess(ULONG handle, ULONG number, PVOID o
     *lines = buffer->height;
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveEndImageBufferAccess(ULONG handle, ULONG number)
 {
     DiveInstance *instance = dive_instance(handle);
@@ -401,6 +418,7 @@ static ULONG impl_DiveEndImageBufferAccess(ULONG handle, ULONG number)
     buffer->accessed = FALSE;
     return DIVE_SUCCESS;
 }
+
 static ULONG set_palette(ULONG handle, ULONG start, ULONG count, PBYTE entries, BOOL source)
 {
     DiveInstance *instance = dive_instance(handle);
@@ -427,14 +445,17 @@ static ULONG set_palette(ULONG handle, ULONG start, ULONG count, PBYTE entries, 
     }
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveSetSourcePalette(ULONG handle, ULONG start, ULONG count, PBYTE entries)
 {
     return set_palette(handle, start, count, entries, TRUE);
 }
+
 static ULONG impl_DiveSetDestinationPalette(ULONG handle, ULONG start, ULONG count, PBYTE entries)
 {
     return set_palette(handle, start, count, entries, FALSE);
 }
+
 static BOOL transparent_pixel(DiveInstance *instance, const DiveImage *image, ULONG x, ULONG y,
                               uint32_t rgb)
 {
@@ -463,6 +484,7 @@ static BOOL transparent_pixel(DiveInstance *instance, const DiveImage *image, UL
                ? inside
                : !inside;
 }
+
 static ULONG impl_DiveBlitImageLines(ULONG handle, ULONG source, ULONG destination, PBYTE lines)
 {
     DiveInstance *instance = dive_instance(handle);
@@ -553,10 +575,12 @@ static ULONG impl_DiveBlitImageLines(ULONG handle, ULONG source, ULONG destinati
     free(pixels);
     return ok ? DIVE_SUCCESS : DIVE_ERR_INVALID_DESTINATION_RECTL;
 }
+
 static ULONG impl_DiveBlitImage(ULONG handle, ULONG source, ULONG destination)
 {
     return impl_DiveBlitImageLines(handle, source, destination, NULL);
 }
+
 static ULONG impl_DiveSetTransparentBlitMode(ULONG handle, ULONG mode, ULONG first, ULONG last)
 {
     DiveInstance *instance = dive_instance(handle);
@@ -573,6 +597,7 @@ static ULONG impl_DiveSetTransparentBlitMode(ULONG handle, ULONG mode, ULONG fir
     instance->transparent_last = last & 0xffffff;
     return DIVE_SUCCESS;
 }
+
 static ULONG framebuffer_rect(DiveInstance *instance, PRECTL rect)
 {
     if (instance->non_screen || !instance->framebuffer.pixels)
@@ -583,6 +608,7 @@ static ULONG framebuffer_rect(DiveInstance *instance, PRECTL rect)
         return DIVE_ERR_INVALID_DESTINATION_RECTL;
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveAcquireFrameBuffer(ULONG handle, PRECTL rect)
 {
     DiveInstance *instance = dive_instance(handle);
@@ -623,6 +649,7 @@ static ULONG impl_DiveAcquireFrameBuffer(ULONG handle, PRECTL rect)
     framebuffer_owner = instance;
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveDeacquireFrameBuffer(ULONG handle)
 {
     DiveInstance *instance = dive_instance(handle);
@@ -650,6 +677,7 @@ static ULONG impl_DiveDeacquireFrameBuffer(ULONG handle)
     framebuffer_owner = NULL;
     return DIVE_SUCCESS;
 }
+
 static ULONG impl_DiveCalcFrameBufferAddress(ULONG handle, PRECTL rect, PVOID output, PULONG bank,
                                              PULONG lines)
 {
@@ -668,6 +696,7 @@ static ULONG impl_DiveCalcFrameBufferAddress(ULONG handle, PRECTL rect, PVOID ou
     *lines = rect->yTop - rect->yBottom;
     return DIVE_SUCCESS;
 }
+
 /* Serialize instance/buffer ownership with setup and worker submissions. */
 ULONG DiveQueryCaps(PDIVE_CAPS caps, ULONG plane)
 {
@@ -679,6 +708,7 @@ ULONG DiveQueryCaps(PDIVE_CAPS caps, ULONG plane)
     dive_unlock();
     return result;
 }
+
 ULONG DiveOpen(PULONG handle, ULONG non_screen, PVOID framebuffer)
 {
     if (!lxRuntimeFeatureEnabled(LX_FEATURE_DIVE))
@@ -689,6 +719,7 @@ ULONG DiveOpen(PULONG handle, ULONG non_screen, PVOID framebuffer)
     dive_unlock();
     return result;
 }
+
 ULONG DiveClose(ULONG handle)
 {
     if (!dive_lock())
@@ -697,6 +728,7 @@ ULONG DiveClose(ULONG handle)
     dive_unlock();
     return result;
 }
+
 ULONG DiveSetupBlitter(ULONG handle, PSETUP_BLITTER setup)
 {
     if (!dive_lock())
@@ -705,6 +737,7 @@ ULONG DiveSetupBlitter(ULONG handle, PSETUP_BLITTER setup)
     dive_unlock();
     return result;
 }
+
 ULONG DiveAllocImageBuffer(ULONG handle, PULONG number, ULONG format, ULONG width, ULONG height,
                            ULONG stride, PBYTE pixels)
 {
@@ -714,6 +747,7 @@ ULONG DiveAllocImageBuffer(ULONG handle, PULONG number, ULONG format, ULONG widt
     dive_unlock();
     return result;
 }
+
 ULONG DiveFreeImageBuffer(ULONG handle, ULONG number)
 {
     if (!dive_lock())
@@ -722,6 +756,7 @@ ULONG DiveFreeImageBuffer(ULONG handle, ULONG number)
     dive_unlock();
     return result;
 }
+
 ULONG DiveBeginImageBufferAccess(ULONG handle, ULONG number, PVOID output, PULONG stride,
                                  PULONG lines)
 {
@@ -731,6 +766,7 @@ ULONG DiveBeginImageBufferAccess(ULONG handle, ULONG number, PVOID output, PULON
     dive_unlock();
     return result;
 }
+
 ULONG DiveEndImageBufferAccess(ULONG handle, ULONG number)
 {
     if (!dive_lock())
@@ -739,6 +775,7 @@ ULONG DiveEndImageBufferAccess(ULONG handle, ULONG number)
     dive_unlock();
     return result;
 }
+
 ULONG DiveSetSourcePalette(ULONG handle, ULONG start, ULONG count, PBYTE entries)
 {
     if (!dive_lock())
@@ -747,6 +784,7 @@ ULONG DiveSetSourcePalette(ULONG handle, ULONG start, ULONG count, PBYTE entries
     dive_unlock();
     return result;
 }
+
 ULONG DiveSetDestinationPalette(ULONG handle, ULONG start, ULONG count, PBYTE entries)
 {
     if (!dive_lock())
@@ -755,6 +793,7 @@ ULONG DiveSetDestinationPalette(ULONG handle, ULONG start, ULONG count, PBYTE en
     dive_unlock();
     return result;
 }
+
 ULONG DiveBlitImage(ULONG handle, ULONG source, ULONG destination)
 {
     if (!dive_lock())
@@ -763,6 +802,7 @@ ULONG DiveBlitImage(ULONG handle, ULONG source, ULONG destination)
     dive_unlock();
     return result;
 }
+
 ULONG DiveBlitImageLines(ULONG handle, ULONG source, ULONG destination, PBYTE lines)
 {
     if (!dive_lock())
@@ -771,6 +811,7 @@ ULONG DiveBlitImageLines(ULONG handle, ULONG source, ULONG destination, PBYTE li
     dive_unlock();
     return result;
 }
+
 ULONG DiveSetTransparentBlitMode(ULONG handle, ULONG mode, ULONG first, ULONG last)
 {
     if (!dive_lock())
@@ -779,6 +820,7 @@ ULONG DiveSetTransparentBlitMode(ULONG handle, ULONG mode, ULONG first, ULONG la
     dive_unlock();
     return result;
 }
+
 ULONG DiveAcquireFrameBuffer(ULONG handle, PRECTL rect)
 {
     if (!dive_lock())
@@ -787,6 +829,7 @@ ULONG DiveAcquireFrameBuffer(ULONG handle, PRECTL rect)
     dive_unlock();
     return result;
 }
+
 ULONG DiveDeacquireFrameBuffer(ULONG handle)
 {
     if (!dive_lock())
@@ -795,6 +838,7 @@ ULONG DiveDeacquireFrameBuffer(ULONG handle)
     dive_unlock();
     return result;
 }
+
 ULONG DiveSwitchBank(ULONG handle, ULONG bank)
 {
     (void)bank;
@@ -807,6 +851,7 @@ ULONG DiveSwitchBank(ULONG handle, ULONG bank)
     dive_unlock();
     return result;
 }
+
 ULONG DiveCalcFrameBufferAddress(ULONG handle, PRECTL rect, PVOID output, PULONG bank, PULONG lines)
 {
     if (!dive_lock())
@@ -815,6 +860,7 @@ ULONG DiveCalcFrameBufferAddress(ULONG handle, PRECTL rect, PVOID output, PULONG
     dive_unlock();
     return result;
 }
+
 /* These notifications accompany an external display-driver mode change. The
    software screen backend has no mapped display aperture to rebind. */
 VOID DiveFullScreenInit(PVOID aperture, PVOID framebuffer_info)
@@ -822,10 +868,12 @@ VOID DiveFullScreenInit(PVOID aperture, PVOID framebuffer_info)
     TRACE_NATIVE("DiveFullScreenInit(%p, %p): software screen has no hardware aperture", aperture,
                  framebuffer_info);
 }
+
 VOID DiveFullScreenTerm(void)
 {
     TRACE_NATIVE("DiveFullScreenTerm(): software screen has no hardware aperture");
 }
+
 static void shutdown_dive(void)
 {
     if (!dive_mutex || !dive_lock())
@@ -837,5 +885,6 @@ static void shutdown_dive(void)
     lx_host_mutex_destroy(dive_mutex);
     dive_mutex = NULL;
 }
+
 #define LX_NATIVE_MODULE_SHUTDOWN() shutdown_dive()
 #include "os2libs/generated/dive-lx.h"

@@ -5,6 +5,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/video_frames.h"
 #include "hal/host_sync.h"
+
 typedef struct VideoTarget
 {
     struct VideoTarget *next;
@@ -16,13 +17,16 @@ typedef struct VideoTarget
     void (*release)(void *);
     BOOL failed;
 } VideoTarget;
+
 static VideoTarget *targets;
 static LxHostMutex *lock;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
+
 static void initialize(void)
 {
     lock = lx_host_mutex_create(0, 0);
 }
+
 static void clear(VideoTarget *target)
 {
     if (target->release)
@@ -30,6 +34,7 @@ static void clear(VideoTarget *target)
     target->owner = NULL;
     target->release = NULL;
 }
+
 void *lx_pm_video_target(HWND handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -48,6 +53,7 @@ void *lx_pm_video_target(HWND handle)
     lx_host_mutex_unlock(lock);
     return target;
 }
+
 BOOL lx_pm_video_submit(void *context, const LxHostVideoFrame *frame, const RECTL *destination,
                         void *owner, void (*release)(void *))
 {
@@ -81,6 +87,7 @@ BOOL lx_pm_video_submit(void *context, const LxHostVideoFrame *frame, const RECT
     }
     return valid;
 }
+
 BOOL lx_pm_video_ready(void *context)
 {
     if (!context || !lock)
@@ -91,6 +98,7 @@ BOOL lx_pm_video_ready(void *context)
     lx_host_mutex_unlock(lock);
     return ready;
 }
+
 void lx_pm_video_release(void *context)
 {
     if (!context || !lock)
@@ -107,6 +115,7 @@ void lx_pm_video_release(void *context)
         }
     lx_host_mutex_unlock(lock);
 }
+
 void lx_pm_video_pump(void *context)
 {
     if (!lock)
@@ -159,6 +168,7 @@ void lx_pm_video_pump(void *context)
     }
     lx_host_mutex_unlock(lock);
 }
+
 void lx_pm_video_forget(void *window)
 {
     if (!lock)
@@ -172,6 +182,7 @@ void lx_pm_video_forget(void *window)
         }
     lx_host_mutex_unlock(lock);
 }
+
 void lx_pm_video_cleanup(void *anchor)
 {
     if (!lock)

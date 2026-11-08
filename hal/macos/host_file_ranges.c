@@ -11,11 +11,13 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdlib.h>
+
 typedef struct Range
 {
     uint64_t offset, length;
     struct Range *next;
 } Range;
+
 typedef struct Owner
 {
     LxHostFile *file;
@@ -24,6 +26,7 @@ typedef struct Owner
     Range *ranges;
     struct Owner *next;
 } Owner;
+
 typedef struct Retired
 {
     int fd;
@@ -31,9 +34,11 @@ typedef struct Retired
     ino_t inode;
     struct Retired *next;
 } Retired;
+
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static Owner *owners;
 static Retired *retired;
+
 static int enter(void)
 {
     int previous;
@@ -41,11 +46,13 @@ static int enter(void)
     pthread_mutex_lock(&mutex);
     return previous;
 }
+
 static void leave(int previous)
 {
     pthread_mutex_unlock(&mutex);
     pthread_setcancelstate(previous, NULL);
 }
+
 static LxHostFsError result_error(int error)
 {
     return !error                                  ? LX_HOST_FS_OK
@@ -54,6 +61,7 @@ static LxHostFsError result_error(int error)
            : error == EINVAL || error == EOVERFLOW ? LX_HOST_FS_INVALID
                                                    : LX_HOST_FS_IO;
 }
+
 static int native_range(int fd, uint64_t offset, uint64_t length, short type)
 {
     struct flock lock = {0};
@@ -67,6 +75,7 @@ static int native_range(int fd, uint64_t offset, uint64_t length, short type)
     while (result < 0 && errno == EINTR);
     return result ? errno : 0;
 }
+
 static int active(dev_t device, ino_t inode)
 {
     for (Owner *owner = owners; owner; owner = owner->next)
@@ -74,6 +83,7 @@ static int active(dev_t device, ino_t inode)
             return 1;
     return 0;
 }
+
 static void drain(dev_t device, ino_t inode)
 {
     if (active(device, inode))
@@ -91,10 +101,12 @@ static void drain(dev_t device, ino_t inode)
         free(entry);
     }
 }
+
 static int overlap(uint64_t offset, uint64_t length, const Range *range)
 {
     return length && offset < range->offset + range->length && range->offset < offset + length;
 }
+
 void lx_host_file_dispose(LxHostFile *file)
 {
     int previous = enter();
@@ -134,6 +146,7 @@ void lx_host_file_dispose(LxHostFile *file)
     free(file);
     leave(previous);
 }
+
 LxHostFsError lx_host_file_lock_range(LxHostFile *file, uint64_t offset, uint64_t length,
                                       int acquire)
 {
@@ -209,6 +222,7 @@ LxHostFsError lx_host_file_lock_range(LxHostFile *file, uint64_t offset, uint64_
     leave(previous);
     return result_error(error);
 }
+
 LxHostFsError lx_host_file_range_conflict(LxHostFile *file, uint64_t offset, uint64_t length,
                                           int *conflict)
 {

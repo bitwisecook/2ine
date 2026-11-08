@@ -12,6 +12,7 @@
 #include <libavutil/common.h>
 #include <libswscale/swscale.h>
 #include <libswresample/swresample.h>
+
 struct LxVideoDecoder
 {
     LxHostFile *file;
@@ -34,6 +35,7 @@ struct LxVideoDecoder
     LxVideoAudioSink audio_sink;
     void *audio_context;
 };
+
 static int read_packet(void *opaque, uint8_t *buffer, int size)
 {
     size_t actual = 0;
@@ -42,6 +44,7 @@ static int read_packet(void *opaque, uint8_t *buffer, int size)
         return AVERROR(EIO);
     return actual ? (int)actual : AVERROR_EOF;
 }
+
 static int64_t seek_packet(void *opaque, int64_t offset, int whence)
 {
     LxVideoDecoder *d = opaque;
@@ -60,6 +63,7 @@ static int64_t seek_packet(void *opaque, int64_t offset, int whence)
         return AVERROR(EIO);
     return (int64_t)position;
 }
+
 void lx_video_decoder_close(LxVideoDecoder *d)
 {
     if (!d)
@@ -81,6 +85,7 @@ void lx_video_decoder_close(LxVideoDecoder *d)
     lx_host_file_close(d->file);
     free(d);
 }
+
 LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info, int audio)
 {
     if (!path || !info)
@@ -182,6 +187,7 @@ fail:
     lx_video_decoder_close(d);
     return NULL;
 }
+
 void lx_video_frame_release(LxDecodedVideoFrame *frame)
 {
     if (!frame)
@@ -190,6 +196,7 @@ void lx_video_frame_release(LxDecodedVideoFrame *frame)
     av_frame_free(&owner);
     memset(frame, 0, sizeof *frame);
 }
+
 static int export_frame(LxVideoDecoder *d, LxDecodedVideoFrame *output)
 {
     if (d->frame->width <= 0 || d->frame->height <= 0 || d->frame->width > 16384 ||
@@ -298,6 +305,7 @@ fail:
     av_frame_free(&frame);
     return 0;
 }
+
 void lx_video_decoder_audio_sink(LxVideoDecoder *d, LxVideoAudioSink sink, void *context)
 {
     if (d)
@@ -306,6 +314,7 @@ void lx_video_decoder_audio_sink(LxVideoDecoder *d, LxVideoAudioSink sink, void 
         d->audio_context = context;
     }
 }
+
 static int audio_output(LxVideoDecoder *d, AVFrame *frame)
 {
     int rate = d->audio_codec->sample_rate;
@@ -347,6 +356,7 @@ static int audio_output(LxVideoDecoder *d, AVFrame *frame)
     d->audio_next_sample += count;
     return 1;
 }
+
 static int audio_packet(LxVideoDecoder *d, AVPacket *packet)
 {
     if (!d->audio_codec)
@@ -363,6 +373,7 @@ static int audio_packet(LxVideoDecoder *d, AVPacket *packet)
     }
     return result == AVERROR(EAGAIN) || result == AVERROR_EOF;
 }
+
 int lx_video_decoder_next(LxVideoDecoder *d, LxDecodedVideoFrame *output)
 {
     if (!d || !output)
@@ -425,6 +436,7 @@ int lx_video_decoder_next(LxVideoDecoder *d, LxDecodedVideoFrame *output)
         }
     }
 }
+
 int lx_video_decoder_seek(LxVideoDecoder *d, int64_t milliseconds)
 {
     if (!d || milliseconds < 0 || milliseconds > UINT32_MAX)
@@ -455,12 +467,14 @@ struct LxVideoDecoder
 {
     int unused;
 };
+
 void lx_video_decoder_audio_sink(LxVideoDecoder *d, LxVideoAudioSink sink, void *context)
 {
     (void)d;
     (void)sink;
     (void)context;
 }
+
 LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info, int audio)
 {
     (void)path;
@@ -468,22 +482,26 @@ LxVideoDecoder *lx_video_decoder_open_audio(const char *path, LxVideoInfo *info,
     (void)audio;
     return NULL;
 }
+
 int lx_video_decoder_next(LxVideoDecoder *d, LxDecodedVideoFrame *frame)
 {
     (void)d;
     (void)frame;
     return -1;
 }
+
 int lx_video_decoder_seek(LxVideoDecoder *d, int64_t milliseconds)
 {
     (void)d;
     (void)milliseconds;
     return 0;
 }
+
 void lx_video_frame_release(LxDecodedVideoFrame *frame)
 {
     (void)frame;
 }
+
 void lx_video_decoder_close(LxVideoDecoder *d)
 {
     free(d);

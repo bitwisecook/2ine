@@ -28,6 +28,7 @@ static cJSON *audio_defaults(void)
     }
     return settings;
 }
+
 static const char *audio_format(const char *path)
 {
     const char *dot = strrchr(path, '.');
@@ -39,10 +40,12 @@ static const char *audio_format(const char *path)
             return formats[i];
     return NULL;
 }
+
 static uint32_t audio_u32(const unsigned char *p)
 {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
 }
+
 static int audio_header(Context *c, const char *path, const char *kind)
 {
     if (!tb_is_file(path) || tb_is_link(path))
@@ -61,6 +64,7 @@ static int audio_header(Context *c, const char *path, const char *kind)
     fclose(file);
     return ok ? 1 : fail(c, "Invalid, empty or oversized %s sound bank", kind);
 }
+
 static const cJSON *audio_bank(Context *c, const char *id)
 {
     cJSON *bank;
@@ -69,6 +73,7 @@ static const cJSON *audio_bank(Context *c, const char *id)
                                                   !strcmp(field(bank, "id"), id)) return bank;
     return NULL;
 }
+
 static char *audio_bank_path(Context *c, const char *id, const char *build)
 {
     if (!id || !*id || !strcmp(id, "default"))
@@ -96,7 +101,9 @@ static char *audio_bank_path(Context *c, const char *id, const char *build)
     }
     return join(c, c->ball, relative);
 }
+
 static int audio_validate(Context *c, const cJSON *settings);
+
 static cJSON *audio_snapshot(Context *c)
 {
     if (get(c->manifest, "soundBanks") && !cJSON_IsArray(get(c->manifest, "soundBanks")))
@@ -144,6 +151,7 @@ static cJSON *audio_snapshot(Context *c)
     }
     return result;
 }
+
 static int audio_number(Context *c, const cJSON *object, const char *key, int min, int max)
 {
     const cJSON *value = get(object, key);
@@ -152,6 +160,7 @@ static int audio_number(Context *c, const cJSON *object, const char *key, int mi
         return fail(c, "Invalid MIDI channel %s", key);
     return 1;
 }
+
 static int audio_validate(Context *c, const cJSON *settings)
 {
     const char *profile = field(settings, "profile"), *bank = field(settings, "bank");
@@ -179,6 +188,7 @@ static int audio_validate(Context *c, const cJSON *settings)
     }
     return 1;
 }
+
 static cJSON *audio_save(Context *c, const cJSON *request)
 {
     const cJSON *settings = get(request, "settings");
@@ -205,6 +215,7 @@ static cJSON *audio_save(Context *c, const cJSON *request)
     put(c->manifest, "audio", merged);
     return save_manifest(c) ? audio_snapshot(c) : NULL;
 }
+
 static int audio_config(Context *c, const char *build, cJSON *env)
 {
     cJSON *defaults = NULL;
@@ -247,6 +258,7 @@ static int audio_config(Context *c, const char *build, cJSON *env)
     put(env, "TWOINE_SOUNDFONT", cJSON_CreateString(bank));
     return 1;
 }
+
 static int audio_tree_hash(Context *c, const char *path, const char *relative, SHA256_CTX *state,
                            unsigned depth, unsigned *count, uint64_t *bytes)
 {
@@ -285,6 +297,7 @@ static int audio_tree_hash(Context *c, const char *path, const char *relative, S
     sha256_update(state, hash, sizeof hash);
     return 1;
 }
+
 static cJSON *audio_import(Context *c, const cJSON *request)
 {
     const char *raw = field(request, "path");
@@ -478,6 +491,7 @@ static int audio_extract(Context *c, const char *source, const char *destination
     tb_media_entries_free(entries, count);
     return ok;
 }
+
 static cJSON *audio_import_archive(Context *c, const cJSON *request)
 {
     const char *raw = field(request, "path");

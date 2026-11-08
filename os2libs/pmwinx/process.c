@@ -54,8 +54,10 @@ enum
     ERROR_NOT_SUPPORTED_ID = 50,
     ERROR_INVALID_THREAD = 309
 };
+
 #define PSEUDO_PROCESS UINT32_MAX
 #define PSEUDO_THREAD (UINT32_MAX - 1)
+
 typedef struct Open32Process
 {
     LxHostMonitor *monitor;
@@ -66,19 +68,23 @@ typedef struct Open32Process
     BOOL finished, terminated;
     struct Open32Process *next;
 } Open32Process;
+
 /* One record per handle family, so a closing handle cannot race a new reference. */
 typedef struct ProcessHandle
 {
     Open32Process *process;
 } ProcessHandle;
+
 typedef struct ProcessResult
 {
     ULONG process, thread, id;
 } ProcessResult;
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *registry;
 static Open32Process *processes;
 static Open32Process current;
+
 static void initialize(void)
 {
     registry = lx_host_monitor_create();
@@ -88,12 +94,14 @@ static void initialize(void)
     current.id = GetCurrentProcessId();
     current.exit_code = STILL_ACTIVE_CODE;
 }
+
 static void retain_process(Open32Process *process)
 {
     lx_host_monitor_lock(registry);
     process->references++;
     lx_host_monitor_unlock(registry);
 }
+
 static void release_process(Open32Process *process)
 {
     if (process == &current)
@@ -116,12 +124,14 @@ static void release_process(Open32Process *process)
         lx_host_monitor_destroy(process->monitor);
     free(process);
 }
+
 static void destroy_handle(void *resource)
 {
     ProcessHandle *handle = resource;
     release_process(handle->process);
     free(handle);
 }
+
 static ULONG make_handle(LxHandleKind kind, Open32Process *process)
 {
     ProcessHandle *reference = calloc(1, sizeof *reference);
@@ -134,6 +144,7 @@ static ULONG make_handle(LxHandleKind kind, Open32Process *process)
         destroy_handle(reference);
     return handle;
 }
+
 static Open32Process *resolve(ULONG handle, LxHandleKind kind, LxHandleBorrow *borrow)
 {
     lx_host_once(&once, initialize);
@@ -143,6 +154,7 @@ static Open32Process *resolve(ULONG handle, LxHandleKind kind, LxHandleBorrow *b
     return lx_handle_borrow(handle, kind, borrow) ? ((ProcessHandle *)borrow->resource)->process
                                                   : NULL;
 }
+
 static ULONG finished_code(const Open32Process *process, const LxHostChildStatus *status)
 {
     if (process->record && __atomic_load_n(&process->record->exit_recorded, __ATOMIC_ACQUIRE))
@@ -151,6 +163,7 @@ static ULONG finished_code(const Open32Process *process, const LxHostChildStatus
         return process->requested_exit;
     return status->signal ? 128 + status->signal : status->result;
 }
+
 static void *watch_process(void *argument)
 {
     Open32Process *process = argument;
@@ -164,6 +177,7 @@ static void *watch_process(void *argument)
     release_process(process);
     return NULL;
 }
+
 /* The launcher's reference covers failure paths; handles and the watcher add theirs. */
 static ULONG launch_process(PSZ program, PSZ arguments, PSZ environment, PSZ directory,
                             BOOL suspended, int priority, ULONG priority_class,
@@ -240,6 +254,7 @@ static ULONG launch_process(PSZ program, PSZ arguments, PSZ environment, PSZ dir
     release_process(process);
     return 8;
 }
+
 /* The profile value holds ';'-separated settings for a Win-OS/2 session. */
 static char *windows_environment(void)
 {
@@ -260,6 +275,7 @@ static char *windows_environment(void)
             *p = 0;
     return block;
 }
+
 static char *argument_block(const char *program, const char *arguments)
 {
     size_t name = strlen(program) + 1, tail = arguments ? strlen(arguments) : 0;
@@ -272,6 +288,7 @@ static char *argument_block(const char *program, const char *arguments)
     }
     return block;
 }
+
 /* Negative inherits the caller's level, as a host child does by default. */
 static int requested_priority(ULONG flags)
 {
@@ -285,6 +302,7 @@ static int requested_priority(ULONG flags)
     return selected & HIGH_PRIORITY_FLAG ? LX_HOST_PROCESS_PRIORITY_NORMAL
                                          : LX_HOST_PROCESS_PRIORITY_REALTIME;
 }
+
 /* Without a request a child reports idle only when its creator is idle. */
 static ULONG reported_priority_class(ULONG flags)
 {
@@ -294,6 +312,7 @@ static ULONG reported_priority_class(ULONG flags)
     return GetPriorityClass(PSEUDO_PROCESS) == IDLE_PRIORITY_FLAG ? IDLE_PRIORITY_FLAG
                                                                   : NORMAL_PRIORITY_FLAG;
 }
+
 static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ environment,
                            PSZ directory, const LxLaunchPresentation *presentation,
                            ProcessResult *result)
@@ -389,6 +408,7 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
         open32SetError(error);
     return !error;
 }
+
 static uint32 show_control(ULONG show)
 {
     switch (show)
@@ -403,6 +423,7 @@ static uint32 show_control(ULONG show)
             return 0;
     }
 }
+
 /* STARTUPINFO guest offsets: 12 title, 16-28 placement, 44 flags, 48 show. */
 static void startup_presentation(const uint8 *startup, LxLaunchPresentation *presentation)
 {
@@ -429,6 +450,7 @@ static void startup_presentation(const uint8 *startup, LxLaunchPresentation *pre
         snprintf(presentation->title, sizeof presentation->title, "%s", text);
     free(text);
 }
+
 BOOL CreateProcess(PSZ application, PSZ command, PVOID process_security, PVOID thread_security,
                    BOOL inherit, ULONG flags, PVOID environment, PSZ directory, PVOID startup,
                    PVOID information)
@@ -451,11 +473,13 @@ BOOL CreateProcess(PSZ application, PSZ command, PVOID process_security, PVOID t
     lx_guest_store_u32((uint8 *)information + 12, PRIMARY_THREAD_ID);
     return TRUE;
 }
+
 BOOL open32CloseProcess(ULONG handle)
 {
     return lx_handle_close(handle, LX_HANDLE_OPEN32_PROCESS) ||
            lx_handle_close(handle, LX_HANDLE_OPEN32_CHILD_THREAD);
 }
+
 typedef struct ProcessWait
 {
     LxHandleBorrow borrow;
@@ -463,10 +487,12 @@ typedef struct ProcessWait
     ULONG timeout;
     BOOL input_idle;
 } ProcessWait;
+
 static void release_wait(void *argument)
 {
     lx_handle_release(&((ProcessWait *)argument)->borrow);
 }
+
 /* Input idle has no wake source in this process, so that wait polls the record. */
 static uint32 wait_process(void *argument)
 {
@@ -497,6 +523,7 @@ static uint32 wait_process(void *argument)
     lx_host_monitor_unlock(process->monitor);
     return result;
 }
+
 int open32WaitProcess(ULONG handle, ULONG timeout, ULONG *result)
 {
     ProcessWait wait = {.timeout = timeout};
@@ -508,6 +535,7 @@ int open32WaitProcess(ULONG handle, ULONG timeout, ULONG *result)
     *result = lx_host_guarded_call(wait_process, &wait, release_wait, &wait);
     return 1;
 }
+
 ULONG WaitForInputIdle(ULONG handle, ULONG timeout)
 {
     ProcessWait wait = {.timeout = timeout, .input_idle = TRUE};
@@ -526,6 +554,7 @@ ULONG WaitForInputIdle(ULONG handle, ULONG timeout)
     }
     return lx_host_guarded_call(wait_process, &wait, release_wait, &wait);
 }
+
 BOOL GetExitCodeProcess(ULONG handle, PULONG code)
 {
     LxHandleBorrow borrow;
@@ -541,6 +570,7 @@ BOOL GetExitCodeProcess(ULONG handle, PULONG code)
     lx_handle_release(&borrow);
     return TRUE;
 }
+
 int open32ChildThreadExitCode(ULONG handle, PULONG code)
 {
     LxHandleBorrow borrow;
@@ -553,6 +583,7 @@ int open32ChildThreadExitCode(ULONG handle, PULONG code)
     lx_handle_release(&borrow);
     return 1;
 }
+
 int open32ChildThreadResume(ULONG handle, PULONG previous)
 {
     LxHandleBorrow borrow;
@@ -577,6 +608,7 @@ int open32ChildThreadResume(ULONG handle, PULONG previous)
     lx_handle_release(&borrow);
     return 1;
 }
+
 int open32ChildThreadSuspend(ULONG handle, PULONG previous)
 {
     LxHandleBorrow borrow;
@@ -599,6 +631,7 @@ int open32ChildThreadSuspend(ULONG handle, PULONG previous)
     lx_handle_release(&borrow);
     return 1;
 }
+
 int open32ChildThreadTerminate(ULONG handle, ULONG code, BOOL *result)
 {
     LxHandleBorrow borrow;
@@ -616,6 +649,7 @@ int open32ChildThreadTerminate(ULONG handle, ULONG code, BOOL *result)
     lx_handle_release(&borrow);
     return 1;
 }
+
 int open32ChildSetPriority(ULONG handle, LxHostProcessPriority priority, ULONG priority_class,
                            int *error)
 {
@@ -633,6 +667,7 @@ int open32ChildSetPriority(ULONG handle, LxHostProcessPriority priority, ULONG p
     lx_handle_release(&borrow);
     return 1;
 }
+
 int open32ChildPriorityClass(ULONG handle, PULONG priority_class)
 {
     LxHandleBorrow borrow;
@@ -647,6 +682,7 @@ int open32ChildPriorityClass(ULONG handle, PULONG priority_class)
     lx_handle_release(&borrow);
     return 1;
 }
+
 ULONG OpenProcess(ULONG access, BOOL inherit, ULONG id)
 {
     (void)access;
@@ -673,6 +709,7 @@ ULONG OpenProcess(ULONG access, BOOL inherit, ULONG id)
     release_process(found);
     return handle;
 }
+
 static BOOL local_process(ULONG handle, BOOL *known)
 {
     LxHandleBorrow borrow;
@@ -682,6 +719,7 @@ static BOOL local_process(ULONG handle, BOOL *known)
     lx_handle_release(&borrow);
     return local;
 }
+
 static ULONG duplicate_object(ULONG source, const uint32_t *access)
 {
     static const LxHandleKind kinds[] = {LX_HANDLE_OPEN32_FILE,        LX_HANDLE_OPEN32_EVENT,
@@ -704,6 +742,7 @@ static ULONG duplicate_object(ULONG source, const uint32_t *access)
     HFILE copy = (HFILE)UINT32_MAX;
     return duplicate && !duplicate((HFILE)source, &copy) ? (ULONG)copy : 0;
 }
+
 BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, PULONG output,
                      ULONG access, BOOL inherit, ULONG options)
 {
@@ -745,6 +784,7 @@ BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, P
         CloseHandle(source);
     return TRUE;
 }
+
 VOID ExitProcess(ULONG code)
 {
     lx_host_once(&once, initialize);
@@ -753,10 +793,12 @@ VOID ExitProcess(ULONG code)
     lx_host_monitor_unlock(current.monitor);
     GLoaderState.dosExit(1, code);
 }
+
 VOID FatalExit(ULONG code)
 {
     GLoaderState.dosExit(1, code);
 }
+
 VOID FatalAppExit(ULONG action, PSZ message)
 {
     if (WinQueryCapture(HWND_DESKTOP))
@@ -768,6 +810,7 @@ VOID FatalAppExit(ULONG action, PSZ message)
         fprintf(stderr, "FATAL EXIT: %s\n", message ? message : "");
     GLoaderState.dosExit(1, action);
 }
+
 /* The session is the ball: this worker, the children it started, and every other
    live PM worker through its mailbox. The host is never shut down. */
 BOOL ExitWindows(ULONG reserved, ULONG code)
@@ -787,6 +830,7 @@ BOOL ExitWindows(ULONG reserved, ULONG code)
     lx_host_monitor_unlock(registry);
     return delivered;
 }
+
 ULONG WinExec(PSZ command, ULONG show)
 {
     if (!command)
@@ -802,6 +846,7 @@ ULONG WinExec(PSZ command, ULONG show)
     open32CloseProcess(result.thread);
     return 0x20;
 }
+
 static ULONG show_flags(LONG show)
 {
     switch (show)
@@ -828,6 +873,7 @@ static ULONG show_flags(LONG show)
             return 0;
     }
 }
+
 static ULONG start_program(PSZ executable, PSZ path, PSZ parameters, PSZ directory, LONG show)
 {
     PROGDETAILS details = {.Length = 72,
@@ -847,6 +893,7 @@ static ULONG start_program(PSZ executable, PSZ path, PSZ parameters, PSZ directo
         return missing;
     return error == PMERR_INVALID_APPL_ID ? SE_BAD_FORMAT : SE_NO_ASSOCIATION;
 }
+
 static ULONG open_document(PSZ path)
 {
     ULONG object = WinQueryObject(path);
@@ -859,6 +906,7 @@ static ULONG open_document(PSZ path)
         return SE_FILE_NOT_FOUND;
     return lx_pmwp_open_associated(path) ? UINT32_MAX : SE_NO_ASSOCIATION;
 }
+
 ULONG ShellExecute(ULONG window, PSZ operation, PSZ file, PSZ parameters, PSZ directory, LONG show)
 {
     (void)window;

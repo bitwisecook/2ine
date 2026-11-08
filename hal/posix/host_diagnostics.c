@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+
 typedef struct DiagnosticSocket
 {
     int fd, kind, header;
@@ -18,8 +19,10 @@ typedef struct DiagnosticSocket
     LxHostSocketAddress peer;
     struct DiagnosticSocket *next;
 } DiagnosticSocket;
+
 static DiagnosticSocket *Sockets;
 static pthread_mutex_t Mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static DiagnosticSocket lookup(int fd)
 {
     DiagnosticSocket result = {0};
@@ -33,10 +36,12 @@ static DiagnosticSocket lookup(int fd)
     pthread_mutex_unlock(&Mutex);
     return result;
 }
+
 int lx_diagnostic_type(int fd)
 {
     return lookup(fd).kind ? LX_SOCKET_RAW : 0;
 }
+
 int lx_diagnostic_connect(int fd, const LxHostSocketAddress *address, int *handled)
 {
     *handled = lookup(fd).kind == UDP_PACKET;
@@ -53,6 +58,7 @@ int lx_diagnostic_connect(int fd, const LxHostSocketAddress *address, int *handl
     pthread_mutex_unlock(&Mutex);
     return 0;
 }
+
 int lx_diagnostic_peer(int fd, LxHostSocketAddress *address, int *handled)
 {
     DiagnosticSocket s = lookup(fd);
@@ -67,6 +73,7 @@ int lx_diagnostic_peer(int fd, LxHostSocketAddress *address, int *handled)
     *address = s.peer;
     return 0;
 }
+
 int lx_diagnostic_open(int protocol)
 {
     int fd, kind;
@@ -102,6 +109,7 @@ int lx_diagnostic_open(int protocol)
     pthread_mutex_unlock(&Mutex);
     return fd;
 }
+
 void lx_diagnostic_close(int fd)
 {
     pthread_mutex_lock(&Mutex);
@@ -116,6 +124,7 @@ void lx_diagnostic_close(int fd)
     }
     pthread_mutex_unlock(&Mutex);
 }
+
 int lx_diagnostic_option(int fd, int option, const void *value, int size, int *handled)
 {
     DiagnosticSocket s = lookup(fd);
@@ -141,10 +150,12 @@ int lx_diagnostic_option(int fd, int option, const void *value, int size, int *h
     pthread_mutex_unlock(&Mutex);
     return 0;
 }
+
 static uint16_t network16(const unsigned char *p)
 {
     return (uint16_t)((p[0] << 8) | p[1]);
 }
+
 int64_t lx_diagnostic_send(int fd, const void *buffer, size_t size, int flags,
                            const LxHostSocketAddress *address, int *handled)
 {
@@ -261,6 +272,7 @@ int64_t lx_diagnostic_send(int fd, const void *buffer, size_t size, int flags,
                     : sendto(fd, data + skip, size - skip, flags, (struct sockaddr *)&a, sizeof a);
     return n < 0 ? -1 : (int64_t)n + (int64_t)skip;
 }
+
 int64_t lx_diagnostic_recv(int fd, void *buffer, size_t size, int flags,
                            LxHostSocketAddress *address, int *handled)
 {

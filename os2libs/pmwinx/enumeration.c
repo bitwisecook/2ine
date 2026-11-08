@@ -2,11 +2,13 @@
 /* Child enumeration snapshots the descendant tree before guest callbacks run. */
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/internal.h"
+
 typedef struct WindowSnapshot
 {
     ULONG *handles;
     size_t count, capacity;
 } WindowSnapshot;
+
 static BOOL collect(WindowSnapshot *snapshot, ULONG parent, unsigned depth)
 {
     if (depth > 256)
@@ -34,6 +36,7 @@ static BOOL collect(WindowSnapshot *snapshot, ULONG parent, unsigned depth)
     }
     return TRUE;
 }
+
 BOOL EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
 {
     TRACE_NATIVE("EnumChildWindows(%u, %X, %X)", parent, procedure, parameter);

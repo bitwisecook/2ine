@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
+
 int DosBeepGenerator(void *userdata, float *stream, int samples, int freq)
 {
     const float beep_volume = GLoaderState.beep_volume;

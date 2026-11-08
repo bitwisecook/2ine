@@ -3,6 +3,7 @@
 #include "arguments.h"
 #include <stdlib.h>
 #include <string.h>
+
 int lx_guest_argument_far(LxExecution *e, uint32_t pointer, size_t size, unsigned permissions,
                           int live, int nullable, LxGuestArgument *a)
 {
@@ -31,6 +32,7 @@ failed:
     lx_guest_argument_finish(a, 0);
     return 0;
 }
+
 int lx_guest_argument_strings(LxExecution *e, uint32_t pointer, unsigned count, size_t maximum,
                               int nullable, LxGuestArgument *a)
 {
@@ -53,6 +55,7 @@ int lx_guest_argument_strings(LxExecution *e, uint32_t pointer, unsigned count, 
     a->host = a->allocation;
     return a->host != NULL;
 }
+
 void lx_guest_argument_finish(LxGuestArgument *a, int copy_back)
 {
     if (a->allocation && a->borrow.mapping && copy_back && (a->permissions & LX_GUEST_WRITE))

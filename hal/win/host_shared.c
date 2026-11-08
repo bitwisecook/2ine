@@ -7,11 +7,13 @@
 #include <stdio.h>
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 struct LxHostShared
 {
     HANDLE object;
     size_t size;
 };
+
 LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShared **output)
 {
     *output = NULL;
@@ -50,6 +52,7 @@ LxHostSharedResult lx_host_shared_open(const char *name, size_t size, LxHostShar
     *output = s;
     return LX_HOST_SHARED_OK;
 }
+
 void *lx_host_shared_map(LxHostShared *s, void *hint, int exact)
 {
     void *view = MapViewOfFileEx(s->object, FILE_MAP_ALL_ACCESS, 0, 0, s->size, hint);
@@ -61,16 +64,19 @@ void *lx_host_shared_map(LxHostShared *s, void *hint, int exact)
     }
     return view;
 }
+
 void lx_host_shared_unmap(void *view, size_t size)
 {
     (void)size;
     UnmapViewOfFile(view);
 }
+
 void lx_host_shared_close(LxHostShared *s)
 {
     CloseHandle(s->object);
     free(s);
 }
+
 size_t lx_host_shared_size(const LxHostShared *s)
 {
     return s->size;

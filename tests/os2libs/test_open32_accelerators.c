@@ -22,6 +22,7 @@
 static UCHAR resource[16] = {2, 0, 0xb5, 1, 2, 0, 0x20, 0, 7, 0, 0x13, 0, 'o', 0, 8, 0};
 static unsigned released;
 static ULONG shared_table;
+
 static uint32 query(uint32 module, uint32 type, uint32 name, uint32 *size)
 {
     if (module != 123 || type != 8 || name != 91)
@@ -29,6 +30,7 @@ static uint32 query(uint32 module, uint32 type, uint32 name, uint32 *size)
     *size = sizeof resource;
     return 0;
 }
+
 static uint32 get(uint32 module, uint32 type, uint32 name, void **data)
 {
     uint32 size;
@@ -37,12 +39,14 @@ static uint32 get(uint32 module, uint32 type, uint32 name, void **data)
     *data = resource;
     return 0;
 }
+
 static uint32 release(void *data)
 {
     CHECK(data == resource);
     released++;
     return 0;
 }
+
 static void *worker(void *unused)
 {
     (void)unused;
@@ -53,6 +57,7 @@ static void *worker(void *unused)
     CHECK(made && DestroyAcceleratorTable(made));
     return NULL;
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 2);

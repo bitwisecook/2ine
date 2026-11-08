@@ -3,6 +3,7 @@
 #define _DARWIN_C_SOURCE 1
 #include "hal/posix/fs_internal.h"
 #include <sys/stat.h>
+
 int lx_host_path_native_identity(const char *path, LxHostFileIdentity *identity)
 {
     struct stat native;

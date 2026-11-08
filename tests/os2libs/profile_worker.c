@@ -8,6 +8,7 @@
 #include <string.h>
 
 static HINI profile;
+
 static HINI scope(const char *name)
 {
     return !strcmp(name, "user")     ? HINI_USERPROFILE
@@ -15,6 +16,7 @@ static HINI scope(const char *name)
            : !strcmp(name, "merged") ? HINI_PROFILE
                                      : profile;
 }
+
 int main(int argc, char **argv)
 {
     if (argc != 3)

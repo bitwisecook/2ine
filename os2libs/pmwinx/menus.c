@@ -7,11 +7,13 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/menus.h"
 #include "guest/abi.h"
+
 typedef struct MenuText
 {
     char *text;
     struct MenuText *next;
 } MenuText;
+
 typedef struct Open32Menu
 {
     HWND handle;
@@ -20,7 +22,9 @@ typedef struct Open32Menu
     MenuText *texts;
     struct Open32Menu *next;
 } Open32Menu;
+
 static _Thread_local Open32Menu *menus;
+
 static void free_texts(Open32Menu *menu)
 {
     while (menu->texts)
@@ -31,6 +35,7 @@ static void free_texts(Open32Menu *menu)
         free(text);
     }
 }
+
 static Open32Menu *find_menu(ULONG handle)
 {
     for (Open32Menu **slot = &menus; *slot; slot = &(*slot)->next)
@@ -46,6 +51,7 @@ static Open32Menu *find_menu(ULONG handle)
         }
     return NULL;
 }
+
 static void prune_menus(void)
 {
     for (Open32Menu **slot = &menus; *slot;)
@@ -61,6 +67,7 @@ static void prune_menus(void)
         }
     }
 }
+
 static ULONG create_menu(BOOL popup)
 {
     if (!open32Presentation())
@@ -89,14 +96,17 @@ static ULONG create_menu(BOOL popup)
     menus = menu;
     return menu->handle;
 }
+
 ULONG CreateMenu(void)
 {
     return create_menu(FALSE);
 }
+
 ULONG CreatePopupMenu(void)
 {
     return create_menu(TRUE);
 }
+
 BOOL DestroyMenu(ULONG handle)
 {
     Open32Menu **link = &menus;
@@ -116,6 +126,7 @@ BOOL DestroyMenu(ULONG handle)
     prune_menus();
     return TRUE;
 }
+
 void open32MenusCleanup(void)
 {
     while (menus)
@@ -133,6 +144,7 @@ static Window *menu_window(ULONG handle)
     Window *window = find_menu(handle) ? lx_pm_menu_window(handle) : NULL;
     return window && window->menu ? window : NULL;
 }
+
 static PmMenuItem *menu_item(Window **target, ULONG item, ULONG flags, unsigned depth)
 {
     if (!*target || depth > 32)
@@ -154,6 +166,7 @@ static PmMenuItem *menu_item(Window **target, ULONG item, ULONG flags, unsigned 
     }
     return NULL;
 }
+
 static BOOL menu_contains(Window *menu, Window *target, unsigned depth)
 {
     if (menu == target || depth >= 32)
@@ -166,6 +179,7 @@ static BOOL menu_contains(Window *menu, Window *target, unsigned depth)
     }
     return FALSE;
 }
+
 BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ text)
 {
     TRACE_NATIVE("InsertMenu(%u, %u, %X, %u, %p)", handle, position, flags, identifier, text);
@@ -266,10 +280,12 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
     WinInvalidateRect(window->hwnd, NULL, FALSE);
     return TRUE;
 }
+
 BOOL AppendMenu(ULONG handle, ULONG flags, ULONG identifier, PSZ text)
 {
     return InsertMenu(handle, UINT32_MAX, flags, identifier, text);
 }
+
 LONG GetMenuItemCount(ULONG handle)
 {
     Window *window = menu_window(handle);
@@ -280,12 +296,14 @@ LONG GetMenuItemCount(ULONG handle)
     }
     return (LONG)window->menu->count;
 }
+
 ULONG GetMenuItemID(ULONG handle, LONG position)
 {
     Window *window = menu_window(handle);
     PmMenuItem *item = menu_item(&window, (ULONG)position, 0x400, 0);
     return item && !item->item.hwndSubMenu ? item->item.id : UINT32_MAX;
 }
+
 ULONG GetSubMenu(ULONG handle, LONG position)
 {
     Window *window = menu_window(handle);
@@ -310,6 +328,7 @@ ULONG GetMenuState(ULONG handle, ULONG identity, ULONG flags)
     }
     return result;
 }
+
 ULONG CheckMenuItem(ULONG handle, ULONG identity, ULONG flags)
 {
     Window *window = menu_window(handle);
@@ -326,6 +345,7 @@ ULONG CheckMenuItem(ULONG handle, ULONG identity, ULONG flags)
     WinInvalidateRect(window->hwnd, NULL, FALSE);
     return old;
 }
+
 ULONG EnableMenuItem(ULONG handle, ULONG identity, ULONG flags)
 {
     Window *window = menu_window(handle);
@@ -377,10 +397,12 @@ static BOOL remove_menu_item(ULONG handle, ULONG identity, ULONG flags, BOOL des
         prune_menus();
     return TRUE;
 }
+
 BOOL RemoveMenu(ULONG handle, ULONG identity, ULONG flags)
 {
     return remove_menu_item(handle, identity, flags, FALSE);
 }
+
 BOOL DeleteMenu(ULONG handle, ULONG identity, ULONG flags)
 {
     return remove_menu_item(handle, identity, flags, TRUE);
@@ -422,6 +444,7 @@ ULONG GetMenu(ULONG handle)
     }
     return window->style & 0x40000000u ? 0 : window->menu;
 }
+
 BOOL SetMenu(ULONG handle, ULONG menu)
 {
     TRACE_NATIVE("SetMenu(%u, %u)", (uint)handle, (uint)menu);
@@ -433,7 +456,7 @@ BOOL SetMenu(ULONG handle, ULONG menu)
     }
     Window *next = menu ? menu_window(menu) : NULL;
     if (menu && (!next || (next->parent->hwnd != HWND_DESKTOP &&
-                          next->parent->hwnd != HWND_OBJECT && next->parent->hwnd != handle)))
+                           next->parent->hwnd != HWND_OBJECT && next->parent->hwnd != handle)))
     {
         open32SetError(1401);
         return FALSE;
@@ -550,6 +573,7 @@ static BOOL resource_name_equal(const char *first, const char *second)
     }
     return *first == *second;
 }
+
 ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
 {
     uintptr_t id = (uintptr_t)name;
@@ -561,11 +585,13 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
         unsigned long value = strtoul(name + 1, &end, 10);
         return end == name + 1 || *end || value > UINT16_MAX ? 0 : (ULONG)value;
     }
+
     enum
     {
         resource_names = 255,
         maximum_name_table = 1048576
     };
+
     ULONG size = 0, result = 0;
     void *data = NULL;
     if (!GLoaderState.queryResourceSize || !GLoaderState.getResource ||
@@ -605,10 +631,12 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
     }
     return result;
 }
+
 static ULONG menu_resource_id(ULONG module, PSZ name)
 {
     return open32ResourceIdentity(module, name, 3); /* RT_MENU */
 }
+
 static char *loaded_menu_text(const char *source, ULONG codepage)
 {
     size_t length = strlen(source);
@@ -639,6 +667,7 @@ static char *loaded_menu_text(const char *source, ULONG codepage)
     text[used] = 0;
     return text;
 }
+
 static BOOL adopt_loaded_menu(HWND handle, Open32Menu **pending, unsigned depth, size_t *nodes)
 {
     Window *window = lx_pm_menu_window(handle);
@@ -682,6 +711,7 @@ static BOOL adopt_loaded_menu(HWND handle, Open32Menu **pending, unsigned depth,
     }
     return TRUE;
 }
+
 ULONG LoadMenu(ULONG module, PSZ resource)
 {
     if (!resource)
@@ -731,6 +761,7 @@ ULONG LoadMenu(ULONG module, PSZ resource)
     menus = pending;
     return handle;
 }
+
 BOOL ModifyMenu(ULONG handle, ULONG identity, ULONG flags, ULONG identifier, PSZ text)
 {
     Window *window = menu_window(handle);
@@ -746,6 +777,7 @@ BOOL ModifyMenu(ULONG handle, ULONG identity, ULONG flags, ULONG identifier, PSZ
         return FALSE;
     return RemoveMenu(target, position + 1, 0x400);
 }
+
 BOOL TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved, ULONG owner,
                     PVOID exclude)
 {
@@ -785,6 +817,7 @@ BOOL TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved, UL
     }
     return TRUE;
 }
+
 ULONG GetMenuContextHelpId(ULONG handle)
 {
     Open32Menu *menu = find_menu(handle);
@@ -795,6 +828,7 @@ ULONG GetMenuContextHelpId(ULONG handle)
     }
     return menu->context_help;
 }
+
 BOOL SetMenuContextHelpId(ULONG handle, ULONG help)
 {
     Open32Menu *menu = find_menu(handle);

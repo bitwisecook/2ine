@@ -14,19 +14,23 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+
 enum
 {
     MAILBOX_LIMIT = 4 * 1024 * 1024,
     MAILBOX_MAGIC = 0x324d424c
 };
+
 typedef struct
 {
     uint32_t magic, owner, order, count, next;
 } Header;
+
 typedef struct
 {
     uint32_t size, priority, token;
 } Record;
+
 struct LxHostMailbox
 {
     int fd, owner, lifetime;
@@ -34,6 +38,7 @@ struct LxHostMailbox
     pthread_mutex_t mutex;
     int cancel_state;
 };
+
 static void lock_mailbox(LxHostMailbox *mailbox)
 {
     int previous;
@@ -41,6 +46,7 @@ static void lock_mailbox(LxHostMailbox *mailbox)
     pthread_mutex_lock(&mailbox->mutex);
     mailbox->cancel_state = previous;
 }
+
 static void unlock(LxHostMailbox *mailbox)
 {
     int previous = mailbox->cancel_state;
@@ -48,6 +54,7 @@ static void unlock(LxHostMailbox *mailbox)
     pthread_mutex_unlock(&mailbox->mutex);
     pthread_setcancelstate(previous, NULL);
 }
+
 static unsigned char *snapshot(LxHostMailbox *mailbox, size_t *size)
 {
     lock_mailbox(mailbox);
@@ -76,12 +83,14 @@ failed:
     unlock(mailbox);
     return NULL;
 }
+
 static int commit(LxHostMailbox *mailbox, void *data, size_t size)
 {
     return pwrite(mailbox->fd, data, size, 0) == (ssize_t)size && !ftruncate(mailbox->fd, size)
                ? 0
                : -1;
 }
+
 int lx_host_mailbox_each(const char *directory, const char *prefix,
                          void (*visit)(const char *name, void *context), void *context)
 {
@@ -96,6 +105,7 @@ int lx_host_mailbox_each(const char *directory, const char *prefix,
     closedir(entries);
     return 0;
 }
+
 int lx_host_mailbox_open(const char *directory, const char *name, int create, unsigned order,
                          LxHostMailbox **output, uint32_t *owner)
 {
@@ -185,6 +195,7 @@ int lx_host_mailbox_open(const char *directory, const char *name, int create, un
     *output = mailbox;
     return 0;
 }
+
 void lx_host_mailbox_close(LxHostMailbox *mailbox)
 {
     if (mailbox->owner)
@@ -196,6 +207,7 @@ void lx_host_mailbox_close(LxHostMailbox *mailbox)
     free(mailbox->path);
     free(mailbox);
 }
+
 int lx_host_mailbox_send(LxHostMailbox *mailbox, const void *data, size_t size, unsigned priority)
 {
     size_t used;
@@ -216,6 +228,7 @@ int lx_host_mailbox_send(LxHostMailbox *mailbox, const void *data, size_t size, 
     unlock(mailbox);
     return result;
 }
+
 int lx_host_mailbox_receive(LxHostMailbox *mailbox, void *data, size_t capacity, size_t *size,
                             unsigned *priority, uint32_t *token, int peek)
 {
@@ -298,6 +311,7 @@ finished:
     unlock(mailbox);
     return result;
 }
+
 int lx_host_mailbox_count(LxHostMailbox *mailbox, uint32_t *count, int purge)
 {
     size_t size;

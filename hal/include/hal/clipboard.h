@@ -4,20 +4,24 @@
 #define TWOINE_HAL_CLIPBOARD_H
 #include <stddef.h>
 #include <stdint.h>
+
 typedef struct LxHostClipboardItem
 {
     const char *mime;
     const void *data;
     size_t size;
 } LxHostClipboardItem;
+
 /* A delayed provider returns malloc-owned bytes. It runs on the video/main
    thread without a clipboard HAL lock, and is called at most once per MIME. */
 typedef void *(*LxHostClipboardProvider)(void *context, const char *mime, size_t *size);
+
 typedef struct LxHostClipboardState
 {
     uint64_t revision;
     int owned;
 } LxHostClipboardState;
+
 int lx_host_clipboard_state(LxHostClipboardState *state);
 int lx_host_clipboard_has(const char *mime);
 void *lx_host_clipboard_read(const char *mime, size_t *size);

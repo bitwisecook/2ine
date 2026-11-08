@@ -18,22 +18,26 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <stdatomic.h>
+
 struct LxImageLock
 {
     pthread_mutex_t mutex;
     atomic_uint references;
 };
+
 static void image_lock(LxHostFile *file)
 {
     if (file->image_lock)
         pthread_mutex_lock(&file->image_lock->mutex);
 }
+
 static LxHostFsError image_done(LxHostFile *file, LxHostFsError result)
 {
     if (file->image_lock)
         pthread_mutex_unlock(&file->image_lock->mutex);
     return result;
 }
+
 struct LxHostDirectory
 {
     DIR *object;
@@ -42,6 +46,7 @@ struct LxHostDirectory
     size_t count, position;
     int image;
 };
+
 LxHostFsError lx_host_file_pipe(LxHostFile **reader, LxHostFile **writer)
 {
     if (!reader || !writer)
@@ -67,6 +72,7 @@ LxHostFsError lx_host_file_pipe(LxHostFile **reader, LxHostFile **writer)
     *writer = output;
     return LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_file_lock(LxHostFile *file, int acquire)
 {
     struct flock lock = {0};
@@ -78,6 +84,7 @@ LxHostFsError lx_host_file_lock(LxHostFile *file, int acquire)
     while (result < 0 && errno == EINTR);
     return result == 0 ? LX_HOST_FS_OK : LX_HOST_FS_IO;
 }
+
 static LxHostFsError fs_error(int error)
 {
     switch (error)
@@ -124,6 +131,7 @@ static LxHostFsError fs_error(int error)
             return LX_HOST_FS_IO;
     }
 }
+
 static LxHostFile *adopt(int fd, LxHostFsError *error)
 {
     if (fd < 0)
@@ -146,6 +154,7 @@ static LxHostFile *adopt(int fd, LxHostFsError *error)
         *error = LX_HOST_FS_OK;
     return file;
 }
+
 LxHostFile *lx_host_file_open(const char *path, unsigned flags, int readonly, LxHostFsError *error)
 {
     unsigned access = flags & (LX_HOST_FILE_READ | LX_HOST_FILE_WRITE);
@@ -263,10 +272,12 @@ LxHostFile *lx_host_file_open(const char *path, unsigned flags, int readonly, Lx
     } while (fd < 0 && errno == EINTR);
     return adopt(fd, error);
 }
+
 LxHostFile *lx_host_file_standard(unsigned stream)
 {
     return stream <= 2 ? adopt(dup((int)stream), NULL) : NULL;
 }
+
 LxHostFsError lx_host_file_inherit(LxHostFile *file, int inherit)
 {
     int flags = fcntl(file->fd, F_GETFD);
@@ -275,6 +286,7 @@ LxHostFsError lx_host_file_inherit(LxHostFile *file, int inherit)
         return fs_error(errno);
     return LX_HOST_FS_OK;
 }
+
 LxHostFile *lx_host_file_duplicate(LxHostFile *file, LxHostFsError *error)
 {
     LxHostFile *copy = adopt(dup(file->fd), error);
@@ -297,6 +309,7 @@ LxHostFile *lx_host_file_duplicate(LxHostFile *file, LxHostFsError *error)
     }
     return copy;
 }
+
 void lx_host_file_close(LxHostFile *file)
 {
     if (file)
@@ -311,6 +324,7 @@ void lx_host_file_close(LxHostFile *file)
         lx_host_file_dispose(file);
     }
 }
+
 static LxHostFsError refresh_image(LxHostFile *file)
 {
     if (!file->image || tb_image_device_kind(file->image_path) == 1)
@@ -323,10 +337,12 @@ static LxHostFsError refresh_image(LxHostFile *file)
     FILE *snapshot = tb_image_fopen(file->image_path);
     if (!snapshot)
         return LX_HOST_FS_OK;
+
     enum
     {
         BUFFER_SIZE = 65536
     };
+
     unsigned char *data = malloc(BUFFER_SIZE);
     if (!data)
     {
@@ -364,6 +380,7 @@ static LxHostFsError refresh_image(LxHostFile *file)
     fclose(snapshot);
     return status;
 }
+
 LxHostFsError lx_host_file_read(LxHostFile *file, void *data, size_t size, size_t *actual)
 {
     image_lock(file);
@@ -381,6 +398,7 @@ LxHostFsError lx_host_file_read(LxHostFile *file, void *data, size_t size, size_
     *actual = result < 0 ? 0 : (size_t)result;
     return image_done(file, result < 0 ? fs_error(errno) : LX_HOST_FS_OK);
 }
+
 LxHostFsError lx_host_file_write(LxHostFile *file, const void *data, size_t size, size_t *actual)
 {
     image_lock(file);
@@ -414,6 +432,7 @@ LxHostFsError lx_host_file_write(LxHostFile *file, const void *data, size_t size
     }
     return image_done(file, result < 0 ? fs_error(errno) : LX_HOST_FS_OK);
 }
+
 LxHostFsError lx_host_file_seek(LxHostFile *file, int64_t distance, unsigned origin,
                                 uint64_t *position)
 {
@@ -431,6 +450,7 @@ LxHostFsError lx_host_file_seek(LxHostFile *file, int64_t distance, unsigned ori
         *position = (uint64_t)result;
     return image_done(file, LX_HOST_FS_OK);
 }
+
 static void describe(const struct stat *native, LxHostFileInfo *info)
 {
     info->size = native->st_size < 0 ? 0 : (uint64_t)native->st_size;
@@ -445,6 +465,7 @@ static void describe(const struct stat *native, LxHostFileInfo *info)
                  : S_ISCHR(native->st_mode) || S_ISBLK(native->st_mode) ? LX_HOST_FILE_DEVICE
                                                                         : LX_HOST_FILE_PIPE;
 }
+
 static void describe_image(const TbImageInfo *image, LxHostFileInfo *info)
 {
     if (image->modified != INT64_MIN)
@@ -454,6 +475,7 @@ static void describe_image(const TbImageInfo *image, LxHostFileInfo *info)
     info->created = image->created;
     info->attributes = image->attributes;
 }
+
 LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info)
 {
     image_lock(file);
@@ -478,6 +500,7 @@ LxHostFsError lx_host_file_info(LxHostFile *file, LxHostFileInfo *info)
         lx_host_native_extras(file->fd, NULL, info);
     return image_done(file, LX_HOST_FS_OK);
 }
+
 static LxHostFsError native_stamps(int fd, const char *path, int64_t created, int64_t accessed,
                                    int64_t modified)
 {
@@ -501,6 +524,7 @@ static LxHostFsError native_stamps(int fd, const char *path, int64_t created, in
     int failed = fd >= 0 ? futimens(fd, times) : utimensat(AT_FDCWD, path, times, 0);
     return failed ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_file_stamps(LxHostFile *file, int64_t created, int64_t accessed,
                                   int64_t modified)
 {
@@ -519,10 +543,12 @@ LxHostFsError lx_host_file_stamps(LxHostFile *file, int64_t created, int64_t acc
     }
     return image_done(file, native_stamps(file->fd, NULL, created, accessed, modified));
 }
+
 LxHostFsError lx_host_file_times(LxHostFile *file, int64_t accessed, int64_t modified)
 {
     return lx_host_file_stamps(file, INT64_MIN, accessed, modified);
 }
+
 LxHostFsError lx_host_path_stamps(const char *path, int64_t created, int64_t accessed,
                                   int64_t modified)
 {
@@ -533,24 +559,27 @@ LxHostFsError lx_host_path_stamps(const char *path, int64_t created, int64_t acc
     }
     return native_stamps(-1, path, created, accessed, modified);
 }
+
 LxHostFsError lx_host_file_attributes(LxHostFile *file, unsigned attributes)
 {
     if (!file)
         return LX_HOST_FS_INVALID;
     image_lock(file);
     if (file->image)
-        return image_done(file, tb_image_attributes(file->image_path, file->image_source,
-                                                    attributes)
-                                    ? LX_HOST_FS_OK
-                                    : fs_error(errno));
+        return image_done(file,
+                          tb_image_attributes(file->image_path, file->image_source, attributes)
+                              ? LX_HOST_FS_OK
+                              : fs_error(errno));
     return image_done(file, lx_host_native_set_attributes(file->fd, NULL, attributes));
 }
+
 LxHostFsError lx_host_path_attributes(const char *path, unsigned attributes)
 {
     if (tb_image_path(path))
         return tb_image_attributes(path, NULL, attributes) ? LX_HOST_FS_OK : fs_error(errno);
     return lx_host_native_set_attributes(-1, path, attributes);
 }
+
 LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size)
 {
     if (size > INT64_MAX || (uint64_t)(off_t)size != size)
@@ -566,10 +595,12 @@ LxHostFsError lx_host_file_resize(LxHostFile *file, uint64_t size)
     }
     return image_done(file, ftruncate(file->fd, (off_t)size) ? fs_error(errno) : LX_HOST_FS_OK);
 }
+
 LxHostFsError lx_host_file_flush(LxHostFile *file)
 {
     return fsync(file->fd) ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_file_readonly(LxHostFile *file, int readonly)
 {
     if (file->image)
@@ -584,6 +615,7 @@ LxHostFsError lx_host_file_readonly(LxHostFile *file, int readonly)
         mode |= S_IWUSR;
     return fchmod(file->fd, mode) ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 int lx_host_path_exists(const char *path)
 {
     if (tb_image_path(path))
@@ -593,6 +625,7 @@ int lx_host_path_exists(const char *path)
     }
     return access(path, F_OK) == 0;
 }
+
 LxHostFsError lx_host_path_readonly(const char *path, int readonly)
 {
     if (tb_image_path(path))
@@ -607,12 +640,14 @@ LxHostFsError lx_host_path_readonly(const char *path, int readonly)
         mode |= S_IWUSR;
     return chmod(path, mode) ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_path_identity(const char *path, LxHostFileIdentity *identity)
 {
     if (!path || !identity || tb_image_path(path))
         return LX_HOST_FS_INVALID;
     return lx_host_path_native_identity(path, identity) == 0 ? LX_HOST_FS_OK : fs_error(errno);
 }
+
 LxHostFsError lx_host_path_info(const char *path, LxHostFileInfo *info)
 {
     if (tb_image_path(path))
@@ -635,6 +670,7 @@ LxHostFsError lx_host_path_info(const char *path, LxHostFileInfo *info)
     lx_host_native_extras(-1, path, info);
     return LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_path_remove(const char *path, int directory)
 {
     if (tb_image_path(path))
@@ -642,6 +678,7 @@ LxHostFsError lx_host_path_remove(const char *path, int directory)
     int result = directory ? rmdir(path) : unlink(path);
     return result ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_path_move(const char *source, const char *target)
 {
     if (tb_image_path(source) || tb_image_path(target))
@@ -652,12 +689,14 @@ LxHostFsError lx_host_path_move(const char *source, const char *target)
     }
     return rename(source, target) ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_path_mkdir(const char *path)
 {
     if (tb_image_path(path))
         return tb_image_mkdir(path) ? LX_HOST_FS_OK : fs_error(errno);
     return mkdir(path, 0755) ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 LxHostFsError lx_host_path_chdir(const char *path)
 {
     if (tb_image_path(path))
@@ -669,16 +708,19 @@ LxHostFsError lx_host_path_chdir(const char *path)
     }
     return chdir(path) ? fs_error(errno) : LX_HOST_FS_OK;
 }
+
 char *lx_host_path_current(void)
 {
     return getcwd(NULL, 0);
 }
+
 char *lx_host_path_canonical(const char *path)
 {
     if (tb_image_path(path))
         return tb_image_canonical(path);
     return realpath(path, NULL);
 }
+
 LxHostDirectory *lx_host_directory_open(const char *path, LxHostFsError *error)
 {
     if (tb_image_path(path))
@@ -733,6 +775,7 @@ LxHostDirectory *lx_host_directory_open(const char *path, LxHostFsError *error)
         *error = LX_HOST_FS_OK;
     return directory;
 }
+
 int lx_host_directory_read(LxHostDirectory *directory, const char **name, LxHostFileInfo *info,
                            LxHostFsError *error)
 {
@@ -786,7 +829,8 @@ int lx_host_directory_read(LxHostDirectory *directory, const char **name, LxHost
             if (fstatat(dirfd(directory->object), entry->d_name, &native, 0))
                 continue;
             describe(&native, info);
-            size_t length = directory->path ? strlen(directory->path) + strlen(entry->d_name) + 2 : 0;
+            size_t length =
+                directory->path ? strlen(directory->path) + strlen(entry->d_name) + 2 : 0;
             char *member = length ? malloc(length) : NULL;
             if (member)
             {
@@ -801,10 +845,12 @@ int lx_host_directory_read(LxHostDirectory *directory, const char **name, LxHost
         return 1;
     }
 }
+
 uint64_t lx_host_directory_position(LxHostDirectory *directory)
 {
     return directory->image ? directory->position : (uint64_t)telldir(directory->object);
 }
+
 void lx_host_directory_seek(LxHostDirectory *directory, uint64_t position)
 {
     if (directory->image)
@@ -816,6 +862,7 @@ void lx_host_directory_seek(LxHostDirectory *directory, uint64_t position)
     if (position <= LONG_MAX)
         seekdir(directory->object, (long)position);
 }
+
 void lx_host_directory_close(LxHostDirectory *directory)
 {
     if (directory)
@@ -832,6 +879,7 @@ void lx_host_directory_close(LxHostDirectory *directory)
         free(directory);
     }
 }
+
 void *lx_host_file_snapshot(const char *path, size_t maximum, size_t *size, LxHostFsError *error)
 {
     *size = 0;

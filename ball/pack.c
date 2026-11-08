@@ -3,6 +3,7 @@
 #include "pack_compat.h"
 #include "vendor/deark/ftcomp.inc"
 #include "vendor/deark/dskdcmps.h"
+
 int tb_pack_decode(const void *input, size_t size, size_t expected, int kind,
                    unsigned char **output)
 {

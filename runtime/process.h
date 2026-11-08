@@ -11,6 +11,7 @@
 #include "formats/types.h"
 #include "runtime/execution.h"
 #pragma pack(push, 1)
+
 typedef struct LxTIB2
 {
     uint32 tib2_ultid;
@@ -61,6 +62,7 @@ typedef struct LxHostThreadState
     uint32 critical_depth;
     LxGuestMapping *tib_mapping;
 } LxHostThreadState;
+
 LxHostThreadState *lxHostThreadState(void);
 void lxHostThreadCleanup(void);
 /* Live runtime peers share the configured ball, IPC scope and C: mapping. */

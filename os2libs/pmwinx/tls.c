@@ -9,18 +9,22 @@ static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static unsigned char allocated[OPEN32_TLS_SLOTS];
 static uint64 generations[OPEN32_TLS_SLOTS];
+
 typedef struct ThreadSlots
 {
     ULONG values[OPEN32_TLS_SLOTS];
     uint64 generations[OPEN32_TLS_SLOTS];
 } ThreadSlots;
+
 /* Fixed TLS storage is released by the host when its thread exits. A generation
    change clears reused indices lazily, including values on other live threads. */
 static LX_HOST_THREAD_LOCAL ThreadSlots thread_slots;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
 }
+
 static BOOL enter(void)
 {
     lx_host_once(&once, initialize);
@@ -32,6 +36,7 @@ static BOOL enter(void)
     lx_host_monitor_lock(monitor);
     return TRUE;
 }
+
 ULONG TlsAlloc(void)
 {
     TRACE_NATIVE("TlsAlloc()");
@@ -52,6 +57,7 @@ ULONG TlsAlloc(void)
     open32SetError(8);
     return UINT32_MAX;
 }
+
 BOOL TlsFree(ULONG index)
 {
     TRACE_NATIVE("TlsFree(%u)", (uint)index);
@@ -66,6 +72,7 @@ BOOL TlsFree(ULONG index)
     lx_host_monitor_unlock(monitor);
     return TRUE;
 }
+
 ULONG TlsGetValue(ULONG index)
 {
     TRACE_NATIVE("TlsGetValue(%u)", (uint)index);
@@ -82,6 +89,7 @@ ULONG TlsGetValue(ULONG index)
     SetLastError(0);
     return result;
 }
+
 BOOL TlsSetValue(ULONG index, ULONG value)
 {
     TRACE_NATIVE("TlsSetValue(%u, %X)", (uint)index, (uint)value);
@@ -97,6 +105,7 @@ BOOL TlsSetValue(ULONG index, ULONG value)
     lx_host_monitor_unlock(monitor);
     return TRUE;
 }
+
 void open32TlsCleanup(void)
 {
     if (!monitor)

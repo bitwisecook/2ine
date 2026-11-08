@@ -5,11 +5,13 @@
 #define TWOINE_OS2LIBS_DOSCALLS_LAUNCH_H
 #include "os2libs/os2types.h"
 #include "hal/host_process.h"
+
 enum
 {
     LX_DOS_LAUNCH_SUSPENDED = 1,       /* Hold the child until lx_host_child_resume. */
     LX_DOS_LAUNCH_SEARCH_DIRECTORY = 2 /* Prefer a relative program in `directory`. */
 };
+
 typedef struct LxDosLaunch
 {
     PSZ program;        /* OS/2 path, or a bare name searched in the current directory and PATH. */
@@ -19,6 +21,7 @@ typedef struct LxDosLaunch
     const char *record; /* Shared LxLaunchRecord name for the child, or NULL. */
     ULONG flags;
 } LxDosLaunch;
+
 /* The observer runs on a thread leaving through DosExit, before it ends. */
 void lx_doscalls_observe_thread_exit(void (*observer)(ULONG code));
 /* The caller owns the returned child, which DosWaitChild does not see. */

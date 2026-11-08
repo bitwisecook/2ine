@@ -7,11 +7,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
 static void leave_quietly(int number)
 {
     (void)number;
     _exit(LX_FATAL_EXIT_STATUS);
 }
+
 static int capture(const char *path, char **argv)
 {
     FILE *file = fopen(path, "w");
@@ -20,6 +22,7 @@ static int capture(const char *path, char **argv)
     fprintf(file, "title=%s\nreport=%s\nmessage=%s\n", argv[0], argv[2], argv[1]);
     return fclose(file) != 0;
 }
+
 int lx_host_fatal_dialog(int argc, char **argv)
 {
     static const int signals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGTRAP, SIGSYS};

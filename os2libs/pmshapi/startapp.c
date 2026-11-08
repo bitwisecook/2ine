@@ -36,11 +36,13 @@ enum
     PMERR_MEMORY_ID = 0x1112,
     SEVERITY_ERROR_ID = 8
 };
+
 typedef struct App
 {
     HWND notify;
     ULONG handle;
 } App;
+
 static void app_ended(void *context, ULONG result)
 {
     App *app = context;
@@ -49,6 +51,7 @@ static void app_ended(void *context, ULONG result)
                    (MPARAM)(uintptr_t)result);
     lx_handle_close(app->handle, LX_HANDLE_PM_APP);
 }
+
 /* An installed command line holding an unquoted prompt marker is not usable as is. */
 static PSZ installed_parameters(PSZ parameters)
 {
@@ -60,6 +63,7 @@ static PSZ installed_parameters(PSZ parameters)
             return "";
     return parameters;
 }
+
 /* Windows program categories run under WINOS2.COM with a mode switch. */
 static const char *windows_switch(ULONG category)
 {
@@ -71,6 +75,7 @@ static const char *windows_switch(ULONG category)
         return "/3 ";
     return category == 12 ? " " : NULL;
 }
+
 static USHORT session_control(const PROGDETAILS *details, ULONG options)
 {
     ULONG flags = details->swpInitial.fl;
@@ -91,6 +96,7 @@ static USHORT session_control(const PROGDETAILS *details, ULONG options)
         control = (control & ~SSF_CONTROL_MAXIMIZE) | SSF_CONTROL_MINIMIZE;
     return control;
 }
+
 static ULONG dos_error(ULONG error)
 {
     switch (error)
@@ -105,6 +111,7 @@ static ULONG dos_error(ULONG error)
             return PMERR_DOS_ERROR_ID;
     }
 }
+
 ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, ULONG options,
                            ULONG *error)
 {
@@ -199,6 +206,7 @@ ULONG lx_pmshapi_start_app(HWND notify, PPROGDETAILS details, PSZ parameters, UL
     }
     return handle;
 }
+
 ULONG WinStartApp(HWND notify, PPROGDETAILS details, PSZ parameters, PVOID reserved, ULONG options)
 {
     TRACE_NATIVE("WinStartApp(%u, %p, '%s', %p, %u)", (unsigned)notify, details, parameters,

@@ -5,26 +5,31 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "guest/abi.h"
+
 ULONG GpiCreateBitmap(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info)
 {
     TRACE_NATIVE("GpiCreateBitmap(%u, %p, %u, %p, %p)", (uint)ps, header, (uint)options, bits,
                  info);
     return lx_pm_bitmap_create_data(ps, header, options, bits, info);
 }
+
 ULONG GpiLoadBitmap(HPS ps, HMODULE module, ULONG id, LONG width, LONG height)
 {
     TRACE_NATIVE("GpiLoadBitmap(%u, %u, %u, %d, %d)", (uint)ps, (uint)module, (uint)id, (int)width,
                  (int)height);
     return lx_pm_bitmap_load(ps, module, id, width, height);
 }
+
 BOOL GpiDeleteBitmap(ULONG bitmap)
 {
     return lx_pm_bitmap_delete(bitmap);
 }
+
 ULONG GpiSetBitmap(HPS ps, ULONG bitmap)
 {
     return lx_pm_bitmap_select(ps, bitmap);
 }
+
 BOOL GpiQueryBitmapParameters(ULONG handle, PVOID data)
 {
     LxHandleBorrow borrow = {0};
@@ -42,6 +47,7 @@ BOOL GpiQueryBitmapParameters(ULONG handle, PVOID data)
     lx_handle_release(&borrow);
     return ok;
 }
+
 BOOL GpiQueryBitmapInfoHeader(ULONG handle, PVOID data)
 {
     LxHandleBorrow borrow = {0};
@@ -62,6 +68,7 @@ BOOL GpiQueryBitmapInfoHeader(ULONG handle, PVOID data)
     lx_handle_release(&borrow);
     return ok;
 }
+
 BOOL GpiQueryDeviceBitmapFormats(HPS ps, LONG count, PLONG output)
 {
     if (!lx_pm_valid_ps(ps) || count < 0 || (count && !output))
@@ -80,6 +87,7 @@ BOOL GpiQueryDeviceBitmapFormats(HPS ps, LONG count, PLONG output)
         output[i] = i < available ? formats[i] : 0;
     return TRUE;
 }
+
 static uint32 rop_pixel(uint32 p, uint32 s, uint32 d, unsigned rop)
 {
     uint32 value = 0;
@@ -88,6 +96,7 @@ static uint32 rop_pixel(uint32 p, uint32 s, uint32 d, unsigned rop)
             value |= (i & 4 ? p : ~p) & (i & 2 ? s : ~s) & (i & 1 ? d : ~d);
     return value & 0xffffff;
 }
+
 static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count, PPOINTL points,
                        LONG rop, ULONG options)
 {
@@ -159,9 +168,8 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
             {
                 size_t index = (size_t)y * w + x;
                 uint32 source_pixel = src[(size_t)(y * sh / h) * sw + x * sw / w];
-                if (uses_source &&
-                    ((ps->back_mix == 18 && source_pixel == (uint32)background) ||
-                     (ps->back_mix == 19 && dst[index] != (uint32)background)))
+                if (uses_source && ((ps->back_mix == 18 && source_pixel == (uint32)background) ||
+                                    (ps->back_mix == 19 && dst[index] != (uint32)background)))
                     continue;
                 uint32 pattern = 0;
                 BOOL foreground;
@@ -182,13 +190,15 @@ static LONG bitmap_blt(HPS destination, HPS source, PmBitmap *bitmap, LONG count
     free(src);
     return ok ? 1 : 0;
 }
+
 LONG GpiBitBlt(HPS destination, HPS source, LONG count, PPOINTL points, LONG rop, ULONG options)
 {
-    TRACE_NATIVE("GpiBitBlt(%u, %u, %d, %d,%d - %d,%d)", (uint)destination, (uint)source, (int)count,
-                 points ? (int)points[0].x : 0, points ? (int)points[0].y : 0,
+    TRACE_NATIVE("GpiBitBlt(%u, %u, %d, %d,%d - %d,%d)", (uint)destination, (uint)source,
+                 (int)count, points ? (int)points[0].x : 0, points ? (int)points[0].y : 0,
                  points ? (int)points[1].x : 0, points ? (int)points[1].y : 0);
     return bitmap_blt(destination, source, NULL, count, points, rop, options);
 }
+
 LONG GpiWCBitBlt(HPS destination, ULONG handle, LONG count, PPOINTL points, LONG rop, ULONG options)
 {
     PresentationSpace *ps = lx_pm_font_space(destination);
@@ -207,8 +217,8 @@ LONG GpiWCBitBlt(HPS destination, ULONG handle, LONG count, PPOINTL points, LONG
     LxHandleBorrow borrow = {0};
     PmBitmap *bitmap = handle ? lx_pm_bitmap(handle, &borrow) : NULL;
     /* A pattern-only ROP passes no bitmap; bitmap_blt rejects any other ROP without a source. */
-    LONG result = bitmap || !handle ? bitmap_blt(destination, 0, bitmap, count, device, rop, options)
-                                    : 0;
+    LONG result =
+        bitmap || !handle ? bitmap_blt(destination, 0, bitmap, count, device, rop, options) : 0;
     lx_handle_release(&borrow);
     return result;
 }
@@ -224,6 +234,7 @@ BOOL GpiSetBitmapId(HPS handle, ULONG bitmap, LONG id)
     ps->bitmap_ids[id] = borrow;
     return TRUE;
 }
+
 ULONG GpiQueryBitmapHandle(HPS handle, LONG id)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);

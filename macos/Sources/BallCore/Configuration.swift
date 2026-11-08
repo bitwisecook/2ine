@@ -15,6 +15,7 @@ public struct ConfigurationEntry: Decodable, Sendable, Identifiable, Hashable {
         return value.prefix(4).enumerated().reduce(0) { $0 | UInt32($1.element) << ($1.offset * 8) }
     }
 }
+
 public struct ConfigurationSnapshot: Decodable, Sendable {
     public let area: String
     public let path: String
@@ -36,12 +37,14 @@ public struct ConfigurationFile: Decodable, Sendable, Identifiable {
     public let reason: String
     public var id: String { path }
 }
+
 public struct ConfigurationFiles: Decodable, Sendable {
     public let files: [ConfigurationFile]
     public let truncated: Bool
     public let limit: Int
     public let skipped: Int
 }
+
 public struct ConfigurationFileSnapshot: Decodable, Sendable {
     public let path: String
     public let revision: String

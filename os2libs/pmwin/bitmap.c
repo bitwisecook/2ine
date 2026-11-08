@@ -3,11 +3,13 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "guest/abi.h"
+
 typedef struct
 {
     unsigned width, height, planes, depth, fixed, palette_entry, colors, compression;
     size_t stride, bytes;
 } BitmapLayout;
+
 static BOOL bitmap_layout(const uint8 *p, BitmapLayout *b)
 {
     if (!p)
@@ -52,6 +54,7 @@ static BOOL bitmap_layout(const uint8 *p, BitmapLayout *b)
     b->bytes = b->stride * b->height;
     return b->compression == 0;
 }
+
 static BOOL bitmap_decode(PmBitmap *bitmap, const BitmapLayout *b, const uint8 *bits,
                           const uint8 *palette)
 {
@@ -88,6 +91,7 @@ static BOOL bitmap_decode(PmBitmap *bitmap, const BitmapLayout *b, const uint8 *
     }
     return TRUE;
 }
+
 ULONG lx_pm_bitmap_create_data(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info)
 {
     BitmapLayout layout;
@@ -115,6 +119,7 @@ ULONG lx_pm_bitmap_create_data(HPS ps, PVOID header, ULONG options, PVOID bits, 
     }
     return handle;
 }
+
 ULONG lx_pm_bitmap_load(HPS ps, HMODULE module, ULONG id, LONG width, LONG height)
 {
     if (!lx_pm_valid_ps(ps) || width < 0 || height < 0 || !GLoaderState.queryResourceSize ||
@@ -180,6 +185,7 @@ done:
         GLoaderState.freeResource(resource);
     return result;
 }
+
 static void destroy_bitmap(void *resource)
 {
     PmBitmap *bitmap = resource;
@@ -192,6 +198,7 @@ static void destroy_bitmap(void *resource)
     free(bitmap->pixels);
     free(bitmap);
 }
+
 PmBitmap *lx_pm_bitmap(ULONG handle, LxHandleBorrow *borrow)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -205,6 +212,7 @@ PmBitmap *lx_pm_bitmap(ULONG handle, LxHandleBorrow *borrow)
     }
     return bitmap;
 }
+
 ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsigned depth)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -238,10 +246,12 @@ ULONG lx_pm_bitmap_create(unsigned width, unsigned height, unsigned planes, unsi
     anchor->bitmaps = bitmap;
     return bitmap->handle;
 }
+
 static int unused_bitmap(void *resource)
 {
     return ((PmBitmap *)resource)->selected == 0;
 }
+
 static ULONG checkbox_bitmap(void)
 {
     /* SBMP_CHECKBOXES is a four-column, three-row atlas. The top row's
@@ -282,6 +292,7 @@ static ULONG checkbox_bitmap(void)
     lx_handle_release(&borrow);
     return handle;
 }
+
 ULONG WinGetSysBitmap(HWND desktop, ULONG id)
 {
     TRACE_NATIVE("WinGetSysBitmap(%u, %u)", (uint)desktop, (uint)id);
@@ -314,6 +325,7 @@ ULONG WinGetSysBitmap(HWND desktop, ULONG id)
     lx_handle_release(&borrow);
     return handle;
 }
+
 BOOL lx_pm_bitmap_delete(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -323,6 +335,7 @@ BOOL lx_pm_bitmap_delete(ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 ULONG lx_pm_bitmap_select(HPS handle, ULONG bitmap)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -349,12 +362,14 @@ ULONG lx_pm_bitmap_select(HPS handle, ULONG bitmap)
     ps->bitmap_lease = next;
     return result;
 }
+
 void lx_pm_bitmap_cleanup(void *context)
 {
     AnchorBlock *anchor = context;
     while (anchor->bitmaps)
         lx_handle_close(anchor->bitmaps->handle, LX_HANDLE_PM_BITMAP);
 }
+
 BOOL lx_pm_raster_read(HPS handle, LONG x, LONG y, unsigned width, unsigned height,
                        uint32_t *pixels)
 {
@@ -392,14 +407,16 @@ BOOL lx_pm_raster_read(HPS handle, LONG x, LONG y, unsigned width, unsigned heig
     free(top);
     return ok;
 }
+
 BOOL lx_pm_raster_write(HPS handle, LONG x, LONG y, unsigned width, unsigned height,
                         const uint32_t *pixels)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps || !pixels || !width || !height || width > 16384 || height > 16384)
         return FALSE;
-    lx_pm_boundary(ps,x,y,width,height);
-    if(ps->gpi.initialized&&!ps->gpi.display_enabled)return TRUE;
+    lx_pm_boundary(ps, x, y, width, height);
+    if (ps->gpi.initialized && !ps->gpi.display_enabled)
+        return TRUE;
     PmBitmap *bitmap = ps->bitmap_lease.resource;
     if (bitmap)
     {

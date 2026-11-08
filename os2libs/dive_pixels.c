@@ -96,15 +96,18 @@ int dive_image_layout(DiveImage *image, uint32_t format, uint32_t width, uint32_
     *image = result;
     return 1;
 }
+
 static unsigned clamp(int value)
 {
     return value < 0 ? 0 : value > 255 ? 255 : (unsigned)value;
 }
+
 static uint32_t from_yuv(int y, int u, int v)
 {
     return clamp(y + v * 1370 / 1000) << 16 | clamp(y - u * 336 / 1000 - v * 698 / 1000) << 8 |
            clamp(y + u * 1730 / 1000);
 }
+
 uint32_t dive_rgb_yuv(uint32_t rgb)
 {
     int r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, b = rgb & 255;
@@ -112,6 +115,7 @@ uint32_t dive_rgb_yuv(uint32_t rgb)
     return (uint32_t)y << 16 | clamp(128 + (b - y) * 492 / 1000) << 8 |
            clamp(128 + (r - y) * 877 / 1000);
 }
+
 static uint32_t vga(unsigned index)
 {
     static const uint32_t colors[16] = {0x000000, 0x0000aa, 0x00aa00, 0x00aaaa, 0xaa0000, 0xaa00aa,
@@ -119,6 +123,7 @@ static uint32_t vga(unsigned index)
                                         0xff5555, 0xff55ff, 0xffff55, 0xffffff};
     return colors[index & 15];
 }
+
 uint32_t dive_image_yuv(const DiveImage *i, uint32_t x, uint32_t y, uint32_t rgb)
 {
     const uint8_t *p = i->pixels + (size_t)y * i->stride;
@@ -174,6 +179,7 @@ uint32_t dive_image_yuv(const DiveImage *i, uint32_t x, uint32_t y, uint32_t rgb
     }
     return luma << 16 | u << 8 | v;
 }
+
 uint32_t dive_image_value(const DiveImage *i, uint32_t x, uint32_t y)
 {
     const uint8_t *row = i->pixels + (size_t)y * i->stride;
@@ -190,6 +196,7 @@ uint32_t dive_image_value(const DiveImage *i, uint32_t x, uint32_t y)
         return dive_image_yuv(i, x, y, 0);
     return dive_image_rgb(i, x, y, NULL);
 }
+
 uint32_t dive_image_rgb(const DiveImage *i, uint32_t x, uint32_t y, const uint32_t *palette)
 {
     const uint8_t *p = i->pixels + (size_t)y * i->stride;
@@ -264,6 +271,7 @@ uint32_t dive_image_rgb(const DiveImage *i, uint32_t x, uint32_t y, const uint32
         }
     }
 }
+
 void dive_image_store(DiveImage *i, uint32_t x, uint32_t y, uint32_t rgb, const uint32_t *palette,
                       int dither)
 {

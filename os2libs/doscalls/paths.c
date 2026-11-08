@@ -586,6 +586,7 @@ enum
     VOLUME_RECORD_BYTES = VOLUME_LABEL_MAXIMUM + 2,
     VOLUME_STORE_BYTES = VOLUME_RECORD_BYTES * 26
 };
+
 static uint8 process_volume_labels[VOLUME_STORE_BYTES];
 
 static char *volumeLabelStorePath(void)
@@ -650,9 +651,8 @@ static APIRET storeVolumeLabel(ULONG drive, const char *label)
         return NO_ERROR;
     }
     LxHostFsError error;
-    LxHostFile *file =
-        lx_host_file_open(path, LX_HOST_FILE_READ | LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE, 0,
-                          &error);
+    LxHostFile *file = lx_host_file_open(
+        path, LX_HOST_FILE_READ | LX_HOST_FILE_WRITE | LX_HOST_FILE_CREATE, 0, &error);
     free(path);
     if (!file)
         return fileError(error);

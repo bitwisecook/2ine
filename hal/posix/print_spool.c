@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
 void lx_host_print_destination_clear(LxHostPrintDestination *destination)
 {
     if (destination)
@@ -18,6 +19,7 @@ void lx_host_print_destination_clear(LxHostPrintDestination *destination)
         memset(destination, 0, sizeof *destination);
     }
 }
+
 static int printer_name(const char *name)
 {
     if (!name || !*name || *name == '-' || strlen(name) > 1024)
@@ -27,6 +29,7 @@ static int printer_name(const char *name)
             return 0;
     return 1;
 }
+
 static int wait_child(pid_t child)
 {
     if (child <= 0)
@@ -38,6 +41,7 @@ static int wait_child(pid_t child)
     while (result < 0 && errno == EINTR);
     return result == child && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 }
+
 static char *cups_program(const char *name)
 {
     const char *directory = getenv("TWOINE_CUPS_BINDIR");
@@ -51,6 +55,7 @@ static char *cups_program(const char *name)
         snprintf(path, size, "%s/%s", directory, name);
     return path;
 }
+
 char **lx_host_print_printers(size_t *count)
 {
     if (!count)
@@ -128,6 +133,7 @@ char **lx_host_print_printers(size_t *count)
     free(output);
     return printers;
 }
+
 int lx_host_print_submit_helper(const char *program, const char *printer, const char *title,
                                 unsigned copies, FILE *source)
 {
@@ -156,6 +162,7 @@ int lx_host_print_submit_helper(const char *program, const char *printer, const 
             "2ine: The system spooler did not accept the PCL print job. Check the printer and CUPS service.\n");
     return ok;
 }
+
 int lx_host_print_submit_pcl(const char *printer, const char *title, unsigned copies, FILE *source)
 {
     char *program = cups_program("lp");

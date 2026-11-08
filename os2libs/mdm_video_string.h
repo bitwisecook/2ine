@@ -10,6 +10,7 @@ static int video_number(const char *text, ULONG *value)
     *value = (ULONG)parsed;
     return 1;
 }
+
 static VideoDevice *video_alias(const char *text)
 {
     ULONG id;
@@ -21,6 +22,7 @@ static VideoDevice *video_alias(const char *text)
             return &devices[i];
     return NULL;
 }
+
 static int video_coordinate(const char *text, ULONG *value)
 {
     char *end;
@@ -31,6 +33,7 @@ static int video_coordinate(const char *text, ULONG *value)
     *value = (ULONG)(LONG)parsed;
     return 1;
 }
+
 static int video_tokens(char *text, char **tokens, unsigned *count)
 {
     *count = 0;
@@ -63,6 +66,7 @@ static int video_tokens(char *text, char **tokens, unsigned *count)
     }
     return *count > 0;
 }
+
 ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULONG window,
                           USHORT user, int *handled)
 {

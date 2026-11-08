@@ -14,6 +14,7 @@
 
 typedef uint32_t GLenum, GLuint;
 typedef int32_t GLint;
+
 /* Host framebuffer tokens are not exposed by the guest's GL 1.1 interface. */
 enum
 {
@@ -52,11 +53,13 @@ struct LxHostGlContext
     int double_buffer, validated;
     GLenum draw, read;
 };
+
 static EGLDisplay display = EGL_NO_DISPLAY;
 static EGLConfig config;
 static LxHostOnce initialized = LX_HOST_ONCE_INIT;
 static char initialization_error[256];
 static LX_HOST_THREAD_LOCAL char error_text[256];
+
 static void release_for_video(void)
 {
     if (display != EGL_NO_DISPLAY && eglGetCurrentContext() != EGL_NO_CONTEXT)
@@ -68,10 +71,12 @@ static int fail(const char *message)
     snprintf(error_text, sizeof error_text, "%s (EGL error 0x%x)", message, eglGetError());
     return 0;
 }
+
 const char *lx_host_gl_error(void)
 {
     return error_text;
 }
+
 static void initialize(void)
 {
     if (!lx_host_gl_platform_prepare(initialization_error, sizeof initialization_error))
@@ -180,6 +185,7 @@ LxHostGlContext *lx_host_gl_create(const LxHostGlConfig *requested, LxHostGlCont
     }
     return c;
 }
+
 void lx_host_gl_destroy(LxHostGlContext *c)
 {
     if (!c)
@@ -204,6 +210,7 @@ void lx_host_gl_destroy(LxHostGlContext *c)
         eglDestroySurface(display, c->surface);
     free(c);
 }
+
 void lx_host_gl_shutdown(void)
 {
     lx_host_video_set_graphics_release(NULL);
@@ -213,15 +220,18 @@ void lx_host_gl_shutdown(void)
     initialized = (LxHostOnce)LX_HOST_ONCE_INIT;
     initialization_error[0] = 0;
 }
+
 const LxHostGlApi *lx_host_gl_api(LxHostGlContext *c)
 {
     return c ? &c->api : NULL;
 }
+
 static GLenum attachment(LxHostGlContext *c, GLenum buffer)
 {
     return GL_COLOR_ATTACHMENT0 +
            ((buffer == GL_BACK || buffer == GL_BACK_LEFT) ? 1 - c->front : c->front);
 }
+
 int lx_host_gl_draw_buffer(LxHostGlContext *c, uint32_t buffer)
 {
     if (buffer == GL_FRONT_AND_BACK)
@@ -239,6 +249,7 @@ int lx_host_gl_draw_buffer(LxHostGlContext *c, uint32_t buffer)
     c->draw = buffer;
     return 1;
 }
+
 int lx_host_gl_read_buffer(LxHostGlContext *c, uint32_t buffer)
 {
     if (buffer != GL_FRONT && buffer != GL_FRONT_LEFT &&
@@ -248,6 +259,7 @@ int lx_host_gl_read_buffer(LxHostGlContext *c, uint32_t buffer)
     c->read = buffer;
     return 1;
 }
+
 uint32_t lx_host_gl_buffer(LxHostGlContext *c, int read)
 {
     int32_t actual = 0;
@@ -337,6 +349,7 @@ static int resize(LxHostGlContext *c, unsigned width, unsigned height)
     lx_host_gl_read_buffer(c, c->read);
     return 1;
 }
+
 int lx_host_gl_make_current(LxHostGlContext *c, unsigned width, unsigned height)
 {
     if (!c || !width || !height || width > 16384 || height > 16384 ||
@@ -360,6 +373,7 @@ int lx_host_gl_make_current(LxHostGlContext *c, unsigned width, unsigned height)
     c->bind_framebuffer(GL_FRAMEBUFFER, c->framebuffer);
     return 1;
 }
+
 int lx_host_gl_release(void)
 {
     return display != EGL_NO_DISPLAY &&
@@ -371,6 +385,7 @@ typedef struct PixelState
     int32_t store[6], map_color;
     float transfer[8];
 } PixelState;
+
 static const GLenum PixelPack[] = {GL_PACK_SWAP_BYTES, GL_PACK_LSB_FIRST,   GL_PACK_ROW_LENGTH,
                                    GL_PACK_SKIP_ROWS,  GL_PACK_SKIP_PIXELS, GL_PACK_ALIGNMENT};
 static const GLenum PixelUnpack[] = {GL_UNPACK_SWAP_BYTES,  GL_UNPACK_LSB_FIRST,
@@ -378,6 +393,7 @@ static const GLenum PixelUnpack[] = {GL_UNPACK_SWAP_BYTES,  GL_UNPACK_LSB_FIRST,
                                      GL_UNPACK_SKIP_PIXELS, GL_UNPACK_ALIGNMENT};
 static const GLenum PixelTransfer[] = {GL_RED_SCALE, GL_GREEN_SCALE, GL_BLUE_SCALE, GL_ALPHA_SCALE,
                                        GL_RED_BIAS,  GL_GREEN_BIAS,  GL_BLUE_BIAS,  GL_ALPHA_BIAS};
+
 static void save_pixels(LxHostGlContext *c, PixelState *state, int pack)
 {
     const GLenum *store = pack ? PixelPack : PixelUnpack;
@@ -394,6 +410,7 @@ static void save_pixels(LxHostGlContext *c, PixelState *state, int pack)
         c->api.glPixelTransferf(PixelTransfer[i], i < 4 ? 1 : 0);
     }
 }
+
 static void restore_pixels(LxHostGlContext *c, const PixelState *state, int pack)
 {
     const GLenum *store = pack ? PixelPack : PixelUnpack;
@@ -424,6 +441,7 @@ int lx_host_gl_front(LxHostGlContext *c, uint32_t *pixels, size_t count)
     free(rgba);
     return 1;
 }
+
 int lx_host_gl_write_front(LxHostGlContext *c, const uint32_t *pixels, size_t count)
 {
     size_t size = (size_t)c->width * c->height;
@@ -475,6 +493,7 @@ int lx_host_gl_write_front(LxHostGlContext *c, const uint32_t *pixels, size_t co
     free(rgba);
     return complete;
 }
+
 int lx_host_gl_swap(LxHostGlContext *c, uint32_t *pixels, size_t count)
 {
     if (c->double_buffer)

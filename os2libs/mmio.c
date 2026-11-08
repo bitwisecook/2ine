@@ -7,6 +7,7 @@
 #include "hal/host_sync.h"
 #include "hal/host_fs.h"
 #include <stdio.h>
+
 static struct
 {
     ULONG handle;
@@ -19,13 +20,16 @@ static struct
     size_t position;
     ULONG flags;
 } elements[64];
+
 static ULONG next_handle = 1;
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMutex *mutex;
+
 static void initialize(void)
 {
     mutex = lx_host_mutex_create(0, 0);
 }
+
 enum
 {
     MMIOM_CLOSE = 0xe03,
@@ -37,10 +41,12 @@ enum
     FOURCC_MEM = 0x204d454d,
     FOURCC_DOS = 0x20534f44
 };
+
 static struct
 {
     uint32_t fourcc, procedure;
 } installed[32];
+
 ULONG mmioInstallIOProc(ULONG fourcc, ULONG procedure, ULONG flags)
 {
     lx_host_once(&once, initialize);
@@ -68,6 +74,7 @@ ULONG mmioInstallIOProc(ULONG fourcc, ULONG procedure, ULONG flags)
     lx_host_mutex_unlock(mutex);
     return result;
 }
+
 static ULONG add_element(unsigned char *copy, uint32_t address, size_t size, LxHostFile *file,
                          ULONG flags)
 {
@@ -89,6 +96,7 @@ static ULONG add_element(unsigned char *copy, uint32_t address, size_t size, LxH
     lx_host_mutex_unlock(mutex);
     return result;
 }
+
 /* The DOS IOProc reads and writes a named file. Installed IOProcs are not available. */
 static ULONG open_file(PSZ name, const unsigned char *info, ULONG flags)
 {
@@ -101,7 +109,7 @@ static ULONG open_file(PSZ name, const unsigned char *info, ULONG flags)
     char *path = GLoaderState.makeUnixPath(name, &error);
     if (!path)
         return 0;
-    unsigned mode = flags & 8 ? LX_HOST_FILE_WRITE
+    unsigned mode = flags & 8      ? LX_HOST_FILE_WRITE
                     : flags & 0x10 ? LX_HOST_FILE_READ | LX_HOST_FILE_WRITE
                                    : LX_HOST_FILE_READ;
     if (flags & 1) /* MMIO_CREATE */
@@ -116,6 +124,7 @@ static ULONG open_file(PSZ name, const unsigned char *info, ULONG flags)
         lx_host_file_close(file);
     return result;
 }
+
 /* The explicit procedure wins, then an installed FOURCC; MEM and DOS are built in. */
 static uint32_t custom_procedure(const unsigned char *info)
 {
@@ -134,6 +143,7 @@ static uint32_t custom_procedure(const unsigned char *info)
     lx_host_mutex_unlock(mutex);
     return result;
 }
+
 /* An IOProc receives guest MMIOINFO, which it may update across every later call. */
 static ULONG open_custom(PSZ name, unsigned char *info, ULONG flags, uint32_t procedure)
 {
@@ -174,6 +184,7 @@ static ULONG open_custom(PSZ name, unsigned char *info, ULONG flags, uint32_t pr
     lx_host_mutex_unlock(mutex);
     return handle;
 }
+
 /* Guest code may reenter MMIO, so callers must not hold the element lock across a call. */
 static BOOL custom_element(ULONG handle, uint32_t *procedure, uint32_t *address, ULONG *flags)
 {
@@ -192,6 +203,7 @@ static BOOL custom_element(ULONG handle, uint32_t *procedure, uint32_t *address,
     lx_host_mutex_unlock(mutex);
     return found;
 }
+
 ULONG mmioOpen(PSZ name, PVOID info, ULONG flags)
 {
     TRACE_NATIVE("mmioOpen(%p, %p, 0x%x)", name, info, (unsigned)flags);
@@ -224,6 +236,7 @@ ULONG mmioOpen(PSZ name, PVOID info, ULONG flags)
         free(copy);
     return result;
 }
+
 USHORT mmioClose(ULONG handle, USHORT flags)
 {
     uint32_t procedure = 0, address = 0;
@@ -250,6 +263,7 @@ USHORT mmioClose(ULONG handle, USHORT flags)
     lx_host_mutex_unlock(mutex);
     return result;
 }
+
 static LONG transfer(ULONG handle, void *buffer, LONG count, int writing)
 {
     if (!buffer || count < 0)
@@ -289,9 +303,10 @@ static LONG transfer(ULONG handle, void *buffer, LONG count, int writing)
             size_t bytes = (size_t)count < remaining ? (size_t)count : remaining;
             if (writing)
             {
-                if (bytes && !lx_execution_write(GLoaderState.execution,
-                                                 elements[i].address + (uint32_t)elements[i].position,
-                                                 buffer, bytes))
+                if (bytes &&
+                    !lx_execution_write(GLoaderState.execution,
+                                        elements[i].address + (uint32_t)elements[i].position,
+                                        buffer, bytes))
                     break;
                 memcpy(elements[i].bytes + elements[i].position, buffer, bytes);
             }
@@ -307,14 +322,17 @@ static LONG transfer(ULONG handle, void *buffer, LONG count, int writing)
     lx_host_mutex_unlock(mutex);
     return result;
 }
+
 LONG mmioRead(ULONG handle, PCHAR buffer, LONG bytes)
 {
     return transfer(handle, buffer, bytes, 0);
 }
+
 LONG mmioWrite(ULONG handle, PCHAR buffer, LONG bytes)
 {
     return transfer(handle, buffer, bytes, 1);
 }
+
 LONG mmioSeek(ULONG handle, LONG offset, LONG origin)
 {
     uint32_t procedure = 0, address = 0;
@@ -337,8 +355,10 @@ LONG mmioSeek(ULONG handle, LONG offset, LONG origin)
                     result = (LONG)position;
                 break;
             }
-            int64_t base = origin == 0 ? 0 : origin == 1 ? (int64_t)elements[i].position
-                                             : origin == 2 ? (int64_t)elements[i].size : -1;
+            int64_t base = origin == 0   ? 0
+                           : origin == 1 ? (int64_t)elements[i].position
+                           : origin == 2 ? (int64_t)elements[i].size
+                                         : -1;
             int64_t position = base + offset;
             if (base >= 0 && position >= 0 && position <= (int64_t)elements[i].size)
                 result = (LONG)(elements[i].position = (size_t)position);
@@ -347,8 +367,9 @@ LONG mmioSeek(ULONG handle, LONG offset, LONG origin)
     lx_host_mutex_unlock(mutex);
     return result;
 }
-ULONG mmioGetHeader(ULONG handle, PVOID header, LONG capacity, PLONG bytes,
-                    ULONG reserved, ULONG flags)
+
+ULONG mmioGetHeader(ULONG handle, PVOID header, LONG capacity, PLONG bytes, ULONG reserved,
+                    ULONG flags)
 {
     (void)reserved;
     (void)flags;
@@ -381,6 +402,7 @@ ULONG mmioGetHeader(ULONG handle, PVOID header, LONG capacity, PLONG bytes,
     lx_host_mutex_unlock(mutex);
     return result;
 }
+
 unsigned char *lx_mmio_copy(ULONG handle, size_t *size)
 {
     unsigned char *result = NULL;
@@ -400,4 +422,5 @@ unsigned char *lx_mmio_copy(ULONG handle, size_t *size)
     lx_host_mutex_unlock(mutex);
     return result;
 }
+
 #include "os2libs/generated/mmio-lx.h"

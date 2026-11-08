@@ -7,12 +7,14 @@
 #include <stdio.h>
 static LxHostOnce env_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *env_monitor;
+
 static void env_initialize(void)
 {
     env_monitor = lx_host_monitor_create();
     if (!env_monitor)
         abort();
 }
+
 ULONG GetEnvironmentStrings(void)
 {
     ULONG address = 0;
@@ -21,6 +23,7 @@ ULONG GetEnvironmentStrings(void)
         open32SetError(8);
     return address;
 }
+
 ULONG GetEnvironmentVariable(PSZ name, PSZ output, ULONG capacity)
 {
     if (!name || !*name || strchr(name, '=') || !capacity || !output)
@@ -52,6 +55,7 @@ ULONG GetEnvironmentVariable(PSZ name, PSZ output, ULONG capacity)
     lx_host_monitor_unlock(env_monitor);
     return result;
 }
+
 BOOL SetEnvironmentVariable(PSZ name, PSZ value)
 {
     if (!name || !*name || strchr(name, '=') || strlen(name) > 32767 ||
@@ -111,6 +115,7 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     lx_host_monitor_unlock(env_monitor);
     return TRUE;
 }
+
 ULONG GetTempPath(ULONG capacity, PSZ output)
 {
     char path[260];
@@ -137,6 +142,7 @@ ULONG GetTempPath(ULONG capacity, PSZ output)
     memcpy(output, path, n + 1);
     return n;
 }
+
 ULONG GetTempFileName(PSZ path, PSZ prefix, ULONG unique, PSZ output)
 {
     if (!path || !prefix || !output || strlen(path) > 240)
@@ -176,6 +182,7 @@ ULONG GetTempFileName(PSZ path, PSZ prefix, ULONG unique, PSZ output)
     open32SetError(80);
     return 0;
 }
+
 BOOL GetDiskFreeSpace(PSZ root, PVOID sectors, PVOID bytes, PVOID free_clusters,
                       PVOID total_clusters)
 {
@@ -211,6 +218,7 @@ BOOL GetDiskFreeSpace(PSZ root, PVOID sectors, PVOID bytes, PVOID free_clusters,
         lx_guest_store_u32(total_clusters, lx_guest_load_u32(info + 8));
     return TRUE;
 }
+
 VOID GlobalMemoryStatus(PVOID output)
 {
     if (!output)
@@ -236,6 +244,7 @@ VOID GlobalMemoryStatus(PVOID output)
     for (unsigned i = 0; i < 8; i++)
         lx_guest_store_u32((uint8 *)output + i * 4, fields[i]);
 }
+
 ULONG SearchPath(PSZ path, PSZ file, PSZ extension, ULONG capacity, PSZ output, PVOID part)
 {
     if (!file || !*file || (capacity && !output))

@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 typedef struct LxHostFont LxHostFont;
+
 typedef struct LxHostFontMetrics
 {
     char family[32], face[32];
@@ -17,11 +18,13 @@ typedef struct LxHostFontMetrics
     uint8_t panose[10];
     unsigned sfnt;
 } LxHostFontMetrics;
+
 typedef struct LxHostGlyph
 {
     int width, height, left, top, advance;
     uint8_t *coverage;
 } LxHostGlyph;
+
 /* Loaded font files follow the bundled faces. An index stays valid for the
    process: after the last unload, lx_host_font_open fails for that slot. */
 unsigned lx_host_font_count(void);

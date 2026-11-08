@@ -11,12 +11,14 @@
 typedef struct LxHostThread LxHostThread;
 LxHostThread *lx_host_thread_create(void *(*entry)(void *), void *argument,
                                     void (*cleanup)(void *));
+
 typedef enum LxHostCancelResult
 {
     LX_HOST_CANCEL_OK,
     LX_HOST_CANCEL_UNSUPPORTED,
     LX_HOST_CANCEL_FAILED
 } LxHostCancelResult;
+
 /* Cancellation runs registered cleanup at a host cancellation point. */
 LxHostCancelResult lx_host_thread_cancel(LxHostThread *thread);
 void lx_host_thread_test_cancel(void);

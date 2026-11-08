@@ -3,6 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "hal/host_sync.h"
+
 typedef struct CriticalSection
 {
     ULONG address, owner, recursion, waiting;
@@ -10,19 +11,23 @@ typedef struct CriticalSection
     LxHostMutex *mutex;
     struct CriticalSection *next;
 } CriticalSection;
+
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *monitor;
 static CriticalSection *sections;
+
 static void initialize(void)
 {
     monitor = lx_host_monitor_create();
     if (!monitor)
         abort();
 }
+
 ULONG GetCurrentThread(void)
 {
     return (ULONG)-2; /* Win32's calling-thread pseudo-handle, not an owned handle. */
 }
+
 ULONG GetCurrentThreadId(void)
 {
     LxTIB *tib = GLoaderState.getOs2Tib ? GLoaderState.getOs2Tib() : NULL;
@@ -31,6 +36,7 @@ ULONG GetCurrentThreadId(void)
                             : NULL;
     return tib2 ? lx_guest_load_u32(tib2) : 0;
 }
+
 static CriticalSection *find_section(ULONG address)
 {
     for (CriticalSection *cs = sections; cs; cs = cs->next)
@@ -38,6 +44,7 @@ static CriticalSection *find_section(ULONG address)
             return cs;
     return NULL;
 }
+
 static void store_section(CriticalSection *cs)
 {
     uint8 record[24] = {0};
@@ -46,6 +53,7 @@ static void store_section(CriticalSection *cs)
     lx_guest_store_u32(record + 12, cs->owner);
     lx_execution_write(GLoaderState.execution, cs->address, record, sizeof record);
 }
+
 VOID InitializeCriticalSection(PVOID address)
 {
     uint32 pointer = (uint32)(uintptr_t)address;
@@ -79,6 +87,7 @@ VOID InitializeCriticalSection(PVOID address)
     store_section(cs);
     lx_host_monitor_unlock(monitor);
 }
+
 VOID EnterCriticalSection(PVOID address)
 {
     LxGuestBorrow record = {0};
@@ -117,6 +126,7 @@ VOID EnterCriticalSection(PVOID address)
     lx_host_monitor_unlock(monitor);
     lx_execution_release(&record);
 }
+
 VOID LeaveCriticalSection(PVOID address)
 {
     ULONG pointer = (ULONG)(uintptr_t)address;
@@ -145,6 +155,7 @@ VOID LeaveCriticalSection(PVOID address)
     lx_host_mutex_unlock(cs->mutex);
     lx_host_monitor_unlock(monitor);
 }
+
 VOID DeleteCriticalSection(PVOID address)
 {
     ULONG pointer = (ULONG)(uintptr_t)address;
@@ -165,6 +176,7 @@ VOID DeleteCriticalSection(PVOID address)
     free(cs);
     lx_host_monitor_unlock(monitor);
 }
+
 void open32CriticalCleanup(void)
 {
     while (sections)

@@ -25,6 +25,7 @@ GlContext *GlContexts;
 LxHostMonitor *GlLock;
 static LxHostTlsKey *ThreadKey;
 static LxGuestMapping *Visuals;
+
 enum
 {
     VISUAL_BYTES = 88,
@@ -48,6 +49,7 @@ static void release_current(GlThread *t)
         lx_handle_release(&t->lease);
     }
 }
+
 static void destroy_thread(void *argument)
 {
     GlThread *t = argument;
@@ -56,6 +58,7 @@ static void destroy_thread(void *argument)
     lx_host_monitor_unlock(GlLock);
     free(t);
 }
+
 GlThread *gl_thread(void)
 {
     GlThread *t = lx_host_tls_get(ThreadKey);
@@ -70,6 +73,7 @@ GlThread *gl_thread(void)
     }
     return t;
 }
+
 void gl_error(uint32_t error)
 {
     GlThread *t = gl_thread();
@@ -79,6 +83,7 @@ void gl_error(uint32_t error)
     if (!*slot)
         *slot = error;
 }
+
 GlContext *gl_current(void)
 {
     GlThread *t = gl_thread();
@@ -101,10 +106,12 @@ GlContext *gl_current(void)
     }
     return t->current;
 }
+
 static int anchor(uint32_t hab)
 {
     return hab && hab == WinQueryAnchorBlock(HWND_DESKTOP);
 }
+
 static void destroy_context(void *argument)
 {
     GlContext *c = argument;
@@ -116,6 +123,7 @@ static void destroy_context(void *argument)
     free(c->feedback);
     free(c);
 }
+
 int gl_pgl_initialize(void)
 {
     GlLock = lx_host_monitor_create();
@@ -135,6 +143,7 @@ int gl_pgl_initialize(void)
     }
     return lx_execution_protect(GLoaderState.execution, Visuals, LX_GUEST_READ);
 }
+
 void gl_pgl_shutdown(void)
 {
     if (ThreadKey)
@@ -162,6 +171,7 @@ void gl_pgl_shutdown(void)
         lx_host_monitor_destroy(GlLock);
     GlLock = NULL;
 }
+
 static uint32_t choose(uint8_t *a)
 {
     if (!anchor(gl_word(a, 0)))
@@ -244,10 +254,12 @@ static uint32_t choose(uint8_t *a)
                ? lx_execution_mapping_address(Visuals) + (double_buffer ? VISUAL_BYTES : 0)
                : 0;
 }
+
 static uint32_t query_configs(uint8_t *a)
 {
     return anchor(gl_word(a, 0)) ? lx_execution_mapping_address(Visuals) + VISUAL_LIST_OFFSET : 0;
 }
+
 static uint32_t create(uint8_t *a)
 {
     uint32_t hab = gl_word(a, 0), visual = gl_word(a, 4), share = gl_word(a, 8);
@@ -294,6 +306,7 @@ failed:
     destroy_context(c);
     return 0;
 }
+
 static uint32_t make_current(uint8_t *a)
 {
     GlThread *t = gl_thread();
@@ -346,6 +359,7 @@ done:
     lx_host_monitor_unlock(GlLock);
     return result;
 }
+
 static uint32_t destroy(uint8_t *a)
 {
     if (!anchor(gl_word(a, 0)))
@@ -370,6 +384,7 @@ static uint32_t destroy(uint8_t *a)
     lx_host_monitor_unlock(GlLock);
     return result;
 }
+
 int gl_resize_current(GlContext *c)
 {
     RECTL rect;
@@ -386,6 +401,7 @@ int gl_resize_current(GlContext *c)
     c->height = rect.yTop;
     return 1;
 }
+
 int gl_present(GlContext *c, int swap)
 {
     if (!c || c->inside || !c->width || !c->height)
@@ -403,16 +419,19 @@ int gl_present(GlContext *c, int swap)
     free(pixels);
     return lx_host_gl_make_current(c->host, c->width, c->height) && result;
 }
+
 static uint32_t current_context(uint8_t *a)
 {
     GlThread *t = gl_thread();
     return anchor(gl_word(a, 0)) && t && t->current ? t->current->handle : 0;
 }
+
 static uint32_t current_window(uint8_t *a)
 {
     GlThread *t = gl_thread();
     return anchor(gl_word(a, 0)) && t && t->current ? t->current->window : 0;
 }
+
 static uint32_t swap(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -420,6 +439,7 @@ static uint32_t swap(uint8_t *a)
         gl_error(GL_INVALID_OPERATION);
     return 0;
 }
+
 static uint32_t capability(uint8_t *a)
 {
     if (!anchor(gl_word(a, 0)))
@@ -431,6 +451,7 @@ static uint32_t capability(uint8_t *a)
     lx_host_gl_destroy(probe);
     return 1;
 }
+
 static uint32_t wait_gl(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -443,6 +464,7 @@ static uint32_t wait_gl(uint8_t *a)
         c->pm_ps = WinGetPS(c->window);
     return c->pm_ps;
 }
+
 static uint32_t wait_pm(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -462,6 +484,7 @@ static uint32_t wait_pm(uint8_t *a)
     }
     return 0;
 }
+
 static uint32_t version(uint8_t *a)
 {
     if (!anchor(gl_word(a, 0)))
@@ -478,6 +501,7 @@ static uint32_t version(uint8_t *a)
     gl_memory_finish(&major);
     return 0;
 }
+
 static uint32_t indirect(uint8_t *a)
 {
     LxHandleBorrow lease = {0};
@@ -487,6 +511,7 @@ static uint32_t indirect(uint8_t *a)
     lx_handle_release(&lease);
     return result;
 }
+
 static uint32_t grab_bitmap(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -519,6 +544,7 @@ done:
     gl_memory_finish(&ps_output);
     return result;
 }
+
 static uint32_t release_front_bitmap(uint8_t *a)
 {
     GlThread *t = gl_thread();
@@ -527,6 +553,7 @@ static uint32_t release_front_bitmap(uint8_t *a)
     release_bitmap(t->current);
     return 1;
 }
+
 static uint32_t bitmap_font(GlContext *c, HPS ps, int first, int count, uint32_t base)
 {
     if (!c || c->inside || !lx_pm_valid_ps(ps) || first < 0 || first > 255 || count < 0 ||
@@ -575,6 +602,7 @@ done:
         lx_host_glyph_free(&glyphs[n]);
     return result;
 }
+
 static uint32_t use_font(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -596,6 +624,7 @@ static uint32_t use_font(uint8_t *a)
         GpiSetCharSet(ps, previous);
     return result;
 }
+
 static uint32_t use_pm_bitmap_font(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -613,13 +642,16 @@ static uint32_t use_pm_bitmap_font(uint8_t *a)
         WinReleasePS(ps);
     return result;
 }
+
 static uint32_t select_palette(uint8_t *a)
 {
     /* RGBA visuals do not accept color-index palettes. */
     (void)a;
     return 0;
 }
+
 const GlEntry GlPglEntries[] = {
 #include "os2libs/generated/pgl-entries.h"
 };
+
 const size_t GlPglEntryCount = sizeof GlPglEntries / sizeof GlPglEntries[0];

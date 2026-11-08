@@ -18,6 +18,7 @@ private struct FloppyIcon: View {
         }.frame(width: 16, height: 16).accessibilityHidden(true)
     }
 }
+
 struct MediaDeviceMenu: View {
     @Bindable var model: AppModel
     let kind: MediaDeviceKind
@@ -66,6 +67,7 @@ struct MediaDeviceMenu: View {
         .accessibilityIdentifier(kind.rawValue + "MediaMenu")
     }
 }
+
 struct InstallCompletionSheet: View {
     @Bindable var model: AppModel
     let completion: InstallCompletion
@@ -131,6 +133,7 @@ struct CreateFloppySheet: View {
         }.padding(24).frame(width: 540)
     }
 }
+
 struct DeviceSettingsView: View {
     @Bindable var model: AppModel
     let snapshot: BallSnapshot

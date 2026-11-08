@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+
 int lx_diagnostic_icmp_open(int *kind)
 {
     int fd;

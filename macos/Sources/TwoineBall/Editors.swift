@@ -10,6 +10,7 @@ private struct FolderChoice: Identifiable {
     let path: String
     var id: String { letter }
 }
+
 struct ProgramSheet: View {
     private enum Panel: String, CaseIterable {
         case general = "General"

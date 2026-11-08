@@ -3,6 +3,7 @@
 #include "hal/audio.h"
 #include <SDL3/SDL.h>
 #include <stdlib.h>
+
 struct LxHostAudio
 {
     SDL_AudioStream *stream;
@@ -10,6 +11,7 @@ struct LxHostAudio
     void *data;
     int channels;
 };
+
 static void SDLCALL fill(void *data, SDL_AudioStream *stream, int needed, int total)
 {
     (void)total;
@@ -28,10 +30,12 @@ static void SDLCALL fill(void *data, SDL_AudioStream *stream, int needed, int to
         needed -= count * frame_bytes;
     }
 }
+
 LxHostAudio *lx_host_audio_open(LxHostAudioCallback callback, void *data)
 {
     return lx_host_audio_open_channels(callback, data, 1);
 }
+
 LxHostAudio *lx_host_audio_open_channels(LxHostAudioCallback callback, void *data, int channels)
 {
     if ((channels != 1 && channels != 2) || !callback || !SDL_InitSubSystem(SDL_INIT_AUDIO))
@@ -58,14 +62,17 @@ LxHostAudio *lx_host_audio_open_channels(LxHostAudioCallback callback, void *dat
     }
     return audio;
 }
+
 void lx_host_audio_lock(LxHostAudio *audio)
 {
     SDL_LockAudioStream(audio->stream);
 }
+
 void lx_host_audio_unlock(LxHostAudio *audio)
 {
     SDL_UnlockAudioStream(audio->stream);
 }
+
 void lx_host_audio_close(LxHostAudio *audio)
 {
     if (!audio)

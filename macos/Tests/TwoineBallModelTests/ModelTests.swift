@@ -167,6 +167,7 @@ private func waitForOperation(_ model: AppModel) async throws {
     #expect(!model.canChangeMedia)
     model.busy = false
 }
+
 @Test @MainActor func installerSuggestionsIncludeCommandFilesWithoutRestrictingBrowsing() async throws {
     let (model, root) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }

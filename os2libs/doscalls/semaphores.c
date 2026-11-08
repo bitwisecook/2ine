@@ -6,20 +6,24 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2libs/doscalls/internal.h"
+
 typedef struct SemaphoreSharing
 {
     struct SemaphoreSharing *next;
     void *resource;
 } SemaphoreSharing;
+
 static LxHostOnce sharing_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *sharing_lock;
 static SemaphoreSharing *sharing;
+
 static void initialize_sharing(void)
 {
     sharing_lock = lx_host_monitor_create();
     if (!sharing_lock)
         abort();
 }
+
 static BOOL set_sharing(void *resource, BOOL shared)
 {
     if (!shared)
@@ -35,6 +39,7 @@ static BOOL set_sharing(void *resource, BOOL shared)
     lx_host_monitor_unlock(sharing_lock);
     return TRUE;
 }
+
 static void remove_sharing(void *resource)
 {
     lx_host_once(&sharing_once, initialize_sharing);
@@ -49,6 +54,7 @@ static void remove_sharing(void *resource)
         }
     lx_host_monitor_unlock(sharing_lock);
 }
+
 BOOL semaphoreResourceShared(void *resource)
 {
     lx_host_once(&sharing_once, initialize_sharing);
@@ -63,6 +69,7 @@ BOOL semaphoreResourceShared(void *resource)
     lx_host_monitor_unlock(sharing_lock);
     return shared;
 }
+
 /* Owner words: a sequence that is odd during an update, then the OS/2 owner.
    Only the owner writes them. Named mutexes keep them in a block every process
    maps, so a query reports an owner in another process. */
@@ -76,6 +83,7 @@ enum
     MUTEX_WORDS,
     MUTEX_BUCKETS = 256
 };
+
 typedef struct MutexState
 {
     struct MutexState *next;
@@ -83,11 +91,14 @@ typedef struct MutexState
     uint32 *owner;
     LxHostShared *shared;
 } MutexState;
+
 static MutexState *mutex_states[MUTEX_BUCKETS];
+
 static MutexState **mutex_bucket(void *resource)
 {
     return &mutex_states[((uintptr_t)resource >> 4) % MUTEX_BUCKETS];
 }
+
 static MutexState *find_mutex_state(void *resource)
 {
     lx_host_once(&sharing_once, initialize_sharing);
@@ -98,23 +109,28 @@ static MutexState *find_mutex_state(void *resource)
     lx_host_monitor_unlock(sharing_lock);
     return state;
 }
+
 static uint32 current_tid(void)
 {
     return LX_GETTIB() ? ((PTIB2)LX_GETTIB2())->tib2_ultid : 0;
 }
+
 static void begin_owner_update(uint32 *owner)
 {
     __atomic_add_fetch(&owner[MUTEX_SEQUENCE], 1, __ATOMIC_ACQ_REL);
 }
+
 static void end_owner_update(uint32 *owner)
 {
     __atomic_add_fetch(&owner[MUTEX_SEQUENCE], 1, __ATOMIC_RELEASE);
 }
+
 static BOOL owned_by_caller(const uint32 *owner)
 {
     return owner[MUTEX_COUNT] && owner[MUTEX_PID] == GLoaderState.pib.pib_ulpid &&
            owner[MUTEX_TID] == current_tid();
 }
+
 /* A hash names the block a named mutex shares; a fresh mutex starts it unowned. */
 static BOOL track_mutex(void *resource, const uint64 *hash, BOOL fresh)
 {
@@ -153,6 +169,7 @@ static BOOL track_mutex(void *resource, const uint64 *hash, BOOL fresh)
     lx_host_monitor_unlock(sharing_lock);
     return TRUE;
 }
+
 static void forget_mutex(void *resource)
 {
     lx_host_once(&sharing_once, initialize_sharing);
@@ -177,6 +194,7 @@ static void forget_mutex(void *resource)
         free(state->owner);
     free(state);
 }
+
 /* The caller holds the host mutex. True when the previous owner died holding it. */
 static BOOL mutex_acquired(void *resource, BOOL owner_died)
 {
@@ -198,6 +216,7 @@ static BOOL mutex_acquired(void *resource, BOOL owner_died)
     end_owner_update(owner);
     return died;
 }
+
 /* Runs before the host unlock, while this thread is still the only writer. */
 void mutexReleasing(void *resource)
 {
@@ -210,6 +229,7 @@ void mutexReleasing(void *resource)
         owner[MUTEX_PID] = owner[MUTEX_TID] = 0;
     end_owner_update(owner);
 }
+
 /* The ending thread releases what it still owns. The owner words stay in place
    and are flagged so a query and the next requester see the dead owner. */
 void abandonThreadMutexes(uint32 tid)
@@ -235,20 +255,24 @@ void abandonThreadMutexes(uint32 tid)
     if (released)
         notifyMuxWaiters();
 }
+
 typedef struct EventReference
 {
     struct EventReference *next;
     uint32 public_handle, internal_handle;
     size_t opens;
 } EventReference;
+
 static EventReference *event_references;
 static LxHostOnce event_pool_once = LX_HOST_ONCE_INIT;
 static LxHostShared *event_pool;
 static uint32 *event_sequence;
+
 enum
 {
     SHARED_EVENT_SIZE = 12
 };
+
 static uint64 eventScope(void)
 {
     uint64 hash = 1469598103934665603ULL;
@@ -259,6 +283,7 @@ static uint64 eventScope(void)
         hash = (hash ^ (unsigned char)*p) * 1099511628211ULL;
     return (hash ^ 0xff) * 1099511628211ULL;
 }
+
 static void initializeEventPool(void)
 {
     char name[64];
@@ -287,6 +312,7 @@ static void initializeEventPool(void)
         }
     }
 }
+
 int borrowEventResource(HEV handle, LxHandleBorrow *borrow)
 {
     if (!(handle & 0x80000000u))
@@ -303,6 +329,7 @@ int borrowEventResource(HEV handle, LxHandleBorrow *borrow)
     ungrabLock(&GMutexDosCalls);
     return result;
 }
+
 void destroyEventResource(void *value)
 {
     EventSem *sem = value;
@@ -1024,9 +1051,11 @@ enum
     FSRS_CLIENT = 8,
     FSRS_SEM = 10
 };
+
 #define FSRS_LOCKED UINT32_MAX
 #define FSRS_WAITERS 0xffu
 #define FSRS_KEPT_ON_RELEASE 0xffff0f00u
+
 static int lockFSRamSem(uint8 *sem, uint32 *word)
 {
     for (;;)
@@ -1038,11 +1067,13 @@ static int lockFSRamSem(uint8 *sem, uint32 *word)
         lx_host_sleep_ms(1);
     }
 }
+
 static void unlockFSRamSem(uint8 *sem, uint32 word)
 {
     uint32 previous;
     semaphoreWord((PHSEM16)(sem + FSRS_SEM), 1, word, &previous);
 }
+
 static uint32 fsRamSemPid(void)
 {
     /* A zero pid field means free, so a host pid folding to zero needs another value. */

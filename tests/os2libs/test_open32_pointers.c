@@ -9,6 +9,7 @@
 
 /* No confinement rectangle is active in these coordinate cases. */
 void open32ClipCursorPoint(LONG *x, LONG *y);
+
 void open32ClipCursorPoint(LONG *x, LONG *y)
 {
     (void)x;
@@ -40,15 +41,18 @@ uint64_t lx_host_thread_id(void)
 {
     return 0;
 }
+
 ULONG open32Presentation(void)
 {
     presentation_calls++;
     return presentation;
 }
+
 void open32SetError(ULONG value)
 {
     error = value;
 }
+
 BOOL WinQueryPointerPos(HWND desktop, PPOINTL output)
 {
     CHECK(desktop == HWND_DESKTOP);
@@ -56,11 +60,13 @@ BOOL WinQueryPointerPos(HWND desktop, PPOINTL output)
     *output = position;
     return query_result;
 }
+
 LONG WinQuerySysValue(HWND desktop, LONG index)
 {
     CHECK(desktop == HWND_DESKTOP && index == 21);
     return height;
 }
+
 BOOL WinSetPointerPos(HWND desktop, LONG x, LONG y)
 {
     CHECK(desktop == HWND_DESKTOP);
@@ -69,6 +75,7 @@ BOOL WinSetPointerPos(HWND desktop, LONG x, LONG y)
         position = (POINTL){x, y};
     return set_result;
 }
+
 /* These entrypoints must never be reached by a position query. */
 int lx_handle_borrow(uint32_t handle, LxHandleKind kind, LxHandleBorrow *borrow)
 {
@@ -78,17 +85,20 @@ int lx_handle_borrow(uint32_t handle, LxHandleKind kind, LxHandleBorrow *borrow)
     CHECK(0);
     return 0;
 }
+
 void lx_handle_release(LxHandleBorrow *borrow)
 {
     (void)borrow;
     CHECK(0);
 }
+
 HPOINTER lx_pm_system_pointer(LONG id)
 {
     (void)id;
     CHECK(0);
     return 0;
 }
+
 HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
 {
     (void)desktop;
@@ -97,6 +107,7 @@ HPOINTER WinLoadPointer(HWND desktop, HMODULE module, ULONG id)
     CHECK(0);
     return 0;
 }
+
 BOOL WinSetPointer(HWND desktop, HPOINTER pointer)
 {
     (void)desktop;
@@ -104,6 +115,7 @@ BOOL WinSetPointer(HWND desktop, HPOINTER pointer)
     CHECK(0);
     return FALSE;
 }
+
 BOOL WinDestroyPointer(HPOINTER pointer)
 {
     (void)pointer;
@@ -116,6 +128,7 @@ static void unchanged(const UCHAR *bytes)
     for (unsigned n = 0; n < 10; n++)
         CHECK(bytes[n] == 0xa5);
 }
+
 int main(void)
 {
     UCHAR guarded[10];
@@ -128,11 +141,13 @@ int main(void)
     unchanged(guarded);
     CHECK(!SetCursorPos(0, 0) && error == ERROR_NOT_ENOUGH_MEMORY && set_calls == 0);
     presentation = 1;
+
     static const struct
     {
         LONG x, pm_y, screen_y;
     } cases[] = {{0, 1079, 0},      {0, 0, 1079},         {-1920, 1089, -10},
                  {2000, -21, 1100}, {INT32_MIN, 1079, 0}, {INT32_MAX, 0, 1079}};
+
     for (unsigned n = 0; n < sizeof cases / sizeof *cases; n++)
     {
         position = (POINTL){cases[n].x, cases[n].pm_y};

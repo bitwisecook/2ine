@@ -26,6 +26,7 @@ static BOOL replace(Window *window, size_t position, size_t removed, const char 
     controlNotify(window, 7); /* MLN_CHANGE */
     return TRUE;
 }
+
 static void count_line(void *context, LONG x, LONG baseline, const char *text, LONG length)
 {
     (void)x;
@@ -34,6 +35,7 @@ static void count_line(void *context, LONG x, LONG baseline, const char *text, L
     (void)length;
     ++*(LONG *)context;
 }
+
 /* Word wrap counts the lines the control paints, using the same break rules. */
 static LONG wrapped_lines(Window *window, const char *text)
 {
@@ -46,6 +48,7 @@ static LONG wrapped_lines(Window *window, const char *text)
     WinReleasePS(space);
     return lines;
 }
+
 MRESULT mleMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;

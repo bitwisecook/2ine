@@ -10,31 +10,37 @@
 #include <errno.h>
 #include <stdint.h>
 #include <pthread.h>
+
 struct LxHostTlsContext
 {
     SSL_CTX *ssl;
     int server;
 };
+
 struct LxHostTls
 {
     SSL *ssl;
     int server;
     char error[256];
 };
+
 /* Keep SIGPIPE suppression and socket ownership inside the host socket contract.
    The stock socket BIO can raise SIGPIPE on Linux when a peer disconnects. */
 static BIO_METHOD *SocketBio;
 static pthread_once_t SocketBioOnce = PTHREAD_ONCE_INIT;
+
 static int bio_create(BIO *bio)
 {
     BIO_set_init(bio, 1);
     BIO_set_data(bio, NULL);
     return 1;
 }
+
 static int bio_destroy(BIO *bio)
 {
     return bio != NULL;
 }
+
 static int bio_read(BIO *bio, char *buffer, int length)
 {
     BIO_clear_retry_flags(bio);
@@ -46,6 +52,7 @@ static int bio_read(BIO *bio, char *buffer, int length)
         BIO_set_retry_read(bio);
     return n;
 }
+
 static int bio_write(BIO *bio, const char *buffer, int length)
 {
     BIO_clear_retry_flags(bio);
@@ -57,6 +64,7 @@ static int bio_write(BIO *bio, const char *buffer, int length)
         BIO_set_retry_write(bio);
     return n;
 }
+
 static long bio_ctrl(BIO *bio, int command, long value, void *pointer)
 {
     (void)value;
@@ -69,6 +77,7 @@ static long bio_ctrl(BIO *bio, int command, long value, void *pointer)
     }
     return command == BIO_CTRL_FLUSH || command == BIO_CTRL_DUP || command == BIO_CTRL_SET_CLOSE;
 }
+
 static void bio_initialize(void)
 {
     SocketBio = BIO_meth_new(BIO_TYPE_SOURCE_SINK | BIO_get_new_index(), "2ine host socket");
@@ -81,6 +90,7 @@ static void bio_initialize(void)
         SocketBio = NULL;
     }
 }
+
 LxHostTlsContext *lx_host_tls_context_create(int server, const char *ca, const char *certificate,
                                              const char *key)
 {
@@ -112,6 +122,7 @@ fail:
     lx_host_tls_context_free(ctx);
     return NULL;
 }
+
 void lx_host_tls_context_free(LxHostTlsContext *ctx)
 {
     if (ctx)
@@ -120,6 +131,7 @@ void lx_host_tls_context_free(LxHostTlsContext *ctx)
         free(ctx);
     }
 }
+
 int lx_host_tls_context_trust(LxHostTlsContext *ctx, const char *file, const char *path)
 {
     if (!ctx)
@@ -127,10 +139,12 @@ int lx_host_tls_context_trust(LxHostTlsContext *ctx, const char *file, const cha
     return file || path ? SSL_CTX_load_verify_locations(ctx->ssl, file, path)
                         : SSL_CTX_set_default_verify_paths(ctx->ssl);
 }
+
 int lx_host_tls_context_ciphers(LxHostTlsContext *ctx, const char *ciphers)
 {
     return ctx && ciphers ? SSL_CTX_set_cipher_list(ctx->ssl, ciphers) : 0;
 }
+
 int lx_host_tls_context_protocol(LxHostTlsContext *ctx, int minimum, int maximum)
 {
     if (!ctx || minimum < TLS1_2_VERSION || (maximum && maximum < minimum))
@@ -138,6 +152,7 @@ int lx_host_tls_context_protocol(LxHostTlsContext *ctx, int minimum, int maximum
     return SSL_CTX_set_min_proto_version(ctx->ssl, minimum) &&
            SSL_CTX_set_max_proto_version(ctx->ssl, maximum);
 }
+
 LxHostTls *lx_host_tls_session_create(LxHostTlsContext *ctx, int socket, const char *peer)
 {
     if (!ctx || socket < 0 || (!ctx->server && (!peer || !*peer)))
@@ -179,6 +194,7 @@ fail:
     lx_host_tls_free(tls);
     return NULL;
 }
+
 void lx_host_tls_free(LxHostTls *tls)
 {
     if (tls)
@@ -187,6 +203,7 @@ void lx_host_tls_free(LxHostTls *tls)
         free(tls);
     }
 }
+
 static int result(LxHostTls *tls, int value)
 {
     if (value > 0)
@@ -205,6 +222,7 @@ static int result(LxHostTls *tls, int value)
         snprintf(tls->error, sizeof tls->error, "TLS I/O error %d (errno %d)", error, errno);
     return LX_TLS_ERROR;
 }
+
 int lx_host_tls_handshake(LxHostTls *tls)
 {
     if (!tls)
@@ -212,6 +230,7 @@ int lx_host_tls_handshake(LxHostTls *tls)
     ERR_clear_error();
     return result(tls, SSL_do_handshake(tls->ssl));
 }
+
 int lx_host_tls_read(LxHostTls *tls, void *buffer, int length)
 {
     if (!tls || length < 0 || (!buffer && length))
@@ -221,6 +240,7 @@ int lx_host_tls_read(LxHostTls *tls, void *buffer, int length)
     ERR_clear_error();
     return result(tls, SSL_read(tls->ssl, buffer, length));
 }
+
 int lx_host_tls_write(LxHostTls *tls, const void *buffer, int length)
 {
     if (!tls || length < 0 || (!buffer && length))
@@ -230,6 +250,7 @@ int lx_host_tls_write(LxHostTls *tls, const void *buffer, int length)
     ERR_clear_error();
     return result(tls, SSL_write(tls->ssl, buffer, length));
 }
+
 int lx_host_tls_shutdown(LxHostTls *tls)
 {
     if (!tls)
@@ -238,14 +259,17 @@ int lx_host_tls_shutdown(LxHostTls *tls)
     int value = SSL_shutdown(tls->ssl);
     return value >= 0 ? value : result(tls, value);
 }
+
 int lx_host_tls_pending(LxHostTls *tls)
 {
     return tls ? SSL_pending(tls->ssl) : 0;
 }
+
 const char *lx_host_tls_version(LxHostTls *tls)
 {
     return tls ? SSL_get_version(tls->ssl) : "";
 }
+
 const char *lx_host_tls_diagnostic(LxHostTls *tls)
 {
     return tls ? tls->error : "Invalid TLS session";

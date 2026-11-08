@@ -11,18 +11,22 @@ LONG MultiByteToWideChar(ULONG, ULONG, PSZ, LONG, PVOID, LONG);
 LONG WideCharToMultiByte(ULONG, ULONG, PVOID, LONG, PSZ, LONG, PSZ, PULONG);
 static _Thread_local ULONG error;
 static ULONG ansi = 1252, oem = 437;
+
 void open32SetError(ULONG value)
 {
     error = value;
 }
+
 ULONG GetACP(void)
 {
     return ansi;
 }
+
 ULONG GetOEMCP(void)
 {
     return oem;
 }
+
 #define CHECK(x)                                                                                   \
     do                                                                                             \
     {                                                                                              \
@@ -32,10 +36,12 @@ ULONG GetOEMCP(void)
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static void word(void *buffer, unsigned at, unsigned value)
 {
     lx_guest_store_u16((UCHAR *)buffer + 2 * at, (USHORT)value);
 }
+
 int main(void)
 {
     UCHAR guarded[64], original[64];

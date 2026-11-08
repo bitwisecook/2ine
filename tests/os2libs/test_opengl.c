@@ -14,6 +14,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static uint32_t pgl_values(const char *name, const uint32_t *values, unsigned count)
 {
     uint8_t args[28] = {0};
@@ -25,11 +26,13 @@ static uint32_t pgl_values(const char *name, const uint32_t *values, unsigned co
             return GlPglEntries[i].call(args);
     abort();
 }
+
 static uint32_t pgl(const char *name, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
     uint32_t values[] = {a, b, c, d};
     return pgl_values(name, values, 4);
 }
+
 int main(void)
 {
     char error[256];

@@ -51,6 +51,7 @@ static cJSON *dependency_database_from_report(Context *c, const cJSON *report)
                               cJSON_Duplicate(get(report, "componentFiles"), 1));
     return database;
 }
+
 static void dependency_database_save(Context *c, const cJSON *report)
 {
     cJSON *database = dependency_database_from_report(c, report);
@@ -62,6 +63,7 @@ static void dependency_database_save(Context *c, const cJSON *report)
         cJSON_Delete(database);
     }
 }
+
 static cJSON *dependency_database_json(Context *c, const char *path)
 {
     uint64_t length = 0;
@@ -72,6 +74,7 @@ static cJSON *dependency_database_json(Context *c, const char *path)
     char *bytes = read_file(c, path, &size, 1);
     return bytes && size ? cJSON_ParseWithLength(bytes, size) : NULL;
 }
+
 static cJSON *dependency_database_load(Context *c)
 {
     cJSON *database = dependency_database_json(c, join(c, c->ball, "cache/dependency-index.json"));

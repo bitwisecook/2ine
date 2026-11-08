@@ -32,30 +32,36 @@ typedef struct Queue
     BOOL legacy;
     uint32 stopped, revision;
 } Queue;
+
 typedef struct Packet
 {
     ULONG sender, request, length, address;
 } Packet;
+
 enum
 {
     QUEUE_PAYLOAD_LIMIT = 65536
 };
+
 #include "os2libs/generated/quecalls-lx.h"
 
 static LxHostOnce registry_once = LX_HOST_ONCE_INIT;
 static LxHostMutex *registry_lock;
 static Queue *queue_registry;
+
 static void registry_initialize(void)
 {
     registry_lock = lx_host_mutex_create(0, 0);
     if (!registry_lock)
         abort();
 }
+
 static void registry_enter(void)
 {
     lx_host_once(&registry_once, registry_initialize);
     lx_host_mutex_lock(registry_lock, UINT32_MAX);
 }
+
 static void destroy_queue(void *value)
 {
     Queue *queue = value;
@@ -68,6 +74,7 @@ static void destroy_queue(void *value)
     free(queue->name);
     free(queue);
 }
+
 static int notify_revision(Queue *queue)
 {
     lx_host_mutex_lock(queue->mutex, UINT32_MAX);
@@ -95,6 +102,7 @@ static int notify_revision(Queue *queue)
     lx_host_mutex_unlock(queue->mutex);
     return failed;
 }
+
 static void *notify_queue(void *value)
 {
     Queue *queue = value;
@@ -106,6 +114,7 @@ static void *notify_queue(void *value)
     }
     return NULL;
 }
+
 static APIRET register_notification(Queue *queue, HEV event)
 {
     lx_host_mutex_lock(queue->mutex, UINT32_MAX);
@@ -133,6 +142,7 @@ static APIRET register_notification(Queue *queue, HEV event)
     lx_host_mutex_unlock(queue->mutex);
     return result;
 }
+
 static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, int create,
                                 ULONG flags, BOOL private, BOOL legacy)
 {
@@ -211,6 +221,7 @@ static APIRET open_queue_locked(PHQUEUE output, PPID owner, const char *name, in
         *owner = queue->owner;
     return NO_ERROR;
 }
+
 static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int create, ULONG flags)
 {
     registry_enter();
@@ -218,6 +229,7 @@ static APIRET open_queue(PHQUEUE output, PPID owner, const char *name, int creat
     lx_host_mutex_unlock(registry_lock);
     return result;
 }
+
 APIRET lx_queue_open_private(PPID owner, PHQUEUE output, const char *name)
 {
     registry_enter();
@@ -225,11 +237,13 @@ APIRET lx_queue_open_private(PPID owner, PHQUEUE output, const char *name)
     lx_host_mutex_unlock(registry_lock);
     return result;
 }
+
 APIRET DosCreateQueue(PHQUEUE phq, ULONG priority, PSZ name)
 {
     TRACE_NATIVE("DosCreateQueue(%p, %u, '%s')", phq, (uint)priority, name);
     return open_queue(phq, NULL, name, 1, priority);
 }
+
 APIRET DosCloseQueue(HQUEUE handle)
 {
     TRACE_NATIVE("DosCloseQueue(%u)", (uint)handle);
@@ -254,6 +268,7 @@ APIRET DosCloseQueue(HQUEUE handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosOpenQueue(PPID owner, PHQUEUE output, PSZ name)
 {
     TRACE_NATIVE("DosOpenQueue(%p, %p, '%s')", owner, output, name);
@@ -261,6 +276,7 @@ APIRET DosOpenQueue(PPID owner, PHQUEUE output, PSZ name)
         return ERROR_INVALID_PARAMETER;
     return open_queue(output, owner, name, 0, 0);
 }
+
 typedef struct QueueReceive
 {
     LxHandleBorrow borrow;
@@ -274,12 +290,14 @@ typedef struct QueueReceive
     BOOL legacy;
     uint8 *bytes;
 } QueueReceive;
+
 static void queue_receive_cleanup(void *argument)
 {
     QueueReceive *call = argument;
     free(call->bytes);
     lx_handle_release(&call->borrow);
 }
+
 static uint32 queue_receive_operation(void *argument)
 {
     QueueReceive *call = argument;
@@ -386,6 +404,7 @@ static uint32 queue_receive_operation(void *argument)
     }
     return result;
 }
+
 static APIRET receive_queue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID output,
                             PULONG element, BOOL32 nowait, PBYTE priority, HEV event, int peek,
                             BOOL legacy)
@@ -401,6 +420,7 @@ static APIRET receive_queue(HQUEUE handle, PREQUESTDATA request, PULONG length, 
                          nowait, event,   peek,   legacy,  NULL};
     return lx_host_guarded_call(queue_receive_operation, &call, queue_receive_cleanup, &call);
 }
+
 APIRET DosPeekQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID output,
                     PULONG element, BOOL32 nowait, PBYTE priority, HEV event)
 {
@@ -408,6 +428,7 @@ APIRET DosPeekQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID o
     return receive_queue(handle, request, length, output, element, nowait, priority, event, 1,
                          FALSE);
 }
+
 APIRET DosPurgeQueue(HQUEUE handle)
 {
     TRACE_NATIVE("DosPurgeQueue(%u)", (uint)handle);
@@ -422,6 +443,7 @@ APIRET DosPurgeQueue(HQUEUE handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosQueryQueue(HQUEUE handle, PULONG count)
 {
     TRACE_NATIVE("DosQueryQueue(%u, %p)", (uint)handle, count);
@@ -436,6 +458,7 @@ APIRET DosQueryQueue(HQUEUE handle, PULONG count)
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosReadQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID output,
                     ULONG element, BOOL32 nowait, PBYTE priority, HEV event)
 {
@@ -447,6 +470,7 @@ APIRET DosReadQueue(HQUEUE handle, PREQUESTDATA request, PULONG length, PPVOID o
         fprintf(stderr, "2INE RET: DosReadQueue(%u) -> %u\n", (uint)handle, (uint)result);
     return result;
 }
+
 static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority,
                           BOOL copy)
 {
@@ -510,11 +534,13 @@ static APIRET write_queue(HQUEUE handle, ULONG request, ULONG length, PVOID data
     lx_handle_release(&borrow);
     return result;
 }
+
 APIRET DosWriteQueue(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority)
 {
     TRACE_NATIVE("DosWriteQueue(%u, %u, %u, %p, %u)", handle, request, length, data, priority);
     return write_queue(handle, request, length, data, priority, FALSE);
 }
+
 APIRET lx_queue_write_copy(HQUEUE handle, ULONG request, ULONG length, PVOID data, ULONG priority)
 {
     return write_queue(handle, request, length, data, priority, TRUE);
@@ -534,6 +560,7 @@ static HQUEUE queue_handle16(USHORT id, LxHandleBorrow *borrow)
     lx_host_mutex_unlock(registry_lock);
     return handle;
 }
+
 APIRET16 Dos16CreateQueue(PUSHORT output, USHORT order, PSZ name)
 {
     if (!output || order > QUE_PRIORITY)
@@ -546,6 +573,7 @@ APIRET16 Dos16CreateQueue(PUSHORT output, USHORT order, PSZ name)
         *output = (USHORT)handle;
     return result;
 }
+
 APIRET16 Dos16CloseQueue(USHORT id)
 {
     LxHandleBorrow borrow = {0};
@@ -554,6 +582,7 @@ APIRET16 Dos16CloseQueue(USHORT id)
     lx_handle_release(&borrow);
     return result;
 }
+
 static APIRET queue_notification16(Queue *queue, ULONG semaphore)
 {
     if (!semaphore)
@@ -585,6 +614,7 @@ static APIRET queue_notification16(Queue *queue, ULONG semaphore)
     lx_host_mutex_unlock(queue->mutex);
     return result;
 }
+
 APIRET16 Dos16ReadQueue(USHORT id, PULONG request, PUSHORT length, PULONG buffer, USHORT element,
                         USHORT nowait, PBYTE priority, ULONG semaphore)
 {

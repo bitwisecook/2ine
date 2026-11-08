@@ -7,11 +7,13 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/printer_profile.h"
 #include "hal/print.h"
+
 enum
 {
     PRINT_DIALOG_BYTES = 66,
     DEVICE_MODE_BYTES = 128
 };
+
 static ULONG printer_block(const void *data, size_t size)
 {
     ULONG block = GlobalAlloc(0x42, (ULONG)size);
@@ -27,6 +29,7 @@ static ULONG printer_block(const void *data, size_t size)
     GlobalUnlock(block);
     return block;
 }
+
 BOOL PrintDlg(PVOID pointer)
 {
     open32CommonDialogError(0);
@@ -128,6 +131,7 @@ BOOL PrintDlg(PVOID pointer)
         GlobalFree(old_names);
     return TRUE;
 }
+
 /* The abort procedure runs guest code at each page and document boundary, before any device
    output. It may itself end the job or delete the DC, so state is looked up again afterwards. */
 enum
@@ -135,6 +139,7 @@ enum
     SP_ERROR = -1,
     SP_APPABORT = -2
 };
+
 static LONG print_boundary(ULONG handle, Open32DC **context)
 {
     BOOL proceed = open32AbortCheck(handle);
@@ -149,6 +154,7 @@ static LONG print_boundary(ULONG handle, Open32DC **context)
     dc->print_active = dc->print_page = FALSE;
     return SP_APPABORT;
 }
+
 LONG StartDoc(ULONG handle, PVOID info)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -190,6 +196,7 @@ LONG StartDoc(ULONG handle, PVOID info)
     }
     return result;
 }
+
 LONG StartPage(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -203,6 +210,7 @@ LONG StartPage(ULONG handle)
     dc->print_page = TRUE;
     return 1;
 }
+
 LONG EndPage(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -218,6 +226,7 @@ LONG EndPage(ULONG handle)
         dc->print_page = FALSE;
     return result;
 }
+
 LONG EndDoc(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -232,6 +241,7 @@ LONG EndDoc(ULONG handle)
     dc->print_active = dc->print_page = FALSE;
     return result;
 }
+
 LONG AbortDoc(ULONG handle)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -281,6 +291,7 @@ BOOL open32PrinterDefaults(unsigned kind, const char *output, PVOID mode)
     }
     return TRUE;
 }
+
 /* The virtual queues print Letter, Legal and A4 at 300 dpi in either orientation. */
 BOOL open32PrinterApply(ULONG handle, PVOID mode)
 {

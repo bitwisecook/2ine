@@ -23,10 +23,12 @@ ULONG WinCompareStrings(HAB hab, ULONG codepage, ULONG country, PSZ first, PSZ s
     unsigned left = (unsigned char)weights[*a], right = (unsigned char)weights[*b];
     return left == right ? 1 : left < right ? 2 : 3;
 }
+
 HWND WinQueryDesktopWindow(HAB hab, HDC dc)
 {
     return getAnchorBlock(hab) && (!dc || lx_pm_dc_valid(dc)) ? HWND_DESKTOP : 0;
 }
+
 BOOL WinQueryWindowProcess(HWND handle, PULONG process, PULONG thread)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -39,16 +41,19 @@ BOOL WinQueryWindowProcess(HWND handle, PULONG process, PULONG thread)
         *thread = owner;
     return TRUE;
 }
+
 static RECTL intersect(RECTL a, RECTL b)
 {
     return (RECTL){a.xLeft > b.xLeft ? a.xLeft : b.xLeft,
                    a.yBottom > b.yBottom ? a.yBottom : b.yBottom,
                    a.xRight < b.xRight ? a.xRight : b.xRight, a.yTop < b.yTop ? a.yTop : b.yTop};
 }
+
 static BOOL nonempty(RECTL a)
 {
     return a.xLeft < a.xRight && a.yBottom < a.yTop;
 }
+
 LONG WinScrollWindow(HWND handle, LONG dx, LONG dy, PRECTL scroll, PRECTL clip, ULONG region,
                      PRECTL update, ULONG flags)
 {

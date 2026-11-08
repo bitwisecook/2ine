@@ -40,6 +40,7 @@ extern "C"
         PSZ ObjectBuffer;
         ULONG ObjectBuffLen;
     } STARTDATA, *PSTARTDATA;
+
     typedef struct
     {
         USHORT Length, SelectInd, BondInd;

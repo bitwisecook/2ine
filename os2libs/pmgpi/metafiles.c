@@ -4,17 +4,20 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/internal.h"
 #include "hal/host_fs.h"
+
 typedef struct PmMetaFile
 {
     size_t length;
     uint8 *bytes;
 } PmMetaFile;
+
 static void destroy_meta(void *v)
 {
     PmMetaFile *m = v;
     free(m->bytes);
     free(m);
 }
+
 static ULONG create_meta(const void *data, size_t length)
 {
     if (!data || !length || length > 64 * 1024 * 1024)
@@ -35,14 +38,17 @@ static ULONG create_meta(const void *data, size_t length)
         destroy_meta(m);
     return h;
 }
+
 ULONG lx_pm_metafile_create(const void *data, size_t length)
 {
     return create_meta(data, length);
 }
+
 BOOL GpiDeleteMetaFile(ULONG h)
 {
     return lx_handle_close(h, LX_HANDLE_PM_METAFILE);
 }
+
 ULONG GpiLoadMetaFile(HAB hab, PSZ name)
 {
     if (!lxHostThreadState()->anchor_block || !name || !GLoaderState.makeUnixPath)
@@ -59,6 +65,7 @@ ULONG GpiLoadMetaFile(HAB hab, PSZ name)
     free(bytes);
     return result;
 }
+
 ULONG GpiCopyMetaFile(ULONG h)
 {
     LxHandleBorrow b = {0};
@@ -69,6 +76,7 @@ ULONG GpiCopyMetaFile(ULONG h)
     lx_handle_release(&b);
     return result;
 }
+
 LONG GpiQueryMetaFileLength(ULONG h)
 {
     LxHandleBorrow b = {0};
@@ -78,6 +86,7 @@ LONG GpiQueryMetaFileLength(ULONG h)
     lx_handle_release(&b);
     return n;
 }
+
 BOOL GpiQueryMetaFileBits(ULONG h, LONG offset, LONG length, PBYTE data)
 {
     LxHandleBorrow b = {0};
@@ -91,6 +100,7 @@ BOOL GpiQueryMetaFileBits(ULONG h, LONG offset, LONG length, PBYTE data)
     lx_handle_release(&b);
     return ok;
 }
+
 BOOL GpiSetMetaFileBits(ULONG h, LONG offset, LONG length, PVOID data)
 {
     LxHandleBorrow b = {0};
@@ -104,6 +114,7 @@ BOOL GpiSetMetaFileBits(ULONG h, LONG offset, LONG length, PVOID data)
     lx_handle_release(&b);
     return ok;
 }
+
 BOOL GpiSaveMetaFile(ULONG h, PSZ name)
 {
     LxHandleBorrow b = {0};

@@ -14,6 +14,7 @@
 #include <strings.h>
 
 #define ARG(a, n) lx_guest_load_u32((a) + 4 * (n))
+
 enum
 {
     PATH_LIMIT = 1024,
@@ -76,10 +77,12 @@ static uint32 class_of(uint32 self)
 {
     return pmwpInvokeObject(PMWP_SOMObject_somGetClass, self, 0, 0, 0);
 }
+
 static ULONG handle_of(uint32 self)
 {
     return pmwpObjectField(self, PMWP_OBJ_HANDLE);
 }
+
 /* Case-insensitive * and ? matching for titles and association filters. */
 static BOOL wildcard(const char *pattern, const char *text)
 {
@@ -102,6 +105,7 @@ static BOOL wildcard(const char *pattern, const char *text)
     }
     return !*text;
 }
+
 static const char *base_name(const char *path)
 {
     const char *base = path;
@@ -110,6 +114,7 @@ static const char *base_name(const char *path)
             base = p + 1;
     return base;
 }
+
 /* Setup strings use a caret to escape their delimiters. */
 static void quote_setup(char *output, size_t capacity, const char *text)
 {
@@ -155,6 +160,7 @@ uint32 pmwpObjectForPath(const char *path)
         pmwpStoreCreate(kind == 2 ? "WPFolder" : "WPDataFile", title, "<WP_DESKTOP>", setup);
     return handle ? pmwpAwaken(handle) : 0;
 }
+
 uint32 pmwpFolderForLocation(const char *location)
 {
     ULONG handle = pmwpStoreFind(location);
@@ -181,11 +187,13 @@ static uint32 load_class(const char *class_name, const char *module_name)
     }
     return pmwpGuestCall(address, 0, 0, 0, 0);
 }
+
 BOOL pmwpViewStored(ULONG handle, ULONG view)
 {
     uint32 object = pmwpAwaken(handle);
     return object && pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpViewObject, object, 0, view, 0);
 }
+
 uint32 pmwpClassForName(const char *name)
 {
     for (int id = 0; id < PMWP_CLASS_COUNT; id++)
@@ -194,6 +202,7 @@ uint32 pmwpClassForName(const char *name)
     char module[260];
     return pmwpStoreClassModule(name, module, sizeof module) ? load_class(name, module) : 0;
 }
+
 ULONG pmwpCreateRegistered(const char *class_name, const char *module, const char *title,
                            const char *setup, const char *location, ULONG flags)
 {
@@ -237,6 +246,7 @@ static uint32 cls_somUninit(uint8 *a)
     pmwpInvoke(PMWP_M_WPOBJECT, PMWP_M_WPObject_wpclsUnInitData, ARG(a, 0), 0, 0, 0);
     return 0;
 }
+
 static uint32 cls_somClassReady(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -244,12 +254,14 @@ static uint32 cls_somClassReady(uint8 *a)
     pmwpInvoke(PMWP_M_WPOBJECT, PMWP_M_WPObject_wpclsInitData, self, 0, 0, 0);
     return 0;
 }
+
 /* Workplace objects are created only by wpclsNew; PMWP.DLL refuses these entries. */
 static uint32 cls_refuse_creation(uint8 *a)
 {
     (void)a;
     return 0;
 }
+
 static uint32 wpclsInitData(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -257,17 +269,20 @@ static uint32 wpclsInitData(uint8 *a)
     pmwpSetClassField(self, PMWP_CLS_PAGE_HEIGHT, PAGE_MINIMUM_HEIGHT);
     return 0;
 }
+
 static uint32 wpclsUnInitData(uint8 *a)
 {
     pmwpSetClassField(ARG(a, 0), PMWP_CLS_USAGE, 0);
     return 0;
 }
+
 static uint32 wpclsIncUsage(uint8 *a)
 {
     uint32 self = ARG(a, 0);
     pmwpSetClassField(self, PMWP_CLS_USAGE, pmwpClassField(self, PMWP_CLS_USAGE) + 1);
     return 0;
 }
+
 static uint32 wpclsDecUsage(uint8 *a)
 {
     uint32 self = ARG(a, 0), usage = pmwpClassField(self, PMWP_CLS_USAGE);
@@ -275,6 +290,7 @@ static uint32 wpclsDecUsage(uint8 *a)
         pmwpSetClassField(self, PMWP_CLS_USAGE, usage - 1);
     return 0;
 }
+
 #define CLASS_TITLE(name, text)                                                                    \
     static uint32 title_##name(uint8 *a)                                                           \
     {                                                                                              \
@@ -312,12 +328,14 @@ CLASS_VALUE(view_desktop, 1)
 CLASS_VALUE(view_disk, 0x78)
 CLASS_VALUE(view_program, 4)
 CLASS_VALUE(folder_animation_icons, 1)
+
 static uint32 report_help(uint8 *a, uint32 panel)
 {
     static const char library[] = "";
     return pmwpStore32(ARG(a, 1), panel) &&
            lx_execution_write(GLoaderState.execution, ARG(a, 2), library, sizeof library);
 }
+
 #define CLASS_HELP(name, panel)                                                                    \
     static uint32 help_##name(uint8 *a)                                                            \
     {                                                                                              \
@@ -328,6 +346,7 @@ CLASS_HELP(data_file, 0xff2)
 CLASS_HELP(desktop, 0xfa0)
 CLASS_HELP(disk, 0x1f4f)
 CLASS_HELP(program, 0xff3)
+
 /* The system pointer for the nearest of the folder and program classes. */
 static uint32 wpclsQueryIcon(uint8 *a)
 {
@@ -342,27 +361,32 @@ static uint32 wpclsQueryIcon(uint8 *a)
         pointer = SYSTEM_POINTER_PROGRAM;
     return WinQuerySysPointer(HWND_DESKTOP, pointer, FALSE);
 }
+
 static uint32 wpclsQueryStyle(uint8 *a)
 {
     (void)a;
     return CLASS_DEFAULT_STYLE;
 }
+
 static uint32 wpclsQueryDefaultView(uint8 *a)
 {
     (void)a;
     return UINT32_MAX;
 }
+
 static uint32 wpclsCreateDefaultTemplates(uint8 *a)
 {
     (void)a;
     return FALSE;
 }
+
 static uint32 wpclsQueryDefaultHelp(uint8 *a)
 {
     static const char library[] = "WPHELP.HLP";
     return pmwpStore32(ARG(a, 1), 0) &&
            lx_execution_write(GLoaderState.execution, ARG(a, 2), library, sizeof library);
 }
+
 /* Five columns, of which the last three read the 12 bytes from wpQueryDetailsData. The
    records are one guest array shared by every class, as in PMWP.DLL. */
 static uint32 details_columns(void)
@@ -399,6 +423,7 @@ static uint32 details_columns(void)
     }
     return block;
 }
+
 static uint32 wpclsQueryDetailsInfo(uint8 *a)
 {
     uint32 head = details_columns();
@@ -410,15 +435,18 @@ static uint32 wpclsQueryDetailsInfo(uint8 *a)
         pmwpStore32(ARG(a, 1), head);
     return DETAIL_COLUMNS;
 }
+
 static uint32 wpclsSetError(uint8 *a)
 {
     pmwpSetClassField(ARG(a, 0), PMWP_CLS_ERROR, ARG(a, 1));
     return TRUE;
 }
+
 static uint32 wpclsQueryError(uint8 *a)
 {
     return pmwpClassField(ARG(a, 0), PMWP_CLS_ERROR);
 }
+
 static uint32 wpclsQuerySettingsPageSize(uint8 *a)
 {
     uint32 self = ARG(a, 0), size = ARG(a, 1);
@@ -427,6 +455,7 @@ static uint32 wpclsQuerySettingsPageSize(uint8 *a)
     return pmwpStore32(size, width < PAGE_MINIMUM_WIDTH ? PAGE_MINIMUM_WIDTH : width) &&
            pmwpStore32(size + 4, height < PAGE_MINIMUM_HEIGHT ? PAGE_MINIMUM_HEIGHT : height);
 }
+
 /* Subclasses raise the minimum page height; the width minimum stays the base one. */
 static uint32 page_size_with_height(uint8 *a, uint32 minimum)
 {
@@ -435,18 +464,22 @@ static uint32 page_size_with_height(uint8 *a, uint32 minimum)
     uint32 height = ARG(a, 1) + 4;
     return pmwpLoad32(height) >= minimum || pmwpStore32(height, minimum);
 }
+
 static uint32 page_size_120(uint8 *a)
 {
     return page_size_with_height(a, 120);
 }
+
 static uint32 page_size_125(uint8 *a)
 {
     return page_size_with_height(a, 125);
 }
+
 static uint32 wpclsNew(uint8 *a)
 {
     return pmwpNewObject(ARG(a, 0), ARG(a, 1), ARG(a, 2), ARG(a, 3), ARG(a, 4));
 }
+
 static uint32 wpclsQueryFolder(uint8 *a)
 {
     char *location = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), PATH_LIMIT);
@@ -456,6 +489,7 @@ static uint32 wpclsQueryFolder(uint8 *a)
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpLockObject, folder, 0, 0, 0);
     return folder;
 }
+
 static uint32 wpclsObjectFromHandle(uint8 *a)
 {
     return pmwpAwaken(ARG(a, 1));
@@ -472,16 +506,19 @@ typedef struct FindState
     uint32 classes[FIND_CLASS_LIMIT];
     size_t class_count;
 } FindState;
+
 static LxHostOnce find_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *find_lock;
 static FindState *finds;
 static ULONG next_find = 1;
+
 static void initialize_find(void)
 {
     find_lock = lx_host_monitor_create();
     if (!find_lock)
         abort();
 }
+
 static FindState *take_find(ULONG id)
 {
     lx_host_once(&find_once, initialize_find);
@@ -495,6 +532,7 @@ static FindState *take_find(ULONG id)
     lx_host_monitor_unlock(find_lock);
     return state;
 }
+
 static void put_find(FindState *state)
 {
     lx_host_once(&find_once, initialize_find);
@@ -505,6 +543,7 @@ static void put_find(FindState *state)
     finds = state;
     lx_host_monitor_unlock(find_lock);
 }
+
 static BOOL within_folder(const PmwpRecord *record, const char *folder, BOOL nested)
 {
     if (!strcasecmp(record->location, folder))
@@ -524,6 +563,7 @@ static BOOL within_folder(const PmwpRecord *record, const char *folder, BOOL nes
     }
     return FALSE;
 }
+
 static BOOL class_matches(const FindState *state, uint32 object)
 {
     if (!state->class_count)
@@ -533,6 +573,7 @@ static BOOL class_matches(const FindState *state, uint32 object)
             return TRUE;
     return FALSE;
 }
+
 /* TRUE reports the search is exhausted. A full buffer returns FALSE with
    WPERR_BUFFER_OVERFLOW so the caller continues with wpclsFindObjectNext. */
 static BOOL deliver(uint32 self, FindState *state, uint32 buffer, uint32 count_address)
@@ -561,6 +602,7 @@ static BOOL deliver(uint32 self, FindState *state, uint32 buffer, uint32 count_a
     }
     return TRUE;
 }
+
 static uint32 wpclsFindObjectFirst(uint8 *a)
 {
     uint32 self = ARG(a, 0), classes = ARG(a, 1), find_address = ARG(a, 2), folder = ARG(a, 4);
@@ -599,6 +641,7 @@ static uint32 wpclsFindObjectFirst(uint8 *a)
     pmwpStore32(find_address, state->id);
     return result;
 }
+
 static uint32 wpclsFindObjectNext(uint8 *a)
 {
     FindState *state = take_find(ARG(a, 1));
@@ -608,6 +651,7 @@ static uint32 wpclsFindObjectNext(uint8 *a)
     put_find(state);
     return result;
 }
+
 static uint32 wpclsFindObjectEnd(uint8 *a)
 {
     FindState *state = take_find(ARG(a, 1));
@@ -623,6 +667,7 @@ static uint32 file_empty_string(uint8 *a)
     (void)a;
     return pmwpConstantString("");
 }
+
 static uint32 wpclsQueryObjectFromPath(uint8 *a)
 {
     char *path = lx_execution_copy_string(GLoaderState.execution, ARG(a, 1), PATH_LIMIT);
@@ -630,6 +675,7 @@ static uint32 wpclsQueryObjectFromPath(uint8 *a)
     free(path);
     return object;
 }
+
 static BOOL object_file_name(uint32 self, char *path, size_t capacity, BOOL qualified)
 {
     ULONG handle = handle_of(self);
@@ -639,6 +685,7 @@ static BOOL object_file_name(uint32 self, char *path, size_t capacity, BOOL qual
         memmove(path, base_name(path), strlen(base_name(path)) + 1);
     return TRUE;
 }
+
 /* A null buffer returns the name length; otherwise the buffer size bounds the copy. */
 static uint32 wpQueryRealName(uint8 *a)
 {
@@ -657,6 +704,7 @@ static uint32 wpQueryRealName(uint8 *a)
     return lx_execution_write(GLoaderState.execution, output, path, copied) &&
            pmwpStore32(size_address, copied - 1);
 }
+
 static uint32 wpQueryFilename(uint8 *a)
 {
     uint32 output = ARG(a, 1);
@@ -666,11 +714,13 @@ static uint32 wpQueryFilename(uint8 *a)
                ? output
                : 0;
 }
+
 static uint32 wpRefresh(uint8 *a)
 {
     char path[PATH_LIMIT];
     return object_file_name(ARG(a, 0), path, sizeof path, TRUE) && pmwpPathKind(path) != 0;
 }
+
 /* .TYPE holds a multi-value EA of ASCII strings, one per type. Types arrive separated by
    newlines. The record below is a FEALIST with that single attribute. */
 static BOOL write_type_attribute(const char *path, const char *types)
@@ -709,6 +759,7 @@ static BOOL write_type_attribute(const char *path, const char *types)
     free(host);
     return result;
 }
+
 static uint32 wpSetType(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -722,10 +773,12 @@ static uint32 wpSetType(uint8 *a)
     free(types);
     return result;
 }
+
 BOOL pmwpObjectFilePath(uint32 self, char *path, size_t capacity)
 {
     return object_file_name(self, path, capacity, TRUE);
 }
+
 /* File system objects carry their file: both operations act on the file first, then on
    the record, whose PATH is updated. The last PATH in a setup string takes effect. */
 static BOOL target_file(uint32 folder, const char *path, char *target, size_t capacity)
@@ -738,6 +791,7 @@ static BOOL target_file(uint32 folder, const char *path, char *target, size_t ca
              length && directory[length - 1] == '\\' ? "" : "\\", base_name(path));
     return TRUE;
 }
+
 static void record_path(ULONG handle, const char *path)
 {
     char quoted[2 * PATH_LIMIT], setup[2 * PATH_LIMIT + 8];
@@ -745,6 +799,7 @@ static void record_path(ULONG handle, const char *path)
     snprintf(setup, sizeof setup, "PATH=%s;", quoted);
     pmwpStoreAppendSetup(handle, setup);
 }
+
 static uint32 fs_wpCopyObject(uint8 *a)
 {
     uint32 self = ARG(a, 0), folder = ARG(a, 1);
@@ -767,6 +822,7 @@ static uint32 fs_wpCopyObject(uint8 *a)
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpObjectReady, object, OR_FROMCOPY_CODE, self, 0);
     return object;
 }
+
 static uint32 fs_wpMoveObject(uint8 *a)
 {
     uint32 self = ARG(a, 0), folder = ARG(a, 1);
@@ -786,6 +842,7 @@ static uint32 fs_wpMoveObject(uint8 *a)
     pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetFolder, self, folder, 0, 0);
     return TRUE;
 }
+
 /* A title change renames the file. Before the object has a file, it is only a title. */
 static uint32 fs_wpSetTitle(uint8 *a)
 {
@@ -798,6 +855,7 @@ static uint32 fs_wpSetTitle(uint8 *a)
     return pmwpInvoke(PMWP_WPFILESYSTEM, PMWP_WPFileSystem_wpSetTitleAndRenameFile, self, ARG(a, 1),
                       confirmations, 0);
 }
+
 static uint32 fs_wpQueryStyle(uint8 *a)
 {
     uint32 self = ARG(a, 0), style = pmwpObjectField(self, PMWP_OBJ_STYLE);
@@ -806,12 +864,14 @@ static uint32 fs_wpQueryStyle(uint8 *a)
         style |= PMWP_OBJSTYLE_NOMOVE | PMWP_OBJSTYLE_NODELETE | PMWP_OBJSTYLE_NORENAME;
     return style;
 }
+
 static uint32 fs_wpAddSettingsPages(uint8 *a)
 {
     uint32 self = ARG(a, 0), book = ARG(a, 1);
     pmwpInvoke(PMWP_WPFILESYSTEM, PMWP_WPFileSystem_wpAddFile1Page, self, book, 0, 0);
     return pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpAddObjectGeneralPage, self, book, 0, 0) != 0;
 }
+
 static uint32 wpQueryType(uint8 *a)
 {
     uint32 self = ARG(a, 0), data = pmwpInstanceData(PMWP_WPFILESYSTEM, self);
@@ -828,6 +888,7 @@ static uint32 wpQueryType(uint8 *a)
     pmwpStore32(data + FILE_TYPE_TEXT, text);
     return text;
 }
+
 static uint32 fs_wpFormatDragItem(uint8 *a)
 {
     uint32 self = ARG(a, 0), item = ARG(a, 1);
@@ -847,6 +908,7 @@ static uint32 fs_wpFormatDragItem(uint8 *a)
     }
     return pmwpFormatDragItem(self, item);
 }
+
 /* A file dropped on a program starts that program with the file as its parameter. */
 static uint32 fs_wpDroppedOnObject(uint8 *a)
 {
@@ -888,6 +950,7 @@ static ULONG associated_program(const char *path)
     free(handles);
     return found;
 }
+
 static uint32 df_wpOpen(uint8 *a)
 {
     uint32 self = ARG(a, 0), view = ARG(a, 2);
@@ -899,6 +962,7 @@ static uint32 df_wpOpen(uint8 *a)
     ULONG program = associated_program(path);
     return program && pmwpStoreStartProgram(program, path);
 }
+
 static uint32 wpQueryAssociatedProgram(uint8 *a)
 {
     char path[PATH_LIMIT];
@@ -907,6 +971,7 @@ static uint32 wpQueryAssociatedProgram(uint8 *a)
     ULONG program = associated_program(path);
     return program ? pmwpAwaken(program) : 0;
 }
+
 static uint32 wpQueryAssociatedFileIcon(uint8 *a)
 {
     char path[PATH_LIMIT];
@@ -915,6 +980,7 @@ static uint32 wpQueryAssociatedFileIcon(uint8 *a)
     uint32 program = handle ? pmwpAwaken(handle) : 0;
     return program ? pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpQueryIcon, program, 0, 0, 0) : 0;
 }
+
 static uint32 wpSetAssociatedFileIcon(uint8 *a)
 {
     uint32 icon = wpQueryAssociatedFileIcon(a);
@@ -922,6 +988,7 @@ static uint32 wpSetAssociatedFileIcon(uint8 *a)
         pmwpInvoke(PMWP_WPOBJECT, PMWP_WPObject_wpSetIcon, ARG(a, 0), icon, 0, 0);
     return 0;
 }
+
 static BOOL print_lines(HDC device, HPS space, const char *text, size_t size, LONG height)
 {
     LONG step = height / (PRINT_LINES + 2), line = 0;
@@ -947,6 +1014,7 @@ static BOOL print_lines(HDC device, HPS space, const char *text, size_t size, LO
     }
     return TRUE;
 }
+
 /* Prints the file as plain text on the destination's device. */
 static uint32 df_wpPrintObject(uint8 *a)
 {
@@ -1020,6 +1088,7 @@ static uint32 wpSetFldrFlags(uint8 *a)
     ULONG handle = handle_of(self);
     return !handle || pmwpStoreSetValue(handle, "WPFolder", FOLDER_FLAGS_KEY, flags, sizeof flags);
 }
+
 /* An awakened folder has zero instance flags until its saved value is read. */
 static uint32 wpQueryFldrFlags(uint8 *a)
 {
@@ -1035,6 +1104,7 @@ static uint32 wpQueryFldrFlags(uint8 *a)
     }
     return flags;
 }
+
 static ULONG *folder_children(uint32 self, size_t *count)
 {
     *count = 0;
@@ -1055,6 +1125,7 @@ static ULONG *folder_children(uint32 self, size_t *count)
     }
     return handles;
 }
+
 /* Directory entries become objects; every child in the store then awakes. */
 static uint32 wpPopulate(uint8 *a)
 {
@@ -1090,6 +1161,7 @@ static uint32 wpPopulate(uint8 *a)
     free(children);
     return TRUE;
 }
+
 static uint32 wpQueryContent(uint8 *a)
 {
     uint32 self = ARG(a, 0), current = ARG(a, 1), option = ARG(a, 2);
@@ -1113,6 +1185,7 @@ static uint32 wpQueryContent(uint8 *a)
     free(children);
     return result;
 }
+
 static uint32 wpDeleteContents(uint8 *a)
 {
     size_t count = 0;
@@ -1128,11 +1201,13 @@ static uint32 wpDeleteContents(uint8 *a)
     free(children);
     return result;
 }
+
 static uint32 parent_method(PmwpClassId id, uint32 offset, uint32 self, uint32 first)
 {
     return pmwpGuestCall(pmwpParentMethod(id, pmwpClassToken(PMWP_WPOBJECT, offset)), self, first,
                          0, 0);
 }
+
 /* Folder flags are saved here; the parent saves the object and file state. */
 static uint32 fdr_wpSaveState(uint8 *a)
 {
@@ -1142,6 +1217,7 @@ static uint32 fdr_wpSaveState(uint8 *a)
     return parent_method(PMWP_WPFOLDER, PMWP_WPObject_wpSaveState, self, 0) &&
            pmwpStoreSetValue(handle_of(self), "WPFolder", FOLDER_FLAGS_KEY, flags, sizeof flags);
 }
+
 static uint32 fdr_wpRestoreState(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -1153,6 +1229,7 @@ static uint32 fdr_wpRestoreState(uint8 *a)
         pmwpStore32(pmwpInstanceData(PMWP_WPFOLDER, self) + FOLDER_FLAGS, lx_guest_load_u32(flags));
     return result;
 }
+
 static uint32 folder_view_from_name(const char *name)
 {
     return !strcasecmp(name, "ICON")      ? FOLDER_VIEW_ICON
@@ -1160,6 +1237,7 @@ static uint32 folder_view_from_name(const char *name)
            : !strcasecmp(name, "DETAILS") ? FOLDER_VIEW_DETAILS
                                           : 0;
 }
+
 /* The folder views are named here; the parent handles every other key. */
 static uint32 fdr_wpSetup(uint8 *a)
 {
@@ -1178,6 +1256,7 @@ static uint32 fdr_wpSetup(uint8 *a)
     free(setup);
     return result;
 }
+
 static uint32 dsk_wpSaveState(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -1187,6 +1266,7 @@ static uint32 dsk_wpSaveState(uint8 *a)
     return parent_method(PMWP_WPDISK, PMWP_WPObject_wpSaveState, self, 0) &&
            pmwpStoreSetValue(handle_of(self), "WPDisk", DISK_DRIVE_KEY, drive, sizeof drive);
 }
+
 static uint32 dsk_wpRestoreState(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -1199,6 +1279,7 @@ static uint32 dsk_wpRestoreState(uint8 *a)
                    0);
     return result;
 }
+
 static uint32 dsk_wpSetup(uint8 *a)
 {
     uint32 self = ARG(a, 0);
@@ -1211,6 +1292,7 @@ static uint32 dsk_wpSetup(uint8 *a)
     free(setup);
     return parent_method(PMWP_WPDISK, PMWP_WPObject_wpSetup, self, ARG(a, 1));
 }
+
 /* Contents go first, so a refused child leaves the folder in place. */
 static uint32 fdr_wpDelete(uint8 *a)
 {
@@ -1219,16 +1301,19 @@ static uint32 fdr_wpDelete(uint8 *a)
         pmwpInvoke(PMWP_WPFOLDER, PMWP_WPFolder_wpDeleteContents, self, ARG(a, 1), 0, 0);
     return result == OK_DELETE_RESULT ? pmwpObjectDelete(self, ARG(a, 1)) : result;
 }
+
 static uint32 fdr_wpRefresh(uint8 *a)
 {
     return pmwpInvoke(PMWP_WPFOLDER, PMWP_WPFolder_wpPopulate, ARG(a, 0), 0, 0, FALSE);
 }
+
 static void end_conversation(uint32 item, BOOL done)
 {
     DrgSendTransferMsg(
         pmwpLoad32(item), DM_ENDCONVERSATION_MESSAGE, (MPARAM)(uintptr_t)pmwpLoad32(item + 4),
         (MPARAM)(uintptr_t)(done ? DMFL_TARGETSUCCESSFUL_FLAG : DMFL_TARGETFAIL_FLAG));
 }
+
 /* A folder performs the requested operation on the dragged object. */
 static uint32 fdr_wpDrop(uint8 *a)
 {
@@ -1246,6 +1331,7 @@ static uint32 fdr_wpDrop(uint8 *a)
     end_conversation(item, done != 0);
     return 1;
 }
+
 /* A file dropped on a program starts it with that file. */
 static uint32 ref_wpDrop(uint8 *a)
 {
@@ -1256,6 +1342,7 @@ static uint32 ref_wpDrop(uint8 *a)
                                pmwpStoreStartProgram(handle_of(self), path));
     return 1;
 }
+
 /* A drive's views are its root folder's views. */
 static uint32 dsk_open_root(uint8 *a)
 {
@@ -1264,6 +1351,7 @@ static uint32 dsk_open_root(uint8 *a)
                              ARG(a, 3))
                 : 0;
 }
+
 static uint32 wpQueryFldrDetailsClass(uint8 *a)
 {
     (void)a;
@@ -1288,10 +1376,12 @@ static uint32 wpQueryLogicalDrive(uint8 *a)
     }
     return drive;
 }
+
 static uint32 wpSetLogicalDrive(uint8 *a)
 {
     return pmwpStore32(pmwpInstanceData(PMWP_WPDISK, ARG(a, 0)) + DISK_DRIVE, ARG(a, 1));
 }
+
 static uint32 wpQueryRootFolder(uint8 *a)
 {
     uint32 drive = pmwpInvoke(PMWP_WPDISK, PMWP_WPDisk_wpQueryLogicalDrive, ARG(a, 0), 0, 0, 0);
@@ -1453,4 +1543,5 @@ const PmwpBody pmwpClassBodies[] = {
     {"WPDisk", "wpQueryRootFolder", wpQueryRootFolder, 4},
     {"WPProgram", "wpQueryProgDetails", wpQueryProgDetails, 12},
 };
+
 const size_t pmwpClassBodyCount = sizeof pmwpClassBodies / sizeof *pmwpClassBodies;

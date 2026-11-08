@@ -2,6 +2,7 @@
 /* Terminal rendering runs under the PTY harness, without a physical display. */
 #include "hal/terminal.h"
 #include <stdio.h>
+
 int main(void)
 {
     int width, height;

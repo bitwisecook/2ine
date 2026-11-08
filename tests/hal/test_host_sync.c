@@ -18,6 +18,7 @@
         }                                                                                          \
     } while (0)
 static LxHostMutex *Mutex;
+
 static void *contender(void *unused)
 {
     (void)unused;
@@ -26,11 +27,13 @@ static void *contender(void *unused)
     CHECK(lx_host_mutex_lock(Mutex, 5) == LX_HOST_LOCK_TIMEOUT);
     return NULL;
 }
+
 typedef struct MonitorTest
 {
     LxHostMonitor *monitor;
     int entered, proceed;
 } MonitorTest;
+
 static void *waiter(void *userdata)
 {
     MonitorTest *t = userdata;
@@ -42,6 +45,7 @@ static void *waiter(void *userdata)
     lx_host_monitor_unlock(t->monitor);
     return NULL;
 }
+
 static void monitor_test(int cancel)
 {
     MonitorTest t = {lx_host_monitor_create(), 0, 0};
@@ -68,6 +72,7 @@ static void monitor_test(int cancel)
     lx_host_monitor_unlock(t.monitor);
     lx_host_monitor_destroy(t.monitor);
 }
+
 static void *cancelled_mutex_wait(void *unused)
 {
     (void)unused;
@@ -75,6 +80,7 @@ static void *cancelled_mutex_wait(void *unused)
     CHECK(0);
     return NULL;
 }
+
 static void mutex_cancel_test(void)
 {
     Mutex = lx_host_mutex_create(0, 1);
@@ -89,17 +95,21 @@ static void mutex_cancel_test(void)
     CHECK(!lx_host_mutex_busy(Mutex));
     CHECK(lx_host_mutex_destroy(Mutex) == LX_HOST_LOCK_OK);
 }
+
 static LxHostOnce Once = LX_HOST_ONCE_INIT;
 static int Initializations, Cleanups;
+
 static void initialize(void)
 {
     Initializations++;
 }
+
 static void cleanup(void *unused)
 {
     (void)unused;
     __atomic_add_fetch(&Cleanups, 1, __ATOMIC_SEQ_CST);
 }
+
 static uint32_t operation(void *cancel)
 {
     lx_host_once(&Once, initialize);
@@ -108,11 +118,13 @@ static uint32_t operation(void *cancel)
             pthread_testcancel();
     return 42;
 }
+
 static void *guarded(void *cancel)
 {
     CHECK(lx_host_guarded_call(operation, cancel, cleanup, NULL) == 42);
     return NULL;
 }
+
 static void once_guard_test(void)
 {
     LxHostThread *threads[2];
@@ -131,6 +143,7 @@ static void once_guard_test(void)
     CHECK(!pthread_join(thread, &result) && result == PTHREAD_CANCELED);
     CHECK(Cleanups == 5);
 }
+
 static void *abandon_named_mutex(void *unused)
 {
     (void)unused;
@@ -138,6 +151,7 @@ static void *abandon_named_mutex(void *unused)
     CHECK(lx_host_mutex_lock(Mutex, 0) == LX_HOST_LOCK_OK);
     return NULL;
 }
+
 static void named_mutex_test(void)
 {
     uint32_t process, parent;
@@ -170,6 +184,7 @@ static void named_mutex_test(void)
     CHECK(lx_host_mutex_unlock(Mutex) == LX_HOST_LOCK_OK);
     CHECK(lx_host_mutex_destroy(Mutex) == LX_HOST_LOCK_OK);
 }
+
 int main(void)
 {
     Mutex = lx_host_mutex_create(1, 1);

@@ -4,11 +4,13 @@
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <string.h>
+
 enum
 {
     BUTTON_CLOSE,
     BUTTON_SHOW_REPORT
 };
+
 static void open_report(const char *path)
 {
     static const char unreserved[] = "-._~/";
@@ -25,6 +27,7 @@ static void open_report(const char *path)
     url[used] = '\0';
     SDL_OpenURL(url);
 }
+
 int lx_host_fatal_present(const char *title, const char *message, const char *report)
 {
     SDL_MessageBoxButtonData buttons[2] = {

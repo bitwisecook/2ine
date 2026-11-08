@@ -129,6 +129,7 @@ APIRET DosQuerySysInfo(ULONG first, ULONG last, PVOID _buf, ULONG buflen)
 
 /* Clock adjustments belong to the emulated process and never change host time. */
 static int64_t guest_clock_offset;
+
 APIRET16 Dos16SetDateTime(PDATETIME datetime)
 {
     if (!datetime || datetime->year < 1980 || datetime->year > 2079 || datetime->hundredths > 99 ||
@@ -150,10 +151,12 @@ APIRET16 Dos16SetDateTime(PDATETIME datetime)
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
+
 APIRET DosSetDateTime(PDATETIME datetime)
 {
     return Dos16SetDateTime(datetime);
 }
+
 APIRET DosGetDateTime(PDATETIME pdt)
 {
     TRACE_NATIVE("DosGetDateTime(%p)", pdt);
@@ -352,6 +355,7 @@ APIRET DosTmrQueryFreq(PULONG frequency)
     *frequency = 1000000;
     return NO_ERROR;
 }
+
 APIRET DosTmrQueryTime(PVOID ticks)
 {
     if (!ticks)

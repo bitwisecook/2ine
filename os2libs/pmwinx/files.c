@@ -6,6 +6,7 @@
 #include "os2libs/pmwinx/process.h"
 #include "os2libs/doscalls.h"
 #include "hal/host_fs.h"
+
 LONG OpenFile(PSZ name, PVOID record, ULONG flags)
 {
     TRACE_NATIVE("OpenFile('%s', %p, %X)", name, record, flags);
@@ -86,6 +87,7 @@ LONG OpenFile(PSZ name, PVOID record, ULONG flags)
     open32SetError(error);
     return -1;
 }
+
 LONG _lclose(ULONG handle)
 {
     typedef APIRET(OS2API * CloseFn)(HFILE);
@@ -95,6 +97,7 @@ LONG _lclose(ULONG handle)
         open32SetError(error);
     return error ? -1 : 0;
 }
+
 LONG _llseek(ULONG handle, LONG distance, LONG origin)
 {
     typedef APIRET(OS2API * SeekFn)(HFILE, LONG, ULONG, PULONG);
@@ -107,6 +110,7 @@ LONG _llseek(ULONG handle, LONG distance, LONG origin)
     }
     return (LONG)position;
 }
+
 ULONG _lread(ULONG handle, PVOID output, ULONG size)
 {
     typedef APIRET(OS2API * ReadFn)(HFILE, PVOID, ULONG, PULONG);
@@ -119,6 +123,7 @@ ULONG _lread(ULONG handle, PVOID output, ULONG size)
     }
     return actual;
 }
+
 ULONG _lwrite(ULONG handle, PVOID input, ULONG size)
 {
     if (!size)
@@ -166,6 +171,7 @@ BOOL ReadFile(ULONG handle, PVOID output, ULONG size, PULONG actual, PVOID overl
     *actual = count;
     return TRUE;
 }
+
 BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overlapped)
 {
     if (!actual || overlapped)
@@ -192,10 +198,11 @@ BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overl
     *actual = count;
     return TRUE;
 }
+
 BOOL CloseHandle(ULONG handle)
 {
     static BOOL (*const closers[])(ULONG) = {open32CloseSemaphore, open32CloseSync,
-                                             open32CloseThread,    open32CloseProcess,
+                                             open32CloseThread, open32CloseProcess,
                                              open32CloseFile};
     for (size_t i = 0; i < sizeof closers / sizeof *closers; i++)
         if (closers[i](handle))

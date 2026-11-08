@@ -7,6 +7,7 @@ typedef struct GlCopy
     GlContext *source, *destination;
     int failed;
 } GlCopy;
+
 static const LxHostGlApi *bind_copy(GlCopy *copy, int destination)
 {
     GlContext *c = destination ? copy->destination : copy->source;
@@ -14,6 +15,7 @@ static const LxHostGlApi *bind_copy(GlCopy *copy, int destination)
         copy->failed = 1;
     return c->api;
 }
+
 static void copy_enable(GlCopy *copy, uint32_t token)
 {
     int enabled = bind_copy(copy, 0)->glIsEnabled(token);
@@ -23,6 +25,7 @@ static void copy_enable(GlCopy *copy, uint32_t token)
     else
         api->glDisable(token);
 }
+
 static void copy_current(GlCopy *copy)
 {
     const LxHostGlApi *source = bind_copy(copy, 0);
@@ -120,6 +123,7 @@ static void copy_current(GlCopy *copy)
     if (material)
         api->glEnable(GL_COLOR_MATERIAL);
 }
+
 static void copy_server(GlCopy *copy, uint32_t mask)
 {
     double v[16] = {0};
@@ -531,6 +535,7 @@ static void copy_server(GlCopy *copy, uint32_t mask)
 #undef SCALAR
 #undef ENABLE_GROUP
 }
+
 uint32_t gl_copy_context(uint8_t *arguments)
 {
     GlThread *thread = gl_thread();

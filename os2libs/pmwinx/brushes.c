@@ -3,6 +3,7 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin/graphics.h"
+
 typedef struct Open32Brush
 {
     ULONG color, style;
@@ -10,14 +11,17 @@ typedef struct Open32Brush
     uint32 *pixels;
     BOOL stock;
 } Open32Brush;
+
 static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULONG operation,
                       Open32Brush *brush);
+
 static void free_brush(void *resource)
 {
     Open32Brush *brush = resource;
     free(brush->pixels);
     free(brush);
 }
+
 ULONG CreateSolidBrush(ULONG color)
 {
     TRACE_NATIVE("CreateSolidBrush(%08X)", (uint)color);
@@ -43,6 +47,7 @@ ULONG CreateSolidBrush(ULONG color)
     }
     return handle;
 }
+
 ULONG open32StockBrush(LONG index)
 {
     static _Thread_local ULONG stocks[6];
@@ -66,6 +71,7 @@ ULONG open32StockBrush(LONG index)
     }
     return stocks[index];
 }
+
 ULONG open32SelectBrush(Open32DC *dc, ULONG handle)
 {
     LxHandleBorrow next = {0};
@@ -77,6 +83,7 @@ ULONG open32SelectBrush(Open32DC *dc, ULONG handle)
     dc->brush_handle = handle;
     return previous;
 }
+
 BOOL open32DeleteBrush(ULONG handle)
 {
     LxHandleBorrow borrow = {0};
@@ -88,6 +95,7 @@ BOOL open32DeleteBrush(ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG open32BrushObject(ULONG handle, LONG capacity, PVOID output)
 {
     LxHandleBorrow borrow = {0};
@@ -104,6 +112,7 @@ LONG open32BrushObject(ULONG handle, LONG capacity, PVOID output)
     lx_handle_release(&borrow);
     return result;
 }
+
 /* A rectangle under a rotating transform is a filled quadrilateral without an outline. */
 BOOL open32RotatedFill(ULONG handle, LONG left, LONG top, LONG right, LONG bottom, ULONG brush)
 {
@@ -123,6 +132,7 @@ BOOL open32RotatedFill(ULONG handle, LONG left, LONG top, LONG right, LONG botto
         open32SelectBrush(dc, old_brush);
     return ok;
 }
+
 LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
 {
     if (!open32CanDraw(handle) || !rectangle)
@@ -249,6 +259,7 @@ LONG FrameRect(ULONG handle, PVOID input, ULONG brush)
     }
     return 1;
 }
+
 BOOL InvertRect(ULONG handle, PVOID input)
 {
     if (!input || !open32CanDraw(handle))
@@ -405,6 +416,7 @@ BOOL PatBlt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULONG operati
         return open32RotatedFill(handle, x, y, x + width, y + height, dc->brush_handle);
     return brush_blt(handle, x, y, width, height, operation, dc ? dc->brush.resource : NULL);
 }
+
 ULONG CreatePatternBrush(ULONG handle)
 {
     TRACE_NATIVE("CreatePatternBrush(%u)", handle);
@@ -507,6 +519,7 @@ BOOL SetBrushOrgEx(ULONG handle, LONG x, LONG y, PVOID previous)
     dc->brush_origin_y = y;
     return TRUE;
 }
+
 BOOL GetBrushOrgEx(ULONG handle, PVOID output)
 {
     Open32DC *dc = open32FindDC(handle);
@@ -538,6 +551,7 @@ ULONG CreateHatchBrush(LONG hatch, ULONG color)
     }
     return handle;
 }
+
 /* DIB pattern brushes decode into the same retained RGB tile as bitmap patterns. */
 ULONG open32DibPatternBrush(PVOID information, PVOID bits, ULONG usage, BOOL monochrome)
 {
@@ -560,6 +574,7 @@ ULONG open32DibPatternBrush(PVOID information, PVOID bits, ULONG usage, BOOL mon
         DeleteDC(dc);
     return result;
 }
+
 /* A pattern tile as a packed bottom-up DIB, for metafile records. Monochrome tiles keep one bit
    per pel so the DC's text and background colors still apply on playback. */
 uint8 *open32BrushDib(ULONG handle, size_t *information_bytes, size_t *bytes, BOOL *monochrome)
@@ -605,6 +620,7 @@ uint8 *open32BrushDib(ULONG handle, size_t *information_bytes, size_t *bytes, BO
     lx_handle_release(&borrow);
     return dib;
 }
+
 static ULONG packed_pattern_brush(ULONG address, ULONG usage)
 {
     uint8 header[40];
@@ -632,6 +648,7 @@ static ULONG packed_pattern_brush(ULONG address, ULONG usage)
     free(packed);
     return result;
 }
+
 ULONG CreateBrushIndirect(PVOID input)
 {
     if (!input)

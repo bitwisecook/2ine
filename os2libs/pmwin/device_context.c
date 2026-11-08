@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/print_job.h"
+
 static void destroy_dc(void *resource)
 {
     PmDeviceContext *dc = resource;
@@ -17,6 +18,7 @@ static void destroy_dc(void *resource)
         lx_pm_bitmap_delete(dc->printer_bitmap);
     free(dc);
 }
+
 HDC lx_pm_open_dc(HAB hab, LONG type, HDC compatible)
 {
     AnchorBlock *anchor = getAnchorBlock(hab);
@@ -38,6 +40,7 @@ HDC lx_pm_open_dc(HAB hab, LONG type, HDC compatible)
     anchor->devices = dc;
     return dc->handle;
 }
+
 HDC lx_pm_open_printer_dc(HAB hab, LONG type, unsigned kind)
 {
     if ((type != 2 && type != 5 && type != 6) || (kind != LX_PRINT_PDF && kind != LX_PRINT_PCL))
@@ -64,6 +67,7 @@ HDC lx_pm_open_printer_dc(HAB hab, LONG type, unsigned kind)
     }
     return handle;
 }
+
 BOOL lx_pm_printer_size(HDC handle, unsigned *width, unsigned *height)
 {
     LxHandleBorrow borrow = {0}, bitmap = {0};
@@ -80,6 +84,7 @@ BOOL lx_pm_printer_size(HDC handle, unsigned *width, unsigned *height)
     lx_handle_release(&borrow);
     return page != NULL;
 }
+
 BOOL lx_pm_printer_options(HDC handle, unsigned copies, unsigned duplex, BOOL draft)
 {
     LxHandleBorrow borrow = {0};
@@ -97,6 +102,7 @@ BOOL lx_pm_printer_options(HDC handle, unsigned copies, unsigned duplex, BOOL dr
     lx_handle_release(&borrow);
     return printer;
 }
+
 /* A page size change replaces the blank page in place, so bound presentation spaces keep their
    lease. It is refused during a job's page output. */
 BOOL lx_pm_printer_page(HDC handle, unsigned width, unsigned height)
@@ -121,6 +127,7 @@ BOOL lx_pm_printer_page(HDC handle, unsigned width, unsigned height)
     lx_handle_release(&borrow);
     return pixels != NULL;
 }
+
 unsigned lx_pm_printer_kind(HDC handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -135,15 +142,18 @@ unsigned lx_pm_printer_kind(HDC handle)
     lx_handle_release(&borrow);
     return kind;
 }
+
 unsigned lx_pm_dc_dpi(HDC handle)
 {
     unsigned dpi = GLoaderState.display_dpi;
     return lx_pm_printer_kind(handle) ? 300 : dpi >= 72 && dpi <= 384 ? dpi : 96;
 }
+
 LONG lx_pm_display_scale(LONG pixels)
 {
     return (LONG)(((int64_t)pixels * lx_pm_dc_dpi(0) + 48) / 96);
 }
+
 BOOL lx_pm_dc_valid(HDC handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -158,10 +168,12 @@ BOOL lx_pm_dc_valid(HDC handle)
     lx_handle_release(&borrow);
     return valid;
 }
+
 static int unused_dc(void *resource)
 {
     return ((PmDeviceContext *)resource)->spaces == 0;
 }
+
 LONG lx_pm_close_dc(HDC handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -177,17 +189,20 @@ LONG lx_pm_close_dc(HDC handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 void destroyDeviceContexts(AnchorBlock *anchor)
 {
     while (anchor->devices)
         lx_handle_close(anchor->devices->handle, LX_HANDLE_PM_DC);
 }
+
 HDC lx_pm_query_dc(HPS handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, handle) : NULL;
     return ps ? ps->dc : (HDC)-1;
 }
+
 BOOL lx_pm_associate_dc(HPS handle, HDC dc)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -279,7 +294,8 @@ LONG lx_pm_print_escape(HDC handle, LONG code, LONG input_count, const void *inp
             free(title);
             if (dc->print_job)
             {
-                lx_print_options(dc->print_job, dc->print_copies, dc->print_duplex, dc->print_draft);
+                lx_print_options(dc->print_job, dc->print_copies, dc->print_duplex,
+                                 dc->print_draft);
                 dc->print_pages = 0;
                 for (size_t i = 0; i < (size_t)page->width * page->height; i++)
                     page->pixels[i] = 0xffffff;

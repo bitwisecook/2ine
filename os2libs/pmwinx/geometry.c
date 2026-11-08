@@ -4,6 +4,7 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/drawing.h"
+
 BOOL GetClientRect(ULONG window, PVOID output)
 {
     RECTL rect;
@@ -18,6 +19,7 @@ BOOL GetClientRect(ULONG window, PVOID output)
     lx_guest_store_u32((uint8 *)output + 12, (ULONG)(rect.yTop - rect.yBottom));
     return TRUE;
 }
+
 BOOL GetWindowRect(ULONG window, PVOID output)
 {
     RECTL rect;
@@ -39,6 +41,7 @@ BOOL GetWindowRect(ULONG window, PVOID output)
     lx_guest_store_u32((uint8 *)output + 12, (ULONG)(height - points[0].y));
     return TRUE;
 }
+
 static BOOL map_point(ULONG window, PVOID point, BOOL to_screen)
 {
     window = open32ClientWindow(window);
@@ -73,18 +76,22 @@ static BOOL map_point(ULONG window, PVOID point, BOOL to_screen)
     lx_guest_store_u32((uint8 *)point + 4, (ULONG)converted);
     return TRUE;
 }
+
 BOOL ClientToScreen(ULONG window, PVOID point)
 {
     return map_point(window, point, TRUE);
 }
+
 BOOL ScreenToClient(ULONG window, PVOID point)
 {
     return map_point(window, point, FALSE);
 }
+
 ULONG GetDesktopWindow(void)
 {
     return open32Presentation() ? HWND_DESKTOP : 0;
 }
+
 static ULONG window_at_point(ULONG parent, LONG x, LONG y, unsigned depth)
 {
     if (depth >= 256)
@@ -101,6 +108,7 @@ static ULONG window_at_point(ULONG parent, LONG x, LONG y, unsigned depth)
     }
     return parent;
 }
+
 ULONG WindowFromPoint(LONG x, LONG y)
 {
     TRACE_NATIVE("WindowFromPoint(%d, %d)", x, y);
@@ -117,11 +125,13 @@ BOOL IsIconic(ULONG window)
     return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
            (WinQueryWindowULong(window, -2) & WS_MINIMIZED) != 0;
 }
+
 BOOL IsZoomed(ULONG window)
 {
     return open32Presentation() && WinIsWindow(open32Presentation(), window) &&
            (WinQueryWindowULong(window, -2) & WS_MAXIMIZED) != 0;
 }
+
 BOOL GetWindowPlacement(ULONG window, PVOID output)
 {
     if (!output || lx_guest_load_u32(output) != 44)

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+
 int main(int argc, char **argv)
 {
     if (argc != 5 || setenv("TWOINE_SOUNDFONT", argv[1], 1) ||

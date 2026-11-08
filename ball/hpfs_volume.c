@@ -24,40 +24,48 @@
 #define H_ANODE 0x37e40aaeu
 #define H_DNODE 0x77e40aaeu
 #define H_LIMIT 1048576u
+
 static unsigned h16(const unsigned char *p)
 {
     return p[0] | (unsigned)p[1] << 8;
 }
+
 static uint32_t h32(const unsigned char *p)
 {
     return h16(p) | (uint32_t)h16(p + 2) << 16;
 }
+
 static void p16(unsigned char *p, unsigned v)
 {
     p[0] = v;
     p[1] = v >> 8;
 }
+
 static void p32(unsigned char *p, uint32_t v)
 {
     p16(p, v);
     p16(p + 2, v >> 16);
 }
+
 static int herr(int error)
 {
     errno = error;
     return 0;
 }
+
 typedef struct HPatch
 {
     uint32_t sector;
     unsigned char data[512];
     struct HPatch *next;
 } HPatch;
+
 typedef struct HCodepage
 {
     unsigned codepage;
     unsigned char map[256];
 } HCodepage;
+
 typedef struct HDisk
 {
     FILE *file;
@@ -73,12 +81,14 @@ typedef struct HDisk
     int writable;
     HPatch *changes[1024];
 } HDisk;
+
 typedef struct HEntry
 {
     unsigned char *record;
     size_t size;
     uint32_t parent;
 } HEntry;
+
 typedef struct HDirectory
 {
     HEntry *entries;
@@ -86,10 +96,12 @@ typedef struct HDirectory
     uint32_t *nodes;
     size_t node_count;
 } HDirectory;
+
 typedef struct HExtent
 {
     uint32_t logical, count, sector;
 } HExtent;
+
 typedef struct HFile
 {
     uint32_t sector;
@@ -99,12 +111,14 @@ typedef struct HFile
     uint32_t *nodes;
     size_t node_count;
 } HFile;
+
 static int raw_read(FILE *file, uint64_t offset, void *bytes, size_t size)
 {
     return !fseeko(file, (int64_t)offset, SEEK_SET) && fread(bytes, 1, size, file) == size
                ? 1
                : herr(EIO);
 }
+
 static int hread(HDisk *d, uint32_t sector, void *bytes, unsigned count)
 {
     if (sector >= d->sectors || count > d->sectors - sector)
@@ -122,6 +136,7 @@ static int hread(HDisk *d, uint32_t sector, void *bytes, unsigned count)
     }
     return 1;
 }
+
 static int hpatch(HDisk *d, uint32_t sector, const void *bytes, unsigned count)
 {
     if (sector >= d->sectors || count > d->sectors - sector)
@@ -145,6 +160,7 @@ static int hpatch(HDisk *d, uint32_t sector, const void *bytes, unsigned count)
     }
     return 1;
 }
+
 static int unique_node(uint32_t **nodes, size_t *count, uint32_t value)
 {
     if (*count >= H_LIMIT)
@@ -159,6 +175,7 @@ static int unique_node(uint32_t **nodes, size_t *count, uint32_t value)
     next[(*count)++] = value;
     return 1;
 }
+
 static void hclose(HDisk *d)
 {
     int saved = errno;
@@ -179,6 +196,7 @@ static void hclose(HDisk *d)
     free(d->bitmap_locations);
     errno = saved;
 }
+
 static int partition(FILE *file, uint64_t bytes, uint32_t *base, unsigned char *super)
 {
     unsigned char boot[512];
@@ -201,6 +219,7 @@ static int partition(FILE *file, uint64_t bytes, uint32_t *base, unsigned char *
     }
     return herr(EINVAL);
 }
+
 int tb_hpfs_volume(const char *path)
 {
     char *source = tb_image_source(path);
@@ -218,6 +237,7 @@ int tb_hpfs_volume(const char *path)
     fclose(file);
     return ok;
 }
+
 static int hopen(const char *path, int write, const char *expected, HDisk *d)
 {
     memset(d, 0, sizeof *d);
@@ -366,6 +386,7 @@ fail:
     d->file = NULL;
     return 0;
 }
+
 static int bitmap_load(HDisk *d)
 {
     if (d->bitmaps)
@@ -392,10 +413,12 @@ static int bitmap_load(HDisk *d)
     }
     return hread(d, d->dir_map, d->dir_bitmap, 4);
 }
+
 static int free_sector(HDisk *d, uint32_t sector)
 {
     return sector < d->sectors && !!(d->bitmaps[sector / 8] & (1u << (sector % 8)));
 }
+
 static int mark_range(HDisk *d, uint32_t sector, uint32_t count, int free)
 {
     if (!sector || sector >= d->sectors || count > d->sectors - sector)
@@ -409,6 +432,7 @@ static int mark_range(HDisk *d, uint32_t sector, uint32_t count, int free)
     }
     return 1;
 }
+
 static uint32_t allocate(HDisk *d, unsigned count, unsigned alignment)
 {
     for (uint32_t i = 18; i < d->sectors && count <= d->sectors - i;)
@@ -431,6 +455,7 @@ static uint32_t allocate(HDisk *d, unsigned count, unsigned alignment)
     errno = ENOSPC;
     return 0;
 }
+
 static uint32_t allocate_dir(HDisk *d)
 {
     for (uint32_t i = 0; i < d->dir_count / 4; i++)
@@ -441,6 +466,7 @@ static uint32_t allocate_dir(HDisk *d)
         }
     return allocate(d, 4, 4);
 }
+
 static int free_dir(HDisk *d, uint32_t sector)
 {
     if (sector >= d->dir_start && sector < d->dir_start + d->dir_count)
@@ -451,6 +477,7 @@ static int free_dir(HDisk *d, uint32_t sector)
     }
     return mark_range(d, sector, 4, 1);
 }
+
 static uint32_t hsum(const unsigned char *bytes, size_t n)
 {
     uint32_t value = 0;
@@ -461,6 +488,7 @@ static uint32_t hsum(const unsigned char *bytes, size_t n)
     }
     return value;
 }
+
 static int sync_source(FILE *file)
 {
     if (fflush(file))
@@ -471,6 +499,7 @@ static int sync_source(FILE *file)
     return !fsync(fileno(file));
 #endif
 }
+
 static int commit(HDisk *d)
 {
     if (!bitmap_load(d))
@@ -512,6 +541,7 @@ static int commit(HDisk *d)
     return !fsync(fileno(d->file));
 #endif
 }
+
 static void directory_free(HDirectory *list)
 {
     for (size_t i = 0; i < list->count; i++)
@@ -520,6 +550,7 @@ static void directory_free(HDirectory *list)
     free(list->nodes);
     memset(list, 0, sizeof *list);
 }
+
 static int directory_read_node(HDisk *d, uint32_t sector, HDirectory *list, uint32_t parent,
                                unsigned depth)
 {
@@ -562,6 +593,7 @@ static int directory_read_node(HDisk *d, uint32_t sector, HDirectory *list, uint
     }
     return herr(EIO);
 }
+
 static int directory_read(HDisk *d, uint32_t fnode, HDirectory *list)
 {
     memset(list, 0, sizeof *list);
@@ -576,6 +608,7 @@ static int directory_read(HDisk *d, uint32_t fnode, HDirectory *list)
     }
     return 1;
 }
+
 static char *name_utf8(HDisk *d, const unsigned char *entry)
 {
     size_t n = entry[30], used = 0;
@@ -612,6 +645,7 @@ static char *name_utf8(HDisk *d, const unsigned char *entry)
     name[used] = 0;
     return name;
 }
+
 static int name_oem(HDisk *d, unsigned index, const char *text, unsigned char name[255],
                     size_t *length)
 {
@@ -649,6 +683,7 @@ static int name_oem(HDisk *d, unsigned index, const char *text, unsigned char na
     *length = n;
     return 1;
 }
+
 static int compare_name(HDisk *d, const unsigned char *a, size_t na, unsigned ia,
                         const unsigned char *b, size_t nb, unsigned ib)
 {
@@ -660,6 +695,7 @@ static int compare_name(HDisk *d, const unsigned char *a, size_t na, unsigned ia
             return ma[a[i]] < mb[b[i]] ? -1 : 1;
     return na < nb ? -1 : na > nb;
 }
+
 static int find_entry(HDisk *d, HDirectory *list, const char *name, size_t *index)
 {
     for (size_t i = 0; i < list->count; i++)
@@ -678,6 +714,7 @@ static int find_entry(HDisk *d, HDirectory *list, const char *name, size_t *inde
     }
     return herr(ENOENT);
 }
+
 static char *normalized(const char *path)
 {
     const char *member = tb_image_member(path);
@@ -738,6 +775,7 @@ static char *normalized(const char *path)
     free(copy);
     return out;
 }
+
 static int locate(HDisk *d, const char *path, HDirectory *parent, size_t *index, int allow_missing)
 {
     char *copy = normalized(path);
@@ -787,12 +825,14 @@ static int locate(HDisk *d, const char *path, HDirectory *parent, size_t *index,
         cursor = slash + 1;
     }
 }
+
 static void file_free(HFile *file)
 {
     free(file->extents);
     free(file->nodes);
     memset(file, 0, sizeof *file);
 }
+
 static int extent_add(HFile *file, uint32_t logical, uint32_t count, uint32_t sector)
 {
     if (file->count >= H_LIMIT)
@@ -817,6 +857,7 @@ static int extent_add(HFile *file, uint32_t logical, uint32_t count, uint32_t se
     next[file->count++] = (HExtent){logical, count, sector};
     return 1;
 }
+
 static int extent_tree(HDisk *d, HFile *file, const unsigned char *header, unsigned capacity,
                        unsigned depth)
 {
@@ -850,6 +891,7 @@ static int extent_tree(HDisk *d, HFile *file, const unsigned char *header, unsig
     }
     return 1;
 }
+
 static int file_load(HDisk *d, uint32_t sector, HFile *file)
 {
     memset(file, 0, sizeof *file);
@@ -871,6 +913,7 @@ static int file_load(HDisk *d, uint32_t sector, HFile *file)
     }
     return 1;
 }
+
 static uint32_t file_sector(HFile *file, uint32_t logical)
 {
     for (size_t i = 0; i < file->count; i++)
@@ -882,6 +925,7 @@ static uint32_t file_sector(HFile *file, uint32_t logical)
     errno = EIO;
     return 0;
 }
+
 static int file_bytes(HDisk *d, HFile *file, FILE *output)
 {
     uint32_t size = h32(file->data + 160);
@@ -896,6 +940,7 @@ static int file_bytes(HDisk *d, HFile *file, FILE *output)
     }
     return 1;
 }
+
 int tb_hpfs_info(const char *path, TbImageInfo *info)
 {
     HDisk disk;
@@ -946,6 +991,7 @@ int tb_hpfs_info(const char *path, TbImageInfo *info)
     hclose(&disk);
     return ok;
 }
+
 char **tb_hpfs_names(const char *path, size_t *count)
 {
     *count = (size_t)-1;
@@ -995,6 +1041,7 @@ char **tb_hpfs_names(const char *path, size_t *count)
     *count = n;
     return names;
 }
+
 FILE *tb_hpfs_fopen(const char *path)
 {
     HDisk disk;
@@ -1023,6 +1070,7 @@ FILE *tb_hpfs_fopen(const char *path)
     hclose(&disk);
     return snapshot;
 }
+
 static int node_parent(HDisk *d, uint32_t node, uint32_t parent, int fnode)
 {
     unsigned char bytes[512];
@@ -1032,10 +1080,12 @@ static int node_parent(HDisk *d, uint32_t node, uint32_t parent, int fnode)
     bytes[12] = fnode ? bytes[12] | 32 : bytes[12] & ~32u;
     return hpatch(d, node, bytes, 1);
 }
+
 typedef struct HRef
 {
     uint32_t sector, end;
 } HRef;
+
 static int file_tree_build(HDisk *d, HFile *file)
 {
     for (size_t i = 0; i < file->node_count; i++)
@@ -1162,6 +1212,7 @@ static int file_tree_build(HDisk *d, HFile *file)
     }
     return hpatch(d, file->sector, file->data, 1);
 }
+
 static int file_resize(HDisk *d, HFile *file, uint64_t bytes)
 {
     if (bytes > 0x7fffffffu)
@@ -1237,6 +1288,7 @@ static int file_resize(HDisk *d, HFile *file, uint64_t bytes)
     p32(file->data + 160, (uint32_t)bytes);
     return file_tree_build(d, file);
 }
+
 static size_t tree_capacity(unsigned height, unsigned keys)
 {
     size_t capacity = keys;
@@ -1248,6 +1300,7 @@ static size_t tree_capacity(unsigned height, unsigned keys)
     }
     return capacity;
 }
+
 static uint32_t directory_build_node(HDisk *d, HEntry *entries, size_t count, uint32_t parent,
                                      unsigned height, unsigned keys, int root)
 {
@@ -1327,6 +1380,7 @@ static uint32_t directory_build_node(HDisk *d, HEntry *entries, size_t count, ui
     p32(block + 4, (uint32_t)at);
     return hpatch(d, sector, block, 4) ? sector : 0;
 }
+
 static int directory_save(HDisk *d, uint32_t fnode, HDirectory *list)
 {
     for (size_t i = 0; i < list->node_count; i++)
@@ -1361,6 +1415,7 @@ static int directory_save(HDisk *d, uint32_t fnode, HDirectory *list)
     p32(file + 76, UINT32_MAX);
     return hpatch(d, fnode, file, 1);
 }
+
 static int entry_insert(HDisk *d, HDirectory *list, HEntry entry)
 {
     size_t at = 0;
@@ -1378,6 +1433,7 @@ static int entry_insert(HDisk *d, HDirectory *list, HEntry entry)
     list->count++;
     return 1;
 }
+
 static void entry_remove(HDirectory *list, size_t index)
 {
     free(list->entries[index].record);
@@ -1385,6 +1441,7 @@ static void entry_remove(HDirectory *list, size_t index)
             (list->count - index - 1) * sizeof *list->entries);
     list->count--;
 }
+
 static int entry_named(HDisk *d, const char *path, const unsigned char *previous, uint32_t parent,
                        HEntry *entry)
 {
@@ -1432,6 +1489,7 @@ static int entry_named(HDisk *d, const char *path, const unsigned char *previous
     free(name);
     return 1;
 }
+
 static int new_file(HDisk *d, HEntry *entry, int directory)
 {
     uint32_t sector = allocate(d, 1, 1);
@@ -1478,6 +1536,7 @@ static int new_file(HDisk *d, HEntry *entry, int directory)
     }
     return 1;
 }
+
 static int release_external(HDisk *d, const unsigned char *fnode, unsigned offset)
 {
     uint32_t size = h32(fnode + offset), sector = h32(fnode + offset + 4);
@@ -1497,7 +1556,9 @@ static int release_external(HDisk *d, const unsigned char *fnode, unsigned offse
     file_free(&tree);
     return ok;
 }
+
 static int ea_values_free(HDisk *d, const unsigned char *fnode);
+
 static int file_delete(HDisk *d, HEntry *entry, int directory)
 {
     uint32_t sector = h32(entry->record + 4);
@@ -1536,6 +1597,7 @@ static int file_delete(HDisk *d, HEntry *entry, int directory)
     return ea_values_free(d, fnode) && release_external(d, fnode, 32) &&
            release_external(d, fnode, 44) && mark_range(d, sector, 1, 1);
 }
+
 static int write_file(HDisk *d, HEntry *entry, int action, uint64_t offset, const void *data,
                       size_t size)
 {
@@ -1574,6 +1636,7 @@ static int write_file(HDisk *d, HEntry *entry, int action, uint64_t offset, cons
     file_free(&file);
     return ok;
 }
+
 int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t offset,
                    const void *data, size_t size, const char *target)
 {
@@ -1728,6 +1791,7 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
     hclose(&disk);
     return ok;
 }
+
 static int format_file(const char *path, uint64_t bytes, FILE **file)
 {
 #ifdef _WIN32
@@ -1753,6 +1817,7 @@ static int format_file(const char *path, uint64_t bytes, FILE **file)
     *file = tb_image_open_source(path, 1);
     return *file != NULL;
 }
+
 int tb_hpfs_format(const char *path, uint64_t bytes)
 {
     if (bytes < 8 * 1024 * 1024 || bytes > UINT64_C(65536) * 1024 * 1024 ||
@@ -1918,6 +1983,7 @@ int tb_hpfs_format(const char *path, uint64_t bytes)
     }
     return ok;
 }
+
 /* OS/2 family APIs use a length-prefixed FEA list. HPFS stores its records
    without that four-byte prefix, either in the FNODE or external sectors. */
 static int auxiliary_read(HDisk *d, uint32_t sector, uint32_t size, int tree, unsigned char *output)
@@ -1957,6 +2023,7 @@ static int auxiliary_read(HDisk *d, uint32_t sector, uint32_t size, int tree, un
     file_free(&file);
     return ok;
 }
+
 static unsigned char *ea_raw(HDisk *d, const unsigned char *fnode, size_t *size)
 {
     uint32_t external = h32(fnode + 44);
@@ -1980,6 +2047,7 @@ static unsigned char *ea_raw(HDisk *d, const unsigned char *fnode, size_t *size)
         memcpy(data, fnode + base + acl, internal);
     return data;
 }
+
 static int auxiliary_free(HDisk *d, uint32_t sector, uint32_t size, int tree)
 {
     if (!size)
@@ -1998,6 +2066,7 @@ static int auxiliary_free(HDisk *d, uint32_t sector, uint32_t size, int tree)
     file_free(&file);
     return ok;
 }
+
 static int ea_values_free(HDisk *d, const unsigned char *fnode)
 {
     size_t size;
@@ -2035,6 +2104,7 @@ static int ea_values_free(HDisk *d, const unsigned char *fnode)
     free(data);
     return ok;
 }
+
 int tb_hpfs_metadata_get(const char *path, const char *expected, void *output, size_t capacity,
                          size_t *required)
 {
@@ -2117,6 +2187,7 @@ int tb_hpfs_metadata_get(const char *path, const char *expected, void *output, s
     hclose(&disk);
     return ok;
 }
+
 int tb_hpfs_metadata_set(const char *path, const char *expected, const void *bytes, size_t size)
 {
     if (size < 4 || size > 65535 || h32(bytes) != size)

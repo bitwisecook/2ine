@@ -24,6 +24,7 @@ int lx_host_network_platform_mac(const struct sockaddr *address, uint32_t flags,
     memcpy(mac, dl->sll_addr, 6);
     return 1;
 }
+
 int lx_host_network_platform_routes(LxHostNetwork *out)
 {
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
@@ -38,11 +39,13 @@ int lx_host_network_platform_routes(LxHostNetwork *out)
     }
     struct timeval timeout = {2, 0};
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+
     struct
     {
         struct nlmsghdr h;
         struct rtmsg r;
     } request = {0};
+
     request.h.nlmsg_len = sizeof request;
     request.h.nlmsg_type = RTM_GETROUTE;
     request.h.nlmsg_flags = NLM_F_REQUEST | NLM_F_DUMP;
@@ -124,13 +127,15 @@ int lx_host_network_platform_routes(LxHostNetwork *out)
         }
     }
 done:
-    {
-        int saved = errno;
-        close(fd);
-        errno = saved;
-    }
+{
+    int saved = errno;
+    close(fd);
+    errno = saved;
+}
+
     return result;
 }
+
 int lx_host_network_platform_dns(LxHostNetworkDns *out)
 {
     FILE *f = fopen("/etc/resolv.conf", "r");

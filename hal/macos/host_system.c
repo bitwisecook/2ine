@@ -5,6 +5,7 @@
 #include <sys/types.h>
 #include <sys/sysctl.h>
 #include <mach/mach.h>
+
 int lx_host_system_memory(uint64_t *total, uint64_t *available)
 {
     if (!total || !available)

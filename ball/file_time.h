@@ -24,6 +24,7 @@ static inline int tb_calendar_day(int year, int month, int day)
     int leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
     return day <= days[month] + (month == 1 && leap);
 }
+
 /* A missing timestamp is distinct from the Unix epoch. DOS dates have no timezone. */
 static inline int64_t tb_dos_time(unsigned date, unsigned clock)
 {
@@ -40,6 +41,7 @@ static inline int64_t tb_dos_time(unsigned date, unsigned clock)
         return INT64_MIN;
     return tb_local_file_time(date, clock, &parts);
 }
+
 /* Date in the high word and clock in the low word, clamped to the DOS date range. */
 static inline uint32_t tb_dos_stamp(int64_t seconds)
 {
@@ -57,6 +59,7 @@ static inline uint32_t tb_dos_stamp(int64_t seconds)
            (uint32_t)date.tm_mday << 16 | (uint32_t)date.tm_hour << 11 |
            (uint32_t)date.tm_min << 5 | (uint32_t)date.tm_sec / 2;
 }
+
 static inline int64_t tb_iso_time(const unsigned char *date)
 {
     struct tm parts = {0};

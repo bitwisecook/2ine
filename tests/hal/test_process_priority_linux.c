@@ -20,6 +20,7 @@
 static int task_count, cursor, nice_value, set_error, read_error, open_error;
 static unsigned set_calls, open_calls;
 static int selected;
+
 DIR *priority_test_opendir(const char *path)
 {
     CHECK(!strcmp(path, "/proc/self/task"));
@@ -32,6 +33,7 @@ DIR *priority_test_opendir(const char *path)
     }
     return (DIR *)(uintptr_t)1;
 }
+
 struct dirent *priority_test_readdir(DIR *directory)
 {
     CHECK(directory == (DIR *)(uintptr_t)1);
@@ -44,18 +46,21 @@ struct dirent *priority_test_readdir(DIR *directory)
     snprintf(result.d_name, sizeof result.d_name, "%d", 100 + cursor++);
     return &result;
 }
+
 int priority_test_closedir(DIR *directory)
 {
     CHECK(directory == (DIR *)(uintptr_t)1);
     errno = EIO; /* Closing must not replace the preflight failure. */
     return 0;
 }
+
 int priority_test_getpriority(int which, id_t task)
 {
     CHECK(which == PRIO_PROCESS && task >= 100 && task < (id_t)(100 + task_count));
     errno = 0;
     return nice_value;
 }
+
 int priority_test_setpriority(int which, id_t process, int value)
 {
     CHECK(which == PRIO_PROCESS && process == 0);
@@ -64,6 +69,7 @@ int priority_test_setpriority(int which, id_t process, int value)
     errno = set_error;
     return set_error ? -1 : 0;
 }
+
 int main(void)
 {
     task_count = 2;

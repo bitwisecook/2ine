@@ -9,6 +9,7 @@
 #include "os2libs/doscalls/launch.h"
 #include "guest/launch_record.h"
 #include <ctype.h>
+
 /* Per-launch state reaches the child only through its environment. */
 typedef struct LaunchStart
 {
@@ -16,13 +17,16 @@ typedef struct LaunchStart
     char *directory;    /* Below the drive root, without a leading backslash. */
     const char *record; /* Shared launch record name, or NULL. */
 } LaunchStart;
+
 typedef struct LaunchPlan
 {
     char *host_program, *loader;
     char **argv, **envp;
 } LaunchPlan;
+
 static char **calcEnvp(const char *os2env, const char *exe, const char *arguments,
                        const LaunchStart *start, APIRET *err);
+
 APIRET DosScanEnv(PSZ name, PSZ *outval)
 {
     TRACE_NATIVE("DosScanEnv('%s', %p)", name, outval);
@@ -79,6 +83,7 @@ void runDosExitList(const uint32 why)
 
 static uint32 processExitCode;
 static int processingExitList;
+
 static void finishProcessExit(uint32 exitcode)
 {
     processExitCode = exitcode;
@@ -93,6 +98,7 @@ static void finishProcessExit(uint32 exitcode)
 }
 
 static void (*threadExitObserver)(ULONG code);
+
 void lx_doscalls_observe_thread_exit(void (*observer)(ULONG code))
 {
     __atomic_store_n(&threadExitObserver, observer, __ATOMIC_RELEASE);
@@ -246,8 +252,8 @@ static char *driveDirectoryPath(int drive, const char *directory, const char *na
     size_t size = strlen(directory) + (name ? strlen(name) : 0) + 6;
     char *path = malloc(size);
     if (path)
-        snprintf(path, size, "%c:\\%s%s%s", 'A' + drive, directory,
-                 name && *directory ? "\\" : "", name ? name : "");
+        snprintf(path, size, "%c:\\%s%s%s", 'A' + drive, directory, name && *directory ? "\\" : "",
+                 name ? name : "");
     return path;
 }
 
@@ -323,8 +329,8 @@ static APIRET prepareLaunch(LaunchPlan *plan, PSZ pArg, PSZ pEnv, PSZ pName,
     char searched[PATH_MAX];
     const char *program = pName;
     char *candidate = NULL;
-    if ((flags & LX_DOS_LAUNCH_SEARCH_DIRECTORY) && start && start->drive >= 0 &&
-        *pName != '\\' && *pName != '/' && pName[1] != ':')
+    if ((flags & LX_DOS_LAUNCH_SEARCH_DIRECTORY) && start && start->drive >= 0 && *pName != '\\' &&
+        *pName != '/' && pName[1] != ':')
     {
         candidate = driveDirectoryPath(start->drive, start->directory, pName);
         if (!candidate)
@@ -537,10 +543,12 @@ static PID legacyChildPid(USHORT pid)
     ungrabLock(&GMutexDosCalls);
     return result;
 }
+
 APIRET16 Dos16KillProcess(USHORT scope, USHORT pid)
 {
     return DosKillProcess(scope, legacyChildPid(pid));
 }
+
 APIRET DosKillProcess(ULONG action, PID pid)
 {
     TRACE_NATIVE("DosKillProcess(%u, %u)", (unsigned)action, (unsigned)pid);
@@ -693,6 +701,7 @@ static int hostControlVariable(const char *entry)
            !strncmp(entry, "XDG_RUNTIME_DIR=", 16) || !strncmp(entry, "LIBGL_", 6) ||
            !strncmp(entry, "GALLIUM_", 8);
 }
+
 static int inheritedHostVariable(const char *entry)
 {
     return hostControlVariable(entry) && strncmp(entry, "TWOINE_CHILD_ARGUMENTS=", 23) &&
@@ -700,6 +709,7 @@ static int inheritedHostVariable(const char *entry)
            strncmp(entry, "TWOINE_CURRENT_DRIVE=", 21) &&
            strncmp(entry, LX_LAUNCH_RECORD_VARIABLE "=", sizeof LX_LAUNCH_RECORD_VARIABLE);
 }
+
 static char **calcEnvp(const char *os2env, const char *exe, const char *arguments,
                        const LaunchStart *start, APIRET *err)
 {

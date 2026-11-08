@@ -47,10 +47,12 @@ static uint32 spl_queue_bridge(uint8 *a, BOOL query)
     free(name);
     return result;
 }
+
 static uint32 bridge32_SplQueryQueue(uint8 *a)
 {
     return spl_queue_bridge(a, TRUE);
 }
+
 static uint32 bridge32_SplEnumQueue(uint8 *a)
 {
     return spl_queue_bridge(a, FALSE);
@@ -83,19 +85,22 @@ static uint32 bridge32_SplQueryDevice(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_SplEnumPrinter(uint8 *a)
 {
     ULONG computer = lx_guest_load_u32(a), address = lx_guest_load_u32(a + 12),
           capacity = lx_guest_load_u32(a + 16);
-    if (capacity > 16 * 1024 * 1024 || lx_guest_load_u32(a + 32)) return 87;
+    if (capacity > 16 * 1024 * 1024 || lx_guest_load_u32(a + 32))
+        return 87;
     char *name = computer ? lx_execution_copy_string(GLoaderState.execution, computer, 256) : NULL;
     LxGuestBorrow buffer = {0}, counts[3] = {{0}};
     ULONG result = 87, returned = 0, total = 0, needed = 0;
-    BOOL valid = (!computer || (name && !*name)) && (!capacity ||
-        lx_execution_borrow(GLoaderState.execution, address, capacity, LX_GUEST_WRITE, &buffer));
+    BOOL valid = (!computer || (name && !*name)) &&
+                 (!capacity || lx_execution_borrow(GLoaderState.execution, address, capacity,
+                                                   LX_GUEST_WRITE, &buffer));
     for (unsigned i = 0; valid && i < 3; i++)
-        valid = lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20 + i * 4),
-                                     4, LX_GUEST_WRITE, &counts[i]);
+        valid = lx_execution_borrow(GLoaderState.execution, lx_guest_load_u32(a + 20 + i * 4), 4,
+                                    LX_GUEST_WRITE, &counts[i]);
     if (valid)
     {
         result = lx_spl_printers(lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8), buffer.host,
@@ -107,6 +112,9 @@ static uint32 bridge32_SplEnumPrinter(uint8 *a)
             lx_guest_store_u32(counts[2].host, needed);
         }
     }
-    for (unsigned i = 0; i < 3; i++) lx_execution_release(&counts[i]);
-    lx_execution_release(&buffer); free(name); return result;
+    for (unsigned i = 0; i < 3; i++)
+        lx_execution_release(&counts[i]);
+    lx_execution_release(&buffer);
+    free(name);
+    return result;
 }

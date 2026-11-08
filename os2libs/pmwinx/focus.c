@@ -3,10 +3,12 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/windows.h"
+
 ULONG GetActiveWindow(void)
 {
     return open32Presentation() ? WinQueryActiveWindow(HWND_DESKTOP) : 0;
 }
+
 ULONG SetActiveWindow(ULONG window)
 {
     ULONG previous = GetActiveWindow();
@@ -17,10 +19,12 @@ ULONG SetActiveWindow(ULONG window)
     }
     return previous;
 }
+
 ULONG GetFocus(void)
 {
     return open32Presentation() ? open32PublicWindow(WinQueryFocus(HWND_DESKTOP)) : 0;
 }
+
 ULONG SetFocus(ULONG window)
 {
     ULONG previous = GetFocus();
@@ -36,6 +40,7 @@ ULONG GetCapture(void)
 {
     return open32Presentation() ? open32PublicWindow(WinQueryCapture(HWND_DESKTOP)) : 0;
 }
+
 ULONG SetCapture(ULONG window)
 {
     ULONG previous = GetCapture();
@@ -46,6 +51,7 @@ ULONG SetCapture(ULONG window)
     }
     return previous;
 }
+
 BOOL ReleaseCapture(void)
 {
     return open32Presentation() && WinSetCapture(HWND_DESKTOP, 0);
@@ -74,10 +80,12 @@ BOOL EnableWindow(ULONG handle, BOOL enable)
     }
     return disabled;
 }
+
 BOOL IsWindowEnabled(ULONG window)
 {
     return open32Presentation() && WinIsWindowEnabled(window);
 }
+
 BOOL IsWindowVisible(ULONG window)
 {
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
@@ -87,6 +95,7 @@ BOOL IsWindowVisible(ULONG window)
             return FALSE;
     return TRUE;
 }
+
 BOOL IsWindow(ULONG window)
 {
     return open32Presentation() && WinIsWindow(open32Presentation(), window);
@@ -107,6 +116,7 @@ ULONG GetCurrentProcessId(void)
 {
     return GLoaderState.pib.pib_ulpid;
 }
+
 ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
 {
     if (!open32FindWindow(window) || !WinIsWindow(open32Presentation(), window))

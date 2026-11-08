@@ -24,11 +24,13 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static char *identity(const char *name, uint32 *error)
 {
     *error = 0;
     return strdup(name);
 }
+
 static void decoder_contracts(const char *path, int kind)
 {
     LxVideoInfo info;
@@ -63,8 +65,10 @@ static void decoder_contracts(const char *path, int kind)
                                                                      ? "Cinepak compressed frames"
                                                                      : "BGRA planes");
 }
+
 static unsigned audio_frames;
 static double audio_left, audio_right;
+
 static int audio_sink(void *context, const float *samples, unsigned count, int64_t at)
 {
     (void)context;
@@ -78,6 +82,7 @@ static int audio_sink(void *context, const float *samples, unsigned count, int64
     audio_frames += count;
     return 1;
 }
+
 static void audio_contracts(const char *path)
 {
     LxVideoInfo info;
@@ -98,6 +103,7 @@ static void audio_contracts(const char *path)
     printf("Stereo PCM resampled 44100 to 48000: %u frames, L/R energy %.3f/%.3f\n", audio_frames,
            audio_left, audio_right);
 }
+
 static void renderer_contracts(const char *path)
 {
     int width, height;
@@ -172,6 +178,7 @@ static void renderer_contracts(const char *path)
     lx_host_video_quit();
     puts("Retained YUV420/NV12 uploads, decoder lifetime, clipping and stride bounds passed");
 }
+
 static ULONG status(USHORT device, unsigned char *p, ULONG item)
 {
     memset(p, 0, 32);
@@ -179,11 +186,13 @@ static ULONG status(USHORT device, unsigned char *p, ULONG item)
     CHECK(!mciSendCommand(device, 10, 0x100, p, 0));
     return lx_guest_load_u32(p + 4);
 }
+
 typedef struct AudioGate
 {
     LxHostMonitor *monitor;
     unsigned entered, release, removing, removed, calls;
 } AudioGate;
+
 static int gated_audio(void *context, float *samples, int count, int rate)
 {
     (void)samples;
@@ -199,6 +208,7 @@ static int gated_audio(void *context, float *samples, int count, int rate)
     lx_host_monitor_unlock(gate->monitor);
     return 1;
 }
+
 static void *remove_audio(void *context)
 {
     AudioGate *gate = context;
@@ -212,6 +222,7 @@ static void *remove_audio(void *context)
     lx_host_monitor_unlock(gate->monitor);
     return NULL;
 }
+
 static void audio_lifetime_contracts(void)
 {
     AudioGate gate = {.monitor = lx_host_monitor_create()};
@@ -243,10 +254,12 @@ static void audio_lifetime_contracts(void)
     lx_host_monitor_destroy(gate.monitor);
     puts("Shared mixer unregister waits for an active callback and prevents subsequent calls");
 }
+
 static void count_release(void *context)
 {
     ++*(unsigned *)context;
 }
+
 static void mailbox_contracts(HWND window, const char *path)
 {
     void *target = lx_pm_video_target(window);
@@ -272,6 +285,7 @@ static void mailbox_contracts(HWND window, const char *path)
     lx_video_decoder_close(decoder);
     puts("Frame supersession releases exactly once; failed uploads reject subsequent frames");
 }
+
 static void mci_contracts(const char *path)
 {
     int pcm_enabled = lxRuntimeFeatureEnabled(LX_FEATURE_PCM);
@@ -441,6 +455,7 @@ static void mci_contracts(const char *path)
     CHECK(WinTerminate(hab));
     puts("MCI type12 open, status, asynchronous play, pause/resume, seek, WAIT and close passed");
 }
+
 int main(int argc, char **argv)
 {
     CHECK(argc == 6);

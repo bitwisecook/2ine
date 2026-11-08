@@ -13,11 +13,13 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static void *owner(void *argument)
 {
     CHECK(lx_host_mutex_lock(argument, UINT32_MAX) == LX_HOST_LOCK_OK);
     return NULL;
 }
+
 int main(void)
 {
     LxHostMutex *mutex = lx_host_mutex_create(0, 0);

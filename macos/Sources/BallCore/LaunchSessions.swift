@@ -38,6 +38,7 @@ struct StartupServiceKey: Hashable, Sendable {
     let ball: String
     let program: String
 }
+
 struct StartupLease: Sendable {
     let sessionID: String
     let keys: [StartupServiceKey]

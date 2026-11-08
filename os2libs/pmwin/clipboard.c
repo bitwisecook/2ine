@@ -17,12 +17,14 @@ typedef struct ClipFormat
     int imported;
     struct ClipFormat *next;
 } ClipFormat;
+
 typedef struct SystemAtom
 {
     char *name;
     ULONG id, references, table;
     struct SystemAtom *next;
 } SystemAtom;
+
 static LxHostOnce clipboard_once = LX_HOST_ONCE_INIT;
 static LxHostMutex *clipboard_mutex;
 static AnchorBlock *clipboard_open;
@@ -33,13 +35,16 @@ static BOOL clipboard_dirty;
 static _Thread_local ULONG rendering_format;
 static ClipFormat *formats;
 static SystemAtom *atoms;
+
 typedef struct PrivateAtomTable
 {
     ULONG handle;
     struct PrivateAtomTable *next;
 } PrivateAtomTable;
+
 static PrivateAtomTable *atom_tables;
 static ULONG next_atom_table = 2;
+
 static BOOL valid_atom_table(ULONG table)
 {
     if (table == 1)
@@ -49,20 +54,25 @@ static BOOL valid_atom_table(ULONG table)
             return TRUE;
     return FALSE;
 }
+
 static void initialize_clipboard(void)
 {
     clipboard_mutex = lx_host_mutex_create(0, 0);
 }
+
 static BOOL lock_clipboard(void)
 {
     lx_host_once(&clipboard_once, initialize_clipboard);
     return clipboard_mutex && lx_host_mutex_lock(clipboard_mutex, UINT32_MAX) == LX_HOST_LOCK_OK;
 }
+
 #include "os2libs/pmwin/clipboard_transfer.h"
+
 ULONG WinQuerySystemAtomTable(VOID)
 {
     return 1;
 }
+
 ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity)
 {
     if (!output || !capacity || !lock_clipboard())
@@ -77,6 +87,7 @@ ULONG lx_pm_clipboard_format_name(ULONG format, char *output, ULONG capacity)
     lx_host_mutex_unlock(clipboard_mutex);
     return (ULONG)size;
 }
+
 static ULONG atom_name(ULONG table, PSZ name, BOOL add)
 {
     if (!name)
@@ -132,14 +143,17 @@ static ULONG atom_name(ULONG table, PSZ name, BOOL add)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 ULONG WinAddAtom(ULONG table, PSZ name)
 {
     return atom_name(table, name, TRUE);
 }
+
 ULONG WinFindAtom(ULONG table, PSZ name)
 {
     return atom_name(table, name, FALSE);
 }
+
 ULONG WinDeleteAtom(ULONG table, ULONG atom)
 {
     if (!atom)
@@ -201,6 +215,7 @@ ULONG WinCreateAtomTable(ULONG initial, ULONG buckets)
     lx_host_mutex_unlock(clipboard_mutex);
     return result;
 }
+
 ULONG WinDestroyAtomTable(ULONG handle)
 {
     if (!lock_clipboard())
@@ -232,12 +247,30 @@ ULONG WinDestroyAtomTable(ULONG handle)
     return valid ? 0 : handle;
 }
 
-ULONG WinQueryAtomName(ULONG table,ULONG atom,PSZ output,ULONG capacity)
+ULONG WinQueryAtomName(ULONG table, ULONG atom, PSZ output, ULONG capacity)
 {
-    if(!output||!capacity||!lock_clipboard())return 0;
-    const char*name=NULL;char number[24];
-    if(atom&&atom<0xc000){snprintf(number,sizeof number,"#%u",(unsigned)atom);name=number;}
-    else for(SystemAtom*p=atoms;p;p=p->next)if(p->table==table&&p->id==atom){name=p->name;break;}
-    size_t n=name?strlen(name):0;if(n>=capacity)n=capacity-1;if(n)memcpy(output,name,n);output[n]=0;
-    lx_host_mutex_unlock(clipboard_mutex);return n;
+    if (!output || !capacity || !lock_clipboard())
+        return 0;
+    const char *name = NULL;
+    char number[24];
+    if (atom && atom < 0xc000)
+    {
+        snprintf(number, sizeof number, "#%u", (unsigned)atom);
+        name = number;
+    }
+    else
+        for (SystemAtom *p = atoms; p; p = p->next)
+            if (p->table == table && p->id == atom)
+            {
+                name = p->name;
+                break;
+            }
+    size_t n = name ? strlen(name) : 0;
+    if (n >= capacity)
+        n = capacity - 1;
+    if (n)
+        memcpy(output, name, n);
+    output[n] = 0;
+    lx_host_mutex_unlock(clipboard_mutex);
+    return n;
 }

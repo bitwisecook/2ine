@@ -14,6 +14,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static void check_lifetime(size_t size)
 {
     uint32_t pid, parent;
@@ -73,6 +74,7 @@ static void check_lifetime(size_t size)
     lx_host_shared_unmap(a, size);
     lx_host_shared_close(first);
 }
+
 int main(void)
 {
     check_lifetime(8);

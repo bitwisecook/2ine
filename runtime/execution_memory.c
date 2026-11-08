@@ -18,6 +18,7 @@ struct LxGuestMapping
     void *backing;
     LxGuestMapping *next;
 };
+
 #define GUEST_PAGE 4096u
 #define GUEST_MAP_END UINT32_C(0xfffe0000)
 #define GUEST_ALLOC_START UINT32_C(0x20000000)
@@ -32,6 +33,7 @@ static int available(LxExecution *e, uint32_t a, size_t n)
             return 0;
     return 1;
 }
+
 static LxGuestMapping *map_unlocked(LxExecution *e, uint32_t address, size_t size,
                                     unsigned permissions, int exact, size_t requested_alignment,
                                     LxHostShared *shared)
@@ -108,6 +110,7 @@ static LxGuestMapping *map_unlocked(LxExecution *e, uint32_t address, size_t siz
         e->next_address = m->address + (uint32_t)size;
     return m;
 }
+
 static LxGuestMapping *mapping_at_unlocked(LxExecution *e, uint32_t address)
 {
     for (LxGuestMapping *m = e->memory; m; m = m->next)
@@ -115,18 +118,22 @@ static LxGuestMapping *mapping_at_unlocked(LxExecution *e, uint32_t address)
             return m;
     return NULL;
 }
+
 uint32_t lx_execution_mapping_address(const LxGuestMapping *m)
 {
     return m->address;
 }
+
 void *lx_execution_mapping_host(const LxGuestMapping *m)
 {
     return m->backing;
 }
+
 size_t lx_execution_mapping_size(const LxGuestMapping *m)
 {
     return m->size;
 }
+
 static LxGuestMapping **owned(LxExecution *e, const LxGuestMapping *m)
 {
     for (LxGuestMapping **p = &e->memory; *p; p = &(*p)->next)
@@ -135,6 +142,7 @@ static LxGuestMapping **owned(LxExecution *e, const LxGuestMapping *m)
     lx_execution_fail(e, "Guest mapping does not belong to this execution instance");
     return NULL;
 }
+
 static int protect_unlocked(LxExecution *e, LxGuestMapping *m, unsigned permissions)
 {
     if (!owned(e, m) || (permissions & ~7u))
@@ -150,6 +158,7 @@ static int protect_unlocked(LxExecution *e, LxGuestMapping *m, unsigned permissi
     m->permissions = permissions;
     return 1;
 }
+
 static int unmap_unlocked(LxExecution *e, LxGuestMapping *m)
 {
     LxGuestMapping **p = owned(e, m);
@@ -167,6 +176,7 @@ static int unmap_unlocked(LxExecution *e, LxGuestMapping *m)
     free(m);
     return 1;
 }
+
 static void *memory_unlocked(LxExecution *e, uint32_t address, size_t size, unsigned permissions)
 {
     if ((permissions & ~7u) || (uint64_t)size > UINT64_C(0x100000000) - address)
@@ -192,6 +202,7 @@ static void *memory_unlocked(LxExecution *e, uint32_t address, size_t size, unsi
     lx_execution_fail(e, "Guest pointer range is unmapped or inaccessible");
     return NULL;
 }
+
 static int address_unlocked(LxExecution *e, const void *host, size_t size, unsigned permissions,
                             uint32_t *address)
 {
@@ -340,6 +351,7 @@ int lx_execution_borrow(LxExecution *e, uint32_t address, size_t size, unsigned 
     lx_host_mutex_unlock(e->memory_mutex);
     return borrow->mapping != NULL;
 }
+
 void lx_execution_release(LxGuestBorrow *borrow)
 {
     if (!borrow || !borrow->mapping)
@@ -502,6 +514,7 @@ int lx_execution_read(LxExecution *e, uint32_t address, void *output, size_t siz
     lx_host_mutex_unlock(e->memory_mutex);
     return host != NULL;
 }
+
 int lx_execution_write(LxExecution *e, uint32_t address, const void *input, size_t size)
 {
     if ((size && !input) || lx_host_mutex_lock(e->memory_mutex, UINT32_MAX) != LX_HOST_LOCK_OK)
@@ -511,6 +524,7 @@ int lx_execution_write(LxExecution *e, uint32_t address, const void *input, size
     lx_host_mutex_unlock(e->memory_mutex);
     return ok;
 }
+
 int lx_execution_borrow_far(LxExecution *e, uint32_t pointer, size_t size, unsigned permissions,
                             LxGuestBorrow *borrow)
 {

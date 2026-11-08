@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+
 int sanityCheckNeModule(const uint8 *exe, const uint32 exelen)
 {
     if (sizeof(NeHeader) >= exelen)

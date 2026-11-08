@@ -29,6 +29,7 @@ static int array_index(uint32_t array)
             return -1;
     }
 }
+
 static int outside(GlContext *c)
 {
     if (!c || c->inside)
@@ -38,6 +39,7 @@ static int outside(GlContext *c)
     }
     return 1;
 }
+
 static int array_definition(int index, int size, uint32_t type, int stride)
 {
     if (stride < 0)
@@ -61,6 +63,7 @@ static int array_definition(int index, int size, uint32_t type, int stride)
             return 0;
     }
 }
+
 static uint32_t define_array(uint8_t *a, int index, int fixed_size, uint32_t fixed_type)
 {
     GlContext *c = gl_current();
@@ -83,30 +86,37 @@ static uint32_t define_array(uint8_t *a, int index, int fixed_size, uint32_t fix
     *array = (GlArray){gl_word(a, offset + 4), type, size, stride, array->enabled};
     return 0;
 }
+
 uint32_t call_glVertexPointer(uint8_t *a)
 {
     return define_array(a, GL_ARRAY_VERTEX, 0, 0);
 }
+
 uint32_t call_glNormalPointer(uint8_t *a)
 {
     return define_array(a, GL_ARRAY_NORMAL, 3, 0);
 }
+
 uint32_t call_glColorPointer(uint8_t *a)
 {
     return define_array(a, GL_ARRAY_COLOR, 0, 0);
 }
+
 uint32_t call_glIndexPointer(uint8_t *a)
 {
     return define_array(a, GL_ARRAY_INDEX, 1, 0);
 }
+
 uint32_t call_glTexCoordPointer(uint8_t *a)
 {
     return define_array(a, GL_ARRAY_TEXTURE, 0, 0);
 }
+
 uint32_t call_glEdgeFlagPointer(uint8_t *a)
 {
     return define_array(a, GL_ARRAY_EDGE, 1, GL_UNSIGNED_BYTE);
 }
+
 static uint32_t enable_array(uint8_t *a, int enable)
 {
     GlContext *c = gl_current();
@@ -126,10 +136,12 @@ static uint32_t enable_array(uint8_t *a, int enable)
     }
     return 0;
 }
+
 uint32_t call_glEnableClientState(uint8_t *a)
 {
     return enable_array(a, 1);
 }
+
 uint32_t call_glDisableClientState(uint8_t *a)
 {
     return enable_array(a, 0);
@@ -160,6 +172,7 @@ static void host_array(GlContext *c, int index, const void *data)
             break;
     }
 }
+
 static void release_arrays(GlContext *c, GlMemory *memory)
 {
     for (int i = 0; i < GL_ARRAY_COUNT; i++)
@@ -169,6 +182,7 @@ static void release_arrays(GlContext *c, GlMemory *memory)
             gl_memory_finish(&memory[i]);
         }
 }
+
 static int prepare_arrays(GlContext *c, uint32_t maximum, GlMemory *memory)
 {
     for (int i = 0; i < GL_ARRAY_COUNT; i++)
@@ -188,6 +202,7 @@ static int prepare_arrays(GlContext *c, uint32_t maximum, GlMemory *memory)
     }
     return 1;
 }
+
 uint32_t call_glDrawArrays(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -206,6 +221,7 @@ uint32_t call_glDrawArrays(uint8_t *a)
     release_arrays(c, memory);
     return 0;
 }
+
 uint32_t call_glDrawElements(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -238,6 +254,7 @@ uint32_t call_glDrawElements(uint8_t *a)
     gl_memory_finish(&indices);
     return 0;
 }
+
 uint32_t call_glGetPointerv(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -261,6 +278,7 @@ uint32_t call_glGetPointerv(uint8_t *a)
     }
     return 0;
 }
+
 uint32_t call_glPushClientAttrib(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -281,6 +299,7 @@ uint32_t call_glPushClientAttrib(uint8_t *a)
     }
     return 0;
 }
+
 uint32_t call_glPopClientAttrib(uint8_t *a)
 {
     (void)a;
@@ -298,6 +317,7 @@ uint32_t call_glPopClientAttrib(uint8_t *a)
     }
     return 0;
 }
+
 uint32_t call_glInterleavedArrays(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -351,6 +371,7 @@ uint32_t call_glInterleavedArrays(uint8_t *a)
     }
     return 0;
 }
+
 static void apply_element(GlContext *c, int index, const GlArray *p, const void *data)
 {
     if (index == GL_ARRAY_EDGE)
@@ -483,6 +504,7 @@ static void apply_element(GlContext *c, int index, const GlArray *p, const void 
             break;
     }
 }
+
 uint32_t call_glArrayElement(uint8_t *a)
 {
     GlContext *c = gl_current();
@@ -505,11 +527,13 @@ uint32_t call_glArrayElement(uint8_t *a)
             continue;
         size_t unit = gl_type_size(p->type), bytes = unit * p->size;
         uint64_t address = (uint64_t)p->address + (uint64_t)index * (p->stride ? p->stride : bytes);
+
         union
         {
             double alignment;
             uint8_t bytes[32];
         } data;
+
         if (address > UINT32_MAX || !bytes || bytes > sizeof data.bytes ||
             !lx_execution_read(GLoaderState.execution, (uint32_t)address, data.bytes, bytes))
         {

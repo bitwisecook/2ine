@@ -8,6 +8,7 @@ enum
     DIALOG_ERROR = 0xffff,
     DIALOG_CANCEL = 2
 };
+
 typedef struct PmDialog
 {
     unsigned references;
@@ -16,6 +17,7 @@ typedef struct PmDialog
     HWND disabled_owner;
     HWND window, previous_focus;
 } PmDialog;
+
 static BOOL containsModal(Window *window)
 {
     if (!window->destroying && window->dialog && window->dialog->processing &&
@@ -26,6 +28,7 @@ static BOOL containsModal(Window *window)
             return TRUE;
     return FALSE;
 }
+
 static BOOL windowCyclePolicy(Window *window, BOOL *eligible, BOOL *modal)
 {
     if (!window || window == &desktop_window)
@@ -40,6 +43,7 @@ static BOOL windowCyclePolicy(Window *window, BOOL *eligible, BOOL *modal)
     *modal = containsModal(window);
     return TRUE;
 }
+
 void updateWindowCyclePolicy(Window *window)
 {
     BOOL eligible, modal;
@@ -49,6 +53,7 @@ void updateWindowCyclePolicy(Window *window)
         window = window->parent;
     lx_host_window_set_cycle_policy(window->heavy.window, eligible, modal);
 }
+
 BOOL windowAcceptsInput(Window *window)
 {
     PmDialog *modal = NULL;
@@ -61,6 +66,7 @@ BOOL windowAcceptsInput(Window *window)
     }
     return window != NULL;
 }
+
 void dialogWordChanged(Window *window, LONG index, USHORT value)
 {
     if (!window->dialog)
@@ -84,11 +90,13 @@ BOOL initializeDialog(Window *window)
     updateWindowCyclePolicy(window);
     return TRUE;
 }
+
 static void release(PmDialog *dialog)
 {
     if (!--dialog->references)
         free(dialog);
 }
+
 HWND WinEnumDlgItem(HWND dialog, HWND item, ULONG code)
 {
     TRACE_NATIVE("WinEnumDlgItem(%u, %u, %u)", dialog, item, code);
@@ -155,6 +163,7 @@ HWND WinEnumDlgItem(HWND dialog, HWND item, ULONG code)
     }
     return result ? result->hwnd : 0;
 }
+
 BOOL initializeDialogProcedure(HWND handle, HWND focus, PVOID parameters)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -172,6 +181,7 @@ BOOL initializeDialogProcedure(HWND handle, HWND focus, PVOID parameters)
     release(dialog);
     return alive;
 }
+
 static void restore_owner(PmDialog *dialog)
 {
     HWND handle = dialog->disabled_owner;
@@ -187,6 +197,7 @@ static void restore_owner(PmDialog *dialog)
             WinSetFocus(HWND_DESKTOP, focus->hwnd);
     }
 }
+
 void destroyDialog(Window *window)
 {
     PmDialog *dialog = window->dialog;
@@ -198,6 +209,7 @@ void destroyDialog(Window *window)
     restore_owner(dialog);
     release(dialog);
 }
+
 BOOL WinDismissDlg(HWND handle, ULONG result)
 {
     TRACE_NATIVE("WinDismissDlg(%u, %u)", (uint)handle, (uint)result);
@@ -216,6 +228,7 @@ BOOL WinDismissDlg(HWND handle, ULONG result)
     release(dialog);
     return TRUE;
 }
+
 static BOOL dialog_key(AnchorBlock *anchor, HWND dialog, const QMSG *message)
 {
     ULONG flags = (USHORT)(uintptr_t)message->mp1;
@@ -277,6 +290,7 @@ static BOOL dialog_key(AnchorBlock *anchor, HWND dialog, const QMSG *message)
     }
     return FALSE;
 }
+
 ULONG WinProcessDlg(HWND handle)
 {
     TRACE_NATIVE("WinProcessDlg(%u)", (uint)handle);
@@ -323,6 +337,7 @@ ULONG WinProcessDlg(HWND handle)
     release(dialog);
     return result;
 }
+
 HWND WinLoadDlg(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG id,
                 PVOID parameters)
 {
@@ -341,6 +356,7 @@ HWND WinLoadDlg(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG 
     GLoaderState.freeResource(data);
     return result;
 }
+
 ULONG WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG id,
                 PVOID parameters)
 {
@@ -360,12 +376,14 @@ ULONG WinDlgBox(HWND parent, HWND owner, PFNWP procedure, HMODULE module, ULONG 
     release(dialog);
     return result;
 }
+
 HWND WinCreateDlg(HWND parent, HWND owner, PFNWP procedure, PDLGTEMPLATE data, PVOID parameters)
 {
     return data ? createDialog(parent, owner, procedure, (const uint8 *)data, data->cbTemplate,
                                parameters, 0)
                 : 0;
 }
+
 MRESULT WinDefDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
 {
     if (message == WM_CLOSE || message == WM_COMMAND)
@@ -390,16 +408,20 @@ MRESULT WinDefDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
     }
     return WinDefWindowProc(window, message, first, second);
 }
+
 MRESULT WinSendDlgItemMsg(HWND window, ULONG id, ULONG message, MPARAM first, MPARAM second)
 {
     return WinSendMsg(WinWindowFromID(window, id), message, first, second);
 }
+
 typedef struct
 {
     unsigned dpi;
     LONG width, height;
 } SystemDialogMetrics;
+
 static LX_HOST_THREAD_LOCAL SystemDialogMetrics DialogMetrics;
+
 static BOOL mapDialogCoordinate(LONG input, LONG numerator, LONG divisor, LONG *output)
 {
     int64_t value = (int64_t)input * numerator;
@@ -409,6 +431,7 @@ static BOOL mapDialogCoordinate(LONG input, LONG numerator, LONG divisor, LONG *
     *output = (LONG)value;
     return TRUE;
 }
+
 BOOL WinMapDlgPoints(HWND window, PPOINTL points, ULONG count, BOOL to_pixels)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();

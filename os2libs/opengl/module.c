@@ -8,6 +8,7 @@
 static const GlEntry GlEntries[] = {
 #include "os2libs/generated/opengl-entries.h"
 };
+
 static LxMmaps Bridges;
 static LxExport *Exports;
 static void **EntryAddresses;
@@ -23,6 +24,7 @@ void lxNativeModuleDeinit(void)
     Exports = NULL;
     EntryAddresses = NULL;
 }
+
 const LxExport *lxNativeModuleInit(uint32 *count)
 {
     if (lxRuntimeOpenGLProvider() != LX_OPENGL_MESA)

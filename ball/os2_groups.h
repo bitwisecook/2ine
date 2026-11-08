@@ -19,9 +19,11 @@ enum
     EXTRACT_OPENGL,
     EXTRACT_COUNT
 };
+
 static const char *extract_categories[EXTRACT_COUNT] = {
     "cmd",        "fonts",   "assets",    "printers",  "help",        "full",   "som",   "runtime",
     "multimedia", "network", "utilities", "languages", "diagnostics", "legacy", "opengl"};
+
 static int extract_category(const char *name)
 {
     for (int i = 0; i < EXTRACT_COUNT; i++)
@@ -29,6 +31,7 @@ static int extract_category(const char *name)
             return i;
     return -1;
 }
+
 static cJSON *extract_group(int category)
 {
     static const char *titles[EXTRACT_COUNT] = {"CMD and REXX Support",
@@ -72,6 +75,7 @@ static cJSON *extract_group(int category)
         cJSON_AddItemToArray(requirements, cJSON_CreateString("runtime"));
     return group;
 }
+
 static cJSON *extract_groups(void)
 {
     cJSON *groups = cJSON_CreateArray();
@@ -79,6 +83,7 @@ static cJSON *extract_groups(void)
         cJSON_AddItemToArray(groups, extract_group(i));
     return groups;
 }
+
 /* Exact names observed in the original installation packages. Do not infer
    membership from a SOM* prefix: unrelated application modules may use it. */
 static int extract_module_group(const char *module)
@@ -107,6 +112,7 @@ static int extract_module_group(const char *module)
         }
     return -1;
 }
+
 static int extract_som_file(const char *name)
 {
     static const char *names[] = {

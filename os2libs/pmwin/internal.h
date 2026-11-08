@@ -41,6 +41,7 @@ typedef struct PmPresentationParameter
     struct PmPresentationParameter *next;
     uint8 data[];
 } PmPresentationParameter;
+
 typedef struct Window
 {
     PFNWP window_proc;
@@ -89,6 +90,7 @@ typedef struct Window
     BOOL enabled;
     BOOL visible_region_notify;
 } Window;
+
 LX_PRIVATE void cleanupErrorInfo(void);
 /* FC_NOSETFOCUS, FC_NOLOSEFOCUS and FC_NOSETACTIVE suppress their notifications. */
 LX_PRIVATE BOOL changeFocus(HWND desktop, HWND handle, ULONG flags);
@@ -134,23 +136,36 @@ typedef struct
 
 /* Wire matrices use six 16.16 coefficients, two integral translations and a
    final integral homogeneous coefficient. */
-typedef struct PmGpiState {
+typedef struct PmGpiState
+{
     BOOL initialized;
-    BOOL display_enabled,boundary_enabled;
+    BOOL display_enabled, boundary_enabled;
     LONG model[9], view[9];
     LONG arc[4], line_end, line_join, line_width, char_extra, stop_draw;
     RECTL graphics_field, viewing_limits, default_limits, boundary;
     BOOL graphics_set, viewing_set, default_set, boundary_set;
     BOOL viewing_custom, correlate, pick_hit;
-    POINTL pick_position; SIZEL pick_size;
+    POINTL pick_position;
+    SIZEL pick_size;
     ULONG palette;
 } PmGpiState;
+
 /* Paths bind to device space when defined; point is refreshed in world space for stroking. */
-typedef struct PmPathPoint { POINTL point; BOOL move; POINTL device; } PmPathPoint;
-typedef struct PmPath {
+typedef struct PmPathPoint
+{
+    POINTL point;
+    BOOL move;
+    POINTL device;
+} PmPathPoint;
+
+typedef struct PmPath
+{
     struct PmPath *next;
-    LONG id; PmPathPoint *points; size_t count, capacity;
+    LONG id;
+    PmPathPoint *points;
+    size_t count, capacity;
 } PmPath;
+
 typedef struct PresentationSpace
 {
     HPS hps;
@@ -171,7 +186,7 @@ typedef struct PresentationSpace
     BOOL viewport_set;
     RECTL paint_clip;
     BOOL paint_clip_set;
-    ULONG page_units,ps_options;
+    ULONG page_units, ps_options;
     SIZEL page_size;
     struct PmSavedSpace *saved;
     LONG save_id;
@@ -180,11 +195,13 @@ typedef struct PresentationSpace
     ULONG clip_flags; /* PSF_CLIPSIBLINGS and PSF_CLIPCHILDREN requested for this PS. */
     LxHostFont *font;
     unsigned font_index, font_pixels;
+
     struct
     {
         unsigned index, metric_index, pixels;
         BOOL defined;
     } logical_fonts[255];
+
     LxHandleBorrow bitmap_ids[255];
     char font_names[255][8];
     POINTL char_angle, char_shear;
@@ -199,6 +216,7 @@ typedef struct PresentationSpace
     LONG colors[256];
     uint8 color_valid[256];
 } PresentationSpace;
+
 typedef struct PmSavedSpace
 {
     struct PmSavedSpace *next;
@@ -222,6 +240,7 @@ typedef struct PmSavedSpace
     LONG colors[256];
     uint8 color_valid[256];
 } PmSavedSpace;
+
 typedef struct PmDeviceContext
 {
     void *anchor;
@@ -276,11 +295,13 @@ typedef struct
     PresentationSpace *pres_spaces;
     size_t pres_spaces_array_len;
 } AnchorBlock;
+
 /* Delivers to every queue in this process; wait blocks until each foreign queue took it. */
 LX_PRIVATE BOOL broadcastQueues(AnchorBlock *self, ULONG message, MPARAM first, MPARAM second,
                                 BOOL wait);
 /* Posts the semantic message whose SV_*KB value names this virtual key and shift state. */
-LX_PRIVATE BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULONG shift, ULONG ticks);
+LX_PRIVATE BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULONG shift,
+                                ULONG ticks);
 extern LX_PRIVATE uint32 GHABCounter;
 extern LX_PRIVATE uint32 GHMQCounter;
 extern LX_PRIVATE Window desktop_window;

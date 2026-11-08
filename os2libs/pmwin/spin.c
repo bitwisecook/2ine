@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/controls.h"
 #include "guest/abi.h"
 #include <errno.h>
+
 static BOOL number(const char *text, LONG *value)
 {
     if (!text || !*text)
@@ -15,6 +16,7 @@ static BOOL number(const char *text, LONG *value)
     *value = (LONG)n;
     return TRUE;
 }
+
 static void set_value(Window *window, LONG value)
 {
     PmControl *c = window->control;
@@ -31,6 +33,7 @@ static void set_value(Window *window, LONG value)
     if (!window->text || strcmp(window->text, string))
         WinSetWindowText(window->hwnd, (PSZ)string);
 }
+
 MRESULT spinMessage(Window *window, ULONG message, MPARAM first, MPARAM second)
 {
     PmControl *c = window->control;

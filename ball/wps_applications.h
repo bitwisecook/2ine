@@ -4,6 +4,7 @@
 #define TB_WPS_APPLICATIONS_H
 #define TB_WPS_PROFILE_LIMIT (8u * 1024u * 1024u)
 #define TB_WPS_OBJECT_LIMIT 8192u
+
 static void wps_digest(const unsigned char *bytes, size_t size, unsigned char digest[32])
 {
     SHA256_CTX hash;
@@ -11,6 +12,7 @@ static void wps_digest(const unsigned char *bytes, size_t size, unsigned char di
     sha256_update(&hash, bytes, size);
     sha256_final(&hash, digest);
 }
+
 static char *wps_property(Context *c, const char *setup, const char *wanted)
 {
     char *result = NULL;
@@ -46,6 +48,7 @@ static char *wps_property(Context *c, const char *setup, const char *wanted)
     }
     return result;
 }
+
 static char *wps_title(Context *c, const char *raw)
 {
     char *value = keep(c, strdup(raw ? raw : ""));
@@ -68,6 +71,7 @@ static char *wps_title(Context *c, const char *raw)
     *out = 0;
     return value;
 }
+
 static cJSON *wps_arguments(Context *c, const char *text)
 {
     cJSON *args = cJSON_CreateArray();
@@ -110,6 +114,7 @@ static cJSON *wps_arguments(Context *c, const char *text)
     }
     return args;
 }
+
 static char *wps_resolve(Context *c, const char *name, const char *cwd, const char *paths)
 {
     if (!name || !*name)
@@ -148,6 +153,7 @@ static char *wps_resolve(Context *c, const char *name, const char *cwd, const ch
     }
     return plain;
 }
+
 static void wps_hide(Context *c, const cJSON *app)
 {
     const char *handle = field(get(app, "wpsRegistration"), "handle");
@@ -163,6 +169,7 @@ static void wps_hide(Context *c, const cJSON *app)
         put(object(c->manifest, "wpsHidden"), handle, hidden);
     }
 }
+
 static int wps_hidden(Context *c, const char *handle, const cJSON *record)
 {
     const cJSON *hidden = get(get(c->manifest, "wpsHidden"), handle);
@@ -173,11 +180,13 @@ static int wps_hidden(Context *c, const char *handle, const cJSON *record)
         return equal_case(id, field(record, "id"));
     return hash && *hash && equal_case(hash, field(record, "hash"));
 }
+
 static void wps_detach(Context *c, cJSON *app)
 {
     wps_hide(c, app);
     cJSON_DeleteItemFromObjectCaseSensitive(app, "wpsRegistration");
 }
+
 static void wps_icon_beside_program(Context *c, cJSON *icon, const char *program)
 {
     const char *declared = field(icon, "path"), *base = declared, *directory = NULL;
@@ -217,6 +226,7 @@ static void wps_icon_beside_program(Context *c, cJSON *icon, const char *program
     free(c->error);
     c->error = NULL;
 }
+
 static const cJSON *wps_previous(const cJSON *apps, const char *handle)
 {
     const cJSON *app;
@@ -225,6 +235,7 @@ static const cJSON *wps_previous(const cJSON *apps, const char *handle)
                        !strcmp(field(get(app, "wpsRegistration"), "handle"), handle)) return app;
     return NULL;
 }
+
 static cJSON *wps_objects(Context *c, const unsigned char *bytes, size_t size)
 {
     if (size > TB_WPS_PROFILE_LIMIT || (size >= 12 && !memcmp(bytes, "2INEPRF1", 8) &&
@@ -301,6 +312,7 @@ static cJSON *wps_objects(Context *c, const unsigned char *bytes, size_t size)
     }
     return objects;
 }
+
 static cJSON *wps_folders(Context *c, const cJSON *objects, const char *location)
 {
     cJSON *folders = cJSON_CreateArray();
@@ -326,6 +338,7 @@ static cJSON *wps_folders(Context *c, const cJSON *objects, const char *location
     cJSON_Delete(folders);
     return NULL;
 }
+
 static int wps_sync(Context *c)
 {
     if (!c->roots[2])
@@ -514,6 +527,7 @@ static int wps_sync(Context *c)
     cJSON_Delete(objects);
     return !c->error;
 }
+
 static cJSON *wps_latest(Context *c)
 {
     char *path = join(c, c->ball, "logs/wps-registration-latest.json");

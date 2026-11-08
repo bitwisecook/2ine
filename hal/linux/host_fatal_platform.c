@@ -9,11 +9,13 @@
 #include <stdlib.h>
 #include <ucontext.h>
 #include <unistd.h>
+
 enum
 {
     /* A guest address space can have a very long map. */
     MAP_COPY_BYTES = 512 * 1024
 };
+
 #if defined(__x86_64__) || defined(__aarch64__)
 static void write_register(const char *name, uint64_t value)
 {
@@ -45,6 +47,7 @@ void lx_host_fatal_write_registers(const void *context)
                  {"rdi", REG_RDI}, {"r8", REG_R8},   {"r9", REG_R9},   {"r10", REG_R10},
                  {"r11", REG_R11}, {"r12", REG_R12}, {"r13", REG_R13}, {"r14", REG_R14},
                  {"r15", REG_R15}};
+
     for (size_t i = 0; i < sizeof names / sizeof *names; i++)
         write_register(names[i].name, (uint64_t)state->uc_mcontext.gregs[names[i].index]);
 #else
@@ -52,6 +55,7 @@ void lx_host_fatal_write_registers(const void *context)
     lx_host_fatal_write("unavailable on this architecture");
 #endif
 }
+
 void lx_host_fatal_write_images(void)
 {
     int maps = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
@@ -67,10 +71,12 @@ void lx_host_fatal_write_images(void)
     }
     close(maps);
 }
+
 int lx_host_fatal_display_available(void)
 {
     return getenv("DISPLAY") || getenv("WAYLAND_DISPLAY");
 }
+
 short lx_host_fatal_prepare_spawn(posix_spawn_file_actions_t *actions)
 {
     (void)actions;

@@ -14,6 +14,7 @@ static uint32 bridge32_DosPutMessage(uint8 *arguments)
 }
 
 APIRET lx_message_get(PVOID, PVOID, ULONG, PCHAR, ULONG, ULONG, PCHAR, PULONG);
+
 static uint32 bridge32_DosTrueGetMessage(uint8 *a)
 {
     const uint32 count = lx_guest_load_u32(a + 8), size = lx_guest_load_u32(a + 16);

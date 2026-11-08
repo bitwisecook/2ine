@@ -14,25 +14,25 @@ LONG WinQuerySysValue(HWND desktop, LONG index)
         failures++;
     switch (index)
     {
-    case 4:
-        return 3;
-    case 5:
-        return 5;
-    case 26:
-        return 7;
-    case 27:
-        return 11;
-    case 28:
-        return 13;
-    case 29:
-        return 17;
-    case 30:
-        return 19;
-    case 35:
-        return 23;
-    default:
-        failures++;
-        return 0;
+        case 4:
+            return 3;
+        case 5:
+            return 5;
+        case 26:
+            return 7;
+        case 27:
+            return 11;
+        case 28:
+            return 13;
+        case 29:
+            return 17;
+        case 30:
+            return 19;
+        case 35:
+            return 23;
+        default:
+            failures++;
+            return 0;
     }
 }
 

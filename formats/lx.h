@@ -10,6 +10,7 @@
 #define TWOINE_FORMAT_LX_H
 #include "formats/types.h"
 #pragma pack(push, 1)
+
 typedef struct LxHeader
 {
     uint8 magic_l;

@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "loader/internal.h"
+
 uint32 guestEntryAddress(void *host)
 {
     uint32 address;

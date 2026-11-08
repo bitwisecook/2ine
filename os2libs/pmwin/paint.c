@@ -7,6 +7,7 @@
  */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+
 PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor, const HPS hps)
 {
     if (hps >= FIRST_HPS_VALUE && !(hps & 1))

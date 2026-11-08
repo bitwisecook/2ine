@@ -13,6 +13,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 int main(void)
 {
     int listener = lx_host_socket_open(LX_SOCKET_STREAM);

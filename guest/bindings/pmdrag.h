@@ -8,14 +8,17 @@ static uint32 bridge32_DrgAddStrHandle(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_DrgDeleteStrHandle(uint8 *a)
 {
     return DrgDeleteStrHandle(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DrgQueryStrNameLen(uint8 *a)
 {
     return DrgQueryStrNameLen(lx_guest_load_u32(a));
 }
+
 static uint32 bridge32_DrgQueryStrName(uint8 *a)
 {
     ULONG capacity = lx_guest_load_u32(a + 4);
@@ -50,7 +53,9 @@ static uint32 bridge32_DrgDeleteDraginfoStrHandles(uint8 *a)
 
 static uint32 bridge32_DrgDrag(uint8 *a)
 {
-    return (uint32)(uintptr_t)DrgDrag(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16), lx_guest_load_u32(a + 20));
+    return (uint32)(uintptr_t)DrgDrag(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4),
+                                      lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12),
+                                      lx_guest_load_u32(a + 16), lx_guest_load_u32(a + 20));
 }
 
 static uint32 bridge32_DrgFreeDraginfo(uint8 *a)
@@ -70,7 +75,9 @@ static uint32 bridge32_DrgGetPS(uint8 *a)
 
 static uint32 bridge32_DrgPostTransferMsg(uint8 *a)
 {
-    return (uint32)(uintptr_t)DrgPostTransferMsg(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16), lx_guest_load_u32(a + 20));
+    return (uint32)(uintptr_t)DrgPostTransferMsg(
+        lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8),
+        lx_guest_load_u32(a + 12), lx_guest_load_u32(a + 16), lx_guest_load_u32(a + 20));
 }
 
 static uint32 bridge32_DrgQueryDragitemCount(uint8 *a)
@@ -80,7 +87,8 @@ static uint32 bridge32_DrgQueryDragitemCount(uint8 *a)
 
 static uint32 bridge32_DrgQueryDragitemPtr(uint8 *a)
 {
-    return (uint32)(uintptr_t)DrgQueryDragitemPtr(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4));
+    return (uint32)(uintptr_t)DrgQueryDragitemPtr(lx_guest_load_u32(a + 0),
+                                                  lx_guest_load_u32(a + 4));
 }
 
 static uint32 bridge32_DrgReleasePS(uint8 *a)
@@ -90,12 +98,15 @@ static uint32 bridge32_DrgReleasePS(uint8 *a)
 
 static uint32 bridge32_DrgSendTransferMsg(uint8 *a)
 {
-    return (uint32)(uintptr_t)DrgSendTransferMsg(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4), (MPARAM)(uintptr_t)lx_guest_load_u32(a + 8), (MPARAM)(uintptr_t)lx_guest_load_u32(a + 12));
+    return (uint32)(uintptr_t)DrgSendTransferMsg(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4),
+                                                 (MPARAM)(uintptr_t)lx_guest_load_u32(a + 8),
+                                                 (MPARAM)(uintptr_t)lx_guest_load_u32(a + 12));
 }
 
 static uint32 bridge32_DrgSetDragitem(uint8 *a)
 {
-    return (uint32)(uintptr_t)DrgSetDragitem(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4), lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
+    return (uint32)(uintptr_t)DrgSetDragitem(lx_guest_load_u32(a + 0), lx_guest_load_u32(a + 4),
+                                             lx_guest_load_u32(a + 8), lx_guest_load_u32(a + 12));
 }
 
 static uint32 bridge32_DrgVerifyRMF(uint8 *a)
@@ -104,5 +115,7 @@ static uint32 bridge32_DrgVerifyRMF(uint8 *a)
     char *m = mechanism ? lx_execution_copy_string(GLoaderState.execution, mechanism, 65536) : NULL;
     char *f = format ? lx_execution_copy_string(GLoaderState.execution, format, 65536) : NULL;
     BOOL result = (!mechanism || m) && (!format || f) && DrgVerifyRMF(lx_guest_load_u32(a), m, f);
-    free(m); free(f); return result;
+    free(m);
+    free(f);
+    return result;
 }

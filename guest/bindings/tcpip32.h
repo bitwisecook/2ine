@@ -7,6 +7,7 @@ static int tcpip_borrow(LxExecution *execution, uint32 address, size_t size, uns
     socket_failure(14);
     return 0;
 }
+
 static int tcpip_read(LxExecution *execution, uint32 address, void *output, size_t size)
 {
     if (lx_execution_read(execution, address, output, size))
@@ -14,6 +15,7 @@ static int tcpip_read(LxExecution *execution, uint32 address, void *output, size
     socket_failure(14);
     return 0;
 }
+
 static uint32 bridge32_OS2_sysctl(uint8 *a)
 {
     uint32 count = lx_guest_load_u32(a + 4), result = (uint32)-1;
@@ -52,6 +54,7 @@ done:
     lx_execution_release(&name);
     return socket_result((int32_t)result);
 }
+
 static uint32 tcpip_ioctl(uint8 *a, int has_length)
 {
     uint32 command = lx_guest_load_u32(a + 4);
@@ -83,19 +86,24 @@ static uint32 tcpip_ioctl(uint8 *a, int has_length)
     lx_execution_release(&outer);
     return result;
 }
+
 static uint32 bridge32_OS2_ioctl(uint8 *a)
 {
     return tcpip_ioctl(a, 0);
 }
+
 static uint32 bridge32_OS2_os2_ioctl(uint8 *a)
 {
     return tcpip_ioctl(a, 1);
 }
+
 #include "guest/bindings/socket_resolver.h"
+
 static uint32 tcpip_word(const uint8 *a, unsigned i)
 {
     return lx_guest_load_u32(a + i * 4);
 }
+
 static uint32 tcpip_host(OS2_hostent *h)
 {
     socket_guest_error(*OS2_tcp_h_errno1());
@@ -104,89 +112,108 @@ static uint32 tcpip_host(OS2_hostent *h)
     LxHostSocketHost host = {h->h_name, h->h_aliases, h->h_addrtype, h->h_length, h->h_addr_list};
     return socket_guest_host(&host);
 }
+
 static uint32 tcpip_protocol(OS2_protoent *p)
 {
     return p ? socket_guest_database(p->p_name, p->p_aliases, p->p_proto, NULL) : 0;
 }
+
 static uint32 tcpip_service(OS2_servent *p)
 {
     return p ? socket_guest_database(p->s_name, p->s_aliases, p->s_port, p->s_proto) : 0;
 }
+
 static uint32 bridge32_OS2_socket(uint8 *a)
 {
     return OS2_socket(tcpip_word(a, 0), tcpip_word(a, 1), tcpip_word(a, 2));
 }
+
 static uint32 bridge32_OS2_soclose(uint8 *a)
 {
     return OS2_soclose(tcpip_word(a, 0));
 }
+
 static uint32 bridge32_OS2_sock_errno(uint8 *a)
 {
     (void)a;
     return OS2_sock_errno();
 }
+
 static uint32 bridge32_OS2_sock_init(uint8 *a)
 {
     (void)a;
     return OS2_sock_init();
 }
+
 static uint32 bridge32_OS2_res_init(uint8 *a)
 {
     (void)a;
     return OS2_res_init();
 }
+
 static uint32 bridge32_OS2_gethostid(uint8 *a)
 {
     (void)a;
     return OS2_gethostid();
 }
+
 static uint32 bridge32_OS2_shutdown(uint8 *a)
 {
     return OS2_shutdown(tcpip_word(a, 0), tcpip_word(a, 1));
 }
+
 static uint32 bridge32_OS2_htons(uint8 *a)
 {
     return OS2_htons((uint16_t)tcpip_word(a, 0));
 }
+
 static uint32 bridge32_OS2_ntohs(uint8 *a)
 {
     return OS2_ntohs((uint16_t)tcpip_word(a, 0));
 }
+
 static uint32 bridge32_OS2_htonl(uint8 *a)
 {
     return OS2_htonl(tcpip_word(a, 0));
 }
+
 static uint32 bridge32_OS2_ntohl(uint8 *a)
 {
     return OS2_ntohl(tcpip_word(a, 0));
 }
+
 static uint32 bridge32_OS2_setprotoent(uint8 *a)
 {
     OS2_setprotoent(tcpip_word(a, 0));
     return 0;
 }
+
 static uint32 bridge32_OS2_endprotoent(uint8 *a)
 {
     (void)a;
     OS2_endprotoent();
     return 0;
 }
+
 static uint32 bridge32_OS2_setservent(uint8 *a)
 {
     OS2_setservent(tcpip_word(a, 0));
     return 0;
 }
+
 static uint32 bridge32_OS2_endservent(uint8 *a)
 {
     (void)a;
     OS2_endservent();
     return 0;
 }
+
 static uint32 bridge32_OS2_inet_ntoa(uint8 *a)
 {
     OS2_in_addr ip = {tcpip_word(a, 0)};
     return socket_guest_text(OS2_inet_ntoa(ip));
 }
+
 static uint32 bridge32_OS2_gethostbyname(uint8 *a)
 {
     char *text = lx_execution_copy_string(GLoaderState.execution, tcpip_word(a, 0), 1024);
@@ -194,6 +221,7 @@ static uint32 bridge32_OS2_gethostbyname(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 bridge32_OS2_gethostbyaddr(uint8 *a)
 {
     uint32 address;
@@ -201,6 +229,7 @@ static uint32 bridge32_OS2_gethostbyaddr(uint8 *a)
         return tcpip_host(OS2_gethostbyaddr(NULL, 0, 0));
     return tcpip_host(OS2_gethostbyaddr(&address, 4, tcpip_word(a, 2)));
 }
+
 static uint32 bridge32_OS2_getprotobyname(uint8 *a)
 {
     char *text = lx_execution_copy_string(GLoaderState.execution, tcpip_word(a, 0), 1024);
@@ -208,10 +237,12 @@ static uint32 bridge32_OS2_getprotobyname(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 bridge32_OS2_getprotobynumber(uint8 *a)
 {
     return tcpip_protocol(OS2_getprotobynumber(tcpip_word(a, 0)));
 }
+
 static uint32 bridge32_OS2_inet_addr(uint8 *a)
 {
     char *text = lx_execution_copy_string(GLoaderState.execution, tcpip_word(a, 0), 1024);
@@ -219,6 +250,7 @@ static uint32 bridge32_OS2_inet_addr(uint8 *a)
     free(text);
     return result;
 }
+
 static uint32 bridge32_OS2_psock_errno(uint8 *a)
 {
     char *text = lx_execution_copy_string(GLoaderState.execution, tcpip_word(a, 0), 1024);
@@ -226,6 +258,7 @@ static uint32 bridge32_OS2_psock_errno(uint8 *a)
     free(text);
     return 0;
 }
+
 static uint32 bridge32_OS2_getservbyname(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, tcpip_word(a, 0), 1024);
@@ -239,6 +272,7 @@ static uint32 bridge32_OS2_getservbyname(uint8 *a)
     free(protocol);
     return result;
 }
+
 static uint32 bridge32_OS2_getservbyport(uint8 *a)
 {
     char *protocol = tcpip_word(a, 1)
@@ -250,6 +284,7 @@ static uint32 bridge32_OS2_getservbyport(uint8 *a)
     free(protocol);
     return result;
 }
+
 static uint32 bridge32_OS2_gethostname(uint8 *a)
 {
     LxGuestBorrow b = {0};
@@ -260,6 +295,7 @@ static uint32 bridge32_OS2_gethostname(uint8 *a)
     lx_execution_release(&b);
     return result;
 }
+
 static uint32 bridge32_OS2_gettimeofday(uint8 *a)
 {
     LxGuestBorrow time = {0}, zone = {0};
@@ -276,6 +312,7 @@ done:
     lx_execution_release(&zone);
     return result;
 }
+
 static uint32 tcpip_address_input(uint8 *a, int connecting)
 {
     OS2_sockaddr address;
@@ -285,14 +322,17 @@ static uint32 tcpip_address_input(uint8 *a, int connecting)
     return connecting ? OS2_connect(tcpip_word(a, 0), &address, 16)
                       : OS2_bind(tcpip_word(a, 0), &address, 16);
 }
+
 static uint32 bridge32_OS2_bind(uint8 *a)
 {
     return tcpip_address_input(a, 0);
 }
+
 static uint32 bridge32_OS2_connect(uint8 *a)
 {
     return tcpip_address_input(a, 1);
 }
+
 static uint32 tcpip_address_output(uint8 *a, int peer)
 {
     LxGuestBorrow address = {0}, count = {0};
@@ -313,14 +353,17 @@ done:
     lx_execution_release(&count);
     return result;
 }
+
 static uint32 bridge32_OS2_getsockname(uint8 *a)
 {
     return tcpip_address_output(a, 0);
 }
+
 static uint32 bridge32_OS2_getpeername(uint8 *a)
 {
     return tcpip_address_output(a, 1);
 }
+
 static uint32 bridge32_OS2_sendto(uint8 *a)
 {
     OS2_sockaddr address;
@@ -333,6 +376,7 @@ static uint32 bridge32_OS2_sendto(uint8 *a)
     lx_execution_release(&b);
     return result;
 }
+
 static uint32 bridge32_OS2_recvfrom(uint8 *a)
 {
     LxGuestBorrow b = {0}, address = {0}, count = {0};
@@ -360,6 +404,7 @@ done:
     lx_execution_release(&count);
     return result;
 }
+
 static uint32 tcpip_transfer(uint8 *a, int writing)
 {
     LxGuestBorrow b = {0};
@@ -371,14 +416,17 @@ static uint32 tcpip_transfer(uint8 *a, int writing)
     lx_execution_release(&b);
     return result;
 }
+
 static uint32 bridge32_OS2_send(uint8 *a)
 {
     return tcpip_transfer(a, 1);
 }
+
 static uint32 bridge32_OS2_recv(uint8 *a)
 {
     return tcpip_transfer(a, 0);
 }
+
 static uint32 bridge32_OS2_setsockopt(uint8 *a)
 {
     LxGuestBorrow b = {0};
@@ -388,6 +436,7 @@ static uint32 bridge32_OS2_setsockopt(uint8 *a)
     lx_execution_release(&b);
     return result;
 }
+
 static uint32 bridge32_OS2_getsockopt(uint8 *a)
 {
     LxGuestBorrow b = {0}, count = {0};
@@ -407,6 +456,7 @@ done:
     lx_execution_release(&count);
     return result;
 }
+
 static uint32 bridge32_OS2_os2_select(uint8 *a)
 {
     int reads = tcpip_word(a, 1), writes = tcpip_word(a, 2), errors = tcpip_word(a, 3);
@@ -420,6 +470,7 @@ static uint32 bridge32_OS2_os2_select(uint8 *a)
     lx_execution_release(&b);
     return result;
 }
+
 static uint32 bridge32_OS2_select(uint8 *a)
 {
     LxGuestBorrow sets[3] = {{0}}, time = {0};
@@ -446,6 +497,7 @@ done:
     lx_execution_release(&time);
     return result;
 }
+
 static uint32 bridge32_OS2_writev(uint8 *a)
 {
     uint32 count = tcpip_word(a, 2), result = (uint32)-1;
@@ -476,6 +528,7 @@ done:
     free(vectors);
     return result;
 }
+
 static uint32 bridge32_OS2_inet_network(uint8 *a)
 {
     char *name = lx_execution_copy_string(GLoaderState.execution, tcpip_word(a, 0), 1024);
@@ -483,6 +536,7 @@ static uint32 bridge32_OS2_inet_network(uint8 *a)
     free(name);
     return result;
 }
+
 static uint32 bridge32_OS2_tcp_h_errno1(uint8 *a)
 {
     (void)a;

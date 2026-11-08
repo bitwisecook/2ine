@@ -2,15 +2,18 @@
 /* Presentation-space state is shared by paint and retained GPI drawing. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+
 HDC WinOpenWindowDC(HWND hwnd)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     return anchor && getWindowFromHWND(anchor, hwnd) ? hwnd : 0;
 }
+
 HDC WinQueryWindowDC(HWND hwnd)
 {
     return WinOpenWindowDC(hwnd);
 }
+
 HPS lx_pm_create_ps(HAB hab, HDC dc)
 {
     if (!getAnchorBlock(hab))
@@ -30,6 +33,7 @@ HPS lx_pm_create_ps(HAB hab, HDC dc)
     }
     return result;
 }
+
 BOOL lx_pm_destroy_ps(HPS hps)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -39,18 +43,24 @@ BOOL lx_pm_destroy_ps(HPS hps)
     destroyPresentationSpace(anchor, ps);
     return TRUE;
 }
+
 BOOL lx_pm_valid_ps(HPS hps)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     return anchor && getPresentationSpaceFromHPS(anchor, hps);
 }
+
 LONG lx_pm_color(HPS hps, LONG color)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
-    if (!ps || (ps->rgb_colors ? color < CLR_FALSE || color > 0xffffff
-                               : color < CLR_FALSE || (color > CLR_PALEGRAY &&
-                                                       !((ps->palette_lease.resource && (ULONG)color<((PmPalette*)ps->palette_lease.resource)->count) || (color < 256 && ps->color_valid[color])))))
+    if (!ps || (ps->rgb_colors
+                    ? color < CLR_FALSE || color > 0xffffff
+                    : color < CLR_FALSE ||
+                          (color > CLR_PALEGRAY &&
+                           !((ps->palette_lease.resource &&
+                              (ULONG)color < ((PmPalette *)ps->palette_lease.resource)->count) ||
+                             (color < 256 && ps->color_valid[color])))))
         return -255;
     LONG previous = ps->color;
     ps->color = color;
@@ -58,29 +68,38 @@ LONG lx_pm_color(HPS hps, LONG color)
         ps->primitive_color[i] = color;
     return previous;
 }
+
 BOOL lx_pm_record_point(PresentationSpace *ps, const POINTL *point, BOOL move)
 {
     PmPath *path = ps->record_path;
-    if (!path) return TRUE;
-    if (path->count == path->capacity) {
+    if (!path)
+        return TRUE;
+    if (path->count == path->capacity)
+    {
         size_t capacity = path->capacity ? path->capacity * 2 : 64;
-        if (capacity > 65536) return FALSE;
+        if (capacity > 65536)
+            return FALSE;
         PmPathPoint *points = realloc(path->points, capacity * sizeof *points);
-        if (!points) return FALSE;
-        path->points = points; path->capacity = capacity;
+        if (!points)
+            return FALSE;
+        path->points = points;
+        path->capacity = capacity;
     }
     POINTL device = *point;
-    if (!lx_pm_transform_point(ps, &device, TRUE)) return FALSE;
+    if (!lx_pm_transform_point(ps, &device, TRUE))
+        return FALSE;
     path->points[path->count++] = (PmPathPoint){*point, move, device};
     return TRUE;
 }
+
 BOOL lx_pm_move(HPS hps, const POINTL *point)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, hps) : NULL;
     if (!ps || !point)
         return FALSE;
-    if (!lx_pm_record_point(ps, point, TRUE)) return FALSE;
+    if (!lx_pm_record_point(ps, point, TRUE))
+        return FALSE;
     ps->position = *point;
     return TRUE;
 }
@@ -101,6 +120,7 @@ HPS WinGetPS(HWND window)
 {
     return acquirePresentationSpace(window, 0, NULL, FALSE);
 }
+
 HPS lx_pm_get_clip_ps(HWND window, ULONG flags)
 {
     HPS handle = WinGetPS(window);
@@ -109,12 +129,14 @@ HPS lx_pm_get_clip_ps(HWND window, ULONG flags)
         ps->clip_flags = flags;
     return handle;
 }
+
 HPS WinGetScreenPS(HWND desktop)
 {
     if (desktop != HWND_DESKTOP)
         return 0;
     return WinGetPS(desktop);
 }
+
 BOOL WinReleasePS(HPS space)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -203,6 +225,7 @@ unsigned lx_pm_font_index(HPS hps)
                                                        : ps->font_index
               : 0;
 }
+
 BOOL lx_pm_set_cp(HPS handle, ULONG codepage)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -212,12 +235,14 @@ BOOL lx_pm_set_cp(HPS handle, ULONG codepage)
     ps->codepage = codepage ? codepage : 437;
     return TRUE;
 }
+
 ULONG lx_pm_query_cp(HPS handle)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
     PresentationSpace *ps = anchor ? getPresentationSpaceFromHPS(anchor, handle) : NULL;
     return ps ? ps->codepage : 0;
 }
+
 LONG lx_pm_resolve_color(HPS handle, LONG color)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -230,12 +255,14 @@ LONG lx_pm_resolve_color(HPS handle, LONG color)
         return lx_pm_rgb(color);
     if (ps->rgb_colors)
         return color <= 0xffffff ? color : -255;
-    PmPalette *palette=ps->palette_lease.resource;
-    if(palette&&(ULONG)color<palette->count)return palette->colors[color]&0xffffff;
+    PmPalette *palette = ps->palette_lease.resource;
+    if (palette && (ULONG)color < palette->count)
+        return palette->colors[color] & 0xffffff;
     if (color < 256 && ps->color_valid[color])
         return ps->colors[color];
     return lx_pm_rgb(color);
 }
+
 BOOL lx_pm_color_table(HPS handle, ULONG options, LONG format, LONG start, LONG count,
                        const LONG *colors)
 {

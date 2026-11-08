@@ -126,6 +126,7 @@ int lx_host_terminal_open(int *width, int *height)
     *height = scrh;
     return 1;
 }
+
 void lx_host_terminal_close(void)
 {
     if (redirected)
@@ -138,6 +139,7 @@ void lx_host_terminal_close(void)
     delwin(stdscr);
     stdscr = NULL;
 }
+
 void lx_host_terminal_refresh(void)
 {
     if (redirected)
@@ -161,6 +163,7 @@ void lx_host_terminal_refresh(void)
     }
     refresh();
 }
+
 void lx_host_terminal_cursor(int x, int y)
 {
     if (redirected)
@@ -168,6 +171,7 @@ void lx_host_terminal_cursor(int x, int y)
     move(y, x);
     refresh();
 }
+
 void lx_host_terminal_cells(int x, int y, const uint16_t *cells, int count, int cursor_x,
                             int cursor_y, int commit)
 {

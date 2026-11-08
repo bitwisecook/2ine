@@ -4,17 +4,20 @@
 #include "ball/icon.h"
 #include "hal/host_fs.h"
 #include "hal/host_sync.h"
+
 LONG WinLoadString(HAB hab, HMODULE module, ULONG id, LONG capacity, PCHAR output)
 {
     TRACE_NATIVE("WinLoadString(%u, %u, %u, %d, %p)", (uint)hab, (uint)module, (uint)id,
                  (int)capacity, output);
     return loadStringTable(module, 5, id, capacity, output);
 }
+
 /* PM's own resources live in PMMRGRES.DLL. They are read from the installed file at run
    time, so a system without that file has no PM strings. */
 static LxHostOnce pm_resources_once = LX_HOST_ONCE_INIT;
 static uint8 *pm_resources;
 static size_t pm_resources_size;
+
 static void load_pm_resources(void)
 {
     uint32 error = 0;
@@ -26,6 +29,7 @@ static void load_pm_resources(void)
         pm_resources = lx_host_file_snapshot(path, 8 * 1024 * 1024, &pm_resources_size, &status);
     free(path);
 }
+
 LONG loadStringTable(HMODULE module, ULONG type, ULONG id, LONG capacity, PCHAR output)
 {
     if (!output || capacity <= 0 || id > UINT16_MAX)

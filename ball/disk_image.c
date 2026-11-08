@@ -27,6 +27,7 @@
 #define DEVICE_PREFIX "/@2ine-device/"
 #define SECTOR 2048u
 #define DIRECTORY_LIMIT (64u * 1024u * 1024u)
+
 typedef struct Node
 {
     uint64_t offset, size;
@@ -36,6 +37,7 @@ typedef struct Node
     uint64_t record;
     unsigned attributes;
 } Node;
+
 typedef struct Disk
 {
     struct ImageIndex *index;
@@ -57,33 +59,41 @@ typedef struct Disk
     char label[12];
     Node root;
 } Disk;
+
 typedef int (*EntryCallback)(void *, const char *, const Node *);
+
 static unsigned le16(const unsigned char *p)
 {
     return p[0] | (unsigned)p[1] << 8;
 }
+
 static uint32_t le32(const unsigned char *p)
 {
     return le16(p) | (uint32_t)le16(p + 2) << 16;
 }
+
 static int failure(int error)
 {
     errno = error;
     return 0;
 }
+
 int tb_image_path(const char *path)
 {
     return path && (!strncmp(path, IMAGE_PREFIX, strlen(IMAGE_PREFIX)) ||
                     !strncmp(path, DEVICE_PREFIX, strlen(DEVICE_PREFIX)));
 }
+
 int tb_image_device(const char *path)
 {
     return path && !strncmp(path, DEVICE_PREFIX, strlen(DEVICE_PREFIX));
 }
+
 static size_t prefix_size(const char *path)
 {
     return strlen(tb_image_device(path) ? DEVICE_PREFIX : IMAGE_PREFIX);
 }
+
 static char *encoded_root(const char *source, const char *kind)
 {
     static const char hex[] = "0123456789abcdef";
@@ -105,18 +115,22 @@ static char *encoded_root(const char *source, const char *kind)
     result[prefix + n * 2] = 0;
     return result;
 }
+
 char *tb_image_root(const char *source)
 {
     return encoded_root(source, IMAGE_PREFIX);
 }
+
 char *tb_image_device_root(const char *control)
 {
     return encoded_root(control, DEVICE_PREFIX);
 }
+
 static int digit(char c)
 {
     return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
 }
+
 FILE *tb_image_open_source(const char *path, int write)
 {
 #ifdef _WIN32
@@ -137,10 +151,12 @@ FILE *tb_image_open_source(const char *path, int write)
     return fopen(path, write ? "rb+" : "rb");
 #endif
 }
+
 static FILE *open_source(const char *path)
 {
     return tb_image_open_source(path, 0);
 }
+
 int tb_image_lock_source(FILE *file, int write)
 {
 #ifdef _WIN32
@@ -157,6 +173,7 @@ int tb_image_lock_source(FILE *file, int write)
     return result == 0;
 #endif
 }
+
 static int read_at(Disk *d, uint64_t offset, void *data, size_t n)
 {
     if (offset > d->bytes || n > d->bytes - offset || offset > INT64_MAX)
@@ -172,6 +189,7 @@ static int read_at(Disk *d, uint64_t offset, void *data, size_t n)
         return failure(EIO);
     return 1;
 }
+
 static void close_disk(Disk *d)
 {
     int error = errno;
@@ -181,6 +199,7 @@ static void close_disk(Disk *d)
     free(d->memory);
     errno = error;
 }
+
 static int iso_node(Disk *d, const unsigned char *r, size_t length, Node *node)
 {
     if (length < 34 || r[0] < 34 || r[0] > length || r[32] > r[0] - 33)
@@ -196,6 +215,7 @@ static int iso_node(Disk *d, const unsigned char *r, size_t length, Node *node)
         return failure(EIO);
     return 1;
 }
+
 static int identify(Disk *d)
 {
     unsigned char b[SECTOR];
@@ -306,6 +326,7 @@ static int identify(Disk *d)
 
     return 1;
 }
+
 const char *tb_image_member(const char *path)
 {
     if (!tb_image_path(path))
@@ -313,6 +334,7 @@ const char *tb_image_member(const char *path)
     const char *end = strchr(path + prefix_size(path), '/');
     return end ? end + 1 : path + strlen(path);
 }
+
 static char *decoded_source(const char *path)
 {
     if (!tb_image_path(path))
@@ -344,6 +366,7 @@ static char *decoded_source(const char *path)
     source[n / 2] = 0;
     return source;
 }
+
 /* A stable device resolves its current medium for every new operation. */
 static char *device_source(const char *path, int *kind, int *readonly)
 {
@@ -395,11 +418,13 @@ static char *device_source(const char *path, int *kind, int *readonly)
     fclose(file);
     return source;
 }
+
 char *tb_image_source(const char *path)
 {
     int kind = 0;
     return tb_image_device(path) ? device_source(path, &kind, NULL) : decoded_source(path);
 }
+
 int tb_image_device_kind(const char *path)
 {
     int kind = 0;
@@ -410,6 +435,7 @@ int tb_image_device_kind(const char *path)
     }
     return kind;
 }
+
 char *tb_image_volume_root(const char *path)
 {
     char *decoded = decoded_source(path);
@@ -426,6 +452,7 @@ char *tb_image_volume_root(const char *path)
     }
     return root;
 }
+
 int tb_image_protected(const char *path)
 {
     if (!tb_image_device(path))
@@ -437,6 +464,7 @@ int tb_image_protected(const char *path)
     free(source);
     return readonly;
 }
+
 static int open_disk_mode(const char *path, Disk *d, const char **member, int write)
 {
     memset(d, 0, sizeof *d);
@@ -480,10 +508,12 @@ static int open_disk_mode(const char *path, Disk *d, const char **member, int wr
     *member = tb_image_member(path);
     return 1;
 }
+
 static int open_disk(const char *path, Disk *d, const char **member)
 {
     return open_disk_mode(path, d, member, 0);
 }
+
 static uint32_t next_cluster(Disk *d, uint32_t cluster)
 {
     if (cluster < 2 || cluster >= d->clusters + 2 ||
@@ -505,6 +535,7 @@ static uint32_t next_cluster(Disk *d, uint32_t cluster)
     }
     return next;
 }
+
 static uint64_t directory_offset(Disk *d, Node directory, size_t at)
 {
     if (!directory.cluster)
@@ -518,6 +549,7 @@ static uint64_t directory_offset(Disk *d, Node directory, size_t at)
     }
     return d->data_offset + (uint64_t)(cluster - 2) * d->cluster_bytes + at % d->cluster_bytes;
 }
+
 static unsigned char *directory_data(Disk *d, Node node, size_t *size)
 {
     uint64_t length = node.size;
@@ -576,6 +608,7 @@ static unsigned char *directory_data(Disk *d, Node node, size_t *size)
     *size = (size_t)length;
     return data;
 }
+
 static int utf16_name(const uint16_t *text, size_t n, char *out, size_t capacity)
 {
     size_t at = 0;
@@ -604,10 +637,12 @@ static int utf16_name(const uint16_t *text, size_t n, char *out, size_t capacity
     out[at] = 0;
     return 1;
 }
+
 static int safe_name(const char *name)
 {
     return *name && strcmp(name, ".") && strcmp(name, "..") && !strpbrk(name, "/\\:");
 }
+
 static int read_entries(Disk *d, Node directory, EntryCallback callback, void *context)
 {
     if (!directory.directory)
@@ -772,13 +807,16 @@ static int read_entries(Disk *d, Node directory, EntryCallback callback, void *c
     free(data);
     return ok;
 }
+
 #include "image_index.h"
+
 typedef struct Find
 {
     const char *name;
     Node node;
     int found;
 } Find;
+
 static int same_name(const char *a, const char *b)
 {
     while (*a && *b)
@@ -786,6 +824,7 @@ static int same_name(const char *a, const char *b)
             return 0;
     return !*a && !*b;
 }
+
 static int find_entry(void *context, const char *name, const Node *node)
 {
     Find *find = context;
@@ -795,6 +834,7 @@ static int find_entry(void *context, const char *name, const Node *node)
     find->found = 1;
     return 0;
 }
+
 static int lookup(Disk *d, const char *member, Node *node)
 {
     char *copy = strdup(member);
@@ -853,6 +893,7 @@ static int lookup(Disk *d, const char *member, Node *node)
     free(copy);
     return 1;
 }
+
 static int root_member(const char *path)
 {
     const char *member = tb_image_member(path);
@@ -869,6 +910,7 @@ static int root_member(const char *path)
     }
     return 1;
 }
+
 int tb_image_info(const char *path, TbImageInfo *info)
 {
     if (tb_hpfs_volume(path))
@@ -936,6 +978,7 @@ int tb_image_info(const char *path, TbImageInfo *info)
     close_disk(&disk);
     return ok;
 }
+
 char *tb_image_absolute(const char *path)
 {
     char *decoded = decoded_source(path);
@@ -1003,16 +1046,19 @@ char *tb_image_absolute(const char *path)
     result[used] = 0;
     return result;
 }
+
 char *tb_image_canonical(const char *path)
 {
     TbImageInfo info;
     return tb_image_info(path, &info) ? tb_image_absolute(path) : NULL;
 }
+
 typedef struct Names
 {
     char **items;
     size_t count;
 } Names;
+
 static int add_name(void *context, const char *name, const Node *node)
 {
     (void)node;
@@ -1030,6 +1076,7 @@ static int add_name(void *context, const char *name, const Node *node)
     list->items[list->count++] = copy;
     return 1;
 }
+
 char **tb_image_names(const char *path, size_t *count)
 {
     if (tb_hpfs_volume(path))
@@ -1055,15 +1102,18 @@ char **tb_image_names(const char *path, size_t *count)
     *count = names.count;
     return names.items;
 }
+
 static FILE *disk_fopen(Disk *disk, const char *member)
 {
     Node node;
     FILE *output = NULL;
     unsigned char *buffer = NULL, *visited = NULL;
+
     enum
     {
         BUFFER_SIZE = 65536
     };
+
     if (!lookup(disk, member, &node))
         goto done;
     if (node.directory)
@@ -1136,6 +1186,7 @@ failed:
     output = NULL;
     errno = error;
 }
+
 done:
     free(visited);
     free(buffer);
@@ -1169,6 +1220,7 @@ static int stream_disk(FILE *file, Disk *disk)
     disk->bytes = (uint64_t)size;
     return identify(disk);
 }
+
 FILE *tb_image_stream_fopen(FILE *file, const char *member)
 {
     Disk disk;
@@ -1181,6 +1233,7 @@ FILE *tb_image_stream_fopen(FILE *file, const char *member)
     free(disk.fat);
     return out;
 }
+
 typedef struct StreamWalk
 {
     TbImageVisitor visitor;
@@ -1190,6 +1243,7 @@ typedef struct StreamWalk
     size_t count, visited;
     int result;
 } StreamWalk;
+
 static int stream_entry(void *opaque, const char *name, const Node *node)
 {
     StreamWalk *walk = opaque;
@@ -1229,6 +1283,7 @@ static int stream_entry(void *opaque, const char *name, const Node *node)
         free(path);
     return result == 1 ? 1 : result == 2 ? 0 : -1;
 }
+
 static int reader_disk(TbReadStream *stream, Disk *disk)
 {
     ImageIndex *index = tb_stream_index(stream);
@@ -1256,6 +1311,7 @@ static int reader_disk(TbReadStream *stream, Disk *disk)
     }
     return 1;
 }
+
 static int disk_walk(Disk *disk, TbImageVisitor visitor, void *context)
 {
     StreamWalk walk = {.visitor = visitor, .context = context, .parent = ""};
@@ -1271,6 +1327,7 @@ static int disk_walk(Disk *disk, TbImageVisitor visitor, void *context)
     free(walk.directories);
     return walk.result ? walk.result : result;
 }
+
 int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context)
 {
     Disk disk;
@@ -1283,6 +1340,7 @@ int tb_image_stream_walk(FILE *file, TbImageVisitor visitor, void *context)
     free(disk.fat);
     return result;
 }
+
 int tb_image_reader_walk(TbReadStream *stream, TbImageVisitor visitor, void *context)
 {
     Disk disk;
@@ -1297,6 +1355,7 @@ int tb_image_reader_walk(TbReadStream *stream, TbImageVisitor visitor, void *con
         free(disk.fat);
     return result;
 }
+
 int tb_image_reader_list(TbReadStream *stream, const char *member, TbImageVisitor visitor,
                          void *context)
 {
@@ -1316,12 +1375,14 @@ int tb_image_reader_list(TbReadStream *stream, const char *member, TbImageVisito
         free(disk.fat);
     return walk.result ? walk.result : result;
 }
+
 void tb_image_reader_cache_stats(TbReadStream *stream, uint64_t *builds, uint64_t *hits)
 {
     ImageIndex *index = tb_stream_index(stream);
     *builds = index ? index->builds : 0;
     *hits = index ? index->hits : 0;
 }
+
 typedef struct ClusterStream
 {
     TbReadStream *parent;
@@ -1329,6 +1390,7 @@ typedef struct ClusterStream
     uint32_t cluster_bytes;
     uint32_t *clusters;
 } ClusterStream;
+
 static void cluster_close(void *context)
 {
     ClusterStream *stream = context;
@@ -1336,6 +1398,7 @@ static void cluster_close(void *context)
     free(stream->clusters);
     free(stream);
 }
+
 static int cluster_read(void *context, uint64_t offset, void *data, size_t size)
 {
     ClusterStream *stream = context;
@@ -1357,6 +1420,7 @@ static int cluster_read(void *context, uint64_t offset, void *data, size_t size)
     }
     return 1;
 }
+
 TbReadStream *tb_image_reader_member(TbReadStream *stream, const char *member)
 {
     Disk disk;
@@ -1426,17 +1490,20 @@ static void store16(unsigned char *p, unsigned value)
     p[0] = value;
     p[1] = value >> 8;
 }
+
 static void store32(unsigned char *p, uint32_t value)
 {
     store16(p, value);
     store16(p + 2, value >> 16);
 }
+
 static unsigned fat_value(Disk *d, uint32_t cluster)
 {
     size_t at = d->fat_bits == 12 ? cluster + cluster / 2 : cluster * 2;
     unsigned value = le16(d->fat + at);
     return d->fat_bits == 12 ? (cluster & 1 ? value >> 4 : value & 0xfff) : value;
 }
+
 static void fat_set(Disk *d, uint32_t cluster, unsigned value)
 {
     size_t at = d->fat_bits == 12 ? cluster + cluster / 2 : cluster * 2;
@@ -1447,10 +1514,12 @@ static void fat_set(Disk *d, uint32_t cluster, unsigned value)
     }
     store16(d->fat + at, value);
 }
+
 static uint64_t cluster_offset(Disk *d, uint32_t cluster)
 {
     return d->data_offset + (uint64_t)(cluster - 2) * d->cluster_bytes;
 }
+
 static uint32_t allocate_cluster(Disk *d)
 {
     for (uint32_t i = 2; i < d->clusters + 2; i++)
@@ -1463,6 +1532,7 @@ static uint32_t allocate_cluster(Disk *d)
     errno = ENOSPC;
     return 0;
 }
+
 static int release_chain(Disk *d, uint32_t cluster)
 {
     for (uint32_t steps = 0; cluster; steps++)
@@ -1477,6 +1547,7 @@ static int release_chain(Disk *d, uint32_t cluster)
     }
     return 1;
 }
+
 static int stage_disk(const char *path, const char *expected, Disk *d, const char **member)
 {
     if (expected)
@@ -1509,6 +1580,7 @@ static int stage_disk(const char *path, const char *expected, Disk *d, const cha
     d->memory = memory;
     return 1;
 }
+
 static int commit_disk(Disk *d)
 {
     for (unsigned i = 0; i < d->fat_count; i++)
@@ -1523,6 +1595,7 @@ static int commit_disk(Disk *d)
     return fsync(fileno(d->file)) ? failure(errno) : 1;
 #endif
 }
+
 static int parent_node(Disk *d, const char *member, Node *parent, char **name)
 {
     char *copy = strdup(member);
@@ -1554,6 +1627,7 @@ static int parent_node(Disk *d, const char *member, Node *parent, char **name)
     }
     return parent->directory ? 1 : failure(ENOTDIR);
 }
+
 static void record_time(unsigned char *entry)
 {
     time_t seconds = time(NULL);
@@ -1571,6 +1645,7 @@ static void record_time(unsigned char *entry)
     store16(entry + 22, value.tm_hour << 11 | value.tm_min << 5 | value.tm_sec / 2);
     store16(entry + 24, (year - 1980) << 9 | (value.tm_mon + 1) << 5 | value.tm_mday);
 }
+
 static int short_exists(Disk *d, Node parent, const unsigned char name[11])
 {
     size_t size;
@@ -1587,6 +1662,7 @@ static int short_exists(Disk *d, Node parent, const unsigned char name[11])
     free(data);
     return found;
 }
+
 static int name_units(const char *name, uint16_t units[260], size_t *length)
 {
     size_t n = 0;
@@ -1622,10 +1698,12 @@ static int name_units(const char *name, uint16_t units[260], size_t *length)
         units[n++] = 0xffff;
     return 1;
 }
+
 static int short_character(unsigned char c)
 {
     return c < 128 && (isalnum(c) || strchr("!#$%&'()-@^_`{}~", c));
 }
+
 static int make_short(Disk *d, Node parent, const char *name, unsigned char alias[11], int *lfn)
 {
     const char *dot = strrchr(name, '.');
@@ -1672,6 +1750,7 @@ static int make_short(Disk *d, Node parent, const char *name, unsigned char alia
     }
     return failure(ENOSPC);
 }
+
 static int directory_slots(Disk *d, Node parent, size_t required, size_t *slot)
 {
     for (;;)
@@ -1715,6 +1794,7 @@ static int directory_slots(Disk *d, Node parent, size_t required, size_t *slot)
         fat_set(d, last, added);
     }
 }
+
 static int new_record(Disk *d, Node parent, const char *name, const unsigned char *previous,
                       Node *result)
 {
@@ -1768,6 +1848,7 @@ static int new_record(Disk *d, Node parent, const char *name, const unsigned cha
     result->directory = !!(entry[11] & 16);
     return 1;
 }
+
 static int erase_record(Disk *d, Node parent, Node node)
 {
     size_t size;
@@ -1801,6 +1882,7 @@ static int erase_record(Disk *d, Node parent, Node node)
     free(data);
     return 1;
 }
+
 static int file_contents(Disk *d, Node node, unsigned char *out, size_t size)
 {
     uint32_t cluster = node.cluster;
@@ -1817,6 +1899,7 @@ static int file_contents(Disk *d, Node node, unsigned char *out, size_t size)
     }
     return 1;
 }
+
 static int replace_contents(Disk *d, Node node, const void *contents, uint64_t size)
 {
     if (node.directory)
@@ -1848,6 +1931,7 @@ static int replace_contents(Disk *d, Node node, const void *contents, uint64_t s
     record_time(entry);
     return 1;
 }
+
 static int change_contents(const char *path, const char *expected, uint64_t offset,
                            const void *bytes, size_t length, uint64_t resized, int resize)
 {
@@ -1879,6 +1963,7 @@ static int change_contents(const char *path, const char *expected, uint64_t offs
     close_disk(&disk);
     return ok;
 }
+
 int tb_image_write(const char *path, const char *expected, uint64_t offset, const void *bytes,
                    size_t size)
 {
@@ -1888,6 +1973,7 @@ int tb_image_write(const char *path, const char *expected, uint64_t offset, cons
         return tb_fat_modify(path, expected, TB_FS_WRITE, offset, bytes, size, NULL);
     return change_contents(path, expected, offset, bytes, size, 0, 0);
 }
+
 int tb_image_resize(const char *path, const char *expected, uint64_t size)
 {
     if (tb_hpfs_volume(path))
@@ -1896,6 +1982,7 @@ int tb_image_resize(const char *path, const char *expected, uint64_t size)
         return tb_fat_modify(path, expected, TB_FS_RESIZE, size, NULL, 0, NULL);
     return change_contents(path, expected, 0, NULL, 0, size, 1);
 }
+
 int tb_image_create_file(const char *path, int exclusive)
 {
     if (tb_hpfs_volume(path))
@@ -1920,6 +2007,7 @@ int tb_image_create_file(const char *path, int exclusive)
     close_disk(&disk);
     return ok;
 }
+
 static int count_entry(void *value, const char *name, const Node *node)
 {
     (void)name;
@@ -1927,6 +2015,7 @@ static int count_entry(void *value, const char *name, const Node *node)
     (*(unsigned *)value)++;
     return 1;
 }
+
 int tb_image_remove(const char *path, int directory)
 {
     if (tb_hpfs_volume(path))
@@ -1954,6 +2043,7 @@ int tb_image_remove(const char *path, int directory)
     close_disk(&disk);
     return ok;
 }
+
 int tb_image_mkdir(const char *path)
 {
     if (tb_hpfs_volume(path))
@@ -1997,6 +2087,7 @@ int tb_image_mkdir(const char *path)
     close_disk(&disk);
     return ok;
 }
+
 int tb_image_readonly(const char *path, int readonly)
 {
     if (tb_hpfs_volume(path))
@@ -2022,6 +2113,7 @@ int tb_image_readonly(const char *path, int readonly)
     close_disk(&disk);
     return ok;
 }
+
 static void store_stamp(unsigned char *field, uint32_t stamp)
 {
     field[0] = (unsigned char)stamp;
@@ -2029,6 +2121,7 @@ static void store_stamp(unsigned char *field, uint32_t stamp)
     field[2] = (unsigned char)(stamp >> 16);
     field[3] = (unsigned char)(stamp >> 24);
 }
+
 int tb_image_stamps(const char *path, const char *expected, const TbImageStamps *stamps)
 {
     if (tb_hpfs_volume(path))
@@ -2061,6 +2154,7 @@ int tb_image_stamps(const char *path, const char *expected, const TbImageStamps 
     close_disk(&disk);
     return ok;
 }
+
 int tb_image_attributes(const char *path, const char *expected, unsigned attributes)
 {
     attributes &= 0x26;
@@ -2085,6 +2179,7 @@ int tb_image_attributes(const char *path, const char *expected, unsigned attribu
     close_disk(&disk);
     return ok;
 }
+
 int tb_image_move(const char *source, const char *target)
 {
     if (tb_hpfs_volume(source))
@@ -2148,6 +2243,7 @@ int tb_image_move(const char *source, const char *target)
     close_disk(&disk);
     return ok;
 }
+
 int tb_image_copy(FILE *source, const char *destination, int exclusive)
 {
     if (fseeko(source, 0, SEEK_END))
@@ -2167,6 +2263,7 @@ int tb_image_copy(FILE *source, const char *destination, int exclusive)
     free(bytes);
     return ok;
 }
+
 int tb_image_create_floppy(const char *path, unsigned kib)
 {
     const struct Geometry
@@ -2261,6 +2358,7 @@ int tb_image_metadata_get(const char *path, const char *expected, void *data, si
         return tb_hpfs_metadata_get(path, expected, data, capacity, size);
     return 1;
 }
+
 int tb_image_metadata_set(const char *path, const char *expected, const void *data, size_t size)
 {
     int readonly = tb_image_protected(path);

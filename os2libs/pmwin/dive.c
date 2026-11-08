@@ -3,6 +3,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "hal/host_sync.h"
+
 typedef struct PmDiveTarget
 {
     struct PmDiveTarget *next;
@@ -14,13 +15,16 @@ typedef struct PmDiveTarget
     RECTL *rectangles;
     uint32_t *pixels;
 } PmDiveTarget;
+
 static PmDiveTarget *targets;
 static LxHostMutex *target_mutex;
 static LxHostOnce target_once = LX_HOST_ONCE_INIT;
+
 static void initialize_targets(void)
 {
     target_mutex = lx_host_mutex_create(0, 0);
 }
+
 static void clear_frame(PmDiveTarget *target)
 {
     free(target->pixels);
@@ -28,6 +32,7 @@ static void clear_frame(PmDiveTarget *target)
     target->pixels = NULL;
     target->rectangles = NULL;
 }
+
 static BOOL write_pixels(HPS ps, LONG x, LONG y, unsigned width, unsigned height,
                          const uint32_t *pixels)
 {
@@ -54,6 +59,7 @@ static BOOL write_pixels(HPS ps, LONG x, LONG y, unsigned width, unsigned height
     }
     return TRUE;
 }
+
 void *lx_pm_dive_target(LONG x, LONG y, unsigned width, unsigned height)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -89,6 +95,7 @@ void *lx_pm_dive_target(LONG x, LONG y, unsigned width, unsigned height)
     lx_host_mutex_unlock(target_mutex);
     return target;
 }
+
 void lx_pm_dive_release(void *context)
 {
     if (!context || !target_mutex)
@@ -105,6 +112,7 @@ void lx_pm_dive_release(void *context)
         }
     lx_host_mutex_unlock(target_mutex);
 }
+
 BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned height,
                      const uint32_t *pixels, ULONG count, const RECTL *rectangles)
 {
@@ -198,6 +206,7 @@ BOOL lx_pm_dive_blit(void *context, LONG x, LONG y, unsigned width, unsigned hei
     }
     return ok;
 }
+
 BOOL lx_pm_dive_read(void *context, LONG x, LONG y, unsigned width, unsigned height,
                      uint32_t *pixels)
 {
@@ -216,6 +225,7 @@ BOOL lx_pm_dive_read(void *context, LONG x, LONG y, unsigned width, unsigned hei
     lx_host_mutex_unlock(target_mutex);
     return ok;
 }
+
 BOOL lx_pm_dive_flush(void *context)
 {
     if (!context || !target_mutex)
@@ -229,6 +239,7 @@ BOOL lx_pm_dive_flush(void *context)
         lx_pm_dive_pump(anchor);
     return ok;
 }
+
 void lx_pm_dive_pump(void *context)
 {
     if (!target_mutex)
@@ -272,6 +283,7 @@ void lx_pm_dive_pump(void *context)
     }
     lx_host_mutex_unlock(target_mutex);
 }
+
 void lx_pm_dive_forget(void *window)
 {
     if (!target_mutex)
@@ -285,6 +297,7 @@ void lx_pm_dive_forget(void *window)
         }
     lx_host_mutex_unlock(target_mutex);
 }
+
 void lx_pm_dive_cleanup(void *anchor)
 {
     if (!target_mutex)

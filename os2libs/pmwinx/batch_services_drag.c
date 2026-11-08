@@ -23,15 +23,18 @@ enum
     DRAGITEM_CONTAINER = 16,
     DRAGITEM_SOURCE = 20
 };
+
 VOID DragAcceptFiles(ULONG window, BOOL accept)
 {
     LONG style = GetWindowLong(window, -20);
     SetWindowLong(window, -20, accept ? style | 0x10 : style & ~0x10);
 }
+
 VOID DragFinish(ULONG drop)
 {
     GlobalFree(drop);
 }
+
 static ULONG drop_address(ULONG drop, uint8 header[20])
 {
     ULONG address = GlobalLock(drop);
@@ -42,6 +45,7 @@ static ULONG drop_address(ULONG drop, uint8 header[20])
     }
     return address;
 }
+
 ULONG DragQueryFile(ULONG drop, ULONG index, PSZ output, ULONG capacity)
 {
     uint8 header[20];
@@ -98,6 +102,7 @@ drop_done:
     GlobalUnlock(drop);
     return result;
 }
+
 BOOL DragQueryPoint(ULONG drop, PVOID output)
 {
     uint8 header[20];
@@ -110,10 +115,12 @@ BOOL DragQueryPoint(ULONG drop, PVOID output)
     GlobalUnlock(drop);
     return result;
 }
+
 static BOOL item_names(ULONG item, uint8 wire[DRAGITEM_NAMES])
 {
     return item && lx_execution_read(GLoaderState.execution, item, wire, DRAGITEM_NAMES);
 }
+
 /* DOR_NEVERDROP unless every item is a file named by container and source. */
 static ULONG drag_over_response(ULONG info)
 {
@@ -137,15 +144,17 @@ static ULONG drag_over_response(ULONG info)
     }
     return 0xbfff0000u | response;
 }
+
 static BOOL item_path(ULONG item, char path[DROP_PATH])
 {
     uint8 names[DRAGITEM_NAMES];
     if (!item_names(item, names))
         return FALSE;
     ULONG length = DrgQueryStrName(lx_guest_load_u32(names + DRAGITEM_CONTAINER), DROP_PATH, path);
-    return length && DrgQueryStrName(lx_guest_load_u32(names + DRAGITEM_SOURCE),
-                                     DROP_PATH - length, path + length);
+    return length && DrgQueryStrName(lx_guest_load_u32(names + DRAGITEM_SOURCE), DROP_PATH - length,
+                                     path + length);
 }
+
 /* The DROPFILES block belongs to the guest; DragFinish releases it. */
 static ULONG build_drop(HWND window, ULONG info)
 {
@@ -198,6 +207,7 @@ static ULONG build_drop(HWND window, ULONG info)
     free(paths);
     return drop;
 }
+
 static void post_dropped_files(HWND window, ULONG info)
 {
     if (!info || !DrgAccessDraginfo(info))
@@ -207,6 +217,7 @@ static void post_dropped_files(HWND window, ULONG info)
     if (drop && !PostMessage(window, WM_DROPFILES, drop, 0))
         GlobalFree(drop);
 }
+
 /* Windows that did not accept files pass drag messages to their parent. */
 ULONG open32DragMessage(ULONG window, BOOL accept, ULONG message, ULONG first, ULONG second)
 {

@@ -2,20 +2,24 @@
 /* Boolean regions are normalized into disjoint horizontal rectangles. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
+
 typedef struct
 {
     LONG x;
     int a, b;
 } Edge;
+
 static int long_compare(const void *left, const void *right)
 {
     LONG a = *(const LONG *)left, b = *(const LONG *)right;
     return (a > b) - (a < b);
 }
+
 static int edge_compare(const void *left, const void *right)
 {
     return long_compare(&((const Edge *)left)->x, &((const Edge *)right)->x);
 }
+
 BOOL regionBoolean(PmRegion *out, const PmRegion *a, const PmRegion *b, LONG mode)
 {
     size_t total = a->count + (b ? b->count : 0);
@@ -130,6 +134,7 @@ fail:
     free(rects);
     return FALSE;
 }
+
 static void destroy_region(void *resource)
 {
     PmRegion *region = resource;
@@ -142,6 +147,7 @@ static void destroy_region(void *resource)
     free(region->rects);
     free(region);
 }
+
 static PmRegion *borrow_region(ULONG handle, LxHandleBorrow *borrow)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -155,10 +161,12 @@ static PmRegion *borrow_region(ULONG handle, LxHandleBorrow *borrow)
     }
     return r;
 }
+
 static LONG region_type(const PmRegion *r)
 {
     return !r->count ? 1 : r->count == 1 ? 2 : 3;
 }
+
 ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles)
 {
     AnchorBlock *anchor = getAnchorBlockNoHAB();
@@ -195,6 +203,7 @@ ULONG lx_pm_region_create(HPS ps, LONG count, const RECTL *rectangles)
     anchor->regions = region;
     return region->handle;
 }
+
 BOOL lx_pm_region_destroy(HPS ps, ULONG handle)
 {
     if (!lx_pm_valid_ps(ps))
@@ -206,6 +215,7 @@ BOOL lx_pm_region_destroy(HPS ps, ULONG handle)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG lx_pm_region_set(HPS ps, ULONG handle, LONG count, const RECTL *rects)
 {
     if (!lx_pm_valid_ps(ps) || count < 0 || count > 4096 || (count && !rects))
@@ -227,6 +237,7 @@ LONG lx_pm_region_set(HPS ps, ULONG handle, LONG count, const RECTL *rects)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG lx_pm_region_combine(HPS ps, ULONG destination, ULONG first, ULONG second, LONG mode)
 {
     if (!lx_pm_valid_ps(ps) || (mode != 1 && mode != 2 && mode != 4 && mode != 6 && mode != 7))
@@ -242,6 +253,7 @@ LONG lx_pm_region_combine(HPS ps, ULONG destination, ULONG first, ULONG second, 
     lx_handle_release(&d);
     return result;
 }
+
 LONG lx_pm_region_box(HPS ps, ULONG handle, RECTL *rect)
 {
     if (!lx_pm_valid_ps(ps) || !rect)
@@ -259,6 +271,7 @@ LONG lx_pm_region_box(HPS ps, ULONG handle, RECTL *rect)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG lx_pm_region_offset(HPS ps, ULONG handle, const POINTL *point)
 {
     if (!lx_pm_valid_ps(ps) || !point)
@@ -275,6 +288,7 @@ LONG lx_pm_region_offset(HPS ps, ULONG handle, const POINTL *point)
     lx_handle_release(&borrow);
     return result;
 }
+
 LONG lx_pm_set_clip(HPS handle, ULONG region, ULONG *previous)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -295,6 +309,7 @@ LONG lx_pm_set_clip(HPS handle, ULONG region, ULONG *previous)
     ps->clip_lease = next;
     return value ? region_type(value) : 2;
 }
+
 LONG lx_pm_rect_visible(HPS handle, const RECTL *rect)
 {
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -327,6 +342,7 @@ LONG lx_pm_rect_visible(HPS handle, const RECTL *rect)
         (uint64_t)((int64_t)rect->xRight - rect->xLeft) * ((int64_t)rect->yTop - rect->yBottom);
     return area == full ? 3 : 2;
 }
+
 void lx_pm_region_cleanup(void *context)
 {
     AnchorBlock *anchor = context;
@@ -339,7 +355,8 @@ BOOL lx_pm_clip_point(HPS handle, LONG x, LONG y)
     PresentationSpace *ps = lx_pm_font_space(handle);
     if (!ps)
         return FALSE;
-    if(!lx_pm_graphics_clip(ps,x,y))return FALSE;
+    if (!lx_pm_graphics_clip(ps, x, y))
+        return FALSE;
     PmRegion *clip = ps->clip_lease.resource;
     if (!clip)
         return TRUE;
@@ -361,22 +378,27 @@ static int region_rect_order(const RECTL *a, const RECTL *b, BOOL bottom_up, BOO
     return right_first ? (a->xLeft < b->xLeft) - (a->xLeft > b->xLeft)
                        : (a->xLeft > b->xLeft) - (a->xLeft < b->xLeft);
 }
+
 static int region_top_left(const void *a, const void *b)
 {
     return region_rect_order(a, b, FALSE, FALSE);
 }
+
 static int region_top_right(const void *a, const void *b)
 {
     return region_rect_order(a, b, FALSE, TRUE);
 }
+
 static int region_bottom_left(const void *a, const void *b)
 {
     return region_rect_order(a, b, TRUE, FALSE);
 }
+
 static int region_bottom_right(const void *a, const void *b)
 {
     return region_rect_order(a, b, TRUE, TRUE);
 }
+
 BOOL lx_pm_region_query_rects(HPS ps, ULONG handle, PRECTL bounds, RGNRECT *control, PRECTL rects)
 {
     if (!control || (rects && (!control->ircStart || !control->crc)) || control->ulDirection < 1 ||

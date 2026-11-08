@@ -5,6 +5,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+
 static inline char *lx_host_pack_arguments(int argc, char *const *argv, size_t *size)
 {
     size_t total = 0;

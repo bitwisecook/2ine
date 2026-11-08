@@ -19,6 +19,7 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
 static void store_environment(const char *path)
 {
 #ifdef _WIN32
@@ -27,6 +28,7 @@ static void store_environment(const char *path)
     CHECK(setenv("TWOINE_PRINT_OUTPUT", path, 1) == 0);
 #endif
 }
+
 static void draw_page(HPS ps, LONG color)
 {
     CHECK(GpiSetColor(ps, color));
@@ -39,6 +41,7 @@ static void draw_page(HPS ps, LONG color)
     POINTL text = {100, 400};
     CHECK(GpiCharStringAt(ps, &text, 15, "2ine Print Test") > 0);
 }
+
 static void check_default_queue(int expected)
 {
     const ULONG levels[] = {3, 4, 6};
@@ -60,6 +63,7 @@ static void check_default_queue(int expected)
         }
     }
 }
+
 static int file_present(const char *path)
 {
     FILE *file = path ? fopen(path, "rb") : NULL;
@@ -67,6 +71,7 @@ static int file_present(const char *path)
         fclose(file);
     return file != NULL;
 }
+
 static void check_profile_default(const char *directory)
 {
     const char *user_path = getenv("TWOINE_USER_PROFILE"),
@@ -125,6 +130,7 @@ static void check_profile_default(const char *directory)
     CHECK(PrfWriteProfileString(HINI_SYSTEMPROFILE, "PM_SPOOLER", "QUEUE", NULL));
     check_default_queue(0);
 }
+
 int main(int argc, char **argv)
 {
     if (argc == 5 && !strcmp(argv[1], "--spool"))

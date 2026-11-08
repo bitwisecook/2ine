@@ -3,16 +3,19 @@
 #define TWOINE_HOST_SOCKET_H
 #include <stddef.h>
 #include <stdint.h>
+
 typedef struct LxHostSocketAddress
 {
     uint32_t address;
     uint16_t port;
 } LxHostSocketAddress;
+
 typedef struct LxHostSocketSet
 {
     int count;
     int *sockets;
 } LxHostSocketSet;
+
 typedef struct LxHostSocketHost
 {
     char *name;
@@ -20,6 +23,7 @@ typedef struct LxHostSocketHost
     int family, length;
     char **addresses;
 } LxHostSocketHost;
+
 typedef struct LxHostSocketService
 {
     char *name;
@@ -27,12 +31,14 @@ typedef struct LxHostSocketService
     int port;
     char *protocol;
 } LxHostSocketService;
+
 enum
 {
     LX_SOCKET_STREAM = 1,
     LX_SOCKET_DGRAM = 2,
     LX_SOCKET_RAW = 3
 };
+
 enum
 {
     LX_MSG_OOB = 1,
@@ -44,6 +50,7 @@ enum
     LX_MSG_WAITALL = 64,
     LX_MSG_DONTWAIT = 128
 };
+
 typedef enum LxHostSocketOption
 {
     LX_SO_INVALID,
@@ -65,6 +72,7 @@ typedef enum LxHostSocketOption
     LX_SO_ERROR,
     LX_SO_TYPE
 } LxHostSocketOption;
+
 int lx_host_socket_open(int type);
 int lx_host_socket_open_protocol(int type, int protocol);
 int lx_host_socket_ip_option(int socket, int option, const void *value, int size);

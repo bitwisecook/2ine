@@ -2,6 +2,7 @@
 /* Open32 alerts fall back to the DOS speaker when no sound scheme is installed. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
+
 BOOL MessageBeep(ULONG type)
 {
     TRACE_NATIVE("MessageBeep(%X)", type);

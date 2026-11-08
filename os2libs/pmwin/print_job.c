@@ -11,6 +11,7 @@
 #include <zlib.h>
 #define PRINT_PAGE_LIMIT 1000u
 #define PRINT_BYTE_LIMIT (UINT64_C(1024) * 1024 * 1024)
+
 struct LxPrintJob
 {
     FILE *spool;
@@ -21,6 +22,7 @@ struct LxPrintJob
     long offsets[3 * PRINT_PAGE_LIMIT + 3];
     int failed;
 };
+
 void lx_print_abort(LxPrintJob *job)
 {
     if (!job)
@@ -31,6 +33,7 @@ void lx_print_abort(LxPrintJob *job)
     free(job->title);
     free(job);
 }
+
 LxPrintJob *lx_print_begin(unsigned kind, const char *title, int *cancelled)
 {
     if (cancelled)
@@ -72,11 +75,13 @@ LxPrintJob *lx_print_begin(unsigned kind, const char *title, int *cancelled)
         fputs("\033%-12345X@PJL ENTER LANGUAGE=PCL\r\n\033E", job->spool);
     return job;
 }
+
 static void pdf_object(LxPrintJob *job, unsigned number)
 {
     job->offsets[number] = ftell(job->spool);
     fprintf(job->spool, "%u 0 obj\n", number);
 }
+
 static int pdf_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsigned height,
                     unsigned dpi)
 {
@@ -128,11 +133,13 @@ static int pdf_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
             content);
     return ok && !ferror(job->spool);
 }
+
 static unsigned pcl_paper(unsigned width, unsigned height)
 {
     unsigned length = width > height ? width : height;
     return length == 3300 ? 2 : length == 4200 ? 3 : 26;
 }
+
 static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsigned height,
                     unsigned dpi)
 {
@@ -141,12 +148,13 @@ static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
     unsigned char *row = malloc(bytes);
     if (!row)
         return 0;
-    fprintf(job->spool,
-            "\033&l%uA\033&l%uO\033&l%uX\033&l%uS\033*o%dM\033&l0E\033*p0x0Y\033*t%uR\033*r%uS\033*r%uT"
-            "\033*b0M\033*r1A",
-            pcl_paper(width, height), width > height ? 1u : 0u,
-            job->destination.printer ? 1u : job->copies, job->duplex - 1, job->draft ? -1 : 0, dpi,
-            width, height);
+    fprintf(
+        job->spool,
+        "\033&l%uA\033&l%uO\033&l%uX\033&l%uS\033*o%dM\033&l0E\033*p0x0Y\033*t%uR\033*r%uS\033*r%uT"
+        "\033*b0M\033*r1A",
+        pcl_paper(width, height), width > height ? 1u : 0u,
+        job->destination.printer ? 1u : job->copies, job->duplex - 1, job->draft ? -1 : 0, dpi,
+        width, height);
     for (unsigned y = 0; y < height; y++)
     {
         memset(row, 0, bytes);
@@ -169,6 +177,7 @@ static int pcl_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, uns
     fputs("\033*rB\f", job->spool);
     return !ferror(job->spool);
 }
+
 int lx_print_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsigned height,
                   unsigned dpi)
 {
@@ -220,6 +229,7 @@ int lx_print_page(LxPrintJob *job, const uint32_t *pixels, unsigned width, unsig
     free(reduced);
     return ok;
 }
+
 void lx_print_options(LxPrintJob *job, unsigned copies, unsigned duplex, int draft)
 {
     if (!job)
@@ -230,6 +240,7 @@ void lx_print_options(LxPrintJob *job, unsigned copies, unsigned duplex, int dra
     if (job->destination.printer)
         job->destination.copies = job->copies;
 }
+
 int lx_print_raw(LxPrintJob *job, const void *data, size_t size)
 {
     if (!job || job->failed || job->kind != LX_PRINT_PCL || !data ||
@@ -237,6 +248,7 @@ int lx_print_raw(LxPrintJob *job, const void *data, size_t size)
         return 0;
     return 1;
 }
+
 static int commit_output(LxPrintJob *job)
 {
     uint32_t pid, parent;
@@ -278,6 +290,7 @@ static int commit_output(LxPrintJob *job)
     free(temporary);
     return ok;
 }
+
 int lx_print_finish(LxPrintJob *job)
 {
     if (!job)

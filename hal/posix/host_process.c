@@ -3,6 +3,7 @@
 #include "hal/host.h"
 #include <unistd.h>
 #include <sys/resource.h>
+
 void lx_host_process_ids(uint32_t *process, uint32_t *parent)
 {
     *process = (uint32_t)getpid();

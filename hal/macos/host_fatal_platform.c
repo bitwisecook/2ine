@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/ucontext.h>
+
 static void write_register(const char *name, uint64_t value)
 {
     lx_host_fatal_write(name);
@@ -16,6 +17,7 @@ static void write_register(const char *name, uint64_t value)
     lx_host_fatal_write_hex(value, 16);
     lx_host_fatal_write(" ");
 }
+
 void lx_host_fatal_write_registers(const void *context)
 {
     const ucontext_t *state = context;
@@ -44,6 +46,7 @@ void lx_host_fatal_write_registers(const void *context)
     write_register("rdi", r->__rdi);
 #endif
 }
+
 void lx_host_fatal_write_images(void)
 {
     uint32_t count = _dyld_image_count();
@@ -75,10 +78,12 @@ void lx_host_fatal_write_images(void)
         lx_host_fatal_write("\n");
     }
 }
+
 int lx_host_fatal_display_available(void)
 {
     return 1;
 }
+
 short lx_host_fatal_prepare_spawn(posix_spawn_file_actions_t *actions)
 {
     for (int descriptor = 0; descriptor < 3; descriptor++)

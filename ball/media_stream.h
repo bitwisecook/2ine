@@ -4,6 +4,7 @@ enum
 {
     MEDIA_CACHE_BYTES = 1024 * 1024
 };
+
 typedef struct LazyArchive
 {
     TbReadStream *parent, *self;
@@ -15,6 +16,7 @@ typedef struct LazyArchive
     uint64_t start, decoded, expected;
     int raw;
 } LazyArchive;
+
 static int lazy_restart(LazyArchive *lazy)
 {
     if (lazy->archive)
@@ -50,6 +52,7 @@ static int lazy_restart(LazyArchive *lazy)
     lazy->start = lazy->decoded = 0;
     return found || bad(ENOENT);
 }
+
 static void lazy_close(void *opaque)
 {
     LazyArchive *lazy = opaque;
@@ -60,6 +63,7 @@ static void lazy_close(void *opaque)
     free(lazy->cache);
     free(lazy);
 }
+
 static int lazy_append(LazyArchive *lazy)
 {
     unsigned char data[65536];
@@ -97,6 +101,7 @@ static int lazy_append(LazyArchive *lazy)
     media_session.stats.decompressed_bytes += n;
     return 1;
 }
+
 static int lazy_read(void *opaque, uint64_t offset, void *data, size_t size)
 {
     LazyArchive *lazy = opaque;
@@ -119,6 +124,7 @@ static int lazy_read(void *opaque, uint64_t offset, void *data, size_t size)
     }
     return 1;
 }
+
 static TbReadStream *lazy_member(TbReadStream *parent, const char *name, uint64_t size, int raw)
 {
     LazyArchive *lazy = calloc(1, sizeof *lazy);
@@ -135,6 +141,7 @@ static TbReadStream *lazy_member(TbReadStream *parent, const char *name, uint64_
         lazy_close(lazy);
     return stream;
 }
+
 /* ZIP_STORED members can be addressed directly in the parent reader. Local
    header spans are checked independently of central-directory size metadata. */
 static TbReadStream *stored_zip_member(TbReadStream *parent, struct archive *archive, uint64_t size)
@@ -152,13 +159,16 @@ static TbReadStream *stored_zip_member(TbReadStream *parent, struct archive *arc
         media_session.stats.direct_slices++;
     return stream;
 }
+
 #include "zip_legacy.h"
 #include "zip_seek.h"
+
 typedef struct ExtractStream
 {
     const char *name;
     TbReadStream *parent, *out;
 } ExtractStream;
+
 static int stream_extract_visit(void *opaque, const char *name, uint64_t size, int directory,
                                 void *input, uint64_t offset, uint64_t packed, int kind,
                                 int64_t modified)
@@ -221,6 +231,7 @@ static int stream_extract_visit(void *opaque, const char *name, uint64_t size, i
     }
     return e->out ? 2 : 0;
 }
+
 static TbReadStream *extract_member(TbReadStream *file, const char *member)
 {
     if (image_reader(file))
