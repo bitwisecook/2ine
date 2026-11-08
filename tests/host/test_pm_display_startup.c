@@ -3,7 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwin.h"
 #include "os2libs/pmgpi.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/library.h"
 #include "host/thread.h"
 #include "host/window.h"

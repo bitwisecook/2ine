@@ -4,7 +4,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 #include "host/clock.h"
 #include "host/mailbox.h"
 #include "host/process.h"

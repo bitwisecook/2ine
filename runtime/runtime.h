@@ -16,8 +16,8 @@
 #include "runtime/diagnostics.h"
 #include "runtime/process.h"
 #include "loader/module.h"
-#include "guest/abi.h"
-#include "guest/handles.h"
+#include "emulator/abi.h"
+#include "emulator/handles.h"
 #include "runtime/audio.h"
 
 #define LXTIBSIZE (sizeof(LxTIB) + sizeof(LxTIB2) + sizeof(LxPostTIB))

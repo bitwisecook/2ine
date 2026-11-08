@@ -4,8 +4,8 @@
 #define TWOINE_OPENGL_INTERNAL_H
 #include "os2libs/os2native.h"
 #include "os2libs/pmwin.h"
-#include "guest/abi.h"
-#include "guest/handles.h"
+#include "emulator/abi.h"
+#include "emulator/handles.h"
 #include "host/opengl.h"
 #include "host/sync.h"
 #include "host/gl/constants.h"

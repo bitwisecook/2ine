@@ -2,7 +2,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/sync.h"
 #include <stdio.h>
 static LxHostOnce env_once = LX_HOST_ONCE_INIT;

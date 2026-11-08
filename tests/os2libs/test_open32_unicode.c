@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Unicode output is explicitly little-endian UTF-16, including unaligned buffers. */
 #include "os2libs/pmwinx.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>

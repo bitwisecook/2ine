@@ -4,7 +4,8 @@
 # with its i386 flags through twoine_add_execution_core().
 if(TWOINE_RUNTIME_ONLY OR TWOINE_BUILD_RUNTIME OR TWOINE_PORTABLE_LOADER OR NOT LX_LEGACY)
     twoine_add_host_services(twoine_portable_host unicorn)
-    add_library(twoine_runtime_objects OBJECT "${PROJECT_SOURCE_DIR}/guest/arguments.c")
+    add_library(twoine_runtime_objects OBJECT)
+    twoine_add_abi_arguments(twoine_runtime_objects)
     twoine_add_execution_core(twoine_runtime_objects)
     set_target_properties(twoine_runtime_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_include_directories(

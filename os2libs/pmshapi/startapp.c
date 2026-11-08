@@ -4,7 +4,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmshapi.h"
 #include "os2libs/sesmgr_start.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 
 enum
 {

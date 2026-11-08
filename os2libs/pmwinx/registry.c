@@ -4,8 +4,8 @@
 #include "os2libs/pmwinx.h"
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmshapi/profiles.h"
-#include "guest/handles.h"
-#include "guest/abi.h"
+#include "emulator/handles.h"
+#include "emulator/abi.h"
 #include "host/sync.h"
 #include "host/clock.h"
 

@@ -6,7 +6,7 @@
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmgpi.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 LONG GetMenuCheckMarkDimensions(void)
 {

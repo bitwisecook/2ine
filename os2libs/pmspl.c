@@ -4,7 +4,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmspl.h"
 #include "os2libs/printer_profile.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "os2libs/generated/pmspl-lx.h"
 
 static size_t queue_record_size(ULONG level)

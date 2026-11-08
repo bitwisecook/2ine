@@ -3,7 +3,7 @@
    owns lives in its guest instance data, so it is released with the object; state
    that survives the object is kept in the persistent store under its handle. */
 #include "os2libs/pmwp/internal.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/sync.h"
 #include <stdio.h>
 #include <strings.h>

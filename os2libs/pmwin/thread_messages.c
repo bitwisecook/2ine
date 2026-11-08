@@ -6,7 +6,7 @@
 #include "os2libs/pmwin/open32_post.h"
 #include "host/mailbox.h"
 #include "host/shared_memory.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 typedef struct Target
 {

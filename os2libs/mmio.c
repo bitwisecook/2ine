@@ -3,7 +3,7 @@
    buffer, keeping a copy made at open for reads after that buffer is gone. */
 #include "os2libs/os2native.h"
 #include "os2libs/mmio.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/sync.h"
 #include "host/fs.h"
 #include <stdio.h>

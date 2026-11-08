@@ -23,7 +23,7 @@
 #include "host/clock.h"
 #include "host/process.h"
 #include "host/sync.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 
 typedef struct WindowClass
 {

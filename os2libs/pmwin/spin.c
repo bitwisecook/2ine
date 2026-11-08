@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Numeric and string-array spin values retain validated limits and current state. */
 #include "os2libs/pmwin/controls.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <errno.h>
 
 static BOOL number(const char *text, LONG *value)

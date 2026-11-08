@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/os2native.h"
 #include "os2libs/helpmgr.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "os2libs/generated/helpmgr-lx.h"
 
 HWND WinCreateHelpInstance(HAB hab, PVOID init)

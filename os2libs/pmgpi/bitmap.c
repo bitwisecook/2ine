@@ -4,7 +4,7 @@
 #include "os2libs/pmgpi.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 ULONG GpiCreateBitmap(HPS ps, PVOID header, ULONG options, PVOID bits, PVOID info)
 {

@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* WM_CREATE carries control data and a complete CREATESTRUCT in the callback's address space. */
 #include "os2libs/pmwin/internal.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 MRESULT sendCreateMessage(Window *window, const CREATESTRUCT *creation)
 {

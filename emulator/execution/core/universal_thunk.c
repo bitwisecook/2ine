@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Host-independent guest code for OS/2's tiled 16-to-32-bit argument thunk. */
 #include "emulator/execution.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "emulator/execution/core/x86/unithunk_bytes.h"
 #include <string.h>
 

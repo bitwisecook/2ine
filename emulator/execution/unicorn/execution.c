@@ -2,7 +2,7 @@
 /* Portable process entry and API dispatch over the CPU execution interface. */
 #include "emulator/execution/core/backend.h"
 #include "emulator/execution/unicorn/cpu.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/fatal.h"
 #include "host/sync.h"
 #include "host/thread.h"

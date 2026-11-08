@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Guest resource names are fixed-width integers, never truncated host pointers. */
-#ifndef TWOINE_GUEST_HANDLES_H
-#define TWOINE_GUEST_HANDLES_H
+#ifndef TWOINE_EMULATOR_HANDLES_H
+#define TWOINE_EMULATOR_HANDLES_H
 #include <stdint.h>
 #include <stddef.h>
 

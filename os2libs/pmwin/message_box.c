@@ -2,7 +2,7 @@
 /* Standard message boxes use resource-template controls and the PM modal loop. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/controls.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 /* A box without a close action dismisses only through one of its buttons. */
 static MRESULT OS2API no_close_procedure(HWND window, ULONG message, MPARAM first, MPARAM second)

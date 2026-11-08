@@ -4,7 +4,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/standard_dialogs.h"
 #include "os2libs/pmctls.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <strings.h>
 
 enum

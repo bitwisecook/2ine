@@ -4,7 +4,7 @@
    32-bit bridges, and somBuildClass itself fills every class data token. */
 #include "os2libs/pmwp/internal.h"
 #include "os2libs/doscalls.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/sync.h"
 #include <stdio.h>
 

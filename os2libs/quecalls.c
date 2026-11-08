@@ -9,8 +9,8 @@
 #include "os2libs/os2native16.h"
 #include "os2libs/quecalls.h"
 
-#include "guest/handles.h"
-#include "guest/abi.h"
+#include "emulator/handles.h"
+#include "emulator/abi.h"
 #include "os2libs/doscalls.h"
 #include "host/clock.h"
 #include "host/mailbox.h"

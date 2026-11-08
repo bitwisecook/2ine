@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Typed resource ownership and generation-checked OS/2 handles. */
-#include "guest/handles.h"
+#include "emulator/handles.h"
 #include "host/sync.h"
 #include <stdlib.h>
 #include <string.h>

@@ -2,8 +2,8 @@
 /* Resource tables own copied bytes, are process-wide, and require no video context. */
 #include "os2libs/pmwinx.h"
 #include "runtime/runtime.h"
-#include "guest/abi.h"
-#include "guest/handles.h"
+#include "emulator/abi.h"
+#include "emulator/handles.h"
 #include "host/thread.h"
 #include <SDL3/SDL.h>
 #include <dlfcn.h>

@@ -3,7 +3,7 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/windows.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 #include "host/sync.h"
 #include <ctype.h>
 

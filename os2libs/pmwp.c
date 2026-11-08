@@ -8,7 +8,7 @@
 #include "os2libs/pmwin.h"
 #include "os2libs/sesmgr.h"
 #include "os2libs/pmwin/graphics.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "os2libs/pmshapi/profiles.h"
 #include "host/fs.h"
 #include "host/sync.h"

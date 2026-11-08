@@ -8,7 +8,7 @@
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmwin.h"
 #include "os2libs/sesmgr.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <stdio.h>
 #include <strings.h>
 

@@ -2,8 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 /* Process-level invocation contracts for native and emulated execution. */
 #include "emulator/execution.h"
-#include "guest/abi.h"
-#include "guest/arguments.h"
+#include "emulator/abi.h"
+#include "emulator/arguments.h"
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>

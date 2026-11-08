@@ -7,7 +7,7 @@
 #include "os2libs/pmdrag.h"
 #include "os2libs/pmshapi.h"
 #include "os2libs/pmwin.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/fs.h"
 #include "host/sync.h"
 #include "host/thread.h"

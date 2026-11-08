@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* USE16 adapters preserve word-sized outputs and selector-based addresses. */
 #include "os2libs/doscalls/internal.h"
-#include "guest/arguments.h"
+#include "emulator/arguments.h"
 
 APIRET16 Dos16RmDir(PSZ path, ULONG reserved)
 {

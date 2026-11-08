@@ -5,7 +5,7 @@
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwinx/windows.h"
 #include "os2libs/pmwinx/input.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 #include <stdio.h>
 
 ULONG GetForegroundWindow(void)

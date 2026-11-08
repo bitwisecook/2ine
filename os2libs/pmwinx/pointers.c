@@ -4,8 +4,8 @@
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwinx/batch_services.h"
 #include "os2libs/pmwin.h"
-#include "guest/abi.h"
-#include "guest/handles.h"
+#include "emulator/abi.h"
+#include "emulator/handles.h"
 static _Thread_local ULONG current_cursor;
 
 ULONG LoadCursor(HMODULE module, PSZ name)

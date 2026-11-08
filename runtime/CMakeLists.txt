@@ -10,8 +10,8 @@ if(NOT TWOINE_RUNTIME_ONLY)
         core/features.c
         core/drives.c
         audio.c
-        ../guest/handles.c
     )
+    twoine_add_abi_handles(2ine)
     twoine_application_target(2ine)
     target_compile_definitions(
         2ine
@@ -20,7 +20,7 @@ if(NOT TWOINE_RUNTIME_ONLY)
     if(TWOINE_NATIVE_LOADER)
         twoine_add_host_services(twoine_native_host native)
         twoine_add_execution_core(2ine)
-        target_sources(2ine PRIVATE ../guest/arguments.c)
+        twoine_add_abi_arguments(2ine)
         target_link_libraries(2ine PRIVATE twoine_native_host)
     else()
         target_link_libraries(2ine PRIVATE twoine_runtime_objects twoine_portable_host)

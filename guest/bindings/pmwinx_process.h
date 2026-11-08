@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "guest/arguments.h"
+#include "emulator/arguments.h"
 #include "os2libs/pmwinx/process.h"
 
 enum

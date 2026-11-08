@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Accelerator tables translate a QMSG in place and retain their packed resource bytes. */
 #include "os2libs/pmwin/internal.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <ctype.h>
 
 typedef struct PmAccelerator

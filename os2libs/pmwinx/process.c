@@ -10,7 +10,7 @@
 #include "os2libs/pmwin.h"
 #include "os2libs/pmwin/open32_post.h"
 #include "os2libs/pmwp.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 #include "guest/launch_record.h"
 #include "host/clock.h"
 #include "host/process.h"

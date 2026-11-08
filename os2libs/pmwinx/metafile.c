@@ -2,7 +2,7 @@
 /* Memory WMFs own a validated copy, independently of the caller's buffer. */
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 #include "host/sync.h"
 #include "os2libs/pmwinx/drawing.h"
 #include "os2libs/pm_text.h"

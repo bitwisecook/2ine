@@ -4,7 +4,7 @@
 #include "os2libs/pmwinx.h"
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/menus.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #define CHECK(condition)                                                                           \

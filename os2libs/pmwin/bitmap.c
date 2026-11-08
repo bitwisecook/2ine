@@ -2,7 +2,7 @@
 /* Selected bitmap lifetimes are pinned by the presentation space. Pixels are bottom-up RGB. */
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 typedef struct
 {

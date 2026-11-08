@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Class extra bytes contain guest words; pointer values remain opaque guest addresses. */
 #include "os2libs/pmwin/internal.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 #if TWOINE_PORTABLE_LOADER && LX_LEGACY
 static uint32 control_callback(uint8 *args)

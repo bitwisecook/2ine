@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Packed templates are validated completely before any window is published. */
 #include "os2libs/pmwin/internal.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "os2libs/pmwin/controls.h"
 #include "os2libs/pmwin/graphics.h"
 

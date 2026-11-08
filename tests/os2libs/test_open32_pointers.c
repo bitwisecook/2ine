@@ -3,8 +3,8 @@
 #include "os2libs/os2native.h"
 #include "os2libs/pmwinx/internal.h"
 #include "os2libs/pmwin.h"
-#include "guest/abi.h"
-#include "guest/handles.h"
+#include "emulator/abi.h"
+#include "emulator/handles.h"
 #include <stdio.h>
 
 /* No confinement rectangle is active in these coordinate cases. */

@@ -7,7 +7,7 @@
 #include "host/window.h"
 #include "host/input.h"
 #include "host/desktop.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 HPOINTER lx_pm_pointer_file(const char *filename);
 BOOL lx_pm_pointer_dimensions(HPOINTER handle, LONG *width, LONG *height);
 BOOL lx_pm_pointer_draw(HPS space, LONG x, LONG y, HPOINTER handle);

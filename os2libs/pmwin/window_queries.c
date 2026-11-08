@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Enumerations retain a snapshot of immediate child handles in snapshotted z order. */
 #include "os2libs/pmwin/internal.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 
 typedef struct PmWindowEnumeration
 {

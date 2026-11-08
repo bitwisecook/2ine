@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Presentation attributes are copied, inherited through owners and changed synchronously. */
 #include "os2libs/pmwin/internal.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 
 static void notify(AnchorBlock *anchor, Window *window, ULONG id)
 {

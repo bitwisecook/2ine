@@ -4,7 +4,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/paint.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <ctype.h>
 
 BOOL WinCancelShutdown(HMQ queue, BOOL cancel)

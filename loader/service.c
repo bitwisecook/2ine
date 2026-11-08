@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Original OS/2 REXX system initialization runs in a separate service worker. */
 #include "loader/internal.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include "host/process.h"
 #include "host/shared_memory.h"
 

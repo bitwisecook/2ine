@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2libs/os2native.h"
 #include "os2libs/ssleay32.h"
-#include "guest/handles.h"
+#include "emulator/handles.h"
 #include "host/tls.h"
 #include "host/sync.h"
 #include "runtime/runtime_features.h"

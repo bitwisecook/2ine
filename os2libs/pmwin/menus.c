@@ -4,7 +4,7 @@
 #include "os2libs/pmwin/controls.h"
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pm_text.h"
-#include "guest/abi.h"
+#include "emulator/abi.h"
 #include <ctype.h>
 
 Window *lx_pm_menu_window(HWND handle)
