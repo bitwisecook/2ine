@@ -3,6 +3,7 @@
 #define TWOINE_DIVE_H
 #include "os2/include/os2def.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/private/pmsplp.h"
 #define DIVE_SUCCESS 0
 #define DIVE_ERR_INVALID_INSTANCE 0x1000
 #define DIVE_ERR_SOURCE_FORMAT 0x1001

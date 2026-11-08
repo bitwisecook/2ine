@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Virtual output queues use the native 2ine raster printer devices. */
-#ifndef TWOINE_PRINTER_CATALOGUE_H
-#define TWOINE_PRINTER_CATALOGUE_H
+#ifndef _INCL_PMDEVP_H_
+#define _INCL_PMDEVP_H_
 #include <string.h>
 #ifdef _WIN32
 #define strncasecmp _strnicmp

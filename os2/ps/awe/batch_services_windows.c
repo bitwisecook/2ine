@@ -5,6 +5,7 @@
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/input.h"
+#include "os2/include/private/pmp.h"
 #include "emulator/handles.h"
 #include <stdio.h>
 

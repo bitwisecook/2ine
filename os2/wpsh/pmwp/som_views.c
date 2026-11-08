@@ -4,9 +4,9 @@
    the object's help library in the system information viewer. */
 #include "os2/wpsh/pmwp/internal.h"
 #include "os2/include/bsedos.h"
-#include "os2/include/pmdrag.h"
-#include "os2/include/pmshapi.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/pmshl.h"
+#include "os2/include/pmstddlg.h"
 #include "emulator/abi.h"
 #include <stdio.h>
 #include <strings.h>

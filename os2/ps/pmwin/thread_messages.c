@@ -4,6 +4,7 @@
 #include "os2/ps/pmwin/graphics.h"
 #include "host/sync.h"
 #include "os2/ps/pmwin/open32_post.h"
+#include "os2/include/private/pmp.h"
 #include "host/mailbox.h"
 #include "host/shared_memory.h"
 #include "emulator/abi.h"

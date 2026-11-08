@@ -6,7 +6,8 @@
 #include "os2/ps/awe/input.h"
 #include "host/clock.h"
 #include "host/window.h"
-#include "os2/include/pmshapi.h"
+#include "os2/include/pmshl.h"
+#include "os2/include/private/pmp.h"
 #include "os2/ps/pmwin/open32_post.h"
 static void open32Shutdown(void);
 #define LX_NATIVE_MODULE_SHUTDOWN() open32Shutdown()

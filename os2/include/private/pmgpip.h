@@ -1,85 +1,29 @@
-/* Public domain. No rights reserved. Wholly AI-authored. */
-/* The OS/2 FONTMETRICS record is 228 bytes, independent of host pointer width. */
-#ifndef TWOINE_PMGPI_FONTS_H
-#define TWOINE_PMGPI_FONTS_H
-#include "os2/include/os2def.h"
-#define FACESIZE 32
-#pragma pack(push, 2)
+/**
+ * 2ine; an OS/2 emulator for Linux.
+ *
+ * Please see the file LICENSE.txt in the source's root directory.
+ *
+ *  This file written by Ryan C. Gordon.
+ */
+/* Private GPI interfaces shared by 2ine's DLLs. */
 
-typedef struct _FATTRS
+#ifndef _INCL_PMGPIP_H_
+#define _INCL_PMGPIP_H_
+
+#include "os2/include/pmgpi.h"
+
+#ifdef __cplusplus
+extern "C"
 {
-    USHORT usRecordLength, fsSelection;
-    LONG lMatch;
-    CHAR szFacename[FACESIZE];
-    USHORT idRegistry, usCodePage;
-    LONG lMaxBaselineExt, lAveCharWidth;
-    USHORT fsType, fsFontUse;
-} FATTRS;
+#endif
 
-typedef FATTRS *PFATTRS;
+    /* Metafiles */
 
-typedef struct _PANOSE
-{
-    BYTE bFamilyType, bSerifStyle, bWeight, bProportion, bContrast, bStrokeVariation;
-    BYTE bArmStyle, bLetterform, bMidline, bXHeight, fbPassedISO, fbFailedISO;
-} PANOSE;
+    /* A native metafile object holding a copy of the given bytes. */
+    OS2EXPORT ULONG lx_pm_metafile_create(const void *data, size_t length);
 
-typedef struct _FONTMETRICS
-{
-    CHAR szFamilyname[FACESIZE];
-    CHAR szFacename[FACESIZE];
-    USHORT idRegistry;
-    USHORT usCodePage;
-    LONG lEmHeight;
-    LONG lXHeight;
-    LONG lMaxAscender;
-    LONG lMaxDescender;
-    LONG lLowerCaseAscent;
-    LONG lLowerCaseDescent;
-    LONG lInternalLeading;
-    LONG lExternalLeading;
-    LONG lAveCharWidth;
-    LONG lMaxCharInc;
-    LONG lEmInc;
-    LONG lMaxBaselineExt;
-    SHORT sCharSlope;
-    SHORT sInlineDir;
-    SHORT sCharRot;
-    USHORT usWeightClass;
-    USHORT usWidthClass;
-    SHORT sXDeviceRes;
-    SHORT sYDeviceRes;
-    SHORT sFirstChar;
-    SHORT sLastChar;
-    SHORT sDefaultChar;
-    SHORT sBreakChar;
-    SHORT sNominalPointSize;
-    SHORT sMinimumPointSize;
-    SHORT sMaximumPointSize;
-    USHORT fsType;
-    USHORT fsDefn;
-    USHORT fsSelection;
-    USHORT fsCapabilities;
-    LONG lSubscriptXSize;
-    LONG lSubscriptYSize;
-    LONG lSubscriptXOffset;
-    LONG lSubscriptYOffset;
-    LONG lSuperscriptXSize;
-    LONG lSuperscriptYSize;
-    LONG lSuperscriptXOffset;
-    LONG lSuperscriptYOffset;
-    LONG lUnderscoreSize;
-    LONG lUnderscorePosition;
-    LONG lStrikeoutSize;
-    LONG lStrikeoutPosition;
-    SHORT sKerningPairs;
-    SHORT sFamilyClass;
-    LONG lMatch;
-    LONG FamilyNameAtom;
-    LONG FaceNameAtom;
-    PANOSE panose;
-} FONTMETRICS;
+#ifdef __cplusplus
+}
+#endif
 
-typedef FONTMETRICS *PFONTMETRICS;
-#pragma pack(pop)
 #endif

@@ -3,9 +3,11 @@
    The desktop is a virtual root. Classes registered from a module are guest SOM classes
    built on the shell classes in pmwp/; their objects keep their state in this store. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmwp.h"
-#include "os2/wpsh/pmwp/internal.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/pmshl.h"
+#include "os2/include/pmwp.h"
+#include "os2/include/private/pmp.h"
+#include "os2/wpsh/pmwp/internal.h"
 #include "os2/include/bsedos.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "emulator/abi.h"

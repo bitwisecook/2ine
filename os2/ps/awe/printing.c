@@ -5,6 +5,7 @@
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
 #include "os2/include/private/pmsplp.h"
 #include "host/print.h"
 

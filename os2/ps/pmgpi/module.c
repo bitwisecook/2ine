@@ -8,6 +8,7 @@
 
 #include "os2/include/private/export.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "os2/ps/pmwin/internal.h"
 

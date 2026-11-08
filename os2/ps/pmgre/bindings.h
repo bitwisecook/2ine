@@ -1,3 +1,5 @@
+#include "os2/include/private/pmp.h"
+
 /* Public domain. No rights reserved. Wholly AI-authored. */
 static uint32 bridge32_Gre32Entry3(uint8 *a)
 {

@@ -3,6 +3,7 @@
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/private/pmp.h"
 #include "host/sync.h"
 #include "host/clipboard.h"
 

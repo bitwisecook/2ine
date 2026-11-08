@@ -2,6 +2,7 @@
 /* Display DPI affects physical units and layout while printer DPI remains fixed. */
 #include "os2/include/pmwin.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "emulator/runtime.h"
 #include <stdio.h>

@@ -1,5 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Help-manager bitmap uploads and explicit errors for unsupported metafile rendering. */
+#include "os2/include/pmerr.h"
+#include "os2/include/pmsei.h"
 #include "os2/include/pmgpi.h"
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/graphics.h"

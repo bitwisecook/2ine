@@ -1,3 +1,5 @@
+#include "os2/include/pmdev.h"
+
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* GPI structures are copied from checked guest spans before host drawing. */
 static uint32 gpi_word(const uint8 *a, unsigned i)

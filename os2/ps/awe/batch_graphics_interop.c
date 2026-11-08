@@ -5,6 +5,8 @@
 #include "os2/ps/pmwin/graphics.h"
 #include "os2/ps/pmwin/internal.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
+#include "os2/include/private/pmgpip.h"
 #include "os2/include/private/pmdevp.h"
 
 LONG SetAbortProc(ULONG h, ULONG procedure)

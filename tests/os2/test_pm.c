@@ -2,7 +2,9 @@
 /* Frame/client lifetime, queue filtering, retained drawing and timer contracts. */
 #include "os2/ps/pmwin/internal.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/pmerr.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
 #include "emulator/handles.h"
 #include "emulator/abi.h"
 #include "os2/ps/pmwin/graphics.h"

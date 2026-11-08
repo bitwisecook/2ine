@@ -2,6 +2,7 @@
 /* Window styles control sibling and child clipping. */
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/graphics.h"
+#include "os2/include/private/pmp.h"
 
 static BOOL exclude_window(PmRegion *visible, Window *window, const LxHostRect *origin)
 {

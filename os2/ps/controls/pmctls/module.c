@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmctls.h"
+#include "os2/include/pmstddlg.h"
 #include "os2/ps/pmwin/standard_dialogs.h"
 #include "os2/ps/controls/pmctls/generated/pmctls-lx.h"
 

@@ -1,7 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Drag string handles retain independent, checked copies of caller strings. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmdrag.h"
+#include "os2/include/pmwin.h"
+#include "os2/include/pmstddlg.h"
+#include "os2/include/private/pmp.h"
 #include "os2/ps/controls/drag/generated/pmdrag-lx.h"
 
 ULONG DrgAddStrHandle(PSZ name)
@@ -52,7 +54,6 @@ ULONG DrgQueryStrNameLen(ULONG string)
 #include "emulator/abi.h"
 #include "host/sync.h"
 #include "host/clock.h"
-#include "os2/include/pmwin.h"
 #include "os2/ps/pmwin/graphics.h"
 
 typedef struct DragAllocation

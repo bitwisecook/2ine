@@ -1,7 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_PRINTER_PROFILE_H
-#define TWOINE_PRINTER_PROFILE_H
-#include "os2/include/pmshapi.h"
+#ifndef _INCL_PMSPLP_H_
+#define _INCL_PMSPLP_H_
+#include "os2/include/pmshl.h"
+#include "os2/include/pmspl.h"
 #include "os2/include/private/pmdevp.h"
 
 /* HINI_PROFILE supplies the same USER/SYSTEM merge as native spooler clients.

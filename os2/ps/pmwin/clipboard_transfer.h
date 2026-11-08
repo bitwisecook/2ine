@@ -1,3 +1,5 @@
+#include "os2/include/private/pmp.h"
+
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Clipboard storage and guest/host transfers. Included by clipboard.c only. */
 static ClipFormat *find_format(ULONG format)

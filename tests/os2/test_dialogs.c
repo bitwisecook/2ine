@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Packed resources, callback dismissal, nested ownership and modal queue unwinding. */
 #include "os2/include/pmwin.h"
+#include "os2/include/pmerr.h"
 #include "os2/ps/pmwin/internal.h"
 #include "emulator/runtime.h"
 #include <stdio.h>

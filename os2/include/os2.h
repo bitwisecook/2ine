@@ -12,7 +12,7 @@
 #include "os2/include/os2def.h"
 #include "os2/include/bse.h"
 #include "os2/include/bsedos16.h"
-#include "os2/include/pmgpi.h"
+#include "os2/include/pm.h"
 #include "os2/include/tcpip32.h"
 
 #endif

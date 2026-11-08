@@ -67,6 +67,7 @@ static BOOL lock_clipboard(void)
 }
 
 #include "os2/ps/pmwin/clipboard_transfer.h"
+#include "os2/include/private/pmp.h"
 
 ULONG WinQuerySystemAtomTable(VOID)
 {

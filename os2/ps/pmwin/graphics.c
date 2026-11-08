@@ -2,6 +2,7 @@
 /* Presentation-space state is shared by paint and retained GPI drawing. */
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/graphics.h"
+#include "os2/include/private/pmp.h"
 
 HDC WinOpenWindowDC(HWND hwnd)
 {

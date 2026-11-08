@@ -2,6 +2,7 @@
 /* Metafiles own checked byte streams. Copy and edits are independent; a bad
    handle or range never dereferences an application supplied resource value. */
 #include "os2/include/pmgpi.h"
+#include "os2/include/private/pmgpip.h"
 #include "os2/ps/pmwin/internal.h"
 #include "host/fs.h"
 

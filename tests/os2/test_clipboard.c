@@ -2,6 +2,7 @@
 /* PM ownership, codepages, delayed rendering and isolated host image fixtures. */
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/graphics.h"
+#include "os2/include/private/pmp.h"
 #include "host/clipboard.h"
 #include <SDL3/SDL.h>
 #include <stdio.h>

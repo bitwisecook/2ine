@@ -5,8 +5,8 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/input.h"
-#include "os2/include/pmctls.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmstddlg.h"
 #include "os2/ps/pmwin/standard_dialogs.h"
 #include <stdio.h>
 

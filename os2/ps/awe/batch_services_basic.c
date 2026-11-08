@@ -6,7 +6,7 @@
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/windows.h"
 #include "os2/ps/awe/case_tables.h"
-#include "os2/include/pmshapi.h"
+#include "os2/include/pmshl.h"
 #include "host/clock.h"
 #include <stdio.h>
 

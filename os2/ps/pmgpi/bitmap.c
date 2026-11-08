@@ -1,6 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* OS/2 bitmap headers are byte-packed; resources retain absolute file offsets. */
 #include "os2/include/private/export.h"
+#include "os2/include/pmerr.h"
+#include "os2/include/pmsei.h"
 #include "os2/include/pmgpi.h"
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/graphics.h"

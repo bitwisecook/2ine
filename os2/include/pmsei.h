@@ -6,17 +6,19 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#ifndef _INCL_PMMERGE_H_
-#define _INCL_PMMERGE_H_
+#ifndef _INCL_PMSEI_H_
+#define _INCL_PMSEI_H_
 
-#include "os2/include/pmwin.h"
+#include "os2/include/os2def.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-    OS2EXPORT ULONG OS2API WinQueryCpType(HMQ queue);
+    /* INCL_WINSEI: error information */
+
+    OS2EXPORT ERRORID OS2API WinSetErrorInfo(ERRORID error, ULONG flags, ...);
 
 #ifdef __cplusplus
 }

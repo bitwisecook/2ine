@@ -2,7 +2,9 @@
 /* WinStartApp maps program details onto a session. The startup directory and
    environment travel with the launch; this process's own state never changes. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmshapi.h"
+#include "os2/include/pmsei.h"
+#include "os2/include/pmshl.h"
+#include "os2/include/private/pmp.h"
 #include "os2/include/private/bsep.h"
 #include "emulator/handles.h"
 

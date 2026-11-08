@@ -2,7 +2,7 @@
 /* Open32 WINI sections share the OS/2 user profile. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
-#include "os2/include/pmshapi.h"
+#include "os2/include/pmshl.h"
 #include "os2/ps/awe/case_tables.h"
 
 static char *profile_section(const char *section)

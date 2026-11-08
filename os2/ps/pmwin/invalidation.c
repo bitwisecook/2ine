@@ -3,6 +3,7 @@
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/paint.h"
 #include "os2/ps/pmwin/graphics.h"
+#include "os2/include/private/pmp.h"
 
 static void remove_paint(AnchorBlock *anchor, HWND handle)
 {

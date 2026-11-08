@@ -4,6 +4,7 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/batch_services.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 #include "emulator/handles.h"
 static _Thread_local ULONG current_cursor;

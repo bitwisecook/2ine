@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Switch entries belong to this worker; no host desktop task list is modified. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmshapi.h"
+#include "os2/include/pmshl.h"
 #include "os2/include/private/bsep.h"
 #include "emulator/handles.h"
 #include "host/sync.h"

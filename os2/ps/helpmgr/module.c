@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "os2/include/private/export.h"
-#include "os2/include/helpmgr.h"
+#include "os2/include/pmhelp.h"
 #include "emulator/abi.h"
 #include "os2/ps/helpmgr/generated/helpmgr-lx.h"
 

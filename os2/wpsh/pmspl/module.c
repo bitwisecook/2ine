@@ -5,6 +5,7 @@
 #include "os2/include/pmspl.h"
 #include "os2/include/private/pmsplp.h"
 #include "emulator/abi.h"
+#include "os2/wpsh/pmspl/internal.h"
 #include "os2/wpsh/pmspl/generated/pmspl-lx.h"
 
 static size_t queue_record_size(ULONG level)

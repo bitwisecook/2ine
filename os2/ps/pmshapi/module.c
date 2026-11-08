@@ -7,6 +7,6 @@
  */
 
 #include "os2/include/private/export.h"
-#include "os2/include/pmshapi.h"
+#include "os2/include/pmshl.h"
 #include "emulator/arguments.h"
 #include "os2/ps/pmshapi/generated/pmshapi-lx.h"

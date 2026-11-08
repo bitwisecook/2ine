@@ -8,6 +8,7 @@
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/video_frames.h"
 #include "os2/ps/pmwin/graphics.h"
+#include "os2/include/private/pmp.h"
 #include "host/clipboard.h"
 static void cleanupThreadPM(void);
 static void (*open32_thread_exit)(void);

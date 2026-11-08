@@ -1,10 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Persistent profiles and Open32 values across independent process lifetimes. */
-#include "os2/include/pmshapi.h"
-#include "os2/include/pmwinx.h"
-#include "os2/include/helpmgr.h"
-#include "os2/include/pmwp.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/pmshl.h"
+#include "os2/include/pmhelp.h"
+#include "os2/include/pmwp.h"
+#include "os2/include/pmwinx.h"
 #include "emulator/runtime.h"
 #include "host/thread.h"
 #include <limits.h>

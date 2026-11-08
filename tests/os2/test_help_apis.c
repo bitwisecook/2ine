@@ -2,7 +2,8 @@
 /* Private atom ownership, locale comparisons, bitmap scan uploads and scroll damage. */
 #include "os2/include/pmwin.h"
 #include "os2/include/pmgpi.h"
-#include "os2/include/pmmerge.h"
+#include "os2/include/pmdev.h"
+#include "os2/include/private/pmp.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "emulator/abi.h"
 #include <stdio.h>

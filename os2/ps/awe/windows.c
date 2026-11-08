@@ -7,6 +7,7 @@
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/pmwin/internal.h"
+#include "os2/include/private/pmp.h"
 #include <stdio.h>
 static _Thread_local Open32Window *windows, *creating;
 static _Thread_local LxGuestMapping *pm_procedure_mapping, *pm_frame_mapping;

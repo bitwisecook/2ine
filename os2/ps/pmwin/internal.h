@@ -16,6 +16,8 @@
     }
 #include "os2/include/private/export.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/pmgpi.h"
+#include "os2/include/private/pmp.h"
 #include "host/window.h"
 #include "host/input.h"
 #include "host/desktop.h"

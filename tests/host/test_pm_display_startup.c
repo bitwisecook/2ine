@@ -3,6 +3,7 @@
 #include "os2/include/private/export.h"
 #include "os2/include/pmwin.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
 #include "emulator/abi.h"
 #include "host/library.h"
 #include "host/thread.h"

@@ -3,6 +3,7 @@
 #ifndef TWOINE_PM_GRAPHICS_H
 #define TWOINE_PM_GRAPHICS_H
 #include "os2/include/pmwin.h"
+#include "os2/include/pmgpi.h"
 #include "host/font.h"
 #include "host/window.h"
 #include "host/input.h"

@@ -3,7 +3,7 @@
    the OS/2 FONTDLG/FATTRS records through checked execution spans. */
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/standard_dialogs.h"
-#include "os2/include/pmctls.h"
+#include "os2/include/pmstddlg.h"
 #include "emulator/abi.h"
 #include <strings.h>
 

@@ -3,7 +3,7 @@
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/controls.h"
 #include "os2/ps/pmwin/standard_dialogs.h"
-#include "os2/include/pmctls.h"
+#include "os2/include/pmstddlg.h"
 #include "host/fs.h"
 #include <ctype.h>
 

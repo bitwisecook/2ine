@@ -3,9 +3,9 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/include/pmwin.h"
+#include "os2/include/pmgpi.h"
 #include "os2/ps/awe/drawing.h"
 #include "os2/ps/pmwin/graphics.h"
-#include "os2/include/pmgpi.h"
 #include "emulator/abi.h"
 
 LONG GetMenuCheckMarkDimensions(void)

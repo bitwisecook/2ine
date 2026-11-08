@@ -1,9 +1,10 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Typed printer contexts, page boundaries, cancellation and actual output. */
 #include "os2/include/private/export.h"
+#include "os2/include/pmshl.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
 #include "os2/include/pmspl.h"
-#include "os2/include/pmshapi.h"
 #include "os2/ps/pmshapi/profiles.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "host/print.h"

@@ -4,6 +4,7 @@
 #include "os2/ps/awe/batch_services.h"
 #include "os2/ps/awe/windows.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/private/pmp.h"
 static _Thread_local LONG cursor_count;
 static ULONG locked_window; /* WinLockWindowUpdate state is shared by the desktop. */
 

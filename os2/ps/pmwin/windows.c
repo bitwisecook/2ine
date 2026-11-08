@@ -11,6 +11,7 @@
 #include "os2/ps/pmwin/graphics.h"
 #include "os2/ps/pmwin/controls.h"
 #include "os2/ps/pmwin/menus.h"
+#include "os2/include/private/pmp.h"
 
 Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd)
 {

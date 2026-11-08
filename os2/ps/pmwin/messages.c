@@ -11,6 +11,7 @@
 #include "os2/ps/pmwin/graphics.h"
 #include "os2/ps/pmwin/menus.h"
 #include "os2/ps/pmwin/open32_post.h"
+#include "os2/include/private/pmp.h"
 #include "emulator/launch_record.h"
 
 const char *messageName(const ULONG msg)

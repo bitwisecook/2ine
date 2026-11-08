@@ -83,6 +83,39 @@ extern "C"
     typedef ULONG ERRORID;
     typedef HANDLE HSEM;
 
+    typedef HANDLE HAB, *PHAB;
+
+    typedef HANDLE HMQ, *PHMQ;
+
+    typedef HANDLE HWND, *PHWND;
+
+    typedef PVOID MPARAM, *PMPARAM;
+
+    typedef PVOID MRESULT, *PMRESULT;
+
+    typedef struct
+    {
+        LONG x;
+        LONG y;
+    } POINTL, *PPOINTL;
+
+    typedef struct
+    {
+        LONG xLeft;
+        LONG yBottom;
+        LONG xRight;
+        LONG yTop;
+    } RECTL, *PRECTL;
+
+/* Mutable guest data exports: classObject followed by SOM method token words. The
+   generated module glue maps them; guest SOM fills them when a class is built.
+   pmwp.def gives each export's ordinal; lxapigen.py reads the size here. */
+#define LX_GUEST_DATA_EXPORT(name, bytes)                                                          \
+    enum                                                                                           \
+    {                                                                                              \
+        name##_bytes = bytes                                                                       \
+    }
+
 #define NULLHANDLE 0
 #define TRUE 1
 #define FALSE 0

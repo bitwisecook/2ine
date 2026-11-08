@@ -2,6 +2,7 @@
 /* Raw bitmap uploads, scan transfers and palette/ROP/clip conversion contracts. */
 #include "os2/include/private/export.h"
 #include "os2/include/pmgpi.h"
+#include "os2/include/pmdev.h"
 #include "os2/ps/pmwin/graphics.h"
 #include "emulator/abi.h"
 #include <stdio.h>

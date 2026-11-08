@@ -2,6 +2,7 @@
 /* Standard message boxes use resource-template controls and the PM modal loop. */
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/controls.h"
+#include "os2/include/private/pmp.h"
 #include "emulator/abi.h"
 
 /* A box without a close action dismisses only through one of its buttons. */

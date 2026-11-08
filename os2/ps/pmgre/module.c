@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Direct display-driver ownership is unavailable on a host window surface. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmgre.h"
+#include "os2/include/private/pmp.h"
 #include "os2/ps/pmgre/generated/pmgre-lx.h"
 
 ULONG Gre32Entry3(ULONG first, ULONG second, ULONG operation)
