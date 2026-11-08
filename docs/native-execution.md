@@ -2,8 +2,11 @@
 
 # Native execution and OS/2 APIs
 
-**Linux i386 runs guest instructions directly.** `emulator/execution/native_i386/execution.c` owns
-LDT selectors, FS/TIB setup, native entry and mixed-mode bridges.
+**Linux i386 runs guest instructions directly.** `emulator/execution/native_i386/`
+owns LDT selectors and FS/TIB setup (`selectors.c`), program, NE and DLL entry
+and missing-import trampolines (`entry.c`), fault emulation and the SIGSEGV
+handler (`faults.c`), mixed-mode bridges, threads and callbacks (`bridges.c`)
+and the backend state and operations table (`execution.c`).
 
 ```mermaid
 flowchart LR

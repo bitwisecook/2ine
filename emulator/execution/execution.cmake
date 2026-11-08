@@ -23,7 +23,19 @@ function(twoine_add_execution_backend target backend)
         )
             message(FATAL_ERROR "Native i386 execution requires Linux x86.")
         endif()
-        target_sources(${target} PRIVATE "${TWOINE_EXECUTION_SOURCE_DIR}/native_i386/execution.c")
+        foreach(
+            source
+            execution
+            selectors
+            entry
+            faults
+            bridges
+        )
+            target_sources(
+                ${target}
+                PRIVATE "${TWOINE_EXECUTION_SOURCE_DIR}/native_i386/${source}.c"
+            )
+        endforeach()
         target_compile_definitions(${target} PUBLIC TWOINE_NATIVE_LINUX_I386=1)
     else()
         message(FATAL_ERROR "Unknown 2ine execution backend: ${backend}")
