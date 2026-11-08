@@ -184,12 +184,8 @@ if(TARGET twoine_runtime)
     target_link_libraries(twoine_diagnostic_tests PRIVATE twoine_runtime)
     add_test(NAME host_diagnostics COMMAND twoine_diagnostic_tests)
     set_tests_properties(host_diagnostics PROPERTIES TIMEOUT 20)
-    add_executable(
-        twoine_network_tests
-        host/test_network.c
-        ${PROJECT_SOURCE_DIR}/os2/mptn/common/network.c
-    )
-    target_link_libraries(twoine_network_tests PRIVATE twoine_runtime)
+    add_executable(twoine_network_tests host/test_network.c)
+    target_link_libraries(twoine_network_tests PRIVATE twoine_os2_network_host twoine_runtime)
     add_test(NAME host_network COMMAND twoine_network_tests)
     set_tests_properties(host_network PROPERTIES TIMEOUT 20)
     find_program(TWOINE_OPENSSL_TOOL NAMES openssl HINTS "${OPENSSL_INCLUDE_DIR}/../bin" REQUIRED)
@@ -880,35 +876,16 @@ if(TARGET doscalls)
 endif()
 
 if(TARGET mdm AND TWOINE_MIDI_SYNTH)
-    add_executable(
-        twoine_midi_synth_tests
-        os2/test_midi_synth.c
-        ../os2/mm/midi/midi_synth.c
-        ../os2/mm/midi/midi_config.c
-        ../os2/mm/midi/midi_mt32.c
-    )
+    add_executable(twoine_midi_synth_tests os2/test_midi_synth.c)
     twoine_application_target(twoine_midi_synth_tests)
-    target_link_libraries(
-        twoine_midi_synth_tests
-        PRIVATE twoine_midi_config twoine_mt32_config 2ine m
-    )
+    target_link_libraries(twoine_midi_synth_tests PRIVATE twoine_os2_midi 2ine)
     if(TWOINE_MIDI_EXTENDED)
-        target_sources(twoine_midi_synth_tests PRIVATE ../os2/mm/midi/midi_banks.cpp)
-        target_compile_features(twoine_midi_synth_tests PRIVATE cxx_std_17)
-        add_executable(
-            twoine_midi_bank_tests
-            os2/test_midi_banks.c
-            ../os2/mm/midi/midi_synth.c
-            ../os2/mm/midi/midi_config.c
-            ../os2/mm/midi/midi_mt32.c
-            ../os2/mm/midi/midi_banks.cpp
-        )
+        # The synthesizer library holds C++; link with the C++ driver.
+        set_target_properties(twoine_midi_synth_tests PROPERTIES LINKER_LANGUAGE CXX)
+        add_executable(twoine_midi_bank_tests os2/test_midi_banks.c)
         twoine_application_target(twoine_midi_bank_tests)
-        target_compile_features(twoine_midi_bank_tests PRIVATE cxx_std_17)
-        target_link_libraries(
-            twoine_midi_bank_tests
-            PRIVATE twoine_midi_config twoine_mt32_config 2ine m
-        )
+        set_target_properties(twoine_midi_bank_tests PROPERTIES LINKER_LANGUAGE CXX)
+        target_link_libraries(twoine_midi_bank_tests PRIVATE twoine_os2_midi 2ine)
         add_test(
             NAME midi_bank_formats
             COMMAND
@@ -943,9 +920,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET dive)
 endif()
 
 if(TARGET mdm AND UNIX)
-    add_executable(twoine_midi_config_tests os2/test_midi_config.c ../os2/mm/midi/midi_config.c)
+    add_executable(twoine_midi_config_tests os2/test_midi_config.c)
     twoine_application_target(twoine_midi_config_tests)
-    target_link_libraries(twoine_midi_config_tests PRIVATE 2ine)
+    target_link_libraries(twoine_midi_config_tests PRIVATE twoine_os2_midi 2ine)
     add_test(NAME midi_preferences COMMAND twoine_midi_config_tests)
     set_tests_properties(midi_preferences PROPERTIES TIMEOUT 20)
 endif()
