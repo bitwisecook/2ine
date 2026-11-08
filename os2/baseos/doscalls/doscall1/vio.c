@@ -12,6 +12,9 @@
 #include "host/terminal.h"
 #include "emulator/launch_record.h"
 
+/* A space in the default attribute: light grey on black. */
+#define BLANK_CELL 0x0720
+
 static uint16 *vio_buffer = NULL;
 static uint16 vio_scrw, vio_scrh;
 static uint16 vio_curx, vio_cury;
@@ -37,7 +40,7 @@ static int open_terminal(void)
     }
 
     for (size_t i = 0; i < buflen / sizeof(uint16); i++)
-        vio_buffer[i] = 0x0720; /* White space on a black text background. */
+        vio_buffer[i] = BLANK_CELL;
     vio_scrw = (uint16)scrw;
     vio_scrh = (uint16)scrh;
     vio_hostw = vio_scrw;
@@ -137,7 +140,7 @@ APIRET16 VioSetMode(PVIOMODEINFO info, HVIO hvio)
     if (!buffer)
         return ERROR_NOT_ENOUGH_MEMORY;
     for (size_t i = 0; i < (size_t)cols * rows; i++)
-        buffer[i] = 0x0720;
+        buffer[i] = BLANK_CELL;
     free(vio_buffer);
     vio_buffer = buffer;
     vio_scrw = cols;
@@ -203,7 +206,7 @@ APIRET16 VioWrtTty(PCH pch, USHORT cb, HVIO hvio)
                                 (size_t)(vio_scrh - 1) * vio_scrw * sizeof(uint16));
                         vio_cury--;
                         for (unsigned k = 0; k < vio_scrw; k++)
-                            vio_buffer[vio_cury * vio_scrw + k] = 0x0720;
+                            vio_buffer[vio_cury * vio_scrw + k] = BLANK_CELL;
                     }
                 }
             }
@@ -214,7 +217,7 @@ APIRET16 VioWrtTty(PCH pch, USHORT cb, HVIO hvio)
                     (size_t)(vio_scrh - 1) * vio_scrw * sizeof(uint16));
             vio_cury--;
             for (unsigned k = 0; k < vio_scrw; k++)
-                vio_buffer[vio_cury * vio_scrw + k] = 0x0720;
+                vio_buffer[vio_cury * vio_scrw + k] = BLANK_CELL;
         }
     }
     push_to_terminal(0, 0, vio_scrw * vio_scrh, 1);
