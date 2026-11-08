@@ -238,8 +238,9 @@ static const cJSON *wps_previous(const cJSON *apps, const char *handle)
 
 static cJSON *wps_objects(Context *c, const unsigned char *bytes, size_t size)
 {
-    if (size > TB_WPS_PROFILE_LIMIT || (size >= 12 && !memcmp(bytes, "2INEPRF1", 8) &&
-                                        configuration_u32(bytes + 8) > TB_WPS_OBJECT_LIMIT))
+    if (size > TB_WPS_PROFILE_LIMIT ||
+        (size >= 12 && !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE) &&
+         tb_le32(bytes + 8) > TB_WPS_OBJECT_LIMIT))
     {
         fail(c, "Workplace Shell profile exceeds the registration limit");
         return NULL;

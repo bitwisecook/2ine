@@ -4,17 +4,6 @@
 #define TB_CONFIGURATION_H
 #define TB_PROFILE_LIMIT (32u * 1024u * 1024u)
 
-static uint32_t configuration_u32(const unsigned char *p)
-{
-    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
-static void configuration_store(unsigned char *p, uint32_t n)
-{
-    for (unsigned i = 0; i < 4; i++)
-        p[i] = (unsigned char)(n >> (8 * i));
-}
-
 static char *configuration_hex(Context *c, const unsigned char *p, size_t n)
 {
     char *out = keep(c, malloc(n * 2 + 1));
@@ -73,77 +62,26 @@ static int configuration_entry(Context *c, cJSON *entries, const unsigned char *
     return !c->error;
 }
 
-static int configuration_native_string(const unsigned char *p, size_t n, uint32_t at, uint32_t size)
+typedef struct ConfigurationParse
 {
-    return size && at <= n && size <= n - at && !p[at + size - 1] && !memchr(p + at, 0, size - 1);
-}
+    Context *context;
+    cJSON *entries;
+} ConfigurationParse;
 
-static int configuration_mark(unsigned char *seen, size_t n, uint32_t at, uint32_t bytes)
+static int configuration_visit(void *opaque, const unsigned char *app, size_t a,
+                               const unsigned char *key, size_t k, const unsigned char *data,
+                               size_t n)
 {
-    if (at < 20 || at > n || bytes > n - at || (seen[at / 8] & (1u << (at % 8))))
-        return 0;
-    seen[at / 8] |= 1u << (at % 8);
-    return 1;
+    ConfigurationParse *parse = opaque;
+    return configuration_entry(parse->context, parse->entries, app, a, key, k, data, n);
 }
 
 static cJSON *configuration_parse(Context *c, const unsigned char *p, size_t n)
 {
-    cJSON *entries = cJSON_CreateArray();
-    if (!n)
-        return entries;
-    if (n >= 20 && configuration_u32(p) == UINT32_MAX)
-    {
-        unsigned char *seen = (unsigned char *)keep(c, calloc((n + 7) / 8, 1));
-        if (!seen || configuration_u32(p + 8) > n)
-            goto invalid;
-        uint32_t app = configuration_u32(p + 4);
-        while (app)
-        {
-            if (!configuration_mark(seen, n, app, 20))
-                goto invalid;
-            uint32_t name = configuration_u32(p + app + 16),
-                     a = p[app + 12] | (uint32_t)p[app + 13] << 8;
-            if (!configuration_native_string(p, n, name, a))
-                goto invalid;
-            uint32_t key = configuration_u32(p + app + 4);
-            while (key)
-            {
-                if (!configuration_mark(seen, n, key, 24))
-                    goto invalid;
-                uint32_t kn = configuration_u32(p + key + 12),
-                         k = p[key + 8] | (uint32_t)p[key + 9] << 8;
-                uint32_t data = configuration_u32(p + key + 20),
-                         bytes = p[key + 16] | (uint32_t)p[key + 17] << 8;
-                if (!configuration_native_string(p, n, kn, k) || data > n || bytes > n - data ||
-                    !configuration_entry(c, entries, p + name, a, p + kn, k, p + data, bytes))
-                    goto invalid;
-                key = configuration_u32(p + key);
-            }
-            app = configuration_u32(p + app);
-        }
-        return entries;
-    }
-    if (n < 12 || memcmp(p, "2INEPRF1", 8))
-        goto invalid;
-    uint32_t count = configuration_u32(p + 8);
-    size_t at = 12;
-    while (count--)
-    {
-        if (n - at < 12)
-            goto invalid;
-        uint32_t a = configuration_u32(p + at), k = configuration_u32(p + at + 4),
-                 bytes = configuration_u32(p + at + 8);
-        at += 12;
-        if (!a || !k || a > 65536 || k > 65536 || a > n - at || k > n - at - a ||
-            bytes > n - at - a - k ||
-            !configuration_entry(c, entries, p + at, a, p + at + a, k, p + at + a + k, bytes))
-            goto invalid;
-        at += a + k + bytes;
-    }
-    if (at == n)
-        return entries;
-invalid:
-    cJSON_Delete(entries);
+    ConfigurationParse parse = {c, cJSON_CreateArray()};
+    if (tb_profile_walk(p, n, configuration_visit, &parse))
+        return parse.entries;
+    cJSON_Delete(parse.entries);
     fail(c, "Profile has an invalid or unsupported binary format; it was not modified");
     return NULL;
 }
@@ -371,16 +309,16 @@ static cJSON *configuration_read(Context *c, const cJSON *request)
     cJSON_AddStringToObject(out, "path", path);
     cJSON_AddStringToObject(out, "revision", configuration_hex(c, digest, sizeof digest));
     cJSON_AddStringToObject(out, "format",
-                            !n                              ? "empty"
-                            : !memcmp(bytes, "2INEPRF1", 8) ? "2INEPRF1"
-                                                            : "OS/2 INI");
+                            !n                                                        ? "empty"
+                            : !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE) ? "2INEPRF1"
+                                                                                      : "OS/2 INI");
     cJSON_AddItemToObject(out, "entries", entries);
     return out;
 }
 
 static int configuration_serialize(Context *c, const char *path, cJSON *entries)
 {
-    size_t total = 12;
+    size_t total = TB_PROFILE_HEADER_SIZE;
     cJSON *entry;
     cJSON_ArrayForEach(entry, entries)
     {
@@ -389,16 +327,16 @@ static int configuration_serialize(Context *c, const char *path, cJSON *entries)
             !utf8_to_latin1(c, field(entry, "key"), &k))
             return 0;
         size_t bytes = strlen(field(entry, "data")) / 2;
-        if (a >= 65536 || k >= 65536 || a + k + bytes + 14 > TB_PROFILE_LIMIT - total)
+        if (a >= TB_PROFILE_NAME_LIMIT || k >= TB_PROFILE_NAME_LIMIT ||
+            tb_profile_entry_size(a, k, bytes) > TB_PROFILE_LIMIT - total)
             return fail(c, "Profile exceeds format limits");
-        total += 14 + a + k + bytes;
+        total += tb_profile_entry_size(a, k, bytes);
     }
     unsigned char *out = (unsigned char *)keep(c, malloc(total));
     if (!out)
         return 0;
-    memcpy(out, "2INEPRF1", 8);
-    configuration_store(out + 8, (uint32_t)cJSON_GetArraySize(entries));
-    size_t at = 12;
+    tb_profile_put_header(out, (uint32_t)cJSON_GetArraySize(entries));
+    size_t at = TB_PROFILE_HEADER_SIZE;
     cJSON_ArrayForEach(entry, entries)
     {
         size_t a = 0, k = 0, n = 0;
@@ -407,16 +345,7 @@ static int configuration_serialize(Context *c, const char *path, cJSON *entries)
         unsigned char *bytes = configuration_unhex(c, field(entry, "data"), &n);
         if (!app || !key || !bytes)
             return 0;
-        configuration_store(out + at, (uint32_t)a + 1);
-        configuration_store(out + at + 4, (uint32_t)k + 1);
-        configuration_store(out + at + 8, (uint32_t)n);
-        at += 12;
-        memcpy(out + at, app, a + 1);
-        at += a + 1;
-        memcpy(out + at, key, k + 1);
-        at += k + 1;
-        memcpy(out + at, bytes, n);
-        at += n;
+        at += tb_profile_put_entry(out + at, app, a, key, k, bytes, n);
     }
     return tb_atomic_write(path, out, total) ? 1
                                              : fail(c, "Cannot save profile: %s", strerror(errno));
@@ -473,7 +402,7 @@ static cJSON *configuration_write(Context *c, const cJSON *request)
                          (!app[root] || app[root] == '\\');
         if (strncmp(key, "v:", 2) || !valid_root || strlen(app) > 32767 || strlen(key) > 32769 ||
             strstr(app, "\\\\") || app[strlen(app) - 1] == '\\' ||
-            (!remove && (n < 4 || (configuration_u32(data) == 4 && n != 8))))
+            (!remove && (n < 4 || (tb_le32(data) == 4 && n != 8))))
         {
             cJSON_Delete(current);
             fail(
@@ -530,8 +459,8 @@ static cJSON *configuration_write(Context *c, const cJSON *request)
                     unsigned char timestamp[8];
                     uint64_t ticks =
                         ((uint64_t)time(NULL) + UINT64_C(11644473600)) * UINT64_C(10000000);
-                    configuration_store(timestamp, (uint32_t)ticks);
-                    configuration_store(timestamp + 4, (uint32_t)(ticks >> 32));
+                    tb_put_le32(timestamp, (uint32_t)ticks);
+                    tb_put_le32(timestamp + 4, (uint32_t)(ticks >> 32));
                     for (size_t i = 0; i < 3; i++)
                     {
                         cJSON *marker = cJSON_CreateObject();
@@ -553,8 +482,8 @@ static cJSON *configuration_write(Context *c, const cJSON *request)
     {
         unsigned char timestamp[8];
         uint64_t ticks = ((uint64_t)time(NULL) + UINT64_C(11644473600)) * UINT64_C(10000000);
-        configuration_store(timestamp, (uint32_t)ticks);
-        configuration_store(timestamp + 4, (uint32_t)(ticks >> 32));
+        tb_put_le32(timestamp, (uint32_t)ticks);
+        tb_put_le32(timestamp + 4, (uint32_t)(ticks >> 32));
         cJSON *stamp = NULL;
         cJSON_ArrayForEach(entry, entries) if (!strcmp(field(entry, "application"), app) &&
                                                !strcmp(field(entry, "key"), "t:")) stamp = entry;
@@ -636,7 +565,7 @@ static cJSON *configuration_roles(const cJSON *aliases, const char *host)
 
 static int configuration_profile_magic(const unsigned char *p, size_t n)
 {
-    return (n >= 8 && !memcmp(p, "2INEPRF1", 8)) || (n >= 4 && configuration_u32(p) == UINT32_MAX);
+    return tb_profile_recognised(p, n);
 }
 
 static cJSON *configuration_file_read(Context *c, const cJSON *request)
@@ -661,9 +590,10 @@ static cJSON *configuration_file_read(Context *c, const cJSON *request)
         if (entries)
         {
             kind = "profile";
-            format = !n                                        ? "empty"
-                     : n >= 8 && !memcmp(bytes, "2INEPRF1", 8) ? "2INEPRF1"
-                                                               : "OS/2 INI";
+            format = !n ? "empty"
+                     : n >= 8 && !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE)
+                         ? "2INEPRF1"
+                         : "OS/2 INI";
         }
         else if (c->error)
         {
@@ -815,9 +745,10 @@ static int configuration_file_catalogue(Context *c, cJSON *files, const cJSON *a
             {
                 kind = "profile";
                 editable = 1;
-                format = !size                                        ? "empty"
-                         : size >= 8 && !memcmp(bytes, "2INEPRF1", 8) ? "2INEPRF1"
-                                                                      : "OS/2 INI";
+                format = !size ? "empty"
+                         : size >= 8 && !memcmp(bytes, TB_PROFILE_MAGIC, TB_PROFILE_MAGIC_SIZE)
+                             ? "2INEPRF1"
+                             : "OS/2 INI";
             }
             cJSON_Delete(parsed);
             while (c->count > allocations)
