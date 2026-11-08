@@ -35,6 +35,15 @@ know no `LxModule`, `LxMmaps` or `GLoaderState`; they do not load files or imple
 DOSCALLS.
 `tests/architecture/check_boundaries.py` checks that source separation.
 
+The include roots are the project root and `hal/include`. Project headers are
+included by their path from the project root (`"os2libs/pmwin.h"`,
+`"ball/disk_image.h"`), and public HAL headers as `"hal/<name>.h"`; same-directory
+names and `../` paths are rejected. Host-OS preprocessor branches (`_WIN32`,
+`__APPLE__`, `__linux__`) appear only in `hal/linux/`, `hal/macos/` and `hal/win/`,
+apart from the named temporary allowances in the checker. Every top-level source
+directory is classified in the checker, so a new component is covered by these
+rules.
+
 | Boundary | Owns |
 |---|---|
 | Common loader | Formats, relocations, imports, modules and OS/2 identity |
