@@ -1,6 +1,6 @@
-/* Derived from original 2ine; zlib-style license. See ../LICENSE.txt. */
+/* Derived from original 2ine; zlib-style license. See ../../LICENSE.txt. */
 /* OS/2 audio generators share a stream. The host audio adapter owns device conversion/lifetime. */
-#include "runtime/audio.h"
+#include "emulator/audio_mixer.h"
 #include "host/audio.h"
 #include "host/sync.h"
 #include <stdlib.h>

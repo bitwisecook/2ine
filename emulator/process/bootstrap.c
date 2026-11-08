@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "runtime/core/internal.h"
+#include "emulator/process/internal.h"
 #include "host/fatal.h"
 
 LxProcessState GProcessState;

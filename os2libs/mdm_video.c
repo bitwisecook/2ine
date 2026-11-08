@@ -7,8 +7,8 @@
 #include "os2libs/pmwin/video_frames.h"
 #include "host/clock.h"
 #include "host/sync.h"
-#include "runtime/audio.h"
-#include "runtime/runtime_features.h"
+#include "emulator/audio_mixer.h"
+#include "emulator/features.h"
 #include <ctype.h>
 #include <errno.h>
 

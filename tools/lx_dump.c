@@ -13,7 +13,7 @@
 
 #include "formats/executable/lx.h"
 #include "formats/executable/ne.h"
-#include "runtime/diagnostics.h"
+#include "emulator/diagnostics.h"
 
 static int sanityCheckLxExe(const uint8 *exe, const uint32 exelen)
 {

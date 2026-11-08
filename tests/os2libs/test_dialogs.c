@@ -2,7 +2,7 @@
 /* Packed resources, callback dismissal, nested ownership and modal queue unwinding. */
 #include "os2libs/pmwin.h"
 #include "os2libs/pmwin/internal.h"
-#include "runtime/runtime.h"
+#include "emulator/runtime.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

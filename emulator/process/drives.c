@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "runtime/core/internal.h"
+#include "emulator/process/internal.h"
 
 void prepOs2Drives(void)
 {

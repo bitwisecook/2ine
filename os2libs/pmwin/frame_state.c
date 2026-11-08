@@ -4,7 +4,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "os2libs/pmwin/menus.h"
 #include "os2libs/pmwin/controls.h"
-#include "runtime/runtime_features.h"
+#include "emulator/features.h"
 
 enum
 {

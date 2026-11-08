@@ -5,13 +5,13 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#ifndef TWOINE_RUNTIME_CORE_INTERNAL_H
-#define TWOINE_RUNTIME_CORE_INTERNAL_H
+#ifndef TWOINE_EMULATOR_PROCESS_INTERNAL_H
+#define TWOINE_EMULATOR_PROCESS_INTERNAL_H
 #define _DARWIN_C_SOURCE 1
 #define _POSIX_C_SOURCE 199309
 #define _DEFAULT_SOURCE
 #define _GNU_SOURCE
-#include "runtime/runtime.h"
+#include "emulator/runtime.h"
 #include "host/process.h"
 #include "host/thread.h"
 #include "host/fs.h"

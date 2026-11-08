@@ -7,18 +7,18 @@
  */
 
 /* Shared process services used by OS/2 library implementations. */
-#ifndef TWOINE_RUNTIME_H
-#define TWOINE_RUNTIME_H
+#ifndef TWOINE_EMULATOR_RUNTIME_H
+#define TWOINE_EMULATOR_RUNTIME_H
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "formats/executable/types.h"
-#include "runtime/diagnostics.h"
-#include "runtime/process.h"
+#include "emulator/diagnostics.h"
+#include "emulator/process.h"
 #include "loader/module.h"
 #include "emulator/abi.h"
 #include "emulator/handles.h"
-#include "runtime/audio.h"
+#include "emulator/audio_mixer.h"
 
 #define LXTIBSIZE (sizeof(LxTIB) + sizeof(LxTIB2) + sizeof(LxPostTIB))
 

@@ -4,7 +4,7 @@
 #include "os2libs/pmwin/internal.h"
 #include "os2libs/pmwin/menus.h"
 #include "os2libs/pmwin/graphics.h"
-#include "runtime/runtime_features.h"
+#include "emulator/features.h"
 #include <stdio.h>
 #define CHECK(test)                                                                                \
     do                                                                                             \

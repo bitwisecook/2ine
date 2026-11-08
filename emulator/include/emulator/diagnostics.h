@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#ifndef TWOINE_DIAGNOSTICS_H
-#define TWOINE_DIAGNOSTICS_H
+#ifndef TWOINE_EMULATOR_DIAGNOSTICS_H
+#define TWOINE_EMULATOR_DIAGNOSTICS_H
 #include <stdio.h>
 #ifndef _STUBBED
 #define _STUBBED(x, what)                                                                          \

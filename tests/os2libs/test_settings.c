@@ -5,7 +5,7 @@
 #include "os2libs/helpmgr.h"
 #include "os2libs/pmwp.h"
 #include "os2libs/pmwin.h"
-#include "runtime/runtime.h"
+#include "emulator/runtime.h"
 #include "host/thread.h"
 #include <limits.h>
 #define CHECK(x)                                                                                   \

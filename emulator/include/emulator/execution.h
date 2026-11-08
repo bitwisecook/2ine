@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Process-level guest execution. No loader objects or host OS types cross this interface. */
-#ifndef TWOINE_EXECUTION_H
-#define TWOINE_EXECUTION_H
+#ifndef TWOINE_EMULATOR_EXECUTION_H
+#define TWOINE_EMULATOR_EXECUTION_H
 #include <stddef.h>
 #include <stdint.h>
 #include "host/shared_memory.h"

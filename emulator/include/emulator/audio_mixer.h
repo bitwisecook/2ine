@@ -1,6 +1,6 @@
-/* Derived from original 2ine; zlib-style license. See ../LICENSE.txt. */
-#ifndef TWOINE_AUDIO_H
-#define TWOINE_AUDIO_H
+/* Derived from original 2ine; zlib-style license. See ../../../LICENSE.txt. */
+#ifndef TWOINE_EMULATOR_AUDIO_MIXER_H
+#define TWOINE_EMULATOR_AUDIO_MIXER_H
 typedef int (*LxAudioGeneratorFn)(void *data, float *stream, int length, int frequency);
 /* Mono callbacks add length frames; stereo callbacks add interleaved L/R pairs. */
 int lxRegisterStereoAudioGenerator(LxAudioGeneratorFn function, void *data, int singleton);

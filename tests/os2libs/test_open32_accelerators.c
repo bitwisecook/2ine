@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Resource tables own copied bytes, are process-wide, and require no video context. */
 #include "os2libs/pmwinx.h"
-#include "runtime/runtime.h"
+#include "emulator/runtime.h"
 #include "emulator/abi.h"
 #include "emulator/handles.h"
 #include "host/thread.h"

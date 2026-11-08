@@ -6,7 +6,7 @@
 #endif
 #include "os2libs/doscalls.h"
 #include "os2libs/os2errors.h"
-#include "runtime/runtime.h"
+#include "emulator/runtime.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>

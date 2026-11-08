@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#ifndef TWOINE_PROCESS_H
-#define TWOINE_PROCESS_H
+#ifndef TWOINE_EMULATOR_PROCESS_H
+#define TWOINE_EMULATOR_PROCESS_H
 #include "formats/executable/types.h"
 #include "emulator/execution.h"
 #pragma pack(push, 1)

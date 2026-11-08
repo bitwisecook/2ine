@@ -4,7 +4,7 @@
 #include "emulator/handles.h"
 #include "host/tls.h"
 #include "host/sync.h"
-#include "runtime/runtime_features.h"
+#include "emulator/features.h"
 
 typedef struct SslContext
 {

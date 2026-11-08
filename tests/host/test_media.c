@@ -5,7 +5,7 @@
 #include "host/input.h"
 #include "host/font.h"
 #include "host/clock.h"
-#include "runtime/audio.h"
+#include "emulator/audio_mixer.h"
 #include <stdio.h>
 #include <stdlib.h>
 #define CHECK(x)                                                                                   \

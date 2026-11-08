@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_RUNTIME_FEATURES_H
-#define TWOINE_RUNTIME_FEATURES_H
+#ifndef TWOINE_EMULATOR_FEATURES_H
+#define TWOINE_EMULATOR_FEATURES_H
 
 typedef enum LxRuntimeFeature
 {

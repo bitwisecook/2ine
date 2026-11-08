@@ -9,8 +9,8 @@
 #include "host/clock.h"
 #include "host/video_frame.h"
 #include "host/sync.h"
-#include "runtime/audio.h"
-#include "runtime/runtime_features.h"
+#include "emulator/audio_mixer.h"
+#include "emulator/features.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

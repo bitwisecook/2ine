@@ -5,8 +5,8 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "runtime/core/internal.h"
-#include "runtime/runtime_features.h"
+#include "emulator/process/internal.h"
+#include "emulator/features.h"
 
 void cfgWarn(const char *fname, const int lineno, const char *fmt, ...)
 {

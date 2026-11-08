@@ -3,8 +3,8 @@
 #include "os2libs/dive.h"
 #include "os2libs/dive_pixels.h"
 #include "os2libs/pmwin/graphics.h"
-#include "runtime/runtime.h"
-#include "runtime/runtime_features.h"
+#include "emulator/runtime.h"
+#include "emulator/features.h"
 #include "host/thread.h"
 #include <stdio.h>
 #include <stdlib.h>

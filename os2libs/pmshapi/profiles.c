@@ -6,7 +6,7 @@
 #include "os2libs/nls.h"
 #include "emulator/handles.h"
 #include "emulator/abi.h"
-#include "runtime/process.h"
+#include "emulator/process.h"
 #include "host/fs.h"
 #include "host/sync.h"
 #include <limits.h>

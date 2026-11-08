@@ -8,7 +8,7 @@
 #include <string.h>
 #ifdef TWOINE_TLS_TEST_SHIM
 #include "os2libs/ssleay32.h"
-#include "runtime/runtime_features.h"
+#include "emulator/features.h"
 #endif
 #define CHECK(x)                                                                                   \
     do                                                                                             \

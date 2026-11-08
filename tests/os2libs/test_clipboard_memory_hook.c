@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* DOSCALLS publishes only its own live clipboard memory-release callback. */
-#include "runtime/runtime.h"
+#include "emulator/runtime.h"
 #include "host/library.h"
 #include <stdio.h>
 #include <stdlib.h>

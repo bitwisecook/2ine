@@ -270,7 +270,7 @@ for path in list(sources("host")) + list(sources("emulator/execution")):
         path,
         [
             r"\b(?:GProcessState|LxModule|LxMmaps)\b",
-            r"#\s*include\s*<[^>]*(?:os2libs/|loader/|runtime/(?:runtime|process)\.h)",
+            r"#\s*include\s*<[^>]*(?:os2libs/|loader/|emulator/(?:runtime|process)\.h)",
         ],
     )
 os_branches = [

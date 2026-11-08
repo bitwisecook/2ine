@@ -7,7 +7,7 @@
 #include "os2libs/pmwin/graphics.h"
 #include "host/window.h"
 #include "host/sync.h"
-#include "runtime/runtime_features.h"
+#include "emulator/features.h"
 #define DIVE_MAX_BUFFERS 256
 #define DIVE_FIRST_BUFFER 16
 #define DIVE_MAX_DIMENSION 16384
