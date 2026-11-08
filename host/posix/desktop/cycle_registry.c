@@ -3,6 +3,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _DARWIN_C_SOURCE 1
 #include "host/core/desktop/cycle_order.h"
+#include "host/core/desktop/cycle_registry.h"
 #include "host/core/desktop/lease.h"
 #include <sys/file.h>
 #include <sys/stat.h>

@@ -1,0 +1,20 @@
+/* Public domain. No rights reserved. Wholly AI-authored. */
+/* Cross-process registry of a desktop session's cycle windows, implemented by
+   host/posix/desktop/cycle_registry.c. */
+#ifndef TWOINE_HOST_CORE_DESKTOP_CYCLE_REGISTRY_H
+#define TWOINE_HOST_CORE_DESKTOP_CYCLE_REGISTRY_H
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct LxDesktopCycle LxDesktopCycle;
+LxDesktopCycle *lx_desktop_cycle_open(const char *directory, const char *session);
+int lx_desktop_cycle_publish(LxDesktopCycle *cycle, const uint32_t *windows, size_t count,
+                             int blocked);
+int lx_desktop_cycle_focus(LxDesktopCycle *cycle, uint32_t window);
+/* 1: queued/consumed, 2: modal/consumed, 0: native behavior, -1: unavailable. */
+int lx_desktop_cycle_request(LxDesktopCycle *cycle, uint32_t current, int reverse,
+                             uint32_t *target_pid);
+uint32_t lx_desktop_cycle_receive(LxDesktopCycle *cycle);
+int lx_desktop_cycle_keyup(LxDesktopCycle *cycle);
+void lx_desktop_cycle_close(LxDesktopCycle *cycle);
+#endif

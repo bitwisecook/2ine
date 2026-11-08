@@ -5,7 +5,7 @@
 #include <SDL3/SDL.h>
 #include "host/core/desktop/session_hooks.h"
 #include "host/core/desktop/group.h"
-#include "host/core/desktop/cycle_order.h"
+#include "host/core/desktop/cycle_registry.h"
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>

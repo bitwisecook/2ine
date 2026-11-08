@@ -5,6 +5,7 @@
 #undef NDEBUG
 #endif
 #include "host/core/desktop/cycle_order.h"
+#include "host/core/desktop/cycle_registry.h"
 #include <assert.h>
 #include <dirent.h>
 #include <fcntl.h>
