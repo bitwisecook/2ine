@@ -3,7 +3,7 @@
 # Host services
 
 The shared runtime and OS/2 libraries call platform-neutral execution and host
-contracts in `host/include/host/` and `runtime/execution.h`. A host function
+contracts in `host/include/host/` and `emulator/execution.h`. A host function
 has a common core and one adapter per platform or library, and every adapter
 directory uses the core's function names:
 
@@ -86,7 +86,7 @@ adapters (except Linux and macOS of `posix/`) and private host headers outside
 
 [Architecture](architecture.md) · [Build](build.md) · [Tests](testing.md)
 
-Audio generator policy lives in `runtime/audio.c`; SDL owns the stream and device
+Audio generator policy lives in `emulator/process/audio_mixer.c`; SDL owns the stream and device
 conversion. A stream stays open until runtime shutdown. Closing PM video does
 not close audio. PM windows/messages/painting use opaque host windows and
 normalized rectangles/events. VIO retains its OS/2 screen buffer and delegates

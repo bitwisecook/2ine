@@ -8,9 +8,11 @@
 
 ```mermaid
 flowchart TD
-    Image["NE / LX executable + DLLs"] --> Loader["loader/ · load, relocate, resolve"]
-    Loader --> Guest["guest/ · wire ABI, arguments, handles"]
+    Image["NE / LX executable + DLLs"] --> Loader["emulator/loader/ · load, relocate, resolve"]
+    Loader --> Process["emulator/process/ · lib2ine process state"]
+    Loader --> Guest["emulator/abi/ + guest/bindings/ · wire ABI, arguments, handles"]
     Guest --> APIs["os2libs/ · OS/2 DLL implementations"]
+    APIs --> Process
     Loader --> Execution["emulator/execution.h"]
     APIs --> Execution
     Execution --> Native["emulator/execution/native_i386/execution.c"]
@@ -24,8 +26,9 @@ flowchart TD
 ```
 
 `os2libs/` contains the OS/2 API implementations shared by both execution paths.
-`runtime/` owns execution dispatch, checked guest mappings and platform-neutral
-process and audio policy. `host/include/host/` declares host-service contracts,
+`emulator/` owns the loader, the OS/2 process runtime (`lib2ine`), the guest ABI
+helpers and execution: dispatch and checked guest mappings in
+`emulator/execution/core/` ([emulator](emulator.md)). `host/include/host/` declares host-service contracts,
 and `host/` implements them as a platform-free core (`host/core/<function>/`)
 plus adapters that mirror it (`host/<adapter>/<function>/`): `host/posix/`
 shares host services between `host/linux/` and `host/macos/`, and `host/win/`
@@ -37,24 +40,29 @@ know no `LxModule`, `LxMmaps` or `GProcessState`; they do not load files or impl
 DOSCALLS.
 `tests/architecture/check_boundaries.py` checks that source separation.
 
-The include roots are the project root, `host/include` and `storage/include`.
+The include roots are the project root, `host/include`, `storage/include` and
+`emulator/include`.
 Project headers are included by their path from the project root
 (`"os2libs/pmwin.h"`, `"storage/common/file_time.h"`), public host headers as
-`"host/<name>.h"` and public storage headers as `"storage/<name>.h"`; same-directory
+`"host/<name>.h"`, public storage headers as `"storage/<name>.h"` and public
+emulator headers as `"emulator/<name>.h"`; same-directory
 names and `../` paths are rejected. Host-OS preprocessor branches (`_WIN32`,
 `__APPLE__`, `__linux__`) appear only in `host/linux/`, `host/macos/`, `host/win/`
 and `emulator/execution/native_i386/`, and in the storage host adapters `storage/common/host*` (file open/lock/sync,
 identity, local time and locks), apart from the named temporary allowances in the
 checker. `formats/` includes no other component, `storage/` only `formats/`, and
-only `ball/` includes `ball/`. Outside `host/`, code includes only the public
+only `ball/` includes `ball/`; `emulator/` includes neither `os2libs/` nor
+`guest/bindings/`, and its layers (execution, ABI, process, loader) include
+only downwards. Inline assembly appears only in `emulator/execution/native_i386/`. Outside `host/`, code includes only the public
 host contracts; `host/core/` and `host/include/` use no host APIs. Every top-level source directory is classified in
 the checker, so a new component is covered by these rules.
 
 | Boundary | Owns |
 |---|---|
-| Common loader | Formats, relocations, imports, modules and OS/2 identity |
-| `guest/` | Fixed-width layouts, checked arguments and private resource IDs |
-| `runtime/execution.h` | Entries, callbacks, threads, selectors and guest mappings |
+| `emulator/loader/` | Formats, relocations, imports, modules and OS/2 identity |
+| `emulator/process/` | Process state, PIB, TIBs, segments, drives and paths |
+| `emulator/abi/` | Fixed-width layouts, checked arguments and private resource IDs |
+| `emulator/execution.h` | Entries, callbacks, threads, selectors and guest mappings |
 | `emulator/execution/unicorn/cpu.h` | CPU registers, contexts/x87, segments, bounded runs and faults |
 | `host/include/host/*.h` | VM, files, paths, libraries, clocks, threads, synchronization, child processes, windows, input, audio and other host services |
 | `host/` | Host-service core and adapters |
@@ -67,16 +75,17 @@ the checker, so a new component is covered by these rules.
 | `formats/executable/` | Packed NE/LX definitions and LX EXEPACK decompression, without process state; built as `twoine_formats` (OS/2 application ABI) and `twoine_formats_host` (host ABI) |
 | `formats/resources/` | OS/2 and Windows icon bitmaps and NE/LX resource extraction |
 | `storage/` | Disk images, filesystems (ISO 9660, FAT, HPFS) and archive containers shared by the host services and ball; public interface in `storage/include/storage/`; built per ABI by `twoine_add_storage` |
-| `loader/` | Entry, imports/relocations, NE/LX loading, module lifetime and paths |
-| `runtime/core/` | Bootstrap, process environment, threads, configuration and drives |
-| `runtime/` | Execution dispatch/mappings and audio generator policy |
-| `guest/` | Wire layouts, argument marshalling, handles and explicit binding policies |
+| `emulator/loader/` | Entry, imports/relocations, NE/LX loading, module lifetime, module diagnostics and the REXX service worker |
+| `emulator/process/` | Bootstrap, PIB, process peers, threads/TIBs, 16-bit segments, configuration, drives and paths, resolver files, launch record and audio generator mixer |
+| `emulator/execution/` | Execution dispatch/mappings (`core/`) and the native i386 and Unicorn backends |
+| `emulator/abi/` | Argument marshalling and handles; public headers in `emulator/include/emulator/` |
+| `guest/bindings/` | Per-DLL bridge glue and the explicit binding policies |
 | `os2libs/doscalls/` | File I/O, file metadata, directories, paths, memory, threads, processes, semaphores, modules, exceptions, system and audio APIs |
 | `os2libs/pmwin/` | Anchor context, windows, messages and painting |
 | `os2libs/generated/` | Generated export tables; public API declarations remain in `os2libs/*.h` |
 | `tools/` | Generators, import analysis, assembly conversion and `lx_dump` |
 | `tools/data/` | Ordinal catalogue |
-| `tests/` | Host, runtime, guest, tools, architecture and integration tests; guest programs/fixtures |
+| `tests/` | Host, emulator, OS/2 library, tools, architecture and integration tests; guest programs/fixtures |
 | `research/` | Format specifications and isolated experiments |
 
 Component CMake files own their targets. Generated tables are included only by

@@ -6,11 +6,11 @@
 
 ```mermaid
 flowchart LR
-    Guest["Guest bytes / handles"] --> Wire["abi.h · little-endian layouts"]
-    Wire --> Bind["bindings/ · explicit pointer policies"]
-    Bind --> Args["arguments.c · validate, pin, copy"]
+    Guest["Guest bytes / handles"] --> Wire["emulator/abi.h · little-endian layouts"]
+    Wire --> Bind["guest/bindings/ · explicit pointer policies"]
+    Bind --> Args["emulator/abi/arguments.c · validate, pin, copy"]
     Args --> API["Host OS/2 API implementation"]
-    Guest --> IDs["handles.c · typed resources"] --> Private["Private host objects"]
+    Guest --> IDs["emulator/abi/handles.c · typed resources"] --> Private["Private host objects"]
 ```
 
 `guest/bindings/api16.json` and `api32.json` select portable imports. Pointer-bearing
