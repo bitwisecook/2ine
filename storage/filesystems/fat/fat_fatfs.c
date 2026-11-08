@@ -3,6 +3,7 @@
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
 #include "storage/volume/volume_internal.h"
+#include "storage/volume/member_path.h"
 #include "storage/common/file_time.h"
 #include "storage/common/host.h"
 #include "storage/common/host_stdio.h"
@@ -15,6 +16,9 @@
 /* FatFs keeps one mounted volume in process-global state. */
 #define LOCK() tb_storage_lock(TB_STORAGE_LOCK_FATFS)
 #define UNLOCK() tb_storage_unlock(TB_STORAGE_LOCK_FATFS)
+/* The image is FatFs logical drive 0; member paths start at its root. */
+#define FATFS_DRIVE "0:"
+#define FATFS_ROOT FATFS_DRIVE "/"
 
 static struct
 {
@@ -165,13 +169,13 @@ static int begin_source(const char *source, int writable, int mount)
     }
     if (probe.sector_bytes)
         media.sector = probe.sector_bytes;
-    if (mount && !result(f_mount(&media.fs, "0:", 1)))
+    if (mount && !result(f_mount(&media.fs, FATFS_DRIVE, 1)))
         goto fail;
     return 1;
 fail:
 {
     int saved = errno;
-    f_mount(NULL, "0:", 0);
+    f_mount(NULL, FATFS_DRIVE, 0);
     fclose(media.file);
     media.file = NULL;
     errno = saved;
@@ -206,73 +210,26 @@ static int begin(const char *path, int writable, const char *expected)
 static void end(void)
 {
     int saved = errno;
-    f_mount(NULL, "0:", 0);
+    f_mount(NULL, FATFS_DRIVE, 0);
     if (media.file)
         fclose(media.file);
     media.file = NULL;
     errno = saved;
 }
 
+/* A FatFs path on logical drive 0. */
 static char *member_path(const char *path)
 {
-    const char *member = tb_image_member(path);
-    if (!member || strpbrk(member, "\\:"))
-    {
-        errno = EINVAL;
+    char *member = tb_member_path(tb_image_member(path));
+    if (!member)
         return NULL;
-    }
-    size_t length = strlen(member), used = 3, count = 0;
-    char *out = malloc(length + 4), *copy = strdup(member);
-    size_t boundaries[256];
-    if (!out || !copy)
+    char *out = malloc(strlen(FATFS_ROOT) + strlen(member) + 1);
+    if (out)
     {
-        free(out);
-        free(copy);
-        return NULL;
+        strcpy(out, FATFS_ROOT);
+        strcat(out, member);
     }
-    memcpy(out, "0:/", 3);
-    char *cursor = copy;
-    while (*cursor)
-    {
-        while (*cursor == '/')
-            cursor++;
-        if (!*cursor)
-            break;
-        char *part = cursor;
-        while (*cursor && *cursor != '/')
-            cursor++;
-        if (*cursor)
-            *cursor++ = 0;
-        if (!strcmp(part, "."))
-            continue;
-        if (!strcmp(part, ".."))
-        {
-            if (!count)
-            {
-                free(out);
-                free(copy);
-                errno = EACCES;
-                return NULL;
-            }
-            used = boundaries[--count];
-            continue;
-        }
-        if (count == 256)
-        {
-            free(out);
-            free(copy);
-            errno = ENAMETOOLONG;
-            return NULL;
-        }
-        boundaries[count++] = used;
-        if (used > 3)
-            out[used++] = '/';
-        size_t n = strlen(part);
-        memcpy(out + used, part, n);
-        used += n;
-    }
-    out[used] = 0;
-    free(copy);
+    free(member);
     return out;
 }
 
@@ -284,7 +241,7 @@ int tb_fat_info(const char *path, TbImageInfo *info)
     LOCK();
     int ok = begin(path, 0, NULL);
     FILINFO file = {0};
-    if (ok && strlen(name) > 3)
+    if (ok && strlen(name) > strlen(FATFS_ROOT))
         ok = result(f_stat(name, &file));
     else
         file.fattrib = AM_DIR;
@@ -313,7 +270,7 @@ int tb_fat_info(const char *path, TbImageInfo *info)
                                                                 : "FAT");
         char label[48];
         DWORD serial = 0;
-        if (f_getlabel("0:", label, &serial) == FR_OK)
+        if (f_getlabel(FATFS_DRIVE, label, &serial) == FR_OK)
         {
             size_t n = strlen(label);
             if (n > 11)
@@ -323,9 +280,9 @@ int tb_fat_info(const char *path, TbImageInfo *info)
         info->serial = serial;
         DWORD clusters;
         FATFS *fs;
-        if (!info->readonly && strlen(name) == 3)
+        if (!info->readonly && strlen(name) == strlen(FATFS_ROOT))
         {
-            ok = result(f_getfree("0:", &clusters, &fs));
+            ok = result(f_getfree(FATFS_DRIVE, &clusters, &fs));
             if (ok)
                 info->available = (uint64_t)clusters * info->cluster_bytes;
         }
@@ -618,7 +575,7 @@ int tb_fat_format(const char *path, const char *filesystem, uint64_t bytes)
         options.fmt = (!strcmp(filesystem, "exfat") ? FM_EXFAT : FM_FAT32) | FM_SFD;
         options.n_fat = 2;
         unsigned char work[65536];
-        ok = result(f_mkfs("0:", &options, work, sizeof work));
+        ok = result(f_mkfs(FATFS_DRIVE, &options, work, sizeof work));
     }
     end();
     UNLOCK();

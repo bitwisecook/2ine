@@ -4,6 +4,7 @@
 #define _FILE_OFFSET_BITS 64
 #include "storage/filesystems/hpfs/hpfs_internal.h"
 #include "storage/volume/volume_internal.h"
+#include "storage/volume/member_path.h"
 #include "storage/common/host_stdio.h"
 #include "storage/vendor/fatfs/ff.h"
 #include "formats/endian.h"
@@ -210,63 +211,7 @@ static int find_entry(HpfsVolume *d, HpfsDirectory *list, const char *name, size
 
 char *hpfs_member_path(const char *path)
 {
-    const char *member = tb_image_member(path);
-    if (!member || strpbrk(member, "\\:"))
-    {
-        errno = EINVAL;
-        return NULL;
-    }
-    char *copy = strdup(member), *out = malloc(strlen(member) + 1);
-    size_t positions[256], depth = 0, used = 0;
-    if (!copy || !out)
-    {
-        free(copy);
-        free(out);
-        return NULL;
-    }
-    char *cursor = copy;
-    while (*cursor)
-    {
-        while (*cursor == '/')
-            cursor++;
-        if (!*cursor)
-            break;
-        char *part = cursor;
-        while (*cursor && *cursor != '/')
-            cursor++;
-        if (*cursor)
-            *cursor++ = 0;
-        if (!strcmp(part, "."))
-            continue;
-        if (!strcmp(part, ".."))
-        {
-            if (!depth)
-            {
-                free(copy);
-                free(out);
-                errno = EACCES;
-                return NULL;
-            }
-            used = positions[--depth];
-            continue;
-        }
-        if (depth == 256)
-        {
-            free(copy);
-            free(out);
-            errno = ENAMETOOLONG;
-            return NULL;
-        }
-        positions[depth++] = used;
-        if (used)
-            out[used++] = '/';
-        size_t n = strlen(part);
-        memcpy(out + used, part, n);
-        used += n;
-    }
-    out[used] = 0;
-    free(copy);
-    return out;
+    return tb_member_path(tb_image_member(path));
 }
 
 int hpfs_locate(HpfsVolume *d, const char *path, HpfsDirectory *parent, size_t *index,

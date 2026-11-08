@@ -9,6 +9,7 @@
 #include "storage/filesystems/fat/fat12_16.h"
 #include "storage/filesystems/iso9660/iso9660.h"
 #include "storage/volume/probe.h"
+#include "storage/volume/member_path.h"
 #include "storage/common/host_stdio.h"
 #include <ctype.h>
 #include <errno.h>
@@ -240,60 +241,32 @@ static int find_entry(void *context, const char *name, const VolumeNode *node)
 
 int volume_lookup(VolumeDisk *d, const char *member, VolumeNode *node)
 {
-    char *copy = strdup(member);
-    if (!copy)
+    /* Normalised paths cannot use ".." to escape the virtual root. */
+    char *path = tb_member_path(member);
+    if (!path)
         return 0;
-    /* Normalize before traversal; never let '..' escape the virtual root. */
-    char *parts[256];
-    size_t count = 0;
-    char *cursor = copy;
-    while (*cursor)
-    {
-        while (*cursor == '/')
-            cursor++;
-        if (!*cursor)
-            break;
-        char *part = cursor;
-        while (*cursor && *cursor != '/')
-            cursor++;
-        if (*cursor)
-            *cursor++ = 0;
-        if (!strcmp(part, "."))
-            continue;
-        if (!strcmp(part, ".."))
-        {
-            if (!count)
-            {
-                free(copy);
-                return volume_failure(EACCES);
-            }
-            count--;
-            continue;
-        }
-        if (count == 256 || strpbrk(part, "\\:"))
-        {
-            free(copy);
-            return volume_failure(EINVAL);
-        }
-        parts[count++] = part;
-    }
     *node = d->root;
-    for (size_t i = 0; i < count; i++)
+    for (char *part = path, *next; *part; part = next)
     {
-        Find find = {parts[i], {0}, 0};
+        next = strchr(part, '/');
+        if (next)
+            *next++ = 0;
+        else
+            next = part + strlen(part);
+        Find find = {part, {0}, 0};
         if (!volume_entries(d, *node, find_entry, &find))
         {
-            free(copy);
+            free(path);
             return 0;
         }
         if (!find.found)
         {
-            free(copy);
+            free(path);
             return volume_failure(ENOENT);
         }
         *node = find.node;
     }
-    free(copy);
+    free(path);
     return 1;
 }
 

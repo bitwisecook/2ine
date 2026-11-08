@@ -13,6 +13,13 @@ target_include_directories(twoine_storage_probe_tests PRIVATE "${PROJECT_SOURCE_
 add_test(NAME storage_volume_probe COMMAND twoine_storage_probe_tests)
 set_tests_properties(storage_volume_probe PROPERTIES TIMEOUT 20)
 if(UNIX)
+    add_executable(twoine_storage_member_path_tests storage/test_member_path.c)
+    target_link_libraries(twoine_storage_member_path_tests PRIVATE twoine_storage)
+    target_include_directories(twoine_storage_member_path_tests PRIVATE "${PROJECT_SOURCE_DIR}")
+    add_test(NAME storage_member_path COMMAND twoine_storage_member_path_tests)
+    set_tests_properties(storage_member_path PROPERTIES TIMEOUT 60)
+endif()
+if(UNIX)
     add_executable(
         twoine_desktop_group_tests
         hal/test_desktop_group.c

@@ -41,6 +41,7 @@ function(twoine_add_storage target)
         "${_storage}/volume/image_reader.c"
         "${_storage}/volume/probe.c"
         "${_storage}/volume/partition_mbr.c"
+        "${_storage}/volume/member_path.c"
         "${_storage}/filesystems/iso9660/iso9660.c"
         "${_storage}/filesystems/fat/fat12_16.c"
         "${_storage}/filesystems/fat/fat_fatfs.c"
