@@ -107,6 +107,21 @@ extern "C"
 
     OS2EXPORT ULONG OS2API WinQueryCpType(HMQ queue);
 
+    /* PMCTLS standard dialogs, for Open32's common dialogs */
+
+    HWND lx_pm_font_dialog(HWND parent, HWND owner, PVOID data);
+
+    /* As lx_pm_font_dialog, with the dialog built from a PM template in memory. */
+    HWND lx_pm_font_dialog_template(HWND parent, HWND owner, PVOID data, PVOID dialog_template);
+
+    MRESULT lx_pm_font_procedure(HWND window, ULONG message, MPARAM first, MPARAM second);
+
+    HWND lx_pm_file_dialog(HWND parent, HWND owner, PVOID data);
+
+    BOOL lx_pm_file_set_filter(HWND window, const char *pattern);
+
+    MRESULT lx_pm_file_procedure(HWND window, ULONG message, MPARAM first, MPARAM second);
+
     /* PMWP */
 
     /* Starts the first program object whose ASSOCFILTER matches the file name. */

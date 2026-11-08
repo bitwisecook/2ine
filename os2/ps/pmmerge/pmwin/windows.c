@@ -136,6 +136,27 @@ WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname)
     return NULL;
 }
 
+enum
+{
+    /* One hook each for the file and font dialogs, with room to spare. */
+    MAX_WINDOW_DESTROY_HOOKS = 4
+};
+
+static PmWindowDestroyHook window_destroy_hooks[MAX_WINDOW_DESTROY_HOOKS];
+static size_t window_destroy_hook_count;
+
+/* Hooks register while their library loads, before any window exists. */
+BOOL lx_pm_add_window_destroy_hook(PmWindowDestroyHook hook)
+{
+    for (size_t i = 0; i < window_destroy_hook_count; i++)
+        if (window_destroy_hooks[i] == hook)
+            return TRUE;
+    if (!hook || window_destroy_hook_count == MAX_WINDOW_DESTROY_HOOKS)
+        return FALSE;
+    window_destroy_hooks[window_destroy_hook_count++] = hook;
+    return TRUE;
+}
+
 void destroyWindow(AnchorBlock *anchor, Window *win)
 {
     if (!win || (win->hwnd == NULLHANDLE) || win->destroying)
@@ -195,8 +216,8 @@ void destroyWindow(AnchorBlock *anchor, Window *win)
     destroyDialog(win);
     destroyControl(win);
     destroyMenu(win);
-    destroyStandardFile(win);
-    destroyStandardFont(win);
+    for (size_t i = 0; i < window_destroy_hook_count; i++)
+        window_destroy_hooks[i](win);
 
     if (win->parent == &desktop_window)
     {

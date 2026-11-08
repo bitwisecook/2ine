@@ -7,7 +7,7 @@
 #include "os2/ps/awe/input.h"
 #include "os2/include/pmgpi.h"
 #include "os2/include/pmstddlg.h"
-#include "os2/ps/pmmerge/pmwin/standard_dialogs.h"
+#include "os2/include/private/pmp.h"
 #include <stdio.h>
 
 enum

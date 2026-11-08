@@ -2,7 +2,7 @@
 /* The standard font chooser enumerates actual host catalogue faces and writes
    the OS/2 FONTDLG/FATTRS records through checked execution spans. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
-#include "os2/ps/pmmerge/pmwin/standard_dialogs.h"
+#include "os2/include/private/pmp.h"
 #include "os2/include/pmstddlg.h"
 #include "emulator/abi.h"
 #include <strings.h>
@@ -82,7 +82,7 @@ static void release_font(PmFontDialog *d)
     }
 }
 
-void destroyStandardFont(Window *w)
+static void destroyStandardFont(Window *w)
 {
     if (w->standard_font)
     {
@@ -747,4 +747,19 @@ HWND lx_pm_font_dialog(HWND parent, HWND owner, PVOID address)
         WinDestroyWindow(handle);
     release_font(d);
     return TRUE;
+}
+
+HWND WinFontDlg(HWND parent, HWND owner, PVOID data)
+{
+    return lx_pm_font_dialog(parent, owner, data);
+}
+
+MRESULT WinDefFontDlgProc(HWND window, ULONG message, MPARAM first, MPARAM second)
+{
+    return lx_pm_font_procedure(window, message, first, second);
+}
+
+LX_NATIVE_CONSTRUCTOR(font_dialog)
+{
+    lx_pm_add_window_destroy_hook(destroyStandardFont);
 }

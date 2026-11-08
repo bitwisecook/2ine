@@ -58,7 +58,7 @@ static int initializeProcessDisplay(void)
 LX_PRIVATE uint32 GHABCounter;
 LX_PRIVATE uint32 GHMQCounter;
 
-LX_PRIVATE Window desktop_window;
+Window desktop_window;
 
 PFNWP defaultGuestWindowProc(void)
 {

@@ -310,12 +310,13 @@ LX_PRIVATE BOOL postSemanticKey(AnchorBlock *anchor, HWND window, ULONG key, ULO
                                 ULONG ticks);
 extern LX_PRIVATE uint32 GHABCounter;
 extern LX_PRIVATE uint32 GHMQCounter;
-extern LX_PRIVATE Window desktop_window;
+/* desktop_window, getAnchorBlockNoHAB and getWindowFromHWND are also used by PMCTLS. */
+extern Window desktop_window;
 LX_PRIVATE void destroyPresentationParameters(Window *window);
 LX_PRIVATE void destroyWindowEnumerations(AnchorBlock *anchor);
-LX_PRIVATE AnchorBlock *getAnchorBlockNoHAB(void);
+AnchorBlock *getAnchorBlockNoHAB(void);
 LX_PRIVATE AnchorBlock *getAnchorBlock(const HAB hab);
-LX_PRIVATE Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd);
+Window *getWindowFromHWND(const AnchorBlock *anchor, const HWND hwnd);
 LX_PRIVATE PresentationSpace *getPresentationSpaceFromHPS(const AnchorBlock *anchor, const HPS hps);
 LX_PRIVATE const char *messageName(const ULONG msg);
 LX_PRIVATE WindowClass *findRegisteredClass(AnchorBlock *anchor, const char *classname);
@@ -375,8 +376,11 @@ LX_PRIVATE HPS acquirePresentationSpace(HWND window, HPS ps, PRECTL rect, BOOL p
 LX_PRIVATE PFNWP callableWindowProcedure(AnchorBlock *anchor, PFNWP procedure);
 LX_PRIVATE MRESULT OS2API menuProcedure(HWND window, ULONG message, MPARAM first, MPARAM second);
 LX_PRIVATE void destroyMenu(Window *window);
-LX_PRIVATE void destroyStandardFile(Window *window);
-LX_PRIVATE void destroyStandardFont(Window *window);
+/* PMCTLS keeps its standard-dialog state on PMMERGE windows. PMMERGE does not
+   link PMCTLS, so PMCTLS registers a hook that releases that state when a
+   window is destroyed. */
+typedef void (*PmWindowDestroyHook)(Window *window);
+BOOL lx_pm_add_window_destroy_hook(PmWindowDestroyHook hook);
 LX_PRIVATE MRESULT sendOwnerItem(Window *owner, ULONG id, OWNERITEM *item);
 LX_PRIVATE void validateWindowPaint(AnchorBlock *anchor, Window *window);
 LX_PRIVATE void destroyDeviceContexts(AnchorBlock *anchor);

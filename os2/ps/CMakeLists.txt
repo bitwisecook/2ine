@@ -56,7 +56,6 @@ twoine_os2_dll(
     pmmerge/pmwin/scrollbar.c
     pmmerge/pmwin/combo.c
     pmmerge/pmwin/mle.c
-    pmmerge/pmwin/standard_file.c
     pmmerge/pmwin/menus.c
     pmmerge/pmwin/regions.c
     pmmerge/pmwin/invalidation.c
@@ -73,12 +72,16 @@ twoine_os2_dll(
     pmmerge/pmwin/semaphore_waits.c
     pmmerge/pmwin/pointer_image.c
     pmmerge/pmwin/compat_services.c
-    pmmerge/pmwin/standard_font.c
 )
 twoine_os2_dll(pmwin pmwin/module.c)
 twoine_os2_dll(pmgre pmgre/module.c)
 twoine_os2_dll(pmshapi pmshapi/module.c)
-twoine_os2_dll(pmctls controls/pmctls/module.c)
+twoine_os2_dll(
+    pmctls
+    controls/pmctls/module.c
+    controls/pmctls/dialogs/filedlgm.c
+    controls/pmctls/dialogs/fontdlg.c
+)
 twoine_os2_dll(pmdrag controls/drag/module.c)
 twoine_os2_dll(helpmgr helpmgr/module.c)
 twoine_os2_dll(
@@ -182,6 +185,9 @@ else()
     target_link_libraries(pmmerge PRIVATE ZLIB::ZLIB)
 endif()
 target_link_libraries(pmgpi PRIVATE pmmerge)
-target_link_libraries(pmwinx PRIVATE pmmerge pmgpi pmdrag pmwp)
+target_link_libraries(
+    pmwinx
+    PRIVATE pmmerge pmgpi pmctls pmdrag pmwp
+)
 target_link_libraries(pmdrag PRIVATE pmmerge)
 target_link_libraries(pmctls PRIVATE pmmerge)
