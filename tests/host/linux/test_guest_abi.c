@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Native guest API entries must align host stack locals for every OS/2 alignment. */
-#include "os2libs/os2types.h"
+#include "os2/include/os2types.h"
 #include <stdint.h>
 #include <stdio.h>
 

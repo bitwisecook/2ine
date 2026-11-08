@@ -17,15 +17,15 @@ class OpenGLGeneratorTests(unittest.TestCase):
         self.output = gen_opengl.render(self.schema)
 
     def test_distinct_ordinal_profiles_and_double_stack_width(self):
-        entries = self.output["os2libs/generated/opengl-entries.h"]
+        entries = self.output["os2/opengl/opengl/generated/opengl-entries.h"]
         self.assertIn('{"glBegin", call_glBegin, 4, 22, 275}', entries)
         self.assertIn('{"glOrtho", call_glOrtho, 48,', entries)
-        wire = self.output["guest/bindings/opengl.h"]
+        wire = self.output["os2/opengl/opengl/bindings.h"]
         self.assertTrue("double far_val = (double)gl_double(a, 40)" in wire)
         self.assertIn("float value = (float)gl_float(a, 4)", wire)
 
     def test_pixel_spans_include_pack_state_and_queries_have_explicit_extents(self):
-        wire = self.output["guest/bindings/opengl.h"]
+        wire = self.output["os2/opengl/opengl/bindings.h"]
         self.assertIn("gl_pixel_bytes(ctx, width, height, format, type, 1)", wire)
         self.assertIn("gl_texture_bytes(ctx, target, level, format, type)", wire)
         self.assertIn("gl_query_count(pname)", wire)

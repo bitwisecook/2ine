@@ -261,10 +261,10 @@ def render(schema):
     return {
         "host/include/host/gl/dispatch.h": "".join(dispatch),
         "host/mesa/opengl/gl_load.h": "".join(loads),
-        "guest/bindings/opengl.h": "".join(wire),
-        "os2libs/generated/opengl-entries.h": "".join(entries),
-        "os2libs/generated/opengl-custom.h": "".join(custom),
-        "os2libs/generated/pgl-entries.h": "".join(pgl),
+        "os2/opengl/opengl/bindings.h": "".join(wire),
+        "os2/opengl/opengl/generated/opengl-entries.h": "".join(entries),
+        "os2/opengl/opengl/generated/opengl-custom.h": "".join(custom),
+        "os2/opengl/opengl/generated/pgl-entries.h": "".join(pgl),
         "host/include/host/gl/constants.h": "".join(constants),
     }
 

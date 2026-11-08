@@ -1,0 +1,34 @@
+/**
+ * 2ine; an OS/2 emulator for Linux.
+ *
+ * Please see the file LICENSE.txt in the source's root directory.
+ *
+ *  This file written by Ryan C. Gordon.
+ */
+
+#ifndef _INCL_MSG_H_
+#define _INCL_MSG_H_
+
+#include "os2/include/os2types.h"
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    OS2EXPORT APIRET16 OS2API16 Dos16PutMessage(USHORT hfile, USHORT cbMsg, PCHAR pBuf);
+    OS2EXPORT APIRET16 OS2API16 Dos16TrueGetMessage(PVOID pTable, USHORT cTable, PCHAR pData,
+                                                    USHORT cbBuf, USHORT msgnum, PCHAR pFilename,
+                                                    PUSHORT pcbMsg, PVOID msgseg);
+    OS2EXPORT APIRET OS2API DosInsertMessage(PVOID table, ULONG count, PCHAR message,
+                                             ULONG message_size, PCHAR output, ULONG capacity,
+                                             PULONG actual);
+    OS2EXPORT APIRET OS2API DosPutMessage(HFILE hfile, ULONG cbMsg, PCHAR pBuf);
+    /* MSGSEG32 passes a hidden word before seven arguments; the bridge removes only that word with ret 4. */
+    OS2EXPORT __attribute__((stdcall)) APIRET OS2API DosTrueGetMessage(PVOID msgseg);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -62,7 +62,7 @@ if(TARGET opengl)
         )
         add_test(NAME opengl_macos_policy COMMAND twoine_gl_policy_tests)
     endif()
-    add_executable(twoine_opengl_pm_tests os2libs/test_opengl.c)
+    add_executable(twoine_opengl_pm_tests os2/test_opengl.c)
     twoine_application_target(twoine_opengl_pm_tests)
     target_link_libraries(twoine_opengl_pm_tests PRIVATE opengl pmwin pmgpi 2ine)
     add_test(NAME opengl_pm COMMAND twoine_opengl_pm_tests)
@@ -184,7 +184,11 @@ if(TARGET twoine_runtime)
     target_link_libraries(twoine_diagnostic_tests PRIVATE twoine_runtime)
     add_test(NAME host_diagnostics COMMAND twoine_diagnostic_tests)
     set_tests_properties(host_diagnostics PROPERTIES TIMEOUT 20)
-    add_executable(twoine_network_tests host/test_network.c ${PROJECT_SOURCE_DIR}/os2libs/network.c)
+    add_executable(
+        twoine_network_tests
+        host/test_network.c
+        ${PROJECT_SOURCE_DIR}/os2/mptn/common/network.c
+    )
     target_link_libraries(twoine_network_tests PRIVATE twoine_runtime)
     add_test(NAME host_network COMMAND twoine_network_tests)
     set_tests_properties(host_network PROPERTIES TIMEOUT 20)
@@ -261,7 +265,7 @@ if(TARGET viocalls)
 endif()
 
 if(TARGET sesmgr AND TARGET quecalls)
-    add_executable(twoine_legacy_session_tests os2libs/test_legacy_sessions.c)
+    add_executable(twoine_legacy_session_tests os2/test_legacy_sessions.c)
     twoine_application_target(twoine_legacy_session_tests)
     target_link_libraries(twoine_legacy_session_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
     add_test(
@@ -294,8 +298,8 @@ if(TARGET pmwin)
                     "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;DYLD_INSERT_LIBRARIES=$<TARGET_FILE:twoine_cursor_backend>"
         )
     endif()
-    add_executable(twoine_pm_tests os2libs/test_pm.c)
-    add_executable(twoine_clipboard_pm_tests os2libs/test_clipboard.c)
+    add_executable(twoine_pm_tests os2/test_pm.c)
+    add_executable(twoine_clipboard_pm_tests os2/test_clipboard.c)
     twoine_application_target(twoine_clipboard_pm_tests)
     target_link_libraries(twoine_clipboard_pm_tests PRIVATE pmwin 2ine SDL3::SDL3)
     add_test(NAME clipboard_pm COMMAND twoine_clipboard_pm_tests)
@@ -303,7 +307,7 @@ if(TARGET pmwin)
         clipboard_pm
         PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
     )
-    add_executable(twoine_clipboard_memory_hook_tests os2libs/test_clipboard_memory_hook.c)
+    add_executable(twoine_clipboard_memory_hook_tests os2/test_clipboard_memory_hook.c)
     twoine_application_target(twoine_clipboard_memory_hook_tests)
     target_link_libraries(twoine_clipboard_memory_hook_tests PRIVATE 2ine)
     add_test(
@@ -318,7 +322,7 @@ if(TARGET pmwin)
         presentation_manager
         PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
     )
-    add_executable(twoine_help_font_tests os2libs/test_help_fonts.c)
+    add_executable(twoine_help_font_tests os2/test_help_fonts.c)
     twoine_application_target(twoine_help_font_tests)
     target_link_libraries(twoine_help_font_tests PRIVATE pmgpi pmwin 2ine)
     add_test(NAME help_font_transitions COMMAND twoine_help_font_tests)
@@ -328,7 +332,7 @@ if(TARGET pmwin)
             TIMEOUT 20
             ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;TWOINE_DISPLAY_DPI=96"
     )
-    add_executable(twoine_frame_format_tests os2libs/test_frame_format.c)
+    add_executable(twoine_frame_format_tests os2/test_frame_format.c)
     twoine_application_target(twoine_frame_format_tests)
     target_link_libraries(twoine_frame_format_tests PRIVATE pmwin 2ine)
     add_test(NAME frame_format_protocol COMMAND twoine_frame_format_tests)
@@ -336,7 +340,7 @@ if(TARGET pmwin)
         frame_format_protocol
         PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
     )
-    add_executable(twoine_display_dpi_tests os2libs/test_display_dpi.c)
+    add_executable(twoine_display_dpi_tests os2/test_display_dpi.c)
     twoine_application_target(twoine_display_dpi_tests)
     target_link_libraries(twoine_display_dpi_tests PRIVATE pmgpi pmwin 2ine)
     foreach(dpi 96 120 144 192)
@@ -359,7 +363,7 @@ if(TARGET pmwin)
                     "TWOINE_DISPLAY_DPI=96;TWOINE_DISPLAY_DEPTH=${depth};SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
         )
     endforeach()
-    add_executable(twoine_menu_chrome_tests os2libs/test_menu_chrome.c)
+    add_executable(twoine_menu_chrome_tests os2/test_menu_chrome.c)
     twoine_application_target(twoine_menu_chrome_tests)
     target_link_libraries(twoine_menu_chrome_tests PRIVATE pmwin 2ine)
     add_test(NAME pm_menu_chrome COMMAND twoine_menu_chrome_tests)
@@ -367,7 +371,7 @@ if(TARGET pmwin)
         pm_menu_chrome
         PROPERTIES ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_AUDIO_DRIVER=dummy"
     )
-    add_executable(twoine_printing_tests os2libs/test_printing.c)
+    add_executable(twoine_printing_tests os2/test_printing.c)
     twoine_application_target(twoine_printing_tests)
     target_link_libraries(
         twoine_printing_tests
@@ -384,7 +388,7 @@ if(TARGET pmwin)
         printer_output
         PROPERTIES TIMEOUT 60 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
     )
-    add_executable(twoine_dialog_tests os2libs/test_dialogs.c)
+    add_executable(twoine_dialog_tests os2/test_dialogs.c)
     twoine_application_target(twoine_dialog_tests)
     target_link_libraries(twoine_dialog_tests PRIVATE pmwin 2ine)
     add_test(NAME pm_dialogs COMMAND twoine_dialog_tests)
@@ -688,11 +692,7 @@ if(TARGET pmwin AND TARGET pmgpi)
 endif()
 
 if(TARGET pmwinx)
-    add_executable(
-        twoine_open32_atomic_tests
-        os2libs/test_open32_atomic.c
-        ../os2libs/pmwinx/atomic.c
-    )
+    add_executable(twoine_open32_atomic_tests os2/test_open32_atomic.c ../os2/ps/awe/atomic.c)
     twoine_application_target(twoine_open32_atomic_tests)
     target_link_libraries(twoine_open32_atomic_tests PRIVATE 2ine)
     add_test(NAME open32_atomic_backing COMMAND twoine_open32_atomic_tests)
@@ -706,12 +706,12 @@ if(TARGET pmwinx)
     set_tests_properties(open32_atomic PROPERTIES TIMEOUT 30)
     add_executable(
         twoine_open32_adjust_window_tests
-        os2libs/test_open32_adjust_window.c
-        ../os2libs/pmwinx/adjust_window.c
+        os2/test_open32_adjust_window.c
+        ../os2/ps/awe/adjust_window.c
     )
     twoine_application_target(twoine_open32_adjust_window_tests)
     add_test(NAME open32_adjust_window COMMAND twoine_open32_adjust_window_tests)
-    add_executable(twoine_open32_load_menu_tests os2libs/test_open32_load_menu.c)
+    add_executable(twoine_open32_load_menu_tests os2/test_open32_load_menu.c)
     twoine_application_target(twoine_open32_load_menu_tests)
     target_link_libraries(
         twoine_open32_load_menu_tests
@@ -726,7 +726,7 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}/open32-load-menu-tests"
     )
     set_tests_properties(open32_load_menu PROPERTIES TIMEOUT 30)
-    add_executable(twoine_settings_tests os2libs/test_settings.c)
+    add_executable(twoine_settings_tests os2/test_settings.c)
     twoine_application_target(twoine_settings_tests)
     target_link_libraries(
         twoine_settings_tests
@@ -735,28 +735,28 @@ if(TARGET pmwinx)
     add_test(
         NAME application_settings
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/os2libs/settings.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/os2/settings.py"
             $<TARGET_FILE:twoine_settings_tests>
     )
     set_tests_properties(application_settings PROPERTIES TIMEOUT 40)
 endif()
 
 if(TARGET pmshapi AND UNIX)
-    add_executable(twoine_profile_worker os2libs/profile_worker.c)
+    add_executable(twoine_profile_worker os2/profile_worker.c)
     twoine_application_target(twoine_profile_worker)
     target_link_libraries(twoine_profile_worker PRIVATE pmshapi 2ine)
     add_test(
         NAME profile_concurrency
         COMMAND
-            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/os2libs/profile_concurrency.py"
+            "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/os2/profile_concurrency.py"
             $<TARGET_FILE:twoine_profile_worker>
     )
     set_tests_properties(profile_concurrency PROPERTIES TIMEOUT 45)
 endif()
 
 if(TARGET dive)
-    add_executable(twoine_dive_tests os2libs/test_dive.c)
-    add_executable(twoine_dive_format_tests os2libs/test_dive_formats.c)
+    add_executable(twoine_dive_tests os2/test_dive.c)
+    add_executable(twoine_dive_format_tests os2/test_dive_formats.c)
     twoine_application_target(twoine_dive_format_tests)
     target_link_libraries(twoine_dive_format_tests PRIVATE dive)
     add_test(NAME dive_formats COMMAND twoine_dive_format_tests)
@@ -771,14 +771,14 @@ if(TARGET dive)
     )
 endif()
 if(TARGET so32dll)
-    add_executable(twoine_legacy_socket_tests os2libs/test_legacy_socket.c)
+    add_executable(twoine_legacy_socket_tests os2/test_legacy_socket.c)
     twoine_application_target(twoine_legacy_socket_tests)
     target_link_libraries(twoine_legacy_socket_tests PRIVATE so32dll tcp32dll 2ine)
     add_test(NAME legacy_socket COMMAND twoine_legacy_socket_tests)
     set_tests_properties(legacy_socket PROPERTIES TIMEOUT 20)
 endif()
 if(TARGET mdm)
-    add_executable(twoine_mdm_tests os2libs/test_mdm.c)
+    add_executable(twoine_mdm_tests os2/test_mdm.c)
     twoine_application_target(twoine_mdm_tests)
     target_link_libraries(twoine_mdm_tests PRIVATE mdm mmio 2ine m)
     add_test(NAME multimedia COMMAND twoine_mdm_tests)
@@ -807,12 +807,12 @@ if(TARGET 2ine)
 endif()
 
 if(TARGET doscalls)
-    add_executable(twoine_file_compat_tests os2libs/test_file_compat.c)
+    add_executable(twoine_file_compat_tests os2/test_file_compat.c)
     twoine_application_target(twoine_file_compat_tests)
     target_link_libraries(twoine_file_compat_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
     add_test(NAME file_compat COMMAND twoine_file_compat_tests $<TARGET_FILE:doscalls>)
     set_tests_properties(file_compat PROPERTIES TIMEOUT 20)
-    add_executable(twoine_legacy_core_tests os2libs/test_legacy_core.c)
+    add_executable(twoine_legacy_core_tests os2/test_legacy_core.c)
     twoine_application_target(twoine_legacy_core_tests)
     target_link_libraries(twoine_legacy_core_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
     add_test(NAME legacy_core COMMAND twoine_legacy_core_tests $<TARGET_FILE:doscalls>)
@@ -820,7 +820,7 @@ if(TARGET doscalls)
 endif()
 
 if(TARGET dive)
-    add_executable(twoine_visibility_tests os2libs/test_visibility.c)
+    add_executable(twoine_visibility_tests os2/test_visibility.c)
     twoine_application_target(twoine_visibility_tests)
     target_link_libraries(twoine_visibility_tests PRIVATE pmgpi pmwin 2ine)
     add_test(NAME pm_visible_regions COMMAND twoine_visibility_tests)
@@ -839,7 +839,7 @@ if(TARGET dive)
 endif()
 
 if(TARGET pmwin)
-    add_executable(twoine_pm_thread_tests os2libs/test_pm_threads.c)
+    add_executable(twoine_pm_thread_tests os2/test_pm_threads.c)
     twoine_application_target(twoine_pm_thread_tests)
     target_link_libraries(twoine_pm_thread_tests PRIVATE pmwin 2ine)
     add_test(NAME pm_thread_posts COMMAND twoine_pm_thread_tests)
@@ -864,10 +864,10 @@ endif()
 if(TARGET mdm AND TWOINE_MIDI_SYNTH)
     add_executable(
         twoine_midi_synth_tests
-        os2libs/test_midi_synth.c
-        ../os2libs/midi_synth.c
-        ../os2libs/midi_config.c
-        ../os2libs/midi_mt32.c
+        os2/test_midi_synth.c
+        ../os2/mm/midi/midi_synth.c
+        ../os2/mm/midi/midi_config.c
+        ../os2/mm/midi/midi_mt32.c
     )
     twoine_application_target(twoine_midi_synth_tests)
     target_link_libraries(
@@ -875,15 +875,15 @@ if(TARGET mdm AND TWOINE_MIDI_SYNTH)
         PRIVATE twoine_midi_config twoine_mt32_config 2ine m
     )
     if(TWOINE_MIDI_EXTENDED)
-        target_sources(twoine_midi_synth_tests PRIVATE ../os2libs/midi_banks.cpp)
+        target_sources(twoine_midi_synth_tests PRIVATE ../os2/mm/midi/midi_banks.cpp)
         target_compile_features(twoine_midi_synth_tests PRIVATE cxx_std_17)
         add_executable(
             twoine_midi_bank_tests
-            os2libs/test_midi_banks.c
-            ../os2libs/midi_synth.c
-            ../os2libs/midi_config.c
-            ../os2libs/midi_mt32.c
-            ../os2libs/midi_banks.cpp
+            os2/test_midi_banks.c
+            ../os2/mm/midi/midi_synth.c
+            ../os2/mm/midi/midi_config.c
+            ../os2/mm/midi/midi_mt32.c
+            ../os2/mm/midi/midi_banks.cpp
         )
         twoine_application_target(twoine_midi_bank_tests)
         target_compile_features(twoine_midi_bank_tests PRIVATE cxx_std_17)
@@ -925,7 +925,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TARGET dive)
 endif()
 
 if(TARGET mdm AND UNIX)
-    add_executable(twoine_midi_config_tests os2libs/test_midi_config.c ../os2libs/midi_config.c)
+    add_executable(twoine_midi_config_tests os2/test_midi_config.c ../os2/mm/midi/midi_config.c)
     twoine_application_target(twoine_midi_config_tests)
     target_link_libraries(twoine_midi_config_tests PRIVATE 2ine)
     add_test(NAME midi_preferences COMMAND twoine_midi_config_tests)
@@ -935,9 +935,9 @@ endif()
 if(TARGET mdm AND UNIX)
     add_executable(
         twoine_midi_mt32_tests
-        os2libs/test_midi_mt32.c
-        ../os2libs/midi_mt32.c
-        ../os2libs/midi_config.c
+        os2/test_midi_mt32.c
+        ../os2/mm/midi/midi_mt32.c
+        ../os2/mm/midi/midi_config.c
     )
     twoine_application_target(twoine_midi_mt32_tests)
     target_link_libraries(twoine_midi_mt32_tests PRIVATE twoine_mt32_config 2ine m)
@@ -982,7 +982,7 @@ if(TARGET 2ine)
 endif()
 
 if(TARGET kbdcalls AND TARGET viocalls AND TARGET nls)
-    add_executable(twoine_console_compat_tests os2libs/test_console_compat.c)
+    add_executable(twoine_console_compat_tests os2/test_console_compat.c)
     twoine_application_target(twoine_console_compat_tests)
     target_link_libraries(twoine_console_compat_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
     add_test(
@@ -995,11 +995,7 @@ if(TARGET kbdcalls AND TARGET viocalls AND TARGET nls)
 endif()
 
 if(TARGET pmwinx)
-    add_executable(
-        twoine_open32_unicode_tests
-        os2libs/test_open32_unicode.c
-        ../os2libs/pmwinx/unicode.c
-    )
+    add_executable(twoine_open32_unicode_tests os2/test_open32_unicode.c ../os2/ps/awe/unicode.c)
     twoine_application_target(twoine_open32_unicode_tests)
     target_link_libraries(twoine_open32_unicode_tests PRIVATE 2ine)
     add_test(NAME open32_unicode_conversion COMMAND twoine_open32_unicode_tests)
@@ -1013,8 +1009,8 @@ if(TARGET pmwinx)
     set_tests_properties(open32_unicode PROPERTIES TIMEOUT 45)
     add_executable(
         twoine_open32_menu_metric_tests
-        os2libs/test_open32_menu_metrics.c
-        ../os2libs/pmwinx/metrics.c
+        os2/test_open32_menu_metrics.c
+        ../os2/ps/awe/metrics.c
     )
     twoine_application_target(twoine_open32_menu_metric_tests)
     add_test(NAME open32_menu_metric_dimensions COMMAND twoine_open32_menu_metric_tests)
@@ -1026,11 +1022,7 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}/open32-menu-metric-tests"
     )
     set_tests_properties(open32_menu_metrics PROPERTIES TIMEOUT 30)
-    add_executable(
-        twoine_open32_pointer_tests
-        os2libs/test_open32_pointers.c
-        ../os2libs/pmwinx/pointers.c
-    )
+    add_executable(twoine_open32_pointer_tests os2/test_open32_pointers.c ../os2/ps/awe/pointers.c)
     twoine_application_target(twoine_open32_pointer_tests)
     add_test(NAME open32_pointer_coordinates COMMAND twoine_open32_pointer_tests)
     add_test(
@@ -1041,11 +1033,7 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}/open32-pointer-tests"
     )
     set_tests_properties(open32_pointers PROPERTIES TIMEOUT 30)
-    add_executable(
-        twoine_open32_priority_tests
-        os2libs/test_open32_priority.c
-        ../os2libs/pmwinx/priority.c
-    )
+    add_executable(twoine_open32_priority_tests os2/test_open32_priority.c ../os2/ps/awe/priority.c)
     twoine_application_target(twoine_open32_priority_tests)
     target_link_libraries(twoine_open32_priority_tests PRIVATE 2ine)
     add_test(NAME open32_priority_mapping COMMAND twoine_open32_priority_tests)
@@ -1060,8 +1048,8 @@ if(TARGET pmwinx)
     if(APPLE)
         add_executable(
             twoine_open32_priority_host_tests
-            os2libs/test_open32_priority.c
-            ../os2libs/pmwinx/priority.c
+            os2/test_open32_priority.c
+            ../os2/ps/awe/priority.c
         )
         twoine_application_target(twoine_open32_priority_host_tests)
         target_compile_definitions(
@@ -1096,7 +1084,7 @@ if(TARGET pmwinx)
             --build "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(open32_accelerators PROPERTIES TIMEOUT 30)
-    add_executable(twoine_open32_accelerator_tests os2libs/test_open32_accelerators.c)
+    add_executable(twoine_open32_accelerator_tests os2/test_open32_accelerators.c)
     twoine_application_target(twoine_open32_accelerator_tests)
     target_link_libraries(twoine_open32_accelerator_tests PRIVATE pmwinx 2ine SDL3::SDL3)
     add_test(
@@ -1111,7 +1099,7 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}" --backend "${_twoine_legacy_backend}"
     )
     set_tests_properties(open32_tls PROPERTIES TIMEOUT 30)
-    add_executable(twoine_open32_tls_cleanup_tests os2libs/test_open32_tls_cleanup.c)
+    add_executable(twoine_open32_tls_cleanup_tests os2/test_open32_tls_cleanup.c)
     twoine_application_target(twoine_open32_tls_cleanup_tests)
     target_link_libraries(twoine_open32_tls_cleanup_tests PRIVATE 2ine ${CMAKE_DL_LIBS})
     add_test(NAME open32_tls_cleanup COMMAND twoine_open32_tls_cleanup_tests $<TARGET_FILE:pmwinx>)
@@ -1157,7 +1145,7 @@ if(TARGET lx_loader)
 endif()
 
 if(TARGET pmmerge AND TARGET pmgpi)
-    add_executable(twoine_help_api_tests os2libs/test_help_apis.c)
+    add_executable(twoine_help_api_tests os2/test_help_apis.c)
     twoine_application_target(twoine_help_api_tests)
     target_link_libraries(twoine_help_api_tests PRIVATE pmwin pmgpi pmmerge 2ine)
     add_test(NAME help_prerequisite_apis COMMAND twoine_help_api_tests)
@@ -1168,7 +1156,7 @@ if(TARGET pmmerge AND TARGET pmgpi)
 endif()
 
 if(TARGET mdm AND TWOINE_VIDEO)
-    add_executable(twoine_video_tests os2libs/test_video.c)
+    add_executable(twoine_video_tests os2/test_video.c)
     twoine_application_target(twoine_video_tests)
     target_link_libraries(twoine_video_tests PRIVATE mdm pmwin 2ine)
     add_test(
@@ -1219,7 +1207,7 @@ if(TARGET lx_loader AND TARGET twoine_ball_cli)
 endif()
 
 if(TARGET pmgpi AND TARGET pmwin)
-    add_executable(twoine_bitmap_bits_tests os2libs/test_bitmap_bits.c)
+    add_executable(twoine_bitmap_bits_tests os2/test_bitmap_bits.c)
     twoine_application_target(twoine_bitmap_bits_tests)
     target_link_libraries(twoine_bitmap_bits_tests PRIVATE pmgpi pmwin 2ine)
     add_test(NAME bitmap_bits COMMAND twoine_bitmap_bits_tests)

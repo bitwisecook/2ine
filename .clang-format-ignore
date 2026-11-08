@@ -4,7 +4,7 @@
 ball/project_sources.h
 host/include/host/gl/dispatch.h
 host/mesa/opengl/gl_load.h
-guest/bindings/opengl.h
+os2/opengl/opengl/bindings.h
 host/include/host/gl/constants.h
 # Reference experiments and dependency sources retain their own formatting.
 research/**

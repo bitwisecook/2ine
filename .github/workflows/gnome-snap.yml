@@ -15,7 +15,7 @@ on:
       - 'docs/licenses/**'
       - 'ball/**'
       - 'cmake/**'
-      - 'os2libs/midi*'
+      - 'os2/mm/midi/**'
       - 'tools/ball.py'
       - 'tools/build_gnome_packages.py'
       - '.github/workflows/gnome-snap.yml'

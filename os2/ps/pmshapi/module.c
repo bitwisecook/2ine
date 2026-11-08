@@ -1,0 +1,12 @@
+/**
+ * 2ine; an OS/2 emulator for Linux.
+ *
+ * Please see the file LICENSE.txt in the source's root directory.
+ *
+ *  This file written by Ryan C. Gordon.
+ */
+
+#include "os2/include/private/export.h"
+#include "os2/include/pmshapi.h"
+#include "emulator/arguments.h"
+#include "os2/ps/pmshapi/generated/pmshapi-lx.h"

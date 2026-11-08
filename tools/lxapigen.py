@@ -13,14 +13,17 @@ from pathlib import Path
 from typing import cast
 
 # Module definitions (LINK386 .def files) name each DLL's exports and ordinals.
-DEFINITION_GLOBS = ("os2libs/*.def",)
-# Headers that declare the exported C prototypes and guest data exports.
-HEADER_GLOBS = ("os2libs/*.h",)
+DEFINITION_GLOBS = ("os2/**/*.def",)
+# Headers that declare the exported C prototypes and guest data exports: the
+# Toolkit-shaped public headers and the headers of non-IBM DLLs.
+HEADER_GLOBS = ("os2/include/**/*.h", "os2/thirdparty/*/*.h")
 # The export framework itself declares no OS/2 exports.
-FRAMEWORK_HEADERS = {"os2native.h", "os2native16.h", "os2native32.h"}
-FRAMEWORK32_INCLUDE = "os2libs/os2native32.h"
-POLICIES16 = "guest/bindings/api16.json"
-POLICIES32 = "guest/bindings/api32.json"
+FRAMEWORK_HEADERS = {"export.h", "export16.h", "export32.h"}
+FRAMEWORK32_INCLUDE = "os2/include/private/export32.h"
+POLICIES16 = "os2/include/private/api16.json"
+POLICIES32 = "os2/include/private/api32.json"
+# Each DLL directory holds its definition, bindings.h and generated/<dll>-lx.h.
+BINDINGS = "bindings.h"
 
 TYPE_SIZES = {"LONG": 4, "ULONG": 4, "SHORT": 2, "USHORT": 2, "HVIO": 2, "HKBD": 2}
 
@@ -579,9 +582,8 @@ def render(
     return "".join(lines).rstrip() + "\n"
 
 
-def bindings_include(root: Path, definition: Path, module: str) -> str:
-    del root, definition
-    return f"guest/bindings/{module}.h"
+def bindings_include(root: Path, definition: Path) -> str:
+    return (definition.parent / BINDINGS).relative_to(root).as_posix()
 
 
 def read_headers(root: Path) -> tuple[dict[str, str], dict[str, int]]:
@@ -590,7 +592,11 @@ def read_headers(root: Path) -> tuple[dict[str, str], dict[str, int]]:
     data: dict[str, int] = {}
     for pattern in HEADER_GLOBS:
         for header in sorted(root.glob(pattern)):
-            if header.name in FRAMEWORK_HEADERS or "generated" in header.parts:
+            if (
+                header.name in FRAMEWORK_HEADERS
+                or header.name.startswith("bindings")
+                or "generated" in header.parts
+            ):
                 continue
             text = header.read_text()
             for name, declaration in parse_prototypes(text).items():
@@ -611,7 +617,7 @@ def generate(root: Path, *, check: bool = False) -> bool:
             definition = parse_definition(path.read_text(), path.name)
             module = definition.module
             functions, data, forwarders = bind_exports(definition, prototypes, data_sizes)
-            layout = Layout(bindings=bindings_include(root, path, module))
+            layout = Layout(bindings=bindings_include(root, path))
             outputs[path.parent / "generated" / f"{module}-lx.h"] = render(
                 module,
                 functions,

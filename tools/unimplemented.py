@@ -12,7 +12,7 @@ from pathlib import Path
 
 def implemented(directory: Path) -> set[str]:
     exports: set[str] = set()
-    for header in sorted(directory.glob("*-lx.h")):
+    for header in sorted(directory.rglob("*-lx.h")):
         module = header.name.removesuffix("-lx.h").upper()
         for line in header.read_text().splitlines():
             match = re.match(r"\s*LX_NATIVE_EXPORT\d*\(.*?, (\d+)\)", line)
@@ -32,7 +32,7 @@ def missing(lines: Iterable[str], exports: set[str]) -> Iterator[str]:
 
 def main() -> int:
     try:
-        exports = implemented(Path(__file__).resolve().parents[1] / "os2libs/generated")
+        exports = implemented(Path(__file__).resolve().parents[1] / "os2")
         sys.stdout.writelines(missing(sys.stdin, exports))
     except OSError as error:
         print(f"unimplemented: {error}", file=sys.stderr)

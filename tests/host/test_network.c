@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #include "host/network.h"
-#include "os2libs/network.h"
+#include "os2/mptn/common/network.h"
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netinet/in.h>

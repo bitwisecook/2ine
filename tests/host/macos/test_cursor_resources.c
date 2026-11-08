@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* A controlled native-cursor backend, never the user's desktop/cursor. */
-#include "os2libs/os2native.h"
-#include "os2libs/pmwin.h"
+#include "os2/include/private/export.h"
+#include "os2/include/pmwin.h"
 #include "emulator/handles.h"
 #include "host/library.h"
 #include "host/thread.h"

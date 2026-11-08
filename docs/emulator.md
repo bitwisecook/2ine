@@ -4,12 +4,12 @@
 
 **The loader, the OS/2 process runtime and execution, above the host services.**
 `emulator/` holds everything that runs an OS/2 program except the OS/2 API
-implementations (`os2libs/`) and the host services (`host/`).
+implementations (`os2/`) and the host services (`host/`).
 
 ```mermaid
 flowchart TD
     Loader["emulator/loader/ · lx_loader"] --> Process["emulator/process/ · lib2ine"]
-    APIs["os2libs/ · OS/2 DLLs"] --> Process
+    APIs["os2/ · OS/2 DLLs"] --> Process
     Loader --> Exec["emulator/include/emulator/execution.h"]
     APIs --> ABI["emulator/abi/ · arguments, handles"] --> Exec
     Process --> Exec
@@ -32,7 +32,7 @@ The layers are checked by `tests/architecture/check_boundaries.py`: execution
 and the ABI helpers know no process state; the process runtime holds module
 records only by pointer and knows no loader internals; the loader uses the
 process runtime through its public headers; nothing in `emulator/` includes
-`os2libs/` or the per-DLL bindings in `guest/bindings/`.
+`os2/`, which also holds the per-DLL bindings.
 
 `execution.h` covers program/DLL/thread entry, callbacks, bridges and selectors.
 `host/*.h` covers files, libraries, threads, processes, synchronization and VM.

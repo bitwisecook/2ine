@@ -1,8 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* GUI import initialization owns a display before a worker requests memory GPI. */
-#include "os2libs/os2native.h"
-#include "os2libs/pmwin.h"
-#include "os2libs/pmgpi.h"
+#include "os2/include/private/export.h"
+#include "os2/include/pmwin.h"
+#include "os2/include/pmgpi.h"
 #include "emulator/abi.h"
 #include "host/library.h"
 #include "host/thread.h"

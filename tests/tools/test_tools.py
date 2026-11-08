@@ -172,41 +172,42 @@ OS2EXPORT PVOID *OS2API Pointer(VOID);
     def test_generator_uses_owned_output_directory_and_read_only_check(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "guest/bindings").mkdir(parents=True)
-            (root / "os2libs").mkdir()
+            (root / "os2/include/private").mkdir(parents=True)
+            (root / "os2/sample").mkdir()
             for name in ("api16.json", "api32.json"):
-                (root / "guest/bindings" / name).write_text("{}")
-            (root / "os2libs/sample.h").write_text("OS2EXPORT APIRET OS2API Call(VOID);\n")
-            (root / "os2libs/sample.def").write_text("LIBRARY SAMPLE\nEXPORTS\n    Call @7\n")
+                (root / "os2/include/private" / name).write_text("{}")
+            (root / "os2/include/sample.h").write_text("OS2EXPORT APIRET OS2API Call(VOID);\n")
+            (root / "os2/sample/sample.def").write_text("LIBRARY SAMPLE\nEXPORTS\n    Call @7\n")
             self.assertTrue(lxapigen.generate(root, check=True))
-            self.assertFalse((root / "os2libs/generated").exists())
+            self.assertFalse((root / "os2/sample/generated").exists())
             self.assertTrue(lxapigen.generate(root))
-            output = root / "os2libs/generated/sample-lx.h"
+            output = root / "os2/sample/generated/sample-lx.h"
             self.assertIn("Call, 7", output.read_text())
             self.assertFalse(lxapigen.generate(root, check=True))
-            self.assertFalse((root / "os2libs/sample-lx.h").exists())
+            self.assertFalse((root / "os2/sample/sample-lx.h").exists())
 
     def test_generator_maps_guest_data_exports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "guest/bindings").mkdir(parents=True)
-            (root / "os2libs").mkdir()
-            (root / "guest/bindings/api16.json").write_text("{}")
-            (root / "guest/bindings/api32.json").write_text(
+            (root / "os2/include/private").mkdir(parents=True)
+            (root / "os2/sample").mkdir()
+            (root / "os2/include/private/api16.json").write_text("{}")
+            (root / "os2/include/private/api32.json").write_text(
                 '{"sample": {"Call": {"argument_bytes": 0, "callee_pop": 0, '
                 '"convention": "LX_ABI_STACK32"}}}'
             )
-            (root / "os2libs/sample.h").write_text(
+            (root / "os2/include/sample.h").write_text(
                 "#define LX_GUEST_DATA_EXPORT(name, bytes) enum { name##_bytes = bytes }\n"
                 "OS2EXPORT APIRET OS2API Call(VOID);\n"
                 "LX_GUEST_DATA_EXPORT(First, 20);\n"
                 "LX_GUEST_DATA_EXPORT(Second, 8);\n"
             )
-            (root / "os2libs/sample.def").write_text(
+            (root / "os2/sample/sample.def").write_text(
                 "LIBRARY SAMPLE\nEXPORTS\n    First @3\n    Call @7\n    Second @9\n"
             )
             self.assertTrue(lxapigen.generate(root))
-            output = (root / "os2libs/generated/sample-lx.h").read_text()
+            output = (root / "os2/sample/generated/sample-lx.h").read_text()
+            self.assertIn('#include "os2/sample/bindings.h"', output)
             self.assertIn("LX_NATIVE_MODULE_INIT_DATA_SUPPORT(48)", output)
             self.assertIn("LX_NATIVE_INIT_DATA(Second, 32)", output)
             self.assertIn("if (!initdata_sample()) return 0;", output)

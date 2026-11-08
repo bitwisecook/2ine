@@ -156,7 +156,7 @@ def masked_c(text: str) -> str:
 
 def source_functions(root: Path) -> dict:
     functions = defaultdict(list)
-    for path in sorted((root / "os2libs").rglob("*.c")):
+    for path in sorted((root / "os2").rglob("*.c")):
         text = path.read_text()
         masked = masked_c(text)
         for match in re.finditer(
@@ -189,20 +189,19 @@ def source_functions(root: Path) -> dict:
 def export_inventory(root: Path) -> dict:
     inventories = {}
     functions = source_functions(root)
-    api32 = json.loads((root / "guest/bindings/api32.json").read_text())
-    api16 = json.loads((root / "guest/bindings/api16.json").read_text())
-    for path in sorted((root / "os2libs/generated").glob("*-lx.h")):
+    api32 = json.loads((root / "os2/include/private/api32.json").read_text())
+    api16 = json.loads((root / "os2/include/private/api16.json").read_text())
+    for path in sorted((root / "os2").glob("**/generated/*-lx.h")):
         module = module_name(path.name.removesuffix("-lx.h"))
+        # A DLL's sources live in the directory that holds its generated table.
+        directory = path.parent.parent.relative_to(root).as_posix() + "/"
         entries = {}
         text = path.read_text()
         pattern = r'LX_NATIVE_EXPORT(?:16|32)?(?:_BRIDGED)?(?P<different>_DIFFERENT_NAME)?\((?P<symbol>\w+),\s*(?:"(?P<name>[^"]+)",\s*)?(?P<ordinal>\d+)\)'
         for match in re.finditer(pattern, text):
             symbol, ordinal = match["symbol"], int(match["ordinal"])
             locations = [
-                entry
-                for entry in functions.get(symbol, [])
-                if entry["path"].startswith(f"os2libs/{module.lower()}/")
-                or entry["path"] == f"os2libs/{module.lower()}.c"
+                entry for entry in functions.get(symbol, []) if entry["path"].startswith(directory)
             ]
             entries[ordinal] = {
                 "ordinal": ordinal,
