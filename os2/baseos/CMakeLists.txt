@@ -33,7 +33,11 @@ twoine_os2_dll(
     doscalls/task/tksleep.c
     doscalls/doscall1/must_complete.c
     doscalls/doscall1/thread_memory.c
-    doscalls/process.c
+    doscalls/task/tkexec.c
+    doscalls/task/task.c
+    doscalls/task/tkextlst.c
+    doscalls/task/tkv1api.c
+    doscalls/filesys/codepg.c
     doscalls/semaphores.c
     doscalls/modules.c
     doscalls/system.c
