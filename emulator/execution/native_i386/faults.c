@@ -109,37 +109,6 @@ static int describeModuleAddress(const void *ptr, char *buffer, size_t size)
                                              buffer, size);
 }
 
-/* Resolve host-only fault addresses through /proc/self/maps. */
-static void describeHostMapping(const void *ptr, char *buf, const size_t buflen)
-{
-    char path[64];
-    snprintf(path, sizeof(path), "/proc/%d/maps", (int)getpid());
-    FILE *io = fopen(path, "r");
-    *buf = '\0';
-    if (!io)
-        return;
-
-    const unsigned long want = (unsigned long)(size_t)ptr;
-    char line[512];
-    while (fgets(line, sizeof(line), io))
-    {
-        unsigned long start = 0, end = 0;
-        if (sscanf(line, "%lx-%lx", &start, &end) == 2)
-        {
-            if ((want >= start) && (want < end))
-            {
-                strncpy(buf, line, buflen - 1);
-                buf[buflen - 1] = '\0';
-                char *nl = strchr(buf, '\n');
-                if (nl)
-                    *nl = '\0';
-                break;
-            }
-        }
-    }
-    fclose(io);
-}
-
 /* OS/2's fixed GDT selectors cannot be installed by an unprivileged Linux task.
    Translate data and TIB selector loads to their host equivalents. */
 static int handleFlatDataSelector(ucontext_t *context)
@@ -227,13 +196,13 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
             if (!*eipmod)
             {
                 char line[512];
-                describeHostMapping(eip, line, sizeof(line));
+                lx_host_memory_mapping(eip, line, sizeof(line));
                 snprintf(eipmod, sizeof(eipmod), "%s", *line ? line : "unmapped");
             }
             if (!*addrmod)
             {
                 char line[512];
-                describeHostMapping(addr, line, sizeof(line));
+                lx_host_memory_mapping(addr, line, sizeof(line));
                 snprintf(addrmod, sizeof(addrmod), "%s", *line ? line : "unmapped");
             }
             fprintf(stderr,
@@ -245,7 +214,7 @@ static void segfault_catcher(int sig, siginfo_t *info, void *ctx)
                     (uint)gregs[REG_EBP], (uint)gregs[REG_ESP]);
             {
                 char line[512];
-                describeHostMapping(eip, line, sizeof(line));
+                lx_host_memory_mapping(eip, line, sizeof(line));
                 if (*line)
                 {
                     const uint8 *bytes = (const uint8 *)(size_t)eip;

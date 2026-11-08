@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Bootstrap queries, argv serialization, memory and calendar host contracts. */
+/* Bootstrap queries, argv serialization, memory, mappings and calendar host contracts. */
 #include "host/memory.h"
 #include "host/clock.h"
 #include "host/system.h"
@@ -17,6 +17,20 @@
             exit(1);                                                                               \
         }                                                                                          \
     } while (0)
+
+/* On Linux the mapping text is the /proc/self/maps line holding the address. */
+static void mapping_test(void)
+{
+    char text[512];
+    CHECK(!lx_host_memory_mapping(NULL, text, sizeof text) && !*text);
+    if (strcmp(TWOINE_TEST_HOST_OS, "linux"))
+        return;
+    CHECK(lx_host_memory_mapping((const void *)mapping_test, text, sizeof text));
+    CHECK(strstr(text, "twoine_host_platform_tests") && strchr(text, '-') && !strchr(text, '\n'));
+    char small[8];
+    CHECK(lx_host_memory_mapping((const void *)mapping_test, small, sizeof small) &&
+          strlen(small) == sizeof small - 1 && !strncmp(small, text, sizeof small - 1));
+}
 
 static void arguments_test(int argc, char **argv)
 {
@@ -46,6 +60,7 @@ static void arguments_test(int argc, char **argv)
 int main(int argc, char **argv)
 {
     arguments_test(argc, argv);
+    mapping_test();
     CHECK(!strcmp(lx_host_os(), TWOINE_TEST_HOST_OS));
     char *executable = lx_host_executable_path();
     CHECK(executable && strstr(executable, "twoine_host_platform_tests"));

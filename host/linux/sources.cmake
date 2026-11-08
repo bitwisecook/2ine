@@ -1,6 +1,6 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 # Linux host adapter, by function. Shared POSIX code is in host/posix/.
-twoine_host_function(system system/system.c)
+twoine_host_function(system system/system.c system/maps.c)
 twoine_host_function(process process/self.c)
 twoine_host_function(thread thread/sync_hooks.c)
 twoine_host_function(fs fs/ranges.c fs/identity.c fs/metadata.c)

@@ -31,3 +31,13 @@ const char *lx_host_os(void)
 {
     return "macos";
 }
+
+/* macOS names loaded images through dyld in the fatal report and has no
+   per-address mapping text. */
+int lx_host_memory_mapping(const void *address, char *text, size_t size)
+{
+    (void)address;
+    if (text && size)
+        *text = '\0';
+    return 0;
+}

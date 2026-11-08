@@ -22,4 +22,8 @@ enum
 void *lx_host_vm_map(void *hint, size_t size, unsigned permissions, int exact);
 int lx_host_vm_protect(void *memory, size_t size, unsigned permissions);
 size_t lx_host_page_size(void);
+/* Describes the host mapping that contains address (on Linux, its
+   /proc/self/maps line) as NUL-terminated text and returns 1, or returns 0
+   with empty text when none is known. Async-signal-safe. */
+int lx_host_memory_mapping(const void *address, char *text, size_t size);
 #endif

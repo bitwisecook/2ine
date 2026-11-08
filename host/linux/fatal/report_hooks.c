@@ -1,9 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* /proc/self/maps names each loaded image and its address range. */
+/* Linux register and loaded-image report hooks. */
 #define _GNU_SOURCE 1
 #include "host/fatal.h"
 #include "host/posix/fatal/report_hooks.h"
-#include <fcntl.h>
+#include "host/linux/system/maps.h"
 #include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -56,20 +56,25 @@ void lx_host_fatal_write_registers(const void *context)
 #endif
 }
 
+typedef struct MapCopy
+{
+    size_t copied;
+} MapCopy;
+
+static int write_map_line(const char *line, size_t length, void *context)
+{
+    MapCopy *copy = context;
+    lx_host_fatal_write_bytes(line, length);
+    if (!length || line[length - 1] != '\n')
+        lx_host_fatal_write_bytes("\n", 1);
+    copy->copied += length;
+    return copy->copied < MAP_COPY_BYTES;
+}
+
 void lx_host_fatal_write_images(void)
 {
-    int maps = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
-    if (maps < 0)
-        return;
-    char block[4096];
-    size_t copied = 0;
-    ssize_t count;
-    while (copied < MAP_COPY_BYTES && (count = read(maps, block, sizeof block)) > 0)
-    {
-        lx_host_fatal_write_bytes(block, (size_t)count);
-        copied += (size_t)count;
-    }
-    close(maps);
+    MapCopy copy = {0};
+    lx_linux_maps_visit(write_map_line, &copy);
 }
 
 int lx_host_fatal_display_available(void)

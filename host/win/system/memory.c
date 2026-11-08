@@ -62,3 +62,12 @@ void lx_host_memory_free(void *memory, size_t size)
     (void)size;
     VirtualFree(memory, 0, MEM_RELEASE);
 }
+
+/* Windows has no per-address mapping text. */
+int lx_host_memory_mapping(const void *address, char *text, size_t size)
+{
+    (void)address;
+    if (text && size)
+        *text = '\0';
+    return 0;
+}
