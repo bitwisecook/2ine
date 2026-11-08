@@ -9,18 +9,20 @@
 int tb_zip_metadata(TbReadStream *parent, const char *name, TbZipMetadata *result)
 {
     uint64_t length = tb_stream_size(parent);
-    size_t amount = length < 65557 ? (size_t)length : 65557;
+    size_t amount = length < ZIP_END_SEARCH_BYTES ? (size_t)length : ZIP_END_SEARCH_BYTES;
     unsigned char *tail = malloc(amount ? amount : 1);
-    if (amount < 22 || !tail || !tb_stream_read_at(parent, length - amount, tail, amount))
+    if (amount < ZIP_END_BYTES || !tail ||
+        !tb_stream_read_at(parent, length - amount, tail, amount))
     {
         free(tail);
         return 0;
     }
-    size_t at = amount - 22;
+    size_t at = amount - ZIP_END_BYTES;
     int found = 0;
     for (;;)
     {
-        if (!memcmp(tail + at, "PK\5\6", 4) && tb_le16(tail + at + 20) == amount - at - 22)
+        if (!memcmp(tail + at, ZIP_END_SIGNATURE, ZIP_SIGNATURE_BYTES) &&
+            tb_le16(tail + at + ZIP_END_COMMENT_BYTES) == amount - at - ZIP_END_BYTES)
         {
             found = 1;
             break;
@@ -33,18 +35,21 @@ int tb_zip_metadata(TbReadStream *parent, const char *name, TbZipMetadata *resul
         free(tail);
         return tb_archive_fail(EINVAL);
     }
-    unsigned char end[22];
+    unsigned char end[ZIP_END_BYTES];
     memcpy(end, tail + at, sizeof end);
     uint64_t end_at = length - amount + at;
     free(tail);
-    uint64_t central = tb_le32(end + 16), central_size = tb_le32(end + 12);
-    unsigned count = tb_le16(end + 10);
-    if (tb_le16(end + 4) || tb_le16(end + 6) || tb_le16(end + 8) != count || count == 65535 ||
+    uint64_t central = tb_le32(end + ZIP_END_CENTRAL_OFFSET),
+             central_size = tb_le32(end + ZIP_END_CENTRAL_BYTES);
+    unsigned count = tb_le16(end + ZIP_END_ENTRIES);
+    if (tb_le16(end + ZIP_END_DISK) || tb_le16(end + ZIP_END_CENTRAL_DISK) ||
+        tb_le16(end + ZIP_END_DISK_ENTRIES) != count || count == ZIP_ZIP64_ENTRIES ||
         central_size > end_at || central > end_at - central_size)
         return tb_archive_fail(EINVAL);
-    unsigned char header[46];
+    unsigned char header[ZIP_CENTRAL_HEADER_BYTES];
     uint64_t adjustment = 0;
-    if (!tb_stream_read_at(parent, central, header, 4) || memcmp(header, "PK\1\2", 4))
+    if (!tb_stream_read_at(parent, central, header, ZIP_SIGNATURE_BYTES) ||
+        memcmp(header, ZIP_CENTRAL_SIGNATURE, ZIP_SIGNATURE_BYTES))
     {
         /* Old self-extractors can prepend their executable without updating
            the original ZIP-relative offsets. */
@@ -56,10 +61,11 @@ int tb_zip_metadata(TbReadStream *parent, const char *name, TbZipMetadata *resul
     {
         if (central > limit || sizeof header > limit - central ||
             !tb_stream_read_at(parent, central, header, sizeof header) ||
-            memcmp(header, "PK\1\2", 4))
+            memcmp(header, ZIP_CENTRAL_SIGNATURE, ZIP_SIGNATURE_BYTES))
             return tb_archive_fail(EINVAL);
-        unsigned name_length = tb_le16(header + 28);
-        uint64_t span = sizeof header + name_length + tb_le16(header + 30) + tb_le16(header + 32);
+        unsigned name_length = tb_le16(header + ZIP_CENTRAL_NAME_BYTES);
+        uint64_t span = sizeof header + name_length + tb_le16(header + ZIP_CENTRAL_EXTRA_BYTES) +
+                        tb_le16(header + ZIP_CENTRAL_COMMENT_BYTES);
         if (span > limit - central)
             return tb_archive_fail(EINVAL);
         char *raw = malloc((size_t)name_length + 1);
@@ -75,15 +81,19 @@ int tb_zip_metadata(TbReadStream *parent, const char *name, TbZipMetadata *resul
         free(normalized);
         if (matched)
         {
-            if (tb_le16(header + 34) || tb_le32(header + 24) == UINT32_MAX ||
-                tb_le32(header + 20) == UINT32_MAX || tb_le32(header + 42) == UINT32_MAX)
+            /* ZIP64 and multi-disk entries are not read. */
+            if (tb_le16(header + ZIP_CENTRAL_DISK) ||
+                tb_le32(header + ZIP_CENTRAL_SIZE) == UINT32_MAX ||
+                tb_le32(header + ZIP_CENTRAL_PACKED) == UINT32_MAX ||
+                tb_le32(header + ZIP_CENTRAL_LOCAL_HEADER) == UINT32_MAX)
                 return tb_archive_fail(EINVAL);
-            *result = (TbZipMetadata){(uint64_t)tb_le32(header + 42) + adjustment,
-                                      tb_le32(header + 20),
-                                      tb_le32(header + 24),
-                                      tb_le32(header + 16),
-                                      tb_le16(header + 8),
-                                      tb_le16(header + 10)};
+            *result = (TbZipMetadata){
+                .position = (uint64_t)tb_le32(header + ZIP_CENTRAL_LOCAL_HEADER) + adjustment,
+                .packed = tb_le32(header + ZIP_CENTRAL_PACKED),
+                .size = tb_le32(header + ZIP_CENTRAL_SIZE),
+                .crc = tb_le32(header + ZIP_CENTRAL_CRC),
+                .flags = tb_le16(header + ZIP_CENTRAL_FLAGS),
+                .method = tb_le16(header + ZIP_CENTRAL_METHOD)};
             return 1;
         }
         central += span;

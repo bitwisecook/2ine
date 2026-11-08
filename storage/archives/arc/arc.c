@@ -11,29 +11,68 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Member header: TB_ARC_MARK, the method, then fields; method 1 omits the unpacked size. */
+enum
+{
+    ARC_METHOD = 1,
+    ARC_NAME = 2,
+    ARC_NAME_BYTES = 13,
+    ARC_PACKED = 15,
+    ARC_DATE = 19,
+    ARC_TIME = 21,
+    ARC_CRC = 23,
+    ARC_SIZE = 25,
+    ARC_MARK_BYTES = 2, /* mark and method */
+    ARC_OLD_HEADER_BYTES = 25,
+    ARC_HEADER_BYTES = 29,
+
+    ARC_METHOD_END = 0,
+    ARC_METHOD_OLD_STORED = 1,
+    ARC_METHOD_STORED = 2,
+    ARC_METHOD_PACKED = 3,   /* RLE90 */
+    ARC_METHOD_SQUEEZED = 4, /* Huffman, then RLE90 */
+    ARC_METHOD_CRUNCHED = 8, /* Unix compress with a maximum-bits byte, then RLE90 */
+    ARC_METHOD_SQUASHED = 9, /* Unix compress, 13 bits */
+    ARC_METHOD_LAST = 9
+};
+
+/* Unix compress (.Z) stream header: two magic bytes, then block mode and maximum bits. */
+enum
+{
+    COMPRESS_MAGIC0 = 0x1f,
+    COMPRESS_MAGIC1 = 0x9d,
+    COMPRESS_BLOCK_MODE = 0x80,
+    COMPRESS_HEADER_BYTES = 3,
+    COMPRESS_BITS_MASK = 31,
+    COMPRESS_MIN_BITS = 9,
+    COMPRESS_MAX_BITS = 16,
+    ARC_SQUASHED_BITS = 13
+};
+
 int tb_arc_walk(TbReadStream *file, TbArchiveVisit visit, void *context)
 {
     uint64_t at = 0, length = tb_stream_size(file);
     for (unsigned count = 0; count < TB_MEDIA_ENTRY_LIMIT; count++)
     {
-        unsigned char h[29];
-        if (!tb_stream_read_at(file, at, h, 2) || h[0] != 0x1a)
+        unsigned char h[ARC_HEADER_BYTES];
+        if (!tb_stream_read_at(file, at, h, ARC_MARK_BYTES) || h[0] != TB_ARC_MARK)
             return tb_archive_fail(EINVAL);
-        unsigned method = h[1];
-        if (!method)
+        unsigned method = h[ARC_METHOD];
+        if (method == ARC_METHOD_END)
             return 1;
-        size_t header = method == 1 ? 25 : 29;
-        if (method > 9 || !tb_stream_read_at(file, at, h, header))
+        size_t header = method == ARC_METHOD_OLD_STORED ? ARC_OLD_HEADER_BYTES : ARC_HEADER_BYTES;
+        if (method > ARC_METHOD_LAST || !tb_stream_read_at(file, at, h, header))
             return tb_archive_fail(ENOTSUP);
-        uint32_t packed = tb_le32(h + 15), size = method == 1 ? packed : tb_le32(h + 25);
+        uint32_t packed = tb_le32(h + ARC_PACKED),
+                 size = method == ARC_METHOD_OLD_STORED ? packed : tb_le32(h + ARC_SIZE);
         if (at > length || header > length - at || packed > length - at - header ||
-            !memchr(h + 2, 0, 13))
+            !memchr(h + ARC_NAME, 0, ARC_NAME_BYTES))
             return tb_archive_fail(EINVAL);
-        char *name = tb_media_sanitise_member((char *)h + 2, 0);
+        char *name = tb_media_sanitise_member((char *)h + ARC_NAME, 0);
         if (name && *name)
         {
             int result = visit(context, name, size, 0, file, at, packed, TB_ARCHIVE_ARC + method,
-                               tb_dos_time(tb_le16(h + 19), tb_le16(h + 21)));
+                               tb_dos_time(tb_le16(h + ARC_DATE), tb_le16(h + ARC_TIME)));
             free(name);
             if (result != 1)
                 return result;
@@ -94,49 +133,56 @@ TbReadStream *tb_arc_member(TbReadStream *parent, uint64_t offset, uint64_t pack
         return NULL;
     }
     unsigned method = (unsigned)(kind - TB_ARCHIVE_ARC);
-    unsigned char arc[29] = {0};
-    size_t bytes = method == 1 ? 25 : 29;
+    unsigned char arc[ARC_HEADER_BYTES] = {0};
+    size_t bytes = method == ARC_METHOD_OLD_STORED ? ARC_OLD_HEADER_BYTES : ARC_HEADER_BYTES;
     if (!tb_stream_read_at(parent, offset, arc, bytes))
         return NULL;
-    uint32_t checksum = tb_le16(arc + 23);
+    uint32_t checksum = tb_le16(arc + ARC_CRC);
     uint64_t data = offset + bytes;
     unsigned char *input = malloc(packed ? (size_t)packed : 1),
                   *output = malloc(size ? (size_t)size : 1);
     int ok = input && output && tb_stream_read_at(parent, data, input, (size_t)packed);
-    if (ok && method <= 2)
+    if (ok && method <= ARC_METHOD_STORED)
     {
         ok = packed == size;
         if (ok)
             memcpy(output, input, (size_t)size);
     }
-    else if (ok && method == 3)
+    else if (ok && method == ARC_METHOD_PACKED)
         ok = tb_rle90_decode(input, (size_t)packed, output, (size_t)size);
-    else if (ok && (method == 4 || method == 8 || method == 9))
+    else if (ok && (method == ARC_METHOD_SQUEEZED || method == ARC_METHOD_CRUNCHED ||
+                    method == ARC_METHOD_SQUASHED))
     {
-        size_t capacity = method == 9 ? (size_t)size : (size_t)size * 2 + 1, used = 0;
+        /* An RLE90 encoding is at most twice the size it decodes to. */
+        size_t capacity = method == ARC_METHOD_SQUASHED ? (size_t)size : (size_t)size * 2 + 1,
+               used = 0;
         unsigned char *plain = malloc(capacity ? capacity : 1);
         ok = plain != NULL;
-        if (ok && method == 4)
+        if (ok && method == ARC_METHOD_SQUEEZED)
             ok = tb_squeeze_decode(input, (size_t)packed, plain, capacity, &used);
         else if (ok)
         {
-            size_t skip = method == 8 ? 1 : 0;
-            unsigned maxbits = method == 8 && packed ? input[0] & 31 : 13;
-            unsigned char *frame = packed >= skip ? malloc(3 + (size_t)packed - skip) : NULL;
-            if (!frame || maxbits < 9 || maxbits > 16)
+            size_t skip = method == ARC_METHOD_CRUNCHED ? 1 : 0;
+            unsigned maxbits = method == ARC_METHOD_CRUNCHED && packed
+                                   ? input[0] & COMPRESS_BITS_MASK
+                                   : ARC_SQUASHED_BITS;
+            unsigned char *frame =
+                packed >= skip ? malloc(COMPRESS_HEADER_BYTES + (size_t)packed - skip) : NULL;
+            if (!frame || maxbits < COMPRESS_MIN_BITS || maxbits > COMPRESS_MAX_BITS)
                 ok = 0;
             else
             {
-                frame[0] = 0x1f;
-                frame[1] = 0x9d;
-                frame[2] = (unsigned char)(0x80 | maxbits);
-                memcpy(frame + 3, input + skip, (size_t)packed - skip);
-                ok = arc_compress_frame(frame, 3 + (size_t)packed - skip, plain, capacity, &used);
+                frame[0] = COMPRESS_MAGIC0;
+                frame[1] = COMPRESS_MAGIC1;
+                frame[2] = (unsigned char)(COMPRESS_BLOCK_MODE | maxbits);
+                memcpy(frame + COMPRESS_HEADER_BYTES, input + skip, (size_t)packed - skip);
+                ok = arc_compress_frame(frame, COMPRESS_HEADER_BYTES + (size_t)packed - skip, plain,
+                                        capacity, &used);
                 frame = NULL; /* Reader owns it. */
             }
             free(frame);
         }
-        if (ok && method == 9)
+        if (ok && method == ARC_METHOD_SQUASHED)
         {
             ok = used == size;
             if (ok)

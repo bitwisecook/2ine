@@ -13,6 +13,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define ISO_STANDARD_ID "CD001"
+
+enum
+{
+    ISO_DESCRIPTOR_OFFSET = 16 * 2048, /* first volume descriptor */
+    ISO_STANDARD_ID_AT = 1,
+    ISO_STANDARD_ID_BYTES = 5,
+    BOOT_SECTOR_BYTES = 512,
+    BOOT_SIGNATURE_AT = 510, /* 55 AA */
+    X86_JMP_SHORT = 0xeb,
+    X86_JMP_NEAR = 0xe9,
+    MZ_SIGNATURE_BYTES = 2
+};
+
 static FILE *source_open(const char *path)
 {
     return tb_image_path(path) ? tb_image_fopen(path) : tb_host_fopen(path, "rb");
@@ -33,16 +47,23 @@ static int disk_visit(void *opaque, const char *name, uint64_t size, int directo
                     modified);
 }
 
+/* An ISO 9660 volume descriptor, or a boot sector that starts with an x86 jump. */
+static int disk_image_magic(const unsigned char *boot, const unsigned char *iso)
+{
+    return !memcmp(iso + ISO_STANDARD_ID_AT, ISO_STANDARD_ID, ISO_STANDARD_ID_BYTES) ||
+           (boot[BOOT_SIGNATURE_AT] == 0x55 && boot[BOOT_SIGNATURE_AT + 1] == 0xaa &&
+            (boot[0] == X86_JMP_SHORT || boot[0] == X86_JMP_NEAR));
+}
+
 static int image_reader(TbReadStream *file)
 {
-    unsigned char magic[512] = {0}, iso[7] = {0};
+    unsigned char magic[BOOT_SECTOR_BYTES] = {0}, iso[7] = {0};
     tb_stream_read_at(file, 0, magic,
                       tb_stream_size(file) < sizeof magic ? (size_t)tb_stream_size(file)
                                                           : sizeof magic);
-    if (tb_stream_size(file) >= 16 * 2048 + sizeof iso)
-        tb_stream_read_at(file, 16 * 2048, iso, sizeof iso);
-    return !memcmp(iso + 1, "CD001", 5) ||
-           (magic[510] == 0x55 && magic[511] == 0xaa && (magic[0] == 0xeb || magic[0] == 0xe9));
+    if (tb_stream_size(file) >= ISO_DESCRIPTOR_OFFSET + sizeof iso)
+        tb_stream_read_at(file, ISO_DESCRIPTOR_OFFSET, iso, sizeof iso);
+    return disk_image_magic(magic, iso);
 }
 
 static void image_stats(TbReadStream *file, uint64_t before_builds, uint64_t before_hits)
@@ -55,34 +76,34 @@ static void image_stats(TbReadStream *file, uint64_t before_builds, uint64_t bef
 
 static int archive_walk(TbReadStream *file, TbArchiveVisit visit, void *context)
 {
-    unsigned char magic[512] = {0};
+    unsigned char magic[BOOT_SECTOR_BYTES] = {0};
     tb_stream_seek(file, 0, SEEK_SET);
     tb_stream_read(magic, 1, sizeof magic, file);
     tb_stream_seek(file, 0, SEEK_SET);
     unsigned char iso[7] = {0};
-    if (!tb_stream_seek(file, 16 * 2048, SEEK_SET))
+    if (!tb_stream_seek(file, ISO_DESCRIPTOR_OFFSET, SEEK_SET))
         tb_stream_read(iso, 1, sizeof iso, file);
     tb_stream_seek(file, 0, SEEK_SET);
-    if (!memcmp(iso + 1, "CD001", 5) ||
-        (magic[510] == 0x55 && magic[511] == 0xaa && (magic[0] == 0xeb || magic[0] == 0xe9)))
+    if (disk_image_magic(magic, iso))
     {
         DiskVisit d = {visit, context, file};
         return tb_image_reader_walk(file, disk_visit, &d);
     }
-    if (tb_le32(magic + 20) == TB_ZOO_SIGNATURE)
+    if (tb_le32(magic + TB_ZOO_SIGNATURE_AT) == TB_ZOO_SIGNATURE)
         return tb_zoo_walk(file, visit, context);
-    if (magic[0] == 0x1a)
+    if (magic[0] == TB_ARC_MARK)
         return tb_arc_walk(file, visit, context);
-    if (magic[0] == 0x60 && magic[1] == 0xea)
+    if (!memcmp(magic, TB_ARJ_SIGNATURE, sizeof TB_ARJ_SIGNATURE - 1))
         return tb_arj_walk(file, visit, context);
-    if (magic[0] == 0xa5 && magic[1] == 0x96)
+    if (!memcmp(magic, TB_IBM_PACK_SIGNATURE, sizeof TB_IBM_PACK_SIGNATURE - 1))
         return tb_ibm_pack_walk(file, visit, context);
-    if (!memcmp(magic, "\x77\x04\x02\xbe", 4) || !memcmp(magic, "MZ", 2))
+    int executable = !memcmp(magic, "MZ", MZ_SIGNATURE_BYTES);
+    if (!memcmp(magic, TB_WARPIN_SIGNATURE, sizeof TB_WARPIN_SIGNATURE - 1) || executable)
     {
         int rc = tb_warpin_walk(file, visit, context);
         if (rc || errno != ENOTSUP)
             return rc;
-        if (!memcmp(magic, "MZ", 2))
+        if (executable)
         {
             rc = tb_arj_sfx_walk(file, visit, context);
             if (rc || errno != ENOTSUP)

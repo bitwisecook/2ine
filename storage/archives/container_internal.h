@@ -80,6 +80,14 @@ int tb_libarchive_walk(TbReadStream *file, TbArchiveVisit visit, void *context);
 /* Decodes the named member, or the only stream when raw, on demand. */
 TbReadStream *tb_libarchive_member(TbReadStream *parent, const char *name, uint64_t size, int raw);
 
+/* Format signatures at the start of a file, except as noted. */
+#define TB_ARC_MARK 0x1a
+#define TB_ARJ_SIGNATURE "\x60\xea"
+#define TB_IBM_PACK_SIGNATURE "\xa5\x96"
+#define TB_WARPIN_SIGNATURE "\x77\x04\x02\xbe" /* also after an executable stub */
+#define TB_ZOO_SIGNATURE UINT32_C(0xfdc4a7dc)  /* little-endian, at TB_ZOO_SIGNATURE_AT */
+#define TB_ZOO_SIGNATURE_AT 20
+
 /* Format walkers and member decoders. */
 int tb_ibm_pack_walk(TbReadStream *file, TbArchiveVisit visit, void *context);
 TbReadStream *tb_ibm_pack_member(TbReadStream *file, uint64_t offset, uint64_t packed,
@@ -93,7 +101,6 @@ int tb_arj_walk(TbReadStream *file, TbArchiveVisit visit, void *context);
 int tb_arj_sfx_walk(TbReadStream *file, TbArchiveVisit visit, void *context);
 TbReadStream *tb_arj_member(TbReadStream *file, uint64_t offset, uint64_t packed, uint64_t size,
                             TbArchiveKind kind);
-#define TB_ZOO_SIGNATURE UINT32_C(0xfdc4a7dc)
 int tb_zoo_walk(TbReadStream *file, TbArchiveVisit visit, void *context);
 TbReadStream *tb_zoo_member(TbReadStream *file, uint64_t offset, uint64_t packed, uint64_t size,
                             TbArchiveKind kind);

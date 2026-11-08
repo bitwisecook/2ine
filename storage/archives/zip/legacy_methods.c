@@ -23,30 +23,31 @@ TbReadStream *tb_zip_legacy_member(TbReadStream *parent, struct archive *archive
        when the seekable ZIP reader jumps from its central directory. Resolve
        the selected name against the checked central table instead. */
     TbZipMetadata metadata;
-    if (!tb_zip_metadata(parent, name, &metadata) || metadata.method > 6)
+    if (!tb_zip_metadata(parent, name, &metadata) || metadata.method > ZIP_METHOD_IMPLODE)
         return NULL;
     *handled = 1;
-    unsigned char header[30];
+    unsigned char header[ZIP_LOCAL_HEADER_BYTES];
     if (!tb_stream_read_at(parent, metadata.position, header, sizeof header) ||
-        memcmp(header, "PK\3\4", 4) || tb_le16(header + 8) != metadata.method ||
-        ((tb_le16(header + 6) ^ metadata.flags) & 0x4f) || (metadata.flags & 0x41) ||
-        size != metadata.size ||
-        (!(metadata.flags & 8) &&
-         (metadata.packed != tb_le32(header + 18) || metadata.crc != tb_le32(header + 14) ||
-          metadata.size != tb_le32(header + 22))))
+        memcmp(header, ZIP_LOCAL_SIGNATURE, ZIP_SIGNATURE_BYTES) ||
+        tb_le16(header + ZIP_LOCAL_METHOD) != metadata.method ||
+        ((tb_le16(header + ZIP_LOCAL_FLAGS) ^ metadata.flags) & ZIP_FLAGS_MATCHED) ||
+        (metadata.flags & ZIP_FLAGS_UNSUPPORTED) || size != metadata.size ||
+        (!(metadata.flags & ZIP_FLAG_DATA_DESCRIPTOR) &&
+         (metadata.packed != tb_le32(header + ZIP_LOCAL_PACKED) ||
+          metadata.crc != tb_le32(header + ZIP_LOCAL_CRC) ||
+          metadata.size != tb_le32(header + ZIP_LOCAL_SIZE))))
     {
         tb_archive_fail(EINVAL);
         return NULL;
     }
     uint32_t packed = metadata.packed, crc = metadata.crc;
-    uint64_t start =
-        metadata.position + sizeof header + tb_le16(header + 26) + tb_le16(header + 28);
+    uint64_t start = metadata.position + tb_zip_local_data(header);
     if (start > tb_stream_size(parent) || packed > tb_stream_size(parent) - start)
     {
         tb_archive_fail(EINVAL);
         return NULL;
     }
-    if (!metadata.method)
+    if (metadata.method == ZIP_METHOD_STORED)
     {
         if (packed != size)
         {
@@ -64,19 +65,21 @@ TbReadStream *tb_zip_legacy_member(TbReadStream *parent, struct archive *archive
     unsigned char *input = malloc(packed ? packed : 1), *output = malloc(size ? (size_t)size : 1);
     int ok = input && output && tb_stream_read_at(parent, start, input, packed);
     size_t used = 0;
-    int large = (tb_le16(header + 6) & 2) != 0, literals = (tb_le16(header + 6) & 4) != 0;
+    unsigned flags = tb_le16(header + ZIP_LOCAL_FLAGS);
+    int large = (flags & ZIP_FLAG_IMPLODE_8K_WINDOW) != 0,
+        literals = (flags & ZIP_FLAG_IMPLODE_LITERAL_TREE) != 0;
     if (ok)
     {
-        if (metadata.method == 1)
+        if (metadata.method == ZIP_METHOD_SHRINK)
         {
             size_t written = 0;
             ok =
                 hwunshrink(input, packed, &used, output, (size_t)size, &written) == HWUNSHRINK_OK &&
                 written == size;
         }
-        else if (metadata.method <= 5)
-            ok = hwexpand(input, packed, (size_t)size, (int)metadata.method - 1, &used, output) ==
-                 HWEXPAND_OK;
+        else if (metadata.method <= ZIP_METHOD_REDUCE_LAST)
+            ok = hwexpand(input, packed, (size_t)size, (int)metadata.method - ZIP_METHOD_SHRINK,
+                          &used, output) == HWEXPAND_OK;
         else
         {
             ok = hwexplode(input, packed, (size_t)size, large, literals, 0, &used, output) ==

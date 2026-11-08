@@ -233,23 +233,24 @@ TbReadStream *tb_zip_indexed_member(TbReadStream *parent, struct archive *archiv
     if ((archive_format(archive) & ARCHIVE_FORMAT_BASE_MASK) != ARCHIVE_FORMAT_ZIP)
         return NULL;
     TbZipMetadata metadata;
-    if (!tb_zip_metadata(parent, name, &metadata) || metadata.method != 8)
+    if (!tb_zip_metadata(parent, name, &metadata) || metadata.method != ZIP_METHOD_DEFLATE)
         return NULL; /* Other codecs/ZIP64 retain the library reader. */
     *handled = 1;
-    unsigned char header[30];
-    if (size != metadata.size || (metadata.flags & 0x41) ||
+    unsigned char header[ZIP_LOCAL_HEADER_BYTES];
+    if (size != metadata.size || (metadata.flags & ZIP_FLAGS_UNSUPPORTED) ||
         !tb_stream_read_at(parent, metadata.position, header, sizeof header) ||
-        memcmp(header, "PK\3\4", 4) || tb_le16(header + 8) != 8 ||
-        ((tb_le16(header + 6) ^ metadata.flags) & 0x4f) ||
-        (!(metadata.flags & 8) &&
-         (tb_le32(header + 18) != metadata.packed || tb_le32(header + 22) != metadata.size ||
-          tb_le32(header + 14) != metadata.crc)))
+        memcmp(header, ZIP_LOCAL_SIGNATURE, ZIP_SIGNATURE_BYTES) ||
+        tb_le16(header + ZIP_LOCAL_METHOD) != ZIP_METHOD_DEFLATE ||
+        ((tb_le16(header + ZIP_LOCAL_FLAGS) ^ metadata.flags) & ZIP_FLAGS_MATCHED) ||
+        (!(metadata.flags & ZIP_FLAG_DATA_DESCRIPTOR) &&
+         (tb_le32(header + ZIP_LOCAL_PACKED) != metadata.packed ||
+          tb_le32(header + ZIP_LOCAL_SIZE) != metadata.size ||
+          tb_le32(header + ZIP_LOCAL_CRC) != metadata.crc)))
     {
         tb_archive_fail(EILSEQ);
         return NULL;
     }
-    uint64_t start =
-        metadata.position + sizeof header + tb_le16(header + 26) + tb_le16(header + 28);
+    uint64_t start = metadata.position + tb_zip_local_data(header);
     if (start > tb_stream_size(parent) || metadata.packed > tb_stream_size(parent) - start)
     {
         tb_archive_fail(EILSEQ);
