@@ -80,6 +80,15 @@ static const TbVolumeOps builtin_volume = {
     .modify = fat12_16_modify,
 };
 
+/* FatFs can mount FAT12/16 too, but they stay with the built-in code, whose observable
+   behaviour differs: it also reads FAT12/16 and ISO 9660 from archive read streams (FatFs
+   reads one stdio file through process-global state); its TbImageInfo carries the BPB
+   geometry, the whole image as capacity, the root directory's size, the boot-sector label
+   when the root has no label entry, and free space for every member; new entries get no
+   creation time; a name that is not an uppercase 8.3 name gets a long name and a sequential
+   ~N alias with '_' for each unusable character, where FatFs stores lowercase 8.3 names with
+   case flags, switches to hashed tails after ~5, builds code page 437 aliases and strips a
+   trailing dot instead of rejecting it. */
 static const TbVolumeOps *const volumes[] = {&hpfs_volume, &fatfs_volume, &builtin_volume};
 
 /* Opens the image source read-only and probes it. Returns NULL when the path has no
