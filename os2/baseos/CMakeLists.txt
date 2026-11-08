@@ -26,6 +26,7 @@ twoine_os2_dll(
     doscalls/doscall1/queue.c
     doscalls/doscall1/session.c
     doscalls/doscall1/nls.c
+    doscalls/doscall1/msg.c
 )
 twoine_os2_dll(msg msg/module.c)
 twoine_os2_dll(nls nls/module.c)
@@ -35,7 +36,7 @@ twoine_os2_dll(kbdcalls kbdcalls/module.c)
 twoine_os2_dll(sesmgr sesmgr/module.c)
 if(TWOINE_NATIVE_LOADER)
     twoine_add_native_abi(doscalls doscalls)
-    twoine_add_native_abi(msg msg)
+    twoine_add_native_abi(doscalls msg)
 endif()
 twoine_add_host_terminal(viocalls)
 target_link_libraries(kbdcalls PRIVATE viocalls)

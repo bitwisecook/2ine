@@ -1,22 +1,5 @@
 {
   "_notice": "Public domain. No rights reserved. Wholly AI-authored.",
-  "msg": {
-    "DosPutMessage": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "DosTrueGetMessage": {
-      "argument_bytes": 32,
-      "callee_pop": 4,
-      "convention": "LX_ABI_STACK32"
-    },
-    "DosInsertMessage": {
-      "argument_bytes": 28,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    }
-  },
   "doscalls": {
     "DosAllocMem": {
       "argument_bytes": 12,
@@ -733,6 +716,21 @@
     },
     "DosQueryCollate": {
       "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosPutMessage": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosTrueGetMessage": {
+      "argument_bytes": 32,
+      "callee_pop": 4,
+      "convention": "LX_ABI_STACK32"
+    },
+    "DosInsertMessage": {
+      "argument_bytes": 28,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

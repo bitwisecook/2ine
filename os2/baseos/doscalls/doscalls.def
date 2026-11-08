@@ -213,6 +213,11 @@ EXPORTS
     DosEnterMustComplete          @380
     DosExitMustComplete           @381
     DosSetRelMaxFH                @382
+    Dos16PutMessage               @383
+    Dos16TrueGetMessage           @384
+    DosInsertMessage              @386
+    DosPutMessage                 @387
+    DosTrueGetMessage             @388
     Dos16CaseMap                  @391
     Dos16GetCollate               @392
     Dos16GetCtryInfo              @393

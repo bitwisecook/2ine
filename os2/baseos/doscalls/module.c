@@ -64,7 +64,6 @@ LX_NATIVE_CONSTRUCTOR(doscalls)
 {
     GProcessState.beep = DosBeep;
     GProcessState.dosExit = DosExit;
-    GProcessState.writeFile = DosWrite;
     GProcessState.getResource = DosGetResource;
     GProcessState.queryResourceSize = DosQueryResourceSize;
     GProcessState.freeResource = DosFreeResource;
@@ -179,7 +178,6 @@ LX_NATIVE_DESTRUCTOR(doscalls)
     cleanupSuballocation();
     cleanupThreadSuspension();
     GProcessState.dosExit = NULL;
-    GProcessState.writeFile = NULL;
     GProcessState.getResource = NULL;
     GProcessState.queryResourceSize = NULL;
     GProcessState.freeResource = NULL;

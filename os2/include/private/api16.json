@@ -1214,9 +1214,7 @@
         "kind": "copy",
         "nullable": false
       }
-    ]
-  },
-  "msg": {
+    ],
     "Dos16PutMessage": [
       {
         "name": "pBuf",

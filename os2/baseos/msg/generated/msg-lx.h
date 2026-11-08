@@ -3,101 +3,18 @@
 
 #if LX_LEGACY
 
-#include "os2/include/private/export32.h"
-#if TWOINE_PORTABLE_LOADER
-#include "os2/baseos/msg/bindings.h"
-LX_NATIVE_MODULE_32BIT_SUPPORT()
-LX_NATIVE_MODULE_32BIT_API(DosInsertMessage)
-LX_NATIVE_MODULE_32BIT_API(DosPutMessage)
-LX_NATIVE_MODULE_32BIT_API(DosTrueGetMessage)
-#endif
-
-static uint32 bridge16to32_Dos16PutMessage(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, pBuf);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cbMsg);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, hfile);
-    LxGuestArgument __abi_args[1] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GProcessState.execution, pBuf_guest, cbMsg, 1, 0, 0, &__abi_args[0])) goto __abi_done;
-    pBuf = (PCHAR) __abi_args[0].host;
-    __abi_result = Dos16PutMessage(hfile, cbMsg, pBuf);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    return __abi_result;
-}
-
-static uint32 bridge16to32_Dos16TrueGetMessage(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, msgseg);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pcbMsg);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, pFilename);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, msgnum);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cbBuf);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, pData);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cTable);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, pTable);
-    LxGuestArgument __abi_args[5] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GProcessState.execution, pTable_guest, (cTable < 9 ? cTable : 9) * 4u, 1, 0, 0, &__abi_args[0])) goto __abi_done;
-    pTable = (PVOID) __abi_args[0].host;
-    if (!lx_guest_argument_far(GProcessState.execution, pData_guest, cbBuf, 2, 0, 0, &__abi_args[1])) goto __abi_done;
-    pData = (PCHAR) __abi_args[1].host;
-    if (!lx_guest_argument_strings(GProcessState.execution, pFilename_guest, 1, 260, 0, &__abi_args[2])) goto __abi_done;
-    pFilename = (PCHAR) __abi_args[2].host;
-    if (!lx_guest_argument_far(GProcessState.execution, pcbMsg_guest, 2, 2, 0, 1, &__abi_args[3])) goto __abi_done;
-    pcbMsg = (PUSHORT) __abi_args[3].host;
-    if (!lx_guest_argument_far(GProcessState.execution, msgseg_guest, 1, 1, 1, 1, &__abi_args[4])) goto __abi_done;
-    msgseg = (PVOID) __abi_args[4].host;
-    __abi_result = Dos16TrueGetMessage(pTable, cTable, pData, cbBuf, msgnum, pFilename, pcbMsg, msgseg);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[2], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[3], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[4], __abi_copy);
-    return __abi_result;
-}
-
-LX_NATIVE_MODULE_16BIT_SUPPORT()
-    LX_NATIVE_MODULE_16BIT_API(Dos16PutMessage)
-    LX_NATIVE_MODULE_16BIT_API(Dos16TrueGetMessage)
-LX_NATIVE_MODULE_16BIT_SUPPORT_END()
-
-LX_NATIVE_MODULE_DEINIT({
-    LX_NATIVE_MODULE_DEINIT_16BIT_SUPPORT();
-    LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT();
-})
-
-static int init16_msg(void) {
-    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16PutMessage, 8)
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16TrueGetMessage, 26)
-    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
-    return 1;
-}
-
-#if TWOINE_PORTABLE_LOADER
-static int init32_msg(void) {
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosInsertMessage, 28, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosPutMessage, 12, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosTrueGetMessage, 32, 4, LX_ABI_STACK32)
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
-    return 1;
-}
-#endif
+LX_NATIVE_FORWARDER(lx_forward_1, "DOSCALLS", 383, "");
+LX_NATIVE_FORWARDER(lx_forward_2, "DOSCALLS", 384, "");
+LX_NATIVE_FORWARDER(lx_forward_4, "DOSCALLS", 386, "");
+LX_NATIVE_FORWARDER(lx_forward_5, "DOSCALLS", 387, "");
+LX_NATIVE_FORWARDER(lx_forward_6, "DOSCALLS", 388, "");
 LX_NATIVE_MODULE_INIT({
-    if (!init16_msg()) return 0;
-    LX_NATIVE_INIT_32BIT_MODULE(msg)
 })
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16PutMessage, "DOSPUTMESSAGE", 1),
-    LX_NATIVE_EXPORT16_DIFFERENT_NAME(Dos16TrueGetMessage, "DOSTRUEGETMESSAGE", 2),
-    LX_NATIVE_EXPORT32(DosInsertMessage, 4),
-    LX_NATIVE_EXPORT32(DosPutMessage, 5),
-    LX_NATIVE_EXPORT32(DosTrueGetMessage, 6),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_1, "DOSPUTMESSAGE", 1),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_2, "DOSTRUEGETMESSAGE", 2),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_4, "DosInsertMessage", 4),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_5, "DosPutMessage", 5),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_6, "DosTrueGetMessage", 6),
 
 LX_NATIVE_MODULE_INIT_END()
 
