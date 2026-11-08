@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "loader/internal.h"
+#include "emulator/loader/internal.h"
 
 char *makeOS2Path(const char *fname)
 {

@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "loader/internal.h"
+#include "emulator/loader/internal.h"
 #include "emulator/features.h"
 
 typedef struct ModuleFailure

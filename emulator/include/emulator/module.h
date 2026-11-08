@@ -6,8 +6,8 @@
  *  This file written by Ryan C. Gordon.
  */
 
-#ifndef TWOINE_LOADER_MODULE_H
-#define TWOINE_LOADER_MODULE_H
+#ifndef TWOINE_EMULATOR_MODULE_H
+#define TWOINE_EMULATOR_MODULE_H
 #include <stddef.h>
 #include "formats/executable/lx.h"
 #include "formats/executable/ne.h"

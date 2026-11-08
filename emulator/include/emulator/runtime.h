@@ -15,7 +15,7 @@
 #include "formats/executable/types.h"
 #include "emulator/diagnostics.h"
 #include "emulator/process.h"
-#include "loader/module.h"
+#include "emulator/module.h"
 #include "emulator/abi.h"
 #include "emulator/handles.h"
 #include "emulator/audio_mixer.h"

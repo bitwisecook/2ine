@@ -5,11 +5,11 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "loader/internal.h"
+#include "emulator/loader/internal.h"
 #include "host/desktop.h"
 #include "host/fatal.h"
 #include "host/process_supervisor.h"
-#include "loader/network_config.h"
+#include "emulator/loader/network_config.h"
 
 int main(int argc, char **argv, char **envp)
 {

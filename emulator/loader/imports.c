@@ -5,7 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
-#include "loader/internal.h"
+#include "emulator/loader/internal.h"
 
 void *generateMissingTrampoline(const char *m, const char *n)
 {

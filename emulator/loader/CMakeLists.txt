@@ -1,4 +1,4 @@
-# Derived from original 2ine; zlib-style license. See ../LICENSE.txt.
+# Derived from original 2ine; zlib-style license. See ../../LICENSE.txt.
 if(LX_LEGACY)
     add_executable(
         lx_loader
@@ -9,7 +9,7 @@ if(LX_LEGACY)
         load_ne.c
         load_lx.c
         paths.c
-        service.c
+        rexx_service.c
     )
     target_sources(lx_loader PRIVATE network_config.c)
     twoine_application_target(lx_loader)

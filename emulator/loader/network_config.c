@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Refresh bridge-owned resolver files while preserving manually configured files. */
-#include "loader/internal.h"
-#include "loader/network_config.h"
+#include "emulator/loader/internal.h"
+#include "emulator/loader/network_config.h"
 #include "host/network.h"
 #include "host/socket.h"
 #include <ctype.h>

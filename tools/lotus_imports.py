@@ -2,7 +2,7 @@
 # Public domain. No rights reserved. Wholly AI-authored.
 """Read-only LX/NE import census, static closures, and source export evidence.
 
-Fixup layouts follow tools/lx_dump.c, loader/load_lx.c, loader/load_ne.c and
+Fixup layouts follow tools/lx_dump.c, emulator/loader/load_lx.c, emulator/loader/load_ne.c and
 formats/{lx,ne}.h. --lx-dump optionally cross-checks their existing text parser.
 No guest code or native API module is loaded or executed.
 """
@@ -221,7 +221,7 @@ def export_inventory(root: Path) -> dict:
         inventories[module] = entries
     # Empty native SOM is built, while genuine OS/2 SOM is supplied by user media.
     inventories.setdefault("SOM", {})
-    runtime_path = root / "loader/imports.c"
+    runtime_path = root / "emulator/loader/imports.c"
     runtime_text = runtime_path.read_text()
     special = re.search(
         r'if \(module->nativelib && !strcasecmp\(module->name, "DOSCALLS"\) && ordinal == 295\)',
@@ -243,7 +243,7 @@ def export_inventory(root: Path) -> dict:
             "abi16Policy": False,
             "sourceLocations": [
                 {
-                    "path": "loader/imports.c",
+                    "path": "emulator/loader/imports.c",
                     "line": runtime_text.count("\n", 0, special.start()) + 1,
                     "sha256": hashlib.sha256(runtime_text.encode()).hexdigest(),
                     "markers": [],
@@ -507,8 +507,8 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
                 "tools/lotus_imports.py",
                 "tools/os2binary.py",
                 "tools/lx_dump.c",
-                "loader/load_lx.c",
-                "loader/load_ne.c",
+                "emulator/loader/load_lx.c",
+                "emulator/loader/load_ne.c",
                 "formats/executable/lx.h",
                 "formats/executable/ne.h",
                 "ball/system_modules.h",
@@ -516,8 +516,8 @@ def scan(ball: Path, source: Path, lx_dump: Path | None = None) -> dict:
         },
         "parserOrigins": [
             "tools/lx_dump.c",
-            "loader/load_lx.c",
-            "loader/load_ne.c",
+            "emulator/loader/load_lx.c",
+            "emulator/loader/load_ne.c",
             "formats/executable/lx.h",
             "formats/executable/ne.h",
         ],
