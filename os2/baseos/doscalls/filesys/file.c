@@ -446,3 +446,8 @@ APIRET16 Dos16SetFileMode(PCHAR filepath, USHORT attr, ULONG reserved)
     free(path);
     return error;
 }
+
+APIRET16 Dos16ForceDelete(PSZ path, ULONG reserved)
+{
+    return reserved ? ERROR_INVALID_PARAMETER : DosForceDelete(path);
+}

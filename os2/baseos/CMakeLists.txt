@@ -3,7 +3,6 @@
 twoine_os2_dll(
     doscalls
     doscalls/module.c
-    doscalls/legacy.c
     doscalls/filesys/file.c
     doscalls/filesys/fhandle.c
     doscalls/filesys/lock.c

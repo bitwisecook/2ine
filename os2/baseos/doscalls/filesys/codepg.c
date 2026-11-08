@@ -59,3 +59,8 @@ APIRET16 Dos16GetCp(USHORT cb, PUSHORT arCP, PUSHORT pcCP)
         *pcCP = count * sizeof(USHORT);
     return count < 3 ? ERROR_CPLIST_TOO_SMALL : NO_ERROR;
 }
+
+APIRET16 Dos16SetCp(USHORT codepage, USHORT reserved)
+{
+    return Dos16SetProcCp(codepage, reserved);
+}

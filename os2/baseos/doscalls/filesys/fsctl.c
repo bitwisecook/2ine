@@ -61,3 +61,14 @@ APIRET DosQueryFSAttach(PSZ pszDeviceName, ULONG ulOrdinal, ULONG ulFSAInfoLevel
     memcpy(output + 11, filesystem, filesystem_size);
     return NO_ERROR;
 }
+
+APIRET16 Dos16QFSAttach(PSZ device, USHORT ordinal, USHORT level, PVOID buffer, PUSHORT size,
+                        ULONG reserved)
+{
+    if (reserved || !size)
+        return ERROR_INVALID_PARAMETER;
+    ULONG length = *size;
+    APIRET result = DosQueryFSAttach(device, ordinal, level, buffer, &length);
+    *size = length > UINT16_MAX ? UINT16_MAX : (USHORT)length;
+    return result;
+}

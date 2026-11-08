@@ -77,3 +77,11 @@ APIRET DosDevIOCtl(HFILE device, ULONG category, ULONG function, PVOID parameter
     lx_handle_release(&file);
     return ERROR_INVALID_FUNCTION;
 }
+
+APIRET16 Dos16DevIOCtl2(PVOID data, USHORT data_size, PVOID parameters, USHORT parameter_size,
+                        USHORT function, USHORT category, USHORT device)
+{
+    ULONG ds = data_size, ps = parameter_size;
+    return DosDevIOCtl(device == UINT16_MAX ? UINT32_MAX : device, category, function, parameters,
+                       ps, &ps, data, ds, &ds);
+}

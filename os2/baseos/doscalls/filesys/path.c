@@ -290,3 +290,8 @@ APIRET DosDeleteDir(PSZ pszDir)
     free(unixpath);
     return error == LX_HOST_FS_MISSING ? ERROR_PATH_NOT_FOUND : fileError(error);
 }
+
+APIRET16 Dos16RmDir(PSZ path, ULONG reserved)
+{
+    return reserved ? ERROR_INVALID_PARAMETER : DosDeleteDir(path);
+}

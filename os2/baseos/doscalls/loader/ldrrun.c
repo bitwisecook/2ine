@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2/baseos/doscalls/internal.h"
+#include "emulator/arguments.h"
 
 APIRET DosQueryModuleNameObject(HMODULE hmod, ULONG buflen, PCHAR buf, const LxModule *lxmod)
 {
@@ -237,5 +238,118 @@ APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
     result = NO_ERROR;
 done:
     lx_host_file_close(file);
+    return result;
+}
+
+APIRET16 Dos16QAppType(PSZ name, PUSHORT flags)
+{
+    if (!flags)
+        return ERROR_INVALID_PARAMETER;
+    ULONG value = 0;
+    APIRET result = DosQueryAppType(name, &value);
+    if (!result)
+        *flags = (USHORT)value;
+    return result;
+}
+
+APIRET16 Dos16LoadModule(PCHAR failure, USHORT capacity, PSZ name, PUSHORT module)
+{
+    if (!module)
+        return ERROR_INVALID_PARAMETER;
+    HMODULE handle = 0;
+    APIRET result = DosLoadModule(failure, capacity, name, &handle);
+    if (!result)
+        *module = (USHORT)handle;
+    return result;
+}
+
+static LxModule *borrowLegacyModule(USHORT id, LxHandleBorrow *borrow)
+{
+    LxModule *found = NULL;
+    grabLock(&GMutexDosCalls);
+    for (LxModule *module = GProcessState.loaded_modules; module; module = module->next)
+        if ((USHORT)module->handle == id &&
+            lx_handle_borrow(module->handle, LX_HANDLE_MODULE, borrow))
+        {
+            found = borrow->resource;
+            break;
+        }
+    if (!found && GProcessState.main_module && (USHORT)GProcessState.main_module->handle == id &&
+        lx_handle_borrow(GProcessState.main_module->handle, LX_HANDLE_MODULE, borrow))
+        found = borrow->resource;
+    ungrabLock(&GMutexDosCalls);
+    return found;
+}
+
+APIRET16 Dos16GetModName(USHORT id, USHORT capacity, PCHAR name)
+{
+    LxHandleBorrow borrow;
+    LxModule *module = borrowLegacyModule(id, &borrow);
+    if (!module)
+        return ERROR_INVALID_HANDLE;
+    APIRET result = name ? DosQueryModuleNameObject(module->handle, capacity, name, module)
+                         : ERROR_INVALID_PARAMETER;
+    lx_handle_release(&borrow);
+    return result;
+}
+
+APIRET16 Dos16FreeModule(USHORT id)
+{
+    LxHandleBorrow borrow;
+    LxModule *module = borrowLegacyModule(id, &borrow);
+    if (!module)
+        return ERROR_INVALID_HANDLE;
+    APIRET result = DosFreeModuleObject(module->handle, module);
+    lx_handle_release(&borrow);
+    return result;
+}
+
+APIRET16 Dos16GetProcAddr(USHORT id, ULONG encoded, PULONG address)
+{
+    if (!address || !encoded)
+        return ERROR_INVALID_PARAMETER;
+    LxHandleBorrow borrow;
+    LxModule *module = borrowLegacyModule(id, &borrow);
+    if (!module)
+        return ERROR_INVALID_HANDLE;
+    LxGuestArgument name = {0};
+    APIRET result = ERROR_INVALID_NAME;
+    if (encoded <= UINT16_MAX ||
+        lx_guest_argument_strings(GProcessState.execution, encoded, 1, 256, 0, &name))
+    {
+        const LxExport *entry = NULL;
+        if (encoded <= UINT16_MAX && GProcessState.findModuleOrdinal)
+            entry = GProcessState.findModuleOrdinal(module, encoded);
+        else
+            for (ULONG i = 0; i < module->num_exports; i++)
+            {
+                const LxExport *candidate = &module->exports[i];
+                if (encoded <= UINT16_MAX ? candidate->ordinal == encoded
+                                          : candidate->name && !strcmp(candidate->name, name.host))
+                {
+                    entry = candidate;
+                    break;
+                }
+            }
+        if (entry)
+        {
+            void *host =
+                entry->indirect == LX_EXPORT_INDIRECT ? *(void **)entry->addr : entry->addr;
+            ULONG far_address = GProcessState.convert32to1616(host);
+            if (!far_address && entry->object && entry->object->alias != UINT16_MAX)
+            {
+                uintptr_t offset = (uintptr_t)host - (uintptr_t)entry->object->addr;
+                if (offset <= UINT16_MAX)
+                    far_address = ((ULONG)((entry->object->alias << 3) | 7) << 16) | offset;
+            }
+            result = far_address ? NO_ERROR : ERROR_INVALID_ADDRESS;
+            if (!result)
+                *address = far_address;
+        }
+        if (result == ERROR_INVALID_NAME && encoded <= UINT16_MAX)
+            result = ERROR_INVALID_ORDINAL;
+    }
+    lx_guest_argument_finish(&name, 0);
+    lx_handle_release(&borrow);
     return result;
 }

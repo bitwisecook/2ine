@@ -108,3 +108,8 @@ APIRET DosSearchPath(ULONG flag, PSZ pszPathOrName, PSZ pszFilename, PBYTE pBuf,
     strcpy((char *)pBuf, fullpath);
     return NO_ERROR;
 }
+
+APIRET16 Dos16SearchPath(USHORT flags, PSZ path, PSZ name, PBYTE result, USHORT capacity)
+{
+    return DosSearchPath(flags, path, name, result, capacity);
+}
