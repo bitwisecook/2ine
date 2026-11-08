@@ -3,15 +3,27 @@
 #include "storage/archives/codecs/codecs.h"
 #include "formats/endian.h"
 
+/* A node count, then per node two signed 16-bit links: a non-negative link is the next
+   node, a negative link -1-symbol ends a code. Symbol 256 ends the stream. */
+enum
+{
+    SQUEEZE_HEADER_BYTES = 2,
+    SQUEEZE_NODE_BYTES = 4,
+    SQUEEZE_LINK_BYTES = 2,
+    SQUEEZE_NODE_LIMIT = 256,
+    SQUEEZE_END = 256
+};
+
 int tb_squeeze_decode(const unsigned char *input, size_t packed, unsigned char *output,
                       size_t capacity, size_t *used)
 {
-    if (packed < 2)
+    if (packed < SQUEEZE_HEADER_BYTES)
         return 0;
     unsigned count = tb_le16(input);
-    if (!count || count > 256 || 2 + count * 4 > packed)
+    if (!count || count > SQUEEZE_NODE_LIMIT ||
+        SQUEEZE_HEADER_BYTES + count * SQUEEZE_NODE_BYTES > packed)
         return 0;
-    size_t bit = (2 + count * 4) * 8;
+    TbBitReader bits = {input, packed, (SQUEEZE_HEADER_BYTES + count * SQUEEZE_NODE_BYTES) * 8, 1};
     *used = 0;
     for (;;)
     {
@@ -19,15 +31,17 @@ int tb_squeeze_decode(const unsigned char *input, size_t packed, unsigned char *
         int value;
         do
         {
-            if (node >= count || bit >= packed * 8)
+            if (node >= count)
                 return 0;
-            unsigned direction = (input[bit / 8] >> (bit % 8)) & 1;
-            bit++;
-            value = (int16_t)tb_le16(input + 2 + node * 4 + direction * 2);
+            unsigned direction = tb_bits_lsb(&bits, 1);
+            if (!bits.valid)
+                return 0;
+            value = (int16_t)tb_le16(input + SQUEEZE_HEADER_BYTES + node * SQUEEZE_NODE_BYTES +
+                                     direction * SQUEEZE_LINK_BYTES);
             node = (unsigned)value;
         } while (value >= 0);
         value = -value - 1;
-        if (value == 256)
+        if (value == SQUEEZE_END)
             return 1;
         if (value > 255 || *used == capacity)
             return 0;

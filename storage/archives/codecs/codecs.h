@@ -9,7 +9,9 @@
 /* CRC-16/ARC: reflected polynomial 0xA001, initial value 0. */
 uint16_t tb_crc16_arc(const unsigned char *data, size_t size);
 
-/* A bounded bit reader; valid clears on overrun and every later read returns 0. */
+/* A bounded bit reader over size bytes; bit is the number of bits consumed. valid
+   clears on overrun, and every later read returns 0. ARJ and LZH codes are read
+   MSB-first, zoo LZD and ARC squeeze codes LSB-first. */
 typedef struct TbBitReader
 {
     const unsigned char *data;
@@ -17,8 +19,13 @@ typedef struct TbBitReader
     int valid;
 } TbBitReader;
 
-/* Reads count (at most 24) bits, most significant bit of each byte first. */
+#define TB_BITS_MAX 24u
+
+/* Read count (at most TB_BITS_MAX) bits. MSB-first takes each byte's most significant
+   bit first and returns the first bit as the value's most significant; LSB-first takes
+   each byte's least significant bit first and returns it as the least significant. */
 unsigned tb_bits_msb(TbBitReader *bits, unsigned count);
+unsigned tb_bits_lsb(TbBitReader *bits, unsigned count);
 
 /* Canonical Huffman code of up to 510 symbols and 16-bit codes. single is the only
    symbol of a zero-length code, or -1. */

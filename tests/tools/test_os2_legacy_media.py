@@ -115,7 +115,7 @@ def bit_bytes(values, msb=False):
     return bytes(result)
 
 
-def arc_bytes(name, payload, method=2, bad_crc=False):
+def arc_bytes(name, payload, method=2, bad_crc=False, compressed=None):
     packed = payload
     if method == 3:
         packed = payload.replace(b"\x90", b"\x90\x00")
@@ -124,10 +124,12 @@ def arc_bytes(name, payload, method=2, bad_crc=False):
         packed = bit_bytes([(byte, 9) for byte in payload])
         if method == 8:
             packed = b"\x0c" + packed
-    elif method == 4:
+    elif method == 4 and compressed is None:
         assert len(set(payload)) == 1
         packed = struct.pack("<Hhh", 1, -payload[0] - 1, -257)
         packed += bit_bytes([(0, 1)] * len(payload) + [(1, 1)])
+    if compressed is not None:
+        packed = compressed
     header = b"\x1a" + bytes([method]) + name.encode().ljust(13, b"\0")
     header += struct.pack("<IHHH", len(packed), 0x5021, 0, crc16(payload) ^ int(bad_crc))
     if method != 1:
@@ -356,6 +358,34 @@ class LegacyMediaTests(unittest.TestCase):
         self.assertEqual(listing["entries"][0]["name"], "CMD.EXE")
         with self.assertRaises(ValueError):
             self.request("import-os2-support", sources=[source])
+
+    def test_arc_squeeze_multi_level_tree_and_truncated_codes(self):
+        # Node 0: 0 -> "A", 1 -> node 1; node 1: 0 -> "B", 1 -> end. Codes are read
+        # least significant bit first: A = 0, B = 1 0, end = 1 1.
+        payload = b"ABBABAAAB" * 7
+        tree = struct.pack("<Hhhhh", 2, -ord("A") - 1, 1, -ord("B") - 1, -257)
+        codes = [bit for byte in payload for bit in ([0] if byte == ord("A") else [1, 0])]
+        source = self.media(
+            "tree.arc",
+            arc_bytes(
+                "TEST.TXT",
+                payload,
+                4,
+                compressed=tree + bit_bytes([(bit, 1) for bit in codes + [1, 1]]),
+            ),
+        )
+        report = self.request("import-os2-support", sources=[source], categories=["full"])
+        path = report["imported"][0]["path"][3:].replace("\\", "/")
+        self.assertEqual((self.ball / "drive_c" / path).read_bytes(), payload)
+        # Without the end code the reader runs out of bits inside the padding.
+        source = self.media(
+            "truncated.arc",
+            arc_bytes(
+                "TEST.TXT", payload, 4, compressed=tree + bit_bytes([(bit, 1) for bit in codes])
+            ),
+        )
+        with self.assertRaises(ValueError):
+            self.request("import-os2-support", sources=[source], categories=["full"])
 
     def test_arj_all_common_methods_and_crc(self):
         for method in range(5):

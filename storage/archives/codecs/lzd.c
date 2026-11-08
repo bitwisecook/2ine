@@ -3,20 +3,6 @@
 #include "storage/archives/codecs/codecs.h"
 #include <limits.h>
 
-static unsigned lzd_bits(TbBitReader *bits, unsigned count)
-{
-    if (!bits->valid || count > 13 || bits->bit > bits->size * 8 ||
-        count > bits->size * 8 - bits->bit)
-    {
-        bits->valid = 0;
-        return 0;
-    }
-    unsigned value = 0;
-    for (unsigned i = 0; i < count; i++, bits->bit++)
-        value |= ((bits->data[bits->bit / 8] >> (bits->bit % 8)) & 1u) << i;
-    return value;
-}
-
 int tb_lzd_decode(const unsigned char *input, size_t packed, unsigned char *output, size_t size)
 {
     uint16_t prefix[8192];
@@ -26,7 +12,7 @@ int tb_lzd_decode(const unsigned char *input, size_t packed, unsigned char *outp
     size_t used = 0;
     while (bits.valid)
     {
-        unsigned code = lzd_bits(&bits, width), original = code;
+        unsigned code = tb_bits_lsb(&bits, width), original = code;
         if (!bits.valid)
             break;
         if (code == 256)
