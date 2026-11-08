@@ -43,31 +43,35 @@ static int extent_add(HpfsFile *file, uint32_t logical, uint32_t count, uint32_t
 int hpfs_extent_tree(HpfsVolume *d, HpfsFile *file, const unsigned char *header, unsigned capacity,
                      unsigned depth)
 {
-    if (depth > 32)
+    if (depth > HPFS_MAX_TREE_DEPTH)
         return hpfs_fail(EIO);
-    unsigned used = header[5], internal = header[0] & 128, width = internal ? 8 : 12;
-    if (used > capacity || tb_le16(header + 6) < 8 + used * width)
+    unsigned used = header[HPFS_TREE_USED], internal = header[HPFS_TREE_FLAGS] & HPFS_TREE_INTERNAL,
+             width = internal ? HPFS_BRANCH_BYTES : HPFS_LEAF_BYTES;
+    if (used > capacity ||
+        tb_le16(header + HPFS_TREE_FIRST_FREE) < HPFS_TREE_ENTRIES + used * width)
         return hpfs_fail(EIO);
     for (unsigned i = 0; i < used; i++)
     {
-        const unsigned char *entry = header + 8 + i * width;
+        const unsigned char *entry = header + HPFS_TREE_ENTRIES + i * width;
         if (internal)
         {
-            uint32_t sector = tb_le32(entry + 4);
-            unsigned char node[512];
+            uint32_t sector = tb_le32(entry + HPFS_BRANCH_SECTOR);
+            unsigned char node[HPFS_SECTOR_BYTES];
             if (!hpfs_add_unique_node(&file->nodes, &file->node_count, sector) ||
                 !hpfs_read_sectors(d, sector, node, 1) || tb_le32(node) != HPFS_ANODE_SIGNATURE ||
-                tb_le32(node + 4) != sector)
+                tb_le32(node + HPFS_ANODE_SELF) != sector)
                 return hpfs_fail(EIO);
-            if (!hpfs_extent_tree(d, file, node + 12, node[12] & 128 ? 60 : 40, depth + 1))
+            if (!hpfs_extent_tree(d, file, node + HPFS_ANODE_TREE, hpfs_anode_capacity(node),
+                                  depth + 1))
                 return 0;
         }
         else
         {
-            uint32_t logical = tb_le32(entry), count = tb_le32(entry + 4),
-                     sector = tb_le32(entry + 8);
-            if (!count || sector < 18 || sector >= d->sectors || count > d->sectors - sector ||
-                (uint64_t)logical + count > UINT32_MAX)
+            uint32_t logical = tb_le32(entry + HPFS_LEAF_LOGICAL),
+                     count = tb_le32(entry + HPFS_LEAF_COUNT),
+                     sector = tb_le32(entry + HPFS_LEAF_SECTOR);
+            if (!count || sector < HPFS_FIRST_DATA_SECTOR || sector >= d->sectors ||
+                count > d->sectors - sector || (uint64_t)logical + count > UINT32_MAX)
                 return hpfs_fail(EIO);
             if (!extent_add(file, logical, count, sector))
                 return 0;
@@ -81,9 +85,14 @@ int hpfs_file_load(HpfsVolume *d, uint32_t sector, HpfsFile *file)
     memset(file, 0, sizeof *file);
     file->sector = sector;
     if (!hpfs_read_sectors(d, sector, file->data, 1) ||
-        tb_le32(file->data) != HPFS_FNODE_SIGNATURE || (file->data[55] & 1))
+        tb_le32(file->data) != HPFS_FNODE_SIGNATURE ||
+        (file->data[HPFS_FNODE_FLAGS] & HPFS_FNODE_DIRECTORY))
         return hpfs_fail(EISDIR);
-    if (!hpfs_extent_tree(d, file, file->data + 56, file->data[56] & 128 ? 12 : 8, 0))
+    if (!hpfs_extent_tree(d, file, file->data + HPFS_FNODE_TREE,
+                          file->data[HPFS_FNODE_TREE + HPFS_TREE_FLAGS] & HPFS_TREE_INTERNAL
+                              ? HPFS_FNODE_BRANCHES
+                              : HPFS_FNODE_LEAVES,
+                          0))
     {
         hpfs_file_free(file);
         return 0;
@@ -91,7 +100,7 @@ int hpfs_file_load(HpfsVolume *d, uint32_t sector, HpfsFile *file)
     uint64_t sectors = file->count ? (uint64_t)file->extents[file->count - 1].logical +
                                          file->extents[file->count - 1].count
                                    : 0;
-    if (sectors * 512 < tb_le32(file->data + 160))
+    if (sectors * HPFS_SECTOR_BYTES < tb_le32(file->data + HPFS_FNODE_FILE_SIZE))
     {
         hpfs_file_free(file);
         return hpfs_fail(EIO);
@@ -113,12 +122,12 @@ uint32_t hpfs_file_sector(HpfsFile *file, uint32_t logical)
 
 int hpfs_file_copy(HpfsVolume *d, HpfsFile *file, FILE *output)
 {
-    uint32_t size = tb_le32(file->data + 160);
-    unsigned char data[512];
+    uint32_t size = tb_le32(file->data + HPFS_FNODE_FILE_SIZE);
+    unsigned char data[HPFS_SECTOR_BYTES];
     for (uint32_t at = 0; at < size;)
     {
-        uint32_t sector = hpfs_file_sector(file, at / 512);
-        unsigned n = size - at < 512 ? size - at : 512;
+        uint32_t sector = hpfs_file_sector(file, at / HPFS_SECTOR_BYTES);
+        unsigned n = size - at < HPFS_SECTOR_BYTES ? size - at : HPFS_SECTOR_BYTES;
         if (!sector || !hpfs_read_sectors(d, sector, data, 1) || fwrite(data, 1, n, output) != n)
             return 0;
         at += n;
@@ -128,11 +137,13 @@ int hpfs_file_copy(HpfsVolume *d, HpfsFile *file, FILE *output)
 
 static int node_parent(HpfsVolume *d, uint32_t node, uint32_t parent, int fnode)
 {
-    unsigned char bytes[512];
+    unsigned char bytes[HPFS_SECTOR_BYTES];
     if (!hpfs_read_sectors(d, node, bytes, 1))
         return 0;
-    tb_put_le32(bytes + 8, parent);
-    bytes[12] = fnode ? bytes[12] | 32 : bytes[12] & ~32u;
+    tb_put_le32(bytes + HPFS_ANODE_PARENT, parent);
+    unsigned char *flags = bytes + HPFS_ANODE_TREE + HPFS_TREE_FLAGS;
+    *flags = fnode ? *flags | HPFS_TREE_PARENT_FNODE : *flags & ~HPFS_TREE_PARENT_FNODE;
+
     return hpfs_stage_sectors(d, node, bytes, 1);
 }
 
@@ -149,50 +160,56 @@ static int file_tree_build(HpfsVolume *d, HpfsFile *file)
     free(file->nodes);
     file->nodes = NULL;
     file->node_count = 0;
-    memset(file->data + 56, 0, 104);
-    if (file->count <= 8)
+    memset(file->data + HPFS_FNODE_TREE, 0, HPFS_FNODE_TREE_BYTES);
+    if (file->count <= HPFS_FNODE_LEAVES)
     {
-        file->data[60] = 8 - file->count;
-        file->data[61] = file->count;
-        tb_put_le16(file->data + 62, (unsigned)(8 + file->count * 12));
+        file->data[HPFS_FNODE_TREE + HPFS_TREE_FREE] = HPFS_FNODE_LEAVES - file->count;
+        file->data[HPFS_FNODE_TREE + HPFS_TREE_USED] = file->count;
+        tb_put_le16(file->data + HPFS_FNODE_TREE + HPFS_TREE_FIRST_FREE,
+                    (unsigned)(HPFS_TREE_ENTRIES + file->count * HPFS_LEAF_BYTES));
         for (size_t i = 0; i < file->count; i++)
         {
-            unsigned char *p = file->data + 64 + i * 12;
-            tb_put_le32(p, file->extents[i].logical);
-            tb_put_le32(p + 4, file->extents[i].count);
-            tb_put_le32(p + 8, file->extents[i].sector);
+            unsigned char *p =
+                file->data + HPFS_FNODE_TREE + HPFS_TREE_ENTRIES + i * HPFS_LEAF_BYTES;
+            tb_put_le32(p + HPFS_LEAF_LOGICAL, file->extents[i].logical);
+            tb_put_le32(p + HPFS_LEAF_COUNT, file->extents[i].count);
+            tb_put_le32(p + HPFS_LEAF_SECTOR, file->extents[i].sector);
         }
     }
     else
     {
-        size_t count = (file->count + 39) / 40;
+        /* Leaf anodes hold the extents; branch anodes are added until the fnode can hold
+           the top level. */
+        size_t count = (file->count + HPFS_ANODE_LEAVES - 1) / HPFS_ANODE_LEAVES;
         HpfsTreeRef *refs = calloc(count, sizeof *refs);
         if (!refs)
             return 0;
         for (size_t group = 0; group < count; group++)
         {
-            unsigned char bytes[512] = {0};
+            unsigned char bytes[HPFS_SECTOR_BYTES] = {0};
             uint32_t sector = hpfs_allocate(d, 1, 1);
             if (!sector)
             {
                 free(refs);
                 return 0;
             }
-            size_t start = group * 40, used = file->count - start;
-            if (used > 40)
-                used = 40;
+            size_t start = group * HPFS_ANODE_LEAVES, used = file->count - start;
+            if (used > HPFS_ANODE_LEAVES)
+                used = HPFS_ANODE_LEAVES;
             tb_put_le32(bytes, HPFS_ANODE_SIGNATURE);
-            tb_put_le32(bytes + 4, sector);
-            bytes[16] = 40 - used;
-            bytes[17] = used;
-            tb_put_le16(bytes + 18, (unsigned)(8 + used * 12));
+            tb_put_le32(bytes + HPFS_ANODE_SELF, sector);
+            bytes[HPFS_ANODE_TREE + HPFS_TREE_FREE] = HPFS_ANODE_LEAVES - used;
+            bytes[HPFS_ANODE_TREE + HPFS_TREE_USED] = used;
+            tb_put_le16(bytes + HPFS_ANODE_TREE + HPFS_TREE_FIRST_FREE,
+                        (unsigned)(HPFS_TREE_ENTRIES + used * HPFS_LEAF_BYTES));
             for (size_t i = 0; i < used; i++)
             {
-                unsigned char *p = bytes + 20 + i * 12;
+                unsigned char *p =
+                    bytes + HPFS_ANODE_TREE + HPFS_TREE_ENTRIES + i * HPFS_LEAF_BYTES;
                 HpfsExtent *e = file->extents + start + i;
-                tb_put_le32(p, e->logical);
-                tb_put_le32(p + 4, e->count);
-                tb_put_le32(p + 8, e->sector);
+                tb_put_le32(p + HPFS_LEAF_LOGICAL, e->logical);
+                tb_put_le32(p + HPFS_LEAF_COUNT, e->count);
+                tb_put_le32(p + HPFS_LEAF_SECTOR, e->sector);
             }
             HpfsExtent *last = file->extents + start + used - 1;
             refs[group] = (HpfsTreeRef){sector, last->logical + last->count};
@@ -202,9 +219,9 @@ static int file_tree_build(HpfsVolume *d, HpfsFile *file)
                 return 0;
             }
         }
-        while (count > 12)
+        while (count > HPFS_FNODE_BRANCHES)
         {
-            size_t groups = (count + 59) / 60;
+            size_t groups = (count + HPFS_ANODE_BRANCHES - 1) / HPFS_ANODE_BRANCHES;
             HpfsTreeRef *next = calloc(groups, sizeof *next);
             if (!next)
             {
@@ -214,27 +231,32 @@ static int file_tree_build(HpfsVolume *d, HpfsFile *file)
             int ok = 1;
             for (size_t group = 0; ok && group < groups; group++)
             {
-                unsigned char bytes[512] = {0};
+                unsigned char bytes[HPFS_SECTOR_BYTES] = {0};
                 uint32_t sector = hpfs_allocate(d, 1, 1);
                 if (!sector)
                 {
                     ok = 0;
                     break;
                 }
-                size_t start = group * 60, used = count - start;
-                if (used > 60)
-                    used = 60;
+                size_t start = group * HPFS_ANODE_BRANCHES, used = count - start;
+                if (used > HPFS_ANODE_BRANCHES)
+                    used = HPFS_ANODE_BRANCHES;
                 tb_put_le32(bytes, HPFS_ANODE_SIGNATURE);
-                tb_put_le32(bytes + 4, sector);
-                bytes[12] = 128;
-                bytes[16] = 60 - used;
-                bytes[17] = used;
-                tb_put_le16(bytes + 18, (unsigned)(8 + used * 8));
+                tb_put_le32(bytes + HPFS_ANODE_SELF, sector);
+                bytes[HPFS_ANODE_TREE + HPFS_TREE_FLAGS] = HPFS_TREE_INTERNAL;
+                bytes[HPFS_ANODE_TREE + HPFS_TREE_FREE] = HPFS_ANODE_BRANCHES - used;
+                bytes[HPFS_ANODE_TREE + HPFS_TREE_USED] = used;
+                tb_put_le16(bytes + HPFS_ANODE_TREE + HPFS_TREE_FIRST_FREE,
+                            (unsigned)(HPFS_TREE_ENTRIES + used * HPFS_BRANCH_BYTES));
                 for (size_t i = 0; ok && i < used; i++)
                 {
-                    tb_put_le32(bytes + 20 + i * 8,
+                    /* The last branch covers the rest of the file. */
+                    tb_put_le32(bytes + HPFS_ANODE_TREE + HPFS_TREE_ENTRIES + HPFS_BRANCH_END +
+                                    i * HPFS_BRANCH_BYTES,
                                 i + 1 == used ? UINT32_MAX : refs[start + i].end);
-                    tb_put_le32(bytes + 24 + i * 8, refs[start + i].sector);
+                    tb_put_le32(bytes + HPFS_ANODE_TREE + HPFS_TREE_ENTRIES + HPFS_BRANCH_SECTOR +
+                                    i * HPFS_BRANCH_BYTES,
+                                refs[start + i].sector);
                     ok = node_parent(d, refs[start + i].sector, sector, 0);
                 }
                 next[group] = (HpfsTreeRef){sector, refs[start + used - 1].end};
@@ -250,14 +272,20 @@ static int file_tree_build(HpfsVolume *d, HpfsFile *file)
                 return 0;
             }
         }
-        file->data[56] = 128;
-        file->data[60] = 12 - count;
-        file->data[61] = count;
-        tb_put_le16(file->data + 62, (unsigned)(8 + count * 8));
+        file->data[HPFS_FNODE_TREE + HPFS_TREE_FLAGS] = HPFS_TREE_INTERNAL;
+        file->data[HPFS_FNODE_TREE + HPFS_TREE_FREE] = HPFS_FNODE_BRANCHES - count;
+        file->data[HPFS_FNODE_TREE + HPFS_TREE_USED] = count;
+        tb_put_le16(file->data + HPFS_FNODE_TREE + HPFS_TREE_FIRST_FREE,
+                    (unsigned)(HPFS_TREE_ENTRIES + count * HPFS_BRANCH_BYTES));
         for (size_t i = 0; i < count; i++)
         {
-            tb_put_le32(file->data + 64 + i * 8, i + 1 == count ? UINT32_MAX : refs[i].end);
-            tb_put_le32(file->data + 68 + i * 8, refs[i].sector);
+            tb_put_le32(file->data + HPFS_FNODE_TREE + HPFS_TREE_ENTRIES + HPFS_BRANCH_END +
+                            i * HPFS_BRANCH_BYTES,
+                        i + 1 == count ? UINT32_MAX : refs[i].end);
+            tb_put_le32(file->data + HPFS_FNODE_TREE + HPFS_TREE_ENTRIES + HPFS_BRANCH_SECTOR +
+                            i * HPFS_BRANCH_BYTES,
+                        refs[i].sector);
+
             if (!node_parent(d, refs[i].sector, file->sector, 1))
             {
                 free(refs);
@@ -271,9 +299,9 @@ static int file_tree_build(HpfsVolume *d, HpfsFile *file)
 
 int hpfs_file_resize(HpfsVolume *d, HpfsFile *file, uint64_t bytes)
 {
-    if (bytes > 0x7fffffffu)
+    if (bytes > HPFS_MAX_FILE_BYTES)
         return hpfs_fail(EFBIG);
-    uint32_t needed = (uint32_t)((bytes + 511) / 512);
+    uint32_t needed = (uint32_t)((bytes + HPFS_SECTOR_BYTES - 1) / HPFS_SECTOR_BYTES);
     uint32_t allocated =
         file->count ? file->extents[file->count - 1].logical + file->extents[file->count - 1].count
                     : 0;
@@ -303,12 +331,12 @@ int hpfs_file_resize(HpfsVolume *d, HpfsFile *file, uint64_t bytes)
     else if (needed > allocated)
     {
         uint32_t free = 0;
-        for (uint32_t i = 18; i < d->sectors; i++)
+        for (uint32_t i = HPFS_FIRST_DATA_SECTOR; i < d->sectors; i++)
             free += hpfs_sector_is_free(d, i);
         if (needed - allocated > free)
             return hpfs_fail(ENOSPC);
-        unsigned char zero[512] = {0};
-        for (uint32_t at = 18; allocated < needed && at < d->sectors;)
+        unsigned char zero[HPFS_SECTOR_BYTES] = {0};
+        for (uint32_t at = HPFS_FIRST_DATA_SECTOR; allocated < needed && at < d->sectors;)
         {
             if (!hpfs_sector_is_free(d, at))
             {
@@ -330,17 +358,18 @@ int hpfs_file_resize(HpfsVolume *d, HpfsFile *file, uint64_t bytes)
         if (allocated < needed)
             return hpfs_fail(ENOSPC);
     }
-    uint32_t previous = tb_le32(file->data + 160);
-    if (bytes > previous && previous % 512)
+    uint32_t previous = tb_le32(file->data + HPFS_FNODE_FILE_SIZE);
+    if (bytes > previous && previous % HPFS_SECTOR_BYTES)
     {
-        unsigned char data[512];
-        uint32_t sector = hpfs_file_sector(file, previous / 512);
+        unsigned char data[HPFS_SECTOR_BYTES];
+        uint32_t sector = hpfs_file_sector(file, previous / HPFS_SECTOR_BYTES);
         if (!sector || !hpfs_read_sectors(d, sector, data, 1))
             return 0;
-        memset(data + previous % 512, 0, 512 - previous % 512);
+        memset(data + previous % HPFS_SECTOR_BYTES, 0,
+               HPFS_SECTOR_BYTES - previous % HPFS_SECTOR_BYTES);
         if (!hpfs_stage_sectors(d, sector, data, 1))
             return 0;
     }
-    tb_put_le32(file->data + 160, (uint32_t)bytes);
+    tb_put_le32(file->data + HPFS_FNODE_FILE_SIZE, (uint32_t)bytes);
     return file_tree_build(d, file);
 }

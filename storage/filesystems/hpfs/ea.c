@@ -11,20 +11,27 @@
 
 /* OS/2 family APIs use a length-prefixed FEA list. HPFS stores its records
    without that four-byte prefix, either in the FNODE or external sectors. */
+enum
+{
+    FEA_LIST_HEADER_BYTES = 4, /* the list's 32-bit total length */
+    /* Upper bound on an external EA run or value, so a corrupt length cannot exhaust memory. */
+    AUXILIARY_MAX_BYTES = 1048576
+};
+
 static int auxiliary_read(HpfsVolume *d, uint32_t sector, uint32_t size, int tree,
                           unsigned char *output)
 {
     if (!size)
         return 1;
-    if (size > 1048576)
+    if (size > AUXILIARY_MAX_BYTES)
         return hpfs_fail(EFBIG);
     if (!tree)
     {
-        unsigned char data[512];
+        unsigned char data[HPFS_SECTOR_BYTES];
         for (uint32_t at = 0; at < size;)
         {
-            unsigned n = size - at < 512 ? size - at : 512;
-            if (!hpfs_read_sectors(d, sector + at / 512, data, 1))
+            unsigned n = size - at < HPFS_SECTOR_BYTES ? size - at : HPFS_SECTOR_BYTES;
+            if (!hpfs_read_sectors(d, sector + at / HPFS_SECTOR_BYTES, data, 1))
                 return 0;
             memcpy(output + at, data, n);
             at += n;
@@ -32,15 +39,15 @@ static int auxiliary_read(HpfsVolume *d, uint32_t sector, uint32_t size, int tre
         return 1;
     }
     HpfsFile file = {0};
-    unsigned char node[512];
+    unsigned char node[HPFS_SECTOR_BYTES];
     int ok = hpfs_read_sectors(d, sector, node, 1) && tb_le32(node) == HPFS_ANODE_SIGNATURE &&
              hpfs_add_unique_node(&file.nodes, &file.node_count, sector) &&
-             hpfs_extent_tree(d, &file, node + 12, node[12] & 128 ? 60 : 40, 0);
+             hpfs_extent_tree(d, &file, node + HPFS_ANODE_TREE, hpfs_anode_capacity(node), 0);
     for (uint32_t at = 0; ok && at < size;)
     {
-        unsigned char data[512];
-        uint32_t physical = hpfs_file_sector(&file, at / 512);
-        unsigned n = size - at < 512 ? size - at : 512;
+        unsigned char data[HPFS_SECTOR_BYTES];
+        uint32_t physical = hpfs_file_sector(&file, at / HPFS_SECTOR_BYTES);
+        unsigned n = size - at < HPFS_SECTOR_BYTES ? size - at : HPFS_SECTOR_BYTES;
         ok = physical && hpfs_read_sectors(d, physical, data, 1);
         if (ok)
             memcpy(output + at, data, n);
@@ -52,10 +59,12 @@ static int auxiliary_read(HpfsVolume *d, uint32_t sector, uint32_t size, int tre
 
 static unsigned char *ea_raw(HpfsVolume *d, const unsigned char *fnode, size_t *size)
 {
-    uint32_t external = tb_le32(fnode + 44);
-    unsigned internal = tb_le16(fnode + 52), base = tb_le16(fnode + 184), acl = tb_le16(fnode + 40);
-    if ((external && internal) || external > 1048576 || base > 512 || acl > 512 - base ||
-        internal > 512 - base - acl)
+    uint32_t external = tb_le32(fnode + HPFS_FNODE_EAS);
+    unsigned internal = tb_le16(fnode + HPFS_FNODE_EA_INTERNAL_SIZE),
+             base = tb_le16(fnode + HPFS_FNODE_INTERNAL_OFFSET),
+             acl = tb_le16(fnode + HPFS_FNODE_ACL_INTERNAL_SIZE);
+    if ((external && internal) || external > AUXILIARY_MAX_BYTES || base > HPFS_SECTOR_BYTES ||
+        acl > HPFS_SECTOR_BYTES - base || internal > HPFS_SECTOR_BYTES - base - acl)
     {
         errno = EIO;
         return NULL;
@@ -64,7 +73,8 @@ static unsigned char *ea_raw(HpfsVolume *d, const unsigned char *fnode, size_t *
     unsigned char *data = malloc(*size ? *size : 1);
     if (!data)
         return NULL;
-    if (external && !auxiliary_read(d, tb_le32(fnode + 48), external, fnode[54], data))
+    if (external && !auxiliary_read(d, tb_le32(fnode + HPFS_FNODE_EA_SECTOR), external,
+                                    fnode[HPFS_FNODE_EA_IN_ANODE], data))
     {
         free(data);
         return NULL;
@@ -79,12 +89,13 @@ static int auxiliary_free(HpfsVolume *d, uint32_t sector, uint32_t size, int tre
     if (!size)
         return 1;
     if (!tree)
-        return hpfs_mark_sectors(d, sector, (uint32_t)(((uint64_t)size + 511) / 512), 1);
+        return hpfs_mark_sectors(
+            d, sector, (uint32_t)(((uint64_t)size + HPFS_SECTOR_BYTES - 1) / HPFS_SECTOR_BYTES), 1);
     HpfsFile file = {0};
-    unsigned char node[512];
+    unsigned char node[HPFS_SECTOR_BYTES];
     int ok = hpfs_read_sectors(d, sector, node, 1) && tb_le32(node) == HPFS_ANODE_SIGNATURE &&
              hpfs_add_unique_node(&file.nodes, &file.node_count, sector) &&
-             hpfs_extent_tree(d, &file, node + 12, node[12] & 128 ? 60 : 40, 0);
+             hpfs_extent_tree(d, &file, node + HPFS_ANODE_TREE, hpfs_anode_capacity(node), 0);
     for (size_t i = 0; ok && i < file.count; i++)
         ok = hpfs_mark_sectors(d, file.extents[i].sector, file.extents[i].count, 1);
     for (size_t i = 0; ok && i < file.node_count; i++)
@@ -102,28 +113,31 @@ int hpfs_ea_values_free(HpfsVolume *d, const unsigned char *fnode)
     int ok = 1;
     for (size_t at = 0; ok && at < size;)
     {
-        if (size - at < 5)
+        if (size - at < HPFS_EA_FIXED_BYTES)
         {
             ok = hpfs_fail(EIO);
             break;
         }
         const unsigned char *entry = data + at;
-        size_t count = 5u + entry[1] + tb_le16(entry + 2);
-        unsigned method = entry[0] & 127;
-        if (count > size - at || entry[4 + entry[1]] || (method != 0 && method != 1 && method != 3))
+        size_t count = HPFS_EA_FIXED_BYTES + entry[HPFS_EA_NAME_LENGTH] +
+                       tb_le16(entry + HPFS_EA_VALUE_LENGTH);
+        unsigned method = entry[HPFS_EA_FLAGS] & HPFS_EA_METHOD;
+        if (count > size - at || entry[HPFS_EA_NAME + entry[HPFS_EA_NAME_LENGTH]] ||
+            (method != HPFS_EA_INLINE && method != HPFS_EA_EXTERNAL && method != HPFS_EA_TREE))
         {
             ok = hpfs_fail(EIO);
             break;
         }
         if (method)
         {
-            const unsigned char *pointer = entry + 5 + entry[1];
-            if (tb_le16(entry + 2) != 8)
+            const unsigned char *pointer = entry + HPFS_EA_FIXED_BYTES + entry[HPFS_EA_NAME_LENGTH];
+            if (tb_le16(entry + HPFS_EA_VALUE_LENGTH) != HPFS_EA_POINTER_BYTES)
             {
                 ok = hpfs_fail(EIO);
                 break;
             }
-            ok = auxiliary_free(d, tb_le32(pointer + 4), tb_le32(pointer), method == 3);
+            ok = auxiliary_free(d, tb_le32(pointer + HPFS_EA_POINTER_SECTOR),
+                                tb_le32(pointer + HPFS_EA_POINTER_SIZE), method == HPFS_EA_TREE);
         }
         at += count;
     }
@@ -140,59 +154,65 @@ int tb_hpfs_metadata_get(const char *path, const char *expected, void *output, s
         return 0;
     HpfsDirectory parent = {0};
     size_t index;
-    unsigned char fnode[512], *raw = NULL, *flat = NULL;
-    size_t size = 0, used = 4;
+    unsigned char fnode[HPFS_SECTOR_BYTES], *raw = NULL, *flat = NULL;
+    size_t size = 0, used = FEA_LIST_HEADER_BYTES;
     int ok = hpfs_locate(&disk, path, &parent, &index, 0) &&
-             hpfs_read_sectors(&disk, tb_le32(parent.entries[index].record + 4), fnode, 1) &&
+             hpfs_read_sectors(&disk, tb_le32(parent.entries[index].record + HPFS_DIRENT_FNODE),
+                               fnode, 1) &&
              tb_le32(fnode) == HPFS_FNODE_SIGNATURE;
     if (ok)
     {
         raw = ea_raw(&disk, fnode, &size);
-        flat = malloc(65535);
+        flat = malloc(HPFS_EA_LIST_MAX);
         ok = raw && flat;
     }
     for (size_t at = 0; ok && at < size;)
     {
-        if (size - at < 5)
+        if (size - at < HPFS_EA_FIXED_BYTES)
         {
             ok = hpfs_fail(EIO);
             break;
         }
         const unsigned char *entry = raw + at;
-        size_t stored = 5u + entry[1] + tb_le16(entry + 2), value = tb_le16(entry + 2);
-        unsigned method = entry[0] & 127;
-        if (stored > size - at || !entry[1] || entry[4 + entry[1]] ||
-            memchr(entry + 4, 0, entry[1]) || (method != 0 && method != 1 && method != 3))
+        size_t stored = HPFS_EA_FIXED_BYTES + entry[HPFS_EA_NAME_LENGTH] +
+                        tb_le16(entry + HPFS_EA_VALUE_LENGTH),
+               value = tb_le16(entry + HPFS_EA_VALUE_LENGTH);
+        unsigned method = entry[HPFS_EA_FLAGS] & HPFS_EA_METHOD;
+        if (stored > size - at || !entry[HPFS_EA_NAME_LENGTH] ||
+            entry[HPFS_EA_NAME + entry[HPFS_EA_NAME_LENGTH]] ||
+            memchr(entry + HPFS_EA_NAME, 0, entry[HPFS_EA_NAME_LENGTH]) ||
+            (method != HPFS_EA_INLINE && method != HPFS_EA_EXTERNAL && method != HPFS_EA_TREE))
         {
             ok = hpfs_fail(EIO);
             break;
         }
-        const unsigned char *pointer = entry + 5 + entry[1];
+        const unsigned char *pointer = entry + HPFS_EA_FIXED_BYTES + entry[HPFS_EA_NAME_LENGTH];
         if (method)
         {
-            if (value != 8)
+            if (value != HPFS_EA_POINTER_BYTES)
             {
                 ok = hpfs_fail(EIO);
                 break;
             }
-            value = tb_le32(pointer);
+            value = tb_le32(pointer + HPFS_EA_POINTER_SIZE);
         }
-        size_t count = 5u + entry[1] + value;
-        if (count > 65535 - used || value > 65535)
+        size_t count = HPFS_EA_FIXED_BYTES + entry[HPFS_EA_NAME_LENGTH] + value;
+        if (count > HPFS_EA_LIST_MAX - used || value > HPFS_EA_LIST_MAX)
         {
             ok = hpfs_fail(EFBIG);
             break;
         }
         unsigned char *record = flat + used;
-        record[0] = entry[0] & 128;
-        record[1] = entry[1];
-        tb_put_le16(record + 2, (unsigned)value);
-        memcpy(record + 4, entry + 4, entry[1] + 1);
+        record[HPFS_EA_FLAGS] = entry[HPFS_EA_FLAGS] & HPFS_EA_NEEDED;
+        record[HPFS_EA_NAME_LENGTH] = entry[HPFS_EA_NAME_LENGTH];
+        tb_put_le16(record + HPFS_EA_VALUE_LENGTH, (unsigned)value);
+        memcpy(record + HPFS_EA_NAME, entry + HPFS_EA_NAME, entry[HPFS_EA_NAME_LENGTH] + 1);
         if (method)
-            ok = auxiliary_read(&disk, tb_le32(pointer + 4), (uint32_t)value, method == 3,
-                                record + 5 + entry[1]);
+            ok = auxiliary_read(&disk, tb_le32(pointer + HPFS_EA_POINTER_SECTOR), (uint32_t)value,
+                                method == HPFS_EA_TREE,
+                                record + HPFS_EA_FIXED_BYTES + entry[HPFS_EA_NAME_LENGTH]);
         else
-            memcpy(record + 5 + entry[1], pointer, value);
+            memcpy(record + HPFS_EA_FIXED_BYTES + entry[HPFS_EA_NAME_LENGTH], pointer, value);
         used += count;
         at += stored;
     }
@@ -217,19 +237,22 @@ int tb_hpfs_metadata_get(const char *path, const char *expected, void *output, s
 
 int tb_hpfs_metadata_set(const char *path, const char *expected, const void *bytes, size_t size)
 {
-    if (size < 4 || size > 65535 || tb_le32(bytes) != size)
+    if (size < FEA_LIST_HEADER_BYTES || size > HPFS_EA_LIST_MAX || tb_le32(bytes) != size)
         return hpfs_fail(EINVAL);
     const unsigned char *data = bytes;
     unsigned needed = 0;
-    for (size_t at = 4; at < size;)
+    for (size_t at = FEA_LIST_HEADER_BYTES; at < size;)
     {
-        if (size - at < 5)
+        if (size - at < HPFS_EA_FIXED_BYTES)
             return hpfs_fail(EINVAL);
-        size_t count = 5u + data[at + 1] + tb_le16(data + at + 2);
-        if (count > size - at || (data[at] & 127) || !data[at + 1] || data[at + 4 + data[at + 1]] ||
-            memchr(data + at + 4, 0, data[at + 1]))
+        size_t count = HPFS_EA_FIXED_BYTES + data[at + HPFS_EA_NAME_LENGTH] +
+                       tb_le16(data + at + HPFS_EA_VALUE_LENGTH);
+        if (count > size - at || (data[at + HPFS_EA_FLAGS] & HPFS_EA_METHOD) ||
+            !data[at + HPFS_EA_NAME_LENGTH] ||
+            data[at + HPFS_EA_NAME + data[at + HPFS_EA_NAME_LENGTH]] ||
+            memchr(data + at + HPFS_EA_NAME, 0, data[at + HPFS_EA_NAME_LENGTH]))
             return hpfs_fail(EINVAL);
-        needed += !!(data[at] & 128);
+        needed += !!(data[at + HPFS_EA_FLAGS] & HPFS_EA_NEEDED);
         at += count;
     }
     HpfsVolume disk;
@@ -237,58 +260,67 @@ int tb_hpfs_metadata_set(const char *path, const char *expected, const void *byt
         return 0;
     HpfsDirectory parent = {0};
     size_t index;
-    unsigned char fnode[512];
+    unsigned char fnode[HPFS_SECTOR_BYTES];
     int ok = hpfs_load_bitmaps(&disk) && hpfs_locate(&disk, path, &parent, &index, 0) &&
-             hpfs_read_sectors(&disk, tb_le32(parent.entries[index].record + 4), fnode, 1) &&
+             hpfs_read_sectors(&disk, tb_le32(parent.entries[index].record + HPFS_DIRENT_FNODE),
+                               fnode, 1) &&
              tb_le32(fnode) == HPFS_FNODE_SIGNATURE;
-    if (ok && parent.entries[index].record[3] & 1)
+    if (ok && parent.entries[index].record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_READONLY)
         ok = hpfs_fail(EACCES);
     if (ok)
-        ok = hpfs_ea_values_free(&disk, fnode) && hpfs_release_external(&disk, fnode, 44);
+        ok = hpfs_ea_values_free(&disk, fnode) &&
+             hpfs_release_external(&disk, fnode, HPFS_FNODE_EAS);
     if (ok)
     {
-        unsigned base = tb_le16(fnode + 184), acl = tb_le16(fnode + 40);
-        size_t n = size - 4;
+        unsigned base = tb_le16(fnode + HPFS_FNODE_INTERNAL_OFFSET),
+                 acl = tb_le16(fnode + HPFS_FNODE_ACL_INTERNAL_SIZE);
+        size_t n = size - FEA_LIST_HEADER_BYTES;
         if (!base)
-            base = 196;
-        if (base < 196 || base > 512 || acl > 512 - base)
+            base = HPFS_FNODE_FREE_AREA;
+        if (base < HPFS_FNODE_FREE_AREA || base > HPFS_SECTOR_BYTES ||
+            acl > HPFS_SECTOR_BYTES - base)
             ok = hpfs_fail(EIO);
         else
         {
-            memset(fnode + base + acl, 0, 512 - base - acl);
-            tb_put_le32(fnode + 44, 0);
-            tb_put_le32(fnode + 48, 0);
-            tb_put_le16(fnode + 52, 0);
-            fnode[54] = 0;
-            tb_put_le16(fnode + 184, base);
-            tb_put_le32(fnode + 164, needed);
-            if (n <= 512 - base - acl)
+            memset(fnode + base + acl, 0, HPFS_SECTOR_BYTES - base - acl);
+            tb_put_le32(fnode + HPFS_FNODE_EAS, 0);
+            tb_put_le32(fnode + HPFS_FNODE_EA_SECTOR, 0);
+            tb_put_le16(fnode + HPFS_FNODE_EA_INTERNAL_SIZE, 0);
+            fnode[HPFS_FNODE_EA_IN_ANODE] = 0;
+            tb_put_le16(fnode + HPFS_FNODE_INTERNAL_OFFSET, base);
+            tb_put_le32(fnode + HPFS_FNODE_NEEDED_EAS, needed);
+            if (n <= HPFS_SECTOR_BYTES - base - acl)
             {
-                memcpy(fnode + base + acl, data + 4, n);
-                tb_put_le16(fnode + 52, (unsigned)n);
+                memcpy(fnode + base + acl, data + FEA_LIST_HEADER_BYTES, n);
+                tb_put_le16(fnode + HPFS_FNODE_EA_INTERNAL_SIZE, (unsigned)n);
             }
             else
             {
-                uint32_t count = (uint32_t)((n + 511) / 512),
+                uint32_t count = (uint32_t)((n + HPFS_SECTOR_BYTES - 1) / HPFS_SECTOR_BYTES),
                          first = hpfs_allocate(&disk, count, 1);
                 if (!first)
                     ok = 0;
                 for (uint32_t i = 0; ok && i < count; i++)
                 {
-                    unsigned char block[512] = {0};
-                    size_t length = n - i * 512 < 512 ? n - i * 512 : 512;
-                    memcpy(block, data + 4 + i * 512, length);
+                    unsigned char block[HPFS_SECTOR_BYTES] = {0};
+                    size_t length = n - i * HPFS_SECTOR_BYTES < HPFS_SECTOR_BYTES
+                                        ? n - i * HPFS_SECTOR_BYTES
+                                        : HPFS_SECTOR_BYTES;
+                    memcpy(block, data + FEA_LIST_HEADER_BYTES + i * HPFS_SECTOR_BYTES, length);
                     ok = hpfs_stage_sectors(&disk, first + i, block, 1);
                 }
-                tb_put_le32(fnode + 44, (uint32_t)n);
-                tb_put_le32(fnode + 48, first);
+                tb_put_le32(fnode + HPFS_FNODE_EAS, (uint32_t)n);
+                tb_put_le32(fnode + HPFS_FNODE_EA_SECTOR, first);
             }
             if (ok)
             {
                 unsigned char *entry = parent.entries[index].record;
-                entry[2] = (entry[2] & ~(16u | 128u)) | (n ? 16 : 0) | (needed ? 128 : 0);
-                tb_put_le32(entry + 24, (uint32_t)n);
-                ok = hpfs_stage_sectors(&disk, tb_le32(entry + 4), fnode, 1) &&
+                entry[HPFS_DIRENT_FLAGS] =
+                    (entry[HPFS_DIRENT_FLAGS] &
+                     ~(unsigned)(HPFS_DIRENT_HAS_EAS | HPFS_DIRENT_NEEDS_EAS)) |
+                    (n ? HPFS_DIRENT_HAS_EAS : 0) | (needed ? HPFS_DIRENT_NEEDS_EAS : 0);
+                tb_put_le32(entry + HPFS_DIRENT_EA_SIZE, (uint32_t)n);
+                ok = hpfs_stage_sectors(&disk, tb_le32(entry + HPFS_DIRENT_FNODE), fnode, 1) &&
                      hpfs_directory_save(&disk, parent.entries[index].parent, &parent) &&
                      hpfs_commit(&disk);
             }

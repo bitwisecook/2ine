@@ -11,7 +11,14 @@
 #include <string.h>
 #include <time.h>
 
+/* Size of a directory's ".." entry: the fixed fields and a two-byte name, rounded to 4. */
+enum
+{
+    DOT_ENTRY_BYTES = 36
+};
+
 int tb_hpfs_info(const char *path, TbImageInfo *info)
+
 {
     HpfsVolume disk;
     if (!hpfs_open(path, 0, NULL, &disk))
@@ -27,13 +34,16 @@ int tb_hpfs_info(const char *path, TbImageInfo *info)
         ok = hpfs_locate(&disk, path, &list, &index, 0);
         if (ok)
         {
-            info->directory = !!(list.entries[index].record[3] & 16);
-            info->size = tb_le32(list.entries[index].record + 12);
-            info->readonly = !!(list.entries[index].record[3] & 1);
-            info->attributes = list.entries[index].record[3] & 0x26;
-            info->modified = tb_le32(list.entries[index].record + 8);
-            info->accessed = tb_le32(list.entries[index].record + 16);
-            info->created = tb_le32(list.entries[index].record + 20);
+            info->directory =
+                !!(list.entries[index].record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_DIRECTORY);
+            info->size = tb_le32(list.entries[index].record + HPFS_DIRENT_FILE_SIZE);
+            info->readonly =
+                !!(list.entries[index].record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_READONLY);
+            info->attributes =
+                list.entries[index].record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_CHANGEABLE;
+            info->modified = tb_le32(list.entries[index].record + HPFS_DIRENT_MODIFIED);
+            info->accessed = tb_le32(list.entries[index].record + HPFS_DIRENT_ACCESSED);
+            info->created = tb_le32(list.entries[index].record + HPFS_DIRENT_CREATED);
         }
     }
     else
@@ -42,18 +52,18 @@ int tb_hpfs_info(const char *path, TbImageInfo *info)
     {
         info->readonly |= tb_image_protected(path) != 0;
         strcpy(info->filesystem, "HPFS");
-        info->capacity = (uint64_t)disk.sectors * 512;
-        info->sector_bytes = info->cluster_bytes = 512;
-        info->serial = tb_le32(disk.boot + 39);
-        memcpy(info->label, disk.boot + 43, 11);
-        for (int i = 10; i >= 0 && info->label[i] == ' '; i--)
+        info->capacity = (uint64_t)disk.sectors * HPFS_SECTOR_BYTES;
+        info->sector_bytes = info->cluster_bytes = HPFS_SECTOR_BYTES;
+        info->serial = tb_le32(disk.boot + HPFS_BOOT_SERIAL);
+        memcpy(info->label, disk.boot + HPFS_BOOT_LABEL, HPFS_BOOT_LABEL_BYTES);
+        for (int i = HPFS_BOOT_LABEL_BYTES - 1; i >= 0 && info->label[i] == ' '; i--)
             info->label[i] = 0;
         if (!info->readonly && name && !*name)
         {
             ok = hpfs_load_bitmaps(&disk);
             for (uint32_t i = 0; ok && i < disk.sectors; i++)
                 if (hpfs_sector_is_free(&disk, i))
-                    info->available += 512;
+                    info->available += HPFS_SECTOR_BYTES;
         }
     }
     free(name);
@@ -78,13 +88,13 @@ char **tb_hpfs_names(const char *path, size_t *count)
     {
         ok = hpfs_locate(&disk, path, &parent, &index, 0);
         if (ok)
-            fnode = tb_le32(parent.entries[index].record + 4);
+            fnode = tb_le32(parent.entries[index].record + HPFS_DIRENT_FNODE);
     }
     if (ok)
         ok = hpfs_directory_read(&disk, fnode, &list);
     for (size_t i = 0; ok && i < list.count; i++)
     {
-        if (list.entries[i].record[2] & 1)
+        if (list.entries[i].record[HPFS_DIRENT_FLAGS] & HPFS_DIRENT_SPECIAL)
             continue;
         char *text = hpfs_name_utf8(&disk, list.entries[i].record);
         char **next = text ? realloc(names, (n + 1) * sizeof *next) : NULL;
@@ -121,8 +131,9 @@ FILE *tb_hpfs_fopen(const char *path)
     HpfsFile file = {0};
     size_t index;
     FILE *snapshot = NULL;
-    int ok = hpfs_locate(&disk, path, &parent, &index, 0) &&
-             hpfs_file_load(&disk, tb_le32(parent.entries[index].record + 4), &file);
+    int ok =
+        hpfs_locate(&disk, path, &parent, &index, 0) &&
+        hpfs_file_load(&disk, tb_le32(parent.entries[index].record + HPFS_DIRENT_FNODE), &file);
     if (ok)
     {
         snapshot = tmpfile();
@@ -146,36 +157,40 @@ int hpfs_create_fnode(HpfsVolume *d, HpfsEntry *entry, int directory)
     uint32_t sector = hpfs_allocate(d, 1, 1);
     if (!sector)
         return 0;
-    unsigned char bytes[512] = {0};
+    unsigned char bytes[HPFS_SECTOR_BYTES] = {0};
     tb_put_le32(bytes, HPFS_FNODE_SIGNATURE);
-    bytes[12] = entry->record[30];
-    unsigned n = bytes[12] > 15 ? 15 : bytes[12];
-    memcpy(bytes + 13, entry->record + 31, n);
-    tb_put_le32(bytes + 28, entry->parent);
-    bytes[55] = directory;
-    bytes[60] = 8;
-    tb_put_le16(bytes + 62, 8);
-    tb_put_le16(bytes + 184, 196);
-    tb_put_le32(entry->record + 4, sector);
+    bytes[HPFS_FNODE_NAME_LENGTH] = entry->record[HPFS_DIRENT_NAME_LENGTH];
+    unsigned n = bytes[HPFS_FNODE_NAME_LENGTH] > HPFS_FNODE_NAME_BYTES
+                     ? HPFS_FNODE_NAME_BYTES
+                     : bytes[HPFS_FNODE_NAME_LENGTH];
+    memcpy(bytes + HPFS_FNODE_NAME, entry->record + HPFS_DIRENT_NAME, n);
+    tb_put_le32(bytes + HPFS_FNODE_PARENT, entry->parent);
+    bytes[HPFS_FNODE_FLAGS] = directory;
+    bytes[HPFS_FNODE_TREE + HPFS_TREE_FREE] = HPFS_FNODE_LEAVES;
+    tb_put_le16(bytes + HPFS_FNODE_TREE + HPFS_TREE_FIRST_FREE, HPFS_TREE_ENTRIES);
+    tb_put_le16(bytes + HPFS_FNODE_INTERNAL_OFFSET, HPFS_FNODE_FREE_AREA);
+    tb_put_le32(entry->record + HPFS_DIRENT_FNODE, sector);
     if (directory)
-        entry->record[3] = 16 | (entry->record[3] & 64);
+        entry->record[HPFS_DIRENT_ATTRIBUTES] =
+            HPFS_ATTR_DIRECTORY | (entry->record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_LONG_NAME);
     if (!hpfs_stage_sectors(d, sector, bytes, 1))
         return 0;
     if (directory)
     {
-        unsigned char *dot = calloc(36, 1);
+        /* The ".." entry: name bytes 01 01, pointing at the directory's own fnode. */
+        unsigned char *dot = calloc(DOT_ENTRY_BYTES, 1);
         if (!dot)
             return 0;
-        tb_put_le16(dot, 36);
-        dot[2] = 1;
-        dot[3] = 16;
-        tb_put_le32(dot + 4, sector);
-        tb_put_le32(dot + 8, tb_le32(entry->record + 8));
-        tb_put_le32(dot + 16, tb_le32(entry->record + 16));
-        tb_put_le32(dot + 20, tb_le32(entry->record + 20));
-        dot[30] = 2;
-        dot[31] = dot[32] = 1;
-        HpfsEntry special = {dot, 36, sector};
+        tb_put_le16(dot + HPFS_DIRENT_SIZE, DOT_ENTRY_BYTES);
+        dot[HPFS_DIRENT_FLAGS] = HPFS_DIRENT_SPECIAL;
+        dot[HPFS_DIRENT_ATTRIBUTES] = HPFS_ATTR_DIRECTORY;
+        tb_put_le32(dot + HPFS_DIRENT_FNODE, sector);
+        tb_put_le32(dot + HPFS_DIRENT_MODIFIED, tb_le32(entry->record + HPFS_DIRENT_MODIFIED));
+        tb_put_le32(dot + HPFS_DIRENT_ACCESSED, tb_le32(entry->record + HPFS_DIRENT_ACCESSED));
+        tb_put_le32(dot + HPFS_DIRENT_CREATED, tb_le32(entry->record + HPFS_DIRENT_CREATED));
+        dot[HPFS_DIRENT_NAME_LENGTH] = 2;
+        dot[HPFS_DIRENT_NAME] = dot[HPFS_DIRENT_NAME + 1] = 1;
+        HpfsEntry special = {dot, DOT_ENTRY_BYTES, sector};
         HpfsDirectory list = {0};
         int ok = hpfs_entry_insert(d, &list, special);
         if (!ok)
@@ -190,16 +205,18 @@ int hpfs_create_fnode(HpfsVolume *d, HpfsEntry *entry, int directory)
 
 int hpfs_release_external(HpfsVolume *d, const unsigned char *fnode, unsigned offset)
 {
-    uint32_t size = tb_le32(fnode + offset), sector = tb_le32(fnode + offset + 4);
+    uint32_t size = tb_le32(fnode + offset + HPFS_RUN_SIZE),
+             sector = tb_le32(fnode + offset + HPFS_RUN_SECTOR);
     if (!size)
         return 1;
-    if (!fnode[offset + 10])
-        return hpfs_mark_sectors(d, sector, (uint32_t)(((uint64_t)size + 511u) / 512u), 1);
+    if (!fnode[offset + HPFS_RUN_IN_ANODE])
+        return hpfs_mark_sectors(
+            d, sector, (uint32_t)(((uint64_t)size + HPFS_SECTOR_BYTES - 1) / HPFS_SECTOR_BYTES), 1);
     HpfsFile tree = {0};
-    unsigned char node[512];
+    unsigned char node[HPFS_SECTOR_BYTES];
     int ok = hpfs_read_sectors(d, sector, node, 1) && tb_le32(node) == HPFS_ANODE_SIGNATURE &&
              hpfs_add_unique_node(&tree.nodes, &tree.node_count, sector) &&
-             hpfs_extent_tree(d, &tree, node + 12, node[12] & 128 ? 60 : 40, 0);
+             hpfs_extent_tree(d, &tree, node + HPFS_ANODE_TREE, hpfs_anode_capacity(node), 0);
     for (size_t i = 0; ok && i < tree.count; i++)
         ok = hpfs_mark_sectors(d, tree.extents[i].sector, tree.extents[i].count, 1);
     for (size_t i = 0; ok && i < tree.node_count; i++)
@@ -210,8 +227,8 @@ int hpfs_release_external(HpfsVolume *d, const unsigned char *fnode, unsigned of
 
 static int file_delete(HpfsVolume *d, HpfsEntry *entry, int directory)
 {
-    uint32_t sector = tb_le32(entry->record + 4);
-    unsigned char fnode[512];
+    uint32_t sector = tb_le32(entry->record + HPFS_DIRENT_FNODE);
+    unsigned char fnode[HPFS_SECTOR_BYTES];
     if (!hpfs_read_sectors(d, sector, fnode, 1) || tb_le32(fnode) != HPFS_FNODE_SIGNATURE)
         return hpfs_fail(EIO);
     if (directory)
@@ -221,7 +238,7 @@ static int file_delete(HpfsVolume *d, HpfsEntry *entry, int directory)
             return 0;
         int ok = 1;
         for (size_t i = 0; i < list.count; i++)
-            if (!(list.entries[i].record[2] & 1))
+            if (!(list.entries[i].record[HPFS_DIRENT_FLAGS] & HPFS_DIRENT_SPECIAL))
                 ok = hpfs_fail(ENOTEMPTY);
         for (size_t i = 0; ok && i < list.node_count; i++)
             ok = hpfs_free_dnode(d, list.nodes[i]);
@@ -243,29 +260,29 @@ static int file_delete(HpfsVolume *d, HpfsEntry *entry, int directory)
         if (!ok)
             return 0;
     }
-    return hpfs_ea_values_free(d, fnode) && hpfs_release_external(d, fnode, 32) &&
-           hpfs_release_external(d, fnode, 44) && hpfs_mark_sectors(d, sector, 1, 1);
+    return hpfs_ea_values_free(d, fnode) && hpfs_release_external(d, fnode, HPFS_FNODE_ACL) &&
+           hpfs_release_external(d, fnode, HPFS_FNODE_EAS) && hpfs_mark_sectors(d, sector, 1, 1);
 }
 
 static int write_file(HpfsVolume *d, HpfsEntry *entry, int action, uint64_t offset,
                       const void *data, size_t size)
 {
     HpfsFile file;
-    if (!hpfs_file_load(d, tb_le32(entry->record + 4), &file))
+    if (!hpfs_file_load(d, tb_le32(entry->record + HPFS_DIRENT_FNODE), &file))
         return 0;
     uint64_t length = action == TB_FS_RESIZE        ? offset
                       : offset <= UINT64_MAX - size ? offset + size
                                                     : UINT64_MAX;
-    if (action != TB_FS_RESIZE && length < tb_le32(file.data + 160))
-        length = tb_le32(file.data + 160);
+    if (action != TB_FS_RESIZE && length < tb_le32(file.data + HPFS_FNODE_FILE_SIZE))
+        length = tb_le32(file.data + HPFS_FNODE_FILE_SIZE);
     int ok = hpfs_file_resize(d, &file, length);
     for (size_t at = 0; ok && action == TB_FS_WRITE && at < size;)
     {
-        unsigned char bytes[512];
+        unsigned char bytes[HPFS_SECTOR_BYTES];
         uint64_t location = offset + at;
-        uint32_t sector = hpfs_file_sector(&file, (uint32_t)(location / 512));
-        unsigned skip = location % 512;
-        size_t n = 512 - skip;
+        uint32_t sector = hpfs_file_sector(&file, (uint32_t)(location / HPFS_SECTOR_BYTES));
+        unsigned skip = location % HPFS_SECTOR_BYTES;
+        size_t n = HPFS_SECTOR_BYTES - skip;
         if (n > size - at)
             n = size - at;
         ok = sector && hpfs_read_sectors(d, sector, bytes, 1);
@@ -278,9 +295,9 @@ static int write_file(HpfsVolume *d, HpfsEntry *entry, int action, uint64_t offs
     }
     if (ok)
     {
-        tb_put_le32(entry->record + 12, (uint32_t)length);
-        tb_put_le32(entry->record + 8, (uint32_t)time(NULL));
-        entry->record[3] |= 32;
+        tb_put_le32(entry->record + HPFS_DIRENT_FILE_SIZE, (uint32_t)length);
+        tb_put_le32(entry->record + HPFS_DIRENT_MODIFIED, (uint32_t)time(NULL));
+        entry->record[HPFS_DIRENT_ATTRIBUTES] |= HPFS_ATTR_ARCHIVED;
     }
     hpfs_file_free(&file);
     return ok;
@@ -324,36 +341,42 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
         HpfsEntry *entry = parent.entries + index;
         if (action == TB_FS_EXCLUSIVE || action == TB_FS_MKDIR)
             ok = hpfs_fail(EEXIST);
-        else if (entry->record[3] & 1 && action != TB_FS_READONLY && action != TB_FS_WRITABLE &&
-                 action != TB_FS_CREATE && action != TB_FS_ATTRIBUTES && action != TB_FS_TOUCH)
+        else if (entry->record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_READONLY &&
+                 action != TB_FS_READONLY && action != TB_FS_WRITABLE && action != TB_FS_CREATE &&
+                 action != TB_FS_ATTRIBUTES && action != TB_FS_TOUCH)
             ok = hpfs_fail(EACCES);
-        else if (action == TB_FS_CREATE && entry->record[3] & 16)
+        else if (action == TB_FS_CREATE &&
+                 entry->record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_DIRECTORY)
             ok = hpfs_fail(EISDIR);
         else if (action == TB_FS_READONLY || action == TB_FS_WRITABLE)
         {
-            entry->record[3] =
-                action == TB_FS_READONLY ? entry->record[3] | 1 : entry->record[3] & ~1u;
+            entry->record[HPFS_DIRENT_ATTRIBUTES] =
+                action == TB_FS_READONLY
+                    ? entry->record[HPFS_DIRENT_ATTRIBUTES] | HPFS_ATTR_READONLY
+                    : entry->record[HPFS_DIRENT_ATTRIBUTES] & ~HPFS_ATTR_READONLY;
             ok = hpfs_directory_save(&disk, parent_sector, &parent);
         }
         else if (action == TB_FS_TOUCH)
         {
             const TbImageStamps *stamps = data;
             if (stamps->modified != INT64_MIN)
-                tb_put_le32(entry->record + 8, (uint32_t)stamps->modified);
+                tb_put_le32(entry->record + HPFS_DIRENT_MODIFIED, (uint32_t)stamps->modified);
             if (stamps->accessed != INT64_MIN)
-                tb_put_le32(entry->record + 16, (uint32_t)stamps->accessed);
+                tb_put_le32(entry->record + HPFS_DIRENT_ACCESSED, (uint32_t)stamps->accessed);
             if (stamps->created != INT64_MIN)
-                tb_put_le32(entry->record + 20, (uint32_t)stamps->created);
+                tb_put_le32(entry->record + HPFS_DIRENT_CREATED, (uint32_t)stamps->created);
             ok = hpfs_directory_save(&disk, parent_sector, &parent);
         }
         else if (action == TB_FS_ATTRIBUTES)
         {
-            entry->record[3] = (unsigned char)((entry->record[3] & ~0x26u) | (offset & 0x26));
+            entry->record[HPFS_DIRENT_ATTRIBUTES] =
+                (unsigned char)((entry->record[HPFS_DIRENT_ATTRIBUTES] & ~HPFS_ATTR_CHANGEABLE) |
+                                (offset & HPFS_ATTR_CHANGEABLE));
             ok = hpfs_directory_save(&disk, parent_sector, &parent);
         }
         else if (action == TB_FS_DELETE || action == TB_FS_RMDIR)
         {
-            int directory = !!(entry->record[3] & 16);
+            int directory = !!(entry->record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_DIRECTORY);
             if (directory != (action == TB_FS_RMDIR))
                 ok = hpfs_fail(directory ? EISDIR : ENOTDIR);
             else
@@ -366,7 +389,7 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
         }
         else if (action == TB_FS_WRITE || action == TB_FS_RESIZE)
         {
-            entry->record[3] |= 0x20;
+            entry->record[HPFS_DIRENT_ATTRIBUTES] |= HPFS_ATTR_ARCHIVED;
             ok = write_file(&disk, entry, action, offset, data, size) &&
                  hpfs_directory_save(&disk, parent_sector, &parent);
         }
@@ -374,15 +397,16 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
         {
             ok = target && hpfs_locate(&disk, target, &destination, &to, 1);
             uint32_t target_parent = destination.count ? destination.entries[0].parent : 0;
-            uint32_t fnode = tb_le32(entry->record + 4);
-            if (ok && to != SIZE_MAX && tb_le32(destination.entries[to].record + 4) != fnode)
+            uint32_t fnode = tb_le32(entry->record + HPFS_DIRENT_FNODE);
+            if (ok && to != SIZE_MAX &&
+                tb_le32(destination.entries[to].record + HPFS_DIRENT_FNODE) != fnode)
                 ok = hpfs_fail(EEXIST);
-            if (ok && entry->record[3] & 16)
+            if (ok && entry->record[HPFS_DIRENT_ATTRIBUTES] & HPFS_ATTR_DIRECTORY)
             {
                 uint32_t ancestor = target_parent;
                 for (unsigned depth = 0; ancestor != disk.root; depth++)
                 {
-                    unsigned char bytes[512];
+                    unsigned char bytes[HPFS_SECTOR_BYTES];
                     if (depth > 256 || ancestor == fnode ||
                         !hpfs_read_sectors(&disk, ancestor, bytes, 1) ||
                         tb_le32(bytes) != HPFS_FNODE_SIGNATURE)
@@ -390,7 +414,7 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
                         ok = hpfs_fail(EINVAL);
                         break;
                     }
-                    uint32_t next = tb_le32(bytes + 28);
+                    uint32_t next = tb_le32(bytes + HPFS_FNODE_PARENT);
                     if (next == ancestor)
                     {
                         ok = hpfs_fail(EIO);
@@ -404,16 +428,18 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
             HpfsEntry moved = {0};
             if (ok)
                 ok = hpfs_entry_named(&disk, target, entry->record, target_parent, &moved);
-            unsigned char bytes[512];
+            unsigned char bytes[HPFS_SECTOR_BYTES];
             if (ok)
                 ok = hpfs_read_sectors(&disk, fnode, bytes, 1);
             if (ok)
             {
-                tb_put_le32(bytes + 28, target_parent);
-                bytes[12] = moved.record[30];
-                memset(bytes + 13, 0, 15);
-                unsigned n = bytes[12] > 15 ? 15 : bytes[12];
-                memcpy(bytes + 13, moved.record + 31, n);
+                tb_put_le32(bytes + HPFS_FNODE_PARENT, target_parent);
+                bytes[HPFS_FNODE_NAME_LENGTH] = moved.record[HPFS_DIRENT_NAME_LENGTH];
+                memset(bytes + HPFS_FNODE_NAME, 0, HPFS_FNODE_NAME_BYTES);
+                unsigned n = bytes[HPFS_FNODE_NAME_LENGTH] > HPFS_FNODE_NAME_BYTES
+                                 ? HPFS_FNODE_NAME_BYTES
+                                 : bytes[HPFS_FNODE_NAME_LENGTH];
+                memcpy(bytes + HPFS_FNODE_NAME, moved.record + HPFS_DIRENT_NAME, n);
                 ok = hpfs_stage_sectors(&disk, fnode, bytes, 1);
             }
             if (ok)

@@ -31,13 +31,13 @@ int hpfs_read_sectors(HpfsVolume *d, uint32_t sector, void *bytes, unsigned coun
         return hpfs_fail(EIO);
     for (unsigned i = 0; i < count; i++)
     {
-        HpfsPatch *patch = d->changes[(sector + i) % 1024];
+        HpfsPatch *patch = d->changes[(sector + i) % HPFS_STAGED_BUCKETS];
         while (patch && patch->sector != sector + i)
             patch = patch->next;
         if (patch)
-            memcpy((unsigned char *)bytes + i * 512, patch->data, 512);
-        else if (!read_bytes(d->file, ((uint64_t)d->base + sector + i) * 512,
-                             (unsigned char *)bytes + i * 512, 512))
+            memcpy((unsigned char *)bytes + i * HPFS_SECTOR_BYTES, patch->data, HPFS_SECTOR_BYTES);
+        else if (!read_bytes(d->file, ((uint64_t)d->base + sector + i) * HPFS_SECTOR_BYTES,
+                             (unsigned char *)bytes + i * HPFS_SECTOR_BYTES, HPFS_SECTOR_BYTES))
             return 0;
     }
     return 1;
@@ -49,7 +49,7 @@ int hpfs_stage_sectors(HpfsVolume *d, uint32_t sector, const void *bytes, unsign
         return hpfs_fail(EIO);
     for (unsigned i = 0; i < count; i++)
     {
-        unsigned bucket = (sector + i) % 1024;
+        unsigned bucket = (sector + i) % HPFS_STAGED_BUCKETS;
         HpfsPatch *patch = d->changes[bucket];
         while (patch && patch->sector != sector + i)
             patch = patch->next;
@@ -62,7 +62,8 @@ int hpfs_stage_sectors(HpfsVolume *d, uint32_t sector, const void *bytes, unsign
             patch->next = d->changes[bucket];
             d->changes[bucket] = patch;
         }
-        memcpy(patch->data, (const unsigned char *)bytes + i * 512, 512);
+        memcpy(patch->data, (const unsigned char *)bytes + i * HPFS_SECTOR_BYTES,
+               HPFS_SECTOR_BYTES);
     }
     return 1;
 }
@@ -87,7 +88,7 @@ void hpfs_close(HpfsVolume *d)
     int saved = errno;
     if (d->file)
         fclose(d->file);
-    for (unsigned i = 0; i < 1024; i++)
+    for (unsigned i = 0; i < HPFS_STAGED_BUCKETS; i++)
     {
         HpfsPatch *p = d->changes[i];
         while (p)
@@ -137,7 +138,7 @@ int tb_hpfs_volume(const char *path)
     free(source);
     if (!file)
         return 0;
-    unsigned char super[512];
+    unsigned char super[HPFS_SECTOR_BYTES];
     uint32_t base;
     int ok = !fseeko(file, 0, SEEK_END);
     int64_t bytes = ok ? ftello(file) : -1;
@@ -172,43 +173,50 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
     if (bytes < 0 || !find_superblock(d->file, (uint64_t)bytes, &d->base, d->super))
         goto fail;
     d->bytes = bytes;
-    d->sectors = tb_le32(d->super + 16);
-    d->root = tb_le32(d->super + 12);
-    if (tb_le32(d->super + 4) != 0xfa53e9c5u || d->super[8] != 2 || d->sectors < 2048 ||
-        ((uint64_t)d->base + d->sectors) * 512 > d->bytes)
+    d->sectors = tb_le32(d->super + HPFS_SUPER_SECTORS);
+    d->root = tb_le32(d->super + HPFS_SUPER_ROOT);
+    if (tb_le32(d->super + HPFS_SUPER_SIGNATURE2) != HPFS_SUPERBLOCK_SIGNATURE2 ||
+        d->super[HPFS_SUPER_VERSION] != 2 || d->sectors < 2048 ||
+        ((uint64_t)d->base + d->sectors) * HPFS_SECTOR_BYTES > d->bytes)
     {
         errno = EINVAL;
         goto fail;
     }
-    if (!hpfs_read_sectors(d, 0, d->boot, 1) || !hpfs_read_sectors(d, 17, d->spare, 1))
+    if (!hpfs_read_sectors(d, 0, d->boot, 1) ||
+        !hpfs_read_sectors(d, HPFS_SPAREBLOCK_SECTOR, d->spare, 1))
         goto fail;
-    if (tb_le16(d->boot + 11) != 512 || tb_le32(d->spare) != HPFS_SPAREBLOCK_SIGNATURE ||
-        tb_le32(d->spare + 4) != 0xfa5229c5u)
+    if (tb_le16(d->boot + HPFS_BOOT_SECTOR_BYTES) != HPFS_SECTOR_BYTES ||
+        tb_le32(d->spare) != HPFS_SPAREBLOCK_SIGNATURE ||
+        tb_le32(d->spare + HPFS_SPARE_SIGNATURE2) != HPFS_SPAREBLOCK_SIGNATURE2)
     {
         errno = EINVAL;
         goto fail;
     }
     /* Hotfix remapping and HPFS386 allocation/ACL variants require their own backend. */
-    if (tb_le32(d->spare + 16) || (write && (d->super[9] > 2 || d->spare[8] & 0x1f)))
+    if (tb_le32(d->spare + HPFS_SPARE_HOTFIX_USED) ||
+        (write && (d->super[HPFS_SUPER_FUNCTIONAL_VERSION] > 2 ||
+                   d->spare[HPFS_SPARE_FLAGS] & HPFS_SPARE_NEEDS_CHECK)))
     {
         errno = ENOTSUP;
         goto fail;
     }
-    unsigned char root_fnode[512];
-    if (d->root < 18 || !hpfs_read_sectors(d, d->root, root_fnode, 1) ||
-        tb_le32(root_fnode) != HPFS_FNODE_SIGNATURE || !(root_fnode[55] & 1))
+    unsigned char root_fnode[HPFS_SECTOR_BYTES];
+    if (d->root < HPFS_FIRST_DATA_SECTOR || !hpfs_read_sectors(d, d->root, root_fnode, 1) ||
+        tb_le32(root_fnode) != HPFS_FNODE_SIGNATURE ||
+        !(root_fnode[HPFS_FNODE_FLAGS] & HPFS_FNODE_DIRECTORY))
     {
         errno = EINVAL;
         goto fail;
     }
     d->writable = write;
-    d->bands = (d->sectors + 16383) / 16384;
-    d->bitmap_list = tb_le32(d->super + 24);
-    d->dir_start = tb_le32(d->super + 52);
-    d->dir_count = tb_le32(d->super + 48);
-    d->dir_map = tb_le32(d->super + 60);
-    if (d->dir_count > 65536 || d->dir_start % 4 || d->dir_count % 4 ||
-        d->dir_start >= d->sectors || d->dir_count > d->sectors - d->dir_start)
+    d->bands = (d->sectors + HPFS_BAND_SECTORS - 1) / HPFS_BAND_SECTORS;
+    d->bitmap_list = tb_le32(d->super + HPFS_SUPER_BITMAP_LIST);
+    d->dir_start = tb_le32(d->super + HPFS_SUPER_DIR_BAND_START);
+    d->dir_count = tb_le32(d->super + HPFS_SUPER_DIR_BAND_SECTORS);
+    d->dir_map = tb_le32(d->super + HPFS_SUPER_DIR_BAND_BITMAP);
+    if (d->dir_count > HPFS_DIR_BAND_MAX_SECTORS || d->dir_start % HPFS_DNODE_SECTORS ||
+        d->dir_count % HPFS_DNODE_SECTORS || d->dir_start >= d->sectors ||
+        d->dir_count > d->sectors - d->dir_start)
     {
         errno = EINVAL;
         goto fail;
@@ -216,11 +224,11 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
     d->codepage = 437;
     for (unsigned i = 0; i < 256; i++)
         d->case_map[i] = i < 128 ? toupper(i) : i;
-    uint32_t cpinfo = tb_le32(d->spare + 32);
+    uint32_t cpinfo = tb_le32(d->spare + HPFS_SPARE_CODEPAGE_INFO);
     if (cpinfo)
     {
-        d->codepage_count = tb_le32(d->spare + 36);
-        if (!d->codepage_count || d->codepage_count > 128)
+        d->codepage_count = tb_le32(d->spare + HPFS_SPARE_CODEPAGES);
+        if (!d->codepage_count || d->codepage_count > HPFS_MAX_CODEPAGES)
         {
             errno = EINVAL;
             goto fail;
@@ -231,44 +239,50 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
         unsigned loaded = 0;
         for (unsigned page = 0; cpinfo; page++)
         {
-            unsigned char info[512];
-            if (page >= 128 || !hpfs_read_sectors(d, cpinfo, info, 1) ||
-                tb_le32(info) != 0x494521f7u || tb_le32(info + 8) != loaded)
+            unsigned char info[HPFS_SECTOR_BYTES];
+            if (page >= HPFS_MAX_CODEPAGES || !hpfs_read_sectors(d, cpinfo, info, 1) ||
+                tb_le32(info) != HPFS_CODEPAGE_INFO_SIGNATURE ||
+                tb_le32(info + HPFS_CPINFO_FIRST_INDEX) != loaded)
             {
                 errno = EINVAL;
                 goto fail;
             }
-            unsigned count = tb_le32(info + 4);
-            if (!count || count > 31 || count > d->codepage_count - loaded)
+            unsigned count = tb_le32(info + HPFS_CPINFO_COUNT);
+            if (!count || count > HPFS_CPINFO_MAX_ENTRIES || count > d->codepage_count - loaded)
             {
                 errno = EINVAL;
                 goto fail;
             }
             for (unsigned i = 0; i < count; i++)
             {
-                const unsigned char *entry = info + 16 + i * 16;
-                unsigned index = loaded + i, codepage = tb_le16(entry + 2);
-                unsigned char data[512];
-                if (tb_le16(entry + 12) != index ||
-                    !hpfs_read_sectors(d, tb_le32(entry + 8), data, 1) ||
-                    tb_le32(data) != 0x894521f7u)
+                const unsigned char *entry =
+                    info + HPFS_CPINFO_ENTRIES + i * HPFS_CPINFO_ENTRY_BYTES;
+                unsigned index = loaded + i, codepage = tb_le16(entry + HPFS_CPINFO_CODEPAGE);
+                unsigned char data[HPFS_SECTOR_BYTES];
+                if (tb_le16(entry + HPFS_CPINFO_INDEX) != index ||
+                    !hpfs_read_sectors(d, tb_le32(entry + HPFS_CPINFO_DATA), data, 1) ||
+                    tb_le32(data) != HPFS_CODEPAGE_DATA_SIGNATURE)
                 {
                     errno = EINVAL;
                     goto fail;
                 }
-                unsigned first = tb_le16(data + 6), entries = tb_le16(data + 4);
-                if (entries > 3 || index < first || index - first >= entries)
+                unsigned first = tb_le16(data + HPFS_CPDATA_FIRST_INDEX),
+                         entries = tb_le16(data + HPFS_CPDATA_COUNT);
+                if (entries > HPFS_CPDATA_MAX_TABLES || index < first || index - first >= entries)
                 {
                     errno = EINVAL;
                     goto fail;
                 }
-                unsigned offset = tb_le16(data + 20 + (index - first) * 2);
-                if (offset > 512 - 136 || tb_le16(data + offset + 2) != codepage)
+                unsigned offset = tb_le16(data + HPFS_CPDATA_OFFSETS + (index - first) * 2);
+                if (offset > HPFS_SECTOR_BYTES - HPFS_CPTABLE_BYTES ||
+                    tb_le16(data + offset + HPFS_CPTABLE_CODEPAGE) != codepage)
                 {
                     errno = EINVAL;
                     goto fail;
                 }
-                if (codepage >= 900 || tb_le16(data + offset + 4) || !ff_oem2uni(128, codepage))
+                /* Names are decoded only in code pages below 900 without DBCS ranges. */
+                if (codepage >= 900 || tb_le16(data + offset + HPFS_CPTABLE_DBCS_RANGES) ||
+                    !ff_oem2uni(128, codepage))
                 {
                     errno = ENOTSUP;
                     goto fail;
@@ -277,10 +291,10 @@ int hpfs_open(const char *path, int write, const char *expected, HpfsVolume *d)
                 cp->codepage = codepage;
                 for (unsigned j = 0; j < 128; j++)
                     cp->map[j] = toupper(j);
-                memcpy(cp->map + 128, data + offset + 6, 128);
+                memcpy(cp->map + 128, data + offset + HPFS_CPTABLE_CASE_MAP, 128);
             }
             loaded += count;
-            cpinfo = tb_le32(info + 12);
+            cpinfo = tb_le32(info + HPFS_CPINFO_NEXT);
         }
         if (loaded != d->codepage_count)
         {
