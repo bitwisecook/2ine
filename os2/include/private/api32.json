@@ -655,14 +655,14 @@
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32",
       "native_bridge": true
-    }
-  },
-  "nls": {
+    },
     "DosQueryDBCSEnv": {
       "argument_bytes": 12,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
-    },
+    }
+  },
+  "nls": {
     "DosMapCase": {
       "argument_bytes": 12,
       "callee_pop": 0,

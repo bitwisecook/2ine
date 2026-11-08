@@ -152,6 +152,7 @@ int main(void)
     CHECK(!InterlockedIncrement((PLONG)(void *)host) && error == 87);
     lx_execution_destroy(GProcessState.execution);
     GProcessState.execution = NULL;
+    GProcessState.execution = NULL;
     puts("Open32 interlocked signs, backing, cross-page/unaligned guards and contention passed");
     return 0;
 }

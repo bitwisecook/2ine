@@ -320,6 +320,7 @@ finished:
         check_stereo_capture(capture);
     CHECK(lx_execution_unmap(GProcessState.execution, mapping));
     lx_execution_destroy(GProcessState.execution);
+    GProcessState.execution = NULL;
     puts("MMPM PCM delivery and memory MIDI contracts passed");
     return 0;
 }

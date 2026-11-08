@@ -1,25 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* NLS wire structures have 32-bit fields and explicit byte order. */
-static uint32 bridge32_DosQueryDBCSEnv(uint8 *arguments)
-{
-    const uint32 size = lx_guest_load_u32(arguments), cc_pointer = lx_guest_load_u32(arguments + 4);
-    const uint32 pointer = lx_guest_load_u32(arguments + 8);
-    LxGuestBorrow codepage = {0}, buffer = {0};
-    if (!lx_execution_borrow(GProcessState.execution, cc_pointer, 8, LX_GUEST_READ, &codepage) ||
-        (size &&
-         !lx_execution_borrow(GProcessState.execution, pointer, size, LX_GUEST_WRITE, &buffer)))
-    {
-        lx_execution_release(&codepage);
-        return ERROR_INVALID_PARAMETER;
-    }
-    COUNTRYCODE cc = {lx_guest_load_u32(codepage.host),
-                      lx_guest_load_u32((uint8 *)codepage.host + 4)};
-    const uint32 result = DosQueryDBCSEnv(size, &cc, buffer.host);
-    lx_execution_release(&buffer);
-    lx_execution_release(&codepage);
-    return result;
-}
-
 static uint32 bridge32_DosMapCase(uint8 *arguments)
 {
     const uint32 size = lx_guest_load_u32(arguments), cc_pointer = lx_guest_load_u32(arguments + 4);

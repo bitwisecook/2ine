@@ -167,6 +167,7 @@ int main(void)
     CHECK(lx_execution_unmap(GProcessState.execution, data));
     lx_execution_destroy(GProcessState.execution);
     GProcessState.execution = NULL;
+    GProcessState.execution = NULL;
     puts("PGL context lifecycle, client placement, retained PM presentation and resize passed");
     return 0;
 }

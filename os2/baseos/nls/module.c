@@ -9,6 +9,7 @@
 #include "os2/include/private/export16.h"
 #include "os2/include/bsedos.h"
 #include "os2/include/bsedos16.h"
+#include "os2/include/private/bsep.h"
 
 #include "os2/baseos/nls/generated/nls-lx.h"
 
@@ -57,23 +58,12 @@ static const UCHAR uppercase_850[128] = {
     0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
 };
 
-static APIRET country_codepage(ULONG country, ULONG codepage, ULONG *resolved)
-{
-    if (country != 0 && country != 1)
-        return ERROR_NLS_NO_CTRY_CODE;
-    if (codepage != 0 && codepage != 437 && codepage != 850)
-        return ERROR_CODE_PAGE_NOT_FOUND;
-    *resolved = codepage ? codepage
-                         : (GProcessState.process_codepage ? GProcessState.process_codepage : 437);
-    return NO_ERROR;
-}
-
 APIRET DosQueryCollate(ULONG len, PCOUNTRYCODE pcc, PCHAR pch, PULONG dlen)
 {
     if (!pcc || !dlen || (!pch && len))
         return ERROR_INVALID_PARAMETER;
     ULONG codepage;
-    APIRET result = country_codepage(pcc->country, pcc->codepage, &codepage);
+    APIRET result = lx_nls_country_codepage(pcc->country, pcc->codepage, &codepage);
     if (result)
         return result;
     *dlen = 256;
@@ -93,23 +83,6 @@ APIRET16 Dos16GetCollate(USHORT len, PCOUNTRYCODE16 pcc, PCHAR pch, PUSHORT dlen
     if (!result || result == ERROR_NLS_TABLE_TRUNCATED)
         *dlen = (USHORT)actual;
     return result;
-}
-
-APIRET16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf)
-{
-
-    TRACE_NATIVE("Dos16GetDBCSEv(%u, %p, %p)", (uint)buflen, pcc, buf);
-    if (!pcc)
-        return ERROR_INVALID_PARAMETER;
-    ULONG codepage;
-    APIRET result = country_codepage(pcc->country, pcc->codepage, &codepage);
-    if (result)
-        return result;
-    if (!buf && buflen)
-        return ERROR_INVALID_PARAMETER;
-    if (buflen)
-        memset(buf, '\0', buflen);
-    return NO_ERROR;
 }
 
 APIRET16 Dos16CaseMap(USHORT len, PCOUNTRYCODE16 pcc, PCHAR pch)
@@ -145,23 +118,6 @@ APIRET16 Dos16GetCtryInfo(USHORT len, PCOUNTRYCODE16 pcc, PCOUNTRYINFO16 pch, PU
     return NO_ERROR;
 }
 
-APIRET DosQueryDBCSEnv(ULONG buflen, PCOUNTRYCODE pcc, PCHAR buf)
-{
-
-    TRACE_NATIVE("DosQueryDBCSEnv(%u, %p, %p)", (uint)buflen, pcc, buf);
-    if (!pcc)
-        return ERROR_INVALID_PARAMETER;
-    ULONG codepage;
-    APIRET result = country_codepage(pcc->country, pcc->codepage, &codepage);
-    if (result)
-        return result;
-    if (!buf && buflen)
-        return ERROR_INVALID_PARAMETER;
-    if (buflen)
-        memset(buf, '\0', buflen);
-    return NO_ERROR;
-}
-
 APIRET DosMapCase(ULONG cb, PCOUNTRYCODE pcc, PCHAR pch)
 {
 
@@ -169,7 +125,7 @@ APIRET DosMapCase(ULONG cb, PCOUNTRYCODE pcc, PCHAR pch)
     if (!pcc)
         return ERROR_INVALID_PARAMETER;
     ULONG codepage;
-    APIRET result = country_codepage(pcc->country, pcc->codepage, &codepage);
+    APIRET result = lx_nls_country_codepage(pcc->country, pcc->codepage, &codepage);
     if (result)
         return result;
     if (!pch && cb)
@@ -189,7 +145,7 @@ APIRET DosQueryCtryInfo(ULONG cb, PCOUNTRYCODE pcc, PCOUNTRYINFO pci, PULONG pcb
     if (!pcc || (!pci && cb))
         return ERROR_INVALID_PARAMETER;
     ULONG codepage;
-    APIRET result = country_codepage(pcc->country, pcc->codepage, &codepage);
+    APIRET result = lx_nls_country_codepage(pcc->country, pcc->codepage, &codepage);
     if (result)
         return result;
     COUNTRYINFO ci;

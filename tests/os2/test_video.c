@@ -450,6 +450,7 @@ static void mci_contracts(const char *path)
     lx_execution_unmap(GProcessState.execution, mapping);
     lx_execution_destroy(GProcessState.execution);
     GProcessState.execution = NULL;
+    GProcessState.execution = NULL;
     CHECK(WinDestroyWindow(window));
     CHECK(WinDestroyMsgQueue(queue));
     CHECK(WinTerminate(hab));

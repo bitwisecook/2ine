@@ -1371,22 +1371,6 @@
     ]
   },
   "nls": {
-    "Dos16GetDBCSEv": [
-      {
-        "name": "pcc",
-        "size": "4",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "buf",
-        "size": "buflen",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      }
-    ],
     "Dos16CaseMap": [
       {
         "name": "pcc",

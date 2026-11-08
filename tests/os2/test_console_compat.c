@@ -3,6 +3,7 @@
 #include "os2/include/bsedos.h"
 #include "os2/include/bsedos16.h"
 #include "os2/include/bsesub.h"
+#include "emulator/runtime.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -219,16 +220,65 @@ static void nls(void *module)
         CHECK(output.bytes[i] == 0xcc);
 }
 
+/* DOSCALLS implements the DBCS vector once; NLS exports it by forwarding. The
+   request is a COUNTRYCODE of two ULONGs (two USHORTs for the 16-bit entry),
+   0 selects the default, and the SBCS code pages return only zeros. */
+static void dbcs(void *module)
+{
+    LOAD(module, DosQueryDBCSEnv);
+    LOAD(module, Dos16GetDBCSEv);
+    unsigned char vector[12];
+    COUNTRYCODE request = {0, 0};
+    memset(vector, 0xcc, sizeof(vector));
+    CHECK(!call_DosQueryDBCSEnv(sizeof(vector), &request, (PCHAR)vector));
+    for (unsigned i = 0; i < sizeof(vector); i++)
+        CHECK(vector[i] == 0);
+    request = (COUNTRYCODE){1, 0};
+    CHECK(!call_DosQueryDBCSEnv(sizeof(vector), &request, (PCHAR)vector));
+    request = (COUNTRYCODE){1, 850};
+    CHECK(!call_DosQueryDBCSEnv(sizeof(vector), &request, (PCHAR)vector));
+    request = (COUNTRYCODE){0, 437};
+    memset(vector, 0xcc, sizeof(vector));
+    CHECK(!call_DosQueryDBCSEnv(4, &request, (PCHAR)vector));
+    CHECK(!vector[0] && !vector[3] && vector[4] == 0xcc);
+    CHECK(!call_DosQueryDBCSEnv(0, &request, NULL));
+    request = (COUNTRYCODE){99, 0};
+    CHECK(call_DosQueryDBCSEnv(sizeof(vector), &request, (PCHAR)vector) == ERROR_NLS_NO_CTRY_CODE);
+    request = (COUNTRYCODE){0, 999};
+    CHECK(call_DosQueryDBCSEnv(sizeof(vector), &request, (PCHAR)vector) ==
+          ERROR_CODE_PAGE_NOT_FOUND);
+    CHECK(call_DosQueryDBCSEnv(sizeof(vector), NULL, (PCHAR)vector) == ERROR_INVALID_PARAMETER);
+    CHECK(call_DosQueryDBCSEnv(sizeof(vector), &request, NULL) == ERROR_CODE_PAGE_NOT_FOUND);
+    request = (COUNTRYCODE){0, 0};
+    CHECK(call_DosQueryDBCSEnv(sizeof(vector), &request, NULL) == ERROR_INVALID_PARAMETER);
+
+    COUNTRYCODE16 request16 = {1, 437};
+    memset(vector, 0xcc, sizeof(vector));
+    CHECK(!call_Dos16GetDBCSEv(4, &request16, (PCHAR)vector));
+    CHECK(!vector[0] && !vector[3] && vector[4] == 0xcc);
+    request16 = (COUNTRYCODE16){99, 0};
+    CHECK(call_Dos16GetDBCSEv(4, &request16, (PCHAR)vector) == ERROR_NLS_NO_CTRY_CODE);
+    request16 = (COUNTRYCODE16){0, 999};
+    CHECK(call_Dos16GetDBCSEv(4, &request16, (PCHAR)vector) == ERROR_CODE_PAGE_NOT_FOUND);
+    CHECK(call_Dos16GetDBCSEv(4, NULL, (PCHAR)vector) == ERROR_INVALID_PARAMETER);
+}
+
 int main(int argc, char **argv)
 {
-    CHECK(argc == 4);
+    CHECK(argc == 5);
+    /* Referencing the process state links lib2ine at startup: its TLS must be
+       in the static block before the DLLs that use it are opened. */
+    GProcessState.process_codepage = 0;
     void *kbd = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
     void *vio = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
     void *national = dlopen(argv[3], RTLD_NOW | RTLD_LOCAL);
-    CHECK(kbd && vio && national);
+    void *doscalls = dlopen(argv[4], RTLD_NOW | RTLD_LOCAL);
+    CHECK(kbd && vio && national && doscalls);
     keyboard(kbd);
     video(vio);
     nls(national);
+    dbcs(doscalls);
+    dlclose(doscalls);
     dlclose(national);
     dlclose(vio);
     dlclose(kbd);
