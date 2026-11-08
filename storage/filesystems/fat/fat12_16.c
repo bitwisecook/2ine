@@ -4,6 +4,7 @@
 #define _DARWIN_C_SOURCE 1
 #define _FILE_OFFSET_BITS 64
 #include "storage/filesystems/fat/fat12_16.h"
+#include "storage/volume/volume_internal.h"
 #include "storage/common/file_time.h"
 #include "storage/common/host.h"
 #include "storage/common/host_stdio.h"
@@ -707,18 +708,7 @@ static int change_contents(const char *path, const char *expected, uint64_t offs
     return ok;
 }
 
-int fat12_16_write(const char *path, const char *expected, uint64_t offset, const void *bytes,
-                   size_t size)
-{
-    return change_contents(path, expected, offset, bytes, size, 0, 0);
-}
-
-int fat12_16_resize(const char *path, const char *expected, uint64_t size)
-{
-    return change_contents(path, expected, 0, NULL, 0, size, 1);
-}
-
-int fat12_16_create_file(const char *path, int exclusive)
+static int create_file(const char *path, int exclusive)
 {
     VolumeDisk disk;
     const char *member;
@@ -745,7 +735,7 @@ static int count_entry(void *value, const char *name, const VolumeNode *node)
     return 1;
 }
 
-int fat12_16_remove(const char *path, int directory)
+static int remove_entry(const char *path, int directory)
 {
     VolumeDisk disk;
     const char *member;
@@ -770,7 +760,7 @@ int fat12_16_remove(const char *path, int directory)
     return ok;
 }
 
-int fat12_16_mkdir(const char *path)
+static int make_directory(const char *path)
 {
     VolumeDisk disk;
     const char *member;
@@ -810,7 +800,7 @@ int fat12_16_mkdir(const char *path)
     return ok;
 }
 
-int fat12_16_readonly(const char *path, int readonly)
+static int set_readonly(const char *path, int readonly)
 {
     VolumeDisk disk;
     const char *member;
@@ -830,7 +820,7 @@ int fat12_16_readonly(const char *path, int readonly)
     return ok;
 }
 
-int fat12_16_stamps(const char *path, const char *expected, const TbImageStamps *stamps)
+static int set_stamps(const char *path, const char *expected, const TbImageStamps *stamps)
 {
     VolumeDisk disk;
     const char *member;
@@ -859,7 +849,7 @@ int fat12_16_stamps(const char *path, const char *expected, const TbImageStamps 
     return ok;
 }
 
-int fat12_16_attributes(const char *path, const char *expected, unsigned attributes)
+static int set_attributes(const char *path, const char *expected, unsigned attributes)
 {
     VolumeDisk disk;
     const char *member;
@@ -879,7 +869,7 @@ int fat12_16_attributes(const char *path, const char *expected, unsigned attribu
     return ok;
 }
 
-int fat12_16_move(const char *source, const char *target)
+static int move_entry(const char *source, const char *target)
 {
     char *a = tb_image_source(source), *b = tb_image_source(target);
     int same = a && b && !strcmp(a, b);
@@ -938,4 +928,34 @@ int fat12_16_move(const char *source, const char *target)
     free(newname);
     volume_close(&disk);
     return ok;
+}
+
+int fat12_16_modify(const char *path, const char *expected, int action, uint64_t offset,
+                    const void *data, size_t size, const char *target)
+{
+    switch (action)
+    {
+        case TB_FS_WRITE:
+            return change_contents(path, expected, offset, data, size, 0, 0);
+        case TB_FS_RESIZE:
+            return change_contents(path, expected, 0, NULL, 0, offset, 1);
+        case TB_FS_CREATE:
+        case TB_FS_EXCLUSIVE:
+            return create_file(path, action == TB_FS_EXCLUSIVE);
+        case TB_FS_DELETE:
+        case TB_FS_RMDIR:
+            return remove_entry(path, action == TB_FS_RMDIR);
+        case TB_FS_MKDIR:
+            return make_directory(path);
+        case TB_FS_READONLY:
+        case TB_FS_WRITABLE:
+            return set_readonly(path, action == TB_FS_READONLY);
+        case TB_FS_TOUCH:
+            return set_stamps(path, expected, data);
+        case TB_FS_ATTRIBUTES:
+            return set_attributes(path, expected, (unsigned)offset);
+        case TB_FS_RENAME:
+            return move_entry(path, target);
+    }
+    return volume_failure(EINVAL);
 }

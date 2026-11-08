@@ -14,15 +14,8 @@ int fat_read_entries(VolumeDisk *d, VolumeNode directory, const unsigned char *d
                      VolumeEntryCallback callback, void *context);
 uint64_t fat_available_bytes(VolumeDisk *d);
 
-/* Mutators on image paths; expected, when set, must match the current source. */
-int fat12_16_write(const char *path, const char *expected, uint64_t offset, const void *bytes,
-                   size_t size);
-int fat12_16_resize(const char *path, const char *expected, uint64_t size);
-int fat12_16_create_file(const char *path, int exclusive);
-int fat12_16_remove(const char *path, int directory);
-int fat12_16_mkdir(const char *path);
-int fat12_16_readonly(const char *path, int readonly);
-int fat12_16_stamps(const char *path, const char *expected, const TbImageStamps *stamps);
-int fat12_16_attributes(const char *path, const char *expected, unsigned attributes);
-int fat12_16_move(const char *source, const char *target);
+/* Applies one TB_FS_* change to a built-in volume, staging the whole volume in memory and
+   rewriting it under an exclusive lock. ISO 9660 volumes fail with EROFS. */
+int fat12_16_modify(const char *path, const char *expected, int action, uint64_t offset,
+                    const void *data, size_t size, const char *target);
 #endif
