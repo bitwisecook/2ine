@@ -22,7 +22,7 @@ typedef struct Open32Thread
 static LxHostOnce once = LX_HOST_ONCE_INIT;
 static LxGuestMapping *entry_code;
 static LxHostOnce adoption_once = LX_HOST_ONCE_INIT;
-static LxHostTlsKey *adopted_key;
+static LxHostThreadLocalKey *adopted_key;
 static _Thread_local LxHandleBorrow current_thread;
 
 static void destroy_thread(void *resource)
@@ -415,7 +415,7 @@ static void initialize_adoption(void)
 {
     typedef void(OS2API * ObserveFn)(void (*)(ULONG));
     ObserveFn observe = (ObserveFn)open32DosService("lx_doscalls_observe_thread_exit");
-    adopted_key = lx_host_tls_create(adopted_thread_ended);
+    adopted_key = lx_host_thread_local_create(adopted_thread_ended);
     if (observe)
         observe(note_thread_exit);
 }
@@ -452,7 +452,7 @@ ULONG open32DuplicateCurrentThread(void)
         return 0;
     }
     thread->entry = current_thread;
-    if (!lx_host_tls_set(adopted_key, thread))
+    if (!lx_host_thread_local_set(adopted_key, thread))
     {
         lx_handle_release(&current_thread);
         lx_handle_close(handle, LX_HANDLE_OPEN32_THREAD);

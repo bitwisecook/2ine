@@ -23,7 +23,7 @@ static void release_bitmap(GlContext *c)
 
 GlContext *GlContexts;
 LxHostMonitor *GlLock;
-static LxHostTlsKey *ThreadKey;
+static LxHostThreadLocalKey *ThreadKey;
 static LxGuestMapping *Visuals;
 
 enum
@@ -61,11 +61,11 @@ static void destroy_thread(void *argument)
 
 GlThread *gl_thread(void)
 {
-    GlThread *t = lx_host_tls_get(ThreadKey);
+    GlThread *t = lx_host_thread_local_get(ThreadKey);
     if (!t)
     {
         t = calloc(1, sizeof *t);
-        if (!t || !lx_host_tls_set(ThreadKey, t))
+        if (!t || !lx_host_thread_local_set(ThreadKey, t))
         {
             free(t);
             return NULL;
@@ -127,7 +127,7 @@ static void destroy_context(void *argument)
 int gl_pgl_initialize(void)
 {
     GlLock = lx_host_monitor_create();
-    ThreadKey = lx_host_tls_create(destroy_thread);
+    ThreadKey = lx_host_thread_local_create(destroy_thread);
     Visuals = lx_execution_map(GLoaderState.execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!GlLock || !ThreadKey || !Visuals)
         return 0;
@@ -148,10 +148,10 @@ void gl_pgl_shutdown(void)
 {
     if (ThreadKey)
     {
-        GlThread *t = lx_host_tls_get(ThreadKey);
+        GlThread *t = lx_host_thread_local_get(ThreadKey);
         if (t)
         {
-            lx_host_tls_set(ThreadKey, NULL);
+            lx_host_thread_local_set(ThreadKey, NULL);
             destroy_thread(t);
         }
     }
@@ -165,7 +165,7 @@ void gl_pgl_shutdown(void)
     if (Visuals)
         lx_execution_unmap(GLoaderState.execution, Visuals);
     Visuals = NULL;
-    lx_host_tls_destroy(ThreadKey);
+    lx_host_thread_local_destroy(ThreadKey);
     ThreadKey = NULL;
     if (GlLock)
         lx_host_monitor_destroy(GlLock);

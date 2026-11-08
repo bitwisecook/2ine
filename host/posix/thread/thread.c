@@ -10,14 +10,14 @@ struct LxHostThread
     pthread_t object;
 };
 
-struct LxHostTlsKey
+struct LxHostThreadLocalKey
 {
     pthread_key_t key;
 };
 
-LxHostTlsKey *lx_host_tls_create(void (*destroy)(void *))
+LxHostThreadLocalKey *lx_host_thread_local_create(void (*destroy)(void *))
 {
-    LxHostTlsKey *key = malloc(sizeof *key);
+    LxHostThreadLocalKey *key = malloc(sizeof *key);
     if (key && pthread_key_create(&key->key, destroy))
     {
         free(key);
@@ -26,7 +26,7 @@ LxHostTlsKey *lx_host_tls_create(void (*destroy)(void *))
     return key;
 }
 
-void lx_host_tls_destroy(LxHostTlsKey *key)
+void lx_host_thread_local_destroy(LxHostThreadLocalKey *key)
 {
     if (key)
     {
@@ -35,12 +35,12 @@ void lx_host_tls_destroy(LxHostTlsKey *key)
     }
 }
 
-void *lx_host_tls_get(LxHostTlsKey *key)
+void *lx_host_thread_local_get(LxHostThreadLocalKey *key)
 {
     return key ? pthread_getspecific(key->key) : NULL;
 }
 
-int lx_host_tls_set(LxHostTlsKey *key, void *value)
+int lx_host_thread_local_set(LxHostThreadLocalKey *key, void *value)
 {
     return key && !pthread_setspecific(key->key, value);
 }
