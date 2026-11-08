@@ -56,31 +56,29 @@ static ULONG host_to_far(void *pointer)
 
 int main(int argc, char **argv)
 {
-    CHECK(argc == 4);
+    CHECK(argc == 2);
     char ipc[] = "/tmp/twoine-legacy-queue-XXXXXX";
     CHECK(mkdtemp(ipc));
     CHECK(!setenv("TWOINE_IPC_DIR", ipc, 1));
     GProcessState.allocSegment = allocate_segment;
     GProcessState.convert1616to32 = far_to_host;
     GProcessState.convert32to1616 = host_to_far;
-    void *queue_library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
-    CHECK(queue_library);
-    void *session_library = dlopen(argv[2], RTLD_NOW | RTLD_LOCAL);
-    CHECK(session_library);
-    void *doscalls_library = dlopen(argv[3], RTLD_NOW | RTLD_LOCAL);
+    /* DOSCALLS implements the queue and session entries that QUECALLS and
+       SESMGR forward to it. */
+    void *doscalls_library = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
     CHECK(doscalls_library);
 #define LOAD(library, function)                                                                    \
     __typeof__(function) *call_##function = dlsym(library, #function);                             \
     CHECK(call_##function)
-    LOAD(queue_library, Dos16CreateQueue);
-    LOAD(queue_library, Dos16ReadQueue);
-    LOAD(queue_library, Dos16CloseQueue);
-    LOAD(queue_library, lx_queue_open_private);
-    LOAD(queue_library, lx_queue_write_copy);
-    LOAD(queue_library, DosCloseQueue);
-    LOAD(session_library, Dos16StopSession);
-    LOAD(session_library, Dos16SetSession);
-    LOAD(session_library, DosStartSession);
+    LOAD(doscalls_library, Dos16CreateQueue);
+    LOAD(doscalls_library, Dos16ReadQueue);
+    LOAD(doscalls_library, Dos16CloseQueue);
+    LOAD(doscalls_library, lx_queue_open_private);
+    LOAD(doscalls_library, lx_queue_write_copy);
+    LOAD(doscalls_library, DosCloseQueue);
+    LOAD(doscalls_library, Dos16StopSession);
+    LOAD(doscalls_library, Dos16SetSession);
+    LOAD(doscalls_library, DosStartSession);
     LOAD(doscalls_library, Dos16SMSetTitle);
     LOAD(doscalls_library, lx_session_title);
 
@@ -148,8 +146,6 @@ int main(int argc, char **argv)
     call_lx_session_title(title, sizeof title);
     CHECK(strlen(title) == 63 && title[0] == 'T');
     CHECK(!dlclose(doscalls_library));
-    CHECK(!dlclose(session_library));
-    CHECK(!dlclose(queue_library));
     for (unsigned i = 1; i < 16; i++)
         free(segments[i]);
     DIR *directory = opendir(ipc);

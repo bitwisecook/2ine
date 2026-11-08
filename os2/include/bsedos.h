@@ -794,6 +794,13 @@ extern "C"
         USHORT Length, SelectInd, BondInd;
     } STATUSDATA, *PSTATUSDATA;
 
+/* STATUSDATA SelectInd and BondInd values. */
+#define SET_SESSION_UNCHANGED 0
+#define SET_SESSION_SELECTABLE 1
+#define SET_SESSION_NON_SELECTABLE 2
+#define SET_SESSION_BOND 1
+#define SET_SESSION_NO_BOND 2
+
     OS2EXPORT APIRET OS2API DosQueryAppType(PSZ pszName, PULONG pFlags);
 
     OS2EXPORT APIRET OS2API DosStartSession(PSTARTDATA psd, PULONG pidSession, PPID ppid);

@@ -4,11 +4,12 @@
 LIBRARY SESMGR
 
 EXPORTS
-    DOSSMSETTITLE = DOSCALLS.690    @5
-    Dos16StopSession                @8
-    Dos16SetSession                 @14
-    Dos16StartSession               @17
-    DosStartSession                 @37
-    DosSelectSession                @38
-    DosSetSession                   @39
-    DosStopSession                  @40
+    DOSSMSETTITLE = DOSCALLS.690     @5
+    Dos16StopSession = DOSCALLS.693  @8
+    Dos16SetSession = DOSCALLS.699   @14
+    Dos16StartSession = DOSCALLS.702 @17
+    DOSSMPMPRESENT = DOSCALLS.712   @28
+    DosStartSession = DOSCALLS.669   @37
+    DosSelectSession = DOSCALLS.670  @38
+    DosSetSession = DOSCALLS.671     @39
+    DosStopSession = DOSCALLS.672    @40

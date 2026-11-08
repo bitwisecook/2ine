@@ -299,6 +299,9 @@ LX_NATIVE_MODULE_32BIT_API(DosSearchPath)
 LX_NATIVE_MODULE_32BIT_API(DosSelToFlat)
 #endif
 #if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosSelectSession)
+#endif
+#if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosSetCurrentDir)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -347,6 +350,9 @@ LX_NATIVE_MODULE_32BIT_API(DosSetProcessCp)
 LX_NATIVE_MODULE_32BIT_API(DosSetRelMaxFH)
 #endif
 #if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosSetSession)
+#endif
+#if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosSetSignalExceptionFocus)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -356,7 +362,13 @@ LX_NATIVE_MODULE_32BIT_API(DosShutdown)
 LX_NATIVE_MODULE_32BIT_API(DosSleep)
 #endif
 #if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosStartSession)
+#endif
+#if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosStartTimer)
+#endif
+#if TWOINE_PORTABLE_LOADER
+LX_NATIVE_MODULE_32BIT_API(DosStopSession)
 #endif
 #if TWOINE_PORTABLE_LOADER
 LX_NATIVE_MODULE_32BIT_API(DosStopTimer)
@@ -1935,6 +1947,47 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_Dos16StopSession(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, reserved);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, session);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, scope);
+    return Dos16StopSession(scope, session, reserved);
+}
+
+static uint32 bridge16to32_Dos16SetSession(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSTATUSDATA, status);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, session);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, status_guest, 6, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    status = (PSTATUSDATA) __abi_args[0].host;
+    __abi_result = Dos16SetSession(session, status);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_Dos16StartSession(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pid);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, session);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, data);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, session_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    session = (PUSHORT) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, pid_guest, 2, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    pid = (PUSHORT) __abi_args[1].host;
+    __abi_result = Dos16StartSession(data, session, pid);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
 static uint32 bridge16to32_Dos16SMPMPresent(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, present);
     LxGuestArgument __abi_args[1] = {0};
@@ -2081,6 +2134,9 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(Dos16CloseQueue)
     LX_NATIVE_MODULE_16BIT_API(Dos16CreateQueue)
     LX_NATIVE_MODULE_16BIT_API(Dos16SMSetTitle)
+    LX_NATIVE_MODULE_16BIT_API(Dos16StopSession)
+    LX_NATIVE_MODULE_16BIT_API(Dos16SetSession)
+    LX_NATIVE_MODULE_16BIT_API(Dos16StartSession)
     LX_NATIVE_MODULE_16BIT_API(Dos16SMPMPresent)
     LX_NATIVE_MODULE_16BIT_API(Dos16SetExtLIBPATH)
     LX_NATIVE_MODULE_16BIT_API(Dos16QueryExtLIBPATH)
@@ -2194,6 +2250,9 @@ static int init16_doscalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CloseQueue, 2)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16CreateQueue, 10)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SMSetTitle, 4)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16StopSession, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetSession, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16StartSession, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SMPMPresent, 4)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetExtLIBPATH, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16QueryExtLIBPATH, 8)
@@ -2496,6 +2555,9 @@ static int init32_doscalls(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(DosSelToFlat, 4, 0, LX_ABI_EAX32)
 #endif
 #if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosSelectSession, 4, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosSetCurrentDir, 4, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -2544,6 +2606,9 @@ static int init32_doscalls(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(DosSetRelMaxFH, 8, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosSetSession, 8, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosSetSignalExceptionFocus, 8, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
@@ -2553,7 +2618,13 @@ static int init32_doscalls(void) {
     LX_NATIVE_INIT_32BIT_BRIDGE(DosSleep, 4, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosStartSession, 12, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosStartTimer, 12, 0, LX_ABI_STACK32)
+#endif
+#if TWOINE_PORTABLE_LOADER
+    LX_NATIVE_INIT_32BIT_BRIDGE(DosStopSession, 8, 0, LX_ABI_STACK32)
 #endif
 #if TWOINE_PORTABLE_LOADER
     LX_NATIVE_INIT_32BIT_BRIDGE(DosStopTimer, 4, 0, LX_ABI_STACK32)
@@ -2852,10 +2923,17 @@ LX_NATIVE_MODULE_INIT({
     LX_NATIVE_EXPORT32(DosWriteQueue, 666),
     LX_NATIVE_EXPORT32(DosOpenQueue, 667),
     LX_NATIVE_EXPORT32(DosCreateQueue, 668),
+    LX_NATIVE_EXPORT32(DosStartSession, 669),
+    LX_NATIVE_EXPORT32(DosSelectSession, 670),
+    LX_NATIVE_EXPORT32(DosSetSession, 671),
+    LX_NATIVE_EXPORT32(DosStopSession, 672),
     LX_NATIVE_EXPORT16(Dos16ReadQueue, 674),
     LX_NATIVE_EXPORT16(Dos16CloseQueue, 676),
     LX_NATIVE_EXPORT16(Dos16CreateQueue, 681),
     LX_NATIVE_EXPORT16(Dos16SMSetTitle, 690),
+    LX_NATIVE_EXPORT16(Dos16StopSession, 693),
+    LX_NATIVE_EXPORT16(Dos16SetSession, 699),
+    LX_NATIVE_EXPORT16(Dos16StartSession, 702),
     LX_NATIVE_EXPORT16(Dos16SMPMPresent, 712),
     LX_NATIVE_EXPORT32(DosSetExtLIBPATH, 873),
     LX_NATIVE_EXPORT32(DosQueryExtLIBPATH, 874),

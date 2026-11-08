@@ -24,6 +24,7 @@ twoine_os2_dll(
     doscalls/unithunk.c
     doscalls/timers.c
     doscalls/doscall1/queue.c
+    doscalls/doscall1/session.c
 )
 twoine_os2_dll(msg msg/module.c)
 twoine_os2_dll(nls nls/module.c)
@@ -38,4 +39,3 @@ endif()
 twoine_add_host_terminal(viocalls)
 target_link_libraries(kbdcalls PRIVATE viocalls)
 target_link_libraries(nls PRIVATE doscalls)
-target_link_libraries(sesmgr PRIVATE doscalls pmwin)

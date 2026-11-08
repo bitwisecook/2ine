@@ -181,7 +181,7 @@ target_link_libraries(
     pmwinx
     PRIVATE pmshapi pmwin pmgpi pmdrag pmwp
 )
-target_link_libraries(pmshapi PRIVATE doscalls pmwin nls sesmgr)
+target_link_libraries(pmshapi PRIVATE doscalls pmwin nls)
 target_link_libraries(pmdrag PRIVATE pmwin)
 target_link_libraries(pmctls PRIVATE pmwin)
 target_link_libraries(pmmerge PRIVATE pmwin)

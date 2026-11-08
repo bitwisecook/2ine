@@ -238,10 +238,17 @@ EXPORTS
     DosWriteQueue                 @666
     DosOpenQueue                  @667
     DosCreateQueue                @668
+    DosStartSession               @669
+    DosSelectSession              @670
+    DosSetSession                 @671
+    DosStopSession                @672
     Dos16ReadQueue                @674
     Dos16CloseQueue               @676
     Dos16CreateQueue              @681
     Dos16SMSetTitle               @690
+    Dos16StopSession              @693
+    Dos16SetSession               @699
+    Dos16StartSession             @702
     Dos16SMPMPresent              @712
     DosSetExtLIBPATH              @873
     DosQueryExtLIBPATH            @874

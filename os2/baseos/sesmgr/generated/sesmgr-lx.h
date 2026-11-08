@@ -3,101 +3,26 @@
 
 #if LX_LEGACY
 
-#include "os2/include/private/export32.h"
-#if TWOINE_PORTABLE_LOADER
-#include "os2/baseos/sesmgr/bindings.h"
-LX_NATIVE_MODULE_32BIT_SUPPORT()
-LX_NATIVE_MODULE_32BIT_API(DosSelectSession)
-LX_NATIVE_MODULE_32BIT_API(DosSetSession)
-LX_NATIVE_MODULE_32BIT_API(DosStartSession)
-LX_NATIVE_MODULE_32BIT_API(DosStopSession)
-#endif
-
-static uint32 bridge16to32_Dos16StopSession(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, reserved);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, session);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, scope);
-    return Dos16StopSession(scope, session, reserved);
-}
-
-static uint32 bridge16to32_Dos16SetSession(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSTATUSDATA, status);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, session);
-    LxGuestArgument __abi_args[1] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GProcessState.execution, status_guest, 6, 1, 0, 0, &__abi_args[0])) goto __abi_done;
-    status = (PSTATUSDATA) __abi_args[0].host;
-    __abi_result = Dos16SetSession(session, status);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    return __abi_result;
-}
-
-static uint32 bridge16to32_Dos16StartSession(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pid);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, session);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, data);
-    LxGuestArgument __abi_args[2] = {0};
-    uint32 __abi_result = ERROR_INVALID_PARAMETER;
-    int __abi_copy = 0;
-    if (!lx_guest_argument_far(GProcessState.execution, session_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
-    session = (PUSHORT) __abi_args[0].host;
-    if (!lx_guest_argument_far(GProcessState.execution, pid_guest, 2, 2, 0, 0, &__abi_args[1])) goto __abi_done;
-    pid = (PUSHORT) __abi_args[1].host;
-    __abi_result = Dos16StartSession(data, session, pid);
-    __abi_copy = 1;
-__abi_done:
-    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
-    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
-    return __abi_result;
-}
-
-LX_NATIVE_MODULE_16BIT_SUPPORT()
-    LX_NATIVE_MODULE_16BIT_API(Dos16StopSession)
-    LX_NATIVE_MODULE_16BIT_API(Dos16SetSession)
-    LX_NATIVE_MODULE_16BIT_API(Dos16StartSession)
-LX_NATIVE_MODULE_16BIT_SUPPORT_END()
-
-LX_NATIVE_MODULE_DEINIT({
-    LX_NATIVE_MODULE_DEINIT_16BIT_SUPPORT();
-    LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT();
-})
-
-static int init16_sesmgr(void) {
-    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT()
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16StopSession, 8)
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetSession, 6)
-        LX_NATIVE_INIT_16BIT_BRIDGE(Dos16StartSession, 12)
-    LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
-    return 1;
-}
-
-#if TWOINE_PORTABLE_LOADER
-static int init32_sesmgr(void) {
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosSelectSession, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosSetSession, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosStartSession, 12, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DosStopSession, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
-    return 1;
-}
-#endif
 LX_NATIVE_FORWARDER(lx_forward_5, "DOSCALLS", 690, "");
+LX_NATIVE_FORWARDER(lx_forward_8, "DOSCALLS", 693, "");
+LX_NATIVE_FORWARDER(lx_forward_14, "DOSCALLS", 699, "");
+LX_NATIVE_FORWARDER(lx_forward_17, "DOSCALLS", 702, "");
+LX_NATIVE_FORWARDER(lx_forward_28, "DOSCALLS", 712, "");
+LX_NATIVE_FORWARDER(lx_forward_37, "DOSCALLS", 669, "");
+LX_NATIVE_FORWARDER(lx_forward_38, "DOSCALLS", 670, "");
+LX_NATIVE_FORWARDER(lx_forward_39, "DOSCALLS", 671, "");
+LX_NATIVE_FORWARDER(lx_forward_40, "DOSCALLS", 672, "");
 LX_NATIVE_MODULE_INIT({
-    if (!init16_sesmgr()) return 0;
-    LX_NATIVE_INIT_32BIT_MODULE(sesmgr)
 })
     LX_NATIVE_EXPORT_FORWARDER(lx_forward_5, "DOSSMSETTITLE", 5),
-    LX_NATIVE_EXPORT16(Dos16StopSession, 8),
-    LX_NATIVE_EXPORT16(Dos16SetSession, 14),
-    LX_NATIVE_EXPORT16(Dos16StartSession, 17),
-    LX_NATIVE_EXPORT32(DosStartSession, 37),
-    LX_NATIVE_EXPORT32(DosSelectSession, 38),
-    LX_NATIVE_EXPORT32(DosSetSession, 39),
-    LX_NATIVE_EXPORT32(DosStopSession, 40),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_8, "Dos16StopSession", 8),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_14, "Dos16SetSession", 14),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_17, "Dos16StartSession", 17),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_28, "DOSSMPMPRESENT", 28),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_37, "DosStartSession", 37),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_38, "DosSelectSession", 38),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_39, "DosSetSession", 39),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_40, "DosStopSession", 40),
 
 LX_NATIVE_MODULE_INIT_END()
 
