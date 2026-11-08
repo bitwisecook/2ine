@@ -1260,74 +1260,7 @@
         "kind": "live",
         "nullable": true
       }
-    ]
-  },
-  "kbdcalls": {
-    "KbdCharIn": [
-      {
-        "name": "pkbci",
-        "size": "10",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      }
     ],
-    "KbdStringIn": [
-      {
-        "name": "pchin",
-        "size": "4",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": false
-      },
-      {
-        "name": "pch",
-        "size": "lx_guest_load_u16(pchin)",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      }
-    ],
-    "KbdGetStatus": [
-      {
-        "name": "pkbci",
-        "size": "10",
-        "permissions": 3,
-        "kind": "copy",
-        "nullable": false
-      }
-    ],
-    "KbdSetStatus": [
-      {
-        "name": "pkbci",
-        "size": "10",
-        "permissions": 1,
-        "kind": "copy",
-        "nullable": false
-      }
-    ],
-    "KbdSetCp": [],
-    "KbdFlushBuffer": [],
-    "KbdGetCp": [
-      {
-        "name": "codepage",
-        "size": "2",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      }
-    ],
-    "KbdPeek": [
-      {
-        "name": "pkbci",
-        "size": "10",
-        "permissions": 2,
-        "kind": "copy",
-        "nullable": false
-      }
-    ]
-  },
-  "viocalls": {
     "VioGetCurPos": [
       {
         "name": "pusRow",
@@ -1498,6 +1431,69 @@
         "name": "cell",
         "size": "2",
         "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdCharIn": [
+      {
+        "name": "pkbci",
+        "size": "10",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdStringIn": [
+      {
+        "name": "pchin",
+        "size": "4",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      },
+      {
+        "name": "pch",
+        "size": "lx_guest_load_u16(pchin)",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdGetStatus": [
+      {
+        "name": "pkbci",
+        "size": "10",
+        "permissions": 3,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdSetStatus": [
+      {
+        "name": "pkbci",
+        "size": "10",
+        "permissions": 1,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdSetCp": [],
+    "KbdFlushBuffer": [],
+    "KbdGetCp": [
+      {
+        "name": "codepage",
+        "size": "2",
+        "permissions": 2,
+        "kind": "copy",
+        "nullable": false
+      }
+    ],
+    "KbdPeek": [
+      {
+        "name": "pkbci",
+        "size": "10",
+        "permissions": 2,
         "kind": "copy",
         "nullable": false
       }

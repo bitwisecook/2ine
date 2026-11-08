@@ -137,9 +137,7 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
         }
     }
 
-    /* DOSCALLS publishes the system keyboard, video, NLS and message entries
-       at additional ordinals. Their callable implementation lives in the
-       owning native module. */
+    /* The 16-bit universal thunk entries are built on first use. */
     if (want16bit && module->nativelib && !strcasecmp(module->name, "DOSCALLS"))
     {
         if (ordinal == LX_ORDINAL_THK16_UNITHUNK || ordinal == LX_ORDINAL_DOS16SELTOFLAT)
@@ -167,24 +165,6 @@ static void *resolveModuleOrdinal(const LxModule *module, const uint32 ordinal,
             if (_lxexp)
                 *_lxexp = exported;
             return exported->addr;
-        }
-        const char *target = NULL;
-        uint32 number = 0;
-        if (ordinal >= 745 && ordinal <= 769)
-        {
-            target = "KBDCALLS";
-            number = ordinal - 744;
-        }
-        else if (ordinal >= 770 && ordinal <= 838)
-        {
-            target = "VIOCALLS";
-            number = ordinal - (ordinal < 808 ? 769 : 768);
-        }
-        if (target)
-        {
-            LxModule *forward = GProcessState.loadModule(target);
-            if (forward)
-                return resolveModuleOrdinal(forward, number, _lxexp, want16bit, native, missing);
         }
     }
 

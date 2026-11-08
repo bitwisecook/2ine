@@ -1,25 +1,25 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of VIOCALLS.DLL: exported name [= C entry] @ordinal.
+; Exports of VIOCALLS.DLL: exported name = DOSCALLS.ordinal @ordinal.
 
 LIBRARY VIOCALLS
 
 EXPORTS
-    VIOGETANSI = VioGetAnsi             @3
-    VIOSCROLLUP = VioScrollUp           @7
-    VIOGETCURPOS = VioGetCurPos         @9
-    VIOWRTCELLSTR = VioWrtCellStr       @10
-    VIOSETCURPOS = VioSetCurPos         @15
-    VIOWRTTTY = VioWrtTty               @19
-    VIOGETMODE = VioGetMode             @21
-    VIOSETMODE = VioSetMode             @22
-    VIOREADCELLSTR = VioReadCellStr     @24
-    VIOGETCURTYPE = VioGetCurType       @27
-    VIOREADCHARSTR = VioReadCharStr     @30
-    VIOGETBUF = VioGetBuf               @31
-    VIOSETCURTYPE = VioSetCurType       @32
-    VIOGETCP = VioGetCp                 @40
-    VIOSETCP = VioSetCp                 @42
-    VIOGETCONFIG = VioGetConfig         @46
-    VIOSCROLLDN = VioScrollDn           @47
-    VIOWRTCHARSTRATT = VioWrtCharStrAtt @48
-    VIOWRTNCELL = VioWrtNCell           @52
+    VIOGETANSI = DOSCALLS.772       @3
+    VIOSCROLLUP = DOSCALLS.776      @7
+    VIOGETCURPOS = DOSCALLS.778     @9
+    VIOWRTCELLSTR = DOSCALLS.779    @10
+    VIOSETCURPOS = DOSCALLS.784     @15
+    VIOWRTTTY = DOSCALLS.788        @19
+    VIOGETMODE = DOSCALLS.790       @21
+    VIOSETMODE = DOSCALLS.791       @22
+    VIOREADCELLSTR = DOSCALLS.793   @24
+    VIOGETCURTYPE = DOSCALLS.796    @27
+    VIOREADCHARSTR = DOSCALLS.799   @30
+    VIOGETBUF = DOSCALLS.800        @31
+    VIOSETCURTYPE = DOSCALLS.801    @32
+    VIOGETCP = DOSCALLS.808         @40
+    VIOSETCP = DOSCALLS.810         @42
+    VIOGETCONFIG = DOSCALLS.814     @46
+    VIOSCROLLDN = DOSCALLS.815      @47
+    VIOWRTCHARSTRATT = DOSCALLS.816 @48
+    VIOWRTNCELL = DOSCALLS.820      @52

@@ -6,6 +6,7 @@
  *  This file written by Ryan C. Gordon.
  */
 #include "os2/baseos/doscalls/internal.h"
+#include "os2/include/bsesub.h"
 #include "os2/baseos/doscalls/generated/doscalls-lx.h"
 
 LX_PRIVATE LxHostMutex *GMutexDosCalls;

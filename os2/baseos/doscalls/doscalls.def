@@ -261,6 +261,33 @@ EXPORTS
     Dos16SetSession               @699
     Dos16StartSession             @702
     Dos16SMPMPresent              @712
+    KbdGetCp                      @747
+    KbdCharIn                     @748
+    KbdSetCp                      @749
+    KbdStringIn                   @753
+    KbdGetStatus                  @754
+    KbdSetStatus                  @755
+    KbdFlushBuffer                @757
+    KbdPeek                       @766
+    VioGetAnsi                    @772
+    VioScrollUp                   @776
+    VioGetCurPos                  @778
+    VioWrtCellStr                 @779
+    VioSetCurPos                  @784
+    VioWrtTty                     @788
+    VioGetMode                    @790
+    VioSetMode                    @791
+    VioReadCellStr                @793
+    VioGetCurType                 @796
+    VioReadCharStr                @799
+    VioGetBuf                     @800
+    VioSetCurType                 @801
+    VioGetCp                      @808
+    VioSetCp                      @810
+    VioGetConfig                  @814
+    VioScrollDn                   @815
+    VioWrtCharStrAtt              @816
+    VioWrtNCell                   @820
     DosSetExtLIBPATH              @873
     DosQueryExtLIBPATH            @874
     DosQueryThreadContext         @877

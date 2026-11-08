@@ -1,14 +1,14 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of KBDCALLS.DLL: exported name [= C entry] @ordinal.
+; Exports of KBDCALLS.DLL: exported name = DOSCALLS.ordinal @ordinal.
 
 LIBRARY KBDCALLS
 
 EXPORTS
-    KBDGETCP = KbdGetCp             @3
-    KBDCHARIN = KbdCharIn           @4
-    KBDSETCP = KbdSetCp             @5
-    KBDSTRINGIN = KbdStringIn       @9
-    KBDGETSTATUS = KbdGetStatus     @10
-    KBDSETSTATUS = KbdSetStatus     @11
-    KBDFLUSHBUFFER = KbdFlushBuffer @13
-    KBDPEEK = KbdPeek               @22
+    KBDGETCP = DOSCALLS.747       @3
+    KBDCHARIN = DOSCALLS.748      @4
+    KBDSETCP = DOSCALLS.749       @5
+    KBDSTRINGIN = DOSCALLS.753    @9
+    KBDGETSTATUS = DOSCALLS.754   @10
+    KBDSETSTATUS = DOSCALLS.755   @11
+    KBDFLUSHBUFFER = DOSCALLS.757 @13
+    KBDPEEK = DOSCALLS.766        @22

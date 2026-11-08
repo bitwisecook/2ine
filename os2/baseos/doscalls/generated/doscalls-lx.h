@@ -2134,6 +2134,444 @@ __abi_done:
     return __abi_result;
 }
 
+static uint32 bridge16to32_KbdGetCp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, codepage);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, reserved);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    codepage = (PUSHORT) __abi_args[0].host;
+    __abi_result = KbdGetCp(reserved, codepage, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_KbdCharIn(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, fWait);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDKEYINFO, pkbci);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    pkbci = (PKBDKEYINFO) __abi_args[0].host;
+    __abi_result = KbdCharIn(pkbci, fWait, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_KbdSetCp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, codepage);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, reserved);
+    return KbdSetCp(reserved, codepage, hkbd);
+}
+
+static uint32 bridge16to32_KbdStringIn(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, flag);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSTRINGINBUF, pchin);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, pch);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pchin_guest, 4, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pchin = (PSTRINGINBUF) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, lx_guest_load_u16(pchin), 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    pch = (PCHAR) __abi_args[1].host;
+    __abi_result = KbdStringIn(pch, pchin, flag, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_KbdGetStatus(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDINFO, pkbci);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pkbci = (PKBDINFO) __abi_args[0].host;
+    __abi_result = KbdGetStatus(pkbci, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_KbdSetStatus(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDINFO, pkbci);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    pkbci = (PKBDINFO) __abi_args[0].host;
+    __abi_result = KbdSetStatus(pkbci, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_KbdFlushBuffer(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    return KbdFlushBuffer(hkbd);
+}
+
+static uint32 bridge16to32_KbdPeek(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HKBD, hkbd);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PKBDKEYINFO, pkbci);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pkbci_guest, 10, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    pkbci = (PKBDKEYINFO) __abi_args[0].host;
+    __abi_result = KbdPeek(pkbci, hkbd);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioGetAnsi(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, enabled);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, enabled_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    enabled = (PUSHORT) __abi_args[0].host;
+    __abi_result = VioGetAnsi(enabled, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioScrollUp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, pCell);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cbLines);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usRightCol);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usBotRow);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usLeftCol);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usTopRow);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pCell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    pCell = (PBYTE) __abi_args[0].host;
+    __abi_result = VioScrollUp(usTopRow, usLeftCol, usBotRow, usRightCol, cbLines, pCell, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioGetCurPos(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pusColumn);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pusRow);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pusRow_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pusRow = (PUSHORT) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, pusColumn_guest, 2, 3, 0, 0, &__abi_args[1])) goto __abi_done;
+    pusColumn = (PUSHORT) __abi_args[1].host;
+    __abi_result = VioGetCurPos(pusRow, pusColumn, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioWrtCellStr(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usColumn);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usRow);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cb);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCH, pchCellStr);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pchCellStr_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    pchCellStr = (PCH) __abi_args[0].host;
+    __abi_result = VioWrtCellStr(pchCellStr, cb, usRow, usColumn, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioSetCurPos(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usColumn);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usRow);
+    return VioSetCurPos(usRow, usColumn, hvio);
+}
+
+static uint32 bridge16to32_VioWrtTty(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cb);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCH, pch);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    pch = (PCH) __abi_args[0].host;
+    __abi_result = VioWrtTty(pch, cb, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioGetMode(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVIOMODEINFO, pvioModeInfo);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    {
+        LxGuestArgument __abi_prefix = {0};
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
+        size_t __abi_size = lx_guest_load_u16(__abi_prefix.host);
+        lx_guest_argument_finish(&__abi_prefix, 0);
+        if (__abi_size < 2) __abi_size = 2;
+        if (__abi_size > (34)) __abi_size = (34);
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, __abi_size, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    }
+    pvioModeInfo = (PVIOMODEINFO) __abi_args[0].host;
+    __abi_result = VioGetMode(pvioModeInfo, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioSetMode(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVIOMODEINFO, pvioModeInfo);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    {
+        LxGuestArgument __abi_prefix = {0};
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
+        size_t __abi_size = lx_guest_load_u16(__abi_prefix.host);
+        lx_guest_argument_finish(&__abi_prefix, 0);
+        if (__abi_size < 2) __abi_size = 2;
+        if (__abi_size > (12)) __abi_size = (12);
+        if (!lx_guest_argument_far(GProcessState.execution, pvioModeInfo_guest, __abi_size, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    }
+    pvioModeInfo = (PVIOMODEINFO) __abi_args[0].host;
+    __abi_result = VioSetMode(pvioModeInfo, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioReadCellStr(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usColumn);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usRow);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pcb);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCH, pchCellStr);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pcb_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pcb = (PUSHORT) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, pchCellStr_guest, pcb ? lx_guest_load_u16(pcb) : 0, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    pchCellStr = (PCH) __abi_args[1].host;
+    __abi_result = VioReadCellStr(pchCellStr, pcb, usRow, usColumn, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioGetCurType(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVIOCURSORINFO, pvioCursorInfo);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pvioCursorInfo_guest, 8, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    pvioCursorInfo = (PVIOCURSORINFO) __abi_args[0].host;
+    __abi_result = VioGetCurType(pvioCursorInfo, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioReadCharStr(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, column);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, row);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pcb);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCH, pch);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pcb_guest, 2, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    pcb = (PUSHORT) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, lx_guest_load_u16(pcb), 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    pch = (PCH) __abi_args[1].host;
+    __abi_result = VioReadCharStr(pch, pcb, row, column, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
+#if !TWOINE_PORTABLE_LOADER
+static uint32 bridge16to32_VioGetBuf(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, pcbLVB);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PULONG, pLVB);
+    return VioGetBuf(pLVB, pcbLVB, hvio);
+}
+#endif
+
+static uint32 bridge16to32_VioSetCurType(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVIOCURSORINFO, pvioCursorInfo);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pvioCursorInfo_guest, 8, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    pvioCursorInfo = (PVIOCURSORINFO) __abi_args[0].host;
+    __abi_result = VioSetCurType(pvioCursorInfo, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioGetCp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PUSHORT, codepage);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, reserved);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, codepage_guest, 2, 2, 0, 0, &__abi_args[0])) goto __abi_done;
+    codepage = (PUSHORT) __abi_args[0].host;
+    __abi_result = VioGetCp(reserved, codepage, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioSetCp(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, codepage);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, reserved);
+    return VioSetCp(reserved, codepage, hvio);
+}
+
+static uint32 bridge16to32_VioGetConfig(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVIOCONFIGINFO, info);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, config);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    {
+        LxGuestArgument __abi_prefix = {0};
+        if (!lx_guest_argument_far(GProcessState.execution, info_guest, 2, 1, 0, 0, &__abi_prefix)) goto __abi_done;
+        size_t __abi_size = lx_guest_load_u16(__abi_prefix.host);
+        lx_guest_argument_finish(&__abi_prefix, 0);
+        if (__abi_size < 2) __abi_size = 2;
+        if (__abi_size > (32)) __abi_size = (32);
+        if (!lx_guest_argument_far(GProcessState.execution, info_guest, __abi_size, 3, 0, 0, &__abi_args[0])) goto __abi_done;
+    }
+    info = (PVIOCONFIGINFO) __abi_args[0].host;
+    __abi_result = VioGetConfig(config, info, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioScrollDn(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, cell);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, lines);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, right);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, bottom);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, left);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, top);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, cell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    cell = (PBYTE) __abi_args[0].host;
+    __abi_result = VioScrollDn(top, left, bottom, right, lines, cell, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioWrtCharStrAtt(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, pAttr);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usColumn);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usRow);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cb);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCH, pch);
+    LxGuestArgument __abi_args[2] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pch_guest, cb, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    pch = (PCH) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, pAttr_guest, 1, 1, 0, 0, &__abi_args[1])) goto __abi_done;
+    pAttr = (PBYTE) __abi_args[1].host;
+    __abi_result = VioWrtCharStrAtt(pch, cb, usRow, usColumn, pAttr, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    lx_guest_argument_finish(&__abi_args[1], __abi_copy);
+    return __abi_result;
+}
+
+static uint32 bridge16to32_VioWrtNCell(uint8 *args) {
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(HVIO, hvio);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usColumn);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, usRow);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cb);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PBYTE, pCell);
+    LxGuestArgument __abi_args[1] = {0};
+    uint32 __abi_result = ERROR_INVALID_PARAMETER;
+    int __abi_copy = 0;
+    if (!lx_guest_argument_far(GProcessState.execution, pCell_guest, 2, 1, 0, 0, &__abi_args[0])) goto __abi_done;
+    pCell = (PBYTE) __abi_args[0].host;
+    __abi_result = VioWrtNCell(pCell, cb, usRow, usColumn, hvio);
+    __abi_copy = 1;
+__abi_done:
+    lx_guest_argument_finish(&__abi_args[0], __abi_copy);
+    return __abi_result;
+}
+
 static uint32 bridge16to32_Dos16SetExtLIBPATH(uint8 *args) {
     LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(ULONG, flags);
     LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, path);
@@ -2275,6 +2713,35 @@ LX_NATIVE_MODULE_16BIT_SUPPORT()
     LX_NATIVE_MODULE_16BIT_API(Dos16SetSession)
     LX_NATIVE_MODULE_16BIT_API(Dos16StartSession)
     LX_NATIVE_MODULE_16BIT_API(Dos16SMPMPresent)
+    LX_NATIVE_MODULE_16BIT_API(KbdGetCp)
+    LX_NATIVE_MODULE_16BIT_API(KbdCharIn)
+    LX_NATIVE_MODULE_16BIT_API(KbdSetCp)
+    LX_NATIVE_MODULE_16BIT_API(KbdStringIn)
+    LX_NATIVE_MODULE_16BIT_API(KbdGetStatus)
+    LX_NATIVE_MODULE_16BIT_API(KbdSetStatus)
+    LX_NATIVE_MODULE_16BIT_API(KbdFlushBuffer)
+    LX_NATIVE_MODULE_16BIT_API(KbdPeek)
+    LX_NATIVE_MODULE_16BIT_API(VioGetAnsi)
+    LX_NATIVE_MODULE_16BIT_API(VioScrollUp)
+    LX_NATIVE_MODULE_16BIT_API(VioGetCurPos)
+    LX_NATIVE_MODULE_16BIT_API(VioWrtCellStr)
+    LX_NATIVE_MODULE_16BIT_API(VioSetCurPos)
+    LX_NATIVE_MODULE_16BIT_API(VioWrtTty)
+    LX_NATIVE_MODULE_16BIT_API(VioGetMode)
+    LX_NATIVE_MODULE_16BIT_API(VioSetMode)
+    LX_NATIVE_MODULE_16BIT_API(VioReadCellStr)
+    LX_NATIVE_MODULE_16BIT_API(VioGetCurType)
+    LX_NATIVE_MODULE_16BIT_API(VioReadCharStr)
+#if !TWOINE_PORTABLE_LOADER
+    LX_NATIVE_MODULE_16BIT_API(VioGetBuf)
+#endif
+    LX_NATIVE_MODULE_16BIT_API(VioSetCurType)
+    LX_NATIVE_MODULE_16BIT_API(VioGetCp)
+    LX_NATIVE_MODULE_16BIT_API(VioSetCp)
+    LX_NATIVE_MODULE_16BIT_API(VioGetConfig)
+    LX_NATIVE_MODULE_16BIT_API(VioScrollDn)
+    LX_NATIVE_MODULE_16BIT_API(VioWrtCharStrAtt)
+    LX_NATIVE_MODULE_16BIT_API(VioWrtNCell)
     LX_NATIVE_MODULE_16BIT_API(Dos16SetExtLIBPATH)
     LX_NATIVE_MODULE_16BIT_API(Dos16QueryExtLIBPATH)
 LX_NATIVE_MODULE_16BIT_SUPPORT_END()
@@ -2396,6 +2863,35 @@ static int init16_doscalls(void) {
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetSession, 6)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16StartSession, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SMPMPresent, 4)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdGetCp, 10)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdCharIn, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdSetCp, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdStringIn, 12)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdGetStatus, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdSetStatus, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdFlushBuffer, 2)
+        LX_NATIVE_INIT_16BIT_BRIDGE(KbdPeek, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetAnsi, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioScrollUp, 16)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetCurPos, 10)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioWrtCellStr, 12)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioSetCurPos, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioWrtTty, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetMode, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioSetMode, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioReadCellStr, 14)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetCurType, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioReadCharStr, 14)
+#if !TWOINE_PORTABLE_LOADER
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetBuf, 10)
+#endif
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioSetCurType, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetCp, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioSetCp, 6)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioGetConfig, 8)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioScrollDn, 16)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioWrtCharStrAtt, 16)
+        LX_NATIVE_INIT_16BIT_BRIDGE(VioWrtNCell, 12)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16SetExtLIBPATH, 8)
         LX_NATIVE_INIT_16BIT_BRIDGE(Dos16QueryExtLIBPATH, 8)
     LX_NATIVE_MODULE_INIT_16BIT_SUPPORT_END()
@@ -3106,6 +3602,35 @@ LX_NATIVE_MODULE_INIT({
     LX_NATIVE_EXPORT16(Dos16SetSession, 699),
     LX_NATIVE_EXPORT16(Dos16StartSession, 702),
     LX_NATIVE_EXPORT16(Dos16SMPMPresent, 712),
+    LX_NATIVE_EXPORT16(KbdGetCp, 747),
+    LX_NATIVE_EXPORT16(KbdCharIn, 748),
+    LX_NATIVE_EXPORT16(KbdSetCp, 749),
+    LX_NATIVE_EXPORT16(KbdStringIn, 753),
+    LX_NATIVE_EXPORT16(KbdGetStatus, 754),
+    LX_NATIVE_EXPORT16(KbdSetStatus, 755),
+    LX_NATIVE_EXPORT16(KbdFlushBuffer, 757),
+    LX_NATIVE_EXPORT16(KbdPeek, 766),
+    LX_NATIVE_EXPORT16(VioGetAnsi, 772),
+    LX_NATIVE_EXPORT16(VioScrollUp, 776),
+    LX_NATIVE_EXPORT16(VioGetCurPos, 778),
+    LX_NATIVE_EXPORT16(VioWrtCellStr, 779),
+    LX_NATIVE_EXPORT16(VioSetCurPos, 784),
+    LX_NATIVE_EXPORT16(VioWrtTty, 788),
+    LX_NATIVE_EXPORT16(VioGetMode, 790),
+    LX_NATIVE_EXPORT16(VioSetMode, 791),
+    LX_NATIVE_EXPORT16(VioReadCellStr, 793),
+    LX_NATIVE_EXPORT16(VioGetCurType, 796),
+    LX_NATIVE_EXPORT16(VioReadCharStr, 799),
+#if !TWOINE_PORTABLE_LOADER
+    LX_NATIVE_EXPORT16(VioGetBuf, 800),
+#endif
+    LX_NATIVE_EXPORT16(VioSetCurType, 801),
+    LX_NATIVE_EXPORT16(VioGetCp, 808),
+    LX_NATIVE_EXPORT16(VioSetCp, 810),
+    LX_NATIVE_EXPORT16(VioGetConfig, 814),
+    LX_NATIVE_EXPORT16(VioScrollDn, 815),
+    LX_NATIVE_EXPORT16(VioWrtCharStrAtt, 816),
+    LX_NATIVE_EXPORT16(VioWrtNCell, 820),
     LX_NATIVE_EXPORT32(DosSetExtLIBPATH, 873),
     LX_NATIVE_EXPORT32(DosQueryExtLIBPATH, 874),
 #if !TWOINE_PORTABLE_LOADER
