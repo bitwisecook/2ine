@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Real guest backing, original return signs, unaligned words and host contenders. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include "host/thread.h"
 #include <stdio.h>
 #include <stdlib.h>

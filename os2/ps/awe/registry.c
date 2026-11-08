@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 root aliases and typed values backed by a separate persistent profile. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include "os2/include/pmshl.h"
 #include "os2/ps/pmshapi/profiles.h"
 #include "emulator/handles.h"

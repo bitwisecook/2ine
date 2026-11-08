@@ -3,7 +3,7 @@
    hook returns 1 when the handle was a process object and 0 to try the next owner. */
 #ifndef TWOINE_PMWINX_PROCESS_H
 #define TWOINE_PMWINX_PROCESS_H
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include "host/process.h"
 BOOL open32CloseProcess(ULONG handle);
 int open32WaitProcess(ULONG handle, ULONG timeout, ULONG *result);

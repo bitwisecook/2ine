@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Legacy sockaddr layout, UDP round-trip, nonblocking errors and resolver exports. */
-#include "os2/include/so32dll.h"
-#include "os2/include/tcp32dll.h"
+#include "os2/include/stack16/sys/socket.h"
+#include "os2/include/stack16/netdb.h"
 #include "host/socket.h"
 #include <stdio.h>
 #include <stdlib.h>

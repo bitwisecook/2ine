@@ -7,7 +7,18 @@
  */
 
 #include "os2/include/private/export.h"
-#include "os2/include/tcpip32.h"
+#include "os2/include/sys/socket.h"
+#include "os2/include/sys/select.h"
+#include "os2/include/sys/time.h"
+#include "os2/include/sys/uio.h"
+#include "os2/include/sys/ioctl.h"
+#include "os2/include/sys/sysctl.h"
+#include "os2/include/sys/itypes.h"
+#include "os2/include/netinet/in.h"
+#include "os2/include/arpa/inet.h"
+#include "os2/include/netdb.h"
+#include "os2/include/resolv.h"
+#include "os2/include/unistd.h"
 
 #include "host/socket.h"
 #include "host/thread.h"

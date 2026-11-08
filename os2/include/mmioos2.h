@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_MMIO_H
-#define TWOINE_MMIO_H
+#ifndef _INCL_MMIOOS2_H_
+#define _INCL_MMIOOS2_H_
 #include "os2/include/os2def.h"
 #include <stddef.h>
 OS2EXPORT ULONG OS2API mmioOpen(PSZ name, PVOID info, ULONG flags);
@@ -11,6 +11,4 @@ OS2EXPORT LONG OS2API mmioWrite(ULONG handle, PCHAR buffer, LONG bytes);
 OS2EXPORT LONG OS2API mmioSeek(ULONG handle, LONG offset, LONG origin);
 OS2EXPORT ULONG OS2API mmioGetHeader(ULONG handle, PVOID header, LONG capacity, PLONG bytes,
                                      ULONG reserved, ULONG flags);
-/* Returns an owned copy of a memory-backed media element. */
-OS2EXPORT unsigned char *lx_mmio_copy(ULONG handle, size_t *size);
 #endif

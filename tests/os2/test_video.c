@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Decode timing/seek, renderer clipping and MCI digital-video lifecycle. */
 #include "os2/include/private/export.h"
-#include "os2/include/mdm.h"
+#include "os2/include/os2me.h"
 #include "os2/mm/video/decode/video_decode.h"
 #include "os2/mm/mci/mdm/mdm_video.h"
 #include "os2/include/pmwin.h"

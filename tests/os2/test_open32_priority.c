@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Process priority mapping and host failures must not publish a false class. */
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include "host/process.h"
 #include "host/clock.h"
 #include "host/thread.h"

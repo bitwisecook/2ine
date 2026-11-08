@@ -1,8 +1,9 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* PCM completion, memory-file MIDI ownership and invalid-device contracts. */
 #include "os2/include/private/export.h"
-#include "os2/include/mdm.h"
-#include "os2/include/mmio.h"
+#include "os2/include/mmioos2.h"
+#include "os2/include/os2me.h"
+#include "os2/include/private/os2mep.h"
 #include "os2/mm/mci/mdm/midi_sequence.h"
 #include "host/clock.h"
 #include <math.h>

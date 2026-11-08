@@ -4,7 +4,7 @@
 #include "os2/include/pmshl.h"
 #include "os2/include/pmhelp.h"
 #include "os2/include/pmwp.h"
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include "emulator/runtime.h"
 #include "host/thread.h"
 #include <limits.h>

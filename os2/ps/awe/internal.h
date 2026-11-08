@@ -2,7 +2,7 @@
 #ifndef TWOINE_PMWINX_INTERNAL_H
 #define TWOINE_PMWINX_INTERNAL_H
 #include <stddef.h>
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 void open32SetError(ULONG error);
 void open32CommonDialogError(ULONG error);
 ULONG open32ScrollWindowProc(ULONG window, ULONG message, ULONG first, ULONG second);

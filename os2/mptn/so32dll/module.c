@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Legacy OS/2 datagram sockets; addresses carry network-order port and address. */
 #include "os2/include/private/export.h"
-#include "os2/include/so32dll.h"
+#include "os2/include/stack16/sys/socket.h"
 #include "host/socket.h"
 #include "host/network.h"
 #include "os2/mptn/common/network.h"

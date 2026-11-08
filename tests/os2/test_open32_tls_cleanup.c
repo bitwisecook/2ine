@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Native-module shutdown resets TLS allocation ownership and current-thread data. */
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include <dlfcn.h>
 #include <stdint.h>
 #include <stdio.h>

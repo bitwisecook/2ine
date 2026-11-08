@@ -7,7 +7,7 @@
  */
 
 #include "os2/include/private/export.h"
-#include "os2/include/som.h"
+#include "os2/include/som/som.h"
 
 LX_NATIVE_MODULE_INIT()
 LX_NATIVE_MODULE_INIT_END()

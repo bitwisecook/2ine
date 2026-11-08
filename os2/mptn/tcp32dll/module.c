@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Legacy resolver results borrow per-thread host resolver snapshots. */
 #include "os2/include/private/export.h"
-#include "os2/include/tcp32dll.h"
+#include "os2/include/stack16/netdb.h"
 #include "host/socket.h"
 #include "os2/mptn/tcp32dll/generated/tcp32dll-lx.h"
 static LX_HOST_THREAD_LOCAL int ResolverError;

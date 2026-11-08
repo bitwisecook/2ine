@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_TCP32DLL_H
-#define TWOINE_TCP32DLL_H
+#ifndef _INCL_STACK16_NETDB_H_
+#define _INCL_STACK16_NETDB_H_
 #include "os2/include/os2def.h"
 
 typedef struct Os2LegacyHost

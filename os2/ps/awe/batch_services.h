@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TWOINE_OPEN32_BATCH_SERVICES_H
 #define TWOINE_OPEN32_BATCH_SERVICES_H
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 ULONG AddAtom(PSZ name);
 BOOL AdjustWindowRect(PVOID rectangle, ULONG style, BOOL menu);
 BOOL Beep(ULONG frequency, ULONG duration);

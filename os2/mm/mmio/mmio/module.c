@@ -2,7 +2,8 @@
 /* MMIO elements are named DOS files or memory files. Memory files use the caller's
    buffer, keeping a copy made at open for reads after that buffer is gone. */
 #include "os2/include/private/export.h"
-#include "os2/include/mmio.h"
+#include "os2/include/mmioos2.h"
+#include "os2/include/private/os2mep.h"
 #include "emulator/abi.h"
 #include "host/sync.h"
 #include "host/fs.h"

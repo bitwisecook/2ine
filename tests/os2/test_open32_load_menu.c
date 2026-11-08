@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Loaded PM resource menus retain their complete queryable hierarchy and ownership. */
 #include "os2/include/private/export.h"
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include "os2/ps/pmwin/internal.h"
 #include "os2/ps/pmwin/menus.h"
 #include "emulator/abi.h"

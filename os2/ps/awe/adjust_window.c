@@ -2,7 +2,7 @@
 /* Open32 window-rectangle sizing for PMWINX ordinal 6. */
 #include "os2/include/private/export.h"
 #include "os2/include/pmwin.h"
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include <string.h>
 
 enum

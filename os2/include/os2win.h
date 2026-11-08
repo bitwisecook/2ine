@@ -1,7 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Open32 exports use OS/2's caller-cleaned 32-bit system linkage. */
-#ifndef TWOINE_OS2LIBS_PMWINX_H
-#define TWOINE_OS2LIBS_PMWINX_H
+#ifndef _INCL_OS2WIN_H_
+#define _INCL_OS2WIN_H_
 #include "os2/include/os2def.h"
 typedef LONG(OS2API *PFNWINMAIN)(ULONG instance, ULONG previous, PSZ command, LONG show);
 #ifdef __cplusplus

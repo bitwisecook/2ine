@@ -2,7 +2,7 @@
 /* AdjustWindowRectEx sizing against distinct injected PM system values. */
 #include "os2/include/private/export.h"
 #include "os2/include/pmwin.h"
-#include "os2/include/pmwinx.h"
+#include "os2/include/os2win.h"
 #include <stdio.h>
 #include <string.h>
 
