@@ -9,18 +9,12 @@
 #ifndef _INCL_NLS_H_
 #define _INCL_NLS_H_
 
-#include "os2libs/os2types.h"
+#include "os2libs/doscalls.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-    typedef struct
-    {
-        ULONG country;
-        ULONG codepage;
-    } COUNTRYCODE, *PCOUNTRYCODE;
 
     typedef struct
     {
@@ -46,12 +40,6 @@ extern "C"
                                              PULONG pcbActual) OS2APIINFO(5);
     OS2EXPORT APIRET OS2API DosQueryCollate(ULONG len, PCOUNTRYCODE pcc, PCHAR pch, PULONG dlen)
         OS2APIINFO(8);
-
-    typedef struct
-    {
-        USHORT country;
-        USHORT codepage;
-    } COUNTRYCODE16, *PCOUNTRYCODE16;
 
     typedef struct
     {

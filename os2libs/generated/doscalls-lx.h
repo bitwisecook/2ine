@@ -1772,17 +1772,17 @@ __abi_done:
 }
 
 static uint32 bridge16to32_Dos16GetDBCSEv(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, buf);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PVOID, pcc);
-    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, cb);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, buf);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCOUNTRYCODE16, pcc);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_ARG(USHORT, buflen);
     LxGuestArgument __abi_args[2] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
     if (!lx_guest_argument_far(GProcessState.execution, pcc_guest, 4, 1, 0, 0, &__abi_args[0])) goto __abi_done;
-    pcc = (PVOID) __abi_args[0].host;
-    if (!lx_guest_argument_far(GProcessState.execution, buf_guest, cb, 2, 0, 0, &__abi_args[1])) goto __abi_done;
-    buf = (PVOID) __abi_args[1].host;
-    __abi_result = Dos16GetDBCSEv(cb, pcc, buf);
+    pcc = (PCOUNTRYCODE16) __abi_args[0].host;
+    if (!lx_guest_argument_far(GProcessState.execution, buf_guest, buflen, 2, 0, 0, &__abi_args[1])) goto __abi_done;
+    buf = (PCHAR) __abi_args[1].host;
+    __abi_result = Dos16GetDBCSEv(buflen, pcc, buf);
     __abi_copy = 1;
 __abi_done:
     lx_guest_argument_finish(&__abi_args[0], __abi_copy);

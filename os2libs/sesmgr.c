@@ -287,7 +287,7 @@ APIRET DosStartSession(PSTARTDATA data, PULONG session_id, PPID pid)
     return lx_session_start(&start, session_id, pid);
 }
 
-APIRET16 Dos16SMSetTitle(PCHAR title)
+APIRET16 Dos16SMSetTitle(PSZ title)
 {
     TRACE_NATIVE("Dos16SMSetTitle(%p)", title);
     if (!title)

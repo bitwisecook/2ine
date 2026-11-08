@@ -274,12 +274,12 @@ APIRET16 Dos16GetDateTime(PDATETIME pdt)
     return (APIRET16)DosGetDateTime(pdt);
 }
 
-APIRET16 Dos16GetDBCSEv(USHORT cb, PVOID pcc, PVOID buf)
+APIRET16 Dos16GetDBCSEv(USHORT buflen, PCOUNTRYCODE16 pcc, PCHAR buf)
 {
-    TRACE_NATIVE("Dos16GetDBCSEv(%u, %p, %p)", (uint)cb, pcc, buf);
+    TRACE_NATIVE("Dos16GetDBCSEv(%u, %p, %p)", (uint)buflen, pcc, buf);
     (void)pcc;
-    if (buf && cb)
-        memset(buf, 0, cb);
+    if (buf && buflen)
+        memset(buf, 0, buflen);
     return NO_ERROR;
 }
 
@@ -342,7 +342,10 @@ APIRET DosQueryDBCSEnv(ULONG buflen, PCOUNTRYCODE pcc, PCHAR buf)
     TRACE_NATIVE("DosQueryDBCSEnv(%u, %p, %p)", (uint)buflen, pcc, buf);
     if ((!pcc) || (!buf))
         return ERROR_INVALID_PARAMETER;
-    if ((pcc->country != 0) || (pcc->codepage != 0))
+    /* Only the default country is known here; this entry tests the request's
+       leading two 16-bit words. */
+    const USHORT *request = (const USHORT *)pcc;
+    if ((request[0] != 0) || (request[1] != 0))
         return ERROR_CODE_PAGE_NOT_FOUND;
     memset(buf, '\0', buflen);
     return NO_ERROR;

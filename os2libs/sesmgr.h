@@ -57,7 +57,7 @@ extern "C"
     /* STARTDATA embeds encoded 16:16 pointers and is decoded by this entry. */
     OS2EXPORT APIRET16 OS2API16 Dos16StartSession(ULONG data, PUSHORT session, PUSHORT pid)
         OS2APIINFO(17);
-    OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PCHAR title)
+    OS2EXPORT APIRET16 OS2API16 Dos16SMSetTitle(PSZ title)
         OS2APIINFO(ord = 5, name = DOSSMSETTITLE);
 
 #ifdef __cplusplus

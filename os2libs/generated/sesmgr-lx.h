@@ -14,12 +14,12 @@ LX_NATIVE_MODULE_32BIT_API(DosStopSession)
 #endif
 
 static uint32 bridge16to32_Dos16SMSetTitle(uint8 *args) {
-    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PCHAR, title);
+    LX_NATIVE_MODULE_16BIT_BRIDGE_PTRARG(PSZ, title);
     LxGuestArgument __abi_args[1] = {0};
     uint32 __abi_result = ERROR_INVALID_PARAMETER;
     int __abi_copy = 0;
     if (!lx_guest_argument_strings(GProcessState.execution, title_guest, 1, 65536, 0, &__abi_args[0])) goto __abi_done;
-    title = (PCHAR) __abi_args[0].host;
+    title = (PSZ) __abi_args[0].host;
     __abi_result = Dos16SMSetTitle(title);
     __abi_copy = 1;
 __abi_done:

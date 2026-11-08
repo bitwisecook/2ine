@@ -104,7 +104,7 @@
       },
       {
         "name": "buf",
-        "size": "cb",
+        "size": "buflen",
         "permissions": 2,
         "kind": "copy",
         "nullable": false
