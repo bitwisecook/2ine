@@ -85,7 +85,8 @@ the checker, so a new component is covered by these rules.
 | `emulator/abi/` | Argument marshalling and handles; public headers in `emulator/include/emulator/` |
 | `os2/include/` | Public OS/2 API headers; `private/` holds cross-DLL internals, the export framework (`export*.h`) and the guest binding policies (`api16.json`, `api32.json`) |
 | `os2/<group>/<dll>/` | One DLL: its `<dll>.def` exports, `module.c` entry, sources, guest bindings (`bindings.h`) and generated export table (`generated/<dll>-lx.h`) |
-| `os2/baseos/doscalls/` | File I/O, file metadata, directories, paths, memory, threads, processes, semaphores, modules, exceptions, system and audio APIs |
+| `os2/baseos/doscalls/` | DOSCALLS, in IBM's kernel unit layout (`filesys/`, `memory/`, `sem/`, `task/`, `loader/`, `dev/`, `perf/`) plus DOSCALL1's ring-3 areas (`doscall1/`: queues, sessions, NLS, messages, Vio, Kbd, suballocation, thunks); see its README |
+| `os2/baseos/{quecalls,sesmgr,nls,msg,viocalls,kbdcalls}/` | Forwarder-only DLLs: each export forwards to the DOSCALLS ordinal that implements it, as in Warp 4.52 |
 | `os2/ps/pmwin/` | Anchor context, windows, messages and painting |
 | `tools/` | Generators, import analysis, assembly conversion and `lx_dump` |
 | `tools/data/` | Ordinal catalogue |

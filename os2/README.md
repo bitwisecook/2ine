@@ -11,7 +11,7 @@ debug data and kernel MAPs. 2ine builds one shared library per DLL
 |---|---|---|
 | `include/` | `rel\os2c\include\base\os2` | Public API headers, named like the OS/2 Toolkit's `h/` |
 | `include/private/` | DDK private companions (`bsep.h`, `pmp.h`, …) | Cross-DLL internals, the export framework (`export*.h`) and the guest binding policies (`api16.json`, `api32.json`) |
-| `baseos/` | `w45baseos` | Base OS: DOSCALLS and the queue, session, NLS, message, Vio and Kbd DLLs |
+| `baseos/` | `w45baseos` | Base OS: DOSCALLS, and the queue, session, NLS, message, Vio and Kbd DLLs that forward to it |
 | `ps/` | `w45ps\src\ps` | Presentation Manager: PMWIN, PMGPI, PMGRE, PMSHAPI, PMMERGE, the controls (`controls/`), HELPMGR and Open32 (`awe/` = PMWINX) |
 | `ps/common/` | `ps\common` | Text helpers shared by PM DLLs |
 | `wpsh/` | `w45wpsh` | Workplace Shell (PMWP) and the spooler (PMSPL) |
@@ -27,7 +27,8 @@ Each DLL directory holds:
   entries `name [= C entry] @ordinal`; `name = MODULE.ordinal` or
   `name = MODULE.entry` declares a forwarder);
 - `module.c`: the DLL entry and the only includer of the export table;
-- `bindings.h`: the guest wire marshalling for portable execution;
+- `bindings.h`: the guest wire marshalling for portable execution (forwarder
+  DLLs have none);
 - `generated/<dll>-lx.h`: the export table written by `tools/lxapigen.py`;
 - `README.md`: IBM's source location for the DLL and how Warp 4.52 built it.
 
@@ -35,8 +36,12 @@ IBM's source paths come from `@BSS` labels in SYM files, object paths in
 shipped binaries and the kernel MAPs. A path marked inferred is not stated by
 any artifact. In Warp 4.52, QUECALLS, SESMGR, NLS, MSG, VIOCALLS and KBDCALLS
 forward to DOSCALL1; PMWIN, PMSHAPI and PMGRE forward to PMMERGE; PMDRAG
-forwards to PMCTLS; MDM and MMIO forward to MMPM. 2ine builds each of these
-with its own implementation.
+forwards to PMCTLS; MDM and MMIO forward to MMPM. 2ine follows the base OS
+part: DOSCALLS implements the queue, session, NLS, message, Vio and Kbd
+entries at Warp's DOSCALLS ordinals, and QUECALLS, SESMGR, NLS, MSG, VIOCALLS
+and KBDCALLS hold only forwarders to them (`baseos/doscalls/README.md` lists
+DOSCALLS' units and the IBM units they follow). The PM and multimedia DLLs
+still carry their own implementations.
 
 ## Headers
 
@@ -51,9 +56,9 @@ socket headers apart from the host's.
 | `os2.h` | `os2def.h`, `bse.h`, `bsedos16.h`, `pm.h` |
 | `os2def.h` | Base types, handles, POINTL/RECTL, `OS2EXPORT`/`OS2API` and `LX_GUEST_DATA_EXPORT` |
 | `bse.h` | `bsedos.h`, `bsesub.h`, `bseerr.h` |
-| `bsedos.h` (+ `bsetib.h`, `bsememf.h`, `bsexcpt.h`) | 32-bit Dos* API by INCL_DOS* group (DOSCALLS, QUECALLS, SESMGR, NLS, MSG) |
-| `bsedos16.h` | USE16 Dos16*/DosSem* entries, as in the DDK (DOSCALLS, QUECALLS, SESMGR, NLS, MSG) |
-| `bsesub.h` | Kbd* and Vio* (KBDCALLS, VIOCALLS) |
+| `bsedos.h` (+ `bsetib.h`, `bsememf.h`, `bsexcpt.h`) | 32-bit Dos* API by INCL_DOS* group (DOSCALLS; forwarded by QUECALLS, SESMGR, NLS, MSG) |
+| `bsedos16.h` | USE16 Dos16*/DosSem* entries, as in the DDK (DOSCALLS; forwarded by QUECALLS, SESMGR, NLS, MSG) |
+| `bsesub.h` | Kbd* and Vio* (DOSCALLS; forwarded by KBDCALLS, VIOCALLS) |
 | `bseerr.h` | Base OS error codes |
 | `pm.h` | The PM headers below |
 | `pmwin.h` (+ `pmerr.h`, `pmsei.h`) | Win* by INCL_WIN* group (PMWIN) |

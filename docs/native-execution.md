@@ -11,7 +11,7 @@ and the backend state and operations table (`execution.c`).
 ```mermaid
 flowchart LR
     Shared["emulator/execution.h"] --> Entry["Native entry"] --> CPU["x86 CPU"]
-    CPU --> Bridge["16/32-bit API bridge"] --> APIs["os2/baseos/doscalls/ · msg · nls"]
+    CPU --> Bridge["16/32-bit API bridge"] --> APIs["os2/baseos/doscalls/"]
     APIs --> Host["host/include/host/*.h"]
     Bridge --> Callback["Nested guest callback"] --> CPU
 ```
