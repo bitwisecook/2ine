@@ -81,6 +81,7 @@ twoine_os2_dll(
     controls/pmctls/module.c
     controls/pmctls/dialogs/filedlgm.c
     controls/pmctls/dialogs/fontdlg.c
+    controls/pmctls/drag/drgutil.c
 )
 twoine_os2_dll(pmdrag controls/drag/module.c)
 twoine_os2_dll(helpmgr helpmgr/module.c)
@@ -185,9 +186,5 @@ else()
     target_link_libraries(pmmerge PRIVATE ZLIB::ZLIB)
 endif()
 target_link_libraries(pmgpi PRIVATE pmmerge)
-target_link_libraries(
-    pmwinx
-    PRIVATE pmmerge pmgpi pmctls pmdrag pmwp
-)
-target_link_libraries(pmdrag PRIVATE pmmerge)
+target_link_libraries(pmwinx PRIVATE pmmerge pmgpi pmctls pmwp)
 target_link_libraries(pmctls PRIVATE pmmerge)

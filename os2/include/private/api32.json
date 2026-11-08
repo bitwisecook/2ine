@@ -4809,7 +4809,71 @@
       "convention": "LX_ABI_STACK32"
     }
   },
-  "pmdrag": {
+  "pmspl": {
+    "SplQueryQueue": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SplEnumQueue": {
+      "argument_bytes": 32,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SplQueryDevice": {
+      "argument_bytes": 24,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "SplEnumPrinter": {
+      "argument_bytes": 36,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "helpmgr": {
+    "WinCreateHelpInstance": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDestroyHelpInstance": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinAssociateHelpInstance": {
+      "argument_bytes": 8,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    }
+  },
+  "pmctls": {
+    "WinFileDlg": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDefFileDlgProc": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFreeFileDlgList": {
+      "argument_bytes": 4,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinFontDlg": {
+      "argument_bytes": 12,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
+    "WinDefFontDlgProc": {
+      "argument_bytes": 16,
+      "callee_pop": 0,
+      "convention": "LX_ABI_STACK32"
+    },
     "DrgAddStrHandle": {
       "argument_bytes": 4,
       "callee_pop": 0,
@@ -4902,72 +4966,6 @@
     },
     "DrgVerifyRMF": {
       "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    }
-  },
-  "pmspl": {
-    "SplQueryQueue": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "SplEnumQueue": {
-      "argument_bytes": 32,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "SplQueryDevice": {
-      "argument_bytes": 24,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "SplEnumPrinter": {
-      "argument_bytes": 36,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    }
-  },
-  "helpmgr": {
-    "WinCreateHelpInstance": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDestroyHelpInstance": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinAssociateHelpInstance": {
-      "argument_bytes": 8,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    }
-  },
-  "pmctls": {
-    "WinFileDlg": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDefFileDlgProc": {
-      "argument_bytes": 16,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinFreeFileDlgList": {
-      "argument_bytes": 4,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinFontDlg": {
-      "argument_bytes": 12,
-      "callee_pop": 0,
-      "convention": "LX_ABI_STACK32"
-    },
-    "WinDefFontDlgProc": {
-      "argument_bytes": 16,
       "callee_pop": 0,
       "convention": "LX_ABI_STACK32"
     }

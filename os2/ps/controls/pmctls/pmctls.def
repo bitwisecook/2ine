@@ -4,8 +4,27 @@
 LIBRARY PMCTLS
 
 EXPORTS
-    WinFontDlg         @2
-    WinDefFontDlgProc  @3
-    WinFileDlg         @4
-    WinDefFileDlgProc  @5
-    WinFreeFileDlgList @6
+    WinFontDlg                  @2
+    WinDefFontDlgProc           @3
+    WinFileDlg                  @4
+    WinDefFileDlgProc           @5
+    WinFreeFileDlgList          @6
+    DrgAccessDraginfo           @74
+    DrgAddStrHandle             @75
+    DrgAllocDraginfo            @76
+    DrgAllocDragtransfer        @77
+    DrgDeleteDraginfoStrHandles @78
+    DrgDeleteStrHandle          @79
+    DrgDrag                     @80
+    DrgFreeDraginfo             @81
+    DrgFreeDragtransfer         @82
+    DrgGetPS                    @83
+    DrgPostTransferMsg          @84
+    DrgQueryDragitemCount       @87
+    DrgQueryDragitemPtr         @88
+    DrgQueryStrName             @91
+    DrgQueryStrNameLen          @92
+    DrgReleasePS                @95
+    DrgSendTransferMsg          @96
+    DrgSetDragitem              @99
+    DrgVerifyRMF                @101

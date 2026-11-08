@@ -3,80 +3,46 @@
 
 #if LX_LEGACY
 
-#include "os2/include/private/export32.h"
-#if TWOINE_PORTABLE_LOADER
-#include "os2/ps/controls/drag/bindings.h"
-LX_NATIVE_MODULE_32BIT_SUPPORT()
-LX_NATIVE_MODULE_32BIT_API(DrgAccessDraginfo)
-LX_NATIVE_MODULE_32BIT_API(DrgAddStrHandle)
-LX_NATIVE_MODULE_32BIT_API(DrgAllocDraginfo)
-LX_NATIVE_MODULE_32BIT_API(DrgAllocDragtransfer)
-LX_NATIVE_MODULE_32BIT_API(DrgDeleteDraginfoStrHandles)
-LX_NATIVE_MODULE_32BIT_API(DrgDeleteStrHandle)
-LX_NATIVE_MODULE_32BIT_API(DrgDrag)
-LX_NATIVE_MODULE_32BIT_API(DrgFreeDraginfo)
-LX_NATIVE_MODULE_32BIT_API(DrgFreeDragtransfer)
-LX_NATIVE_MODULE_32BIT_API(DrgGetPS)
-LX_NATIVE_MODULE_32BIT_API(DrgPostTransferMsg)
-LX_NATIVE_MODULE_32BIT_API(DrgQueryDragitemCount)
-LX_NATIVE_MODULE_32BIT_API(DrgQueryDragitemPtr)
-LX_NATIVE_MODULE_32BIT_API(DrgQueryStrName)
-LX_NATIVE_MODULE_32BIT_API(DrgQueryStrNameLen)
-LX_NATIVE_MODULE_32BIT_API(DrgReleasePS)
-LX_NATIVE_MODULE_32BIT_API(DrgSendTransferMsg)
-LX_NATIVE_MODULE_32BIT_API(DrgSetDragitem)
-LX_NATIVE_MODULE_32BIT_API(DrgVerifyRMF)
-#endif
-
-LX_NATIVE_MODULE_DEINIT({ LX_NATIVE_MODULE_DEINIT_32BIT_SUPPORT(); })
-#if TWOINE_PORTABLE_LOADER
-static int init32_pmdrag(void) {
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT()
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgAccessDraginfo, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgAddStrHandle, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgAllocDraginfo, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgAllocDragtransfer, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgDeleteDraginfoStrHandles, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgDeleteStrHandle, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgDrag, 24, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgFreeDraginfo, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgFreeDragtransfer, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgGetPS, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgPostTransferMsg, 24, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgQueryDragitemCount, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgQueryDragitemPtr, 8, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgQueryStrName, 12, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgQueryStrNameLen, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgReleasePS, 4, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgSendTransferMsg, 16, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgSetDragitem, 16, 0, LX_ABI_STACK32)
-    LX_NATIVE_INIT_32BIT_BRIDGE(DrgVerifyRMF, 12, 0, LX_ABI_STACK32)
-    LX_NATIVE_MODULE_INIT_32BIT_SUPPORT_END()
-    return 1;
-}
-#endif
+LX_NATIVE_FORWARDER(lx_forward_32, "PMCTLS", 74, "");
+LX_NATIVE_FORWARDER(lx_forward_33, "PMCTLS", 75, "");
+LX_NATIVE_FORWARDER(lx_forward_34, "PMCTLS", 76, "");
+LX_NATIVE_FORWARDER(lx_forward_35, "PMCTLS", 77, "");
+LX_NATIVE_FORWARDER(lx_forward_36, "PMCTLS", 78, "");
+LX_NATIVE_FORWARDER(lx_forward_37, "PMCTLS", 79, "");
+LX_NATIVE_FORWARDER(lx_forward_38, "PMCTLS", 80, "");
+LX_NATIVE_FORWARDER(lx_forward_39, "PMCTLS", 81, "");
+LX_NATIVE_FORWARDER(lx_forward_40, "PMCTLS", 82, "");
+LX_NATIVE_FORWARDER(lx_forward_41, "PMCTLS", 83, "");
+LX_NATIVE_FORWARDER(lx_forward_42, "PMCTLS", 84, "");
+LX_NATIVE_FORWARDER(lx_forward_45, "PMCTLS", 87, "");
+LX_NATIVE_FORWARDER(lx_forward_46, "PMCTLS", 88, "");
+LX_NATIVE_FORWARDER(lx_forward_49, "PMCTLS", 91, "");
+LX_NATIVE_FORWARDER(lx_forward_50, "PMCTLS", 92, "");
+LX_NATIVE_FORWARDER(lx_forward_53, "PMCTLS", 95, "");
+LX_NATIVE_FORWARDER(lx_forward_54, "PMCTLS", 96, "");
+LX_NATIVE_FORWARDER(lx_forward_57, "PMCTLS", 99, "");
+LX_NATIVE_FORWARDER(lx_forward_59, "PMCTLS", 101, "");
 LX_NATIVE_MODULE_INIT({
-    LX_NATIVE_INIT_32BIT_MODULE(pmdrag)
 })
-    LX_NATIVE_EXPORT32(DrgAccessDraginfo, 32),
-    LX_NATIVE_EXPORT32(DrgAddStrHandle, 33),
-    LX_NATIVE_EXPORT32(DrgAllocDraginfo, 34),
-    LX_NATIVE_EXPORT32(DrgAllocDragtransfer, 35),
-    LX_NATIVE_EXPORT32(DrgDeleteDraginfoStrHandles, 36),
-    LX_NATIVE_EXPORT32(DrgDeleteStrHandle, 37),
-    LX_NATIVE_EXPORT32(DrgDrag, 38),
-    LX_NATIVE_EXPORT32(DrgFreeDraginfo, 39),
-    LX_NATIVE_EXPORT32(DrgFreeDragtransfer, 40),
-    LX_NATIVE_EXPORT32(DrgGetPS, 41),
-    LX_NATIVE_EXPORT32(DrgPostTransferMsg, 42),
-    LX_NATIVE_EXPORT32(DrgQueryDragitemCount, 45),
-    LX_NATIVE_EXPORT32(DrgQueryDragitemPtr, 46),
-    LX_NATIVE_EXPORT32(DrgQueryStrName, 49),
-    LX_NATIVE_EXPORT32(DrgQueryStrNameLen, 50),
-    LX_NATIVE_EXPORT32(DrgReleasePS, 53),
-    LX_NATIVE_EXPORT32(DrgSendTransferMsg, 54),
-    LX_NATIVE_EXPORT32(DrgSetDragitem, 57),
-    LX_NATIVE_EXPORT32(DrgVerifyRMF, 59),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_32, "DrgAccessDraginfo", 32),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_33, "DrgAddStrHandle", 33),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_34, "DrgAllocDraginfo", 34),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_35, "DrgAllocDragtransfer", 35),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_36, "DrgDeleteDraginfoStrHandles", 36),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_37, "DrgDeleteStrHandle", 37),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_38, "DrgDrag", 38),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_39, "DrgFreeDraginfo", 39),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_40, "DrgFreeDragtransfer", 40),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_41, "DrgGetPS", 41),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_42, "DrgPostTransferMsg", 42),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_45, "DrgQueryDragitemCount", 45),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_46, "DrgQueryDragitemPtr", 46),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_49, "DrgQueryStrName", 49),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_50, "DrgQueryStrNameLen", 50),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_53, "DrgReleasePS", 53),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_54, "DrgSendTransferMsg", 54),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_57, "DrgSetDragitem", 57),
+    LX_NATIVE_EXPORT_FORWARDER(lx_forward_59, "DrgVerifyRMF", 59),
 
 LX_NATIVE_MODULE_INIT_END()
 

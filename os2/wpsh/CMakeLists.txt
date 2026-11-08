@@ -11,5 +11,5 @@ twoine_os2_dll(
     pmwp/som_extended.c
 )
 twoine_os2_dll(pmspl pmspl/module.c)
-target_link_libraries(pmwp PRIVATE doscalls pmdrag pmgpi pmmerge)
+target_link_libraries(pmwp PRIVATE doscalls pmctls pmgpi pmmerge)
 target_link_libraries(pmspl PRIVATE pmmerge)

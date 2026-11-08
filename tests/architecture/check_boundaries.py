@@ -65,6 +65,7 @@ OS2_FORWARDER_DLLS = {
     "os2/ps/pmgre": "PMMERGE",
     "os2/ps/pmshapi": "PMMERGE",
     "os2/ps/pmwin": "PMMERGE",
+    "os2/ps/controls/drag": "PMCTLS",
 }
 OS2_FORWARDER_FILES = {"module.c", "README.md"}
 # Static helper code shared by several DLLs of one group, outside any DLL.
@@ -77,8 +78,7 @@ OS2_CROSS_DLL_ALLOWANCES = {
     ("os2/mm/video/dive", "os2/ps/pmmerge"): 1,
     ("os2/opengl/opengl", "os2/ps/pmmerge"): 1,
     ("os2/ps/awe", "os2/ps/pmmerge"): 39,
-    ("os2/ps/controls/drag", "os2/ps/pmmerge"): 1,
-    ("os2/ps/controls/pmctls", "os2/ps/pmmerge"): 3,
+    ("os2/ps/controls/pmctls", "os2/ps/pmmerge"): 4,
     ("os2/ps/pmgpi", "os2/ps/pmmerge"): 22,
     ("os2/wpsh/pmwp", "os2/ps/pmmerge"): 1,
 }
@@ -385,10 +385,11 @@ for path in sorted((root / "os2").glob("**/*-lx.h")):
         failures.append(f"{relative(path)}: generated exports belong in <dll>/generated/")
 for directory in sorted(OS2_FORWARDER_DLLS):
     dll = root / directory
-    definition = dll / f"{dll.name}.def"
-    if not definition.is_file():
-        failures.append(f"{directory}/: forwarder DLL without {definition.name}")
+    definitions = sorted(dll.glob("*.def"))
+    if len(definitions) != 1:
+        failures.append(f"{directory}/: forwarder DLL without one module definition")
         continue
+    definition = definitions[0]
     for line in definition.read_text().splitlines():
         entry = line.split(";", 1)[0].strip()
         target = OS2_FORWARDER_DLLS[directory]

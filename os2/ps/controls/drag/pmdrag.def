@@ -1,25 +1,25 @@
 ; 2ine. Zlib-style license; see LICENSE.txt.
-; Exports of PMDRAG.DLL: exported name [= C entry] @ordinal.
+; Exports of PMDRAG.DLL: exported name = PMCTLS.ordinal @ordinal.
 
 LIBRARY PMDRAG
 
 EXPORTS
-    DrgAccessDraginfo           @32
-    DrgAddStrHandle             @33
-    DrgAllocDraginfo            @34
-    DrgAllocDragtransfer        @35
-    DrgDeleteDraginfoStrHandles @36
-    DrgDeleteStrHandle          @37
-    DrgDrag                     @38
-    DrgFreeDraginfo             @39
-    DrgFreeDragtransfer         @40
-    DrgGetPS                    @41
-    DrgPostTransferMsg          @42
-    DrgQueryDragitemCount       @45
-    DrgQueryDragitemPtr         @46
-    DrgQueryStrName             @49
-    DrgQueryStrNameLen          @50
-    DrgReleasePS                @53
-    DrgSendTransferMsg          @54
-    DrgSetDragitem              @57
-    DrgVerifyRMF                @59
+    DrgAccessDraginfo = PMCTLS.74           @32
+    DrgAddStrHandle = PMCTLS.75             @33
+    DrgAllocDraginfo = PMCTLS.76            @34
+    DrgAllocDragtransfer = PMCTLS.77        @35
+    DrgDeleteDraginfoStrHandles = PMCTLS.78 @36
+    DrgDeleteStrHandle = PMCTLS.79          @37
+    DrgDrag = PMCTLS.80                     @38
+    DrgFreeDraginfo = PMCTLS.81             @39
+    DrgFreeDragtransfer = PMCTLS.82         @40
+    DrgGetPS = PMCTLS.83                    @41
+    DrgPostTransferMsg = PMCTLS.84          @42
+    DrgQueryDragitemCount = PMCTLS.87       @45
+    DrgQueryDragitemPtr = PMCTLS.88         @46
+    DrgQueryStrName = PMCTLS.91             @49
+    DrgQueryStrNameLen = PMCTLS.92          @50
+    DrgReleasePS = PMCTLS.95                @53
+    DrgSendTransferMsg = PMCTLS.96          @54
+    DrgSetDragitem = PMCTLS.99              @57
+    DrgVerifyRMF = PMCTLS.101               @59
