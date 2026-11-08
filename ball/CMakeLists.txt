@@ -95,7 +95,6 @@ foreach(target twoine_ball twoine_ball_static)
     target_compile_definitions(
         ${target}
         PRIVATE
-            TB_MEDIA_TIME_CACHE
             TB_SOURCE_VERSION="${TWOINE_SOURCE_VERSION}"
             TB_SOURCE_REVISION="${TWOINE_SOURCE_REVISION}"
     )

@@ -1,18 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Bounded process cache. A source is leased exclusively for one request; a
    concurrent reader gets its own state instead of sharing file/decoder cursors. */
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-static SRWLOCK media_cache_lock = SRWLOCK_INIT;
-#define CACHE_LOCK() AcquireSRWLockExclusive(&media_cache_lock)
-#define CACHE_UNLOCK() ReleaseSRWLockExclusive(&media_cache_lock)
-#else
-#include <pthread.h>
-static pthread_mutex_t media_cache_lock = PTHREAD_MUTEX_INITIALIZER;
-#define CACHE_LOCK() pthread_mutex_lock(&media_cache_lock)
-#define CACHE_UNLOCK() pthread_mutex_unlock(&media_cache_lock)
-#endif
+#define CACHE_LOCK() tb_storage_lock(TB_STORAGE_LOCK_CONTAINER_CACHE)
+#define CACHE_UNLOCK() tb_storage_unlock(TB_STORAGE_LOCK_CONTAINER_CACHE)
 #define MEDIA_CACHED_SOURCES 4
 #define MEDIA_CACHED_PARENTS 16
 #define MEDIA_SOURCE_CACHE_BYTES (64u * 1024u * 1024u)
@@ -93,7 +83,7 @@ static void select_media_cache(const char *host)
     if (!media_session.active)
         return;
     TbFileIdentity identity;
-    if (!tb_path_identity(host, &identity))
+    if (!source_identity(host, &identity))
         return;
     for (size_t i = 0; i < media_session.count; i++)
     {

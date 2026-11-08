@@ -3,21 +3,14 @@
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
 #include "storage/volume/volume_internal.h"
+#include "storage/common/host.h"
+#include "storage/common/host_stdio.h"
 #include "storage/vendor/fatfs/ff.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#ifdef _WIN32
-#include <windows.h>
-#include <io.h>
-#define fseeko _fseeki64
-#define ftello _ftelli64
-#define strdup _strdup
-#else
-#include <unistd.h>
-#endif
 #define H_SUPER 0xf995e849u
 #define H_SPARE 0xf9911849u
 #define H_FNODE 0xf7e40aaeu
@@ -493,11 +486,7 @@ static int sync_source(FILE *file)
 {
     if (fflush(file))
         return 0;
-#ifdef _WIN32
-    return !_commit(_fileno(file));
-#else
-    return !fsync(fileno(file));
-#endif
+    return tb_host_sync(file);
 }
 
 static int commit(HDisk *d)
@@ -535,11 +524,7 @@ static int commit(HDisk *d)
     if (fseeko(d->file, ((uint64_t)d->base + 17) * 512, SEEK_SET) ||
         fwrite(d->spare, 1, 512, d->file) != 512 || fflush(d->file))
         return herr(EIO);
-#ifdef _WIN32
-    return !_commit(_fileno(d->file));
-#else
-    return !fsync(fileno(d->file));
-#endif
+    return tb_host_sync(d->file);
 }
 
 static void directory_free(HDirectory *list)
@@ -1794,16 +1779,7 @@ int tb_hpfs_modify(const char *path, const char *expected, int action, uint64_t 
 
 static int format_file(const char *path, uint64_t bytes, FILE **file)
 {
-#ifdef _WIN32
-    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
-    wchar_t *wide = n ? malloc((size_t)n * sizeof *wide) : NULL;
-    if (wide)
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, n);
-    *file = wide ? _wfopen(wide, L"wbx") : NULL;
-    free(wide);
-#else
-    *file = fopen(path, "wbx");
-#endif
+    *file = tb_host_fopen(path, "wbx");
     if (!*file)
         return 0;
     if (fseeko(*file, (int64_t)bytes - 1, SEEK_SET) || fputc(0, *file) != 0 || fflush(*file))

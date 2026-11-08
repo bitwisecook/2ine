@@ -2,7 +2,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "storage/container.h"
 #include "storage/common/file_time.h"
-#include "ball/platform.h"
+#include "storage/common/host.h"
+#include "storage/common/host_stdio.h"
 #include "storage/volume.h"
 #include "storage/archives/ibm_pack/decode.h"
 #include "storage/read_stream.h"
@@ -12,14 +13,27 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
-#ifdef _WIN32
-#define strdup _strdup
-#define fseeko _fseeki64
-#define ftello _ftelli64
-#endif
 #define MEDIA_PREFIX "/@2ine-media/"
 #define MEDIA_MEMBER_LIMIT (UINT64_C(2) * 1024 * 1024 * 1024)
 #define MEDIA_ENTRY_LIMIT 100000u
+
+/* A container source is a host file or a file inside a mapped disk image. */
+static char *source_canonical(const char *path)
+{
+    return tb_image_path(path) ? tb_image_canonical(path) : tb_host_canonical(path);
+}
+
+static FILE *source_open(const char *path)
+{
+    return tb_image_path(path) ? tb_image_fopen(path) : tb_host_fopen(path, "rb");
+}
+
+/* Image volumes are mutable, so their files are never cached as sources. */
+static int source_identity(const char *path, TbFileIdentity *identity)
+{
+    return !tb_image_path(path) && tb_host_identity(path, identity);
+}
+
 #include "storage/archives/container_cache.h"
 
 static unsigned u16(const unsigned char *p)
@@ -104,7 +118,7 @@ char *tb_media_root(const char *source)
 {
     if (tb_media_path(source))
         return append(source, "", "!");
-    char *absolute = tb_canonical(source);
+    char *absolute = source_canonical(source);
     if (!absolute)
         return NULL;
     char *encoded = encode(absolute);
@@ -176,14 +190,14 @@ char *tb_media_member_name(const char *path)
 char *tb_media_host_source(const char *path)
 {
     if (!tb_media_path(path))
-        return tb_canonical(path);
+        return source_canonical(path);
     const char *begin = path + strlen(MEDIA_PREFIX), *end = strchr(begin, '!');
     if (!end)
         return NULL;
     char *decoded = decode(begin, (size_t)(end - begin));
     if (!decoded)
         return NULL;
-    char *canonical = tb_canonical(decoded);
+    char *canonical = source_canonical(decoded);
     free(decoded);
     return canonical;
 }
@@ -650,7 +664,7 @@ static TbReadStream *open_parent(const char *path, char **member)
     TbReadStream *file = cached_parent(path, (size_t)(end - path));
     if (!file)
     {
-        file = tb_stream_file(tb_fopen(host, "rb"), 1);
+        file = tb_stream_file(source_open(host), 1);
         if (file && media_session.current)
             tb_stream_set_budget(file, &media_session.current->budget);
         cache_parent(path, (size_t)(end - path), file);
@@ -836,7 +850,7 @@ int tb_media_container(const char *path)
         free(member);
     }
     else
-        file = tb_stream_file(tb_fopen(path, "rb"), 1);
+        file = tb_stream_file(source_open(path), 1);
     if (!file)
         return 0;
     int ok = archive_walk(file, probe_visit, NULL);

@@ -41,9 +41,11 @@ Project headers are included by their path from the project root
 `"hal/<name>.h"` and public storage headers as `"storage/<name>.h"`; same-directory
 names and `../` paths are rejected. Host-OS preprocessor branches (`_WIN32`,
 `__APPLE__`, `__linux__`) appear only in `hal/linux/`, `hal/macos/` and `hal/win/`,
-apart from the named temporary allowances in the checker. Every top-level source
-directory is classified in the checker, so a new component is covered by these
-rules.
+and in the storage host adapters `storage/common/host*` (file open/lock/sync,
+identity, local time and locks), apart from the named temporary allowances in the
+checker. `formats/` includes no other component, `storage/` only `formats/`, and
+only `ball/` includes `ball/`. Every top-level source directory is classified in
+the checker, so a new component is covered by these rules.
 
 | Boundary | Owns |
 |---|---|

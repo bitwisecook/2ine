@@ -6,23 +6,13 @@
 #include "storage/volume.h"
 #include "storage/volume/volume_internal.h"
 #include "storage/common/file_time.h"
+#include "storage/common/host.h"
+#include "storage/common/host_stdio.h"
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
 #include <time.h>
-#ifdef _WIN32
-#include <io.h>
-#else
-#include <sys/file.h>
-#include <unistd.h>
-#endif
-#ifdef _WIN32
-#include <windows.h>
-#define strdup _strdup
-#define fseeko _fseeki64
-#define ftello _ftelli64
-#endif
 #define IMAGE_PREFIX "/@2ine-image/"
 #define DEVICE_PREFIX "/@2ine-device/"
 #define SECTOR 2048u
@@ -133,23 +123,7 @@ static int digit(char c)
 
 FILE *tb_image_open_source(const char *path, int write)
 {
-#ifdef _WIN32
-    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
-    if (!n)
-    {
-        errno = EINVAL;
-        return NULL;
-    }
-    wchar_t *wide = malloc((size_t)n * sizeof *wide);
-    if (!wide)
-        return NULL;
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, n);
-    FILE *result = _wfopen(wide, write ? L"rb+" : L"rb");
-    free(wide);
-    return result;
-#else
-    return fopen(path, write ? "rb+" : "rb");
-#endif
+    return tb_host_fopen(path, write ? "rb+" : "rb");
 }
 
 static FILE *open_source(const char *path)
@@ -159,19 +133,7 @@ static FILE *open_source(const char *path)
 
 int tb_image_lock_source(FILE *file, int write)
 {
-#ifdef _WIN32
-    OVERLAPPED overlapped = {0};
-    if (!LockFileEx((HANDLE)_get_osfhandle(_fileno(file)), write ? LOCKFILE_EXCLUSIVE_LOCK : 0, 0,
-                    MAXDWORD, MAXDWORD, &overlapped))
-        return failure(EACCES);
-    return 1;
-#else
-    int result;
-    do
-        result = flock(fileno(file), write ? LOCK_EX : LOCK_SH);
-    while (result && errno == EINTR);
-    return result == 0;
-#endif
+    return tb_host_lock(file, write);
 }
 
 static int read_at(Disk *d, uint64_t offset, void *data, size_t n)
@@ -1589,11 +1551,7 @@ static int commit_disk(Disk *d)
     if (fseeko(d->file, 0, SEEK_SET) ||
         fwrite(d->memory, 1, (size_t)d->bytes, d->file) != d->bytes || fflush(d->file))
         return failure(errno ? errno : EIO);
-#ifdef _WIN32
-    return _commit(_fileno(d->file)) ? failure(errno) : 1;
-#else
-    return fsync(fileno(d->file)) ? failure(errno) : 1;
-#endif
+    return tb_host_sync(d->file) ? 1 : failure(errno);
 }
 
 static int parent_node(Disk *d, const char *member, Node *parent, char **name)
@@ -1630,13 +1588,8 @@ static int parent_node(Disk *d, const char *member, Node *parent, char **name)
 
 static void record_time(unsigned char *entry)
 {
-    time_t seconds = time(NULL);
     struct tm value;
-#ifdef _WIN32
-    localtime_s(&value, &seconds);
-#else
-    localtime_r(&seconds, &value);
-#endif
+    tb_host_localtime((int64_t)time(NULL), &value);
     unsigned year = value.tm_year + 1900;
     if (year < 1980)
         year = 1980;
@@ -2311,16 +2264,7 @@ int tb_image_create_floppy(const char *path, unsigned kib)
         bytes[at] = g->media;
         bytes[at + 1] = bytes[at + 2] = 0xff;
     }
-#ifdef _WIN32
-    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
-    wchar_t *wide = n ? malloc((size_t)n * sizeof *wide) : NULL;
-    if (wide)
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, n);
-    FILE *file = wide ? _wfopen(wide, L"wbx") : NULL;
-    free(wide);
-#else
-    FILE *file = fopen(path, "wbx");
-#endif
+    FILE *file = tb_host_fopen(path, "wbx");
     int ok = file != NULL;
     if (file)
     {

@@ -29,6 +29,9 @@ function(twoine_add_storage target)
     add_library(
         ${target}
         STATIC
+        "${_storage}/common/host_source.c"
+        "${_storage}/common/host_sync.c"
+        "${_storage}/common/host_time.c"
         "${_storage}/common/read_stream.c"
         "${_storage}/volume/volume.c"
         "${_storage}/filesystems/fat/fat_fatfs.c"
@@ -60,6 +63,9 @@ function(twoine_add_storage target)
     endif()
     if(STORAGE_CACHED_FILE_TIMES)
         target_compile_definitions(${target} PRIVATE TB_MEDIA_TIME_CACHE)
+        if(APPLE)
+            target_link_libraries(${target} PUBLIC "-framework CoreFoundation")
+        endif()
     endif()
     if(STORAGE_I386)
         target_compile_options(${target} PRIVATE -m32)

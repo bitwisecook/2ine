@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
+#include "storage/host_file.h"
 /* Path results are owned allocations. NULL preserves an errno failure reason. */
 char *tb_absolute(const char *path);
 char *tb_canonical(const char *path);
@@ -26,11 +27,6 @@ int tb_copy_new(const char *source, const char *destination);
 int tb_copy(const char *source, const char *destination);
 int tb_file_info(FILE *file, int64_t *size, int *mode);
 int tb_path_info(const char *path, uint64_t *size, int64_t *modified);
-
-typedef struct TbFileIdentity
-{
-    uint64_t device, file, size, modified, changed, modified_fraction, changed_fraction;
-} TbFileIdentity;
 
 int tb_path_identity(const char *path, TbFileIdentity *identity);
 typedef struct TbMutationLock TbMutationLock;

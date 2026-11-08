@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 #ifndef TB_FILE_TIME_H
 #define TB_FILE_TIME_H
+#include "storage/common/host.h"
 #include <stdint.h>
 #include <time.h>
 void tb_file_time_cache_reset(void);
@@ -8,7 +9,7 @@ void tb_file_time_cache_reset(void);
 int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts);
 #else
 /* Mounted writable volumes use the current local zone on every call. Media
-   requests opt into a request-scoped snapshot provided by platform.c. */
+   requests opt into a request-scoped snapshot provided by host_time.c. */
 static inline int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
 {
     (void)date;
@@ -45,13 +46,8 @@ static inline int64_t tb_dos_time(unsigned date, unsigned clock)
 /* Date in the high word and clock in the low word, clamped to the DOS date range. */
 static inline uint32_t tb_dos_stamp(int64_t seconds)
 {
-    time_t value = (time_t)seconds;
     struct tm date;
-#ifdef _WIN32
-    localtime_s(&date, &value);
-#else
-    localtime_r(&value, &date);
-#endif
+    tb_host_localtime(seconds, &date);
     unsigned year = date.tm_year + 1900 < 1980   ? 1980
                     : date.tm_year + 1900 > 2107 ? 2107
                                                  : (unsigned)date.tm_year + 1900;

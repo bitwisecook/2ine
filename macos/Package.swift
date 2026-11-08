@@ -25,7 +25,6 @@ let projectRoot = URL(filePath: #filePath).deletingLastPathComponent()
 
 let ballBuildSettings: [CSetting] = [
     .unsafeFlags(["-I", projectRoot]),
-    .define("TB_MEDIA_TIME_CACHE"),
     .define("CJSON_HIDE_SYMBOLS"),
     .define(
         "TB_SOURCE_VERSION",

@@ -13,8 +13,8 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 
 # Every top-level directory that holds sources has a role, so a new component is
 # placed under the rules below before it can pass.
-PORTABLE_COMPONENTS = {"formats", "runtime", "loader", "guest", "os2libs"}
-HOST_COMPONENTS = {"hal", "ball", "storage"}
+PORTABLE_COMPONENTS = {"formats", "storage", "runtime", "loader", "guest", "os2libs"}
+HOST_COMPONENTS = {"hal", "ball"}
 SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
 FOREIGN_DIRECTORIES = {"ports", "research"}
@@ -22,6 +22,22 @@ FOREIGN_DIRECTORIES = {"ports", "research"}
 # Paths whose sources follow another project's or toolchain's conventions:
 # vendored libraries and OS/2 guest programs built with OS/2 compilers.
 FOREIGN_SOURCE_PATHS = ("ball/vendor/", "storage/vendor/", "tests/programs/")
+
+# Files inside portable components that adapt them to the host: the only
+# place such a component may use host APIs or branch on the host OS.
+PORTABLE_HOST_ADAPTERS = ("storage/common/host",)
+
+# Includes each component may not use: formats/ is self-contained, storage/
+# builds on formats/ only, and nothing outside ball/ depends on ball/.
+FORBIDDEN_INCLUDES = {
+    "formats": ("storage/", "ball/", "hal/", "runtime/", "loader/", "guest/", "os2libs/"),
+    "storage": ("ball/", "hal/", "runtime/", "loader/", "guest/", "os2libs/"),
+    "hal": ("ball/",),
+    "runtime": ("ball/",),
+    "loader": ("ball/",),
+    "guest": ("ball/",),
+    "os2libs": ("ball/",),
+}
 
 # HAL directories that may branch on the host operating system.
 HAL_PLATFORM_DIRECTORIES = ("hal/linux/", "hal/macos/", "hal/win/")
@@ -103,6 +119,9 @@ def check_include_style(path):
         if name.startswith("hal/include/"):
             failures.append(f'{where}: public HAL headers are included as "hal/<name>.h"')
             continue
+        if name.startswith("storage/include/"):
+            failures.append(f'{where}: public storage headers are included as "storage/<name>.h"')
+            continue
         rooted = [base / name for base in INCLUDE_ROOTS if (base / name).is_file()]
         local = path.parent / name
         if local.is_file() and not any(local.samefile(candidate) for candidate in rooted):
@@ -111,8 +130,20 @@ def check_include_style(path):
             failures.append(f"{where}: unresolved project include")
 
 
+def foreign(name):
+    return name.split("/", 1)[0] in FOREIGN_DIRECTORIES or name.startswith(FOREIGN_SOURCE_PATHS)
+
+
+def portable_source(path):
+    """Component code that must build on any host without host APIs."""
+    name = relative(path)
+    return not foreign(name) and not name.startswith(PORTABLE_HOST_ADAPTERS)
+
+
 def os_branch_scope(path):
     name = relative(path)
+    if foreign(name) or name.startswith(PORTABLE_HOST_ADAPTERS):
+        return False
     top = name.split("/", 1)[0]
     if top in PORTABLE_COMPONENTS:
         return True
@@ -143,12 +174,21 @@ hardware = platform + [
 ]
 for directory in sorted(PORTABLE_COMPONENTS):
     for path in sources(directory, {".c", ".h"}):
+        if not portable_source(path):
+            continue
         check(
             path,
             hardware
             + [
                 r"#\s*include\s*<[^>]*hal/(?!abi\.h|audio\.h|clipboard\.h|video\.h|video_frame\.h|print\.h|font\.h|opengl\.h|gl_(?:dispatch|constants)\.h|socket\.h|network\.h|tls\.h|terminal\.h|host(?:_\w+)?\.h)[^>]+>"
             ],
+        )
+for directory, prefixes in sorted(FORBIDDEN_INCLUDES.items()):
+    for path in sources(directory):
+        if foreign(relative(path)):
+            continue
+        check(
+            path, [rf"#\s*(?:include|import)\s*<{re.escape(prefix)}[^>]*>" for prefix in prefixes]
         )
 for path in sources("hal/include", {".h"}):
     check(path, platform + [r"\bHANDLE\b"])

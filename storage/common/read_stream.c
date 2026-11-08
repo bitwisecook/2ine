@@ -2,13 +2,11 @@
 #define _POSIX_C_SOURCE 200809L
 #define _FILE_OFFSET_BITS 64
 #include "storage/read_stream.h"
+#include "storage/common/host_stdio.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-#define fseeko _fseeki64
-#define ftello _ftelli64
-#endif
+
 struct TbReadStream
 {
     uint64_t size, position;

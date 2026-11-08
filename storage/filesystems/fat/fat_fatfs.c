@@ -4,28 +4,18 @@
 #define _FILE_OFFSET_BITS 64
 #include "storage/volume/volume_internal.h"
 #include "storage/common/file_time.h"
+#include "storage/common/host.h"
+#include "storage/common/host_stdio.h"
 #include "storage/vendor/fatfs/ff.h"
 #include "storage/vendor/fatfs/diskio.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#ifdef _WIN32
-#include <windows.h>
-#include <io.h>
-#define fseeko _fseeki64
-#define ftello _ftelli64
-#define strdup _strdup
-static SRWLOCK mutex = SRWLOCK_INIT;
-#define LOCK() AcquireSRWLockExclusive(&mutex)
-#define UNLOCK() ReleaseSRWLockExclusive(&mutex)
-#else
-#include <pthread.h>
-#include <unistd.h>
-static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-#define LOCK() pthread_mutex_lock(&mutex)
-#define UNLOCK() pthread_mutex_unlock(&mutex)
-#endif
+/* FatFs keeps one mounted volume in process-global state. */
+#define LOCK() tb_storage_lock(TB_STORAGE_LOCK_FATFS)
+#define UNLOCK() tb_storage_unlock(TB_STORAGE_LOCK_FATFS)
+
 static struct
 {
     FILE *file;
@@ -65,11 +55,7 @@ DWORD get_fattime(void)
 {
     time_t now = time(NULL);
     struct tm date;
-#ifdef _WIN32
-    localtime_s(&date, &now);
-#else
-    localtime_r(&now, &date);
-#endif
+    tb_host_localtime((int64_t)now, &date);
     unsigned year = date.tm_year + 1900;
     if (year < 1980)
         year = 1980;
@@ -127,13 +113,8 @@ DRESULT disk_ioctl(BYTE drive, BYTE command, void *data)
     {
         if (fflush(media.file))
             return RES_ERROR;
-#ifdef _WIN32
-        if (media.writable && _commit(_fileno(media.file)))
+        if (media.writable && !tb_host_sync(media.file))
             return RES_ERROR;
-#else
-        if (media.writable && fsync(fileno(media.file)))
-            return RES_ERROR;
-#endif
     }
     else
         return RES_PARERR;
@@ -639,17 +620,7 @@ int tb_fat_format(const char *path, const char *filesystem, uint64_t bytes)
     }
     /* Exclusive creation never overwrites existing media. */
     FILE *new_file = NULL;
-#ifdef _WIN32
-    int n = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
-    wchar_t *wide = n ? malloc((size_t)n * sizeof *wide) : NULL;
-    if (wide)
-        MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, n);
-    if (wide)
-        new_file = _wfopen(wide, L"wbx");
-    free(wide);
-#else
-    new_file = fopen(path, "wbx");
-#endif
+    new_file = tb_host_fopen(path, "wbx");
     if (!new_file)
         return 0;
     int ok = !fseeko(new_file, (int64_t)bytes - 1, SEEK_SET) && fputc(0, new_file) == 0;

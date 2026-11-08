@@ -4,84 +4,13 @@
 #define _DARWIN_C_SOURCE 1
 #define _XOPEN_SOURCE 700
 #include "ball/platform.h"
+#include "storage/host_file.h"
 #include "storage/volume.h"
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
-#ifdef __APPLE__
-#include <CoreFoundation/CoreFoundation.h>
-static _Thread_local CFCalendarRef file_time_calendar;
-#endif
-/* mktime on macOS may reload zoneinfo for every DOS archive timestamp. A
-   request uses one local-zone interpretation; no process-wide TZ is changed. */
-static _Thread_local struct
-{
-    uint64_t key;
-    int64_t value;
-    int valid;
-} file_time_cache[4096];
-
-void tb_file_time_cache_reset(void)
-{
-    memset(file_time_cache, 0, sizeof file_time_cache);
-#ifdef __APPLE__
-    if (file_time_calendar)
-        CFRelease(file_time_calendar);
-    file_time_calendar = NULL;
-#endif
-}
-
-int64_t tb_local_file_time(unsigned date, unsigned clock, struct tm *parts)
-{
-    uint64_t key = ((uint64_t)date << 32) | clock;
-    size_t slot =
-        (size_t)((key ^ (key >> 17)) * UINT64_C(11400714819323198485)) >> (sizeof(size_t) * 8 - 12);
-    if (!file_time_cache[slot].valid || file_time_cache[slot].key != key)
-    {
-        file_time_cache[slot].key = key;
-#ifdef __APPLE__
-        if (!file_time_calendar)
-        {
-            const char *environment = getenv("TZ");
-            CFTimeZoneRef zone = NULL;
-            if (environment && *environment)
-            {
-                CFStringRef name =
-                    CFStringCreateWithCString(NULL, environment, kCFStringEncodingUTF8);
-                if (name)
-                {
-                    zone = CFTimeZoneCreateWithName(NULL, name, true);
-                    CFRelease(name);
-                }
-                if (!zone && (!strcmp(environment, "UTC0") || !strcmp(environment, "GMT0")))
-                    zone = CFTimeZoneCreateWithTimeIntervalFromGMT(NULL, 0);
-            }
-            else
-                zone = CFTimeZoneCopySystem();
-            if (zone)
-            {
-                file_time_calendar = CFCalendarCreateWithIdentifier(NULL, kCFGregorianCalendar);
-                if (file_time_calendar)
-                    CFCalendarSetTimeZone(file_time_calendar, zone);
-                CFRelease(zone);
-            }
-        }
-        CFAbsoluteTime absolute;
-        if (file_time_calendar &&
-            CFCalendarComposeAbsoluteTime(file_time_calendar, &absolute, "yMdHms",
-                                          parts->tm_year + 1900, parts->tm_mon + 1, parts->tm_mday,
-                                          parts->tm_hour, parts->tm_min, parts->tm_sec))
-            file_time_cache[slot].value = (int64_t)(absolute + kCFAbsoluteTimeIntervalSince1970);
-        else
-#endif
-            file_time_cache[slot].value = (int64_t)mktime(parts);
-        file_time_cache[slot].valid = 1;
-    }
-    return file_time_cache[slot].value;
-}
-
 #ifdef __linux__
 #include <fcntl.h>
 #include <sys/syscall.h>
@@ -200,56 +129,7 @@ char *tb_canonical(const char *path)
 {
     if (tb_image_path(path))
         return tb_image_canonical(path);
-    wchar_t *w = wide(path);
-    if (!w)
-        return NULL;
-    HANDLE f = CreateFileW(w, 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
-                           OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-    if (f == INVALID_HANDLE_VALUE)
-    {
-        path_errno(GetLastError());
-        free(w);
-        return NULL;
-    }
-    free(w);
-    DWORD n = GetFinalPathNameByHandleW(f, NULL, 0, FILE_NAME_NORMALIZED);
-    if (!n)
-    {
-        path_errno(GetLastError());
-        int error = errno;
-        CloseHandle(f);
-        errno = error;
-        return NULL;
-    }
-    wchar_t *full = n ? malloc(((size_t)n + 1) * sizeof(*full)) : NULL;
-    char *result = NULL;
-    DWORD length = full ? GetFinalPathNameByHandleW(f, full, n + 1, FILE_NAME_NORMALIZED) : 0;
-    if (full && !length)
-        path_errno(GetLastError());
-    else if (length > n)
-        errno = ENAMETOOLONG;
-    if (length && length <= n)
-    {
-        if (!wcsncmp(full, L"\\\\?\\UNC\\", 8))
-        {
-            size_t count = wcslen(full + 8);
-            wchar_t *unc = malloc((count + 3) * sizeof(*unc));
-            if (unc)
-            {
-                unc[0] = unc[1] = L'\\';
-                wcscpy(unc + 2, full + 8);
-                result = utf8(unc);
-                free(unc);
-            }
-        }
-        else
-            result = utf8(wcsncmp(full, L"\\\\?\\", 4) == 0 ? full + 4 : full);
-    }
-    int error = errno;
-    free(full);
-    CloseHandle(f);
-    errno = error;
-    return result;
+    return tb_host_canonical(path);
 }
 
 static DWORD attributes(const char *path)
@@ -375,7 +255,7 @@ char *tb_canonical(const char *p)
 {
     if (tb_image_path(p))
         return tb_image_canonical(p);
-    return realpath(p, NULL);
+    return tb_host_canonical(p);
 }
 
 char *tb_absolute(const char *p)
@@ -1001,26 +881,7 @@ int tb_path_identity(const char *path, TbFileIdentity *identity)
     memset(identity, 0, sizeof *identity);
     if (tb_image_path(path))
         return 0; /* Virtual/mutable volumes are never retained as host media. */
-#ifdef _WIN32
-    wchar_t *name = wide(path);
-    if (!name)
-        return 0;
-    HANDLE file = CreateFileW(name, FILE_READ_ATTRIBUTES,
-                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
-                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    free(name);
-    if (file == INVALID_HANDLE_VALUE)
-        return 0;
-    int ok = file_identity(file, identity);
-    CloseHandle(file);
-    return ok;
-#else
-    struct stat info;
-    if (stat(path, &info) || !S_ISREG(info.st_mode))
-        return 0;
-    stat_identity(&info, identity);
-    return 1;
-#endif
+    return tb_host_identity(path, identity);
 }
 
 struct TbMutationLock
