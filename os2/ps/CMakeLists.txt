@@ -178,6 +178,9 @@ twoine_os2_dll(
     awe/gdi/fonts.c
     awe/gdi/mapping_modes.c
     awe/gdi/objects.c
+    awe/gdi/metafiles/conversion.c
+    awe/gdi/metafiles/emf.c
+    awe/gdi/metafiles/recorder.c
     awe/gdi/metafiles/wmf.c
     awe/gdi/palettes.c
     awe/gdi/paths.c

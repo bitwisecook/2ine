@@ -5,8 +5,6 @@
 #include "os2/ps/awe/internal.h"
 #include "emulator/handles.h"
 #include "host/clock.h"
-#include "host/sync.h"
-#include "host/thread.h"
 #include "os2/ps/awe/dde/dde.h"
 
 DdeConversation *dde_conversations;

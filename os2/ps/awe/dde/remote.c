@@ -7,9 +7,6 @@
 #include "host/clock.h"
 #include "host/mailbox.h"
 #include "host/process.h"
-#include "host/shared_memory.h"
-#include "host/sync.h"
-#include "host/thread.h"
 #include <stdio.h>
 #include "os2/ps/awe/dde/dde.h"
 

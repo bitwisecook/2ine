@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#ifndef TWOINE_OPEN32_BATCH_METAFILE_H
-#define TWOINE_OPEN32_BATCH_METAFILE_H
+/* Recording hooks: drawing calls on a metafile DC append their records through these. */
+#ifndef TWOINE_PMWINX_METAFILE_H
+#define TWOINE_PMWINX_METAFILE_H
 BOOL open32MetafilePolyPolygon(ULONG dc, PVOID points, PVOID counts, LONG polygons);
 BOOL open32IsMetafile(ULONG dc);
 void open32MetafileDib(ULONG dc, LONG x, LONG y, LONG w, LONG h, LONG sx, LONG sy, LONG sw, LONG sh,

@@ -3,7 +3,6 @@
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "emulator/handles.h"
-#include "host/sync.h"
 #include "os2/ps/awe/dde/dde.h"
 
 static void cleanup_dde_owned(ULONG id);
