@@ -8,6 +8,20 @@ Format every language with `python3 tools/format.py --write`, or verify with
 
 Python 3.11+. No runtime dependencies outside the standard library.
 
+| Directory | Contents |
+|---|---|
+| `tools/codegen/` | `lxapigen.py`, `gen_opengl.py`, `gen_unithunk.py`, `project_sources.py`, `cvtasm.py`; `data/opengl.json`, `data/project-sources.json` |
+| `tools/binary/` | `lx_dump.c` (built as `lx_dump`), `os2binary.py`, `os2imports.py`, `unimplemented.py`, `lotus_imports.py`, `extract_warp_fonts.py`; `data/os2imports.json` |
+| `tools/ball/` | `engine.py`, the Python adapter for the shared C ball engine, and `desktop.py`, its JSON stdin/stdout adapter |
+| `tools/ports/` | `build_doom.py`, `build_glquake.py`, `benchmark_games.py` for the sources in `ports/` |
+| `tools/soundfonts/` | Sound-bank fetching and recommendations; `data/` catalogues |
+| `tools/macos/` | macOS app bundling, build numbers, Mesa build and icon rendering |
+| `tools/dev/` | `format-c.py` and the pinned `clang-format-version` used by `tools/format.py`, `compare_wordpro.py` |
+
+Scripts run directly (`python3 tools/<group>/<tool>.py`) or as modules
+(`python3 -m tools.<group>.<tool>`); either way they import other tools as
+`tools.<group>.<module>`.
+
 | Tool | Input → output |
 |---|---|
 | `tools/codegen/lxapigen.py` | Module definitions + API headers + binding policies → `os2/**/generated/*-lx.h` |

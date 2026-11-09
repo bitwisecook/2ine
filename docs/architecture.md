@@ -8,6 +8,7 @@
 
 ```mermaid
 flowchart TD
+    Program["apps/lx_loader/ · lx_loader command line"] --> Loader
     Image["NE / LX executable + DLLs"] --> Loader["emulator/loader/ · load, relocate, resolve"]
     Loader --> Process["emulator/process/ · lib2ine process state"]
     Loader --> Guest["emulator/abi/ + os2/**/bindings.h · wire ABI, arguments, handles"]
@@ -56,7 +57,9 @@ The ball store (`ball/`) keeps settings, files and references and includes no
 installation or launch code; the installation manager (`environment/`) and
 launch planning (`emulator/launch/`) reach it only through `ball/store.h`, and
 only the JSON facade (`ball/facade/`) composes them. Applications (`apps/`) use
-the engine's JSON ABI only. `emulator/` outside `emulator/launch/` does not
+the engine's JSON ABI only; the loader program (`apps/lx_loader/`) enters the
+emulator through its public headers. Vendored libraries live in `third_party/`
+and include no project code. `emulator/` outside `emulator/launch/` does not
 include `ball/`, `environment/` or `os2/`, and its layers (execution, ABI,
 process, loader) include only downwards. Inside `os2/`, sources use only the known IBM groups; each DLL directory has
 one module definition, and its generated table is included only by its
@@ -88,9 +91,14 @@ the checker, so a new component is covered by these rules.
 | `environment/` | The OS/2 installation manager: installation media, the component ledger and operations, dependency audits, install receipts, Workplace Shell launchers and sound banks. See [environment.md](environment.md) |
 | `emulator/launch/` | Launch planning for a ball: runtime selection and features, the guest and host environments, the `system.*` schema, `2ine.cfg` and `audio.conf`, arguments, prerequisites and the launch plan |
 | `os2/config/` | Codecs for OS/2's configuration files: INI profiles (native and 2INEPRF1), CONFIG.SYS statements and search lists, Workplace Shell object records and setup strings; shared by PMSHAPI, PMWP and the ball |
+| `apps/lx_loader/` | `lx_loader`, the program that runs an OS/2 executable: fatal-dialog mode, installer operation supervisor and usage, then `lx_loader_run` |
 | `apps/cli/` | `2ine-ball`, the command-line client of the JSON facade |
+| `apps/gnome/` | The GNOME manager: the `twoine_gnome` package, `data/` (UI, icons, desktop and AppStream files), the `2ine-ball` launcher, `install.py` and `package.py` (deb/rpm/snap staging). See [gnome-app.md](gnome-app.md) |
+| `apps/macos/` | The macOS manager: Swift package (`Sources/BallCore`, `Sources/TwoineBall/{Views,Browsers,Components,Settings}`, symlinked C targets), `Tests/`, `Xcode/` and `Resources/` (icons, entitlements). See [macos-app.md](macos-app.md) |
+| `apps/common/` | Assets shared by the frontends (the ball document icon) |
+| `third_party/` | Vendored libraries with their licences: cJSON, SHA-256, FatFs, HWZIP, Deark's PACK decoders and the pinned libarchive API headers |
 | `storage/` | Disk images, filesystems (ISO 9660, FAT, HPFS) and archive containers shared by the host services and ball; public interface in `storage/include/storage/`; built per ABI by `twoine_add_storage` |
-| `emulator/loader/` | Entry, imports/relocations, NE/LX loading, module lifetime, module diagnostics and the REXX service worker |
+| `emulator/loader/` | The loader library (`twoine_loader`): process start (`lx_loader_run`), entry, imports/relocations, NE/LX loading, module lifetime, module diagnostics and the REXX service worker |
 | `emulator/process/` | Bootstrap, PIB, process peers, threads/TIBs, 16-bit segments, configuration, drives and paths, resolver files, launch record and audio generator mixer |
 | `emulator/execution/` | Execution dispatch/mappings (`core/`) and the native i386 and Unicorn backends |
 | `emulator/abi/` | Argument marshalling and handles; public headers in `emulator/include/emulator/` |
@@ -104,9 +112,9 @@ the checker, so a new component is covered by these rules.
 | `os2/mm/{mci/mdm,mmio/mmio}/` | Forwarder-only DLLs: each export forwards to the MMPM ordinal that implements it, as in Warp 4.52 |
 | `os2/registry/reg32/` | REGISTRY: the Reg* entries, which PMWINX forwards to at Warp's ordinals |
 | `os2/mptn/common/` | Socket layouts, socket errors and host lookups shared by TCPIP32, SO32DLL and TCP32DLL |
-| `tools/` | Generators, import analysis, assembly conversion and `lx_dump` |
-| `tools/data/` | Ordinal catalogue |
-| `tests/` | Host, emulator, OS/2 library, tools, architecture and integration tests; guest programs/fixtures |
+| `tools/` | Developer and packaging tools, by purpose: `codegen/`, `binary/` (with `lx_dump`), `ball/`, `ports/`, `soundfonts/`, `dev/`, `macos/`; catalogues sit in each group's `data/`. See [tools.md](tools.md) |
+| `ports/` | Source ports built for OS/2 by `tools/ports/`: GLQuake sources and Doom patches, each with an `upstream.json` manifest |
+| `tests/` | Tests mirroring the tree (`storage/`, `host/`, `emulator/`, `os2/<group>/`, `ball/`, `environment/`, `apps/`, `tools/`), the boundary checker (`architecture/`), guest programs (`programs/`) and the integration scripts (`integration/`). See [testing.md](testing.md) |
 | `research/` | Format specifications and isolated experiments |
 
 Component CMake files own their targets. Generated tables are included only by

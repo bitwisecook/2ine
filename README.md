@@ -46,6 +46,19 @@ The [native macOS manager](docs/macos-app.md) uses SwiftUI and a shared C ball
 engine, with a Python-free app bundle and Make targets for development and
 Developer ID notarized distribution.
 
+## Source tree
+
+| Directory | Contents |
+|---|---|
+| `emulator/` | Loader, OS/2 process runtime (`lib2ine`), guest ABI, execution backends (native i386, Unicorn) and launch planning |
+| `os2/` | The OS/2 DLLs, grouped like IBM's component trees (`baseos`, `ps`, `mm`, `mptn`, …); see [os2/README.md](os2/README.md) |
+| `host/` | Host services: a platform-free core plus Linux, macOS, POSIX, SDL and other adapters |
+| `formats/`, `storage/` | Executable, resource and audio formats; disk images, filesystems and archives |
+| `ball/`, `environment/` | The ball store and its JSON facade; the OS/2 installation manager |
+| `apps/` | `lx_loader`, the `2ine-ball` CLI, the GNOME and macOS managers |
+| `third_party/` | Vendored libraries with their licences |
+| `tools/`, `tests/`, `ports/`, `docs/` | Developer tools, tests mirroring the tree, game ports, documentation |
+
 ## Origins, credits and project sources
 
 2ine was created by **[Ryan C. Gordon (icculus)](https://icculus.org/)**.

@@ -6,6 +6,24 @@ Run runtime and execution contracts with `ctest --test-dir build --output-on-fai
 They cover mixed-mode entry, callbacks, threads/TLS, memory bounds, resource
 lifetimes, x87 state and host synchronization.
 
+## Layout
+
+`tests/` mirrors the source tree. Each directory's `CMakeLists.txt` registers
+its own ctest cases; test executables are written to the tests build directory.
+
+| Directory | Contents |
+|---|---|
+| `storage/`, `host/`, `emulator/` | C unit tests of those components, and the scripts paired with their test executables |
+| `os2/{baseos,ps,awe,mm,mptn,opengl}/` | C tests of the OS/2 DLLs, by IBM group |
+| `ball/`, `environment/`, `emulator/launch/`, `apps/gnome/`, `tools/` | Python unit tests of the ball store and facade, the installation manager, launch planning, the GNOME frontend models and the tools |
+| `integration/` | Scripts that run generated and original OS/2 programs: `harness/` (guest image builders, fixtures, X11 helpers), `emulator/`, `host/`, `os2/<group>/`, `ports/`, `applications/`, `ball/`, `apps/{gnome,macos}/` |
+| `programs/` | Guest program sources and retained fixtures |
+| `architecture/` | `check_boundaries.py`, the source-ownership checker (ctest `source_boundaries`) |
+
+Run the Python unit tests with
+`python3 -m unittest discover -s tests -t . -p 'test_*.py'`. Integration
+scripts import their helpers as `tests.integration.harness.<module>`.
+
 `legacy_file_apis` builds synthetic NE/LX guests without an external compiler.
 It verifies writable preloaded NE stacks, NLS case mapping and export ordinals,
 packed `DosFindFirst2` directory records, `DosOpen2` with empty extended
