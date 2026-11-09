@@ -57,6 +57,8 @@ twoine_os2_dll(
     pmmerge/pmwin/static.c
     pmmerge/pmwin/buttons.c
     pmmerge/pmwin/bitmap.c
+    pmmerge/pmwin/sysbitmap.c
+    pmmerge/pmwin/draw.c
     pmmerge/pmwin/text.c
     pmmerge/pmwin/rectangles.c
     pmmerge/pmwin/entry.c
