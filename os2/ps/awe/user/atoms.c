@@ -213,6 +213,8 @@ typedef struct LocalAtom
     ULONG references;
 } LocalAtom;
 
+/* Local atoms are a private table rather than a PM atom table so that they keep Windows' atom
+   numbers (0xC000 + slot) and report errors through SetLastError. */
 static LocalAtom local_atoms[0x4000];
 static LxHostOnce local_once = LX_HOST_ONCE_INIT;
 static LxHostMonitor *local_monitor;
@@ -224,20 +226,9 @@ static void local_initialize(void)
         abort();
 }
 
-static ULONG local_integer_atom(PSZ name)
-{
-    if ((uintptr_t)name <= 0xFFFF)
-        return (ULONG)(uintptr_t)name < 0xC000 ? (ULONG)(uintptr_t)name : 0;
-    if (*name != '#')
-        return 0;
-    char *end;
-    unsigned long value = strtoul(name + 1, &end, 10);
-    return end != name + 1 && !*end && value > 0 && value < 0xC000 ? (ULONG)value : 0;
-}
-
 static ULONG local_find_atom(PSZ name, BOOL add)
 {
-    ULONG integer = local_integer_atom(name);
+    ULONG integer = integer_atom(name);
     if (integer)
         return integer;
     if ((uintptr_t)name <= 0xFFFF || !*name || strlen(name) > 255 || *name == '#')

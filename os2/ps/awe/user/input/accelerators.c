@@ -1,5 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Open32 accelerator handles own copied PM resources or Windows ACCEL arrays. */
+/* Open32 accelerator handles own copied PM resources or Windows ACCEL arrays. They translate to
+   Windows WM_COMMAND/WM_SYSCOMMAND messages, so this table is separate from PM's
+   WinTranslateAccel, which posts PM commands with CMDSRC_ACCELERATOR. */
 #include "os2/include/private/export.h"
 #include "os2/ps/awe/internal.h"
 #include "os2/ps/awe/user/windows/windows.h"
