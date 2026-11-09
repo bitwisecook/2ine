@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+BYTES_PER_LINE = 12
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -37,9 +39,11 @@ def main():
         "/* clang-format off */",
         "static const unsigned char UniversalThunk[] = {",
     ]
-    for offset in range(0, len(blob), 12):
+    for offset in range(0, len(blob), BYTES_PER_LINE):
         lines.append(
-            "    " + ", ".join(f"0x{byte:02x}" for byte in blob[offset : offset + 12]) + ","
+            "    "
+            + ", ".join(f"0x{byte:02x}" for byte in blob[offset : offset + BYTES_PER_LINE])
+            + ","
         )
     lines.append("};")
     for name in ("data", "flat_address", "flat_cs", "return_cs", "flat", "sel_to_flat"):
