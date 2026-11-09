@@ -5,14 +5,43 @@
 #include <stdlib.h>
 #include <string.h>
 
+enum
+{
+    /* Larger clipboard images are refused. */
+    MAX_IMAGE_SIDE = 16384,
+    MAX_IMAGE_PIXELS = 16777216,
+    MAX_IMAGE_BYTES = 64 * 1024 * 1024,
+    RGBA_BYTES = 4,
+
+    /* PNG: 8-byte signature, then the IHDR chunk's length, type, width and height. */
+    PNG_SIGNATURE_BYTES = 8,
+    PNG_IHDR_LENGTH_OFFSET = 8,
+    PNG_IHDR_DATA_LENGTH = 13,
+    PNG_IHDR_TYPE_OFFSET = 12,
+    PNG_IHDR_WIDTH_OFFSET = 16,
+    PNG_IHDR_HEIGHT_OFFSET = 20,
+    PNG_MIN_BYTES = 33, /* signature and the complete IHDR chunk */
+
+    /* BMP: 14-byte file header, then a BITMAPCOREHEADER (12) or BITMAPINFOHEADER (40+). */
+    BMP_INFO_OFFSET = 14,
+    BMP_CORE_HEADER_BYTES = 12,
+    BMP_CORE_WIDTH_OFFSET = 18,
+    BMP_CORE_HEIGHT_OFFSET = 20,
+    BMP_INFO_HEADER_BYTES = 40,
+    BMP_INFO_WIDTH_OFFSET = 18,
+    BMP_INFO_HEIGHT_OFFSET = 22,
+    BMP_INFO_MIN_FILE_BYTES = BMP_INFO_OFFSET + BMP_INFO_HEADER_BYTES,
+    MIN_IMAGE_BYTES = BMP_INFO_OFFSET + BMP_CORE_HEADER_BYTES
+};
+
 void *lx_host_clipboard_encode_image(const char *mime, const void *rgba, unsigned width,
                                      unsigned height, size_t *size)
 {
-    if (!mime || !rgba || !size || !width || !height || width > 16384 || height > 16384 ||
-        (uint64_t)width * height > 16777216)
+    if (!mime || !rgba || !size || !width || !height || width > MAX_IMAGE_SIDE ||
+        height > MAX_IMAGE_SIDE || (uint64_t)width * height > MAX_IMAGE_PIXELS)
         return NULL;
     SDL_Surface *surface = SDL_CreateSurfaceFrom((int)width, (int)height, SDL_PIXELFORMAT_RGBA32,
-                                                 (void *)rgba, (int)width * 4);
+                                                 (void *)rgba, (int)width * RGBA_BYTES);
     SDL_IOStream *stream = SDL_IOFromDynamicMem();
     void *result = NULL;
     if (surface && stream)
@@ -21,7 +50,7 @@ void *lx_host_clipboard_encode_image(const char *mime, const void *rgba, unsigne
                  : !strcmp(mime, "image/bmp") ? SDL_SaveBMP_IO(surface, stream, false)
                                               : 0;
         Sint64 length = SDL_GetIOSize(stream);
-        if (ok && length > 0 && length <= 64 * 1024 * 1024)
+        if (ok && length > 0 && length <= MAX_IMAGE_BYTES)
         {
             result = malloc((size_t)length);
             void *source = SDL_GetPointerProperty(SDL_GetIOProperties(stream),
@@ -58,27 +87,30 @@ static uint32_t big32(const uint8_t *p)
 void *lx_host_clipboard_decode_image(const char *mime, const void *bytes, size_t size,
                                      unsigned *width, unsigned *height)
 {
-    if (!mime || !bytes || !width || !height || size < 26 || size > 64 * 1024 * 1024)
+    if (!mime || !bytes || !width || !height || size < MIN_IMAGE_BYTES || size > MAX_IMAGE_BYTES)
         return NULL;
     const uint8_t *p = bytes;
     uint32_t w = 0, h = 0;
     int png = !strcmp(mime, "image/png");
-    if (png && size >= 33 && !memcmp(p, "\x89PNG\r\n\x1a\n", 8) && big32(p + 8) == 13 &&
-        !memcmp(p + 12, "IHDR", 4))
-        w = big32(p + 16), h = big32(p + 20);
+    if (png && size >= PNG_MIN_BYTES && !memcmp(p, "\x89PNG\r\n\x1a\n", PNG_SIGNATURE_BYTES) &&
+        big32(p + PNG_IHDR_LENGTH_OFFSET) == PNG_IHDR_DATA_LENGTH &&
+        !memcmp(p + PNG_IHDR_TYPE_OFFSET, "IHDR", 4))
+        w = big32(p + PNG_IHDR_WIDTH_OFFSET), h = big32(p + PNG_IHDR_HEIGHT_OFFSET);
     else if (!strcmp(mime, "image/bmp") && p[0] == 'B' && p[1] == 'M')
     {
-        uint32_t header = little32(p + 14);
-        if (header == 12)
-            w = p[18] | (unsigned)p[19] << 8, h = p[20] | (unsigned)p[21] << 8;
-        else if (header >= 40 && size >= 54)
+        uint32_t header = little32(p + BMP_INFO_OFFSET);
+        if (header == BMP_CORE_HEADER_BYTES)
+            w = p[BMP_CORE_WIDTH_OFFSET] | (unsigned)p[BMP_CORE_WIDTH_OFFSET + 1] << 8,
+            h = p[BMP_CORE_HEIGHT_OFFSET] | (unsigned)p[BMP_CORE_HEIGHT_OFFSET + 1] << 8;
+        else if (header >= BMP_INFO_HEADER_BYTES && size >= BMP_INFO_MIN_FILE_BYTES)
         {
-            int32_t signed_height = (int32_t)little32(p + 22);
-            w = little32(p + 18);
+            /* A negative height marks a top-down bitmap. */
+            int32_t signed_height = (int32_t)little32(p + BMP_INFO_HEIGHT_OFFSET);
+            w = little32(p + BMP_INFO_WIDTH_OFFSET);
             h = signed_height < 0 ? (uint32_t)-(int64_t)signed_height : (uint32_t)signed_height;
         }
     }
-    if (!w || !h || w > 16384 || h > 16384 || (uint64_t)w * h > 16777216)
+    if (!w || !h || w > MAX_IMAGE_SIDE || h > MAX_IMAGE_SIDE || (uint64_t)w * h > MAX_IMAGE_PIXELS)
         return NULL;
     SDL_IOStream *stream = SDL_IOFromConstMem(bytes, size);
     SDL_Surface *surface =
@@ -87,7 +119,7 @@ void *lx_host_clipboard_decode_image(const char *mime, const void *bytes, size_t
     void *result = NULL;
     if (converted && converted->w == (int)w && converted->h == (int)h)
     {
-        result = malloc((size_t)w * h * 4);
+        result = malloc((size_t)w * h * RGBA_BYTES);
         if (result)
         {
             for (unsigned y = 0; y < h; y++)

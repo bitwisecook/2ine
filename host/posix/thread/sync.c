@@ -40,6 +40,15 @@ enum
     NAMED_MUTEX_READY = 1
 };
 
+enum
+{
+    MICROSECONDS_PER_MILLISECOND = 1000,
+    /* Polling interval while waiting for a contended named or timed lock. */
+    LOCK_POLL_NANOSECONDS = 1000000,
+    /* Time allowed for a named mutex's creator to finish initializing it. */
+    NAMED_MUTEX_READY_TIMEOUT_US = 1000000
+};
+
 static pthread_key_t named_owner_key;
 static pthread_once_t named_owner_once = PTHREAD_ONCE_INIT;
 static int named_owner_ready;
@@ -154,7 +163,9 @@ static void stopWaiting(void *p)
 static LxHostLockResult lock_named(LxHostMutex *mutex, uint32_t timeout)
 {
     uint64_t deadline =
-        timeout == UINT32_MAX ? UINT64_MAX : lx_host_monotonic_us() + (uint64_t)timeout * 1000;
+        timeout == UINT32_MAX
+            ? UINT64_MAX
+            : lx_host_monotonic_us() + (uint64_t)timeout * MICROSECONDS_PER_MILLISECOND;
     LxHostLockResult result = LX_HOST_LOCK_FAILED;
     __atomic_add_fetch(&mutex->waiting, 1, __ATOMIC_SEQ_CST);
     pthread_cleanup_push(stopWaiting, mutex);
@@ -210,7 +221,7 @@ static LxHostLockResult lock_named(LxHostMutex *mutex, uint32_t timeout)
             result = timeout ? LX_HOST_LOCK_TIMEOUT : LX_HOST_LOCK_BUSY;
             break;
         }
-        const struct timespec pause = {0, 1000000};
+        const struct timespec pause = {0, LOCK_POLL_NANOSECONDS};
         nanosleep(&pause, NULL);
     }
     pthread_cleanup_pop(1);
@@ -228,7 +239,8 @@ LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
         rc = pthread_mutex_lock(&m->object);
     else
     {
-        const uint64_t deadline = lx_host_monotonic_us() + (uint64_t)timeout * 1000;
+        const uint64_t deadline =
+            lx_host_monotonic_us() + (uint64_t)timeout * MICROSECONDS_PER_MILLISECOND;
         while ((rc = pthread_mutex_trylock(&m->object)) == EBUSY && timeout)
         {
             if (lx_host_monotonic_us() >= deadline)
@@ -236,7 +248,7 @@ LxHostLockResult lx_host_mutex_lock(LxHostMutex *m, uint32_t timeout)
                 rc = ETIMEDOUT;
                 break;
             }
-            const struct timespec pause = {0, 1000000};
+            const struct timespec pause = {0, LOCK_POLL_NANOSECONDS};
             nanosleep(&pause, NULL);
         }
     }
@@ -351,7 +363,7 @@ LxHostNamedMutexResult lx_host_mutex_open_named(const char *name, int create, in
     }
     else
     {
-        uint64_t deadline = lx_host_monotonic_us() + 1000000;
+        uint64_t deadline = lx_host_monotonic_us() + NAMED_MUTEX_READY_TIMEOUT_US;
         while (!__atomic_load_n(&state[NAMED_MUTEX_READY], __ATOMIC_ACQUIRE))
         {
             if (lx_host_monotonic_us() >= deadline)
@@ -464,7 +476,7 @@ void lx_host_once(LxHostOnce *once, void (*initialize)(void))
     else
         while (__atomic_load_n(&once->state, __ATOMIC_ACQUIRE) != 2)
         {
-            const struct timespec pause = {0, 1000000};
+            const struct timespec pause = {0, LOCK_POLL_NANOSECONDS};
             nanosleep(&pause, NULL);
         }
 }

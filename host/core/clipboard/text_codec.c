@@ -92,9 +92,20 @@ void *lx_host_clipboard_html_extract(const void *data, size_t size, size_t *leng
     return copy;
 }
 
+/* Returns the lx_host_sbcs_unicode table for an OS/2 code page, or -1. */
 static int page_index(unsigned codepage)
 {
-    return codepage == 437 ? 0 : codepage == 850 ? 1 : codepage == 1004 ? 2 : -1;
+    enum
+    {
+        CODEPAGE_US = 437,
+        CODEPAGE_MULTILINGUAL = 850,
+        CODEPAGE_WINDOWS_LATIN1 = 1004
+    };
+
+    return codepage == CODEPAGE_US               ? 0
+           : codepage == CODEPAGE_MULTILINGUAL   ? 1
+           : codepage == CODEPAGE_WINDOWS_LATIN1 ? 2
+                                                 : -1;
 }
 
 void *lx_host_clipboard_text_utf8(unsigned codepage, const void *bytes, size_t size, size_t *length)

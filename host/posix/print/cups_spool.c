@@ -10,12 +10,15 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/* The shell's exit status when a command cannot be executed. */
+#define EXEC_FAILED_STATUS 127
+
 static int printer_name(const char *name)
 {
     if (!name || !*name || *name == '-' || strlen(name) > 1024)
         return 0;
     for (const unsigned char *p = (const unsigned char *)name; *p; p++)
-        if (*p <= 32 || *p == 127 || *p == '/' || *p == '#')
+        if (*p <= ' ' || *p == 0x7f || *p == '/' || *p == '#')
             return 0;
     return 1;
 }
@@ -66,10 +69,10 @@ char **lx_host_print_printers(size_t *count)
     {
         close(descriptors[0]);
         if (dup2(descriptors[1], STDOUT_FILENO) < 0)
-            _exit(127);
+            _exit(EXEC_FAILED_STATUS);
         close(descriptors[1]);
         execl(program, "lpstat", "-a", (char *)NULL);
-        _exit(127);
+        _exit(EXEC_FAILED_STATUS);
     }
     free(program);
     close(descriptors[1]);
@@ -138,12 +141,12 @@ int lx_host_print_submit_helper(const char *program, const char *printer, const 
     if (!child)
     {
         if (dup2(fileno(source), STDIN_FILENO) < 0)
-            _exit(127);
+            _exit(EXEC_FAILED_STATUS);
         if (fileno(source) > STDERR_FILENO)
             close(fileno(source));
         execl(program, program, "-d", printer, "-n", number, "-t",
               title && *title ? title : "2ine Print Job", "-o", "raw", "--", "-", (char *)NULL);
-        _exit(127);
+        _exit(EXEC_FAILED_STATUS);
     }
     int ok = wait_child(child);
     if (!ok)

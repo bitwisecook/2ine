@@ -208,6 +208,11 @@ size_t lx_host_shared_size(const LxHostShared *s)
 enum
 {
     SLOT_NAME = 128,
+    /* After the NUL-padded name: four 64-bit words. */
+    SLOT_IDENTITY = 128,
+    SLOT_ADDRESS = 136,
+    SLOT_SIZE = 144,
+    SLOT_GENERATION = 152,
     SLOT_ROW = 160,
     SLOT_LIMIT = 4096
 };
@@ -263,14 +268,14 @@ int lx_host_shared_slot(LxHostShared *s, uint64_t first, uint64_t limit, uint64_
         }
         if (!memchr(row, 0, SLOT_NAME))
             goto done;
-        uint64_t row_address = slot_word(row + 136), row_size = slot_word(row + 144);
+        uint64_t row_address = slot_word(row + SLOT_ADDRESS), row_size = slot_word(row + SLOT_SIZE);
         if (row_address < first || row_address >= limit || row_address % alignment || !row_size ||
             row_size > limit - row_address)
             goto done;
-        if (!strcmp((const char *)row, s->name) && slot_word(row + 128) == identity &&
-            slot_word(row + 152) == s->generation)
+        if (!strcmp((const char *)row, s->name) && slot_word(row + SLOT_IDENTITY) == identity &&
+            slot_word(row + SLOT_GENERATION) == s->generation)
         {
-            uint64_t address = slot_word(row + 136), size = slot_word(row + 144);
+            uint64_t address = slot_word(row + SLOT_ADDRESS), size = slot_word(row + SLOT_SIZE);
             if (address >= first && address % alignment == 0 && address < limit &&
                 size <= limit - address && size == s->size)
             {
@@ -305,7 +310,7 @@ int lx_host_shared_slot(LxHostShared *s, uint64_t first, uint64_t limit, uint64_
     for (size_t i = 0; i < count; i++)
     {
         unsigned char *row = rows + i * SLOT_ROW;
-        uint64_t address = slot_word(row + 136), size = slot_word(row + 144);
+        uint64_t address = slot_word(row + SLOT_ADDRESS), size = slot_word(row + SLOT_SIZE);
         if (row[0] && candidate < address + size && address < candidate + s->size)
         {
             candidate = (address + size + alignment - 1) & ~(alignment - 1);
@@ -317,10 +322,10 @@ int lx_host_shared_slot(LxHostShared *s, uint64_t first, uint64_t limit, uint64_
     unsigned char *row = rows + vacant * SLOT_ROW;
     memset(row, 0, SLOT_ROW);
     strcpy((char *)row, s->name);
-    store_slot(row + 128, identity);
-    store_slot(row + 136, candidate);
-    store_slot(row + 144, s->size);
-    store_slot(row + 152, s->generation);
+    store_slot(row + SLOT_IDENTITY, identity);
+    store_slot(row + SLOT_ADDRESS, candidate);
+    store_slot(row + SLOT_SIZE, s->size);
+    store_slot(row + SLOT_GENERATION, s->generation);
     if (vacant == count)
         count++;
     if (pwrite(fd, rows, count * SLOT_ROW, 0) != (ssize_t)(count * SLOT_ROW))
@@ -371,7 +376,7 @@ LxHostSharedResult lx_host_shared_find(uint64_t slot, LxHostShared **output, cha
             result = LX_HOST_SHARED_DENIED;
             break;
         }
-        if (!row[0] || slot_word(row + 136) != slot)
+        if (!row[0] || slot_word(row + SLOT_ADDRESS) != slot)
             continue;
         char identifier[SLOT_NAME + 1];
         const unsigned char *end = memchr(row, 0, SLOT_NAME);
@@ -390,8 +395,9 @@ LxHostSharedResult lx_host_shared_find(uint64_t slot, LxHostShared **output, cha
         struct stat identity;
         if (fstat(object->fd, &identity) ||
             ((uint64_t)identity.st_ino ^ ((uint64_t)identity.st_dev << 32)) !=
-                slot_word(row + 128) ||
-            object->size != slot_word(row + 144) || object->generation != slot_word(row + 152))
+                slot_word(row + SLOT_IDENTITY) ||
+            object->size != slot_word(row + SLOT_SIZE) ||
+            object->generation != slot_word(row + SLOT_GENERATION))
         {
             lx_host_shared_close(object);
             result = LX_HOST_SHARED_MISSING;
@@ -410,7 +416,9 @@ done:
    two fixed-width words, so 32-bit and 64-bit workers share the same format. */
 enum
 {
-    ACCESS_HEADER = 16,
+    ACCESS_HEADER = 16, /* identity word, owner, attributes */
+    ACCESS_HEADER_OWNER = 8,
+    ACCESS_HEADER_ATTRIBUTES = 12,
     ACCESS_ROW = 8,
     ACCESS_PEERS = 4096
 };
@@ -436,8 +444,8 @@ static int shared_access(LxHostShared *object, unsigned operation, uint32_t peer
     if (operation == 1)
     {
         store_slot(header, identity);
-        memcpy(header + 8, owner, 4);
-        memcpy(header + 12, attributes, 4);
+        memcpy(header + ACCESS_HEADER_OWNER, owner, sizeof *owner);
+        memcpy(header + ACCESS_HEADER_ATTRIBUTES, attributes, sizeof *attributes);
         success =
             !ftruncate(fd, sizeof header) && pwrite(fd, header, sizeof header, 0) == sizeof header;
         goto done;
@@ -449,8 +457,8 @@ static int shared_access(LxHostShared *object, unsigned operation, uint32_t peer
         goto done;
     if (!operation)
     {
-        memcpy(owner, header + 8, 4);
-        memcpy(attributes, header + 12, 4);
+        memcpy(owner, header + ACCESS_HEADER_OWNER, sizeof *owner);
+        memcpy(attributes, header + ACCESS_HEADER_ATTRIBUTES, sizeof *attributes);
         *permissions = 0;
     }
     for (off_t at = ACCESS_HEADER; at < info.st_size; at += ACCESS_ROW)

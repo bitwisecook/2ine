@@ -11,6 +11,9 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/* The shell's exit status when a command cannot be executed. */
+#define EXEC_FAILED_STATUS 127
+
 static LxHostSaveResult dialog(char *const arguments[], char **output)
 {
     *output = NULL;
@@ -22,10 +25,10 @@ static LxHostSaveResult dialog(char *const arguments[], char **output)
     {
         close(descriptors[0]);
         if (dup2(descriptors[1], STDOUT_FILENO) < 0)
-            _exit(127);
+            _exit(EXEC_FAILED_STATUS);
         close(descriptors[1]);
         execvp(arguments[0], arguments);
-        _exit(127);
+        _exit(EXEC_FAILED_STATUS);
     }
     close(descriptors[1]);
     const size_t capacity = 65536;
