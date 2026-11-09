@@ -6,6 +6,7 @@
 #include "os2/include/private/export.h"
 #include "os2/include/pmwp.h"
 #include "os2/wpsh/pmwp/som_tokens.h"
+#include "host/fs.h"
 
 typedef enum PmwpClassId
 {
@@ -264,6 +265,36 @@ BOOL pmwpStoreStartProgram(ULONG handle, const char *parameters);
 /* 0: absent, 1: file, 2: directory. */
 int pmwpPathKind(const char *path);
 char *pmwpHostPath(const char *path);
+
+enum
+{
+    /* Upper bound, in bytes, on a store record, a class or module name and a key list. */
+    OBJECT_LIMIT = 65536,
+    /* The first object handle the store gives out. */
+    FIRST_OBJECT = 0x20000
+};
+
+/* The object store's profile, shared by the API units (store.c). store_begin
+   takes the store lock and opens the profile; store_end closes both. */
+LX_PRIVATE HINI store_begin(LxHostFile **lock);
+LX_PRIVATE void store_end(HINI profile, LxHostFile *lock);
+LX_PRIVATE BOOL store_load(HINI profile, ULONG handle, PmwpRecord *object);
+LX_PRIVATE BOOL store_save(HINI profile, ULONG handle, const PmwpRecord *object);
+/* Reads one KEY=value; entry of a setup string. */
+LX_PRIVATE BOOL store_property(const char *setup, const char *name, char *value, size_t capacity);
+LX_PRIVATE char *store_keys(HINI profile, ULONG *size);
+LX_PRIVATE ULONG store_find(HINI profile, const char *id, const char *location, const char *title);
+LX_PRIVATE void store_object_key(ULONG handle, char key[9]);
+LX_PRIVATE BOOL store_ensure_identifier(HINI profile, ULONG handle, char *identifier,
+                                        size_t capacity);
+LX_PRIVATE ULONG store_allocate_object(HINI profile);
+LX_PRIVATE char *store_remove_identifier(const char *setup);
+/* The object's path below the desktop (objects.c). */
+LX_PRIVATE BOOL pmwp_object_path(HINI profile, ULONG handle, char *output, size_t capacity,
+                                 unsigned depth);
+/* Opens an object's view (open.c). */
+LX_PRIVATE BOOL pmwp_open_object(ULONG handle, ULONG view, BOOL activate, unsigned depth,
+                                 HWND *opened);
 
 /* Guest address of an exported class data structure, or zero when it is private. */
 uint32 pmwpExportedClassData(PmwpClassId id);

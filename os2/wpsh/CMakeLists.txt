@@ -3,6 +3,10 @@
 twoine_os2_dll(
     pmwp
     pmwp/module.c
+    pmwp/store.c
+    pmwp/objects.c
+    pmwp/classes.c
+    pmwp/open.c
     pmwp/som_runtime.c
     pmwp/som_tables.c
     pmwp/som_object.c
