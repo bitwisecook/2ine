@@ -18,7 +18,9 @@ enum
     /* Waveaudio and sequencer IDs stay below the digital-video IDs. */
     MCI_DEVICE_ID_LIMIT = 0x8000,
     /* DART buffers per device */
-    MIX_BUFFER_MAX = 64
+    MIX_BUFFER_MAX = 64,
+    /* The host audio generator mixes interleaved stereo frames. */
+    MCI_MIXER_CHANNELS = 2
 };
 
 typedef enum LxMciDeviceKind

@@ -3,6 +3,16 @@
 #include "os2/mm/mmpm/mci/svmc/video.h"
 #include "emulator/features.h"
 
+enum
+{
+    MS_PER_SECOND = 1000,
+    /* Frame rate assumed until an element is loaded. */
+    DEFAULT_FRAMES_PER_SECOND = 25,
+    /* Where the device's own window opens on the desktop. */
+    VIDEO_WINDOW_X = 100,
+    VIDEO_WINDOW_Y = 100
+};
+
 LxDgvDevice lx_dgv_devices[VIDEO_DEVICES];
 LxHostMonitor *lx_dgv_monitor;
 static USHORT next_id = VIDEO_FIRST_ID;
@@ -38,10 +48,10 @@ uint32_t lx_dgv_position_units(LxDgvDevice *d, int64_t milliseconds)
 {
     if (milliseconds < 0)
         return 0;
-    uint64_t value =
-        d->format == MCI_FORMAT_FRAMES
-            ? (uint64_t)milliseconds * d->info.rate_numerator / (1000ull * d->info.rate_denominator)
-            : (uint64_t)milliseconds;
+    uint64_t value = d->format == MCI_FORMAT_FRAMES
+                         ? (uint64_t)milliseconds * d->info.rate_numerator /
+                               ((uint64_t)MS_PER_SECOND * d->info.rate_denominator)
+                         : (uint64_t)milliseconds;
     return value > UINT32_MAX ? UINT32_MAX : (uint32_t)value;
 }
 
@@ -50,7 +60,7 @@ int64_t lx_dgv_milliseconds(LxDgvDevice *d, ULONG value)
     uint64_t result = value;
     if (d->format == MCI_FORMAT_FRAMES)
     {
-        result *= 1000;
+        result *= MS_PER_SECOND;
         if (result > UINT64_MAX / d->info.rate_denominator)
             return -1;
         result = result * d->info.rate_denominator / d->info.rate_numerator;
@@ -97,7 +107,7 @@ int lx_dgv_create_window(LxDgvDevice *d)
         return 0;
     RECTL rect = {0, 0, (LONG)d->info.width, (LONG)d->info.height};
     WinCalcFrameRect(d->frame, &rect, FALSE);
-    WinSetWindowPos(d->frame, HWND_TOP, 100, 100, rect.xRight - rect.xLeft,
+    WinSetWindowPos(d->frame, HWND_TOP, VIDEO_WINDOW_X, VIDEO_WINDOW_Y, rect.xRight - rect.xLeft,
                     rect.yTop - rect.yBottom, SWP_MOVE | SWP_SIZE | SWP_SHOW);
     if (lx_dgv_set_window(d, client))
         return 1;
@@ -108,7 +118,7 @@ int lx_dgv_create_window(LxDgvDevice *d)
 
 ULONG lx_dgv_load_element(ULONG address, LxVideoDecoder **decoder, LxVideoInfo *info)
 {
-    char *name = lx_execution_copy_string(GProcessState.execution, address, 4096);
+    char *name = lx_execution_copy_string(GProcessState.execution, address, VIDEO_NAME_LIMIT);
     if (!name)
         return MCIERR_INVALID_BUFFER;
     uint32_t error = 0;
@@ -135,7 +145,7 @@ ULONG lx_dgv_open(ULONG flags, unsigned char *p)
         }
     if (!d || !next_id)
         return MCIERR_OUT_OF_MEMORY;
-    LxVideoInfo info = {.rate_numerator = 25, .rate_denominator = 1};
+    LxVideoInfo info = {.rate_numerator = DEFAULT_FRAMES_PER_SECOND, .rate_denominator = 1};
     LxVideoDecoder *decoder = NULL;
     if (flags & MCI_OPEN_ELEMENT)
     {
@@ -162,8 +172,8 @@ ULONG lx_dgv_open(ULONG flags, unsigned char *p)
     }
     if (flags & MCI_OPEN_ALIAS)
     {
-        char *alias = lx_execution_copy_string(GProcessState.execution,
-                                               lx_guest_load_u32(p + MCI_OPEN_PARMS_ALIAS), 128);
+        char *alias = lx_execution_copy_string(
+            GProcessState.execution, lx_guest_load_u32(p + MCI_OPEN_PARMS_ALIAS), VIDEO_ALIAS_SIZE);
         if (!alias || !*alias)
         {
             free(alias);

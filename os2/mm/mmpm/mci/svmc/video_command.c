@@ -5,6 +5,14 @@
 #include "emulator/features.h"
 #include "host/clock.h"
 
+enum
+{
+    /* Bytes of the longest device-type name copied from the guest. */
+    DEVICE_TYPE_NAME_LIMIT = 128,
+    /* An MCI_WAIT play pumps the caller's PM queue this often. */
+    WAIT_PUMP_MS = 2
+};
+
 static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID parameters, USHORT user,
                            int *handled)
 {
@@ -17,15 +25,16 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         char *text = NULL;
         if (!(flags & MCI_OPEN_TYPE_ID) && type)
         {
-            text = lx_execution_copy_string(GProcessState.execution, type, 128);
+            text = lx_execution_copy_string(GProcessState.execution, type, DEVICE_TYPE_NAME_LIMIT);
             is_video =
                 text && (!strcasecmp(text, "digitalvideo") || !strcasecmp(text, "digitalvideo01"));
             free(text);
         }
         if (!type && (flags & MCI_OPEN_ELEMENT))
         {
-            text = lx_execution_copy_string(
-                GProcessState.execution, lx_guest_load_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME), 4096);
+            text = lx_execution_copy_string(GProcessState.execution,
+                                            lx_guest_load_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME),
+                                            VIDEO_NAME_LIMIT);
             is_video = lx_dgv_video_name(text);
             free(text);
         }
@@ -395,7 +404,7 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
                 QMSG message;
                 while (WinPeekMsg(hab, &message, 0, 0, 0, PM_REMOVE))
                     WinDispatchMsg(hab, &message);
-                lx_host_sleep_ms(2);
+                lx_host_sleep_ms(WAIT_PUMP_MS);
             }
             lx_dgv_stop(d);
             return lx_pm_video_ready(d->target) ? d->error : MCIERR_FILE_IO;

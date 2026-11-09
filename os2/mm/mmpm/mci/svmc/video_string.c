@@ -5,6 +5,15 @@
 #include <ctype.h>
 #include <errno.h>
 
+enum
+{
+    /* Longest command string accepted, and most words in one command. */
+    COMMAND_LENGTH_LIMIT = 65536,
+    COMMAND_TOKEN_LIMIT = 24,
+    /* "put <device> destination at x y width height" carries four values. */
+    PUT_RECT_VALUES = 4
+};
+
 static int video_number(const char *text, ULONG *value)
 {
     char *end;
@@ -49,7 +58,7 @@ static int video_tokens(char *text, char **tokens, unsigned *count)
             read++;
         if (!*read)
             break;
-        if (*count == 24)
+        if (*count == COMMAND_TOKEN_LIMIT)
             return 0;
         tokens[(*count)++] = write;
         int quote = 0;
@@ -85,9 +94,9 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
                           USHORT user, int *handled)
 {
     *handled = 0;
-    if (!command || strlen(command) > 65536)
+    if (!command || strlen(command) > COMMAND_LENGTH_LIMIT)
         return MCIERR_INVALID_BUFFER;
-    char *text = strdup(command), *tokens[24];
+    char *text = strdup(command), *tokens[COMMAND_TOKEN_LIMIT];
     unsigned count = 0;
     if (!text)
         return MCIERR_OUT_OF_MEMORY;
@@ -125,7 +134,7 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
     lx_guest_store_u32(p + MCI_PARMS_CALLBACK, window);
     if (opening)
     {
-        if (strlen(tokens[1]) >= 4096)
+        if (strlen(tokens[1]) >= VIDEO_NAME_LIMIT)
         {
             result = MCIERR_INVALID_BUFFER;
             goto done;
@@ -140,7 +149,7 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
                 i++;
             else if (!strcasecmp(tokens[i], "alias") && i + 1 < count)
             {
-                if (strlen(tokens[++i]) >= 128 || video_alias(tokens[i]))
+                if (strlen(tokens[++i]) >= VIDEO_ALIAS_SIZE || video_alias(tokens[i]))
                 {
                     result = MCIERR_INVALID_FLAG;
                     goto done;
@@ -165,7 +174,7 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
     }
     else if (!strcasecmp(tokens[0], "load") && (count == 3 || count == 4))
     {
-        if (strlen(tokens[2]) >= 4096 || (count == 4 && strcasecmp(tokens[3], "wait")))
+        if (strlen(tokens[2]) >= VIDEO_NAME_LIMIT || (count == 4 && strcasecmp(tokens[3], "wait")))
         {
             result = MCIERR_INVALID_FLAG;
             goto done;
@@ -227,15 +236,16 @@ ULONG lx_mci_video_string(const char *command, char *output, USHORT length, ULON
             result = MCIERR_INVALID_FLAG;
             goto done;
         }
-        for (unsigned i = 0; i < 4; i++)
+        for (unsigned i = 0; i < PUT_RECT_VALUES; i++)
         {
             ULONG value;
+            /* The first two values are the origin; width and height must be positive. */
             if (!video_coordinate(tokens[i + 4], &value) || (i >= 2 && (LONG)value <= 0))
             {
                 result = MCIERR_OUTOFRANGE;
                 goto done;
             }
-            lx_guest_store_u32(p + MCI_VID_RECT_PARMS_X + i * 4, value);
+            lx_guest_store_u32(p + MCI_VID_RECT_PARMS_X + i * sizeof(ULONG), value);
         }
         message = MCI_PUT;
         flags = MCI_DGV_PUT_RECT | MCI_DGV_PUT_DESTINATION | (count == 9 ? MCI_WAIT : 0);

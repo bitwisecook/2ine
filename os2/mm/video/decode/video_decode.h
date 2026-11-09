@@ -20,6 +20,15 @@ typedef struct LxVideoInfo
     int audio_present;
 } LxVideoInfo;
 
+/* Decoded sound reaches the sink as interleaved stereo float frames at
+   LX_VIDEO_AUDIO_RATE; its position argument counts those frames. */
+enum
+{
+    LX_VIDEO_AUDIO_RATE = 48000,
+    LX_VIDEO_AUDIO_FRAMES_PER_MS = LX_VIDEO_AUDIO_RATE / 1000,
+    LX_VIDEO_AUDIO_CHANNELS = 2
+};
+
 typedef int (*LxVideoAudioSink)(void *, const float *, unsigned, int64_t);
 void lx_video_decoder_audio_sink(LxVideoDecoder *decoder, LxVideoAudioSink sink, void *context);
 LxVideoDecoder *lx_video_decoder_open(const char *host_path, LxVideoInfo *info);

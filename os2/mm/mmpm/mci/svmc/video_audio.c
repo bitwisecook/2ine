@@ -1,16 +1,23 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Digital-video sound: the decoder fills a 48 kHz ring that the host mixer
-   drains; the ring position is the media clock. */
+/* Digital-video sound: the decoder fills a ring that the host mixer drains;
+   the ring position is the media clock. */
 #include "os2/mm/mmpm/mci/svmc/video.h"
 #include "emulator/audio_mixer.h"
 #include "host/clock.h"
+
+/* The decoder waits this long for the mixer to drain a full ring. */
+enum
+{
+    RING_FULL_WAIT_MS = 2
+};
 
 static int audio_registered;
 
 static int fill_audio(void *context, float *samples, int count, int frequency)
 {
     (void)context;
-    if (frequency != 48000)
+    /* The ring holds decoder-rate frames; a mixer at another rate gets none. */
+    if (frequency != LX_VIDEO_AUDIO_RATE)
         return 1;
     lx_host_monitor_lock(lx_dgv_monitor);
     for (unsigned device = 0; device < VIDEO_DEVICES; device++)
@@ -26,8 +33,10 @@ static int fill_audio(void *context, float *samples, int count, int frequency)
             uint64_t at = sound->rendered++, slot = at % VIDEO_AUDIO_FRAMES;
             if (sound->tags[slot] == at)
             {
-                samples[2 * i] += sound->samples[slot * 2] * sound->volume;
-                samples[2 * i + 1] += sound->samples[slot * 2 + 1] * sound->volume;
+                samples[LX_VIDEO_AUDIO_CHANNELS * i] +=
+                    sound->samples[slot * LX_VIDEO_AUDIO_CHANNELS] * sound->volume;
+                samples[LX_VIDEO_AUDIO_CHANNELS * i + 1] +=
+                    sound->samples[slot * LX_VIDEO_AUDIO_CHANNELS + 1] * sound->volume;
                 sound->tags[slot] = UINT64_MAX;
             }
         }
@@ -71,7 +80,7 @@ static int enqueue_audio(void *context, const float *samples, unsigned count, in
         if ((uint64_t)at >= rendered + VIDEO_AUDIO_FRAMES)
         {
             lx_host_monitor_unlock(lx_dgv_monitor);
-            lx_host_sleep_ms(2);
+            lx_host_sleep_ms(RING_FULL_WAIT_MS);
             continue;
         }
         uint64_t available = rendered + VIDEO_AUDIO_FRAMES - (uint64_t)at;
@@ -82,8 +91,10 @@ static int enqueue_audio(void *context, const float *samples, unsigned count, in
         {
             uint64_t index = (uint64_t)at + i, slot = index % VIDEO_AUDIO_FRAMES;
             d->sound.tags[slot] = index;
-            d->sound.samples[slot * 2] = samples[(done + i) * 2];
-            d->sound.samples[slot * 2 + 1] = samples[(done + i) * 2 + 1];
+            d->sound.samples[slot * LX_VIDEO_AUDIO_CHANNELS] =
+                samples[(done + i) * LX_VIDEO_AUDIO_CHANNELS];
+            d->sound.samples[slot * LX_VIDEO_AUDIO_CHANNELS + 1] =
+                samples[(done + i) * LX_VIDEO_AUDIO_CHANNELS + 1];
         }
         if ((uint64_t)at + amount > d->sound.end)
             d->sound.end = (uint64_t)at + amount;
@@ -97,7 +108,8 @@ int64_t lx_dgv_media_clock(LxDgvDevice *d)
 {
     if (d->audio)
     {
-        return d->sound.origin / 48 + (int64_t)(d->sound.rendered / 48);
+        return d->sound.origin / LX_VIDEO_AUDIO_FRAMES_PER_MS +
+               (int64_t)(d->sound.rendered / LX_VIDEO_AUDIO_FRAMES_PER_MS);
     }
     return (int64_t)lx_host_video_ticks_ms() - (int64_t)d->started;
 }
@@ -107,10 +119,11 @@ int lx_dgv_start_audio(LxDgvDevice *d, int64_t from, int64_t to)
     if (!d->info.audio_present)
         return 1;
     d->sound = (LxDgvAudio){.paused = 1,
-                            .origin = from * 48,
+                            .origin = from * LX_VIDEO_AUDIO_FRAMES_PER_MS,
                             .volume = d->volume,
-                            .limit = to >= 0 ? (uint64_t)(to - from) * 48 : UINT64_MAX};
-    d->sound.samples = calloc((size_t)VIDEO_AUDIO_FRAMES * 2, sizeof(float));
+                            .limit = to >= 0 ? (uint64_t)(to - from) * LX_VIDEO_AUDIO_FRAMES_PER_MS
+                                             : UINT64_MAX};
+    d->sound.samples = calloc((size_t)VIDEO_AUDIO_FRAMES * LX_VIDEO_AUDIO_CHANNELS, sizeof(float));
     d->sound.tags = malloc(VIDEO_AUDIO_FRAMES * sizeof(uint64_t));
     if (!d->sound.samples || !d->sound.tags)
     {
@@ -119,6 +132,7 @@ int lx_dgv_start_audio(LxDgvDevice *d, int64_t from, int64_t to)
         memset(&d->sound, 0, sizeof d->sound);
         return 0;
     }
+    /* An all-ones tag (UINT64_MAX) marks an empty slot. */
     memset(d->sound.tags, 0xff, VIDEO_AUDIO_FRAMES * sizeof(uint64_t));
     if (!audio_registered)
     {
