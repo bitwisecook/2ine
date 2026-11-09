@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Combo edit/list children retain ordinary PM identities and a real popup list. */
-#include "os2/ps/pmmerge/pmwin/controls.h"
+#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
 
 enum

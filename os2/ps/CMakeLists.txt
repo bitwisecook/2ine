@@ -53,20 +53,20 @@ twoine_os2_dll(
     pmmerge/pmwin/dialogs.c
     pmmerge/pmwin/dialog_template.c
     pmmerge/pmwin/message_box.c
-    pmmerge/pmwin/controls.c
-    pmmerge/pmwin/listbox.c
-    pmmerge/pmwin/static.c
-    pmmerge/pmwin/buttons.c
+    pmmerge/controls/pmwctls/controls.c
+    pmmerge/controls/pmwctls/listbox.c
+    pmmerge/controls/pmwctls/static.c
+    pmmerge/controls/pmwctls/buttons.c
     pmmerge/pmgre/32bitmap.c
     pmmerge/pmwin/sysbitmap.c
     pmmerge/pmwin/draw.c
     pmmerge/pmgre/32chstr.c
     pmmerge/pmwin/rectangles.c
-    pmmerge/pmwin/entry.c
-    pmmerge/pmwin/spin.c
-    pmmerge/pmwin/scrollbar.c
-    pmmerge/pmwin/combo.c
-    pmmerge/pmwin/mle.c
+    pmmerge/controls/pmwctls/entry.c
+    pmmerge/controls/pmwctls/spin.c
+    pmmerge/controls/pmwctls/scrollbar.c
+    pmmerge/controls/pmwctls/combo.c
+    pmmerge/controls/pmwctls/mle.c
     pmmerge/pmwin/menus.c
     pmmerge/pmgre/regions.c
     pmmerge/pmwin/invalidation.c

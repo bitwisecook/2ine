@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Multiline edit storage uses byte offsets and CR/LF line endings. */
-#include "os2/ps/pmmerge/pmwin/controls.h"
+#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
 
 static BOOL replace(Window *window, size_t position, size_t removed, const char *data, size_t size)

@@ -2,7 +2,7 @@
 /* Packed templates are validated completely before any window is published. */
 #include "os2/ps/pmmerge/pmwin/internal.h"
 #include "emulator/abi.h"
-#include "os2/ps/pmmerge/pmwin/controls.h"
+#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
 #include "os2/ps/pmmerge/pmgre/graphics.h"
 
 enum

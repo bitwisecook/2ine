@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Button check state, automatic transitions and owner notifications. */
-#include "os2/ps/pmmerge/pmwin/controls.h"
+#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
 
 enum
 {

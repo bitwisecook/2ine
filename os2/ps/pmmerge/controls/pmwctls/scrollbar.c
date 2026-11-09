@@ -1,6 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Scrollbar ranges, proportional thumbs and owner scroll notifications. */
-#include "os2/ps/pmmerge/pmwin/controls.h"
+#include "os2/ps/pmmerge/controls/pmwctls/controls.h"
 #include "emulator/abi.h"
 
 static LONG bound(LONG value, LONG low, LONG high)
