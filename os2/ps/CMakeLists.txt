@@ -183,8 +183,12 @@ twoine_os2_dll(
     awe/gdi/regions.c
     awe/gdi/text.c
     awe/comdlg/color_dialog.c
+    awe/comdlg/common_dialogs.c
     awe/comdlg/file_dialogs.c
+    awe/comdlg/font_dialog.c
+    awe/comdlg/print_dialog.c
     awe/shell/drag_drop.c
+    awe/shell/execute.c
     awe/dde/conversations.c
 )
 target_link_libraries(pmmerge PRIVATE twoine_formats doscalls)
