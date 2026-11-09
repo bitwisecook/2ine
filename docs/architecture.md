@@ -89,6 +89,10 @@ the checker, so a new component is covered by these rules.
 | `os2/baseos/{quecalls,sesmgr,nls,msg,viocalls,kbdcalls}/` | Forwarder-only DLLs: each export forwards to the DOSCALLS ordinal that implements it, as in Warp 4.52 |
 | `os2/ps/pmmerge/` | PMMERGE, the merged PM library, in IBM's source layout: `pmwin/` (windows, messages, input, painting, dialogs), `pmgre/` (graphics engine entries), `ishapi/` (profiles, switch list, WinStartApp); see its README |
 | `os2/ps/{pmwin,pmshapi,pmgre}/` | Forwarder-only DLLs: each export forwards to the PMMERGE ordinal that implements it, as in Warp 4.52 |
+| `os2/mm/mmpm/` | MMPM, the merged MMPM/2 library: `mci/` (MCI dispatch in `mdm/`, waveaudio DART in `admc/`, sequencer in `mimc/`, digital video in `svmc/`) and `mmio/mmio/`; see its README |
+| `os2/mm/{mci/mdm,mmio/mmio}/` | Forwarder-only DLLs: each export forwards to the MMPM ordinal that implements it, as in Warp 4.52 |
+| `os2/registry/reg32/` | REGISTRY: the Reg* entries, which PMWINX forwards to at Warp's ordinals |
+| `os2/mptn/common/` | Socket layouts, socket errors and host lookups shared by TCPIP32, SO32DLL and TCP32DLL |
 | `tools/` | Generators, import analysis, assembly conversion and `lx_dump` |
 | `tools/data/` | Ordinal catalogue |
 | `tests/` | Host, emulator, OS/2 library, tools, architecture and integration tests; guest programs/fixtures |
