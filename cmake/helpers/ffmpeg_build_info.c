@@ -13,7 +13,8 @@ static void string(FILE *file, const char *text)
     {
         if (*p == '"' || *p == '\\')
             fputc('\\', file);
-        if (*p < 32)
+        /* JSON strings cannot hold raw control characters. */
+        if (*p < ' ')
             fprintf(file, "\\u%04x", *p);
         else
             fputc(*p, file);
