@@ -23,6 +23,7 @@
 #include "host/socket.h"
 #include "host/thread.h"
 #include "os2/mptn/common/network.h"
+#include "os2/mptn/common/socket_errors.h"
 
 #include "host/network.h"
 #include "host/sync.h"
@@ -30,15 +31,14 @@
 #include <ctype.h>
 static LX_HOST_THREAD_LOCAL int SocketError, ResolverError;
 
-static int socket_failure(int number)
+static int socket_failure(int code)
 {
-    SocketError = 10000 + number;
-    return -1;
+    return lx_mptn_socket_error(&SocketError, code);
 }
 
 static int socket_result(int result)
 {
-    return result < 0 ? socket_failure(lx_host_socket_bsd_error()) : result;
+    return lx_mptn_socket_result(&SocketError, result);
 }
 
 static int initializeResolverData(void);
@@ -569,7 +569,7 @@ int OS2_getsockopt(int sock, int level, int option, void *value, int *length)
         memcpy(&number, value, 4);
         if (number)
         {
-            number += 10000;
+            number += SOCBASEERR;
             memcpy(value, &number, 4);
         }
     }

@@ -4,7 +4,7 @@ static int tcpip_borrow(LxExecution *execution, uint32 address, size_t size, uns
 {
     if (lx_execution_borrow(execution, address, size, flags, borrow))
         return 1;
-    socket_failure(14);
+    socket_failure(SOCEFAULT);
     return 0;
 }
 
@@ -12,7 +12,7 @@ static int tcpip_read(LxExecution *execution, uint32 address, void *output, size
 {
     if (lx_execution_read(execution, address, output, size))
         return 1;
-    socket_failure(14);
+    socket_failure(SOCEFAULT);
     return 0;
 }
 
@@ -61,7 +61,7 @@ static uint32 tcpip_ioctl(uint8 *a, int has_length)
     uint32 length = has_length ? lx_guest_load_u32(a + 12) : (command >> 16) & 0x1fff;
     uint32 result = (uint32)-1;
     if (length > INT32_MAX)
-        return socket_failure(22);
+        return socket_failure(SOCEINVAL);
     LxGuestBorrow outer = {0}, entries = {0};
     if (!tcpip_borrow(GProcessState.execution, lx_guest_load_u32(a + 8), length,
                       LX_GUEST_READ | LX_GUEST_WRITE, &outer))
@@ -462,7 +462,7 @@ static uint32 bridge32_OS2_os2_select(uint8 *a)
 {
     int reads = tcpip_word(a, 1), writes = tcpip_word(a, 2), errors = tcpip_word(a, 3);
     if (reads < 0 || writes < 0 || errors < 0 || reads > 1024 || writes > 1024 || errors > 1024)
-        return socket_failure(22);
+        return socket_failure(SOCEINVAL);
     LxGuestBorrow b = {0};
     uint32 result = (uint32)-1;
     if (tcpip_borrow(GProcessState.execution, tcpip_word(a, 0), (reads + writes + errors) * 4,
@@ -484,7 +484,7 @@ static uint32 bridge32_OS2_select(uint8 *a)
                 goto done;
             if (lx_guest_load_u16(sets[i].host) > OS2_FD_SETSIZE)
             {
-                socket_failure(22);
+                socket_failure(SOCEINVAL);
                 goto done;
             }
         }
@@ -503,7 +503,7 @@ static uint32 bridge32_OS2_writev(uint8 *a)
 {
     uint32 count = tcpip_word(a, 2), result = (uint32)-1;
     if (count > 1024)
-        return socket_failure(22);
+        return socket_failure(SOCEINVAL);
     OS2_iovec *vectors = calloc(count ? count : 1, sizeof *vectors);
     LxGuestBorrow *buffers = calloc(count ? count : 1, sizeof *buffers), array = {0};
     if (!vectors || !buffers ||

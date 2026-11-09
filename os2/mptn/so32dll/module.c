@@ -5,6 +5,7 @@
 #include "host/socket.h"
 #include "host/network.h"
 #include "os2/mptn/common/network.h"
+#include "os2/mptn/common/socket_errors.h"
 static int socket_result(int result);
 #include "os2/mptn/so32dll/generated/so32dll-lx.h"
 static LX_HOST_THREAD_LOCAL int socket_error;
@@ -29,28 +30,26 @@ uint32_t Os2LegacyGetHostId(void)
 enum
 {
     OS2_AF_INET_LEGACY = 2,
-    OS2_SOCKET_ERROR_BASE = 10000,
     OS2_FIONBIO_LEGACY = 0x667e,
     OS2_FIONREAD_LEGACY = 0x667f
 };
 
-static int failure(int number)
+static int failure(int code)
 {
-    socket_error = OS2_SOCKET_ERROR_BASE + number;
-    return -1;
+    return lx_mptn_socket_error(&socket_error, code);
 }
 
 static int socket_result(int result)
 {
-    return result < 0 ? failure(lx_host_socket_bsd_error()) : result;
+    return lx_mptn_socket_result(&socket_error, result);
 }
 
 static int input_address(const Os2LegacyAddress *address, int length, LxHostSocketAddress *output)
 {
     if (!address || length < (int)sizeof *address)
-        return failure(14);
+        return failure(SOCEFAULT);
     if (address->family != OS2_AF_INET_LEGACY)
-        return failure(47);
+        return failure(SOCEAFNOSUPPORT);
     output->address = address->address;
     output->port = address->port;
     return 0;
@@ -68,11 +67,11 @@ int Os2LegacySocket(int family, int type, int protocol)
 {
     TRACE_NATIVE("SO32DLL socket(%d,%d,%d)", family, type, protocol);
     if (family != OS2_AF_INET_LEGACY)
-        return failure(47);
+        return failure(SOCEAFNOSUPPORT);
     if (type != LX_SOCKET_STREAM && type != LX_SOCKET_DGRAM && type != LX_SOCKET_RAW)
-        return failure(44);
+        return failure(SOCESOCKTNOSUPPORT);
     if (type != LX_SOCKET_RAW && protocol && protocol != (type == LX_SOCKET_DGRAM ? 17 : 6))
-        return failure(43);
+        return failure(SOCEPROTONOSUPPORT);
     return socket_result(lx_host_socket_open_protocol(type, protocol));
 }
 
@@ -100,7 +99,7 @@ int Os2LegacyListen(int socket, int backlog)
 int Os2LegacyAccept(int socket, Os2LegacyAddress *address, int *length)
 {
     if (address && (!length || *length < (int)sizeof *address))
-        return failure(14);
+        return failure(SOCEFAULT);
     LxHostSocketAddress host;
     int result = socket_result(lx_host_socket_accept(socket, &host));
     if (result >= 0 && address)
@@ -117,7 +116,7 @@ int Os2LegacyAccept(int socket, Os2LegacyAddress *address, int *length)
 int Os2LegacyRecv(int socket, void *buffer, int length, int flags)
 {
     if (length < 0 || (!buffer && length) || input_flags(flags) < 0)
-        return failure(22);
+        return failure(SOCEINVAL);
     return socket_result(
         (int)lx_host_socket_recv(socket, buffer, (size_t)length, input_flags(flags)));
 }
@@ -125,7 +124,7 @@ int Os2LegacyRecv(int socket, void *buffer, int length, int flags)
 int Os2LegacySend(int socket, const void *buffer, int length, int flags)
 {
     if (length < 0 || (!buffer && length) || input_flags(flags) < 0)
-        return failure(22);
+        return failure(SOCEINVAL);
     return socket_result(
         (int)lx_host_socket_send(socket, buffer, (size_t)length, input_flags(flags)));
 }
@@ -133,14 +132,14 @@ int Os2LegacySend(int socket, const void *buffer, int length, int flags)
 int Os2LegacyShutdown(int socket, int how)
 {
     if (how < 0 || how > 2)
-        return failure(22);
+        return failure(SOCEINVAL);
     return socket_result(lx_host_socket_shutdown(socket, how));
 }
 
 int Os2LegacyIoctl(int socket, int command, void *argument, int length)
 {
     if (!argument || length < 4)
-        return failure(14);
+        return failure(SOCEFAULT);
     int value;
     memcpy(&value, argument, 4);
     /* Accept the legacy command and its BSD size/direction-decorated form. */
@@ -154,17 +153,17 @@ int Os2LegacyIoctl(int socket, int command, void *argument, int length)
         return result;
     }
     if (length < 0)
-        return failure(22);
+        return failure(SOCEINVAL);
     if (((unsigned)command & 0xffff) == 0x6914)
     {
         /* The native worker has 32-bit pointers. Portable guests translate ifconf. */
         uint32_t capacity, pointer;
         if (length < 8)
-            return failure(14);
+            return failure(SOCEFAULT);
         memcpy(&capacity, argument, 4);
         memcpy(&pointer, (char *)argument + 4, 4);
         if (capacity > INT32_MAX)
-            return failure(22);
+            return failure(SOCEINVAL);
         size_t used;
         int result =
             socket_result(lx_os2_network_ifconf((void *)(uintptr_t)pointer, capacity, &used, 0));
@@ -185,7 +184,7 @@ int Os2LegacySendTo(int socket, const void *buffer, int length, int flags,
     if (input_address(address, address_length, &host))
         return -1;
     if (length < 0 || (!buffer && length) || input_flags(flags) < 0)
-        return failure(22);
+        return failure(SOCEINVAL);
     return socket_result((int)lx_host_socket_sendto(socket, buffer, (size_t)length,
                                                     (unsigned)input_flags(flags), &host));
 }
@@ -194,9 +193,9 @@ int Os2LegacyRecvFrom(int socket, void *buffer, int length, int flags, Os2Legacy
                       int *address_length)
 {
     if (length < 0 || (!buffer && length) || input_flags(flags) < 0)
-        return failure(22);
+        return failure(SOCEINVAL);
     if (address && (!address_length || *address_length < (int)sizeof *address))
-        return failure(14);
+        return failure(SOCEFAULT);
     LxHostSocketAddress host;
     int result = socket_result((int)lx_host_socket_recvfrom(socket, buffer, (size_t)length,
                                                             (unsigned)input_flags(flags), &host));
@@ -229,7 +228,7 @@ int Os2LegacySocketInit(void)
 int Os2LegacyGetSocketName(int socket, Os2LegacyAddress *address, int *length)
 {
     if (!address || !length || *length < (int)sizeof *address)
-        return failure(14);
+        return failure(SOCEFAULT);
     LxHostSocketAddress host;
     int result = socket_result(lx_host_socket_name(socket, &host));
     if (!result)
@@ -248,7 +247,7 @@ int Os2LegacySocketOption(int socket, int level, int option, const void *value, 
     if (level == 0)
         return socket_result(lx_host_socket_ip_option(socket, option, value, length));
     if (level != 0xffff)
-        return failure(42);
+        return failure(SOCENOPROTOOPT);
     LxHostSocketOption host;
     switch (option)
     {
@@ -277,10 +276,10 @@ int Os2LegacySocketOption(int socket, int level, int option, const void *value, 
             host = LX_SO_RCVBUF;
             break;
         default:
-            return failure(42);
+            return failure(SOCENOPROTOOPT);
     }
     if (!value || length < 4)
-        return failure(14);
+        return failure(SOCEFAULT);
     int number;
     memcpy(&number, value, sizeof number);
     return socket_result(lx_host_socket_option(socket, host, &number, sizeof number));
