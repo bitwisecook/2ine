@@ -96,6 +96,18 @@ class OS2SupportTests(unittest.TestCase):
             "E:\\BOOKS",
         )
 
+    def test_config_sys_statements_allow_blanks_around_the_equals_sign(self):
+        config = self.ball / "drive_c/CONFIG.SYS"
+        config.write_bytes(
+            b"rem LIBPATH=C:\\IGNORED\r\n  libpath = .;C:\\APP\\DLL \r\n"
+            b"set  Greeting = h\xe9llo\r\nPROTSHELL=C:\\OS2\\PMSHELL.EXE\r\n"
+        )
+        environment = self.request("guest-environment")
+        self.assertEqual(environment["LIBPATH"], ".;C:\\APP\\DLL")
+        self.assertEqual(environment["GREETING"], "h\u00e9llo")
+        self.assertNotIn("PROTSHELL", environment)
+        self.assertNotIn("REM LIBPATH", environment)
+
     def test_unreadable_detected_iso_is_reported_without_hiding_readable_iso(self):
         archive = io.BytesIO()
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zip:

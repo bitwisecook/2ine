@@ -9,6 +9,7 @@
 #include "environment/audio.h"
 #include "environment/install_records.h"
 #include "ball/facade/facade.h"
+#include "os2/config/config_sys.h"
 #include "emulator/launch/host_environment.h"
 #include "emulator/launch/dependencies.h"
 #include "emulator/launch/prerequisites.h"

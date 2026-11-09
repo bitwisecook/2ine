@@ -1,44 +1,15 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Add installed component directories to OS/2's configuration search lists. */
 #include "ball/store.h"
+#include "os2/config/config_sys.h"
 #include "environment/components/search_paths.h"
-
-static int os2_path_equal(const char *first, size_t length, const char *second)
-{
-    while (length && isspace((unsigned char)*first))
-        first++, length--;
-    while (length && isspace((unsigned char)first[length - 1]))
-        length--;
-    if (length > 1 && *first == '"' && first[length - 1] == '"')
-        first++, length -= 2;
-    while (length > 3 && (first[length - 1] == '\\' || first[length - 1] == '/'))
-        length--;
-    if (strlen(second) != length)
-        return 0;
-    for (size_t i = 0; i < length; i++)
-    {
-        char a = first[i] == '/' ? '\\' : (char)toupper((unsigned char)first[i]);
-        char b = second[i] == '/' ? '\\' : (char)toupper((unsigned char)second[i]);
-        if (a != b)
-            return 0;
-    }
-    return 1;
-}
 
 static char *os2_path_append(TbBall *c, const char *value, const char *directory)
 {
     if (!value)
         value = "";
-    for (const char *part = value; *part;)
-    {
-        const char *end = strchr(part, ';');
-        size_t n = end ? (size_t)(end - part) : strlen(part);
-        if (os2_path_equal(part, n, directory))
-            return (char *)value;
-        part += n;
-        if (*part)
-            part++;
-    }
+    if (os2_search_list_contains(value, directory))
+        return (char *)value;
     size_t n = strlen(value);
     return tb_ball_format(c, "%s%s%s", value, n && value[n - 1] != ';' ? ";" : "", directory);
 }
@@ -158,21 +129,12 @@ int os2_configure_paths(TbBall *c, const cJSON *files)
         char *next = strchr(line, '\n');
         if (next)
             *next++ = 0;
-        char *entry = tb_ball_trim(line), *assignment = entry;
-        if (strlen(entry) >= 4 && toupper((unsigned char)entry[0]) == 'S' &&
-            toupper((unsigned char)entry[1]) == 'E' && toupper((unsigned char)entry[2]) == 'T' &&
-            isspace((unsigned char)entry[3]))
-            assignment = tb_ball_trim(entry + 4);
-        char *equals = strchr(assignment, '=');
-        if (equals)
-        {
-            *equals = 0;
-            char *key = tb_ball_trim(assignment);
-            for (char *at = key; *at; at++)
-                *at = (char)toupper((unsigned char)*at);
-            if (get(wanted, key) && (assignment != entry || !strcmp(key, "LIBPATH")))
-                put(configured, key, cJSON_CreateString(tb_ball_trim(equals + 1)));
-        }
+        char *name, *value;
+        int kind = os2_config_sys_statement(line, &name, &value);
+        if ((kind == OS2_CONFIG_SYS_SET ||
+             (kind == OS2_CONFIG_SYS_COMMAND && !strcmp(name, "LIBPATH"))) &&
+            get(wanted, name))
+            put(configured, name, cJSON_CreateString(value));
         line = next;
     }
     char *output = bytes;

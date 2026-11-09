@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Opening, creating and saving a ball's manifest. */
 #include "ball/ball_internal.h"
+#include "os2/config/config_sys.h"
 
 int tb_ball_save_manifest(TbBall *c)
 {
@@ -71,14 +72,7 @@ int tb_ball_create(TbBall *c, const char *path)
     const char *groups[] = {"environment", "system", "runtime", "applications", NULL};
     for (int i = 0; groups[i]; i++)
         cJSON_AddObjectToObject(c->manifest, groups[i]);
-    char *config = tb_ball_keep(c, strdup(""));
-    for (int i = 0; os2_default_environment_names[i]; i++)
-        config = tb_ball_format(c, "%s%s%s=%s\r\n", config,
-                                !strcmp(os2_default_environment_names[i], "LIBPATH") ? "" : "SET ",
-                                !strcmp(os2_default_environment_names[i], "OS2PATH")
-                                    ? "PATH"
-                                    : os2_default_environment_names[i],
-                                os2_default_environment_values[i]);
+    char *config = tb_ball_keep(c, os2_config_sys_default_text());
     if (!config || !tb_ball_save_manifest(c) ||
         !tb_atomic_write(tb_ball_join(c, c->ball, "drive_c/CONFIG.SYS"), config, strlen(config)))
         return tb_ball_fail(c, "Cannot initialize ball");

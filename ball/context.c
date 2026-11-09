@@ -1,6 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Request context: owned allocations, the first error, paths and JSON files. */
 #include "ball/ball_internal.h"
+#include "os2/config/config_sys.h"
 #include "storage/volume.h"
 #include "ball/vendor/sha256/sha256.h"
 #include <time.h>
@@ -195,19 +196,7 @@ char *tb_ball_latin1_to_utf8(TbBall *c, const char *bytes, size_t n)
         tb_ball_fail(c, "Out of memory");
         return NULL;
     }
-    size_t at = 0;
-    for (size_t i = 0; i < n; i++)
-    {
-        unsigned char b = (unsigned char)bytes[i];
-        if (b < 128)
-            text[at++] = (char)b;
-        else
-        {
-            text[at++] = (char)(0xc0 | (b >> 6));
-            text[at++] = (char)(0x80 | (b & 63));
-        }
-    }
-    text[at] = 0;
+    os2_latin1_to_utf8(bytes, n, text);
     return tb_ball_keep(c, text);
 }
 
@@ -219,25 +208,12 @@ char *tb_ball_utf8_to_latin1(TbBall *c, const char *text, size_t *length)
         tb_ball_fail(c, "Out of memory");
         return NULL;
     }
-    size_t at = 0;
-    for (const unsigned char *p = (const unsigned char *)text; *p; p++)
+    if (!os2_utf8_to_latin1(text, bytes, length))
     {
-        if (*p < 128)
-            bytes[at++] = (char)*p;
-        else if ((*p == 0xc2 || *p == 0xc3) && p[1] >= 0x80 && p[1] <= 0xbf)
-        {
-            bytes[at++] = (char)(((*p & 3) << 6) | (p[1] & 63));
-            p++;
-        }
-        else
-        {
-            free(bytes);
-            tb_ball_fail(c, "CONFIG.SYS uses Latin-1; remove characters outside that encoding");
-            return NULL;
-        }
+        free(bytes);
+        tb_ball_fail(c, "CONFIG.SYS uses Latin-1; remove characters outside that encoding");
+        return NULL;
     }
-    bytes[at] = 0;
-    *length = at;
     return tb_ball_keep(c, bytes);
 }
 

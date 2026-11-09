@@ -1,19 +1,7 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* The guest environment: CONFIG.SYS assignments and ball overrides. */
 #include "ball/ball_internal.h"
-
-const char *os2_default_environment_names[] = {"LANG", "OS2PATH", "LIBPATH",  "DPATH",      "HELP",
-                                               "TEMP", "TMP",     "USER_INI", "SYSTEM_INI", NULL};
-
-const char *os2_default_environment_values[] = {"en_US",
-                                                "C:\\OS2;C:\\OS2\\SYSTEM",
-                                                "C:\\OS2\\DLL",
-                                                "C:\\OS2;C:\\OS2\\SYSTEM",
-                                                "C:\\OS2\\HELP",
-                                                "C:\\TEMP",
-                                                "C:\\TEMP",
-                                                "C:\\OS2\\OS2.INI",
-                                                "C:\\OS2\\OS2SYS.INI"};
+#include "os2/config/config_sys.h"
 
 static int valid_env_key(const char *key)
 {
@@ -190,33 +178,11 @@ cJSON *tb_ball_guest_environment(TbBall *c, const cJSON *overrides)
         char *next = strchr(line, '\n');
         if (next)
             *next++ = 0;
-        char *entry = tb_ball_trim(line);
-        char *key = NULL;
-        if (strlen(entry) >= 4 && toupper((unsigned char)entry[0]) == 'S' &&
-            toupper((unsigned char)entry[1]) == 'E' && toupper((unsigned char)entry[2]) == 'T' &&
-            isspace((unsigned char)entry[3]))
-            key = entry + 4;
-        else if (strlen(entry) >= 8)
-        {
-            char first[9];
-            memcpy(first, entry, 8);
-            first[8] = 0;
-            if (equal_case(first, "LIBPATH="))
-                key = entry;
-        }
-        if (key)
-        {
-            char *equals = strchr(key, '=');
-            if (equals)
-            {
-                *equals = 0;
-                key = tb_ball_trim(key);
-                for (char *p = key; *p; p++)
-                    *p = (char)toupper((unsigned char)*p);
-                put(env, !strcmp(key, "PATH") ? "OS2PATH" : key,
-                    cJSON_CreateString(tb_ball_trim(equals + 1)));
-            }
-        }
+        char *name, *value;
+        int kind = os2_config_sys_statement(line, &name, &value);
+        if (kind == OS2_CONFIG_SYS_SET ||
+            (kind == OS2_CONFIG_SYS_COMMAND && !strcmp(name, "LIBPATH")))
+            put(env, !strcmp(name, "PATH") ? "OS2PATH" : name, cJSON_CreateString(value));
         line = next;
     }
     if (!overlay_environment(c, env, get(c->manifest, "environment")) ||

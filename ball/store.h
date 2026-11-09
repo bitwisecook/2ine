@@ -179,8 +179,6 @@ char *tb_ball_guest_for_input(TbBall *c, const char *host, const char *input);
 int tb_ball_validate_directories(TbBall *c, const cJSON *directories);
 
 /* The guest environment from CONFIG.SYS and the environment settings. */
-extern const char *os2_default_environment_names[];
-extern const char *os2_default_environment_values[];
 cJSON *tb_ball_guest_environment(TbBall *c, const cJSON *overrides);
 
 /* Files: browsing drives and copying host files in. */
