@@ -119,7 +119,7 @@ void prepOs2Drives(void)
 
     /* Launchers and guest subprocesses supply every drive's own directory.
        Canonicalize before accepting it so a forged environment cannot escape a mount. */
-    for (i = 0; i < 26; i++)
+    for (i = 0; i < LX_DRIVE_COUNT; i++)
     {
         if (!GProcessState.disks[i])
             continue;
@@ -187,7 +187,7 @@ char *lxHostPathToGuest(const char *name)
         return NULL;
     int drive = -1;
     size_t prefix = 0;
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < LX_DRIVE_COUNT; i++)
     {
         const char *mount = GProcessState.disks[i];
         if (!mount)

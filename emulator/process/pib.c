@@ -121,12 +121,13 @@ void initPib(void)
     for (int i = 0; envp[i]; i++)
     {
         const char *str = envp[i];
-        if (strncmp(str, "PATH=", 5) == 0)
+        if (strncmp(str, "PATH=", strlen("PATH=")) == 0)
         {
             if (!GProcessState.subprocess)
                 str = path;
         }
-        else if (strncmp(str, "IS_2INE=", 8) == 0 || !strncmp(str, "TWOINE_CHILD_ARGUMENTS=", 23))
+        else if (strncmp(str, "IS_2INE=", strlen("IS_2INE=")) == 0 ||
+                 !strncmp(str, "TWOINE_CHILD_ARGUMENTS=", strlen("TWOINE_CHILD_ARGUMENTS=")))
         {
             continue;
         }
@@ -136,14 +137,15 @@ void initPib(void)
     len += 4;
 
     char *env = NULL;
-    if (posix_memalign((void **)&env, 0x10000, 0x10000) != 0)
+    if (posix_memalign((void **)&env, LX_ENVIRONMENT_SEGMENT_SIZE, LX_ENVIRONMENT_SEGMENT_SIZE) !=
+        0)
     {
         fprintf(stderr, "Out of memory\n");
         abort();
     }
 
-    memset(env, 0, 0x10000);
-    if (len > 0x10000)
+    memset(env, 0, LX_ENVIRONMENT_SEGMENT_SIZE);
+    if (len > LX_ENVIRONMENT_SEGMENT_SIZE)
     {
         fprintf(stderr, "OS/2 environment and command exceed one segment\n");
         abort();
@@ -153,16 +155,17 @@ void initPib(void)
     for (int i = 0; envp[i]; i++)
     {
         const char *str = envp[i];
-        if (strncmp(str, "PATH=", 5) == 0)
+        if (strncmp(str, "PATH=", strlen("PATH=")) == 0)
         {
             if (!GProcessState.subprocess)
                 str = path;
         }
-        else if (strncmp(str, "LIBPATH=", 8) == 0)
+        else if (strncmp(str, "LIBPATH=", strlen("LIBPATH=")) == 0)
         {
-            libpath = str + 8;
+            libpath = str + strlen("LIBPATH=");
         }
-        else if (strncmp(str, "IS_2INE=", 8) == 0 || !strncmp(str, "TWOINE_CHILD_ARGUMENTS=", 23))
+        else if (strncmp(str, "IS_2INE=", strlen("IS_2INE=")) == 0 ||
+                 !strncmp(str, "TWOINE_CHILD_ARGUMENTS=", strlen("TWOINE_CHILD_ARGUMENTS=")))
         {
             continue;
         }

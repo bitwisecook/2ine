@@ -8,6 +8,12 @@
 #include "emulator/process/internal.h"
 #include "emulator/features.h"
 
+/* Room for the per-user configuration path suffix after $XDG_CONFIG_HOME or $HOME. */
+enum
+{
+    CONFIG_PATH_SUFFIX_ROOM = 32
+};
+
 void cfgWarn(const char *fname, const int lineno, const char *fmt, ...)
 {
     va_list ap;
@@ -140,7 +146,7 @@ void cfgProcessSystem(const char *fname, const int lineno, const char *var, cons
     {
         char *end = NULL;
         unsigned long dpi = strtoul(val, &end, 10);
-        if (end != val && !*end && dpi >= 72 && dpi <= 384)
+        if (end != val && !*end && dpi >= LX_MIN_DISPLAY_DPI && dpi <= LX_MAX_DISPLAY_DPI)
             GProcessState.display_dpi = (unsigned)dpi;
         else
             cfgWarn(fname, lineno, "Display DPI must be a whole number between 72 and 384");
@@ -284,7 +290,7 @@ void cfgLoadFiles(void)
     const char *env = getenv("XDG_CONFIG_HOME");
     if (env)
     {
-        const size_t buflen = strlen(env) + 32;
+        const size_t buflen = strlen(env) + CONFIG_PATH_SUFFIX_ROOM;
         fname = (char *)malloc(buflen);
         if (fname)
         {
@@ -296,7 +302,7 @@ void cfgLoadFiles(void)
         env = getenv("HOME");
         if (env)
         {
-            const size_t buflen = strlen(env) + 32;
+            const size_t buflen = strlen(env) + CONFIG_PATH_SUFFIX_ROOM;
             fname = (char *)malloc(buflen);
             if (fname)
             {

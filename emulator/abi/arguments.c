@@ -4,6 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* A snapshot is read through host struct types: leave room for an aligned object's tail
+   padding beyond the guest size. */
+enum
+{
+    HOST_OBJECT_TAIL_PADDING = 16
+};
+
 int lx_guest_argument_far(LxExecution *e, uint32_t pointer, size_t size, unsigned permissions,
                           int live, int nullable, LxGuestArgument *a)
 {
@@ -21,8 +28,7 @@ int lx_guest_argument_far(LxExecution *e, uint32_t pointer, size_t size, unsigne
         goto failed;
     if (!live)
     {
-        /* Space for an aligned host POD object, including its tail padding. */
-        a->allocation = calloc(1, size + 16);
+        a->allocation = calloc(1, size + HOST_OBJECT_TAIL_PADDING);
         if (!a->allocation || !lx_execution_read(e, a->address, a->allocation, size))
             goto failed;
         a->host = a->allocation;

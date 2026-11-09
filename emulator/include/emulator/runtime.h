@@ -30,6 +30,9 @@ struct LxExport;
 
 #define LX_MAX_LDT_SLOTS 8192
 
+/* Drive letters A: through Z:. */
+#define LX_DRIVE_COUNT 26
+
 typedef struct LxProcessState
 {
     LxExecution *execution;
@@ -48,10 +51,11 @@ typedef struct LxProcessState
     int running;
     int trace_native;
     int trace_events;
-    char *disks[26];       // mount points, A: through Z: ... NULL if unmounted.
-    char *current_dir[26]; // current directory, per-disk, A: through Z: ... NULL if unmounted.
-    int current_disk;      // 1==A:\\, 2==B:\\, etc.
-    uint32 diskmap;        // 1<<0==drive A mounted, 1<<1==drive B mounted, etc.
+    char *disks[LX_DRIVE_COUNT]; // mount points, A: through Z: ... NULL if unmounted.
+    char *current_dir
+        [LX_DRIVE_COUNT]; // current directory, per-disk, A: through Z: ... NULL if unmounted.
+    int current_disk;     // 1==A:\\, 2==B:\\, etc.
+    uint32 diskmap;       // 1<<0==drive A mounted, 1<<1==drive B mounted, etc.
     float beep_volume;
     unsigned display_dpi;
     unsigned display_depth;

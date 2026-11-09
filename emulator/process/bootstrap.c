@@ -41,8 +41,8 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
 
     /* Use a low amplitude to match the PC speaker mix. */
     GProcessState.beep_volume = 0.05f;
-    GProcessState.display_dpi = 96;
-    GProcessState.display_depth = 24;
+    GProcessState.display_dpi = LX_DEFAULT_DISPLAY_DPI;
+    GProcessState.display_depth = LX_DEFAULT_DISPLAY_DEPTH;
 
     cfgLoadFiles();
     const char *display_dpi = getenv("TWOINE_DISPLAY_DPI");
@@ -50,7 +50,7 @@ LX_NATIVE_CONSTRUCTOR(lib2ine)
     {
         char *end = NULL;
         unsigned long dpi = strtoul(display_dpi, &end, 10);
-        if (end != display_dpi && !*end && dpi >= 72 && dpi <= 384)
+        if (end != display_dpi && !*end && dpi >= LX_MIN_DISPLAY_DPI && dpi <= LX_MAX_DISPLAY_DPI)
             GProcessState.display_dpi = (unsigned)dpi;
     }
     const char *display_depth = getenv("TWOINE_DISPLAY_DEPTH");
