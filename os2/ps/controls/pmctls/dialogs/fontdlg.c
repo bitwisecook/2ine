@@ -24,10 +24,6 @@ enum
     STRIKEOUT_CHECK = 309,
     FOREGROUND_LIST = 330, /* The toolkit assigns no identities to the color lists. */
     BACKGROUND_LIST = 331,
-    LM_INSERTITEM = 0x161,
-    LM_SELECTITEM = 0x164,
-    LM_QUERYSELECTION = 0x165,
-    LM_DELETEALL = 0x16e,
     BM_QUERYCHECK = 0x124,
     BM_SETCHECK = 0x125
 };

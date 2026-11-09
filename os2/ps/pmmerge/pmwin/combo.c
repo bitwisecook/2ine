@@ -9,8 +9,7 @@ enum
     CBID_EDIT = 0x29b,
     CBM_SHOWLIST = 0x170,
     CBM_HILITE = 0x171,
-    CBM_ISLISTSHOWING = 0x172,
-    LM_SELECTITEM = 0x164
+    CBM_ISLISTSHOWING = 0x172
 };
 
 BOOL initializeCombo(Window *window)

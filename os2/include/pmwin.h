@@ -106,6 +106,28 @@ extern "C"
         SWP_NOAUTOCLOSE = 0x8000
     };
 
+    /* List box messages (INCL_WINLISTBOXES) */
+    enum
+    {
+        LM_QUERYITEMCOUNT = 0x0160,
+        LM_INSERTITEM = 0x0161,
+        LM_SETTOPINDEX = 0x0162,
+        LM_DELETEITEM = 0x0163,
+        LM_SELECTITEM = 0x0164,
+        LM_QUERYSELECTION = 0x0165,
+        LM_SETITEMTEXT = 0x0166,
+        LM_QUERYITEMTEXTLENGTH = 0x0167,
+        LM_QUERYITEMTEXT = 0x0168,
+        LM_SETITEMHANDLE = 0x0169,
+        LM_QUERYITEMHANDLE = 0x016a,
+        LM_SEARCHSTRING = 0x016b,
+        LM_SETITEMHEIGHT = 0x016c,
+        LM_QUERYTOPINDEX = 0x016d,
+        LM_DELETEALL = 0x016e,
+        LM_INSERTMULTITEMS = 0x016f,
+        LM_SETITEMWIDTH = 0x0660
+    };
+
     /* WinGetClipPS() flags */
     enum
     {
