@@ -83,7 +83,7 @@ int tb_ball_save_application(Context *c, const cJSON *request)
         }
     }
     c->application = NULL;
-    wps_detach(c, app);
+    tb_ball_detach_application(c, app);
     put(apps, name, app);
     if (previous && strcmp(previous, name))
         cJSON_DeleteItemFromObjectCaseSensitive(apps, previous);

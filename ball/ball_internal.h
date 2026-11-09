@@ -32,8 +32,27 @@
 #endif
 
 typedef struct ComponentOperation ComponentOperation;
+typedef struct Context Context;
 
-typedef struct Context
+/* Work that belongs to the components layered on the ball store: the facade
+   installs them for each request, so the store itself never plans launches
+   or installs OS/2 components. A missing hook leaves the store's own result. */
+typedef struct TbBallHooks
+{
+    /* Rewrites the files derived from the manifest after drives or settings change. */
+    int (*regenerate)(Context *c);
+    /* Validates the settings groups after a config or unset command. */
+    int (*validate_settings)(Context *c, const cJSON *request);
+    /* The complete client snapshot: store fields plus layered component state. */
+    cJSON *(*snapshot)(Context *c);
+    /* A launcher record the user edited or removed leaves its shell registration. */
+    void (*detach_application)(Context *c, cJSON *application);
+    void (*hide_application)(Context *c, const cJSON *application);
+    /* Adds the identity of a runtime build to export provenance. */
+    void (*describe_runtime)(Context *c, const char *build, cJSON *runtime);
+} TbBallHooks;
+
+struct Context
 {
     char **allocations;
     size_t count;
@@ -47,7 +66,8 @@ typedef struct Context
     char *registration_warning;
     ComponentOperation *component_operation;
     int readonly_drives;
-} Context;
+    const TbBallHooks *hooks;
+};
 
 static inline const char *str(const cJSON *j)
 {
@@ -78,6 +98,11 @@ static inline int native_host_path(const char *path)
 #else
     return path[0] != '\\' && !(path[0] == '/' && path[1] == '/') &&
            !(isalpha((unsigned char)path[0]) && path[1] == ':');
+    int tb_ball_regenerate(Context * c);
+    int tb_ball_validate_settings(Context * c, const cJSON *request);
+    cJSON *tb_ball_client_snapshot(Context * c);
+    void tb_ball_detach_application(Context * c, cJSON * application);
+    void tb_ball_hide_application(Context * c, const cJSON *application);
 #endif
 }
 
@@ -129,4 +154,14 @@ char *tb_ball_hex(Context *c, const unsigned char hash[32]);
 char *tb_ball_trim(char *s);
 char *tb_ball_now(Context *c);
 int tb_ball_array_strings(Context *c, const cJSON *array);
+int tb_ball_regenerate(Context *c);
+int tb_ball_validate_settings(Context *c, const cJSON *request);
+cJSON *tb_ball_client_snapshot(Context *c);
+void tb_ball_detach_application(Context *c, cJSON *application);
+void tb_ball_hide_application(Context *c, const cJSON *application);
+int tb_ball_regenerate(Context *c);
+int tb_ball_validate_settings(Context *c, const cJSON *request);
+cJSON *tb_ball_client_snapshot(Context *c);
+void tb_ball_detach_application(Context *c, cJSON *application);
+void tb_ball_hide_application(Context *c, const cJSON *application);
 #endif

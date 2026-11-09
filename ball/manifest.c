@@ -86,5 +86,5 @@ int tb_ball_create(Context *c, const char *path)
     if (!config || !tb_ball_save_manifest(c) ||
         !tb_atomic_write(tb_ball_join(c, c->ball, "drive_c/CONFIG.SYS"), config, strlen(config)))
         return tb_ball_fail(c, "Cannot initialize ball");
-    return launch_write_runtime_config(c);
+    return tb_ball_regenerate(c);
 }

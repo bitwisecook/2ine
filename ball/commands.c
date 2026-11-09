@@ -57,7 +57,7 @@ int tb_ball_command(Context *c, const cJSON *request)
                     return tb_ball_fail(c, "CD images are read-only");
                 put(existing, "readonly", cJSON_CreateBool(enabled));
             }
-            return launch_write_runtime_config(c) && tb_ball_save_manifest(c);
+            return tb_ball_regenerate(c) && tb_ball_save_manifest(c);
         }
         if (!strcmp(action, "create-disk"))
         {
@@ -89,7 +89,7 @@ int tb_ball_command(Context *c, const cJSON *request)
             put(mapping, "device", cJSON_CreateString("disk"));
             put(mapping, "image", cJSON_CreateString(path));
             put(drives, letter, mapping);
-            return launch_write_runtime_config(c) && tb_ball_save_manifest(c);
+            return tb_ball_regenerate(c) && tb_ball_save_manifest(c);
         }
         if (!strcmp(action, "create-floppy"))
         {
@@ -112,7 +112,7 @@ int tb_ball_command(Context *c, const cJSON *request)
             put(mapping, "device", cJSON_CreateString("floppy"));
             put(mapping, "image", cJSON_CreateString(path));
             put(drives, letter, mapping);
-            return launch_write_runtime_config(c) && tb_ball_save_manifest(c);
+            return tb_ball_regenerate(c) && tb_ball_save_manifest(c);
         }
         if (!strcmp(action, "map-image"))
         {
@@ -203,7 +203,7 @@ int tb_ball_command(Context *c, const cJSON *request)
         }
         else
             cJSON_DeleteItemFromObjectCaseSensitive(drives, letter);
-        return launch_write_runtime_config(c) && tb_ball_save_manifest(c);
+        return tb_ball_regenerate(c) && tb_ball_save_manifest(c);
     }
     if (!strcmp(action, "config") || !strcmp(action, "unset"))
     {
@@ -231,15 +231,9 @@ int tb_ball_command(Context *c, const cJSON *request)
                 return tb_ball_fail(c, "A setting value is required");
             put(settings, key, cJSON_CreateString(value));
         }
-        const char *build = field(request, "build");
-        char *absolute = tb_ball_resolve_path(c, build && *build ? build : ".", 0);
-        if (!absolute)
+        if (!tb_ball_validate_settings(c, request))
             return 0;
-        cJSON *env = launch_host_environment(c, absolute, field(request, "backend"), NULL);
-        if (!env)
-            return 0;
-        cJSON_Delete(env);
-        return launch_write_runtime_config(c) && tb_ball_save_manifest(c);
+        return tb_ball_regenerate(c) && tb_ball_save_manifest(c);
     }
     if (!strcmp(action, "add-app"))
     {
@@ -262,7 +256,7 @@ int tb_ball_command(Context *c, const cJSON *request)
             return tb_ball_fail(c, "Invalid applications object");
         cJSON *existing = get(apps, name);
         cJSON *app = existing ? cJSON_Duplicate(existing, 1) : cJSON_CreateObject();
-        wps_detach(c, app);
+        tb_ball_detach_application(c, app);
         put(app, "program", cJSON_CreateString(tb_ball_guest_for_input(c, host, program)));
         cJSON *argv = cJSON_CreateArray();
         put(app, "arguments", argv);
@@ -307,7 +301,7 @@ int tb_ball_command(Context *c, const cJSON *request)
     {
         if (!name)
             return tb_ball_fail(c, "An application name is required");
-        wps_hide(c, get(get(c->manifest, "applications"), name));
+        tb_ball_hide_application(c, get(get(c->manifest, "applications"), name));
         cJSON_DeleteItemFromObjectCaseSensitive(get(c->manifest, "applications"), name);
         return tb_ball_save_manifest(c);
     }

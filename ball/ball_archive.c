@@ -60,29 +60,8 @@ static cJSON *archive_build_info(Context *c, const cJSON *request, int images)
         build = field(get(c->manifest, "runtime"), "build");
     if (build)
         cJSON_AddStringToObject(runtime, "buildPath", build);
-    int available = build && (tb_is_file(tb_ball_join(c, build, "lx_loader")) ||
-                              tb_is_file(tb_ball_join(c, build, "lx_loader.exe")));
-    cJSON_AddBoolToObject(runtime, "available", available);
-    if (available)
-    {
-        char *identity = runtime_id(c, build);
-        if (identity)
-            cJSON_AddStringToObject(runtime, "identitySHA256", identity);
-        const char *loader = runtime_loader_name(c, build);
-        unsigned char hash[32];
-        if (loader && tb_ball_digest_file(c, tb_ball_join(c, build, loader), hash))
-            cJSON_AddStringToObject(runtime, "loaderSHA256", tb_ball_hex(c, hash));
-        char *path = tb_ball_join(c, build, "2ine-build.json");
-        if (path && tb_is_file(path))
-        {
-            char *text = tb_ball_read_file(c, path, NULL, 0);
-            cJSON *details = text ? cJSON_ParseWithOpts(text, NULL, 1) : NULL;
-            if (details)
-                cJSON_AddItemToObject(runtime, "buildInformation", details);
-            else
-                tb_ball_fail(c, "Invalid runtime build information: %s", path);
-        }
-    }
+    if (c->hooks && c->hooks->describe_runtime)
+        c->hooks->describe_runtime(c, build, runtime);
     return info;
 }
 
@@ -576,8 +555,8 @@ cJSON *import_ball(Context *c, const cJSON *request)
             char *cache = tb_ball_join(c, c->roots[2], "OS2/DLL/2INE");
             if (cache && tb_is_dir(cache) && !tb_remove_tree(cache))
                 tb_ball_fail(c, "Cannot reset imported runtime snapshots");
-            if (!c->error && launch_write_runtime_config(c))
-                result = tb_ball_snapshot(c);
+            if (!c->error && tb_ball_regenerate(c))
+                result = tb_ball_client_snapshot(c);
         }
         cJSON_Delete(manifest);
         if (!result)

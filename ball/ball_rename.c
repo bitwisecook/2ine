@@ -225,7 +225,7 @@ cJSON *rename_ball(Context *c, const cJSON *request)
     {
         cJSON *result = cJSON_CreateObject();
         cJSON_AddStringToObject(result, "path", old);
-        cJSON_AddItemToObject(result, "snapshot", tb_ball_snapshot(c));
+        cJSON_AddItemToObject(result, "snapshot", tb_ball_client_snapshot(c));
         return result;
     }
     uint64_t size;
@@ -237,7 +237,7 @@ cJSON *rename_ball(Context *c, const cJSON *request)
             "That name already exists. Choose another name; case-only renames are not supported on case-insensitive filesystems");
         return NULL;
     }
-    cJSON *preflight = tb_ball_snapshot(c);
+    cJSON *preflight = tb_ball_client_snapshot(c);
     cJSON_Delete(preflight);
     if (c->error)
         return NULL;
@@ -297,7 +297,7 @@ cJSON *rename_ball(Context *c, const cJSON *request)
     else
     {
         committed = changed;
-        value = tb_ball_snapshot(c);
+        value = tb_ball_client_snapshot(c);
     }
     if (!c->error && value)
     {

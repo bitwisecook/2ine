@@ -9,6 +9,7 @@
 #include "ball/ball_rename.h"
 #include "ball/commands.h"
 #include "ball/configuration.h"
+#include "ball/facade/facade.h"
 #include "ball/drives.h"
 #include "ball/files.h"
 #include "ball/guest_environment.h"
@@ -288,7 +289,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     {
         if (!tb_ball_create(c, field(request, "ball")))
             return NULL;
-        return tb_ball_snapshot(c);
+        return facade_snapshot(c);
     }
     if (!tb_ball_load(c, request))
         return NULL;
@@ -364,7 +365,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
     if (!strcmp(action, "cancel-os2-component-operation"))
         return cancel_os2_component_operation(c, request);
     if (!strcmp(action, "snapshot"))
-        return tb_ball_snapshot(c);
+        return facade_snapshot(c);
     if (!strcmp(action, "browse"))
         return tb_ball_browse(c, field(request, "path")
                                      ? field(request, "path")
@@ -389,7 +390,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             return NULL;
         if (changed)
             dependency_refresh_mutation(c, request);
-        return tb_ball_snapshot(c);
+        return facade_snapshot(c);
     }
     if (!strcmp(action, "application-icon"))
         return launch_application_icon(c, request);
@@ -417,7 +418,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         char *host = tb_ball_host_path(c, path, 0);
         put(dirs, key, cJSON_CreateString(tb_ball_guest_for_input(c, host, path)));
         put(c->manifest, "currentDrive", cJSON_CreateString(key));
-        return tb_ball_save_manifest(c) ? tb_ball_snapshot(c) : NULL;
+        return tb_ball_save_manifest(c) ? facade_snapshot(c) : NULL;
     }
     if (!strcmp(action, "command"))
     {
@@ -425,7 +426,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             return NULL;
         if (first && (!strcmp(first, "add-app") || !strcmp(first, "restore-app")))
             dependency_refresh_mutation(c, request);
-        return tb_ball_snapshot(c);
+        return facade_snapshot(c);
     }
     if (!strcmp(action, "runtime-build") || !strcmp(action, "restore-runtime"))
     {
@@ -446,7 +447,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             cJSON_DeleteItemFromObjectCaseSensitive(runtime, "build");
         if (!tb_ball_save_manifest(c))
             return NULL;
-        return tb_ball_snapshot(c);
+        return facade_snapshot(c);
     }
     if (!strcmp(action, "save-config-sys"))
     {
@@ -473,7 +474,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
             tb_ball_fail(c, "Cannot save CONFIG.SYS");
             return NULL;
         }
-        return tb_ball_snapshot(c);
+        return facade_snapshot(c);
     }
     if (!strcmp(action, "prepare-launch"))
     {
@@ -547,7 +548,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
         }
         int ok = tb_ball_write_json(c, tb_ball_join(c, c->ball, "logs/last-install.json"), saved);
         cJSON_Delete(saved);
-        return ok ? tb_ball_snapshot(c) : NULL;
+        return ok ? facade_snapshot(c) : NULL;
     }
     /* Small operations exposed for CLI/native frontends and interoperability tests. */
     if (!strcmp(action, "host-path") || !strcmp(action, "guest-path"))
@@ -567,7 +568,7 @@ static cJSON *dispatch(Context *c, const cJSON *request)
                      : NULL;
     }
     if (!strcmp(action, "write-config"))
-        return launch_write_runtime_config(c) ? tb_ball_snapshot(c) : NULL;
+        return launch_write_runtime_config(c) ? facade_snapshot(c) : NULL;
     tb_ball_fail(c, "Unsupported ball action: %s", action);
     return NULL;
 }
@@ -589,6 +590,7 @@ int tb_request(const char *text, char **result, char **error)
     *result = NULL;
     *error = NULL;
     Context c = {0};
+    c.hooks = &facade_hooks;
     tb_media_session_begin();
     cJSON *request = text ? cJSON_ParseWithOpts(text, NULL, 1) : NULL;
     cJSON *response = NULL;

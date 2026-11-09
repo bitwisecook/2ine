@@ -1,6 +1,8 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
 /* Request context: owned allocations, the first error, paths and JSON files. */
 #include "ball/ball_internal.h"
+#include "ball/drives.h"
+#include "ball/snapshot.h"
 
 int tb_ball_fail(Context *c, const char *format, ...)
 {
@@ -301,4 +303,31 @@ int tb_ball_array_strings(Context *c, const cJSON *array)
     cJSON *a;
     cJSON_ArrayForEach(a, array) if (!str(a)) return tb_ball_fail(c, "Arguments must be strings");
     return 1;
+}
+
+int tb_ball_regenerate(Context *c)
+{
+    return c->hooks && c->hooks->regenerate ? c->hooks->regenerate(c) : tb_ball_roots(c);
+}
+
+int tb_ball_validate_settings(Context *c, const cJSON *request)
+{
+    return c->hooks && c->hooks->validate_settings ? c->hooks->validate_settings(c, request) : 1;
+}
+
+cJSON *tb_ball_client_snapshot(Context *c)
+{
+    return c->hooks && c->hooks->snapshot ? c->hooks->snapshot(c) : tb_ball_snapshot(c);
+}
+
+void tb_ball_detach_application(Context *c, cJSON *application)
+{
+    if (c->hooks && c->hooks->detach_application)
+        c->hooks->detach_application(c, application);
+}
+
+void tb_ball_hide_application(Context *c, const cJSON *application)
+{
+    if (c->hooks && c->hooks->hide_application)
+        c->hooks->hide_application(c, application);
 }

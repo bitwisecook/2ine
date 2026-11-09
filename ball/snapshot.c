@@ -3,15 +3,12 @@
 #include "ball/ball_internal.h"
 #include "ball/drives.h"
 #include "ball/guest_environment.h"
-#include "ball/os2_dependencies.h"
-#include "ball/os2_support.h"
 #include "ball/paths.h"
 #include "ball/snapshot.h"
-#include "ball/wps_applications.h"
 
 cJSON *tb_ball_snapshot(Context *c)
 {
-    if (!tb_ball_roots(c) || !wps_sync(c))
+    if (!tb_ball_roots(c))
         return NULL;
     char *path = tb_ball_join(c, c->roots[2], "CONFIG.SYS");
     size_t size = 0;
@@ -19,16 +16,7 @@ cJSON *tb_ball_snapshot(Context *c)
     if (!bytes)
         return NULL;
     cJSON *value = cJSON_CreateObject(), *mapping = cJSON_CreateObject();
-    if (c->registration_warning)
-        cJSON_AddStringToObject(value, "applicationRegistrationWarning", c->registration_warning);
     cJSON_AddItemToObject(value, "manifest", cJSON_Duplicate(c->manifest, 1));
-    cJSON *registration = wps_latest(c);
-    if (registration)
-        cJSON_AddItemToObject(value, "applicationRegistration", registration);
-    cJSON_AddItemToObject(value, "os2Support", os2_support(c));
-    cJSON *dependency_audit = dependency_audit_latest(c);
-    if (dependency_audit)
-        cJSON_AddItemToObject(value, "dependencyAudit", dependency_audit);
     cJSON *records = cJSON_AddObjectToObject(value, "applicationRecords"), *application;
     cJSON_ArrayForEach(application, get(c->manifest, "applications"))
     {

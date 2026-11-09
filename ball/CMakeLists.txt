@@ -61,7 +61,8 @@ set(TWOINE_BALL_SOURCES
     context.c
     dependency_database.c
     dependency_freshness.c
-    dispatch.c
+    facade/dispatch.c
+    facade/hooks.c
     drives.c
     files.c
     guest_environment.c
