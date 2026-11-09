@@ -8,6 +8,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from tests.integration.harness.images import FlatGuest, linear_image
 
+# Win32 values the contracts pass and expect, by their Win32 SDK names.
+SRCCOPY = 0x00CC0020
+DT_SINGLELINE = 0x0020
+DT_CALCRECT = 0x0400
+TRANSPARENT, OPAQUE = 1, 2
+OF_READWRITE = 0x0002
+OF_CREATE = 0x1000
+OF_REOPEN = 0x8000
+OFSTRUCT_SIZE = 136
+FILE_BEGIN = 0
+HFILE_ERROR = 0xFFFFFFFF
+ERROR_INVALID_HANDLE = 6
+
 API = {
     "GetFileAttributes": 284,
     "lstrcmpi": 480,
@@ -306,7 +319,7 @@ def drawing_program():
     store(g, canvas)
     call(g, "SelectObject", (target,), (canvas,))
     store(g, old_target)
-    call(g, "BitBlt", (target,), 1, 1, 2, 2, (source,), 0, 0, 0xCC0020)
+    call(g, "BitBlt", (target,), 1, 1, 2, 2, (source,), 0, 0, SRCCOPY)
     g.result(1, 6)
     for x, y, pixel in ((0, 0, 0), (1, 1, 0xFF0000), (1, 2, 0xFF), (2, 1, 0xFFFFFF)):
         call(g, "GetPixel", (target,), x, y)
@@ -351,15 +364,15 @@ def drawing_program():
     call(g, "DeleteObject", (font,))
     g.result(0, 11)
     wide = g.field(struct.pack("<4i", 0, 0, 100, 40))
-    call(g, "DrawText", (target,), text, 5, wide, 0x20)
+    call(g, "DrawText", (target,), text, 5, wide, DT_SINGLELINE)
     call(g, "GetPixel", (target,), 0, 0)
     g.result(0xFFFFFF, 121)
     call(g, "GetPixel", (target,), 99, 39)
     g.result(0, 122)
-    call(g, "DrawText", (target,), text, 5, rectangle, 0x420)
+    call(g, "DrawText", (target,), text, 5, rectangle, DT_CALCRECT | DT_SINGLELINE)
     g.require(b"\x85\xc0\x0f\x95\xc0\x0f\xb6\xc0\x3d\x01\0\0\0", 12)
-    call(g, "SetBkMode", (target,), 1)
-    g.result(2, 13)
+    call(g, "SetBkMode", (target,), TRANSPARENT)
+    g.result(OPAQUE, 13)
     call(g, "SetTextColor", (target,), 0xFF)
     g.result(0, 14)
     call(g, "TextOut", (target,), 4, 16, text, 5)
@@ -401,14 +414,14 @@ def drawing_program():
 def file_program():
     g = FlatGuest()
     name = g.field(b"io.txt\0")
-    structure, handle, count, buffer = (g.field(bytes(n)) for n in (136, 4, 4, 32))
+    structure, handle, count, buffer = (g.field(bytes(n)) for n in (OFSTRUCT_SIZE, 4, 4, 32))
     text = g.field(b"hello\0")
-    call(g, "OpenFile", name, structure, 0x1002)
+    call(g, "OpenFile", name, structure, OF_CREATE | OF_READWRITE)
     store(g, handle)
     call(g, "WriteFile", (handle,), text, 5, count, 0)
     g.result(1, 30)
     g.word(count, 5, 31)
-    call(g, "_llseek", (handle,), 0, 0)
+    call(g, "_llseek", (handle,), 0, FILE_BEGIN)
     g.result(0, 32)
     call(g, "ReadFile", (handle,), buffer, 9, count, 0)
     g.result(1, 33)
@@ -417,20 +430,20 @@ def file_program():
     call(g, "ReadFile", (handle,), buffer, 9, count, 0)
     g.result(1, 36)
     g.word(count, 0, 37)
-    call(g, "_llseek", (handle,), 2, 0)
+    call(g, "_llseek", (handle,), 2, FILE_BEGIN)
     g.result(2, 38)
     call(g, "_lwrite", (handle,), 0, 0)
     g.result(0, 39)
     call(g, "CloseHandle", (handle,))
     g.result(1, 40)
     call(g, "_lclose", (handle,))
-    g.result(0xFFFFFFFF, 41)
+    g.result(HFILE_ERROR, 41)
     call(g, "WriteFile", (handle,), 0, 0, count, 0)
     g.result(0, 44)
     call(g, "GetLastError")
-    g.result(6, 45)
+    g.result(ERROR_INVALID_HANDLE, 45)
 
-    call(g, "OpenFile", 0xDEADBEEF, structure, 0x8000)
+    call(g, "OpenFile", 0xDEADBEEF, structure, OF_REOPEN)
     store(g, handle)
     call(g, "_lread", (handle,), buffer, 9)
     g.result(2, 42)

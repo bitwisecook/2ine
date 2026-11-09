@@ -5,34 +5,52 @@ import struct
 
 PAYLOAD = b"MZ" + bytes(range(256)) * 6
 
+# FAT boot sector (BIOS parameter block) layout and the fixture geometry:
+# (total sectors, sectors per FAT, root directory entries).
+SECTOR_SIZE = 512
+BPB_OFFSET = 11
+EBPB_SIGNATURE_OFFSET = 38
+EXTENDED_BOOT_SIGNATURE = 0x29
+VOLUME_SERIAL = 0x12345678
+BOOT_SIGNATURE_OFFSET = 510
+BOOT_SIGNATURE = b"\x55\xaa"
+MEDIA_DESCRIPTOR = 0xF0
+SECTORS_PER_TRACK = 18
+FLOPPY_1440K_GEOMETRY = (2880, 9, 224)
+FAT16_GEOMETRY = (8500, 34, 512)
+DIRECTORY_ENTRY_SIZE = 32
+ATTR_VOLUME_ID = 0x08
+ATTR_DIRECTORY = 0x10
+FIRST_DATA_CLUSTER = 2
+
 
 def fat_image(bits=12):
-    sectors, fat_sectors, root_entries = (2880, 9, 224) if bits == 12 else (8500, 34, 512)
-    data = bytearray(sectors * 512)
+    sectors, fat_sectors, root_entries = FLOPPY_1440K_GEOMETRY if bits == 12 else FAT16_GEOMETRY
+    data = bytearray(sectors * SECTOR_SIZE)
     data[:11] = b"\xeb\x3c\x90TWOINET "
     struct.pack_into(
         "<HBHBHHBHHHII",
         data,
-        11,
-        512,
+        BPB_OFFSET,
+        SECTOR_SIZE,
         1,
         1,
         2,
         root_entries,
         sectors,
-        0xF0,
+        MEDIA_DESCRIPTOR,
         fat_sectors,
-        18,
+        SECTORS_PER_TRACK,
         2,
         0,
         0,
     )
-    data[38] = 0x29
-    struct.pack_into("<I", data, 39, 0x12345678)
+    data[EBPB_SIGNATURE_OFFSET] = EXTENDED_BOOT_SIGNATURE
+    struct.pack_into("<I", data, EBPB_SIGNATURE_OFFSET + 1, VOLUME_SERIAL)
     data[43:54] = b"TEST_MEDIA "
     data[54:62] = b"FAT12   " if bits == 12 else b"FAT16   "
-    data[510:512] = b"\x55\xaa"
-    fat = bytearray(fat_sectors * 512)
+    data[BOOT_SIGNATURE_OFFSET : BOOT_SIGNATURE_OFFSET + 2] = BOOT_SIGNATURE
+    fat = bytearray(fat_sectors * SECTOR_SIZE)
 
     def set_cluster(cluster, value):
         if bits == 16:
@@ -49,10 +67,13 @@ def fat_image(bits=12):
     for cluster, value in [(2, end), (4, end), (3, 5), (5, 7), (7, 9), (9, end)]:
         set_cluster(cluster, value)
     for copy in range(2):
-        start = (1 + copy * fat_sectors) * 512
+        start = (1 + copy * fat_sectors) * SECTOR_SIZE
         data[start : start + len(fat)] = fat
-    root = (1 + 2 * fat_sectors) * 512
-    content = root + ((root_entries * 32 + 511) // 512) * 512
+    root = (1 + 2 * fat_sectors) * SECTOR_SIZE
+    content = (
+        root
+        + ((root_entries * DIRECTORY_ENTRY_SIZE + SECTOR_SIZE - 1) // SECTOR_SIZE) * SECTOR_SIZE
+    )
 
     def entry(at, name, attributes, cluster, size):
         data[at : at + 11] = name
@@ -60,14 +81,14 @@ def fat_image(bits=12):
         struct.pack_into("<H", data, at + 26, cluster)
         struct.pack_into("<I", data, at + 28, size)
 
-    entry(root, b"TEST_MEDIA ", 8, 0, 0)
-    entry(root + 32, b"INSTALL    ", 16, 2, 0)
-    entry(root + 64, b"README  TXT", 0, 4, 5)
+    entry(root, b"TEST_MEDIA ", ATTR_VOLUME_ID, 0, 0)
+    entry(root + DIRECTORY_ENTRY_SIZE, b"INSTALL    ", ATTR_DIRECTORY, 2, 0)
+    entry(root + 2 * DIRECTORY_ENTRY_SIZE, b"README  TXT", 0, 4, 5)
     entry(content, b"SETUP   EXE", 0, 3, len(PAYLOAD))
-    data[content + 2 * 512 : content + 2 * 512 + 5] = b"media"
+    data[content + 2 * SECTOR_SIZE : content + 2 * SECTOR_SIZE + 5] = b"media"
     for i, cluster in enumerate([3, 5, 7, 9]):
-        part = PAYLOAD[i * 512 : (i + 1) * 512]
-        at = content + (cluster - 2) * 512
+        part = PAYLOAD[i * SECTOR_SIZE : (i + 1) * SECTOR_SIZE]
+        at = content + (cluster - FIRST_DATA_CLUSTER) * SECTOR_SIZE
         data[at : at + len(part)] = part
     return bytes(data)
 

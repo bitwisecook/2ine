@@ -13,6 +13,20 @@ from pathlib import Path
 
 from tools.ball import engine as ball_api
 
+# Host executable header values (system header names) for foreign-CPU loaders.
+MH_MAGIC_64 = 0xFEEDFACF
+MH_EXECUTE = 2
+FAT_MAGIC_64 = 0xCAFEBABF
+CPU_TYPE_X86_64 = 0x01000007
+CPU_TYPE_ARM64 = 0x0100000C
+ELF64_LSB_CURRENT = b"\x7fELF\x02\x01\x01"
+ET_EXEC = 2
+EM_X86_64 = 62
+EM_AARCH64 = 183
+IMAGE_FILE_MACHINE_AMD64 = 0x8664
+IMAGE_FILE_MACHINE_ARM64 = 0xAA64
+IMAGE_FILE_EXECUTABLE_IMAGE = 0x0002
+
 
 class BallPortabilityTests(unittest.TestCase):
     def setUp(self):
@@ -98,27 +112,29 @@ class BallPortabilityTests(unittest.TestCase):
         loader = folder / ("lx_loader.exe" if os.name == "nt" else "lx_loader")
         arm = platform.machine().lower() in ("arm64", "aarch64")
         if sys.platform == "darwin":
-            cpu = 0x01000007 if arm else 0x0100000C
-            data = struct.pack("<4I", 0xFEEDFACF, cpu, 0, 2) + bytes(48)
+            cpu = CPU_TYPE_X86_64 if arm else CPU_TYPE_ARM64
+            data = struct.pack("<4I", MH_MAGIC_64, cpu, 0, MH_EXECUTE) + bytes(48)
         elif sys.platform.startswith("linux"):
             data = bytearray(64)
-            data[:7] = b"\x7fELF\x02\x01\x01"
-            struct.pack_into("<HH", data, 16, 2, 62 if arm else 183)
+            data[:7] = ELF64_LSB_CURRENT
+            struct.pack_into("<HH", data, 16, ET_EXEC, EM_X86_64 if arm else EM_AARCH64)
         else:
             data = bytearray(88)
             data[:2] = b"MZ"
             struct.pack_into("<I", data, 60, 64)
             data[64:68] = b"PE\0\0"
-            struct.pack_into("<H", data, 68, 0x8664 if arm else 0xAA64)
-            struct.pack_into("<H", data, 86, 2)
+            struct.pack_into(
+                "<H", data, 68, IMAGE_FILE_MACHINE_AMD64 if arm else IMAGE_FILE_MACHINE_ARM64
+            )
+            struct.pack_into("<H", data, 86, IMAGE_FILE_EXECUTABLE_IMAGE)
         loader.write_bytes(data)
         loader.chmod(0o755)
         self.assertEqual(self.effective(folder), str(self.receiving))
         if sys.platform == "darwin":
-            native_cpu = 0x0100000C if arm else 0x01000007
-            image = struct.pack("<4I", 0xFEEDFACF, native_cpu, 0, 2) + bytes(48)
+            native_cpu = CPU_TYPE_ARM64 if arm else CPU_TYPE_X86_64
+            image = struct.pack("<4I", MH_MAGIC_64, native_cpu, 0, MH_EXECUTE) + bytes(48)
             # A little-endian FAT64 slice uses 64-bit little-endian offsets.
-            fat = struct.pack("<II", 0xCAFEBABF, 1)
+            fat = struct.pack("<II", FAT_MAGIC_64, 1)
             fat += struct.pack("<IIQQII", native_cpu, 0, 64, len(image), 0, 0)
             loader.write_bytes(fat + bytes(64 - len(fat)) + image)
             self.assertEqual(self.effective(folder), str(folder))
