@@ -2,6 +2,7 @@
 /* Decode timing/seek, renderer clipping and MCI digital-video lifecycle. */
 #include "os2/include/private/export.h"
 #include "os2/include/os2me.h"
+#include "os2/include/private/os2mep.h"
 #include "os2/mm/video/decode/video_decode.h"
 #include "os2/mm/mmpm/mci/svmc/digital_video.h"
 #include "os2/include/pmwin.h"
@@ -179,12 +180,18 @@ static void renderer_contracts(const char *path)
     puts("Retained YUV420/NV12 uploads, decoder lifetime, clipping and stride bounds passed");
 }
 
+/* Clears the largest parameter block the test sends (MCI_SET_PARMS). */
+enum
+{
+    PARAMETER_BLOCK_CLEAR = MCI_SET_PARMS_SIZE
+};
+
 static ULONG status(USHORT device, unsigned char *p, ULONG item)
 {
-    memset(p, 0, 32);
-    lx_guest_store_u32(p + 8, item);
-    CHECK(!mciSendCommand(device, 10, 0x100, p, 0));
-    return lx_guest_load_u32(p + 4);
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    lx_guest_store_u32(p + MCI_STATUS_PARMS_ITEM, item);
+    CHECK(!mciSendCommand(device, MCI_STATUS, MCI_STATUS_ITEM, p, 0));
+    return lx_guest_load_u32(p + MCI_STATUS_PARMS_RETURN);
 }
 
 typedef struct AudioGate
@@ -309,51 +316,59 @@ static void mci_contracts(const char *path)
         &services, error, sizeof error);
     CHECK(GProcessState.execution);
     GProcessState.makeUnixPath = identity;
-    LxGuestMapping *mapping = lx_execution_map(GProcessState.execution, 0, 0x2000, 3, 0);
+    LxGuestMapping *mapping =
+        lx_execution_map(GProcessState.execution, 0, 0x2000, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     CHECK(mapping);
     unsigned char *p = lx_execution_mapping_host(mapping);
     ULONG base = lx_execution_mapping_address(mapping);
     CHECK(strlen(path) < 4096);
     strcpy((char *)p + 1024, path);
-    lx_guest_store_u32(p + 8, 12);
-    lx_guest_store_u32(p + 12, base + 1024);
-    lx_guest_store_u32(p + 20, window);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE, MCI_DEVTYPE_DIGITAL_VIDEO);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME, base + 1024);
+    lx_guest_store_u32(p + MCI_DGV_OPEN_PARMS_PARENT, window);
+    const ULONG open_element = MCI_OPEN_TYPE_ID | MCI_OPEN_ELEMENT;
     CHECK(lxRuntimeConfigureFeature("video", "false") == 1);
-    CHECK(mciSendCommand(0, 1, 0x1000 | 0x100 | 0x1000000, p, 0) == 5020);
+    CHECK(mciSendCommand(0, MCI_OPEN, open_element | MCI_DGV_OPEN_PARENT, p, 0) ==
+          MCIERR_DEVICE_NOT_READY);
     CHECK(lxRuntimeConfigureFeature("video", "true") == 1);
     CHECK(lxRuntimeConfigureFeature("pcm", "false") == 1);
-    lx_guest_store_u32(p + 8, 9);
-    CHECK(mciSendCommand(0, 1, 0x1000, p, 0) == 5020);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE, MCI_DEVTYPE_AUDIO_AMPMIX);
+    CHECK(mciSendCommand(0, MCI_OPEN, MCI_OPEN_TYPE_ID, p, 0) == MCIERR_DEVICE_NOT_READY);
     CHECK(lxRuntimeConfigureFeature("pcm", pcm_enabled ? "true" : "false") == 1);
     CHECK(lxRuntimeConfigureFeature("midi", "false") == 1);
-    CHECK(mciSendCommand(0, 1, 0x4000, p, 0) == 5020);
+    CHECK(mciSendCommand(0, MCI_OPEN, MCI_OPEN_MMIO, p, 0) == MCIERR_DEVICE_NOT_READY);
     CHECK(lxRuntimeConfigureFeature("midi", "true") == 1);
-    lx_guest_store_u32(p + 8, 12);
-    CHECK(!mciSendCommand(0, 1, 0x1000 | 0x100 | 0x1000000, p, 0));
-    USHORT device = lx_guest_load_u16(p + 4);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE, MCI_DEVTYPE_DIGITAL_VIDEO);
+    CHECK(!mciSendCommand(0, MCI_OPEN, open_element | MCI_DGV_OPEN_PARENT, p, 0));
+    USHORT device = lx_guest_load_u16(p + MCI_OPEN_PARMS_DEVICE_ID);
     CHECK(device >= 0x8000);
-    CHECK(status(device, p, 2) == 400 && status(device, p, 3) == 4);
+    CHECK(status(device, p, MCI_STATUS_LENGTH) == 400 &&
+          status(device, p, MCI_STATUS_MODE) == MCI_MODE_STOP);
     if (!pcm_enabled)
-        CHECK(!status(device, p, 13));
-    memset(p, 0, 32);
-    lx_guest_store_u32(p + 8, 10);
-    CHECK(!mciSendCommand(device, 9, 0x200, p, 0) && lx_guest_load_u32(p + 4) == 12);
-    lx_guest_store_u32(p + 8, 5);
-    CHECK(!mciSendCommand(device, 9, 0x200, p, 0) && !lx_guest_load_u32(p + 4));
-    lx_guest_store_u16(p + 12, 4);
-    CHECK(!mciSendCommand(device, 9, 0x100, p, 0) && lx_guest_load_u32(p + 4) == 1);
-    lx_guest_store_u16(p + 12, 11);
-    CHECK(!mciSendCommand(device, 9, 0x100, p, 0) && !lx_guest_load_u32(p + 4));
-    memset(p, 0, 32);
-    lx_guest_store_u32(p + 16, 50);
-    CHECK(!mciSendCommand(device, 12, 0x80000, p, 0));
-    CHECK(status(device, p, 8) == 50);
-    memset(p, 0, 32);
-    lx_guest_store_u32(p + 16, 100);
-    CHECK(!mciSendCommand(device, 12, 0x80000, p, 0));
-    memset(p, 0, 32);
-    lx_guest_store_u32(p, window);
-    CHECK(!mciSendCommand(device, 4, 1, p, 7));
+        CHECK(!status(device, p, MCI_STATUS_AUDIO));
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    lx_guest_store_u32(p + MCI_GETDEVCAPS_PARMS_ITEM, MCI_GETDEVCAPS_DEVICE_TYPE);
+    CHECK(!mciSendCommand(device, MCI_GETDEVCAPS, MCI_GETDEVCAPS_ITEM, p, 0) &&
+          lx_guest_load_u32(p + MCI_GETDEVCAPS_PARMS_RETURN) == MCI_DEVTYPE_DIGITAL_VIDEO);
+    lx_guest_store_u32(p + MCI_GETDEVCAPS_PARMS_ITEM, MCI_GETDEVCAPS_CAN_RECORD);
+    CHECK(!mciSendCommand(device, MCI_GETDEVCAPS, MCI_GETDEVCAPS_ITEM, p, 0) &&
+          !lx_guest_load_u32(p + MCI_GETDEVCAPS_PARMS_RETURN));
+    lx_guest_store_u16(p + MCI_GETDEVCAPS_PARMS_MESSAGE, MCI_PLAY);
+    CHECK(!mciSendCommand(device, MCI_GETDEVCAPS, MCI_GETDEVCAPS_MESSAGE, p, 0) &&
+          lx_guest_load_u32(p + MCI_GETDEVCAPS_PARMS_RETURN) == 1);
+    lx_guest_store_u16(p + MCI_GETDEVCAPS_PARMS_MESSAGE, MCI_SPIN);
+    CHECK(!mciSendCommand(device, MCI_GETDEVCAPS, MCI_GETDEVCAPS_MESSAGE, p, 0) &&
+          !lx_guest_load_u32(p + MCI_GETDEVCAPS_PARMS_RETURN));
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    lx_guest_store_u32(p + MCI_SET_PARMS_LEVEL, 50);
+    CHECK(!mciSendCommand(device, MCI_SET, MCI_SET_VOLUME, p, 0));
+    CHECK(status(device, p, MCI_STATUS_VOLUME) == 50);
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    lx_guest_store_u32(p + MCI_SET_PARMS_LEVEL, 100);
+    CHECK(!mciSendCommand(device, MCI_SET, MCI_SET_VOLUME, p, 0));
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    lx_guest_store_u32(p + MCI_PARMS_CALLBACK, window);
+    CHECK(!mciSendCommand(device, MCI_PLAY, MCI_NOTIFY, p, 7));
     QMSG message;
     uint64_t started = lx_host_video_ticks_ms();
     while (lx_host_video_ticks_ms() - started < 80)
@@ -362,41 +377,43 @@ static void mci_contracts(const char *path)
             WinDispatchMsg(hab, &message);
         lx_host_sleep_ms(2);
     }
-    CHECK(!mciSendCommand(device, 7, 0, p, 0));
-    ULONG paused = status(device, p, 5);
+    CHECK(!mciSendCommand(device, MCI_PAUSE, 0, p, 0));
+    ULONG paused = status(device, p, MCI_STATUS_POSITION);
     lx_host_sleep_ms(120);
-    CHECK(status(device, p, 5) == paused && status(device, p, 3) == 2);
-    CHECK(!mciSendCommand(device, 29, 0, p, 0));
+    CHECK(status(device, p, MCI_STATUS_POSITION) == paused &&
+          status(device, p, MCI_STATUS_MODE) == MCI_MODE_PAUSE);
+    CHECK(!mciSendCommand(device, MCI_RESUME, 0, p, 0));
     started = lx_host_video_ticks_ms();
-    while (status(device, p, 3) != 4 && lx_host_video_ticks_ms() - started < 2000)
+    while (status(device, p, MCI_STATUS_MODE) != MCI_MODE_STOP &&
+           lx_host_video_ticks_ms() - started < 2000)
     {
         while (WinPeekMsg(hab, &message, 0, 0, 0, 1))
             WinDispatchMsg(hab, &message);
         lx_host_sleep_ms(2);
     }
-    CHECK(status(device, p, 3) == 4);
-    CHECK(!mciSendCommand(device, 6, 0, p, 0));
-    memset(p, 0, 32);
-    CHECK(!mciSendCommand(device, 5, 0x100, p, 0));
-    CHECK(status(device, p, 5) == 0);
-    memset(p, 0, 32);
+    CHECK(status(device, p, MCI_STATUS_MODE) == MCI_MODE_STOP);
+    CHECK(!mciSendCommand(device, MCI_STOP, 0, p, 0));
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    CHECK(!mciSendCommand(device, MCI_SEEK, MCI_TO_START, p, 0));
+    CHECK(status(device, p, MCI_STATUS_POSITION) == 0);
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
     uint64_t begin = lx_host_video_ticks_ms();
-    CHECK(!mciSendCommand(device, 4, 2, p, 0));
+    CHECK(!mciSendCommand(device, MCI_PLAY, MCI_WAIT, p, 0));
     CHECK(lx_host_video_ticks_ms() - begin >= 280);
-    CHECK(status(device, p, 3) == 4);
-    CHECK(!mciSendCommand(device, 2, 0, p, 0));
-    memset(p, 0, 32);
-    lx_guest_store_u32(p + 8, 12);
-    lx_guest_store_u32(p + 12, base + 1024);
-    CHECK(!mciSendCommand(0, 1, 0x1000 | 0x100, p, 0));
-    device = lx_guest_load_u16(p + 4);
-    CHECK(!mciSendCommand(device, 4, 0, p, 0));
-    HWND owned = status(device, p, 0x7000);
+    CHECK(status(device, p, MCI_STATUS_MODE) == MCI_MODE_STOP);
+    CHECK(!mciSendCommand(device, MCI_CLOSE, 0, p, 0));
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE, MCI_DEVTYPE_DIGITAL_VIDEO);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME, base + 1024);
+    CHECK(!mciSendCommand(0, MCI_OPEN, open_element, p, 0));
+    device = lx_guest_load_u16(p + MCI_OPEN_PARMS_DEVICE_ID);
+    CHECK(!mciSendCommand(device, MCI_PLAY, 0, p, 0));
+    HWND owned = status(device, p, MCI_DGV_STATUS_HWND);
     CHECK(owned && WinIsWindow(hab, owned));
     lx_host_sleep_ms(25);
     lx_mci_video_shutdown();
     CHECK(!WinIsWindow(hab, owned));
-    CHECK(mciSendCommand(device, 2, 0, p, 0) == 5001);
+    CHECK(mciSendCommand(device, MCI_CLOSE, 0, p, 0) == MCIERR_INVALID_DEVICE_ID);
     char command[8192], reply[128];
     CHECK(!mciSendString("open digitalvideo alias sample wait shareable", reply, sizeof reply,
                          window, 0));
@@ -404,7 +421,8 @@ static void mci_contracts(const char *path)
     USHORT sample = (USHORT)strtoul(reply, NULL, 10);
     CHECK(!mciSendString("status sample ready", reply, sizeof reply, window, 0));
     CHECK(!strcmp(reply, "0"));
-    CHECK(mciSendString("play sample wait", reply, sizeof reply, window, 0) == 5020);
+    CHECK(mciSendString("play sample wait", reply, sizeof reply, window, 0) ==
+          MCIERR_DEVICE_NOT_READY);
     snprintf(command, sizeof command, "window sample handle %u wait", window);
     CHECK(!mciSendString(command, reply, sizeof reply, window, 0));
     snprintf(command, sizeof command, "load sample \"%s\" wait", path);
@@ -415,10 +433,12 @@ static void mci_contracts(const char *path)
                         window, 0) != 0);
     CHECK(
         !mciSendString("put sample destination at 3 4 56 40 wait", reply, sizeof reply, window, 0));
-    memset(p, 0, 32);
-    CHECK(!mciSendCommand(sample, 51, 0x300, p, 0));
-    CHECK(lx_guest_load_u32(p + 4) == 3 && lx_guest_load_u32(p + 8) == 4 &&
-          lx_guest_load_u32(p + 12) == 56 && lx_guest_load_u32(p + 16) == 40);
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    CHECK(!mciSendCommand(sample, MCI_WHERE, MCI_DGV_PUT_RECT | MCI_DGV_PUT_DESTINATION, p, 0));
+    CHECK(lx_guest_load_u32(p + MCI_VID_RECT_PARMS_X) == 3 &&
+          lx_guest_load_u32(p + MCI_VID_RECT_PARMS_Y) == 4 &&
+          lx_guest_load_u32(p + MCI_VID_RECT_PARMS_WIDTH) == 56 &&
+          lx_guest_load_u32(p + MCI_VID_RECT_PARMS_HEIGHT) == 40);
     CHECK(!mciSendString("set sample time format frames", reply, sizeof reply, window, 0));
     CHECK(!mciSendString("status sample length", reply, sizeof reply, window, 0));
     CHECK(!strcmp(reply, "4"));
@@ -433,20 +453,21 @@ static void mci_contracts(const char *path)
     HWND transient = WinCreateWindow(HWND_DESKTOP, "VideoTest", "Transient", WS_VISIBLE, 0, 0, 64,
                                      48, HWND_DESKTOP, HWND_TOP, 2, NULL, NULL);
     CHECK(transient);
-    memset(p, 0, 32);
-    lx_guest_store_u32(p + 8, 12);
-    lx_guest_store_u32(p + 12, base + 1024);
-    lx_guest_store_u32(p + 20, transient);
-    CHECK(!mciSendCommand(0, 1, 0x1000 | 0x100 | 0x1000000, p, 0));
-    device = lx_guest_load_u16(p + 4);
-    CHECK(!mciSendCommand(device, 4, 0, p, 0));
-    CHECK(!mciSendCommand(device, 7, 0, p, 0));
+    memset(p, 0, PARAMETER_BLOCK_CLEAR);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE, MCI_DEVTYPE_DIGITAL_VIDEO);
+    lx_guest_store_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME, base + 1024);
+    lx_guest_store_u32(p + MCI_DGV_OPEN_PARMS_PARENT, transient);
+    CHECK(!mciSendCommand(0, MCI_OPEN, open_element | MCI_DGV_OPEN_PARENT, p, 0));
+    device = lx_guest_load_u16(p + MCI_OPEN_PARMS_DEVICE_ID);
+    CHECK(!mciSendCommand(device, MCI_PLAY, 0, p, 0));
+    CHECK(!mciSendCommand(device, MCI_PAUSE, 0, p, 0));
     CHECK(WinDestroyWindow(transient));
     started = lx_host_video_ticks_ms();
-    while (status(device, p, 3) != 4 && lx_host_video_ticks_ms() - started < 1000)
+    while (status(device, p, MCI_STATUS_MODE) != MCI_MODE_STOP &&
+           lx_host_video_ticks_ms() - started < 1000)
         lx_host_sleep_ms(2);
-    CHECK(status(device, p, 3) == 4);
-    CHECK(!mciSendCommand(device, 2, 0, p, 0));
+    CHECK(status(device, p, MCI_STATUS_MODE) == MCI_MODE_STOP);
+    CHECK(!mciSendCommand(device, MCI_CLOSE, 0, p, 0));
     lx_execution_unmap(GProcessState.execution, mapping);
     lx_execution_destroy(GProcessState.execution);
     GProcessState.execution = NULL;
