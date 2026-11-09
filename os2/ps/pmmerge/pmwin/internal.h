@@ -337,7 +337,19 @@ LX_PRIVATE ERRORID postMessage(AnchorBlock *anchor, const QMSG *qmsg);
 LX_PRIVATE BOOL postTimestampedMsg(AnchorBlock *anchor, HWND hwnd, ULONG msg, MPARAM mp1,
                                    MPARAM mp2, ULONG ticks);
 LX_PRIVATE BOOL postExposedMessages(AnchorBlock *anchor, Window *win, const ULONG ticks);
+
+/* The WM_PAINT calls running on this thread, innermost first; presentation
+   defers the canvases they draw on. */
+typedef struct PaintScope
+{
+    AnchorBlock *anchor;
+    HWND window;
+    struct PaintScope *previous;
+} PaintScope;
+
+extern LX_PRIVATE LX_HOST_THREAD_LOCAL PaintScope *ActivePaint;
 LX_PRIVATE void presentWindow(AnchorBlock *anchor, Window *window);
+LX_PRIVATE void presentWindows(AnchorBlock *anchor);
 LX_PRIVATE extern BOOL lxPmHostFocusReport;
 LX_PRIVATE HWND registerWindowMessages(AnchorBlock *anchor);
 LX_PRIVATE void unregisterWindowMessages(HWND window);

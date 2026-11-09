@@ -31,6 +31,9 @@ twoine_os2_dll(
     pmmerge/pmwin/windows.c
     pmmerge/pmwin/frame_state.c
     pmmerge/pmwin/messages.c
+    pmmerge/pmwin/winloop.c
+    pmmerge/pmwin/host_events.c
+    pmmerge/pmwin/present.c
     pmmerge/pmwin/paint.c
     pmmerge/pmwin/timers.c
     pmmerge/pmwin/graphics.c
