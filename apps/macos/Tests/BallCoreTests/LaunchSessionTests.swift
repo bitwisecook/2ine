@@ -307,6 +307,7 @@ func installerIsExclusiveButAnotherBallCanRun(installFirst: Bool) async throws {
         defer { fixture.cleanup() }
         let repository = URL(filePath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
         let generator = try await ProcessRunner().run(
             executable: URL(filePath: "/usr/bin/python3"),
             arguments: [
@@ -380,6 +381,7 @@ func installerIsExclusiveButAnotherBallCanRun(installFirst: Bool) async throws {
         defer { fixture.cleanup() }
         let repository = URL(filePath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
         let generator = try await ProcessRunner().run(
             executable: URL(filePath: "/usr/bin/python3"),
             arguments: [

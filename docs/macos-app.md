@@ -83,7 +83,7 @@ independent counters. Preserve the counter when migrating build infrastructure.
 
 ## Xcode and tests
 
-Open `macos/Xcode/TwoineBall/TwoineBall.xcodeproj` in Xcode 27. Its source
+Open `apps/macos/Xcode/TwoineBall/TwoineBall.xcodeproj` in Xcode 27. Its source
 and test folders link to the Swift package's sources; there is one implementation.
 Build `make macos-app-dev` first. The development Info.plist locates its bundled
 resources at the standard output path, with no Python runtime dependency.
@@ -236,11 +236,11 @@ its installed applications are functional.
 
 ## Icon and design sources
 
-`macos/Twoine.icon` has two editable SVG layers: a wound ball of twine forms
+`apps/macos/Resources/Twoine.icon` has two editable SVG layers: a wound ball of twine forms
 the O, and one continuous strand leaves it to draw S/2 and a loose curl.
 Native `ictool` renders Default, Dark and tinted appearances on every app
-build; `macos/IconExports` retains those exports and `Twoine.icns`.
-`macos/Twoine.iconset` contains the complete 16–1024 pixel macOS size set.
+build; `apps/macos/Resources/IconExports` retains those exports and `Twoine.icns`.
+`apps/macos/Resources/Twoine.iconset` contains the complete 16–1024 pixel macOS size set.
 The rendered result becomes the app's multi-resolution `.icns`.
 
 The implementation applies [Axiom](https://github.com/CharlesWiltgen/Axiom),

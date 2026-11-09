@@ -27,5 +27,5 @@
             <key>public.filename-extension</key><array><string>2ineball</string></array>
         </dict>
     </dict></array>
-    <key>TwoineDeveloperResources</key><string>$(SRCROOT)/../../../build-macos/2ine.app/Contents/Resources</string>
+    <key>TwoineDeveloperResources</key><string>$(SRCROOT)/../../../../build-macos/2ine.app/Contents/Resources</string>
 </dict></plist>

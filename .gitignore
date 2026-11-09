@@ -16,7 +16,7 @@ __pycache__/
 .ty_cache/
 
 _deps/
-macos/.build/
+apps/macos/.build/
 **/xcuserdata/
 *.xcuserstate
 

@@ -37,7 +37,7 @@
           "log-environment-variables": false,
           "input-paths": [
             "$(SRCROOT)/Info.plist",
-            "$(SRCROOT)/../../../tools/macos/macos_build_number.py",
+            "$(SRCROOT)/../../../../tools/macos/macos_build_number.py",
           ],
           "output-paths": [
             "$(DERIVED_FILE_DIR)/Twoine-Info.plist",
@@ -45,7 +45,7 @@
           ],
           "run-on-every-build": true,
           "shell": "/bin/sh",
-          "script": "set -eu\npython3 \"$SRCROOT/../../../tools/macos/macos_build_number.py\" --template \"$SRCROOT/Info.plist\" --plist \"$DERIVED_FILE_DIR/Twoine-Info.plist\"\n",
+          "script": "set -eu\npython3 \"$SRCROOT/../../../../tools/macos/macos_build_number.py\" --template \"$SRCROOT/Info.plist\" --plist \"$DERIVED_FILE_DIR/Twoine-Info.plist\"\n",
         },
         "compile-sources",
         "frameworks",
@@ -55,13 +55,13 @@
           "name": "Copy Ball Document Icon",
           "log-environment-variables": false,
           "input-paths": [
-            "$(SRCROOT)/../../../build-macos/2ine.app/Contents/Resources/TwoineBall.icns",
+            "$(SRCROOT)/../../../../build-macos/2ine.app/Contents/Resources/TwoineBall.icns",
           ],
           "output-paths": [
             "$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/TwoineBall.icns",
           ],
           "shell": "/bin/sh",
-          "script": "set -eu\nmkdir -p \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\ncp \"$SRCROOT/../../../build-macos/2ine.app/Contents/Resources/TwoineBall.icns\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/TwoineBall.icns\"\n",
+          "script": "set -eu\nmkdir -p \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH\"\ncp \"$SRCROOT/../../../../build-macos/2ine.app/Contents/Resources/TwoineBall.icns\" \"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/TwoineBall.icns\"\n",
         },
       ],
       "build-settings": {
@@ -80,10 +80,10 @@
         "GENERATE_INFOPLIST_FILE": "NO",
         "HEADER_SEARCH_PATHS": [
           "$(inherited)",
-          "$(SRCROOT)/../../..",
-          "$(SRCROOT)/../../../ball",
-          "$(SRCROOT)/../../../third_party/cjson",
-          "$(SRCROOT)/../../../third_party/sha256",
+          "$(SRCROOT)/../../../..",
+          "$(SRCROOT)/../../../../ball",
+          "$(SRCROOT)/../../../../third_party/cjson",
+          "$(SRCROOT)/../../../../third_party/sha256",
         ],
         "INFOPLIST_FILE": "$(DERIVED_FILE_DIR)/Twoine-Info.plist",
         "TWOINE_BUILD_COUNTER_DIR": "$(HOME)/Library/Application Support/2ine/builds",
@@ -106,7 +106,7 @@
           "$(inherited)",
           "-larchive",
           "-lz",
-          "\"$(SRCROOT)/../../../build-ball-engine/libtwoine_ball_core.a\"",
+          "\"$(SRCROOT)/../../../../build-ball-engine/libtwoine_ball_core.a\"",
         ],
         "PRODUCT_BUNDLE_IDENTIFIER": "io.github.bitwisecook.TwoineBall",
         "PRODUCT_NAME": "2ine",

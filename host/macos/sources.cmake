@@ -35,7 +35,7 @@ twoine_host_requires(opengl DEFINE TWOINE_KOSMICKRISP_ICD="${TWOINE_KOSMICKRISP_
 # embedded at configure time so a loader copied anywhere can present it.
 if(NOT TWOINE_RUNTIME_ONLY)
     file(
-        READ "${PROJECT_SOURCE_DIR}/macos/Twoine.iconset/icon_256x256.png"
+        READ "${PROJECT_SOURCE_DIR}/apps/macos/Resources/Twoine.iconset/icon_256x256.png"
         _twoine_ball_icon_hex
         HEX
     )
@@ -43,7 +43,7 @@ if(NOT TWOINE_RUNTIME_ONLY)
     math(EXPR _twoine_ball_icon_size "${_twoine_ball_icon_length} / 2")
     file(
         WRITE "${PROJECT_BINARY_DIR}/generated/twoine_ball_icon_png.h"
-        "/* Generated from macos/Twoine.iconset/icon_256x256.png. Do not edit. */\n"
+        "/* Generated from apps/macos/Resources/Twoine.iconset/icon_256x256.png. Do not edit. */\n"
         "#define TWOINE_BALL_ICON_PNG_SIZE ${_twoine_ball_icon_size}\n"
         "#define TWOINE_BALL_ICON_PNG_HEX \"${_twoine_ball_icon_hex}\"\n"
     )

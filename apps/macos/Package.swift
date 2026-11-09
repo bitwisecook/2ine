@@ -19,9 +19,9 @@ func sourceIdentity(_ arguments: [String], fallback: String) -> String {
 }
 
 // C sources include project headers by their path from the repository root
-// ("ball/...", "formats/..."); that root lies outside the package directory.
+// ("ball/...", "formats/..."); this package sits two levels below it, in apps/macos.
 let projectRoot = URL(filePath: #filePath).deletingLastPathComponent()
-    .deletingLastPathComponent().path(percentEncoded: false)
+    .deletingLastPathComponent().deletingLastPathComponent().path(percentEncoded: false)
 
 let ballBuildSettings: [CSetting] = [
     .unsafeFlags(["-I", projectRoot]),

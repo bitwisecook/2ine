@@ -15,7 +15,7 @@ SOURCE_SUFFIXES = {".c", ".h", ".m", ".mm", ".cpp", ".inc"}
 # placed under the rules below before it can pass.
 PORTABLE_COMPONENTS = {"formats", "storage", "emulator", "os2"}
 HOST_COMPONENTS = {"host", "ball", "environment", "apps"}
-SUPPORT_DIRECTORIES = {"tests", "tools", "macos", "cmake", "docs", "snap"}
+SUPPORT_DIRECTORIES = {"tests", "tools", "cmake", "docs", "snap"}
 # Sources built by other toolchains or kept only as reference material.
 FOREIGN_DIRECTORIES = {"ports", "research", "third_party"}
 

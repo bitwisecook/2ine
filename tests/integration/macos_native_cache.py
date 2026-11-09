@@ -89,7 +89,7 @@ def main():
             ["install_name_tool", "-add_rpath", str(mirror), target], capture_output=True
         )
         exception = (
-            ["--entitlements", ROOT / "macos/runtime.entitlements"]
+            ["--entitlements", ROOT / "apps/macos/Resources/runtime.entitlements"]
             if target.name == "lx_loader"
             else []
         )

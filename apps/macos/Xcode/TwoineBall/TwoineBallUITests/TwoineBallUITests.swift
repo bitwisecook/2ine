@@ -5,7 +5,7 @@ final class TwoineBallUITests: XCTestCase {
     func testBallNavigationConfigurationAndLaunchFailure() throws {
         continueAfterFailure = false
         var repo = URL(filePath: #filePath)
-        for _ in 0..<5 { repo.deleteLastPathComponent() }
+        for _ in 0..<6 { repo.deleteLastPathComponent() }
         let resources = repo.appending(path: "build-macos/2ine.app/Contents/Resources")
         let work = FileManager.default.temporaryDirectory.appending(
             path: "2ine-ui-\(UUID().uuidString)")

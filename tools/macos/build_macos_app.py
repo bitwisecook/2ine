@@ -117,7 +117,7 @@ def main():
                     "swift",
                     "build",
                     "--package-path",
-                    ROOT / "macos",
+                    ROOT / "apps/macos",
                     "-c",
                     "release",
                     "--scratch-path",
@@ -202,7 +202,7 @@ def main():
         command(
             [
                 ictool,
-                ROOT / "macos/Twoine.icon",
+                ROOT / "apps/macos/Resources/Twoine.icon",
                 "--export-image",
                 "--output-file",
                 exports / f"{rendition}.png",
@@ -256,7 +256,7 @@ def main():
     with (contents / "Info.plist").open("wb") as file:
         plistlib.dump(info, file)
     macos_bundle.audit(app)
-    macos_bundle.sign(app, args.sign_identity, ROOT / "macos/runtime.entitlements")
+    macos_bundle.sign(app, args.sign_identity, ROOT / "apps/macos/Resources/runtime.entitlements")
     if args.notarize:
         macos_bundle.notarize(app, args.notary_profile, output)
     (output / "build-info.json").write_text(
