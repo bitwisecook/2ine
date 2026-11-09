@@ -97,7 +97,7 @@ VERSION_1_GROUPS = {
 
 
 def version_1_problems(manifest):
-    """Reasons a version 1 engine (ball.c load/roots) would reject this manifest."""
+    """Reasons a version 1 engine (the version 1 manifest loader) would reject this manifest."""
     problems = []
     if manifest.get("version") != 1:
         problems.append("version is not 1")
