@@ -712,11 +712,8 @@ if(TARGET pmmerge AND TARGET pmgpi)
 endif()
 
 if(TARGET pmwinx)
-    add_executable(
-        twoine_open32_atomic_tests
-        os2/test_open32_atomic.c
-        ../os2/ps/awe/kernel/interlocked.c
-    )
+    add_executable(twoine_open32_atomic_tests os2/test_open32_atomic.c)
+    target_link_libraries(twoine_open32_atomic_tests PRIVATE pmwinx_interlocked)
     twoine_application_target(twoine_open32_atomic_tests)
     target_link_libraries(twoine_open32_atomic_tests PRIVATE 2ine)
     add_test(NAME open32_atomic_backing COMMAND twoine_open32_atomic_tests)
@@ -728,11 +725,8 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}/open32-atomic-tests"
     )
     set_tests_properties(open32_atomic PROPERTIES TIMEOUT 30)
-    add_executable(
-        twoine_open32_adjust_window_tests
-        os2/test_open32_adjust_window.c
-        ../os2/ps/awe/user/windows/adjust_window.c
-    )
+    add_executable(twoine_open32_adjust_window_tests os2/test_open32_adjust_window.c)
+    target_link_libraries(twoine_open32_adjust_window_tests PRIVATE pmwinx_adjust_window)
     twoine_application_target(twoine_open32_adjust_window_tests)
     add_test(NAME open32_adjust_window COMMAND twoine_open32_adjust_window_tests)
     add_executable(twoine_open32_load_menu_tests os2/test_open32_load_menu.c)
@@ -995,11 +989,8 @@ if(TARGET doscalls)
 endif()
 
 if(TARGET pmwinx)
-    add_executable(
-        twoine_open32_unicode_tests
-        os2/test_open32_unicode.c
-        ../os2/ps/awe/kernel/unicode.c
-    )
+    add_executable(twoine_open32_unicode_tests os2/test_open32_unicode.c)
+    target_link_libraries(twoine_open32_unicode_tests PRIVATE pmwinx_unicode)
     twoine_application_target(twoine_open32_unicode_tests)
     target_link_libraries(twoine_open32_unicode_tests PRIVATE 2ine)
     add_test(NAME open32_unicode_conversion COMMAND twoine_open32_unicode_tests)
@@ -1011,11 +1002,8 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}/open32-unicode-tests"
     )
     set_tests_properties(open32_unicode PROPERTIES TIMEOUT 45)
-    add_executable(
-        twoine_open32_menu_metric_tests
-        os2/test_open32_menu_metrics.c
-        ../os2/ps/awe/user/system_metrics.c
-    )
+    add_executable(twoine_open32_menu_metric_tests os2/test_open32_menu_metrics.c)
+    target_link_libraries(twoine_open32_menu_metric_tests PRIVATE pmwinx_system_metrics)
     twoine_application_target(twoine_open32_menu_metric_tests)
     add_test(NAME open32_menu_metric_dimensions COMMAND twoine_open32_menu_metric_tests)
     add_test(
@@ -1026,11 +1014,8 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}/open32-menu-metric-tests"
     )
     set_tests_properties(open32_menu_metrics PROPERTIES TIMEOUT 30)
-    add_executable(
-        twoine_open32_pointer_tests
-        os2/test_open32_pointers.c
-        ../os2/ps/awe/user/input/cursors.c
-    )
+    add_executable(twoine_open32_pointer_tests os2/test_open32_pointers.c)
+    target_link_libraries(twoine_open32_pointer_tests PRIVATE pmwinx_cursors)
     twoine_application_target(twoine_open32_pointer_tests)
     add_test(NAME open32_pointer_coordinates COMMAND twoine_open32_pointer_tests)
     add_test(
@@ -1041,11 +1026,8 @@ if(TARGET pmwinx)
             "${PROJECT_BINARY_DIR}/open32-pointer-tests"
     )
     set_tests_properties(open32_pointers PROPERTIES TIMEOUT 30)
-    add_executable(
-        twoine_open32_priority_tests
-        os2/test_open32_priority.c
-        ../os2/ps/awe/kernel/priority.c
-    )
+    add_executable(twoine_open32_priority_tests os2/test_open32_priority.c)
+    target_link_libraries(twoine_open32_priority_tests PRIVATE pmwinx_priority)
     twoine_application_target(twoine_open32_priority_tests)
     target_link_libraries(twoine_open32_priority_tests PRIVATE 2ine)
     add_test(NAME open32_priority_mapping COMMAND twoine_open32_priority_tests)
@@ -1058,11 +1040,8 @@ if(TARGET pmwinx)
     )
     set_tests_properties(open32_priority PROPERTIES TIMEOUT 30)
     if(APPLE)
-        add_executable(
-            twoine_open32_priority_host_tests
-            os2/test_open32_priority.c
-            ../os2/ps/awe/kernel/priority.c
-        )
+        add_executable(twoine_open32_priority_host_tests os2/test_open32_priority.c)
+        target_link_libraries(twoine_open32_priority_host_tests PRIVATE pmwinx_priority)
         twoine_application_target(twoine_open32_priority_host_tests)
         target_compile_definitions(
             twoine_open32_priority_host_tests

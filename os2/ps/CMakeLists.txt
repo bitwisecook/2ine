@@ -116,11 +116,9 @@ twoine_os2_dll(
     awe/kernel/files/file_handles.c
     awe/kernel/files/find.c
     awe/kernel/files/legacy_files.c
-    awe/kernel/interlocked.c
     awe/kernel/locale.c
     awe/kernel/memory.c
     awe/kernel/modules.c
-    awe/kernel/priority.c
     awe/kernel/processes.c
     awe/kernel/profiles.c
     awe/kernel/resources.c
@@ -129,7 +127,6 @@ twoine_os2_dll(
     awe/kernel/time.c
     awe/kernel/time_zones.c
     awe/kernel/tls.c
-    awe/kernel/unicode.c
     awe/kernel/validation.c
     awe/user/atoms.c
     awe/user/clipboard.c
@@ -142,7 +139,6 @@ twoine_os2_dll(
     awe/user/help.c
     awe/user/input/accelerators.c
     awe/user/input/caret.c
-    awe/user/input/cursors.c
     awe/user/input/icons.c
     awe/user/input/keyboard.c
     awe/user/input/mouse.c
@@ -155,9 +151,7 @@ twoine_os2_dll(
     awe/user/rectangles.c
     awe/user/strings/format.c
     awe/user/strings/strings.c
-    awe/user/system_metrics.c
     awe/user/windows/activation.c
-    awe/user/windows/adjust_window.c
     awe/user/windows/classes.c
     awe/user/windows/defer_position.c
     awe/user/windows/enumeration.c
@@ -203,6 +197,33 @@ twoine_os2_dll(
     awe/dde/remote.c
     awe/dde/strings.c
 )
+# PMWINX units that tests also build on their own, against fakes of the services they call. They
+# compile once, with PMWINX's settings, into both.
+foreach(
+    _unit
+    IN
+    ITEMS
+        kernel/interlocked
+        kernel/priority
+        kernel/unicode
+        user/input/cursors
+        user/system_metrics
+        user/windows/adjust_window
+)
+    string(REGEX REPLACE ".*/" "pmwinx_" _target "${_unit}")
+    add_library(${_target} OBJECT awe/${_unit}.c)
+    twoine_application_target(${_target})
+    set_target_properties(${_target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+    target_include_directories(
+        ${_target}
+        PRIVATE $<TARGET_PROPERTY:2ine,INTERFACE_INCLUDE_DIRECTORIES>
+    )
+    target_compile_definitions(
+        ${_target}
+        PRIVATE $<TARGET_PROPERTY:2ine,INTERFACE_COMPILE_DEFINITIONS>
+    )
+    target_sources(pmwinx PRIVATE $<TARGET_OBJECTS:${_target}>)
+endforeach()
 target_link_libraries(pmmerge PRIVATE twoine_formats doscalls)
 find_package(ZLIB REQUIRED)
 if(TWOINE_NATIVE_LOADER)
