@@ -2,7 +2,6 @@
 /* DART queues retain PCM until playback completion. Callbacks run off the SDL thread. */
 #include "os2/include/private/export.h"
 #include "os2/include/mmioos2.h"
-#include "os2/include/os2me.h"
 #include "os2/include/private/os2mep.h"
 #include "os2/mm/mmpm/mci/mdm/mdm_video.h"
 #include "emulator/audio_mixer.h"
@@ -13,28 +12,16 @@
 #include "host/sync.h"
 #include <math.h>
 #define DEVICE_COUNT 32
-#define MCIERR_INVALID_DEVICE_ID 5001
-#define MCIERR_UNSUPPORTED_FUNCTION 5018
-#define MCIERR_DEVICE_NOT_READY 5020
-#define MCIERR_INVALID_BUFFER 5050
-#define MCIERR_OUT_OF_MEMORY 5008
-#define MCI_OPEN 1
-#define MCI_CLOSE 2
-#define MCI_PLAY 4
-#define MCI_STOP 6
-#define MCI_PAUSE 7
-#define MCI_SET 12
-#define MCI_RESUME 29
-#define MCI_BUFFER 62
-#define MCI_MIXSETUP 63
-#define MCI_OPEN_TYPE_ID 0x1000
-#define MCI_OPEN_MMIO 0x4000
-#define MCI_SET_VOLUME 0x80000
-#define MCI_ALLOCATE_MEMORY 0x40000
-#define MCI_DEALLOCATE_MEMORY 0x80000
-#define MCI_MIXSETUP_INIT 0x10000
-#define MCI_MIXSETUP_DEINIT 0x20000
-#define MIX_WRITE_COMPLETE 2
+
+/* DART limits: buffers per device and bytes per buffer; MCI_MIXSETUP suggests
+   three 4 KiB buffers. */
+enum
+{
+    MIX_BUFFER_MAX = 64,
+    MIX_BUFFER_BYTES_MAX = 4 * 1024 * 1024,
+    MIX_SUGGESTED_BUFFER_SIZE = 4096,
+    MIX_SUGGESTED_BUFFERS = 3
+};
 
 typedef struct Packet
 {
@@ -59,7 +46,7 @@ typedef struct Device
     float volume;
     Packet *head, *tail, *done, *done_tail;
     LxHostThread *thread;
-    LxGuestMapping *buffers[64];
+    LxGuestMapping *buffers[MIX_BUFFER_MAX];
     unsigned buffer_count, pending;
     LxMidiSequence sequence;
     size_t next_event;
@@ -524,7 +511,8 @@ static void *delivery(void *argument)
             int notify = d->notify;
             lx_host_monitor_unlock(monitor);
             if (notify && window)
-                WinPostMsg(window, 0x500, (MPARAM)(uintptr_t)(d->id << 16),
+                WinPostMsg(window, MM_MCINOTIFY,
+                           (MPARAM)(uintptr_t)(d->id << 16 | MCI_NOTIFY_SUCCESSFUL),
                            (MPARAM)(uintptr_t)user);
             lx_host_monitor_lock(monitor);
         }
@@ -559,7 +547,7 @@ static ULONG start_audio(Device *d)
 
 static LONG queue_buffers(ULONG handle, ULONG address, ULONG count)
 {
-    if (!count || count > 64)
+    if (!count || count > MIX_BUFFER_MAX)
         return MCIERR_INVALID_BUFFER;
     lx_host_monitor_lock(monitor);
     Device *d = find_device(handle);
@@ -568,7 +556,7 @@ static LONG queue_buffers(ULONG handle, ULONG address, ULONG count)
         lx_host_monitor_unlock(monitor);
         return MCIERR_INVALID_DEVICE_ID;
     }
-    if (d->stopped || count > 64 - d->pending)
+    if (d->stopped || count > MIX_BUFFER_MAX - d->pending)
     {
         lx_host_monitor_unlock(monitor);
         return MCIERR_DEVICE_NOT_READY;
@@ -577,11 +565,13 @@ static LONG queue_buffers(ULONG handle, ULONG address, ULONG count)
     unsigned submitted = 0;
     for (ULONG i = 0; i < count; i++)
     {
-        unsigned char record[32];
-        if (!lx_execution_read(GProcessState.execution, address + i * 32, record, 32))
+        unsigned char record[MCI_MIX_BUFFER_SIZE];
+        if (!lx_execution_read(GProcessState.execution, address + i * MCI_MIX_BUFFER_SIZE, record,
+                               MCI_MIX_BUFFER_SIZE))
             goto fail;
-        ULONG length = lx_guest_load_u32(record + 8), data = lx_guest_load_u32(record + 4);
-        if (length > 4 * 1024 * 1024)
+        ULONG length = lx_guest_load_u32(record + MCI_MIX_BUFFER_BUFFER_LENGTH),
+              data = lx_guest_load_u32(record + MCI_MIX_BUFFER_BUFFER);
+        if (length > MIX_BUFFER_BYTES_MAX)
             goto fail;
         if (!length)
             continue;
@@ -599,7 +589,7 @@ static LONG queue_buffers(ULONG handle, ULONG address, ULONG count)
         }
         p->samples = malloc(frames * 2 * sizeof(float));
         p->count = frames;
-        p->record = address + i * 32;
+        p->record = address + i * MCI_MIX_BUFFER_SIZE;
         if (!p->samples || !lx_execution_read(GProcessState.execution, data, pcm, length))
         {
             free(p->samples);
@@ -654,27 +644,30 @@ static size_t parameter_size(USHORT message, ULONG flags)
     switch (message)
     {
         case MCI_OPEN:
-            return flags & 0x01000000 ? 24 : 20;
+            return flags & MCI_DGV_OPEN_PARENT ? MCI_DGV_OPEN_PARMS_SIZE : MCI_OPEN_PARMS_SIZE;
         case MCI_MIXSETUP:
-            return 56;
+            return MCI_MIXSETUP_PARMS_SIZE;
         case MCI_BUFFER:
-            return 32;
+            return MCI_BUFFER_PARMS_SIZE;
         case MCI_SET:
-            return 32;
+            return MCI_SET_PARMS_SIZE;
         case MCI_PLAY:
-            return flags & 0x4000 ? 16 : 12;
-        case 5:
-        case 22:
-            return 8; /* MCI_SEEK, MCI_LOAD */
-        case 9:
-        case 10:
-            return 16; /* MCI_GETDEVCAPS, MCI_STATUS */
-        case 44:
-        case 51:
-        case 52:
-            return 20; /* MCI_PUT, MCI_WHERE, MCI_WINDOW */
+            return flags & MCI_DGV_PLAY_SPEED ? MCI_DGV_PLAY_PARMS_SIZE : MCI_PLAY_PARMS_SIZE;
+        case MCI_SEEK:
+            return MCI_SEEK_PARMS_SIZE;
+        case MCI_LOAD:
+            return MCI_LOAD_PARMS_SIZE;
+        case MCI_GETDEVCAPS:
+            return MCI_GETDEVCAPS_PARMS_SIZE;
+        case MCI_STATUS:
+            return MCI_STATUS_PARMS_SIZE;
+        case MCI_PUT:
+        case MCI_WHERE:
+            return MCI_VID_RECT_PARMS_SIZE;
+        case MCI_WINDOW:
+            return MCI_VID_WINDOW_PARMS_SIZE;
         default:
-            return 4;
+            return MCI_GENERIC_PARMS_SIZE;
     }
 }
 #endif
@@ -693,7 +686,8 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
     if (message == MCI_OPEN)
     {
         int kind = 0;
-        if ((flags & MCI_OPEN_TYPE_ID) && lx_guest_load_u32(p + 8) == 9)
+        if ((flags & MCI_OPEN_TYPE_ID) &&
+            lx_guest_load_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE) == MCI_DEVTYPE_AUDIO_AMPMIX)
             kind = 1;
         else if (flags & MCI_OPEN_MMIO)
             kind = 2;
@@ -727,7 +721,9 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
         if (kind == 2)
         {
             size_t size = 0;
-            unsigned char *data = lx_mmio_copy(lx_guest_load_u32(p + 12), &size);
+            /* With MCI_OPEN_MMIO the element name is an open HMMIO. */
+            unsigned char *data =
+                lx_mmio_copy(lx_guest_load_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME), &size);
             int ok = data && lx_midi_sequence_parse(&d->sequence, data, size);
             free(data);
 #if TWOINE_MIDI_SYNTH || TWOINE_MT32_SYNTH
@@ -753,7 +749,7 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
                 return MCIERR_INVALID_BUFFER;
             }
         }
-        lx_guest_store_u16(p + 4, d->id);
+        lx_guest_store_u16(p + MCI_OPEN_PARMS_DEVICE_ID, d->id);
         lx_host_monitor_unlock(monitor);
         return 0;
     }
@@ -766,44 +762,48 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
             return mciSendCommand(id, MCI_STOP, 0, p, 0);
         if (!(flags & MCI_MIXSETUP_INIT))
             return MCIERR_UNSUPPORTED_FUNCTION;
-        ULONG bits = lx_guest_load_u32(p + 4), channels = lx_guest_load_u32(p + 16),
-              rate = lx_guest_load_u32(p + 12);
+        ULONG bits = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_BITS_PER_SAMPLE),
+              channels = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_CHANNELS),
+              rate = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_SAMPLES_PER_SEC);
         if (d->kind != 1 || (bits != 8 && bits != 16) || !channels || channels > 2 || rate < 4000 ||
-            rate > 192000 || lx_guest_load_u32(p + 8) != 1 || lx_guest_load_u32(p + 20) != MCI_PLAY)
+            rate > 192000 ||
+            lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_FORMAT_TAG) != MCI_WAVE_FORMAT_PCM ||
+            lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_FORMAT_MODE) != MCI_PLAY)
             return MCIERR_INVALID_BUFFER;
         lx_host_monitor_lock(monitor);
         d->bits = bits;
         d->channels = channels;
         d->rate = rate;
-        d->callback = lx_guest_load_u32(p + 40);
+        d->callback = lx_guest_load_u32(p + MCI_MIXSETUP_PARMS_MIX_EVENT);
         lx_host_monitor_unlock(monitor);
 #if TWOINE_PORTABLE_LOADER
         if (!write_entry && !initialize_write_bridge())
             return MCIERR_OUT_OF_MEMORY;
-        lx_guest_store_u32(p + 32, write_entry);
+        lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_MIX_WRITE, write_entry);
 #else
-        lx_guest_store_u32(p + 32, (ULONG)(uintptr_t)mixWrite);
+        lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_MIX_WRITE, (ULONG)(uintptr_t)mixWrite);
 #endif
-        lx_guest_store_u32(p + 28, d->id);
-        lx_guest_store_u32(p + 48, 4096);
-        lx_guest_store_u32(p + 52, 3);
+        lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_MIX_HANDLE, d->id);
+        lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_BUFFER_SIZE, MIX_SUGGESTED_BUFFER_SIZE);
+        lx_guest_store_u32(p + MCI_MIXSETUP_PARMS_NUM_BUFFERS, MIX_SUGGESTED_BUFFERS);
         return start_audio(d);
     }
     if (message == MCI_BUFFER)
     {
-        ULONG count = lx_guest_load_u32(p + 8), size = lx_guest_load_u32(p + 12),
-              list = lx_guest_load_u32(p + 28);
-        if (!count || count > 64 || !size || size > 4 * 1024 * 1024)
+        ULONG count = lx_guest_load_u32(p + MCI_BUFFER_PARMS_NUM_BUFFERS),
+              size = lx_guest_load_u32(p + MCI_BUFFER_PARMS_BUFFER_SIZE),
+              list = lx_guest_load_u32(p + MCI_BUFFER_PARMS_BUFFER_LIST);
+        if (!count || count > MIX_BUFFER_MAX || !size || size > MIX_BUFFER_BYTES_MAX)
             return MCIERR_INVALID_BUFFER;
         if (flags & MCI_ALLOCATE_MEMORY)
         {
             if (d->buffer_count)
                 return MCIERR_INVALID_BUFFER;
-            unsigned char records[64 * 32] = {0};
+            unsigned char records[MIX_BUFFER_MAX * MCI_MIX_BUFFER_SIZE] = {0};
             for (ULONG i = 0; i < count; i++)
             {
-                d->buffers[i] =
-                    lx_execution_map(GProcessState.execution, 0, (size + 4095) & ~4095u, 3, 0);
+                d->buffers[i] = lx_execution_map(GProcessState.execution, 0, (size + 4095) & ~4095u,
+                                                 LX_GUEST_READ | LX_GUEST_WRITE, 0);
                 if (!d->buffers[i])
                 {
                     for (ULONG j = 0; j < i; j++)
@@ -811,12 +811,14 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
                     memset(d->buffers, 0, sizeof d->buffers);
                     return MCIERR_OUT_OF_MEMORY;
                 }
-                lx_guest_store_u32(records + i * 32, 32);
-                lx_guest_store_u32(records + i * 32 + 4,
+                unsigned char *record = records + i * MCI_MIX_BUFFER_SIZE;
+                lx_guest_store_u32(record + MCI_MIX_BUFFER_STRUCT_LENGTH, MCI_MIX_BUFFER_SIZE);
+                lx_guest_store_u32(record + MCI_MIX_BUFFER_BUFFER,
                                    lx_execution_mapping_address(d->buffers[i]));
-                lx_guest_store_u32(records + i * 32 + 8, size);
+                lx_guest_store_u32(record + MCI_MIX_BUFFER_BUFFER_LENGTH, size);
             }
-            if (!lx_execution_write(GProcessState.execution, list, records, count * 32))
+            if (!lx_execution_write(GProcessState.execution, list, records,
+                                    count * MCI_MIX_BUFFER_SIZE))
             {
                 for (ULONG i = 0; i < count; i++)
                     lx_execution_unmap(GProcessState.execution, d->buffers[i]);
@@ -840,7 +842,7 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
     }
     if (message == MCI_SET && (flags & MCI_SET_VOLUME))
     {
-        ULONG level = lx_guest_load_u32(p + 16);
+        ULONG level = lx_guest_load_u32(p + MCI_SET_PARMS_LEVEL);
         if (level > 100)
             return MCIERR_INVALID_BUFFER;
         lx_host_monitor_lock(monitor);
@@ -862,8 +864,8 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
         d->next_event = 0;
         memset(d->voices, 0, sizeof d->voices);
         d->paused = 0;
-        d->notify = flags & 1;
-        d->notify_window = lx_guest_load_u32(p);
+        d->notify = flags & MCI_NOTIFY;
+        d->notify_window = lx_guest_load_u32(p + MCI_PARMS_CALLBACK);
         d->notify_user = user;
         d->ending = 0;
         lx_host_monitor_unlock(monitor);
@@ -938,7 +940,7 @@ static void shutdown_mdm(void)
         for (unsigned i = 0; i < DEVICE_COUNT; i++)
             if (devices[i].id)
             {
-                unsigned char parameters[4] = {0};
+                unsigned char parameters[MCI_GENERIC_PARMS_SIZE] = {0};
                 mciSendCommand(devices[i].id, MCI_CLOSE, 0, parameters, 0);
             }
 }

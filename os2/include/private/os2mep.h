@@ -1,9 +1,85 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* Private MMPM/2 interfaces: MMIO services used by the MCI devices and the tests. */
+/* Private MMPM/2 interfaces: MMIO services used by the MCI devices and the tests,
+   and the guest layout of the MCI parameter blocks. */
 #ifndef _INCL_OS2MEP_H_
 #define _INCL_OS2MEP_H_
-#include "os2/include/mmioos2.h"
+#include "os2/include/os2me.h"
 #include <stddef.h>
 /* Returns an owned copy of a memory-backed media element. */
 OS2EXPORT unsigned char *lx_mmio_copy(ULONG handle, size_t *size);
+
+/* Byte sizes and field offsets of the mcios2.h parameter blocks as the guest
+   lays them out (HWND, PSZ and PVOID are 32 bits). Every block starts with
+   hwndCallback. */
+enum
+{
+    MCI_GENERIC_PARMS_SIZE = 4,
+    MCI_PARMS_CALLBACK = 0,
+
+    MCI_OPEN_PARMS_SIZE = 20,
+    MCI_OPEN_PARMS_DEVICE_ID = 4,
+    MCI_OPEN_PARMS_DEVICE_TYPE = 8,
+    MCI_OPEN_PARMS_ELEMENT_NAME = 12,
+    MCI_OPEN_PARMS_ALIAS = 16,
+    MCI_DGV_OPEN_PARMS_SIZE = 24,
+    MCI_DGV_OPEN_PARMS_PARENT = 20,
+
+    MCI_PLAY_PARMS_SIZE = 12,
+    MCI_PLAY_PARMS_FROM = 4,
+    MCI_PLAY_PARMS_TO = 8,
+    MCI_DGV_PLAY_PARMS_SIZE = 16,
+
+    MCI_SEEK_PARMS_SIZE = 8,
+    MCI_SEEK_PARMS_TO = 4,
+
+    MCI_LOAD_PARMS_SIZE = 8,
+    MCI_LOAD_PARMS_ELEMENT_NAME = 4,
+
+    MCI_STATUS_PARMS_SIZE = 16,
+    MCI_STATUS_PARMS_RETURN = 4,
+    MCI_STATUS_PARMS_ITEM = 8,
+
+    MCI_GETDEVCAPS_PARMS_SIZE = 16,
+    MCI_GETDEVCAPS_PARMS_RETURN = 4,
+    MCI_GETDEVCAPS_PARMS_ITEM = 8,
+    MCI_GETDEVCAPS_PARMS_MESSAGE = 12,
+
+    MCI_SET_PARMS_SIZE = 32,
+    MCI_SET_PARMS_TIME_FORMAT = 4,
+    MCI_SET_PARMS_AUDIO = 12,
+    MCI_SET_PARMS_LEVEL = 16,
+    MCI_SET_PARMS_OVER = 20,
+
+    /* rc holds x, y, width and height */
+    MCI_VID_RECT_PARMS_SIZE = 20,
+    MCI_VID_RECT_PARMS_X = 4,
+    MCI_VID_RECT_PARMS_Y = 8,
+    MCI_VID_RECT_PARMS_WIDTH = 12,
+    MCI_VID_RECT_PARMS_HEIGHT = 16,
+
+    MCI_VID_WINDOW_PARMS_SIZE = 20,
+    MCI_VID_WINDOW_PARMS_HWND_DEST = 4,
+
+    MCI_MIXSETUP_PARMS_SIZE = 56,
+    MCI_MIXSETUP_PARMS_BITS_PER_SAMPLE = 4,
+    MCI_MIXSETUP_PARMS_FORMAT_TAG = 8,
+    MCI_MIXSETUP_PARMS_SAMPLES_PER_SEC = 12,
+    MCI_MIXSETUP_PARMS_CHANNELS = 16,
+    MCI_MIXSETUP_PARMS_FORMAT_MODE = 20,
+    MCI_MIXSETUP_PARMS_MIX_HANDLE = 28,
+    MCI_MIXSETUP_PARMS_MIX_WRITE = 32,
+    MCI_MIXSETUP_PARMS_MIX_EVENT = 40,
+    MCI_MIXSETUP_PARMS_BUFFER_SIZE = 48,
+    MCI_MIXSETUP_PARMS_NUM_BUFFERS = 52,
+
+    MCI_BUFFER_PARMS_SIZE = 32,
+    MCI_BUFFER_PARMS_NUM_BUFFERS = 8,
+    MCI_BUFFER_PARMS_BUFFER_SIZE = 12,
+    MCI_BUFFER_PARMS_BUFFER_LIST = 28,
+
+    MCI_MIX_BUFFER_SIZE = 32,
+    MCI_MIX_BUFFER_STRUCT_LENGTH = 0,
+    MCI_MIX_BUFFER_BUFFER = 4,
+    MCI_MIX_BUFFER_BUFFER_LENGTH = 8
+};
 #endif

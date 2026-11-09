@@ -2,6 +2,7 @@
 /* Digital-video MCI wire parameters follow the OS/2 Toolkit mcios2.h.
    Decoder workers transfer retained frames to the PM owner; they never render. */
 #include "os2/include/private/export.h"
+#include "os2/include/private/os2mep.h"
 #include "os2/mm/mmpm/mci/mdm/mdm_video.h"
 #include "os2/mm/video/decode/video_decode.h"
 #include "os2/include/private/pmp.h"
@@ -12,51 +13,11 @@
 #include <ctype.h>
 #include <errno.h>
 
+/* Video device IDs start above the waveaudio and sequencer IDs. */
 enum
 {
     VIDEO_DEVICES = 16,
-    VIDEO_FIRST_ID = 0x8000,
-    V_OPEN = 1,
-    V_CLOSE = 2,
-    V_PLAY = 4,
-    V_SEEK = 5,
-    V_STOP = 6,
-    V_PAUSE = 7,
-    V_CAPS = 9,
-    V_STATUS = 10,
-    V_SET = 12,
-    V_LOAD = 22,
-    V_RESUME = 29,
-    V_PUT = 44,
-    V_WHERE = 51,
-    V_WINDOW = 52,
-    V_NOTIFY = 1,
-    V_WAIT = 2,
-    V_FROM = 4,
-    V_TO = 8,
-    V_FRAME_TITLE = 0x1,
-    V_FRAME_SYSMENU = 0x2,
-    V_FRAME_DIALOG_BORDER = 0x100,
-    V_PM_REMOVE = 1,
-    V_OPEN_ELEMENT = 0x100,
-    V_OPEN_TYPE_ID = 0x1000,
-    V_OPEN_MMIO = 0x4000,
-    V_OPEN_PARENT = 0x1000000,
-    V_FORMAT_MS = 1,
-    V_FORMAT_FRAMES = 8,
-    V_MODE_PAUSE = 2,
-    V_MODE_NOT_READY = 1,
-    V_MODE_PLAY = 3,
-    V_MODE_STOP = 4,
-    V_ERR_DEVICE = 5001,
-    V_ERR_NOMEM = 5008,
-    V_ERR_UNSUPPORTED = 5018,
-    V_ERR_FILE = 5019,
-    V_ERR_NOT_READY = 5020,
-    V_ERR_RANGE = 5026,
-    V_ERR_BUFFER = 5050,
-    V_ERR_FLAG = 5054,
-    V_ERR_IO = 5125
+    VIDEO_FIRST_ID = 0x8000
 };
 
 enum
@@ -266,7 +227,7 @@ static void *play_worker(void *context)
     for (;;)
     {
         lx_host_monitor_lock(monitor);
-        while (!d->stop && d->mode == V_MODE_PAUSE && lx_pm_video_ready(d->target))
+        while (!d->stop && d->mode == MCI_MODE_PAUSE && lx_pm_video_ready(d->target))
             lx_host_monitor_wait(monitor, 20);
         int stopped = d->stop;
         lx_host_monitor_unlock(monitor);
@@ -293,7 +254,7 @@ static void *play_worker(void *context)
         lx_host_monitor_lock(monitor);
         while (!d->stop && lx_pm_video_ready(d->target))
         {
-            if (d->mode == V_MODE_PAUSE)
+            if (d->mode == MCI_MODE_PAUSE)
             {
                 lx_host_monitor_wait(monitor, 20);
                 continue;
@@ -338,7 +299,7 @@ static void *play_worker(void *context)
                 end = audio_end;
         }
         while (!d->stop && lx_pm_video_ready(d->target) &&
-               (d->mode == V_MODE_PAUSE || media_clock(d) < end))
+               (d->mode == MCI_MODE_PAUSE || media_clock(d) < end))
             lx_host_monitor_wait(monitor, 10);
         if (!d->stop && !lx_pm_video_ready(d->target))
             result = -1;
@@ -346,12 +307,14 @@ static void *play_worker(void *context)
             d->position = end;
     }
     unsigned notify = d->notify;
-    uint32_t completion = d->stop ? d->canceled : result < 0 ? 3 : 0;
+    uint32_t completion = d->stop      ? d->canceled
+                          : result < 0 ? MCI_NOTIFY_ERROR
+                                       : MCI_NOTIFY_SUCCESSFUL;
     HWND window = d->notify_window;
     USHORT id = d->id;
     uint32_t user = d->user;
-    d->error = result < 0 ? V_ERR_IO : 0;
-    d->mode = V_MODE_STOP;
+    d->error = result < 0 ? MCIERR_FILE_IO : 0;
+    d->mode = MCI_MODE_STOP;
     if (d->audio)
     {
         d->sound.paused = 1;
@@ -359,7 +322,7 @@ static void *play_worker(void *context)
     lx_host_monitor_wake_all(monitor);
     lx_host_monitor_unlock(monitor);
     if (notify && window)
-        WinPostMsg(window, 0x500, (MPARAM)(uintptr_t)(((ULONG)id << 16) | completion),
+        WinPostMsg(window, MM_MCINOTIFY, (MPARAM)(uintptr_t)(((ULONG)id << 16) | completion),
                    (MPARAM)(uintptr_t)user);
     return NULL;
 }
@@ -383,13 +346,13 @@ static void stop_reason(VideoDevice *d, unsigned reason)
     lx_host_monitor_unlock(monitor);
     lx_video_decoder_audio_sink(d->decoder, NULL, NULL);
     lx_host_monitor_lock(monitor);
-    d->mode = d->decoder ? V_MODE_STOP : V_MODE_NOT_READY;
+    d->mode = d->decoder ? MCI_MODE_STOP : MCI_MODE_NOT_READY;
     lx_host_monitor_unlock(monitor);
 }
 
 static void stop(VideoDevice *d)
 {
-    stop_reason(d, 2);
+    stop_reason(d, MCI_NOTIFY_ABORTED);
 }
 
 static uint32_t position_units(VideoDevice *d, int64_t milliseconds)
@@ -397,7 +360,7 @@ static uint32_t position_units(VideoDevice *d, int64_t milliseconds)
     if (milliseconds < 0)
         return 0;
     uint64_t value =
-        d->format == V_FORMAT_FRAMES
+        d->format == MCI_FORMAT_FRAMES
             ? (uint64_t)milliseconds * d->info.rate_numerator / (1000ull * d->info.rate_denominator)
             : (uint64_t)milliseconds;
     return value > UINT32_MAX ? UINT32_MAX : (uint32_t)value;
@@ -406,7 +369,7 @@ static uint32_t position_units(VideoDevice *d, int64_t milliseconds)
 static int64_t milliseconds(VideoDevice *d, ULONG value)
 {
     uint64_t result = value;
-    if (d->format == V_FORMAT_FRAMES)
+    if (d->format == MCI_FORMAT_FRAMES)
     {
         result *= 1000;
         if (result > UINT64_MAX / d->info.rate_denominator)
@@ -447,7 +410,7 @@ static int create_window(VideoDevice *d)
     if (!hab)
         return 0;
     WinRegisterClass(hab, "2ineDigitalVideo", WinDefWindowProc, CS_SIZEREDRAW, 0);
-    ULONG flags = V_FRAME_TITLE | V_FRAME_SYSMENU | V_FRAME_DIALOG_BORDER;
+    ULONG flags = FCF_TITLEBAR | FCF_SYSMENU | FCF_DLGBORDER;
     HWND client = 0;
     d->frame = WinCreateStdWindow(HWND_DESKTOP, WS_VISIBLE, &flags, "2ineDigitalVideo",
                                   "Digital Video", WS_VISIBLE, 0, d->id, &client);
@@ -468,22 +431,22 @@ static ULONG load_element(ULONG address, LxVideoDecoder **decoder, LxVideoInfo *
 {
     char *name = lx_execution_copy_string(GProcessState.execution, address, 4096);
     if (!name)
-        return V_ERR_BUFFER;
+        return MCIERR_INVALID_BUFFER;
     uint32_t error = 0;
     char *path = GProcessState.makeUnixPath(name, &error);
     free(name);
     if (!path)
-        return V_ERR_FILE;
+        return MCIERR_FILE_NOT_FOUND;
     *decoder = lx_video_decoder_open_audio(path, info, lxRuntimeFeatureEnabled(LX_FEATURE_PCM));
     free(path);
-    return *decoder ? 0 : V_ERR_NOT_READY;
+    return *decoder ? 0 : MCIERR_DEVICE_NOT_READY;
 }
 
 static ULONG open_device(ULONG flags, unsigned char *p)
 {
-    if (flags & ~((ULONG)V_NOTIFY | V_WAIT | V_OPEN_ELEMENT | V_OPEN_TYPE_ID | 0x200 | 0x2000 |
-                  0x8000 | V_OPEN_PARENT))
-        return V_ERR_UNSUPPORTED;
+    if (flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_OPEN_ELEMENT | MCI_OPEN_TYPE_ID |
+                  MCI_OPEN_ALIAS | MCI_OPEN_SHAREABLE | MCI_READONLY | MCI_DGV_OPEN_PARENT))
+        return MCIERR_UNSUPPORTED_FUNCTION;
     VideoDevice *d = NULL;
     for (unsigned i = 0; i < VIDEO_DEVICES; i++)
         if (!devices[i].id)
@@ -492,12 +455,13 @@ static ULONG open_device(ULONG flags, unsigned char *p)
             break;
         }
     if (!d || !next_id)
-        return V_ERR_NOMEM;
+        return MCIERR_OUT_OF_MEMORY;
     LxVideoInfo info = {.rate_numerator = 25, .rate_denominator = 1};
     LxVideoDecoder *decoder = NULL;
-    if (flags & V_OPEN_ELEMENT)
+    if (flags & MCI_OPEN_ELEMENT)
     {
-        ULONG error = load_element(lx_guest_load_u32(p + 12), &decoder, &info);
+        ULONG error =
+            load_element(lx_guest_load_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME), &decoder, &info);
         if (error)
             return error;
     }
@@ -505,33 +469,34 @@ static ULONG open_device(ULONG flags, unsigned char *p)
     d->id = next_id++;
     d->decoder = decoder;
     d->info = info;
-    d->mode = decoder ? V_MODE_STOP : V_MODE_NOT_READY;
-    d->format = V_FORMAT_MS;
+    d->mode = decoder ? MCI_MODE_STOP : MCI_MODE_NOT_READY;
+    d->format = MCI_FORMAT_MILLISECONDS;
     d->volume = 1;
     d->until = -1;
     d->destination = (RECTL){0, 0, (LONG)info.width, (LONG)info.height};
-    if ((flags & V_OPEN_PARENT) && !set_window(d, lx_guest_load_u32(p + 20)))
+    if ((flags & MCI_DGV_OPEN_PARENT) &&
+        !set_window(d, lx_guest_load_u32(p + MCI_DGV_OPEN_PARMS_PARENT)))
     {
         lx_video_decoder_close(decoder);
         reset_device(d);
-        return V_ERR_NOT_READY;
+        return MCIERR_DEVICE_NOT_READY;
     }
-    if (flags & 0x200)
+    if (flags & MCI_OPEN_ALIAS)
     {
-        char *alias =
-            lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(p + 16), 128);
+        char *alias = lx_execution_copy_string(GProcessState.execution,
+                                               lx_guest_load_u32(p + MCI_OPEN_PARMS_ALIAS), 128);
         if (!alias || !*alias)
         {
             free(alias);
             lx_video_decoder_close(decoder);
             lx_pm_video_release(d->target);
             reset_device(d);
-            return V_ERR_BUFFER;
+            return MCIERR_INVALID_BUFFER;
         }
         snprintf(d->alias, sizeof d->alias, "%s", alias);
         free(alias);
     }
-    lx_guest_store_u16(p + 4, d->id);
+    lx_guest_store_u16(p + MCI_OPEN_PARMS_DEVICE_ID, d->id);
     return 0;
 }
 
@@ -540,22 +505,22 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
 {
     *handled = 0;
     unsigned char *p = parameters;
-    if (message == V_OPEN && p)
+    if (message == MCI_OPEN && p)
     {
-        ULONG type = lx_guest_load_u32(p + 8);
-        int is_video = (flags & V_OPEN_TYPE_ID) && type == 12;
+        ULONG type = lx_guest_load_u32(p + MCI_OPEN_PARMS_DEVICE_TYPE);
+        int is_video = (flags & MCI_OPEN_TYPE_ID) && type == MCI_DEVTYPE_DIGITAL_VIDEO;
         char *text = NULL;
-        if (!(flags & V_OPEN_TYPE_ID) && type)
+        if (!(flags & MCI_OPEN_TYPE_ID) && type)
         {
             text = lx_execution_copy_string(GProcessState.execution, type, 128);
             is_video =
                 text && (!strcasecmp(text, "digitalvideo") || !strcasecmp(text, "digitalvideo01"));
             free(text);
         }
-        if (!type && (flags & V_OPEN_ELEMENT))
+        if (!type && (flags & MCI_OPEN_ELEMENT))
         {
-            text =
-                lx_execution_copy_string(GProcessState.execution, lx_guest_load_u32(p + 12), 4096);
+            text = lx_execution_copy_string(
+                GProcessState.execution, lx_guest_load_u32(p + MCI_OPEN_PARMS_ELEMENT_NAME), 4096);
             is_video = video_name(text);
             free(text);
         }
@@ -566,21 +531,22 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         {
             fprintf(stderr,
                     "2ine: video playback is disabled in this ball's Graphics & Media settings\n");
-            return V_ERR_NOT_READY;
+            return MCIERR_DEVICE_NOT_READY;
         }
         lx_host_once(&once, initialize);
-        return monitor ? open_device(flags, p) : V_ERR_NOMEM;
+        return monitor ? open_device(flags, p) : MCIERR_OUT_OF_MEMORY;
     }
     VideoDevice *d = find(id);
     if (!d)
         return 0;
     *handled = 1;
     if (!p)
-        return V_ERR_BUFFER;
-    if ((message == V_CLOSE || message == V_STOP || message == V_PAUSE || message == V_RESUME) &&
-        (flags & ~((ULONG)V_NOTIFY | V_WAIT)))
-        return V_ERR_UNSUPPORTED;
-    if (message == V_CLOSE)
+        return MCIERR_INVALID_BUFFER;
+    if ((message == MCI_CLOSE || message == MCI_STOP || message == MCI_PAUSE ||
+         message == MCI_RESUME) &&
+        (flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT)))
+        return MCIERR_UNSUPPORTED_FUNCTION;
+    if (message == MCI_CLOSE)
     {
         d->closing = 1;
         stop(d);
@@ -591,18 +557,19 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         reset_device(d);
         return 0;
     }
-    if (message == V_STOP)
+    if (message == MCI_STOP)
     {
         stop(d);
         return 0;
     }
-    if (message == V_LOAD)
+    if (message == MCI_LOAD)
     {
-        if (flags & ~((ULONG)V_NOTIFY | V_WAIT))
-            return V_ERR_UNSUPPORTED;
+        if (flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT))
+            return MCIERR_UNSUPPORTED_FUNCTION;
         LxVideoInfo info;
         LxVideoDecoder *decoder = NULL;
-        ULONG error = load_element(lx_guest_load_u32(p + 4), &decoder, &info);
+        ULONG error =
+            load_element(lx_guest_load_u32(p + MCI_LOAD_PARMS_ELEMENT_NAME), &decoder, &info);
         if (error)
             return error;
         stop(d);
@@ -610,29 +577,37 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         d->decoder = decoder;
         d->info = info;
         d->position = 0;
-        d->mode = V_MODE_STOP;
+        d->mode = MCI_MODE_STOP;
         if (!d->window)
             d->destination = (RECTL){0, 0, (LONG)info.width, (LONG)info.height};
         return 0;
     }
-    if (message == V_WINDOW)
+    if (message == MCI_WINDOW)
     {
-        if (flags & ~((ULONG)V_NOTIFY | V_WAIT | 0x100))
-            return V_ERR_UNSUPPORTED;
+        if (flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_DGV_WINDOW_HWND))
+            return MCIERR_UNSUPPORTED_FUNCTION;
         stop(d);
-        return (flags & 0x100) && set_window(d, lx_guest_load_u32(p + 4)) ? 0 : V_ERR_BUFFER;
+        return (flags & MCI_DGV_WINDOW_HWND) &&
+                       set_window(d, lx_guest_load_u32(p + MCI_VID_WINDOW_PARMS_HWND_DEST))
+                   ? 0
+                   : MCIERR_INVALID_BUFFER;
     }
-    if (message == V_PUT || message == V_WHERE)
+    if (message == MCI_PUT || message == MCI_WHERE)
     {
-        if ((flags & ~((ULONG)V_NOTIFY | V_WAIT | 0x300)) || !(flags & 0x200))
-            return V_ERR_UNSUPPORTED;
-        if (message == V_PUT)
+        /* MCI_WHERE is checked with the MCI_PUT flag values. */
+        if ((flags &
+             ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_DGV_PUT_RECT | MCI_DGV_PUT_DESTINATION)) ||
+            !(flags & MCI_DGV_PUT_DESTINATION))
+            return MCIERR_UNSUPPORTED_FUNCTION;
+        if (message == MCI_PUT)
         {
-            LONG x = (LONG)lx_guest_load_u32(p + 4), y = (LONG)lx_guest_load_u32(p + 8);
-            LONG width = (LONG)lx_guest_load_u32(p + 12), height = (LONG)lx_guest_load_u32(p + 16);
+            LONG x = (LONG)lx_guest_load_u32(p + MCI_VID_RECT_PARMS_X),
+                 y = (LONG)lx_guest_load_u32(p + MCI_VID_RECT_PARMS_Y);
+            LONG width = (LONG)lx_guest_load_u32(p + MCI_VID_RECT_PARMS_WIDTH),
+                 height = (LONG)lx_guest_load_u32(p + MCI_VID_RECT_PARMS_HEIGHT);
             int64_t right = (int64_t)x + width, top = (int64_t)y + height;
             if (width <= 0 || height <= 0 || right > INT32_MAX || top > INT32_MAX)
-                return V_ERR_RANGE;
+                return MCIERR_OUTOFRANGE;
             RECTL rect = {x, y, (LONG)right, (LONG)top};
             lx_host_monitor_lock(monitor);
             d->destination = rect;
@@ -640,180 +615,189 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         }
         else
         {
-            lx_guest_store_u32(p + 4, d->destination.xLeft);
-            lx_guest_store_u32(p + 8, d->destination.yBottom);
-            lx_guest_store_u32(p + 12, d->destination.xRight - d->destination.xLeft);
-            lx_guest_store_u32(p + 16, d->destination.yTop - d->destination.yBottom);
+            lx_guest_store_u32(p + MCI_VID_RECT_PARMS_X, d->destination.xLeft);
+            lx_guest_store_u32(p + MCI_VID_RECT_PARMS_Y, d->destination.yBottom);
+            lx_guest_store_u32(p + MCI_VID_RECT_PARMS_WIDTH,
+                               d->destination.xRight - d->destination.xLeft);
+            lx_guest_store_u32(p + MCI_VID_RECT_PARMS_HEIGHT,
+                               d->destination.yTop - d->destination.yBottom);
         }
         return 0;
     }
-    if (message == V_SET && (flags & 0x80000))
+    if (message == MCI_SET && (flags & MCI_SET_VOLUME))
     {
-        if ((flags & ~((ULONG)V_NOTIFY | V_WAIT | 0x80000 | 0x1000)) || lx_guest_load_u32(p + 12) ||
-            lx_guest_load_u32(p + 20))
-            return V_ERR_UNSUPPORTED;
-        ULONG level = lx_guest_load_u32(p + 16);
+        if ((flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_SET_VOLUME | MCI_SET_AUDIO)) ||
+            lx_guest_load_u32(p + MCI_SET_PARMS_AUDIO) != MCI_SET_AUDIO_ALL ||
+            lx_guest_load_u32(p + MCI_SET_PARMS_OVER))
+            return MCIERR_UNSUPPORTED_FUNCTION;
+        ULONG level = lx_guest_load_u32(p + MCI_SET_PARMS_LEVEL);
         if (level > 100)
-            return V_ERR_RANGE;
+            return MCIERR_OUTOFRANGE;
         lx_host_monitor_lock(monitor);
         d->volume = level / 100.0f;
         d->sound.volume = d->volume;
         lx_host_monitor_unlock(monitor);
         return 0;
     }
-    if (message == V_SET)
+    if (message == MCI_SET)
     {
-        if ((flags & ~((ULONG)V_NOTIFY | V_WAIT | 0x10000)) || !(flags & 0x10000))
-            return V_ERR_UNSUPPORTED;
-        ULONG format = lx_guest_load_u32(p + 4);
-        if (format != V_FORMAT_MS && format != V_FORMAT_FRAMES)
-            return V_ERR_FLAG;
+        if ((flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_SET_TIME_FORMAT)) ||
+            !(flags & MCI_SET_TIME_FORMAT))
+            return MCIERR_UNSUPPORTED_FUNCTION;
+        ULONG format = lx_guest_load_u32(p + MCI_SET_PARMS_TIME_FORMAT);
+        if (format != MCI_FORMAT_MILLISECONDS && format != MCI_FORMAT_FRAMES)
+            return MCIERR_INVALID_FLAG;
         lx_host_monitor_lock(monitor);
         d->format = format;
         lx_host_monitor_unlock(monitor);
         return 0;
     }
-    if (message == V_STATUS || message == V_CAPS)
+    if (message == MCI_STATUS || message == MCI_GETDEVCAPS)
     {
-        if ((flags & ~((ULONG)V_NOTIFY | V_WAIT | 0x300)) ||
-            (message == V_STATUS && (flags & 0x300) != 0x100) ||
-            (message == V_CAPS && (flags & 0x300) != 0x100 && (flags & 0x300) != 0x200))
-            return V_ERR_FLAG;
-        ULONG item = lx_guest_load_u32(p + 8), value = 0;
-        if (message == V_CAPS && (flags & 0x100))
+        /* MCI_STATUS_ITEM and MCI_GETDEVCAPS_MESSAGE share a value, as do the
+           items and return fields of both parameter blocks. */
+        ULONG kind = flags & (MCI_GETDEVCAPS_MESSAGE | MCI_GETDEVCAPS_ITEM);
+        if ((flags &
+             ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_GETDEVCAPS_MESSAGE | MCI_GETDEVCAPS_ITEM)) ||
+            (message == MCI_STATUS && kind != MCI_STATUS_ITEM) ||
+            (message == MCI_GETDEVCAPS && kind != MCI_GETDEVCAPS_MESSAGE &&
+             kind != MCI_GETDEVCAPS_ITEM))
+            return MCIERR_INVALID_FLAG;
+        ULONG item = lx_guest_load_u32(p + MCI_STATUS_PARMS_ITEM), value = 0;
+        if (message == MCI_GETDEVCAPS && (flags & MCI_GETDEVCAPS_MESSAGE))
         {
-            switch (lx_guest_load_u16(p + 12))
+            switch (lx_guest_load_u16(p + MCI_GETDEVCAPS_PARMS_MESSAGE))
             {
-                case V_OPEN:
-                case V_CLOSE:
-                case V_PLAY:
-                case V_SEEK:
-                case V_STOP:
-                case V_PAUSE:
-                case V_CAPS:
-                case V_STATUS:
-                case V_SET:
-                case V_LOAD:
-                case V_RESUME:
-                case V_PUT:
-                case V_WHERE:
-                case V_WINDOW:
+                case MCI_OPEN:
+                case MCI_CLOSE:
+                case MCI_PLAY:
+                case MCI_SEEK:
+                case MCI_STOP:
+                case MCI_PAUSE:
+                case MCI_GETDEVCAPS:
+                case MCI_STATUS:
+                case MCI_SET:
+                case MCI_LOAD:
+                case MCI_RESUME:
+                case MCI_PUT:
+                case MCI_WHERE:
+                case MCI_WINDOW:
                     value = 1;
                     break;
             }
-            lx_guest_store_u32(p + 4, value);
+            lx_guest_store_u32(p + MCI_GETDEVCAPS_PARMS_RETURN, value);
             return 0;
         }
         lx_host_monitor_lock(monitor);
-        if (message == V_STATUS)
+        if (message == MCI_STATUS)
         {
             switch (item)
             {
-                case 2:
+                case MCI_STATUS_LENGTH:
                     value = position_units(d, d->info.duration_ms);
                     break;
-                case 3:
+                case MCI_STATUS_MODE:
                     value = d->mode;
                     break;
-                case 5:
+                case MCI_STATUS_POSITION:
                     value = position_units(d, d->position);
                     break;
-                case 7:
-                case 9:
-                case 14:
+                case MCI_STATUS_MEDIA_PRESENT:
+                case MCI_STATUS_READY:
+                case MCI_STATUS_VIDEO:
                     value = d->decoder != NULL;
                     break;
-                case 8:
+                case MCI_STATUS_VOLUME:
                     value = (ULONG)(d->volume * 100.0f + 0.5f);
                     break;
-                case 10:
+                case MCI_STATUS_TIME_FORMAT:
                     value = d->format;
                     break;
-                case 13:
+                case MCI_STATUS_AUDIO:
                     value = d->info.audio_present;
                     break;
-                case 0x7000:
+                case MCI_DGV_STATUS_HWND:
                     value = d->window;
                     break;
-                case 0x700b:
+                case MCI_DGV_STATUS_VIDEO_X_EXTENT:
                     value = d->info.width;
                     break;
-                case 0x700c:
+                case MCI_DGV_STATUS_VIDEO_Y_EXTENT:
                     value = d->info.height;
                     break;
                 default:
                     lx_host_monitor_unlock(monitor);
-                    return V_ERR_UNSUPPORTED;
+                    return MCIERR_UNSUPPORTED_FUNCTION;
             }
         }
         else
         {
             switch (item)
             {
-                case 3:
-                case 8:
-                case 12:
-                case 15:
-                case 0x7000:
-                case 0x7001:
+                case MCI_GETDEVCAPS_CAN_PLAY:
+                case MCI_GETDEVCAPS_CAN_SETVOLUME:
+                case MCI_GETDEVCAPS_HAS_VIDEO:
+                case MCI_GETDEVCAPS_USES_FILES:
+                case MCI_DGV_GETDEVCAPS_CAN_STRETCH:
+                case MCI_DGV_GETDEVCAPS_CAN_DISTORT:
                     value = 1;
                     break;
-                case 1:
-                case 2:
-                case 4:
-                case 5:
-                case 6:
-                case 7:
-                case 9:
-                case 16:
-                case 18:
-                case 0x7007:
-                case 0x7008:
-                case 0x7009:
+                case MCI_GETDEVCAPS_CAN_EJECT:
+                case MCI_GETDEVCAPS_CAN_LOCKEJECT:
+                case MCI_GETDEVCAPS_CAN_PROCESS_INTERNAL:
+                case MCI_GETDEVCAPS_CAN_RECORD:
+                case MCI_GETDEVCAPS_CAN_RECORD_INSERT:
+                case MCI_GETDEVCAPS_CAN_SAVE:
+                case MCI_GETDEVCAPS_CAN_STREAM:
+                case MCI_GETDEVCAPS_HAS_IMAGE:
+                case MCI_GETDEVCAPS_CAN_CLOSE_DOOR:
+                case MCI_VID_GETDEVCAPS_CAN_FREEZE:
+                case MCI_DGV_GETDEVCAPS_OVERLAY_GRAPHICS:
+                case MCI_DGV_GETDEVCAPS_CAN_REVERSE:
                     value = 0;
                     break;
-                case 0x7006:
+                case MCI_DGV_GETDEVCAPS_MAX_WINDOWS:
                     value = 1;
                     break;
-                case 10:
-                    value = 12;
+                case MCI_GETDEVCAPS_DEVICE_TYPE:
+                    value = MCI_DEVTYPE_DIGITAL_VIDEO;
                     break;
-                case 11:
+                case MCI_GETDEVCAPS_HAS_AUDIO:
                     value = d->info.audio_present;
                     break;
-                case 0x7002:
-                case 0x7004:
+                case MCI_DGV_GETDEVCAPS_VIDEO_X_EXTENT:
+                case MCI_DGV_GETDEVCAPS_IMAGE_X_EXTENT:
                     value = d->info.width;
                     break;
-                case 0x7003:
-                case 0x7005:
+                case MCI_DGV_GETDEVCAPS_VIDEO_Y_EXTENT:
+                case MCI_DGV_GETDEVCAPS_IMAGE_Y_EXTENT:
                     value = d->info.height;
                     break;
                 default:
                     lx_host_monitor_unlock(monitor);
-                    return V_ERR_UNSUPPORTED;
+                    return MCIERR_UNSUPPORTED_FUNCTION;
             }
         }
         lx_host_monitor_unlock(monitor);
-        lx_guest_store_u32(p + 4, value);
+        lx_guest_store_u32(p + MCI_STATUS_PARMS_RETURN, value);
         return 0;
     }
-    if (message == V_PAUSE || message == V_RESUME)
+    if (message == MCI_PAUSE || message == MCI_RESUME)
     {
         lx_host_monitor_lock(monitor);
-        if (message == V_PAUSE && d->mode == V_MODE_PLAY)
+        if (message == MCI_PAUSE && d->mode == MCI_MODE_PLAY)
         {
-            d->mode = V_MODE_PAUSE;
+            d->mode = MCI_MODE_PAUSE;
             d->paused_at = lx_host_video_ticks_ms();
             if (d->audio)
             {
                 d->sound.paused = 1;
             }
         }
-        else if (message == V_RESUME && d->mode == V_MODE_PAUSE)
+        else if (message == MCI_RESUME && d->mode == MCI_MODE_PAUSE)
         {
             d->started += lx_host_video_ticks_ms() - d->paused_at;
-            d->mode = V_MODE_PLAY;
+            d->mode = MCI_MODE_PLAY;
             if (d->audio)
             {
                 d->sound.paused = 0;
@@ -823,56 +807,60 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         else
         {
             lx_host_monitor_unlock(monitor);
-            return V_ERR_NOT_READY;
+            return MCIERR_DEVICE_NOT_READY;
         }
         lx_host_monitor_unlock(monitor);
         return 0;
     }
-    if (message == V_SEEK)
+    if (message == MCI_SEEK)
     {
-        if ((flags & ~((ULONG)V_NOTIFY | V_WAIT | 0x300)) || (flags & 0x300) == 0x300)
-            return V_ERR_UNSUPPORTED;
+        if ((flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_TO_START | MCI_TO_END)) ||
+            (flags & (MCI_TO_START | MCI_TO_END)) == (MCI_TO_START | MCI_TO_END))
+            return MCIERR_UNSUPPORTED_FUNCTION;
         if (!d->decoder)
-            return V_ERR_NOT_READY;
+            return MCIERR_DEVICE_NOT_READY;
         stop(d);
-        int64_t at = flags & 0x100   ? 0
-                     : flags & 0x200 ? d->info.duration_ms
-                                     : milliseconds(d, lx_guest_load_u32(p + 4));
+        int64_t at = flags & MCI_TO_START ? 0
+                     : flags & MCI_TO_END
+                         ? d->info.duration_ms
+                         : milliseconds(d, lx_guest_load_u32(p + MCI_SEEK_PARMS_TO));
         if (at < 0 || (d->info.duration_ms > 0 && at > d->info.duration_ms))
-            return V_ERR_RANGE;
+            return MCIERR_OUTOFRANGE;
         if (!lx_video_decoder_seek(d->decoder, at))
-            return V_ERR_IO;
+            return MCIERR_FILE_IO;
         d->position = at;
         return 0;
     }
-    if (message == V_PLAY)
+    if (message == MCI_PLAY)
     {
-        if (flags & ~((ULONG)V_NOTIFY | V_WAIT | V_FROM | V_TO))
-            return V_ERR_UNSUPPORTED;
+        if (flags & ~((ULONG)MCI_NOTIFY | MCI_WAIT | MCI_FROM | MCI_TO))
+            return MCIERR_UNSUPPORTED_FUNCTION;
         if (!d->decoder)
-            return V_ERR_NOT_READY;
-        stop_reason(d, 1);
+            return MCIERR_DEVICE_NOT_READY;
+        stop_reason(d, MCI_NOTIFY_SUPERSEDED);
         if (!d->target && !create_window(d))
-            return V_ERR_NOT_READY;
-        int64_t from = flags & V_FROM ? milliseconds(d, lx_guest_load_u32(p + 4)) : d->position;
-        int64_t to = flags & V_TO              ? milliseconds(d, lx_guest_load_u32(p + 8))
+            return MCIERR_DEVICE_NOT_READY;
+        int64_t from = flags & MCI_FROM
+                           ? milliseconds(d, lx_guest_load_u32(p + MCI_PLAY_PARMS_FROM))
+                           : d->position;
+        int64_t to = flags & MCI_TO ? milliseconds(d, lx_guest_load_u32(p + MCI_PLAY_PARMS_TO))
                      : d->info.duration_ms > 0 ? d->info.duration_ms
                                                : -1;
-        if (from < 0 || ((flags & V_TO) && to < 0) || (to >= 0 && to <= from) ||
+        if (from < 0 || ((flags & MCI_TO) && to < 0) || (to >= 0 && to <= from) ||
             (d->info.duration_ms > 0 && (from > d->info.duration_ms || to > d->info.duration_ms)))
-            return V_ERR_RANGE;
+            return MCIERR_OUTOFRANGE;
         if (!lx_video_decoder_seek(d->decoder, from))
-            return V_ERR_IO;
+            return MCIERR_FILE_IO;
         if (!start_audio(d, from, to))
-            return V_ERR_NOT_READY;
+            return MCIERR_DEVICE_NOT_READY;
         lx_host_monitor_lock(monitor);
         d->position = from;
         d->until = to;
         d->stop = 0;
         d->error = 0;
-        d->mode = V_MODE_PLAY;
-        d->notify = flags & V_NOTIFY;
-        d->notify_window = lx_guest_load_u32(p);
+        d->mode = MCI_MODE_PLAY;
+        d->notify = flags & MCI_NOTIFY;
+        d->notify_window = lx_guest_load_u32(p + MCI_PARMS_CALLBACK);
         d->user = user;
         d->started = lx_host_video_ticks_ms() - (uint64_t)from;
         d->thread = lx_host_thread_create(play_worker, d, NULL);
@@ -882,46 +870,49 @@ static ULONG video_command(USHORT id, USHORT message, ULONG flags, PVOID paramet
         }
         if (!d->thread)
         {
-            d->mode = V_MODE_STOP;
+            d->mode = MCI_MODE_STOP;
             lx_host_monitor_unlock(monitor);
             stop(d);
-            return V_ERR_NOMEM;
+            return MCIERR_OUT_OF_MEMORY;
         }
         lx_host_monitor_unlock(monitor);
-        if (flags & V_WAIT)
+        if (flags & MCI_WAIT)
         {
             HAB hab = WinQueryAnchorBlock(d->window);
             for (;;)
             {
                 lx_host_monitor_lock(monitor);
-                int playing = d->mode != V_MODE_STOP && d->id == id;
+                int playing = d->mode != MCI_MODE_STOP && d->id == id;
                 lx_host_monitor_unlock(monitor);
                 lx_pm_video_pump_current();
                 if (!playing)
                     break;
                 QMSG message;
-                while (WinPeekMsg(hab, &message, 0, 0, 0, V_PM_REMOVE))
+                while (WinPeekMsg(hab, &message, 0, 0, 0, PM_REMOVE))
                     WinDispatchMsg(hab, &message);
                 lx_host_sleep_ms(2);
             }
             stop(d);
-            return lx_pm_video_ready(d->target) ? d->error : V_ERR_IO;
+            return lx_pm_video_ready(d->target) ? d->error : MCIERR_FILE_IO;
         }
         return 0;
     }
-    return V_ERR_UNSUPPORTED;
+    return MCIERR_UNSUPPORTED_FUNCTION;
 }
 
 ULONG lx_mci_video_command(USHORT id, USHORT message, ULONG flags, PVOID parameters, USHORT user,
                            int *handled)
 {
     ULONG result = video_command(id, message, flags, parameters, user, handled);
-    if (*handled && !result && (flags & V_NOTIFY) && message != V_PLAY && parameters)
+    if (*handled && !result && (flags & MCI_NOTIFY) && message != MCI_PLAY && parameters)
     {
-        ULONG window = lx_guest_load_u32(parameters);
-        USHORT device = message == V_OPEN ? lx_guest_load_u16((uint8 *)parameters + 4) : id;
+        ULONG window = lx_guest_load_u32((uint8 *)parameters + MCI_PARMS_CALLBACK);
+        USHORT device = message == MCI_OPEN
+                            ? lx_guest_load_u16((uint8 *)parameters + MCI_OPEN_PARMS_DEVICE_ID)
+                            : id;
         if (window)
-            WinPostMsg(window, 0x500, (MPARAM)(uintptr_t)((ULONG)device << 16),
+            WinPostMsg(window, MM_MCINOTIFY,
+                       (MPARAM)(uintptr_t)((ULONG)device << 16 | MCI_NOTIFY_SUCCESSFUL),
                        (MPARAM)(uintptr_t)user);
     }
     return result;

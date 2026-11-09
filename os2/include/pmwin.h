@@ -511,6 +511,13 @@ extern "C"
         HT_ERROR = -3
     };
 
+    /* WinPeekMsg options */
+    enum
+    {
+        PM_NOREMOVE = 0x0000,
+        PM_REMOVE = 0x0001
+    };
+
     OS2EXPORT BOOL OS2API WinPeekMsg(HAB hab, PQMSG message, HWND filter, ULONG first, ULONG last,
                                      ULONG flags);
 
@@ -667,6 +674,14 @@ extern "C"
         FID_DBE_KBDSTAT = 0x8011,
         FID_DBE_PECIC = 0x8012,
         FID_DBE_KKPOPUP = 0x8013
+    };
+
+    /* Frame creation flags */
+    enum
+    {
+        FCF_TITLEBAR = 0x00000001,
+        FCF_SYSMENU = 0x00000002,
+        FCF_DLGBORDER = 0x00000100
     };
 
 /* Two-byte packing preserves the shared USE16/USE32 PM layout. */
