@@ -9,7 +9,7 @@ twoine_os2_dll(
     pmwp/open.c
     pmwp/som_runtime.c
     pmwp/som_tables.c
-    pmwp/som_object.c
+    pmwp/wpobject.c
     pmwp/som_views.c
     pmwp/som_classes.c
     pmwp/som_extended.c
