@@ -11,6 +11,10 @@ import sys
 import tempfile
 from pathlib import Path
 
+SIGNAL_STATUS_BASE = 128
+# The floppy capacities the engine can format.
+FLOPPY_CAPACITIES_KIB = [360, 720, 1200, 1440, 2880]
+
 ROOT = Path(__file__).resolve().parents[2]
 _LIBRARY = None
 _BUILD_HINT = None
@@ -265,7 +269,8 @@ def run(args, ball, data):
                 "exitCode": result.returncode,
             }
         )
-    return result.returncode if result.returncode >= 0 else 128 - result.returncode
+    # A signal n ends the child with -n; report it as the shell does, 128 + n.
+    return result.returncode if result.returncode >= 0 else SIGNAL_STATUS_BASE - result.returncode
 
 
 def main(argv=None):
@@ -365,7 +370,7 @@ def main(argv=None):
     create = sub.add_parser("create-floppy", help="create a formatted FAT12 image and attach it")
     create.add_argument("drive")
     create.add_argument("image", type=Path)
-    create.add_argument("kib", type=int, choices=[360, 720, 1200, 1440, 2880])
+    create.add_argument("kib", type=int, choices=FLOPPY_CAPACITIES_KIB)
     disk = sub.add_parser("create-disk", help="create and attach a formatted filesystem image")
     disk.add_argument("drive")
     disk.add_argument("image", type=Path)
