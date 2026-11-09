@@ -5,20 +5,38 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Opening, copying, moving and deleting files. */
 #include "os2/baseos/doscalls/internal.h"
+
+/* fsOpenFlags holds the exists action in its low nibble and the new action above it. */
+enum
+{
+    OPEN_ACTION_EXISTS_MASK = 0x000F,
+    OPEN_ACTION_NEW_MASK = 0x00F0,
+    OPEN_ACCESS_BITS = 0x0003
+};
+
+static const ULONG OPEN_ACTION_RESERVED_BITS = 0xFFFFFE00u;
+static const ULONG OPEN_MODE_RESERVED_BITS = 0xFFFF0000u;
+
+/* DosCopy moves data through a stack buffer of this many bytes. */
+enum
+{
+    COPY_CHUNK_BYTES = 16384
+};
 
 APIRET doDosOpen(PSZ name, PHFILE output, PULONG action, LONGLONG size, ULONG attributes,
                  ULONG open_flags, ULONG open_mode, PEAOP2 extended)
 {
     if (!name || !output || size < 0 || extended || (attributes & FILE_DIRECTORY) ||
-        (open_flags & 0xfffffe00u) || (open_mode & 0xffff0000u))
+        (open_flags & OPEN_ACTION_RESERVED_BITS) || (open_mode & OPEN_MODE_RESERVED_BITS))
         return ERROR_INVALID_PARAMETER;
     if (!*name)
         return ERROR_INVALID_NAME;
     if (open_flags & OPEN_FLAGS_DASD)
         return ERROR_OPEN_FAILED;
     unsigned flags;
-    switch (open_mode & 3)
+    switch (open_mode & OPEN_ACCESS_BITS)
     {
         case OPEN_ACCESS_READONLY:
             flags = LX_HOST_FILE_READ;
@@ -32,7 +50,8 @@ APIRET doDosOpen(PSZ name, PHFILE output, PULONG action, LONGLONG size, ULONG at
         default:
             return ERROR_INVALID_PARAMETER;
     }
-    const ULONG existing = open_flags & 15, missing = open_flags & 0xf0;
+    const ULONG existing = open_flags & OPEN_ACTION_EXISTS_MASK,
+                missing = open_flags & OPEN_ACTION_NEW_MASK;
     if (existing > OPEN_ACTION_REPLACE_IF_EXISTS ||
         (missing != OPEN_ACTION_FAIL_IF_NEW && missing != OPEN_ACTION_CREATE_IF_NEW))
         return ERROR_INVALID_PARAMETER;
@@ -209,7 +228,7 @@ APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
         for (const char *p = pszOld; *p; p++)
             if (*p == '/' || *p == '\\' || *p == ':')
                 base = p + 1;
-        size_t size = strlen(pszNew) + strlen(base) + 2;
+        size_t size = strlen(pszNew) + strlen(base) + sizeof "\\";
         char *destination = malloc(size);
         if (!destination)
         {
@@ -255,8 +274,8 @@ APIRET DosCopy(PSZ pszOld, PSZ pszNew, ULONG option)
         else
         {
             if (option & DCPY_APPEND)
-                retval = fileError(lx_host_file_seek(output, 0, 2, NULL));
-            char data[16384];
+                retval = fileError(lx_host_file_seek(output, 0, FILE_END, NULL));
+            char data[COPY_CHUNK_BYTES];
             while (!retval)
             {
                 size_t count;
@@ -370,7 +389,7 @@ APIRET16 Dos16Open2(PSZ pszFileName, PUSHORT pHf, PUSHORT pusAction, ULONG cbFil
     if (reserved || !pHf || !pusAction)
         return ERROR_INVALID_PARAMETER;
     if (ea)
-        lx_guest_store_u32((uint8 *)ea + 8, 0);
+        lx_guest_store_u32((uint8 *)ea + EAOP16_ERROR_OFFSET, 0);
     HFILE handle = (HFILE)-1;
     ULONG action = 0;
     APIRET result = doDosOpen(pszFileName, &handle, &action, cbFile, ulAttribute, fsOpenFlags,
@@ -398,7 +417,7 @@ APIRET16 Dos16OpenL(PSZ name, PUSHORT file, PUSHORT action, ULONG high, ULONG lo
     if (!file || !action)
         return ERROR_INVALID_PARAMETER;
     if (ea)
-        lx_guest_store_u32((uint8 *)ea + 8, 0);
+        lx_guest_store_u32((uint8 *)ea + EAOP16_ERROR_OFFSET, 0);
     HFILE handle;
     ULONG taken;
     LONGLONG size = (LONGLONG)((uint64_t)high << 32 | low);

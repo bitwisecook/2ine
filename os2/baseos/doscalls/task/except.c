@@ -5,22 +5,69 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Exception handler chains: DosRaiseException, DosUnwindException and signal focus. */
 #include "os2/baseos/doscalls/internal.h"
 
 enum
 {
     EXCEPTION_CHAIN_END = UINT32_MAX,
+    /* Chains longer than this are treated as corrupt or circular. */
     EXCEPTION_CHAIN_LIMIT = 4096,
+    /* Nested DosRaiseException calls a thread may make before failing. */
+    EXCEPTION_RAISE_DEPTH_LIMIT = 64
+};
+
+/* EXCEPTIONREGISTRATIONRECORD: prev_structure, then ExceptionHandler. */
+enum
+{
+    REGISTRATION_HANDLER_OFFSET = 4,
+    REGISTRATION_SIZE = 8,
+    REGISTRATION_ALIGNMENT = 4
+};
+
+/* EXCEPTIONREPORTRECORD fields; ExceptionInfo holds cParameters ULONGs. */
+enum
+{
+    REPORT_NUMBER_OFFSET = 0,
+    REPORT_FLAGS_OFFSET = 4,
+    REPORT_NESTED_OFFSET = 8,
+    REPORT_ADDRESS_OFFSET = 12,
+    REPORT_PARAMETERS_OFFSET = 16,
     EXCEPTION_REPORT_HEADER = 20,
+    EXCEPTION_REPORT_SIZE = EXCEPTION_REPORT_HEADER + EXCEPTION_MAXIMUM_PARAMETERS * 4
+};
+
+/* CONTEXTRECORD: ContextFlags, the x87 environment and stack, then the general
+   registers from ctx_SegGs to ctx_SegSs, each in a ULONG. */
+enum
+{
     EXCEPTION_CONTEXT_SIZE = 176,
     EXCEPTION_CONTEXT_REGISTERS = 112,
-    EXCEPTION_CONTEXT_CONTROL = 1,
-    EXCEPTION_CONTEXT_INTEGER = 2,
-    EXCEPTION_CONTEXT_SEGMENTS = 4,
-    EXCEPTION_NONCONTINUABLE = 1,
-    EXCEPTION_NESTED_CALL = 16,
-    EXCEPTION_NONCONTINUABLE_NUMBER = 0xC0000024u,
-    EXCEPTION_INVALID_DISPOSITION_NUMBER = 0xC0000025u
+    CONTEXT_SEGGS_OFFSET = 112,
+    CONTEXT_SEGFS_OFFSET = 116,
+    CONTEXT_SEGES_OFFSET = 120,
+    CONTEXT_SEGDS_OFFSET = 124,
+    CONTEXT_EDI_OFFSET = 128,
+    CONTEXT_ESI_OFFSET = 132,
+    CONTEXT_EAX_OFFSET = 136,
+    CONTEXT_EBX_OFFSET = 140,
+    CONTEXT_ECX_OFFSET = 144,
+    CONTEXT_EDX_OFFSET = 148,
+    CONTEXT_EBP_OFFSET = 152,
+    CONTEXT_EIP_OFFSET = 156,
+    CONTEXT_SEGCS_OFFSET = 160,
+    CONTEXT_EFLAGS_OFFSET = 164,
+    CONTEXT_ESP_OFFSET = 168,
+    CONTEXT_SEGSS_OFFSET = 172,
+    /* The context follows the report on a 16-byte boundary. */
+    CONTEXT_ALIGNMENT = 16,
+    /* DosUnwindException places its context after the copied report. */
+    UNWIND_CONTEXT_OFFSET = 64
+};
+
+enum
+{
+    RETURN_ADDRESS_SIZE = 4
 };
 
 static LxGuestTib *exception_tib(void)
@@ -30,11 +77,12 @@ static LxGuestTib *exception_tib(void)
 
 static BOOL exception_record(uint32 address, uint32 *previous, uint32 *procedure)
 {
-    uint8 bytes[8];
-    if ((address & 3) || !lx_execution_read(GProcessState.execution, address, bytes, sizeof bytes))
+    uint8 bytes[REGISTRATION_SIZE];
+    if ((address & (REGISTRATION_ALIGNMENT - 1)) ||
+        !lx_execution_read(GProcessState.execution, address, bytes, sizeof bytes))
         return FALSE;
     *previous = lx_guest_load_u32(bytes);
-    *procedure = lx_guest_load_u32(bytes + 4);
+    *procedure = lx_guest_load_u32(bytes + REGISTRATION_HANDLER_OFFSET);
     return TRUE;
 }
 
@@ -44,8 +92,8 @@ APIRET DosSetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
     LxGuestTib *tib = exception_tib();
     uint32 address, previous, procedure;
     if (!tib ||
-        !lx_execution_address(GProcessState.execution, rec, 8, LX_GUEST_READ | LX_GUEST_WRITE,
-                              &address) ||
+        !lx_execution_address(GProcessState.execution, rec, REGISTRATION_SIZE,
+                              LX_GUEST_READ | LX_GUEST_WRITE, &address) ||
         !exception_record(address, &previous, &procedure) ||
         !lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
         return ERROR_INVALID_PARAMETER;
@@ -69,8 +117,8 @@ APIRET DosUnsetExceptionHandler(PEXCEPTIONREGISTRATIONRECORD rec)
     LxGuestTib *tib = exception_tib();
     uint32 address, previous, procedure;
     if (!tib ||
-        !lx_execution_address(GProcessState.execution, rec, 8, LX_GUEST_READ | LX_GUEST_WRITE,
-                              &address) ||
+        !lx_execution_address(GProcessState.execution, rec, REGISTRATION_SIZE,
+                              LX_GUEST_READ | LX_GUEST_WRITE, &address) ||
         lx_guest_load_u32(&tib->exception_chain) != address ||
         !exception_record(address, &previous, &procedure))
         return ERROR_INVALID_PARAMETER;
@@ -90,7 +138,7 @@ APIRET DosSetSignalExceptionFocus(BOOL32 flag, PULONG pulTimes)
     }
     else if (flag == 1)
     {
-        if (GProcessState.main_module->signal_exception_focus_count == 0xFFFFFFFF)
+        if (GProcessState.main_module->signal_exception_focus_count == UINT32_MAX)
             return ERROR_NESTING_TOO_DEEP;
         GProcessState.main_module->signal_exception_focus_count++;
     }
@@ -166,17 +214,19 @@ APIRET DosRaiseException(PEXCEPTIONREPORTRECORD pexcept)
         return ERROR_NOT_SUPPORTED;
     if (!input || !lx_execution_read(execution, input, header, sizeof header))
         return ERROR_INVALID_ADDRESS;
-    const uint32 parameters = lx_guest_load_u32(header + 16);
-    const uint64 report_size = EXCEPTION_REPORT_HEADER + (uint64)parameters * 4;
-    const uint64 context_offset = (report_size + 15) & ~UINT64_C(15);
-    const uint64 total = context_offset + EXCEPTION_CONTEXT_SIZE + 36;
+    const uint32 parameters = lx_guest_load_u32(header + REPORT_PARAMETERS_OFFSET);
+    const uint64 report_size = EXCEPTION_REPORT_HEADER + (uint64)parameters * sizeof(ULONG);
+    const uint64 context_offset =
+        (report_size + CONTEXT_ALIGNMENT - 1) & ~(uint64)(CONTEXT_ALIGNMENT - 1);
+    /* The mapping also holds a nested report for a failed continuation. */
+    const uint64 total = context_offset + EXCEPTION_CONTEXT_SIZE + EXCEPTION_REPORT_SIZE;
     if (total > UINT32_MAX || report_size > UINT32_MAX - input)
         return ERROR_INVALID_PARAMETER;
-    if (thread->raise_depth >= 64)
+    if (thread->raise_depth >= EXCEPTION_RAISE_DEPTH_LIMIT)
         return ERROR_NESTING_TOO_DEEP;
-    LxGuestMapping *mapping =
-        lx_execution_map(execution, 0, (size_t)((total + 4095) & ~UINT64_C(4095)),
-                         LX_GUEST_READ | LX_GUEST_WRITE, 0);
+    LxGuestMapping *mapping = lx_execution_map(
+        execution, 0, (size_t)((total + GUEST_PAGE_SIZE - 1) & ~(uint64)(GUEST_PAGE_SIZE - 1)),
+        LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
         return ERROR_NOT_ENOUGH_MEMORY;
     uint8 *report = lx_execution_mapping_host(mapping);
@@ -187,24 +237,24 @@ APIRET DosRaiseException(PEXCEPTIONREPORTRECORD pexcept)
         lx_execution_unmap(execution, mapping);
         return ERROR_INVALID_ADDRESS;
     }
-    lx_guest_store_u32(report + 12, registers.eip);
-    uint32 flags = lx_guest_load_u32(report + 4) & EXCEPTION_NONCONTINUABLE;
+    lx_guest_store_u32(report + REPORT_ADDRESS_OFFSET, registers.eip);
+    /* EH_NONCONTINUABLE is the only flag a caller may set. */
+    uint32 flags = lx_guest_load_u32(report + REPORT_FLAGS_OFFSET) & EH_NONCONTINUABLE;
     if (thread->raised_report)
     {
-        flags |= EXCEPTION_NESTED_CALL;
-        lx_guest_store_u32(report + 8, thread->raised_report);
+        flags |= EH_NESTED_CALL;
+        lx_guest_store_u32(report + REPORT_NESTED_OFFSET, thread->raised_report);
     }
-    lx_guest_store_u32(report + 4, flags);
+    lx_guest_store_u32(report + REPORT_FLAGS_OFFSET, flags);
     memset(context, 0, EXCEPTION_CONTEXT_SIZE);
-    lx_guest_store_u32(context, EXCEPTION_CONTEXT_CONTROL | EXCEPTION_CONTEXT_INTEGER |
-                                    EXCEPTION_CONTEXT_SEGMENTS);
+    lx_guest_store_u32(context, CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_SEGMENTS);
     registers.eax = NO_ERROR;
     const uint32 fields[] = {registers.gs,  registers.fs,     registers.es,  registers.ds,
                              registers.edi, registers.esi,    registers.eax, registers.ebx,
                              registers.ecx, registers.edx,    registers.ebp, registers.eip,
                              registers.cs,  registers.eflags, registers.esp, registers.ss};
     for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++)
-        lx_guest_store_u32(context + EXCEPTION_CONTEXT_REGISTERS + i * 4, fields[i]);
+        lx_guest_store_u32(context + EXCEPTION_CONTEXT_REGISTERS + i * sizeof(ULONG), fields[i]);
     uint32 *visited = malloc(EXCEPTION_CHAIN_LIMIT * sizeof *visited);
     if (!visited)
     {
@@ -249,20 +299,21 @@ APIRET DosRaiseException(PEXCEPTIONREPORTRECORD pexcept)
             visited[count++] = cursor;
             uint32 disposition = lx_execution_callback32_4(
                 execution, procedure, report_address, cursor, base + (uint32)context_offset, 0);
-            if (disposition == UINT32_MAX)
+            if (disposition == XCPT_CONTINUE_EXECUTION)
             {
-                if (!((flags | lx_guest_load_u32(current + 4)) & EXCEPTION_NONCONTINUABLE))
+                if (!((flags | lx_guest_load_u32(current + REPORT_FLAGS_OFFSET)) &
+                      EH_NONCONTINUABLE))
                     handled = TRUE;
                 else
                 {
-                    fatal = EXCEPTION_NONCONTINUABLE_NUMBER;
+                    fatal = XCPT_NONCONTINUABLE_EXCEPTION;
                     secondary = TRUE;
                 }
                 break;
             }
-            if (disposition != 0)
+            if (disposition != XCPT_CONTINUE_SEARCH)
             {
-                fatal = EXCEPTION_INVALID_DISPOSITION_NUMBER;
+                fatal = XCPT_INVALID_DISPOSITION;
                 secondary = TRUE;
                 break;
             }
@@ -271,40 +322,40 @@ APIRET DosRaiseException(PEXCEPTIONREPORTRECORD pexcept)
         if (!secondary || pass)
             break;
         uint8 *nested = context + EXCEPTION_CONTEXT_SIZE;
-        memset(nested, 0, 36);
-        lx_guest_store_u32(nested, fatal);
-        lx_guest_store_u32(nested + 4, EXCEPTION_NONCONTINUABLE | EXCEPTION_NESTED_CALL);
-        lx_guest_store_u32(nested + 8, base);
-        lx_guest_store_u32(nested + 12, registers.eip);
-        flags = EXCEPTION_NONCONTINUABLE;
+        memset(nested, 0, EXCEPTION_REPORT_SIZE);
+        lx_guest_store_u32(nested + REPORT_NUMBER_OFFSET, fatal);
+        lx_guest_store_u32(nested + REPORT_FLAGS_OFFSET, EH_NONCONTINUABLE | EH_NESTED_CALL);
+        lx_guest_store_u32(nested + REPORT_NESTED_OFFSET, base);
+        lx_guest_store_u32(nested + REPORT_ADDRESS_OFFSET, registers.eip);
+        flags = EH_NONCONTINUABLE;
     }
     if (handled)
     {
         const uint32 mask = lx_guest_load_u32(context);
-        if (mask & EXCEPTION_CONTEXT_SEGMENTS)
+        if (mask & CONTEXT_SEGMENTS)
         {
-            registers.gs = (uint16)lx_guest_load_u32(context + 112);
-            registers.fs = (uint16)lx_guest_load_u32(context + 116);
-            registers.es = (uint16)lx_guest_load_u32(context + 120);
-            registers.ds = (uint16)lx_guest_load_u32(context + 124);
+            registers.gs = (uint16)lx_guest_load_u32(context + CONTEXT_SEGGS_OFFSET);
+            registers.fs = (uint16)lx_guest_load_u32(context + CONTEXT_SEGFS_OFFSET);
+            registers.es = (uint16)lx_guest_load_u32(context + CONTEXT_SEGES_OFFSET);
+            registers.ds = (uint16)lx_guest_load_u32(context + CONTEXT_SEGDS_OFFSET);
         }
-        if (mask & EXCEPTION_CONTEXT_INTEGER)
+        if (mask & CONTEXT_INTEGER)
         {
-            registers.edi = lx_guest_load_u32(context + 128);
-            registers.esi = lx_guest_load_u32(context + 132);
-            registers.eax = lx_guest_load_u32(context + 136);
-            registers.ebx = lx_guest_load_u32(context + 140);
-            registers.ecx = lx_guest_load_u32(context + 144);
-            registers.edx = lx_guest_load_u32(context + 148);
+            registers.edi = lx_guest_load_u32(context + CONTEXT_EDI_OFFSET);
+            registers.esi = lx_guest_load_u32(context + CONTEXT_ESI_OFFSET);
+            registers.eax = lx_guest_load_u32(context + CONTEXT_EAX_OFFSET);
+            registers.ebx = lx_guest_load_u32(context + CONTEXT_EBX_OFFSET);
+            registers.ecx = lx_guest_load_u32(context + CONTEXT_ECX_OFFSET);
+            registers.edx = lx_guest_load_u32(context + CONTEXT_EDX_OFFSET);
         }
-        if (mask & EXCEPTION_CONTEXT_CONTROL)
+        if (mask & CONTEXT_CONTROL)
         {
-            registers.ebp = lx_guest_load_u32(context + 152);
-            registers.eip = lx_guest_load_u32(context + 156);
-            registers.cs = (uint16)lx_guest_load_u32(context + 160);
-            registers.eflags = lx_guest_load_u32(context + 164);
-            registers.esp = lx_guest_load_u32(context + 168);
-            registers.ss = (uint16)lx_guest_load_u32(context + 172);
+            registers.ebp = lx_guest_load_u32(context + CONTEXT_EBP_OFFSET);
+            registers.eip = lx_guest_load_u32(context + CONTEXT_EIP_OFFSET);
+            registers.cs = (uint16)lx_guest_load_u32(context + CONTEXT_SEGCS_OFFSET);
+            registers.eflags = lx_guest_load_u32(context + CONTEXT_EFLAGS_OFFSET);
+            registers.esp = lx_guest_load_u32(context + CONTEXT_ESP_OFFSET);
+            registers.ss = (uint16)lx_guest_load_u32(context + CONTEXT_SEGSS_OFFSET);
         }
         if (!lx_execution_api_resume32(execution, &registers))
             result = ERROR_INVALID_ADDRESS;
@@ -330,8 +381,10 @@ APIRET DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler, PVOID pTargetIP
     LxExecutionRegisters32 registers;
     if (!tib || !arguments || !lx_execution_api_registers32(execution, &registers))
         return ERROR_NOT_SUPPORTED;
-    if (!ip || !lx_execution_memory(execution, ip, 1, LX_GUEST_EXECUTE) || arguments < 4 ||
-        !lx_execution_memory(execution, arguments - 4, 4, LX_GUEST_WRITE))
+    if (!ip || !lx_execution_memory(execution, ip, 1, LX_GUEST_EXECUTE) ||
+        arguments < RETURN_ADDRESS_SIZE ||
+        !lx_execution_memory(execution, arguments - RETURN_ADDRESS_SIZE, RETURN_ADDRESS_SIZE,
+                             LX_GUEST_WRITE))
         return ERROR_INVALID_ADDRESS;
 
     typedef struct
@@ -361,44 +414,48 @@ APIRET DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler, PVOID pTargetIP
     }
     if (target && cursor != target)
         goto finished;
-    uint8 report[36] = {0};
+    uint8 report[EXCEPTION_REPORT_SIZE] = {0};
     if (input)
     {
         if (!lx_execution_read(execution, input, report, sizeof report) ||
-            lx_guest_load_u32(report + 16) > 4)
+            lx_guest_load_u32(report + REPORT_PARAMETERS_OFFSET) > EXCEPTION_MAXIMUM_PARAMETERS)
             goto finished;
     }
     else
     {
-        lx_guest_store_u32(report, 0xC0000026u); /* XCPT_UNWIND */
-        lx_guest_store_u32(report + 12, registers.eip);
+        lx_guest_store_u32(report + REPORT_NUMBER_OFFSET, XCPT_UNWIND);
+        lx_guest_store_u32(report + REPORT_ADDRESS_OFFSET, registers.eip);
     }
-    lx_guest_store_u32(report + 4, lx_guest_load_u32(report + 4) | 2 | (target ? 0 : 4));
+    /* A null target unwinds the whole chain, which OS/2 reports as an exit unwind. */
+    lx_guest_store_u32(report + REPORT_FLAGS_OFFSET,
+                       lx_guest_load_u32(report + REPORT_FLAGS_OFFSET) | EH_UNWINDING |
+                           (target ? 0 : EH_EXIT_UNWIND));
     LxGuestMapping *mapping =
-        lx_execution_map(execution, 0, 4096, LX_GUEST_READ | LX_GUEST_WRITE, 0);
+        lx_execution_map(execution, 0, GUEST_PAGE_SIZE, LX_GUEST_READ | LX_GUEST_WRITE, 0);
     if (!mapping)
     {
         result = ERROR_NOT_ENOUGH_MEMORY;
         goto finished;
     }
     uint32 base = lx_execution_mapping_address(mapping);
-    uint8 *context = (uint8 *)lx_execution_mapping_host(mapping) + 64;
-    memset(context, 0, 176);
-    lx_guest_store_u32(context, 7); /* CONTROL | INTEGER | SEGMENTS; x87 state is not supplied. */
+    uint8 *context = (uint8 *)lx_execution_mapping_host(mapping) + UNWIND_CONTEXT_OFFSET;
+    memset(context, 0, EXCEPTION_CONTEXT_SIZE);
+    /* x87 state is not supplied. */
+    lx_guest_store_u32(context, CONTEXT_CONTROL | CONTEXT_INTEGER | CONTEXT_SEGMENTS);
     const uint32 fields[] = {registers.gs,  registers.fs,     registers.es,  registers.ds,
                              registers.edi, registers.esi,    registers.eax, registers.ebx,
                              registers.ecx, registers.edx,    registers.ebp, registers.eip,
                              registers.cs,  registers.eflags, registers.esp, registers.ss};
     for (size_t i = 0; i < sizeof fields / sizeof fields[0]; i++)
-        lx_guest_store_u32(context + 112 + i * 4, fields[i]);
+        lx_guest_store_u32(context + EXCEPTION_CONTEXT_REGISTERS + i * sizeof(ULONG), fields[i]);
     memcpy(lx_execution_mapping_host(mapping), report, sizeof report);
     result = NO_ERROR;
     for (size_t i = 0; i < count; i++)
     {
         UnwindEntry *entry = &entries[i];
-        uint32 disposition = lx_execution_callback32_4(execution, entry->procedure, base,
-                                                       entry->address, base + 64, 0);
-        if (disposition != 0)
+        uint32 disposition = lx_execution_callback32_4(
+            execution, entry->procedure, base, entry->address, base + UNWIND_CONTEXT_OFFSET, 0);
+        if (disposition != XCPT_CONTINUE_SEARCH)
         {
             result = ERROR_INVALID_PARAMETER;
             break;
@@ -409,9 +466,11 @@ APIRET DosUnwindException(PEXCEPTIONREGISTRATIONRECORD phandler, PVOID pTargetIP
     if (!result)
     {
         lx_guest_store_u32(&tib->exception_chain, target ? target : EXCEPTION_CHAIN_END);
-        uint8 address[4];
+        /* Resume at the target by replacing the API call's return address. */
+        uint8 address[RETURN_ADDRESS_SIZE];
         lx_guest_store_u32(address, ip);
-        if (!lx_execution_write(execution, arguments - 4, address, sizeof address))
+        if (!lx_execution_write(execution, arguments - RETURN_ADDRESS_SIZE, address,
+                                sizeof address))
             result = ERROR_INVALID_ADDRESS;
     }
 finished:

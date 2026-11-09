@@ -5,8 +5,9 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Kbd*: keyboard input for text sessions, read from the host terminal. */
 
-#include "os2/include/private/export16.h"
+#include "os2/baseos/doscalls/internal.h"
 #include "os2/include/bsesub.h"
 #include "host/terminal.h"
 #include "host/clock.h"
@@ -17,7 +18,7 @@
 /* Every fsMask bit KbdSetStatus accepts, through KEYBOARD_SHIFT_REPORT. */
 #define STATUS_MASK 0x01ffu
 
-static USHORT keyboard_codepage = 437;
+static USHORT keyboard_codepage = CODEPAGE_US;
 static KBDINFO keyboard_status = {sizeof(KBDINFO), KEYBOARD_ECHO_ON | KEYBOARD_ASCII_MODE, '\r', 0,
                                   0};
 static int keyboard_pending = -1;
@@ -30,7 +31,7 @@ static void key_info(PKBDKEYINFO info, int ch)
     {
         info->chChar = ch == '\n' ? '\r' : ch;
         info->fbStatus = KBDTRF_FINAL_CHAR_IN;
-        info->time = (ULONG)(lx_host_monotonic_us() / 1000);
+        info->time = (ULONG)(lx_host_monotonic_us() / US_PER_MS);
     }
 }
 
@@ -72,7 +73,7 @@ APIRET16 KbdSetCp(USHORT reserved, USHORT codepage, HKBD hkbd)
         return ERROR_KBD_INVALID_HANDLE;
     if (reserved)
         return ERROR_KBD_PARAMETER;
-    if (codepage != 437 && codepage != 850)
+    if (codepage != CODEPAGE_US && codepage != CODEPAGE_MULTILINGUAL)
         return ERROR_KBD_INVALID_CODEPAGE;
     keyboard_codepage = codepage;
     return NO_ERROR;

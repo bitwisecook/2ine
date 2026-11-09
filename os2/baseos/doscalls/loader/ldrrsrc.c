@@ -66,7 +66,7 @@ APIRET DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output)
         lx_handle_release(&borrow);
         return result;
     }
-    if ((uint64_t)r->resource_size + 4095 > SIZE_MAX)
+    if ((uint64_t)r->resource_size + GUEST_PAGE_SIZE - 1 > SIZE_MAX)
     {
         lx_handle_release(&borrow);
         return ERROR_NOT_ENOUGH_MEMORY;
@@ -82,9 +82,12 @@ APIRET DosGetResource(HMODULE module, ULONG type, ULONG name, PPVOID output)
         block = calloc(1, sizeof *block);
         if (block)
         {
-            size_t bytes = ((size_t)r->resource_size + 4095) & ~(size_t)4095;
-            block->mapping = lx_execution_map(GProcessState.execution, 0, bytes ? bytes : 4096,
-                                              LX_GUEST_READ | LX_GUEST_WRITE, 0);
+            size_t bytes =
+                ((size_t)r->resource_size + GUEST_PAGE_SIZE - 1) & ~(size_t)(GUEST_PAGE_SIZE - 1);
+            /* An empty resource still gets a page, so its address is valid. */
+            block->mapping =
+                lx_execution_map(GProcessState.execution, 0, bytes ? bytes : GUEST_PAGE_SIZE,
+                                 LX_GUEST_READ | LX_GUEST_WRITE, 0);
             if (!block->mapping ||
                 !lx_execution_read(GProcessState.execution,
                                    m->mmaps[r->object - 1].guest_base + r->offset,

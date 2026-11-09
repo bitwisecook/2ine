@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Sessions: DosStartSession and its 16-bit form, session titles and termination queues. */
 
 #include "os2/include/private/export16.h"
 #include "os2/include/bsedos.h"
@@ -17,6 +18,46 @@
 #include "host/process.h"
 #include "host/library.h"
 #include "os2/include/pmwin.h"
+
+/* STARTDATA as callers pass it: the fields through TermQ are required, and later
+   fields are present when Length covers them. */
+enum
+{
+    STARTDATA_RELATED_OFFSET = 2,
+    STARTDATA_FGBG_OFFSET = 4,
+    STARTDATA_TRACEOPT_OFFSET = 6,
+    STARTDATA_TITLE_OFFSET = 8,
+    STARTDATA_NAME_OFFSET = 12,
+    STARTDATA_INPUTS_OFFSET = 16,
+    STARTDATA_TERMQ_OFFSET = 20,
+    STARTDATA_ENVIRONMENT_OFFSET = 24,
+    STARTDATA_INHERITOPT_OFFSET = 28,
+    STARTDATA_SESSIONTYPE_OFFSET = 30,
+    STARTDATA_ICONFILE_OFFSET = 32,
+    STARTDATA_PGMHANDLE_OFFSET = 36,
+    STARTDATA_PGMCONTROL_OFFSET = 40,
+    STARTDATA_INITXPOS_OFFSET = 42,
+    STARTDATA_INITYPOS_OFFSET = 44,
+    STARTDATA_INITXSIZE_OFFSET = 46,
+    STARTDATA_INITYSIZE_OFFSET = 48,
+    STARTDATA_RESERVED_OFFSET = 50,
+    STARTDATA_OBJECTBUFFER_OFFSET = 52,
+    STARTDATA_OBJECTBUFFLEN_OFFSET = 56,
+    STARTDATA_MINIMUM_LENGTH = 24,
+    STARTDATA_MAXIMUM_LENGTH = 60,
+    /* PgmTitle, PgmName, PgmInputs, TermQ and IconFile. */
+    STARTDATA_STRING_COUNT = 5,
+    /* Strings are read from at most one 64 KB segment. */
+    STARTDATA_STRING_LIMIT = 0x10000
+};
+
+enum
+{
+    /* Session IDs run from 1 to 0xFFFE. */
+    SESSION_ID_COUNT = 0xFFFE,
+    /* lx_host_mailbox_open's result for a name another session holds. */
+    MAILBOX_EXISTS = 2
+};
 
 typedef struct SessionWait
 {
@@ -51,15 +92,16 @@ static BOOL reserve_session(SessionWait *session)
 {
     uint32 process, parent;
     lx_host_process_ids(&process, &parent);
-    for (ULONG offset = 0; offset < 0xfffe; offset++)
+    /* Start at a pid-derived ID so that concurrent processes rarely collide. */
+    for (ULONG offset = 0; offset < SESSION_ID_COUNT; offset++)
     {
-        ULONG id = (process + offset) % 0xfffe + 1;
+        ULONG id = (process + offset) % SESSION_ID_COUNT + 1;
         char name[32];
         snprintf(name, sizeof name, "session-%04x", (unsigned)id);
         uint32 owner;
         int result =
             lx_host_mailbox_open(getenv("TWOINE_IPC_DIR"), name, 1, 0, &session->identity, &owner);
-        if (result == 2)
+        if (result == MAILBOX_EXISTS)
             continue;
         if (result)
             return FALSE;
@@ -186,19 +228,20 @@ static void *session_wait(void *value)
 APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid)
 {
     PSTARTDATA data = start->data;
-    if (!data || data->Length < 24 || !data->PgmName || !*data->PgmName || !session_id || !pid)
+    if (!data || data->Length < STARTDATA_MINIMUM_LENGTH || !data->PgmName || !*data->PgmName ||
+        !session_id || !pid)
         return ERROR_INVALID_PARAMETER;
-    if (data->Related > 1)
+    if (data->Related > SSF_RELATED_CHILD)
         return ERROR_SMG_INVALID_RELATED_OPT;
-    if (data->FgBg > 1)
+    if (data->FgBg > SSF_FGBG_BACK)
         return ERROR_SMG_INVALID_START_MODE;
-    if (data->TraceOpt > 2)
+    if (data->TraceOpt > SSF_TRACEOPT_TRACEALL)
         return ERROR_SMG_INVALID_TRACE_OPTION;
     if (data->TraceOpt)
         return ERROR_NOT_SUPPORTED;
-    if (data->InheritOpt > 1)
+    if (data->InheritOpt > SSF_INHERTOPT_PARENT)
         return ERROR_SMG_INVALID_INHERIT_OPT;
-    if (data->SessionType > 9)
+    if (data->SessionType > SSF_TYPE_VDD)
         return ERROR_SMG_INVALID_PROGRAM_TYPE;
     if (data->Reserved)
         return ERROR_SMG_BAD_RESERVE;
@@ -245,6 +288,7 @@ APIRET lx_session_start(const LxSessionStart *start, PULONG session_id, PPID pid
     lx_launch_record_present(session->record, &presentation);
     const char *inputs = data->PgmInputs ? (const char *)data->PgmInputs : "";
     size_t name_size = strlen(data->PgmName) + 1;
+    /* The program name and inputs, each NUL-terminated, then an empty string. */
     char *command = malloc(name_size + strlen(inputs) + 2);
     if (!command)
     {
@@ -405,13 +449,15 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
 {
     if (!session || !pid)
         return ERROR_INVALID_PARAMETER;
-    LxGuestArgument header = {0}, input = {0}, text[5] = {{0}}, environment = {0}, object = {0};
+    LxGuestArgument header = {0}, input = {0}, text[STARTDATA_STRING_COUNT] = {{0}},
+                    environment = {0}, object = {0};
     APIRET result = ERROR_INVALID_PARAMETER;
-    if (!lx_guest_argument_far(GProcessState.execution, pointer, 2, LX_GUEST_READ, 0, 0, &header))
+    if (!lx_guest_argument_far(GProcessState.execution, pointer, sizeof(USHORT), LX_GUEST_READ, 0,
+                               0, &header))
         return result;
     USHORT length = lx_guest_load_u16(header.host);
     lx_guest_argument_finish(&header, 0);
-    if (length < 24 || length > 60)
+    if (length < STARTDATA_MINIMUM_LENGTH || length > STARTDATA_MAXIMUM_LENGTH)
         return ERROR_SMG_INVALID_DATA_LENGTH;
     if (!lx_guest_argument_far(GProcessState.execution, pointer, length, LX_GUEST_READ, 0, 0,
                                &input))
@@ -419,14 +465,18 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
     const uint8 *wire = input.host;
     STARTDATA data = {0};
     data.Length = length;
-    data.Related = lx_guest_load_u16(wire + 2);
-    data.FgBg = lx_guest_load_u16(wire + 4);
-    data.TraceOpt = lx_guest_load_u16(wire + 6);
-    const unsigned offsets[] = {8, 12, 16, 20, 32};
-    for (unsigned i = 0; i < 5; i++)
+    data.Related = lx_guest_load_u16(wire + STARTDATA_RELATED_OFFSET);
+    data.FgBg = lx_guest_load_u16(wire + STARTDATA_FGBG_OFFSET);
+    data.TraceOpt = lx_guest_load_u16(wire + STARTDATA_TRACEOPT_OFFSET);
+    const unsigned offsets[STARTDATA_STRING_COUNT] = {
+        STARTDATA_TITLE_OFFSET, STARTDATA_NAME_OFFSET, STARTDATA_INPUTS_OFFSET,
+        STARTDATA_TERMQ_OFFSET, STARTDATA_ICONFILE_OFFSET};
+    for (unsigned i = 0; i < STARTDATA_STRING_COUNT; i++)
     {
-        ULONG address = offsets[i] + 4 <= length ? lx_guest_load_u32(wire + offsets[i]) : 0;
-        if (!lx_guest_argument_strings(GProcessState.execution, address, 1, 65536, 1, &text[i]))
+        ULONG address =
+            offsets[i] + sizeof(ULONG) <= length ? lx_guest_load_u32(wire + offsets[i]) : 0;
+        if (!lx_guest_argument_strings(GProcessState.execution, address, 1, STARTDATA_STRING_LIMIT,
+                                       1, &text[i]))
             goto done;
     }
     data.PgmTitle = text[0].host;
@@ -434,33 +484,36 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
     data.PgmInputs = text[2].host;
     data.TermQ = text[3].host;
     data.IconFile = text[4].host;
-    if (length >= 28 &&
-        !lx_guest_argument_strings(GProcessState.execution, lx_guest_load_u32(wire + 24), 0, 65536,
-                                   1, &environment))
+    if (length >= STARTDATA_INHERITOPT_OFFSET &&
+        !lx_guest_argument_strings(GProcessState.execution,
+                                   lx_guest_load_u32(wire + STARTDATA_ENVIRONMENT_OFFSET), 0,
+                                   STARTDATA_STRING_LIMIT, 1, &environment))
         goto done;
     data.Environment = environment.host;
-    if (length >= 30)
-        data.InheritOpt = lx_guest_load_u16(wire + 28);
-    if (length >= 32)
-        data.SessionType = lx_guest_load_u16(wire + 30);
-    if (length >= 40)
-        data.PgmHandle = lx_guest_load_u32(wire + 36);
-    if (length >= 42)
-        data.PgmControl = lx_guest_load_u16(wire + 40);
-    if (length >= 44)
-        data.InitXPos = lx_guest_load_u16(wire + 42);
-    if (length >= 46)
-        data.InitYPos = lx_guest_load_u16(wire + 44);
-    if (length >= 48)
-        data.InitXSize = lx_guest_load_u16(wire + 46);
-    if (length >= 50)
-        data.InitYSize = lx_guest_load_u16(wire + 48);
-    if (length >= 52)
-        data.Reserved = lx_guest_load_u16(wire + 50);
-    if (length >= 60)
+    /* Each later field is read only when Length covers it. */
+    if (length >= STARTDATA_SESSIONTYPE_OFFSET)
+        data.InheritOpt = lx_guest_load_u16(wire + STARTDATA_INHERITOPT_OFFSET);
+    if (length >= STARTDATA_ICONFILE_OFFSET)
+        data.SessionType = lx_guest_load_u16(wire + STARTDATA_SESSIONTYPE_OFFSET);
+    if (length >= STARTDATA_PGMCONTROL_OFFSET)
+        data.PgmHandle = lx_guest_load_u32(wire + STARTDATA_PGMHANDLE_OFFSET);
+    if (length >= STARTDATA_INITXPOS_OFFSET)
+        data.PgmControl = lx_guest_load_u16(wire + STARTDATA_PGMCONTROL_OFFSET);
+    if (length >= STARTDATA_INITYPOS_OFFSET)
+        data.InitXPos = lx_guest_load_u16(wire + STARTDATA_INITXPOS_OFFSET);
+    if (length >= STARTDATA_INITXSIZE_OFFSET)
+        data.InitYPos = lx_guest_load_u16(wire + STARTDATA_INITYPOS_OFFSET);
+    if (length >= STARTDATA_INITYSIZE_OFFSET)
+        data.InitXSize = lx_guest_load_u16(wire + STARTDATA_INITXSIZE_OFFSET);
+    if (length >= STARTDATA_RESERVED_OFFSET)
+        data.InitYSize = lx_guest_load_u16(wire + STARTDATA_INITYSIZE_OFFSET);
+    if (length >= STARTDATA_OBJECTBUFFER_OFFSET)
+        data.Reserved = lx_guest_load_u16(wire + STARTDATA_RESERVED_OFFSET);
+    if (length >= STARTDATA_MAXIMUM_LENGTH)
     {
-        data.ObjectBuffLen = lx_guest_load_u32(wire + 56);
-        if (!lx_guest_argument_far(GProcessState.execution, lx_guest_load_u32(wire + 52),
+        data.ObjectBuffLen = lx_guest_load_u32(wire + STARTDATA_OBJECTBUFFLEN_OFFSET);
+        if (!lx_guest_argument_far(GProcessState.execution,
+                                   lx_guest_load_u32(wire + STARTDATA_OBJECTBUFFER_OFFSET),
                                    data.ObjectBuffLen, LX_GUEST_WRITE, 0, 1, &object))
             goto done;
         data.ObjectBuffer = object.host;
@@ -468,7 +521,7 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
     ULONG sid;
     PID process;
     result = DosStartSession(&data, &sid, &process);
-    if (!result && data.Related == 1)
+    if (!result && data.Related == SSF_RELATED_CHILD)
     {
         *session = (USHORT)sid;
         *pid = (USHORT)process;
@@ -476,7 +529,7 @@ APIRET16 Dos16StartSession(ULONG pointer, PUSHORT session, PUSHORT pid)
 done:
     lx_guest_argument_finish(&object, 1);
     lx_guest_argument_finish(&environment, 0);
-    for (unsigned i = 0; i < 5; i++)
+    for (unsigned i = 0; i < STARTDATA_STRING_COUNT; i++)
         lx_guest_argument_finish(&text[i], 0);
     lx_guest_argument_finish(&input, 0);
     return result;

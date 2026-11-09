@@ -5,6 +5,8 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* DOSCALLS internals shared by its units: handle and thread tables, layout constants and
+   helpers. */
 #ifndef TWOINE_OS2LIBS_DOSCALLS_INTERNAL_H
 #define TWOINE_OS2LIBS_DOSCALLS_INTERNAL_H
 /* TWOINE_TRACE_RET logs results independently of argument tracing. */
@@ -18,14 +20,6 @@
             fprintf(stderr, "\n");                                                                 \
         }                                                                                          \
     } while (0)
-// DosSearchPath() flags, from the OS/2 Toolkit's bsedos.h.
-#define SEARCH_PATH 0x0000          // pszPathOrName is a path list.
-#define SEARCH_CUR_DIRECTORY 0x0001 // search the current directory too.
-#define SEARCH_ENVIRONMENT 0x0002   // pszPathOrName names an environment variable.
-#define SEARCH_IGNORENETERRS 0x0004 // ignore an unset environment variable.
-// DosCopy control bits (OS/2 Toolkit bsedos.h).
-#define DCPY_EXISTING 0x0001U // copy even if the target exists.
-#define DCPY_APPEND 0x0002U   // append instead of replacing.
 #include "os2/include/private/export16.h"
 #include "os2/include/bsedos.h"
 #include "os2/include/bsedos16.h"
@@ -37,6 +31,104 @@
 #include "host/sync.h"
 #include "host/shared_memory.h"
 #include <limits.h>
+
+/* Drive letters A: through Z:; disk numbers in the API are 1-based. */
+enum
+{
+    DRIVE_COUNT = 26
+};
+
+/* CONFIG.SYS CODEPAGE=437,850: the code pages every 2ine process has prepared, for the
+   one country 2ine knows. */
+enum
+{
+    CODEPAGE_US = 437,
+    CODEPAGE_MULTILINGUAL = 850,
+    COUNTRY_US = 1
+};
+
+/* An FEA list with no entries is its ULONG cbList alone. The 16-bit EAOP holds two
+   far list pointers and oError. */
+enum
+{
+    EA_LIST_EMPTY_SIZE = 4,
+    EAOP16_FEALIST_OFFSET = 4,
+    EAOP16_ERROR_OFFSET = 8,
+    EAOP16_SIZE = 12
+};
+
+/* Host clocks count microseconds; OS/2 times count milliseconds and hundredths. */
+enum
+{
+    US_PER_MS = 1000,
+    US_PER_HUNDREDTH = 10000,
+    US_PER_SECOND = 1000000
+};
+
+/* LINFOSEG rfProcStatus bit set while the process runs its exit list. */
+enum
+{
+    LINFO_EXIT_LIST = 0x01
+};
+
+/* Named semaphores live under \SEM32\, in names of at most 255 characters. */
+#define SEM32_PREFIX "\\SEM32\\"
+
+enum
+{
+    SEM32_PREFIX_LENGTH = sizeof SEM32_PREFIX - 1,
+    SEMAPHORE_NAME_MAXIMUM = 255
+};
+
+/* FNV-1a 64-bit derives host shared-object names from case-folded OS/2 names. */
+#define FNV1A_64_OFFSET_BASIS 1469598103934665603ULL
+#define FNV1A_64_PRIME 1099511628211ULL
+/* Hashed after a ball scope, so that the scope and the name that follows stay apart. */
+#define FNV_SCOPE_SEPARATOR 0xff
+
+/* OS/2 Warp 4.5x reports itself as version 20.45. */
+enum
+{
+    OS2_VERSION_MAJOR = 20,
+    OS2_VERSION_MINOR = 45,
+    OS2_VERSION_REVISION = 0
+};
+
+/* A ring-3 LDT selector: the descriptor slot, the table indicator and RPL 3. */
+enum
+{
+    SELECTOR_INDEX_SHIFT = 3,
+    SELECTOR_LDT_RING3 = 7
+};
+
+enum
+{
+    SELECTOR_TABLE_LDT = 0x0004,
+    /* A 16:16 pointer holds the selector above its 16-bit offset. */
+    SELECTOR_OFFSET_BITS = 16
+};
+
+static inline USHORT ldtSelector(uint32 slot)
+{
+    return (USHORT)(slot << SELECTOR_INDEX_SHIFT | SELECTOR_LDT_RING3);
+}
+
+/* A 16-bit segment spans at most 64 KB; a requested size of zero means all of it. */
+enum
+{
+    SEGMENT_SIZE_MAXIMUM = 0x10000
+};
+
+enum
+{
+    GUEST_PAGE_SIZE = 4096
+};
+
+/* Family API handles are USHORTs, so no process may hold more than 64 K files. */
+enum
+{
+    FILE_HANDLE_LIMIT = 0x10000
+};
 
 void cleanupSuballocation(void);
 APIRET DosGetSharedMemAddress(ULONG address, ULONG flags);

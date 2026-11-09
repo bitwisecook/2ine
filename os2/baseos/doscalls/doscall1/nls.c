@@ -5,13 +5,23 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* National language support: collation, case mapping, DBCS ranges and country data. */
 
-#include "os2/include/private/export16.h"
-#include "os2/include/bsedos.h"
-#include "os2/include/bsedos16.h"
+#include "os2/baseos/doscalls/internal.h"
+#include <stddef.h>
+
+/* Collation and case tables cover every byte value; the tables below hold the upper
+   half, where the code pages differ from ASCII. */
+enum
+{
+    NLS_TABLE_SIZE = 256,
+    NLS_ASCII_LIMIT = 128,
+    /* OS/2 Warp 4.52 reports this COUNTRYINFO length. */
+    COUNTRYINFO_REPORTED_SIZE = 38
+};
 
 /* Single-byte weights and uppercase mappings for the US 437/850 code pages. */
-static const UCHAR collate_437[128] = {
+static const UCHAR collate_437[NLS_TABLE_SIZE - NLS_ASCII_LIMIT] = {
     0x43, 0x55, 0x45, 0x41, 0x41, 0x41, 0x41, 0x43, 0x45, 0x45, 0x45, 0x49, 0x49, 0x49, 0x41, 0x41,
     0x45, 0x41, 0x41, 0x4f, 0x4f, 0x4f, 0x55, 0x55, 0x59, 0x4f, 0x55, 0x24, 0x24, 0x24, 0x24, 0x24,
     0x41, 0x49, 0x4f, 0x55, 0x4e, 0x4e, 0xa6, 0xa7, 0x3f, 0xa9, 0xaa, 0xab, 0xac, 0x21, 0x22, 0x22,
@@ -22,7 +32,7 @@ static const UCHAR collate_437[128] = {
     0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
 };
 
-static const UCHAR uppercase_437[128] = {
+static const UCHAR uppercase_437[NLS_TABLE_SIZE - NLS_ASCII_LIMIT] = {
     0x80, 0x9a, 0x45, 0x41, 0x8e, 0x41, 0x8f, 0x80, 0x45, 0x45, 0x45, 0x49, 0x49, 0x49, 0x8e, 0x8f,
     0x90, 0x92, 0x92, 0x4f, 0x99, 0x4f, 0x55, 0x55, 0x59, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
     0x41, 0x49, 0x4f, 0x55, 0xa5, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
@@ -33,7 +43,7 @@ static const UCHAR uppercase_437[128] = {
     0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
 };
 
-static const UCHAR collate_850[128] = {
+static const UCHAR collate_850[NLS_TABLE_SIZE - NLS_ASCII_LIMIT] = {
     0x43, 0x55, 0x45, 0x41, 0x41, 0x41, 0x41, 0x43, 0x45, 0x45, 0x45, 0x49, 0x49, 0x49, 0x41, 0x41,
     0x45, 0x41, 0x41, 0x4f, 0x4f, 0x4f, 0x55, 0x55, 0x59, 0x4f, 0x55, 0x4f, 0x24, 0x4f, 0x9e, 0x24,
     0x41, 0x49, 0x4f, 0x55, 0x4e, 0x4e, 0xa6, 0xa7, 0x3f, 0xa9, 0xaa, 0xab, 0xac, 0x21, 0x22, 0x22,
@@ -44,7 +54,7 @@ static const UCHAR collate_850[128] = {
     0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff,
 };
 
-static const UCHAR uppercase_850[128] = {
+static const UCHAR uppercase_850[NLS_TABLE_SIZE - NLS_ASCII_LIMIT] = {
     0x80, 0x9a, 0x90, 0xb6, 0x8e, 0xb7, 0x8f, 0x80, 0xd2, 0xd3, 0xd4, 0xd8, 0xd7, 0xde, 0x8e, 0x8f,
     0x90, 0x92, 0x92, 0xe2, 0x99, 0xe3, 0xea, 0xeb, 0x98, 0x99, 0x9a, 0x9d, 0x9c, 0x9d, 0x9e, 0x9f,
     0xb5, 0xd6, 0xe0, 0xe9, 0xa5, 0xa5, 0xa6, 0xa7, 0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
@@ -59,12 +69,13 @@ static const UCHAR uppercase_850[128] = {
    and 850; 0 selects the system country or the process code page. */
 static APIRET country_codepage(ULONG country, ULONG codepage, ULONG *resolved)
 {
-    if (country != 0 && country != 1)
+    if (country != 0 && country != COUNTRY_US)
         return ERROR_NLS_NO_CTRY_CODE;
-    if (codepage != 0 && codepage != 437 && codepage != 850)
+    if (codepage != 0 && codepage != CODEPAGE_US && codepage != CODEPAGE_MULTILINGUAL)
         return ERROR_CODE_PAGE_NOT_FOUND;
-    *resolved = codepage ? codepage
-                         : (GProcessState.process_codepage ? GProcessState.process_codepage : 437);
+    *resolved =
+        codepage ? codepage
+                 : (GProcessState.process_codepage ? GProcessState.process_codepage : CODEPAGE_US);
     return NO_ERROR;
 }
 
@@ -76,11 +87,12 @@ APIRET DosQueryCollate(ULONG len, PCOUNTRYCODE pcc, PCHAR pch, PULONG dlen)
     APIRET result = country_codepage(pcc->country, pcc->codepage, &codepage);
     if (result)
         return result;
-    *dlen = 256;
-    const UCHAR *weights = codepage == 850 ? collate_850 : collate_437;
-    for (unsigned i = 0; i < len && i < 256; i++)
-        pch[i] = i >= 128 ? weights[i - 128] : (i >= 'a' && i <= 'z' ? i - 32 : i);
-    return len < 256 ? ERROR_NLS_TABLE_TRUNCATED : NO_ERROR;
+    *dlen = NLS_TABLE_SIZE;
+    const UCHAR *weights = codepage == CODEPAGE_MULTILINGUAL ? collate_850 : collate_437;
+    for (unsigned i = 0; i < len && i < NLS_TABLE_SIZE; i++)
+        pch[i] = i >= NLS_ASCII_LIMIT ? weights[i - NLS_ASCII_LIMIT]
+                                      : (i >= 'a' && i <= 'z' ? i - ('a' - 'A') : i);
+    return len < NLS_TABLE_SIZE ? ERROR_NLS_TABLE_TRUNCATED : NO_ERROR;
 }
 
 APIRET16 Dos16GetCollate(USHORT len, PCOUNTRYCODE16 pcc, PCHAR pch, PUSHORT dlen)
@@ -146,18 +158,20 @@ APIRET16 Dos16CaseMap(USHORT len, PCOUNTRYCODE16 pcc, PCHAR pch)
 APIRET16 Dos16GetCtryInfo(USHORT len, PCOUNTRYCODE16 pcc, PCOUNTRYINFO16 pch, PUSHORT dlen)
 {
     TRACE_NATIVE("Dos16GetCtryInfo(%u, %p, %p)", len, pcc, pch);
-    if (!pcc || !pch || (len < 6))
+    if (!pcc || !pch || (len < offsetof(COUNTRYINFO16, szCurrency)))
         return ERROR_INVALID_PARAMETER;
     COUNTRYINFO ci;
     COUNTRYCODE cc = {pcc->country, pcc->codepage};
     APIRET16 ret = DosQueryCtryInfo(sizeof(ci), &cc, &ci, NULL);
     if (ret)
         return ret;
-    uint8 wire[38] = {0};
-    lx_guest_store_u16(wire, ci.country);
-    lx_guest_store_u16(wire + 2, ci.codepage);
-    lx_guest_store_u16(wire + 4, ci.fsDateFmt);
-    memcpy(wire + 6, ci.szCurrency, 32);
+    /* COUNTRYINFO16 narrows the three leading ULONGs; the byte fields after them match. */
+    uint8 wire[sizeof(COUNTRYINFO16)] = {0};
+    lx_guest_store_u16(wire + offsetof(COUNTRYINFO16, country), ci.country);
+    lx_guest_store_u16(wire + offsetof(COUNTRYINFO16, codepage), ci.codepage);
+    lx_guest_store_u16(wire + offsetof(COUNTRYINFO16, fsDateFmt), ci.fsDateFmt);
+    memcpy(wire + offsetof(COUNTRYINFO16, szCurrency), ci.szCurrency,
+           sizeof(COUNTRYINFO16) - offsetof(COUNTRYINFO16, szCurrency));
     memcpy(pch, wire, len < sizeof wire ? len : sizeof wire);
     if (dlen)
         *dlen = sizeof wire;
@@ -176,11 +190,12 @@ APIRET DosMapCase(ULONG cb, PCOUNTRYCODE pcc, PCHAR pch)
         return result;
     if (!pch && cb)
         return ERROR_INVALID_PARAMETER;
-    const UCHAR *upper = codepage == 850 ? uppercase_850 : uppercase_437;
+    const UCHAR *upper = codepage == CODEPAGE_MULTILINGUAL ? uppercase_850 : uppercase_437;
     for (ULONG i = 0; i < cb; i++)
     {
         const UCHAR ch = (UCHAR)pch[i];
-        pch[i] = ch >= 128 ? upper[ch - 128] : (ch >= 'a' && ch <= 'z' ? ch - 32 : ch);
+        pch[i] = ch >= NLS_ASCII_LIMIT ? upper[ch - NLS_ASCII_LIMIT]
+                                       : (ch >= 'a' && ch <= 'z' ? ch - ('a' - 'A') : ch);
     }
 
     return NO_ERROR;
@@ -197,7 +212,7 @@ APIRET DosQueryCtryInfo(ULONG cb, PCOUNTRYCODE pcc, PCOUNTRYINFO pci, PULONG pcb
     COUNTRYINFO ci;
     memset(&ci, 0, sizeof(ci));
 
-    ci.country = 1;
+    ci.country = COUNTRY_US;
     ci.codepage = codepage;
     ci.fsDateFmt = 0;
     ci.szCurrency[0] = '$';
@@ -212,7 +227,7 @@ APIRET DosQueryCtryInfo(ULONG cb, PCOUNTRYCODE pcc, PCOUNTRYINFO pci, PULONG pcb
     ci.szDataSeparator[0] = ',';
 
     if (pcbActual)
-        *pcbActual = 38; // OS/2 Warp 4.52 doesn't count the abReserved[5] at the end.
+        *pcbActual = COUNTRYINFO_REPORTED_SIZE;
 
     memcpy(pci, &ci, cb < sizeof(ci) ? cb : sizeof(ci));
 

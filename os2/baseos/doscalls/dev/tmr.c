@@ -21,6 +21,6 @@ APIRET DosTmrQueryTime(PVOID ticks)
         return ERROR_INVALID_PARAMETER;
     uint64 value = lx_host_monotonic_us();
     lx_guest_store_u32(ticks, (ULONG)value);
-    lx_guest_store_u32((uint8 *)ticks + 4, (ULONG)(value >> 32));
+    lx_guest_store_u32((uint8 *)ticks + sizeof(ULONG), (ULONG)(value >> 32));
     return NO_ERROR;
 }

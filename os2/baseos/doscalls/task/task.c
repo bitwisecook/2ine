@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Child process termination and waits. */
 #include "os2/baseos/doscalls/internal.h"
 
 void setProcessResultCode(PRESULTCODES output, const LxHostChildStatus *status)

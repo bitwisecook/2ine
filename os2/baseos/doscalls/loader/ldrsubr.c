@@ -5,7 +5,13 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Procedure addresses, module freeing and header queries. */
 #include "os2/baseos/doscalls/internal.h"
+
+enum
+{
+    LAST_EXPORT_ORDINAL = 65533
+};
 
 APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppfn,
                               const LxModule *lxmod)
@@ -15,7 +21,8 @@ APIRET DosQueryProcAddrObject(HMODULE hmod, ULONG ordinal, PSZ pszName, PFN *ppf
     const LxExport *exports = lxmod->exports;
     const uint32 num_exports = lxmod->num_exports;
 
-    if (ordinal > 65533)
+    /* Ordinals 65534 and 65535 are never valid exports. */
+    if (ordinal > LAST_EXPORT_ORDINAL)
     {
         TRACE_NATIVE("unavailable export %s#%u", lxmod->name, (uint)ordinal);
         return ERROR_INVALID_ORDINAL;

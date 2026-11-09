@@ -55,6 +55,28 @@ extern "C"
 
     enum
     {
+        PRTYS_PROCESS = 0,
+        PRTYS_PROCESSTREE = 1,
+        PRTYS_THREAD = 2
+    };
+
+    enum
+    {
+        PRTYC_NOCHANGE = 0,
+        PRTYC_IDLETIME = 1,
+        PRTYC_REGULAR = 2,
+        PRTYC_TIMECRITICAL = 3,
+        PRTYC_FOREGROUNDSERVER = 4
+    };
+
+    enum
+    {
+        PRTYD_MINIMUM = -31,
+        PRTYD_MAXIMUM = 31
+    };
+
+    enum
+    {
         CREATE_READY,
         CREATE_SUSPENDED
     };
@@ -212,6 +234,27 @@ extern "C"
 
     enum
     {
+        HDIR_CREATE = -1,
+        HDIR_SYSTEM = 1
+    };
+
+    enum
+    {
+        DCPY_EXISTING = 0x0001,
+        DCPY_APPEND = 0x0002,
+        DCPY_FAILEAS = 0x0004
+    };
+
+    enum
+    {
+        SEARCH_PATH = 0x0000,
+        SEARCH_CUR_DIRECTORY = 0x0001,
+        SEARCH_ENVIRONMENT = 0x0002,
+        SEARCH_IGNORENETERRS = 0x0004
+    };
+
+    enum
+    {
         FIL_STANDARD = 1,
         FIL_QUERYEASIZE = 2,
         FIL_QUERYEASFROMLIST = 3,
@@ -272,12 +315,6 @@ extern "C"
 
     enum
     {
-        HDIR_CREATE = -1,
-        HDIR_SYSTEM = 1
-    };
-
-    enum
-    {
         MUST_HAVE_READONLY = ((FILE_READONLY << 8) | FILE_READONLY),
         MUST_HAVE_HIDDEN = ((FILE_HIDDEN << 8) | FILE_HIDDEN),
         MUST_HAVE_SYSTEM = ((FILE_SYSTEM << 8) | FILE_SYSTEM),
@@ -333,6 +370,21 @@ extern "C"
         CHAR achName[CCHMAXPATHCOMP];
     } FILEFINDBUF4, *PFILEFINDBUF4;
 
+    enum
+    {
+        FSAIL_QUERYNAME = 1,
+        FSAIL_DEVNUMBER = 2,
+        FSAIL_DRVNUMBER = 3
+    };
+
+    enum
+    {
+        FSAT_CHARDEV = 1,
+        FSAT_PSEUDODEV = 2,
+        FSAT_LOCALDRV = 3,
+        FSAT_REMOTEDRV = 4
+    };
+
     typedef struct
     {
         USHORT iType;
@@ -343,6 +395,56 @@ extern "C"
         UCHAR szFSDName[1];
         UCHAR rgFSAData[1];
     } FSQBUFFER2, *PFSQBUFFER2;
+
+    enum
+    {
+        FSIL_ALLOC = 1,
+        FSIL_VOLSER = 2
+    };
+
+#pragma pack(push, 1)
+
+    typedef struct _VOLUMELABEL
+    {
+        BYTE cch;
+        CHAR szVolLabel[12];
+    } VOLUMELABEL, *PVOLUMELABEL;
+
+    typedef struct _FSINFO
+    {
+        FDATE fdateCreation;
+        FTIME ftimeCreation;
+        VOLUMELABEL vol;
+    } FSINFO, *PFSINFO;
+
+    typedef struct _FSALLOCATE
+    {
+        ULONG idFileSystem;
+        ULONG cSectorUnit;
+        ULONG cUnit;
+        ULONG cUnitAvail;
+        USHORT cbSector;
+    } FSALLOCATE, *PFSALLOCATE;
+
+#pragma pack(pop)
+
+    enum
+    {
+        FHT_DISKFILE = 0x0000,
+        FHT_CHRDEV = 0x0001,
+        FHT_PIPE = 0x0002
+    };
+
+    enum
+    {
+        ENUMEA_LEVEL_NO_VALUE = 1
+    };
+
+    enum
+    {
+        ENUMEA_REFTYPE_FHANDLE = 0,
+        ENUMEA_REFTYPE_PATH = 1
+    };
 
     OS2EXPORT APIRET OS2API DosDupHandle(HFILE hFile, PHFILE pHfile);
 
@@ -762,6 +864,45 @@ extern "C"
         FAPPTYP_WINDOWSPROT = 0x0400,
         FAPPTYP_WINDOWSPROT31 = 0x1000,
         FAPPTYP_32BIT = 0x4000
+    };
+
+    enum
+    {
+        SSF_RELATED_INDEPENDENT = 0,
+        SSF_RELATED_CHILD = 1
+    };
+
+    enum
+    {
+        SSF_FGBG_FORE = 0,
+        SSF_FGBG_BACK = 1
+    };
+
+    enum
+    {
+        SSF_TRACEOPT_NONE = 0,
+        SSF_TRACEOPT_TRACE = 1,
+        SSF_TRACEOPT_TRACEALL = 2
+    };
+
+    enum
+    {
+        SSF_INHERTOPT_SHELL = 0,
+        SSF_INHERTOPT_PARENT = 1
+    };
+
+    enum
+    {
+        SSF_TYPE_DEFAULT = 0,
+        SSF_TYPE_FULLSCREEN = 1,
+        SSF_TYPE_WINDOWABLEVIO = 2,
+        SSF_TYPE_PM = 3,
+        SSF_TYPE_VDM = 4,
+        SSF_TYPE_GROUP = 5,
+        SSF_TYPE_DLL = 6,
+        SSF_TYPE_WINDOWEDVDM = 7,
+        SSF_TYPE_PDD = 8,
+        SSF_TYPE_VDD = 9
     };
 
     typedef struct

@@ -72,7 +72,7 @@ static void *timerWorker(void *unused)
         const uint64 now = lx_host_monotonic_us();
         if (timer->due > now)
         {
-            const uint64 wait = (timer->due - now + 999) / 1000;
+            const uint64 wait = (timer->due - now + US_PER_MS - 1) / US_PER_MS;
             lx_host_monitor_wait(monitor, wait < INT32_MAX ? (uint32)wait : INT32_MAX);
             continue;
         }
@@ -131,7 +131,8 @@ static APIRET armTimer(ULONG msec, HSEM hsem, PHTIMER output, BOOL one_shot)
     }
     timer->event = (HEV)hsem;
     timer->one_shot = one_shot;
-    timer->interval = (uint64)(msec ? msec : 1) * 1000;
+    /* A zero interval posts each millisecond instead of spinning. */
+    timer->interval = (uint64)(msec ? msec : 1) * US_PER_MS;
     timer->due = lx_host_monotonic_us() + timer->interval;
     lx_host_once(&monitor_once, initializeMonitor);
     lx_host_monitor_lock(monitor);

@@ -65,9 +65,10 @@ socket headers apart from the host's.
 |---|---|
 | `os2.h` | `os2def.h`, `bse.h`, `bsedos16.h`, `pm.h` |
 | `os2def.h` | Base types, handles, POINTL/RECTL, `OS2EXPORT`/`OS2API` and `LX_GUEST_DATA_EXPORT` |
-| `bse.h` | `bsedos.h`, `bsesub.h`, `bseerr.h` |
+| `bse.h` | `bsedos.h`, `bsedev.h`, `bsesub.h`, `bseerr.h` |
 | `bsedos.h` (+ `bsetib.h`, `bsememf.h`, `bsexcpt.h`) | 32-bit Dos* API by INCL_DOS* group (DOSCALLS; forwarded by QUECALLS, SESMGR, NLS, MSG) |
 | `bsedos16.h` | USE16 Dos16*/DosSem* entries, as in the DDK (DOSCALLS; forwarded by QUECALLS, SESMGR, NLS, MSG) |
+| `bsedev.h` | DosDevIOCtl categories, functions and parameter records |
 | `bsesub.h` | Kbd* and Vio* (DOSCALLS; forwarded by KBDCALLS, VIOCALLS) |
 | `bseerr.h` | Base OS error codes |
 | `pm.h` | The PM headers below |

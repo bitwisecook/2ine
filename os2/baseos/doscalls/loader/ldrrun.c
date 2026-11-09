@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Module handles and names, DosLoadModule and DosQueryAppType. */
 #include "os2/baseos/doscalls/internal.h"
 #include "emulator/arguments.h"
 
@@ -44,7 +45,7 @@ static int moduleNameMatches(const LxModule *module, const char *name)
             return 1;
     }
     size_t length = strlen(module->name);
-    return strlen(name) == length + 4 && !strncasecmp(module->name, name, length) &&
+    return strlen(name) == length + sizeof ".DLL" - 1 && !strncasecmp(module->name, name, length) &&
            !strcasecmp(name + length, ".DLL");
 }
 
@@ -54,7 +55,7 @@ APIRET DosQueryModuleHandle(PSZ pszModname, PHMODULE phmod)
     if (!pszModname || !*pszModname || !phmod)
         return ERROR_INVALID_PARAMETER;
     for (const unsigned char *p = (const unsigned char *)pszModname; *p; p++)
-        if (*p < 32 || strchr("\"<>|?*", *p))
+        if (*p < ' ' || strchr("\"<>|?*", *p))
             return ERROR_INVALID_NAME;
     grabLock(&GMutexDosCalls);
     LxModule *lxmod;
@@ -145,6 +146,52 @@ APIRET DosQueryModFromEIP(PHMODULE phmod, PULONG pulObject, ULONG cbModName, PCH
     return ERROR_FILE_NOT_FOUND;
 }
 
+/* A 16-bit procedure name is read from at most this many bytes. */
+enum
+{
+    PROCEDURE_NAME_LIMIT = 256
+};
+
+/* Executable header fields DosQueryAppType reads (Toolkit newexe.h and exe386.h). */
+enum
+{
+    MZ_HEADER_SIZE = 64,
+    MZ_NEW_HEADER_OFFSET = 60,
+    NEW_HEADER_SIZE = 64,
+    /* Enough of an NE or LX header to hold its signature and module flags. */
+    NEW_HEADER_MINIMUM = 24,
+    NE_FLAGS_OFFSET = 12,
+    NE_EXETYP_OFFSET = 54,
+    NE_EXPVER_OFFSET = 62,
+    LX_FLAGS_OFFSET = 16
+};
+
+enum
+{
+    NENOTP = 0x8000,
+    NEIERR = 0x2000,
+    /* The NE application type field matches FAPPTYP's low bits. */
+    NE_APPTYPE_SHIFT = 8,
+    NE_APPTYPE_BITS = 0x3,
+    NE_WINDOWS = 0x2,
+    NE_DEV386 = 0x4,
+    WINDOWS_VERSION_3_0 = 0x300
+};
+
+enum
+{
+    E32NOLOAD = 0x2000,
+    E32APPMASK = 0x0300,
+    E32NOPMW = 0x0100,
+    E32PMW = 0x0200,
+    E32PMAPI = 0x0300,
+    E32MODMASK = 0x38000,
+    E32MODDLL = 0x08000,
+    E32MODPROTDLL = 0x18000,
+    E32MODPDEV = 0x20000,
+    E32MODVDEV = 0x28000
+};
+
 APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
 {
     TRACE_NATIVE("DosQueryAppType('%s', %p)", pszName, pFlags);
@@ -162,7 +209,7 @@ APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
     free(path);
     if (!file)
         return fileError(error);
-    uint8 mz[64], lx[64];
+    uint8 mz[MZ_HEADER_SIZE], lx[NEW_HEADER_SIZE];
     size_t actual;
     APIRET result = ERROR_INVALID_EXE_SIGNATURE;
     if (lx_host_file_read(file, mz, sizeof mz, &actual) || actual != sizeof mz || mz[0] != 'M' ||
@@ -171,9 +218,9 @@ APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
     /* A plain MZ executable is a DOS program; NE headers also describe Win16. */
     *pFlags = FAPPTYP_DOS;
     result = NO_ERROR;
-    const uint32 header = lx_guest_load_u32(mz + 60);
-    if (header < sizeof mz || lx_host_file_seek(file, header, 0, NULL) ||
-        lx_host_file_read(file, lx, sizeof lx, &actual) || actual < 24)
+    const uint32 header = lx_guest_load_u32(mz + MZ_NEW_HEADER_OFFSET);
+    if (header < sizeof mz || lx_host_file_seek(file, header, FILE_BEGIN, NULL) ||
+        lx_host_file_read(file, lx, sizeof lx, &actual) || actual < NEW_HEADER_MINIMUM)
         goto done;
     if (lx[0] == 'N' && lx[1] == 'E')
     {
@@ -182,55 +229,56 @@ APIRET DosQueryAppType(PSZ pszName, PULONG pFlags)
             result = ERROR_BAD_EXE_FORMAT;
             goto done;
         }
-        const USHORT module_flags = lx_guest_load_u16(lx + 12);
-        if (module_flags & 0x2000)
+        const USHORT module_flags = lx_guest_load_u16(lx + NE_FLAGS_OFFSET);
+        if (module_flags & NEIERR)
         {
             result = ERROR_EXE_MARKED_INVALID;
             goto done;
         }
-        ULONG flags = (module_flags >> 8) & 3;
-        if (module_flags & 0x8000)
+        ULONG flags = (module_flags >> NE_APPTYPE_SHIFT) & NE_APPTYPE_BITS;
+        if (module_flags & NENOTP)
             flags |= FAPPTYP_DLL;
-        if (lx[54] == 2 || lx[54] == 4)
-            flags |=
-                lx_guest_load_u16(lx + 62) >= 0x300 ? FAPPTYP_WINDOWSPROT31 : FAPPTYP_WINDOWSPROT;
+        if (lx[NE_EXETYP_OFFSET] == NE_WINDOWS || lx[NE_EXETYP_OFFSET] == NE_DEV386)
+            flags |= lx_guest_load_u16(lx + NE_EXPVER_OFFSET) >= WINDOWS_VERSION_3_0
+                         ? FAPPTYP_WINDOWSPROT31
+                         : FAPPTYP_WINDOWSPROT;
         *pFlags = flags;
         goto done;
     }
     if (lx[0] != 'L' || (lx[1] != 'X' && lx[1] != 'E'))
         goto done;
-    const uint32 module_flags = lx_guest_load_u32(lx + 16);
-    if (module_flags & 0x2000)
+    const uint32 module_flags = lx_guest_load_u32(lx + LX_FLAGS_OFFSET);
+    if (module_flags & E32NOLOAD)
     {
         result = ERROR_EXE_MARKED_INVALID;
         goto done;
     }
-    const uint32 type = module_flags & 0x38000;
+    const uint32 type = module_flags & E32MODMASK;
     ULONG flags = FAPPTYP_32BIT;
-    switch (module_flags & 0x300)
+    switch (module_flags & E32APPMASK)
     {
-        case 0x100:
+        case E32NOPMW:
             flags |= FAPPTYP_NOTWINDOWCOMPAT;
             break;
-        case 0x200:
+        case E32PMW:
             flags |= FAPPTYP_WINDOWCOMPAT;
             break;
-        case 0x300:
+        case E32PMAPI:
             flags |= FAPPTYP_WINDOWAPI;
             break;
     }
     switch (type)
     {
-        case 0x8000:
+        case E32MODDLL:
             flags |= FAPPTYP_DLL;
             break;
-        case 0x20000:
+        case E32MODPDEV:
             flags |= FAPPTYP_PHYSDRV;
             break;
-        case 0x28000:
+        case E32MODVDEV:
             flags |= FAPPTYP_VIRTDRV;
             break;
-        case 0x18000:
+        case E32MODPROTDLL:
             flags |= FAPPTYP_PROTDLL;
             break;
     }
@@ -314,8 +362,8 @@ APIRET16 Dos16GetProcAddr(USHORT id, ULONG encoded, PULONG address)
         return ERROR_INVALID_HANDLE;
     LxGuestArgument name = {0};
     APIRET result = ERROR_INVALID_NAME;
-    if (encoded <= UINT16_MAX ||
-        lx_guest_argument_strings(GProcessState.execution, encoded, 1, 256, 0, &name))
+    if (encoded <= UINT16_MAX || lx_guest_argument_strings(GProcessState.execution, encoded, 1,
+                                                           PROCEDURE_NAME_LIMIT, 0, &name))
     {
         const LxExport *entry = NULL;
         if (encoded <= UINT16_MAX && GProcessState.findModuleOrdinal)
@@ -340,7 +388,8 @@ APIRET16 Dos16GetProcAddr(USHORT id, ULONG encoded, PULONG address)
             {
                 uintptr_t offset = (uintptr_t)host - (uintptr_t)entry->object->addr;
                 if (offset <= UINT16_MAX)
-                    far_address = ((ULONG)((entry->object->alias << 3) | 7) << 16) | offset;
+                    far_address =
+                        ((ULONG)ldtSelector(entry->object->alias) << SELECTOR_OFFSET_BITS) | offset;
             }
             result = far_address ? NO_ERROR : ERROR_INVALID_ADDRESS;
             if (!result)

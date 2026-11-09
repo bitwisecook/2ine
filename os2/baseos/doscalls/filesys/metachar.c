@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* DosEditName: wildcard name editing for copy and rename targets. */
 #include "os2/baseos/doscalls/internal.h"
 
 static unsigned editNameFold(unsigned char value)

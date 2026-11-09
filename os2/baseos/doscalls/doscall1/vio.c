@@ -5,21 +5,34 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Vio*: a text-mode screen buffer shown on the host terminal. */
 
-#include "os2/include/private/export16.h"
+#include "os2/baseos/doscalls/internal.h"
 #include "os2/include/bsesub.h"
+#include <stddef.h>
 
 #include "host/terminal.h"
 #include "emulator/launch_record.h"
 
 /* A space in the default attribute: light grey on black. */
 #define BLANK_CELL 0x0720
+#define CELL_ATTRIBUTE_MASK 0xff00u
+
+/* The mode and configuration OS/2 4.52 reports for a VGA text session. */
+enum
+{
+    CURSOR_SCAN_LINE = 15,
+    TEXT_MODE_HRES = 640,
+    TEXT_MODE_VRES = 400,
+    VIDEO_MEMORY_BYTES = 256 * 1024,
+    TAB_WIDTH = 8
+};
 
 static uint16 *vio_buffer = NULL;
 static uint16 vio_scrw, vio_scrh;
 static uint16 vio_curx, vio_cury;
 static uint16 vio_hostw, vio_hosth;
-static uint16 vio_codepage = 437;
+static uint16 vio_codepage = CODEPAGE_US;
 static VIOCURSORINFO vio_cursorinfo;
 
 static int open_terminal(void)
@@ -48,8 +61,8 @@ static int open_terminal(void)
     vio_curx = vio_cury = 0;
 
     FIXME("these are just the default values OS/2 4.52 returns");
-    vio_cursorinfo.yStart = 15;
-    vio_cursorinfo.cEnd = 15;
+    vio_cursorinfo.yStart = CURSOR_SCAN_LINE;
+    vio_cursorinfo.cEnd = CURSOR_SCAN_LINE;
     vio_cursorinfo.cx = 1;
     vio_cursorinfo.attr = 0;
 
@@ -116,7 +129,7 @@ APIRET16 VioSetCp(USHORT reserved, USHORT codepage, HVIO hvio)
         return ERROR_VIO_INVALID_HANDLE;
     if (reserved)
         return ERROR_VIO_BAD_RESERVE;
-    if (codepage != 437 && codepage != 850)
+    if (codepage != CODEPAGE_US && codepage != CODEPAGE_MULTILINGUAL)
         return ERROR_VIO_BAD_CP;
     vio_codepage = codepage;
     return NO_ERROR;
@@ -128,7 +141,7 @@ APIRET16 VioSetMode(PVIOMODEINFO info, HVIO hvio)
         return ERROR_VIO_INVALID_HANDLE;
     if (!info)
         return ERROR_VIO_INVALID_PARMS;
-    if (info->cb < 12)
+    if (info->cb < offsetof(VIOMODEINFO, fmt_ID))
         return ERROR_VIO_INVALID_LENGTH;
     if (!open_terminal())
         return ERROR_VIO_INVALID_HANDLE;
@@ -154,16 +167,16 @@ APIRET16 VioGetConfig(USHORT config, PVIOCONFIGINFO info, HVIO hvio)
 {
     if (hvio)
         return ERROR_VIO_INVALID_HANDLE;
-    if (!info || config > 1)
+    if (!info || config > VIO_CONFIG_PRIMARY)
         return ERROR_VIO_INVALID_PARMS;
-    if (info->cb < 10)
+    if (info->cb < offsetof(VIOCONFIGINFO, Configuration))
         return ERROR_VIO_INVALID_LENGTH;
     const USHORT count = info->cb < sizeof(*info) ? info->cb : sizeof(*info);
     VIOCONFIGINFO result = {0};
     result.cb = count;
-    result.adapter = 3; /* VGA adapter. */
-    result.display = 4; /* VGA color monitor. */
-    result.cbMemory = 256 * 1024;
+    result.adapter = DISPLAY_VGA;
+    result.display = MONITOR_851X_COLOR;
+    result.cbMemory = VIDEO_MEMORY_BYTES;
     memcpy(info, &result, count);
     return NO_ERROR;
 }
@@ -192,11 +205,11 @@ APIRET16 VioWrtTty(PCH pch, USHORT cb, HVIO hvio)
             continue;
         else
         {
-            const unsigned count = ch == '\t' ? 8 - vio_curx % 8 : 1;
+            const unsigned count = ch == '\t' ? TAB_WIDTH - vio_curx % TAB_WIDTH : 1;
             for (unsigned j = 0; j < count; j++)
             {
                 uint16 *cell = vio_buffer + vio_cury * vio_scrw + vio_curx;
-                *cell = (*cell & 0xff00u) | (ch == '\t' ? ' ' : ch);
+                *cell = (*cell & CELL_ATTRIBUTE_MASK) | (ch == '\t' ? ' ' : ch);
                 if (++vio_curx == vio_scrw)
                 {
                     vio_curx = 0;
@@ -232,7 +245,7 @@ APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
         return ERROR_VIO_INVALID_HANDLE;
     else if (pvioModeInfo == NULL)
         return ERROR_VIO_INVALID_PARMS;
-    else if (pvioModeInfo->cb < 12)
+    else if (pvioModeInfo->cb < offsetof(VIOMODEINFO, fmt_ID))
         return ERROR_VIO_INVALID_LENGTH;
 
     else if (!open_terminal())
@@ -243,11 +256,11 @@ APIRET16 VioGetMode(PVIOMODEINFO pvioModeInfo, HVIO hvio)
     VIOMODEINFO info = {0};
     info.cb = count;
     info.fbType = VGMT_OTHER;
-    info.color = 4;
+    info.color = COLORS_16;
     info.col = vio_scrw;
     info.row = vio_scrh;
-    info.hres = 640;
-    info.vres = 400;
+    info.hres = TEXT_MODE_HRES;
+    info.vres = TEXT_MODE_VRES;
     info.attrib = 1;
     memcpy(pvioModeInfo, &info, count);
 

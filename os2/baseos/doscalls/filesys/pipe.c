@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Dos16MakePipe: anonymous pipes. */
 #include "os2/baseos/doscalls/internal.h"
 
 APIRET16 Dos16MakePipe(PUSHORT reader, PUSHORT writer, USHORT size)

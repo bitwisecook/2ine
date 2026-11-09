@@ -5,7 +5,13 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* File handles: read, write, seek, close, duplicate and handle-table limits. */
 #include "os2/baseos/doscalls/internal.h"
+
+enum
+{
+    FHSTATE16_SETTABLE_BITS = 0x00FF
+};
 
 APIRET fileError(LxHostFsError error)
 {
@@ -62,10 +68,10 @@ int initFileInfo(LxHostFile *file, HFileInfo *info, ULONG flags)
         lx_host_file_close(file);
         return 0;
     }
-    info->type = description.kind == LX_HOST_FILE_REGULAR  ? 0
-                 : description.kind == LX_HOST_FILE_DEVICE ? 1
-                                                           : 2;
-    info->attr = info->type == 1 ? DAW_STDIN | DAW_STDOUT | DAW_LEVEL1 | DAW_CHARACTER : 0;
+    info->type = description.kind == LX_HOST_FILE_REGULAR  ? FHT_DISKFILE
+                 : description.kind == LX_HOST_FILE_DEVICE ? FHT_CHRDEV
+                                                           : FHT_PIPE;
+    info->attr = info->type == FHT_CHRDEV ? DAW_STDIN | DAW_STDOUT | DAW_LEVEL1 | DAW_CHARACTER : 0;
     info->flags = flags;
     return 1;
 }
@@ -169,7 +175,7 @@ APIRET DosSetFilePtr(HFILE hFile, LONG ib, ULONG method, PULONG ibActual)
 
 APIRET16 Dos16SetFilePtrL(USHORT id, ULONG high, ULONG low, ULONG method, PVOID position)
 {
-    if (method > 2 || !position)
+    if (method > FILE_END || !position)
         return ERROR_INVALID_PARAMETER;
     LxHandleBorrow file;
     if (!borrowFile(id, &file))
@@ -181,7 +187,7 @@ APIRET16 Dos16SetFilePtrL(USHORT id, ULONG high, ULONG low, ULONG method, PVOID 
     if (!error)
     {
         lx_guest_store_u32(position, (uint32_t)result);
-        lx_guest_store_u32((uint8 *)position + 4, (uint32_t)((uint64_t)result >> 32));
+        lx_guest_store_u32((uint8 *)position + sizeof(ULONG), (uint32_t)((uint64_t)result >> 32));
     }
     return (APIRET16)fileError(error);
 }
@@ -313,8 +319,8 @@ APIRET DosSetRelMaxFH(PLONG request, PULONG current)
     if (request && *request > 0)
     {
         uint32 increase = (uint32)*request;
-        if (increase > 0x10000u - MaxHFiles)
-            increase = 0x10000u - MaxHFiles;
+        if (increase > FILE_HANDLE_LIMIT - MaxHFiles)
+            increase = FILE_HANDLE_LIMIT - MaxHFiles;
         HFileInfo *files =
             increase ? realloc(HFiles, sizeof *files * (MaxHFiles + increase)) : NULL;
         if (files)
@@ -362,7 +368,8 @@ APIRET DosResetBuffer(HFILE id)
 
 APIRET16 Dos16BufReset(USHORT file)
 {
-    return (APIRET16)DosResetBuffer(file == 0xffff ? UINT32_MAX : file);
+    /* Handle 0xFFFF flushes every file the process has open. */
+    return (APIRET16)DosResetBuffer(file == UINT16_MAX ? UINT32_MAX : file);
 }
 
 APIRET16 Dos16QFHandState(USHORT file, PUSHORT state)
@@ -376,7 +383,9 @@ APIRET16 Dos16QFHandState(USHORT file, PUSHORT state)
 
 APIRET16 Dos16SetFHandState(USHORT file, USHORT state)
 {
-    if (state & ~0xffu)
+    /* Of the settable states only OPEN_FLAGS_NOINHERIT is applied; the caching and
+       error modes above the low byte have no host descriptor equivalent. */
+    if (state & ~FHSTATE16_SETTABLE_BITS)
         return ERROR_NOT_SUPPORTED;
     grabLock(&GMutexDosCalls);
     APIRET result = ERROR_INVALID_HANDLE;
@@ -421,7 +430,7 @@ APIRET DosSetMaxFH(ULONG cFH)
     TRACE_NATIVE("DosSetMaxFH(%u)", (uint)cFH);
     grabLock(&GMutexDosCalls);
 
-    if (cFH < MaxHFiles || cFH > 0x10000u)
+    if (cFH < MaxHFiles || cFH > FILE_HANDLE_LIMIT)
     {
         ungrabLock(&GMutexDosCalls);
         return ERROR_INVALID_PARAMETER;
@@ -441,7 +450,7 @@ APIRET DosSetMaxFH(ULONG cFH)
         for (ULONG i = MaxHFiles; i < cFH; i++, info++)
         {
             info->handle = 0;
-            info->type = 0;
+            info->type = FHT_DISKFILE;
             info->attr = 0;
             info->flags = 0;
         }

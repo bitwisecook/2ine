@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Thread suspension and resumption. */
 #include "os2/baseos/doscalls/internal.h"
 
 /* Suspension state has one leaf monitor: nothing else is locked while it is held,

@@ -5,7 +5,17 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Volume information: allocation, serial number and volume label. */
 #include "os2/baseos/doscalls/internal.h"
+#include <stddef.h>
+
+/* FSINFO's FDATE/FTIME pair carries the 32-bit volume serial number. */
+enum
+{
+    FSINFO_SERIAL_OFFSET = offsetof(FSINFO, fdateCreation),
+    FSINFO_LABEL_LENGTH_OFFSET = offsetof(FSINFO, vol.cch),
+    FSINFO_LABEL_OFFSET = offsetof(FSINFO, vol.szVolLabel)
+};
 
 static void applyVolumeLabel(ULONG drive, LxHostVolumeInfo *volume);
 
@@ -14,7 +24,7 @@ APIRET16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf, USHORT inf
     TRACE_NATIVE("Dos16QFsInfo(%d, %d, %p, %d)", drivenum, fslevel, infobuf, infobufsize);
     if (!drivenum)
         drivenum = (USHORT)GProcessState.current_disk;
-    if (!drivenum || drivenum > 26 || !GProcessState.disks[drivenum - 1])
+    if (!drivenum || drivenum > DRIVE_COUNT || !GProcessState.disks[drivenum - 1])
         return ERROR_INVALID_DRIVE;
     LxHostVolumeInfo volume;
     LxHostFsError error = lx_host_path_volume(GProcessState.disks[drivenum - 1], &volume);
@@ -22,13 +32,13 @@ APIRET16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf, USHORT inf
         return fileError(error);
     applyVolumeLabel(drivenum - 1, &volume);
     const char *label = volume.label;
-    if (fslevel != 2)
+    if (fslevel != FSIL_VOLSER)
         return ERROR_INVALID_LEVEL;
-    if (infobufsize < 5 + strlen(label) + 1)
+    if (infobufsize < FSINFO_LABEL_OFFSET + strlen(label) + 1)
         return ERROR_BUFFER_OVERFLOW;
-    lx_guest_store_u32(infobuf, volume.serial);
-    infobuf[4] = (uint8)strlen(label);
-    memcpy(infobuf + 5, label, strlen(label) + 1);
+    lx_guest_store_u32(infobuf + FSINFO_SERIAL_OFFSET, volume.serial);
+    infobuf[FSINFO_LABEL_LENGTH_OFFSET] = (uint8)strlen(label);
+    memcpy(infobuf + FSINFO_LABEL_OFFSET, label, strlen(label) + 1);
     return NO_ERROR;
 }
 
@@ -38,8 +48,9 @@ APIRET16 Dos16QFsInfo(USHORT drivenum, USHORT fslevel, PBYTE infobuf, USHORT inf
 enum
 {
     VOLUME_LABEL_MAXIMUM = 11,
+    /* A set flag, the label and its terminator. */
     VOLUME_RECORD_BYTES = VOLUME_LABEL_MAXIMUM + 2,
-    VOLUME_STORE_BYTES = VOLUME_RECORD_BYTES * 26
+    VOLUME_STORE_BYTES = VOLUME_RECORD_BYTES * DRIVE_COUNT
 };
 
 static uint8 process_volume_labels[VOLUME_STORE_BYTES];
@@ -122,7 +133,7 @@ static APIRET storeVolumeLabel(ULONG drive, const char *label)
             memset(records, 0, sizeof records);
         memcpy(records + drive * VOLUME_RECORD_BYTES, record, sizeof record);
         if (!error)
-            error = lx_host_file_seek(file, 0, 0, NULL);
+            error = lx_host_file_seek(file, 0, FILE_BEGIN, NULL);
         if (!error)
             error = lx_host_file_write(file, records, sizeof records, &actual);
         if (!error && actual != sizeof records)
@@ -140,9 +151,9 @@ APIRET DosSetFSInfo(ULONG drive, ULONG level, PVOID data, ULONG size)
     ULONG disk = (USHORT)drive;
     if (!disk)
         disk = GProcessState.current_disk;
-    if (disk > 26 || !disk || !GProcessState.disks[disk - 1])
+    if (disk > DRIVE_COUNT || !disk || !GProcessState.disks[disk - 1])
         return ERROR_INVALID_DRIVE;
-    if ((USHORT)level != 2)
+    if ((USHORT)level != FSIL_VOLSER)
         return ERROR_INVALID_LEVEL;
     const ULONG capacity = (USHORT)size;
     if (!capacity)
@@ -179,14 +190,14 @@ APIRET DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
     TRACE_NATIVE("DosQueryFSInfo(%u, %u, %p, %u)", (uint)drive, (uint)level, data, (uint)capacity);
     if (!drive)
         drive = GProcessState.current_disk;
-    if (drive > 26 || !drive || !GProcessState.disks[drive - 1])
+    if (drive > DRIVE_COUNT || !drive || !GProcessState.disks[drive - 1])
         return ERROR_INVALID_DRIVE;
     uint8 *output = data;
     if (!output)
         return ERROR_INVALID_PARAMETER;
-    if (level == 1)
+    if (level == FSIL_ALLOC)
     {
-        if (capacity < 18)
+        if (capacity < sizeof(FSALLOCATE))
             return ERROR_BUFFER_OVERFLOW;
         uint64_t total, available;
         LxHostFsError error =
@@ -199,26 +210,29 @@ APIRET DosQueryFSInfo(ULONG drive, ULONG level, PVOID data, ULONG capacity)
             return fileError(error);
         uint64_t units = total / volume.cluster_bytes,
                  free_units = available / volume.cluster_bytes;
-        lx_guest_store_u32(output, 0);
-        lx_guest_store_u32(output + 4, volume.cluster_bytes / volume.sector_bytes);
-        lx_guest_store_u32(output + 8, units > UINT32_MAX ? UINT32_MAX : units);
-        lx_guest_store_u32(output + 12, free_units > UINT32_MAX ? UINT32_MAX : free_units);
-        lx_guest_store_u16(output + 16, volume.sector_bytes);
+        lx_guest_store_u32(output + offsetof(FSALLOCATE, idFileSystem), 0);
+        lx_guest_store_u32(output + offsetof(FSALLOCATE, cSectorUnit),
+                           volume.cluster_bytes / volume.sector_bytes);
+        lx_guest_store_u32(output + offsetof(FSALLOCATE, cUnit),
+                           units > UINT32_MAX ? UINT32_MAX : units);
+        lx_guest_store_u32(output + offsetof(FSALLOCATE, cUnitAvail),
+                           free_units > UINT32_MAX ? UINT32_MAX : free_units);
+        lx_guest_store_u16(output + offsetof(FSALLOCATE, cbSector), volume.sector_bytes);
         return NO_ERROR;
     }
-    if (level == 2)
+    if (level == FSIL_VOLSER)
     {
-        if (capacity < 17)
+        if (capacity < sizeof(FSINFO))
             return ERROR_BUFFER_OVERFLOW;
-        memset(output, 0, 17);
+        memset(output, 0, sizeof(FSINFO));
         LxHostVolumeInfo volume;
         LxHostFsError error = lx_host_path_volume(GProcessState.disks[drive - 1], &volume);
         if (error)
             return fileError(error);
         applyVolumeLabel(drive - 1, &volume);
-        lx_guest_store_u32(output, volume.serial);
-        output[4] = (uint8)strlen(volume.label);
-        memcpy(output + 5, volume.label, strlen(volume.label) + 1);
+        lx_guest_store_u32(output + FSINFO_SERIAL_OFFSET, volume.serial);
+        output[FSINFO_LABEL_LENGTH_OFFSET] = (uint8)strlen(volume.label);
+        memcpy(output + FSINFO_LABEL_OFFSET, volume.label, strlen(volume.label) + 1);
         return NO_ERROR;
     }
     return ERROR_INVALID_LEVEL;

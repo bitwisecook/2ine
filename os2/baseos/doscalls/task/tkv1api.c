@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Environment scanning and process IDs for the 16-bit API. */
 #include "os2/baseos/doscalls/internal.h"
 
 APIRET DosScanEnv(PSZ name, PSZ *outval)

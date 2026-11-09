@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Must-complete section nesting counts. */
 #include "os2/baseos/doscalls/internal.h"
 
 APIRET DosEnterMustComplete(PULONG pulNesting)
@@ -12,7 +13,7 @@ APIRET DosEnterMustComplete(PULONG pulNesting)
     TRACE_NATIVE("DosEnterMustComplete(%p)", pulNesting);
 
     PTIB2 tib2 = (PTIB2)LX_GETTIB2();
-    if (tib2->tib2_usMCCount == 0xFFFF)
+    if (tib2->tib2_usMCCount == UINT16_MAX)
     {
         return ERROR_NESTING_TOO_DEEP;
     }

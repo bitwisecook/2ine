@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* 16-bit segments: allocation, sizing and flat/16:16 address conversion. */
 #include "os2/baseos/doscalls/internal.h"
 
 ULONG _DosFlatToSel(PVOID ptr)
@@ -30,6 +31,13 @@ APIRET16 Dos16CreateCSAlias(USHORT selDS, PUSHORT pselCS)
     return NO_ERROR;
 }
 
+/* Dos16AllocSeg flag bits above SEG_DISCARDABLE and its sizeable bit are reserved. */
+enum
+{
+    ALLOCSEG_RESERVED_BITS = 0xFFF0,
+    NO_SELECTOR = 0xFFFF
+};
+
 static ULONG segment_sizes[LX_MAX_LDT_SLOTS];
 
 static ULONG segment_capacities[LX_MAX_LDT_SLOTS];
@@ -38,9 +46,9 @@ static unsigned char owned_segments[LX_MAX_LDT_SLOTS];
 
 APIRET16 Dos16SizeSeg(USHORT selector, PULONG size)
 {
-    if (!size || !(selector & 4))
+    if (!size || !(selector & SELECTOR_TABLE_LDT))
         return ERROR_INVALID_PARAMETER;
-    unsigned index = selector >> 3;
+    unsigned index = selector >> SELECTOR_INDEX_SHIFT;
     grabLock(&GMutexDosCalls);
     ULONG length = segment_sizes[index];
     if (!length)
@@ -48,13 +56,14 @@ APIRET16 Dos16SizeSeg(USHORT selector, PULONG size)
              module = module->next)
             for (ULONG i = 0; i < module->num_mmaps; i++)
                 if (module->mmaps[i].alias == index)
-                    length = module->mmaps[i].size > 65536 ? 65536 : module->mmaps[i].size;
+                    length = module->mmaps[i].size > SEGMENT_SIZE_MAXIMUM ? SEGMENT_SIZE_MAXIMUM
+                                                                          : module->mmaps[i].size;
     if (!length && GProcessState.main_module)
         for (ULONG i = 0; i < GProcessState.main_module->num_mmaps; i++)
             if (GProcessState.main_module->mmaps[i].alias == index)
             {
                 size_t extent = GProcessState.main_module->mmaps[i].size;
-                length = extent > 65536 ? 65536 : extent;
+                length = extent > SEGMENT_SIZE_MAXIMUM ? SEGMENT_SIZE_MAXIMUM : extent;
                 break;
             }
     if (length && !segment_capacities[index])
@@ -77,13 +86,15 @@ APIRET16 Dos16GetShrSeg(PSZ name, PUSHORT selector)
     ULONG pointer = GProcessState.convert32to1616(memory);
     if (!pointer || (pointer & UINT16_MAX))
         return ERROR_INVALID_ADDRESS;
-    *selector = pointer >> 16;
+    *selector = pointer >> SELECTOR_OFFSET_BITS;
     grabLock(&GMutexDosCalls);
     for (SharedMemBlock *block = GSharedMem; block; block = block->next)
         if (block->addr == memory)
         {
-            segment_sizes[*selector >> 3] = block->size > 65536 ? 65536 : block->size;
-            segment_capacities[*selector >> 3] = segment_sizes[*selector >> 3];
+            const unsigned index = *selector >> SELECTOR_INDEX_SHIFT;
+            segment_sizes[index] =
+                block->size > SEGMENT_SIZE_MAXIMUM ? SEGMENT_SIZE_MAXIMUM : block->size;
+            segment_capacities[index] = segment_sizes[index];
             break;
         }
     ungrabLock(&GMutexDosCalls);
@@ -97,39 +108,39 @@ APIRET16 Dos16AllocSeg(USHORT size, PUSHORT psel, USHORT flags)
     {
         return ERROR_INVALID_PARAMETER;
     }
-    else if ((flags & 0xFFF0) != 0)
-    { // these bits are reserved and must be zero.
+    else if ((flags & ALLOCSEG_RESERVED_BITS) != 0)
+    {
         return ERROR_INVALID_PARAMETER;
     }
 
-    uint16 sel = 0xFFFF;
+    uint16 sel = NO_SELECTOR;
 
     void *addr = GProcessState.allocSegment(&sel, 0);
     if (!addr)
     {
-        assert(sel == 0xFFFF);
+        assert(sel == NO_SELECTOR);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
 
-    assert(sel != 0xFFFF);
+    assert(sel != NO_SELECTOR);
 
-    if (flags & (1 << 0))
+    if (flags & SEG_GIVEABLE)
     {
         FIXME("segment is meant to be shareable through Dos16GiveSeg");
     }
 
-    if (flags & (1 << 1))
+    if (flags & SEG_GETTABLE)
     {
         FIXME("segment is meant to be shareable through Dos16GetSeg");
     }
 
     /* OS/2 exposes the tiled segment value through this API. */
     grabLock(&GMutexDosCalls);
-    segment_sizes[sel] = size ? size : 65536;
-    segment_capacities[sel] = 65536;
+    segment_sizes[sel] = size ? size : SEGMENT_SIZE_MAXIMUM;
+    segment_capacities[sel] = SEGMENT_SIZE_MAXIMUM;
     owned_segments[sel] = 1;
     ungrabLock(&GMutexDosCalls);
-    *psel = (USHORT)((sel << 3) | 7);
+    *psel = ldtSelector(sel);
     return NO_ERROR;
 }
 
@@ -142,13 +153,13 @@ APIRET16 Dos16ReallocSeg(USHORT size, USHORT sel)
     if (result)
         return result;
     grabLock(&GMutexDosCalls);
-    ULONG requested = size ? size : 65536;
-    if (requested > segment_capacities[sel >> 3])
+    ULONG requested = size ? size : SEGMENT_SIZE_MAXIMUM;
+    if (requested > segment_capacities[sel >> SELECTOR_INDEX_SHIFT])
     {
         ungrabLock(&GMutexDosCalls);
         return ERROR_NOT_ENOUGH_MEMORY;
     }
-    segment_sizes[sel >> 3] = requested;
+    segment_sizes[sel >> SELECTOR_INDEX_SHIFT] = requested;
     ungrabLock(&GMutexDosCalls);
     return NO_ERROR;
 }
@@ -196,9 +207,9 @@ APIRET16 Dos16GetHugeShift(PUSHORT pcount)
 APIRET16 Dos16FreeSeg(USHORT sel)
 {
     TRACE_NATIVE("Dos16FreeSeg(%u)", (uint)sel);
-    if (!(sel & 4))
+    if (!(sel & SELECTOR_TABLE_LDT))
         return ERROR_INVALID_SEGMENT_NUMBER;
-    unsigned index = sel >> 3;
+    unsigned index = sel >> SELECTOR_INDEX_SHIFT;
     grabLock(&GMutexDosCalls);
     if (owned_segments[index])
     {

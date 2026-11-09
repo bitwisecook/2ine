@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* The process-wide registry of named semaphores. */
 #include "os2/baseos/doscalls/internal.h"
 
 NamedSem *findNamedSemLocked(const char *name, int is_mutex)

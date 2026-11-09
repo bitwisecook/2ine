@@ -5,7 +5,41 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* File and path information: FILESTATUS queries and updates, and FDATE/FTIME conversion. */
 #include "os2/baseos/doscalls/internal.h"
+
+/* FDATE counts years from 1980 in seven bits; FTIME counts seconds in pairs. */
+enum
+{
+    FDATE_EPOCH_YEAR = 1980,
+    FDATE_YEAR_MAXIMUM = 127,
+    FDATE_MONTH_SHIFT = 5,
+    FDATE_YEAR_SHIFT = 9,
+    FTIME_MINUTES_SHIFT = 5,
+    FTIME_HOURS_SHIFT = 11
+};
+
+/* The 16-bit FILESTATUS and FILESTATUS2 records: 32-bit ones with a USHORT attrFile. */
+enum
+{
+    FILESTATUS16_CREATION_OFFSET = 0,
+    FILESTATUS16_ACCESS_OFFSET = 4,
+    FILESTATUS16_WRITE_OFFSET = 8,
+    FILESTATUS16_SIZE_OFFSET = 12,
+    FILESTATUS16_ALLOC_OFFSET = 16,
+    FILESTATUS16_ATTRIBUTES_OFFSET = 20,
+    FILESTATUS16_EASIZE_OFFSET = 22,
+    FILESTATUS16_SIZE = 22,
+    FILESTATUS2_16_SIZE = 26
+};
+
+/* Levels the Toolkit leaves unnamed: 7 returns the case-corrected full name, and the
+   16-bit level 4 query returns every EA. */
+enum
+{
+    FIL_QUERYCASEDNAME = 7,
+    FIL16_QUERYALLEAS = 4
+};
 
 void unixTimeToOs2(const int64_t seconds, FDATE *date, FTIME *time)
 {
@@ -18,7 +52,10 @@ void unixTimeToOs2(const int64_t seconds, FDATE *date, FTIME *time)
     }
     date->day = value.day;
     date->month = value.month;
-    date->year = value.year < 1980 ? 0 : value.year > 2107 ? 127 : value.year - 1980;
+    date->year = value.year < FDATE_EPOCH_YEAR ? 0
+                 : value.year > FDATE_EPOCH_YEAR + FDATE_YEAR_MAXIMUM
+                     ? FDATE_YEAR_MAXIMUM
+                     : value.year - FDATE_EPOCH_YEAR;
     time->twosecs = value.second / 2;
     time->minutes = value.minute;
     time->hours = value.hour;
@@ -26,8 +63,10 @@ void unixTimeToOs2(const int64_t seconds, FDATE *date, FTIME *time)
 
 void storeDateTime16(uint8 *data, FDATE date, FTIME time)
 {
-    lx_guest_store_u16(data, date.day | date.month << 5 | date.year << 9);
-    lx_guest_store_u16(data + 2, time.twosecs | time.minutes << 5 | time.hours << 11);
+    lx_guest_store_u16(data,
+                       date.day | date.month << FDATE_MONTH_SHIFT | date.year << FDATE_YEAR_SHIFT);
+    lx_guest_store_u16(data + sizeof(USHORT), time.twosecs | time.minutes << FTIME_MINUTES_SHIFT |
+                                                  time.hours << FTIME_HOURS_SHIFT);
 }
 
 void initFileCreationDateTime(FDATE *fdate, FTIME *ftime)
@@ -70,14 +109,14 @@ APIRET queryFileInfoStandardFromStat(const LxHostFileInfo *statbuf, PVOID pInfoB
         st->attrFile |= FILE_READONLY;
     st->attrFile |= statbuf->attributes & (FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
-    /* Older 32-bit C runtimes request the 22-byte FILESTATUS prefix. */
+    /* Older 32-bit C runtimes request only the FILESTATUS16_SIZE prefix. */
     memcpy(pInfoBuf, st, cbInfoBuf < sizeof *st ? cbInfoBuf : sizeof *st);
     return NO_ERROR;
 }
 
 APIRET queryPathInfoStandard(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
-    if (cbInfoBuf < 22)
+    if (cbInfoBuf < FILESTATUS16_SIZE)
         return ERROR_BUFFER_OVERFLOW;
 
     LxHostFileInfo statbuf;
@@ -127,7 +166,7 @@ APIRET queryPathInfoEaSize(PSZ unixPath, PVOID pInfoBuf, ULONG cbInfoBuf)
     lx_host_file_close(file);
     if (error && error != LX_HOST_FS_INVALID)
         return fileError(error);
-    st->cbList = size ? size : 4;
+    st->cbList = size ? size : EA_LIST_EMPTY_SIZE;
     return NO_ERROR;
 }
 
@@ -164,8 +203,8 @@ APIRET queryPathInfo(PSZ unixPath, ULONG ulInfoLevel, PVOID pInfoBuf, ULONG cbIn
         case FIL_QUERYEASFROMLIST:
             return queryPathInfoEasFromList(unixPath, pInfoBuf, cbInfoBuf);
 
-        /* Info level 7 returns a case-corrected full path through the regular path resolver. */
-        case 7:
+        /* Level 7 returns a case-corrected full path through the regular path resolver. */
+        case FIL_QUERYCASEDNAME:
         case FIL_QUERYFULLNAME:
             return queryPathInfoFullName(unixPath, pInfoBuf, cbInfoBuf);
         default:
@@ -193,7 +232,7 @@ APIRET DosQueryPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULON
 
 APIRET queryFileInfoStandard(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG cbInfoBuf)
 {
-    if (cbInfoBuf < 22)
+    if (cbInfoBuf < FILESTATUS16_SIZE)
         return ERROR_BUFFER_OVERFLOW;
     return queryFileInfoStandardFromStat(statbuf, pInfoBuf, cbInfoBuf);
 }
@@ -207,7 +246,7 @@ APIRET queryFileInfoEaSize(const LxHostFileInfo *statbuf, PVOID pInfoBuf, ULONG 
         return rc;
 
     FILESTATUS4 *st = (FILESTATUS4 *)pInfoBuf;
-    st->cbList = 4;
+    st->cbList = EA_LIST_EMPTY_SIZE;
     return NO_ERROR;
 }
 
@@ -222,7 +261,7 @@ static int64_t os2DateSeconds(FDATE date, FTIME time)
 {
     if (!date.day && !date.month && !date.year && !time.twosecs && !time.minutes && !time.hours)
         return INT64_MIN;
-    LxHostCalendar calendar = {.year = 1980 + date.year,
+    LxHostCalendar calendar = {.year = FDATE_EPOCH_YEAR + date.year,
                                .month = date.month,
                                .day = date.day,
                                .hour = time.hours,
@@ -262,7 +301,7 @@ APIRET DosQueryFileInfo(HFILE hf, ULONG ulInfoLevel, PVOID pInfo, ULONG cbInfoBu
         case FIL_QUERYEASIZE:
             rc = queryFileInfoEaSize(&statbuf, pInfo, cbInfoBuf);
             if (!rc)
-                ((FILESTATUS4 *)pInfo)->cbList = ea_size ? ea_size : 4;
+                ((FILESTATUS4 *)pInfo)->cbList = ea_size ? ea_size : EA_LIST_EMPTY_SIZE;
             break;
         case FIL_QUERYEASFROMLIST:
             rc = queryFileInfoEasFromList(&statbuf, pInfo, cbInfoBuf);
@@ -335,14 +374,14 @@ APIRET DosSetPathInfo(PSZ pszPathName, ULONG ulInfoLevel, PVOID pInfoBuf, ULONG 
 static void storeStatus16(PVOID buffer, USHORT level, const FILESTATUS4 *value)
 {
     uint8 *p = buffer;
-    storeDateTime16(p, value->fdateCreation, value->ftimeCreation);
-    storeDateTime16(p + 4, value->fdateLastAccess, value->ftimeLastAccess);
-    storeDateTime16(p + 8, value->fdateLastWrite, value->ftimeLastWrite);
-    lx_guest_store_u32(p + 12, value->cbFile);
-    lx_guest_store_u32(p + 16, value->cbFileAlloc);
-    lx_guest_store_u16(p + 20, value->attrFile);
+    storeDateTime16(p + FILESTATUS16_CREATION_OFFSET, value->fdateCreation, value->ftimeCreation);
+    storeDateTime16(p + FILESTATUS16_ACCESS_OFFSET, value->fdateLastAccess, value->ftimeLastAccess);
+    storeDateTime16(p + FILESTATUS16_WRITE_OFFSET, value->fdateLastWrite, value->ftimeLastWrite);
+    lx_guest_store_u32(p + FILESTATUS16_SIZE_OFFSET, value->cbFile);
+    lx_guest_store_u32(p + FILESTATUS16_ALLOC_OFFSET, value->cbFileAlloc);
+    lx_guest_store_u16(p + FILESTATUS16_ATTRIBUTES_OFFSET, value->attrFile);
     if (level == FIL_QUERYEASIZE)
-        lx_guest_store_u32(p + 22, value->cbList);
+        lx_guest_store_u32(p + FILESTATUS16_EASIZE_OFFSET, value->cbList);
 }
 
 APIRET16 Dos16QPathInfo(PSZ path, USHORT level, PVOID buffer, USHORT capacity, ULONG reserved)
@@ -351,7 +390,9 @@ APIRET16 Dos16QPathInfo(PSZ path, USHORT level, PVOID buffer, USHORT capacity, U
         return ERROR_INVALID_PARAMETER;
     if (level == FIL_QUERYFULLNAME)
         return (APIRET16)DosQueryPathInfo(path, level, buffer, capacity);
-    unsigned size = level == FIL_STANDARD ? 22 : level == FIL_QUERYEASIZE ? 26 : 0;
+    unsigned size = level == FIL_STANDARD      ? FILESTATUS16_SIZE
+                    : level == FIL_QUERYEASIZE ? FILESTATUS2_16_SIZE
+                                               : 0;
     if (!size)
         return ERROR_INVALID_LEVEL;
     if (capacity < size)
@@ -366,9 +407,11 @@ APIRET16 Dos16QPathInfo(PSZ path, USHORT level, PVOID buffer, USHORT capacity, U
 APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
 {
     TRACE_NATIVE("Dos16QFileInfo(%u, %u, %p, %u)", hf, level, buffer, capacity);
-    if (level == 4)
-        return capacity < 12 ? ERROR_BUFFER_OVERFLOW : queryAllEas16(hf, buffer);
-    const uint32 size = level == FIL_STANDARD ? 22 : level == FIL_QUERYEASIZE ? 26 : 0;
+    if (level == FIL16_QUERYALLEAS)
+        return capacity < EAOP16_SIZE ? ERROR_BUFFER_OVERFLOW : queryAllEas16(hf, buffer);
+    const uint32 size = level == FIL_STANDARD      ? FILESTATUS16_SIZE
+                        : level == FIL_QUERYEASIZE ? FILESTATUS2_16_SIZE
+                                                   : 0;
     if (!size)
         return ERROR_INVALID_LEVEL;
     if (capacity < size)
@@ -385,18 +428,20 @@ APIRET16 Dos16QFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
 
 APIRET16 Dos16SetFileInfo(USHORT hf, USHORT level, PVOID buffer, USHORT capacity)
 {
-    if (level == 2)
-        return capacity < 12 ? ERROR_BUFFER_OVERFLOW : applyEas16(hf, buffer);
+    /* Level 2 sets the EAs an EAOP names. */
+    if (level == FIL_QUERYEASIZE)
+        return capacity < EAOP16_SIZE ? ERROR_BUFFER_OVERFLOW : applyEas16(hf, buffer);
     if (level != FIL_STANDARD)
         return ERROR_INVALID_LEVEL;
-    if (capacity < 22)
+    if (capacity < FILESTATUS16_SIZE)
         return ERROR_BUFFER_OVERFLOW;
     uint32 address;
-    if (!lx_execution_address(GProcessState.execution, buffer, 22, LX_GUEST_READ, &address))
+    if (!lx_execution_address(GProcessState.execution, buffer, FILESTATUS16_SIZE, LX_GUEST_READ,
+                              &address))
         return ERROR_INVALID_PARAMETER;
     FILESTATUS3 value = {0};
     /* The current file-info setter applies the permission attribute. */
-    value.attrFile = lx_guest_load_u16((uint8 *)buffer + 20);
+    value.attrFile = lx_guest_load_u16((uint8 *)buffer + FILESTATUS16_ATTRIBUTES_OFFSET);
     return DosSetFileInfo(hf, level, &value, sizeof value);
 }
 

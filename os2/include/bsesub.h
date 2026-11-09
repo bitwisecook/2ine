@@ -105,6 +105,42 @@ extern "C"
 
 #pragma pack(pop)
 
+    enum
+    {
+        COLORS_2 = 0x0001,
+        COLORS_4 = 0x0002,
+        COLORS_16 = 0x0004
+    };
+
+    enum
+    {
+        DISPLAY_MONOCHROME = 0x0000,
+        DISPLAY_CGA = 0x0001,
+        DISPLAY_EGA = 0x0002,
+        DISPLAY_VGA = 0x0003,
+        DISPLAY_8514A = 0x0007,
+        DISPLAY_IMAGEADAPTER = 0x0008,
+        DISPLAY_XGA = 0x0009,
+        DISPLAY_SVGA = 0x000A
+    };
+
+    enum
+    {
+        MONITOR_MONOCHROME = 0x0000,
+        MONITOR_COLOR = 0x0001,
+        MONITOR_ENHANCED = 0x0002,
+        MONITOR_8503 = 0x0003,
+        MONITOR_851X_COLOR = 0x0004,
+        MONITOR_8514 = 0x0009
+    };
+
+    enum
+    {
+        VIO_CONFIG_CURRENT = 0,
+        VIO_CONFIG_PRIMARY = 1,
+        VIO_CONFIG_SECONDARY = 2
+    };
+
 #pragma pack(push, 2)
 
     typedef struct

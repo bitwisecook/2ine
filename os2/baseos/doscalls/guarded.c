@@ -5,6 +5,8 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Locking helpers, and file and semaphore operations run as guarded host calls so that a
+   thread killed mid-call still releases its handle borrow. */
 #include "os2/baseos/doscalls/internal.h"
 
 int grabLock(LxHostMutex **lock)

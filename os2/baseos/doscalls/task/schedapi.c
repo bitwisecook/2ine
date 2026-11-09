@@ -5,7 +5,15 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Critical sections and thread priorities. */
 #include "os2/baseos/doscalls/internal.h"
+
+/* tib2_ulpri holds the priority class in its high byte and the level in its low byte. */
+enum
+{
+    PRIORITY_CLASS_SHIFT = 8,
+    PRIORITY_LEVEL_MASK = 0xFF
+};
 
 void initCritSec(void)
 {
@@ -70,22 +78,27 @@ APIRET16 Dos16SetPrty(USHORT scope, USHORT prtyclass, SHORT delta, USHORT pid)
 APIRET DosSetPriority(ULONG scope, ULONG priority_class, LONG delta, ULONG target)
 {
     TRACE_NATIVE("DosSetPriority(%u, %u, %d, %u)", scope, priority_class, (int)delta, target);
-    if (scope > 2)
+    if (scope > PRTYS_THREAD)
         return ERROR_INVALID_SCOPE;
-    if (priority_class > 4)
+    if (priority_class > PRTYC_FOREGROUNDSERVER)
         return ERROR_INVALID_PCLASS;
-    if (delta < -31 || delta > 31)
+    if (delta < PRTYD_MINIMUM || delta > PRTYD_MAXIMUM)
         return ERROR_INVALID_PDELTA;
     PTIB2 tib = (PTIB2)LX_GETTIB2();
-    if (scope != 2 || (target && target != tib->tib2_ultid))
+    if (scope != PRTYS_THREAD || (target && target != tib->tib2_ultid))
         return ERROR_INVALID_PROCID;
     ULONG previous = tib->tib2_ulpri;
-    LONG level = priority_class ? delta : (LONG)(previous & 0xff) + delta;
+    /* A new class starts its level at the delta; PRTYC_NOCHANGE adjusts the current level. */
+    LONG level =
+        priority_class != PRTYC_NOCHANGE ? delta : (LONG)(previous & PRIORITY_LEVEL_MASK) + delta;
     if (level < 0)
         level = 0;
-    if (level > 31)
-        level = 31;
+    if (level > PRTYD_MAXIMUM)
+        level = PRTYD_MAXIMUM;
     /* Guest scheduling priority is distinct from host process privileges. */
-    tib->tib2_ulpri = ((priority_class ? priority_class : previous >> 8) << 8) | (ULONG)level;
+    tib->tib2_ulpri =
+        ((priority_class != PRTYC_NOCHANGE ? priority_class : previous >> PRIORITY_CLASS_SHIFT)
+         << PRIORITY_CLASS_SHIFT) |
+        (ULONG)level;
     return NO_ERROR;
 }

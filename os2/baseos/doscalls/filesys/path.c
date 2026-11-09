@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* Current directories and directory creation and removal. */
 #include "os2/baseos/doscalls/internal.h"
 
 char *makeUnixPath(const char *os2path, APIRET *err)
