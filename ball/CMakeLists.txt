@@ -70,6 +70,7 @@ set(TWOINE_BALL_SOURCES
     guest_environment.c
     manifest.c
     paths.c
+    settings.c
     snapshot.c
     platform.c
     vendor/cjson/cJSON.c

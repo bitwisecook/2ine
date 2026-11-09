@@ -6,4 +6,7 @@
 
 const char *runtime_effective_backend(TbBall *c, const char *build, const char *requested,
                                       int saved);
+/* The effective-runtime and effective-backend actions. */
+cJSON *launch_effective_runtime(TbBall *c, const cJSON *request);
+cJSON *launch_effective_backend(TbBall *c, const cJSON *request);
 #endif

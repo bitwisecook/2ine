@@ -157,6 +157,13 @@ int tb_ball_array_strings(TbBall *c, const cJSON *array);
 int tb_ball_save_manifest(TbBall *c);
 int tb_ball_load(TbBall *c, const cJSON *request);
 int tb_ball_create(TbBall *c, const char *path);
+/* Balls in the default library, $XDG_DATA_HOME/2ine/ball. */
+cJSON *tb_ball_discover(TbBall *c);
+
+/* Settings outside the commands. */
+int tb_ball_set_working_directory(TbBall *c, const char *path);
+/* A NULL build forgets the runtime reference. */
+int tb_ball_set_runtime_build(TbBall *c, const char *build);
 
 /* Drive table: folder, image and device roots. */
 int tb_ball_roots(TbBall *c);
@@ -196,6 +203,9 @@ cJSON *configuration_write(TbBall *c, const cJSON *request);
 cJSON *configuration_file_read(TbBall *c, const cJSON *request);
 cJSON *configuration_file_write(TbBall *c, const cJSON *request);
 cJSON *configuration_files(TbBall *c, const cJSON *request);
+/* CONFIG.SYS as UTF-8, and its revision-checked replacement. */
+cJSON *tb_ball_config_sys(TbBall *c);
+int tb_ball_save_config_sys(TbBall *c, const cJSON *request);
 
 /* Packages: export, import and rename. */
 cJSON *tb_ball_export(TbBall *c, const cJSON *request);

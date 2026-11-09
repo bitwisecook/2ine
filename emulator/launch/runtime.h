@@ -8,4 +8,7 @@ const char *runtime_loader_name(TbBall *c, const char *build);
 char **runtime_names(const char *build, size_t *count);
 char *runtime_id(TbBall *c, const char *build);
 int runtime_sync(TbBall *c, const char *build, const char *directory);
+/* The runtime-files and sync-runtime actions. */
+cJSON *runtime_files(TbBall *c, const cJSON *request);
+cJSON *runtime_sync_request(TbBall *c, const cJSON *request);
 #endif

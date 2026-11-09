@@ -959,3 +959,39 @@ cJSON *configuration_files(TbBall *c, const cJSON *request)
     cJSON_Delete(aliases);
     return out;
 }
+
+cJSON *tb_ball_config_sys(TbBall *c)
+{
+    size_t n = 0;
+    char *bytes =
+        tb_ball_read_file(c, tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS"), &n, 1);
+    return bytes ? cJSON_CreateString(tb_ball_latin1_to_utf8(c, bytes, n)) : NULL;
+}
+
+int tb_ball_save_config_sys(TbBall *c, const cJSON *request)
+{
+    const char *expected = field(request, "expected"), *text = field(request, "text");
+    if (!expected || !text)
+    {
+        tb_ball_fail(c, "Expected and edited CONFIG.SYS text are required");
+        return 0;
+    }
+    char *path = tb_ball_join(c, c->roots[TB_BALL_DRIVE_C], "CONFIG.SYS");
+    size_t n = 0;
+    char *bytes = tb_ball_read_file(c, path, &n, 1);
+    if (!bytes)
+        return 0;
+    char *current = tb_ball_latin1_to_utf8(c, bytes, n);
+    if (!current || strcmp(expected, current))
+    {
+        tb_ball_fail(c, "CONFIG.SYS changed on disk. Reload it before saving your edits.");
+        return 0;
+    }
+    char *edited = tb_ball_utf8_to_latin1(c, text, &n);
+    if (!edited || !tb_atomic_write(path, edited, n))
+    {
+        tb_ball_fail(c, "Cannot save CONFIG.SYS");
+        return 0;
+    }
+    return 1;
+}

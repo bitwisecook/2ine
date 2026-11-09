@@ -84,3 +84,32 @@ int tb_ball_create(TbBall *c, const char *path)
         return tb_ball_fail(c, "Cannot initialize ball");
     return tb_ball_regenerate(c);
 }
+
+cJSON *tb_ball_discover(TbBall *c)
+{
+    const char *xdg = getenv("XDG_DATA_HOME");
+    char *home = tb_home();
+    if (!home)
+    {
+        tb_ball_fail(c, errno == ENOMEM ? "Out of memory" : "Home directory is unavailable");
+        return NULL;
+    }
+    home = tb_ball_keep(c, home);
+    if (!home)
+        return NULL;
+    char *base = xdg && *xdg ? tb_ball_keep(c, strdup(xdg)) : tb_ball_join(c, home, ".local/share");
+    char *directory = tb_ball_join(c, base, "2ine/ball");
+    cJSON *list = cJSON_CreateArray();
+    size_t n = 0;
+    char **names = tb_names(directory, &n);
+    if (n > 1)
+        qsort(names, n, sizeof(*names), compare_names);
+    for (size_t i = 0; i < n; i++)
+    {
+        char *path = tb_ball_join(c, directory, names[i]);
+        if (tb_is_file(tb_ball_join(c, path, "ball.json")))
+            cJSON_AddItemToArray(list, cJSON_CreateString(path));
+    }
+    tb_names_free(names, n);
+    return list;
+}

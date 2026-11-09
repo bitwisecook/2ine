@@ -5,6 +5,7 @@ add_library(
     twoine_environment
     OBJECT
     audio.c
+    install_records.c
     wps_sync.c
     components/operations.c
     components/search_paths.c

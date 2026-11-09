@@ -6,6 +6,7 @@
 add_library(
     twoine_launch
     OBJECT
+    argv.c
     audio_config.c
     dependencies.c
     desktop_identity.c

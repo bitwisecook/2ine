@@ -74,3 +74,27 @@ const char *runtime_effective_backend(TbBall *c, const char *build, const char *
     }
     return tb_ball_keep(c, strdup(requested));
 }
+
+cJSON *launch_effective_runtime(TbBall *c, const cJSON *request)
+{
+    const char *candidates[] = {field(request, "path"), field(request, "build")};
+    for (unsigned i = 0; i < 2; i++)
+        if (candidates[i] && *candidates[i] && native_host_path(candidates[i]) &&
+            (tb_host_executable(tb_ball_join(c, candidates[i], "lx_loader")) ||
+             tb_host_executable(tb_ball_join(c, candidates[i], "lx_loader.exe"))))
+            return cJSON_CreateString(candidates[i]);
+    tb_ball_fail(c, "No compatible host runtime is available. Choose a runtime for this computer.");
+    return NULL;
+}
+
+cJSON *launch_effective_backend(TbBall *c, const cJSON *request)
+{
+    const char *build = field(request, "build");
+    if (!build || !*build)
+    {
+        tb_ball_fail(c, "A receiving host runtime is required");
+        return NULL;
+    }
+    const char *backend = runtime_effective_backend(c, build, field(request, "path"), 1);
+    return backend ? cJSON_CreateString(backend) : NULL;
+}

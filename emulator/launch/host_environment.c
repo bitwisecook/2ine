@@ -129,3 +129,20 @@ failed:
     cJSON_Delete(env);
     return NULL;
 }
+
+cJSON *launch_unset_environment(void)
+{
+    cJSON *v = cJSON_CreateArray();
+    for (int i = 0; launch_unset_environment_keys[i]; i++)
+        cJSON_AddItemToArray(v, cJSON_CreateString(launch_unset_environment_keys[i]));
+    return v;
+}
+
+cJSON *launch_environment(TbBall *c, const cJSON *request)
+{
+    const char *b = field(request, "build");
+    char *build = tb_ball_resolve_path(c, b && *b ? b : ".", 0);
+    return build ? launch_host_environment(c, build, field(request, "backend"),
+                                           get(c->application, "environment"))
+                 : NULL;
+}

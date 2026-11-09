@@ -100,3 +100,31 @@ int runtime_sync(TbBall *c, const char *build, const char *directory)
     tb_names_free(names, n);
     return ok;
 }
+
+cJSON *runtime_files(TbBall *c, const cJSON *request)
+{
+    const char *build = field(request, "build");
+    if (!build)
+    {
+        tb_ball_fail(c, "A build directory is required");
+        return NULL;
+    }
+    size_t n = 0;
+    char **names = runtime_names(build, &n);
+    cJSON *v = cJSON_CreateArray();
+    for (size_t i = 0; i < n; i++)
+        cJSON_AddItemToArray(v, cJSON_CreateString(tb_ball_join(c, build, names[i])));
+    tb_names_free(names, n);
+    return v;
+}
+
+cJSON *runtime_sync_request(TbBall *c, const cJSON *request)
+{
+    const char *build = field(request, "build"), *destination = field(request, "directory");
+    if (!build || !destination)
+    {
+        tb_ball_fail(c, "Build and destination are required");
+        return NULL;
+    }
+    return runtime_sync(c, build, destination) ? cJSON_CreateBool(1) : NULL;
+}
