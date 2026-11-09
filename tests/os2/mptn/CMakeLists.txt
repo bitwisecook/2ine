@@ -1,0 +1,15 @@
+# Public domain. No rights reserved. Wholly AI-authored.
+# TCP/IP: OS/2 socket layouts and the legacy socket DLLs.
+if(TARGET twoine_runtime)
+    add_executable(twoine_network_tests test_network.c)
+    target_link_libraries(twoine_network_tests PRIVATE twoine_os2_network_host twoine_runtime)
+    add_test(NAME host_network COMMAND twoine_network_tests)
+    set_tests_properties(host_network PROPERTIES TIMEOUT 20)
+endif()
+if(TARGET so32dll)
+    add_executable(twoine_legacy_socket_tests test_legacy_socket.c)
+    twoine_application_target(twoine_legacy_socket_tests)
+    target_link_libraries(twoine_legacy_socket_tests PRIVATE so32dll tcp32dll tcpip32 2ine)
+    add_test(NAME legacy_socket COMMAND twoine_legacy_socket_tests)
+    set_tests_properties(legacy_socket PROPERTIES TIMEOUT 20)
+endif()

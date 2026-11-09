@@ -78,7 +78,7 @@ def main():
             "gnome_native.py",
         ):
             run(
-                [sys.executable, ROOT / "tests/integration" / test, "--build", runtime],
+                [sys.executable, ROOT / "tests/integration/apps/gnome" / test, "--build", runtime],
                 env=environment,
             )
         print(f"{args.package.name}: relocated ELF closure and GTK/LX workflows passed")
