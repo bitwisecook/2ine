@@ -8,12 +8,14 @@
 #include "os2/include/pmshl.h"
 #include "os2/include/private/pmp.h"
 #include "os2/ps/pmmerge/pmwin/open32_post.h"
+#include "os2/ps/pmmerge/pmwin/internal.h"
 static void open32Shutdown(void);
 #define LX_NATIVE_MODULE_SHUTDOWN() open32Shutdown()
 #include "os2/ps/awe/generated/pmwinx-lx.h"
 
 static uint32 references;
-static ULONG command_line;
+/* The calling thread created its anchor block and queue for Open32 and destroys them. */
+static _Thread_local BOOL owns_context;
 
 static void open32Shutdown(void)
 {
@@ -41,7 +43,7 @@ static void open32Shutdown(void)
     open32TlsCleanup();
     open32ContextCleanup();
     open32MemoryCleanup();
-    command_line = 0;
+    open32SystemCleanup();
     references = 0;
 }
 
@@ -82,23 +84,6 @@ VOID WinTerminateOpen32(ULONG reserved)
     }
 }
 
-LONG MulDiv(LONG number, LONG numerator, LONG denominator)
-{
-    if (!denominator)
-        return -1;
-    int64_t product = (int64_t)number * numerator;
-    const int negative = (product < 0) != (denominator < 0);
-    if (product < 0)
-        product = -product;
-    int64_t divisor = denominator;
-    if (divisor < 0)
-        divisor = -divisor;
-    int64_t result = (product + divisor / 2) / divisor;
-    if (negative)
-        result = -result;
-    return result < INT32_MIN || result > INT32_MAX ? -1 : (LONG)result;
-}
-
 LONG WinCallWinMain(LONG argc, PSZ *argv, PFNWINMAIN entry, LONG show)
 {
     TRACE_NATIVE("WinCallWinMain(%d, %p, %p, %d)", (int)argc, argv, entry, (int)show);
@@ -126,95 +111,31 @@ LONG WinCallWinMain(LONG argc, PSZ *argv, PFNWINMAIN entry, LONG show)
     return entry(UINT32_MAX, 0, command, show);
 }
 
-ULONG GetTickCount(void)
+ULONG open32Presentation(void)
 {
-    /* GetMessageTime and native PM packets use this same millisecond clock. */
-    return (ULONG)lx_host_video_ticks_ms();
-}
-
-static _Thread_local ULONG last_error;
-
-void open32SetError(ULONG error)
-{
-    TRACE_NATIVE("Open32 error %u", error);
-    last_error = error;
-}
-
-ULONG GetLastError(void)
-{
-    return last_error;
-}
-
-VOID SetLastError(ULONG error)
-{
-    last_error = error;
-}
-
-VOID Sleep(ULONG milliseconds)
-{
-    lx_host_sleep_ms(milliseconds);
-}
-
-ULONG GetUserDefaultLCID(void)
-{
-    /* The current NLS provider exposes United States country and English locale. */
-    return 0x0409;
-}
-
-ULONG GetOEMCP(void)
-{
-    /* The NLS provider currently exposes CP437 as the process OEM code page. */
-    return 437;
-}
-
-ULONG GetACP(void)
-{
-    /* Windows code-page identifier for the ANSI encoding exposed by GetLocaleInfo. */
-    return 1252;
-}
-
-ULONG timeGetTime(void)
-{
-    return GetTickCount();
-}
-
-ULONG GetCurrentTime(void)
-{
-    return GetTickCount();
-}
-
-ULONG GetVersion(void)
-{
-    /* Open32 reports Windows NT 3.51, with the major version in the low byte. */
-    return 0x00003303;
-}
-
-ULONG GetCommandLine(void)
-{
-    ULONG result = __atomic_load_n(&command_line, __ATOMIC_ACQUIRE);
-    if (result)
-        return result;
-    const char *program = GProcessState.pib.command;
-    const char *tail = program ? program + strlen(program) + 1 : "";
-    if (!program)
-        program = "";
-    size_t length = strlen(program) + strlen(tail) + 4;
-    if (length > UINT32_MAX)
-        return 0;
-    ULONG address = LocalAlloc(0, (ULONG)length);
-    if (!address)
-        return 0;
-    char *text = lx_execution_memory(GProcessState.execution, address, length,
-                                     LX_GUEST_READ | LX_GUEST_WRITE);
-    if (!text)
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    if (!anchor)
     {
-        LocalFree(address);
-        return 0;
+        if (!WinInitialize(0))
+            return 0;
+        owns_context = TRUE;
+        anchor = lxHostThreadState()->anchor_block;
     }
-    snprintf(text, length, "\"%s\"%s%s", program, *tail ? " " : "", tail);
-    if (__atomic_compare_exchange_n(&command_line, &result, address, 0, __ATOMIC_RELEASE,
-                                    __ATOMIC_ACQUIRE))
-        return address;
-    LocalFree(address);
-    return result;
+    if (!anchor->message_queue.hmq && !WinCreateMsgQueue(anchor->hab, 0))
+        return 0;
+    open32RegisterThreadQueue();
+    return anchor->hab;
+}
+
+void open32ContextCleanup(void)
+{
+    AnchorBlock *anchor = lxHostThreadState()->anchor_block;
+    open32UnregisterThreadQueue();
+    if (owns_context && anchor)
+    {
+        if (anchor->message_queue.hmq)
+            WinDestroyMsgQueue(anchor->message_queue.hmq);
+        WinTerminate(anchor->hab);
+    }
+    owns_context = FALSE;
 }

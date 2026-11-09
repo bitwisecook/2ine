@@ -332,3 +332,9 @@ ULONG GlobalFlags(ULONG handle)
 {
     return LocalFlags(handle) & 0xC1FF;
 }
+
+VOID ZeroMemory(PVOID output, ULONG count)
+{
+    if (count)
+        memset(output, 0, count);
+}

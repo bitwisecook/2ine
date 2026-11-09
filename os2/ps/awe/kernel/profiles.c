@@ -118,3 +118,34 @@ BOOL WritePrivateProfileString(PSZ section, PSZ key, PSZ value, PSZ filename)
     free(normalized);
     return result;
 }
+
+ULONG GetPrivateProfileInt(PSZ section, PSZ key, LONG fallback, PSZ filename)
+{
+    char text[64], *end;
+    if (!section || !key || !filename)
+    {
+        open32SetError(87);
+        return (ULONG)fallback;
+    }
+    if (!GetPrivateProfileString(section, key, "", text, sizeof text, filename))
+        return (ULONG)fallback;
+    long value = strtol(text, &end, 0);
+    return end == text ? 0 : (ULONG)value;
+}
+
+BOOL WriteProfileString(PSZ section, PSZ key, PSZ value)
+{
+    if (!section)
+        return !key && !value;
+    size_t size = strlen(section) + 6;
+    char *app = malloc(size);
+    if (!app)
+    {
+        open32SetError(8);
+        return FALSE;
+    }
+    snprintf(app, size, "WINI_%s", section);
+    BOOL result = PrfWriteProfileString(HINI_USERPROFILE, app, key, value);
+    free(app);
+    return result;
+}

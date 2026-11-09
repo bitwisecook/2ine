@@ -165,3 +165,84 @@ USHORT GetUserDefaultLangID(void)
 {
     return (USHORT)GetUserDefaultLCID();
 }
+
+BOOL GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count, PVOID output)
+{
+    (void)locale; /* Input is single-byte text, and its classes do not vary by locale here. */
+    if (!input || !output || count == 0 || count < -1 || count > 1024 * 1024 ||
+        (kind != 1 && kind != 2 && kind != 4))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    if (count == -1)
+        count = (LONG)strlen(input) + 1;
+    uint8 *wide = malloc((size_t)count * 2);
+    if (!wide)
+    {
+        open32SetError(8);
+        return FALSE;
+    }
+    if (!MultiByteToWideChar(0, 0, input, count, wide, count))
+    {
+        free(wide);
+        return FALSE;
+    }
+    for (LONG i = 0; i < count; i++)
+    {
+        ULONG c = lx_guest_load_u16(wide + i * 2);
+        BOOL upper = (c >= 'A' && c <= 'Z') || (c >= 0xC0 && c <= 0xDE && c != 0xD7) ||
+                     c == 0x178 || c == 0x152 || c == 0x160 || c == 0x17D;
+        BOOL lower = (c >= 'a' && c <= 'z') || (c >= 0xDF && c <= 0xFF && c != 0xF7) ||
+                     c == 0x153 || c == 0x161 || c == 0x17E || c == 0x192;
+        BOOL alpha = upper || lower || c == 0xAA || c == 0xBA || c == 0xB5;
+        BOOL digit = c >= '0' && c <= '9', control = c < 32 || (c >= 0x7F && c < 0xA0);
+        BOOL space = (c >= 9 && c <= 13) || c == 32 || c == 0xA0;
+        BOOL blank = c == 9 || c == 32 || c == 0xA0;
+        BOOL defined = c != 0xFFFD;
+        USHORT value = 0;
+        if (kind == 1)
+            value = (upper ? 1 : 0) | (lower ? 2 : 0) | (digit ? 4 : 0) | (space ? 8 : 0) |
+                    (!alpha && !digit && !space && !control && defined ? 0x10 : 0) |
+                    (control ? 0x20 : 0) | (blank ? 0x40 : 0) |
+                    (digit || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f') ? 0x80 : 0) |
+                    (alpha ? 0x100 : 0) | (defined ? 0x200 : 0);
+        else if (kind == 2)
+            value = alpha                                               ? 1
+                    : digit                                             ? 3
+                    : c == '\r' || c == '\n'                            ? 8
+                    : c == '\t'                                         ? 9
+                    : space                                             ? 10
+                    : c == '+' || c == '-'                              ? 4
+                    : c == '$' || c == 0xA3 || c == 0xA5 || c == 0x20AC ? 5
+                    : c == ',' || c == '.' || c == ':'                  ? 7
+                                                                        : 11;
+        else
+            value =
+                (alpha ? 0x8000 : 0) |
+                (c == 0xA8 || c == 0xAF || c == 0xB4 || c == 0xB8 || c == 0x2C6 || c == 0x2DC ? 2
+                                                                                              : 0) |
+                (!alpha && !digit && !space && !control ? 8 : 0);
+        lx_guest_store_u16((uint8 *)output + i * 2, value);
+    }
+    free(wide);
+    return TRUE;
+}
+
+ULONG GetUserDefaultLCID(void)
+{
+    /* The current NLS provider exposes United States country and English locale. */
+    return 0x0409;
+}
+
+ULONG GetOEMCP(void)
+{
+    /* The NLS provider currently exposes CP437 as the process OEM code page. */
+    return 437;
+}
+
+ULONG GetACP(void)
+{
+    /* Windows code-page identifier for the ANSI encoding exposed by GetLocaleInfo. */
+    return 1252;
+}

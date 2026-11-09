@@ -259,3 +259,17 @@ BOOL GetVolumeInformation(PSZ root, PSZ label, ULONG label_capacity, PULONG seri
         *flags = 2; /* FILE_CASE_PRESERVED_NAMES: the virtual DOS volume preserves spelling. */
     return TRUE;
 }
+
+ULONG GetSystemDirectory(PSZ output, ULONG capacity)
+{
+    char path[260];
+    ULONG length = GetWindowsDirectory(path, sizeof path);
+    if (!output || !length || length >= sizeof path - 8)
+        return 0;
+    memcpy(path + length, "\\SYSTEM", 8);
+    length += 7;
+    if (capacity <= length)
+        return length + 1;
+    memcpy(output, path, length + 1);
+    return length;
+}

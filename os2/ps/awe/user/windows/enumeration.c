@@ -75,3 +75,15 @@ BOOL EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
     free(snapshot.handles);
     return result;
 }
+
+ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
+{
+    if (!open32FindWindow(window) || !WinIsWindow(open32Presentation(), window))
+    {
+        open32SetError(1400);
+        return 0;
+    }
+    if (process)
+        lx_guest_store_u32(process, GetCurrentProcessId());
+    return GetCurrentThreadId();
+}

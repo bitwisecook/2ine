@@ -255,3 +255,55 @@ LONG lstrcmp(ULONG first, ULONG second)
     free(b);
     return result;
 }
+
+static ULONG character_type(ULONG character)
+{
+    if (character > 255)
+        return 0;
+    char byte = (char)character;
+    uint8 flags[2];
+    return GetStringTypeEx(0x409, 1, &byte, 1, flags) ? lx_guest_load_u16(flags) : 0;
+}
+
+BOOL IsCharUpper(ULONG character)
+{
+    return (character_type(character) & 1) != 0;
+}
+
+BOOL IsCharAlpha(ULONG character)
+{
+    return (character_type(character) & 0x100) != 0;
+}
+
+BOOL IsCharAlphaNumeric(ULONG character)
+{
+    return (character_type(character) & 0x104) != 0;
+}
+
+LONG lstrcmp2(PSZ first, PSZ second)
+{
+    if (!first || !second)
+    {
+        open32SetError(87);
+        return 0;
+    }
+    /* Both operands are compared as UTF-16 units from the OEM code page. */
+    ULONG page = GetOEMCP();
+    LONG a = MultiByteToWideChar(page, 1, first, -1, NULL, 0);
+    LONG b = MultiByteToWideChar(page, 1, second, -1, NULL, 0);
+    uint8 *left = a > 0 ? malloc((size_t)a * 2) : NULL;
+    uint8 *right = b > 0 ? malloc((size_t)b * 2) : NULL;
+    LONG result = 0;
+    if (!left || !right || !MultiByteToWideChar(page, 1, first, -1, left, a) ||
+        !MultiByteToWideChar(page, 1, second, -1, right, b))
+        open32SetError(8);
+    else
+        for (LONG i = 0; i < a && i < b && !result; i++)
+        {
+            USHORT x = lx_guest_load_u16(left + i * 2), y = lx_guest_load_u16(right + i * 2);
+            result = x < y ? -1 : x > y;
+        }
+    free(left);
+    free(right);
+    return result;
+}

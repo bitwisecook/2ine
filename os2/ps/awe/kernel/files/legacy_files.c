@@ -208,3 +208,46 @@ BOOL CloseHandle(ULONG handle)
             return TRUE;
     return _lclose(handle) == 0;
 }
+
+LONG _lopen(PSZ path, LONG flags)
+{
+    typedef APIRET(OS2API * Fn)(PSZ, PULONG, PULONG, ULONG, ULONG, ULONG, ULONG, PVOID);
+    Fn call = (Fn)open32DosService("DosOpen");
+    ULONG handle = 0, action = 0;
+    ULONG error = !path || (flags & ~0x73) || (flags & 3) == 3 ? 87
+                  : !call                                      ? 120
+                          : call(path, &handle, &action, 0, 0, 1,
+                                 (flags & 0x73) | ((flags & 0x70) ? 0 : 0x40), NULL);
+    if (error)
+        open32SetError(error);
+    return error ? -1 : (LONG)handle;
+}
+
+LONG _lcreat(PSZ path, LONG attributes)
+{
+    typedef APIRET(OS2API * Fn)(PSZ, PULONG, PULONG, ULONG, ULONG, ULONG, ULONG, PVOID);
+    Fn call = (Fn)open32DosService("DosOpen");
+    ULONG handle = 0, action = 0;
+    /* Read-only creation selects read access; others are exclusive read/write. */
+    ULONG mode = attributes & 1 ? 0 : 0x12;
+    ULONG error = !path   ? 87
+                  : !call ? 120
+                          : call(path, &handle, &action, 0, attributes & 7, 0x12, mode, NULL);
+    if (error)
+        open32SetError(error);
+    return error ? -1 : (LONG)handle;
+}
+
+ULONG SetHandleCount(ULONG count)
+{
+    typedef APIRET(OS2API * Fn)(PLONG, PULONG);
+    Fn call = (Fn)open32DosService("DosSetRelMaxFH");
+    LONG delta = 0;
+    ULONG current = 0;
+    if (!call)
+        return 0;
+    call(&delta, &current);
+    delta = (LONG)(count - current);
+    call(&delta, &count);
+    return count;
+}

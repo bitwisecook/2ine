@@ -40,6 +40,7 @@ void open32TlsCleanup(void);
 void open32IconsCleanup(void);
 ULONG open32Presentation(void);
 void open32ContextCleanup(void);
+void open32SystemCleanup(void);
 void open32DdeCleanup(void);
 void open32DdeSetError(ULONG id, ULONG error);
 /* Runs DDE work queued for the calling thread. A thread packet carrying

@@ -497,3 +497,20 @@ BOOL GetOpenFileName(PVOID address)
     TRACE_NATIVE("GetOpenFileName(%p)", address);
     return common_dialog(address, FALSE);
 }
+
+SHORT GetFileTitle(PSZ path, PSZ output, USHORT capacity)
+{
+    if (!path || !output)
+        return -1;
+    const char *name = path;
+    for (const char *p = path; *p; p++)
+        if (*p == '\\' || *p == '/' || *p == ':')
+            name = p + 1;
+    size_t length = strlen(name) + 1;
+    if (!*name || strpbrk(name, "*?"))
+        return -1;
+    if (length > capacity)
+        return (SHORT)(length > INT16_MAX ? INT16_MAX : length);
+    memcpy(output, name, length);
+    return 0;
+}

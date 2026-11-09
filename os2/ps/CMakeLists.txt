@@ -109,6 +109,8 @@ twoine_os2_dll(
     awe/module.c
     awe/kernel/critical_sections.c
     awe/kernel/environment.c
+    awe/kernel/files/file_operations.c
+    awe/kernel/system.c
     awe/kernel/events_mutexes.c
     awe/kernel/files/directories.c
     awe/kernel/files/file_handles.c

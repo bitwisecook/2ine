@@ -26,3 +26,30 @@ BOOL IsBadCodePtr(ULONG procedure)
 {
     return !open32ValidProcedure(procedure);
 }
+
+BOOL IsBadHugeReadPtr(PVOID pointer, ULONG size)
+{
+    return IsBadReadPtr(pointer, size);
+}
+
+BOOL IsBadHugeWritePtr(PVOID pointer, ULONG size)
+{
+    return IsBadWritePtr(pointer, size);
+}
+
+BOOL IsBadStringPtr(ULONG address, ULONG maximum)
+{
+    for (ULONG i = 0; i < maximum; i++)
+    {
+        uint8 byte;
+        if (address > UINT32_MAX - i ||
+            !lx_execution_read(GProcessState.execution, address + i, &byte, 1))
+        {
+            open32SetError(5);
+            return TRUE;
+        }
+        if (!byte)
+            return FALSE;
+    }
+    return FALSE;
+}

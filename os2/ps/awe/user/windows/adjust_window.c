@@ -60,3 +60,8 @@ BOOL AdjustWindowRectEx(PVOID rectangle, ULONG style, BOOL menu, ULONG extended_
     memcpy(rectangle, edges, sizeof edges);
     return TRUE;
 }
+
+BOOL AdjustWindowRect(PVOID rectangle, ULONG style, BOOL menu)
+{
+    return AdjustWindowRectEx(rectangle, style, menu, 0);
+}

@@ -939,3 +939,13 @@ ULONG ShellExecute(ULONG window, PSZ operation, PSZ file, PSZ parameters, PSZ di
     free(path);
     return result;
 }
+
+ULONG GetCurrentProcessId(void)
+{
+    return GProcessState.pib.process_id;
+}
+
+ULONG GetCurrentProcess(void)
+{
+    return UINT32_MAX;
+}

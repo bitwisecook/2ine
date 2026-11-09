@@ -155,3 +155,49 @@ BOOL FileTimeToSystemTime(PVOID input, PVOID output)
         lx_guest_store_u16((uint8 *)output + i * 2, fields[i]);
     return TRUE;
 }
+
+LONG CompareFileTime(PVOID first, PVOID second)
+{
+    if (!first || !second)
+    {
+        open32SetError(87);
+        return -1;
+    }
+    ULONG ah = lx_guest_load_u32((uint8 *)first + 4), bh = lx_guest_load_u32((uint8 *)second + 4);
+    ULONG al = lx_guest_load_u32(first), bl = lx_guest_load_u32(second);
+    return ah != bh ? (ah > bh ? 1 : -1) : al != bl ? (al > bl ? 1 : -1) : 0;
+}
+
+BOOL DosDateTimeToFileTime(USHORT date, USHORT time, PVOID output)
+{
+    uint8 fields[16] = {0};
+    lx_guest_store_u16(fields, 1980 + (date >> 9));
+    lx_guest_store_u16(fields + 2, (date >> 5) & 15);
+    lx_guest_store_u16(fields + 6, date & 31);
+    lx_guest_store_u16(fields + 8, time >> 11);
+    lx_guest_store_u16(fields + 10, (time >> 5) & 63);
+    lx_guest_store_u16(fields + 12, (time & 31) * 2);
+    return SystemTimeToFileTime(fields, output);
+}
+
+BOOL FileTimeToDosDateTime(PVOID input, PVOID date, PVOID time)
+{
+    uint8 fields[16];
+    if (!date || !time || !FileTimeToSystemTime(input, fields))
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    ULONG year = lx_guest_load_u16(fields);
+    if (year < 1980 || year > 2107)
+    {
+        open32SetError(87);
+        return FALSE;
+    }
+    lx_guest_store_u16(date, ((year - 1980) << 9) | (lx_guest_load_u16(fields + 2) << 5) |
+                                 lx_guest_load_u16(fields + 6));
+    lx_guest_store_u16(time, (lx_guest_load_u16(fields + 8) << 11) |
+                                 (lx_guest_load_u16(fields + 10) << 5) |
+                                 (lx_guest_load_u16(fields + 12) / 2));
+    return TRUE;
+}

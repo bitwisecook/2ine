@@ -112,28 +112,6 @@ BOOL BringWindowToTop(ULONG window)
     return TRUE;
 }
 
-ULONG GetCurrentProcessId(void)
-{
-    return GProcessState.pib.process_id;
-}
-
-ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
-{
-    if (!open32FindWindow(window) || !WinIsWindow(open32Presentation(), window))
-    {
-        open32SetError(1400);
-        return 0;
-    }
-    if (process)
-        lx_guest_store_u32(process, GetCurrentProcessId());
-    return GetCurrentThreadId();
-}
-
-ULONG GetCurrentProcess(void)
-{
-    return UINT32_MAX;
-}
-
 BOOL SetForegroundWindow(ULONG handle)
 {
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), handle))
