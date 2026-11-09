@@ -5,6 +5,10 @@
 #include "environment/components/store.h"
 #include "environment/dependencies/audit.h"
 
+#define DATABASE_SIZE_LIMIT (32u * 1024u * 1024u)
+/* Longest relative parent folder a database entry may name. */
+#define DATABASE_PARENT_LIMIT 128u
+
 static cJSON *dependency_database_from_report(TbBall *c, const cJSON *report)
 {
     if (!cJSON_IsArray(get(report, "binaries")) || !cJSON_IsArray(get(report, "imports")))
@@ -74,7 +78,7 @@ static cJSON *dependency_database_json(TbBall *c, const char *path)
 {
     uint64_t length = 0;
     int64_t modified = 0;
-    if (!tb_path_info(path, &length, &modified) || !length || length > 32u * 1024u * 1024u)
+    if (!tb_path_info(path, &length, &modified) || !length || length > DATABASE_SIZE_LIMIT)
         return NULL;
     size_t size = 0;
     char *bytes = tb_ball_read_file(c, path, &size, 1);
@@ -103,7 +107,8 @@ cJSON *dependency_database_load(TbBall *c)
             at = strstr(at + 1, "/dependency-audit-");
         }
     }
-    if (parent && !strstr(parent, "..") && !strchr(parent, '\\') && strlen(parent) < 128 &&
+    if (parent && !strstr(parent, "..") && !strchr(parent, '\\') &&
+        strlen(parent) < DATABASE_PARENT_LIMIT &&
         !strcmp(strrchr(parent, '/') ? strrchr(parent, '/') : "", "/audit.json"))
     {
         cJSON *report =

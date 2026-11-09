@@ -22,6 +22,16 @@
 #include <io.h>
 #endif
 #define DEPENDENCY_ROUND_LIMIT 16u
+/* OS/2 module names: at most 255 printable, non-blank ASCII characters. */
+#define DEPENDENCY_MODULE_NAME_LIMIT 255u
+/* Report folders take a three-digit suffix within one second. */
+#define DEPENDENCY_REPORT_SLOTS 1000u
+#define DEPENDENCY_REPORT_SIZE_LIMIT (32 * 1024 * 1024)
+
+enum
+{
+    DEPENDENCY_HASH_BLOCK_SIZE = 65536
+};
 
 static int dependency_read_at(FILE *file, uint64_t length, uint64_t offset, void *output,
                               size_t count)
@@ -33,9 +43,9 @@ static int dependency_read_at(FILE *file, uint64_t length, uint64_t offset, void
 char *dependency_module(TbBall *c, const char *name)
 {
     size_t length = strlen(name);
-    if (length > 4 && equal_case(name + length - 4, ".dll"))
-        length -= 4;
-    if (!length || length > 255)
+    if (length > strlen(".dll") && equal_case(name + length - strlen(".dll"), ".dll"))
+        length -= strlen(".dll");
+    if (!length || length > DEPENDENCY_MODULE_NAME_LIMIT)
         return NULL;
     char *module = tb_ball_keep(c, malloc(length + 1));
     if (!module)
@@ -43,7 +53,7 @@ char *dependency_module(TbBall *c, const char *name)
     for (size_t i = 0; i < length; i++)
     {
         unsigned ch = (unsigned char)name[i];
-        if (ch < 33 || ch > 126 || strchr("/\\:;*?", (int)ch))
+        if (ch < '!' || ch > '~' || strchr("/\\:;*?", (int)ch))
             return NULL;
         module[i] = (char)toupper(ch);
     }
@@ -702,7 +712,7 @@ static char *dependency_media_fingerprint(TbBall *c, const char *source)
 #endif
     SHA256_CTX state;
     sha256_init(&state);
-    unsigned char block[65536], digest[32];
+    unsigned char block[DEPENDENCY_HASH_BLOCK_SIZE], digest[TB_BALL_DIGEST_SIZE];
     size_t amount = size < (int64_t)sizeof block ? (size_t)size : sizeof block;
     if (ok)
         ok = dependency_read_at(file, (uint64_t)size, 0, block, amount);
@@ -725,7 +735,7 @@ static char *dependency_media_fingerprint(TbBall *c, const char *source)
 static char *dependency_cache_path(TbBall *c, const char *source, const char *variant)
 {
     SHA256_CTX state;
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     sha256_init(&state);
     sha256_update(&state, (const BYTE *)source, strlen(source));
     sha256_final(&state, digest);
@@ -769,8 +779,9 @@ static cJSON *dependency_cached_media(TbBall *c, const char *source, const char 
             char *name = path ? dependency_basename(c, path) : NULL;
             const cJSON *priority = get(file, "priority");
             if (!path || !member || !name || !equal_case(name, module->string) || !priority ||
-                !cJSON_IsNumber(priority) || priority->valuedouble < 0 ||
-                priority->valuedouble > 3 || !root || strncmp(member, root, strlen(root)))
+                !cJSON_IsNumber(priority) || priority->valuedouble < EXTRACT_PRIORITY_BOOT_DISK ||
+                priority->valuedouble > EXTRACT_PRIORITY_INSTALLED_LAYOUT || !root ||
+                strncmp(member, root, strlen(root)))
             {
                 valid = 0;
                 break;
@@ -1139,7 +1150,7 @@ static void dependency_recovery(TbBall *c, cJSON *binaries, cJSON *index, cJSON 
             const char *guest = field(item, "path");
             char *host = tb_ball_host_path(c, guest, 0);
             cJSON *recovered = cJSON_Duplicate(item, 1);
-            unsigned char digest[32];
+            unsigned char digest[TB_BALL_DIGEST_SIZE];
             if (host && tb_ball_digest_file(c, host, digest))
             {
                 put(recovered, "sha256", cJSON_CreateString(tb_ball_hex(c, digest)));
@@ -1200,7 +1211,7 @@ cJSON *dependency_audit_latest(TbBall *c)
         return NULL;
     int64_t size = 0;
     int mode = 0;
-    if (!tb_file_info(file, &size, &mode) || size <= 0 || size > 32 * 1024 * 1024)
+    if (!tb_file_info(file, &size, &mode) || size <= 0 || size > DEPENDENCY_REPORT_SIZE_LIMIT)
     {
         fclose(file);
         return NULL;
@@ -1299,7 +1310,7 @@ static void dependency_save_report(TbBall *c, cJSON *report)
     cJSON *errors = get(report, "errors");
     char *logs = tb_ball_join(c, c->ball, "logs"), *directory = NULL;
     if (logs && tb_mkdirs(logs))
-        for (unsigned number = 0; number < 1000; number++)
+        for (unsigned number = 0; number < DEPENDENCY_REPORT_SLOTS; number++)
         {
             char *candidate = tb_ball_format(c, "%s/dependency-audit-%lld-%03u", logs,
                                              (long long)time(NULL), number);

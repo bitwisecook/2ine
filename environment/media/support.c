@@ -8,6 +8,34 @@
 #include "formats/executable/os2_executable.h"
 #include "third_party/sha256/sha256.h"
 
+/* Positions in os2_support_names that are NE/LX executables or DLLs; the
+   rest are SYSLEVEL.OS2 and MKMSGF message files. */
+enum
+{
+    SUPPORT_CMD = 0,
+    SUPPORT_SYSLEVEL = 1,
+    SUPPORT_FIRST_REXX_DLL = 3,
+    SUPPORT_LAST_REXX_DLL = 6,
+    SUPPORT_FIRST_REXX_PROGRAM = 9,
+};
+
+#define SYSLEVEL_SIGNATURE "\xff\xffSYSLEVEL"
+#define SYSLEVEL_SIGNATURE_SIZE 10
+#define MESSAGE_FILE_SIGNATURE "\xffMKMSGF"
+#define MESSAGE_FILE_SIGNATURE_SIZE 7
+
+/* Support files are small; a larger file is not the original. */
+enum
+{
+    SUPPORT_FILE_SIZE_LIMIT = 16 * 1024 * 1024
+};
+
+/* Bounds a media search the user pointed at too large a folder. */
+enum
+{
+    SUPPORT_SEARCH_ENTRY_LIMIT = 100000
+};
+
 const char *os2_support_names[] = {"CMD.EXE",     "SYSLEVEL.OS2", "OSO001.MSG",   "REXX.DLL",
                                    "REXXAPI.DLL", "REXXUTIL.DLL", "REXXINIT.DLL", "REX.MSG",
                                    "REXH.MSG",    "RXQUEUE.EXE",  "RXSUBCOM.EXE"};
@@ -251,7 +279,7 @@ int os2_support_read(TbBall *c, const char *source, int index, SupportFile *file
     int ok = !fseek(input, 0, SEEK_END);
     long size = ok ? ftell(input) : -1;
     rewind(input);
-    if (size <= 0 || size > 16 * 1024 * 1024)
+    if (size <= 0 || size > SUPPORT_FILE_SIZE_LIMIT)
     {
         fclose(input);
         return tb_ball_fail(c, "Invalid support file size: %s", os2_support_names[index]);
@@ -265,11 +293,16 @@ int os2_support_read(TbBall *c, const char *source, int index, SupportFile *file
         return tb_ball_fail(c, "Cannot read %s", os2_support_names[index]);
     }
     TbExecutable exe;
-    int valid = index == 0 || (index >= 3 && index <= 6) || index >= 9
-                    ? tb_executable_open_memory(&exe, data, (size_t)size) && exe.dos_stub &&
-                          (exe.format == TB_EXECUTABLE_NE || exe.format == TB_EXECUTABLE_LX)
-                : index == 1 ? size >= 10 && !memcmp(data, "\xff\xffSYSLEVEL", 10)
-                             : size >= 8 && !memcmp(data, "\xffMKMSGF", 7);
+    int valid =
+        index == SUPPORT_CMD ||
+                (index >= SUPPORT_FIRST_REXX_DLL && index <= SUPPORT_LAST_REXX_DLL) ||
+                index >= SUPPORT_FIRST_REXX_PROGRAM
+            ? tb_executable_open_memory(&exe, data, (size_t)size) && exe.dos_stub &&
+                  (exe.format == TB_EXECUTABLE_NE || exe.format == TB_EXECUTABLE_LX)
+        : index == SUPPORT_SYSLEVEL
+            ? size >= SYSLEVEL_SIGNATURE_SIZE &&
+                  !memcmp(data, SYSLEVEL_SIGNATURE, SYSLEVEL_SIGNATURE_SIZE)
+            : size >= 8 && !memcmp(data, MESSAGE_FILE_SIGNATURE, MESSAGE_FILE_SIGNATURE_SIZE);
     if (!valid)
     {
         free(data);
@@ -307,7 +340,7 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
     {
         if (component_cancelled(c))
             break;
-        if (++visited > 100000u)
+        if (++visited > SUPPORT_SEARCH_ENTRY_LIMIT)
         {
             tb_ball_fail(
                 c,
@@ -463,7 +496,7 @@ cJSON *import_os2_support(TbBall *c, const cJSON *request)
             free(label);
             cJSON_AddItemToArray(imported, entry);
             SHA256_CTX hash;
-            unsigned char digest[32];
+            unsigned char digest[TB_BALL_DIGEST_SIZE];
             sha256_init(&hash);
             sha256_update(&hash, files[i].data, files[i].size);
             sha256_final(&hash, digest);

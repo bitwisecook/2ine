@@ -6,6 +6,12 @@
 #include "environment/dependencies/audit.h"
 #include "third_party/sha256/sha256.h"
 
+/* Freshness tokens hash small configuration files only. */
+enum
+{
+    FRESHNESS_TOKEN_FILE_LIMIT = 1024 * 1024
+};
+
 static void dependency_token_text(SHA256_CTX *state, const char *text)
 {
     const char *value = text ? text : "";
@@ -101,7 +107,8 @@ static int dependency_token_contents(TbBall *c, SHA256_CTX *state, const char *p
     dependency_token_text(state, path);
     uint64_t length = 0;
     int64_t modified = 0;
-    if (tb_is_file(path) && (!tb_path_info(path, &length, &modified) || length > 1024 * 1024))
+    if (tb_is_file(path) &&
+        (!tb_path_info(path, &length, &modified) || length > FRESHNESS_TOKEN_FILE_LIMIT))
         return 0;
     size_t size = 0;
     char *bytes = tb_ball_read_file(c, path, &size, 1);
@@ -123,7 +130,7 @@ char *dependency_fingerprint(TbBall *parent, const cJSON *sources, const char *b
     storage.error = NULL;
     TbBall *c = &storage;
     SHA256_CTX state;
-    unsigned char digest[32];
+    unsigned char digest[TB_BALL_DIGEST_SIZE];
     sha256_init(&state);
     dependency_token_text(&state, "2ine-installed-dependencies-v3");
     unsigned visited = 0, binaries = 0;

@@ -5,9 +5,29 @@
 #include "storage/volume.h"
 #include "third_party/sha256/sha256.h"
 
+/* Component and job tokens become file names. */
+enum
+{
+    COMPONENT_TOKEN_LIMIT = 64
+};
+
+/* Progress keeps only the most recent completed paths. */
+enum
+{
+    COMPONENT_COMPLETED_PATHS_LIMIT = 256
+};
+
+/* "C:\" and at least one name character. */
+enum
+{
+    COMPONENT_GUEST_PATH_MIN = TB_GUEST_ROOT_LENGTH + 1
+};
+
+#define COMPONENT_GUEST_PATH_LIMIT 32768u
+
 int component_token(const char *token)
 {
-    if (!token || !*token || strlen(token) > 64)
+    if (!token || !*token || strlen(token) > COMPONENT_TOKEN_LIMIT)
         return 0;
     for (const unsigned char *at = (const unsigned char *)token; *at; at++)
         if (!((*at >= 'A' && *at <= 'Z') || (*at >= 'a' && *at <= 'z') ||
@@ -197,7 +217,7 @@ int component_journal(TbBall *c, cJSON *entry)
     else
         put(job->ledger, key, cJSON_Duplicate(entry, 1));
     cJSON *completed = get(job->progress, "completedPaths");
-    if (cJSON_GetArraySize(completed) == 256)
+    if (cJSON_GetArraySize(completed) == COMPONENT_COMPLETED_PATHS_LIMIT)
     {
         cJSON_DeleteItemFromArray(completed, 0);
         put(job->progress, "completedPathsTruncated", cJSON_CreateTrue());
@@ -260,7 +280,7 @@ int component_begin(TbBall *c, const cJSON *request, const char *kind)
         if (!workspace)
             return tb_ball_fail(c, "Cannot create component operation ID");
         SHA256_CTX hash;
-        unsigned char digest[32];
+        unsigned char digest[TB_BALL_DIGEST_SIZE];
         sha256_init(&hash);
         sha256_update(&hash, (const unsigned char *)workspace, strlen(workspace));
         sha256_final(&hash, digest);
@@ -365,9 +385,9 @@ void component_finish(TbBall *c, cJSON *result)
    Missing regular paths are allowed; mapped/external drives and cache internals are not. */
 char *component_private_path(TbBall *c, const char *guest)
 {
-    if (!guest || strlen(guest) < 4 || strlen(guest) > 32768 ||
-        toupper((unsigned char)guest[0]) != 'C' || guest[1] != ':' ||
-        (guest[2] != '\\' && guest[2] != '/') || !c->roots[TB_BALL_DRIVE_C] ||
+    if (!guest || strlen(guest) < COMPONENT_GUEST_PATH_MIN ||
+        strlen(guest) > COMPONENT_GUEST_PATH_LIMIT || toupper((unsigned char)guest[0]) != 'C' ||
+        guest[1] != ':' || (guest[2] != '\\' && guest[2] != '/') || !c->roots[TB_BALL_DRIVE_C] ||
         !tb_ball_inside(c->roots[TB_BALL_DRIVE_C], c->ball) ||
         tb_image_path(c->roots[TB_BALL_DRIVE_C]) || tb_is_link(c->roots[TB_BALL_DRIVE_C]))
     {
@@ -375,7 +395,7 @@ char *component_private_path(TbBall *c, const char *guest)
         return NULL;
     }
     char *key = component_key(c, guest);
-    if (!strncmp(key, "C:\\OS2\\DLL\\2INE\\", 16) || equal_case(key, "C:\\OS2\\DLL\\2INE"))
+    if (has_prefix(key, "C:\\OS2\\DLL\\2INE\\") || equal_case(key, "C:\\OS2\\DLL\\2INE"))
     {
         tb_ball_fail(c, "Runtime cache files cannot be managed as OS/2 components");
         return NULL;

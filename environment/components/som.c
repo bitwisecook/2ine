@@ -39,6 +39,12 @@ int os2_som_complete(TbBall *c)
     return 1;
 }
 
+/* The launch plan starts at most this many startup programs. */
+enum
+{
+    SOM_STARTUP_PROGRAM_LIMIT = 16
+};
+
 int os2_som_provision(TbBall *c, int *changed)
 {
     if (changed)
@@ -57,7 +63,7 @@ int os2_som_provision(TbBall *c, int *changed)
         if (program && equal_case(program, "C:\\OS2\\SOMDD.EXE"))
             return 1;
     }
-    if (cJSON_GetArraySize(programs) >= 16)
+    if (cJSON_GetArraySize(programs) >= SOM_STARTUP_PROGRAM_LIMIT)
         return tb_ball_fail(c, "Cannot configure DSOM: the ball already has 16 startup programs");
     cJSON *effective = tb_ball_guest_environment(c, NULL);
     if (!effective)
