@@ -110,6 +110,14 @@ extern "C"
 
     /* INCL_GPIPATHS */
 
+    enum
+    {
+        FPATH_ALTERNATE = 0,
+        FPATH_WINDING = 2,
+        FPATH_INCL = 0,
+        FPATH_EXCL = 8
+    };
+
     OS2EXPORT BOOL OS2API GpiBeginPath(HPS a0, LONG a1);
 
     OS2EXPORT BOOL OS2API GpiCloseFigure(HPS a0);
@@ -152,6 +160,28 @@ extern "C"
                                               PULONG a5);
 
     /* INCL_GPIBITMAPS */
+
+    enum
+    {
+        ROP_SRCCOPY = 0x00cc,
+        ROP_SRCPAINT = 0x00ee,
+        ROP_SRCAND = 0x0088,
+        ROP_SRCINVERT = 0x0066,
+        ROP_SRCERASE = 0x0044,
+        ROP_NOTSRCCOPY = 0x0033,
+        ROP_NOTSRCERASE = 0x0011,
+        ROP_MERGECOPY = 0x00c0,
+        ROP_MERGEPAINT = 0x00bb,
+        ROP_PATCOPY = 0x00f0,
+        ROP_PATPAINT = 0x00fb,
+        ROP_PATINVERT = 0x005a,
+        ROP_DSTINVERT = 0x0055,
+        ROP_ZERO = 0x0000,
+        ROP_ONE = 0x00ff,
+        BBO_OR = 0,
+        BBO_AND = 1,
+        BBO_IGNORE = 2
+    };
 
     OS2EXPORT LONG OS2API GpiSetBitmapBits(HPS ps, LONG start, LONG scans, PVOID bits, PVOID info);
 
@@ -215,6 +245,44 @@ extern "C"
         CLR_DARKCYAN = 13,
         CLR_BROWN = 14,
         CLR_PALEGRAY = 15
+    };
+
+    enum
+    {
+        FM_DEFAULT = 0,
+        FM_OR = 1,
+        FM_OVERPAINT = 2,
+        FM_XOR = 4,
+        FM_LEAVEALONE = 5,
+        FM_AND = 6,
+        FM_SUBTRACT = 7,
+        FM_MASKSRCNOT = 8,
+        FM_ZERO = 9,
+        FM_NOTMERGESRC = 10,
+        FM_NOTXORSRC = 11,
+        FM_INVERT = 12,
+        FM_MERGESRCNOT = 13,
+        FM_NOTCOPYSRC = 14,
+        FM_MERGENOTSRC = 15,
+        FM_NOTMASKSRC = 16,
+        FM_ONE = 17,
+        BM_DEFAULT = 0,
+        BM_OVERPAINT = 2,
+        BM_LEAVEALONE = 5,
+        BM_SRCTRANSPARENT = 18,
+        BM_DESTTRANSPARENT = 19,
+        LINETYPE_SOLID = 7,
+        LINETYPE_INVISIBLE = 8,
+        PATSYM_DEFAULT = 0,
+        PATSYM_NOSHADE = 15,
+        PATSYM_SOLID = 16,
+        PATSYM_BLANK = 64,
+        BA_NOBOUNDARY = 0,
+        BA_BOUNDARY = 1,
+        BA_ALTERNATE = 0,
+        BA_WINDING = 2,
+        BA_INCL = 0,
+        BA_EXCL = 8
     };
 
     typedef struct

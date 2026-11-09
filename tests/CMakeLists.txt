@@ -319,6 +319,14 @@ if(TARGET pmmerge)
         presentation_manager
         PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
     )
+    add_executable(twoine_pm_raster_tests os2/test_pm_raster.c)
+    twoine_application_target(twoine_pm_raster_tests)
+    target_link_libraries(twoine_pm_raster_tests PRIVATE pmwinx pmgpi pmmerge 2ine)
+    add_test(NAME pm_raster COMMAND twoine_pm_raster_tests)
+    set_tests_properties(
+        pm_raster
+        PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software"
+    )
     add_executable(twoine_help_font_tests os2/test_help_fonts.c)
     twoine_application_target(twoine_help_font_tests)
     target_link_libraries(twoine_help_font_tests PRIVATE pmgpi pmmerge 2ine)
