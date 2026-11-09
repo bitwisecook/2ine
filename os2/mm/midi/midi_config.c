@@ -6,6 +6,12 @@
 #include <string.h>
 #include <stdio.h>
 
+enum
+{
+    /* audio.conf holds a few key=value lines; a larger file is not read. */
+    CONFIG_FILE_LIMIT = 16384
+};
+
 static char *config_path(void)
 {
     const char *selected = getenv("TWOINE_AUDIO_CONFIG");
@@ -39,7 +45,7 @@ char *lx_midi_config_value(const char *key)
         return NULL;
     size_t size;
     LxHostFsError error;
-    char *text = lx_host_file_snapshot(path, 16384, &size, &error);
+    char *text = lx_host_file_snapshot(path, CONFIG_FILE_LIMIT, &size, &error);
     free(path);
     if (!text)
         return NULL;

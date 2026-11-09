@@ -7,8 +7,11 @@
 enum
 {
     /* MIDI key 69 is A4 (440 Hz); twelve keys per octave. */
-    MIDI_KEY_A4 = 69
+    MIDI_KEY_A4 = 69,
+    KEYS_PER_OCTAVE = 12
 };
+
+static const double A4_HZ = 440.0;
 
 static const double tau = 6.283185307179586;
 /* Per-voice gain, low enough that a chord does not clip. */
@@ -18,7 +21,7 @@ void lx_midi_oscillator_event(LxMidiOscillator *oscillator, unsigned status, uns
                               unsigned value)
 {
     LxMidiOscillatorVoice *voices = oscillator->voices;
-    unsigned type = status & 0xf0, channel = status & 15;
+    unsigned type = status & MIDI_STATUS_TYPE_MASK, channel = status & MIDI_CHANNEL_MASK;
     if (type == MIDI_CONTROL_CHANGE && (key == MIDI_ALL_SOUND_OFF || key == MIDI_ALL_NOTES_OFF))
     {
         for (unsigned i = 0; i < MIDI_OSCILLATOR_VOICES; i++)
@@ -37,8 +40,9 @@ void lx_midi_oscillator_event(LxMidiOscillator *oscillator, unsigned status, uns
         for (i = 0; i < MIDI_OSCILLATOR_VOICES - 1 && voices[i].level; i++)
         {
         }
-        voices[i] = (LxMidiOscillatorVoice){
-            .channel = (unsigned char)channel, .key = (unsigned char)key, .level = value / 127.0f};
+        voices[i] = (LxMidiOscillatorVoice){.channel = (unsigned char)channel,
+                                            .key = (unsigned char)key,
+                                            .level = value / (float)MIDI_DATA_MAX};
     }
 }
 
@@ -52,7 +56,8 @@ void lx_midi_oscillator_render_stereo(LxMidiOscillator *oscillator, float *sampl
             if (oscillator->voices[v].level)
             {
                 LxMidiOscillatorVoice *voice = &oscillator->voices[v];
-                double hz = 440.0 * pow(2.0, ((int)voice->key - MIDI_KEY_A4) / 12.0);
+                double hz =
+                    A4_HZ * pow(2.0, ((int)voice->key - MIDI_KEY_A4) / (double)KEYS_PER_OCTAVE);
                 value += (float)sin(voice->phase) * voice->level * voice_gain;
                 voice->phase += tau * hz / rate;
                 if (voice->phase > tau)

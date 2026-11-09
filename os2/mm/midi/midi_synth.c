@@ -3,6 +3,7 @@
 #include "os2/mm/midi/midi_synth.h"
 #include "os2/mm/midi/midi_mt32.h"
 #include "os2/mm/midi/midi_config.h"
+#include "os2/mm/midi/midi_messages.h"
 #if TWOINE_MIDI_EXTENDED
 #include "os2/mm/midi/midi_banks.h"
 #endif
@@ -21,6 +22,28 @@
 #pragma GCC visibility pop
 #endif
 #endif
+enum
+{
+    /* Rate the synthesizers are created at; a render at another rate retunes them. */
+    SYNTH_INITIAL_RATE = 48000,
+    SYNTH_RATE_MIN = 4000,
+    SYNTH_RATE_MAX = 192000,
+    /* Stereo frames rendered per TinySoundFont call. */
+    RENDER_BLOCK_FRAMES = 256,
+    /* Frames rendered and discarded after a reset so that released voices die away. */
+    RESET_FLUSH_FRAMES = 2048,
+    /* SoundFont bank 128 holds the percussion kits. */
+    SOUNDFONT_PERCUSSION_BANK = 128,
+    SOUNDFONT_MAX_VOICES = 256,
+    /* F0 7E <device> 09 <01-03> F7: GM System On, GM System Off or GM2 System On. */
+    GM_SYSTEM_MESSAGE_SIZE = 6,
+    GM_SYSTEM_ON = 1,
+    GM2_SYSTEM_ON = 3
+};
+
+/* TinySoundFont output gain, leaving headroom for dense passages. */
+static const float SOUNDFONT_GAIN_DB = -6.0f;
+
 struct LxMidiSynth
 {
 #if TWOINE_MIDI_SYNTH
@@ -94,10 +117,11 @@ int lx_midi_synth_reset(LxMidiSynth *synth)
 #endif
 #if TWOINE_MIDI_SYNTH
     tsf_reset(synth->font);
-    float discarded[4096];
-    tsf_render_float(synth->font, discarded, 2048, 0);
-    for (unsigned channel = 0; channel < 16; channel++)
-        if (!tsf_channel_set_presetnumber(synth->font, channel, 0, channel == 9))
+    float discarded[RESET_FLUSH_FRAMES * 2];
+    tsf_render_float(synth->font, discarded, RESET_FLUSH_FRAMES, 0);
+    for (unsigned channel = 0; channel < MIDI_CHANNELS; channel++)
+        if (!tsf_channel_set_presetnumber(synth->font, channel, 0,
+                                          channel == MIDI_PERCUSSION_CHANNEL))
             return 0;
     return 1;
 #else
@@ -122,7 +146,7 @@ LxMidiSynth *lx_midi_synth_create(void)
     LxMidiSynth *synth = calloc(1, sizeof *synth);
     if (!synth)
         return NULL;
-    synth->rate = 48000;
+    synth->rate = SYNTH_INITIAL_RATE;
     if (mt32)
     {
         synth->mt32 = lx_midi_mt32_create(synth->rate);
@@ -178,20 +202,21 @@ LxMidiSynth *lx_midi_synth_create(void)
         free(synth);
         return NULL;
     }
-    for (unsigned program = 0; program < 128; program++)
+    for (unsigned program = 0; program < MIDI_PROGRAMS; program++)
         if (tsf_get_presetindex(synth->font, 0, program) < 0)
         {
             fprintf(stderr, "2ine: SoundFont lacks General MIDI program %u.\n", program);
             lx_midi_synth_destroy(synth);
             return NULL;
         }
-    if (tsf_get_presetindex(synth->font, 128, 0) < 0 || !tsf_set_max_voices(synth->font, 256))
+    if (tsf_get_presetindex(synth->font, SOUNDFONT_PERCUSSION_BANK, 0) < 0 ||
+        !tsf_set_max_voices(synth->font, SOUNDFONT_MAX_VOICES))
     {
         fprintf(stderr, "2ine: SoundFont percussion or synthesis resources unavailable.\n");
         lx_midi_synth_destroy(synth);
         return NULL;
     }
-    tsf_set_output(synth->font, TSF_STEREO_INTERLEAVED, synth->rate, -6.0f);
+    tsf_set_output(synth->font, TSF_STEREO_INTERLEAVED, synth->rate, SOUNDFONT_GAIN_DB);
     if (!lx_midi_synth_reset(synth))
     {
         lx_midi_synth_destroy(synth);
@@ -222,7 +247,8 @@ void lx_midi_synth_destroy(LxMidiSynth *synth)
 
 void lx_midi_synth_event(LxMidiSynth *synth, unsigned status, unsigned key, unsigned value)
 {
-    if (!synth || status < 0x80 || status >= 0xf0 || key > 127 || value > 127)
+    if (!synth || status < MIDI_STATUS_BIT || status >= MIDI_SYSEX || key > MIDI_DATA_MAX ||
+        value > MIDI_DATA_MAX)
         return;
     if (synth->mt32)
     {
@@ -237,23 +263,24 @@ void lx_midi_synth_event(LxMidiSynth *synth, unsigned status, unsigned key, unsi
         return;
     }
 #endif
-    unsigned channel = status & 15;
-    switch (status & 0xf0)
+    unsigned channel = status & MIDI_CHANNEL_MASK;
+    switch (status & MIDI_STATUS_TYPE_MASK)
     {
-        case 0x80:
+        case MIDI_NOTE_OFF:
             tsf_channel_note_off(synth->font, channel, key);
             break;
-        case 0x90:
-            tsf_channel_note_on(synth->font, channel, key, value / 127.0f);
+        case MIDI_NOTE_ON:
+            tsf_channel_note_on(synth->font, channel, key, value / (float)MIDI_DATA_MAX);
             break;
-        case 0xb0:
+        case MIDI_CONTROL_CHANGE:
             tsf_channel_midi_control(synth->font, channel, key, value);
             break;
-        case 0xc0:
-            tsf_channel_set_presetnumber(synth->font, channel, key, channel == 9);
+        case MIDI_PROGRAM_CHANGE:
+            tsf_channel_set_presetnumber(synth->font, channel, key,
+                                         channel == MIDI_PERCUSSION_CHANNEL);
             break;
-        case 0xe0:
-            tsf_channel_set_pitchwheel(synth->font, channel, key | value << 7);
+        case MIDI_PITCH_BEND:
+            tsf_channel_set_pitchwheel(synth->font, channel, key | value << MIDI_DATA_BITS);
             break;
     }
 #endif
@@ -261,7 +288,8 @@ void lx_midi_synth_event(LxMidiSynth *synth, unsigned status, unsigned key, unsi
 
 void lx_midi_synth_sysex(LxMidiSynth *synth, const unsigned char *message, size_t length)
 {
-    if (!synth || !message || length < 2 || message[0] != 0xf0 || message[length - 1] != 0xf7)
+    if (!synth || !message || length < 2 || message[0] != MIDI_SYSEX ||
+        message[length - 1] != MIDI_SYSEX_END)
         return;
     if (synth->mt32)
     {
@@ -275,14 +303,17 @@ void lx_midi_synth_sysex(LxMidiSynth *synth, const unsigned char *message, size_
         return;
     }
 #endif
-    if (length == 6 && message[1] == 0x7e && message[3] == 9 && message[4] >= 1 && message[4] <= 3)
+    if (length == GM_SYSTEM_MESSAGE_SIZE && message[1] == MIDI_SYSEX_UNIVERSAL_NON_REAL_TIME &&
+        message[3] == MIDI_SYSEX_GENERAL_MIDI && message[4] >= GM_SYSTEM_ON &&
+        message[4] <= GM2_SYSTEM_ON)
         lx_midi_synth_reset(synth);
 }
 
 static void render(LxMidiSynth *synth, float *samples, unsigned count, unsigned rate, float volume,
                    int channels)
 {
-    if (!synth || !samples || !count || rate < 4000 || rate > 192000 || !isfinite(volume))
+    if (!synth || !samples || !count || rate < SYNTH_RATE_MIN || rate > SYNTH_RATE_MAX ||
+        !isfinite(volume))
         return;
     if (synth->mt32)
     {
@@ -306,14 +337,14 @@ static void render(LxMidiSynth *synth, float *samples, unsigned count, unsigned 
     if (rate != synth->rate)
     {
         synth->rate = rate;
-        tsf_set_output(synth->font, TSF_STEREO_INTERLEAVED, rate, -6.0f);
+        tsf_set_output(synth->font, TSF_STEREO_INTERLEAVED, rate, SOUNDFONT_GAIN_DB);
     }
-    float rendered[512];
+    float rendered[RENDER_BLOCK_FRAMES * 2];
     for (unsigned offset = 0; offset < count;)
     {
         unsigned block = count - offset;
-        if (block > 256)
-            block = 256;
+        if (block > RENDER_BLOCK_FRAMES)
+            block = RENDER_BLOCK_FRAMES;
         tsf_render_float(synth->font, rendered, (int)block, 0);
         for (unsigned i = 0; i < block; i++)
             if (channels == 1)

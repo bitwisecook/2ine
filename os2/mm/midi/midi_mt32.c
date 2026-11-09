@@ -2,6 +2,7 @@
 /* Native Roland MT-32 emulation through Munt's stable C interface. */
 #include "os2/mm/midi/midi_mt32.h"
 #include "os2/mm/midi/midi_config.h"
+#include "os2/mm/midi/midi_messages.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -9,6 +10,17 @@
 #include <string.h>
 #if TWOINE_MT32_SYNTH
 #include <mt32emu/mt32emu.h>
+
+enum
+{
+    MT32_RATE_MIN = 4000,
+    MT32_RATE_MAX = 192000,
+    /* Stereo frames rendered per Munt call. */
+    RENDER_BLOCK_FRAMES = 256,
+    /* Munt packs a short message as status, then the first and second data bytes. */
+    SHORT_MESSAGE_KEY_SHIFT = 8,
+    SHORT_MESSAGE_VALUE_SHIFT = 16
+};
 
 struct LxMidiMt32
 {
@@ -61,7 +73,7 @@ LxMidiMt32 *lx_midi_mt32_create(unsigned rate)
         free(pcm);
         return NULL;
     }
-    if (rate < 4000 || rate > 192000)
+    if (rate < MT32_RATE_MIN || rate > MT32_RATE_MAX)
     {
         free(control);
         free(pcm);
@@ -108,16 +120,18 @@ LxMidiMt32 *lx_midi_mt32_create(unsigned rate)
 
 int lx_midi_mt32_event(LxMidiMt32 *synth, unsigned status, unsigned key, unsigned value)
 {
-    if (!synth || status < 0x80 || status >= 0xf0 || key > 127 || value > 127)
+    if (!synth || status < MIDI_STATUS_BIT || status >= MIDI_SYSEX || key > MIDI_DATA_MAX ||
+        value > MIDI_DATA_MAX)
         return 0;
-    mt32emu_play_msg_now(synth->context, status | key << 8 | value << 16);
+    mt32emu_play_msg_now(synth->context, status | key << SHORT_MESSAGE_KEY_SHIFT |
+                                             value << SHORT_MESSAGE_VALUE_SHIFT);
     return 1;
 }
 
 int lx_midi_mt32_sysex(LxMidiMt32 *synth, const unsigned char *message, size_t length)
 {
-    if (!synth || !message || length < 2 || length > UINT32_MAX || message[0] != 0xf0 ||
-        message[length - 1] != 0xf7)
+    if (!synth || !message || length < 2 || length > UINT32_MAX || message[0] != MIDI_SYSEX ||
+        message[length - 1] != MIDI_SYSEX_END)
         return 0;
     mt32emu_play_sysex_now(synth->context, message, (mt32emu_bit32u)length);
     return 1;
@@ -127,12 +141,12 @@ static void render(LxMidiMt32 *synth, float *samples, unsigned count, float volu
 {
     if (!synth || !samples || !isfinite(volume))
         return;
-    float stereo[512];
+    float stereo[RENDER_BLOCK_FRAMES * 2];
     for (unsigned offset = 0; offset < count;)
     {
         unsigned frames = count - offset;
-        if (frames > 256)
-            frames = 256;
+        if (frames > RENDER_BLOCK_FRAMES)
+            frames = RENDER_BLOCK_FRAMES;
         mt32emu_render_float(synth->context, stereo, frames);
         for (unsigned i = 0; i < frames; i++)
             if (channels == 1)
