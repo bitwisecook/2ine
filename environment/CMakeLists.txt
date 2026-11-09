@@ -22,7 +22,10 @@ add_library(
 )
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH TWOINE_ENVIRONMENT_PROJECT_ROOT)
 target_include_directories(twoine_environment PRIVATE "${TWOINE_ENVIRONMENT_PROJECT_ROOT}")
-target_link_libraries(twoine_environment PRIVATE twoine_formats_host twoine_storage)
+target_link_libraries(
+    twoine_environment
+    PRIVATE twoine_formats_host twoine_os2_config_host twoine_storage
+)
 target_compile_features(twoine_environment PRIVATE c_std_11)
 target_compile_definitions(twoine_environment PRIVATE CJSON_HIDE_SYMBOLS)
 set_target_properties(

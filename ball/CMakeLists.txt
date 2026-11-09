@@ -47,6 +47,9 @@ file(
 if(NOT TARGET twoine_formats_host)
     add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/formats" formats)
 endif()
+if(NOT TARGET twoine_os2_config_host)
+    add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/os2/config" os2_config)
+endif()
 if(NOT TARGET twoine_storage)
     add_subdirectory("${TWOINE_BALL_PROJECT_ROOT}/storage" storage)
 endif()
@@ -81,7 +84,12 @@ set(TWOINE_BALL_SOURCES
 add_library(twoine_ball SHARED ${TWOINE_BALL_SOURCES})
 target_link_libraries(
     twoine_ball
-    PRIVATE twoine_formats_host twoine_storage LibArchive::LibArchive ZLIB::ZLIB
+    PRIVATE
+        twoine_formats_host
+        twoine_os2_config_host
+        twoine_storage
+        LibArchive::LibArchive
+        ZLIB::ZLIB
 )
 target_include_directories(twoine_ball PUBLIC include PRIVATE "${TWOINE_BALL_PROJECT_ROOT}")
 target_compile_features(twoine_ball PRIVATE c_std_11)
@@ -104,6 +112,7 @@ add_library(
     STATIC
     ${TWOINE_BALL_SOURCES}
     $<TARGET_OBJECTS:twoine_formats_host>
+    $<TARGET_OBJECTS:twoine_os2_config_host>
     $<TARGET_OBJECTS:twoine_storage>
 )
 target_link_libraries(twoine_ball_static PUBLIC LibArchive::LibArchive ZLIB::ZLIB)

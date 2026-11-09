@@ -1,5 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-#include "formats/profile/os2_ini.h"
+#include "os2/config/os2_ini.h"
 #include "formats/endian.h"
 #include <stdlib.h>
 #include <string.h>

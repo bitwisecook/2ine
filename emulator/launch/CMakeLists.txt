@@ -23,7 +23,10 @@ add_library(
 cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH TWOINE_LAUNCH_EMULATOR)
 cmake_path(GET TWOINE_LAUNCH_EMULATOR PARENT_PATH TWOINE_LAUNCH_PROJECT_ROOT)
 target_include_directories(twoine_launch PRIVATE "${TWOINE_LAUNCH_PROJECT_ROOT}")
-target_link_libraries(twoine_launch PRIVATE twoine_formats_host twoine_storage)
+target_link_libraries(
+    twoine_launch
+    PRIVATE twoine_formats_host twoine_os2_config_host twoine_storage
+)
 target_compile_features(twoine_launch PRIVATE c_std_11)
 target_compile_definitions(twoine_launch PRIVATE CJSON_HIDE_SYMBOLS)
 set_target_properties(

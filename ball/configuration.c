@@ -2,7 +2,7 @@
 /* Binary-safe profile inspection and revision-checked value replacement. */
 #include "ball/ball_internal.h"
 #include "formats/endian.h"
-#include "formats/profile/os2_ini.h"
+#include "os2/config/os2_ini.h"
 #include "ball/vendor/sha256/sha256.h"
 #include <time.h>
 #define TB_PROFILE_LIMIT (32u * 1024u * 1024u)

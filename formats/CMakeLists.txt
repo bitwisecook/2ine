@@ -10,7 +10,6 @@ function(twoine_add_formats target)
         "${_formats}/encoding/base64.c"
         "${_formats}/executable/lx_exepack.c"
         "${_formats}/executable/os2_executable.c"
-        "${_formats}/profile/os2_ini.c"
         "${_formats}/resources/icon_bitmap.c"
         "${_formats}/resources/icon_executable.c"
     )

@@ -3,7 +3,7 @@
 #include "ball/store.h"
 #include "environment/wps_sync.h"
 #include "formats/endian.h"
-#include "formats/profile/os2_ini.h"
+#include "os2/config/os2_ini.h"
 #include "formats/resources/icon.h"
 #include "ball/vendor/sha256/sha256.h"
 #define TB_WPS_PROFILE_LIMIT (8u * 1024u * 1024u)

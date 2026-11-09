@@ -75,8 +75,11 @@ LAYERED_INCLUDES = {
 
 # os2/ follows IBM's component build trees. include/ holds the Toolkit-shaped
 # public headers and include/private/ the DDK-style private companions.
+# config/ is not an IBM tree: it holds the codecs for the files OS/2 keeps its
+# configuration in, shared by the DLLs and the ball's configuration editor.
 OS2_GROUPS = {
     "include",
+    "config",
     "baseos",
     "ps",
     "wpsh",
@@ -114,7 +117,13 @@ OS2_PARTIAL_FORWARDERS = {
     "os2/ps/awe/pmwinx.def": (r"REG(?!ISTER)[A-Z]*", "REGISTRY"),
 }
 # Static helper code shared by several DLLs of one group, outside any DLL.
-OS2_SHARED = ("os2/ps/common/", "os2/mm/midi/", "os2/mm/video/decode/", "os2/mptn/common/")
+OS2_SHARED = (
+    "os2/config/",
+    "os2/ps/common/",
+    "os2/mm/midi/",
+    "os2/mm/video/decode/",
+    "os2/mptn/common/",
+)
 # Internal headers one DLL may take from another DLL's directory, with the
 # number of such includes; a count change fails. None remain: internals that
 # several DLLs share are declared in os2/include/private/ (pmp.h, pmwinp.h,

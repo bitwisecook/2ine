@@ -55,6 +55,9 @@ let package = Package(
             cSettings: [.unsafeFlags(["-I", projectRoot]), .define("TB_MEDIA_TIME_CACHE")],
             linkerSettings: [.linkedLibrary("archive"), .linkedLibrary("z")]),
         .target(
+            name: "TwoineOS2Config", path: "Sources/TwoineOS2Config", exclude: ["CMakeLists.txt"],
+            cSettings: [.unsafeFlags(["-I", projectRoot])]),
+        .target(
             name: "TwoineEnvironment", dependencies: ["TwoineFormats", "TwoineStorage"],
             path: "Sources/TwoineEnvironment", exclude: ["CMakeLists.txt"],
             cSettings: [.unsafeFlags(["-I", projectRoot]), .define("CJSON_HIDE_SYMBOLS")]),
@@ -64,7 +67,10 @@ let package = Package(
             cSettings: [.unsafeFlags(["-I", projectRoot]), .define("CJSON_HIDE_SYMBOLS")]),
         .target(
             name: "BallEngine",
-            dependencies: ["TwoineFormats", "TwoineStorage", "TwoineEnvironment", "TwoineLaunch"],
+            dependencies: [
+                "TwoineFormats", "TwoineOS2Config", "TwoineStorage", "TwoineEnvironment",
+                "TwoineLaunch",
+            ],
             path: "Sources/BallEngine",
             exclude: [
                 "CMakeLists.txt", "cli.c", "vendor/cjson/LICENSE", "vendor/sha256/README.md",
