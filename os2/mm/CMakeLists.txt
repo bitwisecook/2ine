@@ -11,6 +11,7 @@ add_library(
     midi/midi_config.c
     midi/midi_mt32.c
     midi/midi_sequence.c
+    midi/midi_oscillator.c
 )
 twoine_application_target(twoine_os2_midi)
 set_target_properties(twoine_os2_midi PROPERTIES POSITION_INDEPENDENT_CODE ON)

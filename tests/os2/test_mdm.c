@@ -1,10 +1,12 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
-/* PCM completion, memory-file MIDI ownership and invalid-device contracts. */
+/* PCM completion, memory-file MIDI ownership, the fallback oscillator and invalid-device
+   contracts. */
 #include "os2/include/private/export.h"
 #include "os2/include/mmioos2.h"
 #include "os2/include/os2me.h"
 #include "os2/include/private/os2mep.h"
 #include "os2/mm/midi/midi_sequence.h"
+#include "os2/mm/midi/midi_oscillator.h"
 #include "host/clock.h"
 #include <math.h>
 #include <errno.h>
@@ -177,9 +179,40 @@ static void check_stereo_capture(const char *path)
         frames, different, left, right, peak_left, peak_right);
 }
 
+static float oscillator_peak(LxMidiOscillator *oscillator, float *left_minus_right)
+{
+    float samples[2 * 512] = {0}, peak = 0;
+    lx_midi_oscillator_render_stereo(oscillator, samples, 512, 48000, 0.5f);
+    *left_minus_right = 0;
+    for (unsigned i = 0; i < 512; i++)
+    {
+        if (fabsf(samples[2 * i]) > peak)
+            peak = fabsf(samples[2 * i]);
+        *left_minus_right += fabsf(samples[2 * i] - samples[2 * i + 1]);
+    }
+    return peak;
+}
+
+/* Note on sounds, note off and all-notes-off silence only their channel. */
+static void oscillator_contracts(void)
+{
+    LxMidiOscillator oscillator = {0};
+    float difference;
+    CHECK(oscillator_peak(&oscillator, &difference) == 0);
+    lx_midi_oscillator_event(&oscillator, MIDI_NOTE_ON | 1, 69, 127);
+    float peak = oscillator_peak(&oscillator, &difference);
+    CHECK(peak > 0.035f && peak <= 0.0401f && difference == 0);
+    lx_midi_oscillator_event(&oscillator, MIDI_NOTE_ON | 2, 60, 127);
+    lx_midi_oscillator_event(&oscillator, MIDI_CONTROL_CHANGE | 2, MIDI_ALL_NOTES_OFF, 0);
+    CHECK(oscillator_peak(&oscillator, &difference) > 0.035f);
+    lx_midi_oscillator_event(&oscillator, MIDI_NOTE_ON | 1, 69, 0);
+    CHECK(oscillator_peak(&oscillator, &difference) == 0);
+}
+
 int main(void)
 {
     midi_sequence_contracts();
+    oscillator_contracts();
     const char *capture = getenv("TWOINE_TEST_STEREO_CAPTURE");
     if (capture)
     {

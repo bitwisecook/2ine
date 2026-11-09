@@ -6,6 +6,7 @@
 #include "os2/mm/mmpm/mci/mdm/mdm_video.h"
 #include "emulator/audio_mixer.h"
 #include "os2/mm/midi/midi_synth.h"
+#include "os2/mm/midi/midi_oscillator.h"
 #include "emulator/features.h"
 #include "os2/mm/midi/midi_sequence.h"
 #include "os2/include/pmwin.h"
@@ -31,13 +32,6 @@ typedef struct Packet
     double position;
 } Packet;
 
-typedef struct Voice
-{
-    double phase;
-    float level;
-    unsigned char channel, key;
-} Voice;
-
 typedef struct Device
 {
     USHORT id;
@@ -51,7 +45,7 @@ typedef struct Device
     LxMidiSequence sequence;
     size_t next_event;
     double time;
-    Voice voices[64];
+    LxMidiOscillator oscillator;
     LxMidiSynth *synth;
 } Device;
 
@@ -88,27 +82,7 @@ static void midi_event(Device *d, const LxMidiEvent *e)
         lx_midi_synth_event(d->synth, e->status, e->key, e->value);
     return;
 #endif
-    unsigned type = e->status & 0xf0, channel = e->status & 15;
-    if (type == 0xb0 && (e->key == 120 || e->key == 123))
-    {
-        for (unsigned i = 0; i < 64; i++)
-            if (d->voices[i].channel == channel)
-                d->voices[i].level = 0;
-    }
-    else if (type == 0x80 || (type == 0x90 && !e->value))
-    {
-        for (unsigned i = 0; i < 64; i++)
-            if (d->voices[i].channel == channel && d->voices[i].key == e->key)
-                d->voices[i].level = 0;
-    }
-    else if (type == 0x90)
-    {
-        unsigned i;
-        for (i = 0; i < 63 && d->voices[i].level; i++)
-        {
-        }
-        d->voices[i] = (Voice){.channel = channel, .key = e->key, .level = e->value / 127.0f};
-    }
+    lx_midi_oscillator_event(&d->oscillator, e->status, e->key, e->value);
 }
 
 static void generate_midi(Device *d, float *samples, int count, int frequency)
@@ -131,22 +105,8 @@ static void generate_midi(Device *d, float *samples, int count, int frequency)
         lx_midi_synth_render_stereo(d->synth, samples + 2 * n, (unsigned)block, (unsigned)frequency,
                                     d->volume);
 #else
-        for (int frame = 0; frame < block; frame++)
-        {
-            float value = 0;
-            for (unsigned v = 0; v < 64; v++)
-                if (d->voices[v].level)
-                {
-                    Voice *voice = &d->voices[v];
-                    double hz = 440.0 * pow(2.0, ((int)voice->key - 69) / 12.0);
-                    value += (float)sin(voice->phase) * voice->level * 0.08f;
-                    voice->phase += 6.283185307179586 * hz / frequency;
-                    if (voice->phase > 6.283185307179586)
-                        voice->phase -= 6.283185307179586;
-                }
-            samples[2 * (n + frame)] += value * d->volume;
-            samples[2 * (n + frame) + 1] += value * d->volume;
-        }
+        lx_midi_oscillator_render_stereo(&d->oscillator, samples + 2 * n, (unsigned)block,
+                                         (unsigned)frequency, d->volume);
 #endif
         n += block;
         d->time += (double)block / frequency;
@@ -597,7 +557,7 @@ ULONG mciSendCommand(USHORT id, USHORT message, ULONG flags, PVOID parameters, U
 #endif
         d->time = 0;
         d->next_event = 0;
-        memset(d->voices, 0, sizeof d->voices);
+        memset(&d->oscillator, 0, sizeof d->oscillator);
         d->paused = 0;
         d->notify = flags & MCI_NOTIFY;
         d->notify_window = lx_guest_load_u32(p + MCI_PARMS_CALLBACK);
