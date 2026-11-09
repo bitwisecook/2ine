@@ -46,14 +46,14 @@ BOOL EnumChildWindows(ULONG parent, ULONG procedure, ULONG parameter)
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), parent) ||
         !open32ValidProcedure(procedure))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     WindowSnapshot snapshot = {0};
     if (!collect(&snapshot, parent, 0))
     {
         free(snapshot.handles);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     BOOL result = TRUE;
@@ -81,7 +81,7 @@ ULONG GetWindowThreadProcessId(ULONG window, PVOID process)
 {
     if (!open32FindWindow(window) || !WinIsWindow(open32Presentation(), window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     if (process)
@@ -141,7 +141,7 @@ ULONG ChildWindowFromPoint(ULONG parent, LONG x, LONG y)
     ULONG native = open32ClientWindow(parent);
     if (!WinQueryWindowRect(native, &bounds))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     POINTL point = {x, bounds.yTop - y};
@@ -175,7 +175,7 @@ ULONG FindWindow(PSZ class_name, PSZ title)
 {
     if (!class_name)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     for (ULONG window = WinQueryWindow(HWND_DESKTOP, 2); window; window = WinQueryWindow(window, 0))
@@ -198,7 +198,7 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
 {
     if (!open32ValidProcedure(procedure))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG *snapshot = NULL;
@@ -226,7 +226,7 @@ static BOOL enum_top(ULONG thread, ULONG procedure, ULONG parameter)
             {
                 free(snapshot);
                 free(object_list);
-                open32SetError(8);
+                open32SetError(ERROR_NOT_ENOUGH_MEMORY);
                 return FALSE;
             }
             snapshot = grown;

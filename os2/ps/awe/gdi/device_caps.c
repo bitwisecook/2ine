@@ -11,7 +11,7 @@ LONG GetDeviceCaps(ULONG handle, LONG index)
 {
     if (!open32FindDC(handle))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     unsigned printer = lx_pm_printer_kind(GpiQueryDevice(handle));

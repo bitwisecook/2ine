@@ -62,7 +62,7 @@ static NativeControl *find_control(ULONG handle, BOOL create)
     NativeControl *control = calloc(1, sizeof *control);
     if (!control)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return NULL;
     }
     control->window.handle = handle;
@@ -126,7 +126,7 @@ static LONG send_text(ULONG handle, ULONG message, ULONG first, const char *text
     LxGuestMapping *mapping = guest_text(size, &address, &host);
     if (!mapping)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return -1;
     }
     memcpy(host, text, size);
@@ -154,7 +154,7 @@ static LONG list_directory(ULONG handle, ULONG attributes, ULONG pattern)
     char *name = lx_execution_copy_string(GProcessState.execution, pattern, 260);
     if (!name)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     uint8 found[320];
@@ -230,7 +230,7 @@ static LONG list_text(ULONG handle, ULONG index, ULONG address, BOOL original)
         return -1;
     if (!lx_execution_memory(GProcessState.execution, address, (size_t)length + 1, LX_GUEST_WRITE))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     ULONG buffer;
@@ -238,7 +238,7 @@ static LONG list_text(ULONG handle, ULONG index, ULONG address, BOOL original)
     LxGuestMapping *mapping = guest_text((size_t)length + 1, &buffer, &text);
     if (!mapping)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return -1;
     }
     ULONG request = (index & 0xFFFF) | (ULONG)(length + 1) << 16;
@@ -299,7 +299,7 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
             text[i] = (char)WinCpTranslateChar(0, 437, (UCHAR)text[i], 1004);
         if (!lx_execution_write(GProcessState.execution, second, text, (size_t)result + 1))
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             result = 0;
         }
         free(text);
@@ -370,7 +370,7 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
             static const LONG styles[] = {0, 0, 1, 2, 3, 5, 6, -1, -1, 4, -1, 7};
             if (first >= sizeof styles / sizeof *styles || styles[first] < 0)
             {
-                open32SetError(50);
+                open32SetError(ERROR_NOT_SUPPORTED);
                 return 0;
             }
             ULONG style = (ULONG)styles[first] | (first == 1 ? 0x400 : 0);
@@ -475,7 +475,7 @@ LONG open32NativeControlMessage(ULONG handle, ULONG message, ULONG first, ULONG 
         native = message - 0x400 + WM_USER;
     if (!native)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     LONG result = pm_message(handle, native, a, b, original);
@@ -717,7 +717,7 @@ BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style,
     RECTL area;
     if (!WinQueryWindowRect(owner, &area))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return TRUE;
     }
     NativeControl *control = calloc(1, sizeof *control);
@@ -726,7 +726,7 @@ BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style,
     {
         free(control);
         free(text);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return TRUE;
     }
     for (char *p = text; *p; p++)
@@ -741,7 +741,7 @@ BOOL open32CreateNativeControl(const char *name, const char *title, ULONG style,
     if (!created)
     {
         free(control);
-        open32SetError(1407);
+        open32SetError(ERROR_CANNOT_FIND_WND_CLASS);
         return TRUE;
     }
     control->window.handle = created;
@@ -766,7 +766,7 @@ LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set)
         {
             if (!prepare_bridges() || (set && !open32ValidProcedure((ULONG)value)))
             {
-                open32SetError(87);
+                open32SetError(ERROR_INVALID_PARAMETER);
                 return 0;
             }
             ULONG previous = control->subclassed ? control->window.procedure
@@ -801,7 +801,7 @@ LONG open32NativeWindowLong(ULONG handle, LONG index, LONG value, BOOL set)
             return (LONG)previous;
         }
         default:
-            open32SetError(1413);
+            open32SetError(ERROR_INVALID_INDEX);
             return 0;
     }
     ULONG previous = *field;

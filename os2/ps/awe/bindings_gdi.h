@@ -16,12 +16,12 @@ static BOOL o32_graphics_buffer(ULONG address, uint64 size, unsigned mode, BOOL 
     {
         if (optional)
             return TRUE;
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (size > 64u * 1024 * 1024)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (!size)
@@ -32,7 +32,7 @@ static BOOL o32_graphics_buffer(ULONG address, uint64 size, unsigned mode, BOOL 
     }
     if (!lx_execution_borrow(GProcessState.execution, address, (size_t)size, mode, &out->lease))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (mode == LX_GUEST_READ)
@@ -40,7 +40,7 @@ static BOOL o32_graphics_buffer(ULONG address, uint64 size, unsigned mode, BOOL 
         out->copy = malloc((size_t)size);
         if (!out->copy)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         memcpy(out->copy, out->lease.host, (size_t)size);
@@ -122,7 +122,7 @@ static uint32 bridge32_CopyMetaFile(uint8 *a)
     BOOL valid = TRUE;
     if (a1 && !s1)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         valid = FALSE;
     }
     if (valid)
@@ -191,7 +191,7 @@ static uint32 bridge32_CreateMetaFile(uint8 *a)
     BOOL valid = TRUE;
     if (a0 && !s0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         valid = FALSE;
     }
     if (valid)
@@ -325,7 +325,7 @@ static uint32 bridge32_EnumFonts(uint8 *a)
     BOOL valid = TRUE;
     if (a1 && !s1)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         valid = FALSE;
     }
     if (valid)
@@ -514,7 +514,7 @@ static uint32 bridge32_GetEnhMetaFile(uint8 *a)
     BOOL valid = TRUE;
     if (a0 && !s0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         valid = FALSE;
     }
     if (valid)
@@ -579,7 +579,7 @@ static uint32 bridge32_GetMetaFile(uint8 *a)
     BOOL valid = TRUE;
     if (a0 && !s0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         valid = FALSE;
     }
     if (valid)
@@ -1258,7 +1258,7 @@ static uint32 bridge32_HPSToHDC(uint8 *a)
     BOOL valid = TRUE;
     if (a2 && !s2)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         valid = FALSE;
     }
     if (valid)
@@ -1346,7 +1346,7 @@ static BOOL o32_graphics_dib(ULONG address, ULONG start, ULONG count, ULONG usag
     size_t info_bytes = 0, expected_pixels = 0;
     if (!lx_execution_read(GProcessState.execution, address, header, sizeof header))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (!open32DibBuffers(header, start, count, usage, &info_bytes, &expected_pixels) ||
@@ -1356,7 +1356,7 @@ static BOOL o32_graphics_dib(ULONG address, ULONG start, ULONG count, ULONG usag
     if (!open32DibBuffers(info->host, start, count, usage, &actual_info, &actual_pixels) ||
         actual_info != info_bytes || actual_pixels != expected_pixels)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     *pixel_bytes = actual_pixels;
@@ -1443,7 +1443,7 @@ static uint32 o32_graphics_polygons(uint8 *a, unsigned kind)
     BOOL valid = polygons <= 65536 && o32_graphics_buffer(counts_address, (uint64)polygons * 4,
                                                           LX_GUEST_READ, FALSE, &counts);
     if (!valid)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     if (valid)
     {
         for (ULONG i = 0; i < polygons; i++)
@@ -1452,7 +1452,7 @@ static uint32 o32_graphics_polygons(uint8 *a, unsigned kind)
             if (count > 65536 || total + count > 65536)
             {
                 valid = FALSE;
-                open32SetError(87);
+                open32SetError(ERROR_INVALID_PARAMETER);
                 break;
             }
             total += count;
@@ -1499,7 +1499,7 @@ static uint32 bridge32_PlayEnhMetaFileRecord(uint8 *a)
     if (lx_execution_read(GProcessState.execution, address, header, sizeof header))
         size = lx_guest_load_u32(header + 4);
     if (size < 8 || (size & 3) || count > 65535)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else if (o32_graphics_buffer(address, size, LX_GUEST_READ, FALSE, &record) &&
              lx_guest_load_u32((uint8 *)record.host + 4) == size &&
              o32_graphics_buffer(lx_guest_load_u32(a + 4), (uint64)count * 4,
@@ -1519,7 +1519,7 @@ static uint32 bridge32_Escape(uint8 *a)
     if (code == 9)
         return (ULONG)SetAbortProc(lx_guest_load_u32(a), lx_guest_load_u32(a + 12));
     if (count < 0 || count > 65536)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else if (o32_graphics_buffer(lx_guest_load_u32(a + 12), (ULONG)count, LX_GUEST_READ, count == 0,
                                  &input))
     {
@@ -1569,7 +1569,7 @@ static uint32 bridge32_DeviceCapabilities(uint8 *a)
         result = DeviceCapabilities(device_name, port_name, capability, output.host,
                                     (PVOID)(uintptr_t)lx_guest_load_u32(a + 16));
     else
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     o32_graphics_release(&output);
     free(device_name);
     free(port_name);

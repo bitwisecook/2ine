@@ -10,7 +10,7 @@ static void get_time(PVOID output, int utc)
     LxHostCalendar value;
     if (!output || !lx_host_calendar((int64_t)(now / 1000000), utc, &value))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     uint16 fields[] = {(uint16)value.year,    (uint16)value.month,
@@ -35,7 +35,7 @@ BOOL SystemTimeToFileTime(PVOID input, PVOID output)
 {
     if (!input || !output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     const uint8 *wire = input;
@@ -49,7 +49,7 @@ BOOL SystemTimeToFileTime(PVOID input, PVOID output)
         day > month_days[month - 1] + (month == 2 && leap) || hour > 23 || minute > 59 ||
         second > 59 || millisecond > 999)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint64_t previous = year - 1;
@@ -74,14 +74,14 @@ static BOOL local_filetime(PVOID input, PVOID output, BOOL utc)
 {
     if (!input || !output || input == output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint64_t value = load_filetime(input);
     LxHostCalendar now;
     if (value > INT64_MAX || !lx_host_calendar((int64_t)(lx_host_realtime_us() / 1000000), 0, &now))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* These Windows APIs use the current timezone/DST bias, even for historical dates. */
@@ -91,7 +91,7 @@ static BOOL local_filetime(PVOID input, PVOID output, BOOL utc)
     if ((adjustment < 0 && value < (uint64_t)-adjustment) ||
         (adjustment >= 0 && value > (uint64_t)(INT64_MAX - adjustment)))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint64_t result =
@@ -121,7 +121,7 @@ BOOL FileTimeToSystemTime(PVOID input, PVOID output)
 {
     if (!input || !output || load_filetime(input) > INT64_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint64_t ticks = load_filetime(input), seconds = ticks / 10000000;
@@ -160,7 +160,7 @@ LONG CompareFileTime(PVOID first, PVOID second)
 {
     if (!first || !second)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     ULONG ah = lx_guest_load_u32((uint8 *)first + 4), bh = lx_guest_load_u32((uint8 *)second + 4);
@@ -185,13 +185,13 @@ BOOL FileTimeToDosDateTime(PVOID input, PVOID date, PVOID time)
     uint8 fields[16];
     if (!date || !time || !FileTimeToSystemTime(input, fields))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG year = lx_guest_load_u16(fields);
     if (year < 1980 || year > 2107)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     lx_guest_store_u16(date, ((year - 1980) << 9) | (lx_guest_load_u16(fields + 2) << 5) |

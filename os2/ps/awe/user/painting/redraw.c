@@ -102,7 +102,7 @@ BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flag
     RECTL bounds;
     if (!WinQueryWindowRect(handle, &bounds))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     LxHandleBorrow borrow = {0};
@@ -111,7 +111,7 @@ BOOL RedrawWindow(ULONG handle, PVOID rectangle, ULONG region_handle, ULONG flag
     {
         if (!lx_handle_borrow(region_handle, LX_HANDLE_OPEN32_REGION, &borrow))
         {
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return FALSE;
         }
         PmRegion *region = borrow.resource;
@@ -166,7 +166,7 @@ BOOL GetUpdateRect(ULONG window, PVOID output, BOOL erase)
     window = open32ClientWindow(window);
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     RECTL rectangle = {0}, bounds;
@@ -201,7 +201,7 @@ BOOL LockWindowUpdate(ULONG window)
 {
     if (window && !IsWindow(window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     if (window)

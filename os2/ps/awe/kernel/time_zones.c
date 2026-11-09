@@ -180,7 +180,7 @@ ULONG GetTimeZoneInformation(PVOID output)
 {
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     int64_t now = (int64_t)(lx_host_realtime_us() / 1000000);
@@ -190,7 +190,7 @@ ULONG GetTimeZoneInformation(PVOID output)
         zone = (ZoneRules){0};
         if (!host_zone(&zone, now))
         {
-            open32SetError(31);
+            open32SetError(ERROR_GEN_FAILURE);
             return UINT32_MAX;
         }
     }

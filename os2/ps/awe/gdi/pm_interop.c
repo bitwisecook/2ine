@@ -69,7 +69,7 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
         return FALSE;
     if (count < 0 || count > 65536 || (count && !rectangles))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG height;
@@ -77,7 +77,7 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
     {
         if (!open32FindDC(h))
         {
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return FALSE;
         }
         height = open32DCHeight(h);
@@ -87,7 +87,7 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
         RECTL r;
         if (!WinQueryWindowRect(open32ClientWindow(window), &r))
         {
-            open32SetError(1400);
+            open32SetError(ERROR_INVALID_WINDOW_HANDLE);
             return FALSE;
         }
         height = r.yTop - r.yBottom;
@@ -99,7 +99,7 @@ BOOL WinTranslateDeviceRects(ULONG h, ULONG window, PVOID rectangles, LONG count
         int64_t t = (int64_t)height - bottom, b = (int64_t)height - top;
         if (t < INT32_MIN || t > INT32_MAX || b < INT32_MIN || b > INT32_MAX)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         lx_guest_store_u32(p + 4, (ULONG)t);
@@ -131,7 +131,7 @@ ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type
             ULONG n = GetPaletteEntries(object, 0, 0, NULL);
             if (!n || n > 256)
             {
-                open32SetError(87);
+                open32SetError(ERROR_INVALID_PARAMETER);
                 return 0;
             }
             uint8 entries[1024];
@@ -147,7 +147,7 @@ ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type
         LONG n = GpiQueryPaletteInfo(object, 0, 0, 0, 0, NULL);
         if (n < 1 || n > 256)
         {
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return 0;
         }
         ULONG colors[256];
@@ -226,6 +226,6 @@ ULONG WinTranslateGraphicsObjectHandle(ULONG object, ULONG direction, ULONG type
         if (result)
             return remember_handle(object, result, type, result);
     }
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return 0;
 }

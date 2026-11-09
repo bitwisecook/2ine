@@ -53,13 +53,13 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
 {
     if ((!create && !name) || (name && (!*name || strlen(name) >= SEMAPHORE_NAME_CAPACITY)))
     {
-        open32SetError(123);
+        open32SetError(ERROR_INVALID_NAME);
         return 0;
     }
     Open32Semaphore *sem = calloc(1, sizeof *sem);
     if (!sem)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     sem->access = access;
@@ -149,7 +149,7 @@ static ULONG semaphore_handle(PSZ name, BOOL create, LONG initial, LONG maximum,
     if (!handle)
         goto failed;
     if (create)
-        open32SetError(existing ? 183 : 0);
+        open32SetError(existing ? ERROR_ALREADY_EXISTS : ERROR_SUCCESS);
     return handle;
 
 failed:
@@ -166,13 +166,13 @@ ULONG CreateSemaphore(PVOID security, LONG initial, LONG maximum, PSZ name)
         const uint8 *record = security;
         if (lx_guest_load_u32(record) != 12)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         /* The host provider does not expose Windows ACLs or inherited kernel handles. */
         if (lx_guest_load_u32(record + 4) || lx_guest_load_u32(record + 8))
         {
-            open32SetError(50);
+            open32SetError(ERROR_NOT_SUPPORTED);
             return 0;
         }
     }
@@ -184,7 +184,7 @@ ULONG OpenSemaphore(ULONG access, BOOL inherit, PSZ name)
     TRACE_NATIVE("OpenSemaphore(%X, %u, '%s')", access, inherit, name);
     if (inherit || (access & ~SEMAPHORE_ALL_ACCESS))
     {
-        open32SetError(inherit ? 50 : 87);
+        open32SetError(inherit ? ERROR_NOT_SUPPORTED : ERROR_INVALID_PARAMETER);
         return 0;
     }
     return semaphore_handle(name, FALSE, 0, 0, access);
@@ -198,7 +198,7 @@ BOOL ReleaseSemaphore(ULONG handle, LONG count, PLONG previous)
     if (!lx_handle_access(handle, LX_HANDLE_OPEN32_SEMAPHORE, &rights) ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_SEMAPHORE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Semaphore *sem = borrow.resource;
@@ -249,7 +249,7 @@ static uint32 wait_semaphore(void *argument)
     ULONG result = UINT32_MAX;
     ULONG timeout = call->timeout;
     if (!(sem->access & SEMAPHORE_SYNCHRONIZE))
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
     else
     {
         uint64 deadline = lx_host_monotonic_us() + (uint64)timeout * 1000;

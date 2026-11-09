@@ -54,7 +54,7 @@ ULONG SetClipboardViewer(ULONG window)
 {
     if (!open32FindWindow(window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     lx_host_once(&once, initialize);
@@ -70,7 +70,7 @@ ULONG SetClipboardViewer(ULONG window)
     if (!viewer)
     {
         lx_host_monitor_unlock(monitor);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     ULONG previous = viewers ? viewers->window : 0;
@@ -153,12 +153,12 @@ BOOL OpenClipboard(ULONG window)
 {
     if (window && !open32FindWindow(window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     if (!WinOpenClipbrd(open32Presentation()))
     {
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
         return FALSE;
     }
     opened_for = window;
@@ -169,7 +169,7 @@ BOOL CloseClipboard(void)
 {
     if (!WinCloseClipbrd(open32Presentation()))
     {
-        open32SetError(1418);
+        open32SetError(ERROR_CLIPBOARD_NOT_OPEN);
         return FALSE;
     }
     opened_for = 0;
@@ -182,7 +182,7 @@ BOOL EmptyClipboard(void)
     if (!WinEmptyClipbrd(hab) ||
         !WinSetClipbrdOwner(hab, opened_for ? open32ClientWindow(opened_for) : 0))
     {
-        open32SetError(1418);
+        open32SetError(ERROR_CLIPBOARD_NOT_OPEN);
         return FALSE;
     }
     discard_clipboard_memory(1);
@@ -208,7 +208,7 @@ ULONG GetClipboardFormatName(ULONG format, PSZ output, LONG capacity)
 {
     if (format < 0xc000 || format > 0xffff || !output || capacity <= 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return lx_pm_clipboard_format_name(format, output, (ULONG)capacity);
@@ -237,7 +237,7 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
 {
     if (!format || (format != 1 && format != 2 && format < 0xc000) || format > 0xffff)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG hab = open32Presentation();
@@ -245,7 +245,7 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
     if (!handle || format == 2)
     {
         if (!WinSetClipbrdData(hab, handle, format, format == 2 ? 0x200 : 0x400))
-            open32SetError(1418);
+            open32SetError(ERROR_CLIPBOARD_NOT_OPEN);
         return handle;
     }
     ULONG size = GlobalSize(handle), address = GlobalLock(handle);
@@ -257,7 +257,7 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
     if (!valid)
     {
         free(bytes);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     size_t length = size;
@@ -278,13 +278,13 @@ ULONG SetClipboardData(ULONG format, ULONG handle)
     free(bytes);
     if (!copied)
     {
-        open32SetError(1418);
+        open32SetError(ERROR_CLIPBOARD_NOT_OPEN);
         return 0;
     }
     discard_clipboard_memory(0);
     if (!remember_memory(format, handle))
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return handle;
@@ -298,7 +298,7 @@ ULONG GetClipboardData(ULONG format)
         return WinQueryClipbrdData(hab, format);
     if (!format || (format != 1 && format < 0xc000) || format > 0xffff)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     for (ClipboardMemory *item = clipboard_memory; item; item = item->next)
@@ -318,7 +318,7 @@ ULONG GetClipboardData(ULONG format)
     if (!bytes || size >= 16 * 1024 * 1024)
     {
         free(bytes);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     ULONG handle = GlobalAlloc(0x42, (ULONG)size + 1), address = handle ? GlobalLock(handle) : 0;
@@ -330,7 +330,7 @@ ULONG GetClipboardData(ULONG format)
     {
         if (handle)
             GlobalFree(handle);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return handle;
@@ -340,7 +340,7 @@ LONG GetPriorityClipboardFormat(PVOID formats, LONG count)
 {
     if (count < 0 || (count && !formats))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     if (!CountClipboardFormats())

@@ -115,12 +115,12 @@ LONG GetLocaleInfo(ULONG locale, ULONG type, PSZ output, LONG capacity)
     TRACE_NATIVE("GetLocaleInfo(%X, %X, %p, %d)", locale, type, output, capacity);
     if (capacity < 0 || (capacity && !output) || (type & 0x3FFF0000))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (locale && locale != 0x400 && locale != 0x800 && locale != 0x409)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     type &= 0xFFFF;
@@ -132,13 +132,13 @@ LONG GetLocaleInfo(ULONG locale, ULONG type, PSZ output, LONG capacity)
                 return (LONG)required;
             if ((size_t)capacity < required)
             {
-                open32SetError(122);
+                open32SetError(ERROR_INSUFFICIENT_BUFFER);
                 return 0;
             }
             memcpy(output, locale_items[i].value, required);
             return (LONG)required;
         }
-    open32SetError(87);
+    open32SetError(ERROR_INVALID_PARAMETER);
     return 0;
 }
 
@@ -172,7 +172,7 @@ BOOL GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count, PVOID outp
     if (!input || !output || count == 0 || count < -1 || count > 1024 * 1024 ||
         (kind != 1 && kind != 2 && kind != 4))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (count == -1)
@@ -180,7 +180,7 @@ BOOL GetStringTypeEx(ULONG locale, ULONG kind, PSZ input, LONG count, PVOID outp
     uint8 *wide = malloc((size_t)count * 2);
     if (!wide)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     if (!MultiByteToWideChar(0, 0, input, count, wide, count))

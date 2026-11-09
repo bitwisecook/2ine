@@ -39,7 +39,7 @@ static ULONG drop_address(ULONG drop, uint8 header[20])
     ULONG address = GlobalLock(drop);
     if (!address || !lx_execution_read(GProcessState.execution, address, header, 20))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     return address;
@@ -55,7 +55,7 @@ ULONG DragQueryFile(ULONG drop, ULONG index, PSZ output, ULONG capacity)
     if (offset < 20 || offset > 16u * 1024u * 1024u || base > UINT32_MAX - offset)
     {
         GlobalUnlock(drop);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     address = base + offset;

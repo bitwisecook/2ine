@@ -70,14 +70,14 @@ static ULONG create_menu(BOOL popup)
 {
     if (!open32Presentation())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     prune_menus();
     Open32Menu *menu = calloc(1, sizeof *menu);
     if (!menu)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     uint8 empty[10] = {0};
@@ -86,7 +86,7 @@ static ULONG create_menu(BOOL popup)
     if (!menu->handle)
     {
         free(menu);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     menu->popup = popup;
@@ -112,7 +112,7 @@ BOOL DestroyMenu(ULONG handle)
         link = &(*link)->next;
     if (!*link)
     {
-        open32SetError(1401);
+        open32SetError(ERROR_INVALID_MENU_HANDLE);
         return FALSE;
     }
     Open32Menu *menu = *link;
@@ -184,12 +184,12 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
     Window *window = menu_window(handle);
     if (!window)
     {
-        open32SetError(1401);
+        open32SetError(ERROR_INVALID_MENU_HANDLE);
         return FALSE;
     }
     if (flags & (4 | 0x100))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     LONG index;
@@ -204,20 +204,20 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
     }
     if (index < 0 || window->menu->count >= 4096)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     Window *submenu = flags & 0x10 ? menu_window(identifier) : NULL;
     if ((flags & 0x10) && !submenu)
     {
-        open32SetError(1401);
+        open32SetError(ERROR_INVALID_MENU_HANDLE);
         return FALSE;
     }
     if (submenu)
     {
         if (menu_contains(submenu, window, 0))
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
     }
@@ -233,7 +233,7 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
             free(label->text);
             free(label);
         }
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     size_t used = 0;
@@ -265,7 +265,7 @@ BOOL InsertMenu(ULONG handle, ULONG position, ULONG flags, ULONG identifier, PSZ
     {
         free(label->text);
         free(label);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     MenuText **slot = &find_menu(window->hwnd)->texts;
@@ -289,7 +289,7 @@ LONG GetMenuItemCount(ULONG handle)
     Window *window = menu_window(handle);
     if (!window)
     {
-        open32SetError(1401);
+        open32SetError(ERROR_INVALID_MENU_HANDLE);
         return -1;
     }
     return (LONG)window->menu->count;
@@ -315,7 +315,7 @@ ULONG GetMenuState(ULONG handle, ULONG identity, ULONG flags)
     PmMenuItem *item = menu_item(&window, identity, flags, 0);
     if (!item)
     {
-        open32SetError(1456);
+        open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return UINT32_MAX;
     }
     ULONG result = item->item.hItem & 0x8FF;
@@ -333,7 +333,7 @@ ULONG CheckMenuItem(ULONG handle, ULONG identity, ULONG flags)
     PmMenuItem *item = menu_item(&window, identity, flags, 0);
     if (!item)
     {
-        open32SetError(1456);
+        open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return UINT32_MAX;
     }
     ULONG old = item->item.hItem & 8;
@@ -350,7 +350,7 @@ ULONG EnableMenuItem(ULONG handle, ULONG identity, ULONG flags)
     PmMenuItem *item = menu_item(&window, identity, flags, 0);
     if (!item)
     {
-        open32SetError(1456);
+        open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return UINT32_MAX;
     }
     ULONG old = item->item.hItem & 3;
@@ -372,7 +372,7 @@ static BOOL remove_menu_item(ULONG handle, ULONG identity, ULONG flags, BOOL des
     PmMenuItem *item = menu_item(&window, identity, flags, 0);
     if (!item)
     {
-        open32SetError(1456);
+        open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return FALSE;
     }
     Window *sub = menu_window(item->item.hwndSubMenu);
@@ -414,7 +414,7 @@ LONG GetMenuString(ULONG handle, ULONG identity, PCHAR output, LONG capacity, UL
     {
         if (output && capacity > 0)
             output[0] = 0;
-        open32SetError(item ? 87 : 1456);
+        open32SetError(item ? ERROR_INVALID_PARAMETER : ERROR_MENU_ITEM_NOT_FOUND);
         return 0;
     }
     MenuText *label = find_menu(window->hwnd)->texts;
@@ -437,7 +437,7 @@ ULONG GetMenu(ULONG handle)
     Open32Window *window = open32FindWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     return window->style & 0x40000000u ? 0 : window->menu;
@@ -449,14 +449,14 @@ BOOL SetMenu(ULONG handle, ULONG menu)
     Open32Window *window = open32FindWindow(handle);
     if (!window || (window->style & 0x40000000u))
     {
-        open32SetError(window ? 87 : 1400);
+        open32SetError(window ? ERROR_INVALID_PARAMETER : ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     Window *next = menu ? menu_window(menu) : NULL;
     if (menu && (!next || (next->parent->hwnd != HWND_DESKTOP &&
                            next->parent->hwnd != HWND_OBJECT && next->parent->hwnd != handle)))
     {
-        open32SetError(1401);
+        open32SetError(ERROR_INVALID_MENU_HANDLE);
         return FALSE;
     }
     ULONG old = window->menu;
@@ -477,13 +477,13 @@ BOOL SetMenu(ULONG handle, ULONG menu)
     {
         if (previous && old != menu)
             lx_pm_menu_attach(old, handle);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     window = open32FindWindow(handle);
     if (!window || window->destroyed)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     window->menu = menu;
@@ -506,7 +506,7 @@ BOOL DrawMenuBar(ULONG handle)
     Open32Window *window = open32FindWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     return SetMenu(handle, window->menu);
@@ -517,7 +517,7 @@ ULONG GetSystemMenu(ULONG handle, BOOL revert)
     Open32Window *window = open32FindWindow(handle);
     if (!window)
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     if (revert)
@@ -624,7 +624,7 @@ ULONG open32ResourceIdentity(ULONG module, PSZ name, ULONG type)
         GProcessState.freeResource(data);
     if (!valid)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     return result;
@@ -714,12 +714,12 @@ ULONG LoadMenu(ULONG module, PSZ resource)
 {
     if (!resource)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!open32Presentation())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     prune_menus();
@@ -728,13 +728,13 @@ ULONG LoadMenu(ULONG module, PSZ resource)
     ULONG identity = menu_resource_id(module, resource);
     if (!identity)
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     ULONG handle = WinLoadMenu(HWND_OBJECT, module, identity);
     if (!handle)
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     Open32Menu *pending = NULL;
@@ -749,7 +749,7 @@ ULONG LoadMenu(ULONG module, PSZ resource)
             free_texts(menu);
             free(menu);
         }
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     Open32Menu **tail = &pending;
@@ -766,7 +766,7 @@ BOOL ModifyMenu(ULONG handle, ULONG identity, ULONG flags, ULONG identifier, PSZ
     PmMenuItem *item = menu_item(&window, identity, flags, 0);
     if (!item)
     {
-        open32SetError(1456);
+        open32SetError(ERROR_MENU_ITEM_NOT_FOUND);
         return FALSE;
     }
     ULONG position = item->item.iPosition, target = window->hwnd;
@@ -784,7 +784,7 @@ BOOL TrackPopupMenu(ULONG handle, ULONG flags, LONG x, LONG y, LONG reserved, UL
     Window *popup = menu_window(handle);
     if (!owner || !popup || !IsWindow(owner))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG width = WinQuerySysValue(HWND_DESKTOP, 20), height = WinQuerySysValue(HWND_DESKTOP, 21);
@@ -821,7 +821,7 @@ ULONG GetMenuContextHelpId(ULONG handle)
     Open32Menu *menu = find_menu(handle);
     if (!menu)
     {
-        open32SetError(1401);
+        open32SetError(ERROR_INVALID_MENU_HANDLE);
         return 0;
     }
     return menu->context_help;
@@ -832,7 +832,7 @@ BOOL SetMenuContextHelpId(ULONG handle, ULONG help)
     Open32Menu *menu = find_menu(handle);
     if (!menu)
     {
-        open32SetError(1401);
+        open32SetError(ERROR_INVALID_MENU_HANDLE);
         return FALSE;
     }
     menu->context_help = help;

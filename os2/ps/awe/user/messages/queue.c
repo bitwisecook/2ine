@@ -155,7 +155,7 @@ static QueuedMessage *new_message(ULONG window, ULONG message, ULONG first, ULON
     QueuedMessage *node = calloc(1, sizeof *node);
     if (!node)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return NULL;
     }
     lx_guest_store_u32(node->wire, window);
@@ -298,12 +298,12 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
     HAB hab = open32Presentation();
     if (filter && filter != UINT32_MAX && hab && !WinIsWindow(hab, filter))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return -1;
     }
     if (!output || !hab || ((first || last) && first > last))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     PaintQuery paint_query = {filter, first, last};
@@ -355,7 +355,7 @@ static LONG retrieve(PVOID output, ULONG filter, ULONG first, ULONG last, BOOL r
         BOOL received = lx_pm_get_open32_message(hab, &native, offer_native_paint, &paint_query);
         if (!received && native.msg != WM_QUIT)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return -1;
         }
         if (!accept_native(&native))
@@ -374,7 +374,7 @@ BOOL WaitMessage(void)
         BOOL received = WinGetMsg(hab, &native, 0, 0, 0);
         if (!received && native.msg != WM_QUIT)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         if (!accept_native(&native))
@@ -387,7 +387,7 @@ BOOL PeekMessage(PVOID output, ULONG filter, ULONG first, ULONG last, ULONG flag
 {
     if (flags & ~3u)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     return retrieve(output, filter, first, last, (flags & 1) != 0, FALSE) > 0;
@@ -414,7 +414,7 @@ BOOL TranslateMessage(PVOID input)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     QueuedMessage *source = find_message(input);
@@ -447,7 +447,7 @@ LONG DispatchMessage(PVOID input)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     const uint8 *wire = input;
@@ -461,7 +461,7 @@ LONG DispatchMessage(PVOID input)
         return (LONG)(intptr_t)WinSendMsg(handle, WM_TIMER, (MPARAM)(uintptr_t)first, 0);
     if (handle && !window && !(timer_callback && open32NativeDialogWindow(handle)))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     QueuedMessage *node = find_message(input);
@@ -470,7 +470,7 @@ LONG DispatchMessage(PVOID input)
     {
         if (!open32ValidProcedure(second))
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         lx_execution_callback32_4(GProcessState.execution, second, handle, message, first,
@@ -516,7 +516,7 @@ BOOL PostMessage(ULONG handle, ULONG message, ULONG first, ULONG second)
            window packets on the PM owner queue for either loop to consume. */
         if (lx_pm_post_open32_message(open32ClientWindow(handle), message, first, second))
             return TRUE;
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     if (message == 18)
@@ -709,7 +709,7 @@ BOOL PostThreadMessage(ULONG thread, ULONG message, ULONG first, ULONG second)
     BOOL result = found && lx_pm_post_open32_message(receiver, message, first, second);
     lx_host_monitor_unlock(thread_queue_lock);
     if (!result)
-        open32SetError(found ? 0 : 87);
+        open32SetError(found ? ERROR_SUCCESS : ERROR_INVALID_PARAMETER);
     return result;
 }
 
@@ -723,7 +723,7 @@ BOOL WinXTranslateMsg(ULONG anchor, PVOID input, PVOID output)
     (void)anchor;
     if (!input || !output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint8 *wire = input;

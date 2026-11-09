@@ -100,7 +100,7 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
     if (security || (flags & ~4u) || stack_bytes > 0x1000000 ||
         !lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     typedef APIRET(OS2API * CreateFn)(PTID, PFNTHREAD, ULONG, ULONG, ULONG);
@@ -110,7 +110,7 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
     lx_host_once(&once, initialize);
     if (!entry_code || !create || !detach)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     Open32Thread *thread = calloc(1, sizeof *thread);
@@ -119,7 +119,7 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
     if (!thread || !thread->monitor)
     {
         free(thread);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     thread->arguments = lx_execution_map(GProcessState.execution, 0, 4096, 3, 0);
@@ -135,7 +135,7 @@ ULONG CreateThread(PVOID security, ULONG stack_bytes, ULONG procedure, ULONG par
             lx_handle_close(thread->public_handle, LX_HANDLE_OPEN32_THREAD);
         else
             destroy_thread(thread);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     uint8 *arguments = lx_execution_mapping_host(thread->arguments);
@@ -166,7 +166,7 @@ BOOL GetExitCodeThread(ULONG handle, PULONG result)
     LxHandleBorrow borrow = {0};
     if (!result || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {
-        open32SetError(result ? 6 : 87);
+        open32SetError(result ? ERROR_INVALID_HANDLE : ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     Open32Thread *thread = borrow.resource;
@@ -194,7 +194,7 @@ ULONG ResumeThread(ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     Open32Thread *thread = borrow.resource;
@@ -233,7 +233,7 @@ ULONG WaitForSingleObject(ULONG handle, ULONG timeout)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     Open32Thread *thread = borrow.resource;
@@ -275,12 +275,12 @@ BOOL SetThreadPriority(ULONG handle, LONG priority)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     lx_handle_release(&borrow);
     /* The host thread provider exposes no scheduling-priority operation. */
-    open32SetError(50);
+    open32SetError(ERROR_NOT_SUPPORTED);
     return FALSE;
 }
 
@@ -290,7 +290,7 @@ static ULONG suspend_thread(Open32Thread *thread)
     if (thread->finished)
     {
         lx_host_monitor_unlock(thread->monitor);
-        open32SetError(309);
+        open32SetError(ERROR_INVALID_THREADID);
         return UINT32_MAX;
     }
     ULONG previous = thread->suspended;
@@ -330,7 +330,7 @@ ULONG SuspendThread(ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     ULONG previous = suspend_thread(borrow.resource);
@@ -349,7 +349,7 @@ BOOL TerminateThread(ULONG handle, ULONG code)
     {
         if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_THREAD, &borrow))
         {
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return FALSE;
         }
         thread = borrow.resource;

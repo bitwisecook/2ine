@@ -10,7 +10,7 @@ BOOL GetClientRect(ULONG window, PVOID output)
     RECTL rect;
     if (!output || !open32Presentation() || !WinQueryWindowRect(open32ClientWindow(window), &rect))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     lx_guest_store_u32(output, 0);
@@ -25,13 +25,13 @@ BOOL GetWindowRect(ULONG window, PVOID output)
     RECTL rect;
     if (!output || !open32Presentation() || !WinQueryWindowRect(window, &rect))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     POINTL points[2] = {{rect.xLeft, rect.yBottom}, {rect.xRight, rect.yTop}};
     if (!WinMapWindowPoints(window, HWND_DESKTOP, points, 2))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     LONG height = WinQuerySysValue(HWND_DESKTOP, 21);
@@ -48,7 +48,7 @@ static BOOL map_point(ULONG window, PVOID point, BOOL to_screen)
     RECTL rect;
     if (!point || !open32Presentation() || !WinQueryWindowRect(window, &rect))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     LONG screen = WinQuerySysValue(HWND_DESKTOP, 21);
@@ -56,20 +56,20 @@ static BOOL map_point(ULONG window, PVOID point, BOOL to_screen)
     int64_t converted = (int64_t)(to_screen ? rect.yTop : screen) - y;
     if (converted < INT32_MIN || converted > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     POINTL mapped = {x, (LONG)converted};
     if (!WinMapWindowPoints(to_screen ? window : HWND_DESKTOP, to_screen ? HWND_DESKTOP : window,
                             &mapped, 1))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     converted = (int64_t)(to_screen ? screen : rect.yTop) - mapped.y;
     if (converted < INT32_MIN || converted > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     lx_guest_store_u32(point, (ULONG)mapped.x);
@@ -136,7 +136,7 @@ BOOL GetWindowPlacement(ULONG window, PVOID output)
 {
     if (!output || lx_guest_load_u32(output) != 44)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     SWP position;
@@ -144,7 +144,7 @@ BOOL GetWindowPlacement(ULONG window, PVOID output)
     if (!open32Presentation() || !WinQueryWindowPos(window, &position) ||
         !WinQueryWindowRect(WinQueryWindow(window, 5), &parent))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     ULONG style = WinQueryWindowULong(window, -2);
@@ -175,7 +175,7 @@ BOOL GetWindowPlacement(ULONG window, PVOID output)
     if (top < INT32_MIN || top > INT32_MAX || right < INT32_MIN || right > INT32_MAX ||
         bottom < INT32_MIN || bottom > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint32 fields[] = {44,         0,        state,      UINT32_MAX,   UINT32_MAX,   UINT32_MAX,
@@ -189,7 +189,7 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
 {
     if (!input || lx_guest_load_u32(input) != 44)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     const uint8 *wire = input;
@@ -201,7 +201,7 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
     if ((flags & ~7u) || command > 11 || width <= 0 || width > INT32_MAX || height <= 0 ||
         height > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* Placement records returned by GetWindowPlacement use default min/max
@@ -209,7 +209,7 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
        additional retained state; do not silently accept those requests. */
     if (flags & 3)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     SWP position;
@@ -217,13 +217,13 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
     if (!open32Presentation() || !WinQueryWindowPos(window, &position) ||
         !WinQueryWindowRect(WinQueryWindow(window, 5), &parent))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return FALSE;
     }
     int64_t y = (int64_t)parent.yTop - bottom;
     if (y < INT32_MIN || y > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     Open32Window *w = open32FindWindow(window);
@@ -247,7 +247,7 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
         WinQueryClassName(window, sizeof class_name, class_name) && !strcmp(class_name, "#1");
     if ((minimize || command == 3) && (!frame && (!mdi || minimize)))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     if (frame && (minimize || command == 3) &&
@@ -255,7 +255,7 @@ BOOL SetWindowPlacement(ULONG window, PVOID input)
          width > UINT16_MAX || height > UINT16_MAX))
     {
         /* PM frame restore words cannot retain a larger normal rectangle. */
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (old_state)
@@ -295,7 +295,7 @@ ULONG GetParent(ULONG window)
 {
     if (!open32Presentation() || !WinIsWindow(open32Presentation(), window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     Open32Window *w = open32FindWindow(window);
@@ -320,12 +320,12 @@ BOOL WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count, 
         height = rectangle.yTop - rectangle.yBottom;
     else
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (count < 0 || count > 65536 || (count && !points))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint8 *wire = points;
@@ -334,7 +334,7 @@ BOOL WinTranslateDevicePoints(ULONG dc, ULONG window, PVOID points, LONG count, 
         int64_t y = (int64_t)height - 1 - (LONG)lx_guest_load_u32(wire + i * 8 + 4);
         if (y < INT32_MIN || y > INT32_MAX)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
     }
@@ -350,13 +350,13 @@ ULONG SetParent(ULONG window, ULONG parent)
     HWND target = parent ? open32ClientWindow(parent) : HWND_DESKTOP;
     if (!hab || !WinIsWindow(hab, window) || !WinIsWindow(hab, target))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     ULONG previous = WinQueryWindow(window, 5);
     if (!WinSetParent(window, target, TRUE))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Open32Window *w = open32FindWindow(window);
@@ -373,7 +373,7 @@ LONG MapWindowPoints(ULONG from, ULONG to, PVOID points, ULONG count)
 {
     if (!points || !count || count > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint8 origin[8] = {0};

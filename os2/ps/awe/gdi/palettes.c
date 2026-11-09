@@ -24,7 +24,7 @@ ULONG CreatePalette(PVOID input)
 {
     if (!input || lx_guest_load_u16(input) != 0x300 || !lx_guest_load_u16((uint8 *)input + 2))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG count = lx_guest_load_u16((uint8 *)input + 2);
@@ -35,7 +35,7 @@ ULONG CreatePalette(PVOID input)
     {
         if (palette)
             free_palette(palette);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     palette->count = count;
@@ -44,7 +44,7 @@ ULONG CreatePalette(PVOID input)
     if (!handle)
     {
         free_palette(palette);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -83,7 +83,7 @@ ULONG SelectPalette(ULONG handle, ULONG palette, BOOL background)
     LxHandleBorrow next = {0};
     if (!dc || !lx_handle_borrow(palette, LX_HANDLE_OPEN32_PALETTE, &next))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     ULONG previous = dc->palette_handle;
@@ -98,7 +98,7 @@ ULONG RealizePalette(ULONG handle)
 {
     if (!open32FindDC(handle))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     open32MetafileRealize(handle);
@@ -111,7 +111,7 @@ ULONG GetPaletteEntries(ULONG handle, ULONG start, ULONG count, PVOID output)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Palette *palette = borrow.resource;
@@ -130,7 +130,7 @@ ULONG GetNearestPaletteIndex(ULONG handle, ULONG color)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     Open32Palette *palette = borrow.resource;
@@ -181,14 +181,14 @@ ULONG SetPaletteEntries(ULONG handle, ULONG first, ULONG count, PVOID input)
     LxHandleBorrow borrow = {0};
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!count)
         return 1;
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Palette *palette = borrow.resource;
@@ -207,14 +207,14 @@ BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
     LxHandleBorrow borrow = {0};
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (!count)
         return TRUE;
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Palette *palette = borrow.resource;
@@ -226,7 +226,7 @@ BOOL AnimatePalette(ULONG handle, ULONG first, ULONG count, PVOID input)
         memcpy(palette->entries + first * 4, input, (size_t)count * 4);
     lx_handle_release(&borrow);
     if (!valid)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else
         open32MetafilePaletteChange(handle, 0x436, first, count, input);
     return valid;
@@ -237,7 +237,7 @@ BOOL ResizePalette(ULONG handle, ULONG count)
     LxHandleBorrow borrow = {0};
     if (!count || count > 65535 || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_PALETTE, &borrow))
     {
-        open32SetError(!count || count > 65535 ? 87 : 6);
+        open32SetError(!count || count > 65535 ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Palette *palette = borrow.resource;
@@ -248,7 +248,7 @@ BOOL ResizePalette(ULONG handle, ULONG count)
         if (!entries)
         {
             lx_handle_release(&borrow);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         palette->entries = entries;
@@ -261,7 +261,7 @@ BOOL ResizePalette(ULONG handle, ULONG count)
     }
     lx_handle_release(&borrow);
     if (!valid)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else
         open32MetafilePaletteChange(handle, 0x139, count, 0, NULL);
     return valid;
@@ -272,7 +272,7 @@ ULONG GetSystemPaletteEntries(ULONG dc, ULONG first, ULONG count, PVOID output)
 {
     if (!open32FindDC(dc))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG colors[256];
@@ -309,7 +309,7 @@ ULONG GetNearestColor(ULONG handle, ULONG color)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     ULONG kind = color >> 24;
@@ -319,14 +319,14 @@ ULONG GetNearestColor(ULONG handle, ULONG color)
         if ((color & 0xFF0000) ||
             GetPaletteEntries(dc->palette_handle, color & 0xFFFF, 1, entry) != 1)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return UINT32_MAX;
         }
         color = (ULONG)entry[0] | (ULONG)entry[1] << 8 | (ULONG)entry[2] << 16;
     }
     else if (kind && kind != 2)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     color &= 0xFFFFFF;

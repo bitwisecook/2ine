@@ -12,13 +12,13 @@ static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG f
         return TRUE;
     if (count > STRING_LIMIT)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint8 *copy = malloc(count);
     if (!copy)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     BOOL result = lx_execution_read(GProcessState.execution, source, copy, count);
@@ -30,7 +30,7 @@ static BOOL convert_buffer(ULONG source, ULONG destination, ULONG count, ULONG f
     }
     free(copy);
     if (!result)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return result;
 }
 
@@ -39,7 +39,7 @@ static BOOL convert_string(ULONG source, ULONG destination, ULONG from, ULONG to
     char *text = lx_execution_copy_string(GProcessState.execution, source, STRING_LIMIT);
     if (!text)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG count = (ULONG)strlen(text) + 1;
@@ -77,7 +77,7 @@ static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
     {
         free(input);
         free(prefix);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     size_t length = strlen(input), before = prefix ? strlen(prefix) : 0;
@@ -85,7 +85,7 @@ static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
     {
         free(input);
         free(prefix);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LxGuestBorrow output = {0};
@@ -94,7 +94,7 @@ static ULONG string_copy(ULONG destination, ULONG source, BOOL append)
     {
         free(input);
         free(prefix);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     memcpy(output.host, input, length);
@@ -122,7 +122,7 @@ LONG lstrlen(ULONG source)
     char *text = lx_execution_copy_string(GProcessState.execution, source, STRING_LIMIT);
     if (!text)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG length = (LONG)strlen(text);
@@ -138,7 +138,7 @@ static ULONG case_buffer(ULONG pointer, ULONG count, const uint8 table[256])
     if (count > STRING_LIMIT || !lx_execution_borrow(GProcessState.execution, pointer, count,
                                                      LX_GUEST_READ | LX_GUEST_WRITE, &text))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint8 *bytes = text.host;
@@ -155,7 +155,7 @@ static ULONG case_string(ULONG value, const uint8 table[256])
     char *copy = lx_execution_copy_string(GProcessState.execution, value, STRING_LIMIT);
     if (!copy)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG count = (ULONG)strlen(copy) + 1;
@@ -188,7 +188,7 @@ ULONG CharNext(ULONG pointer)
     uint8 value;
     if (!lx_execution_read(GProcessState.execution, pointer, &value, 1))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return value ? pointer + 1 : pointer;
@@ -200,7 +200,7 @@ ULONG CharPrev(ULONG start, ULONG current)
         return current;
     if (!lx_execution_memory(GProcessState.execution, current - 1, 1, LX_GUEST_READ))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* The process NLS provider exposes no double-byte lead ranges. */
@@ -213,7 +213,7 @@ LONG lstrcmpi(ULONG first, ULONG second)
     char *b = lx_execution_copy_string(GProcessState.execution, second, STRING_LIMIT);
     LONG result = 0;
     if (!a || !b)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else
     {
         const unsigned char *p = (const unsigned char *)a, *q = (const unsigned char *)b;
@@ -240,7 +240,7 @@ LONG lstrcmp(ULONG first, ULONG second)
     char *b = lx_execution_copy_string(GProcessState.execution, second, STRING_LIMIT);
     LONG result = 0;
     if (!a || !b)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     else
     {
         const unsigned char *p = (const unsigned char *)a, *q = (const unsigned char *)b;
@@ -284,7 +284,7 @@ LONG lstrcmp2(PSZ first, PSZ second)
 {
     if (!first || !second)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* Both operands are compared as UTF-16 units from the OEM code page. */
@@ -296,7 +296,7 @@ LONG lstrcmp2(PSZ first, PSZ second)
     LONG result = 0;
     if (!left || !right || !MultiByteToWideChar(page, 1, first, -1, left, a) ||
         !MultiByteToWideChar(page, 1, second, -1, right, b))
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     else
         for (LONG i = 0; i < a && i < b && !result; i++)
         {

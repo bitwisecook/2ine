@@ -31,21 +31,21 @@ ULONG SetEnhMetaFileBits(ULONG size, PVOID data)
 {
     if (!data || size < 108 || size > 64u * 1024 * 1024)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     lx_host_once(&metafile_once, metafile_initialize);
     Open32Metafile *f = metafile_monitor ? malloc(sizeof *f + size) : NULL;
     if (!f)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     memcpy(f->data, data, size);
     if (!valid_emf(f->data, size))
     {
         free(f);
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     f->size = size;
@@ -62,7 +62,7 @@ ULONG SetEnhMetaFileBits(ULONG size, PVOID data)
     if (!result)
     {
         free(f);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return result;
 }
@@ -76,7 +76,7 @@ BOOL DeleteEnhMetaFile(ULONG handle)
 {
     if (lx_handle_close(handle, LX_HANDLE_OPEN32_ENHMETAFILE))
         return TRUE;
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return FALSE;
 }
 
@@ -85,7 +85,7 @@ ULONG GetEnhMetaFileBits(ULONG handle, ULONG capacity, PVOID output)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_ENHMETAFILE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Metafile *f = borrow.resource;
@@ -101,7 +101,7 @@ ULONG GetEnhMetaFileHeader(ULONG handle, ULONG capacity, PVOID output)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_ENHMETAFILE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Metafile *f = borrow.resource;
@@ -120,14 +120,14 @@ static BOOL emf_object(PVOID table, ULONG count, ULONG index, ULONG object)
     {
         if (object)
             DeleteObject(object);
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     uint8 *p = (uint8 *)table + index * 4;
     if (lx_guest_load_u32(p))
     {
         DeleteObject(object);
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     lx_guest_store_u32(p, object);
@@ -140,7 +140,7 @@ static ULONG emf_region(const uint8 *data, ULONG size)
     ULONG n = size >= 32 ? lx_guest_load_u32(data + 8) : UINT32_MAX;
     if (n > (size - 32) / 16 || size < 32)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     ULONG region = CreateRectRgn(0, 0, 0, 0), part = region ? CreateRectRgn(0, 0, 0, 0) : 0;
@@ -171,7 +171,7 @@ static BOOL emf_dib(const uint8 *p, ULONG bytes, ULONG info_at, ULONG info_size,
         !open32DibBuffers((PVOID)(p + info_at), 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
         info_bytes > info_size || pixel_bytes > bits_size)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     return TRUE;
@@ -201,7 +201,7 @@ static BOOL emf_bezier(ULONG dc, const uint8 *points, ULONG n, BOOL from_current
     }
     if ((n - first) % 3 || (n - first) / 3 > 4095)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     ULONG segments = (n - first) / 3, total = segments * 16 + 1;
@@ -210,7 +210,7 @@ static BOOL emf_bezier(ULONG dc, const uint8 *points, ULONG n, BOOL from_current
     uint8 *line = malloc((size_t)total * 8);
     if (!line)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     lx_guest_store_u32(line, (ULONG)x0);
@@ -256,7 +256,7 @@ static BOOL emf_mask_blt(ULONG dc, const uint8 *p, ULONG bytes)
         (info_size && !emf_dib(p, bytes, info_at, info_size, bits_at, bits_size, usage)) ||
         lx_guest_load_u16(p + mask_info_at + 14) != 1)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     LONG x = (LONG)lx_guest_load_u32(p + 24), y = (LONG)lx_guest_load_u32(p + 28),
@@ -338,7 +338,7 @@ static BOOL emf_poly_draw(ULONG dc, const uint8 *points, const uint8 *types, ULO
         unsigned used = (types[i] & ~1u) == 4 ? 3 : 1;
         if (i + used > n)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         for (unsigned k = 0; k < used; k++)
@@ -364,7 +364,7 @@ static BOOL emf_poly_draw(ULONG dc, const uint8 *points, const uint8 *types, ULO
                 ok = emf_bezier(dc, wire, 3, TRUE);
                 break;
             default:
-                open32SetError(13);
+                open32SetError(ERROR_INVALID_DATA);
                 return FALSE;
         }
         if (ok && (types[i + used - 1] & 1))
@@ -378,14 +378,14 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
 {
     if (!open32FindDC(dc) || !record || count > 65535 || (count && !table))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     const uint8 *p = record;
     ULONG type = lx_guest_load_u32(p), bytes = lx_guest_load_u32(p + 4);
     if (bytes < 8 || (bytes & 3) || bytes > 64u * 1024 * 1024)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
 #define EMF_LONG(o) ((LONG)lx_guest_load_u32(p + (o)))
@@ -461,7 +461,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         ULONG n = lx_guest_load_u32(p + 24);
         if (n > 65536 || n > (bytes - 28) / 8)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return type == 3 ? Polygon(dc, (PVOID)(p + 28), (LONG)n)
@@ -473,7 +473,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         if (polygons > 65536 || points > 65536 || polygons > (bytes - 32) / 4 ||
             points > (bytes - 32 - polygons * 4) / 8)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         uint64 total = 0;
@@ -481,7 +481,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
             total += lx_guest_load_u32(p + 32 + i * 4);
         if (total != points)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return type == 7
@@ -556,7 +556,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         char *ansi = malloc(n ? n : 1);
         if (!ansi)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         BOOL valid = TRUE;
@@ -574,7 +574,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
             if (!found)
             {
                 valid = FALSE;
-                open32SetError(50);
+                open32SetError(ERROR_NOT_SUPPORTED);
                 break;
             }
         }
@@ -628,19 +628,19 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
               points = lx_guest_load_u32(p + (multiple ? 28 : 24));
         if ((multiple && bytes < 32) || polygons > 65536 || points > 65536)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         ULONG head = multiple ? 32 + polygons * 4 : 28;
         if (head > bytes || points > (bytes - head) / 4)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         uint8 *wide = malloc(head + (size_t)points * 8);
         if (!wide)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         memcpy(wide, p, head);
@@ -660,7 +660,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         ULONG n = lx_guest_load_u32(p + 24);
         if (n > 65536 || n > (bytes - 28) / 8)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         if (type != 6)
@@ -723,7 +723,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         ULONG n = lx_guest_load_u32(p + 24), size = type == 56 ? 8 : 4;
         if (n > 65536 || n > (bytes - 28) / (size + 1))
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return emf_poly_draw(dc, p + 28, p + 28 + (size_t)n * size, n, size == 4);
@@ -762,7 +762,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
     {
         if (lx_guest_load_u16(p + 14) > (bytes - 16) / 4)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return emf_object(table, count, lx_guest_load_u32(p + 8), CreatePalette((PVOID)(p + 12)));
@@ -773,7 +773,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         ULONG object = index < count ? lx_guest_load_u32((uint8 *)table + index * 4) : 0;
         if (!object)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         if (type == 51)
@@ -781,7 +781,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         ULONG entries = lx_guest_load_u32(p + 16);
         if (entries > (bytes - 20) / 4)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         SetPaletteEntries(object, lx_guest_load_u32(p + 12), entries, (PVOID)(p + 20));
@@ -794,7 +794,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         ULONG at = type == 71 ? 32 : type == 72 ? 40 : type == 75 ? 16 : 28;
         if (size > bytes - at)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         if (type == 75 && !size)
@@ -862,7 +862,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
                               lx_guest_load_u32(p + 72), usage, &ib, &pb) ||
             ib > info_size || pb > bits_size)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return SetDIBitsToDevice(dc, EMF_LONG(24), EMF_LONG(28), EMF_LONG(40), EMF_LONG(44),
@@ -879,7 +879,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
         if (info_at > bytes || info_size > bytes - info_at || info_size < 40 || bits_at > bytes ||
             bits_size > bytes - bits_at)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         memcpy(mono, p + info_at, 40);
@@ -917,7 +917,7 @@ BOOL PlayEnhMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
     }
 #undef EMF_LONG
     TRACE_NATIVE("Unsupported EMF record %u (%u bytes)", type, bytes);
-    open32SetError(50);
+    open32SetError(ERROR_NOT_SUPPORTED);
     return FALSE;
 }
 
@@ -956,7 +956,7 @@ static BOOL enhanced_bounds(ULONG dc, const Open32Metafile *file, PVOID bounds)
     if (!w || !h || w < INT32_MIN || w > INT32_MAX || h < INT32_MIN || h > INT32_MAX ||
         fw < INT32_MIN || fw > INT32_MAX || fh < INT32_MIN || fh > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* The picture's device space maps onto the target. Its own mapping records then apply
@@ -990,12 +990,12 @@ BOOL PlayEnhMetaFile(ULONG dc, ULONG handle, PVOID bounds)
         (lx_guest_load_u32(bounds) == lx_guest_load_u32((uint8 *)bounds + 8) ||
          lx_guest_load_u32((uint8 *)bounds + 4) == lx_guest_load_u32((uint8 *)bounds + 12)))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (!open32FindDC(dc) || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_ENHMETAFILE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32Metafile *f = borrow.resource;
@@ -1039,7 +1039,7 @@ BOOL EnumEnhMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter, P
     if ((dc && (!open32FindDC(dc) || !bounds)) || !open32ValidProcedure(procedure) ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_ENHMETAFILE, &borrow))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (bounds &&

@@ -98,7 +98,7 @@ static BOOL bitmap_blt(ULONG destination, ULONG source, PPOINTL points, LONG rop
     if (converted)
         GpiDeleteBitmap(converted);
     if (!ok)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return ok;
 }
 
@@ -137,7 +137,7 @@ ULONG LoadBitmap(HMODULE module, PSZ name)
         module = GProcessState.main_module->handle;
     if (!open32Presentation())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     HPS ps = WinGetPS(HWND_DESKTOP);
@@ -145,7 +145,7 @@ ULONG LoadBitmap(HMODULE module, PSZ name)
     if (ps)
         WinReleasePS(ps);
     if (!bitmap)
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
     return bitmap;
 }
 
@@ -154,7 +154,7 @@ BOOL open32BitmapBytes(LONG width, LONG height, ULONG planes, ULONG depth, size_
     if (width < 1 || height < 1 || width > 16384 || height > 16384 ||
         (uint64_t)width * height > 16777216)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* Plane count multiplies the depth of the chunky raster that backs every bitmap. */
@@ -163,7 +163,7 @@ BOOL open32BitmapBytes(LONG width, LONG height, ULONG planes, ULONG depth, size_
         (bits != 1 && bits != 2 && bits != 4 && bits != 8 && bits != 16 && bits != 24 &&
          bits != 32))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     *bytes = ((size_t)width * bits + 15) / 16 * 2 * (size_t)height;
@@ -198,7 +198,7 @@ ULONG CreateBitmap(LONG width, LONG height, ULONG planes, ULONG depth, PVOID bit
     PmBitmap *bitmap = handle ? lx_pm_bitmap(handle, &borrow) : NULL;
     if (!bitmap)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     if (bits)
@@ -267,7 +267,7 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
     PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
     if (!bitmap)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     size_t size = 0;
@@ -287,7 +287,7 @@ static LONG bitmap_bits(ULONG handle, ULONG capacity, PVOID data, BOOL write)
     if (!encoded)
     {
         lx_handle_release(&borrow);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     uint32 palette[256];
@@ -355,7 +355,7 @@ LONG GetBitmapBits(ULONG h, LONG count, PVOID output)
 {
     if (count < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* A zero capacity is a size query, as is a NULL buffer. */
@@ -366,7 +366,7 @@ LONG SetBitmapBits(ULONG h, ULONG count, PVOID input)
 {
     if (!count || !input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return bitmap_bits(h, count, input, TRUE);
@@ -376,7 +376,7 @@ ULONG _CreateBitmapIndirect(PVOID input)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     const uint8 *p = input;
@@ -389,14 +389,14 @@ ULONG _CreateBitmapIndirect(PVOID input)
         return 0;
     if (planes > 32 || depth > 32 || w < 0 || h < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!w || !h)
     {
         ULONG empty = lx_pm_bitmap_create(1, 1, 1, 1);
         if (!empty)
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return empty;
     }
     size_t bytes;
@@ -410,7 +410,7 @@ ULONG _CreateBitmapIndirect(PVOID input)
         !lx_execution_borrow(GProcessState.execution, address, pitch * (size_t)h, LX_GUEST_READ,
                              &bits))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* Rows are repacked when the record's pitch exceeds the bitmap's WORD-aligned rows. */
@@ -418,7 +418,7 @@ ULONG _CreateBitmapIndirect(PVOID input)
     if (!packed)
     {
         lx_execution_release(&bits);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     for (LONG row = 0; row < h; row++)
@@ -433,21 +433,21 @@ ULONG CreateDIBitmap(ULONG dc, PVOID header, ULONG options, PVOID bits, PVOID in
 {
     if (!open32FindDC(dc))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (!bits)
         options = 0;
     if (!header || lx_guest_load_u32(header) != 40 || ((options & 4) && !info))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG w = (LONG)lx_guest_load_u32((uint8 *)header + 4),
          h = (LONG)lx_guest_load_u32((uint8 *)header + 8);
     if (h == INT32_MIN)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG height = h < 0 ? -h : h;
@@ -474,7 +474,7 @@ BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source,
     Open32DC *dc = open32FindDC(source);
     if (!dc || !open32FindDC(destination))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (!w || !h || !sw || !sh)
@@ -482,7 +482,7 @@ BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source,
     int64_t ex = (int64_t)sx + sw, ey = (int64_t)sy + sh;
     if (ex < INT32_MIN || ex > INT32_MAX || ey < INT32_MIN || ey > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG xx = (LONG)ex, yy = (LONG)ey;
@@ -493,7 +493,7 @@ BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source,
         return TRUE;
     if (width > 16384 || height > 16384 || width * height > 16777216)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     LONG left = sx < xx ? sx : xx, top = sy < yy ? sy : yy;
@@ -549,6 +549,6 @@ BOOL StretchBlt(ULONG destination, LONG x, LONG y, LONG w, LONG h, ULONG source,
     free(bits);
     free(pixels);
     if (!ok)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return ok;
 }

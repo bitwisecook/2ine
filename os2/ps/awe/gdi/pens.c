@@ -21,13 +21,13 @@ ULONG CreatePen(LONG style, LONG width, ULONG color)
     if (style < 0 || style > 6 || width < 0 || width > 32767 ||
         ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Open32Pen *pen = calloc(1, sizeof *pen);
     if (!pen)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     pen->style = width > 1 && style >= 1 && style <= 4 ? 0 : style;
@@ -37,7 +37,7 @@ ULONG CreatePen(LONG style, LONG width, ULONG color)
     if (!handle)
     {
         free(pen);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -46,7 +46,7 @@ ULONG CreatePenIndirect(PVOID record)
 {
     if (!record)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return CreatePen((LONG)lx_guest_load_u32(record), (LONG)lx_guest_load_u32((uint8 *)record + 4),
@@ -120,19 +120,19 @@ ULONG ExtCreatePen(ULONG style, ULONG width, PVOID brush, ULONG count, PVOID ent
     ULONG basic = style & 15;
     if (!brush)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* PMWINX refuses PS_USERSTYLE and requires cosmetic pens to be one-pel solid. */
     if (basic == 7)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     ULONG brush_style = lx_guest_load_u32(brush);
     if (basic > 8 || (style & 0x10000 ? brush_style > 8 : width != 1 || brush_style))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG object = CreatePen((LONG)(basic > 6 ? 0 : basic), (LONG)width,
@@ -165,7 +165,7 @@ ULONG ExtCreatePen(ULONG style, ULONG width, PVOID brush, ULONG count, PVOID ent
     if (!valid)
     {
         DeleteObject(object);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return object;

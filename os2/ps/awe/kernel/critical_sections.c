@@ -61,7 +61,7 @@ VOID InitializeCriticalSection(PVOID address)
     if ((uintptr_t)address > UINT32_MAX ||
         !lx_execution_memory(GProcessState.execution, pointer, 24, 3))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     lx_host_once(&once, initialize);
@@ -69,7 +69,7 @@ VOID InitializeCriticalSection(PVOID address)
     if (find_section(pointer))
     {
         lx_host_monitor_unlock(monitor);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     CriticalSection *cs = calloc(1, sizeof *cs);
@@ -79,7 +79,7 @@ VOID InitializeCriticalSection(PVOID address)
     {
         free(cs);
         lx_host_monitor_unlock(monitor);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return;
     }
     cs->address = pointer;
@@ -96,7 +96,7 @@ VOID EnterCriticalSection(PVOID address)
     if ((uintptr_t)address > UINT32_MAX ||
         !lx_execution_borrow(GProcessState.execution, pointer, 24, 3, &record))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     lx_host_once(&once, initialize);
@@ -106,7 +106,7 @@ VOID EnterCriticalSection(PVOID address)
     {
         lx_host_monitor_unlock(monitor);
         lx_execution_release(&record);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     cs->waiting++;
@@ -122,7 +122,7 @@ VOID EnterCriticalSection(PVOID address)
         cs->owner = GetCurrentThreadId();
     }
     else
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     store_section(cs);
     lx_host_monitor_unlock(monitor);
     lx_execution_release(&record);
@@ -134,7 +134,7 @@ VOID LeaveCriticalSection(PVOID address)
     if ((uintptr_t)address > UINT32_MAX ||
         !lx_execution_memory(GProcessState.execution, pointer, 24, 3))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     lx_host_once(&once, initialize);
@@ -143,7 +143,7 @@ VOID LeaveCriticalSection(PVOID address)
     if (!cs || !cs->recursion || cs->host_owner != lx_host_thread_id())
     {
         lx_host_monitor_unlock(monitor);
-        open32SetError(158);
+        open32SetError(ERROR_NOT_LOCKED);
         return;
     }
     cs->recursion--;
@@ -169,7 +169,7 @@ VOID DeleteCriticalSection(PVOID address)
     if (!cs || (uintptr_t)address > UINT32_MAX || cs->recursion || cs->waiting)
     {
         lx_host_monitor_unlock(monitor);
-        open32SetError(cs ? 170 : 87);
+        open32SetError(cs ? ERROR_BUSY : ERROR_INVALID_PARAMETER);
         return;
     }
     *link = cs->next;

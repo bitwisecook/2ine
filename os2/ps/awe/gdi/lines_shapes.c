@@ -14,7 +14,7 @@ BOOL MoveToEx(ULONG handle, LONG x, LONG y, PVOID previous)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (previous)
@@ -291,7 +291,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !open32CanDraw(handle) || !dc->pen.resource)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     int captured = open32PathLine(dc, target_x, target_y, FALSE);
@@ -314,7 +314,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     int64_t dx = llabs((int64_t)target_x - x), dy = llabs((int64_t)target_y - y);
     if (dx > 65536 || dy > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (pen->style == PS_NULL || (!dx && !dy))
@@ -348,7 +348,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     BOOL polygonal = stroke_polygonal(pen);
     if (pixel_count > 16777216 || (!polygonal && work > 67108864))
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     size_t width = (size_t)(right - left), height = (size_t)(bottom - top),
@@ -359,7 +359,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
     {
         free(coverage);
         free(pixels);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     StrokePlane plane = {coverage, left, top, right, bottom, width};
@@ -398,7 +398,7 @@ BOOL LineTo(ULONG handle, LONG target_x, LONG target_y)
         dc->position_y = logical_target_y;
     }
     else
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return result;
 }
 
@@ -409,7 +409,7 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     if (!dc || !open32CanDraw(handle) || !dc->pen.resource ||
         open32BrushObject(dc->brush_handle, sizeof brush, brush) != sizeof brush)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (!open32IdentityMapping(dc) || stroke_polygonal(dc->pen.resource))
@@ -463,14 +463,14 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     uint64_t area = (uint64_t)(r - l) * (uint64_t)(b - t);
     if (area > 16777216)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     unsigned width = (unsigned)(r - l), height = (unsigned)(b - t);
     uint32 *pixels = malloc((size_t)area * 4);
     if (!pixels)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     BOOL result =
@@ -552,7 +552,7 @@ BOOL Rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
             lx_pm_raster_write(handle, (LONG)l, canvas_height - (LONG)b, width, height, pixels);
     free(pixels);
     if (!result)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return result;
 }
 
@@ -569,7 +569,7 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     Open32Pen *pen = dc ? dc->pen.resource : NULL;
     if (!dc || !pen || !open32CanDraw(handle) || !input || count < 2 || count > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     int captured = open32PathCapture(dc, input, count, closed);
@@ -582,7 +582,7 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     {
         free(points);
         free(shape);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     int64_t left = INT32_MAX, top = INT32_MAX, right = INT32_MIN, bottom = INT32_MIN;
@@ -634,7 +634,7 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
     {
         free(points);
         free(shape);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     if (left >= right || top >= bottom)
@@ -652,7 +652,7 @@ static BOOL draw_path(ULONG handle, PVOID input, LONG count, BOOL closed, BOOL f
         free(shape);
         free(coverage);
         free(pixels);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     StrokePlane plane = {coverage, left, top, right, bottom, width};
@@ -726,7 +726,7 @@ static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LON
 {
     if (!open32FindDC(h))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (l > r)
@@ -746,7 +746,7 @@ static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LON
         return TRUE;
     if (rx > 32768 || ry > 32768)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     double start = 0, sweep = 2 * 3.14159265358979323846;
@@ -773,7 +773,7 @@ static BOOL curve(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG sx, LONG sy, LON
     uint8 *points = malloc((size_t)n * 8);
     if (!points)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     for (unsigned i = 0; i <= steps; i++)
@@ -839,7 +839,7 @@ BOOL RoundRect(ULONG h, LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
     }
     if ((int64_t)r - l > 65536 || (int64_t)b - t > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     double rx = fmin(fabs((double)ew), (double)r - l) / 2,
@@ -882,7 +882,7 @@ BOOL PolyPolyline(ULONG h, PVOID points, PVOID counts, ULONG polygons)
 {
     if (!points || !counts || polygons > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     size_t offset = 0;
@@ -891,7 +891,7 @@ BOOL PolyPolyline(ULONG h, PVOID points, PVOID counts, ULONG polygons)
         ULONG n = lx_guest_load_u32((uint8 *)counts + p * 4);
         if (n < 2 || n > 65536 - offset)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         if (!Polyline(h, (uint8 *)points + offset * 8, (LONG)n))
@@ -906,7 +906,7 @@ BOOL PolyPolygon(ULONG h, PVOID points, PVOID counts, LONG polygons)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !points || !counts || polygons < 0 || polygons > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (open32PathRecording(dc))
@@ -936,7 +936,7 @@ BOOL PolyPolygon(ULONG h, PVOID points, PVOID counts, LONG polygons)
         uint8 *closed = malloc(((size_t)n + 1) * 8);
         if (!closed)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         memcpy(closed, (uint8 *)points + offset * 8, (size_t)n * 8);
@@ -952,13 +952,13 @@ BOOL LineDDA(LONG x, LONG y, LONG end_x, LONG end_y, ULONG procedure, ULONG para
 {
     if (!lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     int64_t dx = llabs((int64_t)end_x - x), dy = llabs((int64_t)end_y - y);
     if (dx > 1048576 || dy > 1048576)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG sx = x < end_x ? 1 : -1, sy = y < end_y ? 1 : -1;
@@ -986,7 +986,7 @@ BOOL DrawFocusRect(ULONG h, PVOID input)
 {
     if (!input || !open32FindDC(h))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG l = (LONG)lx_guest_load_u32(input), t = (LONG)lx_guest_load_u32((uint8 *)input + 4),
@@ -1019,13 +1019,13 @@ BOOL open32FloodFill(ULONG h, LONG x, LONG y, ULONG color, ULONG mode)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !open32CanDraw(h) || !open32MapPoint(dc, &x, &y, TRUE))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     LONG width = open32DCWidth(h), height = open32DCHeight(h);
     if (x < 0 || y < 0 || x >= width || y >= height || (uint64)width * height > 16777216)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     size_t area = (size_t)width * height;

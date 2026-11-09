@@ -39,7 +39,7 @@ static uint32 bridge32_CreateProcess(uint8 *a)
                                lx_guest_load_u32(a + 16), lx_guest_load_u32(a + 20),
                                environment.host, directory, startup.host, information.host);
     else
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     lx_execution_release(&information);
     lx_execution_release(&startup);
     lx_guest_argument_finish(&environment, 0);
@@ -55,7 +55,7 @@ static uint32 bridge32_DuplicateHandle(uint8 *a)
     if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 12), 4, LX_GUEST_WRITE,
                              &output))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG copy = 0;
@@ -126,7 +126,7 @@ static uint32 bridge32_GetExitCodeProcess(uint8 *a)
     if (!lx_execution_borrow(GProcessState.execution, lx_guest_load_u32(a + 4), 4, LX_GUEST_WRITE,
                              &output))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG code = 0;

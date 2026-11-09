@@ -94,7 +94,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     (void)security;
     if (name && (!*name || strlen(name) > 240))
     {
-        open32SetError(123);
+        open32SetError(ERROR_INVALID_NAME);
         return 0;
     }
     char identifier[80], gate[84], shared_name[40];
@@ -117,7 +117,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     Open32Sync *sync = calloc(1, sizeof *sync);
     if (!sync)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     sync->event = event;
@@ -142,14 +142,14 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
                     continue;
             }
             destroy_sync(sync);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         if (!sync->shared || lx_host_shared_size(sync->shared) != sizeof(SyncMetadata) ||
             !(sync->metadata = lx_host_shared_map(sync->shared, NULL, 0)))
         {
             destroy_sync(sync);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         if (!found)
@@ -168,7 +168,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
                 sync->metadata->event != (ULONG)event || strcmp(sync->metadata->name, name))
             {
                 destroy_sync(sync);
-                open32SetError(6);
+                open32SetError(ERROR_INVALID_HANDLE);
                 return 0;
             }
             sync->manual = sync->metadata->manual;
@@ -187,7 +187,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     if (!handle)
     {
         destroy_sync(sync);
-        open32SetError(error ? error : 8);
+        open32SetError(error ? error : ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     lx_host_once(&sync_once, initialize_sync_objects);
@@ -197,7 +197,7 @@ static ULONG make_sync(PVOID security, BOOL event, BOOL manual, BOOL initial, PS
     sync_objects = sync;
     lx_host_monitor_unlock(sync_lock);
     if (existing)
-        open32SetError(183);
+        open32SetError(ERROR_ALREADY_EXISTS);
     return handle;
 }
 
@@ -224,14 +224,14 @@ static BOOL event_operation(ULONG handle, BOOL set)
     if (!lx_handle_access(handle, LX_HANDLE_OPEN32_EVENT, &access) ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_EVENT, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (!(access & EVENT_MODIFY_STATE_RIGHT))
     {
         lx_handle_release(&borrow);
         /* The original reports a refused SetEvent as a bad handle, ResetEvent as denied. */
-        open32SetError(set ? 6 : 5);
+        open32SetError(set ? ERROR_INVALID_HANDLE : ERROR_ACCESS_DENIED);
         return FALSE;
     }
     Open32Sync *sync = borrow.resource;
@@ -274,7 +274,7 @@ BOOL ReleaseMutex(ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_MUTEX, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     typedef APIRET(OS2API * Fn)(ULONG);

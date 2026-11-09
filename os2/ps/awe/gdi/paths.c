@@ -35,13 +35,13 @@ static BOOL path_point(struct Open32Path *p, LONG x, LONG y, BOOL move)
         size_t n = p->capacity ? p->capacity * 2 : 64;
         if (n > 1048576)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         void *more = realloc(p->points, n * sizeof *p->points);
         if (!more)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         p->points = more;
@@ -69,7 +69,7 @@ int open32PathCapture(Open32DC *dc, PVOID input, LONG count, BOOL close)
         return 0;
     if (!input || count < 1 || count > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     size_t before = dc->path->count;
@@ -91,14 +91,14 @@ BOOL BeginPath(ULONG h)
     Open32DC *dc = open32FindDC(h);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     open32PathCleanup(dc);
     dc->path = calloc(1, sizeof *dc->path);
     if (!dc->path)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     dc->path->recording = TRUE;
@@ -110,7 +110,7 @@ BOOL EndPath(ULONG h)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !dc->path || !dc->path->recording)
     {
-        open32SetError(dc ? 1003 : 6);
+        open32SetError(dc ? ERROR_CAN_NOT_COMPLETE : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     dc->path->recording = FALSE;
@@ -123,7 +123,7 @@ BOOL StrokePath(ULONG h)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !dc->path || !dc->path->ready)
     {
-        open32SetError(dc ? 1003 : 6);
+        open32SetError(dc ? ERROR_CAN_NOT_COMPLETE : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     struct Open32Path *p = dc->path;
@@ -144,7 +144,7 @@ BOOL open32PathClose(Open32DC *dc)
 {
     if (!dc || !dc->path || !dc->path->recording)
     {
-        open32SetError(dc ? 1003 : 6);
+        open32SetError(dc ? ERROR_CAN_NOT_COMPLETE : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     struct Open32Path *p = dc->path;
@@ -163,7 +163,7 @@ static ULONG path_region(Open32DC *dc, BOOL device)
     struct Open32Path *p = dc->path;
     if (p->count > 65536)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     uint8 *points = malloc((p->count ? p->count : 1) * 8),
@@ -195,7 +195,7 @@ static ULONG path_region(Open32DC *dc, BOOL device)
     else if (ok)
         region = CreateRectRgn(0, 0, 0, 0);
     else
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     free(points);
     free(counts);
     return region;
@@ -207,7 +207,7 @@ BOOL open32PathFill(ULONG h, BOOL stroke)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !dc->path || !dc->path->ready)
     {
-        open32SetError(dc ? 1003 : 6);
+        open32SetError(dc ? ERROR_CAN_NOT_COMPLETE : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     ULONG region = path_region(dc, FALSE);
@@ -225,7 +225,7 @@ BOOL open32PathClip(ULONG h, LONG mode)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !dc->path || !dc->path->ready)
     {
-        open32SetError(dc ? 1003 : 6);
+        open32SetError(dc ? ERROR_CAN_NOT_COMPLETE : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     ULONG region = path_region(dc, TRUE);
@@ -242,7 +242,7 @@ BOOL open32PathWiden(Open32DC *dc)
     uint8 pen[16];
     if (!dc || !dc->path || !dc->path->ready)
     {
-        open32SetError(dc ? 1003 : 6);
+        open32SetError(dc ? ERROR_CAN_NOT_COMPLETE : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (open32PenObject(dc->pen_handle, sizeof pen, pen) != 16)
@@ -251,7 +251,7 @@ BOOL open32PathWiden(Open32DC *dc)
     struct Open32Path *source = dc->path, *wide = calloc(1, sizeof *wide);
     if (!wide)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     BOOL ok = TRUE;

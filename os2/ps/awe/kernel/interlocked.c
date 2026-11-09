@@ -11,7 +11,7 @@ static int interlocked_word(PLONG value, int operation, uint32 delta, uint32 *pr
                               LX_GUEST_READ | LX_GUEST_WRITE, &address) ||
         !lx_execution_atomic_u32(GProcessState.execution, address, operation, delta, previous))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return 1;

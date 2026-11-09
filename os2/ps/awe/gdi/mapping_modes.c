@@ -10,7 +10,7 @@ LONG GetMapMode(ULONG dc)
     Open32DC *context = open32FindDC(dc);
     if (!context)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     return context->map_mode;
@@ -21,12 +21,12 @@ LONG SetMapMode(ULONG dc, LONG mode)
     Open32DC *context = open32FindDC(dc);
     if (!context)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (mode < 1 || mode > 8)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG previous = context->map_mode;
@@ -122,7 +122,7 @@ BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device)
     {
         if (map_transformed(dc, x, y, device))
             return TRUE;
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG a = *x, b = *y;
@@ -135,7 +135,7 @@ BOOL open32MapPoint(Open32DC *dc, LONG *x, LONG *y, BOOL device)
                            dc->viewport_height);
     if (!valid)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     *x = a;
@@ -148,7 +148,7 @@ static BOOL map_points(ULONG handle, PVOID points, LONG count, BOOL device)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || count < 0 || count > 65536 || (count && !points))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     for (LONG i = 0; i < count; i++)
@@ -196,7 +196,7 @@ static BOOL set_mapping(ULONG handle, LONG x, LONG y, PVOID previous, unsigned k
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     LONG *first = kind == 0   ? &dc->viewport_x
@@ -209,7 +209,7 @@ static BOOL set_mapping(ULONG handle, LONG x, LONG y, PVOID previous, unsigned k
                                : &dc->window_height;
     if (kind >= 2 && dc->map_mode >= 7 && (!x || !y))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (previous)
@@ -261,7 +261,7 @@ BOOL open32WorldTransform(ULONG h, const double m[6], ULONG mode)
     Open32DC *dc = open32FindDC(h);
     if (!dc || mode > 3)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (mode == 1)

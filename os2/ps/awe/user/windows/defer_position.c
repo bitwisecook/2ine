@@ -39,7 +39,7 @@ ULONG BeginDeferWindowPos(LONG count)
 {
     if (count < 0 || count > 65536)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     DeferredBatch *batch = calloc(1, sizeof *batch);
@@ -54,7 +54,7 @@ ULONG BeginDeferWindowPos(LONG count)
     {
         if (batch)
             destroy_defer(batch);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     if (handle)
     {
@@ -72,14 +72,14 @@ ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LO
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_DEFER, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     DeferredBatch *batch = borrow.resource;
     if (batch->owner != lxHostThreadState())
     {
         lx_handle_release(&borrow);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     BOOL valid = IsWindow(window);
@@ -102,7 +102,7 @@ ULONG DeferWindowPos(ULONG handle, ULONG window, ULONG after, LONG x, LONG y, LO
     if (!valid)
     {
         lx_handle_close(handle, LX_HANDLE_OPEN32_DEFER);
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     return handle;
@@ -113,14 +113,14 @@ BOOL EndDeferWindowPos(ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_DEFER, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     DeferredBatch *batch = borrow.resource;
     if (batch->owner != lxHostThreadState())
     {
         lx_handle_release(&borrow);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     BOOL valid = TRUE;

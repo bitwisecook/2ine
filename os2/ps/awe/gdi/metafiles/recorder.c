@@ -360,7 +360,7 @@ ULONG CreateMetaFile(PSZ name)
     if (!r)
     {
         DeleteDC(dc);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     r->dc = dc;
@@ -370,7 +370,7 @@ ULONG CreateMetaFile(PSZ name)
     {
         free(r);
         DeleteDC(dc);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     r->size = 18;
@@ -387,7 +387,7 @@ ULONG CloseMetaFile(ULONG dc)
     Open32Recorder *r = recorder(dc);
     if (!r)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     ULONG result = 0;
@@ -404,7 +404,7 @@ ULONG CloseMetaFile(ULONG dc)
             result = SetMetaFileBitsEx((ULONG)r->size, r->data);
     }
     else
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     open32MetafileDCCleanup(dc);
     DeleteDC(dc);
     return result;
@@ -486,7 +486,7 @@ BOOL open32MetafilePolyPolygon(ULONG dc, PVOID points, PVOID counts, LONG polygo
     Open32Recorder *r = recorder(dc);
     if (!r || polygons < 1 || polygons > 65535)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG total = 0;
@@ -495,7 +495,7 @@ BOOL open32MetafilePolyPolygon(ULONG dc, PVOID points, PVOID counts, LONG polygo
         ULONG n = lx_guest_load_u32((uint8 *)counts + i * 4);
         if (n < 2 || n > 65535 - total)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         total += n;
@@ -504,7 +504,7 @@ BOOL open32MetafilePolyPolygon(ULONG dc, PVOID points, PVOID counts, LONG polygo
     uint8 *p = malloc(bytes);
     if (!p)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     lx_guest_store_u16(p, (uint16)polygons);
@@ -526,7 +526,7 @@ BOOL open32MetafilePolyPolygon(ULONG dc, PVOID points, PVOID counts, LONG polygo
         ok = append_record(r, 0x538, p, bytes);
     free(p);
     if (!ok)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return ok;
 }
 

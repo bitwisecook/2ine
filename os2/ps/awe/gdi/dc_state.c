@@ -33,7 +33,7 @@ LONG SaveDC(ULONG handle)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32SavedDC *saved = calloc(1, sizeof *saved);
@@ -78,7 +78,7 @@ LONG SaveDC(ULONG handle)
 failed:
     release_state(saved);
 memory_error:
-    open32SetError(8);
+    open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return 0;
 }
 
@@ -88,7 +88,7 @@ BOOL RestoreDC(ULONG handle, LONG level)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !level || level == INT32_MIN)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32SavedDC *saved = dc->saved;
@@ -97,12 +97,12 @@ BOOL RestoreDC(ULONG handle, LONG level)
         saved = saved->next;
     if (!saved)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (dc->kind == 1 && GpiSetBitmap(handle, saved->bitmap_handle) == UINT32_MAX)
     {
-        open32SetError(170);
+        open32SetError(ERROR_BUSY);
         return FALSE;
     }
     if (!GpiRestorePS(handle, saved->native_id))

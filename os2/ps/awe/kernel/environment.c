@@ -19,7 +19,7 @@ ULONG GetEnvironmentStrings(void)
     ULONG address = 0;
     if (!lx_execution_address(GProcessState.execution, GProcessState.pib.environment, 1,
                               LX_GUEST_READ, &address))
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return address;
 }
 
@@ -27,7 +27,7 @@ ULONG GetEnvironmentVariable(PSZ name, PSZ output, ULONG capacity)
 {
     if (!name || !*name || strchr(name, '=') || !capacity || !output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     lx_host_once(&env_once, env_initialize);
@@ -50,7 +50,7 @@ ULONG GetEnvironmentVariable(PSZ name, PSZ output, ULONG capacity)
             memcpy(output, value, n + 1);
     }
     else
-        open32SetError(203);
+        open32SetError(ERROR_ENVVAR_NOT_FOUND);
     lx_host_monitor_unlock(env_monitor);
     return result;
 }
@@ -60,7 +60,7 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     if (!name || !*name || strchr(name, '=') || strlen(name) > 32767 ||
         (value && strlen(value) > 32767))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     lx_host_once(&env_once, env_initialize);
@@ -80,7 +80,7 @@ BOOL SetEnvironmentVariable(PSZ name, PSZ value)
     if (!mapping)
     {
         lx_host_monitor_unlock(env_monitor);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     char *begin = lx_execution_mapping_host(mapping), *out = begin;

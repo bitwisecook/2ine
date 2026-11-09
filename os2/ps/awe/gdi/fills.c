@@ -32,7 +32,7 @@ LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
 {
     if (!open32CanDraw(handle) || !rectangle)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (open32Rotated(open32FindDC(handle)) && brush_handle > 21)
@@ -55,7 +55,7 @@ LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
     }
     else
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     const uint8 *wire = rectangle;
@@ -67,7 +67,7 @@ LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
             (int64_t)bottom - top > INT32_MAX || (int64_t)bottom - top < INT32_MIN)
         {
             lx_handle_release(&borrow);
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         ULONG recorded_brush = brush_handle, temporary = 0;
@@ -124,7 +124,7 @@ LONG FillRect(ULONG handle, PVOID rectangle, ULONG brush_handle)
     }
     lx_handle_release(&borrow);
     if (!result)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return result;
 }
 
@@ -132,7 +132,7 @@ LONG FrameRect(ULONG handle, PVOID input, ULONG brush)
 {
     if (!input || !open32CanDraw(handle))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     const uint8 *wire = input;
@@ -159,7 +159,7 @@ BOOL InvertRect(ULONG handle, PVOID input)
 {
     if (!input || !open32CanDraw(handle))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG height = open32DCHeight(handle);
@@ -168,7 +168,7 @@ BOOL InvertRect(ULONG handle, PVOID input)
     int64_t bottom = (int64_t)height - (LONG)lx_guest_load_u32((uint8 *)input + 12);
     if (top < INT32_MIN || top > INT32_MAX || bottom < INT32_MIN || bottom > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL rectangle = {left, (LONG)bottom, right, (LONG)top};
@@ -239,18 +239,18 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
     unsigned rop = (operation >> 16) & 255;
     if (!dc || !open32CanDraw(handle))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (lx_pm_rop_uses_source(rop))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     int64_t ex = (int64_t)x + width, ey = (int64_t)y + height;
     if (ex < INT32_MIN || ex > INT32_MAX || ey < INT32_MIN || ey > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG mapped_x = (LONG)ex, mapped_y = (LONG)ey;
@@ -260,7 +260,7 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
     ey = (int64_t)mapped_y - y;
     if (ex < INT32_MIN || ex > INT32_MAX || ey < INT32_MIN || ey > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     width = (LONG)ex;
@@ -268,7 +268,7 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
     BOOL pattern = lx_pm_rop_uses_pattern(rop);
     if (pattern && !brush)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (!width || !height || (pattern && brush->style == BS_NULL))
@@ -289,7 +289,7 @@ static BOOL brush_blt(ULONG handle, LONG x, LONG y, LONG width, LONG height, ULO
         return TRUE;
     if ((uint64)(right - left) * (uint64)(bottom - top) > 16777216)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     BrushBlit blit = {dc, brush, rop, canvas_height};

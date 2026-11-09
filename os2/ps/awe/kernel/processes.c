@@ -315,7 +315,7 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
 {
     if (!application && !command)
     {
-        open32SetError(2);
+        open32SetError(ERROR_FILE_NOT_FOUND);
         return FALSE;
     }
     /* No host offers a realtime class, so refuse before anything starts. */
@@ -373,7 +373,7 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
                 if (!(windows_inputs = malloc(size)))
                 {
                     free(settings);
-                    open32SetError(8);
+                    open32SetError(ERROR_NOT_ENOUGH_MEMORY);
                     return FALSE;
                 }
                 snprintf(windows_inputs, size, "/s %s%s%s", program, tail ? " " : "",
@@ -389,7 +389,7 @@ static BOOL create_process(PSZ application, PSZ command, ULONG flags, PSZ enviro
              !(flags & (DETACHED_PROCESS_FLAG | CREATE_SUSPENDED_FLAG)))
     {
         /* The DOS layer refuses debug execution with this same error. */
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
         return FALSE;
     }
     char *block = argument_block(program, inputs);
@@ -538,7 +538,7 @@ ULONG WaitForInputIdle(ULONG handle, ULONG timeout)
     wait.process = resolve(handle, LX_HANDLE_OPEN32_PROCESS, &wait.borrow);
     if (!wait.process)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     if (!wait.process->record)
@@ -557,7 +557,7 @@ BOOL GetExitCodeProcess(ULONG handle, PULONG code)
     Open32Process *process = code ? resolve(handle, LX_HANDLE_OPEN32_PROCESS, &borrow) : NULL;
     if (!process)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     lx_host_monitor_lock(process->monitor);
@@ -744,7 +744,7 @@ BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, P
 {
     if (access >> 24)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* Handle tables are private to each worker, so no child could receive this one. */
@@ -758,7 +758,7 @@ BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, P
     local = local_process(target_process, &target_known) && local;
     if (!source_known || !target_known)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (!local)
@@ -772,7 +772,7 @@ BOOL DuplicateHandle(ULONG source_process, ULONG source, ULONG target_process, P
     ULONG copy = duplicate_object(source, options & DUPLICATE_SAME_ACCESS_FLAG ? NULL : &rights);
     if (!copy)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     *output = copy;
@@ -817,7 +817,7 @@ BOOL ExitWindows(ULONG reserved, ULONG code)
         return FALSE;
     BOOL delivered = lx_pm_end_session();
     if (!delivered)
-        open32SetError(31);
+        open32SetError(ERROR_GEN_FAILURE);
     WinBroadcastMsg(HWND_DESKTOP, WM_SAVEAPPLICATION, 0, 0, BROADCAST_SEND_FRAMES);
     lx_host_once(&once, initialize);
     lx_host_monitor_lock(registry);

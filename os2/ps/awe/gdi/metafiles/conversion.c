@@ -394,7 +394,7 @@ ULONG SetWinMetaFileBits(ULONG size, PVOID data, ULONG dc, PVOID picture)
 {
     if ((dc && !open32FindDC(dc)) || !metafile_valid_wmf(data, size))
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     /* The picture's size comes from the WMF's own window, then METAFILEPICT, then the device. */
@@ -438,7 +438,7 @@ ULONG SetWinMetaFileBits(ULONG size, PVOID data, ULONG dc, PVOID picture)
     if (!header)
     {
         free(slots);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     uint8 *comment = emf_add(&e, 70, 28 + (size_t)size);
@@ -488,7 +488,7 @@ ULONG SetWinMetaFileBits(ULONG size, PVOID data, ULONG dc, PVOID picture)
         result = SetEnhMetaFileBits((ULONG)e.size, emf);
     }
     else
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     free(e.data);
     return result;
 }
@@ -499,7 +499,7 @@ ULONG GetWinMetaFileBits(ULONG handle, ULONG capacity, PVOID output, LONG mode, 
     if ((dc && !open32FindDC(dc)) || mode < 1 || mode > 8 ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_ENHMETAFILE, &borrow))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Open32Metafile *f = borrow.resource;

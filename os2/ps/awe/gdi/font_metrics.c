@@ -66,7 +66,7 @@ BOOL GetTextMetrics(ULONG handle, PVOID output)
     if (!dc || !output || !GpiQueryFontMetrics(handle, sizeof fm, &fm) ||
         !lx_host_font_metrics(lx_pm_font(handle), &host))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint8 record[72], logfont[60];
@@ -81,7 +81,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
     if (!open32FindDC(handle) ||
         !lx_execution_memory(GProcessState.execution, procedure, 1, LX_GUEST_EXECUTE))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     PSZ wanted = family && *family ? family : NULL;
@@ -89,7 +89,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
     LONG total = GpiQueryFonts(handle, 1, wanted, &count, sizeof(FONTMETRICS), NULL);
     if (total < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     FONTMETRICS *fonts = calloc(total ? (size_t)total : 1, sizeof *fonts);
@@ -98,7 +98,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
     if (!mapping)
     {
         free(fonts);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     count = total;
@@ -106,7 +106,7 @@ static LONG enumerate_fonts(ULONG handle, PSZ family, ULONG procedure, ULONG par
     {
         lx_execution_unmap(GProcessState.execution, mapping);
         free(fonts);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint8 *record = lx_execution_mapping_host(mapping);
@@ -155,7 +155,7 @@ LONG GetTextFace(ULONG handle, LONG capacity, PCHAR output)
     if (!open32FindDC(handle) || capacity < 0 ||
         !GpiQueryFontMetrics(handle, sizeof metrics, &metrics))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     size_t length = strnlen(metrics.szFacename, sizeof metrics.szFacename);
@@ -185,7 +185,7 @@ BOOL GetCharWidth(ULONG h, ULONG first, ULONG last, PVOID output)
 {
     if (!open32FindDC(h) || !output || first > last || last > 255)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LxHostFont *font = lx_pm_font(h);
@@ -203,7 +203,7 @@ BOOL GetCharABCWidths(ULONG h, ULONG first, ULONG last, PVOID output)
 {
     if (!open32FindDC(h) || !output || first > last || last > 255)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* PMWINX reports the whole advance as abcB, for every font technology. */
@@ -225,7 +225,7 @@ ULONG GetKerningPairs(ULONG h, ULONG capacity, PVOID output)
 {
     if (!open32FindDC(h))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LxHostFont *font = lx_pm_font(h);
@@ -256,12 +256,12 @@ ULONG GetOutlineTextMetrics(ULONG h, ULONG capacity, PVOID output)
     if (!open32FindDC(h) || !lx_host_font_metrics(lx_pm_font(h), &metrics) ||
         !GetTextMetrics(h, tm))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (!capacity)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* PMWINX stores family and face, then an empty style and full name, in a fixed 0x116 record. */

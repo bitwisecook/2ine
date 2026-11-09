@@ -26,7 +26,7 @@ static BOOL rectangle(PmRegion *region, LONG left, LONG top, LONG right, LONG bo
     if (left < minimum || left > maximum || top < minimum || top > maximum || right < minimum ||
         right > maximum || bottom < minimum || bottom > maximum)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL rect = {left < right ? left : right, top < bottom ? top : bottom,
@@ -36,7 +36,7 @@ static BOOL rectangle(PmRegion *region, LONG left, LONG top, LONG right, LONG bo
     source.count = left != right && top != bottom;
     if (!regionBoolean(region, &source, NULL, 2))
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     return TRUE;
@@ -47,7 +47,7 @@ ULONG CreateRectRgn(LONG left, LONG top, LONG right, LONG bottom)
     PmRegion *region = calloc(1, sizeof *region);
     if (!region)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     if (!rectangle(region, left, top, right, bottom))
@@ -59,7 +59,7 @@ ULONG CreateRectRgn(LONG left, LONG top, LONG right, LONG bottom)
     if (!handle)
     {
         free_region(region);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -68,7 +68,7 @@ ULONG CreateRectRgnIndirect(PVOID input)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return CreateRectRgn(
@@ -81,7 +81,7 @@ BOOL SetRectRgn(ULONG handle, LONG left, LONG top, LONG right, LONG bottom)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_REGION, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     BOOL result = rectangle(borrow.resource, left, top, right, bottom);
@@ -94,7 +94,7 @@ LONG CombineRgn(ULONG destination, ULONG first, ULONG second, LONG mode)
     static const LONG modes[] = {0, 6, 1, 4, 7, 2};
     if (mode < 1 || mode > 5)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LxHandleBorrow out = {0}, a = {0}, b = {0};
@@ -106,10 +106,10 @@ LONG CombineRgn(ULONG destination, ULONG first, ULONG second, LONG mode)
         if (regionBoolean(out.resource, a.resource, b.resource, modes[mode]))
             result = region_type(out.resource);
         else
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     else
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_handle_release(&b);
     lx_handle_release(&a);
     lx_handle_release(&out);
@@ -121,7 +121,7 @@ LONG GetRgnBox(ULONG handle, PVOID output)
     LxHandleBorrow borrow = {0};
     if (!output || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_REGION, &borrow))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     PmRegion *region = borrow.resource;
@@ -157,7 +157,7 @@ LONG SelectClipRgn(ULONG handle, ULONG region_handle)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     ULONG selected = 0;
@@ -166,7 +166,7 @@ LONG SelectClipRgn(ULONG handle, ULONG region_handle)
     {
         if (!lx_handle_borrow(region_handle, LX_HANDLE_OPEN32_REGION, &borrow))
         {
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return 0;
         }
         PmRegion *region = borrow.resource;
@@ -174,7 +174,7 @@ LONG SelectClipRgn(ULONG handle, ULONG region_handle)
         if (!rects)
         {
             lx_handle_release(&borrow);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         LONG height = open32DCHeight(handle);
@@ -196,7 +196,7 @@ LONG SelectClipRgn(ULONG handle, ULONG region_handle)
         lx_handle_release(&borrow);
         if (!selected)
         {
-            open32SetError(valid ? 8 : 87);
+            open32SetError(valid ? ERROR_NOT_ENOUGH_MEMORY : ERROR_INVALID_PARAMETER);
             return 0;
         }
     }
@@ -205,7 +205,7 @@ LONG SelectClipRgn(ULONG handle, ULONG region_handle)
     {
         if (selected)
             GpiDestroyRegion(handle, selected);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG previous = dc->clip_region;
@@ -226,7 +226,7 @@ static LONG clip_rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG b
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     const LONG recorded[] = {left, top, right, bottom};
@@ -249,7 +249,7 @@ static LONG clip_rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG b
     int64_t lower = (int64_t)height - bottom, upper = (int64_t)height - top;
     if (lower < INT32_MIN || lower > INT32_MAX || upper < INT32_MIN || upper > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     RECTL area = {left, (LONG)lower, right, (LONG)upper};
@@ -271,7 +271,7 @@ static LONG clip_rectangle(ULONG handle, LONG left, LONG top, LONG right, LONG b
     {
         if (selected)
             GpiDestroyRegion(handle, selected);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     ULONG previous = dc->clip_region;
@@ -295,14 +295,14 @@ LONG GetClipBox(ULONG handle, PVOID output)
 {
     if (!open32FindDC(handle) || !output)
     {
-        open32SetError(output ? 6 : 87);
+        open32SetError(output ? ERROR_INVALID_HANDLE : ERROR_INVALID_PARAMETER);
         return 0;
     }
     RECTL rectangle;
     LONG result = lx_pm_visible_box(handle, &rectangle);
     if (!result)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (result == 1)
@@ -326,7 +326,7 @@ static ULONG adopt_region(PmRegion *region)
     if (!handle)
     {
         free_region(region);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -349,7 +349,7 @@ static ULONG round_region(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
     if (w > 65536 || h > 65536 || l < -(1L << 26) || r >= (1L << 26) || t < -(1L << 26) ||
         b >= (1L << 26))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (ew < 0)
@@ -368,7 +368,7 @@ static ULONG round_region(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
     {
         free(region);
         free(spans);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     size_t n = 0;
@@ -391,7 +391,7 @@ static ULONG round_region(LONG l, LONG t, LONG r, LONG b, LONG ew, LONG eh)
     if (!ok)
     {
         free_region(region);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return adopt_region(region);
@@ -407,7 +407,7 @@ ULONG CreateEllipticRgn(LONG l, LONG t, LONG r, LONG b)
     int64_t w = llabs((int64_t)r - l), h = llabs((int64_t)b - t);
     if (w > INT32_MAX || h > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return round_region(l, t, r, b, (LONG)w, (LONG)h);
@@ -417,7 +417,7 @@ ULONG CreateEllipticRgnIndirect(PVOID p)
 {
     if (!p)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return CreateEllipticRgn((LONG)lx_guest_load_u32(p), (LONG)lx_guest_load_u32((uint8 *)p + 4),
@@ -454,7 +454,7 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
     if (!points || !counts || polygons < 1 || polygons > 65536 ||
         (mode != ALTERNATE && mode != WINDING))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     size_t total = 0;
@@ -464,7 +464,7 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
         LONG n = (LONG)lx_guest_load_u32((uint8 *)counts + i * 4);
         if (n < 0 || n > 65536 - total)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         total += (size_t)n;
@@ -475,7 +475,7 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
              y = (LONG)lx_guest_load_u32((uint8 *)points + i * 8 + 4);
         if (x < -(1L << 26) || x >= (1L << 26) || y < -(1L << 26) || y >= (1L << 26))
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         if (y < top)
@@ -487,7 +487,7 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
         return CreateRectRgn(0, 0, 0, 0);
     if ((int64_t)bottom - top > 65536 || (uint64)(bottom - top) * total > 67108864)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     PmScanPoint *shape = malloc(total * sizeof *shape);
@@ -518,7 +518,7 @@ ULONG CreatePolyPolygonRgn(PVOID points, PVOID counts, LONG polygons, LONG mode)
     {
         if (region)
             free_region(region);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return adopt_region(region);
@@ -528,7 +528,7 @@ ULONG CreatePolygonRgn(PVOID points, LONG count, LONG mode)
 {
     if (count < 2)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint8 n[4];
@@ -547,11 +547,11 @@ BOOL EqualRgn(ULONG first, ULONG second)
         if (regionBoolean(&difference, a.resource, b.resource, 4))
             same = difference.count == 0;
         else
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         free(difference.rects);
     }
     else
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_handle_release(&b);
     lx_handle_release(&a);
     return same;
@@ -562,7 +562,7 @@ LONG OffsetRgn(ULONG h, LONG dx, LONG dy)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(h, LX_HANDLE_OPEN32_REGION, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     PmRegion *r = borrow.resource;
@@ -589,7 +589,7 @@ LONG OffsetRgn(ULONG h, LONG dx, LONG dy)
     LONG result = valid ? region_type(r) : 0;
     lx_handle_release(&borrow);
     if (!valid)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return result;
 }
 
@@ -598,7 +598,7 @@ BOOL PtInRegion(ULONG h, LONG x, LONG y)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(h, LX_HANDLE_OPEN32_REGION, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     PmRegion *r = borrow.resource;
@@ -621,7 +621,7 @@ BOOL RectInRegion(ULONG h, PVOID p)
     LxHandleBorrow borrow = {0};
     if (!p || !lx_handle_borrow(h, LX_HANDLE_OPEN32_REGION, &borrow))
     {
-        open32SetError(p ? 6 : 87);
+        open32SetError(p ? ERROR_INVALID_HANDLE : ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG l = (LONG)lx_guest_load_u32(p), t = (LONG)lx_guest_load_u32((uint8 *)p + 4),
@@ -649,7 +649,7 @@ LONG GetClipRgn(ULONG h, ULONG out)
     LxHandleBorrow borrow = {0}, native = {0};
     if (!dc || !lx_handle_borrow(out, LX_HANDLE_OPEN32_REGION, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return -1;
     }
     if (!dc->clip_region)
@@ -684,7 +684,7 @@ LONG GetClipRgn(ULONG h, ULONG out)
     lx_handle_release(&native);
     lx_handle_release(&borrow);
     if (result < 0)
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return result;
 }
 
@@ -694,7 +694,7 @@ LONG ExtSelectClipRgn(ULONG h, ULONG region, LONG mode)
         return SelectClipRgn(h, region);
     if (mode < 1 || mode > 4 || !region || !open32FindDC(h))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG base = CreateRectRgn(0, 0, 0, 0);
@@ -715,7 +715,7 @@ BOOL RectVisible(ULONG h, PVOID p)
     Open32DC *dc = open32FindDC(h);
     if (!dc || !p)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     uint8 logical[16];
@@ -757,7 +757,7 @@ BOOL FillRgn(ULONG h, ULONG region, ULONG brush)
     LxHandleBorrow borrow = {0};
     if (!open32FindDC(h) || !lx_handle_borrow(region, LX_HANDLE_OPEN32_REGION, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     PmRegion *r = borrow.resource;
@@ -781,7 +781,7 @@ BOOL PaintRgn(ULONG h, ULONG region)
     Open32DC *dc = open32FindDC(h);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     return FillRgn(h, region, dc->brush_handle);
@@ -791,14 +791,14 @@ BOOL FrameRgn(ULONG h, ULONG region, ULONG brush, LONG width, LONG height)
 {
     if (!open32FindDC(h))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     width = width < 0 ? (width == INT32_MIN ? INT32_MAX : -width) : width;
     height = height < 0 ? (height == INT32_MIN ? INT32_MAX : -height) : height;
     if (width > 32768 || height > 32768)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG interior = CreateRectRgn(0, 0, 0, 0), copy = CreateRectRgn(0, 0, 0, 0),
@@ -837,7 +837,7 @@ LONG GetUpdateRgn(ULONG window, ULONG output, BOOL erase)
     if (!found || !lx_handle_borrow(output, LX_HANDLE_OPEN32_REGION, &borrow))
     {
         free(raw.rects);
-        open32SetError(found ? 6 : 1400);
+        open32SetError(found ? ERROR_INVALID_HANDLE : ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     BOOL ok = !raw.count || raw.rects;
@@ -857,6 +857,6 @@ LONG GetUpdateRgn(ULONG window, ULONG output, BOOL erase)
     if (ok && erase && result > 1)
         GetUpdateRect(window, NULL, TRUE);
     if (!ok)
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return result;
 }

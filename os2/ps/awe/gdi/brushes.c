@@ -20,13 +20,13 @@ ULONG CreateSolidBrush(ULONG color)
        specifier in LOGBRUSH; raster conversion already uses its RGB bytes. */
     if ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Open32Brush *brush = calloc(1, sizeof *brush);
     if (!brush)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     brush->color = color;
@@ -34,7 +34,7 @@ ULONG CreateSolidBrush(ULONG color)
     if (!handle)
     {
         free(brush);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -45,7 +45,7 @@ ULONG open32StockBrush(LONG index)
     static const ULONG colors[] = {0xFFFFFF, 0xC0C0C0, 0x808080, 0x404040, 0, 0};
     if (index < 0 || index > 5)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!stocks[index])
@@ -111,7 +111,7 @@ ULONG CreatePatternBrush(ULONG handle)
     PmBitmap *bitmap = lx_pm_bitmap(handle, &borrow);
     if (!bitmap)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Brush *brush = calloc(1, sizeof *brush);
@@ -122,7 +122,7 @@ ULONG CreatePatternBrush(ULONG handle)
     {
         free(brush);
         lx_handle_release(&borrow);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     brush->style = 3;
@@ -139,7 +139,7 @@ ULONG CreatePatternBrush(ULONG handle)
     if (!result)
     {
         free_brush(brush);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return result;
 }
@@ -194,7 +194,7 @@ BOOL SetBrushOrgEx(ULONG handle, LONG x, LONG y, PVOID previous)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     if (previous)
@@ -212,7 +212,7 @@ BOOL GetBrushOrgEx(ULONG handle, PVOID output)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !output)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     lx_guest_store_u32(output, (ULONG)dc->brush_origin_x);
@@ -224,7 +224,7 @@ ULONG CreateHatchBrush(LONG hatch, ULONG color)
 {
     if (hatch < 0 || hatch > 5)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG handle = CreateSolidBrush(color);
@@ -319,7 +319,7 @@ static ULONG packed_pattern_brush(ULONG address, ULONG usage)
         !lx_execution_borrow(GProcessState.execution, address, info_bytes + pixel_bytes,
                              LX_GUEST_READ, &dib))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint8 *packed = malloc(info_bytes + pixel_bytes);
@@ -331,7 +331,7 @@ static ULONG packed_pattern_brush(ULONG address, ULONG usage)
         checked_info == info_bytes && checked_pixels == pixel_bytes)
         result = open32DibPatternBrush(packed, packed + info_bytes, usage, FALSE);
     else
-        open32SetError(packed ? 87 : 8);
+        open32SetError(packed ? ERROR_INVALID_PARAMETER : ERROR_NOT_ENOUGH_MEMORY);
     free(packed);
     return result;
 }
@@ -340,7 +340,7 @@ ULONG CreateBrushIndirect(PVOID input)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG style = lx_guest_load_u32(input), color = lx_guest_load_u32((uint8 *)input + 4),
@@ -370,6 +370,6 @@ ULONG CreateBrushIndirect(PVOID input)
         }
         return handle;
     }
-    open32SetError(87);
+    open32SetError(ERROR_INVALID_PARAMETER);
     return 0;
 }

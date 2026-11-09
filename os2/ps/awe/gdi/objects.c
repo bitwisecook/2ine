@@ -9,7 +9,7 @@ LONG GetObject(ULONG handle, LONG capacity, PVOID output)
 {
     if (capacity < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LxHandleBorrow borrow = {0};
@@ -24,13 +24,13 @@ LONG GetObject(ULONG handle, LONG capacity, PVOID output)
         if (!result)
             result = open32PaletteObject(handle, capacity, output);
         if (!result)
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
         return result;
     }
     if (!bitmap || capacity < 0 || (output && capacity < 24))
     {
         lx_handle_release(&borrow);
-        open32SetError(bitmap ? 87 : 6);
+        open32SetError(bitmap ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     if (output)
@@ -52,7 +52,7 @@ BOOL DeleteObject(ULONG handle)
     if (lx_pm_bitmap_delete(handle) || open32DeleteFont(handle) || open32DeleteBrush(handle) ||
         open32DeletePalette(handle) || open32DeleteRegion(handle) || open32DeletePen(handle))
         return TRUE;
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return FALSE;
 }
 
@@ -80,7 +80,7 @@ ULONG GetObjectType(ULONG handle)
             return types[i].type;
         }
     }
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return 0;
 }
 

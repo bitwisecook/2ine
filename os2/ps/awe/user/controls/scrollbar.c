@@ -124,7 +124,7 @@ ULONG open32ScrollWindowProc(ULONG handle, ULONG message, ULONG first, ULONG sec
             if (!lx_execution_memory(GProcessState.execution, first, 4, LX_GUEST_WRITE) ||
                 !lx_execution_memory(GProcessState.execution, second, 4, LX_GUEST_WRITE))
             {
-                open32SetError(87);
+                open32SetError(ERROR_INVALID_PARAMETER);
                 return 0;
             }
             lx_execution_write(GProcessState.execution, first, minimum, 4);

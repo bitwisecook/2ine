@@ -60,7 +60,7 @@ static ULONG mdi_create(Open32Window *client, ULONG definition)
     uint8 bytes[36];
     if (!lx_execution_read(GProcessState.execution, definition, bytes, sizeof bytes))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG class_pointer = lx_guest_load_u32(bytes), title_pointer = lx_guest_load_u32(bytes + 4);
@@ -74,7 +74,7 @@ static ULONG mdi_create(Open32Window *client, ULONG definition)
     {
         free(class_copy);
         free(title);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG x = (LONG)lx_guest_load_u32(bytes + 12), y = (LONG)lx_guest_load_u32(bytes + 16),
@@ -175,7 +175,7 @@ ULONG open32BuiltinWindowProc(ULONG handle, ULONG message, ULONG first, ULONG se
             uint8 result[4];
             lx_guest_store_u32(result, child && (child->style & 0x01000000));
             if (!lx_execution_write(GProcessState.execution, second, result, 4))
-                open32SetError(87);
+                open32SetError(ERROR_INVALID_PARAMETER);
         }
         return window->mdi_active;
     }
@@ -231,7 +231,7 @@ BOOL TranslateMDISysAccel(ULONG client, PVOID message)
 {
     if (!message)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG kind = lx_guest_load_u32((uint8 *)message + 4),

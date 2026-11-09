@@ -11,20 +11,20 @@ LONG OpenFile(PSZ name, PVOID record, ULONG flags)
     TRACE_NATIVE("OpenFile('%s', %p, %X)", name, record, flags);
     if (!record || (flags & ~0xFF73u) || ((flags & 3) == 3))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     uint8 *wire = record;
     const char *source = flags & 0x8000 ? (char *)wire + 8 : name;
     if (!source || ((flags & 0x8000) && !memchr(source, 0, 128)))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return -1;
     }
     char path[260];
     if (strlen(source) >= sizeof path)
     {
-        open32SetError(206);
+        open32SetError(ERROR_FILENAME_EXCED_RANGE);
         return -1;
     }
     strcpy(path, source);
@@ -157,7 +157,7 @@ BOOL ReadFile(ULONG handle, PVOID output, ULONG size, PULONG actual, PVOID overl
 {
     if (!actual || overlapped)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     *actual = 0;
@@ -175,7 +175,7 @@ BOOL WriteFile(ULONG handle, PVOID input, ULONG size, PULONG actual, PVOID overl
 {
     if (!actual || overlapped)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     *actual = 0;

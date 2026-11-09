@@ -45,7 +45,7 @@ BOOL IsBadStringPtr(ULONG address, ULONG maximum)
         if (address > UINT32_MAX - i ||
             !lx_execution_read(GProcessState.execution, address + i, &byte, 1))
         {
-            open32SetError(5);
+            open32SetError(ERROR_ACCESS_DENIED);
             return TRUE;
         }
         if (!byte)

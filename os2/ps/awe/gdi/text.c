@@ -111,7 +111,7 @@ LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
         (!open32CanDraw(handle) && !(flags & 0x400)) || !rectangle || !text || count < -1 ||
         (flags & 0xFFFF8000))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     const uint8 *wire = rectangle;
@@ -123,14 +123,14 @@ LONG DrawText(ULONG handle, PSZ text, LONG count, PVOID rectangle, ULONG flags)
         (int64_t)bottom - top > INT32_MAX || y_top < INT32_MIN || y_top > INT32_MAX ||
         y_bottom < INT32_MIN || y_bottom > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG length;
     char *copy = text_copy(text, count, TRUE, flags, &length);
     if (!copy)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG pm_flags = (flags & 1 ? 0x100 : 0) | (flags & 2 ? 0x200 : 0) | (flags & 4 ? 0x400 : 0) |
@@ -172,7 +172,7 @@ BOOL TextOut(ULONG handle, LONG x, LONG y, PSZ text, LONG count)
 {
     if (count < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     return ExtTextOut(handle, x, y, 0, NULL, text, (ULONG)count, NULL);
@@ -186,14 +186,14 @@ BOOL GetTextExtentExPoint(ULONG handle, PCHAR text, LONG count, LONG maximum, PV
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !output || count < 0 || count > 65536 || (count && !text) || (fit && maximum < 0))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LxHostFont *font = lx_pm_font(handle);
     LxHostFontMetrics metrics;
     if (!lx_host_font_metrics(font, &metrics))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     int64_t width = 0;
@@ -206,13 +206,13 @@ BOOL GetTextExtentExPoint(ULONG handle, PCHAR text, LONG count, LONG maximum, PV
             spaces++;
         if (advance == INT32_MIN)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         width += advance;
         if (width < INT32_MIN || width > INT32_MAX)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         if (width <= maximum)
@@ -245,7 +245,7 @@ ULONG GetTabbedTextExtent(ULONG handle, PCHAR text, LONG count, LONG tab_count, 
         tab_count > 65536 || (tab_count && !tabs) ||
         !lx_host_font_metrics(lx_pm_font(handle), &metrics))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG last = 0;
@@ -254,7 +254,7 @@ ULONG GetTabbedTextExtent(ULONG handle, PCHAR text, LONG count, LONG tab_count, 
         LONG next = (LONG)lx_guest_load_u32((uint8 *)tabs + i * 4);
         if (next <= last)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         last = next;
@@ -282,14 +282,14 @@ ULONG GetTabbedTextExtent(ULONG handle, PCHAR text, LONG count, LONG tab_count, 
             int advance = lx_host_font_advance(font, lx_pm_codepoint(c));
             if (advance < 0)
             {
-                open32SetError(87);
+                open32SetError(ERROR_INVALID_PARAMETER);
                 return 0;
             }
             width += advance;
         }
         if (width > INT32_MAX)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
     }
@@ -306,12 +306,12 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
     if (!dc || !open32CanDraw(handle) || count > 65536 || (count && !text) ||
         ((flags & 6) && !rectangle))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     if (flags & ~6u)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return FALSE;
     }
     RECTL area = {0};
@@ -324,7 +324,7 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
         if (right < left || bottom < top || !open32MapPoint(dc, &left, &top, TRUE) ||
             !open32MapPoint(dc, &right, &bottom, TRUE))
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         if (left > right)
@@ -342,7 +342,7 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
         int64_t lower = (int64_t)height - bottom, upper = (int64_t)height - top;
         if (lower < INT32_MIN || upper > INT32_MAX)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         area = (RECTL){left, (LONG)lower, right, (LONG)upper};
@@ -354,7 +354,7 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
     if ((count && !copy) || !lx_host_font_metrics(font, &metrics))
     {
         free(copy);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     int64_t advance = 0;
@@ -387,7 +387,7 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
          ((int64_t)device_x + advance < INT32_MIN || (int64_t)device_x + advance > INT32_MAX)))
     {
         free(copy);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     x = (LONG)start;
@@ -412,7 +412,7 @@ static BOOL text_out(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle,
     if (!valid)
     {
         free(copy);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     BOOL result = TRUE;
@@ -480,7 +480,7 @@ static BOOL rotated_text(ULONG handle, Open32DC *dc, LONG x, LONG y, ULONG flags
     char *copy = count ? text_copy(text, (LONG)count, FALSE, 0, &length) : NULL;
     if (count && !copy)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     double total = 0;
@@ -627,7 +627,7 @@ BOOL ExtTextOut(ULONG handle, LONG x, LONG y, ULONG flags, PVOID rectangle, PCHA
         uint8 *scaled = advances && count ? malloc((size_t)count * 4) : NULL;
         if (advances && count && !scaled)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         for (ULONG i = 0; scaled && i < count; i++)
@@ -674,12 +674,12 @@ ULONG SetTextAlign(ULONG handle, ULONG alignment)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || (alignment & ~0x1fu) || (alignment & 6) == 4 || (alignment & 24) == 16)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     if ((alignment & 1) && (alignment & 6))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return UINT32_MAX;
     }
     ULONG previous = dc->text_alignment;
@@ -694,7 +694,7 @@ ULONG GetTextAlign(ULONG handle)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     return dc->text_alignment;
@@ -710,7 +710,7 @@ LONG TabbedTextOut(ULONG h, LONG x, LONG y, PCHAR text, LONG count, LONG tab_cou
     if (!dc || count < 0 || count > 65536 || (count && !text) || tab_count < 0 ||
         tab_count > 65536 || !lx_host_font_metrics(lx_pm_font(h), &metrics))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG last = 0;
@@ -719,7 +719,7 @@ LONG TabbedTextOut(ULONG h, LONG x, LONG y, PCHAR text, LONG count, LONG tab_cou
         LONG stop = (LONG)lx_guest_load_u32((uint8 *)tabs + i * 4);
         if (stop <= last)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         last = stop;
@@ -766,7 +766,7 @@ LONG TabbedTextOut(ULONG h, LONG x, LONG y, PCHAR text, LONG count, LONG tab_cou
     dc->text_alignment = alignment;
     if (!ok || position - x < 0 || position - x > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return (LONG)(((ULONG)(position - x) & 0xffff) |

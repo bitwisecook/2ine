@@ -95,7 +95,7 @@ SHORT GetKeyState(LONG key)
 {
     if (key < 0 || key > 255)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return (SHORT)((down[key] ? 0x8000 : 0) | toggled[key]);
@@ -105,7 +105,7 @@ SHORT GetAsyncKeyState(LONG key)
 {
     if (key < 0 || key > 255)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!open32Presentation() || !lx_pm_poll_input())
@@ -132,7 +132,7 @@ BOOL GetKeyboardState(PVOID output)
 {
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     uint8 *bytes = output;
@@ -199,7 +199,7 @@ LONG GetKeyNameText(ULONG parameter, PSZ output, LONG capacity)
 {
     if (!output || capacity <= 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG scan = (parameter >> 16) & 255, key = MapVirtualKey(scan, 1);

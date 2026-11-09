@@ -15,7 +15,7 @@ ULONG LoadCursor(HMODULE module, PSZ name)
     {
         if (!open32Presentation())
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         return (uintptr_t)name <= 0xffff
@@ -57,7 +57,7 @@ ULONG LoadCursor(HMODULE module, PSZ name)
         }
     ULONG result = id ? lx_pm_system_pointer(id) : 0;
     if (!result)
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
     return result;
 }
 
@@ -66,20 +66,21 @@ ULONG SetCursor(ULONG cursor)
     LxHandleBorrow borrow = {0};
     if (cursor && !lx_handle_borrow(cursor, LX_HANDLE_PM_POINTER, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (!open32Presentation())
     {
         lx_handle_release(&borrow);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     ULONG previous = current_cursor;
     current_cursor = cursor;
     /* A valid guest cursor remains current even if a headless host cannot display it. */
     if (!WinSetPointer(HWND_DESKTOP, cursor))
-        open32SetError(50); /* ERROR_NOT_SUPPORTED: resource validity and presentation differ. */
+        open32SetError(
+            ERROR_NOT_SUPPORTED); /* ERROR_NOT_SUPPORTED: resource validity and presentation differ. */
     lx_handle_release(&borrow);
     return previous;
 }

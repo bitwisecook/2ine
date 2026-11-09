@@ -34,12 +34,12 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
         return 0;
     if (window && !open32FindWindow(window) && !open32NativeDialogWindow(window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     if (callback && !open32ValidProcedure(callback))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Open32Timer *timer;
@@ -64,7 +64,7 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
         timer = calloc(1, sizeof *timer);
         if (!timer)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         if (!driver)
@@ -72,7 +72,7 @@ ULONG SetTimer(ULONG window, ULONG id, ULONG milliseconds, ULONG callback)
         if (!driver)
         {
             free(timer);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         timer->window = window;

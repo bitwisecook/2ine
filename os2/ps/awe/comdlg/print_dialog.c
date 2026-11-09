@@ -46,7 +46,8 @@ BOOL PrintDlg(PVOID pointer)
           old_names = lx_guest_load_u32(record + 12);
     if ((flags & 0x3f000) || (flags & 0x300) == 0x300)
     {
-        open32SetError(50);           /* Custom guest print hooks/templates are not implemented. */
+        open32SetError(
+            ERROR_NOT_SUPPORTED);     /* Custom guest print hooks/templates are not implemented. */
         open32CommonDialogError(0xb); /* CDERR_NOHOOK */
         return FALSE;
     }

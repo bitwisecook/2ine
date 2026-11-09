@@ -98,7 +98,7 @@ static uint32 create_file(void *data)
         if (!strcasecmp(other->path, file->path) &&
             ((file->access & ~other->share) || (other->access & ~file->share)))
         {
-            open32SetError(32);
+            open32SetError(ERROR_SHARING_VIOLATION);
             return UINT32_MAX;
         }
     LxHostFsError error;
@@ -127,20 +127,22 @@ static uint32 create_file(void *data)
     error = lx_host_file_info(file->file, &info);
     if (error || info.kind == LX_HOST_FILE_DIRECTORY)
     {
-        open32SetError(error ? file_error(error) : 5);
+        open32SetError(error ? file_error(error) : ERROR_ACCESS_DENIED);
         return UINT32_MAX;
     }
     ULONG handle = lx_handle_create(LX_HANDLE_OPEN32_FILE, file, destroy_file);
     if (!handle)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return UINT32_MAX;
     }
     file->handle = handle;
     file->next = files;
     files = file;
     call->file = NULL;
-    open32SetError(!created && (call->disposition == 2 || call->disposition == 4) ? 183 : 0);
+    open32SetError(!created && (call->disposition == 2 || call->disposition == 4)
+                       ? ERROR_ALREADY_EXISTS
+                       : ERROR_SUCCESS);
     return handle;
 }
 
@@ -153,29 +155,29 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
     if (!name || !*name || disposition < 1 || disposition > 5 || (share & ~7u) ||
         (access & ~0xc0000000u))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     if ((attributes & ~supported) || template)
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return UINT32_MAX;
     }
     if (security && (lx_guest_load_u32(security) != 12 || lx_guest_load_u32((uint8 *)security + 4)))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return UINT32_MAX;
     }
     if (disposition == 5 && !(access & 0x40000000u))
     {
-        open32SetError(5);
+        open32SetError(ERROR_ACCESS_DENIED);
         return UINT32_MAX;
     }
     uint32 error = 0;
     char *path = GProcessState.makeUnixPath ? GProcessState.makeUnixPath(name, &error) : NULL;
     if (!path)
     {
-        open32SetError(error ? error : 3);
+        open32SetError(error ? error : ERROR_PATH_NOT_FOUND);
         return UINT32_MAX;
     }
     char *canonical = lx_host_path_canonical(path);
@@ -188,7 +190,7 @@ ULONG CreateFile(PSZ name, ULONG access, ULONG share, PVOID security, ULONG disp
     if (!file)
     {
         free(path);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return UINT32_MAX;
     }
     file->path = path;
@@ -263,7 +265,7 @@ static uint32 file_operation(void *data)
         BOOL writing = call->operation == FILE_WRITE;
         if (!(file->access & (writing ? 2 : 1)))
         {
-            open32SetError(5);
+            open32SetError(ERROR_ACCESS_DENIED);
             return FALSE;
         }
         lx_host_monitor_lock(monitor);
@@ -277,7 +279,7 @@ static uint32 file_operation(void *data)
             return result_error(error);
         if (conflict || range_busy(file, position, call->size, FALSE))
         {
-            open32SetError(33);
+            open32SetError(ERROR_LOCK_VIOLATION);
             return FALSE;
         }
         size_t actual = 0;
@@ -292,7 +294,7 @@ static uint32 file_operation(void *data)
     {
         if (!(file->access & 2))
         {
-            open32SetError(5);
+            open32SetError(ERROR_ACCESS_DENIED);
             return FALSE;
         }
         error = lx_host_file_seek(file->file, 0, 1, &call->position);
@@ -307,7 +309,7 @@ static uint32 file_operation(void *data)
     {
         if (!(file->access & 2))
         {
-            open32SetError(file->access ? 50 : 5);
+            open32SetError(file->access ? ERROR_NOT_SUPPORTED : ERROR_ACCESS_DENIED);
             return FALSE;
         }
         lx_host_monitor_lock(monitor);
@@ -316,13 +318,13 @@ static uint32 file_operation(void *data)
         {
             if (range_busy(file, call->position, call->length, TRUE))
             {
-                open32SetError(33);
+                open32SetError(ERROR_LOCK_VIOLATION);
                 return FALSE;
             }
             FileRange *range = calloc(1, sizeof *range);
             if (!range)
             {
-                open32SetError(8);
+                open32SetError(ERROR_NOT_ENOUGH_MEMORY);
                 return FALSE;
             }
             error = lx_host_file_lock_range(file->file, call->position, call->length, TRUE);
@@ -343,7 +345,7 @@ static uint32 file_operation(void *data)
                 link = &(*link)->next;
             if (!*link)
             {
-                open32SetError(158);
+                open32SetError(ERROR_NOT_LOCKED);
                 return FALSE;
             }
             error = lx_host_file_lock_range(file->file, call->position, call->length, FALSE);
@@ -356,13 +358,13 @@ static uint32 file_operation(void *data)
         }
         if (error == LX_HOST_FS_BUSY)
         {
-            open32SetError(33);
+            open32SetError(ERROR_LOCK_VIOLATION);
             return FALSE;
         }
     }
     if (call->operation == FILE_SEEK && error == LX_HOST_FS_INVALID)
     {
-        open32SetError(131);
+        open32SetError(ERROR_NEGATIVE_SEEK);
         return FALSE;
     }
     return result_error(error);
@@ -372,7 +374,7 @@ static BOOL invoke(ULONG handle, FileCall *call)
 {
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_FILE, &call->borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     return lx_host_guarded_call(file_operation, call, release_file, call);
@@ -407,7 +409,7 @@ ULONG SetFilePointer(ULONG handle, LONG distance, PLONG high, ULONG origin)
 {
     if (origin > 2)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     FileCall call = {.operation = FILE_SEEK,
@@ -418,7 +420,7 @@ ULONG SetFilePointer(ULONG handle, LONG distance, PLONG high, ULONG origin)
         return UINT32_MAX;
     if (high)
         *high = (LONG)(call.position >> 32);
-    open32SetError(0);
+    open32SetError(ERROR_SUCCESS);
     return (ULONG)call.position;
 }
 
@@ -429,7 +431,7 @@ ULONG GetFileSize(ULONG handle, PULONG high)
         return UINT32_MAX;
     if (high)
         *high = (ULONG)(call.info.size >> 32);
-    open32SetError(0);
+    open32SetError(ERROR_SUCCESS);
     return (ULONG)call.info.size;
 }
 
@@ -462,7 +464,7 @@ static BOOL lock_range(ULONG handle, ULONG offset_low, ULONG offset_high, ULONG 
     if (!call.length || call.position > INT64_MAX ||
         call.length > (uint64_t)INT64_MAX - call.position)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     return invoke(handle, &call);
@@ -579,7 +581,7 @@ BOOL SetFileTime(ULONG handle, PVOID creation, PVOID access, PVOID write)
     if (!filetime_seconds(creation, &btime) || !filetime_seconds(access, &atime) ||
         !filetime_seconds(write, &mtime))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LxHandleBorrow borrow = {0};

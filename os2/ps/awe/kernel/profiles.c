@@ -26,7 +26,7 @@ ULONG GetProfileInt(PSZ section, PSZ key, LONG fallback)
     if (!app || !key)
     {
         free(app);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return (ULONG)fallback;
     }
     ULONG result = (ULONG)PrfQueryProfileInt(HINI_USERPROFILE, app, key, fallback);
@@ -42,7 +42,7 @@ ULONG GetProfileString(PSZ section, PSZ key, PSZ fallback, PSZ output, ULONG cap
     if (!app || !output || !capacity)
     {
         free(app);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     ULONG result = PrfQueryProfileString(HINI_USERPROFILE, app, key, fallback, output, capacity);
@@ -67,14 +67,14 @@ ULONG GetPrivateProfileString(PSZ section, PSZ key, PSZ fallback, PSZ output, UL
                  filename ? filename : "");
     if (!output || !fallback || !capacity || !filename)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     output[0] = 0;
     char *normalized = private_key(key);
     if (key && !normalized)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     HINI profile = PrfOpenProfile(0, filename);
@@ -101,13 +101,13 @@ BOOL WritePrivateProfileString(PSZ section, PSZ key, PSZ value, PSZ filename)
 {
     if (!filename || (!section && (key || value)))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     char *normalized = private_key(key);
     if (key && !normalized)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     HINI profile = PrfOpenProfile(0, filename);
@@ -124,7 +124,7 @@ ULONG GetPrivateProfileInt(PSZ section, PSZ key, LONG fallback, PSZ filename)
     char text[64], *end;
     if (!section || !key || !filename)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return (ULONG)fallback;
     }
     if (!GetPrivateProfileString(section, key, "", text, sizeof text, filename))
@@ -141,7 +141,7 @@ BOOL WriteProfileString(PSZ section, PSZ key, PSZ value)
     char *app = malloc(size);
     if (!app)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return FALSE;
     }
     snprintf(app, size, "WINI_%s", section);

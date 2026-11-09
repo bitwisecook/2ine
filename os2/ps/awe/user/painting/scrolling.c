@@ -17,7 +17,7 @@ BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
 {
     if (!open32FindDC(h))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     Open32DC *mapping = open32FindDC(h);
@@ -86,7 +86,7 @@ BOOL ScrollDC(ULONG h, LONG dx, LONG dy, PVOID scroll, PVOID clip, ULONG update,
     if (!update)
         DeleteObject(region);
     if (!ok)
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
     return ok;
 }
 

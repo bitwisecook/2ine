@@ -19,7 +19,7 @@ static BOOL store_rectangle(PVOID output, RECTL rect)
 {
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     lx_guest_store_u32(output, (ULONG)rect.xLeft);
@@ -55,7 +55,7 @@ BOOL CopyRect(PVOID output, PVOID input)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     return store_rectangle(output, load_rectangle(input));
@@ -65,7 +65,7 @@ BOOL IsRectEmpty(PVOID input)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return TRUE;
     }
     return empty(load_rectangle(input));
@@ -75,7 +75,7 @@ BOOL EqualRect(PVOID first, PVOID second)
 {
     if (!first || !second)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL a = load_rectangle(first), b = load_rectangle(second);
@@ -86,7 +86,7 @@ BOOL UnionRect(PVOID output, PVOID first, PVOID second)
 {
     if (!output || !first || !second)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL a = load_rectangle(first), b = load_rectangle(second), result = {0};
@@ -102,7 +102,7 @@ BOOL IntersectRect(PVOID output, PVOID first, PVOID second)
 {
     if (!output || !first || !second)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL result = intersection(load_rectangle(first), load_rectangle(second));
@@ -114,7 +114,7 @@ BOOL SubtractRect(PVOID output, PVOID first, PVOID second)
 {
     if (!output || !first || !second)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL a = load_rectangle(first), b = intersection(a, load_rectangle(second)), result = a;
@@ -147,7 +147,7 @@ BOOL OffsetRect(PVOID input, LONG x, LONG y)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL rect = load_rectangle(input);
@@ -159,7 +159,7 @@ BOOL InflateRect(PVOID input, LONG x, LONG y)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL rect = load_rectangle(input);
@@ -171,7 +171,7 @@ BOOL PtInRect(PVOID input, LONG x, LONG y)
 {
     if (!input)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     RECTL rect = load_rectangle(input);

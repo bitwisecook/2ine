@@ -158,13 +158,13 @@ ULONG GetDC(ULONG window)
 {
     if (!open32Presentation())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     HWND target = window ? open32ClientWindow(window) : HWND_DESKTOP;
     if (!WinIsWindow(0, target))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     /* Foreign windows expose display capabilities through a local screen PS. */
@@ -175,7 +175,7 @@ ULONG GetDC(ULONG window)
     {
         if (ps)
             WinReleasePS(ps);
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     dc->foreign_window = foreign;
@@ -187,7 +187,7 @@ LONG ReleaseDC(ULONG window, ULONG handle)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || dc->kind != 3 || dc->window != window)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     return discard_context(dc);
@@ -197,12 +197,12 @@ ULONG CreateCompatibleDC(ULONG source)
 {
     if (source && !open32FindDC(source))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (!open32Presentation())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     SIZEL size = {0, 0};
@@ -212,14 +212,14 @@ ULONG CreateCompatibleDC(ULONG source)
     {
         if (ps)
             GpiDestroyPS(ps);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     dc->default_bitmap = lx_pm_bitmap_create(1, 1, 1, 1);
     if (!dc->default_bitmap || GpiSetBitmap(ps, dc->default_bitmap) == UINT32_MAX)
     {
         discard_context(dc);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return ps;
@@ -230,7 +230,7 @@ BOOL DeleteDC(ULONG handle)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || (dc->kind != 1 && dc->kind != 4 && dc->kind != 5 && dc->kind != 6 && dc->kind != 8))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     return discard_context(dc);
@@ -259,14 +259,14 @@ ULONG SelectObject(ULONG handle, ULONG object)
     if (!dc || dc->kind != 1 || !bitmap)
     {
         lx_handle_release(&borrow);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     ULONG previous = GpiSetBitmap(handle, object);
     lx_handle_release(&borrow);
     if (previous == UINT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return previous;
@@ -289,7 +289,7 @@ BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG so
     if (!open32CanDraw(destination) || !open32CanDraw(source) || width <= 0 || height <= 0 ||
         width > 16384 || height > 16384)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     int64_t right = (int64_t)x + width, bottom = (int64_t)open32DCHeight(destination) - y - height;
@@ -298,7 +298,7 @@ BOOL BitBlt(ULONG destination, LONG x, LONG y, LONG width, LONG height, ULONG so
         src_bottom < INT32_MIN || src_bottom > INT32_MAX || (int64_t)source_x + width > INT32_MAX ||
         bottom + height > INT32_MAX || src_bottom + height > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     POINTL points[4] = {{x, (LONG)bottom},
@@ -312,7 +312,7 @@ ULONG BeginPaint(ULONG window, PVOID output)
 {
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     RECTL rect;
@@ -324,7 +324,7 @@ ULONG BeginPaint(ULONG window, PVOID output)
         if (ps)
             WinEndPaint(ps);
         open32CaretPaint(window, FALSE);
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     context->clip_region = GpiCreateRegion(ps, WinIsRectEmpty(0, &rect) ? 0 : 1, &rect);
@@ -332,7 +332,7 @@ ULONG BeginPaint(ULONG window, PVOID output)
     {
         discard_context(context);
         open32CaretPaint(window, FALSE);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     open32ValidateQueuedPaint(window);
@@ -352,7 +352,7 @@ BOOL EndPaint(ULONG window, PVOID input)
     Open32DC *dc = input ? open32FindDC(lx_guest_load_u32(input)) : NULL;
     if (!dc || dc->kind != 2 || dc->window != window)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     BOOL result = discard_context(dc);
@@ -365,7 +365,7 @@ LONG SetBkMode(ULONG handle, LONG mode)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || (mode != 1 && mode != 2))
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG previous = dc->background_mode;
@@ -386,7 +386,7 @@ ULONG SetTextColor(ULONG handle, ULONG color)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     ULONG previous = dc->text_color;
@@ -402,7 +402,7 @@ ULONG SetBkColor(ULONG handle, ULONG color)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || ((color & 0xFF000000u) && (color & 0xFF000000u) != 0x02000000u))
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     ULONG previous = dc->background_color;
@@ -432,7 +432,7 @@ ULONG CreateCompatibleBitmap(ULONG handle, LONG width, LONG height)
 {
     if (!open32FindDC(handle) || width < 0 || height < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     PresentationSpace *ps = lx_pm_font_space(handle);
@@ -441,7 +441,7 @@ ULONG CreateCompatibleBitmap(ULONG handle, LONG width, LONG height)
                                                          selected ? selected->depth : 24)
                                    : lx_pm_bitmap_create(1, 1, 1, 1);
     if (!result)
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     return result;
 }
 
@@ -451,7 +451,7 @@ ULONG GetPixel(ULONG handle, LONG x, LONG y)
     if (!open32CanDraw(handle) || x < 0 || y < 0 || y >= open32DCHeight(handle) ||
         !lx_pm_raster_read(handle, x, open32DCHeight(handle) - 1 - y, 1, 1, &pixel))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return UINT32_MAX;
     }
     return (ULONG)rgb_color(pixel);
@@ -479,17 +479,17 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
                    (!driver && device && !strcasecmp(device, "DISPLAY"));
     if (!display)
     {
-        open32SetError(1801);
+        open32SetError(ERROR_INVALID_PRINTER_NAME);
         return 0;
     }
     if (mode || (output && *output))
     {
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     if (!open32Presentation())
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     HPS ps = WinGetPS(HWND_DESKTOP);
@@ -497,7 +497,7 @@ ULONG CreateIC(PSZ driver, PSZ device, PSZ output, PVOID mode)
     {
         if (ps)
             WinReleasePS(ps);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return ps;
@@ -522,7 +522,7 @@ ULONG open32CreatePrinterContext(unsigned kind, BOOL information)
             GpiDestroyPS(ps);
         if (printer)
             DevCloseDC(printer);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return ps;
@@ -551,12 +551,12 @@ ULONG CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
     {
         if (mode || (output && *output))
         {
-            open32SetError(50);
+            open32SetError(ERROR_NOT_SUPPORTED);
             return 0;
         }
         if (!open32Presentation())
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         HPS ps = WinGetPS(HWND_DESKTOP);
@@ -564,12 +564,12 @@ ULONG CreateDC(PSZ driver, PSZ device, PSZ output, PVOID mode)
         {
             if (ps)
                 WinReleasePS(ps);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         return ps;
     }
-    open32SetError(1801);
+    open32SetError(ERROR_INVALID_PRINTER_NAME);
     return 0;
 }
 
@@ -579,7 +579,7 @@ ULONG GetWindowDC(ULONG window)
         return GetDC(0);
     if (!open32Presentation() || !WinIsWindow(0, window))
     {
-        open32SetError(1400);
+        open32SetError(ERROR_INVALID_WINDOW_HANDLE);
         return 0;
     }
     HPS ps = WinGetPS(window);
@@ -587,7 +587,7 @@ ULONG GetWindowDC(ULONG window)
     {
         if (ps)
             WinReleasePS(ps);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     return ps;
@@ -597,7 +597,7 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
 {
     if (!lx_pm_valid_ps(ps))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32DC *dc = open32FindDC(ps);
@@ -605,7 +605,7 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
         dc = register_context(ps, window, 7);
     if (!dc)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     /* The target rectangle applies only when a driver name selects a device mapping. */
@@ -617,7 +617,7 @@ ULONG HPSToHDC(ULONG window, ULONG ps, PSZ driver, PVOID rectangle)
              b = (LONG)lx_guest_load_u32((uint8 *)rectangle + 12);
         if (r < l || b < t)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         /* The PS page maps onto the target rectangle, so a smaller rectangle scales. */
@@ -642,7 +642,7 @@ VOID DeleteHDCObjects(ULONG ps)
     Open32DC *dc = open32FindDC(ps);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return;
     }
     /* Only HPSToHDC wrappers own state here; ordinary DCs are left untouched. */

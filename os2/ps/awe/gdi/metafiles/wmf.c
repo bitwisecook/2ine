@@ -60,14 +60,14 @@ ULONG SetMetaFileBitsEx(ULONG size, PVOID data)
     TRACE_NATIVE("SetMetaFileBitsEx(%u, %p)", size, data);
     if (!data || size < 24 || size > 64u * 1024 * 1024 || (size & 1))
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     lx_host_once(&metafile_once, metafile_initialize);
     Open32Metafile *file = metafile_monitor ? malloc(sizeof *file + size) : NULL;
     if (!file)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     file->size = size;
@@ -78,7 +78,7 @@ ULONG SetMetaFileBitsEx(ULONG size, PVOID data)
     if (!metafile_valid_wmf(file->data, size))
     {
         free(file);
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return 0;
     }
     lx_host_monitor_lock(metafile_monitor);
@@ -93,7 +93,7 @@ ULONG SetMetaFileBitsEx(ULONG size, PVOID data)
     if (!handle)
     {
         free(file);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -104,7 +104,7 @@ ULONG GetMetaFileBitsEx(ULONG handle, ULONG size, PVOID data)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_METAFILE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Metafile *file = borrow.resource;
@@ -120,7 +120,7 @@ BOOL DeleteMetaFile(ULONG handle)
     TRACE_NATIVE("DeleteMetaFile(%u)", handle);
     if (lx_handle_close(handle, LX_HANDLE_OPEN32_METAFILE))
         return TRUE;
-    open32SetError(6);
+    open32SetError(ERROR_INVALID_HANDLE);
     return FALSE;
 }
 
@@ -138,7 +138,7 @@ static BOOL wmf_dib(ULONG dc, const UCHAR *dib, ULONG available, LONG x, LONG y,
         !open32DibBuffers((PVOID)dib, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
         !pixel_bytes || info_bytes > available || pixel_bytes > available - info_bytes)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     return StretchDIBits(dc, x, y, width, height, source_x, source_y, source_width, source_height,
@@ -187,7 +187,7 @@ static BOOL wmf_text(ULONG dc, const UCHAR *p, ULONG bytes)
     ULONG text_at = options ? 16 : 8, padded = (n + 1) & ~1u, parameters = bytes - 6;
     if (text_at > parameters || padded > parameters - text_at)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     uint8 rectangle[16];
@@ -199,7 +199,7 @@ static BOOL wmf_text(ULONG dc, const UCHAR *p, ULONG bytes)
         advances = malloc((size_t)n * 4);
         if (!advances)
         {
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return FALSE;
         }
         for (ULONG i = 0; i < n; i++)
@@ -235,7 +235,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         if (!open32DibBuffers(info, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
             !pixel_bytes || info_bytes > bytes - 28 || pixel_bytes > bytes - 28 - info_bytes)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return StretchDIBits(dc, metafile_word(p + 20), metafile_word(p + 18),
@@ -476,7 +476,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
                               &pixel_bytes) ||
             info_bytes > available || pixel_bytes > available - info_bytes)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return SetDIBitsToDevice(dc, metafile_word(p + 16), metafile_word(p + 14),
@@ -500,7 +500,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         ULONG first = lx_guest_load_u16(p), entries = lx_guest_load_u16(p + 2);
         if (entries > (bytes - 10) / 4)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         return function == 0x37
@@ -515,7 +515,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
         ULONG size = lx_guest_load_u16(p + 2);
         if (size > bytes - 10)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             return FALSE;
         }
         if (lx_guest_load_u16(p) != 15)
@@ -527,7 +527,7 @@ static BOOL play_record(ULONG dc, const UCHAR *record, PVOID table, ULONG count)
     if (function == 0x105 || function == 0x231)
         return TRUE;
     TRACE_NATIVE("Unsupported WMF record %04X (%u bytes)", function, bytes);
-    open32SetError(50);
+    open32SetError(ERROR_NOT_SUPPORTED);
     return FALSE;
 }
 
@@ -536,13 +536,13 @@ BOOL PlayMetaFileRecord(ULONG dc, PVOID table, PVOID record, ULONG count)
     (void)table;
     if (!open32FindDC(dc) || !record || count > 65535)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     ULONG words = lx_guest_load_u32(record);
     if (words < 3 || words > 32u * 1024 * 1024)
     {
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
         return FALSE;
     }
     return play_record(dc, record, table, count);
@@ -556,7 +556,7 @@ BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
     if ((dc && !open32FindDC(dc)) || !open32ValidProcedure(procedure) ||
         !lx_handle_borrow(handle, LX_HANDLE_OPEN32_METAFILE, &borrow))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     Open32Metafile *file = borrow.resource;
@@ -581,7 +581,7 @@ BOOL EnumMetaFile(ULONG dc, ULONG handle, ULONG procedure, ULONG parameter)
         ok = lx_execution_protect(execution, code, LX_GUEST_READ | LX_GUEST_EXECUTE);
     }
     if (!ok)
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     if (ok)
     {
         UCHAR *record = (UCHAR *)lx_execution_mapping_host(data) + table_bytes;
@@ -609,7 +609,7 @@ BOOL PlayMetaFile(ULONG dc, ULONG handle)
     LxHandleBorrow borrow = {0};
     if (!open32FindDC(dc) || !lx_handle_borrow(handle, LX_HANDLE_OPEN32_METAFILE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     LONG saved = SaveDC(dc);
@@ -624,7 +624,7 @@ BOOL PlayMetaFile(ULONG dc, ULONG handle)
         size_t bytes = (size_t)lx_guest_load_u32(record) * 2;
         if (bytes < 6 || bytes > file->size - offset)
         {
-            open32SetError(13);
+            open32SetError(ERROR_INVALID_DATA);
             ok = FALSE;
             break;
         }
@@ -648,7 +648,7 @@ BOOL PlayMetaFile(ULONG dc, ULONG handle)
     }
     lx_handle_release(&borrow);
     if (!ok)
-        open32SetError(error ? error : 87);
+        open32SetError(error ? error : ERROR_INVALID_PARAMETER);
     return ok;
 }
 
@@ -682,7 +682,7 @@ ULONG metafile_read(PSZ name, BOOL enhanced)
 {
     if (!name)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint8 of[136];
@@ -702,10 +702,10 @@ ULONG metafile_read(PSZ name, BOOL enhanced)
             free(bytes);
         }
         else
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     else
-        open32SetError(13);
+        open32SetError(ERROR_INVALID_DATA);
     _lclose((ULONG)file);
     return result;
 }
@@ -720,7 +720,7 @@ ULONG CopyMetaFile(ULONG handle, PSZ name)
     LxHandleBorrow borrow = {0};
     if (!lx_handle_borrow(handle, LX_HANDLE_OPEN32_METAFILE, &borrow))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     Open32Metafile *f = borrow.resource;

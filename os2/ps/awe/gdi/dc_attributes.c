@@ -12,7 +12,7 @@ static BOOL state_pair(ULONG handle, PVOID output, unsigned kind)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || !output)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     LONG x, y;
@@ -73,7 +73,7 @@ ULONG GetBkColor(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
     if (!dc)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return dc ? dc->background_color & 0xFFFFFF : UINT32_MAX;
 }
 
@@ -81,7 +81,7 @@ ULONG GetTextColor(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
     if (!dc)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return dc ? dc->text_color : UINT32_MAX;
 }
 
@@ -89,7 +89,7 @@ LONG GetBkMode(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
     if (!dc)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return dc ? dc->background_mode : 0;
 }
 
@@ -97,7 +97,7 @@ LONG GetPolyFillMode(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
     if (!dc)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return dc ? dc->poly_fill_mode : 0;
 }
 
@@ -106,7 +106,7 @@ LONG SetPolyFillMode(ULONG h, LONG value)
     Open32DC *dc = open32FindDC(h);
     if (!dc || value < 1 || value > 2)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG old = dc->poly_fill_mode;
@@ -120,7 +120,7 @@ LONG SetStretchBltMode(ULONG h, LONG value)
     Open32DC *dc = open32FindDC(h);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     /* PMWINX maps BLACKONWHITE, WHITEONBLACK and COLORONCOLOR; any other mode returns 0. */
@@ -137,7 +137,7 @@ LONG SetTextCharacterExtra(ULONG h, LONG value)
     Open32DC *dc = open32FindDC(h);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return INT32_MIN;
     }
     LONG old = dc->character_extra;
@@ -151,7 +151,7 @@ BOOL SetTextJustification(ULONG h, LONG extra, LONG breaks)
     Open32DC *dc = open32FindDC(h);
     if (!dc || breaks < 0)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return FALSE;
     }
     dc->justify_extra = breaks ? extra : 0;
@@ -166,7 +166,7 @@ ULONG GetCurrentObject(ULONG h, ULONG type)
     Open32DC *dc = open32FindDC(h);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     switch (type)
@@ -186,7 +186,7 @@ ULONG GetCurrentObject(ULONG h, ULONG type)
             return b ? b->handle : 0;
         }
         default:
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return 0;
     }
 }
@@ -195,7 +195,7 @@ ULONG WindowFromDC(ULONG h)
 {
     Open32DC *dc = open32FindDC(h);
     if (!dc)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     return dc && dc->window ? open32PublicWindow(dc->window) : 0;
 }
 
@@ -204,14 +204,14 @@ static BOOL offset_origin(ULONG h, LONG x, LONG y, PVOID old, BOOL viewport)
     Open32DC *dc = open32FindDC(h);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return FALSE;
     }
     int64_t a = (int64_t)(viewport ? dc->viewport_x : dc->window_x) + x;
     int64_t b = (int64_t)(viewport ? dc->viewport_y : dc->window_y) + y;
     if (a < INT32_MIN || a > INT32_MAX || b < INT32_MIN || b > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     return viewport ? SetViewportOrgEx(h, (LONG)a, (LONG)b, old)
@@ -233,7 +233,7 @@ static BOOL scale_extent(ULONG h, LONG xn, LONG xd, LONG yn, LONG yd, PVOID old,
     Open32DC *dc = open32FindDC(h);
     if (!dc || (!viewport && (!xn || !yn)))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     /* Viewport scaling outside the free modes, or with a zero factor, changes nothing. */
@@ -241,14 +241,14 @@ static BOOL scale_extent(ULONG h, LONG xn, LONG xd, LONG yn, LONG yd, PVOID old,
         return TRUE;
     if (!xd || !yd)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     double scaled_x = (double)(viewport ? dc->viewport_width : dc->window_width) * xn / xd;
     double scaled_y = (double)(viewport ? dc->viewport_height : dc->window_height) * yn / yd;
     if (fabs(scaled_x) > INT32_MAX || fabs(scaled_y) > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     LONG x = (LONG)lround(scaled_x), y = (LONG)lround(scaled_y);
@@ -272,7 +272,7 @@ ULONG SetPixel(ULONG h, LONG x, LONG y, ULONG color)
         open32MetafilePixel(h, x, y, color);
     if (!dc || !open32MapPoint(dc, &x, &y, TRUE))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return UINT32_MAX;
     }
     ULONG nearest = GetNearestColor(h, color);
@@ -290,7 +290,7 @@ LONG SetROP2(ULONG handle, LONG mode)
     Open32DC *dc = open32FindDC(handle);
     if (!dc || mode < 1 || mode > 16)
     {
-        open32SetError(dc ? 87 : 6);
+        open32SetError(dc ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG previous = dc->rop2;
@@ -304,7 +304,7 @@ LONG GetROP2(ULONG handle)
     Open32DC *dc = open32FindDC(handle);
     if (!dc)
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     return dc->rop2;

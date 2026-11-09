@@ -16,7 +16,7 @@ ULONG CreateFontIndirect(PVOID record)
 {
     if (!record || !memchr((uint8 *)record + 28, 0, 32))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     const uint8 *bytes = record;
@@ -25,13 +25,13 @@ ULONG CreateFontIndirect(PVOID record)
     if (height < -512 || height > 512 || width < 0 || width > 512 || lx_guest_load_u32(bytes + 8) ||
         lx_guest_load_u32(bytes + 12))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     Open32Font *font = calloc(1, sizeof *font);
     if (!font)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     memcpy(font->record, bytes, 60);
@@ -77,7 +77,7 @@ ULONG CreateFontIndirect(PVOID record)
     if (!handle)
     {
         free(font);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     }
     return handle;
 }
@@ -93,7 +93,7 @@ ULONG open32SelectFont(Open32DC *dc, ULONG handle)
         !GpiCreateLogFont(dc->ps, NULL, 1, &font->attributes) || !GpiSetCharSet(dc->ps, 1))
     {
         lx_handle_release(&next);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     lx_handle_release(&dc->font);
@@ -148,7 +148,7 @@ BOOL AddFontResource(PSZ path)
 {
     if (GpiLoadPublicFonts(0, path))
         return TRUE;
-    open32SetError(3);
+    open32SetError(ERROR_PATH_NOT_FOUND);
     return FALSE;
 }
 
@@ -156,7 +156,7 @@ BOOL RemoveFontResource(PSZ path)
 {
     if (GpiUnloadPublicFonts(0, path))
         return TRUE;
-    open32SetError(3);
+    open32SetError(ERROR_PATH_NOT_FOUND);
     return FALSE;
 }
 
@@ -166,7 +166,7 @@ ULONG open32StockFont(LONG index)
     static _Thread_local ULONG stocks[DEFAULT_GUI_FONT + 1];
     if (index < OEM_FIXED_FONT || index == DEFAULT_PALETTE || index > DEFAULT_GUI_FONT)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!stocks[index])

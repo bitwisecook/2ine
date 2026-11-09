@@ -50,13 +50,13 @@ ULONG LocalAlloc(ULONG flags, ULONG size)
     TRACE_NATIVE("LocalAlloc(%X, %u)", flags, size);
     if (flags & ~0xF72u)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LocalMemory *block = calloc(1, sizeof *block);
     if (!block)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     block->size = size;
@@ -67,7 +67,7 @@ ULONG LocalAlloc(ULONG flags, ULONG size)
         if (!block->mapping)
         {
             free(block);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
     }
@@ -78,7 +78,7 @@ ULONG LocalAlloc(ULONG flags, ULONG size)
         if (block->mapping)
             lx_execution_unmap(GProcessState.execution, block->mapping);
         free(block);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     lock_heap();
@@ -99,11 +99,11 @@ ULONG LocalFree(ULONG handle)
     LocalMemory *block = *link;
     ULONG result = handle;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     else if (block->locks)
-        open32SetError(212); /* ERROR_LOCKED */
+        open32SetError(ERROR_LOCKED);
     else if (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping))
-        open32SetError(212);
+        open32SetError(ERROR_LOCKED);
     else
     {
         *link = block->next;
@@ -122,11 +122,11 @@ ULONG LocalLock(ULONG handle)
     LocalMemory *block = find_block(handle);
     ULONG result = 0;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     else if (!block->mapping)
-        open32SetError(157); /* ERROR_DISCARDED */
+        open32SetError(ERROR_DISCARDED);
     else if ((block->flags & 2) && block->locks == 255)
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     else
     {
         result = lx_execution_mapping_address(block->mapping);
@@ -143,16 +143,16 @@ BOOL LocalUnlock(ULONG handle)
     LocalMemory *block = find_block(handle);
     BOOL result = FALSE;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     else if (!(block->flags & 2))
-        open32SetError(0);
+        open32SetError(ERROR_SUCCESS);
     else if (!block->locks)
-        open32SetError(158); /* ERROR_NOT_LOCKED */
+        open32SetError(ERROR_NOT_LOCKED);
     else
     {
         result = --block->locks != 0;
         if (!result)
-            open32SetError(0);
+            open32SetError(ERROR_SUCCESS);
     }
     lx_host_monitor_unlock(monitor);
     return result;
@@ -164,7 +164,7 @@ ULONG LocalSize(ULONG handle)
     LocalMemory *block = find_block(handle);
     ULONG result = block ? block->size : 0;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_host_monitor_unlock(monitor);
     return result;
 }
@@ -176,7 +176,7 @@ ULONG LocalFlags(ULONG handle)
     ULONG result =
         block ? (block->flags & 0xF00) | block->locks | (block->mapping ? 0 : 0x4000) : 0x8000;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_host_monitor_unlock(monitor);
     return result;
 }
@@ -192,7 +192,7 @@ ULONG LocalHandle(ULONG pointer)
             break;
         }
     if (!result)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     lx_host_monitor_unlock(monitor);
     return result;
 }
@@ -201,14 +201,14 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
 {
     if (flags & ~0xFF2u)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     lock_heap();
     LocalMemory *block = find_block(handle);
     ULONG result = 0;
     if (!block)
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
     else if (flags & 0x80)
     {
         block->flags = (block->flags & 2) | (flags & 0xF00);
@@ -218,7 +218,7 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
     {
         if (block->locks ||
             (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping)))
-            open32SetError(212);
+            open32SetError(ERROR_LOCKED);
         else
         {
             block->mapping = NULL;
@@ -235,12 +235,12 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
         result = handle;
     }
     else if (block->locks || (!(block->flags & 2) && !(flags & 2)))
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
     else
     {
         LxGuestMapping *replacement = allocate(size);
         if (!replacement)
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         else
         {
             if (block->mapping)
@@ -250,7 +250,7 @@ ULONG LocalReAlloc(ULONG handle, ULONG size, ULONG flags)
             if (block->mapping && !lx_execution_unmap(GProcessState.execution, block->mapping))
             {
                 lx_execution_unmap(GProcessState.execution, replacement);
-                open32SetError(212);
+                open32SetError(ERROR_LOCKED);
             }
             else
             {
@@ -286,7 +286,7 @@ ULONG GlobalAlloc(ULONG flags, ULONG size)
 {
     if (flags & ~0x7F72u)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     /* Win32 share/bank/notification hints do not change process-heap ownership. */
@@ -297,7 +297,7 @@ ULONG GlobalReAlloc(ULONG handle, ULONG size, ULONG flags)
 {
     if (flags & ~0x7FF2u)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return LocalReAlloc(handle, size, flags & 0x1F2);
@@ -343,7 +343,7 @@ VOID GlobalMemoryStatus(PVOID output)
 {
     if (!output)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return;
     }
     typedef APIRET(OS2API * Fn)(ULONG, ULONG, PVOID, ULONG);

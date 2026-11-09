@@ -10,7 +10,7 @@ BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
 {
     if (!information || lx_guest_load_u32(information) != 40 || usage > 1)
     {
-        open32SetError(usage > 1 ? 50 : 87);
+        open32SetError(usage > 1 ? ERROR_NOT_SUPPORTED : ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     const uint8 *info = information;
@@ -29,7 +29,7 @@ BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
         compression > 3 || (compression == 1 && depth != 8) || (compression == 2 && depth != 4) ||
         (compression == 3 && depth != 16 && depth != 32) || (compressed && height < 0))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return FALSE;
     }
     unsigned colors = lx_guest_load_u32(info + 32);
@@ -37,7 +37,7 @@ BOOL open32DibBuffers(PVOID information, ULONG start, ULONG count, ULONG usage,
     {
         if (colors > (1u << depth))
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return FALSE;
         }
         /* DIB_RGB_COLORS tables hold RGBQUADs; DIB_PAL_COLORS tables hold palette indices. */
@@ -162,7 +162,7 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     size_t info_bytes, pixel_bytes;
     if (!open32FindDC(dc))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (!bits && information)
@@ -176,13 +176,13 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         if (!described)
         {
             lx_handle_release(&source);
-            open32SetError(6);
+            open32SetError(ERROR_INVALID_HANDLE);
             return 0;
         }
         if (lx_guest_load_u32(query) != 40 && (!requested || requested >= 16))
         {
             lx_handle_release(&source);
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         unsigned depth = requested ? requested : described->depth;
@@ -205,7 +205,7 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     if (!bitmap)
     {
         lx_handle_release(&borrow);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     uint8 *info = information;
@@ -215,14 +215,14 @@ LONG GetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         (uint64_t)(height < 0 ? -(int64_t)height : height) != bitmap->height)
     {
         lx_handle_release(&borrow);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint32 colors[256] = {0};
     if (lx_guest_load_u32(info + 16) == 1 || lx_guest_load_u32(info + 16) == 2)
     {
         lx_handle_release(&borrow);
-        open32SetError(50);
+        open32SetError(ERROR_NOT_SUPPORTED);
         return 0;
     }
     unsigned color_count = depth <= 8 ? (unsigned)((info_bytes - 40) / (usage ? 2 : 4)) : 0;
@@ -286,7 +286,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     size_t info_bytes, pixel_bytes;
     if (!open32FindDC(dc))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (!open32DibBuffers(information, start, count, usage, &info_bytes, &pixel_bytes))
@@ -295,7 +295,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     unsigned depth = lx_guest_load_u16(info + 14);
     if (!depth || (pixel_bytes && !bits))
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LxHandleBorrow borrow = {0};
@@ -303,7 +303,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     if (!bitmap)
     {
         lx_handle_release(&borrow);
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     LONG height = (LONG)lx_guest_load_u32(info + 8);
@@ -311,7 +311,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         (uint64_t)(height < 0 ? -(int64_t)height : height) != bitmap->height)
     {
         lx_handle_release(&borrow);
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (count > bitmap->height - start)
@@ -344,7 +344,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     if (!decoded)
     {
         lx_handle_release(&borrow);
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     BOOL valid = TRUE;
@@ -357,7 +357,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
         {
             free(decoded);
             lx_handle_release(&borrow);
-            open32SetError(8);
+            open32SetError(ERROR_NOT_ENOUGH_MEMORY);
             return 0;
         }
         valid =
@@ -417,7 +417,7 @@ LONG SetDIBits(ULONG dc, ULONG handle, ULONG start, ULONG count, PVOID bits, PVO
     lx_handle_release(&borrow);
     if (!valid)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return (LONG)count;
@@ -449,7 +449,7 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
                 continue;
             if (++*work > 67108864)
             {
-                open32SetError(8);
+                open32SetError(ERROR_NOT_ENOUGH_MEMORY);
                 return FALSE;
             }
             LONG x = sw > 0 ? sx + u : sx - 1 - u,
@@ -457,7 +457,7 @@ static BOOL stretch_sample(const PmBitmap *bitmap, LONG image_height, LONG sx, L
                                       : (LONG)bitmap->height - 1 - (sh > 0 ? sy + v : sy - 1 - v);
             if (x < 0 || y < 0 || (ULONG)x >= bitmap->width || (ULONG)y >= bitmap->height)
             {
-                open32SetError(87);
+                open32SetError(ERROR_INVALID_PARAMETER);
                 return FALSE;
             }
             uint32 pixel = bitmap->pixels[(size_t)y * bitmap->width + x];
@@ -624,7 +624,7 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
         !open32DibBuffers(information, 0, UINT32_MAX, usage, &info_bytes, &pixel_bytes) ||
         !pixel_bytes)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (!width || !height || !source_width || !source_height)
@@ -641,7 +641,7 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
         source_y < 0 || sy_end < 0 || source_y > rows || sy_end > rows || x_end < INT32_MIN ||
         x_end > INT32_MAX || y_end < INT32_MIN || y_end > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     if (open32Rotated(dc))
@@ -659,7 +659,7 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
             DeleteObject(temporary);
         if (!drawn)
         {
-            open32SetError(87);
+            open32SetError(ERROR_INVALID_PARAMETER);
             return 0;
         }
         return source_height < 0 ? -source_height : source_height;
@@ -686,7 +686,7 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
     size_t area = (size_t)(right - left) * (size_t)(bottom - top);
     if (area > 16777216)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     ULONG bitmap_handle = CreateBitmap(image_width, rows, 1, 24, NULL);
@@ -707,7 +707,7 @@ LONG StretchDIBits(ULONG handle, LONG x, LONG y, LONG width, LONG height, LONG s
         DeleteObject(bitmap_handle);
     if (!ok)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     return source_height < 0 ? -source_height : source_height;
@@ -719,13 +719,13 @@ LONG SetDIBitsToDevice(ULONG dc, LONG x, LONG y, LONG width, LONG height, LONG s
     size_t info_size, pixel_size;
     if (!open32FindDC(dc))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     if (!open32DibBuffers(info, first, count, usage, &info_size, &pixel_size) || !bits || !count ||
         width < 0 || height < 0)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     LONG image_width = (LONG)lx_guest_load_u32((uint8 *)info + 4),
@@ -745,13 +745,13 @@ LONG SetDIBitsToDevice(ULONG dc, LONG x, LONG y, LONG width, LONG height, LONG s
     int64_t skipped = rows < 0 ? low - sy : (int64_t)sy + height - high;
     if ((int64_t)y + skipped > INT32_MAX)
     {
-        open32SetError(87);
+        open32SetError(ERROR_INVALID_PARAMETER);
         return 0;
     }
     uint8 *copy = malloc(info_size);
     if (!copy)
     {
-        open32SetError(8);
+        open32SetError(ERROR_NOT_ENOUGH_MEMORY);
         return 0;
     }
     memcpy(copy, info, info_size);

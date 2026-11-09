@@ -18,7 +18,7 @@ ULONG FindResource(HMODULE module, PSZ name, PSZ type)
     uintptr_t identity = (uintptr_t)name, kind = (uintptr_t)type;
     if (!identity || identity > UINT16_MAX || !kind || kind > UINT16_MAX)
     {
-        open32SetError(123);
+        open32SetError(ERROR_INVALID_NAME);
         return 0;
     }
     if (kind <= 255)
@@ -27,7 +27,7 @@ ULONG FindResource(HMODULE module, PSZ name, PSZ type)
     if (!kind || !GProcessState.queryResourceSize ||
         GProcessState.queryResourceSize(resource_module(module), kind, identity, &size))
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     return (ULONG)((kind << 16) | identity);
@@ -40,7 +40,7 @@ ULONG SizeofResource(HMODULE module, ULONG resource)
         GProcessState.queryResourceSize(resource_module(module), resource >> 16, resource & 0xFFFF,
                                         &size))
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     return size;
@@ -77,7 +77,7 @@ ULONG LoadResource(HMODULE module, ULONG resource)
                                   &data) ||
         !lx_execution_address(GProcessState.execution, data, 1, LX_GUEST_READ, &address))
     {
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
         return 0;
     }
     return resource >> 16 == 2 ? bitmap_header(data, address) : address;
@@ -87,7 +87,7 @@ ULONG LockResource(ULONG resource)
 {
     if (!lx_execution_memory(GProcessState.execution, resource, 1, LX_GUEST_READ))
     {
-        open32SetError(6);
+        open32SetError(ERROR_INVALID_HANDLE);
         return 0;
     }
     return resource;
@@ -100,13 +100,13 @@ LONG LoadString(HMODULE module, ULONG identity, PCHAR output, LONG capacity)
     {
         if (module && output && capacity > 0)
             output[0] = 0;
-        open32SetError(module ? 87 : 6);
+        open32SetError(module ? ERROR_INVALID_PARAMETER : ERROR_INVALID_HANDLE);
         return 0;
     }
     if (identity & 0xFF000000u)
         identity &= 0xFFFF;
     LONG result = WinLoadString(0, resource_module(module), identity, capacity, output);
     if (!result)
-        open32SetError(1814);
+        open32SetError(ERROR_RESOURCE_NAME_NOT_FOUND);
     return result;
 }
