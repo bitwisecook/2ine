@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* POSIX and Windows implementations of the ball's host platform services. */
 #define _POSIX_C_SOURCE 200809L
 #define _GNU_SOURCE 1
 #define _DARWIN_C_SOURCE 1

@@ -5,6 +5,7 @@
  *
  *  This file written by Ryan C. Gordon.
  */
+/* lx_dump: prints the headers, objects, fixups and tables of an LX or NE executable. */
 
 #include <stdio.h>
 #include <string.h>

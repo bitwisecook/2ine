@@ -1,4 +1,6 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* Host filesystem and path services for the ball store, and the probe for
+   runnable host executables; image paths route to the volume layer. */
 #ifndef TB_PLATFORM_H
 #define TB_PLATFORM_H
 #include <stddef.h>

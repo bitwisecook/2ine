@@ -1,4 +1,5 @@
 /* Public domain. No rights reserved. Wholly AI-authored. */
+/* The ball engine's public C interface: one JSON request in, one JSON result out. */
 #ifndef TWOINE_BALL_H
 #define TWOINE_BALL_H
 #ifdef _WIN32
