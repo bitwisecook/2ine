@@ -51,4 +51,8 @@ BOOL initializeCombo(Window *window);
 BOOL initializeScrollbar(Window *window, MPARAM data);
 MRESULT scrollbarMessage(Window *window, ULONG message, MPARAM first, MPARAM second);
 void controlTextChanged(Window *window);
+MRESULT listMessage(Window *window, ULONG message, MPARAM first, MPARAM second);
+BOOL staticIsFrame(const Window *window);
+void paintStaticShape(Window *window, HPS space);
+void paintGroupBox(Window *window, HPS space, const LxHostFontMetrics *metrics);
 #endif

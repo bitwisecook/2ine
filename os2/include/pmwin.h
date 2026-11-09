@@ -106,6 +106,23 @@ extern "C"
         SWP_NOAUTOCLOSE = 0x8000
     };
 
+    /* Static control styles (INCL_WINSTATICS) */
+    enum
+    {
+        SS_TEXT = 0x0001,
+        SS_GROUPBOX = 0x0002,
+        SS_ICON = 0x0003,
+        SS_BITMAP = 0x0004,
+        SS_FGNDRECT = 0x0005,
+        SS_HALFTONERECT = 0x0006,
+        SS_BKGNDRECT = 0x0007,
+        SS_FGNDFRAME = 0x0008,
+        SS_HALFTONEFRAME = 0x0009,
+        SS_BKGNDFRAME = 0x000a,
+        SS_SYSICON = 0x000b,
+        SS_AUTOSIZE = 0x0040
+    };
+
     /* List box messages (INCL_WINLISTBOXES) */
     enum
     {

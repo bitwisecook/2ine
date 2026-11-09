@@ -48,6 +48,8 @@ twoine_os2_dll(
     pmmerge/pmwin/dialog_template.c
     pmmerge/pmwin/message_box.c
     pmmerge/pmwin/controls.c
+    pmmerge/pmwin/listbox.c
+    pmmerge/pmwin/static.c
     pmmerge/pmwin/buttons.c
     pmmerge/pmwin/bitmap.c
     pmmerge/pmwin/text.c
