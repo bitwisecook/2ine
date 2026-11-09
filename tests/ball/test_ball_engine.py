@@ -411,9 +411,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_lx_ne_and_array_icons_use_resource_bytes_and_alpha_masks(self):
         import base64
         import struct
-        import sys
 
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "integration"))
         from tests.integration.harness.images import linear_image
 
         # Two bottom-up XOR rows followed by the AND rows; white, black,

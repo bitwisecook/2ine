@@ -4,9 +4,9 @@
 import unittest
 from pathlib import Path
 
-from tests.tools import test_os2_dependencies as binaries
-from tests.tools import test_os2_support as support
-from tests.tools import test_os2_tree as tree
+from tests.environment import test_os2_dependencies as binaries
+from tests.environment import test_os2_support as support
+from tests.environment import test_os2_tree as tree
 from tools.ball import engine as ball_api
 
 

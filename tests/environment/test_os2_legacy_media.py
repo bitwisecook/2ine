@@ -10,7 +10,7 @@ import unittest
 import zlib
 from pathlib import Path
 
-from tests.tools import test_os2_support as support
+from tests.environment import test_os2_support as support
 from tools.ball import engine as ball_api
 
 

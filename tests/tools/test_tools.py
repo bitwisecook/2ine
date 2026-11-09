@@ -117,7 +117,7 @@ class WarpFontTests(unittest.TestCase):
             extract_warp_fonts.select_members(listing + "\nPath = os2image/disk_18/HELV.PFB")
 
     def test_rejects_checkout_and_existing_destinations_before_extraction(self):
-        checkout = Path(extract_warp_fonts.__file__).resolve().parents[1]
+        checkout = Path(extract_warp_fonts.__file__).resolve().parents[2]
         with self.assertRaisesRegex(ValueError, "outside"):
             extract_warp_fonts.extract(Path("absent.iso"), checkout / "fonts", "absent", "absent")
         with tempfile.TemporaryDirectory() as directory:

@@ -27,4 +27,4 @@ jobs:
           cmake -S ball -B build-ball-engine -DCMAKE_BUILD_TYPE=Release
           cmake --build build-ball-engine --config Release --parallel 2
       - name: Test native persistence, launch plans and API ownership
-        run: python -m unittest tests.tools.test_ball tests.tools.test_ball_desktop tests.tools.test_ball_engine tests.tools.test_ball_archives tests.tools.test_audio_library -v
+        run: python -m unittest tests.ball.test_ball tests.tools.ball.test_desktop tests.ball.test_ball_engine tests.ball.test_ball_archives tests.environment.test_audio_library -v

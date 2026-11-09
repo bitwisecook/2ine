@@ -33,7 +33,7 @@ def segmented(named=False, size=8, iterated=False):
 
 class ImportParserTests(unittest.TestCase):
     def test_builtin_modules_follow_the_installation_manager_table(self):
-        provided = inventory.builtin_modules(Path(__file__).resolve().parents[2])
+        provided = inventory.builtin_modules(Path(__file__).resolve().parents[3])
         self.assertTrue({"DOSCALLS", "PMMERGE", "REGISTRY"} <= provided)
 
     def test_linear_ordinals_names_lists_and_exact_locations(self):
@@ -110,7 +110,7 @@ class ImportParserTests(unittest.TestCase):
         self.assertIn("zero-sized", inventory.parse_image(segmented(size=0))["errors"][0])
 
     def test_source_body_markers_and_loader_special_export_are_evidence_only(self):
-        root = Path(__file__).resolve().parents[2]
+        root = Path(__file__).resolve().parents[3]
         exported = inventory.export_inventory(root)
         self.assertEqual(exported["DOSCALLS"][295]["runtimeSpecial"], "absolute-flat-data-selector")
         self.assertTrue(exported["PMWINX"][715]["sourceLocations"])
@@ -147,7 +147,7 @@ class ImportParserTests(unittest.TestCase):
         self.assertEqual(entry["sourceLocations"][0]["path"], "os2/baseos/doscalls/queue.c")
 
     def test_optional_modules_do_not_enter_application_closure_and_output_is_stable(self):
-        source = Path(__file__).resolve().parents[2]
+        source = Path(__file__).resolve().parents[3]
         with tempfile.TemporaryDirectory() as directory:
             ball = Path(directory)
             root = ball / "drive_c/LOTUSW4"
@@ -610,7 +610,7 @@ class EvidenceOutputTests(unittest.TestCase):
     def test_reference_artifact_is_deterministic_and_indexed(self):
         import gzip
 
-        source = Path(__file__).resolve().parents[2]
+        source = Path(__file__).resolve().parents[3]
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             ball = base / "ball"

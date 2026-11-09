@@ -15,7 +15,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from tests.tools.test_soundfonts import soundfont
+from tests.tools.soundfonts.test_soundfonts import soundfont
 from tools.soundfonts import vogons_soundfonts as forum
 
 TOPIC = "https://www.vogons.org/viewtopic.php?t=88648"

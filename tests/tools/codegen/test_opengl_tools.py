@@ -9,7 +9,7 @@ from pathlib import Path
 from tools.codegen import gen_opengl
 from tools.macos import build_mesa_macos
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 class OpenGLGeneratorTests(unittest.TestCase):

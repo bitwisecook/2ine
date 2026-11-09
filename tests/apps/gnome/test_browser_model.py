@@ -179,7 +179,7 @@ class BrowserModelTests(unittest.TestCase):
         self.assertEqual(checks.selected, {"a", "b", "c"})
 
     def test_packaging_registers_both_shared_browser_modules(self):
-        source = Path(__file__).resolve().parents[2] / "apps/gnome/package.py"
+        source = Path(__file__).resolve().parents[3] / "apps/gnome/package.py"
         tree = ast.parse(source.read_text())
         staged = set()
         for node in ast.walk(tree):

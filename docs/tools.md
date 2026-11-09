@@ -53,7 +53,7 @@ declaration variants and documentation before implementing each API family.
 uvx ruff check .
 uvx ruff format --check .
 uvx ty check
-python3 -m unittest discover -s tests/tools -p test_tools.py -v
+python3 -m unittest tests.tools.test_tools -v
 ```
 
 Ruff and ty cover the four tools and their tests. Their scope is in

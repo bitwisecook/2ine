@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tests.tools.test_configuration import profile
+from tests.ball.test_configuration import profile
 from tools.ball import engine as ball_api
 
 

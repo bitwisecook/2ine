@@ -8,9 +8,9 @@ import time
 import unittest
 from pathlib import Path
 
-from tests.tools import test_os2_dependencies as dependency_fixtures
-from tests.tools import test_os2_support as fixtures
-from tests.tools import test_os2_tree as tree_fixtures
+from tests.environment import test_os2_dependencies as dependency_fixtures
+from tests.environment import test_os2_support as fixtures
+from tests.environment import test_os2_tree as tree_fixtures
 from tools.ball import engine as ball_api
 
 

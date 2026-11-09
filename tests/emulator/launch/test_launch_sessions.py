@@ -6,7 +6,7 @@ import struct
 import unittest
 from pathlib import Path
 
-from tests.tools import test_os2_dependencies as fixtures
+from tests.environment import test_os2_dependencies as fixtures
 
 
 class LaunchPreparationTests(unittest.TestCase):

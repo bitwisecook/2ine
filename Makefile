@@ -29,7 +29,7 @@ macos-runtime:
 
 macos-test: macos-engine
 	swift test --package-path apps/macos --scratch-path "$(MACOS_OUTPUT)/swift-tests"
-	$(PYTHON) -m unittest discover -s tests/tools -p 'test_*.py'
+	$(PYTHON) -m unittest discover -s tests -t . -p 'test_*.py'
 
 macos-engine:
 	cmake -S ball -B build-ball-engine -G Ninja

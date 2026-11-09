@@ -10,7 +10,7 @@ from pathlib import Path
 
 class DoomClockTests(unittest.TestCase):
     def test_desktop_view_fits_four_by_three_and_centers_bars(self):
-        root = Path(__file__).resolve().parents[2]
+        root = Path(__file__).resolve().parents[3]
         patch = (root / "ports/doom/doom110-desktop.patch").read_text()
         additions = "\n".join(line[1:] for line in patch.splitlines() if line.startswith("+"))
         body = "static void FitGameView" + additions.split("static void FitGameView", 1)[1]
@@ -62,7 +62,7 @@ int main(void) {
             subprocess.run([str(directory / "view")], env={"TWOINE_KEEP_ASPECT": "0"}, check=True)
 
     def test_patched_clock_rollover_and_concurrent_callers(self):
-        root = Path(__file__).resolve().parents[2]
+        root = Path(__file__).resolve().parents[3]
         patch = (root / "ports/doom/doom110-clock.patch").read_text()
         additions = [line[1:] for line in patch.splitlines() if line.startswith("+")]
         first = additions.index("    ULONG milliseconds;")
@@ -164,7 +164,7 @@ int main(void)
             self.assertIn("minute/wrap/concurrency checks passed", result.stdout)
 
     def test_patched_audio_shutdown_waits_before_free_and_is_idempotent(self):
-        root = Path(__file__).resolve().parents[2]
+        root = Path(__file__).resolve().parents[3]
         patch = (root / "ports/doom/doom110-clock.patch").read_text()
         section = patch.split("+++ b/audio.c\n", 1)[1]
         patched = "\n".join(
@@ -335,7 +335,7 @@ int main(void)
             self.assertIn("stop-before-free, retry and repeated-close checks passed", result.stdout)
 
     def test_patched_large_save_owns_storage_and_preserves_screen(self):
-        root = Path(__file__).resolve().parents[2]
+        root = Path(__file__).resolve().parents[3]
         patch = (root / "ports/doom/doom110-clock.patch").read_text()
         section = patch.rsplit("+++ b/g_game.c\n", 1)[1]
         patched = "\n".join(

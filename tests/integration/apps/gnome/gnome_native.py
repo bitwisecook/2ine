@@ -11,9 +11,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+from tests.environment.test_os2_support import LEVEL
 from tests.integration.apps.gnome.gnome_ball import gnome_ball, pump
 from tests.integration.harness.images import FlatGuest, linear_image
-from tests.tools.test_os2_support import LEVEL
 
 
 def main():

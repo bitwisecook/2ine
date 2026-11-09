@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from apps.gnome.twoine_gnome import app as gnome_ball
 else:
     from tests.integration.apps.gnome.gnome_ball import gnome_ball
-from tests.tools.test_os2_support import CMD, LEVEL, MESSAGE
+from tests.environment.test_os2_support import CMD, LEVEL, MESSAGE
 
 
 def main():

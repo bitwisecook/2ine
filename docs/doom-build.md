@@ -52,7 +52,7 @@ normalizes DOS end-of-file markers and include-path separators in scratch
 copies, preserving the supplied SDK tree. It links the authentic SDK imports
 and matching Watcom runtime libraries.
 
-`tests/tools/test_doom_build.py` compiles the actual clock patch body against
+`tests/tools/ports/test_doom_build.py` compiles the actual clock patch body against
 controlled time samples and concurrent callers. It also executes the patched
 shutdown and save routines with delayed callbacks, concurrent close callers,
 large archives and allocation canaries. The real GUI verifier is

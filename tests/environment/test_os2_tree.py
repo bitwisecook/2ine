@@ -7,7 +7,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from tests.tools import test_os2_support as fixtures
+from tests.environment import test_os2_support as fixtures
 
 
 def walk(node):
