@@ -42,6 +42,7 @@ twoine_os2_dll(
     pmmerge/pmwin/raster.c
     pmmerge/pmwin/coordinates.c
     pmmerge/pmwin/device_context.c
+    pmmerge/pmwin/winprint.c
     pmmerge/pmwin/print_job.c
     pmmerge/pmwin/resources.c
     pmmerge/pmwin/window_data.c
